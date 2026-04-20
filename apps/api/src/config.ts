@@ -10,6 +10,10 @@ const envSchema = z.object({
   HERMES_HOME: z.string().default(join(homedir(), '.hermes')),
   OPENCLAW_WS_URL: z.string().default('ws://localhost:18789'),
   OPENCLAW_HOME: z.string().default(join(homedir(), '.openclaw')),
+  OPENAI_BASE_URL: z.string().default('https://api.openai.com'),
+  OPENAI_API_KEY: z.string().optional(),
+  OPENAI_MODEL: z.string().default('gpt-4o-mini'),
+  OPENAI_TIMEOUT_MS: z.coerce.number().default(60_000),
 })
 
 export const config = envSchema.parse(process.env)

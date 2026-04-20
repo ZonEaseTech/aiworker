@@ -1,9 +1,11 @@
-import type { BrainProvider } from '@aiworker/shared'
+import type { BrainProvider, ExecutorProvider } from '@aiworker/shared'
 
 import { config } from '../config'
 import { HermesProvider } from './brain/hermes'
+import { OpenAICompatibleExecutor } from './executor/openai-compatible'
 
 let brainProvider: BrainProvider | null = null
+let executorProvider: ExecutorProvider | null = null
 
 export function getBrainProvider(): BrainProvider {
   if (!brainProvider) {
@@ -15,4 +17,14 @@ export function getBrainProvider(): BrainProvider {
   return brainProvider
 }
 
-// getExecutorProvider() will be added in subtask 1.3 (OpenClaw)
+export function getExecutorProvider(): ExecutorProvider {
+  if (!executorProvider) {
+    executorProvider = new OpenAICompatibleExecutor({
+      baseUrl: config.OPENAI_BASE_URL,
+      apiKey: config.OPENAI_API_KEY,
+      model: config.OPENAI_MODEL,
+      timeoutMs: config.OPENAI_TIMEOUT_MS,
+    })
+  }
+  return executorProvider
+}
