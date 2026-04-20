@@ -1,6 +1,6 @@
 # AIWorker
 
-Middleware glue service bridging Hermes Agent (knowledge/memory) with OpenClaw (execution/gateway).
+Self-hosted Agent Runtime composing a Brain provider (knowledge/memory) and an Executor provider (OpenAI-compatible chat completions + tool calling).
 
 ## Project Development
 
@@ -14,4 +14,4 @@ Use `/bkd` for multi-subtask orchestration via BKD kanban.
 
 - **Backend**: Bun, Hono (OpenAPIHono), Drizzle ORM, SQLite
 - **Frontend**: React 19, TypeScript, Vite 8, TanStack Router + Query, Zustand, shadcn/ui, Tailwind CSS v4
-- **Integration**: agentskills.io standard, MCP protocol, REST APIs
+- **Integration**: OpenAI-compatible executor endpoint (chat completions + tool calling), agentskills.io standard, REST + SSE APIs

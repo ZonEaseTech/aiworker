@@ -2,7 +2,12 @@
 
 ## Overview
 
-AIWorker is a middleware service that bridges **Hermes Agent** (knowledge base, memory, self-improving skills) with **OpenClaw** (execution gateway, tool sandboxing, message routing). It provides a unified management UI and API layer for orchestrating the two systems.
+AIWorker is a **self-hosted Agent Runtime** that composes two pluggable providers:
+
+- **Brain provider** — knowledge base, memory store, skill catalogue. Current implementation: `HermesProvider` (Hermes filesystem + API).
+- **Executor provider** — chat completions with tool calling over an OpenAI-compatible endpoint. Current implementation: `OpenAICompatibleExecutor`.
+
+The **Orchestrator** drives the agent loop (submit prompt → stream completions → execute tools → persist transcript → emit SSE events). Everything else (REST surface, SSE stream, web UI) is built on top of this core.
 
 ## System Architecture
 
@@ -12,124 +17,119 @@ AIWorker is a middleware service that bridges **Hermes Agent** (knowledge base, 
 │         React 19 + Vite 8 + TanStack            │
 │                                                  │
 │  ┌──────────┐ ┌──────────┐ ┌──────────────────┐ │
-│  │ Dashboard │ │ Skills   │ │ Memory Explorer  │ │
-│  │          │ │ Manager  │ │                  │ │
+│  │ Dashboard│ │ Skills   │ │ Memory Explorer  │ │
 │  └──────────┘ └──────────┘ └──────────────────┘ │
 │  ┌──────────┐ ┌──────────┐ ┌──────────────────┐ │
 │  │ Execution│ │ Config   │ │ Sync Status      │ │
 │  │ Monitor  │ │ Editor   │ │                  │ │
 │  └──────────┘ └──────────┘ └──────────────────┘ │
+│  ┌──────────────────────────────────────────┐   │
+│  │ Orchestrator (task list + replay + SSE) │   │
+│  └──────────────────────────────────────────┘   │
 └──────────────────────┬──────────────────────────┘
-                       │
+                       │ REST + SSE
                        ▼
 ┌──────────────────────────────────────────────────┐
 │              Backend API (Bun + Hono)            │
 │                                                  │
 │  ┌────────────────────────────────────────────┐  │
+│  │           Orchestrator                     │  │
+│  │  submit → loop(stream → tool → persist)    │  │
+│  │  queue · cancel · SSE broadcast            │  │
+│  └──────────────────┬─────────────────────────┘  │
+│                     │                            │
+│  ┌──────────────────┴─────────────────────────┐  │
 │  │           Module Layer                     │  │
-│  │  ┌──────────┐ ┌──────────┐ ┌───────────┐  │  │
-│  │  │ Skills   │ │ Memory   │ │ Execution │  │  │
-│  │  │ Sync     │ │ Bridge   │ │ Monitor   │  │  │
-│  │  └──────────┘ └──────────┘ └───────────┘  │  │
-│  │  ┌──────────┐ ┌──────────┐ ┌───────────┐  │  │
-│  │  │ Config   │ │ Health   │ │ Events    │  │  │
-│  │  │ Manager  │ │ Check    │ │ Stream    │  │  │
-│  │  └──────────┘ └──────────┘ └───────────┘  │  │
+│  │  ┌────────┐ ┌────────┐ ┌─────────┐ ┌────┐ │  │
+│  │  │ Skills │ │ Memory │ │Execution│ │... │ │  │
+│  │  └────────┘ └────────┘ └─────────┘ └────┘ │  │
 │  └────────────────────────────────────────────┘  │
 │                                                  │
 │  ┌────────────────────────────────────────────┐  │
-│  │           Adapter Layer                    │  │
-│  │  ┌──────────────┐  ┌───────────────────┐   │  │
-│  │  │ Hermes       │  │ OpenClaw          │   │  │
-│  │  │ Adapter      │  │ Adapter           │   │  │
-│  │  │ - filesystem │  │ - WebSocket API   │   │  │
-│  │  │ - API server │  │ - REST config     │   │  │
-│  │  │ - MCP client │  │ - plugin hooks    │   │  │
-│  │  └──────────────┘  └───────────────────┘   │  │
+│  │           Provider Interfaces              │  │
+│  │  ┌───────────────┐  ┌────────────────────┐ │  │
+│  │  │ BrainProvider │  │ ExecutorProvider   │ │  │
+│  │  │ ─ HermesProv. │  │ ─ OpenAICompatible │ │  │
+│  │  └───────────────┘  └────────────────────┘ │  │
 │  └────────────────────────────────────────────┘  │
 │                                                  │
 │  ┌────────────────────────────────────────────┐  │
-│  │  SQLite (Drizzle) — sync state, events     │  │
+│  │  SQLite (Drizzle) — tasks, conversations,  │  │
+│  │  messages, execution_logs, skill_conflicts │  │
 │  └────────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────┘
-         │                           │
-         ▼                           ▼
-┌─────────────────┐       ┌─────────────────────┐
-│  Hermes Agent   │       │     OpenClaw         │
-│                 │       │                      │
-│ ~/.hermes/      │       │ ~/.openclaw/         │
-│  ├── skills/    │       │  ├── workspace/      │
-│  ├── memories/  │       │  │   ├── skills/     │
-│  ├── config.yaml│       │  │   ├── MEMORY.md   │
-│  └── .env       │       │  ├── openclaw.json   │
-│                 │       │  └── .env            │
-│ API: :8642      │       │                      │
-│ MCP: stdio      │       │ Gateway: :18789 (WS) │
-└─────────────────┘       └─────────────────────┘
+└────────┬───────────────────────────────┬─────────┘
+         │                               │
+         ▼                               ▼
+┌─────────────────┐           ┌────────────────────────┐
+│  Hermes Agent   │           │  OpenAI-compatible API │
+│                 │           │                        │
+│ ~/.hermes/      │           │  Any endpoint that     │
+│  ├── skills/    │           │  speaks Chat           │
+│  ├── memories/  │           │  Completions + tools   │
+│  └── config.yaml│           │  (OpenAI, Ollama,      │
+│ API: :8642      │           │  vLLM, LM Studio, …)   │
+└─────────────────┘           └────────────────────────┘
 ```
 
-## Module Breakdown
+## Layered Responsibilities
 
-### Backend Modules
+### Orchestrator (`apps/api/src/modules/orchestrator`)
+
+Coordinates the agent loop for a single task:
+
+1. `submitTask` inserts a row in `agent_tasks` (status `queued`) and enqueues `runTask` on a FIFO queue.
+2. `runTask` materialises a `conversations` row, builds a system prompt from Brain-listed skills, and begins streaming from the Executor.
+3. On each `tool_call` chunk, the orchestrator routes to `executeTool` (`search_memory`, `write_memory`, `read_file`) against the Brain provider / `HERMES_HOME`, persists the call to `execution_logs`, and appends the result to the transcript.
+4. Terminal states (`succeeded` / `failed` / `cancelled`) finalise `agent_tasks.finishedAt` and, when enabled, auto-writeback the final assistant message as a new memory.
+5. Every state transition publishes `orchestrator.task.*` events onto `eventBus`, which the SSE endpoint forwards to connected UIs.
+
+### Provider Interfaces (`packages/shared`)
+
+| Interface | Responsibility | Current implementation |
+|-----------|----------------|------------------------|
+| `BrainProvider` | list/search/write memories, list skills, watch for changes, health | `HermesProvider` — Hermes filesystem + HTTP API |
+| `ExecutorProvider` | stream chat completions with tool calling, expose available tools, health | `OpenAICompatibleExecutor` — POSTs to `${OPENAI_BASE_URL}/v1/chat/completions` with SSE streaming |
+
+Swap either by implementing the interface and wiring it in `apps/api/src/providers/index.ts`.
+
+### Module Layer
 
 | Module | Responsibility |
 |--------|---------------|
-| `skills-sync` | Bidirectional skill discovery and sync between Hermes and OpenClaw via agentskills.io format |
-| `memory-bridge` | Read Hermes memory files, provide search/query API, write execution feedback |
-| `execution-monitor` | Poll OpenClaw gateway events, track tool execution, capture results |
-| `config-manager` | Unified config read/write for both Hermes and OpenClaw settings |
-| `health-check` | Periodic health checks for both services, status aggregation |
-| `events-stream` | SSE endpoint for real-time event forwarding to frontend |
+| `skills` | Skill catalogue, diff, conflict records (`skill_conflicts.brain_hash` / `executor_hash`) |
+| `memory` | Read-through / search Brain memories; write back via the provider |
+| `execution` | Execution log query surface; writes originate from the orchestrator tool path |
+| `config` | Unified read/write for Hermes YAML; legacy OpenClaw config is no longer surfaced |
+| `health` | Aggregates `services.brain` + `services.executor` status |
+| `events` | In-process event bus + `/api/events/stream` SSE endpoint |
+| `orchestrator` | Task lifecycle + tool loop (see above) |
 
-### Adapter Layer
-
-| Adapter | Interface | Protocol |
-|---------|-----------|----------|
-| Hermes filesystem | `~/.hermes/skills/`, `~/.hermes/memories/` | Direct file I/O |
-| Hermes API | `http://localhost:8642/v1` | OpenAI-compatible REST |
-| Hermes MCP | `hermes mcp serve` | MCP stdio |
-| OpenClaw Gateway | `ws://localhost:18789` | WebSocket JSON frames |
-| OpenClaw config | `~/.openclaw/openclaw.json` | Direct file I/O |
-
-### Frontend Pages
-
-| Page | Function |
-|------|----------|
-| Dashboard | Overview: service status, recent events, skill/memory counts |
-| Skills Manager | Browse, sync, diff skills between Hermes and OpenClaw |
-| Memory Explorer | Search and browse Hermes memories, view execution feedback |
-| Execution Monitor | Live view of OpenClaw executions, tool calls, results |
-| Config Editor | Unified config management for both services |
-| Sync Status | Sync history, conflict resolution, manual triggers |
-
-## Data Flow
-
-### Skill Sync Flow
+### Data Flow
 
 ```
-Hermes ~/.hermes/skills/  ←──── AIWorker watches ────→  OpenClaw ~/.openclaw/workspace/skills/
-           │                        │                              │
-           │                   ┌────┴────┐                         │
-           │                   │ Diff &  │                         │
-           │                   │ Merge   │                         │
-           │                   └────┬────┘                         │
-           │                        │                              │
-           └──── agentskills.io ────┘──── agentskills.io ─────────┘
+Client ─ POST /api/orchestrator/tasks ─▶ Orchestrator
+                                         │
+                                         ├─▶ Executor.runChat (stream)
+                                         │      ├─ text delta   → persist assistant message
+                                         │      ├─ tool_call    → Brain.searchMemory / writeMemory / fs.read
+                                         │      └─ finish       → finalise task
+                                         │
+                                         └─▶ eventBus ─▶ SSE /api/events/stream ─▶ UI
 ```
 
-### Execution Feedback Loop
+## Environment
 
-```
-OpenClaw executes tool
-  → AIWorker captures result via Gateway WS events
-  → Stores in SQLite event log
-  → Writes feedback to Hermes-readable format
-  → Hermes learns from feedback (skill create/improve)
-```
+See `apps/api/.env.example` for the full list. Required for live runs:
+
+- `HERMES_API_URL`, `HERMES_HOME` — Brain provider target
+- `OPENAI_BASE_URL`, `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_TIMEOUT_MS` — Executor provider target
+
+Legacy `OPENCLAW_WS_URL` / `OPENCLAW_HOME` remain in the env schema for transitional compatibility; they are not consumed by the current orchestrator or surfaced via `/api/config`.
 
 ## Key Design Decisions
 
-1. **File-first for skills/memory**: Direct filesystem access for Hermes/OpenClaw data, not API wrappers around file reads.
-2. **WebSocket for OpenClaw events**: Gateway WS is the canonical event source, not polling.
-3. **SQLite for glue state**: Sync metadata, event log, conflict history. Not a replacement for either system's storage.
-4. **No forking**: AIWorker does not modify Hermes or OpenClaw source code. Pure middleware.
+1. **Provider-shaped core**: the orchestrator depends only on `BrainProvider` / `ExecutorProvider`, not on Hermes or OpenAI specifically. Tests inject scripted executors; production swaps via `apps/api/src/providers/index.ts`.
+2. **File-first for Brain**: memories and skills live as markdown files under `HERMES_HOME`; the provider wraps filesystem + optional HTTP.
+3. **SQLite for runtime state**: agent tasks, conversations, transcripts, tool-call logs, and skill conflicts. Drizzle migrations run automatically on `initDb`.
+4. **SSE for live updates**: the orchestrator publishes typed events; the web app subscribes via `/api/events/stream` for dashboard, execution monitor, and orchestrator pages.
+5. **OpenAI-compatible, not OpenAI-only**: any endpoint speaking the chat-completions + tools dialect works (OpenAI, Ollama, vLLM, LM Studio, Together, …).
