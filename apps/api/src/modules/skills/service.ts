@@ -1,107 +1,86 @@
+import type { BrainSkill, ExecutorTool } from '@aiworker/shared'
+
 import type { ConflictRecord, SkillDiffEntry, SyncDirection, SyncResult } from './sync'
 import type { Skill } from './types'
 
-import { join } from 'node:path'
-
-import { scanSkills } from '../../adapters/hermes/fs-scanner'
-import { scanOpenClawSkills } from '../../adapters/openclaw'
-import { config } from '../../config'
 import { getDb } from '../../db'
+import { getBrainProvider, getExecutorProvider } from '../../providers'
 import { diffSkillSets, getConflicts as getConflictsFromDb, performSync, resolveConflict as resolveConflictInDb } from './sync'
 
-function hermesSkillsDir(): string {
-  return join(config.HERMES_HOME, 'skills')
+function executorToolToSkill(tool: ExecutorTool): BrainSkill {
+  return {
+    id: tool.name,
+    name: tool.name,
+    description: tool.description,
+    version: '0',
+    tags: [],
+  }
 }
 
-function openclawSkillsDir(): string {
-  return join(config.OPENCLAW_HOME, 'skills')
+async function getExecutorSkills(): Promise<BrainSkill[]> {
+  const tools = await getExecutorProvider().listTools()
+  return tools.map(executorToolToSkill)
+}
+
+function toApiSkill(skill: BrainSkill, source: 'brain' | 'executor'): Skill {
+  return {
+    id: `${source}-${skill.name}`,
+    name: skill.name,
+    description: skill.description,
+    version: skill.version,
+    capabilities: skill.tags ?? [],
+    source,
+  }
 }
 
 export async function listSkills(): Promise<{ skills: Skill[], total: number }> {
-  const [hermesSkills, openclawSkills] = await Promise.all([
-    scanSkills(config.HERMES_HOME),
-    scanOpenClawSkills(config.OPENCLAW_HOME),
+  const [brainSkills, executorSkills] = await Promise.all([
+    getBrainProvider().listSkills(),
+    getExecutorSkills(),
   ])
 
   const skills: Skill[] = [
-    ...hermesSkills.map(s => ({
-      id: `hermes-${s.name}`,
-      name: s.name,
-      description: s.description,
-      version: s.version,
-      capabilities: s.capabilities,
-      source: 'hermes' as const,
-    })),
-    ...openclawSkills.map(s => ({
-      id: `openclaw-${s.name}`,
-      name: s.name,
-      description: s.description,
-      version: s.version,
-      capabilities: s.capabilities,
-      source: 'openclaw' as const,
-    })),
+    ...brainSkills.map(s => toApiSkill(s, 'brain')),
+    ...executorSkills.map(s => toApiSkill(s, 'executor')),
   ]
 
   return { skills, total: skills.length }
 }
 
 export async function getSkill(name: string): Promise<Skill | null> {
-  const [hermesSkills, openclawSkills] = await Promise.all([
-    scanSkills(config.HERMES_HOME),
-    scanOpenClawSkills(config.OPENCLAW_HOME),
+  const [brainSkills, executorSkills] = await Promise.all([
+    getBrainProvider().listSkills(),
+    getExecutorSkills(),
   ])
 
-  const hermes = hermesSkills.find(s => s.name === name)
-  if (hermes) {
-    return {
-      id: `hermes-${hermes.name}`,
-      name: hermes.name,
-      description: hermes.description,
-      version: hermes.version,
-      capabilities: hermes.capabilities,
-      source: 'hermes',
-    }
-  }
+  const brain = brainSkills.find(s => s.name === name)
+  if (brain)
+    return toApiSkill(brain, 'brain')
 
-  const openclaw = openclawSkills.find(s => s.name === name)
-  if (openclaw) {
-    return {
-      id: `openclaw-${openclaw.name}`,
-      name: openclaw.name,
-      description: openclaw.description,
-      version: openclaw.version,
-      capabilities: openclaw.capabilities,
-      source: 'openclaw',
-    }
-  }
+  const executor = executorSkills.find(s => s.name === name)
+  if (executor)
+    return toApiSkill(executor, 'executor')
 
   return null
 }
 
 export async function diffSkills(): Promise<SkillDiffEntry[]> {
-  const [hermesSkills, openclawSkills] = await Promise.all([
-    scanSkills(config.HERMES_HOME),
-    scanOpenClawSkills(config.OPENCLAW_HOME),
+  const [brainSkills, executorSkills] = await Promise.all([
+    getBrainProvider().listSkills(),
+    getExecutorSkills(),
   ])
 
-  return diffSkillSets(hermesSkills, openclawSkills)
+  return diffSkillSets(brainSkills, executorSkills)
 }
 
 export async function syncSkills(direction: SyncDirection = 'bidirectional'): Promise<SyncResult> {
-  const [hermesSkills, openclawSkills] = await Promise.all([
-    scanSkills(config.HERMES_HOME),
-    scanOpenClawSkills(config.OPENCLAW_HOME),
+  const [brainSkills, executorSkills] = await Promise.all([
+    getBrainProvider().listSkills(),
+    getExecutorSkills(),
   ])
 
   const db = getDb()
-  return performSync(
-    direction,
-    hermesSkills,
-    openclawSkills,
-    hermesSkillsDir(),
-    openclawSkillsDir(),
-    db,
-  )
+  return performSync(direction, brainSkills, executorSkills, db)
 }
 
 export async function getConflicts(): Promise<ConflictRecord[]> {
@@ -109,7 +88,7 @@ export async function getConflicts(): Promise<ConflictRecord[]> {
   return getConflictsFromDb(db)
 }
 
-export async function resolveConflict(id: number, resolution: 'hermes' | 'openclaw' | 'manual'): Promise<ConflictRecord | null> {
+export async function resolveConflict(id: number, resolution: 'brain' | 'executor' | 'manual'): Promise<ConflictRecord | null> {
   const db = getDb()
   return resolveConflictInDb(db, id, resolution)
 }

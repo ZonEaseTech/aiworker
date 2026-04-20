@@ -1,46 +1,53 @@
+import type { ServiceStatus } from '@aiworker/shared'
+import { getBrainProvider, getExecutorProvider } from '../../providers'
+
 export interface ServiceHealth {
   status: 'ok' | 'degraded' | 'down'
-  latency?: number
+  name?: string
+  lastChecked?: string
   error?: string
 }
 
-async function checkService(url: string, timeoutMs = 3000): Promise<ServiceHealth> {
-  const start = performance.now()
+function fromProviderStatus(status: ServiceStatus): ServiceHealth {
+  return {
+    status: status.status === 'healthy' ? 'ok' : status.status,
+    name: status.name,
+    lastChecked: status.lastChecked,
+  }
+}
+
+async function safeCheck(check: () => Promise<ServiceStatus>): Promise<ServiceHealth> {
   try {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), timeoutMs)
-    const res = await fetch(url, { signal: controller.signal })
-    clearTimeout(timeout)
-    const latency = Math.round(performance.now() - start)
-    return { status: res.ok ? 'ok' : 'degraded', latency }
+    return fromProviderStatus(await check())
   }
   catch (err) {
     return {
       status: 'down',
-      latency: Math.round(performance.now() - start),
       error: err instanceof Error ? err.message : 'Unknown error',
     }
   }
 }
 
-export async function checkHermes(): Promise<ServiceHealth> {
-  return checkService('http://localhost:8642/health')
+export async function checkBrain(): Promise<ServiceHealth> {
+  return safeCheck(() => getBrainProvider().health())
 }
 
-export async function checkOpenclaw(): Promise<ServiceHealth> {
-  return checkService('http://localhost:18789/health')
+export async function checkExecutor(): Promise<ServiceHealth> {
+  return safeCheck(() => getExecutorProvider().health())
+}
+
+function combineStatus(a: ServiceHealth, b: ServiceHealth): 'ok' | 'degraded' | 'down' {
+  if (a.status === 'ok' && b.status === 'ok')
+    return 'ok'
+  if (a.status === 'down' && b.status === 'down')
+    return 'down'
+  return 'degraded'
 }
 
 export async function getHealthStatus() {
-  const [hermes, openclaw] = await Promise.all([checkHermes(), checkOpenclaw()])
-  const overall = hermes.status === 'ok' && openclaw.status === 'ok'
-    ? 'ok'
-    : hermes.status === 'down' && openclaw.status === 'down'
-      ? 'down'
-      : 'degraded'
-
+  const [brain, executor] = await Promise.all([checkBrain(), checkExecutor()])
   return {
-    status: overall as 'ok' | 'degraded' | 'down',
-    services: { hermes, openclaw },
+    status: combineStatus(brain, executor),
+    services: { brain, executor },
   }
 }

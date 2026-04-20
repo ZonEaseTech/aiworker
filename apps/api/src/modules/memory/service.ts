@@ -1,48 +1,55 @@
+import type { BrainMemory } from '@aiworker/shared'
 import type { MemoryEntry, MemoryIndex, WriteFeedbackInput, WriteMemoryInput } from './types'
 
 import { join } from 'node:path'
 
-import { scanMemories } from '../../adapters/hermes/fs-scanner'
 import { config } from '../../config'
-import { parseMemoryIndex, writeMemoryFile } from './writer'
+import { getBrainProvider } from '../../providers'
+import { parseMemoryIndex } from './writer'
 
-function toMemoryEntry(m: { id: string, title: string, content: string, metadata: Record<string, unknown>, filePath: string, hash: string, createdAt?: string, updatedAt?: string }): MemoryEntry {
+function toMemoryEntry(m: BrainMemory): MemoryEntry {
+  const meta = m.metadata as Record<string, unknown>
+  const title = typeof meta.title === 'string' ? meta.title : m.id
+  const filePath = typeof meta.filePath === 'string' ? meta.filePath : ''
+  const hash = typeof meta.hash === 'string' ? meta.hash : ''
   return {
     id: m.id,
-    title: m.title,
+    title,
     content: m.content,
-    metadata: m.metadata,
-    filePath: m.filePath,
-    hash: m.hash,
+    metadata: meta,
+    filePath,
+    hash,
     createdAt: m.createdAt,
     updatedAt: m.updatedAt,
   }
 }
 
+function toBrainWriteInput(input: WriteMemoryInput) {
+  return {
+    content: input.content,
+    metadata: {
+      name: input.name,
+      description: input.description,
+      type: input.type,
+    },
+  }
+}
+
 export async function listMemories(): Promise<{ memories: MemoryEntry[], total: number }> {
-  const raw = await scanMemories(config.HERMES_HOME)
+  const raw = await getBrainProvider().listMemories()
   const memories = raw.map(toMemoryEntry)
   return { memories, total: memories.length }
 }
 
 export async function getMemory(id: string): Promise<MemoryEntry | null> {
-  const raw = await scanMemories(config.HERMES_HOME)
+  const raw = await getBrainProvider().listMemories()
   const found = raw.find(m => m.id === id)
   return found ? toMemoryEntry(found) : null
 }
 
 export async function searchMemories(query: string): Promise<{ results: Array<MemoryEntry & { score: number }>, query: string }> {
-  const raw = await scanMemories(config.HERMES_HOME)
-  const lower = query.toLowerCase()
-  const results = raw
-    .filter(m =>
-      m.content.toLowerCase().includes(lower)
-      || m.title.toLowerCase().includes(lower)
-      || (m.metadata.name && String(m.metadata.name).toLowerCase().includes(lower))
-      || (m.metadata.description && String(m.metadata.description).toLowerCase().includes(lower)),
-    )
-    .map(m => ({ ...toMemoryEntry(m), score: 1.0 }))
-
+  const raw = await getBrainProvider().searchMemories(query)
+  const results = raw.map(m => ({ ...toMemoryEntry(m), score: m.score ?? 1 }))
   return { results, query }
 }
 
@@ -61,8 +68,9 @@ export async function getMemoryIndex(): Promise<MemoryIndex> {
 }
 
 export async function writeMemory(input: WriteMemoryInput): Promise<{ id: string, filePath: string, success: boolean }> {
-  const { id, filePath } = await writeMemoryFile(input)
-  return { id, filePath, success: true }
+  const written = await getBrainProvider().writeMemory(toBrainWriteInput(input))
+  const filePath = typeof written.metadata.filePath === 'string' ? written.metadata.filePath : ''
+  return { id: written.id, filePath, success: true }
 }
 
 export async function writeFeedback(input: WriteFeedbackInput): Promise<{ id: string, filePath: string, success: boolean }> {

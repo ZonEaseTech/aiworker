@@ -6,7 +6,7 @@ export const skillSchema = z.object({
   description: z.string(),
   version: z.string(),
   capabilities: z.array(z.string()),
-  source: z.enum(['hermes', 'openclaw', 'local']),
+  source: z.enum(['brain', 'executor', 'local']),
 })
 
 export const skillListResponseSchema = z.object({
@@ -24,9 +24,9 @@ export const syncResponseSchema = z.object({
 
 export const diffEntrySchema = z.object({
   name: z.string(),
-  status: z.enum(['added-hermes', 'added-openclaw', 'modified', 'identical']),
-  hermesHash: z.string().optional(),
-  openclawHash: z.string().optional(),
+  status: z.enum(['added-brain', 'added-executor', 'modified', 'identical']),
+  brainHash: z.string().optional(),
+  executorHash: z.string().optional(),
 })
 
 export const diffResponseSchema = z.object({
@@ -37,9 +37,9 @@ export const diffResponseSchema = z.object({
 export const conflictSchema = z.object({
   id: z.number(),
   skillName: z.string(),
-  hermesHash: z.string(),
-  openclawHash: z.string(),
-  resolution: z.enum(['pending', 'hermes', 'openclaw', 'manual']),
+  brainHash: z.string(),
+  executorHash: z.string(),
+  resolution: z.enum(['pending', 'brain', 'executor', 'manual']),
   createdAt: z.string(),
 })
 
@@ -49,11 +49,11 @@ export const conflictListResponseSchema = z.object({
 })
 
 export const resolveConflictRequestSchema = z.object({
-  resolution: z.enum(['hermes', 'openclaw', 'manual']),
+  resolution: z.enum(['brain', 'executor', 'manual']),
 })
 
 export const syncRequestSchema = z.object({
-  direction: z.enum(['hermes-to-openclaw', 'openclaw-to-hermes', 'bidirectional']).default('bidirectional'),
+  direction: z.enum(['brain-to-executor', 'executor-to-brain', 'bidirectional']).default('bidirectional'),
 })
 
 export type Skill = z.infer<typeof skillSchema>

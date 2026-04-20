@@ -1,17 +1,18 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi'
-import { checkHermes, checkOpenclaw, getHealthStatus } from './service'
+import { checkBrain, checkExecutor, getHealthStatus } from './service'
 
 const serviceHealthSchema = z.object({
   status: z.enum(['ok', 'degraded', 'down']),
-  latency: z.number().optional(),
+  name: z.string().optional(),
+  lastChecked: z.string().optional(),
   error: z.string().optional(),
 })
 
 const healthResponseSchema = z.object({
   status: z.enum(['ok', 'degraded', 'down']),
   services: z.object({
-    hermes: serviceHealthSchema,
-    openclaw: serviceHealthSchema,
+    brain: serviceHealthSchema,
+    executor: serviceHealthSchema,
   }),
 })
 
@@ -30,28 +31,28 @@ const healthRoute = createRoute({
   },
 })
 
-const hermesRoute = createRoute({
+const brainRoute = createRoute({
   method: 'get',
-  path: '/hermes',
+  path: '/brain',
   tags: ['Health'],
-  summary: 'Hermes API health check',
+  summary: 'Brain provider health check',
   responses: {
     200: {
       content: { 'application/json': { schema: serviceHealthSchema } },
-      description: 'Hermes health status',
+      description: 'Brain provider health status',
     },
   },
 })
 
-const openclawRoute = createRoute({
+const executorRoute = createRoute({
   method: 'get',
-  path: '/openclaw',
+  path: '/executor',
   tags: ['Health'],
-  summary: 'OpenClaw gateway health check',
+  summary: 'Executor provider health check',
   responses: {
     200: {
       content: { 'application/json': { schema: serviceHealthSchema } },
-      description: 'OpenClaw health status',
+      description: 'Executor provider health status',
     },
   },
 })
@@ -61,13 +62,13 @@ health.openapi(healthRoute, async (c) => {
   return c.json(result, 200)
 })
 
-health.openapi(hermesRoute, async (c) => {
-  const result = await checkHermes()
+health.openapi(brainRoute, async (c) => {
+  const result = await checkBrain()
   return c.json(result, 200)
 })
 
-health.openapi(openclawRoute, async (c) => {
-  const result = await checkOpenclaw()
+health.openapi(executorRoute, async (c) => {
+  const result = await checkExecutor()
   return c.json(result, 200)
 })
 
