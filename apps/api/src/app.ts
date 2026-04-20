@@ -2,6 +2,7 @@ import { OpenAPIHono } from '@hono/zod-openapi'
 import { apiReference } from '@scalar/hono-api-reference'
 
 import { configRouter } from './modules/config'
+import { events } from './modules/events'
 import { execution } from './modules/execution'
 import { health } from './modules/health'
 import { memory } from './modules/memory'
@@ -20,6 +21,7 @@ app.route('/api/memories', memory)
 app.route('/api/execution', execution)
 app.route('/api/orchestrator', orchestrator)
 app.route('/api/config', configRouter)
+app.route('/api/events', events)
 
 app.doc('/openapi.json', {
   openapi: '3.1.0',
