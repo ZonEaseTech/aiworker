@@ -1,36 +1,76 @@
-import type { MemoryEntry } from './types'
+import type { MemoryEntry, MemoryIndex, WriteFeedbackInput, WriteMemoryInput } from './types'
 
-const mockMemories: MemoryEntry[] = [
-  {
-    id: 'mem-001',
-    content: 'User prefers TypeScript strict mode with noUncheckedIndexedAccess',
-    metadata: { category: 'preference', source: 'hermes' },
-    createdAt: '2025-01-15T10:00:00Z',
-    updatedAt: '2025-01-15T10:00:00Z',
-  },
-  {
-    id: 'mem-002',
-    content: 'Project uses Bun monorepo with workspace protocol',
-    metadata: { category: 'context', source: 'hermes' },
-    createdAt: '2025-01-16T09:30:00Z',
-    updatedAt: '2025-01-16T09:30:00Z',
-  },
-  {
-    id: 'mem-003',
-    content: 'OpenClaw gateway runs on port 18789 with REST API',
-    metadata: { category: 'infrastructure', source: 'local' },
-    createdAt: '2025-01-17T14:00:00Z',
-    updatedAt: '2025-01-17T14:00:00Z',
-  },
-]
+import { join } from 'node:path'
 
-export function listMemories() {
-  return { memories: mockMemories, total: mockMemories.length }
+import { scanMemories } from '../../adapters/hermes/fs-scanner'
+import { config } from '../../config'
+import { parseMemoryIndex, writeMemoryFile } from './writer'
+
+function toMemoryEntry(m: { id: string, title: string, content: string, metadata: Record<string, unknown>, filePath: string, hash: string, createdAt?: string, updatedAt?: string }): MemoryEntry {
+  return {
+    id: m.id,
+    title: m.title,
+    content: m.content,
+    metadata: m.metadata,
+    filePath: m.filePath,
+    hash: m.hash,
+    createdAt: m.createdAt,
+    updatedAt: m.updatedAt,
+  }
 }
 
-export function searchMemories(query: string) {
-  const results = mockMemories
-    .filter(m => m.content.toLowerCase().includes(query.toLowerCase()))
-    .map(m => ({ ...m, score: 0.85 }))
+export async function listMemories(): Promise<{ memories: MemoryEntry[], total: number }> {
+  const raw = await scanMemories(config.HERMES_HOME)
+  const memories = raw.map(toMemoryEntry)
+  return { memories, total: memories.length }
+}
+
+export async function getMemory(id: string): Promise<MemoryEntry | null> {
+  const raw = await scanMemories(config.HERMES_HOME)
+  const found = raw.find(m => m.id === id)
+  return found ? toMemoryEntry(found) : null
+}
+
+export async function searchMemories(query: string): Promise<{ results: Array<MemoryEntry & { score: number }>, query: string }> {
+  const raw = await scanMemories(config.HERMES_HOME)
+  const lower = query.toLowerCase()
+  const results = raw
+    .filter(m =>
+      m.content.toLowerCase().includes(lower)
+      || m.title.toLowerCase().includes(lower)
+      || (m.metadata.name && String(m.metadata.name).toLowerCase().includes(lower))
+      || (m.metadata.description && String(m.metadata.description).toLowerCase().includes(lower)),
+    )
+    .map(m => ({ ...toMemoryEntry(m), score: 1.0 }))
+
   return { results, query }
+}
+
+export async function getMemoryIndex(): Promise<MemoryIndex> {
+  const indexPath = join(config.HERMES_HOME, 'memories', 'MEMORY.md')
+  const file = Bun.file(indexPath)
+  const exists = await file.exists()
+
+  if (!exists) {
+    return { entries: [] }
+  }
+
+  const raw = await file.text()
+  const entries = parseMemoryIndex(raw)
+  return { entries }
+}
+
+export async function writeMemory(input: WriteMemoryInput): Promise<{ id: string, filePath: string, success: boolean }> {
+  const { id, filePath } = await writeMemoryFile(input)
+  return { id, filePath, success: true }
+}
+
+export async function writeFeedback(input: WriteFeedbackInput): Promise<{ id: string, filePath: string, success: boolean }> {
+  const memoryInput: WriteMemoryInput = {
+    name: input.title,
+    description: input.source ? `Feedback from ${input.source}` : 'Execution feedback',
+    type: 'feedback',
+    content: input.content,
+  }
+  return writeMemory(memoryInput)
 }
