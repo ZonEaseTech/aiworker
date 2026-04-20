@@ -5,6 +5,7 @@ import { configRouter } from './modules/config'
 import { execution } from './modules/execution'
 import { health } from './modules/health'
 import { memory } from './modules/memory'
+import { orchestrator } from './modules/orchestrator'
 import { skills } from './modules/skills'
 import { errorHandler, requestLogger } from './shared'
 
@@ -17,6 +18,7 @@ app.route('/health', health)
 app.route('/api/skills', skills)
 app.route('/api/memories', memory)
 app.route('/api/execution', execution)
+app.route('/api/orchestrator', orchestrator)
 app.route('/api/config', configRouter)
 
 app.doc('/openapi.json', {
