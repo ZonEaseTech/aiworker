@@ -1,40 +1,115 @@
+import type { ConflictRecord, SkillDiffEntry, SyncDirection, SyncResult } from './sync'
 import type { Skill } from './types'
 
-const mockSkills: Skill[] = [
-  {
-    id: 'skill-001',
-    name: 'code-review',
-    description: 'Automated code review using LLM analysis',
-    version: '1.0.0',
-    capabilities: ['review', 'suggest', 'explain'],
-    source: 'hermes',
-  },
-  {
-    id: 'skill-002',
-    name: 'test-generator',
-    description: 'Generate unit tests for source files',
-    version: '0.9.0',
-    capabilities: ['generate', 'validate'],
-    source: 'openclaw',
-  },
-  {
-    id: 'skill-003',
-    name: 'doc-writer',
-    description: 'Generate documentation from code',
-    version: '1.1.0',
-    capabilities: ['generate', 'format'],
-    source: 'local',
-  },
-]
+import { join } from 'node:path'
 
-export function listSkills() {
-  return { skills: mockSkills, total: mockSkills.length }
+import { scanSkills } from '../../adapters/hermes/fs-scanner'
+import { scanOpenClawSkills } from '../../adapters/openclaw'
+import { config } from '../../config'
+import { getDb } from '../../db'
+import { diffSkillSets, getConflicts as getConflictsFromDb, performSync, resolveConflict as resolveConflictInDb } from './sync'
+
+function hermesSkillsDir(): string {
+  return join(config.HERMES_HOME, 'skills')
 }
 
-export function getSkill(name: string) {
-  return mockSkills.find(s => s.name === name) ?? null
+function openclawSkillsDir(): string {
+  return join(config.OPENCLAW_HOME, 'skills')
 }
 
-export function triggerSync() {
-  return { status: 'completed' as const, synced: 3, conflicts: 0 }
+export async function listSkills(): Promise<{ skills: Skill[], total: number }> {
+  const [hermesSkills, openclawSkills] = await Promise.all([
+    scanSkills(config.HERMES_HOME),
+    scanOpenClawSkills(config.OPENCLAW_HOME),
+  ])
+
+  const skills: Skill[] = [
+    ...hermesSkills.map(s => ({
+      id: `hermes-${s.name}`,
+      name: s.name,
+      description: s.description,
+      version: s.version,
+      capabilities: s.capabilities,
+      source: 'hermes' as const,
+    })),
+    ...openclawSkills.map(s => ({
+      id: `openclaw-${s.name}`,
+      name: s.name,
+      description: s.description,
+      version: s.version,
+      capabilities: s.capabilities,
+      source: 'openclaw' as const,
+    })),
+  ]
+
+  return { skills, total: skills.length }
+}
+
+export async function getSkill(name: string): Promise<Skill | null> {
+  const [hermesSkills, openclawSkills] = await Promise.all([
+    scanSkills(config.HERMES_HOME),
+    scanOpenClawSkills(config.OPENCLAW_HOME),
+  ])
+
+  const hermes = hermesSkills.find(s => s.name === name)
+  if (hermes) {
+    return {
+      id: `hermes-${hermes.name}`,
+      name: hermes.name,
+      description: hermes.description,
+      version: hermes.version,
+      capabilities: hermes.capabilities,
+      source: 'hermes',
+    }
+  }
+
+  const openclaw = openclawSkills.find(s => s.name === name)
+  if (openclaw) {
+    return {
+      id: `openclaw-${openclaw.name}`,
+      name: openclaw.name,
+      description: openclaw.description,
+      version: openclaw.version,
+      capabilities: openclaw.capabilities,
+      source: 'openclaw',
+    }
+  }
+
+  return null
+}
+
+export async function diffSkills(): Promise<SkillDiffEntry[]> {
+  const [hermesSkills, openclawSkills] = await Promise.all([
+    scanSkills(config.HERMES_HOME),
+    scanOpenClawSkills(config.OPENCLAW_HOME),
+  ])
+
+  return diffSkillSets(hermesSkills, openclawSkills)
+}
+
+export async function syncSkills(direction: SyncDirection = 'bidirectional'): Promise<SyncResult> {
+  const [hermesSkills, openclawSkills] = await Promise.all([
+    scanSkills(config.HERMES_HOME),
+    scanOpenClawSkills(config.OPENCLAW_HOME),
+  ])
+
+  const db = getDb()
+  return performSync(
+    direction,
+    hermesSkills,
+    openclawSkills,
+    hermesSkillsDir(),
+    openclawSkillsDir(),
+    db,
+  )
+}
+
+export async function getConflicts(): Promise<ConflictRecord[]> {
+  const db = getDb()
+  return getConflictsFromDb(db)
+}
+
+export async function resolveConflict(id: number, resolution: 'hermes' | 'openclaw' | 'manual'): Promise<ConflictRecord | null> {
+  const db = getDb()
+  return resolveConflictInDb(db, id, resolution)
 }
