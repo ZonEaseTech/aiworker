@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SyncRouteImport } from './routes/sync'
 import { Route as SkillsRouteImport } from './routes/skills'
+import { Route as OrchestratorRouteImport } from './routes/orchestrator'
 import { Route as MemoryRouteImport } from './routes/memory'
 import { Route as ExecutionRouteImport } from './routes/execution'
 import { Route as ConfigRouteImport } from './routes/config'
@@ -24,6 +25,11 @@ const SyncRoute = SyncRouteImport.update({
 const SkillsRoute = SkillsRouteImport.update({
   id: '/skills',
   path: '/skills',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OrchestratorRoute = OrchestratorRouteImport.update({
+  id: '/orchestrator',
+  path: '/orchestrator',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MemoryRoute = MemoryRouteImport.update({
@@ -52,6 +58,7 @@ export interface FileRoutesByFullPath {
   '/config': typeof ConfigRoute
   '/execution': typeof ExecutionRoute
   '/memory': typeof MemoryRoute
+  '/orchestrator': typeof OrchestratorRoute
   '/skills': typeof SkillsRoute
   '/sync': typeof SyncRoute
 }
@@ -60,6 +67,7 @@ export interface FileRoutesByTo {
   '/config': typeof ConfigRoute
   '/execution': typeof ExecutionRoute
   '/memory': typeof MemoryRoute
+  '/orchestrator': typeof OrchestratorRoute
   '/skills': typeof SkillsRoute
   '/sync': typeof SyncRoute
 }
@@ -69,20 +77,36 @@ export interface FileRoutesById {
   '/config': typeof ConfigRoute
   '/execution': typeof ExecutionRoute
   '/memory': typeof MemoryRoute
+  '/orchestrator': typeof OrchestratorRoute
   '/skills': typeof SkillsRoute
   '/sync': typeof SyncRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/config' | '/execution' | '/memory' | '/skills' | '/sync'
+  fullPaths:
+    | '/'
+    | '/config'
+    | '/execution'
+    | '/memory'
+    | '/orchestrator'
+    | '/skills'
+    | '/sync'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/config' | '/execution' | '/memory' | '/skills' | '/sync'
+  to:
+    | '/'
+    | '/config'
+    | '/execution'
+    | '/memory'
+    | '/orchestrator'
+    | '/skills'
+    | '/sync'
   id:
     | '__root__'
     | '/'
     | '/config'
     | '/execution'
     | '/memory'
+    | '/orchestrator'
     | '/skills'
     | '/sync'
   fileRoutesById: FileRoutesById
@@ -92,6 +116,7 @@ export interface RootRouteChildren {
   ConfigRoute: typeof ConfigRoute
   ExecutionRoute: typeof ExecutionRoute
   MemoryRoute: typeof MemoryRoute
+  OrchestratorRoute: typeof OrchestratorRoute
   SkillsRoute: typeof SkillsRoute
   SyncRoute: typeof SyncRoute
 }
@@ -110,6 +135,13 @@ declare module '@tanstack/react-router' {
       path: '/skills'
       fullPath: '/skills'
       preLoaderRoute: typeof SkillsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/orchestrator': {
+      id: '/orchestrator'
+      path: '/orchestrator'
+      fullPath: '/orchestrator'
+      preLoaderRoute: typeof OrchestratorRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/memory': {
@@ -148,6 +180,7 @@ const rootRouteChildren: RootRouteChildren = {
   ConfigRoute: ConfigRoute,
   ExecutionRoute: ExecutionRoute,
   MemoryRoute: MemoryRoute,
+  OrchestratorRoute: OrchestratorRoute,
   SkillsRoute: SkillsRoute,
   SyncRoute: SyncRoute,
 }

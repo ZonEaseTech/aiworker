@@ -15,6 +15,12 @@ const EVENT_TYPES = [
   'sync_failed',
   'memory_write',
   'skill_updated',
+  'orchestrator.task.started',
+  'orchestrator.task.message',
+  'orchestrator.task.tool_call',
+  'orchestrator.task.finished',
+  'orchestrator.task.failed',
+  'orchestrator.task.cancelled',
 ] as const
 
 export function useEventStream(onEvent: (event: BusEvent) => void, enabled = true) {
