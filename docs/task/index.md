@@ -32,4 +32,4 @@ Each task is a single line linking to its detail file. All detailed information 
 ## Tasks
 
 - [x] [**FEAT-001 Build AIWorker middleware product**](FEAT-001.md) `P1`
-- [-] [**REFACTOR-001 Refactor AIWorker into a self-hosted Agent Runtime**](REFACTOR-001.md) `P1`
+- [x] [**REFACTOR-001 Refactor AIWorker into a self-hosted Agent Runtime**](REFACTOR-001.md) `P1`

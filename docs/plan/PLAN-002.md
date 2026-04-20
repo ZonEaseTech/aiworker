@@ -1,8 +1,9 @@
 # PLAN-002 Refactor AIWorker into self-hosted Agent Runtime
 
-- **status**: implementing
+- **status**: completed
 - **createdAt**: 2026-04-20 17:40
 - **approvedAt**: 2026-04-20 18:05
+- **completedAt**: 2026-04-20 20:50
 - **relatedTask**: REFACTOR-001
 
 ## Context
