@@ -1,5 +1,5 @@
 import { createRootRoute, Link, Outlet } from '@tanstack/react-router'
-import { Activity, Database, FileStack, LayoutDashboard, RefreshCw, Settings, Sparkles } from 'lucide-react'
+import { Activity, Bot, Database, FileStack, LayoutDashboard, RefreshCw, Settings, Sparkles } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
@@ -9,6 +9,7 @@ const navItems = [
   { to: '/skills', label: 'Skills', icon: Sparkles },
   { to: '/memory', label: 'Memory', icon: Database },
   { to: '/execution', label: 'Execution', icon: Activity },
+  { to: '/orchestrator', label: 'Orchestrator', icon: Bot },
   { to: '/config', label: 'Config', icon: Settings },
   { to: '/sync', label: 'Sync', icon: RefreshCw },
 ] as const
