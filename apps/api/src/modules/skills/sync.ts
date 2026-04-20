@@ -1,21 +1,17 @@
-import type { HermesSkill } from '../../adapters/hermes/types'
-import type { OpenClawSkill } from '../../adapters/openclaw'
+import type { BrainSkill } from '@aiworker/shared'
 import type { AppDatabase } from '../../db'
-
-import { mkdir } from 'node:fs/promises'
-import { dirname } from 'node:path'
 
 import { eq } from 'drizzle-orm'
 
 import { skillConflicts, syncEvents } from '../../db/schema'
 
-export type SyncDirection = 'hermes-to-openclaw' | 'openclaw-to-hermes' | 'bidirectional'
+export type SyncDirection = 'brain-to-executor' | 'executor-to-brain' | 'bidirectional'
 
 export interface SkillDiffEntry {
   name: string
-  status: 'added-hermes' | 'added-openclaw' | 'modified' | 'identical'
-  hermesHash?: string
-  openclawHash?: string
+  status: 'added-brain' | 'added-executor' | 'modified' | 'identical'
+  brainHash?: string
+  executorHash?: string
 }
 
 export interface SyncResult {
@@ -27,119 +23,76 @@ export interface SyncResult {
 export interface ConflictRecord {
   id: number
   skillName: string
-  hermesHash: string
-  openclawHash: string
-  resolution: 'pending' | 'hermes' | 'openclaw' | 'manual'
+  brainHash: string
+  executorHash: string
+  resolution: 'pending' | 'brain' | 'executor' | 'manual'
   createdAt: string
 }
 
+function skillFingerprint(skill: BrainSkill): string {
+  return skill.version || skill.id
+}
+
 export function diffSkillSets(
-  hermesSkills: HermesSkill[],
-  openclawSkills: OpenClawSkill[],
+  brainSkills: BrainSkill[],
+  executorSkills: BrainSkill[],
 ): SkillDiffEntry[] {
-  const hermesMap = new Map(hermesSkills.map(s => [s.name, s]))
-  const openclawMap = new Map(openclawSkills.map(s => [s.name, s]))
-  const allNames = new Set([...hermesMap.keys(), ...openclawMap.keys()])
+  const brainMap = new Map(brainSkills.map(s => [s.name, s]))
+  const executorMap = new Map(executorSkills.map(s => [s.name, s]))
+  const allNames = new Set([...brainMap.keys(), ...executorMap.keys()])
 
   const diff: SkillDiffEntry[] = []
 
   for (const name of allNames) {
-    const hermes = hermesMap.get(name)
-    const openclaw = openclawMap.get(name)
+    const brain = brainMap.get(name)
+    const executor = executorMap.get(name)
 
-    if (hermes && !openclaw) {
-      diff.push({ name, status: 'added-hermes', hermesHash: hermes.hash })
+    if (brain && !executor) {
+      diff.push({ name, status: 'added-brain', brainHash: skillFingerprint(brain) })
     }
-    else if (!hermes && openclaw) {
-      diff.push({ name, status: 'added-openclaw', openclawHash: openclaw.hash })
+    else if (!brain && executor) {
+      diff.push({ name, status: 'added-executor', executorHash: skillFingerprint(executor) })
     }
-    else if (hermes && openclaw) {
-      if (hermes.hash === openclaw.hash) {
-        diff.push({ name, status: 'identical', hermesHash: hermes.hash, openclawHash: openclaw.hash })
-      }
-      else {
-        diff.push({ name, status: 'modified', hermesHash: hermes.hash, openclawHash: openclaw.hash })
-      }
+    else if (brain && executor) {
+      const brainHash = skillFingerprint(brain)
+      const executorHash = skillFingerprint(executor)
+      const status = brainHash === executorHash ? 'identical' : 'modified'
+      diff.push({ name, status, brainHash, executorHash })
     }
   }
 
   return diff
 }
 
-async function copySkillFile(sourcePath: string, targetDir: string, relativeName: string): Promise<void> {
-  const sourceFile = Bun.file(sourcePath)
-  const content = await sourceFile.arrayBuffer()
-  const targetPath = `${targetDir}/${relativeName}`
-  await mkdir(dirname(targetPath), { recursive: true })
-  await Bun.write(targetPath, content)
-}
-
-function getRelativeName(filePath: string): string {
-  // Extract the part after /skills/ in the path
-  const idx = filePath.indexOf('/skills/')
-  if (idx === -1)
-    return filePath.split('/').pop() ?? 'unknown'
-  return filePath.slice(idx + '/skills/'.length)
-}
-
 export async function performSync(
   direction: SyncDirection,
-  hermesSkills: HermesSkill[],
-  openclawSkills: OpenClawSkill[],
-  hermesSkillsDir: string,
-  openclawSkillsDir: string,
+  brainSkills: BrainSkill[],
+  executorSkills: BrainSkill[],
   db: AppDatabase,
 ): Promise<SyncResult> {
-  const diff = diffSkillSets(hermesSkills, openclawSkills)
+  const diff = diffSkillSets(brainSkills, executorSkills)
   const result: SyncResult = { synced: 0, conflicts: 0, errors: [] }
 
   for (const entry of diff) {
-    try {
-      if (entry.status === 'identical')
-        continue
+    if (entry.status === 'identical')
+      continue
 
-      if (entry.status === 'modified') {
-        // Conflict: same skill, different content
-        await db.insert(skillConflicts).values({
-          skillName: entry.name,
-          hermesHash: entry.hermesHash!,
-          openclawHash: entry.openclawHash!,
-          resolution: 'pending',
-        })
-        result.conflicts++
-        continue
-      }
-
-      if (entry.status === 'added-hermes' && (direction === 'hermes-to-openclaw' || direction === 'bidirectional')) {
-        const skill = hermesSkills.find(s => s.name === entry.name)
-        if (skill) {
-          const relativeName = getRelativeName(skill.filePath)
-          await copySkillFile(skill.filePath, openclawSkillsDir, relativeName)
-          result.synced++
-        }
-      }
-
-      if (entry.status === 'added-openclaw' && (direction === 'openclaw-to-hermes' || direction === 'bidirectional')) {
-        const skill = openclawSkills.find(s => s.name === entry.name)
-        if (skill) {
-          const relativeName = getRelativeName(skill.filePath)
-          await copySkillFile(skill.filePath, hermesSkillsDir, relativeName)
-          result.synced++
-        }
-      }
-    }
-    catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      result.errors.push(`Failed to sync skill '${entry.name}': ${message}`)
+    if (entry.status === 'modified') {
+      await db.insert(skillConflicts).values({
+        skillName: entry.name,
+        brainHash: entry.brainHash!,
+        executorHash: entry.executorHash!,
+        resolution: 'pending',
+      })
+      result.conflicts++
     }
   }
 
-  // Record sync event
   await db.insert(syncEvents).values({
     type: 'skill-sync',
-    source: direction.includes('hermes') ? 'hermes' : 'bidirectional',
-    target: direction.includes('openclaw') ? 'openclaw' : 'bidirectional',
-    status: result.errors.length > 0 ? 'completed' : 'completed',
+    source: direction.includes('brain') ? 'brain' : 'bidirectional',
+    target: direction.includes('executor') ? 'executor' : 'bidirectional',
+    status: 'completed',
     metadata: {
       direction,
       synced: result.synced,
@@ -163,7 +116,7 @@ export async function getConflicts(db: AppDatabase): Promise<ConflictRecord[]> {
 export async function resolveConflict(
   db: AppDatabase,
   id: number,
-  resolution: 'hermes' | 'openclaw' | 'manual',
+  resolution: 'brain' | 'executor' | 'manual',
 ): Promise<ConflictRecord | null> {
   const result = await db
     .update(skillConflicts)

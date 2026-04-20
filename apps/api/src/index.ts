@@ -4,9 +4,12 @@ import consola from 'consola'
 import { app } from './app'
 import { config } from './config'
 import { closeDb, initDb } from './db'
+import { runMigrations } from './db/migrate'
 
 const dbPath = path.resolve(import.meta.dir, '../data/aiworker.db')
 initDb(dbPath)
+const migrationsFolder = path.resolve(import.meta.dir, '../drizzle')
+runMigrations(migrationsFolder)
 consola.info(`Database initialized at ${dbPath}`)
 
 const server = Bun.serve({

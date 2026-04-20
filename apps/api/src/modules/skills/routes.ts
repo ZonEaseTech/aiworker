@@ -70,7 +70,7 @@ const diffRoute = createRoute({
   method: 'get',
   path: '/diff',
   tags: ['Skills'],
-  summary: 'Compute skill diff between Hermes and OpenClaw',
+  summary: 'Compute skill diff between brain and executor providers',
   responses: {
     200: {
       content: { 'application/json': { schema: diffResponseSchema } },
