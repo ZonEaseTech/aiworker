@@ -14,11 +14,11 @@ export type {
   ChatUsage,
   ExecutorProvider,
   ExecutorTool,
-  ToolCall,
 } from './executor'
 
 export type {
   AgentTask,
   AgentTaskStatus,
   ChatMessage,
+  ToolCall,
 } from './orchestrator'

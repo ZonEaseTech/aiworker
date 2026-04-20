@@ -1,5 +1,5 @@
 import type { ServiceStatus } from '../types'
-import type { ChatMessage } from './orchestrator'
+import type { ChatMessage, ToolCall } from './orchestrator'
 
 /** Tool advertised by an executor provider for the orchestrator to invoke. */
 export interface ExecutorTool {
@@ -7,14 +7,6 @@ export interface ExecutorTool {
   description: string
   /** JSON Schema describing the tool's accepted arguments. */
   inputSchema: Record<string, unknown>
-}
-
-/** A tool invocation requested by the model during a chat run. */
-export interface ToolCall {
-  /** Provider-assigned identifier, used to correlate the tool response. */
-  id: string
-  name: string
-  arguments: Record<string, unknown>
 }
 
 /** Input payload for a streamed chat run. */
