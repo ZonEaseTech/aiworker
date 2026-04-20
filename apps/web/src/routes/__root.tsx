@@ -1,7 +1,10 @@
+import type { HealthResponse, ServiceHealthDto } from '@/lib/api'
+import { useQuery } from '@tanstack/react-query'
 import { createRootRoute, Link, Outlet } from '@tanstack/react-router'
 import { Activity, Bot, Database, FileStack, LayoutDashboard, RefreshCw, Settings, Sparkles } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
+import { apiGet } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 const navItems = [
@@ -13,6 +16,39 @@ const navItems = [
   { to: '/config', label: 'Config', icon: Settings },
   { to: '/sync', label: 'Sync', icon: RefreshCw },
 ] as const
+
+function statusVariant(status: ServiceHealthDto['status'] | undefined) {
+  switch (status) {
+    case 'ok': return 'success' as const
+    case 'degraded': return 'warning' as const
+    case 'down': return 'destructive' as const
+    default: return 'outline' as const
+  }
+}
+
+function HealthBadges() {
+  const health = useQuery({
+    queryKey: ['health'],
+    queryFn: () => apiGet<HealthResponse>('/health'),
+    refetchInterval: 30_000,
+  })
+  const brain = health.data?.services.brain.status
+  const executor = health.data?.services.executor.status
+  return (
+    <>
+      <Badge variant={statusVariant(brain)}>
+        Brain:
+        {' '}
+        {brain ?? 'unknown'}
+      </Badge>
+      <Badge variant={statusVariant(executor)}>
+        Executor:
+        {' '}
+        {executor ?? 'unknown'}
+      </Badge>
+    </>
+  )
+}
 
 function RootLayout() {
   return (
@@ -48,8 +84,7 @@ function RootLayout() {
             Middleware glue service
           </span>
           <div className="flex items-center gap-2">
-            <Badge variant="outline">Hermes: unknown</Badge>
-            <Badge variant="outline">OpenClaw: unknown</Badge>
+            <HealthBadges />
           </div>
         </header>
         <main className="flex-1 overflow-auto p-6">

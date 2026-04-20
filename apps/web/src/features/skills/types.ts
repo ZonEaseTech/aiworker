@@ -1,4 +1,4 @@
-export type SkillSource = 'hermes' | 'openclaw' | 'local'
+export type SkillSource = 'brain' | 'executor' | 'local'
 
 export interface Skill {
   id: string
@@ -14,13 +14,13 @@ export interface SkillsListResponse {
   total: number
 }
 
-export type DiffStatus = 'added-hermes' | 'added-openclaw' | 'modified' | 'identical'
+export type DiffStatus = 'added-brain' | 'added-executor' | 'modified' | 'identical'
 
 export interface DiffEntry {
   name: string
   status: DiffStatus
-  hermesHash?: string
-  openclawHash?: string
+  brainHash?: string
+  executorHash?: string
 }
 
 export interface DiffResponse {
@@ -28,13 +28,13 @@ export interface DiffResponse {
   total: number
 }
 
-export type ConflictResolution = 'pending' | 'hermes' | 'openclaw' | 'manual'
+export type ConflictResolution = 'pending' | 'brain' | 'executor' | 'manual'
 
 export interface Conflict {
   id: number
   skillName: string
-  hermesHash: string
-  openclawHash: string
+  brainHash: string
+  executorHash: string
   resolution: ConflictResolution
   createdAt: string
 }
@@ -44,7 +44,7 @@ export interface ConflictsListResponse {
   total: number
 }
 
-export type SyncDirection = 'bidirectional' | 'hermes-to-openclaw' | 'openclaw-to-hermes'
+export type SyncDirection = 'bidirectional' | 'brain-to-executor' | 'executor-to-brain'
 
 export interface SyncResponse {
   status: 'started' | 'completed'

@@ -32,7 +32,7 @@ function DashboardPage() {
 
   const stats = useQuery({
     queryKey: ['executions', 'stats'],
-    queryFn: () => apiGet<ExecutionStatsResponse>('/api/executions/stats'),
+    queryFn: () => apiGet<ExecutionStatsResponse>('/api/execution/stats'),
   })
 
   const conflicts = useQuery({
@@ -41,25 +41,26 @@ function DashboardPage() {
   })
 
   const pendingConflicts = conflicts.data?.conflicts.filter(c => c.resolution === 'pending').length ?? conflicts.data?.total
+  const avgDuration = stats.data?.averageDurationMs
 
   return (
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">Live overview of Hermes and OpenClaw integration.</p>
+        <p className="text-sm text-muted-foreground">Live overview of Brain and Executor integration.</p>
       </div>
 
       <div className="flex flex-col gap-4 lg:flex-row">
         <ServiceStatusCard
-          name="Hermes"
-          health={health.data?.services.hermes}
+          name="Brain"
+          health={health.data?.services.brain}
           isLoading={health.isLoading}
           isFetching={health.isFetching}
           onCheck={() => health.refetch()}
         />
         <ServiceStatusCard
-          name="OpenClaw"
-          health={health.data?.services.openclaw}
+          name="Executor"
+          health={health.data?.services.executor}
           isLoading={health.isLoading}
           isFetching={health.isFetching}
           onCheck={() => health.refetch()}
@@ -86,7 +87,7 @@ function DashboardPage() {
             <KpiCard
               title="Executions"
               value={stats.data?.total}
-              hint={stats.data ? `${stats.data.lastHour} in last hour` : undefined}
+              hint={avgDuration != null ? `${Math.round(avgDuration)} ms avg` : undefined}
               icon={Activity}
               isLoading={stats.isLoading}
             />

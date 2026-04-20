@@ -11,29 +11,29 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { apiGet, apiPost } from '@/lib/api'
 
 const STATUS_VARIANT: Record<DiffStatus, BadgeVariantProps['variant']> = {
-  'added-hermes': 'success',
-  'added-openclaw': 'success',
+  'added-brain': 'success',
+  'added-executor': 'success',
   'modified': 'warning',
   'identical': 'secondary',
 }
 
 const STATUS_LABEL: Record<DiffStatus, string> = {
-  'added-hermes': 'Added (Hermes)',
-  'added-openclaw': 'Added (OpenClaw)',
+  'added-brain': 'Added (Brain)',
+  'added-executor': 'Added (Executor)',
   'modified': 'Modified',
   'identical': 'Identical',
 }
 
 const DIRECTION_OPTIONS: { value: SyncDirection, label: string }[] = [
   { value: 'bidirectional', label: 'Bidirectional' },
-  { value: 'hermes-to-openclaw', label: 'Hermes -> OpenClaw' },
-  { value: 'openclaw-to-hermes', label: 'OpenClaw -> Hermes' },
+  { value: 'brain-to-executor', label: 'Brain -> Executor' },
+  { value: 'executor-to-brain', label: 'Executor -> Brain' },
 ]
 
 function groupByStatus(entries: DiffEntry[]) {
   const groups: Record<DiffStatus, DiffEntry[]> = {
-    'added-hermes': [],
-    'added-openclaw': [],
+    'added-brain': [],
+    'added-executor': [],
     'modified': [],
     'identical': [],
   }
@@ -74,7 +74,7 @@ export function DiffTab() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold">Sync diff</h2>
-          <p className="text-sm text-muted-foreground">Differences between Hermes and OpenClaw skill sets.</p>
+          <p className="text-sm text-muted-foreground">Differences between Brain and Executor skill sets.</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="relative">

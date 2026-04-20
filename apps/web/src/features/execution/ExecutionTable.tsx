@@ -1,16 +1,18 @@
 import type { ExecutionLog } from './types'
 import { formatDistanceToNow } from 'date-fns'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronRight, MessageSquare } from 'lucide-react'
 import { Fragment, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 
 interface ExecutionTableProps {
   executions: ExecutionLog[]
   isLoading: boolean
+  onReplay?: (conversationId: string) => void
 }
 
-export function ExecutionTable({ executions, isLoading }: ExecutionTableProps) {
+export function ExecutionTable({ executions, isLoading, onReplay }: ExecutionTableProps) {
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set())
 
   if (isLoading) {
@@ -47,6 +49,7 @@ export function ExecutionTable({ executions, isLoading }: ExecutionTableProps) {
             <th className="px-3 py-2 text-left">Issue</th>
             <th className="px-3 py-2 text-right">Duration</th>
             <th className="px-3 py-2 text-left">When</th>
+            <th className="w-20 px-3 py-2 text-left">Replay</th>
           </tr>
         </thead>
         <tbody>
@@ -71,10 +74,25 @@ export function ExecutionTable({ executions, isLoading }: ExecutionTableProps) {
                   <td className="px-3 py-2 text-muted-foreground">
                     {formatDistanceToNow(new Date(log.createdAt), { addSuffix: true })}
                   </td>
+                  <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
+                    {log.conversationId && onReplay
+                      ? (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 px-2"
+                            onClick={() => onReplay(log.conversationId!)}
+                          >
+                            <MessageSquare className="size-3.5" />
+                            View
+                          </Button>
+                        )
+                      : <span className="text-xs text-muted-foreground">—</span>}
+                  </td>
                 </tr>
                 {isOpen && (
                   <tr className="border-t bg-muted/10">
-                    <td colSpan={5} className="px-4 py-3">
+                    <td colSpan={6} className="px-4 py-3">
                       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                         <div>
                           <div className="mb-1 text-xs font-semibold text-muted-foreground">Params</div>

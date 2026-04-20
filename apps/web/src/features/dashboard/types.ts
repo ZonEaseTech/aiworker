@@ -2,22 +2,23 @@ export type ServiceStatus = 'ok' | 'degraded' | 'down'
 
 export interface ServiceHealth {
   status: ServiceStatus
-  latency?: number
+  name?: string
+  lastChecked?: string
   error?: string
 }
 
 export interface HealthResponse {
   status: ServiceStatus
   services: {
-    hermes: ServiceHealth
-    openclaw: ServiceHealth
+    brain: ServiceHealth
+    executor: ServiceHealth
   }
 }
 
 export interface SkillSummary {
   id: string
   name: string
-  source: 'hermes' | 'openclaw' | 'local'
+  source: 'brain' | 'executor' | 'local'
 }
 
 export interface SkillsListResponse {
@@ -32,14 +33,14 @@ export interface MemoriesListResponse {
 
 export interface ExecutionStatsResponse {
   total: number
-  lastHour: number
-  byTool: { name: string, count: number }[]
+  byTool: Record<string, number>
+  averageDurationMs: number | null
 }
 
 export interface ConflictSummary {
   id: number
   skillName: string
-  resolution: 'pending' | 'hermes' | 'openclaw' | 'manual'
+  resolution: 'pending' | 'brain' | 'executor' | 'manual'
 }
 
 export interface ConflictsListResponse {
