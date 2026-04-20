@@ -1,6 +1,12 @@
+import path from 'node:path'
 import consola from 'consola'
 import { app } from './app'
 import { config } from './config'
+import { initDb } from './db'
+
+const dbPath = path.resolve(import.meta.dir, '../data/aiworker.db')
+initDb(dbPath)
+consola.info(`[dev] Database initialized at ${dbPath}`)
 
 Bun.serve({
   fetch: app.fetch,

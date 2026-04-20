@@ -1,24 +1,30 @@
-import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi'
+import { OpenAPIHono } from '@hono/zod-openapi'
+import { apiReference } from '@scalar/hono-api-reference'
+import { errorHandler, requestLogger } from './shared'
+import { health } from './modules/health'
+import { skills } from './modules/skills'
+import { memory } from './modules/memory'
 
 const app = new OpenAPIHono()
 
-const healthRoute = createRoute({
-  method: 'get',
-  path: '/health',
-  responses: {
-    200: {
-      content: {
-        'application/json': {
-          schema: z.object({ status: z.string() }),
-        },
-      },
-      description: 'Health check response',
-    },
+app.use(requestLogger)
+app.onError(errorHandler)
+
+app.route('/health', health)
+app.route('/api/skills', skills)
+app.route('/api/memories', memory)
+
+app.doc('/openapi.json', {
+  openapi: '3.1.0',
+  info: {
+    title: 'AIWorker API',
+    version: '0.1.0',
+    description: 'Middleware glue service bridging Hermes Agent with OpenClaw',
   },
 })
 
-app.openapi(healthRoute, (c) => {
-  return c.json({ status: 'ok' }, 200)
-})
+app.get('/docs', apiReference({
+  spec: { url: '/openapi.json' },
+}))
 
 export { app }
