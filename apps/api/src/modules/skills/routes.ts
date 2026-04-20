@@ -58,7 +58,8 @@ skills.openapi(listRoute, (c) => {
 skills.openapi(detailRoute, (c) => {
   const { name } = c.req.valid('param')
   const skill = getSkill(name)
-  if (!skill) throw AppError.notFound(`Skill '${name}' not found`)
+  if (!skill)
+    throw AppError.notFound(`Skill '${name}' not found`)
   return c.json(skill, 200)
 })
 

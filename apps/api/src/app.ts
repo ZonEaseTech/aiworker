@@ -1,9 +1,10 @@
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { apiReference } from '@scalar/hono-api-reference'
-import { errorHandler, requestLogger } from './shared'
+
 import { health } from './modules/health'
-import { skills } from './modules/skills'
 import { memory } from './modules/memory'
+import { skills } from './modules/skills'
+import { errorHandler, requestLogger } from './shared'
 
 const app = new OpenAPIHono()
 
