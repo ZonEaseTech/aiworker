@@ -13,6 +13,7 @@ import type {
   ChatCompletionRequest,
   OpenAiChatMessage,
   OpenAiToolCallWire,
+  OpenAiToolDefinition,
 } from '../../adapters/openai'
 
 import { createChatStream, OpenAiHttpError } from '../../adapters/openai'
@@ -94,6 +95,10 @@ export class OpenAICompatibleExecutor implements ExecutorProvider {
     }
     if (input.temperature !== undefined)
       body.temperature = input.temperature
+    if (input.toolDefinitions && input.toolDefinitions.length > 0) {
+      body.tools = input.toolDefinitions.map(toOpenAiToolDefinition)
+      body.tool_choice = 'auto'
+    }
 
     let stream: AsyncIterable<{ type: 'chunk', chunk: import('../../adapters/openai').ChatCompletionChunk } | { type: 'done' }>
     try {
@@ -159,6 +164,17 @@ export class OpenAICompatibleExecutor implements ExecutorProvider {
       reason: finishReason ?? 'stop',
       ...(usage ? { usage } : {}),
     }
+  }
+}
+
+function toOpenAiToolDefinition(tool: ExecutorTool): OpenAiToolDefinition {
+  return {
+    type: 'function',
+    function: {
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.inputSchema,
+    },
   }
 }
 

@@ -16,6 +16,12 @@ export interface ChatRunInput {
   model?: string
   /** Names of tools (from `listTools()`) to expose for this run. */
   tools?: string[]
+  /**
+   * Full tool definitions to expose inline for this run. Executors that accept
+   * per-call schemas (rather than only pre-registered tool names) should send
+   * these as the tool list to the underlying model.
+   */
+  toolDefinitions?: ExecutorTool[]
   /** Sampling temperature, when supported by the underlying model. */
   temperature?: number
   /** Optional abort signal to cancel the stream. */
