@@ -5,18 +5,19 @@ export interface ExecutionLog {
   params: Record<string, unknown> | null
   result: Record<string, unknown> | null
   duration: number | null
+  conversationId: string | null
   createdAt: string
 }
 
 export interface ExecutionListResponse {
-  executions: ExecutionLog[]
+  logs: ExecutionLog[]
   total: number
 }
 
 export interface ExecutionStats {
   total: number
-  lastHour: number
-  byTool: { name: string, count: number }[]
+  byTool: Record<string, number>
+  averageDurationMs: number | null
 }
 
 export interface LiveExecutionEvent {

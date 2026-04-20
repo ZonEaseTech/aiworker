@@ -3,11 +3,12 @@ import type { BusEvent } from '@/lib/hooks/useEventStream'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import { Activity, Clock, RefreshCw, Zap } from 'lucide-react'
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
+import { ConversationReplay } from '@/features/execution/ConversationReplay'
 import { ExecutionTable } from '@/features/execution/ExecutionTable'
 import { LiveFeed } from '@/features/execution/LiveFeed'
 import { apiGet } from '@/lib/api'
@@ -41,25 +42,23 @@ function normalizeLiveEvent(event: BusEvent): LiveExecutionEvent | null {
 }
 
 function ExecutionPage() {
-  const [toolFilter, setToolFilter] = useState('')
-  const [issueFilter, setIssueFilter] = useState('')
+  const [conversationFilter, setConversationFilter] = useState('')
   const [liveEvents, setLiveEvents] = useState<LiveExecutionEvent[]>([])
+  const [replayId, setReplayId] = useState<string | null>(null)
 
   const statsQuery = useQuery({
     queryKey: ['executions', 'stats'],
-    queryFn: () => apiGet<ExecutionStats>('/api/executions/stats'),
+    queryFn: () => apiGet<ExecutionStats>('/api/execution/stats'),
     refetchInterval: 15_000,
   })
 
   const listQuery = useQuery({
-    queryKey: ['executions', 'list', toolFilter, issueFilter],
+    queryKey: ['executions', 'list', conversationFilter],
     queryFn: () => {
       const params = new URLSearchParams({ limit: '25' })
-      if (toolFilter.trim())
-        params.set('toolName', toolFilter.trim())
-      if (issueFilter.trim())
-        params.set('issueId', issueFilter.trim())
-      return apiGet<ExecutionListResponse>(`/api/executions?${params}`)
+      if (conversationFilter.trim())
+        params.set('conversationId', conversationFilter.trim())
+      return apiGet<ExecutionListResponse>(`/api/execution?${params}`)
     },
   })
 
@@ -72,7 +71,15 @@ function ExecutionPage() {
 
   useEventStream(handleEvent)
 
-  const topTools = statsQuery.data?.byTool.slice(0, 3) ?? []
+  const topTools = useMemo(() => {
+    const byTool = statsQuery.data?.byTool ?? {}
+    return Object.entries(byTool)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([name, count]) => ({ name, count }))
+  }, [statsQuery.data])
+
+  const avgDuration = statsQuery.data?.averageDurationMs
 
   return (
     <div className="flex flex-col gap-4">
@@ -81,8 +88,18 @@ function ExecutionPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <StatCard title="Total executions" value={statsQuery.data?.total} icon={<Activity className="size-4 text-muted-foreground" />} isLoading={statsQuery.isLoading} />
-        <StatCard title="Last hour" value={statsQuery.data?.lastHour} icon={<Clock className="size-4 text-muted-foreground" />} isLoading={statsQuery.isLoading} />
+        <StatCard
+          title="Total executions"
+          value={statsQuery.data?.total}
+          icon={<Activity className="size-4 text-muted-foreground" />}
+          isLoading={statsQuery.isLoading}
+        />
+        <StatCard
+          title="Avg duration"
+          value={avgDuration != null ? `${Math.round(avgDuration)} ms` : '—'}
+          icon={<Clock className="size-4 text-muted-foreground" />}
+          isLoading={statsQuery.isLoading}
+        />
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Top tools</CardTitle>
@@ -130,19 +147,14 @@ function ExecutionPage() {
         <CardHeader className="flex flex-col gap-3 pb-3 md:flex-row md:items-end md:justify-between">
           <div>
             <CardTitle className="text-base">Execution log</CardTitle>
+            <p className="text-xs text-muted-foreground">Click "View" on a row with a conversation id to replay the agent transcript.</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Input
-              className="h-9 w-40"
-              placeholder="Tool name"
-              value={toolFilter}
-              onChange={e => setToolFilter(e.target.value)}
-            />
-            <Input
-              className="h-9 w-40"
-              placeholder="Issue id"
-              value={issueFilter}
-              onChange={e => setIssueFilter(e.target.value)}
+              className="h-9 w-64"
+              placeholder="Filter by conversationId"
+              value={conversationFilter}
+              onChange={e => setConversationFilter(e.target.value)}
             />
             <Button
               size="sm"
@@ -158,16 +170,27 @@ function ExecutionPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <ExecutionTable executions={listQuery.data?.executions ?? []} isLoading={listQuery.isLoading} />
+          <ExecutionTable
+            executions={listQuery.data?.logs ?? []}
+            isLoading={listQuery.isLoading}
+            onReplay={setReplayId}
+          />
         </CardContent>
       </Card>
+
+      {replayId && (
+        <ConversationReplay
+          conversationId={replayId}
+          onClose={() => setReplayId(null)}
+        />
+      )}
     </div>
   )
 }
 
 interface StatCardProps {
   title: string
-  value: number | undefined
+  value: number | string | undefined
   icon: React.ReactNode
   isLoading: boolean
 }

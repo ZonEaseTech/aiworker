@@ -38,3 +38,82 @@ export function apiPut<T>(path: string, body?: unknown) {
 export function apiDelete<T>(path: string) {
   return request<T>('DELETE', path)
 }
+
+// Shared backend response shapes used across multiple features.
+
+export interface ServiceHealthDto {
+  status: 'ok' | 'degraded' | 'down'
+  name?: string
+  lastChecked?: string
+  error?: string
+}
+
+export interface HealthResponse {
+  status: 'ok' | 'degraded' | 'down'
+  services: {
+    brain: ServiceHealthDto
+    executor: ServiceHealthDto
+  }
+}
+
+export interface ConfigResponse {
+  brain: {
+    apiUrl: string
+    homePath: string
+  }
+  executor: {
+    baseUrl: string
+    model: string
+    apiKeySet: boolean
+  }
+}
+
+export type AgentTaskStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled'
+
+export interface AgentTask {
+  id: string
+  prompt: string
+  status: AgentTaskStatus
+  conversationId?: string
+  createdAt: string
+  finishedAt?: string
+  result?: Record<string, unknown>
+  error?: string
+}
+
+export interface ToolCall {
+  id: string
+  name: string
+  arguments: Record<string, unknown>
+}
+
+export interface MessageDto {
+  id: number
+  conversationId: string
+  role: 'system' | 'user' | 'assistant' | 'tool'
+  content: string
+  toolCalls?: ToolCall[]
+  toolCallId?: string
+  createdAt: string
+}
+
+export interface ToolCallDto {
+  id: number
+  conversationId: string | null
+  toolName: string
+  params: Record<string, unknown> | null
+  result: Record<string, unknown> | null
+  durationMs: number | null
+  createdAt: string
+}
+
+export interface ListTasksResponse {
+  tasks: AgentTask[]
+  nextCursor?: string
+}
+
+export interface TaskDetailResponse {
+  task: AgentTask
+  messages: MessageDto[]
+  toolCalls: ToolCallDto[]
+}

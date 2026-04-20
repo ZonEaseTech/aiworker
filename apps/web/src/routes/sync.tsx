@@ -79,21 +79,21 @@ function SyncPage() {
 
   const counts = useMemo(() => {
     const entries = diffQuery.data?.diff ?? []
-    let hermes = 0
-    let openclaw = 0
+    let brain = 0
+    let executor = 0
     for (const e of entries) {
       if (e.status === 'identical' || e.status === 'modified') {
-        hermes++
-        openclaw++
+        brain++
+        executor++
       }
-      else if (e.status === 'added-hermes') {
-        hermes++
+      else if (e.status === 'added-brain') {
+        brain++
       }
-      else if (e.status === 'added-openclaw') {
-        openclaw++
+      else if (e.status === 'added-executor') {
+        executor++
       }
     }
-    return { hermes, openclaw }
+    return { brain, executor }
   }, [diffQuery.data])
 
   const pendingConflicts = conflictsQuery.data?.conflicts.filter(c => c.resolution === 'pending').length ?? 0
@@ -109,8 +109,8 @@ function SyncPage() {
             onChange={e => setDirection(e.target.value as SyncDirection)}
           >
             <option value="bidirectional">Bidirectional</option>
-            <option value="hermes-to-openclaw">Hermes → OpenClaw</option>
-            <option value="openclaw-to-hermes">OpenClaw → Hermes</option>
+            <option value="brain-to-executor">Brain → Executor</option>
+            <option value="executor-to-brain">Executor → Brain</option>
           </select>
           <Button
             size="sm"
@@ -126,24 +126,24 @@ function SyncPage() {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Hermes skills</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Brain skills</CardTitle>
             <GitBranch className="size-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             {diffQuery.isLoading
               ? <Skeleton className="h-7 w-20" />
-              : <div className="text-2xl font-semibold">{counts.hermes}</div>}
+              : <div className="text-2xl font-semibold">{counts.brain}</div>}
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">OpenClaw skills</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Executor skills</CardTitle>
             <GitBranch className="size-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             {diffQuery.isLoading
               ? <Skeleton className="h-7 w-20" />
-              : <div className="text-2xl font-semibold">{counts.openclaw}</div>}
+              : <div className="text-2xl font-semibold">{counts.executor}</div>}
           </CardContent>
         </Card>
         <Card>

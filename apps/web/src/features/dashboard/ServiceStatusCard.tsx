@@ -1,5 +1,6 @@
 import type { ServiceHealth, ServiceStatus } from './types'
 import type { BadgeVariantProps } from '@/components/ui/badge-variants'
+import { formatDistanceToNow } from 'date-fns'
 import { RefreshCw } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -35,21 +36,24 @@ export function ServiceStatusCard({ name, health, isLoading, isFetching, onCheck
           Check
         </Button>
       </CardHeader>
-      <CardContent className="flex flex-col gap-3">
+      <CardContent className="flex flex-col gap-2">
         <div className="flex items-center gap-2">
           {isLoading
             ? <Badge variant="outline">loading...</Badge>
             : status
               ? <Badge variant={STATUS_VARIANT[status]}>{status}</Badge>
               : <Badge variant="destructive">unreachable</Badge>}
-          {health?.latency != null && (
-            <span className="text-sm text-muted-foreground">
-              {health.latency}
-              {' '}
-              ms
-            </span>
+          {health?.name && (
+            <span className="text-xs text-muted-foreground">{health.name}</span>
           )}
         </div>
+        {health?.lastChecked && (
+          <p className="text-xs text-muted-foreground">
+            Last checked
+            {' '}
+            {formatDistanceToNow(new Date(health.lastChecked), { addSuffix: true })}
+          </p>
+        )}
         {health?.error && (
           <p className="text-xs text-destructive">{health.error}</p>
         )}

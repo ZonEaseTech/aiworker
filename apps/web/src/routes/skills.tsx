@@ -21,7 +21,7 @@ function SkillsPage() {
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Skills</h1>
-        <p className="text-sm text-muted-foreground">Manage skills synchronized between Hermes and OpenClaw.</p>
+        <p className="text-sm text-muted-foreground">Manage skills synchronized between Brain and Executor.</p>
       </div>
 
       <div className="flex gap-1 border-b">

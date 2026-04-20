@@ -1,4 +1,4 @@
-export type SyncDirection = 'hermes-to-openclaw' | 'openclaw-to-hermes' | 'bidirectional'
+export type SyncDirection = 'brain-to-executor' | 'executor-to-brain' | 'bidirectional'
 
 export interface SyncResponse {
   status: 'started' | 'completed'
@@ -8,9 +8,9 @@ export interface SyncResponse {
 
 export interface DiffEntry {
   name: string
-  status: 'added-hermes' | 'added-openclaw' | 'modified' | 'identical'
-  hermesHash?: string
-  openclawHash?: string
+  status: 'added-brain' | 'added-executor' | 'modified' | 'identical'
+  brainHash?: string
+  executorHash?: string
 }
 
 export interface DiffResponse {
@@ -21,9 +21,9 @@ export interface DiffResponse {
 export interface Conflict {
   id: number
   skillName: string
-  hermesHash: string
-  openclawHash: string
-  resolution: 'pending' | 'hermes' | 'openclaw' | 'manual'
+  brainHash: string
+  executorHash: string
+  resolution: 'pending' | 'brain' | 'executor' | 'manual'
   createdAt: string
 }
 
