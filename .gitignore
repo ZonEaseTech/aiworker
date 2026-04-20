@@ -13,3 +13,5 @@ tmp/
 coverage/
 *.tsbuildinfo
 .code-review-graph/
+.claude/
+.serena/

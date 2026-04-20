@@ -2,11 +2,13 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "jsx": "react-jsx",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
-    }
+    },
+    "types": ["node"]
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "include": ["src/**/*.ts", "src/**/*.tsx", "src/routeTree.gen.ts"],
   "exclude": ["node_modules", "dist"]
 }
