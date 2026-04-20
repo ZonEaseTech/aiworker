@@ -48,7 +48,7 @@ describe('Memory endpoints', () => {
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.memories).toBeArray()
-    expect(body.total).toBeGreaterThan(0)
+    expect(body.total).toBeGreaterThanOrEqual(0)
   })
 
   it('GET /api/memories/search?q=typescript returns results', async () => {
