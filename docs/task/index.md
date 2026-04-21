@@ -33,7 +33,7 @@ Each task is a single line linking to its detail file. All detailed information 
 
 - [x] [**FEAT-001 Build AIWorker middleware product**](FEAT-001.md) `P1`
 - [x] [**REFACTOR-001 Refactor AIWorker into a self-hosted Agent Runtime**](REFACTOR-001.md) `P1`
-- [-] [**REFACTOR-002 Refactor AIWorker into a multi-worker fleet runtime**](REFACTOR-002.md) `P1`
+- [x] [**REFACTOR-002 Refactor AIWorker into a multi-worker fleet runtime**](REFACTOR-002.md) `P1`
 - [ ] [**FEAT-002 Executable skills runtime (sandbox)**](FEAT-002.md) `P3`
 - [ ] [**FEAT-003 Telegram channel adapter**](FEAT-003.md) `P2`
 - [ ] [**FEAT-004 Lark channel adapter**](FEAT-004.md) `P2`

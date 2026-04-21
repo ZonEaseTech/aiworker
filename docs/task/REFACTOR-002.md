@@ -1,10 +1,11 @@
 # REFACTOR-002 Refactor AIWorker into a multi-worker fleet runtime
 
-- **status**: in_progress
+- **status**: completed
 - **priority**: P1
 - **owner**: coordinator
 - **createdAt**: 2026-04-21 07:00
 - **startedAt**: 2026-04-21 07:40
+- **completedAt**: 2026-04-21 11:48
 
 ## Description
 
@@ -34,4 +35,8 @@ Refactoring AIWorker into a multi-worker fleet runtime
 
 ## Notes
 
-Related plan: PLAN-003. Builds on the Provider-shaped core delivered by REFACTOR-001. Pre-release project — destructive DB migration is acceptable; existing deployed instance will be redeployed with a fresh schema.
+Related plans: PLAN-003 (phase 1 scaffold — committed 9e38180) and PLAN-004 (final distributed architecture — commits e2a20c8..3abc332). Builds on the Provider-shaped core delivered by REFACTOR-001. Pre-release project — destructive DB migration was acceptable; existing deployed instance will be redeployed with a fresh schema as part of FEAT-009.
+
+Delivery: 13-subtask BKD worktree dispatch (5t0fo920) under project `aiworker` (`lded7ogt`); all subtasks `done`. End-to-end smoke green (`apps/api/scripts/smoke-plan-004.ts`). `bun run check` clean.
+
+Refactor acceptance criteria met except for the **deployment to the `aiwork` server via aissh CLI** line, which was deferred on explicit user direction during PLAN-003 scoping and is tracked in FEAT-009. Closing this task `completed` with deployment explicitly captured downstream.

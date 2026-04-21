@@ -1,10 +1,13 @@
 # PLAN-004 Self-sufficient worker + manager-as-registry
 
-- **status**: draft
+- **status**: completed
 - **createdAt**: 2026-04-21 08:20
-- **approvedAt**: (pending)
+- **approvedAt**: 2026-04-21 09:08
+- **completedAt**: 2026-04-21 11:48
 - **relatedTask**: REFACTOR-002
 - **supersedes-in-progress**: PLAN-003 (phase 1 scaffold committed at 9e38180; remaining PLAN-003 phases absorbed or dropped here)
+- **bkdDispatch**: 5t0fo920 (13 subtasks, worktree mode, all `done`)
+- **commitRange**: e2a20c8..3abc332 (26 commits)
 
 ## Context
 
@@ -390,3 +393,20 @@ Deliverable: operator runs `docker run ... aiworker-runtime:dev` with only a mas
 ### 2026-04-21 08:20 — Draft
 
 Initial draft. Awaiting user approval to transition BKD coordinator to `working` and launch subtasks.
+
+### 2026-04-21 09:08 — Approved + dispatched
+
+User approved with `继续 worktree`. BKD dispatch coordinator `5t0fo920` moved to `working`; 13 worktree subtasks queued in `todo` with per-subtask follow-ups describing scope + self-review protocol + report-back format.
+
+### 2026-04-21 11:48 — Completed
+
+All 13 subtasks reported green through the coordinator logs-filter; every `bkd/{issueId}` branch merged into `main`; post-merge `bun run check` green at each boundary. Deliverables verified:
+
+- `bun run check` (typecheck + lint) clean across `shared`, `api`, `web`
+- `apps/api` tests: 162/162 pass (`bun test`)
+- `apps/web` tests: 17/17 pass (`vitest run`)
+- `apps/api/scripts/smoke-plan-004.ts` exits 0 (7/7 steps)
+- `docs/changelog.md` 2026-04-21 11:30 [release] entry landed
+- `docs/e2e-smoke.md` documents local reproduction
+
+BKD dispatch `5t0fo920` and all 13 child subtasks moved to `done`. Parent issue `h53ba4b9` moved to `review` with a final summary follow-up noting that deployment (original prompt's aissh CLI piece) is tracked separately under FEAT-009.
