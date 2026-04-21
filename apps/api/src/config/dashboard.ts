@@ -12,6 +12,9 @@ const schema = z.object({
   WORKER_MEMORY_LIMIT: z.string().default('256m'),
   WORKER_CPU_LIMIT: z.coerce.number().default(0.5),
   FLEET_MIGRATIONS_FOLDER: z.string().default('./drizzle/fleet'),
+  // PLAN-004 3.3 — manager periodic /info poll. Set interval to 0 to disable.
+  MANAGER_POLL_INTERVAL_MS: z.coerce.number().int().nonnegative().default(30_000),
+  MANAGER_POLL_JITTER_MS: z.coerce.number().int().nonnegative().default(3_000),
 })
 
 export const dashboardConfig = schema.parse(process.env)
