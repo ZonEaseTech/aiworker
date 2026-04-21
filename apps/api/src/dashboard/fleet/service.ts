@@ -1,202 +1,67 @@
 import type { CreateWorkerInput, UpdateWorkerInput, Worker, WorkerConfig, WorkerSummary } from '@aiworker/shared'
-import { desc, eq } from 'drizzle-orm'
 
-import { dashboardConfig } from '../../config/dashboard'
-import { getFleetDb } from '../../db/fleet'
-import { workerConfigs, workers, workerSecrets } from '../../db/fleet/schema'
-import { AppError, mintWorkerId, slugify } from '../../shared'
-import { getSecretsVault } from '../secrets'
-import { enumerateSecretPaths, hydrateSecrets, redactSecrets } from './secret-paths'
+import { AppError } from '../../shared'
 
-function rowToWorker(row: typeof workers.$inferSelect): Worker {
-  return {
-    id: row.id,
-    slug: row.slug,
-    name: row.name,
-    ...(row.description === null ? {} : { description: row.description }),
-    status: row.status,
-    ...(row.containerId === null ? {} : { containerId: row.containerId }),
-    containerImage: row.containerImage,
-    configVersion: row.configVersion,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-  }
+// PLAN-004 3.1-3.2: Manager switches from owning worker config/secrets to
+// registering existing workers and proxying to their own HTTP APIs. Subtask
+// 1.3 removed the underlying `workers` / `worker_configs` / `worker_secrets`
+// tables from fleet.db; every legacy helper below is now a typed stub that
+// preserves the call signatures consumed by `routes.ts` and `supervisor/*`
+// but throws at runtime. Subtask 3.1 replaces these with a registry client
+// and subtask 3.2 rewrites the service against `registered_workers`.
+
+function notImplemented(fn: string): never {
+  throw AppError.internal(`Fleet service "${fn}" pending PLAN-004 3.1-3.2 rewrite`)
 }
 
-async function storeSecrets(workerId: string, config: WorkerConfig) {
-  const vault = getSecretsVault()
-  await vault.removeAllForWorker(workerId)
-  const pairs = enumerateSecretPaths(config)
-  for (const { path, value } of pairs) {
-    if (value && value.length > 0)
-      await vault.put(workerId, path, value)
-  }
+// PLAN-004 3.2: replace with registry insert + worker /info validation.
+export async function createWorker(_input: CreateWorkerInput): Promise<Worker> {
+  notImplemented('createWorker')
 }
 
-async function loadSecrets(workerId: string): Promise<Map<string, string>> {
-  const vault = getSecretsVault()
-  const keys = await vault.list(workerId)
-  const out = new Map<string, string>()
-  for (const key of keys) {
-    const value = await vault.get(workerId, key)
-    if (value !== null)
-      out.set(key, value)
-  }
-  return out
+// PLAN-004 3.2: replace with registry lookup.
+export function getWorker(_id: string): Worker | null {
+  notImplemented('getWorker')
 }
 
-export async function createWorker(input: CreateWorkerInput): Promise<Worker> {
-  const db = getFleetDb()
-  const name = input.name.trim()
-  if (!name)
-    throw AppError.badRequest('Worker name is required')
-
-  const slug = (input.slug ? slugify(input.slug) : slugify(name)) || `worker-${Date.now()}`
-  const collision = db.select({ id: workers.id }).from(workers).where(eq(workers.slug, slug)).get()
-  if (collision)
-    throw new AppError('SLUG_CONFLICT', 409, `Slug "${slug}" is already used`)
-
-  const id = mintWorkerId()
-  const now = new Date().toISOString()
-
-  db.insert(workers).values({
-    id,
-    slug,
-    name,
-    ...(input.description ? { description: input.description } : {}),
-    containerImage: dashboardConfig.AIWORKER_IMAGE,
-    configVersion: 1,
-    status: 'active',
-    createdAt: now,
-    updatedAt: now,
-  }).run()
-
-  const redacted = redactSecrets(input.config)
-  db.insert(workerConfigs).values({
-    workerId: id,
-    configJson: redacted,
-    version: 1,
-    updatedAt: now,
-  }).run()
-
-  await storeSecrets(id, input.config)
-
-  const inserted = db.select().from(workers).where(eq(workers.id, id)).get()!
-  return rowToWorker(inserted)
+// PLAN-004 3.2: replace with registry lookup by displayName/baseUrl.
+export function getWorkerBySlug(_slug: string): Worker | null {
+  notImplemented('getWorkerBySlug')
 }
 
-export function getWorker(id: string): Worker | null {
-  const row = getFleetDb().select().from(workers).where(eq(workers.id, id)).get()
-  return row ? rowToWorker(row) : null
-}
-
-export function getWorkerBySlug(slug: string): Worker | null {
-  const row = getFleetDb().select().from(workers).where(eq(workers.slug, slug)).get()
-  return row ? rowToWorker(row) : null
-}
-
+// PLAN-004 3.2: replace with registry list.
 export function listWorkers(): Worker[] {
-  return getFleetDb().select().from(workers).orderBy(desc(workers.createdAt)).all().map(rowToWorker)
+  notImplemented('listWorkers')
 }
 
+// PLAN-004 3.2: replace with registry list + cached /info projection.
 export function listWorkerSummaries(): WorkerSummary[] {
-  const db = getFleetDb()
-  const rows = db.select().from(workers).orderBy(desc(workers.createdAt)).all()
-  return rows.map((row) => {
-    const configRow = db.select().from(workerConfigs).where(eq(workerConfigs.workerId, row.id)).get()
-    const cfg = configRow?.configJson
-    return {
-      id: row.id,
-      slug: row.slug,
-      name: row.name,
-      status: row.status,
-      enabledChannels: cfg?.channels.filter(c => c.enabled).map(c => c.channel) ?? [],
-      brainCount: cfg?.brains.length ?? 0,
-      executorType: cfg?.executor.type ?? 'http',
-    } satisfies WorkerSummary
-  })
+  notImplemented('listWorkerSummaries')
 }
 
-export function getRedactedConfig(workerId: string): WorkerConfig | null {
-  const row = getFleetDb().select().from(workerConfigs).where(eq(workerConfigs.workerId, workerId)).get()
-  return row?.configJson ?? null
+// PLAN-004 3.2: replace with proxy call to worker `GET /api/worker/config`.
+export function getRedactedConfig(_workerId: string): WorkerConfig | null {
+  notImplemented('getRedactedConfig')
 }
 
-export async function getResolvedConfig(workerId: string): Promise<WorkerConfig | null> {
-  const redacted = getRedactedConfig(workerId)
-  if (!redacted)
-    return null
-  const secrets = await loadSecrets(workerId)
-  return hydrateSecrets(redacted, secrets)
+// PLAN-004 3.2: replace with proxy call to worker `GET /api/worker/config`
+// (resolved configs never leave the worker under PLAN-004).
+export async function getResolvedConfig(_workerId: string): Promise<WorkerConfig | null> {
+  notImplemented('getResolvedConfig')
 }
 
-export async function updateWorker(id: string, input: UpdateWorkerInput): Promise<Worker> {
-  const db = getFleetDb()
-  const existing = db.select().from(workers).where(eq(workers.id, id)).get()
-  if (!existing)
-    throw AppError.notFound(`Worker ${id} not found`)
-
-  const now = new Date().toISOString()
-  const updates: Partial<typeof workers.$inferInsert> = { updatedAt: now }
-
-  if (input.name !== undefined)
-    updates.name = input.name.trim()
-  if (input.description !== undefined)
-    updates.description = input.description
-  if (input.status !== undefined)
-    updates.status = input.status
-
-  if (input.slug !== undefined) {
-    const slug = slugify(input.slug)
-    if (slug && slug !== existing.slug) {
-      const collision = db.select({ id: workers.id })
-        .from(workers)
-        .where(eq(workers.slug, slug))
-        .get()
-      if (collision)
-        throw new AppError('SLUG_CONFLICT', 409, `Slug "${slug}" is already used`)
-      updates.slug = slug
-    }
-  }
-
-  if (input.config !== undefined) {
-    updates.configVersion = existing.configVersion + 1
-    const redacted = redactSecrets(input.config)
-    const configRow = db.select().from(workerConfigs).where(eq(workerConfigs.workerId, id)).get()
-    if (configRow) {
-      db.update(workerConfigs)
-        .set({ configJson: redacted, version: existing.configVersion + 1, updatedAt: now })
-        .where(eq(workerConfigs.workerId, id))
-        .run()
-    }
-    else {
-      db.insert(workerConfigs).values({
-        workerId: id,
-        configJson: redacted,
-        version: existing.configVersion + 1,
-        updatedAt: now,
-      }).run()
-    }
-    await storeSecrets(id, input.config)
-  }
-
-  db.update(workers).set(updates).where(eq(workers.id, id)).run()
-  const updated = db.select().from(workers).where(eq(workers.id, id)).get()!
-  return rowToWorker(updated)
+// PLAN-004 3.2: replace with registry patch + proxy PUT to worker `/config`.
+export async function updateWorker(_id: string, _input: UpdateWorkerInput): Promise<Worker> {
+  notImplemented('updateWorker')
 }
 
-export async function deleteWorker(id: string): Promise<void> {
-  const db = getFleetDb()
-  const existing = db.select({ id: workers.id }).from(workers).where(eq(workers.id, id)).get()
-  if (!existing)
-    throw AppError.notFound(`Worker ${id} not found`)
-  const vault = getSecretsVault()
-  await vault.removeAllForWorker(id)
-  db.delete(workerSecrets).where(eq(workerSecrets.workerId, id)).run()
-  db.delete(workerConfigs).where(eq(workerConfigs.workerId, id)).run()
-  db.delete(workers).where(eq(workers.id, id)).run()
+// PLAN-004 3.2: replace with registry row delete (worker itself untouched).
+export async function deleteWorker(_id: string): Promise<void> {
+  notImplemented('deleteWorker')
 }
 
-export function setContainerId(workerId: string, containerId: string | null) {
-  getFleetDb().update(workers).set({ containerId, updatedAt: new Date().toISOString() }).where(eq(workers.id, workerId)).run()
+// PLAN-004 3.4: MANAGER_CAN_LAUNCH-gated supervisor will track container ids
+// separately from the registry; until then the hook is a no-op stub.
+export function setContainerId(_workerId: string, _containerId: string | null): void {
+  notImplemented('setContainerId')
 }

@@ -1,9 +1,13 @@
 import type { FleetDatabase } from '../../db/fleet'
 import { Buffer } from 'node:buffer'
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
-import { and, eq } from 'drizzle-orm'
 
-import { workerSecrets } from '../../db/fleet/schema'
+// PLAN-004 2.1: `SecretsVault` moves from the dashboard-owned fleet.db over to
+// the worker-owned worker.db. Subtask 1.3 removed the `worker_secrets` table
+// from fleet.db, so the DB-backed methods below are stubs that throw at
+// runtime until 2.1 relocates the implementation. The constructor + AES-GCM
+// primitives remain to keep downstream imports (`getSecretsVault`) and
+// (currently skipped) vault tests compiling without a schema dependency.
 
 const ALGO = 'aes-256-gcm'
 const NONCE_BYTES = 12
@@ -12,7 +16,7 @@ const KEY_BYTES = 32
 export class SecretsVault {
   private readonly key: Buffer
 
-  constructor(masterKeyHex: string, private readonly db: FleetDatabase) {
+  constructor(masterKeyHex: string, private readonly _db: FleetDatabase) {
     if (!/^[0-9a-f]{64}$/.test(masterKeyHex))
       throw new Error('SecretsVault: AIWORKER_MASTER_KEY must be 32-byte hex (64 hex chars)')
     this.key = Buffer.from(masterKeyHex, 'hex')
@@ -20,62 +24,28 @@ export class SecretsVault {
       throw new Error('SecretsVault: decoded master key length is not 32 bytes')
   }
 
-  async put(workerId: string, key: string, value: string): Promise<void> {
-    const { ciphertext, nonce, authTag } = this.encrypt(value)
-    const existing = await this.db.select({ id: workerSecrets.id })
-      .from(workerSecrets)
-      .where(and(eq(workerSecrets.workerId, workerId), eq(workerSecrets.key, key)))
-      .get()
-
-    const now = new Date().toISOString()
-    if (existing) {
-      await this.db.update(workerSecrets)
-        .set({ valueEnc: ciphertext, nonce, authTag, updatedAt: now })
-        .where(eq(workerSecrets.id, existing.id))
-        .run()
-    }
-    else {
-      await this.db.insert(workerSecrets).values({
-        workerId,
-        key,
-        valueEnc: ciphertext,
-        nonce,
-        authTag,
-        createdAt: now,
-        updatedAt: now,
-      }).run()
-    }
+  async put(_workerId: string, _key: string, _value: string): Promise<void> {
+    throw new Error('SecretsVault.put: pending PLAN-004 2.1 move to worker.db')
   }
 
-  async get(workerId: string, key: string): Promise<string | null> {
-    const row = await this.db.select()
-      .from(workerSecrets)
-      .where(and(eq(workerSecrets.workerId, workerId), eq(workerSecrets.key, key)))
-      .get()
-    if (!row)
-      return null
-    return this.decrypt(row.valueEnc, row.nonce, row.authTag)
+  async get(_workerId: string, _key: string): Promise<string | null> {
+    throw new Error('SecretsVault.get: pending PLAN-004 2.1 move to worker.db')
   }
 
-  async list(workerId: string): Promise<string[]> {
-    const rows = await this.db.select({ key: workerSecrets.key })
-      .from(workerSecrets)
-      .where(eq(workerSecrets.workerId, workerId))
-      .all()
-    return rows.map(r => r.key)
+  async list(_workerId: string): Promise<string[]> {
+    throw new Error('SecretsVault.list: pending PLAN-004 2.1 move to worker.db')
   }
 
-  async remove(workerId: string, key: string): Promise<void> {
-    await this.db.delete(workerSecrets)
-      .where(and(eq(workerSecrets.workerId, workerId), eq(workerSecrets.key, key)))
-      .run()
+  async remove(_workerId: string, _key: string): Promise<void> {
+    throw new Error('SecretsVault.remove: pending PLAN-004 2.1 move to worker.db')
   }
 
-  async removeAllForWorker(workerId: string): Promise<void> {
-    await this.db.delete(workerSecrets).where(eq(workerSecrets.workerId, workerId)).run()
+  async removeAllForWorker(_workerId: string): Promise<void> {
+    throw new Error('SecretsVault.removeAllForWorker: pending PLAN-004 2.1 move to worker.db')
   }
 
-  private encrypt(plaintext: string): { ciphertext: string, nonce: string, authTag: string } {
+  // Retained so 2.1 can lift the class wholesale without re-deriving the primitives.
+  encrypt(plaintext: string): { ciphertext: string, nonce: string, authTag: string } {
     const nonce = randomBytes(NONCE_BYTES)
     const cipher = createCipheriv(ALGO, this.key, nonce)
     const buf = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()])
@@ -87,7 +57,7 @@ export class SecretsVault {
     }
   }
 
-  private decrypt(ciphertext: string, nonce: string, authTag: string): string {
+  decrypt(ciphertext: string, nonce: string, authTag: string): string {
     const decipher = createDecipheriv(ALGO, this.key, Buffer.from(nonce, 'base64'))
     decipher.setAuthTag(Buffer.from(authTag, 'base64'))
     const buf = Buffer.concat([
