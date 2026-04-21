@@ -6,8 +6,13 @@ import { z } from 'zod'
 const envSchema = z.object({
   PORT: z.coerce.number().default(3001),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  BRAIN_PROVIDER: z.enum(['hermes', 'cloud-gateway']).default('hermes'),
   HERMES_API_URL: z.string().default('http://localhost:8642'),
   HERMES_HOME: z.string().default(join(homedir(), '.hermes')),
+  CLOUD_GATEWAY_MCP_URL: z.string().optional(),
+  CLOUD_GATEWAY_MCP_TOKEN: z.string().optional(),
+  CLOUD_GATEWAY_DEFAULT_CATEGORY: z.string().optional(),
+  CLOUD_GATEWAY_DEFAULT_TYPE_ID: z.string().optional(),
   /** @deprecated OpenClaw WS gateway is being replaced by the OpenAI-compatible executor; kept for legacy frontend compatibility only. */
   OPENCLAW_WS_URL: z.string().default('ws://localhost:18789'),
   /** @deprecated OpenClaw home is no longer read by the backend; kept for legacy frontend compatibility only. */
