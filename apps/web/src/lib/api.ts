@@ -1,4 +1,13 @@
-import type { SafeRegisteredWorker } from '@aiworker/shared'
+import type {
+  BrainSourceConfig,
+  ChannelType,
+  ExecutorConfig,
+  SafeRegisteredWorker,
+  ServiceStatus,
+  WorkerComponentStatus,
+  WorkerConfig,
+  WorkerInfo,
+} from '@aiworker/shared'
 
 export interface ApiError {
   status: number
@@ -139,6 +148,9 @@ export type WorkerApiErrorCode
     | 'invalid-worker-info'
     | 'not-found'
     | 'invalid-body'
+    | 'invalid-config'
+    | 'version-conflict'
+    | 'invalid-if-match'
     | 'unknown'
 
 interface WorkerApiErrorBody {
@@ -147,6 +159,8 @@ interface WorkerApiErrorBody {
     message?: string
     workerId?: string
     details?: unknown
+    expected?: number
+    actual?: number
   }
 }
 
@@ -155,6 +169,10 @@ export class WorkerApiError extends Error {
   readonly code: WorkerApiErrorCode
   readonly workerId?: string
   readonly details?: unknown
+  /** For `version-conflict` responses: the `If-Match` version the client sent. */
+  readonly expectedVersion?: number
+  /** For `version-conflict` responses: the current version on the worker. */
+  readonly actualVersion?: number
 
   constructor(status: number, body: unknown) {
     const parsed = (body && typeof body === 'object' ? body : {}) as WorkerApiErrorBody
@@ -165,6 +183,8 @@ export class WorkerApiError extends Error {
     this.code = code
     this.workerId = parsed.error?.workerId
     this.details = parsed.error?.details
+    this.expectedVersion = parsed.error?.expected
+    this.actualVersion = parsed.error?.actual
   }
 }
 
@@ -213,4 +233,141 @@ export function updateWorker(id: string, patch: UpdateWorkerInput): Promise<Safe
 
 export async function deleteWorker(id: string): Promise<void> {
   await workerRequest<unknown>('DELETE', `/api/workers/${encodeURIComponent(id)}`)
+}
+
+// ---------------------------------------------------------------------------
+// PLAN-004 fleet — proxy-worker fetchers (go through /api/workers/:id/proxy/worker/*)
+//
+// The dashboard never talks to individual workers directly; it calls the
+// manager's pass-through which decrypts the stored bearer token and forwards.
+// Non-2xx responses are normalised onto `WorkerApiError` so UI can branch on
+// `code` (e.g. `version-conflict` for optimistic-concurrency failures).
+// ---------------------------------------------------------------------------
+
+function proxyPath(id: string, suffix: string): string {
+  return `/api/workers/${encodeURIComponent(id)}/proxy/worker${suffix}`
+}
+
+async function workerProxyRequest<T>(
+  method: string,
+  id: string,
+  suffix: string,
+  body?: unknown,
+  headers?: Record<string, string>,
+): Promise<T> {
+  const res = await fetch(proxyPath(id, suffix), {
+    method,
+    headers: {
+      ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+      ...(headers ?? {}),
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+
+  const contentType = res.headers.get('content-type') ?? ''
+  const parsed = contentType.includes('application/json')
+    ? await res.json().catch(() => null)
+    : await res.text().catch(() => null)
+
+  if (!res.ok)
+    throw new WorkerApiError(res.status, parsed)
+
+  return parsed as T
+}
+
+export function getWorkerInfo(id: string): Promise<WorkerInfo> {
+  return workerProxyRequest<WorkerInfo>('GET', id, '/info')
+}
+
+export interface WorkerConfigResponse {
+  config: WorkerConfig
+  version: number
+}
+
+export function getWorkerConfig(id: string): Promise<WorkerConfigResponse> {
+  return workerProxyRequest<WorkerConfigResponse>('GET', id, '/config')
+}
+
+export interface PutWorkerConfigResponse extends WorkerConfigResponse {
+  runtimeReload: 'ok' | 'failed'
+}
+
+export function putWorkerConfig(
+  id: string,
+  body: WorkerConfig,
+  options: { ifMatchVersion?: number } = {},
+): Promise<PutWorkerConfigResponse> {
+  const headers: Record<string, string> = {}
+  if (options.ifMatchVersion !== undefined)
+    headers['If-Match'] = String(options.ifMatchVersion)
+  return workerProxyRequest<PutWorkerConfigResponse>('PUT', id, '/config', body, headers)
+}
+
+export async function listWorkerSecrets(id: string): Promise<{ keys: string[] }> {
+  return workerProxyRequest<{ keys: string[] }>('GET', id, '/secrets')
+}
+
+export async function putWorkerSecret(id: string, key: string, value: string): Promise<void> {
+  await workerProxyRequest<unknown>(
+    'PUT',
+    id,
+    `/secrets/${encodeURIComponent(key)}`,
+    { value },
+  )
+}
+
+export async function deleteWorkerSecret(id: string, key: string): Promise<void> {
+  await workerProxyRequest<unknown>('DELETE', id, `/secrets/${encodeURIComponent(key)}`)
+}
+
+export interface BrainTestRow {
+  id: string
+  type: BrainSourceConfig['type'] | 'multi'
+  status: ServiceStatus['status'] | WorkerComponentStatus
+  errorMessage?: string
+}
+
+export function testWorkerBrain(id: string): Promise<{ brains: BrainTestRow[] }> {
+  return workerProxyRequest<{ brains: BrainTestRow[] }>('POST', id, '/brain/test')
+}
+
+export interface ExecutorTestRow {
+  type: ExecutorConfig['type']
+  status: ServiceStatus['status'] | 'unknown' | 'degraded'
+  tinyProbe?: {
+    ok: boolean
+    latencyMs: number
+    output?: string
+  }
+  probeError?: string
+}
+
+export function testWorkerExecutor(
+  id: string,
+  body: { probe?: boolean } = {},
+): Promise<{ executor: ExecutorTestRow }> {
+  return workerProxyRequest<{ executor: ExecutorTestRow }>('POST', id, '/executor/test', body)
+}
+
+export interface ChannelTestResponse {
+  sent: boolean
+  platformResponse?: unknown
+  error?: string
+}
+
+export function testWorkerChannel(
+  id: string,
+  channel: ChannelType,
+  body: { chatId?: string, text?: string } = {},
+): Promise<ChannelTestResponse> {
+  return workerProxyRequest<ChannelTestResponse>(
+    'POST',
+    id,
+    `/channels/${encodeURIComponent(channel)}/test`,
+    body,
+  )
+}
+
+export function rotateWorkerToken(id: string): Promise<{ newToken: string }> {
+  return workerProxyRequest<{ newToken: string }>('POST', id, '/token/rotate')
 }
