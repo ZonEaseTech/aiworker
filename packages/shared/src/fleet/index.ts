@@ -36,6 +36,7 @@ export type {
   RegisteredWorker,
   RegisteredWorkerLivenessState,
   RegisteredWorkerOrigin,
+  SafeRegisteredWorker,
 } from './registered-worker'
 
 export type {

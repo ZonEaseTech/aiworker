@@ -83,9 +83,19 @@ export class WorkerClient {
       signal: controller.signal,
     }
     if (body !== undefined) {
-      init.body = typeof body === 'string' ? body : JSON.stringify(body)
-      if (!headers['Content-Type'] && typeof body !== 'string')
-        headers['Content-Type'] = 'application/json'
+      if (typeof body === 'string') {
+        init.body = body
+      }
+      else if (body instanceof ArrayBuffer || ArrayBuffer.isView(body)) {
+        // Proxy pass-through: preserve the exact bytes + caller-supplied
+        // Content-Type. Do not set application/json here.
+        init.body = body as BodyInit
+      }
+      else {
+        init.body = JSON.stringify(body)
+        if (!headers['Content-Type'])
+          headers['Content-Type'] = 'application/json'
+      }
     }
     try {
       return await this.fetchImpl(this.buildUrl(path), init)
