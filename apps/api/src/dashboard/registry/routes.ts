@@ -1,7 +1,9 @@
-import { WORKER_API_TOKEN_PATTERN } from '@aiworker/shared'
+import type { FleetSupervisor } from '../supervisor/service'
+import { WORKER_API_TOKEN_PATTERN, WORKER_ID_PATTERN } from '@aiworker/shared'
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { z } from 'zod'
 
+import { LaunchFailedError, LaunchTimeoutError } from '../supervisor/errors'
 import {
   WorkerClient,
   WorkerClientAuthError,
@@ -36,10 +38,29 @@ const updateBody = z
     message: 'at least one of displayName or baseUrl must be provided',
   })
 
+const launchLocalBody = z.object({
+  displayName: z.string().min(1).max(80),
+  forceId: z.string().regex(WORKER_ID_PATTERN).optional(),
+})
+
+/**
+ * Subset of {@link FleetSupervisor} the /launch-local route actually calls.
+ * Narrowing to `Pick` lets tests pass in a stub without having to construct a
+ * full supervisor / DockerClient pair.
+ */
+export type RegistrySupervisor = Pick<FleetSupervisor, 'launchLocal'>
+
 export interface RegistryRoutesOptions {
   masterKeyHex: string
   /** Test hook — swap in an in-memory `WorkerClient` for the proxy route. */
   buildProxyClient?: (baseUrl: string, apiToken: string) => Pick<WorkerClient, 'passThrough'>
+  /**
+   * When true, mount `POST /launch-local`. Requires `supervisor` to be set;
+   * otherwise the route is hidden so a default (registry-only) manager
+   * returns 404 for the endpoint.
+   */
+  canLaunch?: boolean
+  supervisor?: RegistrySupervisor | null
 }
 
 /** Hop-by-hop request headers the manager must never forward to workers. */
@@ -65,9 +86,11 @@ const STRIPPED_RESPONSE_HEADERS = new Set([
  *   PATCH  /:id                            — 3.2
  *   DELETE /:id                            — 3.2
  *   ALL    /:id/proxy/worker/*             — 3.2 transparent pass-through
+ *   POST   /launch-local                   — 3.4 (only when canLaunch=true)
  */
 export function buildRegistryRoutes(options: RegistryRoutesOptions) {
   const routes = new OpenAPIHono()
+  const canLaunch = options.canLaunch === true && options.supervisor != null
 
   routes.post('/register', async (c) => {
     const raw = await c.req.json().catch(() => null)
@@ -235,6 +258,74 @@ export function buildRegistryRoutes(options: RegistryRoutesOptions) {
       headers: responseHeaders,
     })
   })
+
+  // POST /launch-local — opt-in single-host convenience. Only mounted when
+  // MANAGER_CAN_LAUNCH=true and a supervisor is supplied. When the flag is
+  // off the route simply isn't registered, so a request lands on the Hono
+  // 404 handler — exactly the "hidden endpoint" behaviour PLAN-004 asks for.
+  if (canLaunch && options.supervisor) {
+    const supervisor = options.supervisor
+    routes.post('/launch-local', async (c) => {
+      const raw = await c.req.json().catch(() => null)
+      const parsed = launchLocalBody.safeParse(raw)
+      if (!parsed.success) {
+        return c.json({
+          error: {
+            code: 'invalid-body',
+            message: 'invalid launch-local payload',
+            details: parsed.error.flatten().fieldErrors,
+          },
+        }, 400)
+      }
+
+      let launched
+      try {
+        launched = await supervisor.launchLocal({
+          displayName: parsed.data.displayName,
+          ...(parsed.data.forceId === undefined ? {} : { forceId: parsed.data.forceId }),
+        })
+      }
+      catch (err) {
+        if (err instanceof LaunchTimeoutError)
+          return c.json({ error: { code: 'launch-timeout', message: err.message } }, 504)
+        if (err instanceof LaunchFailedError)
+          return c.json({ error: { code: 'launch-failed', message: err.message } }, 500)
+        throw err
+      }
+
+      try {
+        const row = await registerWorker(
+          {
+            baseUrl: launched.baseUrl,
+            apiToken: launched.apiToken,
+            displayName: parsed.data.displayName,
+          },
+          { masterKeyHex: options.masterKeyHex, addedBy: 'launch-local' },
+        )
+        return c.json({
+          id: row.id,
+          baseUrl: row.baseUrl,
+          displayName: row.displayName,
+          addedAt: row.addedAt,
+          addedBy: row.addedBy,
+          lastSeenAt: row.lastSeenAt,
+          lastSeenState: row.lastSeenState,
+          lastConfigVersion: row.lastConfigVersion,
+        }, 201)
+      }
+      catch (err) {
+        if (err instanceof RegistryConflictError)
+          return c.json({ error: { code: 'already-registered', workerId: err.workerId } }, 409)
+        if (err instanceof WorkerClientAuthError)
+          return c.json({ error: { code: 'auth-failed' } }, 401)
+        if (err instanceof WorkerClientNetworkError)
+          return c.json({ error: { code: 'worker-unreachable', message: err.message } }, 502)
+        if (err instanceof WorkerClientInvalidResponseError)
+          return c.json({ error: { code: 'invalid-worker-info', message: err.message } }, 502)
+        throw err
+      }
+    })
+  }
 
   return routes
 }

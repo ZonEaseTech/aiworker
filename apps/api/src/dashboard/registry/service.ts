@@ -1,4 +1,4 @@
-import type { RegisteredWorker, SafeRegisteredWorker } from '@aiworker/shared'
+import type { RegisteredWorker, RegisteredWorkerOrigin, SafeRegisteredWorker } from '@aiworker/shared'
 
 import { eq } from 'drizzle-orm'
 
@@ -47,6 +47,12 @@ export interface RegistryServiceOptions {
    * omitted, `registerWorker` constructs a real fetch-backed client.
    */
   buildClient?: (baseUrl: string, apiToken: string) => Pick<WorkerClient, 'info'>
+  /**
+   * Provenance column written to the `added_by` field. Defaults to `manual`
+   * (the classic `POST /register` path); the launch-local route passes
+   * `launch-local` so audit logs / UI filters can distinguish the two.
+   */
+  addedBy?: RegisteredWorkerOrigin
 }
 
 /**
@@ -86,7 +92,7 @@ export async function registerWorker(
     nonce: sealed.nonce,
     authTag: sealed.authTag,
     addedAt: now,
-    addedBy: 'manual',
+    addedBy: options.addedBy ?? 'manual',
     lastSeenAt: now,
     lastSeenState: 'online',
     lastConfigVersion: info.configVersion,

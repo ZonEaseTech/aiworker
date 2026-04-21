@@ -4,6 +4,7 @@ import consola from 'consola'
 
 import { dashboardConfig } from '../config/dashboard'
 import { buildRegistryRoutes } from '../dashboard/registry/routes'
+import { getFleetSupervisor } from '../dashboard/supervisor/service'
 import { initFleetDb, runFleetMigrations } from '../db/fleet'
 import { errorHandler, requestLogger } from '../shared'
 
@@ -12,9 +13,14 @@ export async function createDashboardApp() {
   runFleetMigrations(dashboardConfig.FLEET_MIGRATIONS_FOLDER)
   consola.info(`[dashboard] fleet.db ready at ${dashboardConfig.FLEET_DB_PATH}`)
 
-  // PLAN-004 3.4 will gate the docker supervisor behind MANAGER_CAN_LAUNCH;
-  // until then the manager only exposes the registry / proxy surface and
-  // never touches docker.
+  // PLAN-004 3.4: the docker supervisor only comes online when the operator
+  // opts in via MANAGER_CAN_LAUNCH. With the flag off the manager is a pure
+  // registry and never constructs the DockerClient, so default deploys have
+  // no docker-socket dependency.
+  const supervisor = dashboardConfig.MANAGER_CAN_LAUNCH ? getFleetSupervisor() : null
+  if (supervisor)
+    consola.info('[dashboard] MANAGER_CAN_LAUNCH=true — /api/workers/launch-local is enabled')
+
   const app = new OpenAPIHono()
 
   app.use(requestLogger)
@@ -28,7 +34,11 @@ export async function createDashboardApp() {
     })
   })
 
-  app.route('/api/workers', buildRegistryRoutes({ masterKeyHex: dashboardConfig.AIWORKER_MASTER_KEY }))
+  app.route('/api/workers', buildRegistryRoutes({
+    masterKeyHex: dashboardConfig.AIWORKER_MASTER_KEY,
+    canLaunch: dashboardConfig.MANAGER_CAN_LAUNCH,
+    supervisor,
+  }))
 
   app.doc('/openapi.json', {
     openapi: '3.1.0',
