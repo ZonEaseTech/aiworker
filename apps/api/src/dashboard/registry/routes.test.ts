@@ -1,3 +1,5 @@
+import type { WorkerApiToken } from '@aiworker/shared'
+import type { RegistrySupervisor } from './routes'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -5,6 +7,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 import { closeFleetDb, initFleetDb, runFleetMigrations } from '../../db/fleet'
+import { LaunchFailedError, LaunchTimeoutError } from '../supervisor/errors'
 import { buildRegistryRoutes } from './routes'
 
 const MASTER_KEY = '00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff'
@@ -345,5 +348,119 @@ describe('registry/routes CRUD + proxy', () => {
     const routes = buildRegistryRoutes({ masterKeyHex: MASTER_KEY })
     const res = await routes.fetch(new Request('http://registry.test/w_missing/proxy/worker/info'))
     expect(res.status).toBe(404)
+  })
+})
+
+describe('registry/routes POST /launch-local', () => {
+  const originalFetch = globalThis.fetch
+
+  beforeEach(() => {
+    closeFleetDb()
+    const dir = mkdtempSync(join(tmpdir(), 'aiworker-registry-routes-launch-'))
+    initFleetDb(join(dir, 'fleet.db'))
+    runFleetMigrations('./drizzle/fleet')
+  })
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch
+  })
+
+  function makeSupervisor(impl?: Partial<RegistrySupervisor>): RegistrySupervisor {
+    return {
+      launchLocal: impl?.launchLocal ?? (async () => ({
+        workerId: 'w_abc456def789',
+        baseUrl: 'http://aiworker-deadbeef:3001',
+        apiToken: 'wtk_launched_token_0000000000000000000000000' as WorkerApiToken,
+        containerId: 'container-id-abc',
+        containerName: 'aiworker-deadbeef',
+      })),
+    }
+  }
+
+  function postLaunch(routes: ReturnType<typeof buildRegistryRoutes>, body: unknown) {
+    return routes.fetch(new Request('http://registry.test/launch-local', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }))
+  }
+
+  it('is not mounted when canLaunch=false (returns 404)', async () => {
+    const routes = buildRegistryRoutes({ masterKeyHex: MASTER_KEY })
+    const res = await postLaunch(routes, { displayName: 'Alpha' })
+    expect(res.status).toBe(404)
+  })
+
+  it('is not mounted when canLaunch=true but supervisor is null', async () => {
+    const routes = buildRegistryRoutes({ masterKeyHex: MASTER_KEY, canLaunch: true, supervisor: null })
+    const res = await postLaunch(routes, { displayName: 'Alpha' })
+    expect(res.status).toBe(404)
+  })
+
+  it('returns 201 with a sanitised row on success', async () => {
+    // The supervisor stub returns a fixed (workerId, apiToken). registerWorker
+    // calls the worker's /info endpoint with that token, so we also need to
+    // intercept that fetch.
+    globalThis.fetch = (async () => new Response(JSON.stringify({
+      workerId: 'w_abc456def789',
+      configVersion: 1,
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })) as unknown as typeof fetch
+
+    const routes = buildRegistryRoutes({
+      masterKeyHex: MASTER_KEY,
+      canLaunch: true,
+      supervisor: makeSupervisor(),
+    })
+    const res = await postLaunch(routes, { displayName: 'Alpha' })
+    expect(res.status).toBe(201)
+    const body = await res.json() as Record<string, unknown>
+    expect(body.id).toBe('w_abc456def789')
+    expect(body.displayName).toBe('Alpha')
+    expect(body.addedBy).toBe('launch-local')
+    expect(body.apiTokenEnc).toBeUndefined()
+  })
+
+  it('returns 400 when the payload is invalid', async () => {
+    const routes = buildRegistryRoutes({
+      masterKeyHex: MASTER_KEY,
+      canLaunch: true,
+      supervisor: makeSupervisor(),
+    })
+    const res = await postLaunch(routes, { displayName: '' })
+    expect(res.status).toBe(400)
+    const body = await res.json() as { error: { code: string } }
+    expect(body.error.code).toBe('invalid-body')
+  })
+
+  it('maps supervisor LaunchFailedError to 500 launch-failed', async () => {
+    const routes = buildRegistryRoutes({
+      masterKeyHex: MASTER_KEY,
+      canLaunch: true,
+      supervisor: makeSupervisor({
+        launchLocal: async () => {
+          throw new LaunchFailedError('docker ping failed')
+        },
+      }),
+    })
+    const res = await postLaunch(routes, { displayName: 'Alpha' })
+    expect(res.status).toBe(500)
+    const body = await res.json() as { error: { code: string } }
+    expect(body.error.code).toBe('launch-failed')
+  })
+
+  it('maps supervisor LaunchTimeoutError to 504 launch-timeout', async () => {
+    const routes = buildRegistryRoutes({
+      masterKeyHex: MASTER_KEY,
+      canLaunch: true,
+      supervisor: makeSupervisor({
+        launchLocal: async () => {
+          throw new LaunchTimeoutError('no bootstrap token after 30000ms')
+        },
+      }),
+    })
+    const res = await postLaunch(routes, { displayName: 'Alpha' })
+    expect(res.status).toBe(504)
+    const body = await res.json() as { error: { code: string } }
+    expect(body.error.code).toBe('launch-timeout')
   })
 })
