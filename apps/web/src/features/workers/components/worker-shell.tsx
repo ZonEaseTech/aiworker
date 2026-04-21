@@ -1,38 +1,53 @@
 import type { SafeRegisteredWorker } from '@aiworker/shared'
 import { useNavigate } from '@tanstack/react-router'
-import { Activity, Check, Copy, KeyRound, Settings as SettingsIcon, ShieldAlert, TestTube2, Trash2 } from 'lucide-react'
+import {
+  Activity,
+  Check,
+  Copy,
+  KeyRound,
+  Loader2,
+  RefreshCcw,
+  Settings as SettingsIcon,
+  ShieldAlert,
+  TestTube2,
+  Trash2,
+} from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { WorkerApiError } from '@/lib/api'
 import { cn } from '@/lib/utils'
-import { useDeleteWorker, useUpdateWorker } from '../hooks'
+import { useDeleteWorker, useRotateWorkerToken, useUpdateWorker } from '../hooks'
 import { formatRelativeTime, stateBadgeLabel, stateBadgeVariant } from '../utils'
+import { ActivityPanel } from './activity-panel'
+import { ConfigEditor } from './config-editor'
+import { SecretsPanel } from './secrets-panel'
+import { TestPanel } from './test-panel'
 
 interface WorkerShellProps {
   worker: SafeRegisteredWorker
 }
 
+type TabId = 'overview' | 'config' | 'secrets' | 'test' | 'activity'
+
 interface SidebarItem {
-  id: string
+  id: TabId
   label: string
   icon: React.ComponentType<{ className?: string }>
-  enabled: boolean
 }
 
 const SIDEBAR: SidebarItem[] = [
-  { id: 'overview', label: 'Overview', icon: Activity, enabled: true },
-  { id: 'config', label: 'Config', icon: SettingsIcon, enabled: false },
-  { id: 'secrets', label: 'Secrets', icon: KeyRound, enabled: false },
-  { id: 'test', label: 'Test', icon: TestTube2, enabled: false },
-  { id: 'activity', label: 'Activity', icon: ShieldAlert, enabled: false },
+  { id: 'overview', label: 'Overview', icon: Activity },
+  { id: 'config', label: 'Config', icon: SettingsIcon },
+  { id: 'secrets', label: 'Secrets', icon: KeyRound },
+  { id: 'test', label: 'Test', icon: TestTube2 },
+  { id: 'activity', label: 'Activity', icon: ShieldAlert },
 ]
 
 export function WorkerShell({ worker }: WorkerShellProps) {
-  const [active, setActive] = useState<string>('overview')
+  const [active, setActive] = useState<TabId>('overview')
 
   return (
     <div className="flex min-h-[calc(100vh-3.5rem)]">
@@ -46,12 +61,16 @@ export function WorkerShell({ worker }: WorkerShellProps) {
             key={item.id}
             item={item}
             isActive={active === item.id}
-            onClick={() => item.enabled && setActive(item.id)}
+            onClick={() => setActive(item.id)}
           />
         ))}
       </aside>
       <div className="flex min-w-0 flex-1 flex-col p-6">
         {active === 'overview' && <OverviewPanel key={`${worker.id}-${worker.displayName}`} worker={worker} />}
+        {active === 'config' && <ConfigEditor workerId={worker.id} />}
+        {active === 'secrets' && <SecretsPanel workerId={worker.id} />}
+        {active === 'test' && <TestPanel workerId={worker.id} />}
+        {active === 'activity' && <ActivityPanel />}
       </div>
     </div>
   )
@@ -62,41 +81,20 @@ function SidebarLink({ item, isActive, onClick }: {
   isActive: boolean
   onClick: () => void
 }) {
-  const className = cn(
-    'flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors',
-    item.enabled
-      ? isActive
-        ? 'bg-accent text-accent-foreground font-medium'
-        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-      : 'cursor-not-allowed text-muted-foreground/60',
-  )
-  if (item.enabled) {
-    return (
-      <button type="button" onClick={onClick} className={className}>
-        <item.icon className="size-4" />
-        {item.label}
-      </button>
-    )
-  }
   return (
-    <Tooltip>
-      <TooltipTrigger
-        render={(props, state) => (
-          <button
-            type="button"
-            aria-disabled="true"
-            onClick={e => e.preventDefault()}
-            {...props}
-            data-state={state.open ? 'open' : 'closed'}
-            className={className}
-          >
-            <item.icon className="size-4" />
-            {item.label}
-          </button>
-        )}
-      />
-      <TooltipContent>Coming in 4.2</TooltipContent>
-    </Tooltip>
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors',
+        isActive
+          ? 'bg-accent text-accent-foreground font-medium'
+          : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+      )}
+    >
+      <item.icon className="size-4" />
+      {item.label}
+    </button>
   )
 }
 
@@ -220,6 +218,8 @@ function OverviewPanel({ worker }: { worker: SafeRegisteredWorker }) {
         </Row>
       </dl>
 
+      <RotateTokenCard worker={worker} />
+
       <UnregisterCard worker={worker} />
     </div>
   )
@@ -251,6 +251,89 @@ function CopyInline({ value, label }: { value: string, label: string }) {
     >
       {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
     </Button>
+  )
+}
+
+function RotateTokenCard({ worker }: { worker: SafeRegisteredWorker }) {
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [newToken, setNewToken] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const rotate = useRotateWorkerToken(worker.id)
+
+  async function runRotate() {
+    setError(null)
+    try {
+      const { newToken: token } = await rotate.mutateAsync()
+      setNewToken(token)
+      setConfirmOpen(false)
+    }
+    catch (err) {
+      setError(err instanceof WorkerApiError ? err.message : 'Rotate failed.')
+    }
+  }
+
+  function closeNewTokenDialog() {
+    // Drop the plaintext so a re-open of the dialog can't expose it again.
+    setNewToken(null)
+  }
+
+  return (
+    <div className="rounded-lg border bg-card p-6">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-base font-semibold">Rotate API token</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Mints a new bearer token on the worker. The previous token becomes invalid immediately — save the new
+            value before closing the dialog.
+          </p>
+        </div>
+        <Button variant="outline" onClick={() => setConfirmOpen(true)}>
+          <RefreshCcw className="size-4" />
+          Rotate token
+        </Button>
+      </div>
+
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Rotate the worker's API token?</DialogTitle>
+            <DialogDescription>
+              The manager's stored bearer token for
+              {' '}
+              <code className="rounded bg-muted px-1 font-mono text-xs">{worker.displayName}</code>
+              {' '}
+              will be replaced with a newly minted value. The old token stops working immediately.
+            </DialogDescription>
+          </DialogHeader>
+          {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmOpen(false)}>Cancel</Button>
+            <Button onClick={runRotate} disabled={rotate.isPending}>
+              {rotate.isPending ? <Loader2 className="size-4 animate-spin" /> : <RefreshCcw className="size-4" />}
+              Rotate
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={newToken !== null} onOpenChange={open => !open && closeNewTokenDialog()}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>New API token</DialogTitle>
+            <DialogDescription>
+              This value is shown once. Copy it now — it will not be shown again.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center gap-2 rounded-md border bg-background p-3">
+            <code className="flex-1 break-all font-mono text-xs">{newToken}</code>
+            <CopyInline value={newToken ?? ''} label="new API token" />
+          </div>
+          <DialogFooter>
+            <Button onClick={closeNewTokenDialog}>I've saved it</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   )
 }
 

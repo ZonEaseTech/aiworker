@@ -1,12 +1,28 @@
-import type { SafeRegisteredWorker } from '@aiworker/shared'
-import type { RegisterWorkerInput, UpdateWorkerInput } from '@/lib/api'
+import type { ChannelType, SafeRegisteredWorker, WorkerConfig } from '@aiworker/shared'
+import type {
+  ChannelTestResponse,
+  PutWorkerConfigResponse,
+  RegisterWorkerInput,
+  UpdateWorkerInput,
+  WorkerConfigResponse,
+} from '@/lib/api'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import {
   deleteWorker,
+  deleteWorkerSecret,
   getWorker,
+  getWorkerConfig,
+  getWorkerInfo,
   listWorkers,
+  listWorkerSecrets,
+  putWorkerConfig,
+  putWorkerSecret,
   registerWorker,
+  rotateWorkerToken,
+  testWorkerBrain,
+  testWorkerChannel,
+  testWorkerExecutor,
   updateWorker,
 } from '@/lib/api'
 import { useWorkerStore } from '@/stores/worker'
@@ -78,5 +94,117 @@ export function useDeleteWorker() {
       qc.invalidateQueries({ queryKey: WORKERS_KEY })
       qc.removeQueries({ queryKey: workerKey(id) })
     },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// PLAN-004 4.2 — per-worker proxy queries/mutations. All go through the
+// manager's `/api/workers/:id/proxy/worker/*` pass-through (3.2).
+// ---------------------------------------------------------------------------
+
+const workerInfoKey = (id: string) => ['workers', id, 'info'] as const
+const workerConfigKey = (id: string) => ['workers', id, 'config'] as const
+const workerSecretsKey = (id: string) => ['workers', id, 'secrets'] as const
+
+export function useWorkerInfo(id: string) {
+  return useQuery({
+    queryKey: workerInfoKey(id),
+    queryFn: () => getWorkerInfo(id),
+    staleTime: 10_000,
+    enabled: Boolean(id),
+  })
+}
+
+export function useWorkerConfig(id: string) {
+  return useQuery({
+    queryKey: workerConfigKey(id),
+    queryFn: () => getWorkerConfig(id),
+    staleTime: 0,
+    enabled: Boolean(id),
+  })
+}
+
+export interface PutWorkerConfigVariables {
+  config: WorkerConfig
+  ifMatchVersion?: number
+}
+
+export function usePutWorkerConfig(id: string) {
+  const qc = useQueryClient()
+  return useMutation<PutWorkerConfigResponse, Error, PutWorkerConfigVariables>({
+    mutationFn: ({ config, ifMatchVersion }) =>
+      putWorkerConfig(id, config, ifMatchVersion === undefined ? {} : { ifMatchVersion }),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: workerInfoKey(id) })
+      qc.setQueryData<WorkerConfigResponse>(workerConfigKey(id), {
+        config: res.config,
+        version: res.version,
+      })
+    },
+  })
+}
+
+export function useWorkerSecrets(id: string) {
+  return useQuery({
+    queryKey: workerSecretsKey(id),
+    queryFn: () => listWorkerSecrets(id),
+    staleTime: 0,
+    enabled: Boolean(id),
+  })
+}
+
+export function usePutWorkerSecret(id: string) {
+  const qc = useQueryClient()
+  return useMutation<void, Error, { key: string, value: string }>({
+    mutationFn: ({ key, value }) => putWorkerSecret(id, key, value),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: workerSecretsKey(id) })
+    },
+  })
+}
+
+export function useDeleteWorkerSecret(id: string) {
+  const qc = useQueryClient()
+  return useMutation<void, Error, string>({
+    mutationFn: key => deleteWorkerSecret(id, key),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: workerSecretsKey(id) })
+    },
+  })
+}
+
+export function useTestWorkerBrain(id: string) {
+  return useMutation({
+    mutationFn: () => testWorkerBrain(id),
+  })
+}
+
+export function useTestWorkerExecutor(id: string) {
+  return useMutation<
+    Awaited<ReturnType<typeof testWorkerExecutor>>,
+    Error,
+    { probe?: boolean } | undefined
+  >({
+    mutationFn: body => testWorkerExecutor(id, body ?? {}),
+  })
+}
+
+export function useTestWorkerChannel(id: string) {
+  return useMutation<
+    ChannelTestResponse,
+    Error,
+    { channel: ChannelType, chatId?: string, text?: string }
+  >({
+    mutationFn: ({ channel, chatId, text }) =>
+      testWorkerChannel(id, channel, {
+        ...(chatId === undefined ? {} : { chatId }),
+        ...(text === undefined ? {} : { text }),
+      }),
+  })
+}
+
+export function useRotateWorkerToken(id: string) {
+  return useMutation({
+    mutationFn: () => rotateWorkerToken(id),
   })
 }
