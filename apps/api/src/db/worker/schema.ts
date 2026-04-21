@@ -1,0 +1,91 @@
+import type { ChannelType, SkillBindingSource, SkillDraftSource, SkillDraftStatus, ToolCall } from '@aiworker/shared'
+import { integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
+
+/**
+ * worker.db — owned by a single worker container. Every row belongs to the
+ * same worker, so no `workerId` column is needed: the whole file is scoped.
+ */
+
+export const agentTasks = sqliteTable('agent_tasks', {
+  id: text('id').primaryKey(),
+  prompt: text('prompt').notNull(),
+  status: text('status', { enum: ['queued', 'running', 'succeeded', 'failed', 'cancelled'] }).notNull(),
+  conversationId: text('conversation_id'),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  finishedAt: text('finished_at'),
+  result: text('result', { mode: 'json' }).$type<Record<string, unknown>>(),
+  error: text('error'),
+})
+
+export const conversations = sqliteTable('conversations', {
+  id: text('id').primaryKey(),
+  taskId: text('task_id').references(() => agentTasks.id),
+  channel: text('channel').$type<ChannelType>().notNull(),
+  chatId: text('chat_id').notNull(),
+  threadId: text('thread_id'),
+  status: text('status', { enum: ['open', 'closed'] }).notNull().default('open'),
+  summary: text('summary'),
+  startedAt: text('started_at').notNull().$defaultFn(() => new Date().toISOString()),
+  lastActiveAt: text('last_active_at').notNull().$defaultFn(() => new Date().toISOString()),
+  closedAt: text('closed_at'),
+})
+
+export const messages = sqliteTable('messages', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  conversationId: text('conversation_id').notNull().references(() => conversations.id, { onDelete: 'cascade' }),
+  role: text('role', { enum: ['system', 'user', 'assistant', 'tool'] }).notNull(),
+  content: text('content').notNull(),
+  toolCalls: text('tool_calls', { mode: 'json' }).$type<ToolCall[]>(),
+  toolCallId: text('tool_call_id'),
+  tokensIn: integer('tokens_in'),
+  tokensOut: integer('tokens_out'),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+})
+
+export const executionLogs = sqliteTable('execution_logs', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  conversationId: text('conversation_id'),
+  toolName: text('tool_name').notNull(),
+  params: text('params', { mode: 'json' }).$type<Record<string, unknown>>(),
+  result: text('result', { mode: 'json' }).$type<Record<string, unknown>>(),
+  duration: integer('duration'),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+})
+
+export const skillBindings = sqliteTable(
+  'skill_bindings',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    source: text('source').$type<SkillBindingSource>().notNull(),
+    brainName: text('brain_name'),
+    skillName: text('skill_name').notNull(),
+    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+    priority: integer('priority').notNull().default(0),
+    config: text('config', { mode: 'json' }).$type<Record<string, unknown>>(),
+    createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+    updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()),
+  },
+  table => ({
+    uniqueBinding: uniqueIndex('skill_bindings_source_brain_name_idx').on(table.source, table.brainName, table.skillName),
+  }),
+)
+
+export const skillDrafts = sqliteTable('skill_drafts', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  proposedName: text('proposed_name').notNull(),
+  source: text('source').$type<SkillDraftSource>().notNull(),
+  bodyMarkdown: text('body_markdown').notNull(),
+  rationale: text('rationale').notNull().default(''),
+  status: text('status').$type<SkillDraftStatus>().notNull().default('pending'),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  decidedAt: text('decided_at'),
+  decidedBy: text('decided_by'),
+})
+
+export const evolutionObservations = sqliteTable('evolution_observations', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  conversationId: text('conversation_id'),
+  kind: text('kind').notNull(),
+  payload: text('payload', { mode: 'json' }).$type<Record<string, unknown>>().notNull(),
+  noticedAt: text('noticed_at').notNull().$defaultFn(() => new Date().toISOString()),
+})

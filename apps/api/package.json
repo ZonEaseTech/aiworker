@@ -7,8 +7,9 @@
     "build": "bun build src/index.ts --outdir dist --target bun",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "bun src/db/migrate.ts"
+    "db:generate:fleet": "drizzle-kit generate --config drizzle.fleet.config.ts",
+    "db:generate:worker": "drizzle-kit generate --config drizzle.worker.config.ts",
+    "db:generate": "bun run db:generate:fleet && bun run db:generate:worker"
   },
   "dependencies": {
     "@aiworker/shared": "workspace:*",

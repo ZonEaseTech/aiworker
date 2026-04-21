@@ -15,3 +15,5 @@ coverage/
 .code-review-graph/
 .claude/
 .serena/
+.aissh.yaml
+.mcp.json

@@ -1,34 +1,23 @@
-import path from 'node:path'
-import process from 'node:process'
 import consola from 'consola'
-import { app } from './app'
-import { config } from './config'
-import { closeDb, initDb } from './db'
-import { runMigrations } from './db/migrate'
 
-const dbPath = path.resolve(import.meta.dir, '../data/aiworker.db')
-initDb(dbPath)
-const migrationsFolder = path.resolve(import.meta.dir, '../drizzle')
-runMigrations(migrationsFolder)
-consola.info(`Database initialized at ${dbPath}`)
+import { APP_MODE } from './config/common'
 
-const server = Bun.serve({
-  fetch: app.fetch,
-  port: config.PORT,
-})
+export async function boot() {
+  if (APP_MODE === 'dashboard') {
+    const { createDashboardApp } = await import('./modes/dashboard')
+    const { app, port } = await createDashboardApp()
+    consola.success(`[dashboard] listening on :${port}`)
+    return { app, port }
+  }
 
-consola.success(`API server running on http://localhost:${config.PORT}`)
+  const { createWorkerApp } = await import('./modes/worker')
+  const { app, port } = createWorkerApp()
+  consola.success(`[worker] listening on :${port}`)
+  return { app, port }
+}
 
-process.on('SIGINT', () => {
-  consola.info('Shutting down...')
-  server.stop()
-  closeDb()
-  process.exit(0)
-})
+// eslint-disable-next-line antfu/no-top-level-await -- Bun entry point needs { fetch, port } available synchronously at module export time
+const { app, port } = await boot()
 
-process.on('SIGTERM', () => {
-  consola.info('Shutting down...')
-  server.stop()
-  closeDb()
-  process.exit(0)
-})
+export default { fetch: app.fetch, port }
+export { app }

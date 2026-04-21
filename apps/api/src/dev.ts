@@ -1,19 +1,9 @@
-import path from 'node:path'
-import consola from 'consola'
-import { app } from './app'
-import { config } from './config'
-import { initDb } from './db'
-import { runMigrations } from './db/migrate'
+import process from 'node:process'
 
-const dbPath = path.resolve(import.meta.dir, '../data/aiworker.db')
-initDb(dbPath)
-const migrationsFolder = path.resolve(import.meta.dir, '../drizzle')
-runMigrations(migrationsFolder)
-consola.info(`[dev] Database initialized at ${dbPath}`)
+// Dev helper: default to dashboard mode with ephemeral secrets if env is not pre-set.
+process.env.AIWORKER_MODE ??= 'dashboard'
+process.env.INTERNAL_SHARED_SECRET ??= 'dev-internal-secret-1234567890'
+process.env.AIWORKER_MASTER_KEY ??= '00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff'
 
-Bun.serve({
-  fetch: app.fetch,
-  port: config.PORT,
-})
-
-consola.success(`[dev] API server running on http://localhost:${config.PORT}`)
+// eslint-disable-next-line antfu/no-top-level-await -- dev entry point mirrors the production entry
+await import('./index')
