@@ -20,6 +20,7 @@ import {
   registerWorker,
   RegistryConflictError,
   RegistryNotFoundError,
+  rotateRegisteredWorkerToken,
   updateWorker,
 } from './service'
 
@@ -54,6 +55,8 @@ export interface RegistryRoutesOptions {
   masterKeyHex: string
   /** Test hook — swap in an in-memory `WorkerClient` for the proxy route. */
   buildProxyClient?: (baseUrl: string, apiToken: string) => Pick<WorkerClient, 'passThrough'>
+  /** Test hook — swap in an in-memory `WorkerClient` for the rotate-token route. */
+  buildRotateClient?: (baseUrl: string, apiToken: string) => Pick<WorkerClient, 'rotateToken'>
   /**
    * When true, mount `POST /launch-local`. Requires `supervisor` to be set;
    * otherwise the route is hidden so a default (registry-only) manager
@@ -176,6 +179,35 @@ export function buildRegistryRoutes(options: RegistryRoutesOptions) {
     catch (err) {
       if (err instanceof RegistryNotFoundError)
         return c.json({ error: { code: 'not-found' } }, 404)
+      throw err
+    }
+  })
+
+  // POST /:id/rotate-token — manager-side wrapper around the worker's
+  // /api/worker/token/rotate. The transparent /proxy path also reaches that
+  // endpoint, but the proxy returns the new plaintext untouched and never
+  // updates registered_workers.apiTokenEnc — leaving the registry's stored
+  // token stale and every subsequent poll/proxy call doomed to 401. This
+  // wrapper closes that gap by re-encrypting the new token under the manager
+  // master key in the same handler that observes the worker's response.
+  routes.post('/:id/rotate-token', async (c) => {
+    const id = c.req.param('id')
+    try {
+      const result = await rotateRegisteredWorkerToken(id, {
+        masterKeyHex: options.masterKeyHex,
+        ...(options.buildRotateClient === undefined ? {} : { buildClient: options.buildRotateClient }),
+      })
+      return c.json(result)
+    }
+    catch (err) {
+      if (err instanceof RegistryNotFoundError)
+        return c.json({ error: { code: 'not-found' } }, 404)
+      if (err instanceof WorkerClientAuthError)
+        return c.json({ error: { code: 'auth-failed' } }, 401)
+      if (err instanceof WorkerClientNetworkError)
+        return c.json({ error: { code: 'worker-unreachable', message: err.message } }, 502)
+      if (err instanceof WorkerClientInvalidResponseError)
+        return c.json({ error: { code: 'invalid-rotate-response', message: err.message } }, 502)
       throw err
     }
   })

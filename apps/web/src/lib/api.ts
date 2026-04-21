@@ -368,6 +368,25 @@ export function testWorkerChannel(
   )
 }
 
-export function rotateWorkerToken(id: string): Promise<{ newToken: string }> {
-  return workerProxyRequest<{ newToken: string }>('POST', id, '/token/rotate')
+export interface RotateWorkerTokenResponse {
+  /** ISO-8601 timestamp the manager observed the rotation. */
+  rotatedAt: string
+  /** Last four characters of the new token — UI hint, never the full plaintext. */
+  lastFourOfNewToken: string
+}
+
+/**
+ * Rotate a worker's bearer token via the manager wrapper at
+ * `POST /api/workers/:id/rotate-token`. The wrapper instructs the worker to
+ * mint a new token AND immediately re-encrypts it into
+ * `registered_workers.apiTokenEnc`, so subsequent proxy + poll calls keep
+ * authenticating. The plaintext is intentionally NOT returned — operators
+ * who need it call the worker directly via the `/proxy/worker/token/rotate`
+ * pass-through.
+ */
+export function rotateWorkerToken(id: string): Promise<RotateWorkerTokenResponse> {
+  return workerRequest<RotateWorkerTokenResponse>(
+    'POST',
+    `/api/workers/${encodeURIComponent(id)}/rotate-token`,
+  )
 }
