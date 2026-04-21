@@ -1,4 +1,4 @@
-import type { Orchestrator } from './service'
+import type { WorkerRuntime } from '../runtime'
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { desc, eq } from 'drizzle-orm'
 
@@ -6,7 +6,11 @@ import { getWorkerDb } from '../../db/worker'
 import { agentTasks, conversations, messages } from '../../db/worker/schema'
 import { AppError } from '../../shared'
 
-export function buildOrchestratorRoutes(orch: Orchestrator) {
+/**
+ * Orchestrator router. The `getRuntime` thunk is re-evaluated at every request
+ *  so PLAN-004 2.2 hot-reloads pick up a fresh orchestrator without remounts.
+ */
+export function buildOrchestratorRoutes(getRuntime: () => WorkerRuntime) {
   const routes = new OpenAPIHono()
 
   routes.get('/tasks', (c) => {
@@ -18,7 +22,7 @@ export function buildOrchestratorRoutes(orch: Orchestrator) {
     const body = await c.req.json<{ prompt: string }>()
     if (!body.prompt || !body.prompt.trim())
       throw AppError.badRequest('prompt is required')
-    const task = await orch.submitTask(body.prompt.trim())
+    const task = await getRuntime().orchestrator.submitTask(body.prompt.trim())
     return c.json({ task }, 201)
   })
 

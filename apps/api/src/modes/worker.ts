@@ -1,4 +1,4 @@
-import type { Envelope, WorkerConfig } from '@aiworker/shared'
+import type { WorkerConfig } from '@aiworker/shared'
 import type { WorkerRuntime } from '../worker/runtime'
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { apiReference } from '@scalar/hono-api-reference'
@@ -12,6 +12,7 @@ import { buildChannelRoutes } from '../worker/channels/routes'
 import { enumerateSecretPaths, hydrateSecrets } from '../worker/config/secret-paths'
 import { buildEventRoutes } from '../worker/events/routes'
 import { evolutionRoutes } from '../worker/evolution/routes'
+import { buildManagementRoutes } from '../worker/management/routes'
 import { buildOrchestratorRoutes } from '../worker/orchestrator/routes'
 import { buildWorkerRuntime } from '../worker/runtime'
 import { getSecretsVault } from '../worker/secrets'
@@ -38,8 +39,9 @@ async function hydrateStoredConfig(stored: WorkerConfig): Promise<WorkerConfig> 
 /**
  * Self-sufficient worker bootstrap: init worker.db, mint identity on first
  * boot, load (or seed) config, hydrate secrets from the vault, and build the
- * runtime. Returns the assembled Hono app plus a mutable `state` object so
- * future config-reload hooks (PLAN-004 2.2) can atomically swap `state.runtime`.
+ * runtime. Returns the assembled Hono app plus a mutable `state` object whose
+ * `runtime` ref is atomically replaced by `reloadRuntime` when PLAN-004 2.2
+ * management API pushes a new config.
  */
 export async function bootstrapWorkerApp(): Promise<{ app: OpenAPIHono, port: number, state: WorkerModeState }> {
   initWorkerDb(workerEnv.WORKER_DB_PATH)
@@ -69,6 +71,21 @@ export async function bootstrapWorkerApp(): Promise<{ app: OpenAPIHono, port: nu
     startedAt: new Date().toISOString(),
   }
 
+  async function reloadRuntime(nextStoredConfig: WorkerConfig, newVersion: number): Promise<void> {
+    const nextHydrated = await hydrateStoredConfig(nextStoredConfig)
+    const nextRuntime = buildWorkerRuntime(state.workerId, nextHydrated)
+    const previous = state.runtime
+    state.runtime = nextRuntime
+    state.configVersion = newVersion
+    try {
+      previous.dispose()
+    }
+    catch (err) {
+      consola.warn(`[worker ${state.workerId}] previous runtime dispose failed: ${String(err)}`)
+    }
+    consola.info(`[worker ${state.workerId}] runtime reloaded to config version ${newVersion}`)
+  }
+
   const app = new OpenAPIHono()
   app.use(requestLogger)
   app.onError(errorHandler)
@@ -95,16 +112,13 @@ export async function bootstrapWorkerApp(): Promise<{ app: OpenAPIHono, port: nu
   // the worker container only ever sees its own suffix.
   app.route(
     '/',
-    buildChannelRoutes(
-      state.runtime.channels,
-      state.workerId,
-      env => state.runtime.orchestrator.ingest(env as Envelope),
-    ),
+    buildChannelRoutes(() => state.runtime, state.workerId),
   )
 
-  app.route('/api/worker/orchestrator', buildOrchestratorRoutes(state.runtime.orchestrator))
+  app.route('/api/worker/orchestrator', buildOrchestratorRoutes(() => state.runtime))
   app.route('/api/worker/evolution', evolutionRoutes)
-  app.route('/api/worker/events', buildEventRoutes(state.runtime.bus))
+  app.route('/api/worker/events', buildEventRoutes(() => state.runtime))
+  app.route('/api/worker', buildManagementRoutes({ getState: () => state, reloadRuntime }))
 
   app.doc('/openapi.json', {
     openapi: '3.1.0',
