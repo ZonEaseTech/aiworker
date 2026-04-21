@@ -582,3 +582,18 @@ User clarified during brainstorming:
 - Current `/opt/aiworker` on `gateway.example.test` (<test-server-ip-redacted>) to be torn down; deploy flow tracked separately.
 
 Plan rewritten accordingly. Deployment work deferred to Future Work FEAT-009 per user instruction.
+
+### 2026-04-21 08:20 — Superseded by PLAN-004 (phase 1 scaffold committed; remainder absorbed)
+
+Phase 1 scaffold (subtasks 1–10, 12 in this plan) committed at `9e38180 refactor(api,shared,ops): multi-worker fleet runtime scaffold (PLAN-003 phase 1)` + `1929b1c chore(api): remove legacy drizzle.config.ts`. Verification: `bun run check` clean, 11 tests pass.
+
+User subsequently reframed the target: workers must be fully self-sufficient (own identity, own config, own secrets) and the manager must be a replaceable registry/aggregator layer — not a provisioner that owns worker state. This is a meaningful architectural pivot that PLAN-003's subtasks 4 (fleet CRUD) and 11 (frontend) did not anticipate.
+
+The follow-on work is captured in [PLAN-004](./PLAN-004.md). PLAN-003 remaining subtasks are withdrawn (not executed as stated):
+
+- Subtask 4 is superseded by PLAN-004 phase 3 (manager as registry).
+- Subtask 5 is superseded by PLAN-004 phase 2 (worker bootstrap owns its config).
+- Subtask 10 (evolution skeleton) is **completed** — lives in the committed scaffold.
+- Subtask 11 (web restructure) is superseded by PLAN-004 phase 4 (different semantics: register existing workers vs create via dashboard).
+
+PLAN-003 status is kept at `implementing` as a landmark; execution continues under PLAN-004. Retrospectively, PLAN-003's biggest gap was not pivoting architecture mid-stream but failing to dispatch via BKD — the plan claimed BKD-coordinated subtasks yet execution was serial single-agent. PLAN-004 execution runs as a BKD worktree dispatch with 12 subtasks.
