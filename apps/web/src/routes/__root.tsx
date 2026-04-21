@@ -81,7 +81,7 @@ function RootLayout() {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 items-center justify-between border-b bg-background px-6">
           <span className="text-sm font-medium text-muted-foreground">
-            Middleware glue service
+            Self-hosted Agent Runtime
           </span>
           <div className="flex items-center gap-2">
             <HealthBadges />

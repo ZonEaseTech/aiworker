@@ -28,7 +28,7 @@ app.doc('/openapi.json', {
   info: {
     title: 'AIWorker API',
     version: '0.1.0',
-    description: 'Middleware glue service bridging Hermes Agent with an OpenAI-compatible executor',
+    description: 'Self-hosted Agent Runtime composing a Brain provider (knowledge/memory) with an Executor provider (OpenAI-compatible chat completions + tool calling).',
   },
 })
 
