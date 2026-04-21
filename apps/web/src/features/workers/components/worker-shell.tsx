@@ -256,15 +256,15 @@ function CopyInline({ value, label }: { value: string, label: string }) {
 
 function RotateTokenCard({ worker }: { worker: SafeRegisteredWorker }) {
   const [confirmOpen, setConfirmOpen] = useState(false)
-  const [newToken, setNewToken] = useState<string | null>(null)
+  const [success, setSuccess] = useState<{ rotatedAt: string, lastFourOfNewToken: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const rotate = useRotateWorkerToken(worker.id)
 
   async function runRotate() {
     setError(null)
     try {
-      const { newToken: token } = await rotate.mutateAsync()
-      setNewToken(token)
+      const result = await rotate.mutateAsync()
+      setSuccess(result)
       setConfirmOpen(false)
     }
     catch (err) {
@@ -272,9 +272,8 @@ function RotateTokenCard({ worker }: { worker: SafeRegisteredWorker }) {
     }
   }
 
-  function closeNewTokenDialog() {
-    // Drop the plaintext so a re-open of the dialog can't expose it again.
-    setNewToken(null)
+  function closeSuccessDialog() {
+    setSuccess(null)
   }
 
   return (
@@ -283,8 +282,13 @@ function RotateTokenCard({ worker }: { worker: SafeRegisteredWorker }) {
         <div>
           <h2 className="text-base font-semibold">Rotate API token</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Mints a new bearer token on the worker. The previous token becomes invalid immediately — save the new
-            value before closing the dialog.
+            Mints a new bearer token on the worker and immediately re-encrypts the new value in the manager's
+            registry. The previous token stops working at once. The new plaintext is never returned through this
+            path — use the worker's own
+            {' '}
+            <code className="rounded bg-muted px-1 font-mono text-[11px]">/api/worker/token/rotate</code>
+            {' '}
+            endpoint if you need to capture it.
           </p>
         </div>
         <Button variant="outline" onClick={() => setConfirmOpen(true)}>
@@ -316,20 +320,29 @@ function RotateTokenCard({ worker }: { worker: SafeRegisteredWorker }) {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={newToken !== null} onOpenChange={open => !open && closeNewTokenDialog()}>
+      <Dialog open={success !== null} onOpenChange={open => !open && closeSuccessDialog()}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>New API token</DialogTitle>
+            <DialogTitle>API token rotated</DialogTitle>
             <DialogDescription>
-              This value is shown once. Copy it now — it will not be shown again.
+              The manager has stored the new bearer and will keep talking to the worker. Capture the last four
+              characters as a verification hint — the full plaintext was not returned.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex items-center gap-2 rounded-md border bg-background p-3">
-            <code className="flex-1 break-all font-mono text-xs">{newToken}</code>
-            <CopyInline value={newToken ?? ''} label="new API token" />
+          <div className="grid gap-2 rounded-md border bg-background p-3 text-sm">
+            <div>
+              <span className="text-muted-foreground">Last 4 of new token:</span>
+              {' '}
+              <code className="rounded bg-muted px-1 font-mono text-xs">{success?.lastFourOfNewToken}</code>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Rotated at:</span>
+              {' '}
+              <code className="rounded bg-muted px-1 font-mono text-xs">{success?.rotatedAt}</code>
+            </div>
           </div>
           <DialogFooter>
-            <Button onClick={closeNewTokenDialog}>I've saved it</Button>
+            <Button onClick={closeSuccessDialog}>Done</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

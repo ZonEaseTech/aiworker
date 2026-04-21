@@ -1,4 +1,5 @@
-import type { WorkerInfo } from '@aiworker/shared'
+import type { WorkerApiToken, WorkerInfo } from '@aiworker/shared'
+import { isWorkerApiToken } from '@aiworker/shared'
 
 /**
  * HTTP client the manager uses to reach a registered worker's `/api/worker/*`
@@ -135,6 +136,36 @@ export class WorkerClient {
       throw new WorkerClientInvalidResponseError(`worker ${this.baseUrl} /info response missing required fields`)
 
     return data
+  }
+
+  /**
+   * `POST /api/worker/token/rotate`. The worker mints a new bearer, persists
+   * it encrypted, and returns the plaintext exactly once. Manager callers
+   * MUST re-encrypt the value into `registered_workers.apiTokenEnc` in the
+   * same atomic step that the worker's response settles, otherwise the
+   * registry permanently loses the ability to talk to that worker.
+   */
+  async rotateToken(): Promise<{ newToken: WorkerApiToken }> {
+    const res = await this.request('POST', 'token/rotate', undefined, {})
+    if (res.status === 401)
+      throw new WorkerClientAuthError()
+    if (!res.ok)
+      throw new WorkerClientNetworkError(`worker ${this.baseUrl} returned HTTP ${res.status} from /token/rotate`)
+
+    let data: unknown
+    try {
+      data = await res.json()
+    }
+    catch (err) {
+      throw new WorkerClientInvalidResponseError(`worker ${this.baseUrl} /token/rotate returned non-JSON body: ${(err as Error).message}`)
+    }
+
+    if (!data || typeof data !== 'object' || !('newToken' in data))
+      throw new WorkerClientInvalidResponseError(`worker ${this.baseUrl} /token/rotate response missing newToken`)
+    const newToken = (data as { newToken: unknown }).newToken
+    if (!isWorkerApiToken(newToken))
+      throw new WorkerClientInvalidResponseError(`worker ${this.baseUrl} /token/rotate returned a token that does not match wtk_<base64url>`)
+    return { newToken }
   }
 
   /**

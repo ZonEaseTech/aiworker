@@ -250,3 +250,73 @@ export function recordAuditEvent(entry: {
 export function decryptTokenFor(row: RegisteredWorker, masterKeyHex: string): string {
   return decryptToken(row.apiTokenEnc, row.nonce, row.authTag, masterKeyHex)
 }
+
+export interface RotateRegisteredTokenOptions {
+  masterKeyHex: string
+  /**
+   * Test seam matching `RegistryServiceOptions.buildClient` — produces a
+   * `WorkerClient` (or any object with a `rotateToken()` method) bound to the
+   * registered worker's `baseUrl` + current bearer.
+   */
+  buildClient?: (baseUrl: string, apiToken: string) => Pick<WorkerClient, 'rotateToken'>
+}
+
+export interface RotateRegisteredTokenResult {
+  /** ISO-8601 timestamp the rotation completed (server clock). */
+  rotatedAt: string
+  /** Last four characters of the new token — UI hint, NEVER the full plaintext. */
+  lastFourOfNewToken: string
+}
+
+/**
+ * Manager-side rotate-token wrapper: instructs the worker to mint a new
+ * bearer, immediately re-encrypts the returned plaintext under the manager
+ * master key, and updates `registered_workers.{apiTokenEnc,nonce,authTag}`
+ * + emits an audit row. The plaintext token is intentionally NOT returned to
+ * the caller — UI-triggered rotation is for keeping the registry's stored
+ * token in sync with the worker's. Operators who want the plaintext (e.g.
+ * for scripted re-provisioning) call the worker directly via the proxy
+ * route, which still returns it.
+ *
+ * Throws `RegistryNotFoundError` for unknown ids and bubbles
+ * `WorkerClientAuthError` / `WorkerClientNetworkError` /
+ * `WorkerClientInvalidResponseError` from the underlying HTTP call so the
+ * route layer can map them 1:1 to status codes.
+ */
+export async function rotateRegisteredWorkerToken(
+  id: string,
+  options: RotateRegisteredTokenOptions,
+): Promise<RotateRegisteredTokenResult> {
+  const row = getById(id)
+  if (!row)
+    throw new RegistryNotFoundError(id)
+
+  const currentToken = decryptTokenFor(row, options.masterKeyHex)
+  const client = options.buildClient
+    ? options.buildClient(row.baseUrl, currentToken)
+    : new WorkerClient({ baseUrl: row.baseUrl, apiToken: currentToken })
+
+  const { newToken } = await client.rotateToken()
+  const sealed = encryptToken(newToken, options.masterKeyHex)
+  const rotatedAt = new Date().toISOString()
+  const lastFourOfNewToken = newToken.slice(-4)
+
+  const db = getFleetDb()
+  db.update(registeredWorkers)
+    .set({
+      apiTokenEnc: sealed.ciphertext,
+      nonce: sealed.nonce,
+      authTag: sealed.authTag,
+    })
+    .where(eq(registeredWorkers.id, id))
+    .run()
+
+  db.insert(auditEvents).values({
+    actor: 'dashboard',
+    action: 'worker.token-rotated',
+    workerId: id,
+    detail: { rotatedAt, lastFourOfNewToken },
+  }).run()
+
+  return { rotatedAt, lastFourOfNewToken }
+}

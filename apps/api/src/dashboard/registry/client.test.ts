@@ -130,6 +130,55 @@ describe('WorkerClient', () => {
     await expect(client.info()).rejects.toBeInstanceOf(WorkerClientInvalidResponseError)
   })
 
+  it('rotateToken posts to /api/worker/token/rotate and returns the new token', async () => {
+    const newToken = 'wtk_brand_new_token_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+    const { fetchImpl, calls } = makeFetch(() => okJson({ newToken }))
+    // The branded WorkerApiToken type is enforced at the WorkerClient.rotateToken
+    // boundary; assert against the plain string the body declares.
+    const client = new WorkerClient({
+      baseUrl: 'https://worker.example.com',
+      apiToken: 'wtk_oldtoken_0000000000000000000000000000000000',
+      fetchImpl,
+    })
+    const result = await client.rotateToken()
+    expect(result.newToken as string).toBe(newToken)
+    expect(calls).toHaveLength(1)
+    expect(calls[0]!.url).toBe('https://worker.example.com/api/worker/token/rotate')
+    expect(calls[0]!.init?.method).toBe('POST')
+    const headers = new Headers(calls[0]!.init?.headers)
+    expect(headers.get('authorization')).toBe('Bearer wtk_oldtoken_0000000000000000000000000000000000')
+  })
+
+  it('rotateToken throws WorkerClientAuthError on 401', async () => {
+    const { fetchImpl } = makeFetch(() => new Response('no', { status: 401 }))
+    const client = new WorkerClient({
+      baseUrl: 'https://worker.example.com',
+      apiToken: 'wtk_oldtoken_0000000000000000000000000000000000',
+      fetchImpl,
+    })
+    await expect(client.rotateToken()).rejects.toBeInstanceOf(WorkerClientAuthError)
+  })
+
+  it('rotateToken throws WorkerClientInvalidResponseError when newToken is malformed', async () => {
+    const { fetchImpl } = makeFetch(() => okJson({ newToken: 'not-a-valid-token' }))
+    const client = new WorkerClient({
+      baseUrl: 'https://worker.example.com',
+      apiToken: 'wtk_oldtoken_0000000000000000000000000000000000',
+      fetchImpl,
+    })
+    await expect(client.rotateToken()).rejects.toBeInstanceOf(WorkerClientInvalidResponseError)
+  })
+
+  it('rotateToken throws WorkerClientInvalidResponseError when body lacks newToken', async () => {
+    const { fetchImpl } = makeFetch(() => okJson({ ok: true }))
+    const client = new WorkerClient({
+      baseUrl: 'https://worker.example.com',
+      apiToken: 'wtk_oldtoken_0000000000000000000000000000000000',
+      fetchImpl,
+    })
+    await expect(client.rotateToken()).rejects.toBeInstanceOf(WorkerClientInvalidResponseError)
+  })
+
   it('passThrough forwards raw Response with Bearer header', async () => {
     const { fetchImpl, calls } = makeFetch(() => new Response('{"ok":true}', {
       status: 200,
