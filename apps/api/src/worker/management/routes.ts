@@ -8,13 +8,18 @@ import { workerEnv } from '../../config/worker'
 import { getWorkerDb } from '../../db/worker'
 import { AppError } from '../../shared'
 import { getSecretsVault } from '../secrets'
+import { buildBearerAuth } from './bearer-auth'
+import { handleBrainTest } from './brain-test'
+import { handleChannelTest } from './channel-test'
 import {
   ConfigVersionConflictError,
   InvalidConfigError,
   putConfig,
   readConfig,
 } from './config'
+import { handleExecutorTest } from './executor-test'
 import { buildInfo } from './info'
+import { handleTokenRotate } from './rotate'
 import { deleteSecret, listSecrets, putSecret } from './secrets'
 
 export interface ManagementRoutesDeps {
@@ -30,15 +35,24 @@ export interface ManagementRoutesDeps {
 
 const putSecretBody = z.object({ value: z.string().min(1) })
 
+const executorTestBody = z.object({ probe: z.boolean().optional() }).optional()
+
+const channelTestBody = z.object({
+  chatId: z.string().optional(),
+  text: z.string().optional(),
+}).optional()
+
 /**
  * Worker self-management router. Mounted at `/api/worker` in
  * `bootstrapWorkerApp`. Pure factory so tests can inject a synthetic state +
  * reload hook without touching the real DB singleton.
  */
 export function buildManagementRoutes(deps: ManagementRoutesDeps) {
-  // PLAN-004 2.3: Bearer auth middleware goes here.
-
   const routes = new OpenAPIHono()
+
+  routes.use('*', buildBearerAuth({
+    getIdentity: () => ({ tokenPlaintext: deps.getState().tokenPlaintext }),
+  }))
 
   routes.get('/info', async (c) => {
     const state = deps.getState()
@@ -147,6 +161,71 @@ export function buildManagementRoutes(deps: ManagementRoutesDeps) {
         return c.json(err.toJSON(), err.status as 400)
       }
       throw err
+    }
+  })
+
+  routes.post('/brain/test', async (c) => {
+    const state = deps.getState()
+    const stored = await readConfig(getWorkerDb())
+    const result = await handleBrainTest(state, stored.config)
+    return c.json(result)
+  })
+
+  routes.post('/executor/test', async (c) => {
+    const raw = await c.req.json().catch(() => null)
+    const parsed = executorTestBody.safeParse(raw ?? {})
+    if (!parsed.success) {
+      return c.json({
+        error: { code: 'invalid-body', message: 'invalid executor test body' },
+      }, 400)
+    }
+    const state = deps.getState()
+    const stored = await readConfig(getWorkerDb())
+    const result = await handleExecutorTest(state, stored.config, parsed.data ?? {})
+    return c.json(result)
+  })
+
+  routes.post('/channels/:channel/test', async (c) => {
+    const channel = c.req.param('channel')
+    const raw = await c.req.json().catch(() => null)
+    const parsed = channelTestBody.safeParse(raw ?? {})
+    if (!parsed.success) {
+      return c.json({
+        error: { code: 'invalid-body', message: 'invalid channel test body' },
+      }, 400)
+    }
+    try {
+      const state = deps.getState()
+      const result = await handleChannelTest(state, channel, parsed.data ?? {})
+      return c.json(result)
+    }
+    catch (err) {
+      if (err instanceof AppError) {
+        return c.json(err.toJSON(), err.status as 400)
+      }
+      throw err
+    }
+  })
+
+  routes.post('/token/rotate', async (c) => {
+    const state = deps.getState()
+    const result = await handleTokenRotate(getWorkerDb(), getSecretsVault(), state)
+    return c.json(result)
+  })
+
+  routes.post('/reload', async (c) => {
+    const stored = await readConfig(getWorkerDb())
+    try {
+      await deps.reloadRuntime(stored.config, stored.version)
+      return c.json({ ok: true, version: stored.version })
+    }
+    catch (err) {
+      consola.error('[worker mgmt] forced reload failed', err)
+      return c.json({
+        ok: false,
+        version: stored.version,
+        error: (err as Error).message ?? String(err),
+      }, 500)
     }
   })
 

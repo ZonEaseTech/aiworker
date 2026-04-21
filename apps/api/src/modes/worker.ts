@@ -22,6 +22,12 @@ export interface WorkerModeState {
   runtime: WorkerRuntime
   configVersion: number
   startedAt: string
+  /**
+   * Current plaintext bearer token that callers of `/api/worker/*` must
+   * present. Mutated in place by `POST /api/worker/token/rotate` so the
+   * auth middleware picks up the new token on the next request.
+   */
+  tokenPlaintext: string
 }
 
 async function hydrateStoredConfig(stored: WorkerConfig): Promise<WorkerConfig> {
@@ -69,6 +75,7 @@ export async function bootstrapWorkerApp(): Promise<{ app: OpenAPIHono, port: nu
     runtime,
     configVersion: stored.version,
     startedAt: new Date().toISOString(),
+    tokenPlaintext: identity.token,
   }
 
   async function reloadRuntime(nextStoredConfig: WorkerConfig, newVersion: number): Promise<void> {
