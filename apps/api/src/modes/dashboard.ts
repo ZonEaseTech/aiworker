@@ -3,9 +3,7 @@ import { apiReference } from '@scalar/hono-api-reference'
 import consola from 'consola'
 
 import { dashboardConfig } from '../config/dashboard'
-import { fleetRoutes } from '../dashboard/fleet/routes'
 import { buildRegistryRoutes } from '../dashboard/registry/routes'
-import { getFleetSupervisor } from '../dashboard/supervisor/service'
 import { initFleetDb, runFleetMigrations } from '../db/fleet'
 import { errorHandler, requestLogger } from '../shared'
 
@@ -14,15 +12,9 @@ export async function createDashboardApp() {
   runFleetMigrations(dashboardConfig.FLEET_MIGRATIONS_FOLDER)
   consola.info(`[dashboard] fleet.db ready at ${dashboardConfig.FLEET_DB_PATH}`)
 
-  const supervisor = getFleetSupervisor()
-  try {
-    await supervisor.ensureInfrastructure()
-    consola.info(`[dashboard] docker network ${dashboardConfig.AIWORKER_NETWORK} ready`)
-  }
-  catch (err) {
-    consola.warn(`[dashboard] docker not reachable yet: ${String(err)}. Fleet control plane will run, but worker spawn will fail until docker is up.`)
-  }
-
+  // PLAN-004 3.4 will gate the docker supervisor behind MANAGER_CAN_LAUNCH;
+  // until then the manager only exposes the registry / proxy surface and
+  // never touches docker.
   const app = new OpenAPIHono()
 
   app.use(requestLogger)
@@ -37,7 +29,6 @@ export async function createDashboardApp() {
   })
 
   app.route('/api/workers', buildRegistryRoutes({ masterKeyHex: dashboardConfig.AIWORKER_MASTER_KEY }))
-  app.route('/api/workers', fleetRoutes)
 
   app.doc('/openapi.json', {
     openapi: '3.1.0',

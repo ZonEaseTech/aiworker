@@ -50,3 +50,11 @@ export interface RegisteredWorker {
   /** `configVersion` reported by the worker on the last `/info` poll. */
   lastConfigVersion?: number
 }
+
+/**
+ * Registry row shape that never carries the encrypted-at-rest bearer token.
+ * Every HTTP surface on the manager returns this — the ciphertext / nonce /
+ * authTag columns exist only on disk and in the decrypt path. See PLAN-004
+ * §Manager registry API.
+ */
+export type SafeRegisteredWorker = Omit<RegisteredWorker, 'apiTokenEnc' | 'nonce' | 'authTag'>

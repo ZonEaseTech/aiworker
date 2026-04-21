@@ -7,8 +7,17 @@ import consola from 'consola'
 import { commonConfig } from '../../config/common'
 import { dashboardConfig } from '../../config/dashboard'
 import { AppError } from '../../shared'
-import { getResolvedConfig, setContainerId } from '../fleet/service'
 import { DockerClient } from './docker-client'
+
+// PLAN-004 3.4: launch-local rewrite. The legacy `dashboard/fleet/service.ts`
+// owned worker configs + container ids in fleet.db; 1.3 dropped those tables
+// and 3.2 deleted the file. This supervisor is NOT wired into any route until
+// the MANAGER_CAN_LAUNCH flag lands in 3.4 — the shims below keep the file
+// type-clean while every `spawn/stop/restart/logs` entry point is unreachable.
+async function getResolvedConfig(_workerId: string): Promise<WorkerConfig | null> {
+  return null
+}
+function setContainerId(_workerId: string, _containerId: string | null): void {}
 
 export class FleetSupervisor {
   private readonly docker: DockerClient

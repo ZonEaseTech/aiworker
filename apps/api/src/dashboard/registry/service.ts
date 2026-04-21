@@ -1,4 +1,4 @@
-import type { RegisteredWorker } from '@aiworker/shared'
+import type { RegisteredWorker, SafeRegisteredWorker } from '@aiworker/shared'
 
 import { eq } from 'drizzle-orm'
 
@@ -18,10 +18,26 @@ export class RegistryConflictError extends Error {
   }
 }
 
+/**
+ * Thrown by `getWorkerById`, `updateWorker`, `deleteWorker` and the proxy
+ * route when the target id is not in `registered_workers`. Maps to HTTP 404.
+ */
+export class RegistryNotFoundError extends Error {
+  constructor(readonly workerId: string) {
+    super(`worker ${workerId} is not registered`)
+    this.name = 'RegistryNotFoundError'
+  }
+}
+
 export interface RegisterWorkerInput {
   baseUrl: string
   apiToken: string
   displayName: string
+}
+
+export interface UpdateRegisteredWorkerInput {
+  displayName?: string
+  baseUrl?: string
 }
 
 export interface RegistryServiceOptions {
@@ -88,6 +104,12 @@ export async function registerWorker(
   return row
 }
 
+/**
+ * Internal lookup that returns the full row including the encrypted bearer
+ * token. Used by the proxy + token-rotate paths where the manager has to
+ * reach the worker. HTTP routes should call `getWorkerById` instead so the
+ * ciphertext columns never leak off the backend.
+ */
 export function getById(id: string): RegisteredWorker | null {
   const row = getFleetDb()
     .select()
@@ -104,10 +126,120 @@ export function getById(id: string): RegisteredWorker | null {
   }
 }
 
+function toSafe(row: RegisteredWorker): SafeRegisteredWorker {
+  const { apiTokenEnc: _t, nonce: _n, authTag: _a, ...safe } = row
+  return safe
+}
+
+/**
+ * Return every registry row with the at-rest ciphertext columns stripped.
+ * Sorted by `addedAt` descending so the dashboard shows the most recent
+ * registrations first.
+ */
+export function listWorkers(): SafeRegisteredWorker[] {
+  const rows = getFleetDb()
+    .select()
+    .from(registeredWorkers)
+    .all()
+  return rows
+    .map(row => toSafe({
+      ...row,
+      lastSeenAt: row.lastSeenAt ?? undefined,
+      lastSeenState: row.lastSeenState ?? undefined,
+      lastConfigVersion: row.lastConfigVersion ?? undefined,
+    }))
+    .sort((a, b) => b.addedAt.localeCompare(a.addedAt))
+}
+
+export function getWorkerById(id: string): SafeRegisteredWorker | null {
+  const row = getById(id)
+  return row ? toSafe(row) : null
+}
+
+/**
+ * Patch `displayName` and/or `baseUrl`. The encrypted token is intentionally
+ * out of scope — rotation goes through the dedicated `/rotate-token` route.
+ * A changed `baseUrl` is NOT re-verified via `/info` here; PLAN-004 3.3's
+ * poller will flip `lastSeenState` to `offline` / `auth-failed` if the new
+ * URL is wrong, which matches the "registry is a pointer store" invariant.
+ */
+export function updateWorker(
+  id: string,
+  patch: UpdateRegisteredWorkerInput,
+): SafeRegisteredWorker {
+  const db = getFleetDb()
+  const existing = getById(id)
+  if (!existing)
+    throw new RegistryNotFoundError(id)
+
+  const next: Partial<Pick<RegisteredWorker, 'displayName' | 'baseUrl'>> = {}
+  if (patch.displayName !== undefined)
+    next.displayName = patch.displayName
+  if (patch.baseUrl !== undefined)
+    next.baseUrl = patch.baseUrl.replace(/\/+$/, '')
+  if (Object.keys(next).length === 0)
+    return toSafe(existing)
+
+  db.update(registeredWorkers)
+    .set(next)
+    .where(eq(registeredWorkers.id, id))
+    .run()
+
+  db.insert(auditEvents).values({
+    actor: 'dashboard',
+    action: 'worker.updated',
+    workerId: id,
+    detail: next,
+  }).run()
+
+  return toSafe({ ...existing, ...next })
+}
+
+/**
+ * Remove the registry row + emit an audit event. The worker container itself
+ * is untouched — unregister is purely a manager-side pointer delete, per
+ * PLAN-004 §Manager registry API.
+ */
+export function deleteWorker(id: string): void {
+  const db = getFleetDb()
+  const existing = getById(id)
+  if (!existing)
+    throw new RegistryNotFoundError(id)
+
+  db.delete(registeredWorkers)
+    .where(eq(registeredWorkers.id, id))
+    .run()
+
+  db.insert(auditEvents).values({
+    actor: 'dashboard',
+    action: 'worker.unregistered',
+    workerId: id,
+    detail: { baseUrl: existing.baseUrl, displayName: existing.displayName },
+  }).run()
+}
+
+/**
+ * Append an audit row. Used by the proxy route to log non-GET proxied calls
+ * without flooding the audit log on polling GETs.
+ */
+export function recordAuditEvent(entry: {
+  actor: string
+  action: string
+  workerId?: string | null
+  detail?: Record<string, unknown>
+}): void {
+  getFleetDb().insert(auditEvents).values({
+    actor: entry.actor,
+    action: entry.action,
+    workerId: entry.workerId ?? null,
+    detail: entry.detail,
+  }).run()
+}
+
 /**
  * Decrypt the at-rest bearer token for a registered worker. Lives here (not
  * in `crypto.ts`) so callers never need to touch ciphertext/nonce/authTag
- * directly. 3.2's poller and 3.3's proxy both consume this.
+ * directly. 3.2's proxy and 3.3's poller both consume this.
  */
 export function decryptTokenFor(row: RegisteredWorker, masterKeyHex: string): string {
   return decryptToken(row.apiTokenEnc, row.nonce, row.authTag, masterKeyHex)

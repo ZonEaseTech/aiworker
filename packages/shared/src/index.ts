@@ -28,6 +28,7 @@ export type {
   RegisteredWorker,
   RegisteredWorkerLivenessState,
   RegisteredWorkerOrigin,
+  SafeRegisteredWorker,
   SkillBindingSource,
   SkillDraft,
   SkillDraftSource,
