@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "80e59b06-2ccf-4d36-8535-023b1517512e",
+  "id": "fa5efae7-f922-4a85-af18-3b705bb19e2f",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "agent_tasks": {
@@ -511,6 +511,195 @@
         }
       },
       "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "worker_config": {
+      "name": "worker_config",
+      "columns": {
+        "pk": {
+          "name": "pk",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'default'"
+        },
+        "config_json": {
+          "name": "config_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "worker_identity": {
+      "name": "worker_identity",
+      "columns": {
+        "pk": {
+          "name": "pk",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'default'"
+        },
+        "worker_id": {
+          "name": "worker_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "api_token_enc": {
+          "name": "api_token_enc",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "nonce": {
+          "name": "nonce",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "auth_tag": {
+          "name": "auth_tag",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "bootstrap_shown_at": {
+          "name": "bootstrap_shown_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "rotated_at": {
+          "name": "rotated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "worker_identity_worker_id_unique": {
+          "name": "worker_identity_worker_id_unique",
+          "columns": [
+            "worker_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "worker_secrets": {
+      "name": "worker_secrets",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "value_enc": {
+          "name": "value_enc",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "nonce": {
+          "name": "nonce",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "auth_tag": {
+          "name": "auth_tag",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "worker_secrets_key_unique": {
+          "name": "worker_secrets_key_unique",
+          "columns": [
+            "key"
+          ],
+          "isUnique": true
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
