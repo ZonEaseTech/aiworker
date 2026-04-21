@@ -1,0 +1,107 @@
+import type { WorkerConfig } from '@aiworker/shared'
+import type { z } from 'zod'
+import type { WorkerDatabase } from '../../db/worker'
+import type { SecretsVault } from '../secrets/vault'
+import { eq } from 'drizzle-orm'
+
+import { workerConfig as workerConfigTable } from '../../db/worker/schema'
+import { enumerateSecretPaths, redactSecrets } from '../config/secret-paths'
+import { workerConfigSchema } from './config-schema'
+
+/** Current stored config alongside its monotonic version. */
+export interface StoredWorkerConfig {
+  config: WorkerConfig
+  version: number
+}
+
+/** Raised when the inbound config fails zod validation. */
+export class InvalidConfigError extends Error {
+  constructor(
+    readonly issues: z.ZodIssue[],
+    message = 'invalid worker config',
+  ) {
+    super(message)
+    this.name = 'InvalidConfigError'
+  }
+}
+
+/** Raised when `If-Match: <version>` no longer matches the stored version. */
+export class ConfigVersionConflictError extends Error {
+  constructor(readonly expected: number, readonly actual: number) {
+    super(`config version ${expected} does not match current version ${actual}`)
+    this.name = 'ConfigVersionConflictError'
+  }
+}
+
+/** Read the redacted singleton stored in `worker_config`. */
+export async function readConfig(db: WorkerDatabase): Promise<StoredWorkerConfig> {
+  const row = await db
+    .select()
+    .from(workerConfigTable)
+    .where(eq(workerConfigTable.pk, 'default'))
+    .get()
+  if (!row)
+    throw new Error('worker_config row missing — bootstrap did not run')
+  return { config: row.configJson, version: row.version }
+}
+
+export interface PutConfigOptions {
+  /** Optional optimistic-concurrency guard. */
+  ifMatchVersion?: number
+}
+
+/**
+ * Validate, split secrets, persist a new config. Steps:
+ *
+ *   1. Zod-validate → `InvalidConfigError` on mismatch.
+ *   2. Compare `ifMatchVersion` (if provided) → `ConfigVersionConflictError`.
+ *   3. Move every non-empty secret in `nextConfig` to the vault; remove any
+ *      vault entries whose path is no longer present in the new config.
+ *   4. Persist the redacted form, bump the version.
+ *
+ * Returns the redacted config + new version. Secrets from the previous config
+ * that are re-submitted as empty strings are preserved in the vault (the
+ * redacted view that round-trips through the dashboard must not wipe secrets).
+ */
+export async function putConfig(
+  db: WorkerDatabase,
+  vault: SecretsVault,
+  nextConfig: unknown,
+  options: PutConfigOptions = {},
+): Promise<StoredWorkerConfig> {
+  const parsed = workerConfigSchema.safeParse(nextConfig)
+  if (!parsed.success)
+    throw new InvalidConfigError(parsed.error.issues)
+
+  const current = await readConfig(db)
+  if (options.ifMatchVersion !== undefined && options.ifMatchVersion !== current.version)
+    throw new ConfigVersionConflictError(options.ifMatchVersion, current.version)
+
+  const nextConfigTyped = parsed.data as WorkerConfig
+  const prevPaths = new Set(enumerateSecretPaths(current.config).map(p => p.path))
+  const nextPaths = enumerateSecretPaths(nextConfigTyped)
+  const nextPathSet = new Set(nextPaths.map(p => p.path))
+
+  // An empty string means "placeholder, do not rewrite" — the redacted form
+  // round-trips through the dashboard and must not wipe stored secrets.
+  for (const { path, value } of nextPaths) {
+    if (value.length > 0)
+      await vault.put(path, value)
+  }
+
+  for (const path of prevPaths) {
+    if (!nextPathSet.has(path))
+      await vault.remove(path)
+  }
+
+  const redacted = redactSecrets(nextConfigTyped)
+  const newVersion = current.version + 1
+  const now = new Date().toISOString()
+  await db
+    .update(workerConfigTable)
+    .set({ configJson: redacted, version: newVersion, updatedAt: now, updatedBy: 'api' })
+    .where(eq(workerConfigTable.pk, 'default'))
+    .run()
+
+  return { config: redacted, version: newVersion }
+}
