@@ -1,3 +1,5 @@
+import type { SafeRegisteredWorker } from '@aiworker/shared'
+
 export interface ApiError {
   status: number
   body: unknown
@@ -116,4 +118,99 @@ export interface TaskDetailResponse {
   task: AgentTask
   messages: MessageDto[]
   toolCalls: ToolCallDto[]
+}
+
+// ---------------------------------------------------------------------------
+// PLAN-004 fleet (manager registry) — typed fetchers for /api/workers/*
+//
+// Errors are normalised into `WorkerApiError` so the wizard can branch on
+// `code` instead of inspecting status + body shapes. Backend mapping (see
+// apps/api/src/dashboard/registry/routes.ts):
+//   401 → { error: { code: 'auth-failed' } }
+//   404 → { error: { code: 'not-found' } }
+//   409 → { error: { code: 'already-registered', workerId } }
+//   502 → { error: { code: 'worker-unreachable' | 'invalid-worker-info', message } }
+// ---------------------------------------------------------------------------
+
+export type WorkerApiErrorCode
+  = | 'auth-failed'
+    | 'already-registered'
+    | 'worker-unreachable'
+    | 'invalid-worker-info'
+    | 'not-found'
+    | 'invalid-body'
+    | 'unknown'
+
+interface WorkerApiErrorBody {
+  error?: {
+    code?: string
+    message?: string
+    workerId?: string
+    details?: unknown
+  }
+}
+
+export class WorkerApiError extends Error {
+  readonly status: number
+  readonly code: WorkerApiErrorCode
+  readonly workerId?: string
+  readonly details?: unknown
+
+  constructor(status: number, body: unknown) {
+    const parsed = (body && typeof body === 'object' ? body : {}) as WorkerApiErrorBody
+    const code = (parsed.error?.code as WorkerApiErrorCode | undefined) ?? 'unknown'
+    super(parsed.error?.message ?? `worker api ${status}`)
+    this.name = 'WorkerApiError'
+    this.status = status
+    this.code = code
+    this.workerId = parsed.error?.workerId
+    this.details = parsed.error?.details
+  }
+}
+
+async function workerRequest<T>(method: string, path: string, body?: unknown): Promise<T> {
+  try {
+    return await request<T>(method, path, body)
+  }
+  catch (err) {
+    if (err && typeof err === 'object' && 'status' in err)
+      throw new WorkerApiError((err as ApiError).status, (err as ApiError).body)
+    throw err
+  }
+}
+
+export interface RegisterWorkerInput {
+  baseUrl: string
+  apiToken: string
+  displayName: string
+}
+
+export interface UpdateWorkerInput {
+  displayName?: string
+  baseUrl?: string
+}
+
+interface WorkersListResponse {
+  workers: SafeRegisteredWorker[]
+}
+
+export async function listWorkers(): Promise<SafeRegisteredWorker[]> {
+  const res = await workerRequest<WorkersListResponse>('GET', '/api/workers')
+  return res.workers
+}
+
+export function getWorker(id: string): Promise<SafeRegisteredWorker> {
+  return workerRequest<SafeRegisteredWorker>('GET', `/api/workers/${encodeURIComponent(id)}`)
+}
+
+export function registerWorker(input: RegisterWorkerInput): Promise<SafeRegisteredWorker> {
+  return workerRequest<SafeRegisteredWorker>('POST', '/api/workers/register', input)
+}
+
+export function updateWorker(id: string, patch: UpdateWorkerInput): Promise<SafeRegisteredWorker> {
+  return workerRequest<SafeRegisteredWorker>('PATCH', `/api/workers/${encodeURIComponent(id)}`, patch)
+}
+
+export async function deleteWorker(id: string): Promise<void> {
+  await workerRequest<unknown>('DELETE', `/api/workers/${encodeURIComponent(id)}`)
 }

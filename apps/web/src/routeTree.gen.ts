@@ -9,162 +9,58 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as SyncRouteImport } from './routes/sync'
-import { Route as SkillsRouteImport } from './routes/skills'
-import { Route as OrchestratorRouteImport } from './routes/orchestrator'
-import { Route as MemoryRouteImport } from './routes/memory'
-import { Route as ExecutionRouteImport } from './routes/execution'
-import { Route as ConfigRouteImport } from './routes/config'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as WorkersIndexRouteImport } from './routes/workers.index'
+import { Route as WorkersWorkerIdRouteImport } from './routes/workers.$workerId'
 
-const SyncRoute = SyncRouteImport.update({
-  id: '/sync',
-  path: '/sync',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SkillsRoute = SkillsRouteImport.update({
-  id: '/skills',
-  path: '/skills',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const OrchestratorRoute = OrchestratorRouteImport.update({
-  id: '/orchestrator',
-  path: '/orchestrator',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MemoryRoute = MemoryRouteImport.update({
-  id: '/memory',
-  path: '/memory',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ExecutionRoute = ExecutionRouteImport.update({
-  id: '/execution',
-  path: '/execution',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ConfigRoute = ConfigRouteImport.update({
-  id: '/config',
-  path: '/config',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WorkersIndexRoute = WorkersIndexRouteImport.update({
+  id: '/workers/',
+  path: '/workers/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WorkersWorkerIdRoute = WorkersWorkerIdRouteImport.update({
+  id: '/workers/$workerId',
+  path: '/workers/$workerId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/config': typeof ConfigRoute
-  '/execution': typeof ExecutionRoute
-  '/memory': typeof MemoryRoute
-  '/orchestrator': typeof OrchestratorRoute
-  '/skills': typeof SkillsRoute
-  '/sync': typeof SyncRoute
+  '/workers/$workerId': typeof WorkersWorkerIdRoute
+  '/workers/': typeof WorkersIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/config': typeof ConfigRoute
-  '/execution': typeof ExecutionRoute
-  '/memory': typeof MemoryRoute
-  '/orchestrator': typeof OrchestratorRoute
-  '/skills': typeof SkillsRoute
-  '/sync': typeof SyncRoute
+  '/workers/$workerId': typeof WorkersWorkerIdRoute
+  '/workers': typeof WorkersIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/config': typeof ConfigRoute
-  '/execution': typeof ExecutionRoute
-  '/memory': typeof MemoryRoute
-  '/orchestrator': typeof OrchestratorRoute
-  '/skills': typeof SkillsRoute
-  '/sync': typeof SyncRoute
+  '/workers/$workerId': typeof WorkersWorkerIdRoute
+  '/workers/': typeof WorkersIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/'
-    | '/config'
-    | '/execution'
-    | '/memory'
-    | '/orchestrator'
-    | '/skills'
-    | '/sync'
+  fullPaths: '/' | '/workers/$workerId' | '/workers/'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/config'
-    | '/execution'
-    | '/memory'
-    | '/orchestrator'
-    | '/skills'
-    | '/sync'
-  id:
-    | '__root__'
-    | '/'
-    | '/config'
-    | '/execution'
-    | '/memory'
-    | '/orchestrator'
-    | '/skills'
-    | '/sync'
+  to: '/' | '/workers/$workerId' | '/workers'
+  id: '__root__' | '/' | '/workers/$workerId' | '/workers/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  ConfigRoute: typeof ConfigRoute
-  ExecutionRoute: typeof ExecutionRoute
-  MemoryRoute: typeof MemoryRoute
-  OrchestratorRoute: typeof OrchestratorRoute
-  SkillsRoute: typeof SkillsRoute
-  SyncRoute: typeof SyncRoute
+  WorkersWorkerIdRoute: typeof WorkersWorkerIdRoute
+  WorkersIndexRoute: typeof WorkersIndexRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/sync': {
-      id: '/sync'
-      path: '/sync'
-      fullPath: '/sync'
-      preLoaderRoute: typeof SyncRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/skills': {
-      id: '/skills'
-      path: '/skills'
-      fullPath: '/skills'
-      preLoaderRoute: typeof SkillsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/orchestrator': {
-      id: '/orchestrator'
-      path: '/orchestrator'
-      fullPath: '/orchestrator'
-      preLoaderRoute: typeof OrchestratorRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/memory': {
-      id: '/memory'
-      path: '/memory'
-      fullPath: '/memory'
-      preLoaderRoute: typeof MemoryRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/execution': {
-      id: '/execution'
-      path: '/execution'
-      fullPath: '/execution'
-      preLoaderRoute: typeof ExecutionRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/config': {
-      id: '/config'
-      path: '/config'
-      fullPath: '/config'
-      preLoaderRoute: typeof ConfigRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/': {
       id: '/'
       path: '/'
@@ -172,17 +68,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/workers/': {
+      id: '/workers/'
+      path: '/workers'
+      fullPath: '/workers/'
+      preLoaderRoute: typeof WorkersIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/workers/$workerId': {
+      id: '/workers/$workerId'
+      path: '/workers/$workerId'
+      fullPath: '/workers/$workerId'
+      preLoaderRoute: typeof WorkersWorkerIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  ConfigRoute: ConfigRoute,
-  ExecutionRoute: ExecutionRoute,
-  MemoryRoute: MemoryRoute,
-  OrchestratorRoute: OrchestratorRoute,
-  SkillsRoute: SkillsRoute,
-  SyncRoute: SyncRoute,
+  WorkersWorkerIdRoute: WorkersWorkerIdRoute,
+  WorkersIndexRoute: WorkersIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

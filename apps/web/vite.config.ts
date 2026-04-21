@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import process from 'node:process'
 import { fileURLToPath, URL } from 'node:url'
 import tailwindcss from '@tailwindcss/vite'
@@ -31,5 +32,11 @@ export default defineConfig({
       '/openapi.json': { target: apiTarget, changeOrigin: true },
       '/docs': { target: apiTarget, changeOrigin: true },
     },
+  },
+  test: {
+    environment: 'happy-dom',
+    globals: true,
+    include: ['src/**/*.test.{ts,tsx}'],
+    setupFiles: ['./src/test-setup.ts'],
   },
 })
