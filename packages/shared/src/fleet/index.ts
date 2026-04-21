@@ -33,6 +33,12 @@ export type {
 } from './evolution'
 
 export type {
+  RegisteredWorker,
+  RegisteredWorkerLivenessState,
+  RegisteredWorkerOrigin,
+} from './registered-worker'
+
+export type {
   SkillBindingSource,
   WorkerSkillBinding,
 } from './skill-binding'
@@ -49,3 +55,21 @@ export type {
   WorkerStatus,
   WorkerSummary,
 } from './worker'
+
+export {
+  isWorkerApiToken,
+  WORKER_API_TOKEN_PATTERN,
+  WORKER_API_TOKEN_PREFIX,
+} from './worker-identity'
+export type {
+  WorkerApiToken,
+  WorkerIdentity,
+} from './worker-identity'
+
+export type {
+  WorkerComponentStatus,
+  WorkerInfo,
+  WorkerInfoBrain,
+  WorkerInfoChannel,
+  WorkerInfoExecutor,
+} from './worker-info'
