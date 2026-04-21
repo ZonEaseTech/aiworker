@@ -1,4 +1,4 @@
-import type { ChannelType, SkillBindingSource, SkillDraftSource, SkillDraftStatus, ToolCall } from '@aiworker/shared'
+import type { ChannelType, SkillBindingSource, SkillDraftSource, SkillDraftStatus, ToolCall, WorkerConfig } from '@aiworker/shared'
 import { integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 
 /**
@@ -88,4 +88,35 @@ export const evolutionObservations = sqliteTable('evolution_observations', {
   kind: text('kind').notNull(),
   payload: text('payload', { mode: 'json' }).$type<Record<string, unknown>>().notNull(),
   noticedAt: text('noticed_at').notNull().$defaultFn(() => new Date().toISOString()),
+})
+
+// Singleton table: `pk` is always the literal 'default'. Enforced at app layer.
+export const workerIdentity = sqliteTable('worker_identity', {
+  pk: text('pk').primaryKey().default('default'),
+  workerId: text('worker_id').notNull().unique(),
+  apiTokenEnc: text('api_token_enc').notNull(),
+  nonce: text('nonce').notNull(),
+  authTag: text('auth_tag').notNull(),
+  bootstrapShownAt: text('bootstrap_shown_at').notNull().$defaultFn(() => new Date().toISOString()),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  rotatedAt: text('rotated_at'),
+})
+
+// Singleton table: `pk` is always the literal 'default'. Enforced at app layer.
+export const workerConfig = sqliteTable('worker_config', {
+  pk: text('pk').primaryKey().default('default'),
+  configJson: text('config_json', { mode: 'json' }).$type<WorkerConfig>().notNull(),
+  version: integer('version').notNull().default(1),
+  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()),
+  updatedBy: text('updated_by', { enum: ['bootstrap', 'api', 'cli'] }),
+})
+
+export const workerSecrets = sqliteTable('worker_secrets', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  key: text('key').notNull().unique(),
+  valueEnc: text('value_enc').notNull(),
+  nonce: text('nonce').notNull(),
+  authTag: text('auth_tag').notNull(),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()),
 })

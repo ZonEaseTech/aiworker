@@ -78,3 +78,35 @@ CREATE TABLE `skill_drafts` (
 	`decided_at` text,
 	`decided_by` text
 );
+--> statement-breakpoint
+CREATE TABLE `worker_config` (
+	`pk` text PRIMARY KEY DEFAULT 'default' NOT NULL,
+	`config_json` text NOT NULL,
+	`version` integer DEFAULT 1 NOT NULL,
+	`updated_at` text NOT NULL,
+	`updated_by` text
+);
+--> statement-breakpoint
+CREATE TABLE `worker_identity` (
+	`pk` text PRIMARY KEY DEFAULT 'default' NOT NULL,
+	`worker_id` text NOT NULL,
+	`api_token_enc` text NOT NULL,
+	`nonce` text NOT NULL,
+	`auth_tag` text NOT NULL,
+	`bootstrap_shown_at` text NOT NULL,
+	`created_at` text NOT NULL,
+	`rotated_at` text
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `worker_identity_worker_id_unique` ON `worker_identity` (`worker_id`);--> statement-breakpoint
+CREATE TABLE `worker_secrets` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`key` text NOT NULL,
+	`value_enc` text NOT NULL,
+	`nonce` text NOT NULL,
+	`auth_tag` text NOT NULL,
+	`created_at` text NOT NULL,
+	`updated_at` text NOT NULL
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `worker_secrets_key_unique` ON `worker_secrets` (`key`);
