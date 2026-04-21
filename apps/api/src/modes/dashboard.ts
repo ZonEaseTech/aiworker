@@ -4,6 +4,7 @@ import consola from 'consola'
 
 import { dashboardConfig } from '../config/dashboard'
 import { fleetRoutes } from '../dashboard/fleet/routes'
+import { buildRegistryRoutes } from '../dashboard/registry/routes'
 import { getFleetSupervisor } from '../dashboard/supervisor/service'
 import { initFleetDb, runFleetMigrations } from '../db/fleet'
 import { errorHandler, requestLogger } from '../shared'
@@ -35,6 +36,7 @@ export async function createDashboardApp() {
     })
   })
 
+  app.route('/api/workers', buildRegistryRoutes({ masterKeyHex: dashboardConfig.AIWORKER_MASTER_KEY }))
   app.route('/api/workers', fleetRoutes)
 
   app.doc('/openapi.json', {
