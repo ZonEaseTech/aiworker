@@ -1,18 +1,23 @@
-import type { FleetDatabase } from '../../db/fleet'
+import type { WorkerDatabase } from '../../db/worker'
 import { Buffer } from 'node:buffer'
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
-import { and, eq } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 
-import { workerSecrets } from '../../db/fleet/schema'
+import { workerSecrets } from '../../db/worker/schema'
 
 const ALGO = 'aes-256-gcm'
 const NONCE_BYTES = 12
 const KEY_BYTES = 32
 
+/**
+ * Worker-scoped secrets vault backed by `worker.db.worker_secrets`. The whole
+ * database is scoped to one worker, so no `workerId` column / argument is
+ * needed (see PLAN-004 §Migration notes).
+ */
 export class SecretsVault {
   private readonly key: Buffer
 
-  constructor(masterKeyHex: string, private readonly db: FleetDatabase) {
+  constructor(masterKeyHex: string, private readonly db: WorkerDatabase) {
     if (!/^[0-9a-f]{64}$/.test(masterKeyHex))
       throw new Error('SecretsVault: AIWORKER_MASTER_KEY must be 32-byte hex (64 hex chars)')
     this.key = Buffer.from(masterKeyHex, 'hex')
@@ -20,11 +25,11 @@ export class SecretsVault {
       throw new Error('SecretsVault: decoded master key length is not 32 bytes')
   }
 
-  async put(workerId: string, key: string, value: string): Promise<void> {
+  async put(key: string, value: string): Promise<void> {
     const { ciphertext, nonce, authTag } = this.encrypt(value)
     const existing = await this.db.select({ id: workerSecrets.id })
       .from(workerSecrets)
-      .where(and(eq(workerSecrets.workerId, workerId), eq(workerSecrets.key, key)))
+      .where(eq(workerSecrets.key, key))
       .get()
 
     const now = new Date().toISOString()
@@ -36,7 +41,6 @@ export class SecretsVault {
     }
     else {
       await this.db.insert(workerSecrets).values({
-        workerId,
         key,
         valueEnc: ciphertext,
         nonce,
@@ -47,32 +51,45 @@ export class SecretsVault {
     }
   }
 
-  async get(workerId: string, key: string): Promise<string | null> {
+  async get(key: string): Promise<string | null> {
     const row = await this.db.select()
       .from(workerSecrets)
-      .where(and(eq(workerSecrets.workerId, workerId), eq(workerSecrets.key, key)))
+      .where(eq(workerSecrets.key, key))
       .get()
     if (!row)
       return null
     return this.decrypt(row.valueEnc, row.nonce, row.authTag)
   }
 
-  async list(workerId: string): Promise<string[]> {
+  async list(): Promise<string[]> {
     const rows = await this.db.select({ key: workerSecrets.key })
       .from(workerSecrets)
-      .where(eq(workerSecrets.workerId, workerId))
       .all()
     return rows.map(r => r.key)
   }
 
-  async remove(workerId: string, key: string): Promise<void> {
+  async remove(key: string): Promise<void> {
     await this.db.delete(workerSecrets)
-      .where(and(eq(workerSecrets.workerId, workerId), eq(workerSecrets.key, key)))
+      .where(eq(workerSecrets.key, key))
       .run()
   }
 
-  async removeAllForWorker(workerId: string): Promise<void> {
-    await this.db.delete(workerSecrets).where(eq(workerSecrets.workerId, workerId)).run()
+  async removeAll(): Promise<void> {
+    await this.db.delete(workerSecrets).run()
+  }
+
+  /**
+   * Encrypt an arbitrary string with the master key. Used by the bootstrap
+   * flow to persist the API token into `worker_identity` using the same AES
+   * parameters as the secrets table.
+   */
+  encryptString(plaintext: string): { ciphertext: string, nonce: string, authTag: string } {
+    return this.encrypt(plaintext)
+  }
+
+  /** Counterpart to `encryptString` — used by the bootstrap flow on restart. */
+  decryptString(ciphertext: string, nonce: string, authTag: string): string {
+    return this.decrypt(ciphertext, nonce, authTag)
   }
 
   private encrypt(plaintext: string): { ciphertext: string, nonce: string, authTag: string } {

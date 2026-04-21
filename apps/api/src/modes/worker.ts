@@ -1,24 +1,73 @@
-import type { Envelope } from '@aiworker/shared'
+import type { Envelope, WorkerConfig } from '@aiworker/shared'
+import type { WorkerRuntime } from '../worker/runtime'
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { apiReference } from '@scalar/hono-api-reference'
 import consola from 'consola'
 
-import { workerConfig, workerConfigEnv } from '../config/worker'
-import { initWorkerDb, runWorkerMigrations } from '../db/worker'
+import { workerEnv } from '../config/worker'
+import { getWorkerDb, initWorkerDb, runWorkerMigrations } from '../db/worker'
 import { errorHandler, requestLogger } from '../shared'
+import { loadOrMintIdentity, loadOrSeedConfig, printBootstrapIfJustMinted } from '../worker/bootstrap'
 import { buildChannelRoutes } from '../worker/channels/routes'
+import { enumerateSecretPaths, hydrateSecrets } from '../worker/config/secret-paths'
 import { buildEventRoutes } from '../worker/events/routes'
 import { evolutionRoutes } from '../worker/evolution/routes'
 import { buildOrchestratorRoutes } from '../worker/orchestrator/routes'
 import { buildWorkerRuntime } from '../worker/runtime'
+import { getSecretsVault } from '../worker/secrets'
 
-export function createWorkerApp() {
-  initWorkerDb(workerConfigEnv.WORKER_DB_PATH)
-  runWorkerMigrations(workerConfigEnv.WORKER_MIGRATIONS_FOLDER)
-  consola.info(`[worker ${workerConfigEnv.WORKER_ID}] worker.db ready at ${workerConfigEnv.WORKER_DB_PATH}`)
+export interface WorkerModeState {
+  workerId: string
+  runtime: WorkerRuntime
+  configVersion: number
+  startedAt: string
+}
 
-  const runtime = buildWorkerRuntime(workerConfigEnv.WORKER_ID, workerConfig)
-  consola.info(`[worker ${workerConfigEnv.WORKER_ID}] runtime built — brains=${workerConfig.brains.length} executor=${workerConfig.executor.type} channels=${runtime.channels.list().length}`)
+async function hydrateStoredConfig(stored: WorkerConfig): Promise<WorkerConfig> {
+  const vault = getSecretsVault()
+  const expectedPaths = new Set(enumerateSecretPaths(stored).map(p => p.path))
+  const map = new Map<string, string>()
+  for (const path of expectedPaths) {
+    const value = await vault.get(path)
+    if (value !== null)
+      map.set(path, value)
+  }
+  return hydrateSecrets(stored, map)
+}
+
+/**
+ * Self-sufficient worker bootstrap: init worker.db, mint identity on first
+ * boot, load (or seed) config, hydrate secrets from the vault, and build the
+ * runtime. Returns the assembled Hono app plus a mutable `state` object so
+ * future config-reload hooks (PLAN-004 2.2) can atomically swap `state.runtime`.
+ */
+export async function bootstrapWorkerApp(): Promise<{ app: OpenAPIHono, port: number, state: WorkerModeState }> {
+  initWorkerDb(workerEnv.WORKER_DB_PATH)
+  runWorkerMigrations(workerEnv.WORKER_MIGRATIONS_FOLDER)
+
+  const vault = getSecretsVault()
+  const db = getWorkerDb()
+
+  const identity = await loadOrMintIdentity(db, vault, {
+    ...(workerEnv.AIWORKER_FORCE_ID === undefined ? {} : { forceId: workerEnv.AIWORKER_FORCE_ID }),
+    ...(workerEnv.AIWORKER_FORCE_TOKEN === undefined ? {} : { forceToken: workerEnv.AIWORKER_FORCE_TOKEN }),
+  })
+  printBootstrapIfJustMinted(identity.workerId, identity.token, db, identity.justMinted)
+
+  consola.info(`[worker ${identity.workerId}] worker.db ready at ${workerEnv.WORKER_DB_PATH}`)
+
+  const stored = await loadOrSeedConfig(db)
+  const hydrated = await hydrateStoredConfig(stored.config)
+
+  const runtime = buildWorkerRuntime(identity.workerId, hydrated)
+  consola.info(`[worker ${identity.workerId}] runtime built — brains=${hydrated.brains.length} executor=${hydrated.executor.type} channels=${runtime.channels.list().length}`)
+
+  const state: WorkerModeState = {
+    workerId: identity.workerId,
+    runtime,
+    configVersion: stored.version,
+    startedAt: new Date().toISOString(),
+  }
 
   const app = new OpenAPIHono()
   app.use(requestLogger)
@@ -26,16 +75,17 @@ export function createWorkerApp() {
 
   app.get('/health', async (c) => {
     const [brainHealth, executorHealth] = await Promise.all([
-      runtime.brain.health().catch(() => null),
-      runtime.executor.health().catch(() => null),
+      state.runtime.brain.health().catch(() => null),
+      state.runtime.executor.health().catch(() => null),
     ])
     return c.json({
       mode: 'worker',
-      workerId: workerConfigEnv.WORKER_ID,
+      workerId: state.workerId,
       status: 'ok',
       brain: brainHealth,
       executor: executorHealth,
-      configVersion: workerConfigEnv.WORKER_CONFIG_VERSION,
+      configVersion: state.configVersion,
+      startedAt: state.startedAt,
       checkedAt: new Date().toISOString(),
     })
   })
@@ -43,23 +93,35 @@ export function createWorkerApp() {
   // Public surface: `/{channel}/webhook` at the root so that external platforms
   // can register simple URLs. The `{workerId}` segment is stripped by Caddy —
   // the worker container only ever sees its own suffix.
-  app.route('/', buildChannelRoutes(runtime.channels, workerConfigEnv.WORKER_ID, env => runtime.orchestrator.ingest(env as Envelope)))
+  app.route(
+    '/',
+    buildChannelRoutes(
+      state.runtime.channels,
+      state.workerId,
+      env => state.runtime.orchestrator.ingest(env as Envelope),
+    ),
+  )
 
-  // Internal surface for the dashboard.
-  app.route('/api/worker/orchestrator', buildOrchestratorRoutes(runtime.orchestrator))
+  app.route('/api/worker/orchestrator', buildOrchestratorRoutes(state.runtime.orchestrator))
   app.route('/api/worker/evolution', evolutionRoutes)
-  app.route('/api/worker/events', buildEventRoutes(runtime.bus))
+  app.route('/api/worker/events', buildEventRoutes(state.runtime.bus))
 
   app.doc('/openapi.json', {
     openapi: '3.1.0',
     info: {
       title: 'AIWorker Worker API',
       version: '0.2.0',
-      description: `Per-worker surface: channels, orchestrator, memory, skills, execution, evolution. Worker id: ${workerConfigEnv.WORKER_ID}`,
+      description: `Per-worker surface: channels, orchestrator, memory, skills, execution, evolution. Worker id: ${state.workerId}`,
     },
   })
 
   app.get('/docs', apiReference({ spec: { url: '/openapi.json' } }))
 
-  return { app, port: workerConfigEnv.PORT }
+  return { app, port: workerEnv.PORT, state }
+}
+
+/** Back-compat wrapper — used by `src/index.ts`. */
+export async function createWorkerApp(): Promise<{ app: OpenAPIHono, port: number }> {
+  const { app, port } = await bootstrapWorkerApp()
+  return { app, port }
 }

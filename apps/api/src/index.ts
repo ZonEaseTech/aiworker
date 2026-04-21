@@ -11,7 +11,7 @@ export async function boot() {
   }
 
   const { createWorkerApp } = await import('./modes/worker')
-  const { app, port } = createWorkerApp()
+  const { app, port } = await createWorkerApp()
   consola.success(`[worker] listening on :${port}`)
   return { app, port }
 }

@@ -1,5 +1,6 @@
 import type { Worker, WorkerConfig, WorkerContainerState } from '@aiworker/shared'
 
+import { randomBytes } from 'node:crypto'
 import { join } from 'node:path'
 import consola from 'consola'
 
@@ -106,17 +107,20 @@ export class FleetSupervisor {
     return this.docker.logs(container.Id as string, opts)
   }
 
-  private buildEnv(worker: Worker, config: WorkerConfig): string[] {
+  // PLAN-004 3.4 will wire MANAGER_CAN_LAUNCH + per-worker master-key persistence.
+  // For now the supervisor is guarded by PLAN-004 3.1's 503 stubs (service.ts) and
+  // never actually spawns, so the key generated here is inert. The shape matches
+  // the post-PLAN-004 worker env so the file continues to typecheck.
+  private buildEnv(worker: Worker, _config: WorkerConfig): string[] {
     return [
       `AIWORKER_MODE=worker`,
       `NODE_ENV=${commonConfig.NODE_ENV}`,
       `INTERNAL_SHARED_SECRET=${commonConfig.INTERNAL_SHARED_SECRET}`,
       `PORT=3001`,
-      `WORKER_ID=${worker.id}`,
       `WORKER_DB_PATH=${join('/var/lib/aiworker', 'worker.db')}`,
       `WORKER_MIGRATIONS_FOLDER=./drizzle/worker`,
-      `WORKER_CONFIG_JSON=${JSON.stringify(config)}`,
-      `WORKER_CONFIG_VERSION=${worker.configVersion}`,
+      `AIWORKER_MASTER_KEY=${randomBytes(32).toString('hex')}`,
+      `AIWORKER_FORCE_ID=${worker.id}`,
     ]
   }
 

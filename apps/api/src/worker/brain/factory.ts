@@ -23,8 +23,6 @@ function buildOne(source: BrainSourceConfig): DecoratedBrain {
 }
 
 export function buildBrain(config: WorkerConfig): BrainProvider {
-  if (config.brains.length === 0)
-    throw new Error('buildBrain: worker config has no brains')
   const sources = config.brains.map(buildOne)
   return new MultiBrainProvider({
     sources,
