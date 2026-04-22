@@ -13,6 +13,21 @@ import { AppError } from '../../shared'
 export function buildChannelRoutes(getRuntime: () => WorkerRuntime, workerId: string) {
   const routes = new OpenAPIHono()
 
+  // Meta Cloud API subscription challenge. Must be registered before the
+  // generic `:channel/webhook` POST so the GET variant is not swallowed.
+  routes.get('/whatsapp/webhook', (c) => {
+    const runtime = getRuntime()
+    const binding = runtime.channels.get('whatsapp')
+    if (!binding || binding.credentials.channel !== 'whatsapp')
+      return c.text('whatsapp channel is not bound to this worker', 404)
+    const mode = c.req.query('hub.mode')
+    const token = c.req.query('hub.verify_token')
+    const challenge = c.req.query('hub.challenge') ?? ''
+    if (mode === 'subscribe' && token === binding.credentials.verifyToken)
+      return c.text(challenge, 200)
+    return c.text('forbidden', 403)
+  })
+
   routes.post('/:channel/webhook', async (c) => {
     const runtime = getRuntime()
     const channel = c.req.param('channel') as import('@aiworker/shared').ChannelType
