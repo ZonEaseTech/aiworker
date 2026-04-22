@@ -171,11 +171,13 @@ function aisshExec(args: Args, remoteCmd: string, reason?: string, defaultTimeou
   )
 }
 
-function aisshUpload(args: Args, localPath: string, remotePath: string, reason?: string): void {
-  const finalReason = reason ?? args.reason ?? `FEAT-009 ${args.command} upload`
+function aisshUpload(args: Args, localPath: string, remotePath: string, _reason?: string): void {
+  // `aissh file upload` has no --reason flag (unlike exec). Audit context
+  // for uploads comes from the server/token + the local/remote path in the
+  // aissh server's own log.
   mustRun(
     'aissh',
-    ['file', 'upload', args.server, localPath, `--remote-path=${remotePath}`, `--reason=${finalReason}`],
+    ['file', 'upload', args.server, localPath, `--remote-path=${remotePath}`],
     { dryRun: args.dryRun },
   )
 }
