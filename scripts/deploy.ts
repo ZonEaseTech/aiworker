@@ -307,12 +307,12 @@ function cmdUpload(args: Args): void {
   aisshUpload(
     args,
     join(REPO_ROOT, 'ops', 'compose', 'docker-compose.yml'),
-    `${DEFAULT_REMOTE_DIR}/`,
+    `${DEFAULT_REMOTE_DIR}/docker-compose.yml`,
   )
   aisshUpload(
     args,
     join(REPO_ROOT, 'ops', 'caddy', 'Caddyfile.tmpl'),
-    `${DEFAULT_REMOTE_DIR}/`,
+    `${DEFAULT_REMOTE_DIR}/Caddyfile.tmpl`,
   )
 }
 
