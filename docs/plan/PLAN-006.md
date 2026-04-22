@@ -1,8 +1,9 @@
 # PLAN-006 P2 batch — channel adapters (Telegram, Lark, WhatsApp) + Evolution generator
 
-- **status**: implementing
+- **status**: completed
 - **createdAt**: 2026-04-21 18:55
 - **approvedAt**: 2026-04-21 18:55
+- **completedAt**: 2026-04-22 04:07
 - **relatedTask**: FEAT-003, FEAT-004, FEAT-005, FEAT-006
 
 ## Context
