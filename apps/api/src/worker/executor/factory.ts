@@ -1,6 +1,7 @@
 import type { ExecutorConfig, ExecutorProvider } from '@aiworker/shared'
 import process from 'node:process'
 
+import { AcpExecutor, getAcpAgent } from './engines/acp'
 import { ClaudeCodeExecutor, DEFAULT_CLAUDE_CLI_VERSION } from './engines/claude-code'
 import { CliExecutor } from './providers/cli'
 import { OpenAICompatibleExecutor } from './providers/http'
@@ -38,6 +39,17 @@ export function buildExecutor(config: ExecutorConfig): ExecutorProvider {
       return new ClaudeCodeExecutor({
         cliVersion,
         ...(config.model === undefined ? {} : { model: config.model }),
+        ...(config.extraArgs === undefined ? {} : { extraArgs: config.extraArgs }),
+        ...(config.env === undefined ? {} : { env: config.env }),
+        ...(config.timeoutMs === undefined ? {} : { timeoutMs: config.timeoutMs }),
+      })
+    }
+    case 'acp': {
+      const agent = getAcpAgent(config.agent)
+      return new AcpExecutor({
+        agent,
+        ...(config.model === undefined ? {} : { model: config.model }),
+        ...(config.cliVersion === undefined ? {} : { cliVersion: config.cliVersion }),
         ...(config.extraArgs === undefined ? {} : { extraArgs: config.extraArgs }),
         ...(config.env === undefined ? {} : { env: config.env }),
         ...(config.timeoutMs === undefined ? {} : { timeoutMs: config.timeoutMs }),

@@ -43,6 +43,7 @@ function executorInfoModel(config: ExecutorConfig): string | undefined {
     case 'mcp': return config.defaultModel
     case 'cli': return undefined
     case 'claude-code': return config.model
+    case 'acp': return config.model
   }
 }
 
