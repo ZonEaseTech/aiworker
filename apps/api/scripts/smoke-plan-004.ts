@@ -358,11 +358,14 @@ async function runSmoke(): Promise<void> {
       brainWriteTarget: '',
       brainRetrieval: 'first-match',
       executor: {
-        type: 'http',
-        baseUrl: 'http://127.0.0.1:65500',
-        apiKey: 'fake-key',
-        model: 'gpt-stub',
-        timeoutMs: 30_000,
+        engine: 'http',
+        variant: 'default',
+        overrides: {
+          baseUrl: 'http://127.0.0.1:65500',
+          apiKey: 'fake-key',
+          model: 'gpt-stub',
+          timeoutMs: 30_000,
+        },
       },
       channels: [
         {

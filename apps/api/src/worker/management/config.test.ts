@@ -25,11 +25,14 @@ function baseConfig(): WorkerConfig {
     brainWriteTarget: 'cloud',
     brainRetrieval: 'first-match',
     executor: {
-      type: 'http',
-      baseUrl: 'http://localhost:4000',
-      apiKey: 'key-one',
-      model: 'gpt-4o-mini',
-      timeoutMs: 30_000,
+      engine: 'http',
+      variant: 'default',
+      overrides: {
+        baseUrl: 'http://localhost:4000',
+        apiKey: 'key-one',
+        model: 'gpt-4o-mini',
+        timeoutMs: 30_000,
+      },
     },
     channels: [
       {
@@ -64,15 +67,14 @@ describe('worker management config', () => {
 
     expect(result.version).toBe(2)
     // Redacted in returned + stored form
-    expect(result.config.executor.type).toBe('http')
-    if (result.config.executor.type === 'http')
-      expect(result.config.executor.apiKey).toBe('')
+    expect(result.config.executor.engine).toBe('http')
+    expect((result.config.executor.overrides as { apiKey?: string } | undefined)?.apiKey).toBe('')
     expect(result.config.brains[0]?.type).toBe('cloud-gateway')
     if (result.config.brains[0]?.type === 'cloud-gateway')
       expect(result.config.brains[0].config.token).toBe('')
 
     // Vault holds the real values
-    expect(await vault.get('executor.apiKey')).toBe('key-one')
+    expect(await vault.get('executor.overrides.apiKey')).toBe('key-one')
     expect(await vault.get('brains.0.config.token')).toBe('sk-live-first')
     expect(await vault.get('channels.telegram.credentials.botToken')).toBe('tele-bot-1')
 
@@ -100,20 +102,23 @@ describe('worker management config', () => {
 
     const first = baseConfig()
     await putConfig(getWorkerDb(), vault, first)
-    expect(await vault.get('executor.apiKey')).toBe('key-one')
+    expect(await vault.get('executor.overrides.apiKey')).toBe('key-one')
 
     // Second PUT: round-trips the redacted form (apiKey='') — must keep the stored secret.
     const second = baseConfig()
     second.executor = {
-      type: 'http',
-      baseUrl: 'http://localhost:4000',
-      apiKey: '',
-      model: 'gpt-4o-mini',
-      timeoutMs: 30_000,
+      engine: 'http',
+      variant: 'default',
+      overrides: {
+        baseUrl: 'http://localhost:4000',
+        apiKey: '',
+        model: 'gpt-4o-mini',
+        timeoutMs: 30_000,
+      },
     }
     const result = await putConfig(getWorkerDb(), vault, second)
     expect(result.version).toBe(3)
-    expect(await vault.get('executor.apiKey')).toBe('key-one')
+    expect(await vault.get('executor.overrides.apiKey')).toBe('key-one')
 
     // Third PUT: drop the channel entirely — its vault entry must be removed.
     const third = baseConfig()

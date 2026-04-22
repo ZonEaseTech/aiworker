@@ -12,10 +12,10 @@ on:
     paths:
       - 'apps/**'
       - 'packages/**'
-      - 'Dockerfile'
-      - 'bun.lock'
-      - 'package.json'
-      - '.github/workflows/build-image.yml'
+      - Dockerfile
+      - bun.lock
+      - package.json
+      - .github/workflows/build-image.yml
 
 concurrency:
   group: build-image-${{ github.ref }}

@@ -68,7 +68,7 @@ export async function bootstrapWorkerApp(): Promise<{ app: OpenAPIHono, port: nu
   const hydrated = await hydrateStoredConfig(stored.config)
 
   const runtime = buildWorkerRuntime(identity.workerId, hydrated)
-  consola.info(`[worker ${identity.workerId}] runtime built — brains=${hydrated.brains.length} executor=${hydrated.executor.type} channels=${runtime.channels.list().length}`)
+  consola.info(`[worker ${identity.workerId}] runtime built — brains=${hydrated.brains.length} executor=${hydrated.executor.engine}/${hydrated.executor.variant} channels=${runtime.channels.list().length}`)
 
   const state: WorkerModeState = {
     workerId: identity.workerId,

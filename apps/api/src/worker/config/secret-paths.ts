@@ -4,6 +4,11 @@ import type { WorkerConfig } from '@aiworker/shared'
  * Enumerate every secret inside a `WorkerConfig` as a (path, value) pair.
  * The `path` is the key under which the value is stored in `worker_secrets`;
  * `redactSecrets` and `hydrateSecrets` use the same scheme.
+ *
+ * After FEAT-014 the executor is `ExecutorProfile`-shaped — secrets always
+ * live under `executor.overrides.{apiKey|token}` regardless of which engine /
+ * variant is selected (variants in `DEFAULT_PROFILES` deliberately store
+ * empty placeholders for those fields).
  */
 export function enumerateSecretPaths(config: WorkerConfig): Array<{ path: string, value: string }> {
   const out: Array<{ path: string, value: string }> = []
@@ -13,10 +18,11 @@ export function enumerateSecretPaths(config: WorkerConfig): Array<{ path: string
       out.push({ path: `brains.${i}.config.token`, value: brain.config.token })
   })
 
-  if (config.executor.type === 'http')
-    out.push({ path: 'executor.apiKey', value: config.executor.apiKey })
-  else if (config.executor.type === 'mcp')
-    out.push({ path: 'executor.token', value: config.executor.token })
+  const overrides = (config.executor.overrides ?? {}) as Record<string, unknown>
+  if (config.executor.engine === 'http' && typeof overrides.apiKey === 'string')
+    out.push({ path: 'executor.overrides.apiKey', value: overrides.apiKey })
+  else if (config.executor.engine === 'mcp' && typeof overrides.token === 'string')
+    out.push({ path: 'executor.overrides.token', value: overrides.token })
 
   config.channels.forEach((binding) => {
     const c = binding.credentials
@@ -66,10 +72,7 @@ export function redactSecrets(config: WorkerConfig): WorkerConfig {
       return { ...b, config: { ...b.config, token: '' } }
     return b
   })
-  if (c.executor.type === 'http')
-    c.executor = { ...c.executor, apiKey: '' }
-  else if (c.executor.type === 'mcp')
-    c.executor = { ...c.executor, token: '' }
+  redactExecutorSecrets(c)
   c.channels = c.channels.map((cb) => {
     const creds = cb.credentials
     switch (creds.channel) {
@@ -114,10 +117,7 @@ export function hydrateSecrets(config: WorkerConfig, secrets: Map<string, string
       return { ...b, config: { ...b.config, token: secrets.get(`brains.${i}.config.token`) ?? '' } }
     return b
   })
-  if (c.executor.type === 'http')
-    c.executor = { ...c.executor, apiKey: secrets.get('executor.apiKey') ?? '' }
-  else if (c.executor.type === 'mcp')
-    c.executor = { ...c.executor, token: secrets.get('executor.token') ?? '' }
+  hydrateExecutorSecrets(c, secrets)
   c.channels = c.channels.map((cb) => {
     const creds = cb.credentials
     switch (creds.channel) {
@@ -168,4 +168,28 @@ export function hydrateSecrets(config: WorkerConfig, secrets: Map<string, string
     }
   })
   return c
+}
+
+function redactExecutorSecrets(c: WorkerConfig): void {
+  const overrides = { ...((c.executor.overrides as Record<string, unknown> | undefined) ?? {}) }
+  if (c.executor.engine === 'http' && typeof overrides.apiKey === 'string')
+    overrides.apiKey = ''
+  if (c.executor.engine === 'mcp' && typeof overrides.token === 'string')
+    overrides.token = ''
+  c.executor = { ...c.executor, overrides }
+}
+
+function hydrateExecutorSecrets(c: WorkerConfig, secrets: Map<string, string>): void {
+  const overrides = { ...((c.executor.overrides as Record<string, unknown> | undefined) ?? {}) }
+  if (c.executor.engine === 'http') {
+    const v = secrets.get('executor.overrides.apiKey')
+    if (v !== undefined)
+      overrides.apiKey = v
+  }
+  else if (c.executor.engine === 'mcp') {
+    const v = secrets.get('executor.overrides.token')
+    if (v !== undefined)
+      overrides.token = v
+  }
+  c.executor = { ...c.executor, overrides }
 }

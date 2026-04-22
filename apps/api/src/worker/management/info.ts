@@ -1,5 +1,5 @@
 import type {
-  ExecutorConfig,
+  ExecutorProfile,
   ServiceStatus,
   WorkerComponentStatus,
   WorkerConfig,
@@ -9,6 +9,7 @@ import type {
   WorkerInfoExecutor,
 } from '@aiworker/shared'
 import type { WorkerModeState } from '../../modes/worker'
+import { resolveVariant } from '../executor/default-profiles'
 
 /**
  * Per-process runtime version surfaced on `/api/worker/info`. Matches the
@@ -37,13 +38,31 @@ async function probe(fn: () => Promise<ServiceStatus>): Promise<WorkerComponentS
   }
 }
 
-function executorInfoModel(config: ExecutorConfig): string | undefined {
-  switch (config.type) {
-    case 'http': return config.model
-    case 'mcp': return config.defaultModel
-    case 'cli': return undefined
-    case 'claude-code': return config.model
-    case 'acp': return config.model
+/**
+ * Pull the "effective model" from the resolved variant body. Each engine
+ * tagged its model under a different key historically, so this helper hides
+ * the engine-specific field name from `buildInfo`.
+ */
+function executorInfoModel(profile: ExecutorProfile): string | undefined {
+  const resolved = tryResolve(profile)
+  if (!resolved)
+    return undefined
+  if (resolved.modelId !== undefined)
+    return resolved.modelId
+  const body = resolved.body as Record<string, unknown>
+  if (typeof body.model === 'string' && body.model.length > 0)
+    return body.model
+  if (typeof body.defaultModel === 'string' && body.defaultModel.length > 0)
+    return body.defaultModel
+  return undefined
+}
+
+function tryResolve(profile: ExecutorProfile) {
+  try {
+    return resolveVariant(profile)
+  }
+  catch {
+    return null
   }
 }
 
@@ -78,7 +97,7 @@ export async function buildInfo(
 
   const resolvedExecutorModel = executorInfoModel(storedConfig.executor)
   const executor: WorkerInfoExecutor = {
-    type: storedConfig.executor.type,
+    type: storedConfig.executor.engine,
     ...(resolvedExecutorModel === undefined ? {} : { model: resolvedExecutorModel }),
     status: executorStatus,
   }

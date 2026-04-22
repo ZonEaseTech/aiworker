@@ -245,7 +245,7 @@ function cmdTeardownLegacy(args: Args): void {
       'if systemctl list-unit-files aiworker.service >/dev/null 2>&1; then systemctl stop aiworker || true; systemctl disable aiworker || true; fi',
       'rm -f /etc/systemd/system/aiworker.service',
       'systemctl daemon-reload',
-      "[ -d /opt/aiworker ] && find /opt/aiworker -mindepth 1 -delete && rmdir /opt/aiworker || true",
+      '[ -d /opt/aiworker ] && find /opt/aiworker -mindepth 1 -delete && rmdir /opt/aiworker || true',
     ].join(' && '),
     'FEAT-009 teardown legacy single-process runtime',
   )

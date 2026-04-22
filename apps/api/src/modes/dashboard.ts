@@ -2,8 +2,8 @@ import process from 'node:process'
 
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { apiReference } from '@scalar/hono-api-reference'
-import { serveStatic } from 'hono/bun'
 import consola from 'consola'
+import { serveStatic } from 'hono/bun'
 
 import { dashboardConfig } from '../config/dashboard'
 import { WorkerPoller } from '../dashboard/registry/poll'

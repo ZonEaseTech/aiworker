@@ -56,9 +56,12 @@ function validConfig(): WorkerConfig {
     brainWriteTarget: '',
     brainRetrieval: 'first-match',
     executor: {
-      type: 'claude-code',
-      model: 'sonnet',
-      timeoutMs: 30_000,
+      engine: 'claude-code',
+      variant: 'default',
+      overrides: {
+        model: 'sonnet',
+        timeoutMs: 30_000,
+      },
     },
     channels: [],
     evolution: { enabled: false, observationRetentionDays: 7 },

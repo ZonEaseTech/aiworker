@@ -1,248 +1,303 @@
-import type { ExecutorConfig } from '@aiworker/shared'
+import type { CmdOverrides, EngineKind, ExecutorProfile, PermissionPolicy } from '@aiworker/shared'
+import { useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { SecretField } from './brain-section'
+import { ExecutorForm } from './executor-form'
+import { defaultProfileFor, ENGINE_CATALOG, listEngines, listVariantsFor } from './executor-variants'
 
 interface ExecutorSectionProps {
-  executor: ExecutorConfig
-  onChange: (next: ExecutorConfig) => void
+  executor: ExecutorProfile
+  onChange: (next: ExecutorProfile) => void
 }
 
-function defaultHttp(): ExecutorConfig {
-  return { type: 'http', baseUrl: '', apiKey: '', model: '', timeoutMs: 30_000 }
-}
-
-function defaultMcp(): ExecutorConfig {
-  return { type: 'mcp', url: '', token: '', timeoutMs: 30_000 }
-}
-
-function defaultCli(): ExecutorConfig {
-  return { type: 'cli', command: '', args: [], timeoutMs: 30_000 }
-}
-
+/**
+ * Two-step engine × variant picker. Variant body fields render via the
+ * lean `<ExecutorForm>` schema mapper. CmdOverrides + per-request fields
+ * (modelId / reasoningId / permissionPolicy) live in their own collapsed
+ * "Advanced" panel so the common case stays one screen of inputs.
+ *
+ * Save semantics: the parent passes the full `ExecutorProfile`. The variant
+ * body is NEVER sent — only `{ engine, variant, overrides? }`. Default
+ * profile fields live server-side in `default-profiles.ts` and merge in via
+ * `resolveVariant` at executor build time.
+ */
 export function ExecutorSection({ executor, onChange }: ExecutorSectionProps) {
-  function switchType(next: ExecutorConfig['type']) {
-    if (next === executor.type)
+  const engineMeta = ENGINE_CATALOG[executor.engine]
+  const variantMeta = engineMeta.variants[executor.variant]
+
+  const [advancedOpen, setAdvancedOpen] = useState(false)
+
+  function switchEngine(nextEngine: EngineKind) {
+    if (nextEngine === executor.engine)
       return
-    if (next === 'http')
-      onChange(defaultHttp())
-    else if (next === 'mcp')
-      onChange(defaultMcp())
-    else onChange(defaultCli())
+    const variants = listVariantsFor(nextEngine)
+    const keepVariant = variants.includes(executor.variant) ? executor.variant : undefined
+    if (keepVariant)
+      onChange({ engine: nextEngine, variant: keepVariant })
+    else
+      onChange(defaultProfileFor(nextEngine))
   }
+
+  function switchVariant(nextVariant: string) {
+    if (nextVariant === executor.variant)
+      return
+    // Drop overrides on variant switch — variant bodies are heterogeneous, so
+    // re-using last variant's overrides almost always produces a broken merge.
+    onChange({ engine: executor.engine, variant: nextVariant })
+  }
+
+  function setOverrides(nextOverrides: Record<string, unknown> | undefined) {
+    if (!nextOverrides || Object.keys(nextOverrides).length === 0) {
+      const { overrides: _drop, ...rest } = executor
+      void _drop
+      onChange(rest as ExecutorProfile)
+      return
+    }
+    onChange({ ...executor, overrides: nextOverrides as ExecutorProfile['overrides'] })
+  }
+
+  function patchVariantBody(next: Record<string, unknown>) {
+    const cmd = (executor.overrides as { cmd?: CmdOverrides } | undefined)?.cmd
+    const merged: Record<string, unknown> = { ...next }
+    if (cmd && Object.keys(cmd).length > 0)
+      merged.cmd = cmd
+    setOverrides(merged)
+  }
+
+  function patchCmd(nextCmd: CmdOverrides | undefined) {
+    const overrides = (executor.overrides ?? {}) as Record<string, unknown>
+    const { cmd: _drop, ...rest } = overrides
+    void _drop
+    if (!nextCmd || Object.keys(nextCmd).length === 0) {
+      setOverrides(rest)
+      return
+    }
+    setOverrides({ ...rest, cmd: nextCmd })
+  }
+
+  function patchTopLevel(next: Pick<ExecutorProfile, 'modelId' | 'reasoningId' | 'permissionPolicy'>) {
+    const out = { ...executor }
+    if (next.modelId === undefined || next.modelId === '')
+      delete out.modelId
+    else out.modelId = next.modelId
+    if (next.reasoningId === undefined || next.reasoningId === '')
+      delete out.reasoningId
+    else out.reasoningId = next.reasoningId
+    if (next.permissionPolicy === undefined)
+      delete out.permissionPolicy
+    else out.permissionPolicy = next.permissionPolicy
+    onChange(out)
+  }
+
+  // Body fields that aren't `cmd`. The variant form only edits these — the
+  // `cmd` slot has its own dedicated panel.
+  const overridesObj = (executor.overrides ?? {}) as Record<string, unknown>
+  const { cmd: cmdOverride, ...bodyOverrides } = overridesObj as { cmd?: CmdOverrides } & Record<string, unknown>
 
   return (
     <section className="flex flex-col gap-4 rounded-lg border bg-card p-6">
       <header>
         <h2 className="text-lg font-semibold">Executor</h2>
         <p className="text-sm text-muted-foreground">
-          Chat-completion backend the worker uses for tool-calling loops.
+          Choose an engine, pick a variant preset, then override only the fields you need.
         </p>
       </header>
 
-      <div className="flex gap-4" role="radiogroup" aria-label="Executor type">
-        {(['http', 'mcp', 'cli'] as const).map(t => (
-          <label key={t} className="flex items-center gap-2 text-sm">
-            <input
-              type="radio"
-              name="executor-type"
-              value={t}
-              checked={executor.type === t}
-              onChange={() => switchType(t)}
-            />
-            <span className="font-mono">{t}</span>
-          </label>
-        ))}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="executor-engine">Engine</Label>
+          <select
+            id="executor-engine"
+            className="h-9 rounded-md border bg-background px-3 text-sm"
+            value={executor.engine}
+            onChange={e => switchEngine(e.target.value as EngineKind)}
+          >
+            {listEngines().map(eng => (
+              <option key={eng} value={eng}>
+                {ENGINE_CATALOG[eng].label}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-muted-foreground">{engineMeta.description}</p>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="executor-variant">Variant</Label>
+          <select
+            id="executor-variant"
+            className="h-9 rounded-md border bg-background px-3 text-sm"
+            value={executor.variant}
+            onChange={e => switchVariant(e.target.value)}
+          >
+            {listVariantsFor(executor.engine).map(v => (
+              <option key={v} value={v}>
+                {engineMeta.variants[v]!.label}
+              </option>
+            ))}
+          </select>
+          {variantMeta?.description && (
+            <p className="text-xs text-muted-foreground">{variantMeta.description}</p>
+          )}
+        </div>
       </div>
 
-      {executor.type === 'http' && <HttpFields executor={executor} onChange={onChange} />}
-      {executor.type === 'mcp' && <McpFields executor={executor} onChange={onChange} />}
-      {executor.type === 'cli' && <CliFields executor={executor} onChange={onChange} />}
+      {variantMeta && (
+        <ExecutorForm
+          schema={variantMeta.schema}
+          value={bodyOverrides}
+          secretFields={variantMeta.secretFields}
+          onChange={patchVariantBody}
+        />
+      )}
+
+      <div className="border-t pt-4">
+        <button
+          type="button"
+          className="text-sm font-medium text-muted-foreground hover:text-foreground"
+          onClick={() => setAdvancedOpen(open => !open)}
+          aria-expanded={advancedOpen}
+        >
+          {advancedOpen ? '▾' : '▸'}
+          {' '}
+          Advanced (per-request + cmd overrides)
+        </button>
+        {advancedOpen && (
+          <div className="mt-3 flex flex-col gap-4">
+            <ProfileLevelOverrides
+              modelId={executor.modelId}
+              reasoningId={executor.reasoningId}
+              permissionPolicy={executor.permissionPolicy}
+              onChange={patchTopLevel}
+            />
+            <CmdOverridesSection cmd={cmdOverride} onChange={patchCmd} />
+          </div>
+        )}
+      </div>
     </section>
   )
 }
 
-function HttpFields({
-  executor,
+function ProfileLevelOverrides({
+  modelId,
+  reasoningId,
+  permissionPolicy,
   onChange,
 }: {
-  executor: Extract<ExecutorConfig, { type: 'http' }>
-  onChange: (next: ExecutorConfig) => void
+  modelId?: string
+  reasoningId?: string
+  permissionPolicy?: PermissionPolicy
+  onChange: (next: { modelId?: string, reasoningId?: string, permissionPolicy?: PermissionPolicy }) => void
 }) {
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      <LabeledInput
-        label="baseUrl"
-        value={executor.baseUrl}
-        onChange={v => onChange({ ...executor, baseUrl: v })}
-      />
-      <LabeledInput
-        label="model"
-        value={executor.model}
-        onChange={v => onChange({ ...executor, model: v })}
-      />
-      <SecretField
-        label="apiKey"
-        value={executor.apiKey}
-        onChange={v => onChange({ ...executor, apiKey: v })}
-      />
-      <NumberInput
-        label="timeoutMs"
-        value={executor.timeoutMs}
-        onChange={v => onChange({ ...executor, timeoutMs: v })}
-      />
-    </div>
-  )
-}
-
-function McpFields({
-  executor,
-  onChange,
-}: {
-  executor: Extract<ExecutorConfig, { type: 'mcp' }>
-  onChange: (next: ExecutorConfig) => void
-}) {
-  const toolsStr = (executor.tools ?? []).join(',')
-  function setTools(next: string) {
-    const arr = next.split(',').map(s => s.trim()).filter(Boolean)
-    onChange({ ...executor, tools: arr.length > 0 ? arr : undefined })
-  }
-  return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      <LabeledInput
-        label="url"
-        value={executor.url}
-        onChange={v => onChange({ ...executor, url: v })}
-      />
-      <SecretField
-        label="token"
-        value={executor.token}
-        onChange={v => onChange({ ...executor, token: v })}
-      />
-      <LabeledInput
-        label="defaultModel (optional)"
-        value={executor.defaultModel ?? ''}
-        onChange={v => onChange({ ...executor, defaultModel: v || undefined })}
-      />
-      <LabeledInput
-        label="tools (comma-separated, optional)"
-        value={toolsStr}
-        onChange={setTools}
-      />
-      <NumberInput
-        label="timeoutMs (optional)"
-        value={executor.timeoutMs ?? 30_000}
-        onChange={v => onChange({ ...executor, timeoutMs: v })}
-      />
-    </div>
-  )
-}
-
-function CliFields({
-  executor,
-  onChange,
-}: {
-  executor: Extract<ExecutorConfig, { type: 'cli' }>
-  onChange: (next: ExecutorConfig) => void
-}) {
-  const argsStr = executor.args.join(' ')
-  function setArgs(next: string) {
-    const arr = next.split(/\s+/).filter(Boolean)
-    onChange({ ...executor, args: arr })
-  }
-  const envStr = Object.entries(executor.env ?? {}).map(([k, v]) => `${k}=${v}`).join('\n')
-  function setEnv(next: string) {
-    const entries: [string, string][] = []
-    for (const line of next.split('\n')) {
-      const eq = line.indexOf('=')
-      if (eq <= 0)
-        continue
-      const k = line.slice(0, eq).trim()
-      const v = line.slice(eq + 1)
-      if (k.length > 0)
-        entries.push([k, v])
-    }
-    onChange({ ...executor, env: entries.length > 0 ? Object.fromEntries(entries) : undefined })
-  }
-  return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      <LabeledInput
-        label="command"
-        value={executor.command}
-        onChange={v => onChange({ ...executor, command: v })}
-      />
-      <LabeledInput
-        label="args (space-separated)"
-        value={argsStr}
-        onChange={setArgs}
-      />
-      <LabeledInput
-        label="cwd (optional)"
-        value={executor.cwd ?? ''}
-        onChange={v => onChange({ ...executor, cwd: v || undefined })}
-      />
-      <NumberInput
-        label="timeoutMs (optional)"
-        value={executor.timeoutMs ?? 30_000}
-        onChange={v => onChange({ ...executor, timeoutMs: v })}
-      />
-      <div className="sm:col-span-2 flex flex-col gap-1.5">
-        <Label>env (KEY=value per line, optional)</Label>
-        <textarea
-          className="min-h-[80px] rounded-md border bg-background px-3 py-2 text-sm font-mono"
-          value={envStr}
-          onChange={e => setEnv(e.target.value)}
+    <div className="grid gap-3 sm:grid-cols-3">
+      <div className="flex flex-col gap-1.5">
+        <Label>modelId (per-request override)</Label>
+        <Input
+          value={modelId ?? ''}
+          onChange={e => onChange({ modelId: e.target.value, reasoningId, permissionPolicy })}
         />
       </div>
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={executor.sandbox === true}
-          onChange={e => onChange({ ...executor, sandbox: e.target.checked })}
+      <div className="flex flex-col gap-1.5">
+        <Label>reasoningId</Label>
+        <Input
+          value={reasoningId ?? ''}
+          onChange={e => onChange({ modelId, reasoningId: e.target.value, permissionPolicy })}
         />
-        Sandbox each invocation (docker)
-      </label>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label>permissionPolicy</Label>
+        <select
+          className="h-9 rounded-md border bg-background px-3 text-sm"
+          value={permissionPolicy ?? ''}
+          onChange={(e) => {
+            const v = e.target.value as PermissionPolicy | ''
+            onChange({ modelId, reasoningId, ...(v ? { permissionPolicy: v } : {}) })
+          }}
+        >
+          <option value="">— unset —</option>
+          <option value="auto">auto</option>
+          <option value="supervised">supervised</option>
+          <option value="plan">plan</option>
+        </select>
+      </div>
     </div>
   )
 }
 
-function LabeledInput({
-  label,
-  value,
+function CmdOverridesSection({
+  cmd,
   onChange,
 }: {
-  label: string
-  value: string
-  onChange: (next: string) => void
+  cmd: CmdOverrides | undefined
+  onChange: (next: CmdOverrides | undefined) => void
 }) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <Label>{label}</Label>
-      <Input value={value} onChange={e => onChange(e.target.value)} />
-    </div>
-  )
-}
+  function patch(next: CmdOverrides) {
+    const cleaned: CmdOverrides = {}
+    if (next.binary && next.binary.length > 0)
+      cleaned.binary = next.binary
+    if (next.extraArgs && next.extraArgs.length > 0)
+      cleaned.extraArgs = next.extraArgs
+    if (next.env && Object.keys(next.env).length > 0)
+      cleaned.env = next.env
+    if (next.cliVersion && next.cliVersion.length > 0)
+      cleaned.cliVersion = next.cliVersion
+    onChange(Object.keys(cleaned).length > 0 ? cleaned : undefined)
+  }
 
-function NumberInput({
-  label,
-  value,
-  onChange,
-}: {
-  label: string
-  value: number
-  onChange: (next: number) => void
-}) {
+  const argsStr = (cmd?.extraArgs ?? []).join(' ')
+  const envStr = Object.entries(cmd?.env ?? {}).map(([k, v]) => `${k}=${v}`).join('\n')
+
   return (
-    <div className="flex flex-col gap-1.5">
-      <Label>{label}</Label>
-      <Input
-        type="number"
-        value={value}
-        onChange={(e) => {
-          const parsed = Number.parseInt(e.target.value, 10)
-          onChange(Number.isNaN(parsed) ? 0 : parsed)
-        }}
-      />
+    <div className="flex flex-col gap-3 rounded-md border bg-muted/30 p-3">
+      <p className="text-xs text-muted-foreground">
+        cmd overrides apply to engines that spawn a binary (cli / claude-code / acp).
+      </p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="flex flex-col gap-1.5">
+          <Label>cmd.binary</Label>
+          <Input
+            value={cmd?.binary ?? ''}
+            onChange={e => patch({ ...cmd, binary: e.target.value })}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label>cmd.cliVersion</Label>
+          <Input
+            value={cmd?.cliVersion ?? ''}
+            onChange={e => patch({ ...cmd, cliVersion: e.target.value })}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5 sm:col-span-2">
+          <Label>cmd.extraArgs (space-separated)</Label>
+          <Input
+            value={argsStr}
+            onChange={(e) => {
+              const arr = e.target.value.split(/\s+/).filter(Boolean)
+              patch({ ...cmd, extraArgs: arr })
+            }}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5 sm:col-span-2">
+          <Label>cmd.env (KEY=value per line)</Label>
+          <textarea
+            className="min-h-[80px] rounded-md border bg-background px-3 py-2 text-sm font-mono"
+            value={envStr}
+            onChange={(e) => {
+              const entries: [string, string][] = []
+              for (const line of e.target.value.split('\n')) {
+                const eq = line.indexOf('=')
+                if (eq <= 0)
+                  continue
+                const k = line.slice(0, eq).trim()
+                const v = line.slice(eq + 1)
+                if (k.length > 0)
+                  entries.push([k, v])
+              }
+              patch({ ...cmd, env: Object.fromEntries(entries) })
+            }}
+          />
+        </div>
+      </div>
     </div>
   )
 }

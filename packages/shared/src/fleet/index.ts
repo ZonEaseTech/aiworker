@@ -13,7 +13,6 @@ export type {
   BrainSourceConfig,
   CloudGatewayBrainSourceConfig,
   EvolutionConfig,
-  ExecutorConfig,
   HermesBrainSourceConfig,
   WorkerConfig,
 } from './config'
@@ -31,6 +30,23 @@ export type {
   SkillDraftSource,
   SkillDraftStatus,
 } from './evolution'
+
+export type {
+  AcpAgentId,
+  AcpVariantBody,
+  ClaudeCodeVariantBody,
+  CliVariantBody,
+  CmdOverrides,
+  EngineKind,
+  ExecutorConfig,
+  ExecutorProfile,
+  HttpVariantBody,
+  McpVariantBody,
+  PermissionPolicy,
+  VariantBody,
+  VariantBodyByEngine,
+  VariantOverrides,
+} from './executor'
 
 export type {
   RegisteredWorker,

@@ -34,7 +34,7 @@ export interface WorkerSummary {
   status: WorkerStatus
   enabledChannels: string[]
   brainCount: number
-  executorType: WorkerConfig['executor']['type']
+  executorType: WorkerConfig['executor']['engine']
   containerState?: WorkerContainerState
   lastActivityAt?: string
 }
