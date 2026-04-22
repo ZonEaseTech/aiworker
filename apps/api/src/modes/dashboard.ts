@@ -2,6 +2,7 @@ import process from 'node:process'
 
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { apiReference } from '@scalar/hono-api-reference'
+import { serveStatic } from 'hono/bun'
 import consola from 'consola'
 
 import { dashboardConfig } from '../config/dashboard'
@@ -67,6 +68,30 @@ export async function createDashboardApp() {
   })
 
   app.get('/docs', apiReference({ spec: { url: '/openapi.json' } }))
+
+  // SPA: Caddy used to serve apps/web/dist as a static site in front of the
+  // legacy bun process. With the dockerised dashboard we bundle the web
+  // assets into /app/web and serve them ourselves so Caddy can be a pure
+  // reverse proxy. AIWORKER_WEB_ROOT overrides for dev/tests.
+  const webRoot = process.env.AIWORKER_WEB_ROOT ?? '/app/web'
+  app.get('*', serveStatic({ root: webRoot }))
+  app.notFound(async (c) => {
+    const path = new URL(c.req.url).pathname
+    // Never HTML-fallback on API / docs / health / assets.
+    if (
+      path.startsWith('/api')
+      || path.startsWith('/health')
+      || path.startsWith('/openapi')
+      || path.startsWith('/docs')
+      || /\.[a-z0-9]+$/i.test(path)
+    ) {
+      return c.json({ error: 'not_found', path }, 404)
+    }
+    const index = Bun.file(`${webRoot}/index.html`)
+    if (await index.exists())
+      return c.html(await index.text())
+    return c.json({ error: 'not_found', path }, 404)
+  })
 
   return { app, port: dashboardConfig.PORT }
 }

@@ -1,7 +1,19 @@
-gateway.example.test {
+{
+	auto_https off
+}
+
+# gateway.example.test is proxied through Cloudflare (orange-cloud) which handles
+# TLS termination; Caddy on the host only needs to serve :80. The dashboard
+# container on 127.0.0.1:3000 serves the API, docs, and the web SPA.
+:80 {
 	encode zstd gzip
 
-	reverse_proxy 127.0.0.1:3000
+	reverse_proxy 127.0.0.1:3000 {
+		flush_interval -1
+		transport http {
+			read_timeout 0
+		}
+	}
 
 	log {
 		output file /var/log/caddy/aiw.access.log {
