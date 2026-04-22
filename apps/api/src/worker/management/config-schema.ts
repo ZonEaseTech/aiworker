@@ -56,6 +56,15 @@ const executorSchema = z.discriminatedUnion('type', [
     timeoutMs: z.number().int().positive().optional(),
     sandbox: z.boolean().optional(),
   }),
+  z.object({
+    type: z.literal('claude-code'),
+    model: z.string().min(1).optional(),
+    cliVersion: z.string().min(1).optional(),
+    extraArgs: z.array(z.string()).optional(),
+    env: z.record(z.string()).optional(),
+    workspaceRoot: z.string().min(1).optional(),
+    timeoutMs: z.number().int().positive().optional(),
+  }),
 ])
 
 const channelCredentialsSchema = z.discriminatedUnion('channel', [

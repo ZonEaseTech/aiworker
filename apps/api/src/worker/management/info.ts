@@ -1,4 +1,5 @@
 import type {
+  ExecutorConfig,
   ServiceStatus,
   WorkerComponentStatus,
   WorkerConfig,
@@ -36,6 +37,15 @@ async function probe(fn: () => Promise<ServiceStatus>): Promise<WorkerComponentS
   }
 }
 
+function executorInfoModel(config: ExecutorConfig): string | undefined {
+  switch (config.type) {
+    case 'http': return config.model
+    case 'mcp': return config.defaultModel
+    case 'cli': return undefined
+    case 'claude-code': return config.model
+  }
+}
+
 function webhookUrl(advertisedBaseUrl: string | undefined, channel: string): string | undefined {
   if (!advertisedBaseUrl)
     return undefined
@@ -65,13 +75,10 @@ export async function buildInfo(
     status: brainAggregate,
   }))
 
+  const resolvedExecutorModel = executorInfoModel(storedConfig.executor)
   const executor: WorkerInfoExecutor = {
     type: storedConfig.executor.type,
-    ...(storedConfig.executor.type === 'http'
-      ? { model: storedConfig.executor.model }
-      : storedConfig.executor.type === 'mcp' && storedConfig.executor.defaultModel !== undefined
-        ? { model: storedConfig.executor.defaultModel }
-        : {}),
+    ...(resolvedExecutorModel === undefined ? {} : { model: resolvedExecutorModel }),
     status: executorStatus,
   }
 

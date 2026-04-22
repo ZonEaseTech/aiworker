@@ -1,5 +1,7 @@
 import type { ExecutorConfig, ExecutorProvider } from '@aiworker/shared'
+import process from 'node:process'
 
+import { ClaudeCodeExecutor, DEFAULT_CLAUDE_CLI_VERSION } from './engines/claude-code'
 import { CliExecutor } from './providers/cli'
 import { OpenAICompatibleExecutor } from './providers/http'
 import { McpExecutor } from './providers/mcp'
@@ -30,5 +32,16 @@ export function buildExecutor(config: ExecutorConfig): ExecutorProvider {
         ...(config.timeoutMs === undefined ? {} : { timeoutMs: config.timeoutMs }),
         ...(config.sandbox === undefined ? {} : { sandbox: config.sandbox }),
       })
+    case 'claude-code': {
+      const envCliVersion = process.env.CLAUDE_CLI_VERSION
+      const cliVersion = config.cliVersion ?? envCliVersion ?? DEFAULT_CLAUDE_CLI_VERSION
+      return new ClaudeCodeExecutor({
+        cliVersion,
+        ...(config.model === undefined ? {} : { model: config.model }),
+        ...(config.extraArgs === undefined ? {} : { extraArgs: config.extraArgs }),
+        ...(config.env === undefined ? {} : { env: config.env }),
+        ...(config.timeoutMs === undefined ? {} : { timeoutMs: config.timeoutMs }),
+      })
+    }
   }
 }
