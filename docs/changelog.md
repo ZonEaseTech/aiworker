@@ -1,5 +1,50 @@
 # AIWorker Changelog
 
+## 2026-04-22 17:30 [progress]
+
+PLAN-007 step 3 / 6 — **FEAT-013 ACP harness + Gemini / Qwen adapters** landed. Second and third agentic-CLI engines now plug into the fleet; a fourth ACP-speaking engine (Copilot, Aider, Amp, ...) requires only a new data file in `engines/acp/agents/`.
+
+Delivered via BKD worktree subtask `9395s1ev` (branch `bkd/9395s1ev`, 18 files, +2141 / -0 all-new). Subtask self-review passed after one fixup (stub path depth `..` count). Merged to main in `128f790`.
+
+Shared:
+
+- `packages/shared/src/fleet/config.ts` — `ExecutorConfig` gains minimal `{ type: 'acp', agent: 'gemini' | 'qwen', model?, cliVersion?, extraArgs?, env?, timeoutMs? }` variant. Three-tier profile layer still deferred to FEAT-014.
+
+API (all new under `apps/api/src/worker/executor/engines/acp/`):
+
+- `harness.ts` — `AcpExecutor` implements `ExecutorProvider`: spawn resolution (PATH → npx fallback with env-driven version), stdio ACP session lifecycle (`initialize` → `newSession` → `prompt` → streaming `sessionUpdate` → `cancel`), 10-minute auth-probe cache, proactive close + peer dispose on child `exit code != 0`.
+- `protocol.ts` — transport-agnostic `JsonRpcPeer`: request / response correlation, notification dispatch, inbound request handling (used for `session/request_permission` auto-approve), timeout + abort + dispose.
+- `normalize.ts` — ACP `sessionUpdate` → `AgentEvent`. `ToolCall.kind` maps to `ToolAction.kind`: read → file_read, edit → file_edit, execute → command_run, search → search, fetch → web_fetch, think → task_plan, else → tool. `stopReason` mapped to `AgentFinishReason`.
+- `types.ts` — JSON-RPC frame + ACP session / tool / stopReason wire types, module-local only.
+- `agents/types.ts` — `AcpAgentDefinition` shape: `{ id, label, commandName, npxPackage, versionEnvVar, defaultVersion, buildArgs(cfg), authProbe() }`.
+- `agents/gemini.ts` — `--experimental-acp --yolo --allowed-tools run_shell_command`; `authProbe` checks `~/.gemini/oauth_creds.json`.
+- `agents/qwen.ts` — `--acp --yolo`; `authProbe` checks `~/.qwen/`.
+- `agents/index.ts` — registry map.
+- `apps/api/src/worker/executor/factory.ts` — `case 'acp'`.
+- `apps/api/src/worker/management/config-schema.ts` + `info.ts` — zod schema + `executorInfoModel` branch for acp.
+- `apps/api/src/worker/orchestrator/service.ts` — `executorModel()` helper covers acp.
+- `apps/api/test-fixtures/cli/acp-stub.mjs` — pre-recorded ACP ndjson usable by both gemini and qwen harness tests.
+
+Tests (61 new):
+
+- `protocol.test.ts` — JsonRpcPeer request/response, notification, cancel, timeout, dispose.
+- `normalize.test.ts` — `sessionUpdate` event → `AgentEvent` including `ToolKind` → `ToolAction.kind` inference and stopReason mapping.
+- `harness.test.ts` — smoke: gemini + qwen both produce assistant-message + tool-use + finish events against the stub binary.
+
+Verification:
+
+- `bun run typecheck` clean across shared / api / web.
+- `bun test` — shared 7 / 7, api 319 / 319 (61 new), web 17 / 17.
+- `bun run lint` at pre-existing main baseline, zero new errors.
+
+Deferred:
+
+- ACP executor hasn't registered with `ProcessManager` → FEAT-015.
+- CLI `--version` shell-out + DB-persisted availability → FEAT-015 or later.
+- Default CLI versions (`gemini 0.9.0`, `qwen 0.0.14`) are placeholders — ops override via `GEMINI_CLI_VERSION` / `QWEN_CLI_VERSION` before production use.
+
+Pointer: `docs/plan/PLAN-007.md`, `docs/task/FEAT-013.md`.
+
 ## 2026-04-22 10:17 [progress]
 
 PLAN-007 step 2 / 6 — **FEAT-012 Claude Code executor with git worktree workspace** landed. This is the first true agentic-CLI adapter on the fleet: the orchestrator no longer drives the tool loop for this engine — the Claude CLI owns the in-process agent loop, built-in tools, and sandboxing.
