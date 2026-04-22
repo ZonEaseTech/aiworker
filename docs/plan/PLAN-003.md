@@ -1,8 +1,9 @@
 # PLAN-003 Refactor AIWorker into a multi-worker fleet runtime
 
-- **status**: implementing
+- **status**: completed
 - **createdAt**: 2026-04-21 07:00
 - **approvedAt**: 2026-04-21 07:40
+- **completedAt**: 2026-04-21 18:45
 - **relatedTask**: REFACTOR-002
 
 ## Context
@@ -597,3 +598,7 @@ The follow-on work is captured in [PLAN-004](./PLAN-004.md). PLAN-003 remaining 
 - Subtask 11 (web restructure) is superseded by PLAN-004 phase 4 (different semantics: register existing workers vs create via dashboard).
 
 PLAN-003 status is kept at `implementing` as a landmark; execution continues under PLAN-004. Retrospectively, PLAN-003's biggest gap was not pivoting architecture mid-stream but failing to dispatch via BKD — the plan claimed BKD-coordinated subtasks yet execution was serial single-agent. PLAN-004 execution runs as a BKD worktree dispatch with 12 subtasks.
+
+### 2026-04-21 18:45 — Closed as completed (trailing index sync)
+
+Stale-status audit under FEAT-009 follow-up found PLAN-003 still marked `[-]` / `implementing` even though its related task REFACTOR-002 closed on 2026-04-21 11:48 and the successor PLAN-004 closed the same day. Flipping the plan index marker to `[x]` and detail `status` to `completed` (delivered via scaffold commits `9e38180` + `1929b1c`, with the rewrites absorbed into PLAN-004). No code impact — documentation sync only.
