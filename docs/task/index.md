@@ -42,3 +42,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [ ] [**FEAT-007 M:1 channel routing (multiple workers, one chat)**](FEAT-007.md) `P3`
 - [ ] [**FEAT-008 Host-level HA and multi-host fleet**](FEAT-008.md) `P3`
 - [x] [**FEAT-009 Deployment automation (aissh-driven fleet deploy)**](FEAT-009.md) `P1`
+- [ ] [**FEAT-010 Publish registry routes into OpenAPI spec**](FEAT-010.md) `P3`
