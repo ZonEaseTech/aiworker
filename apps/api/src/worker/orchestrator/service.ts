@@ -10,6 +10,7 @@ import type {
 } from '@aiworker/shared'
 import type { WorkerEventBus } from '../events/bus'
 import type { WorkspaceHandle, WorkspaceManager } from '../executor/workspace'
+import type { ProcessManager } from './process-manager'
 
 import consola from 'consola'
 import { eq } from 'drizzle-orm'
@@ -19,7 +20,6 @@ import { agentTasks, conversations, messages } from '../../db/worker/schema'
 import { getChannelAdapter } from '../channels/registry'
 import { classifyContinuation, findOpenConversation, loadRecentMessages } from '../conversation/router'
 import { resolveVariant } from '../executor/default-profiles'
-import { AsyncQueue } from './queue'
 
 interface OrchestratorDeps {
   config: WorkerConfig
@@ -28,10 +28,17 @@ interface OrchestratorDeps {
   bus: WorkerEventBus
   workerId: string
   workspaces: WorkspaceManager
+  /**
+   * 进程级集中管控（FEAT-015）。`ingest` 与 `disposeWorkspace` 都走
+   * `processes.run`：group=conversationId 保证同会话 FIFO；engine 取自
+   * `config.executor.engine`，class=interactive（人类 envelope）或
+   * background（清理）。stall 检测通过 onActivity（每个 AgentEvent 触发）
+   * + cancel（AbortController.abort() → engine 内部 SIGTERM/SIGKILL）实现。
+   */
+  processes: ProcessManager
 }
 
 export class Orchestrator {
-  private readonly queue = new AsyncQueue()
   constructor(private readonly deps: OrchestratorDeps) {}
 
   /** Entry point for inbound envelopes from any channel. */
@@ -41,10 +48,38 @@ export class Orchestrator {
     const workspace = await this.provisionWorkspace(conversation.id)
     const userMessage = this.persistUserMessage(conversation.id, envelope)
     this.deps.bus.emit('conversation.message', { conversationId: conversation.id, messageId: userMessage.id, role: 'user' })
-    await this.queue.enqueue(() => this.run(conversation, envelope, workspace))
+
+    // ProcessManager controls cancellation via an AbortController; its `cancel`
+    // hook flips this controller, which propagates through `input.signal` to
+    // the engine and triggers SIGTERM/SIGKILL on any spawned child process.
+    const controller = new AbortController()
+    let activityCb: (() => void) | null = null
+    await this.deps.processes.run({
+      group: conversation.id,
+      engine: this.deps.config.executor.engine,
+      class: 'interactive',
+      meta: { conversationId: conversation.id, channel: envelope.channel },
+      onSpawn: async () => ({
+        cancel: async () => controller.abort(),
+        onActivity: (cb) => {
+          activityCb = cb
+          return () => {
+            if (activityCb === cb)
+              activityCb = null
+          }
+        },
+      }),
+      job: () => this.run(conversation, envelope, workspace, controller.signal, () => activityCb?.()),
+    })
   }
 
-  private async run(conversation: ConversationState, envelope: Envelope, workspace: WorkspaceHandle | null): Promise<void> {
+  private async run(
+    conversation: ConversationState,
+    envelope: Envelope,
+    workspace: WorkspaceHandle | null,
+    signal: AbortSignal,
+    notifyActivity: () => void,
+  ): Promise<void> {
     const db = getWorkerDb()
     const history = await this.loadConversationMessages(conversation.id)
     const systemPrompt = await this.buildSystemPrompt()
@@ -59,10 +94,15 @@ export class Orchestrator {
       messages: chatMessages,
       ...(model ? { model } : {}),
       ...(workspace ? { workspacePath: workspace.path } : {}),
+      signal,
     }
     let assistantText = ''
     try {
       for await (const event of this.deps.executor.run(runInput)) {
+        // Each AgentEvent counts as a stdout heartbeat for ProcessManager
+        // stall detection — keeps a chatty agent alive and lets a silent one
+        // get reaped after stallTimeoutMs.
+        notifyActivity()
         if (event.type === 'assistant_message_delta') {
           assistantText += event.delta
           this.deps.bus.emit('orchestrator.text', { conversationId: conversation.id, delta: event.delta })
@@ -140,11 +180,22 @@ export class Orchestrator {
 
     const closedAt = new Date().toISOString()
     db.update(conversations).set({ status: 'closed', closedAt }).where(eq(conversations.id, existing.id)).run()
-    // Defer workspace dispose behind the FIFO queue so any in-flight run
-    // that was enqueued on the prior conversation completes before the
-    // directory (or git worktree) goes away.
+    // Defer workspace dispose behind the same group key so any in-flight run
+    // for the closed conversation completes before the directory (or git
+    // worktree) goes away. ProcessManager guarantees per-group FIFO, so
+    // background-class dispose still queues after pending interactive runs.
     const closedId = existing.id
-    void this.queue.enqueue(() => this.disposeWorkspace(closedId))
+    void this.deps.processes.run({
+      group: closedId,
+      engine: this.deps.config.executor.engine,
+      class: 'background',
+      meta: { conversationId: closedId, kind: 'workspace.dispose' },
+      onSpawn: async () => ({
+        cancel: async () => {},
+        onActivity: () => () => {},
+      }),
+      job: () => this.disposeWorkspace(closedId),
+    }).catch(err => consola.warn(`[orchestrator] dispose workspace job failed: ${String(err)}`))
     return this.createConversation(envelope)
   }
 

@@ -13,6 +13,7 @@ import { enumerateSecretPaths, hydrateSecrets } from '../worker/config/secret-pa
 import { buildEventRoutes } from '../worker/events/routes'
 import { evolutionRoutes } from '../worker/evolution/routes'
 import { buildManagementRoutes } from '../worker/management/routes'
+import { ProcessManager } from '../worker/orchestrator/process-manager'
 import { buildOrchestratorRoutes } from '../worker/orchestrator/routes'
 import { buildWorkerRuntime } from '../worker/runtime'
 import { getSecretsVault } from '../worker/secrets'
@@ -67,7 +68,18 @@ export async function bootstrapWorkerApp(): Promise<{ app: OpenAPIHono, port: nu
   const stored = await loadOrSeedConfig(db)
   const hydrated = await hydrateStoredConfig(stored.config)
 
-  const runtime = buildWorkerRuntime(identity.workerId, hydrated)
+  // ProcessManager 跨 hot-reload 持久化（FEAT-015 / PLAN-007 §架构承诺 5）：
+  // bootstrap 时 new 一次，之后每次 reloadRuntime 只调 setLimits。
+  const processes = new ProcessManager({
+    maxConcurrentTotal: workerEnv.MAX_CONCURRENT_TOTAL,
+    perEngineLimits: { ...workerEnv.perEngineLimits },
+    stallTimeoutMs: workerEnv.PROCESS_STALL_TIMEOUT_MS,
+    killTimeoutMs: workerEnv.PROCESS_KILL_TIMEOUT_MS,
+    autoCleanupDelayMs: workerEnv.PROCESS_AUTO_CLEANUP_DELAY_MS,
+    gcIntervalMs: workerEnv.PROCESS_GC_INTERVAL_MS,
+  })
+
+  const runtime = buildWorkerRuntime(identity.workerId, hydrated, { processes })
   consola.info(`[worker ${identity.workerId}] runtime built — brains=${hydrated.brains.length} executor=${hydrated.executor.engine}/${hydrated.executor.variant} channels=${runtime.channels.list().length}`)
 
   const state: WorkerModeState = {
@@ -80,7 +92,13 @@ export async function bootstrapWorkerApp(): Promise<{ app: OpenAPIHono, port: nu
 
   async function reloadRuntime(nextStoredConfig: WorkerConfig, newVersion: number): Promise<void> {
     const nextHydrated = await hydrateStoredConfig(nextStoredConfig)
-    const nextRuntime = buildWorkerRuntime(state.workerId, nextHydrated)
+    // ProcessManager 跨 reload 复用——只刷新容量，不重建实例（活跃进程 +
+    // 队列保留）。env 现在是 process-level，setLimits 会取最新 env 值。
+    processes.setLimits({
+      maxConcurrentTotal: workerEnv.MAX_CONCURRENT_TOTAL,
+      perEngineLimits: { ...workerEnv.perEngineLimits },
+    })
+    const nextRuntime = buildWorkerRuntime(state.workerId, nextHydrated, { processes })
     const previous = state.runtime
     state.runtime = nextRuntime
     state.configVersion = newVersion

@@ -1,4 +1,5 @@
 import type { BrainProvider, ExecutorProvider, WorkerConfig } from '@aiworker/shared'
+import type { ProcessManager } from './orchestrator/process-manager'
 
 import { workerEnv } from '../config/worker'
 import { buildBrain } from './brain/factory'
@@ -20,16 +21,39 @@ export interface WorkerRuntime {
   bus: WorkerEventBus
   orchestrator: Orchestrator
   workspaces: WorkspaceManager
+  /**
+   * 进程级集中管控（FEAT-015 / PLAN-007 §架构承诺 5）。**跨 hot-reload
+   * 持久化**：reload 时不重建，仅通过 `processes.setLimits()` 调容量。
+   * `dispose()` 不会清空它（由 bootstrap 退出阶段统一 cancelAll + dispose）。
+   */
+  processes: ProcessManager
   dispose: () => void
 }
 
-export function buildWorkerRuntime(workerId: string, config: WorkerConfig): WorkerRuntime {
+export interface BuildRuntimeDeps {
+  /**
+   * 跨 reload 持有的 ProcessManager 实例。`bootstrapWorkerApp` 在 init 时
+   * new 一次，之后每次 `reloadRuntime` 都把同一个实例传进来，确保活跃进程
+   * + 队列不被 reload 清空。
+   */
+  processes: ProcessManager
+}
+
+export function buildWorkerRuntime(workerId: string, config: WorkerConfig, deps: BuildRuntimeDeps): WorkerRuntime {
   const brain = buildBrain(config)
   const executor = buildExecutor(config.executor)
   const channels = new ChannelRegistry(config.channels)
   const bus = new WorkerEventBus()
   const workspaces = buildWorkspaceManager(config)
-  const orchestrator = new Orchestrator({ config, brain, executor, bus, workerId, workspaces })
+  const orchestrator = new Orchestrator({
+    config,
+    brain,
+    executor,
+    bus,
+    workerId,
+    workspaces,
+    processes: deps.processes,
+  })
 
   const unsubObserver = attachEvolutionObserver(bus)
   const stopProposer = config.evolution.enabled ? startProposerLoop() : () => undefined
@@ -43,9 +67,12 @@ export function buildWorkerRuntime(workerId: string, config: WorkerConfig): Work
     bus,
     orchestrator,
     workspaces,
+    processes: deps.processes,
     dispose() {
       unsubObserver()
       stopProposer()
+      // 注意：不 dispose processes —— ProcessManager 跨 reload 持久化，
+      // 由 bootstrap 退出阶段统一 cancelAll + dispose。
     },
   }
 }

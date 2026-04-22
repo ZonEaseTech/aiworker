@@ -13,6 +13,7 @@ import { beforeEach, describe, expect, it } from 'bun:test'
 import { closeWorkerDb, getWorkerDb, initWorkerDb, runWorkerMigrations } from '../../db/worker'
 import { loadOrSeedConfig } from '../bootstrap/config'
 import { ChannelRegistry } from '../channels/registry'
+import { ProcessManager } from '../orchestrator/process-manager'
 import { resetSecretsVaultForTests } from '../secrets'
 import { buildManagementRoutes } from './routes'
 
@@ -39,7 +40,7 @@ function healthyExecutor(): ExecutorProvider {
   }
 }
 
-function stubRuntime(): WorkerRuntime {
+function stubRuntime(processes?: ProcessManager): WorkerRuntime {
   return {
     workerId: 'w_abcdefghjkmn',
     config: {} as WorkerConfig,
@@ -49,14 +50,15 @@ function stubRuntime(): WorkerRuntime {
     bus: {} as WorkerRuntime['bus'],
     orchestrator: {} as WorkerRuntime['orchestrator'],
     workspaces: {} as WorkerRuntime['workspaces'],
+    processes: processes ?? ({} as WorkerRuntime['processes']),
     dispose: () => undefined,
   }
 }
 
-function stubState(configVersion = 1): WorkerModeState {
+function stubState(configVersion = 1, processes?: ProcessManager): WorkerModeState {
   return {
     workerId: 'w_abcdefghjkmn',
-    runtime: stubRuntime(),
+    runtime: stubRuntime(processes),
     configVersion,
     startedAt: '2026-04-21T00:00:00.000Z',
     tokenPlaintext: STATE_TOKEN,
@@ -84,7 +86,7 @@ function validConfig(overrides: Partial<WorkerConfig> = {}): WorkerConfig {
   }
 }
 
-async function bootstrap(): Promise<{ state: WorkerModeState }> {
+async function bootstrap(processes?: ProcessManager): Promise<{ state: WorkerModeState }> {
   closeWorkerDb()
   resetSecretsVaultForTests()
   const dir = mkdtempSync(join(tmpdir(), 'aiworker-mgmt-routes-'))
@@ -92,7 +94,7 @@ async function bootstrap(): Promise<{ state: WorkerModeState }> {
   runWorkerMigrations('./drizzle/worker')
   process.env.AIWORKER_MASTER_KEY = MASTER_KEY
   await loadOrSeedConfig(getWorkerDb())
-  const state = stubState(1)
+  const state = stubState(1, processes)
   return { state }
 }
 
@@ -329,5 +331,64 @@ describe('buildManagementRoutes', () => {
     const body = await res.json() as { ok: boolean, error: string }
     expect(body.ok).toBe(false)
     expect(body.error).toContain('nope')
+  })
+
+  it('GET /runtime/processes/capacity returns ProcessManager snapshot', async () => {
+    const processes = new ProcessManager({
+      maxConcurrentTotal: 3,
+      perEngineLimits: { http: 2 },
+      stallTimeoutMs: 60_000,
+      killTimeoutMs: 5_000,
+      autoCleanupDelayMs: 60_000,
+      gcIntervalMs: 0,
+    })
+    try {
+      const { state } = await bootstrap(processes)
+      const routes = buildManagementRoutes({ getState: () => state, reloadRuntime: async () => {} })
+      const res = await routes.fetch(authed('/runtime/processes/capacity'))
+      expect(res.status).toBe(200)
+      const body = await res.json() as {
+        maxConcurrentTotal: number
+        totalActive: number
+        totalQueued: number
+        availableSlots: number
+        perEngine: Record<string, { limit: number, active: number, queued: number, available: number }>
+        byState: Record<string, number>
+        recentTerminal: unknown[]
+      }
+      expect(body.maxConcurrentTotal).toBe(3)
+      expect(body.totalActive).toBe(0)
+      expect(body.totalQueued).toBe(0)
+      expect(body.availableSlots).toBe(3)
+      expect(body.perEngine.http!.limit).toBe(2)
+      expect(body.perEngine.http!.available).toBe(2)
+      expect(body.byState.queued).toBe(0)
+      expect(Array.isArray(body.recentTerminal)).toBe(true)
+    }
+    finally {
+      processes.dispose()
+    }
+  })
+
+  it('GET /runtime/processes/capacity requires bearer auth', async () => {
+    const processes = new ProcessManager({
+      maxConcurrentTotal: 1,
+      perEngineLimits: {},
+      stallTimeoutMs: 60_000,
+      killTimeoutMs: 5_000,
+      autoCleanupDelayMs: 60_000,
+      gcIntervalMs: 0,
+    })
+    try {
+      const { state } = await bootstrap(processes)
+      const routes = buildManagementRoutes({ getState: () => state, reloadRuntime: async () => {} })
+      const res = await routes.fetch(new Request('http://w/runtime/processes/capacity'))
+      expect(res.status).toBe(401)
+      const body = await res.json() as { code: string }
+      expect(body.code).toBe('auth-failed')
+    }
+    finally {
+      processes.dispose()
+    }
   })
 })
