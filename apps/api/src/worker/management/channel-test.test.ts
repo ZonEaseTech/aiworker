@@ -17,6 +17,7 @@ function stubState(bindings: ChannelBinding[]): WorkerModeState {
     channels,
     bus: {} as WorkerRuntime['bus'],
     orchestrator: {} as WorkerRuntime['orchestrator'],
+    workspaces: {} as WorkerRuntime['workspaces'],
     dispose: () => undefined,
   }
   return {

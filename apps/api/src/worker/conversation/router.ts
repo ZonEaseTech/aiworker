@@ -51,10 +51,12 @@ export async function classifyContinuation(
   priorSummary: string | null,
   recent: Array<{ role: string, content: string }>,
   incoming: string,
+  workspacePath?: string,
 ): Promise<ConversationDecision> {
   const input = {
     messages: buildPrompt(priorSummary, recent, incoming),
     ...(model ? { model } : {}),
+    ...(workspacePath ? { workspacePath } : {}),
     temperature: 0,
   }
   let text = ''

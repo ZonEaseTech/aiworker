@@ -36,6 +36,30 @@ export type ExecutorConfig
       /** When true, each invocation is wrapped in a one-shot docker sandbox. Reserved for FEAT-002. */
       sandbox?: boolean
     }
+    | {
+      /**
+       * Claude Code agentic CLI executor. FEAT-012 ships the minimal shape;
+       * the full three-tier (engine × variant × override) config lands in
+       * FEAT-014 — do not expand this discriminator prematurely.
+       */
+      type: 'claude-code'
+      /** Optional model id pass-through (e.g. `sonnet`, `opus`). */
+      model?: string
+      /** Pinned `@anthropic-ai/claude-code` version for `npx` fallback. */
+      cliVersion?: string
+      /** Additional CLI args appended after the required flags. */
+      extraArgs?: string[]
+      /** Additional env vars merged into the spawned process env. */
+      env?: Record<string, string>
+      /**
+       * Subdir name (relative to `WORKER_DATA_ROOT`) for per-conversation
+       * workspaces. Defaults to `workspaces`. Any value that would resolve
+       * outside `WORKER_DATA_ROOT` is rejected by the path-escape guard.
+       */
+      workspaceRoot?: string
+      /** Per-turn hard timeout; defaults to 120s if unset. */
+      timeoutMs?: number
+    }
 
 /** Evolution (L3) settings. MVP wires the observer and approval UI only. */
 export interface EvolutionConfig {

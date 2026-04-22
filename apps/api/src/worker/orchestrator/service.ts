@@ -9,6 +9,7 @@ import type {
   WorkerConfig,
 } from '@aiworker/shared'
 import type { WorkerEventBus } from '../events/bus'
+import type { WorkspaceHandle, WorkspaceManager } from '../executor/workspace'
 
 import consola from 'consola'
 import { eq } from 'drizzle-orm'
@@ -25,6 +26,7 @@ interface OrchestratorDeps {
   executor: ExecutorProvider
   bus: WorkerEventBus
   workerId: string
+  workspaces: WorkspaceManager
 }
 
 export class Orchestrator {
@@ -35,12 +37,13 @@ export class Orchestrator {
   async ingest(envelope: Envelope): Promise<void> {
     this.deps.bus.emit('channel.inbound', { channel: envelope.channel, chatId: envelope.chatId, text: envelope.text })
     const conversation = await this.resolveConversation(envelope)
+    const workspace = await this.provisionWorkspace(conversation.id)
     const userMessage = this.persistUserMessage(conversation.id, envelope)
     this.deps.bus.emit('conversation.message', { conversationId: conversation.id, messageId: userMessage.id, role: 'user' })
-    await this.queue.enqueue(() => this.run(conversation, envelope))
+    await this.queue.enqueue(() => this.run(conversation, envelope, workspace))
   }
 
-  private async run(conversation: ConversationState, envelope: Envelope): Promise<void> {
+  private async run(conversation: ConversationState, envelope: Envelope, workspace: WorkspaceHandle | null): Promise<void> {
     const db = getWorkerDb()
     const history = await this.loadConversationMessages(conversation.id)
     const systemPrompt = await this.buildSystemPrompt()
@@ -51,9 +54,14 @@ export class Orchestrator {
     ]
 
     const model = executorModel(this.deps.config.executor)
+    const runInput = {
+      messages: chatMessages,
+      ...(model ? { model } : {}),
+      ...(workspace ? { workspacePath: workspace.path } : {}),
+    }
     let assistantText = ''
     try {
-      for await (const event of this.deps.executor.run({ messages: chatMessages, ...(model ? { model } : {}) })) {
+      for await (const event of this.deps.executor.run(runInput)) {
         if (event.type === 'assistant_message_delta') {
           assistantText += event.delta
           this.deps.bus.emit('orchestrator.text', { conversationId: conversation.id, delta: event.delta })
@@ -114,6 +122,7 @@ export class Orchestrator {
     if (!existing)
       return this.createConversation(envelope)
 
+    const existingWorkspace = await this.provisionWorkspace(existing.id)
     const recent = await loadRecentMessages(existing.id)
     const model = executorModel(this.deps.config.executor)
     const decision = await classifyContinuation(
@@ -122,6 +131,7 @@ export class Orchestrator {
       existing.summary ?? null,
       recent,
       envelope.text,
+      existingWorkspace?.path,
     )
     this.deps.bus.emit('conversation.classifier', { conversationId: existing.id, decision })
     if (decision.continue)
@@ -129,7 +139,36 @@ export class Orchestrator {
 
     const closedAt = new Date().toISOString()
     db.update(conversations).set({ status: 'closed', closedAt }).where(eq(conversations.id, existing.id)).run()
+    // Defer workspace dispose behind the FIFO queue so any in-flight run
+    // that was enqueued on the prior conversation completes before the
+    // directory (or git worktree) goes away.
+    const closedId = existing.id
+    void this.queue.enqueue(() => this.disposeWorkspace(closedId))
     return this.createConversation(envelope)
+  }
+
+  /**
+   * Create (or return existing) workspace for a conversation. `null` is
+   * returned when provisioning fails so the caller can still proceed with
+   * executors that don't require a workspace (http / mcp).
+   */
+  private async provisionWorkspace(conversationId: string): Promise<WorkspaceHandle | null> {
+    try {
+      return await this.deps.workspaces.createWorkspace(conversationId)
+    }
+    catch (err) {
+      consola.warn(`[orchestrator] workspace create failed for ${conversationId}: ${String(err)}`)
+      return null
+    }
+  }
+
+  private async disposeWorkspace(conversationId: string): Promise<void> {
+    try {
+      await this.deps.workspaces.disposeWorkspace(conversationId)
+    }
+    catch (err) {
+      consola.warn(`[orchestrator] workspace dispose failed for ${conversationId}: ${String(err)}`)
+    }
   }
 
   private createConversation(envelope: Envelope): ConversationState {
@@ -220,6 +259,7 @@ function executorModel(config: ExecutorConfig): string | undefined {
     case 'http': return config.model
     case 'mcp': return config.defaultModel
     case 'cli': return undefined
+    case 'claude-code': return config.model
   }
 }
 

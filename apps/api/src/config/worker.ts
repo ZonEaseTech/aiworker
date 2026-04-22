@@ -17,6 +17,22 @@ const schema = z.object({
   AIWORKER_FORCE_ID: z.string().regex(WORKER_ID_PATTERN).optional(),
   AIWORKER_FORCE_TOKEN: z.string().regex(WORKER_API_TOKEN_PATTERN).optional(),
   AIWORKER_ADVERTISED_BASE_URL: z.string().optional(),
+  /**
+   * Root for per-conversation agentic-CLI workspaces (Claude Code, ACP, ...).
+   * The per-worker executor config may override via `workspaceRoot`; whatever
+   * value is used must pass the path-escape guard in `workspace.ts`.
+   */
+  WORKER_DATA_ROOT: z.string().default('/var/lib/aiworker'),
+  /**
+   * When set to a git repo URL or path, per-conversation workspaces are
+   * provisioned as `git worktree add`; otherwise a plain empty dir.
+   */
+  WORKER_WORKSPACE_GIT_ORIGIN: z.string().optional(),
+  /**
+   * Default `@anthropic-ai/claude-code` version for the `npx` fallback used
+   * by the Claude Code executor; per-worker config can override.
+   */
+  CLAUDE_CLI_VERSION: z.string().optional(),
 })
 
 export const workerEnv = schema.parse(process.env)

@@ -27,6 +27,13 @@ export interface AgentRunInput {
   temperature?: number
   /** Optional abort signal to cancel the run. */
   signal?: AbortSignal
+  /**
+   * Per-conversation workspace directory to run agentic-CLI executors in.
+   * Engines that don't spawn a CLI (e.g. OpenAI-compat chat) ignore this
+   * field. Orchestrator owns the lifecycle; path-escape guard lives in
+   * `workspace.ts`. See PLAN-007 architectural commitment #4.
+   */
+  workspacePath?: string
 }
 
 /** Abstract executor provider responsible for running agent workloads. */

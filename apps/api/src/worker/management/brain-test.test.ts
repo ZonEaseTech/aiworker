@@ -26,6 +26,7 @@ function stubState(brain: BrainProvider): WorkerModeState {
     channels: {} as WorkerRuntime['channels'],
     bus: {} as WorkerRuntime['bus'],
     orchestrator: {} as WorkerRuntime['orchestrator'],
+    workspaces: {} as WorkerRuntime['workspaces'],
     dispose: () => undefined,
   }
   return {
