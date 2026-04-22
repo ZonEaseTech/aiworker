@@ -3,6 +3,8 @@ import type {
   ClaudeCodeVariantBody,
   CliVariantBody,
   CmdOverrides,
+  CodexVariantBody,
+  CursorVariantBody,
   EngineKind,
   ExecutorProfile,
   HttpVariantBody,
@@ -98,6 +100,22 @@ export const DEFAULT_PROFILES: {
         agent: 'qwen',
         timeoutMs: 120_000,
       } satisfies AcpVariantBody,
+    },
+  },
+  'codex': {
+    variants: {
+      default: {
+        model: 'gpt-5.2-codex',
+        timeoutMs: 120_000,
+      } satisfies CodexVariantBody,
+    },
+  },
+  'cursor': {
+    variants: {
+      default: {
+        model: 'auto',
+        timeoutMs: 120_000,
+      } satisfies CursorVariantBody,
     },
   },
 }

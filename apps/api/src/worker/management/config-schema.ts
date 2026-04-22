@@ -54,7 +54,7 @@ const variantOverridesSchema = z.record(z.unknown()).and(
 )
 
 const executorSchema = z.object({
-  engine: z.enum(['http', 'mcp', 'cli', 'claude-code', 'acp']),
+  engine: z.enum(['http', 'mcp', 'cli', 'claude-code', 'acp', 'codex', 'cursor']),
   variant: z.string().min(1),
   overrides: variantOverridesSchema.optional(),
   modelId: z.string().min(1).optional(),

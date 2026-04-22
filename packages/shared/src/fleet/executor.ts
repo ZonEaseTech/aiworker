@@ -17,7 +17,7 @@
  */
 
 /** Engine kinds the fleet currently knows about. */
-export type EngineKind = 'http' | 'mcp' | 'cli' | 'claude-code' | 'acp'
+export type EngineKind = 'http' | 'mcp' | 'cli' | 'claude-code' | 'acp' | 'codex' | 'cursor'
 
 /**
  * Engine-agnostic CLI overrides. Apply to any engine that spawns a binary
@@ -109,6 +109,27 @@ export interface AcpVariantBody {
   timeoutMs?: number
 }
 
+/**
+ * Codex (`@openai/codex app-server`) variant body. FEAT-016 keeps the
+ * exposed surface minimal — `model` maps to the `thread_start` param, all
+ * other Codex-specific knobs (sandbox / approval_policy / reasoning effort)
+ * tunnel through `CmdOverrides.extraArgs` so variant bodies don't balloon.
+ */
+export interface CodexVariantBody {
+  model?: string
+  timeoutMs?: number
+}
+
+/**
+ * Cursor Agent (`cursor-agent -p --output-format=stream-json`) variant body.
+ * `model` defaults to `auto` — the CLI picks the active workspace model when
+ * not overridden.
+ */
+export interface CursorVariantBody {
+  model?: string
+  timeoutMs?: number
+}
+
 /** Discriminator for compile-time variant body lookup. */
 export interface VariantBodyByEngine {
   'http': HttpVariantBody
@@ -116,6 +137,8 @@ export interface VariantBodyByEngine {
   'cli': CliVariantBody
   'claude-code': ClaudeCodeVariantBody
   'acp': AcpVariantBody
+  'codex': CodexVariantBody
+  'cursor': CursorVariantBody
 }
 
 export type VariantBody<Engine extends EngineKind = EngineKind> = VariantBodyByEngine[Engine]

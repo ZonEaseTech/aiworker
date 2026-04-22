@@ -144,4 +144,51 @@ describe('executorSection (FEAT-014 picker)', () => {
     const last = onChange.mock.calls.at(-1)![0]
     expect(last.modelId).toBe('gpt-foo')
   })
+
+  it('exposes codex and cursor engines in the picker (FEAT-016)', () => {
+    render(<Harness initial={{ engine: 'http', variant: 'default' }} onChange={() => undefined} />)
+
+    const engineSelect = screen.getByLabelText('Engine') as HTMLSelectElement
+    const options = Array.from(engineSelect.querySelectorAll('option')).map(o => o.value)
+    expect(options).toContain('codex')
+    expect(options).toContain('cursor')
+  })
+
+  it('switches to codex engine and renders its variant body fields (FEAT-016)', () => {
+    const captured: ExecutorProfile[] = []
+    render(
+      <Harness
+        initial={{ engine: 'http', variant: 'default' }}
+        onChange={p => captured.push(p)}
+      />,
+    )
+
+    fireEvent.change(screen.getByLabelText('Engine'), { target: { value: 'codex' } })
+    expect(captured.at(-1)).toEqual({ engine: 'codex', variant: 'default' })
+
+    // Codex schema marks both fields as optional → labels render with the
+    // `(optional)` suffix the form mapper injects.
+    expect(screen.getByText('model (optional)')).toBeTruthy()
+    expect(screen.getByText('timeoutMs (optional)')).toBeTruthy()
+  })
+
+  it('switches to cursor engine and persists model override (FEAT-016)', () => {
+    const captured: ExecutorProfile[] = []
+    render(
+      <Harness
+        initial={{ engine: 'http', variant: 'default' }}
+        onChange={p => captured.push(p)}
+      />,
+    )
+
+    fireEvent.change(screen.getByLabelText('Engine'), { target: { value: 'cursor' } })
+    expect(captured.at(-1)).toEqual({ engine: 'cursor', variant: 'default' })
+
+    const modelInput = inputForLabel('model (optional)')
+    fireEvent.change(modelInput, { target: { value: 'gpt-5' } })
+
+    const last = captured.at(-1)!
+    expect(last.engine).toBe('cursor')
+    expect((last.overrides as { model?: string } | undefined)?.model).toBe('gpt-5')
+  })
 })

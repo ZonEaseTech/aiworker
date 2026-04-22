@@ -34,4 +34,23 @@ describe('ExecutorProfile shape', () => {
     }
     expect(profile.variant).toBe('gemini')
   })
+
+  it('accepts a codex profile with model override (FEAT-016)', () => {
+    const profile: ExecutorProfile = {
+      engine: 'codex',
+      variant: 'default',
+      overrides: { model: 'gpt-5.2-codex' },
+    }
+    expect(profile.engine).toBe('codex')
+    expect(profile.overrides?.model).toBe('gpt-5.2-codex')
+  })
+
+  it('accepts a cursor profile with model auto (FEAT-016)', () => {
+    const profile: ExecutorProfile = {
+      engine: 'cursor',
+      variant: 'default',
+    }
+    expect(profile.engine).toBe('cursor')
+    expect(profile.variant).toBe('default')
+  })
 })

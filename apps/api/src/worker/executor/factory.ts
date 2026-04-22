@@ -2,6 +2,8 @@ import type {
   AcpVariantBody,
   ClaudeCodeVariantBody,
   CliVariantBody,
+  CodexVariantBody,
+  CursorVariantBody,
   ExecutorConfig,
   ExecutorProvider,
   HttpVariantBody,
@@ -12,6 +14,8 @@ import process from 'node:process'
 import { resolveVariant } from './default-profiles'
 import { AcpExecutor, getAcpAgent } from './engines/acp'
 import { ClaudeCodeExecutor, DEFAULT_CLAUDE_CLI_VERSION } from './engines/claude-code'
+import { CodexExecutor, DEFAULT_CODEX_CLI_VERSION } from './engines/codex'
+import { CursorExecutor } from './engines/cursor'
 import { CliExecutor } from './providers/cli'
 import { OpenAICompatibleExecutor } from './providers/http'
 import { McpExecutor } from './providers/mcp'
@@ -92,6 +96,36 @@ export function buildExecutor(profile: ExecutorConfig): ExecutorProvider {
         agent,
         ...(model === undefined ? {} : { model }),
         ...(cliVersion === undefined ? {} : { cliVersion }),
+        ...(extraArgs === undefined ? {} : { extraArgs }),
+        ...(env === undefined ? {} : { env }),
+        ...(body.timeoutMs === undefined ? {} : { timeoutMs: body.timeoutMs }),
+      })
+    }
+    case 'codex': {
+      const body = resolved.body as CodexVariantBody
+      const cmd = resolved.cmd
+      const cliVersion = cmd?.cliVersion
+        ?? process.env.CODEX_CLI_VERSION
+        ?? DEFAULT_CODEX_CLI_VERSION
+      const model = resolved.modelId ?? body.model
+      const extraArgs = cmd?.extraArgs
+      const env = cmd?.env
+      return new CodexExecutor({
+        cliVersion,
+        ...(model === undefined ? {} : { model }),
+        ...(extraArgs === undefined ? {} : { extraArgs }),
+        ...(env === undefined ? {} : { env }),
+        ...(body.timeoutMs === undefined ? {} : { timeoutMs: body.timeoutMs }),
+      })
+    }
+    case 'cursor': {
+      const body = resolved.body as CursorVariantBody
+      const cmd = resolved.cmd
+      const model = resolved.modelId ?? body.model
+      const extraArgs = cmd?.extraArgs
+      const env = cmd?.env
+      return new CursorExecutor({
+        ...(model === undefined ? {} : { model }),
         ...(extraArgs === undefined ? {} : { extraArgs }),
         ...(env === undefined ? {} : { env }),
         ...(body.timeoutMs === undefined ? {} : { timeoutMs: body.timeoutMs }),

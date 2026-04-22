@@ -71,6 +71,16 @@ const acpVariantSchema = z.object({
   timeoutMs: z.number().int().positive().optional(),
 })
 
+const codexVariantSchema = z.object({
+  model: z.string().optional(),
+  timeoutMs: z.number().int().positive().optional(),
+})
+
+const cursorVariantSchema = z.object({
+  model: z.string().optional(),
+  timeoutMs: z.number().int().positive().optional(),
+})
+
 export const ENGINE_CATALOG: Record<EngineKind, EngineMeta> = {
   'http': {
     label: 'HTTP (OpenAI-compatible)',
@@ -160,6 +170,28 @@ export const ENGINE_CATALOG: Record<EngineKind, EngineMeta> = {
         label: 'Qwen Code',
         description: 'qwenlm/qwen-code with --acp + --yolo.',
         schema: acpVariantSchema,
+      },
+    },
+  },
+  'codex': {
+    label: 'Codex',
+    description: 'OpenAI @openai/codex app-server via JSON-RPC over stdio (FEAT-016).',
+    variants: {
+      default: {
+        label: 'Default (gpt-5.2-codex)',
+        description: 'Auto-approve (approval_policy=never), 120s turn timeout.',
+        schema: codexVariantSchema,
+      },
+    },
+  },
+  'cursor': {
+    label: 'Cursor Agent',
+    description: 'Cursor CLI in stream-json mode — no npm fallback (install cursor-agent) (FEAT-016).',
+    variants: {
+      default: {
+        label: 'Default (auto model)',
+        description: 'cursor-agent -p --output-format=stream-json, 120s turn timeout.',
+        schema: cursorVariantSchema,
       },
     },
   },
