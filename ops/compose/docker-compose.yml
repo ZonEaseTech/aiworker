@@ -1,0 +1,25 @@
+name: aiworker
+
+services:
+  dashboard:
+    image: aiworker-runtime:${AIWORKER_IMAGE_TAG}
+    container_name: aiworker-dashboard
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:3000:3000'
+    environment:
+      AIWORKER_MODE: dashboard
+      NODE_ENV: production
+      PORT: '3000'
+      FLEET_DB_PATH: /var/lib/aiworker/fleet.db
+      FLEET_MIGRATIONS_FOLDER: /app/drizzle/fleet
+      AIWORKER_MASTER_KEY: ${AIWORKER_MASTER_KEY}
+      INTERNAL_SHARED_SECRET: ${INTERNAL_SHARED_SECRET}
+      MANAGER_POLL_INTERVAL_MS: '30000'
+      MANAGER_POLL_JITTER_MS: '3000'
+    volumes:
+      - aiworker_fleet:/var/lib/aiworker
+
+volumes:
+  aiworker_fleet:
+    name: aiworker_fleet

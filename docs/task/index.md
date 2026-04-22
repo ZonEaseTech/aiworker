@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-04-20
+> Updated: 2026-04-21
 
 ## Usage
 
@@ -41,4 +41,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [ ] [**FEAT-006 Evolution generator (Hermes-style skill self-learning)**](FEAT-006.md) `P2`
 - [ ] [**FEAT-007 M:1 channel routing (multiple workers, one chat)**](FEAT-007.md) `P3`
 - [ ] [**FEAT-008 Host-level HA and multi-host fleet**](FEAT-008.md) `P3`
-- [ ] [**FEAT-009 Deployment automation (aissh-driven fleet deploy)**](FEAT-009.md) `P1`
+- [x] [**FEAT-009 Deployment automation (aissh-driven fleet deploy)**](FEAT-009.md) `P1`

@@ -1,9 +1,12 @@
 # FEAT-009 Deployment automation (aissh-driven fleet deploy)
 
-- **status**: pending
+- **status**: completed
 - **priority**: P1
-- **owner**: (unassigned)
+- **owner**: claude-opus-4-7
 - **createdAt**: 2026-04-21 07:30
+- **claimedAt**: 2026-04-21 18:00
+- **completedAt**: 2026-04-21 18:30
+- **plan**: PLAN-005
 
 ## Description
 
