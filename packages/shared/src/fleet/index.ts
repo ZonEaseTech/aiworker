@@ -37,6 +37,8 @@ export type {
   ClaudeCodeVariantBody,
   CliVariantBody,
   CmdOverrides,
+  CodexVariantBody,
+  CursorVariantBody,
   EngineKind,
   ExecutorConfig,
   ExecutorProfile,

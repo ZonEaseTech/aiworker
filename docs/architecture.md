@@ -92,6 +92,18 @@ Coordinates the agent loop for a single task:
 
 Swap either by implementing the interface and wiring it in `apps/api/src/providers/index.ts`.
 
+#### Executor engines (FEAT-011 → FEAT-016)
+
+PLAN-007 turned `ExecutorProvider` into a registry keyed by `EngineKind`. Each engine lives under `apps/api/src/worker/executor/engines/*` (or `providers/*` for the original HTTP/MCP/CLI shims) and emits engine-agnostic `AgentEvent`s:
+
+- `http` — OpenAI-compatible chat completions (FEAT-011 baseline, serving HTTP/DeepSeek/SiliconFlow/OpenRouter variants)
+- `mcp` — Model Context Protocol streamable-http tool source
+- `cli` — generic one-shot CLI stub (debug / sandbox)
+- `claude-code` — `claude` CLI in stream-json mode with control protocol (FEAT-012)
+- `acp` — Agent Client Protocol harness over JSON-RPC/stdio, ships Gemini + Qwen adapters (FEAT-013)
+- `codex` — `@openai/codex app-server` over JSON-RPC/stdio, `approval_policy: 'never'` for auto-approve (FEAT-016)
+- `cursor` — `cursor-agent -p --output-format=stream-json`, no npm fallback — PATH install required (FEAT-016)
+
 ### Module Layer
 
 | Module | Responsibility |
