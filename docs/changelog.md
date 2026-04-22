@@ -1,5 +1,49 @@
 # AIWorker Changelog
 
+## 2026-04-22 18:45 [progress]
+
+PLAN-007 step 5 / 6 (delivered early, parallel with FEAT-015 rework) — **FEAT-016 Codex + Cursor agent adapters** landed. The executor fleet now covers 7 engines: `http` + `mcp` + `cli` + `claude-code` + `acp` (gemini, qwen) + `codex` + `cursor`.
+
+Delivered via BKD worktree subtask `x28in77k` (branch `bkd/x28in77k`, commit `a1c5a4f`, merged to main in `4eba707`).
+
+Shared:
+
+- `packages/shared/src/fleet/executor.ts` — `EngineKind` now `'http' | 'mcp' | 'cli' | 'claude-code' | 'acp' | 'codex' | 'cursor'`; new `CodexVariantBody` + `CursorVariantBody` types, `executorProfileSchema` enum widened, `executor.test.ts` matrix gets two rows.
+- `packages/shared/src/fleet/index.ts` + `packages/shared/src/index.ts` — re-export new types.
+
+API:
+
+- **New** `apps/api/src/worker/executor/engines/codex/` — `executor.ts` (spawns `codex app-server` / npx `@openai/codex@<version>` fallback), `protocol.ts` (re-export of `engines/acp/protocol.ts::JsonRpcPeer + splitNdjson`, zero peer duplication), `normalize.ts` (`codex/event/{assistant_message,thinking,token_usage,tool_call,tool_result,stop,error}` → `AgentEvent`, action.kind inferred by tool name), `types.ts`, `index.ts` + 3 test files.
+- **New** `apps/api/src/worker/executor/engines/cursor/` — `executor.ts` (spawns `cursor-agent -p --output-format=stream-json --model ...`, stdin prompt + `stdin.shutdown()`, no npm fallback: `resolveBinary` null → `AgentEvent.error`), `normalize.ts` (imports `splitNdjson` from claude-code; local `parseCursorLine`; `session_id` captured and exposed via `getLastSessionId()`), `types.ts`, `index.ts` + 2 test files.
+- `apps/api/src/worker/executor/default-profiles.ts` — `codex.default = { model: 'gpt-5.2-codex', timeoutMs: 120_000 }`; `cursor.default = { model: 'auto', timeoutMs: 120_000 }`. Variant bodies kept minimal; apiKey / sandbox / policy / extraArgs traverse `CmdOverrides`.
+- `apps/api/src/worker/executor/factory.ts` — `case 'codex'` (reads `CODEX_CLI_VERSION` / `DEFAULT_CODEX_CLI_VERSION`) + `case 'cursor'` (no cliVersion — no npx fallback).
+- `apps/api/src/worker/management/config-schema.ts` — engine enum + schema branches for codex / cursor.
+- `apps/api/test-fixtures/cli/codex-stub.mjs` + `cursor-stub.sh` — pre-recorded wire fixtures, `chmod +x`.
+
+Web:
+
+- `apps/web/src/features/workers/components/config-editor/executor-variants.ts` — `ENGINE_CATALOG.codex` + `.cursor` with `z.object({ model?, timeoutMs? })` schemas.
+- `executor-section.test.tsx` — 3 new cases: engine picker shows codex/cursor, cursor body renders, cursor model override persists.
+
+Docs:
+
+- `docs/architecture.md` — "Executor engines" section enumerates all 7 engines.
+
+Verification:
+
+- `bun run typecheck` clean across shared / api / web.
+- `bun test` — shared 12 / 12 (+2), api 397 / 397 (+59), web 26 / 26 (+3).
+- `bun run lint` — 0 errors.
+
+Deferred (all P2/P3):
+
+- Codex / Cursor wire shapes may drift with CLI versions — capture live traces before production and update `normalize.ts` + stubs as needed.
+- Codex `thread_fork` resume + Cursor `--resume sessionId` slots reserved but not threaded through orchestrator.
+- availability probe / auth detection follow-up.
+- Lift executor catalog schemas into `@aiworker/shared` (open since FEAT-014).
+
+Pointer: `docs/plan/PLAN-007.md`, `docs/task/FEAT-016.md`.
+
 ## 2026-04-22 18:10 [progress]
 
 PLAN-007 step 4 / 6 — **FEAT-014 three-tier ExecutorConfig + frontend picker** landed. `ExecutorConfig` collapses from a flat 5-branch discriminated union into a three-tier `ExecutorProfile = {engine, variant, overrides?, modelId?, reasoningId?, permissionPolicy?}`. Worker stores only the diff from baked-in `DEFAULT_PROFILES`; the flat legacy shape migrates reader-side, not write-side.
