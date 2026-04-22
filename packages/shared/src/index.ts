@@ -49,22 +49,32 @@ export type {
   WorkerSummary,
 } from './fleet'
 
+export {
+  agentEventSchema,
+  agentFinishReasonSchema,
+  tokenUsageSchema,
+  toolActionSchema,
+  toolStatusSchema,
+} from './providers'
+
 export type {
+  AgentEvent,
+  AgentFinishReason,
+  AgentRunInput,
   AgentTask,
   AgentTaskStatus,
   BrainMemory,
   BrainProvider,
   BrainSkill,
   BrainWatchEvent,
-  ChatFinishReason,
   ChatMessage,
-  ChatRunInput,
-  ChatStreamChunk,
-  ChatUsage,
   ExecutorProvider,
   ExecutorTool,
   MemoryFilter,
+  TokenUsage,
+  ToolAction,
   ToolCall,
+  ToolStatus,
   WriteMemoryInput,
 } from './providers'
 

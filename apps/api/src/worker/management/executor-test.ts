@@ -1,4 +1,4 @@
-import type { ChatStreamChunk, ExecutorConfig, ServiceStatus } from '@aiworker/shared'
+import type { AgentEvent, ExecutorConfig, ServiceStatus } from '@aiworker/shared'
 import type { WorkerModeState } from '../../modes/worker'
 
 /** Max milliseconds we'll spend on the probe before aborting. */
@@ -36,25 +36,25 @@ async function runTinyProbe(
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS)
   try {
-    const stream = state.runtime.executor.runChat({
+    const stream = state.runtime.executor.run({
       messages: [{ role: 'user', content: 'ping' }],
       signal: controller.signal,
     })
     let output = ''
-    for await (const chunk of stream as AsyncIterable<ChatStreamChunk>) {
-      if (chunk.type === 'text') {
-        output += chunk.delta
+    for await (const event of stream as AsyncIterable<AgentEvent>) {
+      if (event.type === 'assistant_message_delta') {
+        output += event.delta
         if (output.length >= PROBE_TEXT_LIMIT)
           break
       }
-      else if (chunk.type === 'error') {
+      else if (event.type === 'error') {
         return {
           ok: false,
           latencyMs: Math.round(performance.now() - start),
-          error: chunk.error,
+          error: event.error,
         }
       }
-      else if (chunk.type === 'finish') {
+      else if (event.type === 'finish') {
         break
       }
     }

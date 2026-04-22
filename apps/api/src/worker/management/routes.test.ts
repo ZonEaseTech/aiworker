@@ -35,7 +35,7 @@ function healthyExecutor(): ExecutorProvider {
     name: 'http',
     health: async () => ({ name: 'http', status: 'healthy', lastChecked: 'x' }),
     listTools: async () => [],
-    runChat: () => ({ async* [Symbol.asyncIterator]() {} } as AsyncIterable<never>),
+    run: () => ({ async* [Symbol.asyncIterator]() {} } as AsyncIterable<never>),
   }
 }
 

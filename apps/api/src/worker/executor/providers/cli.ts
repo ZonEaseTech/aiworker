@@ -1,6 +1,6 @@
 import type {
-  ChatRunInput,
-  ChatStreamChunk,
+  AgentEvent,
+  AgentRunInput,
   ExecutorProvider,
   ExecutorTool,
   ServiceStatus,
@@ -65,8 +65,8 @@ export class CliExecutor implements ExecutorProvider {
     return []
   }
 
-  async* runChat(_input: ChatRunInput): AsyncGenerator<ChatStreamChunk> {
-    yield { type: 'error', error: 'CliExecutor.runChat is not implemented — CLI executors provide tools, not chat.' }
+  async* run(_input: AgentRunInput): AsyncGenerator<AgentEvent> {
+    yield { type: 'error', error: 'CliExecutor.run is not implemented — CLI executors provide tools, not chat.' }
     yield { type: 'finish', reason: 'error' }
   }
 

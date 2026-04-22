@@ -1,3 +1,19 @@
+export {
+  agentEventSchema,
+  agentFinishReasonSchema,
+  tokenUsageSchema,
+  toolActionSchema,
+  toolStatusSchema,
+} from './agent-event'
+
+export type {
+  AgentEvent,
+  AgentFinishReason,
+  TokenUsage,
+  ToolAction,
+  ToolStatus,
+} from './agent-event'
+
 export type {
   BrainMemory,
   BrainProvider,
@@ -8,10 +24,7 @@ export type {
 } from './brain'
 
 export type {
-  ChatFinishReason,
-  ChatRunInput,
-  ChatStreamChunk,
-  ChatUsage,
+  AgentRunInput,
   ExecutorProvider,
   ExecutorTool,
 } from './executor'

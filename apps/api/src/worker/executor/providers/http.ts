@@ -1,13 +1,12 @@
 import type {
-  ChatFinishReason,
+  AgentEvent,
+  AgentFinishReason,
+  AgentRunInput,
   ChatMessage,
-  ChatRunInput,
-  ChatStreamChunk,
-  ChatUsage,
   ExecutorProvider,
   ExecutorTool,
   ServiceStatus,
-  ToolCall,
+  ToolAction,
 } from '@aiworker/shared'
 import type {
   ChatCompletionRequest,
@@ -77,11 +76,11 @@ export class OpenAICompatibleExecutor implements ExecutorProvider {
     return []
   }
 
-  runChat(input: ChatRunInput): AsyncIterable<ChatStreamChunk> {
-    return this.runChatIterable(input)
+  run(input: AgentRunInput): AsyncIterable<AgentEvent> {
+    return this.runIterable(input)
   }
 
-  private async* runChatIterable(input: ChatRunInput): AsyncGenerator<ChatStreamChunk> {
+  private async* runIterable(input: AgentRunInput): AsyncGenerator<AgentEvent> {
     if (!this.apiKey) {
       yield { type: 'error', error: 'OpenAI API key is not configured' }
       return
@@ -116,8 +115,8 @@ export class OpenAICompatibleExecutor implements ExecutorProvider {
     }
 
     const toolCalls = new Map<number, AccumulatingToolCall>()
-    let finishReason: ChatFinishReason | null = null
-    let usage: ChatUsage | undefined
+    let finishReason: AgentFinishReason | null = null
+    let usage: { inputTokens: number, outputTokens: number } | undefined
 
     try {
       for await (const event of stream) {
@@ -129,7 +128,7 @@ export class OpenAICompatibleExecutor implements ExecutorProvider {
           const delta = choice.delta
 
           if (typeof delta.content === 'string' && delta.content.length > 0)
-            yield { type: 'text', delta: delta.content }
+            yield { type: 'assistant_message_delta', delta: delta.content }
 
           if (delta.tool_calls) {
             for (const partial of delta.tool_calls)
@@ -156,8 +155,11 @@ export class OpenAICompatibleExecutor implements ExecutorProvider {
     for (const [, call] of Array.from(toolCalls.entries()).sort(([a], [b]) => a - b)) {
       const assembled = finalizeToolCall(call)
       if (assembled)
-        yield { type: 'tool_call', call: assembled }
+        yield assembled
     }
+
+    if (usage)
+      yield { type: 'token_usage', usage }
 
     yield {
       type: 'finish',
@@ -215,7 +217,7 @@ function accumulateToolCall(
   map.set(index, existing)
 }
 
-function finalizeToolCall(acc: AccumulatingToolCall): ToolCall | null {
+function finalizeToolCall(acc: AccumulatingToolCall): (AgentEvent & { type: 'tool_use' }) | null {
   if (!acc.id || !acc.name)
     return null
   const raw = acc.args.join('')
@@ -230,12 +232,13 @@ function finalizeToolCall(acc: AccumulatingToolCall): ToolCall | null {
       args = { _raw: raw }
     }
   }
-  return { id: acc.id, name: acc.name, arguments: args }
+  const action: ToolAction = { kind: 'tool', toolName: acc.name, arguments: args }
+  return { type: 'tool_use', id: acc.id, name: acc.name, arguments: args, action }
 }
 
 function mapFinishReason(
   reason: 'stop' | 'length' | 'tool_calls' | 'content_filter' | 'function_call',
-): ChatFinishReason {
+): AgentFinishReason {
   switch (reason) {
     case 'tool_calls':
     case 'function_call':

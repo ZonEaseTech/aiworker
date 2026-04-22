@@ -1,6 +1,6 @@
 import type {
-  ChatRunInput,
-  ChatStreamChunk,
+  AgentEvent,
+  AgentRunInput,
   ExecutorProvider,
   ExecutorTool,
   ServiceStatus,
@@ -61,8 +61,8 @@ export class McpExecutor implements ExecutorProvider {
     }
   }
 
-  async* runChat(_input: ChatRunInput): AsyncGenerator<ChatStreamChunk> {
-    yield { type: 'error', error: 'McpExecutor.runChat is not implemented yet — use http executor for chat.' }
+  async* run(_input: AgentRunInput): AsyncGenerator<AgentEvent> {
+    yield { type: 'error', error: 'McpExecutor.run is not implemented yet — use http executor for chat.' }
     yield { type: 'finish', reason: 'error' }
   }
 }

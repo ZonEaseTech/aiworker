@@ -53,17 +53,20 @@ export class Orchestrator {
     const model = executorModel(this.deps.config.executor)
     let assistantText = ''
     try {
-      for await (const chunk of this.deps.executor.runChat({ messages: chatMessages, ...(model ? { model } : {}) })) {
-        if (chunk.type === 'text') {
-          assistantText += chunk.delta
-          this.deps.bus.emit('orchestrator.text', { conversationId: conversation.id, delta: chunk.delta })
+      for await (const event of this.deps.executor.run({ messages: chatMessages, ...(model ? { model } : {}) })) {
+        if (event.type === 'assistant_message_delta') {
+          assistantText += event.delta
+          this.deps.bus.emit('orchestrator.text', { conversationId: conversation.id, delta: event.delta })
         }
-        else if (chunk.type === 'tool_call') {
-          this.deps.bus.emit('orchestrator.tool_call', { conversationId: conversation.id, call: chunk.call })
+        else if (event.type === 'tool_use') {
+          this.deps.bus.emit('orchestrator.tool_call', {
+            conversationId: conversation.id,
+            call: { id: event.id, name: event.name, arguments: event.arguments },
+          })
         }
-        else if (chunk.type === 'error') {
-          consola.warn(`[orchestrator] executor error: ${chunk.error}`)
-          this.deps.bus.emit('orchestrator.error', { conversationId: conversation.id, error: chunk.error })
+        else if (event.type === 'error') {
+          consola.warn(`[orchestrator] executor error: ${event.error}`)
+          this.deps.bus.emit('orchestrator.error', { conversationId: conversation.id, error: event.error })
           return
         }
       }

@@ -1,6 +1,6 @@
 import type {
-  ChatRunInput,
-  ChatStreamChunk,
+  AgentEvent,
+  AgentRunInput,
   ExecutorConfig,
   ExecutorProvider,
   WorkerConfig,
@@ -14,13 +14,13 @@ import { handleExecutorTest } from './executor-test'
 
 function stubExecutor(
   health: () => Promise<{ status: 'healthy' | 'degraded' | 'down' }>,
-  chat?: (input: ChatRunInput) => AsyncIterable<ChatStreamChunk>,
+  chat?: (input: AgentRunInput) => AsyncIterable<AgentEvent>,
 ): ExecutorProvider {
   return {
     name: 'http',
     health: async () => ({ name: 'http', lastChecked: 'x', ...(await health()) }),
     listTools: async () => [],
-    runChat: chat ?? (() => ({ async* [Symbol.asyncIterator]() { /* empty */ } } as AsyncIterable<ChatStreamChunk>)),
+    run: chat ?? (() => ({ async* [Symbol.asyncIterator]() { /* empty */ } } as AsyncIterable<AgentEvent>)),
   }
 }
 
@@ -64,9 +64,9 @@ describe('handleExecutorTest', () => {
   })
 
   it('runs the tiny probe and returns output when probe=true', async () => {
-    const chat = (): AsyncIterable<ChatStreamChunk> => ({
+    const chat = (): AsyncIterable<AgentEvent> => ({
       async* [Symbol.asyncIterator]() {
-        yield { type: 'text', delta: 'pong' }
+        yield { type: 'assistant_message_delta', delta: 'pong' }
         yield { type: 'finish', reason: 'stop' }
       },
     })
@@ -77,8 +77,8 @@ describe('handleExecutorTest', () => {
     expect(res.executor.status).toBe('healthy')
   })
 
-  it('marks the response degraded + records probeError when runChat throws', async () => {
-    const chat = (): AsyncIterable<ChatStreamChunk> => ({
+  it('marks the response degraded + records probeError when run throws', async () => {
+    const chat = (): AsyncIterable<AgentEvent> => ({
       async* [Symbol.asyncIterator]() {
         throw new Error('chat exploded')
       },
@@ -90,8 +90,8 @@ describe('handleExecutorTest', () => {
     expect(res.executor.probeError).toContain('chat exploded')
   })
 
-  it('marks the response degraded when the stream emits an error chunk', async () => {
-    const chat = (): AsyncIterable<ChatStreamChunk> => ({
+  it('marks the response degraded when the stream emits an error event', async () => {
+    const chat = (): AsyncIterable<AgentEvent> => ({
       async* [Symbol.asyncIterator]() {
         yield { type: 'error', error: 'upstream 500' }
       },
@@ -104,9 +104,9 @@ describe('handleExecutorTest', () => {
 
   it('truncates probe output to 100 chars', async () => {
     const long = 'x'.repeat(500)
-    const chat = (): AsyncIterable<ChatStreamChunk> => ({
+    const chat = (): AsyncIterable<AgentEvent> => ({
       async* [Symbol.asyncIterator]() {
-        yield { type: 'text', delta: long }
+        yield { type: 'assistant_message_delta', delta: long }
         yield { type: 'finish', reason: 'stop' }
       },
     })

@@ -59,11 +59,11 @@ export async function classifyContinuation(
   }
   let text = ''
   try {
-    for await (const chunk of executor.runChat(input)) {
-      if (chunk.type === 'text')
-        text += chunk.delta
-      else if (chunk.type === 'error')
-        throw new Error(chunk.error)
+    for await (const event of executor.run(input)) {
+      if (event.type === 'assistant_message_delta')
+        text += event.delta
+      else if (event.type === 'error')
+        throw new Error(event.error)
     }
   }
   catch (err) {

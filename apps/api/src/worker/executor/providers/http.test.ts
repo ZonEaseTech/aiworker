@@ -1,4 +1,4 @@
-import type { ChatStreamChunk } from '@aiworker/shared'
+import type { AgentEvent } from '@aiworker/shared'
 
 import { afterEach, beforeEach, describe, expect, it, spyOn } from 'bun:test'
 
@@ -75,10 +75,10 @@ function toolCallChunk(
   return `data: ${JSON.stringify(obj)}`
 }
 
-async function collect(iter: AsyncIterable<ChatStreamChunk>): Promise<ChatStreamChunk[]> {
-  const out: ChatStreamChunk[] = []
-  for await (const chunk of iter)
-    out.push(chunk)
+async function collect(iter: AsyncIterable<AgentEvent>): Promise<AgentEvent[]> {
+  const out: AgentEvent[] = []
+  for await (const event of iter)
+    out.push(event)
   return out
 }
 
@@ -102,7 +102,7 @@ describe('OpenAICompatibleExecutor', () => {
     return fetchSpy
   }
 
-  it('streams text deltas in order', async () => {
+  it('streams assistant_message_delta events in order', async () => {
     mockFetch(async () => sseResponse([
       textChunk('c1', 'Hello'),
       textChunk('c1', ', '),
@@ -117,19 +117,21 @@ describe('OpenAICompatibleExecutor', () => {
       timeoutMs: 5_000,
     })
 
-    const chunks = await collect(executor.runChat({
+    const events = await collect(executor.run({
       messages: [{ role: 'user', content: 'hi' }],
     }))
 
-    const texts = chunks.filter(c => c.type === 'text').map(c => (c as { type: 'text', delta: string }).delta)
+    const texts = events
+      .filter(e => e.type === 'assistant_message_delta')
+      .map(e => (e as { type: 'assistant_message_delta', delta: string }).delta)
     expect(texts).toEqual(['Hello', ', ', 'world!'])
 
-    const finish = chunks.find(c => c.type === 'finish')
+    const finish = events.find(e => e.type === 'finish')
     expect(finish).toBeDefined()
     expect((finish as { reason: string }).reason).toBe('stop')
   })
 
-  it('assembles tool_call deltas across chunks into a single emission', async () => {
+  it('assembles tool_call deltas into a single tool_use event with a tool-kind action', async () => {
     mockFetch(async () => sseResponse([
       toolCallChunk('c1', 0, { id: 'call_abc', name: 'get_weather', args: '{"loc' }),
       toolCallChunk('c1', 0, { args: 'ation":' }),
@@ -144,22 +146,23 @@ describe('OpenAICompatibleExecutor', () => {
       timeoutMs: 5_000,
     })
 
-    const chunks = await collect(executor.runChat({
+    const events = await collect(executor.run({
       messages: [{ role: 'user', content: 'weather?' }],
     }))
 
-    const toolCalls = chunks.filter(c => c.type === 'tool_call')
-    expect(toolCalls).toHaveLength(1)
-    const only = toolCalls[0] as { type: 'tool_call', call: { id: string, name: string, arguments: Record<string, unknown> } }
-    expect(only.call.id).toBe('call_abc')
-    expect(only.call.name).toBe('get_weather')
-    expect(only.call.arguments).toEqual({ location: 'Tokyo' })
+    const toolUses = events.filter(e => e.type === 'tool_use')
+    expect(toolUses).toHaveLength(1)
+    const only = toolUses[0] as Extract<AgentEvent, { type: 'tool_use' }>
+    expect(only.id).toBe('call_abc')
+    expect(only.name).toBe('get_weather')
+    expect(only.arguments).toEqual({ location: 'Tokyo' })
+    expect(only.action.kind).toBe('tool')
 
-    const finish = chunks.find(c => c.type === 'finish') as { type: 'finish', reason: string } | undefined
+    const finish = events.find(e => e.type === 'finish') as Extract<AgentEvent, { type: 'finish' }> | undefined
     expect(finish?.reason).toBe('tool')
   })
 
-  it('emits error chunk and terminates on non-2xx response', async () => {
+  it('emits error event and terminates on non-2xx response', async () => {
     mockFetch(async () => new Response('rate limit exceeded', {
       status: 429,
       statusText: 'Too Many Requests',
@@ -172,13 +175,13 @@ describe('OpenAICompatibleExecutor', () => {
       timeoutMs: 5_000,
     })
 
-    const chunks = await collect(executor.runChat({
+    const events = await collect(executor.run({
       messages: [{ role: 'user', content: 'hi' }],
     }))
 
-    expect(chunks).toHaveLength(1)
-    expect(chunks[0]?.type).toBe('error')
-    const err = chunks[0] as { type: 'error', error: string }
+    expect(events).toHaveLength(1)
+    expect(events[0]?.type).toBe('error')
+    const err = events[0] as Extract<AgentEvent, { type: 'error' }>
     expect(err.error).toContain('429')
     expect(err.error).not.toContain('test-key')
   })
@@ -198,11 +201,13 @@ describe('OpenAICompatibleExecutor', () => {
       timeoutMs: 5_000,
     })
 
-    const chunks = await collect(executor.runChat({
+    const events = await collect(executor.run({
       messages: [{ role: 'user', content: 'hi' }],
     }))
 
-    const texts = chunks.filter(c => c.type === 'text').map(c => (c as { type: 'text', delta: string }).delta)
+    const texts = events
+      .filter(e => e.type === 'assistant_message_delta')
+      .map(e => (e as Extract<AgentEvent, { type: 'assistant_message_delta' }>).delta)
     expect(texts).toEqual(['part1', 'part2'])
   })
 
@@ -218,17 +223,17 @@ describe('OpenAICompatibleExecutor', () => {
     expect(status.name).toBe('openai-compatible')
   })
 
-  it('runChat yields error when API key is missing', async () => {
+  it('run yields error when API key is missing', async () => {
     const executor = new OpenAICompatibleExecutor({
       baseUrl: 'https://api.openai.com',
       apiKey: undefined,
       model: 'gpt-4o-mini',
       timeoutMs: 5_000,
     })
-    const chunks = await collect(executor.runChat({
+    const events = await collect(executor.run({
       messages: [{ role: 'user', content: 'hi' }],
     }))
-    expect(chunks).toHaveLength(1)
-    expect(chunks[0]?.type).toBe('error')
+    expect(events).toHaveLength(1)
+    expect(events[0]?.type).toBe('error')
   })
 })

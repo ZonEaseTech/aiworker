@@ -1,5 +1,6 @@
 import type { ServiceStatus } from '../types'
-import type { ChatMessage, ToolCall } from './orchestrator'
+import type { AgentEvent } from './agent-event'
+import type { ChatMessage } from './orchestrator'
 
 /** Tool advertised by an executor provider for the orchestrator to invoke. */
 export interface ExecutorTool {
@@ -9,8 +10,8 @@ export interface ExecutorTool {
   inputSchema: Record<string, unknown>
 }
 
-/** Input payload for a streamed chat run. */
-export interface ChatRunInput {
+/** Input payload for a streamed agent run. */
+export interface AgentRunInput {
   messages: ChatMessage[]
   /** Model identifier, provider-specific. */
   model?: string
@@ -24,31 +25,20 @@ export interface ChatRunInput {
   toolDefinitions?: ExecutorTool[]
   /** Sampling temperature, when supported by the underlying model. */
   temperature?: number
-  /** Optional abort signal to cancel the stream. */
+  /** Optional abort signal to cancel the run. */
   signal?: AbortSignal
 }
 
-/** Reason a chat run finished. */
-export type ChatFinishReason = 'stop' | 'tool' | 'length' | 'error'
-
-/** Token usage reported by the executor for a chat run. */
-export interface ChatUsage {
-  inputTokens: number
-  outputTokens: number
-}
-
-/** A single chunk yielded by a streamed chat run. */
-export type ChatStreamChunk
-  = | { type: 'text', delta: string }
-    | { type: 'tool_call', call: ToolCall }
-    | { type: 'finish', reason: ChatFinishReason, usage?: ChatUsage }
-    | { type: 'error', error: string }
-
-/** Abstract executor provider responsible for running chat/tool workloads. */
+/** Abstract executor provider responsible for running agent workloads. */
 export interface ExecutorProvider {
-  /** Stable provider identifier, e.g. `openclaw`. */
+  /** Stable provider identifier, e.g. `openai-compatible`. */
   readonly name: string
   health: () => Promise<ServiceStatus>
   listTools: () => Promise<ExecutorTool[]>
-  runChat: (input: ChatRunInput) => AsyncIterable<ChatStreamChunk>
+  /**
+   * Stream a single agent turn. Implementations emit `AgentEvent` entries
+   * regardless of the underlying wire format (OpenAI chat completions, Claude
+   * Code control protocol, ACP, JSON-RPC, ...).
+   */
+  run: (input: AgentRunInput) => AsyncIterable<AgentEvent>
 }
