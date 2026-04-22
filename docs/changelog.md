@@ -1,5 +1,60 @@
 # AIWorker Changelog
 
+## 2026-04-22 18:10 [progress]
+
+PLAN-007 step 4 / 6 — **FEAT-014 three-tier ExecutorConfig + frontend picker** landed. `ExecutorConfig` collapses from a flat 5-branch discriminated union into a three-tier `ExecutorProfile = {engine, variant, overrides?, modelId?, reasoningId?, permissionPolicy?}`. Worker stores only the diff from baked-in `DEFAULT_PROFILES`; the flat legacy shape migrates reader-side, not write-side.
+
+Delivered via BKD worktree subtask `geb8ycbp` (branch `bkd/geb8ycbp`, 38 files, +1987 / -439). Merged to main in `a72472d`.
+
+Shared:
+
+- **New** `packages/shared/src/fleet/executor.ts` — `EngineKind`, `CmdOverrides`, `ExecutorProfile`, zod schemas. This is now the only shape `PUT /config` accepts.
+- `packages/shared/src/fleet/config.ts` — reduced to a re-export shim over `./executor`.
+- `packages/shared/src/fleet/{index.ts,worker.ts,worker-info.ts}` — re-export surface updated; `WorkerInfo` exposes `engine` + `effectiveModel`.
+
+API:
+
+- **New** `apps/api/src/worker/executor/default-profiles.ts` — embedded variant catalog per engine (http default / deepseek / openrouter / siliconflow presets, claude-code default + opus-plan, acp gemini / qwen, mcp default, cli default) + `resolveVariant()` merging variant body + `overrides` + `CmdOverrides`.
+- `apps/api/src/worker/executor/factory.ts` — takes `ExecutorProfile`, resolves variant, threads effective config into existing engine constructors unchanged.
+- `apps/api/src/worker/bootstrap/config.ts` + `default-config.ts` — `migrateLegacyExecutor()` upgrades `{type:'http'|'mcp'|'cli'|'claude-code'|'acp',...}` → profile shape on load; never writes back. Old clients `PUT`ing flat shape get 400.
+- `apps/api/src/worker/config/secret-paths.ts` — secret paths now point at `executor.overrides.{apiKey,token}`; `DEFAULT_PROFILES` keeps empty-string placeholders.
+- `apps/api/src/worker/management/{config-schema,executor-test,info}.ts` — zod schema, tiny probe, and `executorInfoModel` migrated to the profile shape.
+- `apps/api/src/worker/orchestrator/service.ts` — `executorModel()` reads from profile.
+- `apps/api/src/worker/runtime.ts` — wires profile-shaped config through the runtime.
+- `apps/api/scripts/smoke-plan-004.ts` — updated to new shape.
+
+Web:
+
+- **Rewritten** `apps/web/src/features/workers/components/config-editor/executor-section.tsx` — two-step picker (engine select → variant select) with an advanced collapse for `CmdOverrides` + per-request overrides.
+- **New** `executor-form.tsx` — lean zod-schema → form mapper (string / number / boolean / enum / array<string> / record<string,string>, JSON textarea fallback). No external form library.
+- **New** `executor-variants.ts` — frontend catalog schemas (zod) so the form renders fields without a round-trip.
+- `apps/web/package.json` — adds `zod` dep for the catalog schemas.
+- `apps/web/src/lib/api.ts` — type surface matches the new profile shape.
+- Engine switch clears `overrides` to prevent cross-engine body key contamination.
+
+Tests (+28):
+
+- `packages/shared/src/fleet/executor.test.ts` — schema accept / reject matrix.
+- `apps/api/src/worker/executor/default-profiles.test.ts` — `resolveVariant` merge semantics; unknown engine / variant throws.
+- `apps/api/src/worker/bootstrap/config.test.ts` — all 5 legacy-shape migrations map correctly.
+- `apps/api/src/worker/management/{config,routes,info,executor-test}.test.ts` — stubs + assertions updated to profile shape.
+- `apps/web/src/features/workers/components/config-editor/executor-section.test.tsx` + `executor-form` / `__tests__/config-editor.test.tsx` — two-step picker flow, variant schema rendering, save-payload contract.
+
+Incidental: subtask auto-fixed all 6 pre-existing main-baseline lint errors (yaml plain-scalar in `.github/workflows/build-image.yml`, import order in `apps/api/src/modes/dashboard.ts`, quote style in `scripts/deploy.ts`). Pure `eslint --fix` changes, zero semantic impact. **New main baseline: 0 lint errors.** Future FEATs must maintain that.
+
+Verification:
+
+- `bun run typecheck` clean across shared / api / web.
+- `bun test` — shared 10 / 10 (+3), api 338 / 338 (+19), web 23 / 23 (+6).
+- `bun run lint` — 0 errors.
+
+Deferred:
+
+- Frontend zod schemas + backend `DEFAULT_PROFILES` TS interfaces are two sources of truth; FEAT-016 should lift into `shared` and unify.
+- Remote model discovery (vibe-kanban's `discover_options` stream) still out of scope.
+
+Pointer: `docs/plan/PLAN-007.md`, `docs/task/FEAT-014.md`.
+
 ## 2026-04-22 17:30 [progress]
 
 PLAN-007 step 3 / 6 — **FEAT-013 ACP harness + Gemini / Qwen adapters** landed. Second and third agentic-CLI engines now plug into the fleet; a fourth ACP-speaking engine (Copilot, Aider, Amp, ...) requires only a new data file in `engines/acp/agents/`.

@@ -46,6 +46,6 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-011 Normalize AgentEvent schema and refactor OpenAI-compat executor**](FEAT-011.md) `P1`
 - [x] [**FEAT-012 Claude Code executor with git worktree workspace**](FEAT-012.md) `P1`
 - [x] [**FEAT-013 ACP harness plus Gemini and Qwen adapters**](FEAT-013.md) `P1`
-- [ ] [**FEAT-014 Three-tier ExecutorConfig and frontend picker**](FEAT-014.md) `P1`
+- [x] [**FEAT-014 Three-tier ExecutorConfig and frontend picker**](FEAT-014.md) `P1`
 - [ ] [**FEAT-015 Process manager replacing AsyncQueue**](FEAT-015.md) `P2`
 - [ ] [**FEAT-016 Codex and Cursor agent adapters (optional)**](FEAT-016.md) `P3`
