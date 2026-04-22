@@ -60,6 +60,28 @@ export type ExecutorConfig
       /** Per-turn hard timeout; defaults to 120s if unset. */
       timeoutMs?: number
     }
+    | {
+      /**
+       * Agent Client Protocol (ACP) executor. FEAT-013 ships Gemini CLI and
+       * Qwen Code adapters over a shared JSON-RPC-over-stdio harness. This
+       * shape is intentionally minimal — variant / profile layering is
+       * deferred to FEAT-014. `agent` selects the data-driven adapter
+       * declaration from `engines/acp/agents/`.
+       */
+      type: 'acp'
+      /** Which ACP-speaking CLI to spawn. */
+      agent: 'gemini' | 'qwen'
+      /** Optional model id pass-through (e.g. `gemini-2.5-pro`, `qwen3-coder-plus`). */
+      model?: string
+      /** Pinned CLI package version for the `npx` fallback branch. */
+      cliVersion?: string
+      /** Additional CLI args appended after the required ACP flags. */
+      extraArgs?: string[]
+      /** Additional env vars merged into the spawned process env. */
+      env?: Record<string, string>
+      /** Per-turn hard timeout; defaults to 120s if unset. */
+      timeoutMs?: number
+    }
 
 /** Evolution (L3) settings. MVP wires the observer and approval UI only. */
 export interface EvolutionConfig {

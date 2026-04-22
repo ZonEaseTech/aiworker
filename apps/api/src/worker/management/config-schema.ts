@@ -65,6 +65,15 @@ const executorSchema = z.discriminatedUnion('type', [
     workspaceRoot: z.string().min(1).optional(),
     timeoutMs: z.number().int().positive().optional(),
   }),
+  z.object({
+    type: z.literal('acp'),
+    agent: z.enum(['gemini', 'qwen']),
+    model: z.string().min(1).optional(),
+    cliVersion: z.string().min(1).optional(),
+    extraArgs: z.array(z.string()).optional(),
+    env: z.record(z.string()).optional(),
+    timeoutMs: z.number().int().positive().optional(),
+  }),
 ])
 
 const channelCredentialsSchema = z.discriminatedUnion('channel', [
