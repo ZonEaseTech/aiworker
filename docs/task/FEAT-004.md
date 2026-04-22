@@ -1,9 +1,11 @@
 # FEAT-004 Lark channel adapter
 
-- **status**: pending
+- **status**: in_progress
 - **priority**: P2
-- **owner**: (unassigned)
+- **owner**: bkd-worktree (PLAN-006)
 - **createdAt**: 2026-04-21 07:30
+- **claimedAt**: 2026-04-21 18:55
+- **plan**: PLAN-006
 
 ## Description
 
