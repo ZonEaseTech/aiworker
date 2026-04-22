@@ -32,7 +32,7 @@ export function buildChannelRoutes(getRuntime: () => WorkerRuntime, workerId: st
       consola.warn(`[channel:${channel}] signature verification failed: ${String(err)}`)
       return c.json({ ok: false, error: 'signature verification failed' }, 401)
     }
-    const envelopes = await adapter.toEnvelopes(rawBody, workerId)
+    const envelopes = await adapter.toEnvelopes(rawBody, workerId, binding)
     for (const env of envelopes)
       await runtime.orchestrator.ingest(env as Envelope)
     return c.json({ ok: true, accepted: envelopes.length })
