@@ -50,6 +50,7 @@ interface Args {
   reason?: string
   dryRun: boolean
   confirm: boolean
+  timeoutSecs?: number
 }
 
 function parseArgs(argv: string[]): Args {
@@ -83,6 +84,12 @@ function parseArgs(argv: string[]): Args {
     else if (arg.startsWith('--reason=')) {
       out.reason = arg.slice('--reason='.length)
     }
+    else if (arg.startsWith('--timeout=')) {
+      const n = Number.parseInt(arg.slice('--timeout='.length), 10)
+      if (!Number.isFinite(n) || n <= 0)
+        fatal(`invalid --timeout: ${arg}`)
+      out.timeoutSecs = n
+    }
     else {
       fatal(`unknown flag: ${arg}`)
     }
@@ -91,7 +98,7 @@ function parseArgs(argv: string[]): Args {
 }
 
 function printHelp(): void {
-  const help = `\nbun run scripts/deploy.ts <command> [flags]\n\nCommands:\n  install-docker   Install docker on target (first-time, approval-gated)\n  teardown-legacy  Remove legacy aiworker.service + /opt/aiworker (approval-gated, --confirm)\n  build            Build image + save to ops/dist/aiworker-<tag>.tar.zst\n  upload           Upload image tarball + compose + Caddyfile to host\n  install          docker load + docker compose up -d on host\n  verify           Curl /health on host, fail on non-ok\n  reload-caddy     Install Caddyfile + caddy validate + systemctl reload caddy\n  deploy           build → upload → install → verify → reload-caddy\n\nFlags:\n  --tag=<tag>      Image tag (default: <git-sha>-<UTC yyyymmddhhmm>)\n  --server=<id>    aissh server id (default: $AIWORK_SERVER_ID or hardcoded)\n  --reason=<text>  aissh --reason (default: "FEAT-009 <command>")\n  --dry-run        Print commands without executing\n  --confirm        Required for teardown-legacy\n`
+  const help = `\nbun run scripts/deploy.ts <command> [flags]\n\nCommands:\n  install-docker   Install docker on target (first-time, approval-gated)\n  teardown-legacy  Remove legacy aiworker.service + /opt/aiworker (approval-gated, --confirm)\n  build            Build image + save to ops/dist/aiworker-<tag>.tar.zst\n  upload           Upload image tarball + compose + Caddyfile to host\n  install          docker load + docker compose up -d on host\n  verify           Curl /health on host, fail on non-ok\n  reload-caddy     Install Caddyfile + caddy validate + systemctl reload caddy\n  deploy           build → upload → install → verify → reload-caddy\n\nFlags:\n  --tag=<tag>       Image tag (default: <git-sha>-<UTC yyyymmddhhmm>)\n  --server=<id>     aissh server id (default: $AIWORK_SERVER_ID or hardcoded)\n  --reason=<text>  aissh --reason (default: "FEAT-009 <command>")\n  --timeout=<secs>  aissh exec timeout in seconds (per-command defaults:\n                    install-docker 300, install 300, others 60)\n  --dry-run         Print commands without executing\n  --confirm         Required for teardown-legacy\n`
   process.stdout.write(help)
 }
 
@@ -148,9 +155,20 @@ function mustRun(cmd: string, args: string[], opts: { dryRun: boolean, cwd?: str
     fatal(`command failed (exit ${code}): ${cmd} ${args.join(' ')}`)
 }
 
-function aisshExec(args: Args, remoteCmd: string, reason?: string): void {
+/**
+ * Per-command aissh exec timeout (seconds). aissh defaults to 30s which is
+ * too short for `docker load` of a ~150 MB tarball, for `curl | sh` installs,
+ * and for Caddy restarts that wait on systemd. Each command overrides as
+ * needed; `--timeout` on the CLI overrides everything.
+ */
+function aisshExec(args: Args, remoteCmd: string, reason?: string, defaultTimeoutSecs = 60): void {
   const finalReason = reason ?? args.reason ?? `FEAT-009 ${args.command}`
-  mustRun('aissh', ['exec', args.server, remoteCmd, `--reason=${finalReason}`], { dryRun: args.dryRun })
+  const timeoutSecs = args.timeoutSecs ?? defaultTimeoutSecs
+  mustRun(
+    'aissh',
+    ['exec', args.server, remoteCmd, `--reason=${finalReason}`, `--timeout=${timeoutSecs}`],
+    { dryRun: args.dryRun },
+  )
 }
 
 function aisshUpload(args: Args, localPath: string, remotePath: string, reason?: string): void {
@@ -179,6 +197,7 @@ function cmdInstallDocker(args: Args): void {
     args,
     'command -v docker >/dev/null 2>&1 && docker --version || curl -fsSL https://get.docker.com | sh',
     'FEAT-009 install docker engine (first-time)',
+    300,
   )
 }
 
@@ -256,7 +275,7 @@ function cmdInstall(args: Args, tag: string): void {
     `rm -f aiworker-${tag}.tar`,
     `AIWORKER_IMAGE_TAG=${tag} docker compose --env-file .env -f docker-compose.yml up -d`,
   ].join(' && ')
-  aisshExec(args, remoteCmd, `FEAT-009 install dashboard ${tag}`)
+  aisshExec(args, remoteCmd, `FEAT-009 install dashboard ${tag}`, 300)
 }
 
 function cmdVerify(args: Args): void {
