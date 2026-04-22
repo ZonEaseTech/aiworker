@@ -51,3 +51,4 @@ Destructive steps (teardown of `/opt/aiworker`) are gated by `aissh approval` �
 | 2026-04-22 07:10 | — | — | claude-opus-4-7 | Reload-caddy ran into `/var/log/caddy/aiw.access.log` owned by root (legacy artefact). Fixed with `chown caddy:caddy` + `systemctl restart caddy`. |
 | 2026-04-22 07:11 | — | — | claude-opus-4-7 | Teardown legacy: `aiworker.service` stopped/disabled/removed, `/opt/aiworker` directory emptied via `find -mindepth 1 -delete && rmdir`. Host `/opt` now contains only `aiworker-deploy/` and `containerd/`. |
 | 2026-04-22 07:12 | — | — | claude-opus-4-7 | End-to-end verified: `https://gateway.example.test/` → 200 HTML via Cloudflare; `/health`, `/api/workers`, `/docs`, `/openapi.json` all 200. |
+| 2026-04-22 08:20 | `007d4be-202604220818` | `007d4be` | claude-opus-4-7 | Add SVG favicon (`/favicon.svg` 200, 236B) — kills the residual `/favicon.ico 404` in browser consoles. `/openapi.json paths: []` tracked separately as FEAT-010. |
