@@ -2,7 +2,7 @@ name: aiworker
 
 services:
   dashboard:
-    image: aiworker-runtime:${AIWORKER_IMAGE_TAG}
+    image: ghcr.io/zoneasetech/aiworker:${AIWORKER_IMAGE_TAG}
     container_name: aiworker-dashboard
     restart: unless-stopped
     ports:

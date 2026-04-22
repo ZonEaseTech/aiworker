@@ -1,0 +1,81 @@
+name: build-image
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Image tag (leave empty for <short-sha>-<UTC yyyymmddhhmm>)
+        required: false
+        default: ''
+  push:
+    branches: [main]
+    paths:
+      - 'apps/**'
+      - 'packages/**'
+      - 'Dockerfile'
+      - 'bun.lock'
+      - 'package.json'
+      - '.github/workflows/build-image.yml'
+
+concurrency:
+  group: build-image-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      image: ${{ steps.meta.outputs.image }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - id: meta
+        name: Compute image tag
+        run: |
+          set -euo pipefail
+          INPUT_TAG="${{ github.event.inputs.tag }}"
+          if [ -n "$INPUT_TAG" ]; then
+            TAG="$INPUT_TAG"
+          else
+            SHA=$(git rev-parse --short HEAD)
+            STAMP=$(date -u +%Y%m%d%H%M)
+            TAG="${SHA}-${STAMP}"
+          fi
+          IMAGE="ghcr.io/zoneasetech/aiworker"
+          echo "tag=$TAG"     >> "$GITHUB_OUTPUT"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+          echo "Will publish $IMAGE:$TAG"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}
+            ${{ steps.meta.outputs.image }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Summary
+        run: |
+          {
+            echo "## Image published"
+            echo ""
+            echo '```'
+            echo "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}"
+            echo "${{ steps.meta.outputs.image }}:latest"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

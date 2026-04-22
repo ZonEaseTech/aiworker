@@ -1,8 +1,10 @@
 /**
  * FEAT-009 / PLAN-005 — aissh-driven fleet deployment CLI.
  *
- * Wraps `aissh exec` / `aissh file upload` to deliver the dashboard image +
- * compose + Caddyfile to the production host and bring the stack up.
+ * Images are built in GitHub Actions (.github/workflows/build-image.yml) and
+ * published to GHCR at ghcr.io/zoneasetech/aiworker:<tag>. This script
+ * triggers that workflow, uploads compose/Caddyfile/.env via aissh, and tells
+ * the host to `docker compose pull && up -d`.
  *
  * Usage:
  *   bun run scripts/deploy.ts <command> [flags]
@@ -11,9 +13,12 @@
  *   install-docker   Install docker on the target host (first-time, approval-gated)
  *   teardown-legacy  Stop aiworker.service, rm /opt/aiworker + unit file
  *                    (IRREVERSIBLE, approval-gated, requires --confirm)
- *   build            bun run build + docker build + docker save → ops/dist/aiworker-<tag>.tar.zst
- *   upload           aissh file upload image tarball + compose + Caddyfile
- *   install          docker load + docker compose up -d (via aissh exec)
+ *   login-ghcr       docker login ghcr.io on host using `gh auth token` of the
+ *                    local operator (one-off; credentials persist in /root/.docker)
+ *   build            Trigger .github/workflows/build-image.yml on main with --tag,
+ *                    watch the run, return the tag
+ *   upload           aissh file upload compose + Caddyfile + .env
+ *   install          docker compose pull + up -d (via aissh exec)
  *   verify           curl -fsS http://127.0.0.1:3000/health on the host
  *   reload-caddy     caddy validate + systemctl reload caddy (on host)
  *   deploy           build → upload → install → verify → reload-caddy
@@ -23,7 +28,7 @@
  *   --server=<id>    aissh server id (default: $AIWORK_SERVER_ID or the
  *                    hardcoded aiwork id from FEAT-009)
  *   --reason=<text>  aissh --reason value (default: "FEAT-009 <command>")
- *   --dry-run        Print the aissh / docker commands without executing
+ *   --dry-run        Print the aissh / gh commands without executing
  *   --confirm        Required for teardown-legacy
  *
  * The script streams child-process stdio straight through, so aissh's own
@@ -32,7 +37,7 @@
  */
 
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
@@ -41,7 +46,8 @@ const DEFAULT_AIWORK_SERVER_ID = '<aissh-server-id-redacted>'
 const DEFAULT_REMOTE_DIR = '/opt/aiworker-deploy'
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = resolve(SCRIPT_DIR, '..')
-const OPS_DIST_DIR = join(REPO_ROOT, 'ops', 'dist')
+const GHCR_IMAGE = 'ghcr.io/zoneasetech/aiworker'
+const BUILD_WORKFLOW = 'build-image.yml'
 
 interface Args {
   command: string
@@ -98,7 +104,7 @@ function parseArgs(argv: string[]): Args {
 }
 
 function printHelp(): void {
-  const help = `\nbun run scripts/deploy.ts <command> [flags]\n\nCommands:\n  install-docker   Install docker on target (first-time, approval-gated)\n  teardown-legacy  Remove legacy aiworker.service + /opt/aiworker (approval-gated, --confirm)\n  build            Build image + save to ops/dist/aiworker-<tag>.tar.zst\n  upload           Upload image tarball + compose + Caddyfile to host\n  install          docker load + docker compose up -d on host\n  verify           Curl /health on host, fail on non-ok\n  reload-caddy     Install Caddyfile + caddy validate + systemctl reload caddy\n  deploy           build → upload → install → verify → reload-caddy\n\nFlags:\n  --tag=<tag>       Image tag (default: <git-sha>-<UTC yyyymmddhhmm>)\n  --server=<id>     aissh server id (default: $AIWORK_SERVER_ID or hardcoded)\n  --reason=<text>  aissh --reason (default: "FEAT-009 <command>")\n  --timeout=<secs>  aissh exec timeout in seconds (per-command defaults:\n                    install-docker 300, install 300, others 60)\n  --dry-run         Print commands without executing\n  --confirm         Required for teardown-legacy\n`
+  const help = `\nbun run scripts/deploy.ts <command> [flags]\n\nCommands:\n  install-docker   Install docker on target (first-time, approval-gated)\n  teardown-legacy  Remove legacy aiworker.service + /opt/aiworker (approval-gated, --confirm)\n  login-ghcr       docker login ghcr.io on host using local \`gh auth token\`\n  build            Trigger .github/workflows/build-image.yml, watch, return tag\n  upload           Upload compose + Caddyfile + .env to host\n  install          docker compose pull + up -d on host\n  verify           Curl /health on host, fail on non-ok\n  reload-caddy     Install Caddyfile + caddy validate + systemctl reload caddy\n  deploy           build → upload → install → verify → reload-caddy\n\nFlags:\n  --tag=<tag>       Image tag (default: <git-sha>-<UTC yyyymmddhhmm>)\n  --server=<id>     aissh server id (default: $AIWORK_SERVER_ID or hardcoded)\n  --reason=<text>  aissh --reason (default: "FEAT-009 <command>")\n  --timeout=<secs>  aissh exec timeout in seconds (per-command defaults:\n                    install-docker 300, install 300, others 60)\n  --dry-run         Print commands without executing\n  --confirm         Required for teardown-legacy\n`
   process.stdout.write(help)
 }
 
@@ -188,6 +194,26 @@ function ensureAissh(): void {
     fatal('`aissh` CLI not found in PATH. Install it and run `aissh config set-server ...` first.')
 }
 
+function ensureGh(): void {
+  const res = runCapture('gh', ['--version'])
+  if (res.status !== 0)
+    fatal('`gh` CLI not found in PATH. Install it and run `gh auth login` first.')
+}
+
+function ghAuthToken(): string {
+  const res = runCapture('gh', ['auth', 'token'])
+  if (res.status !== 0 || !res.stdout.trim())
+    fatal('`gh auth token` failed. Run `gh auth login` and ensure the token has write:packages + workflow scopes.')
+  return res.stdout.trim()
+}
+
+function ghAuthUser(): string {
+  const res = runCapture('gh', ['api', '/user', '--jq', '.login'])
+  if (res.status !== 0 || !res.stdout.trim())
+    fatal('`gh api /user` failed. Run `gh auth login` first.')
+  return res.stdout.trim()
+}
+
 // --------------------------------------------------------------------------
 // Commands
 // --------------------------------------------------------------------------
@@ -222,59 +248,85 @@ function cmdTeardownLegacy(args: Args): void {
   )
 }
 
+function cmdLoginGhcr(args: Args): void {
+  ensureAissh()
+  ensureGh()
+  const user = ghAuthUser()
+  const token = ghAuthToken()
+  log(`logging ${user}@ghcr.io on host (credentials persist in /root/.docker/config.json)`)
+  // Pipe the token via here-doc on the remote side so it never lands on a
+  // command line that shows up in /proc or shell history. aissh exec relays
+  // stdio to the agent, not to a tty, so the token is only visible to the
+  // aissh server audit log.
+  const remoteCmd = `docker login ghcr.io -u '${user}' --password-stdin <<'EOF'\n${token}\nEOF`
+  aisshExec(args, remoteCmd, 'FEAT-009 docker login ghcr.io', 60)
+}
+
 function cmdBuild(args: Args): string {
+  ensureGh()
   const tag = args.tag ?? defaultTag()
-  log(`building aiworker-runtime:${tag}`)
+  log(`triggering workflow ${BUILD_WORKFLOW} with tag=${tag}`)
 
-  mkdirSync(OPS_DIST_DIR, { recursive: true })
+  // Record the newest run id BEFORE dispatch so we can identify the one we
+  // just triggered. `gh workflow run` does not return a run id directly.
+  const beforeRes = runCapture('gh', ['run', 'list', '--workflow', BUILD_WORKFLOW, '--limit', '1', '--json', 'databaseId', '--jq', '.[0].databaseId // empty'])
+  const beforeRunId = beforeRes.stdout.trim()
 
-  mustRun('bun', ['run', 'build'], { dryRun: args.dryRun })
-  mustRun('docker', ['build', '-t', `aiworker-runtime:${tag}`, '.'], { dryRun: args.dryRun })
+  mustRun('gh', ['workflow', 'run', BUILD_WORKFLOW, '--ref', 'main', '-f', `tag=${tag}`], { dryRun: args.dryRun })
+  if (args.dryRun)
+    return tag
 
-  const tarPath = join(OPS_DIST_DIR, `aiworker-${tag}.tar.zst`)
-  // `docker save | zstd` keeps the upload under ~150 MB for our tight 1 GiB host.
-  mustRun('sh', ['-c', `docker save aiworker-runtime:${tag} | zstd -T0 -19 -q -o '${tarPath}'`], { dryRun: args.dryRun })
+  // Poll for the new run to appear (GitHub takes a few seconds to register).
+  let runId = ''
+  const deadline = Date.now() + 30_000
+  while (Date.now() < deadline) {
+    const res = runCapture('gh', ['run', 'list', '--workflow', BUILD_WORKFLOW, '--limit', '1', '--json', 'databaseId,status,headBranch', '--jq', '.[0].databaseId // empty'])
+    const id = res.stdout.trim()
+    if (id && id !== beforeRunId) {
+      runId = id
+      break
+    }
+    Bun.sleepSync(2000)
+  }
+  if (!runId)
+    fatal('timed out waiting for the new workflow run to appear in `gh run list`.')
 
-  log(`built tarball at ${tarPath}`)
+  log(`watching run ${runId}`)
+  mustRun('gh', ['run', 'watch', runId, '--exit-status', '--interval', '10'], { dryRun: false })
+  log(`image ${GHCR_IMAGE}:${tag} published`)
   return tag
 }
 
-function cmdUpload(args: Args, tag: string): void {
+function cmdUpload(args: Args): void {
   ensureAissh()
-  const tarPath = join(OPS_DIST_DIR, `aiworker-${tag}.tar.zst`)
-  if (!args.dryRun && !existsSync(tarPath))
-    fatal(`image tarball not found: ${tarPath}. Run \`deploy build --tag=${tag}\` first.`)
-
-  log(`uploading artifacts for tag ${tag}`)
-  aisshUpload(args, tarPath, `${DEFAULT_REMOTE_DIR}/`, `FEAT-009 upload image ${tag}`)
+  log('uploading compose + Caddyfile + .env')
+  const envPath = join(REPO_ROOT, 'ops', 'compose', '.env')
+  if (!args.dryRun && !existsSync(envPath))
+    fatal(`missing ${envPath}. Copy ops/compose/.env.example there and fill in AIWORKER_MASTER_KEY + INTERNAL_SHARED_SECRET first.`)
+  aisshUpload(args, envPath, `${DEFAULT_REMOTE_DIR}/.env`)
   aisshUpload(
     args,
     join(REPO_ROOT, 'ops', 'compose', 'docker-compose.yml'),
     `${DEFAULT_REMOTE_DIR}/`,
-    'FEAT-009 upload docker-compose.yml',
   )
   aisshUpload(
     args,
     join(REPO_ROOT, 'ops', 'caddy', 'Caddyfile.tmpl'),
     `${DEFAULT_REMOTE_DIR}/`,
-    'FEAT-009 upload Caddyfile.tmpl',
   )
 }
 
 function cmdInstall(args: Args, tag: string): void {
   ensureAissh()
-  log(`loading image + bringing compose up for tag ${tag}`)
-  const tarName = `aiworker-${tag}.tar.zst`
-  // One exec so load+up is atomic from the approval perspective.
+  log(`pulling ${GHCR_IMAGE}:${tag} + bringing compose up`)
+  // One exec so pull+up is atomic from the approval perspective.
   const remoteCmd = [
     'set -e',
     `cd ${DEFAULT_REMOTE_DIR}`,
-    `[ -f .env ] || { echo 'FATAL: ${DEFAULT_REMOTE_DIR}/.env missing — copy ops/compose/.env.example and fill it in before install.' >&2; exit 2; }`,
+    `[ -f .env ] || { echo 'FATAL: ${DEFAULT_REMOTE_DIR}/.env missing — run \\\`deploy upload\\\` first.' >&2; exit 2; }`,
     'grep -q "^AIWORKER_MASTER_KEY=." .env || { echo "FATAL: AIWORKER_MASTER_KEY missing from .env" >&2; exit 2; }',
     'grep -q "^INTERNAL_SHARED_SECRET=." .env || { echo "FATAL: INTERNAL_SHARED_SECRET missing from .env" >&2; exit 2; }',
-    `zstd -d -q -f -o aiworker-${tag}.tar ${tarName}`,
-    `docker load -i aiworker-${tag}.tar`,
-    `rm -f aiworker-${tag}.tar`,
+    `AIWORKER_IMAGE_TAG=${tag} docker compose --env-file .env -f docker-compose.yml pull`,
     `AIWORKER_IMAGE_TAG=${tag} docker compose --env-file .env -f docker-compose.yml up -d`,
   ].join(' && ')
   aisshExec(args, remoteCmd, `FEAT-009 install dashboard ${tag}`, 300)
@@ -310,7 +362,7 @@ function cmdReloadCaddy(args: Args): void {
 function cmdDeploy(args: Args): void {
   const tag = cmdBuild(args)
   const argsWithTag: Args = { ...args, tag }
-  cmdUpload(argsWithTag, tag)
+  cmdUpload(argsWithTag)
   cmdInstall(argsWithTag, tag)
   cmdVerify(argsWithTag)
   cmdReloadCaddy(argsWithTag)
@@ -331,16 +383,17 @@ function main(): void {
     case 'teardown-legacy':
       cmdTeardownLegacy(args)
       break
+    case 'login-ghcr':
+      cmdLoginGhcr(args)
+      break
     case 'build':
       cmdBuild(args)
       break
-    case 'upload': {
-      const tag = args.tag ?? readLastTagFromDist() ?? fatal('upload requires --tag=<tag> (or a previously-built tarball in ops/dist/).')
-      cmdUpload(args, tag)
+    case 'upload':
+      cmdUpload(args)
       break
-    }
     case 'install': {
-      const tag = args.tag ?? fatal('install requires --tag=<tag> so the host knows which tarball to load.')
+      const tag = args.tag ?? fatal('install requires --tag=<tag> so the host pulls the intended image.')
       cmdInstall(args, tag)
       break
     }
@@ -356,23 +409,6 @@ function main(): void {
     default:
       fatal(`unknown command: ${args.command}. Run --help for the list.`)
   }
-}
-
-function readLastTagFromDist(): string | undefined {
-  if (!existsSync(OPS_DIST_DIR))
-    return undefined
-  const names = readdirSync(OPS_DIST_DIR)
-    .filter(n => n.startsWith('aiworker-') && n.endsWith('.tar.zst'))
-  if (names.length === 0)
-    return undefined
-  let newest: { name: string, mtime: number } | undefined
-  for (const name of names) {
-    const mtime = statSync(join(OPS_DIST_DIR, name)).mtimeMs
-    if (!newest || mtime > newest.mtime)
-      newest = { name, mtime }
-  }
-  const m = newest?.name.match(/^aiworker-(.+)\.tar\.zst$/)
-  return m?.[1]
 }
 
 main()
