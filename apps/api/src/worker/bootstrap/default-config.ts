@@ -1,4 +1,5 @@
 import type { WorkerConfig } from '@aiworker/shared'
+import { DEFAULT_EXECUTOR_PROFILE } from '../executor/default-profiles'
 
 /**
  * Placeholder config written into `worker_config` on first boot. Every field
@@ -11,13 +12,7 @@ export const DEFAULT_EMPTY_CONFIG: WorkerConfig = {
   brains: [],
   brainWriteTarget: '',
   brainRetrieval: 'first-match',
-  executor: {
-    type: 'http',
-    baseUrl: 'http://localhost:9999',
-    apiKey: '',
-    model: 'stub',
-    timeoutMs: 30_000,
-  },
+  executor: { ...DEFAULT_EXECUTOR_PROFILE },
   channels: [],
   evolution: {
     enabled: false,

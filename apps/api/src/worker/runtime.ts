@@ -6,6 +6,7 @@ import { ChannelRegistry } from './channels/registry'
 import { WorkerEventBus } from './events/bus'
 import { attachEvolutionObserver } from './evolution/observer'
 import { startProposerLoop } from './evolution/proposer'
+import { resolveVariant } from './executor/default-profiles'
 import { buildExecutor } from './executor/factory'
 import { WorkspaceManager } from './executor/workspace'
 import { Orchestrator } from './orchestrator/service'
@@ -50,9 +51,21 @@ export function buildWorkerRuntime(workerId: string, config: WorkerConfig): Work
 }
 
 function buildWorkspaceManager(config: WorkerConfig): WorkspaceManager {
-  const configuredRoot = config.executor.type === 'claude-code' && typeof config.executor.workspaceRoot === 'string'
-    ? config.executor.workspaceRoot
-    : undefined
+  // Only the claude-code engine reads `workspaceRoot`; other engines ignore
+  // it. Resolve through the variant catalogue so a future variant body that
+  // bakes in a workspaceRoot is honoured even without explicit overrides.
+  const configuredRoot = (() => {
+    if (config.executor.engine !== 'claude-code')
+      return undefined
+    try {
+      const body = resolveVariant(config.executor).body as Record<string, unknown>
+      const root = body.workspaceRoot
+      return typeof root === 'string' && root.length > 0 ? root : undefined
+    }
+    catch {
+      return undefined
+    }
+  })()
   return new WorkspaceManager({
     root: workerEnv.WORKER_DATA_ROOT,
     ...(configuredRoot ? { subdir: configuredRoot } : {}),

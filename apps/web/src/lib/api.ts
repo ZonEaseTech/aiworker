@@ -1,7 +1,7 @@
 import type {
   BrainSourceConfig,
   ChannelType,
-  ExecutorConfig,
+  EngineKind,
   SafeRegisteredWorker,
   ServiceStatus,
   WorkerComponentStatus,
@@ -332,7 +332,7 @@ export function testWorkerBrain(id: string): Promise<{ brains: BrainTestRow[] }>
 }
 
 export interface ExecutorTestRow {
-  type: ExecutorConfig['type']
+  type: EngineKind
   status: ServiceStatus['status'] | 'unknown' | 'degraded'
   tinyProbe?: {
     ok: boolean

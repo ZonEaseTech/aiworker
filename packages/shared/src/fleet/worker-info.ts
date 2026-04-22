@@ -1,5 +1,6 @@
 import type { ChannelBinding } from './channel'
-import type { BrainSourceConfig, ExecutorConfig } from './config'
+import type { BrainSourceConfig } from './config'
+import type { EngineKind } from './executor'
 
 /**
  * Health verdict the manager (or any caller of `/api/worker/info`) sees for
@@ -16,9 +17,13 @@ export interface WorkerInfoBrain {
   status: WorkerComponentStatus
 }
 
-/** Executor summary inside the `WorkerInfo` response. */
+/**
+ * Executor summary inside the `WorkerInfo` response. `type` carries the
+ * engine kind (FEAT-014); the field name stays `type` for response-schema
+ * stability with manager / dashboard clients.
+ */
 export interface WorkerInfoExecutor {
-  type: ExecutorConfig['type']
+  type: EngineKind
   model?: string
   status: WorkerComponentStatus
 }

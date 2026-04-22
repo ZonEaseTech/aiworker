@@ -1,4 +1,9 @@
-import type { AgentEvent, ExecutorConfig, ServiceStatus } from '@aiworker/shared'
+import type {
+  AgentEvent,
+  EngineKind,
+  ExecutorConfig,
+  ServiceStatus,
+} from '@aiworker/shared'
 import type { WorkerModeState } from '../../modes/worker'
 
 /** Max milliseconds we'll spend on the probe before aborting. */
@@ -8,7 +13,7 @@ const PROBE_TIMEOUT_MS = 5_000
 const PROBE_TEXT_LIMIT = 100
 
 export interface ExecutorTestRow {
-  type: ExecutorConfig['type']
+  type: EngineKind
   status: ServiceStatus['status'] | 'unknown' | 'degraded'
   tinyProbe?: {
     ok: boolean
@@ -87,7 +92,7 @@ export async function handleExecutorTest(
   storedConfig: { executor: ExecutorConfig },
   options: { probe?: boolean } = {},
 ): Promise<ExecutorTestResponse> {
-  const type = storedConfig.executor.type
+  const type = storedConfig.executor.engine
   let healthStatus: ServiceStatus['status'] | 'unknown' = 'unknown'
   try {
     const health = await state.runtime.executor.health()

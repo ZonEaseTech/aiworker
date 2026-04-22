@@ -1,59 +1,116 @@
-import type { ExecutorConfig, ExecutorProvider } from '@aiworker/shared'
+import type {
+  AcpVariantBody,
+  ClaudeCodeVariantBody,
+  CliVariantBody,
+  ExecutorConfig,
+  ExecutorProvider,
+  HttpVariantBody,
+  McpVariantBody,
+} from '@aiworker/shared'
 import process from 'node:process'
 
+import { resolveVariant } from './default-profiles'
 import { AcpExecutor, getAcpAgent } from './engines/acp'
 import { ClaudeCodeExecutor, DEFAULT_CLAUDE_CLI_VERSION } from './engines/claude-code'
 import { CliExecutor } from './providers/cli'
 import { OpenAICompatibleExecutor } from './providers/http'
 import { McpExecutor } from './providers/mcp'
 
-export function buildExecutor(config: ExecutorConfig): ExecutorProvider {
-  switch (config.type) {
-    case 'http':
+/**
+ * Build the per-engine executor instance from a three-tier `ExecutorProfile`.
+ * Variant body + overrides are merged via `resolveVariant`; this switch only
+ * translates the merged effective config + per-request profile knobs into the
+ * engine-specific constructor signature.
+ */
+export function buildExecutor(profile: ExecutorConfig): ExecutorProvider {
+  const resolved = resolveVariant(profile)
+
+  switch (resolved.engine) {
+    case 'http': {
+      const body = resolved.body as HttpVariantBody
       return new OpenAICompatibleExecutor({
-        baseUrl: config.baseUrl,
-        apiKey: config.apiKey,
-        model: config.model,
-        timeoutMs: config.timeoutMs,
+        baseUrl: body.baseUrl,
+        apiKey: body.apiKey,
+        model: resolved.modelId ?? body.model,
+        timeoutMs: body.timeoutMs,
       })
-    case 'mcp':
+    }
+    case 'mcp': {
+      const body = resolved.body as McpVariantBody
       return new McpExecutor({
-        url: config.url,
-        token: config.token,
-        ...(config.defaultModel === undefined ? {} : { defaultModel: config.defaultModel }),
-        ...(config.tools === undefined ? {} : { tools: config.tools }),
-        ...(config.timeoutMs === undefined ? {} : { timeoutMs: config.timeoutMs }),
+        url: body.url,
+        token: body.token,
+        ...(resolved.modelId !== undefined
+          ? { defaultModel: resolved.modelId }
+          : body.defaultModel === undefined ? {} : { defaultModel: body.defaultModel }),
+        ...(body.tools === undefined ? {} : { tools: body.tools }),
+        ...(body.timeoutMs === undefined ? {} : { timeoutMs: body.timeoutMs }),
       })
-    case 'cli':
+    }
+    case 'cli': {
+      const body = resolved.body as CliVariantBody
+      const cmd = resolved.cmd
+      const command = cmd?.binary ?? body.command
+      const args = cmd?.extraArgs ? [...body.args, ...cmd.extraArgs] : body.args
+      const env = mergeEnv(body.env, cmd?.env)
       return new CliExecutor({
-        command: config.command,
-        args: config.args,
-        ...(config.cwd === undefined ? {} : { cwd: config.cwd }),
-        ...(config.env === undefined ? {} : { env: config.env }),
-        ...(config.timeoutMs === undefined ? {} : { timeoutMs: config.timeoutMs }),
-        ...(config.sandbox === undefined ? {} : { sandbox: config.sandbox }),
+        command,
+        args,
+        ...(body.cwd === undefined ? {} : { cwd: body.cwd }),
+        ...(env === undefined ? {} : { env }),
+        ...(body.timeoutMs === undefined ? {} : { timeoutMs: body.timeoutMs }),
+        ...(body.sandbox === undefined ? {} : { sandbox: body.sandbox }),
       })
+    }
     case 'claude-code': {
-      const envCliVersion = process.env.CLAUDE_CLI_VERSION
-      const cliVersion = config.cliVersion ?? envCliVersion ?? DEFAULT_CLAUDE_CLI_VERSION
+      const body = resolved.body as ClaudeCodeVariantBody
+      const cmd = resolved.cmd
+      const cliVersion = cmd?.cliVersion
+        ?? body.cliVersion
+        ?? process.env.CLAUDE_CLI_VERSION
+        ?? DEFAULT_CLAUDE_CLI_VERSION
+      const model = resolved.modelId ?? body.model
+      const extraArgs = mergeArgs(body.extraArgs, cmd?.extraArgs)
+      const env = mergeEnv(body.env, cmd?.env)
       return new ClaudeCodeExecutor({
         cliVersion,
-        ...(config.model === undefined ? {} : { model: config.model }),
-        ...(config.extraArgs === undefined ? {} : { extraArgs: config.extraArgs }),
-        ...(config.env === undefined ? {} : { env: config.env }),
-        ...(config.timeoutMs === undefined ? {} : { timeoutMs: config.timeoutMs }),
+        ...(model === undefined ? {} : { model }),
+        ...(extraArgs === undefined ? {} : { extraArgs }),
+        ...(env === undefined ? {} : { env }),
+        ...(body.timeoutMs === undefined ? {} : { timeoutMs: body.timeoutMs }),
       })
     }
     case 'acp': {
-      const agent = getAcpAgent(config.agent)
+      const body = resolved.body as AcpVariantBody
+      const cmd = resolved.cmd
+      const cliVersion = cmd?.cliVersion ?? body.cliVersion
+      const model = resolved.modelId ?? body.model
+      const extraArgs = mergeArgs(body.extraArgs, cmd?.extraArgs)
+      const env = mergeEnv(body.env, cmd?.env)
+      const agent = getAcpAgent(body.agent)
       return new AcpExecutor({
         agent,
-        ...(config.model === undefined ? {} : { model: config.model }),
-        ...(config.cliVersion === undefined ? {} : { cliVersion: config.cliVersion }),
-        ...(config.extraArgs === undefined ? {} : { extraArgs: config.extraArgs }),
-        ...(config.env === undefined ? {} : { env: config.env }),
-        ...(config.timeoutMs === undefined ? {} : { timeoutMs: config.timeoutMs }),
+        ...(model === undefined ? {} : { model }),
+        ...(cliVersion === undefined ? {} : { cliVersion }),
+        ...(extraArgs === undefined ? {} : { extraArgs }),
+        ...(env === undefined ? {} : { env }),
+        ...(body.timeoutMs === undefined ? {} : { timeoutMs: body.timeoutMs }),
       })
     }
   }
+}
+
+function mergeArgs(base: string[] | undefined, extra: string[] | undefined): string[] | undefined {
+  if (!base && !extra)
+    return undefined
+  return [...(base ?? []), ...(extra ?? [])]
+}
+
+function mergeEnv(
+  base: Record<string, string> | undefined,
+  extra: Record<string, string> | undefined,
+): Record<string, string> | undefined {
+  if (!base && !extra)
+    return undefined
+  return { ...(base ?? {}), ...(extra ?? {}) }
 }

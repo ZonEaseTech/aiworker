@@ -69,11 +69,14 @@ function validConfig(overrides: Partial<WorkerConfig> = {}): WorkerConfig {
     brainWriteTarget: '',
     brainRetrieval: 'first-match',
     executor: {
-      type: 'http',
-      baseUrl: 'http://localhost:4000',
-      apiKey: 'key-one',
-      model: 'gpt-4o-mini',
-      timeoutMs: 30_000,
+      engine: 'http',
+      variant: 'default',
+      overrides: {
+        baseUrl: 'http://localhost:4000',
+        apiKey: 'key-one',
+        model: 'gpt-4o-mini',
+        timeoutMs: 30_000,
+      },
     },
     channels: [],
     evolution: { enabled: false, observationRetentionDays: 7 },
@@ -215,7 +218,7 @@ describe('buildManagementRoutes', () => {
     }))
     const res = await routes.fetch(authed('/secrets'))
     const body = await res.json() as { keys: string[] }
-    expect(body.keys).toContain('executor.apiKey')
+    expect(body.keys).toContain('executor.overrides.apiKey')
   })
 
   it('PUT /secrets/:key round-trips through GET', async () => {

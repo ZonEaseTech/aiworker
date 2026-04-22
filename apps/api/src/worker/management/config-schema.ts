@@ -31,50 +31,36 @@ const cloudGatewaySource = z.object({
 
 const brainSourceSchema = z.discriminatedUnion('type', [hermesSource, cloudGatewaySource])
 
-const executorSchema = z.discriminatedUnion('type', [
-  z.object({
-    type: z.literal('http'),
-    baseUrl: z.string().min(1),
-    apiKey: z.string(),
-    model: z.string().min(1),
-    timeoutMs: z.number().int().positive(),
-  }),
-  z.object({
-    type: z.literal('mcp'),
-    url: z.string().min(1),
-    token: z.string(),
-    defaultModel: z.string().optional(),
-    tools: z.array(z.string()).optional(),
-    timeoutMs: z.number().int().positive().optional(),
-  }),
-  z.object({
-    type: z.literal('cli'),
-    command: z.string().min(1),
-    args: z.array(z.string()),
-    cwd: z.string().optional(),
-    env: z.record(z.string()).optional(),
-    timeoutMs: z.number().int().positive().optional(),
-    sandbox: z.boolean().optional(),
-  }),
-  z.object({
-    type: z.literal('claude-code'),
-    model: z.string().min(1).optional(),
-    cliVersion: z.string().min(1).optional(),
-    extraArgs: z.array(z.string()).optional(),
-    env: z.record(z.string()).optional(),
-    workspaceRoot: z.string().min(1).optional(),
-    timeoutMs: z.number().int().positive().optional(),
-  }),
-  z.object({
-    type: z.literal('acp'),
-    agent: z.enum(['gemini', 'qwen']),
-    model: z.string().min(1).optional(),
-    cliVersion: z.string().min(1).optional(),
-    extraArgs: z.array(z.string()).optional(),
-    env: z.record(z.string()).optional(),
-    timeoutMs: z.number().int().positive().optional(),
-  }),
-])
+// FEAT-014: three-tier executor config. The schema accepts only
+// `{ engine, variant, overrides? }` — legacy `{ type, ...flat }` payloads are
+// rejected here so dashboards holding stale clients see a clear 400. Reader-
+// side migration (for already-stored configs) lives in
+// `apps/api/src/worker/executor/default-profiles.ts::migrateLegacyExecutor`.
+
+const cmdOverridesSchema = z.object({
+  binary: z.string().min(1).optional(),
+  extraArgs: z.array(z.string()).optional(),
+  env: z.record(z.string()).optional(),
+  cliVersion: z.string().min(1).optional(),
+}).strict()
+
+// `overrides` is a free-form bag plus an optional `cmd` slot. Because each
+// engine uses different keys, we don't enforce per-key shapes here — that
+// would require a `discriminatedUnion` on `engine` and would couple this
+// schema tightly to every variant body. Wrong keys silently no-op when
+// merged; missing required keys still fail at the engine constructor.
+const variantOverridesSchema = z.record(z.unknown()).and(
+  z.object({ cmd: cmdOverridesSchema.optional() }).partial(),
+)
+
+const executorSchema = z.object({
+  engine: z.enum(['http', 'mcp', 'cli', 'claude-code', 'acp']),
+  variant: z.string().min(1),
+  overrides: variantOverridesSchema.optional(),
+  modelId: z.string().min(1).optional(),
+  reasoningId: z.string().min(1).optional(),
+  permissionPolicy: z.enum(['auto', 'supervised', 'plan']).optional(),
+})
 
 const channelCredentialsSchema = z.discriminatedUnion('channel', [
   z.object({ channel: z.literal('web') }),

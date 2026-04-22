@@ -18,6 +18,7 @@ import { getWorkerDb } from '../../db/worker'
 import { agentTasks, conversations, messages } from '../../db/worker/schema'
 import { getChannelAdapter } from '../channels/registry'
 import { classifyContinuation, findOpenConversation, loadRecentMessages } from '../conversation/router'
+import { resolveVariant } from '../executor/default-profiles'
 import { AsyncQueue } from './queue'
 
 interface OrchestratorDeps {
@@ -255,13 +256,28 @@ export class Orchestrator {
 }
 
 function executorModel(config: ExecutorConfig): string | undefined {
-  switch (config.type) {
-    case 'http': return config.model
-    case 'mcp': return config.defaultModel
-    case 'cli': return undefined
-    case 'claude-code': return config.model
-    case 'acp': return config.model
+  // Resolve through the variant catalogue so a user who picks a preset (e.g.
+  // http/deepseek without an `overrides.model`) still surfaces the variant's
+  // baked-in model id. Failures (unknown engine / variant) are swallowed —
+  // the executor itself will still error and the orchestrator just omits the
+  // per-request model hint.
+  let resolved: ReturnType<typeof resolveVariant> | null = null
+  try {
+    resolved = resolveVariant(config)
   }
+  catch {
+    return undefined
+  }
+  if (!resolved)
+    return undefined
+  if (resolved.modelId !== undefined && resolved.modelId.length > 0)
+    return resolved.modelId
+  const body = resolved.body as Record<string, unknown>
+  if (typeof body.model === 'string' && body.model.length > 0)
+    return body.model
+  if (typeof body.defaultModel === 'string' && body.defaultModel.length > 0)
+    return body.defaultModel
+  return undefined
 }
 
 function rowToState(row: typeof conversations.$inferSelect): ConversationState {

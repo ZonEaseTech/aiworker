@@ -105,7 +105,8 @@ describe('bootstrap', () => {
 
     it('returns the shape required by WorkerConfig for DEFAULT_EMPTY_CONFIG', () => {
       expect(DEFAULT_EMPTY_CONFIG.brains).toEqual([])
-      expect(DEFAULT_EMPTY_CONFIG.executor.type).toBe('http')
+      expect(DEFAULT_EMPTY_CONFIG.executor.engine).toBe('http')
+      expect(DEFAULT_EMPTY_CONFIG.executor.variant).toBe('default')
       expect(DEFAULT_EMPTY_CONFIG.channels).toEqual([])
       expect(DEFAULT_EMPTY_CONFIG.evolution.enabled).toBe(false)
     })

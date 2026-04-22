@@ -58,11 +58,14 @@ const CONFIG: WorkerConfig = {
   brainWriteTarget: 'hermes-primary',
   brainRetrieval: 'merge-by-priority',
   executor: {
-    type: 'http',
-    baseUrl: 'http://localhost:4000',
-    apiKey: '',
-    model: 'gpt-4o-mini',
-    timeoutMs: 30_000,
+    engine: 'http',
+    variant: 'default',
+    overrides: {
+      baseUrl: 'http://localhost:4000',
+      apiKey: '',
+      model: 'gpt-4o-mini',
+      timeoutMs: 30_000,
+    },
   },
   channels: [
     {
@@ -145,7 +148,11 @@ describe('buildInfo', () => {
   it('surfaces the mcp defaultModel as executor.model when set', async () => {
     const mcpConfig: WorkerConfig = {
       ...CONFIG,
-      executor: { type: 'mcp', url: 'https://mcp.local', token: '', defaultModel: 'sonnet' },
+      executor: {
+        engine: 'mcp',
+        variant: 'default',
+        overrides: { url: 'https://mcp.local', token: '', defaultModel: 'sonnet' },
+      },
     }
     const runtime = stubRuntime(
       async () => ({ name: 'multi', status: 'healthy', lastChecked: 'x' }),

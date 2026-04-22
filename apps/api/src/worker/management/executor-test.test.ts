@@ -46,7 +46,11 @@ function stubState(executor: ExecutorProvider): WorkerModeState {
 }
 
 const STORED: { executor: ExecutorConfig } = {
-  executor: { type: 'http', baseUrl: 'http://x', apiKey: 'k', model: 'm', timeoutMs: 1000 },
+  executor: {
+    engine: 'http',
+    variant: 'default',
+    overrides: { baseUrl: 'http://x', apiKey: 'k', model: 'm', timeoutMs: 1000 },
+  },
 }
 
 describe('handleExecutorTest', () => {
