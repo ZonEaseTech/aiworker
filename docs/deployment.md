@@ -11,16 +11,20 @@ The tooling assumes the default target (aissh server `aiwork`,
 Local workstation:
 
 - `bun` (same version used for development)
-- `docker` (client + engine, used for `docker build` / `docker save`)
-- `zstd` (used to compress the image tarball)
 - `aissh` CLI, already authenticated (`aissh status` should succeed)
+- `gh` CLI, logged in with `workflow` + `write:packages` scopes (used to
+  trigger the build workflow and to stamp the host's GHCR login)
 - `git` (used to derive the default image tag)
 
 Target host (done once, via the first-time deploy below):
 
 - Ubuntu 24.04, ≥ 25 GB disk, docker + `docker compose` plugin
-- Caddy v2 as a system service (`systemctl status caddy`)
-- Directory `/opt/aiworker-deploy/` owned by root, containing a filled-in `.env`
+- Caddy v2 as a system service (`systemctl status caddy`), with
+  `/var/log/caddy/aiw.access.log` owned by the `caddy` user
+- Directory `/opt/aiworker-deploy/` owned by root, containing a filled-in
+  `.env`
+- `/root/.docker/config.json` carrying GHCR credentials — `scripts/deploy.ts
+  login-ghcr` stamps them in (reuses your local `gh auth token`)
 
 ## Required host-local `.env`
 
@@ -31,9 +35,10 @@ fill in every value **before** running `install`:
   before first deploy.** Losing it bricks every registered worker's stored
   bearer token; you will not be able to recover by redeploying.
 - `INTERNAL_SHARED_SECRET` — ≥ 16 chars.
-- `AIWORKER_IMAGE_TAG` — last known-good tag. The deploy script overrides this
-  inline when running; this value only matters for manual `docker compose up
-  -d` on the host (e.g. after a reboot).
+- `AIWORKER_IMAGE_TAG` — last known-good tag published to
+  `ghcr.io/zoneasetech/aiworker`. The deploy script overrides this inline when
+  running; this value only matters for manual `docker compose up -d` on the
+  host (e.g. after a reboot).
 
 `scripts/deploy.ts install` refuses to run if the file or the two required
 secrets are missing.
@@ -46,19 +51,23 @@ Run once, in order, from a clean repo checkout on your workstation:
 # 1. Install docker on the host. Triggers aissh approval.
 bun run scripts/deploy.ts install-docker
 
-# 2. Verify aissh can reach the host and docker works.
-#    (run the dry-run first to see what the script will ask for)
+# 2. Stamp GHCR credentials into /root/.docker/config.json on the host.
+#    Uses `gh auth token` from the operator's workstation.
+bun run scripts/deploy.ts login-ghcr
+
+# 3. Dry-run the deploy to see what the script will ask for.
 bun run scripts/deploy.ts deploy --dry-run
 
-# 3. Build, upload, install, verify, and reload Caddy.
+# 4. Trigger the build workflow, upload compose + Caddyfile + .env,
+#    docker compose pull + up -d, verify /health, reload Caddy.
 bun run scripts/deploy.ts deploy
 
-# 4. Only after /health returns ok: tear down the legacy runtime.
-#    IRREVERSIBLE. Triggers aissh approval.
+# 5. Only after /health returns ok: tear down the legacy runtime.
+#    IRREVERSIBLE. Requires --confirm.
 bun run scripts/deploy.ts teardown-legacy --confirm
 ```
 
-After step 3 succeeds, edit `/opt/aiworker-deploy/.env` on the host and set
+After step 4 succeeds, edit `/opt/aiworker-deploy/.env` on the host and set
 `AIWORKER_IMAGE_TAG=<the tag printed by the script>` so manual compose
 invocations also see the right image.
 
@@ -70,12 +79,14 @@ bun run scripts/deploy.ts deploy
 
 Equivalent to:
 
-1. `build` — `bun run build`, `docker build -t aiworker-runtime:<tag> .`,
-   `docker save | zstd` to `ops/dist/aiworker-<tag>.tar.zst`.
-2. `upload` — `aissh file upload` of tarball + `docker-compose.yml` +
-   `Caddyfile.tmpl` to `/opt/aiworker-deploy/`.
-3. `install` — `aissh exec` runs `zstd -d`, `docker load`, then
-   `AIWORKER_IMAGE_TAG=<tag> docker compose --env-file .env up -d`.
+1. `build` — `gh workflow run build-image.yml --ref main -f tag=<tag>` and
+   `gh run watch` until the run exits 0. The workflow publishes
+   `ghcr.io/zoneasetech/aiworker:<tag>` (plus `:latest`) via buildx.
+2. `upload` — `aissh file upload` of `docker-compose.yml`, `Caddyfile.tmpl`,
+   and `.env` to `/opt/aiworker-deploy/` (each with an explicit filename —
+   aissh sftp PUT rejects trailing-slash targets).
+3. `install` — `aissh exec` runs
+   `AIWORKER_IMAGE_TAG=<tag> docker compose --env-file .env pull && up -d`.
 4. `verify` — `aissh exec curl -fsS http://127.0.0.1:3000/health` asserts
    `status == ok`.
 5. `reload-caddy` — `caddy validate` + `systemctl reload caddy`.
@@ -84,18 +95,18 @@ Use `--tag=<tag>` to pin a specific tag (otherwise `<git-sha>-<UTC timestamp>`).
 
 ## Rollback
 
-Find a previous tag (list tarballs in `ops/dist/` locally or
-`docker image ls aiworker-runtime` on the host), then:
+List prior tags on GHCR
+(`gh api /orgs/zoneasetech/packages/container/aiworker/versions`) or on the
+host (`docker image ls ghcr.io/zoneasetech/aiworker`), then:
 
 ```sh
 bun run scripts/deploy.ts install --tag=<previous-tag>
 bun run scripts/deploy.ts verify
 ```
 
-If the previous image is already loaded on the host, `install` is fast — no
-re-upload is needed. If the tarball isn't locally stashed, re-run `build` with
-the previous tag (you'll need the matching source checkout) or pull it from
-your image archive.
+If the previous image is still cached on the host, `install` is near-instant —
+`docker compose pull` is a no-op and `up -d` recreates the container in
+seconds. Otherwise compose pulls the tag over the network.
 
 Update `AIWORKER_IMAGE_TAG` in the host `.env` once the rollback is verified
 so manual compose invocations stay aligned.
@@ -123,10 +134,19 @@ FEAT-009 does **not** automate worker deployment; that is follow-up work.
 ## Deviations from the original FEAT-009 draft
 
 The FEAT-009 task file was authored before PLAN-004. This run book intentionally
-deviates in three places:
+deviates in five places:
 
 1. Health endpoint is `GET /health`, not `GET /api/system/health`.
 2. The Caddyfile does not strip a `{workerId}` prefix — PLAN-004 made workers
    advertise their own externally-reachable URL.
 3. First-cut deploy brings up the dashboard only; workers are operator-
    registered after the dashboard is healthy.
+4. Images are built in `.github/workflows/build-image.yml` and published to
+   `ghcr.io/zoneasetech/aiworker` (private). The host does
+   `docker compose pull`, not `docker load` of an uploaded tarball — the
+   original PLAN-005 rejected CI deploy as "FEAT-scale work"; the workstation
+   docker build path turned out brittle enough to flip that call.
+5. The dashboard container serves the bundled web SPA itself via
+   `hono/bun.serveStatic` at `/app/web` with an index.html SPA fallback. Caddy
+   is a pure `:80 → 127.0.0.1:3000` reverse proxy; TLS is terminated by
+   Cloudflare's orange-cloud proxy on `gateway.example.test`.

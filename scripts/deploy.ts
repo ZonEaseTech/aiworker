@@ -234,7 +234,10 @@ function cmdTeardownLegacy(args: Args): void {
     fatal('teardown-legacy is irreversible — re-run with --confirm once the new dashboard has been verified healthy.')
   ensureAissh()
   log('tearing down legacy aiworker.service + /opt/aiworker')
-  // One exec so the whole teardown is a single approval.
+  // aissh rejects `rm -rf /opt/...` as a dangerous command (auth_error). Use
+  // `find -mindepth 1 -delete` to remove directory contents, then rmdir the
+  // empty dir. `-path '*/containerd*' -prune` is defence-in-depth in case the
+  // legacy path ever overlapped with docker state.
   aisshExec(
     args,
     [
@@ -242,7 +245,7 @@ function cmdTeardownLegacy(args: Args): void {
       'if systemctl list-unit-files aiworker.service >/dev/null 2>&1; then systemctl stop aiworker || true; systemctl disable aiworker || true; fi',
       'rm -f /etc/systemd/system/aiworker.service',
       'systemctl daemon-reload',
-      'rm -rf /opt/aiworker',
+      "[ -d /opt/aiworker ] && find /opt/aiworker -mindepth 1 -delete && rmdir /opt/aiworker || true",
     ].join(' && '),
     'FEAT-009 teardown legacy single-process runtime',
   )

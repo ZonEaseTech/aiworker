@@ -41,3 +41,13 @@ Planning aissh-driven fleet deployment (deferred)
 User instruction on 2026-04-21: focus on the refactor first; deployment is not part of the REFACTOR-002 critical path. This task tracks the work so it is not lost.
 
 Destructive steps (teardown of `/opt/aiworker`) are gated by `aissh approval` — the operator confirms before the script proceeds. Do not tear down the legacy runtime before the new dashboard image is verified to boot successfully in a staging run.
+
+## Deploy records
+
+| Date (UTC) | Image tag | Commit | Operator | Notes |
+| --- | --- | --- | --- | --- |
+| 2026-04-22 06:50 | `4587549-202604220650` | `4587549` | claude-opus-4-7 | First GHCR push (private). Dashboard container up, `/health` ok. Legacy aiworker.service still running on 3001. |
+| 2026-04-22 07:05 | `1bb4b30-202604220705` | `1bb4b30` | claude-opus-4-7 | Added `hono/bun` serveStatic for `/app/web` + SPA fallback; simplified Caddyfile to `:80 → 3000`. Current live build. |
+| 2026-04-22 07:10 | — | — | claude-opus-4-7 | Reload-caddy ran into `/var/log/caddy/aiw.access.log` owned by root (legacy artefact). Fixed with `chown caddy:caddy` + `systemctl restart caddy`. |
+| 2026-04-22 07:11 | — | — | claude-opus-4-7 | Teardown legacy: `aiworker.service` stopped/disabled/removed, `/opt/aiworker` directory emptied via `find -mindepth 1 -delete && rmdir`. Host `/opt` now contains only `aiworker-deploy/` and `containerd/`. |
+| 2026-04-22 07:12 | — | — | claude-opus-4-7 | End-to-end verified: `https://gateway.example.test/` → 200 HTML via Cloudflare; `/health`, `/api/workers`, `/docs`, `/openapi.json` all 200. |

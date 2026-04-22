@@ -17,3 +17,4 @@ coverage/
 .serena/
 .aissh.yaml
 .mcp.json
+.playwright-mcp/
