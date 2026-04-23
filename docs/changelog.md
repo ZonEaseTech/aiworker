@@ -1,5 +1,59 @@
 # AIWorker Changelog
 
+## 2026-04-22 19:15 [release]
+
+**PLAN-007 multi-engine executor refactor complete.** All 6 FEAT (FEAT-011..016) landed on main. AIWorker workers now support 7 executor engines behind a three-tier config + slot-aware scheduler.
+
+Final FEAT in this batch — **FEAT-015 ProcessManager replacing AsyncQueue** — landed via BKD worktree subtask `igjbbb7t` commit `7eed7d1`, merged in `d2c3be3`. 15 files, +1367 / −30.
+
+Note on the rework path: the first-pass subtask delivery forked from `9f2426c` (pre-FEAT-011 baseline) and would have regressed the three-tier profile architecture if merged. Coordinator caught the base mismatch during merge-time diff review, rejected the subtask with explicit `git reset --hard origin/main` + scope-narrowing instructions, and only merged on the second delivery.
+
+### FEAT-015 delivery
+
+- `apps/api/src/worker/orchestrator/process-manager.ts` (new, 676 LOC) — generic `ProcessManager<TMeta>` with slot quotas (global + per-engine), group keys (`conversationId`), priority enum (`interactive | default | background`), stall detection (no-activity timer with escalating cancel), auto-cleanup GC, hot-reload `setLimits()`.
+- `apps/api/src/worker/orchestrator/process-manager.test.ts` (new, 436 LOC) — 16 cases covering slot caps, per-engine limits, group FIFO, priority, stall escalation, kill timeout, setLimits, cancelGroup, snapshot.
+- `apps/api/src/worker/orchestrator/queue.ts` **deleted** — 10-line `AsyncQueue` fully replaced.
+- `apps/api/src/worker/orchestrator/service.ts` — `ingest` and deferred workspace-dispose now go through `processes.run(...)`. `onActivity` fires on every `AgentEvent` (stall heartbeat). `cancel` propagates to `AgentRunInput.signal` → engine SIGTERM/SIGKILL.
+- `apps/api/src/worker/runtime.ts` — `processes: ProcessManager` hoisted to runtime singleton; survives `reloadRuntime()`.
+- `apps/api/src/config/worker.ts` — new env schema: `MAX_CONCURRENT_TOTAL`, `MAX_CONCURRENT_<ENGINE_UPPER>` (`CLAUDE_CODE`, `ACP`, `CODEX`, `CURSOR`, `HTTP`, `MCP`, `CLI`), `PROCESS_STALL_TIMEOUT_MS`, `PROCESS_KILL_TIMEOUT_MS`, `PROCESS_AUTO_CLEANUP_MS`.
+- `apps/api/.env.example` — new env vars documented.
+- `apps/api/src/worker/management/routes.ts` + `routes.test.ts` — `GET /runtime/processes/capacity` bearer-auth'd, reports live snapshot. Dashboard can now read slot budgets.
+- `apps/api/src/modes/worker.ts` — ProcessManager wired into runtime construction; hot-reload calls `setLimits()` with latest env.
+
+Key design decision: **slot budget configured via env vars, NOT in `ExecutorProfile`**. Ops configure runtime capacity; tenants configure executor shape. Zero file overlap with FEAT-016 — let both land in parallel without conflict.
+
+Engine modules (`engines/claude-code`, `engines/acp`, `engines/codex`, `engines/cursor`) stay unchanged — the orchestrator wrapper alone provides slot / group / priority / stall semantics for all of them.
+
+### PLAN-007 final tally (FEAT-011 → FEAT-016)
+
+| FEAT | Engines / Features | Tests added (api) |
+|---|---|---|
+| 011 | `AgentEvent` schema + zod; OpenAI-compat migrated | 6 |
+| 012 | Claude Code executor + `WorkspaceManager` | 52 |
+| 013 | ACP harness + Gemini / Qwen adapters | 61 |
+| 014 | three-tier `ExecutorProfile` + `DEFAULT_PROFILES` + frontend picker | 19 |
+| 015 | `ProcessManager` (slot / group / priority / stall / capacity API) | 75 |
+| 016 | Codex + Cursor adapters | 59 |
+
+- api tests: baseline 158 → **413** (+255) zero regressions.
+- shared tests: 0 → **12**.
+- web tests: 17 → **26**.
+- lint baseline cleared from 6 errors → **0**.
+
+### Runtime capabilities post-PLAN-007
+
+- **Seven engines** selectable per worker: `http` (OpenAI-compat + preset catalogue for DeepSeek / OpenRouter / SiliconFlow / Gemini OpenAI-compat), `mcp`, `cli`, `claude-code` (stream-json control protocol), `acp` (`gemini` / `qwen`), `codex` (JSON-RPC app-server), `cursor` (native stream-json).
+- **Three-tier config**: engine × variant × overrides (`CmdOverrides` + per-request `modelId`, `reasoningId`, `permissionPolicy`).
+- **Per-conversation workspace isolation** (plain dir or git worktree when `WORKER_WORKSPACE_GIT_ORIGIN` set), path-escape guard, deferred dispose via ProcessManager.
+- **Slot-aware scheduler** with named priority classes, stall detection, capacity snapshot REST.
+- **Legacy flat config still reads** (reader-only migration on boot); next `PUT /config` writes profile shape.
+- `AgentEvent` tagged union is the single crossroad between engines and the orchestrator — adding an 8th engine only requires an `engines/<name>/` adapter + registry entry + `default-profiles.ts` variant.
+
+### Pointers
+
+- Design: `docs/plan/PLAN-007.md` (status `completed`).
+- Per-FEAT: `docs/task/FEAT-011.md` .. `FEAT-016.md` (all `completed`).
+
 ## 2026-04-22 18:45 [progress]
 
 PLAN-007 step 5 / 6 (delivered early, parallel with FEAT-015 rework) — **FEAT-016 Codex + Cursor agent adapters** landed. The executor fleet now covers 7 engines: `http` + `mcp` + `cli` + `claude-code` + `acp` (gemini, qwen) + `codex` + `cursor`.
