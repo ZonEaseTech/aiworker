@@ -307,6 +307,7 @@ export function ExecutorSection({ executor, onChange, workerId }: ExecutorSectio
           schema={variantMeta.schema}
           value={bodyOverrides}
           secretFields={variantMeta.secretFields}
+          fieldHints={variantMeta.fieldHints}
           onChange={patchVariantBody}
         />
       )}

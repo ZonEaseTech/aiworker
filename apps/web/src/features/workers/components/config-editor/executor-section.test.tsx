@@ -223,8 +223,10 @@ describe('executorSection (FEAT-014 picker)', () => {
     fireEvent.change(screen.getByLabelText('Engine'), { target: { value: 'cursor' } })
     expect(captured.at(-1)).toEqual({ engine: 'cursor', variant: 'default' })
 
-    const modelInput = inputForLabel('model (optional)')
-    fireEvent.change(modelInput, { target: { value: 'gpt-5' } })
+    // FEAT-019: model field is now a preset <select> for engines with a
+    // fieldHints catalogue. `gpt-5` is in the cursor preset list.
+    const modelSelect = screen.getByTestId('field-model-select') as HTMLSelectElement
+    fireEvent.change(modelSelect, { target: { value: 'gpt-5' } })
 
     const last = captured.at(-1)!
     expect(last.engine).toBe('cursor')
@@ -380,5 +382,83 @@ describe('executorSection (FEAT-018 availability badges)', () => {
       const b2 = screen.getByTestId('variant-selected-badge')
       expect(b2.getAttribute('data-status')).toBe('not-found')
     })
+  })
+})
+
+describe('executorSection model picker (FEAT-019)', () => {
+  it('renders model as a <select> preset picker when fieldHints is set', () => {
+    render(<Harness initial={{ engine: 'http', variant: 'default' }} onChange={() => undefined} />)
+
+    const select = screen.getByTestId('field-model-select') as HTMLSelectElement
+    const values = Array.from(select.querySelectorAll('option')).map(o => o.value)
+    expect(values).toContain('gpt-4o-mini')
+    expect(values).toContain('gpt-4o')
+    expect(values).toContain('__custom__')
+  })
+
+  it('selecting a preset model writes it to overrides.model', () => {
+    const captured: ExecutorProfile[] = []
+    render(
+      <Harness
+        initial={{ engine: 'http', variant: 'default' }}
+        onChange={p => captured.push(p)}
+      />,
+    )
+
+    const select = screen.getByTestId('field-model-select') as HTMLSelectElement
+    fireEvent.change(select, { target: { value: 'gpt-4o' } })
+
+    const last = captured.at(-1)!
+    expect((last.overrides as { model?: string } | undefined)?.model).toBe('gpt-4o')
+  })
+
+  it('picking Custom… switches to a free text input that writes arbitrary values', () => {
+    const captured: ExecutorProfile[] = []
+    render(
+      <Harness
+        initial={{ engine: 'http', variant: 'default' }}
+        onChange={p => captured.push(p)}
+      />,
+    )
+
+    const select = screen.getByTestId('field-model-select') as HTMLSelectElement
+    fireEvent.change(select, { target: { value: '__custom__' } })
+
+    const input = screen.getByTestId('field-model-input') as HTMLInputElement
+    fireEvent.change(input, { target: { value: 'gpt-7-experimental' } })
+
+    const last = captured.at(-1)!
+    expect((last.overrides as { model?: string } | undefined)?.model).toBe('gpt-7-experimental')
+  })
+
+  it('pre-filling with a non-catalogue value starts in custom mode', () => {
+    render(
+      <Harness
+        initial={{ engine: 'http', variant: 'default', overrides: { model: 'gpt-7-experimental' } }}
+        onChange={() => undefined}
+      />,
+    )
+
+    const input = screen.getByTestId('field-model-input') as HTMLInputElement
+    expect(input.value).toBe('gpt-7-experimental')
+    expect(screen.queryByTestId('field-model-select')).toBeNull()
+  })
+
+  it('every engine default variant exposes a model field preset catalogue', async () => {
+    const variants = await import('./executor-variants')
+    for (const engine of variants.listEngines()) {
+      // http + claude-code + acp + codex + cursor all carry a model preset
+      // catalogue; mcp + cli intentionally don't.
+      if (engine === 'mcp' || engine === 'cli')
+        continue
+      const meta = variants.ENGINE_CATALOG[engine]
+      for (const variantKey of Object.keys(meta.variants)) {
+        const v = meta.variants[variantKey]
+        expect(v).toBeDefined()
+        const hints = v?.fieldHints
+        expect(hints).toBeTruthy()
+        expect((hints?.model ?? []).length).toBeGreaterThan(0)
+      }
+    }
   })
 })

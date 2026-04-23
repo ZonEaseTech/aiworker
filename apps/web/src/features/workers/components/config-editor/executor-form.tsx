@@ -1,7 +1,10 @@
+import { useState } from 'react'
 import { z } from 'zod'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { SecretField } from './brain-section'
+
+const CUSTOM_OPTION = '__custom__'
 
 /**
  * Lean Zod-schema → form mapper. Renders one field per top-level key of the
@@ -23,12 +26,26 @@ export interface ExecutorFormProps {
    * `<SecretField>` (masked input + show/hide toggle).
    */
   secretFields?: string[]
+  /**
+   * Per-field suggested values (FEAT-019). Fields whose name appears here
+   * and whose schema is a string render as a `<select>` with the listed
+   * values plus a `custom…` entry that falls back to a free text input.
+   * Fields not listed render as before (plain input / number / array / ...).
+   */
+  fieldHints?: Record<string, string[]>
   onChange: (next: Record<string, unknown>) => void
 }
 
 const EMPTY_SECRET_FIELDS: string[] = []
+const EMPTY_HINTS: Record<string, string[]> = {}
 
-export function ExecutorForm({ schema, value, secretFields = EMPTY_SECRET_FIELDS, onChange }: ExecutorFormProps) {
+export function ExecutorForm({
+  schema,
+  value,
+  secretFields = EMPTY_SECRET_FIELDS,
+  fieldHints = EMPTY_HINTS,
+  onChange,
+}: ExecutorFormProps) {
   const shape = schema.shape
   const secretSet = new Set(secretFields)
 
@@ -52,6 +69,7 @@ export function ExecutorForm({ schema, value, secretFields = EMPTY_SECRET_FIELDS
           schema={fieldSchema}
           value={value[key]}
           isSecret={secretSet.has(key)}
+          hintValues={fieldHints[key]}
           onChange={next => patch(key, next)}
         />
       ))}
@@ -64,6 +82,7 @@ interface FieldRendererProps {
   schema: z.ZodTypeAny
   value: unknown
   isSecret: boolean
+  hintValues?: string[]
   onChange: (next: unknown) => void
 }
 
@@ -75,7 +94,7 @@ function unwrapOptional(schema: z.ZodTypeAny): { inner: z.ZodTypeAny, optional: 
   return { inner: schema, optional: false }
 }
 
-function FieldRenderer({ name, schema, value, isSecret, onChange }: FieldRendererProps) {
+function FieldRenderer({ name, schema, value, isSecret, hintValues, onChange }: FieldRendererProps) {
   const { inner, optional } = unwrapOptional(schema)
   const labelSuffix = optional ? ' (optional)' : ''
 
@@ -87,6 +106,18 @@ function FieldRenderer({ name, schema, value, isSecret, onChange }: FieldRendere
           label={`${name}${labelSuffix}`}
           value={str}
           onChange={next => onChange(next || (optional ? undefined : ''))}
+        />
+      )
+    }
+    if (hintValues && hintValues.length > 0) {
+      return (
+        <HintedStringField
+          name={`${name}${labelSuffix}`}
+          fieldName={name}
+          presets={hintValues}
+          optional={optional}
+          value={str}
+          onChange={onChange}
         />
       )
     }
@@ -261,6 +292,102 @@ function LabeledInput({
     <div className="flex flex-col gap-1.5">
       <Label>{label}</Label>
       <Input value={value} onChange={e => onChange(e.target.value)} />
+    </div>
+  )
+}
+
+/**
+ * String field with a preset catalogue (FEAT-019). Initial mode derives from
+ * the stored value: in-catalogue values show as the preset `<select>`; any
+ * non-empty value outside the catalogue starts in `custom…` mode with the
+ * free-text input prefilled. Operator can switch back to preset via the
+ * select; picking `custom…` shows the text box without discarding whatever
+ * was typed.
+ */
+function HintedStringField({
+  name,
+  fieldName,
+  presets,
+  optional,
+  value,
+  onChange,
+}: {
+  name: string
+  fieldName: string
+  presets: string[]
+  optional: boolean
+  value: string
+  onChange: (next: unknown) => void
+}) {
+  const inCatalogue = value.length > 0 && presets.includes(value)
+  const [mode, setMode] = useState<'preset' | 'custom'>(() => {
+    if (value.length === 0)
+      return 'preset'
+    return inCatalogue ? 'preset' : 'custom'
+  })
+
+  function emit(next: string) {
+    if (next.length === 0)
+      onChange(optional ? undefined : '')
+    else onChange(next)
+  }
+
+  function onSelect(nextValue: string) {
+    if (nextValue === CUSTOM_OPTION) {
+      setMode('custom')
+      return
+    }
+    setMode('preset')
+    emit(nextValue)
+  }
+
+  if (mode === 'custom') {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center justify-between">
+          <Label>{name}</Label>
+          <button
+            type="button"
+            className="text-xs text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground"
+            onClick={() => {
+              setMode('preset')
+              if (!presets.includes(value))
+                emit('')
+            }}
+          >
+            Choose preset…
+          </button>
+        </div>
+        <Input
+          data-testid={`field-${fieldName}-input`}
+          placeholder={presets[0] ?? ''}
+          value={value}
+          onChange={e => emit(e.target.value)}
+        />
+      </div>
+    )
+  }
+
+  const selectValue = inCatalogue ? value : ''
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label htmlFor={`field-${fieldName}-select`}>{name}</Label>
+      <select
+        id={`field-${fieldName}-select`}
+        data-testid={`field-${fieldName}-select`}
+        className="h-9 rounded-md border bg-background px-3 text-sm"
+        value={selectValue}
+        onChange={e => onSelect(e.target.value)}
+      >
+        {optional && <option value="">— unset —</option>}
+        {!optional && selectValue === '' && <option value="" disabled>— choose a model —</option>}
+        {presets.map(opt => (
+          <option key={opt} value={opt}>
+            {opt}
+          </option>
+        ))}
+        <option value={CUSTOM_OPTION}>Custom…</option>
+      </select>
     </div>
   )
 }

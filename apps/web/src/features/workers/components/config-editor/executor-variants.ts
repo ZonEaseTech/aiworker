@@ -18,6 +18,13 @@ export interface VariantMeta {
   schema: z.ZodObject<z.ZodRawShape>
   /** Variant body keys treated as secrets in the UI. */
   secretFields?: string[]
+  /**
+   * Optional per-field catalog of suggested values. Keys map to variant body
+   * fields; currently used by string fields to render a `<select>` of known
+   * presets plus a `custom…` escape hatch. Empty / absent means free text.
+   * FEAT-019.
+   */
+  fieldHints?: Record<string, string[]>
 }
 
 export interface EngineMeta {
@@ -81,6 +88,30 @@ const cursorVariantSchema = z.object({
   timeoutMs: z.number().int().positive().optional(),
 })
 
+// FEAT-019 — curated model presets per (engine, variant). Small lists on
+// purpose: "custom…" is always the escape hatch. Values reflect the CLI
+// upstream docs as of 2026-04; refresh alongside the corresponding default
+// variant.
+const HTTP_MODELS_OPENAI = ['gpt-4o-mini', 'gpt-4o', 'gpt-5', 'gpt-5-mini', 'o3-mini']
+const HTTP_MODELS_GEMINI = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash']
+const HTTP_MODELS_DEEPSEEK = ['deepseek-chat', 'deepseek-reasoner']
+const HTTP_MODELS_SILICONFLOW = [
+  'Qwen/Qwen2.5-7B-Instruct',
+  'Qwen/Qwen2.5-72B-Instruct',
+  'deepseek-ai/DeepSeek-V3',
+]
+const HTTP_MODELS_OPENROUTER = [
+  'anthropic/claude-sonnet-4.5',
+  'openai/gpt-5',
+  'openai/gpt-4o-mini',
+  'google/gemini-2.5-flash',
+]
+const CLAUDE_CODE_MODELS = ['sonnet', 'opus', 'haiku']
+const GEMINI_ACP_MODELS = ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash']
+const QWEN_ACP_MODELS = ['qwen3-coder-plus', 'qwen3-max', 'qwen3-72b']
+const CODEX_MODELS = ['gpt-5.2-codex', 'gpt-5.2', 'gpt-5.1-codex-fast', 'gpt-5']
+const CURSOR_MODELS = ['auto', 'claude-sonnet-4.5', 'gpt-5', 'gemini-2.5-pro']
+
 export const ENGINE_CATALOG: Record<EngineKind, EngineMeta> = {
   'http': {
     label: 'HTTP (OpenAI-compatible)',
@@ -91,30 +122,35 @@ export const ENGINE_CATALOG: Record<EngineKind, EngineMeta> = {
         description: 'Empty preset — fill in baseUrl, apiKey, model.',
         schema: httpVariantSchema,
         ...httpHelpers,
+        fieldHints: { model: HTTP_MODELS_OPENAI },
       },
       'gemini-openai-compat': {
         label: 'Gemini (OpenAI-compat)',
         description: 'generativelanguage.googleapis.com OpenAI compatibility endpoint.',
         schema: httpVariantSchema,
         ...httpHelpers,
+        fieldHints: { model: HTTP_MODELS_GEMINI },
       },
       'deepseek': {
         label: 'DeepSeek',
         description: 'api.deepseek.com — model defaults to deepseek-chat.',
         schema: httpVariantSchema,
         ...httpHelpers,
+        fieldHints: { model: HTTP_MODELS_DEEPSEEK },
       },
       'siliconflow': {
         label: 'SiliconFlow',
         description: 'api.siliconflow.cn/v1 — Chinese OpenAI-compatible aggregator.',
         schema: httpVariantSchema,
         ...httpHelpers,
+        fieldHints: { model: HTTP_MODELS_SILICONFLOW },
       },
       'openrouter': {
         label: 'OpenRouter',
         description: 'openrouter.ai/api/v1 — fanout to 100+ provider models.',
         schema: httpVariantSchema,
         ...httpHelpers,
+        fieldHints: { model: HTTP_MODELS_OPENROUTER },
       },
     },
   },
@@ -149,11 +185,13 @@ export const ENGINE_CATALOG: Record<EngineKind, EngineMeta> = {
         label: 'Default (sonnet)',
         description: 'Auto-approve, sonnet model, 120s turn timeout.',
         schema: claudeCodeVariantSchema,
+        fieldHints: { model: CLAUDE_CODE_MODELS },
       },
       'opus-plan': {
         label: 'Opus + Plan policy',
         description: 'Opus model with plan-mode permission policy, 180s turn timeout.',
         schema: claudeCodeVariantSchema,
+        fieldHints: { model: CLAUDE_CODE_MODELS },
       },
     },
   },
@@ -165,11 +203,13 @@ export const ENGINE_CATALOG: Record<EngineKind, EngineMeta> = {
         label: 'Gemini CLI',
         description: 'google-gemini/gemini-cli with --experimental-acp + --yolo.',
         schema: acpVariantSchema,
+        fieldHints: { model: GEMINI_ACP_MODELS },
       },
       qwen: {
         label: 'Qwen Code',
         description: 'qwenlm/qwen-code with --acp + --yolo.',
         schema: acpVariantSchema,
+        fieldHints: { model: QWEN_ACP_MODELS },
       },
     },
   },
@@ -181,6 +221,7 @@ export const ENGINE_CATALOG: Record<EngineKind, EngineMeta> = {
         label: 'Default (gpt-5.2-codex)',
         description: 'Auto-approve (approval_policy=never), 120s turn timeout.',
         schema: codexVariantSchema,
+        fieldHints: { model: CODEX_MODELS },
       },
     },
   },
@@ -192,6 +233,7 @@ export const ENGINE_CATALOG: Record<EngineKind, EngineMeta> = {
         label: 'Default (auto model)',
         description: 'cursor-agent -p --output-format=stream-json, 120s turn timeout.',
         schema: cursorVariantSchema,
+        fieldHints: { model: CURSOR_MODELS },
       },
     },
   },
