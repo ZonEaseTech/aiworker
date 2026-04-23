@@ -49,6 +49,8 @@ const REPO_ROOT = resolve(SCRIPT_DIR, '..')
 const GHCR_IMAGE = 'ghcr.io/zoneasetech/aiworker'
 const BUILD_WORKFLOW = 'build-image.yml'
 
+type ImageVariant = 'slim' | 'full'
+
 interface Args {
   command: string
   tag?: string
@@ -57,6 +59,12 @@ interface Args {
   dryRun: boolean
   confirm: boolean
   timeoutSecs?: number
+  imageVariant: ImageVariant
+}
+
+/** Suffix appended to the image tag when picking a variant (FEAT-020). */
+function variantSuffix(variant: ImageVariant): string {
+  return variant === 'full' ? '-full' : ''
 }
 
 function parseArgs(argv: string[]): Args {
@@ -67,11 +75,13 @@ function parseArgs(argv: string[]): Args {
     printHelp()
     process.exit(0)
   }
+  const envVariant = normalizeVariant(process.env.AIWORKER_IMAGE_VARIANT, 'slim')
   const out: Args = {
     command,
     server: process.env.AIWORK_SERVER_ID ?? DEFAULT_AIWORK_SERVER_ID,
     dryRun: false,
     confirm: false,
+    imageVariant: envVariant,
   }
   for (let i = 1; i < argv.length; i++) {
     const arg = argv[i]!
@@ -96,6 +106,9 @@ function parseArgs(argv: string[]): Args {
         fatal(`invalid --timeout: ${arg}`)
       out.timeoutSecs = n
     }
+    else if (arg.startsWith('--image-variant=')) {
+      out.imageVariant = normalizeVariant(arg.slice('--image-variant='.length), 'slim')
+    }
     else {
       fatal(`unknown flag: ${arg}`)
     }
@@ -103,8 +116,18 @@ function parseArgs(argv: string[]): Args {
   return out
 }
 
+function normalizeVariant(raw: string | undefined, fallback: ImageVariant): ImageVariant {
+  const v = (raw ?? '').trim().toLowerCase()
+  if (v === 'slim' || v === '')
+    return 'slim'
+  if (v === 'full')
+    return 'full'
+  fatal(`invalid --image-variant: ${raw} (expected slim | full)`)
+  return fallback
+}
+
 function printHelp(): void {
-  const help = `\nbun run scripts/deploy.ts <command> [flags]\n\nCommands:\n  install-docker   Install docker on target (first-time, approval-gated)\n  teardown-legacy  Remove legacy aiworker.service + /opt/aiworker (approval-gated, --confirm)\n  login-ghcr       docker login ghcr.io on host using local \`gh auth token\`\n  build            Trigger .github/workflows/build-image.yml, watch, return tag\n  upload           Upload compose + Caddyfile + .env to host\n  install          docker compose pull + up -d on host\n  verify           Curl /health on host, fail on non-ok\n  reload-caddy     Install Caddyfile + caddy validate + systemctl reload caddy\n  deploy           build → upload → install → verify → reload-caddy\n\nFlags:\n  --tag=<tag>       Image tag (default: <git-sha>-<UTC yyyymmddhhmm>)\n  --server=<id>     aissh server id (default: $AIWORK_SERVER_ID or hardcoded)\n  --reason=<text>  aissh --reason (default: "FEAT-009 <command>")\n  --timeout=<secs>  aissh exec timeout in seconds (per-command defaults:\n                    install-docker 300, install 300, others 60)\n  --dry-run         Print commands without executing\n  --confirm         Required for teardown-legacy\n`
+  const help = `\nbun run scripts/deploy.ts <command> [flags]\n\nCommands:\n  install-docker   Install docker on target (first-time, approval-gated)\n  teardown-legacy  Remove legacy aiworker.service + /opt/aiworker (approval-gated, --confirm)\n  login-ghcr       docker login ghcr.io on host using local \`gh auth token\`\n  build            Trigger .github/workflows/build-image.yml, watch, return tag\n  upload           Upload compose + Caddyfile + .env to host\n  install          docker compose pull + up -d on host\n  verify           Curl /health on host, fail on non-ok\n  reload-caddy     Install Caddyfile + caddy validate + systemctl reload caddy\n  deploy           build → upload → install → verify → reload-caddy\n\nFlags:\n  --tag=<tag>              Image tag (default: <git-sha>-<UTC yyyymmddhhmm>)\n  --image-variant=slim|full  FEAT-020 slim is default (~150 MB), full bakes\n                             claude-code / codex / gemini-cli / qwen-code\n                             (~300 MB). Overrides $AIWORKER_IMAGE_VARIANT.\n  --server=<id>            aissh server id (default: $AIWORK_SERVER_ID)\n  --reason=<text>         aissh --reason (default: "FEAT-009 <command>")\n  --timeout=<secs>         aissh exec timeout in seconds (per-command defaults:\n                           install-docker 300, install 300, others 60)\n  --dry-run                Print commands without executing\n  --confirm                Required for teardown-legacy\n`
   process.stdout.write(help)
 }
 
@@ -321,18 +344,24 @@ function cmdUpload(args: Args): void {
 
 function cmdInstall(args: Args, tag: string): void {
   ensureAissh()
-  log(`pulling ${GHCR_IMAGE}:${tag} + bringing compose up`)
-  // One exec so pull+up is atomic from the approval perspective.
+  const suffix = variantSuffix(args.imageVariant)
+  const fullRef = `${GHCR_IMAGE}:${tag}${suffix}`
+  log(`pulling ${fullRef} + bringing compose up`)
+  // One exec so pull+up is atomic from the approval perspective. Both env
+  // vars are inlined so the compose image interpolation resolves without
+  // depending on whatever suffix currently sits in `.env`; the .env value
+  // is the fallback for manual `docker compose up -d` on the host.
+  const envPair = `AIWORKER_IMAGE_TAG=${tag} AIWORKER_IMAGE_VARIANT_SUFFIX=${suffix}`
   const remoteCmd = [
     'set -e',
     `cd ${DEFAULT_REMOTE_DIR}`,
     `[ -f .env ] || { echo 'FATAL: ${DEFAULT_REMOTE_DIR}/.env missing — run \\\`deploy upload\\\` first.' >&2; exit 2; }`,
     'grep -q "^AIWORKER_MASTER_KEY=." .env || { echo "FATAL: AIWORKER_MASTER_KEY missing from .env" >&2; exit 2; }',
     'grep -q "^INTERNAL_SHARED_SECRET=." .env || { echo "FATAL: INTERNAL_SHARED_SECRET missing from .env" >&2; exit 2; }',
-    `AIWORKER_IMAGE_TAG=${tag} docker compose --env-file .env -f docker-compose.yml pull`,
-    `AIWORKER_IMAGE_TAG=${tag} docker compose --env-file .env -f docker-compose.yml up -d`,
+    `${envPair} docker compose --env-file .env -f docker-compose.yml pull`,
+    `${envPair} docker compose --env-file .env -f docker-compose.yml up -d`,
   ].join(' && ')
-  aisshExec(args, remoteCmd, `FEAT-009 install dashboard ${tag}`, 300)
+  aisshExec(args, remoteCmd, `FEAT-009 install dashboard ${tag}${suffix}`, 300)
 }
 
 function cmdVerify(args: Args): void {
@@ -369,8 +398,9 @@ function cmdDeploy(args: Args): void {
   cmdInstall(argsWithTag, tag)
   cmdVerify(argsWithTag)
   cmdReloadCaddy(argsWithTag)
-  log(`deploy ok — image tag ${tag}`)
-  log(`Remember: update AIWORKER_IMAGE_TAG=${tag} in ${DEFAULT_REMOTE_DIR}/.env on the host if you want manual \`docker compose up -d\` to pick up this tag.`)
+  const suffix = variantSuffix(args.imageVariant)
+  log(`deploy ok — image tag ${tag}${suffix} (variant=${args.imageVariant})`)
+  log(`Remember: update AIWORKER_IMAGE_TAG=${tag} + AIWORKER_IMAGE_VARIANT_SUFFIX=${suffix} in ${DEFAULT_REMOTE_DIR}/.env on the host if you want manual \`docker compose up -d\` to pick up this tag+variant.`)
 }
 
 // --------------------------------------------------------------------------

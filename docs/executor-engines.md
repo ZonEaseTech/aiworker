@@ -4,10 +4,26 @@
 （FEAT-018）只做 PATH 查找 + auth 文件存在性检查，并不替你装或登录。本表给出
 每个引擎的 npm 包 / 安装方式 / 登录命令 / 推荐的容器内落地方案。
 
-> 通用策略：在构建镜像时预装 CLI，运行时通过卷挂载宿主的登录目录或启动
-> 脚本交互式 `login` 一次。登录后 auth 文件会缓存在 `$HOME/...`，10 分钟内在
-> worker 端的 `/engines` 缓存里透明命中。操作员在 dashboard 的 executor 面板
-> 点 "Refresh" 可立即绕缓存重查。
+## 镜像预装（FEAT-020）
+
+自 2026-04-23 起，每次 `build-image` workflow 发两个 tag：
+
+| Tag | 大小 | 内容 |
+|---|---|---|
+| `ghcr.io/zoneasetech/aiworker:<sha>` | ~150 MB | slim，不预装任一 agentic CLI；worker 依旧可以通过 `npx -y ...` 冷启动 fallback 工作 |
+| `ghcr.io/zoneasetech/aiworker:<sha>-full` | ~300 MB | slim 之上额外 `npm install -g` 了 claude-code / codex / gemini-cli / qwen-code 四个 CLI（Cursor 另行 opt-in，见 FEAT-021） |
+
+部署到 aiwork 时用 `scripts/deploy.ts install --image-variant=full` 或在
+`/opt/aiworker-deploy/.env` 里设置 `AIWORKER_IMAGE_VARIANT_SUFFIX=-full`。
+**auth 文件永不进镜像** —— 预装只省你装 binary 的步骤；首次登录仍需在
+容器里跑一次对应 CLI 的 login 命令，或把宿主的 auth 文件挂载进来。
+
+> 通用策略：如果用 `-full` 镜像，Dockerfile 已 bake 好版本（和源代码
+> `DEFAULT_*_CLI_VERSION` / `agent.defaultVersion` 保持一致）；通过
+> `ExecutorProfile.overrides.cmd.cliVersion` 可覆盖到任意 npx 可拉的版本。
+> 登录后 auth 文件会缓存在 `$HOME/...`，10 分钟内在 worker 端的
+> `/engines` 缓存里透明命中。操作员在 dashboard 的 executor 面板点
+> "Refresh" 可立即绕缓存重查。
 
 ## http / mcp / cli
 
@@ -19,12 +35,13 @@
 - **npm 包**：`@anthropic-ai/claude-code`
 - **二进制**：`claude`
 - **auth 文件**：`~/.claude.json`（或 `~/.claude/config.json`）
-- **安装**（容器内）：
+- **`-full` 镜像里已预装**（pinned 到 `DEFAULT_CLAUDE_CLI_VERSION` = `2.1.112`）。
+- **安装**（容器内，用 slim 镜像时）：
   ```bash
   npm i -g @anthropic-ai/claude-code@<pinned-version>
   ```
   也可在首次 `run` 时由 worker 的 npx 回退路径 `npx -y @anthropic-ai/claude-code@<v>`
-  拉取 —— 这会导致每次 cold start 重新下载，建议预装。
+  拉取 —— 这会导致每次 cold start 重新下载，建议预装或用 `-full` 镜像。
 - **登录**：
   ```bash
   claude login          # 交互式浏览器登录
@@ -47,7 +64,8 @@ ACP harness 支持两个 agent：**Gemini CLI** 与 **Qwen Code**。探测结果
 - **npm 包**：`@google/gemini-cli`
 - **二进制**：`gemini`
 - **auth 文件**：`~/.gemini/oauth_creds.json`
-- **安装**：
+- **`-full` 镜像里已预装**（pinned 到 `gemini.defaultVersion` = `0.9.0`）。
+- **安装**（slim 镜像时）：
   ```bash
   npm i -g @google/gemini-cli@<pinned-version>
   ```
@@ -66,7 +84,8 @@ ACP harness 支持两个 agent：**Gemini CLI** 与 **Qwen Code**。探测结果
 - **npm 包**：`@qwen-code/qwen-code`
 - **二进制**：`qwen`
 - **auth 文件**：`~/.qwen/oauth_creds.json` 或 `~/.qwen/settings.json`
-- **安装**：
+- **`-full` 镜像里已预装**（pinned 到 `qwen.defaultVersion` = `0.0.14`）。
+- **安装**（slim 镜像时）：
   ```bash
   npm i -g @qwen-code/qwen-code@<pinned-version>
   ```
@@ -82,7 +101,8 @@ ACP harness 支持两个 agent：**Gemini CLI** 与 **Qwen Code**。探测结果
 - **npm 包**：`@openai/codex`
 - **二进制**：`codex`
 - **auth 文件**：`~/.codex/auth.json`
-- **安装**：
+- **`-full` 镜像里已预装**（pinned 到 `DEFAULT_CODEX_CLI_VERSION` = `0.121.0`）。
+- **安装**（slim 镜像时）：
   ```bash
   npm i -g @openai/codex@<pinned-version>
   ```
@@ -100,6 +120,7 @@ ACP harness 支持两个 agent：**Gemini CLI** 与 **Qwen Code**。探测结果
 ## cursor <a id="cursor"></a>
 
 - **安装来源**：Cursor 官方 CLI —— `https://cursor.com/cli`（**无 npm 包**）
+- **`-full` 镜像**：**未预装**（无 npm 包 + glibc / arch 依赖需要运维定制）；FEAT-021 追踪可选的镜像 bake。
 - **二进制**：`cursor-agent`
 - **auth 文件**：`~/.cursor/cli-config.json` 或 `~/.cursor-agent/auth.json`
   （不同版本命名有差异，探测会依次检查几个常见路径）

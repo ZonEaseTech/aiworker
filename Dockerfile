@@ -1,5 +1,22 @@
 # syntax=docker/dockerfile:1
 # Single-image runtime for the fleet. MODE env decides dashboard vs worker.
+#
+# Targets:
+#   runtime      — slim image (~150 MB). Default; agentic CLIs are not baked
+#                  in. Workers still work via the `npx -y` cold fallback, or
+#                  by installing the CLI at container-start time.
+#   runtime-full — adds pinned npm installs for the four npm-available
+#                  agentic CLIs (claude-code / codex / gemini-cli /
+#                  qwen-code). Cursor is intentionally out because it has no
+#                  npm package; see FEAT-021 for the optional curl-installer
+#                  stage.
+#
+# Version constants (FEAT-020 keeps them here as build args; the TS source
+# of truth lives at:
+#   apps/api/src/worker/executor/engines/claude-code/executor.ts
+#   apps/api/src/worker/executor/engines/codex/executor.ts
+#   apps/api/src/worker/executor/engines/acp/agents/{gemini,qwen}.ts
+# When one of those constants changes, bump the matching ARG below.
 
 FROM oven/bun:1-debian AS deps
 WORKDIR /app
@@ -29,3 +46,32 @@ COPY --from=build /app/packages/shared /app/packages/shared
 ENV NODE_ENV=production
 EXPOSE 3000 3001
 ENTRYPOINT ["/usr/bin/tini", "--", "bun", "run", "dist/index.js"]
+
+# ---- runtime-full ----
+#
+# Extends the slim runtime with four pinned npm agentic CLIs so workers can
+# spawn them without a 30–60s cold `npx` fetch. Versions are build args so
+# a bump only touches one file (the workflow passes them explicitly so CI
+# stays the single source of truth for "what got baked").
+FROM runtime AS runtime-full
+ARG CLAUDE_CODE_VERSION=2.1.112
+ARG CODEX_VERSION=0.121.0
+ARG GEMINI_CLI_VERSION=0.9.0
+ARG QWEN_CODE_VERSION=0.0.14
+# Install Node.js from the official NodeSource repo (bun doesn't ship one);
+# we use `npm` for the `-g` installs so the CLIs are shellable at PATH.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends curl gnupg ca-certificates \
+ && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+ && apt-get install -y --no-install-recommends nodejs \
+ && rm -rf /var/lib/apt/lists/*
+RUN npm install -g \
+      "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
+      "@openai/codex@${CODEX_VERSION}" \
+      "@google/gemini-cli@${GEMINI_CLI_VERSION}" \
+      "@qwen-code/qwen-code@${QWEN_CODE_VERSION}" \
+ && claude --version \
+ && codex --version \
+ && gemini --version \
+ && qwen --version
+# Preserve the same ENTRYPOINT as runtime; `--from` order keeps env + layers.

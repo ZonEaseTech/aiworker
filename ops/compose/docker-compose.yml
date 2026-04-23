@@ -2,7 +2,12 @@ name: aiworker
 
 services:
   dashboard:
-    image: ghcr.io/zoneasetech/aiworker:${AIWORKER_IMAGE_TAG}
+    # Image tag resolves to ghcr.io/zoneasetech/aiworker:${TAG}${VARIANT_SUFFIX}
+    # where VARIANT_SUFFIX is empty (slim, default) or `-full` (FEAT-020 bake
+    # with agentic CLIs baked in). `scripts/deploy.ts install --image-variant`
+    # sets the suffix for one-shot deploys; the host `.env` holds the default
+    # for manual `docker compose up -d`.
+    image: ghcr.io/zoneasetech/aiworker:${AIWORKER_IMAGE_TAG}${AIWORKER_IMAGE_VARIANT_SUFFIX}
     container_name: aiworker-dashboard
     restart: unless-stopped
     ports:

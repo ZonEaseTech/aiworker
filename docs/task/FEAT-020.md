@@ -1,10 +1,11 @@
 # FEAT-020 Bake npm agentic CLIs into the worker image
 
-- **status**: in_progress
+- **status**: completed
 - **priority**: P1
 - **owner**: ben
 - **createdAt**: 2026-04-23 06:05
 - **startedAt**: 2026-04-23 06:20
+- **completedAt**: 2026-04-23 06:35
 
 ## Description
 

@@ -52,6 +52,6 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-017 Register worker UX improvements**](FEAT-017.md) `P1`
 - [x] [**FEAT-018 Engine availability discovery**](FEAT-018.md) `P1`
 - [x] [**FEAT-019 Model picker with known-model catalog per engine**](FEAT-019.md) `P1`
-- [-] [**FEAT-020 Bake npm agentic CLIs into the worker image**](FEAT-020.md) `P1`
+- [x] [**FEAT-020 Bake npm agentic CLIs into the worker image**](FEAT-020.md) `P1`
 - [ ] [**FEAT-021 Bake Cursor agent into the full image (optional)**](FEAT-021.md) `P3`
-- [ ] [**FEAT-022 Auth mount recipe + Register dialog hint**](FEAT-022.md) `P2`
+- [-] [**FEAT-022 Auth mount recipe + Register dialog hint**](FEAT-022.md) `P2`

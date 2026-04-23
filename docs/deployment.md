@@ -156,6 +156,36 @@ worker's live `worker_identity`. Two ways to obtain one:
    `AIWORKER_FORCE_TOKEN` is a one-shot knob — it is ignored when the
    worker already has a `worker_identity` row.
 
+## Slim vs Full image (FEAT-020)
+
+Every `build-image` workflow run publishes **two tags** to
+`ghcr.io/zoneasetech/aiworker`:
+
+| Tag | Size | Content |
+|---|---|---|
+| `<sha>` (slim, default) | ~150 MB | No agentic CLIs baked in. Workers fall back to `npx -y ...` at first use (30–60s cold start). |
+| `<sha>-full` | ~300 MB | Slim + `npm install -g` for `@anthropic-ai/claude-code`, `@openai/codex`, `@google/gemini-cli`, `@qwen-code/qwen-code`, pinned to the same defaults the TS source uses (`DEFAULT_*_CLI_VERSION`). Cursor is **not** included (see FEAT-021). |
+
+Pick per deploy:
+
+```bash
+# Default — slim.
+bun scripts/deploy.ts deploy --tag=$TAG
+
+# Full, so workers don't pay the npx cold-start each first use.
+bun scripts/deploy.ts deploy --tag=$TAG --image-variant=full
+```
+
+Switching without a rebuild: edit `/opt/aiworker-deploy/.env` on the host
+so `AIWORKER_IMAGE_VARIANT_SUFFIX=` (slim) or `=-full`, then re-run
+`scripts/deploy.ts install --tag=<same tag>`.
+
+**Auth files never ship in the image** — pre-installing the CLI only
+skips the binary fetch. First login still happens at container run-time
+(either a one-off `docker exec claude login` or a host auth-dir mount).
+See [`docs/executor-engines.md`](./executor-engines.md) per engine for
+login paths and mount recipes.
+
 ## Troubleshooting
 
 - `aissh exec` prints an operation id and `approval required`: run
