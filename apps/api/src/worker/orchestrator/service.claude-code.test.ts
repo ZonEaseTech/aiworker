@@ -17,6 +17,7 @@ import { closeWorkerDb, getWorkerDb, initWorkerDb, runWorkerMigrations } from '.
 import { messages } from '../../db/worker/schema'
 import { ClaudeCodeExecutor } from '../executor/engines/claude-code'
 import { WorkspaceManager as RealWorkspaceManager } from '../executor/workspace'
+import { ProcessManager } from './process-manager'
 import { Orchestrator } from './service'
 
 /**
@@ -71,6 +72,7 @@ function validConfig(): WorkerConfig {
 describe('Orchestrator + ClaudeCodeExecutor (stub CLI)', () => {
   let tmpRoot: string
   let workspaces: WorkspaceManager
+  let processes: ProcessManager
 
   beforeEach(() => {
     closeWorkerDb()
@@ -78,10 +80,19 @@ describe('Orchestrator + ClaudeCodeExecutor (stub CLI)', () => {
     initWorkerDb(path.join(tmpRoot, 'worker.db'))
     runWorkerMigrations('./drizzle/worker')
     workspaces = new RealWorkspaceManager({ root: tmpRoot })
+    processes = new ProcessManager({
+      maxConcurrentTotal: 4,
+      perEngineLimits: {},
+      stallTimeoutMs: 60_000,
+      killTimeoutMs: 5_000,
+      autoCleanupDelayMs: 60_000,
+      gcIntervalMs: 0,
+    })
   })
 
   afterEach(async () => {
     closeWorkerDb()
+    processes.dispose()
     await fs.rm(tmpRoot, { recursive: true, force: true })
   })
 
@@ -101,6 +112,7 @@ describe('Orchestrator + ClaudeCodeExecutor (stub CLI)', () => {
       bus,
       workerId: 'w_testtesttest',
       workspaces,
+      processes,
     })
 
     const envelope: Envelope = {

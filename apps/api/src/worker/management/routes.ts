@@ -229,5 +229,15 @@ export function buildManagementRoutes(deps: ManagementRoutesDeps) {
     }
   })
 
+  /**
+   * FEAT-015: 暴露当前 ProcessManager 的容量快照。`getState().runtime.processes`
+   * 是 hot-reload-safe 的闭包查询——ProcessManager 跨 reload 持久化，所以
+   * 实际拿到的是 bootstrap 时 new 的同一个实例。
+   */
+  routes.get('/runtime/processes/capacity', (c) => {
+    const snap = deps.getState().runtime.processes.snapshot()
+    return c.json(snap)
+  })
+
   return routes
 }
