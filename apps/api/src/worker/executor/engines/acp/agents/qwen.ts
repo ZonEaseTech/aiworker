@@ -1,7 +1,5 @@
-import type { AcpAgentDefinition, AvailabilityInfo } from './types'
-import fs from 'node:fs/promises'
-import os from 'node:os'
-import path from 'node:path'
+import type { AcpAgentDefinition } from './types'
+import { probeAcpQwenAuth } from '../../../availability'
 
 /**
  * Qwen Code ACP adapter. Data-only — harness logic lives in `harness.ts`.
@@ -9,6 +7,8 @@ import path from 'node:path'
  * CLI repo: https://github.com/QwenLM/qwen-code — forked from Gemini CLI with
  * Qwen-specific defaults. Same ACP framing as Gemini: `--acp` puts the CLI
  * into JSON-RPC-over-stdio mode; `--yolo` auto-approves tool calls.
+ *
+ * FEAT-018 起 auth 探测逻辑统一由 `worker/executor/availability.ts` 托管。
  */
 export const qwenAgent: AcpAgentDefinition = {
   id: 'qwen',
@@ -30,26 +30,5 @@ export const qwenAgent: AcpAgentDefinition = {
       args.push(...extraArgs)
     return args
   },
-  authProbe: async () => probeQwenAuth(),
-}
-
-async function probeQwenAuth(): Promise<AvailabilityInfo> {
-  const checkedAt = new Date().toISOString()
-  const home = os.homedir()
-  const credsPath = path.join(home, '.qwen', 'oauth_creds.json')
-  const configPath = path.join(home, '.qwen', 'settings.json')
-  try {
-    await fs.stat(credsPath)
-    return { status: 'LoginDetected', checkedAt, detail: 'oauth_creds.json present' }
-  }
-  catch {
-    // fall through
-  }
-  try {
-    await fs.stat(configPath)
-    return { status: 'InstallationFound', checkedAt, detail: 'settings.json present, login pending' }
-  }
-  catch {
-    return { status: 'NotFound', checkedAt, detail: '~/.qwen not present' }
-  }
+  authProbe: () => probeAcpQwenAuth(),
 }

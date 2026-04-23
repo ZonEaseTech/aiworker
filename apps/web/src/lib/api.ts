@@ -1,6 +1,7 @@
 import type {
   BrainSourceConfig,
   ChannelType,
+  EngineAvailabilityResponse,
   EngineKind,
   SafeRegisteredWorker,
   ServiceStatus,
@@ -389,4 +390,17 @@ export function rotateWorkerToken(id: string): Promise<RotateWorkerTokenResponse
     'POST',
     `/api/workers/${encodeURIComponent(id)}/rotate-token`,
   )
+}
+
+/**
+ * FEAT-018 — 引擎可达性。每个 EngineKind 返回至少一条结果；`acp` 展开为
+ * `gemini` / `qwen` 两条。`refresh=true` 在查询串中附加 `?refresh=1`，绕过
+ * worker 端 10 分钟 in-memory 缓存。
+ */
+export function getWorkerEngines(
+  id: string,
+  options: { refresh?: boolean } = {},
+): Promise<EngineAvailabilityResponse> {
+  const suffix = options.refresh ? '/engines?refresh=1' : '/engines'
+  return workerProxyRequest<EngineAvailabilityResponse>('GET', id, suffix)
 }

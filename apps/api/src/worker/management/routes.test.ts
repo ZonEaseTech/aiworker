@@ -13,6 +13,7 @@ import { beforeEach, describe, expect, it } from 'bun:test'
 import { closeWorkerDb, getWorkerDb, initWorkerDb, runWorkerMigrations } from '../../db/worker'
 import { loadOrSeedConfig } from '../bootstrap/config'
 import { ChannelRegistry } from '../channels/registry'
+import { resetAvailabilityProbeForTests } from '../executor/availability'
 import { ProcessManager } from '../orchestrator/process-manager'
 import { resetSecretsVaultForTests } from '../secrets'
 import { buildManagementRoutes } from './routes'
@@ -390,5 +391,68 @@ describe('buildManagementRoutes', () => {
     finally {
       processes.dispose()
     }
+  })
+
+  it('GET /engines requires bearer auth', async () => {
+    const { state } = await bootstrap()
+    const routes = buildManagementRoutes({ getState: () => state, reloadRuntime: async () => {} })
+    const res = await routes.fetch(new Request('http://w/engines'))
+    expect(res.status).toBe(401)
+    const body = await res.json() as { code: string }
+    expect(body.code).toBe('auth-failed')
+  })
+
+  it('GET /engines returns one entry per EngineKind (acp expanded)', async () => {
+    const { state } = await bootstrap()
+    resetAvailabilityProbeForTests({
+      resolveBinary: async () => null,
+      pathExists: async () => false,
+      homedir: () => '/home/test',
+      now: () => 1,
+    })
+    const routes = buildManagementRoutes({ getState: () => state, reloadRuntime: async () => {} })
+    const res = await routes.fetch(authed('/engines'))
+    expect(res.status).toBe(200)
+    const body = await res.json() as {
+      engines: Array<{ kind: string, agent?: string, status: string, authHint?: string }>
+    }
+    const kinds = body.engines.map(e => e.agent ? `${e.kind}:${e.agent}` : e.kind).sort()
+    expect(kinds).toEqual([
+      'acp:gemini',
+      'acp:qwen',
+      'claude-code',
+      'cli',
+      'codex',
+      'cursor',
+      'http',
+      'mcp',
+    ])
+    // The three CLI-less engines should still report ready.
+    expect(body.engines.find(e => e.kind === 'http')?.status).toBe('ready')
+    expect(body.engines.find(e => e.kind === 'claude-code')?.status).toBe('not-found')
+  })
+
+  it('GET /engines?refresh=1 bypasses the 10-minute cache', async () => {
+    const { state } = await bootstrap()
+    let binaryCalls = 0
+    resetAvailabilityProbeForTests({
+      resolveBinary: async () => {
+        binaryCalls += 1
+        return null
+      },
+      pathExists: async () => false,
+      homedir: () => '/home/test',
+      now: () => 1,
+    })
+    const routes = buildManagementRoutes({ getState: () => state, reloadRuntime: async () => {} })
+
+    await routes.fetch(authed('/engines'))
+    const firstCount = binaryCalls
+    await routes.fetch(authed('/engines'))
+    // Second call without refresh hits the in-memory cache.
+    expect(binaryCalls).toBe(firstCount)
+
+    await routes.fetch(authed('/engines?refresh=1'))
+    expect(binaryCalls).toBeGreaterThan(firstCount)
   })
 })

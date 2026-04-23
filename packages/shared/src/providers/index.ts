@@ -15,6 +15,12 @@ export type {
 } from './agent-event'
 
 export type {
+  EngineAvailability,
+  EngineAvailabilityResponse,
+  EngineAvailabilityStatus,
+} from './availability'
+
+export type {
   BrainMemory,
   BrainProvider,
   BrainSkill,
