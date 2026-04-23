@@ -279,6 +279,7 @@ function RegisterForm({ onCancel, onSuccess }: RegisterFormProps) {
               </p>
             </div>
           )}
+          <AuthMountHint />
         </div>
 
         <div className="grid gap-1.5">
@@ -310,6 +311,63 @@ function RegisterForm({ onCancel, onSuccess }: RegisterFormProps) {
         </Button>
       </DialogFooter>
     </form>
+  )
+}
+
+/**
+ * FEAT-022 reminder: the bearer token lets the manager talk to the worker,
+ * but agentic executors (claude-code / codex / acp gemini / acp qwen /
+ * cursor) also need CLI auth on the worker side. Surface a lightweight,
+ * collapsed-by-default pointer so operators who *don't* need agentic auth
+ * aren't distracted. Linked doc already enumerates the two supported
+ * recipes (host mount / docker exec login).
+ */
+function AuthMountHint() {
+  return (
+    <details className="rounded-md border border-dashed border-muted-foreground/30 bg-muted/20 px-3 py-2 text-xs">
+      <summary className="cursor-pointer select-none font-medium text-muted-foreground">
+        Using an agentic engine? You'll also need to seed CLI auth on the worker.
+      </summary>
+      <p className="mt-2 text-muted-foreground">
+        The bearer token above only authorises dashboard → worker calls.
+        {' '}
+        claude-code / codex / gemini / qwen / cursor each need their own
+        login state (`~/.claude.json`, `~/.codex/auth.json`, etc.) inside
+        the worker container. Two recipes:
+      </p>
+      <ul className="mt-1.5 ml-4 list-disc text-muted-foreground">
+        <li>
+          <strong>Mount the host&apos;s auth dir</strong>
+          {' '}
+          into the container
+          (read-only), or
+        </li>
+        <li>
+          <strong>docker exec &lt;worker&gt; &lt;cli&gt; login</strong>
+          {' '}
+          once
+          inside a fresh container.
+        </li>
+      </ul>
+      <p className="mt-2 text-muted-foreground">
+        Full walkthrough:
+        {' '}
+        <a
+          className="underline decoration-dotted underline-offset-2 hover:text-foreground"
+          href="/docs/executor-engines.md#auth-recipes"
+          target="_blank"
+          rel="noreferrer"
+        >
+          docs/executor-engines.md#auth-recipes
+        </a>
+        {' '}
+        · starter compose:
+        {' '}
+        <code className="rounded bg-muted px-1 py-0.5 font-mono">
+          ops/compose/docker-compose.worker.example.yml
+        </code>
+      </p>
+    </details>
   )
 }
 

@@ -1,10 +1,11 @@
 # FEAT-022 Auth mount recipe + Register dialog hint
 
-- **status**: in_progress
+- **status**: completed
 - **priority**: P2
 - **owner**: ben
 - **createdAt**: 2026-04-23 06:05
 - **startedAt**: 2026-04-23 06:35
+- **completedAt**: 2026-04-23 06:45
 
 ## Description
 

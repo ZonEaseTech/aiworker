@@ -25,6 +25,58 @@
 > `/engines` 缓存里透明命中。操作员在 dashboard 的 executor 面板点
 > "Refresh" 可立即绕缓存重查。
 
+## Auth recipes <a id="auth-recipes"></a>
+
+`-full` 镜像预装了 agentic CLI 二进制，但 **auth 文件从不打进镜像**。
+新 worker 容器启动后必须补一次登录态；有两套推荐做法（FEAT-022）。
+
+### Recipe A — 宿主 auth 目录挂载（推荐日常）
+
+操作员在宿主机上已经登录过某个 CLI（比如已经装了 Claude Code），worker
+容器以 `:ro` 挂载复用：
+
+```yaml
+# docker-compose.worker.example.yml
+volumes:
+  - ${HOME}/.claude.json:/root/.claude.json:ro
+  - ${HOME}/.codex:/root/.codex:ro
+  - ${HOME}/.gemini:/root/.gemini:ro
+  - ${HOME}/.qwen:/root/.qwen:ro
+```
+
+- **优点**：开机即用；token 在宿主机集中管；容器重建不丢登录态。
+- **缺点**：只读挂载意味着 CLI 无法在容器内旋转 token（一般也不需要）；
+  权限坏了 CLI 会 fallback 到"请再 login"——检查宿主 auth 文件权限。
+- **多 worker 复用**：适合。多个 worker 共享同一份宿主 auth 是安全的
+  （bearer auth 在 worker ↔ dashboard 之间走单独路径，CLI auth 与之无关）。
+
+### Recipe B — 容器内 `docker exec` 一次性登录
+
+适合一个 worker 用独立账号，或者宿主机本身没装该 CLI：
+
+```bash
+docker compose up -d worker
+docker exec -it aiworker-worker-example claude login
+docker exec -it aiworker-worker-example codex login
+# ... 每个 CLI 各跑一次
+```
+
+配合 `docker-compose.worker.example.yml` 里的 `aiworker_worker_home`
+volume 就能持续化 `/root` 下所有登录态。
+
+- **优点**：container 独立身份；不依赖宿主上装任何 CLI。
+- **缺点**：每建一个新 worker 都要重复一遍；OAuth 浏览器流在
+  headless 容器里需要走 device-code 备选路径。
+
+### 通用注意
+
+- Token 永远**不进镜像**。镜像里 bake auth 文件会把 secret 泄露给任何
+  `docker pull` 的人。
+- 登录后 dashboard engine picker 徽标从 `login required` 变 `ready`；
+  因为 availability probe 有 10 分钟 cache，按 Refresh 立即绕缓存重查。
+- 轮换 token 通常只需要替换 auth 文件/卷内容 + 重启 worker 容器
+  （worker bearer token 和 CLI auth 是两回事，不互相影响）。
+
 ## http / mcp / cli
 
 这三类引擎不依赖本地 CLI —— 它们走远端 HTTP / MCP / 任意命令，因此探测
