@@ -1,4 +1,9 @@
-import type { ChannelType, SafeRegisteredWorker, WorkerConfig } from '@aiworker/shared'
+import type {
+  ChannelType,
+  EngineAvailabilityResponse,
+  SafeRegisteredWorker,
+  WorkerConfig,
+} from '@aiworker/shared'
 import type {
   ChannelTestResponse,
   PutWorkerConfigResponse,
@@ -7,12 +12,13 @@ import type {
   WorkerConfigResponse,
 } from '@/lib/api'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect } from 'react'
+import { useCallback, useEffect } from 'react'
 import {
   deleteWorker,
   deleteWorkerSecret,
   getWorker,
   getWorkerConfig,
+  getWorkerEngines,
   getWorkerInfo,
   listWorkers,
   listWorkerSecrets,
@@ -207,4 +213,33 @@ export function useRotateWorkerToken(id: string) {
   return useMutation({
     mutationFn: () => rotateWorkerToken(id),
   })
+}
+
+// ---------------------------------------------------------------------------
+// FEAT-018 —— 引擎可达性探测。配套 worker 端 `GET /api/worker/engines`。
+// 10 分钟 staleTime 与 worker 端缓存 TTL 对齐，避免双层缓存串扰。
+// ---------------------------------------------------------------------------
+
+const workerEnginesKey = (id: string) => ['workers', id, 'engines'] as const
+
+export function useWorkerEngines(id: string | undefined) {
+  return useQuery<EngineAvailabilityResponse>({
+    queryKey: id ? workerEnginesKey(id) : ['workers', '__missing__', 'engines'],
+    queryFn: () => getWorkerEngines(id as string),
+    staleTime: 10 * 60_000,
+    enabled: Boolean(id),
+  })
+}
+
+/**
+ * 触发一次强制刷新：附带 `?refresh=1` 绕过 worker 10 分钟缓存，再让 TanStack
+ * Query 失效，这样配置面板上的徽标在操作员刚 `claude login` 之后就能即时更新。
+ */
+export function useRefreshWorkerEngines(id: string) {
+  const qc = useQueryClient()
+  return useCallback(async () => {
+    const fresh = await getWorkerEngines(id, { refresh: true })
+    qc.setQueryData<EngineAvailabilityResponse>(workerEnginesKey(id), fresh)
+    return fresh
+  }, [id, qc])
 }

@@ -7,6 +7,7 @@ import { z } from 'zod'
 import { workerEnv } from '../../config/worker'
 import { getWorkerDb } from '../../db/worker'
 import { AppError } from '../../shared'
+import { getAvailabilityProbe } from '../executor/availability'
 import { getSecretsVault } from '../secrets'
 import { buildBearerAuth } from './bearer-auth'
 import { handleBrainTest } from './brain-test'
@@ -237,6 +238,17 @@ export function buildManagementRoutes(deps: ManagementRoutesDeps) {
   routes.get('/runtime/processes/capacity', (c) => {
     const snap = deps.getState().runtime.processes.snapshot()
     return c.json(snap)
+  })
+
+  /**
+   * FEAT-018: 引擎可达性探测。返回每个 EngineKind 的 PATH + auth 文件命中情况，
+   * acp 展开为 gemini / qwen 两条记录。`?refresh=1` 绕过 10 分钟 in-memory 缓存，
+   * 便于操作员刚登录 CLI 后立即重查。结果不落 worker.db。
+   */
+  routes.get('/engines', async (c) => {
+    const refresh = c.req.query('refresh') === '1'
+    const engines = await getAvailabilityProbe().probeAll({ refresh })
+    return c.json({ engines })
   })
 
   return routes

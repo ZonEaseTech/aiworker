@@ -205,7 +205,7 @@ function ConfigForm({
         onChange={patchBrain}
       />
 
-      <ExecutorSection executor={draft.executor} onChange={setExecutor} />
+      <ExecutorSection workerId={workerId} executor={draft.executor} onChange={setExecutor} />
 
       <ChannelsSection channels={draft.channels} info={info} onChange={setChannels} />
 

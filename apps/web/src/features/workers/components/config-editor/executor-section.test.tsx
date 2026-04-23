@@ -1,25 +1,40 @@
-import type { ExecutorProfile } from '@aiworker/shared'
-import { fireEvent, render, screen } from '@testing-library/react'
+import type { EngineAvailabilityResponse, ExecutorProfile } from '@aiworker/shared'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useState } from 'react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ExecutorSection } from './executor-section'
+
+function makeClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, staleTime: 0, gcTime: 0 },
+      mutations: { retry: false },
+    },
+  })
+}
 
 function Harness({
   initial,
   onChange,
+  workerId,
 }: {
   initial: ExecutorProfile
   onChange: (next: ExecutorProfile) => void
+  workerId?: string
 }) {
   const [profile, setProfile] = useState<ExecutorProfile>(initial)
   return (
-    <ExecutorSection
-      executor={profile}
-      onChange={(next) => {
-        setProfile(next)
-        onChange(next)
-      }}
-    />
+    <QueryClientProvider client={makeClient()}>
+      <ExecutorSection
+        executor={profile}
+        onChange={(next) => {
+          setProfile(next)
+          onChange(next)
+        }}
+        workerId={workerId}
+      />
+    </QueryClientProvider>
   )
 }
 
@@ -39,6 +54,30 @@ function inputForLabel(text: string | RegExp): HTMLInputElement {
   }
   throw new Error(`no input found for label ${text}`)
 }
+
+/** Stub `/api/workers/:id/proxy/worker/engines` for tests that mount with workerId. */
+function stubEnginesFetch(response: EngineAvailabilityResponse) {
+  const mock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = typeof input === 'string' ? input : input.toString()
+    if (url.includes('/proxy/worker/engines')) {
+      return new Response(JSON.stringify(response), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    }
+    return new Response('not found', { status: 404 })
+  })
+  globalThis.fetch = mock as unknown as typeof fetch
+  return mock
+}
+
+let originalFetch: typeof fetch
+beforeEach(() => {
+  originalFetch = globalThis.fetch
+})
+afterEach(() => {
+  globalThis.fetch = originalFetch
+})
 
 describe('executorSection (FEAT-014 picker)', () => {
   it('renders the engine + variant pickers seeded with the current profile', () => {
@@ -190,5 +229,156 @@ describe('executorSection (FEAT-014 picker)', () => {
     const last = captured.at(-1)!
     expect(last.engine).toBe('cursor')
     expect((last.overrides as { model?: string } | undefined)?.model).toBe('gpt-5')
+  })
+})
+
+describe('executorSection (FEAT-018 availability badges)', () => {
+  it('renders three-state badges for each EngineKind when workerId is passed', async () => {
+    stubEnginesFetch({
+      engines: [
+        { kind: 'http', status: 'ready', checkedAt: 'now', authHint: 'no-cli-required' },
+        { kind: 'mcp', status: 'ready', checkedAt: 'now', authHint: 'no-cli-required' },
+        { kind: 'cli', status: 'ready', checkedAt: 'now', authHint: 'no-cli-required' },
+        { kind: 'claude-code', status: 'ready', checkedAt: 'now', binaryPath: '/usr/bin/claude', authHint: 'auth-file-present' },
+        { kind: 'codex', status: 'login-required', checkedAt: 'now', binaryPath: '/usr/bin/codex', authHint: 'auth-file-missing' },
+        { kind: 'cursor', status: 'not-found', checkedAt: 'now', authHint: 'binary-not-on-path' },
+        { kind: 'acp', agent: 'gemini', status: 'ready', checkedAt: 'now', binaryPath: '/usr/bin/gemini', authHint: 'auth-file-present' },
+        { kind: 'acp', agent: 'qwen', status: 'login-required', checkedAt: 'now', binaryPath: '/usr/bin/qwen', authHint: 'auth-file-missing' },
+      ],
+    })
+
+    render(
+      <Harness
+        initial={{ engine: 'http', variant: 'default' }}
+        onChange={() => undefined}
+        workerId="w_abc"
+      />,
+    )
+
+    // The availability row is only rendered once the query returns data, so
+    // waiting for the claude-code badge to get its `data-status` attribute is
+    // enough to gate the rest of the assertions on the loaded state.
+    await waitFor(() => {
+      const b = screen.getByTestId('engine-availability-badge-claude-code')
+      expect(b.getAttribute('data-status')).toBe('ready')
+    })
+    expect(screen.getByTestId('engine-availability-badge-codex').getAttribute('data-status')).toBe('login-required')
+    expect(screen.getByTestId('engine-availability-badge-cursor').getAttribute('data-status')).toBe('not-found')
+    // acp aggregates to ready because at least one agent (gemini) is ready.
+    expect(screen.getByTestId('engine-availability-badge-acp').getAttribute('data-status')).toBe('ready')
+  })
+
+  it('shows install callout when the selected engine is not installed', async () => {
+    stubEnginesFetch({
+      engines: [
+        { kind: 'cursor', status: 'not-found', checkedAt: 'now', authHint: 'binary-not-on-path' },
+      ],
+    })
+
+    render(
+      <Harness
+        initial={{ engine: 'cursor', variant: 'default' }}
+        onChange={() => undefined}
+        workerId="w_abc"
+      />,
+    )
+
+    const callout = await screen.findByTestId('engine-install-callout')
+    expect(callout).toBeTruthy()
+    const link = callout.querySelector('a')
+    expect(link?.getAttribute('href')).toContain('#cursor')
+  })
+
+  it('shows login callout when the CLI is installed but auth is missing', async () => {
+    stubEnginesFetch({
+      engines: [
+        { kind: 'claude-code', status: 'login-required', checkedAt: 'now', binaryPath: '/usr/bin/claude', authHint: 'auth-file-missing' },
+      ],
+    })
+
+    render(
+      <Harness
+        initial={{ engine: 'claude-code', variant: 'default' }}
+        onChange={() => undefined}
+        workerId="w_abc"
+      />,
+    )
+
+    const callout = await screen.findByTestId('engine-login-callout')
+    expect(callout).toBeTruthy()
+  })
+
+  it('refresh button triggers a refetch with ?refresh=1', async () => {
+    const fetchSpy = stubEnginesFetch({
+      engines: [
+        { kind: 'claude-code', status: 'login-required', checkedAt: 'now', binaryPath: '/usr/bin/claude', authHint: 'auth-file-missing' },
+      ],
+    })
+
+    render(
+      <Harness
+        initial={{ engine: 'claude-code', variant: 'default' }}
+        onChange={() => undefined}
+        workerId="w_abc"
+      />,
+    )
+
+    // Wait for the initial fetch (no `refresh=1`) to land and the login callout
+    // to render — that proves the query resolved before we click Refresh.
+    await screen.findByTestId('engine-login-callout')
+    const initialCalls = fetchSpy.mock.calls.length
+    expect(initialCalls).toBeGreaterThanOrEqual(1)
+    const firstUrl = fetchSpy.mock.calls[0]![0]
+    expect(String(firstUrl)).not.toContain('refresh=1')
+
+    const refreshBtn = await screen.findByTestId('refresh-engines-btn')
+    fireEvent.click(refreshBtn)
+
+    await waitFor(() => expect(fetchSpy.mock.calls.length).toBeGreaterThan(initialCalls))
+    const refreshCall = fetchSpy.mock.calls
+      .slice(initialCalls)
+      .find(c => String(c[0]).includes('refresh=1'))
+    expect(refreshCall).toBeDefined()
+  })
+
+  it('does not render availability row or refresh button when workerId is missing', () => {
+    render(
+      <Harness
+        initial={{ engine: 'http', variant: 'default' }}
+        onChange={() => undefined}
+      />,
+    )
+    expect(screen.queryByTestId('refresh-engines-btn')).toBeNull()
+    expect(screen.queryByTestId('engine-availability-http')).toBeNull()
+  })
+
+  it('renders the acp variant selected badge for each agent', async () => {
+    stubEnginesFetch({
+      engines: [
+        { kind: 'acp', agent: 'gemini', status: 'ready', checkedAt: 'now', binaryPath: '/x', authHint: 'auth-file-present' },
+        { kind: 'acp', agent: 'qwen', status: 'not-found', checkedAt: 'now', authHint: 'binary-not-on-path' },
+      ],
+    })
+
+    render(
+      <Harness
+        initial={{ engine: 'acp', variant: 'gemini' }}
+        onChange={() => undefined}
+        workerId="w_abc"
+      />,
+    )
+
+    await waitFor(() => {
+      const badge = screen.getByTestId('variant-selected-badge')
+      expect(badge.getAttribute('data-status')).toBe('ready')
+    })
+
+    const variantSelect = screen.getByLabelText('Variant') as HTMLSelectElement
+    fireEvent.change(variantSelect, { target: { value: 'qwen' } })
+
+    await waitFor(() => {
+      const b2 = screen.getByTestId('variant-selected-badge')
+      expect(b2.getAttribute('data-status')).toBe('not-found')
+    })
   })
 })

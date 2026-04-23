@@ -1,7 +1,5 @@
-import type { AcpAgentDefinition, AvailabilityInfo } from './types'
-import fs from 'node:fs/promises'
-import os from 'node:os'
-import path from 'node:path'
+import type { AcpAgentDefinition } from './types'
+import { probeAcpGeminiAuth } from '../../../availability'
 
 /**
  * Gemini CLI ACP adapter. Data-only — harness logic lives in `harness.ts`.
@@ -10,6 +8,9 @@ import path from 'node:path'
  * flag puts the CLI into ACP mode (JSON-RPC over stdio). We pair it with
  * `--yolo` + an allowed-tools list so the FEAT-013 auto-approve path never
  * hits interactive prompts.
+ *
+ * FEAT-018 起 auth 探测逻辑统一由 `worker/executor/availability.ts` 托管，本
+ * 文件仅保留声明性绑定以消除重复。
  */
 export const geminiAgent: AcpAgentDefinition = {
   id: 'gemini',
@@ -28,29 +29,5 @@ export const geminiAgent: AcpAgentDefinition = {
       args.push(...extraArgs)
     return args
   },
-  authProbe: async () => probeGeminiAuth(),
-}
-
-async function probeGeminiAuth(): Promise<AvailabilityInfo> {
-  const checkedAt = new Date().toISOString()
-  // Gemini CLI stores OAuth credentials under ~/.gemini — presence of the
-  // creds file is treated as "logged in". If the directory exists but the
-  // creds file doesn't we downgrade to "InstallationFound".
-  const home = os.homedir()
-  const credsPath = path.join(home, '.gemini', 'oauth_creds.json')
-  const configPath = path.join(home, '.gemini', 'settings.json')
-  try {
-    await fs.stat(credsPath)
-    return { status: 'LoginDetected', checkedAt, detail: 'oauth_creds.json present' }
-  }
-  catch {
-    // fall through to settings.json check
-  }
-  try {
-    await fs.stat(configPath)
-    return { status: 'InstallationFound', checkedAt, detail: 'settings.json present, login pending' }
-  }
-  catch {
-    return { status: 'NotFound', checkedAt, detail: '~/.gemini not present' }
-  }
+  authProbe: () => probeAcpGeminiAuth(),
 }
