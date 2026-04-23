@@ -1,9 +1,10 @@
 # FEAT-021 Bake Cursor agent into the full image (optional)
 
-- **status**: pending
+- **status**: completed
 - **priority**: P3
-- **owner**: (unassigned)
+- **owner**: BKD subtask s306n1zj
 - **createdAt**: 2026-04-23 06:05
+- **completedAt**: 2026-04-23 08:56
 
 ## Description
 
@@ -53,3 +54,29 @@ Adding the cursor-agent installer to the full image.
 - Because the Cursor installer hits the network at build time, CI failures
   are a real concern. Cache the installed binary into buildx cache or
   fallback to a committed installer script.
+
+### Implementation notes (2026-04-23 08:56)
+
+Landed as `bkd/s306n1zj` commit `2dae80a`, merged to main in `7928639`.
+GHCR double-tag build `24826143375` passed in 3m41s (slim cached → only
+the full stage paid the cursor curl fetch), with `cursor-agent --version`
+as the build-time sanity gate.
+
+Key design decisions the subtask made:
+
+1. **Installer URL correction** — the task prompt suggested `cursor.com/install-agent`, which returned 404 in real tests. The actual endpoint is `cursor.com/install`. Subtask committed the corrected URL.
+2. **Bash wrapper + symlink over copy** — `cursor-agent` is a bash wrapper that resolves its sibling `node` binary via `realpath $0`. Copying the single file to `/usr/local/bin/` breaks path resolution. Solution: `ln -sf "$(readlink -f /root/.local/bin/cursor-agent)" /usr/local/bin/cursor-agent`, so `/usr/local/bin/cursor-agent` points at the versioned binary under `/root/.local/share/cursor-agent/versions/<ver>/`, and realpath traversal still finds the sibling `node`.
+3. **`bash -euo pipefail -c '...'`** wrapping the `curl | bash` so a CDN failure on the curl side of the pipe fails the RUN instead of silently executing empty stdin (dash's default behaviour).
+4. **glibc compatibility confirmed** — `oven/bun:1-debian` is based on Debian trixie (glibc 2.41); cursor requires 2.28+. No libc compatibility work needed.
+
+Remaining items:
+
+- P3: image size estimate of `~320 MB` in docs is a rough guess (curl tarball ~64 MB, unpacked ~130 MB node binary + JS assets). After a merge-time GHCR build, the actual layer size can be measured and docs updated.
+- P2: the cursor tarball includes a bundled Node.js runtime, not shared with bun — this is wasteful but unavoidable given cursor's distribution model. Multi-arch support beyond amd64 is out of scope.
+
+Verification (coordinator-run after merge):
+
+- `bun run typecheck` — shared / api / web all green.
+- `bun test` — shared 18 / api 429 / web 37.
+- `bun run lint` — 0 errors.
+- GHCR double-tag build `24826143375` → slim and `-full` both published; `cursor-agent --version` gate passed.

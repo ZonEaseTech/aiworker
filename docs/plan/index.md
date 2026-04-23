@@ -37,4 +37,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-006 P2 batch — channel adapters + evolution generator**](PLAN-006.md) `2026-04-21`
 - [x] [**PLAN-007 Multi-engine executor refactor**](PLAN-007.md) `2026-04-22`
 - [x] [**PLAN-008 Worker registration UX + engine availability**](PLAN-008.md) `2026-04-23`
-- [-] [**PLAN-009 Worker image bundling + model picker**](PLAN-009.md) `2026-04-23`
+- [x] [**PLAN-009 Worker image bundling + model picker**](PLAN-009.md) `2026-04-23`

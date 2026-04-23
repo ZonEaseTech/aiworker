@@ -1,5 +1,52 @@
 # AIWorker Changelog
 
+## 2026-04-23 08:56 [release]
+
+**PLAN-009 worker image bundling + model picker complete.** Four FEATs (FEAT-019 / 020 / 022 / 021) landed across one day. Net effect: engine picker shows known-model presets instead of free text; every build pushes two image tags (slim / full); `-full` pre-installs all five agentic CLIs (claude-code / codex / gemini-cli / qwen-code / cursor-agent) so workers skip the `npx` cold fetch; operator docs + `docker-compose.worker.example.yml` enumerate auth-mount recipes.
+
+FEAT-021 — final step — delivered via BKD worktree subtask `s306n1zj` commit `2dae80a`, merged in `7928639`. 4 files, +33 / −16 (Dockerfile + docs).
+
+Dockerfile:
+
+- `runtime-full` stage gains a Cursor agent install step. Since Cursor has no npm package, we use the official `curl -fsSL https://cursor.com/install | bash` script. The installer drops cursor-agent as a bash wrapper at `~/.local/bin/cursor-agent` that resolves its sibling `node` binary via `realpath $0`, so we re-symlink `/usr/local/bin/cursor-agent` at the same versioned binary instead of copying the file. `cursor-agent --version` runs at build time as a sanity gate.
+- `bash -euo pipefail -c '...'` wraps the RUN so curl failures on the pipe side fail the build (default dash swallows them).
+
+Docs:
+
+- `docs/executor-engines.md` #cursor section updated: `-full` image now pre-installs cursor-agent; slim still requires the manual installer. Top-level slim/full table size bumped to ~320 MB.
+- `docs/deployment.md` Slim vs Full table expanded to include cursor-agent.
+
+Verification:
+
+- `bun run typecheck` clean across shared / api / web.
+- `bun test` — shared 18, api 429, web 37.
+- `bun run lint` — 0 errors.
+- GHCR build `24826143375` double-tag push succeeded (3m41s; slim cache hit → only full stage paid network). All 5 CLIs' `--version` gates passed inside `-full` layer.
+
+### PLAN-009 final tally (FEAT-019 → FEAT-022 → FEAT-021)
+
+| FEAT | Scope | Delta |
+|---|---|---|
+| 019 | Per-variant `knownModels` catalog + lean preset `<select>` + `Custom…` escape | web tests +5 |
+| 020 | Dockerfile `runtime-full` stage, dual-tag GHCR publish, `--image-variant` deploy flag, `AIWORKER_IMAGE_VARIANT_SUFFIX` compose env | ops + docs only |
+| 022 | `docker-compose.worker.example.yml` + auth recipes in executor-engines + Register dialog `<details>` hint | docs + 1 frontend component |
+| 021 | Cursor agent bake (symlink + realpath) | Dockerfile + docs |
+
+- shared tests: 18 (unchanged this plan).
+- api tests: 429 (unchanged this plan).
+- web tests: 32 → **37** (+5 FEAT-019).
+- lint baseline: 0 → 0.
+- Image tags per push: 1 → **2** (`<sha>` slim + `<sha>-full`).
+
+### Runtime capabilities post-PLAN-009
+
+- **Dashboard runs on slim** — it doesn't need agentic CLIs.
+- **Worker can pick slim or full** per compose. Full adds ~170 MB but skips first-use npx / curl fetches for every agentic engine.
+- **Picker UX** — variant form fields with a `knownModels` entry render as preset `<select>` + `Custom…`; free text is still one click away, but typos are no longer the default.
+- **Auth still operator's job** — pre-install ≠ pre-login. Register dialog now nudges operators to the recipe docs.
+
+Pointer: `docs/plan/PLAN-009.md` (status `completed`), `docs/task/FEAT-019.md` / `FEAT-020.md` / `FEAT-021.md` / `FEAT-022.md`.
+
 ## 2026-04-23 05:35 [release]
 
 **PLAN-008 worker registration UX + engine availability complete.** Two FEATs (FEAT-017, FEAT-018) landed on main in a single calendar day on top of PLAN-007's GA.

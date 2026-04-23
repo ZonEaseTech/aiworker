@@ -1,8 +1,9 @@
 # PLAN-009 Worker image bundling + model picker
 
-- **status**: implementing
+- **status**: completed
 - **createdAt**: 2026-04-23 06:05
 - **approvedAt**: 2026-04-23 06:05
+- **completedAt**: 2026-04-23 08:56
 - **relatedTask**: FEAT-019, FEAT-020, FEAT-021, FEAT-022
 
 ## Context
