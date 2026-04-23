@@ -1,9 +1,10 @@
 # FEAT-018 Engine availability discovery
 
-- **status**: pending
+- **status**: completed
 - **priority**: P1
-- **owner**: (unassigned)
+- **owner**: BKD subtask cly4ayr3
 - **createdAt**: 2026-04-23 05:00
+- **completedAt**: 2026-04-23 05:35
 
 ## Description
 
@@ -84,3 +85,30 @@ Adding worker-side engine availability probing and a picker badge.
 - Reuse FEAT-013's `AvailabilityInfo` if compatible; otherwise promote a
   shared `AvailabilityInfo` type to `@aiworker/shared/providers` and
   migrate ACP's internal one to it.
+
+### Implementation notes (2026-04-23 05:35)
+
+Landed as `bkd/cly4ayr3` commit `c5d9db8`, merged to main in `d5332f5`. 16
+files / +1327 / −87. Base correct (`aa10f69` = FEAT-017); no rework needed.
+
+Key design decisions:
+
+1. **Shared type surface in `@aiworker/shared/providers/availability.ts`** — `EngineAvailability`, `EngineAvailabilityStatus` (`ready | login-required | not-found`), `EngineAvailabilityResponse`. Consumed by worker probe, dashboard types, and frontend hook.
+2. **Worker-side probe `apps/api/src/worker/executor/availability.ts`** — singleton `AvailabilityProbe` with DI-friendly `fsExists` / `resolveBinary` to keep tests hermetic. 10-minute cache with `resetAvailabilityProbeForTests()` for unit tests. Seven `EngineKind` entries; `acp` expands to two entries with `agent: 'gemini' | 'qwen'`.
+3. **Probe rules stay file-only** — PATH lookup + auth file mtime. No `--version` shell-outs, no network. Honours the "cheap probe" risk entry in PLAN-008.
+4. **ACP agent modules simplified** — `engines/acp/agents/gemini.ts` and `qwen.ts` drop their inline `authProbe` and import from the shared `availability.ts`. One source of truth. The existing `AvailabilityInfo` contract inside ACP is gone; callers now read the shared type.
+5. **New route `GET /api/worker/engines`** (bearer-auth) in `management/routes.ts`; supports `?refresh=1` to bypass cache. Returns `{ engines: EngineAvailability[] }`.
+6. **Frontend hook `useWorkerEngines(workerId)`** in `apps/web/src/features/workers/hooks.ts` — TanStack Query against the transparent proxy, 10-minute stale time. `refreshWorkerEngines()` helper invalidates the key.
+7. **Executor picker UX** in `executor-section.tsx` — each engine option gets a 2-color dot + short label via `engine-availability.ts` status helper. Not-installed engines stay clickable; the variant panel renders a callout with a link to `docs/executor-engines.md#<engine>` when the chosen engine is absent. `acp` variant sub-picker (gemini / qwen) shows the per-agent badge. A Refresh icon-button next to the engine label triggers `refreshWorkerEngines()`.
+8. **New doc `docs/executor-engines.md`** — one section per non-trivial engine (claude-code / acp-gemini / acp-qwen / codex / cursor) with install command, auth command, and container-embedding guidance.
+
+Remaining items:
+
+- P3: auth probe is still best-effort (file presence only). "login-required" honestly means "no auth file found", not "auth expired". This is the same limit vibe-kanban and bkd accept; matches PLAN-008 risk #3.
+- P3: cursor auth path heuristic checked `~/.cursor/cli-config.json` and `~/.cursor-agent/` — validate against real CLI output before relying on it in prod.
+
+Verification (coordinator-run after merge):
+
+- `bun run typecheck` — shared / api / web all green.
+- `bun test` — shared 18 / 18, api 429 / 429 (+16), web 32 / 32 (+6).
+- `bun run lint` — 0 errors (baseline stays clean; FEAT-018 subtask moved a few non-component exports out of `executor-section.tsx` to silence `react-refresh/only-export-components`).

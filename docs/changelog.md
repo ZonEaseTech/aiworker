@@ -1,5 +1,52 @@
 # AIWorker Changelog
 
+## 2026-04-23 05:35 [release]
+
+**PLAN-008 worker registration UX + engine availability complete.** Two FEATs (FEAT-017, FEAT-018) landed on main in a single calendar day on top of PLAN-007's GA.
+
+Final FEAT — **FEAT-018 Engine availability discovery** — delivered via BKD worktree subtask `cly4ayr3` commit `c5d9db8`, merged in `d5332f5`. 16 files / +1327 / −87. No rework (base `aa10f69` picked up correctly).
+
+Shared:
+
+- **New** `packages/shared/src/providers/availability.ts` — `EngineAvailability`, `EngineAvailabilityStatus` (`ready | login-required | not-found`), `EngineAvailabilityResponse`. Re-exported via `@aiworker/shared`.
+
+API:
+
+- **New** `apps/api/src/worker/executor/availability.ts` — singleton `AvailabilityProbe` with dependency-injected `fsExists` / `resolveBinary` for hermetic tests, 10-minute cache, `resetAvailabilityProbeForTests()` helper. Covers all seven `EngineKind` (acp expands to `{agent:'gemini'}` and `{agent:'qwen'}`). File-presence probes only — no `--version` shell-outs, no network.
+- `apps/api/src/worker/executor/engines/acp/agents/{gemini,qwen}.ts` — inline `authProbe` removed; both agents now import from the shared `availability.ts`. One source of truth for engine probing.
+- `apps/api/src/worker/management/routes.ts` — new bearer-authed `GET /api/worker/engines` with `?refresh=1` cache-bust query, returns `{engines: EngineAvailability[]}`.
+
+Web:
+
+- `apps/web/src/features/workers/hooks.ts` — `useWorkerEngines(workerId)` hook (TanStack Query, 10-minute stale) + `refreshWorkerEngines(workerId)` helper.
+- **New** `apps/web/src/features/workers/components/config-editor/engine-availability.ts` — status → dot-color + short-label mapping, extracted out of `executor-section.tsx` to appease `react-refresh/only-export-components`.
+- `apps/web/src/features/workers/components/config-editor/executor-section.tsx` — engine picker renders availability badge per option; `acp` variant sub-picker shows per-agent (gemini / qwen) badge; not-installed engines stay clickable and the variant panel shows a callout linking to `docs/executor-engines.md#<engine>`. Refresh icon-button invalidates the engines query.
+- `apps/web/src/lib/api.ts` — `fetchWorkerEngines(workerId, refresh?)` client helper.
+
+Docs:
+
+- **New** `docs/executor-engines.md` — one section per non-trivial engine (claude-code / acp-gemini / acp-qwen / codex / cursor) with install command, auth command, container-embedding guidance.
+
+Tests (+22):
+
+- `apps/api/src/worker/executor/availability.test.ts` (+16) — three-status matrix across all engines, cache behaviour, refresh path.
+- `apps/api/src/worker/management/routes.test.ts` — bearer-auth + shape + `?refresh=1` cases.
+- `apps/web/.../executor-section.test.tsx` (+6) — three-badge render, not-installed callout, Refresh click.
+
+### PLAN-008 final tally (FEAT-017 → FEAT-018)
+
+| FEAT | Scope | Tests added |
+|---|---|---|
+| 017 | Register dialog UX: better Base URL guidance + client-side token generator + `AIWORKER_FORCE_TOKEN` helper | shared +6 |
+| 018 | Worker-side engine probe + `GET /api/worker/engines` + frontend availability badges + install docs | api +16, web +6 |
+
+- shared tests: 12 → **18** (+6 from FEAT-017).
+- api tests: 413 → **429** (+16).
+- web tests: 26 → **32** (+6).
+- lint baseline: 0 → 0.
+
+Pointer: `docs/plan/PLAN-008.md` (status `completed`), `docs/task/FEAT-017.md`, `docs/task/FEAT-018.md`.
+
 ## 2026-04-23 05:15 [progress]
 
 PLAN-008 step 1 / 2 — **FEAT-017 Register dialog UX polish** landed. Fixes two operator papercuts surfaced during the post-PLAN-007 smoke on `https://gateway.example.test`.

@@ -50,4 +50,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-015 Process manager replacing AsyncQueue**](FEAT-015.md) `P2`
 - [x] [**FEAT-016 Codex and Cursor agent adapters (optional)**](FEAT-016.md) `P3`
 - [x] [**FEAT-017 Register worker UX improvements**](FEAT-017.md) `P1`
-- [ ] [**FEAT-018 Engine availability discovery**](FEAT-018.md) `P1`
+- [x] [**FEAT-018 Engine availability discovery**](FEAT-018.md) `P1`

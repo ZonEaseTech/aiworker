@@ -1,8 +1,9 @@
 # PLAN-008 Worker registration UX + engine availability
 
-- **status**: implementing
+- **status**: completed
 - **createdAt**: 2026-04-23 05:00
 - **approvedAt**: 2026-04-23 05:00
+- **completedAt**: 2026-04-23 05:35
 - **relatedTask**: FEAT-017, FEAT-018
 
 ## Context

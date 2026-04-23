@@ -36,4 +36,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-005 aissh-driven fleet deployment automation**](PLAN-005.md) `2026-04-21`
 - [x] [**PLAN-006 P2 batch — channel adapters + evolution generator**](PLAN-006.md) `2026-04-21`
 - [x] [**PLAN-007 Multi-engine executor refactor**](PLAN-007.md) `2026-04-22`
-- [-] [**PLAN-008 Worker registration UX + engine availability**](PLAN-008.md) `2026-04-23`
+- [x] [**PLAN-008 Worker registration UX + engine availability**](PLAN-008.md) `2026-04-23`
