@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-04-22 09:20
+> Updated: 2026-04-23 05:00
 
 ## Usage
 
@@ -49,3 +49,5 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-014 Three-tier ExecutorConfig and frontend picker**](FEAT-014.md) `P1`
 - [x] [**FEAT-015 Process manager replacing AsyncQueue**](FEAT-015.md) `P2`
 - [x] [**FEAT-016 Codex and Cursor agent adapters (optional)**](FEAT-016.md) `P3`
+- [x] [**FEAT-017 Register worker UX improvements**](FEAT-017.md) `P1`
+- [ ] [**FEAT-018 Engine availability discovery**](FEAT-018.md) `P1`

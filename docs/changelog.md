@@ -1,5 +1,30 @@
 # AIWorker Changelog
 
+## 2026-04-23 05:15 [progress]
+
+PLAN-008 step 1 / 2 — **FEAT-017 Register dialog UX polish** landed. Fixes two operator papercuts surfaced during the post-PLAN-007 smoke on `https://gateway.example.test`.
+
+Shared:
+
+- `packages/shared/src/fleet/worker-identity.ts` — new `generateWorkerApiToken()` producing `wtk_` + 43 chars base64url of 32 CSPRNG bytes. Re-exported through `@aiworker/shared/fleet` and `@aiworker/shared` root.
+- `packages/shared/src/fleet/worker-identity.test.ts` (new) — 6 cases: prefix, pattern match (100 samples), length, uniqueness over 1000 invocations, base64url alphabet.
+
+Web:
+
+- `apps/web/src/features/workers/components/register-wizard.tsx` — `Base URL` placeholder now `http://aiworker-worker:3000`; inline helper line enumerates the three typical shapes (same-compose / reverse-proxy / direct-port). Bootstrap API token row gains a `Generate` button that calls `generateWorkerApiToken()`, prefills the field, and surfaces a helper block containing the ready-to-paste `AIWORKER_FORCE_TOKEN=<token>` env assignment with copy-to-clipboard. Generated-value tracking invalidates itself on manual edit to avoid stale helper blocks. Import of `WORKER_API_TOKEN_PREFIX` from `@aiworker/shared` replaces the local duplicate constant.
+
+Docs:
+
+- `docs/deployment.md` — new subsections `Worker base URL formats` (three-shape table + pitfalls) and `Bootstrap token options` (manual vs dashboard-generated + `AIWORKER_FORCE_TOKEN` one-shot semantics).
+
+Verification:
+
+- `bun run typecheck` clean across shared / api / web.
+- `bun test` — shared 18 / 18 (+6), api 413 / 413, web 26 / 26.
+- `bun run lint` — 0 errors.
+
+Pointer: `docs/plan/PLAN-008.md`, `docs/task/FEAT-017.md`.
+
 ## 2026-04-22 19:15 [release]
 
 **PLAN-007 multi-engine executor refactor complete.** All 6 FEAT (FEAT-011..016) landed on main. AIWorker workers now support 7 executor engines behind a three-tier config + slot-aware scheduler.

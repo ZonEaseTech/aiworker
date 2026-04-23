@@ -119,6 +119,43 @@ registers them by URL + bootstrap token. See
 [PLAN-004](plan/PLAN-004.md#operator-flow) for the registration walkthrough.
 FEAT-009 does **not** automate worker deployment; that is follow-up work.
 
+### Worker base URL formats
+
+The Register dialog's `Base URL` is the dashboard → worker HTTP endpoint. It
+must be the worker's HTTP root: scheme + host/port, **no trailing path**. The
+dashboard concatenates `/api/worker/info`, `/api/worker/config`, etc. on top.
+
+| Topology | Example `Base URL` |
+|---|---|
+| Dashboard and worker share a docker compose network | `http://aiworker-worker:3000` |
+| Worker on a different host, fronted by HTTPS reverse proxy | `https://worker-1.example.com` |
+| Worker on a different host, reachable by direct port | `http://<test-server-ip-redacted>:3001` |
+
+Notes:
+
+- The dashboard always connects server-side (not through the operator's
+  browser), so internal docker hostnames resolve fine.
+- `http` vs `https` just has to match what the worker actually serves.
+- Do not include `/api/worker` or any suffix — if registration fails with
+  `worker-unreachable`, a stray path is a common cause.
+
+### Bootstrap token options
+
+The Register dialog accepts a `wtk_`-prefixed token that must match the
+worker's live `worker_identity`. Two ways to obtain one:
+
+1. **Let the worker mint its own**: start the worker container with no
+   `AIWORKER_FORCE_TOKEN`; on first boot it generates a token and prints it
+   once to stdout. Copy it from `docker logs <worker-container>` and paste
+   it into the dashboard.
+2. **Have the dashboard mint it** (FEAT-017): click **Generate** in the
+   Register dialog — a CSPRNG produces a compliant token in the browser.
+   Set `AIWORKER_FORCE_TOKEN=<token>` on the worker container *before its
+   first boot* (e.g. add it to the worker compose `environment:` block).
+   The worker will then use exactly that token instead of minting its own.
+   `AIWORKER_FORCE_TOKEN` is a one-shot knob — it is ignored when the
+   worker already has a `worker_identity` row.
+
 ## Troubleshooting
 
 - `aissh exec` prints an operation id and `approval required`: run

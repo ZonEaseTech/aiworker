@@ -29,6 +29,28 @@ export function isWorkerApiToken(value: unknown): value is WorkerApiToken {
 }
 
 /**
+ * Mint a fresh bootstrap API token that satisfies `WORKER_API_TOKEN_PATTERN`.
+ *
+ * Produces 32 random bytes via Web Crypto (`crypto.getRandomValues`, CSPRNG
+ * quality in browsers, Bun, and Node ≥ 20) and encodes them as base64url.
+ * Result is always `wtk_` + 43 chars. Shared between the dashboard's in-browser
+ * Generate button (FEAT-017) and any future server-side minting path, so
+ * format stays lockstep across producers.
+ */
+export function generateWorkerApiToken(): WorkerApiToken {
+  const bytes = new Uint8Array(32)
+  globalThis.crypto.getRandomValues(bytes)
+  return `${WORKER_API_TOKEN_PREFIX}${base64UrlEncode(bytes)}` as WorkerApiToken
+}
+
+function base64UrlEncode(bytes: Uint8Array): string {
+  let binary = ''
+  for (const b of bytes)
+    binary += String.fromCharCode(b)
+  return globalThis.btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+/**
  * Worker-side singleton row that owns the worker's stable identity.
  * Persisted in `worker.db.worker_identity` (pk fixed to `'default'`); see
  * PLAN-004 §Data model. The `pk` column is intentionally omitted from the

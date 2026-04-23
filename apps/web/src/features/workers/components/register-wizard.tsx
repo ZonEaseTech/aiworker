@@ -1,6 +1,7 @@
 import type { SafeRegisteredWorker } from '@aiworker/shared'
+import { generateWorkerApiToken, WORKER_API_TOKEN_PREFIX } from '@aiworker/shared'
 import { useNavigate } from '@tanstack/react-router'
-import { CheckCircle2, Eye, EyeOff } from 'lucide-react'
+import { CheckCircle2, Copy, Eye, EyeOff, Info, Sparkles } from 'lucide-react'
 import { useId, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -10,8 +11,6 @@ import { Label } from '@/components/ui/label'
 import { WorkerApiError } from '@/lib/api'
 import { useRegisterWorker } from '../hooks'
 import { stateBadgeLabel, stateBadgeVariant } from '../utils'
-
-const WORKER_API_TOKEN_PREFIX = 'wtk_'
 
 interface FormErrors {
   baseUrl?: string
@@ -84,12 +83,38 @@ function RegisterForm({ onCancel, onSuccess }: RegisterFormProps) {
   const baseUrlId = useId()
   const apiTokenId = useId()
   const displayNameId = useId()
+  const baseUrlHelpId = useId()
   const [baseUrl, setBaseUrl] = useState('')
   const [apiToken, setApiToken] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [showToken, setShowToken] = useState(false)
+  const [generatedToken, setGeneratedToken] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
   const [errors, setErrors] = useState<FormErrors>({})
   const register = useRegisterWorker()
+
+  function onGenerateToken() {
+    const token = generateWorkerApiToken()
+    setApiToken(token)
+    setGeneratedToken(token)
+    setShowToken(true)
+    setCopied(false)
+    setErrors(prev => ({ ...prev, apiToken: undefined }))
+  }
+
+  async function onCopyToken() {
+    if (!generatedToken)
+      return
+    try {
+      await navigator.clipboard.writeText(generatedToken)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    }
+    catch {
+      // Clipboard write may fail in insecure contexts; operator can still
+      // select the field value by hand.
+    }
+  }
 
   function validate(): FormErrors | null {
     const next: FormErrors = {}
@@ -150,14 +175,27 @@ function RegisterForm({ onCancel, onSuccess }: RegisterFormProps) {
           <Label htmlFor={baseUrlId}>Base URL</Label>
           <Input
             id={baseUrlId}
-            placeholder="https://worker.example.com"
+            placeholder="http://aiworker-worker:3000"
             value={baseUrl}
             onChange={e => setBaseUrl(e.target.value)}
             autoComplete="off"
             autoFocus
             data-invalid={errors.baseUrl ? 'true' : undefined}
             aria-invalid={errors.baseUrl ? 'true' : undefined}
+            aria-describedby={baseUrlHelpId}
           />
+          <p id={baseUrlHelpId} className="flex items-start gap-1.5 text-xs text-muted-foreground">
+            <Info className="mt-0.5 size-3.5 shrink-0" />
+            <span>
+              Worker's HTTP root — scheme + host/port, no trailing path. Typical shapes:
+              <code className="mx-1 rounded bg-muted px-1 py-0.5 font-mono">http://aiworker-worker:3000</code>
+              (same compose),
+              <code className="mx-1 rounded bg-muted px-1 py-0.5 font-mono">https://worker-1.example.com</code>
+              (reverse proxy),
+              <code className="mx-1 rounded bg-muted px-1 py-0.5 font-mono">http://<test-server-ip-redacted>:3001</code>
+              (direct port).
+            </span>
+          </p>
           <FieldError message={errors.baseUrl} />
         </div>
 
@@ -168,7 +206,13 @@ function RegisterForm({ onCancel, onSuccess }: RegisterFormProps) {
               id={apiTokenId}
               placeholder="wtk_…"
               value={apiToken}
-              onChange={e => setApiToken(e.target.value)}
+              onChange={(e) => {
+                setApiToken(e.target.value)
+                // Any manual edit invalidates the "this value was just minted
+                // by the dashboard" claim — hide the helper block.
+                if (generatedToken && e.target.value !== generatedToken)
+                  setGeneratedToken(null)
+              }}
               type={showToken ? 'text' : 'password'}
               autoComplete="off"
               spellCheck={false}
@@ -183,8 +227,58 @@ function RegisterForm({ onCancel, onSuccess }: RegisterFormProps) {
             >
               {showToken ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
             </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onGenerateToken}
+              aria-label="Generate API token"
+            >
+              <Sparkles className="size-4" />
+              Generate
+            </Button>
           </div>
           <FieldError message={errors.apiToken} />
+          {generatedToken && (
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 text-xs">
+              <p className="mb-2 font-medium text-foreground">
+                Token minted in this browser.
+              </p>
+              <p className="mb-2 text-muted-foreground">
+                Set it as an env var on the worker container before first
+                boot — only honoured on a fresh worker (no
+                {' '}
+                <code className="rounded bg-muted px-1 py-0.5 font-mono">worker_identity</code>
+                {' '}
+                row yet):
+              </p>
+              <div className="flex items-center gap-2 rounded bg-muted/60 px-2 py-1.5 font-mono text-[11px]">
+                <code className="flex-1 break-all">
+                  AIWORKER_FORCE_TOKEN=
+                  {generatedToken}
+                </code>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-6"
+                  onClick={onCopyToken}
+                  aria-label="Copy env assignment"
+                >
+                  <Copy className="size-3" />
+                </Button>
+              </div>
+              {copied && (
+                <p role="status" className="mt-1 text-emerald-600 dark:text-emerald-400">
+                  Copied.
+                </p>
+              )}
+              <p className="mt-2 text-muted-foreground">
+                If the worker already minted its own token on a previous
+                boot, this env var is ignored and registration will fail —
+                use the token from its startup logs instead.
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="grid gap-1.5">

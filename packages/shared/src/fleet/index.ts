@@ -76,6 +76,7 @@ export type {
 } from './worker'
 
 export {
+  generateWorkerApiToken,
   isWorkerApiToken,
   WORKER_API_TOKEN_PATTERN,
   WORKER_API_TOKEN_PREFIX,
