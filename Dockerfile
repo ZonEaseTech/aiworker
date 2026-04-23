@@ -7,9 +7,9 @@
 #                  by installing the CLI at container-start time.
 #   runtime-full — adds pinned npm installs for the four npm-available
 #                  agentic CLIs (claude-code / codex / gemini-cli /
-#                  qwen-code). Cursor is intentionally out because it has no
-#                  npm package; see FEAT-021 for the optional curl-installer
-#                  stage.
+#                  qwen-code) plus the Cursor agent (installed via the
+#                  official curl-to-bash script since Cursor has no npm
+#                  package; FEAT-021 bakes the tarball into the image).
 #
 # Version constants (FEAT-020 keeps them here as build args; the TS source
 # of truth lives at:
@@ -74,4 +74,19 @@ RUN npm install -g \
  && codex --version \
  && gemini --version \
  && qwen --version
+# Cursor agent — no npm package; the official curl-to-bash installer unpacks
+# a self-contained bundle (cursor-agent is a bash wrapper that locates its
+# sibling `node` binary via `realpath $0`) into
+# ~/.local/share/cursor-agent/versions/<ver>/ and drops a symlink in
+# ~/.local/bin/. We re-symlink /usr/local/bin/cursor-agent at the same
+# versioned binary so PATH lookup works from any working directory and user;
+# cursor-agent's realpath resolution follows the symlink chain to find the
+# versioned directory. `--version` is the build-time sanity gate — a broken
+# installer fails the image build instead of shipping a non-functional CLI.
+# Uses `bash -euo pipefail` so a CDN failure on the curl side of the pipe
+# fails the RUN instead of silently executing an empty script on stdin.
+RUN bash -euo pipefail -c '\
+      curl -fsSL https://cursor.com/install | bash \
+      && ln -sf "$(readlink -f /root/.local/bin/cursor-agent)" /usr/local/bin/cursor-agent \
+      && cursor-agent --version'
 # Preserve the same ENTRYPOINT as runtime; `--from` order keeps env + layers.

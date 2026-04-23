@@ -11,7 +11,7 @@
 | Tag | 大小 | 内容 |
 |---|---|---|
 | `ghcr.io/zoneasetech/aiworker:<sha>` | ~150 MB | slim，不预装任一 agentic CLI；worker 依旧可以通过 `npx -y ...` 冷启动 fallback 工作 |
-| `ghcr.io/zoneasetech/aiworker:<sha>-full` | ~300 MB | slim 之上额外 `npm install -g` 了 claude-code / codex / gemini-cli / qwen-code 四个 CLI（Cursor 另行 opt-in，见 FEAT-021） |
+| `ghcr.io/zoneasetech/aiworker:<sha>-full` | ~320 MB | slim 之上额外 `npm install -g` 了 claude-code / codex / gemini-cli / qwen-code 四个 CLI，并通过官方 curl installer 预装 cursor-agent（FEAT-021） |
 
 部署到 aiwork 时用 `scripts/deploy.ts install --image-variant=full` 或在
 `/opt/aiworker-deploy/.env` 里设置 `AIWORKER_IMAGE_VARIANT_SUFFIX=-full`。
@@ -171,23 +171,26 @@ ACP harness 支持两个 agent：**Gemini CLI** 与 **Qwen Code**。探测结果
 
 ## cursor <a id="cursor"></a>
 
-- **安装来源**：Cursor 官方 CLI —— `https://cursor.com/cli`（**无 npm 包**）
-- **`-full` 镜像**：**未预装**（无 npm 包 + glibc / arch 依赖需要运维定制）；FEAT-021 追踪可选的镜像 bake。
-- **二进制**：`cursor-agent`
+- **安装来源**：Cursor 官方 CLI —— `https://cursor.com/install`（**无 npm 包**）
+- **`-full` 镜像里已预装**（自 FEAT-021 起）：build 时跑
+  `curl -fsSL https://cursor.com/install | bash`，安装脚本把产物解包到
+  `/root/.local/share/cursor-agent/versions/<ver>/` 并在 `/root/.local/bin/`
+  建 symlink；Dockerfile 再把 `/usr/local/bin/cursor-agent` 做成指向版本化
+  二进制的 symlink，PATH 查找全容器生效。build 阶段以 `cursor-agent --version`
+  做 sanity gate，installer 回归会让镜像构建失败而不是把坏 CLI 发进产线。
+- **二进制**：`cursor-agent`（bash wrapper，`realpath $0` 解析到版本目录后调用同目录的 `node`）
 - **auth 文件**：`~/.cursor/cli-config.json` 或 `~/.cursor-agent/auth.json`
   （不同版本命名有差异，探测会依次检查几个常见路径）
-- **安装**：
+- **安装**（slim 镜像时）：
   ```bash
-  curl https://cursor.com/install -fsSL | bash
+  curl -fsSL https://cursor.com/install | bash
   ```
-  安装脚本把二进制放在 `~/.local/bin/cursor-agent`；在镜像里固定到
-  `/usr/local/bin/cursor-agent` 会让 PATH 查找更稳定。
+  脚本把二进制放在 `~/.local/bin/cursor-agent`。
 - **登录**：
   ```bash
   cursor-agent login
   ```
 - **推荐落地**：
-  1. Dockerfile 里 `RUN curl https://cursor.com/install -fsSL | bash` 后把产物
-     复制到 `/usr/local/bin/`。
+  1. 用 `-full` 镜像即开箱即用；或 slim 镜像在容器内一次性跑 installer。
   2. 将 `~/.cursor` 挂载为卷以复用登录态。
-- **注意**：Cursor CLI 没有 `npx` 回退路径 —— 不安装就是 `not installed`。
+- **注意**：Cursor CLI 没有 `npx` 回退路径 —— slim 镜像里不安装就是 `not installed`。
