@@ -164,7 +164,7 @@ Every `build-image` workflow run publishes **two tags** to
 | Tag | Size | Content |
 |---|---|---|
 | `<sha>` (slim, default) | ~150 MB | No agentic CLIs baked in. Workers fall back to `npx -y ...` at first use (30–60s cold start). |
-| `<sha>-full` | ~300 MB | Slim + `npm install -g` for `@anthropic-ai/claude-code`, `@openai/codex`, `@google/gemini-cli`, `@qwen-code/qwen-code`, pinned to the same defaults the TS source uses (`DEFAULT_*_CLI_VERSION`). Cursor is **not** included (see FEAT-021). |
+| `<sha>-full` | ~320 MB | Slim + `npm install -g` for `@anthropic-ai/claude-code`, `@openai/codex`, `@google/gemini-cli`, `@qwen-code/qwen-code`, pinned to the same defaults the TS source uses (`DEFAULT_*_CLI_VERSION`); plus `cursor-agent` installed via the official `https://cursor.com/install` curl script and symlinked at `/usr/local/bin/cursor-agent` (FEAT-021). `--version` of every CLI is a build-time sanity gate. |
 
 Pick per deploy:
 
