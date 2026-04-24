@@ -1,27 +1,26 @@
 name: aiworker
 
 services:
-  dashboard:
-    # Image tag resolves to ghcr.io/zoneasetech/aiworker:${TAG}${VARIANT_SUFFIX}
-    # where VARIANT_SUFFIX is empty (slim, default) or `-full` (FEAT-020 bake
-    # with agentic CLIs baked in). `scripts/deploy.ts install --image-variant`
-    # sets the suffix for one-shot deploys; the host `.env` holds the default
-    # for manual `docker compose up -d`.
+  # PLAN-013 S5: gateway 取代 dashboard 成为控制面入口。
+  # 负责:fleet.db 管理、workers.pair / workers.launch / token.rotate 等
+  # operator-to-gateway 方法,以及 operator ↔ node 的请求转发。
+  # web 静态资源和 /api/* REST 均已下线;浏览器走 ws://…/ws 协议。
+  gateway:
     image: ghcr.io/zoneasetech/aiworker:${AIWORKER_IMAGE_TAG}${AIWORKER_IMAGE_VARIANT_SUFFIX}
-    container_name: aiworker-dashboard
+    container_name: aiworker-gateway
     restart: unless-stopped
+    command: [bun, apps/gateway/src/index.ts]
     ports:
       - '127.0.0.1:3000:3000'
     environment:
-      AIWORKER_MODE: dashboard
       NODE_ENV: production
-      PORT: '3000'
-      FLEET_DB_PATH: /var/lib/aiworker/fleet.db
-      FLEET_MIGRATIONS_FOLDER: /app/drizzle/fleet
+      AIWORKER_GATEWAY_PORT: '3000'
+      AIWORKER_GATEWAY_HOST: 0.0.0.0
+      AIWORKER_FLEET_DB_PATH: /var/lib/aiworker/fleet.db
       AIWORKER_MASTER_KEY: ${AIWORKER_MASTER_KEY}
+      # gateway ↔ 远程 node 双向鉴权密钥。浏览器经 Caddy/loopback 连接时
+      # 无需携带(loopback 自动放行)。
       INTERNAL_SHARED_SECRET: ${INTERNAL_SHARED_SECRET}
-      MANAGER_POLL_INTERVAL_MS: '30000'
-      MANAGER_POLL_JITTER_MS: '3000'
     volumes:
       - aiworker_fleet:/var/lib/aiworker
 

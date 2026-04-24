@@ -1,5 +1,12 @@
 # syntax=docker/dockerfile:1
-# Single-image runtime for the fleet. MODE env decides dashboard vs worker.
+# Single-image runtime serving两种入口:
+#
+#   - gateway(控制面, PLAN-013 S5):compose 以
+#       command: ['bun', 'apps/gateway/src/index.ts']
+#     启动镜像,监听 3000/tcp(WS 协议)。
+#   - worker(数据面):`bun run dist/index.js` 启动,监听 3001/tcp(HTTP)。
+#     这是 Dockerfile 默认的 ENTRYPOINT,docker compose 为 gateway 服务显式
+#     覆盖 command 字段即可。
 #
 # Targets:
 #   runtime      — slim image (~150 MB). Default; agentic CLIs are not baked
@@ -23,7 +30,10 @@ WORKDIR /app
 COPY package.json bun.lock ./
 COPY apps/api/package.json apps/api/
 COPY apps/cli/package.json apps/cli/
+COPY apps/gateway/package.json apps/gateway/
 COPY apps/web/package.json apps/web/
+COPY packages/fs-layout/package.json packages/fs-layout/
+COPY packages/gateway-proto/package.json packages/gateway-proto/
 COPY packages/shared/package.json packages/shared/
 COPY packages/storage-sqlite/package.json packages/storage-sqlite/
 RUN bun install --frozen-lockfile
@@ -39,14 +49,32 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates tini \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
+# worker bundle(默认入口;dist/index.js)。
 COPY --from=build /app/apps/api/dist /app/dist
+# drizzle 迁移(fleet + worker)。fleet 供 gateway 用,worker 供 dist/index.js 用。
 COPY --from=build /app/packages/storage-sqlite/drizzle /app/drizzle
+# web 静态资源已被 PLAN-013 S5 下线(浏览器走 WS),本行保留以便滚动回退。
 COPY --from=build /app/apps/web/dist /app/web
+# node_modules(monorepo hoist)。
 COPY --from=build /app/node_modules /app/node_modules
 COPY --from=build /app/apps/api/node_modules /app/apps/api/node_modules
 COPY --from=build /app/packages/shared /app/packages/shared
 COPY --from=build /app/packages/storage-sqlite /app/packages/storage-sqlite
+# gateway 源码(未 bundle,直接 bun 执行)——compose 以 `bun apps/gateway/src/index.ts` 启动。
+COPY --from=build /app/apps/gateway /app/apps/gateway
+COPY --from=build /app/packages/fs-layout /app/packages/fs-layout
+COPY --from=build /app/packages/gateway-proto /app/packages/gateway-proto
+# 根 package.json 定义 workspace,bun 需要它来定位 workspace:* 依赖。
+COPY --from=build /app/package.json /app/package.json
+# 保留其它 workspace 成员的 package.json(仅 manifest,避免源码增重),
+# 否则 bun 会在 workspace glob 解析失败:
+#   error: Workspace "apps/api" not found
+# apps/api 是 dist bundle,不能只留 package.json——下面 stub 一份最小 json。
+COPY --from=build /app/apps/api/package.json /app/apps/api/package.json
+COPY --from=build /app/apps/cli/package.json /app/apps/cli/package.json
+COPY --from=build /app/apps/web/package.json /app/apps/web/package.json
 ENV NODE_ENV=production
+# 3000 = gateway (compose 显式覆盖 command);3001 = worker (默认 ENTRYPOINT)。
 EXPOSE 3000 3001
 ENTRYPOINT ["/usr/bin/tini", "--", "bun", "run", "dist/index.js"]
 

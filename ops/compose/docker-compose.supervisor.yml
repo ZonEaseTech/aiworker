@@ -1,7 +1,7 @@
-# PLAN-010 §P5 — manager-driven worker creation overlay.
+# PLAN-013 S5 — gateway launch 能力 overlay。
 #
-# Invoke alongside the base compose to let the dashboard spawn worker
-# containers on the local docker engine:
+# 把本文件与 docker-compose.yml 组合启动,gateway 才能通过 docker daemon 拉起
+# 新的 worker 容器(需要打开 AIWORKER_GATEWAY_CAN_LAUNCH 开关):
 #
 #   docker compose \
 #     -f docker-compose.yml \
@@ -11,52 +11,39 @@
 #
 # PRE-FLIGHT:
 #
-#   1. `DASHBOARD_REQUIRE_AUTH=true` MUST be enabled before mounting
-#      `/var/run/docker.sock`. The socket is equivalent to host root; gating
-#      `/api/*` with the bearer/basic middleware is the only thing keeping an
-#      unauthenticated HTTP caller from escalating.
-#   2. Create the host-side worker data directory and make it owned by the
-#      uid the docker daemon runs as (usually root):
+#   1. INTERNAL_SHARED_SECRET 必须就绪——它既是远程 operator 连接 gateway 的
+#      bearer,也会注入到 launch 的 worker 容器 env 里作为 node 侧鉴权基线。
+#   2. 在宿主上提前准备 worker 数据目录(docker daemon 写):
 #        sudo install -d -o root -g root -m 0755 /opt/aiworker-workers
-#   3. `INTERNAL_SHARED_SECRET` must already be in `.env` — both the bearer
-#      middleware and each launched worker re-use it.
+#   3. `/var/run/docker.sock` 以只读方式挂进 gateway 容器。
 #
-# This overlay deliberately does **not** redefine the base service — compose
-# merges the two files. Only the environment + volume deltas live here.
+# overlay 只覆盖 environment + volumes 增量,不重定义 service 结构。
 
 services:
-  dashboard:
+  gateway:
     environment:
-      # PLAN-010 §P1 — turn on the bearer/basic middleware guarding /api/*.
-      DASHBOARD_REQUIRE_AUTH: 'true'
+      # 打开 launch 能力;未开启时 `workers.launch` 直接返回 feature_disabled。
+      AIWORKER_GATEWAY_CAN_LAUNCH: 'true'
 
-      # PLAN-004 §3.4 — enable the supervisor. Without this the POST
-      # /api/workers/launch-local route is unmounted and the UI's
-      # "Create worker" button stays disabled.
-      MANAGER_CAN_LAUNCH: 'true'
+      # 可选配额上限(fleet 行数)。留空即不限。
+      AIWORKER_MAX_WORKERS: ${AIWORKER_MAX_WORKERS:-}
 
-      # PLAN-010 §P3 — hard cap on rows in registered_workers. Leave unset
-      # in .env for no cap.
-      MANAGER_MAX_WORKERS: ${MANAGER_MAX_WORKERS:-}
-
-      # PLAN-004 §3.4 required envs when MANAGER_CAN_LAUNCH=true.
+      # canLaunch=true 时必填:新拉起的 worker 容器需要镜像 / 数据目录 / 资源限额。
       AIWORKER_IMAGE: ghcr.io/zoneasetech/aiworker:${AIWORKER_IMAGE_TAG}${AIWORKER_IMAGE_VARIANT_SUFFIX}
       WORKER_DATA_ROOT: /opt/aiworker-workers
       WORKER_MEMORY_LIMIT: ${WORKER_MEMORY_LIMIT:-512m}
       WORKER_CPU_LIMIT: ${WORKER_CPU_LIMIT:-1.0}
 
-      # `aiworker_default` is the network compose auto-creates from the base
-      # file (`name: aiworker` → `<name>_default`). The dashboard is already
-      # joined to it; launch-local workers will be attached to the same
-      # network so `http://{containerName}:3001` resolves.
+      # compose 会按 `name: aiworker` 的前缀自动建 `<name>_default` 网络;
+      # gateway 与被 spawn 的 worker 容器都接这个网络,
+      # http://{containerName}:3001 才能互相解析。
       AIWORKER_NETWORK: aiworker_default
       AIWORKER_LAUNCH_BASE_URL_TEMPLATE: ${AIWORKER_LAUNCH_BASE_URL_TEMPLATE:-http://{containerName}:3001}
 
     volumes:
-      # docker.sock — read-only is enough for create/start/stop/logs. Do not
-      # mount without DASHBOARD_REQUIRE_AUTH=true first.
+      # docker.sock:只读足够 create/start/stop/logs。严禁挂入前请确认 gateway
+      # 前面有 Caddy / 反代做 IP / basic auth 层层防护。
       - '/var/run/docker.sock:/var/run/docker.sock:ro'
-      # Worker data directory. The host path and the container path MUST be
-      # identical so the `Binds` the supervisor hands to the docker daemon
-      # resolve correctly (daemon-in-host sees the host path literally).
+      # worker 数据目录。容器内 / 容器外路径必须一致,docker daemon 接收到的
+      # Binds 由 gateway 按字面量写入,daemon 运行在宿主上看到的是宿主路径。
       - '/opt/aiworker-workers:/opt/aiworker-workers'
