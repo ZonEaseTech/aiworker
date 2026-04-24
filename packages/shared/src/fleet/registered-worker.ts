@@ -9,10 +9,10 @@ export type RegisteredWorkerLivenessState
     | 'config-version-mismatch'
 
 /**
- * How a worker entered the manager's registry. `manual` covers a curl/UI
- * `POST /api/workers/register`; `launch-local` is the optional supervisor
- * convenience gated behind `MANAGER_CAN_LAUNCH`; `import` is reserved for
- * future bulk-import flows. See PLAN-004 §Manager registry API.
+ * How a worker entered the gateway's registry. `manual` covers an operator
+ * driven `workers.pair`;`launch-local` is the optional supervisor convenience
+ * gated behind `AIWORKER_GATEWAY_CAN_LAUNCH` (PLAN-013 S5);`import` is
+ * reserved for future bulk-import flows.
  */
 export type RegisteredWorkerOrigin = 'manual' | 'launch-local' | 'import'
 
