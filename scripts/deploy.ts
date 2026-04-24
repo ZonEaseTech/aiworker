@@ -254,7 +254,7 @@ function cmdInstallDocker(args: Args): void {
 
 function cmdTeardownLegacy(args: Args): void {
   if (!args.confirm)
-    fatal('teardown-legacy is irreversible — re-run with --confirm once the new dashboard has been verified healthy.')
+    fatal('teardown-legacy is irreversible — re-run with --confirm once the new gateway has been verified healthy.')
   ensureAissh()
   log('tearing down legacy aiworker.service + /opt/aiworker')
   // aissh rejects `rm -rf /opt/...` as a dangerous command (auth_error). Use
@@ -361,18 +361,20 @@ function cmdInstall(args: Args, tag: string): void {
     `${envPair} docker compose --env-file .env -f docker-compose.yml pull`,
     `${envPair} docker compose --env-file .env -f docker-compose.yml up -d`,
   ].join(' && ')
-  aisshExec(args, remoteCmd, `FEAT-009 install dashboard ${tag}${suffix}`, 300)
+  aisshExec(args, remoteCmd, `FEAT-009 install gateway ${tag}${suffix}`, 300)
 }
 
 function cmdVerify(args: Args): void {
   ensureAissh()
-  log('verifying dashboard /health')
+  log('verifying gateway /health')
   // curl exits non-zero on HTTP error thanks to -f, and docker compose's port
-  // binding is 127.0.0.1:3000 per ops/compose/docker-compose.yml.
+  // binding is 127.0.0.1:3000 per ops/compose/docker-compose.yml. PLAN-013
+  // replaced the dashboard with the WS gateway — the new /health body is
+  // `{"ok":true,"service":"aiworker-gateway","ts":...}` (see apps/gateway/src/server.ts).
   aisshExec(
     args,
-    'curl -fsS http://127.0.0.1:3000/health | grep -q \'"status":"ok"\'',
-    'FEAT-009 verify dashboard /health',
+    'curl -fsS http://127.0.0.1:3000/health | grep -q \'"ok":true\'',
+    'FEAT-009 verify gateway /health',
   )
   log('verify ok')
 }
