@@ -16,7 +16,6 @@ import { ForwardTable, NodeRegistry, OperatorRegistry } from '../src/registry'
 import { FleetPersistence } from '../src/registry/persistence'
 import { dispatchNodeEvent, dispatchNodeResponse, dispatchOperatorRequest, getLocalMethodNames, getProtoMethodNames, isLocalMethod } from '../src/router/dispatch'
 import { forwardOperatorRequestToNode } from '../src/router/forward'
-import { handleTokenRotate, handleWorkersLaunch, handleWorkersPair } from '../src/router/methods/launch-stub'
 import { handleSystemPresence } from '../src/router/methods/system'
 import { handleWorkersList, handleWorkersRemove } from '../src/router/methods/workers'
 
@@ -128,39 +127,6 @@ describe('workers.remove', () => {
       expect(r.ok).toBe(false)
       if (!r.ok)
         expect(r.code).toBe('invalid_params')
-    }
-    finally { cleanup() }
-  })
-})
-
-describe('pair / launch / token.rotate（PLAN-013 S2 stub）', () => {
-  test('workers.pair 返回 not_implemented', async () => {
-    const { ctx, cleanup } = makeCtx()
-    try {
-      const r = await handleWorkersPair(ctx, { workerBaseUrl: 'http://x', bootstrapToken: 't' })
-      expect(r.ok).toBe(false)
-      if (!r.ok)
-        expect(r.code).toBe('not_implemented')
-    }
-    finally { cleanup() }
-  })
-  test('workers.launch 返回 not_implemented', async () => {
-    const { ctx, cleanup } = makeCtx()
-    try {
-      const r = await handleWorkersLaunch(ctx, {})
-      expect(r.ok).toBe(false)
-      if (!r.ok)
-        expect(r.code).toBe('not_implemented')
-    }
-    finally { cleanup() }
-  })
-  test('token.rotate 返回 not_implemented', async () => {
-    const { ctx, cleanup } = makeCtx()
-    try {
-      const r = await handleTokenRotate(ctx, { workerId: 'w1' })
-      expect(r.ok).toBe(false)
-      if (!r.ok)
-        expect(r.code).toBe('not_implemented')
     }
     finally { cleanup() }
   })

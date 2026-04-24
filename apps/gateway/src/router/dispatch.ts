@@ -4,9 +4,9 @@ import type { GatewayContext, LocalHandler } from './context'
 import { encodeFrame, getMethodDef, METHODS } from '@aiworker/gateway-proto'
 import { broadcastEventToOperators } from '../events/broadcast'
 import { forwardOperatorRequestToNode } from './forward'
-import { handleTokenRotate, handleWorkersLaunch, handleWorkersPair } from './methods/launch-stub'
 import { handleSystemPresence } from './methods/system'
-import { handleWorkersList, handleWorkersRemove } from './methods/workers'
+import { handleTokenRotate } from './methods/token'
+import { handleWorkersLaunch, handleWorkersList, handleWorkersPair, handleWorkersRemove } from './methods/workers'
 
 /** 本地方法名 → handler 映射。只覆盖 routing=operator-to-gateway 的。 */
 const LOCAL_HANDLERS: Record<string, LocalHandler> = {
@@ -18,8 +18,14 @@ const LOCAL_HANDLERS: Record<string, LocalHandler> = {
   'token.rotate': handleTokenRotate,
 }
 
-/** audit 不应该被 presence 这类高频 tick 淹没。 */
-const AUDIT_METHOD_BLACKLIST = new Set<string>(['system.presence'])
+/**
+ * audit 不应该被 presence / workers.list 这类高频只读 tick 淹没。
+ * web UI 默认 10s 轮询 workers.list,一天积累 8640 条 audit——无意义。
+ */
+const AUDIT_METHOD_BLACKLIST = new Set<string>([
+  'system.presence',
+  'workers.list',
+])
 
 /**
  * 处理 operator 侧来的一条 request 帧。

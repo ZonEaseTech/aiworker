@@ -16,13 +16,15 @@ import { loadGatewayConfigFromEnv } from './config'
 import { ForwardTable, NodeRegistry, OperatorRegistry } from './registry'
 import { FleetPersistence } from './registry/persistence'
 import { startGatewayServer } from './server'
+import { FleetSupervisor } from './supervisor/service'
 
 /**
  * 构造一份可复用的 GatewayContext。
  *
- * - `fleet.db` 由 `initFleetDb` + `runFleetMigrations` 保证 schema 就绪；
- *   gateway 只读 / 删 `registered_workers`，不会写 schema。
- * - registry 三件套（nodes / operators / forwards）全内存、进程重启丢失。
+ * - `fleet.db` 由 `initFleetDb` + `runFleetMigrations` 保证 schema 就绪;
+ *   gateway 持有 master key,负责 pair/rotate 时的 AES 加解密。
+ * - registry 三件套(nodes / operators / forwards)全内存、进程重启丢失。
+ * - 当 `canLaunch=true` 时额外构造 `FleetSupervisor`——docker 能力按需开启。
  */
 export function createGatewayContext(config: GatewayConfig): GatewayContext {
   initFleetDb(config.fleetDbPath)
@@ -36,10 +38,10 @@ export function createGatewayContext(config: GatewayConfig): GatewayContext {
       consola.warn(
         `[gateway] forward 取消 (method=${entry.method} workerId=${entry.workerId} reason=${reason})`,
       )
-      // operator 已经断开——没有可送达的对端，静默清理即可。
+      // operator 已经断开——没有可送达的对端,静默清理即可。
       if (reason === 'operator_gone')
         return
-      // node 下线 / 超时：补一条错误响应给 operator，避免 aim CLI 永久挂起。
+      // node 下线 / 超时:补一条错误响应给 operator,避免 aim CLI 永久挂起。
       const code = reason === 'timeout' ? 'forward_timeout' : 'node_gone'
       const message = reason === 'timeout'
         ? `等待 worker ${entry.workerId} 响应超时`
@@ -55,12 +57,35 @@ export function createGatewayContext(config: GatewayConfig): GatewayContext {
       catch { /* operator 也已经断开——忽略。 */ }
     },
   })
+
+  let supervisor: FleetSupervisor | null = null
+  if (config.canLaunch) {
+    // superRefine 已经保证这些字段非空。
+    supervisor = new FleetSupervisor({
+      config: {
+        dockerHost: config.supervisor.dockerHost,
+        image: config.supervisor.image!,
+        network: config.supervisor.network,
+        workerDataRoot: config.supervisor.workerDataRoot!,
+        workerMemoryLimit: config.supervisor.workerMemoryLimit!,
+        workerCpuLimit: config.supervisor.workerCpuLimit!,
+        launchBaseUrlTemplate: config.supervisor.launchBaseUrlTemplate,
+        internalSharedSecret: config.internalSharedSecret!,
+        nodeEnv: config.nodeEnv,
+      },
+    })
+    consola.info('[gateway] AIWORKER_GATEWAY_CAN_LAUNCH=true — workers.launch 已开启')
+  }
+
   return {
     persistence,
     nodes,
     operators,
     forwards,
     logger: consola.withTag('gateway'),
+    masterKeyHex: config.masterKeyHex,
+    supervisor,
+    maxWorkers: config.maxWorkers,
   }
 }
 
@@ -68,7 +93,7 @@ export interface StartGatewayResult extends StartedGateway {
   config: GatewayConfig
 }
 
-/** 完整启动流程：加载 env → 建 context → 起服务 → 装 SIGTERM 钩子。 */
+/** 完整启动流程:加载 env → 建 context → 起服务 → 装 SIGTERM 钩子。 */
 export async function startGateway(override?: Partial<GatewayConfig>): Promise<StartGatewayResult> {
   const base = loadGatewayConfigFromEnv()
   const config: GatewayConfig = { ...base, ...override }
