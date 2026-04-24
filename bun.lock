@@ -54,6 +54,25 @@
         "typescript": "^5.8.3",
       },
     },
+    "apps/gateway": {
+      "name": "@aiworker/gateway",
+      "bin": {
+        "aiworker-gateway": "./src/index.ts",
+      },
+      "dependencies": {
+        "@aiworker/fs-layout": "workspace:*",
+        "@aiworker/gateway-proto": "workspace:*",
+        "@aiworker/shared": "workspace:*",
+        "@aiworker/storage-sqlite": "workspace:*",
+        "consola": "^3.4.2",
+        "drizzle-orm": "^0.44.1",
+        "zod": "^3.24.4",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.2.13",
+        "typescript": "^5.8.3",
+      },
+    },
     "apps/web": {
       "name": "@aiworker/web",
       "dependencies": {
@@ -138,6 +157,8 @@
     "@aiworker/cli": ["@aiworker/cli@workspace:apps/cli"],
 
     "@aiworker/fs-layout": ["@aiworker/fs-layout@workspace:packages/fs-layout"],
+
+    "@aiworker/gateway": ["@aiworker/gateway@workspace:apps/gateway"],
 
     "@aiworker/gateway-proto": ["@aiworker/gateway-proto@workspace:packages/gateway-proto"],
 

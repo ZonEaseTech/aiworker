@@ -1,0 +1,109 @@
+#!/usr/bin/env bun
+import type { GatewayConfig } from './config'
+import type { GatewayContext } from './router/context'
+import type { StartedGateway } from './server'
+import process from 'node:process'
+import { encodeFrame } from '@aiworker/gateway-proto'
+import {
+  closeFleetDb,
+  defaultFleetMigrationsFolder,
+  getFleetDb,
+  initFleetDb,
+  runFleetMigrations,
+} from '@aiworker/storage-sqlite/fleet'
+import consola from 'consola'
+import { loadGatewayConfigFromEnv } from './config'
+import { ForwardTable, NodeRegistry, OperatorRegistry } from './registry'
+import { FleetPersistence } from './registry/persistence'
+import { startGatewayServer } from './server'
+
+/**
+ * 构造一份可复用的 GatewayContext。
+ *
+ * - `fleet.db` 由 `initFleetDb` + `runFleetMigrations` 保证 schema 就绪；
+ *   gateway 只读 / 删 `registered_workers`，不会写 schema。
+ * - registry 三件套（nodes / operators / forwards）全内存、进程重启丢失。
+ */
+export function createGatewayContext(config: GatewayConfig): GatewayContext {
+  initFleetDb(config.fleetDbPath)
+  runFleetMigrations(defaultFleetMigrationsFolder)
+  const db = getFleetDb()
+  const persistence = new FleetPersistence(db)
+  const nodes = new NodeRegistry()
+  const operators = new OperatorRegistry()
+  const forwards = new ForwardTable({
+    onExpire: (entry, reason) => {
+      consola.warn(
+        `[gateway] forward 取消 (method=${entry.method} workerId=${entry.workerId} reason=${reason})`,
+      )
+      // operator 已经断开——没有可送达的对端，静默清理即可。
+      if (reason === 'operator_gone')
+        return
+      // node 下线 / 超时：补一条错误响应给 operator，避免 aim CLI 永久挂起。
+      const code = reason === 'timeout' ? 'forward_timeout' : 'node_gone'
+      const message = reason === 'timeout'
+        ? `等待 worker ${entry.workerId} 响应超时`
+        : `worker ${entry.workerId} 在等待响应期间下线`
+      try {
+        entry.operatorWs.send(encodeFrame({
+          type: 'response',
+          id: entry.operatorRequestId,
+          ok: false,
+          error: { code, message, details: { workerId: entry.workerId, method: entry.method } },
+        }))
+      }
+      catch { /* operator 也已经断开——忽略。 */ }
+    },
+  })
+  return {
+    persistence,
+    nodes,
+    operators,
+    forwards,
+    logger: consola.withTag('gateway'),
+  }
+}
+
+export interface StartGatewayResult extends StartedGateway {
+  config: GatewayConfig
+}
+
+/** 完整启动流程：加载 env → 建 context → 起服务 → 装 SIGTERM 钩子。 */
+export async function startGateway(override?: Partial<GatewayConfig>): Promise<StartGatewayResult> {
+  const base = loadGatewayConfigFromEnv()
+  const config: GatewayConfig = { ...base, ...override }
+  const context = createGatewayContext(config)
+  const started = startGatewayServer({ config, context })
+  consola.success(
+    `[gateway] listening ws://${config.host}:${started.port}/ws (auth=${config.internalSharedSecret ? 'shared-secret+loopback' : 'loopback-only'})`,
+  )
+  return { ...started, config }
+}
+
+async function main(): Promise<void> {
+  const started = await startGateway()
+  let shuttingDown = false
+  const shutdown = async (signal: NodeJS.Signals) => {
+    if (shuttingDown)
+      return
+    shuttingDown = true
+    consola.info(`[gateway] received ${signal}, shutting down`)
+    try {
+      await started.stop()
+      closeFleetDb()
+    }
+    catch (err) {
+      consola.error('[gateway] shutdown failed', err)
+    }
+    process.exit(0)
+  }
+  process.once('SIGTERM', () => void shutdown('SIGTERM'))
+  process.once('SIGINT', () => void shutdown('SIGINT'))
+}
+
+// 只有作为入口被 `bun src/index.ts` 执行时才真正 main。import 进来做库用时
+// 由调用方自行 startGateway()。
+if (import.meta.main) {
+  // eslint-disable-next-line antfu/no-top-level-await -- Bun 支持 top-level await 入口
+  await main()
+}

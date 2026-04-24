@@ -1,0 +1,281 @@
+import type { ServerWebSocket } from 'bun'
+import type { GatewayConfig } from './config'
+import type { ConnectionData } from './registry/types'
+import type { GatewayContext } from './router/context'
+import { Buffer } from 'node:buffer'
+import { EVENTS, parseFrame } from '@aiworker/gateway-proto'
+import { isLoopbackAddress } from './auth/loopback'
+import { authorizeConnection } from './auth/token'
+import { broadcastEventToOperators } from './events/broadcast'
+import { dispatchNodeEvent, dispatchNodeResponse, dispatchOperatorRequest } from './router/dispatch'
+
+/** Bun.Server 泛型绑定 ConnectionData，便于后续 ws.data 强类型。 */
+type GatewayServerHandle = ReturnType<typeof Bun.serve<ConnectionData>>
+
+/** 启动结果，交给 index.ts / 测试 / smoke 管理生命周期。 */
+export interface StartedGateway {
+  server: GatewayServerHandle
+  /** 实际监听的端口；启动时传 0 会由 OS 随机分配，这里读回真实端口。 */
+  port: number
+  context: GatewayContext
+  stop: () => Promise<void>
+}
+
+export interface StartGatewayOptions {
+  config: GatewayConfig
+  context: GatewayContext
+}
+
+/**
+ * 启动一个 gateway WS 服务。`fetch` handler 负责升级；`websocket` handler
+ * 承载完整生命周期。
+ *
+ * 路径约定：
+ * - `GET /health` — 纯 JSON 心跳；loopback 运维可用。
+ * - `GET /ws`（with Upgrade）— WS 升级入口。
+ * - 其它路径：404。
+ */
+export function startGatewayServer(options: StartGatewayOptions): StartedGateway {
+  const { config, context } = options
+
+  const server = Bun.serve<ConnectionData>({
+    port: config.port,
+    hostname: config.host,
+    fetch(req, serverRef) {
+      const url = new URL(req.url)
+      if (url.pathname === '/health') {
+        return new Response(
+          JSON.stringify({ ok: true, service: 'aiworker-gateway', ts: Date.now() }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        )
+      }
+      if (url.pathname === '/ws') {
+        const ip = serverRef.requestIP(req)
+        const remoteAddress = ip?.address
+        const loopback = isLoopbackAddress(remoteAddress)
+        const upgraded = serverRef.upgrade(req, {
+          data: {
+            role: undefined,
+            agentId: undefined,
+            deviceId: undefined,
+            loopback,
+            remoteAddress,
+            connectedAt: Date.now(),
+            subscribedAll: true,
+          } satisfies ConnectionData,
+        })
+        if (upgraded)
+          return undefined
+        return new Response('upgrade failed', { status: 400 })
+      }
+      return new Response('not found', { status: 404 })
+    },
+    websocket: {
+      open(ws) {
+        context.logger.debug(
+          `[gateway] ws opened (remote=${ws.data.remoteAddress ?? '?'} loopback=${ws.data.loopback})`,
+        )
+      },
+      message(ws, raw) {
+        handleMessage(ws, raw, context, config)
+      },
+      close(ws, code, reason) {
+        handleClose(ws, code, reason, context)
+      },
+    },
+  })
+
+  const listeningPort = server.port
+  if (typeof listeningPort !== 'number') {
+    // 仅当绑定到 unix socket 时才会返回 undefined；gateway 不支持这种模式。
+    throw new TypeError('Bun.serve did not return a TCP port — unix socket is not supported')
+  }
+  return {
+    server,
+    port: listeningPort,
+    context,
+    stop: async () => {
+      context.forwards.dispose()
+      await server.stop(true)
+    },
+  }
+}
+
+function handleMessage(
+  ws: ServerWebSocket<ConnectionData>,
+  raw: string | Buffer,
+  ctx: GatewayContext,
+  config: GatewayConfig,
+): void {
+  const text = typeof raw === 'string' ? raw : Buffer.from(raw).toString('utf8')
+  const parsed = parseFrame(text)
+  if (!parsed.ok) {
+    ctx.logger.warn(`[gateway] 无法解析帧: ${parsed.error}`)
+    ws.close(4400, 'bad_frame')
+    return
+  }
+  const frame = parsed.frame
+
+  // === 握手前：必须先收到 connect 帧 ===
+  if (ws.data.role === undefined) {
+    if (frame.type !== 'connect') {
+      ctx.logger.warn(`[gateway] 握手前收到非 connect 帧: ${frame.type}`)
+      ws.close(4400, 'connect_required')
+      return
+    }
+    const authResult = authorizeConnection({
+      loopback: ws.data.loopback,
+      sharedSecret: config.internalSharedSecret,
+      presentedToken: frame.auth.token,
+    })
+    if (!authResult.ok) {
+      ctx.persistence.recordAudit({
+        actor: 'gateway',
+        action: 'gateway.connect.rejected',
+        workerId: frame.role === 'node' ? frame.agentId : null,
+        detail: {
+          reason: authResult.reason,
+          role: frame.role,
+          agentId: frame.agentId,
+          remoteAddress: ws.data.remoteAddress,
+        },
+      })
+      ws.close(4401, `auth:${authResult.reason}`)
+      return
+    }
+
+    ws.data.role = frame.role
+    ws.data.agentId = frame.agentId
+    ws.data.deviceId = frame.deviceId
+
+    if (frame.role === 'operator') {
+      ctx.operators.register({
+        agentId: frame.agentId,
+        deviceId: frame.deviceId,
+        ws,
+        connectedAt: Date.now(),
+      })
+    }
+    else {
+      // role === 'node'
+      const { replaced } = ctx.nodes.register({
+        workerId: frame.agentId,
+        deviceId: frame.deviceId,
+        ws,
+        pairedAt: Date.now(),
+        meta: frame.meta ?? {},
+      })
+      if (replaced) {
+        ctx.forwards.cancelByWorker(frame.agentId)
+        try {
+          replaced.ws.close(1012, 'replaced_by_new_node_connection')
+        }
+        catch { /* 关老连接失败不影响新连接 */ }
+      }
+      // 对 operator 广播 worker.online。
+      const displayName = ctx.persistence.getRegisteredWorker(frame.agentId)?.displayName
+      broadcastEventToOperators(ctx.operators, {
+        type: 'event',
+        name: EVENTS.WORKER_ONLINE,
+        payload: {
+          workerId: frame.agentId,
+          displayName,
+          deviceId: frame.deviceId,
+          connectedAt: Date.now(),
+        },
+        ts: Date.now(),
+      })
+    }
+
+    ctx.persistence.recordAudit({
+      actor: 'gateway',
+      action: 'gateway.connect.accepted',
+      workerId: frame.role === 'node' ? frame.agentId : null,
+      detail: {
+        role: frame.role,
+        agentId: frame.agentId,
+        deviceId: frame.deviceId,
+        loopback: ws.data.loopback,
+      },
+    })
+    return
+  }
+
+  // === 握手后：按 role + frame.type 分流 ===
+  if (ws.data.role === 'operator') {
+    if (frame.type === 'request') {
+      const agentId = ws.data.agentId ?? 'unknown'
+      void dispatchOperatorRequest(ctx, ws, frame, agentId)
+      return
+    }
+    ctx.logger.warn(`[gateway] operator 端发送了非 request 帧: ${frame.type}`)
+    ws.close(4400, 'operator_expects_request_only')
+    return
+  }
+
+  if (ws.data.role === 'node') {
+    if (frame.type === 'response') {
+      dispatchNodeResponse(ctx, ws, frame)
+      return
+    }
+    if (frame.type === 'event') {
+      // 入站 event：广播给所有 operator。
+      dispatchNodeEvent(ctx, ws, frame)
+      return
+    }
+    ctx.logger.warn(`[gateway] node 端发送了非 response/event 帧: ${frame.type}`)
+    ws.close(4400, 'node_expects_response_or_event_only')
+  }
+}
+
+function handleClose(
+  ws: ServerWebSocket<ConnectionData>,
+  code: number,
+  reason: string,
+  ctx: GatewayContext,
+): void {
+  if (ws.data.role === 'operator') {
+    ctx.operators.unregister(ws)
+    ctx.forwards.cancelByOperator(ws)
+  }
+  else if (ws.data.role === 'node') {
+    const entry = ctx.nodes.unregisterByWs(ws)
+    if (entry) {
+      ctx.forwards.cancelByWorker(entry.workerId)
+      broadcastEventToOperators(ctx.operators, {
+        type: 'event',
+        name: EVENTS.WORKER_OFFLINE,
+        payload: {
+          workerId: entry.workerId,
+          deviceId: entry.deviceId,
+          reason: inferOfflineReason(code),
+          disconnectedAt: Date.now(),
+        },
+        ts: Date.now(),
+      })
+      ctx.persistence.recordAudit({
+        actor: 'gateway',
+        action: 'gateway.node.disconnected',
+        workerId: entry.workerId,
+        detail: { code, reason },
+      })
+    }
+  }
+  ctx.logger.debug(`[gateway] ws closed (code=${code} reason=${reason})`)
+}
+
+/**
+ * 把 WebSocket close code 映射到 proto 约定的 offline 原因。
+ * 1000 正常关闭 / 1012 服务主动替换 → 归为 disconnected；4xxx 归为 kicked；
+ * 其它未归类按 expired 记。
+ */
+function inferOfflineReason(code: number): 'disconnected' | 'expired' | 'kicked' | undefined {
+  if (code === 1000 || code === 1012 || code === 1001 || code === 1005 || code === 1006)
+    return 'disconnected'
+  if (code >= 4000 && code < 5000)
+    return 'kicked'
+  return 'expired'
+}
+
+// 用于测试：把已暴露的 handleMessage / handleClose 命名导出。
+export { handleClose as __handleCloseForTest, handleMessage as __handleMessageForTest }

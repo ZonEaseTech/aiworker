@@ -1,0 +1,27 @@
+{
+  "name": "@aiworker/gateway",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "aiworker-gateway": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "start": "bun src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@aiworker/fs-layout": "workspace:*",
+    "@aiworker/gateway-proto": "workspace:*",
+    "@aiworker/shared": "workspace:*",
+    "@aiworker/storage-sqlite": "workspace:*",
+    "consola": "^3.4.2",
+    "drizzle-orm": "^0.44.1",
+    "zod": "^3.24.4"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.13",
+    "typescript": "^5.8.3"
+  }
+}
