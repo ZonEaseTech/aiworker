@@ -1,75 +1,77 @@
 # AIWorker Deployment
 
-End-to-end run book for getting the AIWorker dashboard onto `gateway.example.test`.
+端到端把 AIWorker 部署到 `gateway.example.test` 的 run book。PLAN-013 之后控制面容器由 `aiworker-dashboard` 迁移为 `aiworker-gateway`（WS 协议），部署流程的骨架不变，但 service name / 入口命令 / 验证端点都有调整。
 
-The tooling assumes the default target (aissh server `aiwork`,
-`<aissh-server-id-redacted>`, `<test-server-ip-redacted>`). Set
-`AIWORK_SERVER_ID` or pass `--server=<id>` to retarget.
+默认目标：aissh server id `aiwork`（`<aissh-server-id-redacted>`，`<test-server-ip-redacted>`）。通过 `AIWORK_SERVER_ID` 环境变量或 `--server=<id>` 可覆盖。
 
 ## Prerequisites
 
-Local workstation:
+本地工作站：
 
-- `bun` (same version used for development)
-- `aissh` CLI, already authenticated (`aissh status` should succeed)
-- `gh` CLI, logged in with `workflow` + `write:packages` scopes (used to
-  trigger the build workflow and to stamp the host's GHCR login)
-- `git` (used to derive the default image tag)
+- `bun`（与开发同版本）
+- `aissh` CLI 已认证（`aissh status` 应成功）
+- `gh` CLI 登录，携带 `workflow` + `write:packages` scope（用于触发 build workflow 并给宿主写 GHCR 凭证）
+- `git`（用于派生默认镜像 tag）
 
-Target host (done once, via the first-time deploy below):
+目标宿主（初次部署时跑一次）：
 
-- Ubuntu 24.04, ≥ 25 GB disk, docker + `docker compose` plugin
-- Caddy v2 as a system service (`systemctl status caddy`), with
-  `/var/log/caddy/aiw.access.log` owned by the `caddy` user
-- Directory `/opt/aiworker-deploy/` owned by root, containing a filled-in
-  `.env`
-- `/root/.docker/config.json` carrying GHCR credentials — `scripts/deploy.ts
-  login-ghcr` stamps them in (reuses your local `gh auth token`)
+- Ubuntu 24.04，≥ 25 GB 磁盘，docker + `docker compose` 插件
+- Caddy v2 作为系统服务（`systemctl status caddy`），`/var/log/caddy/aiw.access.log` 属于 `caddy` 用户
+- 目录 `/opt/aiworker-deploy/` 属 root，内含填好的 `.env`
+- `/root/.docker/config.json` 有 GHCR 凭证——`scripts/deploy.ts login-ghcr` 自动写入（复用本机 `gh auth token`）
 
 ## Required host-local `.env`
 
-Copy `ops/compose/.env.example` to `/opt/aiworker-deploy/.env` on the host and
-fill in every value **before** running `install`:
+把 `ops/compose/.env.example` 复制到宿主的 `/opt/aiworker-deploy/.env`，在跑 `install` **之前** 填好：
 
-- `AIWORKER_MASTER_KEY` — 32-byte hex. **Back this up in your org secret store
-  before first deploy.** Losing it bricks every registered worker's stored
-  bearer token; you will not be able to recover by redeploying.
-- `INTERNAL_SHARED_SECRET` — ≥ 16 chars.
-- `AIWORKER_IMAGE_TAG` — last known-good tag published to
-  `ghcr.io/zoneasetech/aiworker`. The deploy script overrides this inline when
-  running; this value only matters for manual `docker compose up -d` on the
-  host (e.g. after a reboot).
+- `AIWORKER_MASTER_KEY` — 32-byte hex。**部署前务必备份到组织级 secret store**。丢失 = gateway 里所有 `registered_workers.apiTokenEnc` 无法解密，所有 worker 都要重新 `aim pair`。
+- `INTERNAL_SHARED_SECRET` — ≥ 16 字符。gateway 对远程 operator 的 bearer，也是 `workers.launch` 时注入子容器的共享密钥。
+- `AIWORKER_IMAGE_TAG` — 上一次 known-good tag（`ghcr.io/zoneasetech/aiworker:<tag>`）。脚本 `install` 会 inline override 这个变量；宿主 `.env` 的值只在手动 `docker compose up -d` 时作为 fallback（例如重启恢复）。
+- `AIWORKER_IMAGE_VARIANT_SUFFIX` — 空串（默认 slim）或 `-full`（FEAT-020 image variant）。
+- `AIWORKER_GATEWAY_CAN_LAUNCH` 以及下面一组 supervisor env：只有叠加 `docker-compose.supervisor.yml` overlay 时才需要。
 
-`scripts/deploy.ts install` refuses to run if the file or the two required
-secrets are missing.
+`scripts/deploy.ts install` 在文件或前两个 required secret 缺失时会拒绝执行。
+
+## Compose topology（现状）
+
+`ops/compose/docker-compose.yml` 定义了一个 service `gateway`（容器名 `aiworker-gateway`）：
+
+- 镜像：`ghcr.io/zoneasetech/aiworker:${AIWORKER_IMAGE_TAG}${AIWORKER_IMAGE_VARIANT_SUFFIX}`
+- 启动命令：`bun apps/gateway/src/index.ts`（覆盖 Dockerfile 默认 `bun run dist/index.js` 的 worker 入口）
+- 端口：`127.0.0.1:3000:3000`（WS + `/health` 都走这个）
+- 关键 env：`AIWORKER_GATEWAY_HOST=0.0.0.0` / `AIWORKER_GATEWAY_PORT=3000` / `AIWORKER_FLEET_DB_PATH=/var/lib/aiworker/fleet.db` / `AIWORKER_MASTER_KEY` / `INTERNAL_SHARED_SECRET`
+- 卷：`aiworker_fleet:/var/lib/aiworker`（fleet.db 持久化）
+
+Dockerfile 单镜像两种入口（见 `Dockerfile` 顶部注释）：
+
+- **gateway**（控制面）：compose 显式设置 `command: ['bun', 'apps/gateway/src/index.ts']`，监听 3000/tcp（WS）。
+- **worker**（数据面）：`ENTRYPOINT ["/usr/bin/tini", "--", "bun", "run", "dist/index.js"]`（镜像默认），监听 3001/tcp（HTTP）；由 `aim workers launch` 或独立的 worker compose 拉起。
+
+Caddy（`ops/caddy/Caddyfile.tmpl`）仍是纯 `:80 → 127.0.0.1:3000` 反代，TLS 由 Cloudflare 橙云代理终止。`flush_interval -1` + `read_timeout 0` 保证 WebSocket 不被切流。
 
 ## First-time deploy
 
-Run once, in order, from a clean repo checkout on your workstation:
+在工作站的干净 checkout 里按顺序跑：
 
 ```sh
-# 1. Install docker on the host. Triggers aissh approval.
+# 1. 给宿主装 docker，触发 aissh approval。
 bun run scripts/deploy.ts install-docker
 
-# 2. Stamp GHCR credentials into /root/.docker/config.json on the host.
-#    Uses `gh auth token` from the operator's workstation.
+# 2. 把 GHCR 凭证写进 /root/.docker/config.json。
 bun run scripts/deploy.ts login-ghcr
 
-# 3. Dry-run the deploy to see what the script will ask for.
+# 3. dry-run 看脚本将要干什么。
 bun run scripts/deploy.ts deploy --dry-run
 
-# 4. Trigger the build workflow, upload compose + Caddyfile + .env,
-#    docker compose pull + up -d, verify /health, reload Caddy.
+# 4. 触发 build workflow → 上传 compose/Caddyfile/.env → compose pull + up -d →
+#    校验 /health → 重载 Caddy。
 bun run scripts/deploy.ts deploy
 
-# 5. Only after /health returns ok: tear down the legacy runtime.
-#    IRREVERSIBLE. Requires --confirm.
+# 5. 只有在 /health 通过后才拆旧运行时（若有）。IRREVERSIBLE，必须 --confirm。
 bun run scripts/deploy.ts teardown-legacy --confirm
 ```
 
-After step 4 succeeds, edit `/opt/aiworker-deploy/.env` on the host and set
-`AIWORKER_IMAGE_TAG=<the tag printed by the script>` so manual compose
-invocations also see the right image.
+步骤 4 成功后，编辑宿主 `/opt/aiworker-deploy/.env` 把 `AIWORKER_IMAGE_TAG` 改成脚本打印的 tag，这样之后宿主 `systemctl` 重启 / `docker compose up -d` 时也能拿到正确镜像。
 
 ## Routine deploy
 
@@ -77,168 +79,120 @@ invocations also see the right image.
 bun run scripts/deploy.ts deploy
 ```
 
-Equivalent to:
+等价于：
 
-1. `build` — `gh workflow run build-image.yml --ref main -f tag=<tag>` and
-   `gh run watch` until the run exits 0. The workflow publishes
-   `ghcr.io/zoneasetech/aiworker:<tag>` (plus `:latest`) via buildx.
-2. `upload` — `aissh file upload` of `docker-compose.yml`, `Caddyfile.tmpl`,
-   and `.env` to `/opt/aiworker-deploy/` (each with an explicit filename —
-   aissh sftp PUT rejects trailing-slash targets).
-3. `install` — `aissh exec` runs
-   `AIWORKER_IMAGE_TAG=<tag> docker compose --env-file .env pull && up -d`.
-4. `verify` — `aissh exec curl -fsS http://127.0.0.1:3000/health` asserts
-   `status == ok`.
-5. `reload-caddy` — `caddy validate` + `systemctl reload caddy`.
+1. **build** — `gh workflow run build-image.yml --ref main -f tag=<tag>` + `gh run watch` 直到 exit 0。workflow 产出 `ghcr.io/zoneasetech/aiworker:<tag>`（外加 `:latest`）。
+2. **upload** — `aissh file upload` 把 `docker-compose.yml` / `Caddyfile.tmpl` / `.env` 传到 `/opt/aiworker-deploy/`（每个显式指定目标文件名；aissh sftp PUT 拒绝 trailing-slash 目标）。
+3. **install** — `aissh exec` 在宿主跑 `AIWORKER_IMAGE_TAG=<tag> AIWORKER_IMAGE_VARIANT_SUFFIX=<suffix> docker compose --env-file .env pull && up -d`。
+4. **verify** — `curl -fsS http://127.0.0.1:3000/health` 期望 HTTP 200。**注意**：PLAN-013 的 gateway `/health` 返回 `{"ok":true,"service":"aiworker-gateway","ts":...}`，与旧 dashboard 的 `{"status":"ok",...}` 字段名不同，等后续更新 `scripts/deploy.ts` 的 grep 时一并修正。
+5. **reload-caddy** — `caddy validate` + `systemctl reload caddy`。
 
-Use `--tag=<tag>` to pin a specific tag (otherwise `<git-sha>-<UTC timestamp>`).
+可加 `--tag=<tag>` 固定 tag；默认 `<git-sha>-<UTC yyyymmddhhmm>`。
+
+## 部署后 smoke
+
+```sh
+# 1) /health 直连：
+curl -sf http://127.0.0.1:3000/health
+# => {"ok":true,"service":"aiworker-gateway","ts":...}
+
+# 2) 公网：
+curl -sf https://gateway.example.test/health
+# => 同上（Cloudflare → Caddy → gateway）
+
+# 3) 操作员登录 gateway + pair 一个测试 worker：
+export AIWORKER_MASTER_KEY=$(grep ^AIWORKER_MASTER_KEY= /opt/aiworker-deploy/.env | cut -d= -f2)
+# 本机 loopback 放行空 token，可以直接跑：
+bun apps/cli/src/aim.ts workers list   # {"workers":[]}
+
+# 4) 若开启 launch：
+bun apps/cli/src/aim.ts workers launch --display-name smoke
+bun apps/cli/src/aim.ts workers list
+bun apps/cli/src/aim.ts workers remove <workerId>
+```
+
+远程（非 loopback）操作员需在连接时携带 `INTERNAL_SHARED_SECRET` 作为 bearer；浏览器经 Caddy 反代属于 gateway 视角的 loopback（Caddy 跑在宿主本机），不需要再叠一层 basic auth，但建议用 Cloudflare Zero Trust 或 Cloudflare Access 控制公网入口。
 
 ## Rollback
 
-List prior tags on GHCR
-(`gh api /orgs/zoneasetech/packages/container/aiworker/versions`) or on the
-host (`docker image ls ghcr.io/zoneasetech/aiworker`), then:
+列出可选 tag：
+
+```sh
+gh api /orgs/zoneasetech/packages/container/aiworker/versions | jq '.[].metadata.container.tags[]?' | head
+# 或在宿主：
+aissh exec <server> 'docker image ls ghcr.io/zoneasetech/aiworker'
+```
+
+回滚：
 
 ```sh
 bun run scripts/deploy.ts install --tag=<previous-tag>
 bun run scripts/deploy.ts verify
 ```
 
-If the previous image is still cached on the host, `install` is near-instant —
-`docker compose pull` is a no-op and `up -d` recreates the container in
-seconds. Otherwise compose pulls the tag over the network.
-
-Update `AIWORKER_IMAGE_TAG` in the host `.env` once the rollback is verified
-so manual compose invocations stay aligned.
-
-## Worker registration
-
-Workers are self-sufficient (PLAN-004). They run wherever you like — same host
-via a separate compose, different VM, another cloud — and the dashboard
-registers them by URL + bootstrap token. See
-[PLAN-004](plan/PLAN-004.md#operator-flow) for the registration walkthrough.
-FEAT-009 does **not** automate worker deployment; that is follow-up work.
-
-### Worker base URL formats
-
-The Register dialog's `Base URL` is the dashboard → worker HTTP endpoint. It
-must be the worker's HTTP root: scheme + host/port, **no trailing path**. The
-dashboard concatenates `/api/worker/info`, `/api/worker/config`, etc. on top.
-
-| Topology | Example `Base URL` |
-|---|---|
-| Dashboard and worker share a docker compose network | `http://aiworker-worker:3000` |
-| Worker on a different host, fronted by HTTPS reverse proxy | `https://worker-1.example.com` |
-| Worker on a different host, reachable by direct port | `http://<test-server-ip-redacted>:3001` |
-
-Notes:
-
-- The dashboard always connects server-side (not through the operator's
-  browser), so internal docker hostnames resolve fine.
-- `http` vs `https` just has to match what the worker actually serves.
-- Do not include `/api/worker` or any suffix — if registration fails with
-  `worker-unreachable`, a stray path is a common cause.
-
-### Bootstrap token options
-
-The Register dialog accepts a `wtk_`-prefixed token that must match the
-worker's live `worker_identity`. Two ways to obtain one:
-
-1. **Let the worker mint its own**: start the worker container with no
-   `AIWORKER_FORCE_TOKEN`; on first boot it generates a token and prints it
-   once to stdout. Copy it from `docker logs <worker-container>` and paste
-   it into the dashboard.
-2. **Have the dashboard mint it** (FEAT-017): click **Generate** in the
-   Register dialog — a CSPRNG produces a compliant token in the browser.
-   Set `AIWORKER_FORCE_TOKEN=<token>` on the worker container *before its
-   first boot* (e.g. add it to the worker compose `environment:` block).
-   The worker will then use exactly that token instead of minting its own.
-   `AIWORKER_FORCE_TOKEN` is a one-shot knob — it is ignored when the
-   worker already has a `worker_identity` row.
+若先前镜像在宿主仍有缓存，`install` 近乎即时。回滚验证通过后把 `AIWORKER_IMAGE_TAG` 同步写回宿主 `.env`。
 
 ## Slim vs Full image (FEAT-020)
 
-Every `build-image` workflow run publishes **two tags** to
-`ghcr.io/zoneasetech/aiworker`:
+每次 `build-image` workflow 都会给 `ghcr.io/zoneasetech/aiworker` 发布两个 tag：
 
-| Tag | Size | Content |
+| Tag | Size | 内容 |
 |---|---|---|
-| `<sha>` (slim, default) | ~150 MB | No agentic CLIs baked in. Workers fall back to `npx -y ...` at first use (30–60s cold start). |
-| `<sha>-full` | ~320 MB | Slim + `npm install -g` for `@anthropic-ai/claude-code`, `@openai/codex`, `@google/gemini-cli`, `@qwen-code/qwen-code`, pinned to the same defaults the TS source uses (`DEFAULT_*_CLI_VERSION`); plus `cursor-agent` installed via the official `https://cursor.com/install` curl script and symlinked at `/usr/local/bin/cursor-agent` (FEAT-021). `--version` of every CLI is a build-time sanity gate. |
+| `<sha>`（slim，默认） | ~150 MB | 不打包任何 agentic CLI。worker 首次调用时走 `npx -y ...` fallback（30–60 秒冷启动）。 |
+| `<sha>-full` | ~320 MB | slim + `@anthropic-ai/claude-code` / `@openai/codex` / `@google/gemini-cli` / `@qwen-code/qwen-code` 按 `DEFAULT_*_CLI_VERSION` 钉版本 `npm install -g`；外加 `cursor-agent`（官方 curl 脚本安装，`/usr/local/bin/cursor-agent` 软链）。每个 CLI 的 `--version` 是构建期 sanity gate。 |
 
-Pick per deploy:
+按 deploy 选：
 
 ```bash
-# Default — slim.
+# 默认 slim。
 bun scripts/deploy.ts deploy --tag=$TAG
 
-# Full, so workers don't pay the npx cold-start each first use.
+# Full（避免首轮 npx 冷启动）。
 bun scripts/deploy.ts deploy --tag=$TAG --image-variant=full
 ```
 
-Switching without a rebuild: edit `/opt/aiworker-deploy/.env` on the host
-so `AIWORKER_IMAGE_VARIANT_SUFFIX=` (slim) or `=-full`, then re-run
-`scripts/deploy.ts install --tag=<same tag>`.
+不重新 build 也可切换：改宿主 `.env` 的 `AIWORKER_IMAGE_VARIANT_SUFFIX=`（slim）或 `=-full`，再跑 `scripts/deploy.ts install --tag=<same tag>`。
 
-**Auth files never ship in the image** — pre-installing the CLI only
-skips the binary fetch. First login still happens at container run-time
-(either a one-off `docker exec claude login` or a host auth-dir mount).
-See [`docs/executor-engines.md`](./executor-engines.md) per engine for
-login paths and mount recipes.
+**Auth 文件永远不打进镜像**——预装 CLI 只省 binary fetch，首次 login 仍在容器 runtime（`docker exec claude login` 或 host auth dir mount）。每个 engine 的 login 路径和 mount 配方见 `docs/executor-engines.md`。
 
-## Enabling manager-driven worker creation
+## Worker 注册（PLAN-013 后）
 
-Feature flag bundle (PLAN-010) that lets operators spawn new worker containers
-end-to-end from the dashboard UI, without hand-rolling `docker run` and
-scraping bootstrap tokens from container logs. **Opt-in only** — the default
-deploy stays a pure registry with no docker-socket dependency.
+PLAN-013 之前：操作员在 dashboard 页面 `Base URL` + `Bootstrap Token` 输入框里手填，dashboard 通过 REST `POST /register` 入库。
 
-### Topology assumed
+PLAN-013 之后：dashboard REST 下线，操作员改走 `aim` CLI 或 web SPA 的 WS 协议。
 
-Single-host: the dashboard container and every spawned worker share the same
-docker engine and the same compose-created network (`aiworker_default`).
-Remote docker daemons are out of scope for PLAN-010.
+### 手动 pair
 
-### Prerequisites (in order)
-
-1. **`DASHBOARD_REQUIRE_AUTH=true`**. The supervisor overlay mounts
-   `/var/run/docker.sock` into the dashboard container. Once that is done,
-   anyone who reaches `/api/*` without auth can create arbitrary containers
-   on the host (docker.sock ≈ host root). Flip the auth flag **before**
-   layering the overlay.
-2. **`INTERNAL_SHARED_SECRET` present in `.env`** (existing requirement).
-   The dashboard middleware accepts both:
-   - `Authorization: Bearer <INTERNAL_SHARED_SECRET>` — CI, deploy scripts,
-     smoke tests;
-   - `Authorization: Basic base64(<anything>:<INTERNAL_SHARED_SECRET>)` — the
-     browser's native Basic prompt. The username is ignored.
-3. **Host data directory**:
+1. Worker 容器首启（`aiw init` / `aiw serve --gateway ...`）在 stdout 打一次性 `AIWORKER_BOOTSTRAP_TOKEN=wtk_...`。
+2. `docker logs <worker-container>` 抓取这一行。
+3. 在运维工作站：
    ```sh
-   sudo install -d -o root -g root -m 0755 /opt/aiworker-workers
+   aim pair \
+     --url ws://127.0.0.1:3000/ws \
+     --worker-url http://aiworker-worker:3001 \
+     --bootstrap-token wtk_xxxx \
+     --display-name prod-1
    ```
-   Must live at the same path inside the dashboard container and on the
-   host (the supervisor hands the host path to the docker daemon verbatim).
+4. 成功后 `aim workers list` 应能看到它，`online=true`（如果 worker 同时用 `aiw serve --gateway ws://gateway:3000/ws` 作为 node 接入）。
 
-### Optional env
+Worker baseUrl 仍是 HTTP 根（scheme + host/port，不带 path）。典型形态：
 
-Set in `/opt/aiworker-deploy/.env` before installing:
+| Topology | 示例 baseUrl |
+|---|---|
+| gateway 与 worker 同一 compose 网络 | `http://aiworker-worker:3001` |
+| worker 在另一宿主，有 HTTPS 反代 | `https://worker-1.example.com` |
+| worker 在另一宿主，直暴端口 | `http://<test-server-ip-redacted>:3001` |
 
-| Variable | Default | Meaning |
-|---|---|---|
-| `MANAGER_MAX_WORKERS` | unset (no cap) | Hard cap on rows in `registered_workers`. Applies to `/register` **and** `/launch-local`. |
-| `WORKER_MEMORY_LIMIT` | `512m` | `--memory` passed to every launched worker container. |
-| `WORKER_CPU_LIMIT` | `1.0` | `--cpus` equivalent (docker `NanoCpus`). |
-| `AIWORKER_LAUNCH_BASE_URL_TEMPLATE` | `http://{containerName}:3001` | Override only if the default URL shape doesn't fit your network. |
+### 自动 launch
 
-### Install
+启用后，`aim workers launch` 让 gateway supervisor 本机拉起 worker 容器、scrape bootstrap、自动 pair。需要的环境全部在 overlay 里：
 
 ```sh
-# One-time: ship the overlay to the deploy target.
-aissh file upload docker-compose.yml       /opt/aiworker-deploy/docker-compose.yml
-aissh file upload docker-compose.supervisor.yml \
-                                           /opt/aiworker-deploy/docker-compose.supervisor.yml
+# 一次性：把 overlay 上传。
+aissh file upload ops/compose/docker-compose.supervisor.yml \
+                  /opt/aiworker-deploy/docker-compose.supervisor.yml
 
-# Bring the stack up with both files merged.
+# 组合启动：
 aissh exec <server> \
   "cd /opt/aiworker-deploy && docker compose \
      -f docker-compose.yml \
@@ -251,26 +205,38 @@ aissh exec <server> \
      up -d"
 ```
 
-### Smoke test
+Prerequisites：
+
+1. `AIWORKER_GATEWAY_CAN_LAUNCH=true` 必须先在宿主 `.env` 打开。overlay 会把 `/var/run/docker.sock:ro` 挂进 gateway 容器——等价于 host root，必须有反代或 Zero Trust 保护。
+2. `INTERNAL_SHARED_SECRET` 必须就绪（gateway 把它注入到 launch 的 worker 容器 env）。
+3. 宿主上的 worker 数据目录：
+   ```sh
+   sudo install -d -o root -g root -m 0755 /opt/aiworker-workers
+   ```
+   容器内外路径必须一致（docker daemon 认宿主路径）。
+
+可选 env：
+
+| 变量 | 默认 | 含义 |
+|---|---|---|
+| `AIWORKER_MAX_WORKERS` | 不设（无上限） | fleet 行数硬上限，对 `workers.pair` / `workers.launch` 都生效 |
+| `WORKER_MEMORY_LIMIT` | `512m` | 每个 launch 的 worker 容器 `--memory` |
+| `WORKER_CPU_LIMIT` | `1.0` | 每个 launch 的 worker 容器 CPU（fractional cores） |
+| `AIWORKER_LAUNCH_BASE_URL_TEMPLATE` | `http://{containerName}:3001` | 网络拓扑不匹配时覆盖 |
+
+Smoke：
 
 ```sh
-# Capabilities must report canLaunch=true.
-curl -u ':'"$INTERNAL_SHARED_SECRET" \
-  https://gateway.example.test/api/workers/capabilities
-# → {"canLaunch":true,"maxWorkers":...,"currentWorkers":0}
-
-# Unauthenticated request must be rejected.
-curl -i https://gateway.example.test/api/workers/capabilities
-# → HTTP/2 401
-# → www-authenticate: Basic realm="AIWorker", charset="UTF-8"
+# loopback 放行空 token。
+bun apps/cli/src/aim.ts workers launch --display-name smoke
+# ✔ 已 launch worker w_xxxxxxxxxxxx
+bun apps/cli/src/aim.ts workers list
+bun apps/cli/src/aim.ts workers remove <workerId>
 ```
 
-### Rollback
+回滚（撤 overlay）：
 
 ```sh
-# Back out to the pure-registry stack. Containers previously spawned via
-# launch-local keep running (RestartPolicy=unless-stopped) — their registry
-# rows stay intact; only the Create-worker UI goes away.
 aissh exec <server> \
   "cd /opt/aiworker-deploy && docker compose \
      -f docker-compose.yml \
@@ -278,54 +244,31 @@ aissh exec <server> \
      up -d"
 ```
 
-If you also want to turn auth back off (not recommended past the initial
-rollout window), unset `DASHBOARD_REQUIRE_AUTH` in `.env` and re-run the
-base compose.
+踩坑：
 
-### Pitfalls
-
-- **Forgetting the network**: if `DASHBOARD_REQUIRE_AUTH=true` and the
-  supervisor overlay are applied but the dashboard container is not on
-  `aiworker_default`, the supervisor's P4 self-check fails loudly at launch
-  time (`dashboard container ... is not a member of docker network
-  'aiworker_default'`). Re-run compose so both services share the default
-  network.
-- **Data path mismatch**: `WORKER_DATA_ROOT` must be a path that is valid on
-  the host docker daemon, not a compose-managed named volume. The overlay
-  uses `/opt/aiworker-workers` on both sides for exactly this reason.
-- **Losing `AIWORKER_MASTER_KEY`**: unchanged from the base deploy. Back up
-  the file offline. Each launched worker has its own independent per-worker
-  master key minted at launch; dashboard does not retain it, and the worker
-  persists it in its own `worker.db`.
+- **忘记网络**：overlay 把 `AIWORKER_NETWORK=aiworker_default` 作为默认；如果宿主 compose 网络名不同，`workers.launch` 的 URL template（`http://{containerName}:3001`）就解析不到，`aim chat` 会拿到 `worker_unreachable`。补丁是在 `.env` 里覆盖 `AIWORKER_LAUNCH_BASE_URL_TEMPLATE`。
+- **数据路径不对等**：`WORKER_DATA_ROOT` 必须在宿主和 gateway 容器里一字不差——docker daemon 拿到的是宿主路径。overlay 两侧都用 `/opt/aiworker-workers`。
+- **Master key 丢失**：与基础部署相同。Master key 必须离线备份；每个 launched worker 有自己的 per-worker master key（由 gateway 在容器内 mint 并写 `worker.db`），gateway 不保留明文。
 
 ## Troubleshooting
 
-- `aissh exec` prints an operation id and `approval required`: run
-  `aissh approval wait <op-id>` in another terminal, then re-run the failed
-  subcommand.
-- `verify` fails: `aissh exec <server> "docker logs aiworker-dashboard --tail
-  200"` — check whether the dashboard actually started, and whether the host
-  `.env` has a valid `AIWORKER_MASTER_KEY`.
-- `reload-caddy` fails `caddy validate`: edit `ops/caddy/Caddyfile.tmpl`
-  locally, re-run `bun run scripts/deploy.ts deploy` (or `upload` +
-  `reload-caddy` if the image is unchanged).
+- `aissh exec` 打印 `approval required`：在另一个终端跑 `aissh approval wait <op-id>`，然后重跑失败的子命令。
+- `verify` 失败：`aissh exec <server> "docker logs aiworker-gateway --tail 200"`——看 gateway 是否真的起了，`.env` 里 `AIWORKER_MASTER_KEY` 是否有效。
+- `reload-caddy` 失败 `caddy validate`：本地改 `ops/caddy/Caddyfile.tmpl`，重跑 `bun run scripts/deploy.ts deploy`（或 `upload` + `reload-caddy`，若镜像未变）。
+- `aim` 命令失败 `auth: shared_secret_mismatch`：loopback 检测不命中（通常是从容器外部直连 gateway 的 `127.0.0.1`，但 Bun 看到的 `requestIP` 是 docker network 地址）。解决：通过 Caddy 反代进入，或者显式在 aim 里 export `INTERNAL_SHARED_SECRET` 当 token。
+- `aim` 等响应超时：检查 node 是否在线（`aim workers list`）；若 node 短时间内频繁断连，看 `fleet.db` 的 `audit_events` 里 `gateway.node.disconnected` 的 close code。
 
-## Deviations from the original FEAT-009 draft
+## 历史 Deploy 记录
 
-The FEAT-009 task file was authored before PLAN-004. This run book intentionally
-deviates in five places:
+PLAN-013 之前的 dashboard 部署时间线记录在 `docs/task/FEAT-009.md` 的 "Deploy records" 表。该表保留作为历史存档；PLAN-013 之后的新部署方式（gateway 容器入口）以本文档为准。
 
-1. Health endpoint is `GET /health`, not `GET /api/system/health`.
-2. The Caddyfile does not strip a `{workerId}` prefix — PLAN-004 made workers
-   advertise their own externally-reachable URL.
-3. First-cut deploy brings up the dashboard only; workers are operator-
-   registered after the dashboard is healthy.
-4. Images are built in `.github/workflows/build-image.yml` and published to
-   `ghcr.io/zoneasetech/aiworker` (private). The host does
-   `docker compose pull`, not `docker load` of an uploaded tarball — the
-   original PLAN-005 rejected CI deploy as "FEAT-scale work"; the workstation
-   docker build path turned out brittle enough to flip that call.
-5. The dashboard container serves the bundled web SPA itself via
-   `hono/bun.serveStatic` at `/app/web` with an index.html SPA fallback. Caddy
-   is a pure `:80 → 127.0.0.1:3000` reverse proxy; TLS is terminated by
-   Cloudflare's orange-cloud proxy on `gateway.example.test`.
+## 与原始 FEAT-009 草案的偏离
+
+原 FEAT-009 task 在 PLAN-004 前写成。本 run book 有意偏离：
+
+1. health 端点 `GET /health`，不是 `GET /api/system/health`。
+2. Caddyfile 不剥 `{workerId}` 前缀——worker 自行广告外部可达 URL。
+3. 首跑只拉 gateway；worker 由 operator 在 gateway 健康后 pair / launch。
+4. 镜像由 `.github/workflows/build-image.yml` 在 GitHub Actions 构建，发布到 `ghcr.io/zoneasetech/aiworker`（private）。宿主只 `docker compose pull`，不 `docker load` 工作站打的 tarball。
+5. Dashboard 容器（PLAN-004 时代）托管 `/app/web` 静态资源。**PLAN-013 起**：web SPA 已切到 WS 协议，静态资源仍存在镜像里但不再被入口 serve（滚动回退遗留）；后续版本会把静态资源下线，入口纯走 WS。
+6. 入口容器从 `aiworker-dashboard`（Hono + REST + SPA）改名为 `aiworker-gateway`（Bun.serve + WS）——service name、ENTRYPOINT override、验证字段全部需要与 PLAN-013 对齐。

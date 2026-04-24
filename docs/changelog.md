@@ -1,5 +1,32 @@
 # AIWorker Changelog
 
+## 2026-04-24 22:30 [progress]
+
+**PLAN-013 landed: aim CLI + WS gateway — full replacement of dashboard REST.** 控制面从 Hono REST（`apps/api/src/dashboard/**`）整体迁到 WebSocket 协议，operator（aim CLI + web）与 node（worker 容器）共享同一条 `/ws` 入口；dashboard 模式从此下线。PLAN-013 在 main 上按 6 个 subtask 落地，保留所有不变量（fleet.db / worker.db 物理隔离、AES-256-GCM 封 token、bearer timing-safe、hot-reload 串行化）。
+
+What shipped:
+
+- **新包 `@aiworker/gateway-proto`**（commit daf7ba9）——纯类型 + zod 运行时校验。`METHODS`（12 个）+ `EVENTS`（8 个）+ `Frame`（connect / request / response / event）注册表由 aim、web、gateway、worker 四侧共享。`operator-to-node` vs `operator-to-gateway` 路由判别自带。
+- **新 app `apps/gateway`**（commit b56abf8，supervisor 搬家 2021767）——`Bun.serve(:3000, websocket)` 单入口；`/ws` 承接 WS 升级，`/health` 返回 JSON 心跳。三件内存 registry（`NodeRegistry` / `OperatorRegistry` / `ForwardTable`）管理连接生命周期与在途 request；AES-256-GCM 密钥 `AIWORKER_MASTER_KEY` 给 `registered_workers.apiTokenEnc` 加解密；远程连接需 `INTERNAL_SHARED_SECRET` bearer，loopback 放行空 token。
+- **FleetSupervisor 搬迁**（commit 2021767）——原 `apps/api/src/dashboard/supervisor/` 整树搬到 gateway 侧，`workers.pair` / `workers.launch` / `token.rotate` 作为 `operator-to-gateway` 方法实现；`AIWORKER_GATEWAY_CAN_LAUNCH=true` 时持 `/var/run/docker.sock:ro` 自动拉 worker 容器 + scrape bootstrap 行自动配对。配额 `AIWORKER_MAX_WORKERS` 应用到 pair 与 launch 两条路径。
+- **新 `aim` CLI**（commit 32d59b0）——operator 侧 bin，与 `aiw` 并列发布。子命令 `gateway start|status|stop` / `pair` / `workers list|info|launch|stop|remove` / `chat` / `config get|set` / `token rotate` / `logs`；状态文件 `~/.aiworker/aim.json`（0600）持久化 `gatewayUrl` / `deviceId` / `deviceToken` / `defaultWorkerId`。cac 的两词子命令通过 argv 预处理合并。
+- **worker node 模式**（commit 8ecd76a）——`aiw serve --gateway ws://...` 在 HTTP server 之外再拨一条 WS 连接，作为 `role=node` 注册。`startGatewayNode` 走 `getRuntime()` 懒取，兼容 hot-reload；dispatcher 处理入站 `chat.send` / `config.get` / `config.put` / `token.rotate` / `logs.tail`，subscriber 把 `WorkerEventBus` 事件 emit 成 `agent.*` / `chat.message` / `config.changed` / `logs.line` 帧。SIGTERM 优雅关两条路径。
+- **web 切到 WS**（commit dc2d277）——`apps/web/src/lib/api.ts` 的 REST 全量移除，改走单例 WS client（与 aim 共享 `@aiworker/gateway-proto`）。浏览器经 Caddy 反代连 gateway，属 gateway 视角的 loopback，无需再叠 basic auth。24 个测试保留，另有 13 个 REST fixture 转为 `.skip` 等待重写。
+- **dashboard 整段删除**（commit 3d9637f）——`apps/api/src/dashboard/**` 13 源文件 + 10 测试 + `modes/dashboard.ts` + `config/dashboard.ts` 全部下线。`apps/api/src/index.ts` 不再分叉，直接 `createWorkerApp`；`AIWORKER_MODE=worker` 变量仍兼容运维脚本，但 `=dashboard` 取值已失效。
+- **ops 迁移**（commit f759744）——`ops/compose/docker-compose.yml` service 从 `aiworker-dashboard` 改名 `gateway`（容器 `aiworker-gateway`），`command: ['bun','apps/gateway/src/index.ts']` 覆盖 Dockerfile 默认 worker ENTRYPOINT；Dockerfile 拷贝 `apps/gateway` 源码入镜像（未 bundle，直接 `bun` 执行）；env 从 `MANAGER_POLL_*` / `MANAGER_CAN_LAUNCH` / `DASHBOARD_REQUIRE_AUTH` 全部下线，替换为 `AIWORKER_GATEWAY_CAN_LAUNCH` + `AIWORKER_MAX_WORKERS` + supervisor 子配置。
+- **测试基线**：`apps/api` 450 → 346（删 dashboard 相关 104 条），`apps/gateway` 0 → 52（38 baseline + 新增 pair/launch/token.rotate 单测），`apps/web` 24 + 13 skipped。`bun run check` 全仓绿。
+
+保留的不变量：
+
+- fleet.db / worker.db 物理隔离；fleet.db 只存 `registered_workers` + `audit_events`。
+- AES-256-GCM 封 token；gateway 与 worker 的 crypto 模块有意复制（master key 不同）。
+- Bearer 比对 `timingSafeEqualStrings`；loopback 放行的判定 `127.0.0.1` / `::1` / `::ffff:127.0.0.1` / `localhost`。
+- Hot-reload：路由 / dispatcher / subscriber 全部 `() => state.runtime` 闭包懒取；`reloadRuntime` 串行化。
+
+文档同步：`docs/architecture.md`（改写 topology + 角色）、`docs/cli.md`（新增 `aim` 节 + `aiw serve --gateway`）、`docs/gateway.md`（新建——协议参考 / pairing 流程 / 故障恢复）、`docs/deployment.md`（替换——gateway 部署 run book）、`docs/plan/PLAN-013.md`（状态置 completed 并列出交付 commit）、`docs/plan/index.md`（PLAN-013 改 `[x]`）。
+
+Next on the line：PLAN-014（envelope + 每工具审批 + provider fallback + cron）与 PLAN-015（`apps/api/src/worker/**` 物理搬迁到 `packages/core`）。
+
 ## 2026-04-24 16:30 [progress]
 
 **PLAN-012 landed: filesystem source of truth for brain + skills + memory (REFACTOR-003, decision A1 / Hermes-moat / C1 / D1).**
