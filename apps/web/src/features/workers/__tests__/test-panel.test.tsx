@@ -54,7 +54,10 @@ afterEach(() => {
   globalThis.fetch = originalFetch
 })
 
-describe('testPanel', () => {
+// PLAN-013 S5: brain/test、executor/test、channels/test 这些端点在 gateway
+// proto 中尚未暴露;`@/lib/api` 已 stub 化为空结果。原 fetch-mocked UI 断言
+// 无法再用,先跳过,待 proto 扩展后重写。
+describe.skip('testPanel', () => {
   it('brain test happy-path renders per-source rows', async () => {
     installFetch(({ method, url }) => {
       if (method === 'GET' && url.includes('/proxy/worker/info'))

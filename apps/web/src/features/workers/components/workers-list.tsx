@@ -58,7 +58,7 @@ export function WorkersList({ workers: workersProp }: WorkersListProps = {}) {
     && caps.currentWorkers >= caps.maxWorkers
   const createDisabled = !caps?.canLaunch || quotaFull
   const createTooltip = !caps?.canLaunch
-    ? 'Set MANAGER_CAN_LAUNCH=true + supervisor envs (see docs/deployment.md)'
+    ? 'Set AIWORKER_GATEWAY_CAN_LAUNCH=true + supervisor envs (see docs/deployment.md)'
     : quotaFull
       ? `Quota reached (${caps.currentWorkers}/${caps.maxWorkers})`
       : undefined

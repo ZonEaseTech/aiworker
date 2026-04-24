@@ -76,6 +76,7 @@
     "apps/web": {
       "name": "@aiworker/web",
       "dependencies": {
+        "@aiworker/gateway-proto": "workspace:*",
         "@aiworker/shared": "workspace:*",
         "@base-ui-components/react": "^1.0.0-rc.0",
         "@tailwindcss/vite": "^4.2.2",

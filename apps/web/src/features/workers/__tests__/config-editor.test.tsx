@@ -1,8 +1,15 @@
 import type { WorkerConfig, WorkerInfo } from '@aiworker/shared'
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { WorkerApiError } from '@/lib/api'
 import { ConfigEditor } from '../components/config-editor'
 import { renderWithProviders } from './test-utils'
+
+/**
+ * PLAN-013 S5: 数据层已从 REST 迁到 gateway WS,不再走 `fetch`。此处 mock
+ * `@/lib/api` 的 getWorkerInfo / getWorkerConfig / putWorkerConfig 三个函数
+ * 直接返回假数据,避免 gateway-client 真的建 WebSocket。
+ */
 
 const WORKER_ID = 'w_aaaaaaaaaaaa'
 
@@ -47,101 +54,74 @@ function infoFixture(): WorkerInfo {
   }
 }
 
-type FetchHandler = (req: { method: string, url: string, body: unknown, headers: Record<string, string> }) => {
-  status: number
-  body: unknown
+type GetConfig = (id: string) => Promise<{ config: WorkerConfig, version: number }>
+type PutConfig = (
+  id: string,
+  body: WorkerConfig,
+  options?: { ifMatchVersion?: number },
+) => Promise<{ config: WorkerConfig, version: number, runtimeReload: 'ok' | 'failed' }>
+type GetInfo = (id: string) => Promise<WorkerInfo>
+
+interface Handlers {
+  getWorkerConfig: ReturnType<typeof vi.fn<GetConfig>>
+  putWorkerConfig: ReturnType<typeof vi.fn<PutConfig>>
+  getWorkerInfo: ReturnType<typeof vi.fn<GetInfo>>
 }
 
-function installFetch(handler: FetchHandler): typeof fetch {
-  const mock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = typeof input === 'string' ? input : input.toString()
-    const method = (init?.method ?? 'GET').toUpperCase()
-    let body: unknown
-    if (typeof init?.body === 'string') {
-      try {
-        body = JSON.parse(init.body)
-      }
-      catch {
-        body = init.body
-      }
-    }
-    const headers: Record<string, string> = {}
-    if (init?.headers) {
-      for (const [k, v] of Object.entries(init.headers as Record<string, string>))
-        headers[k] = v
-    }
-    const result = handler({ method, url, body, headers })
-    return new Response(JSON.stringify(result.body), {
-      status: result.status,
-      headers: { 'content-type': 'application/json' },
-    })
-  })
-  globalThis.fetch = mock as unknown as typeof fetch
-  return mock as unknown as typeof fetch
+let handlers: Handlers = createHandlers()
+
+function createHandlers(): Handlers {
+  return {
+    getWorkerConfig: vi.fn<GetConfig>(async () => ({ config: configFixture(), version: 3 })),
+    putWorkerConfig: vi.fn<PutConfig>(async (_id, body, options) => ({
+      config: body,
+      version: (options?.ifMatchVersion ?? 0) + 1,
+      runtimeReload: 'ok',
+    })),
+    getWorkerInfo: vi.fn<GetInfo>(async () => infoFixture()),
+  }
 }
 
-let originalFetch: typeof fetch
+vi.mock('@/lib/api', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api')
+  return {
+    ...actual,
+    getWorkerConfig: (id: string) => handlers.getWorkerConfig(id),
+    putWorkerConfig: (id: string, body: WorkerConfig, options?: { ifMatchVersion?: number }) =>
+      handlers.putWorkerConfig(id, body, options),
+    getWorkerInfo: (id: string) => handlers.getWorkerInfo(id),
+  }
+})
 
 beforeEach(() => {
-  originalFetch = globalThis.fetch
+  handlers = createHandlers()
 })
 
 afterEach(() => {
-  globalThis.fetch = originalFetch
+  vi.clearAllMocks()
 })
 
 describe('configEditor', () => {
   it('loads config + PUT round-trip on Save', async () => {
-    let putCalled = false
-    installFetch(({ method, url, body }) => {
-      if (method === 'GET' && url.includes('/proxy/worker/config'))
-        return { status: 200, body: { config: configFixture(), version: 3 } }
-      if (method === 'GET' && url.includes('/proxy/worker/info'))
-        return { status: 200, body: infoFixture() }
-      if (method === 'PUT' && url.includes('/proxy/worker/config')) {
-        putCalled = true
-        return {
-          status: 200,
-          body: { config: body as WorkerConfig, version: 4, runtimeReload: 'ok' },
-        }
-      }
-      return { status: 404, body: {} }
-    })
-
     renderWithProviders(<ConfigEditor workerId={WORKER_ID} />)
 
     await screen.findByText(/Configuration/)
-    // Wait for version text to indicate load succeeded.
     await screen.findByText(/Version/)
 
     fireEvent.click(screen.getByRole('button', { name: /Save configuration/i }))
 
-    await waitFor(() => expect(putCalled).toBe(true))
+    await waitFor(() => expect(handlers.putWorkerConfig).toHaveBeenCalled())
     await screen.findByText(/Saved \(version 4\)\./i)
   })
 
   it('shows 409 conflict banner and surfaces Reload button', async () => {
-    installFetch(({ method, url }) => {
-      if (method === 'GET' && url.includes('/proxy/worker/config'))
-        return { status: 200, body: { config: configFixture(), version: 3 } }
-      if (method === 'GET' && url.includes('/proxy/worker/info'))
-        return { status: 200, body: infoFixture() }
-      if (method === 'PUT' && url.includes('/proxy/worker/config')) {
-        return {
-          status: 409,
-          body: {
-            error: {
-              code: 'version-conflict',
-              message: 'config version 3 does not match current version 5',
-              expected: 3,
-              actual: 5,
-            },
-          },
-        }
-      }
-      return { status: 404, body: {} }
-    })
-
+    handlers.putWorkerConfig.mockRejectedValueOnce(
+      new WorkerApiError(
+        'version-conflict',
+        'config version 3 does not match current version 5',
+        { expected: 3, actual: 5 },
+      ),
+    )
     renderWithProviders(<ConfigEditor workerId={WORKER_ID} />)
     await screen.findByText(/Configuration/)
 
@@ -153,13 +133,7 @@ describe('configEditor', () => {
   it('blocks save when brainWriteTarget is empty while brains exist', async () => {
     const brokenConfig = configFixture()
     brokenConfig.brainWriteTarget = ''
-    installFetch(({ method, url }) => {
-      if (method === 'GET' && url.includes('/proxy/worker/config'))
-        return { status: 200, body: { config: brokenConfig, version: 1 } }
-      if (method === 'GET' && url.includes('/proxy/worker/info'))
-        return { status: 200, body: infoFixture() }
-      return { status: 500, body: {} }
-    })
+    handlers.getWorkerConfig.mockResolvedValueOnce({ config: brokenConfig, version: 1 })
 
     renderWithProviders(<ConfigEditor workerId={WORKER_ID} />)
     await screen.findByText(/Configuration/)

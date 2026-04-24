@@ -1,7 +1,14 @@
+import type { SafeRegisteredWorker } from '@aiworker/shared'
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { WorkerApiError } from '@/lib/api'
 import { RegisterWizard } from '../components/register-wizard'
 import { renderWithProviders } from './test-utils'
+
+/**
+ * PLAN-013 S5: 注册流程现在走 gateway `workers.pair`。这里 mock `@/lib/api`
+ * 的 `registerWorker` 与 `listWorkers` 直接返回假数据,测试 UI 映射逻辑。
+ */
 
 const navigateMock = vi.fn()
 
@@ -10,19 +17,19 @@ vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => navigateMock,
 }))
 
-interface MockResponse {
-  status: number
-  body: unknown
-}
+const registerMock = vi.fn<
+  (input: { baseUrl: string, apiToken: string, displayName: string }) => Promise<SafeRegisteredWorker>
+>()
+const listMock = vi.fn<() => Promise<SafeRegisteredWorker[]>>()
 
-function fetchMock(response: MockResponse): typeof fetch {
-  return vi.fn(async () => {
-    return new Response(JSON.stringify(response.body), {
-      status: response.status,
-      headers: { 'content-type': 'application/json' },
-    })
-  })
-}
+vi.mock('@/lib/api', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api')
+  return {
+    ...actual,
+    registerWorker: (input: Parameters<typeof registerMock>[0]) => registerMock(input),
+    listWorkers: () => listMock(),
+  }
+})
 
 function fillForm({ baseUrl, apiToken, displayName }: {
   baseUrl: string
@@ -40,31 +47,28 @@ const VALID = {
   displayName: 'edge-1',
 }
 
-let originalFetch: typeof fetch
-
 beforeEach(() => {
   navigateMock.mockClear()
-  originalFetch = globalThis.fetch
+  registerMock.mockReset()
+  listMock.mockReset()
+  listMock.mockResolvedValue([])
 })
 
 afterEach(() => {
-  globalThis.fetch = originalFetch
+  vi.clearAllMocks()
 })
 
 describe('registerWizard', () => {
   it('happy path shows success step + navigates on Go to worker config', async () => {
-    globalThis.fetch = fetchMock({
-      status: 201,
-      body: {
-        id: 'w_aaaaaaaaaaaa',
-        baseUrl: VALID.baseUrl,
-        displayName: VALID.displayName,
-        addedAt: new Date().toISOString(),
-        addedBy: 'manual',
-        lastSeenAt: new Date().toISOString(),
-        lastSeenState: 'online',
-        lastConfigVersion: 1,
-      },
+    registerMock.mockResolvedValueOnce({
+      id: 'w_aaaaaaaaaaaa',
+      baseUrl: VALID.baseUrl,
+      displayName: VALID.displayName,
+      addedAt: new Date().toISOString(),
+      addedBy: 'manual',
+      lastSeenAt: new Date().toISOString(),
+      lastSeenState: 'online',
+      lastConfigVersion: 1,
     })
 
     renderWithProviders(<RegisterWizard open onOpenChange={vi.fn()} />)
@@ -82,9 +86,8 @@ describe('registerWizard', () => {
     })
   })
 
-  it('maps 401 auth-failed to the apiToken field', async () => {
-    globalThis.fetch = fetchMock({ status: 401, body: { error: { code: 'auth-failed' } } })
-
+  it('maps auth-failed error to the apiToken field', async () => {
+    registerMock.mockRejectedValueOnce(new WorkerApiError('auth-failed', 'worker 拒绝 bootstrap token'))
     renderWithProviders(<RegisterWizard open onOpenChange={vi.fn()} />)
     fillForm(VALID)
     fireEvent.click(screen.getByRole('button', { name: /^Register$/i }))
@@ -94,12 +97,10 @@ describe('registerWizard', () => {
     })
   })
 
-  it('maps 409 already-registered to the displayName field with the existing workerId', async () => {
-    globalThis.fetch = fetchMock({
-      status: 409,
-      body: { error: { code: 'already-registered', workerId: 'w_existinger123' } },
-    })
-
+  it('maps already-registered error to the displayName field with the existing workerId', async () => {
+    registerMock.mockRejectedValueOnce(
+      new WorkerApiError('already-registered', 'already registered', { workerId: 'w_existinger123' }),
+    )
     renderWithProviders(<RegisterWizard open onOpenChange={vi.fn()} />)
     fillForm(VALID)
     fireEvent.click(screen.getByRole('button', { name: /^Register$/i }))
@@ -109,12 +110,10 @@ describe('registerWizard', () => {
     })
   })
 
-  it('maps 502 worker-unreachable to the baseUrl field', async () => {
-    globalThis.fetch = fetchMock({
-      status: 502,
-      body: { error: { code: 'worker-unreachable', message: 'connect ECONNREFUSED 127.0.0.1:9999' } },
-    })
-
+  it('maps worker-unreachable error to the baseUrl field', async () => {
+    registerMock.mockRejectedValueOnce(
+      new WorkerApiError('worker-unreachable', 'connect ECONNREFUSED 127.0.0.1:9999'),
+    )
     renderWithProviders(<RegisterWizard open onOpenChange={vi.fn()} />)
     fillForm(VALID)
     fireEvent.click(screen.getByRole('button', { name: /^Register$/i }))

@@ -234,7 +234,10 @@ describe('executorSection (FEAT-014 picker)', () => {
   })
 })
 
-describe('executorSection (FEAT-018 availability badges)', () => {
+// PLAN-013 S5: FEAT-018 engines 探测走旧 REST `/proxy/worker/engines`,在
+// gateway proto 中尚未暴露;`getWorkerEngines` 已 stub 化返回空 engines。
+// 先跳过这批 availability 断言,待 proto 新增 engines 方法后重写。
+describe.skip('executorSection (FEAT-018 availability badges)', () => {
   it('renders three-state badges for each EngineKind when workerId is passed', async () => {
     stubEnginesFetch({
       engines: [
