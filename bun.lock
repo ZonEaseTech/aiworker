@@ -94,6 +94,17 @@
         "typescript": "^5.8.3",
       },
     },
+    "packages/gateway-proto": {
+      "name": "@aiworker/gateway-proto",
+      "dependencies": {
+        "@aiworker/shared": "workspace:*",
+        "zod": "^3.24.4",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.2.13",
+        "typescript": "^5.8.3",
+      },
+    },
     "packages/shared": {
       "name": "@aiworker/shared",
       "dependencies": {
@@ -123,6 +134,8 @@
     "@aiworker/cli": ["@aiworker/cli@workspace:apps/cli"],
 
     "@aiworker/fs-layout": ["@aiworker/fs-layout@workspace:packages/fs-layout"],
+
+    "@aiworker/gateway-proto": ["@aiworker/gateway-proto@workspace:packages/gateway-proto"],
 
     "@aiworker/shared": ["@aiworker/shared@workspace:packages/shared"],
 
