@@ -3,6 +3,7 @@ import type { WorkerDatabase } from '@aiworker/storage-sqlite/worker'
 import type { Buffer } from 'node:buffer'
 import type { SecretsVault } from '../secrets/vault'
 import { randomBytes } from 'node:crypto'
+import { ensureWorkerHome } from '@aiworker/fs-layout'
 import { isWorkerApiToken, WORKER_API_TOKEN_PREFIX, WORKER_ID_PATTERN } from '@aiworker/shared'
 import { workerIdentity } from '@aiworker/storage-sqlite/worker'
 
@@ -55,6 +56,9 @@ export async function loadOrMintIdentity(
     const plaintext = vault.decryptString(existing.apiTokenEnc, existing.nonce, existing.authTag)
     if (!isWorkerApiToken(plaintext))
       throw new Error('loadOrMintIdentity: decrypted API token failed isWorkerApiToken check')
+    // Home directory may have been wiped between boots (e.g. dev tmpdir); seed
+    // idempotently so `FilesystemBrainProvider.health()` stays green.
+    await ensureWorkerHome(existing.workerId)
     return { workerId: existing.workerId, token: plaintext, justMinted: false }
   }
 
@@ -79,6 +83,8 @@ export async function loadOrMintIdentity(
     bootstrapShownAt: now,
     createdAt: now,
   }).run()
+
+  await ensureWorkerHome(workerId)
 
   return { workerId, token, justMinted: true }
 }

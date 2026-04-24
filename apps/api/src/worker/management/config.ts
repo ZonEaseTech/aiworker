@@ -2,9 +2,13 @@ import type { WorkerConfig } from '@aiworker/shared'
 import type { WorkerDatabase } from '@aiworker/storage-sqlite/worker'
 import type { z } from 'zod'
 import type { SecretsVault } from '../secrets/vault'
+import { writeFile } from 'node:fs/promises'
+import { resolveConfigYamlPath } from '@aiworker/fs-layout'
 import { workerConfig as workerConfigTable } from '@aiworker/storage-sqlite/worker'
 
+import consola from 'consola'
 import { eq } from 'drizzle-orm'
+import { stringify as stringifyYaml } from 'yaml'
 import { enumerateSecretPaths, redactSecrets } from '../config/secret-paths'
 import { workerConfigSchema } from './config-schema'
 
@@ -104,4 +108,21 @@ export async function putConfig(
     .run()
 
   return { config: redacted, version: newVersion }
+}
+
+/**
+ * Write the redacted worker config as YAML to `<workerHome>/config.yaml`.
+ * Advisory mirror — DB stays authoritative; this file is for operator
+ * convenience (`cat config.yaml`, `aim config edit`). Best-effort: failures
+ * are logged but do not bubble up.
+ */
+export async function mirrorConfigToYaml(workerId: string, redacted: WorkerConfig, version: number): Promise<void> {
+  const path = resolveConfigYamlPath(workerId)
+  const body = stringifyYaml({ version, config: redacted })
+  try {
+    await writeFile(path, body, { encoding: 'utf8' })
+  }
+  catch (err) {
+    consola.warn(`[mirror-config] failed to write ${path}: ${String(err)}`)
+  }
 }

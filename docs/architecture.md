@@ -10,11 +10,36 @@ apps/
 packages/
   shared/          # cross-layer types / constants / zod schemas
   storage-sqlite/  # fleet.db + worker.db schemas, drizzle configs, migrations
+  fs-layout/       # ~/.aiworker/ path resolver + ensureWorkerHome bootstrap
 ```
 
-- **`apps/api`** exposes two surfaces: the default `.` export (legacy dev entry) and a `./lib` subpath export so CLI + scripts can reach into the runtime without starting a Hono server. PLAN-011 phase 1b will hoist most of the worker subtree into a new `packages/core`.
-- **`apps/cli`** depends on `@aiworker/api/lib` + `@aiworker/storage-sqlite`; its subcommands (`aiw init / run / serve / config-show / config-set / token-rotate`) drive the exact same bootstrap sequence as `AIWORKER_MODE=worker`. See `docs/cli.md`.
+- **`apps/api`** exposes two surfaces: the default `.` export (legacy dev entry) and a `./lib` subpath export so CLI + scripts can reach into the runtime without starting a Hono server. PLAN-015 will hoist most of the worker subtree into a new `packages/core`.
+- **`apps/cli`** depends on `@aiworker/api/lib` + `@aiworker/storage-sqlite` + `@aiworker/fs-layout`; its subcommands (`aiw init / run / serve / config-show / config-set / token-rotate`) drive the exact same bootstrap sequence as `AIWORKER_MODE=worker`. See `docs/cli.md`.
 - **`packages/storage-sqlite`** is the single source of truth for the two SQLite databases. It exports subpaths `./fleet` and `./worker` to keep the data-domain boundary narrow, and re-exports `defaultFleetMigrationsFolder` / `defaultWorkerMigrationsFolder` resolved via `import.meta.url` so consumers never hardcode `./drizzle/...` paths.
+- **`packages/fs-layout`** owns the per-worker home directory layout (see below). Both `apps/api` (identity bootstrap, config mirror) and `apps/cli` (config lookups, future gateway client) resolve paths through it, so the layout can evolve without touching every consumer.
+
+## Filesystem source of truth (PLAN-012)
+
+Each worker owns a directory tree under `AIWORKER_HOME` (default `~/.aiworker`):
+
+```text
+~/.aiworker/workers/<workerId>/
+  AGENT.md         # persona / role doc — orchestrator may inject into system prompt
+  SOUL.md          # voice + style guide
+  USER.md          # user profile the agent maintains over time
+  config.yaml      # redacted worker config mirror (advisory; DB stays authoritative)
+  brain/
+    MEMORY.md      # human-readable memory index
+    memories/*.md  # individual memory notes (agent-created + hand-edited)
+    skills/<n>/SKILL.md  # agentskills.io-compatible skills
+  worker.db        # SQLite identity + FTS + runtime state
+  workspaces/      # per-conversation ephemeral workspaces
+```
+
+- **Skills + memories** are read/written through `FilesystemBrainProvider` (class renamed from `HermesProvider` in PLAN-012). The provider treats the filesystem as authoritative; SQLite holds only identity + transient runtime state + (future) FTS indexes.
+- **`config.yaml`** is an advisory mirror of `worker_config.configJson`. `PUT /api/worker/config` and `aiw config-set` both call `mirrorConfigToYaml` after the DB write. The DB remains authoritative because the optimistic-lock contract (`If-Match: <version>`) depends on it. Moving yaml to source-of-truth is deferred to a later plan once WS gateway + `aim config edit` land.
+- **`AGENT.md` / `SOUL.md` / `USER.md`** are seeded as stubs on first boot. The orchestrator does not yet inject them into the system prompt — that behaviour lands alongside the prompt-assembly changes in PLAN-014.
+- **`ensureWorkerHome(workerId)`** is called from `loadOrMintIdentity` (both the existing + just-minted paths) so a freshly wiped tmpdir always has the expected skeleton by the time the runtime boots.
 
 ## Overview
 

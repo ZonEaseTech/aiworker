@@ -11,10 +11,10 @@ function configFixture(): WorkerConfig {
     brains: [
       {
         id: 'brain-1',
-        type: 'hermes',
+        type: 'filesystem',
         priority: 100,
         readOnly: false,
-        config: { apiUrl: 'https://hermes.example.com', home: '/home' },
+        config: { home: '/home' },
       },
     ],
     brainWriteTarget: 'brain-1',
@@ -39,7 +39,7 @@ function infoFixture(): WorkerInfo {
     workerId: WORKER_ID,
     runtimeVersion: '0.2.0',
     configVersion: 3,
-    brains: [{ id: 'brain-1', type: 'hermes', status: 'healthy' }],
+    brains: [{ id: 'brain-1', type: 'filesystem', status: 'healthy' }],
     executor: { type: 'http', status: 'healthy', model: 'stub' },
     channels: [],
     evolutionEnabled: false,

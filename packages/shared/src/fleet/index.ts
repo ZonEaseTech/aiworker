@@ -13,7 +13,7 @@ export type {
   BrainSourceConfig,
   CloudGatewayBrainSourceConfig,
   EvolutionConfig,
-  HermesBrainSourceConfig,
+  FilesystemBrainSourceConfig,
   WorkerConfig,
 } from './config'
 

@@ -1,5 +1,31 @@
 # AIWorker Changelog
 
+## 2026-04-24 16:30 [progress]
+
+**PLAN-012 landed: filesystem source of truth for brain + skills + memory (REFACTOR-003, decision A1 / Hermes-moat / C1 / D1).**
+
+Post-phase-1a research on Hermes Agent + OpenClaw confirmed both projects are instances of the same long-running-agent-daemon pattern (one conversation loop, many entry points, filesystem-owned skills + memories). AIWorker's current shape — fleet manager + per-worker runtime — is already OpenClaw RFC 42026's proposed split, so the refactor doesn't touch topology. It targets the real gaps instead: data-domain source of truth (this plan), remote-control protocol (PLAN-013), envelope + approvals + fallback + cron (PLAN-014), physical `packages/core` extraction (PLAN-015). The original PLAN-012 — mechanical move of `apps/api/src/worker/**` into `packages/core` — was superseded; it's now PLAN-015 and runs last.
+
+What shipped:
+
+- **New package `@aiworker/fs-layout`** — owns the `~/.aiworker/` path convention. Exports `resolveWorkerHome`, `resolveBrainHome`, `resolveSkillsDir`, `resolveMemoriesDir`, `resolveConfigYamlPath`, `resolveAgentMdPath`, `resolveSoulMdPath`, `resolveUserMdPath`, and the idempotent `ensureWorkerHome(workerId)` seeder. `AIWORKER_HOME` env overrides the root (default `~/.aiworker`).
+- **`HermesProvider` → `FilesystemBrainProvider`** — file moved from `apps/api/src/worker/brain/providers/hermes.ts` to `apps/api/src/worker/brain/providers/filesystem/index.ts`. `HermesApiClient` (the vestigial `/health` probe over HTTP) deleted; health now uses `access(home)`. Scanner + watcher + types moved alongside (from `apps/api/src/adapters/hermes/` which is now empty and removed). The provider drops `apiUrl` and takes only `home`.
+- **Shared types renamed**: `HermesBrainSourceConfig` → `FilesystemBrainSourceConfig` (no `apiUrl` field; `home` is optional and defaults via the factory to `resolveBrainHome(workerId)`). Discriminator `type: 'hermes'` → `type: 'filesystem'`. Re-export list in `packages/shared/src/index.ts` + `packages/shared/src/fleet/index.ts` updated.
+- **`buildBrain` signature** now takes `(workerId, config)` so the factory can default the brain home via fs-layout. `runtime.ts` threads the workerId through.
+- **`ensureWorkerHome` hooked into `loadOrMintIdentity`** — both existing + just-minted paths seed the tree, so `aiw init` and the HTTP worker mode produce identical on-disk layouts.
+- **Config yaml mirror** — `putConfig` gained a new sibling `mirrorConfigToYaml(workerId, config, version)`. Both the HTTP `PUT /api/worker/config` and `aiw config-set` call it after the DB write. `~/.aiworker/workers/<id>/config.yaml` is advisory (DB remains authoritative); a future WS gateway + `aim config edit` can promote it to source-of-truth.
+- **Dashboard web UI** — `BrainSection` form updated: `Hermes` button → `Filesystem`; `apiUrl/home` pair → single optional `home` field; type discriminator select option `hermes` → `filesystem`. Config-editor integration test fixture updated.
+- **Legacy env wipe** — `BRAIN_PROVIDER`, `HERMES_API_URL`, `HERMES_HOME`, `OPENCLAW_WS_URL`, `OPENCLAW_HOME` deleted from `apps/api/.env.example`. `AIWORKER_HOME` added. No runtime code ever consumed these — they were ornamental.
+
+Verification:
+
+- `bun run check` clean (typecheck across 6 packages + eslint).
+- `bun run --filter '@aiworker/api' test` — 450 pass / 0 fail (parity).
+- `bun run --filter '@aiworker/cli' smoke:aiw-run` — PASS.
+- Manual E2E: `aiw init` with a tmp `AIWORKER_HOME` produces `workers/<id>/{AGENT.md,SOUL.md,USER.md,config.yaml-missing-until-first-set,brain/{MEMORY.md,memories/,skills/},workspaces/}` exactly as specified. `aiw config-set '<json>'` writes `config.yaml` with the round-tripped redacted form.
+
+Next on the line: PLAN-013 (`aim` CLI + WS gateway, fully replacing dashboard REST).
+
 ## 2026-04-24 12:30 [progress]
 
 **PLAN-011 phase 1a landed: CLI-first lightweight runtime (storage-sqlite + aiw).** First concrete step of REFACTOR-003 toward a hermes-style CLI + an openclaw-style gateway. The conversation loop can now run without binding any HTTP port.

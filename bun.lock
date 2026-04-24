@@ -17,6 +17,7 @@
     "apps/api": {
       "name": "@aiworker/api",
       "dependencies": {
+        "@aiworker/fs-layout": "workspace:*",
         "@aiworker/shared": "workspace:*",
         "@aiworker/storage-sqlite": "workspace:*",
         "@hono/zod-openapi": "^0.19.6",
@@ -86,6 +87,13 @@
         "vitest": "4",
       },
     },
+    "packages/fs-layout": {
+      "name": "@aiworker/fs-layout",
+      "devDependencies": {
+        "@types/bun": "^1.2.13",
+        "typescript": "^5.8.3",
+      },
+    },
     "packages/shared": {
       "name": "@aiworker/shared",
       "dependencies": {
@@ -113,6 +121,8 @@
     "@aiworker/api": ["@aiworker/api@workspace:apps/api"],
 
     "@aiworker/cli": ["@aiworker/cli@workspace:apps/cli"],
+
+    "@aiworker/fs-layout": ["@aiworker/fs-layout@workspace:packages/fs-layout"],
 
     "@aiworker/shared": ["@aiworker/shared@workspace:packages/shared"],
 

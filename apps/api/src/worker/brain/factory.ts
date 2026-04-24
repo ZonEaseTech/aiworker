@@ -1,15 +1,18 @@
 import type { BrainProvider, BrainSourceConfig, WorkerConfig } from '@aiworker/shared'
 
+import { resolveBrainHome } from '@aiworker/fs-layout'
+
 import { CloudGatewayBrainProvider } from './providers/cloud-gateway'
-import { HermesProvider } from './providers/hermes'
+import { FilesystemBrainProvider } from './providers/filesystem'
 import { MultiBrainProvider } from './providers/multi'
 
 type DecoratedBrain = BrainProvider & { id: string, priority: number, readOnly: boolean }
 
-function buildOne(source: BrainSourceConfig): DecoratedBrain {
+function buildOne(workerId: string, source: BrainSourceConfig): DecoratedBrain {
   let provider: BrainProvider
-  if (source.type === 'hermes') {
-    provider = new HermesProvider({ apiUrl: source.config.apiUrl, home: source.config.home })
+  if (source.type === 'filesystem') {
+    const home = source.config.home ?? resolveBrainHome(workerId)
+    provider = new FilesystemBrainProvider({ home })
   }
   else {
     provider = new CloudGatewayBrainProvider({
@@ -22,8 +25,8 @@ function buildOne(source: BrainSourceConfig): DecoratedBrain {
   return Object.assign(provider, { id: source.id, priority: source.priority, readOnly: source.readOnly })
 }
 
-export function buildBrain(config: WorkerConfig): BrainProvider {
-  const sources = config.brains.map(buildOne)
+export function buildBrain(workerId: string, config: WorkerConfig): BrainProvider {
+  const sources = config.brains.map(source => buildOne(workerId, source))
   return new MultiBrainProvider({
     sources,
     writeTargetId: config.brainWriteTarget,

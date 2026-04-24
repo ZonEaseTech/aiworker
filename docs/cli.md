@@ -29,6 +29,7 @@ Phase-1b will add a `bun build --compile` step and publish a single `aiw` binary
 
 Optional but commonly set:
 
+- `AIWORKER_HOME` — root of the per-worker filesystem tree; defaults to `~/.aiworker`. `aiw init` materialises `<home>/workers/<workerId>/` with `AGENT.md` / `SOUL.md` / `USER.md` / `brain/` / `workspaces/` (see `docs/architecture.md`).
 - `WORKER_MIGRATIONS_FOLDER` — defaults to the package-embedded path resolved from `@aiworker/storage-sqlite` via `import.meta.url`, which works when running from source. Override if you vendored migrations elsewhere.
 - `AIWORKER_FORCE_ID` / `AIWORKER_FORCE_TOKEN` — pin the identity during tests / replay.
 
@@ -36,7 +37,7 @@ Optional but commonly set:
 
 ### `aiw init`
 
-Materialise `worker.db`, run migrations, mint identity + token on first boot, seed a default config. Idempotent — re-running does not reprint the bootstrap token. Equivalent to the first half of what `apps/api/src/modes/worker.ts` does at startup.
+Materialise `worker.db`, run migrations, mint identity + token on first boot, seed a default config, and create the `~/.aiworker/workers/<workerId>/` filesystem tree (`AGENT.md` / `SOUL.md` / `USER.md` / `brain/skills/` / `brain/memories/` / `workspaces/`). Idempotent — re-running does not reprint the bootstrap token and will not overwrite any existing seed files.
 
 ```sh
 aiw init
@@ -85,7 +86,7 @@ aiw config-show
 
 ### `aiw config-set <json> [--if-match <version>]`
 
-Replace the stored worker config. Payload shape matches the dashboard `PUT /api/worker/config` body. The `--if-match` guard triggers the same optimistic-concurrency check the HTTP surface uses — reject unless the stored version equals the expected version.
+Replace the stored worker config. Payload shape matches the dashboard `PUT /api/worker/config` body. The `--if-match` guard triggers the same optimistic-concurrency check the HTTP surface uses — reject unless the stored version equals the expected version. On success, the redacted config is also mirrored to `~/.aiworker/workers/<workerId>/config.yaml` (advisory — the DB row stays authoritative).
 
 ```sh
 aiw config-set "$(cat new-config.json)" --if-match 1

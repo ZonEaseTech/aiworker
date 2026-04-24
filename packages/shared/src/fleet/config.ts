@@ -1,10 +1,15 @@
 import type { ChannelBinding } from './channel'
 import type { ExecutorConfig } from './executor'
 
-/** Shape of config for a Hermes-backed brain source. */
-export interface HermesBrainSourceConfig {
-  apiUrl: string
-  home: string
+/**
+ * Shape of config for a filesystem-backed brain source. `home` is optional;
+ * when omitted, the factory defaults to `<resolveBrainHome(workerId)>`
+ * under `~/.aiworker/workers/<workerId>/brain/` (see `@aiworker/fs-layout`).
+ * Supplying an explicit path is only useful for pointing at a shared
+ * knowledge base outside the worker's own home.
+ */
+export interface FilesystemBrainSourceConfig {
+  home?: string
 }
 
 /** Shape of config for a cloud-gateway (MCP streamable-http) brain source. */
@@ -17,7 +22,7 @@ export interface CloudGatewayBrainSourceConfig {
 
 /** A single brain mount on a worker. Workers may have many. */
 export type BrainSourceConfig
-  = | { id: string, type: 'hermes', priority: number, readOnly: boolean, config: HermesBrainSourceConfig }
+  = | { id: string, type: 'filesystem', priority: number, readOnly: boolean, config: FilesystemBrainSourceConfig }
     | { id: string, type: 'cloud-gateway', priority: number, readOnly: boolean, config: CloudGatewayBrainSourceConfig }
 
 /** How the multi-brain layer merges results across sources. */

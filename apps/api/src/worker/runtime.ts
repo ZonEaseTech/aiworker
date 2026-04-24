@@ -40,7 +40,7 @@ export interface BuildRuntimeDeps {
 }
 
 export function buildWorkerRuntime(workerId: string, config: WorkerConfig, deps: BuildRuntimeDeps): WorkerRuntime {
-  const brain = buildBrain(config)
+  const brain = buildBrain(workerId, config)
   const executor = buildExecutor(config.executor)
   const channels = new ChannelRegistry(config.channels)
   const bus = new WorkerEventBus()

@@ -15,6 +15,7 @@ import { handleChannelTest } from './channel-test'
 import {
   ConfigVersionConflictError,
   InvalidConfigError,
+  mirrorConfigToYaml,
   putConfig,
   readConfig,
 } from './config'
@@ -85,6 +86,8 @@ export function buildManagementRoutes(deps: ManagementRoutesDeps) {
       const stored = await putConfig(getWorkerDb(), getSecretsVault(), raw, {
         ...(ifMatchVersion === undefined ? {} : { ifMatchVersion }),
       })
+
+      await mirrorConfigToYaml(deps.getState().workerId, stored.config, stored.version)
 
       let runtimeReload: 'ok' | 'failed' = 'ok'
       try {

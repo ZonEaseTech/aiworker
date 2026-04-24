@@ -5,14 +5,15 @@ import { z } from 'zod'
  * boundary. Shared package exports types only; the schema lives here because
  * the worker-side API is the sole validator of inbound config.
  */
-const hermesSource = z.object({
+const filesystemSource = z.object({
   id: z.string().min(1),
-  type: z.literal('hermes'),
+  type: z.literal('filesystem'),
   priority: z.number().int(),
   readOnly: z.boolean(),
   config: z.object({
-    apiUrl: z.string().min(1),
-    home: z.string().min(1),
+    // `home` is optional — factory falls back to `resolveBrainHome(workerId)`
+    // which resolves to `~/.aiworker/workers/<workerId>/brain/`.
+    home: z.string().min(1).optional(),
   }),
 })
 
@@ -29,7 +30,7 @@ const cloudGatewaySource = z.object({
   }),
 })
 
-const brainSourceSchema = z.discriminatedUnion('type', [hermesSource, cloudGatewaySource])
+const brainSourceSchema = z.discriminatedUnion('type', [filesystemSource, cloudGatewaySource])
 
 // FEAT-014: three-tier executor config. The schema accepts only
 // `{ engine, variant, overrides? }` — legacy `{ type, ...flat }` payloads are

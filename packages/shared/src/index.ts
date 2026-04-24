@@ -33,7 +33,7 @@ export type {
   EvolutionObservation,
   ExecutorConfig,
   ExecutorProfile,
-  HermesBrainSourceConfig,
+  FilesystemBrainSourceConfig,
   HttpVariantBody,
   McpVariantBody,
   OutboundMessage,

@@ -1,33 +1,32 @@
 import type { FSWatcher } from 'node:fs'
 
 import type { WatchEvent, WatchEventType } from './types'
+
 import { watch } from 'node:fs'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
 
 type WatchEventHandler = (event: WatchEvent) => void
-
-function expandHome(dir: string): string {
-  if (dir.startsWith('~'))
-    return join(homedir(), dir.slice(1))
-  return dir
-}
 
 function resolveKind(path: string): 'skill' | 'memory' {
   return path.includes('/skills/') || path.includes('\\skills\\') ? 'skill' : 'memory'
 }
 
-export class HermesWatcher {
+/**
+ * Debounced directory watcher for `<home>/skills/` + `<home>/memories/`.
+ * Callers register handlers via `on()` and invoke `start()` lazily. Safe to
+ * start() multiple times — noop after the first call.
+ */
+export class FilesystemWatcher {
   private watchers: FSWatcher[] = []
   private handlers: WatchEventHandler[] = []
   private debounceTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private debounceMs: number
-  private hermesHome: string
+  private home: string
   private running = false
 
-  constructor(options?: { hermesHome?: string, debounceMs?: number }) {
-    this.hermesHome = expandHome(options?.hermesHome ?? '~/.hermes')
-    this.debounceMs = options?.debounceMs ?? 100
+  constructor(options: { home: string, debounceMs?: number }) {
+    this.home = options.home
+    this.debounceMs = options.debounceMs ?? 100
   }
 
   on(handler: WatchEventHandler): () => void {
@@ -59,7 +58,6 @@ export class HermesWatcher {
         const fullPath = join(dir, filename)
         const key = fullPath
 
-        // Debounce rapid changes
         const existing = this.debounceTimers.get(key)
         if (existing)
           clearTimeout(existing)
@@ -82,7 +80,6 @@ export class HermesWatcher {
       return watcher
     }
     catch {
-      // Directory doesn't exist or can't be watched
       return null
     }
   }
@@ -93,8 +90,8 @@ export class HermesWatcher {
 
     this.running = true
 
-    const skillsDir = join(this.hermesHome, 'skills')
-    const memoriesDir = join(this.hermesHome, 'memories')
+    const skillsDir = join(this.home, 'skills')
+    const memoriesDir = join(this.home, 'memories')
 
     const w1 = this.watchDir(skillsDir)
     const w2 = this.watchDir(memoriesDir)

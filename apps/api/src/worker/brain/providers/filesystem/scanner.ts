@@ -1,15 +1,8 @@
-import type { HermesMemory, HermesSkill } from './types'
+import type { FilesystemMemory, FilesystemSkill } from './types'
 
-import { homedir } from 'node:os'
 import { join } from 'node:path'
 
 import { parse as parseYaml } from 'yaml'
-
-function expandHome(dir: string): string {
-  if (dir.startsWith('~'))
-    return join(homedir(), dir.slice(1))
-  return dir
-}
 
 async function computeHash(content: string | Uint8Array): Promise<string> {
   const hasher = new Bun.CryptoHasher('sha256')
@@ -31,7 +24,7 @@ function parseFrontmatter(raw: string): { metadata: Record<string, unknown>, con
   }
 }
 
-function parseSkillMetadata(raw: string, filePath: string): Omit<HermesSkill, 'hash'> | null {
+function parseSkillMetadata(raw: string, filePath: string): Omit<FilesystemSkill, 'hash'> | null {
   const ext = filePath.split('.').pop()?.toLowerCase()
 
   if (ext === 'yaml' || ext === 'yml') {
@@ -64,16 +57,21 @@ function parseSkillMetadata(raw: string, filePath: string): Omit<HermesSkill, 'h
   return null
 }
 
-export async function scanSkills(hermesHome?: string): Promise<HermesSkill[]> {
-  const baseDir = expandHome(hermesHome ?? '~/.hermes')
-  const skillsDir = join(baseDir, 'skills')
+/**
+ * Scans `<home>/skills/**` for `.md` or `.yaml` files, parses
+ * agentskills.io-style frontmatter, and returns structured skill records.
+ * Returns `[]` when the directory does not exist — callers rely on this
+ * as a "no skills configured" signal.
+ */
+export async function scanSkills(home: string): Promise<FilesystemSkill[]> {
+  const skillsDir = join(home, 'skills')
 
   try {
     const fs = await import('node:fs/promises')
     await fs.access(skillsDir)
 
     const glob = new Bun.Glob('**/*.{yaml,yml,md}')
-    const skills: HermesSkill[] = []
+    const skills: FilesystemSkill[] = []
 
     for await (const path of glob.scan({ cwd: skillsDir })) {
       const fullPath = join(skillsDir, path)
@@ -94,21 +92,23 @@ export async function scanSkills(hermesHome?: string): Promise<HermesSkill[]> {
     return skills
   }
   catch {
-    // Directory doesn't exist or isn't accessible
     return []
   }
 }
 
-export async function scanMemories(hermesHome?: string): Promise<HermesMemory[]> {
-  const baseDir = expandHome(hermesHome ?? '~/.hermes')
-  const memoriesDir = join(baseDir, 'memories')
+/**
+ * Scans `<home>/memories/**` for `.md` files, parses frontmatter, returns
+ * structured memory records. Returns `[]` when the directory does not exist.
+ */
+export async function scanMemories(home: string): Promise<FilesystemMemory[]> {
+  const memoriesDir = join(home, 'memories')
 
   try {
     const fs = await import('node:fs/promises')
     await fs.access(memoriesDir)
 
     const glob = new Bun.Glob('**/*.md')
-    const memories: HermesMemory[] = []
+    const memories: FilesystemMemory[] = []
 
     for await (const path of glob.scan({ cwd: memoriesDir })) {
       const fullPath = join(memoriesDir, path)
@@ -139,7 +139,6 @@ export async function scanMemories(hermesHome?: string): Promise<HermesMemory[]>
     return memories
   }
   catch {
-    // Directory doesn't exist or isn't accessible
     return []
   }
 }

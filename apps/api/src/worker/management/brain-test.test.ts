@@ -40,11 +40,11 @@ function stubState(brain: BrainProvider): WorkerModeState {
 }
 
 const ONE_SOURCE: BrainSourceConfig[] = [
-  { id: 'hermes-primary', type: 'hermes', priority: 10, readOnly: false, config: { apiUrl: 'http://h', home: '/tmp' } },
+  { id: 'fs-primary', type: 'filesystem', priority: 10, readOnly: false, config: { home: '/tmp' } },
 ]
 
 const TWO_SOURCES: BrainSourceConfig[] = [
-  { id: 'hermes-primary', type: 'hermes', priority: 10, readOnly: false, config: { apiUrl: 'http://h', home: '/tmp' } },
+  { id: 'fs-primary', type: 'filesystem', priority: 10, readOnly: false, config: { home: '/tmp' } },
   { id: 'cloud', type: 'cloud-gateway', priority: 1, readOnly: true, config: { url: 'https://c', token: '' } },
 ]
 
@@ -53,7 +53,7 @@ describe('handleBrainTest', () => {
     const state = stubState(stubBrain(async () => ({ status: 'healthy' })))
     const res = await handleBrainTest(state, { brains: ONE_SOURCE })
     expect(res.brains).toEqual([
-      { id: 'hermes-primary', type: 'hermes', status: 'healthy' },
+      { id: 'fs-primary', type: 'filesystem', status: 'healthy' },
     ])
   })
 

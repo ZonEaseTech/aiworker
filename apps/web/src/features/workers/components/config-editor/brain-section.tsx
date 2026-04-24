@@ -12,13 +12,16 @@ interface BrainSectionProps {
   onChange: (patch: Partial<Pick<WorkerConfig, 'brains' | 'brainWriteTarget' | 'brainRetrieval'>>) => void
 }
 
-function defaultHermesSource(index: number): BrainSourceConfig {
+function defaultFilesystemSource(index: number): BrainSourceConfig {
   return {
     id: `brain-${index}`,
-    type: 'hermes',
+    type: 'filesystem',
     priority: 100,
     readOnly: false,
-    config: { apiUrl: '', home: '' },
+    // Leave `home` undefined — the worker factory defaults to
+    // `~/.aiworker/workers/<workerId>/brain/`. Operators can override by
+    // typing a path in the form.
+    config: {},
   }
 }
 
@@ -55,8 +58,8 @@ export function BrainSection({
 
   function addSource(type: BrainSourceConfig['type']) {
     const next
-      = type === 'hermes'
-        ? defaultHermesSource(brains.length + 1)
+      = type === 'filesystem'
+        ? defaultFilesystemSource(brains.length + 1)
         : defaultCloudGatewaySource(brains.length + 1)
     onChange({ brains: [...brains, next] })
   }
@@ -71,9 +74,9 @@ export function BrainSection({
           </p>
         </div>
         <div className="flex gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={() => addSource('hermes')}>
+          <Button type="button" variant="outline" size="sm" onClick={() => addSource('filesystem')}>
             <Plus className="size-3.5" />
-            Hermes
+            Filesystem
           </Button>
           <Button type="button" variant="outline" size="sm" onClick={() => addSource('cloud-gateway')}>
             <Plus className="size-3.5" />
@@ -154,13 +157,13 @@ function BrainSourceRow({
   function switchType(nextType: BrainSourceConfig['type']) {
     if (nextType === source.type)
       return
-    if (nextType === 'hermes') {
+    if (nextType === 'filesystem') {
       onChange({
         id: source.id,
-        type: 'hermes',
+        type: 'filesystem',
         priority: source.priority,
         readOnly: source.readOnly,
-        config: { apiUrl: '', home: '' },
+        config: {},
       })
     }
     else {
@@ -193,7 +196,7 @@ function BrainSourceRow({
             onChange={e => switchType(e.target.value as BrainSourceConfig['type'])}
             aria-label="Brain source type"
           >
-            <option value="hermes">hermes</option>
+            <option value="filesystem">filesystem</option>
             <option value="cloud-gateway">cloud-gateway</option>
           </select>
         </div>
@@ -226,19 +229,13 @@ function BrainSourceRow({
         </div>
       </div>
 
-      {source.type === 'hermes'
+      {source.type === 'filesystem'
         ? (
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="apiUrl">
+              <Field label="home (optional — leave blank for default ~/.aiworker/workers/<id>/brain)">
                 <Input
-                  value={source.config.apiUrl}
-                  onChange={e => onChange({ ...source, config: { ...source.config, apiUrl: e.target.value } })}
-                />
-              </Field>
-              <Field label="home">
-                <Input
-                  value={source.config.home}
-                  onChange={e => onChange({ ...source, config: { ...source.config, home: e.target.value } })}
+                  value={source.config.home ?? ''}
+                  onChange={e => onChange({ ...source, config: { ...source.config, home: e.target.value || undefined } })}
                 />
               </Field>
             </div>

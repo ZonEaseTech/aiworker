@@ -37,6 +37,7 @@ export { type WorkerEventBus } from './worker/events/bus'
 export {
   ConfigVersionConflictError,
   InvalidConfigError,
+  mirrorConfigToYaml,
   putConfig,
   type PutConfigOptions,
   readConfig,

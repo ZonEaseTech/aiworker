@@ -42,11 +42,11 @@ function stubState(runtime: WorkerRuntime): WorkerModeState {
 const CONFIG: WorkerConfig = {
   brains: [
     {
-      id: 'hermes-primary',
-      type: 'hermes',
+      id: 'fs-primary',
+      type: 'filesystem',
       priority: 10,
       readOnly: false,
-      config: { apiUrl: 'http://hermes.local', home: '/tmp/h' },
+      config: { home: '/tmp/h' },
     },
     {
       id: 'cloud-fallback',
@@ -56,7 +56,7 @@ const CONFIG: WorkerConfig = {
       config: { url: 'https://cloud.example.com', token: '' },
     },
   ],
-  brainWriteTarget: 'hermes-primary',
+  brainWriteTarget: 'fs-primary',
   brainRetrieval: 'merge-by-priority',
   executor: {
     engine: 'http',
@@ -95,7 +95,7 @@ describe('buildInfo', () => {
     expect(info.advertisedBaseUrl).toBe('https://worker.example.com')
 
     expect(info.brains).toEqual([
-      { id: 'hermes-primary', type: 'hermes', status: 'healthy' },
+      { id: 'fs-primary', type: 'filesystem', status: 'healthy' },
       { id: 'cloud-fallback', type: 'cloud-gateway', status: 'healthy' },
     ])
 

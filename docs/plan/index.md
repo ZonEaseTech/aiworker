@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-04-24 11:40
+> Updated: 2026-04-24 16:30
 
 ## Usage
 
@@ -40,4 +40,7 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-009 Worker image bundling + model picker**](PLAN-009.md) `2026-04-23`
 - [x] [**PLAN-010 Manager-driven worker creation + dashboard authN + quota**](PLAN-010.md) `2026-04-23`
 - [x] [**PLAN-011 CLI-first lightweight runtime (core extraction + aiw / aim / gateway)**](PLAN-011.md) `2026-04-24`
-- [ ] [**PLAN-012 Core extraction — move worker/** into @aiworker/core (PLAN-011 phase 1b)**](PLAN-012.md) `2026-04-24`
+- [x] [**PLAN-012 Filesystem source of truth for brain + skills + memory**](PLAN-012.md) `2026-04-24`
+- [ ] [**PLAN-013 aim CLI + WS gateway (full replacement of dashboard REST)**](PLAN-013.md) `2026-04-24`
+- [ ] [**PLAN-014 Envelope upgrade + per-tool approvals + provider fallback + cron**](PLAN-014.md) `2026-04-24`
+- [ ] [**PLAN-015 Physical extraction — move worker/** into @aiworker/core**](PLAN-015.md) `2026-04-24`

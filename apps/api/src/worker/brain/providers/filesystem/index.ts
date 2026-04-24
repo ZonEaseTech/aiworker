@@ -8,25 +8,21 @@ import type {
   WriteMemoryInput,
 } from '@aiworker/shared'
 
-import type { HermesMemory, HermesSkill, WatchEvent } from '../../../adapters/hermes'
+import type { FilesystemMemory, FilesystemSkill, WatchEvent } from './types'
 
 import { existsSync, mkdirSync } from 'node:fs'
 import { access, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 
-import {
-  HermesApiClient,
-  HermesWatcher,
-  scanMemories,
-  scanSkills,
-} from '../../../adapters/hermes'
+import { scanMemories, scanSkills } from './scanner'
+import { FilesystemWatcher } from './watcher'
 
-interface HermesProviderOptions {
-  apiUrl: string
+interface FilesystemBrainProviderOptions {
+  /** Base directory containing `skills/` + `memories/` + `MEMORY.md`. */
   home: string
 }
 
-function mapSkill(skill: HermesSkill): BrainSkill {
+function mapSkill(skill: FilesystemSkill): BrainSkill {
   return {
     id: skill.filePath,
     name: skill.name,
@@ -36,7 +32,7 @@ function mapSkill(skill: HermesSkill): BrainSkill {
   }
 }
 
-async function mapMemory(memory: HermesMemory, score?: number): Promise<BrainMemory> {
+async function mapMemory(memory: FilesystemMemory, score?: number): Promise<BrainMemory> {
   let createdAt = memory.createdAt
   let updatedAt = memory.updatedAt
 
@@ -142,8 +138,8 @@ function sanitizeFilename(name: string): string {
 }
 
 async function appendMemoryIndex(dir: string, title: string, filename: string, description: string): Promise<void> {
-  const indexPath = join(dir, 'MEMORY.md')
-  const entry = `- [${title}](${filename}) — ${description}`
+  const indexPath = join(dir, '..', 'MEMORY.md')
+  const entry = `- [${title}](memories/${filename}) — ${description}`
   const file = Bun.file(indexPath)
   if (await file.exists()) {
     const current = await file.text()
@@ -152,40 +148,38 @@ async function appendMemoryIndex(dir: string, title: string, filename: string, d
     await Bun.write(indexPath, updated)
   }
   else {
-    await Bun.write(indexPath, `${entry}\n`)
+    await Bun.write(indexPath, `# Memory index\n\n${entry}\n`)
   }
 }
 
-export class HermesProvider implements BrainProvider {
-  readonly name = 'hermes'
+/**
+ * Reads skills + memories from a local directory that follows the
+ * agentskills.io convention (`<home>/skills/<name>/SKILL.md` +
+ * `<home>/memories/*.md`). Formerly `HermesProvider` — renamed in PLAN-012
+ * once aiworker took ownership of the filesystem layout under
+ * `~/.aiworker/workers/<id>/brain/` rather than piggybacking on `~/.hermes/`.
+ */
+export class FilesystemBrainProvider implements BrainProvider {
+  readonly name = 'filesystem'
 
   private readonly home: string
-  private readonly client: HermesApiClient
-  private readonly watcher: HermesWatcher
+  private readonly watcher: FilesystemWatcher
   private watcherStarted = false
 
-  constructor(options: HermesProviderOptions) {
+  constructor(options: FilesystemBrainProviderOptions) {
     this.home = options.home
-    this.client = new HermesApiClient({ baseUrl: options.apiUrl })
-    this.watcher = new HermesWatcher({ hermesHome: options.home })
+    this.watcher = new FilesystemWatcher({ home: options.home })
   }
 
   async health(): Promise<ServiceStatus> {
     const lastChecked = new Date().toISOString()
-
     try {
       await access(this.home)
+      return { name: this.name, status: 'healthy', lastChecked }
     }
     catch {
       return { name: this.name, status: 'down', lastChecked }
     }
-
-    const result = await this.client.health()
-    if (!result.ok) {
-      return { name: this.name, status: 'down', lastChecked }
-    }
-
-    return { name: this.name, status: 'healthy', lastChecked }
   }
 
   async listSkills(): Promise<BrainSkill[]> {

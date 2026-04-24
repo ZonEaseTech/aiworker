@@ -19,6 +19,7 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@aiworker/fs-layout": "workspace:*",
     "@aiworker/shared": "workspace:*",
     "@aiworker/storage-sqlite": "workspace:*",
     "@hono/zod-openapi": "^0.19.6",

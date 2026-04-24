@@ -2,6 +2,7 @@ import {
   ConfigVersionConflictError,
   getSecretsVault,
   InvalidConfigError,
+  mirrorConfigToYaml,
   putConfig,
   readConfig,
 } from '@aiworker/api/lib'
@@ -33,7 +34,7 @@ export interface ConfigSetOptions {
  * Returns 0 on success, 2 on validation failure, 3 on version conflict.
  */
 export async function runConfigSet(options: ConfigSetOptions): Promise<number> {
-  await loadWorkerContext({ silent: true })
+  const ctx = await loadWorkerContext({ silent: true })
   let parsed: unknown
   try {
     parsed = JSON.parse(options.json)
@@ -49,6 +50,7 @@ export async function runConfigSet(options: ConfigSetOptions): Promise<number> {
 
   try {
     const result = await putConfig(db, vault, parsed, options.ifMatch === undefined ? {} : { ifMatchVersion: options.ifMatch })
+    await mirrorConfigToYaml(ctx.workerId, result.config, result.version)
     consola.success(`[aiw config set] stored config v${result.version}`)
     return 0
   }
