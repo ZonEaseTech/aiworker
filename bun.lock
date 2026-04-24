@@ -38,9 +38,12 @@
       "name": "@aiworker/cli",
       "bin": {
         "aiw": "./src/aiw.ts",
+        "aim": "./src/aim.ts",
       },
       "dependencies": {
         "@aiworker/api": "workspace:*",
+        "@aiworker/fs-layout": "workspace:*",
+        "@aiworker/gateway-proto": "workspace:*",
         "@aiworker/shared": "workspace:*",
         "@aiworker/storage-sqlite": "workspace:*",
         "cac": "^6.7.14",

@@ -3,15 +3,19 @@
   "type": "module",
   "private": true,
   "bin": {
-    "aiw": "./src/aiw.ts"
+    "aiw": "./src/aiw.ts",
+    "aim": "./src/aim.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "smoke:aiw-run": "bun scripts/smoke-aiw-run.ts"
+    "smoke:aiw-run": "bun scripts/smoke-aiw-run.ts",
+    "smoke:aim": "bun scripts/smoke-aim.ts"
   },
   "dependencies": {
     "@aiworker/api": "workspace:*",
+    "@aiworker/fs-layout": "workspace:*",
+    "@aiworker/gateway-proto": "workspace:*",
     "@aiworker/shared": "workspace:*",
     "@aiworker/storage-sqlite": "workspace:*",
     "cac": "^6.7.14",
