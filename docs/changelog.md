@@ -1,5 +1,26 @@
 # AIWorker Changelog
 
+## 2026-04-23 09:55 [progress]
+
+**PLAN-010 / FEAT-023 manager-driven worker creation landed.** The dashboard now has a dedicated "Create worker" button that spawns a fresh worker container on the local docker engine end-to-end (supervisor `launchLocal` → token scrape → registry insert), surfaces the one-time plaintext bearer to the operator (like a GitHub PAT), and is gated by two new safety rails:
+
+- **`DASHBOARD_REQUIRE_AUTH=true`** flips on a bearer/basic middleware guarding `/api/*`. Same shared secret (`INTERNAL_SHARED_SECRET`) handles both CI (`Authorization: Bearer …`) and browsers (native `Basic` prompt via `WWW-Authenticate`). Default is `false` so the rollout can sequence authN-first, then overlay-second.
+- **`MANAGER_MAX_WORKERS`** applies a hard cap to both `/register` and `/launch-local`, returning `409 { code: 'quota-exceeded', limit, current }` on overflow. Omit for no cap.
+
+`FleetSupervisor` also grew a startup self-check that refuses to launch if the dashboard container isn't joined to `aiworker_default`, catching the most common single-host misconfig instead of silently producing zombie `offline` registry rows. `ensureInfrastructure()` now calls `inspectContainer(HOSTNAME)` and asserts membership; soft-fails on bare metal or when the hostname isn't a docker container id.
+
+Ops:
+
+- New `ops/compose/docker-compose.supervisor.yml` overlay mounts `docker.sock:ro` + `/opt/aiworker-workers` and turns on the launcher env bundle. Compose with `-f docker-compose.yml -f docker-compose.supervisor.yml`. Default deploy unchanged.
+- `docs/deployment.md` gained a full "Enabling manager-driven worker creation" runbook: prerequisites (authN before sock mount), compose overlay, smoke test (`curl -u :$INTERNAL_SHARED_SECRET …/api/workers/capabilities`), rollback, pitfalls (network membership, data path, master-key backup).
+- `ops/compose/.env.example` commented with the new optional envs.
+
+Verification:
+
+- `bun run typecheck` clean across shared / api / web.
+- `bun test` — api 450 pass (baseline 429 + 21 new: 11 auth middleware + 4 supervisor self-check + 6 capabilities/quota routes), web 37 pass unchanged.
+- `bun run lint` — 0 errors.
+
 ## 2026-04-23 08:56 [release]
 
 **PLAN-009 worker image bundling + model picker complete.** Four FEATs (FEAT-019 / 020 / 022 / 021) landed across one day. Net effect: engine picker shows known-model presets instead of free text; every build pushes two image tags (slim / full); `-full` pre-installs all five agentic CLIs (claude-code / codex / gemini-cli / qwen-code / cursor-agent) so workers skip the `npx` cold fetch; operator docs + `docker-compose.worker.example.yml` enumerate auth-mount recipes.

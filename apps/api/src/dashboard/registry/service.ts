@@ -163,6 +163,19 @@ export function getWorkerById(id: string): SafeRegisteredWorker | null {
 }
 
 /**
+ * Count of rows in `registered_workers`. Used by the PLAN-010 quota check
+ * ahead of `/register` and `/launch-local`. SQLite returns `.length` on
+ * `all()` at negligible cost at fleet scales.
+ */
+export function countWorkers(): number {
+  return getFleetDb()
+    .select({ id: registeredWorkers.id })
+    .from(registeredWorkers)
+    .all()
+    .length
+}
+
+/**
  * Patch `displayName` and/or `baseUrl`. The encrypted token is intentionally
  * out of scope — rotation goes through the dedicated `/rotate-token` route.
  * A changed `baseUrl` is NOT re-verified via `/info` here; PLAN-004 3.3's

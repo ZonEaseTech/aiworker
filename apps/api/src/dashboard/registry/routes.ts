@@ -11,6 +11,7 @@ import {
   WorkerClientNetworkError,
 } from './client'
 import {
+  countWorkers,
   decryptTokenFor,
   deleteWorker,
   getById,
@@ -64,6 +65,11 @@ export interface RegistryRoutesOptions {
    */
   canLaunch?: boolean
   supervisor?: RegistrySupervisor | null
+  /**
+   * PLAN-010 §P3: hard cap on the number of rows in `registered_workers`.
+   * Applied to both `/register` and `/launch-local`. Undefined = no cap.
+   */
+  maxWorkers?: number
 }
 
 /** Hop-by-hop request headers the manager must never forward to workers. */
@@ -94,6 +100,41 @@ const STRIPPED_RESPONSE_HEADERS = new Set([
 export function buildRegistryRoutes(options: RegistryRoutesOptions) {
   const routes = new OpenAPIHono()
   const canLaunch = options.canLaunch === true && options.supervisor != null
+  const { maxWorkers } = options
+
+  /**
+   * PLAN-010 §P3: enforce `MANAGER_MAX_WORKERS` before row insertion. Returns
+   * the 409 Response to bubble up when the cap is hit, or `null` when the
+   * caller may proceed. Racing launches can both slip through because the
+   * count + insert are not atomic; acceptable at MVP scale (single operator,
+   * docker-run path is seconds-long).
+   */
+  function quotaBlockResponse(c: import('hono').Context): Response | null {
+    if (maxWorkers === undefined)
+      return null
+    const current = countWorkers()
+    if (current < maxWorkers)
+      return null
+    return c.json({
+      error: {
+        code: 'quota-exceeded',
+        message: `worker quota reached (${current}/${maxWorkers})`,
+        limit: maxWorkers,
+        current,
+      },
+    }, 409)
+  }
+
+  // GET /capabilities — PLAN-010 §P2. Lets the dashboard UI decide whether to
+  // enable the "Create worker" button and preview quota headroom without
+  // trial-and-error 404s against /launch-local.
+  routes.get('/capabilities', (c) => {
+    return c.json({
+      canLaunch,
+      maxWorkers: maxWorkers ?? null,
+      currentWorkers: countWorkers(),
+    })
+  })
 
   routes.post('/register', async (c) => {
     const raw = await c.req.json().catch(() => null)
@@ -107,6 +148,10 @@ export function buildRegistryRoutes(options: RegistryRoutesOptions) {
         },
       }, 400)
     }
+
+    const blocked = quotaBlockResponse(c)
+    if (blocked)
+      return blocked
 
     try {
       const row = await registerWorker(parsed.data, { masterKeyHex: options.masterKeyHex })
@@ -310,6 +355,13 @@ export function buildRegistryRoutes(options: RegistryRoutesOptions) {
         }, 400)
       }
 
+      // Quota check before spinning a container — cheaper than provisioning
+      // and then rolling back. Launches cannot slip past because the
+      // supervisor doesn't touch fleet.db.
+      const blocked = quotaBlockResponse(c)
+      if (blocked)
+        return blocked
+
       let launched
       try {
         launched = await supervisor.launchLocal({
@@ -334,6 +386,11 @@ export function buildRegistryRoutes(options: RegistryRoutesOptions) {
           },
           { masterKeyHex: options.masterKeyHex, addedBy: 'launch-local' },
         )
+        // PLAN-010 §P6: surface the plaintext bearer token once. This is the
+        // only moment the manager holds the token in the clear (it was just
+        // scraped from the container's bootstrap log) and the operator needs
+        // it for offline backup. The at-rest ciphertext in `fleet.db` remains
+        // the source of truth for manager → worker calls.
         return c.json({
           id: row.id,
           baseUrl: row.baseUrl,
@@ -343,6 +400,7 @@ export function buildRegistryRoutes(options: RegistryRoutesOptions) {
           lastSeenAt: row.lastSeenAt,
           lastSeenState: row.lastSeenState,
           lastConfigVersion: row.lastConfigVersion,
+          apiToken: launched.apiToken,
         }, 201)
       }
       catch (err) {

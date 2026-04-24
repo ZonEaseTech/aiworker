@@ -5,7 +5,9 @@ import { apiReference } from '@scalar/hono-api-reference'
 import consola from 'consola'
 import { serveStatic } from 'hono/bun'
 
+import { commonConfig } from '../config/common'
 import { dashboardConfig } from '../config/dashboard'
+import { buildDashboardAuth } from '../dashboard/middleware/auth'
 import { WorkerPoller } from '../dashboard/registry/poll'
 import { buildRegistryRoutes } from '../dashboard/registry/routes'
 import { getFleetSupervisor } from '../dashboard/supervisor/service'
@@ -38,10 +40,22 @@ export async function createDashboardApp() {
     })
   })
 
+  // PLAN-010 §P1: bearer/basic auth middleware guarding `/api/*`. `/health`,
+  // `/openapi.json`, `/docs` and the SPA static fallback stay open because
+  // none of them match the `/api/*` pattern.
+  if (dashboardConfig.DASHBOARD_REQUIRE_AUTH) {
+    app.use('/api/*', buildDashboardAuth({ secret: commonConfig.INTERNAL_SHARED_SECRET }))
+    consola.info('[dashboard] DASHBOARD_REQUIRE_AUTH=true — /api/* is guarded by bearer/basic auth')
+  }
+  else {
+    consola.warn('[dashboard] DASHBOARD_REQUIRE_AUTH=false — /api/* is UNGUARDED; flip the flag before exposing the manager to an untrusted network')
+  }
+
   app.route('/api/workers', buildRegistryRoutes({
     masterKeyHex: dashboardConfig.AIWORKER_MASTER_KEY,
     canLaunch: dashboardConfig.MANAGER_CAN_LAUNCH,
     supervisor,
+    maxWorkers: dashboardConfig.MANAGER_MAX_WORKERS,
   }))
 
   // PLAN-004 3.3 — background /info poll keeps the registry's lastSeen* columns

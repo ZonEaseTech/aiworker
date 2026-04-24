@@ -28,6 +28,7 @@ interface StubDocker {
   stopContainer: (id: string) => Promise<void>
   removeContainer: (id: string, opts?: { force?: boolean, removeVolumes?: boolean }) => Promise<void>
   logs: (id: string) => Promise<string>
+  inspectContainer: (id: string) => Promise<Record<string, unknown>>
 }
 
 function makeDocker(overrides: Partial<StubDocker> = {}): StubDocker & { calls: { created: CreatedSpec[], removed: string[] } } {
@@ -46,6 +47,9 @@ function makeDocker(overrides: Partial<StubDocker> = {}): StubDocker & { calls: 
       calls.removed.push(id)
     }),
     logs: overrides.logs ?? (async () => ''),
+    inspectContainer: overrides.inspectContainer ?? (async () => {
+      throw new Error('Docker API GET /containers/foo/json failed: 404 no such container')
+    }),
   }
   return docker
 }
@@ -72,7 +76,7 @@ describe('parseBootstrapFromLogs', () => {
 
 describe('FleetSupervisor.buildEnv', () => {
   it('emits only the simplified PLAN-004 env vars', () => {
-    const supervisor = new FleetSupervisor({ docker: makeDocker() })
+    const supervisor = new FleetSupervisor({ docker: makeDocker(), selfHostname: null })
     const env = supervisor.buildEnv({
       masterKeyHex: 'aa'.repeat(32),
       port: 3001,
@@ -89,7 +93,7 @@ describe('FleetSupervisor.buildEnv', () => {
   })
 
   it('injects AIWORKER_FORCE_ID only when supplied', () => {
-    const supervisor = new FleetSupervisor({ docker: makeDocker() })
+    const supervisor = new FleetSupervisor({ docker: makeDocker(), selfHostname: null })
     const without = supervisor.buildEnv({ masterKeyHex: 'aa'.repeat(32), port: 3001 })
     expect(without.some(line => line.startsWith('AIWORKER_FORCE_ID='))).toBe(false)
 
@@ -116,6 +120,7 @@ describe('FleetSupervisor.launchLocal', () => {
       allocatePort: async () => 3101,
       pollIntervalMs: 1,
       pollTimeoutMs: 500,
+      selfHostname: null,
     })
 
     const result = await supervisor.launchLocal({ displayName: 'Alpha' })
@@ -150,6 +155,7 @@ describe('FleetSupervisor.launchLocal', () => {
       allocatePort: async () => 3102,
       pollIntervalMs: 1,
       pollTimeoutMs: 500,
+      selfHostname: null,
     })
     await supervisor.launchLocal({ displayName: 'Beta', forceId: 'w_pnqrst234567' })
     const spec = docker.calls.created[0]!.spec as { Env: string[] }
@@ -163,6 +169,7 @@ describe('FleetSupervisor.launchLocal', () => {
       allocatePort: async () => 3103,
       pollIntervalMs: 1,
       pollTimeoutMs: 10,
+      selfHostname: null,
     })
     await expect(supervisor.launchLocal({ displayName: 'Gamma' })).rejects.toBeInstanceOf(LaunchTimeoutError)
     expect(docker.calls.removed).toHaveLength(1)
@@ -179,9 +186,83 @@ describe('FleetSupervisor.launchLocal', () => {
       allocatePort: async () => 3104,
       pollIntervalMs: 1,
       pollTimeoutMs: 10,
+      selfHostname: null,
     })
     const err = await supervisor.launchLocal({ displayName: 'Delta' }).catch((e: unknown) => e)
     expect(err).toBeInstanceOf(LaunchFailedError)
     expect(docker.calls.removed).toHaveLength(1)
+  })
+})
+
+describe('FleetSupervisor network self-check (PLAN-010 §P4)', () => {
+  it('passes when the dashboard container is joined to AIWORKER_NETWORK', async () => {
+    const docker = makeDocker({
+      inspectContainer: async () => ({
+        NetworkSettings: { Networks: { aiworker_default: {}, bridge: {} } },
+      }),
+      logs: async () => '[worker] id=w_abc456def789\n[worker] AIWORKER_BOOTSTRAP_TOKEN=wtk_abc_00000000000000000000000000000000\n',
+    })
+    const supervisor = new FleetSupervisor({
+      docker,
+      allocatePort: async () => 3201,
+      pollIntervalMs: 1,
+      pollTimeoutMs: 500,
+      selfHostname: 'abcdef012345',
+    })
+    const result = await supervisor.launchLocal({ displayName: 'Net1' })
+    expect(result.workerId).toBe('w_abc456def789')
+  })
+
+  it('throws LaunchFailedError when the dashboard is not in the network', async () => {
+    const docker = makeDocker({
+      inspectContainer: async () => ({
+        NetworkSettings: { Networks: { bridge: {} } },
+      }),
+    })
+    const supervisor = new FleetSupervisor({
+      docker,
+      allocatePort: async () => 3202,
+      pollIntervalMs: 1,
+      pollTimeoutMs: 10,
+      selfHostname: 'abcdef012345',
+    })
+    const err = await supervisor.launchLocal({ displayName: 'Net2' }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(LaunchFailedError)
+    expect((err as Error).message).toMatch(/not a member of docker network/)
+    // No container was created since ensureInfrastructure threw upstream.
+    expect(docker.calls.created).toHaveLength(0)
+  })
+
+  it('soft-skips when HOSTNAME is not a container id (dev / bare-metal)', async () => {
+    const docker = makeDocker({
+      logs: async () => '[worker] id=w_abc456def789\n[worker] AIWORKER_BOOTSTRAP_TOKEN=wtk_abc_00000000000000000000000000000000\n',
+    })
+    const supervisor = new FleetSupervisor({
+      docker,
+      allocatePort: async () => 3203,
+      pollIntervalMs: 1,
+      pollTimeoutMs: 500,
+      selfHostname: 'laptop.local',
+    })
+    const result = await supervisor.launchLocal({ displayName: 'Net3' })
+    expect(result.workerId).toBe('w_abc456def789')
+  })
+
+  it('soft-skips when inspect 404s (hostname is not a known container)', async () => {
+    const docker = makeDocker({
+      logs: async () => '[worker] id=w_abc456def789\n[worker] AIWORKER_BOOTSTRAP_TOKEN=wtk_abc_00000000000000000000000000000000\n',
+      inspectContainer: async () => {
+        throw new Error('Docker API GET /containers/deadbeef000000/json failed: 404 no such container')
+      },
+    })
+    const supervisor = new FleetSupervisor({
+      docker,
+      allocatePort: async () => 3204,
+      pollIntervalMs: 1,
+      pollTimeoutMs: 500,
+      selfHostname: 'deadbeef0000',
+    })
+    const result = await supervisor.launchLocal({ displayName: 'Net4' })
+    expect(result.workerId).toBe('w_abc456def789')
   })
 })

@@ -6,6 +6,9 @@ import type {
 } from '@aiworker/shared'
 import type {
   ChannelTestResponse,
+  DashboardCapabilities,
+  LaunchWorkerInput,
+  LaunchWorkerResponse,
   PutWorkerConfigResponse,
   RegisterWorkerInput,
   UpdateWorkerInput,
@@ -16,10 +19,12 @@ import { useCallback, useEffect } from 'react'
 import {
   deleteWorker,
   deleteWorkerSecret,
+  getCapabilities,
   getWorker,
   getWorkerConfig,
   getWorkerEngines,
   getWorkerInfo,
+  launchWorker,
   listWorkers,
   listWorkerSecrets,
   putWorkerConfig,
@@ -99,6 +104,38 @@ export function useDeleteWorker() {
     onSuccess: (_void, id) => {
       qc.invalidateQueries({ queryKey: WORKERS_KEY })
       qc.removeQueries({ queryKey: workerKey(id) })
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// PLAN-010 — Manager-driven worker creation.
+// ---------------------------------------------------------------------------
+
+const CAPABILITIES_KEY = ['dashboard', 'capabilities'] as const
+
+/**
+ * Capability flags drive the "Create worker" button's enabled state and the
+ * quota hint on the wizard. 30s staleTime avoids hammering the fleet-count
+ * query while still picking up env changes shortly after the dashboard
+ * restarts.
+ */
+export function useDashboardCapabilities() {
+  return useQuery<DashboardCapabilities>({
+    queryKey: CAPABILITIES_KEY,
+    queryFn: getCapabilities,
+    staleTime: 30_000,
+  })
+}
+
+export function useLaunchWorker() {
+  const qc = useQueryClient()
+  return useMutation<LaunchWorkerResponse, Error, LaunchWorkerInput>({
+    mutationFn: launchWorker,
+    onSuccess: (row) => {
+      qc.invalidateQueries({ queryKey: WORKERS_KEY })
+      qc.invalidateQueries({ queryKey: CAPABILITIES_KEY })
+      qc.setQueryData(workerKey(row.id), row)
     },
   })
 }

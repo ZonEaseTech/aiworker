@@ -397,7 +397,7 @@ describe('registry/routes POST /launch-local', () => {
     expect(res.status).toBe(404)
   })
 
-  it('returns 201 with a sanitised row on success', async () => {
+  it('returns 201 with a sanitised row and one-time apiToken on success', async () => {
     // The supervisor stub returns a fixed (workerId, apiToken). registerWorker
     // calls the worker's /info endpoint with that token, so we also need to
     // intercept that fetch.
@@ -418,6 +418,8 @@ describe('registry/routes POST /launch-local', () => {
     expect(body.displayName).toBe('Alpha')
     expect(body.addedBy).toBe('launch-local')
     expect(body.apiTokenEnc).toBeUndefined()
+    // PLAN-010 §P6: one-time plaintext bearer surfaced back to the UI.
+    expect(body.apiToken).toBe('wtk_launched_token_0000000000000000000000000')
   })
 
   it('returns 400 when the payload is invalid', async () => {
@@ -462,5 +464,168 @@ describe('registry/routes POST /launch-local', () => {
     expect(res.status).toBe(504)
     const body = await res.json() as { error: { code: string } }
     expect(body.error.code).toBe('launch-timeout')
+  })
+})
+
+describe('registry/routes GET /capabilities (PLAN-010 §P2)', () => {
+  const originalFetch = globalThis.fetch
+  beforeEach(() => {
+    closeFleetDb()
+    const dir = mkdtempSync(join(tmpdir(), 'aiworker-registry-routes-caps-'))
+    initFleetDb(join(dir, 'fleet.db'))
+    runFleetMigrations('./drizzle/fleet')
+  })
+  afterEach(() => {
+    globalThis.fetch = originalFetch
+  })
+
+  it('reports canLaunch=false when launch is disabled', async () => {
+    const routes = buildRegistryRoutes({ masterKeyHex: MASTER_KEY })
+    const res = await routes.fetch(new Request('http://registry.test/capabilities'))
+    expect(res.status).toBe(200)
+    const body = await res.json() as { canLaunch: boolean, maxWorkers: number | null, currentWorkers: number }
+    expect(body.canLaunch).toBe(false)
+    expect(body.maxWorkers).toBeNull()
+    expect(body.currentWorkers).toBe(0)
+  })
+
+  it('reports canLaunch=true + maxWorkers when both flags are on', async () => {
+    const routes = buildRegistryRoutes({
+      masterKeyHex: MASTER_KEY,
+      canLaunch: true,
+      supervisor: { launchLocal: async () => { throw new Error('never called') } },
+      maxWorkers: 5,
+    })
+    const res = await routes.fetch(new Request('http://registry.test/capabilities'))
+    expect(res.status).toBe(200)
+    const body = await res.json() as { canLaunch: boolean, maxWorkers: number | null, currentWorkers: number }
+    expect(body.canLaunch).toBe(true)
+    expect(body.maxWorkers).toBe(5)
+    expect(body.currentWorkers).toBe(0)
+  })
+
+  it('currentWorkers tracks the registered_workers row count', async () => {
+    globalThis.fetch = (async () => new Response(JSON.stringify({ ...DEFAULT_INFO, workerId: 'w_111111111111' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })) as unknown as typeof fetch
+
+    const routes = buildRegistryRoutes({ masterKeyHex: MASTER_KEY, maxWorkers: 3 })
+    await postRegister(routes, {
+      baseUrl: 'https://w1.example.com',
+      apiToken: 'wtk_plain_token_0000000000000000000000000',
+      displayName: 'One',
+    })
+    const res = await routes.fetch(new Request('http://registry.test/capabilities'))
+    const body = await res.json() as { currentWorkers: number, maxWorkers: number | null }
+    expect(body.currentWorkers).toBe(1)
+    expect(body.maxWorkers).toBe(3)
+  })
+})
+
+describe('registry/routes quota enforcement (PLAN-010 §P3)', () => {
+  const originalFetch = globalThis.fetch
+  beforeEach(() => {
+    closeFleetDb()
+    const dir = mkdtempSync(join(tmpdir(), 'aiworker-registry-routes-quota-'))
+    initFleetDb(join(dir, 'fleet.db'))
+    runFleetMigrations('./drizzle/fleet')
+  })
+  afterEach(() => {
+    globalThis.fetch = originalFetch
+  })
+
+  function mockInfoFor(workerId: string) {
+    globalThis.fetch = (async () => new Response(JSON.stringify({ ...DEFAULT_INFO, workerId }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })) as unknown as typeof fetch
+  }
+
+  it('POST /register allows up to maxWorkers rows then 409s', async () => {
+    const routes = buildRegistryRoutes({ masterKeyHex: MASTER_KEY, maxWorkers: 2 })
+
+    mockInfoFor('w_first_00000')
+    const first = await postRegister(routes, {
+      baseUrl: 'https://a.example.com',
+      apiToken: 'wtk_plain_token_0000000000000000000000000',
+      displayName: 'A',
+    })
+    expect(first.status).toBe(201)
+
+    mockInfoFor('w_second_0000')
+    const second = await postRegister(routes, {
+      baseUrl: 'https://b.example.com',
+      apiToken: 'wtk_plain_token_0000000000000000000000000',
+      displayName: 'B',
+    })
+    expect(second.status).toBe(201)
+
+    mockInfoFor('w_third_00000')
+    const third = await postRegister(routes, {
+      baseUrl: 'https://c.example.com',
+      apiToken: 'wtk_plain_token_0000000000000000000000000',
+      displayName: 'C',
+    })
+    expect(third.status).toBe(409)
+    const body = await third.json() as { error: { code: string, limit: number, current: number } }
+    expect(body.error.code).toBe('quota-exceeded')
+    expect(body.error.limit).toBe(2)
+    expect(body.error.current).toBe(2)
+  })
+
+  it('POST /launch-local is blocked by quota before the supervisor is called', async () => {
+    let launchCalls = 0
+    const supervisor: RegistrySupervisor = {
+      launchLocal: async () => {
+        launchCalls += 1
+        return {
+          workerId: 'w_launched_000',
+          baseUrl: 'http://aiworker-x:3001',
+          apiToken: 'wtk_launched_token_0000000000000000000000000' as WorkerApiToken,
+          containerId: 'c-x',
+          containerName: 'aiworker-x',
+        }
+      },
+    }
+
+    const routes = buildRegistryRoutes({
+      masterKeyHex: MASTER_KEY,
+      canLaunch: true,
+      supervisor,
+      maxWorkers: 1,
+    })
+
+    // Seed one worker via /register so launch-local is already at quota.
+    mockInfoFor('w_seed_000000')
+    const seed = await postRegister(routes, {
+      baseUrl: 'https://seed.example.com',
+      apiToken: 'wtk_plain_token_0000000000000000000000000',
+      displayName: 'Seed',
+    })
+    expect(seed.status).toBe(201)
+
+    const res = await routes.fetch(new Request('http://registry.test/launch-local', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ displayName: 'Over' }),
+    }))
+    expect(res.status).toBe(409)
+    const body = await res.json() as { error: { code: string } }
+    expect(body.error.code).toBe('quota-exceeded')
+    expect(launchCalls).toBe(0)
+  })
+
+  it('no cap when maxWorkers is omitted', async () => {
+    const routes = buildRegistryRoutes({ masterKeyHex: MASTER_KEY })
+    for (let i = 0; i < 5; i++) {
+      mockInfoFor(`w_loop${String(i).padStart(7, '0')}`)
+      const res = await postRegister(routes, {
+        baseUrl: `https://w${i}.example.com`,
+        apiToken: 'wtk_plain_token_0000000000000000000000000',
+        displayName: `N${i}`,
+      })
+      expect(res.status).toBe(201)
+    }
   })
 })

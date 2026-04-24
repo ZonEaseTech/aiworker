@@ -144,6 +144,7 @@ export interface TaskDetailResponse {
 
 export type WorkerApiErrorCode
   = | 'auth-failed'
+    | 'auth-required'
     | 'already-registered'
     | 'worker-unreachable'
     | 'invalid-worker-info'
@@ -152,6 +153,9 @@ export type WorkerApiErrorCode
     | 'invalid-config'
     | 'version-conflict'
     | 'invalid-if-match'
+    | 'quota-exceeded'
+    | 'launch-timeout'
+    | 'launch-failed'
     | 'unknown'
 
 interface WorkerApiErrorBody {
@@ -162,6 +166,10 @@ interface WorkerApiErrorBody {
     details?: unknown
     expected?: number
     actual?: number
+    /** For `quota-exceeded` responses: the `MANAGER_MAX_WORKERS` cap. */
+    limit?: number
+    /** For `quota-exceeded` responses: the current row count. */
+    current?: number
   }
 }
 
@@ -174,6 +182,10 @@ export class WorkerApiError extends Error {
   readonly expectedVersion?: number
   /** For `version-conflict` responses: the current version on the worker. */
   readonly actualVersion?: number
+  /** For `quota-exceeded` responses: the configured cap. */
+  readonly quotaLimit?: number
+  /** For `quota-exceeded` responses: the current row count. */
+  readonly quotaCurrent?: number
 
   constructor(status: number, body: unknown) {
     const parsed = (body && typeof body === 'object' ? body : {}) as WorkerApiErrorBody
@@ -186,6 +198,8 @@ export class WorkerApiError extends Error {
     this.details = parsed.error?.details
     this.expectedVersion = parsed.error?.expected
     this.actualVersion = parsed.error?.actual
+    this.quotaLimit = parsed.error?.limit
+    this.quotaCurrent = parsed.error?.current
   }
 }
 
@@ -234,6 +248,40 @@ export function updateWorker(id: string, patch: UpdateWorkerInput): Promise<Safe
 
 export async function deleteWorker(id: string): Promise<void> {
   await workerRequest<unknown>('DELETE', `/api/workers/${encodeURIComponent(id)}`)
+}
+
+// ---------------------------------------------------------------------------
+// PLAN-010 §P2 + §P6 — manager-driven worker creation.
+// ---------------------------------------------------------------------------
+
+export interface DashboardCapabilities {
+  /** True when MANAGER_CAN_LAUNCH=true AND a supervisor is wired up. */
+  canLaunch: boolean
+  /** MANAGER_MAX_WORKERS value or null when no cap is set. */
+  maxWorkers: number | null
+  /** Current count of rows in `registered_workers`. */
+  currentWorkers: number
+}
+
+export function getCapabilities(): Promise<DashboardCapabilities> {
+  return workerRequest<DashboardCapabilities>('GET', '/api/workers/capabilities')
+}
+
+export interface LaunchWorkerInput {
+  displayName: string
+  /** Optional — force a specific workerId for deterministic replay / tests. */
+  forceId?: string
+}
+
+/**
+ * Backend returns the registered-worker row plus a one-time plaintext
+ * `apiToken`. The token never appears on any subsequent GET — the UI must
+ * surface it to the operator in the success step.
+ */
+export type LaunchWorkerResponse = SafeRegisteredWorker & { apiToken: string }
+
+export function launchWorker(input: LaunchWorkerInput): Promise<LaunchWorkerResponse> {
+  return workerRequest<LaunchWorkerResponse>('POST', '/api/workers/launch-local', input)
 }
 
 // ---------------------------------------------------------------------------

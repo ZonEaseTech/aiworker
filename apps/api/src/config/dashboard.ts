@@ -23,6 +23,21 @@ const schema = z.object({
     .default('false')
     .transform(v => v === 'true'),
 
+  // PLAN-010 §P1: gate the `/api/*` bearer/basic middleware. Default off so an
+  // upgrade that ships the middleware does not 401 an existing deploy before
+  // the operator has the chance to configure the browser credential cache.
+  // Flip to `true` once the ops runbook confirms `INTERNAL_SHARED_SECRET` is
+  // set and CI / deploy scripts are passing the header.
+  DASHBOARD_REQUIRE_AUTH: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform(v => v === 'true'),
+
+  // PLAN-010 §P3: optional hard cap on the number of rows in
+  // `registered_workers`. Enforced in both `/register` and `/launch-local`.
+  // Omit to disable.
+  MANAGER_MAX_WORKERS: z.coerce.number().int().positive().optional(),
+
   // Launch-local-only settings. Optional by default; required when
   // MANAGER_CAN_LAUNCH=true (see superRefine).
   DOCKER_HOST: z.string().default('/var/run/docker.sock'),

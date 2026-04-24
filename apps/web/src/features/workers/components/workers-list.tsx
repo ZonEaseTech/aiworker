@@ -1,13 +1,14 @@
 import type { SafeRegisteredWorker } from '@aiworker/shared'
 import { useNavigate } from '@tanstack/react-router'
-import { Check, Copy, ExternalLink, PlusCircle, ServerOff } from 'lucide-react'
+import { Check, Copy, ExternalLink, PlusCircle, ServerOff, Sparkles } from 'lucide-react'
 import { useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { useRegisteredWorkers } from '../hooks'
+import { useDashboardCapabilities, useRegisteredWorkers } from '../hooks'
 import { formatRelativeTime, stateBadgeLabel, stateBadgeVariant, truncateWorkerId } from '../utils'
+import { CreateWizard } from './create-wizard'
 import { RegisterWizard } from './register-wizard'
 
 interface CopyButtonProps {
@@ -44,10 +45,23 @@ interface WorkersListProps {
 export function WorkersList({ workers: workersProp }: WorkersListProps = {}) {
   const navigate = useNavigate()
   const query = useRegisteredWorkers()
-  const [wizardOpen, setWizardOpen] = useState(false)
+  const [registerOpen, setRegisterOpen] = useState(false)
+  const [createOpen, setCreateOpen] = useState(false)
+  const capabilities = useDashboardCapabilities()
 
   const workers = workersProp ?? query.data
   const isLoading = workersProp === undefined && query.isLoading
+
+  const caps = capabilities.data
+  const quotaFull = caps !== undefined
+    && caps.maxWorkers !== null
+    && caps.currentWorkers >= caps.maxWorkers
+  const createDisabled = !caps?.canLaunch || quotaFull
+  const createTooltip = !caps?.canLaunch
+    ? 'Set MANAGER_CAN_LAUNCH=true + supervisor envs (see docs/deployment.md)'
+    : quotaFull
+      ? `Quota reached (${caps.currentWorkers}/${caps.maxWorkers})`
+      : undefined
 
   return (
     <div className="flex flex-col gap-6">
@@ -58,10 +72,20 @@ export function WorkersList({ workers: workersProp }: WorkersListProps = {}) {
             Registered AIWorker runtimes the manager can drive.
           </p>
         </div>
-        <Button onClick={() => setWizardOpen(true)}>
-          <PlusCircle className="size-4" />
-          Register worker
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setRegisterOpen(true)}>
+            <PlusCircle className="size-4" />
+            Register worker
+          </Button>
+          <Button
+            onClick={() => setCreateOpen(true)}
+            disabled={createDisabled}
+            title={createTooltip}
+          >
+            <Sparkles className="size-4" />
+            Create worker
+          </Button>
+        </div>
       </div>
 
       {isLoading
@@ -129,9 +153,10 @@ export function WorkersList({ workers: workersProp }: WorkersListProps = {}) {
                 </Table>
               </div>
             )
-          : <EmptyState onRegister={() => setWizardOpen(true)} />}
+          : <EmptyState onRegister={() => setRegisterOpen(true)} />}
 
-      <RegisterWizard open={wizardOpen} onOpenChange={setWizardOpen} />
+      <RegisterWizard open={registerOpen} onOpenChange={setRegisterOpen} />
+      <CreateWizard open={createOpen} onOpenChange={setCreateOpen} />
     </div>
   )
 }

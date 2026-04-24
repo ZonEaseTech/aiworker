@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-04-23 06:05
+> Updated: 2026-04-23 09:55
 
 ## Usage
 
@@ -38,3 +38,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-007 Multi-engine executor refactor**](PLAN-007.md) `2026-04-22`
 - [x] [**PLAN-008 Worker registration UX + engine availability**](PLAN-008.md) `2026-04-23`
 - [x] [**PLAN-009 Worker image bundling + model picker**](PLAN-009.md) `2026-04-23`
+- [x] [**PLAN-010 Manager-driven worker creation + dashboard authN + quota**](PLAN-010.md) `2026-04-23`

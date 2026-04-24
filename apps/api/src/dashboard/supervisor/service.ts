@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { join } from 'node:path'
+import process from 'node:process'
 
 import consola from 'consola'
 
@@ -51,6 +52,7 @@ export interface SupervisorDockerApi {
   stopContainer: (id: string) => Promise<void>
   removeContainer: (id: string, opts?: { force?: boolean, removeVolumes?: boolean }) => Promise<void>
   logs: (id: string, opts?: { tail?: number }) => Promise<string>
+  inspectContainer: (id: string) => Promise<Record<string, unknown>>
 }
 
 export interface FleetSupervisorOptions {
@@ -62,6 +64,13 @@ export interface FleetSupervisorOptions {
   /** Override the clock; used by tests to short-circuit the poller. */
   now?: () => number
   sleep?: (ms: number) => Promise<void>
+  /**
+   * Dashboard container's own identity used by the PLAN-010 §P4 network
+   * self-check. Defaults to `process.env.HOSTNAME` (docker sets this to the
+   * 12-char short id for non-`--hostname` containers). Override for tests.
+   * When `null` or missing, the self-check soft-fails with a warning.
+   */
+  selfHostname?: string | null
 }
 
 /**
@@ -81,6 +90,7 @@ export class FleetSupervisor {
   private readonly pollTimeoutMs: number
   private readonly now: () => number
   private readonly sleep: (ms: number) => Promise<void>
+  private readonly selfHostname: string | null
 
   constructor(options: FleetSupervisorOptions = {}) {
     this.docker = options.docker ?? new DockerClient(dashboardConfig.DOCKER_HOST)
@@ -89,11 +99,58 @@ export class FleetSupervisor {
     this.pollTimeoutMs = options.pollTimeoutMs ?? LAUNCH_POLL_TIMEOUT_MS
     this.now = options.now ?? Date.now
     this.sleep = options.sleep ?? (ms => new Promise(r => setTimeout(r, ms)))
+    this.selfHostname = options.selfHostname === undefined
+      ? (process.env.HOSTNAME ?? null)
+      : options.selfHostname
   }
 
   async ensureInfrastructure(): Promise<void> {
     await this.docker.ping()
     await this.docker.ensureNetwork(dashboardConfig.AIWORKER_NETWORK)
+    await this.ensureSelfJoinedNetwork(dashboardConfig.AIWORKER_NETWORK)
+  }
+
+  /**
+   * PLAN-010 §P4: verify the dashboard container itself is a member of the
+   * shared worker network. Otherwise a freshly launched worker will be
+   * addressable at `http://{containerName}:3001` only to *other* containers
+   * on that network — the manager's subsequent `/info` probe silently 502s
+   * and the fleet row stays forever `offline`.
+   *
+   * Soft-fail semantics:
+   *   - `selfHostname` missing / not a 12-hex docker short id → warn + skip
+   *     (covers `bun dev`, unit tests, bare-metal).
+   *   - `inspectContainer` 404 → warn + skip (hostname isn't actually a
+   *     container on this daemon, e.g. `docker run --hostname foo`).
+   *   - inspect succeeds but network membership missing → throw
+   *     `LaunchFailedError`.
+   */
+  private async ensureSelfJoinedNetwork(networkName: string): Promise<void> {
+    const hostname = this.selfHostname
+    if (!hostname || !/^[0-9a-f]{12,64}$/i.test(hostname)) {
+      consola.warn(`[supervisor] HOSTNAME=${hostname ?? '(unset)'} is not a docker container id; skipping self-in-network check`)
+      return
+    }
+    let info: Record<string, unknown>
+    try {
+      info = await this.docker.inspectContainer(hostname)
+    }
+    catch (err) {
+      consola.warn(`[supervisor] could not inspect self-container ${hostname}: ${(err as Error).message}; skipping self-in-network check`)
+      return
+    }
+    const networks = (info.NetworkSettings as { Networks?: Record<string, unknown> } | undefined)?.Networks
+    if (!networks || typeof networks !== 'object') {
+      consola.warn(`[supervisor] inspect of ${hostname} returned no NetworkSettings.Networks; skipping self-in-network check`)
+      return
+    }
+    if (!(networkName in networks)) {
+      throw new LaunchFailedError(
+        `dashboard container ${hostname} is not a member of docker network '${networkName}'. `
+        + `Attach it via docker compose (networks: [${networkName}]) or \`docker network connect\` before enabling launch-local; `
+        + `otherwise launched workers will be unreachable at the rendered baseUrl.`,
+      )
+    }
   }
 
   /**

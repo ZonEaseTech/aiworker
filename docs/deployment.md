@@ -186,6 +186,118 @@ skips the binary fetch. First login still happens at container run-time
 See [`docs/executor-engines.md`](./executor-engines.md) per engine for
 login paths and mount recipes.
 
+## Enabling manager-driven worker creation
+
+Feature flag bundle (PLAN-010) that lets operators spawn new worker containers
+end-to-end from the dashboard UI, without hand-rolling `docker run` and
+scraping bootstrap tokens from container logs. **Opt-in only** — the default
+deploy stays a pure registry with no docker-socket dependency.
+
+### Topology assumed
+
+Single-host: the dashboard container and every spawned worker share the same
+docker engine and the same compose-created network (`aiworker_default`).
+Remote docker daemons are out of scope for PLAN-010.
+
+### Prerequisites (in order)
+
+1. **`DASHBOARD_REQUIRE_AUTH=true`**. The supervisor overlay mounts
+   `/var/run/docker.sock` into the dashboard container. Once that is done,
+   anyone who reaches `/api/*` without auth can create arbitrary containers
+   on the host (docker.sock ≈ host root). Flip the auth flag **before**
+   layering the overlay.
+2. **`INTERNAL_SHARED_SECRET` present in `.env`** (existing requirement).
+   The dashboard middleware accepts both:
+   - `Authorization: Bearer <INTERNAL_SHARED_SECRET>` — CI, deploy scripts,
+     smoke tests;
+   - `Authorization: Basic base64(<anything>:<INTERNAL_SHARED_SECRET>)` — the
+     browser's native Basic prompt. The username is ignored.
+3. **Host data directory**:
+   ```sh
+   sudo install -d -o root -g root -m 0755 /opt/aiworker-workers
+   ```
+   Must live at the same path inside the dashboard container and on the
+   host (the supervisor hands the host path to the docker daemon verbatim).
+
+### Optional env
+
+Set in `/opt/aiworker-deploy/.env` before installing:
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `MANAGER_MAX_WORKERS` | unset (no cap) | Hard cap on rows in `registered_workers`. Applies to `/register` **and** `/launch-local`. |
+| `WORKER_MEMORY_LIMIT` | `512m` | `--memory` passed to every launched worker container. |
+| `WORKER_CPU_LIMIT` | `1.0` | `--cpus` equivalent (docker `NanoCpus`). |
+| `AIWORKER_LAUNCH_BASE_URL_TEMPLATE` | `http://{containerName}:3001` | Override only if the default URL shape doesn't fit your network. |
+
+### Install
+
+```sh
+# One-time: ship the overlay to the deploy target.
+aissh file upload docker-compose.yml       /opt/aiworker-deploy/docker-compose.yml
+aissh file upload docker-compose.supervisor.yml \
+                                           /opt/aiworker-deploy/docker-compose.supervisor.yml
+
+# Bring the stack up with both files merged.
+aissh exec <server> \
+  "cd /opt/aiworker-deploy && docker compose \
+     -f docker-compose.yml \
+     -f docker-compose.supervisor.yml \
+     --env-file .env \
+     pull && docker compose \
+     -f docker-compose.yml \
+     -f docker-compose.supervisor.yml \
+     --env-file .env \
+     up -d"
+```
+
+### Smoke test
+
+```sh
+# Capabilities must report canLaunch=true.
+curl -u ':'"$INTERNAL_SHARED_SECRET" \
+  https://gateway.example.test/api/workers/capabilities
+# → {"canLaunch":true,"maxWorkers":...,"currentWorkers":0}
+
+# Unauthenticated request must be rejected.
+curl -i https://gateway.example.test/api/workers/capabilities
+# → HTTP/2 401
+# → www-authenticate: Basic realm="AIWorker", charset="UTF-8"
+```
+
+### Rollback
+
+```sh
+# Back out to the pure-registry stack. Containers previously spawned via
+# launch-local keep running (RestartPolicy=unless-stopped) — their registry
+# rows stay intact; only the Create-worker UI goes away.
+aissh exec <server> \
+  "cd /opt/aiworker-deploy && docker compose \
+     -f docker-compose.yml \
+     --env-file .env \
+     up -d"
+```
+
+If you also want to turn auth back off (not recommended past the initial
+rollout window), unset `DASHBOARD_REQUIRE_AUTH` in `.env` and re-run the
+base compose.
+
+### Pitfalls
+
+- **Forgetting the network**: if `DASHBOARD_REQUIRE_AUTH=true` and the
+  supervisor overlay are applied but the dashboard container is not on
+  `aiworker_default`, the supervisor's P4 self-check fails loudly at launch
+  time (`dashboard container ... is not a member of docker network
+  'aiworker_default'`). Re-run compose so both services share the default
+  network.
+- **Data path mismatch**: `WORKER_DATA_ROOT` must be a path that is valid on
+  the host docker daemon, not a compose-managed named volume. The overlay
+  uses `/opt/aiworker-workers` on both sides for exactly this reason.
+- **Losing `AIWORKER_MASTER_KEY`**: unchanged from the base deploy. Back up
+  the file offline. Each launched worker has its own independent per-worker
+  master key minted at launch; dashboard does not retain it, and the worker
+  persists it in its own `worker.db`.
+
 ## Troubleshooting
 
 - `aissh exec` prints an operation id and `approval required`: run

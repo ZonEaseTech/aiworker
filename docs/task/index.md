@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-04-23 06:05
+> Updated: 2026-04-23 09:55
 
 ## Usage
 
@@ -55,3 +55,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-020 Bake npm agentic CLIs into the worker image**](FEAT-020.md) `P1`
 - [x] [**FEAT-021 Bake Cursor agent into the full image (optional)**](FEAT-021.md) `P3`
 - [x] [**FEAT-022 Auth mount recipe + Register dialog hint**](FEAT-022.md) `P2`
+- [x] [**FEAT-023 Manager-driven worker creation**](FEAT-023.md) `P1`

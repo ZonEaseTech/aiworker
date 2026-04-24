@@ -1,0 +1,62 @@
+# PLAN-010 §P5 — manager-driven worker creation overlay.
+#
+# Invoke alongside the base compose to let the dashboard spawn worker
+# containers on the local docker engine:
+#
+#   docker compose \
+#     -f docker-compose.yml \
+#     -f docker-compose.supervisor.yml \
+#     --env-file .env \
+#     up -d
+#
+# PRE-FLIGHT:
+#
+#   1. `DASHBOARD_REQUIRE_AUTH=true` MUST be enabled before mounting
+#      `/var/run/docker.sock`. The socket is equivalent to host root; gating
+#      `/api/*` with the bearer/basic middleware is the only thing keeping an
+#      unauthenticated HTTP caller from escalating.
+#   2. Create the host-side worker data directory and make it owned by the
+#      uid the docker daemon runs as (usually root):
+#        sudo install -d -o root -g root -m 0755 /opt/aiworker-workers
+#   3. `INTERNAL_SHARED_SECRET` must already be in `.env` — both the bearer
+#      middleware and each launched worker re-use it.
+#
+# This overlay deliberately does **not** redefine the base service — compose
+# merges the two files. Only the environment + volume deltas live here.
+
+services:
+  dashboard:
+    environment:
+      # PLAN-010 §P1 — turn on the bearer/basic middleware guarding /api/*.
+      DASHBOARD_REQUIRE_AUTH: 'true'
+
+      # PLAN-004 §3.4 — enable the supervisor. Without this the POST
+      # /api/workers/launch-local route is unmounted and the UI's
+      # "Create worker" button stays disabled.
+      MANAGER_CAN_LAUNCH: 'true'
+
+      # PLAN-010 §P3 — hard cap on rows in registered_workers. Leave unset
+      # in .env for no cap.
+      MANAGER_MAX_WORKERS: ${MANAGER_MAX_WORKERS:-}
+
+      # PLAN-004 §3.4 required envs when MANAGER_CAN_LAUNCH=true.
+      AIWORKER_IMAGE: ghcr.io/zoneasetech/aiworker:${AIWORKER_IMAGE_TAG}${AIWORKER_IMAGE_VARIANT_SUFFIX}
+      WORKER_DATA_ROOT: /opt/aiworker-workers
+      WORKER_MEMORY_LIMIT: ${WORKER_MEMORY_LIMIT:-512m}
+      WORKER_CPU_LIMIT: ${WORKER_CPU_LIMIT:-1.0}
+
+      # `aiworker_default` is the network compose auto-creates from the base
+      # file (`name: aiworker` → `<name>_default`). The dashboard is already
+      # joined to it; launch-local workers will be attached to the same
+      # network so `http://{containerName}:3001` resolves.
+      AIWORKER_NETWORK: aiworker_default
+      AIWORKER_LAUNCH_BASE_URL_TEMPLATE: ${AIWORKER_LAUNCH_BASE_URL_TEMPLATE:-http://{containerName}:3001}
+
+    volumes:
+      # docker.sock — read-only is enough for create/start/stop/logs. Do not
+      # mount without DASHBOARD_REQUIRE_AUTH=true first.
+      - '/var/run/docker.sock:/var/run/docker.sock:ro'
+      # Worker data directory. The host path and the container path MUST be
+      # identical so the `Binds` the supervisor hands to the docker daemon
+      # resolve correctly (daemon-in-host sees the host path literally).
+      - '/opt/aiworker-workers:/opt/aiworker-workers'
