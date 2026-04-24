@@ -35,8 +35,20 @@ cli
 cli
   .command('serve', 'Start the worker HTTP server (equivalent to AIWORKER_MODE=worker)')
   .option('--port <n>', 'Override the PORT env', { type: [Number] })
-  .action(async (opts: { port?: number[] }) => {
-    await runServe({ port: opts.port?.[0] })
+  .option('--gateway <url>', 'Dial the given gateway WS URL as a node alongside the HTTP server')
+  .option('--gateway-token <token>', 'Bearer token presented to the gateway (omit for loopback)')
+  .option('--no-reconnect', 'Disable gateway-client auto-reconnect (useful for smoke / tests)')
+  .action(async (opts: { port?: number[], gateway?: string, gatewayToken?: string, reconnect?: boolean }) => {
+    const serveOptions: Parameters<typeof runServe>[0] = {}
+    if (opts.port?.[0] !== undefined)
+      serveOptions.port = opts.port[0]
+    if (opts.gateway !== undefined)
+      serveOptions.gateway = opts.gateway
+    if (opts.gatewayToken !== undefined)
+      serveOptions.gatewayToken = opts.gatewayToken
+    if (opts.reconnect === false)
+      serveOptions.gatewayReconnect = false
+    await runServe(serveOptions)
   })
 
 cli.command('config-show', 'Print the stored worker config as JSON').action(async () => {

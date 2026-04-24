@@ -33,6 +33,18 @@ export { enumerateSecretPaths, hydrateSecrets } from './worker/config/secret-pat
 // Event bus type (so callers can subscribe to runtime.bus).
 export { type WorkerEventBus } from './worker/events/bus'
 
+// Gateway-client (PLAN-013 S4): worker node 主动接入 gateway 的 WS 客户端。
+export {
+  type GatewayNode,
+  type GatewayNodeOptions,
+  type NodeHandlers,
+  type OrchestratorLike,
+  startGatewayNode,
+  stopGatewayNode,
+  type WebSocketCtor,
+  type WebSocketLike,
+} from './worker/gateway-client'
+
 // Config read/write (covers `aiw config show|set`).
 export {
   ConfigVersionConflictError,
