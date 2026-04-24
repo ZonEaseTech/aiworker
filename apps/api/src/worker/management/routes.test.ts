@@ -8,9 +8,9 @@ import type { WorkerRuntime } from '../runtime'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { beforeEach, describe, expect, it } from 'bun:test'
+import { closeWorkerDb, getWorkerDb, initWorkerDb, runWorkerMigrations } from '@aiworker/storage-sqlite/worker'
 
-import { closeWorkerDb, getWorkerDb, initWorkerDb, runWorkerMigrations } from '../../db/worker'
+import { beforeEach, describe, expect, it } from 'bun:test'
 import { loadOrSeedConfig } from '../bootstrap/config'
 import { ChannelRegistry } from '../channels/registry'
 import { resetAvailabilityProbeForTests } from '../executor/availability'
@@ -92,7 +92,7 @@ async function bootstrap(processes?: ProcessManager): Promise<{ state: WorkerMod
   resetSecretsVaultForTests()
   const dir = mkdtempSync(join(tmpdir(), 'aiworker-mgmt-routes-'))
   initWorkerDb(join(dir, 'worker.db'))
-  runWorkerMigrations('./drizzle/worker')
+  runWorkerMigrations()
   process.env.AIWORKER_MASTER_KEY = MASTER_KEY
   await loadOrSeedConfig(getWorkerDb())
   const state = stubState(1, processes)

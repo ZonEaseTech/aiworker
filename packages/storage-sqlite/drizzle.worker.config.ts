@@ -1,10 +1,13 @@
 import { defineConfig } from 'drizzle-kit'
 
+/**
+ * See notes on `drizzle.fleet.config.ts`.
+ */
 export default defineConfig({
-  schema: './src/db/worker/schema.ts',
+  schema: './src/worker/schema.ts',
   out: './drizzle/worker',
   dialect: 'sqlite',
   dbCredentials: {
-    url: './data/worker.db',
+    url: '../../apps/api/data/worker.db',
   },
 })

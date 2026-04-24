@@ -2,9 +2,9 @@ import type { WorkerConfig } from '@aiworker/shared'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { beforeEach, describe, expect, it } from 'bun:test'
+import { closeWorkerDb, getWorkerDb, initWorkerDb, runWorkerMigrations } from '@aiworker/storage-sqlite/worker'
 
-import { closeWorkerDb, getWorkerDb, initWorkerDb, runWorkerMigrations } from '../../db/worker'
+import { beforeEach, describe, expect, it } from 'bun:test'
 import { loadOrSeedConfig } from '../bootstrap/config'
 import { SecretsVault } from '../secrets/vault'
 import { ConfigVersionConflictError, InvalidConfigError, putConfig, readConfig } from './config'
@@ -50,7 +50,7 @@ describe('worker management config', () => {
     closeWorkerDb()
     const dir = mkdtempSync(join(tmpdir(), 'aiworker-mgmt-config-'))
     initWorkerDb(join(dir, 'worker.db'))
-    runWorkerMigrations('./drizzle/worker')
+    runWorkerMigrations()
     await loadOrSeedConfig(getWorkerDb())
   })
 

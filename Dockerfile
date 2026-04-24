@@ -22,8 +22,10 @@ FROM oven/bun:1-debian AS deps
 WORKDIR /app
 COPY package.json bun.lock ./
 COPY apps/api/package.json apps/api/
+COPY apps/cli/package.json apps/cli/
 COPY apps/web/package.json apps/web/
 COPY packages/shared/package.json packages/shared/
+COPY packages/storage-sqlite/package.json packages/storage-sqlite/
 RUN bun install --frozen-lockfile
 
 FROM deps AS build
@@ -38,11 +40,12 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app/apps/api/dist /app/dist
-COPY --from=build /app/apps/api/drizzle /app/drizzle
+COPY --from=build /app/packages/storage-sqlite/drizzle /app/drizzle
 COPY --from=build /app/apps/web/dist /app/web
 COPY --from=build /app/node_modules /app/node_modules
 COPY --from=build /app/apps/api/node_modules /app/apps/api/node_modules
 COPY --from=build /app/packages/shared /app/packages/shared
+COPY --from=build /app/packages/storage-sqlite /app/packages/storage-sqlite
 ENV NODE_ENV=production
 EXPOSE 3000 3001
 ENTRYPOINT ["/usr/bin/tini", "--", "bun", "run", "dist/index.js"]

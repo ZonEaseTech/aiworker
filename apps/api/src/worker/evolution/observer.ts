@@ -1,9 +1,8 @@
 import type { WorkerEvent, WorkerEventBus } from '../events/bus'
 
-import consola from 'consola'
+import { evolutionObservations, getWorkerDb } from '@aiworker/storage-sqlite/worker'
 
-import { getWorkerDb } from '../../db/worker'
-import { evolutionObservations } from '../../db/worker/schema'
+import consola from 'consola'
 
 /**
  * Evolution observer: subscribes to orchestrator + channel events and writes

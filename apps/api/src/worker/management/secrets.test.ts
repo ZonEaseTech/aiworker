@@ -1,9 +1,9 @@
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { beforeEach, describe, expect, it } from 'bun:test'
+import { closeWorkerDb, getWorkerDb, initWorkerDb, runWorkerMigrations } from '@aiworker/storage-sqlite/worker'
 
-import { closeWorkerDb, getWorkerDb, initWorkerDb, runWorkerMigrations } from '../../db/worker'
+import { beforeEach, describe, expect, it } from 'bun:test'
 import { AppError } from '../../shared'
 import { SecretsVault } from '../secrets/vault'
 import { deleteSecret, listSecrets, putSecret } from './secrets'
@@ -17,7 +17,7 @@ describe('worker management secrets', () => {
     closeWorkerDb()
     const dir = mkdtempSync(join(tmpdir(), 'aiworker-mgmt-secrets-'))
     initWorkerDb(join(dir, 'worker.db'))
-    runWorkerMigrations('./drizzle/worker')
+    runWorkerMigrations()
     vault = new SecretsVault(MASTER_KEY, getWorkerDb())
   })
 

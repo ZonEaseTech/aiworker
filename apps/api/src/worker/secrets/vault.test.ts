@@ -1,9 +1,9 @@
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { beforeEach, describe, expect, it } from 'bun:test'
+import { closeWorkerDb, getWorkerDb, initWorkerDb, runWorkerMigrations } from '@aiworker/storage-sqlite/worker'
 
-import { closeWorkerDb, getWorkerDb, initWorkerDb, runWorkerMigrations } from '../../db/worker'
+import { beforeEach, describe, expect, it } from 'bun:test'
 import { SecretsVault } from './vault'
 
 const MASTER_KEY = '00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff'
@@ -13,7 +13,7 @@ describe('SecretsVault', () => {
     closeWorkerDb()
     const dir = mkdtempSync(join(tmpdir(), 'aiworker-vault-'))
     initWorkerDb(join(dir, 'worker.db'))
-    runWorkerMigrations('./drizzle/worker')
+    runWorkerMigrations()
   })
 
   it('roundtrips a secret through encrypt/decrypt', async () => {

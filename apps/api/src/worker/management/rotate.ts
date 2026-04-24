@@ -1,9 +1,9 @@
 import type { WorkerApiToken } from '@aiworker/shared'
-import type { WorkerDatabase } from '../../db/worker'
+import type { WorkerDatabase } from '@aiworker/storage-sqlite/worker'
 import type { SecretsVault } from '../secrets/vault'
-import { eq } from 'drizzle-orm'
+import { workerIdentity } from '@aiworker/storage-sqlite/worker'
 
-import { workerIdentity } from '../../db/worker/schema'
+import { eq } from 'drizzle-orm'
 import { mintApiToken } from '../bootstrap/identity'
 
 export interface RotateTokenCurrentState {

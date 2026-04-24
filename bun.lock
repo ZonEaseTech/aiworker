@@ -18,6 +18,7 @@
       "name": "@aiworker/api",
       "dependencies": {
         "@aiworker/shared": "workspace:*",
+        "@aiworker/storage-sqlite": "workspace:*",
         "@hono/zod-openapi": "^0.19.6",
         "@scalar/hono-api-reference": "^0.5.180",
         "consola": "^3.4.2",
@@ -28,7 +29,23 @@
       },
       "devDependencies": {
         "@types/bun": "^1.2.13",
-        "drizzle-kit": "^0.31.1",
+        "typescript": "^5.8.3",
+      },
+    },
+    "apps/cli": {
+      "name": "@aiworker/cli",
+      "bin": {
+        "aiw": "./src/aiw.ts",
+      },
+      "dependencies": {
+        "@aiworker/api": "workspace:*",
+        "@aiworker/shared": "workspace:*",
+        "@aiworker/storage-sqlite": "workspace:*",
+        "cac": "^6.7.14",
+        "consola": "^3.4.2",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.2.13",
         "typescript": "^5.8.3",
       },
     },
@@ -79,11 +96,27 @@
         "typescript": "^5.8.3",
       },
     },
+    "packages/storage-sqlite": {
+      "name": "@aiworker/storage-sqlite",
+      "dependencies": {
+        "@aiworker/shared": "workspace:*",
+        "drizzle-orm": "^0.44.1",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.2.13",
+        "drizzle-kit": "^0.31.1",
+        "typescript": "^5.8.3",
+      },
+    },
   },
   "packages": {
     "@aiworker/api": ["@aiworker/api@workspace:apps/api"],
 
+    "@aiworker/cli": ["@aiworker/cli@workspace:apps/cli"],
+
     "@aiworker/shared": ["@aiworker/shared@workspace:packages/shared"],
+
+    "@aiworker/storage-sqlite": ["@aiworker/storage-sqlite@workspace:packages/storage-sqlite"],
 
     "@aiworker/web": ["@aiworker/web@workspace:apps/web"],
 

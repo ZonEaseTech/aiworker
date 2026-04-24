@@ -1,9 +1,8 @@
 import type { WorkerRuntime } from '../runtime'
+import { agentTasks, conversations, getWorkerDb, messages } from '@aiworker/storage-sqlite/worker'
+
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { desc, eq } from 'drizzle-orm'
-
-import { getWorkerDb } from '../../db/worker'
-import { agentTasks, conversations, messages } from '../../db/worker/schema'
 import { AppError } from '../../shared'
 
 /**

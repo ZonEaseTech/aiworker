@@ -12,11 +12,10 @@ import type { WorkerEventBus } from '../events/bus'
 import type { WorkspaceHandle, WorkspaceManager } from '../executor/workspace'
 import type { ProcessManager } from './process-manager'
 
+import { agentTasks, conversations, getWorkerDb, messages } from '@aiworker/storage-sqlite/worker'
+
 import consola from 'consola'
 import { eq } from 'drizzle-orm'
-
-import { getWorkerDb } from '../../db/worker'
-import { agentTasks, conversations, messages } from '../../db/worker/schema'
 import { getChannelAdapter } from '../channels/registry'
 import { classifyContinuation, findOpenConversation, loadRecentMessages } from '../conversation/router'
 import { resolveVariant } from '../executor/default-profiles'

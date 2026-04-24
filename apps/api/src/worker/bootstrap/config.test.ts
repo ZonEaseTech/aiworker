@@ -2,11 +2,10 @@ import type { WorkerConfig } from '@aiworker/shared'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { closeWorkerDb, getWorkerDb, initWorkerDb, runWorkerMigrations, workerConfig as workerConfigTable } from '@aiworker/storage-sqlite/worker'
+
 import { beforeEach, describe, expect, it } from 'bun:test'
 import { eq } from 'drizzle-orm'
-
-import { closeWorkerDb, getWorkerDb, initWorkerDb, runWorkerMigrations } from '../../db/worker'
-import { workerConfig as workerConfigTable } from '../../db/worker/schema'
 import { loadOrSeedConfig } from './config'
 
 describe('loadOrSeedConfig executor migration (FEAT-014)', () => {
@@ -14,7 +13,7 @@ describe('loadOrSeedConfig executor migration (FEAT-014)', () => {
     closeWorkerDb()
     const dir = mkdtempSync(join(tmpdir(), 'aiworker-bootstrap-cfg-'))
     initWorkerDb(join(dir, 'worker.db'))
-    runWorkerMigrations('./drizzle/worker')
+    runWorkerMigrations()
   })
 
   function seedRawExecutor(executor: unknown): void {

@@ -1,10 +1,9 @@
 import type { ChatMessage, ConversationDecision, Envelope, ExecutorProvider } from '@aiworker/shared'
-import type { conversations as conversationsTable } from '../../db/worker/schema'
+import type { conversations as conversationsTable } from '@aiworker/storage-sqlite/worker'
+import { conversations, getWorkerDb, messages } from '@aiworker/storage-sqlite/worker'
+
 import consola from 'consola'
 import { and, desc, eq } from 'drizzle-orm'
-
-import { getWorkerDb } from '../../db/worker'
-import { conversations, messages } from '../../db/worker/schema'
 
 const MAX_RECENT_MESSAGES = 4
 

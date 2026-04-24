@@ -1,10 +1,10 @@
 import type { WorkerConfig } from '@aiworker/shared'
+import type { WorkerDatabase } from '@aiworker/storage-sqlite/worker'
 import type { z } from 'zod'
-import type { WorkerDatabase } from '../../db/worker'
 import type { SecretsVault } from '../secrets/vault'
-import { eq } from 'drizzle-orm'
+import { workerConfig as workerConfigTable } from '@aiworker/storage-sqlite/worker'
 
-import { workerConfig as workerConfigTable } from '../../db/worker/schema'
+import { eq } from 'drizzle-orm'
 import { enumerateSecretPaths, redactSecrets } from '../config/secret-paths'
 import { workerConfigSchema } from './config-schema'
 

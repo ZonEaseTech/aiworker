@@ -1,12 +1,12 @@
 import type { WorkerApiToken } from '@aiworker/shared'
+import type { WorkerDatabase } from '@aiworker/storage-sqlite/worker'
 import type { Buffer } from 'node:buffer'
-import type { WorkerDatabase } from '../../db/worker'
 import type { SecretsVault } from '../secrets/vault'
 import { randomBytes } from 'node:crypto'
 import { isWorkerApiToken, WORKER_API_TOKEN_PREFIX, WORKER_ID_PATTERN } from '@aiworker/shared'
-import { eq } from 'drizzle-orm'
+import { workerIdentity } from '@aiworker/storage-sqlite/worker'
 
-import { workerIdentity } from '../../db/worker/schema'
+import { eq } from 'drizzle-orm'
 import { mintWorkerId as sharedMintWorkerId } from '../../shared/lib/ids'
 
 export interface BootstrapOptions {

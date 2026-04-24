@@ -2,9 +2,9 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { isWorkerApiToken, WORKER_ID_PATTERN } from '@aiworker/shared'
-import { beforeEach, describe, expect, it } from 'bun:test'
+import { closeWorkerDb, getWorkerDb, initWorkerDb, runWorkerMigrations } from '@aiworker/storage-sqlite/worker'
 
-import { closeWorkerDb, getWorkerDb, initWorkerDb, runWorkerMigrations } from '../../db/worker'
+import { beforeEach, describe, expect, it } from 'bun:test'
 import { SecretsVault } from '../secrets/vault'
 import { loadOrSeedConfig } from './config'
 import { DEFAULT_EMPTY_CONFIG } from './default-config'
@@ -18,7 +18,7 @@ describe('bootstrap', () => {
     closeWorkerDb()
     const dir = mkdtempSync(join(tmpdir(), 'aiworker-bootstrap-'))
     initWorkerDb(join(dir, 'worker.db'))
-    runWorkerMigrations('./drizzle/worker')
+    runWorkerMigrations()
   })
 
   describe('mintWorkerId', () => {

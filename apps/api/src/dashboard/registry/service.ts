@@ -1,9 +1,8 @@
 import type { RegisteredWorker, RegisteredWorkerOrigin, SafeRegisteredWorker } from '@aiworker/shared'
 
-import { eq } from 'drizzle-orm'
+import { auditEvents, getFleetDb, registeredWorkers } from '@aiworker/storage-sqlite/fleet'
 
-import { getFleetDb } from '../../db/fleet'
-import { auditEvents, registeredWorkers } from '../../db/fleet/schema'
+import { eq } from 'drizzle-orm'
 import { WorkerClient } from './client'
 import { decryptToken, encryptToken } from './crypto'
 

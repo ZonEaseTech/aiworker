@@ -1,8 +1,7 @@
+import { evolutionObservations, getWorkerDb, skillDrafts } from '@aiworker/storage-sqlite/worker'
+
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { desc, eq } from 'drizzle-orm'
-
-import { getWorkerDb } from '../../db/worker'
-import { evolutionObservations, skillDrafts } from '../../db/worker/schema'
 import { AppError } from '../../shared'
 
 export const evolutionRoutes = new OpenAPIHono()

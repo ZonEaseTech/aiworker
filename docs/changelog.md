@@ -1,5 +1,30 @@
 # AIWorker Changelog
 
+## 2026-04-24 12:30 [progress]
+
+**PLAN-011 phase 1a landed: CLI-first lightweight runtime (storage-sqlite + aiw).** First concrete step of REFACTOR-003 toward a hermes-style CLI + an openclaw-style gateway. The conversation loop can now run without binding any HTTP port.
+
+What shipped:
+
+- **New package `@aiworker/storage-sqlite`** — physically extracted `apps/api/src/db/**`, `apps/api/drizzle/**`, and both `drizzle.*.config.ts` files into `packages/storage-sqlite/`. Subpath exports `./fleet` + `./worker` keep the data-domain boundary narrow (a route handler should import from the subpath it actually touches). Package also exports `defaultFleetMigrationsFolder` / `defaultWorkerMigrationsFolder` resolved via `import.meta.url`, so CLI + scripts no longer hardcode `./drizzle/...` relative paths.
+- **New app `@aiworker/cli`** with the `aiw` binary (cac-based argv). Subcommands: `init` (mint identity + seed config), `run --message <text> [--dry-run]` (feed one envelope through the orchestrator, stream events to stdout, exit), `serve [--port <n>]` (bit-for-bit equivalent of `AIWORKER_MODE=worker`), `config-show`, `config-set <json> [--if-match <v>]`, `token-rotate`. `aiw run --dry-run` is the phase-1 success demo — it boots the runtime in-process with zero HTTP binding.
+- **Lazy env parsing** — `apps/api/src/config/worker.ts` now parses `process.env` on first property access (Proxy-backed `workerEnv` + explicit `getWorkerEnv()`). `aiw --help` / `aiw --version` no longer require `AIWORKER_MASTER_KEY`, which matters for CI and first-time users reading the CLI docs.
+- **`apps/api` library surface** — new `./lib` subpath export (`apps/api/src/lib.ts`) re-exports the transport-agnostic seams (`buildWorkerRuntime`, `loadOrMintIdentity`, `putConfig`, `handleTokenRotate`, `bootstrapWorkerApp`, ...). `apps/cli` consumes this; phase 1b will physically move these seams into `packages/core` and delete the re-exports.
+- **29-file import sweep** — every `../db/*` / `../../db/*` import under `apps/api/src/**` rewritten to `@aiworker/storage-sqlite/{fleet,worker}`. Test fixtures dropped their hardcoded `./drizzle/worker` path — the package default kicks in.
+- **Ops** — `Dockerfile` copies `packages/storage-sqlite/drizzle` into `/app/drizzle` (same runtime path as before, so `WORKER_MIGRATIONS_FOLDER=./drizzle/worker` stays valid). `bun run db:generate` now delegates to the storage-sqlite workspace.
+
+Verification:
+
+- `bun run check` clean (typecheck across shared / storage-sqlite / web / api / cli + eslint).
+- `bun run --filter '@aiworker/api' test` — 450 pass / 0 fail (parity with the pre-refactor baseline).
+- `bun run --filter '@aiworker/cli' smoke:aiw-run` — PASS: `aiw init` + `aiw run --message hello --dry-run` completes with "runtime constructed" in stdout.
+- Manual `aiw --help` / `aiw config-show` / `aiw token-rotate` against a tmpdir db — all functional.
+
+Scope notes:
+
+- The 107-file physical move of `apps/api/src/worker/**` → `packages/core/src/worker/**` is deferred to PLAN-012 (phase 1b). Rationale: the 29-file db move + CLI shell is a clean atomic merge; the worker tree move is mechanical but brings cross-cutting helper imports (`config/worker`, `shared/AppError`, `shared/lib/ids`) that deserve their own review cycle. See `docs/plan/PLAN-011.md` §"Execution split" for the full phase-1a / 1b boundary.
+- `aim` CLI (manager side) and the WebSocket gateway (`aim gateway`) remain out-of-scope here — tracked by PLAN-013 / PLAN-014 once phase 1b lands.
+
 ## 2026-04-23 09:55 [progress]
 
 **PLAN-010 / FEAT-023 manager-driven worker creation landed.** The dashboard now has a dedicated "Create worker" button that spawns a fresh worker container on the local docker engine end-to-end (supervisor `launchLocal` → token scrape → registry insert), surfaces the one-time plaintext bearer to the operator (like a GitHub PAT), and is gated by two new safety rails:

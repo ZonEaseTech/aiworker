@@ -1,11 +1,11 @@
 import type { WorkerConfig } from '@aiworker/shared'
 import type { WorkerModeState } from '../../modes/worker'
+import { getWorkerDb } from '@aiworker/storage-sqlite/worker'
 import { OpenAPIHono } from '@hono/zod-openapi'
 import consola from 'consola'
-import { z } from 'zod'
 
+import { z } from 'zod'
 import { workerEnv } from '../../config/worker'
-import { getWorkerDb } from '../../db/worker'
 import { AppError } from '../../shared'
 import { getAvailabilityProbe } from '../executor/availability'
 import { getSecretsVault } from '../secrets'

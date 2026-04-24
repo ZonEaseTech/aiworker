@@ -1,10 +1,10 @@
 import type { RegisteredWorker, RegisteredWorkerLivenessState } from '@aiworker/shared'
-import type { FleetDatabase } from '../../db/fleet'
+import type { FleetDatabase } from '@aiworker/storage-sqlite/fleet'
 
+import { auditEvents, registeredWorkers } from '@aiworker/storage-sqlite/fleet'
 import consola from 'consola'
-import { eq } from 'drizzle-orm'
 
-import { auditEvents, registeredWorkers } from '../../db/fleet/schema'
+import { eq } from 'drizzle-orm'
 import {
   WorkerClient,
   WorkerClientAuthError,

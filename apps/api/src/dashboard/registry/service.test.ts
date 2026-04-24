@@ -3,10 +3,9 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { beforeEach, describe, expect, it } from 'bun:test'
+import { auditEvents, closeFleetDb, getFleetDb, initFleetDb, registeredWorkers, runFleetMigrations } from '@aiworker/storage-sqlite/fleet'
 
-import { closeFleetDb, getFleetDb, initFleetDb, runFleetMigrations } from '../../db/fleet'
-import { auditEvents, registeredWorkers } from '../../db/fleet/schema'
+import { beforeEach, describe, expect, it } from 'bun:test'
 import {
   WorkerClientAuthError,
   WorkerClientInvalidResponseError,
@@ -50,7 +49,7 @@ describe('registry/service', () => {
     closeFleetDb()
     const dir = mkdtempSync(join(tmpdir(), 'aiworker-registry-'))
     initFleetDb(join(dir, 'fleet.db'))
-    runFleetMigrations('./drizzle/fleet')
+    runFleetMigrations()
   })
 
   it('registers a new worker and writes an audit row', async () => {

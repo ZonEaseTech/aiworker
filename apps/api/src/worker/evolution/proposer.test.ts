@@ -1,10 +1,9 @@
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { beforeEach, describe, expect, it } from 'bun:test'
+import { closeWorkerDb, evolutionObservations, executionLogs, getWorkerDb, initWorkerDb, runWorkerMigrations, skillBindings, skillDrafts } from '@aiworker/storage-sqlite/worker'
 
-import { closeWorkerDb, getWorkerDb, initWorkerDb, runWorkerMigrations } from '../../db/worker'
-import { evolutionObservations, executionLogs, skillBindings, skillDrafts } from '../../db/worker/schema'
+import { beforeEach, describe, expect, it } from 'bun:test'
 import { parseEvolutionMeta, runProposerOnce } from './proposer'
 
 function seedConversation(convId: string, tools: string[]) {
@@ -27,7 +26,7 @@ describe('runProposerOnce', () => {
     closeWorkerDb()
     const dir = mkdtempSync(join(tmpdir(), 'aiworker-proposer-'))
     initWorkerDb(join(dir, 'worker.db'))
-    runWorkerMigrations('./drizzle/worker')
+    runWorkerMigrations()
   })
 
   it('writes a draft when a tool sequence repeats across conversations', async () => {

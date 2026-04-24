@@ -14,6 +14,10 @@ import { z } from 'zod'
  * `MAX_CONCURRENT_<ENGINE_UPPER>`, `PROCESS_*_MS`) so they don't pollute
  * `ExecutorProfile` (which FEAT-014 owns) and stay independent of any single
  * engine variant body.
+ *
+ * PLAN-011 phase 1a — parse lazily so `aiw --help` / `aiw --version`, which
+ * transitively import this module, don't require a full env at import time.
+ * Any consumer that actually *reads* a field still triggers validation.
  */
 const schema = z.object({
   PORT: z.coerce.number().default(3001),
@@ -48,7 +52,13 @@ const schema = z.object({
   PROCESS_GC_INTERVAL_MS: z.coerce.number().int().min(0).default(30_000),
 })
 
-const parsed = schema.parse(process.env)
+type ParsedEnv = z.infer<typeof schema>
+
+export type WorkerEnv = ParsedEnv & {
+  readonly perEngineLimits: Readonly<Record<string, number>>
+}
+
+let cached: WorkerEnv | null = null
 
 /**
  * 解析 `MAX_CONCURRENT_<ENGINE>` 形式的 env。约定：
@@ -75,8 +85,34 @@ function parseEngineLimits(env: NodeJS.ProcessEnv): Record<string, number> {
   return out
 }
 
-export const workerEnv = {
-  ...parsed,
-  perEngineLimits: parseEngineLimits(process.env),
-} as const
-export type WorkerEnv = typeof workerEnv
+/** Memoised parse of `process.env`. First call validates; subsequent calls are free. */
+export function getWorkerEnv(): WorkerEnv {
+  if (cached)
+    return cached
+  const parsed = schema.parse(process.env)
+  cached = Object.freeze({
+    ...parsed,
+    perEngineLimits: Object.freeze({ ...parseEngineLimits(process.env) }),
+  }) as WorkerEnv
+  return cached
+}
+
+/**
+ * Back-compat proxy: every existing `import { workerEnv }` keeps working.
+ * The actual parse only fires on *property access*, so simply importing this
+ * module (e.g. transitively from `aiw --help`) does not require a valid env.
+ */
+export const workerEnv: WorkerEnv = new Proxy({} as WorkerEnv, {
+  get(_target, prop) {
+    return getWorkerEnv()[prop as keyof WorkerEnv]
+  },
+  has(_target, prop) {
+    return prop in getWorkerEnv()
+  },
+  ownKeys(_target) {
+    return Reflect.ownKeys(getWorkerEnv())
+  },
+  getOwnPropertyDescriptor(_target, prop) {
+    return Reflect.getOwnPropertyDescriptor(getWorkerEnv(), prop)
+  },
+})

@@ -3,11 +3,10 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { auditEvents, closeFleetDb, getFleetDb, initFleetDb, registeredWorkers, runFleetMigrations } from '@aiworker/storage-sqlite/fleet'
+
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { eq } from 'drizzle-orm'
-
-import { closeFleetDb, getFleetDb, initFleetDb, runFleetMigrations } from '../../db/fleet'
-import { auditEvents, registeredWorkers } from '../../db/fleet/schema'
 import { WorkerClientAuthError, WorkerClientInvalidResponseError, WorkerClientNetworkError } from './client'
 import { decryptToken } from './crypto'
 import { buildRegistryRoutes } from './routes'
@@ -51,7 +50,7 @@ describe('rotateRegisteredWorkerToken', () => {
     closeFleetDb()
     const dir = mkdtempSync(join(tmpdir(), 'aiworker-rotate-token-'))
     initFleetDb(join(dir, 'fleet.db'))
-    runFleetMigrations('./drizzle/fleet')
+    runFleetMigrations()
   })
 
   it('updates apiTokenEnc + emits audit + returns lastFour without leaking plaintext', async () => {
@@ -129,7 +128,7 @@ describe('registry/routes POST /:id/rotate-token', () => {
     closeFleetDb()
     const dir = mkdtempSync(join(tmpdir(), 'aiworker-rotate-route-'))
     initFleetDb(join(dir, 'fleet.db'))
-    runFleetMigrations('./drizzle/fleet')
+    runFleetMigrations()
   })
 
   afterEach(() => {

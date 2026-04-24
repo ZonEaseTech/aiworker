@@ -2,11 +2,10 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { isWorkerApiToken } from '@aiworker/shared'
+import { closeWorkerDb, getWorkerDb, initWorkerDb, runWorkerMigrations, workerIdentity } from '@aiworker/storage-sqlite/worker'
+
 import { beforeEach, describe, expect, it } from 'bun:test'
 import { eq } from 'drizzle-orm'
-
-import { closeWorkerDb, getWorkerDb, initWorkerDb, runWorkerMigrations } from '../../db/worker'
-import { workerIdentity } from '../../db/worker/schema'
 import { loadOrMintIdentity } from '../bootstrap/identity'
 import { resetSecretsVaultForTests } from '../secrets'
 import { SecretsVault } from '../secrets/vault'
@@ -19,7 +18,7 @@ async function bootstrap() {
   resetSecretsVaultForTests()
   const dir = mkdtempSync(join(tmpdir(), 'aiworker-mgmt-rotate-'))
   initWorkerDb(join(dir, 'worker.db'))
-  runWorkerMigrations('./drizzle/worker')
+  runWorkerMigrations()
   process.env.AIWORKER_MASTER_KEY = MASTER_KEY
   const db = getWorkerDb()
   const vault = new SecretsVault(MASTER_KEY, db)

@@ -11,10 +11,9 @@ import { mkdtempSync } from 'node:fs'
 import fs from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
+import { closeWorkerDb, getWorkerDb, initWorkerDb, messages, runWorkerMigrations } from '@aiworker/storage-sqlite/worker'
 
-import { closeWorkerDb, getWorkerDb, initWorkerDb, runWorkerMigrations } from '../../db/worker'
-import { messages } from '../../db/worker/schema'
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { ClaudeCodeExecutor } from '../executor/engines/claude-code'
 import { WorkspaceManager as RealWorkspaceManager } from '../executor/workspace'
 import { ProcessManager } from './process-manager'
@@ -78,7 +77,7 @@ describe('Orchestrator + ClaudeCodeExecutor (stub CLI)', () => {
     closeWorkerDb()
     tmpRoot = mkdtempSync(path.join(tmpdir(), 'aiworker-orch-cc-'))
     initWorkerDb(path.join(tmpRoot, 'worker.db'))
-    runWorkerMigrations('./drizzle/worker')
+    runWorkerMigrations()
     workspaces = new RealWorkspaceManager({ root: tmpRoot })
     processes = new ProcessManager({
       maxConcurrentTotal: 4,

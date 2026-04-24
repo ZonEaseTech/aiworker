@@ -3,10 +3,9 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { beforeEach, describe, expect, it } from 'bun:test'
+import { auditEvents, closeFleetDb, getFleetDb, initFleetDb, registeredWorkers, runFleetMigrations } from '@aiworker/storage-sqlite/fleet'
 
-import { closeFleetDb, getFleetDb, initFleetDb, runFleetMigrations } from '../../db/fleet'
-import { auditEvents, registeredWorkers } from '../../db/fleet/schema'
+import { beforeEach, describe, expect, it } from 'bun:test'
 import {
   WorkerClientAuthError,
   WorkerClientInvalidResponseError,
@@ -65,7 +64,7 @@ describe('registry/poll WorkerPoller', () => {
     closeFleetDb()
     const dir = mkdtempSync(join(tmpdir(), 'aiworker-registry-poll-'))
     initFleetDb(join(dir, 'fleet.db'))
-    runFleetMigrations('./drizzle/fleet')
+    runFleetMigrations()
   })
 
   it('pollOnce updates lastSeen fields per worker and audits only state transitions', async () => {

@@ -1,9 +1,9 @@
 import type { WorkerApiToken } from '@aiworker/shared'
-import type { WorkerDatabase } from '../../db/worker'
+import type { WorkerDatabase } from '@aiworker/storage-sqlite/worker'
 import process from 'node:process'
-import { eq } from 'drizzle-orm'
+import { workerIdentity } from '@aiworker/storage-sqlite/worker'
 
-import { workerIdentity } from '../../db/worker/schema'
+import { eq } from 'drizzle-orm'
 
 /**
  * First-boot only: print the worker id and bootstrap token exactly once to

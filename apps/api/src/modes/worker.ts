@@ -1,11 +1,11 @@
 import type { WorkerConfig } from '@aiworker/shared'
 import type { WorkerRuntime } from '../worker/runtime'
+import { getWorkerDb, initWorkerDb, runWorkerMigrations } from '@aiworker/storage-sqlite/worker'
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { apiReference } from '@scalar/hono-api-reference'
-import consola from 'consola'
 
+import consola from 'consola'
 import { workerEnv } from '../config/worker'
-import { getWorkerDb, initWorkerDb, runWorkerMigrations } from '../db/worker'
 import { errorHandler, requestLogger } from '../shared'
 import { loadOrMintIdentity, loadOrSeedConfig, printBootstrapIfJustMinted } from '../worker/bootstrap'
 import { buildChannelRoutes } from '../worker/channels/routes'

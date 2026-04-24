@@ -1,9 +1,9 @@
-import type { WorkerDatabase } from '../../db/worker'
+import type { WorkerDatabase } from '@aiworker/storage-sqlite/worker'
 import { Buffer } from 'node:buffer'
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
-import { eq } from 'drizzle-orm'
+import { workerSecrets } from '@aiworker/storage-sqlite/worker'
 
-import { workerSecrets } from '../../db/worker/schema'
+import { eq } from 'drizzle-orm'
 
 const ALGO = 'aes-256-gcm'
 const NONCE_BYTES = 12

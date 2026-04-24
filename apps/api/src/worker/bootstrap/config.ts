@@ -1,8 +1,8 @@
 import type { WorkerConfig } from '@aiworker/shared'
-import type { WorkerDatabase } from '../../db/worker'
-import { eq } from 'drizzle-orm'
+import type { WorkerDatabase } from '@aiworker/storage-sqlite/worker'
+import { workerConfig as workerConfigTable } from '@aiworker/storage-sqlite/worker'
 
-import { workerConfig as workerConfigTable } from '../../db/worker/schema'
+import { eq } from 'drizzle-orm'
 import { migrateLegacyExecutor } from '../executor/default-profiles'
 import { DEFAULT_EMPTY_CONFIG } from './default-config'
 

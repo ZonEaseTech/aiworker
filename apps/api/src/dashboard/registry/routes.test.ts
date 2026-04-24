@@ -4,9 +4,9 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
+import { closeFleetDb, initFleetDb, runFleetMigrations } from '@aiworker/storage-sqlite/fleet'
 
-import { closeFleetDb, initFleetDb, runFleetMigrations } from '../../db/fleet'
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { LaunchFailedError, LaunchTimeoutError } from '../supervisor/errors'
 import { buildRegistryRoutes } from './routes'
 
@@ -45,7 +45,7 @@ describe('registry/routes POST /register', () => {
     closeFleetDb()
     const dir = mkdtempSync(join(tmpdir(), 'aiworker-registry-routes-'))
     initFleetDb(join(dir, 'fleet.db'))
-    runFleetMigrations('./drizzle/fleet')
+    runFleetMigrations()
   })
 
   afterEach(() => {
@@ -159,7 +159,7 @@ describe('registry/routes CRUD + proxy', () => {
     closeFleetDb()
     const dir = mkdtempSync(join(tmpdir(), 'aiworker-registry-routes-crud-'))
     initFleetDb(join(dir, 'fleet.db'))
-    runFleetMigrations('./drizzle/fleet')
+    runFleetMigrations()
   })
 
   afterEach(() => {
@@ -358,7 +358,7 @@ describe('registry/routes POST /launch-local', () => {
     closeFleetDb()
     const dir = mkdtempSync(join(tmpdir(), 'aiworker-registry-routes-launch-'))
     initFleetDb(join(dir, 'fleet.db'))
-    runFleetMigrations('./drizzle/fleet')
+    runFleetMigrations()
   })
 
   afterEach(() => {
@@ -473,7 +473,7 @@ describe('registry/routes GET /capabilities (PLAN-010 §P2)', () => {
     closeFleetDb()
     const dir = mkdtempSync(join(tmpdir(), 'aiworker-registry-routes-caps-'))
     initFleetDb(join(dir, 'fleet.db'))
-    runFleetMigrations('./drizzle/fleet')
+    runFleetMigrations()
   })
   afterEach(() => {
     globalThis.fetch = originalFetch
@@ -529,7 +529,7 @@ describe('registry/routes quota enforcement (PLAN-010 §P3)', () => {
     closeFleetDb()
     const dir = mkdtempSync(join(tmpdir(), 'aiworker-registry-routes-quota-'))
     initFleetDb(join(dir, 'fleet.db'))
-    runFleetMigrations('./drizzle/fleet')
+    runFleetMigrations()
   })
   afterEach(() => {
     globalThis.fetch = originalFetch

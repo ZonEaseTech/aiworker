@@ -1,0 +1,24 @@
+{
+  "name": "@aiworker/cli",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "aiw": "./src/aiw.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "smoke:aiw-run": "bun scripts/smoke-aiw-run.ts"
+  },
+  "dependencies": {
+    "@aiworker/api": "workspace:*",
+    "@aiworker/shared": "workspace:*",
+    "@aiworker/storage-sqlite": "workspace:*",
+    "cac": "^6.7.14",
+    "consola": "^3.4.2"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.13",
+    "typescript": "^5.8.3"
+  }
+}

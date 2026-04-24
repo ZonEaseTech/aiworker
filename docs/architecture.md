@@ -1,5 +1,21 @@
 # AIWorker Architecture
 
+## Monorepo Layout
+
+```text
+apps/
+  api/          # Hono HTTP server (dashboard + worker modes)
+  cli/          # aiw CLI — conversation loop without binding HTTP
+  web/          # React 19 SPA served by the dashboard mode
+packages/
+  shared/          # cross-layer types / constants / zod schemas
+  storage-sqlite/  # fleet.db + worker.db schemas, drizzle configs, migrations
+```
+
+- **`apps/api`** exposes two surfaces: the default `.` export (legacy dev entry) and a `./lib` subpath export so CLI + scripts can reach into the runtime without starting a Hono server. PLAN-011 phase 1b will hoist most of the worker subtree into a new `packages/core`.
+- **`apps/cli`** depends on `@aiworker/api/lib` + `@aiworker/storage-sqlite`; its subcommands (`aiw init / run / serve / config-show / config-set / token-rotate`) drive the exact same bootstrap sequence as `AIWORKER_MODE=worker`. See `docs/cli.md`.
+- **`packages/storage-sqlite`** is the single source of truth for the two SQLite databases. It exports subpaths `./fleet` and `./worker` to keep the data-domain boundary narrow, and re-exports `defaultFleetMigrationsFolder` / `defaultWorkerMigrationsFolder` resolved via `import.meta.url` so consumers never hardcode `./drizzle/...` paths.
+
 ## Overview
 
 AIWorker is a **self-hosted Agent Runtime** that composes two pluggable providers:

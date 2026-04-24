@@ -1,17 +1,17 @@
 import process from 'node:process'
 
+import { getFleetDb, initFleetDb, runFleetMigrations } from '@aiworker/storage-sqlite/fleet'
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { apiReference } from '@scalar/hono-api-reference'
 import consola from 'consola'
-import { serveStatic } from 'hono/bun'
 
+import { serveStatic } from 'hono/bun'
 import { commonConfig } from '../config/common'
 import { dashboardConfig } from '../config/dashboard'
 import { buildDashboardAuth } from '../dashboard/middleware/auth'
 import { WorkerPoller } from '../dashboard/registry/poll'
 import { buildRegistryRoutes } from '../dashboard/registry/routes'
 import { getFleetSupervisor } from '../dashboard/supervisor/service'
-import { getFleetDb, initFleetDb, runFleetMigrations } from '../db/fleet'
 import { errorHandler, requestLogger } from '../shared'
 
 export async function createDashboardApp() {

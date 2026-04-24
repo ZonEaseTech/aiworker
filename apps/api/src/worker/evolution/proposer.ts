@@ -1,14 +1,13 @@
-import type { WorkerDatabase } from '../../db/worker'
+import type { WorkerDatabase } from '@aiworker/storage-sqlite/worker'
 import type { MinedPattern } from './pattern-miner'
 
 import { createHash } from 'node:crypto'
 import process from 'node:process'
 
+import { evolutionObservations, executionLogs, getWorkerDb, skillBindings, skillDrafts } from '@aiworker/storage-sqlite/worker'
+
 import consola from 'consola'
 import { asc, desc, inArray } from 'drizzle-orm'
-
-import { getWorkerDb } from '../../db/worker'
-import { evolutionObservations, executionLogs, skillBindings, skillDrafts } from '../../db/worker/schema'
 import { DEFAULT_MINER_OPTIONS, mineToolPatterns } from './pattern-miner'
 
 export interface ProposerOptions {

@@ -1,8 +1,15 @@
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 import { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
 
 import * as schema from './schema'
+
+const moduleDir = path.dirname(fileURLToPath(import.meta.url))
+
+export const defaultWorkerMigrationsFolder: string = path.resolve(moduleDir, '../../drizzle/worker')
 
 let db: ReturnType<typeof createDb> | null = null
 
@@ -28,9 +35,10 @@ export function closeWorkerDb() {
   db = null
 }
 
-export function runWorkerMigrations(migrationsFolder: string) {
+export function runWorkerMigrations(migrationsFolder: string = defaultWorkerMigrationsFolder) {
   migrate(getWorkerDb(), { migrationsFolder })
 }
 
 export type WorkerDatabase = ReturnType<typeof createDb>
 export { schema as workerSchema }
+export * from './schema'
