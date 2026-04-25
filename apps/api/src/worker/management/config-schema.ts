@@ -1,3 +1,4 @@
+import type { ExecutorProfile } from '@aiworker/shared'
 import { z } from 'zod'
 
 /**
@@ -53,14 +54,32 @@ const variantOverridesSchema = z.record(z.unknown()).and(
   z.object({ cmd: cmdOverridesSchema.optional() }).partial(),
 )
 
-const executorSchema = z.object({
+const executorErrorKindSchema = z.enum([
+  'rate-limit',
+  'timeout',
+  'auth',
+  'network',
+  'server-5xx',
+  'unknown',
+])
+
+// `executorSchema` is recursive — each `fallbacks[].executor` is itself a full
+// executor profile, so chains nest arbitrarily deep. The fallback entry is
+// inlined inside the lazy body so the self-reference resolves at parse time
+// without tripping `no-use-before-define`.
+const executorSchema: z.ZodType<ExecutorProfile> = z.lazy(() => z.object({
   engine: z.enum(['http', 'mcp', 'cli', 'claude-code', 'acp', 'codex', 'cursor']),
   variant: z.string().min(1),
   overrides: variantOverridesSchema.optional(),
   modelId: z.string().min(1).optional(),
   reasoningId: z.string().min(1).optional(),
   permissionPolicy: z.enum(['auto', 'supervised', 'plan']).optional(),
-})
+  fallbacks: z.array(z.object({
+    executor: executorSchema,
+    onErrorKinds: z.array(executorErrorKindSchema).min(1),
+    maxRetries: z.number().int().min(1).optional(),
+  })).optional(),
+}))
 
 const channelCredentialsSchema = z.discriminatedUnion('channel', [
   z.object({ channel: z.literal('web') }),

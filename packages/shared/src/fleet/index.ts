@@ -41,6 +41,8 @@ export type {
   CursorVariantBody,
   EngineKind,
   ExecutorConfig,
+  ExecutorErrorKind,
+  ExecutorFallbackEntry,
   ExecutorProfile,
   HttpVariantBody,
   McpVariantBody,

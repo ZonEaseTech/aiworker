@@ -32,6 +32,8 @@ export type {
   EvolutionConfig,
   EvolutionObservation,
   ExecutorConfig,
+  ExecutorErrorKind,
+  ExecutorFallbackEntry,
   ExecutorProfile,
   HermesBrainSourceConfig,
   HttpVariantBody,
