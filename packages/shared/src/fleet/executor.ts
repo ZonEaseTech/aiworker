@@ -56,6 +56,35 @@ export interface ExecutorProfile {
   reasoningId?: string
   /** Approval policy hint, reserved for future agent-cli integration. */
   permissionPolicy?: PermissionPolicy
+  /**
+   * Optional fallback chain (PLAN-014 §F3). When the primary executor throws
+   * during a run, the worker classifies the error via `inferErrorKind` and
+   * swaps in the first entry whose `onErrorKinds` includes the classified
+   * kind. Each entry's `executor` is itself an `ExecutorProfile`, so chains
+   * can be nested arbitrarily deep.
+   */
+  fallbacks?: ExecutorFallbackEntry[]
+}
+
+/** Error categories that drive fallback selection. */
+export type ExecutorErrorKind
+  = | 'rate-limit'
+    | 'timeout'
+    | 'auth'
+    | 'network'
+    | 'server-5xx'
+    | 'unknown'
+
+/** A single fallback link in an executor chain. */
+export interface ExecutorFallbackEntry {
+  executor: ExecutorProfile
+  onErrorKinds: ExecutorErrorKind[]
+  /**
+   * Total attempts on this fallback before bubbling to the next entry.
+   * Defaults to 1 (single attempt, no extra retry). Initial call is included
+   * in the count, so `maxRetries: 3` runs the fallback up to 3 times.
+   */
+  maxRetries?: number
 }
 
 export type VariantOverrides = { cmd?: CmdOverrides } & Record<string, unknown>

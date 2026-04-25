@@ -33,6 +33,8 @@ export type {
   EvolutionConfig,
   EvolutionObservation,
   ExecutorConfig,
+  ExecutorErrorKind,
+  ExecutorFallbackEntry,
   ExecutorProfile,
   FilesystemBrainSourceConfig,
   HttpVariantBody,

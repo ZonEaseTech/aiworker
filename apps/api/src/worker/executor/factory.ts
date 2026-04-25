@@ -16,6 +16,7 @@ import { AcpExecutor, getAcpAgent } from './engines/acp'
 import { ClaudeCodeExecutor, DEFAULT_CLAUDE_CLI_VERSION } from './engines/claude-code'
 import { CodexExecutor, DEFAULT_CODEX_CLI_VERSION } from './engines/codex'
 import { CursorExecutor } from './engines/cursor'
+import { FallbackExecutor } from './fallback'
 import { CliExecutor } from './providers/cli'
 import { OpenAICompatibleExecutor } from './providers/http'
 import { McpExecutor } from './providers/mcp'
@@ -25,8 +26,25 @@ import { McpExecutor } from './providers/mcp'
  * Variant body + overrides are merged via `resolveVariant`; this switch only
  * translates the merged effective config + per-request profile knobs into the
  * engine-specific constructor signature.
+ *
+ * If the profile carries a non-empty `fallbacks` chain (PLAN-014 §F3), the
+ * primary executor is wrapped in a `FallbackExecutor`. Each fallback entry's
+ * executor is itself built recursively, so chains can nest.
  */
 export function buildExecutor(profile: ExecutorConfig): ExecutorProvider {
+  const primary = buildPrimaryExecutor(profile)
+  if (!profile.fallbacks || profile.fallbacks.length === 0)
+    return primary
+
+  const links = profile.fallbacks.map(entry => ({
+    executor: buildExecutor(entry.executor),
+    onErrorKinds: entry.onErrorKinds,
+    maxRetries: entry.maxRetries ?? 1,
+  }))
+  return new FallbackExecutor(primary, links)
+}
+
+function buildPrimaryExecutor(profile: ExecutorConfig): ExecutorProvider {
   const resolved = resolveVariant(profile)
 
   switch (resolved.engine) {
