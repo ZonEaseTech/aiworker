@@ -51,6 +51,7 @@ function stubRuntime(processes?: ProcessManager, approvals?: ApprovalStore): Wor
     channels: new ChannelRegistry([]),
     bus: {} as WorkerRuntime['bus'],
     orchestrator: {} as WorkerRuntime['orchestrator'],
+    cron: {} as WorkerRuntime['cron'],
     workspaces: {} as WorkerRuntime['workspaces'],
     processes: processes ?? ({} as WorkerRuntime['processes']),
     approvals: approvals ?? new ApprovalStore(),

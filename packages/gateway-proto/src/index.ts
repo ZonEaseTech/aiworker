@@ -55,6 +55,9 @@ export type {
 
 export {
   approvalDecisionSchema,
+  cronJobInputSchema,
+  cronJobPatchSchema,
+  cronJobRecordSchema,
   getMethodDef,
   isKnownMethod,
   METHODS,
@@ -65,6 +68,7 @@ export {
 } from './methods'
 export type {
   ApprovalDecision,
+  CronJobRecordProto,
   MethodDef,
   MethodName,
   MethodRouting,

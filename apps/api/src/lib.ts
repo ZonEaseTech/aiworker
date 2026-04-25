@@ -30,6 +30,11 @@ export {
 // Config hydration / secret enumeration.
 export { enumerateSecretPaths, hydrateSecrets } from './worker/config/secret-paths'
 
+// Cron service (PLAN-014 §F4)：runtime 启动 / dispose 时挂载，所有 HTTP / WS / CLI
+// 入口共用同一个 CronService 实例。
+export { type CronOrchestratorLike, CronService, type CronServiceDeps } from './worker/cron/service'
+export type { CronJobInput, CronJobPatch, CronJobRecord } from './worker/cron/types'
+
 // Event bus type (so callers can subscribe to runtime.bus).
 export { type WorkerEventBus } from './worker/events/bus'
 
@@ -44,6 +49,7 @@ export {
   type WebSocketCtor,
   type WebSocketLike,
 } from './worker/gateway-client'
+export { buildCronHandlers, type CronServiceLike } from './worker/gateway-client/methods/cron'
 
 // Config read/write (covers `aiw config show|set`).
 export {

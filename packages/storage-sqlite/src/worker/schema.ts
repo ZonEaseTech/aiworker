@@ -113,6 +113,27 @@ export const workerConfig = sqliteTable('worker_config', {
   updatedBy: text('updated_by', { enum: ['bootstrap', 'api', 'cli'] }),
 })
 
+/**
+ * `cron_jobs` 是 worker 自驱调度的存储位（PLAN-014 §F4）。
+ * tick loop 每分钟扫描一次：所有 `enabled=true` 且 `nextRunAt <= now()` 的 row
+ * 都会被合成 envelope 喂给 orchestrator.ingest，然后用 cron-parser 算出新的
+ * nextRunAt。`accountId` 在 PLAN-014 S1 后随 envelope 必填，cron 默认填
+ * `sys:cron`，operator 也可以显式填自定义值（与 web binding.id 形成命名空间隔离）。
+ */
+export const cronJobs = sqliteTable('cron_jobs', {
+  id: text('id').primaryKey(),
+  expression: text('expression').notNull(),
+  prompt: text('prompt').notNull(),
+  channel: text('channel').$type<ChannelType>().notNull(),
+  chatId: text('chat_id').notNull(),
+  accountId: text('account_id').notNull(),
+  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+  lastRunAt: text('last_run_at'),
+  nextRunAt: text('next_run_at'),
+  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()),
+})
+
 export const workerSecrets = sqliteTable('worker_secrets', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   key: text('key').notNull().unique(),

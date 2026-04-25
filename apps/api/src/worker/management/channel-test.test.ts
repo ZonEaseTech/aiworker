@@ -17,6 +17,7 @@ function stubState(bindings: ChannelBinding[]): WorkerModeState {
     channels,
     bus: {} as WorkerRuntime['bus'],
     orchestrator: {} as WorkerRuntime['orchestrator'],
+    cron: {} as WorkerRuntime['cron'],
     workspaces: {} as WorkerRuntime['workspaces'],
     processes: {} as WorkerRuntime['processes'],
     approvals: {} as WorkerRuntime['approvals'],

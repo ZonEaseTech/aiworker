@@ -45,6 +45,30 @@ const channelTestBody = z.object({
 }).optional()
 
 /**
+ * `/cron` CRUD 共用的 channel 枚举校验——保持与 ChannelType 同步。
+ * 与 toolPolicy / channels 各自的入口 schema 一样，写在 routes 层做最小防线。
+ */
+const cronChannelEnum = z.enum(['web', 'line', 'telegram', 'lark', 'whatsapp'])
+
+const cronAddBody = z.object({
+  expression: z.string().min(1),
+  prompt: z.string().min(1),
+  channel: cronChannelEnum,
+  chatId: z.string().min(1),
+  accountId: z.string().min(1).optional(),
+  enabled: z.boolean().optional(),
+})
+
+const cronUpdateBody = z.object({
+  expression: z.string().min(1).optional(),
+  prompt: z.string().min(1).optional(),
+  channel: cronChannelEnum.optional(),
+  chatId: z.string().min(1).optional(),
+  accountId: z.string().min(1).optional(),
+  enabled: z.boolean().optional(),
+}).refine(p => Object.keys(p).length > 0, { message: '至少提供一个待更新字段' })
+
+/**
  * Worker self-management router. Mounted at `/api/worker` in
  * `bootstrapWorkerApp`. Pure factory so tests can inject a synthetic state +
  * reload hook without touching the real DB singleton.
@@ -284,6 +308,63 @@ export function buildManagementRoutes(deps: ManagementRoutesDeps) {
     }
     const granted = deps.getState().runtime.approvals.grant(taskId, toolCallId, parsed.data.decision)
     return c.json({ granted })
+  })
+
+  // PLAN-014 §F4：cron CRUD。所有 /cron* 路由都通过 `deps.getState().runtime.cron`
+  // 取当前 runtime 上的 CronService 实例，遵循 hot-reload 不变量。
+  routes.get('/cron', async (c) => {
+    const jobs = await deps.getState().runtime.cron.listJobs()
+    return c.json({ jobs })
+  })
+
+  routes.post('/cron', async (c) => {
+    const raw = await c.req.json().catch(() => null)
+    const parsed = cronAddBody.safeParse(raw)
+    if (!parsed.success) {
+      return c.json({
+        error: { code: 'invalid-body', message: 'invalid cron job body', details: parsed.error.flatten().fieldErrors },
+      }, 400)
+    }
+    try {
+      const job = await deps.getState().runtime.cron.addJob(parsed.data)
+      return c.json({ job }, 201)
+    }
+    catch (err) {
+      // cron-parser 错误统一转 400——非法 expression 或空 accountId 都是输入侧问题。
+      return c.json({
+        error: { code: 'invalid-cron', message: err instanceof Error ? err.message : String(err) },
+      }, 400)
+    }
+  })
+
+  routes.patch('/cron/:id', async (c) => {
+    const id = c.req.param('id')
+    const raw = await c.req.json().catch(() => null)
+    const parsed = cronUpdateBody.safeParse(raw)
+    if (!parsed.success) {
+      return c.json({
+        error: { code: 'invalid-body', message: 'invalid cron patch body', details: parsed.error.flatten().fieldErrors },
+      }, 400)
+    }
+    try {
+      const job = await deps.getState().runtime.cron.updateJob(id, parsed.data)
+      if (!job)
+        return c.json({ error: { code: 'not-found', message: `cron job ${id} 不存在` } }, 404)
+      return c.json({ job })
+    }
+    catch (err) {
+      return c.json({
+        error: { code: 'invalid-cron', message: err instanceof Error ? err.message : String(err) },
+      }, 400)
+    }
+  })
+
+  routes.delete('/cron/:id', async (c) => {
+    const id = c.req.param('id')
+    const result = await deps.getState().runtime.cron.removeJob(id)
+    if (!result.removed)
+      return c.json({ error: { code: 'not-found', message: `cron job ${id} 不存在` } }, 404)
+    return c.json({ ok: true })
   })
 
   return routes

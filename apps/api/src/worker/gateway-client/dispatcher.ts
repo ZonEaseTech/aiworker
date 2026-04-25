@@ -1,10 +1,13 @@
 import type { RequestFrame, ResponseFrame } from '@aiworker/gateway-proto'
 import type { Envelope } from '@aiworker/shared'
+import type { CronJobInput, CronJobPatch, CronJobRecord } from '../cron/types'
 import type { WorkerEventBus } from '../events/bus'
 import type { ApprovalStore } from '../orchestrator/approvals'
 
 import { getMethodDef, METHODS } from '@aiworker/gateway-proto'
 import consola from 'consola'
+
+import { CronJobNotFoundError } from './methods/cron'
 
 /**
  * Orchestrator 的最小接口——gateway-client 不需要持有整个 WorkerRuntime，
@@ -44,6 +47,12 @@ export interface NodeHandlers {
    * follow=true 时后续新行也继续推。handler 只需返回 subscribed 布尔。
    */
   logsTail?: (input: { follow?: boolean, lines?: number }) => Promise<{ subscribed: boolean }>
+  /** PLAN-014 §F4：cron CRUD 走 gateway。下层调本地 CronService。 */
+  cronList?: () => Promise<{ jobs: CronJobRecord[] }>
+  cronAdd?: (input: { job: CronJobInput }) => Promise<{ job: CronJobRecord }>
+  cronRemove?: (input: { jobId: string }) => Promise<{ removed: boolean }>
+  /** 找不到 jobId 时抛 `CronJobNotFoundError`（dispatcher 转 not_found）。 */
+  cronUpdate?: (input: { jobId: string, patch: CronJobPatch }) => Promise<{ job: CronJobRecord }>
 }
 
 export interface DispatcherDeps {
@@ -110,6 +119,18 @@ export class GatewayDispatcher {
           break
         case METHODS['approval.grant'].method:
           this.handleApprovalGrant(id, p)
+          break
+        case METHODS['cron.list'].method:
+          await this.handleCronList(id, p)
+          break
+        case METHODS['cron.add'].method:
+          await this.handleCronAdd(id, p)
+          break
+        case METHODS['cron.remove'].method:
+          await this.handleCronRemove(id, p)
+          break
+        case METHODS['cron.update'].method:
+          await this.handleCronUpdate(id, p)
           break
         case METHODS['workers.info'].method:
           // workers.info 暂不实现；S5 会在删 HTTP 路由时一并迁过来。
@@ -248,6 +269,84 @@ export class GatewayDispatcher {
     const decision = params.decision === 'allow' ? 'allow' : 'deny'
     const granted = approvals.grant(taskId, toolCallId, decision)
     this.replyOk(id, { granted })
+  }
+
+  // ---- cron.* (PLAN-014 §F4) ----
+
+  /**
+   * cron 方法都要求 `params.workerId === this.deps.workerId`：gateway 在转发
+   * 时会以 workerId 寻路，但这里再做一次防御，避免操作员误把 cron 任务挂到
+   * 错的 worker（gateway 路由表错乱时也能被这里拦下）。
+   */
+  private ensureWorkerMatch(id: string, params: Record<string, unknown>): boolean {
+    const workerId = String(params.workerId)
+    if (workerId !== this.deps.workerId) {
+      this.replyError(id, 'worker_mismatch', `targeted workerId=${workerId}, this node is ${this.deps.workerId}`)
+      return false
+    }
+    return true
+  }
+
+  private async handleCronList(id: string, params: Record<string, unknown>): Promise<void> {
+    if (!this.deps.handlers?.cronList) {
+      this.replyError(id, 'method_not_implemented', 'cron.list handler not wired')
+      return
+    }
+    if (!this.ensureWorkerMatch(id, params))
+      return
+    const result = await this.deps.handlers.cronList()
+    this.replyOk(id, result)
+  }
+
+  private async handleCronAdd(id: string, params: Record<string, unknown>): Promise<void> {
+    if (!this.deps.handlers?.cronAdd) {
+      this.replyError(id, 'method_not_implemented', 'cron.add handler not wired')
+      return
+    }
+    if (!this.ensureWorkerMatch(id, params))
+      return
+    try {
+      const result = await this.deps.handlers.cronAdd({ job: params.job as CronJobInput })
+      this.replyOk(id, result)
+    }
+    catch (err) {
+      // cron-parser / accountId 校验等输入错统一回 invalid_cron。
+      this.replyError(id, 'invalid_cron', err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  private async handleCronRemove(id: string, params: Record<string, unknown>): Promise<void> {
+    if (!this.deps.handlers?.cronRemove) {
+      this.replyError(id, 'method_not_implemented', 'cron.remove handler not wired')
+      return
+    }
+    if (!this.ensureWorkerMatch(id, params))
+      return
+    const result = await this.deps.handlers.cronRemove({ jobId: String(params.jobId) })
+    this.replyOk(id, result)
+  }
+
+  private async handleCronUpdate(id: string, params: Record<string, unknown>): Promise<void> {
+    if (!this.deps.handlers?.cronUpdate) {
+      this.replyError(id, 'method_not_implemented', 'cron.update handler not wired')
+      return
+    }
+    if (!this.ensureWorkerMatch(id, params))
+      return
+    try {
+      const result = await this.deps.handlers.cronUpdate({
+        jobId: String(params.jobId),
+        patch: params.patch as CronJobPatch,
+      })
+      this.replyOk(id, result)
+    }
+    catch (err) {
+      if (err instanceof CronJobNotFoundError) {
+        this.replyError(id, 'not_found', err.message, { jobId: err.jobId })
+        return
+      }
+      this.replyError(id, 'invalid_cron', err instanceof Error ? err.message : String(err))
+    }
   }
 
   // ---- helpers ----

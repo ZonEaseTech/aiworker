@@ -26,6 +26,7 @@
     "@hono/zod-openapi": "^0.19.6",
     "@scalar/hono-api-reference": "^0.5.180",
     "consola": "^3.4.2",
+    "cron-parser": "^5.5.0",
     "drizzle-orm": "^0.44.1",
     "hono": "^4.7.7",
     "yaml": "^2.7.1",
