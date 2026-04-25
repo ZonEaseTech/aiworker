@@ -1,5 +1,43 @@
 # AIWorker Changelog
 
+## 2026-04-25 PLAN-014 完成
+
+**PLAN-014 landed: envelope upgrade + per-tool approvals + provider fallback + cron.** 来自 REFACTOR-003 调研结论的四个独立特性，按 BKD 五子任务并行落地（W1 → W2 三路并发 → W3 文档收尾），全部合入 main，保留 PLAN-004 / PLAN-013 既有不变量。
+
+What shipped:
+
+- **F1 — Envelope 路由维度**（feat 02c2b56 / merge 41d6c7b）——`Envelope` 加 **必填** `accountId` 与可选 `richMetadata`（`isEdit` / `isDelete` / `replyTo` / `quote` / `reactions`）；`messages` 表新增 `rich_metadata` 列（migration `0001_secret_dagger.sql`，仅 `ALTER ADD`）。5 个 channel adapter 各自派生 accountId（telegram→`botUsername`、whatsapp→`phoneNumberId`、lark→`appId`、line→`sha256(channelAccessToken)` 前 8 字节、web→`binding.id`），并提取 reply / edit / delete 信号。系统派发路径用保留前缀 `sys:` 命名空间隔离 channel binding 命名空间——`sys:task` / `sys:gateway` / `sys:cli` / `sys:cron`。
+- **F2 — Per-tool approvals**（feat 07908be / merge 62fd614）——`WorkerConfig.toolPolicy?` 三态语义：`auto` / `ask`（60s 超时按 deny） / `deny` 短路。orchestrator 在 `runTool` 路径加 policy gate；`ApprovalStore` 在 `runtime.dispose()` 时全部 `resolve('deny')`（不能 reject——orchestrator 用 await 拿决策）。`@aiworker/gateway-proto` 新增 `approval.list` / `approval.grant` 方法 + `APPROVAL_REQUESTED` 事件（gateway 仅透传，与 `chat.send` / `config.*` 一致）。worker 本地 HTTP 端点 `GET /api/worker/approvals` + `POST /api/worker/approvals/:taskId/:toolCallId/grant` 给 `aiw approvals-list` / `aiw approvals-grant` 用；operator 侧 `aim approvals list/grant` 走 gateway WS。
+- **F3 — Provider fallback chain**（feat 8af3069 / merge 034e1f2）——`ExecutorConfig.fallbacks?` 嵌套结构（每条 `executor + onErrorKinds + maxRetries?`）；`FallbackExecutor` wrapper 包裹 primary，按 `inferErrorKind` 六分类（`rate-limit` / `timeout` / `auth` / `network` / `server-5xx` / `unknown`）匹配 fallback 项，保留 `auth` 在 401+5xx 文本冲突时的优先权 + `AbortError` 在 fetch 失败叠加时归 `timeout`。`buildExecutor` 检测 `fallbacks` 后递归构造嵌套包装，wrapper 与 `ExecutorProvider` 一一对应（不进 orchestrator）。**已 yield 流后不重放**——chat 已下发首事件后直接冒泡，避免半截 transcript 与双流叠加。
+- **F4 — Cron 调度**（feat 1442360 / merge 2f00d6e）——新表 `cron_jobs`（migration `0002_jazzy_moondragon.sql`）；`CronService` 60s `setInterval` tick + CRUD，挂在 `runtime.build/dispose` 上；fire 顺序"先算 next → 写库 → ingest"避免重复触发；用 `cron-parser ^5.5.0` 校验 + 计算下一次 tick；fire 时合成 `sys:cron` envelope 喂 `orchestrator.ingest`，**绝不进 orchestrator hot path**。`@aiworker/gateway-proto` 新增 `cron.list` / `cron.add` / `cron.remove` / `cron.update` 方法；operator `aim schedule list/add/remove`；worker 本地 `aiw schedule-list/-add/-remove`（直接 in-process CronService CRUD，与 `aiw config-show` 模式一致）。
+
+测试基线变化：
+
+- `apps/api` 346 → **410**（+64：F1 channel adapter 12 + F2 policy/store/gateway-client 32 + F3 fallback 19 + F4 cron service 12 + management 路由若干，向 410 收敛）
+- `apps/gateway` 52 → **55**（+3：approvals + cron 透传单测）
+- `packages/gateway-proto` 0 → **11**（新协议字段单测）
+
+保留的不变量（验证过）：
+
+- fleet.db / worker.db 物理隔离；fleet.db 永不写 toolPolicy / cron job / approval 等业务态。
+- AES-256-GCM 封 `apiTokenEnc`；gateway 与 worker 的 crypto 模块仍有意复制。
+- bearer 比对 `timingSafeEqualStrings`；hot-reload 时路由 / dispatcher / subscriber 全部 `() => state.runtime` 闭包懒取；`reloadRuntime` 串行化。
+- evolution observer 离 hot path；F2 policy gate / F4 cron tick 也都不进 orchestrator hot path。
+
+文档同步：
+
+- `docs/architecture.md` 新增 §"PLAN-014：envelope / approvals / fallback / cron" 段落（F1-F4 各自语义边界 + 不变量 + sys:* 保留前缀表）。
+- `docs/cli.md` aiw 节追加 `approvals-list/-grant` + `schedule-list/-add/-remove`；aim 节追加 `approvals list/grant` + `schedule list/add/remove`。
+- `docs/plan/PLAN-014.md` 状态 `implementing → completed`，追加完成记录节。
+- `docs/plan/index.md` PLAN-014 改 `[x]`。
+
+已知 follow-up（不在本批）：
+
+- `cron_jobs` 在 `reloadRuntime` 极短窗口内可能出现双 setInterval（fire 顺序保证不会重复触发同一 job，`lastRunAt` 可能早 1s 写）—— P2，未修。
+- `evolution_observations` 仍随对话线性增长，需要 TTL / 滚动压实策略（PLAN-004 既存遗留）。
+
+Next on the line：PLAN-015（`apps/api/src/worker/**` 物理搬迁到 `packages/core`）、PLAN-016（部署形态调整：CLI-first 安装 + docker 作为可选 fast-launch）。
+
 ## 2026-04-24 22:30 [progress]
 
 **PLAN-013 landed: aim CLI + WS gateway — full replacement of dashboard REST.** 控制面从 Hono REST（`apps/api/src/dashboard/**`）整体迁到 WebSocket 协议，operator（aim CLI + web）与 node（worker 容器）共享同一条 `/ws` 入口；dashboard 模式从此下线。PLAN-013 在 main 上按 6 个 subtask 落地，保留所有不变量（fleet.db / worker.db 物理隔离、AES-256-GCM 封 token、bearer timing-safe、hot-reload 串行化）。
