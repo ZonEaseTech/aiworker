@@ -1,35 +1,30 @@
+import type { WorkerModeState } from '@aiworker/core'
 import type { WorkerConfig } from '@aiworker/shared'
-import type { WorkerRuntime } from '../worker/runtime'
+import {
+  buildWorkerRuntime,
+  enumerateSecretPaths,
+  getSecretsVault,
+  hydrateSecrets,
+  loadOrMintIdentity,
+  loadOrSeedConfig,
+  printBootstrapIfJustMinted,
+  ProcessManager,
+  workerEnv,
+} from '@aiworker/core'
 import { getWorkerDb, initWorkerDb, runWorkerMigrations } from '@aiworker/storage-sqlite/worker'
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { apiReference } from '@scalar/hono-api-reference'
 
 import consola from 'consola'
-import { workerEnv } from '../config/worker'
-import { errorHandler, requestLogger } from '../shared'
-import { loadOrMintIdentity, loadOrSeedConfig, printBootstrapIfJustMinted } from '../worker/bootstrap'
+import { errorHandler } from '../shared/middleware/error-handler'
+import { requestLogger } from '../shared/middleware/logger'
 import { buildChannelRoutes } from '../worker/channels/routes'
-import { enumerateSecretPaths, hydrateSecrets } from '../worker/config/secret-paths'
 import { buildEventRoutes } from '../worker/events/routes'
 import { evolutionRoutes } from '../worker/evolution/routes'
 import { buildManagementRoutes } from '../worker/management/routes'
-import { ProcessManager } from '../worker/orchestrator/process-manager'
 import { buildOrchestratorRoutes } from '../worker/orchestrator/routes'
-import { buildWorkerRuntime } from '../worker/runtime'
-import { getSecretsVault } from '../worker/secrets'
 
-export interface WorkerModeState {
-  workerId: string
-  runtime: WorkerRuntime
-  configVersion: number
-  startedAt: string
-  /**
-   * Current plaintext bearer token that callers of `/api/worker/*` must
-   * present. Mutated in place by `POST /api/worker/token/rotate` so the
-   * auth middleware picks up the new token on the next request.
-   */
-  tokenPlaintext: string
-}
+export type { WorkerModeState }
 
 async function hydrateStoredConfig(stored: WorkerConfig): Promise<WorkerConfig> {
   const vault = getSecretsVault()

@@ -1,14 +1,14 @@
-import type { GatewayNode } from '@aiworker/api/lib'
+import type { GatewayNode } from '@aiworker/core'
 import process from 'node:process'
 
+import { bootstrapWorkerApp } from '@aiworker/api/bootstrap'
 import {
-  bootstrapWorkerApp,
   buildCronHandlers,
   getSecretsVault,
   handleTokenRotate,
   readConfig,
   startGatewayNode,
-} from '@aiworker/api/lib'
+} from '@aiworker/core'
 import { getWorkerDb } from '@aiworker/storage-sqlite/worker'
 import consola from 'consola'
 

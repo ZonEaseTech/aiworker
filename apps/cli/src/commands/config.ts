@@ -5,7 +5,7 @@ import {
   mirrorConfigToYaml,
   putConfig,
   readConfig,
-} from '@aiworker/api/lib'
+} from '@aiworker/core'
 import consola from 'consola'
 
 import { loadWorkerContext } from '../context'

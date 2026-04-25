@@ -1,9 +1,9 @@
+import type { WorkerRuntime } from '@aiworker/core'
 import type { Envelope } from '@aiworker/shared'
-import type { WorkerRuntime } from '../runtime'
+import { AppError } from '@aiworker/shared'
+
 import { OpenAPIHono } from '@hono/zod-openapi'
 import consola from 'consola'
-
-import { AppError } from '../../shared'
 
 /**
  * Channel webhook router. The `getRuntime` thunk is re-evaluated at every

@@ -20,9 +20,9 @@
 #
 # Version constants (FEAT-020 keeps them here as build args; the TS source
 # of truth lives at:
-#   apps/api/src/worker/executor/engines/claude-code/executor.ts
-#   apps/api/src/worker/executor/engines/codex/executor.ts
-#   apps/api/src/worker/executor/engines/acp/agents/{gemini,qwen}.ts
+#   packages/core/src/worker/executor/engines/claude-code/executor.ts
+#   packages/core/src/worker/executor/engines/codex/executor.ts
+#   packages/core/src/worker/executor/engines/acp/agents/{gemini,qwen}.ts
 # When one of those constants changes, bump the matching ARG below.
 
 FROM oven/bun:1-debian AS deps
@@ -32,6 +32,7 @@ COPY apps/api/package.json apps/api/
 COPY apps/cli/package.json apps/cli/
 COPY apps/gateway/package.json apps/gateway/
 COPY apps/web/package.json apps/web/
+COPY packages/core/package.json packages/core/
 COPY packages/fs-layout/package.json packages/fs-layout/
 COPY packages/gateway-proto/package.json packages/gateway-proto/
 COPY packages/shared/package.json packages/shared/
@@ -58,6 +59,7 @@ COPY --from=build /app/apps/web/dist /app/web
 # node_modules(monorepo hoist)。
 COPY --from=build /app/node_modules /app/node_modules
 COPY --from=build /app/apps/api/node_modules /app/apps/api/node_modules
+COPY --from=build /app/packages/core /app/packages/core
 COPY --from=build /app/packages/shared /app/packages/shared
 COPY --from=build /app/packages/storage-sqlite /app/packages/storage-sqlite
 # gateway 源码(未 bundle,直接 bun 执行)——compose 以 `bun apps/gateway/src/index.ts` 启动。

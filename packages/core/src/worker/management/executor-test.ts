@@ -4,7 +4,7 @@ import type {
   ExecutorConfig,
   ServiceStatus,
 } from '@aiworker/shared'
-import type { WorkerModeState } from '../../modes/worker'
+import type { WorkerModeState } from './state'
 
 /** Max milliseconds we'll spend on the probe before aborting. */
 const PROBE_TIMEOUT_MS = 5_000

@@ -1,4 +1,4 @@
-import type { WorkerRuntime } from '../runtime'
+import type { WorkerRuntime } from '@aiworker/core'
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { streamSSE } from 'hono/streaming'
 

@@ -1,4 +1,4 @@
-import { getSecretsVault, handleTokenRotate } from '@aiworker/api/lib'
+import { getSecretsVault, handleTokenRotate } from '@aiworker/core'
 import { getWorkerDb } from '@aiworker/storage-sqlite/worker'
 import consola from 'consola'
 

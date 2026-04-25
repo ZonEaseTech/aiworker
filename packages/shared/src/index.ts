@@ -1,3 +1,4 @@
+export { AppError } from './errors'
 export {
   generateWorkerApiToken,
   isWorkerApiToken,
@@ -6,6 +7,7 @@ export {
   WORKER_ID_ALPHABET,
   WORKER_ID_PATTERN,
 } from './fleet'
+
 export type {
   AcpAgentId,
   AcpVariantBody,
@@ -69,6 +71,7 @@ export type {
   WorkerStatus,
   WorkerSummary,
 } from './fleet'
+export { mintWorkerId, slugify } from './lib/ids'
 
 export {
   agentEventSchema,

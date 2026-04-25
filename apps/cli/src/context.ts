@@ -1,4 +1,4 @@
-import type { WorkerRuntime } from '@aiworker/api/lib'
+import type { WorkerRuntime } from '@aiworker/core'
 
 import type { WorkerConfig } from '@aiworker/shared'
 import type { WorkerDatabase } from '@aiworker/storage-sqlite/worker'
@@ -13,8 +13,7 @@ import {
   printBootstrapIfJustMinted,
   ProcessManager,
   workerEnv,
-
-} from '@aiworker/api/lib'
+} from '@aiworker/core'
 import {
   defaultWorkerMigrationsFolder,
   getWorkerDb,

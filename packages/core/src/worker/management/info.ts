@@ -8,7 +8,7 @@ import type {
   WorkerInfoChannel,
   WorkerInfoExecutor,
 } from '@aiworker/shared'
-import type { WorkerModeState } from '../../modes/worker'
+import type { WorkerModeState } from './state'
 import { resolveVariant } from '../executor/default-profiles'
 
 /**

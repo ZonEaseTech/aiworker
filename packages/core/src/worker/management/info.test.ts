@@ -4,8 +4,8 @@ import type {
   ServiceStatus,
   WorkerConfig,
 } from '@aiworker/shared'
-import type { WorkerModeState } from '../../modes/worker'
 import type { WorkerRuntime } from '../runtime'
+import type { WorkerModeState } from './state'
 
 import { describe, expect, it } from 'bun:test'
 

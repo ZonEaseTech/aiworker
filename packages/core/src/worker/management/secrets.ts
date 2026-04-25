@@ -1,5 +1,5 @@
 import type { SecretsVault } from '../secrets/vault'
-import { AppError } from '../../shared'
+import { AppError } from '@aiworker/shared'
 
 /**
  * Out-of-band secrets CRUD. These routes bypass `worker_config.version` — the

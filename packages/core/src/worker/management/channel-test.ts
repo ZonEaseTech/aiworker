@@ -1,7 +1,7 @@
 import type { ChannelType, OutboundMessage } from '@aiworker/shared'
-import type { WorkerModeState } from '../../modes/worker'
+import type { WorkerModeState } from './state'
+import { AppError } from '@aiworker/shared'
 
-import { AppError } from '../../shared'
 import { getChannelAdapter } from '../channels/registry'
 
 export interface ChannelTestBody {

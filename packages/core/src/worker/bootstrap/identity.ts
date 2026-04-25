@@ -4,11 +4,10 @@ import type { Buffer } from 'node:buffer'
 import type { SecretsVault } from '../secrets/vault'
 import { randomBytes } from 'node:crypto'
 import { ensureWorkerHome } from '@aiworker/fs-layout'
-import { isWorkerApiToken, WORKER_API_TOKEN_PREFIX, WORKER_ID_PATTERN } from '@aiworker/shared'
+import { isWorkerApiToken, mintWorkerId as sharedMintWorkerId, WORKER_API_TOKEN_PREFIX, WORKER_ID_PATTERN } from '@aiworker/shared'
 import { workerIdentity } from '@aiworker/storage-sqlite/worker'
 
 import { eq } from 'drizzle-orm'
-import { mintWorkerId as sharedMintWorkerId } from '../../shared/lib/ids'
 
 export interface BootstrapOptions {
   forceId?: string

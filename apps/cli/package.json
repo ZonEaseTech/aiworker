@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@aiworker/api": "workspace:*",
+    "@aiworker/core": "workspace:*",
     "@aiworker/fs-layout": "workspace:*",
     "@aiworker/gateway-proto": "workspace:*",
     "@aiworker/shared": "workspace:*",

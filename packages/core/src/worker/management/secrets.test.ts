@@ -1,10 +1,10 @@
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { closeWorkerDb, getWorkerDb, initWorkerDb, runWorkerMigrations } from '@aiworker/storage-sqlite/worker'
+import { AppError } from '@aiworker/shared'
 
+import { closeWorkerDb, getWorkerDb, initWorkerDb, runWorkerMigrations } from '@aiworker/storage-sqlite/worker'
 import { beforeEach, describe, expect, it } from 'bun:test'
-import { AppError } from '../../shared'
 import { SecretsVault } from '../secrets/vault'
 import { deleteSecret, listSecrets, putSecret } from './secrets'
 
