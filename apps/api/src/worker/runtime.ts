@@ -10,6 +10,7 @@ import { startProposerLoop } from './evolution/proposer'
 import { resolveVariant } from './executor/default-profiles'
 import { buildExecutor } from './executor/factory'
 import { WorkspaceManager } from './executor/workspace'
+import { ApprovalStore } from './orchestrator/approvals'
 import { Orchestrator } from './orchestrator/service'
 
 export interface WorkerRuntime {
@@ -27,6 +28,8 @@ export interface WorkerRuntime {
    * `dispose()` 不会清空它（由 bootstrap 退出阶段统一 cancelAll + dispose）。
    */
   processes: ProcessManager
+  /** PLAN-014 F2：per-tool 审批挂起 store。reload 时一并重建 + 旧 store dispose。 */
+  approvals: ApprovalStore
   dispose: () => void
 }
 
@@ -45,6 +48,7 @@ export function buildWorkerRuntime(workerId: string, config: WorkerConfig, deps:
   const channels = new ChannelRegistry(config.channels)
   const bus = new WorkerEventBus()
   const workspaces = buildWorkspaceManager(config)
+  const approvals = new ApprovalStore()
   const orchestrator = new Orchestrator({
     config,
     brain,
@@ -53,6 +57,7 @@ export function buildWorkerRuntime(workerId: string, config: WorkerConfig, deps:
     workerId,
     workspaces,
     processes: deps.processes,
+    approvals,
   })
 
   const unsubObserver = attachEvolutionObserver(bus)
@@ -68,9 +73,13 @@ export function buildWorkerRuntime(workerId: string, config: WorkerConfig, deps:
     orchestrator,
     workspaces,
     processes: deps.processes,
+    approvals,
     dispose() {
       unsubObserver()
       stopProposer()
+      // PLAN-014 F2 hot-reload 不变量：旧 runtime 的挂起审批必须立刻 reject，
+      // 否则 operator grant 永远不会送到新 runtime 上，promise 泄漏。
+      approvals.dispose()
       // 注意：不 dispose processes —— ProcessManager 跨 reload 持久化，
       // 由 bootstrap 退出阶段统一 cancelAll + dispose。
     },

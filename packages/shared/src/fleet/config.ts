@@ -54,6 +54,23 @@ export interface EvolutionConfig {
   observationRetentionDays: number
 }
 
+/** Per-tool action used by `toolPolicy.default` and matched rule entries. */
+export type ToolPolicyAction = 'auto' | 'ask' | 'deny'
+
+/**
+ * Per-tool approval policy (PLAN-014 F2). Tool name 通过 `rules[]` 顺序匹配，
+ * 第一条命中即用；都不命中走 `default`。`pattern` 当前支持字面量精确匹配与
+ * `*` 通配符（`*` / `prefix-*` / `*-suffix` / `pre-*-post`）。
+ *
+ * 缺省 `default='auto'` 不破坏现状；`ask` 触发 `approval.requested` 事件
+ * 并挂起执行直到 operator 通过 `approval.grant` 批准/拒绝；`deny` 直接
+ * 短路合成一条 `tool {name} blocked by policy` 助手消息，不进入 executor。
+ */
+export interface ToolPolicy {
+  default: ToolPolicyAction
+  rules: Array<{ pattern: string, action: ToolPolicyAction }>
+}
+
 /**
  * Complete per-worker configuration. Materialized from dashboard forms and
  * persisted in `fleet.db.worker_configs`; secret fields referenced inside
@@ -68,4 +85,6 @@ export interface WorkerConfig {
   executor: ExecutorConfig
   channels: ChannelBinding[]
   evolution: EvolutionConfig
+  /** Per-tool approval policy（PLAN-014 F2）。缺省视同 `{ default: 'auto', rules: [] }`。 */
+  toolPolicy?: ToolPolicy
 }

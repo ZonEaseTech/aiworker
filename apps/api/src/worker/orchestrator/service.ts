@@ -10,6 +10,7 @@ import type {
 } from '@aiworker/shared'
 import type { WorkerEventBus } from '../events/bus'
 import type { WorkspaceHandle, WorkspaceManager } from '../executor/workspace'
+import type { ApprovalDecision, ApprovalStore } from './approvals'
 import type { ProcessManager } from './process-manager'
 
 import { agentTasks, conversations, getWorkerDb, messages } from '@aiworker/storage-sqlite/worker'
@@ -19,6 +20,8 @@ import { eq } from 'drizzle-orm'
 import { getChannelAdapter } from '../channels/registry'
 import { classifyContinuation, findOpenConversation, loadRecentMessages } from '../conversation/router'
 import { resolveVariant } from '../executor/default-profiles'
+import { DEFAULT_APPROVAL_TIMEOUT_MS } from './approvals'
+import { evaluateToolPolicy } from './policy'
 
 interface OrchestratorDeps {
   config: WorkerConfig
@@ -35,6 +38,33 @@ interface OrchestratorDeps {
    * + cancel（AbortController.abort() → engine 内部 SIGTERM/SIGKILL）实现。
    */
   processes: ProcessManager
+  /**
+   * Per-tool approval store（PLAN-014 F2）。runtime 跨 reload 重建一次；
+   * `runTool()` 命中 `ask` 时挂在这里等 operator 解锁，dispose 时全部 reject。
+   */
+  approvals: ApprovalStore
+}
+
+/** `runTool` 输入。`taskId` / `toolCallId` 用作 ApprovalStore 的 key。 */
+export interface RunToolInput {
+  taskId: string
+  toolCallId: string
+  toolName: string
+  params: Record<string, unknown>
+  /** 仅用于把 deny 短路 message 落库；缺省时不写库。 */
+  conversationId?: string
+  /** 覆盖默认 60s 超时；测试用。 */
+  timeoutMs?: number
+}
+
+export type RunToolDecision = 'allow' | 'deny'
+
+export interface RunToolResult {
+  decision: RunToolDecision
+  /** 命中的 policy action（auto / ask / deny）。 */
+  policy: 'auto' | 'ask' | 'deny'
+  /** 当 policy=deny 时合成的 assistant 文本；其余情况为 undefined。 */
+  syntheticAssistantMessage?: string
 }
 
 export class Orchestrator {
@@ -279,6 +309,81 @@ export class Orchestrator {
         lines.push(`- ${s.name}: ${s.description}`)
     }
     return lines.join('\n')
+  }
+
+  /**
+   * Per-tool approval gate（PLAN-014 F2）。在 executor 真正执行 tool 前调用：
+   *
+   * - `auto` → 立即返回 `allow`，调用方可直接进 executor。
+   * - `ask`  → 在 bus 上发 `approval.requested` 事件，挂起 promise 等
+   *            `approval.grant`；超时（默认 60s）按 deny 处理。
+   * - `deny` → 短路：合成一条 `tool {name} blocked by policy` 助手消息；
+   *            如果传了 `conversationId` 也会写入 `messages` 表。
+   */
+  async runTool(input: RunToolInput): Promise<RunToolResult> {
+    const policy = evaluateToolPolicy(input.toolName, this.deps.config.toolPolicy)
+    if (policy === 'auto')
+      return { decision: 'allow', policy: 'auto' }
+
+    if (policy === 'deny') {
+      const text = `tool ${input.toolName} blocked by policy`
+      if (input.conversationId !== undefined)
+        this.persistAssistantMessage(input.conversationId, text)
+      this.deps.bus.emit('approval.denied', {
+        taskId: input.taskId,
+        toolCallId: input.toolCallId,
+        toolName: input.toolName,
+        reason: 'policy',
+      })
+      return { decision: 'deny', policy: 'deny', syntheticAssistantMessage: text }
+    }
+
+    // policy === 'ask'：发事件后挂起，等 grant；超时视作 deny。
+    const timeoutMs = input.timeoutMs ?? DEFAULT_APPROVAL_TIMEOUT_MS
+    const expiresAt = Date.now() + timeoutMs
+    this.deps.bus.emit('approval.requested', {
+      workerId: this.deps.workerId,
+      taskId: input.taskId,
+      toolCallId: input.toolCallId,
+      toolName: input.toolName,
+      params: input.params,
+      expiresAt,
+    })
+
+    let decision: ApprovalDecision
+    try {
+      decision = await this.deps.approvals.wait({
+        taskId: input.taskId,
+        toolCallId: input.toolCallId,
+        toolName: input.toolName,
+        params: input.params,
+        timeoutMs,
+      })
+    }
+    catch {
+      // dispose 期间 reject —— 当成 deny 处理，调用方走短路分支。
+      decision = 'deny'
+    }
+
+    if (decision === 'allow')
+      return { decision: 'allow', policy: 'ask' }
+
+    const text = `tool ${input.toolName} blocked by policy`
+    if (input.conversationId !== undefined)
+      this.persistAssistantMessage(input.conversationId, text)
+    return { decision: 'deny', policy: 'ask', syntheticAssistantMessage: text }
+  }
+
+  private persistAssistantMessage(conversationId: string, text: string): void {
+    const db = getWorkerDb()
+    const now = new Date().toISOString()
+    db.insert(messages).values({
+      conversationId,
+      role: 'assistant',
+      content: text,
+      createdAt: now,
+    }).run()
+    db.update(conversations).set({ lastActiveAt: now }).where(eq(conversations.id, conversationId)).run()
   }
 
   // Convenience: submit a free-form task not tied to a channel.

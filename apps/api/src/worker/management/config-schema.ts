@@ -104,6 +104,19 @@ const channelBindingSchema = z.object({
   { message: 'channel and credentials.channel must match', path: ['credentials', 'channel'] },
 )
 
+// PLAN-014 F2: per-tool approval policy. `pattern` 当前只支持字面量 + `*`
+// 通配符，rule 顺序匹配；都不命中走 `default`。schema 是可选的，旧 config
+// 缺该字段时视同 `{ default: 'auto', rules: [] }`，保持向前兼容。
+const toolPolicyActionSchema = z.enum(['auto', 'ask', 'deny'])
+
+const toolPolicySchema = z.object({
+  default: toolPolicyActionSchema,
+  rules: z.array(z.object({
+    pattern: z.string().min(1),
+    action: toolPolicyActionSchema,
+  })),
+})
+
 export const workerConfigSchema = z.object({
   brains: z.array(brainSourceSchema),
   brainWriteTarget: z.string(),
@@ -114,4 +127,5 @@ export const workerConfigSchema = z.object({
     enabled: z.boolean(),
     observationRetentionDays: z.number().int().nonnegative(),
   }),
+  toolPolicy: toolPolicySchema.optional(),
 })

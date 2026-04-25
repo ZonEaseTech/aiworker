@@ -1,6 +1,7 @@
 import type { RequestFrame, ResponseFrame } from '@aiworker/gateway-proto'
 import type { Envelope } from '@aiworker/shared'
 import type { WorkerEventBus } from '../events/bus'
+import type { ApprovalStore } from '../orchestrator/approvals'
 
 import { getMethodDef, METHODS } from '@aiworker/gateway-proto'
 import consola from 'consola'
@@ -11,6 +12,16 @@ import consola from 'consola'
  */
 export interface OrchestratorLike {
   ingest: (envelope: Envelope) => Promise<void>
+}
+
+/**
+ * gateway-client 看到的最小 runtime 视图。比 OrchestratorLike 多一个
+ * `approvals` ——`approval.list` / `approval.grant` 直接桥到 store。
+ */
+export interface RuntimeLike {
+  bus: WorkerEventBus
+  orchestrator: OrchestratorLike
+  approvals?: ApprovalStore
 }
 
 /**
@@ -39,9 +50,9 @@ export interface DispatcherDeps {
   workerId: string
   /**
    * 懒取 runtime—和 HTTP 路由一致；hot-reload 之后必须拿到 fresh bus /
-   * orchestrator，不能把旧 runtime 冻进闭包。
+   * orchestrator / approvals，不能把旧 runtime 冻进闭包。
    */
-  getRuntime: () => { bus: WorkerEventBus, orchestrator: OrchestratorLike }
+  getRuntime: () => RuntimeLike
   /** 其它节点级操作。 */
   handlers?: NodeHandlers
   /** 发送 response 帧的 transport（client.send 的薄封装）。 */
@@ -93,6 +104,12 @@ export class GatewayDispatcher {
           break
         case METHODS['logs.tail'].method:
           await this.handleLogsTail(id, p)
+          break
+        case METHODS['approval.list'].method:
+          this.handleApprovalList(id)
+          break
+        case METHODS['approval.grant'].method:
+          this.handleApprovalGrant(id, p)
           break
         case METHODS['workers.info'].method:
           // workers.info 暂不实现；S5 会在删 HTTP 路由时一并迁过来。
@@ -199,6 +216,38 @@ export class GatewayDispatcher {
       input.lines = params.lines
     const result = await this.deps.handlers.logsTail(input)
     this.replyOk(id, result)
+  }
+
+  // ---- approval.list / approval.grant（PLAN-014 F2）----
+
+  private handleApprovalList(id: string): void {
+    const approvals = this.deps.getRuntime().approvals
+    if (!approvals) {
+      this.replyError(id, 'method_not_implemented', 'approval store not wired')
+      return
+    }
+    const list = approvals.list().map(p => ({
+      workerId: this.deps.workerId,
+      taskId: p.taskId,
+      toolCallId: p.toolCallId,
+      toolName: p.toolName,
+      params: p.params,
+      expiresAt: p.expiresAt,
+    }))
+    this.replyOk(id, { approvals: list })
+  }
+
+  private handleApprovalGrant(id: string, params: Record<string, unknown>): void {
+    const approvals = this.deps.getRuntime().approvals
+    if (!approvals) {
+      this.replyError(id, 'method_not_implemented', 'approval store not wired')
+      return
+    }
+    const taskId = String(params.taskId)
+    const toolCallId = String(params.toolCallId)
+    const decision = params.decision === 'allow' ? 'allow' : 'deny'
+    const granted = approvals.grant(taskId, toolCallId, decision)
+    this.replyOk(id, { granted })
   }
 
   // ---- helpers ----

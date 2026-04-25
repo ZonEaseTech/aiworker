@@ -14,6 +14,7 @@ import { beforeEach, describe, expect, it } from 'bun:test'
 import { loadOrSeedConfig } from '../bootstrap/config'
 import { ChannelRegistry } from '../channels/registry'
 import { resetAvailabilityProbeForTests } from '../executor/availability'
+import { ApprovalStore } from '../orchestrator/approvals'
 import { ProcessManager } from '../orchestrator/process-manager'
 import { resetSecretsVaultForTests } from '../secrets'
 import { buildManagementRoutes } from './routes'
@@ -41,7 +42,7 @@ function healthyExecutor(): ExecutorProvider {
   }
 }
 
-function stubRuntime(processes?: ProcessManager): WorkerRuntime {
+function stubRuntime(processes?: ProcessManager, approvals?: ApprovalStore): WorkerRuntime {
   return {
     workerId: 'w_abcdefghjkmn',
     config: {} as WorkerConfig,
@@ -52,6 +53,7 @@ function stubRuntime(processes?: ProcessManager): WorkerRuntime {
     orchestrator: {} as WorkerRuntime['orchestrator'],
     workspaces: {} as WorkerRuntime['workspaces'],
     processes: processes ?? ({} as WorkerRuntime['processes']),
+    approvals: approvals ?? new ApprovalStore(),
     dispose: () => undefined,
   }
 }
@@ -430,6 +432,48 @@ describe('buildManagementRoutes', () => {
     // The three CLI-less engines should still report ready.
     expect(body.engines.find(e => e.kind === 'http')?.status).toBe('ready')
     expect(body.engines.find(e => e.kind === 'claude-code')?.status).toBe('not-found')
+  })
+
+  it('GET /approvals 返回当前挂起的 per-tool 审批列表', async () => {
+    const { state } = await bootstrap()
+    const store = state.runtime.approvals
+    void store.wait({ taskId: 't-1', toolCallId: 'c-1', toolName: 'fs.write', params: { path: '/x' }, timeoutMs: 5_000 })
+    const routes = buildManagementRoutes({ getState: () => state, reloadRuntime: async () => {} })
+    const res = await routes.fetch(authed('/approvals'))
+    expect(res.status).toBe(200)
+    const body = await res.json() as { approvals: Array<{ taskId: string, toolName: string }> }
+    expect(body.approvals).toHaveLength(1)
+    expect(body.approvals[0]).toMatchObject({ taskId: 't-1', toolName: 'fs.write' })
+    store.dispose()
+  })
+
+  it('POST /approvals/:taskId/:toolCallId/grant 解锁挂起 promise + 返回 granted=true', async () => {
+    const { state } = await bootstrap()
+    const store = state.runtime.approvals
+    const pending = store.wait({ taskId: 't-2', toolCallId: 'c-2', toolName: 'Read', params: {}, timeoutMs: 5_000 })
+    const routes = buildManagementRoutes({ getState: () => state, reloadRuntime: async () => {} })
+    const res = await routes.fetch(authed('/approvals/t-2/c-2/grant', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ decision: 'allow' }),
+    }))
+    expect(res.status).toBe(200)
+    const body = await res.json() as { granted: boolean }
+    expect(body.granted).toBe(true)
+    await expect(pending).resolves.toBe('allow')
+    store.dispose()
+  })
+
+  it('POST /approvals/:taskId/:toolCallId/grant 缺 decision → 400', async () => {
+    const { state } = await bootstrap()
+    const routes = buildManagementRoutes({ getState: () => state, reloadRuntime: async () => {} })
+    const res = await routes.fetch(authed('/approvals/x/y/grant', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    }))
+    expect(res.status).toBe(400)
+    state.runtime.approvals.dispose()
   })
 
   it('GET /engines?refresh=1 bypasses the 10-minute cache', async () => {

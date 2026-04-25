@@ -8,9 +8,8 @@
  * hot-reload 不变量。
  */
 import type { Frame, RequestFrame } from '@aiworker/gateway-proto'
-import type { WorkerEventBus } from '../events/bus'
 import type { GatewayNodeOptions } from './config'
-import type { NodeHandlers, OrchestratorLike } from './dispatcher'
+import type { NodeHandlers, RuntimeLike } from './dispatcher'
 
 import consola from 'consola'
 import { GatewayClient } from './client'
@@ -20,7 +19,7 @@ import { GatewaySubscriber } from './subscriber'
 
 export type { WebSocketCtor, WebSocketLike } from './client'
 export type { GatewayNodeOptions } from './config'
-export type { NodeHandlers, OrchestratorLike } from './dispatcher'
+export type { NodeHandlers, OrchestratorLike, RuntimeLike } from './dispatcher'
 
 /**
  * 外部配置：启动 node 需要的所有拼装参数。
@@ -28,9 +27,10 @@ export type { NodeHandlers, OrchestratorLike } from './dispatcher'
 export interface StartGatewayNodeOptions extends GatewayNodeOptions {
   /**
    * 懒取 runtime—gateway-client 不持有 runtime 实例，而是每次用的时候调
-   * 一次这个函数，保证 hot-reload 换 runtime 后 bus / orchestrator 自动跟上。
+   * 一次这个函数，保证 hot-reload 换 runtime 后 bus / orchestrator / approvals
+   * 都自动跟上。
    */
-  getRuntime: () => { bus: WorkerEventBus, orchestrator: OrchestratorLike }
+  getRuntime: () => RuntimeLike
   /** 节点级 handler（config / token / logs），按需注入。 */
   handlers?: NodeHandlers
   /**

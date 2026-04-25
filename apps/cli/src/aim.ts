@@ -4,6 +4,7 @@ import process from 'node:process'
 import cac from 'cac'
 import consola from 'consola'
 
+import { runApprovalsGrant, runApprovalsList } from './aim/commands/approvals'
 import { runChat } from './aim/commands/chat'
 import { runConfigGet, runConfigSet } from './aim/commands/config'
 import { runGatewayStart, runGatewayStatus, runGatewayStop } from './aim/commands/gateway'
@@ -151,6 +152,26 @@ cli
   .command('token rotate <workerId>', '为目标 worker 轮换 deviceToken（旧 token 立即失效）')
   .action(async (workerId: string) => {
     process.exit(await runTokenRotate(workerId))
+  })
+
+// --- approvals (PLAN-014 F2) ---
+cli
+  .command('approvals list', '列出挂起的 per-tool 审批；默认覆盖所有 online worker')
+  .option('--worker <id>', '只查指定 workerId（不传则聚合所有 online worker）')
+  .action(async (opts: { worker?: string }) => {
+    process.exit(await runApprovalsList({ ...(opts.worker === undefined ? {} : { workerId: opts.worker }) }))
+  })
+
+cli
+  .command('approvals grant <workerId> <taskId> <toolCallId>', '解锁某条 worker 上挂起的 tool 审批')
+  .option('--deny', '下发 deny 决策；不带此 flag 默认 allow')
+  .action(async (workerId: string, taskId: string, toolCallId: string, opts: { deny?: boolean }) => {
+    process.exit(await runApprovalsGrant({
+      workerId,
+      taskId,
+      toolCallId,
+      ...(opts.deny === undefined ? {} : { deny: opts.deny }),
+    }))
   })
 
 // --- logs ---

@@ -13,6 +13,7 @@ export const EVENTS = {
   AGENT_DONE: 'agent.done',
   CONFIG_CHANGED: 'config.changed',
   LOGS_LINE: 'logs.line',
+  APPROVAL_REQUESTED: 'approval.requested',
 } as const
 
 export type EventName = typeof EVENTS[keyof typeof EVENTS]
@@ -90,6 +91,20 @@ export const logsLinePayloadSchema = workerIdField.extend({
 export type LogsLinePayload = z.infer<typeof logsLinePayloadSchema>
 
 /**
+ * PLAN-014 F2 — orchestrator 在 toolPolicy=ask 命中时上行此事件，operator
+ * 看到后通过 `approval.grant` 决定 allow/deny。`expiresAt` 是 worker 本地的
+ * 毫秒时间戳；超过即视作 deny。
+ */
+export const approvalRequestedPayloadSchema = workerIdField.extend({
+  taskId: z.string().min(1),
+  toolCallId: z.string().min(1),
+  toolName: z.string().min(1),
+  params: z.record(z.unknown()),
+  expiresAt: z.number().int(),
+})
+export type ApprovalRequestedPayload = z.infer<typeof approvalRequestedPayloadSchema>
+
+/**
  * 事件名 → payload schema 的注册表。
  * 下游（aim CLI / web console）据此对入站 event 做强校验。
  */
@@ -102,6 +117,7 @@ export const EVENT_PAYLOADS: {
   [EVENTS.AGENT_DONE]: typeof agentDonePayloadSchema
   [EVENTS.CONFIG_CHANGED]: typeof configChangedPayloadSchema
   [EVENTS.LOGS_LINE]: typeof logsLinePayloadSchema
+  [EVENTS.APPROVAL_REQUESTED]: typeof approvalRequestedPayloadSchema
 } = {
   [EVENTS.WORKER_ONLINE]: workerOnlinePayloadSchema,
   [EVENTS.WORKER_OFFLINE]: workerOfflinePayloadSchema,
@@ -111,6 +127,7 @@ export const EVENT_PAYLOADS: {
   [EVENTS.AGENT_DONE]: agentDonePayloadSchema,
   [EVENTS.CONFIG_CHANGED]: configChangedPayloadSchema,
   [EVENTS.LOGS_LINE]: logsLinePayloadSchema,
+  [EVENTS.APPROVAL_REQUESTED]: approvalRequestedPayloadSchema,
 }
 
 /** 判断一个字符串是否是本包已知的事件名。 */

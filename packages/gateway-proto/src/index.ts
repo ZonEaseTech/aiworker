@@ -10,6 +10,7 @@ export {
   agentDonePayloadSchema,
   agentThinkingPayloadSchema,
   agentToolCallPayloadSchema,
+  approvalRequestedPayloadSchema,
   chatMessagePayloadSchema,
   configChangedPayloadSchema,
   EVENT_PAYLOADS,
@@ -23,6 +24,7 @@ export type {
   AgentDonePayload,
   AgentThinkingPayload,
   AgentToolCallPayload,
+  ApprovalRequestedPayload,
   ChatMessagePayload,
   ConfigChangedPayload,
   EventName,
@@ -52,19 +54,23 @@ export type {
 } from './messages'
 
 export {
+  approvalDecisionSchema,
   getMethodDef,
   isKnownMethod,
   METHODS,
   pairRequestSchema,
   pairResultSchema,
+  pendingApprovalSchema,
   workerSummarySchema,
 } from './methods'
 export type {
+  ApprovalDecision,
   MethodDef,
   MethodName,
   MethodRouting,
   PairRequest,
   PairResult,
+  PendingApprovalDescriptor,
   WorkerSummary,
 } from './methods'
 
