@@ -1,5 +1,41 @@
 # AIWorker Changelog
 
+## 2026-04-25 PLAN-015 完成
+
+**PLAN-015 landed: worker/** 物理抽离至 `@aiworker/core`.** REFACTOR-003 收尾，把 `apps/api/src/worker/**` 整树（除 Hono 路由）+ `apps/api/src/config/{worker,common}.ts` + `apps/api/src/adapters/{mcp,openai}` + `apps/api/src/shared/lib/{ids,app-error}.ts` + 对应 test-fixtures 整体搬到 `packages/core` / `packages/shared`，删除 `apps/api/src/lib.ts` 桥面，新增 ESLint `no-restricted-imports` guard 锁边界，新增 hot-reload 闭包不变量回归测。**纯物理重排，零行为变更**。
+
+What shipped:
+
+- 新包 `@aiworker/core`：transport-agnostic worker runtime；不依赖 `hono` / `@hono/*` / `@scalar/*`；公共面 `packages/core/src/index.ts`（对齐原 `lib.ts` + 增补 Hono 路由层所需 helper：`buildInfo` / `handleBrainTest` / `handleChannelTest` / `handleExecutorTest` / `ChannelRegistry` / `ApprovalStore`）。
+- `apps/api` 瘦身到 Hono 路由 + middleware + 入口装配；新增 `@aiworker/api/bootstrap` 子路径供 `aiw serve` 拿 `bootstrapWorkerApp` / `createWorkerApp` / `WorkerModeState`。
+- `packages/shared` 接收 `lib/ids.ts`（`mintWorkerId` / `slugify`）+ `errors.ts`（`AppError`，重命名自 `app-error.ts`），通过 `packages/shared/src/index.ts` re-export。
+- ESLint guard：`packages/core/**/*.ts` 禁止 import `hono` / `hono/*` / `@hono/*` / `@scalar/*` / `apps/*`，CI 拦下任何回退。
+- Hot-reload 回归测 `packages/core/src/worker/runtime.test.ts`（3 case）：闭包 `() => state.runtime` 在 swap 后返回新实例；旧 runtime 的 `cron.stop` / `approvals.dispose` 各卸恰好一次；`dispose` 后挂起 approval 立即以 `deny` 解锁。
+- `Dockerfile` 同步：`deps` stage `COPY packages/core/package.json`，`runtime` stage `COPY --from=build /app/packages/core /app/packages/core`；版本常量注释路径从 `apps/api/src/worker/executor/...` 更新为 `packages/core/src/worker/executor/...`。
+- `apps/cli` 的 5 条命令（`context` / `token` / `config` / `approvals` / `schedule`）改 `@aiworker/api/lib` → `@aiworker/core`；`serve` 命令额外从 `@aiworker/api/bootstrap` 取 Hono 入口。
+
+测试基线变化：
+
+- `apps/api` 410 → **32**（worker 业务测整体迁出，留 routes / bearer-auth 路由层）
+- `packages/core` 0 → **381**（迁入 + 新增 3 hot-reload regression）
+- `@aiworker/shared` 18（无变化）/ `@aiworker/gateway` 55（无变化）/ `@aiworker/gateway-proto` 11（无变化）/ `@aiworker/web` 24+13 skipped（无变化）
+- 总 runtime pass：481 → **521**（净 +40，主因 shared 18 全量纳入统计 + 3 hot-reload regression）
+
+保留的不变量（再次验证）：
+
+- fleet.db / worker.db 物理隔离不变；workers/** 跨边界仍走 manager → gateway → worker 透传。
+- AES-256-GCM 封 `apiTokenEnc`；gateway 与 worker 的 crypto 模块仍有意复制（边界不可融合）。
+- `() => state.runtime` 闭包懒取在跨包后仍成立，由新增 regression 守。
+- evolution observer / cron tick / approvals gate 均不进 orchestrator hot path。
+
+文档同步：
+
+- `docs/architecture.md` Monorepo Layout 段加入 `packages/core` + 描述更新；`apps/api` 描述瘦身。
+- `docs/plan/PLAN-015.md` 状态 `implementing → completed`，追加完成记录节（commits + 时间戳 + Outcomes 段）。
+- `docs/plan/index.md` PLAN-015 改 `[x]`，更新顶部 `Updated:`。
+
+Next on the line：PLAN-016（部署形态调整：CLI-first 安装 + docker 作为可选 fast-launch）。
+
 ## 2026-04-25 PLAN-014 完成
 
 **PLAN-014 landed: envelope upgrade + per-tool approvals + provider fallback + cron.** 来自 REFACTOR-003 调研结论的四个独立特性，按 BKD 五子任务并行落地（W1 → W2 三路并发 → W3 文档收尾），全部合入 main，保留 PLAN-004 / PLAN-013 既有不变量。
@@ -36,7 +72,7 @@ What shipped:
 - `cron_jobs` 在 `reloadRuntime` 极短窗口内可能出现双 setInterval（fire 顺序保证不会重复触发同一 job，`lastRunAt` 可能早 1s 写）—— P2，未修。
 - `evolution_observations` 仍随对话线性增长，需要 TTL / 滚动压实策略（PLAN-004 既存遗留）。
 
-Next on the line：PLAN-015（`apps/api/src/worker/**` 物理搬迁到 `packages/core`）、PLAN-016（部署形态调整：CLI-first 安装 + docker 作为可选 fast-launch）。
+Next on the line：PLAN-016（部署形态调整：CLI-first 安装 + docker 作为可选 fast-launch）。
 
 ## 2026-04-24 22:30 [progress]
 

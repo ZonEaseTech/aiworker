@@ -11,15 +11,17 @@ apps/
 packages/
   shared/          # cross-layer types / constants / zod schemas
   gateway-proto/   # WS 协议纯类型 + zod：METHODS / EVENTS / Frame
+  core/            # transport-agnostic worker runtime（@aiworker/core）
   storage-sqlite/  # fleet.db + worker.db schemas, drizzle configs, migrations
   fs-layout/       # ~/.aiworker/ path resolver + ensureWorkerHome bootstrap
 ```
 
-- **`apps/api`** 只负责 worker 运行时（数据面）。`AIWORKER_MODE=worker` 仍保留以兼容运维脚本，但入口不再按模式分叉——`boot()` 一律构建 `createWorkerApp`。dashboard REST 已随 PLAN-013 整体下线。`apps/api/lib` 仍导出运行时组件供 CLI / gateway 复用（`buildWorkerRuntime`、`loadOrMintIdentity`、`putConfig`、`handleTokenRotate`、`bootstrapWorkerApp`、`startGatewayNode`）。
+- **`apps/api`** 只负责 worker 运行时（数据面）。`AIWORKER_MODE=worker` 仍保留以兼容运维脚本，但入口不再按模式分叉——`boot()` 一律构建 `createWorkerApp`。dashboard REST 已随 PLAN-013 整体下线。运行时业务（brain / executor / channels / orchestrator / cron / approvals / gateway-client / runtime / secrets / bootstrap / management 业务态）已物理抽离至 `packages/core`，apps/api 仅保留 Hono 路由 + middleware + bootstrap 装配（`@aiworker/api/bootstrap` 暴露给 `aiw serve`），保持 transport 与业务的边界。
 - **`apps/gateway`** 是新增的 WS 控制面，单入口 `Bun.serve(:3000)`，路径 `/ws` 承接 WebSocket 升级，`/health` 返回心跳。运行时持有 fleet.db（`registered_workers` + `audit_events`）并做 operator ↔ node 帧转发。见 `docs/gateway.md`。
-- **`apps/cli`** 同时发布两枚 bin：`aiw`（worker-side，原 PLAN-011/012 的子命令 + 新增 `aiw serve --gateway`）和 `aim`（operator-side，WS 协议客户端）。两者共享 `cac` 解析器与 `@aiworker/api/lib` 服务端复用，但状态文件各自独立（worker.db vs `~/.aiworker/aim.json`）。
+- **`apps/cli`** 同时发布两枚 bin：`aiw`（worker-side，原 PLAN-011/012 的子命令 + 新增 `aiw serve --gateway`）和 `aim`（operator-side，WS 协议客户端）。两者共享 `cac` 解析器与 `@aiworker/core` 运行时复用（`aiw serve` 额外从 `@aiworker/api/bootstrap` 取 Hono 入口），但状态文件各自独立（worker.db vs `~/.aiworker/aim.json`）。
 - **`apps/web`** 不再消费任何 REST。`lib/api.ts` 已替换为统一 WS 客户端，浏览器直连 gateway（Caddy 反代 `:80 → :3000`，loopback 自动放行）。
 - **`packages/gateway-proto`** 是协议的纯类型 + 运行时校验层。不依赖任何网络框架，所有 METHODS / EVENTS / Frame schema 都在这里定义，aim / web / gateway / worker 四侧共用。
+- **`packages/core`** 是 transport-agnostic 的 worker runtime（PLAN-015 §S1 物理抽离）。封装 brain provider、executor provider、channel adapter、orchestrator、cron、approvals、gateway-client、secrets、bootstrap、management 业务态等所有运行时业务；公共面 `packages/core/src/index.ts` 同时被 `apps/api` 路由、`apps/cli` 与 gateway node 接入复用。**不**依赖 `hono` / `@hono/*` / `@scalar/*`——边界由 ESLint `no-restricted-imports` 守，CI 拦下任何回退到 transport 层耦合的尝试。
 - **`packages/storage-sqlite`** 是 fleet.db 与 worker.db 的唯一 schema 源。通过 subpath `./fleet` 与 `./worker` 保持数据域边界；`defaultFleetMigrationsFolder` / `defaultWorkerMigrationsFolder` 通过 `import.meta.url` 解析，避免调用方硬编码 `./drizzle/...`。
 - **`packages/fs-layout`** 管理每 worker 的 `~/.aiworker/workers/<id>/` 目录布局。gateway 与 worker 都复用它解析 `AGENT.md` / `SOUL.md` / `USER.md` / `config.yaml` / `brain/` 等路径。
 
@@ -59,7 +61,7 @@ AIWorker 是一个**自托管 Agent Runtime**，由两类 provider 组合而成�
 **Orchestrator** 驱动 agent loop（submit prompt → stream completions → execute tools → persist transcript → emit `WorkerEventBus` 事件）。网络层（WS gateway / HTTP worker）与 orchestrator 解耦：
 
 - Gateway 只负责帧转发与 fleet 级控制方法（`workers.*`、`token.rotate`、`system.presence`）。
-- Worker 持有 orchestrator；node 模式通过 `@aiworker/api/lib` 的 `startGatewayNode` 主动拨一条 WS 连接上报 `WorkerEventBus` 事件、处理 gateway 转发过来的 `chat.send` / `config.get` / `config.put` / `token.rotate` / `logs.tail` 请求。
+- Worker 持有 orchestrator；node 模式通过 `@aiworker/core` 的 `startGatewayNode` 主动拨一条 WS 连接上报 `WorkerEventBus` 事件、处理 gateway 转发过来的 `chat.send` / `config.get` / `config.put` / `token.rotate` / `logs.tail` 请求。
 
 ## System Architecture
 
@@ -174,7 +176,7 @@ Caddy :80 (纯反代)  ──►  127.0.0.1:3000  =  aiworker-gateway 容器
 
 ## Executor engines (PLAN-007 / FEAT-011 → FEAT-016)
 
-`ExecutorProvider` 注册表按 `EngineKind` 分派，每个引擎在 `apps/api/src/worker/executor/engines/*` 下：
+`ExecutorProvider` 注册表按 `EngineKind` 分派，每个引擎在 `packages/core/src/worker/executor/engines/*` 下：
 
 - `http` — OpenAI 兼容 chat completions（FEAT-011 baseline，服务 HTTP / DeepSeek / SiliconFlow / OpenRouter 变体）
 - `mcp` — Model Context Protocol streamable-http 工具源
@@ -203,9 +205,9 @@ PLAN-014 在 PLAN-013 协议骨架之上落了四个独立但相关的特性。�
   | `quote?: string` | 文本引用块（lark / line） |
   | `reactions?: Array<{ emoji: string; count: number }>` | reaction 聚合 |
 
-- `messages` 表新增 `rich_metadata` 列（`text/json`，可选）；写入路径 `apps/api/src/worker/orchestrator/service.ts::persistUserMessage` 把 envelope 的 `richMetadata` 一并落盘。Migration `0001_secret_dagger.sql`（only `ALTER ADD`，不破坏存量行）。
+- `messages` 表新增 `rich_metadata` 列（`text/json`，可选）；写入路径 `packages/core/src/worker/orchestrator/service.ts::persistUserMessage` 把 envelope 的 `richMetadata` 一并落盘。Migration `0001_secret_dagger.sql`（only `ALTER ADD`，不破坏存量行）。
 
-5 个 channel adapter（`apps/api/src/worker/channels/adapters/{telegram,whatsapp,lark,line,web}.ts`）`toEnvelopes` 各自派生 `accountId`：
+5 个 channel adapter（`packages/core/src/worker/channels/adapters/{telegram,whatsapp,lark,line,web}.ts`）`toEnvelopes` 各自派生 `accountId`：
 
 | channel | accountId 来源 |
 |---|---|
@@ -285,7 +287,7 @@ fallbacks?: Array<{
 }>
 ```
 
-`apps/api/src/worker/executor/factory.ts::buildExecutor` 检测到 `fallbacks` 非空时递归构造 `FallbackExecutor` 包装链；wrapper 与 `ExecutorProvider` 一一对应（**不要在 orchestrator 加 provider-specific 分支**）。
+`packages/core/src/worker/executor/factory.ts::buildExecutor` 检测到 `fallbacks` 非空时递归构造 `FallbackExecutor` 包装链；wrapper 与 `ExecutorProvider` 一一对应（**不要在 orchestrator 加 provider-specific 分支**）。
 
 `inferErrorKind` 分类规则（优先级从高到低）：
 
@@ -320,7 +322,7 @@ fallbacks?: Array<{
 | `lastRunAt` / `nextRunAt` | iso 时间戳 |
 | `createdAt` / `updatedAt` | iso |
 
-`apps/api/src/worker/cron/service.ts::CronService`：
+`packages/core/src/worker/cron/service.ts::CronService`：
 
 - 60s `setInterval` tick；每次 tick 内**串行**遍历 jobs，对到期的 job 先用 `cron-parser ^5.5.0` 算下一个 `nextRunAt` → 写库 → 合成 `sys:cron` envelope 喂 `orchestrator.ingest`。"先算 next → 写库 → ingest" 顺序确保即使 ingest 抛错也不会重复触发同一时刻。
 - `runtime.build()` 时 `start()`，`runtime.dispose()` 时 `stop()`；**不进 orchestrator hot path**——tick 在自有 setInterval 跑，与 orchestrator 解耦。
@@ -350,7 +352,7 @@ operator 控制面：
 
 ## 加密与认证
 
-- Gateway 侧的 `apps/gateway/src/registry/crypto.ts` 与 worker 侧的 `apps/api/src/worker/secrets/vault.ts` **有意复制**，不要抽取为共享模块——两者 master key 不同（gateway 用 `AIWORKER_MASTER_KEY` 解 `registered_workers.apiTokenEnc`；worker 用自己的 master key 解 `worker_secrets`），耦合会破坏信任边界。
+- Gateway 侧的 `apps/gateway/src/registry/crypto.ts` 与 worker 侧的 `packages/core/src/worker/secrets/vault.ts` **有意复制**，不要抽取为共享模块——两者 master key 不同（gateway 用 `AIWORKER_MASTER_KEY` 解 `registered_workers.apiTokenEnc`；worker 用自己的 master key 解 `worker_secrets`），耦合会破坏信任边界。
 - Bearer token 对比一律 `timingSafeEqualStrings`（`worker/secrets/crypto.ts`）。
 - 所有 channel webhook 入站必须验签：Telegram（`X-Telegram-Bot-Api-Secret-Token`）、WhatsApp（`X-Hub-Signature-256` HMAC）、Lark（`encrypt` AES + token）。
 - `AIWORKER_MASTER_KEY` 丢失 = 所有已注册 worker 的存储 token 无法解密，必须重新 pair。Master key 必须纳入组织级 secret store，并有轮换/恢复预案。

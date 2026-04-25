@@ -1,9 +1,10 @@
 # PLAN-015 Physical extraction — move worker/** into @aiworker/core
 
-- **status**: implementing
+- **status**: completed
 - **createdAt**: 2026-04-24 15:45
-- **revisedAt**: 2026-04-25 12:30
+- **revisedAt**: 2026-04-25 13:00
 - **approvedAt**: 2026-04-25 12:30
+- **completedAt**: 2026-04-25 13:00
 - **relatedTask**: REFACTOR-003
 - **supersedes**: 原 PLAN-012 mechanical move 草稿（已废）
 - **dependsOn**: PLAN-012 / PLAN-013 / PLAN-014（功能层都到位，剩纯物理重排）
@@ -109,3 +110,18 @@ apps/api/src/shared/index.ts            → 拆：AppError 走 shared，requestL
 | W2 | S2 docs + changelog + plan 收尾 | W1 merge 后 |
 
 每个 subtask 强制 `/pma-cr` 自审、报告模板、回报 coordinator。
+
+## Outcomes
+
+Landed 2026-04-25 in two waves under dispatch BKD `523v0p2o`：
+
+- **S1** — commit `1bb4e82` (PR-equivalent merge `06ab5ff`)：物理搬迁 + import 重写 + ESLint guard + hot-reload regression。165 文件改动；rename ~134 条 + ~20 条 import 编辑 + ~11 条新增 + 大量 ESLint sort-imports 自动重排。零行为变更。
+- **S2** — commit `<待 merge 后回填>` (merge `<待 merge 后回填>`)：本文档 + `docs/architecture.md` + `docs/changelog.md` + `docs/plan/index.md` 收尾。
+
+Verified: `bun run check` 全绿（含新 ESLint guard）；总 runtime test pass 521（基线 481，净 +40）；smoke `aiw-run` / `aim` / `gateway-local` 全绿。原 `apps/api/src/lib.ts` 已删；`grep '@aiworker/api/lib' apps packages` 零命中；`grep -rE "from ['\"]hono" packages/core/src` 零命中。
+
+Follow-up（不在本 plan 内修，留给后续）：
+
+- `apps/cli` / `packages/fs-layout` / `packages/storage-sqlite` 的 `"test"` 脚本因无测试文件而 exit 1，导致 root `bun run test` 整体非零；建议加 `--passWithNoTests` 或移除 `"test"` 脚本。
+- `apps/api/src/worker/<area>/` 路由目录树仅剩 6 文件，可考虑后续 PR 重命名为 `apps/api/src/routes/worker/`，但要权衡 git history。
+- `WorkerModeState` 类型 re-export 链可在后续清理（让 cli 直接从 `@aiworker/core` 取并删除 `modes/worker.ts` 的 re-export）。
