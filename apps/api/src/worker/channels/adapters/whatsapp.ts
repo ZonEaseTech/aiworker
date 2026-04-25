@@ -1,4 +1,4 @@
-import type { Envelope } from '@aiworker/shared'
+import type { Envelope, EnvelopeRichMetadata } from '@aiworker/shared'
 import type { ChannelAdapter } from './types'
 
 import { Buffer } from 'node:buffer'
@@ -17,6 +17,14 @@ interface WhatsAppMediaBody {
   caption?: string
 }
 
+interface WhatsAppContext {
+  /** wa_id of the original message author. */
+  from?: string
+  /** wamid of the message being replied to. */
+  id?: string
+  referred_product?: unknown
+}
+
 interface WhatsAppMessage {
   id?: string
   from: string
@@ -27,6 +35,7 @@ interface WhatsAppMessage {
   audio?: WhatsAppMediaBody
   video?: WhatsAppMediaBody
   document?: WhatsAppMediaBody
+  context?: WhatsAppContext
   [k: string]: unknown
 }
 
@@ -65,7 +74,10 @@ export const whatsappAdapter: ChannelAdapter = {
       throw new Error('invalid WhatsApp signature')
   },
 
-  async toEnvelopes(rawBody, workerId) {
+  async toEnvelopes(rawBody, workerId, binding) {
+    if (!binding || binding.credentials.channel !== 'whatsapp')
+      throw new Error('whatsapp adapter requires a whatsapp binding for accountId derivation')
+    const accountId = binding.credentials.phoneNumberId
     const body = JSON.parse(rawBody) as WhatsAppWebhookBody
     const envelopes: Envelope[] = []
     for (const entry of body.entry ?? []) {
@@ -81,13 +93,16 @@ export const whatsappAdapter: ChannelAdapter = {
           const chatId = msg.from
           const contact = contacts.find(c => c.wa_id === chatId)
           const displayName = contact?.profile?.name
+          const richMetadata = extractRichMetadata(msg)
           envelopes.push({
             workerId,
             channel: 'whatsapp',
+            accountId,
             chatId,
             userId: chatId,
             ...(displayName ? { userDisplayName: displayName } : {}),
             text,
+            ...(richMetadata === undefined ? {} : { richMetadata }),
             receivedAt: new Date(Number(msg.timestamp) * 1000).toISOString(),
             raw: msg,
           })
@@ -138,4 +153,23 @@ function extractText(msg: WhatsAppMessage): string | undefined {
     default:
       return undefined
   }
+}
+
+/**
+ * WhatsApp Cloud API webhooks expose the replied-to message id via
+ * `messages[].context = { from, id }`. The original text is not inlined
+ * in the webhook, so `replyTo.text` is left empty — `authorId` is the
+ * `wa_id` of the original author, and `quote` carries the wamid for
+ * downstream consumers that want to fetch the quoted body via the Graph API.
+ */
+function extractRichMetadata(msg: WhatsAppMessage): EnvelopeRichMetadata | undefined {
+  const ctx = msg.context
+  if (!ctx || typeof ctx.from !== 'string' || ctx.from.length === 0)
+    return undefined
+  const meta: EnvelopeRichMetadata = {
+    replyTo: { authorId: ctx.from, text: '' },
+  }
+  if (typeof ctx.id === 'string' && ctx.id.length > 0)
+    meta.quote = ctx.id
+  return meta
 }

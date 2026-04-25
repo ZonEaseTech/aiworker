@@ -5,6 +5,7 @@ export type {
   ChannelType,
   Envelope,
   EnvelopeAttachment,
+  EnvelopeRichMetadata,
   OutboundMessage,
 } from './channel'
 

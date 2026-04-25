@@ -117,6 +117,7 @@ describe('Orchestrator + ClaudeCodeExecutor (stub CLI)', () => {
     const envelope: Envelope = {
       workerId: 'w_testtesttest',
       channel: 'web',
+      accountId: 'test',
       chatId: 'chat-1',
       text: 'hello',
       receivedAt: new Date().toISOString(),

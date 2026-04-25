@@ -5,7 +5,7 @@ export type ChannelType = 'web' | 'line' | 'telegram' | 'lark' | 'whatsapp'
 export type ChannelCredentials
   = | { channel: 'web' }
     | { channel: 'line', channelSecret: string, channelAccessToken: string }
-    | { channel: 'telegram', botToken: string, webhookSecretToken?: string }
+    | { channel: 'telegram', botToken: string, botUsername?: string, webhookSecretToken?: string }
     | {
       channel: 'lark'
       appId: string
@@ -32,6 +32,13 @@ export interface ChannelProfile {
  * the credential JSON travels through the secrets vault.
  */
 export interface ChannelBinding {
+  /**
+   * Stable per-binding identifier. Used as `Envelope.accountId` for channels
+   * (e.g. web) where the underlying credentials don't already carry a unique
+   * account-level id. Multiple bindings of the same `channel` MUST have
+   * distinct `id`s.
+   */
+  id?: string
   channel: ChannelType
   enabled: boolean
   credentials: ChannelCredentials
@@ -48,6 +55,29 @@ export interface EnvelopeAttachment {
 }
 
 /**
+ * Reply-to / quote / reaction signals extracted from the raw payload.
+ * Each adapter populates only the fields its protocol exposes; everything
+ * here is optional.
+ */
+export interface EnvelopeRichMetadata {
+  /** True if the inbound message edits a previously delivered one. */
+  isEdit?: boolean
+  /** True if the inbound message deletes a previously delivered one. */
+  isDelete?: boolean
+  /** Inline quoted message the user is replying to. */
+  replyTo?: {
+    /** Platform-native author id of the quoted message. */
+    authorId: string
+    /** Best-effort plain-text rendering of the quoted message. */
+    text: string
+  }
+  /** Free-form quoted text when no structured replyTo is available. */
+  quote?: string
+  /** Aggregated reactions on the inbound message (emoji + count). */
+  reactions?: Array<{ emoji: string, count: number }>
+}
+
+/**
  * Normalized inbound message handed to the orchestrator.
  *
  * Every channel adapter converts its platform-specific payload into this shape
@@ -57,12 +87,21 @@ export interface EnvelopeAttachment {
 export interface Envelope {
   workerId: string
   channel: ChannelType
+  /**
+   * Per-channel credential identity. Distinguishes envelopes coming from
+   * different bots / phone numbers / app ids running on the same `channel`.
+   * Adapters derive this from the binding's credentials (or `binding.id` for
+   * channels without account-scoped credentials).
+   */
+  accountId: string
   chatId: string
   threadId?: string
   userId?: string
   userDisplayName?: string
   text: string
   attachments?: EnvelopeAttachment[]
+  /** Optional structured reply / edit / delete / reaction signals. */
+  richMetadata?: EnvelopeRichMetadata
   receivedAt: string
   raw: unknown
 }

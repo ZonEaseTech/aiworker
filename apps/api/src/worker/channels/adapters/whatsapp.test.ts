@@ -47,7 +47,7 @@ describe('whatsappAdapter.verify', () => {
 })
 
 describe('whatsappAdapter.toEnvelopes', () => {
-  it('maps a text message into one envelope', async () => {
+  it('maps a text message into one envelope and derives accountId from phoneNumberId', async () => {
     // Based on the Meta Cloud API "text" example payload.
     const payload = {
       object: 'whatsapp_business_account',
@@ -70,16 +70,43 @@ describe('whatsappAdapter.toEnvelopes', () => {
         }],
       }],
     }
-    const envelopes = await whatsappAdapter.toEnvelopes(JSON.stringify(payload), 'w_test')
+    const envelopes = await whatsappAdapter.toEnvelopes(JSON.stringify(payload), 'w_test', BINDING)
     expect(envelopes).toHaveLength(1)
     const env = envelopes[0]!
     expect(env.channel).toBe('whatsapp')
     expect(env.workerId).toBe('w_test')
+    expect(env.accountId).toBe('1234567890')
     expect(env.chatId).toBe('16505551234')
     expect(env.userId).toBe('16505551234')
     expect(env.userDisplayName).toBe('Alice')
     expect(env.text).toBe('Hello')
     expect(env.receivedAt).toBe(new Date(1700000000 * 1000).toISOString())
+    expect(env.richMetadata).toBeUndefined()
+  })
+
+  it('extracts replyTo richMetadata from a message context', async () => {
+    const payload = {
+      entry: [{
+        changes: [{
+          value: {
+            contacts: [{ profile: { name: 'Alice' }, wa_id: '16505551234' }],
+            messages: [{
+              from: '16505551234',
+              id: 'wamid.REPLY',
+              timestamp: '1700000010',
+              text: { body: 'sounds good' },
+              type: 'text',
+              context: { from: '16505550000', id: 'wamid.PARENT' },
+            }],
+          },
+        }],
+      }],
+    }
+    const envelopes = await whatsappAdapter.toEnvelopes(JSON.stringify(payload), 'w_test', BINDING)
+    expect(envelopes).toHaveLength(1)
+    const env = envelopes[0]!
+    expect(env.richMetadata?.replyTo).toEqual({ authorId: '16505550000', text: '' })
+    expect(env.richMetadata?.quote).toBe('wamid.PARENT')
   })
 
   it('maps an image with caption, using caption as text', async () => {
@@ -99,7 +126,7 @@ describe('whatsappAdapter.toEnvelopes', () => {
         }],
       }],
     }
-    const envelopes = await whatsappAdapter.toEnvelopes(JSON.stringify(payload), 'w_test')
+    const envelopes = await whatsappAdapter.toEnvelopes(JSON.stringify(payload), 'w_test', BINDING)
     expect(envelopes).toHaveLength(1)
     expect(envelopes[0]!.text).toBe('look at this')
     expect(envelopes[0]!.chatId).toBe('16505551234')
@@ -121,7 +148,7 @@ describe('whatsappAdapter.toEnvelopes', () => {
         }],
       }],
     }
-    const envelopes = await whatsappAdapter.toEnvelopes(JSON.stringify(payload), 'w_test')
+    const envelopes = await whatsappAdapter.toEnvelopes(JSON.stringify(payload), 'w_test', BINDING)
     expect(envelopes).toEqual([])
   })
 
@@ -141,7 +168,7 @@ describe('whatsappAdapter.toEnvelopes', () => {
         }],
       }],
     }
-    const envelopes = await whatsappAdapter.toEnvelopes(JSON.stringify(payload), 'w_test')
+    const envelopes = await whatsappAdapter.toEnvelopes(JSON.stringify(payload), 'w_test', BINDING)
     expect(envelopes).toEqual([])
   })
 
@@ -159,7 +186,7 @@ describe('whatsappAdapter.toEnvelopes', () => {
         }],
       }],
     }
-    const envelopes = await whatsappAdapter.toEnvelopes(JSON.stringify(payload), 'w_test')
+    const envelopes = await whatsappAdapter.toEnvelopes(JSON.stringify(payload), 'w_test', BINDING)
     expect(envelopes).toEqual([])
   })
 })

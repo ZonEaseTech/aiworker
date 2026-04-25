@@ -243,10 +243,12 @@ export class Orchestrator {
   private persistUserMessage(conversationId: string, envelope: Envelope) {
     const db = getWorkerDb()
     const now = new Date().toISOString()
+    const richMetadata = envelope.richMetadata ? JSON.stringify(envelope.richMetadata) : null
     const res = db.insert(messages).values({
       conversationId,
       role: 'user',
       content: envelope.text,
+      ...(richMetadata === null ? {} : { richMetadata }),
       createdAt: now,
     }).returning({ id: messages.id }).all()
     db.update(conversations).set({ lastActiveAt: now }).where(eq(conversations.id, conversationId)).run()
@@ -294,6 +296,9 @@ export class Orchestrator {
     const envelope: Envelope = {
       workerId: this.deps.workerId,
       channel: 'web',
+      // 系统派发的任务流不来自任何 web binding，使用保留前缀 `sys:` 避免与
+      // 用户配置的 binding.id 冲突。
+      accountId: 'sys:task',
       chatId: `task:${id}`,
       text: prompt,
       receivedAt: now,
