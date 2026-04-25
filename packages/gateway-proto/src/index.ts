@@ -52,6 +52,9 @@ export type {
 } from './messages'
 
 export {
+  cronJobInputSchema,
+  cronJobPatchSchema,
+  cronJobRecordSchema,
   getMethodDef,
   isKnownMethod,
   METHODS,
@@ -60,6 +63,7 @@ export {
   workerSummarySchema,
 } from './methods'
 export type {
+  CronJobRecordProto,
   MethodDef,
   MethodName,
   MethodRouting,

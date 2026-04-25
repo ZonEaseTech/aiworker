@@ -15,6 +15,13 @@
       "when": 1777092169262,
       "tag": "0001_secret_dagger",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1777094345846,
+      "tag": "0002_jazzy_moondragon",
+      "breakpoints": true
     }
   ]
 }

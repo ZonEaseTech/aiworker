@@ -3,6 +3,7 @@ import process from 'node:process'
 
 import {
   bootstrapWorkerApp,
+  buildCronHandlers,
   getSecretsVault,
   handleTokenRotate,
   readConfig,
@@ -55,6 +56,8 @@ export async function runServe(options: ServeOptions = {}): Promise<void> {
           const { newToken } = await handleTokenRotate(getWorkerDb(), getSecretsVault(), state)
           return { deviceToken: newToken }
         },
+        // 懒取 cron service：runtime hot-reload 后取的就是新 runtime 上的实例。
+        ...buildCronHandlers(() => state.runtime.cron),
       },
     })
     consola.success(`[aiw serve] gateway-client dialing ${options.gateway}`)

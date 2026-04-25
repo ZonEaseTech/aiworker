@@ -50,6 +50,7 @@ function stubRuntime(processes?: ProcessManager): WorkerRuntime {
     channels: new ChannelRegistry([]),
     bus: {} as WorkerRuntime['bus'],
     orchestrator: {} as WorkerRuntime['orchestrator'],
+    cron: {} as WorkerRuntime['cron'],
     workspaces: {} as WorkerRuntime['workspaces'],
     processes: processes ?? ({} as WorkerRuntime['processes']),
     dispose: () => undefined,

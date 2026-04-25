@@ -4,6 +4,7 @@ import type { ProcessManager } from './orchestrator/process-manager'
 import { workerEnv } from '../config/worker'
 import { buildBrain } from './brain/factory'
 import { ChannelRegistry } from './channels/registry'
+import { CronService } from './cron/service'
 import { WorkerEventBus } from './events/bus'
 import { attachEvolutionObserver } from './evolution/observer'
 import { startProposerLoop } from './evolution/proposer'
@@ -20,6 +21,12 @@ export interface WorkerRuntime {
   channels: ChannelRegistry
   bus: WorkerEventBus
   orchestrator: Orchestrator
+  /**
+   * Cron 调度服务。tick loop 在 build 时启动，dispose 时停止；持有自己的
+   * `setInterval` handle，绝不进 orchestrator hot path（fire 时只合成 envelope
+   * 喂 `orchestrator.ingest`）。
+   */
+  cron: CronService
   workspaces: WorkspaceManager
   /**
    * 进程级集中管控（FEAT-015 / PLAN-007 §架构承诺 5）。**跨 hot-reload
@@ -58,6 +65,14 @@ export function buildWorkerRuntime(workerId: string, config: WorkerConfig, deps:
   const unsubObserver = attachEvolutionObserver(bus)
   const stopProposer = config.evolution.enabled ? startProposerLoop() : () => undefined
 
+  const cron = new CronService({
+    workerId,
+    // 懒取 orchestrator 引用——hot-reload 时 cron 已在 dispose 阶段被 stop，
+    // 这里取的就是 build 时 new 出来的同一个 orchestrator，保持稳定。
+    getOrchestrator: () => orchestrator,
+  })
+  cron.start()
+
   return {
     workerId,
     config,
@@ -66,11 +81,13 @@ export function buildWorkerRuntime(workerId: string, config: WorkerConfig, deps:
     channels,
     bus,
     orchestrator,
+    cron,
     workspaces,
     processes: deps.processes,
     dispose() {
       unsubObserver()
       stopProposer()
+      cron.stop()
       // 注意：不 dispose processes —— ProcessManager 跨 reload 持久化，
       // 由 bootstrap 退出阶段统一 cancelAll + dispose。
     },

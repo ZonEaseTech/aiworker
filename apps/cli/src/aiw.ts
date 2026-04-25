@@ -7,6 +7,7 @@ import consola from 'consola'
 import { runConfigSet, runConfigShow } from './commands/config'
 import { runInit } from './commands/init'
 import { runRun } from './commands/run'
+import { runScheduleAdd, runScheduleList, runScheduleRemove } from './commands/schedule'
 import { runServe } from './commands/serve'
 import { runTokenRotate } from './commands/token'
 
@@ -68,6 +69,50 @@ cli.command('token-rotate', 'Mint a fresh bearer token; prints the new plaintext
   const code = await runTokenRotate()
   process.exit(code)
 })
+
+// --- schedule (cron) ---
+cli
+  .command('schedule-list', 'List all cron jobs persisted in the local worker.db')
+  .action(async () => {
+    process.exit(await runScheduleList())
+  })
+
+cli
+  .command('schedule-add', 'Add a cron job to the local worker.db (validates expression up-front)')
+  .option('--expression <expr>', 'Five-field cron expression (required)')
+  .option('--prompt <text>', 'Envelope.text synthesised when the job fires (required)')
+  .option('--channel <channel>', 'Channel: web/line/telegram/lark/whatsapp (required)')
+  .option('--chat-id <id>', 'chatId used at fire time (required)')
+  .option('--account-id <id>', 'Override accountId (defaults to sys:cron)')
+  .option('--disabled', 'Persist with enabled=false (default is enabled=true)')
+  .action(async (opts: {
+    expression?: string
+    prompt?: string
+    channel?: string
+    chatId?: string
+    accountId?: string
+    disabled?: boolean
+  }) => {
+    if (!opts.expression || !opts.prompt || !opts.channel || !opts.chatId) {
+      consola.error('[aiw schedule-add] requires --expression, --prompt, --channel, --chat-id')
+      process.exit(2)
+    }
+    const code = await runScheduleAdd({
+      expression: opts.expression,
+      prompt: opts.prompt,
+      channel: opts.channel,
+      chatId: opts.chatId,
+      ...(opts.accountId === undefined ? {} : { accountId: opts.accountId }),
+      ...(opts.disabled === true ? { enabled: false } : {}),
+    })
+    process.exit(code)
+  })
+
+cli
+  .command('schedule-remove <jobId>', 'Remove a cron job from the local worker.db')
+  .action(async (jobId: string) => {
+    process.exit(await runScheduleRemove(jobId))
+  })
 
 cli.help()
 cli.version('0.2.0')

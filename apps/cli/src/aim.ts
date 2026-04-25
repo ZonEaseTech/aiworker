@@ -9,6 +9,7 @@ import { runConfigGet, runConfigSet } from './aim/commands/config'
 import { runGatewayStart, runGatewayStatus, runGatewayStop } from './aim/commands/gateway'
 import { runLogs } from './aim/commands/logs'
 import { runPair } from './aim/commands/pair'
+import { runScheduleAdd, runScheduleList, runScheduleRemove } from './aim/commands/schedule'
 import { runTokenRotate } from './aim/commands/token'
 import {
   runWorkersInfo,
@@ -151,6 +152,51 @@ cli
   .command('token rotate <workerId>', '为目标 worker 轮换 deviceToken（旧 token 立即失效）')
   .action(async (workerId: string) => {
     process.exit(await runTokenRotate(workerId))
+  })
+
+// --- schedule (cron) ---
+cli
+  .command('schedule list <workerId>', '列出某 worker 上所有 cron 任务')
+  .action(async (workerId: string) => {
+    process.exit(await runScheduleList(workerId))
+  })
+
+cli
+  .command('schedule add <workerId>', '在某 worker 上新增一条 cron 任务')
+  .option('--expression <expr>', '5-field cron 表达式（必填）')
+  .option('--prompt <text>', 'cron 触发时合成的 envelope.text（必填）')
+  .option('--channel <channel>', 'channel 类型：web/line/telegram/lark/whatsapp（必填）')
+  .option('--chat-id <id>', '触发时使用的 chatId（必填）')
+  .option('--account-id <id>', 'accountId，默认 sys:cron')
+  .option('--disabled', '默认 enabled=true；带此 flag 改为 false')
+  .action(async (workerId: string, opts: {
+    expression?: string
+    prompt?: string
+    channel?: string
+    chatId?: string
+    accountId?: string
+    disabled?: boolean
+  }) => {
+    if (!opts.expression || !opts.prompt || !opts.channel || !opts.chatId) {
+      consola.error('schedule add 必须提供 --expression / --prompt / --channel / --chat-id')
+      process.exit(2)
+    }
+    const code = await runScheduleAdd({
+      workerId,
+      expression: opts.expression,
+      prompt: opts.prompt,
+      channel: opts.channel,
+      chatId: opts.chatId,
+      ...(opts.accountId === undefined ? {} : { accountId: opts.accountId }),
+      ...(opts.disabled === true ? { enabled: false } : {}),
+    })
+    process.exit(code)
+  })
+
+cli
+  .command('schedule remove <workerId> <jobId>', '删除某 worker 上的某条 cron 任务')
+  .action(async (workerId: string, jobId: string) => {
+    process.exit(await runScheduleRemove(workerId, jobId))
   })
 
 // --- logs ---

@@ -186,6 +186,88 @@ const systemPresenceMethod = defineMethod({
   routing: 'operator-to-gateway',
 })
 
+// ---- cron.* (PLAN-014 §F4) ----
+
+/**
+ * 与 ChannelType 保持同步——proto 层做最小防线，避免跨包导入。
+ */
+const cronChannelEnum = z.enum(['web', 'line', 'telegram', 'lark', 'whatsapp'])
+
+export const cronJobRecordSchema = z.object({
+  id: z.string().min(1),
+  expression: z.string().min(1),
+  prompt: z.string().min(1),
+  channel: cronChannelEnum,
+  chatId: z.string().min(1),
+  accountId: z.string().min(1),
+  enabled: z.boolean(),
+  lastRunAt: z.string().nullable(),
+  nextRunAt: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
+export type CronJobRecordProto = z.infer<typeof cronJobRecordSchema>
+
+export const cronJobInputSchema = z.object({
+  expression: z.string().min(1),
+  prompt: z.string().min(1),
+  channel: cronChannelEnum,
+  chatId: z.string().min(1),
+  accountId: z.string().min(1).optional(),
+  enabled: z.boolean().optional(),
+})
+
+export const cronJobPatchSchema = z.object({
+  expression: z.string().min(1).optional(),
+  prompt: z.string().min(1).optional(),
+  channel: cronChannelEnum.optional(),
+  chatId: z.string().min(1).optional(),
+  accountId: z.string().min(1).optional(),
+  enabled: z.boolean().optional(),
+}).refine(p => Object.keys(p).length > 0, { message: '至少提供一个待更新字段' })
+
+const cronListMethod = defineMethod({
+  method: 'cron.list',
+  description: '列出目标 worker 上所有 cron 任务（含 enabled / lastRunAt / nextRunAt）。',
+  params: z.object({ workerId: z.string().min(1) }),
+  result: z.object({ jobs: z.array(cronJobRecordSchema) }),
+  routing: 'operator-to-node',
+})
+
+const cronAddMethod = defineMethod({
+  method: 'cron.add',
+  description: '在目标 worker 上新增一条 cron 任务；非法 expression 直接失败。',
+  params: z.object({
+    workerId: z.string().min(1),
+    job: cronJobInputSchema,
+  }),
+  result: z.object({ job: cronJobRecordSchema }),
+  routing: 'operator-to-node',
+})
+
+const cronRemoveMethod = defineMethod({
+  method: 'cron.remove',
+  description: '删除目标 worker 上的某条 cron 任务。',
+  params: z.object({
+    workerId: z.string().min(1),
+    jobId: z.string().min(1),
+  }),
+  result: z.object({ removed: z.boolean() }),
+  routing: 'operator-to-node',
+})
+
+const cronUpdateMethod = defineMethod({
+  method: 'cron.update',
+  description: '局部更新目标 worker 上某条 cron 任务；改 expression 或 enabled 会重算 nextRunAt。',
+  params: z.object({
+    workerId: z.string().min(1),
+    jobId: z.string().min(1),
+    patch: cronJobPatchSchema,
+  }),
+  result: z.object({ job: cronJobRecordSchema }),
+  routing: 'operator-to-node',
+})
+
 /**
  * 方法名 → 方法定义的注册表。
  * key 必须与 value.method 一致。
@@ -203,6 +285,10 @@ export const METHODS = {
   'token.rotate': tokenRotateMethod,
   'logs.tail': logsTailMethod,
   'system.presence': systemPresenceMethod,
+  'cron.list': cronListMethod,
+  'cron.add': cronAddMethod,
+  'cron.remove': cronRemoveMethod,
+  'cron.update': cronUpdateMethod,
 } as const
 
 export type MethodName = keyof typeof METHODS
