@@ -184,6 +184,153 @@ Caddy :80 (纯反代)  ──►  127.0.0.1:3000  =  aiworker-gateway 容器
 - `codex` — `@openai/codex app-server` JSON-RPC over stdio，`approval_policy: 'never'`（FEAT-016）
 - `cursor` — `cursor-agent -p --output-format=stream-json`，仅走 PATH 安装，无 npm fallback（FEAT-016）
 
+## PLAN-014：envelope / approvals / fallback / cron
+
+PLAN-014 在 PLAN-013 协议骨架之上落了四个独立但相关的特性。下面分别描述其语义边界与必须保持的不变量。
+
+### F1 — Envelope 路由维度
+
+`Envelope` 字段升级（`packages/shared/src/fleet/channel.ts`）：
+
+- 新增 **必填** `accountId: string`——每 channel 的"凭据身份"维度，与 `chatId`（会话）、`channel`（协议）共同构成路由三元组 `(channel, accountId, peer)`。同 channel 多 bot / 多账号在不进 fleet.db 的前提下也能正确分流。
+- 新增可选 `richMetadata`：
+
+  | 字段 | 含义 |
+  |---|---|
+  | `isEdit?: boolean` | 来源 platform 把这条标记为编辑 |
+  | `isDelete?: boolean` | 来源 platform 撤回 / 删除 |
+  | `replyTo?: { authorId: string; text: string }` | 引用回复（telegram / whatsapp / web） |
+  | `quote?: string` | 文本引用块（lark / line） |
+  | `reactions?: Array<{ emoji: string; count: number }>` | reaction 聚合 |
+
+- `messages` 表新增 `rich_metadata` 列（`text/json`，可选）；写入路径 `apps/api/src/worker/orchestrator/service.ts::persistUserMessage` 把 envelope 的 `richMetadata` 一并落盘。Migration `0001_secret_dagger.sql`（only `ALTER ADD`，不破坏存量行）。
+
+5 个 channel adapter（`apps/api/src/worker/channels/adapters/{telegram,whatsapp,lark,line,web}.ts`）`toEnvelopes` 各自派生 `accountId`：
+
+| channel | accountId 来源 |
+|---|---|
+| telegram | `credentials.botUsername`（缺失时 `sha256(botToken)` 前 8 字节 hex） |
+| whatsapp | `phoneNumberId` |
+| lark | `appId` |
+| line | `sha256(channelAccessToken)` 前 8 字节 hex |
+| web | `binding.id ?? 'default'` |
+
+#### `sys:` 保留前缀（系统派发）
+
+非 channel adapter 的派发路径（不存在外部凭据身份）使用 **保留前缀 `sys:` 命名空间**，与用户配置的 web `binding.id` 隔离：
+
+| 前缀 | 触发源 |
+|---|---|
+| `sys:task` | `submitTask`（dashboard 路径删除后保留为内部任务派发） |
+| `sys:gateway` | gateway dispatcher 转发的 `chat.send` |
+| `sys:cli` | `aiw run --message`（一次性 CLI ingest） |
+| `sys:cron` | F4 cron 触发的合成 envelope（默认值，可被 `--account-id` 覆盖） |
+
+> Channel adapter 不允许直接产出 `sys:*` 前缀的 accountId；adapter test 必须断言这一点（5 个 adapter 均覆盖）。
+
+### F2 — Per-tool approvals
+
+工具调用前的策略 gate 由 `WorkerConfig.toolPolicy`（`packages/shared/src/fleet/config.ts`）声明：
+
+```ts
+toolPolicy?: {
+  default: 'auto' | 'ask' | 'deny'
+  rules: Array<{ pattern: string; action: 'auto' | 'ask' | 'deny' }>
+}
+```
+
+`pattern` 是 tool name 的 glob；orchestrator 在 `runTool` 路径用 `evaluateToolPolicy` 决定走向：
+
+| 决策 | 行为 |
+|---|---|
+| `auto` | 直接执行，等同未配 toolPolicy 时的现状 |
+| `ask` | 通过 `WorkerEventBus` 上行 `approval.requested`（gateway 透传到 operator）；orchestrator 在 `ApprovalStore` 挂起 promise，**60s 超时按 deny 处理** |
+| `deny` | 短路返回合成助手消息 `"tool {name} blocked by policy"`，**不进 executor** |
+
+不变量：
+
+- **缺省安全**：`toolPolicy` 缺失时 `evaluateToolPolicy` 一律返回 `auto`，旧 config 行为不变。
+- **Hot-reload 安全**：`runtime.dispose()` 必须调 `approvals.dispose()`，把全部挂起 promise 以 `decision='deny'` resolve（不能 reject——orchestrator 用 await 拿决策，reject 会破坏 transcript）。
+- **Gate 顺序**：policy gate 在 envelope schema 校验之后、executor 实际派发之前；`auto/deny` 立刻短路，不经 bus。
+
+链路：
+
+```
+worker orchestrator (ask)
+    │ approval.requested  (bus event)
+    ▼
+worker gateway-client subscriber  ──►  gateway  ──►  operator (aim / web)
+                                                        │ approval.grant
+                                                        ▼
+worker gateway-client dispatcher  ◄──  gateway  ◄──  approval.grant
+    │ ApprovalStore.resolve(decision)
+    ▼
+worker orchestrator (resume)
+```
+
+operator 控制面：
+
+- `aim approvals list [--worker <id>]` / `aim approvals grant <workerId> <taskId> <toolCallId> [--deny]`（`@aiworker/gateway-proto` 新增 `approval.list` / `approval.grant` 方法 + `APPROVAL_REQUESTED` 事件）。
+- `aiw approvals-list` / `aiw approvals-grant <taskId> <toolCallId> [--deny]`（不经 gateway，直接调 worker 本地 `GET /api/worker/approvals` 与 `POST /api/worker/approvals/:taskId/:toolCallId/grant`，方便 dev 与运维 fallback）。
+
+### F3 — Provider fallback chain
+
+`ExecutorConfig` 新增可选嵌套字段：
+
+```ts
+fallbacks?: Array<{
+  executor: ExecutorConfig
+  onErrorKinds: Array<'rate-limit' | 'timeout' | 'auth' | 'network' | 'server-5xx' | 'unknown'>
+  maxRetries?: number  // 默认 1
+}>
+```
+
+`apps/api/src/worker/executor/factory.ts::buildExecutor` 检测到 `fallbacks` 非空时递归构造 `FallbackExecutor` 包装链；wrapper 与 `ExecutorProvider` 一一对应（**不要在 orchestrator 加 provider-specific 分支**）。
+
+`inferErrorKind` 分类规则（优先级从高到低）：
+
+| Kind | 触发条件 |
+|---|---|
+| `rate-limit` | HTTP 429 / claude-code "rate limited" / "rate-limit" 字样 |
+| `timeout` | HTTP 408 / `AbortError` / engine stall（fetch 失败叠加 abort 时优先归此） |
+| `auth` | HTTP 401/403 / "invalid api key"（401+5xx 文本冲突时优先 auth） |
+| `network` | `ECONNREFUSED` / `ETIMEDOUT` / DNS / fetch network err |
+| `server-5xx` | HTTP 500-599 |
+| `unknown` | 其他 |
+
+不变量：
+
+- **不重放已下发流**：流式 chat 已 yield 第一个事件后，原 executor 抛错直接冒泡——避免半截 transcript 与 fallback 双流叠加。
+- **递归嵌套**：fallback 自身仍可携带 `fallbacks?`，递归构造（factory 不限层数；通常 2-3 层够用）。
+- **缺省零开销**：旧 config 不带 `fallbacks` 时 factory 返回原 executor 实例，不引入 wrapper。
+
+### F4 — Cron 调度
+
+新表 `cron_jobs`（`packages/storage-sqlite/src/worker/schema.ts`，migration `0002_jazzy_moondragon.sql`）：
+
+| 列 | 说明 |
+|---|---|
+| `id` | uuid pk |
+| `expression` | 5-field cron 表达式 |
+| `prompt` | fire 时合成的 `Envelope.text` |
+| `channel` | channel 枚举 |
+| `chatId` | fire 时使用的 chatId |
+| `accountId` | F1 后必填，默认 `sys:cron` |
+| `enabled` | bool default true |
+| `lastRunAt` / `nextRunAt` | iso 时间戳 |
+| `createdAt` / `updatedAt` | iso |
+
+`apps/api/src/worker/cron/service.ts::CronService`：
+
+- 60s `setInterval` tick；每次 tick 内**串行**遍历 jobs，对到期的 job 先用 `cron-parser ^5.5.0` 算下一个 `nextRunAt` → 写库 → 合成 `sys:cron` envelope 喂 `orchestrator.ingest`。"先算 next → 写库 → ingest" 顺序确保即使 ingest 抛错也不会重复触发同一时刻。
+- `runtime.build()` 时 `start()`，`runtime.dispose()` 时 `stop()`；**不进 orchestrator hot path**——tick 在自有 setInterval 跑，与 orchestrator 解耦。
+- 已知 race（P2，未修）：`reloadRuntime` 期间老 runtime 的 `setInterval` 还未 clearInterval 时新 runtime 已 start，理论上存在双重 tick 极短窗口（~毫秒级）；fire 顺序保证不会双触发同一 job，但可能让 `lastRunAt` 早 1s 写。
+
+operator 控制面：
+
+- `aim schedule list <workerId>` / `aim schedule add <workerId> --expression --prompt --channel --chat-id [--account-id sys:cron] [--disabled]` / `aim schedule remove <workerId> <jobId>`（gateway 新增 `cron.list` / `cron.add` / `cron.remove` / `cron.update` 方法）。
+- `aiw schedule-list` / `aiw schedule-add` / `aiw schedule-remove`（直接走 in-process `CronService` CRUD，不经 HTTP，与 `aiw config-show` 模式一致）。
+
 ## Module Layer
 
 | Module | Responsibility |
@@ -194,7 +341,8 @@ Caddy :80 (纯反代)  ──►  127.0.0.1:3000  =  aiworker-gateway 容器
 | `config` | 统一的 worker config 读/写（DB + yaml mirror） |
 | `health` | 汇总 `services.brain` + `services.executor` |
 | `events` | 进程内事件总线 + `/api/events/stream` SSE 端点（worker HTTP 留存）+ gateway node subscriber |
-| `orchestrator` | Task lifecycle + tool loop |
+| `orchestrator` | Task lifecycle + tool loop（含 PLAN-014 F2 policy gate） |
+| `cron` | `CronService` 60s tick + CRUD（PLAN-014 F4） |
 
 ## 透传与 hop-by-hop 头（下线）
 

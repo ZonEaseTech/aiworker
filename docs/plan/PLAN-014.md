@@ -1,11 +1,13 @@
 # PLAN-014 Envelope upgrade + per-tool approvals + provider fallback + cron
 
-- **status**: implementing
+- **status**: completed
 - **createdAt**: 2026-04-24 15:45
 - **revisedAt**: 2026-04-24 19:15
 - **approvedAt**: 2026-04-24 19:15
+- **completedAt**: 2026-04-25 06:30
 - **relatedTask**: REFACTOR-003
 - **dependsOn**: PLAN-013（gateway 已就位；F2 操作员审批走 WS event）
+- **commits**: 02c2b56, 41d6c7b, 8af3069, 034e1f2, 07908be, 62fd614, 1442360, 2f00d6e
 
 ## Summary
 
@@ -187,3 +189,31 @@
 - 形式化能力验证（hermes 风格，未来）。
 - 自然语言 cron（"每天早上 9 点"→ cron 表达式）— 让 operator 自己写。
 - 多 agent per worker（C1 决定排除）。
+
+## 完成记录
+
+| Subtask | BKD | Branch | feat commit | merge commit | Acceptance 摘要 |
+|---|---|---|---|---|---|
+| S1 F1 envelope | `lm14vk7i` | `bkd/lm14vk7i` | `02c2b56` | `41d6c7b` | `Envelope.accountId` 必填 + `richMetadata` 可选；`messages.rich_metadata` 列 + migration `0001_secret_dagger.sql`；5 channel adapter 派生 accountId / 提取 reply / edit / delete；保留前缀 `sys:*`（task / gateway / cli / cron）；adapter test 全量更新（5 个） |
+| S2 F2 approvals | `ofouh8su` | `bkd/ofouh8su` | `07908be` | `62fd614` | `WorkerConfig.toolPolicy?` 三态语义；orchestrator policy gate（auto / ask 60s 超时按 deny / deny 短路）；`ApprovalStore` `dispose` 时 `decision='deny'` resolve；`approval.list/grant` 方法 + `APPROVAL_REQUESTED` 事件；worker `/approvals` + `/approvals/:taskId/:toolCallId/grant` 本地端点；`aim approvals list/grant` + `aiw approvals-list/-grant` |
+| S3 F3 fallback | `rbxh9y78` | `bkd/rbxh9y78` | `8af3069` | `034e1f2` | `ExecutorConfig.fallbacks?` 嵌套；`FallbackExecutor` wrapper + `inferErrorKind` 6 分类（`rate-limit` / `timeout` / `auth` / `network` / `server-5xx` / `unknown`）；factory 递归展开；fallback.test.ts 19 case 覆盖 6 种 kind + 嵌套 + maxRetries 耗尽；已 yield 流后不重放 |
+| S4 F4 cron | `psgpvmwf` | `bkd/psgpvmwf` | `1442360` | `2f00d6e` | `cron_jobs` 表 + migration `0002_jazzy_moondragon.sql`；`CronService` 60s tick + CRUD；`cron-parser ^5.5.0`；fire 顺序"先算 next → 写库 → ingest"；runtime build/dispose 接入；`cron.list/add/remove/update` 方法；worker `/cron` CRUD；`aim schedule list/add/remove` + `aiw schedule-list/-add/-remove` |
+| S5 docs | `admggnqq` | `bkd/admggnqq` | — | — | architecture / cli / changelog / plan / index 全量同步；commit hash 引用核验通过；`bun run check` 绿 |
+
+测试基线变化：
+
+- `apps/api` 346 → 410（+64）
+- `apps/gateway` 55
+- `packages/gateway-proto` 11
+
+保留的不变量（与 PLAN-004 / PLAN-013 一致，验证过）：
+
+- fleet.db / worker.db 物理隔离；toolPolicy / cron job / approval 全部归属 worker.db。
+- AES-256-GCM 封 token；gateway 与 worker 的 crypto 模块仍有意复制。
+- Hot-reload：路由 / dispatcher / subscriber 全部 `() => state.runtime` 闭包懒取；`ApprovalStore.dispose` 与 `CronService.stop` 都接进 `runtime.dispose()`。
+- F2 policy gate / F4 cron tick 都不进 orchestrator hot path。
+
+已知 follow-up（不在本 plan 范围）：
+
+- `reloadRuntime` 极短窗口内 cron 双 `setInterval` 极小 race（P2，未修）；fire 顺序保证不会双触发同一 job，但 `lastRunAt` 可能早 1s 写。
+- `evolution_observations` 滚动压实策略（PLAN-004 遗留，未在本批处理）。

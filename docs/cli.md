@@ -121,6 +121,71 @@ aiw token-rotate
 
 旧 token 立即失效。保存明文；存储里只留密文。
 
+### `aiw approvals-list`（PLAN-014 F2）
+
+读取**本地** worker HTTP 端点 `GET /api/worker/approvals`，列出当前进程内所有挂起的 per-tool 审批：
+
+```sh
+aiw approvals-list
+# {
+#   "approvals": [
+#     { "taskId":"...","toolCallId":"...","toolName":"...","params":{...},"expiresAt":1714... }
+#   ]
+# }
+```
+
+不经 gateway，是 dev / 运维兜底路径——管理员 ssh 进 worker 容器即可观察。端口取 `workerEnv.PORT`（默认 3000），bearer 由 `loadWorkerContext()` 从 worker.db / vault 解出。
+
+### `aiw approvals-grant <taskId> <toolCallId> [--deny]`（PLAN-014 F2）
+
+调 `POST /api/worker/approvals/:taskId/:toolCallId/grant`，下发决策。默认 `decision=allow`；带 `--deny` 改为 `deny`：
+
+```sh
+aiw approvals-grant tsk_xxx call_yyy            # allow
+aiw approvals-grant tsk_xxx call_yyy --deny     # deny
+```
+
+`deny` 路径会在 worker 内合成助手消息 `"tool {name} blocked by policy"` 短路返回。
+
+### `aiw schedule-list`（PLAN-014 F4）
+
+读取本地 `worker.db` 的 `cron_jobs` 表，输出全部 job：
+
+```sh
+aiw schedule-list
+# {
+#   "jobs": [
+#     { "id":"...","expression":"0 9 * * *","prompt":"早报","channel":"web","chatId":"...","accountId":"sys:cron","enabled":true,"lastRunAt":null,"nextRunAt":"..." }
+#   ]
+# }
+```
+
+实现复用 in-process `CronService`（一次性 boot + CRUD + 退出），与 `aiw config-show` / `aiw config-set` 模式一致——不绑 server，不进 orchestrator hot path。
+
+### `aiw schedule-add --expression <expr> --prompt <text> --channel <channel> --chat-id <id> [--account-id <id>] [--disabled]`（PLAN-014 F4）
+
+新增一条 cron job。`--expression` 走 `cron-parser` 校验，无效立即拒绝；`--account-id` 缺省 `sys:cron`（PLAN-014 F1 sys:* 保留前缀）；`--disabled` 把 `enabled` 置 false。
+
+```sh
+aiw schedule-add \
+  --expression "0 9 * * *" \
+  --prompt "晨间日报" \
+  --channel web \
+  --chat-id local-cli
+# { "job": { "id":"...","expression":"0 9 * * *",... } }
+```
+
+### `aiw schedule-remove <jobId>`（PLAN-014 F4）
+
+按 id 删除：
+
+```sh
+aiw schedule-remove crn_xxxxxxxxxxxx
+# { "removed": true }
+```
+
+不存在时退出码 `1`，输出 `{ "removed": false }`。
+
 ### Exit code 约定（aiw）
 
 - `0` — 成功；
@@ -266,6 +331,62 @@ aim config set w_xxxxxxxxxxxx "$(cat new-config.json)" --if-match 2
 ```sh
 aim token rotate w_xxxxxxxxxxxx
 # { "deviceToken": "wtk_NEWTOKENHERE" }
+```
+
+### `aim approvals list [--worker <id>]`（PLAN-014 F2）
+
+通过 gateway WS 协议 `approval.list` 列出挂起的 per-tool 审批。带 `--worker` 时只查指定 worker；不带时先 `workers.list` 拉全部 online worker，再并行查每个 worker 的 approvals 并聚合：
+
+```sh
+aim approvals list
+# 聚合所有 online worker
+aim approvals list --worker w_xxxxxxxxxxxx
+# 只查指定
+# {
+#   "approvals": [
+#     { "workerId":"w_...","taskId":"tsk_...","toolCallId":"call_...","toolName":"...","params":{...},"expiresAt":1714... }
+#   ]
+# }
+```
+
+### `aim approvals grant <workerId> <taskId> <toolCallId> [--deny]`（PLAN-014 F2）
+
+调 gateway 协议 `approval.grant`，下发 `allow` / `deny` 决策。worker 收到后：
+
+- `allow`：`ApprovalStore` resolve，orchestrator 继续执行 tool。
+- `deny`：合成 `"tool {name} blocked by policy"` 助手消息短路。
+
+```sh
+aim approvals grant w_xxxxxxxxxxxx tsk_xxx call_yyy
+aim approvals grant w_xxxxxxxxxxxx tsk_xxx call_yyy --deny
+```
+
+### `aim schedule list <workerId>`（PLAN-014 F4）
+
+读取目标 worker 上 `cron_jobs` 表全量：
+
+```sh
+aim schedule list w_xxxxxxxxxxxx
+# { "jobs": [ { "id":"...","expression":"0 9 * * *","prompt":"...","channel":"web","chatId":"...","accountId":"sys:cron","enabled":true,... } ] }
+```
+
+### `aim schedule add <workerId> --expression <expr> --prompt <text> --channel <channel> --chat-id <id> [--account-id <id>] [--disabled]`（PLAN-014 F4）
+
+通过 gateway 协议 `cron.add` 在远端 worker 落库一条 cron job。`--account-id` 缺省 `sys:cron`，`--disabled` 把初始 `enabled` 置 false。
+
+```sh
+aim schedule add w_xxxxxxxxxxxx \
+  --expression "*/15 * * * *" \
+  --prompt "每 15 分钟巡检" \
+  --channel web \
+  --chat-id ops-monitor
+```
+
+### `aim schedule remove <workerId> <jobId>`（PLAN-014 F4）
+
+```sh
+aim schedule remove w_xxxxxxxxxxxx crn_xxxxxxxxxxxx
+# { "removed": true }
 ```
 
 ### `aim logs <workerId> [--follow] [--tail N] [--timeout-ms <n>]`
