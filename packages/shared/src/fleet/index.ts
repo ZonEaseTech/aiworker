@@ -15,6 +15,8 @@ export type {
   CloudGatewayBrainSourceConfig,
   EvolutionConfig,
   FilesystemBrainSourceConfig,
+  ToolPolicy,
+  ToolPolicyAction,
   WorkerConfig,
 } from './config'
 

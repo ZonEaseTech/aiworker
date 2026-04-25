@@ -348,6 +348,114 @@ describe('dispatchNodeEvent 全量广播', () => {
   })
 })
 
+describe('approval.* (PLAN-014 F2)', () => {
+  test('approval.requested event 通过 dispatchNodeEvent 广播到所有 operator', () => {
+    const { ctx, cleanup } = makeCtx()
+    try {
+      const op1 = makeSendTap()
+      const op2 = makeSendTap()
+      ctx.operators.register({ agentId: 'op-1', deviceId: 'op-d1', ws: op1.ws, connectedAt: 1 })
+      ctx.operators.register({ agentId: 'op-2', deviceId: 'op-d2', ws: op2.ws, connectedAt: 2 })
+      const nodeWs = makeSendTap().ws
+      dispatchNodeEvent(ctx, nodeWs, {
+        type: 'event',
+        name: 'approval.requested',
+        payload: {
+          workerId: 'w-ask',
+          taskId: 't-1',
+          toolCallId: 'c-1',
+          toolName: 'fs.write',
+          params: { path: '/etc/passwd' },
+          expiresAt: Date.now() + 60_000,
+        },
+        ts: Date.now(),
+      })
+      expect(op1.sent).toHaveLength(1)
+      expect(op2.sent).toHaveLength(1)
+      const parsed = parseFrame(op1.sent[0]!)
+      if (parsed.ok && parsed.frame.type === 'event') {
+        expect(parsed.frame.name).toBe('approval.requested')
+        expect((parsed.frame.payload as { toolName?: string }).toolName).toBe('fs.write')
+      }
+    }
+    finally { cleanup() }
+  })
+
+  test('approval.grant 走 operator-to-node 转发：node 在线时帧到达 node', async () => {
+    const { ctx, cleanup } = makeCtx()
+    try {
+      const nodeTap = makeSendTap()
+      ctx.nodes.register({
+        workerId: 'w-grant',
+        deviceId: 'd-g',
+        ws: nodeTap.ws,
+        pairedAt: 1,
+        meta: {},
+      })
+      const opTap = makeSendTap()
+      await dispatchOperatorRequest(
+        ctx,
+        opTap.ws,
+        {
+          type: 'request',
+          id: 'op-req-grant',
+          method: 'approval.grant',
+          params: {
+            workerId: 'w-grant',
+            taskId: 't-1',
+            toolCallId: 'c-1',
+            decision: 'allow',
+          },
+        },
+        'op-agent',
+      )
+      // 帧到达 node（id 被 gateway 重写）
+      expect(nodeTap.sent).toHaveLength(1)
+      const parsed = parseFrame(nodeTap.sent[0]!)
+      if (parsed.ok && parsed.frame.type === 'request') {
+        expect(parsed.frame.method).toBe('approval.grant')
+        expect(parsed.frame.id).not.toBe('op-req-grant')
+      }
+      // operator 还没收到响应（要等 node 回 response 才会回送）
+      expect(opTap.sent).toHaveLength(0)
+
+      // 模拟 node 回 response：dispatchNodeResponse 把 id 翻回 operator 原始 id
+      const reqId = (parsed.ok && parsed.frame.type === 'request') ? parsed.frame.id : ''
+      dispatchNodeResponse(ctx, nodeTap.ws, {
+        type: 'response',
+        id: reqId,
+        ok: true,
+        result: { granted: true },
+      })
+      expect(opTap.sent).toHaveLength(1)
+      const back = parseFrame(opTap.sent[0]!)
+      if (back.ok && back.frame.type === 'response' && back.frame.ok === true) {
+        expect(back.frame.id).toBe('op-req-grant')
+        expect(back.frame.result).toEqual({ granted: true })
+      }
+    }
+    finally { cleanup() }
+  })
+
+  test('approval.list 缺 workerId → invalid_params', async () => {
+    const { ctx, cleanup } = makeCtx()
+    try {
+      const opTap = makeSendTap()
+      await dispatchOperatorRequest(
+        ctx,
+        opTap.ws,
+        { type: 'request', id: 'op-req-list', method: 'approval.list', params: {} },
+        'op-agent',
+      )
+      expect(opTap.sent).toHaveLength(1)
+      const parsed = parseFrame(opTap.sent[0]!)
+      if (parsed.ok && parsed.frame.type === 'response' && parsed.frame.ok === false)
+        expect(parsed.frame.error.code).toBe('invalid_params')
+    }
+    finally { cleanup() }
+  })
+})
+
 describe('path guard — proto methods are either local-handled or routed to node', () => {
   test('getProtoMethodNames 涵盖所有 METHODS，且每条方法都有路由归属', () => {
     // dispatch 的契约：proto 里任何方法要么在本地 handler map 里，要么

@@ -49,6 +49,8 @@ export type {
   SkillDraft,
   SkillDraftSource,
   SkillDraftStatus,
+  ToolPolicy,
+  ToolPolicyAction,
   UpdateWorkerInput,
   VariantBody,
   VariantBodyByEngine,

@@ -4,6 +4,7 @@ import process from 'node:process'
 import cac from 'cac'
 import consola from 'consola'
 
+import { runApprovalsGrant, runApprovalsList } from './commands/approvals'
 import { runConfigSet, runConfigShow } from './commands/config'
 import { runInit } from './commands/init'
 import { runRun } from './commands/run'
@@ -68,6 +69,24 @@ cli.command('token-rotate', 'Mint a fresh bearer token; prints the new plaintext
   const code = await runTokenRotate()
   process.exit(code)
 })
+
+// PLAN-014 F2: per-tool approvals (local worker HTTP)
+// 沿用 aiw 既有的 dash 命名（config-show / config-set / token-rotate），
+// 避免多词子命令需要 cac argv 预处理。
+cli.command('approvals-list', '列出当前 worker 进程内挂起的 per-tool 审批').action(async () => {
+  process.exit(await runApprovalsList())
+})
+
+cli
+  .command('approvals-grant <taskId> <toolCallId>', '解锁某条挂起的 tool 审批')
+  .option('--deny', '下发 deny 决策；默认 allow')
+  .action(async (taskId: string, toolCallId: string, opts: { deny?: boolean }) => {
+    process.exit(await runApprovalsGrant({
+      taskId,
+      toolCallId,
+      ...(opts.deny === undefined ? {} : { deny: opts.deny }),
+    }))
+  })
 
 cli.help()
 cli.version('0.2.0')

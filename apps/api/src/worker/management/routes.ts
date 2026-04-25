@@ -254,5 +254,37 @@ export function buildManagementRoutes(deps: ManagementRoutesDeps) {
     return c.json({ engines })
   })
 
+  /**
+   * PLAN-014 F2 — per-tool approvals 本地视图。aiw CLI 不经 gateway，
+   * 直接读 worker 自身的内存 store；甚至 dev / debug 时操作员也可以手动 grant
+   * 跳过 gateway WS 路径。bearer-auth 中间件已经对所有 `/api/worker/*` 生效，
+   * 局域网外的访问者需要持 worker bearer token。
+   */
+  routes.get('/approvals', (c) => {
+    const approvals = deps.getState().runtime.approvals
+    const list = approvals.list().map(p => ({
+      taskId: p.taskId,
+      toolCallId: p.toolCallId,
+      toolName: p.toolName,
+      params: p.params,
+      expiresAt: p.expiresAt,
+    }))
+    return c.json({ approvals: list })
+  })
+
+  routes.post('/approvals/:taskId/:toolCallId/grant', async (c) => {
+    const taskId = c.req.param('taskId')
+    const toolCallId = c.req.param('toolCallId')
+    const raw = await c.req.json().catch(() => null)
+    const parsed = z.object({ decision: z.enum(['allow', 'deny']) }).safeParse(raw)
+    if (!parsed.success) {
+      return c.json({
+        error: { code: 'invalid-body', message: 'decision must be "allow" or "deny"' },
+      }, 400)
+    }
+    const granted = deps.getState().runtime.approvals.grant(taskId, toolCallId, parsed.data.decision)
+    return c.json({ granted })
+  })
+
   return routes
 }

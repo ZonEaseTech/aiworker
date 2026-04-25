@@ -173,6 +173,44 @@ const logsTailMethod = defineMethod({
   routing: 'operator-to-node',
 })
 
+// ---- approval.* ----（PLAN-014 F2）
+
+export const approvalDecisionSchema = z.enum(['allow', 'deny'])
+export type ApprovalDecision = z.infer<typeof approvalDecisionSchema>
+
+export const pendingApprovalSchema = z.object({
+  workerId: z.string().min(1),
+  taskId: z.string().min(1),
+  toolCallId: z.string().min(1),
+  toolName: z.string().min(1),
+  params: z.record(z.unknown()),
+  expiresAt: z.number().int(),
+})
+export type PendingApprovalDescriptor = z.infer<typeof pendingApprovalSchema>
+
+const approvalListMethod = defineMethod({
+  method: 'approval.list',
+  description: '列出目标 worker 当前所有挂起的 per-tool 审批请求。',
+  params: z.object({ workerId: z.string().min(1) }),
+  result: z.object({ approvals: z.array(pendingApprovalSchema) }),
+  routing: 'operator-to-node',
+})
+
+const approvalGrantMethod = defineMethod({
+  method: 'approval.grant',
+  description: '解锁某条挂起的 tool 审批：allow 让 orchestrator 继续执行，deny 立即短路。',
+  params: z.object({
+    workerId: z.string().min(1),
+    taskId: z.string().min(1),
+    toolCallId: z.string().min(1),
+    decision: approvalDecisionSchema,
+  }),
+  result: z.object({
+    granted: z.boolean(),
+  }),
+  routing: 'operator-to-node',
+})
+
 // ---- system.* ----
 
 const systemPresenceMethod = defineMethod({
@@ -203,6 +241,8 @@ export const METHODS = {
   'token.rotate': tokenRotateMethod,
   'logs.tail': logsTailMethod,
   'system.presence': systemPresenceMethod,
+  'approval.list': approvalListMethod,
+  'approval.grant': approvalGrantMethod,
 } as const
 
 export type MethodName = keyof typeof METHODS

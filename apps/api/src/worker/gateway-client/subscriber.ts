@@ -141,6 +141,25 @@ export class GatewaySubscriber {
           },
         }
       }
+      case 'approval.requested': {
+        // PLAN-014 F2：orchestrator 在 toolPolicy=ask 命中时发到 bus 的事件，
+        // 这里直接转换为 gateway 协议的 APPROVAL_REQUESTED 帧上行给 operator。
+        // 注意 bus payload 里 workerId 已存在，但下游 emit 会把自身 workerId
+        // 再贴一次——payload 里删掉它再走 emit 路径，避免覆盖。
+        const taskId = strOrNull(p.taskId)
+        const toolCallId = strOrNull(p.toolCallId)
+        const toolName = strOrNull(p.toolName)
+        const expiresAt = typeof p.expiresAt === 'number' ? p.expiresAt : null
+        if (!taskId || !toolCallId || !toolName || expiresAt === null)
+          return null
+        const params = (typeof p.params === 'object' && p.params !== null)
+          ? p.params as Record<string, unknown>
+          : {}
+        return {
+          name: EVENTS.APPROVAL_REQUESTED,
+          payload: { taskId, toolCallId, toolName, params, expiresAt },
+        }
+      }
       default:
         return null
     }

@@ -16,6 +16,7 @@ import { closeWorkerDb, getWorkerDb, initWorkerDb, messages, runWorkerMigrations
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { ClaudeCodeExecutor } from '../executor/engines/claude-code'
 import { WorkspaceManager as RealWorkspaceManager } from '../executor/workspace'
+import { ApprovalStore } from './approvals'
 import { ProcessManager } from './process-manager'
 import { Orchestrator } from './service'
 
@@ -104,6 +105,7 @@ describe('Orchestrator + ClaudeCodeExecutor (stub CLI)', () => {
         spawn(STUB_PATH, [], { cwd: opts.cwd, env: opts.env, stdio: ['pipe', 'pipe', 'pipe'] }),
     })
 
+    const approvals = new ApprovalStore()
     const orchestrator = new Orchestrator({
       config,
       brain: stubBrain(),
@@ -112,6 +114,7 @@ describe('Orchestrator + ClaudeCodeExecutor (stub CLI)', () => {
       workerId: 'w_testtesttest',
       workspaces,
       processes,
+      approvals,
     })
 
     const envelope: Envelope = {

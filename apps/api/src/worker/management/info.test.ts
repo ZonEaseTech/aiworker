@@ -25,6 +25,7 @@ function stubRuntime(
     orchestrator: {} as WorkerRuntime['orchestrator'],
     workspaces: {} as WorkerRuntime['workspaces'],
     processes: {} as WorkerRuntime['processes'],
+    approvals: {} as WorkerRuntime['approvals'],
     dispose: () => undefined,
   }
 }
