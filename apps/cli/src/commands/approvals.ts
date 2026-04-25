@@ -1,6 +1,6 @@
 import process from 'node:process'
 
-import { workerEnv } from '@aiworker/api/lib'
+import { workerEnv } from '@aiworker/core'
 import consola from 'consola'
 
 import { loadWorkerContext } from '../context'

@@ -1,5 +1,5 @@
 import { getWorkerDb } from '@aiworker/storage-sqlite/worker'
-import { workerEnv } from '../../config/worker'
+import { workerEnv } from '../env'
 import { SecretsVault } from './vault'
 
 let instance: SecretsVault | null = null

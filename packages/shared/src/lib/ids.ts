@@ -1,6 +1,6 @@
 import type { Buffer } from 'node:buffer'
 import { randomBytes } from 'node:crypto'
-import { WORKER_ID_ALPHABET } from '@aiworker/shared'
+import { WORKER_ID_ALPHABET } from '../fleet'
 
 /** Crockford base32 encoder that emits the exact number of characters requested. */
 function encodeBase32(bytes: Buffer, outputLen: number): string {

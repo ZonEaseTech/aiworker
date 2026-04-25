@@ -1,22 +1,23 @@
+import type { WorkerModeState, WorkerRuntime } from '@aiworker/core'
 import type {
   BrainProvider,
   ExecutorProvider,
   WorkerConfig,
 } from '@aiworker/shared'
-import type { WorkerModeState } from '../../modes/worker'
-import type { WorkerRuntime } from '../runtime'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import {
+  ApprovalStore,
+  ChannelRegistry,
+  loadOrSeedConfig,
+  ProcessManager,
+  resetAvailabilityProbeForTests,
+  resetSecretsVaultForTests,
+} from '@aiworker/core'
 import { closeWorkerDb, getWorkerDb, initWorkerDb, runWorkerMigrations } from '@aiworker/storage-sqlite/worker'
 
 import { beforeEach, describe, expect, it } from 'bun:test'
-import { loadOrSeedConfig } from '../bootstrap/config'
-import { ChannelRegistry } from '../channels/registry'
-import { resetAvailabilityProbeForTests } from '../executor/availability'
-import { ApprovalStore } from '../orchestrator/approvals'
-import { ProcessManager } from '../orchestrator/process-manager'
-import { resetSecretsVaultForTests } from '../secrets'
 import { buildManagementRoutes } from './routes'
 
 const MASTER_KEY = '00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff'

@@ -1,6 +1,6 @@
 import type { Context } from 'hono'
+import { AppError } from '@aiworker/shared'
 import consola from 'consola'
-import { AppError } from '../lib/app-error'
 
 export function errorHandler(err: Error, c: Context) {
   if (err instanceof AppError) {

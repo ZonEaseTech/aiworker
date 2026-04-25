@@ -1,8 +1,7 @@
+import { AppError } from '@aiworker/shared'
 import { evolutionObservations, getWorkerDb, skillDrafts } from '@aiworker/storage-sqlite/worker'
-
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { desc, eq } from 'drizzle-orm'
-import { AppError } from '../../shared'
 
 export const evolutionRoutes = new OpenAPIHono()
 

@@ -1,9 +1,9 @@
-import type { WorkerRuntime } from '../runtime'
+import type { WorkerRuntime } from '@aiworker/core'
+import { AppError } from '@aiworker/shared'
 import { agentTasks, conversations, getWorkerDb, messages } from '@aiworker/storage-sqlite/worker'
 
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { desc, eq } from 'drizzle-orm'
-import { AppError } from '../../shared'
 
 /**
  * Orchestrator router. The `getRuntime` thunk is re-evaluated at every request

@@ -1,28 +1,30 @@
+import type { WorkerModeState } from '@aiworker/core'
 import type { WorkerConfig } from '@aiworker/shared'
-import type { WorkerModeState } from '../../modes/worker'
+import {
+  buildInfo,
+  ConfigVersionConflictError,
+  deleteSecret,
+  getAvailabilityProbe,
+  getSecretsVault,
+  handleBrainTest,
+  handleChannelTest,
+  handleExecutorTest,
+  handleTokenRotate,
+  InvalidConfigError,
+  listSecrets,
+  mirrorConfigToYaml,
+  putConfig,
+  putSecret,
+  readConfig,
+  workerEnv,
+} from '@aiworker/core'
+import { AppError } from '@aiworker/shared'
 import { getWorkerDb } from '@aiworker/storage-sqlite/worker'
 import { OpenAPIHono } from '@hono/zod-openapi'
 import consola from 'consola'
 
 import { z } from 'zod'
-import { workerEnv } from '../../config/worker'
-import { AppError } from '../../shared'
-import { getAvailabilityProbe } from '../executor/availability'
-import { getSecretsVault } from '../secrets'
 import { buildBearerAuth } from './bearer-auth'
-import { handleBrainTest } from './brain-test'
-import { handleChannelTest } from './channel-test'
-import {
-  ConfigVersionConflictError,
-  InvalidConfigError,
-  mirrorConfigToYaml,
-  putConfig,
-  readConfig,
-} from './config'
-import { handleExecutorTest } from './executor-test'
-import { buildInfo } from './info'
-import { handleTokenRotate } from './rotate'
-import { deleteSecret, listSecrets, putSecret } from './secrets'
 
 export interface ManagementRoutesDeps {
   getState: () => WorkerModeState

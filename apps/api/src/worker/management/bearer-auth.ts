@@ -1,6 +1,5 @@
 import type { MiddlewareHandler } from 'hono'
-
-import { timingSafeEqualStrings } from '../secrets/crypto'
+import { timingSafeEqualStrings } from '@aiworker/core'
 
 export interface BearerAuthIdentity {
   /** Current plaintext bearer token that inbound callers must present. */

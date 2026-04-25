@@ -1,5 +1,5 @@
 import type { BrainSourceConfig, ServiceStatus } from '@aiworker/shared'
-import type { WorkerModeState } from '../../modes/worker'
+import type { WorkerModeState } from './state'
 
 /**
  * Per-source brain status surfaced by `POST /api/worker/brain/test`. The

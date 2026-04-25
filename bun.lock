@@ -17,6 +17,7 @@
     "apps/api": {
       "name": "@aiworker/api",
       "dependencies": {
+        "@aiworker/core": "workspace:*",
         "@aiworker/fs-layout": "workspace:*",
         "@aiworker/gateway-proto": "workspace:*",
         "@aiworker/shared": "workspace:*",
@@ -24,10 +25,8 @@
         "@hono/zod-openapi": "^0.19.6",
         "@scalar/hono-api-reference": "^0.5.180",
         "consola": "^3.4.2",
-        "cron-parser": "^5.5.0",
         "drizzle-orm": "^0.44.1",
         "hono": "^4.7.7",
-        "yaml": "^2.7.1",
         "zod": "^3.24.4",
       },
       "devDependencies": {
@@ -43,6 +42,7 @@
       },
       "dependencies": {
         "@aiworker/api": "workspace:*",
+        "@aiworker/core": "workspace:*",
         "@aiworker/fs-layout": "workspace:*",
         "@aiworker/gateway-proto": "workspace:*",
         "@aiworker/shared": "workspace:*",
@@ -112,6 +112,24 @@
         "vitest": "4",
       },
     },
+    "packages/core": {
+      "name": "@aiworker/core",
+      "dependencies": {
+        "@aiworker/fs-layout": "workspace:*",
+        "@aiworker/gateway-proto": "workspace:*",
+        "@aiworker/shared": "workspace:*",
+        "@aiworker/storage-sqlite": "workspace:*",
+        "consola": "^3.4.2",
+        "cron-parser": "^5.5.0",
+        "drizzle-orm": "^0.44.1",
+        "yaml": "^2.7.1",
+        "zod": "^3.24.4",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.2.13",
+        "typescript": "^5.8.3",
+      },
+    },
     "packages/fs-layout": {
       "name": "@aiworker/fs-layout",
       "devDependencies": {
@@ -157,6 +175,8 @@
     "@aiworker/api": ["@aiworker/api@workspace:apps/api"],
 
     "@aiworker/cli": ["@aiworker/cli@workspace:apps/cli"],
+
+    "@aiworker/core": ["@aiworker/core@workspace:packages/core"],
 
     "@aiworker/fs-layout": ["@aiworker/fs-layout@workspace:packages/fs-layout"],
 
