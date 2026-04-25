@@ -116,7 +116,7 @@ apps/api/src/shared/index.ts            → 拆：AppError 走 shared，requestL
 Landed 2026-04-25 in two waves under dispatch BKD `523v0p2o`：
 
 - **S1** — commit `1bb4e82` (PR-equivalent merge `06ab5ff`)：物理搬迁 + import 重写 + ESLint guard + hot-reload regression。165 文件改动；rename ~134 条 + ~20 条 import 编辑 + ~11 条新增 + 大量 ESLint sort-imports 自动重排。零行为变更。
-- **S2** — commit `<待 merge 后回填>` (merge `<待 merge 后回填>`)：本文档 + `docs/architecture.md` + `docs/changelog.md` + `docs/plan/index.md` 收尾。
+- **S2** — commit `d26ad35` (merge `0e43264`)：本文档 + `docs/architecture.md` + `docs/changelog.md` + `docs/plan/index.md` 收尾。
 
 Verified: `bun run check` 全绿（含新 ESLint guard）；总 runtime test pass 521（基线 481，净 +40）；smoke `aiw-run` / `aim` / `gateway-local` 全绿。原 `apps/api/src/lib.ts` 已删；`grep '@aiworker/api/lib' apps packages` 零命中；`grep -rE "from ['\"]hono" packages/core/src` 零命中。
 

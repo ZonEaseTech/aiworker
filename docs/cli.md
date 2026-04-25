@@ -5,7 +5,7 @@
 - **`aiw`** — worker 侧：引导 worker 运行时、喂消息、启动 HTTP 服务、（可选）作为 node 拨回 gateway。
 - **`aim`** — operator 侧（PLAN-013）：通过 WS 协议跟 gateway 对话，管理 fleet 内所有 worker。
 
-两者共享 `cac` 解析器与 `@aiworker/api/lib` 服务端复用，但状态文件各自独立——`aiw` 读写 `worker.db`，`aim` 读写 `~/.aiworker/aim.json`。
+两者共享 `cac` 解析器与 `@aiworker/core` 服务端复用，但状态文件各自独立——`aiw` 读写 `worker.db`，`aim` 读写 `~/.aiworker/aim.json`。
 
 ## Installation (dev)
 
