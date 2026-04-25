@@ -39,6 +39,8 @@ export const messages = sqliteTable('messages', {
   toolCallId: text('tool_call_id'),
   tokensIn: integer('tokens_in'),
   tokensOut: integer('tokens_out'),
+  // JSON 字符串：envelope 附带的 reply / edit / delete / reactions 等元信息。
+  richMetadata: text('rich_metadata'),
   createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
 })
 

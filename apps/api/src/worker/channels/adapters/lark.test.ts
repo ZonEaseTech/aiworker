@@ -139,18 +139,29 @@ describe('larkAdapter', () => {
   })
 
   describe('toEnvelopes', () => {
-    it('normalises a group im.message.receive_v1 text event', async () => {
+    it('normalises a group im.message.receive_v1 text event and derives accountId from appId', async () => {
       const event = groupTextEvent('hello group')
-      const envelopes = await larkAdapter.toEnvelopes(JSON.stringify(event), 'w_test', makeBinding())
+      const envelopes = await larkAdapter.toEnvelopes(JSON.stringify(event), 'w_test', makeBinding({ appId: 'cli_app_id' }))
       expect(envelopes).toHaveLength(1)
       const env = envelopes[0]!
       expect(env.channel).toBe('lark')
+      expect(env.accountId).toBe('cli_app_id')
       expect(env.chatId).toBe('group:oc_room1')
       expect(env.userId).toBe('ou_user1')
       expect(env.userDisplayName).toBe('Alice')
       expect(env.text).toBe('hello group')
       expect(env.workerId).toBe('w_test')
       expect(env.receivedAt).toBe(new Date(1700000000123).toISOString())
+      expect(env.richMetadata).toBeUndefined()
+    })
+
+    it('extracts quote richMetadata when message has a parent_id', async () => {
+      const event = groupTextEvent('replying') as Record<string, unknown>
+      const eventBlock = (event as { event: { message: Record<string, unknown> } }).event
+      eventBlock.message.parent_id = 'om_parent'
+      const envelopes = await larkAdapter.toEnvelopes(JSON.stringify(event), 'w_test', makeBinding())
+      expect(envelopes).toHaveLength(1)
+      expect(envelopes[0]!.richMetadata?.quote).toBe('om_parent')
     })
 
     it('normalises a p2p text event into chatId p2p:<open_id>', async () => {

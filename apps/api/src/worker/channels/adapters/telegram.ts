@@ -1,8 +1,8 @@
-import type { Envelope } from '@aiworker/shared'
+import type { Envelope, EnvelopeRichMetadata } from '@aiworker/shared'
 import type { ChannelAdapter } from './types'
 
 import { Buffer } from 'node:buffer'
-import { timingSafeEqual } from 'node:crypto'
+import { createHash, timingSafeEqual } from 'node:crypto'
 
 import { nowIso } from '../envelope'
 
@@ -29,6 +29,8 @@ interface TelegramMessage {
   chat: TelegramChat
   from?: TelegramUser
   text?: string
+  edit_date?: number
+  reply_to_message?: TelegramMessage
 }
 
 interface TelegramUpdate {
@@ -82,6 +84,33 @@ function chunkByLimit(text: string, limit: number): string[] {
   return chunks
 }
 
+/**
+ * 优先用运维填入的 bot username；缺失时以 botToken 的 sha256 前 8 字节 hex
+ * 兜底，保证同 token 派生稳定且不同 bot 不会冲突。
+ */
+function deriveTelegramAccountId(credentials: { botToken: string, botUsername?: string }): string {
+  if (credentials.botUsername && credentials.botUsername.length > 0)
+    return credentials.botUsername
+  return createHash('sha256').update(credentials.botToken, 'utf8').digest('hex').slice(0, 16)
+}
+
+function extractRichMetadata(msg: TelegramMessage): EnvelopeRichMetadata | undefined {
+  const meta: EnvelopeRichMetadata = {}
+  if (typeof msg.edit_date === 'number')
+    meta.isEdit = true
+  const replyTarget = msg.reply_to_message
+  if (replyTarget) {
+    const authorId = replyTarget.from?.id?.toString()
+    if (authorId !== undefined) {
+      meta.replyTo = {
+        authorId,
+        text: typeof replyTarget.text === 'string' ? replyTarget.text : '',
+      }
+    }
+  }
+  return meta.isEdit === undefined && meta.replyTo === undefined ? undefined : meta
+}
+
 export const telegramAdapter: ChannelAdapter = {
   channel: 'telegram',
 
@@ -96,7 +125,9 @@ export const telegramAdapter: ChannelAdapter = {
       throw new Error('invalid X-Telegram-Bot-Api-Secret-Token')
   },
 
-  async toEnvelopes(rawBody, workerId) {
+  async toEnvelopes(rawBody, workerId, binding) {
+    if (!binding || binding.credentials.channel !== 'telegram')
+      throw new Error('telegram adapter requires a telegram binding for accountId derivation')
     const update = JSON.parse(rawBody) as TelegramUpdate
     const msg = update.message
     if (!msg || typeof msg.text !== 'string')
@@ -107,13 +138,17 @@ export const telegramAdapter: ChannelAdapter = {
     const receivedAt = Number.isFinite(msg.date)
       ? new Date(msg.date * 1000).toISOString()
       : nowIso()
+    const accountId = deriveTelegramAccountId(binding.credentials)
+    const richMetadata = extractRichMetadata(msg)
     const envelope: Envelope = {
       workerId,
       channel: 'telegram',
+      accountId,
       chatId,
       ...(userId === undefined ? {} : { userId }),
       ...(name === undefined ? {} : { userDisplayName: name }),
       text: msg.text,
+      ...(richMetadata === undefined ? {} : { richMetadata }),
       receivedAt,
       raw: update,
     }

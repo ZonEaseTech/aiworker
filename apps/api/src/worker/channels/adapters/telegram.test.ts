@@ -8,7 +8,7 @@ type FetchFn = typeof globalThis.fetch
 type MockFetchImpl = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
 
 function telegramBinding(
-  creds: { botToken?: string, webhookSecretToken?: string } = {},
+  creds: { botToken?: string, botUsername?: string, webhookSecretToken?: string } = {},
 ): ChannelBinding {
   return {
     channel: 'telegram',
@@ -16,6 +16,9 @@ function telegramBinding(
     credentials: {
       channel: 'telegram',
       botToken: creds.botToken ?? 'TEST:TOKEN',
+      ...(creds.botUsername === undefined
+        ? {}
+        : { botUsername: creds.botUsername }),
       ...(creds.webhookSecretToken === undefined
         ? {}
         : { webhookSecretToken: creds.webhookSecretToken }),
@@ -70,6 +73,7 @@ describe('telegramAdapter', () => {
       const envelopes = await telegramAdapter.toEnvelopes(
         JSON.stringify(update),
         'worker-1',
+        telegramBinding({ botUsername: 'aiwBot' }),
       )
 
       expect(envelopes).toHaveLength(1)
@@ -77,11 +81,80 @@ describe('telegramAdapter', () => {
       expect(env.workerId).toBe('worker-1')
       expect(env.channel).toBe('telegram')
       expect(env.chatId).toBe('private:123456')
+      expect(env.accountId).toBe('aiwBot')
       expect(env.userId).toBe('42')
       expect(env.userDisplayName).toBe('Test User')
       expect(env.text).toBe('hello')
       expect(env.receivedAt).toBe(new Date(1_700_000_000 * 1000).toISOString())
+      expect(env.richMetadata).toBeUndefined()
       expect(env.raw).toEqual(update)
+    })
+
+    it('falls back to a stable hash of the bot token when botUsername is missing', async () => {
+      const update = {
+        update_id: 99,
+        message: {
+          message_id: 1,
+          from: { id: 9, first_name: 'X' },
+          chat: { id: 9, type: 'private' },
+          date: 1_700_000_000,
+          text: 'hi',
+        },
+      }
+      const [env] = await telegramAdapter.toEnvelopes(
+        JSON.stringify(update),
+        'w',
+        telegramBinding({ botToken: 'BOT:1234567890:abcdef' }),
+      )
+      expect(env?.accountId).toMatch(/^[0-9a-f]{16}$/)
+    })
+
+    it('extracts replyTo richMetadata from reply_to_message', async () => {
+      const update = {
+        update_id: 50,
+        message: {
+          message_id: 200,
+          from: { id: 42, first_name: 'Alice' },
+          chat: { id: 123, type: 'private' },
+          date: 1_700_000_500,
+          text: 'sounds good',
+          reply_to_message: {
+            message_id: 199,
+            from: { id: 7, first_name: 'Bob' },
+            chat: { id: 123, type: 'private' },
+            date: 1_700_000_400,
+            text: 'lunch at 12?',
+          },
+        },
+      }
+      const [env] = await telegramAdapter.toEnvelopes(
+        JSON.stringify(update),
+        'w',
+        telegramBinding({ botUsername: 'aiwBot' }),
+      )
+      expect(env?.richMetadata).toEqual({
+        replyTo: { authorId: '7', text: 'lunch at 12?' },
+      })
+    })
+
+    it('marks isEdit when telegram delivers an edit_date on a message', async () => {
+      const update = {
+        update_id: 51,
+        message: {
+          message_id: 300,
+          from: { id: 42, first_name: 'Alice' },
+          chat: { id: 123, type: 'private' },
+          date: 1_700_000_600,
+          edit_date: 1_700_000_700,
+          text: 'corrected text',
+        },
+      }
+      const [env] = await telegramAdapter.toEnvelopes(
+        JSON.stringify(update),
+        'w',
+        telegramBinding({ botUsername: 'aiwBot' }),
+      )
+      expect(env?.richMetadata?.isEdit).toBe(true)
     })
 
     it('uses first_name alone when last_name is absent and falls back to username', async () => {
@@ -108,10 +181,12 @@ describe('telegramAdapter', () => {
       const [aliceEnv] = await telegramAdapter.toEnvelopes(
         JSON.stringify(firstOnly),
         'w',
+        telegramBinding(),
       )
       const [bobEnv] = await telegramAdapter.toEnvelopes(
         JSON.stringify(usernameOnly),
         'w',
+        telegramBinding(),
       )
       expect(aliceEnv?.userDisplayName).toBe('Alice')
       expect(bobEnv?.userDisplayName).toBe('bob')
@@ -132,6 +207,7 @@ describe('telegramAdapter', () => {
       const envelopes = await telegramAdapter.toEnvelopes(
         JSON.stringify(update),
         'w',
+        telegramBinding(),
       )
       expect(envelopes).toEqual([])
     })
@@ -150,6 +226,7 @@ describe('telegramAdapter', () => {
       const envelopes = await telegramAdapter.toEnvelopes(
         JSON.stringify(update),
         'w',
+        telegramBinding(),
       )
       expect(envelopes).toEqual([])
     })

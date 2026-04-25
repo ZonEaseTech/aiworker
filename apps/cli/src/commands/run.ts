@@ -49,6 +49,8 @@ export async function runRun(options: RunOptions = {}): Promise<number> {
   const envelope: Envelope = {
     workerId: ctx.workerId,
     channel: 'web',
+    // aiw CLI 直接驱动 worker，使用保留前缀 `sys:cli` 避免与 web binding.id 冲突。
+    accountId: 'sys:cli',
     chatId,
     text: message,
     receivedAt: new Date().toISOString(),

@@ -29,6 +29,7 @@ export type {
   EngineKind,
   Envelope,
   EnvelopeAttachment,
+  EnvelopeRichMetadata,
   EvolutionConfig,
   EvolutionObservation,
   ExecutorConfig,

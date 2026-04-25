@@ -133,6 +133,9 @@ export class GatewayDispatcher {
     const envelope: Envelope = {
       workerId: this.deps.workerId,
       channel: 'web',
+      // gateway 推送过来的 chat.send 用保留前缀 `sys:gateway` accountId，
+      // 与用户的 web binding.id 形成命名空间隔离。
+      accountId: 'sys:gateway',
       chatId,
       text: content,
       receivedAt: new Date().toISOString(),

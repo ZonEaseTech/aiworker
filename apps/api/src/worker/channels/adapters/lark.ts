@@ -1,4 +1,4 @@
-import type { Envelope } from '@aiworker/shared'
+import type { Envelope, EnvelopeRichMetadata } from '@aiworker/shared'
 import type { ChannelAdapter } from './types'
 
 import { Buffer } from 'node:buffer'
@@ -24,6 +24,9 @@ interface LarkMessage {
   chat_type: 'p2p' | 'group'
   message_type: string
   content: string
+  /** Set when the user is replying to / quoting another message. */
+  parent_id?: string
+  root_id?: string
 }
 
 interface LarkEventV2 {
@@ -160,9 +163,10 @@ export const larkAdapter: ChannelAdapter = {
   },
 
   async toEnvelopes(rawBody, workerId, binding) {
-    const encryptKey = binding?.credentials.channel === 'lark'
-      ? binding.credentials.encryptKey
-      : undefined
+    if (!binding || binding.credentials.channel !== 'lark')
+      throw new Error('lark adapter requires a lark binding for accountId derivation')
+    const accountId = binding.credentials.appId
+    const encryptKey = binding.credentials.encryptKey
     const payload = parseLarkBody(rawBody, encryptKey)
     if (isUrlVerification(payload))
       return []
@@ -192,13 +196,17 @@ export const larkAdapter: ChannelAdapter = {
       ? `group:${message.chat_id}`
       : `p2p:${openId ?? ''}`
 
+    const richMetadata = extractRichMetadata(message)
+
     const envelope: Envelope = {
       workerId,
       channel: 'lark',
+      accountId,
       chatId,
       ...(openId === undefined ? {} : { userId: openId }),
       ...(displayName === undefined ? {} : { userDisplayName: displayName }),
       text,
+      ...(richMetadata === undefined ? {} : { richMetadata }),
       receivedAt: new Date(Number(message.create_time)).toISOString(),
       raw: payload,
     }
@@ -237,6 +245,21 @@ export const larkAdapter: ChannelAdapter = {
     if (data.code !== 0)
       throw new Error(`Lark send failed: ${data.code ?? res.status} ${data.msg ?? res.statusText}`)
   },
+}
+
+/**
+ * Lark webhooks include `parent_id` when the user replies to / quotes another
+ * message but expose neither the parent author nor body — those require an
+ * extra `im.message.get` round-trip. Surface the parent id via `quote`; the
+ * downstream consumer can hydrate it on demand.
+ */
+function extractRichMetadata(message: LarkMessage): EnvelopeRichMetadata | undefined {
+  const parentId = typeof message.parent_id === 'string' && message.parent_id.length > 0
+    ? message.parent_id
+    : undefined
+  if (!parentId)
+    return undefined
+  return { quote: parentId }
 }
 
 /** Internals exposed for tests only. Do not import from production code. */
