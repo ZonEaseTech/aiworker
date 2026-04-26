@@ -166,7 +166,9 @@ curl -fsS http://127.0.0.1:3000/health
 
 Telegram / WhatsApp / Lark / LINE webhook 必须能从公网回调到 gateway 才能收消息。把这一层（Cloudflare orange-cloud + Caddy `:80 → 127.0.0.1:3000` 反代 + 公开域名）单独拆到 [`deployment-public-https.md`](./deployment-public-https.md)，按需叠加到形态二或形态三上。
 
-形态一（裸跑）通常不需要——开发机用 `cloudflared tunnel` / `ngrok` / Tailscale Funnel 即可临时暴露。
+> **如果你打算自己加 Caddy / nginx 反代到 gateway**：必须先读 [`deployment-public-https.md` § Caddy basic-auth setup (BUG-007)](./deployment-public-https.md#caddy-basic-auth-setup-bug-007)。Gateway 的 loopback authN 在反代后会失效——任何能 hit 反代的请求都会被识别为 loopback 通过认证。Caddy 必须自己叠 basic-auth / IP allowlist / Cloudflare Access 等手段。
+
+形态一（裸跑）通常不需要公网入口——开发机用 `cloudflared tunnel` / `ngrok` / Tailscale Funnel 即可临时暴露。
 
 ---
 

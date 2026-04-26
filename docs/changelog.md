@@ -1,5 +1,29 @@
 # AIWorker Changelog
 
+## 2026-04-26 15:00 [BUG-P0] BUG-007 修复 — 公网 Caddy 反代绕过 gateway authN
+
+**关键安全修复**。stage-1 投产评估时发现：当 gateway 跑在 Caddy 反代之后（生产推荐拓扑：Cloudflare orange-cloud → host :80 → Caddy → gateway :3000），gateway 的 loopback authN（`apps/gateway/src/auth/loopback.ts`）会把所有反代过来的请求识别为 `127.0.0.1`，**绕过 token 校验**。Cloudflare 橙云只做 TLS 终止，不是 authN 层。结果：任何能 resolve 公网域名的请求都自动以 operator 身份通过。同样问题影响任何打算把 gateway 摆到 nginx / Caddy / haproxy / Cloud Run 等反向代理后的用户。
+
+之前 `docs/deployment-public-https.md` 把这个行为 documented 成"特性"（"Caddy 反代属于 gateway 视角的 loopback ... 不需要再叠一层 basic auth"）——已纠正。
+
+What shipped (this commit):
+
+- `ops/caddy/Caddyfile.tmpl`：`:80` 站点 `import auth.snippet`，把 basicauth 段外置到宿主侧的 `/etc/caddy/auth.snippet`（**不入 git**，缺失则 Caddy 拒启动——fail-closed）；附详细 inline 注释解释为什么 Caddy 自身必须做 authN。
+- `docs/deployment-public-https.md`：删掉错误论断（"经 Caddy 反代不需要 basic auth"）；新增 §"Caddy basic-auth setup（BUG-007）"段落，含 `caddy hash-password` 生成 hash → ssh 写 snippet → reload-caddy → 公网 401/200 验证四步流程；轮换 / aim CLI URL 携带凭证 / web SPA 兼容性 caveat 一并说明；故障排查段同步更新（缺 snippet 的报错指引）。
+- `docs/deployment.md`：在"公网 HTTPS"段加 prominent pointer——任何打算自加反代的人必须先读 BUG-007 setup。
+- `docs/task/BUG-007.md` + index：新建并标 `[x]`。
+
+不影响（**重要**）：
+
+- 裸跑 / systemd 单机：gateway 默认监听 `127.0.0.1`，无 Caddy 介入，不受影响。
+- 内网部署（无 Caddy 或 Caddy 仅做 TLS 终止 + IP allowlist）：未受影响，但运维仍需自行确认 Caddy 不会让 loopback IP 出现在 gateway requestIP 里。
+- 已部署的 `gateway.example.test`：**必须** ssh 上宿主按本 changelog 的 setup 段补 snippet 后再 reload Caddy；在补完之前公网入口处于裸开口状态。
+
+后续跟进：
+
+- 浏览器 / web SPA 通过 `wss://user:pass@host/...` URL form 携带 basicauth 在现代 Chromium 受限，长期方案是 Cloudflare Access SSO 或 token-in-cookie 路径——本 BUG 不解决；仅关闭裸开口。
+- BUG-007 是**运维级修复**（Caddyfile + docs），不动任何业务代码，因此 typecheck / unit test / e2e smoke 全部不动；上线验证靠手工 `curl https://gateway.example.test/health`（401 vs 200）。
+
 ## 2026-04-26 14:40 [BUG-P2] BUG-005 修复 — aiw run 终态事件名对齐 runtime 契约
 
 **`aiw run` 历史遗留 bug**：监听早期 PLAN-011 设计的 `orchestrator.task.succeeded/.failed/.cancelled`，但当前 runtime 实际只发 `orchestrator.finished` / `orchestrator.error`，导致每次 `aiw run` 都 timeout 退出 124（即使 conversation 已完成）。`docs/cli.md` 文档同样跟错。

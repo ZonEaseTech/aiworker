@@ -2,11 +2,30 @@
 	auto_https off
 }
 
-# gateway.example.test is proxied through Cloudflare (orange-cloud) which handles
-# TLS termination; Caddy on the host only needs to serve :80. The dashboard
-# container on 127.0.0.1:3000 serves the API, docs, and the web SPA.
+# AIWorker public ingress.
+#
+# SECURITY (BUG-007): Caddy reverse proxies traffic to 127.0.0.1:3000,
+# which makes gateway's loopback authN check (`apps/gateway/src/auth/loopback.ts`)
+# pass for ANY request that reaches Caddy — gateway sees `requestIP() == 127.0.0.1`
+# regardless of the original client. Therefore THIS Caddyfile MUST enforce
+# its own authN before forwarding.
+#
+# We do this by importing /etc/caddy/auth.snippet, which:
+#   - is host-managed (NOT in git),
+#   - contains a single `basicauth { ... }` block with bcrypt creds,
+#   - is created by the operator per docs/deployment-public-https.md.
+#
+# If auth.snippet is missing or unreadable, Caddy fails to load —
+# fail-closed by design. This is preferred over a default-allow config
+# because the previous (now fixed) deployment shipped without authN.
+#
+# gateway.example.test sits behind Cloudflare orange-cloud (TLS termination
+# only — Cloudflare is NOT an authN layer). Caddy serves :80; cloudflare
+# Origin Rules bridge HTTPS↔HTTP.
 :80 {
 	encode zstd gzip
+
+	import auth.snippet
 
 	reverse_proxy 127.0.0.1:3000 {
 		flush_interval -1

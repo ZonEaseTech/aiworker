@@ -102,7 +102,7 @@ Dockerfile 单镜像两种入口（见 `Dockerfile` 顶部注释）：
 - **gateway**（控制面）：compose 显式设置 `command: ['bun', 'apps/gateway/src/index.ts']`，监听 3000/tcp（WS）。
 - **worker**（数据面）：`ENTRYPOINT ["/usr/bin/tini", "--", "bun", "run", "dist/index.js"]`（镜像默认），监听 3001/tcp（HTTP）；由 `aim workers launch` 或独立的 worker compose 拉起。
 
-Caddy（`ops/caddy/Caddyfile.tmpl`）仍是纯 `:80 → 127.0.0.1:3000` 反代，TLS 由 Cloudflare 橙云代理终止。`flush_interval -1` + `read_timeout 0` 保证 WebSocket 不被切流。
+Caddy（`ops/caddy/Caddyfile.tmpl`）反代 `:80 → 127.0.0.1:3000`，TLS 由 Cloudflare 橙云代理终止。`flush_interval -1` + `read_timeout 0` 保证 WebSocket 不被切流。**自 BUG-007 起 Caddy 必须叠 basic-auth（fail-closed）**——见下文 §"Caddy basic-auth setup（BUG-007）"。
 
 ---
 
@@ -172,7 +172,52 @@ bun apps/cli/src/aim.ts workers list
 bun apps/cli/src/aim.ts workers remove <workerId>
 ```
 
-远程（非 loopback）操作员需在连接时携带 `INTERNAL_SHARED_SECRET` 作为 bearer；浏览器经 Caddy 反代属于 gateway 视角的 loopback（Caddy 跑在宿主本机），不需要再叠一层 basic auth，但建议用 Cloudflare Zero Trust 或 Cloudflare Access 控制公网入口。
+远程（非 loopback）操作员需在连接时携带 `INTERNAL_SHARED_SECRET` 作为 bearer。
+
+> **重要（BUG-007）**：浏览器 / aim CLI 经 Caddy 反代时，gateway 看到的 `requestIP()` 是 `127.0.0.1`——会被识别为 loopback **绕过 token 校验**。这意味着仅靠 gateway authN，**任何能 hit Caddy :80 的流量都自动通过**。Cloudflare 橙云只做 TLS 终止，**不是 authN 层**。
+>
+> 因此，公网 Caddy **必须叠一层 basic-auth**（或 Cloudflare Access / Zero Trust / IP allowlist 等等效手段）。BUG-007 修复后 `Caddyfile.tmpl` 用 `import auth.snippet` 强制要求宿主侧准备 basicauth 段；snippet 缺失时 Caddy 拒启动（**fail-closed**），杜绝意外裸跑。
+
+### Caddy basic-auth setup（BUG-007）
+
+首次启用或 BUG-007 之前已部署的宿主，按下面步骤补 snippet。
+
+```sh
+# 1) 工作站上生成 bcrypt hash（不含明文落盘）：
+caddy hash-password --plaintext '<your-strong-secret>'
+# → $2a$14$abcdef...（复制下来，下面要贴到宿主）
+
+# 2) ssh 上宿主创建 snippet（不入 git）：
+sudo tee /etc/caddy/auth.snippet >/dev/null <<EOF
+basicauth {
+  operator $2a$14$abcdef...
+}
+EOF
+sudo chown caddy:caddy /etc/caddy/auth.snippet
+sudo chmod 0640 /etc/caddy/auth.snippet
+
+# 3) reload Caddy（脚本会先 caddy validate）：
+bun run scripts/deploy.ts reload-caddy
+
+# 4) 公网验证（应得 401）：
+curl -i https://gateway.example.test/health
+# → HTTP/2 401, WWW-Authenticate: Basic realm="restricted"
+
+# 5) 带凭证再试（应得 200）：
+curl -i -u operator:'<your-strong-secret>' https://gateway.example.test/health
+# → HTTP/2 200, body {"ok":true,...}
+```
+
+凭证分发给操作员；aim CLI 走公网时把凭证 / `INTERNAL_SHARED_SECRET` 都带上：
+
+```sh
+# aim 通过 wss URL form 携带 basicauth 凭证：
+aim ... --url 'wss://operator:<your-strong-secret>@gateway.example.test/ws'
+```
+
+> 浏览器 / web SPA 的 basicauth 兼容性较差（modern Chromium 对 `wss://user:pass@host/...` URL 限制趋严）；如果运维需要长期 web 控制台访问，建议改用 Cloudflare Access（前端 SSO）或 IP allowlist 替代。本 BUG-007 的目标是**关闭裸开口**；web SPA 的人因身份层后续按需扩展。
+
+凭证轮换：直接覆盖 `/etc/caddy/auth.snippet` + `systemctl reload caddy` 即可；fleet.db / worker token 都不受影响。
 
 ---
 
@@ -321,8 +366,8 @@ aissh exec <server> \
 
 - `aissh exec` 打印 `approval required`：在另一个终端跑 `aissh approval wait <op-id>`，然后重跑失败的子命令。
 - `verify` 失败：`aissh exec <server> "docker logs aiworker-gateway --tail 200"`——看 gateway 是否真的起了，`.env` 里 `AIWORKER_MASTER_KEY` 是否有效。
-- `reload-caddy` 失败 `caddy validate`：本地改 `ops/caddy/Caddyfile.tmpl`，重跑 `bun run scripts/deploy.ts deploy`（或 `upload` + `reload-caddy`，若镜像未变）。
-- `aim` 命令失败 `auth: shared_secret_mismatch`：loopback 检测不命中（通常是从容器外部直连 gateway 的 `127.0.0.1`，但 Bun 看到的 `requestIP` 是 docker network 地址）。解决：通过 Caddy 反代进入，或者显式在 aim 里 export `INTERNAL_SHARED_SECRET` 当 token。
+- `reload-caddy` 失败 `caddy validate`：本地改 `ops/caddy/Caddyfile.tmpl`，重跑 `bun run scripts/deploy.ts deploy`（或 `upload` + `reload-caddy`，若镜像未变）。**特别注意（BUG-007）**：`Caddyfile.tmpl` `import auth.snippet` 要求宿主侧已存在 `/etc/caddy/auth.snippet`；缺失时 caddy validate 会报 `import: file not found`——按上文 §"Caddy basic-auth setup（BUG-007）"补 snippet 后再 reload。
+- `aim` 命令失败 `auth: shared_secret_mismatch`：loopback 检测不命中（通常是从容器外部直连 gateway 的 `127.0.0.1`，但 Bun 看到的 `requestIP` 是 docker network 地址）。解决：显式在 aim 里 export `INTERNAL_SHARED_SECRET` 当 token，或经 Caddy 反代进入并带上 basicauth 凭证（BUG-007 修复后两层都会校验）。
 - `aim` 等响应超时：检查 node 是否在线（`aim workers list`）；若 node 短时间内频繁断连，看 `fleet.db` 的 `audit_events` 里 `gateway.node.disconnected` 的 close code。
 
 ---

@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-04-26 14:35
+> Updated: 2026-04-26 14:55
 
 ## Usage
 
@@ -63,3 +63,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-004 Refresh gateway-client subscriber after runtime hot-reload**](BUG-004.md) `P1`
 - [x] [**BUG-005 aiw run waits for orchestrator.task.* but runtime emits orchestrator.finished**](BUG-005.md) `P2`
 - [ ] [**BUG-006 Make reloadRuntime serialisation explicit (in-process mutex)**](BUG-006.md) `P3`
+- [x] [**BUG-007 Public Caddy ingress bypasses gateway authN (loopback misidentification)**](BUG-007.md) `P0`
