@@ -43,7 +43,7 @@ What shipped:
 - **T2** `aim pair --url ws://127.0.0.1:20500/ws --worker-url http://127.0.0.1:20501 --bootstrap-token <tok>` 后 `aim.json` 含 `gatewayUrl=ws://127.0.0.1:20500/ws`，紧跟着 `aim workers list` 不需要手改 JSON 即返回 worker；
 - **T3** `aim config get` v1 → `aim config set --if-match 1` 正确路径返回 `version=2 / runtimeReload=ok`；同 `--if-match 1` 再发返回 `version_conflict: config version 1 does not match current version 2`（明确错误码不再 `method_not_implemented` / `internal_error`）；reload 后 `aim chat` 立即收到 `accepted → chat.message → done`，对照原 `aim-chat-post-reload.log` 是 `accepted → timeout`（BUG-004 修复证据）。
 
-后续：subtask BUG-003 报告里指出 `reloadRuntime` 没有 mutex（HTTP+gateway 并发 PUT 时存在 race），不在本 plan 范围内，可单独提任务跟进；CLAUDE.md "reload 必须串行化" 不变量当前由"应用层不并发"维持。
+后续：subtask BUG-003 报告里指出 `reloadRuntime` 没有 mutex（HTTP+gateway 并发 PUT 时存在 race），不在本 plan 范围内；已显式记入 [BUG-006](task/BUG-006.md)（P3，preventive）。CLAUDE.md "reload 必须串行化" 不变量当前由乐观锁 + "应用层不并发"维持，待 BUG-006 把它升级为 mutex 强制。
 
 ## 2026-04-26 PLAN-016 完成
 
