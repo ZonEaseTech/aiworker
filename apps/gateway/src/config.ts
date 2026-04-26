@@ -25,6 +25,13 @@ export interface GatewayConfig {
   fleetDbPath: string
   canLaunch: boolean
   maxWorkers?: number
+  /**
+   * Worker self-enrollment 共享 join token（PLAN-018）。未设 → self-enroll
+   * 完全禁用：所有携带 `connect.enroll` 块的远端 node 帧 close 4401
+   * `auth:join_token_disabled`。与 `internalSharedSecret` 角色互不重叠——
+   * 后者用于操作员 / 已配对 node 的 bearer，前者只用于"首帧自助注册"门禁。
+   */
+  joinToken?: string
   nodeEnv: string
   supervisor: {
     dockerHost: string
@@ -52,6 +59,7 @@ const envSchema = z.object({
     .default('false')
     .transform(v => v === 'true'),
   AIWORKER_MAX_WORKERS: z.coerce.number().int().positive().optional(),
+  AIWORKER_JOIN_TOKEN: z.string().min(16).optional(),
   DOCKER_HOST: z.string().default('/var/run/docker.sock'),
   AIWORKER_IMAGE: z.string().optional(),
   AIWORKER_NETWORK: z.string().default('aiworker_default'),
@@ -98,6 +106,7 @@ export function loadGatewayConfigFromEnv(): GatewayConfig {
     fleetDbPath: parsed.AIWORKER_FLEET_DB_PATH,
     canLaunch: parsed.AIWORKER_GATEWAY_CAN_LAUNCH,
     maxWorkers: parsed.AIWORKER_MAX_WORKERS,
+    joinToken: parsed.AIWORKER_JOIN_TOKEN,
     nodeEnv: parsed.NODE_ENV,
     supervisor: {
       dockerHost: parsed.DOCKER_HOST,
