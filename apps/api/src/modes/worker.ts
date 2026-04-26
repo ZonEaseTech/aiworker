@@ -43,7 +43,18 @@ async function hydrateStoredConfig(stored: WorkerConfig): Promise<WorkerConfig> 
  * `runtime` ref is atomically replaced by `reloadRuntime` when PLAN-004 2.2
  * management API pushes a new config.
  */
-export async function bootstrapWorkerApp(): Promise<{ app: OpenAPIHono, port: number, state: WorkerModeState }> {
+export async function bootstrapWorkerApp(): Promise<{
+  app: OpenAPIHono
+  port: number
+  state: WorkerModeState
+  /**
+   * Hot-reload entry point shared by HTTP `PUT /config` and gateway-client
+   * `config.put` — atomically swaps `state.runtime` to a runtime built around
+   * the new stored config. Throwing here does NOT roll back the persisted
+   * config; callers downgrade their `runtimeReload` field instead.
+   */
+  reloadRuntime: (nextStoredConfig: WorkerConfig, newVersion: number) => Promise<void>
+}> {
   initWorkerDb(workerEnv.WORKER_DB_PATH)
   runWorkerMigrations(workerEnv.WORKER_MIGRATIONS_FOLDER)
 
@@ -149,7 +160,7 @@ export async function bootstrapWorkerApp(): Promise<{ app: OpenAPIHono, port: nu
 
   app.get('/docs', apiReference({ spec: { url: '/openapi.json' } }))
 
-  return { app, port: workerEnv.PORT, state }
+  return { app, port: workerEnv.PORT, state, reloadRuntime }
 }
 
 /** Back-compat wrapper — used by `src/index.ts`. */

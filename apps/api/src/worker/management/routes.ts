@@ -1,6 +1,7 @@
 import type { WorkerModeState } from '@aiworker/core'
 import type { WorkerConfig } from '@aiworker/shared'
 import {
+  applyConfigUpdate,
   buildInfo,
   ConfigVersionConflictError,
   deleteSecret,
@@ -12,8 +13,6 @@ import {
   handleTokenRotate,
   InvalidConfigError,
   listSecrets,
-  mirrorConfigToYaml,
-  putConfig,
   putSecret,
   readConfig,
   workerEnv,
@@ -109,22 +108,15 @@ export function buildManagementRoutes(deps: ManagementRoutesDeps) {
     }
 
     try {
-      const stored = await putConfig(getWorkerDb(), getSecretsVault(), raw, {
+      const result = await applyConfigUpdate({
+        db: getWorkerDb(),
+        vault: getSecretsVault(),
+        raw,
         ...(ifMatchVersion === undefined ? {} : { ifMatchVersion }),
+        workerId: deps.getState().workerId,
+        reloadRuntime: deps.reloadRuntime,
       })
-
-      await mirrorConfigToYaml(deps.getState().workerId, stored.config, stored.version)
-
-      let runtimeReload: 'ok' | 'failed' = 'ok'
-      try {
-        await deps.reloadRuntime(stored.config, stored.version)
-      }
-      catch (err) {
-        runtimeReload = 'failed'
-        consola.error('[worker mgmt] runtime reload failed', err)
-      }
-
-      return c.json({ ...stored, runtimeReload })
+      return c.json(result)
     }
     catch (err) {
       if (err instanceof InvalidConfigError) {

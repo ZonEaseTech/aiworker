@@ -62,6 +62,9 @@ export { buildCronHandlers, type CronServiceLike } from './worker/gateway-client
 export { handleBrainTest } from './worker/management/brain-test'
 export { handleChannelTest } from './worker/management/channel-test'
 export {
+  applyConfigUpdate,
+  type ApplyConfigUpdateArgs,
+  type ApplyConfigUpdateResult,
   ConfigVersionConflictError,
   InvalidConfigError,
   mirrorConfigToYaml,
