@@ -1,5 +1,11 @@
 # AIWorker Changelog
 
+## 2026-04-26 19:35 PLAN-018 E2E 验证 — coordinator 收尾
+
+跑完整 self-enroll round-trip：起 gateway with `AIWORKER_JOIN_TOKEN=test-secret-1234567890abcdef` + `AIWORKER_MASTER_KEY=<32-byte hex>` 在 `:23000`；起 `aiw serve` with 同一 join token + `AIWORKER_GATEWAY_URL=ws://127.0.0.1:23000/ws` + `AIWORKER_DISPLAY_NAME=smoke` 在 `:23001`。5 秒内 `fleet.db.registered_workers` 出现 `id=w_3xdwxx8pe6qq, display_name=smoke, added_by=self-enroll`，`audit_events` 写入一条 `gateway.worker.enrolled` 含 `workerId / displayName / deviceId`（FEAT-024 AC #1 / #2 / #7 ✓）。换错 token 重起一个 worker → `fleet.db` 不变，`audit_events` 写多条 `gateway.connect.rejected reason=join_token_mismatch`（worker reconnect loop 的预期表现，AC #3 ✓）。脚本与 inspect helper 留在 `tmp/pl018-e2e/`。
+
+PLAN-018 / FEAT-024 status → completed；本次 BKD coordinator (`16duffa1`) + S1-S4 (`q92q7h5c` / `b1httrl8` / `3ybg2y8v` / `3bkng8a1`) 全 worktree subtask 流程顺利收尾。
+
 ## 2026-04-26 19:30 PLAN-018 完成 — Worker 自助 enrollment 上线（FEAT-024）
 
 **PLAN-018 landed: worker self-enrollment via shared join token.** 第三条进 fleet 的路径（前两条：手动 `aim pair` / 自动 `aim workers launch`）。worker 仅需 outbound WS 即可入网——NAT/防火墙后部署、批量 docker / k8s 节点、operator 无法逐个手贴 bootstrap token 的运维场景由此打通。kubeadm join / Nomad client join / Datadog agent 同一形态。BKD 1 coordinator + 3 worktree subtask（S1 proto / S2 gateway / S3 worker），按 wire-first 顺序合 main，每次合后跑 typecheck + 该 sub 的回归 case。文档（本 commit）等到 S1+S2+S3 都合 main 后落，**确保文档对照实际实现，不是 spec 想象**。

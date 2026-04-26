@@ -1,6 +1,6 @@
 # FEAT-024 Worker self-enrollment via shared join token
 
-- **status**: pending
+- **status**: completed
 - **priority**: P2
 - **owner**: (unassigned)
 - **createdAt**: 2026-04-26 17:50

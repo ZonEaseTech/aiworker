@@ -1,6 +1,6 @@
 # PLAN-018 Worker self-enrollment via shared join token
 
-- **status**: implementing
+- **status**: completed
 - **createdAt**: 2026-04-26 17:50
 - **approvedAt**: 2026-04-26 18:00
 - **relatedTask**: FEAT-024
