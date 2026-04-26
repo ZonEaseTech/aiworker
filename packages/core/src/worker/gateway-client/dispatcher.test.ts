@@ -1,8 +1,9 @@
 import type { ResponseFrame } from '@aiworker/gateway-proto'
 import type { WorkerEventBus } from '../events/bus'
-import type { OrchestratorLike } from './dispatcher'
+import type { NodeHandlers, OrchestratorLike } from './dispatcher'
 
 import { describe, expect, it } from 'bun:test'
+import { ConfigVersionConflictError, InvalidConfigError } from '../management/config'
 import { ApprovalStore } from '../orchestrator/approvals'
 import { GatewayDispatcher } from './dispatcher'
 
@@ -32,7 +33,7 @@ interface CapturedDispatcher {
   responses: ResponseFrame[]
 }
 
-function makeDispatcher(): CapturedDispatcher {
+function makeDispatcher(handlers?: NodeHandlers): CapturedDispatcher {
   const approvals = new ApprovalStore()
   const responses: ResponseFrame[] = []
   const dispatcher = new GatewayDispatcher({
@@ -42,6 +43,7 @@ function makeDispatcher(): CapturedDispatcher {
       orchestrator: stubOrchestrator(),
       approvals,
     }),
+    ...(handlers ? { handlers } : {}),
     sendResponse: frame => responses.push(frame),
   })
   return { dispatcher, approvals, responses }
@@ -103,6 +105,88 @@ describe('GatewayDispatcher — approval.list / approval.grant', () => {
     expect(responses[0]?.ok).toBe(true)
     const result = (responses[0] as { ok: true, result: unknown }).result as { granted: boolean }
     expect(result.granted).toBe(false)
+    approvals.dispose()
+  })
+})
+
+/**
+ * BUG-003 — config.put dispatcher 桥接：保证 handler 注入后不再 method_not_implemented，
+ * 且 putConfig 抛的两个边界错（InvalidConfig / VersionConflict）映射到对应 wire code，
+ * 而不是统一吞成 internal_error。
+ */
+describe('GatewayDispatcher — config.put', () => {
+  it('returns method_not_implemented when handler is absent', async () => {
+    const { dispatcher, approvals, responses } = makeDispatcher()
+    await dispatcher.handleRequest({
+      type: 'request',
+      id: 'req-cp-0',
+      method: 'config.put',
+      params: { workerId: 'w_test', ifMatch: 0, config: {} },
+    })
+    expect(responses).toHaveLength(1)
+    const frame = responses[0]!
+    expect(frame.ok).toBe(false)
+    if (!frame.ok)
+      expect(frame.error.code).toBe('method_not_implemented')
+    approvals.dispose()
+  })
+
+  it('replyOk forwards handler result (version + appliedAt + runtimeReload)', async () => {
+    const { dispatcher, approvals, responses } = makeDispatcher({
+      configPut: async ({ ifMatch }) => ({ version: ifMatch + 1, appliedAt: 1, runtimeReload: 'ok' }),
+    })
+    await dispatcher.handleRequest({
+      type: 'request',
+      id: 'req-cp-1',
+      method: 'config.put',
+      params: { workerId: 'w_test', ifMatch: 4, config: { brains: [] } },
+    })
+    expect(responses).toHaveLength(1)
+    const frame = responses[0]!
+    expect(frame.ok).toBe(true)
+    if (frame.ok) {
+      const result = frame.result as { version: number, runtimeReload: string }
+      expect(result.version).toBe(5)
+      expect(result.runtimeReload).toBe('ok')
+    }
+    approvals.dispose()
+  })
+
+  it('maps ConfigVersionConflictError to wire code version_conflict (not internal_error)', async () => {
+    const { dispatcher, approvals, responses } = makeDispatcher({
+      configPut: async () => { throw new ConfigVersionConflictError(2, 7) },
+    })
+    await dispatcher.handleRequest({
+      type: 'request',
+      id: 'req-cp-2',
+      method: 'config.put',
+      params: { workerId: 'w_test', ifMatch: 2, config: {} },
+    })
+    expect(responses).toHaveLength(1)
+    const frame = responses[0]!
+    expect(frame.ok).toBe(false)
+    if (!frame.ok) {
+      expect(frame.error.code).toBe('version_conflict')
+      expect(frame.error.details).toMatchObject({ expected: 2, actual: 7 })
+    }
+    approvals.dispose()
+  })
+
+  it('maps InvalidConfigError to wire code invalid_config (not internal_error)', async () => {
+    const { dispatcher, approvals, responses } = makeDispatcher({
+      configPut: async () => { throw new InvalidConfigError([], 'bad shape') },
+    })
+    await dispatcher.handleRequest({
+      type: 'request',
+      id: 'req-cp-3',
+      method: 'config.put',
+      params: { workerId: 'w_test', ifMatch: 0, config: { brains: 'nope' } },
+    })
+    expect(responses).toHaveLength(1)
+    const frame = responses[0]!
+    expect(frame.ok).toBe(false)
+    if (!frame.ok)
+      expect(frame.error.code).toBe('invalid_config')
     approvals.dispose()
   })
 })

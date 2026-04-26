@@ -7,6 +7,7 @@ import type { ApprovalStore } from '../orchestrator/approvals'
 import { getMethodDef, METHODS } from '@aiworker/gateway-proto'
 import consola from 'consola'
 
+import { ConfigVersionConflictError, InvalidConfigError } from '../management/config'
 import { CronJobNotFoundError } from './methods/cron'
 
 /**
@@ -37,9 +38,16 @@ export interface NodeHandlers {
   configGet?: () => Promise<{ version: number, config: unknown }>
   /**
    * 写 config：实现方负责做 If-Match 校验、secret 分离、reload runtime。
-   * 成功后返回新版本与应用时间戳（毫秒）。
+   * 成功后返回新版本与应用时间戳（毫秒）。`runtimeReload` 透出 hot-reload
+   * 是否成功——失败时配置已落库，操作员可走 `POST /api/worker/reload` 重试。
+   * Validation / version 错误必须以 `InvalidConfigError` /
+   * `ConfigVersionConflictError` 抛出，dispatcher 会映射到对应 wire code。
    */
-  configPut?: (input: { ifMatch: number, config: unknown }) => Promise<{ version: number, appliedAt: number }>
+  configPut?: (input: { ifMatch: number, config: unknown }) => Promise<{
+    version: number
+    appliedAt: number
+    runtimeReload?: 'ok' | 'failed'
+  }>
   /** 轮换 device/node bearer token，返回新 token 明文（只返一次）。 */
   tokenRotate?: () => Promise<{ deviceToken: string }>
   /**
@@ -207,8 +215,21 @@ export class GatewayDispatcher {
     }
     const ifMatch = Number(params.ifMatch)
     const config = params.config
-    const result = await this.deps.handlers.configPut({ ifMatch, config })
-    this.replyOk(id, result)
+    try {
+      const result = await this.deps.handlers.configPut({ ifMatch, config })
+      this.replyOk(id, result)
+    }
+    catch (err) {
+      if (err instanceof InvalidConfigError) {
+        this.replyError(id, 'invalid_config', err.message, { issues: err.issues })
+        return
+      }
+      if (err instanceof ConfigVersionConflictError) {
+        this.replyError(id, 'version_conflict', err.message, { expected: err.expected, actual: err.actual })
+        return
+      }
+      throw err
+    }
   }
 
   // ---- token.rotate ----

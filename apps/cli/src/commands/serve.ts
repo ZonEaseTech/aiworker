@@ -3,6 +3,7 @@ import process from 'node:process'
 
 import { bootstrapWorkerApp } from '@aiworker/api/bootstrap'
 import {
+  applyConfigUpdate,
   buildCronHandlers,
   getSecretsVault,
   handleTokenRotate,
@@ -33,7 +34,7 @@ export interface ServeOptions {
  * 两条路径独立，SIGTERM 时都做优雅关闭。
  */
 export async function runServe(options: ServeOptions = {}): Promise<void> {
-  const { app, port: envPort, state } = await bootstrapWorkerApp()
+  const { app, port: envPort, state, reloadRuntime } = await bootstrapWorkerApp()
   const port = options.port ?? envPort
 
   const server = Bun.serve({ port, fetch: app.fetch })
@@ -51,6 +52,20 @@ export async function runServe(options: ServeOptions = {}): Promise<void> {
         configGet: async () => {
           const stored = await readConfig(getWorkerDb())
           return { version: stored.version, config: stored.config }
+        },
+        // 与 HTTP `PUT /api/worker/config` 共享 applyConfigUpdate；
+        // InvalidConfig / VersionConflict 会从 putConfig 冒上来，由 dispatcher
+        // 转成 invalid_config / version_conflict wire code，避免吞成 internal_error。
+        configPut: async ({ ifMatch, config }) => {
+          const result = await applyConfigUpdate({
+            db: getWorkerDb(),
+            vault: getSecretsVault(),
+            raw: config,
+            ifMatchVersion: ifMatch,
+            workerId: state.workerId,
+            reloadRuntime,
+          })
+          return { version: result.version, appliedAt: Date.now(), runtimeReload: result.runtimeReload }
         },
         tokenRotate: async () => {
           const { newToken } = await handleTokenRotate(getWorkerDb(), getSecretsVault(), state)

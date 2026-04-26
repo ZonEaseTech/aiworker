@@ -126,3 +126,51 @@ export async function mirrorConfigToYaml(workerId: string, redacted: WorkerConfi
     consola.warn(`[mirror-config] failed to write ${path}: ${String(err)}`)
   }
 }
+
+export interface ApplyConfigUpdateArgs {
+  db: WorkerDatabase
+  vault: SecretsVault
+  /** Raw payload from the operator (HTTP body / gateway request param). */
+  raw: unknown
+  /** Optimistic-lock guard. Omit to skip the check. */
+  ifMatchVersion?: number
+  /** Used to derive the on-disk YAML mirror path. */
+  workerId: string
+  /**
+   * Hot-reload callback. Errors here downgrade `runtimeReload` to `'failed'`
+   * but do NOT roll back the persisted config — callers report the field so
+   * the operator can retry via `POST /reload`.
+   */
+  reloadRuntime: (next: WorkerConfig, version: number) => Promise<void>
+}
+
+export interface ApplyConfigUpdateResult extends StoredWorkerConfig {
+  runtimeReload: 'ok' | 'failed'
+}
+
+/**
+ * Single source of truth for "operator updated worker config". Drives both
+ * `PUT /api/worker/config` and gateway `config.put`: validate + persist via
+ * `putConfig`, mirror to YAML, then attempt hot-reload.
+ *
+ * Validation / version errors (`InvalidConfigError`, `ConfigVersionConflictError`)
+ * propagate so the caller can map them to the right HTTP status / wire code.
+ */
+export async function applyConfigUpdate(args: ApplyConfigUpdateArgs): Promise<ApplyConfigUpdateResult> {
+  const stored = await putConfig(
+    args.db,
+    args.vault,
+    args.raw,
+    args.ifMatchVersion === undefined ? {} : { ifMatchVersion: args.ifMatchVersion },
+  )
+  await mirrorConfigToYaml(args.workerId, stored.config, stored.version)
+  let runtimeReload: 'ok' | 'failed' = 'ok'
+  try {
+    await args.reloadRuntime(stored.config, stored.version)
+  }
+  catch (err) {
+    runtimeReload = 'failed'
+    consola.error('[applyConfigUpdate] runtime reload failed', err)
+  }
+  return { ...stored, runtimeReload }
+}
