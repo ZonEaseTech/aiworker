@@ -36,6 +36,19 @@ async function hydrateStoredConfig(stored: WorkerConfig): Promise<WorkerConfig> 
   return hydrateSecrets(stored, map)
 }
 
+export interface BootstrapWorkerAppOptions {
+  /**
+   * 调用方（如 `aiw serve`）注册的 hook，在 `state.runtime` 已经原子换成
+   * `nextRuntime` 之后、`previous.dispose()` 解绑老 bus 之前同步触发。
+   * 顺序很关键：必须晚于 swap（hook 里 `state.runtime` 已是新 runtime），
+   * 必须早于 dispose（subscriber 重新订阅完成后老 bus 才能被解掉）。
+   *
+   * gateway-client 用它把 subscriber 重新挂到新 bus 上——老 bus 被 dispose
+   * 之后就不会再发事件，subscriber 的旧 unsubscribe 闭包是死的。
+   */
+  onRuntimeReloaded?: () => void
+}
+
 /**
  * Self-sufficient worker bootstrap: init worker.db, mint identity on first
  * boot, load (or seed) config, hydrate secrets from the vault, and build the
@@ -43,7 +56,7 @@ async function hydrateStoredConfig(stored: WorkerConfig): Promise<WorkerConfig> 
  * `runtime` ref is atomically replaced by `reloadRuntime` when PLAN-004 2.2
  * management API pushes a new config.
  */
-export async function bootstrapWorkerApp(): Promise<{
+export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}): Promise<{
   app: OpenAPIHono
   port: number
   state: WorkerModeState
@@ -106,6 +119,17 @@ export async function bootstrapWorkerApp(): Promise<{
     const previous = state.runtime
     state.runtime = nextRuntime
     state.configVersion = newVersion
+    // hook 必须在 swap 之后、dispose 之前调——subscriber 此时才能从新 bus
+    // 拿到 listener；一旦 previous.dispose() 跑完，老 bus 上即使有事件也
+    // 不会再到达 subscriber（且新事件本来也是从新 bus 出的）。
+    if (options.onRuntimeReloaded) {
+      try {
+        options.onRuntimeReloaded()
+      }
+      catch (err) {
+        consola.warn(`[worker ${state.workerId}] onRuntimeReloaded hook failed: ${String(err)}`)
+      }
+    }
     try {
       previous.dispose()
     }
