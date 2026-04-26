@@ -34,13 +34,19 @@ export interface ServeOptions {
  * 两条路径独立，SIGTERM 时都做优雅关闭。
  */
 export async function runServe(options: ServeOptions = {}): Promise<void> {
-  const { app, port: envPort, state, reloadRuntime } = await bootstrapWorkerApp()
+  // gatewayNode 在 bootstrap 之后才能 start（要拿到 state.workerId / reloadRuntime），
+  // 但 bootstrap 自己又需要在 reloadRuntime 完成 swap 后回调 gatewayNode 让 subscriber
+  // 重新挂到新 bus——chicken-and-egg。先建可变 ref，bootstrap 闭包里读这个 ref，
+  // 真正的 GatewayNode 实例 startGatewayNode() 之后再写入。
+  let gatewayNode: GatewayNode | null = null
+  const { app, port: envPort, state, reloadRuntime } = await bootstrapWorkerApp({
+    onRuntimeReloaded: () => gatewayNode?.notifyRuntimeReloaded(),
+  })
   const port = options.port ?? envPort
 
   const server = Bun.serve({ port, fetch: app.fetch })
   consola.success(`[aiw serve] worker ${state.workerId} listening on :${port} (config v${state.configVersion})`)
 
-  let gatewayNode: GatewayNode | null = null
   if (options.gateway && options.gateway.length > 0) {
     gatewayNode = startGatewayNode({
       url: options.gateway,

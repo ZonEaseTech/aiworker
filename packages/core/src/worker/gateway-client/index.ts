@@ -45,6 +45,17 @@ export interface GatewayNode {
   stop: () => Promise<void>
   /** 诊断：当前是否已经握手成功。 */
   isConnected: () => boolean
+  /**
+   * 在 worker runtime hot-reload 之后调用：subscriber 内部持有的
+   * unsubscribe 闭包仍指向上一代 bus，老 bus 已经被 dispose 解绑，
+   * 必须在新 runtime 上重新订阅，否则 `agent.thinking / agent.done`
+   * 不会再上行。
+   *
+   * 仅在 socket 已 connected 时重挂——未连上时 onConnected 回调本身
+   * 会 start subscriber，重复 start 会浪费一次 emit→sendEvent 路径
+   * （sendEvent 此时是 no-op，但仍会触发 listener 重组）。
+   */
+  notifyRuntimeReloaded: () => void
 }
 
 export function startGatewayNode(options: StartGatewayNodeOptions): GatewayNode {
@@ -100,6 +111,13 @@ export function startGatewayNode(options: StartGatewayNodeOptions): GatewayNode 
     },
     isConnected() {
       return connected
+    },
+    notifyRuntimeReloaded() {
+      // subscriber.start() 内部幂等（先 stop 老 unsub 再挂新 bus），
+      // 但只有已 connected 时才有意义——未连上时连 sendEvent 都是
+      // no-op，等 onConnected 第一次回调时再挂即可。
+      if (connected)
+        subscriber.start()
     },
   }
 }
