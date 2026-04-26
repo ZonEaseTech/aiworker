@@ -18,7 +18,7 @@ import { GatewayDispatcher } from './dispatcher'
 import { GatewaySubscriber } from './subscriber'
 
 export type { WebSocketCtor, WebSocketLike } from './client'
-export type { GatewayNodeOptions } from './config'
+export type { GatewayNodeEnrollOptions, GatewayNodeOptions } from './config'
 export type { NodeHandlers, OrchestratorLike, RuntimeLike } from './dispatcher'
 
 /**

@@ -127,6 +127,9 @@ export class GatewayClient {
     this.ws = ws
     ws.onopen = () => {
       // 握手：发 connect 帧。agentId 用 workerId；deviceId 由 options 决定。
+      // PLAN-018：若调用方传了 `enroll` 块，原样透传到帧里——gateway 看到
+      // enroll 字段 + JOIN_TOKEN 匹配即落 fleet.db；未传则走现有路径
+      // （gateway 仅校验 auth.token / loopback bypass）。
       const connectFrame: ConnectFrame = {
         type: 'connect',
         role: ROLES.NODE,
@@ -135,6 +138,17 @@ export class GatewayClient {
         auth: { token: this.deps.options.token },
         ...(this.deps.options.displayName
           ? { meta: { displayName: this.deps.options.displayName } }
+          : {}),
+        ...(this.deps.options.enroll
+          ? {
+              enroll: {
+                joinToken: this.deps.options.enroll.joinToken,
+                apiToken: this.deps.options.enroll.apiToken,
+                ...(this.deps.options.enroll.displayName
+                  ? { displayName: this.deps.options.enroll.displayName }
+                  : {}),
+              },
+            }
           : {}),
       }
       try {

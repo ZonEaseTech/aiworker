@@ -1,4 +1,4 @@
-import type { GatewayNode } from '@aiworker/core'
+import type { GatewayNode, GatewayNodeEnrollOptions } from '@aiworker/core'
 import process from 'node:process'
 
 import { bootstrapWorkerApp } from '@aiworker/api/bootstrap'
@@ -9,6 +9,7 @@ import {
   handleTokenRotate,
   readConfig,
   startGatewayNode,
+  workerEnv,
 } from '@aiworker/core'
 import { getWorkerDb } from '@aiworker/storage-sqlite/worker'
 import consola from 'consola'
@@ -47,12 +48,44 @@ export async function runServe(options: ServeOptions = {}): Promise<void> {
   const server = Bun.serve({ port, fetch: app.fetch })
   consola.success(`[aiw serve] worker ${state.workerId} listening on :${port} (config v${state.configVersion})`)
 
-  if (options.gateway && options.gateway.length > 0) {
+  // PLAN-018 / FEAT-024 worker self-enrollment：env 三件套触发。
+  // 触发表（与 plan 一致）：
+  //   --gateway 显式 flag                     → 走老路径（operator-pull 后 token 已下发）
+  //   AIWORKER_GATEWAY_URL + AIWORKER_JOIN_TOKEN → 走 enroll 路径（带 enroll 块）
+  //   只有 AIWORKER_JOIN_TOKEN 没 URL          → warn 后跳过（既不 enroll 也不开 gateway-client）
+  //   只有 AIWORKER_GATEWAY_URL 没 JOIN_TOKEN  → 当前不自动起（与 PLAN-018 §Worker-side 一致）
+  // 老 flag 与新 env 同时给时，--gateway 优先（运维显式覆盖）。
+  const envGatewayUrl = workerEnv.AIWORKER_GATEWAY_URL
+  const envJoinToken = workerEnv.AIWORKER_JOIN_TOKEN
+  const envDisplayName = workerEnv.AIWORKER_DISPLAY_NAME
+  const flagGatewayUrl = options.gateway && options.gateway.length > 0 ? options.gateway : undefined
+
+  let gatewayUrl: string | undefined
+  let enroll: GatewayNodeEnrollOptions | undefined
+  if (flagGatewayUrl) {
+    gatewayUrl = flagGatewayUrl
+  }
+  else if (envJoinToken && envJoinToken.length > 0 && envGatewayUrl && envGatewayUrl.length > 0) {
+    gatewayUrl = envGatewayUrl
+    enroll = {
+      joinToken: envJoinToken,
+      apiToken: state.tokenPlaintext,
+      ...(envDisplayName ? { displayName: envDisplayName } : {}),
+    }
+  }
+  else if (envJoinToken && envJoinToken.length > 0) {
+    consola.warn('[aiw serve] AIWORKER_JOIN_TOKEN set but AIWORKER_GATEWAY_URL missing; skipping self-enroll')
+  }
+
+  if (gatewayUrl) {
+    if (enroll)
+      consola.info(`[aiw serve] self-enrolling to ${gatewayUrl} as ${enroll.displayName ?? state.workerId}`)
     gatewayNode = startGatewayNode({
-      url: options.gateway,
+      url: gatewayUrl,
       token: options.gatewayToken ?? '',
       workerId: state.workerId,
       ...(options.gatewayReconnect === false ? { reconnect: false } : {}),
+      ...(enroll ? { enroll } : {}),
       getRuntime: () => state.runtime,
       handlers: {
         configGet: async () => {
@@ -81,7 +114,7 @@ export async function runServe(options: ServeOptions = {}): Promise<void> {
         ...buildCronHandlers(() => state.runtime.cron),
       },
     })
-    consola.success(`[aiw serve] gateway-client dialing ${options.gateway}`)
+    consola.success(`[aiw serve] gateway-client dialing ${gatewayUrl}`)
   }
 
   // SIGTERM / SIGINT：同时优雅关 HTTP server 与 gateway-client，最长等 5s。
