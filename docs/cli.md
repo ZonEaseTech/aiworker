@@ -41,6 +41,7 @@ bun run --filter '@aiworker/cli' smoke:aiw-run   # aiw 冒烟：init + run --dry
 - `WORKER_DATA_ROOT` — per-conversation 工作区根。未设时派生为 `<AIWORKER_HOME>/data-root`（默认 `~/.aiworker/data-root`），裸跑/dev 零配置即可；容器/systemd `--system` 形态请显式设到操作员可写的绝对路径（compose `docker-compose.yml` 设为 `/var/lib/aiworker`）。
 - `WORKER_MIGRATIONS_FOLDER` — 默认使用 `@aiworker/storage-sqlite` 内嵌路径（`import.meta.url` 解析得来的**绝对**路径），源码运行 / 容器 / 单文件 bundle 都能定位；外部 vendor 时再显式覆盖。
 - `AIWORKER_FORCE_ID` / `AIWORKER_FORCE_TOKEN` — 测试 / 备份恢复用的一次性覆盖。
+- `AIWORKER_GATEWAY_URL` / `AIWORKER_JOIN_TOKEN` / `AIWORKER_DISPLAY_NAME`（PLAN-018 / FEAT-024）— self-enroll 三件套：URL + token 同时设 → `aiw serve` 跳过 operator 手动 `aim pair`，bootstrap 完成后用 outbound WS 主动拨 gateway 把自身写入 fleet。`DISPLAY_NAME` 可选，缺省回落 workerId（最长 80 字符）。详见下文 §`aiw serve` 与 [`docs/deployment.md` § Worker self-enroll quick start](./deployment.md#worker-self-enroll-quick-start-plan-018--feat-024)。
 
 ### `aiw init`
 
@@ -86,6 +87,26 @@ aiw serve --port 3001
 
 # HTTP + 同时作为 node 注册到本机 gateway：
 aiw serve --port 3001 --gateway ws://127.0.0.1:3000/ws
+```
+
+**Self-enroll via env trio**（PLAN-018 / FEAT-024）：当 env 同时设 `AIWORKER_GATEWAY_URL` + `AIWORKER_JOIN_TOKEN` 且 **未** 传 `--gateway` flag 时，`aiw serve` bootstrap 完成后自动拨 `AIWORKER_GATEWAY_URL`，第一帧 `connect` 携带 enroll 块（join token + 自身 mint 的 apiToken + 可选 `AIWORKER_DISPLAY_NAME`）；gateway 验签后直接落 fleet.db，**不需要** operator 抓 bootstrap log 跑 `aim pair`。触发表：
+
+| `--gateway` flag | `AIWORKER_GATEWAY_URL` | `AIWORKER_JOIN_TOKEN` | 行为 |
+|---|---|---|---|
+| 设 | 任意 | 任意 | 走老路径（operator-pull 后 deviceToken 已下发，flag 显式覆盖 env） |
+| 未设 | 设 | 设 | **self-enroll**：发带 enroll 的 connect 帧 |
+| 未设 | 设 | 未设 | 不起 gateway-client（保守，避免无 token 自动连） |
+| 未设 | 未设 | 设 | `consola.warn` 跳过 |
+| 未设 | 未设 | 未设 | 纯 HTTP 模式 |
+
+适用场景与运维 / 排错见 [`docs/deployment.md` § Worker self-enroll quick start](./deployment.md#worker-self-enroll-quick-start-plan-018--feat-024)。
+
+```sh
+# 纯 enroll（NAT 后部署常用）：
+AIWORKER_GATEWAY_URL=wss://aiw.example.com/ws \
+AIWORKER_JOIN_TOKEN=<shared> \
+AIWORKER_DISPLAY_NAME=prod-1 \
+aiw serve --port 3001
 ```
 
 ### `aiw config-show`

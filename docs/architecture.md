@@ -167,9 +167,12 @@ Caddy :80 (纯反代)  ──►  127.0.0.1:3000  =  aiworker-gateway 容器
 ## 身份与配置自举
 
 - Worker 首次启动在容器内 `mintWorkerId + mintApiToken`（`worker/bootstrap/identity.ts`），token 明文只打印一次（`[worker] AIWORKER_BOOTSTRAP_TOKEN=wtk_...`），密文写入 `worker_identity` 后不再重新打印。
-- 操作员把 worker 注册进 fleet 的唯一路径：
-  1. `aim pair --url ws://... --worker-url http://... --bootstrap-token wtk_...`：手动 scrape bootstrap 日志行 → gateway 调 worker `/info` 校验 → 加密存 fleet.db → 返回 deviceToken 写回 `~/.aiworker/aim.json`。
-  2. `aim workers launch --display-name foo`：需 `AIWORKER_GATEWAY_CAN_LAUNCH=true`；gateway supervisor 拉 worker 容器、scrape stdout、自动 pair。
+- worker 进 fleet 的三条路径：
+  1. **手动 pair**（`aim pair --url ws://... --worker-url http://... --bootstrap-token wtk_...`）：操作员从 worker stdout 抓 bootstrap 日志行 → gateway 调 worker `/info` 校验 → 加密存 fleet.db → 返回 deviceToken 写回 `~/.aiworker/aim.json`。**inbound** 方向：gateway 必须能 HTTP 回拨 worker `/info`，因此 worker 在 NAT/防火墙后会失败。`addedBy='manual'`。
+  2. **自动 launch**（`aim workers launch --display-name foo`）：需 `AIWORKER_GATEWAY_CAN_LAUNCH=true`；gateway supervisor 拉 worker 容器、scrape stdout、自动 pair。仅限 docker 形态、与 gateway 同主机。`addedBy='launch-local'`。
+  3. **自助 enroll**（PLAN-018 / FEAT-024）：worker 容器 env 同时设 `AIWORKER_GATEWAY_URL` + `AIWORKER_JOIN_TOKEN`，`aiw serve` bootstrap 完成后用 outbound WS 主动拨 gateway，并把 enroll 块（`joinToken` + 自身 mint 的 `apiToken` + 可选 `displayName`）塞进 `connect` 帧第一帧；gateway 验 `joinToken` 后直接 upsert fleet.db 行。**outbound-only**，worker 不需要任何 inbound 端口暴露——是 NAT 后部署、批量 docker / k8s 节点、residential network 上 worker 的标准路径。`addedBy='self-enroll'`。
+- 三条路径在 `connect` 帧上的鉴权分支由 `apps/gateway/src/auth/token.ts::authorizeConnection` 集中判定：携带 `enroll` 块走 join token 校验（独立分支，不回退到 sharedSecret）；其余按 loopback / sharedSecret 老规则。失败口径统一写 `gateway.connect.rejected` audit + 4401 close code（`auth:join_token_disabled` / `auth:join_token_mismatch` / `auth:quota_exceeded` / `auth:master_key_missing`）；成功 enroll 仅在 fleet.db 行实际变化（created / updated）时才补 `gateway.worker.enrolled` audit，避免 reconnect 风暴淹没事件流。
+- 自助 enroll 适用 worker 在 NAT/防火墙后只能出站、批量部署需要 zero-touch、operator 无法逐个手贴 bootstrap token 的场景；高安全场景（每 worker 显式审批）保留手动 pair 作为更窄入口。
 - `worker_identity` / `worker_config` 都是 singleton，`pk` 固定为字符串 `'default'`；不要在应用层添加多租户假设。
 - `config.put` / `PUT /api/worker/config` 使用 `ifMatch: <version>` 乐观锁；新版本配置持久化后通过 `reloadRuntime(nextConfig, newVersion)` 原子替换 `state.runtime`。**reload 必须串行化**（禁止并发），防止老版本晚到覆盖新版本。
 - 配置中的 secret 以 ref 形式占位，落库时即被 redact；启动和 reload 通过 `enumerateSecretPaths` + `hydrateSecrets` 从 `SecretsVault` 注回明文。Secrets **永不**进 `worker_config.configJson`。
