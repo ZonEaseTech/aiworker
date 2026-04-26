@@ -8,6 +8,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "test": "bun test",
     "smoke:aiw-run": "bun scripts/smoke-aiw-run.ts",
     "smoke:aim": "bun scripts/smoke-aim.ts"
   },

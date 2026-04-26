@@ -8,6 +8,7 @@ import { runApprovalsGrant, runApprovalsList } from './aim/commands/approvals'
 import { runChat } from './aim/commands/chat'
 import { runConfigGet, runConfigSet } from './aim/commands/config'
 import { runGatewayStart, runGatewayStatus, runGatewayStop } from './aim/commands/gateway'
+import { runInstallSystemd } from './aim/commands/install'
 import { runLogs } from './aim/commands/logs'
 import { runPair } from './aim/commands/pair'
 import { runScheduleAdd, runScheduleList, runScheduleRemove } from './aim/commands/schedule'
@@ -218,6 +219,28 @@ cli
   .command('schedule remove <workerId> <jobId>', '删除某 worker 上的某条 cron 任务')
   .action(async (workerId: string, jobId: string) => {
     process.exit(await runScheduleRemove(workerId, jobId))
+  })
+
+// --- install (systemd 等服务化集成) ---
+cli
+  .command('install systemd', '渲染 aiworker-gateway.service 并（可选）注册到 systemd')
+  .option('--user', 'systemd 用户实例（默认）；写到 ~/.config/systemd/user/')
+  .option('--system', 'systemd 系统实例（需 root）；写到 /etc/systemd/system/')
+  .option('--dry-run', '只往 stdout 打 unit 内容，不写盘也不 systemctl')
+  .option('--out <path>', '覆盖目标路径（异常布局/测试用）；自动跳过 systemctl')
+  .option('--no-enable', '写盘后跳过 systemctl daemon-reload + enable --now')
+  .action(async (opts: { user?: boolean, system?: boolean, dryRun?: boolean, out?: string, enable?: boolean }) => {
+    if (opts.user === true && opts.system === true) {
+      consola.error('install systemd: 不能同时指定 --user 和 --system')
+      process.exit(2)
+    }
+    const code = await runInstallSystemd({
+      scope: opts.system === true ? 'system' : 'user',
+      ...(opts.dryRun === true ? { dryRun: true } : {}),
+      ...(opts.out === undefined ? {} : { out: opts.out }),
+      ...(opts.enable === false ? { noEnable: true } : {}),
+    })
+    process.exit(code)
   })
 
 // --- logs ---
