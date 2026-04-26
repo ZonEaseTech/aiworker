@@ -56,13 +56,14 @@ aiw init
 
 ### `aiw run --message <text> [--chat-id <id>] [--dry-run] [--timeout-ms <n>]`
 
-一次性把一条消息喂进 orchestrator。事件以 NDJSON 输出到 stdout，直到 orchestrator 发出终态事件（`orchestrator.task.succeeded` / `.failed` / `.cancelled`）。
+一次性把一条消息喂进 orchestrator。事件以 NDJSON 输出到 stdout，直到 orchestrator 发出终态事件（`orchestrator.finished` 成功 / `orchestrator.error` 失败）。
 
 ```sh
 aiw run --message "hello"
 # {"type":"channel.inbound",...}
 # {"type":"conversation.message",...}
-# {"type":"orchestrator.task.succeeded",...}
+# {"type":"orchestrator.text",...}
+# {"type":"orchestrator.finished",...}
 ```
 
 - `--dry-run` — 完整 bootstrap 但不投递消息，用于 CI 冒烟。

@@ -67,14 +67,15 @@ export async function runRun(options: RunOptions = {}): Promise<number> {
 
     unsubscribe = runtime.bus.on((event) => {
       console.log(JSON.stringify({ type: event.type, at: event.at, payload: event.payload }))
-      if (
-        event.type === 'orchestrator.task.succeeded'
-        || event.type === 'orchestrator.task.failed'
-        || event.type === 'orchestrator.task.cancelled'
-      ) {
+      // 终态事件契约（与 packages/core/src/worker/orchestrator/service.ts 与
+      // packages/core/src/worker/gateway-client/subscriber.ts 保持一致）：
+      //   orchestrator.finished → 成功，exit 0
+      //   orchestrator.error    → 失败，exit 1
+      // 早期 PLAN-011 设计的 orchestrator.task.* 事件在当前 runtime 已无人 emit。
+      if (event.type === 'orchestrator.finished' || event.type === 'orchestrator.error') {
         clearTimeout(timer)
         unsubscribe?.()
-        resolve(event.type === 'orchestrator.task.succeeded' ? 0 : 1)
+        resolve(event.type === 'orchestrator.finished' ? 0 : 1)
       }
     })
   })
