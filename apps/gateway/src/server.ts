@@ -123,10 +123,13 @@ function handleMessage(
       ws.close(4400, 'connect_required')
       return
     }
+    const isSelfEnroll = frame.role === 'node' && frame.enroll !== undefined
     const authResult = authorizeConnection({
       loopback: ws.data.loopback,
       sharedSecret: config.internalSharedSecret,
       presentedToken: frame.auth.token,
+      enrollToken: isSelfEnroll ? frame.enroll!.joinToken : undefined,
+      gatewayJoinToken: config.joinToken,
     })
     if (!authResult.ok) {
       ctx.persistence.recordAudit({
@@ -142,6 +145,71 @@ function handleMessage(
       })
       ws.close(4401, `auth:${authResult.reason}`)
       return
+    }
+
+    // self-enroll 通过 join token 验签后,先查配额再 upsert fleet 行;失败一律
+    // 走 connect.rejected 链路,与 token 错误的口径保持一致。
+    if (isSelfEnroll) {
+      if (ctx.maxWorkers !== undefined) {
+        const current = ctx.persistence.countRegisteredWorkers()
+        // 已注册过的 workerId 重连不占配额(它已在 fleet 里)。
+        const alreadyRegistered = ctx.persistence.getRegisteredWorker(frame.agentId) !== undefined
+        if (!alreadyRegistered && current >= ctx.maxWorkers) {
+          ctx.persistence.recordAudit({
+            actor: 'gateway',
+            action: 'gateway.connect.rejected',
+            workerId: frame.agentId,
+            detail: {
+              reason: 'quota_exceeded',
+              role: frame.role,
+              agentId: frame.agentId,
+              limit: ctx.maxWorkers,
+              current,
+            },
+          })
+          ws.close(4401, 'auth:quota_exceeded')
+          return
+        }
+      }
+      if (!ctx.masterKeyHex) {
+        // self-enroll 需要 masterKey 才能加密落 apiToken;否则只能拒。
+        ctx.persistence.recordAudit({
+          actor: 'gateway',
+          action: 'gateway.connect.rejected',
+          workerId: frame.agentId,
+          detail: {
+            reason: 'master_key_missing',
+            role: frame.role,
+            agentId: frame.agentId,
+          },
+        })
+        ws.close(4401, 'auth:master_key_missing')
+        return
+      }
+      const enroll = frame.enroll!
+      const upsert = ctx.persistence.upsertEnrolledWorker(
+        {
+          workerId: frame.agentId,
+          baseUrl: '',
+          apiToken: enroll.apiToken,
+          displayName: enroll.displayName ?? frame.agentId,
+          addedBy: 'self-enroll',
+        },
+        ctx.masterKeyHex,
+      )
+      if (upsert.kind !== 'unchanged') {
+        ctx.persistence.recordAudit({
+          actor: 'gateway',
+          action: 'gateway.worker.enrolled',
+          workerId: frame.agentId,
+          detail: {
+            workerId: frame.agentId,
+            displayName: upsert.row.displayName,
+            deviceId: frame.deviceId,
+            change: upsert.kind,
+          },
+        })
+      }
     }
 
     ws.data.role = frame.role
@@ -196,6 +264,7 @@ function handleMessage(
         agentId: frame.agentId,
         deviceId: frame.deviceId,
         loopback: ws.data.loopback,
+        via: authResult.via,
       },
     })
     return

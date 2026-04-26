@@ -133,6 +133,100 @@ export class FleetPersistence {
   }
 
   /**
+   * Worker self-enroll（PLAN-018）落库入口：
+   *
+   * - 行不存在 → INSERT，addedBy='self-enroll'，并附带 `gateway.worker.paired`
+   *   audit 行（与 `createRegisteredWorker` 一致，保持运维视角统一），返回
+   *   `{ created: true }`。
+   * - 行存在且 `displayName` 变化 → 仅 UPDATE displayName + lastSeenAt，apiToken
+   *   保留旧值（worker 重连只是改名，不应静默轮换 token），返回
+   *   `{ updated: true }`。
+   * - 行存在且无变化 → 仅 UPDATE lastSeenAt（连接活性），返回
+   *   `{ unchanged: true }`。
+   *
+   * 调用方据返回值决定是否写 `gateway.worker.enrolled` audit——idempotent
+   * reconnect 不应刷屏（PLAN-018 §Risks 第 4 条 "Audit volume"）。
+   *
+   * 与 `createRegisteredWorker` 在加密落库这一段刻意复用相同流程（都通过
+   * `encryptToken` + `masterKeyHex`），但**不**调用它本身——pair 与 self-enroll
+   * 的 audit action（`gateway.worker.paired` vs `gateway.worker.enrolled`）
+   * 由 server.ts 上层选择，避免在这里做角色二次分支。
+   */
+  upsertEnrolledWorker(
+    input: CreateRegisteredWorkerInput,
+    masterKeyHex: string,
+  ):
+    | { kind: 'created', row: Omit<RegisteredWorker, 'apiTokenEnc' | 'nonce' | 'authTag'> }
+    | { kind: 'updated', row: Omit<RegisteredWorker, 'apiTokenEnc' | 'nonce' | 'authTag'> }
+    | { kind: 'unchanged', row: Omit<RegisteredWorker, 'apiTokenEnc' | 'nonce' | 'authTag'> } {
+    const baseUrl = input.baseUrl.replace(/\/+$/, '')
+    const now = new Date().toISOString()
+    const existing = this.db
+      .select()
+      .from(registeredWorkers)
+      .where(eq(registeredWorkers.id, input.workerId))
+      .get()
+    if (!existing) {
+      const sealed = encryptToken(input.apiToken, masterKeyHex)
+      const row: RegisteredWorker = {
+        id: input.workerId,
+        baseUrl,
+        displayName: input.displayName,
+        apiTokenEnc: sealed.ciphertext,
+        nonce: sealed.nonce,
+        authTag: sealed.authTag,
+        addedAt: now,
+        addedBy: input.addedBy ?? 'self-enroll',
+        lastSeenAt: now,
+        lastSeenState: 'online',
+        lastConfigVersion: input.configVersion,
+      }
+      this.db.insert(registeredWorkers).values(row).run()
+      const { apiTokenEnc: _t, nonce: _n, authTag: _a, ...safe } = row
+      return {
+        kind: 'created',
+        row: {
+          ...safe,
+          lastSeenAt: safe.lastSeenAt ?? undefined,
+          lastSeenState: safe.lastSeenState ?? undefined,
+          lastConfigVersion: safe.lastConfigVersion ?? undefined,
+        },
+      }
+    }
+    if (existing.displayName !== input.displayName) {
+      this.db.update(registeredWorkers)
+        .set({ displayName: input.displayName, lastSeenAt: now, lastSeenState: 'online' })
+        .where(eq(registeredWorkers.id, input.workerId))
+        .run()
+      const { apiTokenEnc: _t, nonce: _n, authTag: _a, ...safe } = existing
+      return {
+        kind: 'updated',
+        row: {
+          ...safe,
+          displayName: input.displayName,
+          lastSeenAt: now,
+          lastSeenState: 'online',
+          lastConfigVersion: safe.lastConfigVersion ?? undefined,
+        },
+      }
+    }
+    this.db.update(registeredWorkers)
+      .set({ lastSeenAt: now, lastSeenState: 'online' })
+      .where(eq(registeredWorkers.id, input.workerId))
+      .run()
+    const { apiTokenEnc: _t, nonce: _n, authTag: _a, ...safe } = existing
+    return {
+      kind: 'unchanged',
+      row: {
+        ...safe,
+        lastSeenAt: now,
+        lastSeenState: 'online',
+        lastConfigVersion: safe.lastConfigVersion ?? undefined,
+      },
+    }
+  }
+
+  /**
    * 轮换加密后的 bearer token。`workers.pair` 以外的任何 token 更新都应走这里——
    * 如 `token.rotate` 从 node 回拉新 token 后立刻重加密落库。
    */
