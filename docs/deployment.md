@@ -174,7 +174,7 @@ Telegram / WhatsApp / Lark / LINE webhook 必须能从公网回调到 gateway �
 
 ## Worker 注册（pair）通用流程
 
-PLAN-013 之后 dashboard REST 已下线，注册一个 worker 进 fleet 的唯一路径是：
+PLAN-013 之后 dashboard REST 已下线，注册一个 worker 进 fleet 有三条路径：
 
 1. **手动 pair**（任意形态都通用）：worker 首启时 stdout 打一次性 `AIWORKER_BOOTSTRAP_TOKEN=wtk_...`；操作员抓取后调
    ```sh
@@ -183,7 +183,9 @@ PLAN-013 之后 dashboard REST 已下线，注册一个 worker 进 fleet 的唯�
             --bootstrap-token wtk_xxxxxxxxxxxx \
             --display-name <name>
    ```
+   > 此路径需要 gateway 能 HTTP 回拨 worker `/info`——worker 在 NAT/防火墙后会失败。
 2. **自动 launch**（仅 docker 形态 + supervisor overlay）：`aim workers launch --display-name foo`；gateway supervisor 拉容器、scrape stdout、自动 pair。
+3. **自助 enroll**（PLAN-018 / FEAT-024）：worker outbound 拨 gateway，第一帧 `connect` 携带 `enroll` 块（`joinToken` + `apiToken` + 可选 `displayName`）；gateway 验签后直接落 fleet.db。详见下文 § Worker self-enroll quick start。
 
 worker baseUrl 是 worker HTTP 根（scheme + host/port，无 path）：
 
@@ -195,6 +197,69 @@ worker baseUrl 是 worker HTTP 根（scheme + host/port，无 path）：
 | 跨主机 HTTPS 反代 | `https://worker-1.example.com` |
 
 完整命令选项见 [`docs/cli.md`](./cli.md)。
+
+---
+
+## Worker self-enroll quick start（PLAN-018 / FEAT-024）
+
+适用：worker 在 NAT/防火墙后只能 outbound、批量部署、无 operator 介入。
+
+### 1. Gateway 侧开启 join token
+
+`AIWORKER_JOIN_TOKEN` 是 fleet 级共享密钥（gateway env 校验 ≥ 16 字符），写到 gateway 进程环境（裸跑 / systemd `Environment=` / docker compose `.env`）：
+
+```sh
+# 生成一段 fleet 级共享密钥（≥ 16 字符；推荐 32 hex）。
+openssl rand -hex 32
+# 写到 gateway 启动环境（systemd / 裸跑 / compose 三选一）。
+export AIWORKER_JOIN_TOKEN=<上面那串>
+# 同时确保 gateway 已配置 AIWORKER_MASTER_KEY；缺它会拒所有 enroll
+# (audit 写 master_key_missing，close 4401 auth:master_key_missing)。
+```
+
+未设 → self-enroll 完全禁用，所有带 `connect.enroll` 的 node 帧 close `4401 auth:join_token_disabled`，`gateway.connect.rejected` audit 留底。
+
+### 2. Worker 侧三件套 env
+
+```sh
+AIWORKER_GATEWAY_URL=ws://gateway-host:3000/ws        # 或 wss://...
+AIWORKER_JOIN_TOKEN=<同上 gateway 侧>
+AIWORKER_DISPLAY_NAME=prod-1                          # 可选；缺省回落 workerId
+```
+
+只设 `AIWORKER_JOIN_TOKEN` 而无 `AIWORKER_GATEWAY_URL` → `aiw serve` 启动时 `consola.warn` 跳过 self-enroll，**不**自动起 gateway-client。`--gateway` flag 与 env 三件套同时存在时，`--gateway` 显式覆盖（走原 operator-pull 路径）。
+
+### 3. 拉起 worker
+
+```sh
+# 任何形态：裸跑、systemd、docker。
+aiw serve --port 3001
+# 等价 systemd unit 片段：
+# [Service]
+# Environment=AIWORKER_MASTER_KEY=...
+# Environment=AIWORKER_GATEWAY_URL=wss://aiw.example.com/ws
+# Environment=AIWORKER_JOIN_TOKEN=<shared>
+# Environment=AIWORKER_DISPLAY_NAME=prod-1
+# ExecStart=/usr/local/bin/aiw serve --port 3001
+```
+
+5 秒内从 gateway 侧 `aim workers list` 应见到该 worker：`online: true`、`addedBy: 'self-enroll'`、`displayName` 与 env 一致。
+
+### 4. 安全模型与运维
+
+- **Join token 是 fleet 级共享**——任何持有它的进程都能以任意 `workerId` 入网。Mitigations：
+  - `AIWORKER_MAX_WORKERS` 配额仍生效（已注册 workerId reconnect 不占配额，超额 → close `4401 auth:quota_exceeded` + audit `quota_exceeded`）；
+  - 操作员 `aim workers remove <id>` 立即吊销该 worker（fleet 行删除 + 在线连接踢下线）；
+  - 旋转 token：改 gateway env 后重启 gateway——已自助入网的 worker 用既有 fleet 行 reconnect 不带 enroll 块、不受影响；新 worker / 重新带 enroll 的连接必须用新 token，否则 `4401 auth:join_token_mismatch`。
+- **Worker 端 apiToken 仍由 worker 容器自身 mint**（不变量同手动 pair 路径）；enroll 块只是把这枚已 mint 的 apiToken 传给 gateway 做 fleet 行加密落库的输入，bootstrap stdout 行不再被任何 operator 抓取。
+- **`displayName` 变更不旋转 apiToken**——同 workerId 重新带 enroll、`displayName` 不同：fleet 行只改名 + `lastSeenAt`，apiToken 密文保留；同名 reconnect 走 `unchanged` 路径，**不**写 `gateway.worker.enrolled` audit（仅 created / updated 才写，避免 reconnect 风暴）。
+- **公网部署**：BUG-007 起 Caddy basic-auth 是必备一层，self-enroll 流量同样 `:80 → :3000` 经过 Caddy；worker 端 `AIWORKER_GATEWAY_URL` 必须按 `wss://operator:<pwd>@host/ws` 形式携带 basicauth。详见 [`deployment-public-https.md` § Caddy basic-auth setup (BUG-007)](./deployment-public-https.md#caddy-basic-auth-setup-bug-007)。
+
+### 5. 常见排错
+
+- `aim workers list` 看不到 worker：worker 端 stderr 看 `consola.info [aiw serve] self-enrolling to ...`，再去 gateway 端 fleet.db 的 `audit_events` 查 `gateway.connect.rejected` 行的 `detail.reason`。
+- `auth:master_key_missing`：gateway 没设 `AIWORKER_MASTER_KEY`；任何路径下 fleet.db 加密都依赖它，必须配齐。
+- `auth:quota_exceeded`：`AIWORKER_MAX_WORKERS` 已满；用 `aim workers remove` 摘除旧 worker 或调高上限。
 
 ---
 

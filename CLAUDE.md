@@ -53,7 +53,12 @@
 
 ### 身份与配置自举
 
-- Worker 首次启动在容器内 `mintWorkerId + mintApiToken`（`worker/bootstrap/identity.ts`），token 密文写入 `worker_identity` 后**不再重新打印**。Manager 注册的唯一路径：`POST /register`（操作员手贴）或 `launch-local`（Supervisor 从容器 stdout 抓取一次性 bootstrap 日志行）。
+- Worker 首次启动在容器内 `mintWorkerId + mintApiToken`（`worker/bootstrap/identity.ts`），token 密文写入 `worker_identity` 后**不再重新打印**。bootstrap 是 worker 容器自身职责——下面三条路径只是把 worker 已 mint 的身份写入 fleet.db 的不同触发方式，**不**改变 mint 的所在地。
+- worker 进 fleet 的三条路径（`registered_workers.addedBy` 三态）：
+  1. **手动 pair**：`aim pair --bootstrap-token wtk_...`（gateway HTTP 回拨 worker `/info` 校验 → 落 fleet.db），`addedBy='manual'`。
+  2. **自动 launch**：`AIWORKER_GATEWAY_CAN_LAUNCH=true` 下 supervisor 从容器 stdout 抓 bootstrap log 自动 pair，`addedBy='launch-local'`。
+  3. **自助 enroll**（PLAN-018 / FEAT-024）：worker env 同时设 `AIWORKER_GATEWAY_URL` + `AIWORKER_JOIN_TOKEN`，`aiw serve` 用 outbound WS 在第一帧 `connect.enroll` 块里把 join token + 自身 apiToken + 可选 displayName 传给 gateway；gateway `authorizeConnection` 第三分支验签 → `upsertEnrolledWorker`，`addedBy='self-enroll'`。outbound-only，worker 不需要 inbound 端口。
+- 三分支由 `apps/gateway/src/auth/token.ts::authorizeConnection` 集中判定；self-enroll 分支独立，不回退到 sharedSecret。失败统一写 `gateway.connect.rejected` audit + 4401 close（`auth:join_token_disabled` / `auth:join_token_mismatch` / `auth:quota_exceeded` / `auth:master_key_missing`）；成功 enroll 仅在 fleet 行真正 created / updated 时才写 `gateway.worker.enrolled`，`unchanged` 不写——避免 reconnect 风暴淹没 audit。
 - `worker_identity` / `worker_config` 都是 singleton，`pk` 固定为字符串 `'default'`；不要在应用层添加多租户假设。
 - `PUT /config` 使用 `If-Match: <version>` 乐观锁；新版本配置由 `putConfig` 持久化后，须通过 `reloadRuntime(nextConfig, newVersion)` 原子替换 `state.runtime`。**reload 必须串行化**（禁止并发），防止老版本晚到覆盖新版本。
 - 配置中的 secret 以 ref 形式占位，落库时即被 redact；启动和 reload 通过 `enumerateSecretPaths` + `hydrateSecrets` 从 `SecretsVault` 注回明文。Secrets **永不**进 `worker_config.configJson`。

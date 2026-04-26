@@ -1,6 +1,49 @@
 # AIWorker Changelog
 
-## 2026-04-26 15:00 [BUG-P0] BUG-007 修复 — 公网 Caddy 反代绕过 gateway authN
+## 2026-04-26 19:30 PLAN-018 完成 — Worker 自助 enrollment 上线（FEAT-024）
+
+**PLAN-018 landed: worker self-enrollment via shared join token.** 第三条进 fleet 的路径（前两条：手动 `aim pair` / 自动 `aim workers launch`）。worker 仅需 outbound WS 即可入网——NAT/防火墙后部署、批量 docker / k8s 节点、operator 无法逐个手贴 bootstrap token 的运维场景由此打通。kubeadm join / Nomad client join / Datadog agent 同一形态。BKD 1 coordinator + 3 worktree subtask（S1 proto / S2 gateway / S3 worker），按 wire-first 顺序合 main，每次合后跑 typecheck + 该 sub 的回归 case。文档（本 commit）等到 S1+S2+S3 都合 main 后落，**确保文档对照实际实现，不是 spec 想象**。
+
+What shipped:
+
+- **S1 — proto wire**（feat `35f15dc` / merge `37d14d8`，`bkd/q92q7h5c`）——`packages/gateway-proto/src/messages.ts` `connectFrameSchema` 增加可选 `enroll: { joinToken: z.string().min(1), apiToken: z.string().regex(WORKER_API_TOKEN_PATTERN), displayName?: z.string().min(1).max(80) }.optional()`。整个块 `.optional()`，老 client 帧（无 enroll）继续合法。`packages/shared/src/fleet/registered-worker.ts` `RegisteredWorkerOrigin` union 把未被任何代码引用的 `'import'` 替换为 `'self-enroll'`（manual / launch-local / self-enroll 三态对齐 `addedBy`）。`parse.test.ts` 加 3 case。
+- **S2 — gateway enroll handshake**（feat `2bbaa62` / merge `614a8c3`，`bkd/b1httrl8`）——
+  - `apps/gateway/src/config.ts`：新增 `AIWORKER_JOIN_TOKEN`（optional, **min 16 字符**），未设 → self-enroll 完全禁用，所有携 enroll 块的 connect 帧 close `4401 auth:join_token_disabled`。与 `INTERNAL_SHARED_SECRET` 角色解耦——operator bearer 与 fleet 入网密钥不复用同一 secret。
+  - `apps/gateway/src/auth/token.ts::authorizeConnection`：第三分支 self-enroll；`enrollToken` / `gatewayJoinToken` 走 `timingSafeEqualStrings`；返回值带 `via: 'loopback' | 'shared-secret' | 'self-enroll'` 给 audit 区分入口。老路径零回归。
+  - `apps/gateway/src/registry/persistence.ts::upsertEnrolledWorker`：返回 `created` / `updated` / `unchanged` 三态——idempotent reconnect 不写 audit（PLAN-018 §Risks 4 audit volume 缓解）。displayName 变化只刷 `displayName + lastSeenAt`，**不**静默轮换 apiToken。
+  - `apps/gateway/src/server.ts::handleMessage`：connect 阶段识别 `frame.role==='node' && frame.enroll`，按序做 join token 验签 → 配额（已注册 workerId 重连不占配额，AC #4）→ `masterKey` 守门（缺则 fail-closed `auth:master_key_missing`）→ upsert fleet → 仅 `created`/`updated` 写 `gateway.worker.enrolled`；任何拒绝走 `gateway.connect.rejected`（reason ∈ {join_token_disabled, join_token_mismatch, quota_exceeded, master_key_missing}）。
+  - `apps/gateway/test/enroll.test.ts`：9 用例覆盖 PLAN-018 §Test plan 的 happy / wrong token / quota / reconnect / displayName change /sharedSecret 回归 / `upsertEnrolledWorker` 单测。
+- **S3 — worker enroll trigger**（feat `f34802a` / merge `5836074`，`bkd/3ybg2y8v`）——
+  - `packages/core/src/config/worker.ts`：增 3 个可选 env——`AIWORKER_GATEWAY_URL`（`z.string().url()`）、`AIWORKER_JOIN_TOKEN`（`z.string().min(1)`）、`AIWORKER_DISPLAY_NAME`（`max(80)`）。
+  - `packages/core/src/worker/gateway-client/{config,client,index}.ts`：`startGatewayNode` 增可选 `enroll: { joinToken, apiToken, displayName? }`；client 编 connect 帧时若有 enroll 选项则原样透传到 `connectFrame.enroll`，未传保持现有行为。
+  - `apps/cli/src/commands/serve.ts::runServe`：bootstrap 拿 `state.tokenPlaintext` 后按触发表分派——`--gateway` flag 优先（老路径）；env 三件套齐 → enroll 路径（bearer 空、connect.enroll 块就位）；只有 `JOIN_TOKEN` 没 URL → `consola.warn` 跳过；只有 URL 没 token → 不自动起 gateway-client（保守，避免裸开口）。enroll 路径显式日志 `self-enrolling to <url> as <name>`。
+  - `packages/core/src/worker/bootstrap/enroll.test.ts`：3 case 断言 connect 帧 enroll 字段一致 / 未传时无字段 / displayName 路径。
+
+测试基线变化：
+
+- `@aiworker/gateway-proto`: +3 case（S1 parse.test）
+- `@aiworker/gateway`: +9 case（S2 enroll.test）
+- `@aiworker/core`: +3 case（S3 bootstrap/enroll.test）
+- workspace 整体 typecheck / lint / 回归测试全绿；老路径（手动 pair / 自动 launch / loopback / sharedSecret）零回归。
+
+回归矩阵（覆盖 PLAN-018 §Test plan + FEAT-024 ACs，全部由 S2/S3 unit 自动化）：
+
+- AC #1 / #2 happy path：gateway 配 `AIWORKER_JOIN_TOKEN`，worker 用 env 三件套 → fleet 行写入 `addedBy='self-enroll' / displayName / online: true`，5 秒内 `aim workers list` 可见。
+- AC #3 wrong token：close `4401 auth:join_token_mismatch`，fleet.db 不动，`audit_events` 留 `gateway.connect.rejected reason=join_token_mismatch`。
+- AC #4 idempotent reconnect：同 workerId 不带 enroll 重连 → 通过老 sharedSecret 路径，fleet 不重复 / 不写 `gateway.worker.enrolled`；带 enroll + 同 displayName → `unchanged` 路径，audit 不写；带 enroll + 改 displayName → fleet 只改名（apiToken 密文保留），audit 写 `updated`。
+- AC #5 quota：`AIWORKER_MAX_WORKERS` 已满 + 全新 workerId → close `4401 auth:quota_exceeded` + audit `quota_exceeded`；已注册 workerId 重连不占配额。
+- AC #6 老路径零回归：手动 pair / 自动 launch / loopback / sharedSecret 全过既有用例。
+- AC #7 audit：`gateway.worker.enrolled` 仅在 created / updated 写，含 `detail.workerId` / `detail.displayName` / `detail.deviceId` / `detail.change`。
+- AC #8 / #10：`aim workers remove` 行为不变；S2/S3 共 12 个新 case 覆盖以上场景。
+
+文档配套（本 commit）：`docs/architecture.md` § "身份与配置自举" 三条路径 + `addedBy` 三态对照；`docs/deployment.md` 新增 § "Worker self-enroll quick start"（gateway / worker env、systemd unit 片段、安全模型与排错）；`docs/cli.md` `aiw serve` 加触发表与 env 三件套；`CLAUDE.md` § "身份与配置自举" 硬规矩同步增补。
+
+后续：
+
+- **BUG-008（未开 task，跟进）**：今日 PLAN-018 范围内**未**强化 reconnect 路径的 apiToken 验证——gateway 仍只校 `INTERNAL_SHARED_SECRET`，信任 `agentId` 声明。self-enroll 不让这件事更差，但也没修。需要单独开一个 BUG 把 `node` reconnect 改成必须验 `frame.auth.token` 与 fleet.db 该 worker 的 apiToken 恒等（密文需用 `AIWORKER_MASTER_KEY` 解出明文比较）。
+- **OTP TTL / 一次性 join token**：PLAN-018 §Alternatives A2 提到的 kubeadm 风格短期 token 仍未上线；当前路径的 token 是 fleet 级长期共享。若运维需要更窄入口可再开一个 PLAN。
+
+
 
 **关键安全修复**。stage-1 投产评估时发现：当 gateway 跑在 Caddy 反代之后（生产推荐拓扑：Cloudflare orange-cloud → host :80 → Caddy → gateway :3000），gateway 的 loopback authN（`apps/gateway/src/auth/loopback.ts`）会把所有反代过来的请求识别为 `127.0.0.1`，**绕过 token 校验**。Cloudflare 橙云只做 TLS 终止，不是 authN 层。结果：任何能 resolve 公网域名的请求都自动以 operator 身份通过。同样问题影响任何打算把 gateway 摆到 nginx / Caddy / haproxy / Cloud Run 等反向代理后的用户。
 
