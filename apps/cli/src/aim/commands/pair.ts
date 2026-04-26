@@ -26,8 +26,10 @@ export async function runPair(opts: PairOptions): Promise<number> {
     }, opts.url === undefined ? {} : { gatewayUrl: opts.url })
 
     // 写回 state：deviceToken 是 gateway 颁发给 operator 的，之后所有 aim 命令都要用。
+    // 同时把本次 pair 用到的 --url 持久化为 gatewayUrl，否则后续命令会回落到 default。
     const { patchAimState } = await import('../state')
     await patchAimState({
+      ...(opts.url === undefined ? {} : { gatewayUrl: opts.url }),
       deviceToken: result.deviceToken,
       defaultWorkerId: result.workerId,
     })
