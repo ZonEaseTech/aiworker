@@ -1,5 +1,8 @@
+import path from 'node:path'
 import process from 'node:process'
+import { resolveAiworkerHome } from '@aiworker/fs-layout'
 import { WORKER_API_TOKEN_PATTERN, WORKER_ID_PATTERN } from '@aiworker/shared'
+import { defaultWorkerMigrationsFolder } from '@aiworker/storage-sqlite/worker'
 import { z } from 'zod'
 
 /**
@@ -18,11 +21,21 @@ import { z } from 'zod'
  * PLAN-011 phase 1a — parse lazily so `aiw --help` / `aiw --version`, which
  * transitively import this module, don't require a full env at import time.
  * Any consumer that actually *reads* a field still triggers validation.
+ *
+ * BUG-001 — `WORKER_DATA_ROOT` 与 `WORKER_MIGRATIONS_FOLDER` 不再硬编码到
+ * `/var/lib/aiworker` / `./drizzle/worker` 这种依赖容器布局或 cwd 的值。dev /
+ * 裸跑只需要 export `AIWORKER_MASTER_KEY`(+ INTERNAL_SHARED_SECRET 等) 就能起
+ * 来,prod 容器仍可以显式覆盖(compose 已经写进 yml)。
  */
 const schema = z.object({
   PORT: z.coerce.number().default(3001),
   WORKER_DB_PATH: z.string().default('/var/lib/aiworker/worker.db'),
-  WORKER_MIGRATIONS_FOLDER: z.string().default('./drizzle/worker'),
+  /**
+   * 迁移目录。未设时回退到 `@aiworker/storage-sqlite` 内嵌路径
+   * (`import.meta.url` 解析得来的绝对路径),源码运行 / 单文件 bundle 都能定位。
+   * 外部 vendor 时仍可显式覆盖。
+   */
+  WORKER_MIGRATIONS_FOLDER: z.string().default(() => defaultWorkerMigrationsFolder),
   AIWORKER_MASTER_KEY: z.string().regex(/^[0-9a-f]{64}$/, 'AIWORKER_MASTER_KEY must be 32-byte hex (64 hex chars)'),
   AIWORKER_FORCE_ID: z.string().regex(WORKER_ID_PATTERN).optional(),
   AIWORKER_FORCE_TOKEN: z.string().regex(WORKER_API_TOKEN_PATTERN).optional(),
@@ -31,8 +44,13 @@ const schema = z.object({
    * Root for per-conversation agentic-CLI workspaces (Claude Code, ACP, ...).
    * The per-worker executor config may override via `workspaceRoot`; whatever
    * value is used must pass the path-escape guard in `workspace.ts`.
+   *
+   * 未设时派生为 `<AIWORKER_HOME>/data-root`(默认 `~/.aiworker/data-root`),
+   * 这样裸跑无需手工创建 `/var/lib/aiworker` 也能写入 workspaces。容器/systemd
+   * 仍可显式覆盖到 `/var/lib/aiworker` 等路径(compose `docker-compose.yml`
+   * 已显式设置)。
    */
-  WORKER_DATA_ROOT: z.string().default('/var/lib/aiworker'),
+  WORKER_DATA_ROOT: z.string().default(() => path.join(resolveAiworkerHome(), 'data-root')),
   /**
    * When set to a git repo URL or path, per-conversation workspaces are
    * provisioned as `git worktree add`; otherwise a plain empty dir.
@@ -83,6 +101,17 @@ function parseEngineLimits(env: NodeJS.ProcessEnv): Record<string, number> {
       out[engineKind] = n
   }
   return out
+}
+
+/**
+ * Test-only: drop the memoised `WorkerEnv` so the next `getWorkerEnv()` /
+ * `workerEnv` access re-parses `process.env`. Production code should never
+ * call this (env should not change after process start).
+ *
+ * @internal
+ */
+export function __resetWorkerEnvCacheForTest(): void {
+  cached = null
 }
 
 /** Memoised parse of `process.env`. First call validates; subsequent calls are free. */

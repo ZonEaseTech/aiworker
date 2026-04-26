@@ -38,7 +38,8 @@ bun run --filter '@aiworker/cli' smoke:aiw-run   # aiw 冒烟：init + run --dry
 可选：
 
 - `AIWORKER_HOME` — `~/.aiworker/workers/<workerId>/...` 根目录，默认 `~/.aiworker`。
-- `WORKER_MIGRATIONS_FOLDER` — 默认使用 `@aiworker/storage-sqlite` 内嵌路径（`import.meta.url` 解析），源码运行即可；外部 vendor 时可覆盖。
+- `WORKER_DATA_ROOT` — per-conversation 工作区根。未设时派生为 `<AIWORKER_HOME>/data-root`（默认 `~/.aiworker/data-root`），裸跑/dev 零配置即可；容器/systemd `--system` 形态请显式设到操作员可写的绝对路径（compose `docker-compose.yml` 设为 `/var/lib/aiworker`）。
+- `WORKER_MIGRATIONS_FOLDER` — 默认使用 `@aiworker/storage-sqlite` 内嵌路径（`import.meta.url` 解析得来的**绝对**路径），源码运行 / 容器 / 单文件 bundle 都能定位；外部 vendor 时再显式覆盖。
 - `AIWORKER_FORCE_ID` / `AIWORKER_FORCE_TOKEN` — 测试 / 备份恢复用的一次性覆盖。
 
 ### `aiw init`
