@@ -11,10 +11,12 @@ export type RegisteredWorkerLivenessState
 /**
  * How a worker entered the gateway's registry. `manual` covers an operator
  * driven `workers.pair`;`launch-local` is the optional supervisor convenience
- * gated behind `AIWORKER_GATEWAY_CAN_LAUNCH` (PLAN-013 S5);`import` is
- * reserved for future bulk-import flows.
+ * gated behind `AIWORKER_GATEWAY_CAN_LAUNCH` (PLAN-013 S5);`self-enroll` is
+ * the worker-driven path introduced by PLAN-018 — worker presents
+ * `AIWORKER_JOIN_TOKEN` in its first `connect` frame and gateway upserts
+ * the fleet row without operator action.
  */
-export type RegisteredWorkerOrigin = 'manual' | 'launch-local' | 'import'
+export type RegisteredWorkerOrigin = 'manual' | 'launch-local' | 'self-enroll'
 
 /**
  * Manager-side record of one worker the dashboard tracks. Mirrors the

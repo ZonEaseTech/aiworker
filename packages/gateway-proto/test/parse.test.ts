@@ -159,6 +159,64 @@ describe('parseFrame', () => {
     }
   })
 
+  test('合法 connect 帧（node 携 enroll，PLAN-018 自助注册）', () => {
+    const raw = JSON.stringify({
+      type: 'connect',
+      role: ROLES.NODE,
+      agentId: 'w_abcdef123456',
+      deviceId: 'w_abcdef123456-container',
+      auth: { token: '' },
+      enroll: {
+        joinToken: 'shared-fleet-secret',
+        apiToken: 'wtk_abcdefghijklmnopqrstuvwxyz012345',
+        displayName: 'prod-1',
+      },
+    })
+    const res = parseFrame(raw)
+    expect(res.ok).toBe(true)
+    if (res.ok && res.frame.type === 'connect') {
+      expect(res.frame.enroll?.joinToken).toBe('shared-fleet-secret')
+      expect(res.frame.enroll?.apiToken).toBe('wtk_abcdefghijklmnopqrstuvwxyz012345')
+      expect(res.frame.enroll?.displayName).toBe('prod-1')
+    }
+  })
+
+  test('connect.enroll.apiToken 不匹配 wtk_ 模式 → ok: false', () => {
+    const raw = JSON.stringify({
+      type: 'connect',
+      role: ROLES.NODE,
+      agentId: 'w_abcdef123456',
+      deviceId: 'w_abcdef123456-container',
+      auth: { token: '' },
+      enroll: {
+        joinToken: 'shared-fleet-secret',
+        apiToken: 'not-a-valid-token',
+      },
+    })
+    const res = parseFrame(raw)
+    expect(res.ok).toBe(false)
+    if (!res.ok) {
+      expect(res.error).toMatch(/^schema:/)
+      expect(res.error).toMatch(/apiToken/)
+    }
+  })
+
+  test('合法 connect 帧（不带 enroll，向后兼容老 client）', () => {
+    const raw = JSON.stringify({
+      type: 'connect',
+      role: ROLES.NODE,
+      agentId: 'w_legacy00001',
+      deviceId: 'w_legacy00001-container',
+      auth: { token: 'legacy-bearer' },
+    })
+    const res = parseFrame(raw)
+    expect(res.ok).toBe(true)
+    if (res.ok && res.frame.type === 'connect') {
+      expect(res.frame.enroll).toBeUndefined()
+      expect(res.frame.auth.token).toBe('legacy-bearer')
+    }
+  })
+
   test('encodeFrame 往返：encode → parse 结果与原始 Frame 等价', () => {
     const original = {
       type: 'event' as const,

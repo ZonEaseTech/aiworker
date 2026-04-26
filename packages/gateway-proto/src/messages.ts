@@ -1,3 +1,4 @@
+import { WORKER_API_TOKEN_PATTERN } from '@aiworker/shared'
 import { z } from 'zod'
 import { roleSchema } from './roles'
 
@@ -5,6 +6,10 @@ import { roleSchema } from './roles'
  * connect：连接建立后客户端必须发的第一帧。
  * - operator 填 device id，node 填 workerId。
  * - auth.token 是 bearer token；loopback 场景允许空字符串。
+ * - enroll：可选的自助注册载荷（PLAN-018）。仅 worker（role='node'）首次接入
+ *   gateway 时携带；gateway 用 `AIWORKER_JOIN_TOKEN` 验签后落 fleet.db。
+ *   后续重连可省略。`apiToken` 必须匹配 `wtk_<base64url>`，由 worker 自身在
+ *   bootstrap 时 mint。
  */
 export const connectFrameSchema = z.object({
   type: z.literal('connect'),
@@ -15,6 +20,11 @@ export const connectFrameSchema = z.object({
     token: z.string(),
   }),
   meta: z.record(z.string()).optional(),
+  enroll: z.object({
+    joinToken: z.string().min(1),
+    apiToken: z.string().regex(WORKER_API_TOKEN_PATTERN, 'apiToken must match wtk_<base64url>'),
+    displayName: z.string().min(1).max(80).optional(),
+  }).optional(),
 })
 export type ConnectFrame = z.infer<typeof connectFrameSchema>
 
