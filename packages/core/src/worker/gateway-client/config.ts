@@ -1,4 +1,16 @@
 /**
+ * PLAN-018 / FEAT-024 worker self-enrollment：connect 帧附带的 enroll 块
+ * 形态。`apiToken` 由 worker bootstrap 产出（`state.tokenPlaintext`），gateway
+ * 收到后会落到 `fleet.db.registered_workers.apiToken`。`displayName` 缺省时
+ * gateway 用 `agentId` 兜底，与 fleet schema 默认一致。
+ */
+export interface GatewayNodeEnrollOptions {
+  joinToken: string
+  apiToken: string
+  displayName?: string
+}
+
+/**
  * Gateway-client 运行参数：支持从 env / CLI flag / 手工 options 组装。
  * 所有字段都是显式的——本模块不读 process.env，由调用方（serve.ts /
  * smoke 脚本）在外层做 env 映射，方便单元测试与本地 smoke 干净隔离。
@@ -29,6 +41,12 @@ export interface GatewayNodeOptions {
   initialReconnectDelayMs?: number
   /** 重连延迟上限；默认 16s（1→2→4→8→16 后封顶）。 */
   maxReconnectDelayMs?: number
+  /**
+   * 可选的 self-enroll 载荷。设置后 client 在 connect 帧里附带 `enroll`
+   * 块，gateway 用 `AIWORKER_JOIN_TOKEN` 验签并 upsert fleet.db。未设则走
+   * 现有路径（gateway 仅校验 `auth.token` / loopback）。
+   */
+  enroll?: GatewayNodeEnrollOptions
 }
 
 export interface ResolvedGatewayNodeOptions {
@@ -40,6 +58,7 @@ export interface ResolvedGatewayNodeOptions {
   reconnect: boolean
   initialReconnectDelayMs: number
   maxReconnectDelayMs: number
+  enroll: GatewayNodeEnrollOptions | undefined
 }
 
 /**
@@ -60,5 +79,6 @@ export function resolveGatewayNodeOptions(options: GatewayNodeOptions): Resolved
     reconnect: options.reconnect ?? true,
     initialReconnectDelayMs: options.initialReconnectDelayMs ?? 1_000,
     maxReconnectDelayMs: options.maxReconnectDelayMs ?? 16_000,
+    enroll: options.enroll,
   }
 }

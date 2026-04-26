@@ -28,6 +28,9 @@ describe('getWorkerEnv 默认 fallback', () => {
       'AIWORKER_FORCE_ID',
       'AIWORKER_FORCE_TOKEN',
       'AIWORKER_ADVERTISED_BASE_URL',
+      'AIWORKER_GATEWAY_URL',
+      'AIWORKER_JOIN_TOKEN',
+      'AIWORKER_DISPLAY_NAME',
     ]) {
       delete process.env[k]
     }
@@ -74,5 +77,63 @@ describe('getWorkerEnv 默认 fallback', () => {
     __resetWorkerEnvCacheForTest()
     const env = getWorkerEnv()
     expect(env.WORKER_MIGRATIONS_FOLDER).toBe('/app/drizzle/worker')
+  })
+})
+
+/**
+ * PLAN-018 / FEAT-024 — worker self-enrollment env 三件套：
+ *   - 默认全 undefined（不触发 enroll，零回归）
+ *   - 三件套同时设 → 三个字段如实落到 WorkerEnv
+ *   - 缺一（DISPLAY_NAME 缺）仍 parse 通过；触发条件由 serve 路径判断
+ *   - 非法 URL → schema 直接抛
+ */
+describe('getWorkerEnv self-enroll env (PLAN-018)', () => {
+  const originalEnv = { ...process.env }
+
+  beforeEach(() => {
+    __resetWorkerEnvCacheForTest()
+    for (const k of ['AIWORKER_GATEWAY_URL', 'AIWORKER_JOIN_TOKEN', 'AIWORKER_DISPLAY_NAME']) {
+      delete process.env[k]
+    }
+    process.env.AIWORKER_MASTER_KEY = MASTER_KEY
+  })
+
+  afterEach(() => {
+    __resetWorkerEnvCacheForTest()
+    for (const k of Object.keys(process.env))
+      delete process.env[k]
+    Object.assign(process.env, originalEnv)
+  })
+
+  it('默认三件套全 undefined（不触发 enroll）', () => {
+    const env = getWorkerEnv()
+    expect(env.AIWORKER_GATEWAY_URL).toBeUndefined()
+    expect(env.AIWORKER_JOIN_TOKEN).toBeUndefined()
+    expect(env.AIWORKER_DISPLAY_NAME).toBeUndefined()
+  })
+
+  it('三件套同时设 → 全部落到 WorkerEnv', () => {
+    process.env.AIWORKER_GATEWAY_URL = 'wss://gw.example.test/ws'
+    process.env.AIWORKER_JOIN_TOKEN = 'join-secret-xyz'
+    process.env.AIWORKER_DISPLAY_NAME = 'prod-1'
+    __resetWorkerEnvCacheForTest()
+    const env = getWorkerEnv()
+    expect(env.AIWORKER_GATEWAY_URL).toBe('wss://gw.example.test/ws')
+    expect(env.AIWORKER_JOIN_TOKEN).toBe('join-secret-xyz')
+    expect(env.AIWORKER_DISPLAY_NAME).toBe('prod-1')
+  })
+
+  it('只设 JOIN_TOKEN（缺 URL）→ parse 仍通过（触发判断在 serve 层）', () => {
+    process.env.AIWORKER_JOIN_TOKEN = 'join-secret-xyz'
+    __resetWorkerEnvCacheForTest()
+    const env = getWorkerEnv()
+    expect(env.AIWORKER_JOIN_TOKEN).toBe('join-secret-xyz')
+    expect(env.AIWORKER_GATEWAY_URL).toBeUndefined()
+  })
+
+  it('AIWORKER_GATEWAY_URL 非 URL → schema 抛错', () => {
+    process.env.AIWORKER_GATEWAY_URL = 'not-a-url'
+    __resetWorkerEnvCacheForTest()
+    expect(() => getWorkerEnv()).toThrow()
   })
 })

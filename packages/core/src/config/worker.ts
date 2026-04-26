@@ -56,6 +56,17 @@ const schema = z.object({
    * provisioned as `git worktree add`; otherwise a plain empty dir.
    */
   WORKER_WORKSPACE_GIT_ORIGIN: z.string().optional(),
+
+  /**
+   * PLAN-018 / FEAT-024 worker self-enrollment：当 `AIWORKER_GATEWAY_URL` 与
+   * `AIWORKER_JOIN_TOKEN` **都**设置时，`aiw serve` 会在 bootstrap 完成后用
+   * outbound WS 主动 enroll 到 gateway，不需要 operator 手工 `aim pair`。
+   * 缺一不触发（仅 `JOIN_TOKEN` 而无 URL → 启动时 warn）。
+   * `DISPLAY_NAME` 仅作 fleet.db 展示用途，未设回落 workerId。
+   */
+  AIWORKER_GATEWAY_URL: z.string().url().optional(),
+  AIWORKER_JOIN_TOKEN: z.string().min(1).optional(),
+  AIWORKER_DISPLAY_NAME: z.string().min(1).max(80).optional(),
   /**
    * Default `@anthropic-ai/claude-code` version for the `npx` fallback used
    * by the Claude Code executor; per-worker config can override.

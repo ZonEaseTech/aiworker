@@ -48,6 +48,7 @@ export {
 // Gateway-client（PLAN-013 S4）：worker node 主动接入 gateway 的 WS 客户端。
 export {
   type GatewayNode,
+  type GatewayNodeEnrollOptions,
   type GatewayNodeOptions,
   type NodeHandlers,
   type OrchestratorLike,
