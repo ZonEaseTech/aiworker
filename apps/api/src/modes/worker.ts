@@ -24,8 +24,6 @@ import { evolutionRoutes } from '../worker/evolution/routes'
 import { buildManagementRoutes } from '../worker/management/routes'
 import { buildOrchestratorRoutes } from '../worker/orchestrator/routes'
 
-export type { WorkerModeState }
-
 async function hydrateStoredConfig(stored: WorkerConfig): Promise<WorkerConfig> {
   const vault = getSecretsVault()
   const expectedPaths = new Set(enumerateSecretPaths(stored).map(p => p.path))
