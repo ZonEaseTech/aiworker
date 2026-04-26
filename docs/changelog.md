@@ -1,5 +1,24 @@
 # AIWorker Changelog
 
+## 2026-04-26 14:40 [BUG-P2] BUG-005 修复 — aiw run 终态事件名对齐 runtime 契约
+
+**`aiw run` 历史遗留 bug**：监听早期 PLAN-011 设计的 `orchestrator.task.succeeded/.failed/.cancelled`，但当前 runtime 实际只发 `orchestrator.finished` / `orchestrator.error`，导致每次 `aiw run` 都 timeout 退出 124（即使 conversation 已完成）。`docs/cli.md` 文档同样跟错。
+
+What shipped (commit `46a8bc6`):
+
+- `apps/cli/src/commands/run.ts`：监听 `orchestrator.finished`（exit 0）与 `orchestrator.error`（exit 1）；timeout 与 `--dry-run` 路径保持原状。
+- `docs/cli.md` §`aiw run`：事件名 + NDJSON 示例更新。
+- 新增 `apps/cli/src/commands/run.test.ts` 5 case：finished → 0 / error → 1 / timeout → 124 / 缺 `--message` → 2 / `--dry-run` → 0 不 ingest。
+
+测试基线：
+
+- `@aiworker/cli`: 15 → **20 pass**（+5）。
+- 其它包不动。typecheck + workspace test 全绿。
+
+E2E 验证：在隔离 smoke 目录跑 `aiw run --message "请用极简一句话回答 3+3"`，模型流出 "6"，`orchestrator.finished` 后**立即**退出 0（修复前同流程必 timeout 退 124）。
+
+**不在范围**：`reloadRuntime` 缺 mutex（PLAN-017 sub 报告中提及，HTTP+WS 并发 PUT 仍 race）；如需要可再开一个 BUG。
+
 ## 2026-04-26 14:20 PLAN-017 完成 — 4 个 bare-metal smoke regressions 修复
 
 **PLAN-017 landed: bare-metal smoke regressions — fix four blockers found during local smoke.** 一次本地 smoke（T1 单进程 orchestrator → T2 gateway+worker 端到端 → T3 hot-reload via `PUT /api/worker/config`）暴露的四个**新开发 / 新运维**入门即踩的 P1/P2 缺陷：dev 默认值绑死容器布局、`aim pair --url` 不持久化、`aim config set` 缺 handler、reload 后 chat 卡死。BKD 1 coordinator + 4 worktree subtask 并行实现，按 `001 → 002 → 003 → 004` 顺序合 main，每次合后跑 typecheck + 该 bug 的回归 smoke，最终全 4 合完跑完整 T1+T2+T3 smoke 全过。**业务逻辑零变更，纯环境适配 + handler 接通 + hot-reload 正确性修复**。
