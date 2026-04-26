@@ -1,5 +1,55 @@
 # AIWorker Changelog
 
+## 2026-04-26 PLAN-016 完成
+
+**PLAN-016 landed: deployment reshape — CLI-first install, docker as optional fast-launch.** REFACTOR-003 总收官。把"如何部署"从 PLAN-005/PLAN-009 时代的"GHCR 镜像 + Caddy 公网终止 + `gateway.example.test`" SaaS 模型，重写为三档并列、docker 不再是默认的形态布局。新增 `aim install systemd` 一键写 unit + `enable --now`（Linux 长跑主路径），文档主线让"5 分钟读完得出'主路径是 systemd，不是 docker compose pull'的结论"。**纯部署形态调整 + 文档重写 + CLI 子命令新增；零业务行为变更**。
+
+What shipped:
+
+- **S1 — `aim install systemd` 子命令**（commit `<TBD-S1>` / merge `<TBD-S1>`）——新文件 `apps/cli/src/aim/commands/install.ts` + 单测。子命令 `aim install systemd [--user|--system] [--dry-run] [--out <path>] [--no-enable]`：
+  - `--user` 默认（写 `~/.config/systemd/user/aiworker-gateway.service`，`WantedBy=default.target`）；
+  - `--system` root only（写 `/etc/systemd/system/aiworker-gateway.service`，`WantedBy=multi-user.target`）；
+  - `--dry-run` 只 stdout 打印，`--out <path>` 覆盖目标路径，`--no-enable` 跳过 `daemon-reload + enable --now`。
+  - unit 模板纯渲染、无新依赖；同 `--out` 反复跑产生字节级一致的 unit 内容。
+  - 注册到 cac 的 commands 表；`aim install --help` 罗列 `systemd` 子命令。
+- **S2 — 部署文档三档重写**（commit `<TBD-S2>` / merge `<TBD-S2>`）——
+  - `docs/deployment.md` 整体重写。开篇即三档对比表，主路径是裸跑 + systemd；docker compose 章节挪到末尾"可选 fast-launch"段落；`scripts/deploy.ts` 不在主流程里出现。
+  - **`docs/deployment-public-https.md` 新建**——把原 `deployment.md` 里 `gateway.example.test` + Cloudflare 橙云 + Caddy `:80 → :3000` + GHCR 镜像 + `bun run scripts/deploy.ts deploy` 的完整 run book 整段搬过来，开篇明确"仅当需要把 channel webhook 暴露公网时才需要本文档"。
+  - `docs/architecture.md` Monorepo Layout 后新增 §"部署模型（PLAN-016）"，三档对比表 + 链接到 `deployment.md` / `deployment-public-https.md`。
+  - `docs/cli.md` 在 `aim gateway stop` 与 `aim pair` 之间插入 §`aim install systemd`，列全 flag 表 + unit 模板示例 + binary 形态升级 caveat。
+  - `scripts/deploy.ts` 文案降级：`--help` 顶部 banner 加 "OPTIONAL docker-mode deploy"；`cmdDeploy` 入口 / 收尾 / 提醒共三条 log 加 `[docker-mode]` 前缀。**实现未变**——仍是 `cmdBuild → cmdUpload → cmdInstall → cmdVerify → cmdReloadCaddy`。
+  - `ops/compose/docker-compose.yml` 头注释加 "PLAN-016 起,docker compose 是可选 fast-launch 形态——主部署路径是裸跑或 systemd"。
+- **S3 — Plan 收尾**（commit `<TBD-S3>` / merge `<TBD-S3>`）——`docs/plan/PLAN-016.md` `implementing → completed` + commit/merge hash 回填 + Outcomes 段；`docs/plan/index.md` PLAN-016 `[ ] → [x]` + Updated 头时间戳；`docs/task/REFACTOR-003.md` `[-] → [x]` + completedAt（**REFACTOR-003 总收官**）；`docs/task/index.md` REFACTOR-003 `[-] → [x]`。
+
+测试基线变化：
+
+- `apps/cli` `<TBD>` → `<TBD>`（+4 起：S1 dry-run / user / system / 已存在文件覆盖共 4 case；具体行数随 S1 实现确定）。
+- 其他包（apps/api / apps/gateway / packages/core / packages/shared / packages/gateway-proto / apps/web）**无变化**——本 plan 不动业务实现。
+- `scripts/deploy.ts deploy --dry-run` 仍能正确出图（实现未变），可作为 docker 形态 smoke。
+
+保留的不变量（再次验证）：
+
+- fleet.db / worker.db 物理隔离；本 plan 完全不动 DB / schema / 加密路径。
+- AES-256-GCM 封 `apiTokenEnc`；gateway 与 worker 的 crypto 模块仍有意复制。
+- bearer 比对 `timingSafeEqualStrings`；hot-reload 路由 / dispatcher / subscriber 全部 `() => state.runtime` 闭包懒取。
+- 所有 smoke（aiw-run / gateway-local / aim）继续绿。
+- GHCR 镜像 + `scripts/deploy.ts` + `ops/compose/` **未删除任何路径**——仅文案降级。`gateway.example.test` 测试机配方完整搬到 `deployment-public-https.md`，部署能力零回归。
+
+文档同步：
+
+- `docs/deployment.md` / `docs/deployment-public-https.md` / `docs/architecture.md` / `docs/cli.md` / `ops/compose/docker-compose.yml` / `scripts/deploy.ts` 见 What shipped。
+- `docs/plan/PLAN-016.md` 状态 `implementing → completed`，追加完成记录节（commits + 时间戳 + Outcomes 段）。
+- `docs/plan/index.md` PLAN-016 改 `[x]`，更新顶部 `Updated:`。
+- `docs/task/REFACTOR-003.md` / `docs/task/index.md` REFACTOR-003 `[-] → [x]`——这是本 plan 的最终交付物。
+
+已知 follow-up（不在本批）：
+
+- **R1（P2）**：`aim install systemd` 的 unit 模板假设 `aim` 在 `~/.bun/bin/`；打 binary 形态（PLAN-017+）后 `ExecStart` 路径需要 parameterize，届时 `aim install systemd` 将自动改写。
+- launchd（macOS）+ 其他 init 系统的 `aim install` 子命令——后续按需扩展。
+- 旧 GHCR 镜像下线 / `scripts/deploy.ts` 路径删除——本 plan 仅降级文案，不破兼容；将来若 docker 形态完全废弃再单独跟。
+
+Next on the line：REFACTOR-003 收官后无后续 plan 排期。下一个独立特性按 BKD 看板新增。
+
 ## 2026-04-25 PLAN-015 完成
 
 **PLAN-015 landed: worker/** 物理抽离至 `@aiworker/core`.** REFACTOR-003 收尾，把 `apps/api/src/worker/**` 整树（除 Hono 路由）+ `apps/api/src/config/{worker,common}.ts` + `apps/api/src/adapters/{mcp,openai}` + `apps/api/src/shared/lib/{ids,app-error}.ts` + 对应 test-fixtures 整体搬到 `packages/core` / `packages/shared`，删除 `apps/api/src/lib.ts` 桥面，新增 ESLint `no-restricted-imports` guard 锁边界，新增 hot-reload 闭包不变量回归测。**纯物理重排，零行为变更**。

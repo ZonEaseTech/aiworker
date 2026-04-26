@@ -25,6 +25,18 @@ packages/
 - **`packages/storage-sqlite`** 是 fleet.db 与 worker.db 的唯一 schema 源。通过 subpath `./fleet` 与 `./worker` 保持数据域边界；`defaultFleetMigrationsFolder` / `defaultWorkerMigrationsFolder` 通过 `import.meta.url` 解析，避免调用方硬编码 `./drizzle/...`。
 - **`packages/fs-layout`** 管理每 worker 的 `~/.aiworker/workers/<id>/` 目录布局。gateway 与 worker 都复用它解析 `AGENT.md` / `SOUL.md` / `USER.md` / `config.yaml` / `brain/` 等路径。
 
+## 部署模型（PLAN-016）
+
+部署形态降级为三档并列，docker 不再是默认：
+
+| 形态 | 适用 | 入口 | docker | 公网 |
+|------|------|------|--------|------|
+| **裸跑** | 开发 / 单机 | `aim gateway start` / `aiw serve` 前台 | 无 | 无 |
+| **systemd** | Linux 服务器长跑 | `aim install systemd [--user\|--system]` 写 unit + `enable --now` | 无 | 可选叠加 |
+| docker compose | 懒人快速试用 / per-worker 容器隔离 | `ops/compose/docker-compose.yml`（GHCR 镜像） | 有 | 必要时叠加 |
+
+公网 HTTPS（Cloudflare orange-cloud + Caddy `:80 → 127.0.0.1:3000` + GHCR + `scripts/deploy.ts` aissh 流程）单独拆到 [`deployment-public-https.md`](./deployment-public-https.md)，仅当需要把 channel webhook 暴露公网时才叠加；详见 [`deployment.md`](./deployment.md)。
+
 ## Filesystem source of truth (PLAN-012)
 
 每个 worker 持有一颗独立子树（根为 `AIWORKER_HOME`，默认 `~/.aiworker`）：

@@ -1,3 +1,9 @@
+# PLAN-016 起,docker compose 是**可选 fast-launch** 形态——主部署路径是
+# 裸跑 (`aim gateway start` / `aiw serve`) 或 systemd (`aim install systemd`)。
+# 详见 docs/deployment.md;仅在不愿装 bun、或需要 `aim workers launch`
+# per-worker 容器隔离时才走本路径。公网 HTTPS 反代见
+# docs/deployment-public-https.md(独立可选叠加层)。
+
 name: aiworker
 
 services:

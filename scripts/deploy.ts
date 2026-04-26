@@ -127,7 +127,7 @@ function normalizeVariant(raw: string | undefined, fallback: ImageVariant): Imag
 }
 
 function printHelp(): void {
-  const help = `\nbun run scripts/deploy.ts <command> [flags]\n\nCommands:\n  install-docker   Install docker on target (first-time, approval-gated)\n  teardown-legacy  Remove legacy aiworker.service + /opt/aiworker (approval-gated, --confirm)\n  login-ghcr       docker login ghcr.io on host using local \`gh auth token\`\n  build            Trigger .github/workflows/build-image.yml, watch, return tag\n  upload           Upload compose + Caddyfile + .env to host\n  install          docker compose pull + up -d on host\n  verify           Curl /health on host, fail on non-ok\n  reload-caddy     Install Caddyfile + caddy validate + systemctl reload caddy\n  deploy           build → upload → install → verify → reload-caddy\n\nFlags:\n  --tag=<tag>              Image tag (default: <git-sha>-<UTC yyyymmddhhmm>)\n  --image-variant=slim|full  FEAT-020 slim is default (~150 MB), full bakes\n                             claude-code / codex / gemini-cli / qwen-code\n                             (~300 MB). Overrides $AIWORKER_IMAGE_VARIANT.\n  --server=<id>            aissh server id (default: $AIWORK_SERVER_ID)\n  --reason=<text>         aissh --reason (default: "FEAT-009 <command>")\n  --timeout=<secs>         aissh exec timeout in seconds (per-command defaults:\n                           install-docker 300, install 300, others 60)\n  --dry-run                Print commands without executing\n  --confirm                Required for teardown-legacy\n`
+  const help = `\nbun run scripts/deploy.ts <command> [flags]\n\n*** OPTIONAL docker-mode deploy. ***\n*** The recommended CLI-first path is bare CLI (\`aim gateway start\`) or\n*** systemd (\`aim install systemd\`). See docs/deployment.md.\n*** This script + ops/compose/ + GHCR + Caddy is the OPTIONAL public-HTTPS\n*** fast-launch path (see docs/deployment-public-https.md).\n\nCommands:\n  install-docker   Install docker on target (first-time, approval-gated)\n  teardown-legacy  Remove legacy aiworker.service + /opt/aiworker (approval-gated, --confirm)\n  login-ghcr       docker login ghcr.io on host using local \`gh auth token\`\n  build            Trigger .github/workflows/build-image.yml, watch, return tag\n  upload           Upload compose + Caddyfile + .env to host\n  install          docker compose pull + up -d on host\n  verify           Curl /health on host, fail on non-ok\n  reload-caddy     Install Caddyfile + caddy validate + systemctl reload caddy\n  deploy           build → upload → install → verify → reload-caddy\n\nFlags:\n  --tag=<tag>              Image tag (default: <git-sha>-<UTC yyyymmddhhmm>)\n  --image-variant=slim|full  FEAT-020 slim is default (~150 MB), full bakes\n                             claude-code / codex / gemini-cli / qwen-code\n                             (~300 MB). Overrides $AIWORKER_IMAGE_VARIANT.\n  --server=<id>            aissh server id (default: $AIWORK_SERVER_ID)\n  --reason=<text>         aissh --reason (default: "FEAT-009 <command>")\n  --timeout=<secs>         aissh exec timeout in seconds (per-command defaults:\n                           install-docker 300, install 300, others 60)\n  --dry-run                Print commands without executing\n  --confirm                Required for teardown-legacy\n`
   process.stdout.write(help)
 }
 
@@ -394,6 +394,7 @@ function cmdReloadCaddy(args: Args): void {
 }
 
 function cmdDeploy(args: Args): void {
+  log('[docker-mode] starting build → upload → install → verify → reload-caddy (optional path; see docs/deployment.md for the recommended CLI-first install)')
   const tag = cmdBuild(args)
   const argsWithTag: Args = { ...args, tag }
   cmdUpload(argsWithTag)
@@ -401,8 +402,8 @@ function cmdDeploy(args: Args): void {
   cmdVerify(argsWithTag)
   cmdReloadCaddy(argsWithTag)
   const suffix = variantSuffix(args.imageVariant)
-  log(`deploy ok — image tag ${tag}${suffix} (variant=${args.imageVariant})`)
-  log(`Remember: update AIWORKER_IMAGE_TAG=${tag} + AIWORKER_IMAGE_VARIANT_SUFFIX=${suffix} in ${DEFAULT_REMOTE_DIR}/.env on the host if you want manual \`docker compose up -d\` to pick up this tag+variant.`)
+  log(`[docker-mode] deploy ok — image tag ${tag}${suffix} (variant=${args.imageVariant})`)
+  log(`[docker-mode] Remember: update AIWORKER_IMAGE_TAG=${tag} + AIWORKER_IMAGE_VARIANT_SUFFIX=${suffix} in ${DEFAULT_REMOTE_DIR}/.env on the host if you want manual \`docker compose up -d\` to pick up this tag+variant.`)
 }
 
 // --------------------------------------------------------------------------

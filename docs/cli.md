@@ -241,6 +241,50 @@ aim gateway status
 
 SIGTERM → 等 `timeoutMs` → SIGKILL 兜底。
 
+### `aim install systemd`（PLAN-016）
+
+把 gateway daemon 包成 systemd unit，开机自启 / 长跑。前台跑 `aim gateway start` 适合开发，**生产推荐用 systemd**——这是部署主路径，详见 [`docs/deployment.md` § 形态二：systemd 服务化](./deployment.md#形态二systemd-服务化推荐-linux-服务器)。
+
+```sh
+aim install systemd [--user|--system] [--dry-run] [--out <path>] [--no-enable]
+```
+
+| Flag | 默认 | 含义 |
+|------|------|------|
+| `--user` | 是（默认） | 用户实例：`~/.config/systemd/user/aiworker-gateway.service`，`WantedBy=default.target` |
+| `--system` | 否 | 系统实例：`/etc/systemd/system/aiworker-gateway.service`，`WantedBy=multi-user.target`；需 root |
+| `--dry-run` | 否 | 只打印 unit 内容到 stdout，不写盘、不 enable |
+| `--out <path>` | 不设 | 覆盖目标路径（测试 / 异常布局 / packaging 用） |
+| `--no-enable` | 否 | 写文件后**不**调 `systemctl daemon-reload + enable --now`，留给运维手动 |
+
+unit 模板（`--user` 形态）：
+
+```ini
+[Unit]
+Description=AIWorker gateway daemon
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=%h/.bun/bin/aim gateway start
+Restart=on-failure
+RestartSec=5
+Environment=AIWORKER_HOME=%h/.aiworker
+
+[Install]
+WantedBy=default.target
+```
+
+`--system` 形态把 `%h` 替换为 `/var/lib/aiworker`（或操作员显式指定的 home），`WantedBy` 改 `multi-user.target`。
+
+幂等：同一 `--out` 路径反复跑产生**字节级一致**的 unit 内容；只有 `aim install systemd --dry-run` 输出与最终写盘一致，才算合法实现。
+
+注意：
+
+- unit 模板里的 `ExecStart=%h/.bun/bin/aim` 假设 `aim` 已经 `bun install -g`。一旦走 binary 形态（PLAN-017+ 的 `bun build --compile`），unit 模板要 parameterize 为绝对路径——届时 `aim install systemd` 会自动改写。
+- `--system` 形态需要明确知道在做什么——服务以 root 跑、数据写到 root home。新手优先 `--user`。
+- worker 进程目前不提供 systemd 模板（worker 通常按需手工 `aiw serve` 或走 docker fast-launch；gateway 是常驻的"那一个"）。
+
 ### `aim pair --url <wsUrl> --worker-url <httpUrl> --bootstrap-token <token> [--display-name <name>]`
 
 把一个已启动的 worker 通过 bootstrap token 注册到 gateway。gateway 会调 worker 的 `/info` 验 token，加密落 fleet.db，并把 deviceToken 返回——aim 把它写回 `aim.json`，之后所有 operator 请求都用它。
