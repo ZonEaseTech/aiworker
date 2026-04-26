@@ -1,5 +1,31 @@
 # AIWorker Changelog
 
+## 2026-04-26 14:20 PLAN-017 完成 — 4 个 bare-metal smoke regressions 修复
+
+**PLAN-017 landed: bare-metal smoke regressions — fix four blockers found during local smoke.** 一次本地 smoke（T1 单进程 orchestrator → T2 gateway+worker 端到端 → T3 hot-reload via `PUT /api/worker/config`）暴露的四个**新开发 / 新运维**入门即踩的 P1/P2 缺陷：dev 默认值绑死容器布局、`aim pair --url` 不持久化、`aim config set` 缺 handler、reload 后 chat 卡死。BKD 1 coordinator + 4 worktree subtask 并行实现，按 `001 → 002 → 003 → 004` 顺序合 main，每次合后跑 typecheck + 该 bug 的回归 smoke，最终全 4 合完跑完整 T1+T2+T3 smoke 全过。**业务逻辑零变更，纯环境适配 + handler 接通 + hot-reload 正确性修复**。
+
+What shipped:
+
+- **BUG-001 — 解耦 dev 默认值**（fix `ea4c5a4` / merge `94691de`，`bkd/in4qr0s7`）——`packages/core/src/config/worker.ts` 把 `WORKER_DATA_ROOT` 与 `WORKER_MIGRATIONS_FOLDER` 改 `.default(() => ...)` lazy 求值；`WORKER_DATA_ROOT` fallback `<resolveAiworkerHome()>/data-root`，`WORKER_MIGRATIONS_FOLDER` fallback 到 `@aiworker/storage-sqlite/worker::defaultWorkerMigrationsFolder`（`import.meta.url` 解析的绝对路径）。新增 `worker.test.ts` 5 case + `__resetWorkerEnvCacheForTest` `@internal` helper；`apps/api/.env.example` + `docs/cli.md` 注释说明 dev 派生 / 容器仍可显式覆盖。**Production 容器行为不变**（`docker-compose.yml` 仍显式 `WORKER_DATA_ROOT=/var/lib/aiworker`）。
+- **BUG-002 — aim pair 持久化 `--url`**（fix `57cb021` / merge `78ca715`，`bkd/7c6eu4br`）——`apps/cli/src/aim/commands/pair.ts:30-34` 在 `patchAimState` 调用前 spread `...(opts.url === undefined ? {} : { gatewayUrl: opts.url })`，`--url` 缺省时不动既有 `gatewayUrl`。新增 `pair.test.ts` 两 case 覆盖 AC1（`--url` 写入）与 AC2（缺省不动）。`aim.json` 文件权限 `0600` 不变。
+- **BUG-003 — 接通 aiw serve gateway-client 的 config.put**（fix `24da562` / merge `6ad908c`，`bkd/mfeawlkb`）——`packages/core/src/worker/management/config.ts` 抽 `applyConfigUpdate` helper（validate → `putConfig` → `mirrorConfigToYaml` → `reloadRuntime`），HTTP route 与 gateway-client 共享同一更新链路；`apps/api/src/modes/worker.ts::bootstrapWorkerApp` return 增加 `reloadRuntime`；`apps/api/src/worker/management/routes.ts` PUT `/config` 退化为 thin caller；`apps/cli/src/commands/serve.ts` 注册 `configPut` handler；`packages/core/src/worker/gateway-client/dispatcher.ts` `handleConfigPut` 把 `InvalidConfigError → invalid_config` / `ConfigVersionConflictError → version_conflict`，不再吞成 `internal_error`。`dispatcher.test.ts` 新增 4 case；既有 `routes.test.ts` 26 case 不 regress。`aim config set --if-match` correct/wrong 两路径都 round-trip。
+- **BUG-004 — runtime hot-reload 后刷新 gateway subscriber**（fix `d1ea58f` / merge `a47e3be`，`bkd/b8fwkuo0`）——`packages/core/src/worker/gateway-client/index.ts` `GatewayNode` 加 `notifyRuntimeReloaded()`，`connected` 时 `subscriber.start()` 重订新 bus（`start()` 幂等，内部先 stop 老 unsub）。`apps/api/src/modes/worker.ts::bootstrapWorkerApp` 接 `onRuntimeReloaded?: () => void` 选项，`reloadRuntime` 闭包在 `state.runtime = nextRuntime` **之后** 与 `previous.dispose()` **之前** 同步触发——顺序关键，PLAN-017 §risks 强调过。`apps/cli/src/commands/serve.ts` mutable ref 解 chicken-and-egg（先建 ref → bootstrap 闭包读 ref → `startGatewayNode` → 把 node 写入 ref）。新增 `subscriber-refresh.test.ts` 2 case 覆盖 reload 后新 bus 上行 + 老 bus 无 listener 泄漏 + 未连接时 hook no-op。**满足 CLAUDE.md hot-reload 不变量**："reload 后自动追新 bus"。
+
+测试基线变化：
+
+- `@aiworker/core`: 379 → **392 pass**（+13：BUG-001 5 + BUG-003 4 + BUG-004 2 + 各 case 内部断言）
+- `@aiworker/api`: 28 → **32 pass**（+4：BUG-003 dispatcher.test 新增）
+- `@aiworker/cli`: 13 → **15 pass**（+2：BUG-002 pair.test）
+- 总 typecheck/lint/test 全绿；workspace 整体不 regress。
+
+完整 PLAN-017 smoke 验证：
+
+- **T1** `aiw run --message ... --dry-run` 仅最小 env（不带 `WORKER_MIGRATIONS_FOLDER` / `WORKER_DATA_ROOT`）成功构造 runtime，无 `EACCES` / `Can't find meta/_journal.json`；
+- **T2** `aim pair --url ws://127.0.0.1:20500/ws --worker-url http://127.0.0.1:20501 --bootstrap-token <tok>` 后 `aim.json` 含 `gatewayUrl=ws://127.0.0.1:20500/ws`，紧跟着 `aim workers list` 不需要手改 JSON 即返回 worker；
+- **T3** `aim config get` v1 → `aim config set --if-match 1` 正确路径返回 `version=2 / runtimeReload=ok`；同 `--if-match 1` 再发返回 `version_conflict: config version 1 does not match current version 2`（明确错误码不再 `method_not_implemented` / `internal_error`）；reload 后 `aim chat` 立即收到 `accepted → chat.message → done`，对照原 `aim-chat-post-reload.log` 是 `accepted → timeout`（BUG-004 修复证据）。
+
+后续：subtask BUG-003 报告里指出 `reloadRuntime` 没有 mutex（HTTP+gateway 并发 PUT 时存在 race），不在本 plan 范围内，可单独提任务跟进；CLAUDE.md "reload 必须串行化" 不变量当前由"应用层不并发"维持。
+
 ## 2026-04-26 PLAN-016 完成
 
 **PLAN-016 landed: deployment reshape — CLI-first install, docker as optional fast-launch.** REFACTOR-003 总收官。把"如何部署"从 PLAN-005/PLAN-009 时代的"GHCR 镜像 + Caddy 公网终止 + `gateway.example.test`" SaaS 模型，重写为三档并列、docker 不再是默认的形态布局。新增 `aim install systemd` 一键写 unit + `enable --now`（Linux 长跑主路径），文档主线让"5 分钟读完得出'主路径是 systemd，不是 docker compose pull'的结论"。**纯部署形态调整 + 文档重写 + CLI 子命令新增；零业务行为变更**。

@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-04-26 10:30
+> Updated: 2026-04-26 13:30
 
 ## Usage
 
@@ -57,3 +57,7 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-022 Auth mount recipe + Register dialog hint**](FEAT-022.md) `P2`
 - [x] [**FEAT-023 Manager-driven worker creation**](FEAT-023.md) `P1`
 - [x] [**REFACTOR-003 CLI-first lightweight runtime (aiw / aim / gateway)**](REFACTOR-003.md) `P1`
+- [x] [**BUG-001 Decouple dev defaults for WORKER_DATA_ROOT and WORKER_MIGRATIONS_FOLDER**](BUG-001.md) `P1`
+- [x] [**BUG-002 aim pair must persist gatewayUrl to aim.json**](BUG-002.md) `P1`
+- [x] [**BUG-003 Wire config.put handler in aiw serve gateway-client**](BUG-003.md) `P2`
+- [x] [**BUG-004 Refresh gateway-client subscriber after runtime hot-reload**](BUG-004.md) `P1`
