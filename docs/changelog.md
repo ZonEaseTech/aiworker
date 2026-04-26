@@ -6,24 +6,24 @@
 
 What shipped:
 
-- **S1 — `aim install systemd` 子命令**（commit `<TBD-S1>` / merge `<TBD-S1>`）——新文件 `apps/cli/src/aim/commands/install.ts` + 单测。子命令 `aim install systemd [--user|--system] [--dry-run] [--out <path>] [--no-enable]`：
+- **S1 — `aim install systemd` 子命令**（feat `0a4c958` / merge `3c46801`）——新文件 `apps/cli/src/aim/commands/install.ts` + 单测。子命令 `aim install systemd [--user|--system] [--dry-run] [--out <path>] [--no-enable]`：
   - `--user` 默认（写 `~/.config/systemd/user/aiworker-gateway.service`，`WantedBy=default.target`）；
   - `--system` root only（写 `/etc/systemd/system/aiworker-gateway.service`，`WantedBy=multi-user.target`）；
   - `--dry-run` 只 stdout 打印，`--out <path>` 覆盖目标路径，`--no-enable` 跳过 `daemon-reload + enable --now`。
   - unit 模板纯渲染、无新依赖；同 `--out` 反复跑产生字节级一致的 unit 内容。
   - 注册到 cac 的 commands 表；`aim install --help` 罗列 `systemd` 子命令。
-- **S2 — 部署文档三档重写**（commit `<TBD-S2>` / merge `<TBD-S2>`）——
+- **S2 — 部署文档三档重写**（cherry-pick `e8a98f6`，原 `bkd/g4j2nqve` tip `523785b`）——
   - `docs/deployment.md` 整体重写。开篇即三档对比表，主路径是裸跑 + systemd；docker compose 章节挪到末尾"可选 fast-launch"段落；`scripts/deploy.ts` 不在主流程里出现。
   - **`docs/deployment-public-https.md` 新建**——把原 `deployment.md` 里 `gateway.example.test` + Cloudflare 橙云 + Caddy `:80 → :3000` + GHCR 镜像 + `bun run scripts/deploy.ts deploy` 的完整 run book 整段搬过来，开篇明确"仅当需要把 channel webhook 暴露公网时才需要本文档"。
   - `docs/architecture.md` Monorepo Layout 后新增 §"部署模型（PLAN-016）"，三档对比表 + 链接到 `deployment.md` / `deployment-public-https.md`。
   - `docs/cli.md` 在 `aim gateway stop` 与 `aim pair` 之间插入 §`aim install systemd`，列全 flag 表 + unit 模板示例 + binary 形态升级 caveat。
   - `scripts/deploy.ts` 文案降级：`--help` 顶部 banner 加 "OPTIONAL docker-mode deploy"；`cmdDeploy` 入口 / 收尾 / 提醒共三条 log 加 `[docker-mode]` 前缀。**实现未变**——仍是 `cmdBuild → cmdUpload → cmdInstall → cmdVerify → cmdReloadCaddy`。
   - `ops/compose/docker-compose.yml` 头注释加 "PLAN-016 起,docker compose 是可选 fast-launch 形态——主部署路径是裸跑或 systemd"。
-- **S3 — Plan 收尾**（commit `<TBD-S3>` / merge `<TBD-S3>`）——`docs/plan/PLAN-016.md` `implementing → completed` + commit/merge hash 回填 + Outcomes 段；`docs/plan/index.md` PLAN-016 `[ ] → [x]` + Updated 头时间戳；`docs/task/REFACTOR-003.md` `[-] → [x]` + completedAt（**REFACTOR-003 总收官**）；`docs/task/index.md` REFACTOR-003 `[-] → [x]`。
+- **S3 — Plan 收尾**（本 commit；S2 因 BKD worktree fork base 偏移没走自动合并）——`docs/plan/PLAN-016.md` `implementing → completed` + commit/merge hash 回填 + Outcomes 段；`docs/plan/index.md` PLAN-016 `[ ] → [x]` + Updated 头时间戳；`docs/task/REFACTOR-003.md` `[-] → [x]` + completedAt（**REFACTOR-003 总收官**）；`docs/task/index.md` REFACTOR-003 `[-] → [x]`。
 
 测试基线变化：
 
-- `apps/cli` `<TBD>` → `<TBD>`（+4 起：S1 dry-run / user / system / 已存在文件覆盖共 4 case；具体行数随 S1 实现确定）。
+- `apps/cli` 0 → **13** pass（S1 单测：dry-run / user / system 路径推断 / `--out` 覆盖 + 幂等 / `--no-enable` 等共 13 case）。
 - 其他包（apps/api / apps/gateway / packages/core / packages/shared / packages/gateway-proto / apps/web）**无变化**——本 plan 不动业务实现。
 - `scripts/deploy.ts deploy --dry-run` 仍能正确出图（实现未变），可作为 docker 形态 smoke。
 

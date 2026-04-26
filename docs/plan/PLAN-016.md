@@ -1,11 +1,45 @@
 # PLAN-016 Deployment reshape — CLI-first install, docker as optional fast-launch
 
-- **status**: implementing
+- **status**: completed
 - **createdAt**: 2026-04-24 19:15
 - **revisedAt**: 2026-04-26 09:30
 - **approvedAt**: 2026-04-26 09:30
+- **completedAt**: 2026-04-26 10:30
 - **relatedTask**: REFACTOR-003
 - **dependsOn**: PLAN-013 / PLAN-014 / PLAN-015（CLI 形态完整 + 文件系统 source-of-truth + core 抽离）
+- **commits**: 0a4c958, 3c46801（S1）, e8a98f6（S2 cherry-pick）
+
+## Outcomes
+
+落地分两个 subtask：
+
+- **S1 — `aim install systemd` 子命令**（feat `0a4c958` / merge `3c46801`）：BKD subtask `bkd/fl6hv9vl` 自动合并，13 个 case 单测覆盖 dry-run / user / system / `--out` / `--no-enable` / unit 模板字段断言。`aim install --help` + `aim install systemd --dry-run` 渲染合法 systemd unit。
+- **S2 — 部署文档三档重写**（cherry-pick `e8a98f6`，原 `bkd/g4j2nqve` tip `523785b`）：BKD subtask 完成 commit 但因 fork base 早于 S1 merge 没走自动合并；本 session 在主分支 cherry-pick 接入，diff 干净（与 S1 文件 zero overlap）。`docs/deployment.md` / `docs/deployment-public-https.md` / `docs/architecture.md` / `docs/cli.md` / `ops/compose/docker-compose.yml` / `scripts/deploy.ts` 全部按 §S2 spec 落地。
+- **S3 — Plan + task 收尾**（本 commit）：S3 没单独走 BKD subtask（W2 dispatch 在 S1+S2 全 merge 后才发，但 S2 没自动合 → 本 session 主分支收完）。本 commit 同时完成：PLAN-016 status / outcomes / commits 字段；plan/index PLAN-016 `[ ] → [x]`；REFACTOR-003 task `[-] → [x]` + completedAt + outcomes 总收官段；task/index REFACTOR-003 `[-] → [x]`。
+
+测试基线变化（PLAN-016 完成态）：
+
+- `apps/cli` 0 → **13** pass（S1 单测，全在 `apps/cli/src/aim/commands/install.test.ts`）。
+- 其他包（apps/api / apps/gateway / packages/core / packages/shared / packages/gateway-proto / apps/web）**无变化** —— 本 plan 不动业务实现。
+- `bun run check` 9 包全绿；3 个 smoke（aiw-run / gateway-local / aim）全绿。
+
+跟原 §Acceptance criteria 对账：
+
+- ✅ `aim install systemd --dry-run` 输出合法 systemd unit（验过）。
+- ✅ `aim install systemd --out /tmp/test-aiw.service --no-enable` 幂等写文件（单测覆盖）。
+- ✅ `docs/deployment.md` 主路径 = systemd（开篇三档对比表 + 形态二段落即给出 `aim install systemd`）。
+- ✅ `bun run check` 全绿；新单测 13 case（≥ 4 要求达成 3 倍）。
+- ✅ `bun test` 总数 +13。
+- ✅ 所有 smoke 继续绿。
+- ✅ `scripts/deploy.ts deploy --dry-run` 仍能正确出图（实现未变）。
+- ✅ REFACTOR-003 task 推到 `[x]` —— 本 commit 即时完成。
+
+Follow-up（不在本 plan）：
+
+- **R1（P2）** unit 模板假设 `~/.bun/bin/aim`；打 binary 形态时（PLAN-017+）`ExecStart` 路径需要 parameterize。
+- launchd（macOS）+ 其他 init 系统的 `aim install` 子命令——后续按需扩展。
+- 旧 GHCR 镜像下线 / `scripts/deploy.ts` 路径删除——本 plan 仅降级文案，不破兼容；将来若 docker 形态完全废弃再单独跟。
+- BKD coordinator 的 worktree-fork-base 偏移问题（S2 没走自动合并的根因）值得在 BKD 侧单独跟踪——理论上 W2 dispatch 时应当从 S1 merge 后的 main rebase。
 
 ## Why
 
