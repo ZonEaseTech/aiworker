@@ -16,7 +16,7 @@ import consola from 'consola'
  * - **形态分叉**：`--user`（默认）走 systemd 用户实例；`--system` 写 `/etc/systemd/system/`，
  *   ExecStart 中的 `%h` 在渲染期就替换为操作员 home（systemd 系统单元不展开 `%h`）。
  *
- * unit 模板假设了 `aim` 由 bun 安装在 `~/.bun/bin/`，这是 PLAN-016 明确的形态前提
+ * unit 模板假设了 `aiworker` 由 bun 安装在 `~/.bun/bin/`，这是 PLAN-016 明确的形态前提
  * （binary 形态见 PLAN-017）。改路径时模板需要同步更新。
  */
 
@@ -43,7 +43,7 @@ export function renderSystemdUnit(opts: RenderSystemdUnitOptions): string {
       '',
       '[Service]',
       'Type=simple',
-      'ExecStart=%h/.bun/bin/aim gateway start',
+      'ExecStart=%h/.bun/bin/aiworker gateway start',
       'Restart=on-failure',
       'RestartSec=5',
       'Environment=AIWORKER_HOME=%h/.aiworker',
@@ -62,7 +62,7 @@ export function renderSystemdUnit(opts: RenderSystemdUnitOptions): string {
     '',
     '[Service]',
     'Type=simple',
-    `ExecStart=${opts.operatorHome}/.bun/bin/aim gateway start`,
+    `ExecStart=${opts.operatorHome}/.bun/bin/aiworker gateway start`,
     'Restart=on-failure',
     'RestartSec=5',
     `Environment=AIWORKER_HOME=${SYSTEM_DATA_DIR}`,

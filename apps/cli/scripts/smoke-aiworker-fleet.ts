@@ -103,7 +103,7 @@ async function main(): Promise<number> {
   process.env.AIWORKER_HOME = home
 
   const gateway = await startStubGateway()
-  consola.info(`[smoke-aim] stub gateway listening at ${gateway.url}`)
+  consola.info(`[smoke-aiworker-fleet] stub gateway listening at ${gateway.url}`)
 
   const client = createAimClient()
   try {
@@ -121,11 +121,11 @@ async function main(): Promise<number> {
     if (!Array.isArray(res.online) || res.online.length !== 1)
       throw new Error(`system.presence online 列表异常: ${JSON.stringify(res.online)}`)
 
-    consola.success(`[smoke-aim] PASS: system.presence 往返成功 (online=${res.online.length})`)
+    consola.success(`[smoke-aiworker-fleet] PASS: system.presence 往返成功 (online=${res.online.length})`)
     return 0
   }
   catch (err) {
-    consola.error(`[smoke-aim] FAIL: ${err instanceof Error ? err.message : String(err)}`)
+    consola.error(`[smoke-aiworker-fleet] FAIL: ${err instanceof Error ? err.message : String(err)}`)
     return 1
   }
   finally {

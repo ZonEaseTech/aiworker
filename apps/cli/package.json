@@ -3,14 +3,13 @@
   "type": "module",
   "private": true,
   "bin": {
-    "aiw": "./src/aiw.ts",
-    "aim": "./src/aim.ts"
+    "aiworker": "./src/aiworker.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "smoke:aiw-run": "bun scripts/smoke-aiw-run.ts",
-    "smoke:aim": "bun scripts/smoke-aim.ts"
+    "smoke:aiworker-run": "bun scripts/smoke-aiworker-run.ts",
+    "smoke:aiworker-fleet": "bun scripts/smoke-aiworker-fleet.ts"
   },
   "dependencies": {
     "@zonease/aiworker-api": "workspace:*",
