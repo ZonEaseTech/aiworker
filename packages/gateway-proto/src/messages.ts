@@ -6,10 +6,13 @@ import { roleSchema } from './roles'
  * connect：连接建立后客户端必须发的第一帧。
  * - operator 填 device id，node 填 workerId。
  * - auth.token 是 bearer token；loopback 场景允许空字符串。
- * - enroll：可选的自助注册载荷（PLAN-018）。仅 worker（role='node'）首次接入
- *   gateway 时携带；gateway 用 `AIWORKER_JOIN_TOKEN` 验签后落 fleet.db。
- *   后续重连可省略。`apiToken` 必须匹配 `wtk_<base64url>`，由 worker 自身在
- *   bootstrap 时 mint。
+ * - enroll：可选的自助注册载荷。仅 worker（role='node'）首次接入 gateway 时携带；
+ *   gateway 验签后落 fleet.db。后续重连可省略。`apiToken` 必须匹配
+ *   `wtk_<base64url>`，由 worker 自身在 bootstrap 时 mint。
+ *   - `mode='join-token'`（PLAN-018，默认）：worker 持 `AIWORKER_JOIN_TOKEN`
+ *     直接通过；`joinToken` 必填。
+ *   - `mode='otp'`（PLAN-019）：worker 不持 join token，只声明身份；gateway
+ *     生成 OTP 与 operator 交互后再放行。`joinToken` 必须省略。
  */
 export const connectFrameSchema = z.object({
   type: z.literal('connect'),
@@ -21,10 +24,18 @@ export const connectFrameSchema = z.object({
   }),
   meta: z.record(z.string()).optional(),
   enroll: z.object({
-    joinToken: z.string().min(1),
     apiToken: z.string().regex(WORKER_API_TOKEN_PATTERN, 'apiToken must match wtk_<base64url>'),
     displayName: z.string().min(1).max(80).optional(),
-  }).optional(),
+    // 缺省 mode 等同 'join-token'（兼容 PLAN-018 早期 client）。
+    // 不在 schema 上挂 .default() 是为了保持 input/output 类型对称——
+    // 否则 Frame 推导出的 enroll.mode 会变成必填，破坏 ZodType 第三个泛型。
+    mode: z.enum(['join-token', 'otp']).optional(),
+    joinToken: z.string().min(1).optional(),
+  }).optional().refine(
+    v => v === undefined
+      || ((v.mode ?? 'join-token') === 'otp' ? v.joinToken === undefined : !!v.joinToken),
+    { message: 'mode=join-token requires joinToken; mode=otp must omit joinToken' },
+  ),
 })
 export type ConnectFrame = z.infer<typeof connectFrameSchema>
 

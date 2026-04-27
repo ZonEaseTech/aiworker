@@ -104,6 +104,51 @@ const workersRemoveMethod = defineMethod({
   routing: 'operator-to-gateway',
 })
 
+// ---- enroll.* (PLAN-019) ----
+
+/**
+ * 一条 pending OTP enrollment 的快照：worker 已经发起 mode='otp' 的
+ * connect.enroll 帧，gateway 给它分配了 OTP 并把它挂在等待队列里，正等
+ * operator 调 enroll.approve / enroll.reject 决定去留。
+ */
+export const pendingEnrollmentSchema = z.object({
+  otp: z.string().min(1),
+  workerId: z.string().min(1),
+  displayName: z.string().min(1).optional(),
+  submittedAt: z.number().int(),
+  expiresAt: z.number().int(),
+})
+export type PendingEnrollment = z.infer<typeof pendingEnrollmentSchema>
+
+const enrollListMethod = defineMethod({
+  method: 'enroll.list',
+  description: '列出 gateway 当前所有 pending OTP enrollment 请求。',
+  params: z.object({}).optional().default({}),
+  result: z.object({
+    pending: z.array(pendingEnrollmentSchema),
+  }),
+  routing: 'operator-to-gateway',
+})
+
+const enrollApproveMethod = defineMethod({
+  method: 'enroll.approve',
+  description: '批准某条 pending OTP enrollment：fleet.db 落 row + 推 enrollment.approved 事件给等待中的 worker。',
+  params: z.object({ otp: z.string().min(1) }),
+  result: z.object({
+    workerId: z.string().min(1),
+    deviceToken: z.string().min(1),
+  }),
+  routing: 'operator-to-gateway',
+})
+
+const enrollRejectMethod = defineMethod({
+  method: 'enroll.reject',
+  description: '拒绝某条 pending OTP：close 4403 给 worker，audit gateway.enrollment.rejected。',
+  params: z.object({ otp: z.string().min(1) }),
+  result: z.object({ rejected: z.boolean() }),
+  routing: 'operator-to-gateway',
+})
+
 // ---- chat.* ----
 
 const chatSendMethod = defineMethod({
@@ -319,6 +364,9 @@ export const METHODS = {
   'workers.launch': workersLaunchMethod,
   'workers.stop': workersStopMethod,
   'workers.remove': workersRemoveMethod,
+  'enroll.list': enrollListMethod,
+  'enroll.approve': enrollApproveMethod,
+  'enroll.reject': enrollRejectMethod,
   'chat.send': chatSendMethod,
   'config.get': configGetMethod,
   'config.put': configPutMethod,
