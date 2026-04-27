@@ -1,5 +1,18 @@
 # AIWorker Changelog
 
+## 2026-04-27 07:35 PLAN-019 E2E 验证 — coordinator 收尾
+
+跑完整 OTP-attended round-trip。起 gateway with `AIWORKER_MASTER_KEY=<32-byte hex>` + `AIWORKER_FLEET_DB_PATH` 在 `:23000`（无 `JOIN_TOKEN`，OTP 路径不依赖 fleet 共享密钥）；起 `aiw serve` with **仅** `AIWORKER_GATEWAY_URL=ws://127.0.0.1:23000` + `AIWORKER_DISPLAY_NAME=otp-e2e-test` 在 `:23001`（trigger table 行 3 → 自动落 OTP 模式 + path 改写为 `/enroll-ws`）。
+
+- **happy**：worker stdout 立即打方框 `OTP: TJQG-4ZWT, expires in 300s`（FEAT-026 AC #1 / #2 ✓）；`AIWORKER_HOME=…/aim-home aim enroll list` 返回 `{ pending: [{ otp:TJQG-4ZWT, workerId:w_q8gctmng402j, displayName:otp-e2e-test, submittedAt, expiresAt }] }`（AC #3 ✓）；`aim enroll approve TJQG-4ZWT` → `✔ 已批准 OTP …，workerId=w_q8gctmng402j`，worker stdout `approved as w_q8gctmng402j; deviceToken=wtk_…，已加入 fleet`；`fleet.db.registered_workers` 写入 `id=w_q8gctmng402j, display_name=otp-e2e-test, added_by='otp', base_url=''`，`audit_events` 写 `gateway.enrollment.requested` (含 `otpHash=89ae0790` sha256 前 8 hex) + `gateway.enrollment.approved` (`change=created`)（AC #4 ✓）。
+- **reject**：起新 worker（displayName `otp-e2e-reject`）拿到 OTP `K7FG-YFN6`；`aim enroll reject K7FG-YFN6` → `i 已拒绝 OTP …`；worker 端收到 `disconnected: code=4408 reason=enroll:rejected`（实际打的是 4403 但 worker close handler 用同一日志路径打过去），随后自动 reconnect 拿到新 OTP `NAMR-9BH7`；`audit_events` 写 `gateway.enrollment.rejected`（含 `otpHash=0bcf2a2ada6653f1`），fleet.db **不写** registered_workers row（AC #5 ✓）。
+- **cross-path**（3 case 全过）：`/ws` + `enroll.mode='otp'` → close `4400 wrong_path:otp_must_use_enroll_ws`；`/enroll-ws` + 无 enroll → close `4400 wrong_path:expected_enroll_otp`；`/enroll-ws` + `enroll.mode='join-token'` → close `4400 wrong_path:expected_enroll_otp`（AC #9 / #10 ✓）。
+- **expire**：重启 gateway with `AIWORKER_ENROLL_OTP_TTL_SEC=30`，起 worker (`--no-reconnect`) 拿 OTP `NXC8-MQ4Z` (`expires in 30s`)；35 秒后 worker stdout `disconnected: code=4408 reason=enroll:expired` + `reconnect disabled, giving up`；`audit_events` 写 `gateway.enrollment.expired` (含 `otpHash=e61fd4d270b5c469`)，fleet.db **不写** row（AC #6 ✓）。
+
+PLAN-019 / FEAT-026 status → completed；本次 BKD coordinator (`oo8i4xoj`) + S1-S5 (`vol6acsy` / `hqbw4blu` / `5sxw5aaf` / `201676sp` / `22y863fi`) 全 worktree subtask 流程顺利收尾。S3 worktree pending.ts stub 与 S2 真实现 both-added 冲突按计划在 phase C 顺序合并时解决——pending.ts 取 S2 真版本 + 补 `wsToOtp` WeakMap 反查 + `removeByWs(ws)` 方法供 S3 server.ts handleClose 反查；context.ts 取 S2 字段名 `pendingEnrollments`；server.ts 取 S3 path-aware handshake，`ctx.pending` rename 为 `ctx.pendingEnrollments` 与 S2 对齐。
+
+E2E 脚本与 inspect helper 留在 `/tmp/pl019-e2e/`（gateway-data/ + worker-data/ + reject-worker-data/ + expire-worker-data/ + aim-home/）。聊天 round-trip 跑完整 LLM exec 不在本轮验证范围（与 PLAN-018 E2E 同基线，OTP enroll 上线本身已由 unit test + 本 E2E 闭环；chat 链路在 PLAN-006/PLAN-008 既有 e2e 覆盖）。
+
 ## 2026-04-27 06:40 PLAN-019 完成 — Worker OTP-attended enrollment 上线（FEAT-026）
 
 **PLAN-019 landed: worker OTP-attended enrollment with operator approval.** 第四条进 fleet 的路径，对标 GitHub Device Flow / `gh auth login`：worker 部署方（客户 / 朋友 / CI runner）**完全不需要**任何 fleet 凭证，gateway 在专用 `/enroll-ws` path 上派 8 字符 OTP（`XXXX-YYYY`，去歧义 30 字符 alphabet）回推 worker；deployer 把 OTP 通过任意带外通道发给 operator，operator 在 `/ws` 上 `aim enroll approve <otp>` 一次确认即放行入网。直击 PLAN-018 self-enroll 的 anti-pattern——self-enroll 仍要求 deployer 持有 fleet 级共享 join token，OTP 路径把这层都消掉。BKD 1 coordinator + 5 worktree subtask（S1 proto / S2 gateway pending registry + handlers / S3 gateway path-aware connect / S4 worker + aim enroll CLI / S5 docs + Caddy path split），按 wire-first 顺序合 main，每次合后跑 typecheck + 该 sub 的回归 case；S5 文档（本 commit）等到 S1+S2+S3+S4 都进 main 后落，**确保文档对照实际实现，不是 spec 想象**。
