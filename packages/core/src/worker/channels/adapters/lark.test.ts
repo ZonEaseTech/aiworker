@@ -5,7 +5,7 @@ import { createCipheriv, createHash, randomBytes } from 'node:crypto'
 
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
-import { __larkInternals, larkAdapter } from './lark'
+import { __larkInternals, larkAdapter, resetLarkTokenCache } from './lark'
 
 type FetchFn = typeof globalThis.fetch
 type FetchInit = RequestInit | undefined
@@ -341,6 +341,37 @@ describe('larkAdapter', () => {
       const headers2 = (fetchCalls[2]!.init?.headers ?? {}) as Record<string, string>
       expect(headers1.Authorization).toBe('Bearer t_shared')
       expect(headers2.Authorization).toBe('Bearer t_shared')
+    })
+
+    it('resetLarkTokenCache 强清缓存——hot-reload 后下一次 send 重新拉 tenant_access_token', async () => {
+      let tokenCalls = 0
+      const tokens = ['t_before_reload', 't_after_reload']
+      fetchImpl = async (url) => {
+        if (url.includes('tenant_access_token')) {
+          // expire=7200 → 远大于 60s margin，正常路径下第二次 send 会复用；
+          // 这里期望 resetLarkTokenCache() 把缓存抹掉，强制再拉一次。
+          return jsonResponse({ code: 0, tenant_access_token: tokens[tokenCalls++], expire: 7200 })
+        }
+        return jsonResponse({ code: 0, msg: 'success' })
+      }
+      const binding = makeBinding({ appId: 'app_hot_reload' })
+      await larkAdapter.send(binding, { channel: 'lark', chatId: 'p2p:ou_a', text: 'a' })
+      expect(tokenCalls).toBe(1)
+      // 模拟 runtime.dispose() 在 hot-reload 阶段执行的清缓存动作：
+      resetLarkTokenCache()
+      await larkAdapter.send(binding, { channel: 'lark', chatId: 'p2p:ou_b', text: 'b' })
+      expect(tokenCalls).toBe(2)
+      const auth1 = ((fetchCalls[1]!.init?.headers ?? {}) as Record<string, string>).Authorization
+      const auth2 = ((fetchCalls[3]!.init?.headers ?? {}) as Record<string, string>).Authorization
+      expect(auth1).toBe('Bearer t_before_reload')
+      expect(auth2).toBe('Bearer t_after_reload')
+    })
+
+    it('__larkInternals.resetTokenCache 与 resetLarkTokenCache 是同一个函数引用', () => {
+      // 测试套件 beforeEach 走 __larkInternals 路径，prod 代码（runtime.dispose）
+      // 走 resetLarkTokenCache 路径——两条路径必须落到同一份模块状态上，否则
+      // hot-reload 清缓存会失效。
+      expect(__larkInternals.resetTokenCache).toBe(resetLarkTokenCache)
     })
 
     it('re-exchanges the token after the cached entry expires', async () => {

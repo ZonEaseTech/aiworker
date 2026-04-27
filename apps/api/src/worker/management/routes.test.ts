@@ -270,6 +270,47 @@ describe('buildManagementRoutes', () => {
     expect(res.status).toBe(400)
   })
 
+  it('PUT /secrets/:key 含非法字符 → 400 invalid-key（脏 key 不入 vault）', async () => {
+    const { state } = await bootstrap()
+    const routes = buildManagementRoutes({ getState: () => state, reloadRuntime: async () => {} })
+    // Hono path param decode 后含空格，正则不通过。
+    const res = await routes.fetch(authed('/secrets/has%20space', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value: 'v' }),
+    }))
+    expect(res.status).toBe(400)
+    const body = await res.json() as { error: { code: string } }
+    expect(body.error.code).toBe('invalid-key')
+    // 确认没有半提交：list 里不应出现该 key。
+    const listRes = await routes.fetch(authed('/secrets'))
+    const list = await listRes.json() as { keys: string[] }
+    expect(list.keys.some(k => k.includes(' '))).toBe(false)
+  })
+
+  it('PUT /secrets/:key 超长 key → 400 invalid-key', async () => {
+    const { state } = await bootstrap()
+    const routes = buildManagementRoutes({ getState: () => state, reloadRuntime: async () => {} })
+    const longKey = 'a'.repeat(129)
+    const res = await routes.fetch(authed(`/secrets/${longKey}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value: 'v' }),
+    }))
+    expect(res.status).toBe(400)
+    const body = await res.json() as { error: { code: string } }
+    expect(body.error.code).toBe('invalid-key')
+  })
+
+  it('DELETE /secrets/:key 含非法字符 → 400 invalid-key', async () => {
+    const { state } = await bootstrap()
+    const routes = buildManagementRoutes({ getState: () => state, reloadRuntime: async () => {} })
+    const res = await routes.fetch(authed('/secrets/bad%20key', { method: 'DELETE' }))
+    expect(res.status).toBe(400)
+    const body = await res.json() as { error: { code: string } }
+    expect(body.error.code).toBe('invalid-key')
+  })
+
   it('DELETE /secrets/:key returns 404 for unknown key', async () => {
     const { state } = await bootstrap()
     const app = buildWrapperApp({ getState: () => state, reloadRuntime: async () => {} })

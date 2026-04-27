@@ -1,7 +1,7 @@
 import type { RegisteredWorker } from '@zonease/aiworker-shared'
 import type { FleetDatabase } from '@zonease/aiworker-storage-sqlite/fleet'
 import { auditEvents, registeredWorkers } from '@zonease/aiworker-storage-sqlite/fleet'
-import { eq } from 'drizzle-orm'
+import { count, desc, eq } from 'drizzle-orm'
 import { encryptToken } from './crypto'
 
 export interface CreateRegisteredWorkerInput {
@@ -32,23 +32,26 @@ export class FleetPersistence {
   constructor(private readonly db: FleetDatabase) {}
 
   /**
-   * 列表。按 `addedAt` 降序——运维视角最新注册的排最前。
+   * 列表。按 `addedAt` 降序——运维视角最新注册的排最前。排序下推到 SQL，
+   * 避免 fleet 长大时全表 select + JS sort。
    * 故意不返回加密列（`apiTokenEnc` / `nonce` / `authTag`）——虽然 gateway
    * 进程内部可见,但外层 method handler 不应该需要,减少误用面。
    */
   listRegisteredWorkers(): Array<Omit<RegisteredWorker, 'apiTokenEnc' | 'nonce' | 'authTag'>> {
-    const rows = this.db.select().from(registeredWorkers).all()
-    return rows
-      .map((row) => {
-        const { apiTokenEnc: _t, nonce: _n, authTag: _a, ...safe } = row
-        return {
-          ...safe,
-          lastSeenAt: safe.lastSeenAt ?? undefined,
-          lastSeenState: safe.lastSeenState ?? undefined,
-          lastConfigVersion: safe.lastConfigVersion ?? undefined,
-        }
-      })
-      .sort((a, b) => b.addedAt.localeCompare(a.addedAt))
+    const rows = this.db
+      .select()
+      .from(registeredWorkers)
+      .orderBy(desc(registeredWorkers.addedAt))
+      .all()
+    return rows.map((row) => {
+      const { apiTokenEnc: _t, nonce: _n, authTag: _a, ...safe } = row
+      return {
+        ...safe,
+        lastSeenAt: safe.lastSeenAt ?? undefined,
+        lastSeenState: safe.lastSeenState ?? undefined,
+        lastConfigVersion: safe.lastConfigVersion ?? undefined,
+      }
+    })
   }
 
   getRegisteredWorker(workerId: string): Omit<RegisteredWorker, 'apiTokenEnc' | 'nonce' | 'authTag'> | undefined {
@@ -265,13 +268,14 @@ export class FleetPersistence {
 
   /**
    * 单行 count——`workers.launch` 会在真正 spawn 容器前检查 fleet 大小是否到顶。
+   * 用 `count(*)` 下推到 SQL，避免 fleet 上千时把整张表拉进 JS 才数行数。
    */
   countRegisteredWorkers(): number {
-    return this.db
-      .select({ id: registeredWorkers.id })
+    const row = this.db
+      .select({ value: count() })
       .from(registeredWorkers)
-      .all()
-      .length
+      .get()
+    return row?.value ?? 0
   }
 
   /** 单条 audit 写入。gateway 动作走这条链。 */

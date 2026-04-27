@@ -37,6 +37,15 @@ export interface ManagementRoutesDeps {
 
 const putSecretBody = z.object({ value: z.string().min(1) })
 
+/**
+ * `/secrets/:key` 路径里 key 的格式校验——避免脏 key（路径分隔符 / 控制字符 /
+ * 超长串）滞留 vault。允许的字符集对齐 `worker_config` 里 ref 占位符
+ * （`{{ secrets.<key> }}`）能解析出来的字符。
+ */
+const secretKeySchema = z.string().regex(/^[\w.-]{1,128}$/, {
+  message: 'secret key 仅允许 [A-Za-z0-9._-]，长度 1-128',
+})
+
 const executorTestBody = z.object({ probe: z.boolean().optional() }).optional()
 
 const channelTestBody = z.object({
@@ -147,7 +156,15 @@ export function buildManagementRoutes(deps: ManagementRoutesDeps) {
   })
 
   routes.put('/secrets/:key', async (c) => {
-    const key = c.req.param('key')
+    const keyParam = secretKeySchema.safeParse(c.req.param('key'))
+    if (!keyParam.success) {
+      return c.json({
+        error: {
+          code: 'invalid-key',
+          message: keyParam.error.issues[0]?.message ?? 'invalid secret key',
+        },
+      }, 400)
+    }
     const raw = await c.req.json().catch(() => null)
     const parsed = putSecretBody.safeParse(raw)
     if (!parsed.success) {
@@ -160,7 +177,7 @@ export function buildManagementRoutes(deps: ManagementRoutesDeps) {
       }, 400)
     }
     try {
-      await putSecret(getSecretsVault(), key, parsed.data.value)
+      await putSecret(getSecretsVault(), keyParam.data, parsed.data.value)
       return c.json({ ok: true }, 200)
     }
     catch (err) {
@@ -172,9 +189,17 @@ export function buildManagementRoutes(deps: ManagementRoutesDeps) {
   })
 
   routes.delete('/secrets/:key', async (c) => {
-    const key = c.req.param('key')
+    const keyParam = secretKeySchema.safeParse(c.req.param('key'))
+    if (!keyParam.success) {
+      return c.json({
+        error: {
+          code: 'invalid-key',
+          message: keyParam.error.issues[0]?.message ?? 'invalid secret key',
+        },
+      }, 400)
+    }
     try {
-      await deleteSecret(getSecretsVault(), key)
+      await deleteSecret(getSecretsVault(), keyParam.data)
       return c.json({ ok: true }, 200)
     }
     catch (err) {

@@ -3,6 +3,7 @@ import type { ProcessManager } from './orchestrator/process-manager'
 
 import { workerEnv } from '../config/worker'
 import { buildBrain } from './brain/factory'
+import { resetLarkTokenCache } from './channels/adapters/lark'
 import { ChannelRegistry } from './channels/registry'
 import { CronService } from './cron/service'
 import { WorkerEventBus } from './events/bus'
@@ -97,6 +98,10 @@ export function buildWorkerRuntime(workerId: string, config: WorkerConfig, deps:
       // 否则 operator grant 永远不会送到新 runtime 上，promise 泄漏。
       approvals.dispose()
       cron.stop()
+      // lark adapter 的 tenant_access_token 缓存是模块级 Map（adapter 是单例
+      // 对象不是工厂）。reload 时若 appId/appSecret 换掉，旧 token 可能在
+      // expiresAt 之前继续被复用。dispose 阶段强清一次，下一次 send 重新拉。
+      resetLarkTokenCache()
       // 注意：不 dispose processes —— ProcessManager 跨 reload 持久化，
       // 由 bootstrap 退出阶段统一 cancelAll + dispose。
     },

@@ -264,10 +264,27 @@ function extractRichMetadata(message: LarkMessage): EnvelopeRichMetadata | undef
   return { quote: parentId }
 }
 
+/**
+ * 清空 lark tenant_access_token 模块级缓存。
+ *
+ * lark adapter 是导出的单例对象（非工厂），`tokenCache` 也是模块级 `Map`，
+ * 所以 hot-reload 时旧 config 的 token 条目不会被新 runtime 自动顶掉。
+ * 当 worker config 里的 lark 凭据被换掉（appId / appSecret 旋转或解绑）
+ * 而旧 token 仍未到 `expiresAt` 时，新 runtime 仍会复用过期的旧 token。
+ *
+ * `runtime.dispose()` 在 hot-reload 阶段调它一次，强制下一次发送重新拉
+ * tenant_access_token——比缓存条目滞留两小时更安全。
+ *
+ * 注意：worker 进程是 single-tenant（一 worker.db / 一进程），没有多
+ * appId 共享缓存的需求，全清是合适的；如果未来切到多 worker per process
+ * 模型，再下沉到 ChannelRegistry 实例。
+ */
+export function resetLarkTokenCache(): void {
+  tokenCache.clear()
+}
+
 /** Internals exposed for tests only. Do not import from production code. */
 export const __larkInternals = {
-  resetTokenCache(): void {
-    tokenCache.clear()
-  },
+  resetTokenCache: resetLarkTokenCache,
   decryptLarkPayload,
 }

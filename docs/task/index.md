@@ -82,3 +82,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-019 Gateway loopback bypass fail-closed 启动断言**](BUG-019.md) `P1`
 - [x] [**BUG-020 gateway WebSocket maxPayloadLength + idleTimeout + connect 限频**](BUG-020.md) `P1`
 - [x] [**REFACTOR-006 orchestrator API 入参 zod 校验 + 历史消息分页窗口**](REFACTOR-006.md) `P2`
+- [x] [**REFACTOR-007 杂项小修：bus 异常吞 / lark cache / fleet count / secrets key**](REFACTOR-007.md) `P2`
