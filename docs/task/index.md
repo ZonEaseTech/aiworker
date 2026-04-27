@@ -92,7 +92,7 @@ Each task is a single line linking to its detail file. All detailed information 
 - [-] [**FEAT-032 复活并重构 Worker + Fleet Web UI（epic）**](FEAT-032.md) `P1`
 - [x] [**REFACTOR-011 fs-layout 引入 project scope 解析 + project layout 模板**](REFACTOR-011.md) `P1`
 - [x] [**FEAT-036 CLI `aiworker init` / `aiworker scope` 项目级初始化命令**](FEAT-036.md) `P1`
-- [-] [**FEAT-033 Phase 1 — apps/web 静态托管 + 双视角源码骨架**](FEAT-033.md) `P1`
+- [x] [**FEAT-033 Phase 1 — apps/web 静态托管 + 双视角源码骨架**](FEAT-033.md) `P1`
 - [ ] [**FEAT-034 Phase 2 — Fleet UI MVP**](FEAT-034.md) `P1`
 - [ ] [**FEAT-035 Phase 3 — Worker UI MVP**](FEAT-035.md) `P1`
 - [ ] [**REFACTOR-009 Phase 4 — apps/web 独立性强化与回归保护**](REFACTOR-009.md) `P2`
