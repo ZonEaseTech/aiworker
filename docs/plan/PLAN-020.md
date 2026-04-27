@@ -1,9 +1,12 @@
 # PLAN-020 CLI rename to `aiworker` + npm publish under `@zonease/aiworker-cli`
 
-- **status**: draft
+- **status**: implementing
 - **createdAt**: 2026-04-27 07:35
-- **approvedAt**: (pending)
+- **approvedAt**: 2026-04-27 07:45
 - **relatedTask**: FEAT-028 (rename) + FEAT-027 (publish)
+- **scope-update 2026-04-27 07:45**: 扩张到全 monorepo rename — 所有
+  `@aiworker/*` 内部 package + apps/* package.json `name` 字段统一迁到
+  `@zonease/aiworker-*` namespace（用户决策：proceed + 同步全包改名）。
 
 ## Context
 
@@ -372,6 +375,65 @@ renaming = bad for early adopters.
 - Going with B1a; B1b can come later (FEAT-029+) if external runtime
   adoption needs it.
 
+## Stage A0 — Full monorepo package rename（用户追加 2026-04-27 07:45）
+
+把所有 `@aiworker/*` 内部 package 与 apps/* `package.json` `name`
+字段统一迁到 `@zonease/aiworker-*` namespace。
+
+### Rename matrix
+
+| 当前 name | 新 name | 类型 |
+|---|---|---|
+| `@aiworker/core` | `@zonease/aiworker-core` | package |
+| `@aiworker/shared` | `@zonease/aiworker-shared` | package |
+| `@aiworker/gateway-proto` | `@zonease/aiworker-gateway-proto` | package |
+| `@aiworker/storage-sqlite` | `@zonease/aiworker-storage-sqlite` | package |
+| `@aiworker/fs-layout` | `@zonease/aiworker-fs-layout` | package |
+| `@aiworker/api` | `@zonease/aiworker-api` | app |
+| `@aiworker/cli` | `@zonease/aiworker-cli` | app（FEAT-027 published） |
+| `@aiworker/gateway` | `@zonease/aiworker-gateway` | app |
+| `@aiworker/web` | `@zonease/aiworker-web` | app |
+| `aiworker`（root） | `aiworker`（不变） | private monorepo root |
+
+### Mechanical changes
+
+1. 9 份 `package.json` `name` 字段更新
+2. `dependencies` / `devDependencies` 里所有 `@aiworker/X` → `@zonease/aiworker-X`
+3. **全工作树 grep** `from ['"]@aiworker/` → `from ['"]@zonease/aiworker-` （估算 100-150 个 .ts 文件）
+4. `@aiworker/storage-sqlite/fleet` / `/worker` subpath imports 也改
+5. `bun install` 重生 `bun.lock`
+6. `bun run typecheck` + `bun run test` 必须全过
+7. `apps/api/src/index.ts` 等运行时入口不变（只 import path 变）
+8. `scripts/deploy.ts` 不影响（不引用 `@aiworker/*`）
+
+### Risks (additive to existing PLAN-020 §Risks)
+
+- **某些字符串引用不在 import 语句**：例如错误消息含包名、文档代码块、
+  test fixture。要全 grep `@aiworker/` 不限语境，逐条评估。
+- **drizzle config files** (`packages/storage-sqlite/drizzle.*.config.ts`)
+  也含包名引用——必须改。
+- **公共面 re-export 路径**: `@aiworker/storage-sqlite/fleet` 等 subpath
+  exports 在 package.json `exports` map 里——name 改了 subpath 不变，
+  但 import 路径串改时要小心 `@aiworker/storage-sqlite/fleet` 改成
+  `@zonease/aiworker-storage-sqlite/fleet` 而不是丢掉 subpath 段。
+
+### Verification（必跑）
+
+- `bun run typecheck` 9/9
+- `bun run test` 全 pass（PLAN-019 后基线 ~470 case）
+- `git grep '@aiworker/'` 返回空（除 historical docs/plan/PLAN-NNN.md /
+  docs/task/{FEAT,BUG,REFACTOR}-NNN.md / docs/changelog.md 旧条目）
+- `git grep "from ['\"]@aiworker"` 返回空
+
 ## Annotations
 
-(Pending user approval. Append all responses below this line.)
+### 2026-04-27 07:45 — user `proceed + 同步修改 monorepo 里的每个包名和 app 名`
+
+Plan approved + scope expanded. 入 implementing。BKD 编排：1 coordinator + 4 worktree subtask。
+
+- **S1 monorepo rename**（A0）：9 个 package.json + 全工作树 import sweep + bun.lock 重生 + typecheck/test 全绿。**串行优先**——是其他 sub 的 base。
+- **S2 CLI 重写**（A1-A3）：单 `aiworker.ts` entry + 删 `aiw.ts` / `aim.ts` + cac multi-word 解析覆盖所有 subcommand。依赖 S1。
+- **S3 docs + systemd**（A4-A6）：5 forward-looking docs sweep + systemd unit + tests。可与 S2 并行（不同文件）。
+- **S4 npm publish**（B）：bun build bundle + release.yml + GH Releases binaries。等 S2+S3 都 review。
+
+合并顺序：S1 → S2 → S3 → S4。**强串行**——避免 import 改后 worktree merge 灾难。
