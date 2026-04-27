@@ -1,5 +1,51 @@
 # AIWorker Changelog
 
+## 2026-04-27 12:30 [info] Session handoff — open tasks 总览 + 测试服 ops 残留
+
+**本会话主要工作**（已 push 到 `origin/main`，HEAD 当时为 `2bcf99c`，含本条 + 后续 BUG-013/BUG-014 + REFACTOR-004 followups 的 commit）：
+
+- **Git history redact + force push**（用户操作）：移除测试服 IP / aissh server id / 公网域名敏感信息（filter-branch tree-filter + msg-filter）
+- **CLAUDE.md 大幅清理**（141 → 79 行，PLAN-013 dashboard 双模过期段全删 + MCP 强制约束放宽）
+- **`@zonease/aiworker-cli@0.2.1` 真发 npmjs.com**（含 in-process gateway + bundle drizzle migrations + WORKER_DB_PATH lazy default）
+- **测试服 fleet 迁移**：`/opt/aiworker` 源码 systemd → `bun install -g @zonease/aiworker-cli` + 改 unit ExecStart 走 npm-installed binary（in-process foreground）+ Caddyfile `:3000 → :9218` + env 删 `PORT=3000`
+- **README 重写**（+216/-167，409 行）：30 秒 demo + ASCII 端到端流程图 + 4 个 LLM executor 配置例子
+- **claude-code executor 端到端 demo 实测通过**：本机 worker → 公网 wss → operator approve → config set claude-code → hot-reload v2 → chat 真实 LLM 流式回复
+
+**Closed tasks（本次）**：
+- ✅ FEAT-027 GA（npm publish 0.2.0 → 0.2.1）
+- ✅ FEAT-030（zero-env quickstart：动态版本 + 默认端口 9217/9218 + 首次启动 mint master key）
+- ✅ REFACTOR-004 GA（测试服迁移到 npm cli + Caddy）
+- ✅ BUG-011（worker quickstart 强制 env 缺口；与 BUG-012 合并 0.2.1 一并修）
+- ✅ BUG-012（cli `gateway start` 假设 monorepo 布局；in-process 重构方案 D 落地，apps/gateway → packages/gateway）
+
+**Open tasks**（下个 session 起点；按 priority 排）：
+
+| ID | P | Title |
+|----|---|-------|
+| BUG-013 | P2 | `workers.info` / `workers.stop` dispatcher 显式 stub（`aiworker fleet info/stop` 永远失败）— **本 session 新开** |
+| BUG-014 | P2 | `aiworker install systemd` 渲染的 unit 缺 `EnvironmentFile` + 全部安全加固（首次部署体验破）— **本 session 新开** |
+| BUG-006 | P3 | `reloadRuntime` 串行化没显式 mutex（PLAN-014 时占位） |
+| BUG-010 | P3 | runtime log 字串仍含 `aiw` / `aim` / `aim.json`（PLAN-020 rename 残留） |
+| FEAT-002 | P3 | Executable skills runtime（sandbox） |
+| FEAT-007 | P3 | M:1 channel routing |
+| FEAT-008 | P3 | Host-level HA + multi-host fleet |
+| FEAT-010 | P3 | Publish registry routes 进 OpenAPI spec |
+
+建议下个 session 优先级：**BUG-013 + BUG-014 一并修发 0.2.2**——两个都是用户首次/常用命令路径上的破口（fleet info / install systemd），都 ~50-100 LOC，可合并一个 commit。BUG-006 / BUG-010 P3 可推迟。
+
+**测试服 ops 残留**（`aissh aiwork`，下次 maintenance 清理；不阻塞）：
+- `/opt/aiworker-removed-20260427` 451M（旧 monorepo 源码）
+- `/opt/aiworker-new` 29M（cutover 前 staging clone，未用）
+- `/opt/aiworker-deploy/` PLAN-016 docker 配置目录
+- `/tmp/aiworker-gateway.service.{bak,new}` + `/tmp/Caddyfile.{bak,new}` + `/tmp/gateway.env.{bak,new}` cutover staging（env.* 已 truncate）
+- `/var/lib/aiworker/.env` 0 bytes（dotenv-bootstrap 残留）
+
+清理命令清单见 `docs/task/REFACTOR-004.md` § Followups。
+
+**安全提醒**：
+- 上次发 0.2.1 用的 npm token 已 shred (`./tmp/npm_token` 已删)，建议 npm 端轮换
+- aissh token 在前次 session 末曾失效一次，本次会话末仍有效；如下次 session 报 `未配置认证 Token` → `aissh config set-token <token>`
+
 ## 2026-04-27 12:15 [progress] README 重写 + claude-code executor 端到端验证
 
 README.md 大幅清理（+216/-167，409 行）：

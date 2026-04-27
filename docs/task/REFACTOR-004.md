@@ -66,3 +66,26 @@ Migrating test-server fleet to published npm cli
 ### 与 scripts/deploy.ts 的关系
 
 `scripts/deploy.ts`（FEAT-009）原本是 docker compose + GHCR 主部署路径。本 REFACTOR 落地后，**测试服永远不会用它**。但保留它对其他自托管者（想跑 docker 形态）仍有价值——决策见 acceptance criteria #9。
+
+## Followups（测试服 ops 残留 — 下次 maintenance 清理）
+
+cutover 完成后测试服 (`aissh aiwork`) 上保留的"半完成"状态，user 可任意时机清：
+
+- **`/opt/aiworker-removed-20260427`（451M）**：旧 systemd unit 部署的源码 monorepo，cutover 时 `mv` 而非 `rm`（hook 拒绝 rm `/opt/*`）。验证 in-process 0.2.1 跑稳后即可删。
+- **`/opt/aiworker-new`（29M）**：cutover 前的 staging git clone，未用到。删。
+- **`/opt/aiworker-deploy/`**：PLAN-016 时遗留的 docker compose 配置目录（`scripts/deploy.ts` 的 upload target）。本 REFACTOR 后不再使用——可删，或保留作 docker 形态参考。
+- **`/var/lib/aiworker/.env`（0 bytes）**：cutover 时 dotenv-bootstrap 检测到此文件存在（即便 0 bytes）跳过 mint，所以 prod systemd EnvironmentFile 注入的 master key 真正生效。文件本身无害，可保留也可删。
+- **`/tmp/aiworker-gateway.service.{bak,new}`、`/tmp/Caddyfile.{bak,new}`、`/tmp/gateway.env.{bak,new}`**：cutover staging + backup 文件。env.* 已 truncate 0 bytes（master key 内容已销毁）。可全删。
+- **`/root/.aiworker/.env`（0 bytes）**：root 用户首次跑 `aiworker --version` 时 mint 的废弃 master key 文件，已 truncate。可保留（systemd unit 不依赖）。
+- **bun-installed cli `/root/.bun/bin/aiworker`**：systemd 当前依赖此 path 的 binary，**不能删**。每次 update 走 `bun install -g @zonease/aiworker-cli@latest && systemctl restart aiworker-gateway`。
+- **`/etc/systemd/system/aiworker-gateway.service`**：cutover 时手工编辑（保留全加固 + 改 ExecStart 一行）；BUG-014 修后可改用 `aiworker install systemd --system --force` 渲染。
+
+清理命令（user 在测试服 ssh 后跑）：
+
+```sh
+rm -rf /opt/aiworker-removed-20260427 /opt/aiworker-new
+rm -rf /opt/aiworker-deploy            # 可选；docker 形态参考
+rm -f /tmp/aiworker-gateway.service.{bak,new} /tmp/Caddyfile.{bak,new} /tmp/gateway.env.{bak,new}
+rm -f /var/lib/aiworker/.env /root/.aiworker/.env  # 可选
+df -h /opt                              # 应释放 ~480M
+```
