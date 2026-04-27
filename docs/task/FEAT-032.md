@@ -40,11 +40,19 @@ Coordinator: BKD issue `xft5fyjw` (#109)。Project: `lded7ogt`。
 
 | Phase | Task | BKD issue id | 当前状态 | Worktree | 依赖 |
 |-------|------|--------------|----------|----------|------|
-| 1 | FEAT-033 | `z27fqf6l` | working | yes | 无（已起跑）|
-| 2 | FEAT-034 | `oq32jpkm` | todo | yes | FEAT-033 |
-| 3 | FEAT-035 | `g0ftmbux` | todo | yes | FEAT-033（与 Phase 2 并行）|
+| 1 | FEAT-033 | `z27fqf6l` | **completed** ✅ | merged → main `d026209` | — |
+| 2 | FEAT-034 | `oq32jpkm` | **working** ▶️ | yes | FEAT-033（已就绪）|
+| 3 | FEAT-035 | `g0ftmbux` | **working** ▶️ | yes | FEAT-033（已就绪，与 Phase 2 并行）|
 | 4 | REFACTOR-009 | `k29nki52` | todo | yes | FEAT-034 + FEAT-035 |
 | 5 | REFACTOR-010 | `xz0bikkl` | todo | yes | REFACTOR-009（且需 master 二次确认）|
+
+### 2026-04-27 19:35 dispatch log
+
+- FEAT-033 (`z27fqf6l`) 报告完成（4 commits + self-review pass + 716 tests pass）。
+- Coordinator 决策：**docs 改动否决**（subtask 把 5-phase epic 改写为 2-phase 简化版），cherry-pick 仅取 code 三 commits + README 单独 patch；merge `bkd/z27fqf6l` 用 `--no-ff`，docs conflicts 全部 ours、code conflicts 接受 worktree。
+- 验证：typecheck 9/9 包 0 error / web build 双 bundle ok（fleet 178KB gzip + worker 113KB gzip）/ test 28 web + 64 api + 全包 0 fail。
+- Capacity: 44 available slots / 6 active jobs。
+- 派发：FEAT-034 + FEAT-035 各发一条 scope-guard follow-up（禁止改 PLAN-022 / FEAT-032 / 其他 phase 文件），然后 PATCH statusId='working'。两条并行。
 
 ### Coordinator dispatch 规则（subtask 报告后续 turn 执行）
 

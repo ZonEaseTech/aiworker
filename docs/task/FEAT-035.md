@@ -1,8 +1,8 @@
 # FEAT-035 Phase 3 — Worker UI MVP
 
-- **status**: pending
+- **status**: in_progress
 - **priority**: P1
-- **owner**: (未分配)
+- **owner**: BKD/g0ftmbux (worktree)
 - **createdAt**: 2026-04-27 18:35
 
 ## 描述

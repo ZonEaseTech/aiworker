@@ -1,8 +1,8 @@
 # FEAT-034 Phase 2 — Fleet UI MVP
 
-- **status**: pending
+- **status**: in_progress
 - **priority**: P1
-- **owner**: (未分配)
+- **owner**: BKD/oq32jpkm (worktree)
 - **createdAt**: 2026-04-27 18:35
 
 ## 描述
