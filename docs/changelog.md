@@ -1,5 +1,13 @@
 # AIWorker Changelog
 
+## 2026-04-27 11:30 [decision] 测试服部署原则收紧——只允许已发布 npm cli + Caddy 反代
+
+用户决策（直引）："测试服务器，除了 caddy 反代外，不再由源码构建，只允许安装或更新，从已发布的 cli 去操作"。
+
+CLAUDE.md "Project Preferences" 替换原"部署优先级 docker compose > docker run > 裸机 + scripts/deploy.ts" 条目为：测试服**只允许** `npm install -g @zonease/aiworker-cli@<version>` + `aiworker install systemd` + Caddy 反代；**禁止** git clone 源码、`docker compose pull` GHCR 镜像、远端 `bun build` / `tsc` 编译。`scripts/deploy.ts` + `ops/compose/*.yml` 仅适用其他场景或保留为参考，不再用于测试服。
+
+开 `REFACTOR-004 P1` 跟踪具体迁移：测试服当前 fleet 跑 `/opt/aiworker/apps/gateway/src/index.ts`（PLAN-016 时 git clone 整 monorepo + systemd `bun ts-entry` 直跑，451M）；目标态 `aiworker gateway start`（npm-installed binary）+ unit 由 `aiworker install systemd` 重渲染。阻塞项：`@zonease/aiworker-cli@0.2.0` 必须先真发到 npmjs.com（待用户授权 + 新 token，旧 token 已要求轮换）。Caddy 端口策略二选一（保留 3000 或与 FEAT-030 默认 9218 对齐），推荐对齐。
+
 ## 2026-04-27 11:05 [progress] FEAT-030 e2e 端到端验证 + BUG-011 占位
 
 本机起 worker（`bun apps/cli/dist/aiworker.js serve`，AIWORKER_HOME 隔离 `/tmp/aiw-feat030-localworker`）通过公网 `wss://gateway.example.test/enroll-ws` OTP enroll 到测试服 systemd gateway；测试服 loopback (`ws://127.0.0.1:3000/ws` 空 token bypass) 跑 operator approve OTP `4Q35-2HEM` → fleet `online: true` → `chat` 全链路 NDJSON `accepted` → `chat.message` → `done`（finishReason=error 因 worker 未配 executor，链路本身 OK）。验证 FEAT-030 三件套全部 wire-through。清理已 fleet remove + kill worker + 删 `/tmp/aiw-feat030-localworker`（含 master key）+ 测试服 `/tmp/feat030-op` 删除。
