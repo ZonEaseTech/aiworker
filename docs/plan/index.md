@@ -49,3 +49,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-018 Worker self-enrollment via shared join token**](PLAN-018.md) `2026-04-26`
 - [x] [**PLAN-019 Worker OTP-attended enrollment (operator-approved join, CLI-only)**](PLAN-019.md) `2026-04-27`
 - [x] [**PLAN-020 CLI rename to `aiworker` + npm publish under `@zonease/aiworker-cli`**](PLAN-020.md) `2026-04-27`
+- [-] [**PLAN-022 apps/web 双视角骨架 + 静态托管**](PLAN-022.md) `2026-04-27`

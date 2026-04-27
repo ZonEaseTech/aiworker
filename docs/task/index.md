@@ -88,3 +88,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REFACTOR-006 orchestrator API 入参 zod 校验 + 历史消息分页窗口**](REFACTOR-006.md) `P2`
 - [x] [**REFACTOR-007 杂项小修：bus 异常吞 / lark cache / fleet count / secrets key**](REFACTOR-007.md) `P2`
 - [ ] [**REFACTOR-008 baseline lint debt 清零（package.json sort-keys + cli process global + CI lint step）**](REFACTOR-008.md) `P3`
+- [x] [**FEAT-033 apps/web 静态托管 + 双视角源码骨架**](FEAT-033.md) `P1`
