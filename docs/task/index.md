@@ -81,3 +81,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-017 Lark verificationToken + WhatsApp verifyToken 非常量时间比较**](BUG-017.md) `P0`
 - [x] [**BUG-019 Gateway loopback bypass fail-closed 启动断言**](BUG-019.md) `P1`
 - [x] [**BUG-020 gateway WebSocket maxPayloadLength + idleTimeout + connect 限频**](BUG-020.md) `P1`
+- [x] [**REFACTOR-006 orchestrator API 入参 zod 校验 + 历史消息分页窗口**](REFACTOR-006.md) `P2`

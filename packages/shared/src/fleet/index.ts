@@ -9,12 +9,16 @@ export type {
   OutboundMessage,
 } from './channel'
 
+export {
+  DEFAULT_MAX_HISTORY_MESSAGES,
+} from './config'
 export type {
   BrainRetrievalMode,
   BrainSourceConfig,
   CloudGatewayBrainSourceConfig,
   EvolutionConfig,
   FilesystemBrainSourceConfig,
+  OrchestratorConfig,
   ToolPolicy,
   ToolPolicyAction,
   WorkerConfig,

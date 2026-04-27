@@ -1,9 +1,16 @@
 import type { WorkerRuntime } from '@zonease/aiworker-core'
 import { OpenAPIHono } from '@hono/zod-openapi'
-import { AppError } from '@zonease/aiworker-shared'
 
 import { agentTasks, conversations, getWorkerDb, messages } from '@zonease/aiworker-storage-sqlite/worker'
 import { desc, eq } from 'drizzle-orm'
+import { z } from 'zod'
+
+// REFACTOR-006 P2：8KB 上限来自 OpenAI/Anthropic 单次 user message 常见
+// 上下文段限制——超过这个数量时 prompt 几乎一定会被分段或拒绝；同时也是
+// SQLite 单行写入的舒适区。trim 后再校验长度避免空白绕过。
+const submitTaskBody = z.object({
+  prompt: z.string().trim().min(1, 'prompt is required').max(8000, 'prompt exceeds 8000 characters'),
+})
 
 /**
  * Orchestrator router. The `getRuntime` thunk is re-evaluated at every request
@@ -18,10 +25,18 @@ export function buildOrchestratorRoutes(getRuntime: () => WorkerRuntime) {
   })
 
   routes.post('/tasks', async (c) => {
-    const body = await c.req.json<{ prompt: string }>()
-    if (!body.prompt || !body.prompt.trim())
-      throw AppError.badRequest('prompt is required')
-    const task = await getRuntime().orchestrator.submitTask(body.prompt.trim())
+    const raw = await c.req.json().catch(() => null)
+    const parsed = submitTaskBody.safeParse(raw)
+    if (!parsed.success) {
+      return c.json({
+        error: {
+          code: 'invalid-body',
+          message: 'invalid task body',
+          details: parsed.error.flatten().fieldErrors,
+        },
+      }, 400)
+    }
+    const task = await getRuntime().orchestrator.submitTask(parsed.data.prompt)
     return c.json({ task }, 201)
   })
 

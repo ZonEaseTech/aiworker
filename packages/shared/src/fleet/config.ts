@@ -72,6 +72,17 @@ export interface ToolPolicy {
 }
 
 /**
+ * Orchestrator 运行时调参（REFACTOR-006 P2）。`maxHistoryMessages` 控制每次
+ * `run()` 灌入 LLM 的最近消息条数，避免长会话把 token 与 IO 一起打爆；缺省
+ * 由 `DEFAULT_MAX_HISTORY_MESSAGES`（20）兜底。
+ */
+export interface OrchestratorConfig {
+  maxHistoryMessages?: number
+}
+
+export const DEFAULT_MAX_HISTORY_MESSAGES = 20
+
+/**
  * Complete per-worker configuration. Materialized from dashboard forms and
  * persisted in `fleet.db.worker_configs`; secret fields referenced inside
  * (`token`, `apiKey`, channel credentials) are stored encrypted in
@@ -87,4 +98,6 @@ export interface WorkerConfig {
   evolution: EvolutionConfig
   /** Per-tool approval policy（PLAN-014 F2）。缺省视同 `{ default: 'auto', rules: [] }`。 */
   toolPolicy?: ToolPolicy
+  /** Orchestrator 运行时调参（REFACTOR-006 P2）；缺省走 `DEFAULT_MAX_HISTORY_MESSAGES`。 */
+  orchestrator?: OrchestratorConfig
 }

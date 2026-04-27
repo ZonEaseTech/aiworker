@@ -139,6 +139,13 @@ const toolPolicySchema = z.object({
   })),
 })
 
+// REFACTOR-006 P2: orchestrator 运行时调参。`maxHistoryMessages` 上限设到
+// 200，足够覆盖任何"长会话也想看完整 transcript"的情况；下限 1（不能 0，
+// run() 至少要拿到当前一轮 user message 自己）。
+const orchestratorConfigSchema = z.object({
+  maxHistoryMessages: z.number().int().min(1).max(200).optional(),
+})
+
 export const workerConfigSchema = z.object({
   brains: z.array(brainSourceSchema),
   brainWriteTarget: z.string(),
@@ -150,4 +157,5 @@ export const workerConfigSchema = z.object({
     observationRetentionDays: z.number().int().nonnegative(),
   }),
   toolPolicy: toolPolicySchema.optional(),
+  orchestrator: orchestratorConfigSchema.optional(),
 })

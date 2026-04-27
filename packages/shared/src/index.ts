@@ -1,5 +1,6 @@
 export { AppError } from './errors'
 export {
+  DEFAULT_MAX_HISTORY_MESSAGES,
   generateWorkerApiToken,
   isWorkerApiToken,
   WORKER_API_TOKEN_PATTERN,
@@ -41,6 +42,7 @@ export type {
   FilesystemBrainSourceConfig,
   HttpVariantBody,
   McpVariantBody,
+  OrchestratorConfig,
   OutboundMessage,
   PermissionPolicy,
   RegisteredWorker,

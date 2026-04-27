@@ -13,6 +13,7 @@ import type { WorkspaceHandle, WorkspaceManager } from '../executor/workspace'
 import type { ApprovalDecision, ApprovalStore } from './approvals'
 import type { ProcessManager } from './process-manager'
 
+import { DEFAULT_MAX_HISTORY_MESSAGES } from '@zonease/aiworker-shared'
 import { agentTasks, conversations, getWorkerDb, messages } from '@zonease/aiworker-storage-sqlite/worker'
 
 import consola from 'consola'
@@ -110,8 +111,8 @@ export class Orchestrator {
     notifyActivity: () => void,
   ): Promise<void> {
     const db = getWorkerDb()
-    const history = await this.loadConversationMessages(conversation.id)
-    const systemPrompt = await this.buildSystemPrompt()
+    const history = await this.loadHistoryWindow(conversation.id)
+    const systemPrompt = await this.buildSystemPrompt(conversation.summary ?? null)
 
     const chatMessages: ChatMessage[] = [
       { role: 'system', content: systemPrompt },
@@ -285,24 +286,30 @@ export class Orchestrator {
     return { id: res[0]?.id ?? -1 }
   }
 
-  private async loadConversationMessages(conversationId: string): Promise<ChatMessage[]> {
-    const db = getWorkerDb()
-    const rows = db.select({
-      role: messages.role,
-      content: messages.content,
-    })
-      .from(messages)
-      .where(eq(messages.conversationId, conversationId))
-      .all()
+  /**
+   * REFACTOR-006 P2：取最近 N 条消息塞进 LLM context。N 来自 worker config
+   * 的 `orchestrator.maxHistoryMessages`，缺省 `DEFAULT_MAX_HISTORY_MESSAGES`
+   * (20)。`loadRecentMessages` 复用 conversation router 的实现：按 id desc
+   * 取 limit 然后 reverse，保证顺序仍是早→晚。
+   */
+  private async loadHistoryWindow(conversationId: string): Promise<ChatMessage[]> {
+    const limit = this.deps.config.orchestrator?.maxHistoryMessages ?? DEFAULT_MAX_HISTORY_MESSAGES
+    const rows = await loadRecentMessages(conversationId, limit)
     return rows.map(r => ({ role: r.role, content: r.content }))
   }
 
-  private async buildSystemPrompt(): Promise<string> {
+  /**
+   * 构造 system prompt。当 conversation 已经积累过 summary（来自将来某个
+   * 总结 trick）时把它带进 system，弥补 history 窗口被截断丢掉的早期上下文。
+   */
+  private async buildSystemPrompt(priorSummary: string | null): Promise<string> {
     const skills = await this.deps.brain.listSkills().catch(() => [])
     const lines = [
       `You are worker ${this.deps.workerId}.`,
       'Respond concisely and helpfully.',
     ]
+    if (priorSummary && priorSummary.trim().length > 0)
+      lines.push(`Conversation summary so far: ${priorSummary.trim()}`)
     if (skills.length > 0) {
       lines.push('Available brain skills:')
       for (const s of skills.slice(0, 10))
