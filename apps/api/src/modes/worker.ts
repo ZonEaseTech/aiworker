@@ -18,6 +18,7 @@ import { getWorkerDb, initWorkerDb, runWorkerMigrations } from '@zonease/aiworke
 import consola from 'consola'
 import { errorHandler } from '../shared/middleware/error-handler'
 import { requestLogger } from '../shared/middleware/logger'
+import { adminStaticMiddleware } from '../worker/admin/serve-static'
 import { buildChannelRoutes } from '../worker/channels/routes'
 import { buildEventRoutes } from '../worker/events/routes'
 import { evolutionRoutes } from '../worker/evolution/routes'
@@ -48,6 +49,13 @@ export interface BootstrapWorkerAppOptions {
    * 之后就不会再发事件，subscriber 的旧 unsubscribe 闭包是死的。
    */
   onRuntimeReloaded?: () => void
+  /**
+   * PLAN-022 / FEAT-033：worker bundle 静态根目录绝对路径。CLI 在启动时决议
+   * （npm install 后是 `<cli-bin>/web/worker`，源码 dev 时是
+   * `<repo>/apps/web/dist/worker`）。未传 → `/admin/*` 不挂载，访问 404；不
+   * 阻塞 bootstrap。
+   */
+  webStaticDir?: string
 }
 
 /**
@@ -143,6 +151,16 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   const app = new OpenAPIHono()
   app.use(requestLogger)
   app.onError(errorHandler)
+
+  // PLAN-022 / FEAT-033：worker bundle 静态托管。挂在 bearer-auth 之前——
+  // `/admin/*` 是公开面（与 `/health`、channel webhook 同等级），不携带
+  // 业务数据；`/api/worker/*` 仍走 bearer-auth。fail-closed 公开模式下要靠
+  // 反代 basic-auth 把陌生人挡在 `/admin/` 之外（见 BUG-007 / BUG-019）。
+  if (options.webStaticDir) {
+    const dir = options.webStaticDir
+    app.get('/admin', c => c.redirect('/admin/', 308))
+    app.use('/admin/*', adminStaticMiddleware(dir))
+  }
 
   app.get('/health', async (c) => {
     const [brainHealth, executorHealth] = await Promise.all([
