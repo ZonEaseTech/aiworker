@@ -33,7 +33,7 @@ describe('renderSystemdUnit', () => {
   it('user scope 渲染包含 %h ExecStart + WantedBy=default.target', () => {
     const text = renderSystemdUnit({ scope: 'user' })
     expect(text).toContain('Description=AIWorker gateway daemon (user instance)')
-    expect(text).toContain('ExecStart=%h/.bun/bin/aim gateway start')
+    expect(text).toContain('ExecStart=%h/.bun/bin/aiworker gateway start')
     expect(text).toContain('Environment=AIWORKER_HOME=%h/.aiworker')
     expect(text).toContain('WantedBy=default.target')
     expect(text).not.toContain('WantedBy=multi-user.target')
@@ -42,7 +42,7 @@ describe('renderSystemdUnit', () => {
 
   it('system scope 把 %h 固化成 operatorHome 绝对路径 + WantedBy=multi-user.target', () => {
     const text = renderSystemdUnit({ scope: 'system', operatorHome: '/home/op' })
-    expect(text).toContain('ExecStart=/home/op/.bun/bin/aim gateway start')
+    expect(text).toContain('ExecStart=/home/op/.bun/bin/aiworker gateway start')
     expect(text).toContain('Environment=AIWORKER_HOME=/var/lib/aiworker')
     expect(text).toContain('WantedBy=multi-user.target')
     expect(text).not.toContain('%h')
@@ -79,7 +79,7 @@ describe('installSystemd', () => {
   it('--dry-run 返回 content 但不写盘、不 enable', () => {
     const target = path.join(workDir, 'aiworker-gateway.service')
     const res = installSystemd({ dryRun: true, out: target })
-    expect(res.content).toContain('ExecStart=%h/.bun/bin/aim gateway start')
+    expect(res.content).toContain('ExecStart=%h/.bun/bin/aiworker gateway start')
     expect(res.written).toBeUndefined()
     expect(res.enabled).toBe(false)
     // dry-run 即便给了 --out 也不应实际落盘。
@@ -147,7 +147,7 @@ describe('runInstallSystemd (CLI 包装)', () => {
     }
     const joined = captured.join('')
     expect(joined).toContain('[Unit]')
-    expect(joined).toContain('ExecStart=%h/.bun/bin/aim gateway start')
+    expect(joined).toContain('ExecStart=%h/.bun/bin/aiworker gateway start')
     expect(joined).toContain('WantedBy=default.target')
   })
 
@@ -156,6 +156,6 @@ describe('runInstallSystemd (CLI 包装)', () => {
     const code = await runInstallSystemd({ scope: 'user', out: target })
     expect(code).toBe(0)
     const persisted = readFileSync(target, 'utf8')
-    expect(persisted).toContain('ExecStart=%h/.bun/bin/aim gateway start')
+    expect(persisted).toContain('ExecStart=%h/.bun/bin/aiworker gateway start')
   })
 })
