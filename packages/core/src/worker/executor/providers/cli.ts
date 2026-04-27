@@ -8,7 +8,8 @@ import type {
 import { Buffer } from 'node:buffer'
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
-import process from 'node:process'
+
+import { buildSafeChildEnv } from '../safe-env'
 
 export interface CliExecutorOptions {
   command: string
@@ -43,7 +44,7 @@ export class CliExecutor implements ExecutorProvider {
     try {
       const child = spawn(this.opts.command, ['--version'], {
         cwd: this.opts.cwd,
-        env: { ...process.env, ...this.opts.env },
+        env: buildSafeChildEnv(this.opts.env),
         stdio: ['ignore', 'pipe', 'pipe'],
       })
       const code = await Promise.race([
@@ -74,7 +75,7 @@ export class CliExecutor implements ExecutorProvider {
     const timeoutMs = this.opts.timeoutMs ?? 30_000
     const child = spawn(this.opts.command, this.opts.args, {
       cwd: this.opts.cwd,
-      env: { ...process.env, ...this.opts.env },
+      env: buildSafeChildEnv(this.opts.env),
       stdio: ['pipe', 'pipe', 'pipe'],
     })
 

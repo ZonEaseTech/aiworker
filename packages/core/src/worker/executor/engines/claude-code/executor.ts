@@ -14,6 +14,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 
+import { buildSafeChildEnv } from '../../safe-env'
 import { normalizeLine, parseLine, splitNdjson } from './normalize'
 import { autoApprovePolicy, ControlProtocolPeer } from './protocol'
 
@@ -118,7 +119,7 @@ export class ClaudeCodeExecutor implements ExecutorProvider {
 
     const child = spawnFn(resolvedCmd, resolvedArgs, {
       cwd: workspacePath,
-      env: { ...process.env, ...(this.options.env ?? {}) },
+      env: buildSafeChildEnv(this.options.env),
     })
 
     const peer = new ControlProtocolPeer({

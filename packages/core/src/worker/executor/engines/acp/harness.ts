@@ -22,6 +22,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 
+import { buildSafeChildEnv } from '../../safe-env'
 import { mapStopReason, normalizeSessionUpdate } from './normalize'
 import { JsonRpcPeer, splitNdjson } from './protocol'
 
@@ -150,7 +151,7 @@ export class AcpExecutor implements ExecutorProvider {
     const spawnFn = this.options.spawn ?? (spawn as unknown as SpawnLike)
     const child = spawnFn(resolved.cmd, resolved.args, {
       cwd: workspacePath,
-      env: { ...process.env, ...(this.options.env ?? {}) },
+      env: buildSafeChildEnv(this.options.env),
     })
 
     const queue = new AgentEventQueue()

@@ -13,6 +13,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 
+import { buildSafeChildEnv } from '../../safe-env'
 import { extractSessionId, normalizeCursorLine, parseCursorLine, splitNdjson } from './normalize'
 
 /** Hard cap on one Cursor turn. Overridable via options. */
@@ -106,7 +107,7 @@ export class CursorExecutor implements ExecutorProvider {
     const spawnFn = this.options.spawn ?? (spawn as unknown as CursorSpawnLike)
     const child = spawnFn(resolved.cmd, resolved.args, {
       cwd: workspacePath,
-      env: { ...process.env, ...(this.options.env ?? {}) },
+      env: buildSafeChildEnv(this.options.env),
     })
 
     // Pipe the prompt through stdin then close it — Cursor's -p mode expects
