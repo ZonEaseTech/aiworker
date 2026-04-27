@@ -1,5 +1,35 @@
 # AIWorker Changelog
 
+## 2026-04-27 16:42 [release] `@zonease/aiworker-cli@0.3.0` — 代码审查批 P0+P1+P2 收官
+
+10 commit `648adf5..f54c0c6` 一次性发到 npm。汇总：
+
+**P0 安全（worker / gateway / channels 三处暴露面）**
+- `BUG-015` worker `/api/worker/{orchestrator,evolution,events}` 缺 bearer-auth → `app.use('/api/worker/*', ...)` 顶层守门 + 移除 management 内部冗余中间件 (`03edf9c`)
+- `BUG-016` web channel webhook 无验签 → web binding 加 `inboundToken`，adapter 用 `timingSafeEqualStrings` 校验 `Authorization: Bearer`，**fail-closed**（旧 deployments 必须在 dashboard 上设一次 token 才能恢复 web ingest）(`9c56ae1`)
+- `BUG-017` Lark `verificationToken` + WhatsApp `verifyToken` 普通 `===` → 改 `timingSafeEqualStrings` (`7ba3886`)
+
+**P1 安全 / 防御**
+- `BUG-018` CLI engine 子进程透传整段 `process.env` → 新建 `safe-env.ts` 白名单（`PATH` / `HOME` / `LANG` / `NODE_*` / `CLAUDE_*` / `CODEX_*` / `CURSOR_*` / `GEMINI_*` / `QWEN_*`）+ 黑名单（`AIWORKER_*` / `INTERNAL_*` / `WORKER_*` / `*_TOKEN` / `*_SECRET` / `*_API_KEY`），4 engine + cli provider 全部接入。**`--dangerously-skip-permissions` 在 args 不在 env，未触碰** (`f0190ee`)
+- `BUG-019` gateway loopback bypass fail-closed → `assertGatewayBindIsSafe()` 启动期检查：non-loopback bind + 无 `INTERNAL_SHARED_SECRET` 直接 throw (`a717fec`)
+- `BUG-020` gateway WS 缺 frame size + 限频 → `maxPayloadLength=1MiB` + `idleTimeout=120s` + `ConnectRateLimiter`（IP 维度，60s 内 ≥5 次 connect 失败短拒，`gateway.connect.brute_force_blocked` audit 留痕）(`6285709`)
+
+**P2 性能 / 健壮性**
+- `REFACTOR-005` worker.db 7 索引（messages.conversationId / conversations 复合 / cron_jobs 复合 / agent_tasks.createdAt / evolution_observations.noticedAt / execution_logs.conversationId / conversations.lastActiveAt）+ migration `0003_rare_cloak.sql` (`64843be`)
+- `REFACTOR-006` orchestrator API zod 入参（prompt 限 8000 字符）+ `WorkerConfig.orchestrator.maxHistoryMessages`（默认 20，1..200），run() 改用 `loadRecentMessages` 滚动窗口 (`9860615`)
+- `REFACTOR-007` 杂项 4 修：`WorkerEventBus` listener 异常 `consola.warn` 不再静默；Lark `tokenCache` 加 `disposeTokenCache` 走 runtime.dispose；`FleetPersistence.countRegisteredWorkers` 改 SQL `count()` + listRegisteredWorkers 改 `orderBy desc`；`secrets/:key` 路径加 `[\w.-]{1,128}` regex (`6447415`)
+
+**docs**
+- `f54c0c6` `docs/task/index.md` 补 BUG-015 / BUG-016 / BUG-018 / REFACTOR-005 4 条 sub-issue 创建时漏的索引行
+- 同 commit 开 `REFACTOR-008`（baseline lint debt 清零，P3，留作后续）
+
+**测试基线**：typecheck 9 包全绿；shared 18 / proto 19 / storage 9 / cli 34 / gateway 112 / core 427 / api 57 / web 24 = ~700 pass / 0 fail；ESLint 60 errors 与 release 前 baseline 同等（package.json sort-keys + cli process global，与本批无关，REFACTOR-008 跟进）。
+
+**升级注意**：
+- web channel 旧部署的 `worker_config.configJson` 没有 `inboundToken`，升级后 web webhook 立即 401。运维必须在 dashboard `web channel → Generate inboundToken` 后 reload 才能恢复 ingest。
+- gateway 启动 env：测试服 / 公网部署如果绑 `0.0.0.0` 但漏配 `INTERNAL_SHARED_SECRET`，新版直接拒启动。修复：要么绑 `127.0.0.1` 让 Caddy 反代，要么显式设 `INTERNAL_SHARED_SECRET`。
+- worker 进程 env：runtime CLI engine 子进程不再继承敏感 env。如果 engine 之前依赖 `AIWORKER_*` / `*_TOKEN` 之类自定义 env（非典型），改在 `executor.overrides.env` 里显式声明。
+
 ## 2026-04-27 [BUG-P1] BUG-019 Gateway 启动期 fail-closed 断言（loopback bypass）
 
 代码审查（root issue `nnid9urk`）发现的 P1 安全问题落地修复。

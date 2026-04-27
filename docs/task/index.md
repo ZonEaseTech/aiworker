@@ -87,3 +87,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REFACTOR-005 worker.db 缺关键索引（messages / conversations / cron_jobs 等）**](REFACTOR-005.md) `P2`
 - [x] [**REFACTOR-006 orchestrator API 入参 zod 校验 + 历史消息分页窗口**](REFACTOR-006.md) `P2`
 - [x] [**REFACTOR-007 杂项小修：bus 异常吞 / lark cache / fleet count / secrets key**](REFACTOR-007.md) `P2`
+- [ ] [**REFACTOR-008 baseline lint debt 清零（package.json sort-keys + cli process global + CI lint step）**](REFACTOR-008.md) `P3`
