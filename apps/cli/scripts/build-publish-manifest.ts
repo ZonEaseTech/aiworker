@@ -1,4 +1,4 @@
-import { access, copyFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
+import { access, copyFile, mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
 const cliDir = resolve(import.meta.dirname, '..')
@@ -19,11 +19,13 @@ const stripped: Record<string, unknown> = {
   bin: { aiworker: './aiworker.js' },
   // BUG-011/BUG-012: dist 必须含 drizzle/ 子目录（fleet + worker migrations），
   // packages/storage-sqlite 的 resolveMigrationsFolder fallback 会找 sibling drizzle/。
-  files: ['aiworker.js', 'README.md', 'drizzle/'],
+  // PLAN-022 / FEAT-033：dist 还含 web/ 子目录（fleet + worker bundles），
+  // gateway / worker `/admin/*` 静态托管在运行期 resolve 同级 web/<bundle>/。
+  files: ['aiworker.js', 'README.md', 'drizzle/', 'web/'],
   engines: pkg.engines,
 }
 
-await writeFile(resolve(distDir, 'package.json'), JSON.stringify(stripped, null, 2) + '\n', 'utf8')
+await writeFile(resolve(distDir, 'package.json'), `${JSON.stringify(stripped, null, 2)}\n`, 'utf8')
 
 const readmeRoot = resolve(repoRoot, 'README.md')
 try {
@@ -39,6 +41,22 @@ catch {
 const drizzleSrc = resolve(repoRoot, 'packages/storage-sqlite/drizzle')
 const drizzleDst = resolve(distDir, 'drizzle')
 await copyDir(drizzleSrc, drizzleDst)
+
+// PLAN-022 / FEAT-033：把 apps/web/dist/{fleet,worker} 拷到 dist/web/，让
+// npm-installed cli 在运行时能 serve fleet bundle（gateway 端）和 worker
+// bundle（worker 端）。`apps/cli/scripts/build`  在 cli 自身 build 之前会先
+// 触发 `bun run --filter '@zonease/aiworker-web' build`（见 cli/package.json
+// scripts.build），所以这里 `apps/web/dist/` 一定存在。
+const webDistSrc = resolve(repoRoot, 'apps/web/dist')
+const webDistDst = resolve(distDir, 'web')
+try {
+  await access(webDistSrc)
+  await copyDir(webDistSrc, webDistDst)
+}
+catch {
+  // 跳过：单测 / `prepublishOnly` 之外的 build 调用可能没先跑 web build。
+  // tarball 缺 web/ 时运行期 fallback 到 404，不影响 cli 自身可用。
+}
 
 async function copyDir(src: string, dst: string): Promise<void> {
   await mkdir(dst, { recursive: true })

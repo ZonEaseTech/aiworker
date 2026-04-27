@@ -1,23 +1,18 @@
 #!/usr/bin/env bun
 import process from 'node:process'
 
-// FEAT-030: 必须在任何业务模块（含 packages/core 的 zod schema）import 之前
-// 跑 dotenv bootstrap——schema 在 import 期就 parse process.env，必须先注入。
-import { bootstrapDotenv } from './lib/dotenv-bootstrap'
+import cac from 'cac'
 
-bootstrapDotenv()
+import consola from 'consola'
 
 // FEAT-030: cli.version 动态读 package.json，与发布版本始终一致。
 // Bun 支持 JSON imports 直接拿 package.json。
 import packageJson from '../package.json' with { type: 'json' }
-
-import cac from 'cac'
-import consola from 'consola'
-
 import {
   runApprovalsGrant as runApprovalsGrantRemote,
   runApprovalsList as runApprovalsListRemote,
 } from './aim/commands/approvals'
+
 import { runChat } from './aim/commands/chat'
 import {
   runConfigGet,
@@ -58,6 +53,11 @@ import {
 } from './commands/schedule'
 import { runServe } from './commands/serve'
 import { runTokenRotate as runTokenRotateLocal } from './commands/token'
+// FEAT-030: 必须在任何业务模块（含 packages/core 的 zod schema）import 之前
+// 跑 dotenv bootstrap——schema 在 import 期就 parse process.env，必须先注入。
+import { bootstrapDotenv } from './lib/dotenv-bootstrap'
+
+bootstrapDotenv()
 
 /**
  * aiworker —— 单二进制 CLI（PLAN-020 / FEAT-028）。
@@ -107,7 +107,8 @@ cli
   .option('--gateway <url>', 'Dial the given gateway WS URL as a node alongside the HTTP server')
   .option('--gateway-token <token>', 'Bearer token presented to the gateway (omit for loopback)')
   .option('--no-reconnect', 'Disable gateway-client auto-reconnect (useful for smoke / tests)')
-  .action(async (opts: { port?: number[], gateway?: string, gatewayToken?: string, reconnect?: boolean }) => {
+  .option('--no-serve-web', '不挂载 worker bundle 到 /admin/*（默认挂载，PLAN-022 / FEAT-033）')
+  .action(async (opts: { port?: number[], gateway?: string, gatewayToken?: string, reconnect?: boolean, serveWeb?: boolean }) => {
     const serveOptions: Parameters<typeof runServe>[0] = {}
     if (opts.port?.[0] !== undefined)
       serveOptions.port = opts.port[0]
@@ -117,6 +118,8 @@ cli
       serveOptions.gatewayToken = opts.gatewayToken
     if (opts.reconnect === false)
       serveOptions.gatewayReconnect = false
+    if (opts.serveWeb === false)
+      serveOptions.serveWeb = false
     await runServe(serveOptions)
   })
 
@@ -236,7 +239,8 @@ cli
   .command('gateway start', '拉起 gateway server（默认 foreground，systemd 友好；--detach 走后台 daemon）')
   .option('--port <n>', '监听端口，默认 9218', { type: [Number] })
   .option('--detach', '后台 daemon 模式：spawn 自身 + PID/log 写入 ~/.aiworker/')
-  .action(async (opts: { port?: number[], detach?: boolean }) => {
+  .option('--no-serve-web', '不挂载 fleet bundle 到 /admin/*（默认挂载，PLAN-022 / FEAT-033）')
+  .action(async (opts: { port?: number[], detach?: boolean, serveWeb?: boolean }) => {
     // env AIWORKER_GATEWAY_INTERNAL_FOREGROUND=1 是 daemon 子进程标记；强制 foreground，
     // 即便误带 --detach（无害）。
     const internal = process.env.AIWORKER_GATEWAY_INTERNAL_FOREGROUND === '1'
@@ -244,6 +248,7 @@ cli
     process.exit(await runGatewayStart({
       ...(opts.port?.[0] === undefined ? {} : { port: opts.port[0] }),
       detach,
+      ...(opts.serveWeb === false ? { serveWeb: false } : {}),
     }))
   })
 

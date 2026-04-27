@@ -25,7 +25,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "build": "bun build --target=bun --minify --outdir=dist src/aiworker.ts && bun scripts/build-publish-manifest.ts",
+    "build": "bun run --filter '@zonease/aiworker-web' build && bun build --target=bun --minify --outdir=dist src/aiworker.ts && bun scripts/build-publish-manifest.ts",
     "prepublishOnly": "bun run build",
     "smoke:aiworker-run": "bun scripts/smoke-aiworker-run.ts",
     "smoke:aiworker-fleet": "bun scripts/smoke-aiworker-fleet.ts"

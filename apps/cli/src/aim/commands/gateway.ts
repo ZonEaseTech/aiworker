@@ -3,6 +3,7 @@ import { startGateway } from '@zonease/aiworker-gateway'
 import { closeFleetDb } from '@zonease/aiworker-storage-sqlite/fleet'
 import consola from 'consola'
 
+import { resolveWebStaticDir } from '../../lib/web-static'
 import { getDaemonStatus, startDaemon, stopDaemon } from '../daemon'
 import { patchAimState } from '../state'
 
@@ -12,6 +13,11 @@ export interface GatewayStartOptions {
   persistUrl?: boolean
   /** background detach（spawn cli 自身 + foreground flag）。默认 false（systemd-friendly）。 */
   detach?: boolean
+  /**
+   * PLAN-022 / FEAT-033：默认挂载 fleet bundle 至 `/admin/*`。`--no-serve-web`
+   * 关掉。资源缺失会 warn 但不阻塞启动。
+   */
+  serveWeb?: boolean
 }
 
 /**
@@ -34,6 +40,8 @@ async function runGatewayStartDetached(opts: GatewayStartOptions): Promise<numbe
   try {
     const res = await startDaemon({
       ...(opts.port === undefined ? {} : { port: opts.port }),
+      // 透传 --no-serve-web 到 spawn 子进程：env 在 foreground 路径里解释。
+      ...(opts.serveWeb === false ? { env: { AIWORKER_GATEWAY_NO_SERVE_WEB: '1' } } : {}),
     })
     if (opts.persistUrl !== false)
       await patchAimState({ gatewayUrl: `ws://localhost:${res.port}` })
@@ -50,9 +58,19 @@ async function runGatewayStartDetached(opts: GatewayStartOptions): Promise<numbe
 
 async function runGatewayStartForeground(opts: GatewayStartOptions): Promise<number> {
   try {
+    // detach 路径会通过 env 把 --no-serve-web 透传到 spawn 子进程；同时也允许
+    // 运维直接 export AIWORKER_GATEWAY_NO_SERVE_WEB=1 关掉。
+    const envOff = process.env.AIWORKER_GATEWAY_NO_SERVE_WEB === '1'
+    const serveWeb = opts.serveWeb !== false && !envOff
+    const webStaticDir = serveWeb ? resolveWebStaticDir('fleet') : undefined
+    if (serveWeb && !webStaticDir)
+      consola.warn('[gateway] web 静态资源未找到（apps/web/dist/fleet 缺失？），/admin/* 将返回 404')
     const started = await startGateway(
       opts.port === undefined ? {} : { port: opts.port },
+      { ...(webStaticDir ? { webStaticDir } : {}) },
     )
+    if (webStaticDir)
+      consola.info(`[gateway] /admin/* serving fleet bundle from ${webStaticDir}`)
     if (opts.persistUrl !== false) {
       try {
         await patchAimState({ gatewayUrl: `ws://localhost:${started.port}` })
