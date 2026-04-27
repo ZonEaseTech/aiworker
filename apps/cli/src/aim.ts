@@ -7,6 +7,7 @@ import consola from 'consola'
 import { runApprovalsGrant, runApprovalsList } from './aim/commands/approvals'
 import { runChat } from './aim/commands/chat'
 import { runConfigGet, runConfigSet } from './aim/commands/config'
+import { runEnrollApprove, runEnrollList, runEnrollReject } from './aim/commands/enroll'
 import { runGatewayStart, runGatewayStatus, runGatewayStop } from './aim/commands/gateway'
 import { runInstallSystemd } from './aim/commands/install'
 import { runLogs } from './aim/commands/logs'
@@ -76,6 +77,23 @@ cli
       ...(opts.displayName === undefined ? {} : { displayName: opts.displayName }),
     })
     process.exit(code)
+  })
+
+// --- enroll.* (PLAN-019 / FEAT-026 OTP-attended enrollment) ---
+cli.command('enroll list', '列出 gateway 当前所有 pending OTP enrollment').action(async () => {
+  process.exit(await runEnrollList())
+})
+
+cli
+  .command('enroll approve <otp>', '批准某条 pending OTP enrollment（worker 立即加入 fleet）')
+  .action(async (otp: string) => {
+    process.exit(await runEnrollApprove(otp))
+  })
+
+cli
+  .command('enroll reject <otp>', '拒绝某条 pending OTP enrollment（worker 收到 close 4403）')
+  .action(async (otp: string) => {
+    process.exit(await runEnrollReject(otp))
   })
 
 // --- workers.* ---
