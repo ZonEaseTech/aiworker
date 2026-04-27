@@ -1,6 +1,12 @@
 /**
  * FEAT-009 / PLAN-005 — aissh-driven fleet deployment CLI.
  *
+ * **REFACTOR-004 起：仅适用 docker compose 自托管场景，非测试服。**
+ * 测试服 (CLAUDE.md "Project Preferences") 已硬约束为
+ * `npm install -g @zonease/aiworker-cli@<v>` + `aiworker install systemd` +
+ * Caddy 反代——禁止 git clone / docker pull / 远端编译。本脚本与
+ * `ops/compose/*.yml` 仅保留给其他自托管者（想跑 docker compose 形态）参考。
+ *
  * Images are built in GitHub Actions (.github/workflows/build-image.yml) and
  * published to GHCR at ghcr.io/zoneasetech/aiworker:<tag>. This script
  * triggers that workflow, uploads compose/Caddyfile/.env via aissh, and tells

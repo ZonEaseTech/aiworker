@@ -1,6 +1,10 @@
+# REFACTOR-004 起,本 compose **仅适用其他自托管者**——测试服已硬约束为
+# `npm install -g @zonease/aiworker-cli` + `aiworker install systemd` + Caddy,
+# 不再走 docker compose 路径(CLAUDE.md "Project Preferences")。
+#
 # PLAN-016 起,docker compose 是**可选 fast-launch** 形态——主部署路径是
-# 裸跑 (`aim gateway start` / `aiw serve`) 或 systemd (`aim install systemd`)。
-# 详见 docs/deployment.md;仅在不愿装 bun、或需要 `aim workers launch`
+# 裸跑 (`aiworker gateway start` / `aiworker serve`) 或 systemd (`aiworker install systemd`)。
+# 详见 docs/deployment.md;仅在不愿装 bun、或需要 `aiworker fleet launch`
 # per-worker 容器隔离时才走本路径。公网 HTTPS 反代见
 # docs/deployment-public-https.md(独立可选叠加层)。
 

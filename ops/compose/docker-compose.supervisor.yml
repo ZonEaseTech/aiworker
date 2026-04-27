@@ -1,3 +1,6 @@
+# REFACTOR-004 起,本 overlay **仅适用其他自托管者**——测试服已硬约束为
+# `npm install -g @zonease/aiworker-cli` + `aiworker install systemd` + Caddy。
+#
 # PLAN-013 S5 — gateway launch 能力 overlay。
 #
 # 把本文件与 docker-compose.yml 组合启动,gateway 才能通过 docker daemon 拉起

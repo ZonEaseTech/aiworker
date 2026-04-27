@@ -1,5 +1,9 @@
 # Example worker compose (FEAT-022).
 #
+# REFACTOR-004 起,本 example **仅适用其他自托管者**——测试服已硬约束为
+# `npm install -g @zonease/aiworker-cli` + `aiworker install systemd` + Caddy,
+# 不再走 docker compose 路径(CLAUDE.md "Project Preferences")。
+#
 # Dashboard and worker run in separate compose projects / hosts by design —
 # PLAN-004 data-domain boundary: fleet.db is the dashboard's, worker.db is the
 # worker's; they only talk over HTTP bearer auth. This file is a starting
