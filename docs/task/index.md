@@ -80,3 +80,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [ ] [**BUG-014 `aiworker install systemd` 渲染的 unit 缺 `EnvironmentFile` + 全部安全加固**](BUG-014.md) `P2`
 - [x] [**BUG-017 Lark verificationToken + WhatsApp verifyToken 非常量时间比较**](BUG-017.md) `P0`
 - [x] [**BUG-019 Gateway loopback bypass fail-closed 启动断言**](BUG-019.md) `P1`
+- [x] [**BUG-020 gateway WebSocket maxPayloadLength + idleTimeout + connect 限频**](BUG-020.md) `P1`

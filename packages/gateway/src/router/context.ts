@@ -1,5 +1,5 @@
 import type { ConsolaInstance } from 'consola'
-import type { ForwardTable, NodeRegistry, OperatorRegistry, PendingEnrollmentRegistry } from '../registry'
+import type { ConnectRateLimiter, ForwardTable, NodeRegistry, OperatorRegistry, PendingEnrollmentRegistry } from '../registry'
 import type { FleetPersistence } from '../registry/persistence'
 import type { FleetSupervisor } from '../supervisor/service'
 
@@ -30,6 +30,13 @@ export interface GatewayContext {
    * 测试场景下可缺省,handler 会回 feature_disabled。
    */
   pendingEnrollments?: PendingEnrollmentRegistry
+  /**
+   * BUG-020：来源 IP 的握手失败计数 / 阻断器。fetch handler 升级前用 isBlocked
+   * 判断是否直接 429,handleMessage 在握手成功 / 失败时分别 recordSuccess /
+   * recordFailure。测试场景下可缺省—server.ts 的逻辑会跳过限频,与现网行为只在
+   * "无 brute-force 防护"这一点上不同。
+   */
+  connectRateLimiter?: ConnectRateLimiter
 }
 
 /**

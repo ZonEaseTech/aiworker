@@ -38,6 +38,16 @@ export interface StartGatewayOptions {
  *   gateway 仅接受 `enroll.mode='otp'` 的 connect，其它一律 close。Caddy 在
  *   该 path 上不挂 basic-auth，把"陌生 worker"的入网面与 operator 通道隔开。
  * - 其它路径：404。
+ *
+ * BUG-020 防御层：
+ * - websocket 配置：`maxPayloadLength` 限制单消息 ≤ 1 MiB（默认 16 MB 太宽，
+ *   GB 级帧能撑爆 `parseFrame` 的 JSON.parse），`idleTimeout` 120s 保证死连
+ *   接被回收；`perMessageDeflate` 默认关闭，规避 zip-bomb。
+ * - fetch handler：upgrade 前查 `connectRateLimiter.isBlocked`，被阻断的 IP
+ *   直接 `429 + Retry-After`，不浪费 ws 升级。
+ * - handleMessage：`authorizeConnection` 失败时 `recordFailure`，达阈值时额
+ *   外写 `gateway.connect.brute_force_blocked` audit；成功握手 `recordSuccess`
+ *   清计数。
  */
 export function startGatewayServer(options: StartGatewayOptions): StartedGateway {
   const { config, context } = options
@@ -64,6 +74,17 @@ export function startGatewayServer(options: StartGatewayOptions): StartedGateway
         const ip = serverRef.requestIP(req)
         const remoteAddress = ip?.address
         const loopback = isLoopbackAddress(remoteAddress)
+        // BUG-020：远程 IP 处于 brute-force 阻断期 → 升级前直接 429。loopback
+        // 视为信任域（aim CLI / 同机 worker），不参与限频。
+        if (!loopback && context.connectRateLimiter) {
+          const block = context.connectRateLimiter.isBlocked(remoteAddress)
+          if (block.blocked) {
+            return new Response('rate_limited', {
+              status: 429,
+              headers: { 'Retry-After': String(Math.ceil(block.retryAfterMs / 1000)) },
+            })
+          }
+        }
         const path: ConnectionPath = url.pathname === '/enroll-ws' ? '/enroll-ws' : '/ws'
         const upgraded = serverRef.upgrade(req, {
           data: {
@@ -84,6 +105,14 @@ export function startGatewayServer(options: StartGatewayOptions): StartedGateway
       return new Response('not found', { status: 404 })
     },
     websocket: {
+      // BUG-020：1 MiB 单消息上限（覆盖 chat.send 大段 content + 普通 forward
+      // 响应）；超过即 ws 自动 close 1009 'message too big'，parseFrame 不会
+      // 看到超限帧。GB 级 OOM 攻击在这一层就被 Bun 兜住。
+      maxPayloadLength: 1024 * 1024,
+      // BUG-020：120s 空闲超时——operator/worker 业务都有自己的 ping 机制，
+      // 长时间无任何流量的连接视为死连接，回收 ws fd。Bun 默认值同为 120s,
+      // 这里显式声明便于 ops 审阅与测试覆盖。
+      idleTimeout: 120,
       open(ws) {
         context.logger.debug(
           `[gateway] ws opened (remote=${ws.data.remoteAddress ?? '?'} loopback=${ws.data.loopback})`,
@@ -170,6 +199,25 @@ function handleMessage(
           path: ws.data.path,
         },
       })
+      // BUG-020：仅 token / join_token 失败计入 brute-force 累计——wrong_path
+      // 是协议错配（versionskew，不是穷举尝试）；同时 loopback 不限频。
+      if (!isWrongPath && !ws.data.loopback && ctx.connectRateLimiter) {
+        const result = ctx.connectRateLimiter.recordFailure(ws.data.remoteAddress)
+        if (result.blockedNow) {
+          ctx.persistence.recordAudit({
+            actor: 'gateway',
+            action: 'gateway.connect.brute_force_blocked',
+            workerId: null,
+            detail: {
+              remoteAddress: ws.data.remoteAddress,
+              fails: result.fails,
+              blockUntil: result.blockUntil,
+              path: ws.data.path,
+              triggerReason: authResult.reason,
+            },
+          })
+        }
+      }
       const code = isWrongPath ? 4400 : 4401
       const reason = isWrongPath ? authResult.reason : `auth:${authResult.reason}`
       ws.close(code, reason)
@@ -351,6 +399,10 @@ function handleMessage(
         via: authResult.via,
       },
     })
+    // BUG-020：握手成功 → 清掉该 IP 的失败累计，防止 token 轮换 / 短暂误用
+    // 后被永久误伤。
+    if (!ws.data.loopback && ctx.connectRateLimiter)
+      ctx.connectRateLimiter.recordSuccess(ws.data.remoteAddress)
     return
   }
 

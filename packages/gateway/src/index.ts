@@ -14,7 +14,7 @@ import {
 } from '@zonease/aiworker-storage-sqlite/fleet'
 import consola from 'consola'
 import { loadGatewayConfigFromEnv } from './config'
-import { ForwardTable, NodeRegistry, OperatorRegistry, PendingEnrollmentRegistry } from './registry'
+import { ConnectRateLimiter, ForwardTable, NodeRegistry, OperatorRegistry, PendingEnrollmentRegistry } from './registry'
 import { FleetPersistence } from './registry/persistence'
 import { startGatewayServer } from './server'
 import { FleetSupervisor } from './supervisor/service'
@@ -104,6 +104,11 @@ export function createGatewayContext(config: GatewayConfig): GatewayContext {
     consola.info('[gateway] AIWORKER_GATEWAY_CAN_LAUNCH=true — workers.launch 已开启')
   }
 
+  // BUG-020：connect 失败累计 / 阻断（默认 60s 内 5 次失败 → block 10 min）。
+  // 阈值与窗口给的是公网 brute-force 的常识值,不开 env：参数硬编码反而方便
+  // 在 fail2ban / Caddy 反代叠加更严的层时彼此独立。
+  const connectRateLimiter = new ConnectRateLimiter()
+
   return {
     persistence,
     nodes,
@@ -114,6 +119,7 @@ export function createGatewayContext(config: GatewayConfig): GatewayContext {
     supervisor,
     maxWorkers: config.maxWorkers,
     pendingEnrollments,
+    connectRateLimiter,
   }
 }
 

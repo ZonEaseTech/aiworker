@@ -1,3 +1,9 @@
+export { ConnectRateLimiter } from './connect-rate-limiter'
+export type {
+  BlockedSnapshot,
+  ConnectRateLimiterOptions,
+  RecordFailureResult,
+} from './connect-rate-limiter'
 export { ForwardTable } from './forward'
 export type { ForwardTableOptions, PendingForward } from './forward'
 export { NodeRegistry } from './nodes'
