@@ -1,7 +1,7 @@
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { closeWorkerDb, evolutionObservations, executionLogs, getWorkerDb, initWorkerDb, runWorkerMigrations, skillBindings, skillDrafts } from '@aiworker/storage-sqlite/worker'
+import { closeWorkerDb, evolutionObservations, executionLogs, getWorkerDb, initWorkerDb, runWorkerMigrations, skillBindings, skillDrafts } from '@zonease/aiworker-storage-sqlite/worker'
 
 import { beforeEach, describe, expect, it } from 'bun:test'
 import { parseEvolutionMeta, runProposerOnce } from './proposer'

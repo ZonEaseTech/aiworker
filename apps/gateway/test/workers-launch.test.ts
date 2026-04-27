@@ -9,7 +9,7 @@ import {
   getFleetDb,
   initFleetDb,
   runFleetMigrations,
-} from '@aiworker/storage-sqlite/fleet'
+} from '@zonease/aiworker-storage-sqlite/fleet'
 import { describe, expect, test } from 'bun:test'
 import consola from 'consola'
 import { ForwardTable, NodeRegistry, OperatorRegistry } from '../src/registry'

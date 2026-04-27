@@ -11,7 +11,7 @@ import type {
   McpVariantBody,
   PermissionPolicy,
   VariantBodyByEngine,
-} from '@aiworker/shared'
+} from '@zonease/aiworker-shared'
 
 /**
  * Engine variant catalogue. Embedded as code so a worker boot does not need

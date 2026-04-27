@@ -1,4 +1,4 @@
-import type { BrainProvider, ExecutorProvider, WorkerConfig } from '@aiworker/shared'
+import type { BrainProvider, ExecutorProvider, WorkerConfig } from '@zonease/aiworker-shared'
 import type { ProcessManager } from './orchestrator/process-manager'
 
 import { workerEnv } from '../config/worker'

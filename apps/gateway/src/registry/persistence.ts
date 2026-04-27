@@ -1,6 +1,6 @@
-import type { RegisteredWorker } from '@aiworker/shared'
-import type { FleetDatabase } from '@aiworker/storage-sqlite/fleet'
-import { auditEvents, registeredWorkers } from '@aiworker/storage-sqlite/fleet'
+import type { RegisteredWorker } from '@zonease/aiworker-shared'
+import type { FleetDatabase } from '@zonease/aiworker-storage-sqlite/fleet'
+import { auditEvents, registeredWorkers } from '@zonease/aiworker-storage-sqlite/fleet'
 import { eq } from 'drizzle-orm'
 import { encryptToken } from './crypto'
 

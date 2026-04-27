@@ -1,4 +1,4 @@
-import type { SafeRegisteredWorker } from '@aiworker/shared'
+import type { SafeRegisteredWorker } from '@zonease/aiworker-shared'
 import { useNavigate } from '@tanstack/react-router'
 import { Check, Copy, ExternalLink, PlusCircle, ServerOff, Sparkles } from 'lucide-react'
 import { useState } from 'react'

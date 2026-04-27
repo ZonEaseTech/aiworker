@@ -1,8 +1,8 @@
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { isWorkerApiToken } from '@aiworker/shared'
-import { closeWorkerDb, getWorkerDb, initWorkerDb, runWorkerMigrations, workerIdentity } from '@aiworker/storage-sqlite/worker'
+import { isWorkerApiToken } from '@zonease/aiworker-shared'
+import { closeWorkerDb, getWorkerDb, initWorkerDb, runWorkerMigrations, workerIdentity } from '@zonease/aiworker-storage-sqlite/worker'
 
 import { beforeEach, describe, expect, it } from 'bun:test'
 import { eq } from 'drizzle-orm'

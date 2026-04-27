@@ -1,7 +1,7 @@
-import type { WorkerApiToken } from '@aiworker/shared'
+import type { WorkerApiToken } from '@zonease/aiworker-shared'
 import type { HandlerResult, LocalHandler } from '../context'
-import { pairResultSchema, workerSummarySchema } from '@aiworker/gateway-proto'
-import { WORKER_API_TOKEN_PATTERN } from '@aiworker/shared'
+import { pairResultSchema, workerSummarySchema } from '@zonease/aiworker-gateway-proto'
+import { WORKER_API_TOKEN_PATTERN } from '@zonease/aiworker-shared'
 import { z } from 'zod'
 import {
   WorkerClient,

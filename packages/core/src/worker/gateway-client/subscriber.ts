@@ -1,10 +1,10 @@
-import type { EventFrame } from '@aiworker/gateway-proto'
+import type { EventFrame } from '@zonease/aiworker-gateway-proto'
 import type { WorkerEvent, WorkerEventBus } from '../events/bus'
 
-import { EVENTS } from '@aiworker/gateway-proto'
+import { EVENTS } from '@zonease/aiworker-gateway-proto'
 
 /**
- * 把 WorkerEventBus 的本地事件映射成 `@aiworker/gateway-proto` EVENTS 常量
+ * 把 WorkerEventBus 的本地事件映射成 `@zonease/aiworker-gateway-proto` EVENTS 常量
  * 定义的外发事件 frame。不做过滤：每个订阅周期内所有映射成功的事件都会
  * 上行一条 frame。
  *

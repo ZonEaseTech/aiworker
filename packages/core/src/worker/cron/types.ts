@@ -1,4 +1,4 @@
-import type { ChannelType } from '@aiworker/shared'
+import type { ChannelType } from '@zonease/aiworker-shared'
 
 /**
  * Cron 调度记录的对外只读视图。返回给 management / gateway / CLI。

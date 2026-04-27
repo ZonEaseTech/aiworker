@@ -1,4 +1,4 @@
-import type { ChannelBinding, Envelope, OutboundMessage } from '@aiworker/shared'
+import type { ChannelBinding, Envelope, OutboundMessage } from '@zonease/aiworker-shared'
 
 export interface ChannelAdapter {
   readonly channel: ChannelBinding['channel']

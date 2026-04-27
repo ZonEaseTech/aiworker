@@ -1,11 +1,11 @@
-import type { EventName, Frame, MethodName } from '@aiworker/gateway-proto'
-import { encodeFrame, parseFrame } from '@aiworker/gateway-proto'
+import type { EventName, Frame, MethodName } from '@zonease/aiworker-gateway-proto'
+import { encodeFrame, parseFrame } from '@zonease/aiworker-gateway-proto'
 
 /**
  * 浏览器侧 gateway WS 单例客户端。
  *
  * 作用:
- * - 与 `@aiworker/gateway` 建立一条持久 WS 连接(默认 `ws(s)://${location.host}/ws`),
+ * - 与 `@zonease/aiworker-gateway` 建立一条持久 WS 连接(默认 `ws(s)://${location.host}/ws`),
  *   在 `connect` 帧里声明 role=`operator` + 一个本地生成的 agentId;
  * - 暴露 `request(method, params)`——每次分配 uuid,把 `request` 帧发给 gateway,
  *   等 `response` 帧按 id 匹配回来,resolve 或 reject;

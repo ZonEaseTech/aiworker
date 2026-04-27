@@ -1,4 +1,4 @@
-import type { EngineKind, ExecutorProfile } from '@aiworker/shared'
+import type { EngineKind, ExecutorProfile } from '@zonease/aiworker-shared'
 import { z } from 'zod'
 
 /**

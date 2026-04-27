@@ -1,4 +1,4 @@
-import type { WorkerConfig } from '@aiworker/shared'
+import type { WorkerConfig } from '@zonease/aiworker-shared'
 import { AlertTriangle, Loader2, Save } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'

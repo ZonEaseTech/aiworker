@@ -1,4 +1,4 @@
-import { EVENTS } from '@aiworker/gateway-proto'
+import { EVENTS } from '@zonease/aiworker-gateway-proto'
 import consola from 'consola'
 
 import { errorToExitCode, printNdjson, withSession } from './common'

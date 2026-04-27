@@ -1,7 +1,7 @@
-import type { Envelope } from '@aiworker/shared'
+import type { Envelope } from '@zonease/aiworker-shared'
 import type { CronJobInput, CronJobPatch, CronJobRecord } from './types'
 
-import { cronJobs, getWorkerDb } from '@aiworker/storage-sqlite/worker'
+import { cronJobs, getWorkerDb } from '@zonease/aiworker-storage-sqlite/worker'
 
 import consola from 'consola'
 import { CronExpressionParser } from 'cron-parser'

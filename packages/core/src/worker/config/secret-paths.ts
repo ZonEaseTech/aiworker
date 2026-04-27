@@ -1,4 +1,4 @@
-import type { WorkerConfig } from '@aiworker/shared'
+import type { WorkerConfig } from '@zonease/aiworker-shared'
 
 /**
  * Enumerate every secret inside a `WorkerConfig` as a (path, value) pair.

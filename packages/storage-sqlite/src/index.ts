@@ -1,5 +1,5 @@
 /**
- * `@aiworker/storage-sqlite` — single-file SQLite storage for both fleet.db
+ * `@zonease/aiworker-storage-sqlite` — single-file SQLite storage for both fleet.db
  * (manager registry) and worker.db (per-worker runtime state). Physical
  * isolation between the two is enforced by the `fleet` / `worker` subpaths;
  * consumers should import from the subpath that matches their data domain.

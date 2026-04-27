@@ -1,4 +1,4 @@
-import type { ChannelType } from '@aiworker/shared'
+import type { ChannelType } from '@zonease/aiworker-shared'
 
 import consola from 'consola'
 
@@ -17,9 +17,9 @@ function parseChannel(value: string): ChannelType {
  * 调用 → 退出），不经 HTTP；与 `aiw config-show` / `aiw config-set` 一致的
  * 模式：复用 worker bootstrap，但不绑 server，避免运维端起两个 server。
  */
-async function withCron<T>(fn: (cron: import('@aiworker/core').CronService) => Promise<T>): Promise<T> {
+async function withCron<T>(fn: (cron: import('@zonease/aiworker-core').CronService) => Promise<T>): Promise<T> {
   await loadWorkerContext({ silent: true })
-  const { CronService } = await import('@aiworker/core')
+  const { CronService } = await import('@zonease/aiworker-core')
   // CronService 不依赖 orchestrator——CRUD 都不会触发 ingest。这里给一个抛错的
   // stub，确保万一谁调了 tick() 也能 fail-fast 而不是默默吞掉。
   const cron = new CronService({

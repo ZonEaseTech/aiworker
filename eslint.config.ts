@@ -5,7 +5,7 @@ export default antfu({
   react: true,
   ignores: ['dist', 'node_modules', '.agents', '.serena', 'docs', '**/routeTree.gen.ts', '**/drizzle/**'],
 }, {
-  // PLAN-015 §S1：`@aiworker/core` 必须保持 transport-agnostic。
+  // PLAN-015 §S1：`@zonease/aiworker-core` 必须保持 transport-agnostic。
   // 任何对 Hono / Scalar / apps/* 的引用都视为越界，CI 跑 lint 时即拦下回退。
   files: ['packages/core/**/*.ts'],
   rules: {

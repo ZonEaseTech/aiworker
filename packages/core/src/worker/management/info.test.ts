@@ -3,7 +3,7 @@ import type {
   ExecutorProvider,
   ServiceStatus,
   WorkerConfig,
-} from '@aiworker/shared'
+} from '@zonease/aiworker-shared'
 import type { WorkerRuntime } from '../runtime'
 import type { WorkerModeState } from './state'
 

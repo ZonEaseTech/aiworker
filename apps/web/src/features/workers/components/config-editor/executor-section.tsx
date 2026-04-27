@@ -4,7 +4,7 @@ import type {
   EngineKind,
   ExecutorProfile,
   PermissionPolicy,
-} from '@aiworker/shared'
+} from '@zonease/aiworker-shared'
 import { RefreshCw } from 'lucide-react'
 import { useState } from 'react'
 import { Input } from '@/components/ui/input'

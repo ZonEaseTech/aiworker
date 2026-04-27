@@ -1,4 +1,4 @@
-import type { ToolPolicy } from '@aiworker/shared'
+import type { ToolPolicy } from '@zonease/aiworker-shared'
 
 import { describe, expect, it } from 'bun:test'
 import { evaluateToolPolicy, matchToolPattern } from './policy'

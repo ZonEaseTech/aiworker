@@ -1,4 +1,4 @@
-import type { AgentEvent, AgentFinishReason, ToolAction } from '@aiworker/shared'
+import type { AgentEvent, AgentFinishReason, ToolAction } from '@zonease/aiworker-shared'
 import type { JsonRpcNotification } from '../acp/types'
 import type {
   CodexAssistantMessageEvent,

@@ -1,6 +1,6 @@
 import type { WorkerEvent, WorkerEventBus } from '../events/bus'
 
-import { evolutionObservations, getWorkerDb } from '@aiworker/storage-sqlite/worker'
+import { evolutionObservations, getWorkerDb } from '@zonease/aiworker-storage-sqlite/worker'
 
 import consola from 'consola'
 

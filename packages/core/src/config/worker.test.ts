@@ -2,7 +2,7 @@ import { homedir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 
-import { defaultWorkerMigrationsFolder } from '@aiworker/storage-sqlite/worker'
+import { defaultWorkerMigrationsFolder } from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 import { __resetWorkerEnvCacheForTest, getWorkerEnv } from './worker'

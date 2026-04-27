@@ -1,8 +1,8 @@
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { isWorkerApiToken, WORKER_ID_PATTERN } from '@aiworker/shared'
-import { closeWorkerDb, getWorkerDb, initWorkerDb, runWorkerMigrations } from '@aiworker/storage-sqlite/worker'
+import { isWorkerApiToken, WORKER_ID_PATTERN } from '@zonease/aiworker-shared'
+import { closeWorkerDb, getWorkerDb, initWorkerDb, runWorkerMigrations } from '@zonease/aiworker-storage-sqlite/worker'
 
 import { beforeEach, describe, expect, it } from 'bun:test'
 import { SecretsVault } from '../secrets/vault'

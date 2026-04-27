@@ -1,4 +1,4 @@
-import type { Envelope } from '@aiworker/shared'
+import type { Envelope } from '@zonease/aiworker-shared'
 
 import consola from 'consola'
 

@@ -1,8 +1,8 @@
-import type { WorkerRuntime } from '@aiworker/core'
-import type { Envelope } from '@aiworker/shared'
-import { AppError } from '@aiworker/shared'
-
+import type { WorkerRuntime } from '@zonease/aiworker-core'
+import type { Envelope } from '@zonease/aiworker-shared'
 import { OpenAPIHono } from '@hono/zod-openapi'
+
+import { AppError } from '@zonease/aiworker-shared'
 import consola from 'consola'
 
 /**
@@ -30,7 +30,7 @@ export function buildChannelRoutes(getRuntime: () => WorkerRuntime, workerId: st
 
   routes.post('/:channel/webhook', async (c) => {
     const runtime = getRuntime()
-    const channel = c.req.param('channel') as import('@aiworker/shared').ChannelType
+    const channel = c.req.param('channel') as import('@zonease/aiworker-shared').ChannelType
     const binding = runtime.channels.get(channel)
     if (!binding)
       throw AppError.notFound(`Channel ${channel} is not bound to this worker`)

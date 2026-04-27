@@ -1,6 +1,6 @@
-import type { SafeRegisteredWorker } from '@aiworker/shared'
-import { generateWorkerApiToken, WORKER_API_TOKEN_PREFIX } from '@aiworker/shared'
+import type { SafeRegisteredWorker } from '@zonease/aiworker-shared'
 import { useNavigate } from '@tanstack/react-router'
+import { generateWorkerApiToken, WORKER_API_TOKEN_PREFIX } from '@zonease/aiworker-shared'
 import { CheckCircle2, Copy, Eye, EyeOff, Info, Sparkles } from 'lucide-react'
 import { useId, useState } from 'react'
 import { Badge } from '@/components/ui/badge'

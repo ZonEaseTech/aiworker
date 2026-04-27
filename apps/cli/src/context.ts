@@ -1,7 +1,7 @@
-import type { WorkerRuntime } from '@aiworker/core'
+import type { WorkerRuntime } from '@zonease/aiworker-core'
 
-import type { WorkerConfig } from '@aiworker/shared'
-import type { WorkerDatabase } from '@aiworker/storage-sqlite/worker'
+import type { WorkerConfig } from '@zonease/aiworker-shared'
+import type { WorkerDatabase } from '@zonease/aiworker-storage-sqlite/worker'
 import process from 'node:process'
 import {
   buildWorkerRuntime,
@@ -13,13 +13,13 @@ import {
   printBootstrapIfJustMinted,
   ProcessManager,
   workerEnv,
-} from '@aiworker/core'
+} from '@zonease/aiworker-core'
 import {
   defaultWorkerMigrationsFolder,
   getWorkerDb,
   initWorkerDb,
   runWorkerMigrations,
-} from '@aiworker/storage-sqlite/worker'
+} from '@zonease/aiworker-storage-sqlite/worker'
 
 /**
  * Bootstrap steps shared across `aiw init`, `aiw run`, `aiw serve`, and

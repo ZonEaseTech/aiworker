@@ -1,4 +1,4 @@
-import type { EngineKind as SharedEngineKind } from '@aiworker/shared'
+import type { EngineKind as SharedEngineKind } from '@zonease/aiworker-shared'
 
 import consola from 'consola'
 

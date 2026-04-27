@@ -1,5 +1,5 @@
-import { getSecretsVault, handleTokenRotate } from '@aiworker/core'
-import { getWorkerDb } from '@aiworker/storage-sqlite/worker'
+import { getSecretsVault, handleTokenRotate } from '@zonease/aiworker-core'
+import { getWorkerDb } from '@zonease/aiworker-storage-sqlite/worker'
 import consola from 'consola'
 
 import { loadWorkerContext } from '../context'

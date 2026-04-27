@@ -4,7 +4,7 @@ import type {
   ExecutorProvider,
   ExecutorTool,
   ServiceStatus,
-} from '@aiworker/shared'
+} from '@zonease/aiworker-shared'
 
 import { McpStreamableHttpClient } from '../../../adapters/mcp'
 

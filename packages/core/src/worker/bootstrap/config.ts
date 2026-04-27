@@ -1,6 +1,6 @@
-import type { WorkerConfig } from '@aiworker/shared'
-import type { WorkerDatabase } from '@aiworker/storage-sqlite/worker'
-import { workerConfig as workerConfigTable } from '@aiworker/storage-sqlite/worker'
+import type { WorkerConfig } from '@zonease/aiworker-shared'
+import type { WorkerDatabase } from '@zonease/aiworker-storage-sqlite/worker'
+import { workerConfig as workerConfigTable } from '@zonease/aiworker-storage-sqlite/worker'
 
 import { eq } from 'drizzle-orm'
 import { migrateLegacyExecutor } from '../executor/default-profiles'

@@ -1,4 +1,4 @@
-import type { AgentEvent } from '@aiworker/shared'
+import type { AgentEvent } from '@zonease/aiworker-shared'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { spawn } from 'node:child_process'
 import fs from 'node:fs/promises'

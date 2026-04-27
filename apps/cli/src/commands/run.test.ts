@@ -1,4 +1,4 @@
-import { WorkerEventBus } from '@aiworker/core'
+import { WorkerEventBus } from '@zonease/aiworker-core'
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test'
 
 /**
@@ -87,7 +87,9 @@ describe('runRun terminal event mapping (BUG-005)', () => {
   it('--dry-run 不 ingest 直接 exit 0', async () => {
     const { runRun } = await import('./run')
     let ingested = false
-    ingestImpl = async () => { ingested = true }
+    ingestImpl = async () => {
+      ingested = true
+    }
     const code = await runRun({ message: 'hello', dryRun: true })
     expect(code).toBe(0)
     expect(ingested).toBe(false)

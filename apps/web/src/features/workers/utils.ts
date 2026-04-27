@@ -1,4 +1,4 @@
-import type { RegisteredWorkerLivenessState } from '@aiworker/shared'
+import type { RegisteredWorkerLivenessState } from '@zonease/aiworker-shared'
 
 /** Tailwind/cva variant keyed by the manager-side liveness label. */
 export function stateBadgeVariant(

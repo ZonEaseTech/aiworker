@@ -1,11 +1,11 @@
-import type { WorkerApiToken } from '@aiworker/shared'
-import type { WorkerDatabase } from '@aiworker/storage-sqlite/worker'
+import type { WorkerApiToken } from '@zonease/aiworker-shared'
+import type { WorkerDatabase } from '@zonease/aiworker-storage-sqlite/worker'
 import type { Buffer } from 'node:buffer'
 import type { SecretsVault } from '../secrets/vault'
 import { randomBytes } from 'node:crypto'
-import { ensureWorkerHome } from '@aiworker/fs-layout'
-import { isWorkerApiToken, mintWorkerId as sharedMintWorkerId, WORKER_API_TOKEN_PREFIX, WORKER_ID_PATTERN } from '@aiworker/shared'
-import { workerIdentity } from '@aiworker/storage-sqlite/worker'
+import { ensureWorkerHome } from '@zonease/aiworker-fs-layout'
+import { isWorkerApiToken, mintWorkerId as sharedMintWorkerId, WORKER_API_TOKEN_PREFIX, WORKER_ID_PATTERN } from '@zonease/aiworker-shared'
+import { workerIdentity } from '@zonease/aiworker-storage-sqlite/worker'
 
 import { eq } from 'drizzle-orm'
 

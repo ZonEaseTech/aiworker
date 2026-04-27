@@ -1,4 +1,4 @@
-import type { Role } from '@aiworker/gateway-proto'
+import type { Role } from '@zonease/aiworker-gateway-proto'
 import type { ServerWebSocket } from 'bun'
 
 /**

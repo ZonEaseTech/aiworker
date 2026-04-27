@@ -3,7 +3,7 @@ import type {
   EnrollmentApprovedPayload,
   EnrollmentOtpPayload,
   Frame,
-} from '@aiworker/gateway-proto'
+} from '@zonease/aiworker-gateway-proto'
 import type { ResolvedGatewayNodeOptions } from './config'
 
 import {
@@ -13,7 +13,7 @@ import {
   EVENTS,
   parseFrame,
   ROLES,
-} from '@aiworker/gateway-proto'
+} from '@zonease/aiworker-gateway-proto'
 
 import consola from 'consola'
 

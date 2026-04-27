@@ -1,4 +1,4 @@
-import type { EngineAvailabilityResponse, ExecutorProfile } from '@aiworker/shared'
+import type { EngineAvailabilityResponse, ExecutorProfile } from '@zonease/aiworker-shared'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useState } from 'react'

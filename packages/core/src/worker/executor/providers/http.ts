@@ -7,7 +7,7 @@ import type {
   ExecutorTool,
   ServiceStatus,
   ToolAction,
-} from '@aiworker/shared'
+} from '@zonease/aiworker-shared'
 import type {
   ChatCompletionRequest,
   OpenAiChatMessage,

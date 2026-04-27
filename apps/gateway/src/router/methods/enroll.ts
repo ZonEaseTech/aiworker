@@ -1,6 +1,6 @@
 import type { HandlerResult, LocalHandler } from '../context'
 import { createHash } from 'node:crypto'
-import { encodeFrame, EVENTS, pendingEnrollmentSchema } from '@aiworker/gateway-proto'
+import { encodeFrame, EVENTS, pendingEnrollmentSchema } from '@zonease/aiworker-gateway-proto'
 import { z } from 'zod'
 import { broadcastEventToOperators } from '../../events/broadcast'
 

@@ -1,4 +1,4 @@
-import type { ChannelBinding, OutboundMessage } from '@aiworker/shared'
+import type { ChannelBinding, OutboundMessage } from '@zonease/aiworker-shared'
 
 import { Buffer } from 'node:buffer'
 import { createCipheriv, createHash, randomBytes } from 'node:crypto'

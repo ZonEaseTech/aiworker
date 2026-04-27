@@ -6,7 +6,7 @@ import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 
 import process from 'node:process'
-import { resolveAiworkerHome } from '@aiworker/fs-layout'
+import { resolveAiworkerHome } from '@zonease/aiworker-fs-layout'
 
 import { resolveGatewayLogPath, resolveGatewayPidPath } from './state'
 

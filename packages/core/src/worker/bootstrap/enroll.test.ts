@@ -1,4 +1,4 @@
-import type { ConnectFrame, Frame } from '@aiworker/gateway-proto'
+import type { ConnectFrame, Frame } from '@zonease/aiworker-gateway-proto'
 import type { WebSocketCtor, WebSocketLike } from '../gateway-client/client'
 import type { RuntimeLike } from '../gateway-client/dispatcher'
 

@@ -1,4 +1,4 @@
-import type { WorkerConfig } from '@aiworker/shared'
+import type { WorkerConfig } from '@zonease/aiworker-shared'
 import type { WorkerRuntime } from './runtime'
 import { describe, expect, it, mock } from 'bun:test'
 

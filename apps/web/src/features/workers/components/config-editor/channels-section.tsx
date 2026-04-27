@@ -3,7 +3,7 @@ import type {
   ChannelCredentials,
   ChannelType,
   WorkerInfo,
-} from '@aiworker/shared'
+} from '@zonease/aiworker-shared'
 import { Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'

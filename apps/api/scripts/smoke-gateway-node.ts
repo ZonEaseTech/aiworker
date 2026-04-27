@@ -17,14 +17,14 @@
  *
  * 用法：bun apps/api/scripts/smoke-gateway-node.ts
  */
-import type { ConnectFrame, Frame, RequestFrame } from '@aiworker/gateway-proto'
-import type { Envelope } from '@aiworker/shared'
+import type { ConnectFrame, Frame, RequestFrame } from '@zonease/aiworker-gateway-proto'
+import type { Envelope } from '@zonease/aiworker-shared'
 import type { OrchestratorLike } from '../src/worker/gateway-client'
 
 import { Buffer } from 'node:buffer'
 import process from 'node:process'
 
-import { encodeFrame, EVENTS, parseFrame } from '@aiworker/gateway-proto'
+import { encodeFrame, EVENTS, parseFrame } from '@zonease/aiworker-gateway-proto'
 
 import { WorkerEventBus } from '../src/worker/events/bus'
 import { startGatewayNode } from '../src/worker/gateway-client'

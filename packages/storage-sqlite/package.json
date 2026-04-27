@@ -1,5 +1,5 @@
 {
-  "name": "@aiworker/storage-sqlite",
+  "name": "@zonease/aiworker-storage-sqlite",
   "type": "module",
   "private": true,
   "exports": {
@@ -25,7 +25,7 @@
     "db:generate": "bun run db:generate:fleet && bun run db:generate:worker"
   },
   "dependencies": {
-    "@aiworker/shared": "workspace:*",
+    "@zonease/aiworker-shared": "workspace:*",
     "drizzle-orm": "^0.44.1"
   },
   "devDependencies": {

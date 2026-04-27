@@ -1,4 +1,4 @@
-import type { ChannelBinding, ChannelType, WorkerConfig } from '@aiworker/shared'
+import type { ChannelBinding, ChannelType, WorkerConfig } from '@zonease/aiworker-shared'
 import type { WorkerRuntime } from '../runtime'
 import type { WorkerModeState } from './state'
 

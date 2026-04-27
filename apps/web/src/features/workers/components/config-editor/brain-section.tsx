@@ -1,4 +1,4 @@
-import type { BrainSourceConfig, WorkerConfig } from '@aiworker/shared'
+import type { BrainSourceConfig, WorkerConfig } from '@zonease/aiworker-shared'
 import { Eye, EyeOff, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'

@@ -8,14 +8,14 @@ import type {
   WorkerComponentStatus,
   WorkerConfig,
   WorkerInfo,
-} from '@aiworker/shared'
+} from '@zonease/aiworker-shared'
 import { GatewayApiError, getGatewayClient } from './gateway-client'
 
 /**
  * PLAN-013 S5: web 数据层从 REST `/api/workers/*` 切换到 gateway WS 协议。
  *
  * 所有函数签名尽量保持 TanStack Query consumer 零改动;内部通过
- * `@aiworker/gateway-proto` METHODS 与 gateway 通讯。
+ * `@zonease/aiworker-gateway-proto` METHODS 与 gateway 通讯。
  *
  * 错误仍用 `WorkerApiError` 暴露给调用层,但内部映射已由 gateway 的错误码取代
  * 原 HTTP 状态码:
