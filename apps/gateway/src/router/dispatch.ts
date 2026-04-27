@@ -4,6 +4,7 @@ import type { GatewayContext, LocalHandler } from './context'
 import { encodeFrame, getMethodDef, METHODS } from '@aiworker/gateway-proto'
 import { broadcastEventToOperators } from '../events/broadcast'
 import { forwardOperatorRequestToNode } from './forward'
+import { handleEnrollApprove, handleEnrollList, handleEnrollReject } from './methods/enroll'
 import { handleSystemPresence } from './methods/system'
 import { handleTokenRotate } from './methods/token'
 import { handleWorkersLaunch, handleWorkersList, handleWorkersPair, handleWorkersRemove } from './methods/workers'
@@ -16,6 +17,9 @@ const LOCAL_HANDLERS: Record<string, LocalHandler> = {
   'workers.pair': handleWorkersPair,
   'workers.launch': handleWorkersLaunch,
   'token.rotate': handleTokenRotate,
+  'enroll.list': handleEnrollList,
+  'enroll.approve': handleEnrollApprove,
+  'enroll.reject': handleEnrollReject,
 }
 
 /**

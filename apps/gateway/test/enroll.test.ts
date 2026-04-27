@@ -73,6 +73,7 @@ function makeConfig(overrides: Partial<GatewayConfig> = {}): GatewayConfig {
     canLaunch: false,
     maxWorkers: undefined,
     joinToken: JOIN_TOKEN,
+    enrollOtpTtlSec: 300,
     nodeEnv: 'test',
     supervisor: {
       dockerHost: '/var/run/docker.sock',

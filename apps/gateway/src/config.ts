@@ -32,6 +32,12 @@ export interface GatewayConfig {
    * 后者用于操作员 / 已配对 node 的 bearer，前者只用于"首帧自助注册"门禁。
    */
   joinToken?: string
+  /**
+   * PLAN-019：OTP-attended enrollment 的 OTP 有效期（秒）。worker 从发起
+   * `connect.enroll.mode='otp'` 起到 operator 调 `enroll.approve` 的 hard
+   * deadline——超过即 close 4408 + audit `gateway.enrollment.expired`。
+   */
+  enrollOtpTtlSec: number
   nodeEnv: string
   supervisor: {
     dockerHost: string
@@ -60,6 +66,7 @@ const envSchema = z.object({
     .transform(v => v === 'true'),
   AIWORKER_MAX_WORKERS: z.coerce.number().int().positive().optional(),
   AIWORKER_JOIN_TOKEN: z.string().min(16).optional(),
+  AIWORKER_ENROLL_OTP_TTL_SEC: z.coerce.number().int().min(30).max(3600).default(300),
   DOCKER_HOST: z.string().default('/var/run/docker.sock'),
   AIWORKER_IMAGE: z.string().optional(),
   AIWORKER_NETWORK: z.string().default('aiworker_default'),
@@ -107,6 +114,7 @@ export function loadGatewayConfigFromEnv(): GatewayConfig {
     canLaunch: parsed.AIWORKER_GATEWAY_CAN_LAUNCH,
     maxWorkers: parsed.AIWORKER_MAX_WORKERS,
     joinToken: parsed.AIWORKER_JOIN_TOKEN,
+    enrollOtpTtlSec: parsed.AIWORKER_ENROLL_OTP_TTL_SEC,
     nodeEnv: parsed.NODE_ENV,
     supervisor: {
       dockerHost: parsed.DOCKER_HOST,

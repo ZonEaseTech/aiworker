@@ -2,6 +2,7 @@
 import type { GatewayConfig } from './config'
 import type { GatewayContext } from './router/context'
 import type { StartedGateway } from './server'
+import { createHash } from 'node:crypto'
 import process from 'node:process'
 import { encodeFrame } from '@aiworker/gateway-proto'
 import {
@@ -13,7 +14,7 @@ import {
 } from '@aiworker/storage-sqlite/fleet'
 import consola from 'consola'
 import { loadGatewayConfigFromEnv } from './config'
-import { ForwardTable, NodeRegistry, OperatorRegistry } from './registry'
+import { ForwardTable, NodeRegistry, OperatorRegistry, PendingEnrollmentRegistry } from './registry'
 import { FleetPersistence } from './registry/persistence'
 import { startGatewayServer } from './server'
 import { FleetSupervisor } from './supervisor/service'
@@ -58,6 +59,32 @@ export function createGatewayContext(config: GatewayConfig): GatewayContext {
     },
   })
 
+  // PLAN-019：OTP-attended enrollment 待批队列。过期回调在这里就地写
+  // gateway.enrollment.expired audit + 关 ws,handler 层只读不写 audit。
+  const pendingEnrollments = new PendingEnrollmentRegistry({
+    ttlMs: config.enrollOtpTtlSec * 1000,
+    onExpire: (entry) => {
+      try {
+        entry.ws.close(4408, 'enroll:expired')
+      }
+      catch { /* ws 已断开,忽略 */ }
+      try {
+        persistence.recordAudit({
+          actor: 'gateway',
+          action: 'gateway.enrollment.expired',
+          workerId: entry.workerId,
+          detail: {
+            displayName: entry.displayName,
+            otpHash: createHash('sha256').update(entry.otp).digest('hex').slice(0, 16),
+          },
+        })
+      }
+      catch (err) {
+        consola.warn('[gateway] 写 enrollment.expired audit 失败', err)
+      }
+    },
+  })
+
   let supervisor: FleetSupervisor | null = null
   if (config.canLaunch) {
     // superRefine 已经保证这些字段非空。
@@ -86,6 +113,7 @@ export function createGatewayContext(config: GatewayConfig): GatewayContext {
     masterKeyHex: config.masterKeyHex,
     supervisor,
     maxWorkers: config.maxWorkers,
+    pendingEnrollments,
   }
 }
 

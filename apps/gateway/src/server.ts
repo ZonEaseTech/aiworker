@@ -96,6 +96,8 @@ export function startGatewayServer(options: StartGatewayOptions): StartedGateway
     context,
     stop: async () => {
       context.forwards.dispose()
+      // PLAN-019:把 pending OTP 的 setTimeout 句柄全部清掉。
+      context.pendingEnrollments?.dispose()
       await server.stop(true)
     },
   }
