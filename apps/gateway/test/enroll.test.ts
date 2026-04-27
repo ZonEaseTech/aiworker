@@ -54,6 +54,7 @@ function makeWs(loopback = false, remoteAddress = '8.8.8.8'): WsStub {
       remoteAddress,
       connectedAt: Date.now(),
       subscribedAll: true,
+      path: '/ws',
     },
     send: (msg: string) => ws.__sent.push(msg),
     close: (code: number, reason?: string) => ws.__closes.push({ code, reason }),

@@ -54,6 +54,7 @@ function makeWs(deviceId = 'dev-otp'): WsStub {
       remoteAddress: '203.0.113.7',
       connectedAt: Date.now(),
       subscribedAll: true,
+      path: '/enroll-ws',
     },
     send: (msg: string) => ws.__sent.push(msg),
     close: (code: number, reason?: string) => ws.__closes.push({ code, reason }),

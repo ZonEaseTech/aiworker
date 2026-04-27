@@ -75,6 +75,8 @@ export class PendingEnrollmentRegistry {
   private readonly onExpire?: (entry: PendingEnrollmentEntry) => void
   private readonly generator: () => string
   private readonly entries = new Map<string, InternalEntry>()
+  /** ws → otp 反查索引：S3 server.ts handleClose 在 ws 关闭时按 ws 反查并 removeByWs。 */
+  private readonly wsToOtp = new WeakMap<AnyWs, string>()
   private disposed = false
 
   constructor(opts: PendingEnrollmentRegistryOptions) {
@@ -105,6 +107,7 @@ export class PendingEnrollmentRegistry {
       timer: setTimeout(() => this.handleExpire(otp), this.ttlMs),
     }
     this.entries.set(otp, entry)
+    this.wsToOtp.set(req.ws, otp)
     return { otp, expiresAt }
   }
 
@@ -133,6 +136,19 @@ export class PendingEnrollmentRegistry {
     return this.entries.has(otp)
   }
 
+  /**
+   * S3 server.ts handleClose 在 `ws.data.role === 'node-pending'` 且未被 approve /
+   * reject / expire 走掉时调用：按 ws 反查并清理 entry。返回被清理的 entry（含
+   * otp）供调用方写 `gateway.enrollment.abandoned` audit；如果 entry 已被走掉
+   * （approve / reject / expire 任一路径已 pop），返回 undefined。
+   */
+  removeByWs(ws: AnyWs): PendingEnrollmentEntry | undefined {
+    const otp = this.wsToOtp.get(ws)
+    if (!otp)
+      return undefined
+    return this.popInternal(otp)
+  }
+
   size(): number {
     return this.entries.size
   }
@@ -153,6 +169,7 @@ export class PendingEnrollmentRegistry {
       return undefined
     clearTimeout(e.timer)
     this.entries.delete(otp)
+    this.wsToOtp.delete(e.ws)
     const { timer: _t, ...snapshot } = e
     return snapshot
   }
@@ -162,6 +179,7 @@ export class PendingEnrollmentRegistry {
     if (!e)
       return
     this.entries.delete(otp)
+    this.wsToOtp.delete(e.ws)
     if (!this.onExpire)
       return
     try {
