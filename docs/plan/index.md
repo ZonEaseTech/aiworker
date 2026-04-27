@@ -47,3 +47,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-016 Deployment reshape — CLI-first install, docker as optional fast-launch**](PLAN-016.md) `2026-04-24`
 - [x] [**PLAN-017 Bare-metal smoke regressions — fix four blockers found during local smoke**](PLAN-017.md) `2026-04-26`
 - [x] [**PLAN-018 Worker self-enrollment via shared join token**](PLAN-018.md) `2026-04-26`
+- [-] [**PLAN-019 Worker OTP-attended enrollment (operator-approved join, CLI-only)**](PLAN-019.md) `2026-04-27`
