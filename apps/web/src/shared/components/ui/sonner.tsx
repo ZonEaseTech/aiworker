@@ -1,6 +1,6 @@
 import type { ComponentProps } from 'react'
 import { Toaster as SonnerToaster } from 'sonner'
-import { useThemeStore } from '@/stores/theme'
+import { useThemeStore } from '@/shared/stores/theme'
 
 type ToasterProps = ComponentProps<typeof SonnerToaster>
 

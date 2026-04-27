@@ -1,7 +1,7 @@
 import type { WorkerConfig, WorkerInfo } from '@zonease/aiworker-shared'
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { WorkerApiError } from '@/lib/api'
+import { WorkerApiError } from '@/fleet/api'
 import { ConfigEditor } from '../components/config-editor'
 import { renderWithProviders } from './test-utils'
 
@@ -82,8 +82,8 @@ function createHandlers(): Handlers {
   }
 }
 
-vi.mock('@/lib/api', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api')
+vi.mock('@/fleet/api', async () => {
+  const actual = await vi.importActual<typeof import('@/fleet/api')>('@/fleet/api')
   return {
     ...actual,
     getWorkerConfig: (id: string) => handlers.getWorkerConfig(id),

@@ -18,4 +18,41 @@ export default antfu({
       ],
     }],
   },
+}, {
+  // PLAN-022 / FEAT-033：apps/web 双视角物理隔离。fleet 视角不得引用 worker 视角；
+  // 共享请放 apps/web/src/shared/。pattern 仅锁定 alias `@/worker/*` 与 web src
+  // 内部相对路径，不通配 `**/worker/*`（会误伤 node_modules 里碰巧叫 worker 的
+  // 路径）。
+  files: ['apps/web/src/fleet/**/*.{ts,tsx}'],
+  rules: {
+    'no-restricted-imports': ['error', {
+      patterns: [
+        { group: ['@/worker', '@/worker/**'], message: 'fleet 视角不得引用 worker 视角；共享请放 @/shared/。' },
+      ],
+    }],
+  },
+}, {
+  // PLAN-022 / FEAT-033：worker 视角不得引用 fleet 视角；共享请放 @/shared/。
+  files: ['apps/web/src/worker/**/*.{ts,tsx}'],
+  rules: {
+    'no-restricted-imports': ['error', {
+      patterns: [
+        { group: ['@/fleet', '@/fleet/**'], message: 'worker 视角不得引用 fleet 视角；共享请放 @/shared/。' },
+      ],
+    }],
+  },
+}, {
+  // PLAN-022 / FEAT-033：shared 不得反向依赖任一视角的 features/routes/lib/api。
+  // shared 是双视角通用底座，反向依赖会让其中一边私有耦合泄漏到另一边。
+  // pattern 同样只锁定 alias 形态——shared 里相对路径根本到不了 fleet/worker
+  // （目录结构隔了），无须再加 `**/...` 通配。
+  files: ['apps/web/src/shared/**/*.{ts,tsx}'],
+  rules: {
+    'no-restricted-imports': ['error', {
+      patterns: [
+        { group: ['@/fleet', '@/fleet/features/**', '@/fleet/routes/**', '@/fleet/lib/**', '@/fleet/api'], message: 'shared 不得反向依赖 fleet 视角的 features/routes/lib/api。' },
+        { group: ['@/worker', '@/worker/features/**', '@/worker/routes/**', '@/worker/lib/**', '@/worker/api'], message: 'shared 不得反向依赖 worker 视角的 features/routes/lib/api。' },
+      ],
+    }],
+  },
 })

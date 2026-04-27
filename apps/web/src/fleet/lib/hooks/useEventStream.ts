@@ -1,7 +1,7 @@
 import type { EventName } from '@zonease/aiworker-gateway-proto'
 import { EVENTS } from '@zonease/aiworker-gateway-proto'
 import { useEffect } from 'react'
-import { getGatewayClient } from '@/lib/gateway-client'
+import { getGatewayClient } from '@/fleet/lib/gateway-client'
 
 /**
  * PLAN-013 S5: 前端事件源从 `/api/events/stream` (SSE) 迁到 gateway WS `event`

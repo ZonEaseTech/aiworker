@@ -1,6 +1,6 @@
 import type { ComponentProps } from 'react'
 import type { BadgeVariantProps } from './badge-variants'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/lib/utils'
 import { badgeVariants } from './badge-variants'
 
 export interface BadgeProps

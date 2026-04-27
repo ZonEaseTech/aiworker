@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { WorkersList } from '@/features/workers/components/workers-list'
+import { WorkersList } from '@/fleet/features/workers/components/workers-list'
 
 function WorkersListPage() {
   return <WorkersList />

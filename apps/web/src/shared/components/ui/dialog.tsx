@@ -1,7 +1,7 @@
 import type { ComponentProps, ReactNode } from 'react'
 import { Dialog as BaseDialog } from '@base-ui-components/react/dialog'
 import { X } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/lib/utils'
 
 export const Dialog = BaseDialog.Root
 export const DialogTrigger = BaseDialog.Trigger

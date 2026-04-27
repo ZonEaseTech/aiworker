@@ -1,11 +1,11 @@
 import { createFileRoute, Link, useParams } from '@tanstack/react-router'
 import { useEffect } from 'react'
-import { buttonVariants } from '@/components/ui/button-variants'
-import { Skeleton } from '@/components/ui/skeleton'
-import { WorkerShell } from '@/features/workers/components/worker-shell'
-import { useRegisteredWorker } from '@/features/workers/hooks'
-import { WorkerApiError } from '@/lib/api'
-import { useWorkerStore } from '@/stores/worker'
+import { WorkerApiError } from '@/fleet/api'
+import { WorkerShell } from '@/fleet/features/workers/components/worker-shell'
+import { useRegisteredWorker } from '@/fleet/features/workers/hooks'
+import { useWorkerStore } from '@/fleet/stores/worker'
+import { buttonVariants } from '@/shared/components/ui/button-variants'
+import { Skeleton } from '@/shared/components/ui/skeleton'
 
 function WorkerDetailPage() {
   const { workerId } = useParams({ from: '/workers/$workerId' })

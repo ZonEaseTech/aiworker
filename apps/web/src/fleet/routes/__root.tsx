@@ -2,10 +2,10 @@ import type { SafeRegisteredWorker } from '@zonease/aiworker-shared'
 import { createRootRoute, Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router'
 import { Boxes, ChevronDown, FileStack, ServerOff } from 'lucide-react'
 import { useMemo } from 'react'
-import { Separator } from '@/components/ui/separator'
-import { TooltipProvider } from '@/components/ui/tooltip'
-import { useRegisteredWorkers } from '@/features/workers/hooks'
-import { cn } from '@/lib/utils'
+import { useRegisteredWorkers } from '@/fleet/features/workers/hooks'
+import { Separator } from '@/shared/components/ui/separator'
+import { TooltipProvider } from '@/shared/components/ui/tooltip'
+import { cn } from '@/shared/lib/utils'
 
 function WorkerSwitcher() {
   const navigate = useNavigate()

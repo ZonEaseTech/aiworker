@@ -1,11 +1,11 @@
 import { Eye, EyeOff, KeyRound, Loader2, Plus, Trash2 } from 'lucide-react'
 import { useId, useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Skeleton } from '@/components/ui/skeleton'
-import { WorkerApiError } from '@/lib/api'
+import { WorkerApiError } from '@/fleet/api'
+import { Button } from '@/shared/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/shared/components/ui/dialog'
+import { Input } from '@/shared/components/ui/input'
+import { Label } from '@/shared/components/ui/label'
+import { Skeleton } from '@/shared/components/ui/skeleton'
 import { useDeleteWorkerSecret, usePutWorkerSecret, useWorkerSecrets } from '../hooks'
 
 interface SecretsPanelProps {

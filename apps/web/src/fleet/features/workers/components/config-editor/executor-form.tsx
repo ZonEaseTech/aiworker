@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { z } from 'zod'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { Input } from '@/shared/components/ui/input'
+import { Label } from '@/shared/components/ui/label'
 import { SecretField } from './brain-section'
 
 const CUSTOM_OPTION = '__custom__'

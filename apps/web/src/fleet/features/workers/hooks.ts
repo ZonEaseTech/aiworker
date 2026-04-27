@@ -13,7 +13,7 @@ import type {
   RegisterWorkerInput,
   UpdateWorkerInput,
   WorkerConfigResponse,
-} from '@/lib/api'
+} from '@/fleet/api'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect } from 'react'
 import {
@@ -35,8 +35,8 @@ import {
   testWorkerChannel,
   testWorkerExecutor,
   updateWorker,
-} from '@/lib/api'
-import { useWorkerStore } from '@/stores/worker'
+} from '@/fleet/api'
+import { useWorkerStore } from '@/fleet/stores/worker'
 
 const WORKERS_KEY = ['workers'] as const
 const workerKey = (id: string) => ['workers', id] as const

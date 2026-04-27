@@ -1,6 +1,6 @@
 import type { ComponentProps } from 'react'
 import type { ButtonVariantProps } from './button-variants'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/lib/utils'
 import { buttonVariants } from './button-variants'
 
 export interface ButtonProps

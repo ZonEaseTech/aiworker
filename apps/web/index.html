@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AIWorker · dev chooser</title>
+    <meta http-equiv="refresh" content="0;url=/fleet/" />
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; padding: 2rem; max-width: 32rem; margin: 0 auto; line-height: 1.5; }
+      a { color: #2563eb; }
+      code { background: #f3f4f6; padding: 0 0.25rem; border-radius: 0.25rem; }
+    </style>
+  </head>
+  <body>
+    <h1>AIWorker · dev server</h1>
+    <p>双视角 multi-page。请直接访问对应入口：</p>
+    <ul>
+      <li><a href="/fleet/">/fleet/</a> — operator 视角（fleet 管理）</li>
+      <li><a href="/worker/">/worker/</a> — worker 自托管 admin</li>
+    </ul>
+    <p>生产环境下两个 bundle 各自由 gateway / worker 在 <code>/admin/*</code> 路径上托管，不走这个 chooser。</p>
+  </body>
+</html>

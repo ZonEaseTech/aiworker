@@ -9,7 +9,7 @@ import type {
   WorkerConfig,
   WorkerInfo,
 } from '@zonease/aiworker-shared'
-import { GatewayApiError, getGatewayClient } from './gateway-client'
+import { GatewayApiError, getGatewayClient } from './lib/gateway-client'
 
 /**
  * PLAN-013 S5: web 数据层从 REST `/api/workers/*` 切换到 gateway WS 协议。
