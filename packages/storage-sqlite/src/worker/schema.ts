@@ -1,58 +1,85 @@
 import type { ChannelType, SkillBindingSource, SkillDraftSource, SkillDraftStatus, ToolCall, WorkerConfig } from '@zonease/aiworker-shared'
-import { integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
+import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 
 /**
  * worker.db — owned by a single worker container. Every row belongs to the
  * same worker, so no `workerId` column is needed: the whole file is scoped.
  */
 
-export const agentTasks = sqliteTable('agent_tasks', {
-  id: text('id').primaryKey(),
-  prompt: text('prompt').notNull(),
-  status: text('status', { enum: ['queued', 'running', 'succeeded', 'failed', 'cancelled'] }).notNull(),
-  conversationId: text('conversation_id'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-  finishedAt: text('finished_at'),
-  result: text('result', { mode: 'json' }).$type<Record<string, unknown>>(),
-  error: text('error'),
-})
+export const agentTasks = sqliteTable(
+  'agent_tasks',
+  {
+    id: text('id').primaryKey(),
+    prompt: text('prompt').notNull(),
+    status: text('status', { enum: ['queued', 'running', 'succeeded', 'failed', 'cancelled'] }).notNull(),
+    conversationId: text('conversation_id'),
+    createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+    finishedAt: text('finished_at'),
+    result: text('result', { mode: 'json' }).$type<Record<string, unknown>>(),
+    error: text('error'),
+  },
+  table => ({
+    createdAtIdx: index('agent_tasks_created_at_idx').on(table.createdAt),
+  }),
+)
 
-export const conversations = sqliteTable('conversations', {
-  id: text('id').primaryKey(),
-  taskId: text('task_id').references(() => agentTasks.id),
-  channel: text('channel').$type<ChannelType>().notNull(),
-  chatId: text('chat_id').notNull(),
-  threadId: text('thread_id'),
-  status: text('status', { enum: ['open', 'closed'] }).notNull().default('open'),
-  summary: text('summary'),
-  startedAt: text('started_at').notNull().$defaultFn(() => new Date().toISOString()),
-  lastActiveAt: text('last_active_at').notNull().$defaultFn(() => new Date().toISOString()),
-  closedAt: text('closed_at'),
-})
+export const conversations = sqliteTable(
+  'conversations',
+  {
+    id: text('id').primaryKey(),
+    taskId: text('task_id').references(() => agentTasks.id),
+    channel: text('channel').$type<ChannelType>().notNull(),
+    chatId: text('chat_id').notNull(),
+    threadId: text('thread_id'),
+    status: text('status', { enum: ['open', 'closed'] }).notNull().default('open'),
+    summary: text('summary'),
+    startedAt: text('started_at').notNull().$defaultFn(() => new Date().toISOString()),
+    lastActiveAt: text('last_active_at').notNull().$defaultFn(() => new Date().toISOString()),
+    closedAt: text('closed_at'),
+  },
+  table => ({
+    // findOpenConversation: WHERE channel=? AND chatId=? [AND threadId=?] AND status=?
+    lookupIdx: index('conversations_lookup_idx').on(table.channel, table.chatId, table.threadId, table.status),
+    // ORDER BY last_active_at DESC LIMIT 200（SQLite 可反向扫普通索引）
+    lastActiveAtIdx: index('conversations_last_active_at_idx').on(table.lastActiveAt),
+  }),
+)
 
-export const messages = sqliteTable('messages', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  conversationId: text('conversation_id').notNull().references(() => conversations.id, { onDelete: 'cascade' }),
-  role: text('role', { enum: ['system', 'user', 'assistant', 'tool'] }).notNull(),
-  content: text('content').notNull(),
-  toolCalls: text('tool_calls', { mode: 'json' }).$type<ToolCall[]>(),
-  toolCallId: text('tool_call_id'),
-  tokensIn: integer('tokens_in'),
-  tokensOut: integer('tokens_out'),
-  // JSON 字符串：envelope 附带的 reply / edit / delete / reactions 等元信息。
-  richMetadata: text('rich_metadata'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-})
+export const messages = sqliteTable(
+  'messages',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    conversationId: text('conversation_id').notNull().references(() => conversations.id, { onDelete: 'cascade' }),
+    role: text('role', { enum: ['system', 'user', 'assistant', 'tool'] }).notNull(),
+    content: text('content').notNull(),
+    toolCalls: text('tool_calls', { mode: 'json' }).$type<ToolCall[]>(),
+    toolCallId: text('tool_call_id'),
+    tokensIn: integer('tokens_in'),
+    tokensOut: integer('tokens_out'),
+    // JSON 字符串：envelope 附带的 reply / edit / delete / reactions 等元信息。
+    richMetadata: text('rich_metadata'),
+    createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  },
+  table => ({
+    conversationIdIdx: index('messages_conversation_id_idx').on(table.conversationId),
+  }),
+)
 
-export const executionLogs = sqliteTable('execution_logs', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  conversationId: text('conversation_id'),
-  toolName: text('tool_name').notNull(),
-  params: text('params', { mode: 'json' }).$type<Record<string, unknown>>(),
-  result: text('result', { mode: 'json' }).$type<Record<string, unknown>>(),
-  duration: integer('duration'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-})
+export const executionLogs = sqliteTable(
+  'execution_logs',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    conversationId: text('conversation_id'),
+    toolName: text('tool_name').notNull(),
+    params: text('params', { mode: 'json' }).$type<Record<string, unknown>>(),
+    result: text('result', { mode: 'json' }).$type<Record<string, unknown>>(),
+    duration: integer('duration'),
+    createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  },
+  table => ({
+    conversationIdIdx: index('execution_logs_conversation_id_idx').on(table.conversationId),
+  }),
+)
 
 export const skillBindings = sqliteTable(
   'skill_bindings',
@@ -84,13 +111,19 @@ export const skillDrafts = sqliteTable('skill_drafts', {
   decidedBy: text('decided_by'),
 })
 
-export const evolutionObservations = sqliteTable('evolution_observations', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  conversationId: text('conversation_id'),
-  kind: text('kind').notNull(),
-  payload: text('payload', { mode: 'json' }).$type<Record<string, unknown>>().notNull(),
-  noticedAt: text('noticed_at').notNull().$defaultFn(() => new Date().toISOString()),
-})
+export const evolutionObservations = sqliteTable(
+  'evolution_observations',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    conversationId: text('conversation_id'),
+    kind: text('kind').notNull(),
+    payload: text('payload', { mode: 'json' }).$type<Record<string, unknown>>().notNull(),
+    noticedAt: text('noticed_at').notNull().$defaultFn(() => new Date().toISOString()),
+  },
+  table => ({
+    noticedAtIdx: index('evolution_observations_noticed_at_idx').on(table.noticedAt),
+  }),
+)
 
 // Singleton table: `pk` is always the literal 'default'. Enforced at app layer.
 export const workerIdentity = sqliteTable('worker_identity', {
@@ -120,19 +153,26 @@ export const workerConfig = sqliteTable('worker_config', {
  * nextRunAt。`accountId` 在 PLAN-014 S1 后随 envelope 必填，cron 默认填
  * `sys:cron`，operator 也可以显式填自定义值（与 web binding.id 形成命名空间隔离）。
  */
-export const cronJobs = sqliteTable('cron_jobs', {
-  id: text('id').primaryKey(),
-  expression: text('expression').notNull(),
-  prompt: text('prompt').notNull(),
-  channel: text('channel').$type<ChannelType>().notNull(),
-  chatId: text('chat_id').notNull(),
-  accountId: text('account_id').notNull(),
-  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
-  lastRunAt: text('last_run_at'),
-  nextRunAt: text('next_run_at'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()),
-})
+export const cronJobs = sqliteTable(
+  'cron_jobs',
+  {
+    id: text('id').primaryKey(),
+    expression: text('expression').notNull(),
+    prompt: text('prompt').notNull(),
+    channel: text('channel').$type<ChannelType>().notNull(),
+    chatId: text('chat_id').notNull(),
+    accountId: text('account_id').notNull(),
+    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+    lastRunAt: text('last_run_at'),
+    nextRunAt: text('next_run_at'),
+    createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+    updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()),
+  },
+  table => ({
+    // tick: WHERE enabled=true AND next_run_at <= now —— 复合索引让 planner 走 range scan
+    dueIdx: index('cron_jobs_due_idx').on(table.enabled, table.nextRunAt),
+  }),
+)
 
 export const workerSecrets = sqliteTable('worker_secrets', {
   id: integer('id').primaryKey({ autoIncrement: true }),

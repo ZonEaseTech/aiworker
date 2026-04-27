@@ -22,6 +22,13 @@
       "when": 1777094345846,
       "tag": "0002_jazzy_moondragon",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1777306304275,
+      "tag": "0003_rare_cloak",
+      "breakpoints": true
     }
   ]
 }

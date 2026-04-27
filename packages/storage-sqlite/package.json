@@ -20,6 +20,7 @@
   "types": "./src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "test": "bun test",
     "db:generate:fleet": "drizzle-kit generate --config drizzle.fleet.config.ts",
     "db:generate:worker": "drizzle-kit generate --config drizzle.worker.config.ts",
     "db:generate": "bun run db:generate:fleet && bun run db:generate:worker"
