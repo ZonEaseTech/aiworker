@@ -5,6 +5,7 @@ import type { GatewayContext } from './router/context'
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import { encodeFrame, EVENTS, parseFrame } from '@zonease/aiworker-gateway-proto'
+import { serveAdminStatic } from './admin/serve-static'
 import { assertGatewayBindIsSafe, isLoopbackAddress } from './auth/loopback'
 import { authorizeConnection } from './auth/token'
 import { broadcastEventToOperators } from './events/broadcast'
@@ -69,6 +70,20 @@ export function startGatewayServer(options: StartGatewayOptions): StartedGateway
           JSON.stringify({ ok: true, service: 'aiworker-gateway', ts: Date.now() }),
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         )
+      }
+      // PLAN-022 / FEAT-033：fleet bundle 静态托管。`/admin` 永久重定向到
+      // `/admin/`，让 HTML 里的相对资源（`./assets/...`）能正确 resolve。
+      if (url.pathname === '/admin') {
+        const dest = new URL('/admin/', url)
+        return Response.redirect(dest.toString(), 308)
+      }
+      if (url.pathname.startsWith('/admin/')) {
+        if (!context.webStaticDir)
+          return new Response('not found', { status: 404 })
+        return serveAdminStatic({
+          webStaticDir: context.webStaticDir,
+          pathnameAfterPrefix: url.pathname.slice('/admin/'.length),
+        })
       }
       if (url.pathname === '/ws' || url.pathname === '/enroll-ws') {
         const ip = serverRef.requestIP(req)

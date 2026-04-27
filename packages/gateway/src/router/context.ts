@@ -37,6 +37,13 @@ export interface GatewayContext {
    * "无 brute-force 防护"这一点上不同。
    */
   connectRateLimiter?: ConnectRateLimiter
+  /**
+   * PLAN-022 / FEAT-033：fleet bundle 静态资源根目录的绝对路径。CLI 在启动时
+   * 解析（npm install 后是 `<cli-bin>/web/fleet`，源码 dev 时是
+   * `<repo>/apps/web/dist/fleet`）。未注入 → `/admin/*` 一律 404，但 gateway
+   * 仍能启动（`--no-serve-web` 或资源不存在的容错路径）。
+   */
+  webStaticDir?: string
 }
 
 /**

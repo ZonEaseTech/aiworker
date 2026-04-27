@@ -13,6 +13,7 @@ import {
 } from '@zonease/aiworker-core'
 import { getWorkerDb } from '@zonease/aiworker-storage-sqlite/worker'
 import consola from 'consola'
+import { resolveWebStaticDir } from '../lib/web-static'
 
 export interface ServeOptions {
   port?: number
@@ -22,6 +23,11 @@ export interface ServeOptions {
   gatewayToken?: string
   /** 显式禁用重连（方便 E2E / smoke）。默认启用。 */
   gatewayReconnect?: boolean
+  /**
+   * PLAN-022 / FEAT-033：默认挂载 worker bundle 至 `/admin/*`。`--no-serve-web`
+   * 把它关掉（CI smoke / 纯 API 部署不希望多一份静态依赖）。
+   */
+  serveWeb?: boolean
 }
 
 /**
@@ -40,13 +46,27 @@ export async function runServe(options: ServeOptions = {}): Promise<void> {
   // 重新挂到新 bus——chicken-and-egg。先建可变 ref，bootstrap 闭包里读这个 ref，
   // 真正的 GatewayNode 实例 startGatewayNode() 之后再写入。
   let gatewayNode: GatewayNode | null = null
+  // PLAN-022 / FEAT-033：默认开启 web 静态托管。`--no-serve-web` 禁用。
+  // 也允许 `AIWORKER_WORKER_NO_SERVE_WEB=1` env 透传——systemd unit 不动
+  // ExecStart 也能开关（与 gateway 路径的 AIWORKER_GATEWAY_NO_SERVE_WEB
+  // 对称）。资源缺失（npm 包旧版本不带 web/、或 dev 未跑 web build）→
+  // 解析返 undefined，bootstrapWorkerApp 收到 undefined 时只是不挂
+  // `/admin/*`，不阻塞启动，与显式禁用同等处理。
+  const envOff = process.env.AIWORKER_WORKER_NO_SERVE_WEB === '1'
+  const serveWeb = options.serveWeb !== false && !envOff
+  const webStaticDir = serveWeb ? resolveWebStaticDir('worker') : undefined
+  if (serveWeb && !webStaticDir)
+    consola.warn('[aiw serve] web 静态资源未找到（apps/web/dist/worker 缺失？），/admin/* 将返回 404')
   const { app, port: envPort, state, reloadRuntime } = await bootstrapWorkerApp({
     onRuntimeReloaded: () => gatewayNode?.notifyRuntimeReloaded(),
+    ...(webStaticDir ? { webStaticDir } : {}),
   })
   const port = options.port ?? envPort
 
   const server = Bun.serve({ port, fetch: app.fetch })
   consola.success(`[aiw serve] worker ${state.workerId} listening on :${port} (config v${state.configVersion})`)
+  if (webStaticDir)
+    consola.info(`[aiw serve] /admin/* serving worker bundle from ${webStaticDir}`)
 
   // PLAN-018 / FEAT-024 self-enrollment + PLAN-019 / FEAT-026 OTP-attended 接入。
   // 触发表（与 PLAN-019 §Worker side 一致）：

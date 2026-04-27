@@ -19,6 +19,14 @@ import { FleetPersistence } from './registry/persistence'
 import { startGatewayServer } from './server'
 import { FleetSupervisor } from './supervisor/service'
 
+export interface CreateGatewayContextOptions {
+  /**
+   * PLAN-022 / FEAT-033：fleet bundle 静态根目录绝对路径。CLI 决议（npm
+   * install 或源码 dev），未传则 `/admin/*` 一律 404 但不阻塞启动。
+   */
+  webStaticDir?: string
+}
+
 /**
  * 构造一份可复用的 GatewayContext。
  *
@@ -27,7 +35,10 @@ import { FleetSupervisor } from './supervisor/service'
  * - registry 三件套(nodes / operators / forwards)全内存、进程重启丢失。
  * - 当 `canLaunch=true` 时额外构造 `FleetSupervisor`——docker 能力按需开启。
  */
-export function createGatewayContext(config: GatewayConfig): GatewayContext {
+export function createGatewayContext(
+  config: GatewayConfig,
+  options: CreateGatewayContextOptions = {},
+): GatewayContext {
   initFleetDb(config.fleetDbPath)
   runFleetMigrations(defaultFleetMigrationsFolder)
   const db = getFleetDb()
@@ -120,6 +131,7 @@ export function createGatewayContext(config: GatewayConfig): GatewayContext {
     maxWorkers: config.maxWorkers,
     pendingEnrollments,
     connectRateLimiter,
+    webStaticDir: options.webStaticDir,
   }
 }
 
@@ -127,11 +139,19 @@ export interface StartGatewayResult extends StartedGateway {
   config: GatewayConfig
 }
 
+export interface StartGatewayOptions {
+  /** PLAN-022 / FEAT-033：fleet bundle 静态根。详见 `CreateGatewayContextOptions`。 */
+  webStaticDir?: string
+}
+
 /** 完整启动流程:加载 env → 建 context → 起服务 → 装 SIGTERM 钩子。 */
-export async function startGateway(override?: Partial<GatewayConfig>): Promise<StartGatewayResult> {
+export async function startGateway(
+  override?: Partial<GatewayConfig>,
+  options: StartGatewayOptions = {},
+): Promise<StartGatewayResult> {
   const base = loadGatewayConfigFromEnv()
   const config: GatewayConfig = { ...base, ...override }
-  const context = createGatewayContext(config)
+  const context = createGatewayContext(config, { webStaticDir: options.webStaticDir })
   const started = startGatewayServer({ config, context })
   consola.success(
     `[gateway] listening ws://${config.host}:${started.port}/ws (auth=${config.internalSharedSecret ? 'shared-secret+loopback' : 'loopback-only'})`,

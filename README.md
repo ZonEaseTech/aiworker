@@ -362,6 +362,7 @@ apps/{api, cli, web} + packages/{core, gateway, gateway-proto, shared, storage-s
 - **timing-safe** bearer 比较
 - **5 channel webhook 强制验签**（Telegram / WhatsApp / Lark / LINE / Web binding token）
 - **Caddy 路径分流**：`/ws` basicauth 守 operator + 已配对 worker，`/enroll-ws` 仅接受 OTP submit；fail-closed（缺 `/etc/caddy/auth.snippet` 直接拒启动，BUG-007）
+- **`/admin/*`（fleet + worker UI）** 与 `/ws`、`/api/*` 同等级——公网必须走 basicauth。新发布 worker bundle 不含 secret，但 prompt 用户输入 bearer 的登录界面如果裸暴露会被钓鱼。`aiworker {gateway start, serve}` 默认挂 `/admin/*`，关掉用 `--no-serve-web` 或 env `AIWORKER_GATEWAY_NO_SERVE_WEB=1` / `AIWORKER_WORKER_NO_SERVE_WEB=1`（PLAN-022 / FEAT-033）
 
 ---
 

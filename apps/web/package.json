@@ -5,7 +5,9 @@
   "license": "MIT",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && bun run build:fleet && bun run build:worker",
+    "build:fleet": "AIWORKER_WEB_BUNDLE=fleet vite build",
+    "build:worker": "AIWORKER_WEB_BUNDLE=worker vite build",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "test": "vitest run"
