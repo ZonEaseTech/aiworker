@@ -71,4 +71,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-027 Publish CLIs to npmjs.com (or compiled binaries via GH Releases)**](FEAT-027.md) `P2`
 - [x] [**FEAT-028 CLI naming redesign (aiw / aim too cryptic)**](FEAT-028.md) `P2`
 - [ ] [**BUG-010 Runtime log strings still reference `aiw` / `aim` / `aim.json` after PLAN-020 rename**](BUG-010.md) `P3`
-- [ ] [**FEAT-029 License decision + LICENSE file + 9 package.json `license` fields**](FEAT-029.md) `P1`
+- [x] [**FEAT-029 License decision + LICENSE file + 9 package.json `license` fields**](FEAT-029.md) `P1`

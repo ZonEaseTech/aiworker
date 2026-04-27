@@ -1,5 +1,29 @@
 # AIWorker Changelog
 
+## 2026-04-27 09:15 [decision] FEAT-029 完成 — license 选 MIT
+
+`@zonease/aiworker-cli` 公开 npm publish 阻塞条件 #7（FEAT-027 §Research Findings）解除：
+
+- 用户决定 license = **MIT**（permissive，与 Anthropic SDK / 主流 npm peer 一致，零 friction adoption）
+- 写 `LICENSE` 文件（MIT 标准文本，© 2026 ZonEase Tech）
+- 全 10 个 `package.json` `license` 字段统一改为 `"MIT"`（root + apps/{api,cli,gateway,web} + packages/{core,shared,gateway-proto,storage-sqlite,fs-layout}）；之前仅 `apps/cli` 显式 `UNLICENSED`，其他 9 个 `license` 字段缺失
+- README.md `## License` 段从"(待定)"改 `[MIT](LICENSE) © 2026 ZonEase Tech`
+- `apps/cli/scripts/build-publish-manifest.ts` 已正确把 `license` 字段拷进 `dist/package.json`（无需改）
+
+**Apache-2.0 备选已弃**——agent runtime 与 fleet 管理无新颖专利面；MIT 的简洁性与生态一致性更重要。如未来引入加密 / ML 模型权重 等专利暴露面，可单独子模块改 Apache-2.0（dual-license OK）。
+
+阻塞清单更新（FEAT-027 §9 prerequisite checklist）：
+
+| # | 项 | 状态 |
+|---|---|---|
+| 1 | 注册 npm user account + 2FA | ⏳ 用户 |
+| 2 | 抢注 npm org `zonease`（free plan） | ⏳ 用户 |
+| 3 | 生成 Granular Access Token | ⏳ 用户 |
+| 4 | GH repo Secret `NPM_TOKEN` | ⏳ 用户 |
+| **5** | **License 决策 + LICENSE + 10 package.json** | **✅ 本 commit 完成** |
+| 6 | GH Actions billing 解决 | ⏳ 用户 |
+| 7 | `git tag v0.1.0 && git push --tags` | ⏳ 等 1-6 |
+
 ## 2026-04-27 09:00 PLAN-020 完成 — CLI 单二进制 `aiworker` + 全 monorepo `@zonease/*` 改名 + npm publish 准备就绪（FEAT-028 + FEAT-027 partial）
 
 **PLAN-020 landed: aiw/aim 双 bin 下线，单 `aiworker` 二进制 + cac 子命令树替换；全 monorepo 9 个包从 `@aiworker/*` 迁到 `@zonease/aiworker-*`；`@zonease/aiworker-cli` npm publish 流水（bundle build + release.yml + dist/ stripped manifest）就绪，未真发。** 用户决策 2026-04-27 07:35（FEAT-028 方案 B 锁定）+ 07:45（scope 扩到 monorepo namespace 迁移）。BKD 1 coordinator (`th3t4j9q`) + 4 worktree subtask（S1 monorepo rename / S2 cli 重写 / S3 forward-looking docs sweep / S4 npm publish 元数据 + bundle build），按 S1 → S2+S3 并行 → S4 串行流水合 main。

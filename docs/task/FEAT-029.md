@@ -1,9 +1,12 @@
 # FEAT-029 License decision + LICENSE file + 9 package.json `license` fields
 
-- **status**: pending
+- **status**: completed
 - **priority**: P1
-- **owner**: (unassigned)
+- **owner**: self
 - **createdAt**: 2026-04-27 09:10
+- **completedAt**: 2026-04-27 09:15
+- **decision**: MIT (user-approved 2026-04-27 09:12)
+- **commits**: (this commit)
 
 ## Description
 

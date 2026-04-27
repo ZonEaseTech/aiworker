@@ -341,7 +341,7 @@ bun run lint
 
 ## License
 
-(待定)
+[MIT](LICENSE) © 2026 ZonEase Tech
 
 ---
 

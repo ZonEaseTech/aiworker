@@ -2,7 +2,10 @@
   "name": "aiworker",
   "type": "module",
   "private": true,
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev": "bun run --filter '*' dev",
     "lint": "eslint .",
@@ -22,5 +25,6 @@
     "eslint-plugin-react-refresh": "^0.4.19",
     "jiti": "^2.6.1",
     "typescript": "^5.8.3"
-  }
+  },
+  "license": "MIT"
 }
