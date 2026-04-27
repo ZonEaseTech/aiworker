@@ -18,9 +18,22 @@ interface ChannelsSectionProps {
 
 const CHANNEL_TYPES: ChannelType[] = ['web', 'line', 'telegram', 'lark', 'whatsapp']
 
+/**
+ * 24 random bytes encoded as base64url — ~32 chars, plenty of entropy for a
+ * webhook bearer token. Browser-side only (uses `crypto.getRandomValues`).
+ */
+function generateInboundToken(): string {
+  const bytes = new Uint8Array(24)
+  crypto.getRandomValues(bytes)
+  let binary = ''
+  for (const b of bytes)
+    binary += String.fromCharCode(b)
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
 function defaultCredentials(channel: ChannelType): ChannelCredentials {
   switch (channel) {
-    case 'web': return { channel: 'web' }
+    case 'web': return { channel: 'web', inboundToken: '' }
     case 'line': return { channel: 'line', channelSecret: '', channelAccessToken: '' }
     case 'telegram': return { channel: 'telegram', botToken: '' }
     case 'lark': return { channel: 'lark', appId: '', appSecret: '', encryptKey: '', verificationToken: '' }
@@ -186,9 +199,34 @@ function ChannelCredentialFields({
   switch (credentials.channel) {
     case 'web':
       return (
-        <p className="text-xs text-muted-foreground">
-          The web channel has no credentials — it receives traffic via the dashboard UI.
-        </p>
+        <div className="flex flex-col gap-2">
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+            <SecretField
+              label="inboundToken"
+              value={credentials.inboundToken ?? ''}
+              onChange={v => onChange({ ...credentials, inboundToken: v })}
+              placeholder="(unchanged — leave empty to keep the stored value)"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onChange({ ...credentials, inboundToken: generateInboundToken() })}
+            >
+              Generate
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Required: clients calling
+            {' '}
+            <code className="font-mono text-[11px]">POST /web/webhook</code>
+            {' '}
+            must send
+            {' '}
+            <code className="font-mono text-[11px]">Authorization: Bearer &lt;inboundToken&gt;</code>
+            . An empty token rejects all inbound traffic (fail-closed).
+          </p>
+        </div>
       )
     case 'line':
       return (

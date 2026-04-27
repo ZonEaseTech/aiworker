@@ -53,6 +53,8 @@ export function enumerateSecretPaths(config: WorkerConfig): Array<{ path: string
         )
         break
       case 'web':
+        if (c.inboundToken && c.inboundToken.length > 0)
+          out.push({ path: 'channels.web.credentials.inboundToken', value: c.inboundToken })
         break
     }
   })
@@ -98,7 +100,13 @@ export function redactSecrets(config: WorkerConfig): WorkerConfig {
           credentials: { ...creds, accessToken: '', appSecret: '', verifyToken: '' },
         }
       case 'web':
-        return cb
+        return {
+          ...cb,
+          credentials: {
+            ...creds,
+            inboundToken: creds.inboundToken === undefined ? undefined : '',
+          },
+        }
       default:
         return cb
     }
@@ -161,8 +169,16 @@ export function hydrateSecrets(config: WorkerConfig, secrets: Map<string, string
             verifyToken: secrets.get('channels.whatsapp.credentials.verifyToken') ?? '',
           },
         }
-      case 'web':
-        return cb
+      case 'web': {
+        const inbound = secrets.get('channels.web.credentials.inboundToken')
+        return {
+          ...cb,
+          credentials: {
+            ...creds,
+            inboundToken: inbound ?? creds.inboundToken,
+          },
+        }
+      }
       default:
         return cb
     }

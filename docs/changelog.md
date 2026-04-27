@@ -17,6 +17,21 @@ What shipped:
 
 **不变量复核**：未引入 transport-coupling（apps/api 通过既有 core re-export 引入，packages/core 不增加 hono 依赖）；未触碰 vault / config-schema / 迁移；行为零差异，纯常量时间路径替换。
 
+## 2026-04-27 13:30 [security] BUG-016 web channel webhook 加 bearer 验签（fail-closed）
+
+P0 安全修复。`/web/webhook` 路由挂在 worker 根、不经 bearer auth；之前 `webAdapter.verify()` 是空实现，任何能访问 worker 端口的人都能 `POST /web/webhook` 注入伪造 envelope，触发 orchestrator → LLM 调用 + 写入 `worker.db.messages`。
+
+修复（方案 A，与 Telegram `webhookSecretToken` 形态对齐）：
+
+- `packages/shared/src/fleet/channel.ts` — web credentials 加 `inboundToken?: string`。
+- `packages/core/src/worker/management/config-schema.ts` — zod web 分支放行 `inboundToken: z.string().optional()`。
+- `packages/core/src/worker/channels/adapters/web.ts` — `verify` 读 `Authorization: Bearer <token>` + `timingSafeEqualStrings`。**fail-closed**：binding 没有 `inboundToken` / 空串 / 头缺失 / scheme 错 / token 不匹配 → throw → 401。
+- `packages/core/src/worker/config/secret-paths.ts` — enumerate / redact / hydrate 三处都覆盖 `inboundToken`，empty-string round-trip 保留语义不变。
+- `apps/web/src/features/workers/components/config-editor/channels-section.tsx` — web 分支换成 `SecretField` + `Generate` 按钮（`crypto.getRandomValues` 24 字节 base64url）。
+- 测试：`packages/core/src/worker/channels/adapters/web.test.ts` 新增 `verify` 7 个用例；`bun test` 410 pass / `bun run typecheck` 全绿 / `aiworker-web` vitest 24 pass。
+
+向后兼容：旧 `worker.db.worker_config.configJson` 里 `{ channel: 'web' }` 没有 `inboundToken`。读上来 `inboundToken === undefined` → verify fail-closed → 旧部署的 web channel ingest 立即拒绝。这是预期：旧路径就是漏洞，运维必须在 dashboard 上设一次 token 才能恢复。
+
 ## 2026-04-27 12:30 [info] Session handoff — open tasks 总览 + 测试服 ops 残留
 
 **本会话主要工作**（已 push 到 `origin/main`，HEAD 当时为 `2bcf99c`，含本条 + 后续 BUG-013/BUG-014 + REFACTOR-004 followups 的 commit）：

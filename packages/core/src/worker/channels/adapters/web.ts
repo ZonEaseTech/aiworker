@@ -1,6 +1,7 @@
 import type { Envelope, EnvelopeRichMetadata } from '@zonease/aiworker-shared'
 import type { ChannelAdapter } from './types'
 
+import { timingSafeEqualStrings } from '../../secrets/crypto'
 import { nowIso } from '../envelope'
 
 interface WebInboundReplyTo {
@@ -43,14 +44,36 @@ function normalizeRichMetadata(input: WebInboundRichMetadata | undefined): Envel
 }
 
 /**
- * Web channel: the dashboard's own chat widget. No external signature — relies
- * on the dashboard session / internal shared secret (enforced by the route
- * handler, not this adapter).
+ * Extract the bearer token from an `Authorization: Bearer <token>` header.
+ * Returns `null` if the header is missing or not a valid Bearer scheme — the
+ * caller maps `null` to a verification failure.
+ */
+function extractBearerToken(headers: Record<string, string | undefined>): string | null {
+  const header = headers.authorization
+  if (!header)
+    return null
+  const match = /^bearer\s+(\S+)\s*$/i.exec(header)
+  return match ? match[1]! : null
+}
+
+/**
+ * Web channel: receives envelopes from the dashboard chat widget or any other
+ * in-house client. The route is mounted at the worker root with no
+ * transport-level auth, so this adapter MUST authenticate every request via a
+ * per-binding bearer token (`credentials.inboundToken`). Fail-closed: missing
+ * or empty token rejects all traffic. See BUG-016.
  */
 export const webAdapter: ChannelAdapter = {
   channel: 'web',
-  async verify() {
-    // nothing: ingress is trusted internal
+  async verify(_rawBody, headers, binding) {
+    if (binding.credentials.channel !== 'web')
+      throw new Error('web adapter called with non-web credentials')
+    const expected = binding.credentials.inboundToken
+    if (!expected || expected.length === 0)
+      throw new Error('web channel binding has no inboundToken — refusing inbound traffic')
+    const presented = extractBearerToken(headers)
+    if (!presented || !timingSafeEqualStrings(presented, expected))
+      throw new Error('invalid Authorization bearer token')
   },
   async toEnvelopes(rawBody, workerId, binding) {
     const accountId = (binding?.id && binding.id.length > 0) ? binding.id : DEFAULT_WEB_ACCOUNT_ID

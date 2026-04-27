@@ -83,7 +83,10 @@ const executorSchema: z.ZodType<ExecutorProfile> = z.lazy(() => z.object({
 }))
 
 const channelCredentialsSchema = z.discriminatedUnion('channel', [
-  z.object({ channel: z.literal('web') }),
+  z.object({
+    channel: z.literal('web'),
+    inboundToken: z.string().optional(),
+  }),
   z.object({
     channel: z.literal('line'),
     channelSecret: z.string(),

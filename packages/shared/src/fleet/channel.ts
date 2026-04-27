@@ -3,23 +3,34 @@ export type ChannelType = 'web' | 'line' | 'telegram' | 'lark' | 'whatsapp'
 
 /** Per-platform credentials required to verify inbound and send outbound messages. */
 export type ChannelCredentials
-  = | { channel: 'web' }
-    | { channel: 'line', channelSecret: string, channelAccessToken: string }
-    | { channel: 'telegram', botToken: string, botUsername?: string, webhookSecretToken?: string }
-    | {
-      channel: 'lark'
-      appId: string
-      appSecret: string
-      encryptKey: string
-      verificationToken: string
-    }
-    | {
-      channel: 'whatsapp'
-      phoneNumberId: string
-      accessToken: string
-      appSecret: string
-      verifyToken: string
-    }
+  = | {
+    channel: 'web'
+    /**
+     * Bearer token required on `POST /web/webhook` (`Authorization: Bearer
+     * <token>`). The web adapter's `verify` is fail-closed — missing or empty
+     * `inboundToken` rejects all inbound requests. Required because the
+     * `/web/webhook` route is mounted at the worker root with no transport-level
+     * auth; without a per-binding secret the endpoint is open to envelope
+     * injection (BUG-016).
+     */
+    inboundToken?: string
+  }
+  | { channel: 'line', channelSecret: string, channelAccessToken: string }
+  | { channel: 'telegram', botToken: string, botUsername?: string, webhookSecretToken?: string }
+  | {
+    channel: 'lark'
+    appId: string
+    appSecret: string
+    encryptKey: string
+    verificationToken: string
+  }
+  | {
+    channel: 'whatsapp'
+    phoneNumberId: string
+    accessToken: string
+    appSecret: string
+    verifyToken: string
+  }
 
 /** Non-secret display metadata for a channel binding (shown in dashboard). */
 export interface ChannelProfile {

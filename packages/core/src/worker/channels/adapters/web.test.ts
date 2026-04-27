@@ -4,12 +4,12 @@ import { describe, expect, it } from 'bun:test'
 
 import { webAdapter } from './web'
 
-function makeBinding(id?: string): ChannelBinding {
+function makeBinding(id?: string, inboundToken?: string): ChannelBinding {
   return {
     ...(id === undefined ? {} : { id }),
     channel: 'web',
     enabled: true,
-    credentials: { channel: 'web' },
+    credentials: { channel: 'web', ...(inboundToken === undefined ? {} : { inboundToken }) },
   }
 }
 
@@ -64,5 +64,80 @@ describe('webAdapter.toEnvelopes', () => {
     expect(env?.richMetadata?.isEdit).toBe(true)
     expect(env?.richMetadata?.replyTo).toEqual({ authorId: 'op-1', text: 'previous' })
     expect(env?.richMetadata?.quote).toBe('previous')
+  })
+})
+
+describe('webAdapter.verify (BUG-016)', () => {
+  it('passes when bearer matches inboundToken', async () => {
+    await expect(
+      webAdapter.verify(
+        '{}',
+        { authorization: 'Bearer secret-abc' },
+        makeBinding('web-bind-A', 'secret-abc'),
+      ),
+    ).resolves.toBeUndefined()
+  })
+
+  it('rejects when bearer does not match inboundToken', async () => {
+    await expect(
+      webAdapter.verify(
+        '{}',
+        { authorization: 'Bearer wrong' },
+        makeBinding('web-bind-A', 'secret-abc'),
+      ),
+    ).rejects.toThrow(/invalid Authorization bearer/i)
+  })
+
+  it('rejects when Authorization header is missing', async () => {
+    await expect(
+      webAdapter.verify(
+        '{}',
+        {},
+        makeBinding('web-bind-A', 'secret-abc'),
+      ),
+    ).rejects.toThrow(/invalid Authorization bearer/i)
+  })
+
+  it('rejects fail-closed when binding has no inboundToken (legacy config)', async () => {
+    await expect(
+      webAdapter.verify(
+        '{}',
+        { authorization: 'Bearer anything' },
+        makeBinding('web-bind-A'),
+      ),
+    ).rejects.toThrow(/no inboundToken/i)
+  })
+
+  it('rejects fail-closed when inboundToken is empty string', async () => {
+    await expect(
+      webAdapter.verify(
+        '{}',
+        { authorization: 'Bearer anything' },
+        makeBinding('web-bind-A', ''),
+      ),
+    ).rejects.toThrow(/no inboundToken/i)
+  })
+
+  it('rejects when Authorization header has wrong scheme', async () => {
+    await expect(
+      webAdapter.verify(
+        '{}',
+        { authorization: 'Basic c2VjcmV0LWFiYw==' },
+        makeBinding('web-bind-A', 'secret-abc'),
+      ),
+    ).rejects.toThrow(/invalid Authorization bearer/i)
+  })
+
+  it('does not leak length info — different-length tokens are constant-time rejected', async () => {
+    // No throw difference between length-mismatch vs same-length-different;
+    // both throw the same error. Smoke that timingSafeEqualStrings handles
+    // the length mismatch without crashing.
+    await expect(
+      webAdapter.verify(
+        '{}',
+        { authorization: 'Bearer x' },
+        makeBinding('web-bind-A', 'much-longer-secret'),
+      ),
+    ).rejects.toThrow(/invalid Authorization bearer/i)
   })
 })
