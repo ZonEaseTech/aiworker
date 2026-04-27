@@ -174,7 +174,7 @@ Telegram / WhatsApp / Lark / LINE webhook 必须能从公网回调到 gateway �
 
 ## Worker 注册（pair）通用流程
 
-PLAN-013 之后 dashboard REST 已下线，注册一个 worker 进 fleet 有三条路径：
+PLAN-013 之后 dashboard REST 已下线，注册一个 worker 进 fleet 有四条路径：
 
 1. **手动 pair**（任意形态都通用）：worker 首启时 stdout 打一次性 `AIWORKER_BOOTSTRAP_TOKEN=wtk_...`；操作员抓取后调
    ```sh
@@ -185,7 +185,8 @@ PLAN-013 之后 dashboard REST 已下线，注册一个 worker 进 fleet 有三�
    ```
    > 此路径需要 gateway 能 HTTP 回拨 worker `/info`——worker 在 NAT/防火墙后会失败。
 2. **自动 launch**（仅 docker 形态 + supervisor overlay）：`aim workers launch --display-name foo`；gateway supervisor 拉容器、scrape stdout、自动 pair。
-3. **自助 enroll**（PLAN-018 / FEAT-024）：worker outbound 拨 gateway，第一帧 `connect` 携带 `enroll` 块（`joinToken` + `apiToken` + 可选 `displayName`）；gateway 验签后直接落 fleet.db。详见下文 § Worker self-enroll quick start。
+3. **自助 enroll**（PLAN-018 / FEAT-024）：worker outbound 拨 gateway `/ws`，第一帧 `connect` 携带 `enroll` 块（`joinToken` + `apiToken` + 可选 `displayName`）；gateway 验签后直接落 fleet.db。详见下文 § Worker self-enroll quick start。
+4. **OTP-attended enroll**（PLAN-019 / FEAT-026）：worker outbound 拨 gateway `/enroll-ws`（**不**复用 self-enroll 的 `/ws`），第一帧 `connect.enroll.mode='otp'` 不带任何 fleet 凭证；gateway 给 worker 派一个 8 字符 OTP，operator 用 `aim enroll approve <otp>` 决定放行。worker 部署方完全不需要 fleet 共享密钥。详见下文 § Worker OTP-attended enroll quick start。
 
 worker baseUrl 是 worker HTTP 根（scheme + host/port，无 path）：
 
@@ -260,6 +261,144 @@ aiw serve --port 3001
 - `aim workers list` 看不到 worker：worker 端 stderr 看 `consola.info [aiw serve] self-enrolling to ...`，再去 gateway 端 fleet.db 的 `audit_events` 查 `gateway.connect.rejected` 行的 `detail.reason`。
 - `auth:master_key_missing`：gateway 没设 `AIWORKER_MASTER_KEY`；任何路径下 fleet.db 加密都依赖它，必须配齐。
 - `auth:quota_exceeded`：`AIWORKER_MAX_WORKERS` 已满；用 `aim workers remove` 摘除旧 worker 或调高上限。
+
+---
+
+## Worker OTP-attended enroll quick start（PLAN-019 / FEAT-026）
+
+适用：worker 部署方是客户 / 朋友 / CI runner 等不该持有 fleet 凭证的人；operator 希望对每次新 worker 入网保留一次"人审"机会，等同 GitHub Device Flow / `gh auth login`。
+
+self-enroll（path 3）虽然把 worker 端 inbound 端口需求消掉了，但 worker 部署方仍要持有 fleet 级共享 `AIWORKER_JOIN_TOKEN`——一旦泄露任何持有者都能以任意 workerId 入网；OTP 路径把这个 anti-pattern 一并消掉。
+
+### 1. Gateway 侧只需 OTP TTL（可选，默认 300s）
+
+OTP 路径不依赖任何 fleet 共享密钥；只要 gateway 已配 `AIWORKER_MASTER_KEY`（fleet.db apiToken 加密）即可工作。可选：
+
+```sh
+# 默认 300 秒（5 分钟）；范围 [30, 3600]。worker 从 connect 到 operator approve 的 hard deadline。
+export AIWORKER_ENROLL_OTP_TTL_SEC=300
+```
+
+未配 `AIWORKER_MASTER_KEY` → operator approve 时 `master_key_missing`，submit 阶段不会拒（OTP 已派给 worker）；运维必须确保启动时已配齐。
+
+### 2. Worker 侧 env
+
+```sh
+AIWORKER_GATEWAY_URL=ws://gateway-host:3000/ws        # 或 wss://...
+AIWORKER_DISPLAY_NAME=ben-laptop                       # 可选；缺省回落 workerId
+# AIWORKER_JOIN_TOKEN 不设 → 自动落 OTP 模式；
+# 若同时设了 JOIN_TOKEN 又想强制 OTP（attended）：
+AIWORKER_ENROLL_MODE=otp                               # 显式 'otp'，忽略 JOIN_TOKEN
+```
+
+> `aiw serve` 内部会把 `AIWORKER_GATEWAY_URL` 的 path 段强制改写为 `/enroll-ws`，无需 deployer 自己改。Path-split 由 Caddy 端完成（见下文 § Caddy `/enroll-ws` path split）。
+
+`aiw serve` 触发表（与 PLAN-019 §"Worker side" 一致；详见 [`docs/cli.md` § `aiw serve`](./cli.md#aiw-serve)）：
+
+| `--gateway` flag | env URL | env JOIN_TOKEN | env ENROLL_MODE | 行为 |
+|---|---|---|---|---|
+| 设 | 任意 | 任意 | 任意 | legacy（operator-pull 后 deviceToken 已下发，flag 显式覆盖 env） |
+| 未设 | 设 | 设 | ≠`otp` | self-enroll（path `/ws`，PLAN-018 不变） |
+| 未设 | 设 | 未设 | 任意 | **OTP enroll**（path `/enroll-ws`，PLAN-019 新增） |
+| 未设 | 设 | 设 | `otp` | **强制 OTP enroll**（忽略 JOIN_TOKEN） |
+| 未设 | 未设 | — | — | 不连 gateway / consola.warn |
+
+### 3. 拉起 worker（deployer 侧）
+
+```sh
+# 任何形态：裸跑 / systemd / docker。
+aiw serve --port 3001
+```
+
+stdout 第一时间会打方框形 OTP，附 expires-in 倒计时：
+
+```text
+[aiw serve] OTP enrolling to ws://gateway-host:3000/enroll-ws; awaiting operator approval
+
+┌──────────────────────────┐
+│  OTP:  BX7P-K39M         │
+│  expires in 300s         │
+└──────────────────────────┘
+
+[aiw serve] OTP BX7P-K39M 已签发，请用 `aim enroll approve BX7P-K39M` 准入；expires in 300s
+```
+
+deployer 把这串 OTP 通过任意带外通道（语音 / 邮件 / IM）发给 operator 即可，**无须**给 deployer 任何 fleet 凭证。
+
+### 4. Operator 流程（operator 侧）
+
+```sh
+# 列待批
+aim enroll list
+# {
+#   "pending": [
+#     { "otp": "BX7P-K39M", "workerId": "w_xxx", "displayName": "ben-laptop", "submittedAt": ..., "expiresAt": ... }
+#   ]
+# }
+
+# 准入（worker 立即收到 enrollment.approved，fleet 行写 addedBy='otp'）
+aim enroll approve BX7P-K39M
+# ✔ 已批准 OTP BX7P-K39M，workerId=w_xxx
+# { "workerId": "w_xxx", "deviceToken": "wtk_..." }
+
+# 或拒绝（worker 收到 close 4403 enroll:rejected）
+aim enroll reject BX7P-K39M
+```
+
+approve 后 worker 端会打 `[aiw serve] approved as w_xxx; deviceToken=wtk_...，已加入 fleet`，并由 gateway 把它升级为 NodeRegistry 里的正式 node、广播 `worker.online`。后续 reconnect 走原 `/enroll-ws` ws（worker 自身缓存 `enrolledViaOtp=true`，client.ts 直接复用），不再触发 OTP 流。
+
+### 5. 安全模型
+
+- **Worker deployer 不持有任何 fleet 凭证**——`/enroll-ws` 端 Caddy 不挂 basicauth，OTP submit 在 operator approve 前不会落 fleet.db；任何 attacker 拿不到 OTP，从外部 spam 该 path 不会污染 fleet。
+- **OTP 单次有效 + 短 TTL**：`AIWORKER_ENROLL_OTP_TTL_SEC` 默认 300 秒；过期由 setTimeout 触发 `gateway.enrollment.expired` audit + close 4408；approve / reject 走的 entry 立即从 pending Map 中删除。OTP 不可重放（in-memory，gateway 重启即丢；所有持久化都在 approve 时才发生）。
+- **OTP 不进 audit 明文**：所有 audit detail 仅落 `sha256(otp).slice(0, 8)`（`gateway.enrollment.requested` / `.rejected` / `.abandoned` 都走这个路径，由 `apps/gateway/src/server.ts::hashOtpForAudit` 与 `apps/gateway/src/router/methods/enroll.ts::hashOtp` 实现）；明文 OTP 只在 worker stdout / `aim enroll list` 输出里出现。运维 fleet.db 拷贝出去后无法据此批准已过期 / 已 reject 的请求。
+- **Path-aware 拒绝**：在 `/ws` 上发 `enroll.mode='otp'` → close 4400 `wrong_path:otp_must_use_enroll_ws`；在 `/enroll-ws` 上发 operator connect / 普通 node connect → close 4400 `wrong_path:expected_enroll_otp`。两条 close code 由 `apps/gateway/src/auth/token.ts::authorizeConnection` 集中产出。
+- **`enroll.approve` 在 `/ws` operator 侧**——attacker 即使知道 OTP，也必须先穿透 Caddy basicauth 才能调 approve。无新攻击面 vs PLAN-018。
+- **Pending state 重启即丢**：UX acceptable—worker 自动重连重新拿一个新 OTP。**不要**指望 OTP 跨 gateway 重启。
+- **配额仍生效**：approve 时再查一次 `AIWORKER_MAX_WORKERS`（已注册 workerId 重批不占新配额）；超额 → `quota_exceeded`，pending entry 已被 pop，worker 端拿不到 approved 事件，需重新发起。
+
+### 6. 排错
+
+| close code / wire code | 含义 | 排查 |
+|---|---|---|
+| `4400 wrong_path:expected_enroll_otp` | 在 `/enroll-ws` 上发了非 OTP 帧（operator connect 或普通 node connect） | 检查 worker / aim 是否拨错 path；reconnect 后已批 worker 的端到端流应回到 `/enroll-ws` 但带 OTP=approved 后由 gateway 接管 |
+| `4400 wrong_path:otp_must_use_enroll_ws` | 在 `/ws` 上发了 `enroll.mode='otp'` | worker 端 trigger table 走错分支；改 env 让 `aiw serve` 重走 |
+| `4401 auth:master_key_missing`（approve 阶段返回的 `master_key_missing`） | gateway 未配 `AIWORKER_MASTER_KEY` | 配齐主密钥后重启 gateway，让 worker 重新发起 |
+| `4401 quota_exceeded`（approve 时） | 配额已满 | `aim workers remove <id>` 摘除旧 worker 或调高 `AIWORKER_MAX_WORKERS` |
+| `4403 enroll:rejected` | operator `aim enroll reject` | 部署方与 operator 沟通后再发起 |
+| `4408 enroll:expired` | 超过 `AIWORKER_ENROLL_OTP_TTL_SEC`（默认 300s） | 部署方重新 `aiw serve`，让 gateway 派新 OTP |
+| `4500 enroll_unavailable` / `enroll_otp_send_failed` | gateway 内部异常（pending registry 未注入 / 推送 OTP 失败） | 看 gateway 日志，重启即可 |
+
+`gateway.enrollment.requested` 写入即视为"OTP 派发成功"；后续 `.approved` / `.rejected` / `.expired` / `.abandoned` 是终态。任何漏掉这条 audit 的，都说明 connect 帧根本没到 gateway——先排 Caddy 反代和网络。
+
+### 7. Caddy `/enroll-ws` path split
+
+公网部署必须把 `/enroll-ws` 单独切出来，不挂 basic-auth，否则 deployer 还是要持有 operator 凭证就回到 self-enroll 的 anti-pattern。模板 `ops/caddy/Caddyfile.tmpl` 已落地：
+
+```caddy
+:80 {
+  encode zstd gzip
+  log { ... }
+
+  handle /ws {
+    import /etc/caddy/auth.snippet           # operator + 已配对 worker reconnect
+    reverse_proxy 127.0.0.1:3000 { ... }
+  }
+
+  handle /enroll-ws {
+    # PLAN-019 OTP-attended enrollment 通道，无 basicauth。
+    # gateway 路径感知 authN 拒绝任何非 OTP connect 帧（4400 wrong_path）。
+    reverse_proxy 127.0.0.1:3000 { ... }
+  }
+
+  handle /health { import /etc/caddy/auth.snippet; reverse_proxy 127.0.0.1:3000 }
+  handle { respond 404 }
+}
+```
+
+`auth.snippet` 仍由宿主提供（不入 git，缺失 → fail-closed，BUG-007 不变），只挂在 `/ws` 与 `/health` 上；`/enroll-ws` 在 trust boundary 上专门做 path-aware authN——攻击者即使能 hit 该路径，gateway 的 `authorizeConnection` 仍要求 connect 帧带 `enroll.mode='otp'`，不带就 close 4400 不留下 fleet 行，更不会 broadcast worker.online。
+
+部署变更：宿主 `:80` 站点的 Caddyfile 替换为新模板后 `caddy reload` 即可；旧版本不存在该 path 段，所以**不能**直接 ssh 上去叠 patch——必须整体替换为新 template，由 `scripts/deploy.ts upload` + `reload-caddy` 完成。
 
 ---
 

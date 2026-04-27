@@ -1,9 +1,10 @@
 # FEAT-026 Worker OTP-attended enrollment (operator-approved join)
 
-- **status**: pending
+- **status**: completed
 - **priority**: P2
 - **owner**: (unassigned)
 - **createdAt**: 2026-04-27 02:00
+- **completedAt**: 2026-04-27 06:40
 
 ## Description
 

@@ -19,25 +19,61 @@
 # fail-closed by design. This is preferred over a default-allow config
 # because the previous (now fixed) deployment shipped without authN.
 #
+# PATH SPLIT (PLAN-019): `/enroll-ws` 是 OTP-attended enrollment 专用入口，
+# 故意**不**挂 basic-auth——worker 部署方（customer / friend / CI runner）
+# 不该被强制持有 operator 凭证。trust boundary 由 path 而非 token 隔离：
+#   /ws         → operator + 已配对 worker（reconnect 用 deviceToken）
+#   /enroll-ws  → 仅 OTP submit；gateway 路径感知拒绝任何非 OTP connect 帧
+#                 （`wrong_path:expected_enroll_otp` → close 4400）；
+#                 operator 走 /ws 用 `aim enroll approve <otp>` 才放行入网。
+# 无凭证只能用 OTP，gateway 无 token submit 不会写 fleet.db；详见
+# `docs/architecture.md` § 身份与配置自举 / `docs/deployment.md` § Caddy
+# `/enroll-ws` path split (PLAN-019)。
+#
 # gateway.example.test sits behind Cloudflare orange-cloud (TLS termination
 # only — Cloudflare is NOT an authN layer). Caddy serves :80; cloudflare
 # Origin Rules bridge HTTPS↔HTTP.
 :80 {
 	encode zstd gzip
 
-	import /etc/caddy/auth.snippet
-
-	reverse_proxy 127.0.0.1:3000 {
-		flush_interval -1
-		transport http {
-			read_timeout 0
-		}
-	}
-
 	log {
 		output file /var/log/caddy/aiw.access.log {
 			roll_size 10mb
 			roll_keep 5
 		}
+	}
+
+	handle /ws {
+		import /etc/caddy/auth.snippet
+
+		reverse_proxy 127.0.0.1:3000 {
+			flush_interval -1
+			transport http {
+				read_timeout 0
+			}
+		}
+	}
+
+	handle /enroll-ws {
+		# PLAN-019 OTP-attended enrollment 通道。
+		# 无 basicauth；gateway 路径感知 authN（apps/gateway/src/auth/token.ts::authorizeConnection）
+		# 强制 connect 帧必须带 enroll.mode='otp'，否则立即 close 4400 wrong_path。
+		# operator approve 之前不会写 fleet.db，更不会 broadcast worker.online。
+		reverse_proxy 127.0.0.1:3000 {
+			flush_interval -1
+			transport http {
+				read_timeout 0
+			}
+		}
+	}
+
+	handle /health {
+		import /etc/caddy/auth.snippet
+
+		reverse_proxy 127.0.0.1:3000
+	}
+
+	handle {
+		respond 404
 	}
 }

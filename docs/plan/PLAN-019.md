@@ -1,8 +1,9 @@
 # PLAN-019 Worker OTP-attended enrollment (operator-approved join, CLI-only)
 
-- **status**: implementing
+- **status**: completed
 - **createdAt**: 2026-04-27 02:00
 - **approvedAt**: 2026-04-27 02:10
+- **completedAt**: 2026-04-27 06:40
 - **relatedTask**: FEAT-026
 
 ## Context
