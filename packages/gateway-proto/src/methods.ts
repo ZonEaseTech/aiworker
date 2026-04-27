@@ -32,7 +32,9 @@ export const workerSummarySchema = z.object({
   displayName: z.string().optional(),
   online: z.boolean(),
   deviceId: z.string().min(1).optional(),
-  baseUrl: z.string().min(1).optional(),
+  // BUG-008: self-enrolled workers (PLAN-018) persist baseUrl='' because
+  // they have no inbound HTTP address. Allow empty / missing here.
+  baseUrl: z.string().optional(),
   lastSeenAt: z.number().int().nullable().optional(),
 })
 export type WorkerSummary = z.infer<typeof workerSummarySchema>

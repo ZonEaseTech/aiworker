@@ -236,4 +236,24 @@ describe('parseFrame', () => {
       expect(res.frame.ts).toBe(1_700_000_000_001)
     }
   })
+
+  // BUG-008: workerSummarySchema 必须接受空字符串 baseUrl —— self-enrolled
+  // worker（PLAN-018）在 NAT 后没有 inbound HTTP 地址，fleet.db 落空字符串。
+  test('workerSummarySchema 接受空字符串 / 缺省 baseUrl（self-enroll 情形）', async () => {
+    const { workerSummarySchema } = await import('../src/methods')
+    expect(workerSummarySchema.safeParse({
+      workerId: 'w_self_enroll',
+      online: true,
+      baseUrl: '',
+    }).success).toBe(true)
+    expect(workerSummarySchema.safeParse({
+      workerId: 'w_no_url',
+      online: false,
+    }).success).toBe(true)
+    expect(workerSummarySchema.safeParse({
+      workerId: 'w_pair',
+      online: true,
+      baseUrl: 'http://10.0.0.1:3001',
+    }).success).toBe(true)
+  })
 })
