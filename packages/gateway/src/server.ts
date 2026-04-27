@@ -5,7 +5,7 @@ import type { GatewayContext } from './router/context'
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import { encodeFrame, EVENTS, parseFrame } from '@zonease/aiworker-gateway-proto'
-import { isLoopbackAddress } from './auth/loopback'
+import { assertGatewayBindIsSafe, isLoopbackAddress } from './auth/loopback'
 import { authorizeConnection } from './auth/token'
 import { broadcastEventToOperators } from './events/broadcast'
 import { dispatchNodeEvent, dispatchNodeResponse, dispatchOperatorRequest } from './router/dispatch'
@@ -41,6 +41,13 @@ export interface StartGatewayOptions {
  */
 export function startGatewayServer(options: StartGatewayOptions): StartedGateway {
   const { config, context } = options
+
+  // BUG-019：fail-closed —— 在真正 bind 端口之前断言"非 loopback bind 必带
+  // INTERNAL_SHARED_SECRET"。失败直接 throw，由调用方（CLI / smoke）显式失败退出。
+  assertGatewayBindIsSafe({
+    host: config.host,
+    internalSharedSecret: config.internalSharedSecret,
+  })
 
   const server = Bun.serve<ConnectionData>({
     port: config.port,

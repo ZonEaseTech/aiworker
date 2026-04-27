@@ -1,5 +1,33 @@
 # AIWorker Changelog
 
+## 2026-04-27 [BUG-P1] BUG-019 Gateway 启动期 fail-closed 断言（loopback bypass）
+
+代码审查（root issue `nnid9urk`）发现的 P1 安全问题落地修复。
+
+**根因**：`packages/gateway/src/auth/loopback.ts` `isLoopbackAddress()` + `auth/token.ts`
+`authorizeConnection()` 对 loopback 远端无条件放空 token。运维若把 gateway 绑到
+`0.0.0.0` 又忘配 `INTERNAL_SHARED_SECRET`，任何能 reach 端口的人都能以 operator
+身份调 `workers.list` / `enroll.approve` / `token.rotate`。BUG-007 的 Caddy
+basicauth 是运维侧 fail-closed，但代码侧没有兜底。
+
+**修复**（短期断言；不修反代后 loopback 欺骗的根因，那留 follow-up）：
+
+- `packages/gateway/src/auth/loopback.ts` 新增 `assertGatewayBindIsSafe({host,
+  internalSharedSecret})` —— 非 loopback bind + 没 secret → throw 带修复提示
+  （绑 `127.0.0.1` + Caddy basic-auth ‖ 设 `INTERNAL_SHARED_SECRET`）。
+- `packages/gateway/src/server.ts` `startGatewayServer()` 入口在 `Bun.serve()` 之前
+  调用断言；CLI 入口 `runGatewayStartForeground()` 已有 try/catch，错配会落
+  `consola.error` + exit 1。
+- `packages/gateway/test/auth.test.ts` 八条新用例覆盖 loopback bind ± secret /
+  `0.0.0.0` ± secret / `::` IPv6 any / 公网 IP / 错误信息文案。
+
+不在本 commit 范围（留独立 issue）：
+
+- `X-Forwarded-For` 检查或 unix socket 拆 loopback / 公网 channel —— 这才是反代
+  欺骗的真正修复，比断言改造大得多。
+
+任务文档：`docs/task/BUG-019.md`。
+
 ## 2026-04-27 13:35 [BUG-P0] BUG-017 修复 — Lark / WhatsApp webhook token 改用常量时间比较
 
 **违反 CLAUDE.md 关键不变量**："bearer / 共享 token 比较一律 `timingSafeEqualStrings`"。代码审查（BKD root `nnid9urk`）发现两处 webhook 验证仍用普通 `===` / `!==`：

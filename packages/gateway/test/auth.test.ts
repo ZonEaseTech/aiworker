@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { isLoopbackAddress } from '../src/auth/loopback'
+import { assertGatewayBindIsSafe, isLoopbackAddress } from '../src/auth/loopback'
 import { authorizeConnection, timingSafeEqualStrings } from '../src/auth/token'
 
 describe('isLoopbackAddress', () => {
@@ -89,5 +89,55 @@ describe('authorizeConnection', () => {
     expect(r.ok).toBe(false)
     if (!r.ok)
       expect(r.reason).toBe('invalid_token')
+  })
+})
+
+describe('assertGatewayBindIsSafe (BUG-019)', () => {
+  test('loopback bind + 无 secret → 放行', () => {
+    expect(() => assertGatewayBindIsSafe({ host: '127.0.0.1', internalSharedSecret: undefined })).not.toThrow()
+    expect(() => assertGatewayBindIsSafe({ host: '::1', internalSharedSecret: undefined })).not.toThrow()
+    expect(() => assertGatewayBindIsSafe({ host: 'localhost', internalSharedSecret: undefined })).not.toThrow()
+    expect(() => assertGatewayBindIsSafe({ host: '127.0.0.5', internalSharedSecret: undefined })).not.toThrow()
+  })
+
+  test('loopback bind + 有 secret → 放行', () => {
+    expect(() => assertGatewayBindIsSafe({ host: '127.0.0.1', internalSharedSecret: 'shhhhh-1234567890abc' })).not.toThrow()
+  })
+
+  test('0.0.0.0 bind + 无 secret → 抛错', () => {
+    expect(() => assertGatewayBindIsSafe({ host: '0.0.0.0', internalSharedSecret: undefined })).toThrow(
+      /INTERNAL_SHARED_SECRET/,
+    )
+  })
+
+  test('0.0.0.0 bind + 空字符串 secret → 抛错', () => {
+    expect(() => assertGatewayBindIsSafe({ host: '0.0.0.0', internalSharedSecret: '' })).toThrow(
+      /INTERNAL_SHARED_SECRET/,
+    )
+  })
+
+  test('0.0.0.0 bind + 有 secret → 放行', () => {
+    expect(() => assertGatewayBindIsSafe({ host: '0.0.0.0', internalSharedSecret: 'shhhhh-1234567890abc' })).not.toThrow()
+  })
+
+  test('IPv6 :: (any) bind + 无 secret → 抛错', () => {
+    expect(() => assertGatewayBindIsSafe({ host: '::', internalSharedSecret: undefined })).toThrow(
+      /INTERNAL_SHARED_SECRET/,
+    )
+  })
+
+  test('public IP bind + 无 secret → 抛错', () => {
+    expect(() => assertGatewayBindIsSafe({ host: '192.168.1.5', internalSharedSecret: undefined })).toThrow(
+      /INTERNAL_SHARED_SECRET/,
+    )
+    expect(() => assertGatewayBindIsSafe({ host: '10.0.0.1', internalSharedSecret: undefined })).toThrow(
+      /INTERNAL_SHARED_SECRET/,
+    )
+  })
+
+  test('错误信息包含修复方式提示', () => {
+    expect(() => assertGatewayBindIsSafe({ host: '0.0.0.0', internalSharedSecret: undefined })).toThrow(
+      /AIWORKER_GATEWAY_HOST=127\.0\.0\.1/,
+    )
   })
 })
