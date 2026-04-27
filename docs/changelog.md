@@ -1,8 +1,32 @@
 # AIWorker Changelog
 
-## 2026-04-27 — PLAN-020 CLI rename + monorepo @zonease/* + npm publish（implementing → completed 待 coordinator 收尾填充）
+## 2026-04-27 09:00 PLAN-020 完成 — CLI 单二进制 `aiworker` + 全 monorepo `@zonease/*` 改名 + npm publish 准备就绪（FEAT-028 + FEAT-027 partial）
 
-（待 coordinator 完成全部 subtask 后填充：S1 monorepo rename / S2 cli 重写 / S3 docs sweep / S4 npm publish dry-run + bundle）
+**PLAN-020 landed: aiw/aim 双 bin 下线，单 `aiworker` 二进制 + cac 子命令树替换；全 monorepo 9 个包从 `@aiworker/*` 迁到 `@zonease/aiworker-*`；`@zonease/aiworker-cli` npm publish 流水（bundle build + release.yml + dist/ stripped manifest）就绪，未真发。** 用户决策 2026-04-27 07:35（FEAT-028 方案 B 锁定）+ 07:45（scope 扩到 monorepo namespace 迁移）。BKD 1 coordinator (`th3t4j9q`) + 4 worktree subtask（S1 monorepo rename / S2 cli 重写 / S3 forward-looking docs sweep / S4 npm publish 元数据 + bundle build），按 S1 → S2+S3 并行 → S4 串行流水合 main。
+
+What shipped:
+
+- **S1 monorepo rename**（commit `5bf852c`，merge `6927faf`，185 files / 362+ / 360-）：9 份 package.json `name` + `dependencies` / `devDependencies` 全迁；根 `package.json` `db:generate*` filter 同步改；全工作树 `.ts` / `.tsx` / `.config.ts` import sweep（172 文件）；Dockerfile build path 必修以保 GHCR 镜像构建可复现；`apps/api/.env.example` 注释；`bun.lock` 重生（0 第三方 dep 漂移，仅 9 个 internal workspace 链接换名）。Subpath imports（如 `@zonease/aiworker-storage-sqlite/fleet`）保留段。
+- **S2 cli 重写**（commit `babe3fd`，merge `1fd2d67`）：新 `apps/cli/src/aiworker.ts` 单 cac entry，36 个子命令（worker-local dash-form：`init / run / serve / config-show / config-set / token-rotate / approvals-list / approvals-grant / schedule-list / schedule-add / schedule-remove`；operator-remote 两词形式：`fleet list/info/launch/stop/remove`、`gateway start/status/stop`、`pair / chat / config get|set / token rotate / approvals list/grant / schedule list/add/remove / enroll list/approve/reject / logs / install systemd`）；`preprocessArgv` 动态从 `cli.commands` 收所有含空格的命令名，通用折叠多词 argv；删 `apps/cli/src/aiw.ts` + `aim.ts`，无 shim；`apps/cli/package.json` `bin: { aiworker }`；`smoke-aiw-run.ts` → `smoke-aiworker-run.ts`、`smoke-aim.ts` → `smoke-aiworker-fleet.ts`（git mv 保留 history）；systemd unit 模板 `ExecStart` 切到 `aiworker gateway start`；新增 `apps/cli/src/aiworker.test.ts` 入口测试 +10 case（注册命令计数 + 多词预处理 6 个用例 + `--help` 关键字）；cli 测试集 24 → 34 全过。
+- **S3 forward-looking 文档迁移**（commit `1ab305e` + 补丁 `fb02179`，merge `4d0fd24`）：6 文档 + 1 .env.example 全替换。命令树统一到 `aiworker` 单二进制：`README.md` / `docs/cli.md`（全文重写）/ `docs/deployment.md`（systemd / install / aim 命令样例）/ `docs/architecture.md` / `docs/gateway.md` / `CLAUDE.md` § Project Development / Stack。`apps/api/.env.example` + `ops/compose/.env.example` 注释清理。补丁 `fb02179` 同步把 `docs/architecture.md` / `docs/cli.md` / `docs/deployment.md` / `docs/gateway.md` 内 14 行 `@aiworker/X` 包名引用迁到 `@zonease/aiworker-X`（含 subpath，如 `@zonease/aiworker-gateway-proto/src/messages.ts`）。`docs/changelog.md` PLAN-020 占位由本 commit 填充正式内容。`docs/plan/PLAN-NNN.md` / `docs/task/{FEAT,BUG,REFACTOR}-NNN.md` 历史命名保留。剩余 word-boundary `aiw|aim` 命中均合理保留（磁盘文件 `aim.json`、域名 `gateway.example.test`、anchor 兼容文档历史叙述）。
+- **S4 npm publish 准备**（commit `7bde0c9`，merge `79cadd8`，4 files / 128+ / 9-）：`apps/cli/package.json` 落 publish 元数据（`version: 0.1.0` / `license: UNLICENSED`（FEAT-029 跟进）/ `repository` / `homepage` / `publishConfig.access: public` / `bin: { aiworker: ./dist/aiworker.js }` / `files: [dist/, README.md]` / `engines.bun: >=1.1`）；`scripts.build = bun build --target=bun --minify --outdir=dist src/aiworker.ts && bun scripts/build-publish-manifest.ts`；`prepublishOnly = bun run build`。新增 `apps/cli/scripts/build-publish-manifest.ts`（38 LOC）：build 后写一份 stripped `dist/package.json`（去掉 `devDependencies` 整个 workspace 段、`bin` 改 `./aiworker.js`、`files: [aiworker.js, README.md]`），并把仓库根 `README.md` copy 到 `dist/`。`.github/workflows/release.yml`（51 LOC）：tag `v*` 触发 → typecheck/test → bundle build → `cd apps/cli && bun publish --access public`（NPM_TOKEN 注入）→ 4 平台 `bun build --compile`（linux x64/arm64 + darwin x64/arm64）→ `softprops/action-gh-release` 附件。**release.yml 仅在 tag 推送时跑——本轮未推 tag，不会触发实发**。`README.md` install 节追加「Published（待 FEAT-027 npm publish 上线）」并行选项与本地开发路径并存。
+
+Verification（最终 main HEAD `79cadd8`）：
+
+- `bun run typecheck`：9/9 全过
+- `bun run test`：~617 pass / 0 fail（PLAN-019 基线 ~607 + S2 入口测试 +10）
+- `bun run --filter '@zonease/aiworker-cli' build` → `apps/cli/dist/aiworker.js` 0.72 MB（393 modules bundled）
+- `bun apps/cli/dist/aiworker.js --help` → 列出 36 个子命令
+- `bun apps/cli/dist/aiworker.js fleet list --help` / `config-show --help` / `install systemd --help` 全通
+- `cd apps/cli/dist && bun publish --dry-run` → 3 files packed（aiworker.js + package.json + README.md，0.73 MB tarball），止步在 `missing authentication` —— 符合「不真发」要求
+- `git grep '@aiworker/' -- ':!docs/plan' ':!docs/task' ':!docs/changelog.md' ':!bun.lock'` → 空（forward-looking + 源代码全清；`docs/plan/*` / `docs/task/*` / `docs/changelog.md` 历史保留）
+
+Conflict / re-dispatch notes：
+
+- S2 / S3 / S4 worktree 启动初期都看到 base = `a2e7961`（pre-S1 旧 main）—— BKD worktree 没自动 rebase，subtask 自己 `git rebase main` 拉齐后再开干（S2 / S3 在自检阶段就发现并 self-correct；S4 也同样自我 rebase，coordinator 跟发的 rebase follow-up 到达时 commit 已落地）。后续 BKD orchestration 同主题 PLAN 应预设 subtask 启动第一步是「rev-parse main vs HEAD 校验」+「reset/rebase」。
+- S1 完成时按规格内 `git grep '@aiworker/'` 验收命令命中 14 行 `forward-looking` docs，与 §8「不要触碰这 4 份 docs」冲突。coordinator 决策 Option A：S1 范围正确（仅源码 import），14 行包名引用归 S3 自然清理。已通过补丁 follow-up 把这 14 行覆盖到 S3，`fb02179` 即为补丁 commit。
+
+PLAN-020 / FEAT-028 → completed；FEAT-027 → completed (partial：bundle build / release.yml / publish 元数据全到位，**未真发到 npmjs.com，未推 git tag**，等用户授权 + GH Actions billing 解决后单点触发)。BKD coordinator (`th3t4j9q`) + S1-S4 (`9nainczp` / `2ndlwj3l` / `vc0463kl` / `fa2w8w83`) 全 worktree subtask 流程顺利收尾。
 
 ## 2026-04-27 07:35 PLAN-019 E2E 验证 — coordinator 收尾
 
