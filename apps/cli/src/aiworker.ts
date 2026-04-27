@@ -1,18 +1,19 @@
 #!/usr/bin/env bun
 import process from 'node:process'
 
-// FEAT-030: 必须在任何业务模块（含 packages/core 的 zod schema）import 之前
-// 跑 dotenv bootstrap——schema 在 import 期就 parse process.env，必须先注入。
-import { bootstrapDotenv } from './lib/dotenv-bootstrap'
+/* eslint-disable perfectionist/sort-imports -- FEAT-030: side-effect bootstrap
+ * 必须在所有业务模块之前——packages/core 的 zod schema 在 import 期就 parse
+ * process.env，dotenv 必须先注入。perfectionist 默认会把 external import 排到
+ * side-effect 之前，破坏这个顺序；区段内豁免该规则。 */
+import './lib/bootstrap'
 
-bootstrapDotenv()
+import cac from 'cac'
+import consola from 'consola'
+/* eslint-enable perfectionist/sort-imports */
 
 // FEAT-030: cli.version 动态读 package.json，与发布版本始终一致。
 // Bun 支持 JSON imports 直接拿 package.json。
 import packageJson from '../package.json' with { type: 'json' }
-
-import cac from 'cac'
-import consola from 'consola'
 
 import {
   runApprovalsGrant as runApprovalsGrantRemote,

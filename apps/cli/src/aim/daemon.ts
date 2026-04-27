@@ -152,9 +152,19 @@ export async function startDaemon(opts: StartDaemonOptions = {}): Promise<StartD
     },
   )
 
-  try { closeSync(out) } catch { /* Node 某些平台自动关；忽略。 */ }
+  try {
+    closeSync(out)
+  }
+  catch {
+    // Node 某些平台自动关；忽略。
+  }
   if (err !== out) {
-    try { closeSync(err) } catch { /* 同上。 */ }
+    try {
+      closeSync(err)
+    }
+    catch {
+      // 同上。
+    }
   }
 
   if (child.pid === undefined)
@@ -184,7 +194,12 @@ export async function stopDaemon(options: { timeoutMs?: number } = {}): Promise<
   catch (err) {
     const code = (err as NodeJS.ErrnoException).code
     if (code === 'ESRCH') {
-      try { unlinkSync(status.pidFile) } catch { /* 忽略。 */ }
+      try {
+        unlinkSync(status.pidFile)
+      }
+      catch {
+        // 忽略。
+      }
       return null
     }
     throw err
@@ -193,15 +208,29 @@ export async function stopDaemon(options: { timeoutMs?: number } = {}): Promise<
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     if (!isPidAlive(pid)) {
-      try { unlinkSync(status.pidFile) } catch { /* 忽略。 */ }
+      try {
+        unlinkSync(status.pidFile)
+      }
+      catch {
+        // 忽略。
+      }
       return pid
     }
     await new Promise(r => setTimeout(r, pollMs))
   }
 
   // 超时未退，升级到 SIGKILL。
-  try { process.kill(pid, 'SIGKILL') } catch { /* 兜底。 */ }
-  try { unlinkSync(status.pidFile) } catch { /* 忽略。 */ }
+  try {
+    process.kill(pid, 'SIGKILL')
+  }
+  catch {
+    // 兜底。
+  }
+  try {
+    unlinkSync(status.pidFile)
+  }
+  catch {
+    // 忽略。
+  }
   return pid
 }
-

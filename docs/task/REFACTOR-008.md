@@ -1,9 +1,10 @@
 # REFACTOR-008 baseline lint debt 清零
 
-- **status**: pending
+- **status**: done
 - **priority**: P3
-- **owner**: TBD
+- **owner**: bkd/w4qsc5uc
 - **createdAt**: 2026-04-27 16:42
+- **completedAt**: 2026-04-27
 - **discovered**: 2026-04-27 — 代码审查（`nnid9urk`）批 P0+P1+P2 收官时 `bun run lint` 显示 60 errors / 0 warnings，但与 audit 批前 baseline (`648adf5`) 同等，本次 0 引入。
 
 ## Description
@@ -46,6 +47,19 @@ bunx eslint . --fix
 ## ActiveForm
 
 Running `bunx eslint --fix` for the auto-fixable bulk and adding `import process from 'node:process'` to apps/cli/src/aiworker.ts, plus a CI lint step.
+
+## Resolution（2026-04-27）
+
+实际修法（与 task acceptance criteria 略有差异，记录如下）：
+
+- **8 个 `package.json` sort-keys**：`bunx eslint . --fix` 一键完成，仅 key 顺序变更，无 value diff。`apps/cli/package.json` 顺手把 `files` 数组 `["dist/", "README.md"]` 排成 `["README.md", "dist/"]`（`jsonc/sort-array-values`），不影响 publish。
+- **`process` global**：实际真正报 `node/prefer-global/process` 的是 `apps/cli/src/lib/dotenv-bootstrap.ts`（11 处），`apps/cli/src/aiworker.ts` 已有 `import process` 在第 2 行。给 `dotenv-bootstrap.ts` 顶部补 `import process from 'node:process'`，所有调用点零差异。
+- **`aiworker.ts` 的 `import/first`**：原 `bootstrapDotenv()` 调用夹在 import 中间触发 22 个 `import/first` error。eslint `--fix` 会把调用挪到所有 import 之后——**这破坏了 FEAT-030 的关键不变量**（`packages/core` zod schema 在 import 期就 parse `process.env`，必须先注入）。改法：抽 `apps/cli/src/lib/bootstrap.ts`（side-effect-only：`import + 调用 bootstrapDotenv()`），在 `aiworker.ts` 用 `import './lib/bootstrap'` 替代调用——side-effect import 仍是 import 行，`import/first` 满足，模块加载顺序保证 dotenv 先跑。`perfectionist/sort-imports` 想把 side-effect 排到 external 之后，与不变量冲突，用区段 `eslint-disable` 豁免并写明理由。
+- **`aim/daemon.ts` 的 `style/max-statements-per-line` + `style/brace-style`**：原 `try { closeSync(out) }` / `catch { /* ... */ }` 单行写法，展开为多行块。共 6 处。
+- **`apps/cli/scripts/build-publish-manifest.ts`**：`prefer-template` + `perfectionist/sort-named-imports` 由 `--fix` 自动完成。
+- **CI lint step**：新建 `.github/workflows/lint.yml`，PR + push main 触发 `bun run lint`。**没**叠在 `release.yml`，避免 lint 失败拦 npm publish 通道；release.yml 仍只跑 typecheck + test + bundle + publish。
+
+最终验证：`bun run lint` 0 error / 0 warning，`bun run typecheck` 全绿，`bun test` 全套通过。
 
 ## Dependencies
 

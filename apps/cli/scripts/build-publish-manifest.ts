@@ -1,4 +1,4 @@
-import { access, copyFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
+import { access, copyFile, mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
 const cliDir = resolve(import.meta.dirname, '..')
@@ -23,7 +23,7 @@ const stripped: Record<string, unknown> = {
   engines: pkg.engines,
 }
 
-await writeFile(resolve(distDir, 'package.json'), JSON.stringify(stripped, null, 2) + '\n', 'utf8')
+await writeFile(resolve(distDir, 'package.json'), `${JSON.stringify(stripped, null, 2)}\n`, 'utf8')
 
 const readmeRoot = resolve(repoRoot, 'README.md')
 try {

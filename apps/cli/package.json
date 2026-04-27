@@ -1,14 +1,14 @@
 {
   "name": "@zonease/aiworker-cli",
+  "type": "module",
   "version": "0.3.0",
   "description": "AIWorker fleet CLI — gateway / worker / operator 单一二进制",
   "license": "MIT",
-  "type": "module",
+  "homepage": "https://github.com/ZonEaseTech/aiworker#readme",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ZonEaseTech/aiworker.git"
   },
-  "homepage": "https://github.com/ZonEaseTech/aiworker#readme",
   "publishConfig": {
     "access": "public"
   },
@@ -16,8 +16,8 @@
     "aiworker": "./dist/aiworker.js"
   },
   "files": [
-    "dist/",
-    "README.md"
+    "README.md",
+    "dist/"
   ],
   "engines": {
     "bun": ">=1.1"

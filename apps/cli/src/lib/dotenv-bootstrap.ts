@@ -22,6 +22,7 @@ import { randomBytes } from 'node:crypto'
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
+import process from 'node:process'
 
 const DEFAULT_HOME = path.join(homedir(), '.aiworker')
 
