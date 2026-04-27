@@ -1,14 +1,27 @@
 /**
- * PLAN-018 / FEAT-024 worker self-enrollment：connect 帧附带的 enroll 块
- * 形态。`apiToken` 由 worker bootstrap 产出（`state.tokenPlaintext`），gateway
- * 收到后会落到 `fleet.db.registered_workers.apiToken`。`displayName` 缺省时
- * gateway 用 `agentId` 兜底，与 fleet schema 默认一致。
+ * worker 自助接入 gateway 的 enroll 载荷。`apiToken` 由 worker bootstrap
+ * 产出（`state.tokenPlaintext`），gateway 收到后会落到
+ * `fleet.db.registered_workers.apiToken`。`displayName` 缺省时 gateway 用
+ * `agentId` 兜底，与 fleet schema 默认一致。
+ *
+ * 两种 mode：
+ * - `'join-token'`（PLAN-018 / FEAT-024）：worker 持 `AIWORKER_JOIN_TOKEN`
+ *   直接通过；gateway 用共享 secret 验签。`joinToken` 必填。
+ * - `'otp'`（PLAN-019 / FEAT-026）：worker 不持 join token，由 gateway 生成
+ *   OTP 给 operator approve；本载荷只声明身份。`joinToken` 必须省略。
  */
-export interface GatewayNodeEnrollOptions {
-  joinToken: string
-  apiToken: string
-  displayName?: string
-}
+export type GatewayNodeEnrollOptions
+  = | {
+    mode?: 'join-token'
+    apiToken: string
+    joinToken: string
+    displayName?: string
+  }
+  | {
+    mode: 'otp'
+    apiToken: string
+    displayName?: string
+  }
 
 /**
  * Gateway-client 运行参数：支持从 env / CLI flag / 手工 options 组装。

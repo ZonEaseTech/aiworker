@@ -68,6 +68,14 @@ const schema = z.object({
   AIWORKER_JOIN_TOKEN: z.string().min(1).optional(),
   AIWORKER_DISPLAY_NAME: z.string().min(1).max(80).optional(),
   /**
+   * PLAN-019 / FEAT-026 worker OTP-attended enrollment：
+   * - `auto`（缺省）：根据 trigger table 自动选择—`URL + JOIN_TOKEN` 走
+   *   PLAN-018 self-enroll，仅 `URL` 走 PLAN-019 OTP enroll。
+   * - `otp`：强制走 OTP，即使 `JOIN_TOKEN` 同时存在也忽略它。运维想"演练"
+   *   /强制 operator-attended approval 路径时设这个。
+   */
+  AIWORKER_ENROLL_MODE: z.enum(['auto', 'otp']).optional().default('auto'),
+  /**
    * Default `@anthropic-ai/claude-code` version for the `npx` fallback used
    * by the Claude Code executor; per-worker config can override.
    */

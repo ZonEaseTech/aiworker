@@ -1,7 +1,19 @@
-import type { ConnectFrame, Frame } from '@aiworker/gateway-proto'
+import type {
+  ConnectFrame,
+  EnrollmentApprovedPayload,
+  EnrollmentOtpPayload,
+  Frame,
+} from '@aiworker/gateway-proto'
 import type { ResolvedGatewayNodeOptions } from './config'
 
-import { encodeFrame, parseFrame, ROLES } from '@aiworker/gateway-proto'
+import {
+  encodeFrame,
+  enrollmentApprovedPayloadSchema,
+  enrollmentOtpPayloadSchema,
+  EVENTS,
+  parseFrame,
+  ROLES,
+} from '@aiworker/gateway-proto'
 
 import consola from 'consola'
 
@@ -35,6 +47,18 @@ export interface GatewayClientDeps {
   onConnected: () => void
   /** WS 关闭后回调；reason 只做日志用途。 */
   onDisconnected: (reason: string) => void
+  /**
+   * PLAN-019：OTP enroll 模式下，gateway 在握手后会立即推 `enrollment.otp`
+   * 事件，client 把 payload 透传给上层（serve.ts 渲染到 stdout 给 deployer）。
+   */
+  onEnrollmentOtp?: (payload: EnrollmentOtpPayload) => void
+  /**
+   * PLAN-019：operator 调 `enroll.approve` 后 gateway 推 `enrollment.approved`，
+   * client 把 deviceToken 透传给上层。client 内部会在收到此事件时把 enroll
+   * 状态翻成"已接入"，后续 reconnect 帧不再带 enroll 块（改为 plain
+   * connect with token=apiToken），见 `enrolledViaOtp` 字段。
+   */
+  onEnrollmentApproved?: (payload: EnrollmentApprovedPayload) => void
   /** 测试注入：构造 WebSocket 的工厂。默认用 globalThis.WebSocket。 */
   webSocketCtor?: WebSocketCtor
 }
@@ -52,6 +76,12 @@ export class GatewayClient {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private stopped = false
   private readonly WebSocketCtor: WebSocketCtor
+  /**
+   * PLAN-019：OTP enroll 一旦被 operator approve，标记为已接入。后续重连
+   * 时 connect 帧不再带 `enroll` 块——改成普通 node connect（auth.token =
+   * apiToken），由 gateway 按 fleet.db 中已落 row 验证身份。
+   */
+  private enrolledViaOtp = false
 
   constructor(private readonly deps: GatewayClientDeps) {
     this.reconnectDelay = deps.options.initialReconnectDelayMs
@@ -130,6 +160,23 @@ export class GatewayClient {
       // PLAN-018：若调用方传了 `enroll` 块，原样透传到帧里——gateway 看到
       // enroll 字段 + JOIN_TOKEN 匹配即落 fleet.db；未传则走现有路径
       // （gateway 仅校验 auth.token / loopback bypass）。
+      // PLAN-019：mode='otp' 时 enroll 块只带 apiToken/displayName，不带
+      // joinToken；OTP approve 后 `enrolledViaOtp=true`，重连帧不再带 enroll
+      // 块，改为普通 node connect（gateway 按 fleet.db 行 + auth.token 验证）。
+      const enroll = this.deps.options.enroll
+      const enrollBlock = enroll === undefined || this.enrolledViaOtp
+        ? undefined
+        : enroll.mode === 'otp'
+          ? {
+              mode: 'otp' as const,
+              apiToken: enroll.apiToken,
+              ...(enroll.displayName ? { displayName: enroll.displayName } : {}),
+            }
+          : {
+              apiToken: enroll.apiToken,
+              joinToken: enroll.joinToken,
+              ...(enroll.displayName ? { displayName: enroll.displayName } : {}),
+            }
       const connectFrame: ConnectFrame = {
         type: 'connect',
         role: ROLES.NODE,
@@ -139,17 +186,7 @@ export class GatewayClient {
         ...(this.deps.options.displayName
           ? { meta: { displayName: this.deps.options.displayName } }
           : {}),
-        ...(this.deps.options.enroll
-          ? {
-              enroll: {
-                joinToken: this.deps.options.enroll.joinToken,
-                apiToken: this.deps.options.enroll.apiToken,
-                ...(this.deps.options.enroll.displayName
-                  ? { displayName: this.deps.options.enroll.displayName }
-                  : {}),
-              },
-            }
-          : {}),
+        ...(enrollBlock ? { enroll: enrollBlock } : {}),
       }
       try {
         ws.send(encodeFrame(connectFrame))
@@ -170,8 +207,42 @@ export class GatewayClient {
         consola.warn(`[gateway-client ${workerId}] drop malformed frame: ${parsed.error}`)
         return
       }
+      // PLAN-019：enrollment.otp / enrollment.approved 这俩 event 是面向 OTP
+      // 流程的内部信令，dispatcher 看不懂；直接在 client 层解码后调专用回调。
+      // 其它 event / request / response 仍按既有逻辑透传给 onFrame。
+      const frame = parsed.frame
+      if (frame.type === 'event' && frame.name === EVENTS.ENROLLMENT_OTP) {
+        const payload = enrollmentOtpPayloadSchema.safeParse(frame.payload)
+        if (!payload.success) {
+          consola.warn(`[gateway-client ${workerId}] enrollment.otp payload invalid: ${payload.error.message}`)
+          return
+        }
+        try {
+          this.deps.onEnrollmentOtp?.(payload.data)
+        }
+        catch (err) {
+          consola.error(`[gateway-client ${workerId}] onEnrollmentOtp threw: ${String(err)}`)
+        }
+        return
+      }
+      if (frame.type === 'event' && frame.name === EVENTS.ENROLLMENT_APPROVED) {
+        const payload = enrollmentApprovedPayloadSchema.safeParse(frame.payload)
+        if (!payload.success) {
+          consola.warn(`[gateway-client ${workerId}] enrollment.approved payload invalid: ${payload.error.message}`)
+          return
+        }
+        // 标记已接入：下次断线重连不再发 enroll 块，token=apiToken 走普通 connect。
+        this.enrolledViaOtp = true
+        try {
+          this.deps.onEnrollmentApproved?.(payload.data)
+        }
+        catch (err) {
+          consola.error(`[gateway-client ${workerId}] onEnrollmentApproved threw: ${String(err)}`)
+        }
+        return
+      }
       try {
-        this.deps.onFrame(parsed.frame)
+        this.deps.onFrame(frame)
       }
       catch (err) {
         consola.error(`[gateway-client ${workerId}] onFrame threw: ${String(err)}`)

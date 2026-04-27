@@ -7,7 +7,12 @@
  * runtime.bus 订阅。两者都通过 `() => state.runtime` 懒取，遵循项目
  * hot-reload 不变量。
  */
-import type { Frame, RequestFrame } from '@aiworker/gateway-proto'
+import type {
+  EnrollmentApprovedPayload,
+  EnrollmentOtpPayload,
+  Frame,
+  RequestFrame,
+} from '@aiworker/gateway-proto'
 import type { GatewayNodeOptions } from './config'
 import type { NodeHandlers, RuntimeLike } from './dispatcher'
 
@@ -33,6 +38,18 @@ export interface StartGatewayNodeOptions extends GatewayNodeOptions {
   getRuntime: () => RuntimeLike
   /** 节点级 handler（config / token / logs），按需注入。 */
   handlers?: NodeHandlers
+  /**
+   * PLAN-019：OTP enroll 模式下，gateway 推 `enrollment.otp` 时透传给上层
+   * （`aiw serve` 渲染到 stdout 给 deployer 看）。仅在 `enroll.mode='otp'`
+   * 路径下会被触发。
+   */
+  onEnrollmentOtp?: (payload: EnrollmentOtpPayload) => void
+  /**
+   * PLAN-019：operator approve 后 gateway 推 `enrollment.approved`，透传给
+   * 上层做"已加入 fleet"提示。client 内部已经把 enroll 状态置为已接入；
+   * 上层无需做 reconnect，当前 socket 直接当作正式 node 连接继续用。
+   */
+  onEnrollmentApproved?: (payload: EnrollmentApprovedPayload) => void
   /**
    * 测试注入的 WebSocket 构造器。production 走默认 globalThis.WebSocket。
    * 签名用 unknown 以避开 any，实际类型与 client.ts 的 WebSocketCtor 一致。
@@ -89,13 +106,16 @@ export function startGatewayNode(options: StartGatewayNodeOptions): GatewayNode 
     },
     onFrame: (frame: Frame) => {
       // node 只处理入站 request；其它 frame 一律忽略（不应在 node→gateway
-      // 方向出现，一旦出现就是 gateway 侧协议 bug）。
+      // 方向出现，一旦出现就是 gateway 侧协议 bug）。enrollment.otp /
+      // enrollment.approved 这两个 event 已在 client 层早于本回调拦截分流。
       if (frame.type === 'request') {
         void dispatcher.handleRequest(frame as RequestFrame)
         return
       }
       consola.warn(`[gateway-client ${resolved.workerId}] unexpected inbound frame type=${frame.type}`)
     },
+    ...(options.onEnrollmentOtp ? { onEnrollmentOtp: options.onEnrollmentOtp } : {}),
+    ...(options.onEnrollmentApproved ? { onEnrollmentApproved: options.onEnrollmentApproved } : {}),
     ...(options.webSocketCtor ? { webSocketCtor: options.webSocketCtor } : {}),
   })
 
