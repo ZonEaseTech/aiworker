@@ -1,5 +1,11 @@
 # AIWorker Changelog
 
+## 2026-04-27 11:05 [progress] FEAT-030 e2e 端到端验证 + BUG-011 占位
+
+本机起 worker（`bun apps/cli/dist/aiworker.js serve`，AIWORKER_HOME 隔离 `/tmp/aiw-feat030-localworker`）通过公网 `wss://gateway.example.test/enroll-ws` OTP enroll 到测试服 systemd gateway；测试服 loopback (`ws://127.0.0.1:3000/ws` 空 token bypass) 跑 operator approve OTP `4Q35-2HEM` → fleet `online: true` → `chat` 全链路 NDJSON `accepted` → `chat.message` → `done`（finishReason=error 因 worker 未配 executor，链路本身 OK）。验证 FEAT-030 三件套全部 wire-through。清理已 fleet remove + kill worker + 删 `/tmp/aiw-feat030-localworker`（含 master key）+ 测试服 `/tmp/feat030-op` 删除。
+
+副产品：开 `BUG-011 P3` —— FEAT-030 README 承诺"OTP 路径只需 `AIWORKER_GATEWAY_URL`"实际不成立，`WORKER_DB_PATH` 默认 `/var/lib/aiworker/worker.db` 写不动 + `WORKER_MIGRATIONS_FOLDER` `import.meta.url` 在 bundle 后失效，仍需 4 个 env 才能起。BUG-011 列了 `WORKER_DB_PATH` 加 lazy `<AIWORKER_HOME>/worker.db` + drizzle migrations 拷进 dist 或内嵌为 string array 两条修复路径。
+
 ## 2026-04-27 10:50 [progress] FEAT-030 followup — 全仓 3000/3001 → 9217/9218 端口语义统一
 
 用户反馈"只要需要用到端口，就往 9217 后排"——上一轮 FEAT-030 仅改了 schema 默认值，留下大量 compose / Dockerfile / 测试 fixture / 活跃文档仍然引用旧 3000/3001。本次一次性 sweep：

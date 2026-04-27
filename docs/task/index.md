@@ -73,3 +73,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [ ] [**BUG-010 Runtime log strings still reference `aiw` / `aim` / `aim.json` after PLAN-020 rename**](BUG-010.md) `P3`
 - [x] [**FEAT-030 Zero-env-quickstart: dynamic CLI version + new default ports + first-run master-key auto-mint**](FEAT-030.md) `P1`
 - [x] [**FEAT-029 License decision + LICENSE file + 9 package.json `license` fields**](FEAT-029.md) `P1`
+- [ ] [**BUG-011 Worker quickstart 仍要求显式 WORKER_DB_PATH / WORKER_MIGRATIONS_FOLDER（与 FEAT-030 README 承诺不符）**](BUG-011.md) `P3`
