@@ -78,8 +78,12 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-012 `aiworker gateway start` 在 npm install 场景下不能启动（仓库布局假设）**](BUG-012.md) `P1`
 - [ ] [**BUG-013 `workers.info` / `workers.stop` 在 node-side dispatcher 显式 stub `method_not_implemented`**](BUG-013.md) `P2`
 - [ ] [**BUG-014 `aiworker install systemd` 渲染的 unit 缺 `EnvironmentFile` + 全部安全加固**](BUG-014.md) `P2`
+- [x] [**BUG-015 worker /api/worker/{orchestrator,evolution,events} 缺 bearer-auth**](BUG-015.md) `P0`
+- [x] [**BUG-016 web channel webhook 无验签无鉴权（envelope 注入）**](BUG-016.md) `P0`
 - [x] [**BUG-017 Lark verificationToken + WhatsApp verifyToken 非常量时间比较**](BUG-017.md) `P0`
+- [x] [**BUG-018 CLI engine 子进程 env 白名单（剔除 AIWORKER_MASTER_KEY 等）**](BUG-018.md) `P1`
 - [x] [**BUG-019 Gateway loopback bypass fail-closed 启动断言**](BUG-019.md) `P1`
 - [x] [**BUG-020 gateway WebSocket maxPayloadLength + idleTimeout + connect 限频**](BUG-020.md) `P1`
+- [x] [**REFACTOR-005 worker.db 缺关键索引（messages / conversations / cron_jobs 等）**](REFACTOR-005.md) `P2`
 - [x] [**REFACTOR-006 orchestrator API 入参 zod 校验 + 历史消息分页窗口**](REFACTOR-006.md) `P2`
 - [x] [**REFACTOR-007 杂项小修：bus 异常吞 / lark cache / fleet count / secrets key**](REFACTOR-007.md) `P2`
