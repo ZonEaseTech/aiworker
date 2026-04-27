@@ -4,7 +4,7 @@
 
 # AIWorker public ingress.
 #
-# SECURITY (BUG-007): Caddy reverse proxies traffic to 127.0.0.1:3000,
+# SECURITY (BUG-007): Caddy reverse proxies traffic to 127.0.0.1:9218,
 # which makes gateway's loopback authN check (`apps/gateway/src/auth/loopback.ts`)
 # pass for ANY request that reaches Caddy — gateway sees `requestIP() == 127.0.0.1`
 # regardless of the original client. Therefore THIS Caddyfile MUST enforce
@@ -46,7 +46,7 @@
 	handle /ws {
 		import /etc/caddy/auth.snippet
 
-		reverse_proxy 127.0.0.1:3000 {
+		reverse_proxy 127.0.0.1:9218 {
 			flush_interval -1
 			transport http {
 				read_timeout 0
@@ -59,7 +59,7 @@
 		# 无 basicauth；gateway 路径感知 authN（apps/gateway/src/auth/token.ts::authorizeConnection）
 		# 强制 connect 帧必须带 enroll.mode='otp'，否则立即 close 4400 wrong_path。
 		# operator approve 之前不会写 fleet.db，更不会 broadcast worker.online。
-		reverse_proxy 127.0.0.1:3000 {
+		reverse_proxy 127.0.0.1:9218 {
 			flush_interval -1
 			transport http {
 				read_timeout 0
@@ -70,7 +70,7 @@
 	handle /health {
 		import /etc/caddy/auth.snippet
 
-		reverse_proxy 127.0.0.1:3000
+		reverse_proxy 127.0.0.1:9218
 	}
 
 	handle {

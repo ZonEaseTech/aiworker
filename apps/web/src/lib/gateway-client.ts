@@ -45,7 +45,8 @@ interface Pending {
 
 function defaultGatewayUrl(): string {
   if (typeof window === 'undefined')
-    return 'ws://127.0.0.1:3000/ws'
+    // FEAT-030: gateway 默认 9218
+    return 'ws://127.0.0.1:9218/ws'
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   return `${proto}//${window.location.host}/ws`
 }

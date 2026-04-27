@@ -6,7 +6,8 @@ import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
-const apiTarget = process.env.AIWORKER_API_URL ?? 'http://localhost:3001'
+// FEAT-030: dev 代理默认指向 worker 9217
+const apiTarget = process.env.AIWORKER_API_URL ?? 'http://localhost:9217'
 
 export default defineConfig({
   plugins: [

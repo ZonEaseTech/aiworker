@@ -1,5 +1,24 @@
 # AIWorker Changelog
 
+## 2026-04-27 10:30 [progress] FEAT-030 完成 — 零 env quickstart：动态版本 + 默认端口 9217/9218 + 首次启动自动 mint master key
+
+`@zonease/aiworker-cli@0.1.0` 首发后用户反馈：版本号写死（`aiworker --version` 印 `0.3.0`，npm 印 `0.1.0`）、默认端口 3000/3001 与 dev 高频段冲突、新用户必须手动 `export AIWORKER_MASTER_KEY` 才能跑 `aiworker init` 友好度差。本次三件套修复：
+
+**1. 动态版本** —— `apps/cli/src/aiworker.ts` 改成 `import packageJson from '../package.json' with { type: 'json' }` + `cli.version(packageJson.version)`，bun bundle / npm install 全路径输出一致。
+
+**2. 默认端口迁 9xxx** —— worker `PORT` 默认 `3001 → 9217`、gateway `AIWORKER_GATEWAY_PORT` 默认 `3000 → 9218`、`AIWORKER_LAUNCH_BASE_URL_TEMPLATE` 模板 `:3001 → :9217`。同步更新 `ops/caddy/Caddyfile.tmpl` 反代 target、CLI 默认 `DEFAULT_GATEWAY_URL`、web `vite.config.ts` dev proxy / `gateway-client.ts` 默认 WS URL、`apps/api/.env.example` 示例、`ops/compose/.env.example` 注释、`register-wizard.tsx` placeholder。9217/9218 不在 IANA well-known，避开 Vite/Next/PostgREST/常规 dev squat 段。**现存生产部署不受影响**：`/etc/aiworker/gateway.env` 显式 `AIWORKER_GATEWAY_PORT=3000` 仍优先（criteria #6）。
+
+**3. 首次启动自动 mint** —— 新增 `apps/cli/src/lib/dotenv-bootstrap.ts`（zero-dep，~120 LOC）：`bootstrapDotenv()` 在所有业务模块 import 之前跑（schema 在 import 期就 parse `process.env`，必须先注入）。逻辑：
+- `~/.aiworker/.env` 存在 → parse + 仅填补缺失 key（显式 export 优先）
+- 不存在 → mint `AIWORKER_MASTER_KEY`（32 byte hex）+ `INTERNAL_SHARED_SECRET`（24 byte hex），写入 chmod `0600`，master key 明文 **仅一次** 打到 stderr 加备份警告
+- 第二次启动 silent 加载
+
+README.md Quickstart 简化：原来要 `export AIWORKER_HOME` + `AIWORKER_MASTER_KEY` + `WORKER_DB_PATH` 三件套，现在 OTP 流程只剩 `AIWORKER_GATEWAY_URL`（必）+ 可选 `AIWORKER_DISPLAY_NAME`。
+
+`apps/cli/package.json` 版本 `0.1.0 → 0.2.0`（minor bump，因为默认端口与首次启动行为对用户可见）。dist bundle 重打 0.72 MB，`bun apps/cli/dist/aiworker.js --version` 验证输出 `aiworker/0.2.0`，第一次跑印 banner 写 `~/.aiworker/.env`，第二次跑 silent。typecheck 9/9 + cli/gateway test 全 pass。
+
+**npm publish `0.2.0` 暂未真发** —— 等用户授权 + 新 token；上轮已用 token 必须轮换。
+
 ## 2026-04-27 09:15 [decision] FEAT-029 完成 — license 选 MIT
 
 `@zonease/aiworker-cli` 公开 npm publish 阻塞条件 #7（FEAT-027 §Research Findings）解除：

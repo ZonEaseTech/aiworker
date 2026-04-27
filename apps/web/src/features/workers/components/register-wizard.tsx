@@ -175,7 +175,7 @@ function RegisterForm({ onCancel, onSuccess }: RegisterFormProps) {
           <Label htmlFor={baseUrlId}>Base URL</Label>
           <Input
             id={baseUrlId}
-            placeholder="http://aiworker-worker:3000"
+            placeholder="http://aiworker-worker:9217"
             value={baseUrl}
             onChange={e => setBaseUrl(e.target.value)}
             autoComplete="off"
@@ -188,11 +188,11 @@ function RegisterForm({ onCancel, onSuccess }: RegisterFormProps) {
             <Info className="mt-0.5 size-3.5 shrink-0" />
             <span>
               Worker's HTTP root — scheme + host/port, no trailing path. Typical shapes:
-              <code className="mx-1 rounded bg-muted px-1 py-0.5 font-mono">http://aiworker-worker:3000</code>
+              <code className="mx-1 rounded bg-muted px-1 py-0.5 font-mono">http://aiworker-worker:9217</code>
               (same compose),
               <code className="mx-1 rounded bg-muted px-1 py-0.5 font-mono">https://worker-1.example.com</code>
               (reverse proxy),
-              <code className="mx-1 rounded bg-muted px-1 py-0.5 font-mono">http://<test-server-ip-redacted>:3001</code>
+              <code className="mx-1 rounded bg-muted px-1 py-0.5 font-mono">http://<test-server-ip-redacted>:9217</code>
               (direct port).
             </span>
           </p>

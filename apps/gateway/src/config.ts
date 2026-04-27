@@ -51,7 +51,8 @@ export interface GatewayConfig {
 }
 
 const envSchema = z.object({
-  AIWORKER_GATEWAY_PORT: z.coerce.number().int().positive().max(65_535).default(3000),
+  // FEAT-030: gateway WS 控制面默认端口 9218（与 worker 9217 配对）
+  AIWORKER_GATEWAY_PORT: z.coerce.number().int().positive().max(65_535).default(9218),
   AIWORKER_GATEWAY_HOST: z.string().min(1).default('127.0.0.1'),
   INTERNAL_SHARED_SECRET: z.string().min(16).optional(),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -73,7 +74,8 @@ const envSchema = z.object({
   WORKER_DATA_ROOT: z.string().optional(),
   WORKER_MEMORY_LIMIT: z.string().optional(),
   WORKER_CPU_LIMIT: z.coerce.number().optional(),
-  AIWORKER_LAUNCH_BASE_URL_TEMPLATE: z.string().default('http://{containerName}:3001'),
+  // FEAT-030: launch 出来的 worker 默认监听 9217（与 PORT 默认对齐）
+  AIWORKER_LAUNCH_BASE_URL_TEMPLATE: z.string().default('http://{containerName}:9217'),
 }).superRefine((cfg, ctx) => {
   if (!cfg.AIWORKER_GATEWAY_CAN_LAUNCH)
     return

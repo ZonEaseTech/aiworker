@@ -20,7 +20,8 @@ export interface AimState {
   defaultWorkerId?: string
 }
 
-const DEFAULT_GATEWAY_URL = 'ws://localhost:3000'
+// FEAT-030: 默认 gateway 端口 9218（与 apps/gateway/src/config.ts 对齐）
+const DEFAULT_GATEWAY_URL = 'ws://localhost:9218'
 
 /** state 文件路径：`<AIWORKER_HOME>/aim.json`。 */
 export function resolveAimStatePath(): string {

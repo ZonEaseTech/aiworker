@@ -28,7 +28,8 @@ import { z } from 'zod'
  * 来,prod 容器仍可以显式覆盖(compose 已经写进 yml)。
  */
 const schema = z.object({
-  PORT: z.coerce.number().default(3001),
+  // FEAT-030: worker HTTP 默认端口 9217（避开 3000-3999 / 5000-5999 / 8000-8999 dev 高频段）
+  PORT: z.coerce.number().default(9217),
   WORKER_DB_PATH: z.string().default('/var/lib/aiworker/worker.db'),
   /**
    * 迁移目录。未设时回退到 `@zonease/aiworker-storage-sqlite` 内嵌路径

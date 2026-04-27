@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, mock } from 'bun:test'
 
 /**
  * BUG-002 回归覆盖：pair 成功后必须把本次使用的 `--url` 持久化为 `gatewayUrl`，
- * 否则后续 aim 命令会回落到 default 的 ws://localhost:3000，造成"pair 后立刻断"的体验。
+ * 否则后续 aim 命令会回落到 default 的 ws://localhost:9218，造成"pair 后立刻断"的体验。
  *
  * 实现策略：mock 掉 `./common`（绕过真实 WS 连接）与 `../state`（捕获 patchAimState 入参），
  * 然后用 `await import('./pair')` 触发被测模块加载。
@@ -20,7 +20,7 @@ let withSessionResult = { deviceToken: 'dt', workerId: 'w-1' }
 mock.module('../state', () => ({
   patchAimState: async (patch: PatchPayload) => {
     patchCalls.push(patch)
-    return { gatewayUrl: 'ws://localhost:3000', deviceId: 'op-test', deviceToken: '', ...patch }
+    return { gatewayUrl: 'ws://localhost:9218', deviceId: 'op-test', deviceToken: '', ...patch }
   },
 }))
 

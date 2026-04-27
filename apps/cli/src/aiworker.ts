@@ -1,6 +1,16 @@
 #!/usr/bin/env bun
 import process from 'node:process'
 
+// FEAT-030: 必须在任何业务模块（含 packages/core 的 zod schema）import 之前
+// 跑 dotenv bootstrap——schema 在 import 期就 parse process.env，必须先注入。
+import { bootstrapDotenv } from './lib/dotenv-bootstrap'
+
+bootstrapDotenv()
+
+// FEAT-030: cli.version 动态读 package.json，与发布版本始终一致。
+// Bun 支持 JSON imports 直接拿 package.json。
+import packageJson from '../package.json' with { type: 'json' }
+
 import cac from 'cac'
 import consola from 'consola'
 
@@ -422,7 +432,7 @@ cli
   })
 
 cli.help()
-cli.version('0.3.0')
+cli.version(packageJson.version)
 
 /**
  * cac 6 原生不支持多词子命令（`isMatched` 只比对 argv[0]），因此这里做一次 argv

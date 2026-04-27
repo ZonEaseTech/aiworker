@@ -43,7 +43,7 @@ worker  ─无凭证─────►  /enroll-ws  ──────► gatewa
 
 ## Install
 
-### Published（待 FEAT-027 npm publish 上线启用）
+### Published
 
 ```sh
 bun install -g @zonease/aiworker-cli
@@ -52,12 +52,13 @@ bun install -g @zonease/aiworker-cli
 #   curl -fsSL https://github.com/ZonEaseTech/aiworker/releases/latest/download/aiworker-linux-x64 -o /usr/local/bin/aiworker
 #   chmod +x /usr/local/bin/aiworker
 
-aiworker serve
+aiworker init                       # 首次 mint master key 写到 ~/.aiworker/.env
+aiworker serve                      # 默认监听 :9217
 aiworker fleet list
 aiworker chat <workerId> 'hello'
 ```
 
-### 本地开发（当前主路径）
+### 本地开发
 
 ```sh
 git clone <repo-url>
@@ -65,7 +66,7 @@ cd aiworker && bun install
 bun apps/cli/src/aiworker.ts <subcmd>
 ```
 
-下面的 Quickstart / cheat sheet 用本地开发态 `bun apps/cli/src/aiworker.ts ...` 调用；Stage B 完成后等价改写为全局 `aiworker ...`，命令树不变。
+下面的 Quickstart / cheat sheet 默认用 `aiworker ...`（已发布命令）；本地开发态等价 `bun apps/cli/src/aiworker.ts ...`。
 
 ---
 
@@ -91,26 +92,24 @@ worker deployer ─── 跑 aiworker serve ────────── 加�
 
 ## 路径 1：OTP 入网（最简）
 
-### Worker deployer（任何机器，**零 fleet 凭证**）
+### Worker deployer（任何机器，**零 fleet 凭证 + 零本地 secret 输入**）
 
 ```sh
-# 1. 装 bun
+# 1. 装 bun（如果没装）
 curl -fsSL https://bun.sh/install | bash
 
-# 2. clone + install
-git clone <repo-url>
-cd aiworker && bun install
+# 2. 装 aiworker CLI
+bun install -g @zonease/aiworker-cli
+# 或 npm install -g @zonease/aiworker-cli
 
-# 3. 最小 env
-export AIWORKER_HOME="$HOME/.aiworker"
-export AIWORKER_MASTER_KEY=$(openssl rand -hex 32)         # worker 自己的 vault key
-export WORKER_DB_PATH="$AIWORKER_HOME/worker.db"
-export AIWORKER_GATEWAY_URL="wss://your-gateway.example/"  # ← 仅这一个公网地址
-export AIWORKER_DISPLAY_NAME="my-laptop"                   # 可选
+# 3. 第一次 init —— 自动 mint master key 写到 ~/.aiworker/.env (chmod 600)，
+#    控制台显示**一次**，请离线备份。
+aiworker init
 
-# 4. init + serve
-bun apps/cli/src/aiworker.ts init
-bun apps/cli/src/aiworker.ts serve --port 3001
+# 4. 启动 worker，指向你的 gateway（默认监听 :9217）
+export AIWORKER_GATEWAY_URL="wss://your-gateway.example/"
+export AIWORKER_DISPLAY_NAME="my-laptop"   # 可选；默认取 hostname
+aiworker serve
 ```
 
 控制台输出：
@@ -152,7 +151,7 @@ export AIWORKER_JOIN_TOKEN="<gateway 端配的 join token>"
 export AIWORKER_DISPLAY_NAME="ci-runner-12"
 
 bun apps/cli/src/aiworker.ts init
-bun apps/cli/src/aiworker.ts serve --port 3001
+bun apps/cli/src/aiworker.ts serve --port 9217
 # 自动加入；operator 端 aiworker fleet list 直接见到
 ```
 
@@ -166,16 +165,16 @@ bun apps/cli/src/aiworker.ts serve --port 3001
 # Worker 端：
 bun apps/cli/src/aiworker.ts init
 # 抓 stdout 的 wtk_xxx
-bun apps/cli/src/aiworker.ts serve --port 3001 --gateway wss://operator:<pwd>@gateway/ws
+bun apps/cli/src/aiworker.ts serve --port 9217 --gateway wss://operator:<pwd>@gateway/ws
 
 # Operator 端：
 aiworker pair --url wss://operator:<pwd>@gateway/ws \
-              --worker-url http://<worker-host>:3001 \
+              --worker-url http://<worker-host>:9217 \
               --bootstrap-token wtk_xxx \
               --display-name production-1
 ```
 
-> 限制：gateway 必须能 inbound 到 worker `:3001` 验 token。worker 在 NAT 后需要反向 tunnel；改用 OTP 模式避坑。
+> 限制：gateway 必须能 inbound 到 worker `:9217` 验 token。worker 在 NAT 后需要反向 tunnel；改用 OTP 模式避坑。
 
 ---
 
@@ -245,7 +244,7 @@ EOF
 chmod 600 ~/.aiworker/aim.json
 ```
 
-如果在 gateway 同机跑（loopback），用 `ws://127.0.0.1:3000/ws`，无需 basicauth/token。
+如果在 gateway 同机跑（loopback），用 `ws://127.0.0.1:9218/ws`，无需 basicauth/token。
 
 ---
 
@@ -284,7 +283,8 @@ aiworker config set <workerId> "$NEW" --if-match <current-version>
 | `AIWORKER_HOME` | gateway / worker | 默认 `~/.aiworker` |
 | `WORKER_DB_PATH` | worker | 默认 `$AIWORKER_HOME/worker.db` |
 | `AIWORKER_FLEET_DB_PATH` | gateway | 默认 `$AIWORKER_HOME/fleet.db` |
-| `AIWORKER_GATEWAY_PORT` | gateway | 默认 3000 |
+| `AIWORKER_GATEWAY_PORT` | gateway | 默认 `9218` |
+| `PORT` | worker | 默认 `9217` |
 | `AIWORKER_ENROLL_OTP_TTL_SEC` | gateway | OTP 过期秒数，默认 300，[30, 3600] |
 
 完整列表见 `apps/api/.env.example` 与 `ops/compose/.env.example`。
