@@ -150,8 +150,9 @@ Caddy :80 (纯反代)  ──►  127.0.0.1:3000  =  aiworker-gateway 容器
 
 | 角色 | 客户端 | 进程/用户 | 鉴权 |
 |------|--------|-----------|------|
-| operator | aim CLI、web SPA | 本机 / 远程运维 | loopback 自动放行；远程必须在 `connect` 帧 `auth.token` 携带 `INTERNAL_SHARED_SECRET` |
-| node | worker 进程（`aiw serve --gateway`） | worker 容器 | loopback 放行；远程 node 必须携带 deviceToken（`INTERNAL_SHARED_SECRET` 作 shared secret） |
+| operator | aim CLI、web SPA | 本机 / 远程运维 | loopback 自动放行；远程必须在 `/ws` 上以 `connect.auth.token` 携带 `INTERNAL_SHARED_SECRET`。`/enroll-ws` 拒绝 operator 角色（`wrong_path:otp_must_use_enroll_ws`）。 |
+| node | worker 进程（`aiw serve --gateway`） | worker 容器 | loopback 放行；远程 reconnect 走 `/ws` + deviceToken（`INTERNAL_SHARED_SECRET` 作 shared secret）；首次入网走 self-enroll（`/ws` + join token）或 OTP-attended（`/enroll-ws` + `enroll.mode='otp'`，无 token）。 |
+| node-pending | OTP 提交后未审批的 worker | worker 容器 | path 锁定 `/enroll-ws`；ws 已升级但不进 NodeRegistry，等待 operator `aim enroll approve <otp>` 触发 `enrollment.approved` 事件后才升级为 node。 |
 
 - Connect 帧必须是每条连接的第一帧（`connectFrameSchema`）；其后按 `role` 分流 request/response/event。
 - bearer 比较一律 `timingSafeEqualStrings`（gateway 与 worker 两侧各自复制一份，见下文"加密与认证"）。
@@ -167,12 +168,23 @@ Caddy :80 (纯反代)  ──►  127.0.0.1:3000  =  aiworker-gateway 容器
 ## 身份与配置自举
 
 - Worker 首次启动在容器内 `mintWorkerId + mintApiToken`（`worker/bootstrap/identity.ts`），token 明文只打印一次（`[worker] AIWORKER_BOOTSTRAP_TOKEN=wtk_...`），密文写入 `worker_identity` 后不再重新打印。
-- worker 进 fleet 的三条路径：
+- worker 进 fleet 的四条路径（`registered_workers.addedBy` 对应四态）：
   1. **手动 pair**（`aim pair --url ws://... --worker-url http://... --bootstrap-token wtk_...`）：操作员从 worker stdout 抓 bootstrap 日志行 → gateway 调 worker `/info` 校验 → 加密存 fleet.db → 返回 deviceToken 写回 `~/.aiworker/aim.json`。**inbound** 方向：gateway 必须能 HTTP 回拨 worker `/info`，因此 worker 在 NAT/防火墙后会失败。`addedBy='manual'`。
   2. **自动 launch**（`aim workers launch --display-name foo`）：需 `AIWORKER_GATEWAY_CAN_LAUNCH=true`；gateway supervisor 拉 worker 容器、scrape stdout、自动 pair。仅限 docker 形态、与 gateway 同主机。`addedBy='launch-local'`。
-  3. **自助 enroll**（PLAN-018 / FEAT-024）：worker 容器 env 同时设 `AIWORKER_GATEWAY_URL` + `AIWORKER_JOIN_TOKEN`，`aiw serve` bootstrap 完成后用 outbound WS 主动拨 gateway，并把 enroll 块（`joinToken` + 自身 mint 的 `apiToken` + 可选 `displayName`）塞进 `connect` 帧第一帧；gateway 验 `joinToken` 后直接 upsert fleet.db 行。**outbound-only**，worker 不需要任何 inbound 端口暴露——是 NAT 后部署、批量 docker / k8s 节点、residential network 上 worker 的标准路径。`addedBy='self-enroll'`。
-- 三条路径在 `connect` 帧上的鉴权分支由 `apps/gateway/src/auth/token.ts::authorizeConnection` 集中判定：携带 `enroll` 块走 join token 校验（独立分支，不回退到 sharedSecret）；其余按 loopback / sharedSecret 老规则。失败口径统一写 `gateway.connect.rejected` audit + 4401 close code（`auth:join_token_disabled` / `auth:join_token_mismatch` / `auth:quota_exceeded` / `auth:master_key_missing`）；成功 enroll 仅在 fleet.db 行实际变化（created / updated）时才补 `gateway.worker.enrolled` audit，避免 reconnect 风暴淹没事件流。
-- 自助 enroll 适用 worker 在 NAT/防火墙后只能出站、批量部署需要 zero-touch、operator 无法逐个手贴 bootstrap token 的场景；高安全场景（每 worker 显式审批）保留手动 pair 作为更窄入口。
+  3. **自助 enroll**（PLAN-018 / FEAT-024）：worker 容器 env 同时设 `AIWORKER_GATEWAY_URL` + `AIWORKER_JOIN_TOKEN`，`aiw serve` bootstrap 完成后用 outbound WS 主动拨 gateway `/ws`，并把 enroll 块（`mode='join-token'` + `joinToken` + 自身 mint 的 `apiToken` + 可选 `displayName`）塞进 `connect` 帧第一帧；gateway 验 `joinToken` 后直接 upsert fleet.db 行。**outbound-only**，worker 不需要任何 inbound 端口暴露——是 NAT 后部署、批量 docker / k8s 节点、residential network 上 worker 的标准路径。`addedBy='self-enroll'`。
+  4. **OTP-attended enroll**（PLAN-019 / FEAT-026）：worker 只设 `AIWORKER_GATEWAY_URL`（无 `AIWORKER_JOIN_TOKEN`）或显式 `AIWORKER_ENROLL_MODE=otp`，`aiw serve` bootstrap 后用 outbound WS 拨 gateway `/enroll-ws`（不同于 self-enroll 的 `/ws`），connect 帧 `enroll.mode='otp'` 带自身 `apiToken` + 可选 `displayName`，**不**带 join token；gateway 在 `apps/gateway/src/registry/pending.ts::PendingEnrollmentRegistry` 内存队列里挂起，回推 `enrollment.otp` 事件给 worker，worker 把 8 字符 OTP（`XXXX-YYYY`，去歧义 30 字符 alphabet）打到 stdout 等待人审。operator 在 `/ws` 通道上 `aim enroll list / approve <otp> / reject <otp>` 决定去留，approve 时才 `upsertEnrolledWorker(addedBy='otp')` 落 fleet.db 并通过原 ws 推 `enrollment.approved` 事件回 worker。`addedBy='otp'`。**Worker 部署方完全不需要持有任何 fleet 凭证**——`/enroll-ws` 端 Caddy 不挂 basicauth，OTP submit 在 operator approve 前不会落库。
+- 四条路径在 `connect` 帧上的鉴权分支由 `apps/gateway/src/auth/token.ts::authorizeConnection` 集中判定，**path-aware authN matrix**（PLAN-019 §"Path-aware authN matrix"）：
+
+  | 进入路径 | `/ws`（Caddy basicauth） | `/enroll-ws`（无 basicauth） |
+  |---|---|---|
+  | operator connect | ✓ loopback / sharedSecret | ✗ `wrong_path:otp_must_use_enroll_ws` close 4400 |
+  | node connect（join-token enroll，PLAN-018） | ✓ self-enroll 分支验 join token | ✗ `wrong_path:expected_enroll_otp` close 4400 |
+  | node connect（OTP enroll，PLAN-019） | ✗ `wrong_path:otp_must_use_enroll_ws` close 4400 | ✓ submit → 入 pending 队列等 operator |
+  | node reconnect（已配对，deviceToken / sharedSecret） | ✓ shared-secret | ✗ `wrong_path:expected_enroll_otp` close 4400 |
+
+  失败口径统一写 `gateway.connect.rejected` audit。token 失败 close 4401（`auth:join_token_disabled` / `auth:join_token_mismatch` / `auth:quota_exceeded` / `auth:master_key_missing`），路径失败 close 4400（`wrong_path:*`）。OTP 路径还会写额外的 audit action：`gateway.enrollment.requested`（submit 即写，OTP 仅落 sha256 前 8 hex）/ `gateway.enrollment.approved` / `gateway.enrollment.rejected` / `gateway.enrollment.expired`（TTL 到由 `setTimeout` 触发，默认 `AIWORKER_ENROLL_OTP_TTL_SEC=300`）/ `gateway.enrollment.abandoned`（worker 在 approve 前掉线）。`gateway.worker.enrolled` 仍仅在 fleet 行 created / updated 时写，避免 reconnect 风暴。
+- OTP 路径下 `node-pending` 是中间态：ws 已升级但 `ws.data.role='node-pending'`，**不**进 NodeRegistry，**不**广播 worker.online。任何非 close 帧都会被忽略；只有 operator approve 触发 `enrollment.approved` 事件 + 后续连接升级才会真正成为 node。pending 队列是纯内存（`PendingEnrollmentRegistry`），gateway 重启即丢；UX 上 worker 自动重连重新拿一个新 OTP，fleet.db 真实持久化只在 approve 时发生。
+- 自助 enroll 适用 worker 在 NAT/防火墙后只能出站、批量部署需要 zero-touch、operator 无法逐个手贴 bootstrap token 的场景；OTP-attended enroll 适用 worker 部署方是客户 / 朋友 / CI runner 等不该持有 fleet 凭证的人——operator 用 8 字符 OTP 一次确认即放行，对标 GitHub Device Flow / `gh auth login`；高安全场景（每 worker 显式审批 + 显式 token 注入）保留手动 pair 作为更窄入口。
 - `worker_identity` / `worker_config` 都是 singleton，`pk` 固定为字符串 `'default'`；不要在应用层添加多租户假设。
 - `config.put` / `PUT /api/worker/config` 使用 `ifMatch: <version>` 乐观锁；新版本配置持久化后通过 `reloadRuntime(nextConfig, newVersion)` 原子替换 `state.runtime`。**reload 必须串行化**（禁止并发），防止老版本晚到覆盖新版本。
 - 配置中的 secret 以 ref 形式占位，落库时即被 redact；启动和 reload 通过 `enumerateSecretPaths` + `hydrateSecrets` 从 `SecretsVault` 注回明文。Secrets **永不**进 `worker_config.configJson`。

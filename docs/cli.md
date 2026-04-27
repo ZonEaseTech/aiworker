@@ -42,6 +42,7 @@ bun run --filter '@aiworker/cli' smoke:aiw-run   # aiw 冒烟：init + run --dry
 - `WORKER_MIGRATIONS_FOLDER` — 默认使用 `@aiworker/storage-sqlite` 内嵌路径（`import.meta.url` 解析得来的**绝对**路径），源码运行 / 容器 / 单文件 bundle 都能定位；外部 vendor 时再显式覆盖。
 - `AIWORKER_FORCE_ID` / `AIWORKER_FORCE_TOKEN` — 测试 / 备份恢复用的一次性覆盖。
 - `AIWORKER_GATEWAY_URL` / `AIWORKER_JOIN_TOKEN` / `AIWORKER_DISPLAY_NAME`（PLAN-018 / FEAT-024）— self-enroll 三件套：URL + token 同时设 → `aiw serve` 跳过 operator 手动 `aim pair`，bootstrap 完成后用 outbound WS 主动拨 gateway 把自身写入 fleet。`DISPLAY_NAME` 可选，缺省回落 workerId（最长 80 字符）。详见下文 §`aiw serve` 与 [`docs/deployment.md` § Worker self-enroll quick start](./deployment.md#worker-self-enroll-quick-start-plan-018--feat-024)。
+- `AIWORKER_ENROLL_MODE`（PLAN-019 / FEAT-026）— `'auto' | 'otp'`，缺省 `'auto'`。`'auto'` 下走 self-enroll 还是 OTP 由 `JOIN_TOKEN` 是否设来判定（设 → self-enroll；未设 → OTP）；显式 `'otp'` 强制 attended 路径，即使 `JOIN_TOKEN` 同时存在也忽略它（用于 deployer 拿不到 fleet 凭证的 attended 场景）。详见下文 §`aiw serve` 与 [`docs/deployment.md` § Worker OTP-attended enroll quick start](./deployment.md#worker-otp-attended-enroll-quick-startplan-019--feat-026)。
 
 ### `aiw init`
 
@@ -89,24 +90,49 @@ aiw serve --port 3001
 aiw serve --port 3001 --gateway ws://127.0.0.1:3000/ws
 ```
 
-**Self-enroll via env trio**（PLAN-018 / FEAT-024）：当 env 同时设 `AIWORKER_GATEWAY_URL` + `AIWORKER_JOIN_TOKEN` 且 **未** 传 `--gateway` flag 时，`aiw serve` bootstrap 完成后自动拨 `AIWORKER_GATEWAY_URL`，第一帧 `connect` 携带 enroll 块（join token + 自身 mint 的 apiToken + 可选 `AIWORKER_DISPLAY_NAME`）；gateway 验签后直接落 fleet.db，**不需要** operator 抓 bootstrap log 跑 `aim pair`。触发表：
+**Self-enroll / OTP enroll via env**（PLAN-018 / FEAT-024 + PLAN-019 / FEAT-026）：当 env 设了 `AIWORKER_GATEWAY_URL` 且**未** 传 `--gateway` flag 时，`aiw serve` bootstrap 完成后自动拨 gateway，按下面触发表分派 self-enroll（带 join token）或 OTP（attended）路径——operator 完全不用跑 `aim pair`。
 
-| `--gateway` flag | `AIWORKER_GATEWAY_URL` | `AIWORKER_JOIN_TOKEN` | 行为 |
-|---|---|---|---|
-| 设 | 任意 | 任意 | 走老路径（operator-pull 后 deviceToken 已下发，flag 显式覆盖 env） |
-| 未设 | 设 | 设 | **self-enroll**：发带 enroll 的 connect 帧 |
-| 未设 | 设 | 未设 | 不起 gateway-client（保守，避免无 token 自动连） |
-| 未设 | 未设 | 设 | `consola.warn` 跳过 |
-| 未设 | 未设 | 未设 | 纯 HTTP 模式 |
+| `--gateway` flag | `AIWORKER_GATEWAY_URL` | `AIWORKER_JOIN_TOKEN` | `AIWORKER_ENROLL_MODE` | 行为 |
+|---|---|---|---|---|
+| 设 | 任意 | 任意 | 任意 | 走老路径（operator-pull 后 deviceToken 已下发，flag 显式覆盖 env） |
+| 未设 | 设 | 设 | 缺省 / `'auto'` | **PLAN-018 self-enroll**：拨 `<URL>/ws`，连接帧 enroll 块带 join token |
+| 未设 | 设 | 未设 | 任意 | **PLAN-019 OTP enroll**：拨 `<URL>` 并把 path 强制改写为 `/enroll-ws`，连接帧 `enroll.mode='otp'`，stdout 打 8 字符 OTP 等 operator approve |
+| 未设 | 设 | 设 | `'otp'` | **强制 OTP**（即使设了 JOIN_TOKEN 也走 OTP，用于 attended 但 deployer 不该持 fleet 凭证的场景） |
+| 未设 | 未设 | 设 | 任意 | `consola.warn` 跳过 |
+| 未设 | 未设 | 未设 | 任意 | 纯 HTTP 模式 |
 
-适用场景与运维 / 排错见 [`docs/deployment.md` § Worker self-enroll quick start](./deployment.md#worker-self-enroll-quick-start-plan-018--feat-024)。
+self-enroll vs OTP 差异：
+
+- **self-enroll**：worker 端持 fleet 共享 `AIWORKER_JOIN_TOKEN`，gateway 验签后直接落 fleet.db，无人审；适合 CI / k8s / 自动化批量部署。
+- **OTP**：worker 端**不**持 fleet 凭证，gateway 给 worker 派 8 字符 OTP（`XXXX-YYYY`，去歧义 30 字符 alphabet），worker 通过任意带外通道把 OTP 发给 operator，operator `aim enroll approve <otp>` 决定放行；适合给客户 / 朋友 / CI runner 等不该看见 fleet 凭证的人装 worker。
+
+OTP 模式 stdout 格式（`apps/cli/src/commands/serve.ts::formatOtpBox`）：
+
+```text
+[aiw serve] OTP enrolling to ws://gateway-host:3000/enroll-ws; awaiting operator approval
+
+┌──────────────────────────┐
+│  OTP:  BX7P-K39M         │
+│  expires in 300s         │
+└──────────────────────────┘
+
+[aiw serve] OTP BX7P-K39M 已签发，请用 `aim enroll approve BX7P-K39M` 准入；expires in 300s
+```
+
+适用场景与运维 / 排错见 [`docs/deployment.md` § Worker self-enroll quick start](./deployment.md#worker-self-enroll-quick-start-plan-018--feat-024) 与 [§ Worker OTP-attended enroll quick start](./deployment.md#worker-otp-attended-enroll-quick-startplan-019--feat-026)。
 
 ```sh
-# 纯 enroll（NAT 后部署常用）：
+# self-enroll（NAT 后批量部署）：
 AIWORKER_GATEWAY_URL=wss://aiw.example.com/ws \
 AIWORKER_JOIN_TOKEN=<shared> \
 AIWORKER_DISPLAY_NAME=prod-1 \
 aiw serve --port 3001
+
+# OTP enroll（attended，deployer 无 fleet 凭证）：
+AIWORKER_GATEWAY_URL=wss://aiw.example.com/ws \
+AIWORKER_DISPLAY_NAME=ben-laptop \
+aiw serve --port 3001
+# stdout 打 OTP 后 deployer 把它带外发给 operator
 ```
 
 ### `aiw config-show`
@@ -323,6 +349,59 @@ aim pair \
 ```
 
 失败码：`auth_failed` / `worker_unreachable` / `already_registered` / `quota_exceeded` / `master_key_missing`。
+
+### `aim enroll list`（PLAN-019 / FEAT-026）
+
+通过 gateway WS 协议 `enroll.list` 列出当前所有 pending OTP enrollment——它们是**已 submit 但 operator 还没 approve / reject**的 worker，连接挂在 `apps/gateway/src/registry/pending.ts::PendingEnrollmentRegistry` 内存队列里。
+
+```sh
+aim enroll list
+# {
+#   "pending": [
+#     {
+#       "otp": "BX7P-K39M",
+#       "workerId": "w_xxxxxxxxxxxx",
+#       "displayName": "ben-laptop",
+#       "submittedAt": 1714...,
+#       "expiresAt": 1714...
+#     }
+#   ]
+# }
+```
+
+返回字段刻意不含 worker 自报的 `apiToken`（仅在 approve 时落 fleet.db）；`expiresAt` 由 `AIWORKER_ENROLL_OTP_TTL_SEC`（默认 300s）算出。空列表也是合法返回。
+
+### `aim enroll approve <otp>`（PLAN-019 / FEAT-026）
+
+调 gateway 协议 `enroll.approve`，参数即 worker stdout 上看到的 OTP（`XXXX-YYYY` 形态）。gateway 在原 ws 上推 `enrollment.approved` 事件回 worker，worker 立即升级为 fleet 内正式 node：
+
+```sh
+aim enroll approve BX7P-K39M
+# ✔ 已批准 OTP BX7P-K39M，workerId=w_xxxxxxxxxxxx
+# {
+#   "workerId": "w_xxxxxxxxxxxx",
+#   "deviceToken": "wtk_..."
+# }
+```
+
+approve 在 fleet.db 写 `addedBy='otp'` 行（与 self-enroll 共用 `upsertEnrolledWorker`），写完才 broadcast `worker.online`。失败码：
+
+- `not_found` — OTP 不在 pending 列表（可能已 approve / reject / expire）
+- `master_key_missing` — gateway 未配 `AIWORKER_MASTER_KEY`
+- `quota_exceeded` — `AIWORKER_MAX_WORKERS` 已满（已注册 workerId 重批不占新名额）
+- `feature_disabled` — gateway 未注入 pending registry（异常 / 测试场景）
+
+### `aim enroll reject <otp>`（PLAN-019 / FEAT-026）
+
+```sh
+aim enroll reject BX7P-K39M
+# ℹ 已拒绝 OTP BX7P-K39M
+# { "rejected": true }
+```
+
+worker 端立即收到 `close 4403 enroll:rejected`，audit 写 `gateway.enrollment.rejected`（含 `otpHash` 前 16 hex）。OTP 本身不返回明文给 audit，避免 fleet.db 拷贝出去后用来批准已 reject 的请求。
+
+OTP 不存在时返回 `{ rejected: false }` + warn——非错误，幂等。
 
 ### `aim workers list`
 

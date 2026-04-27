@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-04-26 19:35
+> Updated: 2026-04-27 06:40
 
 ## Usage
 
@@ -66,4 +66,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-007 Public Caddy ingress bypasses gateway authN (loopback misidentification)**](BUG-007.md) `P0`
 - [x] [**FEAT-024 Worker self-enrollment via shared join token**](FEAT-024.md) `P2`
 - [x] [**BUG-008 workerSummarySchema rejects self-enrolled worker (empty baseUrl)**](BUG-008.md) `P1`
-- [ ] [**FEAT-026 Worker OTP-attended enrollment (operator-approved join)**](FEAT-026.md) `P2`
+- [x] [**FEAT-026 Worker OTP-attended enrollment (operator-approved join)**](FEAT-026.md) `P2`

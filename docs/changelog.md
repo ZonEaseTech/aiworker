@@ -1,5 +1,65 @@
 # AIWorker Changelog
 
+## 2026-04-27 06:40 PLAN-019 完成 — Worker OTP-attended enrollment 上线（FEAT-026）
+
+**PLAN-019 landed: worker OTP-attended enrollment with operator approval.** 第四条进 fleet 的路径，对标 GitHub Device Flow / `gh auth login`：worker 部署方（客户 / 朋友 / CI runner）**完全不需要**任何 fleet 凭证，gateway 在专用 `/enroll-ws` path 上派 8 字符 OTP（`XXXX-YYYY`，去歧义 30 字符 alphabet）回推 worker；deployer 把 OTP 通过任意带外通道发给 operator，operator 在 `/ws` 上 `aim enroll approve <otp>` 一次确认即放行入网。直击 PLAN-018 self-enroll 的 anti-pattern——self-enroll 仍要求 deployer 持有 fleet 级共享 join token，OTP 路径把这层都消掉。BKD 1 coordinator + 5 worktree subtask（S1 proto / S2 gateway pending registry + handlers / S3 gateway path-aware connect / S4 worker + aim enroll CLI / S5 docs + Caddy path split），按 wire-first 顺序合 main，每次合后跑 typecheck + 该 sub 的回归 case；S5 文档（本 commit）等到 S1+S2+S3+S4 都进 main 后落，**确保文档对照实际实现，不是 spec 想象**。
+
+What shipped:
+
+- **S1 — proto wire**（feat `05f2245` / merge `010372c`，`bkd/vol6acsy`）——`packages/gateway-proto/src/messages.ts` `connectFrameSchema.enroll` 加入 `mode: 'join-token' | 'otp'` 判别联合，refine 强制 `join-token` 必有 `joinToken` / `otp` 必无 `joinToken`；缺省 `mode='join-token'` 向后兼容 PLAN-018 帧。`packages/gateway-proto/src/methods.ts` 新增 3 个 operator-to-gateway 方法 `enroll.list` / `enroll.approve` / `enroll.reject`，并导出 `pendingEnrollmentSchema`。`packages/gateway-proto/src/events.ts` 新增 2 条 gateway → worker 事件 `enrollment.otp` / `enrollment.approved`。`packages/shared/src/fleet/registered-worker.ts` `RegisteredWorkerOrigin` union 加入 `'otp'`（manual / launch-local / self-enroll / otp 四态对齐 `addedBy`）。`parse.test.ts` 加 4 case 覆盖 mode 切换 × joinToken 取舍。
+- **S2 — gateway pending registry + handlers**（feat `9c7c078` / merge `508a146`，`bkd/hqbw4blu`）——
+  - `apps/gateway/src/registry/pending.ts`：新文件 `PendingEnrollmentRegistry`，30 字符去歧义 alphabet（Crockford 减 `0/O/I/1/L/U`），`XXXX-YYYY` 8 字符 OTP，碰撞重 roll（最多 5 次），`setTimeout` TTL（`onExpire` 回调由 gateway 注入），`wsToOtp` WeakMap 反查支持掉线清表。in-memory 设计——gateway 重启即丢，worker 自动重连重新拿新 OTP，所有持久化都在 approve 时才发生。
+  - `apps/gateway/src/router/methods/enroll.ts`：新文件 `handleEnrollList` / `handleEnrollApprove` / `handleEnrollReject`，`approve` 走 `master_key` + `quota` 守门 → `upsertEnrolledWorker(addedBy='otp')` → 通过原 ws 推 `enrollment.approved` 事件 → 写 `gateway.enrollment.approved` audit；`reject` close 4403 `enroll:rejected` + 写 `gateway.enrollment.rejected` audit（OTP 仅落 sha256 前 16 hex，明文不进 audit）。
+  - `apps/gateway/src/config.ts`：新增 `AIWORKER_ENROLL_OTP_TTL_SEC` env（默认 300，范围 [30, 3600]）。
+  - `apps/gateway/src/index.ts::createGatewayContext`：实例化 `PendingEnrollmentRegistry`，`onExpire` 写 `gateway.enrollment.expired` audit + close 4408；`server.ts::stop` 调 `dispose` 清所有 timer。
+  - `apps/gateway/src/router/dispatch.ts` + `apps/gateway/src/registry/index.ts`：注册 enroll 方法 + re-export 类型。
+  - `apps/gateway/test/enroll-otp.test.ts`：11 case 覆盖 happy / expire / reject / collision / list / quota / master_key_missing / dispose / unknown otp / feature_disabled。
+- **S3 — gateway path-aware enroll handshake**（feat `7705be7` / merge `4d97b2a`，`bkd/5sxw5aaf`）——
+  - `apps/gateway/src/server.ts::fetch`：接受 `/enroll-ws` upgrade，`ws.data.path` 标记为 `/ws` / `/enroll-ws`，下游 `handleMessage` 据此分流。
+  - `apps/gateway/src/auth/token.ts::authorizeConnection`：增 `path` + `isOtpEnrollSubmit` 入参，`/enroll-ws` 仅放 `enroll.mode='otp'`、`/ws` 拒绝 `enroll.mode='otp'`，`wrong_path:*` 走 close 4400（协议错），与 4401 `auth:*` 区分。
+  - `apps/gateway/src/server.ts::handleMessage`：connect 阶段在 `/enroll-ws` + OTP 路径调用 `ctx.pendingEnrollments.submit`，回推 `enrollment.otp` 事件给 worker，标 `ws.data.role='node-pending'`，写 `gateway.enrollment.requested` audit（OTP 仅落 sha256 前 8 hex）；`ws.send` 失败立即 `removeByWs` + close 4500，不留悬挂 entry。握手后 `node-pending` 状态忽略所有非 close 帧。`handleClose` 在 `node-pending` 掉线时 `removeByWs` + 写 `gateway.enrollment.abandoned` audit（幂等，approve / reject 已先清的不重复）。
+  - `apps/gateway/src/registry/types.ts`：`ConnectionData` 加 `'node-pending'` role + `path: '/ws' | '/enroll-ws'` 字段。
+  - `apps/gateway/test/enroll-otp-handshake.test.ts`：9 case 覆盖 path-aware authN matrix 各分支（cross-path 拒绝 / submit 成功 / abandon / 推送失败回滚）。
+- **S4 — worker OTP mode + aim enroll CLI**（feat `b09d9f1` / merge `ebe0d6f`，`bkd/201676sp`）——
+  - `packages/core/src/config/worker.ts`：新增 `AIWORKER_ENROLL_MODE` env（`'auto' | 'otp'`，默认 `'auto'`）。
+  - `packages/core/src/worker/gateway-client/{config,client,index}.ts`：`GatewayNodeEnrollOptions` 改 `mode='join-token'|'otp'` 判别联合；mode='otp' 时 connect 帧 `enroll` 块只带 `apiToken` / `displayName`，不带 `joinToken`；`onmessage` 拦截 `enrollment.otp` / `enrollment.approved` 事件分别走 `onEnrollmentOtp` / `onEnrollmentApproved` 回调（不进 dispatcher）。approved 后 client 翻 `enrolledViaOtp=true`，下次断线重连帧改为 plain node connect（不带 enroll 块、`token=apiToken`，path 仍走 `/enroll-ws`）。
+  - `apps/cli/src/commands/serve.ts::runServe`：trigger table 加 OTP 分支——`--gateway` 显式 → legacy；URL + JOIN_TOKEN（mode≠otp）→ self-enroll；URL only → OTP；URL + JOIN_TOKEN + ENROLL_MODE='otp' → 强制 OTP（忽略 JOIN_TOKEN）；URL only 时 path 强制改写为 `/enroll-ws`。`onEnrollmentOtp` 回调通过 `formatOtpBox` 把 `XXXX-YYYY` + 倒计时打成方框形 stdout，consola.info 附 `aim enroll approve` 提示；`onEnrollmentApproved` 回调打 `approved as <workerId>` 行。
+  - `apps/cli/src/aim/commands/enroll.ts`：新文件 `runEnrollList` / `runEnrollApprove` / `runEnrollReject`，三个子命令复用 `withSession` 走 operator-to-gateway routing。
+  - `apps/cli/src/aim.ts`：注册 `aim enroll list / approve <otp> / reject <otp>` 三个子命令。
+  - `packages/core/src/worker/gateway-client/otp-mode.test.ts`：4 case 覆盖 OTP 帧编码 / OTP / approved 事件回调路径 / 重连后 plain connect。
+  - `apps/cli/src/aim/commands/enroll.test.ts`：4 case 覆盖 list / approve / reject / 异常退出码。
+- **S5 — docs + Caddyfile path split**（本 commit）——`ops/caddy/Caddyfile.tmpl` 拆 `/ws`（保留 `import auth.snippet` BUG-007）+ `/enroll-ws`（**无** basicauth）+ `/health`（保留 basicauth）+ 默认 404 fallback；`docs/architecture.md` § 身份与配置自举从三条路径升级到四条 + 完整 path-aware authN matrix 表；`docs/deployment.md` 新增 § "Worker OTP-attended enroll quick start (PLAN-019 / FEAT-026)" 含 deployer / operator 双视角命令、安全模型、close code 排错表、Caddy path split 说明；`docs/cli.md` `aiw serve` 触发表升级到 5 行（含 OTP 模式）+ stdout OTP 方框示例 + 新增 `aim enroll list / approve / reject` 三个子命令文档；`CLAUDE.md` § 身份与配置自举硬规矩从三条升级到四条（含 OTP 分支判定 + path-aware authN）。
+
+测试基线变化：
+
+- `@aiworker/gateway-proto`: +4 case（S1 parse.test）→ 19 pass。
+- `@aiworker/gateway`: +20 case（S2 enroll-otp.test 11 + S3 enroll-otp-handshake.test 9）→ 87 pass。
+- `@aiworker/core`: +4 case（S4 otp-mode.test）→ 403 pass。
+- `@aiworker/cli`: +4 case（S4 aim enroll.test）→ 24 pass。
+- workspace 整体 typecheck 9/9 全过；老路径（手动 pair / 自动 launch / loopback / sharedSecret / self-enroll）零回归。
+
+回归矩阵（覆盖 PLAN-019 §Test plan + FEAT-026 12 ACs）：
+
+- AC #1 触发：`aiw serve` 仅有 `AIWORKER_GATEWAY_URL` env → 落 OTP 模式（trigger table 行 3，S4 单测 + 集成）。
+- AC #2 OTP 渲染：去歧义 alphabet `ABCDEFGHJKMNPQRSTVWXYZ23456789`（registry 单测 + S4 stdout 集成）。
+- AC #3 list：`enroll.list` 返 pending 数组（S2 enroll-otp.test 6 / aim enroll.test 1）。
+- AC #4 approve：fleet 行 `addedBy='otp'`，原 ws 收 `enrollment.approved`（S2 happy + S4 client 集成）。
+- AC #5 reject：close 4403 + audit `gateway.enrollment.rejected`（S2 reject case）。
+- AC #6 expire：`AIWORKER_ENROLL_OTP_TTL_SEC` TTL 到 → close 4408 + audit `.expired`（S2 expire case）。
+- AC #7 collision：generator 制造碰撞 → registry 重 roll（S2 collision case + registry 单测）。
+- AC #8 reconnect：approved 后 worker 翻 `enrolledViaOtp=true`，下次重连不再 OTP submit（S4 client 集成）。
+- AC #9 Caddy path split：`/ws` 仍挂 basicauth、`/enroll-ws` 无 basicauth（本 commit `ops/caddy/Caddyfile.tmpl`）。
+- AC #10 path-aware authN：`/enroll-ws` 拒非 OTP / `/ws` 拒 OTP，全部由 `authorizeConnection` 集中产 `wrong_path:*`（S3 handshake 9 case 全覆盖）。
+- AC #11 文档：本 commit `architecture.md` / `deployment.md` / `cli.md` / `CLAUDE.md` 同步落地。
+- AC #12 测试：gateway 20 case（S2 11 + S3 9）/ worker bootstrap 4 case 全过。
+
+文档配套（本 commit）：`docs/architecture.md` § 身份与配置自举升级到四条路径 + path-aware authN matrix 表 + 角色与鉴权表加 `node-pending` 行；`docs/deployment.md` § "Worker OTP-attended enroll quick start" 完整 deployer / operator 双视角命令 + Caddy path split 段；`docs/cli.md` `aiw serve` 触发表 + `aim enroll {list,approve,reject}` 三段；`CLAUDE.md` § "身份与配置自举" 四条硬规矩 + audit action 列表。
+
+后续：
+
+- **OTP rate-limit per source IP**（PLAN-019 §Risks "OTP enumeration / brute-force"，P3）：当前 `/enroll-ws` 无 per-IP 限速，理论上可暴力穷尽 OTP 空间——但 `enroll.approve` 在 operator basicauth 通道，攻击者要先穿透 basic-auth 才能尝试，无新攻击面。如运营观察到滥用再开 P3 follow-up。
+- **Web SPA pending-list UI**（PLAN-019 §A5，stage-2）：本轮明确不做（"应该还不需要 web ui"）；CLI 已闭环。后续如果 SaaS 多租户需求出现可以再开一个 PLAN 落 SPA 形式。
+
 ## 2026-04-26 19:35 PLAN-018 E2E 验证 — coordinator 收尾
 
 跑完整 self-enroll round-trip：起 gateway with `AIWORKER_JOIN_TOKEN=test-secret-1234567890abcdef` + `AIWORKER_MASTER_KEY=<32-byte hex>` 在 `:23000`；起 `aiw serve` with 同一 join token + `AIWORKER_GATEWAY_URL=ws://127.0.0.1:23000/ws` + `AIWORKER_DISPLAY_NAME=smoke` 在 `:23001`。5 秒内 `fleet.db.registered_workers` 出现 `id=w_3xdwxx8pe6qq, display_name=smoke, added_by=self-enroll`，`audit_events` 写入一条 `gateway.worker.enrolled` 含 `workerId / displayName / deviceId`（FEAT-024 AC #1 / #2 / #7 ✓）。换错 token 重起一个 worker → `fleet.db` 不变，`audit_events` 写多条 `gateway.connect.rejected reason=join_token_mismatch`（worker reconnect loop 的预期表现，AC #3 ✓）。脚本与 inspect helper 留在 `tmp/pl018-e2e/`。
