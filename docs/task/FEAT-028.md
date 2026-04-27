@@ -1,9 +1,10 @@
 # FEAT-028 CLI naming redesign (aiw / aim too cryptic)
 
 - **status**: pending
-- **priority**: P2
+- **priority**: P1
 - **owner**: (unassigned)
 - **createdAt**: 2026-04-27 07:30
+- **decided**: 2026-04-27 07:35 — 方案 B + binary 名 `aiworker` + npm 包 `@zonease/aiworker-cli`；no backwards-compat shim（用户明确不需要：aiw/aim 从未发布过）
 
 ## Description
 
@@ -34,9 +35,9 @@ instructions, systemd templates, GH Releases asset names, etc.
    - systemd unit template `aim install systemd`
    - `~/.aiworker/aim.json` filename — or rename the state file too
    - README.md
-2. Backwards-compat shim during transition: old `aiw` / `aim` binaries
-   exist as deprecation-warning wrappers calling the new ones for at
-   least one minor version.
+2. **No backwards-compat shim** — `aiw.ts` / `aim.ts` files removed
+   entirely; `apps/cli/package.json` only exposes `aiworker` bin
+   (decision 2026-04-27: never published, clean break).
 3. `bun run typecheck && test` clean.
 4. Smoke: full PLAN-019 OTP e2e using new names.
 
@@ -77,7 +78,7 @@ instructions, systemd templates, GH Releases asset names, etc.
 - Cons: `agent` is also generic; collides with ssh-agent, a thousand
   AI/agent CLIs in 2025
 
-### Recommended (subject to user approval): **B (`aiworker` single binary)**
+### LOCKED: **B (`aiworker` single binary)** — user-approved 2026-04-27 07:35
 
 - Single binary keeps `$PATH` clean.
 - "aiworker is THE tool" is good marketing alignment with the project name.
@@ -88,10 +89,22 @@ instructions, systemd templates, GH Releases asset names, etc.
     — what `aim workers ...` does today
   - `aiworker pair / chat / config get/set / token rotate / approvals list/grant / schedule list/add/remove / enroll list/approve/reject / logs / install systemd`
     — what `aim ...` does today
-- Implementation: keep current `aiw.ts` / `aim.ts` files; add a single
-  `aiworker.ts` entry that dispatches by `argv[2]` to the right module.
-- Backwards-compat: `aiw` and `aim` survive one release as thin
-  wrappers (deprecation warning + delegate).
+- Implementation: replace `aiw.ts` + `aim.ts` with single `aiworker.ts`
+  entry that registers all subcommands via cac. The two existing files
+  can either be deleted or kept as internal modules imported by
+  `aiworker.ts` (whichever keeps cac registration cleaner — likely
+  collapse to one file given cac top-level command count is moderate).
+- **No backwards-compat** (decision 2026-04-27): `aiw` / `aim` are not
+  in `bin` map of any published artifact, so dropping them costs zero
+  downstream users.
+- npm package name: `@zonease/aiworker-cli` (FEAT-027). `bin` entry:
+  `aiworker`. Install + use:
+  ```
+  npm install -g @zonease/aiworker-cli
+  aiworker serve --port 3001
+  aiworker fleet list
+  aiworker chat <workerId> 'hello'
+  ```
 
 ## ActiveForm
 
@@ -114,3 +127,7 @@ Redesigning CLI names
 - Coordinator should sweep the entire repo for hardcoded `aiw ` /
   `aim ` strings (with trailing space to avoid false positives in
   comments) before declaring done.
+- ⚠️ **Historical docs do not change** — `BUG-NNN.md` / `FEAT-NNN.md`
+  / `PLAN-NNN.md` / `docs/changelog.md` 内出现的 `aiw` / `aim`
+  references 留作历史记录，只改"forward-looking"文档（README.md /
+  architecture.md / cli.md / deployment.md / CLAUDE.md）。

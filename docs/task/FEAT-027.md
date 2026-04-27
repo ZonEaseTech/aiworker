@@ -4,6 +4,7 @@
 - **priority**: P2
 - **owner**: (unassigned)
 - **createdAt**: 2026-04-27 07:30
+- **decided**: 2026-04-27 07:35 — npm scope `@zonease`，包名 `@zonease/aiworker-cli`，binary `aiworker`
 
 ## Description
 
@@ -28,9 +29,9 @@ curl -fsSL https://github.com/.../releases/.../aiw -o /usr/local/bin/aiw && chmo
 
 ### Acceptance criteria
 
-1. `apps/cli` published to npmjs.com (or equivalent) under
-   `@aiworker/cli` (or whatever name FEAT-028 settles on); both binaries
-   (`aiw` + `aim` — or rebranded names — exposed via `bin` map).
+1. `apps/cli` published to npmjs.com under `@zonease/aiworker-cli`
+   (FEAT-028 lock-in 2026-04-27); single `bin: { "aiworker": ... }`
+   entry — no `aiw` / `aim` in any published artifact.
 2. Version bump strategy documented (semver; tied to git tag releases).
 3. CHANGELOG entries auto-generated from `docs/changelog.md` PLAN/BUG
    entries since last release.
@@ -69,6 +70,8 @@ Publishing CLI to npmjs / GH Releases
 - GH Actions billing is still out (per session 2026-04-26). Either
   resolve billing first, or run release workflow on a self-hosted
   runner.
-- npm scope `@aiworker` may already be taken — check and reserve early.
+- npm scope `@zonease` confirmed owned 2026-04-27. Publishing path:
+  `bun publish` (or `npm publish --access public`) under
+  `@zonease/aiworker-cli`.
 - `bun publish` is now production-ready and avoids the npm CLI; pick
   one and stick with it.
