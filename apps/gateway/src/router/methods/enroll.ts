@@ -2,6 +2,7 @@ import type { HandlerResult, LocalHandler } from '../context'
 import { createHash } from 'node:crypto'
 import { encodeFrame, EVENTS, pendingEnrollmentSchema } from '@aiworker/gateway-proto'
 import { z } from 'zod'
+import { broadcastEventToOperators } from '../../events/broadcast'
 
 /**
  * PLAN-019：OTP-attended enrollment 的 operator 端方法。
@@ -12,10 +13,9 @@ import { z } from 'zod'
  *   audit `gateway.enrollment.approved`。
  * - `enroll.reject`：取出 entry → close 4403 → audit `gateway.enrollment.rejected`。
  *
- * 注意：handler 不在这里把 ws 升级注册成 NodeRegistry。S3（server.ts 路径感知
- * connect）会在同一个 entry.ws 上接管：S3 要么扩展本 handler 在 approve 后做
- * 注册，要么靠 worker 在收到 enrollment.approved 后立即重连普通 `/ws`——具体
- * 留 S3 决定。S2 阶段保持"事件 + 持久化"职责单一。
+ * BUG-009 后 approve handler 也负责把 entry.ws 从 node-pending 升级成
+ * 正式 node + 注册 NodeRegistry + 广播 worker.online——这一步原本 S2/S3
+ * 互相留 TODO 没接，导致 aim workers list 永远 online=false。
  */
 
 const otpParamSchema = z.object({ otp: z.string().min(1) })
@@ -105,8 +105,30 @@ export const handleEnrollApprove: LocalHandler = (ctx, params): HandlerResult =>
     ctx.masterKeyHex,
   )
 
+  // BUG-009：把 node-pending ws 升级到正式 node 注册——之前 S2/S3 互相留 TODO，
+  // 谁都没接，approve 后 ws 一直停在 node-pending 状态、NodeRegistry 看不到，
+  // 导致 aim workers list 永远 online=false、chat.send 全部 node_offline。
+  // 顺序：升级 role → 注册 NodeRegistry（处理可能的 replaced 老连接） →
+  // 推 enrollment.approved → 广播 worker.online。
+  entry.ws.data.role = 'node'
+  entry.ws.data.agentId = entry.workerId
+  const { replaced } = ctx.nodes.register({
+    workerId: entry.workerId,
+    deviceId: entry.ws.data.deviceId ?? entry.workerId,
+    ws: entry.ws,
+    pairedAt: Date.now(),
+    meta: {},
+  })
+  if (replaced) {
+    ctx.forwards.cancelByWorker(entry.workerId)
+    try {
+      replaced.ws.close(1012, 'replaced_by_enroll_approve')
+    }
+    catch { /* 老连接关失败不影响新连接 */ }
+  }
+
   // 通过原 ws 把 enrollment.approved 事件推回 worker——worker 拿到 deviceToken
-  // 后即可视作 enrollment 完成,后续如何升级连接由 S3/S4 决定。
+  // 后即可视作 enrollment 完成。BUG-009 之后 ws 已升级为正式 node，无需重连。
   try {
     entry.ws.send(encodeFrame({
       type: 'event',
@@ -122,6 +144,20 @@ export const handleEnrollApprove: LocalHandler = (ctx, params): HandlerResult =>
     // worker 已断开——视为放弃 enrollment;fleet 行已经写了,运维通过
     // workers.list 仍可见这条记录。
   }
+
+  // 广播 worker.online 给所有 operator——与常规 connect 路径
+  // (apps/gateway/src/server.ts handleMessage line 322) 行为对齐。
+  broadcastEventToOperators(ctx.operators, {
+    type: 'event',
+    name: EVENTS.WORKER_ONLINE,
+    payload: {
+      workerId: entry.workerId,
+      displayName: upsert.row.displayName,
+      deviceId: entry.ws.data.deviceId ?? entry.workerId,
+      connectedAt: Date.now(),
+    },
+    ts: Date.now(),
+  })
 
   if (upsert.kind !== 'unchanged') {
     ctx.persistence.recordAudit({

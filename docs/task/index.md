@@ -67,3 +67,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-024 Worker self-enrollment via shared join token**](FEAT-024.md) `P2`
 - [x] [**BUG-008 workerSummarySchema rejects self-enrolled worker (empty baseUrl)**](BUG-008.md) `P1`
 - [x] [**FEAT-026 Worker OTP-attended enrollment (operator-approved join)**](FEAT-026.md) `P2`
+- [x] [**BUG-009 OTP approve does not upgrade ws to NodeRegistry**](BUG-009.md) `P1`
