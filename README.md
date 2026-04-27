@@ -1,184 +1,173 @@
 # AIWorker
 
-自托管 Agent Runtime — 由 **Brain provider**（知识 / 记忆 / 技能）与 **Executor provider**（OpenAI 兼容 chat completions + tool calling）组合而成。
+自托管 Agent Runtime — 由 **Brain provider**（知识 / 记忆 / 技能）与 **Executor provider**（OpenAI 兼容 / claude-code / codex / gemini-cli / qwen-code / cursor / MCP）组合而成。
 
-工作站、服务器、k8s pod、docker container 都能跑成一个 worker 加入同一个 fleet。Operator 通过一个 CLI 控制所有 worker。
+工作站、服务器、k8s pod、docker container 都能跑成一个 worker 加入同一个 fleet。Operator 用一个 CLI 控制所有 worker。
 
 ## Features
 
-- **4 种入网路径**：手动 pair、docker auto-launch、自助 self-enroll（unattended）、**OTP-attended enrollment（worker deployer 零凭证）**
-- **WS 控制面**：operator 与 worker 共享同一 gateway 入口，按 path 分流
-- **多 LLM engine**：`http`（OpenAI / DeepSeek / SiliconFlow 等）/ `claude-code` / `codex` / `gemini-cli` / `qwen-code` / `cursor` / `mcp`
-- **多 channel**：Telegram / WhatsApp / Lark / LINE / Web 五种 webhook adapter，全部强制验签
-- **Cron / per-tool approvals / hot-reload / fallback chain** 全部内建
-- **数据物理隔离**：fleet.db（gateway）与 worker.db（每 worker）AES-256-GCM 各自加密，丢失 master key = 全部失联
-- **三档部署**：裸跑（开发）/ systemd（推荐 Linux）/ docker compose（fast-launch）
+- **4 种入网路径**：OTP-attended（worker deployer 零凭证）/ self-enroll（unattended 批量）/ 手动 pair / docker auto-launch
+- **WS 控制面**：operator + worker 共享同一 gateway 入口，按 path 分流（`/ws` basicauth + `/enroll-ws` OTP 专用）
+- **多 LLM engine**：`http` (OpenAI / DeepSeek / SiliconFlow / 任意 OpenAI 兼容) / `claude-code` / `codex` / `acp` (gemini / qwen) / `cursor` / `mcp`
+- **多 channel webhook**：Telegram / WhatsApp / Lark / LINE / Web，全部强制验签
+- **Cron / per-tool approvals / hot-reload / fallback chain** 内建
+- **数据物理隔离**：fleet.db（gateway）与 worker.db（每 worker）AES-256-GCM 各自加密
+- **三档部署**：裸跑 / systemd / docker compose
 
-## Architecture
+---
+
+## 🚀 30 秒 demo
+
+**目标**：本机起一个 worker，加入远端 gateway，发一条消息让 worker 用 LLM 回。
 
 ```
-operator ─basicauth─►  /ws         ──────► gateway
-worker  ─无凭证─────►  /enroll-ws  ──────► gateway     (OTP enrollment 专用)
-                                            │
-                                            ▼
-                                       fleet.db
-                                            │
-                                       outbound WS
-                                            │
-                                       worker process(es)
-                                            │
-                                            ▼
-                                  worker.db + LLM engine
+┌──────────────────────────┐      OTP enroll          ┌──────────────────────────┐
+│   你的工作站              │  wss://<gateway>/        │   远端 gateway            │
+│                          │     /enroll-ws           │                          │
+│   aiworker serve         │ ───────────────────────► │  /root/.bun/bin/aiworker │
+│   (workerId 自动 mint)   │                          │  gateway start (systemd) │
+│   listening :9217        │ ◄─────── OTP YDCR-ZD8M ──│                          │
+│                          │                          │  fleet.db                │
+└──────────┬───────────────┘                          └─────┬────────────────────┘
+           │                                                │
+           │  ┌─────────────────────────────────────────────┴──┐
+           │  │  Step 4: operator 在 gateway 同机 loopback     │
+           │  │  ws://127.0.0.1:9218/ws (空 token bypass)      │
+           │  │  $ aiworker enroll list                        │
+           │  │  $ aiworker enroll approve YDCR-ZD8M           │
+           │  └─────────────────────────────────────────────┬──┘
+           │                                                │
+           │ ◄─────── enrollment.approved (deviceToken) ────┤
+           │  worker.online=true 写 fleet.db                │
+           │                                                │
+           │  Step 6: chat (operator → gateway → worker)    │
+           │ ◄─────── chat.send 'hello' ────────────────────┤
+           │  orchestrator → executor (claude-code)         │
+           │  orchestrator → ... → done                     │
+           ├───── chat.message echo ──────────────────────► │
+           ▼                                                ▼
+     pkill / SIGTERM                                  fleet.db 持久化
 ```
 
-详见 [`docs/architecture.md`](docs/architecture.md)。
+**Worker 端**（你的工作站，零 fleet 凭证）：
 
-## Stack
+```sh
+bun install -g @zonease/aiworker-cli       # 或 npm install -g
 
-- Bun workspaces (monorepo: `apps/api` + `apps/cli` + `apps/gateway` + `apps/web` + 7 个 packages)
-- Hono OpenAPIHono / Bun.serve / Drizzle ORM / SQLite / Zod / consola
-- React 19 + TanStack Router/Query + shadcn/ui + Tailwind v4（web SPA）
+export AIWORKER_GATEWAY_URL='wss://your-gateway.example/'
+export AIWORKER_DISPLAY_NAME='my-laptop'
+aiworker serve
+```
+
+输出：
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│  ⚠️  AIWORKER first-run setup                                              │
+│  AIWORKER_MASTER_KEY (写入 ~/.aiworker/.env, chmod 0600)                   │
+│      <64 hex chars — 离线备份>                                             │
+└────────────────────────────────────────────────────────────────────────────┘
+[worker] id=w_ntssfzwwzzq0
+[worker] AIWORKER_BOOTSTRAP_TOKEN=wtk_VhW4ea1JrfCJFdSQ...
+√ [aiworker serve] worker listening on :9217 (config v1)
+i [aiworker serve] OTP enrolling to wss://your-gateway.example/enroll-ws
+┌─────────────────────┐
+│  OTP:  YDCR-ZD8M    │
+│  expires in 300s    │
+└─────────────────────┘
+```
+
+**Operator 端**（gateway 主机或 basicauth 远端）：
+
+```sh
+aiworker enroll list                       # 看 pending OTP
+aiworker enroll approve YDCR-ZD8M          # ✔ 已批准
+aiworker fleet list                        # online: true
+aiworker chat w_ntssfzwwzzq0 'hello'       # NDJSON 流式输出
+```
+
+完整端到端实测见 [docs/changelog.md](docs/changelog.md) 11:50 条目。
 
 ---
 
 ## Install
 
-### Published
+### 已发布
 
 ```sh
-bun install -g @zonease/aiworker-cli
-# 或 npm install -g @zonease/aiworker-cli
-# 或从 GitHub Releases 下载单文件 binary（无依赖）：
-#   curl -fsSL https://github.com/ZonEaseTech/aiworker/releases/latest/download/aiworker-linux-x64 -o /usr/local/bin/aiworker
-#   chmod +x /usr/local/bin/aiworker
-
-aiworker init                       # 首次 mint master key 写到 ~/.aiworker/.env
-aiworker serve                      # 默认监听 :9217
-aiworker fleet list
-aiworker chat <workerId> 'hello'
+bun install -g @zonease/aiworker-cli       # ← 当前 latest 0.2.1（含 in-process gateway / OTP enroll / 6 LLM engine）
+# 或
+npm install -g @zonease/aiworker-cli
 ```
+
+binary 跑在 `~/.bun/bin/aiworker` 或 `$(npm bin -g)/aiworker`。第一次跑任意命令时自动 mint master key 写到 `~/.aiworker/.env`（chmod 0600）。
 
 ### 本地开发
 
 ```sh
-git clone <repo-url>
+git clone https://github.com/ZonEaseTech/aiworker
 cd aiworker && bun install
-bun apps/cli/src/aiworker.ts <subcmd>
+bun apps/cli/src/aiworker.ts <subcmd>      # = aiworker <subcmd>
 ```
 
-下面的 Quickstart / cheat sheet 默认用 `aiworker ...`（已发布命令）；本地开发态等价 `bun apps/cli/src/aiworker.ts ...`。
+下面所有 `aiworker ...` 命令在本地开发态等价 `bun apps/cli/src/aiworker.ts ...`。
 
 ---
 
-## Quickstart
+## 4 种入网路径
 
-### 角色
+| 场景 | 用 | Worker 端凭证 | Operator 介入 |
+|---|---|---|---|
+| 朋友/客户/CI 临时装 worker | **OTP（推荐）** | 零（worker 不持任何 fleet 共享 secret） | 看 8 字符 OTP → approve |
+| k8s/docker compose 批量 unattended | self-enroll | `AIWORKER_JOIN_TOKEN`（fleet 共享） | 无（自动入网） |
+| 高安全单 worker 手动 | 手动 pair | worker 启动后输出 `wtk_xxx` bootstrap token | `aiworker pair --bootstrap-token wtk_...` |
+| docker fast-launch（gateway 同机） | `aiworker fleet launch` | gateway 自动注入 | 一行命令 |
 
-```
-operator        ─── 持 basicauth + aiworker CLI ─── 管 fleet
-worker deployer ─── 跑 aiworker serve ────────── 加入 fleet 后等指令
-```
+### OTP（推荐）
 
-### 选哪种 enrollment？
-
-| 场景 | 用 | 一句话 |
-|---|---|---|
-| 朋友/客户/CI 临时装 worker | **OTP（推荐）** | worker deployer **零凭证**，operator 看 8 字符 OTP 后 approve |
-| k8s/docker compose 批量 unattended | self-enroll | env 配 `AIWORKER_JOIN_TOKEN` 自动入网 |
-| 高安全单 worker 手动 | 手动 pair | `aiworker pair --bootstrap-token wtk_...` |
-| docker fast-launch（gateway 同机） | `aiworker fleet launch` | gateway supervisor 自己拉容器 |
-
----
-
-## 路径 1：OTP 入网（最简）
-
-### Worker deployer（任何机器，**零 fleet 凭证 + 零本地 secret 输入**）
-
+Worker:
 ```sh
-# 1. 装 bun（如果没装）
-curl -fsSL https://bun.sh/install | bash
-
-# 2. 装 aiworker CLI
-bun install -g @zonease/aiworker-cli
-# 或 npm install -g @zonease/aiworker-cli
-
-# 3. 第一次 init —— 自动 mint master key 写到 ~/.aiworker/.env (chmod 600)，
-#    控制台显示**一次**，请离线备份。
-aiworker init
-
-# 4. 启动 worker，指向你的 gateway（默认监听 :9217）
-export AIWORKER_GATEWAY_URL="wss://your-gateway.example/"
-export AIWORKER_DISPLAY_NAME="my-laptop"   # 可选；默认取 hostname
+export AIWORKER_GATEWAY_URL='wss://your-gateway.example/'
+export AIWORKER_DISPLAY_NAME='my-laptop'   # 可选，默认 hostname
 aiworker serve
 ```
 
-控制台输出：
-
-```
-i [aiworker serve] OTP enrolling to wss://your-gateway.example/enroll-ws; awaiting operator approval
-┌─────────────────────┐
-│  OTP:  9CDT-94BK    │
-│  expires in 300s    │
-└─────────────────────┘
-```
-
-把 OTP 报给 operator。
-
-### Operator
-
+Operator:
 ```sh
-aiworker enroll list
-# {"pending":[{"otp":"9CDT-94BK","displayName":"my-laptop",...}]}
-
-aiworker enroll approve 9CDT-94BK
-# ✔ 已批准
-
-aiworker fleet list
-# {"workers":[{"workerId":"w_xxx","displayName":"my-laptop","online":true,...}]}
+aiworker enroll list                       # → pending [{ otp, workerId, displayName }]
+aiworker enroll approve <OTP>
 ```
 
-worker 端同步打：`√ approved as w_xxx; deviceToken=wtk_...，已加入 fleet`。
+### self-enroll（自动化）
 
----
-
-## 路径 2：self-enroll（自动化批量）
-
-Worker 端 env 多两个，省去 operator approve：
-
+Worker:
 ```sh
-export AIWORKER_GATEWAY_URL="wss://operator:<basicauth-pwd>@your-gateway.example/ws"
-export AIWORKER_JOIN_TOKEN="<gateway 端配的 join token>"
-export AIWORKER_DISPLAY_NAME="ci-runner-12"
-
-bun apps/cli/src/aiworker.ts init
-bun apps/cli/src/aiworker.ts serve --port 9217
-# 自动加入；operator 端 aiworker fleet list 直接见到
+export AIWORKER_GATEWAY_URL='wss://operator:<basicauth-pwd>@your-gateway.example/ws'
+export AIWORKER_JOIN_TOKEN='<gateway 配置的 join token>'
+export AIWORKER_DISPLAY_NAME='ci-runner-12'
+aiworker serve
+# operator 端立即 aiworker fleet list 见到
 ```
 
 > ⚠️ URL 含 basicauth + JOIN_TOKEN 是 fleet 共享 secret，泄露面大。CI 可接受，朋友机器不要给。
 
----
-
-## 路径 3：手动 pair（高安全）
+### 手动 pair（高安全）
 
 ```sh
-# Worker 端：
-bun apps/cli/src/aiworker.ts init
+# Worker:
+aiworker serve --gateway 'wss://operator:<pwd>@gateway/ws'
 # 抓 stdout 的 wtk_xxx
-bun apps/cli/src/aiworker.ts serve --port 9217 --gateway wss://operator:<pwd>@gateway/ws
 
-# Operator 端：
-aiworker pair --url wss://operator:<pwd>@gateway/ws \
+# Operator:
+aiworker pair --url 'wss://operator:<pwd>@gateway/ws' \
               --worker-url http://<worker-host>:9217 \
               --bootstrap-token wtk_xxx \
               --display-name production-1
 ```
 
-> 限制：gateway 必须能 inbound 到 worker `:9217` 验 token。worker 在 NAT 后需要反向 tunnel；改用 OTP 模式避坑。
+> 限制：gateway 必须 inbound 到 worker `:9217` 验 token。worker 在 NAT 后用 OTP 替代。
 
----
-
-## 路径 4：docker auto-launch
+### docker auto-launch
 
 需要 gateway 启用 `AIWORKER_GATEWAY_CAN_LAUNCH=true` + `docker.sock:ro` mount。
 
@@ -187,49 +176,46 @@ aiworker fleet launch --display-name demo
 # gateway supervisor 自动 docker run + scrape bootstrap token + pair
 ```
 
-详见 [`docs/deployment.md`](docs/deployment.md) 的 supervisor overlay 段落。
+详见 [`docs/deployment.md`](docs/deployment.md) supervisor overlay。
 
 ---
 
-## Operator 日常 cheat sheet
+## Operator cheat sheet
 
 ```sh
 # fleet 状态
-aiworker fleet list                            # 谁在线
-aiworker fleet info <workerId>                 # 单个 worker 运行时快照
-aiworker fleet remove <workerId>               # 摘除（deviceToken 立即失效）
+aiworker fleet list                                # 谁在线
+aiworker fleet remove <workerId>                   # 摘除（deviceToken 立即失效）
 
-# 与 worker 对话（流式 NDJSON）
+# chat（流式 NDJSON）
 aiworker chat <workerId> 'hello'
 aiworker chat <workerId> '继续' --conversation-id <prev-id>
 
 # 配置（乐观锁必须带 --if-match）
-aiworker config get <workerId>                 # 读出含 version
+aiworker config get <workerId>                     # 读出含 version
 aiworker config set <workerId> "$(cat new.json)" --if-match <version>
 
-# Token 轮换（旧立即失效）
+# Token 轮换
 aiworker token rotate <workerId>
 
 # OTP 审批
-aiworker enroll list
-aiworker enroll approve <OTP>
-aiworker enroll reject  <OTP>
+aiworker enroll list / approve <OTP> / reject <OTP>
 
 # 日志订阅
 aiworker logs <workerId> --follow --tail 200
 
-# 审批 per-tool
+# Per-tool approvals
 aiworker approvals list
-aiworker approvals grant <workerId> <taskId> <toolCallId>          # allow
+aiworker approvals grant <workerId> <taskId> <toolCallId>           # allow
 aiworker approvals grant <workerId> <taskId> <toolCallId> --deny
 
-# 定时任务
+# Cron
 aiworker schedule list <workerId>
-aiworker schedule add  <workerId> --expression '0 9 * * *' --prompt '早报' --channel web --chat-id daily
+aiworker schedule add <workerId> --expression '0 9 * * *' --prompt '早报' --channel web --chat-id daily
 aiworker schedule remove <workerId> <jobId>
 ```
 
-`aiworker` operator 默认 gatewayUrl 在 `~/.aiworker/aim.json`。第一次跑：
+Operator 端首次需写 `~/.aiworker/aim.json`：
 
 ```sh
 mkdir -p ~/.aiworker
@@ -244,22 +230,89 @@ EOF
 chmod 600 ~/.aiworker/aim.json
 ```
 
-如果在 gateway 同机跑（loopback），用 `ws://127.0.0.1:9218/ws`，无需 basicauth/token。
+> gateway 同机 loopback：用 `ws://127.0.0.1:9218/ws`，无需 basicauth/token（loopback bypass）。
 
 ---
 
-## Worker 配 LLM（claude-code 示例）
+## Worker 配 LLM executor
+
+新 worker 默认 `executor: { engine: 'http', variant: 'default' }` 但缺 OpenAI key 会失败。配真实 LLM：
+
+### 选 1：claude-code（本地已 `claude login`）
 
 ```sh
-NEW='{"brains":[],"brainWriteTarget":"","brainRetrieval":"first-match","executor":{"engine":"claude-code","variant":"default"},"channels":[],"evolution":{"enabled":false,"observationRetentionDays":7}}'
-aiworker config set <workerId> "$NEW" --if-match <current-version>
+# 1. 拿 worker 当前 config + version
+aiworker config get <workerId>
+# → { "version": 1, "config": {...} }
+
+# 2. 切到 claude-code default variant（model=sonnet, timeout=120s）
+NEW='{
+  "brains": [],
+  "brainWriteTarget": "",
+  "brainRetrieval": "first-match",
+  "executor": { "engine": "claude-code", "variant": "default" },
+  "channels": [],
+  "evolution": { "enabled": false, "observationRetentionDays": 7 }
+}'
+aiworker config set <workerId> "$NEW" --if-match 1
+
+# 3. chat 验证
+aiworker chat <workerId> '请用中文回我一句话'
+# {"kind":"accepted",...}
+# {"kind":"chat.message","payload":{"role":"assistant","content":"...claude 真实回复..."}}
+# {"kind":"done","payload":{"finishReason":"stop"}}
 ```
 
-可选 `engine`：`http`（OpenAI 兼容）/ `mcp` / `claude-code` / `acp`(gemini/qwen) / `codex` / `cursor`。
+要求：worker 进程所在主机能跑 `claude` CLI（PATH 含 `~/.claude/local/claude` 或 npm 全局），且 `~/.claude.json` 有效（`claude login` 已完成）。
+
+`opus-plan` variant 切到 opus + plan 模式：`"executor": { "engine": "claude-code", "variant": "opus-plan" }`。
+
+### 选 2：OpenAI 兼容 (OpenAI / DeepSeek / SiliconFlow / etc.)
+
+```json
+{
+  "executor": {
+    "engine": "http",
+    "variant": "default",
+    "overrides": {
+      "baseUrl": "https://api.deepseek.com/v1",
+      "model": "deepseek-chat",
+      "apiKeyRef": "secret://openai/deepseek"
+    }
+  }
+}
+```
+
+`apiKeyRef` 必须先 register 到 worker 的 `SecretsVault`（POST `/api/worker/secrets`）；明文 secret 永不进 `worker_config.configJson`。
+
+### 选 3：ACP gemini / qwen
+
+```json
+{ "executor": { "engine": "acp", "variant": "gemini" } }
+```
+
+要求：worker 主机有 `gemini` CLI（`npm install -g @google/generative-ai-cli`）+ `~/.gemini/` auth。
+
+### 选 4：codex / cursor / mcp
+
+详见 [`docs/executor-engines.md`](docs/executor-engines.md)（含每 engine 安装/auth recipe）。
 
 ---
 
-## 部署形态对比
+## Architecture & deployment
+
+详见：
+- [`docs/architecture.md`](docs/architecture.md) — monorepo 布局、数据流、安全模型、env 全表
+- [`docs/gateway.md`](docs/gateway.md) — WS 协议（METHODS / EVENTS）+ 4 enroll path 实现
+- [`docs/deployment.md`](docs/deployment.md) — 三档部署 run book
+- [`docs/deployment-public-https.md`](docs/deployment-public-https.md) — 可选 Cloudflare + Caddy 公网叠加层（含 BUG-007 fail-closed basicauth）
+- [`docs/executor-engines.md`](docs/executor-engines.md) — 每 LLM engine 的 auth/install recipe
+
+```
+apps/{api, cli, web} + packages/{core, gateway, gateway-proto, shared, storage-sqlite, fs-layout}
+```
+
+部署形态：
 
 | 形态 | 适用 | 入口 | docker |
 |------|------|------|--------|
@@ -267,19 +320,17 @@ aiworker config set <workerId> "$NEW" --if-match <current-version>
 | **systemd**（Linux 推荐） | 服务器长跑 | `aiworker install systemd [--user\|--system]` | 无 |
 | **docker compose** | 不愿装 bun / per-worker 隔离 | `ops/compose/docker-compose.yml`（GHCR 镜像） | 有 |
 
-详见 [`docs/deployment.md`](docs/deployment.md)；公网 HTTPS（Cloudflare + Caddy）单独叠加层在 [`docs/deployment-public-https.md`](docs/deployment-public-https.md)。
-
 ---
 
 ## 关键 env
 
 | 变量 | 用于 | 说明 |
 |---|---|---|
-| `AIWORKER_MASTER_KEY` | gateway / worker | 64 hex；丢了 fleet.db 解不开 — **必须组织级离线备份** |
-| `INTERNAL_SHARED_SECRET` | gateway / 远程 operator | ≥16 chars；远程 aiworker CLI bearer |
+| `AIWORKER_MASTER_KEY` | gateway / worker | 64 hex；丢了 fleet.db / worker.db 解不开 — **必须组织级离线备份** |
+| `INTERNAL_SHARED_SECRET` | gateway / 远程 operator | ≥16 chars；远程 operator bearer |
 | `AIWORKER_JOIN_TOKEN` | gateway / self-enroll worker | self-enroll 模式触发；与 INTERNAL_SHARED_SECRET 解耦 |
 | `AIWORKER_GATEWAY_URL` | worker | OTP / self-enroll 模式连入口 |
-| `AIWORKER_DISPLAY_NAME` | worker | operator 端识别用 |
+| `AIWORKER_DISPLAY_NAME` | worker | operator 端识别用（默认 hostname） |
 | `AIWORKER_HOME` | gateway / worker | 默认 `~/.aiworker` |
 | `WORKER_DB_PATH` | worker | 默认 `$AIWORKER_HOME/worker.db` |
 | `AIWORKER_FLEET_DB_PATH` | gateway | 默认 `$AIWORKER_HOME/fleet.db` |
@@ -287,19 +338,18 @@ aiworker config set <workerId> "$NEW" --if-match <current-version>
 | `PORT` | worker | 默认 `9217` |
 | `AIWORKER_ENROLL_OTP_TTL_SEC` | gateway | OTP 过期秒数，默认 300，[30, 3600] |
 
-完整列表见 `apps/api/.env.example` 与 `ops/compose/.env.example`。
+完整列表：`apps/api/.env.example` + `ops/compose/.env.example`。
 
 ---
 
-## 故障排查（高频 3 条）
+## 故障排查（高频）
 
 | 现象 | 原因 | 修法 |
 |---|---|---|
 | `aiworker fleet list` → `WebSocket Expected 101 status code` | aim.json `gatewayUrl` 缺 `/ws` 或 basicauth | 重写 `~/.aiworker/aim.json`（见上） |
-| OTP `aiworker enroll approve` 后 worker `online: false` | gateway 版本旧（缺 BUG-009 fix，commit `233548b` 起修） | 服务器 `git pull && systemctl restart aiworker-gateway` |
-| 公网 `/health` 返回 401 | 你忘了带 basicauth | `curl -u operator:<pwd> https://your-gateway/health` |
-
-详见 [`docs/deployment-public-https.md` § Troubleshooting](docs/deployment-public-https.md)。
+| 公网 `/health` 返回 401 | Caddy basicauth | `curl -u operator:<pwd> https://your-gateway/health` |
+| OTP enroll 后 `aiworker chat` `executor error: OpenAI API key is not configured` | worker 没配 LLM | 走"Worker 配 LLM executor"段，切 claude-code / 配 OpenAI key |
+| systemd `aiworker-gateway` exit 1 `gateway 入口未找到` | 用了 0.2.0 旧 cli | `bun install -g @zonease/aiworker-cli@latest`（≥0.2.1）+ restart |
 
 ---
 
@@ -308,10 +358,8 @@ aiworker config set <workerId> "$NEW" --if-match <current-version>
 - **fleet.db / worker.db 物理隔离**：gateway 永不存 worker 的业务数据
 - **AES-256-GCM** 加密 `registered_workers.apiTokenEnc` + `worker_secrets`
 - **timing-safe** bearer 比较
-- **5 channel webhook 强制验签**（Telegram secret token / WhatsApp HMAC / Lark AES + token / LINE channel signature / Web binding token）
-- **Caddy 路径分流**：`/ws` basicauth 守 operator + 已配对 worker，`/enroll-ws` 仅接受 OTP submit；fail-closed（缺 `/etc/caddy/auth.snippet` 直接拒启动）
-
-详见 [CLAUDE.md § Security](CLAUDE.md) 与 [`docs/architecture.md` § 加密与认证](docs/architecture.md)。
+- **5 channel webhook 强制验签**（Telegram / WhatsApp / Lark / LINE / Web binding token）
+- **Caddy 路径分流**：`/ws` basicauth 守 operator + 已配对 worker，`/enroll-ws` 仅接受 OTP submit；fail-closed（缺 `/etc/caddy/auth.snippet` 直接拒启动，BUG-007）
 
 ---
 
@@ -335,7 +383,7 @@ bun run test           # 全工作区
 bun run lint
 ```
 
-文档系统（PMA）：[`docs/plan/`](docs/plan/) 是历史方案，[`docs/task/`](docs/task/) 是 task 跟踪，[`docs/changelog.md`](docs/changelog.md) 是发布日志。新功能按 `/pma` skill 走 investigate → proposal → implement 三阶段。
+文档系统（PMA workflow）：[`docs/plan/`](docs/plan/) 历史方案、[`docs/task/`](docs/task/) task 跟踪、[`docs/changelog.md`](docs/changelog.md) 发布日志。新功能按 `/pma` skill 走 investigate → proposal → implement 三阶段。
 
 ---
 
@@ -350,11 +398,12 @@ bun run lint
 | Module | Status |
 |---|---|
 | Gateway WS 控制面 | ✅ Production |
-| 4 enrollment paths | ✅ Production |
-| 7 LLM engines | ✅ Production |
-| 5 channel webhooks | ✅ Production |
-| Cron / approvals / hot-reload | ✅ Production |
-| **CLI 重命名（单 `aiworker` 入口）** | 🚧 Implementing (PLAN-020 / FEAT-028) |
-| **npm 发布** | ⏳ Planned (FEAT-027) |
+| 4 enrollment paths（OTP / self-enroll / pair / launch） | ✅ Production |
+| 6 LLM engines（http / claude-code / acp / codex / cursor / mcp） | ✅ Production |
+| 5 channel webhooks（Telegram / WhatsApp / Lark / LINE / Web） | ✅ Production |
+| Cron / per-tool approvals / hot-reload | ✅ Production |
+| 单 `aiworker` CLI（PLAN-020 / FEAT-028） | ✅ GA |
+| npm 发布（`@zonease/aiworker-cli`） | ✅ Latest 0.2.1 |
+| In-process gateway（npm install 场景，REFACTOR-004） | ✅ GA |
 | Web SPA pending UI | 🔜 Stage-2 |
 | Multi-host HA | 🔜 Stage-2 |

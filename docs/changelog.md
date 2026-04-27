@@ -1,5 +1,32 @@
 # AIWorker Changelog
 
+## 2026-04-27 12:15 [progress] README 重写 + claude-code executor 端到端验证
+
+README.md 大幅清理（+216/-167，409 行）：
+
+- 顶部加 **🚀 30 秒 demo** 章节：完整 ASCII 端到端流程图（worker → wss enroll → operator approve → fleet online → chat dispatch）+ 真实 worker/operator 命令 + 期望 stdout 输出
+- 修过期 Stack 描述：`apps/{api,cli,web}` + `packages/{core, gateway, gateway-proto, shared, storage-sqlite, fs-layout}`（apps/gateway 已 REFACTOR-004 迁到 packages/gateway）
+- 修 Status 表：CLI 重命名（PLAN-020）/ npm publish（FEAT-027 0.2.1 latest）/ in-process gateway（REFACTOR-004）全部 ✅ GA
+- "Worker 配 LLM executor" 段展开 4 例：claude-code（local logged-in `claude`）/ http (OpenAI/DeepSeek 兼容) / acp (gemini/qwen) / codex+cursor+mcp 链接
+- 修路径 2/3 命令（`bun apps/cli/src/aiworker.ts ...` → `aiworker ...`）
+- 故障排查 4 行替换：删旧 BUG-009 commit hash 引用 + 加 BUG-012 修法（`bun install -g @latest` ≥0.2.1）
+
+**claude-code executor 端到端 demo 实测**：
+
+本机起 worker（`AIWORKER_HOME=/tmp/aiw-demo-claude`），enroll 到测试服公网 wss → operator (loopback) approve OTP `94K3-C94C` → workerId `w_vk7y0qx23cgb` 加入 fleet → operator `aiworker config set ... '{"executor":{"engine":"claude-code","variant":"default"}}'` `--if-match 1` → response `{"version":2,"runtimeReload":"ok"}` → worker log: `i [worker] runtime reloaded to config version 2` → operator `aiworker chat <id> '请用一句话介绍你自己...'` →
+
+```
+{"kind":"accepted",...}
+{"kind":"agent.thinking","payload":{"chunk":"我是 Claude"}}
+{"kind":"agent.thinking","payload":{"chunk":"，由 Anthropic 构建的 AI 助手，目前运行在 **Claude"}}
+{"kind":"agent.thinking","payload":{"chunk":" Sonnet 4.6**（`claude-sonnet-4-6`）模型上。"}}
+{"kind":"done","payload":{"finishReason":"stop"}}
+```
+
+链路：本机 worker → 公网 wss → Cloudflare → Caddy `/ws` → 测试服 in-process gateway 0.2.1 → ForwardTable → worker orchestrator → claude-code executor → 本机 `claude` CLI（用 `~/.claude.json` 已登录 token）→ Anthropic API → stream chunks 回流。验证 hot-reload + claude-code executor + 真实 LLM 响应一气呵成。`finishReason: stop`（不再是 error）。
+
+清理：fleet remove + kill worker process + truncate tmp homes。
+
 ## 2026-04-27 11:50 [progress] REFACTOR-004 GA + BUG-011 + BUG-012 完成 — 测试服迁移到 npm cli + in-process gateway
 
 `@zonease/aiworker-cli@0.2.1` 真发到 npmjs.com（shasum `73a715c`，13 files / 0.85 MB unpacked / 234 KB packed，含 dist/drizzle/{fleet,worker} migrations）。测试服 cutover 一气呵成成功：
