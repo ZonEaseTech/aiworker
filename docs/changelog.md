@@ -1,5 +1,23 @@
 # AIWorker Changelog
 
+## 2026-04-27 12:00 [progress] REFACTOR-004 测试服迁移 cutover 失败 + 开 BUG-012 P1（gateway entry 仓库布局假设）
+
+测试服迁移 cutover 实战阻塞：`bun install -g @zonease/aiworker-cli@0.2.0` 装好后 systemctl restart aiworker-gateway 卡 activating（exit 1）。journal:
+
+```
+ERROR  gateway start 失败: gateway 入口未找到。请设置 AIWORKER_GATEWAY_ENTRY 或使用 --entry <path>；
+或确保仓库内存在 apps/gateway/src/index.ts。
+```
+
+Root cause：`apps/cli/src/aim/daemon.ts::resolveGatewayEntry` 假设 cli 跑在 monorepo 内，walk-up 找 `apps/gateway/src/index.ts` 作为 spawn 目标。npm install 装的 dist tarball 仅含 `aiworker.js + README.md + package.json`，sibling apps 不存在 → 命令无路可走。
+
+**Rollback 完成**（gateway 回 :3000 active + /health OK + fleet.db / 已注册 worker 全部不受影响）：
+- systemctl stop → cp /tmp/*.bak 原版 → daemon-reload + start → caddy reload
+- 清理 mint 残留：`/var/lib/aiworker/.env` + `/root/.aiworker/.env`（dotenv-bootstrap 自动 mint 的废弃 master key）truncate 0 bytes；`/tmp/gateway.env.{bak,new}`（prod master key 副本）同样 truncate
+- bun-installed cli 仍在 `/root/.bun/bin/aiworker`（无害，systemd 不调）
+
+开 `BUG-012 P1` 跟踪——4 修复策略对比（A env workaround / B build-time bundle gateway / C 单独 publish gateway 包 / D in-process 推荐）；短期 workaround = 0.2.1 加 dist/gateway.js + daemon.ts fallback。建议 BUG-011（lazy default）+ BUG-012（gateway entry）二修同 0.2.1 一并发，REFACTOR-004 重跑 cutover 一气呵成。
+
 ## 2026-04-27 11:50 [progress] FEAT-027 GA — `@zonease/aiworker-cli@0.2.0` 真发到 npmjs.com
 
 `@zonease/aiworker-cli@0.2.0` 真实 publish 落地（前置：`e485bea` redacted history force push 完成）：

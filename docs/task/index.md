@@ -75,3 +75,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-029 License decision + LICENSE file + 9 package.json `license` fields**](FEAT-029.md) `P1`
 - [ ] [**BUG-011 Worker quickstart 仍要求显式 WORKER_DB_PATH / WORKER_MIGRATIONS_FOLDER（与 FEAT-030 README 承诺不符）**](BUG-011.md) `P3`
 - [ ] [**REFACTOR-004 测试服部署迁移：源码 systemd → 已发布 npm cli + `aiworker install systemd`**](REFACTOR-004.md) `P1`
+- [ ] [**BUG-012 `aiworker gateway start` 在 npm install 场景下不能启动（仓库布局假设）**](BUG-012.md) `P1`
