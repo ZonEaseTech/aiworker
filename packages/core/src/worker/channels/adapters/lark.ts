@@ -4,6 +4,8 @@ import type { ChannelAdapter } from './types'
 import { Buffer } from 'node:buffer'
 import { createDecipheriv, createHash } from 'node:crypto'
 
+import { timingSafeEqualStrings } from '../../secrets/crypto'
+
 interface LarkSenderId {
   open_id?: string
   union_id?: string
@@ -158,7 +160,7 @@ export const larkAdapter: ChannelAdapter = {
       throw new Error('lark adapter called with non-lark credentials')
     const payload = parseLarkBody(rawBody, binding.credentials.encryptKey)
     const token = extractToken(payload)
-    if (token === undefined || token !== binding.credentials.verificationToken)
+    if (token === undefined || !timingSafeEqualStrings(token, binding.credentials.verificationToken))
       throw new Error('invalid Lark verification token')
   },
 

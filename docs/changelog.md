@@ -1,5 +1,22 @@
 # AIWorker Changelog
 
+## 2026-04-27 13:35 [BUG-P0] BUG-017 修复 — Lark / WhatsApp webhook token 改用常量时间比较
+
+**违反 CLAUDE.md 关键不变量**："bearer / 共享 token 比较一律 `timingSafeEqualStrings`"。代码审查（BKD root `nnid9urk`）发现两处 webhook 验证仍用普通 `===` / `!==`：
+
+- `packages/core/src/worker/channels/adapters/lark.ts:161` — Lark `verificationToken`。未加密路径**只**靠这个 token 把关，跨网时序攻击者可推算后伪造 Lark 事件、注入虚假用户消息。
+- `apps/api/src/worker/channels/routes.ts:26` — WhatsApp Cloud API `GET /webhook` 订阅挑战的 `verifyToken`。推算成功后可在 Meta 控制台层完成订阅劫持，间接劫持 webhook 交付（POST 路径仍有 HMAC 兜底，风险次于 Lark）。
+
+What shipped:
+
+- 两处都改成 `timingSafeEqualStrings(actual, expected)`：core 内部直接 import `../../secrets/crypto`；apps/api 走 `@zonease/aiworker-core` 已 re-export（与 `apps/api/src/worker/management/bearer-auth.ts` 同款用法）。
+- `packages/core/src/worker/channels/adapters/lark.test.ts` 增 2 case：同长度但内容不同（强制 timing-safe compare 分支）+ header.token 缺失；mismatched-token case 改成 message exact-match。
+- 新建 `apps/api/src/worker/channels/routes.test.ts` 6 case：subscribe + 正确 token → 200 challenge / 同长度错误 token → 403 / 不同长度错误 token → 403 / 错误 hub.mode → 403 / 缺 verify_token → 403 / whatsapp 未绑定 → 404。
+
+测试基线：core 405 pass、apps/api 38 → **44 pass**（+6）。typecheck + 改动文件 lint 全绿。
+
+**不变量复核**：未引入 transport-coupling（apps/api 通过既有 core re-export 引入，packages/core 不增加 hono 依赖）；未触碰 vault / config-schema / 迁移；行为零差异，纯常量时间路径替换。
+
 ## 2026-04-27 12:30 [info] Session handoff — open tasks 总览 + 测试服 ops 残留
 
 **本会话主要工作**（已 push 到 `origin/main`，HEAD 当时为 `2bcf99c`，含本条 + 后续 BUG-013/BUG-014 + REFACTOR-004 followups 的 commit）：

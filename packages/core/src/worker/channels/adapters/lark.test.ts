@@ -203,11 +203,34 @@ describe('larkAdapter', () => {
       await expect(larkAdapter.verify(body, {}, makeBinding())).resolves.toBeUndefined()
     })
 
-    it('throws on a mismatched verificationToken', async () => {
+    it('throws on a mismatched verificationToken (different length)', async () => {
       const event = groupTextEvent('hi') as any
       event.header.token = 'wrong-token'
       const body = JSON.stringify(event)
-      await expect(larkAdapter.verify(body, {}, makeBinding())).rejects.toThrow(/verification token/)
+      await expect(larkAdapter.verify(body, {}, makeBinding())).rejects.toThrow(
+        'invalid Lark verification token',
+      )
+    })
+
+    it('throws on a same-length but different verificationToken (constant-time path)', async () => {
+      // VERIFY_TOKEN = 'verification-token-xyz' → len 22。构造同长度但内容不同的 token
+      // 强制走 timingSafeEqualStrings 的 timingSafeEqual 分支（而非 length-mismatch 早返回）。
+      const event = groupTextEvent('hi') as any
+      event.header.token = 'verification-token-XYZ'
+      expect(event.header.token.length).toBe(VERIFY_TOKEN.length)
+      const body = JSON.stringify(event)
+      await expect(larkAdapter.verify(body, {}, makeBinding())).rejects.toThrow(
+        'invalid Lark verification token',
+      )
+    })
+
+    it('throws when header.token is missing', async () => {
+      const event = groupTextEvent('hi') as any
+      delete event.header.token
+      const body = JSON.stringify(event)
+      await expect(larkAdapter.verify(body, {}, makeBinding())).rejects.toThrow(
+        'invalid Lark verification token',
+      )
     })
 
     it('verifies a url_verification root token', async () => {

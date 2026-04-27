@@ -78,3 +78,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-012 `aiworker gateway start` 在 npm install 场景下不能启动（仓库布局假设）**](BUG-012.md) `P1`
 - [ ] [**BUG-013 `workers.info` / `workers.stop` 在 node-side dispatcher 显式 stub `method_not_implemented`**](BUG-013.md) `P2`
 - [ ] [**BUG-014 `aiworker install systemd` 渲染的 unit 缺 `EnvironmentFile` + 全部安全加固**](BUG-014.md) `P2`
+- [x] [**BUG-017 Lark verificationToken + WhatsApp verifyToken 非常量时间比较**](BUG-017.md) `P0`

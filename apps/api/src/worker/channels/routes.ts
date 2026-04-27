@@ -2,6 +2,7 @@ import type { WorkerRuntime } from '@zonease/aiworker-core'
 import type { Envelope } from '@zonease/aiworker-shared'
 import { OpenAPIHono } from '@hono/zod-openapi'
 
+import { timingSafeEqualStrings } from '@zonease/aiworker-core'
 import { AppError } from '@zonease/aiworker-shared'
 import consola from 'consola'
 
@@ -23,8 +24,13 @@ export function buildChannelRoutes(getRuntime: () => WorkerRuntime, workerId: st
     const mode = c.req.query('hub.mode')
     const token = c.req.query('hub.verify_token')
     const challenge = c.req.query('hub.challenge') ?? ''
-    if (mode === 'subscribe' && token === binding.credentials.verifyToken)
+    if (
+      mode === 'subscribe'
+      && token !== undefined
+      && timingSafeEqualStrings(token, binding.credentials.verifyToken)
+    ) {
       return c.text(challenge, 200)
+    }
     return c.text('forbidden', 403)
   })
 
