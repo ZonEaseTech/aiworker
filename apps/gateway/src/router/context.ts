@@ -1,5 +1,5 @@
 import type { ConsolaInstance } from 'consola'
-import type { ForwardTable, NodeRegistry, OperatorRegistry } from '../registry'
+import type { ForwardTable, NodeRegistry, OperatorRegistry, PendingEnrollmentRegistry } from '../registry'
 import type { FleetPersistence } from '../registry/persistence'
 import type { FleetSupervisor } from '../supervisor/service'
 
@@ -24,6 +24,12 @@ export interface GatewayContext {
   supervisor?: FleetSupervisor | null
   /** `AIWORKER_MAX_WORKERS` 配额上限(可选)。 */
   maxWorkers?: number
+  /**
+   * PLAN-019:OTP-attended enrollment 待批队列。S2 引入,server.ts 路径感知
+   * 分支(S3)负责往里 submit;`enroll.list/approve/reject` handler 消费它。
+   * 测试场景下可缺省,handler 会回 feature_disabled。
+   */
+  pendingEnrollments?: PendingEnrollmentRegistry
 }
 
 /**
