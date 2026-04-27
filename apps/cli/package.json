@@ -1,17 +1,30 @@
 {
   "name": "@zonease/aiworker-cli",
+  "version": "0.1.0",
+  "description": "AIWorker fleet CLI — gateway / worker / operator 单一二进制",
+  "license": "UNLICENSED",
   "type": "module",
-  "private": true,
-  "bin": {
-    "aiworker": "./src/aiworker.ts"
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ZonEaseTech/aiworker.git"
   },
+  "homepage": "https://github.com/ZonEaseTech/aiworker#readme",
+  "publishConfig": { "access": "public" },
+  "bin": {
+    "aiworker": "./dist/aiworker.js"
+  },
+  "files": ["dist/", "README.md"],
+  "engines": { "bun": ">=1.1" },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "bun test",
+    "build": "bun build --target=bun --minify --outdir=dist src/aiworker.ts && bun scripts/build-publish-manifest.ts",
+    "prepublishOnly": "bun run build",
     "smoke:aiworker-run": "bun scripts/smoke-aiworker-run.ts",
     "smoke:aiworker-fleet": "bun scripts/smoke-aiworker-fleet.ts"
   },
-  "dependencies": {
+  "devDependencies": {
+    "@types/bun": "^1.2.13",
     "@zonease/aiworker-api": "workspace:*",
     "@zonease/aiworker-core": "workspace:*",
     "@zonease/aiworker-fs-layout": "workspace:*",
@@ -19,10 +32,7 @@
     "@zonease/aiworker-shared": "workspace:*",
     "@zonease/aiworker-storage-sqlite": "workspace:*",
     "cac": "^6.7.14",
-    "consola": "^3.4.2"
-  },
-  "devDependencies": {
-    "@types/bun": "^1.2.13",
+    "consola": "^3.4.2",
     "typescript": "^5.8.3"
   }
 }

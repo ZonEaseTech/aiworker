@@ -41,9 +41,35 @@ worker  ─无凭证─────►  /enroll-ws  ──────► gatewa
 
 ---
 
-## Quickstart
+## Install
 
-> **Stage A 命令形态**：当前 CLI 走开发态 `bun apps/cli/src/aiworker.ts <subcmd>`；Stage B（FEAT-027 npm publish）完成后改为 `bun install -g @zonease/aiworker-cli && aiworker <subcmd>`，命令树不变。
+### Published（待 FEAT-027 npm publish 上线启用）
+
+```sh
+bun install -g @zonease/aiworker-cli
+# 或 npm install -g @zonease/aiworker-cli
+# 或从 GitHub Releases 下载单文件 binary（无依赖）：
+#   curl -fsSL https://github.com/ZonEaseTech/aiworker/releases/latest/download/aiworker-linux-x64 -o /usr/local/bin/aiworker
+#   chmod +x /usr/local/bin/aiworker
+
+aiworker serve
+aiworker fleet list
+aiworker chat <workerId> 'hello'
+```
+
+### 本地开发（当前主路径）
+
+```sh
+git clone <repo-url>
+cd aiworker && bun install
+bun apps/cli/src/aiworker.ts <subcmd>
+```
+
+下面的 Quickstart / cheat sheet 用本地开发态 `bun apps/cli/src/aiworker.ts ...` 调用；Stage B 完成后等价改写为全局 `aiworker ...`，命令树不变。
+
+---
+
+## Quickstart
 
 ### 角色
 
