@@ -1,5 +1,9 @@
 # AIWorker Changelog
 
+## 2026-04-27 — PLAN-020 CLI rename + monorepo @zonease/* + npm publish（implementing → completed 待 coordinator 收尾填充）
+
+（待 coordinator 完成全部 subtask 后填充：S1 monorepo rename / S2 cli 重写 / S3 docs sweep / S4 npm publish dry-run + bundle）
+
 ## 2026-04-27 07:35 PLAN-019 E2E 验证 — coordinator 收尾
 
 跑完整 OTP-attended round-trip。起 gateway with `AIWORKER_MASTER_KEY=<32-byte hex>` + `AIWORKER_FLEET_DB_PATH` 在 `:23000`（无 `JOIN_TOKEN`，OTP 路径不依赖 fleet 共享密钥）；起 `aiw serve` with **仅** `AIWORKER_GATEWAY_URL=ws://127.0.0.1:23000` + `AIWORKER_DISPLAY_NAME=otp-e2e-test` 在 `:23001`（trigger table 行 3 → 自动落 OTP 模式 + path 改写为 `/enroll-ws`）。

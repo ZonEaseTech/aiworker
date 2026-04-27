@@ -43,11 +43,13 @@ worker  ─无凭证─────►  /enroll-ws  ──────► gatewa
 
 ## Quickstart
 
+> **Stage A 命令形态**：当前 CLI 走开发态 `bun apps/cli/src/aiworker.ts <subcmd>`；Stage B（FEAT-027 npm publish）完成后改为 `bun install -g @zonease/aiworker-cli && aiworker <subcmd>`，命令树不变。
+
 ### 角色
 
 ```
-operator        ─── 持 basicauth + aim CLI ─── 管 fleet
-worker deployer ─── 跑 aiw serve ─────────── 加入 fleet 后等指令
+operator        ─── 持 basicauth + aiworker CLI ─── 管 fleet
+worker deployer ─── 跑 aiworker serve ────────── 加入 fleet 后等指令
 ```
 
 ### 选哪种 enrollment？
@@ -56,8 +58,8 @@ worker deployer ─── 跑 aiw serve ─────────── 加入
 |---|---|---|
 | 朋友/客户/CI 临时装 worker | **OTP（推荐）** | worker deployer **零凭证**，operator 看 8 字符 OTP 后 approve |
 | k8s/docker compose 批量 unattended | self-enroll | env 配 `AIWORKER_JOIN_TOKEN` 自动入网 |
-| 高安全单 worker 手动 | 手动 pair | `aim pair --bootstrap-token wtk_...` |
-| docker fast-launch（gateway 同机） | `aim workers launch` | gateway supervisor 自己拉容器 |
+| 高安全单 worker 手动 | 手动 pair | `aiworker pair --bootstrap-token wtk_...` |
+| docker fast-launch（gateway 同机） | `aiworker fleet launch` | gateway supervisor 自己拉容器 |
 
 ---
 
@@ -81,14 +83,14 @@ export AIWORKER_GATEWAY_URL="wss://your-gateway.example/"  # ← 仅这一个公
 export AIWORKER_DISPLAY_NAME="my-laptop"                   # 可选
 
 # 4. init + serve
-bun apps/cli/src/aiw.ts init
-bun apps/cli/src/aiw.ts serve --port 3001
+bun apps/cli/src/aiworker.ts init
+bun apps/cli/src/aiworker.ts serve --port 3001
 ```
 
 控制台输出：
 
 ```
-i [aiw serve] OTP enrolling to wss://your-gateway.example/enroll-ws; awaiting operator approval
+i [aiworker serve] OTP enrolling to wss://your-gateway.example/enroll-ws; awaiting operator approval
 ┌─────────────────────┐
 │  OTP:  9CDT-94BK    │
 │  expires in 300s    │
@@ -100,13 +102,13 @@ i [aiw serve] OTP enrolling to wss://your-gateway.example/enroll-ws; awaiting op
 ### Operator
 
 ```sh
-aim enroll list
+aiworker enroll list
 # {"pending":[{"otp":"9CDT-94BK","displayName":"my-laptop",...}]}
 
-aim enroll approve 9CDT-94BK
+aiworker enroll approve 9CDT-94BK
 # ✔ 已批准
 
-aim workers list
+aiworker fleet list
 # {"workers":[{"workerId":"w_xxx","displayName":"my-laptop","online":true,...}]}
 ```
 
@@ -123,9 +125,9 @@ export AIWORKER_GATEWAY_URL="wss://operator:<basicauth-pwd>@your-gateway.example
 export AIWORKER_JOIN_TOKEN="<gateway 端配的 join token>"
 export AIWORKER_DISPLAY_NAME="ci-runner-12"
 
-bun apps/cli/src/aiw.ts init
-bun apps/cli/src/aiw.ts serve --port 3001
-# 自动加入；operator 端 aim workers list 直接见到
+bun apps/cli/src/aiworker.ts init
+bun apps/cli/src/aiworker.ts serve --port 3001
+# 自动加入；operator 端 aiworker fleet list 直接见到
 ```
 
 > ⚠️ URL 含 basicauth + JOIN_TOKEN 是 fleet 共享 secret，泄露面大。CI 可接受，朋友机器不要给。
@@ -136,15 +138,15 @@ bun apps/cli/src/aiw.ts serve --port 3001
 
 ```sh
 # Worker 端：
-bun apps/cli/src/aiw.ts init
+bun apps/cli/src/aiworker.ts init
 # 抓 stdout 的 wtk_xxx
-bun apps/cli/src/aiw.ts serve --port 3001 --gateway wss://operator:<pwd>@gateway/ws
+bun apps/cli/src/aiworker.ts serve --port 3001 --gateway wss://operator:<pwd>@gateway/ws
 
 # Operator 端：
-aim pair --url wss://operator:<pwd>@gateway/ws \
-         --worker-url http://<worker-host>:3001 \
-         --bootstrap-token wtk_xxx \
-         --display-name production-1
+aiworker pair --url wss://operator:<pwd>@gateway/ws \
+              --worker-url http://<worker-host>:3001 \
+              --bootstrap-token wtk_xxx \
+              --display-name production-1
 ```
 
 > 限制：gateway 必须能 inbound 到 worker `:3001` 验 token。worker 在 NAT 后需要反向 tunnel；改用 OTP 模式避坑。
@@ -156,7 +158,7 @@ aim pair --url wss://operator:<pwd>@gateway/ws \
 需要 gateway 启用 `AIWORKER_GATEWAY_CAN_LAUNCH=true` + `docker.sock:ro` mount。
 
 ```sh
-aim workers launch --display-name demo
+aiworker fleet launch --display-name demo
 # gateway supervisor 自动 docker run + scrape bootstrap token + pair
 ```
 
@@ -168,41 +170,41 @@ aim workers launch --display-name demo
 
 ```sh
 # fleet 状态
-aim workers list                            # 谁在线
-aim workers info <workerId>                 # 单个 worker 运行时快照
-aim workers remove <workerId>               # 摘除（deviceToken 立即失效）
+aiworker fleet list                            # 谁在线
+aiworker fleet info <workerId>                 # 单个 worker 运行时快照
+aiworker fleet remove <workerId>               # 摘除（deviceToken 立即失效）
 
 # 与 worker 对话（流式 NDJSON）
-aim chat <workerId> 'hello'
-aim chat <workerId> '继续' --conversation-id <prev-id>
+aiworker chat <workerId> 'hello'
+aiworker chat <workerId> '继续' --conversation-id <prev-id>
 
 # 配置（乐观锁必须带 --if-match）
-aim config get <workerId>                   # 读出含 version
-aim config set <workerId> "$(cat new.json)" --if-match <version>
+aiworker config get <workerId>                 # 读出含 version
+aiworker config set <workerId> "$(cat new.json)" --if-match <version>
 
 # Token 轮换（旧立即失效）
-aim token rotate <workerId>
+aiworker token rotate <workerId>
 
 # OTP 审批
-aim enroll list
-aim enroll approve <OTP>
-aim enroll reject  <OTP>
+aiworker enroll list
+aiworker enroll approve <OTP>
+aiworker enroll reject  <OTP>
 
 # 日志订阅
-aim logs <workerId> --follow --tail 200
+aiworker logs <workerId> --follow --tail 200
 
 # 审批 per-tool
-aim approvals list
-aim approvals grant <workerId> <taskId> <toolCallId>          # allow
-aim approvals grant <workerId> <taskId> <toolCallId> --deny
+aiworker approvals list
+aiworker approvals grant <workerId> <taskId> <toolCallId>          # allow
+aiworker approvals grant <workerId> <taskId> <toolCallId> --deny
 
 # 定时任务
-aim schedule list <workerId>
-aim schedule add  <workerId> --expression '0 9 * * *' --prompt '早报' --channel web --chat-id daily
-aim schedule remove <workerId> <jobId>
+aiworker schedule list <workerId>
+aiworker schedule add  <workerId> --expression '0 9 * * *' --prompt '早报' --channel web --chat-id daily
+aiworker schedule remove <workerId> <jobId>
 ```
 
-`aim` 默认 gatewayUrl 在 `~/.aiworker/aim.json`。第一次跑：
+`aiworker` operator 默认 gatewayUrl 在 `~/.aiworker/aim.json`。第一次跑：
 
 ```sh
 mkdir -p ~/.aiworker
@@ -225,7 +227,7 @@ chmod 600 ~/.aiworker/aim.json
 
 ```sh
 NEW='{"brains":[],"brainWriteTarget":"","brainRetrieval":"first-match","executor":{"engine":"claude-code","variant":"default"},"channels":[],"evolution":{"enabled":false,"observationRetentionDays":7}}'
-aim config set <workerId> "$NEW" --if-match <current-version>
+aiworker config set <workerId> "$NEW" --if-match <current-version>
 ```
 
 可选 `engine`：`http`（OpenAI 兼容）/ `mcp` / `claude-code` / `acp`(gemini/qwen) / `codex` / `cursor`。
@@ -236,8 +238,8 @@ aim config set <workerId> "$NEW" --if-match <current-version>
 
 | 形态 | 适用 | 入口 | docker |
 |------|------|------|--------|
-| **裸跑** | 开发 / CI | `aim gateway start` / `aiw serve` 前台 | 无 |
-| **systemd**（Linux 推荐） | 服务器长跑 | `aim install systemd [--user\|--system]` | 无 |
+| **裸跑** | 开发 / CI | `aiworker gateway start` / `aiworker serve` 前台 | 无 |
+| **systemd**（Linux 推荐） | 服务器长跑 | `aiworker install systemd [--user\|--system]` | 无 |
 | **docker compose** | 不愿装 bun / per-worker 隔离 | `ops/compose/docker-compose.yml`（GHCR 镜像） | 有 |
 
 详见 [`docs/deployment.md`](docs/deployment.md)；公网 HTTPS（Cloudflare + Caddy）单独叠加层在 [`docs/deployment-public-https.md`](docs/deployment-public-https.md)。
@@ -249,7 +251,7 @@ aim config set <workerId> "$NEW" --if-match <current-version>
 | 变量 | 用于 | 说明 |
 |---|---|---|
 | `AIWORKER_MASTER_KEY` | gateway / worker | 64 hex；丢了 fleet.db 解不开 — **必须组织级离线备份** |
-| `INTERNAL_SHARED_SECRET` | gateway / 远程 operator | ≥16 chars；远程 aim CLI bearer |
+| `INTERNAL_SHARED_SECRET` | gateway / 远程 operator | ≥16 chars；远程 aiworker CLI bearer |
 | `AIWORKER_JOIN_TOKEN` | gateway / self-enroll worker | self-enroll 模式触发；与 INTERNAL_SHARED_SECRET 解耦 |
 | `AIWORKER_GATEWAY_URL` | worker | OTP / self-enroll 模式连入口 |
 | `AIWORKER_DISPLAY_NAME` | worker | operator 端识别用 |
@@ -267,8 +269,8 @@ aim config set <workerId> "$NEW" --if-match <current-version>
 
 | 现象 | 原因 | 修法 |
 |---|---|---|
-| `aim workers list` → `WebSocket Expected 101 status code` | aim.json `gatewayUrl` 缺 `/ws` 或 basicauth | 重写 `~/.aiworker/aim.json`（见上） |
-| OTP `aim enroll approve` 后 worker `online: false` | gateway 版本旧（缺 BUG-009 fix，commit `233548b` 起修） | 服务器 `git pull && systemctl restart aiworker-gateway` |
+| `aiworker fleet list` → `WebSocket Expected 101 status code` | aim.json `gatewayUrl` 缺 `/ws` 或 basicauth | 重写 `~/.aiworker/aim.json`（见上） |
+| OTP `aiworker enroll approve` 后 worker `online: false` | gateway 版本旧（缺 BUG-009 fix，commit `233548b` 起修） | 服务器 `git pull && systemctl restart aiworker-gateway` |
 | 公网 `/health` 返回 401 | 你忘了带 basicauth | `curl -u operator:<pwd> https://your-gateway/health` |
 
 详见 [`docs/deployment-public-https.md` § Troubleshooting](docs/deployment-public-https.md)。
@@ -326,7 +328,7 @@ bun run lint
 | 7 LLM engines | ✅ Production |
 | 5 channel webhooks | ✅ Production |
 | Cron / approvals / hot-reload | ✅ Production |
+| **CLI 重命名（单 `aiworker` 入口）** | 🚧 Implementing (PLAN-020 / FEAT-028) |
 | **npm 发布** | ⏳ Planned (FEAT-027) |
-| **CLI 命名重设计** | ⏳ Planned (FEAT-028) |
 | Web SPA pending UI | 🔜 Stage-2 |
 | Multi-host HA | 🔜 Stage-2 |

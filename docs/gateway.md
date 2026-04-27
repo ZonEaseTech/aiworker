@@ -1,6 +1,6 @@
 # Gateway 协议
 
-PLAN-013 引入的 WebSocket 控制面：operator（aim CLI / web）与 node（worker 容器）共享同一条 `ws://<host>:3000/ws` 入口，按 role 分流。协议的纯类型 + zod 运行时校验全部在 `@aiworker/gateway-proto`，供 aim、gateway、worker、web 四侧复用。
+PLAN-013 引入的 WebSocket 控制面：operator（aiworker CLI / web）与 node（worker 容器）共享同一条 `ws://<host>:3000/ws` 入口，按 role 分流。协议的纯类型 + zod 运行时校验全部在 `@zonease/aiworker-gateway-proto`，供 aiworker CLI、gateway、worker、web 四侧复用。
 
 ## 概览
 
@@ -10,8 +10,8 @@ PLAN-013 引入的 WebSocket 控制面：operator（aim CLI / web）与 node（w
   - `GET /ws` — WebSocket 升级端点（必需 `Upgrade: websocket`）。
   - 其它路径 → 404。
 - 三角色：
-  - `operator` — 发起请求、订阅事件；aim CLI / web SPA 都是 operator。
-  - `node` — worker 进程；通过 `aiw serve --gateway` 作为 node 拨号。
+  - `operator` — 发起请求、订阅事件；aiworker CLI（operator-remote 子命令）/ web SPA 都是 operator。
+  - `node` — worker 进程；通过 `aiworker serve --gateway` 作为 node 拨号。
   - `gateway` — 中枢，不对外以 client 身份连接。
 - 首帧：`connect`；然后按 role + `type` 分流 `request` / `response` / `event`。
 
@@ -41,7 +41,7 @@ gateway 的 `authorizeConnection` 规则：
 - operator：注册进 `OperatorRegistry`；之后只能发 `request` 帧，发其它类型会被踢（4400）。
 - node：注册进 `NodeRegistry`（同 `workerId` 的旧连接会被强制替换并关 1012）；之后只能发 `response` / `event`，发 `request` 会被踢。
 
-## 帧类型（引用 `@aiworker/gateway-proto/src/messages.ts`）
+## 帧类型（引用 `@zonease/aiworker-gateway-proto/src/messages.ts`）
 
 ### connect（见上）
 
@@ -109,13 +109,13 @@ gateway → operator 的推送。payload 由 `EVENT_PAYLOADS` 约束：
 
 | method | routing | 典型场景 |
 |--------|---------|----------|
-| `workers.list` | operator-to-gateway | 面板首页、aim `workers list` |
-| `workers.info` | operator-to-node | 详情页刷新、aim `workers info` |
-| `workers.pair` | operator-to-gateway | aim `pair`（手动 bootstrap token 注册） |
-| `workers.launch` | operator-to-gateway | aim `workers launch`（gateway supervisor 自动创建容器） |
+| `workers.list` | operator-to-gateway | 面板首页、`aiworker fleet list` |
+| `workers.info` | operator-to-node | 详情页刷新、`aiworker fleet info` |
+| `workers.pair` | operator-to-gateway | `aiworker pair`（手动 bootstrap token 注册） |
+| `workers.launch` | operator-to-gateway | `aiworker fleet launch`（gateway supervisor 自动创建容器） |
 | `workers.stop` | operator-to-node | 向 node 下停止指令 |
 | `workers.remove` | operator-to-gateway | 从 fleet 摘除（deviceToken 作废） |
-| `chat.send` | operator-to-node | 面板 / aim `chat` 追加一条用户消息并触发 run |
+| `chat.send` | operator-to-node | 面板 / `aiworker chat` 追加一条用户消息并触发 run |
 | `config.get` | operator-to-node | 读 worker 配置 + version |
 | `config.put` | operator-to-node | 乐观锁（`ifMatch`）更新配置 |
 | `token.rotate` | operator-to-gateway | 轮换 deviceToken，旧 token 立即失效 |
@@ -158,19 +158,19 @@ gateway 自己在 close WS 时派发 `worker.offline`（`inferOfflineReason` 把
 
 ## Pairing 流程
 
-### 手动 pair（aim pair）
+### 手动 pair（aiworker pair）
 
-1. worker 容器首次启动（`aiw init` / `aiw serve` 首跑）在 stdout 打印一次性 bootstrap line：
+1. worker 容器首次启动（`aiworker init` / `aiworker serve` 首跑）在 stdout 打印一次性 bootstrap line：
    ```
    [worker] AIWORKER_BOOTSTRAP_TOKEN=wtk_xxxxxxxxxxxx
    ```
 2. 操作员抓取这一行（`docker logs <worker-container>`）。
-3. 运行 aim：
+3. 运行 aiworker CLI：
    ```sh
-   aim pair --url ws://127.0.0.1:3000/ws \
-            --worker-url http://aiworker-worker:3001 \
-            --bootstrap-token wtk_xxxxxxxxxxxx \
-            --display-name test
+   aiworker pair --url ws://127.0.0.1:3000/ws \
+                 --worker-url http://aiworker-worker:3001 \
+                 --bootstrap-token wtk_xxxxxxxxxxxx \
+                 --display-name test
    ```
 4. gateway 的 `workers.pair` handler：
    - 校验 `AIWORKER_MASTER_KEY` 就绪；
@@ -179,14 +179,14 @@ gateway 自己在 close WS 时派发 `worker.offline`（`inferOfflineReason` 把
    - `registered_workers` 已存在 → `already_registered`；
    - 否则把 `(workerId, baseUrl, apiToken, displayName, addedBy='manual')` AES-GCM 加密落库；
    - 把 bootstrap token 作为 deviceToken 返回。
-5. aim 把 deviceToken + defaultWorkerId 回写 `~/.aiworker/aim.json`（0600）。
+5. aiworker CLI 把 deviceToken + defaultWorkerId 回写 `~/.aiworker/aim.json`（0600；文件名沿用历史以避免 operator 升级时丢配置）。
 
 ### 自动 launch（workers.launch）
 
 1. 前置开关：`AIWORKER_GATEWAY_CAN_LAUNCH=true`（compose overlay `docker-compose.supervisor.yml`）；同时需要 `INTERNAL_SHARED_SECRET` / `AIWORKER_IMAGE` / `WORKER_DATA_ROOT` / `WORKER_MEMORY_LIMIT` / `WORKER_CPU_LIMIT` 就绪（`gateway/src/config.ts` `superRefine` 保证）。
 2. operator 发 `workers.launch` 方法：
    ```sh
-   aim workers launch --display-name demo
+   aiworker fleet launch --display-name demo
    ```
 3. gateway `FleetSupervisor` 走 docker daemon：
    - pull 镜像（若不在本机）；
@@ -195,14 +195,14 @@ gateway 自己在 close WS 时派发 `worker.offline`（`inferOfflineReason` 把
    - start + 阻塞读 stdout，scrape bootstrap 行，超时 → `launch_timeout`；
    - 返回 `{ workerId, baseUrl, apiToken, containerId, containerName }`。
 4. gateway 把 deviceToken 加密落 `registered_workers(addedBy='launch-local')` + 写 `audit_events(action='gateway.worker.launched')`。
-5. aim 侧写回 deviceToken + defaultWorkerId。
+5. aiworker CLI 侧写回 deviceToken + defaultWorkerId。
 
 ## 故障恢复
 
-- **`AIWORKER_MASTER_KEY` 丢失** = 所有 `registered_workers.apiTokenEnc` 无法解密 → 必须对每个 worker 重新 `aim pair`。
-- **单个 node 掉线**：gateway `handleClose` 把它从 `NodeRegistry` 摘掉，广播 `worker.offline`，写 `audit_events(action='gateway.node.disconnected')`；已发到该 worker 但未收到 response 的 request 由 `ForwardTable.onExpire('node_gone')` 给 operator 回一条 `response(ok=false, error.code='node_gone')`，避免 aim CLI 永久挂起。
+- **`AIWORKER_MASTER_KEY` 丢失** = 所有 `registered_workers.apiTokenEnc` 无法解密 → 必须对每个 worker 重新 `aiworker pair`。
+- **单个 node 掉线**：gateway `handleClose` 把它从 `NodeRegistry` 摘掉，广播 `worker.offline`，写 `audit_events(action='gateway.node.disconnected')`；已发到该 worker 但未收到 response 的 request 由 `ForwardTable.onExpire('node_gone')` 给 operator 回一条 `response(ok=false, error.code='node_gone')`，避免 aiworker CLI 永久挂起。
 - **gateway 重启**：所有 in-flight forward 在 `ForwardTable.dispose()` 里取消；operator 会看到补偿错误响应；node 侧的 `startGatewayNode` 默认开启自动重连（`--no-reconnect` 可关），连回来后 subscriber 重新挂 bus。
-- **操作员 aim.json 失密**：deviceToken 等价于 operator 的 bearer，任何能读到 `~/.aiworker/aim.json` 的本机用户都能冒充 operator。文件保存时强制 `0600`；疑似泄露时走 `aim token rotate` 或 `aim workers remove` + `aim pair` 重建。
+- **操作员 aim.json 失密**：deviceToken 等价于 operator 的 bearer，任何能读到 `~/.aiworker/aim.json` 的本机用户都能冒充 operator。文件保存时强制 `0600`；疑似泄露时走 `aiworker token rotate` 或 `aiworker fleet remove` + `aiworker pair` 重建。
 
 ## Backup 清单
 

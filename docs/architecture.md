@@ -5,22 +5,22 @@
 ```text
 apps/
   api/          # Hono worker runtime (worker mode only)
-  cli/          # aiw (worker) + aim (operator) CLIs
+  cli/          # aiworker (单二进制：worker-local + operator-remote + gateway 生命周期)
   gateway/      # WS 控制面：operator ↔ gateway ↔ node 三方协议枢纽
   web/          # React 19 SPA（operator console；通过 WS 连 gateway）
 packages/
   shared/          # cross-layer types / constants / zod schemas
   gateway-proto/   # WS 协议纯类型 + zod：METHODS / EVENTS / Frame
-  core/            # transport-agnostic worker runtime（@aiworker/core）
+  core/            # transport-agnostic worker runtime（@zonease/aiworker-core）
   storage-sqlite/  # fleet.db + worker.db schemas, drizzle configs, migrations
   fs-layout/       # ~/.aiworker/ path resolver + ensureWorkerHome bootstrap
 ```
 
-- **`apps/api`** 只负责 worker 运行时（数据面）。`AIWORKER_MODE=worker` 仍保留以兼容运维脚本，但入口不再按模式分叉——`boot()` 一律构建 `createWorkerApp`。dashboard REST 已随 PLAN-013 整体下线。运行时业务（brain / executor / channels / orchestrator / cron / approvals / gateway-client / runtime / secrets / bootstrap / management 业务态）已物理抽离至 `packages/core`，apps/api 仅保留 Hono 路由 + middleware + bootstrap 装配（`@aiworker/api/bootstrap` 暴露给 `aiw serve`），保持 transport 与业务的边界。
+- **`apps/api`** 只负责 worker 运行时（数据面）。`AIWORKER_MODE=worker` 仍保留以兼容运维脚本，但入口不再按模式分叉——`boot()` 一律构建 `createWorkerApp`。dashboard REST 已随 PLAN-013 整体下线。运行时业务（brain / executor / channels / orchestrator / cron / approvals / gateway-client / runtime / secrets / bootstrap / management 业务态）已物理抽离至 `packages/core`，apps/api 仅保留 Hono 路由 + middleware + bootstrap 装配（`@zonease/aiworker-api/bootstrap` 暴露给 `aiworker serve`），保持 transport 与业务的边界。
 - **`apps/gateway`** 是新增的 WS 控制面，单入口 `Bun.serve(:3000)`，路径 `/ws` 承接 WebSocket 升级，`/health` 返回心跳。运行时持有 fleet.db（`registered_workers` + `audit_events`）并做 operator ↔ node 帧转发。见 `docs/gateway.md`。
-- **`apps/cli`** 同时发布两枚 bin：`aiw`（worker-side，原 PLAN-011/012 的子命令 + 新增 `aiw serve --gateway`）和 `aim`（operator-side，WS 协议客户端）。两者共享 `cac` 解析器与 `@aiworker/core` 运行时复用（`aiw serve` 额外从 `@aiworker/api/bootstrap` 取 Hono 入口），但状态文件各自独立（worker.db vs `~/.aiworker/aim.json`）。
+- **`apps/cli`** 发布单枚 bin：`aiworker`（PLAN-020 / FEAT-028 起；原 `aiw` / `aim` 双 bin 已下线，无 backwards-compat shim）。子命令树由 worker-local（dash-form）+ operator-remote（两词 form）+ gateway 生命周期 + `install systemd` 构成，共享 `cac` 解析器与 `@zonease/aiworker-core` 运行时复用（worker-local `aiworker serve` 额外从 `@zonease/aiworker-api/bootstrap` 取 Hono 入口）。状态文件按用法分流：worker-local 写 `worker.db`，operator-remote 写 `~/.aiworker/aim.json`（文件名沿用历史以避免 operator 升级时丢配置）。
 - **`apps/web`** 不再消费任何 REST。`lib/api.ts` 已替换为统一 WS 客户端，浏览器直连 gateway（Caddy 反代 `:80 → :3000`，loopback 自动放行）。
-- **`packages/gateway-proto`** 是协议的纯类型 + 运行时校验层。不依赖任何网络框架，所有 METHODS / EVENTS / Frame schema 都在这里定义，aim / web / gateway / worker 四侧共用。
+- **`packages/gateway-proto`** 是协议的纯类型 + 运行时校验层。不依赖任何网络框架，所有 METHODS / EVENTS / Frame schema 都在这里定义，CLI / web / gateway / worker 四侧共用。
 - **`packages/core`** 是 transport-agnostic 的 worker runtime（PLAN-015 §S1 物理抽离）。封装 brain provider、executor provider、channel adapter、orchestrator、cron、approvals、gateway-client、secrets、bootstrap、management 业务态等所有运行时业务；公共面 `packages/core/src/index.ts` 同时被 `apps/api` 路由、`apps/cli` 与 gateway node 接入复用。**不**依赖 `hono` / `@hono/*` / `@scalar/*`——边界由 ESLint `no-restricted-imports` 守，CI 拦下任何回退到 transport 层耦合的尝试。
 - **`packages/storage-sqlite`** 是 fleet.db 与 worker.db 的唯一 schema 源。通过 subpath `./fleet` 与 `./worker` 保持数据域边界；`defaultFleetMigrationsFolder` / `defaultWorkerMigrationsFolder` 通过 `import.meta.url` 解析，避免调用方硬编码 `./drizzle/...`。
 - **`packages/fs-layout`** 管理每 worker 的 `~/.aiworker/workers/<id>/` 目录布局。gateway 与 worker 都复用它解析 `AGENT.md` / `SOUL.md` / `USER.md` / `config.yaml` / `brain/` 等路径。
@@ -31,8 +31,8 @@ packages/
 
 | 形态 | 适用 | 入口 | docker | 公网 |
 |------|------|------|--------|------|
-| **裸跑** | 开发 / 单机 | `aim gateway start` / `aiw serve` 前台 | 无 | 无 |
-| **systemd** | Linux 服务器长跑 | `aim install systemd [--user\|--system]` 写 unit + `enable --now` | 无 | 可选叠加 |
+| **裸跑** | 开发 / 单机 | `aiworker gateway start` / `aiworker serve` 前台 | 无 | 无 |
+| **systemd** | Linux 服务器长跑 | `aiworker install systemd [--user\|--system]` 写 unit + `enable --now` | 无 | 可选叠加 |
 | docker compose | 懒人快速试用 / per-worker 容器隔离 | `ops/compose/docker-compose.yml`（GHCR 镜像） | 有 | 必要时叠加 |
 
 公网 HTTPS（Cloudflare orange-cloud + Caddy `:80 → 127.0.0.1:3000` + GHCR + `scripts/deploy.ts` aissh 流程）单独拆到 [`deployment-public-https.md`](./deployment-public-https.md)，仅当需要把 channel webhook 暴露公网时才叠加；详见 [`deployment.md`](./deployment.md)。
@@ -43,9 +43,9 @@ packages/
 
 ```text
 ~/.aiworker/
-  aim.json                     # operator 本地状态（gatewayUrl / deviceId / deviceToken / defaultWorkerId，0600）
-  aim-gateway.pid              # 本机 aim gateway daemon pid（若启动）
-  aim-gateway.log              # 本机 aim gateway daemon 日志
+  aim.json                     # operator 本地状态（gatewayUrl / deviceId / deviceToken / defaultWorkerId，0600；文件名沿用历史以避免 operator 升级时丢配置）
+  aim-gateway.pid              # 本机 aiworker gateway daemon pid（若启动；文件名沿用历史）
+  aim-gateway.log              # 本机 aiworker gateway daemon 日志（文件名沿用历史）
   workers/<workerId>/
     AGENT.md                   # persona / role doc
     SOUL.md                    # voice + style guide
@@ -60,7 +60,7 @@ packages/
 ```
 
 - **Skills / memories** 读写统一过 `FilesystemBrainProvider`（PLAN-012 将旧 `HermesProvider` 改名并把 HTTP 依赖全部拆掉）；filesystem 是权威，SQLite 只负责 identity 与可索引状态。
-- **`config.yaml`** 是 `worker_config.configJson` 的 advisory 镜像——`PUT /api/worker/config` 与 `aiw config-set` / `aim config set` 落库成功后都会调 `mirrorConfigToYaml`，DB 仍为 source-of-truth（乐观锁 `If-Match` 依赖 DB version）。
+- **`config.yaml`** 是 `worker_config.configJson` 的 advisory 镜像——`PUT /api/worker/config` 与 `aiworker config-set`（worker-local）/ `aiworker config set`（operator-remote）落库成功后都会调 `mirrorConfigToYaml`，DB 仍为 source-of-truth（乐观锁 `If-Match` 依赖 DB version）。
 - **`AGENT.md` / `SOUL.md` / `USER.md`** 首次启动种出 stub，由 `ensureWorkerHome(workerId)` 幂等保证；注入到 system prompt 的逻辑待 PLAN-014 在 envelope 改造里一并落。
 
 ## Overview
@@ -73,7 +73,7 @@ AIWorker 是一个**自托管 Agent Runtime**，由两类 provider 组合而成�
 **Orchestrator** 驱动 agent loop（submit prompt → stream completions → execute tools → persist transcript → emit `WorkerEventBus` 事件）。网络层（WS gateway / HTTP worker）与 orchestrator 解耦：
 
 - Gateway 只负责帧转发与 fleet 级控制方法（`workers.*`、`token.rotate`、`system.presence`）。
-- Worker 持有 orchestrator；node 模式通过 `@aiworker/core` 的 `startGatewayNode` 主动拨一条 WS 连接上报 `WorkerEventBus` 事件、处理 gateway 转发过来的 `chat.send` / `config.get` / `config.put` / `token.rotate` / `logs.tail` 请求。
+- Worker 持有 orchestrator；node 模式通过 `@zonease/aiworker-core` 的 `startGatewayNode` 主动拨一条 WS 连接上报 `WorkerEventBus` 事件、处理 gateway 转发过来的 `chat.send` / `config.get` / `config.put` / `token.rotate` / `logs.tail` 请求。
 
 ## System Architecture
 
@@ -81,7 +81,7 @@ AIWorker 是一个**自托管 Agent Runtime**，由两类 provider 组合而成�
 ┌──────────────────────────────────────────────────────────────┐
 │                Operator surface                              │
 │  ┌─────────────────────┐   ┌──────────────────────────────┐  │
-│  │ aim CLI (cac-based) │   │ web SPA (React 19)           │  │
+│  │ aiworker CLI (cac)  │   │ web SPA (React 19)           │  │
 │  └─────────────────────┘   └──────────────────────────────┘  │
 └──────────────────────────────┬───────────────────────────────┘
                                │ WS  ws://host:3000/ws  (role=operator)
@@ -110,7 +110,7 @@ AIWorker 是一个**自托管 Agent Runtime**，由两类 provider 组合而成�
                                ▼
 ┌──────────────────────────────────────────────────────────────┐
 │                   Worker (apps/api worker mode)              │
-│   - `aiw serve [--gateway ws://...]`：HTTP :3001 + 可选      │
+│   - `aiworker serve [--gateway ws://...]`：HTTP :3001 + 可选 │
 │     gateway WS 客户端                                         │
 │   - bootstrap：mintWorkerId + mintApiToken（一次性 stdout），│
 │     `worker_identity` / `worker_config` singleton（pk='default')│
@@ -131,11 +131,11 @@ Cloudflare (orange-cloud, TLS 终止)
 Caddy :80 (纯反代)  ──►  127.0.0.1:3000  =  aiworker-gateway 容器
                                              │
                                              │ WS /ws
-                                             ├─◄ operator：aim CLI + web
+                                             ├─◄ operator：aiworker CLI + web
                                              │
                                              ├─► node：aiworker-worker-* 容器
                                              │     （同镜像，command: bun run dist/index.js）
-                                             │     可选 `--gateway ws://gateway:3000/ws`
+                                             │     可选 `--gateway ws://gateway:3000/ws`（aiworker serve）
                                              │
                                              ├─ fleet.db（volume aiworker_fleet）
                                              └─ （可选）docker.sock:ro + WORKER_DATA_ROOT
@@ -143,16 +143,16 @@ Caddy :80 (纯反代)  ──►  127.0.0.1:3000  =  aiworker-gateway 容器
 ```
 
 - **gateway 容器** 是控制面入口。PLAN-013 之前是 `aiworker-dashboard`（Hono + 静态 web），现在换成 `aiworker-gateway`（Bun.serve WS）。
-- 浏览器与 aim CLI 都走同一个 `/ws` 路径；path `/health` 纯 JSON，供 loopback / caddy / 部署脚本 `curl -sf http://127.0.0.1:3000/health` 做 readiness check。
-- Worker 容器独立管理数据；`aiw serve --gateway ws://gateway:3000/ws` 注册为 node，也可仅跑 HTTP（跨 gateway 拨号的独立部署）。
+- 浏览器与 aiworker CLI 都走同一个 `/ws` 路径；path `/health` 纯 JSON，供 loopback / caddy / 部署脚本 `curl -sf http://127.0.0.1:3000/health` 做 readiness check。
+- Worker 容器独立管理数据；`aiworker serve --gateway ws://gateway:3000/ws` 注册为 node，也可仅跑 HTTP（跨 gateway 拨号的独立部署）。
 
 ## 角色与鉴权
 
 | 角色 | 客户端 | 进程/用户 | 鉴权 |
 |------|--------|-----------|------|
-| operator | aim CLI、web SPA | 本机 / 远程运维 | loopback 自动放行；远程必须在 `/ws` 上以 `connect.auth.token` 携带 `INTERNAL_SHARED_SECRET`。`/enroll-ws` 拒绝 operator 角色（`wrong_path:otp_must_use_enroll_ws`）。 |
-| node | worker 进程（`aiw serve --gateway`） | worker 容器 | loopback 放行；远程 reconnect 走 `/ws` + deviceToken（`INTERNAL_SHARED_SECRET` 作 shared secret）；首次入网走 self-enroll（`/ws` + join token）或 OTP-attended（`/enroll-ws` + `enroll.mode='otp'`，无 token）。 |
-| node-pending | OTP 提交后未审批的 worker | worker 容器 | path 锁定 `/enroll-ws`；ws 已升级但不进 NodeRegistry，等待 operator `aim enroll approve <otp>` 触发 `enrollment.approved` 事件后才升级为 node。 |
+| operator | aiworker CLI（operator-remote 子命令）、web SPA | 本机 / 远程运维 | loopback 自动放行；远程必须在 `/ws` 上以 `connect.auth.token` 携带 `INTERNAL_SHARED_SECRET`。`/enroll-ws` 拒绝 operator 角色（`wrong_path:otp_must_use_enroll_ws`）。 |
+| node | worker 进程（`aiworker serve --gateway`） | worker 容器 | loopback 放行；远程 reconnect 走 `/ws` + deviceToken（`INTERNAL_SHARED_SECRET` 作 shared secret）；首次入网走 self-enroll（`/ws` + join token）或 OTP-attended（`/enroll-ws` + `enroll.mode='otp'`，无 token）。 |
+| node-pending | OTP 提交后未审批的 worker | worker 容器 | path 锁定 `/enroll-ws`；ws 已升级但不进 NodeRegistry，等待 operator `aiworker enroll approve <otp>` 触发 `enrollment.approved` 事件后才升级为 node。 |
 
 - Connect 帧必须是每条连接的第一帧（`connectFrameSchema`）；其后按 `role` 分流 request/response/event。
 - bearer 比较一律 `timingSafeEqualStrings`（gateway 与 worker 两侧各自复制一份，见下文"加密与认证"）。
@@ -169,10 +169,10 @@ Caddy :80 (纯反代)  ──►  127.0.0.1:3000  =  aiworker-gateway 容器
 
 - Worker 首次启动在容器内 `mintWorkerId + mintApiToken`（`worker/bootstrap/identity.ts`），token 明文只打印一次（`[worker] AIWORKER_BOOTSTRAP_TOKEN=wtk_...`），密文写入 `worker_identity` 后不再重新打印。
 - worker 进 fleet 的四条路径（`registered_workers.addedBy` 对应四态）：
-  1. **手动 pair**（`aim pair --url ws://... --worker-url http://... --bootstrap-token wtk_...`）：操作员从 worker stdout 抓 bootstrap 日志行 → gateway 调 worker `/info` 校验 → 加密存 fleet.db → 返回 deviceToken 写回 `~/.aiworker/aim.json`。**inbound** 方向：gateway 必须能 HTTP 回拨 worker `/info`，因此 worker 在 NAT/防火墙后会失败。`addedBy='manual'`。
-  2. **自动 launch**（`aim workers launch --display-name foo`）：需 `AIWORKER_GATEWAY_CAN_LAUNCH=true`；gateway supervisor 拉 worker 容器、scrape stdout、自动 pair。仅限 docker 形态、与 gateway 同主机。`addedBy='launch-local'`。
-  3. **自助 enroll**（PLAN-018 / FEAT-024）：worker 容器 env 同时设 `AIWORKER_GATEWAY_URL` + `AIWORKER_JOIN_TOKEN`，`aiw serve` bootstrap 完成后用 outbound WS 主动拨 gateway `/ws`，并把 enroll 块（`mode='join-token'` + `joinToken` + 自身 mint 的 `apiToken` + 可选 `displayName`）塞进 `connect` 帧第一帧；gateway 验 `joinToken` 后直接 upsert fleet.db 行。**outbound-only**，worker 不需要任何 inbound 端口暴露——是 NAT 后部署、批量 docker / k8s 节点、residential network 上 worker 的标准路径。`addedBy='self-enroll'`。
-  4. **OTP-attended enroll**（PLAN-019 / FEAT-026）：worker 只设 `AIWORKER_GATEWAY_URL`（无 `AIWORKER_JOIN_TOKEN`）或显式 `AIWORKER_ENROLL_MODE=otp`，`aiw serve` bootstrap 后用 outbound WS 拨 gateway `/enroll-ws`（不同于 self-enroll 的 `/ws`），connect 帧 `enroll.mode='otp'` 带自身 `apiToken` + 可选 `displayName`，**不**带 join token；gateway 在 `apps/gateway/src/registry/pending.ts::PendingEnrollmentRegistry` 内存队列里挂起，回推 `enrollment.otp` 事件给 worker，worker 把 8 字符 OTP（`XXXX-YYYY`，去歧义 30 字符 alphabet）打到 stdout 等待人审。operator 在 `/ws` 通道上 `aim enroll list / approve <otp> / reject <otp>` 决定去留，approve 时才 `upsertEnrolledWorker(addedBy='otp')` 落 fleet.db 并通过原 ws 推 `enrollment.approved` 事件回 worker。`addedBy='otp'`。**Worker 部署方完全不需要持有任何 fleet 凭证**——`/enroll-ws` 端 Caddy 不挂 basicauth，OTP submit 在 operator approve 前不会落库。
+  1. **手动 pair**（`aiworker pair --url ws://... --worker-url http://... --bootstrap-token wtk_...`）：操作员从 worker stdout 抓 bootstrap 日志行 → gateway 调 worker `/info` 校验 → 加密存 fleet.db → 返回 deviceToken 写回 `~/.aiworker/aim.json`。**inbound** 方向：gateway 必须能 HTTP 回拨 worker `/info`，因此 worker 在 NAT/防火墙后会失败。`addedBy='manual'`。
+  2. **自动 launch**（`aiworker fleet launch --display-name foo`）：需 `AIWORKER_GATEWAY_CAN_LAUNCH=true`；gateway supervisor 拉 worker 容器、scrape stdout、自动 pair。仅限 docker 形态、与 gateway 同主机。`addedBy='launch-local'`。
+  3. **自助 enroll**（PLAN-018 / FEAT-024）：worker 容器 env 同时设 `AIWORKER_GATEWAY_URL` + `AIWORKER_JOIN_TOKEN`，`aiworker serve` bootstrap 完成后用 outbound WS 主动拨 gateway `/ws`，并把 enroll 块（`mode='join-token'` + `joinToken` + 自身 mint 的 `apiToken` + 可选 `displayName`）塞进 `connect` 帧第一帧；gateway 验 `joinToken` 后直接 upsert fleet.db 行。**outbound-only**，worker 不需要任何 inbound 端口暴露——是 NAT 后部署、批量 docker / k8s 节点、residential network 上 worker 的标准路径。`addedBy='self-enroll'`。
+  4. **OTP-attended enroll**（PLAN-019 / FEAT-026）：worker 只设 `AIWORKER_GATEWAY_URL`（无 `AIWORKER_JOIN_TOKEN`）或显式 `AIWORKER_ENROLL_MODE=otp`，`aiworker serve` bootstrap 后用 outbound WS 拨 gateway `/enroll-ws`（不同于 self-enroll 的 `/ws`），connect 帧 `enroll.mode='otp'` 带自身 `apiToken` + 可选 `displayName`，**不**带 join token；gateway 在 `apps/gateway/src/registry/pending.ts::PendingEnrollmentRegistry` 内存队列里挂起，回推 `enrollment.otp` 事件给 worker，worker 把 8 字符 OTP（`XXXX-YYYY`，去歧义 30 字符 alphabet）打到 stdout 等待人审。operator 在 `/ws` 通道上 `aiworker enroll list / approve <otp> / reject <otp>` 决定去留，approve 时才 `upsertEnrolledWorker(addedBy='otp')` 落 fleet.db 并通过原 ws 推 `enrollment.approved` 事件回 worker。`addedBy='otp'`。**Worker 部署方完全不需要持有任何 fleet 凭证**——`/enroll-ws` 端 Caddy 不挂 basicauth，OTP submit 在 operator approve 前不会落库。
 - 四条路径在 `connect` 帧上的鉴权分支由 `apps/gateway/src/auth/token.ts::authorizeConnection` 集中判定，**path-aware authN matrix**（PLAN-019 §"Path-aware authN matrix"）：
 
   | 进入路径 | `/ws`（Caddy basicauth） | `/enroll-ws`（无 basicauth） |
@@ -252,7 +252,7 @@ PLAN-014 在 PLAN-013 协议骨架之上落了四个独立但相关的特性。�
 |---|---|
 | `sys:task` | `submitTask`（dashboard 路径删除后保留为内部任务派发） |
 | `sys:gateway` | gateway dispatcher 转发的 `chat.send` |
-| `sys:cli` | `aiw run --message`（一次性 CLI ingest） |
+| `sys:cli` | `aiworker run --message`（一次性 CLI ingest） |
 | `sys:cron` | F4 cron 触发的合成 envelope（默认值，可被 `--account-id` 覆盖） |
 
 > Channel adapter 不允许直接产出 `sys:*` 前缀的 accountId；adapter test 必须断言这一点（5 个 adapter 均覆盖）。
@@ -288,7 +288,7 @@ toolPolicy?: {
 worker orchestrator (ask)
     │ approval.requested  (bus event)
     ▼
-worker gateway-client subscriber  ──►  gateway  ──►  operator (aim / web)
+worker gateway-client subscriber  ──►  gateway  ──►  operator (aiworker / web)
                                                         │ approval.grant
                                                         ▼
 worker gateway-client dispatcher  ◄──  gateway  ◄──  approval.grant
@@ -299,8 +299,8 @@ worker orchestrator (resume)
 
 operator 控制面：
 
-- `aim approvals list [--worker <id>]` / `aim approvals grant <workerId> <taskId> <toolCallId> [--deny]`（`@aiworker/gateway-proto` 新增 `approval.list` / `approval.grant` 方法 + `APPROVAL_REQUESTED` 事件）。
-- `aiw approvals-list` / `aiw approvals-grant <taskId> <toolCallId> [--deny]`（不经 gateway，直接调 worker 本地 `GET /api/worker/approvals` 与 `POST /api/worker/approvals/:taskId/:toolCallId/grant`，方便 dev 与运维 fallback）。
+- `aiworker approvals list [--worker <id>]` / `aiworker approvals grant <workerId> <taskId> <toolCallId> [--deny]`（`@zonease/aiworker-gateway-proto` 新增 `approval.list` / `approval.grant` 方法 + `APPROVAL_REQUESTED` 事件）。
+- `aiworker approvals-list` / `aiworker approvals-grant <taskId> <toolCallId> [--deny]`（worker-local dash-form；不经 gateway，直接调 worker 本地 `GET /api/worker/approvals` 与 `POST /api/worker/approvals/:taskId/:toolCallId/grant`，方便 dev 与运维 fallback）。
 
 ### F3 — Provider fallback chain
 
@@ -357,8 +357,8 @@ fallbacks?: Array<{
 
 operator 控制面：
 
-- `aim schedule list <workerId>` / `aim schedule add <workerId> --expression --prompt --channel --chat-id [--account-id sys:cron] [--disabled]` / `aim schedule remove <workerId> <jobId>`（gateway 新增 `cron.list` / `cron.add` / `cron.remove` / `cron.update` 方法）。
-- `aiw schedule-list` / `aiw schedule-add` / `aiw schedule-remove`（直接走 in-process `CronService` CRUD，不经 HTTP，与 `aiw config-show` 模式一致）。
+- `aiworker schedule list <workerId>` / `aiworker schedule add <workerId> --expression --prompt --channel --chat-id [--account-id sys:cron] [--disabled]` / `aiworker schedule remove <workerId> <jobId>`（gateway 新增 `cron.list` / `cron.add` / `cron.remove` / `cron.update` 方法）。
+- `aiworker schedule-list` / `aiworker schedule-add` / `aiworker schedule-remove`（worker-local dash-form；直接走 in-process `CronService` CRUD，不经 HTTP，与 `aiworker config-show` 模式一致）。
 
 ## Module Layer
 
@@ -393,7 +393,7 @@ operator 控制面：
 
 完整列表见 `apps/api/.env.example` 与 `ops/compose/.env.example`。常用变量：
 
-Worker 侧（`aiw serve` / worker 容器）：
+Worker 侧（`aiworker serve` / worker 容器）：
 
 - `AIWORKER_MASTER_KEY` — worker 自己的 secrets vault 主密钥（64 hex）。
 - `AIWORKER_HOME` — 默认 `~/.aiworker`。
@@ -413,7 +413,7 @@ Gateway 侧（`apps/gateway/src/index.ts` / gateway 容器）：
 ## Key Design Decisions
 
 1. **Provider-shaped core**：orchestrator 只依赖 `BrainProvider` / `ExecutorProvider`；测试注入 scripted executor；生产在 `apps/api/src/providers/index.ts` / engines 注册表里切换。
-2. **File-first for Brain**：memories / skills 落 markdown 文件（`FilesystemBrainProvider`）；`AIWORKER_HOME` 根下结构由 `@aiworker/fs-layout` 管。
+2. **File-first for Brain**：memories / skills 落 markdown 文件（`FilesystemBrainProvider`）；`AIWORKER_HOME` 根下结构由 `@zonease/aiworker-fs-layout` 管。
 3. **SQLite for runtime state**：agent tasks / conversations / transcripts / tool-call logs / skill conflicts。Drizzle 迁移在 `initDb` 时自动跑。
-4. **WS-first control plane**：operator 与 node 走同一条 WS 入口、同一套协议包（`@aiworker/gateway-proto`），方法 routing 自带 `operator-to-node` vs `operator-to-gateway` 判别；REST 不再作为控制面语言。
+4. **WS-first control plane**：operator 与 node 走同一条 WS 入口、同一套协议包（`@zonease/aiworker-gateway-proto`），方法 routing 自带 `operator-to-node` vs `operator-to-gateway` 判别；REST 不再作为控制面语言。
 5. **OpenAI-compatible, not OpenAI-only**：executor engines 可扩展到任何兼容 chat-completions / tool-use 方言的后端（OpenAI、Ollama、vLLM、LM Studio、Together、claude-code、codex、gemini-cli、qwen-code、cursor-agent 等）。

@@ -10,11 +10,11 @@
 
 | 形态 | 适用场景 | 典型命令 | docker | 公网入口 |
 |------|----------|----------|--------|----------|
-| **裸跑** | 开发 / 调试 / 一次性试用 | `aim gateway start` / `aiw serve` 前台 | 无 | 无 |
-| **systemd 服务化** | Linux 长跑 / 服务器 | `aim install systemd [--user\|--system]` | 无 | 可选叠加 deployment-public-https |
+| **裸跑** | 开发 / 调试 / 一次性试用 | `aiworker gateway start` / `aiworker serve` 前台 | 无 | 无 |
+| **systemd 服务化** | Linux 长跑 / 服务器 | `aiworker install systemd [--user\|--system]` | 无 | 可选叠加 deployment-public-https |
 | docker compose | 懒人快速试用 / 多 worker 容器隔离 | `docker compose up -d`（`ops/compose/`） | 有 | 必要时叠加 deployment-public-https |
 
-> **默认就选裸跑或 systemd。** docker compose 路径的存在意义只剩两个：(1) 不愿装 bun 时一行命令试用，(2) 需要 `aim workers launch` 自动拉起 per-worker 隔离容器（必须叠 supervisor overlay）。两者都不要求公网暴露。
+> **默认就选裸跑或 systemd。** docker compose 路径的存在意义只剩两个：(1) 不愿装 bun 时一行命令试用，(2) 需要 `aiworker fleet launch` 自动拉起 per-worker 隔离容器（必须叠 supervisor overlay）。两者都不要求公网暴露。
 
 ---
 
@@ -23,7 +23,7 @@
 无论选哪一档都需要：
 
 - [`bun`](https://bun.sh) ≥ 1.1（裸跑 / systemd 必备；docker 形态由镜像内置）。
-- 一段 64 字符 hex 的 `AIWORKER_MASTER_KEY`：`openssl rand -hex 32`。**部署前务必离线备份**——丢失 = fleet.db 里所有 `registered_workers.apiTokenEnc` 无法解密，所有 worker 都要重新 `aim pair`。
+- 一段 64 字符 hex 的 `AIWORKER_MASTER_KEY`：`openssl rand -hex 32`。**部署前务必离线备份**——丢失 = fleet.db 里所有 `registered_workers.apiTokenEnc` 无法解密，所有 worker 都要重新 `aiworker pair`。
 - 一段 ≥ 16 字符的 `INTERNAL_SHARED_SECRET`：`openssl rand -base64 24`。远程 operator 的 bearer，loopback 自动放行。
 
 约定 `~/.aiworker/` 为运行时主目录（`AIWORKER_HOME` 可改）。fleet.db 默认落到这里；worker.db 落到每个 worker 自己的 `~/.aiworker/workers/<workerId>/worker.db`。完整文件布局见 [`architecture.md` § Filesystem source of truth](./architecture.md#filesystem-source-of-truth-plan-012)。
@@ -35,29 +35,30 @@
 适合开发机、单机用户、CI 临时。无 docker、无公网、无 Caddy。
 
 ```sh
-# 1. 装 CLI（开发期直接走源码也行，见 docs/cli.md）。
-bun install -g @aiworker/cli
+# 1. 装 CLI（Stage A 直接走源码 `bun apps/cli/src/aiworker.ts`，见 docs/cli.md；
+#     Stage B / FEAT-027 完成后改为 `bun install -g @zonease/aiworker-cli`）。
+bun install -g @zonease/aiworker-cli
 
 # 2. 准备主密钥与共享密钥（写到 shell 启动脚本或 ~/.aiworker/.env）。
 export AIWORKER_MASTER_KEY=$(openssl rand -hex 32)
 export INTERNAL_SHARED_SECRET=$(openssl rand -base64 24)
 
 # 3. 终端 A：拉起 gateway 前台（fleet.db 自动落 ~/.aiworker/fleet.db）。
-aim gateway start --port 3000
+aiworker gateway start --port 3000
 
 # 4. 终端 B：拉起 worker 前台（HTTP :3001 + 同机注册到 gateway）。
-aiw init                 # 首次：mint identity + bootstrap token（输出一次）
-aiw serve --port 3001 --gateway ws://127.0.0.1:3000/ws
+aiworker init                 # 首次：mint identity + bootstrap token（输出一次）
+aiworker serve --port 3001 --gateway ws://127.0.0.1:3000/ws
 
 # 5. 终端 C：从 worker stdout 抓 wtk_... 后 pair。
-aim pair --url ws://127.0.0.1:3000/ws \
-         --worker-url http://127.0.0.1:3001 \
-         --bootstrap-token wtk_xxxxxxxxxxxx \
-         --display-name dev-1
-aim workers list
+aiworker pair --url ws://127.0.0.1:3000/ws \
+              --worker-url http://127.0.0.1:3001 \
+              --bootstrap-token wtk_xxxxxxxxxxxx \
+              --display-name dev-1
+aiworker fleet list
 ```
 
-退出：Ctrl-C 双方进程即可。状态在 `~/.aiworker/` 下持久化，下次直接 `aim gateway start` + `aiw serve` 重新拉起就好。
+退出：Ctrl-C 双方进程即可。状态在 `~/.aiworker/` 下持久化，下次直接 `aiworker gateway start` + `aiworker serve` 重新拉起就好。
 
 ---
 
@@ -69,19 +70,19 @@ aim workers list
 
 ```sh
 # 用户实例（默认；写到 ~/.config/systemd/user/aiworker-gateway.service）：
-aim install systemd --user
+aiworker install systemd --user
 
 # 系统实例（root；写到 /etc/systemd/system/aiworker-gateway.service）：
-sudo aim install systemd --system
+sudo aiworker install systemd --system
 
 # 仅打印 unit 内容，不写盘 / 不 enable：
-aim install systemd --dry-run
+aiworker install systemd --dry-run
 
 # 自定义输出路径（异常布局或 packaging 用）：
-aim install systemd --out /tmp/aiworker-gateway.service --no-enable
+aiworker install systemd --out /tmp/aiworker-gateway.service --no-enable
 ```
 
-`aim install systemd` 写完 unit 后默认会调 `systemctl daemon-reload + enable --now`；带 `--no-enable` 让运维手动 enable。完整 flag 列表见 [`docs/cli.md` § `aim install`](./cli.md#aim-install-systemd)。
+`aiworker install systemd` 写完 unit 后默认会调 `systemctl daemon-reload + enable --now`；带 `--no-enable` 让运维手动 enable。完整 flag 列表见 [`docs/cli.md` § `aiworker install systemd`](./cli.md#aiworker-install-systemd-plan-016)。
 
 ### 验证
 
@@ -101,9 +102,9 @@ curl -fsS http://127.0.0.1:3000/health
 
 ### 注意
 
-- unit 模板里的 `ExecStart` 假设 `aim` 已位于 `~/.bun/bin/aim`（`bun install -g` 默认路径）。binary 形态（PLAN-017+）一旦发布，`aim install systemd` 会改写为绝对路径。
+- unit 模板里的 `ExecStart` 假设 `aiworker` 已位于 `~/.bun/bin/aiworker`（`bun install -g @zonease/aiworker-cli` 默认路径）。binary 形态（FEAT-027 之后的 `bun build --compile`）一旦发布，`aiworker install systemd` 会按 `which aiworker` 改写为绝对路径。
 - `--system` 形态需要明确知道在做什么——服务以 root 跑、数据写到 root home（除非自定义 `Environment=AIWORKER_HOME=...`）。新手优先 `--user`。
-- worker 进程目前不提供 systemd 模板。常见做法：让 gateway 跑 systemd（长驻），worker 按需手工 `aiw serve` 或走 docker fast-launch。
+- worker 进程目前不提供 systemd 模板。常见做法：让 gateway 跑 systemd（长驻），worker 按需手工 `aiworker serve` 或走 docker fast-launch。
 
 ---
 
@@ -114,7 +115,7 @@ curl -fsS http://127.0.0.1:3000/health
 适合：
 
 - 一行命令试用 AIWorker，不想装 bun。
-- 需要 `aim workers launch` 自动拉起 per-worker 容器（必须叠加 supervisor overlay）。
+- 需要 `aiworker fleet launch` 自动拉起 per-worker 容器（必须叠加 supervisor overlay）。
 - 多人共享主机、希望容器化进程边界。
 
 镜像由 GitHub Actions 在 `.github/workflows/build-image.yml` 构建并发布到私有 GHCR `ghcr.io/zoneasetech/aiworker:<tag>`。本地 / 服务器**不**自行 build。
@@ -138,7 +139,7 @@ docker compose up -d
 curl -fsS http://127.0.0.1:3000/health
 ```
 
-操作员侧的 pair / launch 流程同形态一、二（`aim pair` / `aim workers launch`）。
+操作员侧的 pair / launch 流程同形态一、二（`aiworker pair` / `aiworker fleet launch`）。
 
 ### `scripts/deploy.ts`（可选远程 aissh 流程）
 
@@ -152,9 +153,9 @@ curl -fsS http://127.0.0.1:3000/health
 
 `bun run scripts/deploy.ts --help` 列全部子命令。
 
-### `aim workers launch` 与 supervisor overlay
+### `aiworker fleet launch` 与 supervisor overlay
 
-要让 gateway 自动拉起 worker 容器，必须叠加 `ops/compose/docker-compose.supervisor.yml`，并启用 `AIWORKER_GATEWAY_CAN_LAUNCH=true`。详细配方在 [`deployment-public-https.md` § `aim workers launch` 与 supervisor overlay](./deployment-public-https.md#aim-workers-launch-与-supervisor-overlay)（与公网 SaaS 部署方式同源，因为 supervisor 通常只在远程服务器上启用）。
+要让 gateway 自动拉起 worker 容器，必须叠加 `ops/compose/docker-compose.supervisor.yml`，并启用 `AIWORKER_GATEWAY_CAN_LAUNCH=true`。详细配方在 [`deployment-public-https.md` § `aiworker fleet launch` 与 supervisor overlay](./deployment-public-https.md#aim-workers-launch-与-supervisor-overlay)（与公网 SaaS 部署方式同源，因为 supervisor 通常只在远程服务器上启用；目标 anchor 仍沿用旧名 `aim-workers-launch-…` 以避免破坏历史链接）。
 
 ### Slim vs Full 镜像
 
@@ -178,15 +179,15 @@ PLAN-013 之后 dashboard REST 已下线，注册一个 worker 进 fleet 有四�
 
 1. **手动 pair**（任意形态都通用）：worker 首启时 stdout 打一次性 `AIWORKER_BOOTSTRAP_TOKEN=wtk_...`；操作员抓取后调
    ```sh
-   aim pair --url ws://<gateway>:3000/ws \
-            --worker-url http://<worker-host>:3001 \
-            --bootstrap-token wtk_xxxxxxxxxxxx \
-            --display-name <name>
+   aiworker pair --url ws://<gateway>:3000/ws \
+                 --worker-url http://<worker-host>:3001 \
+                 --bootstrap-token wtk_xxxxxxxxxxxx \
+                 --display-name <name>
    ```
    > 此路径需要 gateway 能 HTTP 回拨 worker `/info`——worker 在 NAT/防火墙后会失败。
-2. **自动 launch**（仅 docker 形态 + supervisor overlay）：`aim workers launch --display-name foo`；gateway supervisor 拉容器、scrape stdout、自动 pair。
+2. **自动 launch**（仅 docker 形态 + supervisor overlay）：`aiworker fleet launch --display-name foo`；gateway supervisor 拉容器、scrape stdout、自动 pair。
 3. **自助 enroll**（PLAN-018 / FEAT-024）：worker outbound 拨 gateway `/ws`，第一帧 `connect` 携带 `enroll` 块（`joinToken` + `apiToken` + 可选 `displayName`）；gateway 验签后直接落 fleet.db。详见下文 § Worker self-enroll quick start。
-4. **OTP-attended enroll**（PLAN-019 / FEAT-026）：worker outbound 拨 gateway `/enroll-ws`（**不**复用 self-enroll 的 `/ws`），第一帧 `connect.enroll.mode='otp'` 不带任何 fleet 凭证；gateway 给 worker 派一个 8 字符 OTP，operator 用 `aim enroll approve <otp>` 决定放行。worker 部署方完全不需要 fleet 共享密钥。详见下文 § Worker OTP-attended enroll quick start。
+4. **OTP-attended enroll**（PLAN-019 / FEAT-026）：worker outbound 拨 gateway `/enroll-ws`（**不**复用 self-enroll 的 `/ws`），第一帧 `connect.enroll.mode='otp'` 不带任何 fleet 凭证；gateway 给 worker 派一个 8 字符 OTP，operator 用 `aiworker enroll approve <otp>` 决定放行。worker 部署方完全不需要 fleet 共享密钥。详见下文 § Worker OTP-attended enroll quick start。
 
 worker baseUrl 是 worker HTTP 根（scheme + host/port，无 path）：
 
@@ -228,29 +229,29 @@ AIWORKER_JOIN_TOKEN=<同上 gateway 侧>
 AIWORKER_DISPLAY_NAME=prod-1                          # 可选；缺省回落 workerId
 ```
 
-只设 `AIWORKER_JOIN_TOKEN` 而无 `AIWORKER_GATEWAY_URL` → `aiw serve` 启动时 `consola.warn` 跳过 self-enroll，**不**自动起 gateway-client。`--gateway` flag 与 env 三件套同时存在时，`--gateway` 显式覆盖（走原 operator-pull 路径）。
+只设 `AIWORKER_JOIN_TOKEN` 而无 `AIWORKER_GATEWAY_URL` → `aiworker serve` 启动时 `consola.warn` 跳过 self-enroll，**不**自动起 gateway-client。`--gateway` flag 与 env 三件套同时存在时，`--gateway` 显式覆盖（走原 operator-pull 路径）。
 
 ### 3. 拉起 worker
 
 ```sh
 # 任何形态：裸跑、systemd、docker。
-aiw serve --port 3001
+aiworker serve --port 3001
 # 等价 systemd unit 片段：
 # [Service]
 # Environment=AIWORKER_MASTER_KEY=...
 # Environment=AIWORKER_GATEWAY_URL=wss://aiw.example.com/ws
 # Environment=AIWORKER_JOIN_TOKEN=<shared>
 # Environment=AIWORKER_DISPLAY_NAME=prod-1
-# ExecStart=/usr/local/bin/aiw serve --port 3001
+# ExecStart=/usr/local/bin/aiworker serve --port 3001
 ```
 
-5 秒内从 gateway 侧 `aim workers list` 应见到该 worker：`online: true`、`addedBy: 'self-enroll'`、`displayName` 与 env 一致。
+5 秒内从 gateway 侧 `aiworker fleet list` 应见到该 worker：`online: true`、`addedBy: 'self-enroll'`、`displayName` 与 env 一致。
 
 ### 4. 安全模型与运维
 
 - **Join token 是 fleet 级共享**——任何持有它的进程都能以任意 `workerId` 入网。Mitigations：
   - `AIWORKER_MAX_WORKERS` 配额仍生效（已注册 workerId reconnect 不占配额，超额 → close `4401 auth:quota_exceeded` + audit `quota_exceeded`）；
-  - 操作员 `aim workers remove <id>` 立即吊销该 worker（fleet 行删除 + 在线连接踢下线）；
+  - 操作员 `aiworker fleet remove <id>` 立即吊销该 worker（fleet 行删除 + 在线连接踢下线）；
   - 旋转 token：改 gateway env 后重启 gateway——已自助入网的 worker 用既有 fleet 行 reconnect 不带 enroll 块、不受影响；新 worker / 重新带 enroll 的连接必须用新 token，否则 `4401 auth:join_token_mismatch`。
 - **Worker 端 apiToken 仍由 worker 容器自身 mint**（不变量同手动 pair 路径）；enroll 块只是把这枚已 mint 的 apiToken 传给 gateway 做 fleet 行加密落库的输入，bootstrap stdout 行不再被任何 operator 抓取。
 - **`displayName` 变更不旋转 apiToken**——同 workerId 重新带 enroll、`displayName` 不同：fleet 行只改名 + `lastSeenAt`，apiToken 密文保留；同名 reconnect 走 `unchanged` 路径，**不**写 `gateway.worker.enrolled` audit（仅 created / updated 才写，避免 reconnect 风暴）。
@@ -258,15 +259,17 @@ aiw serve --port 3001
 
 ### 5. 常见排错
 
-- `aim workers list` 看不到 worker：worker 端 stderr 看 `consola.info [aiw serve] self-enrolling to ...`，再去 gateway 端 fleet.db 的 `audit_events` 查 `gateway.connect.rejected` 行的 `detail.reason`。
+- `aiworker fleet list` 看不到 worker：worker 端 stderr 看 `consola.info [aiworker serve] self-enrolling to ...`，再去 gateway 端 fleet.db 的 `audit_events` 查 `gateway.connect.rejected` 行的 `detail.reason`。
 - `auth:master_key_missing`：gateway 没设 `AIWORKER_MASTER_KEY`；任何路径下 fleet.db 加密都依赖它，必须配齐。
-- `auth:quota_exceeded`：`AIWORKER_MAX_WORKERS` 已满；用 `aim workers remove` 摘除旧 worker 或调高上限。
+- `auth:quota_exceeded`：`AIWORKER_MAX_WORKERS` 已满；用 `aiworker fleet remove` 摘除旧 worker 或调高上限。
 
 ---
 
 ## Worker OTP-attended enroll quick start（PLAN-019 / FEAT-026）
 
 适用：worker 部署方是客户 / 朋友 / CI runner 等不该持有 fleet 凭证的人；operator 希望对每次新 worker 入网保留一次"人审"机会，等同 GitHub Device Flow / `gh auth login`。
+
+> 命令形态：本节示例统一用 `aiworker enroll …` 单二进制 form（PLAN-020 / FEAT-028 起）。Stage A 时直接跑 `bun apps/cli/src/aiworker.ts enroll …`，Stage B（FEAT-027 npm publish）后改成 `bun install -g @zonease/aiworker-cli && aiworker enroll …`。
 
 self-enroll（path 3）虽然把 worker 端 inbound 端口需求消掉了，但 worker 部署方仍要持有 fleet 级共享 `AIWORKER_JOIN_TOKEN`——一旦泄露任何持有者都能以任意 workerId 入网；OTP 路径把这个 anti-pattern 一并消掉。
 
@@ -291,9 +294,9 @@ AIWORKER_DISPLAY_NAME=ben-laptop                       # 可选；缺省回落 w
 AIWORKER_ENROLL_MODE=otp                               # 显式 'otp'，忽略 JOIN_TOKEN
 ```
 
-> `aiw serve` 内部会把 `AIWORKER_GATEWAY_URL` 的 path 段强制改写为 `/enroll-ws`，无需 deployer 自己改。Path-split 由 Caddy 端完成（见下文 § Caddy `/enroll-ws` path split）。
+> `aiworker serve` 内部会把 `AIWORKER_GATEWAY_URL` 的 path 段强制改写为 `/enroll-ws`，无需 deployer 自己改。Path-split 由 Caddy 端完成（见下文 § Caddy `/enroll-ws` path split）。
 
-`aiw serve` 触发表（与 PLAN-019 §"Worker side" 一致；详见 [`docs/cli.md` § `aiw serve`](./cli.md#aiw-serve)）：
+`aiworker serve` 触发表（与 PLAN-019 §"Worker side" 一致；详见 [`docs/cli.md` § `aiworker serve`](./cli.md#aiworker-serve-port-n-gateway-wsurl-gateway-token-token-no-reconnect)）：
 
 | `--gateway` flag | env URL | env JOIN_TOKEN | env ENROLL_MODE | 行为 |
 |---|---|---|---|---|
@@ -307,20 +310,20 @@ AIWORKER_ENROLL_MODE=otp                               # 显式 'otp'，忽略 J
 
 ```sh
 # 任何形态：裸跑 / systemd / docker。
-aiw serve --port 3001
+aiworker serve --port 3001
 ```
 
 stdout 第一时间会打方框形 OTP，附 expires-in 倒计时：
 
 ```text
-[aiw serve] OTP enrolling to ws://gateway-host:3000/enroll-ws; awaiting operator approval
+[aiworker serve] OTP enrolling to ws://gateway-host:3000/enroll-ws; awaiting operator approval
 
 ┌──────────────────────────┐
 │  OTP:  BX7P-K39M         │
 │  expires in 300s         │
 └──────────────────────────┘
 
-[aiw serve] OTP BX7P-K39M 已签发，请用 `aim enroll approve BX7P-K39M` 准入；expires in 300s
+[aiworker serve] OTP BX7P-K39M 已签发，请用 `aiworker enroll approve BX7P-K39M` 准入；expires in 300s
 ```
 
 deployer 把这串 OTP 通过任意带外通道（语音 / 邮件 / IM）发给 operator 即可，**无须**给 deployer 任何 fleet 凭证。
@@ -329,7 +332,7 @@ deployer 把这串 OTP 通过任意带外通道（语音 / 邮件 / IM）发给 
 
 ```sh
 # 列待批
-aim enroll list
+aiworker enroll list
 # {
 #   "pending": [
 #     { "otp": "BX7P-K39M", "workerId": "w_xxx", "displayName": "ben-laptop", "submittedAt": ..., "expiresAt": ... }
@@ -337,21 +340,21 @@ aim enroll list
 # }
 
 # 准入（worker 立即收到 enrollment.approved，fleet 行写 addedBy='otp'）
-aim enroll approve BX7P-K39M
+aiworker enroll approve BX7P-K39M
 # ✔ 已批准 OTP BX7P-K39M，workerId=w_xxx
 # { "workerId": "w_xxx", "deviceToken": "wtk_..." }
 
 # 或拒绝（worker 收到 close 4403 enroll:rejected）
-aim enroll reject BX7P-K39M
+aiworker enroll reject BX7P-K39M
 ```
 
-approve 后 worker 端会打 `[aiw serve] approved as w_xxx; deviceToken=wtk_...，已加入 fleet`，并由 gateway 把它升级为 NodeRegistry 里的正式 node、广播 `worker.online`。后续 reconnect 走原 `/enroll-ws` ws（worker 自身缓存 `enrolledViaOtp=true`，client.ts 直接复用），不再触发 OTP 流。
+approve 后 worker 端会打 `[aiworker serve] approved as w_xxx; deviceToken=wtk_...，已加入 fleet`，并由 gateway 把它升级为 NodeRegistry 里的正式 node、广播 `worker.online`。后续 reconnect 走原 `/enroll-ws` ws（worker 自身缓存 `enrolledViaOtp=true`，client.ts 直接复用），不再触发 OTP 流。
 
 ### 5. 安全模型
 
 - **Worker deployer 不持有任何 fleet 凭证**——`/enroll-ws` 端 Caddy 不挂 basicauth，OTP submit 在 operator approve 前不会落 fleet.db；任何 attacker 拿不到 OTP，从外部 spam 该 path 不会污染 fleet。
 - **OTP 单次有效 + 短 TTL**：`AIWORKER_ENROLL_OTP_TTL_SEC` 默认 300 秒；过期由 setTimeout 触发 `gateway.enrollment.expired` audit + close 4408；approve / reject 走的 entry 立即从 pending Map 中删除。OTP 不可重放（in-memory，gateway 重启即丢；所有持久化都在 approve 时才发生）。
-- **OTP 不进 audit 明文**：所有 audit detail 仅落 `sha256(otp).slice(0, 8)`（`gateway.enrollment.requested` / `.rejected` / `.abandoned` 都走这个路径，由 `apps/gateway/src/server.ts::hashOtpForAudit` 与 `apps/gateway/src/router/methods/enroll.ts::hashOtp` 实现）；明文 OTP 只在 worker stdout / `aim enroll list` 输出里出现。运维 fleet.db 拷贝出去后无法据此批准已过期 / 已 reject 的请求。
+- **OTP 不进 audit 明文**：所有 audit detail 仅落 `sha256(otp).slice(0, 8)`（`gateway.enrollment.requested` / `.rejected` / `.abandoned` 都走这个路径，由 `apps/gateway/src/server.ts::hashOtpForAudit` 与 `apps/gateway/src/router/methods/enroll.ts::hashOtp` 实现）；明文 OTP 只在 worker stdout / `aiworker enroll list` 输出里出现。运维 fleet.db 拷贝出去后无法据此批准已过期 / 已 reject 的请求。
 - **Path-aware 拒绝**：在 `/ws` 上发 `enroll.mode='otp'` → close 4400 `wrong_path:otp_must_use_enroll_ws`；在 `/enroll-ws` 上发 operator connect / 普通 node connect → close 4400 `wrong_path:expected_enroll_otp`。两条 close code 由 `apps/gateway/src/auth/token.ts::authorizeConnection` 集中产出。
 - **`enroll.approve` 在 `/ws` operator 侧**——attacker 即使知道 OTP，也必须先穿透 Caddy basicauth 才能调 approve。无新攻击面 vs PLAN-018。
 - **Pending state 重启即丢**：UX acceptable—worker 自动重连重新拿一个新 OTP。**不要**指望 OTP 跨 gateway 重启。
@@ -361,12 +364,12 @@ approve 后 worker 端会打 `[aiw serve] approved as w_xxx; deviceToken=wtk_...
 
 | close code / wire code | 含义 | 排查 |
 |---|---|---|
-| `4400 wrong_path:expected_enroll_otp` | 在 `/enroll-ws` 上发了非 OTP 帧（operator connect 或普通 node connect） | 检查 worker / aim 是否拨错 path；reconnect 后已批 worker 的端到端流应回到 `/enroll-ws` 但带 OTP=approved 后由 gateway 接管 |
-| `4400 wrong_path:otp_must_use_enroll_ws` | 在 `/ws` 上发了 `enroll.mode='otp'` | worker 端 trigger table 走错分支；改 env 让 `aiw serve` 重走 |
+| `4400 wrong_path:expected_enroll_otp` | 在 `/enroll-ws` 上发了非 OTP 帧（operator connect 或普通 node connect） | 检查 worker / operator 是否拨错 path；reconnect 后已批 worker 的端到端流应回到 `/enroll-ws` 但带 OTP=approved 后由 gateway 接管 |
+| `4400 wrong_path:otp_must_use_enroll_ws` | 在 `/ws` 上发了 `enroll.mode='otp'` | worker 端 trigger table 走错分支；改 env 让 `aiworker serve` 重走 |
 | `4401 auth:master_key_missing`（approve 阶段返回的 `master_key_missing`） | gateway 未配 `AIWORKER_MASTER_KEY` | 配齐主密钥后重启 gateway，让 worker 重新发起 |
-| `4401 quota_exceeded`（approve 时） | 配额已满 | `aim workers remove <id>` 摘除旧 worker 或调高 `AIWORKER_MAX_WORKERS` |
-| `4403 enroll:rejected` | operator `aim enroll reject` | 部署方与 operator 沟通后再发起 |
-| `4408 enroll:expired` | 超过 `AIWORKER_ENROLL_OTP_TTL_SEC`（默认 300s） | 部署方重新 `aiw serve`，让 gateway 派新 OTP |
+| `4401 quota_exceeded`（approve 时） | 配额已满 | `aiworker fleet remove <id>` 摘除旧 worker 或调高 `AIWORKER_MAX_WORKERS` |
+| `4403 enroll:rejected` | operator `aiworker enroll reject` | 部署方与 operator 沟通后再发起 |
+| `4408 enroll:expired` | 超过 `AIWORKER_ENROLL_OTP_TTL_SEC`（默认 300s） | 部署方重新 `aiworker serve`，让 gateway 派新 OTP |
 | `4500 enroll_unavailable` / `enroll_otp_send_failed` | gateway 内部异常（pending registry 未注入 / 推送 OTP 失败） | 看 gateway 日志，重启即可 |
 
 `gateway.enrollment.requested` 写入即视为"OTP 派发成功"；后续 `.approved` / `.rejected` / `.expired` / `.abandoned` 是终态。任何漏掉这条 audit 的，都说明 connect 帧根本没到 gateway——先排 Caddy 反代和网络。
@@ -406,7 +409,7 @@ approve 后 worker 端会打 `[aiw serve] approved as w_xxx; deviceToken=wtk_...
 
 无论形态，备份都必须涵盖：
 
-- **`AIWORKER_MASTER_KEY`** — 离线保管。丢失 = fleet 里所有 worker 的 token 全部失效，必须重新 `aim pair`。
+- **`AIWORKER_MASTER_KEY`** — 离线保管。丢失 = fleet 里所有 worker 的 token 全部失效，必须重新 `aiworker pair`。
 - **fleet.db** — 裸跑/systemd 在 `~/.aiworker/fleet.db`；docker 在卷 `aiworker_fleet`（默认 `/var/lib/docker/volumes/aiworker_fleet/_data/fleet.db`）。
 - **每个 worker 的 worker.db** — 裸跑/systemd 在 `~/.aiworker/workers/<workerId>/worker.db`；docker launch 形态在 `WORKER_DATA_ROOT/<workerId>/worker.db`。
 
@@ -414,10 +417,10 @@ approve 后 worker 端会打 `[aiw serve] approved as w_xxx; deviceToken=wtk_...
 
 ## Troubleshooting
 
-- **`aim` 报 `auth: shared_secret_mismatch`**：通常是从容器外部直连 gateway 的 `127.0.0.1`，但 Bun 看到的 `requestIP` 是 docker network 地址（不在 loopback 白名单）。解决：经 Caddy 反代（loopback）进入，或者显式 export `INTERNAL_SHARED_SECRET` 当 token。
-- **`aim` 等响应超时**：`aim workers list` 看 node 是否在线；若短时间内频繁断连，看 `fleet.db` 的 `audit_events` 里 `gateway.node.disconnected` 的 close code。
+- **`aiworker` 报 `auth: shared_secret_mismatch`**：通常是从容器外部直连 gateway 的 `127.0.0.1`，但 Bun 看到的 `requestIP` 是 docker network 地址（不在 loopback 白名单）。解决：经 Caddy 反代（loopback）进入，或者显式 export `INTERNAL_SHARED_SECRET` 当 token。
+- **`aiworker` 等响应超时**：`aiworker fleet list` 看 node 是否在线；若短时间内频繁断连，看 `fleet.db` 的 `audit_events` 里 `gateway.node.disconnected` 的 close code。
 - **gateway `/health` 不通**：检查 gateway 进程是否真的起了；`AIWORKER_MASTER_KEY` 是否有效（解 fleet.db 失败会立即退出）。
-- **systemd unit 启动失败**：`journalctl --user -u aiworker-gateway -e` 看错误；常见是 `aim` 不在 `$PATH`（unit `Environment=PATH=...` 缺）或 `~/.aiworker/` 权限错。
+- **systemd unit 启动失败**：`journalctl --user -u aiworker-gateway -e` 看错误；常见是 `aiworker` 不在 `$PATH`（unit `Environment=PATH=...` 缺）或 `~/.aiworker/` 权限错。
 - **docker 形态 verify 失败**：`docker logs aiworker-gateway --tail 200`。
 
 公网 HTTPS / aissh / Caddy 相关问题见 [`deployment-public-https.md` § Troubleshooting](./deployment-public-https.md#troubleshooting)。
