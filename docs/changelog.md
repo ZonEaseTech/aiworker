@@ -1,5 +1,18 @@
 # AIWorker Changelog
 
+## 2026-04-27 11:50 [progress] FEAT-027 GA — `@zonease/aiworker-cli@0.2.0` 真发到 npmjs.com
+
+`@zonease/aiworker-cli@0.2.0` 真实 publish 落地（前置：`e485bea` redacted history force push 完成）：
+
+- `bun publish --access public` 从 `apps/cli/dist/` 出包：3 文件 0.73 MB unpacked / 217.71 KB packed，shasum `54e6c3f203e68df60c95f73d50e5e15d588c5cf2`，dist-tags `latest=0.2.0`
+- 含 FEAT-030 全部改进：动态版本（`aiworker --version` → `0.2.0`）、默认端口 9217 / 9218、首次启动自动 mint master key 写 `~/.aiworker/.env` chmod 0600
+- License MIT、deps none、bin `aiworker`、files `aiworker.js + README.md`
+- npm registry 验证：`bunx npm view @zonease/aiworker-cli@0.2.0` 返回正确 metadata，published just now by ben9217
+
+token 安全：`./tmp/npm_token` 用完即 shred，未入 git。建议 npm 端轮换。
+
+REFACTOR-004 阻塞解除（aiworker@0.2.0 可 npm install）；测试服迁移待 aissh token 重新配置后继续。
+
 ## 2026-04-27 11:30 [decision] 测试服部署原则收紧——只允许已发布 npm cli + Caddy 反代
 
 用户决策（直引）："测试服务器，除了 caddy 反代外，不再由源码构建，只允许安装或更新，从已发布的 cli 去操作"。

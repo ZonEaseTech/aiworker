@@ -1,8 +1,9 @@
 # FEAT-027 Publish CLIs to npmjs.com (or compiled binaries via GH Releases)
 
-- **status**: completed (build pipeline 就绪；真 publish 需用户操作 prerequisites)
+- **status**: completed (`@zonease/aiworker-cli@0.2.0` 真发到 npmjs.com)
 - **priority**: P2
-- **completedAt**: 2026-04-27 08:55
+- **completedAt**: 2026-04-27 11:50
+- **firstReleased**: 2026-04-27 11:50 — `@zonease/aiworker-cli@0.2.0`（含 FEAT-030 全部改进），shasum `54e6c3f203e68df60c95f73d50e5e15d588c5cf2`
 - **owner**: (unassigned)
 - **createdAt**: 2026-04-27 07:30
 - **decided**: 2026-04-27 07:35 — npm scope `@zonease`，包名 `@zonease/aiworker-cli`，binary `aiworker`
