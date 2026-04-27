@@ -41,8 +41,8 @@ RUN bun install --frozen-lockfile
 
 FROM deps AS build
 COPY . .
-RUN bun run --filter '@aiworker/shared' typecheck \
- && bun run --filter '@aiworker/web' build \
+RUN bun run --filter '@zonease/aiworker-shared' typecheck \
+ && bun run --filter '@zonease/aiworker-web' build \
  && bun run --cwd apps/api build
 
 FROM oven/bun:1-debian AS runtime

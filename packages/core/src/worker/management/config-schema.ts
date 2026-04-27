@@ -1,4 +1,4 @@
-import type { ExecutorProfile } from '@aiworker/shared'
+import type { ExecutorProfile } from '@zonease/aiworker-shared'
 import { z } from 'zod'
 
 /**

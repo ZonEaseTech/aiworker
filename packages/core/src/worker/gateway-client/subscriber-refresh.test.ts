@@ -1,8 +1,8 @@
-import type { Frame } from '@aiworker/gateway-proto'
+import type { Frame } from '@zonease/aiworker-gateway-proto'
 import type { WebSocketCtor, WebSocketLike } from './client'
 import type { RuntimeLike } from './dispatcher'
 
-import { EVENTS } from '@aiworker/gateway-proto'
+import { EVENTS } from '@zonease/aiworker-gateway-proto'
 import { describe, expect, it } from 'bun:test'
 
 import { WorkerEventBus } from '../events/bus'

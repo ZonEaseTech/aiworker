@@ -1,4 +1,4 @@
-import type { ChannelType, SkillBindingSource, SkillDraftSource, SkillDraftStatus, ToolCall, WorkerConfig } from '@aiworker/shared'
+import type { ChannelType, SkillBindingSource, SkillDraftSource, SkillDraftStatus, ToolCall, WorkerConfig } from '@zonease/aiworker-shared'
 import { integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 
 /**

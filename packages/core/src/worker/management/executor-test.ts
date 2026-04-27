@@ -3,7 +3,7 @@ import type {
   EngineKind,
   ExecutorConfig,
   ServiceStatus,
-} from '@aiworker/shared'
+} from '@zonease/aiworker-shared'
 import type { WorkerModeState } from './state'
 
 /** Max milliseconds we'll spend on the probe before aborting. */

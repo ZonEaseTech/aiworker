@@ -1,10 +1,10 @@
-import type { RequestFrame, ResponseFrame } from '@aiworker/gateway-proto'
-import type { Envelope } from '@aiworker/shared'
+import type { RequestFrame, ResponseFrame } from '@zonease/aiworker-gateway-proto'
+import type { Envelope } from '@zonease/aiworker-shared'
 import type { CronJobInput, CronJobPatch, CronJobRecord } from '../cron/types'
 import type { WorkerEventBus } from '../events/bus'
 import type { ApprovalStore } from '../orchestrator/approvals'
 
-import { getMethodDef, METHODS } from '@aiworker/gateway-proto'
+import { getMethodDef, METHODS } from '@zonease/aiworker-gateway-proto'
 import consola from 'consola'
 
 import { ConfigVersionConflictError, InvalidConfigError } from '../management/config'

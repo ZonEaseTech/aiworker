@@ -1,4 +1,4 @@
-import type { WorkerConfig } from '@aiworker/shared'
+import type { WorkerConfig } from '@zonease/aiworker-shared'
 import { DEFAULT_EXECUTOR_PROFILE } from '../executor/default-profiles'
 
 /**

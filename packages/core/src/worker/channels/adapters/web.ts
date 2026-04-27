@@ -1,4 +1,4 @@
-import type { Envelope, EnvelopeRichMetadata } from '@aiworker/shared'
+import type { Envelope, EnvelopeRichMetadata } from '@zonease/aiworker-shared'
 import type { ChannelAdapter } from './types'
 
 import { nowIso } from '../envelope'

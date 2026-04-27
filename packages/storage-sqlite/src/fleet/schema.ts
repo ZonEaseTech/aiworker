@@ -1,4 +1,4 @@
-import type { RegisteredWorkerLivenessState, RegisteredWorkerOrigin } from '@aiworker/shared'
+import type { RegisteredWorkerLivenessState, RegisteredWorkerOrigin } from '@zonease/aiworker-shared'
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
 /**

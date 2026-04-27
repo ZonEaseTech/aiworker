@@ -1,4 +1,4 @@
-import type { EngineAvailability, EngineKind } from '@aiworker/shared'
+import type { EngineAvailability, EngineKind } from '@zonease/aiworker-shared'
 
 /** 前端用的轻量可达性图谱：`${kind}` / `${kind}:${agent}` → 状态行。 */
 export type EngineAvailabilityMap = Map<string, EngineAvailability>

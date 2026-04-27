@@ -3,7 +3,7 @@ import type { GatewayContext } from '../src/router/context'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { parseFrame } from '@aiworker/gateway-proto'
+import { parseFrame } from '@zonease/aiworker-gateway-proto'
 import {
   auditEvents,
   closeFleetDb,
@@ -12,7 +12,7 @@ import {
   initFleetDb,
   registeredWorkers,
   runFleetMigrations,
-} from '@aiworker/storage-sqlite/fleet'
+} from '@zonease/aiworker-storage-sqlite/fleet'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import consola from 'consola'
 import { eq } from 'drizzle-orm'

@@ -2,7 +2,7 @@ import type {
   BrainProvider,
   Envelope,
   WorkerConfig,
-} from '@aiworker/shared'
+} from '@zonease/aiworker-shared'
 import type { WorkerEventBus } from '../events/bus'
 import type { WorkspaceManager } from '../executor/workspace'
 
@@ -11,7 +11,7 @@ import { mkdtempSync } from 'node:fs'
 import fs from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { closeWorkerDb, getWorkerDb, initWorkerDb, messages, runWorkerMigrations } from '@aiworker/storage-sqlite/worker'
+import { closeWorkerDb, getWorkerDb, initWorkerDb, messages, runWorkerMigrations } from '@zonease/aiworker-storage-sqlite/worker'
 
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { ClaudeCodeExecutor } from '../executor/engines/claude-code'

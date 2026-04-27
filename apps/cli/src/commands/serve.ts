@@ -1,7 +1,7 @@
-import type { GatewayNode, GatewayNodeEnrollOptions } from '@aiworker/core'
+import type { GatewayNode, GatewayNodeEnrollOptions } from '@zonease/aiworker-core'
 import process from 'node:process'
 
-import { bootstrapWorkerApp } from '@aiworker/api/bootstrap'
+import { bootstrapWorkerApp } from '@zonease/aiworker-api/bootstrap'
 import {
   applyConfigUpdate,
   buildCronHandlers,
@@ -10,8 +10,8 @@ import {
   readConfig,
   startGatewayNode,
   workerEnv,
-} from '@aiworker/core'
-import { getWorkerDb } from '@aiworker/storage-sqlite/worker'
+} from '@zonease/aiworker-core'
+import { getWorkerDb } from '@zonease/aiworker-storage-sqlite/worker'
 import consola from 'consola'
 
 export interface ServeOptions {

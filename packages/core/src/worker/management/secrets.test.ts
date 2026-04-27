@@ -1,9 +1,9 @@
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { AppError } from '@aiworker/shared'
+import { AppError } from '@zonease/aiworker-shared'
 
-import { closeWorkerDb, getWorkerDb, initWorkerDb, runWorkerMigrations } from '@aiworker/storage-sqlite/worker'
+import { closeWorkerDb, getWorkerDb, initWorkerDb, runWorkerMigrations } from '@zonease/aiworker-storage-sqlite/worker'
 import { beforeEach, describe, expect, it } from 'bun:test'
 import { SecretsVault } from '../secrets/vault'
 import { deleteSecret, listSecrets, putSecret } from './secrets'

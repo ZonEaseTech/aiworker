@@ -4,14 +4,14 @@ import type { GatewayContext } from './router/context'
 import type { StartedGateway } from './server'
 import { createHash } from 'node:crypto'
 import process from 'node:process'
-import { encodeFrame } from '@aiworker/gateway-proto'
+import { encodeFrame } from '@zonease/aiworker-gateway-proto'
 import {
   closeFleetDb,
   defaultFleetMigrationsFolder,
   getFleetDb,
   initFleetDb,
   runFleetMigrations,
-} from '@aiworker/storage-sqlite/fleet'
+} from '@zonease/aiworker-storage-sqlite/fleet'
 import consola from 'consola'
 import { loadGatewayConfigFromEnv } from './config'
 import { ForwardTable, NodeRegistry, OperatorRegistry, PendingEnrollmentRegistry } from './registry'

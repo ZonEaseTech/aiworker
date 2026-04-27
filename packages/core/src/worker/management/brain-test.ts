@@ -1,4 +1,4 @@
-import type { BrainSourceConfig, ServiceStatus } from '@aiworker/shared'
+import type { BrainSourceConfig, ServiceStatus } from '@zonease/aiworker-shared'
 import type { WorkerModeState } from './state'
 
 /**

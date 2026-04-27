@@ -1,7 +1,7 @@
 import { chmod, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
-import { resolveAiworkerHome } from '@aiworker/fs-layout'
+import { resolveAiworkerHome } from '@zonease/aiworker-fs-layout'
 
 /**
  * aim operator 本地状态。保存在 `<AIWORKER_HOME>/aim.json`。

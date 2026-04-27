@@ -1,4 +1,4 @@
-import type { Envelope } from '@aiworker/shared'
+import type { Envelope } from '@zonease/aiworker-shared'
 
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -10,7 +10,7 @@ import {
   getWorkerDb,
   initWorkerDb,
   runWorkerMigrations,
-} from '@aiworker/storage-sqlite/worker'
+} from '@zonease/aiworker-storage-sqlite/worker'
 
 import { beforeEach, describe, expect, it } from 'bun:test'
 import { eq } from 'drizzle-orm'

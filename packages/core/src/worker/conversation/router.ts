@@ -1,6 +1,6 @@
-import type { ChatMessage, ConversationDecision, Envelope, ExecutorProvider } from '@aiworker/shared'
-import type { conversations as conversationsTable } from '@aiworker/storage-sqlite/worker'
-import { conversations, getWorkerDb, messages } from '@aiworker/storage-sqlite/worker'
+import type { ChatMessage, ConversationDecision, Envelope, ExecutorProvider } from '@zonease/aiworker-shared'
+import type { conversations as conversationsTable } from '@zonease/aiworker-storage-sqlite/worker'
+import { conversations, getWorkerDb, messages } from '@zonease/aiworker-storage-sqlite/worker'
 
 import consola from 'consola'
 import { and, desc, eq } from 'drizzle-orm'

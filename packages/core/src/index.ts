@@ -1,5 +1,5 @@
 /**
- * `@aiworker/core` — transport-agnostic worker runtime。
+ * `@zonease/aiworker-core` — transport-agnostic worker runtime。
  *
  * 封装 brain provider、executor provider、channel adapter、orchestrator、
  * gateway-client、cron、approvals、secrets、bootstrap、config 校验/写入/热重载

@@ -5,7 +5,7 @@ import {
   mirrorConfigToYaml,
   putConfig,
   readConfig,
-} from '@aiworker/core'
+} from '@zonease/aiworker-core'
 import consola from 'consola'
 
 import { loadWorkerContext } from '../context'
@@ -15,7 +15,7 @@ import { loadWorkerContext } from '../context'
  */
 export async function runConfigShow(): Promise<number> {
   await loadWorkerContext({ silent: true })
-  const { getWorkerDb } = await import('@aiworker/storage-sqlite/worker')
+  const { getWorkerDb } = await import('@zonease/aiworker-storage-sqlite/worker')
   const stored = await readConfig(getWorkerDb())
   console.log(JSON.stringify({ version: stored.version, config: stored.config }, null, 2))
   return 0
@@ -44,7 +44,7 @@ export async function runConfigSet(options: ConfigSetOptions): Promise<number> {
     return 2
   }
 
-  const { getWorkerDb } = await import('@aiworker/storage-sqlite/worker')
+  const { getWorkerDb } = await import('@zonease/aiworker-storage-sqlite/worker')
   const db = getWorkerDb()
   const vault = getSecretsVault()
 

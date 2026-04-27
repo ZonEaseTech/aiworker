@@ -1,4 +1,4 @@
-import type { ChannelType } from '@aiworker/shared'
+import type { ChannelType } from '@zonease/aiworker-shared'
 import type { CronJobInput, CronJobPatch, CronJobRecord } from '../../cron/types'
 import type { NodeHandlers } from '../dispatcher'
 

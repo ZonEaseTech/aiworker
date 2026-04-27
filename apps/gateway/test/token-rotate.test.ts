@@ -2,14 +2,14 @@ import type { GatewayContext } from '../src/router/context'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { encodeFrame, parseFrame } from '@aiworker/gateway-proto'
+import { encodeFrame, parseFrame } from '@zonease/aiworker-gateway-proto'
 import {
   closeFleetDb,
   defaultFleetMigrationsFolder,
   getFleetDb,
   initFleetDb,
   runFleetMigrations,
-} from '@aiworker/storage-sqlite/fleet'
+} from '@zonease/aiworker-storage-sqlite/fleet'
 import { describe, expect, test } from 'bun:test'
 import consola from 'consola'
 import { ForwardTable, NodeRegistry, OperatorRegistry } from '../src/registry'

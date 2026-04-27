@@ -1,4 +1,4 @@
-import type { ChannelType } from '@aiworker/shared'
+import type { ChannelType } from '@zonease/aiworker-shared'
 import { Loader2, Play } from 'lucide-react'
 import { useState } from 'react'
 import { Badge } from '@/components/ui/badge'

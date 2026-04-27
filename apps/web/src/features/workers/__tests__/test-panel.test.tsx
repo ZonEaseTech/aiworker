@@ -1,4 +1,4 @@
-import type { WorkerInfo } from '@aiworker/shared'
+import type { WorkerInfo } from '@zonease/aiworker-shared'
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TestPanel } from '../components/test-panel'

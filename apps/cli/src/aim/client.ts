@@ -8,7 +8,7 @@ import type {
   RequestFrame,
   ResponseError,
   ResponseFrame,
-} from '@aiworker/gateway-proto'
+} from '@zonease/aiworker-gateway-proto'
 
 import {
   encodeFrame,
@@ -16,7 +16,7 @@ import {
   isKnownMethod,
   parseFrame,
   ROLES,
-} from '@aiworker/gateway-proto'
+} from '@zonease/aiworker-gateway-proto'
 
 /**
  * aim CLI 的 WebSocket 客户端封装。
@@ -341,7 +341,7 @@ export function createAimClient(): AimClient {
     opts?: RequestOptions,
   ): Promise<MethodResult<M>> {
     if (!isKnownMethod(method))
-      throw new AimWsError(`method ${method} 未在 @aiworker/gateway-proto 注册`, 'unknown_method')
+      throw new AimWsError(`method ${method} 未在 @zonease/aiworker-gateway-proto 注册`, 'unknown_method')
     return (await sendRequest(method, params, opts)) as MethodResult<M>
   }
 

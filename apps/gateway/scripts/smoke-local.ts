@@ -14,7 +14,7 @@ import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
-import { encodeFrame, parseFrame, ROLES } from '@aiworker/gateway-proto'
+import { encodeFrame, parseFrame, ROLES } from '@zonease/aiworker-gateway-proto'
 import consola from 'consola'
 import { startGateway } from '../src/index'
 

@@ -1,8 +1,8 @@
-import type { WorkerConfig } from '@aiworker/shared'
+import type { WorkerConfig } from '@zonease/aiworker-shared'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { closeWorkerDb, getWorkerDb, initWorkerDb, runWorkerMigrations, workerConfig as workerConfigTable } from '@aiworker/storage-sqlite/worker'
+import { closeWorkerDb, getWorkerDb, initWorkerDb, runWorkerMigrations, workerConfig as workerConfigTable } from '@zonease/aiworker-storage-sqlite/worker'
 
 import { beforeEach, describe, expect, it } from 'bun:test'
 import { eq } from 'drizzle-orm'

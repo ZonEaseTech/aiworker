@@ -3,7 +3,7 @@ import type {
   EngineAvailabilityResponse,
   SafeRegisteredWorker,
   WorkerConfig,
-} from '@aiworker/shared'
+} from '@zonease/aiworker-shared'
 import type {
   ChannelTestResponse,
   DashboardCapabilities,

@@ -1,4 +1,4 @@
-import type { ChannelType } from '@aiworker/shared'
+import type { ChannelType } from '@zonease/aiworker-shared'
 
 import consola from 'consola'
 

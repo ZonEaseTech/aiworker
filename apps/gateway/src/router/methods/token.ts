@@ -1,8 +1,8 @@
-import type { ResponseFrame } from '@aiworker/gateway-proto'
+import type { ResponseFrame } from '@zonease/aiworker-gateway-proto'
 import type { AnyWs } from '../../registry/types'
 import type { GatewayContext, HandlerResult, LocalHandler } from '../context'
 import { Buffer } from 'node:buffer'
-import { encodeFrame } from '@aiworker/gateway-proto'
+import { encodeFrame } from '@zonease/aiworker-gateway-proto'
 import { z } from 'zod'
 
 /**

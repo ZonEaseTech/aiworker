@@ -1,4 +1,4 @@
-import type { ToolPolicy, ToolPolicyAction } from '@aiworker/shared'
+import type { ToolPolicy, ToolPolicyAction } from '@zonease/aiworker-shared'
 
 /**
  * 评估某个 tool 名在给定 `toolPolicy` 下的 action（PLAN-014 F2）。

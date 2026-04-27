@@ -1,7 +1,7 @@
-import type { WorkerDatabase } from '@aiworker/storage-sqlite/worker'
+import type { WorkerDatabase } from '@zonease/aiworker-storage-sqlite/worker'
 import { Buffer } from 'node:buffer'
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
-import { workerSecrets } from '@aiworker/storage-sqlite/worker'
+import { workerSecrets } from '@zonease/aiworker-storage-sqlite/worker'
 
 import { eq } from 'drizzle-orm'
 

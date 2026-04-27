@@ -4,7 +4,7 @@ import type {
   ExecutorProvider,
   ExecutorTool,
   ServiceStatus,
-} from '@aiworker/shared'
+} from '@zonease/aiworker-shared'
 import type { Buffer } from 'node:buffer'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { spawn } from 'node:child_process'

@@ -10,9 +10,9 @@
     "test": "bun run --filter '*' test",
     "build": "bun run --filter '*' build",
     "check": "bun run typecheck && bun run lint",
-    "db:generate": "bun run --filter '@aiworker/storage-sqlite' db:generate",
-    "db:generate:fleet": "bun run --filter '@aiworker/storage-sqlite' db:generate:fleet",
-    "db:generate:worker": "bun run --filter '@aiworker/storage-sqlite' db:generate:worker"
+    "db:generate": "bun run --filter '@zonease/aiworker-storage-sqlite' db:generate",
+    "db:generate:fleet": "bun run --filter '@zonease/aiworker-storage-sqlite' db:generate:fleet",
+    "db:generate:worker": "bun run --filter '@zonease/aiworker-storage-sqlite' db:generate:worker"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^4.13.2",

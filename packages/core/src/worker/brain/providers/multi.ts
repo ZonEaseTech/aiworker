@@ -6,7 +6,7 @@ import type {
   MemoryFilter,
   ServiceStatus,
   WriteMemoryInput,
-} from '@aiworker/shared'
+} from '@zonease/aiworker-shared'
 
 interface MultiBrainOptions {
   sources: Array<BrainProvider & { id: string, priority: number, readOnly: boolean }>

@@ -1,5 +1,5 @@
 {
-  "name": "@aiworker/cli",
+  "name": "@zonease/aiworker-cli",
   "type": "module",
   "private": true,
   "bin": {
@@ -13,12 +13,12 @@
     "smoke:aim": "bun scripts/smoke-aim.ts"
   },
   "dependencies": {
-    "@aiworker/api": "workspace:*",
-    "@aiworker/core": "workspace:*",
-    "@aiworker/fs-layout": "workspace:*",
-    "@aiworker/gateway-proto": "workspace:*",
-    "@aiworker/shared": "workspace:*",
-    "@aiworker/storage-sqlite": "workspace:*",
+    "@zonease/aiworker-api": "workspace:*",
+    "@zonease/aiworker-core": "workspace:*",
+    "@zonease/aiworker-fs-layout": "workspace:*",
+    "@zonease/aiworker-gateway-proto": "workspace:*",
+    "@zonease/aiworker-shared": "workspace:*",
+    "@zonease/aiworker-storage-sqlite": "workspace:*",
     "cac": "^6.7.14",
     "consola": "^3.4.2"
   },

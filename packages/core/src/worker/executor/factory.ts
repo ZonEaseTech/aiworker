@@ -8,7 +8,7 @@ import type {
   ExecutorProvider,
   HttpVariantBody,
   McpVariantBody,
-} from '@aiworker/shared'
+} from '@zonease/aiworker-shared'
 import process from 'node:process'
 
 import { resolveVariant } from './default-profiles'

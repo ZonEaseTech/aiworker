@@ -1,4 +1,4 @@
-import type { ChannelType, Envelope, EnvelopeAttachment, OutboundMessage } from '@aiworker/shared'
+import type { ChannelType, Envelope, EnvelopeAttachment, OutboundMessage } from '@zonease/aiworker-shared'
 
 export type { ChannelType, Envelope, EnvelopeAttachment, OutboundMessage }
 

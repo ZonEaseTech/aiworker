@@ -1,8 +1,8 @@
 import path from 'node:path'
 import process from 'node:process'
-import { resolveAiworkerHome } from '@aiworker/fs-layout'
-import { WORKER_API_TOKEN_PATTERN, WORKER_ID_PATTERN } from '@aiworker/shared'
-import { defaultWorkerMigrationsFolder } from '@aiworker/storage-sqlite/worker'
+import { resolveAiworkerHome } from '@zonease/aiworker-fs-layout'
+import { WORKER_API_TOKEN_PATTERN, WORKER_ID_PATTERN } from '@zonease/aiworker-shared'
+import { defaultWorkerMigrationsFolder } from '@zonease/aiworker-storage-sqlite/worker'
 import { z } from 'zod'
 
 /**
@@ -31,7 +31,7 @@ const schema = z.object({
   PORT: z.coerce.number().default(3001),
   WORKER_DB_PATH: z.string().default('/var/lib/aiworker/worker.db'),
   /**
-   * 迁移目录。未设时回退到 `@aiworker/storage-sqlite` 内嵌路径
+   * 迁移目录。未设时回退到 `@zonease/aiworker-storage-sqlite` 内嵌路径
    * (`import.meta.url` 解析得来的绝对路径),源码运行 / 单文件 bundle 都能定位。
    * 外部 vendor 时仍可显式覆盖。
    */

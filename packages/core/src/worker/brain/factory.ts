@@ -1,6 +1,6 @@
-import type { BrainProvider, BrainSourceConfig, WorkerConfig } from '@aiworker/shared'
+import type { BrainProvider, BrainSourceConfig, WorkerConfig } from '@zonease/aiworker-shared'
 
-import { resolveBrainHome } from '@aiworker/fs-layout'
+import { resolveBrainHome } from '@zonease/aiworker-fs-layout'
 
 import { CloudGatewayBrainProvider } from './providers/cloud-gateway'
 import { FilesystemBrainProvider } from './providers/filesystem'

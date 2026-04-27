@@ -1,9 +1,9 @@
-import type { WorkerModeState, WorkerRuntime } from '@aiworker/core'
+import type { WorkerModeState, WorkerRuntime } from '@zonease/aiworker-core'
 import type {
   BrainProvider,
   ExecutorProvider,
   WorkerConfig,
-} from '@aiworker/shared'
+} from '@zonease/aiworker-shared'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -14,8 +14,8 @@ import {
   ProcessManager,
   resetAvailabilityProbeForTests,
   resetSecretsVaultForTests,
-} from '@aiworker/core'
-import { closeWorkerDb, getWorkerDb, initWorkerDb, runWorkerMigrations } from '@aiworker/storage-sqlite/worker'
+} from '@zonease/aiworker-core'
+import { closeWorkerDb, getWorkerDb, initWorkerDb, runWorkerMigrations } from '@zonease/aiworker-storage-sqlite/worker'
 
 import { beforeEach, describe, expect, it } from 'bun:test'
 import { buildManagementRoutes } from './routes'

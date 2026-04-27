@@ -7,7 +7,7 @@ import type {
   WorkerInfoBrain,
   WorkerInfoChannel,
   WorkerInfoExecutor,
-} from '@aiworker/shared'
+} from '@zonease/aiworker-shared'
 import type { WorkerModeState } from './state'
 import { resolveVariant } from '../executor/default-profiles'
 

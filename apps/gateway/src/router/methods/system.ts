@@ -1,5 +1,5 @@
 import type { HandlerResult, LocalHandler } from '../context'
-import { workerSummarySchema } from '@aiworker/gateway-proto'
+import { workerSummarySchema } from '@zonease/aiworker-gateway-proto'
 import { z } from 'zod'
 
 const presenceResultSchema = z.object({

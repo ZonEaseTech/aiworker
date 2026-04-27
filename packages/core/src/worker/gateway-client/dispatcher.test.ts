@@ -1,4 +1,4 @@
-import type { ResponseFrame } from '@aiworker/gateway-proto'
+import type { ResponseFrame } from '@zonease/aiworker-gateway-proto'
 import type { WorkerEventBus } from '../events/bus'
 import type { NodeHandlers, OrchestratorLike } from './dispatcher'
 

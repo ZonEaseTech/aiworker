@@ -1,4 +1,4 @@
-import { getWorkerDb } from '@aiworker/storage-sqlite/worker'
+import { getWorkerDb } from '@zonease/aiworker-storage-sqlite/worker'
 import { workerEnv } from '../env'
 import { SecretsVault } from './vault'
 

@@ -1,5 +1,5 @@
 {
-  "name": "@aiworker/fs-layout",
+  "name": "@zonease/aiworker-fs-layout",
   "type": "module",
   "private": true,
   "exports": {

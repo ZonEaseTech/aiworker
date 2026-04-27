@@ -1,6 +1,6 @@
-import type { ChannelType, OutboundMessage } from '@aiworker/shared'
+import type { ChannelType, OutboundMessage } from '@zonease/aiworker-shared'
 import type { WorkerModeState } from './state'
-import { AppError } from '@aiworker/shared'
+import { AppError } from '@zonease/aiworker-shared'
 
 import { getChannelAdapter } from '../channels/registry'
 

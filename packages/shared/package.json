@@ -1,5 +1,5 @@
 {
-  "name": "@aiworker/shared",
+  "name": "@zonease/aiworker-shared",
   "type": "module",
   "private": true,
   "exports": {

@@ -1,5 +1,7 @@
-import type { WorkerModeState } from '@aiworker/core'
-import type { WorkerConfig } from '@aiworker/shared'
+import type { WorkerModeState } from '@zonease/aiworker-core'
+import type { WorkerConfig } from '@zonease/aiworker-shared'
+import { OpenAPIHono } from '@hono/zod-openapi'
+import { apiReference } from '@scalar/hono-api-reference'
 import {
   buildWorkerRuntime,
   enumerateSecretPaths,
@@ -10,10 +12,8 @@ import {
   printBootstrapIfJustMinted,
   ProcessManager,
   workerEnv,
-} from '@aiworker/core'
-import { getWorkerDb, initWorkerDb, runWorkerMigrations } from '@aiworker/storage-sqlite/worker'
-import { OpenAPIHono } from '@hono/zod-openapi'
-import { apiReference } from '@scalar/hono-api-reference'
+} from '@zonease/aiworker-core'
+import { getWorkerDb, initWorkerDb, runWorkerMigrations } from '@zonease/aiworker-storage-sqlite/worker'
 
 import consola from 'consola'
 import { errorHandler } from '../shared/middleware/error-handler'

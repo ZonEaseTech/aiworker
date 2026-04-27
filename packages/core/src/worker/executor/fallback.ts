@@ -5,7 +5,7 @@ import type {
   ExecutorProvider,
   ExecutorTool,
   ServiceStatus,
-} from '@aiworker/shared'
+} from '@zonease/aiworker-shared'
 
 /**
  * One link in a `FallbackExecutor` chain. `executor` may itself be a

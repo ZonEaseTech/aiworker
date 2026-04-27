@@ -1,5 +1,5 @@
 import type { SecretsVault } from '../secrets/vault'
-import { AppError } from '@aiworker/shared'
+import { AppError } from '@zonease/aiworker-shared'
 
 /**
  * Out-of-band secrets CRUD. These routes bypass `worker_config.version` — the

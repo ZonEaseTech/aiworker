@@ -1,4 +1,4 @@
-import type { WorkerApiToken } from '@aiworker/shared'
+import type { WorkerApiToken } from '@zonease/aiworker-shared'
 import { randomBytes } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
 import { createServer } from 'node:net'

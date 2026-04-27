@@ -1,5 +1,5 @@
-import type { EventName } from '@aiworker/gateway-proto'
-import { EVENTS } from '@aiworker/gateway-proto'
+import type { EventName } from '@zonease/aiworker-gateway-proto'
+import { EVENTS } from '@zonease/aiworker-gateway-proto'
 import { useEffect } from 'react'
 import { getGatewayClient } from '@/lib/gateway-client'
 

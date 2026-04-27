@@ -1,4 +1,4 @@
-import type { BrainProvider, BrainSourceConfig, WorkerConfig } from '@aiworker/shared'
+import type { BrainProvider, BrainSourceConfig, WorkerConfig } from '@zonease/aiworker-shared'
 import type { WorkerRuntime } from '../runtime'
 import type { WorkerModeState } from './state'
 

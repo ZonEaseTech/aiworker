@@ -1,6 +1,6 @@
 import type { AnyWs } from '../registry/types'
 import type { GatewayContext } from './context'
-import { encodeFrame } from '@aiworker/gateway-proto'
+import { encodeFrame } from '@zonease/aiworker-gateway-proto'
 import { z } from 'zod'
 
 /**

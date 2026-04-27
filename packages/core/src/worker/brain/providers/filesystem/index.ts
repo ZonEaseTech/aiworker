@@ -6,7 +6,7 @@ import type {
   MemoryFilter,
   ServiceStatus,
   WriteMemoryInput,
-} from '@aiworker/shared'
+} from '@zonease/aiworker-shared'
 
 import type { FilesystemMemory, FilesystemSkill, WatchEvent } from './types'
 

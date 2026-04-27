@@ -1,5 +1,5 @@
-import type { WorkerApiToken, WorkerInfo } from '@aiworker/shared'
-import { isWorkerApiToken } from '@aiworker/shared'
+import type { WorkerApiToken, WorkerInfo } from '@zonease/aiworker-shared'
+import { isWorkerApiToken } from '@zonease/aiworker-shared'
 
 /**
  * gateway 侧 HTTP 客户端——用来直连一个已知 worker 的 `/api/worker/*` 表面。

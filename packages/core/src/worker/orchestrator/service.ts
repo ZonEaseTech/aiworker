@@ -7,13 +7,13 @@ import type {
   ExecutorConfig,
   ExecutorProvider,
   WorkerConfig,
-} from '@aiworker/shared'
+} from '@zonease/aiworker-shared'
 import type { WorkerEventBus } from '../events/bus'
 import type { WorkspaceHandle, WorkspaceManager } from '../executor/workspace'
 import type { ApprovalDecision, ApprovalStore } from './approvals'
 import type { ProcessManager } from './process-manager'
 
-import { agentTasks, conversations, getWorkerDb, messages } from '@aiworker/storage-sqlite/worker'
+import { agentTasks, conversations, getWorkerDb, messages } from '@zonease/aiworker-storage-sqlite/worker'
 
 import consola from 'consola'
 import { eq } from 'drizzle-orm'

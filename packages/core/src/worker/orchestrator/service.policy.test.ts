@@ -2,7 +2,7 @@ import type {
   BrainProvider,
   ExecutorProvider,
   WorkerConfig,
-} from '@aiworker/shared'
+} from '@zonease/aiworker-shared'
 import type { WorkerEventBus } from '../events/bus'
 import type { WorkspaceManager } from '../executor/workspace'
 
@@ -11,7 +11,7 @@ import fs from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
-import { closeWorkerDb, getWorkerDb, initWorkerDb, messages, runWorkerMigrations } from '@aiworker/storage-sqlite/worker'
+import { closeWorkerDb, getWorkerDb, initWorkerDb, messages, runWorkerMigrations } from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { WorkspaceManager as RealWorkspaceManager } from '../executor/workspace'
@@ -93,7 +93,7 @@ function buildOrch(deps: {
 async function insertConversation(id: string): Promise<void> {
   const db = getWorkerDb()
   const now = new Date().toISOString()
-  await db.insert((await import('@aiworker/storage-sqlite/worker')).conversations).values({
+  await db.insert((await import('@zonease/aiworker-storage-sqlite/worker')).conversations).values({
     id,
     channel: 'web',
     chatId: `chat-${id}`,

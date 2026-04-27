@@ -1,4 +1,4 @@
-import type { EngineAvailability, EngineKind } from '@aiworker/shared'
+import type { EngineAvailability, EngineKind } from '@zonease/aiworker-shared'
 import type { AvailabilityInfo as AcpAvailabilityInfo } from './engines/acp/agents/types'
 import fs from 'node:fs/promises'
 import os from 'node:os'
@@ -20,7 +20,7 @@ import process from 'node:process'
  * 附带可选 `agent` 字段。Wire 形态定义在
  * `packages/shared/src/providers/availability.ts` —— 所有调用方都读同一份类型。
  */
-export type { EngineAvailability, EngineAvailabilityResponse, EngineAvailabilityStatus } from '@aiworker/shared'
+export type { EngineAvailability, EngineAvailabilityResponse, EngineAvailabilityStatus } from '@zonease/aiworker-shared'
 
 export const AVAILABILITY_CACHE_TTL_MS = 10 * 60 * 1000
 

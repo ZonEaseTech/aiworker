@@ -1,7 +1,7 @@
-import type { WorkerApiToken } from '@aiworker/shared'
-import type { WorkerDatabase } from '@aiworker/storage-sqlite/worker'
+import type { WorkerApiToken } from '@zonease/aiworker-shared'
+import type { WorkerDatabase } from '@zonease/aiworker-storage-sqlite/worker'
 import type { SecretsVault } from '../secrets/vault'
-import { workerIdentity } from '@aiworker/storage-sqlite/worker'
+import { workerIdentity } from '@zonease/aiworker-storage-sqlite/worker'
 
 import { eq } from 'drizzle-orm'
 import { mintApiToken } from '../bootstrap/identity'

@@ -1,4 +1,4 @@
-import type { SafeRegisteredWorker } from '@aiworker/shared'
+import type { SafeRegisteredWorker } from '@zonease/aiworker-shared'
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { WorkerApiError } from '@/lib/api'

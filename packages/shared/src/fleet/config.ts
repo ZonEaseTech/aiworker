@@ -4,7 +4,7 @@ import type { ExecutorConfig } from './executor'
 /**
  * Shape of config for a filesystem-backed brain source. `home` is optional;
  * when omitted, the factory defaults to `<resolveBrainHome(workerId)>`
- * under `~/.aiworker/workers/<workerId>/brain/` (see `@aiworker/fs-layout`).
+ * under `~/.aiworker/workers/<workerId>/brain/` (see `@zonease/aiworker-fs-layout`).
  * Supplying an explicit path is only useful for pointing at a shared
  * knowledge base outside the worker's own home.
  */
@@ -29,7 +29,7 @@ export type BrainSourceConfig
 export type BrainRetrievalMode = 'merge-by-priority' | 'first-match'
 
 // Re-export executor shapes from the dedicated module so existing imports of
-// `ExecutorConfig` from `@aiworker/shared` keep working without a rename.
+// `ExecutorConfig` from `@zonease/aiworker-shared` keep working without a rename.
 export type {
   AcpAgentId,
   AcpVariantBody,

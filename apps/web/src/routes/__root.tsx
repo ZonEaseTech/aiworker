@@ -1,4 +1,4 @@
-import type { SafeRegisteredWorker } from '@aiworker/shared'
+import type { SafeRegisteredWorker } from '@zonease/aiworker-shared'
 import { createRootRoute, Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router'
 import { Boxes, ChevronDown, FileStack, ServerOff } from 'lucide-react'
 import { useMemo } from 'react'

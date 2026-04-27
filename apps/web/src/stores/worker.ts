@@ -1,4 +1,4 @@
-import type { SafeRegisteredWorker } from '@aiworker/shared'
+import type { SafeRegisteredWorker } from '@zonease/aiworker-shared'
 import { create } from 'zustand'
 
 interface WorkerStoreState {

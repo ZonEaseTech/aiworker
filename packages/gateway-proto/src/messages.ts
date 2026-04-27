@@ -1,4 +1,4 @@
-import { WORKER_API_TOKEN_PATTERN } from '@aiworker/shared'
+import { WORKER_API_TOKEN_PATTERN } from '@zonease/aiworker-shared'
 import { z } from 'zod'
 import { roleSchema } from './roles'
 

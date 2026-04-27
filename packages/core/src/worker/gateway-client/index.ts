@@ -12,7 +12,7 @@ import type {
   EnrollmentOtpPayload,
   Frame,
   RequestFrame,
-} from '@aiworker/gateway-proto'
+} from '@zonease/aiworker-gateway-proto'
 import type { GatewayNodeOptions } from './config'
 import type { NodeHandlers, RuntimeLike } from './dispatcher'
 

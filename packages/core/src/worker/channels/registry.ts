@@ -1,4 +1,4 @@
-import type { ChannelBinding, ChannelType } from '@aiworker/shared'
+import type { ChannelBinding, ChannelType } from '@zonease/aiworker-shared'
 import type { ChannelAdapter } from './adapters/types'
 
 import { larkAdapter } from './adapters/lark'

@@ -18,7 +18,7 @@ import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
-import { encodeFrame, parseFrame, ROLES } from '@aiworker/gateway-proto'
+import { encodeFrame, parseFrame, ROLES } from '@zonease/aiworker-gateway-proto'
 import { startGateway } from '../../gateway/src/index'
 
 /** smoke 脚本用简化 logger,避免给 apps/web 增加 consola 依赖。 */

@@ -1,6 +1,6 @@
-import type { EventFrame } from '@aiworker/gateway-proto'
+import type { EventFrame } from '@zonease/aiworker-gateway-proto'
 import type { OperatorRegistry } from '../registry'
-import { encodeFrame } from '@aiworker/gateway-proto'
+import { encodeFrame } from '@zonease/aiworker-gateway-proto'
 
 /**
  * 把一条 node 上行的 event 帧广播给所有当前 operator 连接。

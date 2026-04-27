@@ -1,4 +1,4 @@
-import type { ChannelBinding } from '@aiworker/shared'
+import type { ChannelBinding } from '@zonease/aiworker-shared'
 
 import { afterEach, beforeEach, describe, expect, it, spyOn } from 'bun:test'
 

@@ -1,4 +1,4 @@
-import type { AgentEvent } from '@aiworker/shared'
+import type { AgentEvent } from '@zonease/aiworker-shared'
 import { describe, expect, it } from 'bun:test'
 
 import { inferToolAction, mapStopReason, normalizeSessionUpdate } from './normalize'

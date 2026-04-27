@@ -5,7 +5,7 @@ import type {
   MemoryFilter,
   ServiceStatus,
   WriteMemoryInput,
-} from '@aiworker/shared'
+} from '@zonease/aiworker-shared'
 
 import { McpStreamableHttpClient } from '../../../adapters/mcp'
 

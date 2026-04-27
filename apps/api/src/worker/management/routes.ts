@@ -1,5 +1,6 @@
-import type { WorkerModeState } from '@aiworker/core'
-import type { WorkerConfig } from '@aiworker/shared'
+import type { WorkerModeState } from '@zonease/aiworker-core'
+import type { WorkerConfig } from '@zonease/aiworker-shared'
+import { OpenAPIHono } from '@hono/zod-openapi'
 import {
   applyConfigUpdate,
   buildInfo,
@@ -16,10 +17,9 @@ import {
   putSecret,
   readConfig,
   workerEnv,
-} from '@aiworker/core'
-import { AppError } from '@aiworker/shared'
-import { getWorkerDb } from '@aiworker/storage-sqlite/worker'
-import { OpenAPIHono } from '@hono/zod-openapi'
+} from '@zonease/aiworker-core'
+import { AppError } from '@zonease/aiworker-shared'
+import { getWorkerDb } from '@zonease/aiworker-storage-sqlite/worker'
 import consola from 'consola'
 
 import { z } from 'zod'
