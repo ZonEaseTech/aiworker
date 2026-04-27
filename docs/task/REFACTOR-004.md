@@ -1,10 +1,12 @@
 # REFACTOR-004 测试服部署迁移：源码 systemd → 已发布 npm cli + `aiworker install systemd`
 
-- **status**: pending
+- **status**: completed
 - **priority**: P1
 - **owner**: (unassigned)
 - **createdAt**: 2026-04-27 11:30
+- **completedAt**: 2026-04-27 11:50
 - **decision driver**: 用户 2026-04-27 11:25 指示——"测试服务器，除了 caddy 反代外，不再由源码构建，只允许安装或更新，从已发布的 cli 去操作"
+- **commits**: 0490888 (in-process gateway + bundle drizzle + 0.2.1 bump)，testserver cutover 11:49
 
 ## Description
 

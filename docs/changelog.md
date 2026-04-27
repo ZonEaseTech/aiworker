@@ -1,5 +1,32 @@
 # AIWorker Changelog
 
+## 2026-04-27 11:50 [progress] REFACTOR-004 GA + BUG-011 + BUG-012 完成 — 测试服迁移到 npm cli + in-process gateway
+
+`@zonease/aiworker-cli@0.2.1` 真发到 npmjs.com（shasum `73a715c`，13 files / 0.85 MB unpacked / 234 KB packed，含 dist/drizzle/{fleet,worker} migrations）。测试服 cutover 一气呵成成功：
+
+- `bun install -g @zonease/aiworker-cli@0.2.1` 装到 `/root/.bun/bin/aiworker`
+- atomic swap：systemd unit `ExecStart=/root/.bun/bin/aiworker gateway start`（保留 EnvironmentFile + StateDirectory + ProtectSystem 等加固）+ `/etc/aiworker/gateway.env` 删 `AIWORKER_GATEWAY_PORT=3000` + Caddyfile 三处 `127.0.0.1:3000 → :9218`
+- `caddy validate` 通过 → reload；`systemctl daemon-reload` + `restart aiworker-gateway` → `systemctl is-active = active`、`/health = {"ok":true,"service":"aiworker-gateway"}`
+- gateway 现跑 in-process foreground 模式（journal: `✔ [gateway] listening ws://127.0.0.1:9218/ws` + `✔ gateway 已启动 (foreground) port=9218`）
+- `/opt/aiworker` 451M 退役至 `/opt/aiworker-removed-20260427`（保留作 rollback；下次 maintenance 可彻底删）
+- prod gateway.env 副本 `/tmp/gateway.env.{bak,new}`（含 master key）truncate 到 0 bytes
+- fleet.db 完整保留（`/var/lib/aiworker/fleet.db` 53 KB），`registered_workers` 行数与 cutover 前一致
+
+**BUG-011 + BUG-012 in-process 重构（commit `0490888`，52 files +216/-204）**：
+
+- `git mv apps/gateway → packages/gateway`：gateway 改库形态，加 `exports` map（删 `bin`）；87 tests 全 pass
+- `apps/cli` deps 加 `@zonease/aiworker-gateway`，bundle 内嵌 in-process gateway（0.72 → 0.77 MB +50 KB）
+- `daemon.ts` 重写：删 `resolveGatewayEntry` / `locateRepoRoot` / `DEFAULT_GATEWAY_WORKSPACE_REL`；spawn 模式改 self-spawn (`process.execPath` + `argv[1]`) + env `AIWORKER_GATEWAY_INTERNAL_FOREGROUND=1` 触发子进程 foreground
+- `commands/gateway.ts` 重写 `runGatewayStart`：默认 foreground in-process `import startGateway()` + SIGTERM/SIGINT shutdown handler + `await new Promise<never>(() => {})` 阻塞主进程；`--detach` 走老 daemon 模式
+- `aiworker.ts` `gateway start`：删 `--entry` flag，加 `--detach`
+- `storage-sqlite/{fleet,worker}/index.ts`：`defaultXxxMigrationsFolder` 用 `resolveMigrationsFolder()` helper（dev `../../drizzle/<rel>` 优先 → bundle `./drizzle/<rel>` sibling fallback）
+- `core/config/worker.ts`：`WORKER_DB_PATH` 加 lazy default `<AIWORKER_HOME>/worker.db`
+- `build-publish-manifest.ts`：拷 `packages/storage-sqlite/drizzle` → `apps/cli/dist/drizzle`；`files` 加 `"drizzle/"`
+
+REFACTOR-004 / BUG-011 / BUG-012 三任务卡全 closed。后续测试服 update 路径：`bun install -g @zonease/aiworker-cli@latest && systemctl restart aiworker-gateway`，一行结束。
+
+token 安全：`./tmp/npm_token` 用完即 shred，未入 git。建议 npm 端轮换。
+
 ## 2026-04-27 12:00 [progress] REFACTOR-004 测试服迁移 cutover 失败 + 开 BUG-012 P1（gateway entry 仓库布局假设）
 
 测试服迁移 cutover 实战阻塞：`bun install -g @zonease/aiworker-cli@0.2.0` 装好后 systemctl restart aiworker-gateway 卡 activating（exit 1）。journal:
