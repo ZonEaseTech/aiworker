@@ -14,6 +14,8 @@ export const EVENTS = {
   CONFIG_CHANGED: 'config.changed',
   LOGS_LINE: 'logs.line',
   APPROVAL_REQUESTED: 'approval.requested',
+  ENROLLMENT_OTP: 'enrollment.otp',
+  ENROLLMENT_APPROVED: 'enrollment.approved',
 } as const
 
 export type EventName = typeof EVENTS[keyof typeof EVENTS]
@@ -105,6 +107,28 @@ export const approvalRequestedPayloadSchema = workerIdField.extend({
 export type ApprovalRequestedPayload = z.infer<typeof approvalRequestedPayloadSchema>
 
 /**
+ * PLAN-019 — gateway 在 mode='otp' enroll 第一帧后立即推 `enrollment.otp` 给
+ * 发起 connect 的 worker（载到该 socket 上），worker 把 OTP 显示给运维让其在
+ * dashboard / aim CLI 走 `enroll.approve`。`expiresAt` 由 gateway 维护，过期
+ * 视为 reject。
+ */
+export const enrollmentOtpPayloadSchema = workerIdField.extend({
+  otp: z.string().min(1),
+  expiresAt: z.number().int(),
+})
+export type EnrollmentOtpPayload = z.infer<typeof enrollmentOtpPayloadSchema>
+
+/**
+ * PLAN-019 — operator 调 `enroll.approve` 后 gateway 把对应 worker 升级成
+ * 正式连接，并在同一个 socket 上推送本事件，把 fleet 颁发的 `deviceToken`
+ * 交还给 worker 持久化。
+ */
+export const enrollmentApprovedPayloadSchema = workerIdField.extend({
+  deviceToken: z.string().min(1),
+})
+export type EnrollmentApprovedPayload = z.infer<typeof enrollmentApprovedPayloadSchema>
+
+/**
  * 事件名 → payload schema 的注册表。
  * 下游（aim CLI / web console）据此对入站 event 做强校验。
  */
@@ -118,6 +142,8 @@ export const EVENT_PAYLOADS: {
   [EVENTS.CONFIG_CHANGED]: typeof configChangedPayloadSchema
   [EVENTS.LOGS_LINE]: typeof logsLinePayloadSchema
   [EVENTS.APPROVAL_REQUESTED]: typeof approvalRequestedPayloadSchema
+  [EVENTS.ENROLLMENT_OTP]: typeof enrollmentOtpPayloadSchema
+  [EVENTS.ENROLLMENT_APPROVED]: typeof enrollmentApprovedPayloadSchema
 } = {
   [EVENTS.WORKER_ONLINE]: workerOnlinePayloadSchema,
   [EVENTS.WORKER_OFFLINE]: workerOfflinePayloadSchema,
@@ -128,6 +154,8 @@ export const EVENT_PAYLOADS: {
   [EVENTS.CONFIG_CHANGED]: configChangedPayloadSchema,
   [EVENTS.LOGS_LINE]: logsLinePayloadSchema,
   [EVENTS.APPROVAL_REQUESTED]: approvalRequestedPayloadSchema,
+  [EVENTS.ENROLLMENT_OTP]: enrollmentOtpPayloadSchema,
+  [EVENTS.ENROLLMENT_APPROVED]: enrollmentApprovedPayloadSchema,
 }
 
 /** 判断一个字符串是否是本包已知的事件名。 */

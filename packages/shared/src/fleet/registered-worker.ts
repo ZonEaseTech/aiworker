@@ -14,9 +14,11 @@ export type RegisteredWorkerLivenessState
  * gated behind `AIWORKER_GATEWAY_CAN_LAUNCH` (PLAN-013 S5);`self-enroll` is
  * the worker-driven path introduced by PLAN-018 — worker presents
  * `AIWORKER_JOIN_TOKEN` in its first `connect` frame and gateway upserts
- * the fleet row without operator action.
+ * the fleet row without operator action; `otp` is the PLAN-019 variant of
+ * self-enroll where the worker carries no shared join token and an operator
+ * approves a one-time OTP that gateway brokered between them.
  */
-export type RegisteredWorkerOrigin = 'manual' | 'launch-local' | 'self-enroll'
+export type RegisteredWorkerOrigin = 'manual' | 'launch-local' | 'self-enroll' | 'otp'
 
 /**
  * Manager-side record of one worker the dashboard tracks. Mirrors the

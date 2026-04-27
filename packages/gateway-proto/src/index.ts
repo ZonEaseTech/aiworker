@@ -13,6 +13,8 @@ export {
   approvalRequestedPayloadSchema,
   chatMessagePayloadSchema,
   configChangedPayloadSchema,
+  enrollmentApprovedPayloadSchema,
+  enrollmentOtpPayloadSchema,
   EVENT_PAYLOADS,
   EVENTS,
   isKnownEvent,
@@ -27,6 +29,8 @@ export type {
   ApprovalRequestedPayload,
   ChatMessagePayload,
   ConfigChangedPayload,
+  EnrollmentApprovedPayload,
+  EnrollmentOtpPayload,
   EventName,
   LogsLinePayload,
   WorkerOfflinePayload,
@@ -64,6 +68,7 @@ export {
   pairRequestSchema,
   pairResultSchema,
   pendingApprovalSchema,
+  pendingEnrollmentSchema,
   workerSummarySchema,
 } from './methods'
 export type {
@@ -75,6 +80,7 @@ export type {
   PairRequest,
   PairResult,
   PendingApprovalDescriptor,
+  PendingEnrollment,
   WorkerSummary,
 } from './methods'
 

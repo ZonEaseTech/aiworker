@@ -217,6 +217,88 @@ describe('parseFrame', () => {
     }
   })
 
+  // PLAN-019 — enroll.mode 切换：'otp' 必须省略 joinToken，'join-token' 必须带 joinToken。
+  test('connect.enroll.mode=otp 且不带 joinToken → 通过', () => {
+    const raw = JSON.stringify({
+      type: 'connect',
+      role: ROLES.NODE,
+      agentId: 'w_otp00000001',
+      deviceId: 'w_otp00000001-container',
+      auth: { token: '' },
+      enroll: {
+        apiToken: 'wtk_abcdefghijklmnopqrstuvwxyz012345',
+        mode: 'otp',
+        displayName: 'pending-otp',
+      },
+    })
+    const res = parseFrame(raw)
+    expect(res.ok).toBe(true)
+    if (res.ok && res.frame.type === 'connect') {
+      expect(res.frame.enroll?.mode).toBe('otp')
+      expect(res.frame.enroll?.joinToken).toBeUndefined()
+    }
+  })
+
+  test('connect.enroll.mode=otp 且带 joinToken → 拒绝（refine 触发）', () => {
+    const raw = JSON.stringify({
+      type: 'connect',
+      role: ROLES.NODE,
+      agentId: 'w_otp00000002',
+      deviceId: 'w_otp00000002-container',
+      auth: { token: '' },
+      enroll: {
+        apiToken: 'wtk_abcdefghijklmnopqrstuvwxyz012345',
+        mode: 'otp',
+        joinToken: 'should-not-be-here',
+      },
+    })
+    const res = parseFrame(raw)
+    expect(res.ok).toBe(false)
+    if (!res.ok) {
+      expect(res.error).toMatch(/^schema:/)
+    }
+  })
+
+  test('connect.enroll.mode=join-token（默认）但缺 joinToken → 拒绝', () => {
+    const raw = JSON.stringify({
+      type: 'connect',
+      role: ROLES.NODE,
+      agentId: 'w_jt0000000001',
+      deviceId: 'w_jt0000000001-container',
+      auth: { token: '' },
+      enroll: {
+        apiToken: 'wtk_abcdefghijklmnopqrstuvwxyz012345',
+        // mode 缺省 → 走 'join-token'
+      },
+    })
+    const res = parseFrame(raw)
+    expect(res.ok).toBe(false)
+    if (!res.ok) {
+      expect(res.error).toMatch(/^schema:/)
+    }
+  })
+
+  test('connect.enroll.mode=join-token + 带 joinToken → 通过（兼容 PLAN-018）', () => {
+    const raw = JSON.stringify({
+      type: 'connect',
+      role: ROLES.NODE,
+      agentId: 'w_jt0000000002',
+      deviceId: 'w_jt0000000002-container',
+      auth: { token: '' },
+      enroll: {
+        apiToken: 'wtk_abcdefghijklmnopqrstuvwxyz012345',
+        mode: 'join-token',
+        joinToken: 'shared-fleet-secret',
+      },
+    })
+    const res = parseFrame(raw)
+    expect(res.ok).toBe(true)
+    if (res.ok && res.frame.type === 'connect') {
+      expect(res.frame.enroll?.mode).toBe('join-token')
+      expect(res.frame.enroll?.joinToken).toBe('shared-fleet-secret')
+    }
+  })
+
   test('encodeFrame 往返：encode → parse 结果与原始 Frame 等价', () => {
     const original = {
       type: 'event' as const,
