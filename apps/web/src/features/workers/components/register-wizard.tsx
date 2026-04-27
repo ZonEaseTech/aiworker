@@ -192,7 +192,7 @@ function RegisterForm({ onCancel, onSuccess }: RegisterFormProps) {
               (same compose),
               <code className="mx-1 rounded bg-muted px-1 py-0.5 font-mono">https://worker-1.example.com</code>
               (reverse proxy),
-              <code className="mx-1 rounded bg-muted px-1 py-0.5 font-mono">http://<test-server-ip-redacted>:9217</code>
+              <code className="mx-1 rounded bg-muted px-1 py-0.5 font-mono">http://203.0.113.10:9217</code>
               (direct port).
             </span>
           </p>

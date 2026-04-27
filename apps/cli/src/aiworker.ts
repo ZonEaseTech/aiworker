@@ -233,13 +233,17 @@ cli
 
 // --- gateway 子命令组（本地 daemon）---
 cli
-  .command('gateway start', '拉起本地 gateway daemon 进程')
-  .option('--port <n>', '监听端口，默认 3000', { type: [Number] })
-  .option('--entry <path>', '显式指定 gateway 入口文件（默认读 AIWORKER_GATEWAY_ENTRY env）')
-  .action(async (opts: { port?: number[], entry?: string }) => {
+  .command('gateway start', '拉起 gateway server（默认 foreground，systemd 友好；--detach 走后台 daemon）')
+  .option('--port <n>', '监听端口，默认 9218', { type: [Number] })
+  .option('--detach', '后台 daemon 模式：spawn 自身 + PID/log 写入 ~/.aiworker/')
+  .action(async (opts: { port?: number[], detach?: boolean }) => {
+    // env AIWORKER_GATEWAY_INTERNAL_FOREGROUND=1 是 daemon 子进程标记；强制 foreground，
+    // 即便误带 --detach（无害）。
+    const internal = process.env.AIWORKER_GATEWAY_INTERNAL_FOREGROUND === '1'
+    const detach = internal ? false : opts.detach === true
     process.exit(await runGatewayStart({
       ...(opts.port?.[0] === undefined ? {} : { port: opts.port[0] }),
-      ...(opts.entry === undefined ? {} : { entry: opts.entry }),
+      detach,
     }))
   })
 

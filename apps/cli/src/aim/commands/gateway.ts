@@ -1,3 +1,6 @@
+import process from 'node:process'
+import { startGateway } from '@zonease/aiworker-gateway'
+import { closeFleetDb } from '@zonease/aiworker-storage-sqlite/fleet'
 import consola from 'consola'
 
 import { getDaemonStatus, startDaemon, stopDaemon } from '../daemon'
@@ -5,30 +8,83 @@ import { patchAimState } from '../state'
 
 export interface GatewayStartOptions {
   port?: number
-  entry?: string
-  /** 成功启动后把 gatewayUrl 写回 aim.json。默认 true。 */
+  /** 启动后写回 aim.json gatewayUrl。默认 true。 */
   persistUrl?: boolean
+  /** background detach（spawn cli 自身 + foreground flag）。默认 false（systemd-friendly）。 */
+  detach?: boolean
 }
 
 /**
- * `aim gateway start` — 本地拉起 gateway daemon，PID 与日志写在 ~/.aiworker/。
- * 返回非零表示启动失败（入口不存在 / 端口非法 / 已在运行等）。
+ * `aiworker gateway start` — 默认 **foreground** in-process 启动 gateway server
+ * （systemd Type=simple 友好，BUG-012 修复）。
+ *
+ * 模式分流：
+ * - `--detach` 显式：spawn cli 自身 background，写 PID/log 到 ~/.aiworker/。
+ * - 默认 / `--__internal-foreground`（daemon spawn 子进程内部）：
+ *     in-process import startGateway() → SIGTERM/SIGINT 优雅停止。
+ *     进程一直 blocking 等 signal，systemd 视为长跑 service。
  */
 export async function runGatewayStart(opts: GatewayStartOptions = {}): Promise<number> {
+  if (opts.detach === true)
+    return runGatewayStartDetached(opts)
+  return runGatewayStartForeground(opts)
+}
+
+async function runGatewayStartDetached(opts: GatewayStartOptions): Promise<number> {
   try {
     const res = await startDaemon({
       ...(opts.port === undefined ? {} : { port: opts.port }),
-      ...(opts.entry === undefined ? {} : { entry: opts.entry }),
     })
-    if (opts.persistUrl !== false) {
-      // 默认把 state.gatewayUrl 更新到 localhost:port，便于后续 aim pair 等命令直接用。
+    if (opts.persistUrl !== false)
       await patchAimState({ gatewayUrl: `ws://localhost:${res.port}` })
-    }
     consola.success(`gateway daemon 已启动 pid=${res.pid} port=${res.port}`)
-    consola.info(`entry  : ${res.entry}`)
     consola.info(`pidFile: ${res.pidFile}`)
     consola.info(`logFile: ${res.logFile}`)
     return 0
+  }
+  catch (err) {
+    consola.error(`gateway start --detach 失败: ${err instanceof Error ? err.message : String(err)}`)
+    return 1
+  }
+}
+
+async function runGatewayStartForeground(opts: GatewayStartOptions): Promise<number> {
+  try {
+    const started = await startGateway(
+      opts.port === undefined ? {} : { port: opts.port },
+    )
+    if (opts.persistUrl !== false) {
+      try {
+        await patchAimState({ gatewayUrl: `ws://localhost:${started.port}` })
+      }
+      catch (err) {
+        // 写 aim.json 失败不影响 server 跑（systemd / 容器场景常见无写权限）。
+        consola.warn(`无法持久化 gatewayUrl 到 aim.json: ${err instanceof Error ? err.message : String(err)}`)
+      }
+    }
+    consola.success(`gateway 已启动 (foreground) port=${started.port}`)
+
+    let shuttingDown = false
+    const shutdown = async (signal: NodeJS.Signals) => {
+      if (shuttingDown)
+        return
+      shuttingDown = true
+      consola.info(`[gateway] received ${signal}, shutting down`)
+      try {
+        await started.stop()
+        closeFleetDb()
+      }
+      catch (err) {
+        consola.error('[gateway] shutdown failed', err)
+      }
+      process.exit(0)
+    }
+    process.once('SIGTERM', () => void shutdown('SIGTERM'))
+    process.once('SIGINT', () => void shutdown('SIGINT'))
+
+    // 阻塞直到 signal handler 调 process.exit；避免 cli main flow 退出。
+    await new Promise<never>(() => {})
+    return 0 // unreachable
   }
   catch (err) {
     consola.error(`gateway start 失败: ${err instanceof Error ? err.message : String(err)}`)
@@ -36,7 +92,7 @@ export async function runGatewayStart(opts: GatewayStartOptions = {}): Promise<n
   }
 }
 
-/** `aim gateway status` — 读 PID 文件并探活；不对 gateway 发起 WS 握手。 */
+/** `aiworker gateway status` — 读 PID 文件并探活；不对 gateway 发起 WS 握手。 */
 export function runGatewayStatus(): number {
   const status = getDaemonStatus()
   if (status.running) {
@@ -45,11 +101,11 @@ export function runGatewayStatus(): number {
     consola.info(`logFile: ${status.logFile}`)
     return 0
   }
-  consola.info('gateway daemon 未运行')
+  consola.info('gateway daemon 未运行（或在 foreground 模式下由 systemd 直接管）')
   return 1
 }
 
-/** `aim gateway stop` — 发 SIGTERM；超时后 SIGKILL 兜底。 */
+/** `aiworker gateway stop` — 发 SIGTERM；超时后 SIGKILL 兜底。 */
 export async function runGatewayStop(options: { timeoutMs?: number } = {}): Promise<number> {
   try {
     const stopped = await stopDaemon(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs })

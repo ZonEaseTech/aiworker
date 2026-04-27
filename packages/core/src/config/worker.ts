@@ -30,7 +30,12 @@ import { z } from 'zod'
 const schema = z.object({
   // FEAT-030: worker HTTP 默认端口 9217（避开 3000-3999 / 5000-5999 / 8000-8999 dev 高频段）
   PORT: z.coerce.number().default(9217),
-  WORKER_DB_PATH: z.string().default('/var/lib/aiworker/worker.db'),
+  /**
+   * Worker SQLite 路径。未设时派生为 `<AIWORKER_HOME>/worker.db`（默认
+   * `~/.aiworker/worker.db`），裸跑 / npm install 场景无需手工 export。
+   * 容器 / systemd 可显式覆盖到 `/var/lib/aiworker/worker.db`（BUG-011 修复）。
+   */
+  WORKER_DB_PATH: z.string().default(() => path.join(resolveAiworkerHome(), 'worker.db')),
   /**
    * 迁移目录。未设时回退到 `@zonease/aiworker-storage-sqlite` 内嵌路径
    * (`import.meta.url` 解析得来的绝对路径),源码运行 / 单文件 bundle 都能定位。

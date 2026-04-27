@@ -1,6 +1,6 @@
 {
   "name": "@zonease/aiworker-cli",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "AIWorker fleet CLI — gateway / worker / operator 单一二进制",
   "license": "MIT",
   "type": "module",
@@ -35,6 +35,7 @@
     "@zonease/aiworker-api": "workspace:*",
     "@zonease/aiworker-core": "workspace:*",
     "@zonease/aiworker-fs-layout": "workspace:*",
+    "@zonease/aiworker-gateway": "workspace:*",
     "@zonease/aiworker-gateway-proto": "workspace:*",
     "@zonease/aiworker-shared": "workspace:*",
     "@zonease/aiworker-storage-sqlite": "workspace:*",

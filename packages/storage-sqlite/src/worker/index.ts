@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -9,7 +10,18 @@ import * as schema from './schema'
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url))
 
-export const defaultWorkerMigrationsFolder: string = path.resolve(moduleDir, '../../drizzle/worker')
+/** 同 fleet/index.ts 注释：dev `../../drizzle/<rel>` → bundle `./drizzle/<rel>` fallback。 */
+function resolveMigrationsFolder(rel: string): string {
+  const dev = path.resolve(moduleDir, '../../drizzle', rel)
+  if (existsSync(dev))
+    return dev
+  const bundled = path.resolve(moduleDir, 'drizzle', rel)
+  if (existsSync(bundled))
+    return bundled
+  return dev
+}
+
+export const defaultWorkerMigrationsFolder: string = resolveMigrationsFolder('worker')
 
 let db: ReturnType<typeof createDb> | null = null
 

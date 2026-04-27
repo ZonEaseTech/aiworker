@@ -36,41 +36,21 @@
     },
     "apps/cli": {
       "name": "@zonease/aiworker-cli",
+      "version": "0.2.0",
       "bin": {
-        "aiw": "./src/aiw.ts",
-        "aim": "./src/aim.ts",
+        "aiworker": "./dist/aiworker.js",
       },
-      "dependencies": {
+      "devDependencies": {
+        "@types/bun": "^1.2.13",
         "@zonease/aiworker-api": "workspace:*",
         "@zonease/aiworker-core": "workspace:*",
         "@zonease/aiworker-fs-layout": "workspace:*",
+        "@zonease/aiworker-gateway": "workspace:*",
         "@zonease/aiworker-gateway-proto": "workspace:*",
         "@zonease/aiworker-shared": "workspace:*",
         "@zonease/aiworker-storage-sqlite": "workspace:*",
         "cac": "^6.7.14",
         "consola": "^3.4.2",
-      },
-      "devDependencies": {
-        "@types/bun": "^1.2.13",
-        "typescript": "^5.8.3",
-      },
-    },
-    "apps/gateway": {
-      "name": "@zonease/aiworker-gateway",
-      "bin": {
-        "aiworker-gateway": "./src/index.ts",
-      },
-      "dependencies": {
-        "@zonease/aiworker-fs-layout": "workspace:*",
-        "@zonease/aiworker-gateway-proto": "workspace:*",
-        "@zonease/aiworker-shared": "workspace:*",
-        "@zonease/aiworker-storage-sqlite": "workspace:*",
-        "consola": "^3.4.2",
-        "drizzle-orm": "^0.44.1",
-        "zod": "^3.24.4",
-      },
-      "devDependencies": {
-        "@types/bun": "^1.2.13",
         "typescript": "^5.8.3",
       },
     },
@@ -132,6 +112,22 @@
     },
     "packages/fs-layout": {
       "name": "@zonease/aiworker-fs-layout",
+      "devDependencies": {
+        "@types/bun": "^1.2.13",
+        "typescript": "^5.8.3",
+      },
+    },
+    "packages/gateway": {
+      "name": "@zonease/aiworker-gateway",
+      "dependencies": {
+        "@zonease/aiworker-fs-layout": "workspace:*",
+        "@zonease/aiworker-gateway-proto": "workspace:*",
+        "@zonease/aiworker-shared": "workspace:*",
+        "@zonease/aiworker-storage-sqlite": "workspace:*",
+        "consola": "^3.4.2",
+        "drizzle-orm": "^0.44.1",
+        "zod": "^3.24.4",
+      },
       "devDependencies": {
         "@types/bun": "^1.2.13",
         "typescript": "^5.8.3",
@@ -632,7 +628,7 @@
 
     "@zonease/aiworker-fs-layout": ["@zonease/aiworker-fs-layout@workspace:packages/fs-layout"],
 
-    "@zonease/aiworker-gateway": ["@zonease/aiworker-gateway@workspace:apps/gateway"],
+    "@zonease/aiworker-gateway": ["@zonease/aiworker-gateway@workspace:packages/gateway"],
 
     "@zonease/aiworker-gateway-proto": ["@zonease/aiworker-gateway-proto@workspace:packages/gateway-proto"],
 

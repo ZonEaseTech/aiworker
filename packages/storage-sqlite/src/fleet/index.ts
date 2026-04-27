@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -10,12 +11,25 @@ import * as schema from './schema'
 const moduleDir = path.dirname(fileURLToPath(import.meta.url))
 
 /**
- * Migrations live at `<package>/drizzle/fleet/` (physically next to this
- * package, two levels above `src/fleet/`). Resolving through `import.meta`
- * means consumers never hardcode a path; the value survives bundling +
- * container layout changes as long as the `drizzle/` folder ships alongside.
+ * Migrations 路径解析（BUG-011/BUG-012 修复，bundle 兼容）：
+ *   - dev / source 布局：`<package>/src/fleet/index.ts` → `../../drizzle/fleet`
+ *   - bundle 布局（cli `dist/aiworker.js`）：sibling `./drizzle/fleet`
+ *     （由 `apps/cli/scripts/build-publish-manifest.ts` 在 build 时拷过来）
+ *
+ * 优先 dev layout（开发体验不变），fallback bundle layout（npm install 场景）。
+ * 两者都不存在时返回 dev path，让 drizzle 抛清晰的 `meta/_journal.json` 错。
  */
-export const defaultFleetMigrationsFolder: string = path.resolve(moduleDir, '../../drizzle/fleet')
+function resolveMigrationsFolder(rel: string): string {
+  const dev = path.resolve(moduleDir, '../../drizzle', rel)
+  if (existsSync(dev))
+    return dev
+  const bundled = path.resolve(moduleDir, 'drizzle', rel)
+  if (existsSync(bundled))
+    return bundled
+  return dev
+}
+
+export const defaultFleetMigrationsFolder: string = resolveMigrationsFolder('fleet')
 
 let db: ReturnType<typeof createDb> | null = null
 
