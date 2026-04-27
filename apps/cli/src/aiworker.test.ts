@@ -15,6 +15,7 @@ const EXPECTED_COMMANDS = [
   // worker-local（dash 形）
   'init',
   'run',
+  'scope',
   'serve',
   'config-show',
   'config-set',

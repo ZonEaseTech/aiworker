@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-04-27 06:40
+> Updated: 2026-04-27 19:30
 
 ## Usage
 
@@ -88,3 +88,12 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REFACTOR-006 orchestrator API 入参 zod 校验 + 历史消息分页窗口**](REFACTOR-006.md) `P2`
 - [x] [**REFACTOR-007 杂项小修：bus 异常吞 / lark cache / fleet count / secrets key**](REFACTOR-007.md) `P2`
 - [x] [**REFACTOR-008 baseline lint debt 清零（package.json sort-keys + cli process global + CI lint step）**](REFACTOR-008.md) `P3`
+- [ ] [**FEAT-031 Worker 项目级落位 + 上下文连贯 + skill/MCP per-worker + 自我迭代闭环（epic）**](FEAT-031.md) `P1`
+- [-] [**FEAT-032 复活并重构 Worker + Fleet Web UI（epic）**](FEAT-032.md) `P1`
+- [x] [**REFACTOR-011 fs-layout 引入 project scope 解析 + project layout 模板**](REFACTOR-011.md) `P1`
+- [x] [**FEAT-036 CLI `aiworker init` / `aiworker scope` 项目级初始化命令**](FEAT-036.md) `P1`
+- [-] [**FEAT-033 Phase 1 — apps/web 静态托管 + 双视角源码骨架**](FEAT-033.md) `P1`
+- [ ] [**FEAT-034 Phase 2 — Fleet UI MVP**](FEAT-034.md) `P1`
+- [ ] [**FEAT-035 Phase 3 — Worker UI MVP**](FEAT-035.md) `P1`
+- [ ] [**REFACTOR-009 Phase 4 — apps/web 独立性强化与回归保护**](REFACTOR-009.md) `P2`
+- [ ] [**REFACTOR-010 Phase 5 — Web UI 能力补齐与可观测性（可选）**](REFACTOR-010.md) `P3`

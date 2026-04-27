@@ -1,54 +1,194 @@
-import { access, mkdir, writeFile } from 'node:fs/promises'
+import { statSync } from 'node:fs'
+import { access, mkdir, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 
 /**
- * `~/.aiworker/` layout owned by aiworker. Mirrors the Hermes / OpenClaw
- * convention (per-agent home directory with brain/memory/skills + persona
- * documents) but under an aiworker-owned root so we don't fight a neighbour
- * project's conventions.
+ * `~/.aiworker/` (user scope) or `<project>/.aiworker/` (project scope) layout
+ * owned by aiworker. Mirrors the Hermes / OpenClaw convention (per-agent home
+ * directory with brain/memory/skills + persona documents) but under an
+ * aiworker-owned root so we don't fight a neighbour project's conventions.
  *
- * Layout:
+ * User-scope layout (legacy, multi-worker per host):
  *
  *   <home>/
  *     workers/
  *       <workerId>/
- *         AGENT.md          # persona / role document
- *         SOUL.md           # voice + style guide
- *         USER.md           # user profile the agent maintains
- *         config.yaml       # redacted worker config mirror (advisory)
- *         brain/
- *           MEMORY.md       # human-readable memory index
- *           memories/*.md   # individual memory notes
- *           skills/<n>/SKILL.md  # agentskills.io skills
- *         worker.db         # SQLite: identity + FTS index + runtime state
- *         worker.db-wal
- *         worker.db-shm
- *         workspaces/       # per-conversation ephemeral workspaces
- *         logs/             # consola spool (future)
+ *         AGENT.md / SOUL.md / USER.md / brain/{MEMORY.md, memories/, skills/}
+ *         workspaces/
+ *
+ * Project-scope layout (PLAN-023, one worker per project):
+ *
+ *   <project>/.aiworker/
+ *     AGENT.md / SOUL.md / USER.md / MEMORY.md / ROLLUP.md   # team-shared persona
+ *     skills/  memories/  mcp.json                            # team-shared
+ *     local/                                                  # gitignored
+ *       worker.db / identity.json / .env / workspaces/
  */
 
 const DEFAULT_HOME_ENV = 'AIWORKER_HOME'
 const DEFAULT_HOME_DIR = '.aiworker'
+const PROJECT_LOCAL_DIR = 'local'
+
+export type AiworkerScope = 'explicit' | 'project' | 'user'
+
+export interface AiworkerScopeResult {
+  scope: AiworkerScope
+  /** Absolute path to the aiworker home that downstream APIs treat as the root. */
+  home: string
+  /** Project root (parent of `.aiworker/`) when `scope === 'project'`. */
+  projectRoot?: string
+  source: 'cli-flag' | 'env' | 'project-detect' | 'user-default'
+}
+
+export interface ResolveScopeOptions {
+  /** Defaults to `process.cwd()`. */
+  cwd?: string
+  /** Explicit `--aiworker-home <path>` from a CLI flag. Highest priority. */
+  explicitHome?: string
+  /** Skip the cwd → up-walk project detection (used for `--global`). */
+  disableProjectDetect?: boolean
+}
 
 function expandTilde(p: string): string {
   return p.startsWith('~') ? path.join(homedir(), p.slice(1)) : p
 }
 
-/** The aiworker root dir. `AIWORKER_HOME` env override, else `~/.aiworker`. */
-export function resolveAiworkerHome(): string {
-  const raw = process.env[DEFAULT_HOME_ENV]
-  if (raw && raw.length > 0)
-    return path.resolve(expandTilde(raw))
-  return path.resolve(homedir(), DEFAULT_HOME_DIR)
+async function isDir(p: string): Promise<boolean> {
+  try {
+    const s = await stat(p)
+    return s.isDirectory()
+  }
+  catch {
+    return false
+  }
 }
 
+function isDirSync(p: string): boolean {
+  try {
+    return statSync(p).isDirectory()
+  }
+  catch {
+    return false
+  }
+}
+
+/**
+ * Walk from `cwd` upward looking for the closest ancestor that contains a
+ * `.aiworker/` directory. Stops at:
+ *   - the filesystem root, OR
+ *   - a directory that contains `.git/` but NOT `.aiworker/`
+ *     (so detection never crosses git repository boundaries).
+ *
+ * Returns the matching ancestor (the *project root*), or `null` if none found.
+ * Sync intentionally — called from sync code paths (zod default factories).
+ */
+export function resolveProjectRoot(cwd?: string): string | null {
+  let cur = path.resolve(cwd ?? process.cwd())
+  // Guard against degenerate inputs.
+  if (!cur)
+    return null
+
+  while (true) {
+    const aiworkerDir = path.join(cur, DEFAULT_HOME_DIR)
+    if (isDirSync(aiworkerDir))
+      return cur
+
+    // git boundary: stop if this dir has .git but no .aiworker (already
+    // checked above), so we never escape into a parent repo / sibling project.
+    const gitDir = path.join(cur, '.git')
+    if (isDirSync(gitDir))
+      return null
+
+    const parent = path.dirname(cur)
+    if (parent === cur)
+      return null
+    cur = parent
+  }
+}
+
+/**
+ * Resolve the active aiworker scope. Priority (high → low):
+ *   1. `opts.explicitHome` (CLI `--aiworker-home <path>`)
+ *   2. `process.env.AIWORKER_HOME` (legacy systemd / docker)
+ *   3. `resolveProjectRoot(cwd)` non-null
+ *   4. `~/.aiworker/` user default
+ *
+ * Pure function — no caching. Caller (CLI entrypoint) may memoise.
+ */
+export function resolveAiworkerScope(opts: ResolveScopeOptions = {}): AiworkerScopeResult {
+  if (opts.explicitHome && opts.explicitHome.length > 0) {
+    return {
+      scope: 'explicit',
+      home: path.resolve(expandTilde(opts.explicitHome)),
+      source: 'cli-flag',
+    }
+  }
+
+  const envHome = process.env[DEFAULT_HOME_ENV]
+  if (envHome && envHome.length > 0) {
+    return {
+      scope: 'explicit',
+      home: path.resolve(expandTilde(envHome)),
+      source: 'env',
+    }
+  }
+
+  if (!opts.disableProjectDetect) {
+    const projectRoot = resolveProjectRoot(opts.cwd)
+    if (projectRoot) {
+      const localHome = path.join(projectRoot, DEFAULT_HOME_DIR, PROJECT_LOCAL_DIR)
+      return {
+        scope: 'project',
+        home: localHome,
+        projectRoot,
+        source: 'project-detect',
+      }
+    }
+  }
+
+  return {
+    scope: 'user',
+    home: path.resolve(homedir(), DEFAULT_HOME_DIR),
+    source: 'user-default',
+  }
+}
+
+/** The aiworker root dir. Equivalent to `resolveAiworkerScope().home`. */
+export function resolveAiworkerHome(): string {
+  return resolveAiworkerScope().home
+}
+
+/**
+ * Worker home for the per-worker assets (worker.db is NOT here — it lives at
+ * `<AIWORKER_HOME>/worker.db`, see `WORKER_DB_PATH` default in
+ * `packages/core/src/config/worker.ts`).
+ *
+ * Behaviour by scope:
+ *   - `explicit` / `user` → `<home>/workers/<workerId>/` (legacy multi-worker)
+ *   - `project` → `<projectRoot>/.aiworker/` (one project = one worker; no
+ *     `workers/<id>/` sublevel)
+ */
 export function resolveWorkerHome(workerId: string): string {
-  return path.join(resolveAiworkerHome(), 'workers', workerId)
+  const result = resolveAiworkerScope()
+  if (result.scope === 'project' && result.projectRoot) {
+    // Project scope: persona docs (AGENT.md etc.) live in the .aiworker/
+    // directory itself, NOT inside local/. The `home` field points at
+    // local/ so worker.db et al are gitignored, but persona docs need the
+    // git-tracked parent.
+    return path.join(result.projectRoot, DEFAULT_HOME_DIR)
+  }
+  return path.join(result.home, 'workers', workerId)
 }
 
 export function resolveBrainHome(workerId: string): string {
+  const result = resolveAiworkerScope()
+  if (result.scope === 'project' && result.projectRoot) {
+    // Project scope: brain artifacts share the project .aiworker/ root
+    // (skills/ and memories/ live at .aiworker/skills, .aiworker/memories).
+    return path.join(result.projectRoot, DEFAULT_HOME_DIR)
+  }
   return path.join(resolveWorkerHome(workerId), 'brain')
 }
 
@@ -65,6 +205,11 @@ export function resolveMemoryIndexPath(workerId: string): string {
 }
 
 export function resolveWorkspacesRoot(workerId: string): string {
+  const result = resolveAiworkerScope()
+  if (result.scope === 'project' && result.projectRoot) {
+    // Workspaces are ephemeral worker state → keep them gitignored under local/.
+    return path.join(result.home, 'workspaces')
+  }
   return path.join(resolveWorkerHome(workerId), 'workspaces')
 }
 
@@ -84,8 +229,18 @@ export function resolveUserMdPath(workerId: string): string {
   return path.join(resolveWorkerHome(workerId), 'USER.md')
 }
 
-async function ensureDir(dir: string): Promise<void> {
-  await mkdir(dir, { recursive: true })
+/** Long-running rollup distilled by the evolution cron job (PLAN-021 Phase E). */
+export function resolveRollupMdPath(workerId: string): string {
+  return path.join(resolveWorkerHome(workerId), 'ROLLUP.md')
+}
+
+/** Per-worker MCP server registry (PLAN-021 Phase D). Project scope only. */
+export function resolveMcpJsonPath(workerId: string): string {
+  return path.join(resolveWorkerHome(workerId), 'mcp.json')
+}
+
+async function ensureDir(dir: string, mode?: number): Promise<void> {
+  await mkdir(dir, { recursive: true, ...(mode === undefined ? {} : { mode }) })
 }
 
 async function seedIfAbsent(filePath: string, content: string): Promise<void> {
@@ -101,8 +256,21 @@ async function seedIfAbsent(filePath: string, content: string): Promise<void> {
  * Create the worker's home tree if it does not yet exist. Safe to call on
  * every boot — every step is idempotent and seed files are only written
  * when absent.
+ *
+ * In **project scope** this becomes a no-op for persona docs (those are
+ * created by `ensureProjectAiworker` once via `aiworker init`); only the
+ * workspaces root is ensured so the executor can write to it.
  */
 export async function ensureWorkerHome(workerId: string): Promise<void> {
+  const result = resolveAiworkerScope()
+  if (result.scope === 'project') {
+    // Persona docs + skills/memories already seeded by ensureProjectAiworker.
+    // Only ensure ephemeral dirs that the runtime writes to.
+    await ensureDir(result.home, 0o700)
+    await ensureDir(resolveWorkspacesRoot(workerId))
+    return
+  }
+
   const workerHome = resolveWorkerHome(workerId)
   await ensureDir(workerHome)
   await ensureDir(resolveBrainHome(workerId))
@@ -126,4 +294,64 @@ export async function ensureWorkerHome(workerId: string): Promise<void> {
     resolveMemoryIndexPath(workerId),
     `# Memory index\n\n> One line per memory: \`- [Title](filename.md) — short description.\`\n`,
   )
+}
+
+/**
+ * Materialise `<projectRoot>/.aiworker/` with the project-scope template:
+ *   - persona docs (AGENT.md / SOUL.md / USER.md / MEMORY.md / ROLLUP.md)
+ *   - empty skills/ memories/ dirs
+ *   - mcp.json placeholder
+ *   - local/ (chmod 0700) with `* + !.gitignore` to silently ignore everything
+ *   - .aiworker/.gitignore that ignores `local/`
+ *
+ * Idempotent: existing files are not overwritten.
+ */
+export async function ensureProjectAiworker(projectRoot: string): Promise<void> {
+  const root = path.resolve(projectRoot)
+  const aiworker = path.join(root, DEFAULT_HOME_DIR)
+  const localDir = path.join(aiworker, PROJECT_LOCAL_DIR)
+
+  await ensureDir(aiworker)
+  await ensureDir(path.join(aiworker, 'skills'))
+  await ensureDir(path.join(aiworker, 'memories'))
+  await ensureDir(localDir, 0o700)
+  await ensureDir(path.join(localDir, 'workspaces'))
+
+  await seedIfAbsent(
+    path.join(aiworker, 'AGENT.md'),
+    `# Agent\n\n> Persona / role document for the agent that lives in this project. The orchestrator injects this file into the system prompt.\n`,
+  )
+  await seedIfAbsent(
+    path.join(aiworker, 'SOUL.md'),
+    `# Voice & style\n\n> Voice / style guide. Influences how the agent phrases responses across channels.\n`,
+  )
+  await seedIfAbsent(
+    path.join(aiworker, 'USER.md'),
+    `# User profile\n\n> The agent writes learned facts about the primary user here over time. Edit by hand to bootstrap.\n`,
+  )
+  await seedIfAbsent(
+    path.join(aiworker, 'MEMORY.md'),
+    `# Long-term memory\n\n> Durable facts, decisions, preferences. Loaded into every session.\n`,
+  )
+  await seedIfAbsent(
+    path.join(aiworker, 'ROLLUP.md'),
+    `# Continuity rollup\n\n> Auto-distilled by the evolution cron job. Recent decisions / todos / context that survive session compaction.\n`,
+  )
+  await seedIfAbsent(
+    path.join(aiworker, 'mcp.json'),
+    `${JSON.stringify({ servers: {} }, null, 2)}\n`,
+  )
+  await seedIfAbsent(
+    path.join(aiworker, '.gitignore'),
+    `${PROJECT_LOCAL_DIR}/\n`,
+  )
+  await seedIfAbsent(
+    path.join(localDir, '.gitignore'),
+    `*\n!.gitignore\n`,
+  )
+}
+
+/** Test-only helper. */
+export async function projectAiworkerExists(projectRoot: string): Promise<boolean> {
+  return isDir(path.join(projectRoot, DEFAULT_HOME_DIR))
 }

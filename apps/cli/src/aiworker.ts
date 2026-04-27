@@ -57,6 +57,7 @@ import {
   runScheduleList as runScheduleListLocal,
   runScheduleRemove as runScheduleRemoveLocal,
 } from './commands/schedule'
+import { runScope } from './commands/scope'
 import { runServe } from './commands/serve'
 import { runTokenRotate as runTokenRotateLocal } from './commands/token'
 
@@ -82,9 +83,22 @@ const cli = cac('aiworker')
 // worker-local（dash 形）
 // ============================================================
 
-cli.command('init', 'Bootstrap worker.db, mint identity + token, seed config').action(async () => {
-  await runInit()
-})
+cli
+  .command('init', 'Bootstrap worker.db, mint identity + token, seed config (defaults to project-scope `<cwd>/.aiworker/`; --global for legacy ~/.aiworker)')
+  .option('--global', 'Initialise the legacy user-scope home `~/.aiworker/` (single host-wide worker)')
+  .option('--force', 'Project-scope only: skip the git-repo guard (allow .aiworker/ in non-git dirs)')
+  .action(async (opts: { global?: boolean, force?: boolean }) => {
+    await runInit({
+      ...(opts.global === true ? { global: true } : {}),
+      ...(opts.force === true ? { force: true } : {}),
+    })
+  })
+
+cli
+  .command('scope', 'Print the resolved aiworker scope (user/project/explicit) + presence of layout files')
+  .action(async () => {
+    process.exit(await runScope())
+  })
 
 cli
   .command('run', 'Feed one message into the orchestrator without binding HTTP')

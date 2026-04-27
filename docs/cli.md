@@ -45,24 +45,65 @@ worker 容器内或 ssh 进 worker 主机直接操作 `worker.db` 的子命令�
 
 可选：
 
-- `AIWORKER_HOME` — `~/.aiworker/workers/<workerId>/...` 根目录，默认 `~/.aiworker`。
+- `AIWORKER_HOME` — aiworker home 显式覆盖。最高优先级，会绕过 PLAN-023 的 cwd-based project scope 探测（详见下文 §`aiworker scope`）。systemd / docker 部署在 unit / compose 里显式设了此变量，行为零回归。
 - `WORKER_DATA_ROOT` — per-conversation 工作区根。未设时派生为 `<AIWORKER_HOME>/data-root`（默认 `~/.aiworker/data-root`），裸跑/dev 零配置即可；容器/systemd `--system` 形态请显式设到操作员可写的绝对路径（compose `docker-compose.yml` 设为 `/var/lib/aiworker`）。
 - `WORKER_MIGRATIONS_FOLDER` — 默认使用 `@zonease/aiworker-storage-sqlite` 内嵌路径（`import.meta.url` 解析得来的**绝对**路径），源码运行 / 容器 / 单文件 bundle 都能定位；外部 vendor 时再显式覆盖。
 - `AIWORKER_FORCE_ID` / `AIWORKER_FORCE_TOKEN` — 测试 / 备份恢复用的一次性覆盖。
 - `AIWORKER_GATEWAY_URL` / `AIWORKER_JOIN_TOKEN` / `AIWORKER_DISPLAY_NAME`（PLAN-018 / FEAT-024）— self-enroll 三件套：URL + token 同时设 → `aiworker serve` 跳过 operator 手动 `aiworker pair`，bootstrap 完成后用 outbound WS 主动拨 gateway 把自身写入 fleet。`DISPLAY_NAME` 可选，缺省回落 workerId（最长 80 字符）。详见下文 §`aiworker serve` 与 [`docs/deployment.md` § Worker self-enroll quick start](./deployment.md#worker-self-enroll-quick-start-plan-018--feat-024)。
 - `AIWORKER_ENROLL_MODE`（PLAN-019 / FEAT-026）— `'auto' | 'otp'`，缺省 `'auto'`。`'auto'` 下走 self-enroll 还是 OTP 由 `JOIN_TOKEN` 是否设来判定（设 → self-enroll；未设 → OTP）；显式 `'otp'` 强制 attended 路径，即使 `JOIN_TOKEN` 同时存在也忽略它（用于 deployer 拿不到 fleet 凭证的 attended 场景）。详见下文 §`aiworker serve` 与 [`docs/deployment.md` § Worker OTP-attended enroll quick start](./deployment.md#worker-otp-attended-enroll-quick-startplan-019--feat-026)。
 
-### `aiworker init`
+### `aiworker init [--global] [--force]`
 
-初始化 `worker.db`，跑迁移，首次启动 mint identity + bootstrap token，种 default config，并在 `~/.aiworker/workers/<workerId>/` 下创建 `AGENT.md` / `SOUL.md` / `USER.md` / `brain/skills/` / `brain/memories/` / `workspaces/`。幂等——重复跑不会重打 bootstrap token，也不会覆盖既有 seed。
+初始化 `worker.db`，跑迁移，首次启动 mint identity + bootstrap token，种 default config，落 layout 模板。幂等——重复跑不会重打 bootstrap token，也不会覆盖既有 seed。
+
+PLAN-023 起 `aiworker init` 默认走 **project scope**：
+
+| 模式 | 触发条件 | 落位 |
+|------|----------|------|
+| **project**（默认） | cwd 在某个 git repo 内（且未显式 `AIWORKER_HOME`） | `<cwd>/.aiworker/{AGENT.md,SOUL.md,USER.md,MEMORY.md,ROLLUP.md,skills/,memories/,mcp.json}` + `<cwd>/.aiworker/local/{worker.db,identity.json,.env,workspaces/}` |
+| **user**（legacy） | `--global` flag，或显式 `AIWORKER_HOME=...`，或当前 cwd 不在 git repo 内（报错引导切 `--global` / `--force`） | `~/.aiworker/{worker.db,.env,workers/<workerId>/{AGENT.md,SOUL.md,USER.md,brain/skills,brain/memories,workspaces/}}` |
+
+`local/` 目录强制 `.gitignore = "*\n!.gitignore\n"`（worker.db / .env / workspaces 等敏感产物绝不入 git）；`.aiworker/.gitignore = "local/\n"`（其余 persona / skills / memories 默认入 git，团队共享 agent 人格定义）。每个 project worker 独立 mint master key（写入 `.aiworker/local/.env`，chmod 0600），与 user 级 `~/.aiworker/.env` 物理隔离——这是数据安全边界。
 
 ```sh
+# 进入项目目录（必须是 git repo）
+cd ~/code/my-project
+
+# 默认 project scope
 aiworker init
-# → prints (once):
-# [worker] id=w_xxxxxxxxxxxx
-# [worker] AIWORKER_BOOTSTRAP_TOKEN=wtk_...
-# [worker] save this token; it will not be printed again.
+# → ✓ project-scope worker w_xxxxxxxxxxxx ready (~/code/my-project)
+# → AIWORKER_MASTER_KEY 写入 .aiworker/local/.env（仅首次输出明文）
+# → bootstrap token 打印（仅一次）
+
+# 走 legacy user scope（host 上唯一 worker）
+aiworker init --global
+
+# cwd 非 git repo 时强制项目级（防止误污染 /tmp 等随机目录）
+aiworker init --force
 ```
+
+### `aiworker scope`
+
+诊断命令（零副作用）。打印当前 cwd 命中的 aiworker scope（user / project / explicit）+ home 路径 + layout 各文件存在性。等同 `git config --list --show-origin` 的角色，运维在跑数据修改命令前先查清楚自己在哪个 scope。
+
+```sh
+aiworker scope
+# ╭─────────────────────────────────────────────────────╮
+# │  Scope        : project                             │
+# │  Home         : ~/code/my-project/.aiworker/local   │
+# │  Source       : project-detect                      │
+# │  Project root : ~/code/my-project                   │
+# ╰─────────────────────────────────────────────────────╯
+#   ✓ AGENT.md       ~/code/my-project/.aiworker/AGENT.md
+#   ✓ SOUL.md        ~/code/my-project/.aiworker/SOUL.md
+#   ...
+```
+
+**Scope 解析优先级**（高 → 低）：
+1. CLI `--aiworker-home <path>`（reserved，未来）
+2. `AIWORKER_HOME` env（systemd / docker 通常显式设）
+3. `<cwd>/.aiworker/`（向上搜，遇 git boundary 即停止——不跨 monorepo / repo 边界）
+4. `~/.aiworker/`（user 级 fallback）
 
 ### `aiworker run --message <text> [--chat-id <id>] [--dry-run] [--timeout-ms <n>]`
 

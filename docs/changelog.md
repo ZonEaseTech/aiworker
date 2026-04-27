@@ -1,5 +1,26 @@
 # AIWorker Changelog
 
+## 2026-04-27 19:30 [progress] PLAN-023 (PLAN-021 Phase A) — Worker 项目级落位收尾
+
+落地 `<project>/.aiworker/` 三层 scope 解析与 CLI 项目级 init。承接 PLAN-021 master plan 的 Phase A，为后续 Phase B/D/C/E（上下文连贯 / skill+MCP per-worker / 三态记忆 / 自演化闭环）打底。
+
+**REFACTOR-011 — fs-layout scope 解析 + project layout API**
+- `packages/fs-layout/src/index.ts` 加 `resolveAiworkerScope(opts)` / `resolveProjectRoot(cwd)` / `ensureProjectAiworker(projectRoot)`，优先级 `cli-flag > env > project-detect > user-default`，遇 git boundary 即停（不跨 monorepo / repo 边界）
+- `resolveWorkerHome` / `resolveBrainHome` / `resolveWorkspacesRoot` 在 project 模式下退化为「无 `workers/<id>/` 中间层」；user / explicit 模式保持 `<home>/workers/<id>/...`，systemd / docker 部署零回归
+- `ensureWorkerHome` 在 project 模式变 no-op（persona docs 由 `ensureProjectAiworker` 负责）
+- `local/.gitignore = "*\n!.gitignore\n"` + `.aiworker/.gitignore = "local/\n"` 默认拦截 worker.db / .env / workspaces 入 git，persona / skills / memories 默认入 git（团队共享 agent 人格）
+- 新增 16 单测覆盖 explicit/env/project/user 优先级、git boundary、ensure 幂等、ensureWorkerHome project no-op
+
+**FEAT-036 — CLI `aiworker init` / `aiworker scope`**
+- `apps/cli/src/lib/bootstrap.ts` scope-aware：先 `resolveAiworkerScope()` 决定 home，再传给 `bootstrapDotenv({ home })`
+- `aiworker init` 默认 project（cwd 必须 git repo，否则报错引导 `--global` / `--force`）；brand-new 路径 `delete process.env.{AIWORKER_HOME, AIWORKER_MASTER_KEY, INTERNAL_SHARED_SECRET}` 后让 fs-layout 自然 project-detect，并在 `<project>/.aiworker/local/.env` re-mint 项目独立 master key
+- 新增 `aiworker scope` 诊断命令（参 `git config --list --show-origin`）：box 显示当前 scope / home / source / projectRoot + layout 文件存在性
+- E2E 验证 7 场景全过：user-default / brand-new project init / idempotent re-init / scope 显示 / non-git repo 报错 / `--global` / `--force`
+
+**6 项 PLAN-021 决策**（master plan 批准时定盘）已写入 PLAN-021 批注：dmScope 默认 `per-channel-peer`、E1 半自动、MCP 合并到 orchestrator tool registry、Engine credential 全 user 级、Phase 顺序 A→B→D→C→E、master 批准后分批起子 PLAN。
+
+**下个步骤**：起 PLAN-024 — Phase B（Conversation router dmScope + auto-compaction + claude-code 退 replay-user-messages 模式）。
+
 ## 2026-04-27 16:42 [release] `@zonease/aiworker-cli@0.3.0` — 代码审查批 P0+P1+P2 收官
 
 10 commit `648adf5..f54c0c6` 一次性发到 npm。汇总：
