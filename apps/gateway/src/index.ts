@@ -14,6 +14,7 @@ import {
 import consola from 'consola'
 import { loadGatewayConfigFromEnv } from './config'
 import { ForwardTable, NodeRegistry, OperatorRegistry } from './registry'
+import { PendingEnrollmentRegistry } from './registry/pending'
 import { FleetPersistence } from './registry/persistence'
 import { startGatewayServer } from './server'
 import { FleetSupervisor } from './supervisor/service'
@@ -77,6 +78,10 @@ export function createGatewayContext(config: GatewayConfig): GatewayContext {
     consola.info('[gateway] AIWORKER_GATEWAY_CAN_LAUNCH=true — workers.launch 已开启')
   }
 
+  // PLAN-019：path-aware OTP 入网等待队列。S3 阶段提供基础 submit / removeByWs;
+  // S2 真实现合入后会在此基础上补 TTL timer / onExpire / collision retry。
+  const pending = new PendingEnrollmentRegistry()
+
   return {
     persistence,
     nodes,
@@ -86,6 +91,7 @@ export function createGatewayContext(config: GatewayConfig): GatewayContext {
     masterKeyHex: config.masterKeyHex,
     supervisor,
     maxWorkers: config.maxWorkers,
+    pending,
   }
 }
 

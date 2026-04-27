@@ -1,9 +1,10 @@
 import type { ServerWebSocket } from 'bun'
 import type { GatewayConfig } from './config'
-import type { ConnectionData } from './registry/types'
+import type { ConnectionData, ConnectionPath } from './registry/types'
 import type { GatewayContext } from './router/context'
 import { Buffer } from 'node:buffer'
-import { EVENTS, parseFrame } from '@aiworker/gateway-proto'
+import { createHash } from 'node:crypto'
+import { encodeFrame, EVENTS, parseFrame } from '@aiworker/gateway-proto'
 import { isLoopbackAddress } from './auth/loopback'
 import { authorizeConnection } from './auth/token'
 import { broadcastEventToOperators } from './events/broadcast'
@@ -32,7 +33,10 @@ export interface StartGatewayOptions {
  *
  * 路径约定：
  * - `GET /health` — 纯 JSON 心跳；loopback 运维可用。
- * - `GET /ws`（with Upgrade）— WS 升级入口。
+ * - `GET /ws`（with Upgrade）— operator + 已配对 worker 的 WS 升级入口。
+ * - `GET /enroll-ws`（with Upgrade，PLAN-019）— OTP 自助入网专用通道；
+ *   gateway 仅接受 `enroll.mode='otp'` 的 connect，其它一律 close。Caddy 在
+ *   该 path 上不挂 basic-auth，把"陌生 worker"的入网面与 operator 通道隔开。
  * - 其它路径：404。
  */
 export function startGatewayServer(options: StartGatewayOptions): StartedGateway {
@@ -49,10 +53,11 @@ export function startGatewayServer(options: StartGatewayOptions): StartedGateway
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         )
       }
-      if (url.pathname === '/ws') {
+      if (url.pathname === '/ws' || url.pathname === '/enroll-ws') {
         const ip = serverRef.requestIP(req)
         const remoteAddress = ip?.address
         const loopback = isLoopbackAddress(remoteAddress)
+        const path: ConnectionPath = url.pathname === '/enroll-ws' ? '/enroll-ws' : '/ws'
         const upgraded = serverRef.upgrade(req, {
           data: {
             role: undefined,
@@ -62,6 +67,7 @@ export function startGatewayServer(options: StartGatewayOptions): StartedGateway
             remoteAddress,
             connectedAt: Date.now(),
             subscribedAll: true,
+            path,
           } satisfies ConnectionData,
         })
         if (upgraded)
@@ -96,6 +102,7 @@ export function startGatewayServer(options: StartGatewayOptions): StartedGateway
     context,
     stop: async () => {
       context.forwards.dispose()
+      context.pending?.dispose()
       await server.stop(true)
     },
   }
@@ -123,15 +130,27 @@ function handleMessage(
       ws.close(4400, 'connect_required')
       return
     }
-    const isSelfEnroll = frame.role === 'node' && frame.enroll !== undefined
+    // PLAN-019：mode='otp' 的 enroll 不走 join-token 验签——只在 /enroll-ws 路径
+    // 上有效，且 operator 端 approve 之前不应被认作 self-enroll。
+    const enrollMode = frame.role === 'node' && frame.enroll
+      ? (frame.enroll.mode ?? 'join-token')
+      : undefined
+    const isOtpEnrollSubmit = enrollMode === 'otp'
+    const isSelfEnroll = frame.role === 'node'
+      && frame.enroll !== undefined
+      && enrollMode === 'join-token'
     const authResult = authorizeConnection({
       loopback: ws.data.loopback,
       sharedSecret: config.internalSharedSecret,
       presentedToken: frame.auth.token,
       enrollToken: isSelfEnroll ? frame.enroll!.joinToken : undefined,
       gatewayJoinToken: config.joinToken,
+      path: ws.data.path,
+      isOtpEnrollSubmit,
     })
     if (!authResult.ok) {
+      // wrong_path:* 是协议层失败（4400），不是 token 失败（4401）。
+      const isWrongPath = authResult.reason.startsWith('wrong_path:')
       ctx.persistence.recordAudit({
         actor: 'gateway',
         action: 'gateway.connect.rejected',
@@ -141,9 +160,67 @@ function handleMessage(
           role: frame.role,
           agentId: frame.agentId,
           remoteAddress: ws.data.remoteAddress,
+          path: ws.data.path,
         },
       })
-      ws.close(4401, `auth:${authResult.reason}`)
+      const code = isWrongPath ? 4400 : 4401
+      const reason = isWrongPath ? authResult.reason : `auth:${authResult.reason}`
+      ws.close(code, reason)
+      return
+    }
+
+    // PLAN-019：OTP submit 分支 —— 不进 NodeRegistry，挂 pending 队列等 approve。
+    if (authResult.via === 'enroll-otp') {
+      if (!ctx.pending) {
+        ctx.logger.error('[gateway] /enroll-ws 收到 OTP submit 但 ctx.pending 未注入')
+        ws.close(4500, 'enroll_unavailable')
+        return
+      }
+      const enroll = frame.enroll!
+      const submission = ctx.pending.submit({
+        workerId: frame.agentId,
+        apiToken: enroll.apiToken,
+        displayName: enroll.displayName,
+        ws,
+      })
+      try {
+        ws.send(encodeFrame({
+          type: 'event',
+          name: EVENTS.ENROLLMENT_OTP,
+          payload: {
+            workerId: frame.agentId,
+            otp: submission.otp,
+            expiresAt: submission.expiresAt,
+          },
+          ts: Date.now(),
+        }))
+      }
+      catch (err) {
+        // 推送 OTP 失败 → worker 永远拿不到 OTP，留 pending 是悬挂行。
+        // 立即清表 + close ws，让 worker 端走重连重试，避免 silent hang。
+        ctx.pending.removeByWs(ws)
+        ctx.logger.warn(`[gateway] 推送 enrollment.otp 失败: ${(err as Error).message}`)
+        ws.close(4500, 'enroll_otp_send_failed')
+        return
+      }
+      ws.data.role = 'node-pending'
+      ws.data.agentId = frame.agentId
+      ws.data.deviceId = frame.deviceId
+      ctx.persistence.recordAudit({
+        actor: 'gateway',
+        action: 'gateway.enrollment.requested',
+        workerId: frame.agentId,
+        detail: {
+          workerId: frame.agentId,
+          displayName: enroll.displayName,
+          deviceId: frame.deviceId,
+          // 仅落 OTP 哈希前缀，避免明文 OTP 进 audit 表（PLAN-019 §Risks
+          // "OTP shoulder-surfing"）。
+          otpHash: hashOtpForAudit(submission.otp),
+          expiresAt: submission.expiresAt,
+          path: ws.data.path,
+        },
+      })
       return
     }
 
@@ -271,6 +348,13 @@ function handleMessage(
   }
 
   // === 握手后：按 role + frame.type 分流 ===
+  // PLAN-019：node-pending 是 OTP 中间态——尚未升级为 node，不允许发送任何
+  // request / response / event 帧。仅监听 close + 等 enroll.approve 触发的 push。
+  if (ws.data.role === 'node-pending') {
+    ctx.logger.warn(`[gateway] node-pending 端在 approve 前发送了 ${frame.type} 帧，忽略`)
+    return
+  }
+
   if (ws.data.role === 'operator') {
     if (frame.type === 'request') {
       const agentId = ws.data.agentId ?? 'unknown'
@@ -303,6 +387,27 @@ function handleClose(
   reason: string,
   ctx: GatewayContext,
 ): void {
+  if (ws.data.role === 'node-pending') {
+    // PLAN-019：worker 在 approve 前掉线——把 pending 队列里的占位清掉。
+    // approve / reject 路径在 S2 handler 内已经先 deleteEntry 了，所以这里
+    // removeByWs 通常 returns undefined（幂等）。
+    const entry = ctx.pending?.removeByWs(ws)
+    if (entry) {
+      ctx.persistence.recordAudit({
+        actor: 'gateway',
+        action: 'gateway.enrollment.abandoned',
+        workerId: entry.workerId,
+        detail: {
+          workerId: entry.workerId,
+          displayName: entry.displayName,
+          code,
+          reason,
+        },
+      })
+    }
+    ctx.logger.debug(`[gateway] node-pending ws closed (code=${code} reason=${reason})`)
+    return
+  }
   if (ws.data.role === 'operator') {
     ctx.operators.unregister(ws)
     ctx.forwards.cancelByOperator(ws)
@@ -344,6 +449,22 @@ function inferOfflineReason(code: number): 'disconnected' | 'expired' | 'kicked'
   if (code >= 4000 && code < 5000)
     return 'kicked'
   return 'expired'
+}
+
+/**
+ * PLAN-019 §Risks "OTP shoulder-surfing"：明文 OTP 不允许进 audit 表。仅取
+ * sha256 前 8 hex 作 fingerprint，足够对账某次 approve/reject 与 submit 配对，
+ * 但反推不出原 OTP。
+ *
+ * 后续可被审计的 audit action 列表（grep 锚点，方便排障）：
+ *   gateway.enrollment.requested  — OTP submit（S3 写入，本文件）
+ *   gateway.enrollment.approved   — operator approve（S2 enroll handler 写入）
+ *   gateway.enrollment.rejected   — operator reject（S2 enroll handler 写入）
+ *   gateway.enrollment.expired    — TTL 过期（S2 onExpire 写入）
+ *   gateway.enrollment.abandoned  — pending 期间 worker 掉线（S3 写入，本文件）
+ */
+function hashOtpForAudit(otp: string): string {
+  return createHash('sha256').update(otp).digest('hex').slice(0, 8)
 }
 
 // 用于测试：把已暴露的 handleMessage / handleClose 命名导出。

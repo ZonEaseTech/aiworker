@@ -1,5 +1,6 @@
 import type { ConsolaInstance } from 'consola'
 import type { ForwardTable, NodeRegistry, OperatorRegistry } from '../registry'
+import type { PendingEnrollmentRegistry } from '../registry/pending'
 import type { FleetPersistence } from '../registry/persistence'
 import type { FleetSupervisor } from '../supervisor/service'
 
@@ -24,6 +25,13 @@ export interface GatewayContext {
   supervisor?: FleetSupervisor | null
   /** `AIWORKER_MAX_WORKERS` 配额上限(可选)。 */
   maxWorkers?: number
+  /**
+   * PLAN-019：path-aware OTP enrollment 等待队列。`/enroll-ws` 入站连接 submit
+   * 后挂在这里，等 operator 通过 `enroll.approve` / `enroll.reject` 决断。
+   * 标记 optional 以便既有测试上下文（不涉及 OTP 路径）省略；server.ts 真正
+   * 进入 `/enroll-ws` 分支时再做存在性兜底。
+   */
+  pending?: PendingEnrollmentRegistry
 }
 
 /**
