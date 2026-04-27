@@ -4,9 +4,11 @@ import type {
   ExecutorProvider,
   WorkerConfig,
 } from '@zonease/aiworker-shared'
+import type { ManagementRoutesDeps } from './routes'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { OpenAPIHono } from '@hono/zod-openapi'
 import {
   ApprovalStore,
   ChannelRegistry,
@@ -18,6 +20,7 @@ import {
 import { closeWorkerDb, getWorkerDb, initWorkerDb, runWorkerMigrations } from '@zonease/aiworker-storage-sqlite/worker'
 
 import { beforeEach, describe, expect, it } from 'bun:test'
+import { buildBearerAuth } from './bearer-auth'
 import { buildManagementRoutes } from './routes'
 
 const MASTER_KEY = '00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff'
@@ -109,6 +112,20 @@ function authed(path: string, init: RequestInit = {}, token = STATE_TOKEN): Requ
   return new Request(`http://w${path}`, { ...init, headers })
 }
 
+/**
+ * BUG-015 之后 bearer-auth 由 `modes/worker.ts` 顶层挂在 `/api/worker/*`，
+ * management 自身不再持有中间件。测试需要还原 e2e 守门行为，因此在外层包一层
+ * 与 worker.ts 同形态的 wrapper：`app.use('*', bearerAuth)` + `app.route('/', mgmt)`。
+ */
+function buildWrapperApp(deps: ManagementRoutesDeps) {
+  const app = new OpenAPIHono()
+  app.use('*', buildBearerAuth({
+    getIdentity: () => ({ tokenPlaintext: deps.getState().tokenPlaintext }),
+  }))
+  app.route('/', buildManagementRoutes(deps))
+  return app
+}
+
 describe('buildManagementRoutes', () => {
   beforeEach(() => {
     // Each test owns a fresh DB + vault.
@@ -116,8 +133,8 @@ describe('buildManagementRoutes', () => {
 
   it('GET /info returns WorkerInfo shape', async () => {
     const { state } = await bootstrap()
-    const routes = buildManagementRoutes({ getState: () => state, reloadRuntime: async () => {} })
-    const res = await routes.fetch(authed('/info'))
+    const app = buildWrapperApp({ getState: () => state, reloadRuntime: async () => {} })
+    const res = await app.fetch(authed('/info'))
     expect(res.status).toBe(200)
     const body = await res.json() as Record<string, unknown>
     expect(body.workerId).toBe('w_abcdefghjkmn')
@@ -127,8 +144,8 @@ describe('buildManagementRoutes', () => {
 
   it('GET /info without a Bearer token returns 401 auth-failed', async () => {
     const { state } = await bootstrap()
-    const routes = buildManagementRoutes({ getState: () => state, reloadRuntime: async () => {} })
-    const res = await routes.fetch(new Request('http://w/info'))
+    const app = buildWrapperApp({ getState: () => state, reloadRuntime: async () => {} })
+    const res = await app.fetch(new Request('http://w/info'))
     expect(res.status).toBe(401)
     const body = await res.json() as { code: string }
     expect(body.code).toBe('auth-failed')
@@ -136,15 +153,15 @@ describe('buildManagementRoutes', () => {
 
   it('GET /info with the right Bearer token returns 200', async () => {
     const { state } = await bootstrap()
-    const routes = buildManagementRoutes({ getState: () => state, reloadRuntime: async () => {} })
-    const res = await routes.fetch(authed('/info'))
+    const app = buildWrapperApp({ getState: () => state, reloadRuntime: async () => {} })
+    const res = await app.fetch(authed('/info'))
     expect(res.status).toBe(200)
   })
 
   it('GET /config returns { config, version }', async () => {
     const { state } = await bootstrap()
-    const routes = buildManagementRoutes({ getState: () => state, reloadRuntime: async () => {} })
-    const res = await routes.fetch(authed('/config'))
+    const app = buildWrapperApp({ getState: () => state, reloadRuntime: async () => {} })
+    const res = await app.fetch(authed('/config'))
     expect(res.status).toBe(200)
     const body = await res.json() as { config: WorkerConfig, version: number }
     expect(body.version).toBe(1)
@@ -154,13 +171,13 @@ describe('buildManagementRoutes', () => {
   it('PUT /config bumps version, calls reloadRuntime with new config, returns runtimeReload=ok', async () => {
     const { state } = await bootstrap()
     let reloaded: { cfg: WorkerConfig, v: number } | null = null
-    const routes = buildManagementRoutes({
+    const app = buildWrapperApp({
       getState: () => state,
       reloadRuntime: async (cfg, v) => {
         reloaded = { cfg, v }
       },
     })
-    const res = await routes.fetch(authed('/config', {
+    const res = await app.fetch(authed('/config', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(validConfig()),
@@ -174,11 +191,11 @@ describe('buildManagementRoutes', () => {
 
   it('PUT /config surfaces runtimeReload=failed when reload throws', async () => {
     const { state } = await bootstrap()
-    const routes = buildManagementRoutes({
+    const app = buildWrapperApp({
       getState: () => state,
       reloadRuntime: async () => { throw new Error('boom') },
     })
-    const res = await routes.fetch(authed('/config', {
+    const res = await app.fetch(authed('/config', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(validConfig()),
@@ -191,8 +208,8 @@ describe('buildManagementRoutes', () => {
 
   it('PUT /config with If-Match mismatch returns 409', async () => {
     const { state } = await bootstrap()
-    const routes = buildManagementRoutes({ getState: () => state, reloadRuntime: async () => {} })
-    const res = await routes.fetch(authed('/config', {
+    const app = buildWrapperApp({ getState: () => state, reloadRuntime: async () => {} })
+    const res = await app.fetch(authed('/config', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', 'If-Match': '999' },
       body: JSON.stringify(validConfig()),
@@ -204,8 +221,8 @@ describe('buildManagementRoutes', () => {
 
   it('PUT /config with invalid body returns 400', async () => {
     const { state } = await bootstrap()
-    const routes = buildManagementRoutes({ getState: () => state, reloadRuntime: async () => {} })
-    const res = await routes.fetch(authed('/config', {
+    const app = buildWrapperApp({ getState: () => state, reloadRuntime: async () => {} })
+    const res = await app.fetch(authed('/config', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ brains: 'nope' }),
@@ -217,35 +234,35 @@ describe('buildManagementRoutes', () => {
 
   it('GET /secrets returns the vault keys after PUT /config', async () => {
     const { state } = await bootstrap()
-    const routes = buildManagementRoutes({ getState: () => state, reloadRuntime: async () => {} })
-    await routes.fetch(authed('/config', {
+    const app = buildWrapperApp({ getState: () => state, reloadRuntime: async () => {} })
+    await app.fetch(authed('/config', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(validConfig()),
     }))
-    const res = await routes.fetch(authed('/secrets'))
+    const res = await app.fetch(authed('/secrets'))
     const body = await res.json() as { keys: string[] }
     expect(body.keys).toContain('executor.overrides.apiKey')
   })
 
   it('PUT /secrets/:key round-trips through GET', async () => {
     const { state } = await bootstrap()
-    const routes = buildManagementRoutes({ getState: () => state, reloadRuntime: async () => {} })
-    const putRes = await routes.fetch(authed('/secrets/manual-key', {
+    const app = buildWrapperApp({ getState: () => state, reloadRuntime: async () => {} })
+    const putRes = await app.fetch(authed('/secrets/manual-key', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ value: 'rotated' }),
     }))
     expect(putRes.status).toBe(200)
-    const listRes = await routes.fetch(authed('/secrets'))
+    const listRes = await app.fetch(authed('/secrets'))
     const body = await listRes.json() as { keys: string[] }
     expect(body.keys).toContain('manual-key')
   })
 
   it('PUT /secrets/:key with empty value returns 400', async () => {
     const { state } = await bootstrap()
-    const routes = buildManagementRoutes({ getState: () => state, reloadRuntime: async () => {} })
-    const res = await routes.fetch(authed('/secrets/k', {
+    const app = buildWrapperApp({ getState: () => state, reloadRuntime: async () => {} })
+    const res = await app.fetch(authed('/secrets/k', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ value: '' }),
@@ -255,15 +272,15 @@ describe('buildManagementRoutes', () => {
 
   it('DELETE /secrets/:key returns 404 for unknown key', async () => {
     const { state } = await bootstrap()
-    const routes = buildManagementRoutes({ getState: () => state, reloadRuntime: async () => {} })
-    const res = await routes.fetch(authed('/secrets/absent', { method: 'DELETE' }))
+    const app = buildWrapperApp({ getState: () => state, reloadRuntime: async () => {} })
+    const res = await app.fetch(authed('/secrets/absent', { method: 'DELETE' }))
     expect(res.status).toBe(404)
   })
 
   it('POST /brain/test returns the brain probe response', async () => {
     const { state } = await bootstrap()
-    const routes = buildManagementRoutes({ getState: () => state, reloadRuntime: async () => {} })
-    const res = await routes.fetch(authed('/brain/test', { method: 'POST' }))
+    const app = buildWrapperApp({ getState: () => state, reloadRuntime: async () => {} })
+    const res = await app.fetch(authed('/brain/test', { method: 'POST' }))
     expect(res.status).toBe(200)
     const body = await res.json() as { brains: Array<{ status: string }> }
     expect(Array.isArray(body.brains)).toBe(true)
@@ -271,8 +288,8 @@ describe('buildManagementRoutes', () => {
 
   it('POST /executor/test runs the probe when body.probe=true', async () => {
     const { state } = await bootstrap()
-    const routes = buildManagementRoutes({ getState: () => state, reloadRuntime: async () => {} })
-    const res = await routes.fetch(authed('/executor/test', {
+    const app = buildWrapperApp({ getState: () => state, reloadRuntime: async () => {} })
+    const res = await app.fetch(authed('/executor/test', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ probe: true }),
@@ -284,8 +301,8 @@ describe('buildManagementRoutes', () => {
 
   it('POST /channels/:channel/test returns 404 for an unbound channel', async () => {
     const { state } = await bootstrap()
-    const routes = buildManagementRoutes({ getState: () => state, reloadRuntime: async () => {} })
-    const res = await routes.fetch(authed('/channels/telegram/test', {
+    const app = buildWrapperApp({ getState: () => state, reloadRuntime: async () => {} })
+    const res = await app.fetch(authed('/channels/telegram/test', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
@@ -295,29 +312,29 @@ describe('buildManagementRoutes', () => {
 
   it('POST /token/rotate returns a new token and rotates the in-memory state', async () => {
     const { state } = await bootstrap()
-    const routes = buildManagementRoutes({ getState: () => state, reloadRuntime: async () => {} })
+    const app = buildWrapperApp({ getState: () => state, reloadRuntime: async () => {} })
     const originalToken = state.tokenPlaintext
-    const res = await routes.fetch(authed('/token/rotate', { method: 'POST' }))
+    const res = await app.fetch(authed('/token/rotate', { method: 'POST' }))
     expect(res.status).toBe(200)
     const body = await res.json() as { newToken: string }
     expect(body.newToken).not.toBe(originalToken)
     expect(state.tokenPlaintext).toBe(body.newToken)
 
     // Old token is now rejected; new token is accepted.
-    const stale = await routes.fetch(authed('/info', {}, originalToken))
+    const stale = await app.fetch(authed('/info', {}, originalToken))
     expect(stale.status).toBe(401)
-    const fresh = await routes.fetch(authed('/info', {}, body.newToken))
+    const fresh = await app.fetch(authed('/info', {}, body.newToken))
     expect(fresh.status).toBe(200)
   })
 
   it('POST /reload succeeds and returns the current version', async () => {
     const { state } = await bootstrap()
     let called = 0
-    const routes = buildManagementRoutes({
+    const app = buildWrapperApp({
       getState: () => state,
       reloadRuntime: async () => { called += 1 },
     })
-    const res = await routes.fetch(authed('/reload', { method: 'POST' }))
+    const res = await app.fetch(authed('/reload', { method: 'POST' }))
     expect(res.status).toBe(200)
     const body = await res.json() as { ok: boolean, version: number }
     expect(body.ok).toBe(true)
@@ -327,11 +344,11 @@ describe('buildManagementRoutes', () => {
 
   it('POST /reload returns 500 when reloadRuntime throws', async () => {
     const { state } = await bootstrap()
-    const routes = buildManagementRoutes({
+    const app = buildWrapperApp({
       getState: () => state,
       reloadRuntime: async () => { throw new Error('nope') },
     })
-    const res = await routes.fetch(authed('/reload', { method: 'POST' }))
+    const res = await app.fetch(authed('/reload', { method: 'POST' }))
     expect(res.status).toBe(500)
     const body = await res.json() as { ok: boolean, error: string }
     expect(body.ok).toBe(false)
@@ -349,8 +366,8 @@ describe('buildManagementRoutes', () => {
     })
     try {
       const { state } = await bootstrap(processes)
-      const routes = buildManagementRoutes({ getState: () => state, reloadRuntime: async () => {} })
-      const res = await routes.fetch(authed('/runtime/processes/capacity'))
+      const app = buildWrapperApp({ getState: () => state, reloadRuntime: async () => {} })
+      const res = await app.fetch(authed('/runtime/processes/capacity'))
       expect(res.status).toBe(200)
       const body = await res.json() as {
         maxConcurrentTotal: number
@@ -386,8 +403,8 @@ describe('buildManagementRoutes', () => {
     })
     try {
       const { state } = await bootstrap(processes)
-      const routes = buildManagementRoutes({ getState: () => state, reloadRuntime: async () => {} })
-      const res = await routes.fetch(new Request('http://w/runtime/processes/capacity'))
+      const app = buildWrapperApp({ getState: () => state, reloadRuntime: async () => {} })
+      const res = await app.fetch(new Request('http://w/runtime/processes/capacity'))
       expect(res.status).toBe(401)
       const body = await res.json() as { code: string }
       expect(body.code).toBe('auth-failed')
@@ -399,8 +416,8 @@ describe('buildManagementRoutes', () => {
 
   it('GET /engines requires bearer auth', async () => {
     const { state } = await bootstrap()
-    const routes = buildManagementRoutes({ getState: () => state, reloadRuntime: async () => {} })
-    const res = await routes.fetch(new Request('http://w/engines'))
+    const app = buildWrapperApp({ getState: () => state, reloadRuntime: async () => {} })
+    const res = await app.fetch(new Request('http://w/engines'))
     expect(res.status).toBe(401)
     const body = await res.json() as { code: string }
     expect(body.code).toBe('auth-failed')
@@ -414,8 +431,8 @@ describe('buildManagementRoutes', () => {
       homedir: () => '/home/test',
       now: () => 1,
     })
-    const routes = buildManagementRoutes({ getState: () => state, reloadRuntime: async () => {} })
-    const res = await routes.fetch(authed('/engines'))
+    const app = buildWrapperApp({ getState: () => state, reloadRuntime: async () => {} })
+    const res = await app.fetch(authed('/engines'))
     expect(res.status).toBe(200)
     const body = await res.json() as {
       engines: Array<{ kind: string, agent?: string, status: string, authHint?: string }>
@@ -440,8 +457,8 @@ describe('buildManagementRoutes', () => {
     const { state } = await bootstrap()
     const store = state.runtime.approvals
     void store.wait({ taskId: 't-1', toolCallId: 'c-1', toolName: 'fs.write', params: { path: '/x' }, timeoutMs: 5_000 })
-    const routes = buildManagementRoutes({ getState: () => state, reloadRuntime: async () => {} })
-    const res = await routes.fetch(authed('/approvals'))
+    const app = buildWrapperApp({ getState: () => state, reloadRuntime: async () => {} })
+    const res = await app.fetch(authed('/approvals'))
     expect(res.status).toBe(200)
     const body = await res.json() as { approvals: Array<{ taskId: string, toolName: string }> }
     expect(body.approvals).toHaveLength(1)
@@ -453,8 +470,8 @@ describe('buildManagementRoutes', () => {
     const { state } = await bootstrap()
     const store = state.runtime.approvals
     const pending = store.wait({ taskId: 't-2', toolCallId: 'c-2', toolName: 'Read', params: {}, timeoutMs: 5_000 })
-    const routes = buildManagementRoutes({ getState: () => state, reloadRuntime: async () => {} })
-    const res = await routes.fetch(authed('/approvals/t-2/c-2/grant', {
+    const app = buildWrapperApp({ getState: () => state, reloadRuntime: async () => {} })
+    const res = await app.fetch(authed('/approvals/t-2/c-2/grant', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ decision: 'allow' }),
@@ -468,8 +485,8 @@ describe('buildManagementRoutes', () => {
 
   it('POST /approvals/:taskId/:toolCallId/grant 缺 decision → 400', async () => {
     const { state } = await bootstrap()
-    const routes = buildManagementRoutes({ getState: () => state, reloadRuntime: async () => {} })
-    const res = await routes.fetch(authed('/approvals/x/y/grant', {
+    const app = buildWrapperApp({ getState: () => state, reloadRuntime: async () => {} })
+    const res = await app.fetch(authed('/approvals/x/y/grant', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({}),
@@ -490,15 +507,15 @@ describe('buildManagementRoutes', () => {
       homedir: () => '/home/test',
       now: () => 1,
     })
-    const routes = buildManagementRoutes({ getState: () => state, reloadRuntime: async () => {} })
+    const app = buildWrapperApp({ getState: () => state, reloadRuntime: async () => {} })
 
-    await routes.fetch(authed('/engines'))
+    await app.fetch(authed('/engines'))
     const firstCount = binaryCalls
-    await routes.fetch(authed('/engines'))
+    await app.fetch(authed('/engines'))
     // Second call without refresh hits the in-memory cache.
     expect(binaryCalls).toBe(firstCount)
 
-    await routes.fetch(authed('/engines?refresh=1'))
+    await app.fetch(authed('/engines?refresh=1'))
     expect(binaryCalls).toBeGreaterThan(firstCount)
   })
 })

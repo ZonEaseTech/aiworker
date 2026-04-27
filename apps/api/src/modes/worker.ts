@@ -21,6 +21,7 @@ import { requestLogger } from '../shared/middleware/logger'
 import { buildChannelRoutes } from '../worker/channels/routes'
 import { buildEventRoutes } from '../worker/events/routes'
 import { evolutionRoutes } from '../worker/evolution/routes'
+import { buildBearerAuth } from '../worker/management/bearer-auth'
 import { buildManagementRoutes } from '../worker/management/routes'
 import { buildOrchestratorRoutes } from '../worker/orchestrator/routes'
 
@@ -167,6 +168,13 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     '/',
     buildChannelRoutes(() => state.runtime, state.workerId),
   )
+
+  // BUG-015: bearer-auth 必须挂在 `/api/worker/*` 顶层而非各 sub-router 内部，
+  // 否则 orchestrator / evolution / events 会落在防护外。`/health` 与 channels
+  // webhook 不在该前缀下，仍按原计划公开。
+  app.use('/api/worker/*', buildBearerAuth({
+    getIdentity: () => ({ tokenPlaintext: state.tokenPlaintext }),
+  }))
 
   app.route('/api/worker/orchestrator', buildOrchestratorRoutes(() => state.runtime))
   app.route('/api/worker/evolution', evolutionRoutes)

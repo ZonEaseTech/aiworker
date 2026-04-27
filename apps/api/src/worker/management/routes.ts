@@ -23,7 +23,6 @@ import { getWorkerDb } from '@zonease/aiworker-storage-sqlite/worker'
 import consola from 'consola'
 
 import { z } from 'zod'
-import { buildBearerAuth } from './bearer-auth'
 
 export interface ManagementRoutesDeps {
   getState: () => WorkerModeState
@@ -77,9 +76,9 @@ const cronUpdateBody = z.object({
 export function buildManagementRoutes(deps: ManagementRoutesDeps) {
   const routes = new OpenAPIHono()
 
-  routes.use('*', buildBearerAuth({
-    getIdentity: () => ({ tokenPlaintext: deps.getState().tokenPlaintext }),
-  }))
+  // bearer-auth 由 `apps/api/src/modes/worker.ts` 在顶层 `/api/worker/*` 挂载，
+  // 这里只负责业务路由本身。BUG-015 之前 auth 只挂在这个 sub-router 上，导致
+  // orchestrator / evolution / events 漏掉防护——见 docs/task/BUG-015.md。
 
   routes.get('/info', async (c) => {
     const state = deps.getState()
@@ -275,8 +274,8 @@ export function buildManagementRoutes(deps: ManagementRoutesDeps) {
   /**
    * PLAN-014 F2 — per-tool approvals 本地视图。aiw CLI 不经 gateway，
    * 直接读 worker 自身的内存 store；甚至 dev / debug 时操作员也可以手动 grant
-   * 跳过 gateway WS 路径。bearer-auth 中间件已经对所有 `/api/worker/*` 生效，
-   * 局域网外的访问者需要持 worker bearer token。
+   * 跳过 gateway WS 路径。bearer-auth 中间件由 `modes/worker.ts` 顶层在
+   * `/api/worker/*` 挂载，局域网外的访问者需要持 worker bearer token。
    */
   routes.get('/approvals', (c) => {
     const approvals = deps.getState().runtime.approvals
