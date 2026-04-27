@@ -1,9 +1,11 @@
 # PLAN-020 CLI rename to `aiworker` + npm publish under `@zonease/aiworker-cli`
 
-- **status**: implementing
+- **status**: completed
 - **createdAt**: 2026-04-27 07:35
 - **approvedAt**: 2026-04-27 07:45
-- **relatedTask**: FEAT-028 (rename) + FEAT-027 (publish)
+- **completedAt**: 2026-04-27 09:00
+- **relatedTask**: FEAT-028 (rename) + FEAT-027 (publish, partial)
+- **mergeCommits**: S1 `6927faf` / S2 `1fd2d67` / S3 `4d0fd24` / S4 `79cadd8`（main HEAD `79cadd8`）
 - **scope-update 2026-04-27 07:45**: 扩张到全 monorepo rename — 所有
   `@aiworker/*` 内部 package + apps/* package.json `name` 字段统一迁到
   `@zonease/aiworker-*` namespace（用户决策：proceed + 同步全包改名）。

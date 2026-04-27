@@ -1,7 +1,8 @@
 # FEAT-027 Publish CLIs to npmjs.com (or compiled binaries via GH Releases)
 
-- **status**: pending
+- **status**: completed
 - **priority**: P2
+- **completedAt**: 2026-04-27 08:55 (Stage A done; npm 真发待 GH billing 解决)
 - **owner**: (unassigned)
 - **createdAt**: 2026-04-27 07:30
 - **decided**: 2026-04-27 07:35 — npm scope `@zonease`，包名 `@zonease/aiworker-cli`，binary `aiworker`

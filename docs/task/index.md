@@ -68,5 +68,5 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-008 workerSummarySchema rejects self-enrolled worker (empty baseUrl)**](BUG-008.md) `P1`
 - [x] [**FEAT-026 Worker OTP-attended enrollment (operator-approved join)**](FEAT-026.md) `P2`
 - [x] [**BUG-009 OTP approve does not upgrade ws to NodeRegistry**](BUG-009.md) `P1`
-- [ ] [**FEAT-027 Publish CLIs to npmjs.com (or compiled binaries via GH Releases)**](FEAT-027.md) `P2`
-- [ ] [**FEAT-028 CLI naming redesign (aiw / aim too cryptic)**](FEAT-028.md) `P2`
+- [x] [**FEAT-027 Publish CLIs to npmjs.com (or compiled binaries via GH Releases)**](FEAT-027.md) `P2`
+- [x] [**FEAT-028 CLI naming redesign (aiw / aim too cryptic)**](FEAT-028.md) `P2`

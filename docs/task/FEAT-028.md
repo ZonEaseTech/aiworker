@@ -1,7 +1,8 @@
 # FEAT-028 CLI naming redesign (aiw / aim too cryptic)
 
-- **status**: pending
+- **status**: completed
 - **priority**: P1
+- **completedAt**: 2026-04-27 08:55
 - **owner**: (unassigned)
 - **createdAt**: 2026-04-27 07:30
 - **decided**: 2026-04-27 07:35 — 方案 B + binary 名 `aiworker` + npm 包 `@zonease/aiworker-cli`；no backwards-compat shim（用户明确不需要：aiw/aim 从未发布过）
