@@ -79,7 +79,7 @@ function makeConfig(overrides: Partial<GatewayConfig> = {}): GatewayConfig {
     supervisor: {
       dockerHost: '/var/run/docker.sock',
       network: 'aiworker_default',
-      launchBaseUrlTemplate: 'http://{containerName}:3001',
+      launchBaseUrlTemplate: 'http://{containerName}:9217',
     },
     ...overrides,
   }

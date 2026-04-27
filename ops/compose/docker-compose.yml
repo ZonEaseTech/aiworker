@@ -17,10 +17,10 @@ services:
     restart: unless-stopped
     command: [bun, apps/gateway/src/index.ts]
     ports:
-      - '127.0.0.1:3000:3000'
+      - '127.0.0.1:9218:9218'
     environment:
       NODE_ENV: production
-      AIWORKER_GATEWAY_PORT: '3000'
+      AIWORKER_GATEWAY_PORT: '9218'
       AIWORKER_GATEWAY_HOST: 0.0.0.0
       AIWORKER_FLEET_DB_PATH: /var/lib/aiworker/fleet.db
       AIWORKER_MASTER_KEY: ${AIWORKER_MASTER_KEY}

@@ -29,15 +29,15 @@ services:
     image: ghcr.io/zoneasetech/aiworker:${AIWORKER_IMAGE_TAG:-latest}-full
     container_name: aiworker-worker-example
     restart: unless-stopped
-    # Worker listens on 3001. Expose it to the dashboard's network (same
-    # compose, same docker network, or a proxy fronted by HTTPS) — here we
-    # only bind loopback so operators can curl it for smoke tests.
+    # Worker listens on 9217 (FEAT-030). Expose it to the dashboard's network
+    # (same compose, same docker network, or a proxy fronted by HTTPS) — here
+    # we only bind loopback so operators can curl it for smoke tests.
     ports:
-      - '127.0.0.1:3001:3001'
+      - '127.0.0.1:9217:9217'
     environment:
       AIWORKER_MODE: worker
       NODE_ENV: production
-      PORT: '3001'
+      PORT: '9217'
 
       # REQUIRED. 32-byte hex (64 chars). Worker-local encryption key for
       # worker_secrets + worker_identity. Generate once per worker:
@@ -57,7 +57,7 @@ services:
       # OPTIONAL. External URL the manager will hit for proxy calls. Only
       # needed when the worker is reachable at a different hostname than
       # the one the operator typed into the Register dialog's Base URL.
-      # AIWORKER_ADVERTISED_BASE_URL: http://aiworker-worker-example:3001
+      # AIWORKER_ADVERTISED_BASE_URL: http://aiworker-worker-example:9217
 
       # OPTIONAL (FEAT-015). Slot budget overrides for ProcessManager.
       # MAX_CONCURRENT_TOTAL: '4'

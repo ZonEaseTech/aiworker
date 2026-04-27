@@ -36,9 +36,9 @@ services:
 
       # compose 会按 `name: aiworker` 的前缀自动建 `<name>_default` 网络;
       # gateway 与被 spawn 的 worker 容器都接这个网络,
-      # http://{containerName}:3001 才能互相解析。
+      # http://{containerName}:9217 才能互相解析（FEAT-030）。
       AIWORKER_NETWORK: aiworker_default
-      AIWORKER_LAUNCH_BASE_URL_TEMPLATE: ${AIWORKER_LAUNCH_BASE_URL_TEMPLATE:-http://{containerName}:3001}
+      AIWORKER_LAUNCH_BASE_URL_TEMPLATE: ${AIWORKER_LAUNCH_BASE_URL_TEMPLATE:-http://{containerName}:9217}
 
     volumes:
       # docker.sock:只读足够 create/start/stop/logs。严禁挂入前请确认 gateway

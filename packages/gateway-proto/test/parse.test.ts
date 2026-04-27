@@ -335,7 +335,7 @@ describe('parseFrame', () => {
     expect(workerSummarySchema.safeParse({
       workerId: 'w_pair',
       online: true,
-      baseUrl: 'http://10.0.0.1:3001',
+      baseUrl: 'http://10.0.0.1:9217',
     }).success).toBe(true)
   })
 })

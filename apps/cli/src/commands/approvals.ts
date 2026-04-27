@@ -14,7 +14,7 @@ import { loadWorkerContext } from '../context'
  * 看到当前挂起请求；不需要 gateway / aim 操作员链路。
  *
  * 端口与 token 的获取：
- * - port 取 `workerEnv.PORT`（env 或 .env，默认 3000）。
+ * - port 取 `workerEnv.PORT`（env 或 .env，默认 9217）。
  * - token 由 `loadWorkerContext()` 从 worker.db / vault 解密拿到。
  */
 

@@ -1,10 +1,10 @@
 # Gateway 协议
 
-PLAN-013 引入的 WebSocket 控制面：operator（aiworker CLI / web）与 node（worker 容器）共享同一条 `ws://<host>:3000/ws` 入口，按 role 分流。协议的纯类型 + zod 运行时校验全部在 `@zonease/aiworker-gateway-proto`，供 aiworker CLI、gateway、worker、web 四侧复用。
+PLAN-013 引入的 WebSocket 控制面：operator（aiworker CLI / web）与 node（worker 容器）共享同一条 `ws://<host>:9218/ws` 入口，按 role 分流。协议的纯类型 + zod 运行时校验全部在 `@zonease/aiworker-gateway-proto`，供 aiworker CLI、gateway、worker、web 四侧复用。
 
 ## 概览
 
-- 服务端实现：`apps/gateway/src/server.ts`（`Bun.serve(:3000, { websocket })`）。
+- 服务端实现：`apps/gateway/src/server.ts`（`Bun.serve(:9218, { websocket })`）。
 - 路径：
   - `GET /health` — JSON 心跳（`{ ok, service: 'aiworker-gateway', ts }`）；loopback / Caddy / 部署脚本 readiness 探针用。
   - `GET /ws` — WebSocket 升级端点（必需 `Upgrade: websocket`）。
@@ -167,8 +167,8 @@ gateway 自己在 close WS 时派发 `worker.offline`（`inferOfflineReason` 把
 2. 操作员抓取这一行（`docker logs <worker-container>`）。
 3. 运行 aiworker CLI：
    ```sh
-   aiworker pair --url ws://127.0.0.1:3000/ws \
-                 --worker-url http://aiworker-worker:3001 \
+   aiworker pair --url ws://127.0.0.1:9218/ws \
+                 --worker-url http://aiworker-worker:9217 \
                  --bootstrap-token wtk_xxxxxxxxxxxx \
                  --display-name test
    ```

@@ -17,7 +17,7 @@
 - 前后端 API 文档以代码为准（OpenAPIHono `app.doc('/openapi.json')` + `/docs`）。新增/修改 API 时必须同步更新两侧。
 - 部署优先级：docker compose > docker run > 裸机；**镜像在 GitHub Actions 构建**（`.github/workflows/build-image.yml` → 私有 GHCR `ghcr.io/zoneasetech/aiworker`），主机 `docker compose pull` 即可；绝不在远端服务器上编译，也不再在本地 `docker build`。
 - 产线部署走 `scripts/deploy.ts`（aissh 驱动：`login-ghcr` → `build`（触发 workflow + 等完成）→ `upload`（compose + Caddyfile + .env）→ `install`（compose pull + up -d）→ `verify` → `reload-caddy`）。详细 run book 以 `docs/deployment.md` 为准；历史部署记录在 `docs/task/FEAT-009.md` 的 "Deploy records" 表。
-- 测试机（唯一当前 target）：aissh server id `<aissh-server-id-redacted>`（`aiwork`，`<test-server-ip-redacted>`）；公网入口 `https://gateway.example.test`（Cloudflare 橙云代理终止 TLS，回源走 HTTP :80）；Caddy 是纯 `:80 → 127.0.0.1:3000` 反代，dashboard 容器自身托管 `/app/web` 静态资源；`AIWORKER_MASTER_KEY` 丢失=全部已注册 worker 失联，务必在组织密钥库备份。
+- 测试机（唯一当前 target）：aissh server id `<aissh-server-id-redacted>`（`aiwork`，`<test-server-ip-redacted>`）；公网入口 `https://gateway.example.test`（Cloudflare 橙云代理终止 TLS，回源走 HTTP :80）；Caddy 是纯 `:80 → 127.0.0.1:9218` 反代（FEAT-030 起 9218 取代 3000），dashboard 容器自身托管 `/app/web` 静态资源；`AIWORKER_MASTER_KEY` 丢失=全部已注册 worker 失联，务必在组织密钥库备份。
 
 ## Project Development
 

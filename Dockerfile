@@ -76,8 +76,8 @@ COPY --from=build /app/apps/api/package.json /app/apps/api/package.json
 COPY --from=build /app/apps/cli/package.json /app/apps/cli/package.json
 COPY --from=build /app/apps/web/package.json /app/apps/web/package.json
 ENV NODE_ENV=production
-# 3000 = gateway (compose 显式覆盖 command);3001 = worker (默认 ENTRYPOINT)。
-EXPOSE 3000 3001
+# FEAT-030: 9218 = gateway (compose 显式覆盖 command);9217 = worker (默认 ENTRYPOINT)。
+EXPOSE 9217 9218
 ENTRYPOINT ["/usr/bin/tini", "--", "bun", "run", "dist/index.js"]
 
 # ---- runtime-full ----

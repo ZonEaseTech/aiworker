@@ -1,5 +1,38 @@
 # AIWorker Changelog
 
+## 2026-04-27 10:50 [progress] FEAT-030 followup — 全仓 3000/3001 → 9217/9218 端口语义统一
+
+用户反馈"只要需要用到端口，就往 9217 后排"——上一轮 FEAT-030 仅改了 schema 默认值，留下大量 compose / Dockerfile / 测试 fixture / 活跃文档仍然引用旧 3000/3001。本次一次性 sweep：
+
+**代码层（影响实际行为）：**
+- `Dockerfile` `EXPOSE 3000 3001 → 9217 9218` + 注释更新
+- `docker-compose.yml` + `ops/compose/docker-compose.yml`：gateway port `3000:3000 → 9218:9218` + `PORT/AIWORKER_GATEWAY_PORT 3000 → 9218`
+- `ops/compose/docker-compose.worker.example.yml`：worker port `3001:3001 → 9217:9217` + `PORT '3001' → '9217'` + advertised baseUrl 注释 → `:9217`
+- `ops/compose/docker-compose.supervisor.yml` + `apps/gateway/src/supervisor/service.ts` 注释：`{containerName}:3001 → :9217`
+- `scripts/deploy.ts` health check `:3000 → :9218`
+- `apps/cli/src/aim/daemon.ts` PORT default `'3000' → '9218'`（gateway daemon entry）
+- `apps/cli/src/commands/approvals.ts` 注释默认 → `9217`
+
+**测试 fixture（保持端口语义一致）：**
+- `apps/gateway/test/{enroll,enroll-otp-handshake,workers-pair,workers-launch}.test.ts`：所有 `:3001` baseUrl / launchBaseUrlTemplate → `:9217`
+- `packages/gateway-proto/test/parse.test.ts` 同上
+
+**活跃文档（反映新现状）：**
+- `CLAUDE.md` Caddy 反代描述 `:80 → 127.0.0.1:3000` → `:80 → 127.0.0.1:9218`
+- `docs/architecture.md` / `docs/gateway.md` / `docs/deployment.md` / `docs/deployment-public-https.md` 全部 `:3000 → :9218`、`:3001 → :9217`、`AIWORKER_GATEWAY_PORT=3000` → `9218`、`--port 3001` → `9217` etc.
+
+**保留不动（历史决策快照）：**
+- `docs/plan/PLAN-001~PLAN-019.md`、`docs/task/BUG-007.md` / `BUG-002.md` / `BUG-010.md` / `FEAT-009.md` / `FEAT-017.md` / `FEAT-024.md` / `docs/changelog.md` 旧条目——这些是当时决策的现场，端口数字是史料。
+- `.playwright-mcp/page-*.yml` 测试快照——一次性 capture，无需追溯。
+
+**生产部署迁移 run book**（次次部署前 must do）：
+1. 改 prod `/etc/aiworker/gateway.env`：删除 `AIWORKER_GATEWAY_PORT=3000`（让默认 9218 生效），或显式改为 `9218`
+2. `scripts/deploy.ts deploy` upload + install 拉新镜像、新 compose、新端口映射
+3. 改 prod Caddy `reverse_proxy 127.0.0.1:3000` → `9218` + reload
+4. verify `curl http://127.0.0.1:9218/health` 200
+
+typecheck 9/9 + gateway 87 / cli 34 / gateway-proto 19 test 全 pass。bundle 未变（0.72 MB）。
+
 ## 2026-04-27 10:30 [progress] FEAT-030 完成 — 零 env quickstart：动态版本 + 默认端口 9217/9218 + 首次启动自动 mint master key
 
 `@zonease/aiworker-cli@0.1.0` 首发后用户反馈：版本号写死（`aiworker --version` 印 `0.3.0`，npm 印 `0.1.0`）、默认端口 3000/3001 与 dev 高频段冲突、新用户必须手动 `export AIWORKER_MASTER_KEY` 才能跑 `aiworker init` 友好度差。本次三件套修复：

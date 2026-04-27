@@ -185,7 +185,8 @@ export async function startDaemon(opts: StartDaemonOptions = {}): Promise<StartD
   await ensureAiworkerHomeDir()
 
   const entry = resolveGatewayEntry(opts.entry)
-  const port = opts.port ?? Number.parseInt(process.env.PORT ?? '3000', 10)
+  // FEAT-030: gateway daemon 默认 9218（与 apps/gateway/src/config.ts 对齐）。
+  const port = opts.port ?? Number.parseInt(process.env.PORT ?? '9218', 10)
   if (!Number.isFinite(port) || port <= 0 || port > 65_535)
     throw new Error(`非法端口: ${port}`)
 

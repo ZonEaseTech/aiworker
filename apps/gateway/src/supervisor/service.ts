@@ -122,7 +122,7 @@ export class FleetSupervisor {
 
   /**
    * gateway 自检:必须是 `AIWORKER_NETWORK` 的成员,否则新拉的 worker 容器在
-   * `http://{containerName}:3001` 只对**同网络**的容器可达,gateway 对其 `/info`
+   * `http://{containerName}:9217` 只对**同网络**的容器可达,gateway 对其 `/info`
    * 探测会静默 502,fleet 行永远处于 `offline`。
    *
    * soft-fail 语义:

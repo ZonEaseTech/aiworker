@@ -44,15 +44,15 @@ export AIWORKER_MASTER_KEY=$(openssl rand -hex 32)
 export INTERNAL_SHARED_SECRET=$(openssl rand -base64 24)
 
 # 3. 终端 A：拉起 gateway 前台（fleet.db 自动落 ~/.aiworker/fleet.db）。
-aiworker gateway start --port 3000
+aiworker gateway start --port 9218
 
-# 4. 终端 B：拉起 worker 前台（HTTP :3001 + 同机注册到 gateway）。
+# 4. 终端 B：拉起 worker 前台（HTTP :9217 + 同机注册到 gateway）。
 aiworker init                 # 首次：mint identity + bootstrap token（输出一次）
-aiworker serve --port 3001 --gateway ws://127.0.0.1:3000/ws
+aiworker serve --port 9217 --gateway ws://127.0.0.1:9218/ws
 
 # 5. 终端 C：从 worker stdout 抓 wtk_... 后 pair。
-aiworker pair --url ws://127.0.0.1:3000/ws \
-              --worker-url http://127.0.0.1:3001 \
+aiworker pair --url ws://127.0.0.1:9218/ws \
+              --worker-url http://127.0.0.1:9217 \
               --bootstrap-token wtk_xxxxxxxxxxxx \
               --display-name dev-1
 aiworker fleet list
@@ -96,7 +96,7 @@ systemctl status aiworker-gateway
 journalctl -u aiworker-gateway -f
 
 # /health（无论哪种实例）：
-curl -fsS http://127.0.0.1:3000/health
+curl -fsS http://127.0.0.1:9218/health
 # => {"ok":true,"service":"aiworker-gateway","ts":...}
 ```
 
@@ -136,7 +136,7 @@ docker compose pull
 docker compose up -d
 
 # 4. /health。
-curl -fsS http://127.0.0.1:3000/health
+curl -fsS http://127.0.0.1:9218/health
 ```
 
 操作员侧的 pair / launch 流程同形态一、二（`aiworker pair` / `aiworker fleet launch`）。
@@ -165,7 +165,7 @@ curl -fsS http://127.0.0.1:3000/health
 
 ## 公网 HTTPS / channel webhook 暴露
 
-Telegram / WhatsApp / Lark / LINE webhook 必须能从公网回调到 gateway 才能收消息。把这一层（Cloudflare orange-cloud + Caddy `:80 → 127.0.0.1:3000` 反代 + 公开域名）单独拆到 [`deployment-public-https.md`](./deployment-public-https.md)，按需叠加到形态二或形态三上。
+Telegram / WhatsApp / Lark / LINE webhook 必须能从公网回调到 gateway 才能收消息。把这一层（Cloudflare orange-cloud + Caddy `:80 → 127.0.0.1:9218` 反代 + 公开域名）单独拆到 [`deployment-public-https.md`](./deployment-public-https.md)，按需叠加到形态二或形态三上。
 
 > **如果你打算自己加 Caddy / nginx 反代到 gateway**：必须先读 [`deployment-public-https.md` § Caddy basic-auth setup (BUG-007)](./deployment-public-https.md#caddy-basic-auth-setup-bug-007)。Gateway 的 loopback authN 在反代后会失效——任何能 hit 反代的请求都会被识别为 loopback 通过认证。Caddy 必须自己叠 basic-auth / IP allowlist / Cloudflare Access 等手段。
 
@@ -179,8 +179,8 @@ PLAN-013 之后 dashboard REST 已下线，注册一个 worker 进 fleet 有四�
 
 1. **手动 pair**（任意形态都通用）：worker 首启时 stdout 打一次性 `AIWORKER_BOOTSTRAP_TOKEN=wtk_...`；操作员抓取后调
    ```sh
-   aiworker pair --url ws://<gateway>:3000/ws \
-                 --worker-url http://<worker-host>:3001 \
+   aiworker pair --url ws://<gateway>:9218/ws \
+                 --worker-url http://<worker-host>:9217 \
                  --bootstrap-token wtk_xxxxxxxxxxxx \
                  --display-name <name>
    ```
@@ -193,9 +193,9 @@ worker baseUrl 是 worker HTTP 根（scheme + host/port，无 path）：
 
 | 拓扑 | 示例 baseUrl |
 |------|--------------|
-| 同机裸跑 | `http://127.0.0.1:3001` |
-| 同 compose 网络 | `http://aiworker-worker:3001` |
-| 跨主机直暴端口 | `http://<test-server-ip-redacted>:3001` |
+| 同机裸跑 | `http://127.0.0.1:9217` |
+| 同 compose 网络 | `http://aiworker-worker:9217` |
+| 跨主机直暴端口 | `http://<test-server-ip-redacted>:9217` |
 | 跨主机 HTTPS 反代 | `https://worker-1.example.com` |
 
 完整命令选项见 [`docs/cli.md`](./cli.md)。
@@ -224,7 +224,7 @@ export AIWORKER_JOIN_TOKEN=<上面那串>
 ### 2. Worker 侧三件套 env
 
 ```sh
-AIWORKER_GATEWAY_URL=ws://gateway-host:3000/ws        # 或 wss://...
+AIWORKER_GATEWAY_URL=ws://gateway-host:9218/ws        # 或 wss://...
 AIWORKER_JOIN_TOKEN=<同上 gateway 侧>
 AIWORKER_DISPLAY_NAME=prod-1                          # 可选；缺省回落 workerId
 ```
@@ -235,14 +235,14 @@ AIWORKER_DISPLAY_NAME=prod-1                          # 可选；缺省回落 wo
 
 ```sh
 # 任何形态：裸跑、systemd、docker。
-aiworker serve --port 3001
+aiworker serve --port 9217
 # 等价 systemd unit 片段：
 # [Service]
 # Environment=AIWORKER_MASTER_KEY=...
 # Environment=AIWORKER_GATEWAY_URL=wss://aiw.example.com/ws
 # Environment=AIWORKER_JOIN_TOKEN=<shared>
 # Environment=AIWORKER_DISPLAY_NAME=prod-1
-# ExecStart=/usr/local/bin/aiworker serve --port 3001
+# ExecStart=/usr/local/bin/aiworker serve --port 9217
 ```
 
 5 秒内从 gateway 侧 `aiworker fleet list` 应见到该 worker：`online: true`、`addedBy: 'self-enroll'`、`displayName` 与 env 一致。
@@ -255,7 +255,7 @@ aiworker serve --port 3001
   - 旋转 token：改 gateway env 后重启 gateway——已自助入网的 worker 用既有 fleet 行 reconnect 不带 enroll 块、不受影响；新 worker / 重新带 enroll 的连接必须用新 token，否则 `4401 auth:join_token_mismatch`。
 - **Worker 端 apiToken 仍由 worker 容器自身 mint**（不变量同手动 pair 路径）；enroll 块只是把这枚已 mint 的 apiToken 传给 gateway 做 fleet 行加密落库的输入，bootstrap stdout 行不再被任何 operator 抓取。
 - **`displayName` 变更不旋转 apiToken**——同 workerId 重新带 enroll、`displayName` 不同：fleet 行只改名 + `lastSeenAt`，apiToken 密文保留；同名 reconnect 走 `unchanged` 路径，**不**写 `gateway.worker.enrolled` audit（仅 created / updated 才写，避免 reconnect 风暴）。
-- **公网部署**：BUG-007 起 Caddy basic-auth 是必备一层，self-enroll 流量同样 `:80 → :3000` 经过 Caddy；worker 端 `AIWORKER_GATEWAY_URL` 必须按 `wss://operator:<pwd>@host/ws` 形式携带 basicauth。详见 [`deployment-public-https.md` § Caddy basic-auth setup (BUG-007)](./deployment-public-https.md#caddy-basic-auth-setup-bug-007)。
+- **公网部署**：BUG-007 起 Caddy basic-auth 是必备一层，self-enroll 流量同样 `:80 → :9218` 经过 Caddy；worker 端 `AIWORKER_GATEWAY_URL` 必须按 `wss://operator:<pwd>@host/ws` 形式携带 basicauth。详见 [`deployment-public-https.md` § Caddy basic-auth setup (BUG-007)](./deployment-public-https.md#caddy-basic-auth-setup-bug-007)。
 
 ### 5. 常见排错
 
@@ -287,7 +287,7 @@ export AIWORKER_ENROLL_OTP_TTL_SEC=300
 ### 2. Worker 侧 env
 
 ```sh
-AIWORKER_GATEWAY_URL=ws://gateway-host:3000/ws        # 或 wss://...
+AIWORKER_GATEWAY_URL=ws://gateway-host:9218/ws        # 或 wss://...
 AIWORKER_DISPLAY_NAME=ben-laptop                       # 可选；缺省回落 workerId
 # AIWORKER_JOIN_TOKEN 不设 → 自动落 OTP 模式；
 # 若同时设了 JOIN_TOKEN 又想强制 OTP（attended）：
@@ -310,13 +310,13 @@ AIWORKER_ENROLL_MODE=otp                               # 显式 'otp'，忽略 J
 
 ```sh
 # 任何形态：裸跑 / systemd / docker。
-aiworker serve --port 3001
+aiworker serve --port 9217
 ```
 
 stdout 第一时间会打方框形 OTP，附 expires-in 倒计时：
 
 ```text
-[aiworker serve] OTP enrolling to ws://gateway-host:3000/enroll-ws; awaiting operator approval
+[aiworker serve] OTP enrolling to ws://gateway-host:9218/enroll-ws; awaiting operator approval
 
 ┌──────────────────────────┐
 │  OTP:  BX7P-K39M         │
@@ -385,16 +385,16 @@ approve 后 worker 端会打 `[aiworker serve] approved as w_xxx; deviceToken=wt
 
   handle /ws {
     import /etc/caddy/auth.snippet           # operator + 已配对 worker reconnect
-    reverse_proxy 127.0.0.1:3000 { ... }
+    reverse_proxy 127.0.0.1:9218 { ... }
   }
 
   handle /enroll-ws {
     # PLAN-019 OTP-attended enrollment 通道，无 basicauth。
     # gateway 路径感知 authN 拒绝任何非 OTP connect 帧（4400 wrong_path）。
-    reverse_proxy 127.0.0.1:3000 { ... }
+    reverse_proxy 127.0.0.1:9218 { ... }
   }
 
-  handle /health { import /etc/caddy/auth.snippet; reverse_proxy 127.0.0.1:3000 }
+  handle /health { import /etc/caddy/auth.snippet; reverse_proxy 127.0.0.1:9218 }
   handle { respond 404 }
 }
 ```

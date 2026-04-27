@@ -25,14 +25,14 @@ Cloudflare（orange-cloud, TLS 终止）
         │   https://gateway.example.test
         │   回源 http :80
         ▼
-Caddy :80（纯反代）  ──►  127.0.0.1:3000  =  aiworker-gateway 容器
+Caddy :80（纯反代）  ──►  127.0.0.1:9218  =  aiworker-gateway 容器
                                              │
                                              │ WS /ws
                                              ├─◄ operator：aim CLI + web
                                              │
                                              ├─► node：aiworker-worker-* 容器
                                              │     （同镜像，command: bun run dist/index.js）
-                                             │     可选 `--gateway ws://gateway:3000/ws`
+                                             │     可选 `--gateway ws://gateway:9218/ws`
                                              │
                                              ├─ fleet.db（volume aiworker_fleet）
                                              └─（可选）docker.sock:ro + WORKER_DATA_ROOT
@@ -41,9 +41,9 @@ Caddy :80（纯反代）  ──►  127.0.0.1:3000  =  aiworker-gateway 容器
 
 - **gateway 容器**是控制面入口（Bun.serve WS）。`/ws` 承接升级，`/health` 返回 JSON 心跳。
 - 浏览器与 `aim` CLI 都走同一个 `/ws` 路径。
-- TLS 在 Cloudflare 终止，回源 HTTP `:80`；Caddy 是纯 `:80 → 127.0.0.1:3000` 反代，`flush_interval -1` + `read_timeout 0` 保证 WebSocket 不被切流。
+- TLS 在 Cloudflare 终止，回源 HTTP `:80`；Caddy 是纯 `:80 → 127.0.0.1:9218` 反代，`flush_interval -1` + `read_timeout 0` 保证 WebSocket 不被切流。
 
-> 你可以把 Cloudflare 换成 Cloudflare Zero Trust / Tailscale Funnel / 自家 ALB，把 Caddy 换成 nginx / Traefik——只要终结 TLS 后能把 WebSocket 透到 `127.0.0.1:3000` 即可。
+> 你可以把 Cloudflare 换成 Cloudflare Zero Trust / Tailscale Funnel / 自家 ALB，把 Caddy 换成 nginx / Traefik——只要终结 TLS 后能把 WebSocket 透到 `127.0.0.1:9218` 即可。
 
 ---
 
@@ -93,16 +93,16 @@ Caddy :80（纯反代）  ──►  127.0.0.1:3000  =  aiworker-gateway 容器
 
 - 镜像：`ghcr.io/zoneasetech/aiworker:${AIWORKER_IMAGE_TAG}${AIWORKER_IMAGE_VARIANT_SUFFIX}`
 - 启动命令：`bun apps/gateway/src/index.ts`（覆盖 Dockerfile 默认 `bun run dist/index.js` 的 worker 入口）
-- 端口：`127.0.0.1:3000:3000`（WS + `/health` 都走这个）
-- 关键 env：`AIWORKER_GATEWAY_HOST=0.0.0.0` / `AIWORKER_GATEWAY_PORT=3000` / `AIWORKER_FLEET_DB_PATH=/var/lib/aiworker/fleet.db` / `AIWORKER_MASTER_KEY` / `INTERNAL_SHARED_SECRET`
+- 端口：`127.0.0.1:9218:9218`（WS + `/health` 都走这个）
+- 关键 env：`AIWORKER_GATEWAY_HOST=0.0.0.0` / `AIWORKER_GATEWAY_PORT=9218` / `AIWORKER_FLEET_DB_PATH=/var/lib/aiworker/fleet.db` / `AIWORKER_MASTER_KEY` / `INTERNAL_SHARED_SECRET`
 - 卷：`aiworker_fleet:/var/lib/aiworker`（fleet.db 持久化）
 
 Dockerfile 单镜像两种入口（见 `Dockerfile` 顶部注释）：
 
-- **gateway**（控制面）：compose 显式设置 `command: ['bun', 'apps/gateway/src/index.ts']`，监听 3000/tcp（WS）。
-- **worker**（数据面）：`ENTRYPOINT ["/usr/bin/tini", "--", "bun", "run", "dist/index.js"]`（镜像默认），监听 3001/tcp（HTTP）；由 `aim workers launch` 或独立的 worker compose 拉起。
+- **gateway**（控制面）：compose 显式设置 `command: ['bun', 'apps/gateway/src/index.ts']`，监听 9218/tcp（WS，FEAT-030）。
+- **worker**（数据面）：`ENTRYPOINT ["/usr/bin/tini", "--", "bun", "run", "dist/index.js"]`（镜像默认），监听 9217/tcp（HTTP，FEAT-030）；由 `aim workers launch` 或独立的 worker compose 拉起。
 
-Caddy（`ops/caddy/Caddyfile.tmpl`）反代 `:80 → 127.0.0.1:3000`，TLS 由 Cloudflare 橙云代理终止。`flush_interval -1` + `read_timeout 0` 保证 WebSocket 不被切流。**自 BUG-007 起 Caddy 必须叠 basic-auth（fail-closed）**——见下文 §"Caddy basic-auth setup（BUG-007）"。
+Caddy（`ops/caddy/Caddyfile.tmpl`）反代 `:80 → 127.0.0.1:9218`，TLS 由 Cloudflare 橙云代理终止。`flush_interval -1` + `read_timeout 0` 保证 WebSocket 不被切流。**自 BUG-007 起 Caddy 必须叠 basic-auth（fail-closed）**——见下文 §"Caddy basic-auth setup（BUG-007）"。
 
 ---
 
@@ -143,7 +143,7 @@ bun run scripts/deploy.ts deploy
 1. **build** — `gh workflow run build-image.yml --ref main -f tag=<tag>` + `gh run watch` 直到 exit 0。workflow 产出 `ghcr.io/zoneasetech/aiworker:<tag>`（外加 `:latest`）。
 2. **upload** — `aissh file upload` 把 `docker-compose.yml` / `Caddyfile.tmpl` / `.env` 传到 `/opt/aiworker-deploy/`（每个显式指定目标文件名；aissh sftp PUT 拒绝 trailing-slash 目标）。
 3. **install** — `aissh exec` 在宿主跑 `AIWORKER_IMAGE_TAG=<tag> AIWORKER_IMAGE_VARIANT_SUFFIX=<suffix> docker compose --env-file .env pull && up -d`。
-4. **verify** — `curl -fsS http://127.0.0.1:3000/health` 期望 HTTP 200，body 含 `"ok":true`。PLAN-013 的 gateway `/health` 返回 `{"ok":true,"service":"aiworker-gateway","ts":...}`。
+4. **verify** — `curl -fsS http://127.0.0.1:9218/health` 期望 HTTP 200，body 含 `"ok":true`。PLAN-013 的 gateway `/health` 返回 `{"ok":true,"service":"aiworker-gateway","ts":...}`。
 5. **reload-caddy** — `caddy validate` + `systemctl reload caddy`。
 
 可加 `--tag=<tag>` 固定 tag；默认 `<git-sha>-<UTC yyyymmddhhmm>`。
@@ -154,7 +154,7 @@ bun run scripts/deploy.ts deploy
 
 ```sh
 # 1) /health 直连：
-curl -sf http://127.0.0.1:3000/health
+curl -sf http://127.0.0.1:9218/health
 # => {"ok":true,"service":"aiworker-gateway","ts":...}
 
 # 2) 公网：
@@ -278,20 +278,20 @@ bun scripts/deploy.ts deploy --tag=$TAG --image-variant=full
 3. 在运维工作站：
    ```sh
    aim pair \
-     --url ws://127.0.0.1:3000/ws \
-     --worker-url http://aiworker-worker:3001 \
+     --url ws://127.0.0.1:9218/ws \
+     --worker-url http://aiworker-worker:9217 \
      --bootstrap-token wtk_xxxx \
      --display-name prod-1
    ```
-4. 成功后 `aim workers list` 应能看到它，`online=true`（如果 worker 同时用 `aiw serve --gateway ws://gateway:3000/ws` 作为 node 接入）。
+4. 成功后 `aim workers list` 应能看到它，`online=true`（如果 worker 同时用 `aiw serve --gateway ws://gateway:9218/ws` 作为 node 接入）。
 
 Worker baseUrl 仍是 HTTP 根（scheme + host/port，不带 path）。典型形态：
 
 | Topology | 示例 baseUrl |
 |---|---|
-| gateway 与 worker 同一 compose 网络 | `http://aiworker-worker:3001` |
+| gateway 与 worker 同一 compose 网络 | `http://aiworker-worker:9217` |
 | worker 在另一宿主，有 HTTPS 反代 | `https://worker-1.example.com` |
-| worker 在另一宿主，直暴端口 | `http://<test-server-ip-redacted>:3001` |
+| worker 在另一宿主，直暴端口 | `http://<test-server-ip-redacted>:9217` |
 
 ### `aim workers launch` 与 supervisor overlay
 
@@ -332,7 +332,7 @@ Prerequisites：
 | `AIWORKER_MAX_WORKERS` | 不设（无上限） | fleet 行数硬上限，对 `workers.pair` / `workers.launch` 都生效 |
 | `WORKER_MEMORY_LIMIT` | `512m` | 每个 launch 的 worker 容器 `--memory` |
 | `WORKER_CPU_LIMIT` | `1.0` | 每个 launch 的 worker 容器 CPU（fractional cores） |
-| `AIWORKER_LAUNCH_BASE_URL_TEMPLATE` | `http://{containerName}:3001` | 网络拓扑不匹配时覆盖 |
+| `AIWORKER_LAUNCH_BASE_URL_TEMPLATE` | `http://{containerName}:9217` | 网络拓扑不匹配时覆盖 |
 
 Smoke：
 
@@ -356,7 +356,7 @@ aissh exec <server> \
 
 踩坑：
 
-- **忘记网络**：overlay 把 `AIWORKER_NETWORK=aiworker_default` 作为默认；如果宿主 compose 网络名不同，`workers.launch` 的 URL template（`http://{containerName}:3001`）就解析不到，`aim chat` 会拿到 `worker_unreachable`。补丁是在 `.env` 里覆盖 `AIWORKER_LAUNCH_BASE_URL_TEMPLATE`。
+- **忘记网络**：overlay 把 `AIWORKER_NETWORK=aiworker_default` 作为默认；如果宿主 compose 网络名不同，`workers.launch` 的 URL template（`http://{containerName}:9217`）就解析不到，`aim chat` 会拿到 `worker_unreachable`。补丁是在 `.env` 里覆盖 `AIWORKER_LAUNCH_BASE_URL_TEMPLATE`。
 - **数据路径不对等**：`WORKER_DATA_ROOT` 必须在宿主和 gateway 容器里一字不差——docker daemon 拿到的是宿主路径。overlay 两侧都用 `/opt/aiworker-workers`。
 - **Master key 丢失**：与基础部署相同。Master key 必须离线备份；每个 launched worker 有自己的 per-worker master key（由 gateway 在容器内 mint 并写 `worker.db`），gateway 不保留明文。
 

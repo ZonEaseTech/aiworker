@@ -121,7 +121,7 @@ describe('workers.pair', () => {
         }),
       })
       const r = await handler(ctx, {
-        workerBaseUrl: 'http://worker-alpha:3001/',
+        workerBaseUrl: 'http://worker-alpha:9217/',
         bootstrapToken: VALID_TOKEN,
         displayName: 'alpha',
       })
@@ -138,7 +138,7 @@ describe('workers.pair', () => {
         .where(eq(registeredWorkers.id, 'w_zzyytt112233'))
         .get()
       expect(row).toBeTruthy()
-      expect(row!.baseUrl).toBe('http://worker-alpha:3001')
+      expect(row!.baseUrl).toBe('http://worker-alpha:9217')
       expect(row!.apiTokenEnc.length).toBeGreaterThan(0)
       expect(row!.nonce.length).toBeGreaterThan(0)
       expect(row!.authTag.length).toBeGreaterThan(0)

@@ -120,7 +120,7 @@ describe('workers.launch', () => {
       return {
         workerId: 'w_launchwxyz42',
         apiToken: VALID_TOKEN as unknown as LaunchLocalResult['apiToken'],
-        baseUrl: 'http://aiworker-aa11:3001',
+        baseUrl: 'http://aiworker-aa11:9217',
         containerId: 'container-1234567890ab',
         containerName: 'aiworker-aa11',
       }

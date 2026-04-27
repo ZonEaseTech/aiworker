@@ -19,7 +19,7 @@
  *                    watch the run, return the tag
  *   upload           aissh file upload compose + Caddyfile + .env
  *   install          docker compose pull + up -d (via aissh exec)
- *   verify           curl -fsS http://127.0.0.1:3000/health on the host
+ *   verify           curl -fsS http://127.0.0.1:9218/health on the host
  *   reload-caddy     caddy validate + systemctl reload caddy (on host)
  *   deploy           build → upload → install → verify → reload-caddy
  *
@@ -368,12 +368,12 @@ function cmdVerify(args: Args): void {
   ensureAissh()
   log('verifying gateway /health')
   // curl exits non-zero on HTTP error thanks to -f, and docker compose's port
-  // binding is 127.0.0.1:3000 per ops/compose/docker-compose.yml. PLAN-013
-  // replaced the dashboard with the WS gateway — the new /health body is
+  // binding is 127.0.0.1:9218 per ops/compose/docker-compose.yml (FEAT-030).
+  // PLAN-013 替换 dashboard 为 WS gateway,新 /health body 是
   // `{"ok":true,"service":"aiworker-gateway","ts":...}` (see apps/gateway/src/server.ts).
   aisshExec(
     args,
-    'curl -fsS http://127.0.0.1:3000/health | grep -q \'"ok":true\'',
+    'curl -fsS http://127.0.0.1:9218/health | grep -q \'"ok":true\'',
     'FEAT-009 verify gateway /health',
   )
   log('verify ok')

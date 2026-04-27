@@ -17,9 +17,9 @@ packages/
 ```
 
 - **`apps/api`** 只负责 worker 运行时（数据面）。`AIWORKER_MODE=worker` 仍保留以兼容运维脚本，但入口不再按模式分叉——`boot()` 一律构建 `createWorkerApp`。dashboard REST 已随 PLAN-013 整体下线。运行时业务（brain / executor / channels / orchestrator / cron / approvals / gateway-client / runtime / secrets / bootstrap / management 业务态）已物理抽离至 `packages/core`，apps/api 仅保留 Hono 路由 + middleware + bootstrap 装配（`@zonease/aiworker-api/bootstrap` 暴露给 `aiworker serve`），保持 transport 与业务的边界。
-- **`apps/gateway`** 是新增的 WS 控制面，单入口 `Bun.serve(:3000)`，路径 `/ws` 承接 WebSocket 升级，`/health` 返回心跳。运行时持有 fleet.db（`registered_workers` + `audit_events`）并做 operator ↔ node 帧转发。见 `docs/gateway.md`。
+- **`apps/gateway`** 是新增的 WS 控制面，单入口 `Bun.serve(:9218)`，路径 `/ws` 承接 WebSocket 升级，`/health` 返回心跳。运行时持有 fleet.db（`registered_workers` + `audit_events`）并做 operator ↔ node 帧转发。见 `docs/gateway.md`。
 - **`apps/cli`** 发布单枚 bin：`aiworker`（PLAN-020 / FEAT-028 起；原 `aiw` / `aim` 双 bin 已下线，无 backwards-compat shim）。子命令树由 worker-local（dash-form）+ operator-remote（两词 form）+ gateway 生命周期 + `install systemd` 构成，共享 `cac` 解析器与 `@zonease/aiworker-core` 运行时复用（worker-local `aiworker serve` 额外从 `@zonease/aiworker-api/bootstrap` 取 Hono 入口）。状态文件按用法分流：worker-local 写 `worker.db`，operator-remote 写 `~/.aiworker/aim.json`（文件名沿用历史以避免 operator 升级时丢配置）。
-- **`apps/web`** 不再消费任何 REST。`lib/api.ts` 已替换为统一 WS 客户端，浏览器直连 gateway（Caddy 反代 `:80 → :3000`，loopback 自动放行）。
+- **`apps/web`** 不再消费任何 REST。`lib/api.ts` 已替换为统一 WS 客户端，浏览器直连 gateway（Caddy 反代 `:80 → :9218`，loopback 自动放行）。
 - **`packages/gateway-proto`** 是协议的纯类型 + 运行时校验层。不依赖任何网络框架，所有 METHODS / EVENTS / Frame schema 都在这里定义，CLI / web / gateway / worker 四侧共用。
 - **`packages/core`** 是 transport-agnostic 的 worker runtime（PLAN-015 §S1 物理抽离）。封装 brain provider、executor provider、channel adapter、orchestrator、cron、approvals、gateway-client、secrets、bootstrap、management 业务态等所有运行时业务；公共面 `packages/core/src/index.ts` 同时被 `apps/api` 路由、`apps/cli` 与 gateway node 接入复用。**不**依赖 `hono` / `@hono/*` / `@scalar/*`——边界由 ESLint `no-restricted-imports` 守，CI 拦下任何回退到 transport 层耦合的尝试。
 - **`packages/storage-sqlite`** 是 fleet.db 与 worker.db 的唯一 schema 源。通过 subpath `./fleet` 与 `./worker` 保持数据域边界；`defaultFleetMigrationsFolder` / `defaultWorkerMigrationsFolder` 通过 `import.meta.url` 解析，避免调用方硬编码 `./drizzle/...`。
@@ -35,7 +35,7 @@ packages/
 | **systemd** | Linux 服务器长跑 | `aiworker install systemd [--user\|--system]` 写 unit + `enable --now` | 无 | 可选叠加 |
 | docker compose | 懒人快速试用 / per-worker 容器隔离 | `ops/compose/docker-compose.yml`（GHCR 镜像） | 有 | 必要时叠加 |
 
-公网 HTTPS（Cloudflare orange-cloud + Caddy `:80 → 127.0.0.1:3000` + GHCR + `scripts/deploy.ts` aissh 流程）单独拆到 [`deployment-public-https.md`](./deployment-public-https.md)，仅当需要把 channel webhook 暴露公网时才叠加；详见 [`deployment.md`](./deployment.md)。
+公网 HTTPS（Cloudflare orange-cloud + Caddy `:80 → 127.0.0.1:9218` + GHCR + `scripts/deploy.ts` aissh 流程）单独拆到 [`deployment-public-https.md`](./deployment-public-https.md)，仅当需要把 channel webhook 暴露公网时才叠加；详见 [`deployment.md`](./deployment.md)。
 
 ## Filesystem source of truth (PLAN-012)
 
@@ -84,13 +84,13 @@ AIWorker 是一个**自托管 Agent Runtime**，由两类 provider 组合而成�
 │  │ aiworker CLI (cac)  │   │ web SPA (React 19)           │  │
 │  └─────────────────────┘   └──────────────────────────────┘  │
 └──────────────────────────────┬───────────────────────────────┘
-                               │ WS  ws://host:3000/ws  (role=operator)
+                               │ WS  ws://host:9218/ws  (role=operator)
                                │ bearer=INTERNAL_SHARED_SECRET
                                │ (loopback 放行空 token)
                                ▼
 ┌──────────────────────────────────────────────────────────────┐
 │                   Gateway (apps/gateway)                     │
-│   - Bun.serve :3000, /ws 承接升级, /health 返回 JSON 心跳    │
+│   - Bun.serve :9218, /ws 承接升级, /health 返回 JSON 心跳    │
 │   - 握手校验：loopback 或 bearer==INTERNAL_SHARED_SECRET     │
 │   - 三件内存 registry：NodeRegistry / OperatorRegistry /      │
 │     ForwardTable（in-flight request ↔ operator 回程）         │
@@ -105,12 +105,12 @@ AIWorker 是一个**自托管 Agent Runtime**，由两类 provider 组合而成�
 │   - 可选 FleetSupervisor：AIWORKER_GATEWAY_CAN_LAUNCH=true    │
 │     时持 docker.sock 拉起 worker 容器                         │
 └──────────────────────────────┬───────────────────────────────┘
-                               │ WS  同一 :3000/ws 入口 (role=node)
+                               │ WS  同一 :9218/ws 入口 (role=node)
                                │ bearer=deviceToken（pair 时发放）
                                ▼
 ┌──────────────────────────────────────────────────────────────┐
 │                   Worker (apps/api worker mode)              │
-│   - `aiworker serve [--gateway ws://...]`：HTTP :3001 + 可选 │
+│   - `aiworker serve [--gateway ws://...]`：HTTP :9217 + 可选 │
 │     gateway WS 客户端                                         │
 │   - bootstrap：mintWorkerId + mintApiToken（一次性 stdout），│
 │     `worker_identity` / `worker_config` singleton（pk='default')│
@@ -128,14 +128,14 @@ Cloudflare (orange-cloud, TLS 终止)
         │   https://gateway.example.test
         │   回源 http :80
         ▼
-Caddy :80 (纯反代)  ──►  127.0.0.1:3000  =  aiworker-gateway 容器
+Caddy :80 (纯反代)  ──►  127.0.0.1:9218  =  aiworker-gateway 容器
                                              │
                                              │ WS /ws
                                              ├─◄ operator：aiworker CLI + web
                                              │
                                              ├─► node：aiworker-worker-* 容器
                                              │     （同镜像，command: bun run dist/index.js）
-                                             │     可选 `--gateway ws://gateway:3000/ws`（aiworker serve）
+                                             │     可选 `--gateway ws://gateway:9218/ws`（aiworker serve）
                                              │
                                              ├─ fleet.db（volume aiworker_fleet）
                                              └─ （可选）docker.sock:ro + WORKER_DATA_ROOT
@@ -143,8 +143,8 @@ Caddy :80 (纯反代)  ──►  127.0.0.1:3000  =  aiworker-gateway 容器
 ```
 
 - **gateway 容器** 是控制面入口。PLAN-013 之前是 `aiworker-dashboard`（Hono + 静态 web），现在换成 `aiworker-gateway`（Bun.serve WS）。
-- 浏览器与 aiworker CLI 都走同一个 `/ws` 路径；path `/health` 纯 JSON，供 loopback / caddy / 部署脚本 `curl -sf http://127.0.0.1:3000/health` 做 readiness check。
-- Worker 容器独立管理数据；`aiworker serve --gateway ws://gateway:3000/ws` 注册为 node，也可仅跑 HTTP（跨 gateway 拨号的独立部署）。
+- 浏览器与 aiworker CLI 都走同一个 `/ws` 路径；path `/health` 纯 JSON，供 loopback / caddy / 部署脚本 `curl -sf http://127.0.0.1:9218/health` 做 readiness check。
+- Worker 容器独立管理数据；`aiworker serve --gateway ws://gateway:9218/ws` 注册为 node，也可仅跑 HTTP（跨 gateway 拨号的独立部署）。
 
 ## 角色与鉴权
 
@@ -402,7 +402,7 @@ Worker 侧（`aiworker serve` / worker 容器）：
 
 Gateway 侧（`apps/gateway/src/index.ts` / gateway 容器）：
 
-- `AIWORKER_GATEWAY_PORT` / `AIWORKER_GATEWAY_HOST`（默认 `3000` / `127.0.0.1`；compose 里绑 `0.0.0.0`）。
+- `AIWORKER_GATEWAY_PORT` / `AIWORKER_GATEWAY_HOST`（默认 `9218` / `127.0.0.1`；compose 里绑 `0.0.0.0`）。
 - `AIWORKER_MASTER_KEY` — fleet.db `registered_workers.apiTokenEnc` 的 AES 主密钥。
 - `INTERNAL_SHARED_SECRET` — 远程 operator 的 bearer；canLaunch=true 时作为新拉起 worker 容器的 env 注入。
 - `AIWORKER_FLEET_DB_PATH` — 默认 `./data/fleet.db`；compose 里挂到 `aiworker_fleet` 卷。
