@@ -231,7 +231,7 @@ Coordinator: `ug03vh9v`.
 
 Stage issues:
 
-- S1-A `gf1grhpz` — session schema and store primitives.
+- S1-A `isf4t4f5` — session schema and store primitives.
 - S1-B `xuropmdt` — session resolver and lifecycle integration.
 - S1-C `hpdbois1` — session lifecycle regression tests and docs.
 - S2 `u8dvdjh9` — token-budget context assembly.
@@ -242,6 +242,9 @@ Stage issues:
 Only S1-A is allowed to run first. Each subsequent issue starts after the
 previous issue reports to the coordinator and its changes are reviewed and
 integrated.
+
+Abandoned issue: `gf1grhpz` was a stale-base S1-A attempt and must not be
+merged.
 
 Stage 1: session key/store/lifecycle
 
