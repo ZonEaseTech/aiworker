@@ -1,6 +1,6 @@
 # PLAN-031 Publish aiworker CLI 0.4.4
 
-- **status**: implementing
+- **status**: completed
 - **createdAt**: 2026-04-28 19:14
 - **approvedAt**: 2026-04-28 19:14
 - **relatedTask**: REL-001
@@ -71,3 +71,6 @@ Expected repository changes:
 
 - User requested release directly with "发版"; this plan is treated as approved
   release execution.
+- 2026-04-28 19:19 Completed. Local gates passed, `v0.4.4` was pushed, the
+  GitHub release workflow succeeded, npm latest is `0.4.4`, and GitHub Release
+  `v0.4.4` is published with platform tarballs.

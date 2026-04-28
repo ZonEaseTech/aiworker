@@ -1,5 +1,17 @@
 # AIWorker Changelog
 
+## 2026-04-28 19:19 [progress] REL-001 — 0.4.4 published
+
+Published `@zonease/aiworker-cli@0.4.4`:
+
+- Local gates passed: typecheck, tests, lint, root build, CLI smoke for
+  `aiworker run`, and CLI smoke for fleet presence.
+- The tag-triggered GitHub release workflow succeeded for `v0.4.4`, including
+  npm publish, standalone binary compilation, platform tarball packaging, and
+  GitHub Release asset upload.
+- npm `latest` now resolves to `0.4.4`, and a published-package smoke reports
+  `aiworker/0.4.4`.
+
 ## 2026-04-28 19:14 [progress] REL-001 — prepare 0.4.4 release
 
 Started the `@zonease/aiworker-cli@0.4.4` patch release:
