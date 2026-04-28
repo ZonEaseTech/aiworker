@@ -1,5 +1,22 @@
 # AIWorker Changelog
 
+## 2026-04-28 18:23 [BUG-P1] BUG-026 — Codex native session capability negotiation
+
+Release target: `@zonease/aiworker-cli@0.4.3`.
+
+Fixed a release-blocking Codex worker e2e failure found while validating the
+FEAT-037 session control plane against a test-server fleet:
+
+- Codex executor now advertises `capabilities.experimentalApi=true` during
+  app-server `initialize`, which current Codex CLI requires before accepting
+  persisted native thread history.
+- Added focused regression coverage to ensure the current protocol path keeps
+  the capability negotiation when starting native thread bindings.
+- Real fleet e2e passed after the fix with a remote fleet gateway and local
+  Codex worker: same `conversation-id` retained continuity, absent and stale
+  native bindings recovered from worker.db transcript fallback, and `/reset`
+  started a fresh session.
+
 ## 2026-04-28 17:33 [progress] FEAT-037 S5 — session status and maintenance surfaces
 
 Implemented S5 only for the OpenClaw-style worker session control plane:
