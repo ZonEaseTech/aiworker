@@ -102,3 +102,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-023 Release blockers after v0.3.0 prevent 0.4.0 publishing**](BUG-023.md) `P1`
 - [x] [**BUG-024 Codex executor fails against current Codex app-server protocol**](BUG-024.md) `P1`
 - [x] [**BUG-025 Codex executor drops worker conversation history between turns**](BUG-025.md) `P1`
+- [-] [**FEAT-037 OpenClaw-style worker session control plane**](FEAT-037.md) `P1`
