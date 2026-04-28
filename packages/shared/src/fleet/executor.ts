@@ -91,14 +91,22 @@ export type VariantOverrides = { cmd?: CmdOverrides } & Record<string, unknown>
 
 // -- Variant bodies (per engine) -------------------------------------------
 
-export interface HttpVariantBody {
+interface ContextWindowHint {
+  /**
+   * Conservative prompt assembly window used by the orchestrator. This is a
+   * local context-budget hint, not a provider tokenizer contract.
+   */
+  contextWindowTokens?: number
+}
+
+export interface HttpVariantBody extends ContextWindowHint {
   baseUrl: string
   apiKey: string
   model: string
   timeoutMs: number
 }
 
-export interface McpVariantBody {
+export interface McpVariantBody extends ContextWindowHint {
   url: string
   token: string
   defaultModel?: string
@@ -106,7 +114,7 @@ export interface McpVariantBody {
   timeoutMs?: number
 }
 
-export interface CliVariantBody {
+export interface CliVariantBody extends ContextWindowHint {
   command: string
   args: string[]
   cwd?: string
@@ -116,7 +124,7 @@ export interface CliVariantBody {
   sandbox?: boolean
 }
 
-export interface ClaudeCodeVariantBody {
+export interface ClaudeCodeVariantBody extends ContextWindowHint {
   model?: string
   cliVersion?: string
   extraArgs?: string[]
@@ -129,7 +137,7 @@ export interface ClaudeCodeVariantBody {
 /** ACP agent identifiers — must match worker-side `AcpAgentId` exactly. */
 export type AcpAgentId = 'gemini' | 'qwen'
 
-export interface AcpVariantBody {
+export interface AcpVariantBody extends ContextWindowHint {
   agent: AcpAgentId
   model?: string
   cliVersion?: string
@@ -144,7 +152,7 @@ export interface AcpVariantBody {
  * other Codex-specific knobs (sandbox / approval_policy / reasoning effort)
  * tunnel through `CmdOverrides.extraArgs` so variant bodies don't balloon.
  */
-export interface CodexVariantBody {
+export interface CodexVariantBody extends ContextWindowHint {
   model?: string
   timeoutMs?: number
 }
@@ -154,7 +162,7 @@ export interface CodexVariantBody {
  * `model` defaults to `auto` — the CLI picks the active workspace model when
  * not overridden.
  */
-export interface CursorVariantBody {
+export interface CursorVariantBody extends ContextWindowHint {
   model?: string
   timeoutMs?: number
 }

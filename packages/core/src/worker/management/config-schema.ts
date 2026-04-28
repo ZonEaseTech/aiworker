@@ -139,11 +139,22 @@ const toolPolicySchema = z.object({
   })),
 })
 
-// REFACTOR-006 P2: orchestrator 运行时调参。`maxHistoryMessages` 上限设到
-// 200，足够覆盖任何"长会话也想看完整 transcript"的情况；下限 1（不能 0，
-// run() 至少要拿到当前一轮 user message 自己）。
+// Orchestrator runtime tuning. `maxHistoryMessages` is kept as the
+// backward-compatible fallback cap; setting any token field enables S2
+// token-budget context assembly.
 const orchestratorConfigSchema = z.object({
+  contextWindowTokens: z.number().int().min(512).max(2_000_000).optional(),
+  reserveTokens: z.number().int().min(0).max(1_000_000).optional(),
+  keepRecentTokens: z.number().int().min(1).max(2_000_000).optional(),
   maxHistoryMessages: z.number().int().min(1).max(200).optional(),
+}).superRefine((value, ctx) => {
+  if (value.contextWindowTokens !== undefined && value.reserveTokens !== undefined && value.reserveTokens >= value.contextWindowTokens) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['reserveTokens'],
+      message: 'reserveTokens must be lower than contextWindowTokens',
+    })
+  }
 })
 
 export const workerConfigSchema = z.object({
