@@ -77,21 +77,55 @@ describe('worker chat panel', () => {
     await act(async () => {
       mocks.sseHandler?.({
         type: 'conversation.created',
-        data: { conversationId: 'conv-1', channel: 'web', chatId: 'task:task-1' },
+        data: { conversationId: 'conv-1', channel: 'web', chatId: 'task:task-1', taskId: 'task-1' },
       })
       mocks.sseHandler?.({
         type: 'orchestrator.text',
-        data: { conversationId: 'conv-1', delta: 'streamed reply' },
+        data: { conversationId: 'conv-1', taskId: 'task-1', delta: 'streamed reply' },
       })
       mocks.sseHandler?.({
         type: 'orchestrator.finished',
-        data: { conversationId: 'conv-1' },
+        data: { conversationId: 'conv-1', taskId: 'task-1' },
       })
     })
 
     expect(await screen.findByText('streamed reply')).toBeTruthy()
     expect(mocks.invalidateTasks).toHaveBeenCalledTimes(1)
     expect(mocks.invalidateMessages).toHaveBeenCalledWith('conv-1')
+    expect(mocks.messageConversationIds).toContain('conv-1')
+  })
+
+  it('ignores foreign orchestrator events before the submitted task binds a conversation', async () => {
+    render(<ChatPanel />)
+
+    fireEvent.change(screen.getByLabelText('Prompt'), { target: { value: 'hello worker' } })
+    fireEvent.click(screen.getByRole('button', { name: /发送/ }))
+
+    await waitFor(() => expect(mocks.submitTask).toHaveBeenCalledWith('hello worker'))
+    await waitFor(() => expect(mocks.subscribeEvents).toHaveBeenCalled())
+
+    await act(async () => {
+      mocks.sseHandler?.({
+        type: 'orchestrator.text',
+        data: { conversationId: 'foreign-conv', taskId: 'task-other', delta: 'wrong stream' },
+      })
+      mocks.sseHandler?.({
+        type: 'orchestrator.text',
+        data: { conversationId: 'legacy-conv', delta: 'legacy stream' },
+      })
+      mocks.sseHandler?.({
+        type: 'orchestrator.text',
+        data: { conversationId: 'conv-1', taskId: 'task-1', delta: 'right stream' },
+      })
+      mocks.sseHandler?.({
+        type: 'orchestrator.finished',
+        data: { conversationId: 'conv-1', taskId: 'task-1' },
+      })
+    })
+
+    expect(screen.queryByText('wrong stream')).toBeNull()
+    expect(screen.queryByText('legacy stream')).toBeNull()
+    expect(await screen.findByText('right stream')).toBeTruthy()
     expect(mocks.messageConversationIds).toContain('conv-1')
   })
 })

@@ -235,9 +235,10 @@ interface SSEHandlers {
 /**
  * 订阅一次 SSE，尽量锁定当前 `submitTask()` 创建的 conversation。
  *
- * 后端 submitTask 使用 `chatId = task:<taskId>` 创建 web conversation；如果
- * `conversation.created` 因 race 没赶上，第一次 `orchestrator.*` 事件也会
- * 补齐 conversationId。其他 event type 忽略。
+ * 后端 submitTask 使用 `chatId = task:<taskId>` 创建 web conversation，并在
+ * 这条 web task 的 `orchestrator.*` SSE payload 里带 `taskId`。如果
+ * `conversation.created` 因 race 没赶上，带匹配 taskId 的首个 orchestrator
+ * 事件也能补齐 conversationId；不带 taskId 的其他通道任务不能抢占绑定。
  */
 async function runSSE(ctrl: AbortController, taskId: string, handlers: SSEHandlers): Promise<void> {
   let conversationId: string | null = null
@@ -253,9 +254,11 @@ async function runSSE(ctrl: AbortController, taskId: string, handlers: SSEHandle
   try {
     await subscribeEvents(ctrl.signal, (evt) => {
       const data = evt.data as Record<string, unknown>
+      const eventTaskId = typeof data.taskId === 'string' ? data.taskId : null
       if (
         evt.type === 'conversation.created'
-        && data.chatId === taskChatId
+        && (!eventTaskId || eventTaskId === taskId)
+        && (data.chatId === taskChatId || eventTaskId === taskId)
         && typeof data.conversationId === 'string'
       ) {
         bindConversation(data.conversationId)
@@ -263,6 +266,10 @@ async function runSSE(ctrl: AbortController, taskId: string, handlers: SSEHandle
       }
 
       const eventConversationId = typeof data.conversationId === 'string' ? data.conversationId : null
+      if (eventTaskId && eventTaskId !== taskId)
+        return
+      if (!conversationId && eventTaskId !== taskId)
+        return
       if (conversationId && eventConversationId && eventConversationId !== conversationId)
         return
 

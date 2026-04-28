@@ -120,6 +120,7 @@ export class Orchestrator {
     ]
 
     const model = executorModel(this.deps.config.executor)
+    const taskId = taskIdFromEnvelope(envelope)
     const runInput = {
       messages: chatMessages,
       ...(model ? { model } : {}),
@@ -135,24 +136,37 @@ export class Orchestrator {
         notifyActivity()
         if (event.type === 'assistant_message_delta') {
           assistantText += event.delta
-          this.deps.bus.emit('orchestrator.text', { conversationId: conversation.id, delta: event.delta })
+          this.deps.bus.emit('orchestrator.text', {
+            conversationId: conversation.id,
+            ...(taskId === undefined ? {} : { taskId }),
+            delta: event.delta,
+          })
         }
         else if (event.type === 'tool_use') {
           this.deps.bus.emit('orchestrator.tool_call', {
             conversationId: conversation.id,
+            ...(taskId === undefined ? {} : { taskId }),
             call: { id: event.id, name: event.name, arguments: event.arguments },
           })
         }
         else if (event.type === 'error') {
           consola.warn(`[orchestrator] executor error: ${event.error}`)
-          this.deps.bus.emit('orchestrator.error', { conversationId: conversation.id, error: event.error })
+          this.deps.bus.emit('orchestrator.error', {
+            conversationId: conversation.id,
+            ...(taskId === undefined ? {} : { taskId }),
+            error: event.error,
+          })
           return
         }
       }
     }
     catch (err) {
       consola.error(`[orchestrator] run failed: ${String(err)}`)
-      this.deps.bus.emit('orchestrator.error', { conversationId: conversation.id, error: String(err) })
+      this.deps.bus.emit('orchestrator.error', {
+        conversationId: conversation.id,
+        ...(taskId === undefined ? {} : { taskId }),
+        error: String(err),
+      })
       return
     }
 
@@ -164,7 +178,10 @@ export class Orchestrator {
       createdAt: now,
     }).run()
     db.update(conversations).set({ lastActiveAt: now }).where(eq(conversations.id, conversation.id)).run()
-    this.deps.bus.emit('orchestrator.finished', { conversationId: conversation.id })
+    this.deps.bus.emit('orchestrator.finished', {
+      conversationId: conversation.id,
+      ...(taskId === undefined ? {} : { taskId }),
+    })
 
     await this.deliver(envelope.channel, conversation, assistantText)
   }
@@ -267,7 +284,13 @@ export class Orchestrator {
       lastActiveAt: now,
     }).run()
     const rowRaw = db.select().from(conversations).where(eq(conversations.id, id)).get()!
-    this.deps.bus.emit('conversation.created', { conversationId: id, channel: envelope.channel, chatId: envelope.chatId })
+    const taskId = taskIdFromEnvelope(envelope)
+    this.deps.bus.emit('conversation.created', {
+      conversationId: id,
+      channel: envelope.channel,
+      chatId: envelope.chatId,
+      ...(taskId === undefined ? {} : { taskId }),
+    })
     return rowToState(rowRaw)
   }
 
@@ -445,6 +468,13 @@ function executorModel(config: ExecutorConfig): string | undefined {
   if (typeof body.defaultModel === 'string' && body.defaultModel.length > 0)
     return body.defaultModel
   return undefined
+}
+
+function taskIdFromEnvelope(envelope: Envelope): string | undefined {
+  if (!envelope.raw || typeof envelope.raw !== 'object' || Array.isArray(envelope.raw))
+    return undefined
+  const taskId = (envelope.raw as Record<string, unknown>).taskId
+  return typeof taskId === 'string' && taskId.length > 0 ? taskId : undefined
 }
 
 function rowToState(row: typeof conversations.$inferSelect): ConversationState {

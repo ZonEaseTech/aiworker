@@ -124,7 +124,7 @@ describe('Orchestrator + ClaudeCodeExecutor (stub CLI)', () => {
       chatId: 'chat-1',
       text: 'hello',
       receivedAt: new Date().toISOString(),
-      raw: {},
+      raw: { taskId: 'task-test' },
     }
 
     await orchestrator.ingest(envelope)
@@ -140,10 +140,18 @@ describe('Orchestrator + ClaudeCodeExecutor (stub CLI)', () => {
     // A tool_call event was surfaced to downstream consumers.
     const toolCall = bus.recorded.find(r => r.kind === 'orchestrator.tool_call')
     expect(toolCall).toBeDefined()
+    expect((toolCall?.payload as { taskId?: string } | undefined)?.taskId).toBe('task-test')
 
     // Assistant text delta was observed (partial OR full block).
     const textEvents = bus.recorded.filter(r => r.kind === 'orchestrator.text')
     expect(textEvents.length).toBeGreaterThan(0)
+    expect(textEvents.every(r => (r.payload as { taskId?: string }).taskId === 'task-test')).toBe(true)
+
+    const created = bus.recorded.find(r => r.kind === 'conversation.created')
+    expect((created?.payload as { taskId?: string } | undefined)?.taskId).toBe('task-test')
+
+    const finished = bus.recorded.find(r => r.kind === 'orchestrator.finished')
+    expect((finished?.payload as { taskId?: string } | undefined)?.taskId).toBe('task-test')
 
     // worker.db.messages has at least the user + one assistant row.
     const db = getWorkerDb()
