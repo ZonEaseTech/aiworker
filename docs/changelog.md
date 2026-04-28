@@ -1,5 +1,21 @@
 # AIWorker Changelog
 
+## 2026-04-28 10:02 [BUG-P1] BUG-023 — 0.4.0 release readiness blockers
+
+Fixed release blockers found while reviewing `v0.3.0..HEAD` for publish:
+
+- Bumped `@zonease/aiworker-cli` to `0.4.0` because `0.3.0` is already the npm
+  `latest` version.
+- Brand-new project `aiworker init` now preserves explicit
+  `AIWORKER_MASTER_KEY` / `INTERNAL_SHARED_SECRET` values so subsequent commands
+  can decrypt the same `worker_identity` row.
+- CLI publish packaging now copies only fresh `fleet` and `worker` Web bundles
+  into `dist/web/` and clears stale bundled assets first.
+- Root `bun run build` now sequences API, Web, and CLI bundle output to avoid
+  concurrent writes to `apps/web/dist`.
+- GitHub Release compiled binary assets are now packaged as tarballs containing
+  the binary plus sibling `web/`, `drizzle/`, and `README.md` files.
+
 ## 2026-04-28 09:25 [BUG-P1] BUG-022 — Web admin SPA mount paths and deep links
 
 Fixed two PLAN-022 Web UI runtime gaps:

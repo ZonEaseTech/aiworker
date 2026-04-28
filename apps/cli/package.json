@@ -1,7 +1,7 @@
 {
   "name": "@zonease/aiworker-cli",
   "type": "module",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "AIWorker fleet CLI — gateway / worker / operator 单一二进制",
   "license": "MIT",
   "homepage": "https://github.com/ZonEaseTech/aiworker#readme",
@@ -25,7 +25,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "build": "bun run --filter '@zonease/aiworker-web' build && bun build --target=bun --minify --outdir=dist src/aiworker.ts && bun scripts/build-publish-manifest.ts",
+    "build": "bun run --filter '@zonease/aiworker-web' build && bun run build:bundle",
+    "build:bundle": "bun build --target=bun --minify --outdir=dist src/aiworker.ts && bun scripts/build-publish-manifest.ts",
     "prepublishOnly": "bun run build",
     "smoke:aiworker-run": "bun scripts/smoke-aiworker-run.ts",
     "smoke:aiworker-fleet": "bun scripts/smoke-aiworker-fleet.ts"

@@ -1,4 +1,4 @@
-import { access, copyFile, mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
+import { access, copyFile, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
 const cliDir = resolve(import.meta.dirname, '..')
@@ -44,18 +44,15 @@ await copyDir(drizzleSrc, drizzleDst)
 
 // PLAN-022 / FEAT-033：把 apps/web/dist/{fleet,worker} 拷到 dist/web/，让
 // npm-installed cli 在运行时能 serve fleet bundle（gateway 端）和 worker
-// bundle（worker 端）。`apps/cli/scripts/build`  在 cli 自身 build 之前会先
-// 触发 `bun run --filter '@zonease/aiworker-web' build`（见 cli/package.json
-// scripts.build），所以这里 `apps/web/dist/` 一定存在。
+// bundle（worker 端）。只复制两个生产 bundle，避免 dev chooser 或旧 hash
+// chunks 从 apps/web/dist 根目录漏进发布包。
 const webDistSrc = resolve(repoRoot, 'apps/web/dist')
 const webDistDst = resolve(distDir, 'web')
-try {
-  await access(webDistSrc)
-  await copyDir(webDistSrc, webDistDst)
-}
-catch {
-  // 跳过：单测 / `prepublishOnly` 之外的 build 调用可能没先跑 web build。
-  // tarball 缺 web/ 时运行期 fallback 到 404，不影响 cli 自身可用。
+await rm(webDistDst, { recursive: true, force: true })
+for (const bundle of ['fleet', 'worker']) {
+  const src = resolve(webDistSrc, bundle)
+  await access(resolve(src, 'index.html'))
+  await copyDir(src, resolve(webDistDst, bundle))
 }
 
 async function copyDir(src: string, dst: string): Promise<void> {

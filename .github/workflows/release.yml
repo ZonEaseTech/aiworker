@@ -36,16 +36,32 @@ jobs:
 
       - name: Compile single-file binaries
         run: |
+          set -euo pipefail
           bun build --compile --target=bun-linux-x64    --outfile=aiworker-linux-x64    apps/cli/src/aiworker.ts
           bun build --compile --target=bun-linux-arm64  --outfile=aiworker-linux-arm64  apps/cli/src/aiworker.ts
           bun build --compile --target=bun-darwin-x64   --outfile=aiworker-darwin-x64   apps/cli/src/aiworker.ts
           bun build --compile --target=bun-darwin-arm64 --outfile=aiworker-darwin-arm64 apps/cli/src/aiworker.ts
 
+      - name: Package binary release bundles
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          for target in linux-x64 linux-arm64 darwin-x64 darwin-arm64; do
+            bundle="aiworker-${target}"
+            mkdir -p "release/${bundle}"
+            cp "${bundle}" "release/${bundle}/aiworker"
+            chmod +x "release/${bundle}/aiworker"
+            cp -R apps/cli/dist/web "release/${bundle}/web"
+            cp -R apps/cli/dist/drizzle "release/${bundle}/drizzle"
+            cp apps/cli/dist/README.md "release/${bundle}/README.md"
+            tar -C release -czf "${bundle}.tar.gz" "${bundle}"
+          done
+
       - name: Attach binaries to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            aiworker-linux-x64
-            aiworker-linux-arm64
-            aiworker-darwin-x64
-            aiworker-darwin-arm64
+            aiworker-linux-x64.tar.gz
+            aiworker-linux-arm64.tar.gz
+            aiworker-darwin-x64.tar.gz
+            aiworker-darwin-arm64.tar.gz

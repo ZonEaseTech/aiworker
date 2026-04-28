@@ -12,7 +12,7 @@
     "lint": "eslint .",
     "typecheck": "bun run --filter '*' typecheck",
     "test": "bun run --filter '*' test",
-    "build": "bun run --filter '*' build",
+    "build": "bun run --filter '@zonease/aiworker-api' build && bun run --filter '@zonease/aiworker-web' build && bun run --filter '@zonease/aiworker-cli' build:bundle",
     "check": "bun run typecheck && bun run lint",
     "db:generate": "bun run --filter '@zonease/aiworker-storage-sqlite' db:generate",
     "db:generate:fleet": "bun run --filter '@zonease/aiworker-storage-sqlite' db:generate:fleet",

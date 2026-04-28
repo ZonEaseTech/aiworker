@@ -36,10 +36,15 @@ function isolatedEnv(home: string): Record<string, string> {
   return env
 }
 
-async function runCli(args: string[], cwd: string, home: string): Promise<{ exitCode: number, output: string }> {
+async function runCli(
+  args: string[],
+  cwd: string,
+  home: string,
+  extraEnv: Record<string, string> = {},
+): Promise<{ exitCode: number, output: string }> {
   const proc = Bun.spawnSync([process.execPath, cliEntry, ...args], {
     cwd,
-    env: isolatedEnv(home),
+    env: { ...isolatedEnv(home), ...extraEnv },
     stderr: 'pipe',
     stdout: 'pipe',
   })
@@ -127,6 +132,30 @@ describe('aiworker init / scope project placement', () => {
     }
     finally {
       await rm(project, { recursive: true, force: true })
+      await rm(home, { recursive: true, force: true })
+    }
+  })
+
+  it('init preserves explicit master key so later project commands can decrypt identity', async () => {
+    const root = await makeTmp('aiworker-cli-init-env-key-')
+    const home = await makeTmp('aiworker-cli-init-env-key-home-')
+    const project = path.join(root, 'repo')
+    const env = {
+      AIWORKER_MASTER_KEY: '00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff',
+      INTERNAL_SHARED_SECRET: 'shared-secret-for-test',
+    }
+    try {
+      await mkdir(path.join(project, '.git'), { recursive: true })
+
+      const init = await runCli(['init'], project, home, env)
+      expect(init.exitCode).toBe(0)
+
+      const run = await runCli(['run', '--message', 'hello', '--dry-run'], project, home, env)
+      expect(run.exitCode).toBe(0)
+      expect(await exists(path.join(project, '.aiworker', 'local', 'worker.db'))).toBe(true)
+    }
+    finally {
+      await rm(root, { recursive: true, force: true })
       await rm(home, { recursive: true, force: true })
     }
   })

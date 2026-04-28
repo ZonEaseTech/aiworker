@@ -76,12 +76,13 @@ export async function runInit(options: InitOptions = {}): Promise<void> {
   }
 
   await ensureProjectAiworker(cwd)
-  // `init` owns dotenv bootstrap, so a brand-new project mints exactly one
-  // project-local master key and never creates a user-scope fallback first.
+  // `init` owns dotenv bootstrap, so a brand-new project mints or persists
+  // exactly one project-local secret set and never creates a user-scope
+  // fallback first. Preserve operator-provided master/shared secrets: later
+  // commands also let explicit env override `.env`, so changing the value here
+  // would make the freshly written worker_identity row undecryptable.
   const projectLocal = path.join(cwd, '.aiworker', 'local')
   delete process.env.AIWORKER_HOME
-  delete process.env.AIWORKER_MASTER_KEY
-  delete process.env.INTERNAL_SHARED_SECRET
   bootstrapDotenv({ home: projectLocal })
   const ctx = await loadWorkerContext()
   consola.success(`[aiworker init] project-scope worker ${ctx.workerId} ready (${cwd})`)

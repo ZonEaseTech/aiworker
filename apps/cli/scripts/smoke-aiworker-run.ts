@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -21,20 +21,27 @@ const TIMEOUT_MS = 30_000
 
 async function main(): Promise<number> {
   const workdir = mkdtempSync(join(tmpdir(), 'aiworker-smoke-'))
-  const dbPath = join(workdir, 'worker.db')
+  const projectDir = join(workdir, 'project')
+  const homeDir = join(workdir, 'home')
+  mkdirSync(join(projectDir, '.git'), { recursive: true })
+  mkdirSync(homeDir, { recursive: true })
   const env = {
     ...process.env,
-    WORKER_DB_PATH: dbPath,
+    HOME: homeDir,
     AIWORKER_MASTER_KEY: MASTER_KEY,
   }
+  delete env.AIWORKER_HOME
+  delete env.INTERNAL_SHARED_SECRET
+  delete env.WORKER_DB_PATH
+  delete env.WORKER_DATA_ROOT
 
-  consola.info(`[smoke-aiworker-run] using tmp db ${dbPath}`)
+  consola.info(`[smoke-aiworker-run] using tmp project ${projectDir}`)
 
   try {
     const entry = new URL('../src/aiworker.ts', import.meta.url).pathname
 
     // Step 1: init
-    const initProc = spawn(['bun', entry, 'init'], { env, stdout: 'pipe', stderr: 'pipe' })
+    const initProc = spawn(['bun', entry, 'init'], { cwd: projectDir, env, stdout: 'pipe', stderr: 'pipe' })
     const initCode = await initProc.exited
     if (initCode !== 0) {
       consola.error(`[smoke-aiworker-run] aiworker init exited ${initCode}`)
@@ -43,6 +50,7 @@ async function main(): Promise<number> {
 
     // Step 2: run --dry-run (no executor call; proves runtime boots)
     const runProc = spawn(['bun', entry, 'run', '--message', 'hello', '--dry-run'], {
+      cwd: projectDir,
       env,
       stdout: 'pipe',
       stderr: 'pipe',
