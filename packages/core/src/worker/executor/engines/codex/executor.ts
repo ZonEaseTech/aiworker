@@ -180,6 +180,7 @@ export class CodexExecutor implements ExecutorProvider {
       await peer.request('initialize', {
         protocolVersion: DEFAULT_PROTOCOL_VERSION,
         clientInfo: { name: 'aiworker', version: '0.2.0' },
+        capabilities: { experimentalApi: true },
       })
 
       const model = input.model ?? this.options.model

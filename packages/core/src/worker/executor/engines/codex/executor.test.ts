@@ -105,12 +105,16 @@ describe('CodexExecutor — smoke over stub app-server', () => {
   }, 15_000)
 
   it('emits a current-protocol native thread binding after starting a thread', async () => {
-    const executor = makeExecutor('current')
+    const traceFile = path.join(workspace, 'codex-current-trace.jsonl')
+    const executor = makeExecutor('current', traceFile)
     const events = await collect(executor.run({
       messages: [{ role: 'user', content: 'reply ok' }],
       workspacePath: workspace,
     }))
 
+    const trace = await readTrace(traceFile)
+    const initialize = trace.find(msg => msg.method === 'initialize')
+    expect((initialize?.params as { capabilities?: { experimentalApi?: boolean } } | undefined)?.capabilities?.experimentalApi).toBe(true)
     expect(events).toContainEqual({
       type: 'engine_binding',
       engine: 'codex',
