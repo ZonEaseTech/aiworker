@@ -1,4 +1,5 @@
 import type { ResponseFrame } from '@zonease/aiworker-gateway-proto'
+import type { Envelope } from '@zonease/aiworker-shared'
 import type { WorkerEventBus } from '../events/bus'
 import type { NodeHandlers, OrchestratorLike } from './dispatcher'
 
@@ -33,14 +34,14 @@ interface CapturedDispatcher {
   responses: ResponseFrame[]
 }
 
-function makeDispatcher(handlers?: NodeHandlers): CapturedDispatcher {
+function makeDispatcher(handlers?: NodeHandlers, orchestrator: OrchestratorLike = stubOrchestrator()): CapturedDispatcher {
   const approvals = new ApprovalStore()
   const responses: ResponseFrame[] = []
   const dispatcher = new GatewayDispatcher({
     workerId: 'w_test',
     getRuntime: () => ({
       bus: stubBus(),
-      orchestrator: stubOrchestrator(),
+      orchestrator,
       approvals,
     }),
     ...(handlers ? { handlers } : {}),
@@ -48,6 +49,81 @@ function makeDispatcher(handlers?: NodeHandlers): CapturedDispatcher {
   })
   return { dispatcher, approvals, responses }
 }
+
+describe('GatewayDispatcher — chat.send session lifecycle envelope', () => {
+  it('keeps the same gateway conversation hint mapped to the same chat id', async () => {
+    const ingested: Envelope[] = []
+    const orchestrator: OrchestratorLike = {
+      ingest: async (envelope) => {
+        ingested.push(envelope)
+      },
+    }
+    const { dispatcher, approvals, responses } = makeDispatcher(undefined, orchestrator)
+
+    await dispatcher.handleRequest({
+      type: 'request',
+      id: 'chat-1',
+      method: 'chat.send',
+      params: { workerId: 'w_test', conversationId: 'sticky', content: 'first turn' },
+    })
+    await dispatcher.handleRequest({
+      type: 'request',
+      id: 'chat-2',
+      method: 'chat.send',
+      params: { workerId: 'w_test', conversationId: 'sticky', content: 'second turn' },
+    })
+
+    expect(responses).toHaveLength(2)
+    for (const frame of responses) {
+      expect(frame.ok).toBe(true)
+      if (frame.ok)
+        expect((frame.result as { conversationId: string }).conversationId).toBe('gw:conv:sticky')
+    }
+    expect(ingested.map(envelope => envelope.chatId)).toEqual(['gw:conv:sticky', 'gw:conv:sticky'])
+    expect(ingested.map(envelope => envelope.text)).toEqual(['first turn', 'second turn'])
+    expect(ingested.every(envelope => envelope.accountId === 'sys:gateway')).toBe(true)
+    expect(ingested.every(envelope => (envelope.raw as Record<string, unknown>).sessionReset === undefined)).toBe(true)
+    approvals.dispose()
+  })
+
+  it('marks /new and /reset commands as manual session resets on the same chat id', async () => {
+    const ingested: Envelope[] = []
+    const orchestrator: OrchestratorLike = {
+      ingest: async (envelope) => {
+        ingested.push(envelope)
+      },
+    }
+    const { dispatcher, approvals, responses } = makeDispatcher(undefined, orchestrator)
+
+    await dispatcher.handleRequest({
+      type: 'request',
+      id: 'chat-new',
+      method: 'chat.send',
+      params: { workerId: 'w_test', conversationId: 'sticky', content: '/new start over' },
+    })
+    await dispatcher.handleRequest({
+      type: 'request',
+      id: 'chat-reset',
+      method: 'chat.send',
+      params: { workerId: 'w_test', conversationId: 'sticky', content: '/reset' },
+    })
+
+    expect(responses).toHaveLength(2)
+    for (const frame of responses) {
+      expect(frame.ok).toBe(true)
+      if (frame.ok)
+        expect((frame.result as { conversationId: string }).conversationId).toBe('gw:conv:sticky')
+    }
+
+    expect(ingested).toHaveLength(2)
+    expect(ingested.map(envelope => envelope.chatId)).toEqual(['gw:conv:sticky', 'gw:conv:sticky'])
+    expect(ingested[0]?.text).toBe('start over')
+    expect(ingested[0]?.raw).toMatchObject({ source: 'gateway', sessionReset: true, resetCommand: '/new' })
+    expect(ingested[1]?.text).toBe('A new session has started. Reply briefly to confirm.')
+    expect(ingested[1]?.raw).toMatchObject({ source: 'gateway', sessionReset: true, resetCommand: '/reset' })
+    approvals.dispose()
+  })
+})
 
 describe('GatewayDispatcher — approval.list / approval.grant', () => {
   it('approval.list returns pending entries from the store', async () => {

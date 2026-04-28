@@ -234,24 +234,26 @@ Stage issues:
 - S1-A — session schema and store primitives. Implemented directly on `main`
   as `c87851b` (`feat(session): add worker session store primitives`) after
   BKD attempts stalled or failed.
-- S1-B `xuropmdt` — session resolver and lifecycle integration. Active BKD
-  worktree task; first review found an account-scoping issue in
-  `resolveSessionKey`, so it was returned to `working` for rework.
-- S1-C `hpdbois1` — session lifecycle regression tests and docs.
+- S1-B `xuropmdt` — session resolver and lifecycle integration. Reviewed,
+  merged, verified, and pushed to `origin/main` as `25cbb4f`
+  (`merge(session): integrate S1-B resolver lifecycle (bkd/xuropmdt)`).
+- S1-C `hpdbois1` — session lifecycle regression tests and docs. Adds
+  regression coverage for the S1-B lifecycle surface without broadening into
+  S2+ session features.
 - S2 `u8dvdjh9` — token-budget context assembly.
 - S3 `h4hpsxl2` — compaction and memory flush.
 - S4 `aeea6hmf` — engine-native session bindings.
 - S5 `u8hbsj4l` — session status and maintenance surfaces.
 
-Only S1-B is allowed to run now. Each subsequent issue starts after the
-previous issue reports to the coordinator and its changes are reviewed,
-integrated, and focused verification passes.
+S1-C is unblocked because S1-B is on `origin/main` at `25cbb4f`. Each
+subsequent issue starts after the previous issue reports to the coordinator and
+its changes are reviewed, integrated, and focused verification passes.
 
-Active coordinator cron:
+Coordinator cron notes:
 
 - `v544zrqo` / `FEAT-037-S1B-execute-poll` runs `issue-execute` against
-  coordinator `ug03vh9v` every five minutes so orchestration does not stall when
-  BKD auto-moves completed coordinator turns back to `review`.
+  coordinator `ug03vh9v` every five minutes. It was used to keep S1-B moving
+  while that stage was active.
 
 Paused coordinator cron:
 
@@ -267,9 +269,15 @@ Abandoned issues:
 
 Stage 1: session key/store/lifecycle
 
-- Add schema migration and resolver.
-- Preserve BUG-025 e2e behavior.
-- Add idle/manual reset tests.
+- S1-A added the `session_entries` schema, migration, and store primitives.
+- S1-B integrated the resolver/lifecycle path: stable `sessionKey`,
+  `session_entries.currentConversationId`, legacy open-conversation backfill,
+  account-scoped keys, threaded route isolation, gateway manual reset, and
+  classifier new-topic rotation.
+- S1-C locks the implemented Stage 1 behavior with focused regression tests and
+  updates this plan/task documentation.
+- Idle and daily expiry remain later lifecycle work. They are not implemented in
+  S1-B/S1-C and should not be implied by Stage 1 docs or tests.
 
 Stage 2: token-budget prompt assembly
 
@@ -324,8 +332,9 @@ Stage 5: status, cleanup, UI follow-up
    - Insufficient because multiple compaction checkpoints and memory flush state
      need structured tracking.
 
-## Proposal Gate
+## Execution Gate
 
-This plan is a proposal draft. Implementation should start only after explicit
-approval, then be split into the staged tasks above instead of completed in one
-session.
+This plan was approved on 2026-04-28 12:27 and is executing through the staged
+BKD chain above. Stage workers should report to the coordinator and move their
+own issue to review; the overall FEAT-037 task remains in progress until the
+later stages land.

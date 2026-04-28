@@ -71,3 +71,25 @@ OpenClaw research anchors:
   lifecycle, budget, and engine-binding metadata.
 - The first implementation should be staged. Do not combine schema migration,
   compaction, native engine resume, UI, and cleanup into one work session.
+
+## Stage Progress
+
+- S1-A completed directly on `main` as `c87851b`
+  (`feat(session): add worker session store primitives`), adding the
+  `session_entries` migration and store helpers.
+- S1-B was reviewed, merged, verified, and pushed to `origin/main` as
+  `25cbb4f`
+  (`merge(session): integrate S1-B resolver lifecycle (bkd/xuropmdt)`).
+- S1-C (`hpdbois1`) covers Stage 1 lifecycle regressions for gateway
+  conversation continuity, first-turn session entry creation, active session
+  mapping reuse, legacy conversation backfill, account-scoped keys, threaded
+  route isolation, gateway `/new` and `/reset` manual rotation, and
+  classifier-driven new-topic rotation.
+
+Deferred to later stages:
+
+- Idle and daily expiry policy implementation.
+- Token-budget context assembly.
+- Persistent compaction summaries and pre-compaction memory flush.
+- Engine-native session/thread bindings.
+- CLI/API/UI session status and maintenance surfaces.
