@@ -1,5 +1,20 @@
 # AIWorker Changelog
 
+## 2026-04-28 10:40 [BUG-P1] BUG-024 — Codex app-server protocol compatibility
+
+Fixed the Codex executor failure found during the `v0.4.0` release e2e test
+with a local Codex worker joined to the test-server fleet:
+
+- Codex executor now keeps legacy `thread_start` / `newTurn` support and falls
+  back to current `thread/start` / `turn/start` when current Codex CLI rejects
+  the legacy request.
+- Current Codex notifications such as `item/agentMessage/delta`,
+  `thread/tokenUsage/updated`, and `turn/completed` now normalize into shared
+  `AgentEvent`s.
+- Codex default model metadata now uses `gpt-5.5`, matching the current Codex
+  CLI model list for the local ChatGPT-backed account.
+- Added focused tests for both legacy and current Codex app-server protocols.
+
 ## 2026-04-28 10:02 [BUG-P1] BUG-023 — 0.4.0 release readiness blockers
 
 Fixed release blockers found while reviewing `v0.3.0..HEAD` for publish:

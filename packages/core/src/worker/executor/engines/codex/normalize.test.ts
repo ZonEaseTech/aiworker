@@ -152,6 +152,48 @@ describe('normalizeCodexNotification', () => {
     })
     expect(out).toEqual([{ type: 'error', error: 'rate limited' }])
   })
+
+  it('turns current item/agentMessage/delta into assistant_message_delta', () => {
+    const out = normalizeCodexNotification({
+      jsonrpc: '2.0',
+      method: 'item/agentMessage/delta',
+      params: { delta: 'OK' },
+    })
+    expect(out).toEqual([{ type: 'assistant_message_delta', delta: 'OK' }])
+  })
+
+  it('turns current thread/tokenUsage/updated into token_usage', () => {
+    const out = normalizeCodexNotification({
+      jsonrpc: '2.0',
+      method: 'thread/tokenUsage/updated',
+      params: {
+        tokenUsage: {
+          total: { inputTokens: 12, outputTokens: 9 },
+        },
+      },
+    })
+    expect(out).toEqual([{
+      type: 'token_usage',
+      usage: { inputTokens: 12, outputTokens: 9 },
+    }])
+  })
+
+  it('turns current failed turn/completed into error + finish:error', () => {
+    const out = normalizeCodexNotification({
+      jsonrpc: '2.0',
+      method: 'turn/completed',
+      params: {
+        turn: {
+          status: 'failed',
+          error: { message: 'unsupported model' },
+        },
+      },
+    })
+    expect(out).toEqual([
+      { type: 'error', error: 'unsupported model' },
+      { type: 'finish', reason: 'error' },
+    ])
+  })
 })
 
 describe('mapStopReason', () => {

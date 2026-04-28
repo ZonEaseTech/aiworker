@@ -30,14 +30,14 @@ describe('CodexExecutor — smoke over stub app-server', () => {
     await fs.rm(workspace, { recursive: true, force: true })
   })
 
-  function makeExecutor() {
+  function makeExecutor(stubProtocol: 'legacy' | 'current' = 'legacy') {
     return new CodexExecutor({
       timeoutMs: 10_000,
       resolveBinary: async () => STUB_PATH,
       spawn: (_cmd, args, opts) =>
         spawn('node', [STUB_PATH, ...args], {
           cwd: opts.cwd,
-          env: opts.env,
+          env: { ...opts.env, CODEX_STUB_PROTOCOL: stubProtocol },
           stdio: ['pipe', 'pipe', 'pipe'],
         }),
     })
@@ -72,6 +72,22 @@ describe('CodexExecutor — smoke over stub app-server', () => {
     expect(last.type).toBe('finish')
     if (last.type === 'finish')
       expect(last.reason).toBe('stop')
+  }, 15_000)
+
+  it('falls back to thread/start → turn/start and emits current-protocol events', async () => {
+    const executor = makeExecutor('current')
+    const events = await collect(executor.run({
+      messages: [{ role: 'user', content: 'reply ok' }],
+      workspacePath: workspace,
+    }))
+
+    expect(events).toContainEqual({ type: 'thinking_delta', delta: 'Planning the edit...' })
+    expect(events).toContainEqual({ type: 'assistant_message_delta', delta: 'OK' })
+    expect(events).toContainEqual({
+      type: 'token_usage',
+      usage: { inputTokens: 12, outputTokens: 9 },
+    })
+    expect(events.at(-1)).toEqual({ type: 'finish', reason: 'stop' })
   }, 15_000)
 
   it('emits error + finish:error when no user message is present', async () => {

@@ -3,7 +3,10 @@
  * Engine-internal; only `AgentEvent` crosses the orchestrator boundary.
  *
  * Lifecycle owned by the host:
- *   `initialize` → `thread_start` (or `thread_fork`) → `newTurn` → events…
+ *   - legacy Codex app-server:
+ *     `initialize` → `thread_start` (or `thread_fork`) → `newTurn` → events…
+ *   - current Codex app-server:
+ *     `initialize` → `thread/start` → `turn/start` → events…
  *
  * The Codex app-server emits progress as JSON-RPC notifications on methods
  * prefixed `codex/event/*`. FEAT-016 only normalises the events listed below;
@@ -36,6 +39,13 @@ export interface CodexThreadStartResult {
   threadId: string
 }
 
+/** Result envelope of current `thread/start`. */
+export interface CodexCurrentThreadStartResult {
+  thread: {
+    id: string
+  }
+}
+
 /** Params sent with `newTurn`. Prompt text is sent verbatim from the user message. */
 export interface CodexNewTurnParams {
   threadId: string
@@ -45,6 +55,22 @@ export interface CodexNewTurnParams {
 /** Result of `newTurn` — arrives after `codex/event/stop` has been emitted. */
 export interface CodexNewTurnResult {
   stopReason?: CodexStopReason
+}
+
+/** Params sent with current `turn/start`. */
+export interface CodexCurrentTurnStartParams {
+  threadId: string
+  input: Array<{
+    type: 'text'
+    text: string
+  }>
+}
+
+export interface CodexCurrentTurnStartResult {
+  turn: {
+    id: string
+    status: 'inProgress' | 'completed' | 'failed' | string
+  }
 }
 
 /** Codex turn stop reasons surfaced to the harness. */

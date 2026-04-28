@@ -95,7 +95,7 @@ const HTTP_MODELS_OPENROUTER = [
 const CLAUDE_CODE_MODELS = ['sonnet', 'opus', 'haiku']
 const GEMINI_ACP_MODELS = ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash']
 const QWEN_ACP_MODELS = ['qwen3-coder-plus', 'qwen3-max', 'qwen3-72b']
-const CODEX_MODELS = ['gpt-5.2-codex', 'gpt-5.2', 'gpt-5.1-codex-fast', 'gpt-5']
+const CODEX_MODELS = ['gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.3-codex', 'gpt-5.2']
 const CURSOR_MODELS = ['auto', 'claude-sonnet-4.5', 'gpt-5', 'gemini-2.5-pro']
 
 export const ENGINE_CATALOG: Record<EngineKind, EngineMeta> = {
@@ -204,8 +204,8 @@ export const ENGINE_CATALOG: Record<EngineKind, EngineMeta> = {
     description: 'OpenAI @openai/codex app-server via JSON-RPC over stdio (FEAT-016).',
     variants: {
       default: {
-        label: 'Default (gpt-5.2-codex)',
-        description: 'Auto-approve (approval_policy=never), 120s turn timeout.',
+        label: 'Default (gpt-5.5)',
+        description: 'Codex app-server, 120s turn timeout.',
         schema: codexVariantSchema,
         fieldHints: { model: CODEX_MODELS },
       },

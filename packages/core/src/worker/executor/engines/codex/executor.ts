@@ -9,6 +9,8 @@ import type { Buffer } from 'node:buffer'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import type { JsonRpcNotification, JsonRpcRequest } from '../acp/types'
 import type {
+  CodexCurrentThreadStartResult,
+  CodexCurrentTurnStartResult,
   CodexNewTurnResult,
   CodexThreadStartParams,
   CodexThreadStartResult,
@@ -37,7 +39,7 @@ export type CodexSpawnLike = (
 ) => ChildProcessWithoutNullStreams
 
 export interface CodexExecutorOptions {
-  /** Forwarded as `thread_start.model` — maps onto `profile.modelId`. */
+  /** Forwarded as the Codex thread-start model — maps onto `profile.modelId`. */
   model?: string
   /** Pin `@openai/codex` version for the `npx -y` fallback. */
   cliVersion?: string
@@ -61,9 +63,10 @@ export interface CodexExecutorOptions {
 
 /**
  * Codex executor. Owns one `codex app-server` subprocess per turn, drives the
- * `initialize → thread_start → newTurn` JSON-RPC lifecycle, and normalises
- * every `codex/event/*` notification into an `AgentEvent` the orchestrator can
- * consume directly.
+ * the Codex app-server JSON-RPC lifecycle, and normalises Codex notifications
+ * into `AgentEvent`s the orchestrator can consume directly. It supports both
+ * legacy `thread_start/newTurn` and current `thread/start/turn/start`
+ * protocol variants.
  *
  * Multi-turn `thread_fork` resume is explicitly out of scope (tracked P3) —
  * every run starts a fresh thread.
@@ -172,28 +175,30 @@ export class CodexExecutor implements ExecutorProvider {
         clientInfo: { name: 'aiworker', version: '0.2.0' },
       })
 
-      const threadStartParams: CodexThreadStartParams = {
-        approval_policy: 'never',
-      }
       const model = input.model ?? this.options.model
-      if (model && model.length > 0)
-        threadStartParams.model = model
-      const thread = await peer.request<CodexThreadStartResult>('thread_start', threadStartParams)
-      if (!thread?.threadId) {
-        yield { type: 'error', error: 'Codex thread_start returned no threadId' }
+      const thread = await this.startThread(peer, model)
+      if (!thread.threadId) {
+        yield { type: 'error', error: 'Codex thread start returned no threadId' }
         yield { type: 'finish', reason: 'error' }
         return
       }
 
-      const turnPromise = peer.request<CodexNewTurnResult>('newTurn', {
-        threadId: thread.threadId,
-        prompt: latestUser,
-      })
-
-      turnPromise.then(
-        () => queue.close({ kind: 'finish' }),
-        err => queue.close({ kind: 'error', message: err instanceof Error ? err.message : String(err) }),
-      )
+      if (thread.protocol === 'legacy') {
+        const turnPromise = peer.request<CodexNewTurnResult>('newTurn', {
+          threadId: thread.threadId,
+          prompt: latestUser,
+        })
+        turnPromise.then(
+          () => queue.close({ kind: 'finish' }),
+          err => queue.close({ kind: 'error', message: err instanceof Error ? err.message : String(err) }),
+        )
+      }
+      else {
+        await peer.request<CodexCurrentTurnStartResult>('turn/start', {
+          threadId: thread.threadId,
+          input: [{ type: 'text', text: latestUser }],
+        })
+      }
 
       let sawFinish = false
       for await (const event of queue.iter()) {
@@ -230,6 +235,8 @@ export class CodexExecutor implements ExecutorProvider {
   private handleNotification(notification: JsonRpcNotification, queue: AgentEventQueue): void {
     for (const event of normalizeCodexNotification(notification))
       queue.push(event)
+    if (notification.method === 'turn/completed')
+      queue.close({ kind: 'finish' })
   }
 
   private async handleInboundRequest(req: JsonRpcRequest): Promise<unknown> {
@@ -239,6 +246,29 @@ export class CodexExecutor implements ExecutorProvider {
     if (req.method === 'codex/request_permission' || req.method === 'session/request_permission')
       return { outcome: { outcome: 'selected', optionId: 'allow' } }
     throw new Error(`unsupported codex client method: ${req.method}`)
+  }
+
+  private async startThread(
+    peer: JsonRpcPeer,
+    model: string | undefined,
+  ): Promise<{ protocol: 'legacy' | 'current', threadId: string }> {
+    const threadStartParams: CodexThreadStartParams = {
+      approval_policy: 'never',
+    }
+    if (model && model.length > 0)
+      threadStartParams.model = model
+
+    try {
+      const thread = await peer.request<CodexThreadStartResult>('thread_start', threadStartParams)
+      return { protocol: 'legacy', threadId: thread.threadId }
+    }
+    catch (err) {
+      if (!isUnknownLegacyThreadStart(err))
+        throw err
+    }
+
+    const thread = await peer.request<CodexCurrentThreadStartResult>('thread/start', threadStartParams)
+    return { protocol: 'current', threadId: thread.thread.id }
   }
 
   private async resolveCommand(): Promise<{ cmd: string, args: string[] }> {
@@ -256,6 +286,14 @@ export class CodexExecutor implements ExecutorProvider {
       args: ['-y', `@openai/codex@${version}`, ...argv],
     }
   }
+}
+
+function isUnknownLegacyThreadStart(err: unknown): boolean {
+  if (!(err instanceof Error))
+    return false
+  return err.message.includes('thread_start')
+    || err.message.includes('unknown variant')
+    || err.message.includes('Invalid request')
 }
 
 /**

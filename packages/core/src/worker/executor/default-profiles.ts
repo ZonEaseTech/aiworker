@@ -105,7 +105,7 @@ export const DEFAULT_PROFILES: {
   'codex': {
     variants: {
       default: {
-        model: 'gpt-5.2-codex',
+        model: 'gpt-5.5',
         timeoutMs: 120_000,
       } satisfies CodexVariantBody,
     },

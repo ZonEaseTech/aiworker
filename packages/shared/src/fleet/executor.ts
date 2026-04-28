@@ -140,7 +140,7 @@ export interface AcpVariantBody {
 
 /**
  * Codex (`@openai/codex app-server`) variant body. FEAT-016 keeps the
- * exposed surface minimal — `model` maps to the `thread_start` param, all
+ * exposed surface minimal — `model` maps to the Codex thread-start param, all
  * other Codex-specific knobs (sandbox / approval_policy / reasoning effort)
  * tunnel through `CmdOverrides.extraArgs` so variant bodies don't balloon.
  */

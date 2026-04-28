@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // Stub Codex app-server used by FEAT-016 tests. Reads JSON-RPC requests on
-// stdin, responds to `initialize` / `thread_start`, and on `newTurn` emits a
-// deterministic `codex/event/*` notification sequence before returning a
-// `stopReason: 'stop'` result. The transcript covers every shape the
-// normalizer cares about:
+// stdin, responds to either the legacy `thread_start/newTurn` protocol or the
+// current `thread/start/turn/start` protocol, and emits a deterministic
+// notification sequence. The transcript covers every shape the normalizer
+// cares about:
 // - codex/event/thinking (delta)
 // - codex/event/assistant_message (delta)
 // - codex/event/tool_call (read + apply_patch)
@@ -16,6 +16,7 @@ import readline from 'node:readline'
 
 const argv = process.argv.slice(2)
 const wantsAppServer = argv.includes('app-server')
+const protocol = process.env.CODEX_STUB_PROTOCOL ?? 'legacy'
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -64,6 +65,35 @@ function runTurn(turnId, threadId) {
   write({ jsonrpc: '2.0', id: turnId, result: { stopReason: 'stop', threadId } })
 }
 
+function runCurrentTurn(threadId) {
+  emitNotification('item/reasoning/textDelta', {
+    threadId,
+    turnId: 'turn_stub',
+    itemId: 'reason_stub',
+    delta: 'Planning the edit...',
+  })
+  emitNotification('item/agentMessage/delta', {
+    threadId,
+    turnId: 'turn_stub',
+    itemId: 'msg_stub',
+    delta: 'OK',
+  })
+  emitNotification('thread/tokenUsage/updated', {
+    threadId,
+    turnId: 'turn_stub',
+    tokenUsage: {
+      total: { inputTokens: 12, outputTokens: 9 },
+    },
+  })
+  emitNotification('turn/completed', {
+    threadId,
+    turn: {
+      id: 'turn_stub',
+      status: 'completed',
+    },
+  })
+}
+
 rl.on('line', (line) => {
   const trimmed = line.trim()
   if (trimmed.length === 0)
@@ -90,13 +120,39 @@ rl.on('line', (line) => {
     })
     return
   }
+  if (protocol === 'current' && msg.method === 'thread_start') {
+    write({
+      jsonrpc: '2.0',
+      id: msg.id,
+      error: {
+        code: -32600,
+        message: 'Invalid request: unknown variant thread_start',
+      },
+    })
+    return
+  }
   if (msg.method === 'thread_start' || msg.method === 'thread_fork') {
     write({ jsonrpc: '2.0', id: msg.id, result: { threadId: 'thr_stub' } })
+    return
+  }
+  if (msg.method === 'thread/start') {
+    write({ jsonrpc: '2.0', id: msg.id, result: { thread: { id: 'thr_stub' } } })
     return
   }
   if (msg.method === 'newTurn') {
     const threadId = msg.params?.threadId ?? 'thr_stub'
     void runTurn(msg.id, threadId)
+  }
+  if (msg.method === 'turn/start') {
+    const threadId = msg.params?.threadId ?? 'thr_stub'
+    write({
+      jsonrpc: '2.0',
+      id: msg.id,
+      result: {
+        turn: { id: 'turn_stub', status: 'inProgress' },
+      },
+    })
+    void runCurrentTurn(threadId)
   }
 })
 

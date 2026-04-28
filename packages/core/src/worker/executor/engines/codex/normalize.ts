@@ -15,9 +15,9 @@ import type {
  * Unknown methods return `[]` so forward-compatible event streams don't crash
  * the harness.
  *
- * Finish semantics: `codex/event/stop` emits exactly one `finish` event; the
- * harness pairs that with the `newTurn` response so callers see the terminal
- * finish either way.
+ * Finish semantics: legacy `codex/event/stop` and current `turn/completed`
+ * each emit exactly one `finish` event. The executor closes the event queue
+ * after the matching terminal condition for the active protocol.
  */
 export function normalizeCodexNotification(notification: JsonRpcNotification): AgentEvent[] {
   const params = (notification.params ?? {}) as Record<string, unknown>
@@ -36,6 +36,17 @@ export function normalizeCodexNotification(notification: JsonRpcNotification): A
       return normalizeStop(params as unknown as CodexStopEvent)
     case 'codex/event/error':
       return [{ type: 'error', error: typeof params.message === 'string' ? params.message : 'codex error' }]
+    case 'item/agentMessage/delta':
+      return normalizeAssistantMessage(params as { delta?: string })
+    case 'item/reasoning/textDelta':
+    case 'item/reasoning/summaryTextDelta':
+      return normalizeThinking(params as { delta?: string })
+    case 'thread/tokenUsage/updated':
+      return normalizeCurrentTokenUsage(params)
+    case 'turn/completed':
+      return normalizeCurrentTurnCompleted(params)
+    case 'error':
+      return normalizeCurrentError(params)
     default:
       return []
   }
@@ -105,6 +116,50 @@ function normalizeStop(event: CodexStopEvent): AgentEvent[] {
   }
   out.push({ type: 'finish', reason: mapStopReason(event.reason) })
   return out
+}
+
+function normalizeCurrentTokenUsage(params: Record<string, unknown>): AgentEvent[] {
+  const tokenUsage = params.tokenUsage
+  if (tokenUsage === null || typeof tokenUsage !== 'object')
+    return []
+  const total = (tokenUsage as { total?: unknown }).total
+  if (total === null || typeof total !== 'object')
+    return []
+  const usage = total as { inputTokens?: unknown, outputTokens?: unknown }
+  return [{
+    type: 'token_usage',
+    usage: {
+      inputTokens: typeof usage.inputTokens === 'number' ? usage.inputTokens : 0,
+      outputTokens: typeof usage.outputTokens === 'number' ? usage.outputTokens : 0,
+    },
+  }]
+}
+
+function normalizeCurrentTurnCompleted(params: Record<string, unknown>): AgentEvent[] {
+  const turn = params.turn
+  if (turn === null || typeof turn !== 'object')
+    return [{ type: 'finish', reason: 'stop' }]
+  const status = (turn as { status?: unknown }).status
+  const error = (turn as { error?: unknown }).error
+  const out: AgentEvent[] = []
+  if (status === 'failed') {
+    out.push({
+      type: 'error',
+      error: extractErrorMessage(error) ?? 'codex turn failed',
+    })
+    out.push({ type: 'finish', reason: 'error' })
+    return out
+  }
+  if (status === 'cancelled') {
+    out.push({ type: 'finish', reason: 'cancelled' })
+    return out
+  }
+  out.push({ type: 'finish', reason: 'stop' })
+  return out
+}
+
+function normalizeCurrentError(params: Record<string, unknown>): AgentEvent[] {
+  return [{ type: 'error', error: extractErrorMessage(params.error) ?? 'codex error' }]
 }
 
 /**
@@ -188,6 +243,17 @@ function pickString(input: Record<string, unknown>, keys: readonly string[]): st
       return v
   }
   return ''
+}
+
+function extractErrorMessage(value: unknown): string | undefined {
+  if (typeof value === 'string' && value.length > 0)
+    return value
+  if (value && typeof value === 'object') {
+    const message = (value as { message?: unknown }).message
+    if (typeof message === 'string' && message.length > 0)
+      return message
+  }
+  return undefined
 }
 
 function buildEditDiff(input: Record<string, unknown>): string | undefined {
