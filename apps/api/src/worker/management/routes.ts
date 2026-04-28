@@ -8,14 +8,17 @@ import {
   deleteSecret,
   getAvailabilityProbe,
   getSecretsVault,
+  getSessionStatus,
   handleBrainTest,
   handleChannelTest,
   handleExecutorTest,
   handleTokenRotate,
   InvalidConfigError,
   listSecrets,
+  listSessionStatuses,
   putSecret,
   readConfig,
+  runClosedTranscriptMaintenance,
   workerEnv,
 } from '@zonease/aiworker-core'
 import { AppError } from '@zonease/aiworker-shared'
@@ -52,6 +55,18 @@ const channelTestBody = z.object({
   chatId: z.string().optional(),
   text: z.string().optional(),
 }).optional()
+
+const sessionListQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(200).optional().default(50),
+  offset: z.coerce.number().int().min(0).optional().default(0),
+  status: z.enum(['active', 'closed']).optional(),
+})
+
+const closedTranscriptMaintenanceBody = z.object({
+  olderThanDays: z.number().int().min(0).max(3650).optional().default(30),
+  limit: z.number().int().min(1).max(200).optional().default(50),
+  apply: z.boolean().optional().default(false),
+})
 
 /**
  * `/cron` CRUD 共用的 channel 枚举校验——保持与 ChannelType 同步。
@@ -256,6 +271,64 @@ export function buildManagementRoutes(deps: ManagementRoutesDeps) {
   routes.post('/token/rotate', async (c) => {
     const state = deps.getState()
     const result = await handleTokenRotate(getWorkerDb(), getSecretsVault(), state)
+    return c.json(result)
+  })
+
+  routes.get('/sessions', (c) => {
+    const parsed = sessionListQuery.safeParse({
+      limit: c.req.query('limit'),
+      offset: c.req.query('offset'),
+      status: c.req.query('status'),
+    })
+    if (!parsed.success) {
+      return c.json({
+        error: {
+          code: 'invalid-query',
+          message: 'invalid sessions query',
+          details: parsed.error.flatten().fieldErrors,
+        },
+      }, 400)
+    }
+    const result = listSessionStatuses({
+      config: deps.getState().runtime.config,
+      limit: parsed.data.limit,
+      offset: parsed.data.offset,
+      ...(parsed.data.status === undefined ? {} : { status: parsed.data.status }),
+    })
+    return c.json(result)
+  })
+
+  routes.get('/sessions/:sessionKey', (c) => {
+    const session = getSessionStatus(c.req.param('sessionKey'), deps.getState().runtime.config)
+    if (session === null) {
+      return c.json({
+        error: {
+          code: 'not-found',
+          message: 'session not found',
+        },
+      }, 404)
+    }
+    return c.json({ session })
+  })
+
+  routes.post('/sessions/maintenance/closed-transcripts', async (c) => {
+    const raw = await c.req.json().catch(() => undefined)
+    const parsed = closedTranscriptMaintenanceBody.safeParse(raw ?? {})
+    if (!parsed.success) {
+      return c.json({
+        error: {
+          code: 'invalid-body',
+          message: 'invalid session maintenance body',
+          details: parsed.error.flatten().fieldErrors,
+        },
+      }, 400)
+    }
+    const body = parsed.data
+    const result = runClosedTranscriptMaintenance({
+      olderThanDays: body.olderThanDays,
+      limit: body.limit,
+      apply: body.apply,
+    })
     return c.json(result)
   })
 

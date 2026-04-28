@@ -25,6 +25,9 @@ const EXPECTED_COMMANDS = [
   'schedule-list',
   'schedule-add',
   'schedule-remove',
+  'sessions list',
+  'sessions show',
+  'sessions maintenance',
   // operator-remote（空格形）
   'fleet list',
   'fleet info',
@@ -78,7 +81,7 @@ describe('aiworker cli registration', () => {
       console.log = orig
     }
     const help = captured.join('\n')
-    for (const keyword of ['serve', 'fleet list', 'gateway start', 'enroll approve', 'config get', 'install systemd'])
+    for (const keyword of ['serve', 'sessions list', 'fleet list', 'gateway start', 'enroll approve', 'config get', 'install systemd'])
       expect(help).toContain(keyword)
   })
 })
@@ -142,6 +145,16 @@ describe('preprocessArgv', () => {
       '/path/to/aiworker.ts',
       'install systemd',
       '--dry-run',
+    ])
+  })
+
+  it('sessions list 被折叠', () => {
+    expect(run('sessions', 'list', '--limit', '2')).toEqual([
+      '/usr/bin/bun',
+      '/path/to/aiworker.ts',
+      'sessions list',
+      '--limit',
+      '2',
     ])
   })
 

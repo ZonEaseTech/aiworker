@@ -105,8 +105,16 @@ OpenClaw research anchors:
   ignore bindings. Gateway `/new` / `/reset` continue to rotate the session
   entry, which clears native bindings before the fresh turn. S4 adds no schema
   migration and does not include S5 status/API/UI or maintenance surfaces.
+- S5 (`u8hbsj4l`) adds session status and maintenance surfaces only. The shared
+  safe DTO powers bounded worker API status queries and local CLI commands,
+  reports lifecycle/counter/memory-flush state from `session_entries`, and
+  summarizes engine bindings without exposing raw binding payload values.
+  Closed transcript maintenance defaults to dry-run and requires explicit
+  apply; it only targets closed conversations no longer referenced by the
+  active session map. S5 adds no schema migration, no UI redesign, no release
+  publishing, and no fleet/worker e2e flow.
 
 Deferred to later stages:
 
 - Idle and daily expiry policy implementation.
-- CLI/API/UI session status and maintenance surfaces.
+- Worker UI observability for session status.

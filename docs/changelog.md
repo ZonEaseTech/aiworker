@@ -1,5 +1,25 @@
 # AIWorker Changelog
 
+## 2026-04-28 17:33 [progress] FEAT-037 S5 — session status and maintenance surfaces
+
+Implemented S5 only for the OpenClaw-style worker session control plane:
+
+- Added shared safe session status DTOs that report session key, active
+  conversation/session id, route metadata, lifecycle timestamps, reset
+  reason/time, context counters, compaction count, memory-flush state, and
+  redacted engine binding summaries.
+- Added bounded worker API status routes under `/api/worker/sessions` plus
+  closed transcript maintenance at
+  `/api/worker/sessions/maintenance/closed-transcripts`.
+- Added local CLI commands: `aiworker sessions list`,
+  `aiworker sessions show <sessionKey>`, and
+  `aiworker sessions maintenance`.
+- Maintenance defaults to dry-run and requires explicit `apply`; it only targets
+  closed conversations that are no longer referenced by
+  `session_entries.currentConversationId`.
+- No schema migration, UI redesign, release publishing, fleet/worker e2e, or
+  deployment automation was added.
+
 ## 2026-04-28 16:38 [progress] FEAT-037 S4 — engine-native session bindings
 
 Implemented S4 only for the OpenClaw-style worker session control plane:

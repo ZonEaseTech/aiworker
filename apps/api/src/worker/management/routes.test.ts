@@ -17,7 +17,18 @@ import {
   resetAvailabilityProbeForTests,
   resetSecretsVaultForTests,
 } from '@zonease/aiworker-core'
-import { closeWorkerDb, getWorkerDb, initWorkerDb, runWorkerMigrations } from '@zonease/aiworker-storage-sqlite/worker'
+import {
+  closeWorkerDb,
+  conversations,
+  getWorkerDb,
+  initWorkerDb,
+  messages,
+  recordSessionCompaction,
+  runWorkerMigrations,
+  touchSessionEntry,
+  updateSessionEngineBinding,
+  upsertSessionEntry,
+} from '@zonease/aiworker-storage-sqlite/worker'
 
 import { beforeEach, describe, expect, it } from 'bun:test'
 import { buildBearerAuth } from './bearer-auth'
@@ -49,7 +60,7 @@ function healthyExecutor(): ExecutorProvider {
 function stubRuntime(processes?: ProcessManager, approvals?: ApprovalStore): WorkerRuntime {
   return {
     workerId: 'w_abcdefghjkmn',
-    config: {} as WorkerConfig,
+    config: validConfig({ executor: { engine: 'codex', variant: 'default' } }),
     brain: healthyBrain(),
     executor: healthyExecutor(),
     channels: new ChannelRegistry([]),
@@ -257,6 +268,103 @@ describe('buildManagementRoutes', () => {
     const listRes = await app.fetch(authed('/secrets'))
     const body = await listRes.json() as { keys: string[] }
     expect(body.keys).toContain('manual-key')
+  })
+
+  it('GET /sessions returns safe session status metadata from session_entries', async () => {
+    const { state } = await bootstrap()
+    getWorkerDb().insert(conversations).values({
+      id: 'conv-session-api',
+      channel: 'web',
+      chatId: 'chat-1',
+      status: 'open',
+      startedAt: '2026-04-28T12:00:00.000Z',
+      lastActiveAt: '2026-04-28T12:00:00.000Z',
+    }).run()
+    upsertSessionEntry({
+      sessionKey: 'gw:conv:session-api',
+      currentConversationId: 'conv-session-api',
+      channel: 'web',
+      chatId: 'chat-1',
+      accountId: 'acct-1',
+      at: '2026-04-28T12:01:00.000Z',
+    })
+    touchSessionEntry('gw:conv:session-api', {
+      at: '2026-04-28T12:02:00.000Z',
+      contextTokens: 123,
+      totalTokens: 456,
+      totalTokensFresh: 78,
+    })
+    recordSessionCompaction('gw:conv:session-api', {
+      memoryFlushAt: '2026-04-28T12:01:30.000Z',
+    })
+    updateSessionEngineBinding('gw:conv:session-api', 'codex', {
+      threadId: 'thread-secret-value',
+      localPath: '/tmp/provider-local-path',
+    })
+
+    const app = buildWrapperApp({ getState: () => state, reloadRuntime: async () => {} })
+    const res = await app.fetch(authed('/sessions?limit=10'))
+    expect(res.status).toBe(200)
+    const body = await res.json() as {
+      sessions: Array<{
+        sessionKey: string
+        currentConversationId: string
+        context: { contextTokens: number, compactionCount: number }
+        engineBindings: { configured: { present: boolean, fields: string[] } }
+      }>
+    }
+    expect(body.sessions[0]?.sessionKey).toBe('gw:conv:session-api')
+    expect(body.sessions[0]?.currentConversationId).toBe('conv-session-api')
+    expect(body.sessions[0]?.context.contextTokens).toBe(123)
+    expect(body.sessions[0]?.context.compactionCount).toBe(1)
+    expect(body.sessions[0]?.engineBindings.configured).toMatchObject({
+      present: true,
+      fields: ['localPath', 'threadId'],
+    })
+    expect(JSON.stringify(body)).not.toContain('thread-secret-value')
+    expect(JSON.stringify(body)).not.toContain('/tmp/provider-local-path')
+
+    const showRes = await app.fetch(authed('/sessions/gw:conv:session-api'))
+    expect(showRes.status).toBe(200)
+    const showBody = await showRes.json() as { session: { sessionKey: string, context: { contextTokens: number } } }
+    expect(showBody.session.sessionKey).toBe('gw:conv:session-api')
+    expect(showBody.session.context.contextTokens).toBe(123)
+  })
+
+  it('POST /sessions/maintenance/closed-transcripts defaults to dry-run without mutating', async () => {
+    const { state } = await bootstrap()
+    getWorkerDb().insert(conversations).values({
+      id: 'conv-closed-api',
+      channel: 'web',
+      chatId: 'chat-old',
+      status: 'closed',
+      startedAt: '2020-01-01T00:00:00.000Z',
+      lastActiveAt: '2020-01-01T00:00:00.000Z',
+      closedAt: '2020-01-02T00:00:00.000Z',
+    }).run()
+    getWorkerDb().insert(messages).values([
+      { conversationId: 'conv-closed-api', role: 'user', content: 'old user' },
+      { conversationId: 'conv-closed-api', role: 'assistant', content: 'old assistant' },
+    ]).run()
+
+    const app = buildWrapperApp({ getState: () => state, reloadRuntime: async () => {} })
+    const res = await app.fetch(authed('/sessions/maintenance/closed-transcripts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ olderThanDays: 1, limit: 10 }),
+    }))
+
+    expect(res.status).toBe(200)
+    const body = await res.json() as {
+      mode: string
+      planned: { conversations: number, messages: number }
+      applied: { conversationsDeleted: number, messagesDeleted: number }
+    }
+    expect(body.mode).toBe('dry-run')
+    expect(body.planned).toMatchObject({ conversations: 1, messages: 2 })
+    expect(body.applied).toEqual({ conversationsDeleted: 0, messagesDeleted: 0 })
+    expect(getWorkerDb().select().from(conversations).all().map(row => row.id)).toContain('conv-closed-api')
+    expect(getWorkerDb().select().from(messages).all()).toHaveLength(2)
   })
 
   it('PUT /secrets/:key with empty value returns 400', async () => {
