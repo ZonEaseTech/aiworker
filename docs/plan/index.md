@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-04-28 19:10
+> Updated: 2026-04-28 19:14
 
 ## Usage
 
@@ -59,3 +59,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [-] [**PLAN-028 OpenClaw-style worker session control plane**](PLAN-028.md) `2026-04-28`
 - [x] [**PLAN-029 Gateway chat accepted id continuation**](PLAN-029.md) `2026-04-28`
 - [x] [**PLAN-030 Restore Web Tailwind utility generation**](PLAN-030.md) `2026-04-28`
+- [-] [**PLAN-031 Publish aiworker CLI 0.4.4**](PLAN-031.md) `2026-04-28`

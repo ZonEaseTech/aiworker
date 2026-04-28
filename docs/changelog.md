@@ -1,5 +1,15 @@
 # AIWorker Changelog
 
+## 2026-04-28 19:14 [progress] REL-001 — prepare 0.4.4 release
+
+Started the `@zonease/aiworker-cli@0.4.4` patch release:
+
+- npm latest is currently `0.4.3`, and `0.4.4` is not published yet.
+- The release contains the accepted gateway chat id continuation fix, the Web
+  Tailwind utility generation fix, and the reusable fleet test workflow skill.
+- Local npm auth is unavailable, so the preferred publish path is the existing
+  tag-triggered GitHub release workflow.
+
 ## 2026-04-28 19:10 [BUG-P1] BUG-028 — Web Tailwind utilities restored
 
 Fixed the Web UI CSS bundle generation bug:

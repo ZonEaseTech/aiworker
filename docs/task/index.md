@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-04-28 19:10
+> Updated: 2026-04-28 19:14
 
 ## Usage
 
@@ -105,3 +105,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [-] [**FEAT-037 OpenClaw-style worker session control plane**](FEAT-037.md) `P1`
 - [x] [**BUG-027 Gateway chat accepted conversation id cannot be reused for continuation**](BUG-027.md) `P1`
 - [x] [**BUG-028 Web UI CSS bundle misses Tailwind utilities**](BUG-028.md) `P1`
+- [-] [**REL-001 Publish aiworker CLI 0.4.4**](REL-001.md) `P1`
