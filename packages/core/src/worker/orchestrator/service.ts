@@ -14,12 +14,12 @@ import type { ApprovalDecision, ApprovalStore } from './approvals'
 import type { ProcessManager } from './process-manager'
 
 import { DEFAULT_MAX_HISTORY_MESSAGES } from '@zonease/aiworker-shared'
-import { agentTasks, conversations, getWorkerDb, messages } from '@zonease/aiworker-storage-sqlite/worker'
+import { agentTasks, conversations, getWorkerDb, messages, rotateSessionConversation, touchSessionEntry, upsertSessionEntry } from '@zonease/aiworker-storage-sqlite/worker'
 
 import consola from 'consola'
 import { eq } from 'drizzle-orm'
 import { getChannelAdapter } from '../channels/registry'
-import { classifyContinuation, findOpenConversation, loadRecentMessages } from '../conversation/router'
+import { classifyContinuation, findOpenConversation, findSessionConversation, hasSessionEntryForRoute, loadRecentMessages, resolveSessionKey } from '../conversation/router'
 import { resolveVariant } from '../executor/default-profiles'
 import { DEFAULT_APPROVAL_TIMEOUT_MS } from './approvals'
 import { evaluateToolPolicy } from './policy'
@@ -47,6 +47,10 @@ interface OrchestratorDeps {
 }
 
 type ConversationRow = typeof conversations.$inferSelect
+interface ResolvedConversation {
+  conversation: ConversationState
+  sessionKey: string
+}
 
 /** `runTool` 输入。`taskId` / `toolCallId` 用作 ApprovalStore 的 key。 */
 export interface RunToolInput {
@@ -76,9 +80,10 @@ export class Orchestrator {
   /** Entry point for inbound envelopes from any channel. */
   async ingest(envelope: Envelope): Promise<void> {
     this.deps.bus.emit('channel.inbound', { channel: envelope.channel, chatId: envelope.chatId, text: envelope.text })
-    const conversation = await this.resolveConversation(envelope)
+    const resolved = await this.resolveConversation(envelope)
+    const { conversation, sessionKey } = resolved
     const workspace = await this.provisionWorkspace(conversation.id)
-    const userMessage = this.persistUserMessage(conversation.id, envelope)
+    const userMessage = this.persistUserMessage(conversation.id, envelope, sessionKey)
     this.deps.bus.emit('conversation.message', { conversationId: conversation.id, messageId: userMessage.id, role: 'user' })
 
     // ProcessManager controls cancellation via an AbortController; its `cancel`
@@ -101,7 +106,7 @@ export class Orchestrator {
           }
         },
       }),
-      job: () => this.run(conversation, envelope, workspace, controller.signal, () => activityCb?.()),
+      job: () => this.run(conversation, envelope, workspace, controller.signal, () => activityCb?.(), sessionKey),
     })
   }
 
@@ -111,6 +116,7 @@ export class Orchestrator {
     workspace: WorkspaceHandle | null,
     signal: AbortSignal,
     notifyActivity: () => void,
+    sessionKey: string,
   ): Promise<void> {
     const db = getWorkerDb()
     const history = await this.loadHistoryWindow(conversation.id)
@@ -180,6 +186,7 @@ export class Orchestrator {
       createdAt: now,
     }).run()
     db.update(conversations).set({ lastActiveAt: now }).where(eq(conversations.id, conversation.id)).run()
+    touchSessionEntry(sessionKey, { at: now })
     this.deps.bus.emit('orchestrator.finished', {
       conversationId: conversation.id,
       ...(taskId === undefined ? {} : { taskId }),
@@ -206,14 +213,26 @@ export class Orchestrator {
     }
   }
 
-  private async resolveConversation(envelope: Envelope): Promise<ConversationState> {
-    const existing = await findOpenConversation(envelope)
-    if (!existing)
-      return this.createConversation(envelope)
+  private async resolveConversation(envelope: Envelope): Promise<ResolvedConversation> {
+    const sessionKey = resolveSessionKey(envelope)
+    const sessionConversation = await findSessionConversation(sessionKey)
+    const routeHasSessionEntry = sessionConversation ? true : await hasSessionEntryForRoute(envelope)
+    const legacyConversation = routeHasSessionEntry ? null : await findOpenConversation(envelope)
+    const existing = sessionConversation ?? legacyConversation
+    if (!existing) {
+      const conversation = this.createConversation(envelope)
+      this.upsertSession(sessionKey, envelope, conversation.id)
+      return { conversation, sessionKey }
+    }
+
+    if (legacyConversation)
+      this.upsertSession(sessionKey, envelope, existing.id)
 
     if (isGatewaySessionReset(envelope)) {
       this.closeConversation(existing)
-      return this.createConversation(envelope)
+      const conversation = this.createConversation(envelope)
+      this.rotateSession(sessionKey, envelope, conversation.id, gatewayResetReason(envelope))
+      return { conversation, sessionKey }
     }
 
     const existingWorkspace = await this.provisionWorkspace(existing.id)
@@ -229,10 +248,12 @@ export class Orchestrator {
     )
     this.deps.bus.emit('conversation.classifier', { conversationId: existing.id, decision })
     if (decision.continue)
-      return rowToState(existing)
+      return { conversation: rowToState(existing), sessionKey }
 
     this.closeConversation(existing)
-    return this.createConversation(envelope)
+    const conversation = this.createConversation(envelope)
+    this.rotateSession(sessionKey, envelope, conversation.id, 'classifier:new-topic')
+    return { conversation, sessionKey }
   }
 
   private closeConversation(existing: ConversationRow): void {
@@ -305,7 +326,28 @@ export class Orchestrator {
     return rowToState(rowRaw)
   }
 
-  private persistUserMessage(conversationId: string, envelope: Envelope) {
+  private upsertSession(sessionKey: string, envelope: Envelope, conversationId: string): void {
+    upsertSessionEntry({
+      sessionKey,
+      currentConversationId: conversationId,
+      channel: envelope.channel,
+      chatId: envelope.chatId,
+      ...(envelope.threadId === undefined ? {} : { threadId: envelope.threadId }),
+      accountId: envelope.accountId,
+    })
+  }
+
+  private rotateSession(sessionKey: string, envelope: Envelope, conversationId: string, resetReason: string): void {
+    const rotated = rotateSessionConversation({
+      sessionKey,
+      currentConversationId: conversationId,
+      resetReason,
+    })
+    if (!rotated)
+      this.upsertSession(sessionKey, envelope, conversationId)
+  }
+
+  private persistUserMessage(conversationId: string, envelope: Envelope, sessionKey: string) {
     const db = getWorkerDb()
     const now = new Date().toISOString()
     const richMetadata = envelope.richMetadata ? JSON.stringify(envelope.richMetadata) : null
@@ -317,6 +359,7 @@ export class Orchestrator {
       createdAt: now,
     }).returning({ id: messages.id }).all()
     db.update(conversations).set({ lastActiveAt: now }).where(eq(conversations.id, conversationId)).run()
+    touchSessionEntry(sessionKey, { at: now })
     return { id: res[0]?.id ?? -1 }
   }
 
@@ -493,6 +536,13 @@ function isGatewaySessionReset(envelope: Envelope): boolean {
     return false
   const raw = envelope.raw as Record<string, unknown>
   return raw.source === 'gateway' && raw.sessionReset === true
+}
+
+function gatewayResetReason(envelope: Envelope): string {
+  if (!envelope.raw || typeof envelope.raw !== 'object' || Array.isArray(envelope.raw))
+    return 'manual'
+  const command = (envelope.raw as Record<string, unknown>).resetCommand
+  return command === '/new' || command === '/reset' ? `manual:${command}` : 'manual'
 }
 
 function rowToState(row: typeof conversations.$inferSelect): ConversationState {

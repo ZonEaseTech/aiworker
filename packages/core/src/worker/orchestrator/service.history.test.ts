@@ -14,9 +14,10 @@ import fs from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
-import { closeWorkerDb, conversations, getWorkerDb, initWorkerDb, messages, runWorkerMigrations } from '@zonease/aiworker-storage-sqlite/worker'
+import { closeWorkerDb, conversations, getSessionEntry, getWorkerDb, initWorkerDb, messages, runWorkerMigrations, upsertSessionEntry } from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { eq } from 'drizzle-orm'
+import { resolveSessionKey } from '../conversation/router'
 import { WorkspaceManager as RealWorkspaceManager } from '../executor/workspace'
 import { ApprovalStore } from './approvals'
 import { ProcessManager } from './process-manager'
@@ -78,13 +79,14 @@ function buildConfig(overrides: Partial<WorkerConfig> = {}): WorkerConfig {
   }
 }
 
-async function seedConversation(id: string, channel = 'web', chatId = 'chat-history') {
+async function seedConversation(id: string, channel = 'web', chatId = 'chat-history', threadId?: string) {
   const db = getWorkerDb()
   const now = new Date().toISOString()
   await db.insert(conversations).values({
     id,
     channel: channel as 'web',
     chatId,
+    ...(threadId === undefined ? {} : { threadId }),
     status: 'open',
     startedAt: now,
     lastActiveAt: now,
@@ -213,6 +215,151 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
     expect(runMessages.length).toBe(5)
   })
 
+  it('routes through session_entries before legacy open conversation lookup', async () => {
+    await seedConversation('conv-session')
+    await seedConversation('conv-legacy')
+    const db = getWorkerDb()
+    db.update(conversations).set({ lastActiveAt: '2026-04-28T12:00:00.000Z' }).where(eq(conversations.id, 'conv-session')).run()
+    db.update(conversations).set({ lastActiveAt: '2026-04-28T12:10:00.000Z' }).where(eq(conversations.id, 'conv-legacy')).run()
+
+    const env = envelope('session-routed')
+    upsertSessionEntry({
+      sessionKey: resolveSessionKey(env),
+      currentConversationId: 'conv-session',
+      channel: env.channel,
+      chatId: env.chatId,
+      accountId: env.accountId,
+    })
+
+    const orch = new Orchestrator({
+      config: buildConfig(),
+      brain: stubBrain(),
+      executor: capturingExecutor(),
+      bus: silentBus(),
+      workerId: 'w_history_test',
+      workspaces,
+      processes,
+      approvals: new ApprovalStore(),
+    })
+    await orch.ingest(env)
+
+    const sessionMessages = db.select().from(messages).where(eq(messages.conversationId, 'conv-session')).all()
+    const legacyMessages = db.select().from(messages).where(eq(messages.conversationId, 'conv-legacy')).all()
+    expect(sessionMessages.some(row => row.content === 'session-routed')).toBe(true)
+    expect(legacyMessages.some(row => row.content === 'session-routed')).toBe(false)
+  })
+
+  it('backfills session_entries from the legacy open conversation fallback', async () => {
+    await seedConversation('conv-legacy-fallback')
+    const env = envelope('legacy fallback')
+    const sessionKey = resolveSessionKey(env)
+    expect(getSessionEntry(sessionKey)).toBeNull()
+
+    const orch = new Orchestrator({
+      config: buildConfig(),
+      brain: stubBrain(),
+      executor: capturingExecutor(),
+      bus: silentBus(),
+      workerId: 'w_history_test',
+      workspaces,
+      processes,
+      approvals: new ApprovalStore(),
+    })
+    await orch.ingest(env)
+
+    expect(getSessionEntry(sessionKey)?.currentConversationId).toBe('conv-legacy-fallback')
+  })
+
+  it('does not route root chat messages into threaded legacy conversations', async () => {
+    await seedConversation('conv-thread', 'web', 'chat-history', 'thread-1')
+    const env = envelope('root message')
+    const sessionKey = resolveSessionKey(env)
+
+    const orch = new Orchestrator({
+      config: buildConfig(),
+      brain: stubBrain(),
+      executor: capturingExecutor(),
+      bus: silentBus(),
+      workerId: 'w_history_test',
+      workspaces,
+      processes,
+      approvals: new ApprovalStore(),
+    })
+    await orch.ingest(env)
+
+    const entry = getSessionEntry(sessionKey)
+    expect(entry?.currentConversationId).toBeDefined()
+    expect(entry?.currentConversationId).not.toBe('conv-thread')
+    const db = getWorkerDb()
+    const threadMessages = db.select().from(messages).where(eq(messages.conversationId, 'conv-thread')).all()
+    expect(threadMessages.some(row => row.content === 'root message')).toBe(false)
+  })
+
+  it('creates a session entry on first ingest and keeps its active conversation on the second turn', async () => {
+    const orch = new Orchestrator({
+      config: buildConfig(),
+      brain: stubBrain(),
+      executor: capturingExecutor(),
+      bus: silentBus(),
+      workerId: 'w_history_test',
+      workspaces,
+      processes,
+      approvals: new ApprovalStore(),
+    })
+    const first = envelope('first turn')
+    const second = envelope('second turn')
+    const sessionKey = resolveSessionKey(first)
+    expect(getSessionEntry(sessionKey)).toBeNull()
+
+    await orch.ingest(first)
+    const firstEntry = getSessionEntry(sessionKey)
+    expect(firstEntry?.currentConversationId).toBeDefined()
+
+    await orch.ingest(second)
+    const secondEntry = getSessionEntry(sessionKey)
+    expect(secondEntry?.currentConversationId).toBe(firstEntry!.currentConversationId)
+
+    const db = getWorkerDb()
+    const rows = db.select().from(messages).where(eq(messages.conversationId, firstEntry!.currentConversationId)).all()
+    expect(rows.some(row => row.content === 'first turn')).toBe(true)
+    expect(rows.some(row => row.content === 'second turn')).toBe(true)
+  })
+
+  it('isolates session entries by account when channel and chat id match', async () => {
+    const orch = new Orchestrator({
+      config: buildConfig(),
+      brain: stubBrain(),
+      executor: capturingExecutor(),
+      bus: silentBus(),
+      workerId: 'w_history_test',
+      workspaces,
+      processes,
+      approvals: new ApprovalStore(),
+    })
+    const first = { ...envelope('from account one'), accountId: 'account-one' }
+    const second = { ...envelope('from account two'), accountId: 'account-two' }
+    const firstKey = resolveSessionKey(first)
+    const secondKey = resolveSessionKey(second)
+
+    expect(firstKey).not.toBe(secondKey)
+
+    await orch.ingest(first)
+    await orch.ingest(second)
+
+    const firstEntry = getSessionEntry(firstKey)
+    const secondEntry = getSessionEntry(secondKey)
+    expect(firstEntry?.currentConversationId).toBeDefined()
+    expect(secondEntry?.currentConversationId).toBeDefined()
+    expect(firstEntry?.currentConversationId).not.toBe(secondEntry?.currentConversationId)
+
+    const db = getWorkerDb()
+    const firstMessages = db.select().from(messages).where(eq(messages.conversationId, firstEntry!.currentConversationId)).all()
+    const secondMessages = db.select().from(messages).where(eq(messages.conversationId, secondEntry!.currentConversationId)).all()
+    expect(firstMessages.some(row => row.content === 'from account one')).toBe(true)
+    expect(firstMessages.some(row => row.content === 'from account two')).toBe(false)
+    expect(secondMessages.some(row => row.content === 'from account two')).toBe(true)
+  })
+
   it('gateway reset closes the current conversation and starts fresh on the same chat id', async () => {
     const executor = capturingExecutor()
     const orch = new Orchestrator({
@@ -226,7 +373,10 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
       approvals: new ApprovalStore(),
     })
 
+    const sessionKey = resolveSessionKey(envelope())
     await orch.ingest(envelope('remember before reset'))
+    const beforeReset = getSessionEntry(sessionKey)
+    expect(beforeReset?.currentConversationId).toBeDefined()
     await orch.ingest({
       ...envelope('after reset'),
       raw: { source: 'gateway', sessionReset: true, resetCommand: '/reset' },
@@ -246,5 +396,9 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
     expect(oldMessages.some(row => row.content === 'remember before reset')).toBe(true)
     expect(newMessages.some(row => row.content === 'after reset')).toBe(true)
     expect(newMessages.some(row => row.content === 'remember before reset')).toBe(false)
+    const entry = getSessionEntry(sessionKey)
+    expect(entry?.currentConversationId).toBe(open!.id)
+    expect(entry?.currentConversationId).not.toBe(beforeReset!.currentConversationId)
+    expect(entry?.resetReason).toBe('manual:/reset')
   })
 })
