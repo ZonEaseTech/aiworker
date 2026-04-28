@@ -7,7 +7,7 @@ apps/
   api/          # Hono worker runtime (worker mode only)
   cli/          # aiworker (单二进制：worker-local + operator-remote + gateway 生命周期)
   gateway/      # WS 控制面：operator ↔ gateway ↔ node 三方协议枢纽
-  web/          # React 19 SPA（operator console；通过 WS 连 gateway）
+  web/          # React 19 双视角 SPA（fleet 走 gateway WS；worker 自管走 REST/SSE）
 packages/
   shared/          # cross-layer types / constants / zod schemas
   gateway-proto/   # WS 协议纯类型 + zod：METHODS / EVENTS / Frame
@@ -19,7 +19,7 @@ packages/
 - **`apps/api`** 只负责 worker 运行时（数据面）。`AIWORKER_MODE=worker` 仍保留以兼容运维脚本，但入口不再按模式分叉——`boot()` 一律构建 `createWorkerApp`。dashboard REST 已随 PLAN-013 整体下线。运行时业务（brain / executor / channels / orchestrator / cron / approvals / gateway-client / runtime / secrets / bootstrap / management 业务态）已物理抽离至 `packages/core`，apps/api 仅保留 Hono 路由 + middleware + bootstrap 装配（`@zonease/aiworker-api/bootstrap` 暴露给 `aiworker serve`），保持 transport 与业务的边界。
 - **`apps/gateway`** 是新增的 WS 控制面，单入口 `Bun.serve(:9218)`，路径 `/ws` 承接 WebSocket 升级，`/health` 返回心跳。运行时持有 fleet.db（`registered_workers` + `audit_events`）并做 operator ↔ node 帧转发。见 `docs/gateway.md`。
 - **`apps/cli`** 发布单枚 bin：`aiworker`（PLAN-020 / FEAT-028 起；原 `aiw` / `aim` 双 bin 已下线，无 backwards-compat shim）。子命令树由 worker-local（dash-form）+ operator-remote（两词 form）+ gateway 生命周期 + `install systemd` 构成，共享 `cac` 解析器与 `@zonease/aiworker-core` 运行时复用（worker-local `aiworker serve` 额外从 `@zonease/aiworker-api/bootstrap` 取 Hono 入口）。状态文件按用法分流：worker-local 写 `worker.db`，operator-remote 写 `~/.aiworker/aim.json`（文件名沿用历史以避免 operator 升级时丢配置）。
-- **`apps/web`** 不再消费任何 REST。`lib/api.ts` 已替换为统一 WS 客户端，浏览器直连 gateway（Caddy 反代 `:80 → :9218`，loopback 自动放行）。
+- **`apps/web`** 产出两套物理独立 bundle：`dist/fleet/` 由 gateway 托管，fleet 视角只通过 gateway WS (`/ws`) 访问 fleet.db / worker 指针；`dist/worker/` 由每个 worker 自身托管，worker 视角只通过本机 `/api/worker/*` REST/SSE + bearer-auth 管理 worker.db / runtime。源码按 `src/fleet/`、`src/worker/`、`src/shared/` 分区，ESLint 与 CI 守住跨视角 import / transport 边界。
 - **`packages/gateway-proto`** 是协议的纯类型 + 运行时校验层。不依赖任何网络框架，所有 METHODS / EVENTS / Frame schema 都在这里定义，CLI / web / gateway / worker 四侧共用。
 - **`packages/core`** 是 transport-agnostic 的 worker runtime（PLAN-015 §S1 物理抽离）。封装 brain provider、executor provider、channel adapter、orchestrator、cron、approvals、gateway-client、secrets、bootstrap、management 业务态等所有运行时业务；公共面 `packages/core/src/index.ts` 同时被 `apps/api` 路由、`apps/cli` 与 gateway node 接入复用。**不**依赖 `hono` / `@hono/*` / `@scalar/*`——边界由 ESLint `no-restricted-imports` 守，CI 拦下任何回退到 transport 层耦合的尝试。
 - **`packages/storage-sqlite`** 是 fleet.db 与 worker.db 的唯一 schema 源。通过 subpath `./fleet` 与 `./worker` 保持数据域边界；`defaultFleetMigrationsFolder` / `defaultWorkerMigrationsFolder` 通过 `import.meta.url` 解析，避免调用方硬编码 `./drizzle/...`。
@@ -36,6 +36,27 @@ packages/
 | docker compose | 懒人快速试用 / per-worker 容器隔离 | `ops/compose/docker-compose.yml`（GHCR 镜像） | 有 | 必要时叠加 |
 
 公网 HTTPS（Cloudflare orange-cloud + Caddy `:80 → 127.0.0.1:9218` + GHCR + `scripts/deploy.ts` aissh 流程）单独拆到 [`deployment-public-https.md`](./deployment-public-https.md)，仅当需要把 channel webhook 暴露公网时才叠加；详见 [`deployment.md`](./deployment.md)。
+
+## 双视角 Web UI（PLAN-022）
+
+`apps/web` 是一个源码工程、两个部署面：
+
+```text
+apps/web/src/fleet/*          apps/web/src/worker/*
+        │                             │
+        ▼                             ▼
+dist/fleet/                    dist/worker/
+gateway :9218 /admin/          worker :9217 /admin/
+        │                             │
+        ▼                             ▼
+gateway WS /ws                 worker REST/SSE /api/worker/*
+fleet.db + node routing        worker.db + local runtime
+```
+
+- **Fleet UI** 是 operator console：列 workers、presence、enrollment、audit，并通过 gateway WS 协议发起 fleet 控制操作。它不直接 fetch worker 的 `/api/worker/*`，也不读取 worker.db。
+- **Worker UI** 是单 worker 自管面：config、secrets、test、cron、approvals、chat 均直连宿主 worker 的 `/api/worker/*`。公网叠 basic-auth 时，UI 只从 `#token=...` 取一次 bearer 写入 `sessionStorage` 并立即清除 URL fragment；loopback 访问由 worker bearer-auth middleware 放行。
+- **Shared** 只放 UI primitives、query client、theme、通用 fetch helper等无业务归属的基础设施。`src/shared/**` 不反向依赖任一视角的 `features/`、`routes/`、`lib/` 或 API 包装层。
+- **守门**：ESLint 禁止 fleet/worker 互相 import、禁止 worker 引入 gateway proto、禁止 fleet 直接 fetch worker REST；CI 额外跑 web lint / test / dual-bundle build / bundle size report / shared import cycle scan。
 
 ## Filesystem source of truth (PLAN-012)
 
@@ -162,7 +183,7 @@ Caddy :80 (纯反代)  ──►  127.0.0.1:9218  =  aiworker-gateway 容器
 
 - `fleet.db` **仅**存 `registered_workers`（指针：baseUrl / displayName / 加密 bearer token / lastSeenAt）与 `audit_events`。**绝不允许**存 worker 的 config、secrets、conversations、messages 或任何业务数据。
 - `worker.db` 由 worker 容器自持，包含 `worker_identity`（singleton pk='default'）、`worker_config`（singleton）、`worker_secrets`、`conversations`、`messages`、`agent_tasks`、`execution_logs`、`skill_bindings`、`skill_drafts`、`evolution_observations`。
-- gateway 永不向 worker 的业务路径直连；一切经 WS 转发（`operator-to-node` routing）。web 前端只通过 operator 身份连 gateway，再由 gateway 转发到 node。
+- gateway 永不向 worker 的业务路径直连；一切经 WS 转发（`operator-to-node` routing）。fleet web 前端只通过 operator 身份连 gateway，再由 gateway 转发到 node；worker web 前端是 worker 自托管的本地自管面，只访问同源 `/api/worker/*`。
 - drizzle-kit 分开生成：`drizzle.fleet.config.ts` / `drizzle.worker.config.ts`，迁移目录不得混用。
 
 ## 身份与配置自举

@@ -1,9 +1,10 @@
 # REFACTOR-009 Phase 4 — apps/web 独立性强化与回归保护
 
-- **status**: pending
+- **status**: completed
 - **priority**: P2
-- **owner**: (未分配)
+- **owner**: Codex
 - **createdAt**: 2026-04-27 18:35
+- **completedAt**: 2026-04-28 07:28
 
 ## 描述
 
@@ -59,3 +60,12 @@ PLAN-022 Phase 4 落地。FEAT-034 + FEAT-035 完成后，强化 fleet/worker �
   ```
 - CI 双 bundle 体积报告可借现成的 `vite-bundle-visualizer` 或自己写 `du -sh dist/{fleet,worker}/` 并存到 GH Actions summary。
 - `madge --circular` 扫 src/shared，如出现循环依赖直接 fail。
+
+## 完成记录
+
+- 扩展 `eslint.config.ts` 的 fleet / worker / shared 边界规则，覆盖 alias 与相对路径跨视角 import，并保留 fleet 禁直接 `fetch("/api/worker/*")` 的 guard。
+- 将 smoke test 移到 `apps/web/src/fleet/__tests__/` 与 `apps/web/src/worker/__tests__/`，新增 `apps/web/src/shared/__tests__/boundary-lint.test.ts` 验证坏 import 会被 lint 拦截。
+- 新增 `scripts/web-quality.ts`，提供 `check:shared-cycles` 与 `size:report` / `size:baseline`，并写入 `apps/web/bundle-size-baseline.json`。
+- `.github/workflows/lint.yml` 加入 web lint / test / build / shared cycle / bundle size report quality gates。
+- `docs/architecture.md` 补充双视角 Web UI 章节，明确 fleet 走 gateway WS、worker 走同源 REST/SSE + bearer。
+- 验证通过：`bun run typecheck`、`bun run test`、`bun run lint`、`bun run --filter '@zonease/aiworker-web' build`、`bun run --filter '@zonease/aiworker-web' check:shared-cycles`、`bun run --filter '@zonease/aiworker-web' size:report`、`git diff --check`。

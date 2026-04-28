@@ -8,8 +8,12 @@
     "build": "tsc --noEmit && bun run build:fleet && bun run build:worker",
     "build:fleet": "AIWORKER_WEB_BUNDLE=fleet vite build",
     "build:worker": "AIWORKER_WEB_BUNDLE=worker vite build",
+    "check:shared-cycles": "bun ../../scripts/web-quality.ts shared-cycles",
+    "lint": "eslint src vite.config.ts",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
+    "size:baseline": "bun ../../scripts/web-quality.ts size-report --write-baseline",
+    "size:report": "bun ../../scripts/web-quality.ts size-report",
     "test": "vitest run"
   },
   "dependencies": {

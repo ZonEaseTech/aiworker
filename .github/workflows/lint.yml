@@ -21,3 +21,18 @@ jobs:
 
       - name: Lint
         run: bun run lint
+
+      - name: Web lint
+        run: bun run --filter '@zonease/aiworker-web' lint
+
+      - name: Web test
+        run: bun run --filter '@zonease/aiworker-web' test
+
+      - name: Web build
+        run: bun run --filter '@zonease/aiworker-web' build
+
+      - name: Web shared cycle check
+        run: bun run --filter '@zonease/aiworker-web' check:shared-cycles
+
+      - name: Web bundle size report
+        run: bun run --filter '@zonease/aiworker-web' size:report
