@@ -231,22 +231,39 @@ Coordinator: `ug03vh9v`.
 
 Stage issues:
 
-- S1-A `h5w2u2qx` — session schema and store primitives.
-- S1-B `xuropmdt` — session resolver and lifecycle integration.
+- S1-A — session schema and store primitives. Implemented directly on `main`
+  as `c87851b` (`feat(session): add worker session store primitives`) after
+  BKD attempts stalled or failed.
+- S1-B `xuropmdt` — session resolver and lifecycle integration. Active BKD
+  worktree task; first review found an account-scoping issue in
+  `resolveSessionKey`, so it was returned to `working` for rework.
 - S1-C `hpdbois1` — session lifecycle regression tests and docs.
 - S2 `u8dvdjh9` — token-budget context assembly.
 - S3 `h4hpsxl2` — compaction and memory flush.
 - S4 `aeea6hmf` — engine-native session bindings.
 - S5 `u8hbsj4l` — session status and maintenance surfaces.
 
-Only S1-A is allowed to run first. Each subsequent issue starts after the
-previous issue reports to the coordinator and its changes are reviewed and
-integrated.
+Only S1-B is allowed to run now. Each subsequent issue starts after the
+previous issue reports to the coordinator and its changes are reviewed,
+integrated, and focused verification passes.
+
+Active coordinator cron:
+
+- `v544zrqo` / `FEAT-037-S1B-execute-poll` runs `issue-execute` against
+  coordinator `ug03vh9v` every five minutes so orchestration does not stall when
+  BKD auto-moves completed coordinator turns back to `review`.
+
+Paused coordinator cron:
+
+- `y20gqe0r` / `FEAT-037-S1B-poll` used `issue-follow-up`, which queued behind
+  `review` status and could not reliably advance the chain.
 
 Abandoned issues:
 
 - `gf1grhpz` was a stale-base S1-A attempt and must not be merged.
 - `isf4t4f5` was a stalled clean-base S1-A attempt and must not be merged.
+- `h5w2u2qx` failed due agent quota with no usable changes and must not be
+  merged.
 
 Stage 1: session key/store/lifecycle
 
