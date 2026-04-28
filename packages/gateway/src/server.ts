@@ -291,6 +291,22 @@ function handleMessage(
           path: ws.data.path,
         },
       })
+      // FEAT-034 Phase 2：广播 enrollment.pending 让 fleet UI 不必等下一次
+      // `enroll.list` 30s polling 才看到新入队项。仅广播 OTP 与最小快照，与
+      // proto `pendingEnrollmentSchema` 字段对齐。
+      broadcastEventToOperators(ctx.operators, {
+        type: 'event',
+        name: EVENTS.ENROLLMENT_PENDING,
+        payload: {
+          workerId: frame.agentId,
+          ...(enroll.displayName === undefined ? {} : { displayName: enroll.displayName }),
+          otp: submission.otp,
+          submittedAt: Date.now(),
+          expiresAt: submission.expiresAt,
+          reason: 'submitted',
+        },
+        ts: Date.now(),
+      })
       return
     }
 
@@ -477,6 +493,20 @@ function handleClose(
           code,
           reason,
         },
+      })
+      // FEAT-034 Phase 2：让 fleet UI 把这条从待批列表里去掉。
+      broadcastEventToOperators(ctx.operators, {
+        type: 'event',
+        name: EVENTS.ENROLLMENT_PENDING,
+        payload: {
+          workerId: entry.workerId,
+          ...(entry.displayName === undefined ? {} : { displayName: entry.displayName }),
+          otp: entry.otp,
+          submittedAt: entry.submittedAt,
+          expiresAt: entry.expiresAt,
+          reason: 'abandoned',
+        },
+        ts: Date.now(),
       })
     }
     ctx.logger.debug(`[gateway] node-pending ws closed (code=${code} reason=${reason})`)

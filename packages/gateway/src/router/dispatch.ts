@@ -4,6 +4,7 @@ import type { GatewayContext, LocalHandler } from './context'
 import { encodeFrame, getMethodDef, METHODS } from '@zonease/aiworker-gateway-proto'
 import { broadcastEventToOperators } from '../events/broadcast'
 import { forwardOperatorRequestToNode } from './forward'
+import { handleAuditList } from './methods/audit'
 import { handleEnrollApprove, handleEnrollList, handleEnrollReject } from './methods/enroll'
 import { handleSystemPresence } from './methods/system'
 import { handleTokenRotate } from './methods/token'
@@ -20,15 +21,22 @@ const LOCAL_HANDLERS: Record<string, LocalHandler> = {
   'enroll.list': handleEnrollList,
   'enroll.approve': handleEnrollApprove,
   'enroll.reject': handleEnrollReject,
+  'audit.list': handleAuditList,
 }
 
 /**
  * audit 不应该被 presence / workers.list 这类高频只读 tick 淹没。
  * web UI 默认 10s 轮询 workers.list,一天积累 8640 条 audit——无意义。
+ *
+ * FEAT-034 Phase 2 同样把 `audit.list` / `enroll.list` 列入：
+ * - audit.list 本身就是浏览 audit 表的入口，记录会形成 self-referential 噪音；
+ * - enroll.list 在 fleet UI `/admin/enroll` 30s polling 期间会反复触发。
  */
 const AUDIT_METHOD_BLACKLIST = new Set<string>([
   'system.presence',
   'workers.list',
+  'audit.list',
+  'enroll.list',
 ])
 
 /**

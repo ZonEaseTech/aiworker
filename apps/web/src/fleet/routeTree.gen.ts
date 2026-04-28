@@ -9,10 +9,28 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as PresenceRouteImport } from './routes/presence'
+import { Route as EnrollRouteImport } from './routes/enroll'
+import { Route as AuditRouteImport } from './routes/audit'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as WorkersIndexRouteImport } from './routes/workers.index'
 import { Route as WorkersWorkerIdRouteImport } from './routes/workers.$workerId'
 
+const PresenceRoute = PresenceRouteImport.update({
+  id: '/presence',
+  path: '/presence',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EnrollRoute = EnrollRouteImport.update({
+  id: '/enroll',
+  path: '/enroll',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuditRoute = AuditRouteImport.update({
+  id: '/audit',
+  path: '/audit',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -31,36 +49,88 @@ const WorkersWorkerIdRoute = WorkersWorkerIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/audit': typeof AuditRoute
+  '/enroll': typeof EnrollRoute
+  '/presence': typeof PresenceRoute
   '/workers/$workerId': typeof WorkersWorkerIdRoute
   '/workers/': typeof WorkersIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/audit': typeof AuditRoute
+  '/enroll': typeof EnrollRoute
+  '/presence': typeof PresenceRoute
   '/workers/$workerId': typeof WorkersWorkerIdRoute
   '/workers': typeof WorkersIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/audit': typeof AuditRoute
+  '/enroll': typeof EnrollRoute
+  '/presence': typeof PresenceRoute
   '/workers/$workerId': typeof WorkersWorkerIdRoute
   '/workers/': typeof WorkersIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/workers/$workerId' | '/workers/'
+  fullPaths:
+    | '/'
+    | '/audit'
+    | '/enroll'
+    | '/presence'
+    | '/workers/$workerId'
+    | '/workers/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/workers/$workerId' | '/workers'
-  id: '__root__' | '/' | '/workers/$workerId' | '/workers/'
+  to:
+    | '/'
+    | '/audit'
+    | '/enroll'
+    | '/presence'
+    | '/workers/$workerId'
+    | '/workers'
+  id:
+    | '__root__'
+    | '/'
+    | '/audit'
+    | '/enroll'
+    | '/presence'
+    | '/workers/$workerId'
+    | '/workers/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuditRoute: typeof AuditRoute
+  EnrollRoute: typeof EnrollRoute
+  PresenceRoute: typeof PresenceRoute
   WorkersWorkerIdRoute: typeof WorkersWorkerIdRoute
   WorkersIndexRoute: typeof WorkersIndexRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/presence': {
+      id: '/presence'
+      path: '/presence'
+      fullPath: '/presence'
+      preLoaderRoute: typeof PresenceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/enroll': {
+      id: '/enroll'
+      path: '/enroll'
+      fullPath: '/enroll'
+      preLoaderRoute: typeof EnrollRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/audit': {
+      id: '/audit'
+      path: '/audit'
+      fullPath: '/audit'
+      preLoaderRoute: typeof AuditRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -87,6 +157,9 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuditRoute: AuditRoute,
+  EnrollRoute: EnrollRoute,
+  PresenceRoute: PresenceRoute,
   WorkersWorkerIdRoute: WorkersWorkerIdRoute,
   WorkersIndexRoute: WorkersIndexRoute,
 }

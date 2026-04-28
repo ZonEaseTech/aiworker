@@ -1,7 +1,7 @@
 import type { SafeRegisteredWorker } from '@zonease/aiworker-shared'
 import { useNavigate } from '@tanstack/react-router'
 import { generateWorkerApiToken, WORKER_API_TOKEN_PREFIX } from '@zonease/aiworker-shared'
-import { CheckCircle2, Copy, Eye, EyeOff, Info, Sparkles } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Copy, Eye, EyeOff, Info, Lock, Sparkles } from 'lucide-react'
 import { useId, useState } from 'react'
 import { WorkerApiError } from '@/fleet/api'
 import { Badge } from '@/shared/components/ui/badge'
@@ -9,7 +9,7 @@ import { Button } from '@/shared/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/shared/components/ui/dialog'
 import { Input } from '@/shared/components/ui/input'
 import { Label } from '@/shared/components/ui/label'
-import { useRegisterWorker } from '../hooks'
+import { usePairWorker } from '../hooks'
 import { stateBadgeLabel, stateBadgeVariant } from '../utils'
 
 interface FormErrors {
@@ -23,6 +23,15 @@ interface FormErrors {
 interface RegisterWizardProps {
   open: boolean
   onOpenChange: (next: boolean) => void
+}
+
+interface PairResult {
+  worker: SafeRegisteredWorker
+  /**
+   * gateway 颁发的 deviceToken 一次性凭据。**只在内存里存在**：dialog 关闭后
+   * React state 立即清掉，绝不写 sessionStorage / localStorage。
+   */
+  deviceToken: string
 }
 
 export function RegisterWizard({ open, onOpenChange }: RegisterWizardProps) {
@@ -50,17 +59,18 @@ export function RegisterWizard({ open, onOpenChange }: RegisterWizardProps) {
 }
 
 function RegisterFlow({ onClose }: { onClose: () => void }) {
-  const [registered, setRegistered] = useState<SafeRegisteredWorker | null>(null)
+  const [paired, setPaired] = useState<PairResult | null>(null)
   const navigate = useNavigate()
 
-  if (registered) {
+  if (paired) {
     return (
       <SuccessStep
-        worker={registered}
+        worker={paired.worker}
+        deviceToken={paired.deviceToken}
         onClose={onClose}
-        onGoToConfig={() => {
+        onGoToWorker={() => {
           onClose()
-          void navigate({ to: '/workers/$workerId', params: { workerId: registered.id } })
+          void navigate({ to: '/workers/$workerId', params: { workerId: paired.worker.id } })
         }}
       />
     )
@@ -69,14 +79,14 @@ function RegisterFlow({ onClose }: { onClose: () => void }) {
   return (
     <RegisterForm
       onCancel={onClose}
-      onSuccess={setRegistered}
+      onSuccess={setPaired}
     />
   )
 }
 
 interface RegisterFormProps {
   onCancel: () => void
-  onSuccess: (row: SafeRegisteredWorker) => void
+  onSuccess: (row: PairResult) => void
 }
 
 function RegisterForm({ onCancel, onSuccess }: RegisterFormProps) {
@@ -91,7 +101,7 @@ function RegisterForm({ onCancel, onSuccess }: RegisterFormProps) {
   const [generatedToken, setGeneratedToken] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [errors, setErrors] = useState<FormErrors>({})
-  const register = useRegisterWorker()
+  const pair = usePairWorker()
 
   function onGenerateToken() {
     const token = generateWorkerApiToken()
@@ -145,12 +155,12 @@ function RegisterForm({ onCancel, onSuccess }: RegisterFormProps) {
     }
     setErrors({})
     try {
-      const row = await register.mutateAsync({
+      const result = await pair.mutateAsync({
         baseUrl: baseUrl.replace(/\/+$/, ''),
-        apiToken,
+        bootstrapToken: apiToken,
         displayName: displayName.trim(),
       })
-      onSuccess(row)
+      onSuccess(result)
     }
     catch (err) {
       setErrors(mapServerError(err))
@@ -306,8 +316,8 @@ function RegisterForm({ onCancel, onSuccess }: RegisterFormProps) {
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <Button type="submit" disabled={register.isPending}>
-          {register.isPending ? 'Registering…' : 'Register'}
+        <Button type="submit" disabled={pair.isPending}>
+          {pair.isPending ? 'Pairing…' : 'Pair worker'}
         </Button>
       </DialogFooter>
     </form>
@@ -403,26 +413,46 @@ function FieldError({ message }: { message?: string }) {
 
 function SuccessStep({
   worker,
+  deviceToken,
   onClose,
-  onGoToConfig,
+  onGoToWorker,
 }: {
   worker: SafeRegisteredWorker
+  deviceToken: string
   onClose: () => void
-  onGoToConfig: () => void
+  onGoToWorker: () => void
 }) {
+  const [showToken, setShowToken] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  async function onCopyToken() {
+    try {
+      await navigator.clipboard.writeText(deviceToken)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    }
+    catch {
+      // Clipboard 在不安全上下文里可能失败；operator 仍可手动选中复制。
+    }
+  }
+
   return (
     <>
       <DialogHeader>
         <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
           <CheckCircle2 className="size-5" />
-          <DialogTitle>Worker registered</DialogTitle>
+          <DialogTitle>Worker paired</DialogTitle>
         </div>
         <DialogDescription>
-          The manager will keep its
+          The fleet has issued a fresh
           {' '}
-          <code className="rounded bg-muted px-1 py-0.5 font-mono">lastSeenState</code>
+          <code className="rounded bg-muted px-1 py-0.5 font-mono">deviceToken</code>
           {' '}
-          fresh on the next poll cycle.
+          for this worker. It is shown
+          {' '}
+          <strong>once</strong>
+          {' '}
+          and not stored in browser storage — copy it before closing if needed.
         </DialogDescription>
       </DialogHeader>
 
@@ -432,7 +462,7 @@ function SuccessStep({
         <dt className="text-muted-foreground">Display name</dt>
         <dd>{worker.displayName}</dd>
         <dt className="text-muted-foreground">Base URL</dt>
-        <dd className="break-all font-mono text-xs">{worker.baseUrl}</dd>
+        <dd className="break-all font-mono text-xs">{worker.baseUrl || '—'}</dd>
         <dt className="text-muted-foreground">State</dt>
         <dd>
           <Badge variant={stateBadgeVariant(worker.lastSeenState)}>
@@ -441,9 +471,53 @@ function SuccessStep({
         </dd>
       </dl>
 
+      <div className="rounded-md border border-primary/30 bg-primary/5 p-3 text-xs">
+        <p className="mb-2 flex items-center gap-1.5 font-medium text-foreground">
+          <Lock className="size-3.5" />
+          One-time deviceToken
+        </p>
+        <div className="flex items-center gap-2 rounded bg-muted/60 px-2 py-1.5 font-mono text-[11px]">
+          <code className="flex-1 break-all">
+            {showToken ? deviceToken : deviceToken.replace(/./g, '•')}
+          </code>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-6"
+            onClick={() => setShowToken(v => !v)}
+            aria-label={showToken ? 'Hide token' : 'Show token'}
+          >
+            {showToken ? <EyeOff className="size-3" /> : <Eye className="size-3" />}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-6"
+            onClick={onCopyToken}
+            aria-label="Copy token"
+          >
+            <Copy className="size-3" />
+          </Button>
+        </div>
+        {copied && (
+          <p role="status" className="mt-1 text-emerald-600 dark:text-emerald-400">
+            Copied.
+          </p>
+        )}
+        <p className="mt-2 flex items-start gap-1.5 text-muted-foreground">
+          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+          <span>
+            This value is not shown again. If lost, rotate the token from the
+            worker&apos;s detail page.
+          </span>
+        </p>
+      </div>
+
       <DialogFooter>
         <Button variant="outline" onClick={onClose}>Close</Button>
-        <Button onClick={onGoToConfig}>Go to worker config</Button>
+        <Button onClick={onGoToWorker}>Go to worker</Button>
       </DialogFooter>
     </>
   )

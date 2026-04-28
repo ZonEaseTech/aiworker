@@ -16,6 +16,7 @@ export const EVENTS = {
   APPROVAL_REQUESTED: 'approval.requested',
   ENROLLMENT_OTP: 'enrollment.otp',
   ENROLLMENT_APPROVED: 'enrollment.approved',
+  ENROLLMENT_PENDING: 'enrollment.pending',
 } as const
 
 export type EventName = typeof EVENTS[keyof typeof EVENTS]
@@ -129,6 +130,22 @@ export const enrollmentApprovedPayloadSchema = workerIdField.extend({
 export type EnrollmentApprovedPayload = z.infer<typeof enrollmentApprovedPayloadSchema>
 
 /**
+ * FEAT-034 Phase 2 — gateway 把一条新的 OTP enrollment 入队（或被 reject /
+ * approve / expire 出队）后，给所有 operator 广播此事件，让 fleet UI 不必走 30s
+ * 轮询节奏即时刷新待批列表。`workerId` / `displayName` / `otp` / `expiresAt`
+ * 字段与 `enroll.list` 返回的快照对齐；`reason` 描述触发原因，用于客户端可选地
+ * 做差异更新（也可以直接 invalidate 整个 list 重拉）。
+ */
+export const enrollmentPendingPayloadSchema = workerIdField.extend({
+  otp: z.string().min(1),
+  displayName: z.string().min(1).optional(),
+  submittedAt: z.number().int(),
+  expiresAt: z.number().int(),
+  reason: z.enum(['submitted', 'approved', 'rejected', 'expired', 'abandoned']),
+})
+export type EnrollmentPendingPayload = z.infer<typeof enrollmentPendingPayloadSchema>
+
+/**
  * 事件名 → payload schema 的注册表。
  * 下游（aim CLI / web console）据此对入站 event 做强校验。
  */
@@ -144,6 +161,7 @@ export const EVENT_PAYLOADS: {
   [EVENTS.APPROVAL_REQUESTED]: typeof approvalRequestedPayloadSchema
   [EVENTS.ENROLLMENT_OTP]: typeof enrollmentOtpPayloadSchema
   [EVENTS.ENROLLMENT_APPROVED]: typeof enrollmentApprovedPayloadSchema
+  [EVENTS.ENROLLMENT_PENDING]: typeof enrollmentPendingPayloadSchema
 } = {
   [EVENTS.WORKER_ONLINE]: workerOnlinePayloadSchema,
   [EVENTS.WORKER_OFFLINE]: workerOfflinePayloadSchema,
@@ -156,6 +174,7 @@ export const EVENT_PAYLOADS: {
   [EVENTS.APPROVAL_REQUESTED]: approvalRequestedPayloadSchema,
   [EVENTS.ENROLLMENT_OTP]: enrollmentOtpPayloadSchema,
   [EVENTS.ENROLLMENT_APPROVED]: enrollmentApprovedPayloadSchema,
+  [EVENTS.ENROLLMENT_PENDING]: enrollmentPendingPayloadSchema,
 }
 
 /** 判断一个字符串是否是本包已知的事件名。 */

@@ -1,9 +1,11 @@
 # FEAT-034 Phase 2 — Fleet UI MVP
 
-- **status**: in_progress
+- **status**: completed
 - **priority**: P1
 - **owner**: BKD/oq32jpkm (worktree)
 - **createdAt**: 2026-04-27 18:35
+- **startedAt**: 2026-04-27 19:35
+- **completedAt**: 2026-04-28 06:55
 
 ## 描述
 
@@ -45,3 +47,10 @@ PLAN-022 Phase 2 落地。在 FEAT-033 完成的双视角骨架之上，实现 f
 - `tokens.rotate` 与 `workers.launch` / `enroll.approve` 返回的 deviceToken 都是一次性可见的明文，UI 必须用 `<Dialog>` 强制 operator 显式 copy + 关闭，关闭后立刻从 React state 清掉，不要存 sessionStorage。
 - 复用现有 `apps/web/src/features/workers/components/`：`workers-list.tsx`、`register-wizard.tsx` (→ pair wizard)、`create-wizard.tsx` (→ launch wizard) 搬迁到 `src/fleet/features/workers/`。删除 `secrets-panel`、`test-panel`、`config-editor`、`worker-shell`（这些是 worker 视角，Phase 3 用）。
 - 单 worker 的 config 入口仍保留在 fleet UI，但只做「跳转到该 worker 的 `/admin/`」按钮（拼接 `worker.baseUrl + /admin/`），不在 fleet UI 内嵌 worker 自管面板。这是 fleet/worker 独立性的关键边界。
+
+### BKD handoff report
+
+- 接手原因：Claude Code 在验证末段命中用量上限，worktree 尚有未提交改动；Codex 接手完成 lint 修复、自审、文档收口与提交前验证。
+- 已实现：fleet-only `gateway-client` API 包装；workers list / pair / launch / remove / token.rotate / stop；`/admin/enroll` pending OTP 列表 + `enrollment.pending` 实时刷新；`/admin/audit` + `audit.list` proto/server/persistence/tests；`/admin/presence`。
+- 自审结果：发现并修复 1 个 P1，`audit.list` action prefix 使用 SQL `LIKE` 时 `%` / `_` 未转义会误匹配；已改为 `LIKE ... ESCAPE '\\'` 并补 `%` / `_` 字面量测试。
+- 验证：`bun run typecheck`、`bun run test`、`bun run --filter '@zonease/aiworker-web' build`、`bun run lint` 全部通过；额外重跑 `@zonease/aiworker-gateway` test/typecheck 覆盖 audit 修复。

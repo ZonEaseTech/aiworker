@@ -4,7 +4,7 @@ import type { GatewayContext } from './router/context'
 import type { StartedGateway } from './server'
 import { createHash } from 'node:crypto'
 import process from 'node:process'
-import { encodeFrame } from '@zonease/aiworker-gateway-proto'
+import { encodeFrame, EVENTS } from '@zonease/aiworker-gateway-proto'
 import {
   closeFleetDb,
   defaultFleetMigrationsFolder,
@@ -14,6 +14,7 @@ import {
 } from '@zonease/aiworker-storage-sqlite/fleet'
 import consola from 'consola'
 import { loadGatewayConfigFromEnv } from './config'
+import { broadcastEventToOperators } from './events/broadcast'
 import { ConnectRateLimiter, ForwardTable, NodeRegistry, OperatorRegistry, PendingEnrollmentRegistry } from './registry'
 import { FleetPersistence } from './registry/persistence'
 import { startGatewayServer } from './server'
@@ -92,6 +93,25 @@ export function createGatewayContext(
       }
       catch (err) {
         consola.warn('[gateway] 写 enrollment.expired audit 失败', err)
+      }
+      // FEAT-034 Phase 2：fleet UI 把这条从待批面板移除（无需重新拉 enroll.list）。
+      try {
+        broadcastEventToOperators(operators, {
+          type: 'event',
+          name: EVENTS.ENROLLMENT_PENDING,
+          payload: {
+            workerId: entry.workerId,
+            ...(entry.displayName === undefined ? {} : { displayName: entry.displayName }),
+            otp: entry.otp,
+            submittedAt: entry.submittedAt,
+            expiresAt: entry.expiresAt,
+            reason: 'expired',
+          },
+          ts: Date.now(),
+        })
+      }
+      catch (err) {
+        consola.warn('[gateway] 广播 enrollment.pending(expired) 失败', err)
       }
     },
   })
