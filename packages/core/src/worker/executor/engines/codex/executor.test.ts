@@ -39,7 +39,7 @@ describe('CodexExecutor — smoke over stub app-server', () => {
     await fs.rm(workspace, { recursive: true, force: true })
   })
 
-  function makeExecutor(stubProtocol: 'legacy' | 'current' = 'legacy', traceFile?: string) {
+  function makeExecutor(stubProtocol: 'legacy' | 'current' = 'legacy', traceFile?: string, stubOptions: { failResume?: boolean } = {}) {
     return new CodexExecutor({
       timeoutMs: 10_000,
       resolveBinary: async () => STUB_PATH,
@@ -50,6 +50,7 @@ describe('CodexExecutor — smoke over stub app-server', () => {
             ...opts.env,
             CODEX_STUB_PROTOCOL: stubProtocol,
             ...(traceFile ? { CODEX_STUB_TRACE_FILE: traceFile } : {}),
+            ...(stubOptions.failResume ? { CODEX_STUB_FAIL_RESUME: '1' } : {}),
           },
           stdio: ['pipe', 'pipe', 'pipe'],
         }),
@@ -99,6 +100,83 @@ describe('CodexExecutor — smoke over stub app-server', () => {
     expect(events).toContainEqual({
       type: 'token_usage',
       usage: { inputTokens: 12, outputTokens: 9 },
+    })
+    expect(events.at(-1)).toEqual({ type: 'finish', reason: 'stop' })
+  }, 15_000)
+
+  it('emits a current-protocol native thread binding after starting a thread', async () => {
+    const executor = makeExecutor('current')
+    const events = await collect(executor.run({
+      messages: [{ role: 'user', content: 'reply ok' }],
+      workspacePath: workspace,
+    }))
+
+    expect(events).toContainEqual({
+      type: 'engine_binding',
+      engine: 'codex',
+      binding: {
+        protocol: 'current',
+        threadId: 'thr_stub',
+        path: '/tmp/codex-thread.jsonl',
+      },
+    })
+  }, 15_000)
+
+  it('resumes a current-protocol native thread when a binding is supplied', async () => {
+    const traceFile = path.join(workspace, 'codex-resume-trace.jsonl')
+    const executor = makeExecutor('current', traceFile)
+    const events = await collect(executor.run({
+      messages: [{ role: 'user', content: 'continue native thread' }],
+      workspacePath: workspace,
+      engineBinding: {
+        protocol: 'current',
+        threadId: 'thr_existing',
+        path: '/tmp/codex-thread.jsonl',
+      },
+    }))
+
+    const trace = await readTrace(traceFile)
+    expect(trace.some(msg => msg.method === 'thread/resume')).toBe(true)
+    expect(trace.some(msg => msg.method === 'thread/start')).toBe(false)
+    const turnStart = trace.find(msg => msg.method === 'turn/start')
+    expect((turnStart?.params as { threadId?: string } | undefined)?.threadId).toBe('thr_existing')
+    const prompt = (turnStart?.params as { input?: Array<{ text?: string }> } | undefined)?.input?.[0]?.text
+    expect(prompt).toBe('continue native thread')
+    expect(events).toContainEqual({
+      type: 'engine_binding',
+      engine: 'codex',
+      binding: {
+        protocol: 'current',
+        threadId: 'thr_existing',
+        path: '/tmp/codex-thread.jsonl',
+      },
+    })
+  }, 15_000)
+
+  it('clears a stale current-protocol binding and starts a fresh thread', async () => {
+    const traceFile = path.join(workspace, 'codex-stale-trace.jsonl')
+    const executor = makeExecutor('current', traceFile, { failResume: true })
+    const events = await collect(executor.run({
+      messages: [{ role: 'user', content: 'recover from stale native thread' }],
+      workspacePath: workspace,
+      engineBinding: {
+        protocol: 'current',
+        threadId: 'thr_missing',
+      },
+    }))
+
+    const trace = await readTrace(traceFile)
+    expect(trace.some(msg => msg.method === 'thread/resume')).toBe(true)
+    expect(trace.some(msg => msg.method === 'thread/start')).toBe(true)
+    expect(events).toContainEqual({ type: 'engine_binding', engine: 'codex', binding: null })
+    expect(events).toContainEqual({
+      type: 'engine_binding',
+      engine: 'codex',
+      binding: {
+        protocol: 'current',
+        threadId: 'thr_stub',
+        path: '/tmp/codex-thread.jsonl',
+      },
     })
     expect(events.at(-1)).toEqual({ type: 'finish', reason: 'stop' })
   }, 15_000)

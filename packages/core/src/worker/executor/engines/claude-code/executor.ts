@@ -23,6 +23,7 @@ export const DEFAULT_CLAUDE_CLI_VERSION = '2.1.112'
 
 /** Hard cap on one turn; exceeding it emits an error + kills the child. */
 const DEFAULT_TIMEOUT_MS = 120_000
+const CLAUDE_CODE_ENGINE = 'claude-code'
 
 export interface ClaudeCodeExecutorOptions {
   /** Optional model id forwarded as `--model <value>`. */
@@ -105,11 +106,14 @@ export class ClaudeCodeExecutor implements ExecutorProvider {
     }
 
     const spawnFn = this.options.spawn ?? (spawn as unknown as NonNullable<ClaudeCodeExecutorOptions['spawn']>)
+    const resumeSessionId = readSessionIdBinding(input.engineBinding)
+    if (input.engineBinding !== undefined && resumeSessionId === undefined)
+      yield { type: 'engine_binding', engine: CLAUDE_CODE_ENGINE, binding: null }
 
     let resolvedCmd: string
     let resolvedArgs: string[]
     try {
-      ({ cmd: resolvedCmd, args: resolvedArgs } = await this.resolveCommand(input.model))
+      ({ cmd: resolvedCmd, args: resolvedArgs } = await this.resolveCommand(input.model, resumeSessionId))
     }
     catch (err) {
       yield { type: 'error', error: err instanceof Error ? err.message : String(err) }
@@ -142,6 +146,7 @@ export class ClaudeCodeExecutor implements ExecutorProvider {
 
     let stdoutBuffer = ''
     let childError: string | null = null
+    let reportedSessionId = ''
     let sawFinish = false
     // `once(child, 'exit')` rejects on 'error'; wrap it so we never throw on
     // an early spawn failure and always resolve to either a numeric code or
@@ -167,6 +172,11 @@ export class ClaudeCodeExecutor implements ExecutorProvider {
           const parsed = parseLine(raw)
           if (!parsed)
             continue
+          const sessionId = readClaudeSessionId(parsed)
+          if (sessionId && sessionId !== reportedSessionId) {
+            reportedSessionId = sessionId
+            yield { type: 'engine_binding', engine: CLAUDE_CODE_ENGINE, binding: { sessionId } }
+          }
           if (parsed.type === 'control_request') {
             const extra = await peer.handleLine(parsed)
             for (const event of extra)
@@ -174,6 +184,8 @@ export class ClaudeCodeExecutor implements ExecutorProvider {
             continue
           }
           for (const event of normalizeLine(parsed)) {
+            if (event.type === 'error' && resumeSessionId !== undefined)
+              yield { type: 'engine_binding', engine: CLAUDE_CODE_ENGINE, binding: null }
             yield event
             if (event.type === 'finish')
               sawFinish = true
@@ -197,6 +209,8 @@ export class ClaudeCodeExecutor implements ExecutorProvider {
     const exitCode = await exitPromise
 
     if (!sawFinish) {
+      if (resumeSessionId !== undefined)
+        yield { type: 'engine_binding', engine: CLAUDE_CODE_ENGINE, binding: null }
       if (childError) {
         yield { type: 'error', error: childError }
       }
@@ -207,8 +221,8 @@ export class ClaudeCodeExecutor implements ExecutorProvider {
     }
   }
 
-  private async resolveCommand(runModel: string | undefined): Promise<{ cmd: string, args: string[] }> {
-    const baseArgs = buildBaseArgs(runModel ?? this.options.model, this.options.extraArgs)
+  private async resolveCommand(runModel: string | undefined, resumeSessionId: string | undefined): Promise<{ cmd: string, args: string[] }> {
+    const baseArgs = buildBaseArgs(runModel ?? this.options.model, this.options.extraArgs, resumeSessionId)
 
     const resolver = this.options.resolveClaudeBinary ?? resolveClaudeOnPath
     const direct = await resolver()
@@ -223,7 +237,7 @@ export class ClaudeCodeExecutor implements ExecutorProvider {
   }
 }
 
-export function buildBaseArgs(model: string | undefined, extra: string[] | undefined): string[] {
+export function buildBaseArgs(model: string | undefined, extra: string[] | undefined, resumeSessionId?: string): string[] {
   const args = [
     '-p',
     '--verbose',
@@ -233,6 +247,8 @@ export function buildBaseArgs(model: string | undefined, extra: string[] | undef
     '--replay-user-messages',
     '--dangerously-skip-permissions',
   ]
+  if (resumeSessionId && resumeSessionId.length > 0)
+    args.push('--resume', resumeSessionId)
   if (model && model.length > 0)
     args.push('--model', model)
   if (extra && extra.length > 0)
@@ -292,4 +308,17 @@ function lastUserMessage(messages: AgentRunInput['messages']): string | null {
       return m.content
   }
   return null
+}
+
+function readSessionIdBinding(binding: AgentRunInput['engineBinding']): string | undefined {
+  if (!binding || typeof binding.sessionId !== 'string' || binding.sessionId.length === 0)
+    return undefined
+  return binding.sessionId
+}
+
+function readClaudeSessionId(line: unknown): string {
+  if (!line || typeof line !== 'object' || Array.isArray(line))
+    return ''
+  const raw = (line as { session_id?: unknown }).session_id
+  return typeof raw === 'string' && raw.length > 0 ? raw : ''
 }

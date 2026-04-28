@@ -71,6 +71,31 @@ describe('CursorExecutor (stub CLI)', () => {
 
     // Session id captured for follow-up --resume.
     expect(executor.getLastSessionId()).toBe('sess_stub')
+    expect(events).toContainEqual({
+      type: 'engine_binding',
+      engine: 'cursor',
+      binding: { sessionId: 'sess_stub' },
+    })
+  })
+
+  it('passes a stored native session id through --resume', async () => {
+    let capturedArgs: string[] = []
+    const executor = new CursorExecutor({
+      resolveBinary: async () => STUB_PATH,
+      spawn: (_cmd, args, opts): ChildProcessWithoutNullStreams => {
+        capturedArgs = args
+        return spawn(STUB_PATH, [], { cwd: opts.cwd, env: opts.env, stdio: ['pipe', 'pipe', 'pipe'] }) as ChildProcessWithoutNullStreams
+      },
+    })
+
+    await collect(executor.run({
+      messages: [{ role: 'user', content: 'edit the note' }],
+      workspacePath: workspace,
+      engineBinding: { sessionId: 'sess_existing' },
+    }))
+
+    expect(capturedArgs).toContain('--resume')
+    expect(capturedArgs).toContain('sess_existing')
   })
 
   it('emits error + finish when no user message is present', async () => {

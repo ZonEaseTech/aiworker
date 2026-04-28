@@ -56,6 +56,10 @@ OpenClaw's session architecture is a control plane, not just prompt replay:
 10. Native CLI session ids are stored as bindings, but reset clears or rotates
     them.
 
+S4 uses findings 1 and 10 directly: `worker.db` / `session_entries` remains the
+authority, and provider-native session ids are cached bindings that reset/new
+must clear before the fresh turn.
+
 ## Proposal
 
 Introduce an AIWorker session control plane where worker.db is the authority and
@@ -332,9 +336,29 @@ Stage 3: compaction and memory flush
 
 Stage 4: engine native bindings
 
-- Persist and reuse engine bindings where supported.
-- Make stale binding recovery explicit.
-- Keep DB-rendered context as fallback.
+- S4 `aeea6hmf` implements the native binding contract without a schema
+  migration: `AgentRunInput.engineBinding` passes the cached binding into a
+  run, and `AgentEvent.engine_binding` reports a new or cleared binding back to
+  the orchestrator.
+- The orchestrator reads the current `session_entries.engineBindings[engine]`
+  only for the primary user turn, persists same-engine binding events through
+  `updateSessionEngineBinding`, and keeps classifier / compaction / memory
+  flush helper runs from mutating the native binding.
+- This follows the OpenClaw finding that gateway/control-plane state owns the
+  session store while provider-owned CLI sessions are cached bindings that must
+  be discarded on explicit reset or stale recovery.
+- Codex current app-server binding uses the generated local protocol surface:
+  `thread/resume` for an existing native thread, `thread/start` for fresh
+  threads, and `turn/start` for the turn. A stale resume clears the cached
+  binding and falls back to a fresh thread using the DB-rendered prompt.
+  Legacy Codex keeps DB-rendered prompt fallback.
+- Claude Code and Cursor use their supported CLI `--resume <sessionId>` flags
+  and emit observed `session_id` values as bindings. HTTP, MCP, generic CLI,
+  and ACP executors cleanly ignore bindings and keep S2/S3 prompt assembly.
+- Reset/new handling relies on `rotateSessionConversation`, which already
+  clears `engineBindings`; S4 tests verify the old binding is not passed after
+  gateway `/new` or `/reset`.
+- S4 does not add S5 status/API/UI or maintenance surfaces.
 
 Stage 5: status, cleanup, UI follow-up
 

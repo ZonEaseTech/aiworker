@@ -99,6 +99,7 @@ export type {
   EngineAvailability,
   EngineAvailabilityResponse,
   EngineAvailabilityStatus,
+  EngineSessionBinding,
   ExecutorProvider,
   ExecutorTool,
   MemoryFilter,

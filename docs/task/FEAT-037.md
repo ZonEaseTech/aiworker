@@ -96,9 +96,17 @@ OpenClaw research anchors:
   to `conversations.summary`, raw transcript rows remain for audit,
   `session_entries.compactionCount` / memory-flush checkpoints are updated,
   and context-overflow errors force one compaction retry.
+- S4 (`aeea6hmf`) implements engine-native binding support only: orchestrator
+  passes the stored binding for `config.executor.engine`, persists executor
+  `engine_binding` events back into `session_entries.engineBindings`, and keeps
+  DB-rendered prompt context as fallback. Codex current app-server uses
+  `thread/resume` with stale-thread recovery to fresh `thread/start`; Claude
+  Code and Cursor use CLI `--resume` session ids, while unsupported executors
+  ignore bindings. Gateway `/new` / `/reset` continue to rotate the session
+  entry, which clears native bindings before the fresh turn. S4 adds no schema
+  migration and does not include S5 status/API/UI or maintenance surfaces.
 
 Deferred to later stages:
 
 - Idle and daily expiry policy implementation.
-- Engine-native session/thread bindings.
 - CLI/API/UI session status and maintenance surfaces.

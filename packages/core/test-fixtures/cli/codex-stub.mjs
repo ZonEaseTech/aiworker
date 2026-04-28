@@ -19,6 +19,7 @@ const argv = process.argv.slice(2)
 const wantsAppServer = argv.includes('app-server')
 const protocol = process.env.CODEX_STUB_PROTOCOL ?? 'legacy'
 const traceFile = process.env.CODEX_STUB_TRACE_FILE
+const failResume = process.env.CODEX_STUB_FAIL_RESUME === '1'
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -145,7 +146,26 @@ rl.on('line', (line) => {
     return
   }
   if (msg.method === 'thread/start') {
-    write({ jsonrpc: '2.0', id: msg.id, result: { thread: { id: 'thr_stub' } } })
+    write({ jsonrpc: '2.0', id: msg.id, result: { thread: { id: 'thr_stub', path: '/tmp/codex-thread.jsonl' } } })
+    return
+  }
+  if (msg.method === 'thread/resume') {
+    if (failResume) {
+      write({
+        jsonrpc: '2.0',
+        id: msg.id,
+        error: {
+          code: -32000,
+          message: 'thread not found',
+        },
+      })
+      return
+    }
+    write({
+      jsonrpc: '2.0',
+      id: msg.id,
+      result: { thread: { id: msg.params?.threadId ?? 'thr_stub', path: '/tmp/codex-thread.jsonl' } },
+    })
     return
   }
   if (msg.method === 'newTurn') {

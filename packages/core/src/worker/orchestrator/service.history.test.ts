@@ -71,9 +71,10 @@ function recordingBrain(options: { failWrites?: boolean } = {}): RecordingBrain 
 
 interface CapturingExecutor extends ExecutorProvider {
   captured: ChatMessage[][]
+  inputs: AgentRunInput[]
 }
 
-type ExecutorStep = string | { error: string }
+type ExecutorStep = string | { error: string } | { binding: Record<string, unknown> | null, engine?: string, error?: string, text?: string }
 
 function capturingExecutor(outputs: string[] = ['ok']): CapturingExecutor {
   return scriptedExecutor(outputs)
@@ -81,21 +82,39 @@ function capturingExecutor(outputs: string[] = ['ok']): CapturingExecutor {
 
 function scriptedExecutor(outputs: ExecutorStep[] = ['ok']): CapturingExecutor {
   const captured: ChatMessage[][] = []
+  const inputs: AgentRunInput[] = []
   let nextOutput = 0
   const exec: CapturingExecutor = {
     name: 'capture',
     captured,
+    inputs,
     health: async () => ({ name: 'capture', status: 'healthy', lastChecked: 'x' }),
     listTools: async () => [],
     run: (input: AgentRunInput) => {
+      inputs.push(input)
       captured.push(input.messages.map(m => ({ role: m.role, content: m.content })))
       const output = outputs[nextOutput] ?? outputs[outputs.length - 1] ?? 'ok'
       nextOutput += 1
       return (async function* () {
-        if (typeof output === 'string')
+        if (typeof output === 'string') {
           yield { type: 'assistant_message_delta' as const, delta: output }
-        else
+        }
+        else if ('binding' in output) {
+          yield {
+            type: 'engine_binding' as const,
+            engine: output.engine ?? 'http',
+            binding: output.binding,
+          }
+          if (output.text !== undefined) {
+            yield { type: 'assistant_message_delta' as const, delta: output.text }
+          }
+          if (output.error !== undefined) {
+            yield { type: 'error' as const, error: output.error }
+          }
+        }
+        else {
           yield { type: 'error' as const, error: output.error }
+        }
       })()
     },
   }
@@ -718,6 +737,152 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
     const rows = db.select().from(messages).where(eq(messages.conversationId, firstEntry!.currentConversationId)).all()
     expect(rows.some(row => row.content === 'first turn')).toBe(true)
     expect(rows.some(row => row.content === 'second turn')).toBe(true)
+  })
+
+  it('persists and reuses native engine bindings for supporting executors', async () => {
+    const firstBinding = { protocol: 'current', threadId: 'thread-1' }
+    const secondBinding = { protocol: 'current', threadId: 'thread-2' }
+    const executor = scriptedExecutor([
+      { engine: 'codex', binding: firstBinding, text: 'first response' },
+      '{"continue":true,"reason":"same topic"}',
+      { engine: 'codex', binding: secondBinding, text: 'second response' },
+    ])
+    const orch = new Orchestrator({
+      config: buildConfig({ executor: { engine: 'codex', variant: 'default' } }),
+      brain: stubBrain(),
+      executor,
+      bus: silentBus(),
+      workerId: 'w_history_test',
+      workspaces,
+      processes,
+      approvals: new ApprovalStore(),
+    })
+
+    const sessionKey = resolveSessionKey(envelope())
+    await orch.ingest(envelope('first turn with native binding'))
+    expect(getSessionEntry(sessionKey)?.engineBindings).toEqual({ codex: firstBinding })
+
+    await orch.ingest(envelope('second turn with native binding'))
+    expect(executor.inputs[0]?.engineBinding).toBeUndefined()
+    expect(executor.inputs[1]?.engineBinding).toBeUndefined()
+    expect(executor.inputs[2]?.engineBinding).toEqual(firstBinding)
+    expect(getSessionEntry(sessionKey)?.engineBindings).toEqual({ codex: secondBinding })
+  })
+
+  it('keeps native engine bindings isolated by account-scoped session key', async () => {
+    const firstBinding = { protocol: 'current', threadId: 'account-one-thread' }
+    const secondBinding = { protocol: 'current', threadId: 'account-two-thread' }
+    const executor = scriptedExecutor([
+      { engine: 'codex', binding: firstBinding, text: 'first response' },
+      { engine: 'codex', binding: secondBinding, text: 'second response' },
+    ])
+    const orch = new Orchestrator({
+      config: buildConfig({ executor: { engine: 'codex', variant: 'default' } }),
+      brain: stubBrain(),
+      executor,
+      bus: silentBus(),
+      workerId: 'w_history_test',
+      workspaces,
+      processes,
+      approvals: new ApprovalStore(),
+    })
+    const first = { ...envelope('from account one'), accountId: 'account-one' }
+    const second = { ...envelope('from account two'), accountId: 'account-two' }
+
+    await orch.ingest(first)
+    await orch.ingest(second)
+
+    expect(executor.inputs[0]?.engineBinding).toBeUndefined()
+    expect(executor.inputs[1]?.engineBinding).toBeUndefined()
+    expect(getSessionEntry(resolveSessionKey(first))?.engineBindings).toEqual({ codex: firstBinding })
+    expect(getSessionEntry(resolveSessionKey(second))?.engineBindings).toEqual({ codex: secondBinding })
+  })
+
+  it('does not pass a previous native binding after gateway reset rotates the session', async () => {
+    const firstBinding = { protocol: 'current', threadId: 'old-thread' }
+    const freshBinding = { protocol: 'current', threadId: 'fresh-thread' }
+    const executor = scriptedExecutor([
+      { engine: 'codex', binding: firstBinding, text: 'first response' },
+      { engine: 'codex', binding: freshBinding, text: 'fresh response' },
+    ])
+    const orch = new Orchestrator({
+      config: buildConfig({ executor: { engine: 'codex', variant: 'default' } }),
+      brain: stubBrain(),
+      executor,
+      bus: silentBus(),
+      workerId: 'w_history_test',
+      workspaces,
+      processes,
+      approvals: new ApprovalStore(),
+    })
+
+    const sessionKey = resolveSessionKey(envelope())
+    await orch.ingest(envelope('before reset'))
+    expect(getSessionEntry(sessionKey)?.engineBindings).toEqual({ codex: firstBinding })
+
+    await orch.ingest({
+      ...envelope('after reset'),
+      raw: { source: 'gateway', sessionReset: true, resetCommand: '/new' },
+    })
+
+    expect(executor.inputs[1]?.engineBinding).toBeUndefined()
+    expect(getSessionEntry(sessionKey)?.engineBindings).toEqual({ codex: freshBinding })
+    expect(getSessionEntry(sessionKey)?.resetReason).toBe('manual:/new')
+  })
+
+  it('retries once with DB-rendered context after a stale native binding is cleared', async () => {
+    const staleBinding = { protocol: 'current', threadId: 'stale-thread' }
+    const freshBinding = { protocol: 'current', threadId: 'fresh-thread' }
+    const executor = scriptedExecutor([
+      { engine: 'codex', binding: staleBinding, text: 'first response' },
+      '{"continue":true,"reason":"same topic"}',
+      { engine: 'codex', binding: null, error: 'native thread not found' },
+      { engine: 'codex', binding: freshBinding, text: 'recovered response' },
+    ])
+    const orch = new Orchestrator({
+      config: buildConfig({ executor: { engine: 'codex', variant: 'default' } }),
+      brain: stubBrain(),
+      executor,
+      bus: silentBus(),
+      workerId: 'w_history_test',
+      workspaces,
+      processes,
+      approvals: new ApprovalStore(),
+    })
+
+    const sessionKey = resolveSessionKey(envelope())
+    await orch.ingest(envelope('first native turn'))
+    await orch.ingest(envelope('second native turn'))
+
+    expect(executor.inputs[2]?.engineBinding).toEqual(staleBinding)
+    expect(executor.inputs[3]?.engineBinding).toBeUndefined()
+    expect(getSessionEntry(sessionKey)?.engineBindings).toEqual({ codex: freshBinding })
+
+    const conversationId = getSessionEntry(sessionKey)!.currentConversationId
+    const rows = getWorkerDb().select().from(messages).where(eq(messages.conversationId, conversationId)).all()
+    expect(rows.some(row => row.content === 'recovered response')).toBe(true)
+  })
+
+  it('keeps prompt fallback unchanged when an executor reports no native binding', async () => {
+    const executor = capturingExecutor(['fallback response'])
+    const orch = new Orchestrator({
+      config: buildConfig({ orchestrator: { maxHistoryMessages: 5 } }),
+      brain: stubBrain(),
+      executor,
+      bus: silentBus(),
+      workerId: 'w_history_test',
+      workspaces,
+      processes,
+      approvals: new ApprovalStore(),
+    })
+    const env = envelope('fallback-only turn')
+
+    await orch.ingest(env)
+
+    const runMessages = executor.captured[0]!
+    expect(runMessages[0]?.role).toBe('system')
+    expect(runMessages[runMessages.length - 1]?.content).toBe('fallback-only turn')
+    expect(getSessionEntry(resolveSessionKey(env))?.engineBindings).toEqual({})
   })
 
   it('isolates session entries by account when channel and chat id match', async () => {

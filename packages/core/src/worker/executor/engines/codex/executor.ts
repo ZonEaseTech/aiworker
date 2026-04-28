@@ -9,6 +9,9 @@ import type { Buffer } from 'node:buffer'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import type { JsonRpcNotification, JsonRpcRequest } from '../acp/types'
 import type {
+  CodexCurrentThreadResumeParams,
+  CodexCurrentThreadResumeResult,
+  CodexCurrentThreadStartParams,
   CodexCurrentThreadStartResult,
   CodexCurrentTurnStartResult,
   CodexNewTurnResult,
@@ -31,6 +34,7 @@ export const DEFAULT_CODEX_CLI_VERSION = '0.121.0'
 const DEFAULT_TIMEOUT_MS = 120_000
 /** Protocol version advertised on `initialize`. */
 const DEFAULT_PROTOCOL_VERSION = 1
+const CODEX_ENGINE = 'codex'
 
 export type CodexSpawnLike = (
   cmd: string,
@@ -68,10 +72,10 @@ export interface CodexExecutorOptions {
  * legacy `thread_start/newTurn` and current `thread/start/turn/start`
  * protocol variants.
  *
- * Worker-owned conversation continuity comes from `AgentRunInput.messages`.
- * Native app-server thread resume is still out of scope; every process starts a
- * fresh Codex thread, but the full worker history window is rendered into the
- * turn prompt so worker.db remains the source of truth.
+ * Worker-owned conversation continuity still comes from `AgentRunInput.messages`.
+ * When the current app-server protocol supports `thread/resume`, the executor
+ * treats `input.engineBinding` as a disposable native-thread optimization and
+ * reports the active binding back through `engine_binding` events.
  */
 export class CodexExecutor implements ExecutorProvider {
   readonly name = 'codex'
@@ -93,12 +97,13 @@ export class CodexExecutor implements ExecutorProvider {
   }
 
   private async* runIterable(input: AgentRunInput): AsyncGenerator<AgentEvent> {
-    if (!hasUserMessage(input.messages)) {
+    const latestUser = lastUserMessage(input.messages)
+    if (latestUser === null) {
       yield { type: 'error', error: 'Codex executor requires a user message' }
       yield { type: 'finish', reason: 'error' }
       return
     }
-    const prompt = renderCodexPrompt(input.messages)
+    const fullPrompt = renderCodexPrompt(input.messages)
 
     const workspacePath = input.workspacePath ?? this.options.fallbackWorkspacePath ?? process.cwd()
 
@@ -178,13 +183,31 @@ export class CodexExecutor implements ExecutorProvider {
       })
 
       const model = input.model ?? this.options.model
-      const thread = await this.startThread(peer, model)
+      const initialBinding = parseCodexBinding(input.engineBinding)
+      if (input.engineBinding !== undefined && initialBinding === null)
+        yield { type: 'engine_binding', engine: CODEX_ENGINE, binding: null }
+
+      let thread: CodexThreadHandle
+      if (initialBinding?.protocol === 'current') {
+        try {
+          thread = await this.resumeCurrentThread(peer, initialBinding, model, workspacePath)
+        }
+        catch {
+          yield { type: 'engine_binding', engine: CODEX_ENGINE, binding: null }
+          thread = await this.startThread(peer, model, workspacePath)
+        }
+      }
+      else {
+        thread = await this.startThread(peer, model, workspacePath)
+      }
+
       if (!thread.threadId) {
         yield { type: 'error', error: 'Codex thread start returned no threadId' }
         yield { type: 'finish', reason: 'error' }
         return
       }
 
+      let prompt = thread.resumed ? latestUser : fullPrompt
       if (thread.protocol === 'legacy') {
         const turnPromise = peer.request<CodexNewTurnResult>('newTurn', {
           threadId: thread.threadId,
@@ -196,10 +219,18 @@ export class CodexExecutor implements ExecutorProvider {
         )
       }
       else {
-        await peer.request<CodexCurrentTurnStartResult>('turn/start', {
-          threadId: thread.threadId,
-          input: [{ type: 'text', text: prompt }],
-        })
+        try {
+          await this.startCurrentTurn(peer, thread.threadId, prompt)
+        }
+        catch (err) {
+          if (!thread.resumed)
+            throw err
+          yield { type: 'engine_binding', engine: CODEX_ENGINE, binding: null }
+          thread = await this.startThread(peer, model, workspacePath)
+          prompt = fullPrompt
+          await this.startCurrentTurn(peer, thread.threadId, prompt)
+        }
+        yield { type: 'engine_binding', engine: CODEX_ENGINE, binding: { ...codexBindingFromThread(thread) } }
       }
 
       let sawFinish = false
@@ -253,7 +284,8 @@ export class CodexExecutor implements ExecutorProvider {
   private async startThread(
     peer: JsonRpcPeer,
     model: string | undefined,
-  ): Promise<{ protocol: 'legacy' | 'current', threadId: string }> {
+    workspacePath: string,
+  ): Promise<CodexThreadHandle> {
     const threadStartParams: CodexThreadStartParams = {
       approval_policy: 'never',
     }
@@ -269,8 +301,51 @@ export class CodexExecutor implements ExecutorProvider {
         throw err
     }
 
-    const thread = await peer.request<CodexCurrentThreadStartResult>('thread/start', threadStartParams)
-    return { protocol: 'current', threadId: thread.thread.id }
+    const currentParams: CodexCurrentThreadStartParams = {
+      approvalPolicy: 'never',
+      cwd: workspacePath,
+      experimentalRawEvents: false,
+      persistExtendedHistory: true,
+    }
+    if (model && model.length > 0)
+      currentParams.model = model
+
+    const thread = await peer.request<CodexCurrentThreadStartResult>('thread/start', currentParams)
+    return {
+      protocol: 'current',
+      threadId: thread.thread.id,
+      ...(thread.thread.path === undefined || thread.thread.path === null ? {} : { path: thread.thread.path }),
+    }
+  }
+
+  private async resumeCurrentThread(
+    peer: JsonRpcPeer,
+    binding: CodexEngineBinding,
+    model: string | undefined,
+    workspacePath: string,
+  ): Promise<CodexThreadHandle> {
+    const params: CodexCurrentThreadResumeParams = {
+      threadId: binding.threadId,
+      approvalPolicy: 'never',
+      cwd: workspacePath,
+      persistExtendedHistory: true,
+    }
+    if (model && model.length > 0)
+      params.model = model
+    const thread = await peer.request<CodexCurrentThreadResumeResult>('thread/resume', params)
+    return {
+      protocol: 'current',
+      resumed: true,
+      threadId: thread.thread.id || binding.threadId,
+      ...(thread.thread.path === undefined || thread.thread.path === null ? binding.path === undefined ? {} : { path: binding.path } : { path: thread.thread.path }),
+    }
+  }
+
+  private async startCurrentTurn(peer: JsonRpcPeer, threadId: string, prompt: string): Promise<void> {
+    await peer.request<CodexCurrentTurnStartResult>('turn/start', {
+      threadId,
+      input: [{ type: 'text', text: prompt }],
+    })
   }
 
   private async resolveCommand(): Promise<{ cmd: string, args: string[] }> {
@@ -296,6 +371,41 @@ function isUnknownLegacyThreadStart(err: unknown): boolean {
   return err.message.includes('thread_start')
     || err.message.includes('unknown variant')
     || err.message.includes('Invalid request')
+}
+
+interface CodexThreadHandle {
+  protocol: 'legacy' | 'current'
+  threadId: string
+  path?: string
+  resumed?: boolean
+}
+
+type CodexEngineBinding = Record<string, unknown> & {
+  protocol: 'current'
+  threadId: string
+  path?: string
+}
+
+function parseCodexBinding(value: unknown): CodexEngineBinding | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    return null
+  const record = value as Record<string, unknown>
+  if ((record.protocol !== undefined && record.protocol !== 'current') || typeof record.threadId !== 'string' || record.threadId.length === 0)
+    return null
+  const pathValue = record.path
+  return {
+    protocol: 'current',
+    threadId: record.threadId,
+    ...(typeof pathValue === 'string' && pathValue.length > 0 ? { path: pathValue } : {}),
+  }
+}
+
+function codexBindingFromThread(thread: CodexThreadHandle): CodexEngineBinding {
+  return {
+    protocol: 'current',
+    threadId: thread.threadId,
+    ...(thread.path === undefined ? {} : { path: thread.path }),
+  }
 }
 
 /**
@@ -392,8 +502,13 @@ function safeEndStdin(child: ChildProcessWithoutNullStreams): void {
   }
 }
 
-function hasUserMessage(messages: AgentRunInput['messages']): boolean {
-  return messages.some(m => m.role === 'user' && m.content.trim().length > 0)
+function lastUserMessage(messages: AgentRunInput['messages']): string | null {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index]
+    if (message?.role === 'user' && message.content.trim().length > 0)
+      return message.content
+  }
+  return null
 }
 
 function renderCodexPrompt(messages: AgentRunInput['messages']): string {

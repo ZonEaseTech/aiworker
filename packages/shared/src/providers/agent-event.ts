@@ -40,6 +40,9 @@ export const tokenUsageSchema = z.object({
 })
 export type TokenUsage = z.infer<typeof tokenUsageSchema>
 
+export const engineSessionBindingSchema = z.record(z.unknown())
+export type EngineSessionBinding = z.infer<typeof engineSessionBindingSchema>
+
 /** Reason a run finished. */
 export const agentFinishReasonSchema = z.enum(['stop', 'tool', 'length', 'error', 'cancelled'])
 export type AgentFinishReason = z.infer<typeof agentFinishReasonSchema>
@@ -72,6 +75,11 @@ export const agentEventSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('token_usage'),
     usage: tokenUsageSchema,
+  }),
+  z.object({
+    type: z.literal('engine_binding'),
+    engine: z.string().min(1),
+    binding: engineSessionBindingSchema.nullable(),
   }),
   z.object({
     type: z.literal('finish'),
