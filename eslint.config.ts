@@ -32,12 +32,15 @@ export default antfu({
     }],
   },
 }, {
-  // PLAN-022 / FEAT-033：worker 视角不得引用 fleet 视角；共享请放 @/shared/。
+  // PLAN-022 / FEAT-033 / FEAT-035：worker 视角不得引用 fleet 视角或
+  // gateway WS 协议；共享请放 @/shared/，worker 自管数据通道只走
+  // `/api/worker/*` REST/SSE。
   files: ['apps/web/src/worker/**/*.{ts,tsx}'],
   rules: {
     'no-restricted-imports': ['error', {
       patterns: [
         { group: ['@/fleet', '@/fleet/**'], message: 'worker 视角不得引用 fleet 视角；共享请放 @/shared/。' },
+        { group: ['@zonease/aiworker-gateway-proto', '@zonease/aiworker-gateway-proto/**'], message: 'worker UI 不得接 gateway WS/proto；请使用 /api/worker/* REST/SSE。' },
       ],
     }],
   },

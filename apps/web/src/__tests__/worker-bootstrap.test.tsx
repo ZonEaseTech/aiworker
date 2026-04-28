@@ -11,10 +11,13 @@ import { routeTree } from '@/worker/routeTree.gen'
 
 describe('worker bundle bootstrap', () => {
   it('imports the worker routeTree without throwing', () => {
+    // routeTree 是 TanStack Router plugin 在构建期生成的产物；能 import 通过即
+    // 证明：1) `apps/web/src/worker/routes/*` 全部 transpile OK；2) shared 资源
+    //       链路完整；3) Phase 3 worker UI MVP 闭环。
     expect(routeTree).toBeDefined()
   })
 
-  it('mounts the worker RouterProvider with the placeholder route', async () => {
+  it('mounts the worker RouterProvider with the overview shell', async () => {
     const router = createRouter({
       routeTree,
       history: createMemoryHistory({ initialEntries: ['/'] }),
@@ -29,7 +32,9 @@ describe('worker bundle bootstrap', () => {
       </QueryClientProvider>,
     )
 
+    // 侧边栏与 top-bar 都标注 worker 视角；"概览" 为 index 路由的 h1 文案，
+    // 命中即说明 root layout + outlet 子节点都成功 mount。
     expect(await screen.findByText(/AIWorker · Worker/)).toBeTruthy()
-    expect(await screen.findByText(/Worker 自助管理/)).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: '概览' })).toBeTruthy()
   })
 })
