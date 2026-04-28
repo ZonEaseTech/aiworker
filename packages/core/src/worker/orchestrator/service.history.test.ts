@@ -20,6 +20,7 @@ import { eq } from 'drizzle-orm'
 import { resolveSessionKey } from '../conversation/router'
 import { WorkspaceManager as RealWorkspaceManager } from '../executor/workspace'
 import { ApprovalStore } from './approvals'
+import { estimateChatMessagesTokens } from './context'
 import { ProcessManager } from './process-manager'
 import { Orchestrator } from './service'
 
@@ -82,7 +83,7 @@ function buildConfig(overrides: Partial<WorkerConfig> = {}): WorkerConfig {
   }
 }
 
-async function seedConversation(id: string, channel = 'web', chatId = 'chat-history', threadId?: string) {
+async function seedConversation(id: string, channel = 'web', chatId = 'chat-history', threadId?: string, summary?: string) {
   const db = getWorkerDb()
   const now = new Date().toISOString()
   await db.insert(conversations).values({
@@ -90,6 +91,7 @@ async function seedConversation(id: string, channel = 'web', chatId = 'chat-hist
     channel: channel as 'web',
     chatId,
     ...(threadId === undefined ? {} : { threadId }),
+    ...(summary === undefined ? {} : { summary }),
     status: 'open',
     startedAt: now,
     lastActiveAt: now,
@@ -151,10 +153,11 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
   async function runIngestAndCapture(opts: {
     config: WorkerConfig
     seedCount: number
+    summary?: string
   }): Promise<{ executor: CapturingExecutor }> {
     // 注意：我们要让 ingest 命中"已存在 conversation"分支，避免触发分类器；
     // 直接预 seed 一个 open conversation + 大量历史消息。
-    await seedConversation('conv-history')
+    await seedConversation('conv-history', 'web', 'chat-history', undefined, opts.summary)
     await seedMessages('conv-history', opts.seedCount)
 
     const executor = capturingExecutor()
@@ -216,6 +219,88 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
     const runMessages = executor.captured[executor.captured.length - 1]!
     // 1 system + 3 seeded + 1 ingested user = 5
     expect(runMessages.length).toBe(5)
+  })
+
+  it('caps very long histories by token budget when token budgeting is enabled', async () => {
+    const { executor } = await runIngestAndCapture({
+      config: buildConfig({
+        orchestrator: {
+          contextWindowTokens: 120,
+          reserveTokens: 40,
+          keepRecentTokens: 40,
+          maxHistoryMessages: 200,
+        },
+      }),
+      seedCount: 50,
+    })
+
+    const runMessages = executor.captured[executor.captured.length - 1]!
+    const history = runMessages.slice(1)
+    expect(history.length).toBeLessThan(20)
+    expect(history.length).toBeGreaterThan(1)
+    expect(history[history.length - 1]!.content).toBe('incoming new turn')
+    expect(history.some(message => message.content === 'msg-0')).toBe(false)
+  })
+
+  it('prefers recent messages and keeps selected history chronological', async () => {
+    const { executor } = await runIngestAndCapture({
+      config: buildConfig({
+        orchestrator: {
+          contextWindowTokens: 120,
+          reserveTokens: 40,
+          keepRecentTokens: 40,
+        },
+      }),
+      seedCount: 50,
+    })
+
+    const runMessages = executor.captured[executor.captured.length - 1]!
+    const history = runMessages.slice(1)
+    const numbered = history
+      .map(message => /^msg-(\d+)$/.exec(message.content)?.[1])
+      .filter((value): value is string => value !== undefined)
+      .map(Number)
+    expect(numbered.length).toBeGreaterThan(0)
+    expect(numbered).toEqual([...numbered].sort((a, b) => a - b))
+    expect(history[history.length - 1]!.content).toBe('incoming new turn')
+  })
+
+  it('keeps bootstrap and summary in the system prompt when history budget is tight', async () => {
+    const { executor } = await runIngestAndCapture({
+      config: buildConfig({
+        orchestrator: {
+          contextWindowTokens: 90,
+          reserveTokens: 20,
+          keepRecentTokens: 40,
+        },
+      }),
+      seedCount: 20,
+      summary: 'prior-summary '.repeat(80),
+    })
+
+    const runMessages = executor.captured[executor.captured.length - 1]!
+    expect(runMessages[0]!.role).toBe('system')
+    expect(runMessages[0]!.content).toContain('Conversation summary so far:')
+    expect(runMessages[0]!.content).toContain('prior-summary')
+    expect(runMessages.slice(1).some(message => message.content.startsWith('msg-'))).toBe(false)
+    expect(runMessages[runMessages.length - 1]!.content).toBe('incoming new turn')
+  })
+
+  it('updates session_entries.contextTokens from the assembled context', async () => {
+    const { executor } = await runIngestAndCapture({
+      config: buildConfig({
+        orchestrator: {
+          contextWindowTokens: 120,
+          reserveTokens: 40,
+          keepRecentTokens: 40,
+        },
+      }),
+      seedCount: 20,
+    })
+
+    const runMessages = executor.captured[executor.captured.length - 1]!
+    const entry = getSessionEntry(resolveSessionKey(envelope()))
+    expect(entry?.contextTokens).toBe(estimateChatMessagesTokens(runMessages))
   })
 
   it('routes through session_entries before legacy open conversation lookup', async () => {

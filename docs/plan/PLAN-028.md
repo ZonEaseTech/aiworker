@@ -281,9 +281,25 @@ Stage 1: session key/store/lifecycle
 
 Stage 2: token-budget prompt assembly
 
-- Add token estimation and context builder.
-- Keep current fixed-window fallback behind config.
-- Add budget tests for very long message histories.
+- S2 `u8dvdjh9` implements token estimation and budget-aware context assembly.
+- Token budgeting is enabled by `orchestrator.contextWindowTokens`,
+  `reserveTokens`, or `keepRecentTokens`. Without those fields, the previous
+  `maxHistoryMessages` fixed-window behavior remains the safe fallback.
+- The context builder keeps the system/bootstrap prompt first, keeps
+  conversation summary in that system prompt, selects recent history
+  newest-backward until the token budget is filled, and returns selected
+  history oldest-to-newest.
+- Executor variant context-window hints and explicit orchestrator overrides are
+  used when resolving the effective budget; an 8k conservative fallback remains
+  available for unknown models.
+- `session_entries.contextTokens` is updated from the assembled prompt with the
+  deterministic estimator.
+- Covered by tests for token-budget capping, recent-message preference,
+  chronological order, summary/system prompt preservation, custom budget
+  tuning, context token recording, and legacy `maxHistoryMessages` fallback.
+- Not included in S2: compaction summaries, memory flush, overflow retry,
+  native engine bindings, CLI/API/UI status surfaces, expiry policy, or
+  maintenance cleanup.
 
 Stage 3: compaction and memory flush
 

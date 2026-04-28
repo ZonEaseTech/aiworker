@@ -137,4 +137,30 @@ describe('worker management config', () => {
     }] as unknown as WorkerConfig['channels']
     await expect(putConfig(getWorkerDb(), vault, bad)).rejects.toBeInstanceOf(InvalidConfigError)
   })
+
+  it('accepts orchestrator token-budget tuning', async () => {
+    const vault = new SecretsVault(MASTER_KEY, getWorkerDb())
+    const next = baseConfig()
+    next.orchestrator = {
+      contextWindowTokens: 4_096,
+      reserveTokens: 1_024,
+      keepRecentTokens: 2_000,
+      maxHistoryMessages: 100,
+    }
+
+    const result = await putConfig(getWorkerDb(), vault, next)
+
+    expect(result.config.orchestrator).toEqual(next.orchestrator)
+  })
+
+  it('rejects token reserve values that consume the entire context window', async () => {
+    const vault = new SecretsVault(MASTER_KEY, getWorkerDb())
+    const bad = baseConfig()
+    bad.orchestrator = {
+      contextWindowTokens: 1_024,
+      reserveTokens: 1_024,
+    }
+
+    await expect(putConfig(getWorkerDb(), vault, bad)).rejects.toBeInstanceOf(InvalidConfigError)
+  })
 })

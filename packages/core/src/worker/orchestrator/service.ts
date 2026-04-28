@@ -4,7 +4,6 @@ import type {
   ChatMessage,
   ConversationState,
   Envelope,
-  ExecutorConfig,
   ExecutorProvider,
   WorkerConfig,
 } from '@zonease/aiworker-shared'
@@ -17,11 +16,17 @@ import { DEFAULT_MAX_HISTORY_MESSAGES } from '@zonease/aiworker-shared'
 import { agentTasks, conversations, getWorkerDb, messages, rotateSessionConversation, touchSessionEntry, upsertSessionEntry } from '@zonease/aiworker-storage-sqlite/worker'
 
 import consola from 'consola'
-import { eq } from 'drizzle-orm'
+import { desc, eq } from 'drizzle-orm'
 import { getChannelAdapter } from '../channels/registry'
 import { classifyContinuation, findOpenConversation, findSessionConversation, hasSessionEntryForRoute, loadRecentMessages, resolveSessionKey } from '../conversation/router'
-import { resolveVariant } from '../executor/default-profiles'
 import { DEFAULT_APPROVAL_TIMEOUT_MS } from './approvals'
+import {
+  assembleTokenBudgetContext,
+  DEFAULT_TOKEN_BUDGET_HISTORY_SCAN_MESSAGES,
+  estimateChatMessagesTokens,
+  resolveContextBudget,
+  resolveExecutorModel,
+} from './context'
 import { evaluateToolPolicy } from './policy'
 
 interface OrchestratorDeps {
@@ -119,15 +124,11 @@ export class Orchestrator {
     sessionKey: string,
   ): Promise<void> {
     const db = getWorkerDb()
-    const history = await this.loadHistoryWindow(conversation.id)
     const systemPrompt = await this.buildSystemPrompt(conversation.summary ?? null)
+    const chatMessages = await this.buildRunContext(conversation.id, systemPrompt)
+    touchSessionEntry(sessionKey, { contextTokens: estimateChatMessagesTokens(chatMessages) })
 
-    const chatMessages: ChatMessage[] = [
-      { role: 'system', content: systemPrompt },
-      ...history,
-    ]
-
-    const model = executorModel(this.deps.config.executor)
+    const model = resolveExecutorModel(this.deps.config.executor)
     const taskId = taskIdFromEnvelope(envelope)
     const runInput = {
       messages: chatMessages,
@@ -237,7 +238,7 @@ export class Orchestrator {
 
     const existingWorkspace = await this.provisionWorkspace(existing.id)
     const recent = await loadRecentMessages(existing.id)
-    const model = executorModel(this.deps.config.executor)
+    const model = resolveExecutorModel(this.deps.config.executor)
     const decision = await classifyContinuation(
       this.deps.executor,
       model,
@@ -363,15 +364,43 @@ export class Orchestrator {
     return { id: res[0]?.id ?? -1 }
   }
 
+  private async buildRunContext(conversationId: string, systemPrompt: string): Promise<ChatMessage[]> {
+    const systemMessage: ChatMessage = { role: 'system', content: systemPrompt }
+    const budget = resolveContextBudget(this.deps.config.orchestrator, this.deps.config.executor)
+    if (!budget) {
+      const history = await this.loadHistoryWindow(conversationId)
+      return [systemMessage, ...history]
+    }
+
+    const historyNewestFirst = await this.loadBudgetHistory(conversationId, budget.maxHistoryMessages)
+    return assembleTokenBudgetContext({
+      systemMessage,
+      historyNewestFirst,
+      budget,
+    }).messages
+  }
+
   /**
-   * REFACTOR-006 P2：取最近 N 条消息塞进 LLM context。N 来自 worker config
-   * 的 `orchestrator.maxHistoryMessages`，缺省 `DEFAULT_MAX_HISTORY_MESSAGES`
-   * (20)。`loadRecentMessages` 复用 conversation router 的实现：按 id desc
-   * 取 limit 然后 reverse，保证顺序仍是早→晚。
+   * Backward-compatible recent-message window. Used when no token budget field
+   * is configured; preserves the REFACTOR-006 `maxHistoryMessages` behavior.
    */
   private async loadHistoryWindow(conversationId: string): Promise<ChatMessage[]> {
     const limit = this.deps.config.orchestrator?.maxHistoryMessages ?? DEFAULT_MAX_HISTORY_MESSAGES
     const rows = await loadRecentMessages(conversationId, limit)
+    return rows.map(r => ({ role: r.role, content: r.content }))
+  }
+
+  private async loadBudgetHistory(conversationId: string, maxHistoryMessages: number | undefined): Promise<ChatMessage[]> {
+    const db = getWorkerDb()
+    const rows = db.select({
+      role: messages.role,
+      content: messages.content,
+    })
+      .from(messages)
+      .where(eq(messages.conversationId, conversationId))
+      .orderBy(desc(messages.id))
+      .limit(maxHistoryMessages ?? DEFAULT_TOKEN_BUDGET_HISTORY_SCAN_MESSAGES)
+      .all()
     return rows.map(r => ({ role: r.role, content: r.content }))
   }
 
@@ -497,31 +526,6 @@ export class Orchestrator {
 
     return { id }
   }
-}
-
-function executorModel(config: ExecutorConfig): string | undefined {
-  // Resolve through the variant catalogue so a user who picks a preset (e.g.
-  // http/deepseek without an `overrides.model`) still surfaces the variant's
-  // baked-in model id. Failures (unknown engine / variant) are swallowed —
-  // the executor itself will still error and the orchestrator just omits the
-  // per-request model hint.
-  let resolved: ReturnType<typeof resolveVariant> | null = null
-  try {
-    resolved = resolveVariant(config)
-  }
-  catch {
-    return undefined
-  }
-  if (!resolved)
-    return undefined
-  if (resolved.modelId !== undefined && resolved.modelId.length > 0)
-    return resolved.modelId
-  const body = resolved.body as Record<string, unknown>
-  if (typeof body.model === 'string' && body.model.length > 0)
-    return body.model
-  if (typeof body.defaultModel === 'string' && body.defaultModel.length > 0)
-    return body.defaultModel
-  return undefined
 }
 
 function taskIdFromEnvelope(envelope: Envelope): string | undefined {

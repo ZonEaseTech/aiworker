@@ -85,11 +85,15 @@ OpenClaw research anchors:
   mapping reuse, legacy conversation backfill, account-scoped keys, threaded
   route isolation, gateway `/new` and `/reset` manual rotation, and
   classifier-driven new-topic rotation.
+- S2 (`u8dvdjh9`) implements token-budget context assembly only: a deterministic
+  estimator, budget-enabled recent-history selection, model/config budget
+  resolution, `session_entries.contextTokens` updates, config validation, and
+  focused tests. Legacy `maxHistoryMessages` remains the fallback when no token
+  budget field is configured.
 
 Deferred to later stages:
 
 - Idle and daily expiry policy implementation.
-- Token-budget context assembly.
 - Persistent compaction summaries and pre-compaction memory flush.
 - Engine-native session/thread bindings.
 - CLI/API/UI session status and maintenance surfaces.

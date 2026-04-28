@@ -31,30 +31,35 @@ export const DEFAULT_PROFILES: {
         baseUrl: '',
         apiKey: '',
         model: 'gpt-4o-mini',
+        contextWindowTokens: 128_000,
         timeoutMs: 30_000,
       } satisfies HttpVariantBody,
       'gemini-openai-compat': {
         baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
         apiKey: '',
         model: 'gemini-2.5-flash',
+        contextWindowTokens: 1_000_000,
         timeoutMs: 30_000,
       } satisfies HttpVariantBody,
       'deepseek': {
         baseUrl: 'https://api.deepseek.com',
         apiKey: '',
         model: 'deepseek-chat',
+        contextWindowTokens: 64_000,
         timeoutMs: 30_000,
       } satisfies HttpVariantBody,
       'siliconflow': {
         baseUrl: 'https://api.siliconflow.cn/v1',
         apiKey: '',
         model: 'Qwen/Qwen2.5-7B-Instruct',
+        contextWindowTokens: 32_000,
         timeoutMs: 30_000,
       } satisfies HttpVariantBody,
       'openrouter': {
         baseUrl: 'https://openrouter.ai/api/v1',
         apiKey: '',
         model: 'anthropic/claude-sonnet-4.5',
+        contextWindowTokens: 200_000,
         timeoutMs: 30_000,
       } satisfies HttpVariantBody,
     },
@@ -81,10 +86,12 @@ export const DEFAULT_PROFILES: {
     variants: {
       'default': {
         model: 'sonnet',
+        contextWindowTokens: 200_000,
         timeoutMs: 120_000,
       } satisfies ClaudeCodeVariantBody,
       'opus-plan': {
         model: 'opus',
+        contextWindowTokens: 200_000,
         permissionPolicy: 'plan',
         timeoutMs: 180_000,
       } satisfies ClaudeCodeVariantBody,
@@ -94,10 +101,12 @@ export const DEFAULT_PROFILES: {
     variants: {
       gemini: {
         agent: 'gemini',
+        contextWindowTokens: 1_000_000,
         timeoutMs: 120_000,
       } satisfies AcpVariantBody,
       qwen: {
         agent: 'qwen',
+        contextWindowTokens: 32_000,
         timeoutMs: 120_000,
       } satisfies AcpVariantBody,
     },
@@ -106,6 +115,7 @@ export const DEFAULT_PROFILES: {
     variants: {
       default: {
         model: 'gpt-5.5',
+        contextWindowTokens: 128_000,
         timeoutMs: 120_000,
       } satisfies CodexVariantBody,
     },

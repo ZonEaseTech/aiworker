@@ -72,11 +72,17 @@ export interface ToolPolicy {
 }
 
 /**
- * Orchestrator 运行时调参（REFACTOR-006 P2）。`maxHistoryMessages` 控制每次
- * `run()` 灌入 LLM 的最近消息条数，避免长会话把 token 与 IO 一起打爆；缺省
- * 由 `DEFAULT_MAX_HISTORY_MESSAGES`（20）兜底。
+ * Orchestrator runtime tuning.
+ *
+ * `maxHistoryMessages` remains the backward-compatible fallback when token
+ * budgeting is not enabled. Setting any token budget field enables S2 context
+ * assembly: the system prompt is always included first, then recent history is
+ * selected newest-backward until the configured token budget is filled.
  */
 export interface OrchestratorConfig {
+  contextWindowTokens?: number
+  reserveTokens?: number
+  keepRecentTokens?: number
   maxHistoryMessages?: number
 }
 
