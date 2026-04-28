@@ -225,6 +225,24 @@ Add cleanup controls after the core path is stable:
 
 Do not implement this as one large patch.
 
+## BKD Execution Chain
+
+Coordinator: `ug03vh9v`.
+
+Stage issues:
+
+- S1-A `gf1grhpz` — session schema and store primitives.
+- S1-B `xuropmdt` — session resolver and lifecycle integration.
+- S1-C `hpdbois1` — session lifecycle regression tests and docs.
+- S2 `u8dvdjh9` — token-budget context assembly.
+- S3 `h4hpsxl2` — compaction and memory flush.
+- S4 `aeea6hmf` — engine-native session bindings.
+- S5 `u8hbsj4l` — session status and maintenance surfaces.
+
+Only S1-A is allowed to run first. Each subsequent issue starts after the
+previous issue reports to the coordinator and its changes are reviewed and
+integrated.
+
 Stage 1: session key/store/lifecycle
 
 - Add schema migration and resolver.
