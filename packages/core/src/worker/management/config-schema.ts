@@ -139,6 +139,15 @@ const toolPolicySchema = z.object({
   })),
 })
 
+const orchestratorCompactionSchema = z.object({
+  enabled: z.boolean().optional(),
+  triggerTokens: z.number().int().min(1).max(2_000_000).optional(),
+  maxSummaryMessages: z.number().int().min(1).max(500).optional(),
+  memoryFlush: z.object({
+    enabled: z.boolean().optional(),
+  }).optional(),
+})
+
 // Orchestrator runtime tuning. `maxHistoryMessages` is kept as the
 // backward-compatible fallback cap; setting any token field enables S2
 // token-budget context assembly.
@@ -147,12 +156,20 @@ const orchestratorConfigSchema = z.object({
   reserveTokens: z.number().int().min(0).max(1_000_000).optional(),
   keepRecentTokens: z.number().int().min(1).max(2_000_000).optional(),
   maxHistoryMessages: z.number().int().min(1).max(200).optional(),
+  compaction: orchestratorCompactionSchema.optional(),
 }).superRefine((value, ctx) => {
   if (value.contextWindowTokens !== undefined && value.reserveTokens !== undefined && value.reserveTokens >= value.contextWindowTokens) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['reserveTokens'],
       message: 'reserveTokens must be lower than contextWindowTokens',
+    })
+  }
+  if (value.contextWindowTokens !== undefined && value.compaction?.triggerTokens !== undefined && value.compaction.triggerTokens > value.contextWindowTokens) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['compaction', 'triggerTokens'],
+      message: 'compaction.triggerTokens must not exceed contextWindowTokens',
     })
   }
 })

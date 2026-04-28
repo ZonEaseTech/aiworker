@@ -115,11 +115,26 @@ export async function loadRecentMessages(conversationId: string, limit = MAX_REC
   const rows = db.select({
     role: messages.role,
     content: messages.content,
+    richMetadata: messages.richMetadata,
   })
     .from(messages)
     .where(eq(messages.conversationId, conversationId))
     .orderBy(desc(messages.id))
-    .limit(limit)
+    .limit(limit * 3)
     .all()
-  return rows.reverse()
+    .filter(row => !isTranscriptAuditEntry(row))
+    .slice(0, limit)
+  return rows.reverse().map(row => ({ role: row.role, content: row.content }))
+}
+
+function isTranscriptAuditEntry(row: { role: string, richMetadata: string | null }): boolean {
+  if (row.role !== 'system' || row.richMetadata === null)
+    return false
+  try {
+    const metadata = JSON.parse(row.richMetadata) as { kind?: unknown }
+    return metadata.kind === 'compaction' || metadata.kind === 'memory-flush'
+  }
+  catch {
+    return false
+  }
 }

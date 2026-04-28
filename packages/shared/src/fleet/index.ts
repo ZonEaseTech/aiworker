@@ -18,6 +18,8 @@ export type {
   CloudGatewayBrainSourceConfig,
   EvolutionConfig,
   FilesystemBrainSourceConfig,
+  OrchestratorCompactionConfig,
+  OrchestratorCompactionMemoryFlushConfig,
   OrchestratorConfig,
   ToolPolicy,
   ToolPolicyAction,

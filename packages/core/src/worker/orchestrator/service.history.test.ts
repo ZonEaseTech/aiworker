@@ -5,8 +5,8 @@ import type {
   Envelope,
   ExecutorProvider,
   WorkerConfig,
+  WriteMemoryInput,
 } from '@zonease/aiworker-shared'
-import type { WorkerEventBus } from '../events/bus'
 import type { WorkspaceManager } from '../executor/workspace'
 
 import { mkdtempSync } from 'node:fs'
@@ -18,6 +18,7 @@ import { closeWorkerDb, conversations, getSessionEntry, getWorkerDb, initWorkerD
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { resolveSessionKey } from '../conversation/router'
+import { WorkerEventBus } from '../events/bus'
 import { WorkspaceManager as RealWorkspaceManager } from '../executor/workspace'
 import { ApprovalStore } from './approvals'
 import { estimateChatMessagesTokens } from './context'
@@ -40,11 +41,45 @@ function stubBrain(): BrainProvider {
   }
 }
 
+interface RecordingBrain extends BrainProvider {
+  writes: WriteMemoryInput[]
+}
+
+function recordingBrain(options: { failWrites?: boolean } = {}): RecordingBrain {
+  const writes: WriteMemoryInput[] = []
+  return {
+    name: 'recording',
+    writes,
+    health: async () => ({ name: 'recording', status: 'healthy', lastChecked: 'x' }),
+    listSkills: async () => [],
+    listMemories: async () => [],
+    searchMemories: async () => [],
+    writeMemory: async (input) => {
+      if (options.failWrites)
+        throw new Error('memory write failed')
+      writes.push(input)
+      return {
+        id: `memory-${writes.length}`,
+        content: input.content,
+        metadata: input.metadata ?? {},
+        createdAt: '2026-04-28T12:00:00.000Z',
+        updatedAt: '2026-04-28T12:00:00.000Z',
+      }
+    },
+  }
+}
+
 interface CapturingExecutor extends ExecutorProvider {
   captured: ChatMessage[][]
 }
 
+type ExecutorStep = string | { error: string }
+
 function capturingExecutor(outputs: string[] = ['ok']): CapturingExecutor {
+  return scriptedExecutor(outputs)
+}
+
+function scriptedExecutor(outputs: ExecutorStep[] = ['ok']): CapturingExecutor {
   const captured: ChatMessage[][] = []
   let nextOutput = 0
   const exec: CapturingExecutor = {
@@ -57,7 +92,10 @@ function capturingExecutor(outputs: string[] = ['ok']): CapturingExecutor {
       const output = outputs[nextOutput] ?? outputs[outputs.length - 1] ?? 'ok'
       nextOutput += 1
       return (async function* () {
-        yield { type: 'assistant_message_delta' as const, delta: output }
+        if (typeof output === 'string')
+          yield { type: 'assistant_message_delta' as const, delta: output }
+        else
+          yield { type: 'error' as const, error: output.error }
       })()
     },
   }
@@ -69,6 +107,19 @@ function silentBus(): WorkerEventBus {
     emit: () => undefined,
     on: () => () => undefined,
   } as unknown as WorkerEventBus
+}
+
+class RecordingBus extends WorkerEventBus {
+  readonly events: Array<{ type: string, payload: Record<string, unknown> }> = []
+
+  override emit(type: string, payload: Record<string, unknown>): void {
+    this.events.push({ type, payload })
+    super.emit(type, payload)
+  }
+}
+
+function recordingBus(): RecordingBus {
+  return new RecordingBus()
 }
 
 function buildConfig(overrides: Partial<WorkerConfig> = {}): WorkerConfig {
@@ -109,6 +160,12 @@ async function seedMessages(conversationId: string, count: number) {
       createdAt: new Date(Date.now() - (count - i) * 1000).toISOString(),
     }).run()
   }
+}
+
+function parseAuditMetadata(row: { richMetadata: string | null }): Record<string, unknown> | null {
+  if (row.richMetadata === null)
+    return null
+  return JSON.parse(row.richMetadata) as Record<string, unknown>
 }
 
 describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
@@ -301,6 +358,217 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
     const runMessages = executor.captured[executor.captured.length - 1]!
     const entry = getSessionEntry(resolveSessionKey(envelope()))
     expect(entry?.contextTokens).toBe(estimateChatMessagesTokens(runMessages))
+  })
+
+  it('compacts long conversations into a persisted summary and keeps raw messages for audit', async () => {
+    await seedConversation('conv-history', 'web', 'chat-history')
+    await seedMessages('conv-history', 30)
+
+    const executor = capturingExecutor([
+      '{"continue":true,"reason":"same topic"}',
+      'durable compacted summary',
+      'first final',
+      '{"continue":true,"reason":"same topic"}',
+      'second final',
+    ])
+    const orch = new Orchestrator({
+      config: buildConfig({
+        orchestrator: {
+          contextWindowTokens: 160,
+          reserveTokens: 40,
+          keepRecentTokens: 35,
+          maxHistoryMessages: 200,
+          compaction: {
+            enabled: true,
+            triggerTokens: 130,
+          },
+        },
+      }),
+      brain: stubBrain(),
+      executor,
+      bus: silentBus(),
+      workerId: 'w_history_test',
+      workspaces,
+      processes,
+      approvals: new ApprovalStore(),
+    })
+
+    await orch.ingest(envelope('incoming after long history'))
+    await orch.ingest(envelope('next turn after compaction'))
+
+    const db = getWorkerDb()
+    const conversation = db.select().from(conversations).where(eq(conversations.id, 'conv-history')).get()
+    expect(conversation?.summary).toBe('durable compacted summary')
+
+    const auditRows = db.select().from(messages).where(eq(messages.conversationId, 'conv-history')).all()
+    const compactionRows = auditRows.filter(row => parseAuditMetadata(row)?.kind === 'compaction')
+    expect(compactionRows).toHaveLength(1)
+    const metadata = parseAuditMetadata(compactionRows[0]!)!
+    expect(typeof metadata.compactedThroughMessageId).toBe('number')
+    expect(auditRows.some(row => row.content === 'msg-0')).toBe(true)
+
+    const latestRunMessages = executor.captured[executor.captured.length - 1]!
+    expect(latestRunMessages[0]!.content).toContain('Conversation summary so far:')
+    expect(latestRunMessages[0]!.content).toContain('durable compacted summary')
+    expect(latestRunMessages.slice(1).some(message => message.content === 'msg-0')).toBe(false)
+    expect(latestRunMessages.slice(1).filter(message => message.content === 'durable compacted summary')).toHaveLength(0)
+    expect(latestRunMessages[latestRunMessages.length - 1]!.content).toBe('next turn after compaction')
+
+    const entry = getSessionEntry(resolveSessionKey(envelope()))
+    expect(entry?.compactionCount).toBe(1)
+    expect(entry?.contextTokens).toBe(estimateChatMessagesTokens(latestRunMessages))
+  })
+
+  it('runs a suppressed pre-compaction memory flush before writing the compaction checkpoint', async () => {
+    await seedConversation('conv-history', 'web', 'chat-history')
+    await seedMessages('conv-history', 30)
+
+    const brain = recordingBrain()
+    const bus = recordingBus()
+    const executor = capturingExecutor([
+      '{"continue":true,"reason":"same topic"}',
+      'remember this durable preference',
+      'summary after memory flush',
+      'visible final answer',
+    ])
+    const orch = new Orchestrator({
+      config: buildConfig({
+        orchestrator: {
+          contextWindowTokens: 160,
+          reserveTokens: 40,
+          keepRecentTokens: 35,
+          maxHistoryMessages: 200,
+          compaction: {
+            enabled: true,
+            triggerTokens: 130,
+            memoryFlush: { enabled: true },
+          },
+        },
+      }),
+      brain,
+      executor,
+      bus,
+      workerId: 'w_history_test',
+      workspaces,
+      processes,
+      approvals: new ApprovalStore(),
+    })
+
+    await orch.ingest(envelope('incoming with flush'))
+
+    expect(brain.writes.map(write => write.content)).toEqual(['remember this durable preference'])
+    const textEvents = bus.events.filter(event => event.type === 'orchestrator.text').map(event => (event.payload as { delta: string }).delta)
+    expect(textEvents).toEqual(['visible final answer'])
+
+    const rows = getWorkerDb().select().from(messages).where(eq(messages.conversationId, 'conv-history')).all()
+    const memoryFlushRow = rows.find(row => parseAuditMetadata(row)?.kind === 'memory-flush')
+    const compactionRow = rows.find(row => parseAuditMetadata(row)?.kind === 'compaction')
+    expect(memoryFlushRow).toBeDefined()
+    expect(compactionRow).toBeDefined()
+    expect(memoryFlushRow!.id).toBeLessThan(compactionRow!.id)
+    expect(parseAuditMetadata(memoryFlushRow!)?.status).toBe('succeeded')
+    expect((parseAuditMetadata(compactionRow!)?.memoryFlush as { status?: string }).status).toBe('succeeded')
+
+    const entry = getSessionEntry(resolveSessionKey(envelope()))
+    expect(entry?.compactionCount).toBe(1)
+    expect(entry?.memoryFlushAt).not.toBeNull()
+    expect(entry?.memoryFlushCompactionCount).toBe(1)
+  })
+
+  it('keeps compaction safe when pre-compaction memory flush persistence fails', async () => {
+    await seedConversation('conv-history', 'web', 'chat-history')
+    await seedMessages('conv-history', 30)
+
+    const executor = capturingExecutor([
+      '{"continue":true,"reason":"same topic"}',
+      'memory that cannot be persisted',
+      'summary despite flush failure',
+      'final after failure',
+    ])
+    const orch = new Orchestrator({
+      config: buildConfig({
+        orchestrator: {
+          contextWindowTokens: 160,
+          reserveTokens: 40,
+          keepRecentTokens: 35,
+          maxHistoryMessages: 200,
+          compaction: {
+            enabled: true,
+            triggerTokens: 130,
+            memoryFlush: { enabled: true },
+          },
+        },
+      }),
+      brain: recordingBrain({ failWrites: true }),
+      executor,
+      bus: silentBus(),
+      workerId: 'w_history_test',
+      workspaces,
+      processes,
+      approvals: new ApprovalStore(),
+    })
+
+    await orch.ingest(envelope('incoming with failing flush'))
+
+    const db = getWorkerDb()
+    const conversation = db.select().from(conversations).where(eq(conversations.id, 'conv-history')).get()
+    expect(conversation?.summary).toBe('summary despite flush failure')
+
+    const rows = db.select().from(messages).where(eq(messages.conversationId, 'conv-history')).all()
+    const memoryFlushRow = rows.find(row => parseAuditMetadata(row)?.kind === 'memory-flush')
+    const compactionRow = rows.find(row => parseAuditMetadata(row)?.kind === 'compaction')
+    expect(parseAuditMetadata(memoryFlushRow!)?.status).toBe('failed')
+    expect((parseAuditMetadata(compactionRow!)?.memoryFlush as { status?: string }).status).toBe('failed')
+    expect(rows.some(row => row.content === 'msg-0')).toBe(true)
+
+    const entry = getSessionEntry(resolveSessionKey(envelope()))
+    expect(entry?.compactionCount).toBe(1)
+    expect(entry?.memoryFlushAt).not.toBeNull()
+    expect(entry?.memoryFlushCompactionCount).toBe(1)
+  })
+
+  it('compacts and retries once after an executor context-overflow error', async () => {
+    await seedConversation('conv-history', 'web', 'chat-history')
+    await seedMessages('conv-history', 30)
+
+    const bus = recordingBus()
+    const executor = scriptedExecutor([
+      '{"continue":true,"reason":"same topic"}',
+      { error: 'context length exceeded' },
+      'summary after overflow',
+      'retried final answer',
+    ])
+    const orch = new Orchestrator({
+      config: buildConfig({
+        orchestrator: {
+          contextWindowTokens: 20_000,
+          reserveTokens: 1_000,
+          keepRecentTokens: 35,
+          maxHistoryMessages: 200,
+          compaction: {
+            enabled: true,
+            triggerTokens: 10_000,
+          },
+        },
+      }),
+      brain: stubBrain(),
+      executor,
+      bus,
+      workerId: 'w_history_test',
+      workspaces,
+      processes,
+      approvals: new ApprovalStore(),
+    })
+
+    await orch.ingest(envelope('incoming before overflow'))
+
+    const db = getWorkerDb()
+    const conversation = db.select().from(conversations).where(eq(conversations.id, 'conv-history')).get()
+    expect(conversation?.summary).toBe('summary after overflow')
+    const assistantRows = db.select().from(messages).where(eq(messages.conversationId, 'conv-history')).all().filter(row => row.role === 'assistant')
+    expect(assistantRows[assistantRows.length - 1]?.content).toBe('retried final answer')
+    expect(bus.events.some(event => event.type === 'orchestrator.error')).toBe(false)
+    expect(getSessionEntry(resolveSessionKey(envelope()))?.compactionCount).toBe(1)
   })
 
   it('routes through session_entries before legacy open conversation lookup', async () => {
