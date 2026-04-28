@@ -1,17 +1,45 @@
 import type { ChatMessage, ConversationDecision, Envelope, ExecutorProvider } from '@zonease/aiworker-shared'
 import type { conversations as conversationsTable } from '@zonease/aiworker-storage-sqlite/worker'
-import { conversations, getWorkerDb, messages } from '@zonease/aiworker-storage-sqlite/worker'
+import { conversations, getSessionEntry, getWorkerDb, messages, sessionEntries } from '@zonease/aiworker-storage-sqlite/worker'
 
 import consola from 'consola'
-import { and, desc, eq } from 'drizzle-orm'
+import { and, desc, eq, isNull } from 'drizzle-orm'
 
 const MAX_RECENT_MESSAGES = 4
+type ConversationRow = typeof conversationsTable.$inferSelect
 
-export async function findOpenConversation(envelope: Envelope): Promise<typeof conversationsTable.$inferSelect | null> {
+export function resolveSessionKey(envelope: Envelope): string {
+  const parts = [envelope.channel, envelope.accountId, envelope.chatId]
+  if (envelope.threadId !== undefined)
+    parts.push(envelope.threadId)
+  return parts.map(encodeURIComponent).join(':')
+}
+
+export async function findSessionConversation(sessionKey: string): Promise<ConversationRow | null> {
+  const entry = getSessionEntry(sessionKey)
+  if (!entry || entry.status !== 'active')
+    return null
+
+  const db = getWorkerDb()
+  return db.select()
+    .from(conversations)
+    .where(and(eq(conversations.id, entry.currentConversationId), eq(conversations.status, 'open')))
+    .get() ?? null
+}
+
+export async function hasSessionEntryForRoute(envelope: Envelope): Promise<boolean> {
+  const db = getWorkerDb()
+  const where = envelope.threadId
+    ? and(eq(sessionEntries.channel, envelope.channel), eq(sessionEntries.chatId, envelope.chatId), eq(sessionEntries.threadId, envelope.threadId))
+    : and(eq(sessionEntries.channel, envelope.channel), eq(sessionEntries.chatId, envelope.chatId), isNull(sessionEntries.threadId))
+  return db.select({ sessionKey: sessionEntries.sessionKey }).from(sessionEntries).where(where).limit(1).get() !== undefined
+}
+
+export async function findOpenConversation(envelope: Envelope): Promise<ConversationRow | null> {
   const db = getWorkerDb()
   const where = envelope.threadId
     ? and(eq(conversations.channel, envelope.channel), eq(conversations.chatId, envelope.chatId), eq(conversations.threadId, envelope.threadId), eq(conversations.status, 'open'))
-    : and(eq(conversations.channel, envelope.channel), eq(conversations.chatId, envelope.chatId), eq(conversations.status, 'open'))
+    : and(eq(conversations.channel, envelope.channel), eq(conversations.chatId, envelope.chatId), isNull(conversations.threadId), eq(conversations.status, 'open'))
   return db.select().from(conversations).where(where).orderBy(desc(conversations.lastActiveAt)).get() ?? null
 }
 
