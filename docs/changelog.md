@@ -1,5 +1,28 @@
 # AIWorker Changelog
 
+## 2026-04-28 19:10 [BUG-P1] BUG-028 — Web Tailwind utilities restored
+
+Fixed the Web UI CSS bundle generation bug:
+
+- `apps/web/src/shared/styles/globals.css` now explicitly registers the Web
+  `src` tree with Tailwind v4 source detection, covering the fleet, worker, and
+  shared UI code when Vite builds with `root: apps/web/{fleet,worker}`.
+- `scripts/web-quality.ts` gained a `css-utilities` check that fails if the
+  built fleet or worker CSS misses representative selectors used by the app
+  shell and shared UI components.
+- `@zonease/aiworker-web` build now runs that CSS check after producing both
+  production bundles.
+- Rebuilt Web CSS grew from the broken 6111-byte base/theme-only bundle to a
+  38320-byte CSS bundle containing utilities such as `.flex`,
+  `.min-h-screen`, `.rounded-md`, `.p-6`, `.border-r`, `.bg-background`, and
+  `.text-foreground`.
+- `@zonease/aiworker-cli` build copies the corrected CSS into
+  `apps/cli/dist/web/{fleet,worker}` for npm publish packaging.
+
+Verification passed: Web build, Web CSS utility check, CLI build/package copy,
+root lint, and Web Vitest suite. Vitest still prints happy-dom AbortError
+teardown noise, but exits successfully with 37 passing tests.
+
 ## 2026-04-28 19:02 [BUG-P1] BUG-027 — gateway accepted chat ids are reusable
 
 Fixed the gateway chat continuation bug recorded during the 0.4.3 fleet smoke:
@@ -17,6 +40,23 @@ Fixed the gateway chat continuation bug recorded during the 0.4.3 fleet smoke:
 Verification passed: focused core tests, changed-file ESLint, core typecheck,
 and full `@zonease/aiworker-core` tests. The live test-server fleet to local
 Codex worker e2e remains an external operator verification step.
+
+## 2026-04-28 18:56 [BUG-P1] BUG-028 — Web UI CSS bundle misses Tailwind utilities
+
+Recorded a Web UI packaging/build bug found while checking the test-server
+fleet admin UI for `@zonease/aiworker-cli@0.4.3`:
+
+- Public `/admin/` static routing is no longer the suspected cause: the gateway
+  serves the fleet CSS asset and the packaged asset exists on the test server.
+- The packaged CSS is only 6111 bytes and contains Tailwind base/theme output
+  without representative utility selectors such as `.flex` or
+  `.bg-background`.
+- Local fleet and worker build outputs show the same 6111-byte CSS shape, so
+  the issue is reproducible from the repository build output.
+- Root-cause candidate is Tailwind v4 source detection missing `apps/web/src`
+  when Vite builds with `root: apps/web/{fleet,worker}` and the entry imports
+  app code from `../src/...`.
+- Tracked as `docs/task/BUG-028.md`; no implementation has been started.
 
 ## 2026-04-28 18:45 [BUG-P1] BUG-027 — gateway chat accepted id continuation gap
 

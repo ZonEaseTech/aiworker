@@ -16,6 +16,17 @@ interface SizeBaseline {
   bundles: Record<'fleet' | 'worker', BundleSize>
 }
 
+const webBundles = ['fleet', 'worker'] as const
+const criticalCssSelectors = [
+  '.flex',
+  '.min-h-screen',
+  '.rounded-md',
+  '.p-6',
+  '.border-r',
+  '.bg-background',
+  '.text-foreground',
+] as const
+
 const repoRoot = fileURLToPath(new URL('..', import.meta.url))
 const webRoot = path.join(repoRoot, 'apps/web')
 const webSrc = path.join(webRoot, 'src')
@@ -26,6 +37,10 @@ async function main() {
   const [command, ...args] = process.argv.slice(2)
   if (command === 'shared-cycles') {
     await checkSharedCycles()
+    return
+  }
+  if (command === 'css-utilities') {
+    await checkCssUtilities()
     return
   }
   if (command === 'size-report') {
@@ -195,6 +210,41 @@ async function reportBundleSizes(writeBaseline: boolean): Promise<void> {
   }
 }
 
+async function checkCssUtilities(): Promise<void> {
+  const failures: string[] = []
+
+  for (const bundle of webBundles) {
+    const assetsDir = path.join(webRoot, 'dist', bundle, 'assets')
+    if (!existsSync(assetsDir)) {
+      failures.push(`${bundle}: missing build assets directory ${rel(assetsDir)}`)
+      continue
+    }
+
+    const cssFiles = (await collectFiles(assetsDir))
+      .filter(file => file.endsWith('.css'))
+      .sort()
+    if (cssFiles.length === 0) {
+      failures.push(`${bundle}: no CSS assets found in ${rel(assetsDir)}`)
+      continue
+    }
+
+    const css = (await Promise.all(cssFiles.map(file => readFile(file, 'utf8')))).join('\n')
+    const missing = criticalCssSelectors.filter(selector => !hasCssSelector(css, selector))
+    if (missing.length > 0) {
+      failures.push(`${bundle}: missing ${missing.join(', ')} in ${cssFiles.map(rel).join(', ')}`)
+      continue
+    }
+
+    console.log(`${bundle} CSS utility check passed (${cssFiles.map(rel).join(', ')})`)
+  }
+
+  if (failures.length > 0) {
+    for (const failure of failures)
+      console.error(failure)
+    throw new Error('web CSS utility check failed')
+  }
+}
+
 async function measureDir(dir: string): Promise<BundleSize> {
   if (!existsSync(dir))
     throw new Error(`missing build output: ${rel(dir)}; run web build first`)
@@ -235,6 +285,14 @@ function pctDelta(current: number, baseline: number): number {
   if (baseline === 0)
     return current === 0 ? 0 : 100
   return ((current - baseline) / baseline) * 100
+}
+
+function hasCssSelector(css: string, selector: string): boolean {
+  return new RegExp(`${escapeRegExp(selector)}(?=[\\s,{:.#>+~\\[])`).test(css)
+}
+
+function escapeRegExp(input: string): string {
+  return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 function rel(file: string): string {
