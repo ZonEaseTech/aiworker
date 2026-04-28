@@ -1,9 +1,10 @@
 # FEAT-035 Phase 3 — Worker UI MVP
 
-- **status**: in_progress
+- **status**: completed
 - **priority**: P1
 - **owner**: BKD/g0ftmbux (worktree)
 - **createdAt**: 2026-04-27 18:35
+- **completedAt**: 2026-04-28 07:04
 
 ## 描述
 
@@ -48,3 +49,11 @@ PLAN-022 Phase 3 落地。在 FEAT-033 完成的双视角骨架之上，实现 w
 - chat 流式可以先用 SSE（worker apps/api 已有 `/api/worker/events`），WebSocket 如必要再加。
 - `/admin/` 不显式带 workerId，因为 worker 自身就知道是谁（`/api/worker/info` 返回）。
 - approval grant 的 ergonomics：界面要 prominent 提示新 pending approval，避免被 operator 错过。可借鉴 CLI `aiworker approvals` 的格式。
+
+## 完成记录
+
+- 交付 worker 视角 `/admin/*`：overview、config、secrets、test、cron、approvals、chat。
+- worker API client 统一走 `/api/worker/*` REST/SSE + bearer header；`#token=...` 只落 sessionStorage 并立即清 hash，不写 localStorage/query。
+- chat 对齐现有后端 SSE 事件契约（`orchestrator.text` / `orchestrator.finished` / `orchestrator.error`）和 `submitTask()` 返回的 `task.id`。
+- ESLint 增加 worker 视角禁止直接引入 gateway proto 的边界规则，防止回退到 gateway WS。
+- 验证：`bun run typecheck`、`bun run test`、`bun run --filter '@zonease/aiworker-web' build`、`bun run lint`。
