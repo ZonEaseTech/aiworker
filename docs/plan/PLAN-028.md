@@ -362,9 +362,23 @@ Stage 4: engine native bindings
 
 Stage 5: status, cleanup, UI follow-up
 
-- Add CLI/API surfaces.
-- Add maintenance dry-run.
-- Add worker UI observability later.
+- S5 `u8hbsj4l` implements CLI/API status and maintenance surfaces only.
+- Safe session status DTOs are shared by API and CLI. They expose
+  `sessionKey`, current conversation/session id, route metadata, lifecycle
+  timestamps, reset reason/time, context token counters, compaction count,
+  memory-flush checkpoint state, and redacted engine binding summaries for the
+  configured executor engine.
+- Worker API adds bounded status queries under `/api/worker/sessions`, including
+  `limit`/`offset` pagination and single-session lookup.
+- CLI adds local worker.db commands: `aiworker sessions list`,
+  `aiworker sessions show <sessionKey>`, and `aiworker sessions maintenance`.
+- Maintenance is safe by default. Closed transcript cleanup defaults to
+  dry-run, requires explicit `apply`, is bounded by `limit`, and only targets
+  closed conversations that are no longer referenced by
+  `session_entries.currentConversationId`.
+- No schema migration was added. `worker.db/session_entries` remains the source
+  of truth; engine-native bindings remain redacted cached optimization only.
+- Worker UI observability remains a later follow-up.
 
 ## Risks
 

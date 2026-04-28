@@ -90,3 +90,18 @@ export { type BuildRuntimeDeps, buildWorkerRuntime, type WorkerRuntime } from '.
 // Secrets vault：master key 加密的 worker 持久化 secret。
 export { getSecretsVault, resetSecretsVaultForTests, SecretsVault } from './worker/secrets'
 export { timingSafeEqualStrings } from './worker/secrets/crypto'
+
+export {
+  type ClosedTranscriptMaintenanceItem,
+  type ClosedTranscriptMaintenanceOptions,
+  type ClosedTranscriptMaintenanceResult,
+  type EngineBindingSummary,
+  getSessionStatus,
+  listSessionStatuses,
+  type ListSessionStatusOptions,
+  planClosedTranscriptMaintenance,
+  runClosedTranscriptMaintenance,
+  type SessionEntryStatus,
+  type SessionStatusDto,
+  type SessionStatusPage,
+} from './worker/sessions/status'

@@ -60,6 +60,11 @@ import {
 } from './commands/schedule'
 import { runScope } from './commands/scope'
 import { runServe } from './commands/serve'
+import {
+  runSessionsList,
+  runSessionsMaintenance,
+  runSessionsShow,
+} from './commands/sessions'
 import { runTokenRotate as runTokenRotateLocal } from './commands/token'
 
 /**
@@ -69,7 +74,8 @@ import { runTokenRotate as runTokenRotateLocal } from './commands/token'
  *   - worker-local（直接读写本地 worker.db）使用 dash 形：
  *     init / run / serve / config-show / config-set / token-rotate /
  *     approvals-list / approvals-grant / schedule-list / schedule-add /
- *     schedule-remove
+ *     schedule-remove；sessions list/show/maintenance 是本地 worker.db 的
+ *     grouped operational surface。
  *   - operator-remote（通过 WS 与 gateway / 远端 worker 对话）使用空格形：
  *     fleet ... / gateway ... / pair / chat / config get|set / token rotate /
  *     approvals list|grant / schedule list|add|remove / enroll list|approve|reject /
@@ -208,6 +214,38 @@ cli
   .command('schedule-remove <jobId>', 'Remove a cron job from the local worker.db')
   .action(async (jobId: string) => {
     process.exit(await runScheduleRemoveLocal(jobId))
+  })
+
+cli
+  .command('sessions list', 'List local worker session status from worker.db')
+  .option('--limit <n>', 'Max sessions to return (1-200, default 50)', { type: [Number] })
+  .option('--offset <n>', 'Offset for pagination (default 0)', { type: [Number] })
+  .option('--status <status>', 'Filter by status: active or closed')
+  .action(async (opts: { limit?: number[], offset?: number[], status?: string }) => {
+    process.exit(await runSessionsList({
+      limit: opts.limit?.[0],
+      offset: opts.offset?.[0],
+      ...(opts.status === undefined ? {} : { status: opts.status }),
+    }))
+  })
+
+cli
+  .command('sessions show <sessionKey>', 'Show one local worker session status by session key')
+  .action(async (sessionKey: string) => {
+    process.exit(await runSessionsShow(sessionKey))
+  })
+
+cli
+  .command('sessions maintenance', 'Dry-run closed transcript cleanup; pass --apply to mutate')
+  .option('--older-than-days <n>', 'Closed transcript retention in days (default 30)', { type: [Number] })
+  .option('--limit <n>', 'Max transcripts to plan/apply (1-200, default 50)', { type: [Number] })
+  .option('--apply', 'Delete planned closed transcripts instead of dry-run')
+  .action(async (opts: { olderThanDays?: number[], limit?: number[], apply?: boolean }) => {
+    process.exit(await runSessionsMaintenance({
+      olderThanDays: opts.olderThanDays?.[0],
+      limit: opts.limit?.[0],
+      ...(opts.apply === undefined ? {} : { apply: opts.apply }),
+    }))
   })
 
 // ============================================================
