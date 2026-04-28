@@ -5,6 +5,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Toaster } from '@/shared/components/ui/sonner'
 import { queryClient } from '@/shared/lib/queryClient'
+import { resolveWebRouterBasepath } from '@/shared/lib/router-basepath'
 import { bootstrapTheme, ThemeInitializer } from '@/shared/stores/theme'
 import { bootstrapBearerFromLocation } from './lib/auth'
 import { routeTree } from './routeTree.gen'
@@ -19,13 +20,11 @@ bootstrapBearerFromLocation()
 // 不挂全局 `declare module '@tanstack/react-router'`：fleet/main.tsx 已注册了
 // 全局 router 类型，两个 bundle 的 router 形态不同，重复声明会触发 TS2717。
 //
-// FEAT-035：worker bundle 通过 `/admin/*` 路径由 worker apps/api 直接 serve。
-// `basepath: '/admin'` 让 file-based routes（`/`, `/config`, ...）映射到
-// `/admin/`, `/admin/config`，与浏览器实际地址对齐。dev mode（5173）按相同
-// 配置工作——无 `/admin` 前缀时 router 会重定向到 `/admin/`。
+// FEAT-035 + BUG-022：生产由 worker apps/api 挂到 `/admin/*`，dev chooser
+// 则挂到 `/worker/*`；basepath 根据当前 pathname 推导，保持两种入口都可用。
 const router = createRouter({
   routeTree,
-  basepath: '/admin',
+  basepath: resolveWebRouterBasepath('worker'),
   defaultPreload: 'intent',
   defaultPreloadStaleTime: 0,
   scrollRestoration: true,

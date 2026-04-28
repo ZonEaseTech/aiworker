@@ -7,6 +7,7 @@ import {
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { queryClient } from '@/shared/lib/queryClient'
+import { resolveWebRouterBasepath } from '@/shared/lib/router-basepath'
 import { routeTree } from '@/worker/routeTree.gen'
 
 describe('worker bundle bootstrap', () => {
@@ -20,7 +21,8 @@ describe('worker bundle bootstrap', () => {
   it('mounts the worker RouterProvider with the overview shell', async () => {
     const router = createRouter({
       routeTree,
-      history: createMemoryHistory({ initialEntries: ['/'] }),
+      basepath: resolveWebRouterBasepath('worker', '/admin/'),
+      history: createMemoryHistory({ initialEntries: ['/admin/'] }),
       defaultPreload: false,
     })
 
@@ -36,5 +38,18 @@ describe('worker bundle bootstrap', () => {
     // 命中即说明 root layout + outlet 子节点都成功 mount。
     expect(await screen.findByText(/AIWorker · Worker/)).toBeTruthy()
     expect(await screen.findByRole('heading', { name: '概览' })).toBeTruthy()
+  })
+
+  it('matches the dev chooser mount path', async () => {
+    const router = createRouter({
+      routeTree,
+      basepath: resolveWebRouterBasepath('worker', '/worker/'),
+      history: createMemoryHistory({ initialEntries: ['/worker/config'] }),
+      defaultPreload: false,
+    })
+
+    await router.load()
+
+    expect(router.state.matches.map(m => m.routeId)).toContain('/config')
   })
 })

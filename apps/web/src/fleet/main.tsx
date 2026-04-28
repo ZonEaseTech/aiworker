@@ -5,6 +5,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Toaster } from '@/shared/components/ui/sonner'
 import { queryClient } from '@/shared/lib/queryClient'
+import { resolveWebRouterBasepath } from '@/shared/lib/router-basepath'
 import { bootstrapTheme, ThemeInitializer } from '@/shared/stores/theme'
 import { routeTree } from './routeTree.gen'
 import '@/shared/styles/globals.css'
@@ -13,6 +14,7 @@ bootstrapTheme('fleet')
 
 const router = createRouter({
   routeTree,
+  basepath: resolveWebRouterBasepath('fleet'),
   defaultPreload: 'intent',
   defaultPreloadStaleTime: 0,
   scrollRestoration: true,

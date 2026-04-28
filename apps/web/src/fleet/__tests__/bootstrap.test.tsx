@@ -8,6 +8,7 @@ import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { routeTree } from '@/fleet/routeTree.gen'
 import { queryClient } from '@/shared/lib/queryClient'
+import { resolveWebRouterBasepath } from '@/shared/lib/router-basepath'
 
 describe('fleet bundle bootstrap', () => {
   it('imports the fleet routeTree without throwing', () => {
@@ -20,7 +21,8 @@ describe('fleet bundle bootstrap', () => {
   it('mounts the fleet RouterProvider with the generated routeTree', async () => {
     const router = createRouter({
       routeTree,
-      history: createMemoryHistory({ initialEntries: ['/workers'] }),
+      basepath: resolveWebRouterBasepath('fleet', '/admin/'),
+      history: createMemoryHistory({ initialEntries: ['/admin/workers'] }),
       defaultPreload: false,
     })
 
@@ -35,5 +37,18 @@ describe('fleet bundle bootstrap', () => {
 
     // 侧边栏与 header 都含 'AIWorker' 文案——任意命中即说明 root layout 渲染成功。
     expect(await screen.findAllByText(/AIWorker/i)).not.toHaveLength(0)
+  })
+
+  it('matches the dev chooser mount path', async () => {
+    const router = createRouter({
+      routeTree,
+      basepath: resolveWebRouterBasepath('fleet', '/fleet/'),
+      history: createMemoryHistory({ initialEntries: ['/fleet/workers'] }),
+      defaultPreload: false,
+    })
+
+    await router.load()
+
+    expect(router.state.matches.map(m => m.routeId)).toContain('/workers/')
   })
 })

@@ -1,5 +1,21 @@
 # AIWorker Changelog
 
+## 2026-04-28 09:25 [BUG-P1] BUG-022 — Web admin SPA mount paths and deep links
+
+Fixed two PLAN-022 Web UI runtime gaps:
+
+- Fleet UI now creates its TanStack Router with the inferred `/admin` basepath
+  in production, so the gateway-hosted `/admin/*` bundle has route matches.
+- Fleet and Worker dev chooser mounts remain valid at `/fleet/*` and
+  `/worker/*`.
+- Production Web builds now emit `/admin/assets/...` and `/admin/favicon.svg`
+  URLs, so nested admin deep-link reloads load assets from the stable admin
+  root instead of a route-local `assets/` path.
+- Added route bootstrap coverage for production and dev mount paths.
+
+Verification: Web lint, typecheck, tests, build, shared cycle check, size
+report, root lint, routeTree mount checks, and build output inspection all pass.
+
 ## 2026-04-28 08:55 [BUG-P1] BUG-021 — project-scope CLI placement hardening
 
 Fixed the PLAN-023 Phase A runtime gap where the CLI side-effect bootstrap wrote
