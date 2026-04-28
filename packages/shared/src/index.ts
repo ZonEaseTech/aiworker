@@ -42,6 +42,8 @@ export type {
   FilesystemBrainSourceConfig,
   HttpVariantBody,
   McpVariantBody,
+  OrchestratorCompactionConfig,
+  OrchestratorCompactionMemoryFlushConfig,
   OrchestratorConfig,
   OutboundMessage,
   PermissionPolicy,

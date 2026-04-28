@@ -71,6 +71,29 @@ export interface ToolPolicy {
   rules: Array<{ pattern: string, action: ToolPolicyAction }>
 }
 
+export interface OrchestratorCompactionMemoryFlushConfig {
+  enabled?: boolean
+}
+
+export interface OrchestratorCompactionConfig {
+  /**
+   * Compaction is opt-in. When disabled or omitted, the S2 token-budget and
+   * legacy max-history behavior remain unchanged.
+   */
+  enabled?: boolean
+  /**
+   * Estimated prompt-token threshold that triggers compaction. Defaults to the
+   * active context window minus reserve tokens.
+   */
+  triggerTokens?: number
+  /**
+   * Maximum transcript rows included in the summarizer prompt. Older and newer
+   * edges are preserved when truncation is required.
+   */
+  maxSummaryMessages?: number
+  memoryFlush?: OrchestratorCompactionMemoryFlushConfig
+}
+
 /**
  * Orchestrator runtime tuning.
  *
@@ -84,6 +107,7 @@ export interface OrchestratorConfig {
   reserveTokens?: number
   keepRecentTokens?: number
   maxHistoryMessages?: number
+  compaction?: OrchestratorCompactionConfig
 }
 
 export const DEFAULT_MAX_HISTORY_MESSAGES = 20

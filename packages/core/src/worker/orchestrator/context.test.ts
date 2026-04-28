@@ -70,4 +70,12 @@ describe('orchestrator context budget assembly', () => {
     expect(resolveContextBudget(undefined, executor)).toBeNull()
     expect(resolveContextBudget({ maxHistoryMessages: 5 }, executor)).toBeNull()
   })
+
+  it('enables token budgeting when compaction is configured', () => {
+    const executor = { engine: 'http', variant: 'default' } as const
+    const budget = resolveContextBudget({ compaction: { enabled: true, triggerTokens: 4_000 } }, executor)
+
+    expect(budget?.contextWindowTokens).toBe(128_000)
+    expect(budget?.reserveTokens).toBe(1_024)
+  })
 })

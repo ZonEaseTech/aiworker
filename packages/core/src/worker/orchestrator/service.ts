@@ -5,6 +5,8 @@ import type {
   ConversationState,
   Envelope,
   ExecutorProvider,
+  OrchestratorCompactionConfig,
+  ToolCall,
   WorkerConfig,
 } from '@zonease/aiworker-shared'
 import type { WorkerEventBus } from '../events/bus'
@@ -13,10 +15,10 @@ import type { ApprovalDecision, ApprovalStore } from './approvals'
 import type { ProcessManager } from './process-manager'
 
 import { DEFAULT_MAX_HISTORY_MESSAGES } from '@zonease/aiworker-shared'
-import { agentTasks, conversations, getWorkerDb, messages, rotateSessionConversation, touchSessionEntry, upsertSessionEntry } from '@zonease/aiworker-storage-sqlite/worker'
+import { agentTasks, conversations, getWorkerDb, messages, recordSessionCompaction, rotateSessionConversation, touchSessionEntry, upsertSessionEntry } from '@zonease/aiworker-storage-sqlite/worker'
 
 import consola from 'consola'
-import { desc, eq } from 'drizzle-orm'
+import { and, asc, desc, eq, gt } from 'drizzle-orm'
 import { getChannelAdapter } from '../channels/registry'
 import { classifyContinuation, findOpenConversation, findSessionConversation, hasSessionEntryForRoute, loadRecentMessages, resolveSessionKey } from '../conversation/router'
 import { DEFAULT_APPROVAL_TIMEOUT_MS } from './approvals'
@@ -24,6 +26,7 @@ import {
   assembleTokenBudgetContext,
   DEFAULT_TOKEN_BUDGET_HISTORY_SCAN_MESSAGES,
   estimateChatMessagesTokens,
+  estimateChatMessageTokens,
   resolveContextBudget,
   resolveExecutorModel,
 } from './context'
@@ -56,6 +59,42 @@ interface ResolvedConversation {
   conversation: ConversationState
   sessionKey: string
 }
+
+interface TranscriptRow {
+  id: number
+  role: ChatMessage['role']
+  content: string
+  toolCalls: ToolCall[] | null
+  toolCallId: string | null
+  richMetadata: string | null
+}
+
+interface CompactionCheckpoint {
+  messageId: number
+  compactedThroughMessageId: number
+}
+
+interface MemoryFlushResult {
+  attempted: boolean
+  at?: string
+  status?: 'succeeded' | 'failed' | 'empty'
+  content?: string
+  error?: string
+}
+
+interface CompactionOutcome {
+  conversation: ConversationState
+  compacted: boolean
+}
+
+interface ExecutorTextResult {
+  ok: boolean
+  text: string
+  error?: string
+}
+
+const DEFAULT_COMPACTION_MAX_SUMMARY_MESSAGES = 120
+const TRANSCRIPT_METADATA_VERSION = 1
 
 /** `runTool` 输入。`taskId` / `toolCallId` 用作 ApprovalStore 的 key。 */
 export interface RunToolInput {
@@ -124,18 +163,84 @@ export class Orchestrator {
     sessionKey: string,
   ): Promise<void> {
     const db = getWorkerDb()
-    const systemPrompt = await this.buildSystemPrompt(conversation.summary ?? null)
-    const chatMessages = await this.buildRunContext(conversation.id, systemPrompt)
+    let activeConversation = (await this.maybeCompactConversation({
+      conversation,
+      sessionKey,
+      workspace,
+      signal,
+      notifyActivity,
+    })).conversation
+    let systemPrompt = await this.buildSystemPrompt(activeConversation.summary ?? null)
+    let chatMessages = await this.buildRunContext(activeConversation.id, systemPrompt)
     touchSessionEntry(sessionKey, { contextTokens: estimateChatMessagesTokens(chatMessages) })
 
     const model = resolveExecutorModel(this.deps.config.executor)
     const taskId = taskIdFromEnvelope(envelope)
-    const runInput = {
+    let runInput = {
       messages: chatMessages,
       ...(model ? { model } : {}),
       ...(workspace ? { workspacePath: workspace.path } : {}),
       signal,
     }
+    let result = await this.collectAssistantText(runInput, activeConversation.id, taskId, notifyActivity)
+    if (!result.ok && this.isContextOverflowError(result.error)) {
+      const retryCompaction = await this.maybeCompactConversation({
+        conversation: activeConversation,
+        sessionKey,
+        workspace,
+        signal,
+        notifyActivity,
+        force: true,
+      })
+      if (retryCompaction.compacted) {
+        activeConversation = retryCompaction.conversation
+        systemPrompt = await this.buildSystemPrompt(activeConversation.summary ?? null)
+        chatMessages = await this.buildRunContext(activeConversation.id, systemPrompt)
+        touchSessionEntry(sessionKey, { contextTokens: estimateChatMessagesTokens(chatMessages) })
+        runInput = {
+          messages: chatMessages,
+          ...(model ? { model } : {}),
+          ...(workspace ? { workspacePath: workspace.path } : {}),
+          signal,
+        }
+        result = await this.collectAssistantText(runInput, activeConversation.id, taskId, notifyActivity)
+      }
+    }
+    if (!result.ok) {
+      const error = result.error ?? 'executor error'
+      consola.warn(`[orchestrator] executor error: ${error}`)
+      this.deps.bus.emit('orchestrator.error', {
+        conversationId: activeConversation.id,
+        ...(taskId === undefined ? {} : { taskId }),
+        error,
+      })
+      return
+    }
+
+    const assistantText = result.text
+    const now = new Date().toISOString()
+    db.insert(messages).values({
+      conversationId: activeConversation.id,
+      role: 'assistant',
+      content: assistantText,
+      createdAt: now,
+    }).run()
+    db.update(conversations).set({ lastActiveAt: now }).where(eq(conversations.id, activeConversation.id)).run()
+    touchSessionEntry(sessionKey, { at: now })
+    this.deps.bus.emit('orchestrator.finished', {
+      conversationId: activeConversation.id,
+      ...(taskId === undefined ? {} : { taskId }),
+    })
+
+    await this.deliver(envelope.channel, activeConversation, assistantText)
+  }
+
+  private async collectAssistantText(
+    runInput: Parameters<ExecutorProvider['run']>[0],
+    conversationId: string,
+    taskId: string | undefined,
+    notifyActivity: () => void,
+  ): Promise<ExecutorTextResult> {
     let assistantText = ''
     try {
       for await (const event of this.deps.executor.run(runInput)) {
@@ -146,54 +251,28 @@ export class Orchestrator {
         if (event.type === 'assistant_message_delta') {
           assistantText += event.delta
           this.deps.bus.emit('orchestrator.text', {
-            conversationId: conversation.id,
+            conversationId,
             ...(taskId === undefined ? {} : { taskId }),
             delta: event.delta,
           })
         }
         else if (event.type === 'tool_use') {
           this.deps.bus.emit('orchestrator.tool_call', {
-            conversationId: conversation.id,
+            conversationId,
             ...(taskId === undefined ? {} : { taskId }),
             call: { id: event.id, name: event.name, arguments: event.arguments },
           })
         }
         else if (event.type === 'error') {
-          consola.warn(`[orchestrator] executor error: ${event.error}`)
-          this.deps.bus.emit('orchestrator.error', {
-            conversationId: conversation.id,
-            ...(taskId === undefined ? {} : { taskId }),
-            error: event.error,
-          })
-          return
+          return { ok: false, text: assistantText, error: event.error }
         }
       }
+      return { ok: true, text: assistantText }
     }
     catch (err) {
       consola.error(`[orchestrator] run failed: ${String(err)}`)
-      this.deps.bus.emit('orchestrator.error', {
-        conversationId: conversation.id,
-        ...(taskId === undefined ? {} : { taskId }),
-        error: String(err),
-      })
-      return
+      return { ok: false, text: assistantText, error: String(err) }
     }
-
-    const now = new Date().toISOString()
-    db.insert(messages).values({
-      conversationId: conversation.id,
-      role: 'assistant',
-      content: assistantText,
-      createdAt: now,
-    }).run()
-    db.update(conversations).set({ lastActiveAt: now }).where(eq(conversations.id, conversation.id)).run()
-    touchSessionEntry(sessionKey, { at: now })
-    this.deps.bus.emit('orchestrator.finished', {
-      conversationId: conversation.id,
-      ...(taskId === undefined ? {} : { taskId }),
-    })
-
-    await this.deliver(envelope.channel, conversation, assistantText)
   }
 
   private async deliver(channel: ChannelType, conversation: ConversationState, text: string) {
@@ -364,6 +443,287 @@ export class Orchestrator {
     return { id: res[0]?.id ?? -1 }
   }
 
+  private async maybeCompactConversation(input: {
+    conversation: ConversationState
+    sessionKey: string
+    workspace: WorkspaceHandle | null
+    signal: AbortSignal
+    notifyActivity: () => void
+    force?: boolean
+  }): Promise<CompactionOutcome> {
+    const compaction = this.deps.config.orchestrator?.compaction
+    if (compaction?.enabled !== true)
+      return { conversation: input.conversation, compacted: false }
+
+    const budget = resolveContextBudget(this.deps.config.orchestrator, this.deps.config.executor)
+    if (!budget)
+      return { conversation: input.conversation, compacted: false }
+
+    const checkpoint = this.loadLatestCompactionCheckpoint(input.conversation.id)
+    const rows = this.loadPromptTranscriptRows(input.conversation.id, checkpoint?.compactedThroughMessageId)
+    if (rows.length <= 1)
+      return { conversation: input.conversation, compacted: false }
+
+    const systemPrompt = await this.buildSystemPrompt(input.conversation.summary ?? null)
+    const systemTokens = estimateChatMessageTokens({ role: 'system', content: systemPrompt })
+    const currentTokens = systemTokens
+      + rows.reduce((sum, row) => sum + estimateChatMessageTokens(rowToChatMessage(row)), 0)
+    const triggerTokens = compaction.triggerTokens ?? Math.max(0, budget.contextWindowTokens - budget.reserveTokens)
+    if (!input.force && currentTokens <= triggerTokens)
+      return { conversation: input.conversation, compacted: false }
+
+    const recentTokenBudget = Math.min(budget.keepRecentTokens, Math.max(0, triggerTokens - systemTokens))
+    const { candidateRows } = splitRowsForCompaction(rows, recentTokenBudget)
+    if (candidateRows.length === 0)
+      return { conversation: input.conversation, compacted: false }
+
+    const fromId = candidateRows[0]!.id
+    const throughId = candidateRows[candidateRows.length - 1]!.id
+    const memoryFlush = await this.runPreCompactionMemoryFlush({
+      conversationId: input.conversation.id,
+      previousSummary: input.conversation.summary ?? null,
+      rows: candidateRows,
+      compaction,
+      workspace: input.workspace,
+      signal: input.signal,
+      notifyActivity: input.notifyActivity,
+      fromId,
+      throughId,
+    })
+
+    let summary: string
+    try {
+      summary = await this.generateCompactionSummary({
+        previousSummary: input.conversation.summary ?? null,
+        rows: candidateRows,
+        compaction,
+        workspace: input.workspace,
+        signal: input.signal,
+        notifyActivity: input.notifyActivity,
+      })
+    }
+    catch (err) {
+      consola.warn(`[orchestrator] compaction summary failed: ${String(err)}`)
+      return { conversation: input.conversation, compacted: false }
+    }
+
+    const now = new Date().toISOString()
+    const db = getWorkerDb()
+    db.insert(messages).values({
+      conversationId: input.conversation.id,
+      role: 'system',
+      content: summary,
+      richMetadata: JSON.stringify({
+        kind: 'compaction',
+        version: TRANSCRIPT_METADATA_VERSION,
+        compactedFromMessageId: fromId,
+        compactedThroughMessageId: throughId,
+        sourceMessageCount: candidateRows.length,
+        previousCompactionMessageId: checkpoint?.messageId ?? null,
+        memoryFlush: memoryFlush.attempted
+          ? {
+              status: memoryFlush.status,
+              at: memoryFlush.at,
+              ...(memoryFlush.error === undefined ? {} : { error: memoryFlush.error }),
+            }
+          : { status: 'disabled' },
+      }),
+      createdAt: now,
+    }).run()
+    db.update(conversations).set({
+      summary,
+      lastActiveAt: now,
+    }).where(eq(conversations.id, input.conversation.id)).run()
+    recordSessionCompaction(input.sessionKey, {
+      at: now,
+      ...(memoryFlush.attempted && memoryFlush.at !== undefined ? { memoryFlushAt: memoryFlush.at } : {}),
+    })
+
+    const row = db.select().from(conversations).where(eq(conversations.id, input.conversation.id)).get()
+    return {
+      conversation: row ? rowToState(row) : { ...input.conversation, summary, lastActiveAt: now },
+      compacted: true,
+    }
+  }
+
+  private async runPreCompactionMemoryFlush(input: {
+    conversationId: string
+    previousSummary: string | null
+    rows: TranscriptRow[]
+    compaction: OrchestratorCompactionConfig
+    workspace: WorkspaceHandle | null
+    signal: AbortSignal
+    notifyActivity: () => void
+    fromId: number
+    throughId: number
+  }): Promise<MemoryFlushResult> {
+    if (input.compaction.memoryFlush?.enabled !== true)
+      return { attempted: false }
+
+    const at = new Date().toISOString()
+    const baseMetadata = {
+      kind: 'memory-flush',
+      version: TRANSCRIPT_METADATA_VERSION,
+      compactedFromMessageId: input.fromId,
+      compactedThroughMessageId: input.throughId,
+    }
+
+    try {
+      const content = await this.runSuppressedExecutor({
+        messages: buildMemoryFlushPrompt(input.previousSummary, input.rows, input.compaction),
+        workspace: input.workspace,
+        signal: input.signal,
+        notifyActivity: input.notifyActivity,
+      })
+      const trimmed = content.trim()
+      if (trimmed.length === 0 || /^none\.?$/i.test(trimmed)) {
+        this.persistAuditMessage(input.conversationId, 'No durable memory changes requested by pre-compaction flush.', {
+          ...baseMetadata,
+          status: 'empty',
+        }, at)
+        return { attempted: true, at, status: 'empty' }
+      }
+
+      await this.deps.brain.writeMemory({
+        content: trimmed,
+        metadata: {
+          name: `pre-compaction-${input.conversationId}-${input.throughId}`,
+          description: 'Pre-compaction memory flush',
+          type: 'memory',
+          conversationId: input.conversationId,
+          compactedFromMessageId: input.fromId,
+          compactedThroughMessageId: input.throughId,
+        },
+        tags: ['aiworker', 'session-compaction'],
+      })
+      this.persistAuditMessage(input.conversationId, trimmed, {
+        ...baseMetadata,
+        status: 'succeeded',
+      }, at)
+      return { attempted: true, at, status: 'succeeded', content: trimmed }
+    }
+    catch (err) {
+      const error = String(err)
+      consola.warn(`[orchestrator] pre-compaction memory flush failed: ${error}`)
+      this.persistAuditMessage(input.conversationId, error, {
+        ...baseMetadata,
+        status: 'failed',
+        error,
+      }, at)
+      return { attempted: true, at, status: 'failed', error }
+    }
+  }
+
+  private async generateCompactionSummary(input: {
+    previousSummary: string | null
+    rows: TranscriptRow[]
+    compaction: OrchestratorCompactionConfig
+    workspace: WorkspaceHandle | null
+    signal: AbortSignal
+    notifyActivity: () => void
+  }): Promise<string> {
+    const generated = await this.runSuppressedExecutor({
+      messages: buildCompactionPrompt(input.previousSummary, input.rows, input.compaction),
+      workspace: input.workspace,
+      signal: input.signal,
+      notifyActivity: input.notifyActivity,
+    })
+    const trimmed = generated.trim()
+    if (trimmed.length > 0)
+      return trimmed
+
+    return fallbackCompactionSummary(input.previousSummary, input.rows)
+  }
+
+  private async runSuppressedExecutor(input: {
+    messages: ChatMessage[]
+    workspace: WorkspaceHandle | null
+    signal: AbortSignal
+    notifyActivity: () => void
+  }): Promise<string> {
+    const model = resolveExecutorModel(this.deps.config.executor)
+    let text = ''
+    for await (const event of this.deps.executor.run({
+      messages: input.messages,
+      ...(model ? { model } : {}),
+      ...(input.workspace ? { workspacePath: input.workspace.path } : {}),
+      signal: input.signal,
+      temperature: 0,
+    })) {
+      input.notifyActivity()
+      if (event.type === 'assistant_message_delta')
+        text += event.delta
+      else if (event.type === 'error')
+        throw new Error(event.error)
+    }
+    return text
+  }
+
+  private persistAuditMessage(conversationId: string, content: string, metadata: Record<string, unknown>, at: string): void {
+    getWorkerDb().insert(messages).values({
+      conversationId,
+      role: 'system',
+      content,
+      richMetadata: JSON.stringify(metadata),
+      createdAt: at,
+    }).run()
+  }
+
+  private loadLatestCompactionCheckpoint(conversationId: string): CompactionCheckpoint | null {
+    const db = getWorkerDb()
+    const rows = db.select({
+      id: messages.id,
+      role: messages.role,
+      richMetadata: messages.richMetadata,
+    }).from(messages).where(and(eq(messages.conversationId, conversationId), eq(messages.role, 'system'))).orderBy(desc(messages.id)).all()
+
+    for (const row of rows) {
+      const metadata = parseTranscriptMetadata(row)
+      if (metadata?.kind !== 'compaction')
+        continue
+      const compactedThroughMessageId = positiveNumber(metadata.compactedThroughMessageId)
+      if (compactedThroughMessageId !== null)
+        return { messageId: row.id, compactedThroughMessageId }
+    }
+    return null
+  }
+
+  private loadPromptTranscriptRows(conversationId: string, afterMessageId: number | undefined): TranscriptRow[] {
+    const where = afterMessageId === undefined
+      ? eq(messages.conversationId, conversationId)
+      : and(eq(messages.conversationId, conversationId), gt(messages.id, afterMessageId))
+    const db = getWorkerDb()
+    return db.select({
+      id: messages.id,
+      role: messages.role,
+      content: messages.content,
+      toolCalls: messages.toolCalls,
+      toolCallId: messages.toolCallId,
+      richMetadata: messages.richMetadata,
+    }).from(messages).where(where).orderBy(asc(messages.id)).all().filter(row => !isTranscriptAuditEntry(row))
+  }
+
+  private loadPromptTranscriptRowsNewestFirst(conversationId: string, afterMessageId: number | undefined, limit: number): TranscriptRow[] {
+    const where = afterMessageId === undefined
+      ? eq(messages.conversationId, conversationId)
+      : and(eq(messages.conversationId, conversationId), gt(messages.id, afterMessageId))
+    const db = getWorkerDb()
+    return db.select({
+      id: messages.id,
+      role: messages.role,
+      content: messages.content,
+      toolCalls: messages.toolCalls,
+      toolCallId: messages.toolCallId,
+      richMetadata: messages.richMetadata,
+    }).from(messages).where(where).orderBy(desc(messages.id)).limit(limit * 3).all().filter(row => !isTranscriptAuditEntry(row)).slice(0, limit)
+  }
+
+  private isContextOverflowError(error: string | undefined): boolean {
+    if (error === undefined)
+      return false
+    return /context|token|too large|maximum length|maximum prompt|prompt is too long/i.test(error)
+  }
+
   private async buildRunContext(conversationId: string, systemPrompt: string): Promise<ChatMessage[]> {
     const systemMessage: ChatMessage = { role: 'system', content: systemPrompt }
     const budget = resolveContextBudget(this.deps.config.orchestrator, this.deps.config.executor)
@@ -386,22 +746,22 @@ export class Orchestrator {
    */
   private async loadHistoryWindow(conversationId: string): Promise<ChatMessage[]> {
     const limit = this.deps.config.orchestrator?.maxHistoryMessages ?? DEFAULT_MAX_HISTORY_MESSAGES
-    const rows = await loadRecentMessages(conversationId, limit)
-    return rows.map(r => ({ role: r.role, content: r.content }))
+    const checkpoint = this.loadLatestCompactionCheckpoint(conversationId)
+    if (!checkpoint) {
+      const rows = await loadRecentMessages(conversationId, limit)
+      return rows.map(r => ({ role: r.role, content: r.content }))
+    }
+    return this.loadPromptTranscriptRowsNewestFirst(conversationId, checkpoint.compactedThroughMessageId, limit).reverse().map(rowToChatMessage)
   }
 
   private async loadBudgetHistory(conversationId: string, maxHistoryMessages: number | undefined): Promise<ChatMessage[]> {
-    const db = getWorkerDb()
-    const rows = db.select({
-      role: messages.role,
-      content: messages.content,
-    })
-      .from(messages)
-      .where(eq(messages.conversationId, conversationId))
-      .orderBy(desc(messages.id))
-      .limit(maxHistoryMessages ?? DEFAULT_TOKEN_BUDGET_HISTORY_SCAN_MESSAGES)
-      .all()
-    return rows.map(r => ({ role: r.role, content: r.content }))
+    const checkpoint = this.loadLatestCompactionCheckpoint(conversationId)
+    const rows = this.loadPromptTranscriptRowsNewestFirst(
+      conversationId,
+      checkpoint?.compactedThroughMessageId,
+      maxHistoryMessages ?? DEFAULT_TOKEN_BUDGET_HISTORY_SCAN_MESSAGES,
+    )
+    return rows.map(rowToChatMessage)
   }
 
   /**
@@ -533,6 +893,178 @@ function taskIdFromEnvelope(envelope: Envelope): string | undefined {
     return undefined
   const taskId = (envelope.raw as Record<string, unknown>).taskId
   return typeof taskId === 'string' && taskId.length > 0 ? taskId : undefined
+}
+
+function rowToChatMessage(row: Pick<TranscriptRow, 'role' | 'content' | 'toolCalls' | 'toolCallId'>): ChatMessage {
+  return {
+    role: row.role,
+    content: row.content,
+    ...(row.toolCalls === null ? {} : { toolCalls: row.toolCalls }),
+    ...(row.toolCallId === null ? {} : { toolCallId: row.toolCallId }),
+  }
+}
+
+function splitRowsForCompaction(rows: TranscriptRow[], keepRecentTokens: number): { candidateRows: TranscriptRow[], recentRows: TranscriptRow[] } {
+  const recentNewestFirst: TranscriptRow[] = []
+  let recentTokens = 0
+  for (let index = rows.length - 1; index >= 0; index -= 1) {
+    const row = rows[index]!
+    const rowTokens = estimateChatMessageTokens(rowToChatMessage(row))
+    if (recentNewestFirst.length > 0 && recentTokens + rowTokens > keepRecentTokens)
+      break
+    recentNewestFirst.push(row)
+    recentTokens += rowTokens
+  }
+
+  const recentRows = expandRecentRowsForToolPairs(rows, recentNewestFirst.reverse())
+  const firstRecentId = recentRows[0]?.id
+  if (firstRecentId === undefined)
+    return { candidateRows: rows, recentRows: [] }
+  return {
+    candidateRows: rows.filter(row => row.id < firstRecentId),
+    recentRows,
+  }
+}
+
+function expandRecentRowsForToolPairs(rows: TranscriptRow[], recentRows: TranscriptRow[]): TranscriptRow[] {
+  const firstRecentId = recentRows[0]?.id
+  if (firstRecentId === undefined)
+    return recentRows
+
+  let startIndex = rows.findIndex(row => row.id === firstRecentId)
+  if (startIndex < 0)
+    return recentRows
+
+  while (startIndex > 0) {
+    const missingAssistantIndex = findMissingToolCallAssistantIndex(rows, startIndex)
+    if (missingAssistantIndex === null || missingAssistantIndex >= startIndex)
+      break
+    startIndex = missingAssistantIndex
+  }
+  return rows.slice(startIndex)
+}
+
+function findMissingToolCallAssistantIndex(rows: TranscriptRow[], startIndex: number): number | null {
+  const availableToolCallIds = new Set<string>()
+  for (let index = startIndex; index < rows.length; index += 1) {
+    const row = rows[index]!
+    for (const toolCall of row.toolCalls ?? [])
+      availableToolCallIds.add(toolCall.id)
+    if (row.role !== 'tool' || row.toolCallId === null || availableToolCallIds.has(row.toolCallId))
+      continue
+    for (let candidateIndex = startIndex - 1; candidateIndex >= 0; candidateIndex -= 1) {
+      const candidate = rows[candidateIndex]!
+      if (candidate.toolCalls?.some(toolCall => toolCall.id === row.toolCallId) === true)
+        return candidateIndex
+    }
+  }
+  return null
+}
+
+function buildCompactionPrompt(previousSummary: string | null, rows: TranscriptRow[], config: OrchestratorCompactionConfig): ChatMessage[] {
+  return [
+    {
+      role: 'system',
+      content: [
+        'You compact an AIWorker conversation transcript for future prompt context.',
+        'Return a concise durable summary only.',
+        'Merge the previous durable summary with the new transcript rows.',
+        'Preserve user preferences, decisions, open tasks, constraints, named entities, and tool outcomes.',
+        'Do not invent facts. Do not mention that this is a summary unless needed for clarity.',
+      ].join('\n'),
+    },
+    {
+      role: 'user',
+      content: [
+        'Previous durable summary:',
+        previousSummary?.trim() || '(none)',
+        '',
+        'Transcript rows to compact. Raw rows remain stored for audit:',
+        formatTranscriptExcerpt(rows, config.maxSummaryMessages ?? DEFAULT_COMPACTION_MAX_SUMMARY_MESSAGES),
+      ].join('\n'),
+    },
+  ]
+}
+
+function buildMemoryFlushPrompt(previousSummary: string | null, rows: TranscriptRow[], config: OrchestratorCompactionConfig): ChatMessage[] {
+  return [
+    {
+      role: 'system',
+      content: [
+        'You are running a pre-compaction memory flush for AIWorker.',
+        'This turn is not delivered to the user.',
+        'Return only durable facts, preferences, decisions, or todos that should be written to long-term memory.',
+        'If there is nothing durable to write, return NONE.',
+      ].join('\n'),
+    },
+    {
+      role: 'user',
+      content: [
+        'Previous durable summary:',
+        previousSummary?.trim() || '(none)',
+        '',
+        'Transcript rows about to be compacted:',
+        formatTranscriptExcerpt(rows, config.maxSummaryMessages ?? DEFAULT_COMPACTION_MAX_SUMMARY_MESSAGES),
+      ].join('\n'),
+    },
+  ]
+}
+
+function formatTranscriptExcerpt(rows: TranscriptRow[], limit: number): string {
+  if (rows.length <= limit)
+    return rows.map(formatTranscriptRow).join('\n')
+
+  const headCount = Math.ceil(limit / 2)
+  const tailCount = Math.floor(limit / 2)
+  const omitted = rows.length - headCount - tailCount
+  return [
+    ...rows.slice(0, headCount).map(formatTranscriptRow),
+    `... ${omitted} transcript rows omitted from summarizer prompt ...`,
+    ...rows.slice(rows.length - tailCount).map(formatTranscriptRow),
+  ].join('\n')
+}
+
+function formatTranscriptRow(row: TranscriptRow): string {
+  const toolCallIds = row.toolCalls?.map(toolCall => toolCall.id).join(', ')
+  const suffix = [
+    toolCallIds ? ` toolCalls=${toolCallIds}` : '',
+    row.toolCallId ? ` toolCallId=${row.toolCallId}` : '',
+  ].join('')
+  return `#${row.id} ${row.role}${suffix}: ${row.content.slice(0, 1_500)}`
+}
+
+function fallbackCompactionSummary(previousSummary: string | null, rows: TranscriptRow[]): string {
+  const range = rows.length === 0 ? 'no rows' : `rows #${rows[0]!.id}-#${rows[rows.length - 1]!.id}`
+  return [
+    previousSummary?.trim() || '',
+    `Compacted ${range}.`,
+    formatTranscriptExcerpt(rows, Math.min(12, DEFAULT_COMPACTION_MAX_SUMMARY_MESSAGES)),
+  ].filter(part => part.length > 0).join('\n\n')
+}
+
+function isTranscriptAuditEntry(row: { role: ChatMessage['role'], richMetadata: string | null }): boolean {
+  if (row.role !== 'system')
+    return false
+  const metadata = parseTranscriptMetadata(row)
+  return metadata?.kind === 'compaction' || metadata?.kind === 'memory-flush'
+}
+
+function parseTranscriptMetadata(row: { role: string, richMetadata: string | null }): Record<string, unknown> | null {
+  if (row.role !== 'system' || row.richMetadata === null)
+    return null
+  try {
+    const parsed = JSON.parse(row.richMetadata) as unknown
+    return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : null
+  }
+  catch {
+    return null
+  }
+}
+
+function positiveNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : null
 }
 
 function isGatewaySessionReset(envelope: Envelope): boolean {

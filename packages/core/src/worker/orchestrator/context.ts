@@ -52,6 +52,8 @@ export function tokenBudgetEnabled(config: OrchestratorConfig | undefined): bool
   return config?.contextWindowTokens !== undefined
     || config?.reserveTokens !== undefined
     || config?.keepRecentTokens !== undefined
+    || config?.compaction?.enabled === true
+    || config?.compaction?.triggerTokens !== undefined
 }
 
 export function resolveContextBudget(

@@ -82,6 +82,11 @@ export interface RotateSessionConversationInput {
   at?: string
 }
 
+export interface RecordSessionCompactionInput {
+  at?: string
+  memoryFlushAt?: string
+}
+
 export function getSessionEntry(sessionKey: string): SessionEntryRow | null {
   return getWorkerDb().select().from(schema.sessionEntries).where(eq(schema.sessionEntries.sessionKey, sessionKey)).get() ?? null
 }
@@ -161,6 +166,26 @@ export function rotateSessionConversation(input: RotateSessionConversationInput)
     updatedAt: now,
   }).where(eq(schema.sessionEntries.sessionKey, input.sessionKey)).run()
   return getSessionEntry(input.sessionKey)
+}
+
+export function recordSessionCompaction(sessionKey: string, input: RecordSessionCompactionInput = {}): SessionEntryRow | null {
+  const existing = getSessionEntry(sessionKey)
+  if (!existing)
+    return null
+
+  const now = input.at ?? new Date().toISOString()
+  const nextCompactionCount = existing.compactionCount + 1
+  getWorkerDb().update(schema.sessionEntries).set({
+    compactionCount: nextCompactionCount,
+    ...(input.memoryFlushAt === undefined
+      ? {}
+      : {
+          memoryFlushAt: input.memoryFlushAt,
+          memoryFlushCompactionCount: nextCompactionCount,
+        }),
+    updatedAt: now,
+  }).where(eq(schema.sessionEntries.sessionKey, sessionKey)).run()
+  return getSessionEntry(sessionKey)
 }
 
 export function updateSessionEngineBinding(sessionKey: string, engine: string, binding: unknown | null, at?: string): SessionEntryRow | null {

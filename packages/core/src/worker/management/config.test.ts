@@ -146,6 +146,12 @@ describe('worker management config', () => {
       reserveTokens: 1_024,
       keepRecentTokens: 2_000,
       maxHistoryMessages: 100,
+      compaction: {
+        enabled: true,
+        triggerTokens: 3_000,
+        maxSummaryMessages: 80,
+        memoryFlush: { enabled: true },
+      },
     }
 
     const result = await putConfig(getWorkerDb(), vault, next)

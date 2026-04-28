@@ -11,6 +11,7 @@ import {
   getSessionEntry,
   getWorkerDb,
   initWorkerDb,
+  recordSessionCompaction,
   rotateSessionConversation,
   runWorkerMigrations,
   sessionEntries,
@@ -174,5 +175,32 @@ describe('worker session store primitives (PLAN-028 S1-A)', () => {
     expect(removed?.engineBindings).toEqual({ 'claude-code': { sessionId: 's-1' } })
     expect(getSessionEntry('missing')).toBeNull()
     expect(updateSessionEngineBinding('missing', 'codex', { threadId: 'x' })).toBeNull()
+  })
+
+  it('records compaction checkpoints and optional memory flush state', () => {
+    seedConversation('conv-1')
+    upsertSessionEntry({
+      sessionKey: 'gw:conv:alpha',
+      currentConversationId: 'conv-1',
+      channel: 'web',
+      chatId: 'chat-1',
+      at: '2026-04-28T12:01:00.000Z',
+    })
+
+    const first = recordSessionCompaction('gw:conv:alpha', {
+      at: '2026-04-28T12:05:00.000Z',
+    })
+    expect(first?.compactionCount).toBe(1)
+    expect(first?.memoryFlushAt).toBeNull()
+    expect(first?.memoryFlushCompactionCount).toBe(0)
+
+    const second = recordSessionCompaction('gw:conv:alpha', {
+      at: '2026-04-28T12:06:00.000Z',
+      memoryFlushAt: '2026-04-28T12:05:30.000Z',
+    })
+    expect(second?.compactionCount).toBe(2)
+    expect(second?.memoryFlushAt).toBe('2026-04-28T12:05:30.000Z')
+    expect(second?.memoryFlushCompactionCount).toBe(2)
+    expect(recordSessionCompaction('missing')).toBeNull()
   })
 })

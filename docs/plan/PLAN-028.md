@@ -303,9 +303,32 @@ Stage 2: token-budget prompt assembly
 
 Stage 3: compaction and memory flush
 
-- Add compaction entries and summary writer.
-- Add overflow-retry path.
-- Add no-delivery memory flush hook.
+- S3 `h4hpsxl2` implements opt-in compaction on top of S2 context assembly.
+- No schema migration was needed. Compaction and memory-flush audit entries are
+  stored as `messages.role='system'` rows with structured `richMetadata.kind`
+  values (`compaction` / `memory-flush`), while raw user/assistant/tool rows
+  remain append-only for audit.
+- Each compaction writes a durable cumulative summary to
+  `conversations.summary`, persists a compaction checkpoint with
+  `compactedThroughMessageId`, and increments
+  `session_entries.compactionCount`.
+- Prompt assembly now skips transcript audit rows and, once a compaction
+  checkpoint exists, includes `conversations.summary` plus only messages after
+  the compacted boundary. Legacy S2 fixed-window behavior remains unchanged
+  when compaction is not configured.
+- Pre-compaction memory flush is gated by
+  `orchestrator.compaction.memoryFlush.enabled`. It runs through the executor
+  without emitting user-delivery events, writes returned durable content through
+  the configured brain provider, and records success/empty/failure in an audit
+  row. Flush failure does not block compaction or delete transcript rows.
+- Context-overflow recovery now forces one compaction and retries the executor
+  run once when the provider reports a context/token overflow.
+- Tool-call/tool-result pairing is only partially protected at the compaction
+  boundary by expanding the kept recent tail when a retained tool result needs
+  its assistant tool-call row. The current persisted prompt loader still depends
+  on the existing `messages.tool_calls` / `tool_call_id` representation and
+  does not claim a full engine-native tool transcript model; that remains
+  outside S3.
 
 Stage 4: engine native bindings
 

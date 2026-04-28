@@ -90,10 +90,15 @@ OpenClaw research anchors:
   resolution, `session_entries.contextTokens` updates, config validation, and
   focused tests. Legacy `maxHistoryMessages` remains the fallback when no token
   budget field is configured.
+- S3 (`h4hpsxl2`) implements opt-in persistent compaction and pre-compaction
+  memory flush without a schema migration: compaction and memory-flush audit
+  rows are stored in `messages.richMetadata`, cumulative summaries are written
+  to `conversations.summary`, raw transcript rows remain for audit,
+  `session_entries.compactionCount` / memory-flush checkpoints are updated,
+  and context-overflow errors force one compaction retry.
 
 Deferred to later stages:
 
 - Idle and daily expiry policy implementation.
-- Persistent compaction summaries and pre-compaction memory flush.
 - Engine-native session/thread bindings.
 - CLI/API/UI session status and maintenance surfaces.
