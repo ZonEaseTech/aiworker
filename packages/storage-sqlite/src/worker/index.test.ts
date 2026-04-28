@@ -76,6 +76,14 @@ describe('worker schema indexes (REFACTOR-005)', () => {
     expect(plan).toContain('agent_tasks_created_at_idx')
   })
 
+  it('session_entries indexes support active-session lookup and maintenance scans', () => {
+    const byConversation = explain(`SELECT * FROM session_entries WHERE current_conversation_id = 'c1'`)
+    expect(byConversation).toContain('session_entries_current_conversation_id_idx')
+
+    const byActivity = explain(`SELECT * FROM session_entries ORDER BY last_interaction_at DESC LIMIT 200`)
+    expect(byActivity).toContain('session_entries_last_interaction_at_idx')
+  })
+
   it('100k messages 单 conversation 点查在毫秒级别', () => {
     const db = getWorkerDb()
     db.insert(conversations).values({

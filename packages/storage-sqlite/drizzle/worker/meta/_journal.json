@@ -29,6 +29,13 @@
       "when": 1777306304275,
       "tag": "0003_rare_cloak",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1777380396323,
+      "tag": "0004_daffy_thing",
+      "breakpoints": true
     }
   ]
 }

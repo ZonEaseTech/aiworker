@@ -45,6 +45,36 @@ export const conversations = sqliteTable(
   }),
 )
 
+export const sessionEntries = sqliteTable(
+  'session_entries',
+  {
+    sessionKey: text('session_key').primaryKey(),
+    currentConversationId: text('current_conversation_id').notNull().references(() => conversations.id),
+    channel: text('channel').$type<ChannelType>().notNull(),
+    chatId: text('chat_id').notNull(),
+    threadId: text('thread_id'),
+    accountId: text('account_id'),
+    status: text('status', { enum: ['active', 'closed'] }).notNull().default('active'),
+    sessionStartedAt: text('session_started_at').notNull().$defaultFn(() => new Date().toISOString()),
+    lastInteractionAt: text('last_interaction_at').notNull().$defaultFn(() => new Date().toISOString()),
+    resetAt: text('reset_at'),
+    resetReason: text('reset_reason'),
+    contextTokens: integer('context_tokens').notNull().default(0),
+    totalTokens: integer('total_tokens').notNull().default(0),
+    totalTokensFresh: integer('total_tokens_fresh').notNull().default(0),
+    compactionCount: integer('compaction_count').notNull().default(0),
+    memoryFlushAt: text('memory_flush_at'),
+    memoryFlushCompactionCount: integer('memory_flush_compaction_count').notNull().default(0),
+    engineBindings: text('engine_bindings', { mode: 'json' }).$type<Record<string, unknown>>().notNull().$defaultFn(() => ({})),
+    createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+    updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()),
+  },
+  table => ({
+    currentConversationIdIdx: index('session_entries_current_conversation_id_idx').on(table.currentConversationId),
+    lastInteractionAtIdx: index('session_entries_last_interaction_at_idx').on(table.lastInteractionAt),
+  }),
+)
+
 export const messages = sqliteTable(
   'messages',
   {
