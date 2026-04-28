@@ -1,9 +1,10 @@
 # REFACTOR-010 Phase 5 — Web UI 能力补齐与可观测性（可选）
 
-- **status**: pending
+- **status**: completed
 - **priority**: P3
-- **owner**: (未分配)
+- **owner**: Codex/bkd-82q998mw
 - **createdAt**: 2026-04-27 18:35
+- **completedAt**: 2026-04-28 08:35
 
 ## 描述
 
@@ -38,7 +39,30 @@ PLAN-022 Phase 5 落地。在前四 Phase 完成、双视角 UI 稳定运行之�
 
 ## 进行时描述
 
-Web UI 能力补齐：cross-worker dashboard + i18n + dark mode
+Web UI capability completion: dark mode hardening only. The current Phase 1-4
+baseline is stable after local main was fast-forwarded into this issue branch.
+This conservative Phase 5 slice avoids new gateway proto expansion and
+cross-worker dashboards.
+
+## 完成记录
+
+- Implemented the Phase 5 dark mode slice only.
+- Added `data-theme` based dual-channel theming while preserving CSS variable
+  tokens and existing Tailwind `dark:` call sites.
+- Added a shared icon-only theme toggle in both fleet and worker shells.
+- Persisted theme selection separately for `fleet` and `worker` bundles via
+  localStorage keys `aiworker-theme:fleet` and `aiworker-theme:worker`.
+- Added tests for bundle-scoped hydration, per-bundle persistence, and the
+  predictable `system -> light -> dark -> system` toggle cycle.
+
+## 剩余可选项
+
+- i18n scaffold remains open.
+- Fleet cross-worker cron / approval dashboard remains open.
+- Gateway proto expansion for `system.capabilities`, `secrets.*`, and `test.*`
+  remains open until there is a concrete cross-worker operator need.
+- Additional observability panels beyond the existing Phase 2 audit and
+  presence surfaces remain open.
 
 ## 依赖
 

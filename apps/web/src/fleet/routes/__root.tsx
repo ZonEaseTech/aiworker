@@ -1,5 +1,6 @@
 import { createRootRoute, Link, Outlet } from '@tanstack/react-router'
 import { Activity, Boxes, FileStack, FileText, Inbox } from 'lucide-react'
+import { ThemeToggle } from '@/shared/components/theme-toggle'
 import { Separator } from '@/shared/components/ui/separator'
 import { TooltipProvider } from '@/shared/components/ui/tooltip'
 import { cn } from '@/shared/lib/utils'
@@ -54,6 +55,7 @@ function RootLayout() {
             <span className="text-sm font-medium text-muted-foreground">
               Self-hosted Agent Runtime · fleet view
             </span>
+            <ThemeToggle />
           </header>
           <main className="flex-1 overflow-auto p-6">
             <Outlet />

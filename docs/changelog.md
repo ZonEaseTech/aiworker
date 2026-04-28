@@ -1,5 +1,22 @@
 # AIWorker Changelog
 
+## 2026-04-28 08:35 [progress] REFACTOR-010 — PLAN-022 Phase 5 dark mode slice
+
+Completed the conservative Phase 5 slice for Web UI capability completion.
+
+- `apps/web/src/shared/stores/theme.ts` now drives theming through
+  `data-theme` / `data-theme-preference` and keeps fleet / worker selections in
+  separate localStorage keys.
+- `apps/web/src/shared/components/theme-toggle.tsx` adds the shared icon-only
+  theme toggle used by both fleet and worker shells.
+- `apps/web/src/shared/styles/globals.css` moves the Tailwind dark variant and
+  dark token overrides from `.dark` to `data-theme="dark"`.
+- Added tests covering scoped hydration, scoped persistence, and the toggle
+  cycle.
+
+Deferred optional Phase 5 items remain i18n, cross-worker cron / approval
+dashboards, and gateway proto expansion for broader cross-worker operations.
+
 ## 2026-04-27 19:30 [progress] PLAN-023 (PLAN-021 Phase A) — Worker 项目级落位收尾
 
 落地 `<project>/.aiworker/` 三层 scope 解析与 CLI 项目级 init。承接 PLAN-021 master plan 的 Phase A，为后续 Phase B/D/C/E（上下文连贯 / skill+MCP per-worker / 三态记忆 / 自演化闭环）打底。

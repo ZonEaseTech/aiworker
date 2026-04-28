@@ -5,9 +5,11 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Toaster } from '@/shared/components/ui/sonner'
 import { queryClient } from '@/shared/lib/queryClient'
-import { ThemeInitializer } from '@/shared/stores/theme'
+import { bootstrapTheme, ThemeInitializer } from '@/shared/stores/theme'
 import { routeTree } from './routeTree.gen'
 import '@/shared/styles/globals.css'
+
+bootstrapTheme('fleet')
 
 const router = createRouter({
   routeTree,
@@ -29,7 +31,7 @@ if (!rootElement)
 createRoot(rootElement).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <ThemeInitializer />
+      <ThemeInitializer scope="fleet" />
       <RouterProvider router={router} />
       <Toaster />
       <ReactQueryDevtools initialIsOpen={false} />

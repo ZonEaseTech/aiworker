@@ -5,10 +5,12 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Toaster } from '@/shared/components/ui/sonner'
 import { queryClient } from '@/shared/lib/queryClient'
-import { ThemeInitializer } from '@/shared/stores/theme'
+import { bootstrapTheme, ThemeInitializer } from '@/shared/stores/theme'
 import { bootstrapBearerFromLocation } from './lib/auth'
 import { routeTree } from './routeTree.gen'
 import '@/shared/styles/globals.css'
+
+bootstrapTheme('worker')
 
 // FEAT-035 §验收 8：URL fragment `#token=<bearer>` → sessionStorage，并立即
 // 清掉 hash。必须在 router 挂载前调，避免首帧无鉴权请求。
@@ -36,7 +38,7 @@ if (!rootElement)
 createRoot(rootElement).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <ThemeInitializer />
+      <ThemeInitializer scope="worker" />
       <RouterProvider router={router} />
       <Toaster />
       <ReactQueryDevtools initialIsOpen={false} />

@@ -10,7 +10,9 @@ import {
   Timer,
   Wrench,
 } from 'lucide-react'
+import { ThemeToggle } from '@/shared/components/theme-toggle'
 import { Separator } from '@/shared/components/ui/separator'
+import { TooltipProvider } from '@/shared/components/ui/tooltip'
 import { useWorkerHealth, useWorkerInfo } from '@/worker/lib/hooks'
 import { WorkerLink } from '@/worker/lib/link'
 
@@ -59,6 +61,7 @@ function TopBar() {
         <Stat label="brains" value={String(brainsCount)} />
         <Stat label="启动" value={info.data?.startedAt ? new Date(info.data.startedAt).toLocaleString() : '—'} />
       </dl>
+      <ThemeToggle />
     </header>
   )
 }
@@ -90,38 +93,40 @@ function Stat({
 
 function RootLayout() {
   return (
-    <div className="flex min-h-screen w-full flex-col bg-background text-foreground">
-      <TopBar />
-      <div className="flex flex-1">
-        <aside className="flex w-60 shrink-0 flex-col border-r bg-card">
-          <div className="flex items-center gap-2 px-5 py-4">
-            <Cpu className="size-5 text-primary" />
-            <span className="text-sm font-semibold tracking-tight">AIWorker · Worker</span>
-          </div>
-          <Separator />
-          <nav className="flex flex-1 flex-col gap-1 p-3">
-            {NAV_ITEMS.map((item) => {
-              const Icon = item.icon
-              return (
-                <WorkerLink
-                  key={item.to}
-                  to={item.to}
-                  className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-                  activeProps={{ className: 'bg-accent text-accent-foreground font-medium' }}
-                  activeOptions={item.exact ? { exact: true } : undefined}
-                >
-                  <Icon className="size-4" />
-                  {item.label}
-                </WorkerLink>
-              )
-            })}
-          </nav>
-        </aside>
-        <main className="flex-1 overflow-auto p-6">
-          <Outlet />
-        </main>
+    <TooltipProvider delay={300}>
+      <div className="flex min-h-screen w-full flex-col bg-background text-foreground">
+        <TopBar />
+        <div className="flex flex-1">
+          <aside className="flex w-60 shrink-0 flex-col border-r bg-card">
+            <div className="flex items-center gap-2 px-5 py-4">
+              <Cpu className="size-5 text-primary" />
+              <span className="text-sm font-semibold tracking-tight">AIWorker · Worker</span>
+            </div>
+            <Separator />
+            <nav className="flex flex-1 flex-col gap-1 p-3">
+              {NAV_ITEMS.map((item) => {
+                const Icon = item.icon
+                return (
+                  <WorkerLink
+                    key={item.to}
+                    to={item.to}
+                    className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                    activeProps={{ className: 'bg-accent text-accent-foreground font-medium' }}
+                    activeOptions={item.exact ? { exact: true } : undefined}
+                  >
+                    <Icon className="size-4" />
+                    {item.label}
+                  </WorkerLink>
+                )
+              })}
+            </nav>
+          </aside>
+          <main className="flex-1 overflow-auto p-6">
+            <Outlet />
+          </main>
+        </div>
       </div>
-    </div>
+    </TooltipProvider>
   )
 }
 
