@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-04-28 10:40
+> Updated: 2026-04-28 10:50
 
 ## Usage
 
@@ -100,4 +100,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-021 Project-scope CLI placement is bypassed by bootstrap env pinning**](BUG-021.md) `P1`
 - [x] [**BUG-022 Web admin SPA mount paths break fleet routing and deep links**](BUG-022.md) `P1`
 - [x] [**BUG-023 Release blockers after v0.3.0 prevent 0.4.0 publishing**](BUG-023.md) `P1`
-- [-] [**BUG-024 Codex executor fails against current Codex app-server protocol**](BUG-024.md) `P1`
+- [x] [**BUG-024 Codex executor fails against current Codex app-server protocol**](BUG-024.md) `P1`

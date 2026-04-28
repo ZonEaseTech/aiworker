@@ -1,8 +1,9 @@
 # PLAN-026 Codex app-server protocol compatibility for 0.4.1
 
-- **status**: in progress
+- **status**: completed
 - **createdAt**: 2026-04-28 10:40
 - **approvedAt**: 2026-04-28 10:40
+- **completedAt**: 2026-04-28 10:50
 - **relatedTask**: BUG-024
 
 ## Current State
@@ -47,3 +48,31 @@ Out of scope:
 - Full rendering of every new Codex app-server notification.
 - Permission profile or sandbox policy redesign.
 - General Codex model discovery from the app-server at runtime.
+
+## Implementation
+
+- Added protocol negotiation in the Codex executor: try legacy
+  `thread_start`, then fall back to current `thread/start` when the installed
+  Codex CLI rejects the legacy method.
+- Added current `turn/start` request support and terminal queue close on
+  `turn/completed`.
+- Normalized current Codex notification methods for assistant deltas, reasoning
+  deltas, token usage, turn completion, and errors.
+- Updated the Codex default model and Worker Web model hints to current Codex
+  models.
+- Extended the Codex stub and focused tests to cover both protocol variants.
+
+## Verification
+
+- Focused Codex executor / normalizer / protocol tests passed.
+- `bun run check` passed.
+- `bun run test` passed.
+- `bun run build` passed.
+- CLI run and fleet smokes passed.
+- `git diff --check` passed.
+- Publish dry-run packed the expected `0.4.1` npm artifact.
+- GitHub release workflow for `v0.4.1` passed.
+- npm latest is `@zonease/aiworker-cli@0.4.1`.
+- Test server gateway upgraded to `0.4.1` and `/health` returned ok.
+- Final test-server fleet to local Codex worker e2e chat returned
+  `finishReason=stop`.
