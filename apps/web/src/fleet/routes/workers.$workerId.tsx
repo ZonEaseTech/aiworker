@@ -195,7 +195,7 @@ function SelfManageHint({ worker }: { worker: SafeRegisteredWorker }) {
             This worker has no inbound HTTP base URL — typical for self-enrolled
             or OTP-attended workers. Use
             {' '}
-            <code className="rounded bg-muted px-1 py-0.5 font-mono">aiworker worker start</code>
+            <code className="rounded bg-muted px-1 py-0.5 font-mono">aiworker serve</code>
             {' '}
             on the worker host and open
             {' '}

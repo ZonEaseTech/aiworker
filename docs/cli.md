@@ -184,7 +184,9 @@ aiworker serve --port 3001
 
 ### `aiworker config-show`
 
-打印当前（已 redact）worker 配置与 monotonic version：
+打印当前（已 redact）worker 配置与 monotonic version。若本地 worker state 尚不存在，
+该命令会执行与 worker-local 命令一致的轻量 bootstrap：创建 `.env` / `worker.db`、
+运行迁移并 seed 默认配置，但不会启动 HTTP server：
 
 ```sh
 aiworker config-show
@@ -582,7 +584,7 @@ aiworker logs w_xxxxxxxxxxxx --follow --tail 200
 把 gateway daemon 包成 systemd unit，开机自启 / 长跑。前台跑 `aiworker gateway start` 适合开发，**生产推荐用 systemd**——这是部署主路径，详见 [`docs/deployment.md` § 形态二：systemd 服务化](./deployment.md#形态二systemd-服务化推荐-linux-服务器)。
 
 ```sh
-aiworker install systemd [--user|--system] [--dry-run] [--out <path>] [--no-enable]
+aiworker install systemd [--user|--system] [--dry-run] [--out <path>] [--no-enable] [--exec-start <command>]
 ```
 
 | Flag | 默认 | 含义 |
@@ -592,33 +594,61 @@ aiworker install systemd [--user|--system] [--dry-run] [--out <path>] [--no-enab
 | `--dry-run` | 否 | 只打印 unit 内容到 stdout，不写盘、不 enable |
 | `--out <path>` | 不设 | 覆盖目标路径（测试 / 异常布局 / packaging 用） |
 | `--no-enable` | 否 | 写文件后**不**调 `systemctl daemon-reload + enable --now`，留给运维手动 |
+| `--exec-start <command>` | 自动探测当前 CLI | 高级覆盖：手动指定完整 systemd `ExecStart` 命令 |
 
 unit 模板（`--user` 形态）：
 
 ```ini
 [Unit]
-Description=AIWorker gateway daemon
-After=network.target
+Description=AIWorker gateway daemon (user instance)
+Documentation=https://github.com/ZonEaseTech/aiworker/blob/main/docs/deployment.md
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=%h/.bun/bin/aiworker gateway start
+Environment=AIWORKER_HOME=%S/aiworker
+EnvironmentFile=-%h/.config/aiworker/gateway.env
+ExecStart=/absolute/path/to/current/aiworker gateway start
 Restart=on-failure
 RestartSec=5
-Environment=AIWORKER_HOME=%h/.aiworker
+StateDirectory=aiworker
+StateDirectoryMode=0700
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=%S/aiworker
+NoNewPrivileges=true
 
 [Install]
 WantedBy=default.target
 ```
 
-`--system` 形态把 `%h` 替换为 `/var/lib/aiworker`（或操作员显式指定的 home），`WantedBy` 改 `multi-user.target`。
+`--system` 形态使用 `/etc/aiworker/gateway.env`、`AIWORKER_HOME=/var/lib/aiworker`、`StateDirectory=aiworker`、`User=root` / `Group=root`，`WantedBy` 改 `multi-user.target`。
 
 幂等：同一 `--out` 路径反复跑产生**字节级一致**的 unit 内容；只有 `aiworker install systemd --dry-run` 输出与最终写盘一致，才算合法实现。
 
+远程 PATH / version 诊断：
+
+- systemd unit 的 `ExecStart` 使用绝对路径或 `%h` 展开路径，不依赖远程
+  `ssh` / `aissh exec` shell 的 PATH。远程 shell 里的 `which aiworker`
+  可能与 systemd 实际运行的 binary 不一致。
+- 查 systemd 部署版本时，先从 `systemctl show ... --property=ExecStart`
+  读取 unit-visible `argv[]`。当前 direct-CLI unit 可运行 `path=` 的
+  `--version`；portable ExecStart 如果经 `bun <aiworker.js>` 启动，则以
+  `argv[]` 完整命令为准，不要误把 `bun --version` 当成 AIWorker 版本。
+- 不要把 env 文件或 `systemctl show -p Environment ...` 输出贴进诊断记录；
+  它们可能包含 `AIWORKER_MASTER_KEY`、`INTERNAL_SHARED_SECRET` 或其它 secret。
+- 需要稳定远程命令路径时，把 AIWorker CLI 本身（不是 `bun` 解释器）
+  symlink 到 `/usr/local/bin/aiworker`，再用 `/usr/local/bin/aiworker --version`。
+
+完整命令见 [`docs/deployment.md` § 远程 PATH / 版本诊断](./deployment.md#远程-path--版本诊断)。
+
 注意：
 
-- unit 模板里的 `ExecStart=%h/.bun/bin/aiworker` 假设 `aiworker` 已经 `bun install -g`（Stage A）或 `bun install -g @zonease/aiworker-cli`（Stage B 之后）。FEAT-027 npm publish 完成后，`aiworker install systemd` 会按 `which aiworker` 动态探测路径写入。
-- `--system` 形态需要明确知道在做什么——服务以 root 跑、数据写到 root home。新手优先 `--user`。
+- unit 模板的 `ExecStart` 默认从当前运行的 CLI 解析：Bun/npm global 安装通常渲染为绝对 `bun <aiworker.js> gateway start` 或 standalone `aiworker gateway start`。不要假设 `/root/.bun/bin/aiworker`；确实要固定旧路径时用 `--exec-start '/root/.bun/bin/aiworker gateway start'` 显式选择。
+- unit 只引用 `EnvironmentFile`，不会把 secret 写进 unit。首次运行按安装输出创建 `gateway.env`：`AIWORKER_MASTER_KEY=$(openssl rand -hex 32)` 和 `INTERNAL_SHARED_SECRET=$(openssl rand -base64 24)`，文件权限 `0600`。
+- 写入变更后默认执行 `daemon-reload + enable --now`。这会启动未运行的服务，但不会重启已在运行的服务；升级/重装时按输出提示在维护窗口执行 `systemctl [--user] restart aiworker-gateway`。
+- `--system` 形态需要明确知道在做什么——服务以 root 跑、数据写到 `/var/lib/aiworker`。新手优先 `--user`。
 - worker 进程目前不提供 systemd 模板（worker 通常按需手工 `aiworker serve` 或走 docker fast-launch；gateway 是常驻的"那一个"）。
 
 ---

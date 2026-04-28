@@ -20,8 +20,27 @@ export interface AimState {
   defaultWorkerId?: string
 }
 
-// FEAT-030: 默认 gateway 端口 9218（与 apps/gateway/src/config.ts 对齐）
-const DEFAULT_GATEWAY_URL = 'ws://localhost:9218'
+// FEAT-030: default gateway port 9218 (aligned with packages/gateway/src/config.ts).
+export const DEFAULT_GATEWAY_URL = 'ws://localhost:9218/ws'
+
+export function gatewayWsUrlForLocalPort(port: number): string {
+  return `ws://localhost:${port}/ws`
+}
+
+export function normalizeGatewayWsUrl(value: string): string {
+  try {
+    const url = new URL(value)
+    if ((url.protocol === 'ws:' || url.protocol === 'wss:')
+      && (url.pathname === '' || url.pathname === '/')) {
+      url.pathname = '/ws'
+      return url.toString()
+    }
+  }
+  catch {
+    // Preserve the caller's value so WebSocket construction reports the error.
+  }
+  return value
+}
 
 /** state 文件路径：`<AIWORKER_HOME>/aim.json`。 */
 export function resolveAimStatePath(): string {
@@ -89,7 +108,10 @@ export async function loadAimState(): Promise<AimState> {
   if (!isAimState(parsed))
     throw new Error(`aim.json 结构不符合 AimState (${filePath})`)
 
-  return parsed
+  return {
+    ...parsed,
+    gatewayUrl: normalizeGatewayWsUrl(parsed.gatewayUrl),
+  }
 }
 
 /**
@@ -123,8 +145,11 @@ export async function patchAimState(patch: Partial<AimState>): Promise<AimState>
   for (const [k, v] of Object.entries(patch)) {
     if (v === undefined)
       continue
+    const normalized = k === 'gatewayUrl' && typeof v === 'string'
+      ? normalizeGatewayWsUrl(v)
+      : v
     // @ts-expect-error — 按字段名直写；上游已用 Partial<AimState> 约束。
-    next[k] = v
+    next[k] = normalized
   }
   await saveAimState(next)
   return next

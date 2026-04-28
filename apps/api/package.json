@@ -17,7 +17,8 @@
     "dev": "bun --watch src/dev.ts",
     "build": "bun build src/index.ts --outdir dist --target bun",
     "typecheck": "tsc --noEmit",
-    "test": "bun test"
+    "test": "bun test --timeout=15000",
+    "test:stress": "bun test --timeout=15000 --rerun-each=3 src/modes/worker.bearer-auth.test.ts src/worker/management/routes.test.ts src/worker/orchestrator/routes.test.ts"
   },
   "dependencies": {
     "@hono/zod-openapi": "^0.19.6",

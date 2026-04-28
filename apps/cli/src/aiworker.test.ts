@@ -1,3 +1,9 @@
+import { existsSync, rmSync } from 'node:fs'
+import { mkdtemp } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import process from 'node:process'
+
 import { describe, expect, it } from 'bun:test'
 
 import { cli, preprocessArgv } from './aiworker'
@@ -53,6 +59,55 @@ const EXPECTED_COMMANDS = [
   'logs',
   'install systemd',
 ] as const
+
+const cliEntry = path.resolve(import.meta.dir, 'aiworker.ts')
+
+function isolatedEnv(home: string): Record<string, string> {
+  const env: Record<string, string> = {}
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value !== undefined)
+      env[key] = value
+  }
+  env.HOME = home
+  env.AIWORKER_HOME = path.join(home, '.aiworker')
+  env.NO_COLOR = '1'
+  delete env.AIWORKER_MASTER_KEY
+  delete env.INTERNAL_SHARED_SECRET
+  delete env.WORKER_DB_PATH
+  delete env.WORKER_DATA_ROOT
+  delete env.WORKER_MIGRATIONS_FOLDER
+  return env
+}
+
+async function runCli(args: string[]): Promise<{
+  aiworkerHome: string
+  exitCode: number
+  output: string
+  root: string
+}> {
+  const root = await mkdtemp(path.join(tmpdir(), 'aiworker-cli-args-'))
+  const home = path.join(root, 'home')
+  const aiworkerHome = path.join(home, '.aiworker')
+  const env = isolatedEnv(home)
+  const proc = Bun.spawnSync([process.execPath, cliEntry, ...args], {
+    cwd: root,
+    env,
+    stderr: 'pipe',
+    stdout: 'pipe',
+  })
+  const stdout = new TextDecoder().decode(proc.stdout)
+  const stderr = new TextDecoder().decode(proc.stderr)
+  return {
+    aiworkerHome,
+    exitCode: proc.exitCode,
+    output: `${stdout}\n${stderr}`,
+    root,
+  }
+}
+
+function cleanup(result: { root: string }): void {
+  rmSync(result.root, { recursive: true, force: true })
+}
 
 describe('aiworker cli registration', () => {
   it('注册了预期数量的命令（漏注册即 fail）', () => {
@@ -164,5 +219,100 @@ describe('preprocessArgv', () => {
       '/path/to/aiworker.ts',
       'init',
     ])
+  })
+})
+
+describe('aiworker malformed argv handling', () => {
+  it('missing command args fail without a raw CAC stack trace or bootstrap side effects', async () => {
+    const result = await runCli(['fleet', 'info'])
+    try {
+      expect(result.exitCode).toBe(2)
+      expect(result.output).toContain('missing required args for command')
+      expect(result.output).not.toContain('node_modules/.bun/cac')
+      expect(result.output).not.toContain('at checkRequiredArgs')
+      expect(existsSync(path.join(result.aiworkerHome, '.env'))).toBe(false)
+    }
+    finally {
+      cleanup(result)
+    }
+  })
+
+  it('unknown options fail without a raw CAC stack trace or bootstrap side effects', async () => {
+    const result = await runCli(['fleet', 'list', '--bad'])
+    try {
+      expect(result.exitCode).toBe(2)
+      expect(result.output).toContain('Unknown option')
+      expect(result.output).not.toContain('node_modules/.bun/cac')
+      expect(result.output).not.toContain('at checkUnknownOptions')
+      expect(existsSync(path.join(result.aiworkerHome, '.env'))).toBe(false)
+    }
+    finally {
+      cleanup(result)
+    }
+  })
+
+  it('unknown commands fail explicitly', async () => {
+    const result = await runCli(['__nope'])
+    try {
+      expect(result.exitCode).toBe(2)
+      expect(result.output).toContain('Unknown command: __nope')
+      expect(existsSync(path.join(result.aiworkerHome, '.env'))).toBe(false)
+    }
+    finally {
+      cleanup(result)
+    }
+  })
+
+  it('rejects malformed numeric options before remote gateway calls', async () => {
+    const result = await runCli(['chat', 'w_test', 'hello', '--timeout-ms', 'nope'])
+    try {
+      expect(result.exitCode).toBe(2)
+      expect(result.output).toContain('--timeout-ms must be a finite number')
+      expect(result.output).not.toContain('WS 连接错误')
+      expect(result.output).not.toContain('Failed to connect')
+      expect(existsSync(path.join(result.aiworkerHome, '.env'))).toBe(false)
+    }
+    finally {
+      cleanup(result)
+    }
+  })
+
+  it('rejects malformed port options before worker server bootstrap', async () => {
+    const result = await runCli(['serve', '--port', 'nope'])
+    try {
+      expect(result.exitCode).toBe(2)
+      expect(result.output).toContain('--port must be a finite number')
+      expect(result.output).not.toContain('worker.db ready')
+      expect(result.output).not.toContain('listening on :NaN')
+      expect(existsSync(path.join(result.aiworkerHome, '.env'))).toBe(false)
+    }
+    finally {
+      cleanup(result)
+    }
+  })
+
+  it('documents config-show bootstrap behavior in command help', async () => {
+    const result = await runCli(['--help'])
+    try {
+      expect(result.exitCode).toBe(0)
+      expect(result.output).toContain('bootstraps local worker state if missing')
+      expect(existsSync(path.join(result.aiworkerHome, '.env'))).toBe(false)
+    }
+    finally {
+      cleanup(result)
+    }
+  })
+
+  it('clarifies gateway status is detached-daemon only in command help', async () => {
+    const result = await runCli(['--help'])
+    try {
+      expect(result.exitCode).toBe(0)
+      expect(result.output).toContain('detached gateway daemon')
+      expect(result.output).toContain('foreground/systemd')
+      expect(existsSync(path.join(result.aiworkerHome, '.env'))).toBe(false)
+    }
+    finally {
+      cleanup(result)
+    }
   })
 })

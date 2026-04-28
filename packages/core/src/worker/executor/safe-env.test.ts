@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 
-import { buildSafeChildEnv } from './safe-env'
+import { buildSafeChildEnv, buildSafeGitEnv } from './safe-env'
 
 describe('buildSafeChildEnv', () => {
   it('passes through canonical locale + shell context vars', () => {
@@ -108,5 +108,35 @@ describe('buildSafeChildEnv', () => {
       HOME: undefined,
     } as NodeJS.ProcessEnv)
     expect(env).toEqual({ PATH: '/usr/bin' })
+  })
+})
+
+describe('buildSafeGitEnv', () => {
+  it('keeps git/ssh basics while stripping worker and generic secret env', () => {
+    const env = buildSafeGitEnv({
+      PATH: '/usr/bin',
+      HOME: '/home/worker',
+      XDG_CONFIG_HOME: '/home/worker/.config',
+      SSH_AUTH_SOCK: '/tmp/ssh-agent.sock',
+      GIT_AUTHOR_NAME: 'AIWorker',
+      GIT_AUTHOR_EMAIL: 'worker@example.test',
+      GIT_SSH_COMMAND: 'ssh -i /tmp/key',
+      AIWORKER_MASTER_KEY: 'deadbeef'.repeat(8),
+      AIWORKER_JOIN_TOKEN: 'join-token',
+      INTERNAL_SHARED_SECRET: 'shared-secret',
+      WORKER_DB_PATH: '/var/lib/aiworker/worker.db',
+      GITHUB_TOKEN: 'gh-token',
+      ANTHROPIC_API_KEY: 'sk-ant-redacted',
+      RANDOM_INTERNAL_VAR: 'drop-me',
+    })
+    expect(env).toEqual({
+      PATH: '/usr/bin',
+      HOME: '/home/worker',
+      XDG_CONFIG_HOME: '/home/worker/.config',
+      SSH_AUTH_SOCK: '/tmp/ssh-agent.sock',
+      GIT_AUTHOR_NAME: 'AIWorker',
+      GIT_AUTHOR_EMAIL: 'worker@example.test',
+      GIT_SSH_COMMAND: 'ssh -i /tmp/key',
+    })
   })
 })

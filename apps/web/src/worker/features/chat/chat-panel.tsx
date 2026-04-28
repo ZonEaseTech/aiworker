@@ -103,8 +103,11 @@ export function ChatPanel() {
   }
 
   return (
-    <div className="grid h-[calc(100vh-200px)] min-h-[420px] grid-cols-[280px_1fr] gap-4">
-      <aside className="flex min-h-0 flex-col gap-2 overflow-y-auto rounded-md border bg-card p-3">
+    <div
+      data-testid="worker-chat-panel"
+      className="grid min-w-0 grid-cols-1 gap-4 lg:h-[calc(100vh-200px)] lg:min-h-[420px] lg:grid-cols-[280px_1fr]"
+    >
+      <aside className="flex max-h-56 min-h-0 min-w-0 flex-col gap-2 overflow-y-auto rounded-md border bg-card p-3 lg:max-h-none">
         <h2 className="px-1 text-sm font-semibold">Conversations</h2>
         {conversationsQ.isLoading
           ? <Skeleton className="h-20" />
@@ -125,12 +128,12 @@ export function ChatPanel() {
                               : 'hover:bg-accent/50'
                           }`}
                         >
-                          <span className="font-mono text-[11px]">
+                          <span className="min-w-0 truncate font-mono text-[11px]">
                             {c.channel}
                             :
                             {c.chatId}
                           </span>
-                          <span className="text-[10px] text-muted-foreground">
+                          <span className="truncate text-[10px] text-muted-foreground">
                             {new Date(c.lastActiveAt).toLocaleString()}
                           </span>
                         </button>
@@ -140,11 +143,11 @@ export function ChatPanel() {
                 )}
       </aside>
 
-      <section className="flex min-h-0 flex-col gap-3 rounded-md border bg-card p-4">
-        <div className="flex flex-1 flex-col gap-2 overflow-y-auto">
+      <section className="flex min-h-[420px] min-w-0 flex-col gap-3 rounded-md border bg-card p-3 sm:p-4 lg:min-h-0">
+        <div className="flex min-w-0 flex-1 flex-col gap-2 overflow-y-auto">
           {!activeId
             ? (
-                <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                <p className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground sm:p-6">
                   发一条消息会创建新会话。
                 </p>
               )
@@ -160,7 +163,7 @@ export function ChatPanel() {
                 : (messagesQ.data?.messages ?? []).map(m => (
                     <div
                       key={m.id}
-                      className={`max-w-[80%] rounded-md p-3 text-sm ${
+                      className={`max-w-[90%] rounded-md p-3 text-sm sm:max-w-[80%] ${
                         m.role === 'user'
                           ? 'self-end bg-primary text-primary-foreground'
                           : 'self-start bg-muted'
@@ -176,7 +179,7 @@ export function ChatPanel() {
                   ))}
 
           {streaming && streaming.text.length > 0 && (
-            <div className="max-w-[80%] self-start rounded-md bg-muted p-3 text-sm">
+            <div className="max-w-[90%] self-start rounded-md bg-muted p-3 text-sm sm:max-w-[80%]">
               <p className="whitespace-pre-wrap break-words">{streaming.text}</p>
               {!streaming.done && (
                 <p className="mt-1 text-[10px] text-muted-foreground">
@@ -195,7 +198,7 @@ export function ChatPanel() {
         )}
 
         <form
-          className="flex gap-2"
+          className="flex flex-col gap-2 sm:flex-row"
           onSubmit={(e) => {
             e.preventDefault()
             void send()
@@ -204,7 +207,7 @@ export function ChatPanel() {
           <label htmlFor={promptId} className="sr-only">Prompt</label>
           <textarea
             id={promptId}
-            className="min-h-[60px] flex-1 resize-none rounded-md border bg-background px-3 py-2 text-sm"
+            className="min-h-[60px] min-w-0 flex-1 resize-none rounded-md border bg-background px-3 py-2 text-sm"
             placeholder="给 worker 发一条消息（Cmd/Ctrl + Enter 发送）"
             value={prompt}
             onChange={e => setPrompt(e.target.value)}
@@ -215,7 +218,11 @@ export function ChatPanel() {
               }
             }}
           />
-          <Button type="submit" disabled={submit.isPending || prompt.trim().length === 0}>
+          <Button
+            type="submit"
+            className="w-full sm:w-auto"
+            disabled={submit.isPending || prompt.trim().length === 0}
+          >
             {submit.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
             发送
           </Button>

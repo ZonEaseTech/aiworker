@@ -32,7 +32,7 @@ export function AuditList() {
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Audit log</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="break-words text-sm text-muted-foreground">
           fleet.db
           {' '}
           <code className="rounded bg-muted px-1 py-0.5 font-mono">audit_events</code>
@@ -118,8 +118,8 @@ function FilterBar({
   onWorkerIdChange: (v: string) => void
 }) {
   return (
-    <div className="flex flex-wrap items-end gap-3">
-      <div className="grid gap-1">
+    <div className="grid gap-3 sm:flex sm:flex-wrap sm:items-end">
+      <div className="grid w-full gap-1 sm:w-64">
         <Label htmlFor="audit-action">Action prefix</Label>
         <Input
           id="audit-action"
@@ -128,10 +128,10 @@ function FilterBar({
           onChange={e => onActionChange(e.target.value)}
           spellCheck={false}
           autoComplete="off"
-          className="w-64"
+          className="w-full"
         />
       </div>
-      <div className="grid gap-1">
+      <div className="grid w-full gap-1 sm:w-64">
         <Label htmlFor="audit-worker">Worker id (exact)</Label>
         <Input
           id="audit-worker"
@@ -140,17 +140,19 @@ function FilterBar({
           onChange={e => onWorkerIdChange(e.target.value)}
           spellCheck={false}
           autoComplete="off"
-          className="w-64"
+          className="w-full"
         />
       </div>
-      <div className="flex items-center gap-1.5 pb-1.5 text-xs text-muted-foreground">
-        <Filter className="size-3.5" />
-        Filters apply on debounce. Action prefix is a SQL
-        {' '}
-        <code className="rounded bg-muted px-1 py-0.5 font-mono">LIKE</code>
-        ;
-        {' '}
-        non-alphanumeric characters fall back to exact match.
+      <div className="flex min-w-0 items-start gap-1.5 pb-1.5 text-xs text-muted-foreground sm:items-center">
+        <Filter className="mt-0.5 size-3.5 shrink-0 sm:mt-0" />
+        <span className="min-w-0 break-words">
+          Filters apply on debounce. Action prefix is a SQL
+          {' '}
+          <code className="rounded bg-muted px-1 py-0.5 font-mono">LIKE</code>
+          ;
+          {' '}
+          non-alphanumeric characters fall back to exact match.
+        </span>
       </div>
     </div>
   )
@@ -201,7 +203,7 @@ function AuditRow({ event }: { event: AuditEventRecord }) {
 
 function EmptyState() {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed bg-card/50 p-12 text-center">
+    <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed bg-card/50 p-6 text-center sm:p-12">
       <FileText className="size-10 text-muted-foreground" />
       <p className="text-sm text-muted-foreground">
         No audit events match the current filters.

@@ -156,16 +156,28 @@ function PendingRow({
 
 function EmptyState() {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed bg-card/50 p-12 text-center">
+    <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed bg-card/50 p-6 text-center sm:p-12">
       <Inbox className="size-10 text-muted-foreground" />
       <div className="space-y-1">
         <h2 className="text-lg font-semibold">No pending enrollments</h2>
         <p className="text-sm text-muted-foreground">
-          Workers running
+          Workers started with
           {' '}
-          <code className="rounded bg-muted px-1 py-0.5 font-mono">aiworker enroll otp</code>
+          <code className="rounded bg-muted px-1 py-0.5 font-mono">aiworker serve</code>
           {' '}
-          will show up here for approval.
+          and
+          {' '}
+          <code className="rounded bg-muted px-1 py-0.5 font-mono">AIWORKER_GATEWAY_URL</code>
+          {' '}
+          set will request an OTP here. Use
+          {' '}
+          <code className="rounded bg-muted px-1 py-0.5 font-mono">aiworker enroll list</code>
+          {' '}
+          and
+          {' '}
+          <code className="rounded bg-muted px-1 py-0.5 font-mono">aiworker enroll approve &lt;otp&gt;</code>
+          {' '}
+          to review and approve them.
         </p>
       </div>
     </div>
