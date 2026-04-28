@@ -19,6 +19,15 @@ async function collect(iter: AsyncIterable<AgentEvent>): Promise<AgentEvent[]> {
   return out
 }
 
+async function readTrace(file: string): Promise<Array<Record<string, unknown>>> {
+  const text = await fs.readFile(file, 'utf8')
+  return text
+    .trim()
+    .split('\n')
+    .filter(Boolean)
+    .map(line => JSON.parse(line) as Record<string, unknown>)
+}
+
 describe('CodexExecutor — smoke over stub app-server', () => {
   let workspace: string
 
@@ -30,14 +39,18 @@ describe('CodexExecutor — smoke over stub app-server', () => {
     await fs.rm(workspace, { recursive: true, force: true })
   })
 
-  function makeExecutor(stubProtocol: 'legacy' | 'current' = 'legacy') {
+  function makeExecutor(stubProtocol: 'legacy' | 'current' = 'legacy', traceFile?: string) {
     return new CodexExecutor({
       timeoutMs: 10_000,
       resolveBinary: async () => STUB_PATH,
       spawn: (_cmd, args, opts) =>
         spawn('node', [STUB_PATH, ...args], {
           cwd: opts.cwd,
-          env: { ...opts.env, CODEX_STUB_PROTOCOL: stubProtocol },
+          env: {
+            ...opts.env,
+            CODEX_STUB_PROTOCOL: stubProtocol,
+            ...(traceFile ? { CODEX_STUB_TRACE_FILE: traceFile } : {}),
+          },
           stdio: ['pipe', 'pipe', 'pipe'],
         }),
     })
@@ -88,6 +101,51 @@ describe('CodexExecutor — smoke over stub app-server', () => {
       usage: { inputTokens: 12, outputTokens: 9 },
     })
     expect(events.at(-1)).toEqual({ type: 'finish', reason: 'stop' })
+  }, 15_000)
+
+  it('sends the worker history window to legacy newTurn', async () => {
+    const traceFile = path.join(workspace, 'codex-trace.jsonl')
+    const executor = makeExecutor('legacy', traceFile)
+    await collect(executor.run({
+      messages: [
+        { role: 'system', content: 'system rules' },
+        { role: 'user', content: 'Remember MEMKEY-774-CERULEAN.' },
+        { role: 'assistant', content: 'STORED' },
+        { role: 'user', content: 'What did I ask you to remember?' },
+      ],
+      workspacePath: workspace,
+    }))
+
+    const trace = await readTrace(traceFile)
+    const newTurn = trace.find(msg => msg.method === 'newTurn')
+    const params = newTurn?.params as { prompt?: string } | undefined
+    expect(params?.prompt).toContain('<System>\nsystem rules\n</System>')
+    expect(params?.prompt).toContain('<User>\nRemember MEMKEY-774-CERULEAN.\n</User>')
+    expect(params?.prompt).toContain('<Assistant>\nSTORED\n</Assistant>')
+    expect(params?.prompt).toContain('<User>\nWhat did I ask you to remember?\n</User>')
+  }, 15_000)
+
+  it('sends the worker history window to current turn/start', async () => {
+    const traceFile = path.join(workspace, 'codex-trace.jsonl')
+    const executor = makeExecutor('current', traceFile)
+    await collect(executor.run({
+      messages: [
+        { role: 'system', content: 'system rules' },
+        { role: 'user', content: 'Remember MEMKEY-774-CERULEAN.' },
+        { role: 'assistant', content: 'STORED' },
+        { role: 'user', content: 'What did I ask you to remember?' },
+      ],
+      workspacePath: workspace,
+    }))
+
+    const trace = await readTrace(traceFile)
+    const turnStart = trace.find(msg => msg.method === 'turn/start')
+    const params = turnStart?.params as { input?: Array<{ text?: string }> } | undefined
+    const prompt = params?.input?.[0]?.text
+    expect(prompt).toContain('<System>\nsystem rules\n</System>')
+    expect(prompt).toContain('<User>\nRemember MEMKEY-774-CERULEAN.\n</User>')
+    expect(prompt).toContain('<Assistant>\nSTORED\n</Assistant>')
+    expect(prompt).toContain('<User>\nWhat did I ask you to remember?\n</User>')
   }, 15_000)
 
   it('emits error + finish:error when no user message is present', async () => {

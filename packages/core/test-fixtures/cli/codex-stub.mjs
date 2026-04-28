@@ -11,12 +11,14 @@
 // - codex/event/token_usage
 // - codex/event/stop
 
+import fs from 'node:fs'
 import process from 'node:process'
 import readline from 'node:readline'
 
 const argv = process.argv.slice(2)
 const wantsAppServer = argv.includes('app-server')
 const protocol = process.env.CODEX_STUB_PROTOCOL ?? 'legacy'
+const traceFile = process.env.CODEX_STUB_TRACE_FILE
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -25,6 +27,12 @@ const rl = readline.createInterface({
 
 function write(msg) {
   process.stdout.write(`${JSON.stringify(msg)}\n`)
+}
+
+function trace(msg) {
+  if (!traceFile)
+    return
+  fs.appendFileSync(traceFile, `${JSON.stringify(msg)}\n`)
 }
 
 function emitNotification(method, params) {
@@ -109,6 +117,7 @@ rl.on('line', (line) => {
     // Tests can assert the executor actually requested app-server mode.
     process.stderr.write(`missing app-server subcommand: argv=${JSON.stringify(argv)}\n`)
   }
+  trace(msg)
   if (msg.method === 'initialize') {
     write({
       jsonrpc: '2.0',

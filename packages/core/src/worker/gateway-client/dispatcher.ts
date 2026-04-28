@@ -165,7 +165,12 @@ export class GatewayDispatcher {
       this.replyError(id, 'worker_mismatch', `chat.send targeted workerId=${workerId}, this node is ${this.deps.workerId}`)
       return
     }
-    const content = String(params.content)
+    const resetCommand = parseSessionResetCommand(String(params.content))
+    const content = resetCommand?.body && resetCommand.body.length > 0
+      ? resetCommand.body
+      : resetCommand
+        ? 'A new session has started. Reply briefly to confirm.'
+        : String(params.content)
     const conversationIdHint = typeof params.conversationId === 'string' ? params.conversationId : undefined
 
     // chatId 映射约定：
@@ -187,6 +192,7 @@ export class GatewayDispatcher {
       receivedAt: new Date().toISOString(),
       raw: {
         source: 'gateway',
+        ...(resetCommand ? { sessionReset: true, resetCommand: resetCommand.command } : {}),
         ...(params.metadata !== undefined ? { metadata: params.metadata } : {}),
       },
     }
@@ -384,4 +390,16 @@ export class GatewayDispatcher {
       error: details === undefined ? { code, message } : { code, message, details },
     })
   }
+}
+
+function parseSessionResetCommand(content: string): { command: '/new' | '/reset', body: string } | null {
+  const trimmed = content.trim()
+  const lower = trimmed.toLowerCase()
+  for (const command of ['/new', '/reset'] as const) {
+    if (lower === command)
+      return { command, body: '' }
+    if (lower.startsWith(command) && /\s/.test(trimmed.charAt(command.length)))
+      return { command, body: trimmed.slice(command.length).trimStart() }
+  }
+  return null
 }

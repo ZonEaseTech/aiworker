@@ -16,6 +16,7 @@ import path from 'node:path'
 
 import { closeWorkerDb, conversations, getWorkerDb, initWorkerDb, messages, runWorkerMigrations } from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
+import { eq } from 'drizzle-orm'
 import { WorkspaceManager as RealWorkspaceManager } from '../executor/workspace'
 import { ApprovalStore } from './approvals'
 import { ProcessManager } from './process-manager'
@@ -210,5 +211,40 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
     const runMessages = executor.captured[executor.captured.length - 1]!
     // 1 system + 3 seeded + 1 ingested user = 5
     expect(runMessages.length).toBe(5)
+  })
+
+  it('gateway reset closes the current conversation and starts fresh on the same chat id', async () => {
+    const executor = capturingExecutor()
+    const orch = new Orchestrator({
+      config: buildConfig(),
+      brain: stubBrain(),
+      executor,
+      bus: silentBus(),
+      workerId: 'w_history_test',
+      workspaces,
+      processes,
+      approvals: new ApprovalStore(),
+    })
+
+    await orch.ingest(envelope('remember before reset'))
+    await orch.ingest({
+      ...envelope('after reset'),
+      raw: { source: 'gateway', sessionReset: true, resetCommand: '/reset' },
+    })
+
+    const db = getWorkerDb()
+    const rows = db.select().from(conversations).where(eq(conversations.chatId, 'chat-history')).all()
+    expect(rows.length).toBe(2)
+    const closed = rows.find(row => row.status === 'closed')
+    const open = rows.find(row => row.status === 'open')
+    expect(closed).toBeDefined()
+    expect(open).toBeDefined()
+    expect(open!.id).not.toBe(closed!.id)
+
+    const oldMessages = db.select().from(messages).where(eq(messages.conversationId, closed!.id)).all()
+    const newMessages = db.select().from(messages).where(eq(messages.conversationId, open!.id)).all()
+    expect(oldMessages.some(row => row.content === 'remember before reset')).toBe(true)
+    expect(newMessages.some(row => row.content === 'after reset')).toBe(true)
+    expect(newMessages.some(row => row.content === 'remember before reset')).toBe(false)
   })
 })

@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-04-28 10:50
+> Updated: 2026-04-28 11:51
 
 ## Usage
 
@@ -55,3 +55,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-024 Phase A hardening — project-scope CLI placement**](PLAN-024.md) `2026-04-28`
 - [x] [**PLAN-025 Release readiness hardening for 0.4.0**](PLAN-025.md) `2026-04-28`
 - [x] [**PLAN-026 Codex app-server protocol compatibility for 0.4.1**](PLAN-026.md) `2026-04-28`
+- [x] [**PLAN-027 Codex session continuity and reset controls**](PLAN-027.md) `2026-04-28`

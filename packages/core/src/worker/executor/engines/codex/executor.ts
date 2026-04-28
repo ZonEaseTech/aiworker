@@ -68,8 +68,10 @@ export interface CodexExecutorOptions {
  * legacy `thread_start/newTurn` and current `thread/start/turn/start`
  * protocol variants.
  *
- * Multi-turn `thread_fork` resume is explicitly out of scope (tracked P3) —
- * every run starts a fresh thread.
+ * Worker-owned conversation continuity comes from `AgentRunInput.messages`.
+ * Native app-server thread resume is still out of scope; every process starts a
+ * fresh Codex thread, but the full worker history window is rendered into the
+ * turn prompt so worker.db remains the source of truth.
  */
 export class CodexExecutor implements ExecutorProvider {
   readonly name = 'codex'
@@ -91,12 +93,12 @@ export class CodexExecutor implements ExecutorProvider {
   }
 
   private async* runIterable(input: AgentRunInput): AsyncGenerator<AgentEvent> {
-    const latestUser = lastUserMessage(input.messages)
-    if (!latestUser) {
+    if (!hasUserMessage(input.messages)) {
       yield { type: 'error', error: 'Codex executor requires a user message' }
       yield { type: 'finish', reason: 'error' }
       return
     }
+    const prompt = renderCodexPrompt(input.messages)
 
     const workspacePath = input.workspacePath ?? this.options.fallbackWorkspacePath ?? process.cwd()
 
@@ -186,7 +188,7 @@ export class CodexExecutor implements ExecutorProvider {
       if (thread.protocol === 'legacy') {
         const turnPromise = peer.request<CodexNewTurnResult>('newTurn', {
           threadId: thread.threadId,
-          prompt: latestUser,
+          prompt,
         })
         turnPromise.then(
           () => queue.close({ kind: 'finish' }),
@@ -196,7 +198,7 @@ export class CodexExecutor implements ExecutorProvider {
       else {
         await peer.request<CodexCurrentTurnStartResult>('turn/start', {
           threadId: thread.threadId,
-          input: [{ type: 'text', text: latestUser }],
+          input: [{ type: 'text', text: prompt }],
         })
       }
 
@@ -390,11 +392,22 @@ function safeEndStdin(child: ChildProcessWithoutNullStreams): void {
   }
 }
 
-function lastUserMessage(messages: AgentRunInput['messages']): string | null {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const m = messages[i]
-    if (m && m.role === 'user' && typeof m.content === 'string' && m.content.length > 0)
-      return m.content
-  }
-  return null
+function hasUserMessage(messages: AgentRunInput['messages']): boolean {
+  return messages.some(m => m.role === 'user' && m.content.trim().length > 0)
+}
+
+function renderCodexPrompt(messages: AgentRunInput['messages']): string {
+  return messages
+    .filter(m => m.content.trim().length > 0)
+    .map((m) => {
+      const role = m.role === 'system'
+        ? 'System'
+        : m.role === 'assistant'
+          ? 'Assistant'
+          : m.role === 'tool'
+            ? 'Tool'
+            : 'User'
+      return `<${role}>\n${m.content}\n</${role}>`
+    })
+    .join('\n\n')
 }

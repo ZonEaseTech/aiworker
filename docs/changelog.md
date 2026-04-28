@@ -1,5 +1,23 @@
 # AIWorker Changelog
 
+## 2026-04-28 11:51 [BUG-P1] BUG-025 — Codex session continuity and reset controls
+
+Release target: `@zonease/aiworker-cli@0.4.2`.
+
+Fixed the Codex worker "fresh session every turn" behavior found during
+test-server fleet e2e:
+
+- Codex executor now sends the full worker history window to both legacy
+  `newTurn` and current `turn/start`, so worker.db remains the authoritative
+  conversation source.
+- Gateway `chat.send` now recognizes `/new` and `/reset`; reset commands close
+  the current worker conversation for the same chat key and start a fresh one.
+- Added focused tests for Codex request payload history and reset conversation
+  rotation.
+- Real fleet e2e passed after the final build: same `conversationId` remembered
+  and returned `MEMKEY-PLAN027B-CERULEAN`; `/reset ...` then returned
+  `UNKNOWN`.
+
 ## 2026-04-28 10:40 [BUG-P1] BUG-024 — Codex app-server protocol compatibility
 
 Fixed the Codex executor failure found during the `v0.4.0` release e2e test

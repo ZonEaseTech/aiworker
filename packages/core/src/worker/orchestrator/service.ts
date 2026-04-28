@@ -46,6 +46,8 @@ interface OrchestratorDeps {
   approvals: ApprovalStore
 }
 
+type ConversationRow = typeof conversations.$inferSelect
+
 /** `runTool` 输入。`taskId` / `toolCallId` 用作 ApprovalStore 的 key。 */
 export interface RunToolInput {
   taskId: string
@@ -205,10 +207,14 @@ export class Orchestrator {
   }
 
   private async resolveConversation(envelope: Envelope): Promise<ConversationState> {
-    const db = getWorkerDb()
     const existing = await findOpenConversation(envelope)
     if (!existing)
       return this.createConversation(envelope)
+
+    if (isGatewaySessionReset(envelope)) {
+      this.closeConversation(existing)
+      return this.createConversation(envelope)
+    }
 
     const existingWorkspace = await this.provisionWorkspace(existing.id)
     const recent = await loadRecentMessages(existing.id)
@@ -225,6 +231,12 @@ export class Orchestrator {
     if (decision.continue)
       return rowToState(existing)
 
+    this.closeConversation(existing)
+    return this.createConversation(envelope)
+  }
+
+  private closeConversation(existing: ConversationRow): void {
+    const db = getWorkerDb()
     const closedAt = new Date().toISOString()
     db.update(conversations).set({ status: 'closed', closedAt }).where(eq(conversations.id, existing.id)).run()
     // Defer workspace dispose behind the same group key so any in-flight run
@@ -243,7 +255,6 @@ export class Orchestrator {
       }),
       job: () => this.disposeWorkspace(closedId),
     }).catch(err => consola.warn(`[orchestrator] dispose workspace job failed: ${String(err)}`))
-    return this.createConversation(envelope)
   }
 
   /**
@@ -475,6 +486,13 @@ function taskIdFromEnvelope(envelope: Envelope): string | undefined {
     return undefined
   const taskId = (envelope.raw as Record<string, unknown>).taskId
   return typeof taskId === 'string' && taskId.length > 0 ? taskId : undefined
+}
+
+function isGatewaySessionReset(envelope: Envelope): boolean {
+  if (!envelope.raw || typeof envelope.raw !== 'object' || Array.isArray(envelope.raw))
+    return false
+  const raw = envelope.raw as Record<string, unknown>
+  return raw.source === 'gateway' && raw.sessionReset === true
 }
 
 function rowToState(row: typeof conversations.$inferSelect): ConversationState {
