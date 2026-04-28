@@ -6,7 +6,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
-import { ClaudeCodeExecutor } from './executor'
+import { buildBaseArgs, ClaudeCodeExecutor } from './executor'
 
 const STUB_PATH = path.resolve(
   import.meta.dirname,
@@ -76,6 +76,31 @@ describe('ClaudeCodeExecutor (stub CLI)', () => {
       expect(finish.reason).toBe('stop')
       expect(finish.usage?.inputTokens).toBe(8)
     }
+    expect(events).toContainEqual({
+      type: 'engine_binding',
+      engine: 'claude-code',
+      binding: { sessionId: 'sess_stub' },
+    })
+  })
+
+  it('passes a stored native session id through --resume', async () => {
+    let capturedArgs: string[] = []
+    const executor = new ClaudeCodeExecutor({
+      resolveClaudeBinary: async () => STUB_PATH,
+      spawn: (_cmd, args, opts): ChildProcessWithoutNullStreams => {
+        capturedArgs = args
+        return spawn(STUB_PATH, [], { cwd: opts.cwd, env: opts.env, stdio: ['pipe', 'pipe', 'pipe'] }) as ChildProcessWithoutNullStreams
+      },
+    })
+
+    await collect(executor.run({
+      messages: [{ role: 'user', content: 'read note' }],
+      workspacePath: workspace,
+      engineBinding: { sessionId: 'sess_existing' },
+    }))
+
+    expect(capturedArgs).toContain('--resume')
+    expect(capturedArgs).toContain('sess_existing')
   })
 
   it('yields error when workspacePath is missing', async () => {
@@ -107,5 +132,13 @@ describe('ClaudeCodeExecutor (stub CLI)', () => {
     const status = await executor.health()
     expect(status.status).toBe('healthy')
     expect(status.name).toBe('claude-code')
+  })
+})
+
+describe('buildBaseArgs', () => {
+  it('appends --resume when a native session id is provided', () => {
+    const args = buildBaseArgs(undefined, undefined, 'sess_1')
+    expect(args).toContain('--resume')
+    expect(args).toContain('sess_1')
   })
 })

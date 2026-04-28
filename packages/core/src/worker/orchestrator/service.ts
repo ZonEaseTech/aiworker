@@ -1,8 +1,10 @@
 import type {
+  AgentRunInput,
   BrainProvider,
   ChannelType,
   ChatMessage,
   ConversationState,
+  EngineSessionBinding,
   Envelope,
   ExecutorProvider,
   OrchestratorCompactionConfig,
@@ -15,7 +17,7 @@ import type { ApprovalDecision, ApprovalStore } from './approvals'
 import type { ProcessManager } from './process-manager'
 
 import { DEFAULT_MAX_HISTORY_MESSAGES } from '@zonease/aiworker-shared'
-import { agentTasks, conversations, getWorkerDb, messages, recordSessionCompaction, rotateSessionConversation, touchSessionEntry, upsertSessionEntry } from '@zonease/aiworker-storage-sqlite/worker'
+import { agentTasks, conversations, getSessionEntry, getWorkerDb, messages, recordSessionCompaction, rotateSessionConversation, touchSessionEntry, updateSessionEngineBinding, upsertSessionEntry } from '@zonease/aiworker-storage-sqlite/worker'
 
 import consola from 'consola'
 import { and, asc, desc, eq, gt } from 'drizzle-orm'
@@ -91,6 +93,7 @@ interface ExecutorTextResult {
   ok: boolean
   text: string
   error?: string
+  staleBindingCleared?: boolean
 }
 
 const DEFAULT_COMPACTION_MAX_SUMMARY_MESSAGES = 120
@@ -176,13 +179,27 @@ export class Orchestrator {
 
     const model = resolveExecutorModel(this.deps.config.executor)
     const taskId = taskIdFromEnvelope(envelope)
-    let runInput = {
+    const engine = this.deps.config.executor.engine
+    let runInput = this.buildAgentRunInput({
       messages: chatMessages,
-      ...(model ? { model } : {}),
-      ...(workspace ? { workspacePath: workspace.path } : {}),
+      model,
+      workspace,
       signal,
+      sessionKey,
+      engine,
+    })
+    let result = await this.collectAssistantText(runInput, activeConversation.id, taskId, notifyActivity, sessionKey)
+    if (!result.ok && result.staleBindingCleared === true && runInput.engineBinding !== undefined && result.text.length === 0) {
+      runInput = this.buildAgentRunInput({
+        messages: chatMessages,
+        model,
+        workspace,
+        signal,
+        sessionKey,
+        engine,
+      })
+      result = await this.collectAssistantText(runInput, activeConversation.id, taskId, notifyActivity, sessionKey)
     }
-    let result = await this.collectAssistantText(runInput, activeConversation.id, taskId, notifyActivity)
     if (!result.ok && this.isContextOverflowError(result.error)) {
       const retryCompaction = await this.maybeCompactConversation({
         conversation: activeConversation,
@@ -197,13 +214,26 @@ export class Orchestrator {
         systemPrompt = await this.buildSystemPrompt(activeConversation.summary ?? null)
         chatMessages = await this.buildRunContext(activeConversation.id, systemPrompt)
         touchSessionEntry(sessionKey, { contextTokens: estimateChatMessagesTokens(chatMessages) })
-        runInput = {
+        runInput = this.buildAgentRunInput({
           messages: chatMessages,
-          ...(model ? { model } : {}),
-          ...(workspace ? { workspacePath: workspace.path } : {}),
+          model,
+          workspace,
           signal,
+          sessionKey,
+          engine,
+        })
+        result = await this.collectAssistantText(runInput, activeConversation.id, taskId, notifyActivity, sessionKey)
+        if (!result.ok && result.staleBindingCleared === true && runInput.engineBinding !== undefined && result.text.length === 0) {
+          runInput = this.buildAgentRunInput({
+            messages: chatMessages,
+            model,
+            workspace,
+            signal,
+            sessionKey,
+            engine,
+          })
+          result = await this.collectAssistantText(runInput, activeConversation.id, taskId, notifyActivity, sessionKey)
         }
-        result = await this.collectAssistantText(runInput, activeConversation.id, taskId, notifyActivity)
       }
     }
     if (!result.ok) {
@@ -240,8 +270,10 @@ export class Orchestrator {
     conversationId: string,
     taskId: string | undefined,
     notifyActivity: () => void,
+    sessionKey: string,
   ): Promise<ExecutorTextResult> {
     let assistantText = ''
+    let staleBindingCleared = false
     try {
       for await (const event of this.deps.executor.run(runInput)) {
         // Each AgentEvent counts as a stdout heartbeat for ProcessManager
@@ -263,16 +295,46 @@ export class Orchestrator {
             call: { id: event.id, name: event.name, arguments: event.arguments },
           })
         }
+        else if (event.type === 'engine_binding') {
+          if (event.engine === this.deps.config.executor.engine) {
+            updateSessionEngineBinding(sessionKey, event.engine, event.binding)
+            if (event.binding === null)
+              staleBindingCleared = true
+          }
+        }
         else if (event.type === 'error') {
-          return { ok: false, text: assistantText, error: event.error }
+          return { ok: false, text: assistantText, error: event.error, staleBindingCleared }
         }
       }
       return { ok: true, text: assistantText }
     }
     catch (err) {
       consola.error(`[orchestrator] run failed: ${String(err)}`)
-      return { ok: false, text: assistantText, error: String(err) }
+      return { ok: false, text: assistantText, error: String(err), staleBindingCleared }
     }
+  }
+
+  private buildAgentRunInput(input: {
+    messages: ChatMessage[]
+    model: string | undefined
+    workspace: WorkspaceHandle | null
+    signal: AbortSignal
+    sessionKey: string
+    engine: string
+  }): AgentRunInput {
+    const binding = this.loadEngineBinding(input.sessionKey, input.engine)
+    return {
+      messages: input.messages,
+      ...(input.model ? { model: input.model } : {}),
+      ...(input.workspace ? { workspacePath: input.workspace.path } : {}),
+      signal: input.signal,
+      ...(binding === undefined ? {} : { engineBinding: binding }),
+    }
+  }
+
+  private loadEngineBinding(sessionKey: string, engine: string): EngineSessionBinding | undefined {
+    const binding = getSessionEntry(sessionKey)?.engineBindings[engine]
+    return isEngineSessionBinding(binding) ? binding : undefined
   }
 
   private async deliver(channel: ChannelType, conversation: ConversationState, text: string) {
@@ -1065,6 +1127,10 @@ function parseTranscriptMetadata(row: { role: string, richMetadata: string | nul
 
 function positiveNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : null
+}
+
+function isEngineSessionBinding(value: unknown): value is EngineSessionBinding {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
 function isGatewaySessionReset(envelope: Envelope): boolean {

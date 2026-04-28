@@ -6,7 +6,7 @@
  *   - legacy Codex app-server:
  *     `initialize` → `thread_start` (or `thread_fork`) → `newTurn` → events…
  *   - current Codex app-server:
- *     `initialize` → `thread/start` → `turn/start` → events…
+ *     `initialize` → (`thread/start` | `thread/resume`) → `turn/start` → events…
  *
  * The Codex app-server emits progress as JSON-RPC notifications on methods
  * prefixed `codex/event/*`. FEAT-016 only normalises the events listed below;
@@ -43,6 +43,33 @@ export interface CodexThreadStartResult {
 export interface CodexCurrentThreadStartResult {
   thread: {
     id: string
+    path?: string | null
+  }
+}
+
+/** Params sent with current `thread/start`. */
+export interface CodexCurrentThreadStartParams {
+  model?: string
+  cwd?: string
+  approvalPolicy?: CodexApprovalPolicy
+  persistExtendedHistory?: boolean
+  experimentalRawEvents?: boolean
+}
+
+/** Params sent with current `thread/resume`. */
+export interface CodexCurrentThreadResumeParams {
+  threadId: string
+  model?: string
+  cwd?: string
+  approvalPolicy?: CodexApprovalPolicy
+  persistExtendedHistory?: boolean
+}
+
+/** Result of current `thread/resume`. */
+export interface CodexCurrentThreadResumeResult {
+  thread: {
+    id: string
+    path?: string | null
   }
 }
 

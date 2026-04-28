@@ -1,5 +1,5 @@
 import type { ServiceStatus } from '../types'
-import type { AgentEvent } from './agent-event'
+import type { AgentEvent, EngineSessionBinding } from './agent-event'
 import type { ChatMessage } from './orchestrator'
 
 /** Tool advertised by an executor provider for the orchestrator to invoke. */
@@ -34,6 +34,11 @@ export interface AgentRunInput {
    * `workspace.ts`. See PLAN-007 architectural commitment #4.
    */
   workspacePath?: string
+  /**
+   * Cached provider-native session/thread binding for this logical worker
+   * session. Executors that do not support native resume ignore this field.
+   */
+  engineBinding?: EngineSessionBinding
 }
 
 /** Abstract executor provider responsible for running agent workloads. */

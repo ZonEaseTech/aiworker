@@ -9,6 +9,7 @@ export {
 export type {
   AgentEvent,
   AgentFinishReason,
+  EngineSessionBinding,
   TokenUsage,
   ToolAction,
   ToolStatus,

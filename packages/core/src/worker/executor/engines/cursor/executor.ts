@@ -18,6 +18,7 @@ import { extractSessionId, normalizeCursorLine, parseCursorLine, splitNdjson } f
 
 /** Hard cap on one Cursor turn. Overridable via options. */
 const DEFAULT_TIMEOUT_MS = 120_000
+const CURSOR_ENGINE = 'cursor'
 
 export type CursorSpawnLike = (
   cmd: string,
@@ -93,10 +94,13 @@ export class CursorExecutor implements ExecutorProvider {
     }
 
     const workspacePath = input.workspacePath ?? this.options.fallbackWorkspacePath ?? process.cwd()
+    const inputResumeSessionId = readSessionIdBinding(input.engineBinding)
+    if (input.engineBinding !== undefined && inputResumeSessionId === undefined)
+      yield { type: 'engine_binding', engine: CURSOR_ENGINE, binding: null }
 
     let resolved: { cmd: string, args: string[] }
     try {
-      resolved = await this.resolveCommand(input.model)
+      resolved = await this.resolveCommand(input.model, inputResumeSessionId)
     }
     catch (err) {
       yield { type: 'error', error: err instanceof Error ? err.message : String(err) }
@@ -126,6 +130,7 @@ export class CursorExecutor implements ExecutorProvider {
 
     let stdoutBuffer = ''
     let childError: string | null = null
+    let reportedSessionId = ''
     let sawFinish = false
     const exitPromise: Promise<number | null> = once(child, 'exit')
       .then(args => (args as [number | null])[0] ?? null)
@@ -153,9 +158,16 @@ export class CursorExecutor implements ExecutorProvider {
           if (!parsed)
             continue
           const sid = extractSessionId(parsed)
-          if (sid)
+          if (sid) {
             this.lastSessionId = sid
+            if (sid !== reportedSessionId) {
+              reportedSessionId = sid
+              yield { type: 'engine_binding', engine: CURSOR_ENGINE, binding: { sessionId: sid } }
+            }
+          }
           for (const event of normalizeCursorLine(parsed)) {
+            if (event.type === 'error' && inputResumeSessionId !== undefined)
+              yield { type: 'engine_binding', engine: CURSOR_ENGINE, binding: null }
             yield event
             if (event.type === 'finish')
               sawFinish = true
@@ -179,6 +191,8 @@ export class CursorExecutor implements ExecutorProvider {
     const exitCode = await exitPromise
 
     if (!sawFinish) {
+      if (inputResumeSessionId !== undefined)
+        yield { type: 'engine_binding', engine: CURSOR_ENGINE, binding: null }
       if (childError) {
         yield { type: 'error', error: childError }
       }
@@ -189,7 +203,7 @@ export class CursorExecutor implements ExecutorProvider {
     }
   }
 
-  private async resolveCommand(runModel: string | undefined): Promise<{ cmd: string, args: string[] }> {
+  private async resolveCommand(runModel: string | undefined, resumeSessionId: string | undefined): Promise<{ cmd: string, args: string[] }> {
     const resolver = this.options.resolveBinary ?? resolveCursorOnPath
     const direct = await resolver()
     if (!direct) {
@@ -198,9 +212,10 @@ export class CursorExecutor implements ExecutorProvider {
       throw new Error('cursor-agent binary not found on PATH (install https://cursor.com/cli)')
     }
     const model = runModel ?? this.options.model
+    const sessionId = resumeSessionId ?? this.options.resumeSessionId
     const args = buildArgs({
       model,
-      ...(this.options.resumeSessionId === undefined ? {} : { resumeSessionId: this.options.resumeSessionId }),
+      ...(sessionId === undefined ? {} : { resumeSessionId: sessionId }),
       ...(this.options.extraArgs === undefined ? {} : { extraArgs: this.options.extraArgs }),
     })
     return { cmd: direct, args }
@@ -265,4 +280,10 @@ function lastUserMessage(messages: AgentRunInput['messages']): string | null {
       return m.content
   }
   return null
+}
+
+function readSessionIdBinding(binding: AgentRunInput['engineBinding']): string | undefined {
+  if (!binding || typeof binding.sessionId !== 'string' || binding.sessionId.length === 0)
+    return undefined
+  return binding.sessionId
 }

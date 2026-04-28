@@ -1,5 +1,22 @@
 # AIWorker Changelog
 
+## 2026-04-28 16:38 [progress] FEAT-037 S4 — engine-native session bindings
+
+Implemented S4 only for the OpenClaw-style worker session control plane:
+
+- Added a generic native binding contract on executor runs:
+  `AgentRunInput.engineBinding` in, `AgentEvent.engine_binding` out.
+- Orchestrator now reads the binding for `config.executor.engine` from
+  `session_entries.engineBindings` and persists executor updates back to the
+  same JSON field.
+- Codex current app-server uses `thread/resume` and recovers stale bindings by
+  clearing the cached binding and starting a fresh thread with the DB-rendered
+  prompt. Legacy Codex stays on DB prompt fallback.
+- Claude Code and Cursor use native CLI `--resume` session ids and refresh the
+  stored binding from streamed `session_id` values.
+- No schema migration, status/API/UI surface, expiry policy, or maintenance
+  cleanup was added.
+
 ## 2026-04-28 11:51 [BUG-P1] BUG-025 — Codex session continuity and reset controls
 
 Release target: `@zonease/aiworker-cli@0.4.2`.
