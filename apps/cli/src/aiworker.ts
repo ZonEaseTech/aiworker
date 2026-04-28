@@ -61,11 +61,6 @@ import {
 import { runScope } from './commands/scope'
 import { runServe } from './commands/serve'
 import { runTokenRotate as runTokenRotateLocal } from './commands/token'
-// FEAT-030: 必须在任何业务模块（含 packages/core 的 zod schema）import 之前
-// 跑 dotenv bootstrap——schema 在 import 期就 parse process.env，必须先注入。
-import { bootstrapDotenv } from './lib/dotenv-bootstrap'
-
-bootstrapDotenv()
 
 /**
  * aiworker —— 单二进制 CLI（PLAN-020 / FEAT-028）。
@@ -103,7 +98,7 @@ cli
 cli
   .command('scope', 'Print the resolved aiworker scope (user/project/explicit) + presence of layout files')
   .action(async () => {
-    process.exit(await runScope())
+    process.exitCode = await runScope()
   })
 
 cli

@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs'
+import { homedir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 
@@ -30,6 +31,9 @@ export interface InitOptions {
  */
 export async function runInit(options: InitOptions = {}): Promise<void> {
   if (options.global === true) {
+    const home = path.join(homedir(), '.aiworker')
+    process.env.AIWORKER_HOME = home
+    bootstrapDotenv({ home })
     const ctx = await loadWorkerContext()
     consola.success(`[aiworker init] user-scope worker ${ctx.workerId} ready (config v${ctx.configVersion})`)
     return
@@ -40,6 +44,7 @@ export async function runInit(options: InitOptions = {}): Promise<void> {
   // the legacy bootstrap.
   const scope = resolveAiworkerScope()
   if (scope.scope === 'explicit') {
+    bootstrapDotenv({ home: scope.home })
     const ctx = await loadWorkerContext()
     consola.success(`[aiworker init] explicit-scope worker ${ctx.workerId} ready (${scope.home})`)
     return
@@ -52,6 +57,7 @@ export async function runInit(options: InitOptions = {}): Promise<void> {
   const existingRoot = resolveProjectRoot(cwd)
   if (existingRoot) {
     await ensureProjectAiworker(existingRoot)
+    bootstrapDotenv({ home: path.join(existingRoot, '.aiworker', 'local') })
     const ctx = await loadWorkerContext()
     consola.success(`[aiworker init] project-scope worker ${ctx.workerId} ready (${existingRoot})`)
     return
@@ -70,15 +76,8 @@ export async function runInit(options: InitOptions = {}): Promise<void> {
   }
 
   await ensureProjectAiworker(cwd)
-  // The side-effect bootstrap (lib/bootstrap.ts) ran *before* `.aiworker/`
-  // existed, so it pinned AIWORKER_HOME at the user-default and minted a
-  // master key into ~/.aiworker/.env. For brand-new projects we want
-  // fs-layout to re-detect project scope cleanly (so resolveWorkerHome
-  // returns `.aiworker/` instead of `<home>/workers/<id>/`), and we want a
-  // *project-local* master key. So unpin AIWORKER_HOME (leaves env empty —
-  // fs-layout's resolveAiworkerScope will project-detect now that `.aiworker/`
-  // exists), wipe user-scope secrets out of process.env, and re-mint into
-  // project local/. The user-scope ~/.aiworker/.env file stays put (harmless).
+  // `init` owns dotenv bootstrap, so a brand-new project mints exactly one
+  // project-local master key and never creates a user-scope fallback first.
   const projectLocal = path.join(cwd, '.aiworker', 'local')
   delete process.env.AIWORKER_HOME
   delete process.env.AIWORKER_MASTER_KEY

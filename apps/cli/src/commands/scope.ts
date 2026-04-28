@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs'
 import path from 'node:path'
+import process from 'node:process'
 
 import {
   resolveAgentMdPath,
@@ -12,7 +13,6 @@ import {
   resolveWorkerHome,
   resolveWorkspacesRoot,
 } from '@zonease/aiworker-fs-layout'
-import consola from 'consola'
 
 /**
  * `aiworker scope` — diagnostic command (zero side effects). Prints the
@@ -26,16 +26,12 @@ import consola from 'consola'
 export async function runScope(): Promise<number> {
   const result = resolveAiworkerScope()
 
-  consola.box(
-    [
-      `Scope        : ${result.scope}`,
-      `Home         : ${result.home}`,
-      `Source       : ${result.source}`,
-      result.projectRoot ? `Project root : ${result.projectRoot}` : null,
-    ]
-      .filter(Boolean)
-      .join('\n'),
-  )
+  process.stdout.write(`${[
+    `Scope        : ${result.scope}`,
+    `Home         : ${result.home}`,
+    `Source       : ${result.source}`,
+    result.projectRoot ? `Project root : ${result.projectRoot}` : null,
+  ].filter(Boolean).join('\n')}\n`)
 
   // Worker-side ID is not yet known at this point (no DB read). Use a
   // placeholder so resolveWorkerHome / resolveBrainHome return the
@@ -63,7 +59,7 @@ export async function runScope(): Promise<number> {
   for (const [label, p] of items) {
     const exists = existsSync(p)
     const marker = exists ? '✓' : '·'
-    consola.info(`  ${marker} ${label.padEnd(14)} ${p}`)
+    process.stdout.write(`  ${marker} ${label.padEnd(14)} ${p}\n`)
   }
   return 0
 }

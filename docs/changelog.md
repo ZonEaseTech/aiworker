@@ -1,5 +1,35 @@
 # AIWorker Changelog
 
+## 2026-04-28 08:55 [BUG-P1] BUG-021 — project-scope CLI placement hardening
+
+Fixed the PLAN-023 Phase A runtime gap where the CLI side-effect bootstrap wrote
+the derived fallback home back into `AIWORKER_HOME`, causing `aiworker init` to
+treat user-default scope as an explicit override and skip project layout
+creation.
+
+Changes:
+
+- `apps/cli/src/lib/bootstrap.ts` no longer writes derived scope into
+  `AIWORKER_HOME`; only operator-provided env remains explicit.
+- `init` is excluded from side-effect bootstrap and now owns dotenv bootstrap for
+  global, explicit, existing-project, and brand-new project modes.
+- `scope` is excluded from side-effect bootstrap and now writes deterministic
+  stdout, so it remains a safe non-mutating diagnostic command.
+- Removed the duplicate unscoped `bootstrapDotenv()` call in the CLI entrypoint.
+- Added real CLI subprocess smokes with isolated `HOME` covering project init,
+  no user-scope fallback, project scope diagnostics, non-mutating scope, and
+  `init --force`.
+
+Verification:
+
+- `bun run --filter '@zonease/aiworker-cli' test`
+- `bun run typecheck`
+- `bun run lint`
+- `bun run test`
+- `bun run build`
+- manual isolated CLI smoke for pre-init `scope`, fresh project `init`, and
+  post-init project `scope`.
+
 ## 2026-04-28 08:35 [progress] REFACTOR-010 — PLAN-022 Phase 5 dark mode slice
 
 Completed the conservative Phase 5 slice for Web UI capability completion.
@@ -36,7 +66,7 @@ dashboards, and gateway proto expansion for broader cross-worker operations.
 
 **6 项 PLAN-021 决策**（master plan 批准时定盘）已写入 PLAN-021 批注：dmScope 默认 `per-channel-peer`、E1 半自动、MCP 合并到 orchestrator tool registry、Engine credential 全 user 级、Phase 顺序 A→B→D→C→E、master 批准后分批起子 PLAN。
 
-**下个步骤**：起 PLAN-024 — Phase B（Conversation router dmScope + auto-compaction + claude-code 退 replay-user-messages 模式）。
+**下个步骤**：先完成 PLAN-024 / BUG-021 Phase A hardening；Phase B（Conversation router dmScope + auto-compaction + claude-code 退 replay-user-messages 模式）后续另起子计划。
 
 ## 2026-04-27 16:42 [release] `@zonease/aiworker-cli@0.3.0` — 代码审查批 P0+P1+P2 收官
 

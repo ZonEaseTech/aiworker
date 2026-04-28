@@ -49,7 +49,7 @@
 ## 依赖
 
 - **blocked by**: REFACTOR-011
-- **blocks**: (后续 PLAN-024~027 默认基于 project layout)
+- **blocks**: (后续 PLAN-021 child phases 默认基于 project layout)
 
 ## 笔记
 

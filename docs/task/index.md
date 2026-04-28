@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-04-28 07:28
+> Updated: 2026-04-28 08:55
 
 ## Usage
 
@@ -97,3 +97,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-035 Phase 3 — Worker UI MVP**](FEAT-035.md) `P1`
 - [x] [**REFACTOR-009 Phase 4 — apps/web 独立性强化与回归保护**](REFACTOR-009.md) `P2`
 - [x] [**REFACTOR-010 Phase 5 — Web UI 能力补齐与可观测性（可选）**](REFACTOR-010.md) `P3`
+- [x] [**BUG-021 Project-scope CLI placement is bypassed by bootstrap env pinning**](BUG-021.md) `P1`

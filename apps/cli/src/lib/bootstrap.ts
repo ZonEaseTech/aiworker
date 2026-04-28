@@ -1,18 +1,34 @@
-// FEAT-030: side-effect-only 入口。
-// CLI 入口（apps/cli/src/aiworker.ts）必须在任何业务模块（含 packages/core 的 zod schema）
-// import 之前 import 本文件——schema 在 import 期就 parse process.env，必须先注入。
-// 单独抽一个文件而非内联调用，是为了 eslint `import/first`：side-effect import 仍然算 import 行。
+// FEAT-030: side-effect-only entrypoint.
+// CLI entry (apps/cli/src/aiworker.ts) imports this before business modules so
+// commands that need worker/gateway secrets can load or mint `.env` first.
 //
-// PLAN-023 / FEAT-036: scope-aware bootstrap。先解析 aiworker scope（user vs
-// project），把命中的 home 写回 `AIWORKER_HOME` 让 packages/core 的 zod schema
-// 派生出正确的 WORKER_DB_PATH / WORKER_DATA_ROOT；再传给 dotenv-bootstrap。
+// PLAN-024 / BUG-021: derived scope must NOT be written back into
+// `AIWORKER_HOME`. That env var means an operator explicitly pinned a home.
+// Project scope remains cwd-detected by fs-layout for later calls.
 //
-// 当 cwd 没有 `.aiworker/` 时 scope 自然 fallback user-default，行为与 FEAT-030
-// 完全一致；不会污染随机目录（如 `/tmp` 跑 `aiworker --version`）。
+// Diagnostic commands and `init` opt out. `scope` / help / version must be
+// non-mutating, and `init` needs to choose the home after applying its own mode
+// flags (`--global`, explicit env, existing project, or brand-new project).
 import process from 'node:process'
 import { resolveAiworkerScope } from '@zonease/aiworker-fs-layout'
 import { bootstrapDotenv } from './dotenv-bootstrap'
 
-const scope = resolveAiworkerScope()
-process.env.AIWORKER_HOME ??= scope.home
-bootstrapDotenv({ home: scope.home })
+function shouldBootstrapDotenv(argv: string[]): boolean {
+  const args = argv.slice(2)
+  if (args.length === 0)
+    return false
+
+  if (args.some(arg => arg === '--help' || arg === '-h' || arg === '--version' || arg === '-v'))
+    return false
+
+  const command = args[0]
+  if (command === 'scope' || command === 'init')
+    return false
+
+  return true
+}
+
+if (shouldBootstrapDotenv(process.argv)) {
+  const scope = resolveAiworkerScope()
+  bootstrapDotenv({ home: scope.home })
+}

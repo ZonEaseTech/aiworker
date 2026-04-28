@@ -6,7 +6,7 @@
 - **completedAt**: 2026-04-27 19:30
 - **relatedTask**: REFACTOR-011 + FEAT-036（双 task 协同；本 plan 同时覆盖两条工作）
 
-> 隶属 PLAN-021（master）Phase A。后续 Phase B/D/C/E 将分别由 PLAN-024 / PLAN-025 / PLAN-026 / PLAN-027 承接。
+> 隶属 PLAN-021（master）Phase A。PLAN-024 后续被用于 Phase A hardening（BUG-021）；后续 Phase B/D/C/E 另起子计划承接。
 
 ## 现状
 
@@ -45,7 +45,7 @@
 
 ### 5. ID 修订
 
-PLAN-021 batch §6 决议「分批起子 PLAN-022~026」时 ID 池被 PLAN-022（独立 Web UI epic）抢占。本 plan 改用 PLAN-023；后续 Phase 顺移：PLAN-024（Phase B）、PLAN-025（Phase D）、PLAN-026（Phase C）、PLAN-027（Phase E）。
+PLAN-021 batch §6 决议「分批起子 PLAN-022~026」时 ID 池被 PLAN-022（独立 Web UI epic）抢占。本 plan 改用 PLAN-023。2026-04-28 代码审查发现 Phase A CLI 入口真实落位失效，PLAN-024 改用于 Phase A hardening（BUG-021）；后续 Phase B/D/C/E 计划 ID 以后续立项为准。
 
 ## 方案
 

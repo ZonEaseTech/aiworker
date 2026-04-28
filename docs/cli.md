@@ -88,12 +88,10 @@ aiworker init --force
 
 ```sh
 aiworker scope
-# ╭─────────────────────────────────────────────────────╮
-# │  Scope        : project                             │
-# │  Home         : ~/code/my-project/.aiworker/local   │
-# │  Source       : project-detect                      │
-# │  Project root : ~/code/my-project                   │
-# ╰─────────────────────────────────────────────────────╯
+# Scope        : project
+# Home         : ~/code/my-project/.aiworker/local
+# Source       : project-detect
+# Project root : ~/code/my-project
 #   ✓ AGENT.md       ~/code/my-project/.aiworker/AGENT.md
 #   ✓ SOUL.md        ~/code/my-project/.aiworker/SOUL.md
 #   ...

@@ -103,7 +103,7 @@
 
 ### Phase C — Bootstrap context（三态记忆）
 
-> 落地子方案：PLAN-024（待起）
+> 落地子方案：future child plan（PLAN-024 已用于 Phase A hardening / BUG-021）
 
 **C1. System prompt bootstrap 注入**（参 Hermes frozen snapshot）：
 
@@ -125,7 +125,7 @@
 
 ### Phase D — Skill / MCP per-worker 灵活配置
 
-> 落地子方案：PLAN-025（待起）
+> 落地子方案：future child plan
 
 **D1. MCP per-worker 配置**：
 
@@ -147,7 +147,7 @@
 
 ### Phase E — 自我迭代闭环（基于现有 evolution）
 
-> 落地子方案：PLAN-026（待起）
+> 落地子方案：future child plan
 
 **E1. LLM-driven skill synthesizer**：
 
