@@ -13,8 +13,5 @@ tmp/
 coverage/
 *.tsbuildinfo
 .code-review-graph/
-.claude/
-.serena/
 .aissh.yaml
-.mcp.json
 .playwright-mcp/
