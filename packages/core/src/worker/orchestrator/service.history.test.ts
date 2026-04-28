@@ -43,8 +43,9 @@ interface CapturingExecutor extends ExecutorProvider {
   captured: ChatMessage[][]
 }
 
-function capturingExecutor(): CapturingExecutor {
+function capturingExecutor(outputs: string[] = ['ok']): CapturingExecutor {
   const captured: ChatMessage[][] = []
+  let nextOutput = 0
   const exec: CapturingExecutor = {
     name: 'capture',
     captured,
@@ -52,8 +53,10 @@ function capturingExecutor(): CapturingExecutor {
     listTools: async () => [],
     run: (input: AgentRunInput) => {
       captured.push(input.messages.map(m => ({ role: m.role, content: m.content })))
+      const output = outputs[nextOutput] ?? outputs[outputs.length - 1] ?? 'ok'
+      nextOutput += 1
       return (async function* () {
-        yield { type: 'assistant_message_delta' as const, delta: 'ok' }
+        yield { type: 'assistant_message_delta' as const, delta: output }
       })()
     },
   }
@@ -295,6 +298,45 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
     expect(threadMessages.some(row => row.content === 'root message')).toBe(false)
   })
 
+  it('does not route root chat messages into threaded session entries', async () => {
+    await seedConversation('conv-thread-session', 'web', 'chat-history', 'thread-1')
+    const rootEnv = envelope('root message with threaded session present')
+    const threadEnv = { ...rootEnv, threadId: 'thread-1' }
+    const rootKey = resolveSessionKey(rootEnv)
+    const threadKey = resolveSessionKey(threadEnv)
+
+    upsertSessionEntry({
+      sessionKey: threadKey,
+      currentConversationId: 'conv-thread-session',
+      channel: threadEnv.channel,
+      chatId: threadEnv.chatId,
+      threadId: threadEnv.threadId,
+      accountId: threadEnv.accountId,
+    })
+
+    const orch = new Orchestrator({
+      config: buildConfig(),
+      brain: stubBrain(),
+      executor: capturingExecutor(),
+      bus: silentBus(),
+      workerId: 'w_history_test',
+      workspaces,
+      processes,
+      approvals: new ApprovalStore(),
+    })
+    await orch.ingest(rootEnv)
+
+    const rootEntry = getSessionEntry(rootKey)
+    const threadEntry = getSessionEntry(threadKey)
+    expect(rootEntry?.currentConversationId).toBeDefined()
+    expect(rootEntry?.currentConversationId).not.toBe('conv-thread-session')
+    expect(threadEntry?.currentConversationId).toBe('conv-thread-session')
+
+    const db = getWorkerDb()
+    const threadMessages = db.select().from(messages).where(eq(messages.conversationId, 'conv-thread-session')).all()
+    expect(threadMessages.some(row => row.content === 'root message with threaded session present')).toBe(false)
+  })
+
   it('creates a session entry on first ingest and keeps its active conversation on the second turn', async () => {
     const orch = new Orchestrator({
       config: buildConfig(),
@@ -400,5 +442,79 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
     expect(entry?.currentConversationId).toBe(open!.id)
     expect(entry?.currentConversationId).not.toBe(beforeReset!.currentConversationId)
     expect(entry?.resetReason).toBe('manual:/reset')
+  })
+
+  it('gateway /new rotates the active session entry and stamps the manual reason', async () => {
+    const orch = new Orchestrator({
+      config: buildConfig(),
+      brain: stubBrain(),
+      executor: capturingExecutor(),
+      bus: silentBus(),
+      workerId: 'w_history_test',
+      workspaces,
+      processes,
+      approvals: new ApprovalStore(),
+    })
+
+    const sessionKey = resolveSessionKey(envelope())
+    await orch.ingest(envelope('conversation before new'))
+    const beforeReset = getSessionEntry(sessionKey)
+    expect(beforeReset?.currentConversationId).toBeDefined()
+
+    await orch.ingest({
+      ...envelope('fresh topic'),
+      raw: { source: 'gateway', sessionReset: true, resetCommand: '/new' },
+    })
+
+    const entry = getSessionEntry(sessionKey)
+    expect(entry?.currentConversationId).toBeDefined()
+    expect(entry?.currentConversationId).not.toBe(beforeReset!.currentConversationId)
+    expect(entry?.resetReason).toBe('manual:/new')
+
+    const db = getWorkerDb()
+    const oldMessages = db.select().from(messages).where(eq(messages.conversationId, beforeReset!.currentConversationId)).all()
+    const newMessages = db.select().from(messages).where(eq(messages.conversationId, entry!.currentConversationId)).all()
+    expect(oldMessages.some(row => row.content === 'conversation before new')).toBe(true)
+    expect(newMessages.some(row => row.content === 'fresh topic')).toBe(true)
+    expect(newMessages.some(row => row.content === 'conversation before new')).toBe(false)
+  })
+
+  it('classifier new-topic decisions rotate the active session entry', async () => {
+    const executor = capturingExecutor([
+      'first response',
+      '{"continue":false,"reason":"new topic"}',
+      'second response',
+    ])
+    const orch = new Orchestrator({
+      config: buildConfig(),
+      brain: stubBrain(),
+      executor,
+      bus: silentBus(),
+      workerId: 'w_history_test',
+      workspaces,
+      processes,
+      approvals: new ApprovalStore(),
+    })
+
+    const sessionKey = resolveSessionKey(envelope())
+    await orch.ingest(envelope('first subject'))
+    const firstEntry = getSessionEntry(sessionKey)
+    expect(firstEntry?.currentConversationId).toBeDefined()
+
+    await orch.ingest(envelope('unrelated second subject'))
+
+    const secondEntry = getSessionEntry(sessionKey)
+    expect(secondEntry?.currentConversationId).toBeDefined()
+    expect(secondEntry?.currentConversationId).not.toBe(firstEntry!.currentConversationId)
+    expect(secondEntry?.resetReason).toBe('classifier:new-topic')
+
+    const db = getWorkerDb()
+    const oldConversation = db.select().from(conversations).where(eq(conversations.id, firstEntry!.currentConversationId)).get()
+    const oldMessages = db.select().from(messages).where(eq(messages.conversationId, firstEntry!.currentConversationId)).all()
+    const newMessages = db.select().from(messages).where(eq(messages.conversationId, secondEntry!.currentConversationId)).all()
+    expect(oldConversation?.status).toBe('closed')
+    expect(oldMessages.some(row => row.content === 'first subject')).toBe(true)
+    expect(newMessages.some(row => row.content === 'unrelated second subject')).toBe(true)
+    expect(newMessages.some(row => row.content === 'first subject')).toBe(false)
   })
 })
