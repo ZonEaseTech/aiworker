@@ -77,7 +77,7 @@ export class GatewaySubscriber {
     const p = event.payload
     switch (event.type) {
       case 'orchestrator.text': {
-        const conversationId = strOrNull(p.conversationId)
+        const conversationId = eventConversationId(p)
         if (!conversationId)
           return null
         const chunk = typeof p.delta === 'string' ? p.delta : ''
@@ -87,7 +87,7 @@ export class GatewaySubscriber {
         }
       }
       case 'orchestrator.tool_call': {
-        const conversationId = strOrNull(p.conversationId)
+        const conversationId = eventConversationId(p)
         const call = (p.call as Record<string, unknown> | undefined) ?? {}
         const toolCallId = strOrNull(call.id)
         const toolName = strOrNull(call.name)
@@ -105,7 +105,7 @@ export class GatewaySubscriber {
         }
       }
       case 'orchestrator.finished': {
-        const conversationId = strOrNull(p.conversationId)
+        const conversationId = eventConversationId(p)
         if (!conversationId)
           return null
         return {
@@ -114,7 +114,7 @@ export class GatewaySubscriber {
         }
       }
       case 'orchestrator.error': {
-        const conversationId = strOrNull(p.conversationId)
+        const conversationId = eventConversationId(p)
         if (!conversationId)
           return null
         return {
@@ -123,7 +123,7 @@ export class GatewaySubscriber {
         }
       }
       case 'conversation.message': {
-        const conversationId = strOrNull(p.conversationId)
+        const conversationId = eventConversationId(p)
         const role = strOrNull(p.role)
         if (!conversationId || !role)
           return null
@@ -168,4 +168,8 @@ export class GatewaySubscriber {
 
 function strOrNull(v: unknown): string | null {
   return typeof v === 'string' && v.length > 0 ? v : null
+}
+
+function eventConversationId(payload: Record<string, unknown>): string | null {
+  return strOrNull(payload.gatewayConversationId) ?? strOrNull(payload.conversationId)
 }

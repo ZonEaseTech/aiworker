@@ -1,5 +1,36 @@
 # AIWorker Changelog
 
+## 2026-04-28 19:02 [BUG-P1] BUG-027 — gateway accepted chat ids are reusable
+
+Fixed the gateway chat continuation bug recorded during the 0.4.3 fleet smoke:
+
+- Worker gateway-client chat handling now treats `gw:` conversation ids as
+  already-normalized accepted ids and reuses them unchanged instead of wrapping
+  them again as `gw:conv:<id>`.
+- Explicit non-prefixed operator ids keep the existing `gw:conv:<id>` mapping.
+- Gateway-origin worker bus events now carry `gatewayConversationId`, and the
+  gateway subscriber uses that user-facing id for streamed chat/agent event
+  payloads while preserving the internal worker `conversations.id` locally.
+- Added regressions for omitted-id reuse, explicit accepted-id reuse, and
+  streamed event id coherence.
+
+Verification passed: focused core tests, changed-file ESLint, core typecheck,
+and full `@zonease/aiworker-core` tests. The live test-server fleet to local
+Codex worker e2e remains an external operator verification step.
+
+## 2026-04-28 18:45 [BUG-P1] BUG-027 — gateway chat accepted id continuation gap
+
+Recorded a session bug found during the `@zonease/aiworker-cli@0.4.3`
+test-server fleet smoke:
+
+- A local Codex worker joined the upgraded 0.4.3 test fleet and passed
+  explicit `--conversation-id` continuity, Codex native binding persistence,
+  session status, and `/new` reset checks.
+- The default `aiworker chat` path still returns an accepted conversation id
+  that cannot be passed unchanged to the next `chat.send` call. Reusing it
+  wraps the id again as `gw:conv:<id>`, creating a new worker-side session.
+- Tracked as `docs/task/BUG-027.md`; no implementation has been started.
+
 ## 2026-04-28 18:23 [BUG-P1] BUG-026 — Codex native session capability negotiation
 
 Release target: `@zonease/aiworker-cli@0.4.3`.

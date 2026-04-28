@@ -7,6 +7,7 @@ import { describe, expect, it } from 'bun:test'
 
 import { WorkerEventBus } from '../events/bus'
 import { startGatewayNode } from './index'
+import { GatewaySubscriber } from './subscriber'
 
 /**
  * BUG-004 — runtime hot-reload 后 subscriber 必须重新订阅新 bus。
@@ -170,5 +171,44 @@ describe('GatewayNode — subscriber refresh after runtime reload', () => {
     expect(count).toBe(1) // 只有我们刚加的 listener 收到
 
     await node.stop()
+  })
+})
+
+describe('GatewaySubscriber — gateway conversation id mapping', () => {
+  it('uses gatewayConversationId for gateway-facing chat events when present', () => {
+    const bus = new WorkerEventBus()
+    const sent: Frame[] = []
+    const subscriber = new GatewaySubscriber({
+      workerId: 'w_test',
+      getBus: () => bus,
+      sendEvent: frame => sent.push(frame),
+    })
+
+    subscriber.start()
+    bus.emit('conversation.message', {
+      conversationId: 'internal-conv',
+      gatewayConversationId: 'gw:w_test:accepted',
+      role: 'assistant',
+      content: 'hello',
+    })
+    bus.emit('orchestrator.text', {
+      conversationId: 'internal-conv',
+      gatewayConversationId: 'gw:w_test:accepted',
+      delta: 'thinking',
+    })
+    bus.emit('orchestrator.finished', {
+      conversationId: 'internal-conv',
+      gatewayConversationId: 'gw:w_test:accepted',
+    })
+    subscriber.stop()
+
+    const payloads = sent
+      .filter(frame => frame.type === 'event')
+      .map(frame => frame.payload as { conversationId: string })
+    expect(payloads.map(payload => payload.conversationId)).toEqual([
+      'gw:w_test:accepted',
+      'gw:w_test:accepted',
+      'gw:w_test:accepted',
+    ])
   })
 })

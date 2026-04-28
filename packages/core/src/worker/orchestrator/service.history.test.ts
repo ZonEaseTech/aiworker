@@ -739,6 +739,65 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
     expect(rows.some(row => row.content === 'second turn')).toBe(true)
   })
 
+  it('emits gatewayConversationId for gateway-origin chat events', async () => {
+    const bus = recordingBus()
+    const orch = new Orchestrator({
+      config: buildConfig(),
+      brain: stubBrain(),
+      executor: capturingExecutor(),
+      bus,
+      workerId: 'w_history_test',
+      workspaces,
+      processes,
+      approvals: new ApprovalStore(),
+    })
+
+    const acceptedId = 'gw:w_history_test:accepted'
+    await orch.ingest({
+      ...envelope('gateway turn'),
+      accountId: 'sys:gateway',
+      chatId: acceptedId,
+      raw: { source: 'gateway' },
+    })
+
+    const mapped = bus.events.filter(event =>
+      event.type === 'conversation.message'
+      || event.type === 'orchestrator.text'
+      || event.type === 'orchestrator.finished',
+    )
+    expect(mapped).toHaveLength(3)
+    expect(mapped.every(event => event.payload.gatewayConversationId === acceptedId)).toBe(true)
+    expect(mapped.every(event => event.payload.conversationId !== acceptedId)).toBe(true)
+  })
+
+  it('does not trust user-controlled raw source fields as gateway-origin events', async () => {
+    const bus = recordingBus()
+    const orch = new Orchestrator({
+      config: buildConfig(),
+      brain: stubBrain(),
+      executor: capturingExecutor(),
+      bus,
+      workerId: 'w_history_test',
+      workspaces,
+      processes,
+      approvals: new ApprovalStore(),
+    })
+
+    await orch.ingest({
+      ...envelope('spoofed gateway source'),
+      chatId: 'gw:w_history_test:spoofed',
+      raw: { source: 'gateway' },
+    })
+
+    const mapped = bus.events.filter(event =>
+      event.type === 'conversation.message'
+      || event.type === 'orchestrator.text'
+      || event.type === 'orchestrator.finished',
+    )
+    expect(mapped).toHaveLength(3)
+    expect(mapped.every(event => event.payload.gatewayConversationId === undefined)).toBe(true)
+  })
+
   it('persists and reuses native engine bindings for supporting executors', async () => {
     const firstBinding = { protocol: 'current', threadId: 'thread-1' }
     const secondBinding = { protocol: 'current', threadId: 'thread-2' }

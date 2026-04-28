@@ -174,13 +174,12 @@ export class GatewayDispatcher {
     const conversationIdHint = typeof params.conversationId === 'string' ? params.conversationId : undefined
 
     // chatId 映射约定：
-    // - 带 conversationId hint → `gw:conv:<id>`（同会话会持续命中 findOpenConversation）
-    // - 否则 → `gw:<workerId>:<uuid>`（每次都是新会话；避免跨消息错并）
+    // - 已归一化的 gateway id（`gw:` 前缀）→ 原样复用；
+    // - 普通 conversationId hint → `gw:conv:<id>`；
+    // - 无 hint → `gw:<workerId>:<uuid>`。
     // 选用现有的 `web` channel 以满足 Envelope.channel 类型；gateway 语义
     // 已经在 chatId 前缀里编码，后续若要专有 channel 可另起 type。
-    const chatId = conversationIdHint
-      ? `gw:conv:${conversationIdHint}`
-      : `gw:${this.deps.workerId}:${crypto.randomUUID()}`
+    const chatId = normalizeGatewayChatId(this.deps.workerId, conversationIdHint)
     const envelope: Envelope = {
       workerId: this.deps.workerId,
       channel: 'web',
@@ -402,4 +401,12 @@ function parseSessionResetCommand(content: string): { command: '/new' | '/reset'
       return { command, body: trimmed.slice(command.length).trimStart() }
   }
   return null
+}
+
+function normalizeGatewayChatId(workerId: string, conversationIdHint: string | undefined): string {
+  if (conversationIdHint === undefined)
+    return `gw:${workerId}:${crypto.randomUUID()}`
+  if (conversationIdHint.startsWith('gw:'))
+    return conversationIdHint
+  return `gw:conv:${conversationIdHint}`
 }

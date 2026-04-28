@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-04-28 17:33
+> Updated: 2026-04-28 19:02
 
 ## Usage
 
@@ -57,3 +57,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-026 Codex app-server protocol compatibility for 0.4.1**](PLAN-026.md) `2026-04-28`
 - [x] [**PLAN-027 Codex session continuity and reset controls**](PLAN-027.md) `2026-04-28`
 - [-] [**PLAN-028 OpenClaw-style worker session control plane**](PLAN-028.md) `2026-04-28`
+- [x] [**PLAN-029 Gateway chat accepted id continuation**](PLAN-029.md) `2026-04-28`

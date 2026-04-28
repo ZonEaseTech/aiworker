@@ -131,7 +131,13 @@ export class Orchestrator {
     const { conversation, sessionKey } = resolved
     const workspace = await this.provisionWorkspace(conversation.id)
     const userMessage = this.persistUserMessage(conversation.id, envelope, sessionKey)
-    this.deps.bus.emit('conversation.message', { conversationId: conversation.id, messageId: userMessage.id, role: 'user' })
+    const gatewayConversationId = gatewayConversationIdFromEnvelope(envelope)
+    this.deps.bus.emit('conversation.message', {
+      conversationId: conversation.id,
+      ...(gatewayConversationId === undefined ? {} : { gatewayConversationId }),
+      messageId: userMessage.id,
+      role: 'user',
+    })
 
     // ProcessManager controls cancellation via an AbortController; its `cancel`
     // hook flips this controller, which propagates through `input.signal` to
@@ -179,6 +185,7 @@ export class Orchestrator {
 
     const model = resolveExecutorModel(this.deps.config.executor)
     const taskId = taskIdFromEnvelope(envelope)
+    const gatewayConversationId = gatewayConversationIdFromEnvelope(envelope)
     const engine = this.deps.config.executor.engine
     let runInput = this.buildAgentRunInput({
       messages: chatMessages,
@@ -188,7 +195,7 @@ export class Orchestrator {
       sessionKey,
       engine,
     })
-    let result = await this.collectAssistantText(runInput, activeConversation.id, taskId, notifyActivity, sessionKey)
+    let result = await this.collectAssistantText(runInput, activeConversation.id, taskId, notifyActivity, sessionKey, gatewayConversationId)
     if (!result.ok && result.staleBindingCleared === true && runInput.engineBinding !== undefined && result.text.length === 0) {
       runInput = this.buildAgentRunInput({
         messages: chatMessages,
@@ -198,7 +205,7 @@ export class Orchestrator {
         sessionKey,
         engine,
       })
-      result = await this.collectAssistantText(runInput, activeConversation.id, taskId, notifyActivity, sessionKey)
+      result = await this.collectAssistantText(runInput, activeConversation.id, taskId, notifyActivity, sessionKey, gatewayConversationId)
     }
     if (!result.ok && this.isContextOverflowError(result.error)) {
       const retryCompaction = await this.maybeCompactConversation({
@@ -222,7 +229,7 @@ export class Orchestrator {
           sessionKey,
           engine,
         })
-        result = await this.collectAssistantText(runInput, activeConversation.id, taskId, notifyActivity, sessionKey)
+        result = await this.collectAssistantText(runInput, activeConversation.id, taskId, notifyActivity, sessionKey, gatewayConversationId)
         if (!result.ok && result.staleBindingCleared === true && runInput.engineBinding !== undefined && result.text.length === 0) {
           runInput = this.buildAgentRunInput({
             messages: chatMessages,
@@ -232,7 +239,7 @@ export class Orchestrator {
             sessionKey,
             engine,
           })
-          result = await this.collectAssistantText(runInput, activeConversation.id, taskId, notifyActivity, sessionKey)
+          result = await this.collectAssistantText(runInput, activeConversation.id, taskId, notifyActivity, sessionKey, gatewayConversationId)
         }
       }
     }
@@ -241,6 +248,7 @@ export class Orchestrator {
       consola.warn(`[orchestrator] executor error: ${error}`)
       this.deps.bus.emit('orchestrator.error', {
         conversationId: activeConversation.id,
+        ...(gatewayConversationId === undefined ? {} : { gatewayConversationId }),
         ...(taskId === undefined ? {} : { taskId }),
         error,
       })
@@ -259,6 +267,7 @@ export class Orchestrator {
     touchSessionEntry(sessionKey, { at: now })
     this.deps.bus.emit('orchestrator.finished', {
       conversationId: activeConversation.id,
+      ...(gatewayConversationId === undefined ? {} : { gatewayConversationId }),
       ...(taskId === undefined ? {} : { taskId }),
     })
 
@@ -271,6 +280,7 @@ export class Orchestrator {
     taskId: string | undefined,
     notifyActivity: () => void,
     sessionKey: string,
+    gatewayConversationId: string | undefined,
   ): Promise<ExecutorTextResult> {
     let assistantText = ''
     let staleBindingCleared = false
@@ -284,6 +294,7 @@ export class Orchestrator {
           assistantText += event.delta
           this.deps.bus.emit('orchestrator.text', {
             conversationId,
+            ...(gatewayConversationId === undefined ? {} : { gatewayConversationId }),
             ...(taskId === undefined ? {} : { taskId }),
             delta: event.delta,
           })
@@ -291,6 +302,7 @@ export class Orchestrator {
         else if (event.type === 'tool_use') {
           this.deps.bus.emit('orchestrator.tool_call', {
             conversationId,
+            ...(gatewayConversationId === undefined ? {} : { gatewayConversationId }),
             ...(taskId === undefined ? {} : { taskId }),
             call: { id: event.id, name: event.name, arguments: event.arguments },
           })
@@ -1138,6 +1150,15 @@ function isGatewaySessionReset(envelope: Envelope): boolean {
     return false
   const raw = envelope.raw as Record<string, unknown>
   return raw.source === 'gateway' && raw.sessionReset === true
+}
+
+function gatewayConversationIdFromEnvelope(envelope: Envelope): string | undefined {
+  if (!envelope.raw || typeof envelope.raw !== 'object' || Array.isArray(envelope.raw))
+    return undefined
+  const raw = envelope.raw as Record<string, unknown>
+  return raw.source === 'gateway' && envelope.accountId === 'sys:gateway' && envelope.chatId.startsWith('gw:')
+    ? envelope.chatId
+    : undefined
 }
 
 function gatewayResetReason(envelope: Envelope): string {

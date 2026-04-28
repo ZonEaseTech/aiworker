@@ -51,6 +51,44 @@ function makeDispatcher(handlers?: NodeHandlers, orchestrator: OrchestratorLike 
 }
 
 describe('GatewayDispatcher — chat.send session lifecycle envelope', () => {
+  it('returns an omitted conversation id that can be reused unchanged', async () => {
+    const ingested: Envelope[] = []
+    const orchestrator: OrchestratorLike = {
+      ingest: async (envelope) => {
+        ingested.push(envelope)
+      },
+    }
+    const { dispatcher, approvals, responses } = makeDispatcher(undefined, orchestrator)
+
+    await dispatcher.handleRequest({
+      type: 'request',
+      id: 'chat-generated-1',
+      method: 'chat.send',
+      params: { workerId: 'w_test', content: 'first turn' },
+    })
+
+    expect(responses).toHaveLength(1)
+    const first = responses[0]!
+    expect(first.ok).toBe(true)
+    const acceptedId = first.ok ? (first.result as { conversationId: string }).conversationId : ''
+    expect(acceptedId.startsWith('gw:w_test:')).toBe(true)
+
+    await dispatcher.handleRequest({
+      type: 'request',
+      id: 'chat-generated-2',
+      method: 'chat.send',
+      params: { workerId: 'w_test', conversationId: acceptedId, content: 'second turn' },
+    })
+
+    expect(responses).toHaveLength(2)
+    const second = responses[1]!
+    expect(second.ok).toBe(true)
+    if (second.ok)
+      expect((second.result as { conversationId: string }).conversationId).toBe(acceptedId)
+    expect(ingested.map(envelope => envelope.chatId)).toEqual([acceptedId, acceptedId])
+    approvals.dispose()
+  })
+
   it('keeps the same gateway conversation hint mapped to the same chat id', async () => {
     const ingested: Envelope[] = []
     const orchestrator: OrchestratorLike = {
@@ -83,6 +121,42 @@ describe('GatewayDispatcher — chat.send session lifecycle envelope', () => {
     expect(ingested.map(envelope => envelope.text)).toEqual(['first turn', 'second turn'])
     expect(ingested.every(envelope => envelope.accountId === 'sys:gateway')).toBe(true)
     expect(ingested.every(envelope => (envelope.raw as Record<string, unknown>).sessionReset === undefined)).toBe(true)
+    approvals.dispose()
+  })
+
+  it('can reuse the accepted id returned from an explicit conversation hint', async () => {
+    const ingested: Envelope[] = []
+    const orchestrator: OrchestratorLike = {
+      ingest: async (envelope) => {
+        ingested.push(envelope)
+      },
+    }
+    const { dispatcher, approvals, responses } = makeDispatcher(undefined, orchestrator)
+
+    await dispatcher.handleRequest({
+      type: 'request',
+      id: 'chat-explicit-1',
+      method: 'chat.send',
+      params: { workerId: 'w_test', conversationId: 'explicit-027', content: 'first turn' },
+    })
+    const acceptedId = responses[0]?.ok === true
+      ? (responses[0].result as { conversationId: string }).conversationId
+      : ''
+    expect(acceptedId).toBe('gw:conv:explicit-027')
+
+    await dispatcher.handleRequest({
+      type: 'request',
+      id: 'chat-explicit-2',
+      method: 'chat.send',
+      params: { workerId: 'w_test', conversationId: acceptedId, content: 'second turn' },
+    })
+
+    expect(responses).toHaveLength(2)
+    const second = responses[1]!
+    expect(second.ok).toBe(true)
+    if (second.ok)
+      expect((second.result as { conversationId: string }).conversationId).toBe('gw:conv:explicit-027')
+    expect(ingested.map(envelope => envelope.chatId)).toEqual(['gw:conv:explicit-027', 'gw:conv:explicit-027'])
     approvals.dispose()
   })
 
