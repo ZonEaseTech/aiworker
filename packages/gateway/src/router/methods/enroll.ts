@@ -172,6 +172,22 @@ export const handleEnrollApprove: LocalHandler = (ctx, params): HandlerResult =>
     })
   }
 
+  // FEAT-034 Phase 2：把 pending 列表的对应项标为 approved，让 fleet UI 立即
+  // 从待批面板移除（worker.online 已在上面广播过，list 收敛由前端处理）。
+  broadcastEventToOperators(ctx.operators, {
+    type: 'event',
+    name: EVENTS.ENROLLMENT_PENDING,
+    payload: {
+      workerId: entry.workerId,
+      ...(entry.displayName === undefined ? {} : { displayName: entry.displayName }),
+      otp: entry.otp,
+      submittedAt: entry.submittedAt,
+      expiresAt: entry.expiresAt,
+      reason: 'approved',
+    },
+    ts: Date.now(),
+  })
+
   return {
     ok: true,
     result: {
@@ -217,6 +233,20 @@ export const handleEnrollReject: LocalHandler = (ctx, params): HandlerResult => 
       displayName: entry.displayName,
       otpHash: hashOtp(entry.otp),
     },
+  })
+  // FEAT-034 Phase 2：fleet UI 立即更新 pending 列表。
+  broadcastEventToOperators(ctx.operators, {
+    type: 'event',
+    name: EVENTS.ENROLLMENT_PENDING,
+    payload: {
+      workerId: entry.workerId,
+      ...(entry.displayName === undefined ? {} : { displayName: entry.displayName }),
+      otp: entry.otp,
+      submittedAt: entry.submittedAt,
+      expiresAt: entry.expiresAt,
+      reason: 'rejected',
+    },
+    ts: Date.now(),
   })
   return { ok: true, result: { rejected: true } }
 }

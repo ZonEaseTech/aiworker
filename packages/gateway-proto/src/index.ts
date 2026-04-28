@@ -15,6 +15,7 @@ export {
   configChangedPayloadSchema,
   enrollmentApprovedPayloadSchema,
   enrollmentOtpPayloadSchema,
+  enrollmentPendingPayloadSchema,
   EVENT_PAYLOADS,
   EVENTS,
   isKnownEvent,
@@ -31,6 +32,7 @@ export type {
   ConfigChangedPayload,
   EnrollmentApprovedPayload,
   EnrollmentOtpPayload,
+  EnrollmentPendingPayload,
   EventName,
   LogsLinePayload,
   WorkerOfflinePayload,
@@ -59,6 +61,7 @@ export type {
 
 export {
   approvalDecisionSchema,
+  auditEventSchema,
   cronJobInputSchema,
   cronJobPatchSchema,
   cronJobRecordSchema,
@@ -73,6 +76,7 @@ export {
 } from './methods'
 export type {
   ApprovalDecision,
+  AuditEventRecord,
   CronJobRecordProto,
   MethodDef,
   MethodName,

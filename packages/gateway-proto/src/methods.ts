@@ -149,6 +149,46 @@ const enrollRejectMethod = defineMethod({
   routing: 'operator-to-gateway',
 })
 
+// ---- audit.* ----
+
+/**
+ * fleet.db `audit_events` 表的对外快照（FEAT-034 Phase 2）。
+ *
+ * - `id` / `at` / `actor` / `action` / `workerId` 直接来自表；
+ * - `detail` 是落库时的 JSON blob，前端展示时可逐字段渲染或折叠原始 JSON；
+ * - 列表端默认按 `id` 倒序（最新在前），分页用游标 `before=<id>`。
+ */
+export const auditEventSchema = z.object({
+  id: z.number().int().positive(),
+  at: z.string().min(1),
+  actor: z.string().min(1),
+  action: z.string().min(1),
+  workerId: z.string().min(1).nullable(),
+  detail: z.record(z.unknown()).nullable(),
+})
+export type AuditEventRecord = z.infer<typeof auditEventSchema>
+
+const auditListMethod = defineMethod({
+  method: 'audit.list',
+  description: 'fleet.db audit_events 浏览：按 id 倒序分页，可按 action 前缀 / workerId 过滤。',
+  params: z.object({
+    /** 一次返回的最大行数。默认 50，硬上限 200 以避免 fleet 长期运行后大窗口拖慢 fleet UI。 */
+    limit: z.number().int().positive().max(200).optional(),
+    /** 分页游标：仅返回 `id < before` 的行。客户端把上一页最后一条 id 回填即可。 */
+    before: z.number().int().positive().optional(),
+    /** action 前缀过滤（exact / prefix 由 server 决定，这里取 prefix）。 */
+    action: z.string().min(1).optional(),
+    /** worker 维度过滤；不传返回全部。 */
+    workerId: z.string().min(1).optional(),
+  }).optional().default({}),
+  result: z.object({
+    events: z.array(auditEventSchema),
+    /** 是否还有更早的页（即至少存在一条 `id < events[最末].id`）。 */
+    hasMore: z.boolean(),
+  }),
+  routing: 'operator-to-gateway',
+})
+
 // ---- chat.* ----
 
 const chatSendMethod = defineMethod({
@@ -367,6 +407,7 @@ export const METHODS = {
   'enroll.list': enrollListMethod,
   'enroll.approve': enrollApproveMethod,
   'enroll.reject': enrollRejectMethod,
+  'audit.list': auditListMethod,
   'chat.send': chatSendMethod,
   'config.get': configGetMethod,
   'config.put': configPutMethod,

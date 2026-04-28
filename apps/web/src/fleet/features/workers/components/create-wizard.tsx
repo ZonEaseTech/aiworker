@@ -10,7 +10,7 @@ import { Button } from '@/shared/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/shared/components/ui/dialog'
 import { Input } from '@/shared/components/ui/input'
 import { Label } from '@/shared/components/ui/label'
-import { useDashboardCapabilities, useLaunchWorker } from '../hooks'
+import { useLaunchWorker } from '../hooks'
 import { stateBadgeLabel, stateBadgeVariant } from '../utils'
 
 interface CreateWizardProps {
@@ -29,7 +29,8 @@ interface SuccessPayload {
   displayName: string
   baseUrl: string
   lastSeenState?: RegisteredWorkerLivenessState
-  apiToken: string
+  /** gateway 颁发的一次性 deviceToken；仅在 React state in-memory，关闭对话框立刻清。 */
+  deviceToken: string
 }
 
 /**
@@ -69,7 +70,7 @@ function CreateFlow({ onClose }: { onClose: () => void }) {
       <SuccessStep
         payload={success}
         onClose={onClose}
-        onGoToConfig={() => {
+        onGoToWorker={() => {
           onClose()
           void navigate({ to: '/workers/$workerId', params: { workerId: success.id } })
         }}
@@ -98,7 +99,6 @@ function CreateForm({ onCancel, onSuccess }: CreateFormProps) {
   const [errors, setErrors] = useState<FormErrors>({})
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const launch = useLaunchWorker()
-  const capabilities = useDashboardCapabilities()
 
   function validate(): FormErrors | null {
     const next: FormErrors = {}
@@ -121,30 +121,22 @@ function CreateForm({ onCancel, onSuccess }: CreateFormProps) {
     }
     setErrors({})
     try {
-      const row = await launch.mutateAsync({
+      const result = await launch.mutateAsync({
         displayName: displayName.trim(),
         ...(forceId.trim().length > 0 ? { forceId: forceId.trim() } : {}),
       })
       onSuccess({
-        id: row.id,
-        displayName: row.displayName,
-        baseUrl: row.baseUrl,
-        lastSeenState: row.lastSeenState,
-        apiToken: row.apiToken,
+        id: result.worker.id,
+        displayName: result.worker.displayName,
+        baseUrl: result.worker.baseUrl,
+        lastSeenState: result.worker.lastSeenState,
+        deviceToken: result.deviceToken,
       })
     }
     catch (err) {
       setErrors(mapServerError(err))
     }
   }
-
-  const caps = capabilities.data
-  const quotaFull = caps !== undefined
-    && caps.maxWorkers !== null
-    && caps.currentWorkers >= caps.maxWorkers
-  const quotaNote = caps?.maxWorkers !== null && caps?.maxWorkers !== undefined
-    ? `${caps.currentWorkers} / ${caps.maxWorkers} workers registered.`
-    : null
 
   return (
     <form onSubmit={onSubmit} noValidate>
@@ -208,16 +200,6 @@ function CreateForm({ onCancel, onSuccess }: CreateFormProps) {
           </div>
         )}
 
-        {quotaNote && (
-          <p className={`flex items-start gap-1.5 text-xs ${quotaFull ? 'text-destructive' : 'text-muted-foreground'}`}>
-            <Info className="mt-0.5 size-3.5 shrink-0" />
-            <span>
-              {quotaNote}
-              {quotaFull && ' Quota reached — delete an existing worker first.'}
-            </span>
-          </p>
-        )}
-
         {errors.form && (
           <p className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
             {errors.form}
@@ -229,8 +211,8 @@ function CreateForm({ onCancel, onSuccess }: CreateFormProps) {
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <Button type="submit" disabled={launch.isPending || quotaFull}>
-          {launch.isPending ? 'Creating…' : 'Create'}
+        <Button type="submit" disabled={launch.isPending}>
+          {launch.isPending ? 'Launching…' : 'Launch'}
         </Button>
       </DialogFooter>
     </form>
@@ -279,18 +261,18 @@ function FieldError({ message }: { message?: string }) {
 function SuccessStep({
   payload,
   onClose,
-  onGoToConfig,
+  onGoToWorker,
 }: {
   payload: SuccessPayload
   onClose: () => void
-  onGoToConfig: () => void
+  onGoToWorker: () => void
 }) {
   const [showToken, setShowToken] = useState(false)
   const [copied, setCopied] = useState(false)
 
   async function onCopyToken() {
     try {
-      await navigator.clipboard.writeText(payload.apiToken)
+      await navigator.clipboard.writeText(payload.deviceToken)
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
     }
@@ -343,7 +325,7 @@ function SuccessStep({
         </p>
         <div className="flex items-center gap-2 rounded bg-muted/60 px-2 py-1.5 font-mono text-[11px]">
           <code className="flex-1 break-all">
-            {showToken ? payload.apiToken : payload.apiToken.replace(/./g, '•')}
+            {showToken ? payload.deviceToken : payload.deviceToken.replace(/./g, '•')}
           </code>
           <Button
             type="button"
@@ -382,7 +364,7 @@ function SuccessStep({
 
       <DialogFooter>
         <Button variant="outline" onClick={onClose}>Close</Button>
-        <Button onClick={onGoToConfig}>Go to worker config</Button>
+        <Button onClick={onGoToWorker}>Go to worker</Button>
       </DialogFooter>
     </>
   )

@@ -1,15 +1,18 @@
 import type { SafeRegisteredWorker } from '@zonease/aiworker-shared'
 import { useNavigate } from '@tanstack/react-router'
-import { Check, Copy, ExternalLink, PlusCircle, ServerOff, Sparkles } from 'lucide-react'
+import { Check, Copy, ExternalLink, MoreHorizontal, PlusCircle, ServerOff, Sparkles } from 'lucide-react'
 import { useState } from 'react'
 import { Badge } from '@/shared/components/ui/badge'
 import { Button } from '@/shared/components/ui/button'
 import { Skeleton } from '@/shared/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/table'
-import { useDashboardCapabilities, useRegisteredWorkers } from '../hooks'
+import { useRegisteredWorkers } from '../hooks'
 import { formatRelativeTime, stateBadgeLabel, stateBadgeVariant, truncateWorkerId } from '../utils'
 import { CreateWizard } from './create-wizard'
 import { RegisterWizard } from './register-wizard'
+import { RemoveWorkerDialog } from './remove-worker-dialog'
+import { RotateTokenDialog } from './rotate-token-dialog'
+import { StopWorkerDialog } from './stop-worker-dialog'
 
 interface CopyButtonProps {
   value: string
@@ -42,26 +45,20 @@ interface WorkersListProps {
   workers?: SafeRegisteredWorker[]
 }
 
+type RowAction
+  = | { kind: 'rotate', worker: SafeRegisteredWorker }
+    | { kind: 'remove', worker: SafeRegisteredWorker }
+    | { kind: 'stop', worker: SafeRegisteredWorker }
+
 export function WorkersList({ workers: workersProp }: WorkersListProps = {}) {
   const navigate = useNavigate()
   const query = useRegisteredWorkers()
-  const [registerOpen, setRegisterOpen] = useState(false)
-  const [createOpen, setCreateOpen] = useState(false)
-  const capabilities = useDashboardCapabilities()
+  const [pairOpen, setPairOpen] = useState(false)
+  const [launchOpen, setLaunchOpen] = useState(false)
+  const [pendingAction, setPendingAction] = useState<RowAction | null>(null)
 
   const workers = workersProp ?? query.data
   const isLoading = workersProp === undefined && query.isLoading
-
-  const caps = capabilities.data
-  const quotaFull = caps !== undefined
-    && caps.maxWorkers !== null
-    && caps.currentWorkers >= caps.maxWorkers
-  const createDisabled = !caps?.canLaunch || quotaFull
-  const createTooltip = !caps?.canLaunch
-    ? 'Set AIWORKER_GATEWAY_CAN_LAUNCH=true + supervisor envs (see docs/deployment.md)'
-    : quotaFull
-      ? `Quota reached (${caps.currentWorkers}/${caps.maxWorkers})`
-      : undefined
 
   return (
     <div className="flex flex-col gap-6">
@@ -69,21 +66,17 @@ export function WorkersList({ workers: workersProp }: WorkersListProps = {}) {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Workers</h1>
           <p className="text-sm text-muted-foreground">
-            Registered AIWorker runtimes the manager can drive.
+            Registered AIWorker runtimes the fleet can drive.
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setRegisterOpen(true)}>
+          <Button variant="outline" onClick={() => setPairOpen(true)}>
             <PlusCircle className="size-4" />
-            Register worker
+            Pair worker
           </Button>
-          <Button
-            onClick={() => setCreateOpen(true)}
-            disabled={createDisabled}
-            title={createTooltip}
-          >
+          <Button onClick={() => setLaunchOpen(true)}>
             <Sparkles className="size-4" />
-            Create worker
+            Launch worker
           </Button>
         </div>
       </div>
@@ -101,7 +94,7 @@ export function WorkersList({ workers: workersProp }: WorkersListProps = {}) {
                       <TableHead>Base URL</TableHead>
                       <TableHead>Last seen</TableHead>
                       <TableHead>State</TableHead>
-                      <TableHead>Config version</TableHead>
+                      <TableHead className="w-[1%] text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -122,19 +115,25 @@ export function WorkersList({ workers: workersProp }: WorkersListProps = {}) {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-1">
-                            <a
-                              href={worker.baseUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                              onClick={e => e.stopPropagation()}
-                            >
-                              {worker.baseUrl}
-                              <ExternalLink className="size-3" />
-                            </a>
-                            <CopyButton value={worker.baseUrl} label="base URL" />
-                          </div>
+                          {worker.baseUrl
+                            ? (
+                                <div className="flex items-center gap-1">
+                                  <a
+                                    href={worker.baseUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                                    onClick={e => e.stopPropagation()}
+                                  >
+                                    {worker.baseUrl}
+                                    <ExternalLink className="size-3" />
+                                  </a>
+                                  <CopyButton value={worker.baseUrl} label="base URL" />
+                                </div>
+                              )
+                            : (
+                                <span className="text-xs text-muted-foreground">—</span>
+                              )}
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
                           {formatRelativeTime(worker.lastSeenAt)}
@@ -144,8 +143,13 @@ export function WorkersList({ workers: workersProp }: WorkersListProps = {}) {
                             {stateBadgeLabel(worker.lastSeenState)}
                           </Badge>
                         </TableCell>
-                        <TableCell className="font-mono text-xs">
-                          {worker.lastConfigVersion ?? '—'}
+                        <TableCell className="text-right" onClick={e => e.stopPropagation()}>
+                          <RowActionsMenu
+                            worker={worker}
+                            onRotate={() => setPendingAction({ kind: 'rotate', worker })}
+                            onRemove={() => setPendingAction({ kind: 'remove', worker })}
+                            onStop={() => setPendingAction({ kind: 'stop', worker })}
+                          />
                         </TableCell>
                       </TableRow>
                     ))}
@@ -153,10 +157,118 @@ export function WorkersList({ workers: workersProp }: WorkersListProps = {}) {
                 </Table>
               </div>
             )
-          : <EmptyState onRegister={() => setRegisterOpen(true)} />}
+          : <EmptyState onRegister={() => setPairOpen(true)} />}
 
-      <RegisterWizard open={registerOpen} onOpenChange={setRegisterOpen} />
-      <CreateWizard open={createOpen} onOpenChange={setCreateOpen} />
+      <RegisterWizard open={pairOpen} onOpenChange={setPairOpen} />
+      <CreateWizard open={launchOpen} onOpenChange={setLaunchOpen} />
+      {pendingAction?.kind === 'rotate' && (
+        <RotateTokenDialog
+          worker={pendingAction.worker}
+          open
+          onOpenChange={open => !open && setPendingAction(null)}
+        />
+      )}
+      {pendingAction?.kind === 'remove' && (
+        <RemoveWorkerDialog
+          worker={pendingAction.worker}
+          open
+          onOpenChange={open => !open && setPendingAction(null)}
+        />
+      )}
+      {pendingAction?.kind === 'stop' && (
+        <StopWorkerDialog
+          worker={pendingAction.worker}
+          open
+          onOpenChange={open => !open && setPendingAction(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+interface RowActionsMenuProps {
+  worker: SafeRegisteredWorker
+  onRotate: () => void
+  onRemove: () => void
+  onStop: () => void
+}
+
+/**
+ * 简版下拉，避免引入新的 menu primitive 依赖。点击展开时再渲染列表，关闭时
+ * blur 自动收起；shadcn DropdownMenu 在 FEAT-035 worker 视角接入后再统一升级。
+ */
+function RowActionsMenu({ worker, onRotate, onRemove, onStop }: RowActionsMenuProps) {
+  const [open, setOpen] = useState(false)
+  const isOnline = worker.lastSeenState === 'online'
+  return (
+    <div className="relative inline-block text-left">
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label="Worker actions"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="size-8"
+        onClick={() => setOpen(v => !v)}
+      >
+        <MoreHorizontal className="size-4" />
+      </Button>
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 z-20 mt-1 w-44 rounded-md border bg-popover p-1 text-sm shadow-lg"
+          onMouseLeave={() => setOpen(false)}
+        >
+          {worker.baseUrl && (
+            <a
+              role="menuitem"
+              href={`${worker.baseUrl.replace(/\/+$/, '')}/admin/`}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-2 rounded px-2 py-1.5 hover:bg-accent"
+              onClick={() => setOpen(false)}
+            >
+              <ExternalLink className="size-3.5" />
+              Open worker UI
+            </a>
+          )}
+          <button
+            role="menuitem"
+            type="button"
+            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-accent"
+            onClick={() => {
+              setOpen(false)
+              onRotate()
+            }}
+          >
+            Rotate token
+          </button>
+          <button
+            role="menuitem"
+            type="button"
+            disabled={!isOnline}
+            title={!isOnline ? 'Stop is only available while the worker is online.' : undefined}
+            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+            onClick={() => {
+              setOpen(false)
+              onStop()
+            }}
+          >
+            Stop runtime
+          </button>
+          <button
+            role="menuitem"
+            type="button"
+            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-destructive hover:bg-destructive/10"
+            onClick={() => {
+              setOpen(false)
+              onRemove()
+            }}
+          >
+            Remove from fleet
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -180,7 +292,8 @@ function EmptyState({ onRegister }: { onRegister: () => void }) {
       <div className="space-y-1">
         <h2 className="text-lg font-semibold">No workers registered yet</h2>
         <p className="text-sm text-muted-foreground">
-          Click Register to add one — it just needs the worker&apos;s base URL and bootstrap API token.
+          Click Pair to attach a worker that has already started — it just
+          needs the worker&apos;s base URL and bootstrap API token.
         </p>
       </div>
       <Button onClick={onRegister}>

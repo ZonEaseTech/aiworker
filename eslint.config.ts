@@ -32,12 +32,33 @@ export default antfu({
     }],
   },
 }, {
+  // PLAN-022 / FEAT-034：fleet 视角的数据通道**只**许走 gateway WS 协议
+  // (`@/fleet/lib/gateway-client`) 与 fleet api 包装层 (`@/fleet/api`)。任何
+  // 直接 fetch worker REST `/api/worker/*` 的代码都属于回退耦合——配置 / secrets
+  // / cron / approvals 是 worker 自管面，fleet UI 只做「跳转到 worker.baseUrl
+  // + /admin/」按钮，不内嵌。
+  files: [
+    'apps/web/src/fleet/api.ts',
+    'apps/web/src/fleet/features/**/*.{ts,tsx}',
+    'apps/web/src/fleet/routes/**/*.{ts,tsx}',
+  ],
+  rules: {
+    'no-restricted-syntax': ['error', {
+      selector: 'CallExpression[callee.name="fetch"] > Literal[value=/^\\/api\\/worker\\//]',
+      message: 'fleet 视角禁止直接 fetch worker REST `/api/worker/*`；走 gateway WS 协议或在 worker bundle 内实现。',
+    }, {
+      selector: 'CallExpression[callee.name="fetch"] > TemplateLiteral',
+      message: 'fleet 视角禁止裸 fetch；统一走 @/fleet/api 经 gateway-client。如果是 health / openapi 类需求请明确说明。',
+    }],
+  },
+}, {
   // PLAN-022 / FEAT-033：worker 视角不得引用 fleet 视角；共享请放 @/shared/。
   files: ['apps/web/src/worker/**/*.{ts,tsx}'],
   rules: {
     'no-restricted-imports': ['error', {
       patterns: [
         { group: ['@/fleet', '@/fleet/**'], message: 'worker 视角不得引用 fleet 视角；共享请放 @/shared/。' },
+        { group: ['@zonease/aiworker-gateway-proto', '@zonease/aiworker-gateway-proto/*'], message: 'worker 视角直连 worker REST + bearer-auth，不应引入 gateway WS 协议；如确需触达 fleet 能力，由 fleet UI 提供。' },
       ],
     }],
   },

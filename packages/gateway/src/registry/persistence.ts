@@ -1,8 +1,12 @@
 import type { RegisteredWorker } from '@zonease/aiworker-shared'
 import type { FleetDatabase } from '@zonease/aiworker-storage-sqlite/fleet'
 import { auditEvents, registeredWorkers } from '@zonease/aiworker-storage-sqlite/fleet'
-import { count, desc, eq } from 'drizzle-orm'
+import { and, count, desc, eq, lt, sql } from 'drizzle-orm'
 import { encryptToken } from './crypto'
+
+function escapeSqlLikePrefix(value: string): string {
+  return value.replace(/[\\%_]/g, ch => `\\${ch}`)
+}
 
 export interface CreateRegisteredWorkerInput {
   workerId: string
@@ -294,5 +298,71 @@ export class FleetPersistence {
         detail: entry.detail,
       })
       .run()
+  }
+
+  /**
+   * FEAT-034 Phase 2 — fleet UI `audit.list` 浏览。按 `id` 倒序分页，可按
+   * `action` 前缀 / `workerId` 过滤。
+   *
+   * - `before`：游标。仅返回 `id < before` 的行；前端把上一页最后一条 id 回填即可。
+   * - `limit`：硬上限 200 由 proto 层校验，这里只做兜底。
+   * - `actionPrefix`：把过滤推到 SQL（`LIKE 'gateway.connect.%'`），避免一次拉
+   *   全表后 JS 过滤；对 fleet 上百万行 audit 而言这是必要的。
+   * - `workerId`：精确匹配。
+   *
+   * 多取一行用于探测「是否还有下一页」（`hasMore`），返回前再切片，避免 SQL
+   * 用 `count(*)` 二次查询。
+   */
+  listAuditEvents(opts: {
+    limit?: number
+    before?: number
+    actionPrefix?: string
+    workerId?: string
+  } = {}): {
+    events: Array<{
+      id: number
+      at: string
+      actor: string
+      action: string
+      workerId: string | null
+      detail: Record<string, unknown> | null
+    }>
+    hasMore: boolean
+  } {
+    const limit = Math.max(1, Math.min(200, opts.limit ?? 50))
+    const filters = []
+    if (typeof opts.before === 'number' && Number.isFinite(opts.before))
+      filters.push(lt(auditEvents.id, opts.before))
+    if (opts.actionPrefix && opts.actionPrefix.length > 0) {
+      const pattern = `${escapeSqlLikePrefix(opts.actionPrefix)}%`
+      filters.push(sql`${auditEvents.action} LIKE ${pattern} ESCAPE '\\'`)
+    }
+    if (opts.workerId && opts.workerId.length > 0)
+      filters.push(eq(auditEvents.workerId, opts.workerId))
+    const where = filters.length === 0
+      ? undefined
+      : filters.length === 1
+        ? filters[0]
+        : and(...filters)
+    const rows = this.db
+      .select()
+      .from(auditEvents)
+      .where(where)
+      .orderBy(desc(auditEvents.id))
+      .limit(limit + 1)
+      .all()
+    const hasMore = rows.length > limit
+    const sliced = hasMore ? rows.slice(0, limit) : rows
+    return {
+      events: sliced.map(r => ({
+        id: r.id,
+        at: r.at,
+        actor: r.actor,
+        action: r.action,
+        workerId: r.workerId ?? null,
+        detail: (r.detail ?? null) as Record<string, unknown> | null,
+      })),
+      hasMore,
+    }
   }
 }
