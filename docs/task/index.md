@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-04-28 19:19
+> Updated: 2026-04-29 03:41
 
 ## Usage
 
@@ -77,7 +77,7 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REFACTOR-004 测试服部署迁移：源码 systemd → 已发布 npm cli + `aiworker install systemd`**](REFACTOR-004.md) `P1`
 - [x] [**BUG-012 `aiworker gateway start` 在 npm install 场景下不能启动（仓库布局假设）**](BUG-012.md) `P1`
 - [ ] [**BUG-013 `workers.info` / `workers.stop` 在 node-side dispatcher 显式 stub `method_not_implemented`**](BUG-013.md) `P2`
-- [ ] [**BUG-014 `aiworker install systemd` 渲染的 unit 缺 `EnvironmentFile` + 全部安全加固**](BUG-014.md) `P2`
+- [x] [**BUG-014 Harden `aiworker install systemd` unit and portable ExecStart**](BUG-014.md) `P2`
 - [x] [**BUG-015 worker /api/worker/{orchestrator,evolution,events} 缺 bearer-auth**](BUG-015.md) `P0`
 - [x] [**BUG-016 web channel webhook 无验签无鉴权（envelope 注入）**](BUG-016.md) `P0`
 - [x] [**BUG-017 Lark verificationToken + WhatsApp verifyToken 非常量时间比较**](BUG-017.md) `P0`
@@ -106,3 +106,16 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-027 Gateway chat accepted conversation id cannot be reused for continuation**](BUG-027.md) `P1`
 - [x] [**BUG-028 Web UI CSS bundle misses Tailwind utilities**](BUG-028.md) `P1`
 - [x] [**REL-001 Publish aiworker CLI 0.4.4**](REL-001.md) `P1`
+- [x] [**QA-001 Run extended 0.4.4 validation campaign**](QA-001.md) `P1`
+- [x] [**BUG-029 Gateway start fails in a clean cwd without a preexisting data directory**](BUG-029.md) `P1`
+- [x] [**BUG-030 Fleet and worker admin mobile layouts overflow under narrow viewports**](BUG-030.md) `P2`
+- [x] [**BUG-031 Gateway start persists root WS URL instead of `/ws`**](BUG-031.md) `P1`
+- [x] [**BUG-032 Stabilize workspace-wide test gate under concurrent package execution**](BUG-032.md) `P1`
+- [x] [**BUG-033 CLI/gateway integration tests can leak gateway processes on timeout**](BUG-033.md) `P1`
+- [x] [**TODO-001 Correct Web UI command copy for enrollment and worker management**](TODO-001.md) `P2`
+- [x] [**TODO-002 Normalize CLI argument validation and command semantics**](TODO-002.md) `P2`
+- [x] [**TODO-003 Refresh Web build config and bundle budget warnings**](TODO-003.md) `P3`
+- [-] [**TODO-004 Evaluate app-level admin auth or fail-closed checks**](TODO-004.md) `P2`
+- [x] [**TODO-005 Apply safe-env policy to git workspace helper processes**](TODO-005.md) `P3`
+- [x] [**TODO-006 Normalize remote CLI PATH and version inspection**](TODO-006.md) `P3`
+- [-] [**BUG-034 Web smoke-e2e imports removed gateway package path**](BUG-034.md) `P2`

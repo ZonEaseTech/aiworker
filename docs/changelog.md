@@ -1,5 +1,254 @@
 # AIWorker Changelog
 
+## 2026-04-29 03:41 [merge] PLAN-034 — reviewed 0.4.4 repairs merged
+
+Merged `bkd/lc9ls9zp` into `main` as `05762a4`
+(`fix: merge reviewed 0.4.4 repairs`). The merge carried the green-reviewed
+`0.4.4` repair/optimization integration for CLI/gateway/runtime, Web UI/build,
+storage, core safe-env handling, user-facing docs, and regression tests.
+
+Pre-merge conflict checking found no conflicts. The current `main` agent and
+Serena configuration was preserved; `TODO-004` remains excluded and pending
+proposal approval.
+
+Post-merge verification passed: root typecheck, lint, build, workspace tests,
+CLI `smoke:aiworker-run`, CLI `smoke:aiworker-fleet`, and Web `smoke:e2e`.
+Merged BKD implementation/audit/coordinator issues were moved to `done`;
+proposal-only `TODO-004`, superseded split workers, and the active parent issue
+remain open.
+
+## 2026-04-28 22:20 [dispatch] PLAN-034 — integration branch merge-ready
+
+Final audit for the reviewed `0.4.4` repair/optimization integration returned
+green. Integration branch `bkd/lc9ls9zp` at commit `897d15c` is merge-ready and
+recommended for parent-main merge if accepted. The branch integrates reviewed
+CLI/gateway/runtime, Web/UI/build, storage, core safe-env, user-facing docs,
+and test reliability repairs while excluding `TODO-004`, child issue PMA docs,
+and `docs/changelog.md`.
+
+Verification reported by the integration worker covered frozen install,
+focused CLI/gateway/storage/Web gates, workspace concurrent tests, stress
+tests, root typecheck/lint/build, smoke tests, 390x844 screenshot checks, and
+post-run residue scans. Final audit found no P0/P1/P2 blockers.
+
+Residual human-review risks: future detached daemon-style tests still need
+explicit daemon-stop cleanup, systemd behavior still needs live user/system
+scope validation across target distros, Vite chunk-size warnings remain
+non-fatal, Web mobile layout still needs final human visual acceptance after
+merge/deploy, and safe Git env intentionally preserves Git SSH/askpass behavior
+while filtering AIWorker/token-like secrets.
+
+## 2026-04-28 21:49 [dispatch] PLAN-034 — split-lane integration active
+
+Coordinator `akif8ehr` split the integration batch into CLI/gateway/runtime
+worker `yg3l8xva` and Web/UI/build worker `o599yeb9`. The earlier all-in-one
+worker `lc9ls9zp` exited cleanly as superseded. Replaced cron `wjxil9uj` with
+`QA-001-PLAN-034-split-poll` (`tigirxz7`) so follow-up monitoring tracks the
+actual topology.
+
+## 2026-04-28 21:47 [dispatch] PLAN-034 — audit rework and cron safety net
+
+Rejected the first `kq6e22bw` audit run as red because it did not produce the
+required risk report. Moved it back to `working` with rework instructions and
+created BKD cron `QA-001-PLAN-034-poll` (`wjxil9uj`) to follow coordinator
+`akif8ehr` every 30 minutes during the integration batch.
+
+## 2026-04-28 21:45 [dispatch] PLAN-034 — integration workers started
+
+Started BKD coordinator `akif8ehr`, integration worker `lc9ls9zp`, and
+read-only audit worker `kq6e22bw`. The implementation lane will merge reviewed
+repair/optimization worktrees into one merge-ready integration worktree, while
+the audit lane checks reviewed outputs and merge risks. `TODO-004` remains
+proposal-only. No source fixes were made in the parent session.
+
+## 2026-04-28 21:41 [dispatch] PLAN-034 — integrate 0.4.4 repairs and optimizations
+
+Started a BKD integration dispatch for reviewed `0.4.4` repair and optimization
+worktrees. Coordinator: `akif8ehr`. The batch exists to merge and verify
+overlapping review branches before any main-branch merge. No source fixes were
+made in the parent session.
+
+## 2026-04-28 21:15 [QA] Baseline 0.4.4 BKD issue moved to review
+
+Moved the original baseline BKD issue `veyrxhkc` to `review` after posting the
+baseline validation summary and extended QA follow-ups. It was not moved to
+`done`; follow-up implementation work remains in separate review issues.
+
+## 2026-04-28 21:13 [QA] QA-001 built CLI bundle smoke passed
+
+Ran a black-box smoke against `apps/cli/dist/aiworker.js` after the root build.
+Evidence:
+`/home/ben/.codex/memories/aiworker-qa001-evidence/bundle-cli-smoke-2113.log`.
+Version, project init, scope, and `run --message hello --dry-run` all exited 0.
+
+## 2026-04-28 21:12 [QA] QA-001 workspace-concurrent test passed on rerun
+
+Re-ran parent workspace-concurrent `bun run --filter '*' test`. Evidence:
+`/home/ben/.codex/memories/aiworker-qa001-evidence/workspace-concurrent-test-2111.log`.
+This run exited 0. `BUG-032`/`BUG-033` remain open for review because an earlier
+reliability loop reproduced timeout and dangling-process signals.
+
+## 2026-04-28 21:11 [QA] QA-001 root check and build passed
+
+Re-ran root `bun run check` and `bun run build` after the extended QA
+campaign. Evidence:
+`/home/ben/.codex/memories/aiworker-qa001-evidence/root-check-build-2109.log`.
+Both commands exited 0; existing Web/Vite/chunk warnings remained unchanged.
+
+## 2026-04-28 21:08 [QA] QA-001 low-level package breadth passed
+
+Ran additional package tests for shared, fs-layout, storage-sqlite,
+gateway-proto, and api packages. The redacted evidence log is
+`/home/ben/.codex/memories/aiworker-qa001-evidence/package-breadth-2108.log`.
+All commands exited 0; no new bug was recorded.
+
+## 2026-04-28 21:06 [QA] QA-001 CLI black-box matrix passed
+
+Ran an isolated CLI command matrix under a temporary HOME/project and stored the
+redacted log at
+`/home/ben/.codex/memories/aiworker-qa001-evidence/cli-blackbox-matrix-2106-rerun.log`.
+The run covered `init`, `scope`, `config-show`, invalid `config-set`,
+`sessions`, and `schedule` CRUD success/failure paths. Final status was 0; no
+new bug was recorded.
+
+## 2026-04-28 21:03 [QA] QA-001 extended parent soak passed
+
+Ran a bounded parent-session soak and stored the log at
+`/home/ben/.codex/memories/aiworker-qa001-evidence/extended-soak-2101.log`.
+The run repeated CLI dry-run/fleet smokes, gateway protocol smoke, gateway
+tests, and core tests three times, then ran Web size report, Web tests, and Web
+production build/CSS utility checks. All commands exited 0. Existing Web
+Vite/happy-dom warning noise remained unchanged. BKD follow-up state was also
+normalized so completed worker outputs remain in `review` until human review.
+
+## 2026-04-28 20:52 [QA] Remote 0.4.4 health and PATH diagnostic repeated
+
+Repeated a read-only remote health/version check with sensitive identifiers
+omitted from PMA records. The gateway service was active, `/health` returned
+`ok=true`, explicit AIWorker CLI path reported `aiworker/0.4.4`, and Bun global
+listed `@zonease/aiworker-cli@0.4.4`. Non-interactive shell PATH still did not
+resolve `aiworker`, reinforcing `TODO-006`. No source fixes were made.
+
+## 2026-04-28 20:51 [BUG-P2] BUG-034 — Web smoke-e2e stale gateway import
+
+Recorded a new QA finding: `apps/web/scripts/smoke-e2e.ts` still imports the
+removed `../../gateway/src/index` path and exits 1 before running the loopback
+Web/gateway protocol smoke. The current gateway module lives under
+`packages/gateway`. `web-quality shared-cycles` passed separately. No source
+fix was made in the parent QA session.
+
+## 2026-04-28 20:49 [QA] BUG-030 Worker admin screenshots persisted
+
+Captured Worker admin overview/chat screenshots from a local Worker bundle
+preview and stored them under
+`/home/ben/.codex/memories/aiworker-qa001-evidence/`. The 390x844 captures
+confirm the Worker shell also keeps the fixed sidebar and pushes main content
+off-screen; desktop comparison remains usable. No source fixes were made.
+
+## 2026-04-28 20:45 [QA] QA-001 reliability loop reproduced workspace flake
+
+Added a parent QA reliability loop log under
+`/home/ben/.codex/memories/aiworker-qa001-evidence/`. CLI smoke pairs passed
+5x, Web test/build passed, and workspace-concurrent tests reproduced
+`BUG-032`/`BUG-033` with CLI/Core timeout failures plus a `killed 1 dangling
+process` signal. Immediate focused reruns of the failed CLI/Core files passed,
+and cleanup checks found no lingering gateway process or recent AIWorker temp
+gateway/smoke directories. No source fixes were made.
+
+## 2026-04-28 20:41 [QA] QA-001 BKD Codex watchdog applied
+
+Recorded the BKD follow-up heuristic for Codex-backed QA work: inspect
+`review + running` issue logs and only wake tasks that lack a final report or
+are visibly mid-task. `TODO-005` (`jfmsr8wc`) was woken and moved back to
+`working`; `TODO-004` (`kz12xf5k`) and `TODO-006` (`3k7sbl3h`) were left in
+review after final reports; `TODO-001` (`2i506owq`) and `BUG-030` (`2q45cah8`)
+were woken and returned to `working` because their logs showed active cleanup
+or reopened scope after entering review. No source fixes were made.
+
+## 2026-04-28 20:30 [QA] QA-001 evidence path normalized
+
+Recorded the final regenerated evidence path for `BUG-029` and `BUG-030`:
+`/home/ben/.codex/memories/aiworker-qa001-evidence/`. The directory now keeps
+redacted gateway start outputs, `/health` outputs, gateway log, HTTP probe
+outputs, and Fleet admin screenshots; temporary credential/state artifacts were
+removed. No source fixes were made.
+
+## 2026-04-28 20:29 [QA] QA-001 sequential reliability gates passed
+
+After recording `BUG-029`, `BUG-030`, and `BUG-014`, sequential reliability
+gates all exited 0: `bun run typecheck`, `bun run lint`, `bun run build`, and
+`bun run --filter '*' test`. Output still included Vite 8
+deprecation/chunk-size warnings and expected negative-path test logs, but no
+command failed. No source fixes were made.
+
+## 2026-04-28 20:24 [QA] QA-001 late subtask reports integrated
+
+Integrated late UI/UX, black-box, and reliability reports from the extended
+`0.4.4` validation campaign:
+
+- widened `BUG-030` to cover both Fleet and Worker admin mobile layout
+  overflow;
+- expanded `BUG-031` with cross-command gateway URL evidence;
+- added `BUG-032` for workspace-wide concurrent test flakiness;
+- added `BUG-033` for gateway process cleanup leaks after timeout paths;
+- added `TODO-001` through `TODO-006` for command copy, CLI argument/semantic
+  cleanup, Web build warnings, admin auth posture, git helper env, and remote
+  CLI PATH/version inspection.
+
+No source fixes were made in this session.
+
+## 2026-04-28 20:18 [BUG-P1] BUG-031 — local gateway operator URL points at root
+
+Recorded another `QA-001` black-box finding: `aiworker gateway start` can start
+locally after the fleet DB parent exists, but it persists `ws://localhost:<port>`
+instead of `ws://localhost:<port>/ws`. Follow-up operator commands such as
+`fleet list` then fail the WebSocket upgrade against `/` even though `/health`
+is healthy. No source fix was made in this session.
+
+## 2026-04-28 20:15 [BUG-P1] BUG-029 / [BUG-P2] BUG-030 — 0.4.4 extended QA findings
+
+Recorded two follow-ups from the unattended `QA-001` validation campaign:
+
+- `BUG-029`: `aiworker gateway start` fails from a clean cwd when the default
+  `./data/fleet.db` parent directory does not exist. The same local gateway
+  starts and returns `/health` 200 when `AIWORKER_FLEET_DB_PATH` points at a
+  temp DB file.
+- `BUG-030`: Fleet admin static assets and desktop rendering are healthy, but
+  the mobile 390x844 viewport is unusable because the fixed `w-60` sidebar
+  compresses main content and causes text/control overflow.
+
+No source fixes were made in this session; both findings were recorded for BKD
+dispatch.
+
+White-box review also reconfirmed existing `BUG-014` with 153 focused tests
+passing, then dispatched it to BKD issue `q7s4bay9` with added notes on
+portable systemd `ExecStart` rendering and restart behavior after unit changes.
+
+Late QA reports also recorded and dispatched:
+
+- `BUG-031`: local `gateway start` persists a root WebSocket URL instead of
+  `/ws`, causing follow-up operator commands to fail upgrade.
+- `BUG-032`: workspace-wide concurrent test execution flakes even when
+  isolated package/focused reruns pass.
+- `BUG-033`: timed-out CLI/gateway integration tests can leave gateway
+  processes and credential-bearing temp directories behind.
+- `TODO-001` through `TODO-006`: Web command copy, CLI malformed-input
+  semantics, Web build warnings, admin auth posture, git helper env policy,
+  and remote CLI PATH/version inspection.
+
+## 2026-04-28 20:03 [progress] QA-001 — extended 0.4.4 validation started
+
+Started an unattended record-only validation campaign for `0.4.4`.
+
+- Baseline release validation already passed local gates, CLI smoke scripts,
+  remote gateway health, fleet Web static smoke, local Codex worker OTP
+  enrollment, explicit/default chat continuity, `/new` reset, and session
+  metadata checks.
+- The expanded campaign will cover reliability loops, black-box CLI/gateway
+  behavior, white-box inspection, and Web UI/UX smoke.
+- This session is intentionally not implementing fixes; confirmed findings
+  should be recorded as PMA tasks and dispatched through BKD follow-ups.
+
 ## 2026-04-28 19:19 [progress] REL-001 — 0.4.4 published
 
 Published `@zonease/aiworker-cli@0.4.4`:
