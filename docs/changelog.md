@@ -1,5 +1,34 @@
 # AIWorker Changelog
 
+## 2026-04-29 10:01 [BUG-P0] BUG-035 fixed: serve foreground lifecycle
+
+Fixed `aiworker serve` so successful startup remains a foreground long-running
+process until SIGTERM/SIGINT. Added a CLI lifecycle regression that verifies the
+worker HTTP server stays alive after `/health` is ready and exits cleanly on
+SIGTERM.
+
+Verification passed: focused serve lifecycle test, CLI package test, workspace
+test suite, root typecheck, root lint, root build, and CLI smoke scripts. A
+temporary test-fleet OTP worker enrolled and was approved successfully; real
+Codex chat continuity is now blocked by the separate `BUG-036` executor
+reconnect failure.
+
+## 2026-04-29 10:01 [bug] BUG-036 found during BUG-035 fleet validation
+
+After the `BUG-035` lifecycle fix, a temporary local `codex/default` worker
+successfully reached OTP approval through the test fleet, but real chat turns
+ended with `finishReason=error`. Local worker logs showed Codex app-server
+reconnect errors. Recorded as `BUG-036` with sanitized evidence; temporary
+worker state was removed from the fleet and local credential-bearing state was
+deleted.
+
+## 2026-04-29 08:45 [bug] BUG-035 found during 0.4.5 fleet validation
+
+The `0.4.5` test-fleet run found a release-blocking `aiworker serve` foreground
+lifecycle bug: the worker starts, begins OTP enrollment, then the CLI process
+exits before an OTP is issued. Recorded as `BUG-035` with sanitized
+reproduction evidence. No source fix was made in this validation pass.
+
 ## 2026-04-29 06:10 [progress] REL-002 — 0.4.5 published
 
 Published `@zonease/aiworker-cli@0.4.5`:

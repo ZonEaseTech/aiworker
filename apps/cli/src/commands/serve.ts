@@ -197,7 +197,11 @@ export async function runServe(options: ServeOptions = {}): Promise<void> {
   }
 
   // SIGTERM / SIGINT：同时优雅关 HTTP server 与 gateway-client，最长等 5s。
+  let shuttingDown = false
   const shutdown = async (signal: string) => {
+    if (shuttingDown)
+      return
+    shuttingDown = true
     consola.info(`[aiw serve] received ${signal}, shutting down`)
     try {
       if (gatewayNode) {
@@ -218,6 +222,9 @@ export async function runServe(options: ServeOptions = {}): Promise<void> {
   }
   process.once('SIGTERM', () => void shutdown('SIGTERM'))
   process.once('SIGINT', () => void shutdown('SIGINT'))
+
+  // Keep the CLI foreground service alive until the signal handlers exit.
+  await new Promise<never>(() => {})
 }
 
 /**
