@@ -1,5 +1,5 @@
 import type { ResponseFrame } from '@zonease/aiworker-gateway-proto'
-import type { Envelope } from '@zonease/aiworker-shared'
+import type { Envelope, WorkerInfo } from '@zonease/aiworker-shared'
 import type { WorkerEventBus } from '../events/bus'
 import type { NodeHandlers, OrchestratorLike } from './dispatcher'
 
@@ -48,6 +48,19 @@ function makeDispatcher(handlers?: NodeHandlers, orchestrator: OrchestratorLike 
     sendResponse: frame => responses.push(frame),
   })
   return { dispatcher, approvals, responses }
+}
+
+function fakeWorkerInfo(workerId = 'w_test'): WorkerInfo {
+  return {
+    workerId,
+    runtimeVersion: '0.2.0',
+    configVersion: 7,
+    brains: [{ id: 'fs-primary', type: 'filesystem', status: 'healthy' }],
+    executor: { type: 'http', model: 'gpt-4o-mini', status: 'healthy' },
+    channels: [{ channel: 'web', enabled: true }],
+    evolutionEnabled: true,
+    startedAt: '2026-04-29T00:00:00.000Z',
+  }
 }
 
 describe('GatewayDispatcher — chat.send session lifecycle envelope', () => {
@@ -255,6 +268,147 @@ describe('GatewayDispatcher — approval.list / approval.grant', () => {
     expect(responses[0]?.ok).toBe(true)
     const result = (responses[0] as { ok: true, result: unknown }).result as { granted: boolean }
     expect(result.granted).toBe(false)
+    approvals.dispose()
+  })
+})
+
+describe('GatewayDispatcher — workers.info / workers.stop', () => {
+  it('workers.info replies with the injected WorkerInfo for the local worker', async () => {
+    let called = 0
+    const info = fakeWorkerInfo()
+    const { dispatcher, approvals, responses } = makeDispatcher({
+      workersInfo: async () => {
+        called += 1
+        return info
+      },
+    })
+
+    await dispatcher.handleRequest({
+      type: 'request',
+      id: 'req-wi-1',
+      method: 'workers.info',
+      params: { workerId: 'w_test' },
+    })
+
+    expect(called).toBe(1)
+    expect(responses).toHaveLength(1)
+    const frame = responses[0]!
+    expect(frame.ok).toBe(true)
+    if (frame.ok)
+      expect(frame.result).toEqual(info)
+    approvals.dispose()
+  })
+
+  it('workers.info rejects a workerId mismatch before invoking the handler', async () => {
+    let called = 0
+    const { dispatcher, approvals, responses } = makeDispatcher({
+      workersInfo: async () => {
+        called += 1
+        return fakeWorkerInfo()
+      },
+    })
+
+    await dispatcher.handleRequest({
+      type: 'request',
+      id: 'req-wi-2',
+      method: 'workers.info',
+      params: { workerId: 'w_other' },
+    })
+
+    expect(called).toBe(0)
+    expect(responses).toHaveLength(1)
+    const frame = responses[0]!
+    expect(frame.ok).toBe(false)
+    if (!frame.ok)
+      expect(frame.error.code).toBe('worker_mismatch')
+    approvals.dispose()
+  })
+
+  it('workers.info returns method_not_implemented when the handler is absent', async () => {
+    const { dispatcher, approvals, responses } = makeDispatcher()
+
+    await dispatcher.handleRequest({
+      type: 'request',
+      id: 'req-wi-3',
+      method: 'workers.info',
+      params: { workerId: 'w_test' },
+    })
+
+    expect(responses).toHaveLength(1)
+    const frame = responses[0]!
+    expect(frame.ok).toBe(false)
+    if (!frame.ok) {
+      expect(frame.error.code).toBe('method_not_implemented')
+      expect(frame.error.message).toBe('workers.info handler not wired')
+    }
+    approvals.dispose()
+  })
+
+  it('workers.stop invokes the injected stop handler and replies stopped=true', async () => {
+    let called = 0
+    const { dispatcher, approvals, responses } = makeDispatcher({
+      workersStop: async () => {
+        called += 1
+      },
+    })
+
+    await dispatcher.handleRequest({
+      type: 'request',
+      id: 'req-ws-1',
+      method: 'workers.stop',
+      params: { workerId: 'w_test' },
+    })
+
+    expect(called).toBe(1)
+    expect(responses).toHaveLength(1)
+    const frame = responses[0]!
+    expect(frame.ok).toBe(true)
+    if (frame.ok)
+      expect(frame.result).toEqual({ stopped: true })
+    approvals.dispose()
+  })
+
+  it('workers.stop rejects a workerId mismatch before invoking the handler', async () => {
+    let called = 0
+    const { dispatcher, approvals, responses } = makeDispatcher({
+      workersStop: async () => {
+        called += 1
+      },
+    })
+
+    await dispatcher.handleRequest({
+      type: 'request',
+      id: 'req-ws-2',
+      method: 'workers.stop',
+      params: { workerId: 'w_other' },
+    })
+
+    expect(called).toBe(0)
+    expect(responses).toHaveLength(1)
+    const frame = responses[0]!
+    expect(frame.ok).toBe(false)
+    if (!frame.ok)
+      expect(frame.error.code).toBe('worker_mismatch')
+    approvals.dispose()
+  })
+
+  it('workers.stop returns method_not_implemented when the handler is absent', async () => {
+    const { dispatcher, approvals, responses } = makeDispatcher()
+
+    await dispatcher.handleRequest({
+      type: 'request',
+      id: 'req-ws-3',
+      method: 'workers.stop',
+      params: { workerId: 'w_test' },
+    })
+
+    expect(responses).toHaveLength(1)
+    const frame = responses[0]!
+    expect(frame.ok).toBe(false)
+    if (!frame.ok) {
+      expect(frame.error.code).toBe('method_not_implemented')
+      expect(frame.error.message).toBe('workers.stop handler not wired')
+    }
     approvals.dispose()
   })
 })

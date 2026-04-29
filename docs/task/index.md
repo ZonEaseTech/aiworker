@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-04-29 17:58
+> Updated: 2026-04-29 18:16
 
 ## Usage
 
@@ -76,7 +76,7 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-011 Worker quickstart 仍要求显式 WORKER_DB_PATH / WORKER_MIGRATIONS_FOLDER（与 FEAT-030 README 承诺不符）**](BUG-011.md) `P3`
 - [x] [**REFACTOR-004 测试服部署迁移：源码 systemd → 已发布 npm cli + `aiworker install systemd`**](REFACTOR-004.md) `P1`
 - [x] [**BUG-012 `aiworker gateway start` 在 npm install 场景下不能启动（仓库布局假设）**](BUG-012.md) `P1`
-- [ ] [**BUG-013 `workers.info` / `workers.stop` 在 node-side dispatcher 显式 stub `method_not_implemented`**](BUG-013.md) `P2`
+- [x] [**BUG-013 `workers.info` / `workers.stop` 在 node-side dispatcher 显式 stub `method_not_implemented`**](BUG-013.md) `P2`
 - [x] [**BUG-014 Harden `aiworker install systemd` unit and portable ExecStart**](BUG-014.md) `P2`
 - [x] [**BUG-015 worker /api/worker/{orchestrator,evolution,events} 缺 bearer-auth**](BUG-015.md) `P0`
 - [x] [**BUG-016 web channel webhook 无验签无鉴权（envelope 注入）**](BUG-016.md) `P0`
