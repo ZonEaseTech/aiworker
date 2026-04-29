@@ -1,6 +1,6 @@
 # PLAN-035 Publish aiworker CLI 0.4.5
 
-- **status**: implementing
+- **status**: completed
 - **createdAt**: 2026-04-29 06:02
 - **approvedAt**: 2026-04-29 06:02
 - **relatedTask**: REL-002
@@ -76,3 +76,22 @@ Expected repository changes:
 
 - 2026-04-29 06:02 Direct release request treated as approval to execute the
   patch release.
+- 2026-04-29 06:10 Completed. Local gates passed, `v0.4.5` was pushed, the
+  GitHub release workflow succeeded, npm latest is `0.4.5`, and GitHub Release
+  `v0.4.5` is published with platform tarballs.
+
+## Verification
+
+- `bun install --frozen-lockfile`
+- `bun run --filter '*' test`
+- `bun run typecheck`
+- `bun run lint`
+- `bun run build`
+- `bun run --filter '@zonease/aiworker-cli' smoke:aiworker-run`
+- `bun run --filter '@zonease/aiworker-cli' smoke:aiworker-fleet`
+- `bun publish --dry-run --access public` from `apps/cli/dist` packed 25 files
+  and stopped at the local npm authentication boundary.
+- GitHub Actions release run `25093652889` completed successfully.
+- npm registry verification resolved `@zonease/aiworker-cli@0.4.5` as
+  `latest`.
+- Published-package smoke reported `aiworker/0.4.5`.

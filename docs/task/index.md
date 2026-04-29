@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-04-29 06:07
+> Updated: 2026-04-29 06:10
 
 ## Usage
 
@@ -119,4 +119,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**TODO-005 Apply safe-env policy to git workspace helper processes**](TODO-005.md) `P3`
 - [x] [**TODO-006 Normalize remote CLI PATH and version inspection**](TODO-006.md) `P3`
 - [x] [**BUG-034 Web smoke-e2e imports removed gateway package path**](BUG-034.md) `P2`
-- [-] [**REL-002 Publish aiworker CLI 0.4.5**](REL-002.md) `P1`
+- [x] [**REL-002 Publish aiworker CLI 0.4.5**](REL-002.md) `P1`

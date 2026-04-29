@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-04-29 06:02
+> Updated: 2026-04-29 06:10
 
 ## Usage
 
@@ -63,4 +63,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-032 Extended 0.4.4 validation campaign**](PLAN-032.md) `2026-04-28`
 - [x] [**PLAN-033 Admin surface fail-closed posture**](PLAN-033.md) `2026-04-28`
 - [x] [**PLAN-034 Integrate reviewed 0.4.4 repairs and optimizations**](PLAN-034.md) `2026-04-28`
-- [-] [**PLAN-035 Publish aiworker CLI 0.4.5**](PLAN-035.md) `2026-04-29`
+- [x] [**PLAN-035 Publish aiworker CLI 0.4.5**](PLAN-035.md) `2026-04-29`

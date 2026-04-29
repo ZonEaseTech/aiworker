@@ -1,5 +1,20 @@
 # AIWorker Changelog
 
+## 2026-04-29 06:10 [progress] REL-002 — 0.4.5 published
+
+Published `@zonease/aiworker-cli@0.4.5`:
+
+- Local release gates passed: frozen install, workspace tests, typecheck, lint,
+  root build, CLI run smoke, CLI fleet smoke, release diff review, and publish
+  dry-run up to the local npm authentication boundary.
+- The tag-triggered GitHub release workflow succeeded for `v0.4.5`, including
+  typecheck, tests, CLI bundle, npm publish, compiled binaries, and GitHub
+  Release asset upload.
+- npm `latest` now resolves to `0.4.5`, and a published-package smoke reports
+  `aiworker/0.4.5`.
+- GitHub Release `v0.4.5` contains the linux-x64, linux-arm64, darwin-x64, and
+  darwin-arm64 tarballs.
+
 ## 2026-04-29 06:02 [progress] REL-002 — prepare 0.4.5 release
 
 Started the `@zonease/aiworker-cli@0.4.5` patch release:
