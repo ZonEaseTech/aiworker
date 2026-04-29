@@ -173,3 +173,9 @@ signals to coordinator `akif8ehr` for follow-up.
   Moved merged BKD implementation/audit/coordinator issues to `done`.
   Superseded split workers `yg3l8xva` and `o599yeb9`, proposal-only
   `TODO-004`/`kz12xf5k`, and active parent issue `veyrxhkc` remain open.
+- 2026-04-29 03:56 Closed the remaining review-state QA discovery subtasks
+  `pow2u9ox`, `e3lt7ehz`, `ay9a9yox`, and `4j09qpa5` because their findings
+  were already incorporated into `QA-001` and the merged repair batch. Also
+  closed superseded split workers `yg3l8xva` and `o599yeb9` as do-not-merge
+  cleanup. Kept `kz12xf5k` in review because `TODO-004` remains a pending
+  proposal decision, not a merged repair.

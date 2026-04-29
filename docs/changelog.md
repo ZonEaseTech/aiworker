@@ -1,5 +1,13 @@
 # AIWorker Changelog
 
+## 2026-04-29 03:56 [cleanup] QA review issues closed
+
+Closed remaining review-state QA discovery subtasks and superseded split-lane
+workers after confirming their findings were already incorporated into
+`QA-001` and the merged `PLAN-034` repair batch. `TODO-004` / `kz12xf5k`
+remains in review because it is a pending proposal decision, not a merged
+repair.
+
 ## 2026-04-29 03:41 [merge] PLAN-034 — reviewed 0.4.4 repairs merged
 
 Merged `bkd/lc9ls9zp` into `main` as `05762a4`
