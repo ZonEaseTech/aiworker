@@ -14,7 +14,51 @@ export interface InitOptions {
   global?: boolean
   /** Allow project init even when cwd is not a git repo (escape hatch for ad-hoc setups). */
   force?: boolean
+  /** Preview planned writes without creating or modifying any file. */
+  dryRun?: boolean
 }
+
+interface PreflightReport {
+  applyLabel: string
+  create: string[]
+  preserve: string[]
+  requiresAction: string[]
+  scope: 'explicit' | 'project' | 'user'
+  targetHome: string
+  targetProject?: string
+}
+
+const PROJECT_TEMPLATE_PATHS = [
+  '.aiworker/',
+  '.aiworker/AGENT.md',
+  '.aiworker/SOUL.md',
+  '.aiworker/USER.md',
+  '.aiworker/MEMORY.md',
+  '.aiworker/ROLLUP.md',
+  '.aiworker/mcp.json',
+  '.aiworker/.gitignore',
+  '.aiworker/skills/',
+  '.aiworker/memories/',
+  '.aiworker/local/',
+  '.aiworker/local/.gitignore',
+  '.aiworker/local/workspaces/',
+] as const
+
+const PROJECT_BOOTSTRAP_STATE_PATHS = [
+  '.aiworker/local/.env',
+  '.aiworker/local/worker.db',
+] as const
+
+const PROJECT_EXISTING_LOCAL_STATE_PATHS = [
+  '.aiworker/local/identity.json',
+] as const
+
+const EXTERNAL_AGENT_PATHS: Array<{ path: string, type: 'directory' | 'file' }> = [
+  { path: 'AGENTS.md', type: 'file' },
+  { path: 'CLAUDE.md', type: 'file' },
+  { path: '.agents/', type: 'directory' },
+  { path: '.claude/', type: 'directory' },
+]
 
 /**
  * `aiworker init` — bootstrap worker.db, mint identity + token on first
@@ -32,6 +76,11 @@ export interface InitOptions {
 export async function runInit(options: InitOptions = {}): Promise<void> {
   if (options.global === true) {
     const home = path.join(homedir(), '.aiworker')
+    const report = buildUserScopePreflight(home, options)
+    printPreflightReport(report)
+    if (options.dryRun === true)
+      return
+
     process.env.AIWORKER_HOME = home
     bootstrapDotenv({ home })
     const ctx = await loadWorkerContext()
@@ -44,6 +93,11 @@ export async function runInit(options: InitOptions = {}): Promise<void> {
   // the legacy bootstrap.
   const scope = resolveAiworkerScope()
   if (scope.scope === 'explicit') {
+    const report = buildUserScopePreflight(scope.home, { ...options, scope: 'explicit' })
+    printPreflightReport(report)
+    if (options.dryRun === true)
+      return
+
     bootstrapDotenv({ home: scope.home })
     const ctx = await loadWorkerContext()
     consola.success(`[aiworker init] explicit-scope worker ${ctx.workerId} ready (${scope.home})`)
@@ -56,6 +110,11 @@ export async function runInit(options: InitOptions = {}): Promise<void> {
   // already aimed AIWORKER_HOME at the existing local/ via resolveAiworkerScope.
   const existingRoot = resolveProjectRoot(cwd)
   if (existingRoot) {
+    const report = buildProjectPreflight(existingRoot, options)
+    printPreflightReport(report)
+    if (options.dryRun === true)
+      return
+
     await ensureProjectAiworker(existingRoot)
     bootstrapDotenv({ home: path.join(existingRoot, '.aiworker', 'local') })
     const ctx = await loadWorkerContext()
@@ -74,6 +133,11 @@ export async function runInit(options: InitOptions = {}): Promise<void> {
       + `  • aiworker init --force    → create .aiworker/ here anyway (no git tracking).`,
     )
   }
+
+  const report = buildProjectPreflight(cwd, options)
+  printPreflightReport(report)
+  if (options.dryRun === true)
+    return
 
   await ensureProjectAiworker(cwd)
   // `init` owns dotenv bootstrap, so a brand-new project mints or persists
@@ -98,4 +162,108 @@ function isGitRepo(cwd: string): boolean {
       return false
     cur = parent
   }
+}
+
+function buildProjectPreflight(projectRoot: string, options: InitOptions): PreflightReport {
+  const root = path.resolve(projectRoot)
+  const create: string[] = []
+  const preserve: string[] = []
+  const requiresAction: string[] = []
+
+  for (const relative of PROJECT_TEMPLATE_PATHS) {
+    const display = `${relative}${existsSync(path.join(root, relative)) ? ' (existing aiworker layout)' : ''}`
+    if (existsSync(path.join(root, relative)))
+      preserve.push(display)
+    else
+      create.push(relative)
+  }
+
+  for (const relative of PROJECT_BOOTSTRAP_STATE_PATHS) {
+    if (existsSync(path.join(root, relative)))
+      preserve.push(`${relative} (existing local state)`)
+    else
+      create.push(`${relative} (worker bootstrap)`)
+  }
+
+  for (const relative of PROJECT_EXISTING_LOCAL_STATE_PATHS) {
+    if (existsSync(path.join(root, relative)))
+      preserve.push(`${relative} (existing local state)`)
+  }
+
+  for (const item of EXTERNAL_AGENT_PATHS) {
+    const relative = item.path
+    const absolute = path.join(root, relative)
+    if (existsSync(absolute)) {
+      requiresAction.push(
+        `${relative} (external agent ${item.type}; not modified, future adopt/merge candidate)`,
+      )
+    }
+  }
+
+  if (options.force === true)
+    requiresAction.push('--force only skips the git-repo guard; it does not overwrite existing files')
+
+  return {
+    applyLabel: options.dryRun === true ? 'dry-run (no files will be written)' : 'apply',
+    create,
+    preserve,
+    requiresAction,
+    scope: 'project',
+    targetHome: path.join(root, '.aiworker', 'local'),
+    targetProject: root,
+  }
+}
+
+function buildUserScopePreflight(
+  home: string,
+  options: InitOptions & { scope?: 'explicit' | 'user' },
+): PreflightReport {
+  const root = path.resolve(home)
+  const create: string[] = []
+  const preserve: string[] = []
+  const paths = [
+    '.env',
+    'worker.db',
+    'workers/',
+  ] as const
+
+  for (const relative of paths) {
+    if (existsSync(path.join(root, relative)))
+      preserve.push(`${relative} (existing user-scope state)`)
+    else
+      create.push(`${relative} (worker bootstrap)`)
+  }
+
+  return {
+    applyLabel: options.dryRun === true ? 'dry-run (no files will be written)' : 'apply',
+    create,
+    preserve,
+    requiresAction: [],
+    scope: options.scope ?? 'user',
+    targetHome: root,
+  }
+}
+
+function printPreflightReport(report: PreflightReport): void {
+  const header = [
+    `[aiworker init] preflight (${report.scope}-scope)`,
+    report.targetProject ? `Project root : ${report.targetProject}` : null,
+    `Home         : ${report.targetHome}`,
+    `Mode         : ${report.applyLabel}`,
+  ].filter((line): line is string => line !== null)
+
+  process.stdout.write(`${header.join('\n')}\n`)
+  printPreflightSection('Will create', report.create)
+  printPreflightSection('Will preserve', report.preserve)
+  printPreflightSection('Needs explicit action', report.requiresAction)
+}
+
+function printPreflightSection(title: string, items: string[]): void {
+  process.stdout.write(`${title}:\n`)
+  if (items.length === 0) {
+    process.stdout.write('  - none\n')
+    return
+  }
+  for (const item of items)
+    process.stdout.write(`  - ${item}\n`)
 }
