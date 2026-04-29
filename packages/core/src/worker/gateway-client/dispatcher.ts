@@ -1,5 +1,5 @@
 import type { RequestFrame, ResponseFrame } from '@zonease/aiworker-gateway-proto'
-import type { Envelope } from '@zonease/aiworker-shared'
+import type { Envelope, WorkerInfo } from '@zonease/aiworker-shared'
 import type { CronJobInput, CronJobPatch, CronJobRecord } from '../cron/types'
 import type { WorkerEventBus } from '../events/bus'
 import type { ApprovalStore } from '../orchestrator/approvals'
@@ -34,6 +34,10 @@ export interface RuntimeLike {
  * 路径暴露给 gateway。
  */
 export interface NodeHandlers {
+  /** 返回当前 worker 运行时快照。 */
+  workersInfo?: () => Promise<WorkerInfo>
+  /** 优雅停止当前 worker。成功后 dispatcher 回 `{ stopped: true }`。 */
+  workersStop?: () => Promise<void>
   /** 读 config + 当前 version。 */
   configGet?: () => Promise<{ version: number, config: unknown }>
   /**
@@ -141,11 +145,10 @@ export class GatewayDispatcher {
           await this.handleCronUpdate(id, p)
           break
         case METHODS['workers.info'].method:
-          // workers.info 暂不实现；S5 会在删 HTTP 路由时一并迁过来。
-          this.replyError(id, 'method_not_implemented', `${method} is not yet implemented on node side`)
+          await this.handleWorkersInfo(id, p)
           break
         case METHODS['workers.stop'].method:
-          this.replyError(id, 'method_not_implemented', `${method} is not yet implemented on node side`)
+          await this.handleWorkersStop(id, p)
           break
         default:
           this.replyError(id, 'method_not_implemented', `${method} not routed`)
@@ -200,6 +203,30 @@ export class GatewayDispatcher {
       consola.warn(`[gateway-dispatcher ${this.deps.workerId}] orchestrator.ingest failed: ${String(err)}`)
     })
     this.replyOk(id, { conversationId: chatId, accepted: true })
+  }
+
+  // ---- workers.info / workers.stop ----
+
+  private async handleWorkersInfo(id: string, params: Record<string, unknown>): Promise<void> {
+    if (!this.ensureWorkerMatch(id, params))
+      return
+    if (!this.deps.handlers?.workersInfo) {
+      this.replyError(id, 'method_not_implemented', 'workers.info handler not wired')
+      return
+    }
+    const result = await this.deps.handlers.workersInfo()
+    this.replyOk(id, result)
+  }
+
+  private async handleWorkersStop(id: string, params: Record<string, unknown>): Promise<void> {
+    if (!this.ensureWorkerMatch(id, params))
+      return
+    if (!this.deps.handlers?.workersStop) {
+      this.replyError(id, 'method_not_implemented', 'workers.stop handler not wired')
+      return
+    }
+    await this.deps.handlers.workersStop()
+    this.replyOk(id, { stopped: true })
   }
 
   // ---- config.get / config.put ----
@@ -299,11 +326,6 @@ export class GatewayDispatcher {
 
   // ---- cron.* (PLAN-014 §F4) ----
 
-  /**
-   * cron 方法都要求 `params.workerId === this.deps.workerId`：gateway 在转发
-   * 时会以 workerId 寻路，但这里再做一次防御，避免操作员误把 cron 任务挂到
-   * 错的 worker（gateway 路由表错乱时也能被这里拦下）。
-   */
   private ensureWorkerMatch(id: string, params: Record<string, unknown>): boolean {
     const workerId = String(params.workerId)
     if (workerId !== this.deps.workerId) {

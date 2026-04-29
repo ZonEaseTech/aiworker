@@ -5,6 +5,7 @@ import { bootstrapWorkerApp } from '@zonease/aiworker-api/bootstrap'
 import {
   applyConfigUpdate,
   buildCronHandlers,
+  buildInfo,
   getSecretsVault,
   handleTokenRotate,
   readConfig,
@@ -167,6 +168,24 @@ export async function runServe(options: ServeOptions = {}): Promise<void> {
         : {}),
       getRuntime: () => state.runtime,
       handlers: {
+        workersInfo: async () => {
+          const stored = await readConfig(getWorkerDb())
+          return await buildInfo(state, stored.config, {
+            ...(workerEnv.AIWORKER_ADVERTISED_BASE_URL === undefined
+              ? {}
+              : { advertisedBaseUrl: workerEnv.AIWORKER_ADVERTISED_BASE_URL }),
+          })
+        },
+        workersStop: async () => {
+          setTimeout(() => {
+            try {
+              process.kill(process.pid, 'SIGTERM')
+            }
+            catch (err) {
+              consola.error(`[aiw serve] workers.stop failed to signal self: ${String(err)}`)
+            }
+          }, 0)
+        },
         configGet: async () => {
           const stored = await readConfig(getWorkerDb())
           return { version: stored.version, config: stored.config }
