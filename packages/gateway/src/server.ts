@@ -10,6 +10,7 @@ import { serveAdminStatic } from './admin/serve-static'
 import { assertGatewayBindIsSafe, isLoopbackAddress } from './auth/loopback'
 import { authorizeConnection } from './auth/token'
 import { broadcastEventToOperators } from './events/broadcast'
+import { handleWorkerApiBridge, isWorkerApiBridgePath } from './router/bridge'
 import { dispatchNodeEvent, dispatchNodeResponse, dispatchOperatorRequest } from './router/dispatch'
 
 /** Bun.Server 泛型绑定 ConnectionData，便于后续 ws.data 强类型。 */
@@ -66,6 +67,10 @@ export function startGatewayServer(options: StartGatewayOptions): StartedGateway
     serveWeb: context.webStaticDir !== undefined,
     externalAuthAcknowledged: config.adminExternalAuthAcknowledged,
   })
+  assertWorkerBridgeServingIsSafe({
+    host: config.host,
+    externalAuthAcknowledged: config.adminExternalAuthAcknowledged,
+  })
 
   const server = Bun.serve<ConnectionData>({
     port: config.port,
@@ -98,6 +103,8 @@ export function startGatewayServer(options: StartGatewayOptions): StartedGateway
           pathnameAfterPrefix: url.pathname.slice('/admin/'.length),
         })
       }
+      if (isWorkerApiBridgePath(url.pathname))
+        return handleWorkerApiBridge(req, url, context)
       if (url.pathname === '/ws' || url.pathname === '/enroll-ws') {
         const ip = serverRef.requestIP(req)
         const remoteAddress = ip?.address
@@ -170,6 +177,25 @@ export function startGatewayServer(options: StartGatewayOptions): StartedGateway
       await server.stop(true)
     },
   }
+}
+
+function assertWorkerBridgeServingIsSafe(args: {
+  host: string
+  externalAuthAcknowledged: boolean
+}): void {
+  if (isLoopbackAddress(args.host))
+    return
+  if (args.externalAuthAcknowledged)
+    return
+  throw new Error(
+    `[fleet] refusing to serve /w/* on non-loopback host="${args.host}" without external-auth acknowledgement.\n`
+    + '\n'
+    + 'The /w/:workerId/* bridge exposes worker management APIs through gateway WS/RPC.\n'
+    + '\n'
+    + 'Fix one of these ways:\n'
+    + '  1. Bind the gateway to 127.0.0.1 and put Caddy/Cloudflare Access/IP allowlist/basic-auth in front;\n'
+    + '  2. Confirm an external auth layer protects /w/*, /admin/*, and /ws, then set AIWORKER_ADMIN_EXTERNAL_AUTH=1.',
+  )
 }
 
 function handleMessage(

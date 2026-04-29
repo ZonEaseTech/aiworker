@@ -68,3 +68,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-037 Tolerate Codex app-server reconnect notifications**](PLAN-037.md) `2026-04-29`
 - [x] [**PLAN-038 Web UI 视觉系统收敛**](PLAN-038.md) `2026-04-29`
 - [x] [**PLAN-040 发布 aiworker CLI 0.4.6**](PLAN-040.md) `2026-04-29`
+- [x] [**PLAN-042 Gateway /w worker API bridge MVP**](PLAN-042.md) `2026-04-29`
