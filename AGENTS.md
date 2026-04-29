@@ -22,6 +22,7 @@ AIWorker 是自托管 worker/fleet runtime。Gateway 是 WebSocket 控制面，�
 - API 构建：`bun run --filter '@zonease/aiworker-api' build`
 - CLI bundle：`bun run --filter '@zonease/aiworker-cli' build:bundle`
 - 数据库 schema 生成：`bun run db:generate:fleet` / `bun run db:generate:worker`
+- code-review-graph 状态/刷新/变更审查：`bun run crg:status` / `bun run crg:update` / `bun run crg:review`
 
 优先跑和改动范围匹配的聚焦命令；跨 package、发布、迁移或安全相关改动再跑全量 gate。
 
@@ -89,4 +90,5 @@ AIWorker 是自托管 worker/fleet runtime。Gateway 是 WebSocket 控制面，�
 
 - 简单文件查找优先 `rg` / `rg --files`。
 - 跨调用链影响分析可用 code-review-graph；大型符号定位可用 Serena；第三方库文档按需用 context7。
+- 使用 code-review-graph 时优先从 `get_minimal_context` 起步；审查变更用 `detect_changes`、`get_affected_flows`、`get_impact_radius`，定位关系用 `query_graph`、`list_communities`、`list_flows`。CLI 统一走 `bun run crg:*`，避免本机 PATH 版本漂移。当前规避 `get_docs_section`、hub/bridge/gaps/surprising 相关端点，它们在本仓库环境下会返回工具错误。
 - 单文件文档/配置改动直接读写即可，不需要强行使用 MCP。

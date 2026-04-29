@@ -71,5 +71,5 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-040 发布 aiworker CLI 0.4.6**](PLAN-040.md) `2026-04-29`
 - [-] [**PLAN-041 Worker 初始化与 Soul 生命周期：安全 init、模板预置、能力包与更新治理**](PLAN-041.md) `2026-04-29`
 - [ ] [**PLAN-042 Fleet 统一入口管理非同 host worker**](PLAN-042.md) `2026-04-29`
-- [-] [**PLAN-043 code-review-graph 开发工作流接入**](PLAN-043.md) `2026-04-29`
+- [x] [**PLAN-043 code-review-graph 开发工作流接入**](PLAN-043.md) `2026-04-29`
 - [ ] [**PLAN-044 Fleet Audit log 内部表格滚动**](PLAN-044.md) `2026-04-29`

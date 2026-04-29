@@ -1,6 +1,6 @@
 # PLAN-043 code-review-graph 开发工作流接入
 
-- **status**: in-review
+- **status**: completed
 - **createdAt**: 2026-04-29 18:48
 - **approvedAt**: 2026-04-29 18:48
 - **relatedTask**: DOC-002
@@ -58,3 +58,4 @@
 ## Review State
 
 - 2026-04-29 19:22：实现和验证证据已具备，但本计划产物仍在 dirty main worktree，尚未 commit 或显式验收。保持 `in-review`，不标记 completed/done。
+- 2026-04-29 19:36：已随 `AGENTS.md` 与 `package.json` 变更收口，`crg:status` 复验通过；状态更新为 completed。

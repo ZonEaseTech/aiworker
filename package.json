@@ -14,6 +14,11 @@
     "test": "bun run --filter '*' test",
     "build": "bun run --filter '@zonease/aiworker-api' build && bun run --filter '@zonease/aiworker-web' build && bun run --filter '@zonease/aiworker-cli' build:bundle",
     "check": "bun run typecheck && bun run lint",
+    "crg:status": "uvx code-review-graph status --repo .",
+    "crg:update": "uvx code-review-graph update --repo . --base HEAD",
+    "crg:review": "uvx code-review-graph detect-changes --repo . --base HEAD --brief",
+    "crg:build": "uvx code-review-graph build --repo .",
+    "crg:watch": "uvx code-review-graph watch --repo .",
     "db:generate": "bun run --filter '@zonease/aiworker-storage-sqlite' db:generate",
     "db:generate:fleet": "bun run --filter '@zonease/aiworker-storage-sqlite' db:generate:fleet",
     "db:generate:worker": "bun run --filter '@zonease/aiworker-storage-sqlite' db:generate:worker"
