@@ -1,6 +1,6 @@
 # PLAN-040 发布 aiworker CLI 0.4.6
 
-- **status**: implementing
+- **status**: completed
 - **createdAt**: 2026-04-29 17:50
 - **approvedAt**: 2026-04-29 17:50
 - **relatedTask**: REL-003
@@ -58,6 +58,7 @@ Expected repository changes:
 
 - 2026-04-29 17:50 用户直接要求发版，按已批准的 patch release 执行。
 - 2026-04-29 17:54 本地 release gates 全部通过，publish dry-run 完成 pack 阶段后停在本机 npm authentication boundary。
+- 2026-04-29 17:58 完成发布。GitHub Actions run `25125176745` 成功，npm latest 是 `0.4.6`，已发布 CLI smoke 返回 `aiworker/0.4.6`，GitHub Release `v0.4.6` 包含四个平台 tarball。
 
 ## Verification
 
@@ -72,5 +73,9 @@ Expected repository changes:
   `apps/cli/dist` packed 25 files / 2.31MB, then stopped with missing local npm
   authentication.
 - Passed: `git diff --check`
-- Pending: GitHub Actions release workflow for `v0.4.6`
-- Pending: npm and published-package smoke verification
+- Passed: GitHub Actions release workflow `25125176745` for `v0.4.6`
+- Passed: npm registry verification resolved `@zonease/aiworker-cli@0.4.6` as
+  `latest`
+- Passed: published-package smoke reported `aiworker/0.4.6`
+- Passed: GitHub Release `v0.4.6` has linux-x64, linux-arm64, darwin-x64, and
+  darwin-arm64 tarballs
