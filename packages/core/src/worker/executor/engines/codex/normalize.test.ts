@@ -194,6 +194,28 @@ describe('normalizeCodexNotification', () => {
       { type: 'finish', reason: 'error' },
     ])
   })
+
+  it('ignores current transient reconnect error notifications', () => {
+    const out = normalizeCodexNotification({
+      jsonrpc: '2.0',
+      method: 'error',
+      params: {
+        error: { message: 'Reconnecting... 2/5' },
+      },
+    })
+    expect(out).toEqual([])
+  })
+
+  it('keeps current non-transient error notifications fatal', () => {
+    const out = normalizeCodexNotification({
+      jsonrpc: '2.0',
+      method: 'error',
+      params: {
+        error: { message: 'network unavailable' },
+      },
+    })
+    expect(out).toEqual([{ type: 'error', error: 'network unavailable' }])
+  })
 })
 
 describe('mapStopReason', () => {

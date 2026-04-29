@@ -20,6 +20,7 @@ const wantsAppServer = argv.includes('app-server')
 const protocol = process.env.CODEX_STUB_PROTOCOL ?? 'legacy'
 const traceFile = process.env.CODEX_STUB_TRACE_FILE
 const failResume = process.env.CODEX_STUB_FAIL_RESUME === '1'
+const transientReconnect = process.env.CODEX_STUB_TRANSIENT_RECONNECT === '1'
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -75,6 +76,11 @@ function runTurn(turnId, threadId) {
 }
 
 function runCurrentTurn(threadId) {
+  if (transientReconnect) {
+    emitNotification('error', {
+      error: { message: 'Reconnecting... 2/5' },
+    })
+  }
   emitNotification('item/reasoning/textDelta', {
     threadId,
     turnId: 'turn_stub',

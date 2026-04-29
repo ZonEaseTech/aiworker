@@ -39,7 +39,7 @@ describe('CodexExecutor — smoke over stub app-server', () => {
     await fs.rm(workspace, { recursive: true, force: true })
   })
 
-  function makeExecutor(stubProtocol: 'legacy' | 'current' = 'legacy', traceFile?: string, stubOptions: { failResume?: boolean } = {}) {
+  function makeExecutor(stubProtocol: 'legacy' | 'current' = 'legacy', traceFile?: string, stubOptions: { failResume?: boolean, transientReconnect?: boolean } = {}) {
     return new CodexExecutor({
       timeoutMs: 10_000,
       resolveBinary: async () => STUB_PATH,
@@ -51,6 +51,7 @@ describe('CodexExecutor — smoke over stub app-server', () => {
             CODEX_STUB_PROTOCOL: stubProtocol,
             ...(traceFile ? { CODEX_STUB_TRACE_FILE: traceFile } : {}),
             ...(stubOptions.failResume ? { CODEX_STUB_FAIL_RESUME: '1' } : {}),
+            ...(stubOptions.transientReconnect ? { CODEX_STUB_TRANSIENT_RECONNECT: '1' } : {}),
           },
           stdio: ['pipe', 'pipe', 'pipe'],
         }),
@@ -124,6 +125,18 @@ describe('CodexExecutor — smoke over stub app-server', () => {
         path: '/tmp/codex-thread.jsonl',
       },
     })
+  }, 15_000)
+
+  it('continues a current-protocol turn after a transient reconnect notification', async () => {
+    const executor = makeExecutor('current', undefined, { transientReconnect: true })
+    const events = await collect(executor.run({
+      messages: [{ role: 'user', content: 'reply ok' }],
+      workspacePath: workspace,
+    }))
+
+    expect(events.some(e => e.type === 'error')).toBe(false)
+    expect(events).toContainEqual({ type: 'assistant_message_delta', delta: 'OK' })
+    expect(events.at(-1)).toEqual({ type: 'finish', reason: 'stop' })
   }, 15_000)
 
   it('resumes a current-protocol native thread when a binding is supplied', async () => {

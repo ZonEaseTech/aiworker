@@ -1,5 +1,19 @@
 # AIWorker Changelog
 
+## 2026-04-29 10:56 [BUG-P1] BUG-036 fixed: Codex reconnect notifications
+
+Fixed the Codex current app-server path so transient reconnect progress
+notifications such as `Reconnecting... n/n` no longer abort the AIWorker turn
+before Codex can emit the terminal `turn/completed` result. Non-transient
+current-protocol errors and failed completed turns remain fatal.
+
+Verification passed: focused Codex normalizer/executor regressions, root
+lint/typecheck/test/build gates, real local `CodexExecutor` one-turn and
+native resume smokes, and the test-fleet local `codex/default` worker path:
+OTP enrollment and approval, explicit conversation id continuity, default
+accepted-id continuity, reset rotation, and `sessions list/show` metadata.
+Temporary fleet registration and local credential-bearing state were removed.
+
 ## 2026-04-29 10:01 [BUG-P0] BUG-035 fixed: serve foreground lifecycle
 
 Fixed `aiworker serve` so successful startup remains a foreground long-running

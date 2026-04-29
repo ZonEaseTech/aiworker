@@ -159,7 +159,10 @@ function normalizeCurrentTurnCompleted(params: Record<string, unknown>): AgentEv
 }
 
 function normalizeCurrentError(params: Record<string, unknown>): AgentEvent[] {
-  return [{ type: 'error', error: extractErrorMessage(params.error) ?? 'codex error' }]
+  const message = extractErrorMessage(params.error) ?? extractErrorMessage(params)
+  if (isTransientReconnectError(message))
+    return []
+  return [{ type: 'error', error: message ?? 'codex error' }]
 }
 
 /**
@@ -254,6 +257,10 @@ function extractErrorMessage(value: unknown): string | undefined {
       return message
   }
   return undefined
+}
+
+function isTransientReconnectError(message: string | undefined): boolean {
+  return /^Reconnecting\.\.\. \d+\/\d+$/.test(message?.trim() ?? '')
 }
 
 function buildEditDiff(input: Record<string, unknown>): string | undefined {

@@ -1,6 +1,6 @@
 # PLAN-037 Tolerate Codex app-server reconnect notifications
 
-- **status**: implementing
+- **status**: completed
 - **createdAt**: 2026-04-29 10:20
 - **approvedAt**: 2026-04-29 10:20
 - **relatedTask**: BUG-036
@@ -100,4 +100,10 @@ Expected files:
 
 ## Annotations
 
-(none)
+- 2026-04-29 10:56: Implemented and verified. Current-protocol Codex
+  `error` notifications that exactly match transient reconnect progress
+  (`Reconnecting... n/n`) are ignored so the executor waits for the terminal
+  `turn/completed` result. Non-transient current errors and failed
+  `turn/completed` results remain fatal. Focused Codex tests, root gates, real
+  local Codex executor smoke/resume checks, and the test-fleet local Codex
+  worker E2E all passed.
