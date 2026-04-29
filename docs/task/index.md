@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-04-29 03:41
+> Updated: 2026-04-29 05:43
 
 ## Usage
 
@@ -115,7 +115,7 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**TODO-001 Correct Web UI command copy for enrollment and worker management**](TODO-001.md) `P2`
 - [x] [**TODO-002 Normalize CLI argument validation and command semantics**](TODO-002.md) `P2`
 - [x] [**TODO-003 Refresh Web build config and bundle budget warnings**](TODO-003.md) `P3`
-- [-] [**TODO-004 Evaluate app-level admin auth or fail-closed checks**](TODO-004.md) `P2`
+- [x] [**TODO-004 Evaluate app-level admin auth or fail-closed checks**](TODO-004.md) `P2`
 - [x] [**TODO-005 Apply safe-env policy to git workspace helper processes**](TODO-005.md) `P3`
 - [x] [**TODO-006 Normalize remote CLI PATH and version inspection**](TODO-006.md) `P3`
 - [-] [**BUG-034 Web smoke-e2e imports removed gateway package path**](BUG-034.md) `P2`

@@ -1,6 +1,7 @@
 import path from 'node:path'
 import process from 'node:process'
 import { resolveAiworkerHome } from '@zonease/aiworker-fs-layout'
+import { parseAdminExternalAuthAcknowledgement } from '@zonease/aiworker-shared'
 import { z } from 'zod'
 
 /**
@@ -22,6 +23,7 @@ import { z } from 'zod'
 export interface GatewayConfig {
   port: number
   host: string
+  adminExternalAuthAcknowledged: boolean
   internalSharedSecret?: string
   masterKeyHex?: string
   fleetDbPath: string
@@ -56,6 +58,10 @@ const envSchema = z.object({
   // FEAT-030: gateway WS 控制面默认端口 9218（与 worker 9217 配对）
   AIWORKER_GATEWAY_PORT: z.coerce.number().int().positive().max(65_535).default(9218),
   AIWORKER_GATEWAY_HOST: z.string().min(1).default('127.0.0.1'),
+  AIWORKER_ADMIN_EXTERNAL_AUTH: z
+    .enum(['1', 'true', '0', 'false'])
+    .default('0')
+    .transform(parseAdminExternalAuthAcknowledgement),
   INTERNAL_SHARED_SECRET: z.string().min(16).optional(),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   AIWORKER_MASTER_KEY: z
@@ -112,6 +118,7 @@ export function loadGatewayConfigFromEnv(): GatewayConfig {
   return {
     port: parsed.AIWORKER_GATEWAY_PORT,
     host: parsed.AIWORKER_GATEWAY_HOST,
+    adminExternalAuthAcknowledged: parsed.AIWORKER_ADMIN_EXTERNAL_AUTH,
     internalSharedSecret: parsed.INTERNAL_SHARED_SECRET,
     masterKeyHex: parsed.AIWORKER_MASTER_KEY,
     fleetDbPath: resolveFleetDbPath(parsed.AIWORKER_FLEET_DB_PATH),

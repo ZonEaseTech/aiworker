@@ -1,6 +1,6 @@
 # TODO-004 Evaluate app-level admin auth or fail-closed checks
 
-- **status**: in_progress
+- **status**: completed
 - **priority**: P2
 - **owner**: self
 - **createdAt**: 2026-04-28 20:24
@@ -56,3 +56,9 @@ Evaluating admin surface app-level auth and fail-closed deployment checks
 - 2026-04-28 20:44 Review pass recorded with no blocking findings. Proposal
   remains draft/pending approval; implementation must include the listed
   gateway/worker guard tests and public-admin smoke checks before completion.
+- 2026-04-29 04:00 User approved fail-closed protection only. App-level admin
+  auth is intentionally deferred for a future Logto integration.
+- 2026-04-29 05:43 Implemented the approved fail-closed path. Public direct
+  binds that actually serve `/admin/*` now require either loopback binding,
+  disabled admin static serving, or explicit `AIWORKER_ADMIN_EXTERNAL_AUTH=1`
+  acknowledgement. App-level admin auth remains intentionally out of scope.

@@ -68,6 +68,7 @@ function makeConfig(overrides: Partial<GatewayConfig> = {}): GatewayConfig {
   return {
     port: 0,
     host: '127.0.0.1',
+    adminExternalAuthAcknowledged: false,
     internalSharedSecret: undefined,
     masterKeyHex: TEST_MASTER,
     fleetDbPath: ':memory:',

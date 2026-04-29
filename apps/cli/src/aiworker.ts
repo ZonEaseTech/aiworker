@@ -120,14 +120,17 @@ cli
 cli
   .command('serve', 'Start the worker HTTP server (equivalent to AIWORKER_MODE=worker)')
   .option('--port <n>', 'Override the PORT env', { type: [Number] })
+  .option('--host <host>', 'Override AIWORKER_WORKER_HOST (default 127.0.0.1)')
   .option('--gateway <url>', 'Dial the given gateway WS URL as a node alongside the HTTP server')
   .option('--gateway-token <token>', 'Bearer token presented to the gateway (omit for loopback)')
   .option('--no-reconnect', 'Disable gateway-client auto-reconnect (useful for smoke / tests)')
   .option('--no-serve-web', '不挂载 worker bundle 到 /admin/*（默认挂载，PLAN-022 / FEAT-033）')
-  .action(async (opts: { port?: number[], gateway?: string, gatewayToken?: string, reconnect?: boolean, serveWeb?: boolean }) => {
+  .action(async (opts: { port?: number[], host?: string, gateway?: string, gatewayToken?: string, reconnect?: boolean, serveWeb?: boolean }) => {
     const serveOptions: Parameters<typeof runServe>[0] = {}
     if (opts.port?.[0] !== undefined)
       serveOptions.port = opts.port[0]
+    if (opts.host !== undefined)
+      serveOptions.host = opts.host
     if (opts.gateway !== undefined)
       serveOptions.gateway = opts.gateway
     if (opts.gatewayToken !== undefined)

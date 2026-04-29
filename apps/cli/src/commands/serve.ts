@@ -11,12 +11,15 @@ import {
   startGatewayNode,
   workerEnv,
 } from '@zonease/aiworker-core'
+import { assertAdminServingIsSafe } from '@zonease/aiworker-shared'
 import { getWorkerDb } from '@zonease/aiworker-storage-sqlite/worker'
 import consola from 'consola'
 import { resolveWebStaticDir } from '../lib/web-static'
 
 export interface ServeOptions {
   port?: number
+  /** Worker HTTP bind host. Defaults to AIWORKER_WORKER_HOST (127.0.0.1). */
+  host?: string
   /** gateway WS URL；留空则不启动 gateway-client（保持纯 HTTP 兼容形态）。 */
   gateway?: string
   /** gateway 下发的 node bearer token；loopback 场景可留空字符串。 */
@@ -57,14 +60,21 @@ export async function runServe(options: ServeOptions = {}): Promise<void> {
   const webStaticDir = serveWeb ? resolveWebStaticDir('worker') : undefined
   if (serveWeb && !webStaticDir)
     consola.warn('[aiw serve] web 静态资源未找到（apps/web/dist/worker 缺失？），/admin/* 将返回 404')
+  const host = options.host ?? workerEnv.AIWORKER_WORKER_HOST
+  assertAdminServingIsSafe({
+    surface: 'worker',
+    host,
+    serveWeb: webStaticDir !== undefined,
+    externalAuthAcknowledged: workerEnv.AIWORKER_ADMIN_EXTERNAL_AUTH,
+  })
   const { app, port: envPort, state, reloadRuntime } = await bootstrapWorkerApp({
     onRuntimeReloaded: () => gatewayNode?.notifyRuntimeReloaded(),
     ...(webStaticDir ? { webStaticDir } : {}),
   })
   const port = options.port ?? envPort
 
-  const server = Bun.serve({ port, fetch: app.fetch })
-  consola.success(`[aiw serve] worker ${state.workerId} listening on :${port} (config v${state.configVersion})`)
+  const server = Bun.serve({ port, hostname: host, fetch: app.fetch })
+  consola.success(`[aiw serve] worker ${state.workerId} listening on ${host}:${port} (config v${state.configVersion})`)
   if (webStaticDir)
     consola.info(`[aiw serve] /admin/* serving worker bundle from ${webStaticDir}`)
 

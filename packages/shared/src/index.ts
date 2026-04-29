@@ -75,6 +75,12 @@ export type {
   WorkerStatus,
   WorkerSummary,
 } from './fleet'
+export {
+  assertAdminServingIsSafe,
+  isLoopbackAddress,
+  parseAdminExternalAuthAcknowledgement,
+} from './lib/admin-exposure'
+export type { AdminServingSafetyInput, AdminServingSurface } from './lib/admin-exposure'
 export { mintWorkerId, slugify } from './lib/ids'
 
 export {

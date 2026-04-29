@@ -1,8 +1,8 @@
 # PLAN-033 Admin surface fail-closed posture
 
-- **status**: draft
+- **status**: completed
 - **createdAt**: 2026-04-28 20:33
-- **approvedAt**: (pending)
+- **approvedAt**: 2026-04-29 04:00
 - **relatedTask**: TODO-004
 
 ## Context
@@ -155,3 +155,19 @@ No database migration is needed. No broad login/session/cookie model is included
   worker bearer-gated `/api/worker/*`, and correctly recommends narrow startup
   fail-closed checks plus deployment smoke coverage. The plan remains a draft;
   implementation is still gated on explicit approval.
+- 2026-04-29 04:00 User approved the narrow fail-closed path and explicitly
+  deferred app-level admin auth for a future Logto integration.
+- 2026-04-29 05:43 Completed implementation. Added a shared admin exposure
+  guard, wired it into gateway and `aiworker serve`, added `--host`,
+  `AIWORKER_WORKER_HOST`, and `AIWORKER_ADMIN_EXTERNAL_AUTH`, updated
+  public-admin docs, and covered the guard with focused shared/gateway/worker
+  config/CLI tests.
+
+## Verification
+
+- `bun test packages/shared/src/lib/admin-exposure.test.ts packages/gateway/test/auth.test.ts packages/gateway/test/config.test.ts packages/gateway/test/health.test.ts packages/core/src/config/worker.test.ts apps/cli/src/aiworker.test.ts`
+- `bun run typecheck`
+- `bun run lint`
+- `bun run --filter '*' test`
+- `bun run build`
+- `git diff --check`

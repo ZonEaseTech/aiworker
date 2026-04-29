@@ -12,6 +12,7 @@ const ENV_KEYS = [
   'AIWORKER_FLEET_DB_PATH',
   'AIWORKER_GATEWAY_PORT',
   'AIWORKER_GATEWAY_HOST',
+  'AIWORKER_ADMIN_EXTERNAL_AUTH',
   'AIWORKER_GATEWAY_CAN_LAUNCH',
   'AIWORKER_MASTER_KEY',
   'INTERNAL_SHARED_SECRET',
@@ -72,5 +73,19 @@ describe('loadGatewayConfigFromEnv fleet DB path', () => {
     finally {
       await rm(cwd, { recursive: true, force: true })
     }
+  })
+
+  test('defaults admin external auth acknowledgement to false', () => {
+    const config = loadGatewayConfigFromEnv()
+
+    expect(config.adminExternalAuthAcknowledged).toBe(false)
+  })
+
+  test('parses explicit admin external auth acknowledgement', () => {
+    process.env.AIWORKER_ADMIN_EXTERNAL_AUTH = '1'
+
+    const config = loadGatewayConfigFromEnv()
+
+    expect(config.adminExternalAuthAcknowledged).toBe(true)
   })
 })

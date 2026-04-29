@@ -94,7 +94,7 @@ Caddy :80（纯反代）  ──►  127.0.0.1:9218  =  aiworker-gateway 容器
 - 镜像：`ghcr.io/zoneasetech/aiworker:${AIWORKER_IMAGE_TAG}${AIWORKER_IMAGE_VARIANT_SUFFIX}`
 - 启动命令：`bun apps/gateway/src/index.ts`（覆盖 Dockerfile 默认 `bun run dist/index.js` 的 worker 入口）
 - 端口：`127.0.0.1:9218:9218`（WS + `/health` 都走这个）
-- 关键 env：`AIWORKER_GATEWAY_HOST=0.0.0.0` / `AIWORKER_GATEWAY_PORT=9218` / `AIWORKER_FLEET_DB_PATH=/var/lib/aiworker/fleet.db` / `AIWORKER_MASTER_KEY` / `INTERNAL_SHARED_SECRET`
+- 关键 env：`AIWORKER_GATEWAY_HOST=0.0.0.0` / `AIWORKER_GATEWAY_PORT=9218` / `AIWORKER_FLEET_DB_PATH=/var/lib/aiworker/fleet.db` / `AIWORKER_MASTER_KEY` / `INTERNAL_SHARED_SECRET`。如果用 `aiworker gateway start` 并默认挂载 `/admin/*`，还需要在 Caddy / Access / allowlist 生效后设置 `AIWORKER_ADMIN_EXTERNAL_AUTH=1`；当前 compose 直接跑 gateway 源码且不挂 admin bundle，不需要该确认。
 - 卷：`aiworker_fleet:/var/lib/aiworker`（fleet.db 持久化）
 
 Dockerfile 单镜像两种入口（见 `Dockerfile` 顶部注释）：
@@ -199,8 +199,10 @@ sudo chmod 0640 /etc/caddy/auth.snippet
 # 3) reload Caddy（脚本会先 caddy validate）：
 bun run scripts/deploy.ts reload-caddy
 
-# 4) 公网验证（应得 401）：
+# 4) 公网验证（未认证应得 401，包含 /admin/）：
 curl -i https://gateway.example.test/health
+# → HTTP/2 401, WWW-Authenticate: Basic realm="restricted"
+curl -i https://gateway.example.test/admin/
 # → HTTP/2 401, WWW-Authenticate: Basic realm="restricted"
 
 # 5) 带凭证再试（应得 200）：

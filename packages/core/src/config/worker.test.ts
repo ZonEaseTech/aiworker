@@ -25,6 +25,8 @@ describe('getWorkerEnv 默认 fallback', () => {
       'AIWORKER_HOME',
       'WORKER_DB_PATH',
       'PORT',
+      'AIWORKER_WORKER_HOST',
+      'AIWORKER_ADMIN_EXTERNAL_AUTH',
       'AIWORKER_FORCE_ID',
       'AIWORKER_FORCE_TOKEN',
       'AIWORKER_ADVERTISED_BASE_URL',
@@ -78,6 +80,30 @@ describe('getWorkerEnv 默认 fallback', () => {
     const env = getWorkerEnv()
     expect(env.WORKER_MIGRATIONS_FOLDER).toBe('/app/drizzle/worker')
   })
+
+  it('AIWORKER_WORKER_HOST 未设 → 默认 loopback', () => {
+    const env = getWorkerEnv()
+    expect(env.AIWORKER_WORKER_HOST).toBe('127.0.0.1')
+  })
+
+  it('AIWORKER_WORKER_HOST 显式设置 → 保持原值', () => {
+    process.env.AIWORKER_WORKER_HOST = '0.0.0.0'
+    __resetWorkerEnvCacheForTest()
+    const env = getWorkerEnv()
+    expect(env.AIWORKER_WORKER_HOST).toBe('0.0.0.0')
+  })
+
+  it('AIWORKER_ADMIN_EXTERNAL_AUTH 未设 → 默认 false', () => {
+    const env = getWorkerEnv()
+    expect(env.AIWORKER_ADMIN_EXTERNAL_AUTH).toBe(false)
+  })
+
+  it('AIWORKER_ADMIN_EXTERNAL_AUTH=1 → true', () => {
+    process.env.AIWORKER_ADMIN_EXTERNAL_AUTH = '1'
+    __resetWorkerEnvCacheForTest()
+    const env = getWorkerEnv()
+    expect(env.AIWORKER_ADMIN_EXTERNAL_AUTH).toBe(true)
+  })
 })
 
 /**
@@ -92,7 +118,13 @@ describe('getWorkerEnv self-enroll env (PLAN-018)', () => {
 
   beforeEach(() => {
     __resetWorkerEnvCacheForTest()
-    for (const k of ['AIWORKER_GATEWAY_URL', 'AIWORKER_JOIN_TOKEN', 'AIWORKER_DISPLAY_NAME']) {
+    for (const k of [
+      'AIWORKER_GATEWAY_URL',
+      'AIWORKER_JOIN_TOKEN',
+      'AIWORKER_DISPLAY_NAME',
+      'AIWORKER_WORKER_HOST',
+      'AIWORKER_ADMIN_EXTERNAL_AUTH',
+    ]) {
       delete process.env[k]
     }
     process.env.AIWORKER_MASTER_KEY = MASTER_KEY

@@ -1,3 +1,7 @@
+import { isLoopbackAddress } from '@zonease/aiworker-shared'
+
+export { isLoopbackAddress }
+
 /**
  * 判断 `Bun.serve` `server.requestIP(...).address` 返回的字符串是否是本机回环。
  *
@@ -10,16 +14,6 @@
  * gateway 在 loopback 场景下放行空 token 连接（aim 本机 CLI / worker 同机
  * docker network 的 sidecar 调用）；远程连接必须携带 `INTERNAL_SHARED_SECRET`。
  */
-export function isLoopbackAddress(address: string | undefined | null): boolean {
-  if (!address)
-    return false
-  if (address === '127.0.0.1' || address === '::1' || address === '::ffff:127.0.0.1' || address === 'localhost')
-    return true
-  if (address.startsWith('127.'))
-    return true
-  return false
-}
-
 /**
  * BUG-019：启动期 fail-closed 断言。
  *

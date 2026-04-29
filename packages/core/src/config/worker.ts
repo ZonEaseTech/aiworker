@@ -1,7 +1,11 @@
 import path from 'node:path'
 import process from 'node:process'
 import { resolveAiworkerHome } from '@zonease/aiworker-fs-layout'
-import { WORKER_API_TOKEN_PATTERN, WORKER_ID_PATTERN } from '@zonease/aiworker-shared'
+import {
+  parseAdminExternalAuthAcknowledgement,
+  WORKER_API_TOKEN_PATTERN,
+  WORKER_ID_PATTERN,
+} from '@zonease/aiworker-shared'
 import { defaultWorkerMigrationsFolder } from '@zonease/aiworker-storage-sqlite/worker'
 import { z } from 'zod'
 
@@ -30,6 +34,19 @@ import { z } from 'zod'
 const schema = z.object({
   // FEAT-030: worker HTTP 默认端口 9217（避开 3000-3999 / 5000-5999 / 8000-8999 dev 高频段）
   PORT: z.coerce.number().default(9217),
+  /**
+   * Worker HTTP bind host for `aiworker serve`. Keep the default loopback-only
+   * so enabling `/admin/*` cannot silently become public.
+   */
+  AIWORKER_WORKER_HOST: z.string().min(1).default('127.0.0.1'),
+  /**
+   * Operator acknowledgement that `/admin/*` is protected by an external auth
+   * layer before public traffic reaches this process.
+   */
+  AIWORKER_ADMIN_EXTERNAL_AUTH: z
+    .enum(['1', 'true', '0', 'false'])
+    .default('0')
+    .transform(parseAdminExternalAuthAcknowledgement),
   /**
    * Worker SQLite 路径。未设时派生为 `<AIWORKER_HOME>/worker.db`（默认
    * `~/.aiworker/worker.db`），裸跑 / npm install 场景无需手工 export。

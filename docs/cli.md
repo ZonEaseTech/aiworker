@@ -49,6 +49,9 @@ worker 容器内或 ssh 进 worker 主机直接操作 `worker.db` 的子命令�
 - `WORKER_DATA_ROOT` — per-conversation 工作区根。未设时派生为 `<AIWORKER_HOME>/data-root`（默认 `~/.aiworker/data-root`），裸跑/dev 零配置即可；容器/systemd `--system` 形态请显式设到操作员可写的绝对路径（compose `docker-compose.yml` 设为 `/var/lib/aiworker`）。
 - `WORKER_MIGRATIONS_FOLDER` — 默认使用 `@zonease/aiworker-storage-sqlite` 内嵌路径（`import.meta.url` 解析得来的**绝对**路径），源码运行 / 容器 / 单文件 bundle 都能定位；外部 vendor 时再显式覆盖。
 - `AIWORKER_FORCE_ID` / `AIWORKER_FORCE_TOKEN` — 测试 / 备份恢复用的一次性覆盖。
+- `AIWORKER_WORKER_HOST` — `aiworker serve` 的 HTTP bind host，默认 `127.0.0.1`。公网或容器网络显式暴露时用 `--host` 覆盖。
+- `AIWORKER_WORKER_NO_SERVE_WEB=1` — 禁用 worker `/admin/*` 静态 bundle。
+- `AIWORKER_ADMIN_EXTERNAL_AUTH=1`（或 `true`）— 仅表示 `/admin/*` 已被外部鉴权层保护。`aiworker serve --host 0.0.0.0` 且实际挂载 admin bundle 时必须设置它，或改用 `--no-serve-web`。
 - `AIWORKER_GATEWAY_URL` / `AIWORKER_JOIN_TOKEN` / `AIWORKER_DISPLAY_NAME`（PLAN-018 / FEAT-024）— self-enroll 三件套：URL + token 同时设 → `aiworker serve` 跳过 operator 手动 `aiworker pair`，bootstrap 完成后用 outbound WS 主动拨 gateway 把自身写入 fleet。`DISPLAY_NAME` 可选，缺省回落 workerId（最长 80 字符）。详见下文 §`aiworker serve` 与 [`docs/deployment.md` § Worker self-enroll quick start](./deployment.md#worker-self-enroll-quick-start-plan-018--feat-024)。
 - `AIWORKER_ENROLL_MODE`（PLAN-019 / FEAT-026）— `'auto' | 'otp'`，缺省 `'auto'`。`'auto'` 下走 self-enroll 还是 OTP 由 `JOIN_TOKEN` 是否设来判定（设 → self-enroll；未设 → OTP）；显式 `'otp'` 强制 attended 路径，即使 `JOIN_TOKEN` 同时存在也忽略它（用于 deployer 拿不到 fleet 凭证的 attended 场景）。详见下文 §`aiworker serve` 与 [`docs/deployment.md` § Worker OTP-attended enroll quick start](./deployment.md#worker-otp-attended-enroll-quick-startplan-019--feat-026)。
 
@@ -120,7 +123,7 @@ aiworker run --message "hello"
 
 Exit codes: 0 success, 1 task failed, 2 bad arguments, 124 timeout.
 
-### `aiworker serve [--port <n>] [--gateway <wsUrl>] [--gateway-token <token>] [--no-reconnect]`
+### `aiworker serve [--port <n>] [--host <host>] [--gateway <wsUrl>] [--gateway-token <token>] [--no-reconnect] [--no-serve-web]`
 
 启动 worker HTTP 服务。行为等同 `AIWORKER_MODE=worker bun src/index.ts`：同一套 bootstrap / 路由 / hot-reload 契约 / `/openapi.json` / `/docs`。
 
@@ -128,13 +131,20 @@ Exit codes: 0 success, 1 task failed, 2 bad arguments, 124 timeout.
 
 - `--gateway-token <token>` — 给 gateway 的 bearer，loopback 场景可省。
 - `--no-reconnect` — 禁用自动重连，冒烟/测试用。
+- `--host <host>` — 覆盖 `AIWORKER_WORKER_HOST`，默认 `127.0.0.1`。
+- `--no-serve-web` — 不挂载 worker `/admin/*` bundle，访问返回 404。
+
+Admin fail-closed：当 worker admin bundle 实际存在并会被挂到 `/admin/*` 时，非 loopback 绑定（如 `--host 0.0.0.0`）必须满足其一：前置 Caddy / Cloudflare Access / IP allowlist / basic-auth 等外部鉴权已经覆盖，并设置 `AIWORKER_ADMIN_EXTERNAL_AUTH=1`；或使用 `--no-serve-web` 关闭 admin 静态资源。这不会给应用本身加登录态，只是防止公开绑定时静默裸跑 admin。
 
 ```sh
 # 纯 HTTP：
-aiworker serve --port 3001
+aiworker serve --port 9217
 
 # HTTP + 同时作为 node 注册到本机 gateway：
-aiworker serve --port 3001 --gateway ws://127.0.0.1:3000/ws
+aiworker serve --port 9217 --gateway ws://127.0.0.1:9218/ws
+
+# 公开绑定但不暴露 worker admin：
+aiworker serve --host 0.0.0.0 --port 9217 --no-serve-web
 ```
 
 **Self-enroll / OTP enroll via env**（PLAN-018 / FEAT-024 + PLAN-019 / FEAT-026）：当 env 设了 `AIWORKER_GATEWAY_URL` 且**未** 传 `--gateway` flag 时，`aiworker serve` bootstrap 完成后自动拨 gateway，按下面触发表分派 self-enroll（带 join token）或 OTP（attended）路径——operator 完全不用跑 `aiworker pair`。
@@ -156,7 +166,7 @@ self-enroll vs OTP 差异：
 OTP 模式 stdout 格式（`apps/cli/src/commands/serve.ts::formatOtpBox`）：
 
 ```text
-[aiworker serve] OTP enrolling to ws://gateway-host:3000/enroll-ws; awaiting operator approval
+[aiworker serve] OTP enrolling to ws://gateway-host:9218/enroll-ws; awaiting operator approval
 
 ┌──────────────────────────┐
 │  OTP:  BX7P-K39M         │
@@ -173,12 +183,12 @@ OTP 模式 stdout 格式（`apps/cli/src/commands/serve.ts::formatOtpBox`）：
 AIWORKER_GATEWAY_URL=wss://aiw.example.com/ws \
 AIWORKER_JOIN_TOKEN=<shared> \
 AIWORKER_DISPLAY_NAME=prod-1 \
-aiworker serve --port 3001
+aiworker serve --port 9217
 
 # OTP enroll（attended，deployer 无 fleet 凭证）：
 AIWORKER_GATEWAY_URL=wss://aiw.example.com/ws \
 AIWORKER_DISPLAY_NAME=ben-laptop \
-aiworker serve --port 3001
+aiworker serve --port 9217
 # stdout 打 OTP 后 deployer 把它带外发给 operator
 ```
 
@@ -232,7 +242,7 @@ aiworker approvals-list
 # }
 ```
 
-不经 gateway，是 dev / 运维兜底路径——管理员 ssh 进 worker 容器即可观察。端口取 `workerEnv.PORT`（默认 3000），bearer 由 `loadWorkerContext()` 从 worker.db / vault 解出。
+不经 gateway，是 dev / 运维兜底路径——管理员 ssh 进 worker 容器即可观察。端口取 `workerEnv.PORT`（默认 9217），bearer 由 `loadWorkerContext()` 从 worker.db / vault 解出。
 
 ### `aiworker approvals-grant <taskId> <toolCallId> [--deny]`（PLAN-014 F2）
 
@@ -304,7 +314,7 @@ operator 通过 WebSocket 与 gateway（`apps/gateway`）对话，由 gateway �
 
 ```jsonc
 {
-  "gatewayUrl": "ws://localhost:3000",   // 默认；aiworker gateway start 会改写
+  "gatewayUrl": "ws://localhost:9218/ws", // 默认；aiworker gateway start 会改写
   "deviceId":   "op-<uuid>",              // 首次 aiworker gateway/pair 时生成
   "deviceToken":"",                       // pair 成功后由 gateway 颁发
   "defaultWorkerId": "w_..."              // 省略 <workerId> 参数时的回退
@@ -321,13 +331,15 @@ operator 通过 WebSocket 与 gateway（`apps/gateway`）对话，由 gateway �
 
 ## Gateway 生命周期
 
-### `aiworker gateway start [--port <n>] [--entry <path>]`
+### `aiworker gateway start [--port <n>] [--no-serve-web]`
 
-本机拉起 gateway daemon（等价于直接跑 `bun apps/gateway/src/index.ts`）。成功后把 `gatewayUrl: ws://localhost:<port>` 回写到 `aim.json`。
+本机拉起 gateway daemon。成功后把 `gatewayUrl: ws://localhost:<port>/ws` 回写到 `aim.json`。
+
+Gateway bind host 由 `AIWORKER_GATEWAY_HOST` 控制，默认 `127.0.0.1`。非 loopback host 仍然必须配置 `INTERNAL_SHARED_SECRET`；如果同时实际挂载 fleet `/admin/*` bundle，还必须设置 `AIWORKER_ADMIN_EXTERNAL_AUTH=1` 来确认外部鉴权已覆盖，或用 `--no-serve-web` 关闭 admin 静态资源。
 
 ```sh
-aiworker gateway start --port 3000
-# ✔ gateway daemon 已启动 pid=12345 port=3000
+aiworker gateway start --port 9218
+# ✔ gateway 已启动 (foreground) port=9218
 ```
 
 ### `aiworker gateway status`
@@ -353,7 +365,7 @@ SIGTERM → 等 `timeoutMs` → SIGKILL 兜底。
 aiworker fleet list
 # {
 #   "workers": [
-#     { "workerId":"w_abc","displayName":"prod-1","online":true,"deviceId":"node-...","baseUrl":"http://...:3001","lastSeenAt":1714... },
+#     { "workerId":"w_abc","displayName":"prod-1","online":true,"deviceId":"node-...","baseUrl":"http://...:9217","lastSeenAt":1714... },
 #     ...
 #   ]
 # }
@@ -392,8 +404,8 @@ aiworker fleet launch --display-name demo
 
 ```sh
 aiworker pair \
-  --url ws://127.0.0.1:3000/ws \
-  --worker-url http://aiworker-worker:3001 \
+  --url ws://127.0.0.1:9218/ws \
+  --worker-url http://aiworker-worker:9217 \
   --bootstrap-token wtk_xxxxxxxxxxxx \
   --display-name test
 # ✔ 已配对 worker w_xxxxxxxxxxxx

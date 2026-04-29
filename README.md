@@ -337,7 +337,10 @@ apps/{api, cli, web} + packages/{core, gateway, gateway-proto, shared, storage-s
 | `WORKER_DB_PATH` | worker | 默认 `$AIWORKER_HOME/worker.db` |
 | `AIWORKER_FLEET_DB_PATH` | gateway | 默认 `$AIWORKER_HOME/fleet.db` |
 | `AIWORKER_GATEWAY_PORT` | gateway | 默认 `9218` |
+| `AIWORKER_GATEWAY_HOST` | gateway | 默认 `127.0.0.1`；非 loopback 需 `INTERNAL_SHARED_SECRET` |
 | `PORT` | worker | 默认 `9217` |
+| `AIWORKER_WORKER_HOST` | worker CLI | 默认 `127.0.0.1`；`aiworker serve --host` 可覆盖 |
+| `AIWORKER_ADMIN_EXTERNAL_AUTH` | gateway / worker CLI | `1` / `true` 表示 `/admin/*` 已由 Caddy / Access / allowlist 等外部层保护 |
 | `AIWORKER_ENROLL_OTP_TTL_SEC` | gateway | OTP 过期秒数，默认 300，[30, 3600] |
 
 完整列表：`apps/api/.env.example` + `ops/compose/.env.example`。
@@ -362,7 +365,7 @@ apps/{api, cli, web} + packages/{core, gateway, gateway-proto, shared, storage-s
 - **timing-safe** bearer 比较
 - **5 channel webhook 强制验签**（Telegram / WhatsApp / Lark / LINE / Web binding token）
 - **Caddy 路径分流**：`/ws` basicauth 守 operator + 已配对 worker，`/enroll-ws` 仅接受 OTP submit；fail-closed（缺 `/etc/caddy/auth.snippet` 直接拒启动，BUG-007）
-- **`/admin/*`（fleet + worker UI）** 与 `/ws`、`/api/*` 同等级——公网必须走 basicauth。新发布 worker bundle 不含 secret，但 prompt 用户输入 bearer 的登录界面如果裸暴露会被钓鱼。`aiworker {gateway start, serve}` 默认挂 `/admin/*`，关掉用 `--no-serve-web` 或 env `AIWORKER_GATEWAY_NO_SERVE_WEB=1` / `AIWORKER_WORKER_NO_SERVE_WEB=1`（PLAN-022 / FEAT-033）
+- **`/admin/*`（fleet + worker UI）** 与 `/ws`、`/api/*` 同等级，公网必须走 basicauth / Cloudflare Access / IP allowlist / Logto 等外部鉴权。`aiworker {gateway start, serve}` 默认挂 `/admin/*`，但在非 loopback host 上实际服务 admin bundle 时会 fail closed：要么绑定 `127.0.0.1`，要么 `--no-serve-web` / `AIWORKER_*_NO_SERVE_WEB=1` 关闭 admin，要么确认外部鉴权已覆盖后设置 `AIWORKER_ADMIN_EXTERNAL_AUTH=1`。这不是应用内登录开关，只是防止误把公开 admin 静态资源裸跑。
 
 ---
 

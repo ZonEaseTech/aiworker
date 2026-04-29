@@ -5,10 +5,11 @@ import { describe, expect, it } from 'bun:test'
 
 import { startGatewayServer } from '../src/server'
 
-function testConfig(): GatewayConfig {
+function testConfig(overrides: Partial<GatewayConfig> = {}): GatewayConfig {
   return {
     port: 0,
     host: '127.0.0.1',
+    adminExternalAuthAcknowledged: false,
     fleetDbPath: ':memory:',
     canLaunch: false,
     enrollOtpTtlSec: 300,
@@ -18,6 +19,7 @@ function testConfig(): GatewayConfig {
       network: 'aiworker_test',
       launchBaseUrlTemplate: 'http://{containerName}:9217',
     },
+    ...overrides,
   }
 }
 
@@ -40,6 +42,57 @@ describe('gateway /health', () => {
       expect(post.status).toBe(405)
       expect(post.headers.get('Allow')).toBe('GET')
       expect(await post.text()).toBe('method not allowed')
+    }
+    finally {
+      await started.stop()
+    }
+  })
+
+  it('refuses public fleet admin serving without external-auth acknowledgement', () => {
+    expect(() => {
+      startGatewayServer({
+        config: testConfig({
+          host: '0.0.0.0',
+          internalSharedSecret: 'shared-secret-1234567890',
+        }),
+        context: {
+          ...testContext(),
+          webStaticDir: '/tmp/aiworker-web-static-test',
+        },
+      })
+    }).toThrow(/AIWORKER_ADMIN_EXTERNAL_AUTH=1/)
+  })
+
+  it('allows public bind when fleet admin serving is disabled', async () => {
+    const started = startGatewayServer({
+      config: testConfig({
+        host: '0.0.0.0',
+        internalSharedSecret: 'shared-secret-1234567890',
+      }),
+      context: testContext(),
+    })
+    try {
+      expect(started.port).toBeGreaterThan(0)
+    }
+    finally {
+      await started.stop()
+    }
+  })
+
+  it('allows public fleet admin serving with external-auth acknowledgement', async () => {
+    const started = startGatewayServer({
+      config: testConfig({
+        host: '0.0.0.0',
+        internalSharedSecret: 'shared-secret-1234567890',
+        adminExternalAuthAcknowledged: true,
+      }),
+      context: {
+        ...testContext(),
+        webStaticDir: '/tmp/aiworker-web-static-test',
+      },
+    })
+    try {
+      expect(started.port).toBeGreaterThan(0)
     }
     finally {
       await started.stop()

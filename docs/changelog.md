@@ -1,5 +1,21 @@
 # AIWorker Changelog
 
+## 2026-04-29 05:43 [security] PLAN-033 admin serving fail-closed
+
+Implemented `TODO-004` without adding first-party app-level admin auth. Fleet
+and worker admin static serving now fails closed on non-loopback binds unless
+the admin bundle is disabled or the operator explicitly acknowledges an
+external auth layer with `AIWORKER_ADMIN_EXTERNAL_AUTH=1`.
+
+Changes include a shared admin exposure guard, gateway startup enforcement,
+`aiworker serve --host`, `AIWORKER_WORKER_HOST`, worker-side enforcement before
+`Bun.serve`, focused guard/config/CLI tests, and updated public deployment docs.
+This is not a login/session system; Logto or another identity layer remains a
+future integration.
+
+Verification passed: focused fail-closed tests, workspace typecheck, lint,
+workspace tests, root build, and `git diff --check`.
+
 ## 2026-04-29 03:56 [cleanup] QA review issues closed
 
 Closed remaining review-state QA discovery subtasks and superseded split-lane

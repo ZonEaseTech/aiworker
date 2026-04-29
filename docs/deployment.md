@@ -30,6 +30,21 @@
 
 ---
 
+## Admin public exposure fail-closed
+
+`/admin/*` 是静态管理 UI，不自带应用内登录。公网部署必须在 AIWorker 前面放 Caddy basic-auth、Cloudflare Access、IP allowlist、Logto 等外部鉴权层。当前实现的保护目标是防止误把 admin bundle 直接绑到公网：
+
+| 绑定 / admin 状态 | 结果 |
+|---|---|
+| `127.0.0.1` / `localhost` + admin enabled | 允许，适合本机浏览器或受保护反代回源 |
+| 非 loopback + `--no-serve-web` | 允许，`/admin/*` 返回 404 |
+| 非 loopback + admin enabled + `AIWORKER_ADMIN_EXTERNAL_AUTH=1` | 允许，表示 operator 已确认外部鉴权覆盖 `/admin/*` |
+| 非 loopback + admin enabled + 未确认外部鉴权 | 启动失败 |
+
+`AIWORKER_ADMIN_EXTERNAL_AUTH=1` 不是应用内鉴权开关，也不会保护 gateway `/ws` 或 worker `/api/worker/*`。它只是一个显式确认：公开入口已经在 AIWorker 之前被外部身份层挡住。公网 smoke 至少应验证未认证访问 `/admin/` 返回 `401` / `403`，或在禁用 admin 时返回 `404`。
+
+---
+
 ## 形态一：裸跑（main path）
 
 适合开发机、单机用户、CI 临时。无 docker、无公网、无 Caddy。
@@ -368,7 +383,7 @@ AIWORKER_ENROLL_MODE=otp                               # 显式 'otp'，忽略 J
 
 > `aiworker serve` 内部会把 `AIWORKER_GATEWAY_URL` 的 path 段强制改写为 `/enroll-ws`，无需 deployer 自己改。Path-split 由 Caddy 端完成（见下文 § Caddy `/enroll-ws` path split）。
 
-`aiworker serve` 触发表（与 PLAN-019 §"Worker side" 一致；详见 [`docs/cli.md` § `aiworker serve`](./cli.md#aiworker-serve-port-n-gateway-wsurl-gateway-token-token-no-reconnect)）：
+`aiworker serve` 触发表（与 PLAN-019 §"Worker side" 一致；详见 [`docs/cli.md` § `aiworker serve`](./cli.md)）：
 
 | `--gateway` flag | env URL | env JOIN_TOKEN | env ENROLL_MODE | 行为 |
 |---|---|---|---|---|

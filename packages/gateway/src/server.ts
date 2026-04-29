@@ -5,6 +5,7 @@ import type { GatewayContext } from './router/context'
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import { encodeFrame, EVENTS, parseFrame } from '@zonease/aiworker-gateway-proto'
+import { assertAdminServingIsSafe } from '@zonease/aiworker-shared'
 import { serveAdminStatic } from './admin/serve-static'
 import { assertGatewayBindIsSafe, isLoopbackAddress } from './auth/loopback'
 import { authorizeConnection } from './auth/token'
@@ -58,6 +59,12 @@ export function startGatewayServer(options: StartGatewayOptions): StartedGateway
   assertGatewayBindIsSafe({
     host: config.host,
     internalSharedSecret: config.internalSharedSecret,
+  })
+  assertAdminServingIsSafe({
+    surface: 'fleet',
+    host: config.host,
+    serveWeb: context.webStaticDir !== undefined,
+    externalAuthAcknowledged: config.adminExternalAuthAcknowledged,
   })
 
   const server = Bun.serve<ConnectionData>({

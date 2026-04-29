@@ -76,6 +76,8 @@ function isolatedEnv(home: string): Record<string, string> {
   delete env.WORKER_DB_PATH
   delete env.WORKER_DATA_ROOT
   delete env.WORKER_MIGRATIONS_FOLDER
+  delete env.AIWORKER_WORKER_HOST
+  delete env.AIWORKER_ADMIN_EXTERNAL_AUTH
   return env
 }
 
@@ -284,6 +286,19 @@ describe('aiworker malformed argv handling', () => {
       expect(result.output).toContain('--port must be a finite number')
       expect(result.output).not.toContain('worker.db ready')
       expect(result.output).not.toContain('listening on :NaN')
+      expect(existsSync(path.join(result.aiworkerHome, '.env'))).toBe(false)
+    }
+    finally {
+      cleanup(result)
+    }
+  })
+
+  it('documents serve host override in command help', async () => {
+    const result = await runCli(['serve', '--help'])
+    try {
+      expect(result.exitCode).toBe(0)
+      expect(result.output).toContain('--host <host>')
+      expect(result.output).toContain('AIWORKER_WORKER_HOST')
       expect(existsSync(path.join(result.aiworkerHome, '.env'))).toBe(false)
     }
     finally {

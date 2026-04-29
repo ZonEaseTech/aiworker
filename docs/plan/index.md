@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-04-29 03:41
+> Updated: 2026-04-29 05:43
 
 ## Usage
 
@@ -61,5 +61,5 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-030 Restore Web Tailwind utility generation**](PLAN-030.md) `2026-04-28`
 - [x] [**PLAN-031 Publish aiworker CLI 0.4.4**](PLAN-031.md) `2026-04-28`
 - [x] [**PLAN-032 Extended 0.4.4 validation campaign**](PLAN-032.md) `2026-04-28`
-- [ ] [**PLAN-033 Admin surface fail-closed posture**](PLAN-033.md) `2026-04-28`
+- [x] [**PLAN-033 Admin surface fail-closed posture**](PLAN-033.md) `2026-04-28`
 - [x] [**PLAN-034 Integrate reviewed 0.4.4 repairs and optimizations**](PLAN-034.md) `2026-04-28`
