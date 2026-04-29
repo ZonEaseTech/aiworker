@@ -148,7 +148,7 @@ function ConfigForm({
       }}
     >
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Configuration</h1>
+        <h1 className="text-2xl font-bold">Configuration</h1>
         <p className="text-sm text-muted-foreground">
           Version
           {' '}
@@ -160,11 +160,11 @@ function ConfigForm({
       {conflict && (
         <div
           role="alert"
-          className="flex items-start gap-3 rounded-md border border-amber-500/40 bg-amber-500/10 p-4 text-sm"
+          className="flex items-start gap-3 rounded-md border border-warning bg-warning-soft p-4 text-sm"
         >
-          <AlertTriangle className="mt-0.5 size-4 text-amber-600 dark:text-amber-400" />
+          <AlertTriangle className="mt-0.5 size-4 text-warning" />
           <div className="flex-1">
-            <p className="font-medium">Version 冲突</p>
+            <p className="font-bold">Version 冲突</p>
             <p className="text-muted-foreground">
               你基于 version
               {' '}
@@ -189,7 +189,7 @@ function ConfigForm({
       )}
 
       {flash && (
-        <p role="status" className="rounded-md border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm">
+        <p role="status" className="rounded-md border border-success bg-success-soft p-3 text-sm">
           {flash}
         </p>
       )}
@@ -205,8 +205,8 @@ function ConfigForm({
 
       <ChannelsSection channels={draft.channels} info={info} onChange={setChannels} />
 
-      <section className="flex flex-col gap-3 rounded-lg border bg-card p-6">
-        <h2 className="text-lg font-semibold">Evolution (L3)</h2>
+      <section className="flex flex-col gap-3 rounded-md border bg-card p-6">
+        <h2 className="text-lg font-bold">Evolution (L3)</h2>
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"
@@ -216,7 +216,7 @@ function ConfigForm({
           启用 evolution observer
         </label>
         <div className="flex flex-col gap-1.5 max-w-[240px]">
-          <label className="text-sm font-medium">Observation 保留天数</label>
+          <label className="text-sm font-bold">Observation 保留天数</label>
           <input
             type="number"
             min={0}

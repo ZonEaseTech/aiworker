@@ -32,7 +32,7 @@ export function ApprovalsPanel() {
   return (
     <div className="flex max-w-4xl flex-col gap-6">
       <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Approvals</h1>
+        <h1 className="text-2xl font-bold">Approvals</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           orchestrator 命中 toolPolicy `ask` 规则时挂起的工具调用。批准前 60s 内未处理视同 deny。
         </p>
@@ -41,11 +41,11 @@ export function ApprovalsPanel() {
       {approvals.length > 0 && (
         <div
           role="alert"
-          className="flex items-start gap-3 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm"
+          className="flex items-start gap-3 rounded-md border border-warning bg-warning-soft p-3 text-sm"
         >
-          <ShieldAlert className="mt-0.5 size-4 text-amber-700 dark:text-amber-400" />
+          <ShieldAlert className="mt-0.5 size-4 text-warning" />
           <div className="flex-1">
-            <p className="font-medium">
+            <p className="font-bold">
               {approvals.length}
               {' '}
               个 pending approval
@@ -139,7 +139,7 @@ function ExpiresIn({ at }: { at: number }) {
   const remainingMs = at - Date.now()
   if (remainingMs <= 0) {
     return (
-      <span className="inline-flex items-center gap-1 text-[11px] text-destructive">
+      <span className="inline-flex items-center gap-1 text-micro text-destructive">
         <Clock className="size-3" />
         expired
       </span>
@@ -147,7 +147,7 @@ function ExpiresIn({ at }: { at: number }) {
   }
   const seconds = Math.max(0, Math.round(remainingMs / 1000))
   return (
-    <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+    <span className="inline-flex items-center gap-1 text-micro text-muted-foreground">
       <Clock className="size-3" />
       剩
       {seconds}

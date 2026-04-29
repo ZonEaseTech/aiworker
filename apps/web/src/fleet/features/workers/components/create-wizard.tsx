@@ -177,7 +177,7 @@ function CreateForm({ onCancel, onSuccess }: CreateFormProps) {
         </div>
 
         {advancedOpen && (
-          <div className="grid gap-1.5 rounded-md border border-dashed border-muted-foreground/30 bg-muted/20 p-3">
+          <div className="grid gap-1.5 rounded-md border border-dashed border-border bg-card p-3">
             <Label htmlFor={forceIdId}>Force workerId (optional)</Label>
             <Input
               id={forceIdId}
@@ -285,7 +285,7 @@ function SuccessStep({
   return (
     <>
       <DialogHeader>
-        <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+        <div className="flex items-center gap-2 text-success">
           <CheckCircle2 className="size-5" />
           <DialogTitle>Worker created</DialogTitle>
         </div>
@@ -318,12 +318,12 @@ function SuccessStep({
         )}
       </dl>
 
-      <div className="rounded-md border border-primary/30 bg-primary/5 p-3 text-xs">
-        <p className="mb-2 flex items-center gap-1.5 font-medium text-foreground">
+      <div className="rounded-md border border-primary bg-card p-3 text-xs">
+        <p className="mb-2 flex items-center gap-1.5 font-bold text-foreground">
           <Lock className="size-3.5" />
           One-time bearer token
         </p>
-        <div className="flex items-center gap-2 rounded bg-muted/60 px-2 py-1.5 font-mono text-[11px]">
+        <div className="flex items-center gap-2 rounded bg-muted px-2 py-1.5 font-mono text-micro">
           <code className="flex-1 break-all">
             {showToken ? payload.deviceToken : payload.deviceToken.replace(/./g, '•')}
           </code>
@@ -349,7 +349,7 @@ function SuccessStep({
           </Button>
         </div>
         {copied && (
-          <p role="status" className="mt-1 text-emerald-600 dark:text-emerald-400">
+          <p role="status" className="mt-1 text-success">
             Copied.
           </p>
         )}

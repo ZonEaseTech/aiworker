@@ -3,7 +3,7 @@ import { cn } from '@/shared/lib/utils'
 
 export function Table({ className, ...props }: ComponentProps<'table'>) {
   return (
-    <div className="relative w-full overflow-auto">
+    <div className="relative w-full overflow-auto rounded-md border">
       <table className={cn('w-full caption-bottom text-sm', className)} {...props} />
     </div>
   )
@@ -33,7 +33,7 @@ export function TableHead({ className, ...props }: ComponentProps<'th'>) {
   return (
     <th
       className={cn(
-        'h-10 px-3 text-left align-middle text-xs font-medium uppercase tracking-wide text-muted-foreground [&:has([role=checkbox])]:pr-0',
+        'h-10 bg-surface-dark px-3 text-left align-middle text-xs font-bold uppercase text-primary-foreground [&:has([role=checkbox])]:pr-0',
         className,
       )}
       {...props}

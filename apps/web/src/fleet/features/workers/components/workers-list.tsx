@@ -64,7 +64,7 @@ export function WorkersList({ workers: workersProp }: WorkersListProps = {}) {
     <div className="flex flex-col gap-6">
       <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight">Workers</h1>
+          <h1 className="text-2xl font-bold">Workers</h1>
           <p className="text-sm text-muted-foreground">
             Registered AIWorker runtimes the fleet can drive.
           </p>
@@ -89,7 +89,7 @@ export function WorkersList({ workers: workersProp }: WorkersListProps = {}) {
         ? <WorkersListSkeleton />
         : workers && workers.length > 0
           ? (
-              <div className="overflow-hidden rounded-lg border bg-card">
+              <div className="overflow-hidden rounded-md border bg-card">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -109,7 +109,7 @@ export function WorkersList({ workers: workersProp }: WorkersListProps = {}) {
                         onClick={() =>
                           void navigate({ to: '/workers/$workerId', params: { workerId: worker.id } })}
                       >
-                        <TableCell className="font-medium">{worker.displayName}</TableCell>
+                        <TableCell className="font-bold">{worker.displayName}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
                             <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
@@ -220,7 +220,7 @@ function RowActionsMenu({ worker, onRotate, onRemove, onStop }: RowActionsMenuPr
       {open && (
         <div
           role="menu"
-          className="absolute right-0 z-20 mt-1 w-44 rounded-md border bg-popover p-1 text-sm shadow-lg"
+          className="absolute right-0 z-20 mt-1 w-44 rounded-md border bg-popover p-1 text-sm shadow-card"
           onMouseLeave={() => setOpen(false)}
         >
           {worker.baseUrl && (
@@ -279,7 +279,7 @@ function RowActionsMenu({ worker, onRotate, onRemove, onStop }: RowActionsMenuPr
 
 function WorkersListSkeleton() {
   return (
-    <div className="overflow-hidden rounded-lg border bg-card">
+    <div className="overflow-hidden rounded-md border bg-card">
       <div className="space-y-3 p-4 sm:p-6">
         {[0, 1, 2].map(i => (
           <Skeleton key={i} className="h-10 w-full" />
@@ -291,10 +291,10 @@ function WorkersListSkeleton() {
 
 function EmptyState({ onRegister }: { onRegister: () => void }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed bg-card/50 p-6 text-center sm:p-12">
+    <div className="flex flex-col items-center justify-center gap-3 rounded-md border border-dashed bg-card p-6 text-center sm:p-12">
       <ServerOff className="size-10 text-muted-foreground" />
       <div className="space-y-1">
-        <h2 className="text-lg font-semibold">No workers registered yet</h2>
+        <h2 className="text-lg font-bold">No workers registered yet</h2>
         <p className="text-sm text-muted-foreground">
           Click Pair to attach a worker that has already started — it just
           needs the worker&apos;s base URL and bootstrap API token.

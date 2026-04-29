@@ -25,7 +25,7 @@ export function PresenceCard() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Presence</h1>
+        <h1 className="text-2xl font-bold">Presence</h1>
         <p className="break-words text-sm text-muted-foreground">
           Live snapshot driven by
           {' '}
@@ -42,7 +42,7 @@ export function PresenceCard() {
       <div className="grid gap-4 sm:grid-cols-3">
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+            <CardTitle className="flex items-center gap-2 text-sm font-bold text-muted-foreground">
               <Activity className="size-4" />
               Online workers
             </CardTitle>
@@ -51,7 +51,7 @@ export function PresenceCard() {
             {presence.isLoading
               ? <Skeleton className="h-8 w-16" />
               : (
-                  <div className="text-3xl font-semibold">
+                  <div className="text-3xl font-bold">
                     {onlineCount}
                     <span className="text-sm font-normal text-muted-foreground">
                       {' '}
@@ -71,7 +71,7 @@ export function PresenceCard() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+            <CardTitle className="flex items-center gap-2 text-sm font-bold text-muted-foreground">
               <Clock className="size-4" />
               Heartbeat distribution
             </CardTitle>
@@ -85,7 +85,7 @@ export function PresenceCard() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+            <CardTitle className="flex items-center gap-2 text-sm font-bold text-muted-foreground">
               <UserPlus className="size-4" />
               Enrollments today
             </CardTitle>
@@ -94,7 +94,7 @@ export function PresenceCard() {
             {todaysEnrollments.isLoading
               ? <Skeleton className="h-8 w-16" />
               : (
-                  <div className="text-3xl font-semibold">
+                  <div className="text-3xl font-bold">
                     {todaysEnrollments.data ?? 0}
                   </div>
                 )}

@@ -62,10 +62,10 @@ export function BrainSection({
   }
 
   return (
-    <section className="flex flex-col gap-4 rounded-lg border bg-card p-6">
+    <section className="flex flex-col gap-4 rounded-md border bg-card p-6">
       <header className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold">Brain sources</h2>
+          <h2 className="text-lg font-bold">Brain sources</h2>
           <p className="text-sm text-muted-foreground">
             知识与记忆后端。Secret 字段留空表示沿用旧值。
           </p>
@@ -116,7 +116,7 @@ export function BrainSection({
             <p className="text-xs text-muted-foreground">
               接收
               {' '}
-              <code className="font-mono text-[11px]">writeMemory</code>
+              <code className="font-mono text-micro">writeMemory</code>
               {' '}
               调用的 source。
             </p>
@@ -311,7 +311,7 @@ export function SecretField({
           {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
         </Button>
       </div>
-      <p className="text-[11px] text-muted-foreground">
+      <p className="text-micro text-muted-foreground">
         留空保留 vault 里旧值。
       </p>
     </div>

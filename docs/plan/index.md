@@ -66,3 +66,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-035 Publish aiworker CLI 0.4.5**](PLAN-035.md) `2026-04-29`
 - [x] [**PLAN-036 Keep aiworker serve in foreground**](PLAN-036.md) `2026-04-29`
 - [x] [**PLAN-037 Tolerate Codex app-server reconnect notifications**](PLAN-037.md) `2026-04-29`
+- [x] [**PLAN-038 Web UI 视觉系统收敛**](PLAN-038.md) `2026-04-29`

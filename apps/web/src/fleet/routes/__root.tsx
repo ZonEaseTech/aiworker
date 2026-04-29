@@ -21,11 +21,11 @@ function RootLayout() {
       >
         <aside
           data-testid="fleet-shell-sidebar"
-          className="flex min-w-0 w-full shrink-0 flex-col border-b bg-card md:min-h-screen md:w-60 md:border-b-0 md:border-r"
+          className="flex min-w-0 w-full shrink-0 flex-col border-b border-border bg-surface-ink text-primary-foreground md:min-h-screen md:w-60 md:border-b-0 md:border-r"
         >
           <div className="flex items-center gap-2 px-5 py-4">
             <FileStack className="size-5 text-primary" />
-            <span className="text-sm font-semibold tracking-tight">
+            <span className="text-sm font-bold">
               AIWorker · Fleet
             </span>
           </div>
@@ -39,9 +39,9 @@ function RootLayout() {
                 key={item.to}
                 to={item.to}
                 className={cn(
-                  'flex min-w-0 items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground',
+                  'flex min-w-0 items-center gap-2 rounded-md border-b-2 border-l-0 border-transparent px-3 py-2 text-sm font-bold text-primary-foreground/70 transition-colors hover:border-primary hover:bg-surface-dark hover:text-primary-foreground md:border-b-0 md:border-l-2',
                 )}
-                activeProps={{ className: 'bg-accent text-accent-foreground font-medium' }}
+                activeProps={{ className: 'border-primary bg-surface-dark text-primary-foreground' }}
                 activeOptions={{ exact: item.exact }}
               >
                 <item.icon className="size-4" />
@@ -49,19 +49,10 @@ function RootLayout() {
               </Link>
             ))}
           </nav>
-          <div className="hidden px-5 py-3 text-[11px] text-muted-foreground md:block">
-            Fleet UI talks to gateway via
-            {' '}
-            <code className="rounded bg-muted px-1 py-0.5 font-mono">/ws</code>
-            {' '}
-            only — worker config / secrets / cron live in each worker&apos;s own
-            <code className="rounded bg-muted px-1 py-0.5 font-mono">/admin/</code>
-            .
-          </div>
         </aside>
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="flex h-12 items-center justify-between gap-3 border-b bg-background px-4 md:h-14 md:px-6">
-            <span className="min-w-0 truncate text-sm font-medium text-muted-foreground">
+            <span className="min-w-0 truncate text-sm font-bold text-muted-foreground">
               Self-hosted Agent Runtime · fleet view
             </span>
             <ThemeToggle />

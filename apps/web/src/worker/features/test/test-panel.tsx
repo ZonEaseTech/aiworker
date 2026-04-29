@@ -20,7 +20,7 @@ export function TestPanel() {
   return (
     <div className="flex max-w-3xl flex-col gap-6">
       <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Test</h1>
+        <h1 className="text-2xl font-bold">Test</h1>
         <p className="text-sm text-muted-foreground">
           针对 brain / executor / channel 跑一次活体探测。
         </p>
@@ -36,10 +36,10 @@ export function TestPanel() {
 function BrainTestCard() {
   const mut = useTestWorkerBrain()
   return (
-    <section className="flex flex-col gap-3 rounded-lg border bg-card p-6">
+    <section className="flex flex-col gap-3 rounded-md border bg-card p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold">Brain</h2>
+          <h2 className="text-lg font-bold">Brain</h2>
           <p className="text-sm text-muted-foreground">
             调
             {' '}
@@ -90,10 +90,10 @@ function ExecutorTestCard() {
   const [probe, setProbe] = useState(false)
   const mut = useTestWorkerExecutor()
   return (
-    <section className="flex flex-col gap-3 rounded-lg border bg-card p-6">
+    <section className="flex flex-col gap-3 rounded-md border bg-card p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold">Executor</h2>
+          <h2 className="text-lg font-bold">Executor</h2>
           <p className="text-sm text-muted-foreground">
             调
             {' '}
@@ -187,9 +187,9 @@ function ChannelTestCard({
   }
 
   return (
-    <section className="flex flex-col gap-3 rounded-lg border bg-card p-6">
+    <section className="flex flex-col gap-3 rounded-md border bg-card p-6">
       <div>
-        <h2 className="text-lg font-semibold">Channel</h2>
+        <h2 className="text-lg font-bold">Channel</h2>
         <p className="text-sm text-muted-foreground">
           调
           {' '}
@@ -242,7 +242,7 @@ function ChannelTestCard({
           </p>
           {mut.data.error && <p className="mt-1 text-xs text-destructive">{mut.data.error}</p>}
           {mut.data.platformResponse !== undefined && (
-            <pre className="mt-2 overflow-x-auto rounded bg-muted p-2 text-[11px]">
+            <pre className="mt-2 overflow-x-auto rounded bg-muted p-2 text-micro">
               {JSON.stringify(mut.data.platformResponse, null, 2)}
             </pre>
           )}

@@ -1,4 +1,5 @@
 import type { LucideIcon } from 'lucide-react'
+import type { ComponentProps } from 'react'
 import type { Theme } from '@/shared/stores/theme'
 import { Monitor, Moon, Sun } from 'lucide-react'
 import { Button } from '@/shared/components/ui/button'
@@ -28,7 +29,7 @@ function getNextTheme(theme: Theme) {
   return THEME_ORDER[nextIndex] ?? 'system'
 }
 
-export function ThemeToggle() {
+export function ThemeToggle({ className }: Pick<ComponentProps<typeof Button>, 'className'>) {
   const theme = useThemeStore(s => s.theme)
   const setTheme = useThemeStore(s => s.setTheme)
   const Icon = THEME_ICONS[theme]
@@ -42,6 +43,7 @@ export function ThemeToggle() {
             aria-label={`Theme: ${label}`}
             size="icon"
             variant="ghost"
+            className={className}
             onClick={() => setTheme(getNextTheme(theme))}
           >
             <Icon className="size-4" />

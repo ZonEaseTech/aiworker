@@ -14,7 +14,7 @@ function WorkerOverview() {
   return (
     <section className="flex w-full max-w-5xl min-w-0 flex-col gap-6">
       <header className="min-w-0">
-        <h1 className="text-2xl font-semibold tracking-tight">概览</h1>
+        <h1 className="text-2xl font-bold">概览</h1>
         <p className="break-words text-sm text-muted-foreground">
           单 worker 自管面板。所有数据通道走本进程的
           {' '}
@@ -101,11 +101,11 @@ function WorkerOverview() {
             <p className="text-sm text-muted-foreground">
               共
               {' '}
-              <span className="font-medium text-foreground">{cron.data.jobs.length}</span>
+              <span className="font-bold text-foreground">{cron.data.jobs.length}</span>
               {' '}
               个；
               {' '}
-              <span className="font-medium text-foreground">
+              <span className="font-bold text-foreground">
                 {cron.data.jobs.filter(j => j.enabled).length}
               </span>
               {' '}
@@ -127,7 +127,7 @@ function WorkerOverview() {
               <span
                 className={
                   approvals.data.approvals.length > 0
-                    ? 'font-semibold text-amber-700 dark:text-amber-400'
+                    ? 'font-bold text-warning'
                     : 'text-muted-foreground'
                 }
               >
@@ -173,11 +173,11 @@ function SummaryCard({
   children?: React.ReactNode
 }) {
   return (
-    <article className="flex min-w-0 flex-col gap-2 rounded-lg border bg-card p-4">
+    <article className="flex min-w-0 flex-col gap-2 rounded-md border bg-card p-4">
       <header className="flex min-w-0 items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <Icon className="size-4 shrink-0 text-muted-foreground" />
-          <h3 className="truncate text-sm font-semibold">{title}</h3>
+          <h3 className="truncate text-sm font-bold">{title}</h3>
         </div>
         {actionTo && (
           <WorkerLink

@@ -26,14 +26,14 @@ const STATUS_LABEL: Record<EngineAvailabilityStatus, string> = {
 }
 
 const STATUS_DOT_CLASS: Record<EngineAvailabilityStatus, string> = {
-  'ready': 'bg-emerald-500',
-  'login-required': 'bg-amber-500',
+  'ready': 'bg-success',
+  'login-required': 'bg-warning',
   'not-found': 'bg-muted-foreground/40',
 }
 
 const STATUS_TEXT_CLASS: Record<EngineAvailabilityStatus, string> = {
-  'ready': 'text-emerald-700 dark:text-emerald-400',
-  'login-required': 'text-amber-700 dark:text-amber-400',
+  'ready': 'text-success',
+  'login-required': 'text-warning',
   'not-found': 'text-muted-foreground',
 }
 
@@ -163,10 +163,10 @@ export function ExecutorSection({ executor, onChange }: ExecutorSectionProps) {
     : availability.get(executor.engine)
 
   return (
-    <section className="flex flex-col gap-4 rounded-lg border bg-card p-6">
+    <section className="flex flex-col gap-4 rounded-md border bg-card p-6">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold">Executor</h2>
+          <h2 className="text-lg font-bold">Executor</h2>
           <p className="text-sm text-muted-foreground">
             选 engine + variant，仅 override 想改的字段。
           </p>
@@ -194,7 +194,7 @@ export function ExecutorSection({ executor, onChange }: ExecutorSectionProps) {
                 className="inline-flex items-center gap-2 rounded border bg-background px-2 py-0.5"
                 data-testid={`engine-availability-${eng}`}
               >
-                <span className="font-medium">{ENGINE_CATALOG[eng].label}</span>
+                <span className="font-bold">{ENGINE_CATALOG[eng].label}</span>
                 <AvailabilityBadge status={status} testId={`engine-availability-badge-${eng}`} />
               </span>
             )
@@ -286,7 +286,7 @@ export function ExecutorSection({ executor, onChange }: ExecutorSectionProps) {
       <div className="border-t pt-4">
         <button
           type="button"
-          className="text-sm font-medium text-muted-foreground hover:text-foreground"
+          className="text-sm font-bold text-muted-foreground hover:text-foreground"
           onClick={() => setAdvancedOpen(open => !open)}
           aria-expanded={advancedOpen}
         >
@@ -316,9 +316,9 @@ function InstallCallout({ engine }: { engine: EngineKind }) {
     <div
       role="alert"
       data-testid="engine-install-callout"
-      className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm"
+      className="rounded-md border border-warning bg-warning-soft p-3 text-sm"
     >
-      <p className="font-medium">本 worker 没有该 engine 对应的 CLI。</p>
+      <p className="font-bold">本 worker 没有该 engine 对应的 CLI。</p>
       <p className="mt-1 text-muted-foreground">
         进 worker 容器装 / 登录后点 Refresh。具体步骤见
         {' '}
@@ -343,9 +343,9 @@ function LoginCallout({ engine }: { engine: EngineKind }) {
     <div
       role="status"
       data-testid="engine-login-callout"
-      className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-sm"
+      className="rounded-md border border-warning bg-warning-soft p-3 text-sm"
     >
-      <p className="font-medium">CLI 已装但缺登录态。</p>
+      <p className="font-bold">CLI 已装但缺登录态。</p>
       <p className="mt-1 text-muted-foreground">
         在 worker 容器跑对应 CLI 的 login 命令（见
         {' '}

@@ -108,7 +108,7 @@ export function ChatPanel() {
       className="grid min-w-0 grid-cols-1 gap-4 lg:h-[calc(100vh-200px)] lg:min-h-[420px] lg:grid-cols-[280px_1fr]"
     >
       <aside className="flex max-h-56 min-h-0 min-w-0 flex-col gap-2 overflow-y-auto rounded-md border bg-card p-3 lg:max-h-none">
-        <h2 className="px-1 text-sm font-semibold">Conversations</h2>
+        <h2 className="px-1 text-sm font-bold">Conversations</h2>
         {conversationsQ.isLoading
           ? <Skeleton className="h-20" />
           : (conversationsQ.data?.conversations ?? []).length === 0
@@ -128,12 +128,12 @@ export function ChatPanel() {
                               : 'hover:bg-accent/50'
                           }`}
                         >
-                          <span className="min-w-0 truncate font-mono text-[11px]">
+                          <span className="min-w-0 truncate font-mono text-micro">
                             {c.channel}
                             :
                             {c.chatId}
                           </span>
-                          <span className="truncate text-[10px] text-muted-foreground">
+                          <span className="truncate text-micro-label text-muted-foreground">
                             {new Date(c.lastActiveAt).toLocaleString()}
                           </span>
                         </button>
@@ -165,12 +165,12 @@ export function ChatPanel() {
                       key={m.id}
                       className={`max-w-[90%] rounded-md p-3 text-sm sm:max-w-[80%] ${
                         m.role === 'user'
-                          ? 'self-end bg-primary text-primary-foreground'
+                          ? 'self-end border-2 border-primary bg-background text-foreground'
                           : 'self-start bg-muted'
                       }`}
                     >
                       <p className="whitespace-pre-wrap break-words">{m.content}</p>
-                      <p className="mt-1 text-[10px] opacity-70">
+                      <p className="mt-1 text-micro-label opacity-70">
                         {m.role}
                         {' · '}
                         {new Date(m.createdAt).toLocaleString()}
@@ -182,7 +182,7 @@ export function ChatPanel() {
             <div className="max-w-[90%] self-start rounded-md bg-muted p-3 text-sm sm:max-w-[80%]">
               <p className="whitespace-pre-wrap break-words">{streaming.text}</p>
               {!streaming.done && (
-                <p className="mt-1 text-[10px] text-muted-foreground">
+                <p className="mt-1 text-micro-label text-muted-foreground">
                   <Loader2 className="inline size-3 animate-spin" />
                   {' streaming…'}
                 </p>

@@ -249,8 +249,8 @@ function RegisterForm({ onCancel, onSuccess }: RegisterFormProps) {
           </div>
           <FieldError message={errors.apiToken} />
           {generatedToken && (
-            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 text-xs">
-              <p className="mb-2 font-medium text-foreground">
+            <div className="rounded-md border border-primary bg-card p-3 text-xs">
+              <p className="mb-2 font-bold text-foreground">
                 Token minted in this browser.
               </p>
               <p className="mb-2 text-muted-foreground">
@@ -261,7 +261,7 @@ function RegisterForm({ onCancel, onSuccess }: RegisterFormProps) {
                 {' '}
                 row yet):
               </p>
-              <div className="flex items-center gap-2 rounded bg-muted/60 px-2 py-1.5 font-mono text-[11px]">
+              <div className="flex items-center gap-2 rounded bg-muted px-2 py-1.5 font-mono text-micro">
                 <code className="flex-1 break-all">
                   AIWORKER_FORCE_TOKEN=
                   {generatedToken}
@@ -278,7 +278,7 @@ function RegisterForm({ onCancel, onSuccess }: RegisterFormProps) {
                 </Button>
               </div>
               {copied && (
-                <p role="status" className="mt-1 text-emerald-600 dark:text-emerald-400">
+                <p role="status" className="mt-1 text-success">
                   Copied.
                 </p>
               )}
@@ -334,8 +334,8 @@ function RegisterForm({ onCancel, onSuccess }: RegisterFormProps) {
  */
 function AuthMountHint() {
   return (
-    <details className="rounded-md border border-dashed border-muted-foreground/30 bg-muted/20 px-3 py-2 text-xs">
-      <summary className="cursor-pointer select-none font-medium text-muted-foreground">
+    <details className="rounded-md border border-dashed border-border bg-card px-3 py-2 text-xs">
+      <summary className="cursor-pointer select-none font-bold text-muted-foreground">
         Using an agentic engine? You'll also need to seed CLI auth on the worker.
       </summary>
       <p className="mt-2 text-muted-foreground">
@@ -439,7 +439,7 @@ function SuccessStep({
   return (
     <>
       <DialogHeader>
-        <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+        <div className="flex items-center gap-2 text-success">
           <CheckCircle2 className="size-5" />
           <DialogTitle>Worker paired</DialogTitle>
         </div>
@@ -471,12 +471,12 @@ function SuccessStep({
         </dd>
       </dl>
 
-      <div className="rounded-md border border-primary/30 bg-primary/5 p-3 text-xs">
-        <p className="mb-2 flex items-center gap-1.5 font-medium text-foreground">
+      <div className="rounded-md border border-primary bg-card p-3 text-xs">
+        <p className="mb-2 flex items-center gap-1.5 font-bold text-foreground">
           <Lock className="size-3.5" />
           One-time deviceToken
         </p>
-        <div className="flex items-center gap-2 rounded bg-muted/60 px-2 py-1.5 font-mono text-[11px]">
+        <div className="flex items-center gap-2 rounded bg-muted px-2 py-1.5 font-mono text-micro">
           <code className="flex-1 break-all">
             {showToken ? deviceToken : deviceToken.replace(/./g, '•')}
           </code>
@@ -502,7 +502,7 @@ function SuccessStep({
           </Button>
         </div>
         {copied && (
-          <p role="status" className="mt-1 text-emerald-600 dark:text-emerald-400">
+          <p role="status" className="mt-1 text-success">
             Copied.
           </p>
         )}

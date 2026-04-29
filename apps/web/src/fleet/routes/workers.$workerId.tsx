@@ -75,7 +75,7 @@ function WorkerDetailPage() {
             <ArrowLeft className="size-3.5" />
             Back to workers
           </Link>
-          <h1 className="text-2xl font-semibold tracking-tight">
+          <h1 className="text-2xl font-bold">
             {worker.displayName}
           </h1>
           <p className="text-sm text-muted-foreground">
@@ -235,7 +235,7 @@ function SelfManageHint({ worker }: { worker: SafeRegisteredWorker }) {
 function WorkerNotFound({ id }: { id: string }) {
   return (
     <div className="flex flex-col items-center justify-center gap-3 p-12 text-center">
-      <h1 className="text-2xl font-semibold">Worker not found</h1>
+      <h1 className="text-2xl font-bold">Worker not found</h1>
       <p className="text-sm text-muted-foreground">
         No registered worker with id
         {' '}

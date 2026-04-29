@@ -31,7 +31,7 @@ export function AuditList() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Audit log</h1>
+        <h1 className="text-2xl font-bold">Audit log</h1>
         <p className="break-words text-sm text-muted-foreground">
           fleet.db
           {' '}
@@ -70,7 +70,7 @@ export function AuditList() {
                   <EmptyState />
                 )
               : (
-                  <div className="overflow-hidden rounded-lg border bg-card">
+                  <div className="overflow-hidden rounded-md border bg-card">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -187,7 +187,7 @@ function AuditRow({ event }: { event: AuditEventRecord }) {
                 </button>
                 {expanded
                   ? (
-                      <pre className="max-h-64 overflow-auto rounded bg-muted/50 p-2 font-mono text-[11px]">
+                      <pre className="max-h-64 overflow-auto rounded bg-muted/50 p-2 font-mono text-micro">
                         {detailJson}
                       </pre>
                     )
@@ -203,7 +203,7 @@ function AuditRow({ event }: { event: AuditEventRecord }) {
 
 function EmptyState() {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed bg-card/50 p-6 text-center sm:p-12">
+    <div className="flex flex-col items-center justify-center gap-3 rounded-md border border-dashed bg-card p-6 text-center sm:p-12">
       <FileText className="size-10 text-muted-foreground" />
       <p className="text-sm text-muted-foreground">
         No audit events match the current filters.

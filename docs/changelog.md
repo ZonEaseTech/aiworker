@@ -1,5 +1,11 @@
 # AIWorker Changelog
 
+## 2026-04-29 17:18 [progress] REFACTOR-012 Web UI 视觉系统收敛
+
+按照 `DESIGN.md` 收敛 Fleet / Worker Web UI：Tailwind v4 token 层改为黑白高对比、NVIDIA green 信号色、2px 半径和单一 card shadow；共享 button / badge / card / input / table / dialog / tooltip / toaster primitive 统一走 token；Fleet 与 Worker shell 改为黑色导航面 + 绿色 active signal；主要页面移除 shadcn 默认大圆角、随意 emerald/amber 状态色和可见 React Query Devtools 浮动入口。
+
+保持 FEAT-032 数据边界不变：Fleet UI 仍只走 gateway WS，Worker UI 仍只走 worker REST + bearer-auth。验证通过 web lint、typecheck、test、build、CSS utility check、`git diff --check`，并用 Playwright 检查 Fleet workers 与 Worker overview/chat 的桌面和 390px 移动视口。
+
 ## 2026-04-29 10:56 [BUG-P1] BUG-036 fixed: Codex reconnect notifications
 
 Fixed the Codex current app-server path so transient reconnect progress

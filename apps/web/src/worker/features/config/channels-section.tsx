@@ -72,10 +72,10 @@ export function ChannelsSection({ channels, info, onChange }: ChannelsSectionPro
   }
 
   return (
-    <section className="flex flex-col gap-4 rounded-lg border bg-card p-6">
+    <section className="flex flex-col gap-4 rounded-md border bg-card p-6">
       <header className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold">Channels</h2>
+          <h2 className="text-lg font-bold">Channels</h2>
           <p className="text-sm text-muted-foreground">
             入站消息源。把卡片里的 webhook URL 粘到对应平台后台。
           </p>
@@ -206,11 +206,11 @@ function ChannelCredentialFields({
           <p className="text-xs text-muted-foreground">
             必填：调用
             {' '}
-            <code className="font-mono text-[11px]">POST /web/webhook</code>
+            <code className="font-mono text-micro">POST /web/webhook</code>
             {' '}
             的客户端必须发
             {' '}
-            <code className="font-mono text-[11px]">Authorization: Bearer &lt;inboundToken&gt;</code>
+            <code className="font-mono text-micro">Authorization: Bearer &lt;inboundToken&gt;</code>
             。空 token = 拒绝所有入站（fail-closed）。
           </p>
         </div>

@@ -59,7 +59,7 @@ export function CronPanel() {
     <div className="flex max-w-4xl flex-col gap-6">
       <header className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Cron</h1>
+          <h1 className="text-2xl font-bold">Cron</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             按 cron 表达式定期触发的 prompt 任务。结果通过指定 channel 发出。
           </p>
@@ -99,11 +99,11 @@ export function CronPanel() {
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
                             <code className="font-mono text-sm">{job.expression}</code>
-                            <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] uppercase tracking-wide text-muted-foreground">
+                            <span className="rounded bg-muted px-1.5 py-0.5 text-micro uppercase text-muted-foreground">
                               {job.channel}
                             </span>
                             {!job.enabled && (
-                              <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-400">
+                              <span className="rounded bg-warning-soft px-1.5 py-0.5 text-micro font-bold text-warning">
                                 disabled
                               </span>
                             )}

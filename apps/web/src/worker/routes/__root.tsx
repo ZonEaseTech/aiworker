@@ -46,13 +46,13 @@ function TopBar() {
   const brainsCount = info.data?.brains?.length ?? 0
 
   return (
-    <header className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-2 border-b bg-card px-4 py-3 sm:px-6 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center">
+    <header className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-2 border-b border-border bg-surface-ink px-4 py-3 text-primary-foreground sm:px-6 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center">
       <div className="flex min-w-0 flex-1 flex-col">
-        <span className="text-xs uppercase tracking-wide text-muted-foreground">Worker</span>
-        <code className="truncate font-mono text-sm font-semibold">{workerId}</code>
+        <span className="text-xs font-bold uppercase text-primary-foreground/70">Worker</span>
+        <code className="truncate font-mono text-sm font-bold">{workerId}</code>
       </div>
       <div className="col-start-2 row-start-1 shrink-0 md:col-start-3">
-        <ThemeToggle />
+        <ThemeToggle className="text-primary-foreground hover:text-primary-foreground" />
       </div>
       <dl className="col-span-2 flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 text-xs md:col-span-1 md:col-start-2 md:row-start-1">
         <Stat label="config v" value={String(configVersion)} />
@@ -79,16 +79,16 @@ function Stat({
 }) {
   const statusClass
     = status === 'healthy'
-      ? 'text-emerald-700 dark:text-emerald-400'
+      ? 'text-success'
       : status === 'down'
         ? 'text-destructive'
         : status === 'degraded'
-          ? 'text-amber-700 dark:text-amber-400'
-          : 'text-muted-foreground'
+          ? 'text-warning'
+          : 'text-primary-foreground/70'
   return (
     <div className="flex min-w-0 flex-col">
-      <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</dt>
-      <dd className={`max-w-[11rem] truncate font-mono ${status ? statusClass : 'text-foreground'}`}>{value}</dd>
+      <dt className="text-xs font-bold uppercase text-primary-foreground/70">{label}</dt>
+      <dd className={`max-w-[11rem] truncate font-mono ${status ? statusClass : 'text-primary-foreground'}`}>{value}</dd>
     </div>
   )
 }
@@ -104,11 +104,11 @@ function RootLayout() {
         >
           <aside
             data-testid="worker-shell-sidebar"
-            className="flex min-w-0 w-full shrink-0 flex-col border-b bg-card md:w-60 md:border-b-0 md:border-r"
+            className="flex min-w-0 w-full shrink-0 flex-col border-b border-border bg-surface-ink text-primary-foreground md:w-60 md:border-b-0 md:border-r"
           >
             <div className="flex items-center gap-2 px-5 py-4">
               <Cpu className="size-5 text-primary" />
-              <span className="text-sm font-semibold tracking-tight">AIWorker · Worker</span>
+              <span className="text-sm font-bold">AIWorker · Worker</span>
             </div>
             <Separator />
             <nav
@@ -121,8 +121,8 @@ function RootLayout() {
                   <WorkerLink
                     key={item.to}
                     to={item.to}
-                    className="flex min-w-0 items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-                    activeProps={{ className: 'bg-accent text-accent-foreground font-medium' }}
+                    className="flex min-w-0 items-center gap-2 rounded-md border-b-2 border-l-0 border-transparent px-3 py-2 text-sm font-bold text-primary-foreground/70 transition-colors hover:border-primary hover:bg-surface-dark hover:text-primary-foreground md:border-b-0 md:border-l-2"
+                    activeProps={{ className: 'border-primary bg-surface-dark text-primary-foreground' }}
                     activeOptions={item.exact ? { exact: true } : undefined}
                   >
                     <Icon className="size-4 shrink-0" />

@@ -24,7 +24,7 @@ export function EnrollList() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Pending enrollments</h1>
+        <h1 className="text-2xl font-bold">Pending enrollments</h1>
         <p className="text-sm text-muted-foreground">
           Workers awaiting OTP approval. Issued OTPs are
           {' '}
@@ -48,7 +48,7 @@ export function EnrollList() {
                 <EmptyState />
               )
             : (
-                <div className="overflow-hidden rounded-lg border bg-card">
+                <div className="overflow-hidden rounded-md border bg-card">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -156,10 +156,10 @@ function PendingRow({
 
 function EmptyState() {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed bg-card/50 p-6 text-center sm:p-12">
+    <div className="flex flex-col items-center justify-center gap-3 rounded-md border border-dashed bg-card p-6 text-center sm:p-12">
       <Inbox className="size-10 text-muted-foreground" />
       <div className="space-y-1">
-        <h2 className="text-lg font-semibold">No pending enrollments</h2>
+        <h2 className="text-lg font-bold">No pending enrollments</h2>
         <p className="text-sm text-muted-foreground">
           Workers started with
           {' '}
@@ -222,12 +222,12 @@ function ApprovedTokenDialog({
             ; copy it before closing.
           </DialogDescription>
         </DialogHeader>
-        <div className="rounded-md border border-primary/30 bg-primary/5 p-3 text-xs">
-          <p className="mb-2 flex items-center gap-1.5 font-medium text-foreground">
+        <div className="rounded-md border border-primary bg-card p-3 text-xs">
+          <p className="mb-2 flex items-center gap-1.5 font-bold text-foreground">
             <Lock className="size-3.5" />
             One-time deviceToken
           </p>
-          <div className="flex items-center gap-2 rounded bg-muted/60 px-2 py-1.5 font-mono text-[11px]">
+          <div className="flex items-center gap-2 rounded bg-muted px-2 py-1.5 font-mono text-micro">
             <code className="flex-1 break-all">
               {showToken ? payload.deviceToken : payload.deviceToken.replace(/./g, '•')}
             </code>
@@ -253,7 +253,7 @@ function ApprovedTokenDialog({
             </Button>
           </div>
           {copied && (
-            <p role="status" className="mt-1 text-emerald-600 dark:text-emerald-400">
+            <p role="status" className="mt-1 text-success">
               Copied.
             </p>
           )}

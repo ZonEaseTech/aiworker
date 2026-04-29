@@ -46,7 +46,7 @@ export function SecretsPanel() {
     <div className="flex max-w-3xl flex-col gap-6">
       <header className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Secrets</h1>
+          <h1 className="text-2xl font-bold">Secrets</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             常规 secret 通过配置编辑器管理；这里用于 out-of-band 轮换 / 应急处置。
           </p>
