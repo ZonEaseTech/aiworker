@@ -40,3 +40,6 @@ Implementing the gateway `/w/:workerId` worker API bridge MVP.
   allowlisted HTTP-to-WS/RPC routing, worker id validation, bridge-local
   `If-Match` handling, public-bind external-auth guard for `/w/*`, and focused
   route tests.
+- 2026-04-29 19:28: S3R review fix added `gateway.method.invoked` audit rows
+  for the allowlisted HTTP bridge success/error paths without storing browser
+  auth headers, cookies, worker bearer tokens, or raw config bodies.

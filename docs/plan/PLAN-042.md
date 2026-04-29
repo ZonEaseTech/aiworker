@@ -69,3 +69,7 @@
   while adding async bridge handling, and requiring explicit external-auth
   acknowledgement before serving `/w/*` on non-loopback binds. `/pma-cr`
   local diff review found no remaining P0/P1 issues.
+- 2026-04-29 19:28: S3R PMA-CR finding fixed by moving HTTP bridge audit to
+  `gateway.method.invoked`, adding operator/path/result/latency/status/error
+  metadata for success and error outcomes, and extending focused bridge tests
+  to prove sensitive headers and config body values stay out of audit detail.

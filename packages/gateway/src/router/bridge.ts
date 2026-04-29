@@ -18,6 +18,21 @@ interface BridgeRequest {
   params: Record<string, unknown>
 }
 
+interface BridgeRouteAudit {
+  method: BridgeRequest['method']
+  errorCode: string
+}
+
+interface BridgeAuditEntry {
+  workerId: string
+  method: BridgeRequest['method']
+  path: string
+  result: 'success' | 'error'
+  status: number
+  latencyMs: number
+  errorCode?: string
+}
+
 /**
  * Gateway HTTP bridge for the worker self-management API. This is not a
  * generic proxy: target worker identity comes only from `/w/:workerId`, and
@@ -28,6 +43,7 @@ export async function handleWorkerApiBridge(
   url: URL,
   ctx: GatewayContext,
 ): Promise<Response> {
+  const startedAt = Date.now()
   const parsed = parseBridgePath(url.pathname)
   if (parsed === undefined)
     return jsonError(404, 'not-found', 'Not a worker bridge path')
@@ -35,8 +51,20 @@ export async function handleWorkerApiBridge(
     return jsonError(400, 'invalid-worker-id', parsed.message)
 
   const route = await buildBridgeRequest(req, parsed.value)
-  if (!route.ok)
+  if (!route.ok) {
+    if (route.audit) {
+      recordBridgeAudit(ctx, {
+        workerId: parsed.value.workerId,
+        method: route.audit.method,
+        path: url.pathname,
+        result: 'error',
+        status: route.response.status,
+        latencyMs: elapsedMs(startedAt),
+        errorCode: route.audit.errorCode,
+      })
+    }
     return route.response
+  }
 
   const frame = await forwardBridgeRequestToNode({
     ctx,
@@ -44,15 +72,17 @@ export async function handleWorkerApiBridge(
     method: route.value.method,
     params: route.value.params,
   })
-  recordBridgeAudit({
-    ctx,
+  const response = responseFrameToHttp(frame)
+  recordBridgeAudit(ctx, {
     workerId: parsed.value.workerId,
-    httpMethod: req.method,
-    workerApiPath: parsed.value.workerApiPath,
-    rpcMethod: route.value.method,
-    frame,
+    method: route.value.method,
+    path: url.pathname,
+    result: frame.ok ? 'success' : 'error',
+    status: response.status,
+    latencyMs: elapsedMs(startedAt),
+    ...(frame.ok ? {} : { errorCode: frame.error.code }),
   })
-  return responseFrameToHttp(frame)
+  return response
 }
 
 export function isWorkerApiBridgePath(pathname: string): boolean {
@@ -85,7 +115,7 @@ async function buildBridgeRequest(
   path: ParsedBridgePath,
 ): Promise<
   | { ok: true, value: BridgeRequest }
-  | { ok: false, response: Response }
+  | { ok: false, response: Response, audit?: BridgeRouteAudit }
 > {
   if (path.workerApiPath === `${WORKER_API_PREFIX}/info`) {
     if (req.method !== 'GET')
@@ -115,6 +145,7 @@ async function buildBridgeRequest(
         return {
           ok: false,
           response: jsonError(400, 'invalid-if-match', ifMatch.message),
+          audit: { method: 'config.put', errorCode: 'invalid-if-match' },
         }
       }
       const body = await req.json().catch(() => undefined)
@@ -122,6 +153,7 @@ async function buildBridgeRequest(
         return {
           ok: false,
           response: jsonError(400, 'invalid-body', 'Request body must be valid JSON'),
+          audit: { method: 'config.put', errorCode: 'invalid-body' },
         }
       }
       return {
@@ -277,29 +309,26 @@ function responseFrameToHttp(frame: ResponseFrame): Response {
   }, statusForError(frame.error.code))
 }
 
-function recordBridgeAudit(args: {
-  ctx: GatewayContext
-  workerId: string
-  httpMethod: string
-  workerApiPath: string
-  rpcMethod: string
-  frame: ResponseFrame
-}): void {
-  const status = args.frame.ok ? 200 : statusForError(args.frame.error.code)
-  args.ctx.persistence.recordAudit({
+function recordBridgeAudit(ctx: GatewayContext, entry: BridgeAuditEntry): void {
+  ctx.persistence.recordAudit({
     actor: 'gateway',
-    action: 'gateway.bridge.invoked',
-    workerId: args.workerId,
+    action: 'gateway.method.invoked',
+    workerId: entry.workerId,
     detail: {
-      source: 'http-bridge',
-      httpMethod: args.httpMethod,
-      path: args.workerApiPath,
-      method: args.rpcMethod,
-      ok: args.frame.ok,
-      status,
-      ...(args.frame.ok ? {} : { errorCode: args.frame.error.code }),
+      operator: 'http-bridge',
+      workerId: entry.workerId,
+      method: entry.method,
+      path: entry.path,
+      result: entry.result,
+      status: entry.status,
+      latencyMs: entry.latencyMs,
+      ...(entry.errorCode === undefined ? {} : { errorCode: entry.errorCode }),
     },
   })
+}
+
+function elapsedMs(startedAt: number): number {
+  return Math.max(0, Date.now() - startedAt)
 }
 
 function statusForError(code: string): number {

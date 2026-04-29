@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parseFrame } from '@zonease/aiworker-gateway-proto'
 import {
+  auditEvents,
   closeFleetDb,
   defaultFleetMigrationsFolder,
   getFleetDb,
@@ -57,6 +58,48 @@ function makeCtx(): { ctx: GatewayContext, cleanup: () => void } {
       rmSync(dir, { recursive: true, force: true })
     },
   }
+}
+
+function readBridgeAudits(): Array<{
+  action: string
+  workerId: string | null
+  detail: Record<string, unknown> | null
+}> {
+  return getFleetDb()
+    .select({
+      action: auditEvents.action,
+      workerId: auditEvents.workerId,
+      detail: auditEvents.detail,
+    })
+    .from(auditEvents)
+    .all()
+}
+
+function expectBridgeAudit(args: {
+  method: 'workers.info' | 'config.get' | 'config.put'
+  result: 'success' | 'error'
+  status: number
+  errorCode?: string
+}): Record<string, unknown> {
+  const rows = readBridgeAudits()
+  expect(rows).toHaveLength(1)
+  const row = rows[0]!
+  expect(row.action).toBe('gateway.method.invoked')
+  expect(row.workerId).toBe(WORKER_ID)
+  expect(row.detail).toMatchObject({
+    operator: 'http-bridge',
+    workerId: WORKER_ID,
+    method: args.method,
+    path: `/w/${WORKER_ID}/api/worker/${args.method === 'workers.info' ? 'info' : 'config'}`,
+    result: args.result,
+    status: args.status,
+  })
+  expect(typeof row.detail?.latencyMs).toBe('number')
+  if (args.errorCode === undefined)
+    expect(row.detail).not.toHaveProperty('errorCode')
+  else
+    expect(row.detail?.errorCode).toBe(args.errorCode)
+  return row.detail!
 }
 
 function makeSendTap(): { ws: any, sent: string[] } {
@@ -138,6 +181,10 @@ describe('gateway worker HTTP bridge', () => {
       const res = await pendingFetch
       expect(res.status).toBe(200)
       expect(await res.json()).toMatchObject({ workerId: WORKER_ID, configVersion: 3 })
+      const detail = expectBridgeAudit({ method: 'workers.info', result: 'success', status: 200 })
+      const serialized = JSON.stringify(detail)
+      expect(serialized).not.toContain('browser-token')
+      expect(serialized).not.toContain('browser-cookie')
     }
     finally {
       await started.stop()
@@ -171,6 +218,9 @@ describe('gateway worker HTTP bridge', () => {
       const res = await pendingFetch
       expect(res.status).toBe(200)
       expect(await res.json()).toEqual({ version: 2, config: { executor: { engine: 'http' } } })
+      const detail = expectBridgeAudit({ method: 'config.get', result: 'success', status: 200 })
+      const serialized = JSON.stringify(detail)
+      expect(serialized).not.toContain('should-not-forward')
     }
     finally {
       await started.stop()
@@ -184,13 +234,18 @@ describe('gateway worker HTTP bridge', () => {
     ctx.nodes.register({ workerId: WORKER_ID, deviceId: 'dev-1', ws: node.ws, pairedAt: 1, meta: {} })
     const started = startGatewayServer({ config: testConfig(), context: ctx })
     try {
-      const nextConfig = { executor: { engine: 'codex' } }
+      const nextConfig = {
+        executor: { engine: 'codex' },
+        secrets: { apiKey: 'raw-config-secret' },
+        workerBearerToken: 'worker-bearer-token',
+      }
       const pendingFetch = fetch(`http://127.0.0.1:${started.port}/w/${WORKER_ID}/api/worker/config`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'If-Match': '7',
           'Authorization': 'Bearer browser-token',
+          'Cookie': 'sid=browser-cookie',
         },
         body: JSON.stringify(nextConfig),
       })
@@ -212,6 +267,12 @@ describe('gateway worker HTTP bridge', () => {
       const res = await pendingFetch
       expect(res.status).toBe(200)
       expect(await res.json()).toEqual({ version: 8, appliedAt: 123, runtimeReload: 'ok' })
+      const detail = expectBridgeAudit({ method: 'config.put', result: 'success', status: 200 })
+      const serialized = JSON.stringify(detail)
+      expect(serialized).not.toContain('browser-token')
+      expect(serialized).not.toContain('browser-cookie')
+      expect(serialized).not.toContain('raw-config-secret')
+      expect(serialized).not.toContain('worker-bearer-token')
     }
     finally {
       await started.stop()
@@ -259,11 +320,18 @@ describe('gateway worker HTTP bridge', () => {
       const res = await fetch(`http://127.0.0.1:${started.port}/w/${WORKER_ID}/api/worker/config`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ secrets: { apiKey: 'raw-config-secret' } }),
       })
       expect(res.status).toBe(400)
       expect(await res.json()).toMatchObject({ error: { code: 'invalid-if-match' } })
       expect(node.sent).toHaveLength(0)
+      const detail = expectBridgeAudit({
+        method: 'config.put',
+        result: 'error',
+        status: 400,
+        errorCode: 'invalid-if-match',
+      })
+      expect(JSON.stringify(detail)).not.toContain('raw-config-secret')
     }
     finally {
       await started.stop()
@@ -286,7 +354,7 @@ describe('gateway worker HTTP bridge', () => {
     }
   })
 
-  test('records audit for a successful bridged worker call', async () => {
+  test('records audit for a bridged node error without storing response details', async () => {
     const { ctx, cleanup } = makeCtx()
     const node = makeSendTap()
     ctx.nodes.register({ workerId: WORKER_ID, deviceId: 'dev-1', ws: node.ws, pairedAt: 1, meta: {} })
@@ -297,28 +365,24 @@ describe('gateway worker HTTP bridge', () => {
       dispatchNodeResponse(ctx, node.ws, {
         type: 'response',
         id: forwarded.id,
-        ok: true,
-        result: { version: 4, config: {} },
+        ok: false,
+        error: {
+          code: 'invalid_config',
+          message: 'invalid config',
+          details: { secret: 'node-error-secret' },
+        },
       })
 
       const res = await pendingFetch
-      expect(res.status).toBe(200)
-      const audit = ctx.persistence.listAuditEvents({ actionPrefix: 'gateway.bridge.', workerId: WORKER_ID })
-      expect(audit.events).toHaveLength(1)
-      expect(audit.events[0]).toMatchObject({
-        actor: 'gateway',
-        action: 'gateway.bridge.invoked',
-        workerId: WORKER_ID,
-        detail: {
-          source: 'http-bridge',
-          httpMethod: 'GET',
-          path: '/api/worker/config',
-          method: 'config.get',
-          ok: true,
-          status: 200,
-        },
+      expect(res.status).toBe(400)
+      expect(await res.json()).toMatchObject({ error: { code: 'invalid-config' } })
+      const detail = expectBridgeAudit({
+        method: 'config.get',
+        result: 'error',
+        status: 400,
+        errorCode: 'invalid_config',
       })
-      expect(audit.events[0]!.detail).not.toHaveProperty('errorCode')
+      expect(JSON.stringify(detail)).not.toContain('node-error-secret')
     }
     finally {
       await started.stop()
@@ -333,22 +397,11 @@ describe('gateway worker HTTP bridge', () => {
       const res = await fetch(`http://127.0.0.1:${started.port}/w/${WORKER_ID}/api/worker/info`)
       expect(res.status).toBe(503)
       expect(await res.json()).toMatchObject({ error: { code: 'node_offline' } })
-
-      const audit = ctx.persistence.listAuditEvents({ actionPrefix: 'gateway.bridge.', workerId: WORKER_ID })
-      expect(audit.events).toHaveLength(1)
-      expect(audit.events[0]).toMatchObject({
-        actor: 'gateway',
-        action: 'gateway.bridge.invoked',
-        workerId: WORKER_ID,
-        detail: {
-          source: 'http-bridge',
-          httpMethod: 'GET',
-          path: '/api/worker/info',
-          method: 'workers.info',
-          ok: false,
-          status: 503,
-          errorCode: 'node_offline',
-        },
+      expectBridgeAudit({
+        method: 'workers.info',
+        result: 'error',
+        status: 503,
+        errorCode: 'node_offline',
       })
     }
     finally {
