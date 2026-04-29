@@ -29,7 +29,7 @@ export function AuditList() {
   })
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex h-full min-h-0 flex-col gap-6">
       <div>
         <h1 className="text-2xl font-bold">Audit log</h1>
         <p className="break-words text-sm text-muted-foreground">
@@ -70,25 +70,27 @@ export function AuditList() {
                   <EmptyState />
                 )
               : (
-                  <div className="overflow-hidden rounded-md border bg-card">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-[7rem]">id</TableHead>
-                          <TableHead className="w-[12rem]">When</TableHead>
-                          <TableHead className="w-[10rem]">Actor</TableHead>
-                          <TableHead>Action</TableHead>
-                          <TableHead className="w-[14rem]">Worker</TableHead>
-                          <TableHead>Detail</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {(query.data?.events ?? []).map(ev => (
-                          <AuditRow key={ev.id} event={ev} />
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
+                  <Table
+                    className="min-w-[60rem]"
+                    containerClassName="min-h-0 flex-1 bg-card"
+                    data-testid="audit-table-scroll"
+                  >
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="sticky top-0 z-10 w-[7rem]">id</TableHead>
+                        <TableHead className="sticky top-0 z-10 w-[12rem]">When</TableHead>
+                        <TableHead className="sticky top-0 z-10 w-[10rem]">Actor</TableHead>
+                        <TableHead className="sticky top-0 z-10">Action</TableHead>
+                        <TableHead className="sticky top-0 z-10 w-[14rem]">Worker</TableHead>
+                        <TableHead className="sticky top-0 z-10">Detail</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(query.data?.events ?? []).map(ev => (
+                        <AuditRow key={ev.id} event={ev} />
+                      ))}
+                    </TableBody>
+                  </Table>
                 )}
 
       <Pager

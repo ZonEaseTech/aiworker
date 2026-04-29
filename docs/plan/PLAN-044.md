@@ -1,6 +1,6 @@
 # PLAN-044 Fleet Audit log 内部表格滚动
 
-- **status**: pending_review
+- **status**: completed
 - **createdAt**: 2026-04-29 18:50
 - **approvedAt**: 2026-04-29 18:50
 - **relatedTask**: BUG-037
@@ -62,3 +62,4 @@
 - 2026-04-29 18:55：实现与验证证据已存在。Audit route 的长表格滚动被限制到表格
   wrapper 内，Fleet shell 保持 viewport-bound；共享 `Table` 默认行为保持兼容。
   由于变更仍留在 dirty main worktree，尚未 commit 或显式验收，本计划保持 pending review。
+- 2026-04-29 19:38：已完成复验并随 Web UI 改动收口，状态更新为 completed。

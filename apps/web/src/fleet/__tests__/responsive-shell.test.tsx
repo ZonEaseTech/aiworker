@@ -6,6 +6,7 @@ import {
 } from '@tanstack/react-router'
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import { listAuditEvents } from '@/fleet/api'
 import { routeTree } from '@/fleet/routeTree.gen'
 import { resolveWebRouterBasepath } from '@/shared/lib/router-basepath'
 
@@ -108,5 +109,34 @@ describe('fleet responsive shell', () => {
       'grid-cols-[minmax(0,1fr)_minmax(0,1fr)]',
       'md:flex-col',
     ]))
+  })
+
+  it('keeps audit rows inside an internal scroll panel', async () => {
+    vi.mocked(listAuditEvents).mockResolvedValueOnce({
+      events: Array.from({ length: 60 }, (_, index) => ({
+        action: 'gateway.connect.accepted',
+        actor: 'gateway',
+        at: new Date(Date.UTC(2026, 3, 29, 18, index)).toISOString(),
+        detail: { index },
+        id: 60 - index,
+        workerId: `w_test_${index}`,
+      })),
+      hasMore: true,
+    })
+
+    await renderFleetRoute('/admin/audit', 430, 932)
+
+    const auditTable = await screen.findByTestId('audit-table-scroll')
+    expect(classListOf(auditTable.parentElement as HTMLElement)).toEqual(expect.arrayContaining([
+      'min-h-0',
+      'flex-1',
+      'overflow-auto',
+    ]))
+
+    const shell = screen.getByTestId('fleet-shell')
+    const main = auditTable.closest('main')
+
+    expect(classListOf(shell)).toEqual(expect.arrayContaining(['h-dvh', 'overflow-hidden']))
+    expect(classListOf(main as HTMLElement)).toEqual(expect.arrayContaining(['min-h-0', 'overflow-auto']))
   })
 })

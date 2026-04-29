@@ -17,7 +17,7 @@ function RootLayout() {
     <TooltipProvider delay={300}>
       <div
         data-testid="fleet-shell"
-        className="flex min-h-screen w-full flex-col bg-background text-foreground md:flex-row"
+        className="flex h-dvh w-full flex-col overflow-hidden bg-background text-foreground md:flex-row"
       >
         <aside
           data-testid="fleet-shell-sidebar"
@@ -50,14 +50,14 @@ function RootLayout() {
             ))}
           </nav>
         </aside>
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <header className="flex h-12 items-center justify-between gap-3 border-b bg-background px-4 md:h-14 md:px-6">
             <span className="min-w-0 truncate text-sm font-bold text-muted-foreground">
               Self-hosted Agent Runtime · fleet view
             </span>
             <ThemeToggle />
           </header>
-          <main className="min-w-0 flex-1 overflow-auto p-4 sm:p-6">
+          <main className="min-h-0 min-w-0 flex-1 overflow-auto p-4 sm:p-6">
             <Outlet />
           </main>
         </div>
