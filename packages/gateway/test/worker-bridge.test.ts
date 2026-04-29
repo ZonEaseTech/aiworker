@@ -1,9 +1,20 @@
 import type { GatewayConfig } from '../src/config'
 import type { GatewayContext } from '../src/router/context'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { parseFrame } from '@zonease/aiworker-gateway-proto'
+import {
+  closeFleetDb,
+  defaultFleetMigrationsFolder,
+  getFleetDb,
+  initFleetDb,
+  runFleetMigrations,
+} from '@zonease/aiworker-storage-sqlite/fleet'
 import { describe, expect, test } from 'bun:test'
 import consola from 'consola'
 import { ForwardTable, NodeRegistry, OperatorRegistry } from '../src/registry'
+import { FleetPersistence } from '../src/registry/persistence'
 import { dispatchNodeResponse } from '../src/router/dispatch'
 import { startGatewayServer } from '../src/server'
 
@@ -27,13 +38,25 @@ function testConfig(overrides: Partial<GatewayConfig> = {}): GatewayConfig {
   }
 }
 
-function testContext(): GatewayContext {
-  return {
+function makeCtx(): { ctx: GatewayContext, cleanup: () => void } {
+  const dir = mkdtempSync(join(tmpdir(), 'gw-bridge-'))
+  initFleetDb(join(dir, 'fleet.db'))
+  runFleetMigrations(defaultFleetMigrationsFolder)
+  const ctx: GatewayContext = {
+    persistence: new FleetPersistence(getFleetDb()),
     nodes: new NodeRegistry(),
     operators: new OperatorRegistry(),
     forwards: new ForwardTable({ timeoutMs: 0 }),
     logger: consola.withTag('gw-bridge-test'),
-  } as unknown as GatewayContext
+  }
+  return {
+    ctx,
+    cleanup: () => {
+      ctx.forwards.dispose()
+      closeFleetDb()
+      rmSync(dir, { recursive: true, force: true })
+    },
+  }
 }
 
 function makeSendTap(): { ws: any, sent: string[] } {
@@ -81,7 +104,7 @@ async function waitForWsOpen(ws: WebSocket): Promise<void> {
 
 describe('gateway worker HTTP bridge', () => {
   test('GET /w/:workerId/api/worker/info forwards to workers.info and returns node JSON', async () => {
-    const ctx = testContext()
+    const { ctx, cleanup } = makeCtx()
     const node = makeSendTap()
     ctx.nodes.register({ workerId: WORKER_ID, deviceId: 'dev-1', ws: node.ws, pairedAt: 1, meta: {} })
     const started = startGatewayServer({ config: testConfig(), context: ctx })
@@ -118,11 +141,12 @@ describe('gateway worker HTTP bridge', () => {
     }
     finally {
       await started.stop()
+      cleanup()
     }
   })
 
   test('GET /w/:workerId/api/worker/config forwards only allowlisted proto params', async () => {
-    const ctx = testContext()
+    const { ctx, cleanup } = makeCtx()
     const node = makeSendTap()
     ctx.nodes.register({ workerId: WORKER_ID, deviceId: 'dev-1', ws: node.ws, pairedAt: 1, meta: {} })
     const started = startGatewayServer({ config: testConfig(), context: ctx })
@@ -150,11 +174,12 @@ describe('gateway worker HTTP bridge', () => {
     }
     finally {
       await started.stop()
+      cleanup()
     }
   })
 
   test('PUT /w/:workerId/api/worker/config maps If-Match and body to config.put', async () => {
-    const ctx = testContext()
+    const { ctx, cleanup } = makeCtx()
     const node = makeSendTap()
     ctx.nodes.register({ workerId: WORKER_ID, deviceId: 'dev-1', ws: node.ws, pairedAt: 1, meta: {} })
     const started = startGatewayServer({ config: testConfig(), context: ctx })
@@ -190,11 +215,13 @@ describe('gateway worker HTTP bridge', () => {
     }
     finally {
       await started.stop()
+      cleanup()
     }
   })
 
   test('rejects invalid workerId before routing', async () => {
-    const started = startGatewayServer({ config: testConfig(), context: testContext() })
+    const { ctx, cleanup } = makeCtx()
+    const started = startGatewayServer({ config: testConfig(), context: ctx })
     try {
       const res = await fetch(`http://127.0.0.1:${started.port}/w/not-a-worker/api/worker/config`)
       expect(res.status).toBe(400)
@@ -202,11 +229,12 @@ describe('gateway worker HTTP bridge', () => {
     }
     finally {
       await started.stop()
+      cleanup()
     }
   })
 
   test('unknown worker API paths are not bridged', async () => {
-    const ctx = testContext()
+    const { ctx, cleanup } = makeCtx()
     const node = makeSendTap()
     ctx.nodes.register({ workerId: WORKER_ID, deviceId: 'dev-1', ws: node.ws, pairedAt: 1, meta: {} })
     const started = startGatewayServer({ config: testConfig(), context: ctx })
@@ -218,11 +246,12 @@ describe('gateway worker HTTP bridge', () => {
     }
     finally {
       await started.stop()
+      cleanup()
     }
   })
 
   test('missing If-Match on config PUT returns a bridge-local JSON error', async () => {
-    const ctx = testContext()
+    const { ctx, cleanup } = makeCtx()
     const node = makeSendTap()
     ctx.nodes.register({ workerId: WORKER_ID, deviceId: 'dev-1', ws: node.ws, pairedAt: 1, meta: {} })
     const started = startGatewayServer({ config: testConfig(), context: ctx })
@@ -238,11 +267,13 @@ describe('gateway worker HTTP bridge', () => {
     }
     finally {
       await started.stop()
+      cleanup()
     }
   })
 
   test('reserved /ws path still upgrades normally', async () => {
-    const started = startGatewayServer({ config: testConfig(), context: testContext() })
+    const { ctx, cleanup } = makeCtx()
+    const started = startGatewayServer({ config: testConfig(), context: ctx })
     const ws = new WebSocket(`ws://127.0.0.1:${started.port}/ws`)
     try {
       await waitForWsOpen(ws)
@@ -251,6 +282,78 @@ describe('gateway worker HTTP bridge', () => {
     finally {
       ws.close()
       await started.stop()
+      cleanup()
+    }
+  })
+
+  test('records audit for a successful bridged worker call', async () => {
+    const { ctx, cleanup } = makeCtx()
+    const node = makeSendTap()
+    ctx.nodes.register({ workerId: WORKER_ID, deviceId: 'dev-1', ws: node.ws, pairedAt: 1, meta: {} })
+    const started = startGatewayServer({ config: testConfig(), context: ctx })
+    try {
+      const pendingFetch = fetch(`http://127.0.0.1:${started.port}/w/${WORKER_ID}/api/worker/config`)
+      const forwarded = await waitForForward(node.sent)
+      dispatchNodeResponse(ctx, node.ws, {
+        type: 'response',
+        id: forwarded.id,
+        ok: true,
+        result: { version: 4, config: {} },
+      })
+
+      const res = await pendingFetch
+      expect(res.status).toBe(200)
+      const audit = ctx.persistence.listAuditEvents({ actionPrefix: 'gateway.bridge.', workerId: WORKER_ID })
+      expect(audit.events).toHaveLength(1)
+      expect(audit.events[0]).toMatchObject({
+        actor: 'gateway',
+        action: 'gateway.bridge.invoked',
+        workerId: WORKER_ID,
+        detail: {
+          source: 'http-bridge',
+          httpMethod: 'GET',
+          path: '/api/worker/config',
+          method: 'config.get',
+          ok: true,
+          status: 200,
+        },
+      })
+      expect(audit.events[0]!.detail).not.toHaveProperty('errorCode')
+    }
+    finally {
+      await started.stop()
+      cleanup()
+    }
+  })
+
+  test('records audit for a bridge error before returning JSON', async () => {
+    const { ctx, cleanup } = makeCtx()
+    const started = startGatewayServer({ config: testConfig(), context: ctx })
+    try {
+      const res = await fetch(`http://127.0.0.1:${started.port}/w/${WORKER_ID}/api/worker/info`)
+      expect(res.status).toBe(503)
+      expect(await res.json()).toMatchObject({ error: { code: 'node_offline' } })
+
+      const audit = ctx.persistence.listAuditEvents({ actionPrefix: 'gateway.bridge.', workerId: WORKER_ID })
+      expect(audit.events).toHaveLength(1)
+      expect(audit.events[0]).toMatchObject({
+        actor: 'gateway',
+        action: 'gateway.bridge.invoked',
+        workerId: WORKER_ID,
+        detail: {
+          source: 'http-bridge',
+          httpMethod: 'GET',
+          path: '/api/worker/info',
+          method: 'workers.info',
+          ok: false,
+          status: 503,
+          errorCode: 'node_offline',
+        },
+      })
+    }
+    finally {
+      await started.stop()
+      cleanup()
     }
   })
 })

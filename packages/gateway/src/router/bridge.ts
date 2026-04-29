@@ -44,6 +44,14 @@ export async function handleWorkerApiBridge(
     method: route.value.method,
     params: route.value.params,
   })
+  recordBridgeAudit({
+    ctx,
+    workerId: parsed.value.workerId,
+    httpMethod: req.method,
+    workerApiPath: parsed.value.workerApiPath,
+    rpcMethod: route.value.method,
+    frame,
+  })
   return responseFrameToHttp(frame)
 }
 
@@ -267,6 +275,31 @@ function responseFrameToHttp(frame: ResponseFrame): Response {
       ...(frame.error.details === undefined ? {} : { details: frame.error.details }),
     },
   }, statusForError(frame.error.code))
+}
+
+function recordBridgeAudit(args: {
+  ctx: GatewayContext
+  workerId: string
+  httpMethod: string
+  workerApiPath: string
+  rpcMethod: string
+  frame: ResponseFrame
+}): void {
+  const status = args.frame.ok ? 200 : statusForError(args.frame.error.code)
+  args.ctx.persistence.recordAudit({
+    actor: 'gateway',
+    action: 'gateway.bridge.invoked',
+    workerId: args.workerId,
+    detail: {
+      source: 'http-bridge',
+      httpMethod: args.httpMethod,
+      path: args.workerApiPath,
+      method: args.rpcMethod,
+      ok: args.frame.ok,
+      status,
+      ...(args.frame.ok ? {} : { errorCode: args.frame.error.code }),
+    },
+  })
 }
 
 function statusForError(code: string): number {
