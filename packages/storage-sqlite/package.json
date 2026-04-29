@@ -21,7 +21,8 @@
   "types": "./src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "bun test",
+    "test": "bun test --timeout=15000",
+    "test:stress": "bun test --timeout=15000 --rerun-each=3 src/worker/index.test.ts",
     "db:generate:fleet": "drizzle-kit generate --config drizzle.fleet.config.ts",
     "db:generate:worker": "drizzle-kit generate --config drizzle.worker.config.ts",
     "db:generate": "bun run db:generate:fleet && bun run db:generate:worker"

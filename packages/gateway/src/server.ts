@@ -65,11 +65,17 @@ export function startGatewayServer(options: StartGatewayOptions): StartedGateway
     hostname: config.host,
     fetch(req, serverRef) {
       const url = new URL(req.url)
-      if (url.pathname === '/health') {
+      if (url.pathname === '/health' && req.method === 'GET') {
         return new Response(
           JSON.stringify({ ok: true, service: 'aiworker-gateway', ts: Date.now() }),
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         )
+      }
+      if (url.pathname === '/health') {
+        return new Response('method not allowed', {
+          status: 405,
+          headers: { Allow: 'GET' },
+        })
       }
       // PLAN-022 / FEAT-033：fleet bundle 静态托管。`/admin` 永久重定向到
       // `/admin/`，让 HTML 里的相对资源（`./assets/...`）能正确 resolve。

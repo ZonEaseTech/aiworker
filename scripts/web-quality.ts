@@ -22,7 +22,7 @@ const criticalCssSelectors = [
   '.min-h-screen',
   '.rounded-md',
   '.p-6',
-  '.border-r',
+  '.md\\:border-r',
   '.bg-background',
   '.text-foreground',
 ] as const

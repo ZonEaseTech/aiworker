@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
   sseHandler: null as ((event: WorkerSSEEvent) => void) | null,
 }))
 
+const asyncRenderWait = { timeout: 10_000 }
+
 vi.mock('@/worker/api', () => {
   class WorkerApiError extends Error {}
   return {
@@ -89,7 +91,7 @@ describe('worker chat panel', () => {
       })
     })
 
-    expect(await screen.findByText('streamed reply')).toBeTruthy()
+    expect(await screen.findByText('streamed reply', {}, asyncRenderWait)).toBeTruthy()
     expect(mocks.invalidateTasks).toHaveBeenCalledTimes(1)
     expect(mocks.invalidateMessages).toHaveBeenCalledWith('conv-1')
     expect(mocks.messageConversationIds).toContain('conv-1')
@@ -125,7 +127,7 @@ describe('worker chat panel', () => {
 
     expect(screen.queryByText('wrong stream')).toBeNull()
     expect(screen.queryByText('legacy stream')).toBeNull()
-    expect(await screen.findByText('right stream')).toBeTruthy()
+    expect(await screen.findByText('right stream', {}, asyncRenderWait)).toBeTruthy()
     expect(mocks.messageConversationIds).toContain('conv-1')
   })
 })

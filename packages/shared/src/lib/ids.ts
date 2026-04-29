@@ -1,9 +1,7 @@
-import type { Buffer } from 'node:buffer'
-import { randomBytes } from 'node:crypto'
 import { WORKER_ID_ALPHABET } from '../fleet'
 
 /** Crockford base32 encoder that emits the exact number of characters requested. */
-function encodeBase32(bytes: Buffer, outputLen: number): string {
+function encodeBase32(bytes: Uint8Array, outputLen: number): string {
   let bits = 0
   let value = 0
   let output = ''
@@ -20,7 +18,8 @@ function encodeBase32(bytes: Buffer, outputLen: number): string {
 
 /** Mint a new worker id (`w_` + 12 Crockford base32 chars). */
 export function mintWorkerId(): string {
-  const raw = randomBytes(10)
+  const raw = new Uint8Array(10)
+  globalThis.crypto.getRandomValues(raw)
   return `w_${encodeBase32(raw, 12)}`
 }
 

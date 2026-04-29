@@ -1,15 +1,8 @@
 #!/usr/bin/env bun
 import process from 'node:process'
 
-/* eslint-disable perfectionist/sort-imports -- FEAT-030: side-effect bootstrap
- * 必须在所有业务模块之前——packages/core 的 zod schema 在 import 期就 parse
- * process.env，dotenv 必须先注入。perfectionist 默认会把 external import 排到
- * side-effect 之前，破坏这个顺序；区段内豁免该规则。 */
-import './lib/bootstrap'
-
 import cac from 'cac'
 import consola from 'consola'
-/* eslint-enable perfectionist/sort-imports */
 
 // FEAT-030: cli.version 动态读 package.json，与发布版本始终一致。
 // Bun 支持 JSON imports 直接拿 package.json。
@@ -66,6 +59,7 @@ import {
   runSessionsShow,
 } from './commands/sessions'
 import { runTokenRotate as runTokenRotateLocal } from './commands/token'
+import { bootstrapCliDotenv } from './lib/bootstrap'
 
 /**
  * aiworker —— 单二进制 CLI（PLAN-020 / FEAT-028）。
@@ -145,7 +139,7 @@ cli
     await runServe(serveOptions)
   })
 
-cli.command('config-show', 'Print the stored worker config as JSON').action(async () => {
+cli.command('config-show', 'Print the stored worker config as JSON (bootstraps local worker state if missing)').action(async () => {
   process.exit(await runConfigShow())
 })
 
@@ -306,12 +300,12 @@ cli
     }))
   })
 
-cli.command('gateway status', '显示 gateway daemon 是否运行').action(() => {
+cli.command('gateway status', '显示 detached gateway daemon 是否运行（foreground/systemd 实例不由此命令跟踪）').action(() => {
   process.exit(runGatewayStatus())
 })
 
 cli
-  .command('gateway stop', '停止 gateway daemon (SIGTERM, 超时后 SIGKILL)')
+  .command('gateway stop', '停止 detached gateway daemon (foreground/systemd 实例请由其 supervisor 停止)')
   .option('--timeout-ms <n>', 'SIGTERM 超时，默认 5000ms', { type: [Number] })
   .action(async (opts: { timeoutMs?: number[] }) => {
     process.exit(await runGatewayStop(opts.timeoutMs?.[0] === undefined ? {} : { timeoutMs: opts.timeoutMs[0] }))
@@ -481,7 +475,8 @@ cli
   .option('--dry-run', '只往 stdout 打 unit 内容，不写盘也不 systemctl')
   .option('--out <path>', '覆盖目标路径（异常布局/测试用）；自动跳过 systemctl')
   .option('--no-enable', '写盘后跳过 systemctl daemon-reload + enable --now')
-  .action(async (opts: { user?: boolean, system?: boolean, dryRun?: boolean, out?: string, enable?: boolean }) => {
+  .option('--exec-start <command>', '高级覆盖：手动指定完整 systemd ExecStart 命令')
+  .action(async (opts: { user?: boolean, system?: boolean, dryRun?: boolean, out?: string, enable?: boolean, execStart?: string }) => {
     if (opts.user === true && opts.system === true) {
       consola.error('install systemd: 不能同时指定 --user 和 --system')
       process.exit(2)
@@ -491,6 +486,7 @@ cli
       ...(opts.dryRun === true ? { dryRun: true } : {}),
       ...(opts.out === undefined ? {} : { out: opts.out }),
       ...(opts.enable === false ? { noEnable: true } : {}),
+      ...(opts.execStart === undefined ? {} : { execStart: opts.execStart }),
     }))
   })
 
@@ -538,13 +534,145 @@ export function preprocessArgv(argv: string[], cliInstance: { commands: Array<{ 
 
 export { cli }
 
-if (import.meta.main) {
+class CliUsageError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'CliUsageError'
+  }
+}
+
+interface NumericRule {
+  integer?: boolean
+  min?: number
+  max?: number
+}
+
+interface CliOptionShape {
+  config?: {
+    type?: unknown[]
+  }
+  name: string
+  rawName: string
+}
+
+interface CliCommandShape {
+  checkOptionValue: () => void
+  checkRequiredArgs: () => void
+  checkUnknownOptions: () => void
+  name: string
+  options: CliOptionShape[]
+}
+
+const NUMERIC_RULES: Record<string, Record<string, NumericRule>> = {
+  'chat': { timeoutMs: { integer: true, min: 1 } },
+  'config set': { ifMatch: { integer: true, min: 1 } },
+  'config-set': { ifMatch: { integer: true, min: 1 } },
+  'gateway start': { port: { integer: true, min: 0, max: 65_535 } },
+  'gateway stop': { timeoutMs: { integer: true, min: 0 } },
+  'logs': {
+    tail: { integer: true, min: 0, max: 1_000 },
+    timeoutMs: { integer: true, min: 1 },
+  },
+  'run': { timeoutMs: { integer: true, min: 1 } },
+  'serve': { port: { integer: true, min: 1, max: 65_535 } },
+  'sessions list': {
+    limit: { integer: true, min: 1, max: 200 },
+    offset: { integer: true, min: 0 },
+  },
+  'sessions maintenance': {
+    limit: { integer: true, min: 1, max: 200 },
+    olderThanDays: { integer: true, min: 0, max: 3650 },
+  },
+}
+
+function isCacError(err: unknown): err is Error {
+  return err instanceof Error && err.name === 'CACError'
+}
+
+function optionDisplayName(rawName: string): string {
+  const match = /--[a-z0-9][\w-]*/i.exec(rawName)
+  return match?.[0] ?? rawName
+}
+
+function optionFlagNames(rawName: string): string[] {
+  return rawName
+    .split(',')
+    .map(part => /^-{1,2}[a-z0-9][\w-]*/i.exec(part.trim())?.[0])
+    .filter((flag): flag is string => flag !== undefined)
+}
+
+function argvHasOption(argv: string[], option: CliOptionShape): boolean {
+  const args = argv.slice(2)
+  const flags = optionFlagNames(option.rawName)
+  return flags.some(flag => args.some(arg => arg === flag || arg.startsWith(`${flag}=`)))
+}
+
+function validateMatchedCommand(command: CliCommandShape): void {
+  command.checkUnknownOptions()
+  command.checkOptionValue()
+  command.checkRequiredArgs()
+}
+
+function validateNumericOptions(command: CliCommandShape, argv: string[]): void {
+  const rules = NUMERIC_RULES[command.name] ?? {}
+  for (const option of command.options) {
+    if (!Array.isArray(option.config?.type) || option.config.type[0] !== Number)
+      continue
+    if (!argvHasOption(argv, option))
+      continue
+    const value = cli.options[option.name]
+    if (value === undefined)
+      continue
+
+    const values = Array.isArray(value) ? value : [value]
+    for (const item of values) {
+      const displayName = optionDisplayName(option.rawName)
+      if (typeof item !== 'number' || !Number.isFinite(item))
+        throw new CliUsageError(`${displayName} must be a finite number`)
+
+      const rule = rules[option.name]
+      if (rule?.integer === true && !Number.isInteger(item))
+        throw new CliUsageError(`${displayName} must be an integer`)
+      if (rule?.min !== undefined && item < rule.min)
+        throw new CliUsageError(`${displayName} must be >= ${rule.min}`)
+      if (rule?.max !== undefined && item > rule.max)
+        throw new CliUsageError(`${displayName} must be <= ${rule.max}`)
+    }
+  }
+}
+
+function shouldExitAfterParse(): boolean {
+  return cli.options.help === true || (cli.options.version === true && cli.matchedCommandName == null)
+}
+
+export async function runCli(argv: string[] = process.argv): Promise<number> {
+  const preprocessed = preprocessArgv(argv)
   try {
-    cli.parse(preprocessArgv(process.argv), { run: false })
+    cli.unsetMatchedCommand()
+    const parsed = cli.parse(preprocessed, { run: false })
+    if (shouldExitAfterParse())
+      return 0
+    if (!cli.matchedCommand && parsed.args[0])
+      throw new CliUsageError(`Unknown command: ${parsed.args[0]}`)
+
+    const command = cli.matchedCommand as CliCommandShape | undefined
+    if (command) {
+      validateMatchedCommand(command)
+      validateNumericOptions(command, preprocessed)
+    }
+
+    bootstrapCliDotenv(preprocessed)
     await cli.runMatchedCommand()
+    return typeof process.exitCode === 'number' ? process.exitCode : 0
   }
   catch (err) {
-    consola.error(err)
-    process.exit(1)
+    const usageError = err instanceof CliUsageError || isCacError(err)
+    const message = err instanceof Error ? err.message : String(err)
+    consola.error(message)
+    return usageError ? 2 : 1
   }
+}
+
+if (import.meta.main) {
+  process.exit(await runCli(process.argv))
 }

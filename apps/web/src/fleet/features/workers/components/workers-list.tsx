@@ -62,19 +62,23 @@ export function WorkersList({ workers: workersProp }: WorkersListProps = {}) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between gap-4">
-        <div>
+      <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight">Workers</h1>
           <p className="text-sm text-muted-foreground">
             Registered AIWorker runtimes the fleet can drive.
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setPairOpen(true)}>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+          <Button
+            variant="outline"
+            className="w-full sm:w-auto"
+            onClick={() => setPairOpen(true)}
+          >
             <PlusCircle className="size-4" />
             Pair worker
           </Button>
-          <Button onClick={() => setLaunchOpen(true)}>
+          <Button className="w-full sm:w-auto" onClick={() => setLaunchOpen(true)}>
             <Sparkles className="size-4" />
             Launch worker
           </Button>
@@ -276,7 +280,7 @@ function RowActionsMenu({ worker, onRotate, onRemove, onStop }: RowActionsMenuPr
 function WorkersListSkeleton() {
   return (
     <div className="overflow-hidden rounded-lg border bg-card">
-      <div className="space-y-3 p-6">
+      <div className="space-y-3 p-4 sm:p-6">
         {[0, 1, 2].map(i => (
           <Skeleton key={i} className="h-10 w-full" />
         ))}
@@ -287,7 +291,7 @@ function WorkersListSkeleton() {
 
 function EmptyState({ onRegister }: { onRegister: () => void }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed bg-card/50 p-12 text-center">
+    <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed bg-card/50 p-6 text-center sm:p-12">
       <ServerOff className="size-10 text-muted-foreground" />
       <div className="space-y-1">
         <h2 className="text-lg font-semibold">No workers registered yet</h2>
@@ -296,7 +300,7 @@ function EmptyState({ onRegister }: { onRegister: () => void }) {
           needs the worker&apos;s base URL and bootstrap API token.
         </p>
       </div>
-      <Button onClick={onRegister}>
+      <Button className="w-full sm:w-auto" onClick={onRegister}>
         <PlusCircle className="size-4" />
         Register a worker
       </Button>

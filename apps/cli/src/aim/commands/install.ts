@@ -7,70 +7,162 @@ import process from 'node:process'
 import consola from 'consola'
 
 /**
- * `aim install systemd` —— 渲染 systemd unit 并（可选）注册为 `enable --now`。
- *
- * 设计目标：
- * - **零新依赖**：unit 内容是模板字符串渲染；systemctl 调用走 `child_process.spawnSync`。
- * - **副作用可控**：`--dry-run` 只 stdout，`--out` 改写盘目标且跳过 systemctl，`--no-enable` 写盘后停手。
- *   合在一起足以让单测在不接触真实 `~/.config/systemd` 与 systemctl 的前提下覆盖渲染 + 写盘 + 幂等。
- * - **形态分叉**：`--user`（默认）走 systemd 用户实例；`--system` 写 `/etc/systemd/system/`，
- *   ExecStart 中的 `%h` 在渲染期就替换为操作员 home（systemd 系统单元不展开 `%h`）。
- *
- * unit 模板假设了 `aiworker` 由 bun 安装在 `~/.bun/bin/`，这是 PLAN-016 明确的形态前提
- * （binary 形态见 PLAN-017）。改路径时模板需要同步更新。
+ * `aiworker install systemd` renders a hardened systemd unit and optionally
+ * registers it with `systemctl daemon-reload + enable --now`.
  */
 
 export type SystemdScope = 'user' | 'system'
 
 export interface RenderSystemdUnitOptions {
   scope: SystemdScope
-  /**
-   * 仅 `scope === 'system'` 时使用：替换 ExecStart 中的 `%h`。
-   * 系统单元里 `%h` 不会被 systemd 展开，所以必须在渲染期固化为绝对路径。
-   */
-  operatorHome?: string
+  /** Full systemd ExecStart command, already escaped for systemd syntax. */
+  execStart?: string
 }
 
 const SERVICE_NAME = 'aiworker-gateway.service'
 const SYSTEM_DATA_DIR = '/var/lib/aiworker'
+const SYSTEM_ENV_FILE = '/etc/aiworker/gateway.env'
+const USER_ENV_FILE = '%h/.config/aiworker/gateway.env'
+const USER_DATA_DIR = '%S/aiworker'
+const DOCUMENTATION_URL = 'https://github.com/ZonEaseTech/aiworker/blob/main/docs/deployment.md'
+const DEFAULT_GATEWAY_ARGS = ['gateway', 'start'] as const
+
+export interface ResolveCurrentExecStartOptions {
+  execPath?: string
+  argv?: string[]
+  env?: NodeJS.ProcessEnv
+  cwd?: string
+  pathExists?: (candidate: string) => boolean
+}
 
 export function renderSystemdUnit(opts: RenderSystemdUnitOptions): string {
+  const execStart = normalizeExecStart(opts.execStart ?? resolveCurrentExecStart())
   if (opts.scope === 'user') {
     return [
       '[Unit]',
       'Description=AIWorker gateway daemon (user instance)',
-      'After=network.target',
+      `Documentation=${DOCUMENTATION_URL}`,
+      'After=network-online.target',
+      'Wants=network-online.target',
       '',
       '[Service]',
       'Type=simple',
-      'ExecStart=%h/.bun/bin/aiworker gateway start',
+      `Environment=AIWORKER_HOME=${USER_DATA_DIR}`,
+      `EnvironmentFile=-${USER_ENV_FILE}`,
+      `ExecStart=${execStart}`,
       'Restart=on-failure',
       'RestartSec=5',
-      'Environment=AIWORKER_HOME=%h/.aiworker',
+      'StateDirectory=aiworker',
+      'StateDirectoryMode=0700',
+      'PrivateTmp=true',
+      'ProtectSystem=strict',
+      `ReadWritePaths=${USER_DATA_DIR}`,
+      'NoNewPrivileges=true',
       '',
       '[Install]',
       'WantedBy=default.target',
       '',
     ].join('\n')
   }
-  if (!opts.operatorHome || opts.operatorHome.length === 0)
-    throw new Error('renderSystemdUnit: scope=system 必须提供 operatorHome（systemd 系统单元不展开 %h）')
   return [
     '[Unit]',
-    'Description=AIWorker gateway daemon (system instance)',
-    'After=network.target',
+    'Description=AIWorker gateway daemon (PLAN-016 systemd path)',
+    `Documentation=${DOCUMENTATION_URL}`,
+    'After=network-online.target',
+    'Wants=network-online.target',
     '',
     '[Service]',
     'Type=simple',
-    `ExecStart=${opts.operatorHome}/.bun/bin/aiworker gateway start`,
+    `Environment=AIWORKER_HOME=${SYSTEM_DATA_DIR}`,
+    `EnvironmentFile=-${SYSTEM_ENV_FILE}`,
+    `ExecStart=${execStart}`,
     'Restart=on-failure',
     'RestartSec=5',
-    `Environment=AIWORKER_HOME=${SYSTEM_DATA_DIR}`,
+    'User=root',
+    'Group=root',
+    'StateDirectory=aiworker',
+    'StateDirectoryMode=0700',
+    'PrivateTmp=true',
+    'ProtectSystem=strict',
+    `ReadWritePaths=${SYSTEM_DATA_DIR}`,
+    'NoNewPrivileges=true',
     '',
     '[Install]',
     'WantedBy=multi-user.target',
     '',
   ].join('\n')
+}
+
+export function resolveCurrentExecStart(opts: ResolveCurrentExecStartOptions = {}): string {
+  const env = opts.env ?? process.env
+  const execPath = opts.execPath ?? process.execPath
+  const argv = opts.argv ?? process.argv
+  const cwd = opts.cwd ?? process.cwd()
+  const pathExists = opts.pathExists ?? existsSync
+  const scriptPath = resolveExistingPath(argv[1], cwd, pathExists)
+
+  if (isBunRuntime(execPath) && scriptPath !== undefined)
+    return renderExecStartCommand(execPath, [scriptPath, ...DEFAULT_GATEWAY_ARGS])
+
+  if (isLikelyAiworkerExecutable(execPath))
+    return renderExecStartCommand(execPath, [...DEFAULT_GATEWAY_ARGS])
+
+  const pathCommand = findOnPath('aiworker', env.PATH, pathExists)
+  if (pathCommand !== undefined)
+    return renderExecStartCommand(pathCommand, [...DEFAULT_GATEWAY_ARGS])
+
+  if (scriptPath !== undefined)
+    return renderExecStartCommand(scriptPath, [...DEFAULT_GATEWAY_ARGS])
+
+  throw new Error('install systemd: unable to locate the current aiworker executable; re-run via the installed aiworker command or pass --exec-start')
+}
+
+export function renderExecStartCommand(command: string, args: string[]): string {
+  return [command, ...args].map(quoteSystemdArg).join(' ')
+}
+
+function normalizeExecStart(value: string): string {
+  const trimmed = value.trim()
+  if (trimmed.length === 0)
+    throw new Error('install systemd: ExecStart must not be empty')
+  if (/[\r\n]/.test(trimmed))
+    throw new Error('install systemd: ExecStart must be a single line')
+  return trimmed
+}
+
+function quoteSystemdArg(value: string): string {
+  if (/^[\w@%+=:,./-]+$/.test(value))
+    return value
+  return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+}
+
+function resolveExistingPath(candidate: string | undefined, cwd: string, pathExists: (candidate: string) => boolean): string | undefined {
+  if (candidate === undefined || candidate.length === 0)
+    return undefined
+  const absolute = path.isAbsolute(candidate) ? candidate : path.resolve(cwd, candidate)
+  return pathExists(absolute) ? absolute : undefined
+}
+
+function isBunRuntime(candidate: string): boolean {
+  const base = path.basename(candidate)
+  return base === 'bun' || base.startsWith('bun-')
+}
+
+function isLikelyAiworkerExecutable(candidate: string): boolean {
+  return path.basename(candidate).startsWith('aiworker')
+}
+
+function findOnPath(command: string, pathValue: string | undefined, pathExists: (candidate: string) => boolean): string | undefined {
+  if (pathValue === undefined || pathValue.length === 0)
+    return undefined
+  for (const dir of pathValue.split(path.delimiter)) {
+    if (dir.length === 0)
+      continue
+    const candidate = path.join(dir, command)
+    if (pathExists(candidate))
+      return candidate
+  }
+  return undefined
 }
 
 export interface InstallSystemdOptions {
@@ -82,15 +174,24 @@ export interface InstallSystemdOptions {
   out?: string
   /** `--no-enable`：写文件后跳过 `systemctl daemon-reload + enable --now`。 */
   noEnable?: boolean
+  /** Advanced override for the rendered ExecStart command. */
+  execStart?: string
 }
 
 export interface InstallSystemdResult {
   scope: SystemdScope
   content: string
+  execStart: string
   /** dryRun 时为 undefined。 */
   written?: { path: string, unchanged: boolean }
   /** 实际跑了 systemctl 时为 true；--dry-run/--out/--no-enable 时为 false。 */
   enabled: boolean
+  /**
+   * true when unit content changed and systemctl was run. `enable --now` starts
+   * inactive units, but an already-active unit needs an explicit restart to run
+   * with the new template.
+   */
+  restartRequired: boolean
 }
 
 /** 渲染默认目标路径。`--out` 优先级高于此函数。 */
@@ -106,13 +207,14 @@ export function canonicalUnitPath(scope: SystemdScope, home: string = homedir())
  */
 export function installSystemd(opts: InstallSystemdOptions = {}): InstallSystemdResult {
   const scope: SystemdScope = opts.scope ?? 'user'
+  const execStart = normalizeExecStart(opts.execStart ?? resolveCurrentExecStart())
   const content = renderSystemdUnit({
     scope,
-    ...(scope === 'system' ? { operatorHome: homedir() } : {}),
+    execStart,
   })
 
   if (opts.dryRun)
-    return { scope, content, enabled: false }
+    return { scope, content, execStart, enabled: false, restartRequired: false }
 
   const target = opts.out ?? canonicalUnitPath(scope)
   mkdirSync(path.dirname(target), { recursive: true })
@@ -128,10 +230,10 @@ export function installSystemd(opts: InstallSystemdOptions = {}): InstallSystemd
   // `--out` 时不跑 systemctl：写到非标准位置 systemctl 也不会自动加载，强行 reload 反而误导。
   const shouldEnable = !opts.noEnable && opts.out === undefined
   if (!shouldEnable)
-    return { scope, content, written: { path: target, unchanged }, enabled: false }
+    return { scope, content, execStart, written: { path: target, unchanged }, enabled: false, restartRequired: false }
 
   runSystemctlEnable(scope)
-  return { scope, content, written: { path: target, unchanged }, enabled: true }
+  return { scope, content, execStart, written: { path: target, unchanged }, enabled: true, restartRequired: !unchanged }
 }
 
 function runSystemctlEnable(scope: SystemdScope): void {
@@ -165,6 +267,10 @@ export async function runInstallSystemd(opts: InstallSystemdOptions = {}): Promi
 
     if (res.enabled) {
       consola.success(`已 enable --now ${SERVICE_NAME}（${res.scope === 'user' ? 'systemctl --user' : 'systemctl'}）`)
+      if (res.restartRequired) {
+        consola.warn('unit 内容已变更；systemctl enable --now 不会重启已在运行的服务。若这是重装/升级，请在维护窗口执行:')
+        consola.warn(`  systemctl ${res.scope === 'user' ? '--user ' : ''}restart ${SERVICE_NAME}`)
+      }
     }
     else if (opts.out !== undefined) {
       consola.info(`--out 指定了非默认路径，已跳过 systemctl；如需启用请手动:`)
@@ -176,10 +282,30 @@ export async function runInstallSystemd(opts: InstallSystemdOptions = {}): Promi
       consola.info(`  systemctl ${res.scope === 'user' ? '--user ' : ''}daemon-reload`)
       consola.info(`  systemctl ${res.scope === 'user' ? '--user ' : ''}enable --now ${SERVICE_NAME}`)
     }
+    printFirstRunGuidance(res.scope)
     return 0
   }
   catch (err) {
     consola.error(`install systemd 失败: ${err instanceof Error ? err.message : String(err)}`)
     return 1
   }
+}
+
+function printFirstRunGuidance(scope: SystemdScope): void {
+  if (scope === 'system') {
+    consola.box([
+      'First-run secrets for aiworker-gateway:',
+      `  sudo install -d -m 0700 -o root -g root ${path.dirname(SYSTEM_ENV_FILE)}`,
+      `  sudo sh -c 'umask 077; printf "AIWORKER_MASTER_KEY=%s\\nINTERNAL_SHARED_SECRET=%s\\n" "$(openssl rand -hex 32)" "$(openssl rand -base64 24)" > ${SYSTEM_ENV_FILE}'`,
+      `  sudo chown root:root ${SYSTEM_ENV_FILE}`,
+      `  sudo chmod 600 ${SYSTEM_ENV_FILE}`,
+    ].join('\n'))
+    return
+  }
+  consola.box([
+    'First-run secrets for aiworker-gateway:',
+    '  install -d -m 0700 ~/.config/aiworker',
+    '  sh -c \'umask 077; printf "AIWORKER_MASTER_KEY=%s\\nINTERNAL_SHARED_SECRET=%s\\n" "$(openssl rand -hex 32)" "$(openssl rand -base64 24)" > ~/.config/aiworker/gateway.env\'',
+    '  chmod 600 ~/.config/aiworker/gateway.env',
+  ].join('\n'))
 }

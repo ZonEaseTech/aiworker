@@ -26,7 +26,7 @@ export function PresenceCard() {
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Presence</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="break-words text-sm text-muted-foreground">
           Live snapshot driven by
           {' '}
           <code className="rounded bg-muted px-1 py-0.5 font-mono">system.presence</code>
@@ -98,7 +98,7 @@ export function PresenceCard() {
                     {todaysEnrollments.data ?? 0}
                   </div>
                 )}
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-1 break-words text-xs text-muted-foreground">
               gateway.worker.paired + gateway.enrollment.approved since 00:00 local
             </p>
           </CardContent>

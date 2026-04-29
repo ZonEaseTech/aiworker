@@ -3,7 +3,8 @@ import { spawn } from 'node:child_process'
 import { once } from 'node:events'
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import process from 'node:process'
+
+import { buildSafeGitEnv } from './safe-env'
 
 /**
  * Per-conversation workspace lifecycle. Every agentic-CLI executor runs inside
@@ -196,7 +197,7 @@ interface GitResult {
 async function runGit(args: string[], cwd: string): Promise<GitResult> {
   const child = spawn('git', args, {
     cwd,
-    env: process.env,
+    env: buildSafeGitEnv(),
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   const stdoutChunks: Buffer[] = []

@@ -5,7 +5,7 @@ import consola from 'consola'
 
 import { resolveWebStaticDir } from '../../lib/web-static'
 import { getDaemonStatus, startDaemon, stopDaemon } from '../daemon'
-import { patchAimState } from '../state'
+import { gatewayWsUrlForLocalPort, patchAimState } from '../state'
 
 export interface GatewayStartOptions {
   port?: number
@@ -44,7 +44,7 @@ async function runGatewayStartDetached(opts: GatewayStartOptions): Promise<numbe
       ...(opts.serveWeb === false ? { env: { AIWORKER_GATEWAY_NO_SERVE_WEB: '1' } } : {}),
     })
     if (opts.persistUrl !== false)
-      await patchAimState({ gatewayUrl: `ws://localhost:${res.port}` })
+      await patchAimState({ gatewayUrl: gatewayWsUrlForLocalPort(res.port) })
     consola.success(`gateway daemon 已启动 pid=${res.pid} port=${res.port}`)
     consola.info(`pidFile: ${res.pidFile}`)
     consola.info(`logFile: ${res.logFile}`)
@@ -73,7 +73,7 @@ async function runGatewayStartForeground(opts: GatewayStartOptions): Promise<num
       consola.info(`[gateway] /admin/* serving fleet bundle from ${webStaticDir}`)
     if (opts.persistUrl !== false) {
       try {
-        await patchAimState({ gatewayUrl: `ws://localhost:${started.port}` })
+        await patchAimState({ gatewayUrl: gatewayWsUrlForLocalPort(started.port) })
       }
       catch (err) {
         // 写 aim.json 失败不影响 server 跑（systemd / 容器场景常见无写权限）。
@@ -114,12 +114,12 @@ async function runGatewayStartForeground(opts: GatewayStartOptions): Promise<num
 export function runGatewayStatus(): number {
   const status = getDaemonStatus()
   if (status.running) {
-    consola.success(`gateway daemon 运行中 pid=${status.pid}`)
+    consola.success(`gateway detached daemon 运行中 pid=${status.pid}`)
     consola.info(`pidFile: ${status.pidFile}`)
     consola.info(`logFile: ${status.logFile}`)
     return 0
   }
-  consola.info('gateway daemon 未运行（或在 foreground 模式下由 systemd 直接管）')
+  consola.info('gateway detached daemon 未运行；foreground/systemd 实例不由此命令跟踪')
   return 1
 }
 
@@ -128,10 +128,10 @@ export async function runGatewayStop(options: { timeoutMs?: number } = {}): Prom
   try {
     const stopped = await stopDaemon(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs })
     if (stopped === null) {
-      consola.info('gateway daemon 当前未运行')
+      consola.info('gateway detached daemon 当前未运行；foreground/systemd 实例请由其 supervisor 停止')
       return 0
     }
-    consola.success(`gateway daemon 已停止 pid=${stopped}`)
+    consola.success(`gateway detached daemon 已停止 pid=${stopped}`)
     return 0
   }
   catch (err) {

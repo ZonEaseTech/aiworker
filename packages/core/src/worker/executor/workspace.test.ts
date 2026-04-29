@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import process from 'node:process'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 import {
@@ -93,3 +94,106 @@ describe('WorkspaceManager (no git origin)', () => {
     expect(await fs.readdir(path.join(tmpRoot, 'workspaces'))).toEqual([])
   })
 })
+
+describe('WorkspaceManager (git origin)', () => {
+  const envKeys = [
+    'AIWORKER_JOIN_TOKEN',
+    'AIWORKER_MASTER_KEY',
+    'ANTHROPIC_API_KEY',
+    'GIT_AUTHOR_EMAIL',
+    'GIT_AUTHOR_NAME',
+    'GIT_SSH_COMMAND',
+    'GITHUB_TOKEN',
+    'HOME',
+    'INTERNAL_SHARED_SECRET',
+    'PATH',
+    'SSH_AUTH_SOCK',
+    'WORKER_DB_PATH',
+  ] as const
+
+  let tmpRoot: string
+  let originalEnv: Record<string, string | undefined>
+
+  beforeEach(async () => {
+    tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'aiworker-ws-git-'))
+    originalEnv = snapshotEnv(envKeys)
+  })
+
+  afterEach(async () => {
+    restoreEnv(originalEnv)
+    await fs.rm(tmpRoot, { recursive: true, force: true })
+  })
+
+  it('runs git helper children with a safe env that preserves git basics', async () => {
+    const binDir = path.join(tmpRoot, 'bin')
+    const repoDir = path.join(tmpRoot, 'repo')
+    const homeDir = path.join(tmpRoot, 'home')
+    await fs.mkdir(binDir, { recursive: true })
+    await fs.mkdir(repoDir, { recursive: true })
+    await fs.mkdir(homeDir, { recursive: true })
+
+    await fs.writeFile(
+      path.join(binDir, 'git'),
+      [
+        '#!/bin/sh',
+        'env | sort > git-env.txt',
+        'mkdir -p "$4"',
+        'exit 0',
+        '',
+      ].join('\n'),
+      { mode: 0o755 },
+    )
+
+    process.env.PATH = [binDir, originalEnv.PATH ?? '/usr/bin:/bin'].join(path.delimiter)
+    process.env.HOME = homeDir
+    process.env.SSH_AUTH_SOCK = '/tmp/aiworker-test-ssh-agent.sock'
+    process.env.GIT_AUTHOR_NAME = 'AIWorker Test'
+    process.env.GIT_AUTHOR_EMAIL = 'worker@example.test'
+    process.env.GIT_SSH_COMMAND = 'ssh -i /tmp/aiworker-test-key'
+    process.env.AIWORKER_MASTER_KEY = 'deadbeef'.repeat(8)
+    process.env.AIWORKER_JOIN_TOKEN = 'join-token'
+    process.env.INTERNAL_SHARED_SECRET = 'internal-secret'
+    process.env.WORKER_DB_PATH = '/var/lib/aiworker/worker.db'
+    process.env.GITHUB_TOKEN = 'gh-token'
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-redacted'
+
+    const manager = new WorkspaceManager({ root: tmpRoot, gitOrigin: repoDir })
+    const handle = await manager.createWorkspace('conv-git')
+
+    expect(handle).toEqual({
+      conversationId: 'conv-git',
+      path: path.join(tmpRoot, 'workspaces', 'conv-git'),
+      isGitWorktree: true,
+    })
+
+    const captured = await fs.readFile(path.join(repoDir, 'git-env.txt'), 'utf8')
+    expect(captured).toContain(`PATH=${process.env.PATH}\n`)
+    expect(captured).toContain(`HOME=${homeDir}\n`)
+    expect(captured).toContain('SSH_AUTH_SOCK=/tmp/aiworker-test-ssh-agent.sock\n')
+    expect(captured).toContain('GIT_AUTHOR_NAME=AIWorker Test\n')
+    expect(captured).toContain('GIT_AUTHOR_EMAIL=worker@example.test\n')
+    expect(captured).toContain('GIT_SSH_COMMAND=ssh -i /tmp/aiworker-test-key\n')
+    expect(captured).not.toContain('AIWORKER_MASTER_KEY=')
+    expect(captured).not.toContain('AIWORKER_JOIN_TOKEN=')
+    expect(captured).not.toContain('INTERNAL_SHARED_SECRET=')
+    expect(captured).not.toContain('WORKER_DB_PATH=')
+    expect(captured).not.toContain('GITHUB_TOKEN=')
+    expect(captured).not.toContain('ANTHROPIC_API_KEY=')
+  })
+})
+
+function snapshotEnv(keys: readonly string[]): Record<string, string | undefined> {
+  const snapshot: Record<string, string | undefined> = {}
+  for (const key of keys)
+    snapshot[key] = process.env[key]
+  return snapshot
+}
+
+function restoreEnv(snapshot: Record<string, string | undefined>): void {
+  for (const [key, value] of Object.entries(snapshot)) {
+    if (value === undefined)
+      delete process.env[key]
+    else
+      process.env[key] = value
+  }
+}

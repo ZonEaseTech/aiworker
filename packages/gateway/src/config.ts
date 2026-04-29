@@ -1,4 +1,6 @@
+import path from 'node:path'
 import process from 'node:process'
+import { resolveAiworkerHome } from '@zonease/aiworker-fs-layout'
 import { z } from 'zod'
 
 /**
@@ -60,7 +62,7 @@ const envSchema = z.object({
     .string()
     .regex(/^[0-9a-f]{64}$/, 'AIWORKER_MASTER_KEY must be 32-byte hex (64 hex chars)')
     .optional(),
-  AIWORKER_FLEET_DB_PATH: z.string().default('./data/fleet.db'),
+  AIWORKER_FLEET_DB_PATH: z.string().optional(),
   AIWORKER_GATEWAY_CAN_LAUNCH: z
     .enum(['true', 'false'])
     .default('false')
@@ -112,7 +114,7 @@ export function loadGatewayConfigFromEnv(): GatewayConfig {
     host: parsed.AIWORKER_GATEWAY_HOST,
     internalSharedSecret: parsed.INTERNAL_SHARED_SECRET,
     masterKeyHex: parsed.AIWORKER_MASTER_KEY,
-    fleetDbPath: parsed.AIWORKER_FLEET_DB_PATH,
+    fleetDbPath: resolveFleetDbPath(parsed.AIWORKER_FLEET_DB_PATH),
     canLaunch: parsed.AIWORKER_GATEWAY_CAN_LAUNCH,
     maxWorkers: parsed.AIWORKER_MAX_WORKERS,
     joinToken: parsed.AIWORKER_JOIN_TOKEN,
@@ -128,4 +130,13 @@ export function loadGatewayConfigFromEnv(): GatewayConfig {
       launchBaseUrlTemplate: parsed.AIWORKER_LAUNCH_BASE_URL_TEMPLATE,
     },
   }
+}
+
+function resolveFleetDbPath(value?: string): string {
+  if (value === ':memory:')
+    return value
+  const dbPath = value && value.length > 0
+    ? value
+    : path.join(resolveAiworkerHome(), 'fleet.db')
+  return path.resolve(dbPath)
 }

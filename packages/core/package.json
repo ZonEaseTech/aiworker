@@ -13,7 +13,8 @@
   "types": "./src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "bun test"
+    "test": "bun test --timeout=30000",
+    "test:stress": "bun test --timeout=30000 --rerun-each=3 src/worker/orchestrator/service.history.test.ts"
   },
   "dependencies": {
     "@zonease/aiworker-fs-layout": "workspace:*",

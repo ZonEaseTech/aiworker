@@ -426,7 +426,7 @@ Gateway 侧（`apps/gateway/src/index.ts` / gateway 容器）：
 - `AIWORKER_GATEWAY_PORT` / `AIWORKER_GATEWAY_HOST`（默认 `9218` / `127.0.0.1`；compose 里绑 `0.0.0.0`）。
 - `AIWORKER_MASTER_KEY` — fleet.db `registered_workers.apiTokenEnc` 的 AES 主密钥。
 - `INTERNAL_SHARED_SECRET` — 远程 operator 的 bearer；canLaunch=true 时作为新拉起 worker 容器的 env 注入。
-- `AIWORKER_FLEET_DB_PATH` — 默认 `./data/fleet.db`；compose 里挂到 `aiworker_fleet` 卷。
+- `AIWORKER_FLEET_DB_PATH` — 默认 `$AIWORKER_HOME/fleet.db`；compose 里挂到 `aiworker_fleet` 卷。
 - `AIWORKER_GATEWAY_CAN_LAUNCH`（默认 `false`）、`AIWORKER_MAX_WORKERS`、`AIWORKER_IMAGE`、`WORKER_DATA_ROOT`、`WORKER_MEMORY_LIMIT`、`WORKER_CPU_LIMIT`、`AIWORKER_NETWORK`、`AIWORKER_LAUNCH_BASE_URL_TEMPLATE`。
 
 > PLAN-013 之前的一批 manager-polling / dashboard-only 变量已随 dashboard 下线；变更明细见 `docs/changelog.md` 的 PLAN-013 条目。

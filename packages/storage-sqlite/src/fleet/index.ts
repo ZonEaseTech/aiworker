@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { existsSync, mkdirSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -34,10 +34,21 @@ export const defaultFleetMigrationsFolder: string = resolveMigrationsFolder('fle
 let db: ReturnType<typeof createDb> | null = null
 
 function createDb(dbPath: string) {
-  const sqlite = new Database(dbPath, { create: true })
-  sqlite.exec('PRAGMA journal_mode = WAL')
-  sqlite.exec('PRAGMA foreign_keys = ON')
-  return drizzle(sqlite, { schema })
+  const resolvedPath = dbPath === ':memory:' ? dbPath : path.resolve(dbPath)
+  try {
+    if (resolvedPath !== ':memory:')
+      mkdirSync(path.dirname(resolvedPath), { recursive: true, mode: 0o700 })
+    const sqlite = new Database(resolvedPath, { create: true })
+    sqlite.exec('PRAGMA journal_mode = WAL')
+    sqlite.exec('PRAGMA foreign_keys = ON')
+    return drizzle(sqlite, { schema })
+  }
+  catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    throw new Error(
+      `Unable to open fleet database at ${resolvedPath}. Ensure the parent directory exists and is writable, or set AIWORKER_FLEET_DB_PATH to a writable location. Original error: ${message}`,
+    )
+  }
 }
 
 export function initFleetDb(dbPath: string) {

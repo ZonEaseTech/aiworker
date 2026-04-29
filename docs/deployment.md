@@ -80,9 +80,29 @@ aiworker install systemd --dry-run
 
 # 自定义输出路径（异常布局或 packaging 用）：
 aiworker install systemd --out /tmp/aiworker-gateway.service --no-enable
+
+# 高级：手动固定 ExecStart（一般不需要）：
+aiworker install systemd --exec-start '/opt/aiworker/bin/aiworker gateway start'
 ```
 
-`aiworker install systemd` 写完 unit 后默认会调 `systemctl daemon-reload + enable --now`；带 `--no-enable` 让运维手动 enable。完整 flag 列表见 [`docs/cli.md` § `aiworker install systemd`](./cli.md#aiworker-install-systemd-plan-016)。
+`aiworker install systemd` 写完 unit 后默认会调 `systemctl daemon-reload + enable --now`；带 `--no-enable` 让运维手动 enable。`enable --now` 会启动未运行的服务，但不会让已运行服务自动重启进新的 unit；重装/升级时按命令输出在维护窗口执行 `systemctl [--user] restart aiworker-gateway`。完整 flag 列表见 [`docs/cli.md` § `aiworker install systemd`](./cli.md#aiworker-install-systemd-plan-016)。
+
+### 首次 secrets
+
+unit 使用 `EnvironmentFile` 注入 secret，避免把 secret 写进 unit 本体：
+
+```sh
+# 用户实例：
+install -d -m 0700 ~/.config/aiworker
+sh -c 'umask 077; printf "AIWORKER_MASTER_KEY=%s\nINTERNAL_SHARED_SECRET=%s\n" "$(openssl rand -hex 32)" "$(openssl rand -base64 24)" > ~/.config/aiworker/gateway.env'
+chmod 600 ~/.config/aiworker/gateway.env
+
+# 系统实例：
+sudo install -d -m 0700 -o root -g root /etc/aiworker
+sudo sh -c 'umask 077; printf "AIWORKER_MASTER_KEY=%s\nINTERNAL_SHARED_SECRET=%s\n" "$(openssl rand -hex 32)" "$(openssl rand -base64 24)" > /etc/aiworker/gateway.env'
+sudo chown root:root /etc/aiworker/gateway.env
+sudo chmod 600 /etc/aiworker/gateway.env
+```
 
 ### 验证
 
@@ -100,10 +120,62 @@ curl -fsS http://127.0.0.1:9218/health
 # => {"ok":true,"service":"aiworker-gateway","ts":...}
 ```
 
+### 远程 PATH / 版本诊断
+
+远程 `ssh` / `aissh exec` 通常是非交互 shell，不一定加载
+`~/.bashrc`、`~/.profile` 或 bun 的 PATH 初始化。因此：
+
+- `which aiworker` / `command -v aiworker` 只能说明当前远程 shell 的
+  PATH，不能证明 systemd unit 实际运行的是哪个 binary。
+- 不要为了查版本而打印 `/etc/aiworker/gateway.env`、`~/.aiworker/.env`、
+  `systemctl show -p Environment ...` 等环境内容；这些路径可能包含
+  `AIWORKER_MASTER_KEY` / `INTERNAL_SHARED_SECRET`。
+
+安全的诊断方式是只读取 unit 的 `ExecStart`，再按 unit 实际命令查版本：
+
+```sh
+# 用户实例：
+systemctl --user show aiworker-gateway --property=ExecStart --value
+
+# 系统实例：
+systemctl show aiworker-gateway --property=ExecStart --value
+```
+
+当前 main 分支的 unit 通常是直接执行 `.../.bun/bin/aiworker gateway start`。
+这种形态可以只取 `path=` 并运行同一个 binary 的 `--version`：
+
+```sh
+# 用户实例：
+unit_bin="$(systemctl --user show aiworker-gateway --property=ExecStart --value | sed -n 's/.*path=\([^ ;]*\).*/\1/p')"
+test -n "$unit_bin" && "$unit_bin" --version
+
+# 系统实例：
+unit_bin="$(systemctl show aiworker-gateway --property=ExecStart --value | sed -n 's/.*path=\([^ ;]*\).*/\1/p')"
+test -n "$unit_bin" && sudo "$unit_bin" --version
+```
+
+Portable `ExecStart` may render as `bun <aiworker.js> gateway start`
+或 standalone `aiworker gateway start`。这时不要只运行 `path=` 的
+`--version`，因为 `path=` 可能是 `bun` 本身；应以 `argv[]` 里的完整命令为
+准，把末尾 `gateway start` 替换成 `--version`，或使用下面的稳定 symlink。
+
+如果运维脚本需要一个稳定命令路径，建议把 AIWorker CLI 本身（不是 `bun`
+解释器）显式 symlink 到 `/usr/local/bin/aiworker`，再用该绝对路径做远程
+检查：
+
+```sh
+sudo ln -sfn /root/.bun/bin/aiworker /usr/local/bin/aiworker
+/usr/local/bin/aiworker --version
+```
+
+升级 CLI 后重新跑一次 `aiworker install systemd ...` 或更新 symlink，确保
+unit 与远程诊断看到的是同一个 AIWorker CLI。
+
 ### 注意
 
-- unit 模板里的 `ExecStart` 假设 `aiworker` 已位于 `~/.bun/bin/aiworker`（`bun install -g @zonease/aiworker-cli` 默认路径）。binary 形态（FEAT-027 之后的 `bun build --compile`）一旦发布，`aiworker install systemd` 会按 `which aiworker` 改写为绝对路径。
-- `--system` 形态需要明确知道在做什么——服务以 root 跑、数据写到 root home（除非自定义 `Environment=AIWORKER_HOME=...`）。新手优先 `--user`。
+- unit 模板会从当前运行的 CLI 解析 `ExecStart`，不假设 `/root/.bun/bin/aiworker`。如果你确实要固定某个旧路径，用 `--exec-start` 显式指定完整命令。
+- `--user` 形态的数据目录由 systemd `StateDirectory=aiworker` 管理，通常是 `~/.local/state/aiworker`；`--system` 形态是 `/var/lib/aiworker`。
+- `--system` 形态需要明确知道在做什么——服务以 root 跑、数据写到 `/var/lib/aiworker`。新手优先 `--user`。
 - worker 进程目前不提供 systemd 模板。常见做法：让 gateway 跑 systemd（长驻），worker 按需手工 `aiworker serve` 或走 docker fast-launch。
 
 ---
@@ -410,8 +482,8 @@ approve 后 worker 端会打 `[aiworker serve] approved as w_xxx; deviceToken=wt
 无论形态，备份都必须涵盖：
 
 - **`AIWORKER_MASTER_KEY`** — 离线保管。丢失 = fleet 里所有 worker 的 token 全部失效，必须重新 `aiworker pair`。
-- **fleet.db** — 裸跑/systemd 在 `~/.aiworker/fleet.db`；docker 在卷 `aiworker_fleet`（默认 `/var/lib/docker/volumes/aiworker_fleet/_data/fleet.db`）。
-- **每个 worker 的 worker.db** — 裸跑/systemd 在 `~/.aiworker/workers/<workerId>/worker.db`；docker launch 形态在 `WORKER_DATA_ROOT/<workerId>/worker.db`。
+- **fleet.db** — 裸跑默认在 `~/.aiworker/fleet.db`；systemd `--user` 默认在 `~/.local/state/aiworker/fleet.db`；systemd `--system` 在 `/var/lib/aiworker/fleet.db`；docker 在卷 `aiworker_fleet`（默认 `/var/lib/docker/volumes/aiworker_fleet/_data/fleet.db`）。
+- **每个 worker 的 worker.db** — 裸跑默认在 `~/.aiworker/workers/<workerId>/worker.db`；systemd 跟随对应 `AIWORKER_HOME`；docker launch 形态在 `WORKER_DATA_ROOT/<workerId>/worker.db`。
 
 ---
 
@@ -420,7 +492,7 @@ approve 后 worker 端会打 `[aiworker serve] approved as w_xxx; deviceToken=wt
 - **`aiworker` 报 `auth: shared_secret_mismatch`**：通常是从容器外部直连 gateway 的 `127.0.0.1`，但 Bun 看到的 `requestIP` 是 docker network 地址（不在 loopback 白名单）。解决：经 Caddy 反代（loopback）进入，或者显式 export `INTERNAL_SHARED_SECRET` 当 token。
 - **`aiworker` 等响应超时**：`aiworker fleet list` 看 node 是否在线；若短时间内频繁断连，看 `fleet.db` 的 `audit_events` 里 `gateway.node.disconnected` 的 close code。
 - **gateway `/health` 不通**：检查 gateway 进程是否真的起了；`AIWORKER_MASTER_KEY` 是否有效（解 fleet.db 失败会立即退出）。
-- **systemd unit 启动失败**：`journalctl --user -u aiworker-gateway -e` 看错误；常见是 `aiworker` 不在 `$PATH`（unit `Environment=PATH=...` 缺）或 `~/.aiworker/` 权限错。
+- **systemd unit 启动失败**：`journalctl --user -u aiworker-gateway -e` 看错误；常见是 `gateway.env` 缺 `AIWORKER_MASTER_KEY` / `INTERNAL_SHARED_SECRET`、`ExecStart` 指向的 CLI 被卸载、或 state 目录权限异常。
 - **docker 形态 verify 失败**：`docker logs aiworker-gateway --tail 200`。
 
 公网 HTTPS / aissh / Caddy 相关问题见 [`deployment-public-https.md` § Troubleshooting](./deployment-public-https.md#troubleshooting)。

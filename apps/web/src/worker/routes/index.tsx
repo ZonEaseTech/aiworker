@@ -12,10 +12,10 @@ function WorkerOverview() {
   const approvals = useApprovals()
 
   return (
-    <section className="flex max-w-5xl flex-col gap-6">
-      <header>
+    <section className="flex w-full max-w-5xl min-w-0 flex-col gap-6">
+      <header className="min-w-0">
         <h1 className="text-2xl font-semibold tracking-tight">概览</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="break-words text-sm text-muted-foreground">
           单 worker 自管面板。所有数据通道走本进程的
           {' '}
           <code className="font-mono text-xs">/api/worker/*</code>
@@ -23,7 +23,7 @@ function WorkerOverview() {
         </p>
       </header>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <SummaryCard
           title="Worker 健康"
           icon={Activity}
@@ -173,16 +173,16 @@ function SummaryCard({
   children?: React.ReactNode
 }) {
   return (
-    <article className="flex flex-col gap-2 rounded-lg border bg-card p-4">
-      <header className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <Icon className="size-4 text-muted-foreground" />
-          <h3 className="text-sm font-semibold">{title}</h3>
+    <article className="flex min-w-0 flex-col gap-2 rounded-lg border bg-card p-4">
+      <header className="flex min-w-0 items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <Icon className="size-4 shrink-0 text-muted-foreground" />
+          <h3 className="truncate text-sm font-semibold">{title}</h3>
         </div>
         {actionTo && (
           <WorkerLink
             to={actionTo}
-            className="text-xs text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground"
+            className="shrink-0 text-xs text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground"
           >
             {actionLabel ?? '前往'}
           </WorkerLink>
@@ -199,9 +199,9 @@ function SummaryCard({
 
 function Row({ label, value }: { label: string, value: string }) {
   return (
-    <li className="flex items-center justify-between">
+    <li className="flex min-w-0 items-center justify-between gap-3">
       <span className="text-xs text-muted-foreground">{label}</span>
-      <code className="font-mono text-xs">{value}</code>
+      <code className="min-w-0 truncate font-mono text-xs">{value}</code>
     </li>
   )
 }

@@ -49,7 +49,7 @@ describe('workersList', () => {
     renderWithProviders(<WorkersList workers={[]} />)
     expect(screen.getByText(/No workers registered yet/i)).toBeTruthy()
     // The empty-state CTA is the only "Register a worker" button rendered.
-    expect(screen.getByRole('button', { name: /Register a worker/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Register a worker/i }).className).toContain('w-full')
   })
 
   it('navigates to the worker detail route when a row is clicked', () => {

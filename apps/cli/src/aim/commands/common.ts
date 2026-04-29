@@ -4,7 +4,7 @@ import type { AimState } from '../state'
 import process from 'node:process'
 
 import { AimWsError, createAimClient } from '../client'
-import { loadAimState, patchAimState, saveAimState } from '../state'
+import { loadAimState, normalizeGatewayWsUrl, patchAimState, saveAimState } from '../state'
 
 /**
  * 命令公共上下文：加载 state、创建 WS 连接、在回调跑完后干净关闭。
@@ -39,7 +39,7 @@ export async function withSession<T>(
   const client = createAimClient()
   try {
     await client.connect({
-      url: opts.gatewayUrl ?? state.gatewayUrl,
+      url: normalizeGatewayWsUrl(opts.gatewayUrl ?? state.gatewayUrl),
       deviceId: state.deviceId,
       token: opts.token ?? state.deviceToken,
       ...(opts.connectTimeoutMs === undefined ? {} : { timeoutMs: opts.connectTimeoutMs }),
