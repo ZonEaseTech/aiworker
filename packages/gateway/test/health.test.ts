@@ -63,20 +63,16 @@ describe('gateway /health', () => {
     }).toThrow(/AIWORKER_ADMIN_EXTERNAL_AUTH=1/)
   })
 
-  it('allows public bind when fleet admin serving is disabled', async () => {
-    const started = startGatewayServer({
-      config: testConfig({
-        host: '0.0.0.0',
-        internalSharedSecret: 'shared-secret-1234567890',
-      }),
-      context: testContext(),
-    })
-    try {
-      expect(started.port).toBeGreaterThan(0)
-    }
-    finally {
-      await started.stop()
-    }
+  it('refuses public worker bridge without external-auth acknowledgement', () => {
+    expect(() => {
+      startGatewayServer({
+        config: testConfig({
+          host: '0.0.0.0',
+          internalSharedSecret: 'shared-secret-1234567890',
+        }),
+        context: testContext(),
+      })
+    }).toThrow(/\/w\/\*/)
   })
 
   it('allows public fleet admin serving with external-auth acknowledgement', async () => {

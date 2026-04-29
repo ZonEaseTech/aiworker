@@ -1,6 +1,6 @@
 # PLAN-042 Fleet 统一入口管理非同 host worker
 
-- **status**: pending_review
+- **status**: implementing
 - **createdAt**: 2026-04-29 18:10
 - **relatedTask**: FEAT-040
 
@@ -262,3 +262,11 @@ browser
 ## 批注
 
 等待用户批准。批准后建议先实施 S1 + S2：先固化路由/安全契约，并补齐 gateway-native 管理 method。这样即使 UI 还未完全切换，非同 host worker 的基础管理能力也能先闭环。
+
+- 2026-04-29 19:39：MVP 实施已合入到本计划的早期切片：
+  - S2 补齐 node-side `workers.info` / `workers.stop` handlers；
+  - S3 增加 `/w/:workerId/api/worker/info`、`GET/PUT /config` 的 gateway HTTP bridge；
+  - S3R 补齐 `gateway.method.invoked` 审计，覆盖成功/失败路径，且不记录浏览器
+    `Authorization` / `Cookie`、worker bearer token 或 raw config body。
+  这只完成 gateway bridge MVP，不代表完整 Fleet-hosted Worker UI、SSE bridge 或
+  全量 worker REST 能力已经完成。

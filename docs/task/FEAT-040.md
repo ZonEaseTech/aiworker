@@ -1,8 +1,8 @@
 # FEAT-040 Fleet 统一入口管理非同 host worker
 
-- **status**: pending
+- **status**: in_progress
 - **priority**: P1
-- **owner**: (未分配)
+- **owner**: BKD skge5qv2
 - **createdAt**: 2026-04-29 18:10
 - **plan**: PLAN-042
 
@@ -43,3 +43,7 @@ https://aiw.jbcnet.co.jp/w/<workerId>/   # 某个 worker 的管理入口
 
 - 2026-04-29 18:10：根据讨论确认方向：非同 host worker 可以被 fleet 管理，关键是 worker 主动连 fleet gateway；路径级 worker admin 应放在 fleet 域名下，但主线应走 gateway-native WS/RPC，而不是依赖 gateway 反向直连 worker。
 - 2026-04-29 18:18：收窄方案：对外地址直接用 `workerId` 派生，pair / enroll 后默认代理 `/w/<workerId>/`；首期不围绕 `baseUrl` 做复杂 fallback 设计。
+- 2026-04-29 19:39：早期 MVP 切片已合入：node-side `workers.info` /
+  `workers.stop` handler、gateway `/w/:workerId/api/worker/info` 与
+  `GET/PUT /config` bridge、bridge 成功/失败审计与敏感字段保护。该切片不代表
+  完整 Worker UI fleet-hosted mode、SSE bridge 或全量 worker REST 能力已完成。

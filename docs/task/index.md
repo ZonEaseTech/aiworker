@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-04-29 19:22
+> Updated: 2026-04-29 19:39
 
 ## Usage
 
@@ -127,6 +127,6 @@ Each task is a single line linking to its detail file. All detailed information 
 - [ ] [**FEAT-038 Worker 决策管线：意图识别、能力选择与质量门禁**](FEAT-038.md) `P1`
 - [x] [**REL-003 发布 aiworker CLI 0.4.6**](REL-003.md) `P1`
 - [-] [**FEAT-039 Worker 初始化与 Soul 生命周期：安全 init、模板预置、能力包与更新治理**](FEAT-039.md) `P1`
-- [ ] [**FEAT-040 Fleet 统一入口管理非同 host worker**](FEAT-040.md) `P1`
+- [-] [**FEAT-040 Fleet 统一入口管理非同 host worker**](FEAT-040.md) `P1`
 - [x] [**DOC-002 接入 code-review-graph 开发工作流**](DOC-002.md) `P3`
 - [x] [**BUG-037 Fleet Audit log table scrolls the whole page**](BUG-037.md) `P2`
