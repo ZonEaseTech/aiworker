@@ -1,5 +1,5 @@
 import type { IntegrationCleanup } from '../test-utils/integration-cleanup'
-import { mkdir, stat } from 'node:fs/promises'
+import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
 import process from 'node:process'
@@ -97,6 +97,29 @@ describe('aiworker init / scope project placement', () => {
     })
   })
 
+  it('init --dry-run in a fresh git repo previews project layout without writing files', async () => {
+    await withCliIntegrationCleanup(async (cleanup) => {
+      const root = await cleanup.makeTempDir('aiworker-cli-init-dry-run-')
+      const home = await cleanup.makeTempDir('aiworker-cli-init-dry-run-home-')
+      const project = path.join(root, 'repo')
+      await mkdir(path.join(project, '.git'), { recursive: true })
+
+      const before = await readdir(project)
+      const result = await runCli(cleanup, ['init', '--dry-run'], project, home)
+      const after = await readdir(project)
+
+      expect(result.exitCode).toBe(0)
+      expect(result.output).toContain('[aiworker init] preflight (project-scope)')
+      expect(result.output).toContain('Mode         : dry-run (no files will be written)')
+      expect(result.output).toContain('.aiworker/AGENT.md')
+      expect(result.output).toContain('.aiworker/local/worker.db (worker bootstrap)')
+      expect(after).toEqual(before)
+      expect(await exists(path.join(project, '.aiworker'))).toBe(false)
+      expect(await exists(path.join(home, '.aiworker', '.env'))).toBe(false)
+      expect(await exists(path.join(home, '.aiworker', 'worker.db'))).toBe(false)
+    })
+  })
+
   it('scope inside an initialized project reports project paths', async () => {
     await withCliIntegrationCleanup(async (cleanup) => {
       const root = await cleanup.makeTempDir('aiworker-cli-scope-project-')
@@ -126,6 +149,61 @@ describe('aiworker init / scope project placement', () => {
       expect(result.exitCode).toBe(0)
       expect(await exists(path.join(project, '.aiworker', 'local', 'worker.db'))).toBe(true)
       expect(await exists(path.join(home, '.aiworker', '.env'))).toBe(false)
+    })
+  })
+
+  it('re-init preserves existing project persona files', async () => {
+    await withCliIntegrationCleanup(async (cleanup) => {
+      const root = await cleanup.makeTempDir('aiworker-cli-init-preserve-persona-')
+      const home = await cleanup.makeTempDir('aiworker-cli-init-preserve-persona-home-')
+      const project = path.join(root, 'repo')
+      const aiworker = path.join(project, '.aiworker')
+      const customAgent = '# Custom agent\n\nKeep this role.\n'
+      const customSoul = '# Custom soul\n\nKeep this voice.\n'
+      await mkdir(path.join(project, '.git'), { recursive: true })
+      await mkdir(aiworker, { recursive: true })
+      await writeFile(path.join(aiworker, 'AGENT.md'), customAgent, 'utf8')
+      await writeFile(path.join(aiworker, 'SOUL.md'), customSoul, 'utf8')
+
+      const result = await runCli(cleanup, ['init'], project, home)
+
+      expect(result.exitCode).toBe(0)
+      expect(result.output).toContain('.aiworker/AGENT.md (existing aiworker layout)')
+      expect(result.output).toContain('.aiworker/SOUL.md (existing aiworker layout)')
+      expect(await readFile(path.join(aiworker, 'AGENT.md'), 'utf8')).toBe(customAgent)
+      expect(await readFile(path.join(aiworker, 'SOUL.md'), 'utf8')).toBe(customSoul)
+      expect(await exists(path.join(project, '.aiworker', 'local', 'worker.db'))).toBe(true)
+    })
+  })
+
+  it('init surfaces existing external agent files without modifying them', async () => {
+    await withCliIntegrationCleanup(async (cleanup) => {
+      const root = await cleanup.makeTempDir('aiworker-cli-init-external-agents-')
+      const home = await cleanup.makeTempDir('aiworker-cli-init-external-agents-home-')
+      const project = path.join(root, 'repo')
+      const agentsMd = '# Existing agents\n'
+      const claudeMd = '# Existing claude\n'
+      const agentsSkill = 'skill'
+      const claudeConfig = '{}\n'
+      await mkdir(path.join(project, '.git'), { recursive: true })
+      await mkdir(path.join(project, '.agents'), { recursive: true })
+      await mkdir(path.join(project, '.claude'), { recursive: true })
+      await writeFile(path.join(project, 'AGENTS.md'), agentsMd, 'utf8')
+      await writeFile(path.join(project, 'CLAUDE.md'), claudeMd, 'utf8')
+      await writeFile(path.join(project, '.agents', 'marker.txt'), agentsSkill, 'utf8')
+      await writeFile(path.join(project, '.claude', 'config.json'), claudeConfig, 'utf8')
+
+      const result = await runCli(cleanup, ['init'], project, home)
+
+      expect(result.exitCode).toBe(0)
+      expect(result.output).toContain('AGENTS.md (external agent file; not modified, future adopt/merge candidate)')
+      expect(result.output).toContain('CLAUDE.md (external agent file; not modified, future adopt/merge candidate)')
+      expect(result.output).toContain('.agents/ (external agent directory; not modified, future adopt/merge candidate)')
+      expect(result.output).toContain('.claude/ (external agent directory; not modified, future adopt/merge candidate)')
+      expect(await readFile(path.join(project, 'AGENTS.md'), 'utf8')).toBe(agentsMd)
+      expect(await readFile(path.join(project, 'CLAUDE.md'), 'utf8')).toBe(claudeMd)
+      expect(await readFile(path.join(project, '.agents', 'marker.txt'), 'utf8')).toBe(agentsSkill)
+      expect(await readFile(path.join(project, '.claude', 'config.json'), 'utf8')).toBe(claudeConfig)
     })
   })
 

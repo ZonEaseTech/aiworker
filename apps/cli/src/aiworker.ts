@@ -88,10 +88,12 @@ cli
   .command('init', 'Bootstrap worker.db, mint identity + token, seed config (defaults to project-scope `<cwd>/.aiworker/`; --global for legacy ~/.aiworker)')
   .option('--global', 'Initialise the legacy user-scope home `~/.aiworker/` (single host-wide worker)')
   .option('--force', 'Project-scope only: skip the git-repo guard (allow .aiworker/ in non-git dirs)')
-  .action(async (opts: { global?: boolean, force?: boolean }) => {
+  .option('--dry-run', 'Print init preflight and planned writes without creating or modifying files')
+  .action(async (opts: { dryRun?: boolean, global?: boolean, force?: boolean }) => {
     await runInit({
       ...(opts.global === true ? { global: true } : {}),
       ...(opts.force === true ? { force: true } : {}),
+      ...(opts.dryRun === true ? { dryRun: true } : {}),
     })
   })
 
