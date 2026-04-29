@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-04-29 17:18
+> Updated: 2026-04-29 17:50
 
 ## Usage
 
@@ -124,3 +124,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-036 Codex executor returns app-server reconnect error during fleet validation**](BUG-036.md) `P1`
 - [x] [**DOC-001 刷新 AGENTS.md 工作指引**](DOC-001.md) `P3`
 - [x] [**REFACTOR-012 按 DESIGN.md 收敛 Web UI 视觉系统**](REFACTOR-012.md) `P2`
+- [-] [**REL-003 发布 aiworker CLI 0.4.6**](REL-003.md) `P1`

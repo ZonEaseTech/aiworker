@@ -1,5 +1,13 @@
 # AIWorker Changelog
 
+## 2026-04-29 17:50 [progress] REL-003 — 准备发布 0.4.6
+
+开始准备 `@zonease/aiworker-cli@0.4.6` patch 发版：
+
+- npm latest 当前是 `0.4.5`，本地最高 release tag 是 `v0.4.5`。
+- 本次发版包含 `0.4.5` 之后的 `aiworker serve` 前台生命周期修复、Codex app-server reconnect 容忍修复、AGENTS 工作指引刷新，以及 Web UI 视觉系统收敛。
+- 发布仍走 tag-triggered GitHub Actions workflow；本地只做发版门禁、dist 产物检查和 dry-run pack，不直接发布 npm。
+
 ## 2026-04-29 17:18 [progress] REFACTOR-012 Web UI 视觉系统收敛
 
 按照 `DESIGN.md` 收敛 Fleet / Worker Web UI：Tailwind v4 token 层改为黑白高对比、NVIDIA green 信号色、2px 半径和单一 card shadow；共享 button / badge / card / input / table / dialog / tooltip / toaster primitive 统一走 token；Fleet 与 Worker shell 改为黑色导航面 + 绿色 active signal；主要页面移除 shadcn 默认大圆角、随意 emerald/amber 状态色和可见 React Query Devtools 浮动入口。
