@@ -1,5 +1,15 @@
 # AIWorker Changelog
 
+## 2026-04-29 06:02 [progress] REL-002 — prepare 0.4.5 release
+
+Started the `@zonease/aiworker-cli@0.4.5` patch release:
+
+- npm latest is currently `0.4.4`, and `0.4.5` is not published yet.
+- The release carries the reviewed post-0.4.4 repair batch plus the admin
+  surface fail-closed security hardening.
+- Local `main` is ahead of `origin/main` with the reviewed release candidate
+  commits, so the release push will include `main` and `v0.4.5`.
+
 ## 2026-04-29 05:43 [security] PLAN-033 admin serving fail-closed
 
 Implemented `TODO-004` without adding first-party app-level admin auth. Fleet

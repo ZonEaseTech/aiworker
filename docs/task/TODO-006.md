@@ -5,7 +5,7 @@
 - **owner**: Unassigned
 - **createdAt**: 2026-04-28 20:24
 - **discoveredAt**: 2026-04-28 20:24
-- **releaseTarget**: `@zonease/aiworker-cli@0.4.4`
+- **releaseTarget**: `@zonease/aiworker-cli@0.4.5`
 - **bkd**: 3k7sbl3h
 
 ## Description
