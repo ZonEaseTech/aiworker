@@ -249,3 +249,12 @@
 - 支持 `observe` / `warn` / `retry` / `block` 模式；默认 observe 不改变交付。
 - `retry` 模式下低分答复会触发一次 suppressed repair run，并发出 `orchestrator.repair_attempted`；`block` / `warn` 只在显式配置时改变交付内容。
 - Evolution observer 已持久化 `orchestrator.repair_attempted`。
+
+### S5 完成记录
+
+2026-04-30：S5 已落地。
+
+- Evolution proposer 现在会消费 `orchestrator.quality_gate` observation。
+- 重复出现同类 failed quality gate 时，proposer 只生成 pending `skill_drafts`，不直接改 memory、policy、MCP 或 worker config。
+- 质量草案带 `evolution-meta.kind = "quality_gate"` 和稳定 `sequenceKey`，后续运行会去重。
+- 保留既有 tool-sequence mining 行为。

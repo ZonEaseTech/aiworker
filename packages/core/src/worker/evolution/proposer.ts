@@ -20,7 +20,19 @@ export interface ProposerOptions {
 interface EvolutionMeta {
   allowedTools: string[]
   confidence: number
+  kind?: 'tool_sequence' | 'quality_gate'
   sequenceKey: string
+}
+
+interface QualityGatePattern {
+  action: string
+  confidence: number
+  missing: string[]
+  occurrences: number
+  rationale: string
+  sequenceKey: string
+  suggestions: string[]
+  uniqueConversations: number
 }
 
 const DEFAULT_INTERVAL_MS = 6 * 60 * 60 * 1000
@@ -100,7 +112,20 @@ export async function runProposerOnce(overrides?: Partial<ProposerOptions>): Pro
     consola.info(`[evolution/proposer] wrote draft ${draft.proposedName} (occurrences=${pattern.occurrences}, convs=${pattern.uniqueConversations})`)
   }
 
-  consola.info(`[evolution/proposer] ${written}/${patterns.length} candidate(s) written; window=${opts.windowSize}, conversations=${conversationIds.length}`)
+  const qualityPatterns = mineQualityGatePatterns(db, opts.windowSize)
+  for (const pattern of qualityPatterns) {
+    if (written >= opts.maxDraftsPerRun)
+      break
+    if (existing.has(pattern.sequenceKey))
+      continue
+    const draft = buildQualityGateDraft(pattern)
+    db.insert(skillDrafts).values(draft).run()
+    existing.add(pattern.sequenceKey)
+    written += 1
+    consola.info(`[evolution/proposer] wrote quality draft ${draft.proposedName} (occurrences=${pattern.occurrences}, convs=${pattern.uniqueConversations})`)
+  }
+
+  consola.info(`[evolution/proposer] ${written}/${patterns.length + qualityPatterns.length} candidate(s) written; window=${opts.windowSize}, conversations=${conversationIds.length}`)
   return { drafts: written }
 }
 
@@ -120,11 +145,12 @@ export function parseEvolutionMeta(body: string): EvolutionMeta | null {
     const parsed = JSON.parse(match[1]) as Partial<EvolutionMeta>
     if (!Array.isArray(parsed.allowedTools) || !parsed.allowedTools.every(t => typeof t === 'string'))
       return null
-    return {
-      allowedTools: parsed.allowedTools,
-      confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0,
-      sequenceKey: typeof parsed.sequenceKey === 'string' ? parsed.sequenceKey : parsed.allowedTools.join('|'),
-    }
+      return {
+        allowedTools: parsed.allowedTools,
+        confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0,
+        kind: parsed.kind === 'quality_gate' ? 'quality_gate' : 'tool_sequence',
+        sequenceKey: typeof parsed.sequenceKey === 'string' ? parsed.sequenceKey : parsed.allowedTools.join('|'),
+      }
   }
   catch {
     return null
@@ -138,7 +164,7 @@ function collectExistingSequences(db: WorkerDatabase): Set<string> {
   for (const d of drafts) {
     const meta = parseEvolutionMeta(d.bodyMarkdown)
     if (meta)
-      existing.add(meta.allowedTools.join('|'))
+      existing.add(meta.sequenceKey)
   }
 
   const bindings = db.select({ config: skillBindings.config }).from(skillBindings).all()
@@ -165,6 +191,7 @@ function buildDraft(pattern: MinedPattern) {
   const meta: EvolutionMeta = {
     allowedTools: pattern.toolSequence,
     confidence: pattern.confidence,
+    kind: 'tool_sequence',
     sequenceKey,
   }
   const trigger = `When the agent runs \`${arrow}\` (seen ${pattern.occurrences}× across ${pattern.uniqueConversations} conversation(s))`
@@ -197,8 +224,116 @@ function buildDraft(pattern: MinedPattern) {
   }
 }
 
+function mineQualityGatePatterns(db: WorkerDatabase, windowSize: number): QualityGatePattern[] {
+  const rows = db
+    .select({
+      conversationId: evolutionObservations.conversationId,
+      payload: evolutionObservations.payload,
+    })
+    .from(evolutionObservations)
+    .where(inArray(evolutionObservations.kind, ['orchestrator.quality_gate']))
+    .orderBy(desc(evolutionObservations.noticedAt))
+    .limit(windowSize)
+    .all()
+
+  const groups = new Map<string, {
+    action: string
+    conversations: Set<string>
+    missing: string[]
+    occurrences: number
+    suggestions: string[]
+  }>()
+  for (const row of rows) {
+    const payload = row.payload
+    const status = typeof payload.status === 'string' ? payload.status : ''
+    const action = typeof payload.action === 'string' ? payload.action : ''
+    if (status !== 'failed' || action === 'pass')
+      continue
+    const missing = stringArray(payload.missing).slice(0, 5)
+    const suggestions = stringArray(payload.suggestions).slice(0, 5)
+    const signature = [...missing, ...suggestions].join('|').toLowerCase()
+    if (signature.length === 0)
+      continue
+    const key = `quality:${createHash('sha256').update(signature).digest('hex').slice(0, 10)}`
+    const existing = groups.get(key)
+    if (existing) {
+      existing.occurrences += 1
+      if (row.conversationId)
+        existing.conversations.add(row.conversationId)
+      continue
+    }
+    groups.set(key, {
+      action,
+      conversations: new Set(row.conversationId ? [row.conversationId] : []),
+      missing,
+      occurrences: 1,
+      suggestions,
+    })
+  }
+
+  return Array.from(groups.entries())
+    .filter(([, group]) => group.occurrences >= 2)
+    .map(([sequenceKey, group]) => ({
+      action: group.action,
+      confidence: Math.min(0.95, 0.5 + group.occurrences * 0.1),
+      missing: group.missing,
+      occurrences: group.occurrences,
+      rationale: `${group.occurrences}× similar quality gate failure(s) across ${group.conversations.size} conversation(s)`,
+      sequenceKey,
+      suggestions: group.suggestions,
+      uniqueConversations: group.conversations.size,
+    }))
+    .sort((a, b) => b.occurrences - a.occurrences || b.uniqueConversations - a.uniqueConversations)
+}
+
+function buildQualityGateDraft(pattern: QualityGatePattern) {
+  const hash = pattern.sequenceKey.replace(/^quality:/, '').slice(0, 6)
+  const name = `auto-quality-${hash}`
+  const meta: EvolutionMeta = {
+    allowedTools: [],
+    confidence: pattern.confidence,
+    kind: 'quality_gate',
+    sequenceKey: pattern.sequenceKey,
+  }
+  const bodyMarkdown = [
+    `<!-- evolution-meta: ${JSON.stringify(meta)} -->`,
+    '',
+    `# ${name}`,
+    '',
+    '## Trigger',
+    '',
+    `When quality gate failures repeat (${pattern.occurrences}× across ${pattern.uniqueConversations} conversation(s)).`,
+    '',
+    '## Missing signals',
+    '',
+    ...pattern.missing.map(item => `- ${item}`),
+    '',
+    '## Improvement guidance',
+    '',
+    ...pattern.suggestions.map(item => `- ${item}`),
+    '',
+    '## Prompt template',
+    '',
+    '```',
+    'Before finalizing similar answers, address the missing signals above and verify the answer against the user request.',
+    '```',
+    '',
+  ].join('\n')
+  return {
+    proposedName: name,
+    source: 'evolution' as const,
+    bodyMarkdown,
+    rationale: pattern.rationale,
+    status: 'pending' as const,
+  }
+}
+
 function slug(tool: string): string {
   return tool.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'tool'
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && item.length > 0) : []
 }
 
 function readEnvNumber(key: string, fallback: number): number {

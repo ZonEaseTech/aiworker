@@ -98,4 +98,30 @@ describe('runProposerOnce', () => {
     expect(first.drafts).toBe(1)
     expect(second.drafts).toBe(0)
   })
+
+  it('writes a pending quality-gate skill draft after repeated failures', async () => {
+    const db = getWorkerDb()
+    for (const convId of ['quality-a', 'quality-b']) {
+      db.insert(evolutionObservations).values({
+        conversationId: convId,
+        kind: 'orchestrator.quality_gate',
+        payload: {
+          conversationId: convId,
+          status: 'failed',
+          action: 'repair',
+          missing: ['answer lacks verification'],
+          suggestions: ['include the verification command and result'],
+        },
+      }).run()
+    }
+
+    const result = await runProposerOnce({ windowSize: 50, maxDraftsPerRun: 5 })
+    expect(result.drafts).toBe(1)
+    const drafts = getWorkerDb().select().from(skillDrafts).all()
+    expect(drafts).toHaveLength(1)
+    expect(drafts[0]!.proposedName.startsWith('auto-quality-')).toBe(true)
+    expect(drafts[0]!.status).toBe('pending')
+    expect(drafts[0]!.bodyMarkdown).toContain('answer lacks verification')
+    expect(parseEvolutionMeta(drafts[0]!.bodyMarkdown)?.kind).toBe('quality_gate')
+  })
 })

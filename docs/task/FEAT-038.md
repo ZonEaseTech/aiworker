@@ -38,3 +38,4 @@
 - 2026-04-30 19:25：PLAN-039 S2 完成。CapabilityRegistry 已 observe-only 聚合 skill、builtin、MCP、toolset descriptor，并驱动 capability decision；执行路径和 tool exposure 不变。
 - 2026-04-30 19:45：PLAN-039 S3 完成。IntentClassifier 已输出结构化 intent/risk/context/profile/sessionAction，支持 heuristic 默认和可选 LLM strict-JSON evaluator；分类结果只影响 observation/capability record。
 - 2026-04-30 20:10：PLAN-039 S4 完成。QualityGate 支持 observe/warn/retry/block、heuristic/LLM evaluator 和一次 repair；默认 observe 不改变交付。
+- 2026-04-30 20:25：PLAN-039 S5 完成。Evolution proposer 已消费 failed quality gate observation 并生成 pending skill draft；只提案不写配置。

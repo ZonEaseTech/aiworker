@@ -1,5 +1,15 @@
 # AIWorker Changelog
 
+## 2026-04-30 20:25 [progress] FEAT-038 — learning loop S5
+
+落地 worker 决策管线的 S5 learning loop 接入：
+
+- Evolution proposer 现在会消费 `orchestrator.quality_gate` observation。
+- 重复 failed quality gate 会生成 pending `skill_drafts`，草案带
+  `evolution-meta.kind = "quality_gate"` 和稳定 `sequenceKey` 去重。
+- 保留原有 tool-sequence mining 行为；S5 不直接写 memory、policy、MCP 或
+  worker config。
+
 ## 2026-04-30 20:10 [progress] FEAT-038 — quality gate S4
 
 落地 worker 决策管线的 S4 quality gate：
