@@ -1,6 +1,6 @@
 # PLAN-052 发布 aiworker CLI 0.4.10
 
-- **status**: in_progress
+- **status**: completed
 - **createdAt**: 2026-04-30 20:25
 - **approvedAt**: 2026-04-30 20:25
 - **relatedTask**: REL-007
@@ -64,6 +64,11 @@ Expected repository changes:
 
 - 2026-04-30 20:25 用户直接要求发版，按 patch release 执行。
 - 2026-04-30 20:30 本地 release gates 全部通过，publish dry-run 完成 pack 阶段后停在本机 npm authentication boundary。
+- 2026-04-30 20:34 完成发布。GitHub Actions run `25187813342` 成功，npm latest 是
+  `0.4.10`，已发布 CLI smoke 返回 `aiworker/0.4.10`，干净临时目录的无 Bun `npx`
+  smoke 返回友好的安装提示，GitHub Release `v0.4.10` 包含四个平台 tarball。
+- 2026-04-30 20:34 Release workflow 有 GitHub Actions Node.js 20 deprecation annotation，
+  指向 `softprops/action-gh-release@v2`，不影响本次发布结果。
 
 ## Verification
 
@@ -81,3 +86,11 @@ Expected repository changes:
   `apps/cli/dist` packed 26 files / 2.39MB, then stopped with missing local npm
   authentication.
 - Passed: `git diff --check`
+- Passed: GitHub Actions release workflow `25187813342` for `v0.4.10`
+- Passed: npm registry verification resolved `@zonease/aiworker-cli@0.4.10` as
+  `latest`
+- Passed: published-package smoke reported `aiworker/0.4.10`
+- Passed: clean-temp no-Bun `npx @zonease/aiworker-cli@0.4.10 -h` returned the
+  friendly Bun install / standalone binary message
+- Passed: GitHub Release `v0.4.10` has linux-x64, linux-arm64, darwin-x64, and
+  darwin-arm64 tarballs
