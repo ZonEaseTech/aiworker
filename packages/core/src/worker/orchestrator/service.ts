@@ -24,6 +24,7 @@ import { and, asc, desc, eq, gt } from 'drizzle-orm'
 import { getChannelAdapter } from '../channels/registry'
 import { classifyContinuation, findOpenConversation, findSessionConversation, hasSessionEntryForRoute, loadRecentMessages, resolveSessionKey } from '../conversation/router'
 import { DEFAULT_APPROVAL_TIMEOUT_MS } from './approvals'
+import { CapabilityRegistry, planCapabilities } from './capabilities'
 import {
   DEFAULT_TOKEN_BUDGET_HISTORY_SCAN_MESSAGES,
   estimateChatMessagesTokens,
@@ -123,9 +124,13 @@ export interface RunToolResult {
 }
 
 export class Orchestrator {
+  private readonly capabilityRegistry: CapabilityRegistry
   private readonly contextManager: ContextManager
 
   constructor(private readonly deps: OrchestratorDeps) {
+    this.capabilityRegistry = new CapabilityRegistry({
+      workerId: deps.workerId,
+    })
     this.contextManager = new ContextManager({
       brain: deps.brain,
       workerId: deps.workerId,
@@ -202,10 +207,16 @@ export class Orchestrator {
     }
     this.deps.bus.emit('orchestrator.intent_decision', buildDefaultIntentDecision(decisionContext))
     const systemContext = await this.contextManager.buildSystemPrompt({ priorSummary: activeConversation.summary ?? null })
+    const registry = await this.capabilityRegistry.snapshot({ skills: systemContext.availableSkills })
+    const capabilityPlan = planCapabilities({
+      intent: 'unknown',
+      promptSkillLimit: systemContext.promptSkillLimit,
+      registry,
+      requiredContext: ['recent_history'],
+    })
     this.deps.bus.emit('orchestrator.capability_decision', buildPromptCapabilityDecision({
       ...decisionContext,
-      availableSkills: systemContext.availableSkills,
-      promptSkillLimit: systemContext.promptSkillLimit,
+      ...capabilityPlan,
     }))
     let systemPrompt = systemContext.systemPrompt
     let chatMessages = await this.buildRunContext(activeConversation.id, systemPrompt)

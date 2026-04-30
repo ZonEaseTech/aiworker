@@ -221,3 +221,12 @@
 - `orchestrator.intent_decision`、`orchestrator.capability_decision`、`orchestrator.quality_gate` 已按 observe-only 默认 payload 发出。
 - `evolution_observations` 已持久化上述新增决策事件。
 - 当前仍不执行真实 intent classifier、CapabilityRegistry、质量评分、repair 或 block；这些留给 S2-S4 分段复审后实现。
+
+### S2 完成记录
+
+2026-04-30：S2 已落地。
+
+- 新增 observe-only `CapabilityRegistry`，聚合 brain skill descriptor、内置 `load_skill` / `memory_search`、`.aiworker/mcp.json` 和 `.aiworker/toolsets.json`。
+- `orchestrator.capability_decision` 改为来自 registry snapshot + planner，记录 available builtin/MCP/skill/toolset 与 selected skill/builtin/MCP 信息。
+- S2 仍不把 registry 输出强制传给 executor，不改变实际 tool exposure。
+- 新增 registry 单元测试覆盖 project-scope `mcp.json` / `toolsets.json` 解析与 selection 结果。

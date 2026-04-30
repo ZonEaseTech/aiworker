@@ -1,5 +1,16 @@
 # AIWorker Changelog
 
+## 2026-04-30 19:25 [progress] FEAT-038 — capability registry S2
+
+落地 worker 决策管线的 S2 observe-only capability registry：
+
+- 新增 `CapabilityRegistry`，聚合 brain skill、内置 `load_skill` /
+  `memory_search`、`.aiworker/mcp.json` 与 `.aiworker/toolsets.json`。
+- `orchestrator.capability_decision` 现在由 registry snapshot + planner
+  生成，包含 available builtin/MCP/skill/toolset 和 selected capability 信息。
+- S2 仍不改变 executor tool exposure，只记录能力选择结果，供后续 S3/S4/S5
+  消费。
+
 ## 2026-04-30 19:05 [progress] FEAT-038 — worker decision pipeline S1
 
 落地 worker 决策管线的第一个 observe-only 切片：

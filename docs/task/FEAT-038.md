@@ -35,3 +35,4 @@
 - 2026-04-29 17:50：初始化、防覆盖、Soul 模板、自定义、外部 agent adapter、云端 Soul 更新和自我迭代收录门禁拆到 FEAT-039 / PLAN-041；本任务继续专注 runtime 决策管线。
 - 2026-04-30 18:40：用户批准接管开发；本轮实施 PLAN-039 S1，范围限定为 Context Manager / Run Context Composer 抽出、observe-only 决策事件骨架和 evolution observation 持久化，不启用真实分类、能力强制选择或质量拦截。
 - 2026-04-30 19:05：PLAN-039 S1 完成。已抽出 ContextManager / RunContextComposer，新增 observe-only intent/capability/quality 事件并接入 evolution observer；FEAT-038 继续保持 in_progress，S2 Capability Registry 待复审后继续。
+- 2026-04-30 19:25：PLAN-039 S2 完成。CapabilityRegistry 已 observe-only 聚合 skill、builtin、MCP、toolset descriptor，并驱动 capability decision；执行路径和 tool exposure 不变。
