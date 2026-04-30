@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-04-29 19:39
+> Updated: 2026-04-30 02:02
 
 ## Usage
 
@@ -130,3 +130,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [-] [**FEAT-040 Fleet 统一入口管理非同 host worker**](FEAT-040.md) `P1`
 - [x] [**DOC-002 接入 code-review-graph 开发工作流**](DOC-002.md) `P3`
 - [x] [**BUG-037 Fleet Audit log table scrolls the whole page**](BUG-037.md) `P2`
+- [-] [**REL-004 发布 aiworker CLI 0.4.7**](REL-004.md) `P1`

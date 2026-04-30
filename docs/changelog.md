@@ -1,5 +1,19 @@
 # AIWorker Changelog
 
+## 2026-04-30 02:02 [progress] REL-004 — 准备发布 0.4.7
+
+开始准备 `@zonease/aiworker-cli@0.4.7` patch 发版：
+
+- npm latest 当前是 `0.4.6`，本地最高 release tag 是 `v0.4.6`。
+- 本次发版包含 `0.4.6` 之后的 `aiworker init` preflight / `--dry-run`、Fleet
+  Audit log 表格内部滚动修复、code-review-graph 工作流接入，以及 gateway worker
+  bridge MVP。
+- Gateway worker bridge 仅作为 MVP 发布：覆盖 node-side `workers.info` /
+  `workers.stop` handler，以及 `/w/:workerId/api/worker/info`、`GET/PUT /config`
+  allowlisted bridge。完整 FEAT-040 / PLAN-042 体验继续由后续任务完成。
+- 发布仍走 tag-triggered GitHub Actions workflow；本地只做发版门禁、dist 产物检查和
+  dry-run pack，不直接发布 npm。
+
 ## 2026-04-29 17:58 [progress] REL-003 — 0.4.6 published
 
 Published `@zonease/aiworker-cli@0.4.6`:
