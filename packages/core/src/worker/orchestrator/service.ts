@@ -16,6 +16,14 @@ import type { WorkspaceHandle, WorkspaceManager } from '../executor/workspace'
 import type { ApprovalDecision, ApprovalStore } from './approvals'
 import type { ProcessManager } from './process-manager'
 
+import { readFile } from 'node:fs/promises'
+import {
+  resolveAgentMdPath,
+  resolveMemoryIndexPath,
+  resolveRollupMdPath,
+  resolveSoulMdPath,
+  resolveUserMdPath,
+} from '@zonease/aiworker-fs-layout'
 import { DEFAULT_MAX_HISTORY_MESSAGES } from '@zonease/aiworker-shared'
 import { agentTasks, conversations, getSessionEntry, getWorkerDb, messages, recordSessionCompaction, rotateSessionConversation, touchSessionEntry, updateSessionEngineBinding, upsertSessionEntry } from '@zonease/aiworker-storage-sqlite/worker'
 
@@ -98,6 +106,7 @@ interface ExecutorTextResult {
 
 const DEFAULT_COMPACTION_MAX_SUMMARY_MESSAGES = 120
 const TRANSCRIPT_METADATA_VERSION = 1
+const SYSTEM_PROMPT_FILE_MAX_CHARS = 6_000
 
 /** `runTool` 输入。`taskId` / `toolCallId` 用作 ApprovalStore 的 key。 */
 export interface RunToolInput {
@@ -843,11 +852,19 @@ export class Orchestrator {
    * 总结 trick）时把它带进 system，弥补 history 窗口被截断丢掉的早期上下文。
    */
   private async buildSystemPrompt(priorSummary: string | null): Promise<string> {
-    const skills = await this.deps.brain.listSkills().catch(() => [])
+    const [skills, persona] = await Promise.all([
+      this.deps.brain.listSkills().catch(() => []),
+      this.loadProjectPersonaDocs(),
+    ])
     const lines = [
       `You are worker ${this.deps.workerId}.`,
       'Respond concisely and helpfully.',
     ]
+    appendSystemPromptSection(lines, 'Project agent instructions', persona.agent)
+    appendSystemPromptSection(lines, 'Project soul / voice', persona.soul)
+    appendSystemPromptSection(lines, 'Project user profile', persona.user)
+    appendSystemPromptSection(lines, 'Project memory index', persona.memory)
+    appendSystemPromptSection(lines, 'Project continuity rollup', persona.rollup)
     if (priorSummary && priorSummary.trim().length > 0)
       lines.push(`Conversation summary so far: ${priorSummary.trim()}`)
     if (skills.length > 0) {
@@ -856,6 +873,24 @@ export class Orchestrator {
         lines.push(`- ${s.name}: ${s.description}`)
     }
     return lines.join('\n')
+  }
+
+  private async loadProjectPersonaDocs(): Promise<{
+    agent: string | null
+    memory: string | null
+    rollup: string | null
+    soul: string | null
+    user: string | null
+  }> {
+    const workerId = this.deps.workerId
+    const [agent, soul, user, memory, rollup] = await Promise.all([
+      readPromptFile(resolveAgentMdPath(workerId)),
+      readPromptFile(resolveSoulMdPath(workerId)),
+      readPromptFile(resolveUserMdPath(workerId)),
+      readPromptFile(resolveMemoryIndexPath(workerId)),
+      readPromptFile(resolveRollupMdPath(workerId)),
+    ])
+    return { agent, memory, rollup, soul, user }
   }
 
   /**
@@ -1135,6 +1170,25 @@ function parseTranscriptMetadata(row: { role: string, richMetadata: string | nul
   catch {
     return null
   }
+}
+
+async function readPromptFile(filePath: string): Promise<string | null> {
+  try {
+    const content = (await readFile(filePath, 'utf8')).trim()
+    if (content.length === 0)
+      return null
+    return content.length <= SYSTEM_PROMPT_FILE_MAX_CHARS
+      ? content
+      : `${content.slice(0, SYSTEM_PROMPT_FILE_MAX_CHARS)}\n... truncated ...`
+  }
+  catch {
+    return null
+  }
+}
+
+function appendSystemPromptSection(lines: string[], title: string, content: string | null): void {
+  if (content && content.trim().length > 0)
+    lines.push(`${title}:\n${content.trim()}`)
 }
 
 function positiveNumber(value: unknown): number | null {

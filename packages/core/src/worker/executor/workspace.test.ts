@@ -95,6 +95,50 @@ describe('WorkspaceManager (no git origin)', () => {
   })
 })
 
+describe('WorkspaceManager (shared project root)', () => {
+  let tmpRoot: string
+
+  beforeEach(async () => {
+    tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'aiworker-ws-project-'))
+  })
+
+  afterEach(async () => {
+    await fs.rm(tmpRoot, { recursive: true, force: true })
+  })
+
+  it('returns the project root as cwd and never removes it', async () => {
+    const projectRoot = path.join(tmpRoot, 'project')
+    const sentinel = path.join(projectRoot, 'AGENTS.md')
+    await fs.mkdir(projectRoot, { recursive: true })
+    await fs.writeFile(sentinel, '# Project instructions\n')
+
+    const manager = new WorkspaceManager({ root: path.join(tmpRoot, 'state'), projectRoot })
+    const handle = await manager.createWorkspace('conv-project')
+
+    expect(handle).toEqual({
+      conversationId: 'conv-project',
+      path: projectRoot,
+      isGitWorktree: false,
+      isSharedProjectRoot: true,
+    })
+
+    await manager.disposeWorkspace('conv-project')
+    await manager.purgeAll()
+
+    expect(await fs.readFile(sentinel, 'utf8')).toBe('# Project instructions\n')
+  })
+
+  it('still validates conversation ids before returning the project root', async () => {
+    const projectRoot = path.join(tmpRoot, 'project')
+    await fs.mkdir(projectRoot, { recursive: true })
+
+    const manager = new WorkspaceManager({ root: path.join(tmpRoot, 'state'), projectRoot })
+
+    await expect(manager.createWorkspace('../escape')).rejects.toThrow(WorkspaceEscapeError)
+    await expect(manager.disposeWorkspace('../escape')).rejects.toThrow(WorkspaceEscapeError)
+  })
+})
+
 describe('WorkspaceManager (git origin)', () => {
   const envKeys = [
     'AIWORKER_JOIN_TOKEN',

@@ -180,6 +180,58 @@ describe('Orchestrator + ClaudeCodeExecutor (stub CLI)', () => {
     expect(leakedEvent).toBeUndefined()
   })
 
+  it('passes the shared project root cwd to Claude Code in project-scope workspace mode', async () => {
+    const projectRoot = path.join(tmpRoot, 'project')
+    await fs.mkdir(path.join(projectRoot, '.agents'), { recursive: true })
+    await fs.writeFile(path.join(projectRoot, 'AGENTS.md'), '# Project instructions\n')
+    await fs.writeFile(path.join(projectRoot, '.agents', 'marker.txt'), 'skill marker\n')
+    workspaces = new RealWorkspaceManager({ root: path.join(tmpRoot, 'state'), projectRoot })
+
+    let spawnedCwd = ''
+    const config = validConfig()
+    const bus = stubBus() as WorkerEventBus & { recorded: Array<{ kind: string, payload: unknown }> }
+    const executor = new ClaudeCodeExecutor({
+      resolveClaudeBinary: async () => STUB_PATH,
+      spawn: (_cmd, _args, opts) => {
+        spawnedCwd = opts.cwd
+        return spawn(STUB_PATH, [], { cwd: opts.cwd, env: opts.env, stdio: ['pipe', 'pipe', 'pipe'] })
+      },
+    })
+
+    const approvals = new ApprovalStore()
+    const orchestrator = new Orchestrator({
+      config,
+      brain: stubBrain(),
+      executor,
+      bus,
+      workerId: 'w_testtesttest',
+      workspaces,
+      processes,
+      approvals,
+    })
+
+    await orchestrator.ingest({
+      workerId: 'w_testtesttest',
+      channel: 'web',
+      accountId: 'test',
+      chatId: 'chat-project',
+      text: 'hello from project',
+      receivedAt: new Date().toISOString(),
+      raw: { taskId: 'task-project' },
+    })
+
+    const deadline = Date.now() + 8_000
+    while (Date.now() < deadline) {
+      if (bus.recorded.some(r => r.kind === 'orchestrator.finished' || r.kind === 'orchestrator.error'))
+        break
+      await new Promise<void>(resolve => setTimeout(resolve, 50))
+    }
+
+    expect(spawnedCwd).toBe(projectRoot)
+    expect(await fs.readFile(path.join(projectRoot, 'AGENTS.md'), 'utf8')).toBe('# Project instructions\n')
+    expect(await fs.readFile(path.join(projectRoot, '.agents', 'marker.txt'), 'utf8')).toBe('skill marker\n')
+  })
+
   it('rejects workspace path escape attempts', async () => {
     await expect(workspaces.disposeWorkspace('../escape'))
       .rejects

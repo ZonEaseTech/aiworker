@@ -13,6 +13,7 @@ import { mkdtempSync } from 'node:fs'
 import fs from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import process from 'node:process'
 
 import { closeWorkerDb, conversations, getSessionEntry, getWorkerDb, initWorkerDb, messages, runWorkerMigrations, upsertSessionEntry } from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
@@ -360,6 +361,47 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
     expect(runMessages[0]!.content).toContain('prior-summary')
     expect(runMessages.slice(1).some(message => message.content.startsWith('msg-'))).toBe(false)
     expect(runMessages[runMessages.length - 1]!.content).toBe('incoming new turn')
+  })
+
+  it('injects project-scope persona and memory docs into the system prompt', async () => {
+    const projectRoot = path.join(tmpRoot, 'project')
+    const aiworkerRoot = path.join(projectRoot, '.aiworker')
+    const originalCwd = process.cwd()
+    const originalHome = process.env.AIWORKER_HOME
+    try {
+      await fs.mkdir(aiworkerRoot, { recursive: true })
+      await fs.writeFile(path.join(aiworkerRoot, 'AGENT.md'), '# Agent\n\nFollow project agent rules.\n')
+      await fs.writeFile(path.join(aiworkerRoot, 'SOUL.md'), '# Soul\n\nUse project voice.\n')
+      await fs.writeFile(path.join(aiworkerRoot, 'USER.md'), '# User\n\nPrimary user prefers concise answers.\n')
+      await fs.writeFile(path.join(aiworkerRoot, 'MEMORY.md'), '# Memory\n\nRemember project decisions.\n')
+      await fs.writeFile(path.join(aiworkerRoot, 'ROLLUP.md'), '# Rollup\n\nRecent project continuity.\n')
+      delete process.env.AIWORKER_HOME
+      process.chdir(projectRoot)
+
+      const { executor } = await runIngestAndCapture({
+        config: buildConfig({ orchestrator: { maxHistoryMessages: 5 } }),
+        seedCount: 1,
+      })
+
+      const systemPrompt = executor.captured[executor.captured.length - 1]![0]!.content
+      expect(systemPrompt).toContain('Project agent instructions:')
+      expect(systemPrompt).toContain('Follow project agent rules.')
+      expect(systemPrompt).toContain('Project soul / voice:')
+      expect(systemPrompt).toContain('Use project voice.')
+      expect(systemPrompt).toContain('Project user profile:')
+      expect(systemPrompt).toContain('Primary user prefers concise answers.')
+      expect(systemPrompt).toContain('Project memory index:')
+      expect(systemPrompt).toContain('Remember project decisions.')
+      expect(systemPrompt).toContain('Project continuity rollup:')
+      expect(systemPrompt).toContain('Recent project continuity.')
+    }
+    finally {
+      process.chdir(originalCwd)
+      if (originalHome === undefined)
+        delete process.env.AIWORKER_HOME
+      else
+        process.env.AIWORKER_HOME = originalHome
+    }
   })
 
   it('updates session_entries.contextTokens from the assembled context', async () => {

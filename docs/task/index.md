@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-04-30 17:46
+> Updated: 2026-04-30 18:26
 
 ## Usage
 
@@ -137,3 +137,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-041 优化 CLI help 信息架构**](FEAT-041.md) `P2`
 - [x] [**REL-006 发布 aiworker CLI 0.4.9**](REL-006.md) `P1`
 - [x] [**BUG-040 `aiworker init` skips Soul template selection and still creates a stub worker**](BUG-040.md) `P1`
+- [x] [**BUG-041 Project-scope engines start outside the project root**](BUG-041.md) `P1`

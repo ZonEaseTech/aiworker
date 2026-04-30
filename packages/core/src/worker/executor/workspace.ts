@@ -8,10 +8,10 @@ import { buildSafeGitEnv } from './safe-env'
 
 /**
  * Per-conversation workspace lifecycle. Every agentic-CLI executor runs inside
- * an isolated directory under `WORKER_DATA_ROOT/workspaces/<conversationId>/`
- * so file writes from one conversation never pollute another. When
- * `WORKER_WORKSPACE_GIT_ORIGIN` is set the workspace is provisioned as a
- * `git worktree add`; otherwise it is a plain empty dir.
+ * either the project root (project-scope default) or an isolated directory
+ * under `WORKER_DATA_ROOT/workspaces/<conversationId>/`. When
+ * `WORKER_WORKSPACE_GIT_ORIGIN` is set the isolated workspace is provisioned
+ * as a `git worktree add`; otherwise it is a plain empty dir.
  */
 
 export interface WorkspaceHandle {
@@ -20,6 +20,8 @@ export interface WorkspaceHandle {
   path: string
   /** `true` when this dir is backed by a git worktree. */
   isGitWorktree: boolean
+  /** `true` when `path` is the shared project root and must not be removed. */
+  isSharedProjectRoot?: boolean
 }
 
 export interface WorkspaceManagerOptions {
@@ -39,6 +41,11 @@ export interface WorkspaceManagerOptions {
    * custom sub-root (e.g. for tests). Defaults to `workspaces`.
    */
   subdir?: string
+  /**
+   * Project-scope default cwd. When set, every conversation runs in this root
+   * so engine-native project files such as AGENTS.md / CLAUDE.md remain visible.
+   */
+  projectRoot?: string
 }
 
 const CONVERSATION_ID_PATTERN = /^[\w-]{1,128}$/
@@ -49,8 +56,7 @@ const CONVERSATION_ID_PATTERN = /^[\w-]{1,128}$/
  * tests can call the guard independently.
  */
 export function resolveWorkspacePath(root: string, subdir: string, conversationId: string): string {
-  if (!CONVERSATION_ID_PATTERN.test(conversationId))
-    throw new WorkspaceEscapeError(`invalid conversation id: ${conversationId}`)
+  assertConversationId(conversationId)
 
   const absoluteRoot = path.resolve(root)
   const parent = path.resolve(absoluteRoot, subdir)
@@ -62,6 +68,11 @@ export function resolveWorkspacePath(root: string, subdir: string, conversationI
     throw new WorkspaceEscapeError(`workspace "${conversationId}" escapes parent`)
 
   return target
+}
+
+function assertConversationId(conversationId: string): void {
+  if (!CONVERSATION_ID_PATTERN.test(conversationId))
+    throw new WorkspaceEscapeError(`invalid conversation id: ${conversationId}`)
 }
 
 function isInside(parent: string, child: string): boolean {
@@ -80,6 +91,7 @@ export class WorkspaceManager {
   private readonly root: string
   private readonly subdir: string
   private readonly gitOrigin: string | undefined
+  private readonly projectRoot: string | undefined
   /** Serializes create/dispose per conversation so concurrent ingests don't race. */
   private readonly inflight = new Map<string, Promise<WorkspaceHandle>>()
 
@@ -87,6 +99,7 @@ export class WorkspaceManager {
     this.root = path.resolve(options.root)
     this.subdir = options.subdir ?? 'workspaces'
     this.gitOrigin = options.gitOrigin
+    this.projectRoot = options.projectRoot === undefined ? undefined : path.resolve(options.projectRoot)
   }
 
   /**
@@ -95,6 +108,16 @@ export class WorkspaceManager {
    * deduplicate via `inflight`.
    */
   async createWorkspace(conversationId: string): Promise<WorkspaceHandle> {
+    if (this.projectRoot) {
+      assertConversationId(conversationId)
+      return {
+        conversationId,
+        path: this.projectRoot,
+        isGitWorktree: false,
+        isSharedProjectRoot: true,
+      }
+    }
+
     const existing = this.inflight.get(conversationId)
     if (existing)
       return existing
@@ -133,6 +156,11 @@ export class WorkspaceManager {
    * worktree metadata is gone.
    */
   async disposeWorkspace(conversationId: string): Promise<void> {
+    if (this.projectRoot) {
+      assertConversationId(conversationId)
+      return
+    }
+
     const target = resolveWorkspacePath(this.root, this.subdir, conversationId)
     if (!(await exists(target)))
       return
@@ -151,6 +179,9 @@ export class WorkspaceManager {
    * shouldn't call this — it's a sledgehammer.
    */
   async purgeAll(): Promise<void> {
+    if (this.projectRoot)
+      return
+
     const parent = path.resolve(this.root, this.subdir)
     if (!(await exists(parent)))
       return

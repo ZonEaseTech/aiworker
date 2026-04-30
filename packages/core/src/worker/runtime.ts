@@ -1,6 +1,7 @@
 import type { BrainProvider, ExecutorProvider, WorkerConfig } from '@zonease/aiworker-shared'
 import type { ProcessManager } from './orchestrator/process-manager'
 
+import { resolveAiworkerScope } from '@zonease/aiworker-fs-layout'
 import { workerEnv } from '../config/worker'
 import { buildBrain } from './brain/factory'
 import { resetLarkTokenCache } from './channels/adapters/lark'
@@ -124,9 +125,16 @@ function buildWorkspaceManager(config: WorkerConfig): WorkspaceManager {
       return undefined
     }
   })()
+  const gitOrigin = workerEnv.WORKER_WORKSPACE_GIT_ORIGIN
+  const scope = resolveAiworkerScope()
+  const projectRoot = scope.scope === 'project' && scope.projectRoot && !gitOrigin && !configuredRoot
+    ? scope.projectRoot
+    : undefined
+
   return new WorkspaceManager({
     root: workerEnv.WORKER_DATA_ROOT,
     ...(configuredRoot ? { subdir: configuredRoot } : {}),
-    ...(workerEnv.WORKER_WORKSPACE_GIT_ORIGIN ? { gitOrigin: workerEnv.WORKER_WORKSPACE_GIT_ORIGIN } : {}),
+    ...(gitOrigin ? { gitOrigin } : {}),
+    ...(projectRoot ? { projectRoot } : {}),
   })
 }

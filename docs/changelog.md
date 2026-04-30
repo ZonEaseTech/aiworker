@@ -1,5 +1,22 @@
 # AIWorker Changelog
 
+## 2026-04-30 18:26 [bug] BUG-041 — project-scope engine cwd
+
+Fixed project-scope agentic CLI execution so engines keep the project root as
+their default working directory:
+
+- Added a shared project root mode to `WorkspaceManager`; project root handles
+  are never removed by conversation dispose or purge.
+- Runtime now enables shared project root mode only for project scope without
+  explicit isolation settings. `WORKER_WORKSPACE_GIT_ORIGIN` and Claude Code
+  `workspaceRoot` overrides continue to use isolated workspaces.
+- The orchestrator now injects `.aiworker/AGENT.md`, `SOUL.md`, `USER.md`,
+  `MEMORY.md`, and `ROLLUP.md` into the system prompt, so AIWorker's project
+  brain files are consumed even though engines run from the project root.
+- Added regressions for workspace disposal safety, runtime project-scope
+  selection, explicit workspaceRoot override behavior, project persona prompt
+  injection, and Claude Code spawn `cwd`.
+
 ## 2026-04-30 17:46 [bug] BUG-040 — init Soul selection
 
 Fixed brand-new project `aiworker init` so it no longer silently creates stub
