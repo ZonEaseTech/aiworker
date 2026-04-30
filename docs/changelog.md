@@ -1,5 +1,19 @@
 # AIWorker Changelog
 
+## 2026-04-30 20:25 [progress] REL-007 — 准备发布 0.4.10
+
+开始准备 `@zonease/aiworker-cli@0.4.10` patch 发版：
+
+- npm latest 和本地最高 release tag 均为 `0.4.9`；远端不存在
+  `v0.4.10` tag。
+- 本次版本包含 Soul-aware init、项目级 engine cwd、Worker 决策管线
+  S1-S5 与 Orchestrator control executor 后续任务记录。
+- 发布路径沿用 tag-triggered GitHub release workflow；本地只做版本、文档、
+  quality gates、artifact dry-run 与 tag 推送。
+- 本地 release gates 已通过：frozen install、workspace tests、typecheck、
+  lint、root build、CLI run smoke、CLI fleet smoke、dist manifest/shim/Web
+  bundle 检查、release diff check 和 publish dry-run 到本机 npm auth 边界。
+
 ## 2026-04-30 20:25 [progress] FEAT-038 — learning loop S5
 
 落地 worker 决策管线的 S5 learning loop 接入：
