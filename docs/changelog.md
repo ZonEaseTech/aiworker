@@ -1,5 +1,12 @@
 # AIWorker Changelog
 
+## 2026-04-30 08:55 [bug] BUG-038 found during 0.4.8 test-fleet validation
+
+The `0.4.8` test-fleet validation found that worker info still reports
+`runtimeVersion: "0.2.0"` even when both the gateway and temporary worker are
+running the published `@zonease/aiworker-cli@0.4.8` package. Recorded as
+`BUG-038`; no source fix was made in this validation pass.
+
 ## 2026-04-30 08:39 [progress] REL-005 — 0.4.8 published
 
 Published `@zonease/aiworker-cli@0.4.8`:
