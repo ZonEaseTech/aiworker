@@ -1,6 +1,6 @@
 # PLAN-049 发布 aiworker CLI 0.4.9
 
-- **status**: implementing
+- **status**: completed
 - **createdAt**: 2026-04-30 16:33
 - **approvedAt**: 2026-04-30 16:33
 - **relatedTask**: REL-006
@@ -64,6 +64,11 @@ Expected repository changes:
 
 - 2026-04-30 16:33 用户直接要求发版，按 patch release 执行。
 - 2026-04-30 16:36 本地 release gates 全部通过，publish dry-run 完成 pack 阶段后停在本机 npm authentication boundary。
+- 2026-04-30 16:41 完成发布。GitHub Actions run `25177445886` 成功，npm latest 是
+  `0.4.9`，已发布 CLI smoke 返回 `aiworker/0.4.9`，干净临时目录的无 Bun `npx`
+  smoke 返回友好的安装提示，GitHub Release `v0.4.9` 包含四个平台 tarball。
+- 2026-04-30 16:41 Release workflow 有 GitHub Actions Node.js 20 deprecation annotation，
+  指向 `softprops/action-gh-release@v2`，不影响本次发布结果。
 
 ## Verification
 
@@ -81,9 +86,11 @@ Expected repository changes:
   `apps/cli/dist` packed 26 files / 2.35MB, then stopped with missing local npm
   authentication.
 - Passed: `git diff --check`
-- Pending: GitHub Actions release workflow for `v0.4.9`
-- Pending: npm registry verification resolved `@zonease/aiworker-cli@0.4.9` as
+- Passed: GitHub Actions release workflow `25177445886` for `v0.4.9`
+- Passed: npm registry verification resolved `@zonease/aiworker-cli@0.4.9` as
   `latest`
-- Pending: published-package smoke reported `aiworker/0.4.9`
-- Pending: GitHub Release `v0.4.9` has linux-x64, linux-arm64, darwin-x64, and
+- Passed: published-package smoke reported `aiworker/0.4.9`
+- Passed: clean-temp no-Bun `npx @zonease/aiworker-cli@0.4.9 -h` returned the
+  friendly Bun install / standalone binary message
+- Passed: GitHub Release `v0.4.9` has linux-x64, linux-arm64, darwin-x64, and
   darwin-arm64 tarballs
