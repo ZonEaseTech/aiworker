@@ -1,6 +1,7 @@
 import type {
   AgentRunInput,
   BrainProvider,
+  BrainSkill,
   ChatMessage,
   Envelope,
   ExecutorProvider,
@@ -39,6 +40,13 @@ function stubBrain(): BrainProvider {
     listMemories: async () => [],
     searchMemories: async () => [],
     writeMemory: async () => { throw new Error('unused') },
+  }
+}
+
+function skillsBrain(skills: BrainSkill[]): BrainProvider {
+  return {
+    ...stubBrain(),
+    listSkills: async () => skills,
   }
 }
 
@@ -402,6 +410,49 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
       else
         process.env.AIWORKER_HOME = originalHome
     }
+  })
+
+  it('emits observe-only decision events without changing the delivered run', async () => {
+    const bus = recordingBus()
+    const executor = capturingExecutor(['decision response'])
+    const orch = new Orchestrator({
+      config: buildConfig(),
+      brain: skillsBrain([
+        { id: 'skill-1', name: 'research', description: 'Research helper', version: '1.0.0' },
+      ]),
+      executor,
+      bus,
+      workerId: 'w_history_test',
+      workspaces,
+      processes,
+      approvals: new ApprovalStore(),
+    })
+
+    await orch.ingest(envelope('decision turn'))
+
+    expect(executor.captured).toHaveLength(1)
+    const eventTypes = bus.events.map(event => event.type)
+    expect(eventTypes.indexOf('orchestrator.intent_decision')).toBeGreaterThan(eventTypes.indexOf('conversation.message'))
+    expect(eventTypes.indexOf('orchestrator.capability_decision')).toBeGreaterThan(eventTypes.indexOf('orchestrator.intent_decision'))
+    expect(eventTypes.indexOf('orchestrator.quality_gate')).toBeLessThan(eventTypes.indexOf('orchestrator.finished'))
+
+    const intent = bus.events.find(event => event.type === 'orchestrator.intent_decision')!.payload
+    expect(intent.mode).toBe('observe_only')
+    expect(intent.intent).toBe('unknown')
+    expect(intent.sessionAction).toBe('continue')
+
+    const capability = bus.events.find(event => event.type === 'orchestrator.capability_decision')!.payload
+    expect(capability.mode).toBe('observe_only')
+    expect(capability.availableSkillCount).toBe(1)
+    expect(capability.selectedSkills).toEqual([
+      { id: 'skill-1', name: 'research', description: 'Research helper', version: '1.0.0' },
+    ])
+
+    const gate = bus.events.find(event => event.type === 'orchestrator.quality_gate')!.payload
+    expect(gate.mode).toBe('observe_only')
+    expect(gate.status).toBe('not_evaluated')
+    expect(gate.action).toBe('pass')
+    expect(gate.finalAnswerLength).toBe('decision response'.length)
   })
 
   it('updates session_entries.contextTokens from the assembled context', async () => {
@@ -804,10 +855,13 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
 
     const mapped = bus.events.filter(event =>
       event.type === 'conversation.message'
+      || event.type === 'orchestrator.intent_decision'
+      || event.type === 'orchestrator.capability_decision'
       || event.type === 'orchestrator.text'
+      || event.type === 'orchestrator.quality_gate'
       || event.type === 'orchestrator.finished',
     )
-    expect(mapped).toHaveLength(3)
+    expect(mapped).toHaveLength(6)
     expect(mapped.every(event => event.payload.gatewayConversationId === acceptedId)).toBe(true)
     expect(mapped.every(event => event.payload.conversationId !== acceptedId)).toBe(true)
   })

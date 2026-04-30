@@ -22,7 +22,11 @@ export function attachEvolutionObserver(bus: WorkerEventBus): () => void {
 }
 
 function persistObservation(event: WorkerEvent) {
-  const interesting = event.type === 'orchestrator.tool_call' || event.type === 'orchestrator.finished'
+  const interesting = event.type === 'orchestrator.tool_call'
+    || event.type === 'orchestrator.finished'
+    || event.type === 'orchestrator.intent_decision'
+    || event.type === 'orchestrator.capability_decision'
+    || event.type === 'orchestrator.quality_gate'
   if (!interesting)
     return
   getWorkerDb().insert(evolutionObservations).values({

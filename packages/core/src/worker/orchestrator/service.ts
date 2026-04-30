@@ -16,14 +16,6 @@ import type { WorkspaceHandle, WorkspaceManager } from '../executor/workspace'
 import type { ApprovalDecision, ApprovalStore } from './approvals'
 import type { ProcessManager } from './process-manager'
 
-import { readFile } from 'node:fs/promises'
-import {
-  resolveAgentMdPath,
-  resolveMemoryIndexPath,
-  resolveRollupMdPath,
-  resolveSoulMdPath,
-  resolveUserMdPath,
-} from '@zonease/aiworker-fs-layout'
 import { DEFAULT_MAX_HISTORY_MESSAGES } from '@zonease/aiworker-shared'
 import { agentTasks, conversations, getSessionEntry, getWorkerDb, messages, recordSessionCompaction, rotateSessionConversation, touchSessionEntry, updateSessionEngineBinding, upsertSessionEntry } from '@zonease/aiworker-storage-sqlite/worker'
 
@@ -33,13 +25,14 @@ import { getChannelAdapter } from '../channels/registry'
 import { classifyContinuation, findOpenConversation, findSessionConversation, hasSessionEntryForRoute, loadRecentMessages, resolveSessionKey } from '../conversation/router'
 import { DEFAULT_APPROVAL_TIMEOUT_MS } from './approvals'
 import {
-  assembleTokenBudgetContext,
   DEFAULT_TOKEN_BUDGET_HISTORY_SCAN_MESSAGES,
   estimateChatMessagesTokens,
   estimateChatMessageTokens,
   resolveContextBudget,
   resolveExecutorModel,
 } from './context'
+import { ContextManager, RunContextComposer } from './context-manager'
+import { buildDefaultIntentDecision, buildDefaultQualityGate, buildPromptCapabilityDecision } from './decisions'
 import { evaluateToolPolicy } from './policy'
 
 interface OrchestratorDeps {
@@ -106,7 +99,6 @@ interface ExecutorTextResult {
 
 const DEFAULT_COMPACTION_MAX_SUMMARY_MESSAGES = 120
 const TRANSCRIPT_METADATA_VERSION = 1
-const SYSTEM_PROMPT_FILE_MAX_CHARS = 6_000
 
 /** `runTool` 输入。`taskId` / `toolCallId` 用作 ApprovalStore 的 key。 */
 export interface RunToolInput {
@@ -131,7 +123,14 @@ export interface RunToolResult {
 }
 
 export class Orchestrator {
-  constructor(private readonly deps: OrchestratorDeps) {}
+  private readonly contextManager: ContextManager
+
+  constructor(private readonly deps: OrchestratorDeps) {
+    this.contextManager = new ContextManager({
+      brain: deps.brain,
+      workerId: deps.workerId,
+    })
+  }
 
   /** Entry point for inbound envelopes from any channel. */
   async ingest(envelope: Envelope): Promise<void> {
@@ -188,14 +187,30 @@ export class Orchestrator {
       signal,
       notifyActivity,
     })).conversation
-    let systemPrompt = await this.buildSystemPrompt(activeConversation.summary ?? null)
-    let chatMessages = await this.buildRunContext(activeConversation.id, systemPrompt)
-    touchSessionEntry(sessionKey, { contextTokens: estimateChatMessagesTokens(chatMessages) })
-
     const model = resolveExecutorModel(this.deps.config.executor)
     const taskId = taskIdFromEnvelope(envelope)
     const gatewayConversationId = gatewayConversationIdFromEnvelope(envelope)
     const engine = this.deps.config.executor.engine
+    const decisionContext = {
+      channel: envelope.channel,
+      conversationId: activeConversation.id,
+      engine,
+      ...(gatewayConversationId === undefined ? {} : { gatewayConversationId }),
+      ...(model === undefined ? {} : { model }),
+      sessionKey,
+      ...(taskId === undefined ? {} : { taskId }),
+    }
+    this.deps.bus.emit('orchestrator.intent_decision', buildDefaultIntentDecision(decisionContext))
+    const systemContext = await this.contextManager.buildSystemPrompt({ priorSummary: activeConversation.summary ?? null })
+    this.deps.bus.emit('orchestrator.capability_decision', buildPromptCapabilityDecision({
+      ...decisionContext,
+      availableSkills: systemContext.availableSkills,
+      promptSkillLimit: systemContext.promptSkillLimit,
+    }))
+    let systemPrompt = systemContext.systemPrompt
+    let chatMessages = await this.buildRunContext(activeConversation.id, systemPrompt)
+    touchSessionEntry(sessionKey, { contextTokens: estimateChatMessagesTokens(chatMessages) })
+
     let runInput = this.buildAgentRunInput({
       messages: chatMessages,
       model,
@@ -227,7 +242,7 @@ export class Orchestrator {
       })
       if (retryCompaction.compacted) {
         activeConversation = retryCompaction.conversation
-        systemPrompt = await this.buildSystemPrompt(activeConversation.summary ?? null)
+        systemPrompt = (await this.contextManager.buildSystemPrompt({ priorSummary: activeConversation.summary ?? null })).systemPrompt
         chatMessages = await this.buildRunContext(activeConversation.id, systemPrompt)
         touchSessionEntry(sessionKey, { contextTokens: estimateChatMessagesTokens(chatMessages) })
         runInput = this.buildAgentRunInput({
@@ -274,6 +289,11 @@ export class Orchestrator {
     }).run()
     db.update(conversations).set({ lastActiveAt: now }).where(eq(conversations.id, activeConversation.id)).run()
     touchSessionEntry(sessionKey, { at: now })
+    this.deps.bus.emit('orchestrator.quality_gate', buildDefaultQualityGate({
+      ...decisionContext,
+      assistantText,
+      conversationId: activeConversation.id,
+    }))
     this.deps.bus.emit('orchestrator.finished', {
       conversationId: activeConversation.id,
       ...(gatewayConversationId === undefined ? {} : { gatewayConversationId }),
@@ -547,7 +567,7 @@ export class Orchestrator {
     if (rows.length <= 1)
       return { conversation: input.conversation, compacted: false }
 
-    const systemPrompt = await this.buildSystemPrompt(input.conversation.summary ?? null)
+    const systemPrompt = (await this.contextManager.buildSystemPrompt({ priorSummary: input.conversation.summary ?? null })).systemPrompt
     const systemTokens = estimateChatMessageTokens({ role: 'system', content: systemPrompt })
     const currentTokens = systemTokens
       + rows.reduce((sum, row) => sum + estimateChatMessageTokens(rowToChatMessage(row)), 0)
@@ -808,19 +828,11 @@ export class Orchestrator {
   }
 
   private async buildRunContext(conversationId: string, systemPrompt: string): Promise<ChatMessage[]> {
-    const systemMessage: ChatMessage = { role: 'system', content: systemPrompt }
-    const budget = resolveContextBudget(this.deps.config.orchestrator, this.deps.config.executor)
-    if (!budget) {
-      const history = await this.loadHistoryWindow(conversationId)
-      return [systemMessage, ...history]
-    }
-
-    const historyNewestFirst = await this.loadBudgetHistory(conversationId, budget.maxHistoryMessages)
-    return assembleTokenBudgetContext({
-      systemMessage,
-      historyNewestFirst,
-      budget,
-    }).messages
+    return new RunContextComposer({
+      config: this.deps.config,
+      loadBudgetHistory: (id, maxHistoryMessages) => this.loadBudgetHistory(id, maxHistoryMessages),
+      loadHistoryWindow: id => this.loadHistoryWindow(id),
+    }).compose({ conversationId, systemPrompt })
   }
 
   /**
@@ -845,52 +857,6 @@ export class Orchestrator {
       maxHistoryMessages ?? DEFAULT_TOKEN_BUDGET_HISTORY_SCAN_MESSAGES,
     )
     return rows.map(rowToChatMessage)
-  }
-
-  /**
-   * 构造 system prompt。当 conversation 已经积累过 summary（来自将来某个
-   * 总结 trick）时把它带进 system，弥补 history 窗口被截断丢掉的早期上下文。
-   */
-  private async buildSystemPrompt(priorSummary: string | null): Promise<string> {
-    const [skills, persona] = await Promise.all([
-      this.deps.brain.listSkills().catch(() => []),
-      this.loadProjectPersonaDocs(),
-    ])
-    const lines = [
-      `You are worker ${this.deps.workerId}.`,
-      'Respond concisely and helpfully.',
-    ]
-    appendSystemPromptSection(lines, 'Project agent instructions', persona.agent)
-    appendSystemPromptSection(lines, 'Project soul / voice', persona.soul)
-    appendSystemPromptSection(lines, 'Project user profile', persona.user)
-    appendSystemPromptSection(lines, 'Project memory index', persona.memory)
-    appendSystemPromptSection(lines, 'Project continuity rollup', persona.rollup)
-    if (priorSummary && priorSummary.trim().length > 0)
-      lines.push(`Conversation summary so far: ${priorSummary.trim()}`)
-    if (skills.length > 0) {
-      lines.push('Available brain skills:')
-      for (const s of skills.slice(0, 10))
-        lines.push(`- ${s.name}: ${s.description}`)
-    }
-    return lines.join('\n')
-  }
-
-  private async loadProjectPersonaDocs(): Promise<{
-    agent: string | null
-    memory: string | null
-    rollup: string | null
-    soul: string | null
-    user: string | null
-  }> {
-    const workerId = this.deps.workerId
-    const [agent, soul, user, memory, rollup] = await Promise.all([
-      readPromptFile(resolveAgentMdPath(workerId)),
-      readPromptFile(resolveSoulMdPath(workerId)),
-      readPromptFile(resolveUserMdPath(workerId)),
-      readPromptFile(resolveMemoryIndexPath(workerId)),
-      readPromptFile(resolveRollupMdPath(workerId)),
-    ])
-    return { agent, memory, rollup, soul, user }
   }
 
   /**
@@ -1170,25 +1136,6 @@ function parseTranscriptMetadata(row: { role: string, richMetadata: string | nul
   catch {
     return null
   }
-}
-
-async function readPromptFile(filePath: string): Promise<string | null> {
-  try {
-    const content = (await readFile(filePath, 'utf8')).trim()
-    if (content.length === 0)
-      return null
-    return content.length <= SYSTEM_PROMPT_FILE_MAX_CHARS
-      ? content
-      : `${content.slice(0, SYSTEM_PROMPT_FILE_MAX_CHARS)}\n... truncated ...`
-  }
-  catch {
-    return null
-  }
-}
-
-function appendSystemPromptSection(lines: string[], title: string, content: string | null): void {
-  if (content && content.trim().length > 0)
-    lines.push(`${title}:\n${content.trim()}`)
 }
 
 function positiveNumber(value: unknown): number | null {

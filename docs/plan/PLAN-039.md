@@ -1,6 +1,6 @@
 # PLAN-039 Worker 决策管线：意图识别、能力选择与质量门禁
 
-- **status**: pending_review
+- **status**: s1_completed_s2_pending_review
 - **createdAt**: 2026-04-29 17:04
 - **relatedTask**: FEAT-038
 
@@ -195,4 +195,29 @@
 
 ## 批注
 
-等待用户批准。批准后建议先实施 S1（Context Manager + 决策事件骨架 observe-only），因为它能先把 Hermes-style runtime primitives 的承载点固化下来，再逐步接入 capability、intent、quality 和 learning。
+2026-04-30：用户批准接管开发。先实施 S1（Context Manager + 决策事件骨架 observe-only），因为它能先把 Hermes-style runtime primitives 的承载点固化下来，再逐步接入 capability、intent、quality 和 learning。
+
+### S1 实施切片
+
+- 抽出 `ContextManager` / `RunContextComposer`，保持当前 system prompt 内容和 history/token-budget 行为不变。
+- 新增 observe-only 决策事件 payload 类型：
+  - `orchestrator.intent_decision`
+  - `orchestrator.capability_decision`
+  - `orchestrator.quality_gate`
+- S1 只发默认/骨架事件，不让分类、能力选择或 gate 改变执行路径。
+- 扩展 evolution observer，让上述决策事件进入 `evolution_observations`，供后续 proposer / retrospect 使用。
+- 聚焦测试覆盖：
+  - system prompt 和 project persona 注入不回归；
+  - 默认 intent/capability/quality 事件按顺序发出；
+  - gateway-origin conversation id 映射仍可透传；
+  - evolution observer 持久化新增决策事件。
+
+### S1 完成记录
+
+2026-04-30：S1 已落地。
+
+- `ContextManager` 负责 `.aiworker` persona/memory 短快照和当前 skill prompt exposure。
+- `RunContextComposer` 负责把 system prompt 与现有 history/token-budget 逻辑组合成 engine-agnostic chat context。
+- `orchestrator.intent_decision`、`orchestrator.capability_decision`、`orchestrator.quality_gate` 已按 observe-only 默认 payload 发出。
+- `evolution_observations` 已持久化上述新增决策事件。
+- 当前仍不执行真实 intent classifier、CapabilityRegistry、质量评分、repair 或 block；这些留给 S2-S4 分段复审后实现。

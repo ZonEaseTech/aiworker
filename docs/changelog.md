@@ -1,5 +1,19 @@
 # AIWorker Changelog
 
+## 2026-04-30 19:05 [progress] FEAT-038 — worker decision pipeline S1
+
+落地 worker 决策管线的第一个 observe-only 切片：
+
+- 从 orchestrator 抽出 `ContextManager` 和 `RunContextComposer`，同时保持现有
+  system prompt、项目 persona 注入、history window、token budget、compaction
+  和 native engine binding 行为不变。
+- 新增 `orchestrator.intent_decision`、`orchestrator.capability_decision` 和
+  `orchestrator.quality_gate` 的 typed default payload builder。
+- 新事件均为 observe-only：只记录当前默认决策，不启用真实分类、不强制能力选择、
+  不修复输出，也不阻断交付。
+- Evolution observation 现在会持久化这些决策事件，供后续 proposer 和 retrospect
+  使用。
+
 ## 2026-04-30 18:26 [bug] BUG-041 — project-scope engine cwd
 
 Fixed project-scope agentic CLI execution so engines keep the project root as
