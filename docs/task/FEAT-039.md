@@ -35,3 +35,4 @@
 - 2026-04-29 17:50：根据讨论补充产品入口设计。关键决策：`init` 默认 safe/idempotent；Soul 选择应在初始化早期发生；`customize` 是正式路径；`.aiworker/` 为权威源，`AGENTS.md` / `CLAUDE.md` / `.agents` / `.claude` 为 adapter 投影；云端 Soul 更新必须 pin/diff/approval；自我迭代默认 proposal，不默认自动写入。
 - 2026-04-29 18:04：用户批准开工。按 BKD 编排执行，控制单 session 范围；先派发 S1 init preflight/dry-run diff 小切片。
 - 2026-04-29 18:18：S1 已通过 BKD 子任务 `urey7cyc` 合入 main，merge commit `8284aa5`。本阶段新增 `aiworker init --dry-run`、init preflight 报告、外部 agent 文件检测和 persona 文件保留回归测试。Post-merge 验证：`bun test --timeout=15000 apps/cli/src/commands/init.integration.test.ts`、`bun run --filter @zonease/aiworker-cli test`、`bun run --filter @zonease/aiworker-cli typecheck`、目标 `eslint`、committed diff check 均通过。
+- 2026-04-30 15:47：根据 init 体验反馈移除 brand-new project 对 git repo 的硬性要求；`aiworker init` 默认可在非 git cwd 创建项目级 `.aiworker/`，preflight 仅提示确认 cwd，`--global` 仍用于 host-wide worker，`--force` 保留为兼容旧脚本且不覆盖文件。

@@ -16,6 +16,14 @@ Improved the npm CLI startup path while keeping AIWorker Bun-native:
   distribution entrypoints only; the runtime remains Bun or the GitHub Release
   standalone binary.
 
+## 2026-04-30 15:47 [progress] FEAT-039 — init no longer requires git
+
+Adjusted the project-scope `aiworker init` first-run flow: a brand-new
+directory no longer needs to be inside a git repository. The command now creates
+the same safe `.aiworker/` project layout in the current cwd, prints a preflight
+note when no git repository is detected, keeps `--global` for user-scope worker
+initialization, and keeps `--force` as a no-overwrite compatibility flag.
+
 ## 2026-04-30 08:55 [bug] BUG-038 found during 0.4.8 test-fleet validation
 
 The `0.4.8` test-fleet validation found that worker info still reports

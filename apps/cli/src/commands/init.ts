@@ -12,7 +12,7 @@ import { bootstrapDotenv } from '../lib/dotenv-bootstrap'
 export interface InitOptions {
   /** Force user-scope at `~/.aiworker/`. Skips cwd project detection. */
   global?: boolean
-  /** Allow project init even when cwd is not a git repo (escape hatch for ad-hoc setups). */
+  /** Backward-compatible flag. Project init is allowed outside git by default. */
   force?: boolean
   /** Preview planned writes without creating or modifying any file. */
   dryRun?: boolean
@@ -21,6 +21,7 @@ export interface InitOptions {
 interface PreflightReport {
   applyLabel: string
   create: string[]
+  notes: string[]
   preserve: string[]
   requiresAction: string[]
   scope: 'explicit' | 'project' | 'user'
@@ -64,14 +65,14 @@ const EXTERNAL_AGENT_PATHS: Array<{ path: string, type: 'directory' | 'file' }> 
  * `aiworker init` — bootstrap worker.db, mint identity + token on first
  * boot, seed default config.
  *
- * Project-scope (default, PLAN-023): create `<cwd>/.aiworker/` (requires
- * cwd to be inside a git repo), then materialise the worker under
- * `<cwd>/.aiworker/local/`. The bootstrap runs idempotently — re-running
- * on an already-initialised vault keeps the same identity and prints no
- * extra token.
+ * Project-scope (default, PLAN-023): create `<cwd>/.aiworker/` without
+ * requiring git, then materialise the worker under `<cwd>/.aiworker/local/`.
+ * The bootstrap runs idempotently — re-running on an already-initialised vault
+ * keeps the same identity and prints no extra token.
  *
  * `--global` falls back to the user-scope `~/.aiworker/` layout (legacy
- * single-host single-worker form). `--force` skips the git-repo guard.
+ * single-host single-worker form). `--force` is retained for older scripts but
+ * does not overwrite existing files.
  */
 export async function runInit(options: InitOptions = {}): Promise<void> {
   if (options.global === true) {
@@ -122,19 +123,7 @@ export async function runInit(options: InitOptions = {}): Promise<void> {
     return
   }
 
-  // Brand-new project init: require a git repo to prevent polluting random
-  // directories (e.g. `aiworker init` in `/tmp/foo`). Operators with truly
-  // git-less setups can opt out with --force.
-  if (options.force !== true && !isGitRepo(cwd)) {
-    throw new Error(
-      `[aiworker init] cwd is not inside a git repo (cwd=${cwd}).\n`
-      + `  • Run inside an existing git repo to enable project-scope worker, OR\n`
-      + `  • aiworker init --global   → use ~/.aiworker (single host-wide worker), OR\n`
-      + `  • aiworker init --force    → create .aiworker/ here anyway (no git tracking).`,
-    )
-  }
-
-  const report = buildProjectPreflight(cwd, options)
+  const report = buildProjectPreflight(cwd, { ...options, gitRepoDetected: isGitRepo(cwd) })
   printPreflightReport(report)
   if (options.dryRun === true)
     return
@@ -164,9 +153,13 @@ function isGitRepo(cwd: string): boolean {
   }
 }
 
-function buildProjectPreflight(projectRoot: string, options: InitOptions): PreflightReport {
+function buildProjectPreflight(
+  projectRoot: string,
+  options: InitOptions & { gitRepoDetected?: boolean },
+): PreflightReport {
   const root = path.resolve(projectRoot)
   const create: string[] = []
+  const notes: string[] = []
   const preserve: string[] = []
   const requiresAction: string[] = []
 
@@ -200,12 +193,18 @@ function buildProjectPreflight(projectRoot: string, options: InitOptions): Prefl
     }
   }
 
+  if (options.gitRepoDetected === false) {
+    notes.push('No git repository detected; aiworker will still create project-local state in the current directory.')
+    notes.push('Run from the directory that should own this worker, or use --global for a host-wide worker.')
+  }
+
   if (options.force === true)
-    requiresAction.push('--force only skips the git-repo guard; it does not overwrite existing files')
+    notes.push('--force is accepted for compatibility; init remains idempotent and does not overwrite existing files.')
 
   return {
     applyLabel: options.dryRun === true ? 'dry-run (no files will be written)' : 'apply',
     create,
+    notes,
     preserve,
     requiresAction,
     scope: 'project',
@@ -237,6 +236,7 @@ function buildUserScopePreflight(
   return {
     applyLabel: options.dryRun === true ? 'dry-run (no files will be written)' : 'apply',
     create,
+    notes: [],
     preserve,
     requiresAction: [],
     scope: options.scope ?? 'user',
@@ -255,6 +255,7 @@ function printPreflightReport(report: PreflightReport): void {
   process.stdout.write(`${header.join('\n')}\n`)
   printPreflightSection('Will create', report.create)
   printPreflightSection('Will preserve', report.preserve)
+  printPreflightSection('Notes', report.notes)
   printPreflightSection('Needs explicit action', report.requiresAction)
 }
 

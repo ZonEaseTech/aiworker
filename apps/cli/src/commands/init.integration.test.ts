@@ -140,13 +140,27 @@ describe('aiworker init / scope project placement', () => {
     })
   })
 
-  it('init --force creates project layout outside git', async () => {
+  it('init creates project layout outside git by default', async () => {
+    await withCliIntegrationCleanup(async (cleanup) => {
+      const project = await cleanup.makeTempDir('aiworker-cli-non-git-')
+      const home = await cleanup.makeTempDir('aiworker-cli-non-git-home-')
+      const result = await runCli(cleanup, ['init'], project, home)
+
+      expect(result.exitCode).toBe(0)
+      expect(result.output).toContain('No git repository detected')
+      expect(await exists(path.join(project, '.aiworker', 'local', 'worker.db'))).toBe(true)
+      expect(await exists(path.join(home, '.aiworker', '.env'))).toBe(false)
+    })
+  })
+
+  it('init --force remains accepted outside git', async () => {
     await withCliIntegrationCleanup(async (cleanup) => {
       const project = await cleanup.makeTempDir('aiworker-cli-force-')
       const home = await cleanup.makeTempDir('aiworker-cli-force-home-')
       const result = await runCli(cleanup, ['init', '--force'], project, home)
 
       expect(result.exitCode).toBe(0)
+      expect(result.output).toContain('--force is accepted for compatibility')
       expect(await exists(path.join(project, '.aiworker', 'local', 'worker.db'))).toBe(true)
       expect(await exists(path.join(home, '.aiworker', '.env'))).toBe(false)
     })

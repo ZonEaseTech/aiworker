@@ -259,3 +259,5 @@ aiworker soul pin developer@1.2.0
 用户已批准开工。先实施 S1（Init preflight + dry-run diff），因为它不会改变运行时行为，却能先把“默认不覆盖、所有变更可预览”的安全基线立住。执行通过 BKD 子任务分片推进，避免单 session 过大。
 
 2026-04-29 18:18：S1 已通过 BKD 子任务 `urey7cyc` 合入 main，merge commit `8284aa5`。后续仍按分片推进，下一阶段才考虑 S2 Soul templates registry skeleton，不在 S1 session 里扩展。
+
+2026-04-30 15:47：补充 init 体验决策：git repo 只应是“可追踪项目上下文”的加分项，不应是初始化项目级 worker 的硬门槛。brand-new `aiworker init` 默认在当前 cwd 创建 `.aiworker/`；非 git cwd 通过 preflight notes 提醒用户确认目标目录，避免用 error 把正常空项目拦住。

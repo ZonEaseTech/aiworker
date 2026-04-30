@@ -63,13 +63,13 @@ PLAN-023 起 `aiworker init` 默认走 **project scope**：
 
 | 模式 | 触发条件 | 落位 |
 |------|----------|------|
-| **project**（默认） | cwd 在某个 git repo 内（且未显式 `AIWORKER_HOME`） | `<cwd>/.aiworker/{AGENT.md,SOUL.md,USER.md,MEMORY.md,ROLLUP.md,skills/,memories/,mcp.json}` + `<cwd>/.aiworker/local/{worker.db,identity.json,.env,workspaces/}` |
-| **user**（legacy） | `--global` flag，或显式 `AIWORKER_HOME=...`，或当前 cwd 不在 git repo 内（报错引导切 `--global` / `--force`） | `~/.aiworker/{worker.db,.env,workers/<workerId>/{AGENT.md,SOUL.md,USER.md,brain/skills,brain/memories,workspaces/}}` |
+| **project**（默认） | 当前 cwd（未显式 `AIWORKER_HOME`） | `<cwd>/.aiworker/{AGENT.md,SOUL.md,USER.md,MEMORY.md,ROLLUP.md,skills/,memories/,mcp.json}` + `<cwd>/.aiworker/local/{worker.db,identity.json,.env,workspaces/}` |
+| **user**（legacy） | `--global` flag，或显式 `AIWORKER_HOME=...` | `~/.aiworker/{worker.db,.env,workers/<workerId>/{AGENT.md,SOUL.md,USER.md,brain/skills,brain/memories,workspaces/}}` |
 
 `local/` 目录强制 `.gitignore = "*\n!.gitignore\n"`（worker.db / .env / workspaces 等敏感产物绝不入 git）；`.aiworker/.gitignore = "local/\n"`（其余 persona / skills / memories 默认入 git，团队共享 agent 人格定义）。每个 project worker 独立 mint master key（写入 `.aiworker/local/.env`，chmod 0600），与 user 级 `~/.aiworker/.env` 物理隔离——这是数据安全边界。
 
 ```sh
-# 进入项目目录（必须是 git repo）
+# 进入要拥有这个 worker 的项目目录（不要求 git repo）
 cd ~/code/my-project
 
 # 默认 project scope
@@ -81,7 +81,7 @@ aiworker init
 # 走 legacy user scope（host 上唯一 worker）
 aiworker init --global
 
-# cwd 非 git repo 时强制项目级（防止误污染 /tmp 等随机目录）
+# 兼容旧脚本；默认已允许非 git 目录，且仍不覆盖既有文件
 aiworker init --force
 ```
 
