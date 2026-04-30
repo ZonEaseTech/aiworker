@@ -1,10 +1,10 @@
 import type { BrainSkill } from '@zonease/aiworker-shared'
+import type { CapabilitySkillDescriptor, RequiredContext, WorkerIntent } from './decisions'
 
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
-import { resolveMcpJsonPath, resolveWorkerHome } from '@zonease/aiworker-fs-layout'
 
-import type { CapabilitySkillDescriptor, RequiredContext, WorkerIntent } from './decisions'
+import { resolveMcpJsonPath, resolveWorkerHome } from '@zonease/aiworker-fs-layout'
 
 export interface BuiltinCapabilityDescriptor {
   description: string

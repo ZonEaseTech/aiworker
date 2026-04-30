@@ -124,7 +124,7 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-036 Codex executor returns app-server reconnect error during fleet validation**](BUG-036.md) `P1`
 - [x] [**DOC-001 刷新 AGENTS.md 工作指引**](DOC-001.md) `P3`
 - [x] [**REFACTOR-012 按 DESIGN.md 收敛 Web UI 视觉系统**](REFACTOR-012.md) `P2`
-- [-] [**FEAT-038 Worker 决策管线：意图识别、能力选择与质量门禁**](FEAT-038.md) `P1`
+- [x] [**FEAT-038 Worker 决策管线：意图识别、能力选择与质量门禁**](FEAT-038.md) `P1`
 - [x] [**REL-003 发布 aiworker CLI 0.4.6**](REL-003.md) `P1`
 - [-] [**FEAT-039 Worker 初始化与 Soul 生命周期：安全 init、模板预置、能力包与更新治理**](FEAT-039.md) `P1`
 - [x] [**FEAT-040 Fleet 统一入口管理非同 host worker**](FEAT-040.md) `P1`

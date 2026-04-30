@@ -145,12 +145,12 @@ export function parseEvolutionMeta(body: string): EvolutionMeta | null {
     const parsed = JSON.parse(match[1]) as Partial<EvolutionMeta>
     if (!Array.isArray(parsed.allowedTools) || !parsed.allowedTools.every(t => typeof t === 'string'))
       return null
-      return {
-        allowedTools: parsed.allowedTools,
-        confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0,
-        kind: parsed.kind === 'quality_gate' ? 'quality_gate' : 'tool_sequence',
-        sequenceKey: typeof parsed.sequenceKey === 'string' ? parsed.sequenceKey : parsed.allowedTools.join('|'),
-      }
+    return {
+      allowedTools: parsed.allowedTools,
+      confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0,
+      kind: parsed.kind === 'quality_gate' ? 'quality_gate' : 'tool_sequence',
+      sequenceKey: typeof parsed.sequenceKey === 'string' ? parsed.sequenceKey : parsed.allowedTools.join('|'),
+    }
   }
   catch {
     return null

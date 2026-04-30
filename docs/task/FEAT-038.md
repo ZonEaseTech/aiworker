@@ -1,6 +1,6 @@
 # FEAT-038 Worker 决策管线：意图识别、能力选择与质量门禁
 
-- **status**: in_progress
+- **status**: completed
 - **priority**: P1
 - **owner**: Codex
 - **createdAt**: 2026-04-29 17:04
@@ -39,3 +39,4 @@
 - 2026-04-30 19:45：PLAN-039 S3 完成。IntentClassifier 已输出结构化 intent/risk/context/profile/sessionAction，支持 heuristic 默认和可选 LLM strict-JSON evaluator；分类结果只影响 observation/capability record。
 - 2026-04-30 20:10：PLAN-039 S4 完成。QualityGate 支持 observe/warn/retry/block、heuristic/LLM evaluator 和一次 repair；默认 observe 不改变交付。
 - 2026-04-30 20:25：PLAN-039 S5 完成。Evolution proposer 已消费 failed quality gate observation 并生成 pending skill draft；只提案不写配置。
+- 2026-04-30：FEAT-038 / PLAN-039 全阶段完成。S1-S5 已覆盖 Context Manager、Capability Registry、IntentClassifier、QualityGate 与 quality-gate proposer；最终验证通过 core test、全量 typecheck、全量 lint 和 diff check。

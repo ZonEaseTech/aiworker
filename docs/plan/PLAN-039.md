@@ -1,6 +1,6 @@
 # PLAN-039 Worker 决策管线：意图识别、能力选择与质量门禁
 
-- **status**: s1_completed_s2_pending_review
+- **status**: completed
 - **createdAt**: 2026-04-29 17:04
 - **relatedTask**: FEAT-038
 
@@ -258,3 +258,14 @@
 - 重复出现同类 failed quality gate 时，proposer 只生成 pending `skill_drafts`，不直接改 memory、policy、MCP 或 worker config。
 - 质量草案带 `evolution-meta.kind = "quality_gate"` 和稳定 `sequenceKey`，后续运行会去重。
 - 保留既有 tool-sequence mining 行为。
+
+### 全阶段完成记录
+
+2026-04-30：PLAN-039 已按 S1-S5 完整落地。
+
+- S1 固化 Context Manager / Run Context Composer 与 observe-only 决策事件骨架。
+- S2 接入 CapabilityRegistry 和 toolset / MCP descriptor observation。
+- S3 接入结构化 IntentClassifier，输出 intent、risk、requiredContext、qualityProfile 与 sessionAction。
+- S4 接入 QualityGate，支持 observe / warn / retry / block、heuristic / LLM evaluator 和一次 repair。
+- S5 接入 quality gate learning proposer，只生成 pending skill draft，不直接写高风险配置。
+- 最终验证通过 core test、全量 typecheck、全量 lint 和 diff check。

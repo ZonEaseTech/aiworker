@@ -137,25 +137,25 @@ function normalizeIntentDecision(
 }
 
 function inferIntent(text: string): WorkerIntent {
-  if (/(remember|记住|记忆|memory)/i.test(text))
+  if (/remember|记住|记忆|memory/i.test(text))
     return 'memory_update'
-  if (/(skill|技能|能力包|capability)/i.test(text))
+  if (/skill|技能|能力包|capability/i.test(text))
     return 'skill_request'
-  if (/(config|配置|初始化|init|mcp|soul|\.aiworker)/i.test(text))
+  if (/config|配置|初始化|init|mcp|soul|\.aiworker/i.test(text))
     return 'config_admin'
-  if (/(review|审查|code review|cr\b)/i.test(text))
+  if (/review|审查|code review|cr\b/i.test(text))
     return 'code_work'
-  if (/(fix|bug|test|typecheck|lint|commit|代码|修复|实现|测试|提交|开发|重构)/i.test(text))
+  if (/fix|bug|test|typecheck|lint|commit|代码|修复|实现|测试|提交|开发|重构/i.test(text))
     return 'code_work'
-  if (/(plan|proposal|roadmap|方案|计划|规划|拆解|设计)/i.test(text))
+  if (/plan|proposal|roadmap|方案|计划|规划|拆解|设计/i.test(text))
     return 'planning'
-  if (/(research|search|lookup|调研|搜索|查找|查一下|资料)/i.test(text))
+  if (/research|search|lookup|调研|搜索|查找|查一下|资料/i.test(text))
     return 'research'
   return text.trim().length === 0 ? 'unknown' : 'answer'
 }
 
 function inferRisk(text: string, intent: WorkerIntent): WorkerRisk {
-  if (/(prod|production|deploy|delete|reset|secret|token|key|生产|部署|删除|重置|密钥|令牌)/i.test(text))
+  if (/prod(?:uction)?|deploy|delete|reset|secret|token|key|生产|部署|删除|重置|密钥|令牌/i.test(text))
     return 'high'
   if (intent === 'code_work' || intent === 'config_admin')
     return 'medium'
@@ -178,7 +178,7 @@ function inferRequiredContext(text: string, intent: WorkerIntent): RequiredConte
 function inferQualityProfile(text: string, intent: WorkerIntent, risk: WorkerRisk): QualityProfile {
   if (risk === 'high')
     return 'high_stakes'
-  if (/(review|审查|代码评审|code review)/i.test(text))
+  if (/review|审查|代码评审|code review/i.test(text))
     return 'code_review'
   if (intent === 'planning')
     return 'planning'

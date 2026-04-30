@@ -1,8 +1,7 @@
 import type { AgentRunInput, ExecutorProvider } from '@zonease/aiworker-shared'
 
 import { describe, expect, it } from 'bun:test'
-import { buildPromptCapabilityDecision } from './decisions'
-import { buildIntentDecision } from './decisions'
+import { buildIntentDecision, buildPromptCapabilityDecision } from './decisions'
 import { evaluateQualityGate } from './quality-gate'
 
 function context() {
