@@ -73,4 +73,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [-] [**PLAN-042 Fleet 统一入口管理非同 host worker**](PLAN-042.md) `2026-04-29`
 - [x] [**PLAN-043 code-review-graph 开发工作流接入**](PLAN-043.md) `2026-04-29`
 - [x] [**PLAN-044 Fleet Audit log 内部表格滚动**](PLAN-044.md) `2026-04-29`
-- [-] [**PLAN-045 发布 aiworker CLI 0.4.7**](PLAN-045.md) `2026-04-30`
+- [x] [**PLAN-045 发布 aiworker CLI 0.4.7**](PLAN-045.md) `2026-04-30`

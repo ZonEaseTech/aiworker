@@ -1,6 +1,23 @@
 # AIWorker Changelog
 
-## 2026-04-30 02:02 [progress] REL-004 — 准备发布 0.4.7
+## 2026-04-30 07:03 [progress] REL-004 — 0.4.7 published
+
+Published `@zonease/aiworker-cli@0.4.7`:
+
+- Local release gates passed: frozen install, workspace tests, typecheck, lint,
+  root build, CLI run smoke, CLI fleet smoke, release diff check, dist manifest
+  version check, and publish dry-run up to the local npm authentication boundary.
+- The tag-triggered GitHub release workflow succeeded for `v0.4.7`, including
+  typecheck, tests, CLI bundle, npm publish, compiled binaries, and GitHub
+  Release asset upload.
+- npm `latest` now resolves to `0.4.7`, and a published-package smoke reports
+  `aiworker/0.4.7`.
+- GitHub Release `v0.4.7` contains the linux-x64, linux-arm64, darwin-x64, and
+  darwin-arm64 tarballs.
+- Gateway worker bridge remains an MVP in this release; complete FEAT-040 /
+  PLAN-042 delivery continues in follow-up work.
+
+## 2026-04-30 07:02 [progress] REL-004 — 准备发布 0.4.7
 
 开始准备 `@zonease/aiworker-cli@0.4.7` patch 发版：
 
