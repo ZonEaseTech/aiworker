@@ -7,6 +7,7 @@ import process from 'node:process'
 import { describe, expect, it } from 'bun:test'
 
 import { cli, preprocessArgv } from './aiworker'
+import { getUngroupedHelpCommands } from './help'
 
 /**
  * 入口构造与命令注册的快照测试。aiworker 是单 binary entry，所有子命令都注册在
@@ -138,8 +139,27 @@ describe('aiworker cli registration', () => {
       console.log = orig
     }
     const help = captured.join('\n')
-    for (const keyword of ['serve', 'sessions list', 'fleet list', 'gateway start', 'enroll approve', 'config get', 'install systemd'])
+    for (const keyword of [
+      '使用引导',
+      '本地 worker',
+      'Gateway / fleet 管理',
+      '远端 worker 操作',
+      '安装、诊断、高级维护',
+      'aiworker init -> aiworker serve',
+      'serve',
+      'sessions list',
+      'fleet list',
+      'gateway start',
+      'enroll approve',
+      'config get',
+      'install systemd',
+    ])
       expect(help).toContain(keyword)
+    expect(help).not.toContain('For more info, run any command')
+  })
+
+  it('help 分组覆盖所有显式注册命令', () => {
+    expect(getUngroupedHelpCommands(cli)).toEqual([])
   })
 })
 
@@ -310,7 +330,7 @@ describe('aiworker malformed argv handling', () => {
     const result = await runCli(['--help'])
     try {
       expect(result.exitCode).toBe(0)
-      expect(result.output).toContain('bootstraps local worker state if missing')
+      expect(result.output).toContain('缺失时会初始化本地状态')
       expect(existsSync(path.join(result.aiworkerHome, '.env'))).toBe(false)
     }
     finally {
@@ -322,7 +342,7 @@ describe('aiworker malformed argv handling', () => {
     const result = await runCli(['--help'])
     try {
       expect(result.exitCode).toBe(0)
-      expect(result.output).toContain('detached gateway daemon')
+      expect(result.output).toContain('后台 gateway 守护进程')
       expect(result.output).toContain('foreground/systemd')
       expect(existsSync(path.join(result.aiworkerHome, '.env'))).toBe(false)
     }

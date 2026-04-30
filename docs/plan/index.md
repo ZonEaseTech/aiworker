@@ -76,3 +76,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-045 发布 aiworker CLI 0.4.7**](PLAN-045.md) `2026-04-30`
 - [x] [**PLAN-046 发布 aiworker CLI 0.4.8**](PLAN-046.md) `2026-04-30`
 - [x] [**PLAN-047 优化 npx / bunx CLI 启动体验**](PLAN-047.md) `2026-04-30`
+- [x] [**PLAN-048 优化 CLI help 信息架构**](PLAN-048.md) `2026-04-30`

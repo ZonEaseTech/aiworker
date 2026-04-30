@@ -59,6 +59,7 @@ import {
   runSessionsShow,
 } from './commands/sessions'
 import { runTokenRotate as runTokenRotateLocal } from './commands/token'
+import { configureCliHelp, localizeGlobalOptions } from './help'
 import { bootstrapCliDotenv } from './lib/bootstrap'
 
 /**
@@ -85,10 +86,10 @@ const cli = cac('aiworker')
 // ============================================================
 
 cli
-  .command('init', 'Bootstrap worker.db, mint identity + token, seed config (defaults to project-scope `<cwd>/.aiworker/`; --global for legacy ~/.aiworker)')
-  .option('--global', 'Initialise the legacy user-scope home `~/.aiworker/` (single host-wide worker)')
-  .option('--force', 'Compatibility flag; project init is allowed outside git and remains no-overwrite')
-  .option('--dry-run', 'Print init preflight and planned writes without creating or modifying files')
+  .command('init', '初始化 worker.db、身份、token 和默认配置（默认当前项目 `<cwd>/.aiworker/`；--global 使用旧版 ~/.aiworker）')
+  .option('--global', '初始化旧版用户级 `~/.aiworker/`（单主机全局 worker）')
+  .option('--force', '兼容旧脚本；项目初始化允许在非 git 目录运行，且仍不会覆盖现有文件')
+  .option('--dry-run', '只打印初始化预检和计划写入，不创建或修改文件')
   .action(async (opts: { dryRun?: boolean, global?: boolean, force?: boolean }) => {
     await runInit({
       ...(opts.global === true ? { global: true } : {}),
@@ -98,17 +99,17 @@ cli
   })
 
 cli
-  .command('scope', 'Print the resolved aiworker scope (user/project/explicit) + presence of layout files')
+  .command('scope', '打印当前 aiworker scope（user/project/explicit）和关键布局文件状态')
   .action(async () => {
     process.exitCode = await runScope()
   })
 
 cli
-  .command('run', 'Feed one message into the orchestrator without binding HTTP')
-  .option('--message <text>', 'User message to ingest (required)')
-  .option('--chat-id <id>', 'Synthetic chat id (defaults to "cli:stdin")')
-  .option('--dry-run', 'Bootstrap everything but skip ingesting the envelope')
-  .option('--timeout-ms <n>', 'Max wait for a terminal event, in ms (default 120000)', { type: [Number] })
+  .command('run', '不启动 HTTP server，直接给 orchestrator 投递一条消息')
+  .option('--message <text>', '要投递的用户消息（必填）')
+  .option('--chat-id <id>', '合成 chat id（默认 "cli:stdin"）')
+  .option('--dry-run', '完成 bootstrap，但不真正投递 envelope')
+  .option('--timeout-ms <n>', '等待终态事件的最长时间，单位毫秒（默认 120000）', { type: [Number] })
   .action(async (opts: { message?: string, chatId?: string, dryRun?: boolean, timeoutMs?: number[] }) => {
     const code = await runRun({
       message: opts.message,
@@ -120,13 +121,13 @@ cli
   })
 
 cli
-  .command('serve', 'Start the worker HTTP server (equivalent to AIWORKER_MODE=worker)')
-  .option('--port <n>', 'Override the PORT env', { type: [Number] })
-  .option('--host <host>', 'Override AIWORKER_WORKER_HOST (default 127.0.0.1)')
-  .option('--gateway <url>', 'Dial the given gateway WS URL as a node alongside the HTTP server')
-  .option('--gateway-token <token>', 'Bearer token presented to the gateway (omit for loopback)')
-  .option('--no-reconnect', 'Disable gateway-client auto-reconnect (useful for smoke / tests)')
-  .option('--no-serve-web', '不挂载 worker bundle 到 /admin/*（默认挂载，PLAN-022 / FEAT-033）')
+  .command('serve', '启动 worker HTTP server（等价于 AIWORKER_MODE=worker）')
+  .option('--port <n>', '覆盖 PORT 环境变量', { type: [Number] })
+  .option('--host <host>', '覆盖 AIWORKER_WORKER_HOST（默认 127.0.0.1）')
+  .option('--gateway <url>', '随 HTTP server 一起连接指定 gateway WebSocket URL')
+  .option('--gateway-token <token>', '连接 gateway 时使用的 bearer token（loopback 可省略）')
+  .option('--no-reconnect', '关闭 gateway-client 自动重连（smoke / 测试时使用）')
+  .option('--no-serve-web', '不挂载 worker bundle 到 /admin/*（默认挂载）')
   .action(async (opts: { port?: number[], host?: string, gateway?: string, gatewayToken?: string, reconnect?: boolean, serveWeb?: boolean }) => {
     const serveOptions: Parameters<typeof runServe>[0] = {}
     if (opts.port?.[0] !== undefined)
@@ -144,28 +145,28 @@ cli
     await runServe(serveOptions)
   })
 
-cli.command('config-show', 'Print the stored worker config as JSON (bootstraps local worker state if missing)').action(async () => {
+cli.command('config-show', '以 JSON 打印本地 worker 配置（缺失时会初始化本地 worker 状态）').action(async () => {
   process.exit(await runConfigShow())
 })
 
 cli
-  .command('config-set <json>', 'Replace the stored worker config')
-  .option('--if-match <version>', 'Optimistic-concurrency guard (reject unless stored version matches)', { type: [Number] })
+  .command('config-set <json>', '替换本地 worker 配置')
+  .option('--if-match <version>', '乐观锁；当前存储 version 不等于此值则拒绝', { type: [Number] })
   .action(async (json: string, opts: { ifMatch?: number[] }) => {
     process.exit(await runConfigSetLocal({ json, ifMatch: opts.ifMatch?.[0] }))
   })
 
-cli.command('token-rotate', 'Mint a fresh bearer token; prints the new plaintext once').action(async () => {
+cli.command('token-rotate', '生成新的 bearer token；明文只打印一次').action(async () => {
   process.exit(await runTokenRotateLocal())
 })
 
-cli.command('approvals-list', '列出当前 worker 进程内挂起的 per-tool 审批').action(async () => {
+cli.command('approvals-list', '列出当前 worker 进程内挂起的工具审批').action(async () => {
   process.exit(await runApprovalsListLocal())
 })
 
 cli
-  .command('approvals-grant <taskId> <toolCallId>', '解锁某条挂起的 tool 审批')
-  .option('--deny', '下发 deny 决策；默认 allow')
+  .command('approvals-grant <taskId> <toolCallId>', '解锁某条挂起的工具审批')
+  .option('--deny', '下发拒绝决策；默认允许')
   .action(async (taskId: string, toolCallId: string, opts: { deny?: boolean }) => {
     process.exit(await runApprovalsGrantLocal({
       taskId,
@@ -174,18 +175,18 @@ cli
     }))
   })
 
-cli.command('schedule-list', 'List all cron jobs persisted in the local worker.db').action(async () => {
+cli.command('schedule-list', '列出本地 worker.db 中持久化的所有 cron 任务').action(async () => {
   process.exit(await runScheduleListLocal())
 })
 
 cli
-  .command('schedule-add', 'Add a cron job to the local worker.db (validates expression up-front)')
-  .option('--expression <expr>', 'Five-field cron expression (required)')
-  .option('--prompt <text>', 'Envelope.text synthesised when the job fires (required)')
-  .option('--channel <channel>', 'Channel: web/line/telegram/lark/whatsapp (required)')
-  .option('--chat-id <id>', 'chatId used at fire time (required)')
-  .option('--account-id <id>', 'Override accountId (defaults to sys:cron)')
-  .option('--disabled', 'Persist with enabled=false (default is enabled=true)')
+  .command('schedule-add', '向本地 worker.db 新增 cron 任务（会先校验表达式）')
+  .option('--expression <expr>', '五段 cron 表达式（必填）')
+  .option('--prompt <text>', '任务触发时合成的 envelope.text（必填）')
+  .option('--channel <channel>', 'channel 类型：web/line/telegram/lark/whatsapp（必填）')
+  .option('--chat-id <id>', '任务触发时使用的 chatId（必填）')
+  .option('--account-id <id>', '覆盖 accountId（默认 sys:cron）')
+  .option('--disabled', '以 enabled=false 保存（默认 enabled=true）')
   .action(async (opts: {
     expression?: string
     prompt?: string
@@ -210,16 +211,16 @@ cli
   })
 
 cli
-  .command('schedule-remove <jobId>', 'Remove a cron job from the local worker.db')
+  .command('schedule-remove <jobId>', '从本地 worker.db 删除一条 cron 任务')
   .action(async (jobId: string) => {
     process.exit(await runScheduleRemoveLocal(jobId))
   })
 
 cli
-  .command('sessions list', 'List local worker session status from worker.db')
-  .option('--limit <n>', 'Max sessions to return (1-200, default 50)', { type: [Number] })
-  .option('--offset <n>', 'Offset for pagination (default 0)', { type: [Number] })
-  .option('--status <status>', 'Filter by status: active or closed')
+  .command('sessions list', '从 worker.db 列出本地 worker 会话状态')
+  .option('--limit <n>', '最多返回会话数（1-200，默认 50）', { type: [Number] })
+  .option('--offset <n>', '分页偏移量（默认 0）', { type: [Number] })
+  .option('--status <status>', '按状态过滤：active 或 closed')
   .action(async (opts: { limit?: number[], offset?: number[], status?: string }) => {
     process.exit(await runSessionsList({
       limit: opts.limit?.[0],
@@ -229,16 +230,16 @@ cli
   })
 
 cli
-  .command('sessions show <sessionKey>', 'Show one local worker session status by session key')
+  .command('sessions show <sessionKey>', '按 session key 查看一个本地 worker 会话状态')
   .action(async (sessionKey: string) => {
     process.exit(await runSessionsShow(sessionKey))
   })
 
 cli
-  .command('sessions maintenance', 'Dry-run closed transcript cleanup; pass --apply to mutate')
-  .option('--older-than-days <n>', 'Closed transcript retention in days (default 30)', { type: [Number] })
-  .option('--limit <n>', 'Max transcripts to plan/apply (1-200, default 50)', { type: [Number] })
-  .option('--apply', 'Delete planned closed transcripts instead of dry-run')
+  .command('sessions maintenance', '试算已关闭 transcript 清理；带 --apply 才会实际删除')
+  .option('--older-than-days <n>', '已关闭 transcript 保留天数（默认 30）', { type: [Number] })
+  .option('--limit <n>', '最多试算/清理 transcript 数量（1-200，默认 50）', { type: [Number] })
+  .option('--apply', '实际删除计划内的已关闭 transcript，而不是 dry-run')
   .action(async (opts: { olderThanDays?: number[], limit?: number[], apply?: boolean }) => {
     process.exit(await runSessionsMaintenance({
       olderThanDays: opts.olderThanDays?.[0],
@@ -289,10 +290,10 @@ cli
 
 // --- gateway 子命令组（本地 daemon）---
 cli
-  .command('gateway start', '拉起 gateway server（默认 foreground，systemd 友好；--detach 走后台 daemon）')
-  .option('--port <n>', '监听端口，默认 9218', { type: [Number] })
-  .option('--detach', '后台 daemon 模式：spawn 自身 + PID/log 写入 ~/.aiworker/')
-  .option('--no-serve-web', '不挂载 fleet bundle 到 /admin/*（默认挂载，PLAN-022 / FEAT-033）')
+  .command('gateway start', '启动 gateway server（默认前台运行，适合 systemd；--detach 使用后台守护进程）')
+  .option('--port <n>', '监听端口（默认 9218）', { type: [Number] })
+  .option('--detach', '后台守护进程模式：spawn 自身，并把 PID/log 写入 ~/.aiworker/')
+  .option('--no-serve-web', '不挂载 fleet bundle 到 /admin/*（默认挂载）')
   .action(async (opts: { port?: number[], detach?: boolean, serveWeb?: boolean }) => {
     // env AIWORKER_GATEWAY_INTERNAL_FOREGROUND=1 是 daemon 子进程标记；强制 foreground，
     // 即便误带 --detach（无害）。
@@ -305,13 +306,13 @@ cli
     }))
   })
 
-cli.command('gateway status', '显示 detached gateway daemon 是否运行（foreground/systemd 实例不由此命令跟踪）').action(() => {
+cli.command('gateway status', '显示后台 gateway 守护进程是否运行（foreground/systemd 实例不由此命令跟踪）').action(() => {
   process.exit(runGatewayStatus())
 })
 
 cli
-  .command('gateway stop', '停止 detached gateway daemon (foreground/systemd 实例请由其 supervisor 停止)')
-  .option('--timeout-ms <n>', 'SIGTERM 超时，默认 5000ms', { type: [Number] })
+  .command('gateway stop', '停止后台 gateway 守护进程（foreground/systemd 实例请由其 supervisor 停止）')
+  .option('--timeout-ms <n>', 'SIGTERM 超时时间（默认 5000ms）', { type: [Number] })
   .action(async (opts: { timeoutMs?: number[] }) => {
     process.exit(await runGatewayStop(opts.timeoutMs?.[0] === undefined ? {} : { timeoutMs: opts.timeoutMs[0] }))
   })
@@ -319,7 +320,7 @@ cli
 // --- pair ---
 cli
   .command('pair', '通过 bootstrap token 把一个已启动的 worker 注册到 gateway')
-  .option('--url <wsUrl>', 'gateway WS URL（默认使用 aim.json 里的 gatewayUrl）')
+  .option('--url <wsUrl>', 'gateway WebSocket URL（默认使用 aim.json 里的 gatewayUrl）')
   .option('--worker-url <httpUrl>', 'worker HTTP base URL（必填）')
   .option('--bootstrap-token <token>', 'worker 打印的一次性 bootstrap token（必填）')
   .option('--display-name <name>', '可选 worker 展示名')
@@ -338,9 +339,9 @@ cli
 
 // --- chat ---
 cli
-  .command('chat <workerId> <text>', '向某 worker 发一条消息并阻塞到 agent.done (NDJSON 输出)')
+  .command('chat <workerId> <text>', '向某个 worker 发送一条消息，并阻塞到 agent.done（NDJSON 输出）')
   .option('--conversation-id <id>', '显式指定会话 id；不传则由 worker 新建')
-  .option('--timeout-ms <n>', '等 agent.done 的总超时，默认 120000', { type: [Number] })
+  .option('--timeout-ms <n>', '等待 agent.done 的总超时时间（默认 120000）', { type: [Number] })
   .action(async (workerId: string, text: string, opts: { conversationId?: string, timeoutMs?: number[] }) => {
     process.exit(await runChat({
       workerId,
@@ -378,15 +379,15 @@ cli
 
 // --- approvals list/grant（远端）---
 cli
-  .command('approvals list', '列出挂起的 per-tool 审批；默认覆盖所有 online worker')
-  .option('--worker <id>', '只查指定 workerId（不传则聚合所有 online worker）')
+  .command('approvals list', '列出挂起的工具审批；默认覆盖所有在线 worker')
+  .option('--worker <id>', '只查指定 workerId（不传则聚合所有在线 worker）')
   .action(async (opts: { worker?: string }) => {
     process.exit(await runApprovalsListRemote({ ...(opts.worker === undefined ? {} : { workerId: opts.worker }) }))
   })
 
 cli
-  .command('approvals grant <workerId> <taskId> <toolCallId>', '解锁某条 worker 上挂起的 tool 审批')
-  .option('--deny', '下发 deny 决策；不带此 flag 默认 allow')
+  .command('approvals grant <workerId> <taskId> <toolCallId>', '解锁某条 worker 上挂起的工具审批')
+  .option('--deny', '下发拒绝决策；不带此 flag 默认允许')
   .action(async (workerId: string, taskId: string, toolCallId: string, opts: { deny?: boolean }) => {
     process.exit(await runApprovalsGrantRemote({
       workerId,
@@ -405,12 +406,12 @@ cli
 
 cli
   .command('schedule add <workerId>', '在某 worker 上新增一条 cron 任务')
-  .option('--expression <expr>', '5-field cron 表达式（必填）')
+  .option('--expression <expr>', '五段 cron 表达式（必填）')
   .option('--prompt <text>', 'cron 触发时合成的 envelope.text（必填）')
   .option('--channel <channel>', 'channel 类型：web/line/telegram/lark/whatsapp（必填）')
   .option('--chat-id <id>', '触发时使用的 chatId（必填）')
   .option('--account-id <id>', 'accountId，默认 sys:cron')
-  .option('--disabled', '默认 enabled=true；带此 flag 改为 false')
+  .option('--disabled', '默认 enabled=true；带此选项改为 false')
   .action(async (workerId: string, opts: {
     expression?: string
     prompt?: string
@@ -441,25 +442,25 @@ cli
   })
 
 // --- enroll list/approve/reject（OTP-attended enrollment）---
-cli.command('enroll list', '列出 gateway 当前所有 pending OTP enrollment').action(async () => {
+cli.command('enroll list', '列出 gateway 当前所有待处理的 OTP enrollment').action(async () => {
   process.exit(await runEnrollList())
 })
 
 cli
-  .command('enroll approve <otp>', '批准某条 pending OTP enrollment（worker 立即加入 fleet）')
+  .command('enroll approve <otp>', '批准某条待处理的 OTP enrollment（worker 立即加入 fleet）')
   .action(async (otp: string) => {
     process.exit(await runEnrollApprove(otp))
   })
 
 cli
-  .command('enroll reject <otp>', '拒绝某条 pending OTP enrollment（worker 收到 close 4403）')
+  .command('enroll reject <otp>', '拒绝某条待处理的 OTP enrollment（worker 收到 close 4403）')
   .action(async (otp: string) => {
     process.exit(await runEnrollReject(otp))
   })
 
 // --- logs ---
 cli
-  .command('logs <workerId>', '订阅某 worker 的日志尾部 (NDJSON 输出)')
+  .command('logs <workerId>', '订阅某个 worker 的日志尾部（NDJSON 输出）')
   .option('--follow', '持续订阅直到超时或 Ctrl-C')
   .option('--tail <n>', '请求历史行数，上限 1000', { type: [Number] })
   .option('--timeout-ms <n>', '订阅总超时', { type: [Number] })
@@ -479,7 +480,7 @@ cli
   .option('--system', 'systemd 系统实例（需 root）；写到 /etc/systemd/system/')
   .option('--dry-run', '只往 stdout 打 unit 内容，不写盘也不 systemctl')
   .option('--out <path>', '覆盖目标路径（异常布局/测试用）；自动跳过 systemctl')
-  .option('--no-enable', '写盘后跳过 systemctl daemon-reload + enable --now')
+  .option('--no-enable', '写盘后跳过 systemctl daemon-reload 和 enable --now')
   .option('--exec-start <command>', '高级覆盖：手动指定完整 systemd ExecStart 命令')
   .action(async (opts: { user?: boolean, system?: boolean, dryRun?: boolean, out?: string, enable?: boolean, execStart?: string }) => {
     if (opts.user === true && opts.system === true) {
@@ -495,8 +496,9 @@ cli
     }))
   })
 
-cli.help()
+configureCliHelp(cli)
 cli.version(packageJson.version)
+localizeGlobalOptions(cli)
 
 /**
  * cac 6 原生不支持多词子命令（`isMatched` 只比对 argv[0]），因此这里做一次 argv

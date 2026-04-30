@@ -1,5 +1,17 @@
 # AIWorker Changelog
 
+## 2026-04-30 16:28 [progress] FEAT-041 CLI help 信息架构
+
+优化 `aiworker --help` 可读性：
+
+- 将 `cac` 默认扁平命令列表改为场景分组：本地 worker、gateway/fleet 管理、
+  远端 worker 操作、安装/诊断/高级维护。
+- 新增简短使用引导，指向 `aiworker init`、`aiworker serve`、gateway
+  pair/enroll，以及 `aiworker chat` 等常见路径。
+- 全局 help 标题、help/version 选项、命令摘要、option 描述和默认值文案收敛为中文；
+  命令名、环境变量和必要技术标识保持原样。
+- 新增回归测试，确保新增显式命令不会漏出分组 help 表面。
+
 ## 2026-04-30 15:47 [bug] BUG-039 npx / bunx CLI startup experience
 
 Improved the npm CLI startup path while keeping AIWorker Bun-native:
