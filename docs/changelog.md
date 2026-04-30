@@ -1,5 +1,20 @@
 # AIWorker Changelog
 
+## 2026-04-30 08:32 [progress] REL-005 — 准备发布 0.4.8
+
+开始准备 `@zonease/aiworker-cli@0.4.8` patch 发版：
+
+- npm latest 当前是 `0.4.7`，本地最高 release tag 是 `v0.4.7`，远端不存在
+  `v0.4.8` tag。
+- 本次发版包含 `0.4.7` 之后的 Fleet 同源托管 Worker UI 完整交付：gateway 托管
+  `/w/:workerId/` worker bundle、Worker UI same-origin bridge/SSE、Fleet UI 同源
+  worker 入口，以及当前 Worker UI 所需 REST bridge 覆盖。
+- 发布仍走 tag-triggered GitHub Actions workflow；本地只做发版门禁、dist 产物检查和
+  dry-run pack，不直接发布 npm。
+- 本地 release gates 已通过：frozen install、workspace tests、typecheck、lint、root
+  build、CLI run smoke、CLI fleet smoke、dist manifest/Web bundle 检查、publish
+  dry-run 到本机 npm authentication boundary、`git diff --check`。
+
 ## 2026-04-30 07:44 [progress] FEAT-040 / PLAN-042 completed
 
 Completed the fleet-hosted worker UI path for non-same-host workers:
