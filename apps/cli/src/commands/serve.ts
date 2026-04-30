@@ -6,14 +6,26 @@ import {
   applyConfigUpdate,
   buildCronHandlers,
   buildInfo,
+  deleteSecret,
+  getAvailabilityProbe,
   getSecretsVault,
+  handleBrainTest,
+  handleChannelTest,
+  handleExecutorTest,
   handleTokenRotate,
+  listSecrets,
+  putSecret,
   readConfig,
   startGatewayNode,
   workerEnv,
 } from '@zonease/aiworker-core'
 import { assertAdminServingIsSafe } from '@zonease/aiworker-shared'
-import { getWorkerDb } from '@zonease/aiworker-storage-sqlite/worker'
+import {
+  getWorkerDb,
+  listAgentTasks,
+  listConversationMessages,
+  listConversations,
+} from '@zonease/aiworker-storage-sqlite/worker'
 import consola from 'consola'
 import { resolveWebStaticDir } from '../lib/web-static'
 
@@ -210,6 +222,44 @@ export async function runServe(options: ServeOptions = {}): Promise<void> {
         },
         // 懒取 cron service：runtime hot-reload 后取的就是新 runtime 上的实例。
         ...buildCronHandlers(() => state.runtime.cron),
+        secretsList: async () => {
+          return { keys: await listSecrets(getSecretsVault()) }
+        },
+        secretsPut: async ({ key, value }) => {
+          await putSecret(getSecretsVault(), key, value)
+          return { ok: true }
+        },
+        secretsDelete: async ({ key }) => {
+          await deleteSecret(getSecretsVault(), key)
+          return { ok: true }
+        },
+        enginesList: async ({ refresh }) => {
+          return { engines: await getAvailabilityProbe().probeAll({ refresh: refresh === true }) }
+        },
+        brainTest: async () => {
+          const stored = await readConfig(getWorkerDb())
+          return await handleBrainTest(state, stored.config)
+        },
+        executorTest: async ({ probe }) => {
+          const stored = await readConfig(getWorkerDb())
+          return await handleExecutorTest(state, stored.config, { probe: probe === true })
+        },
+        channelTest: async ({ channel, body }) => {
+          return await handleChannelTest(state, channel, body ?? {})
+        },
+        tasksList: async () => {
+          return { tasks: listAgentTasks(200) }
+        },
+        tasksCreate: async ({ prompt }) => {
+          const task = await state.runtime.orchestrator.submitTask(prompt)
+          return { task }
+        },
+        conversationsList: async () => {
+          return { conversations: listConversations(200) }
+        },
+        messagesList: async ({ conversationId }) => {
+          return { messages: listConversationMessages(conversationId) }
+        },
       },
     })
     consola.success(`[aiw serve] gateway-client dialing ${gatewayUrl}`)

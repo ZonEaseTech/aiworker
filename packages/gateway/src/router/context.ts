@@ -44,6 +44,12 @@ export interface GatewayContext {
    * 仍能启动（`--no-serve-web` 或资源不存在的容错路径）。
    */
   webStaticDir?: string
+  /**
+   * FEAT-040：worker bundle 静态资源根目录。gateway 用它在
+   * `/w/:workerId/*` 下托管同一份 worker UI，API 仍通过 gateway bridge 转发，
+   * 不要求 worker 暴露 public baseUrl。
+   */
+  workerWebStaticDir?: string
 }
 
 /**

@@ -12,6 +12,11 @@ describe('resolveWebRouterBasepath', () => {
     expect(resolveWebRouterBasepath('worker', '/worker/config')).toBe('/worker')
   })
 
+  it('uses /w/:workerId for fleet-hosted worker paths', () => {
+    expect(resolveWebRouterBasepath('worker', '/w/w_aaaabbbbcccd/config')).toBe('/w/w_aaaabbbbcccd')
+    expect(resolveWebRouterBasepath('worker', '/w/not-a-worker/config')).toBe('/admin')
+  })
+
   it('falls back to /admin outside known dev mounts', () => {
     expect(resolveWebRouterBasepath('fleet', '/')).toBe('/admin')
     expect(resolveWebRouterBasepath('worker', '/something-else')).toBe('/admin')

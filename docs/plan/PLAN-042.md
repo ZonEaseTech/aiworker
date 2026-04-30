@@ -1,6 +1,6 @@
 # PLAN-042 Fleet 统一入口管理非同 host worker
 
-- **status**: implementing
+- **status**: completed
 - **createdAt**: 2026-04-29 18:10
 - **relatedTask**: FEAT-040
 
@@ -270,3 +270,14 @@ browser
     `Authorization` / `Cookie`、worker bearer token 或 raw config body。
   这只完成 gateway bridge MVP，不代表完整 Fleet-hosted Worker UI、SSE bridge 或
   全量 worker REST 能力已经完成。
+- 2026-04-30 07:44：完成完整 Fleet-hosted Worker UI 交付：
+  - gateway 在 `/w/:workerId/*` 托管 worker bundle，保留 `/w/:workerId/api/worker/*`
+    为 allowlisted HTTP bridge；
+  - worker bundle 支持 `/w/:workerId` router base，并从当前路径派生
+    `/w/:workerId/api/worker` API base；自托管 `/admin` 和 dev `/worker` 保持兼容；
+  - bridge 覆盖当前 worker UI 使用的 info/config/secrets/engines/probes/cron/
+    approvals/orchestrator tasks/conversations/messages；
+  - `/w/:workerId/api/worker/events/stream` 提供 worker-scoped SSE bridge，包含
+    abort cleanup、最大连接数和 backpressure drop 策略；
+  - Fleet UI 的 worker 入口改为 same-origin `/w/:workerId/`，不再依赖
+    `worker.baseUrl/admin/`。

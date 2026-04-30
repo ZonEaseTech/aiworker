@@ -223,19 +223,17 @@ function RowActionsMenu({ worker, onRotate, onRemove, onStop }: RowActionsMenuPr
           className="absolute right-0 z-20 mt-1 w-44 rounded-md border bg-popover p-1 text-sm shadow-card"
           onMouseLeave={() => setOpen(false)}
         >
-          {worker.baseUrl && (
-            <a
-              role="menuitem"
-              href={`${worker.baseUrl.replace(/\/+$/, '')}/admin/`}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-2 rounded px-2 py-1.5 hover:bg-accent"
-              onClick={() => setOpen(false)}
-            >
-              <ExternalLink className="size-3.5" />
-              Open worker UI
-            </a>
-          )}
+          <a
+            role="menuitem"
+            href={workerUiPath(worker.id)}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-2 rounded px-2 py-1.5 hover:bg-accent"
+            onClick={() => setOpen(false)}
+          >
+            <ExternalLink className="size-3.5" />
+            Open worker UI
+          </a>
           <button
             role="menuitem"
             type="button"
@@ -275,6 +273,10 @@ function RowActionsMenu({ worker, onRotate, onRemove, onStop }: RowActionsMenuPr
       )}
     </div>
   )
+}
+
+function workerUiPath(workerId: string): string {
+  return `/w/${workerId}/`
 }
 
 function WorkersListSkeleton() {

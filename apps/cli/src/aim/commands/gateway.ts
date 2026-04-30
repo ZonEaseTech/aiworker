@@ -63,14 +63,22 @@ async function runGatewayStartForeground(opts: GatewayStartOptions): Promise<num
     const envOff = process.env.AIWORKER_GATEWAY_NO_SERVE_WEB === '1'
     const serveWeb = opts.serveWeb !== false && !envOff
     const webStaticDir = serveWeb ? resolveWebStaticDir('fleet') : undefined
+    const workerWebStaticDir = serveWeb ? resolveWebStaticDir('worker') : undefined
     if (serveWeb && !webStaticDir)
       consola.warn('[gateway] web 静态资源未找到（apps/web/dist/fleet 缺失？），/admin/* 将返回 404')
+    if (serveWeb && !workerWebStaticDir)
+      consola.warn('[gateway] worker web 静态资源未找到（apps/web/dist/worker 缺失？），/w/:workerId/* 将返回 404')
     const started = await startGateway(
       opts.port === undefined ? {} : { port: opts.port },
-      { ...(webStaticDir ? { webStaticDir } : {}) },
+      {
+        ...(webStaticDir ? { webStaticDir } : {}),
+        ...(workerWebStaticDir ? { workerWebStaticDir } : {}),
+      },
     )
     if (webStaticDir)
       consola.info(`[gateway] /admin/* serving fleet bundle from ${webStaticDir}`)
+    if (workerWebStaticDir)
+      consola.info(`[gateway] /w/:workerId/* serving worker bundle from ${workerWebStaticDir}`)
     if (opts.persistUrl !== false) {
       try {
         await patchAimState({ gatewayUrl: gatewayWsUrlForLocalPort(started.port) })

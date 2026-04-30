@@ -16,11 +16,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/sha
 import { Skeleton } from '@/shared/components/ui/skeleton'
 
 /**
- * Fleet 视角的 worker detail：只展示 fleet.db 视野里的元数据 + 跳转入口。
- *
- * 不在这里嵌入 worker 自管面板（config / secrets / cron / approvals / chat 等）：
- * 这些能力由 worker 自己托管在它的 `:9217/admin/`，符合 PLAN-022 的「物理独立」
- * 不变量。
+ * Fleet 视角的 worker detail：只展示 fleet.db 视野里的元数据 + fleet-hosted
+ * worker UI 入口。worker 业务数据仍在 worker.db，gateway 只做受控 bridge。
  */
 function WorkerDetailPage() {
   const { workerId } = useParams({ from: '/workers/$workerId' })
@@ -59,9 +56,7 @@ function WorkerDetailPage() {
   }
 
   const worker = query.data
-  const adminUrl = worker.baseUrl
-    ? `${worker.baseUrl.replace(/\/+$/, '')}/admin/`
-    : null
+  const adminUrl = workerUiPath(worker.id)
   const isOnline = worker.lastSeenState === 'online'
 
   return (
@@ -89,17 +84,15 @@ function WorkerDetailPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {adminUrl && (
-            <a
-              href={adminUrl}
-              target="_blank"
-              rel="noreferrer"
-              className={buttonVariants({ variant: 'default' })}
-            >
-              <ExternalLink className="size-4" />
-              Open worker UI
-            </a>
-          )}
+          <a
+            href={adminUrl}
+            target="_blank"
+            rel="noreferrer"
+            className={buttonVariants({ variant: 'default' })}
+          >
+            <ExternalLink className="size-4" />
+            Open worker UI
+          </a>
           <Button
             variant="outline"
             onClick={() => setPendingAction('rotate')}
@@ -162,7 +155,8 @@ function FleetMetadataCard({ worker }: { worker: SafeRegisteredWorker }) {
         <CardTitle>Fleet record</CardTitle>
         <CardDescription>
           fleet.db pointer for this worker. Config / secrets / cron / approvals
-          live in the worker&apos;s own database — open the worker UI for those.
+          live in the worker&apos;s own database; fleet opens a same-origin worker
+          UI bridge for those.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -186,35 +180,15 @@ function FleetMetadataCard({ worker }: { worker: SafeRegisteredWorker }) {
 }
 
 function SelfManageHint({ worker }: { worker: SafeRegisteredWorker }) {
-  if (!worker.baseUrl) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Worker self-management</CardTitle>
-          <CardDescription>
-            This worker has no inbound HTTP base URL — typical for self-enrolled
-            or OTP-attended workers. Use
-            {' '}
-            <code className="rounded bg-muted px-1 py-0.5 font-mono">aiworker serve</code>
-            {' '}
-            on the worker host and open
-            {' '}
-            <code className="rounded bg-muted px-1 py-0.5 font-mono">/admin/</code>
-            {' '}
-            on its loopback interface.
-          </CardDescription>
-        </CardHeader>
-      </Card>
-    )
-  }
-  const adminUrl = `${worker.baseUrl.replace(/\/+$/, '')}/admin/`
+  const adminUrl = workerUiPath(worker.id)
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Worker self-management</CardTitle>
+        <CardTitle>Fleet-hosted worker UI</CardTitle>
         <CardDescription>
           Config / secrets / cron / approvals / chat for this worker live in
-          its own database. Open the worker UI to manage them.
+          its own database. The fleet path opens the worker bundle through the
+          gateway bridge.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -230,6 +204,10 @@ function SelfManageHint({ worker }: { worker: SafeRegisteredWorker }) {
       </CardContent>
     </Card>
   )
+}
+
+function workerUiPath(workerId: string): string {
+  return `/w/${workerId}/`
 }
 
 function WorkerNotFound({ id }: { id: string }) {

@@ -43,7 +43,7 @@ const buildOutDir = bundle
 
 export default defineConfig({
   root: buildRoot,
-  base: bundle ? '/admin/' : '/',
+  base: bundle === 'worker' ? './' : bundle ? '/admin/' : '/',
   publicDir: fileURLToPath(new URL('./public', import.meta.url)),
   plugins: [
     tanstackRouterGenerator({

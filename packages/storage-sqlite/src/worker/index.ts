@@ -5,7 +5,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { Database } from 'bun:sqlite'
-import { eq } from 'drizzle-orm'
+import { desc, eq } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
 
@@ -56,6 +56,9 @@ export function runWorkerMigrations(migrationsFolder: string = defaultWorkerMigr
 
 export type WorkerDatabase = ReturnType<typeof createDb>
 export type SessionEntryRow = typeof schema.sessionEntries.$inferSelect
+export type AgentTaskRow = typeof schema.agentTasks.$inferSelect
+export type ConversationRow = typeof schema.conversations.$inferSelect
+export type MessageRow = typeof schema.messages.$inferSelect
 
 export interface UpsertSessionEntryInput {
   sessionKey: string
@@ -85,6 +88,32 @@ export interface RotateSessionConversationInput {
 export interface RecordSessionCompactionInput {
   at?: string
   memoryFlushAt?: string
+}
+
+export function listAgentTasks(limit = 200): AgentTaskRow[] {
+  return getWorkerDb()
+    .select()
+    .from(schema.agentTasks)
+    .orderBy(desc(schema.agentTasks.createdAt))
+    .limit(limit)
+    .all()
+}
+
+export function listConversations(limit = 200): ConversationRow[] {
+  return getWorkerDb()
+    .select()
+    .from(schema.conversations)
+    .orderBy(desc(schema.conversations.lastActiveAt))
+    .limit(limit)
+    .all()
+}
+
+export function listConversationMessages(conversationId: string): MessageRow[] {
+  return getWorkerDb()
+    .select()
+    .from(schema.messages)
+    .where(eq(schema.messages.conversationId, conversationId))
+    .all()
 }
 
 export function getSessionEntry(sessionKey: string): SessionEntryRow | null {

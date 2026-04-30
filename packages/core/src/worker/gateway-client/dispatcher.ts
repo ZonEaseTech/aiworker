@@ -1,10 +1,11 @@
 import type { RequestFrame, ResponseFrame } from '@zonease/aiworker-gateway-proto'
-import type { Envelope, WorkerInfo } from '@zonease/aiworker-shared'
+import type { ChannelType, Envelope, WorkerInfo } from '@zonease/aiworker-shared'
 import type { CronJobInput, CronJobPatch, CronJobRecord } from '../cron/types'
 import type { WorkerEventBus } from '../events/bus'
 import type { ApprovalStore } from '../orchestrator/approvals'
 
 import { getMethodDef, METHODS } from '@zonease/aiworker-gateway-proto'
+import { AppError } from '@zonease/aiworker-shared'
 import consola from 'consola'
 
 import { ConfigVersionConflictError, InvalidConfigError } from '../management/config'
@@ -65,6 +66,17 @@ export interface NodeHandlers {
   cronRemove?: (input: { jobId: string }) => Promise<{ removed: boolean }>
   /** 找不到 jobId 时抛 `CronJobNotFoundError`（dispatcher 转 not_found）。 */
   cronUpdate?: (input: { jobId: string, patch: CronJobPatch }) => Promise<{ job: CronJobRecord }>
+  secretsList?: () => Promise<{ keys: string[] }>
+  secretsPut?: (input: { key: string, value: string }) => Promise<{ ok: true }>
+  secretsDelete?: (input: { key: string }) => Promise<{ ok: true }>
+  enginesList?: (input: { refresh?: boolean }) => Promise<{ engines: unknown[] }>
+  brainTest?: () => Promise<unknown>
+  executorTest?: (input: { probe?: boolean }) => Promise<unknown>
+  channelTest?: (input: { channel: ChannelType, body?: { chatId?: string, text?: string } }) => Promise<unknown>
+  tasksList?: () => Promise<{ tasks: unknown[] }>
+  tasksCreate?: (input: { prompt: string }) => Promise<{ task: unknown }>
+  conversationsList?: () => Promise<{ conversations: unknown[] }>
+  messagesList?: (input: { conversationId: string }) => Promise<{ messages: unknown[] }>
 }
 
 export interface DispatcherDeps {
@@ -143,6 +155,39 @@ export class GatewayDispatcher {
           break
         case METHODS['cron.update'].method:
           await this.handleCronUpdate(id, p)
+          break
+        case METHODS['secrets.list'].method:
+          await this.handleSecretsList(id, p)
+          break
+        case METHODS['secrets.put'].method:
+          await this.handleSecretsPut(id, p)
+          break
+        case METHODS['secrets.delete'].method:
+          await this.handleSecretsDelete(id, p)
+          break
+        case METHODS['engines.list'].method:
+          await this.handleEnginesList(id, p)
+          break
+        case METHODS['brain.test'].method:
+          await this.handleBrainTest(id, p)
+          break
+        case METHODS['executor.test'].method:
+          await this.handleExecutorTest(id, p)
+          break
+        case METHODS['channel.test'].method:
+          await this.handleChannelTest(id, p)
+          break
+        case METHODS['orchestrator.tasks.list'].method:
+          await this.handleTasksList(id, p)
+          break
+        case METHODS['orchestrator.tasks.create'].method:
+          await this.handleTasksCreate(id, p)
+          break
+        case METHODS['orchestrator.conversations.list'].method:
+          await this.handleConversationsList(id, p)
+          break
+        case METHODS['orchestrator.messages.list'].method:
+          await this.handleMessagesList(id, p)
           break
         case METHODS['workers.info'].method:
           await this.handleWorkersInfo(id, p)
@@ -397,6 +442,154 @@ export class GatewayDispatcher {
     }
   }
 
+  // ---- secrets.* / probes / orchestrator.* ----
+
+  private async handleSecretsList(id: string, params: Record<string, unknown>): Promise<void> {
+    if (!this.deps.handlers?.secretsList) {
+      this.replyError(id, 'method_not_implemented', 'secrets.list handler not wired')
+      return
+    }
+    if (!this.ensureWorkerMatch(id, params))
+      return
+    const result = await this.deps.handlers.secretsList()
+    this.replyOk(id, result)
+  }
+
+  private async handleSecretsPut(id: string, params: Record<string, unknown>): Promise<void> {
+    if (!this.deps.handlers?.secretsPut) {
+      this.replyError(id, 'method_not_implemented', 'secrets.put handler not wired')
+      return
+    }
+    if (!this.ensureWorkerMatch(id, params))
+      return
+    try {
+      const result = await this.deps.handlers.secretsPut({
+        key: String(params.key),
+        value: String(params.value),
+      })
+      this.replyOk(id, result)
+    }
+    catch (err) {
+      this.replyAppError(id, err)
+    }
+  }
+
+  private async handleSecretsDelete(id: string, params: Record<string, unknown>): Promise<void> {
+    if (!this.deps.handlers?.secretsDelete) {
+      this.replyError(id, 'method_not_implemented', 'secrets.delete handler not wired')
+      return
+    }
+    if (!this.ensureWorkerMatch(id, params))
+      return
+    try {
+      const result = await this.deps.handlers.secretsDelete({ key: String(params.key) })
+      this.replyOk(id, result)
+    }
+    catch (err) {
+      this.replyAppError(id, err)
+    }
+  }
+
+  private async handleEnginesList(id: string, params: Record<string, unknown>): Promise<void> {
+    if (!this.deps.handlers?.enginesList) {
+      this.replyError(id, 'method_not_implemented', 'engines.list handler not wired')
+      return
+    }
+    if (!this.ensureWorkerMatch(id, params))
+      return
+    const result = await this.deps.handlers.enginesList({
+      ...(typeof params.refresh === 'boolean' ? { refresh: params.refresh } : {}),
+    })
+    this.replyOk(id, result)
+  }
+
+  private async handleBrainTest(id: string, params: Record<string, unknown>): Promise<void> {
+    if (!this.deps.handlers?.brainTest) {
+      this.replyError(id, 'method_not_implemented', 'brain.test handler not wired')
+      return
+    }
+    if (!this.ensureWorkerMatch(id, params))
+      return
+    this.replyOk(id, await this.deps.handlers.brainTest())
+  }
+
+  private async handleExecutorTest(id: string, params: Record<string, unknown>): Promise<void> {
+    if (!this.deps.handlers?.executorTest) {
+      this.replyError(id, 'method_not_implemented', 'executor.test handler not wired')
+      return
+    }
+    if (!this.ensureWorkerMatch(id, params))
+      return
+    const result = await this.deps.handlers.executorTest({
+      ...(typeof params.probe === 'boolean' ? { probe: params.probe } : {}),
+    })
+    this.replyOk(id, result)
+  }
+
+  private async handleChannelTest(id: string, params: Record<string, unknown>): Promise<void> {
+    if (!this.deps.handlers?.channelTest) {
+      this.replyError(id, 'method_not_implemented', 'channel.test handler not wired')
+      return
+    }
+    if (!this.ensureWorkerMatch(id, params))
+      return
+    try {
+      const body = params.body && typeof params.body === 'object'
+        ? params.body as { chatId?: string, text?: string }
+        : undefined
+      const result = await this.deps.handlers.channelTest({
+        channel: params.channel as ChannelType,
+        ...(body === undefined ? {} : { body }),
+      })
+      this.replyOk(id, result)
+    }
+    catch (err) {
+      this.replyAppError(id, err)
+    }
+  }
+
+  private async handleTasksList(id: string, params: Record<string, unknown>): Promise<void> {
+    if (!this.deps.handlers?.tasksList) {
+      this.replyError(id, 'method_not_implemented', 'orchestrator.tasks.list handler not wired')
+      return
+    }
+    if (!this.ensureWorkerMatch(id, params))
+      return
+    this.replyOk(id, await this.deps.handlers.tasksList())
+  }
+
+  private async handleTasksCreate(id: string, params: Record<string, unknown>): Promise<void> {
+    if (!this.deps.handlers?.tasksCreate) {
+      this.replyError(id, 'method_not_implemented', 'orchestrator.tasks.create handler not wired')
+      return
+    }
+    if (!this.ensureWorkerMatch(id, params))
+      return
+    this.replyOk(id, await this.deps.handlers.tasksCreate({ prompt: String(params.prompt) }))
+  }
+
+  private async handleConversationsList(id: string, params: Record<string, unknown>): Promise<void> {
+    if (!this.deps.handlers?.conversationsList) {
+      this.replyError(id, 'method_not_implemented', 'orchestrator.conversations.list handler not wired')
+      return
+    }
+    if (!this.ensureWorkerMatch(id, params))
+      return
+    this.replyOk(id, await this.deps.handlers.conversationsList())
+  }
+
+  private async handleMessagesList(id: string, params: Record<string, unknown>): Promise<void> {
+    if (!this.deps.handlers?.messagesList) {
+      this.replyError(id, 'method_not_implemented', 'orchestrator.messages.list handler not wired')
+      return
+    }
+    if (!this.ensureWorkerMatch(id, params))
+      return
+    this.replyOk(id, await this.deps.handlers.messagesList({
+      conversationId: String(params.conversationId),
+    }))
+  }
+
   // ---- helpers ----
 
   private replyOk(id: string, result: unknown): void {
@@ -410,6 +603,19 @@ export class GatewayDispatcher {
       ok: false,
       error: details === undefined ? { code, message } : { code, message, details },
     })
+  }
+
+  private replyAppError(id: string, err: unknown): void {
+    if (err instanceof AppError) {
+      const code = err.status === 404
+        ? 'not_found'
+        : err.status === 400
+          ? 'invalid_params'
+          : 'internal_error'
+      this.replyError(id, code, err.message)
+      return
+    }
+    throw err
   }
 }
 

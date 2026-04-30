@@ -12,6 +12,7 @@ import { authorizeConnection } from './auth/token'
 import { broadcastEventToOperators } from './events/broadcast'
 import { handleWorkerApiBridge, isWorkerApiBridgePath } from './router/bridge'
 import { dispatchNodeEvent, dispatchNodeResponse, dispatchOperatorRequest } from './router/dispatch'
+import { handleWorkerUi, isWorkerUiPath } from './router/worker-ui'
 
 /** Bun.Server 泛型绑定 ConnectionData，便于后续 ws.data 强类型。 */
 type GatewayServerHandle = ReturnType<typeof Bun.serve<ConnectionData>>
@@ -105,6 +106,8 @@ export function startGatewayServer(options: StartGatewayOptions): StartedGateway
       }
       if (isWorkerApiBridgePath(url.pathname))
         return handleWorkerApiBridge(req, url, context)
+      if (isWorkerUiPath(url.pathname))
+        return handleWorkerUi(req, url, context)
       if (url.pathname === '/ws' || url.pathname === '/enroll-ws') {
         const ip = serverRef.requestIP(req)
         const remoteAddress = ip?.address

@@ -1,5 +1,22 @@
 # AIWorker Changelog
 
+## 2026-04-30 07:44 [progress] FEAT-040 / PLAN-042 completed
+
+Completed the fleet-hosted worker UI path for non-same-host workers:
+
+- Gateway now serves the worker bundle at `/w/:workerId/*` and keeps
+  `/w/:workerId/api/worker/*` on an explicit bridge allowlist.
+- The worker bundle derives its router base and API/SSE base from
+  `/w/:workerId`, while preserving self-hosted `/admin` and dev `/worker`.
+- The bridge covers the worker UI surfaces currently in use: info/config,
+  secrets, engine availability, brain/executor/channel probes, cron,
+  approvals, orchestrator tasks, conversations, messages, and worker-scoped
+  SSE.
+- Fleet UI worker links now open same-origin `/w/:workerId/` instead of
+  requiring `worker.baseUrl/admin/`.
+- `fleet.db` remains pointer/audit-only; worker config, secrets, messages, and
+  conversations stay in `worker.db`.
+
 ## 2026-04-30 07:03 [progress] REL-004 — 0.4.7 published
 
 Published `@zonease/aiworker-cli@0.4.7`:

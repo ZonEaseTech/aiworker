@@ -1,6 +1,6 @@
 import type { GatewayConfig } from '../src/config'
 import type { GatewayContext } from '../src/router/context'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parseFrame } from '@zonease/aiworker-gateway-proto'
@@ -16,7 +16,7 @@ import { describe, expect, test } from 'bun:test'
 import consola from 'consola'
 import { ForwardTable, NodeRegistry, OperatorRegistry } from '../src/registry'
 import { FleetPersistence } from '../src/registry/persistence'
-import { dispatchNodeResponse } from '../src/router/dispatch'
+import { dispatchNodeEvent, dispatchNodeResponse } from '../src/router/dispatch'
 import { startGatewayServer } from '../src/server'
 
 const WORKER_ID = 'w_aaaabbbbcccd'
@@ -143,6 +143,20 @@ async function waitForWsOpen(ws: WebSocket): Promise<void> {
       reject(new Error('ws failed to open'))
     }, { once: true })
   })
+}
+
+async function readUntil(reader: ReadableStreamDefaultReader<Uint8Array>, needle: string): Promise<string> {
+  const decoder = new TextDecoder()
+  let text = ''
+  for (let i = 0; i < 20; i++) {
+    const { value, done } = await reader.read()
+    if (done)
+      break
+    text += decoder.decode(value)
+    if (text.includes(needle))
+      return text
+  }
+  return text
 }
 
 describe('gateway worker HTTP bridge', () => {
@@ -300,10 +314,256 @@ describe('gateway worker HTTP bridge', () => {
     ctx.nodes.register({ workerId: WORKER_ID, deviceId: 'dev-1', ws: node.ws, pairedAt: 1, meta: {} })
     const started = startGatewayServer({ config: testConfig(), context: ctx })
     try {
-      const res = await fetch(`http://127.0.0.1:${started.port}/w/${WORKER_ID}/api/worker/secrets`)
+      const res = await fetch(`http://127.0.0.1:${started.port}/w/${WORKER_ID}/api/worker/runtime/processes/capacity`)
       expect(res.status).toBe(404)
       expect(await res.json()).toMatchObject({ error: { code: 'not-found' } })
       expect(node.sent).toHaveLength(0)
+    }
+    finally {
+      await started.stop()
+      cleanup()
+    }
+  })
+
+  test('bridges worker UI REST routes through allowlisted proto methods', async () => {
+    const { ctx, cleanup } = makeCtx()
+    const node = makeSendTap()
+    ctx.nodes.register({ workerId: WORKER_ID, deviceId: 'dev-1', ws: node.ws, pairedAt: 1, meta: {} })
+    const started = startGatewayServer({ config: testConfig(), context: ctx })
+
+    async function expectForward(args: {
+      path: string
+      init?: RequestInit
+      method: string
+      params: unknown
+      result: unknown
+      body?: unknown
+    }) {
+      node.sent.length = 0
+      const pendingFetch = fetch(`http://127.0.0.1:${started.port}${args.path}`, args.init)
+      const forwarded = await waitForForward(node.sent)
+      expect(forwarded.method).toBe(args.method)
+      expect(forwarded.params).toEqual(args.params)
+      dispatchNodeResponse(ctx, node.ws, {
+        type: 'response',
+        id: forwarded.id,
+        ok: true,
+        result: args.result,
+      })
+      const res = await pendingFetch
+      expect(res.status).toBe(200)
+      if (args.body !== undefined)
+        expect(await res.json()).toEqual(args.body)
+      else
+        await res.text()
+    }
+
+    try {
+      await expectForward({
+        path: `/w/${WORKER_ID}/api/worker/cron`,
+        method: 'cron.list',
+        params: { workerId: WORKER_ID },
+        result: { jobs: [] },
+        body: { jobs: [] },
+      })
+      await expectForward({
+        path: `/w/${WORKER_ID}/api/worker/cron`,
+        init: {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ expression: '* * * * *', prompt: 'ping', channel: 'web', chatId: 'c' }),
+        },
+        method: 'cron.add',
+        params: {
+          workerId: WORKER_ID,
+          job: { expression: '* * * * *', prompt: 'ping', channel: 'web', chatId: 'c' },
+        },
+        result: { job: { id: 'job-1' } },
+        body: { job: { id: 'job-1' } },
+      })
+      await expectForward({
+        path: `/w/${WORKER_ID}/api/worker/cron/job-1`,
+        init: {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled: false }),
+        },
+        method: 'cron.update',
+        params: { workerId: WORKER_ID, jobId: 'job-1', patch: { enabled: false } },
+        result: { job: { id: 'job-1', enabled: false } },
+        body: { job: { id: 'job-1', enabled: false } },
+      })
+      await expectForward({
+        path: `/w/${WORKER_ID}/api/worker/cron/job-1`,
+        init: { method: 'DELETE' },
+        method: 'cron.remove',
+        params: { workerId: WORKER_ID, jobId: 'job-1' },
+        result: { removed: true },
+        body: { ok: true },
+      })
+      await expectForward({
+        path: `/w/${WORKER_ID}/api/worker/approvals`,
+        method: 'approval.list',
+        params: { workerId: WORKER_ID },
+        result: { approvals: [] },
+        body: { approvals: [] },
+      })
+      await expectForward({
+        path: `/w/${WORKER_ID}/api/worker/approvals/t-1/c-1/grant`,
+        init: {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ decision: 'allow' }),
+        },
+        method: 'approval.grant',
+        params: { workerId: WORKER_ID, taskId: 't-1', toolCallId: 'c-1', decision: 'allow' },
+        result: { granted: true },
+        body: { granted: true },
+      })
+      await expectForward({
+        path: `/w/${WORKER_ID}/api/worker/secrets`,
+        method: 'secrets.list',
+        params: { workerId: WORKER_ID },
+        result: { keys: ['api-key'] },
+        body: { keys: ['api-key'] },
+      })
+      await expectForward({
+        path: `/w/${WORKER_ID}/api/worker/secrets/api-key`,
+        init: {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ value: 'secret-value' }),
+        },
+        method: 'secrets.put',
+        params: { workerId: WORKER_ID, key: 'api-key', value: 'secret-value' },
+        result: { ok: true },
+        body: { ok: true },
+      })
+      await expectForward({
+        path: `/w/${WORKER_ID}/api/worker/engines?refresh=1`,
+        method: 'engines.list',
+        params: { workerId: WORKER_ID, refresh: true },
+        result: { engines: [{ kind: 'http' }] },
+        body: { engines: [{ kind: 'http' }] },
+      })
+      await expectForward({
+        path: `/w/${WORKER_ID}/api/worker/executor/test`,
+        init: {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ probe: true }),
+        },
+        method: 'executor.test',
+        params: { workerId: WORKER_ID, probe: true },
+        result: { executor: { type: 'http', status: 'healthy' } },
+        body: { executor: { type: 'http', status: 'healthy' } },
+      })
+      await expectForward({
+        path: `/w/${WORKER_ID}/api/worker/channels/web/test`,
+        init: {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chatId: 'c', text: 'hello' }),
+        },
+        method: 'channel.test',
+        params: { workerId: WORKER_ID, channel: 'web', body: { chatId: 'c', text: 'hello' } },
+        result: { sent: true },
+        body: { sent: true },
+      })
+      await expectForward({
+        path: `/w/${WORKER_ID}/api/worker/orchestrator/tasks`,
+        method: 'orchestrator.tasks.list',
+        params: { workerId: WORKER_ID },
+        result: { tasks: [] },
+        body: { tasks: [] },
+      })
+      await expectForward({
+        path: `/w/${WORKER_ID}/api/worker/orchestrator/tasks`,
+        init: {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt: 'hello' }),
+        },
+        method: 'orchestrator.tasks.create',
+        params: { workerId: WORKER_ID, prompt: 'hello' },
+        result: { task: { id: 'task-1' } },
+        body: { task: { id: 'task-1' } },
+      })
+      await expectForward({
+        path: `/w/${WORKER_ID}/api/worker/orchestrator/conversations/conv-1/messages`,
+        method: 'orchestrator.messages.list',
+        params: { workerId: WORKER_ID, conversationId: 'conv-1' },
+        result: { messages: [] },
+        body: { messages: [] },
+      })
+    }
+    finally {
+      await started.stop()
+      cleanup()
+    }
+  })
+
+  test('serves the worker bundle under /w/:workerId/', async () => {
+    const { ctx, cleanup } = makeCtx()
+    const staticDir = mkdtempSync(join(tmpdir(), 'gw-worker-ui-'))
+    mkdirSync(join(staticDir, 'assets'))
+    writeFileSync(join(staticDir, 'index.html'), '<html><body>worker shell</body></html>')
+    writeFileSync(join(staticDir, 'assets', 'app.js'), 'console.log("worker")')
+    ctx.workerWebStaticDir = staticDir
+    const node = makeSendTap()
+    ctx.nodes.register({ workerId: WORKER_ID, deviceId: 'dev-1', ws: node.ws, pairedAt: 1, meta: {} })
+    const started = startGatewayServer({ config: testConfig(), context: ctx })
+    try {
+      const redirect = await fetch(`http://127.0.0.1:${started.port}/w/${WORKER_ID}`, { redirect: 'manual' })
+      expect(redirect.status).toBe(308)
+      expect(redirect.headers.get('location')).toBe(`http://127.0.0.1:${started.port}/w/${WORKER_ID}/`)
+
+      const shell = await fetch(`http://127.0.0.1:${started.port}/w/${WORKER_ID}/config`)
+      expect(shell.status).toBe(200)
+      expect(await shell.text()).toContain('worker shell')
+
+      const asset = await fetch(`http://127.0.0.1:${started.port}/w/${WORKER_ID}/assets/app.js`)
+      expect(asset.status).toBe(200)
+      expect(await asset.text()).toContain('console.log')
+    }
+    finally {
+      await started.stop()
+      rmSync(staticDir, { recursive: true, force: true })
+      cleanup()
+    }
+  })
+
+  test('bridges worker events as worker-scoped SSE', async () => {
+    const { ctx, cleanup } = makeCtx()
+    const node = makeSendTap()
+    ctx.nodes.register({ workerId: WORKER_ID, deviceId: 'dev-1', ws: node.ws, pairedAt: 1, meta: {} })
+    const started = startGatewayServer({ config: testConfig(), context: ctx })
+    const ctrl = new AbortController()
+    try {
+      const res = await fetch(`http://127.0.0.1:${started.port}/w/${WORKER_ID}/api/worker/events/stream`, {
+        signal: ctrl.signal,
+      })
+      expect(res.status).toBe(200)
+      const reader = res.body!.getReader()
+
+      dispatchNodeEvent(ctx, node.ws, {
+        type: 'event',
+        name: 'chat.message',
+        payload: {
+          workerId: WORKER_ID,
+          conversationId: 'conv-1',
+          role: 'assistant',
+          content: 'hello',
+          createdAt: 1,
+        },
+        ts: 2,
+      })
+
+      const text = await readUntil(reader, 'chat.message')
+      expect(text).toContain('event: chat.message')
+      expect(text).toContain('"workerId":"w_aaaabbbbcccd"')
+      await reader.cancel()
+      ctrl.abort()
     }
     finally {
       await started.stop()

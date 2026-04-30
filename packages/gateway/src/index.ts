@@ -26,6 +26,8 @@ export interface CreateGatewayContextOptions {
    * install 或源码 dev），未传则 `/admin/*` 一律 404 但不阻塞启动。
    */
   webStaticDir?: string
+  /** FEAT-040：worker bundle 静态根，挂到 `/w/:workerId/*`。 */
+  workerWebStaticDir?: string
 }
 
 /**
@@ -152,6 +154,7 @@ export function createGatewayContext(
     pendingEnrollments,
     connectRateLimiter,
     webStaticDir: options.webStaticDir,
+    workerWebStaticDir: options.workerWebStaticDir,
   }
 }
 
@@ -162,6 +165,8 @@ export interface StartGatewayResult extends StartedGateway {
 export interface StartGatewayOptions {
   /** PLAN-022 / FEAT-033：fleet bundle 静态根。详见 `CreateGatewayContextOptions`。 */
   webStaticDir?: string
+  /** FEAT-040：worker bundle 静态根。详见 `CreateGatewayContextOptions`。 */
+  workerWebStaticDir?: string
 }
 
 /** 完整启动流程:加载 env → 建 context → 起服务 → 装 SIGTERM 钩子。 */
@@ -171,7 +176,10 @@ export async function startGateway(
 ): Promise<StartGatewayResult> {
   const base = loadGatewayConfigFromEnv()
   const config: GatewayConfig = { ...base, ...override }
-  const context = createGatewayContext(config, { webStaticDir: options.webStaticDir })
+  const context = createGatewayContext(config, {
+    webStaticDir: options.webStaticDir,
+    workerWebStaticDir: options.workerWebStaticDir,
+  })
   const started = startGatewayServer({ config, context })
   consola.success(
     `[gateway] listening ws://${config.host}:${started.port}/ws (auth=${config.internalSharedSecret ? 'shared-secret+loopback' : 'loopback-only'})`,

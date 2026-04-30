@@ -16,10 +16,10 @@ function WorkerOverview() {
       <header className="min-w-0">
         <h1 className="text-2xl font-bold">概览</h1>
         <p className="break-words text-sm text-muted-foreground">
-          单 worker 自管面板。所有数据通道走本进程的
+          单 worker 自管面板。所有数据通道走当前入口的
           {' '}
           <code className="font-mono text-xs">/api/worker/*</code>
-          ，绝不依赖 gateway。
+          兼容管理 API。
         </p>
       </header>
 

@@ -1,6 +1,6 @@
 # FEAT-040 Fleet 统一入口管理非同 host worker
 
-- **status**: in_progress
+- **status**: completed
 - **priority**: P1
 - **owner**: BKD skge5qv2
 - **createdAt**: 2026-04-29 18:10
@@ -47,3 +47,7 @@ https://aiw.jbcnet.co.jp/w/<workerId>/   # 某个 worker 的管理入口
   `workers.stop` handler、gateway `/w/:workerId/api/worker/info` 与
   `GET/PUT /config` bridge、bridge 成功/失败审计与敏感字段保护。该切片不代表
   完整 Worker UI fleet-hosted mode、SSE bridge 或全量 worker REST 能力已完成。
+- 2026-04-30 07:44：完整交付已合入：gateway 托管 `/w/:workerId/` worker UI，
+  worker bundle 支持 fleet-hosted router/API base，gateway bridge 覆盖当前
+  worker UI 已调用的 REST 能力与 worker-scoped SSE，Fleet UI 入口改为 same-origin
+  `/w/:workerId/`，不再要求 worker 有 public `baseUrl`。

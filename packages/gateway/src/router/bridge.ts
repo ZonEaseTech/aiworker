@@ -1,4 +1,4 @@
-import type { ResponseFrame } from '@zonease/aiworker-gateway-proto'
+import type { MethodName, ResponseFrame } from '@zonease/aiworker-gateway-proto'
 import type { AnyWs } from '../registry/types'
 import type { GatewayContext } from './context'
 import { encodeFrame, parseFrame } from '@zonease/aiworker-gateway-proto'
@@ -7,6 +7,10 @@ import { WORKER_ID_PATTERN } from '@zonease/aiworker-shared'
 const BRIDGE_PREFIX = '/w/'
 const WORKER_API_PREFIX = '/api/worker'
 const BRIDGE_TIMEOUT_MS = 60_000
+const MAX_JSON_BODY_BYTES = 1024 * 1024
+const MAX_EVENT_STREAMS = 50
+
+let activeEventStreams = 0
 
 interface ParsedBridgePath {
   workerId: string
@@ -14,18 +18,19 @@ interface ParsedBridgePath {
 }
 
 interface BridgeRequest {
-  method: 'workers.info' | 'config.get' | 'config.put'
+  method: MethodName
   params: Record<string, unknown>
+  transformResult?: (result: unknown) => unknown
 }
 
 interface BridgeRouteAudit {
-  method: BridgeRequest['method']
+  method: string
   errorCode: string
 }
 
 interface BridgeAuditEntry {
   workerId: string
-  method: BridgeRequest['method']
+  method: string
   path: string
   result: 'success' | 'error'
   status: number
@@ -50,7 +55,10 @@ export async function handleWorkerApiBridge(
   if (!parsed.ok)
     return jsonError(400, 'invalid-worker-id', parsed.message)
 
-  const route = await buildBridgeRequest(req, parsed.value)
+  if (parsed.value.workerApiPath === `${WORKER_API_PREFIX}/events/stream`)
+    return handleWorkerEventsStream(req, url, ctx, parsed.value, startedAt)
+
+  const route = await buildBridgeRequest(req, url, parsed.value)
   if (!route.ok) {
     if (route.audit) {
       recordBridgeAudit(ctx, {
@@ -71,8 +79,9 @@ export async function handleWorkerApiBridge(
     workerId: parsed.value.workerId,
     method: route.value.method,
     params: route.value.params,
+    signal: req.signal,
   })
-  const response = responseFrameToHttp(frame)
+  const response = responseFrameToHttp(frame, route.value.transformResult)
   recordBridgeAudit(ctx, {
     workerId: parsed.value.workerId,
     method: route.value.method,
@@ -86,7 +95,13 @@ export async function handleWorkerApiBridge(
 }
 
 export function isWorkerApiBridgePath(pathname: string): boolean {
-  return pathname.startsWith(BRIDGE_PREFIX)
+  if (!pathname.startsWith(BRIDGE_PREFIX))
+    return false
+  const suffix = pathname.slice(BRIDGE_PREFIX.length)
+  const firstSlash = suffix.indexOf('/')
+  if (firstSlash === -1)
+    return false
+  return suffix.slice(firstSlash).startsWith(WORKER_API_PREFIX)
 }
 
 function parseBridgePath(pathname: string):
@@ -112,6 +127,7 @@ function parseBridgePath(pathname: string):
 
 async function buildBridgeRequest(
   req: Request,
+  url: URL,
   path: ParsedBridgePath,
 ): Promise<
   | { ok: true, value: BridgeRequest }
@@ -148,12 +164,12 @@ async function buildBridgeRequest(
           audit: { method: 'config.put', errorCode: 'invalid-if-match' },
         }
       }
-      const body = await req.json().catch(() => undefined)
-      if (body === undefined) {
+      const body = await readJsonBody(req)
+      if (!body.ok) {
         return {
           ok: false,
-          response: jsonError(400, 'invalid-body', 'Request body must be valid JSON'),
-          audit: { method: 'config.put', errorCode: 'invalid-body' },
+          response: jsonError(body.status, body.code, body.message),
+          audit: { method: 'config.put', errorCode: body.code },
         }
       }
       return {
@@ -163,7 +179,7 @@ async function buildBridgeRequest(
           params: {
             workerId: path.workerId,
             ifMatch: ifMatch.value,
-            config: body,
+            config: body.value,
           },
         },
       }
@@ -171,10 +187,473 @@ async function buildBridgeRequest(
     return { ok: false, response: methodNotAllowed('GET, PUT') }
   }
 
+  if (path.workerApiPath === `${WORKER_API_PREFIX}/cron`) {
+    if (req.method === 'GET') {
+      return {
+        ok: true,
+        value: { method: 'cron.list', params: { workerId: path.workerId } },
+      }
+    }
+    if (req.method === 'POST') {
+      const body = await readJsonBody(req)
+      if (!body.ok) {
+        return {
+          ok: false,
+          response: jsonError(body.status, body.code, body.message),
+          audit: { method: 'cron.add', errorCode: body.code },
+        }
+      }
+      return {
+        ok: true,
+        value: {
+          method: 'cron.add',
+          params: { workerId: path.workerId, job: body.value },
+          transformResult: passThroughCreated,
+        },
+      }
+    }
+    return { ok: false, response: methodNotAllowed('GET, POST') }
+  }
+
+  const cronJobMatch = path.workerApiPath.match(/^\/api\/worker\/cron\/([^/]+)$/)
+  if (cronJobMatch) {
+    const jobId = decodeURIComponent(cronJobMatch[1]!)
+    if (req.method === 'PATCH') {
+      const body = await readJsonBody(req)
+      if (!body.ok) {
+        return {
+          ok: false,
+          response: jsonError(body.status, body.code, body.message),
+          audit: { method: 'cron.update', errorCode: body.code },
+        }
+      }
+      return {
+        ok: true,
+        value: {
+          method: 'cron.update',
+          params: { workerId: path.workerId, jobId, patch: body.value },
+        },
+      }
+    }
+    if (req.method === 'DELETE') {
+      return {
+        ok: true,
+        value: {
+          method: 'cron.remove',
+          params: { workerId: path.workerId, jobId },
+          transformResult: cronRemoveResultToRest,
+        },
+      }
+    }
+    return { ok: false, response: methodNotAllowed('PATCH, DELETE') }
+  }
+
+  if (path.workerApiPath === `${WORKER_API_PREFIX}/approvals`) {
+    if (req.method !== 'GET')
+      return { ok: false, response: methodNotAllowed('GET') }
+    return {
+      ok: true,
+      value: { method: 'approval.list', params: { workerId: path.workerId } },
+    }
+  }
+
+  const approvalGrantMatch = path.workerApiPath.match(/^\/api\/worker\/approvals\/([^/]+)\/([^/]+)\/grant$/)
+  if (approvalGrantMatch) {
+    if (req.method !== 'POST')
+      return { ok: false, response: methodNotAllowed('POST') }
+    const body = await readJsonBody(req)
+    if (!body.ok) {
+      return {
+        ok: false,
+        response: jsonError(body.status, body.code, body.message),
+        audit: { method: 'approval.grant', errorCode: body.code },
+      }
+    }
+    const decision = (body.value as Record<string, unknown>).decision
+    if (decision !== 'allow' && decision !== 'deny') {
+      return {
+        ok: false,
+        response: jsonError(400, 'invalid-body', 'decision must be "allow" or "deny"'),
+        audit: { method: 'approval.grant', errorCode: 'invalid-body' },
+      }
+    }
+    return {
+      ok: true,
+      value: {
+        method: 'approval.grant',
+        params: {
+          workerId: path.workerId,
+          taskId: decodeURIComponent(approvalGrantMatch[1]!),
+          toolCallId: decodeURIComponent(approvalGrantMatch[2]!),
+          decision,
+        },
+      },
+    }
+  }
+
+  if (path.workerApiPath === `${WORKER_API_PREFIX}/secrets`) {
+    if (req.method !== 'GET')
+      return { ok: false, response: methodNotAllowed('GET') }
+    return {
+      ok: true,
+      value: { method: 'secrets.list', params: { workerId: path.workerId } },
+    }
+  }
+
+  const secretMatch = path.workerApiPath.match(/^\/api\/worker\/secrets\/([^/]+)$/)
+  if (secretMatch) {
+    const key = decodeURIComponent(secretMatch[1]!)
+    if (!/^[\w.-]{1,128}$/.test(key)) {
+      const method = req.method === 'DELETE' ? 'secrets.delete' : 'secrets.put'
+      return {
+        ok: false,
+        response: jsonError(400, 'invalid-key', 'secret key must match [A-Za-z0-9._-] and be 1-128 chars'),
+        audit: { method, errorCode: 'invalid-key' },
+      }
+    }
+    if (req.method === 'PUT') {
+      const body = await readJsonBody(req)
+      if (!body.ok) {
+        return {
+          ok: false,
+          response: jsonError(body.status, body.code, body.message),
+          audit: { method: 'secrets.put', errorCode: body.code },
+        }
+      }
+      const value = (body.value as Record<string, unknown>).value
+      if (typeof value !== 'string' || value.length === 0) {
+        return {
+          ok: false,
+          response: jsonError(400, 'invalid-body', 'secret value must be a non-empty string'),
+          audit: { method: 'secrets.put', errorCode: 'invalid-body' },
+        }
+      }
+      return {
+        ok: true,
+        value: { method: 'secrets.put', params: { workerId: path.workerId, key, value } },
+      }
+    }
+    if (req.method === 'DELETE') {
+      return {
+        ok: true,
+        value: { method: 'secrets.delete', params: { workerId: path.workerId, key } },
+      }
+    }
+    return { ok: false, response: methodNotAllowed('PUT, DELETE') }
+  }
+
+  if (path.workerApiPath === `${WORKER_API_PREFIX}/engines`) {
+    if (req.method !== 'GET')
+      return { ok: false, response: methodNotAllowed('GET') }
+    return {
+      ok: true,
+      value: {
+        method: 'engines.list',
+        params: { workerId: path.workerId, refresh: url.searchParams.get('refresh') === '1' },
+      },
+    }
+  }
+
+  if (path.workerApiPath === `${WORKER_API_PREFIX}/brain/test`) {
+    if (req.method !== 'POST')
+      return { ok: false, response: methodNotAllowed('POST') }
+    return {
+      ok: true,
+      value: { method: 'brain.test', params: { workerId: path.workerId } },
+    }
+  }
+
+  if (path.workerApiPath === `${WORKER_API_PREFIX}/executor/test`) {
+    if (req.method !== 'POST')
+      return { ok: false, response: methodNotAllowed('POST') }
+    const body = await readOptionalJsonBody(req)
+    if (!body.ok) {
+      return {
+        ok: false,
+        response: jsonError(body.status, body.code, body.message),
+        audit: { method: 'executor.test', errorCode: body.code },
+      }
+    }
+    const probe = (body.value as Record<string, unknown> | undefined)?.probe
+    return {
+      ok: true,
+      value: {
+        method: 'executor.test',
+        params: { workerId: path.workerId, ...(typeof probe === 'boolean' ? { probe } : {}) },
+      },
+    }
+  }
+
+  const channelTestMatch = path.workerApiPath.match(/^\/api\/worker\/channels\/([^/]+)\/test$/)
+  if (channelTestMatch) {
+    if (req.method !== 'POST')
+      return { ok: false, response: methodNotAllowed('POST') }
+    const body = await readOptionalJsonBody(req)
+    if (!body.ok) {
+      return {
+        ok: false,
+        response: jsonError(body.status, body.code, body.message),
+        audit: { method: 'channel.test', errorCode: body.code },
+      }
+    }
+    return {
+      ok: true,
+      value: {
+        method: 'channel.test',
+        params: {
+          workerId: path.workerId,
+          channel: decodeURIComponent(channelTestMatch[1]!),
+          ...(body.value === undefined ? {} : { body: body.value }),
+        },
+      },
+    }
+  }
+
+  if (path.workerApiPath === `${WORKER_API_PREFIX}/orchestrator/tasks`) {
+    if (req.method === 'GET') {
+      return {
+        ok: true,
+        value: { method: 'orchestrator.tasks.list', params: { workerId: path.workerId } },
+      }
+    }
+    if (req.method === 'POST') {
+      const body = await readJsonBody(req)
+      if (!body.ok) {
+        return {
+          ok: false,
+          response: jsonError(body.status, body.code, body.message),
+          audit: { method: 'orchestrator.tasks.create', errorCode: body.code },
+        }
+      }
+      const prompt = (body.value as Record<string, unknown>).prompt
+      if (typeof prompt !== 'string' || prompt.trim().length === 0 || prompt.trim().length > 8000) {
+        return {
+          ok: false,
+          response: jsonError(400, 'invalid-body', 'prompt is required and must be at most 8000 chars'),
+          audit: { method: 'orchestrator.tasks.create', errorCode: 'invalid-body' },
+        }
+      }
+      return {
+        ok: true,
+        value: {
+          method: 'orchestrator.tasks.create',
+          params: { workerId: path.workerId, prompt },
+          transformResult: passThroughCreated,
+        },
+      }
+    }
+    return { ok: false, response: methodNotAllowed('GET, POST') }
+  }
+
+  if (path.workerApiPath === `${WORKER_API_PREFIX}/orchestrator/conversations`) {
+    if (req.method !== 'GET')
+      return { ok: false, response: methodNotAllowed('GET') }
+    return {
+      ok: true,
+      value: { method: 'orchestrator.conversations.list', params: { workerId: path.workerId } },
+    }
+  }
+
+  const messagesMatch = path.workerApiPath.match(/^\/api\/worker\/orchestrator\/conversations\/([^/]+)\/messages$/)
+  if (messagesMatch) {
+    if (req.method !== 'GET')
+      return { ok: false, response: methodNotAllowed('GET') }
+    return {
+      ok: true,
+      value: {
+        method: 'orchestrator.messages.list',
+        params: { workerId: path.workerId, conversationId: decodeURIComponent(messagesMatch[1]!) },
+      },
+    }
+  }
+
   return {
     ok: false,
     response: jsonError(404, 'not-found', `Unsupported worker bridge path ${path.workerApiPath}`),
   }
+}
+
+type JsonBodyResult
+  = | { ok: true, value: unknown }
+    | { ok: false, status: number, code: string, message: string }
+
+async function readJsonBody(req: Request): Promise<JsonBodyResult> {
+  const size = Number.parseInt(req.headers.get('Content-Length') ?? '0', 10)
+  if (Number.isFinite(size) && size > MAX_JSON_BODY_BYTES) {
+    return {
+      ok: false,
+      status: 413,
+      code: 'payload-too-large',
+      message: 'Request body is too large',
+    }
+  }
+  const text = await req.text().catch(() => undefined)
+  if (text === undefined) {
+    return {
+      ok: false,
+      status: 400,
+      code: 'invalid-body',
+      message: 'Request body must be readable',
+    }
+  }
+  if (new TextEncoder().encode(text).byteLength > MAX_JSON_BODY_BYTES) {
+    return {
+      ok: false,
+      status: 413,
+      code: 'payload-too-large',
+      message: 'Request body is too large',
+    }
+  }
+  try {
+    return { ok: true, value: JSON.parse(text) as unknown }
+  }
+  catch {
+    return {
+      ok: false,
+      status: 400,
+      code: 'invalid-body',
+      message: 'Request body must be valid JSON',
+    }
+  }
+}
+
+async function readOptionalJsonBody(req: Request): Promise<JsonBodyResult | { ok: true, value: undefined }> {
+  if (!req.body)
+    return { ok: true, value: undefined }
+  const text = await req.text().catch(() => undefined)
+  if (text === undefined) {
+    return {
+      ok: false,
+      status: 400,
+      code: 'invalid-body',
+      message: 'Request body must be readable',
+    }
+  }
+  if (text.trim().length === 0)
+    return { ok: true, value: undefined }
+  if (new TextEncoder().encode(text).byteLength > MAX_JSON_BODY_BYTES) {
+    return {
+      ok: false,
+      status: 413,
+      code: 'payload-too-large',
+      message: 'Request body is too large',
+    }
+  }
+  try {
+    return { ok: true, value: JSON.parse(text) as unknown }
+  }
+  catch {
+    return {
+      ok: false,
+      status: 400,
+      code: 'invalid-body',
+      message: 'Request body must be valid JSON',
+    }
+  }
+}
+
+function passThroughCreated(result: unknown): unknown {
+  return result
+}
+
+function cronRemoveResultToRest(result: unknown): unknown {
+  const removed = Boolean((result as { removed?: boolean }).removed)
+  return removed ? { ok: true } : result
+}
+
+function handleWorkerEventsStream(
+  req: Request,
+  url: URL,
+  ctx: GatewayContext,
+  path: ParsedBridgePath,
+  startedAt: number,
+): Response {
+  if (req.method !== 'GET')
+    return methodNotAllowed('GET')
+  if (activeEventStreams >= MAX_EVENT_STREAMS) {
+    return jsonError(503, 'too-many-event-streams', 'Too many active worker event streams')
+  }
+  if (!ctx.nodes.has(path.workerId) && !ctx.persistence.getRegisteredWorker(path.workerId)) {
+    return jsonError(404, 'not-found', `worker ${path.workerId} is not registered`)
+  }
+  if (!ctx.nodes.has(path.workerId))
+    return jsonError(503, 'node_offline', `worker ${path.workerId} 当前未连接到 gateway`)
+
+  activeEventStreams += 1
+  let closed = false
+  const streamId = `http-sse-${crypto.randomUUID()}`
+  let cleanupStream: (() => void) | undefined
+
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      const encoder = new TextEncoder()
+      const write = (chunk: string) => {
+        if (closed)
+          return
+        if (controller.desiredSize !== null && controller.desiredSize <= 0)
+          return
+        controller.enqueue(encoder.encode(chunk))
+      }
+      const operatorWs = {
+        send(message: string) {
+          const parsed = parseFrame(message)
+          if (!parsed.ok || parsed.frame.type !== 'event')
+            return
+          const payload = parsed.frame.payload as Record<string, unknown>
+          if (payload.workerId !== path.workerId)
+            return
+          write(`event: ${parsed.frame.name}\ndata: ${JSON.stringify({ ...payload, at: parsed.frame.ts })}\n\n`)
+        },
+        close() {},
+        data: {},
+      } as unknown as AnyWs
+      let keepalive: ReturnType<typeof setInterval> | undefined
+      const cleanup = () => {
+        if (closed)
+          return
+        closed = true
+        activeEventStreams = Math.max(0, activeEventStreams - 1)
+        ctx.operators.unregister(operatorWs)
+        if (keepalive)
+          clearInterval(keepalive)
+        req.signal.removeEventListener('abort', cleanup)
+      }
+      cleanupStream = cleanup
+      keepalive = setInterval(() => write(': keepalive\n\n'), 30_000)
+      if (typeof (keepalive as unknown as { unref?: () => void }).unref === 'function')
+        (keepalive as unknown as { unref: () => void }).unref()
+
+      ctx.operators.register({
+        agentId: streamId,
+        deviceId: streamId,
+        ws: operatorWs,
+        connectedAt: Date.now(),
+      })
+      req.signal.addEventListener('abort', cleanup, { once: true })
+      write(': connected\n\n')
+    },
+    cancel() {
+      cleanupStream?.()
+    },
+  })
+
+  recordBridgeAudit(ctx, {
+    workerId: path.workerId,
+    method: 'events.stream',
+    path: url.pathname,
+    result: 'success',
+    status: 200,
+    latencyMs: elapsedMs(startedAt),
+  })
+
+  return new Response(body, {
+    status: 200,
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    },
+  })
 }
 
 function parseIfMatch(value: string | null): { ok: true, value: number } | { ok: false, message: string } {
@@ -194,6 +673,7 @@ interface ForwardBridgeArgs {
   workerId: string
   method: string
   params: unknown
+  signal?: AbortSignal
 }
 
 function forwardBridgeRequestToNode(args: ForwardBridgeArgs): Promise<ResponseFrame> {
@@ -216,13 +696,33 @@ function forwardBridgeRequestToNode(args: ForwardBridgeArgs): Promise<ResponseFr
     let settled = false
     let gatewayRequestId: string | undefined
     let timer: ReturnType<typeof setTimeout> | undefined
+    let abort: (() => void) | undefined
+    const cleanup = () => {
+      if (timer)
+        clearTimeout(timer)
+      if (abort)
+        args.signal?.removeEventListener('abort', abort)
+    }
     const settle = (frame: ResponseFrame) => {
       if (settled)
         return
       settled = true
-      if (timer)
-        clearTimeout(timer)
+      cleanup()
       resolve(frame)
+    }
+    abort = () => {
+      if (gatewayRequestId)
+        args.ctx.forwards.consume(gatewayRequestId)
+      settle({
+        type: 'response',
+        id: operatorRequestId,
+        ok: false,
+        error: {
+          code: 'request_aborted',
+          message: 'request aborted by client',
+          details: { workerId: args.workerId, method: args.method },
+        },
+      })
     }
 
     const operatorWs = {
@@ -263,6 +763,8 @@ function forwardBridgeRequestToNode(args: ForwardBridgeArgs): Promise<ResponseFr
     if (typeof (timer as unknown as { unref?: () => void }).unref === 'function')
       (timer as unknown as { unref: () => void }).unref()
 
+    args.signal?.addEventListener('abort', abort, { once: true })
+
     const pending = args.ctx.forwards.allocate({
       operatorRequestId,
       operatorWs,
@@ -295,9 +797,9 @@ function forwardBridgeRequestToNode(args: ForwardBridgeArgs): Promise<ResponseFr
   })
 }
 
-function responseFrameToHttp(frame: ResponseFrame): Response {
+function responseFrameToHttp(frame: ResponseFrame, transformResult?: (result: unknown) => unknown): Response {
   if (frame.ok)
-    return json(frame.result, 200)
+    return json(transformResult ? transformResult(frame.result) : frame.result, 200)
 
   const code = normalizeRestErrorCode(frame.error.code)
   return json({
@@ -335,6 +837,9 @@ function statusForError(code: string): number {
   switch (code) {
     case 'invalid_params':
     case 'invalid_config':
+    case 'invalid_body':
+    case 'invalid_key':
+    case 'invalid_cron':
       return 400
     case 'version_conflict':
       return 409
@@ -346,6 +851,8 @@ function statusForError(code: string): number {
       return 503
     case 'forward_timeout':
       return 504
+    case 'request_aborted':
+      return 499
     case 'method_not_implemented':
       return 501
     default:
@@ -359,6 +866,14 @@ function normalizeRestErrorCode(code: string): string {
       return 'invalid-config'
     case 'version_conflict':
       return 'version-conflict'
+    case 'invalid_body':
+      return 'invalid-body'
+    case 'invalid_key':
+      return 'invalid-key'
+    case 'invalid_cron':
+      return 'invalid-cron'
+    case 'not_found':
+      return 'not-found'
     default:
       return code
   }

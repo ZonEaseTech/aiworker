@@ -27,6 +27,7 @@ describe('fleet admin command copy', () => {
     const source = readWebSource('fleet/routes/workers.$workerId.tsx')
 
     expect(source).not.toContain(staleWorkerCommand)
-    expect(source).toContain('aiworker serve')
+    expect(source).toContain('return `/w/')
+    expect(source).toContain('workerId}/`')
   })
 })

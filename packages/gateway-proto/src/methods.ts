@@ -298,6 +298,133 @@ const approvalGrantMethod = defineMethod({
   routing: 'operator-to-node',
 })
 
+/**
+ * 与 ChannelType 保持同步——proto 层做最小防线，避免跨包导入。
+ */
+const workerChannelEnum = z.enum(['web', 'line', 'telegram', 'lark', 'whatsapp'])
+
+// ---- secrets.* ----
+
+const secretKeySchema = z.string().regex(/^[\w.-]{1,128}$/)
+
+const secretsListMethod = defineMethod({
+  method: 'secrets.list',
+  description: '列出目标 worker vault 里的 secret key，不返回 secret value。',
+  params: z.object({ workerId: z.string().min(1) }),
+  result: z.object({ keys: z.array(z.string()) }),
+  routing: 'operator-to-node',
+})
+
+const secretsPutMethod = defineMethod({
+  method: 'secrets.put',
+  description: '写入或覆盖目标 worker 的一个 secret value。',
+  params: z.object({
+    workerId: z.string().min(1),
+    key: secretKeySchema,
+    value: z.string().min(1),
+  }),
+  result: z.object({ ok: z.literal(true) }),
+  routing: 'operator-to-node',
+})
+
+const secretsDeleteMethod = defineMethod({
+  method: 'secrets.delete',
+  description: '删除目标 worker 的一个 secret key。',
+  params: z.object({
+    workerId: z.string().min(1),
+    key: secretKeySchema,
+  }),
+  result: z.object({ ok: z.literal(true) }),
+  routing: 'operator-to-node',
+})
+
+// ---- engines / probes ----
+
+const enginesListMethod = defineMethod({
+  method: 'engines.list',
+  description: '读取目标 worker 的 executor engine availability 列表。',
+  params: z.object({
+    workerId: z.string().min(1),
+    refresh: z.boolean().optional(),
+  }),
+  result: z.object({ engines: z.array(z.unknown()) }),
+  routing: 'operator-to-node',
+})
+
+const brainTestMethod = defineMethod({
+  method: 'brain.test',
+  description: '在目标 worker 上执行 brain health probe。',
+  params: z.object({ workerId: z.string().min(1) }),
+  result: z.unknown(),
+  routing: 'operator-to-node',
+})
+
+const executorTestMethod = defineMethod({
+  method: 'executor.test',
+  description: '在目标 worker 上执行 executor health / tiny probe。',
+  params: z.object({
+    workerId: z.string().min(1),
+    probe: z.boolean().optional(),
+  }),
+  result: z.unknown(),
+  routing: 'operator-to-node',
+})
+
+const channelTestMethod = defineMethod({
+  method: 'channel.test',
+  description: '在目标 worker 上执行 channel binding probe。',
+  params: z.object({
+    workerId: z.string().min(1),
+    channel: workerChannelEnum,
+    body: z.object({
+      chatId: z.string().optional(),
+      text: z.string().optional(),
+    }).optional(),
+  }),
+  result: z.unknown(),
+  routing: 'operator-to-node',
+})
+
+// ---- orchestrator.* ----
+
+const orchestratorTasksListMethod = defineMethod({
+  method: 'orchestrator.tasks.list',
+  description: '列出目标 worker 的最近 orchestrator task。',
+  params: z.object({ workerId: z.string().min(1) }),
+  result: z.object({ tasks: z.array(z.unknown()) }),
+  routing: 'operator-to-node',
+})
+
+const orchestratorTasksCreateMethod = defineMethod({
+  method: 'orchestrator.tasks.create',
+  description: '在目标 worker 上创建一个 orchestrator task。',
+  params: z.object({
+    workerId: z.string().min(1),
+    prompt: z.string().trim().min(1).max(8000),
+  }),
+  result: z.object({ task: z.unknown() }),
+  routing: 'operator-to-node',
+})
+
+const orchestratorConversationsListMethod = defineMethod({
+  method: 'orchestrator.conversations.list',
+  description: '列出目标 worker 的最近 conversations。',
+  params: z.object({ workerId: z.string().min(1) }),
+  result: z.object({ conversations: z.array(z.unknown()) }),
+  routing: 'operator-to-node',
+})
+
+const orchestratorMessagesListMethod = defineMethod({
+  method: 'orchestrator.messages.list',
+  description: '列出目标 worker 某 conversation 的 messages。',
+  params: z.object({
+    workerId: z.string().min(1),
+    conversationId: z.string().min(1),
+  }),
+  result: z.object({ messages: z.array(z.unknown()) }),
+  routing: 'operator-to-node',
+})
+
 // ---- system.* ----
 
 const systemPresenceMethod = defineMethod({
@@ -313,10 +440,7 @@ const systemPresenceMethod = defineMethod({
 
 // ---- cron.* (PLAN-014 §F4) ----
 
-/**
- * 与 ChannelType 保持同步——proto 层做最小防线，避免跨包导入。
- */
-const cronChannelEnum = z.enum(['web', 'line', 'telegram', 'lark', 'whatsapp'])
+const cronChannelEnum = workerChannelEnum
 
 export const cronJobRecordSchema = z.object({
   id: z.string().min(1),
@@ -416,6 +540,17 @@ export const METHODS = {
   'system.presence': systemPresenceMethod,
   'approval.list': approvalListMethod,
   'approval.grant': approvalGrantMethod,
+  'secrets.list': secretsListMethod,
+  'secrets.put': secretsPutMethod,
+  'secrets.delete': secretsDeleteMethod,
+  'engines.list': enginesListMethod,
+  'brain.test': brainTestMethod,
+  'executor.test': executorTestMethod,
+  'channel.test': channelTestMethod,
+  'orchestrator.tasks.list': orchestratorTasksListMethod,
+  'orchestrator.tasks.create': orchestratorTasksCreateMethod,
+  'orchestrator.conversations.list': orchestratorConversationsListMethod,
+  'orchestrator.messages.list': orchestratorMessagesListMethod,
   'cron.list': cronListMethod,
   'cron.add': cronAddMethod,
   'cron.remove': cronRemoveMethod,

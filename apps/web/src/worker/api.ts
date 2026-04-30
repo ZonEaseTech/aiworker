@@ -5,6 +5,7 @@ import type {
   WorkerInfo,
 } from '@zonease/aiworker-shared'
 import { jsonFetch as sharedJsonFetch, WebApiError } from '@/shared/api'
+import { isFleetHostedWorkerPath, workerApiUrl } from './lib/api-base'
 import { getBearerToken } from './lib/auth'
 
 /**
@@ -70,7 +71,7 @@ async function workerFetch<T>(path: string, init: RequestInit = {}): Promise<T> 
 
   let res: Response
   try {
-    res = await fetch(path, { ...init, headers })
+    res = await fetch(workerApiUrl(path), { ...init, headers })
   }
   catch (err) {
     throw new WorkerApiError('network', err instanceof Error ? err.message : String(err))
@@ -161,6 +162,19 @@ export interface WorkerHealth {
 }
 
 export async function getWorkerHealth(): Promise<WorkerHealth> {
+  if (isFleetHostedWorkerPath()) {
+    const info = await getInfo()
+    return {
+      mode: 'worker',
+      workerId: info.workerId,
+      status: 'ok',
+      configVersion: info.configVersion,
+      startedAt: info.startedAt,
+      checkedAt: new Date().toISOString(),
+      brain: info.brains[0] ? { status: info.brains[0].status } : null,
+      executor: info.executor ? { status: info.executor.status } : null,
+    }
+  }
   // `/health` 不在 `/api/worker/*` 下——loopback / public 都开放，但仍走带
   // bearer 的 fetch wrapper（worker 中间件忽略未要求的 header）。
   return await sharedJsonFetch<WorkerHealth>('/health')
@@ -446,7 +460,7 @@ export async function subscribeEvents(
   if (token)
     headers.set('Authorization', `Bearer ${token}`)
 
-  const res = await fetch('/api/worker/events/stream', { headers, signal })
+  const res = await fetch(workerApiUrl('/events/stream'), { headers, signal })
   if (!res.ok || !res.body) {
     throw new WorkerApiError(mapStatusToCode(res.status), `events stream HTTP ${res.status}`, {
       status: res.status,
