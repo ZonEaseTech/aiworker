@@ -78,7 +78,8 @@ AIWorker 是自托管 worker/fleet runtime。Gateway 是 WebSocket 控制面，�
 ## Shell 与进程
 
 - 命令默认用 `bash`。
-- 开发服务器和长驻进程放 tmux：session name 用 `{basename}-{hash}`，创建前先 `tmux has-session`。
+- 开发服务器和长驻进程优先放 tmux：session name 用 `{basename}-{hash}`，创建前先 `tmux has-session`；如果环境没有 `tmux`，使用 `setsid`/`nohup` + 明确 pidfile/logfile，并在完成后清理。
+- 测试 Codex executor 或 Codex-backed worker 时保持真实用户 `HOME`，让 Codex CLI 读取已有认证和 sandbox 配置；只用 `AIWORKER_HOME`、DB 路径、data root、log、pidfile 隔离 AIWorker 状态。需要验证默认 HOME 初始化行为时，单独做非 Codex 场景。
 - 禁止 `kill $(lsof -ti:PORT)`；如需按端口处理，只匹配监听进程，例如 `lsof -tiTCP:PORT -sTCP:LISTEN`。
 
 ## Git

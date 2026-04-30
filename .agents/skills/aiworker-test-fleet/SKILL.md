@@ -20,8 +20,12 @@ without retyping the long operator prompt.
   values in commands saved to docs.
 - Treat the remote test server as the fleet. Do not stop the shared fleet unless
   the user explicitly asks. Temporary local workers must be cleaned up.
-- Prefer isolated temporary local state for operator and worker commands. Remove
-  temp state when it contains credentials or registration material.
+- Prefer isolated temporary AIWorker state for operator and worker commands.
+  Remove temp state when it contains credentials or registration material.
+- For Codex-backed worker tests, keep the real user `HOME` so the Codex CLI can
+  load its auth and sandbox configuration. Isolate AIWorker with
+  `AIWORKER_HOME`, database paths, data roots, logs, and pidfiles instead of
+  changing `HOME`.
 - If named MCP tools such as Context7, Exa, Serena, or code-review-graph are not
   available, continue with local repo and shell inspection and state that briefly.
 
@@ -98,9 +102,11 @@ user has already authorized Codex token usage when they say so; do not conserve
 tokens at the cost of coverage.
 
 1. Create isolated local state:
-   - temporary operator home if needed;
-   - temporary worker home/data root;
+   - temporary `AIWORKER_HOME` for operator and worker commands;
+   - temporary fleet/worker database paths or data root when needed;
    - temporary log path and PID tracking outside the repo when possible.
+   - do not change `HOME` for Codex executor E2E; only test default-home
+     bootstrap behavior in a separate non-Codex scenario.
 
 2. Enroll or pair the local worker with the fleet using the current CLI flow.
    Discover exact flags with `aiworker --help` and current package scripts.
@@ -109,6 +115,8 @@ tokens at the cost of coverage.
 3. Start the local worker against the fleet:
    - executor engine: `codex`;
    - model: use the project default unless the user asks otherwise;
+   - use `tmux` only when it is installed and required by the repo rules;
+     otherwise use `setsid` or `nohup` with explicit log and pidfile cleanup;
    - wait until the fleet reports the worker online.
 
 4. Verify session behavior:
