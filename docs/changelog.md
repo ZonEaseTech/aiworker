@@ -10,6 +10,16 @@
 - 保留原有 tool-sequence mining 行为；S5 不直接写 memory、policy、MCP 或
   worker config。
 
+## 2026-04-30 20:20 [docs] FEAT-042 — control executor follow-up
+
+记录 FEAT-038 的 MVP 边界和后续任务：
+
+- 当前允许 Orchestrator 的 LLM classifier / quality gate / repair / compaction
+  suppressed run 复用 worker 主 executor。
+- 新增 FEAT-042 / PLAN-051，后续把 Orchestrator control-plane executor 与
+  task executor 解耦。
+- 默认行为仍应兼容：未配置 control executor 时继续复用主 executor。
+
 ## 2026-04-30 20:10 [progress] FEAT-038 — quality gate S4
 
 落地 worker 决策管线的 S4 quality gate：
