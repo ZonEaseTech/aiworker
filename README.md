@@ -95,12 +95,17 @@ aiworker chat w_ntssfzwwzzq0 'hello'       # NDJSON 流式输出
 ### 已发布
 
 ```sh
-bun install -g @zonease/aiworker-cli       # ← 当前 latest 0.2.1（含 in-process gateway / OTP enroll / 6 LLM engine）
-# 或
+bun install -g @zonease/aiworker-cli
+
+# 已安装 Bun 时也可免全局安装：
+bunx @zonease/aiworker-cli --help
+
+# npm / npx 也可作为分发入口，但运行时仍需要 bun 在 PATH：
+npx @zonease/aiworker-cli --help
 npm install -g @zonease/aiworker-cli
 ```
 
-binary 跑在 `~/.bun/bin/aiworker` 或 `$(npm bin -g)/aiworker`。第一次跑任意命令时自动 mint master key 写到 `~/.aiworker/.env`（chmod 0600）。
+AIWorker CLI 是 Bun-native：`npx` / `npm install -g` 不会把 runtime 改成 Node。没有 Bun 时，CLI 会提示安装 Bun 或改用 GitHub Releases 的 standalone binary。binary 跑在 `~/.bun/bin/aiworker` 或 `$(npm bin -g)/aiworker`。第一次跑任意命令时自动 mint master key 写到 `~/.aiworker/.env`（chmod 0600）。
 
 **项目级 worker**（PLAN-023，可选）：在 git repo 内 `aiworker init` 默认在 `<cwd>/.aiworker/` 落项目级 layout（每 project 一份独立 worker.db / master key / persona / skills），engine（claude / codex / cursor）保持 user 级共享。`aiworker scope` 诊断当前命中的 layout。详见 [docs/cli.md §`aiworker init`](docs/cli.md)。
 

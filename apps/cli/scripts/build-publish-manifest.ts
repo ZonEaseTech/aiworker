@@ -1,9 +1,11 @@
-import { access, copyFile, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { access, chmod, copyFile, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
 const cliDir = resolve(import.meta.dirname, '..')
 const repoRoot = resolve(cliDir, '..', '..')
 const distDir = resolve(cliDir, 'dist')
+const binShimSrc = resolve(cliDir, 'scripts/aiworker-bin-shim.sh')
+const binShimDst = resolve(distDir, 'aiworker.js')
 
 const pkg = JSON.parse(await readFile(resolve(cliDir, 'package.json'), 'utf8'))
 
@@ -21,9 +23,12 @@ const stripped: Record<string, unknown> = {
   // packages/storage-sqlite 的 resolveMigrationsFolder fallback 会找 sibling drizzle/。
   // PLAN-022 / FEAT-033：dist 还含 web/ 子目录（fleet + worker bundles），
   // gateway / worker `/admin/*` 静态托管在运行期 resolve 同级 web/<bundle>/。
-  files: ['aiworker.js', 'README.md', 'drizzle/', 'web/'],
+  files: ['aiworker.js', 'aiworker-bun.js', 'README.md', 'drizzle/', 'web/'],
   engines: pkg.engines,
 }
+
+await copyFile(binShimSrc, binShimDst)
+await chmod(binShimDst, 0o755)
 
 await writeFile(resolve(distDir, 'package.json'), `${JSON.stringify(stripped, null, 2)}\n`, 'utf8')
 

@@ -1,5 +1,21 @@
 # AIWorker Changelog
 
+## 2026-04-30 15:47 [bug] BUG-039 npx / bunx CLI startup experience
+
+Improved the npm CLI startup path while keeping AIWorker Bun-native:
+
+- The publish artifact now exposes `aiworker.js` as a POSIX shell shim and
+  keeps the real Bun bundle at `aiworker-bun.js`.
+- The shim searches `AIWORKER_BUN_BIN`, PATH, `$BUN_INSTALL/bin/bun`, and
+  `$HOME/.bun/bin/bun`, then execs the Bun bundle with argv/exit-code
+  passthrough.
+- When Bun is unavailable, `npx @zonease/aiworker-cli ...` now exits 127 with
+  an actionable install / `bunx` / standalone binary message instead of raw
+  `env: bun: No such file or directory`.
+- README install guidance now states that `npx` / `npm install -g` are
+  distribution entrypoints only; the runtime remains Bun or the GitHub Release
+  standalone binary.
+
 ## 2026-04-30 08:55 [bug] BUG-038 found during 0.4.8 test-fleet validation
 
 The `0.4.8` test-fleet validation found that worker info still reports

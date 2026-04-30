@@ -27,7 +27,7 @@
     "test": "bun test --timeout=15000",
     "test:stress": "bun test --timeout=15000 --rerun-each=3 src/commands/init.integration.test.ts src/commands/sessions.test.ts",
     "build": "bun run --filter '@zonease/aiworker-web' build && bun run build:bundle",
-    "build:bundle": "bun build --target=bun --minify --outdir=dist src/aiworker.ts && bun scripts/build-publish-manifest.ts",
+    "build:bundle": "bun build --target=bun --minify --outfile=dist/aiworker-bun.js src/aiworker.ts && bun scripts/build-publish-manifest.ts",
     "prepublishOnly": "bun run build",
     "smoke:aiworker-run": "bun scripts/smoke-aiworker-run.ts",
     "smoke:aiworker-fleet": "bun scripts/smoke-aiworker-fleet.ts"
