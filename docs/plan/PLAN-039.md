@@ -239,3 +239,13 @@
 - `orchestrator.intent_decision` 现在反映真实 session action（continue / new_topic / reset_requested）和任务意图，不再只是 S1 默认值。
 - 预留 `orchestrator.decisionPipeline.intentClassifier.evaluator = "llm"`，启用后通过 suppressed executor 做 strict-JSON intent classification，失败时回退 heuristic。
 - Capability planner 现在消费 intent decision 的 intent / requiredContext，但仍只影响 observation，不改变执行路径。
+
+### S4 完成记录
+
+2026-04-30：S4 已落地。
+
+- 新增 `QualityGate`，默认 `mode=observe`、`evaluator=heuristic`，会给最终答复输出 score、threshold、dimensions、missing、suggestions 和 action。
+- 预留 `evaluator=llm`，启用后通过 suppressed executor 做 strict-JSON 质量评审，失败时回退 heuristic。
+- 支持 `observe` / `warn` / `retry` / `block` 模式；默认 observe 不改变交付。
+- `retry` 模式下低分答复会触发一次 suppressed repair run，并发出 `orchestrator.repair_attempted`；`block` / `warn` 只在显式配置时改变交付内容。
+- Evolution observer 已持久化 `orchestrator.repair_attempted`。

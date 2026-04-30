@@ -27,6 +27,7 @@ function persistObservation(event: WorkerEvent) {
     || event.type === 'orchestrator.intent_decision'
     || event.type === 'orchestrator.capability_decision'
     || event.type === 'orchestrator.quality_gate'
+    || event.type === 'orchestrator.repair_attempted'
   if (!interesting)
     return
   getWorkerDb().insert(evolutionObservations).values({

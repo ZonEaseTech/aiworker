@@ -451,9 +451,40 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
 
     const gate = bus.events.find(event => event.type === 'orchestrator.quality_gate')!.payload
     expect(gate.mode).toBe('observe_only')
-    expect(gate.status).toBe('not_evaluated')
+    expect(gate.gateMode).toBe('observe')
+    expect(gate.status).toBe('passed')
     expect(gate.action).toBe('pass')
     expect(gate.finalAnswerLength).toBe('decision response'.length)
+  })
+
+  it('repairs a low-scoring answer once when quality gate retry mode is enabled', async () => {
+    const bus = recordingBus()
+    const executor = capturingExecutor(['ok', 'repaired response with enough detail'])
+    const orch = new Orchestrator({
+      config: buildConfig({
+        orchestrator: {
+          decisionPipeline: {
+            qualityGate: { mode: 'retry', threshold: 7 },
+          },
+        },
+      }),
+      brain: stubBrain(),
+      executor,
+      bus,
+      workerId: 'w_history_test',
+      workspaces,
+      processes,
+      approvals: new ApprovalStore(),
+    })
+
+    await orch.ingest(envelope('repair this answer'))
+
+    expect(executor.captured).toHaveLength(2)
+    const repair = bus.events.find(event => event.type === 'orchestrator.repair_attempted')
+    expect(repair?.payload.status).toBe('succeeded')
+    const db = getWorkerDb()
+    const assistantRows = db.select().from(messages).where(eq(messages.role, 'assistant')).all()
+    expect(assistantRows.at(-1)?.content).toBe('repaired response with enough detail')
   })
 
   it('updates session_entries.contextTokens from the assembled context', async () => {

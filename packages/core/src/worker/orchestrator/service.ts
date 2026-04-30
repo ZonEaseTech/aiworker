@@ -34,9 +34,10 @@ import {
   resolveExecutorModel,
 } from './context'
 import { ContextManager, RunContextComposer } from './context-manager'
-import { buildDefaultQualityGate, buildPromptCapabilityDecision } from './decisions'
+import { buildPromptCapabilityDecision } from './decisions'
 import { classifyIntentHeuristic, classifyIntentWithExecutor } from './intent-classifier'
 import { evaluateToolPolicy } from './policy'
+import { buildRepairPrompt, evaluateQualityGate } from './quality-gate'
 
 interface OrchestratorDeps {
   config: WorkerConfig
@@ -230,10 +231,11 @@ export class Orchestrator {
       registry,
       requiredContext: intentDecision.requiredContext,
     })
-    this.deps.bus.emit('orchestrator.capability_decision', buildPromptCapabilityDecision({
+    const capabilityDecision = buildPromptCapabilityDecision({
       ...decisionContext,
       ...capabilityPlan,
-    }))
+    })
+    this.deps.bus.emit('orchestrator.capability_decision', capabilityDecision)
     let systemPrompt = systemContext.systemPrompt
     let chatMessages = await this.buildRunContext(activeConversation.id, systemPrompt)
     touchSessionEntry(sessionKey, { contextTokens: estimateChatMessagesTokens(chatMessages) })
@@ -306,7 +308,55 @@ export class Orchestrator {
       return
     }
 
-    const assistantText = result.text
+    let assistantText = result.text
+    const gateConfig = this.deps.config.orchestrator?.decisionPipeline?.qualityGate
+    const qualityGate = await evaluateQualityGate({
+      assistantText,
+      capabilityDecision,
+      context: {
+        ...decisionContext,
+        conversationId: activeConversation.id,
+      },
+      evaluator: gateConfig?.evaluator ?? 'heuristic',
+      executor: this.deps.executor,
+      intentDecision,
+      mode: gateConfig?.mode ?? 'observe',
+      model,
+      notifyActivity,
+      requestText: envelope.text,
+      signal,
+      threshold: gateConfig?.threshold,
+      workspacePath: workspace?.path,
+    })
+    this.deps.bus.emit('orchestrator.quality_gate', qualityGate)
+    if (qualityGate.action === 'repair' && gateConfig?.mode === 'retry') {
+      const repaired = await this.runSuppressedExecutor({
+        messages: buildRepairPrompt({ assistantText, gate: qualityGate, requestText: envelope.text }),
+        workspace,
+        signal,
+        notifyActivity,
+      }).catch(err => `Quality repair failed: ${String(err)}`)
+      this.deps.bus.emit('orchestrator.repair_attempted', {
+        conversationId: activeConversation.id,
+        ...(gatewayConversationId === undefined ? {} : { gatewayConversationId }),
+        ...(taskId === undefined ? {} : { taskId }),
+        originalLength: assistantText.length,
+        repairedLength: repaired.length,
+        status: repaired.startsWith('Quality repair failed:') ? 'failed' : 'succeeded',
+      })
+      if (!repaired.startsWith('Quality repair failed:') && repaired.trim().length > 0)
+        assistantText = repaired.trim()
+    }
+    else if (qualityGate.action === 'block' && gateConfig?.mode === 'block') {
+      assistantText = 'The response was blocked by the worker quality gate.'
+    }
+    else if (qualityGate.action === 'warn' && gateConfig?.mode === 'warn') {
+      assistantText = [
+        assistantText,
+        '',
+        `Quality gate warning: ${qualityGate.reason}`,
+      ].join('\n')
+    }
     const now = new Date().toISOString()
     db.insert(messages).values({
       conversationId: activeConversation.id,
@@ -316,11 +366,6 @@ export class Orchestrator {
     }).run()
     db.update(conversations).set({ lastActiveAt: now }).where(eq(conversations.id, activeConversation.id)).run()
     touchSessionEntry(sessionKey, { at: now })
-    this.deps.bus.emit('orchestrator.quality_gate', buildDefaultQualityGate({
-      ...decisionContext,
-      assistantText,
-      conversationId: activeConversation.id,
-    }))
     this.deps.bus.emit('orchestrator.finished', {
       conversationId: activeConversation.id,
       ...(gatewayConversationId === undefined ? {} : { gatewayConversationId }),

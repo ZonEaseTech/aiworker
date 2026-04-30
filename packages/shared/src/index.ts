@@ -45,6 +45,8 @@ export type {
   OrchestratorCompactionConfig,
   OrchestratorCompactionMemoryFlushConfig,
   OrchestratorConfig,
+  OrchestratorDecisionPipelineConfig,
+  OrchestratorQualityGateConfig,
   OutboundMessage,
   PermissionPolicy,
   RegisteredWorker,

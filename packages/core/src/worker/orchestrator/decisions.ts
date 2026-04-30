@@ -3,7 +3,7 @@ import type { ChannelType } from '@zonease/aiworker-shared'
 export const ORCHESTRATOR_DECISION_SCHEMA_VERSION = 1
 
 export type DecisionMode = 'observe_only'
-export type DecisionSource = 's1-default' | 'capability-registry' | 'intent-heuristic' | 'intent-llm' | 'intent-fallback'
+export type DecisionSource = 's1-default' | 'capability-registry' | 'intent-heuristic' | 'intent-llm' | 'intent-fallback' | 'quality-gate'
 
 export type SessionAction = 'continue' | 'new_topic' | 'reset_requested' | 'isolated_task'
 export type WorkerIntent = 'answer' | 'code_work' | 'planning' | 'research' | 'config_admin' | 'memory_update' | 'skill_request' | 'unknown'
@@ -64,17 +64,21 @@ export type CapabilityDecisionPayload = DecisionBasePayload & {
   selectedSkills: CapabilitySkillDescriptor[]
 }
 
-export type QualityGatePayload = DecisionBasePayload & {
-  action: 'pass'
-  dimensions: Record<string, number | null>
+export interface QualityGateFields {
+  action: 'pass' | 'repair' | 'warn' | 'block'
+  dimensions: Record<string, unknown>
+  evaluator: 'heuristic' | 'llm' | 'none'
   finalAnswerLength: number
+  gateMode: 'observe' | 'warn' | 'retry' | 'block'
   missing: string[]
   reason: string
-  score: null
-  status: 'not_evaluated'
+  score: number | null
+  status: 'not_evaluated' | 'passed' | 'failed'
   suggestions: string[]
-  threshold: null
+  threshold: number | null
 }
+
+export type QualityGatePayload = DecisionBasePayload & QualityGateFields
 
 export function buildDefaultIntentDecision(input: DecisionContext): IntentDecisionPayload {
   return buildIntentDecision(input, {
@@ -140,17 +144,25 @@ export function buildPromptCapabilityDecision(input: DecisionContext & {
 export function buildDefaultQualityGate(input: DecisionContext & {
   assistantText: string
 }): QualityGatePayload {
-  return {
-    ...decisionBase(input),
+  return buildQualityGatePayload(input, {
     action: 'pass',
     dimensions: {},
+    evaluator: 'none',
     finalAnswerLength: input.assistantText.length,
+    gateMode: 'observe',
     missing: [],
     reason: 'S1 observe-only default; quality gate is not evaluating or blocking delivery yet.',
     score: null,
     status: 'not_evaluated',
     suggestions: [],
     threshold: null,
+  })
+}
+
+export function buildQualityGatePayload(input: DecisionContext, gate: QualityGateFields): QualityGatePayload {
+  return {
+    ...decisionBase(input, 'quality-gate'),
+    ...gate,
   }
 }
 

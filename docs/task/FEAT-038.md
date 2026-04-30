@@ -37,3 +37,4 @@
 - 2026-04-30 19:05：PLAN-039 S1 完成。已抽出 ContextManager / RunContextComposer，新增 observe-only intent/capability/quality 事件并接入 evolution observer；FEAT-038 继续保持 in_progress，S2 Capability Registry 待复审后继续。
 - 2026-04-30 19:25：PLAN-039 S2 完成。CapabilityRegistry 已 observe-only 聚合 skill、builtin、MCP、toolset descriptor，并驱动 capability decision；执行路径和 tool exposure 不变。
 - 2026-04-30 19:45：PLAN-039 S3 完成。IntentClassifier 已输出结构化 intent/risk/context/profile/sessionAction，支持 heuristic 默认和可选 LLM strict-JSON evaluator；分类结果只影响 observation/capability record。
+- 2026-04-30 20:10：PLAN-039 S4 完成。QualityGate 支持 observe/warn/retry/block、heuristic/LLM evaluator 和一次 repair；默认 observe 不改变交付。

@@ -1,0 +1,208 @@
+import type { ChatMessage, ExecutorProvider, OrchestratorQualityGateConfig } from '@zonease/aiworker-shared'
+
+import type { CapabilityDecisionPayload, DecisionContext, IntentDecisionPayload, QualityGatePayload } from './decisions'
+
+import { buildQualityGatePayload } from './decisions'
+
+export interface QualityGateInput {
+  assistantText: string
+  capabilityDecision: CapabilityDecisionPayload
+  context: DecisionContext
+  evaluator: OrchestratorQualityGateConfig['evaluator']
+  executor: ExecutorProvider
+  intentDecision: IntentDecisionPayload
+  mode: OrchestratorQualityGateConfig['mode']
+  model: string | undefined
+  notifyActivity: () => void
+  requestText: string
+  signal: AbortSignal
+  threshold: number | undefined
+  workspacePath: string | undefined
+}
+
+export async function evaluateQualityGate(input: QualityGateInput): Promise<QualityGatePayload> {
+  const evaluator = input.evaluator ?? 'heuristic'
+  if (evaluator === 'llm') {
+    try {
+      return await evaluateWithExecutor(input)
+    }
+    catch {
+      return evaluateHeuristic({ ...input, evaluator: 'heuristic' })
+    }
+  }
+  return evaluateHeuristic({ ...input, evaluator: 'heuristic' })
+}
+
+export function buildRepairPrompt(input: {
+  assistantText: string
+  gate: QualityGatePayload
+  requestText: string
+}): ChatMessage[] {
+  return [
+    {
+      role: 'system',
+      content: [
+        'Repair the assistant answer so it satisfies the quality gate.',
+        'Return only the improved answer. Do not mention the gate or scoring.',
+      ].join('\n'),
+    },
+    {
+      role: 'user',
+      content: [
+        'Original user request:',
+        input.requestText,
+        '',
+        'Previous answer:',
+        input.assistantText,
+        '',
+        'Quality gate missing items:',
+        input.gate.missing.length > 0 ? input.gate.missing.map(item => `- ${item}`).join('\n') : '(none)',
+        '',
+        'Suggestions:',
+        input.gate.suggestions.length > 0 ? input.gate.suggestions.map(item => `- ${item}`).join('\n') : '(none)',
+      ].join('\n'),
+    },
+  ]
+}
+
+function evaluateHeuristic(input: QualityGateInput): QualityGatePayload {
+  const threshold = input.threshold ?? defaultThreshold(input.intentDecision.qualityProfile)
+  const trimmed = input.assistantText.trim()
+  const missing: string[] = []
+  const suggestions: string[] = []
+  let score = 8
+  if (trimmed.length === 0) {
+    score = 0
+    missing.push('assistant answer is empty')
+    suggestions.push('produce a concrete answer to the user request')
+  }
+  else if (trimmed.length < 12) {
+    score = 4
+    missing.push('assistant answer is too short to verify completeness')
+    suggestions.push('expand the answer with the key result and next step')
+  }
+  if (input.intentDecision.risk === 'high' && trimmed.length < 80) {
+    score = Math.min(score, 6)
+    missing.push('high-risk answer lacks enough detail')
+    suggestions.push('include concrete verification, risk, and approval boundaries')
+  }
+  return buildQualityGatePayload(input.context, {
+    action: actionFor(score, threshold, input.mode ?? 'observe'),
+    dimensions: {
+      completeness: score,
+      evidence: input.intentDecision.risk === 'high' ? Math.min(score, 6) : score,
+      format: trimmed.length > 0 ? 8 : 0,
+      relevance: trimmed.length > 0 ? 8 : 0,
+      safety: input.intentDecision.risk === 'high' ? Math.min(score, 6) : 8,
+    },
+    evaluator: 'heuristic',
+    finalAnswerLength: input.assistantText.length,
+    missing,
+    gateMode: input.mode ?? 'observe',
+    reason: score >= threshold ? 'heuristic quality gate passed' : 'heuristic quality gate found gaps',
+    score,
+    status: score >= threshold ? 'passed' : 'failed',
+    suggestions,
+    threshold,
+  })
+}
+
+async function evaluateWithExecutor(input: QualityGateInput): Promise<QualityGatePayload> {
+  let text = ''
+  for await (const event of input.executor.run({
+    messages: buildGatePrompt(input),
+    ...(input.model ? { model: input.model } : {}),
+    ...(input.workspacePath ? { workspacePath: input.workspacePath } : {}),
+    signal: input.signal,
+    temperature: 0,
+  })) {
+    input.notifyActivity()
+    if (event.type === 'assistant_message_delta')
+      text += event.delta
+    else if (event.type === 'error')
+      throw new Error(event.error)
+  }
+  const parsed = JSON.parse(text.trim()) as unknown
+  const data = recordValue(parsed)
+  if (!data)
+    throw new Error('quality gate returned non-object JSON')
+  const threshold = numeric(data.threshold) ?? input.threshold ?? defaultThreshold(input.intentDecision.qualityProfile)
+  const score = Math.max(0, Math.min(10, numeric(data.score) ?? 0))
+  return buildQualityGatePayload(input.context, {
+    action: oneOf(data.action, ['pass', 'repair', 'warn', 'block'] as const) ?? actionFor(score, threshold, input.mode ?? 'observe'),
+    dimensions: recordValue(data.dimensions) ?? {},
+    evaluator: 'llm',
+    finalAnswerLength: input.assistantText.length,
+    missing: stringArray(data.missing),
+    gateMode: input.mode ?? 'observe',
+    reason: typeof data.reason === 'string' ? data.reason.slice(0, 240) : 'llm quality gate',
+    score,
+    status: score >= threshold ? 'passed' : 'failed',
+    suggestions: stringArray(data.suggestions),
+    threshold,
+  })
+}
+
+function buildGatePrompt(input: QualityGateInput): ChatMessage[] {
+  return [
+    {
+      role: 'system',
+      content: [
+        'Review an AIWorker assistant answer.',
+        'Return only strict JSON:',
+        '{"score":0..10,"threshold":number,"dimensions":{"relevance":0..10,"completeness":0..10,"evidence":0..10,"safety":0..10,"format":0..10},"missing":["..."],"suggestions":["..."],"action":"pass|repair|warn|block","reason":"short"}',
+      ].join('\n'),
+    },
+    {
+      role: 'user',
+      content: [
+        `Quality profile: ${input.intentDecision.qualityProfile}`,
+        `Risk: ${input.intentDecision.risk}`,
+        `Mode: ${input.mode ?? 'observe'}`,
+        `Threshold: ${input.threshold ?? defaultThreshold(input.intentDecision.qualityProfile)}`,
+        '',
+        'User request:',
+        input.requestText,
+        '',
+        'Assistant answer:',
+        input.assistantText,
+      ].join('\n'),
+    },
+  ]
+}
+
+function defaultThreshold(profile: string): number {
+  if (profile === 'high_stakes')
+    return 8
+  if (profile === 'code_review' || profile === 'planning')
+    return 7
+  return 5
+}
+
+function actionFor(score: number, threshold: number, mode: NonNullable<OrchestratorQualityGateConfig['mode']>): QualityGatePayload['action'] {
+  if (score >= threshold)
+    return 'pass'
+  if (mode === 'block')
+    return 'block'
+  if (mode === 'retry')
+    return 'repair'
+  if (mode === 'warn')
+    return 'warn'
+  return 'warn'
+}
+
+function recordValue(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null
+}
+
+function numeric(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
+}
+
+function oneOf<const T extends readonly string[]>(value: unknown, allowed: T): T[number] | null {
+  return typeof value === 'string' && (allowed as readonly string[]).includes(value) ? value as T[number] : null
+}

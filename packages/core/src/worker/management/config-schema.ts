@@ -152,6 +152,11 @@ const decisionPipelineSchema = z.object({
   intentClassifier: z.object({
     evaluator: z.enum(['heuristic', 'llm']).optional(),
   }).optional(),
+  qualityGate: z.object({
+    evaluator: z.enum(['heuristic', 'llm']).optional(),
+    mode: z.enum(['observe', 'warn', 'retry', 'block']).optional(),
+    threshold: z.number().min(0).max(10).optional(),
+  }).optional(),
 }).strict()
 
 // Orchestrator runtime tuning. `maxHistoryMessages` is kept as the

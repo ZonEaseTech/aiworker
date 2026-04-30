@@ -1,5 +1,17 @@
 # AIWorker Changelog
 
+## 2026-04-30 20:10 [progress] FEAT-038 — quality gate S4
+
+落地 worker 决策管线的 S4 quality gate：
+
+- 新增 `QualityGate`，默认 `mode=observe`、`evaluator=heuristic`，记录 score、
+  threshold、dimensions、missing、suggestions 和 action。
+- 新增可选 LLM strict-JSON evaluator，失败时回退 heuristic。
+- 支持 `observe` / `warn` / `retry` / `block`。默认 observe 不改变交付；
+  显式 `retry` 会触发一次 suppressed repair run 并发出
+  `orchestrator.repair_attempted`。
+- Evolution observer 现在也会持久化 repair attempt 事件。
+
 ## 2026-04-30 19:45 [progress] FEAT-038 — intent classifier S3
 
 落地 worker 决策管线的 S3 intent/risk classifier：

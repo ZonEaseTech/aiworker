@@ -95,6 +95,14 @@ export interface OrchestratorCompactionConfig {
 }
 
 export type IntentClassifierEvaluator = 'heuristic' | 'llm'
+export type QualityGateEvaluator = 'heuristic' | 'llm'
+export type QualityGateMode = 'observe' | 'warn' | 'retry' | 'block'
+
+export interface OrchestratorQualityGateConfig {
+  evaluator?: QualityGateEvaluator
+  mode?: QualityGateMode
+  threshold?: number
+}
 
 export interface OrchestratorDecisionPipelineConfig {
   intentClassifier?: {
@@ -104,6 +112,7 @@ export interface OrchestratorDecisionPipelineConfig {
      */
     evaluator?: IntentClassifierEvaluator
   }
+  qualityGate?: OrchestratorQualityGateConfig
 }
 
 /**
