@@ -438,8 +438,9 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
 
     const intent = bus.events.find(event => event.type === 'orchestrator.intent_decision')!.payload
     expect(intent.mode).toBe('observe_only')
-    expect(intent.intent).toBe('unknown')
-    expect(intent.sessionAction).toBe('continue')
+    expect(intent.intent).toBe('answer')
+    expect(intent.sessionAction).toBe('new_topic')
+    expect(intent.source).toBe('intent-heuristic')
 
     const capability = bus.events.find(event => event.type === 'orchestrator.capability_decision')!.payload
     expect(capability.mode).toBe('observe_only')

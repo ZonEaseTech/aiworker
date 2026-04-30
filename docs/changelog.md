@@ -1,5 +1,16 @@
 # AIWorker Changelog
 
+## 2026-04-30 19:45 [progress] FEAT-038 — intent classifier S3
+
+落地 worker 决策管线的 S3 intent/risk classifier：
+
+- 新增 `IntentClassifier`，默认用 deterministic heuristic 生成 intent、risk、
+  requiredContext、qualityProfile、confidence、sessionAction 和 reason。
+- `orchestrator.intent_decision` 现在记录真实 session action 和任务意图。
+- 新增可选 `orchestrator.decisionPipeline.intentClassifier.evaluator = "llm"`，
+  启用后通过 suppressed executor 做 strict-JSON 分类，失败时回退 heuristic。
+- Capability planner 现在消费 intent decision，但仍只写 observation，不改变主执行路径。
+
 ## 2026-04-30 19:25 [progress] FEAT-038 — capability registry S2
 
 落地 worker 决策管线的 S2 observe-only capability registry：

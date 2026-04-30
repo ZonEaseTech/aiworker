@@ -94,6 +94,18 @@ export interface OrchestratorCompactionConfig {
   memoryFlush?: OrchestratorCompactionMemoryFlushConfig
 }
 
+export type IntentClassifierEvaluator = 'heuristic' | 'llm'
+
+export interface OrchestratorDecisionPipelineConfig {
+  intentClassifier?: {
+    /**
+     * `heuristic` is deterministic and cheap. `llm` runs a suppressed executor
+     * strict-JSON classifier before the main turn and falls back to heuristic.
+     */
+    evaluator?: IntentClassifierEvaluator
+  }
+}
+
 /**
  * Orchestrator runtime tuning.
  *
@@ -108,6 +120,7 @@ export interface OrchestratorConfig {
   keepRecentTokens?: number
   maxHistoryMessages?: number
   compaction?: OrchestratorCompactionConfig
+  decisionPipeline?: OrchestratorDecisionPipelineConfig
 }
 
 export const DEFAULT_MAX_HISTORY_MESSAGES = 20

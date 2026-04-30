@@ -230,3 +230,12 @@
 - `orchestrator.capability_decision` 改为来自 registry snapshot + planner，记录 available builtin/MCP/skill/toolset 与 selected skill/builtin/MCP 信息。
 - S2 仍不把 registry 输出强制传给 executor，不改变实际 tool exposure。
 - 新增 registry 单元测试覆盖 project-scope `mcp.json` / `toolsets.json` 解析与 selection 结果。
+
+### S3 完成记录
+
+2026-04-30：S3 已落地。
+
+- 新增结构化 `IntentClassifier`，默认使用 deterministic heuristic，输出 intent、risk、requiredContext、qualityProfile、confidence、sessionAction 和 reason。
+- `orchestrator.intent_decision` 现在反映真实 session action（continue / new_topic / reset_requested）和任务意图，不再只是 S1 默认值。
+- 预留 `orchestrator.decisionPipeline.intentClassifier.evaluator = "llm"`，启用后通过 suppressed executor 做 strict-JSON intent classification，失败时回退 heuristic。
+- Capability planner 现在消费 intent decision 的 intent / requiredContext，但仍只影响 observation，不改变执行路径。

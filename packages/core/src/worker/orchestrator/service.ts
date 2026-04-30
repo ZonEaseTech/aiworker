@@ -14,6 +14,7 @@ import type {
 import type { WorkerEventBus } from '../events/bus'
 import type { WorkspaceHandle, WorkspaceManager } from '../executor/workspace'
 import type { ApprovalDecision, ApprovalStore } from './approvals'
+import type { DecisionContext } from './decisions'
 import type { ProcessManager } from './process-manager'
 
 import { DEFAULT_MAX_HISTORY_MESSAGES } from '@zonease/aiworker-shared'
@@ -33,7 +34,8 @@ import {
   resolveExecutorModel,
 } from './context'
 import { ContextManager, RunContextComposer } from './context-manager'
-import { buildDefaultIntentDecision, buildDefaultQualityGate, buildPromptCapabilityDecision } from './decisions'
+import { buildDefaultQualityGate, buildPromptCapabilityDecision } from './decisions'
+import { classifyIntentHeuristic, classifyIntentWithExecutor } from './intent-classifier'
 import { evaluateToolPolicy } from './policy'
 
 interface OrchestratorDeps {
@@ -61,6 +63,8 @@ interface OrchestratorDeps {
 type ConversationRow = typeof conversations.$inferSelect
 interface ResolvedConversation {
   conversation: ConversationState
+  sessionAction: 'continue' | 'new_topic' | 'reset_requested' | 'isolated_task'
+  sessionReason: string
   sessionKey: string
 }
 
@@ -172,7 +176,7 @@ export class Orchestrator {
           }
         },
       }),
-      job: () => this.run(conversation, envelope, workspace, controller.signal, () => activityCb?.(), sessionKey),
+      job: () => this.run(conversation, envelope, workspace, controller.signal, () => activityCb?.(), resolved),
     })
   }
 
@@ -182,8 +186,9 @@ export class Orchestrator {
     workspace: WorkspaceHandle | null,
     signal: AbortSignal,
     notifyActivity: () => void,
-    sessionKey: string,
+    resolved: ResolvedConversation,
   ): Promise<void> {
+    const { sessionKey } = resolved
     const db = getWorkerDb()
     let activeConversation = (await this.maybeCompactConversation({
       conversation,
@@ -205,14 +210,25 @@ export class Orchestrator {
       sessionKey,
       ...(taskId === undefined ? {} : { taskId }),
     }
-    this.deps.bus.emit('orchestrator.intent_decision', buildDefaultIntentDecision(decisionContext))
+    const recentRows = this.loadPromptTranscriptRowsNewestFirst(activeConversation.id, undefined, 12).reverse()
+    const intentDecision = await this.classifyIntentDecision({
+      decisionContext,
+      envelope,
+      model,
+      notifyActivity,
+      recentMessages: recentRows.map(row => ({ role: row.role, content: row.content })),
+      resolved,
+      signal,
+      workspace,
+    })
+    this.deps.bus.emit('orchestrator.intent_decision', intentDecision)
     const systemContext = await this.contextManager.buildSystemPrompt({ priorSummary: activeConversation.summary ?? null })
     const registry = await this.capabilityRegistry.snapshot({ skills: systemContext.availableSkills })
     const capabilityPlan = planCapabilities({
-      intent: 'unknown',
+      intent: intentDecision.intent,
       promptSkillLimit: systemContext.promptSkillLimit,
       registry,
-      requiredContext: ['recent_history'],
+      requiredContext: intentDecision.requiredContext,
     })
     this.deps.bus.emit('orchestrator.capability_decision', buildPromptCapabilityDecision({
       ...decisionContext,
@@ -366,6 +382,38 @@ export class Orchestrator {
     }
   }
 
+  private async classifyIntentDecision(input: {
+    decisionContext: DecisionContext
+    envelope: Envelope
+    model: string | undefined
+    notifyActivity: () => void
+    recentMessages: Array<{ role: string, content: string }>
+    resolved: ResolvedConversation
+    signal: AbortSignal
+    workspace: WorkspaceHandle | null
+  }) {
+    const classification = {
+      envelopeText: input.envelope.text,
+      priorSummary: input.resolved.conversation.summary ?? null,
+      recentMessages: input.recentMessages,
+      sessionAction: input.resolved.sessionAction,
+      sessionReason: input.resolved.sessionReason,
+    }
+    const evaluator = this.deps.config.orchestrator?.decisionPipeline?.intentClassifier?.evaluator ?? 'heuristic'
+    if (evaluator === 'llm') {
+      return classifyIntentWithExecutor({
+        classification,
+        context: input.decisionContext,
+        executor: this.deps.executor,
+        model: input.model,
+        notifyActivity: input.notifyActivity,
+        signal: input.signal,
+        workspacePath: input.workspace?.path,
+      })
+    }
+    return classifyIntentHeuristic(input.decisionContext, classification)
+  }
+
   private buildAgentRunInput(input: {
     messages: ChatMessage[]
     model: string | undefined
@@ -416,7 +464,7 @@ export class Orchestrator {
     if (!existing) {
       const conversation = this.createConversation(envelope)
       this.upsertSession(sessionKey, envelope, conversation.id)
-      return { conversation, sessionKey }
+      return { conversation, sessionAction: 'new_topic', sessionReason: 'no-existing-conversation', sessionKey }
     }
 
     if (legacyConversation)
@@ -426,7 +474,7 @@ export class Orchestrator {
       this.closeConversation(existing)
       const conversation = this.createConversation(envelope)
       this.rotateSession(sessionKey, envelope, conversation.id, gatewayResetReason(envelope))
-      return { conversation, sessionKey }
+      return { conversation, sessionAction: 'reset_requested', sessionReason: 'gateway-reset', sessionKey }
     }
 
     const existingWorkspace = await this.provisionWorkspace(existing.id)
@@ -442,12 +490,12 @@ export class Orchestrator {
     )
     this.deps.bus.emit('conversation.classifier', { conversationId: existing.id, decision })
     if (decision.continue)
-      return { conversation: rowToState(existing), sessionKey }
+      return { conversation: rowToState(existing), sessionAction: 'continue', sessionReason: decision.reason, sessionKey }
 
     this.closeConversation(existing)
     const conversation = this.createConversation(envelope)
     this.rotateSession(sessionKey, envelope, conversation.id, 'classifier:new-topic')
-    return { conversation, sessionKey }
+    return { conversation, sessionAction: 'new_topic', sessionReason: decision.reason || 'classifier:new-topic', sessionKey }
   }
 
   private closeConversation(existing: ConversationRow): void {

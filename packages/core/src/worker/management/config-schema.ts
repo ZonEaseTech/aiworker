@@ -148,6 +148,12 @@ const orchestratorCompactionSchema = z.object({
   }).optional(),
 })
 
+const decisionPipelineSchema = z.object({
+  intentClassifier: z.object({
+    evaluator: z.enum(['heuristic', 'llm']).optional(),
+  }).optional(),
+}).strict()
+
 // Orchestrator runtime tuning. `maxHistoryMessages` is kept as the
 // backward-compatible fallback cap; setting any token field enables S2
 // token-budget context assembly.
@@ -157,6 +163,7 @@ const orchestratorConfigSchema = z.object({
   keepRecentTokens: z.number().int().min(1).max(2_000_000).optional(),
   maxHistoryMessages: z.number().int().min(1).max(200).optional(),
   compaction: orchestratorCompactionSchema.optional(),
+  decisionPipeline: decisionPipelineSchema.optional(),
 }).superRefine((value, ctx) => {
   if (value.contextWindowTokens !== undefined && value.reserveTokens !== undefined && value.reserveTokens >= value.contextWindowTokens) {
     ctx.addIssue({

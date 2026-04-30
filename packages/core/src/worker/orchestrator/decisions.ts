@@ -3,7 +3,7 @@ import type { ChannelType } from '@zonease/aiworker-shared'
 export const ORCHESTRATOR_DECISION_SCHEMA_VERSION = 1
 
 export type DecisionMode = 'observe_only'
-export type DecisionSource = 's1-default' | 'capability-registry'
+export type DecisionSource = 's1-default' | 'capability-registry' | 'intent-heuristic' | 'intent-llm' | 'intent-fallback'
 
 export type SessionAction = 'continue' | 'new_topic' | 'reset_requested' | 'isolated_task'
 export type WorkerIntent = 'answer' | 'code_work' | 'planning' | 'research' | 'config_admin' | 'memory_update' | 'skill_request' | 'unknown'
@@ -77,8 +77,7 @@ export type QualityGatePayload = DecisionBasePayload & {
 }
 
 export function buildDefaultIntentDecision(input: DecisionContext): IntentDecisionPayload {
-  return {
-    ...decisionBase(input),
+  return buildIntentDecision(input, {
     confidence: 0,
     intent: 'unknown',
     qualityProfile: 'default',
@@ -86,6 +85,29 @@ export function buildDefaultIntentDecision(input: DecisionContext): IntentDecisi
     requiredContext: ['recent_history'],
     risk: 'low',
     sessionAction: 'continue',
+    source: 's1-default',
+  })
+}
+
+export function buildIntentDecision(input: DecisionContext, decision: {
+  confidence: number
+  intent: WorkerIntent
+  qualityProfile: QualityProfile
+  reason: string
+  requiredContext: RequiredContext[]
+  risk: WorkerRisk
+  sessionAction: SessionAction
+  source: DecisionSource
+}): IntentDecisionPayload {
+  return {
+    ...decisionBase(input, decision.source),
+    confidence: decision.confidence,
+    intent: decision.intent,
+    qualityProfile: decision.qualityProfile,
+    reason: decision.reason,
+    requiredContext: decision.requiredContext,
+    risk: decision.risk,
+    sessionAction: decision.sessionAction,
   }
 }
 
