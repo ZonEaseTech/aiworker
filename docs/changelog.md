@@ -1,5 +1,19 @@
 # AIWorker Changelog
 
+## 2026-04-30 16:33 [progress] REL-006 — 准备发布 0.4.9
+
+开始准备 `@zonease/aiworker-cli@0.4.9` patch 发版：
+
+- npm latest 当前是 `0.4.8`，本地最高 release tag 是 `v0.4.8`，远端不存在
+  `v0.4.9` tag。
+- 本次发版包含 `0.4.8` 之后的 CLI 使用体验改进：`npx` / `bunx` 启动 shim、
+  无 Bun 时的友好错误提示、非 git 目录 `aiworker init`，以及中文分组 help。
+- 发布仍走 tag-triggered GitHub Actions workflow；本地只做发版门禁、dist 产物检查和
+  dry-run pack，不直接发布 npm。
+- 本地 release gates 已通过：frozen install、workspace tests、typecheck、lint、root
+  build、CLI run smoke、CLI fleet smoke、dist manifest/shim/Web bundle 检查、publish
+  dry-run 到本机 npm authentication boundary、`git diff --check`。
+
 ## 2026-04-30 16:28 [progress] FEAT-041 CLI help 信息架构
 
 优化 `aiworker --help` 可读性：

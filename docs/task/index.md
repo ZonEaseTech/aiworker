@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-04-30 16:28
+> Updated: 2026-04-30 16:33
 
 ## Usage
 
@@ -135,3 +135,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [ ] [**BUG-038 Worker info reports stale runtimeVersion after 0.4.8 upgrade**](BUG-038.md) `P2`
 - [x] [**BUG-039 优化 npx / bunx CLI 启动体验**](BUG-039.md) `P1`
 - [x] [**FEAT-041 优化 CLI help 信息架构**](FEAT-041.md) `P2`
+- [-] [**REL-006 发布 aiworker CLI 0.4.9**](REL-006.md) `P1`
