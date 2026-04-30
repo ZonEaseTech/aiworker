@@ -1,5 +1,23 @@
 # AIWorker Changelog
 
+## 2026-04-30 17:46 [bug] BUG-040 — init Soul selection
+
+Fixed brand-new project `aiworker init` so it no longer silently creates stub
+persona files:
+
+- Added project Soul selection before `.aiworker/`, worker identity, and
+  worker.db creation. Non-interactive brand-new init now requires
+  `--soul <preset>` and fails without writing files when omitted.
+- Added builtin presets plus interactive `customize` questions for role,
+  boundaries, out-of-scope handling, communication style, approval posture,
+  capability packs, and toolsets.
+- Project init now seeds non-stub `SOUL.md` / `AGENT.md` plus draft
+  `policy.json`, `toolsets.json`, and `capability-packs.json`, while preserving
+  the existing no-overwrite behavior for existing `.aiworker/` and external
+  agent files.
+- Updated CLI docs, help quickstart, and smoke coverage to use
+  `aiworker init --soul developer` for non-interactive paths.
+
 ## 2026-04-30 16:41 [progress] REL-006 — 0.4.9 published
 
 Published `@zonease/aiworker-cli@0.4.9`:

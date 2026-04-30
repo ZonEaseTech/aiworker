@@ -261,3 +261,5 @@ aiworker soul pin developer@1.2.0
 2026-04-29 18:18：S1 已通过 BKD 子任务 `urey7cyc` 合入 main，merge commit `8284aa5`。后续仍按分片推进，下一阶段才考虑 S2 Soul templates registry skeleton，不在 S1 session 里扩展。
 
 2026-04-30 15:47：补充 init 体验决策：git repo 只应是“可追踪项目上下文”的加分项，不应是初始化项目级 worker 的硬门槛。brand-new `aiworker init` 默认在当前 cwd 创建 `.aiworker/`；非 git cwd 通过 preflight notes 提醒用户确认目标目录，避免用 error 把正常空项目拦住。
+
+2026-04-30 17:46：BUG-040 完成 S2R 修复。`aiworker init` 在 brand-new project 创建 worker identity / worker.db 前先解析 Soul；非交互路径必须传 `--soul <preset>`，交互路径提供 preset wizard 和 `customize` 问答；project layout 现在生成非 stub `SOUL.md` / `AGENT.md` 以及 `policy.json`、`toolsets.json`、`capability-packs.json` 草案。S3-S6 仍按本计划后续切片推进。

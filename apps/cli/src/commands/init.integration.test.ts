@@ -77,6 +77,20 @@ describe('aiworker init / scope project placement', () => {
     })
   })
 
+  it('init in a fresh non-interactive project requires an explicit Soul preset', async () => {
+    await withCliIntegrationCleanup(async (cleanup) => {
+      const project = await cleanup.makeTempDir('aiworker-cli-init-no-soul-')
+      const home = await cleanup.makeTempDir('aiworker-cli-init-no-soul-home-')
+      const result = await runCli(cleanup, ['init'], project, home)
+
+      expect(result.exitCode).toBe(2)
+      expect(result.output).toContain('brand-new project init requires a Soul preset in non-interactive mode')
+      expect(await exists(path.join(project, '.aiworker'))).toBe(false)
+      expect(await exists(path.join(home, '.aiworker', '.env'))).toBe(false)
+      expect(await exists(path.join(home, '.aiworker', 'worker.db'))).toBe(false)
+    })
+  })
+
   it('init in a fresh git repo creates project layout without user-scope fallback', async () => {
     await withCliIntegrationCleanup(async (cleanup) => {
       const root = await cleanup.makeTempDir('aiworker-cli-init-')
@@ -84,16 +98,25 @@ describe('aiworker init / scope project placement', () => {
       const project = path.join(root, 'repo')
       await mkdir(path.join(project, '.git'), { recursive: true })
 
-      const result = await runCli(cleanup, ['init'], project, home)
+      const result = await runCli(cleanup, ['init', '--soul', 'developer'], project, home)
 
       expect(result.exitCode).toBe(0)
+      expect(result.output).toContain('Soul         : developer (Developer, flag)')
       expect(await exists(path.join(project, '.aiworker', 'AGENT.md'))).toBe(true)
       expect(await exists(path.join(project, '.aiworker', 'SOUL.md'))).toBe(true)
+      expect(await exists(path.join(project, '.aiworker', 'policy.json'))).toBe(true)
+      expect(await exists(path.join(project, '.aiworker', 'toolsets.json'))).toBe(true)
+      expect(await exists(path.join(project, '.aiworker', 'capability-packs.json'))).toBe(true)
       expect(await exists(path.join(project, '.aiworker', 'local', '.env'))).toBe(true)
       expect(await exists(path.join(project, '.aiworker', 'local', 'worker.db'))).toBe(true)
       expect(await exists(path.join(project, '.aiworker', 'local', 'workers'))).toBe(false)
       expect(await exists(path.join(home, '.aiworker', '.env'))).toBe(false)
       expect(await exists(path.join(home, '.aiworker', 'worker.db'))).toBe(false)
+      const soul = await readFile(path.join(project, '.aiworker', 'SOUL.md'), 'utf8')
+      expect(soul).toContain('# Developer Soul')
+      expect(soul).not.toContain('Voice / style guide')
+      const policy = JSON.parse(await readFile(path.join(project, '.aiworker', 'policy.json'), 'utf8'))
+      expect(policy.soul.preset).toBe('developer')
     })
   })
 
@@ -105,13 +128,17 @@ describe('aiworker init / scope project placement', () => {
       await mkdir(path.join(project, '.git'), { recursive: true })
 
       const before = await readdir(project)
-      const result = await runCli(cleanup, ['init', '--dry-run'], project, home)
+      const result = await runCli(cleanup, ['init', '--dry-run', '--soul', 'developer'], project, home)
       const after = await readdir(project)
 
       expect(result.exitCode).toBe(0)
       expect(result.output).toContain('[aiworker init] preflight (project-scope)')
       expect(result.output).toContain('Mode         : dry-run (no files will be written)')
+      expect(result.output).toContain('Soul         : developer (Developer, flag)')
       expect(result.output).toContain('.aiworker/AGENT.md')
+      expect(result.output).toContain('.aiworker/policy.json')
+      expect(result.output).toContain('.aiworker/toolsets.json')
+      expect(result.output).toContain('.aiworker/capability-packs.json')
       expect(result.output).toContain('.aiworker/local/worker.db (worker bootstrap)')
       expect(after).toEqual(before)
       expect(await exists(path.join(project, '.aiworker'))).toBe(false)
@@ -126,7 +153,7 @@ describe('aiworker init / scope project placement', () => {
       const home = await cleanup.makeTempDir('aiworker-cli-scope-project-home-')
       const project = path.join(root, 'repo')
       await mkdir(path.join(project, '.git'), { recursive: true })
-      const init = await runCli(cleanup, ['init'], project, home)
+      const init = await runCli(cleanup, ['init', '--soul', 'developer'], project, home)
       expect(init.exitCode).toBe(0)
 
       const result = await runCli(cleanup, ['scope'], project, home)
@@ -144,7 +171,7 @@ describe('aiworker init / scope project placement', () => {
     await withCliIntegrationCleanup(async (cleanup) => {
       const project = await cleanup.makeTempDir('aiworker-cli-non-git-')
       const home = await cleanup.makeTempDir('aiworker-cli-non-git-home-')
-      const result = await runCli(cleanup, ['init'], project, home)
+      const result = await runCli(cleanup, ['init', '--soul', 'developer'], project, home)
 
       expect(result.exitCode).toBe(0)
       expect(result.output).toContain('No git repository detected')
@@ -157,7 +184,7 @@ describe('aiworker init / scope project placement', () => {
     await withCliIntegrationCleanup(async (cleanup) => {
       const project = await cleanup.makeTempDir('aiworker-cli-force-')
       const home = await cleanup.makeTempDir('aiworker-cli-force-home-')
-      const result = await runCli(cleanup, ['init', '--force'], project, home)
+      const result = await runCli(cleanup, ['init', '--force', '--soul', 'developer'], project, home)
 
       expect(result.exitCode).toBe(0)
       expect(result.output).toContain('--force is accepted for compatibility')
@@ -207,7 +234,7 @@ describe('aiworker init / scope project placement', () => {
       await writeFile(path.join(project, '.agents', 'marker.txt'), agentsSkill, 'utf8')
       await writeFile(path.join(project, '.claude', 'config.json'), claudeConfig, 'utf8')
 
-      const result = await runCli(cleanup, ['init'], project, home)
+      const result = await runCli(cleanup, ['init', '--soul', 'developer'], project, home)
 
       expect(result.exitCode).toBe(0)
       expect(result.output).toContain('AGENTS.md (external agent file; not modified, future adopt/merge candidate)')
@@ -232,7 +259,7 @@ describe('aiworker init / scope project placement', () => {
       }
       await mkdir(path.join(project, '.git'), { recursive: true })
 
-      const init = await runCli(cleanup, ['init'], project, home, env)
+      const init = await runCli(cleanup, ['init', '--soul', 'developer'], project, home, env)
       expect(init.exitCode).toBe(0)
 
       const run = await runCli(cleanup, ['run', '--message', 'hello', '--dry-run'], project, home, env)

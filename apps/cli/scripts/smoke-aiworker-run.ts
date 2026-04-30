@@ -41,7 +41,7 @@ async function main(): Promise<number> {
     const entry = new URL('../src/aiworker.ts', import.meta.url).pathname
 
     // Step 1: init
-    const initProc = spawn(['bun', entry, 'init'], { cwd: projectDir, env, stdout: 'pipe', stderr: 'pipe' })
+    const initProc = spawn(['bun', entry, 'init', '--soul', 'developer'], { cwd: projectDir, env, stdout: 'pipe', stderr: 'pipe' })
     const initCode = await initProc.exited
     if (initCode !== 0) {
       consola.error(`[smoke-aiworker-run] aiworker init exited ${initCode}`)

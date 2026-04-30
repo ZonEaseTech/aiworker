@@ -240,7 +240,7 @@ describe('ensureProjectAiworker', () => {
       }
 
       // persona docs
-      for (const f of ['AGENT.md', 'SOUL.md', 'USER.md', 'MEMORY.md', 'ROLLUP.md']) {
+      for (const f of ['AGENT.md', 'SOUL.md', 'USER.md', 'MEMORY.md', 'ROLLUP.md', 'policy.json', 'toolsets.json', 'capability-packs.json']) {
         const s = await stat(path.join(aiworker, f))
         expect(s.isFile()).toBe(true)
       }
@@ -248,6 +248,13 @@ describe('ensureProjectAiworker', () => {
       // mcp.json with empty servers map
       const mcp = JSON.parse(await readFile(path.join(aiworker, 'mcp.json'), 'utf8'))
       expect(mcp).toEqual({ servers: {} })
+
+      const policy = JSON.parse(await readFile(path.join(aiworker, 'policy.json'), 'utf8'))
+      expect(policy.status).toBe('draft')
+      const toolsets = JSON.parse(await readFile(path.join(aiworker, 'toolsets.json'), 'utf8'))
+      expect(toolsets.defaultToolsets).toEqual([])
+      const packs = JSON.parse(await readFile(path.join(aiworker, 'capability-packs.json'), 'utf8'))
+      expect(packs.packs).toEqual([])
 
       // .gitignore in .aiworker/ ignores local/
       const topGitignore = await readFile(path.join(aiworker, '.gitignore'), 'utf8')

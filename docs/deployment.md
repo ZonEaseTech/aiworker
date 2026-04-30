@@ -62,7 +62,7 @@ export INTERNAL_SHARED_SECRET=$(openssl rand -base64 24)
 aiworker gateway start --port 9218
 
 # 4. 终端 B：拉起 worker 前台（HTTP :9217 + 同机注册到 gateway）。
-aiworker init                 # 首次：mint identity + bootstrap token（输出一次）
+aiworker init --soul developer # 首次：选择 Soul，mint identity + bootstrap token（输出一次）
 aiworker serve --port 9217 --gateway ws://127.0.0.1:9218/ws
 
 # 5. 终端 C：从 worker stdout 抓 wtk_... 后 pair。

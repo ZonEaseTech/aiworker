@@ -55,28 +55,33 @@ worker 容器内或 ssh 进 worker 主机直接操作 `worker.db` 的子命令�
 - `AIWORKER_GATEWAY_URL` / `AIWORKER_JOIN_TOKEN` / `AIWORKER_DISPLAY_NAME`（PLAN-018 / FEAT-024）— self-enroll 三件套：URL + token 同时设 → `aiworker serve` 跳过 operator 手动 `aiworker pair`，bootstrap 完成后用 outbound WS 主动拨 gateway 把自身写入 fleet。`DISPLAY_NAME` 可选，缺省回落 workerId（最长 80 字符）。详见下文 §`aiworker serve` 与 [`docs/deployment.md` § Worker self-enroll quick start](./deployment.md#worker-self-enroll-quick-start-plan-018--feat-024)。
 - `AIWORKER_ENROLL_MODE`（PLAN-019 / FEAT-026）— `'auto' | 'otp'`，缺省 `'auto'`。`'auto'` 下走 self-enroll 还是 OTP 由 `JOIN_TOKEN` 是否设来判定（设 → self-enroll；未设 → OTP）；显式 `'otp'` 强制 attended 路径，即使 `JOIN_TOKEN` 同时存在也忽略它（用于 deployer 拿不到 fleet 凭证的 attended 场景）。详见下文 §`aiworker serve` 与 [`docs/deployment.md` § Worker OTP-attended enroll quick start](./deployment.md#worker-otp-attended-enroll-quick-startplan-019--feat-026)。
 
-### `aiworker init [--global] [--force]`
+### `aiworker init [--soul <preset>] [--global] [--force]`
 
 初始化 `worker.db`，跑迁移，首次启动 mint identity + bootstrap token，种 default config，落 layout 模板。幂等——重复跑不会重打 bootstrap token，也不会覆盖既有 seed。
+
+brand-new project scope 会在创建 worker identity / worker.db 之前选择 Soul。交互终端直接运行 `aiworker init` 会出现 preset wizard；非交互脚本必须显式传 `--soul <preset>`，避免静默生成通用 stub。当前内置 preset：`developer`、`project-manager`、`devops-sre`、`product-designer`、`qa-reviewer`、`support-operator`、`finance-ops`、`hr-recruiting`、`general-assistant`、`customize`。其中 `customize` 需要交互终端回答职责、边界、职责外响应、沟通风格和高风险操作策略。
 
 PLAN-023 起 `aiworker init` 默认走 **project scope**：
 
 | 模式 | 触发条件 | 落位 |
 |------|----------|------|
-| **project**（默认） | 当前 cwd（未显式 `AIWORKER_HOME`） | `<cwd>/.aiworker/{AGENT.md,SOUL.md,USER.md,MEMORY.md,ROLLUP.md,skills/,memories/,mcp.json}` + `<cwd>/.aiworker/local/{worker.db,identity.json,.env,workspaces/}` |
+| **project**（默认） | 当前 cwd（未显式 `AIWORKER_HOME`） | `<cwd>/.aiworker/{AGENT.md,SOUL.md,USER.md,MEMORY.md,ROLLUP.md,policy.json,toolsets.json,capability-packs.json,skills/,memories/,mcp.json}` + `<cwd>/.aiworker/local/{worker.db,identity.json,.env,workspaces/}` |
 | **user**（legacy） | `--global` flag，或显式 `AIWORKER_HOME=...` | `~/.aiworker/{worker.db,.env,workers/<workerId>/{AGENT.md,SOUL.md,USER.md,brain/skills,brain/memories,workspaces/}}` |
 
-`local/` 目录强制 `.gitignore = "*\n!.gitignore\n"`（worker.db / .env / workspaces 等敏感产物绝不入 git）；`.aiworker/.gitignore = "local/\n"`（其余 persona / skills / memories 默认入 git，团队共享 agent 人格定义）。每个 project worker 独立 mint master key（写入 `.aiworker/local/.env`，chmod 0600），与 user 级 `~/.aiworker/.env` 物理隔离——这是数据安全边界。
+`local/` 目录强制 `.gitignore = "*\n!.gitignore\n"`（worker.db / .env / workspaces 等敏感产物绝不入 git）；`.aiworker/.gitignore = "local/\n"`（其余 persona / policy / toolsets / skills / memories 默认入 git，团队共享 agent 人格定义）。每个 project worker 独立 mint master key（写入 `.aiworker/local/.env`，chmod 0600），与 user 级 `~/.aiworker/.env` 物理隔离——这是数据安全边界。
 
 ```sh
 # 进入要拥有这个 worker 的项目目录（不要求 git repo）
 cd ~/code/my-project
 
-# 默认 project scope
-aiworker init
+# 非交互或脚本里显式选择 Soul preset
+aiworker init --soul developer
 # → ✓ project-scope worker w_xxxxxxxxxxxx ready (~/code/my-project)
 # → AIWORKER_MASTER_KEY 写入 .aiworker/local/.env（仅首次输出明文）
 # → bootstrap token 打印（仅一次）
+
+# 交互终端可省略 --soul，按 wizard 选择 preset 或 customize
+aiworker init
 
 # 走 legacy user scope（host 上唯一 worker）
 aiworker init --global

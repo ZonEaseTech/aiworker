@@ -22,6 +22,7 @@ import process from 'node:process'
  *
  *   <project>/.aiworker/
  *     AGENT.md / SOUL.md / USER.md / MEMORY.md / ROLLUP.md   # team-shared persona
+ *     policy.json / toolsets.json / capability-packs.json     # team-shared drafts
  *     skills/  memories/  mcp.json                            # team-shared
  *     local/                                                  # gitignored
  *       worker.db / identity.json / .env / workspaces/
@@ -252,6 +253,47 @@ async function seedIfAbsent(filePath: string, content: string): Promise<void> {
   }
 }
 
+export interface ProjectAiworkerSeed {
+  agentMd?: string
+  capabilityPacksJson?: string
+  mcpJson?: string
+  memoryMd?: string
+  policyJson?: string
+  rollupMd?: string
+  soulMd?: string
+  toolsetsJson?: string
+  userMd?: string
+}
+
+const DEFAULT_PROJECT_AIWORKER_SEED: Required<ProjectAiworkerSeed> = {
+  agentMd: `# Agent\n\n> Persona / role document for the agent that lives in this project. The orchestrator injects this file into the system prompt.\n`,
+  soulMd: `# Voice & style\n\n> Voice / style guide. Influences how the agent phrases responses across channels.\n`,
+  userMd: `# User profile\n\n> The agent writes learned facts about the primary user here over time. Edit by hand to bootstrap.\n`,
+  memoryMd: `# Long-term memory\n\n> Durable facts, decisions, preferences. Loaded into every session.\n`,
+  rollupMd: `# Continuity rollup\n\n> Auto-distilled by the evolution cron job. Recent decisions / todos / context that survive session compaction.\n`,
+  mcpJson: `${JSON.stringify({ servers: {} }, null, 2)}\n`,
+  policyJson: `${JSON.stringify({
+    schemaVersion: 1,
+    status: 'draft',
+    risk: {
+      highRiskRequiresApproval: true,
+    },
+    outOfScope: {
+      default: 'ask-for-operator-direction',
+    },
+  }, null, 2)}\n`,
+  toolsetsJson: `${JSON.stringify({
+    schemaVersion: 1,
+    status: 'draft',
+    defaultToolsets: [],
+  }, null, 2)}\n`,
+  capabilityPacksJson: `${JSON.stringify({
+    schemaVersion: 1,
+    status: 'draft',
+    packs: [],
+  }, null, 2)}\n`,
+}
+
 /**
  * Create the worker's home tree if it does not yet exist. Safe to call on
  * every boot — every step is idempotent and seed files are only written
@@ -299,6 +341,7 @@ export async function ensureWorkerHome(workerId: string): Promise<void> {
 /**
  * Materialise `<projectRoot>/.aiworker/` with the project-scope template:
  *   - persona docs (AGENT.md / SOUL.md / USER.md / MEMORY.md / ROLLUP.md)
+ *   - governance drafts (policy.json / toolsets.json / capability-packs.json)
  *   - empty skills/ memories/ dirs
  *   - mcp.json placeholder
  *   - local/ (chmod 0700) with `* + !.gitignore` to silently ignore everything
@@ -306,10 +349,11 @@ export async function ensureWorkerHome(workerId: string): Promise<void> {
  *
  * Idempotent: existing files are not overwritten.
  */
-export async function ensureProjectAiworker(projectRoot: string): Promise<void> {
+export async function ensureProjectAiworker(projectRoot: string, seed: ProjectAiworkerSeed = {}): Promise<void> {
   const root = path.resolve(projectRoot)
   const aiworker = path.join(root, DEFAULT_HOME_DIR)
   const localDir = path.join(aiworker, PROJECT_LOCAL_DIR)
+  const mergedSeed = { ...DEFAULT_PROJECT_AIWORKER_SEED, ...seed }
 
   await ensureDir(aiworker)
   await ensureDir(path.join(aiworker, 'skills'))
@@ -319,27 +363,39 @@ export async function ensureProjectAiworker(projectRoot: string): Promise<void> 
 
   await seedIfAbsent(
     path.join(aiworker, 'AGENT.md'),
-    `# Agent\n\n> Persona / role document for the agent that lives in this project. The orchestrator injects this file into the system prompt.\n`,
+    mergedSeed.agentMd,
   )
   await seedIfAbsent(
     path.join(aiworker, 'SOUL.md'),
-    `# Voice & style\n\n> Voice / style guide. Influences how the agent phrases responses across channels.\n`,
+    mergedSeed.soulMd,
   )
   await seedIfAbsent(
     path.join(aiworker, 'USER.md'),
-    `# User profile\n\n> The agent writes learned facts about the primary user here over time. Edit by hand to bootstrap.\n`,
+    mergedSeed.userMd,
   )
   await seedIfAbsent(
     path.join(aiworker, 'MEMORY.md'),
-    `# Long-term memory\n\n> Durable facts, decisions, preferences. Loaded into every session.\n`,
+    mergedSeed.memoryMd,
   )
   await seedIfAbsent(
     path.join(aiworker, 'ROLLUP.md'),
-    `# Continuity rollup\n\n> Auto-distilled by the evolution cron job. Recent decisions / todos / context that survive session compaction.\n`,
+    mergedSeed.rollupMd,
   )
   await seedIfAbsent(
     path.join(aiworker, 'mcp.json'),
-    `${JSON.stringify({ servers: {} }, null, 2)}\n`,
+    mergedSeed.mcpJson,
+  )
+  await seedIfAbsent(
+    path.join(aiworker, 'policy.json'),
+    mergedSeed.policyJson,
+  )
+  await seedIfAbsent(
+    path.join(aiworker, 'toolsets.json'),
+    mergedSeed.toolsetsJson,
+  )
+  await seedIfAbsent(
+    path.join(aiworker, 'capability-packs.json'),
+    mergedSeed.capabilityPacksJson,
   )
   await seedIfAbsent(
     path.join(aiworker, '.gitignore'),

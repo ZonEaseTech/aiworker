@@ -159,7 +159,7 @@ function buildHelpSections(cli: CAC, sections: HelpSection[]): HelpSection[] {
     {
       title: '使用引导',
       body: [
-        '  新建本地 worker：aiworker init -> aiworker serve',
+        '  新建本地 worker：aiworker init --soul developer -> aiworker serve',
         '  只试一次消息：aiworker run --message "..."',
         '  管理 fleet：aiworker gateway start -> aiworker pair 或 aiworker enroll list',
         '  已接入 fleet 后对话：aiworker chat <workerId> "..."',

@@ -13,7 +13,7 @@ packages/
   gateway-proto/   # WS 协议纯类型 + zod：METHODS / EVENTS / Frame
   core/            # transport-agnostic worker runtime（@zonease/aiworker-core）
   storage-sqlite/  # fleet.db + worker.db schemas, drizzle configs, migrations
-  fs-layout/       # ~/.aiworker/ path resolver + ensureWorkerHome bootstrap
+  fs-layout/       # user/project scope path resolver + worker/project layout bootstrap
 ```
 
 - **`apps/api`** 只负责 worker 运行时（数据面）。`AIWORKER_MODE=worker` 仍保留以兼容运维脚本，但入口不再按模式分叉——`boot()` 一律构建 `createWorkerApp`。dashboard REST 已随 PLAN-013 整体下线。运行时业务（brain / executor / channels / orchestrator / cron / approvals / gateway-client / runtime / secrets / bootstrap / management 业务态）已物理抽离至 `packages/core`，apps/api 仅保留 Hono 路由 + middleware + bootstrap 装配（`@zonease/aiworker-api/bootstrap` 暴露给 `aiworker serve`），保持 transport 与业务的边界。
@@ -23,7 +23,7 @@ packages/
 - **`packages/gateway-proto`** 是协议的纯类型 + 运行时校验层。不依赖任何网络框架，所有 METHODS / EVENTS / Frame schema 都在这里定义，CLI / web / gateway / worker 四侧共用。
 - **`packages/core`** 是 transport-agnostic 的 worker runtime（PLAN-015 §S1 物理抽离）。封装 brain provider、executor provider、channel adapter、orchestrator、cron、approvals、gateway-client、secrets、bootstrap、management 业务态等所有运行时业务；公共面 `packages/core/src/index.ts` 同时被 `apps/api` 路由、`apps/cli` 与 gateway node 接入复用。**不**依赖 `hono` / `@hono/*` / `@scalar/*`——边界由 ESLint `no-restricted-imports` 守，CI 拦下任何回退到 transport 层耦合的尝试。
 - **`packages/storage-sqlite`** 是 fleet.db 与 worker.db 的唯一 schema 源。通过 subpath `./fleet` 与 `./worker` 保持数据域边界；`defaultFleetMigrationsFolder` / `defaultWorkerMigrationsFolder` 通过 `import.meta.url` 解析，避免调用方硬编码 `./drizzle/...`。
-- **`packages/fs-layout`** 管理每 worker 的 `~/.aiworker/workers/<id>/` 目录布局。gateway 与 worker 都复用它解析 `AGENT.md` / `SOUL.md` / `USER.md` / `config.yaml` / `brain/` 等路径。
+- **`packages/fs-layout`** 管理 user scope 的 `~/.aiworker/workers/<id>/` 与 project scope 的 `<project>/.aiworker/` 目录布局。gateway 与 worker 都复用它解析 `AGENT.md` / `SOUL.md` / `USER.md` / `config.yaml` / `brain/` 等路径。
 
 ## 部署模型（PLAN-016）
 
@@ -80,9 +80,27 @@ fleet.db + node routing        worker.db + local runtime
     workspaces/                # per-conversation ephemeral workspaces
 ```
 
+project scope 下，团队共享上下文落在 `<project>/.aiworker/`：
+
+```text
+<project>/.aiworker/
+  AGENT.md
+  SOUL.md
+  USER.md
+  MEMORY.md
+  ROLLUP.md
+  policy.json
+  toolsets.json
+  capability-packs.json
+  skills/
+  memories/
+  mcp.json
+  local/                       # gitignored: worker.db / .env / workspaces
+```
+
 - **Skills / memories** 读写统一过 `FilesystemBrainProvider`（PLAN-012 将旧 `HermesProvider` 改名并把 HTTP 依赖全部拆掉）；filesystem 是权威，SQLite 只负责 identity 与可索引状态。
 - **`config.yaml`** 是 `worker_config.configJson` 的 advisory 镜像——`PUT /api/worker/config` 与 `aiworker config-set`（worker-local）/ `aiworker config set`（operator-remote）落库成功后都会调 `mirrorConfigToYaml`，DB 仍为 source-of-truth（乐观锁 `If-Match` 依赖 DB version）。
-- **`AGENT.md` / `SOUL.md` / `USER.md`** 首次启动种出 stub，由 `ensureWorkerHome(workerId)` 幂等保证；注入到 system prompt 的逻辑待 PLAN-014 在 envelope 改造里一并落。
+- **`AGENT.md` / `SOUL.md` / `USER.md`** user scope 首次启动由 `ensureWorkerHome(workerId)` 幂等种出；project scope 由 `aiworker init` 根据 Soul preset 种出非 stub 模板，并保持 no-overwrite。
 
 ## Overview
 

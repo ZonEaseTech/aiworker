@@ -90,12 +90,14 @@ cli
   .option('--global', '初始化旧版用户级 `~/.aiworker/`（单主机全局 worker）')
   .option('--force', '兼容旧脚本；项目初始化允许在非 git 目录运行，且仍不会覆盖现有文件')
   .option('--dry-run', '只打印初始化预检和计划写入，不创建或修改文件')
-  .action(async (opts: { dryRun?: boolean, global?: boolean, force?: boolean }) => {
-    await runInit({
+  .option('--soul <preset>', '项目级初始化使用的 Soul 预设；非交互 brand-new init 必填，可选 developer/project-manager/devops-sre/product-designer/qa-reviewer/support-operator/finance-ops/hr-recruiting/general-assistant/customize')
+  .action(async (opts: { dryRun?: boolean, global?: boolean, force?: boolean, soul?: string }) => {
+    process.exit(await runInit({
       ...(opts.global === true ? { global: true } : {}),
       ...(opts.force === true ? { force: true } : {}),
       ...(opts.dryRun === true ? { dryRun: true } : {}),
-    })
+      ...(opts.soul === undefined ? {} : { soul: opts.soul }),
+    }))
   })
 
 cli

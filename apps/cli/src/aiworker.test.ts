@@ -145,7 +145,7 @@ describe('aiworker cli registration', () => {
       'Gateway / fleet 管理',
       '远端 worker 操作',
       '安装、诊断、高级维护',
-      'aiworker init -> aiworker serve',
+      'aiworker init --soul developer -> aiworker serve',
       'serve',
       'sessions list',
       'fleet list',
