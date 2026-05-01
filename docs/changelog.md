@@ -1,5 +1,18 @@
 # AIWorker Changelog
 
+## 2026-05-01 [release] REL-008 / PLAN-062 — 发布 aiworker CLI 0.4.11
+
+`@zonease/aiworker-cli` 从 `0.4.10` bump 到 `0.4.11`，作为 patch release。包含自 0.4.10 以来已合入 main 的改动：
+
+- FEAT-042 / PLAN-051：Orchestrator 控制执行器与任务执行器解耦，control executor 走独立 model / timeout / fallback 配置；`/api/worker/info` 增加 `controlExecutor` 诊断。
+- FEAT-043 / FEAT-044：CLI `init` 后引导与 Soul 能力测试流程优化；新增 executor capability 投影命令、capability 校验与 dry-run。
+- BUG-006 / PLAN-061：`reloadRuntime` 通过内部 promise chain 串行化，避免热重载 swap race。
+- BUG-038 / PLAN-059：`/api/worker/info` 的 `runtimeVersion` 改由 CLI package version 注入，发布版报告与 npm 版本一致。
+- REFACTOR-013：稳定 CLI test gate 并拆分 Soul preset 模块。
+- REFACTOR-014 / PLAN-060：CLI 内部 operator 模块迁出 `aim` 旧前缀，公共行为不变。
+- DOC-003 / DOC-004：声明 brain 与 executor 能力边界、清理陈旧 PMA 待办状态。
+- 顺手修复 `aiworker serve` 在 merge resolve 中遗失的 worker admin URL 提示与 `--open` / `--no-open` 通路：当 `webStaticDir` 挂载时 serve 会再次打印 admin 地址，并按 `--open` / TTY 判断自动开浏览器；CLI flag 也接回 `runServe` 的 `open` 选项。残留的 `[aiw serve]` 旧前缀同步替换为 `[aiworker serve]`。
+
 ## 2026-05-02 02:44 [progress] FEAT-042 / PLAN-051 — Orchestrator control executor
 
 完成 Orchestrator control-plane executor 与 task executor 的解耦：

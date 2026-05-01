@@ -90,3 +90,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-059 Worker info runtimeVersion 发布版本注入**](PLAN-059.md) `2026-05-02`
 - [x] [**PLAN-060 Rename CLI operator module away from aim**](PLAN-060.md) `2026-05-02`
 - [x] [**PLAN-061 reloadRuntime in-process serialization**](PLAN-061.md) `2026-05-02`
+- [-] [**PLAN-062 发布 aiworker CLI 0.4.11**](PLAN-062.md) `2026-05-01`
