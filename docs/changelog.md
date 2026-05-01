@@ -1,6 +1,6 @@
 # AIWorker Changelog
 
-## 2026-05-01 [release] REL-008 / PLAN-062 — 发布 aiworker CLI 0.4.11
+## 2026-05-01 19:35 [release] REL-008 / PLAN-062 — 发布 aiworker CLI 0.4.11 + 测试服升级
 
 `@zonease/aiworker-cli` 从 `0.4.10` bump 到 `0.4.11`，作为 patch release。包含自 0.4.10 以来已合入 main 的改动：
 
@@ -12,6 +12,11 @@
 - REFACTOR-014 / PLAN-060：CLI 内部 operator 模块迁出 `aim` 旧前缀，公共行为不变。
 - DOC-003 / DOC-004：声明 brain 与 executor 能力边界、清理陈旧 PMA 待办状态。
 - 顺手修复 `aiworker serve` 在 merge resolve 中遗失的 worker admin URL 提示与 `--open` / `--no-open` 通路：当 `webStaticDir` 挂载时 serve 会再次打印 admin 地址，并按 `--open` / TTY 判断自动开浏览器；CLI flag 也接回 `runServe` 的 `open` 选项。残留的 `[aiw serve]` 旧前缀同步替换为 `[aiworker serve]`。
+
+发布与升级流水：
+
+- GitHub Actions release run `25229619765` for `v0.4.11` 全过；npm `@zonease/aiworker-cli` latest 解析为 `0.4.11`；GitHub Release `v0.4.11` 含 darwin-arm64 / darwin-x64 / linux-arm64 / linux-x64 四个 tarball；published smoke `bunx --bun @zonease/aiworker-cli@0.4.11 --version` 报告 `aiworker/0.4.11`。
+- 测试服 (`aissh aiwork`) `bun install -g @zonease/aiworker-cli@0.4.11 && systemctl restart aiworker-gateway`：unit active running，CGroup `ExecStart` 指向 `/root/.bun/install/global/node_modules/@zonease/aiworker-cli/aiworker-bun.js gateway start`，`/127.0.0.1:9218/health` ok，9218 监听不变；fleet.db、Caddy、systemd unit 文件均未动。
 
 ## 2026-05-02 02:44 [progress] FEAT-042 / PLAN-051 — Orchestrator control executor
 

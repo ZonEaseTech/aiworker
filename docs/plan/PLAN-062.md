@@ -1,6 +1,6 @@
 # PLAN-062 发布 aiworker CLI 0.4.11
 
-- **status**: approved
+- **status**: completed
 - **createdAt**: 2026-05-01
 - **approvedAt**: 2026-05-01
 - **relatedTask**: REL-008
@@ -59,7 +59,25 @@
 ## Annotations
 
 - 2026-05-01 用户直接要求"发版且在测试服更新最新版"，按 patch release + 测试服升级一并执行。
+- 2026-05-01 19:27 本地 release gates 全过；publish dry-run 在 `apps/cli/dist` 内 packed 26 files / 2.43MB 后停在 npm authentication boundary（与 0.4.10 流程一致）。
+- 2026-05-01 19:31 准备 commit 时发现 root `bun run lint` 在三处报错——其中 `aiworker.ts` / `operator/commands/common.ts` 是单纯的 perfectionist 排序漂移；`commands/serve.ts` 的 `openWorkerAdminBrowser is defined but never used` 是 3ac7168 merge resolve 时把 a1c94c6 引入的 admin URL/打开浏览器调用合掉、helper 留下的死代码。修复路径选择"恢复调用、清掉旧 `[aiw serve]` 前缀"，作为发版前置 fix 一同进入 0.4.11；CLI action 内 `opts.open` 也接回 `runServe`。
+- 2026-05-01 19:31 push `main` + `v0.4.11`；GitHub Actions release run `25229619765` 全部成功（typecheck / test / bundle / npm publish / 单文件二进制 / GitHub Release）；workflow 仍带 Node.js 20 deprecation annotation（`softprops/action-gh-release@v2`），不影响发布。
+- 2026-05-01 19:33 npm `@zonease/aiworker-cli` latest 解析为 `0.4.11`；`bunx --bun @zonease/aiworker-cli@0.4.11 --version` 报告 `aiworker/0.4.11`；GitHub Release `v0.4.11` 含 darwin-arm64 / darwin-x64 / linux-arm64 / linux-x64 四个 tarball。
+- 2026-05-01 19:35 测试服 (`aissh aiwork`) `bun install -g @zonease/aiworker-cli@0.4.11` 完成；`systemctl restart aiworker-gateway` 后 unit active running，CGroup `ExecStart` 指向 `/root/.bun/install/global/node_modules/@zonease/aiworker-cli/aiworker-bun.js gateway start`；`/health` 返回 `{"ok":true,"service":"aiworker-gateway",...}`。
 
 ## Verification
 
-待 release 流程完成后回填。
+- Passed: `bun install --frozen-lockfile`
+- Passed: `bun run typecheck`
+- Passed: `bun run lint`（修了 3 处后）
+- Passed: `bun run --filter '*' test`
+- Passed: `bun run build`
+- Passed: `bun run --filter '@zonease/aiworker-cli' smoke:aiworker-run`
+- Passed: `bun run --filter '@zonease/aiworker-cli' smoke:aiworker-fleet`
+- Passed: `apps/cli/dist/package.json` 报告 `0.4.11`，`aiworker.js` shim 与 `aiworker-bun.js` 存在，Fleet/Worker Web bundle 均已就位
+- Passed to local auth boundary: `cd apps/cli/dist && bun publish --dry-run --access public` packed 26 files / 2.43MB
+- Passed: `git diff --check`
+- Passed: GitHub Actions release workflow run `25229619765` for `v0.4.11`
+- Passed: npm registry latest = `0.4.11`，published smoke `bunx --bun @zonease/aiworker-cli@0.4.11 --version` = `aiworker/0.4.11`
+- Passed: GitHub Release `v0.4.11` 含 4 个平台 tarball
+- Passed: 测试服 (`aissh aiwork`) `aiworker --version` = `aiworker/0.4.11`，`systemctl is-active aiworker-gateway` = active，`/health` ok

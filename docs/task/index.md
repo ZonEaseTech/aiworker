@@ -146,4 +146,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**DOC-003 标记废弃 PMA 方案与 capability 边界**](DOC-003.md) `P1`
 - [x] [**DOC-004 清理陈旧 PMA 待办状态**](DOC-004.md) `P1`
 - [x] [**REFACTOR-014 Rename internal CLI operator module away from `aim`**](REFACTOR-014.md) `P2`
-- [-] [**REL-008 发布 aiworker CLI 0.4.11**](REL-008.md) `P1`
+- [x] [**REL-008 发布 aiworker CLI 0.4.11**](REL-008.md) `P1`
