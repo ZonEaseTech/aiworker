@@ -140,8 +140,18 @@ export async function runServe(options: ServeOptions = {}): Promise<void> {
 
   const server = Bun.serve({ port, hostname: host, fetch: app.fetch })
   consola.success(`[aiworker serve] worker ${state.workerId} listening on ${host}:${port} (config v${state.configVersion})`)
-  if (webStaticDir)
+  if (webStaticDir) {
     consola.info(`[aiworker serve] /admin/* serving worker bundle from ${webStaticDir}`)
+    const adminBaseUrl = buildWorkerAdminBaseUrl({ host, port })
+    consola.info(`[aiworker serve] worker admin: ${adminBaseUrl}`)
+    if (shouldOpenWorkerAdminBrowser({ open: options.open, stdoutIsTTY: process.stdout.isTTY === true })) {
+      const adminUrl = buildWorkerAdminTokenUrl({ host, port, token: state.tokenPlaintext })
+      openWorkerAdminBrowser(adminUrl)
+    }
+  }
+  else if (options.open === true) {
+    consola.warn('[aiworker serve] --open 已请求，但 worker web 静态资源未挂载，跳过打开浏览器')
+  }
 
   // PLAN-018 / FEAT-024 self-enrollment + PLAN-019 / FEAT-026 OTP-attended 接入。
   // 触发表（与 PLAN-019 §Worker side 一致）：
@@ -383,12 +393,12 @@ function openWorkerAdminBrowser(url: string): void {
   try {
     const child = spawn(command, args, { detached: true, stdio: 'ignore' })
     child.once('error', (err) => {
-      consola.warn(`[aiw serve] 打开浏览器失败：${err instanceof Error ? err.message : String(err)}`)
+      consola.warn(`[aiworker serve] 打开浏览器失败：${err instanceof Error ? err.message : String(err)}`)
     })
     child.unref()
-    consola.info('[aiw serve] 正在打开 worker admin（bearer 通过 URL fragment 带入，UI 会立即清理 hash）')
+    consola.info('[aiworker serve] 正在打开 worker admin（bearer 通过 URL fragment 带入，UI 会立即清理 hash）')
   }
   catch (err) {
-    consola.warn(`[aiw serve] 打开浏览器失败：${err instanceof Error ? err.message : String(err)}`)
+    consola.warn(`[aiworker serve] 打开浏览器失败：${err instanceof Error ? err.message : String(err)}`)
   }
 }

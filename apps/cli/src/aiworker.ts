@@ -9,37 +9,10 @@ import consola from 'consola'
 import packageJson from '../package.json' with { type: 'json' }
 
 import {
-  runApprovalsGrant as runApprovalsGrantRemote,
-  runApprovalsList as runApprovalsListRemote,
-} from './operator/commands/approvals'
-
-import { runChat } from './operator/commands/chat'
-import {
-  runConfigGet,
-  runConfigSet as runConfigSetRemote,
-} from './operator/commands/config'
-import { runEnrollApprove, runEnrollList, runEnrollReject } from './operator/commands/enroll'
-import { runGatewayStart, runGatewayStatus, runGatewayStop } from './operator/commands/gateway'
-import { runInstallSystemd } from './operator/commands/install'
-import { runLogs } from './operator/commands/logs'
-import { runPair } from './operator/commands/pair'
-import {
-  runScheduleAdd as runScheduleAddRemote,
-  runScheduleList as runScheduleListRemote,
-  runScheduleRemove as runScheduleRemoveRemote,
-} from './operator/commands/schedule'
-import { runTokenRotate as runTokenRotateRemote } from './operator/commands/token'
-import {
-  runWorkersInfo,
-  runWorkersLaunch,
-  runWorkersList,
-  runWorkersRemove,
-  runWorkersStop,
-} from './operator/commands/workers'
-import {
   runApprovalsGrant as runApprovalsGrantLocal,
   runApprovalsList as runApprovalsListLocal,
 } from './commands/approvals'
+
 import {
   runConfigSet as runConfigSetLocal,
   runConfigShow,
@@ -68,6 +41,33 @@ import { runSoulList, runSoulShow } from './commands/soul'
 import { runTokenRotate as runTokenRotateLocal } from './commands/token'
 import { configureCliHelp, localizeGlobalOptions } from './help'
 import { bootstrapCliDotenv } from './lib/bootstrap'
+import {
+  runApprovalsGrant as runApprovalsGrantRemote,
+  runApprovalsList as runApprovalsListRemote,
+} from './operator/commands/approvals'
+import { runChat } from './operator/commands/chat'
+import {
+  runConfigGet,
+  runConfigSet as runConfigSetRemote,
+} from './operator/commands/config'
+import { runEnrollApprove, runEnrollList, runEnrollReject } from './operator/commands/enroll'
+import { runGatewayStart, runGatewayStatus, runGatewayStop } from './operator/commands/gateway'
+import { runInstallSystemd } from './operator/commands/install'
+import { runLogs } from './operator/commands/logs'
+import { runPair } from './operator/commands/pair'
+import {
+  runScheduleAdd as runScheduleAddRemote,
+  runScheduleList as runScheduleListRemote,
+  runScheduleRemove as runScheduleRemoveRemote,
+} from './operator/commands/schedule'
+import { runTokenRotate as runTokenRotateRemote } from './operator/commands/token'
+import {
+  runWorkersInfo,
+  runWorkersLaunch,
+  runWorkersList,
+  runWorkersRemove,
+  runWorkersStop,
+} from './operator/commands/workers'
 
 /**
  * aiworker —— 单二进制 CLI（PLAN-020 / FEAT-028）。
@@ -196,6 +196,8 @@ cli
       serveOptions.gatewayReconnect = false
     if (opts.serveWeb === false)
       serveOptions.serveWeb = false
+    if (opts.open !== undefined)
+      serveOptions.open = opts.open
     serveOptions.runtimeVersion = packageJson.version
     await runServe(serveOptions)
   })

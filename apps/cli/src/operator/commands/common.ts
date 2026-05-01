@@ -3,7 +3,7 @@ import type { OperatorState } from '../state'
 
 import process from 'node:process'
 
-import { OperatorWsError, createOperatorClient } from '../client'
+import { createOperatorClient, OperatorWsError } from '../client'
 import { loadOperatorState, normalizeGatewayWsUrl, patchOperatorState, saveOperatorState } from '../state'
 
 /**
