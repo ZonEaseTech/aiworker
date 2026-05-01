@@ -130,7 +130,9 @@ cli
   .option('--gateway-token <token>', '连接 gateway 时使用的 bearer token（loopback 可省略）')
   .option('--no-reconnect', '关闭 gateway-client 自动重连（smoke / 测试时使用）')
   .option('--no-serve-web', '不挂载 worker bundle 到 /admin/*（默认挂载）')
-  .action(async (opts: { port?: number[], host?: string, gateway?: string, gatewayToken?: string, reconnect?: boolean, serveWeb?: boolean }) => {
+  .option('--open', '启动后打开 worker admin（会通过 URL fragment 带入一次性 bearer）')
+  .option('--no-open', '启动后不自动打开浏览器')
+  .action(async (opts: { port?: number[], host?: string, gateway?: string, gatewayToken?: string, reconnect?: boolean, serveWeb?: boolean, open?: boolean }) => {
     const serveOptions: Parameters<typeof runServe>[0] = {}
     if (opts.port?.[0] !== undefined)
       serveOptions.port = opts.port[0]
@@ -144,6 +146,8 @@ cli
       serveOptions.gatewayReconnect = false
     if (opts.serveWeb === false)
       serveOptions.serveWeb = false
+    if (opts.open !== undefined)
+      serveOptions.open = opts.open
     await runServe(serveOptions)
   })
 

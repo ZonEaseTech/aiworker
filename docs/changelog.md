@@ -1,5 +1,18 @@
 # AIWorker Changelog
 
+## 2026-04-30 21:09 [progress] FEAT-043 — serve admin auto-open
+
+优化 `aiworker serve` 的本地管理入口体验：
+
+- worker web bundle 挂载时输出 `/admin/` 基础 URL，日志不打印完整 bearer token。
+- 交互式 TTY 默认尝试打开浏览器，并通过 URL fragment 携带当前 worker bearer；
+  worker UI 继续复用既有 hash → sessionStorage → 清 hash 流程。
+- 新增 `--open` / `--no-open` 控制浏览器打开行为；`--no-serve-web` 或静态资源缺失时不打开。
+- `0.0.0.0` / IPv6 wildcard bind host 会映射为浏览器可访问的 loopback URL。
+
+验证通过：聚焦 `serve.integration.test.ts`、`aiworker.test.ts`、CLI package
+typecheck/test/build、root lint、`git diff --check`。
+
 ## 2026-04-30 20:34 [progress] REL-007 — 0.4.10 published
 
 Published `@zonease/aiworker-cli@0.4.10`:

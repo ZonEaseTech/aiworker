@@ -81,3 +81,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-050 Project-scope engine cwd preservation**](PLAN-050.md) `2026-04-30`
 - [ ] [**PLAN-051 Orchestrator 控制执行器与任务执行器解耦**](PLAN-051.md) `2026-04-30`
 - [x] [**PLAN-052 发布 aiworker CLI 0.4.10**](PLAN-052.md) `2026-04-30`
+- [x] [**PLAN-053 优化 aiworker serve 本地管理入口体验**](PLAN-053.md) `2026-04-30`

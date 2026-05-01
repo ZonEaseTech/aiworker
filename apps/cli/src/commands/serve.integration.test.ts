@@ -6,6 +6,13 @@ import process from 'node:process'
 
 import { describe, expect, it } from 'bun:test'
 
+import {
+  buildOpenBrowserCommand,
+  buildWorkerAdminBaseUrl,
+  buildWorkerAdminTokenUrl,
+  shouldOpenWorkerAdminBrowser,
+} from './serve'
+
 const cliEntry = path.resolve(import.meta.dir, '..', 'aiworker.ts')
 const MASTER_KEY = '00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff'
 
@@ -151,6 +158,44 @@ function signalProcess(proc: ServeProcess, signal: NodeJS.Signals): void {
     throw err
   }
 }
+
+describe('worker admin 启动入口 helper', () => {
+  it('按 bind host 生成浏览器可访问的 admin 基础 URL', () => {
+    expect(buildWorkerAdminBaseUrl({ host: '127.0.0.1', port: 9217 })).toBe('http://127.0.0.1:9217/admin/')
+    expect(buildWorkerAdminBaseUrl({ host: '0.0.0.0', port: 9217 })).toBe('http://127.0.0.1:9217/admin/')
+    expect(buildWorkerAdminBaseUrl({ host: '::', port: 9217 })).toBe('http://[::1]:9217/admin/')
+    expect(buildWorkerAdminBaseUrl({ host: '[::1]', port: 9217 })).toBe('http://[::1]:9217/admin/')
+  })
+
+  it('把 bearer token 放进 URL fragment 而不是 query string', () => {
+    const url = buildWorkerAdminTokenUrl({ host: 'localhost', port: 9217, token: 'wtk_a b/=' })
+
+    expect(url).toBe('http://localhost:9217/admin/#token=wtk_a%20b%2F%3D')
+    expect(url).not.toContain('?token=')
+  })
+
+  it('默认只在交互式 TTY 自动打开，显式参数可覆盖', () => {
+    expect(shouldOpenWorkerAdminBrowser({ stdoutIsTTY: true })).toBe(true)
+    expect(shouldOpenWorkerAdminBrowser({ stdoutIsTTY: false })).toBe(false)
+    expect(shouldOpenWorkerAdminBrowser({ open: true, stdoutIsTTY: false })).toBe(true)
+    expect(shouldOpenWorkerAdminBrowser({ open: false, stdoutIsTTY: true })).toBe(false)
+  })
+
+  it('按平台映射本机浏览器打开命令', () => {
+    expect(buildOpenBrowserCommand('http://127.0.0.1:9217/admin/', 'darwin')).toEqual({
+      command: 'open',
+      args: ['http://127.0.0.1:9217/admin/'],
+    })
+    expect(buildOpenBrowserCommand('http://127.0.0.1:9217/admin/', 'linux')).toEqual({
+      command: 'xdg-open',
+      args: ['http://127.0.0.1:9217/admin/'],
+    })
+    expect(buildOpenBrowserCommand('http://127.0.0.1:9217/admin/', 'win32')).toEqual({
+      command: 'cmd',
+      args: ['/c', 'start', '', 'http://127.0.0.1:9217/admin/'],
+    })
+  })
+})
 
 describe('aiworker serve foreground lifecycle', () => {
   it('stays alive after startup and exits cleanly on SIGTERM', async () => {

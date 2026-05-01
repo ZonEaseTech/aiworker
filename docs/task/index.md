@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-04-30 20:34
+> Updated: 2026-04-30 21:09
 
 ## Usage
 
@@ -140,3 +140,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-041 Project-scope engines start outside the project root**](BUG-041.md) `P1`
 - [ ] [**FEAT-042 Orchestrator 控制执行器与任务执行器解耦**](FEAT-042.md) `P1`
 - [x] [**REL-007 发布 aiworker CLI 0.4.10**](REL-007.md) `P1`
+- [x] [**FEAT-043 优化 aiworker serve 本地管理入口体验**](FEAT-043.md) `P2`
