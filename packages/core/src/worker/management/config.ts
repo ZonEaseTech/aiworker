@@ -113,7 +113,7 @@ export async function putConfig(
 /**
  * Write the redacted worker config as YAML to `<workerHome>/config.yaml`.
  * Advisory mirror — DB stays authoritative; this file is for operator
- * convenience (`cat config.yaml`, `aim config edit`). Best-effort: failures
+ * convenience (`cat config.yaml`, `aiworker config get/set`). Best-effort: failures
  * are logged but do not bubble up.
  */
 export async function mirrorConfigToYaml(workerId: string, redacted: WorkerConfig, version: number): Promise<void> {

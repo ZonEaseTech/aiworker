@@ -110,7 +110,7 @@ export type ApprovalRequestedPayload = z.infer<typeof approvalRequestedPayloadSc
 /**
  * PLAN-019 — gateway 在 mode='otp' enroll 第一帧后立即推 `enrollment.otp` 给
  * 发起 connect 的 worker（载到该 socket 上），worker 把 OTP 显示给运维让其在
- * dashboard / aim CLI 走 `enroll.approve`。`expiresAt` 由 gateway 维护，过期
+ * dashboard / aiworker operator CLI 走 `enroll.approve`。`expiresAt` 由 gateway 维护，过期
  * 视为 reject。
  */
 export const enrollmentOtpPayloadSchema = workerIdField.extend({
@@ -147,7 +147,7 @@ export type EnrollmentPendingPayload = z.infer<typeof enrollmentPendingPayloadSc
 
 /**
  * 事件名 → payload schema 的注册表。
- * 下游（aim CLI / web console）据此对入站 event 做强校验。
+ * 下游（aiworker operator CLI / web console）据此对入站 event 做强校验。
  */
 export const EVENT_PAYLOADS: {
   [EVENTS.WORKER_ONLINE]: typeof workerOnlinePayloadSchema

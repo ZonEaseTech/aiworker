@@ -12,7 +12,7 @@ function parseChannel(value: string): ChannelType {
   return value as ChannelType
 }
 
-/** `aim schedule list <workerId>` — 列出某 worker 上所有 cron 任务。 */
+/** `aiworker schedule list <workerId>` — 列出某 worker 上所有 cron 任务。 */
 export async function runScheduleList(workerId: string): Promise<number> {
   try {
     const res = await withSession(async ({ client }) => {
@@ -37,7 +37,7 @@ export interface ScheduleAddOptions {
   enabled?: boolean
 }
 
-/** `aim schedule add <workerId> --expression ... --prompt ... --channel ... --chat-id ...` */
+/** `aiworker schedule add <workerId> --expression ... --prompt ... --channel ... --chat-id ...` */
 export async function runScheduleAdd(opts: ScheduleAddOptions): Promise<number> {
   try {
     const channel = parseChannel(opts.channel)
@@ -71,7 +71,7 @@ export async function runScheduleAdd(opts: ScheduleAddOptions): Promise<number> 
   }
 }
 
-/** `aim schedule remove <workerId> <jobId>` */
+/** `aiworker schedule remove <workerId> <jobId>` */
 export async function runScheduleRemove(workerId: string, jobId: string): Promise<number> {
   try {
     const res = await withSession(async ({ client }) => {

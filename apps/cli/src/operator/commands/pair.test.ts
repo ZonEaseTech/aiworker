@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it } from 'bun:test'
 
 /**
  * BUG-002 回归覆盖：pair 成功后必须把本次使用的 `--url` 持久化为 `gatewayUrl`，
- * 否则后续 aim 命令会回落到 default 的 ws://localhost:9218，造成"pair 后立刻断"的体验。
+ * 否则后续 aiworker operator 命令会回落到 default 的 ws://localhost:9218，造成"pair 后立刻断"的体验。
  *
- * 实现策略：通过 `runPair` 的 deps 注入 fake `withSession` 与 `patchAimState`，
+ * 实现策略：通过 `runPair` 的 deps 注入 fake `withSession` 与 `patchOperatorState`，
  * 避免 module mock 污染其它命令测试。
  */
 
@@ -24,7 +24,7 @@ beforeEach(() => {
 
 const testDeps = {
   errorToExitCode: () => 1,
-  patchAimState: async (patch: PatchPayload) => {
+  patchOperatorState: async (patch: PatchPayload) => {
     patchCalls.push(patch)
     return { gatewayUrl: 'ws://localhost:9218', deviceId: 'op-test', deviceToken: '', ...patch }
   },

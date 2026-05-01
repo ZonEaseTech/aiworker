@@ -15,6 +15,38 @@
 - `bun test apps/api/src/worker/management/routes.test.ts`
 - `bun run --filter '@zonease/aiworker-api' typecheck`
 
+## 2026-05-02 02:00 [refactor] REFACTOR-014 / PLAN-060 — CLI operator module 内部命名清理
+
+完成 BUG-010 / PLAN-058 的后续内部源码清理，公共 CLI 行为不变：
+
+- `apps/cli/src/aim/` 通过 `git mv` 迁到 `apps/cli/src/operator/`。
+- CLI entry 与 smoke 脚本 import 改为 `operator` 路径。
+- 内部 operator state/client/session 符号从 `Aim*` 改为 `Operator*`，包括 `OperatorState`、`loadOperatorState`、`patchOperatorState`、`OperatorClient`、`createOperatorClient` 和 `OperatorWsError`。
+- `aiworker gateway start` 仍写 `~/.aiworker/aiworker.json`，daemon 文件仍是 `aiworker-gateway.pid` / `aiworker-gateway.log`。
+- BUG-010 / PLAN-058 当前说明补充：`apps/cli/src/aim` 保留只代表当时历史状态，当前实现已迁到 `operator`。
+
+验证：
+
+- `bun run --filter '@zonease/aiworker-cli' test`
+- `bun run --filter '@zonease/aiworker-cli' typecheck`
+- `rg -n "\\baim\\b|\\baiw\\b|aim\\.json|aim-gateway|src/aim" apps/cli/src apps/cli/scripts` 无命中。
+- `git diff --check`
+
+## 2026-05-02 01:38 [bug] BUG-010 / PLAN-058 — CLI runtime 旧命名前缀清理
+
+按最新版本做 clean rename，不保留 legacy operator state 文件名：
+
+- 用户可见 runtime 前缀从 `[aiw ...]` 统一为 `[aiworker ...]`，worker-local dash-form 命令使用 `[aiworker config-set]`、`[aiworker token-rotate]`、`[aiworker schedule-*]`。
+- OTP enrollment 提示从 `aim enroll approve <otp>` 改为 `aiworker enroll approve <otp>`。
+- operator state 从 `~/.aiworker/aim.json` 改为 `~/.aiworker/aiworker.json`；gateway daemon pid/log 从 `aim-gateway.*` 改为 `aiworker-gateway.*`。
+- README、`docs/cli.md`、`docs/gateway.md`、`docs/architecture.md` 与相关 CLI tests 同步。
+
+验证：
+
+- `bun run --filter '@zonease/aiworker-cli' test`
+- `bun run --filter '@zonease/aiworker-cli' typecheck`
+- `rg -n "\\[aiw(\\s|\\])|aim enroll approve|\\baiw\\b|aim\\.json|aim-gateway|~/.aiworker/aim" apps/cli/src apps/cli/scripts packages/core/src packages/gateway/src packages/gateway-proto/src apps/api/src docs/cli.md docs/gateway.md docs/architecture.md README.md` 无命中。
+
 ## 2026-05-02 01:14 [bug] BUG-038 / PLAN-059 — worker info runtimeVersion follows CLI package version
 
 Fixed stale worker info version reporting:

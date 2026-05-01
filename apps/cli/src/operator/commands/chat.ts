@@ -12,7 +12,7 @@ export interface ChatOptions {
 }
 
 /**
- * `aim chat <workerId> <text>` — 往目标 worker 发一条用户消息并阻塞到 agent.done。
+ * `aiworker chat <workerId> <text>` — 往目标 worker 发一条用户消息并阻塞到 agent.done。
  *
  * 输出协议：NDJSON，每行一个 `{ kind, payload }` 记录：
  *   - kind=accepted：首次 request 返回（含 conversationId / taskId）

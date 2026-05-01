@@ -2,11 +2,11 @@
 /**
  * PLAN-013 S3 smoke：
  * 起一个 stub WS server 扮演 gateway —— 收到 connect 后不回复 ack，收到 request 后
- * 按 `@zonease/aiworker-gateway-proto` 的协议返回成功 response。aim client 走一次
+ * 按 `@zonease/aiworker-gateway-proto` 的协议返回成功 response。aiworker client 走一次
  * system.presence 往返，成功即 PASS。
  *
  * 这个脚本不 mock 协议本身（用的是真 parseFrame/encodeFrame），也不直接 import
- * apps/gateway 的代码——符合"aim 仅通过协议与 gateway 对话"的约束。
+ * apps/gateway 的代码——符合"CLI 仅通过协议与 gateway 对话"的约束。
  */
 import type { RequestFrame } from '@zonease/aiworker-gateway-proto'
 import type { Server, ServerWebSocket } from 'bun'
@@ -19,7 +19,7 @@ import process from 'node:process'
 import { encodeFrame, parseFrame, ROLES } from '@zonease/aiworker-gateway-proto'
 import consola from 'consola'
 
-import { createAimClient } from '../src/aim/client'
+import { createOperatorClient } from '../src/operator/client'
 
 type StubWs = ServerWebSocket<{ connected: boolean }>
 
@@ -99,13 +99,13 @@ function handleRequest(ws: StubWs, frame: RequestFrame): void {
 
 async function main(): Promise<number> {
   // 隔离 state：用 tmp 目录作为 AIWORKER_HOME，避免污染开发者家目录。
-  const home = mkdtempSync(path.join(tmpdir(), 'aim-smoke-'))
+  const home = mkdtempSync(path.join(tmpdir(), 'aiworker-smoke-'))
   process.env.AIWORKER_HOME = home
 
   const gateway = await startStubGateway()
   consola.info(`[smoke-aiworker-fleet] stub gateway listening at ${gateway.url}`)
 
-  const client = createAimClient()
+  const client = createOperatorClient()
   try {
     await client.connect({
       url: gateway.url,

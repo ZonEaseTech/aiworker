@@ -25,7 +25,7 @@ let workDir: string
 const TEST_EXEC_START = '/bin/true gateway start'
 
 beforeEach(() => {
-  workDir = mkdtempSync(path.join(tmpdir(), 'aim-install-systemd-'))
+  workDir = mkdtempSync(path.join(tmpdir(), 'aiworker-install-systemd-'))
 })
 
 afterEach(() => {

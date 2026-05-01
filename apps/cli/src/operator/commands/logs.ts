@@ -13,7 +13,7 @@ export interface LogsOptions {
 }
 
 /**
- * `aim logs <workerId> [--follow] [--tail N]` — 订阅某个 worker 的日志尾部。
+ * `aiworker logs <workerId> [--follow] [--tail N]` — 订阅某个 worker 的日志尾部。
  * 输出 NDJSON（每行一个 `{ stream, line, ts }`）。
  *
  * 非 follow 模式：发起 logs.tail，拿到 subscribed:true 的 ack 后等一次 grace

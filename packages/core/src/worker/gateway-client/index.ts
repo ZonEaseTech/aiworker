@@ -40,7 +40,7 @@ export interface StartGatewayNodeOptions extends GatewayNodeOptions {
   handlers?: NodeHandlers
   /**
    * PLAN-019：OTP enroll 模式下，gateway 推 `enrollment.otp` 时透传给上层
-   * （`aiw serve` 渲染到 stdout 给 deployer 看）。仅在 `enroll.mode='otp'`
+   * （`aiworker serve` 渲染到 stdout 给 deployer 看）。仅在 `enroll.mode='otp'`
    * 路径下会被触发。
    */
   onEnrollmentOtp?: (payload: EnrollmentOtpPayload) => void

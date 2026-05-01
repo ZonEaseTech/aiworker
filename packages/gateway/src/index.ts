@@ -56,7 +56,7 @@ export function createGatewayContext(
       // operator 已经断开——没有可送达的对端,静默清理即可。
       if (reason === 'operator_gone')
         return
-      // node 下线 / 超时:补一条错误响应给 operator,避免 aim CLI 永久挂起。
+      // node 下线 / 超时:补一条错误响应给 operator,避免 aiworker CLI 永久挂起。
       const code = reason === 'timeout' ? 'forward_timeout' : 'node_gone'
       const message = reason === 'timeout'
         ? `等待 worker ${entry.workerId} 响应超时`

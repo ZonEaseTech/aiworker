@@ -38,7 +38,7 @@ export function timingSafeEqualStrings(a: string, b: string): boolean {
  *    `gatewayJoinToken`，且二者常量时间恒等。`auth.token` 字段在该路径上无
  *    意义（worker 还未拿到 fleet 侧的 bearer），因此无视 loopback / sharedSecret。
  *    这条分支独立于下面两条，不会回退去看 sharedSecret。
- * 2. loopback：无条件放行。原因：loopback 带宽内已经是信任边界；aim CLI
+ * 2. loopback：无条件放行。原因：loopback 带宽内已经是信任边界；aiworker CLI
  *    本机调用不想被强制给 token。
  * 3. remote bearer：必须配置 `sharedSecret` 且 `presentedToken` 与之恒等。
  *    原因：一旦 gateway 绑定 `0.0.0.0` 暴露出去，必须要求鉴权。

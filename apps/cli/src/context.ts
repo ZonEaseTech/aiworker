@@ -22,7 +22,7 @@ import {
 } from '@zonease/aiworker-storage-sqlite/worker'
 
 /**
- * Bootstrap steps shared across `aiw init`, `aiw run`, `aiw serve`, and
+ * Bootstrap steps shared across `aiworker init`, `aiworker run`, `aiworker serve`, and
  * config/token subcommands. Intentionally mirrors the in-process sequence
  * that `apps/api/src/modes/worker.ts` performs — that keeps the CLI
  * behaviour bit-for-bit compatible with `AIWORKER_MODE=worker` without
@@ -95,7 +95,7 @@ export async function loadWorkerContext(options: { silent?: boolean } = {}): Pro
 }
 
 /**
- * Build a runtime from a loaded context. Split out so `aiw init` can skip
+ * Build a runtime from a loaded context. Split out so `aiworker init` can skip
  * the heavy runtime construction (no brain / executor / channels needed
  * just to mint + print identity).
  */

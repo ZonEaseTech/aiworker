@@ -5,19 +5,19 @@ import process from 'node:process'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import {
   DEFAULT_GATEWAY_URL,
-  loadAimState,
+  loadOperatorState,
   normalizeGatewayWsUrl,
-  patchAimState,
-  resolveAimStatePath,
+  patchOperatorState,
+  resolveOperatorStatePath,
 } from './state'
 
-describe('aim state gateway URL normalization', () => {
+describe('aiworker operator state gateway URL normalization', () => {
   let home: string
   let previousHome: string | undefined
 
   beforeEach(async () => {
     previousHome = process.env.AIWORKER_HOME
-    home = await mkdtemp(path.join(tmpdir(), 'aim-state-'))
+    home = await mkdtemp(path.join(tmpdir(), 'aiworker-state-'))
     process.env.AIWORKER_HOME = home
   })
 
@@ -30,7 +30,7 @@ describe('aim state gateway URL normalization', () => {
   })
 
   it('uses /ws in the default operator state', async () => {
-    const state = await loadAimState()
+    const state = await loadOperatorState()
     expect(state.gatewayUrl).toBe(DEFAULT_GATEWAY_URL)
   })
 
@@ -42,7 +42,7 @@ describe('aim state gateway URL normalization', () => {
   })
 
   it('normalizes persisted historical bare gatewayUrl on load', async () => {
-    const statePath = resolveAimStatePath()
+    const statePath = resolveOperatorStatePath()
     await mkdir(path.dirname(statePath), { recursive: true })
     await writeFile(statePath, JSON.stringify({
       gatewayUrl: 'ws://127.0.0.1:20300',
@@ -50,14 +50,14 @@ describe('aim state gateway URL normalization', () => {
       deviceToken: '',
     }), 'utf8')
 
-    const state = await loadAimState()
+    const state = await loadOperatorState()
     expect(state.gatewayUrl).toBe('ws://127.0.0.1:20300/ws')
   })
 
-  it('normalizes bare gatewayUrl patches before saving aim.json', async () => {
-    await patchAimState({ gatewayUrl: 'ws://127.0.0.1:20301' })
+  it('normalizes bare gatewayUrl patches before saving aiworker.json', async () => {
+    await patchOperatorState({ gatewayUrl: 'ws://127.0.0.1:20301' })
 
-    const raw = await readFile(resolveAimStatePath(), 'utf8')
+    const raw = await readFile(resolveOperatorStatePath(), 'utf8')
     const state = JSON.parse(raw) as { gatewayUrl: string }
     expect(state.gatewayUrl).toBe('ws://127.0.0.1:20301/ws')
   })

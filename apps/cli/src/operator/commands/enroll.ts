@@ -1,4 +1,4 @@
-import type { AimSession, WithSessionOptions } from './common'
+import type { OperatorSession, WithSessionOptions } from './common'
 
 import consola from 'consola'
 import { errorToExitCode, printJson, withSession } from './common'
@@ -7,17 +7,17 @@ interface EnrollDeps {
   errorToExitCode?: typeof errorToExitCode
   printJson?: typeof printJson
   withSession?: (
-    fn: (ctx: AimSession) => Promise<unknown>,
+    fn: (ctx: OperatorSession) => Promise<unknown>,
     opts?: WithSessionOptions,
   ) => Promise<unknown>
 }
 
 /**
- * `aim enroll` —— PLAN-019 / FEAT-026 OTP-attended enrollment 三件套：
+ * `aiworker enroll` —— PLAN-019 / FEAT-026 OTP-attended enrollment 三件套：
  *
- *   aim enroll list                  → enroll.list
- *   aim enroll approve <otp>         → enroll.approve
- *   aim enroll reject  <otp>         → enroll.reject
+ *   aiworker enroll list                  → enroll.list
+ *   aiworker enroll approve <otp>         → enroll.approve
+ *   aiworker enroll reject  <otp>         → enroll.reject
  *
  * 三个子命令都走 operator-to-gateway routing，不需要指定 workerId；OTP 是
  * gateway 在 worker 第一次 `mode='otp'` connect 时签发的 8 位人类可读码

@@ -12,7 +12,7 @@ const presenceResultSchema = z.object({
  *
  * - 结果按 proto 的 `workerSummarySchema` 形态返回：`online=true` 恒成立，
  *   `lastSeenAt` 取 node 进入 registry 的毫秒戳（连接建立时间）。
- * - 故意读取 `persistence` 去补 `displayName` / `baseUrl`：运维视角在 aim
+ * - 故意读取 `persistence` 去补 `displayName` / `baseUrl`：运维视角在 aiworker
  *   CLI 里直接看到人类可读的名字比只看 workerId 有用；这条查询也是读内存
  *   命中（SQLite 走 WAL，单行 select 极快）。
  */

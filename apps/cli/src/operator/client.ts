@@ -19,7 +19,7 @@ import {
 } from '@zonease/aiworker-gateway-proto'
 
 /**
- * aim CLI 的 WebSocket 客户端封装。
+ * aiworker operator CLI 的 WebSocket 客户端封装。
  *
  * - 基于 Bun 内置的 `WebSocket`（DOM-style API），不依赖 `ws` npm 包。
  * - 连接建立后首帧必须发 `connect`，gateway 会据此完成 operator 身份校验并绑定 deviceId。
@@ -40,7 +40,7 @@ export interface ConnectOptions {
   url: string
   deviceId: string
   token: string
-  /** 发送 connect 帧时携带的可选元数据（例如 aim 版本、hostname）。 */
+  /** 发送 connect 帧时携带的可选元数据（例如 aiworker 版本、hostname）。 */
   meta?: Record<string, string>
   /** 建立连接的超时，默认 10s。 */
   timeoutMs?: number
@@ -53,7 +53,7 @@ export interface RequestOptions {
   signal?: AbortSignal
 }
 
-export interface AimClient {
+export interface OperatorClient {
   connect: (opts: ConnectOptions) => Promise<void>
   request: <M extends MethodName>(
     method: M,
@@ -76,21 +76,21 @@ interface PendingRequest {
   signalCleanup: (() => void) | null
 }
 
-class AimWsError extends Error {
-  constructor(message: string, public readonly code = 'aim_ws_error') {
+class OperatorWsError extends Error {
+  constructor(message: string, public readonly code = 'operator_ws_error') {
     super(message)
-    this.name = 'AimWsError'
+    this.name = 'OperatorWsError'
   }
 }
 
 /**
- * 构造一个新的 aim WS 客户端。生命周期：
- *   const c = createAimClient()
+ * 构造一个新的 aiworker operator WS 客户端。生命周期：
+ *   const c = createOperatorClient()
  *   await c.connect({ url, deviceId, token })
  *   const res = await c.request('system.presence', {})
  *   await c.close()
  */
-export function createAimClient(): AimClient {
+export function createOperatorClient(): OperatorClient {
   let ws: WebSocket | null = null
   let opened = false
   let closed = false
@@ -122,7 +122,7 @@ export function createAimClient(): AimClient {
     }
     else {
       const err = frame.error
-      p.reject(new AimWsError(`${err.code}: ${err.message}`, err.code))
+      p.reject(new OperatorWsError(`${err.code}: ${err.message}`, err.code))
     }
   }
 
@@ -160,7 +160,7 @@ export function createAimClient(): AimClient {
 
   async function connect(opts: ConnectOptions): Promise<void> {
     if (opened)
-      throw new AimWsError('aim client 已经连接', 'already_connected')
+      throw new OperatorWsError('aiworker client 已经连接', 'already_connected')
 
     const timeoutMs = opts.timeoutMs ?? 10_000
 
@@ -171,7 +171,7 @@ export function createAimClient(): AimClient {
         sock = new WebSocket(opts.url)
       }
       catch (err) {
-        reject(new AimWsError(
+        reject(new OperatorWsError(
           `WebSocket 构造失败 (${opts.url}): ${err instanceof Error ? err.message : String(err)}`,
           'ws_construct_failed',
         ))
@@ -189,7 +189,7 @@ export function createAimClient(): AimClient {
         catch {
           // 忽略关闭阶段的异常。
         }
-        reject(new AimWsError(`连接 gateway 超时 (>${timeoutMs}ms): ${opts.url}`, 'connect_timeout'))
+        reject(new OperatorWsError(`连接 gateway 超时 (>${timeoutMs}ms): ${opts.url}`, 'connect_timeout'))
       }, timeoutMs)
 
       sock.onopen = () => {
@@ -210,7 +210,7 @@ export function createAimClient(): AimClient {
             return
           settled = true
           clearTimeout(timer)
-          reject(new AimWsError(
+          reject(new OperatorWsError(
             `发送 connect 帧失败: ${err instanceof Error ? err.message : String(err)}`,
             'connect_send_failed',
           ))
@@ -242,20 +242,20 @@ export function createAimClient(): AimClient {
         settled = true
         clearTimeout(timer)
         const msg = (ev as unknown as { message?: string }).message ?? 'unknown'
-        reject(new AimWsError(`WS 连接错误: ${msg}`, 'ws_error'))
+        reject(new OperatorWsError(`WS 连接错误: ${msg}`, 'ws_error'))
       }
 
       sock.onclose = (ev: CloseEvent) => {
         closed = true
         opened = false
-        rejectAllPending(new AimWsError(
+        rejectAllPending(new OperatorWsError(
           `WS 已关闭 (code=${ev.code}, reason=${ev.reason || 'n/a'})`,
           'ws_closed',
         ))
         if (!settled) {
           settled = true
           clearTimeout(timer)
-          reject(new AimWsError(`WS 在握手阶段被关闭 (code=${ev.code})`, 'ws_closed_early'))
+          reject(new OperatorWsError(`WS 在握手阶段被关闭 (code=${ev.code})`, 'ws_closed_early'))
         }
       }
     })
@@ -263,7 +263,7 @@ export function createAimClient(): AimClient {
 
   function assertOpen(): void {
     if (!opened || closed || ws === null || ws.readyState !== WebSocket.OPEN)
-      throw new AimWsError('aim client 未连接或已关闭', 'not_connected')
+      throw new OperatorWsError('aiworker client 未连接或已关闭', 'not_connected')
   }
 
   async function sendRequest(method: string, params: unknown, opts?: RequestOptions): Promise<unknown> {
@@ -291,7 +291,7 @@ export function createAimClient(): AimClient {
       timer = setTimeout(() => {
         pending.delete(id)
         signalCleanup?.()
-        reject(new AimWsError(
+        reject(new OperatorWsError(
           `request ${method} 超时 (>${timeoutMs}ms)`,
           'request_timeout',
         ))
@@ -303,14 +303,14 @@ export function createAimClient(): AimClient {
         if (sig.aborted) {
           pending.delete(id)
           clearTimeout(timer)
-          reject(sig.reason ?? new AimWsError(`request ${method} 被 abort`, 'aborted'))
+          reject(sig.reason ?? new OperatorWsError(`request ${method} 被 abort`, 'aborted'))
           return
         }
         const onAbort = () => {
           pending.delete(id)
           if (timer)
             clearTimeout(timer)
-          reject(sig.reason ?? new AimWsError(`request ${method} 被 abort`, 'aborted'))
+          reject(sig.reason ?? new OperatorWsError(`request ${method} 被 abort`, 'aborted'))
         }
         sig.addEventListener('abort', onAbort, { once: true })
         signalCleanup = () => sig.removeEventListener('abort', onAbort)
@@ -327,7 +327,7 @@ export function createAimClient(): AimClient {
         if (timer)
           clearTimeout(timer)
         signalCleanup?.()
-        reject(new AimWsError(
+        reject(new OperatorWsError(
           `request ${method} 发送失败: ${err instanceof Error ? err.message : String(err)}`,
           'send_failed',
         ))
@@ -341,7 +341,7 @@ export function createAimClient(): AimClient {
     opts?: RequestOptions,
   ): Promise<MethodResult<M>> {
     if (!isKnownMethod(method))
-      throw new AimWsError(`method ${method} 未在 @zonease/aiworker-gateway-proto 注册`, 'unknown_method')
+      throw new OperatorWsError(`method ${method} 未在 @zonease/aiworker-gateway-proto 注册`, 'unknown_method')
     return (await sendRequest(method, params, opts)) as MethodResult<M>
   }
 
@@ -410,5 +410,5 @@ export function createAimClient(): AimClient {
   }
 }
 
-export { AimWsError }
+export { OperatorWsError }
 export type { ResponseError }

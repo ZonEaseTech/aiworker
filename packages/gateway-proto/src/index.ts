@@ -1,7 +1,7 @@
 /**
  * @zonease/aiworker-gateway-proto
  *
- * aim CLI ↔ gateway ↔ worker-node 之间 WS 协议的纯类型 + 运行时解析层。
+ * aiworker operator CLI ↔ gateway ↔ worker-node 之间 WS 协议的纯类型 + 运行时解析层。
  * 本包只负责帧结构、方法/事件 schema 与 parse/encode，不包含任何 server
  * 框架、socket 客户端或网络 API 的引用。
  */

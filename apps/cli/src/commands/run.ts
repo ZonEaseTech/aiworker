@@ -18,7 +18,7 @@ export interface RunOptions {
 const DEFAULT_TIMEOUT_MS = 120_000
 
 /**
- * `aiw run` — load the worker runtime, synthesise a single `web` envelope
+ * `aiworker run` — load the worker runtime, synthesise a single `web` envelope
  * from the user-provided message, stream every event to stdout, and exit
  * once the orchestrator reaches a terminal state (task succeeded / failed /
  * cancelled). No HTTP endpoint is bound at any point.
@@ -29,7 +29,7 @@ const DEFAULT_TIMEOUT_MS = 120_000
 export async function runRun(options: RunOptions = {}): Promise<number> {
   const message = options.message ?? ''
   if (!message) {
-    consola.error('[aiw run] --message is required (non-empty)')
+    consola.error('[aiworker run] --message is required (non-empty)')
     return 2
   }
 
@@ -37,10 +37,10 @@ export async function runRun(options: RunOptions = {}): Promise<number> {
   const runtime = buildRuntime(ctx)
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
 
-  consola.info(`[aiw run] worker ${ctx.workerId} (config v${ctx.configVersion}) — engine=${ctx.hydrated.executor.engine}/${ctx.hydrated.executor.variant}`)
+  consola.info(`[aiworker run] worker ${ctx.workerId} (config v${ctx.configVersion}) — engine=${ctx.hydrated.executor.engine}/${ctx.hydrated.executor.variant}`)
 
   if (options.dryRun) {
-    consola.success('[aiw run] --dry-run: runtime constructed, no envelope ingested')
+    consola.success('[aiworker run] --dry-run: runtime constructed, no envelope ingested')
     runtime.dispose()
     return 0
   }
@@ -49,18 +49,18 @@ export async function runRun(options: RunOptions = {}): Promise<number> {
   const envelope: Envelope = {
     workerId: ctx.workerId,
     channel: 'web',
-    // aiw CLI 直接驱动 worker，使用保留前缀 `sys:cli` 避免与 web binding.id 冲突。
+    // aiworker CLI 直接驱动 worker，使用保留前缀 `sys:cli` 避免与 web binding.id 冲突。
     accountId: 'sys:cli',
     chatId,
     text: message,
     receivedAt: new Date().toISOString(),
-    raw: { source: 'aiw-cli' },
+    raw: { source: 'aiworker-cli' },
   }
 
   const terminalPromise = new Promise<number>((resolve) => {
     let unsubscribe: (() => void) | null = null
     const timer = setTimeout(() => {
-      consola.error(`[aiw run] timed out after ${timeoutMs}ms without reaching a terminal state`)
+      consola.error(`[aiworker run] timed out after ${timeoutMs}ms without reaching a terminal state`)
       unsubscribe?.()
       resolve(124)
     }, timeoutMs)
@@ -84,7 +84,7 @@ export async function runRun(options: RunOptions = {}): Promise<number> {
     await runtime.orchestrator.ingest(envelope)
   }
   catch (err) {
-    consola.error(`[aiw run] ingest failed: ${String(err)}`)
+    consola.error(`[aiworker run] ingest failed: ${String(err)}`)
     runtime.dispose()
     return 1
   }

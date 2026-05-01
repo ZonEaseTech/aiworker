@@ -198,7 +198,7 @@ export function createWorkersPairHandler(deps: PairHandlerDeps = {}): LocalHandl
     )
 
     // pair 成功后把 bootstrap token 作为 deviceToken 返回一次——与 proto 语义对齐。
-    // 后续 operator / aim 可选择立即 rotate 换新 token。
+    // 后续 operator / aiworker CLI 可选择立即 rotate 换新 token。
     const result = pairResultSchema.safeParse({
       workerId: row.id,
       deviceToken: input.bootstrapToken,

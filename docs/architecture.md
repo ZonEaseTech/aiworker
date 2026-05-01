@@ -18,7 +18,7 @@ packages/
 
 - **`apps/api`** 只负责 worker 运行时（数据面）。`AIWORKER_MODE=worker` 仍保留以兼容运维脚本，但入口不再按模式分叉——`boot()` 一律构建 `createWorkerApp`。dashboard REST 已随 PLAN-013 整体下线。运行时业务（brain / executor / channels / orchestrator / cron / approvals / gateway-client / runtime / secrets / bootstrap / management 业务态）已物理抽离至 `packages/core`，apps/api 仅保留 Hono 路由 + middleware + bootstrap 装配（`@zonease/aiworker-api/bootstrap` 暴露给 `aiworker serve`），保持 transport 与业务的边界。
 - **`apps/gateway`** 是新增的 WS 控制面，单入口 `Bun.serve(:9218)`，路径 `/ws` 承接 WebSocket 升级，`/health` 返回心跳。运行时持有 fleet.db（`registered_workers` + `audit_events`）并做 operator ↔ node 帧转发。见 `docs/gateway.md`。
-- **`apps/cli`** 发布单枚 bin：`aiworker`（PLAN-020 / FEAT-028 起；原 `aiw` / `aim` 双 bin 已下线，无 backwards-compat shim）。子命令树由 worker-local（dash-form）+ operator-remote（两词 form）+ gateway 生命周期 + `install systemd` 构成，共享 `cac` 解析器与 `@zonease/aiworker-core` 运行时复用（worker-local `aiworker serve` 额外从 `@zonease/aiworker-api/bootstrap` 取 Hono 入口）。状态文件按用法分流：worker-local 写 `worker.db`，operator-remote 写 `~/.aiworker/aim.json`（文件名沿用历史以避免 operator 升级时丢配置）。
+- **`apps/cli`** 发布单枚 bin：`aiworker`。子命令树由 worker-local（dash-form）+ operator-remote（两词 form）+ gateway 生命周期 + `install systemd` 构成，共享 `cac` 解析器与 `@zonease/aiworker-core` 运行时复用（worker-local `aiworker serve` 额外从 `@zonease/aiworker-api/bootstrap` 取 Hono 入口）。状态文件按用法分流：worker-local 写 `worker.db`，operator-remote 写 `~/.aiworker/aiworker.json`。
 - **`apps/web`** 产出两套物理独立 bundle：`dist/fleet/` 由 gateway 托管，fleet 视角只通过 gateway WS (`/ws`) 访问 fleet.db / worker 指针；`dist/worker/` 由每个 worker 自身托管，worker 视角只通过本机 `/api/worker/*` REST/SSE + bearer-auth 管理 worker.db / runtime。源码按 `src/fleet/`、`src/worker/`、`src/shared/` 分区，ESLint 与 CI 守住跨视角 import / transport 边界。
 - **`packages/gateway-proto`** 是协议的纯类型 + 运行时校验层。不依赖任何网络框架，所有 METHODS / EVENTS / Frame schema 都在这里定义，CLI / web / gateway / worker 四侧共用。
 - **`packages/core`** 是 transport-agnostic 的 worker runtime（PLAN-015 §S1 物理抽离）。封装 brain provider、executor provider、channel adapter、orchestrator、cron、approvals、gateway-client、secrets、bootstrap、management 业务态等所有运行时业务；公共面 `packages/core/src/index.ts` 同时被 `apps/api` 路由、`apps/cli` 与 gateway node 接入复用。**不**依赖 `hono` / `@hono/*` / `@scalar/*`——边界由 ESLint `no-restricted-imports` 守，CI 拦下任何回退到 transport 层耦合的尝试。
@@ -64,9 +64,9 @@ fleet.db + node routing        worker.db + local runtime
 
 ```text
 ~/.aiworker/
-  aim.json                     # operator 本地状态（gatewayUrl / deviceId / deviceToken / defaultWorkerId，0600；文件名沿用历史以避免 operator 升级时丢配置）
-  aim-gateway.pid              # 本机 aiworker gateway daemon pid（若启动；文件名沿用历史）
-  aim-gateway.log              # 本机 aiworker gateway daemon 日志（文件名沿用历史）
+  aiworker.json                # operator 本地状态（gatewayUrl / deviceId / deviceToken / defaultWorkerId，0600）
+  aiworker-gateway.pid         # 本机 aiworker gateway daemon pid（若启动）
+  aiworker-gateway.log         # 本机 aiworker gateway daemon 日志
   workers/<workerId>/
     AGENT.md                   # persona / role doc
     SOUL.md                    # voice + style guide
@@ -210,7 +210,7 @@ Caddy :80 (纯反代)  ──►  127.0.0.1:9218  =  aiworker-gateway 容器
 
 - Worker 首次启动在容器内 `mintWorkerId + mintApiToken`（`worker/bootstrap/identity.ts`），token 明文只打印一次（`[worker] AIWORKER_BOOTSTRAP_TOKEN=wtk_...`），密文写入 `worker_identity` 后不再重新打印。
 - worker 进 fleet 的四条路径（`registered_workers.addedBy` 对应四态）：
-  1. **手动 pair**（`aiworker pair --url ws://... --worker-url http://... --bootstrap-token wtk_...`）：操作员从 worker stdout 抓 bootstrap 日志行 → gateway 调 worker `/info` 校验 → 加密存 fleet.db → 返回 deviceToken 写回 `~/.aiworker/aim.json`。**inbound** 方向：gateway 必须能 HTTP 回拨 worker `/info`，因此 worker 在 NAT/防火墙后会失败。`addedBy='manual'`。
+  1. **手动 pair**（`aiworker pair --url ws://... --worker-url http://... --bootstrap-token wtk_...`）：操作员从 worker stdout 抓 bootstrap 日志行 → gateway 调 worker `/info` 校验 → 加密存 fleet.db → 返回 deviceToken 写回 `~/.aiworker/aiworker.json`。**inbound** 方向：gateway 必须能 HTTP 回拨 worker `/info`，因此 worker 在 NAT/防火墙后会失败。`addedBy='manual'`。
   2. **自动 launch**（`aiworker fleet launch --display-name foo`）：需 `AIWORKER_GATEWAY_CAN_LAUNCH=true`；gateway supervisor 拉 worker 容器、scrape stdout、自动 pair。仅限 docker 形态、与 gateway 同主机。`addedBy='launch-local'`。
   3. **自助 enroll**（PLAN-018 / FEAT-024）：worker 容器 env 同时设 `AIWORKER_GATEWAY_URL` + `AIWORKER_JOIN_TOKEN`，`aiworker serve` bootstrap 完成后用 outbound WS 主动拨 gateway `/ws`，并把 enroll 块（`mode='join-token'` + `joinToken` + 自身 mint 的 `apiToken` + 可选 `displayName`）塞进 `connect` 帧第一帧；gateway 验 `joinToken` 后直接 upsert fleet.db 行。**outbound-only**，worker 不需要任何 inbound 端口暴露——是 NAT 后部署、批量 docker / k8s 节点、residential network 上 worker 的标准路径。`addedBy='self-enroll'`。
   4. **OTP-attended enroll**（PLAN-019 / FEAT-026）：worker 只设 `AIWORKER_GATEWAY_URL`（无 `AIWORKER_JOIN_TOKEN`）或显式 `AIWORKER_ENROLL_MODE=otp`，`aiworker serve` bootstrap 后用 outbound WS 拨 gateway `/enroll-ws`（不同于 self-enroll 的 `/ws`），connect 帧 `enroll.mode='otp'` 带自身 `apiToken` + 可选 `displayName`，**不**带 join token；gateway 在 `apps/gateway/src/registry/pending.ts::PendingEnrollmentRegistry` 内存队列里挂起，回推 `enrollment.otp` 事件给 worker，worker 把 8 字符 OTP（`XXXX-YYYY`，去歧义 30 字符 alphabet）打到 stdout 等待人审。operator 在 `/ws` 通道上 `aiworker enroll list / approve <otp> / reject <otp>` 决定去留，approve 时才 `upsertEnrolledWorker(addedBy='otp')` 落 fleet.db 并通过原 ws 推 `enrollment.approved` 事件回 worker。`addedBy='otp'`。**Worker 部署方完全不需要持有任何 fleet 凭证**——`/enroll-ws` 端 Caddy 不挂 basicauth，OTP submit 在 operator approve 前不会落库。

@@ -11,7 +11,7 @@ export { isLoopbackAddress }
  * - IPv4-mapped IPv6：`::ffff:127.0.0.1`
  * - 某些环境下会返回主机名：`localhost`
  *
- * gateway 在 loopback 场景下放行空 token 连接（aim 本机 CLI / worker 同机
+ * gateway 在 loopback 场景下放行空 token 连接（aiworker 本机 CLI / worker 同机
  * docker network 的 sidecar 调用）；远程连接必须携带 `INTERNAL_SHARED_SECRET`。
  */
 /**

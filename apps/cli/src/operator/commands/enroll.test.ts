@@ -1,8 +1,8 @@
-import type { AimSession } from './common'
+import type { OperatorSession } from './common'
 import { beforeEach, describe, expect, it } from 'bun:test'
 
 /**
- * PLAN-019 / FEAT-026 — `aim enroll list/approve/reject` CLI 路由测试。
+ * PLAN-019 / FEAT-026 — `aiworker enroll list/approve/reject` CLI 路由测试。
  *
  * 通过命令 deps 注入 fake `withSession`，捕获每次 client.request 的入参，
  * 断言 method/params 正确。不连真 WS，也不污染其它测试文件的 module cache。
@@ -19,7 +19,7 @@ let nextRequestResult: unknown
 const testDeps = {
   errorToExitCode: () => 1,
   printJson: () => {},
-  withSession: async (fn: (ctx: AimSession) => Promise<unknown>) => {
+  withSession: async (fn: (ctx: OperatorSession) => Promise<unknown>) => {
     const client = {
       close: async () => {},
       connect: async () => {},
@@ -28,9 +28,9 @@ const testDeps = {
       request: (async (method: string, params: unknown) => {
         requestCalls.push({ method, params })
         return nextRequestResult
-      }) as AimSession['client']['request'],
+      }) as OperatorSession['client']['request'],
       requestRaw: async () => ({}),
-    } satisfies AimSession['client']
+    } satisfies OperatorSession['client']
     return fn({
       client,
       state: { deviceId: 'op-test', deviceToken: '', gatewayUrl: 'ws://localhost:9218/ws' },
@@ -43,7 +43,7 @@ beforeEach(() => {
   nextRequestResult = undefined
 })
 
-describe('aim enroll list', () => {
+describe('aiworker enroll list', () => {
   it('调 enroll.list method，params 为空对象', async () => {
     nextRequestResult = { pending: [] }
     const { runEnrollList } = await import('./enroll')
@@ -54,7 +54,7 @@ describe('aim enroll list', () => {
   })
 })
 
-describe('aim enroll approve', () => {
+describe('aiworker enroll approve', () => {
   it('调 enroll.approve method 并把 OTP 透传到 params.otp', async () => {
     nextRequestResult = { workerId: 'w_otp', deviceToken: 'wtk_xyz' }
     const { runEnrollApprove } = await import('./enroll')
@@ -65,7 +65,7 @@ describe('aim enroll approve', () => {
   })
 })
 
-describe('aim enroll reject', () => {
+describe('aiworker enroll reject', () => {
   it('调 enroll.reject method 并把 OTP 透传到 params.otp', async () => {
     nextRequestResult = { rejected: true }
     const { runEnrollReject } = await import('./enroll')

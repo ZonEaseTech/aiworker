@@ -70,7 +70,7 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-009 OTP approve does not upgrade ws to NodeRegistry**](BUG-009.md) `P1`
 - [x] [**FEAT-027 Publish CLIs to npmjs.com (or compiled binaries via GH Releases)**](FEAT-027.md) `P2`
 - [x] [**FEAT-028 CLI naming redesign (aiw / aim too cryptic)**](FEAT-028.md) `P2`
-- [ ] [**BUG-010 Runtime log strings still reference `aiw` / `aim` / `aim.json` after PLAN-020 rename**](BUG-010.md) `P3`
+- [x] [**BUG-010 Runtime log strings still reference `aiw` / `aim` / `aim.json` after PLAN-020 rename**](BUG-010.md) `P3`
 - [x] [**FEAT-030 Zero-env-quickstart: dynamic CLI version + new default ports + first-run master-key auto-mint**](FEAT-030.md) `P1`
 - [x] [**FEAT-029 License decision + LICENSE file + 9 package.json `license` fields**](FEAT-029.md) `P1`
 - [x] [**BUG-011 Worker quickstart 仍要求显式 WORKER_DB_PATH / WORKER_MIGRATIONS_FOLDER（与 FEAT-030 README 承诺不符）**](BUG-011.md) `P3`
@@ -145,3 +145,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-044 Executor capability projection commands**](FEAT-044.md) `P1`
 - [x] [**DOC-003 标记废弃 PMA 方案与 capability 边界**](DOC-003.md) `P1`
 - [x] [**DOC-004 清理陈旧 PMA 待办状态**](DOC-004.md) `P1`
+- [x] [**REFACTOR-014 Rename internal CLI operator module away from `aim`**](REFACTOR-014.md) `P2`

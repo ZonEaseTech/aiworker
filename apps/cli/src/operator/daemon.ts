@@ -20,7 +20,7 @@ import { resolveGatewayLogPath, resolveGatewayPidPath } from './state'
  * - daemon (background) 模式继续保留，由本模块负责。机制：spawn 当前 cli binary
  *   自身（`process.execPath` + `process.argv[1]`）+ env `AIWORKER_GATEWAY_INTERNAL_FOREGROUND=1`
  *   触发子进程跑 in-process foreground；detach + unref 让父进程 exit 后子进程仍存活。
- * - PID 写 `<AIWORKER_HOME>/aim-gateway.pid`；启动前探活旧 PID。
+ * - PID 写 `<AIWORKER_HOME>/aiworker-gateway.pid`；启动前探活旧 PID。
  */
 
 /** 环境变量哨兵：daemon spawn 子进程时设此 env=1，cli `gateway start` 检测到则强制 foreground。 */

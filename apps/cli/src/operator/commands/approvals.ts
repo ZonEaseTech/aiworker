@@ -3,7 +3,7 @@ import consola from 'consola'
 import { errorToExitCode, printJson, withSession } from './common'
 
 /**
- * `aim approvals list [--worker <id>]` — 列出某个或所有 worker 的挂起审批。
+ * `aiworker approvals list [--worker <id>]` — 列出某个或所有 worker 的挂起审批。
  *
  * 当前 gateway 协议 `approval.list` 的 routing 是 operator-to-node，必须指定
  * 单个 workerId；当用户没传 --worker 时，回落到先 `workers.list` 拿全部 online
@@ -44,7 +44,7 @@ export async function runApprovalsList(opts: ApprovalsListOptions = {}): Promise
 }
 
 /**
- * `aim approvals grant <workerId> <taskId> <toolCallId> [--deny]` — 解锁某条挂起。
+ * `aiworker approvals grant <workerId> <taskId> <toolCallId> [--deny]` — 解锁某条挂起。
  *
  * decision 默认 allow；带 --deny 时下发 deny。worker 立刻短路并合成
  * 助手消息（`tool {name} blocked by policy`）。

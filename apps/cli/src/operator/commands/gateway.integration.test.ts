@@ -31,7 +31,7 @@ async function readProcessOutput(proc: PipedProcess): Promise<SpawnResult> {
 }
 
 async function waitForPersistedGatewayUrl(home: string, timeoutMs: number): Promise<string> {
-  const statePath = path.join(home, 'aim.json')
+  const statePath = path.join(home, 'aiworker.json')
   const deadline = Date.now() + timeoutMs
   let lastError: unknown
   while (Date.now() < deadline) {

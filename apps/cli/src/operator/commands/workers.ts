@@ -2,7 +2,7 @@ import consola from 'consola'
 
 import { errorToExitCode, printJson, withSession } from './common'
 
-/** `aim workers list` — 打印 fleet 内所有 worker。 */
+/** `aiworker fleet list` — 打印 fleet 内所有 worker。 */
 export async function runWorkersList(): Promise<number> {
   try {
     const res = await withSession(async ({ client }) => {
@@ -17,7 +17,7 @@ export async function runWorkersList(): Promise<number> {
   }
 }
 
-/** `aim workers info <workerId>` — gateway 透传到目标 worker 的 info 接口。 */
+/** `aiworker fleet info <workerId>` — gateway 透传到目标 worker 的 info 接口。 */
 export async function runWorkersInfo(workerId: string): Promise<number> {
   try {
     const res = await withSession(async ({ client }) => {
@@ -40,7 +40,7 @@ export interface WorkersLaunchOptions {
   env?: Record<string, string>
 }
 
-/** `aim workers launch` — 由 gateway 自身在本机拉起一个 worker 容器并完成配对。 */
+/** `aiworker fleet launch` — 由 gateway 自身在本机拉起一个 worker 容器并完成配对。 */
 export async function runWorkersLaunch(opts: WorkersLaunchOptions = {}): Promise<number> {
   try {
     const res = await withSession(async ({ client }) => {
@@ -56,9 +56,9 @@ export async function runWorkersLaunch(opts: WorkersLaunchOptions = {}): Promise
       })
     })
 
-    // 新 worker 配对完成：保存 deviceToken + defaultWorkerId（与 aim pair 一致）。
-    const { patchAimState } = await import('../state')
-    await patchAimState({
+    // 新 worker 配对完成：保存 deviceToken + defaultWorkerId（与 aiworker pair 一致）。
+    const { patchOperatorState } = await import('../state')
+    await patchOperatorState({
       deviceToken: res.deviceToken,
       defaultWorkerId: res.workerId,
     })
@@ -93,12 +93,12 @@ export async function runWorkersRemove(workerId: string): Promise<number> {
       return await client.request('workers.remove', { workerId })
     })
     // 如果当前 defaultWorkerId 就是刚被摘除的 worker，清掉它。
-    const { loadAimState, saveAimState } = await import('../state')
-    const state = await loadAimState()
+    const { loadOperatorState, saveOperatorState } = await import('../state')
+    const state = await loadOperatorState()
     if (state.defaultWorkerId === workerId) {
       const next = { ...state }
       delete next.defaultWorkerId
-      await saveAimState(next)
+      await saveOperatorState(next)
     }
     printJson(res)
     return 0

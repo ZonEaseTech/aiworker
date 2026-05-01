@@ -2,7 +2,7 @@ import consola from 'consola'
 
 import { errorToExitCode, printJson, withSession } from './common'
 
-/** `aim config get <workerId>` — 透传到 worker 的 config.get。 */
+/** `aiworker config get <workerId>` — 透传到 worker 的 config.get。 */
 export async function runConfigGet(workerId: string): Promise<number> {
   try {
     const res = await withSession(async ({ client }) => {
@@ -26,7 +26,7 @@ export interface ConfigSetOptions {
 }
 
 /**
- * `aim config set <workerId> <json> --if-match <version>` — 更新 worker 配置。
+ * `aiworker config set <workerId> <json> --if-match <version>` — 更新 worker 配置。
  * 必须显式提供 --if-match（worker 侧乐观锁依赖）。
  */
 export async function runConfigSet(opts: ConfigSetOptions): Promise<number> {

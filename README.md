@@ -222,11 +222,11 @@ aiworker schedule add <workerId> --expression '0 9 * * *' --prompt '早报' --ch
 aiworker schedule remove <workerId> <jobId>
 ```
 
-Operator 端首次需写 `~/.aiworker/aim.json`：
+Operator 端首次需写 `~/.aiworker/aiworker.json`：
 
 ```sh
 mkdir -p ~/.aiworker
-cat > ~/.aiworker/aim.json <<EOF
+cat > ~/.aiworker/aiworker.json <<EOF
 {
   "gatewayUrl": "wss://operator:<basicauth-pwd>@your-gateway.example/ws",
   "deviceId": "op-$(uuidgen)",
@@ -234,7 +234,7 @@ cat > ~/.aiworker/aim.json <<EOF
   "defaultWorkerId": ""
 }
 EOF
-chmod 600 ~/.aiworker/aim.json
+chmod 600 ~/.aiworker/aiworker.json
 ```
 
 > gateway 同机 loopback：用 `ws://127.0.0.1:9218/ws`，无需 basicauth/token（loopback bypass）。
@@ -356,7 +356,7 @@ apps/{api, cli, web} + packages/{core, gateway, gateway-proto, shared, storage-s
 
 | 现象 | 原因 | 修法 |
 |---|---|---|
-| `aiworker fleet list` → `WebSocket Expected 101 status code` | aim.json `gatewayUrl` 缺 `/ws` 或 basicauth | 重写 `~/.aiworker/aim.json`（见上） |
+| `aiworker fleet list` → `WebSocket Expected 101 status code` | aiworker.json `gatewayUrl` 缺 `/ws` 或 basicauth | 重写 `~/.aiworker/aiworker.json`（见上） |
 | 公网 `/health` 返回 401 | Caddy basicauth | `curl -u operator:<pwd> https://your-gateway/health` |
 | OTP enroll 后 `aiworker chat` `executor error: OpenAI API key is not configured` | worker 没配 LLM | 走"Worker 配 LLM executor"段，切 claude-code / 配 OpenAI key |
 | systemd `aiworker-gateway` exit 1 `gateway 入口未找到` | 用了 0.2.0 旧 cli | `bun install -g @zonease/aiworker-cli@latest`（≥0.2.1）+ restart |

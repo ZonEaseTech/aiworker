@@ -1,6 +1,6 @@
 # AIWorker CLI — `aiworker`（单二进制）
 
-`@zonease/aiworker-cli` 发布**一枚** bin：`aiworker`，子命令树由 worker-side（dash-form）+ operator-side（两词 form）+ gateway 生命周期 + `install systemd` 构成。原 PLAN-020 之前的 `aiw` / `aim` 双 bin 形态已下线（FEAT-028），命令树形态以本文件为准。
+`@zonease/aiworker-cli` 发布**一枚** bin：`aiworker`，子命令树由 worker-side（dash-form）+ operator-side（两词 form）+ gateway 生命周期 + `install systemd` 构成，命令树形态以本文件为准。
 
 | Surface | 形态 | 例子 |
 |---|---|---|
@@ -316,13 +316,13 @@ OTP 模式 stdout 格式（`apps/cli/src/commands/serve.ts::formatOtpBox`）：
 
 ```sh
 # self-enroll（NAT 后批量部署）：
-AIWORKER_GATEWAY_URL=wss://aiw.example.com/ws \
+AIWORKER_GATEWAY_URL=wss://gateway.example.com/ws \
 AIWORKER_JOIN_TOKEN=<shared> \
 AIWORKER_DISPLAY_NAME=prod-1 \
 aiworker serve --port 9217
 
 # OTP enroll（attended，deployer 无 fleet 凭证）：
-AIWORKER_GATEWAY_URL=wss://aiw.example.com/ws \
+AIWORKER_GATEWAY_URL=wss://gateway.example.com/ws \
 AIWORKER_DISPLAY_NAME=ben-laptop \
 aiworker serve --port 9217
 # stdout 打 OTP 后 deployer 把它带外发给 operator
@@ -446,7 +446,7 @@ operator 通过 WebSocket 与 gateway（`apps/gateway`）对话，由 gateway �
 
 ### 本地状态
 
-`~/.aiworker/aim.json`（权限 `0600`，文件名沿用历史以避免 operator 升级时丢配置）持久化：
+`~/.aiworker/aiworker.json`（权限 `0600`）持久化：
 
 ```jsonc
 {
@@ -457,7 +457,7 @@ operator 通过 WebSocket 与 gateway（`apps/gateway`）对话，由 gateway �
 }
 ```
 
-补充文件：`~/.aiworker/aim-gateway.pid`（本机 daemon PID）、`~/.aiworker/aim-gateway.log`（daemon 日志）。
+补充文件：`~/.aiworker/aiworker-gateway.pid`（本机 daemon PID）、`~/.aiworker/aiworker-gateway.log`（daemon 日志）。
 
 ### Exit code 约定（operator-remote）
 
@@ -469,7 +469,7 @@ operator 通过 WebSocket 与 gateway（`apps/gateway`）对话，由 gateway �
 
 ### `aiworker gateway start [--port <n>] [--no-serve-web]`
 
-本机拉起 gateway daemon。成功后把 `gatewayUrl: ws://localhost:<port>/ws` 回写到 `aim.json`。
+本机拉起 gateway daemon。成功后把 `gatewayUrl: ws://localhost:<port>/ws` 回写到 `aiworker.json`。
 
 Gateway bind host 由 `AIWORKER_GATEWAY_HOST` 控制，默认 `127.0.0.1`。非 loopback host 仍然必须配置 `INTERNAL_SHARED_SECRET`；如果同时实际挂载 fleet `/admin/*` bundle，还必须设置 `AIWORKER_ADMIN_EXTERNAL_AUTH=1` 来确认外部鉴权已覆盖，或用 `--no-serve-web` 关闭 admin 静态资源。
 
@@ -483,8 +483,8 @@ aiworker gateway start --port 9218
 ```sh
 aiworker gateway status
 # ✔ gateway daemon 运行中 pid=12345
-# ℹ pidFile: /root/.aiworker/aim-gateway.pid
-# ℹ logFile: /root/.aiworker/aim-gateway.log
+# ℹ pidFile: /root/.aiworker/aiworker-gateway.pid
+# ℹ logFile: /root/.aiworker/aiworker-gateway.log
 ```
 
 ### `aiworker gateway stop [--timeout-ms <n>]`
@@ -528,7 +528,7 @@ aiworker fleet launch --display-name demo
 
 ### `aiworker fleet remove <workerId>`
 
-从 fleet 中摘除该 worker（deviceToken 作废 + 若在线则踢下线）。若 `defaultWorkerId` 正是它，也会从 `aim.json` 清掉。
+从 fleet 中摘除该 worker（deviceToken 作废 + 若在线则踢下线）。若 `defaultWorkerId` 正是它，也会从 `aiworker.json` 清掉。
 
 ---
 
@@ -536,7 +536,7 @@ aiworker fleet launch --display-name demo
 
 ### `aiworker pair --url <wsUrl> --worker-url <httpUrl> --bootstrap-token <token> [--display-name <name>]`
 
-把一个已启动的 worker 通过 bootstrap token 注册到 gateway。gateway 会调 worker 的 `/info` 验 token，加密落 fleet.db，并把 deviceToken 返回——CLI 把它写回 `aim.json`，之后所有 operator 请求都用它。
+把一个已启动的 worker 通过 bootstrap token 注册到 gateway。gateway 会调 worker 的 `/info` 验 token，加密落 fleet.db，并把 deviceToken 返回——CLI 把它写回 `aiworker.json`，之后所有 operator 请求都用它。
 
 ```sh
 aiworker pair \
@@ -801,10 +801,8 @@ WantedBy=default.target
 
 ---
 
-## 老版 caveats（保留给迁移用户）
+## Caveats
 
-- 历史 PLAN-013 / PLAN-018 / PLAN-019 期间命令为 `aiw <subcmd>`（worker-side）和 `aim <subcmd>`（operator-side），PLAN-020 / FEAT-028 起合并为单二进制 `aiworker`，**无 backwards-compat shim**——脚本里残留的 `aiw` / `aim` 调用必须按本文件 §worker-local / §operator-remote 命令树替换。
-- 历史 task 卡 / changelog 条目仍保留 `aiw` / `aim` 字面（设计如此，史料不动）；新写的脚本与文档统一走 `aiworker`。
 - 子命令名仍是带空格的两词（`config get` / `token rotate`）；`cac` 6 原生不支持，`aiworker.ts` 在入口前做了一次 argv 预处理把 `argv[2]+argv[3]` 合成一个 token。新增两词命令需注册到 `cli.command('foo bar', ...)` 并让多词识别表自动拾取。
 - `aiworker run` 默认频道 `web` 与 chat id `cli:stdin`；webhook-driven 频道（Telegram / Lark / WhatsApp）仍需 `aiworker serve`。
 - 没有 `aiworker repl` / 交互循环；`aiworker run` 是一次性。

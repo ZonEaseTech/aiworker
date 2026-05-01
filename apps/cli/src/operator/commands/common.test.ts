@@ -11,7 +11,7 @@ describe('withSession gateway URL normalization', () => {
   beforeEach(async () => {
     mock.restore()
     previousHome = process.env.AIWORKER_HOME
-    home = await mkdtemp(path.join(tmpdir(), 'aim-common-'))
+    home = await mkdtemp(path.join(tmpdir(), 'aiworker-common-'))
     process.env.AIWORKER_HOME = home
   })
 

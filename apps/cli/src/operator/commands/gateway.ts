@@ -5,11 +5,11 @@ import consola from 'consola'
 
 import { resolveWebStaticDir } from '../../lib/web-static'
 import { getDaemonStatus, startDaemon, stopDaemon } from '../daemon'
-import { gatewayWsUrlForLocalPort, patchAimState } from '../state'
+import { gatewayWsUrlForLocalPort, patchOperatorState } from '../state'
 
 export interface GatewayStartOptions {
   port?: number
-  /** 启动后写回 aim.json gatewayUrl。默认 true。 */
+  /** 启动后写回 aiworker.json gatewayUrl。默认 true。 */
   persistUrl?: boolean
   /** background detach（spawn cli 自身 + foreground flag）。默认 false（systemd-friendly）。 */
   detach?: boolean
@@ -44,7 +44,7 @@ async function runGatewayStartDetached(opts: GatewayStartOptions): Promise<numbe
       ...(opts.serveWeb === false ? { env: { AIWORKER_GATEWAY_NO_SERVE_WEB: '1' } } : {}),
     })
     if (opts.persistUrl !== false)
-      await patchAimState({ gatewayUrl: gatewayWsUrlForLocalPort(res.port) })
+      await patchOperatorState({ gatewayUrl: gatewayWsUrlForLocalPort(res.port) })
     consola.success(`gateway daemon 已启动 pid=${res.pid} port=${res.port}`)
     consola.info(`pidFile: ${res.pidFile}`)
     consola.info(`logFile: ${res.logFile}`)
@@ -81,11 +81,11 @@ async function runGatewayStartForeground(opts: GatewayStartOptions): Promise<num
       consola.info(`[gateway] /w/:workerId/* serving worker bundle from ${workerWebStaticDir}`)
     if (opts.persistUrl !== false) {
       try {
-        await patchAimState({ gatewayUrl: gatewayWsUrlForLocalPort(started.port) })
+        await patchOperatorState({ gatewayUrl: gatewayWsUrlForLocalPort(started.port) })
       }
       catch (err) {
-        // 写 aim.json 失败不影响 server 跑（systemd / 容器场景常见无写权限）。
-        consola.warn(`无法持久化 gatewayUrl 到 aim.json: ${err instanceof Error ? err.message : String(err)}`)
+        // 写 aiworker.json 失败不影响 server 跑（systemd / 容器场景常见无写权限）。
+        consola.warn(`无法持久化 gatewayUrl 到 aiworker.json: ${err instanceof Error ? err.message : String(err)}`)
       }
     }
     consola.success(`gateway 已启动 (foreground) port=${started.port}`)

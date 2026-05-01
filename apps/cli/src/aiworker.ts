@@ -11,31 +11,31 @@ import packageJson from '../package.json' with { type: 'json' }
 import {
   runApprovalsGrant as runApprovalsGrantRemote,
   runApprovalsList as runApprovalsListRemote,
-} from './aim/commands/approvals'
+} from './operator/commands/approvals'
 
-import { runChat } from './aim/commands/chat'
+import { runChat } from './operator/commands/chat'
 import {
   runConfigGet,
   runConfigSet as runConfigSetRemote,
-} from './aim/commands/config'
-import { runEnrollApprove, runEnrollList, runEnrollReject } from './aim/commands/enroll'
-import { runGatewayStart, runGatewayStatus, runGatewayStop } from './aim/commands/gateway'
-import { runInstallSystemd } from './aim/commands/install'
-import { runLogs } from './aim/commands/logs'
-import { runPair } from './aim/commands/pair'
+} from './operator/commands/config'
+import { runEnrollApprove, runEnrollList, runEnrollReject } from './operator/commands/enroll'
+import { runGatewayStart, runGatewayStatus, runGatewayStop } from './operator/commands/gateway'
+import { runInstallSystemd } from './operator/commands/install'
+import { runLogs } from './operator/commands/logs'
+import { runPair } from './operator/commands/pair'
 import {
   runScheduleAdd as runScheduleAddRemote,
   runScheduleList as runScheduleListRemote,
   runScheduleRemove as runScheduleRemoveRemote,
-} from './aim/commands/schedule'
-import { runTokenRotate as runTokenRotateRemote } from './aim/commands/token'
+} from './operator/commands/schedule'
+import { runTokenRotate as runTokenRotateRemote } from './operator/commands/token'
 import {
   runWorkersInfo,
   runWorkersLaunch,
   runWorkersList,
   runWorkersRemove,
   runWorkersStop,
-} from './aim/commands/workers'
+} from './operator/commands/workers'
 import {
   runApprovalsGrant as runApprovalsGrantLocal,
   runApprovalsList as runApprovalsListLocal,
@@ -83,7 +83,7 @@ import { bootstrapCliDotenv } from './lib/bootstrap'
  *     approvals list|grant / schedule list|add|remove / enroll list|approve|reject /
  *     logs / install systemd
  *
- * 退出码（详见 aim/commands/common.ts errorToExitCode）：
+ * 退出码（详见 operator commands/common.ts errorToExitCode）：
  *   0 成功；1 泛型错误；2 参数非法 / 未知方法；3 超时；4 连接断开。
  */
 const cli = cac('aiworker')
@@ -305,7 +305,7 @@ cli
 // operator-remote（空格形）
 // ============================================================
 
-// --- fleet 子命令组（原 `aim workers ...`）---
+// --- fleet 子命令组（原 operator workers ...）---
 cli.command('fleet list', '列出 fleet 内所有 worker').action(async () => {
   process.exit(await runWorkersList())
 })
@@ -373,7 +373,7 @@ cli
 // --- pair ---
 cli
   .command('pair', '通过 bootstrap token 把一个已启动的 worker 注册到 gateway')
-  .option('--url <wsUrl>', 'gateway WebSocket URL（默认使用 aim.json 里的 gatewayUrl）')
+  .option('--url <wsUrl>', 'gateway WebSocket URL（默认使用 aiworker.json 里的 gatewayUrl）')
   .option('--worker-url <httpUrl>', 'worker HTTP base URL（必填）')
   .option('--bootstrap-token <token>', 'worker 打印的一次性 bootstrap token（必填）')
   .option('--display-name <name>', '可选 worker 展示名')
