@@ -1,4 +1,4 @@
-import type { WorkerConfig } from '@zonease/aiworker-shared'
+import type { ExecutorConfig, WorkerConfig } from '@zonease/aiworker-shared'
 
 /**
  * Enumerate every secret inside a `WorkerConfig` as a (path, value) pair.
@@ -18,11 +18,10 @@ export function enumerateSecretPaths(config: WorkerConfig): Array<{ path: string
       out.push({ path: `brains.${i}.config.token`, value: brain.config.token })
   })
 
-  const overrides = (config.executor.overrides ?? {}) as Record<string, unknown>
-  if (config.executor.engine === 'http' && typeof overrides.apiKey === 'string')
-    out.push({ path: 'executor.overrides.apiKey', value: overrides.apiKey })
-  else if (config.executor.engine === 'mcp' && typeof overrides.token === 'string')
-    out.push({ path: 'executor.overrides.token', value: overrides.token })
+  enumerateExecutorSecretPaths(config.executor, 'executor', out)
+  const controlExecutor = config.orchestrator?.decisionPipeline?.executor
+  if (controlExecutor)
+    enumerateExecutorSecretPaths(controlExecutor, 'orchestrator.decisionPipeline.executor', out)
 
   config.channels.forEach((binding) => {
     const c = binding.credentials
@@ -186,26 +185,94 @@ export function hydrateSecrets(config: WorkerConfig, secrets: Map<string, string
   return c
 }
 
+function enumerateExecutorSecretPaths(
+  profile: ExecutorConfig,
+  basePath: string,
+  out: Array<{ path: string, value: string }>,
+): void {
+  const overrides = (profile.overrides ?? {}) as Record<string, unknown>
+  if (profile.engine === 'http' && typeof overrides.apiKey === 'string')
+    out.push({ path: `${basePath}.overrides.apiKey`, value: overrides.apiKey })
+  else if (profile.engine === 'mcp' && typeof overrides.token === 'string')
+    out.push({ path: `${basePath}.overrides.token`, value: overrides.token })
+
+  profile.fallbacks?.forEach((entry, i) => {
+    enumerateExecutorSecretPaths(entry.executor, `${basePath}.fallbacks.${i}.executor`, out)
+  })
+}
+
 function redactExecutorSecrets(c: WorkerConfig): void {
-  const overrides = { ...((c.executor.overrides as Record<string, unknown> | undefined) ?? {}) }
-  if (c.executor.engine === 'http' && typeof overrides.apiKey === 'string')
+  c.executor = redactExecutorProfile(c.executor)
+  const decisionPipeline = c.orchestrator?.decisionPipeline
+  const controlExecutor = decisionPipeline?.executor
+  if (controlExecutor) {
+    c.orchestrator = {
+      ...c.orchestrator,
+      decisionPipeline: {
+        ...decisionPipeline,
+        executor: redactExecutorProfile(controlExecutor),
+      },
+    }
+  }
+}
+
+function redactExecutorProfile(profile: ExecutorConfig): ExecutorConfig {
+  const overrides = { ...((profile.overrides as Record<string, unknown> | undefined) ?? {}) }
+  if (profile.engine === 'http' && typeof overrides.apiKey === 'string')
     overrides.apiKey = ''
-  if (c.executor.engine === 'mcp' && typeof overrides.token === 'string')
+  if (profile.engine === 'mcp' && typeof overrides.token === 'string')
     overrides.token = ''
-  c.executor = { ...c.executor, overrides }
+  return {
+    ...profile,
+    overrides,
+    ...(profile.fallbacks === undefined
+      ? {}
+      : {
+          fallbacks: profile.fallbacks.map(entry => ({
+            ...entry,
+            executor: redactExecutorProfile(entry.executor),
+          })),
+        }),
+  }
 }
 
 function hydrateExecutorSecrets(c: WorkerConfig, secrets: Map<string, string>): void {
-  const overrides = { ...((c.executor.overrides as Record<string, unknown> | undefined) ?? {}) }
-  if (c.executor.engine === 'http') {
-    const v = secrets.get('executor.overrides.apiKey')
+  c.executor = hydrateExecutorProfile(c.executor, secrets, 'executor')
+  const decisionPipeline = c.orchestrator?.decisionPipeline
+  const controlExecutor = decisionPipeline?.executor
+  if (controlExecutor) {
+    c.orchestrator = {
+      ...c.orchestrator,
+      decisionPipeline: {
+        ...decisionPipeline,
+        executor: hydrateExecutorProfile(controlExecutor, secrets, 'orchestrator.decisionPipeline.executor'),
+      },
+    }
+  }
+}
+
+function hydrateExecutorProfile(profile: ExecutorConfig, secrets: Map<string, string>, basePath: string): ExecutorConfig {
+  const overrides = { ...((profile.overrides as Record<string, unknown> | undefined) ?? {}) }
+  if (profile.engine === 'http') {
+    const v = secrets.get(`${basePath}.overrides.apiKey`)
     if (v !== undefined)
       overrides.apiKey = v
   }
-  else if (c.executor.engine === 'mcp') {
-    const v = secrets.get('executor.overrides.token')
+  else if (profile.engine === 'mcp') {
+    const v = secrets.get(`${basePath}.overrides.token`)
     if (v !== undefined)
       overrides.token = v
   }
-  c.executor = { ...c.executor, overrides }
+  return {
+    ...profile,
+    overrides,
+    ...(profile.fallbacks === undefined
+      ? {}
+      : {
+          fallbacks: profile.fallbacks.map((entry, i) => ({
+            ...entry,
+            executor: hydrateExecutorProfile(entry.executor, secrets, `${basePath}.fallbacks.${i}.executor`),
+          })),
+        }),
+  }
 }

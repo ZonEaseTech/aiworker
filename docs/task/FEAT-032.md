@@ -1,9 +1,22 @@
 # FEAT-032 复活并重构 Worker + Fleet Web UI（epic）
 
-- **status**: in_progress
+- **status**: completed
 - **priority**: P1
 - **owner**: bkd-orchestrator
 - **createdAt**: 2026-04-27 18:30
+- **completedAt**: 2026-05-01 14:53
+
+## 完成标记 / Absorbed By Child Tasks
+
+本 epic 已被后续 phase 实质完成并收口，不再作为 in-progress 入口。已落地成果包括：
+
+- FEAT-033：Web 静态托管与 fleet / worker 双视角源码骨架。
+- FEAT-034：Fleet UI MVP。
+- FEAT-035：Worker UI MVP。
+- REFACTOR-009：Web UI 独立性强化与回归保护。
+- REFACTOR-010：Web UI 能力补齐与可观测性。
+
+后续如果需要新的 fleet / worker UI 能力，应按具体页面或协议能力重新发起任务，不再复用本 epic。
 
 ## 描述
 

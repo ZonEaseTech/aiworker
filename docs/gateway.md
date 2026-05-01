@@ -179,7 +179,7 @@ gateway 自己在 close WS 时派发 `worker.offline`（`inferOfflineReason` 把
    - `registered_workers` 已存在 → `already_registered`；
    - 否则把 `(workerId, baseUrl, apiToken, displayName, addedBy='manual')` AES-GCM 加密落库；
    - 把 bootstrap token 作为 deviceToken 返回。
-5. aiworker CLI 把 deviceToken + defaultWorkerId 回写 `~/.aiworker/aim.json`（0600；文件名沿用历史以避免 operator 升级时丢配置）。
+5. aiworker CLI 把 deviceToken + defaultWorkerId 回写 `~/.aiworker/aiworker.json`（0600）。
 
 ### 自动 launch（workers.launch）
 
@@ -202,7 +202,7 @@ gateway 自己在 close WS 时派发 `worker.offline`（`inferOfflineReason` 把
 - **`AIWORKER_MASTER_KEY` 丢失** = 所有 `registered_workers.apiTokenEnc` 无法解密 → 必须对每个 worker 重新 `aiworker pair`。
 - **单个 node 掉线**：gateway `handleClose` 把它从 `NodeRegistry` 摘掉，广播 `worker.offline`，写 `audit_events(action='gateway.node.disconnected')`；已发到该 worker 但未收到 response 的 request 由 `ForwardTable.onExpire('node_gone')` 给 operator 回一条 `response(ok=false, error.code='node_gone')`，避免 aiworker CLI 永久挂起。
 - **gateway 重启**：所有 in-flight forward 在 `ForwardTable.dispose()` 里取消；operator 会看到补偿错误响应；node 侧的 `startGatewayNode` 默认开启自动重连（`--no-reconnect` 可关），连回来后 subscriber 重新挂 bus。
-- **操作员 aim.json 失密**：deviceToken 等价于 operator 的 bearer，任何能读到 `~/.aiworker/aim.json` 的本机用户都能冒充 operator。文件保存时强制 `0600`；疑似泄露时走 `aiworker token rotate` 或 `aiworker fleet remove` + `aiworker pair` 重建。
+- **操作员 aiworker.json 失密**：deviceToken 等价于 operator 的 bearer，任何能读到 `~/.aiworker/aiworker.json` 的本机用户都能冒充 operator。文件保存时强制 `0600`；疑似泄露时走 `aiworker token rotate` 或 `aiworker fleet remove` + `aiworker pair` 重建。
 
 ## Backup 清单
 
@@ -210,4 +210,4 @@ gateway 自己在 close WS 时派发 `worker.offline`（`inferOfflineReason` 把
 - `fleet.db` — gateway 卷 `aiworker_fleet:/var/lib/aiworker/fleet.db`。
 - 每个 worker 的 `worker.db` — worker 自己的卷。
 - `INTERNAL_SHARED_SECRET` — 运维 env 文件，`/opt/aiworker-deploy/.env`。
-- `~/.aiworker/aim.json` 可重建（重新 pair 即可），无需备份。
+- `~/.aiworker/aiworker.json` 可重建（重新 pair 即可），无需备份。

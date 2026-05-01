@@ -33,7 +33,7 @@ describe('integration cleanup helper', () => {
 
     const result = await withIntegrationCleanup(async (cleanup) => {
       dir = await cleanup.makeTempDir('aiworker-cleanup-success-')
-      await writeFile(path.join(dir, 'aim.json'), '{"deviceToken":"secret"}')
+      await writeFile(path.join(dir, 'aiworker.json'), '{"deviceToken":"secret"}')
       return 'ok'
     })
 

@@ -104,5 +104,6 @@ export type {
   WorkerInfo,
   WorkerInfoBrain,
   WorkerInfoChannel,
+  WorkerInfoControlExecutor,
   WorkerInfoExecutor,
 } from './worker-info'

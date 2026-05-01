@@ -28,6 +28,12 @@ export interface WorkerInfoExecutor {
   status: WorkerComponentStatus
 }
 
+/** Control-plane executor diagnostics surfaced by `GET /api/worker/info`. */
+export interface WorkerInfoControlExecutor extends WorkerInfoExecutor {
+  /** True when suppressed control calls reuse `WorkerConfig.executor`. */
+  reusesTaskExecutor: boolean
+}
+
 /** One channel binding row inside the `WorkerInfo` response. */
 export interface WorkerInfoChannel {
   channel: ChannelBinding['channel']
@@ -48,6 +54,7 @@ export interface WorkerInfo {
   configVersion: number
   brains: WorkerInfoBrain[]
   executor: WorkerInfoExecutor
+  controlExecutor?: WorkerInfoControlExecutor
   channels: WorkerInfoChannel[]
   evolutionEnabled: boolean
   /** ISO-8601 timestamp the current worker process started. */

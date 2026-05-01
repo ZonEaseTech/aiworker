@@ -1,9 +1,16 @@
 # FEAT-008 Host-level HA and multi-host fleet
 
-- **status**: pending
+- **status**: closed
 - **priority**: P3
-- **owner**: (unassigned)
+- **owner**: local
 - **createdAt**: 2026-04-21 07:30
+- **closedAt**: 2026-05-01 14:53
+
+## 关闭标记 / Reopen Guidance
+
+本任务作为早期多 host HA 占位关闭。当前开发成果仍围绕单 gateway / worker fleet runtime、npm CLI 部署和测试服验证；没有证据表明单 host 已成为瓶颈。
+
+未来如需要多 host，应重新发起 ops/architecture 任务，先定义真实容量目标、故障模型、worker.db 备份恢复、fleet.db 持久化策略和部署边界。
 
 ## Description
 

@@ -1,49 +1,39 @@
-# FEAT-043 优化 aiworker serve 本地管理入口体验
+# FEAT-043 优化 init 后引导与 Soul 能力测试流程
 
 - **status**: completed
-- **priority**: P2
-- **owner**: self
-- **createdAt**: 2026-04-30 20:59
+- **priority**: P1
+- **owner**: local
+- **createdAt**: 2026-05-01 12:34
+- **claimedAt**: 2026-05-01 12:39
+- **completedAt**: 2026-05-01 12:47
 - **plan**: PLAN-053
 
 ## 描述
 
-`aiworker serve` 当前能启动 worker HTTP server 并默认挂载 worker admin bundle 到
-`/admin/*`，但启动完成后只输出监听地址和静态资源目录。首次使用者仍需要自己拼
-`/admin/` URL，并在非 loopback 场景手动处理 bearer token。
+`aiworker init` 已经能选择 Soul 并生成项目级 `.aiworker/`，但完成后仍缺少清晰的下一步引导。刚上手的用户不知道应该先检查哪些文件、如何跑一次本地验证、何时启动 `serve`，以及如何把 worker 接入 gateway。
+
+同时，当前每个内置 Soul 的能力只散落在 `apps/cli/src/commands/init.ts` 的 preset 数据里。用户无法直接查看每个 Soul 具备哪些职责、默认 capability packs、toolsets 和风险策略，也没有一条完整测试流程证明所有 Soul preset 都能初始化并生成一致的能力草案。
 
 验收标准：
 
-1. `aiworker serve` 启动成功后能生成 worker admin URL。
-2. admin URL 通过 URL fragment 携带当前 worker bearer token，复用 worker UI
-   已有 `#token=...` → sessionStorage → 清 hash 的安全引导逻辑。
-3. 交互式本地启动默认尝试打开浏览器；非交互式、禁用 web bundle 或显式禁用时不打开。
-4. 提供显式 CLI 开关控制浏览器打开行为。
-5. 不把 bearer token 落入 query string；默认日志不打印完整 token。
-6. 保持 `--no-serve-web`、gateway enrollment、SIGTERM 前台生命周期行为不变。
+1. `aiworker init` 成功后输出短小、可执行的 next steps，包含 `scope`、检查 `.aiworker/SOUL.md`、本地 dry-run、实际 `run`、`serve` / gateway 接入提示。
+2. 内置 Soul preset 从 `init.ts` 中抽出为可复用 registry，避免 init、帮助信息、测试矩阵各自维护一份列表。
+3. 新增 CLI 能力查看入口，例如 `aiworker soul list` 和 `aiworker soul show <id>`，能展示每个 Soul 的职责、边界、packs、toolsets、风险策略和当前草案状态。
+4. 为所有内置 Soul 增加聚焦测试：逐个 `aiworker init --soul <preset> --dry-run` 和实际 init，校验生成的 `SOUL.md`、`AGENT.md`、`policy.json`、`toolsets.json`、`capability-packs.json` 都包含对应 preset 能力。
+5. 文档补充 init 后推荐验证路径，避免用户只看到 worker id / token 后停住。
 
 ## 进行时描述
 
-已交付 `aiworker serve` worker admin URL、token fragment 引导和可控浏览器打开体验。
+正在优化 `aiworker init` 后的首次使用路径，并补齐 Soul 能力可见性与测试矩阵。
 
 ## 依赖
 
-- **blocked by**: (none)
-- **blocks**: 本地 worker quickstart、worker admin 首次进入体验
-- **relates to**: FEAT-035, FEAT-041, BUG-035
+- **blocked by**: PLAN-053 审批
+- **relates to**: FEAT-039, PLAN-041, BUG-040, FEAT-041
+- **blocks**: Soul 模板后续治理、capability pack validation、首次使用体验
 
 ## 笔记
 
-- 2026-04-30 20:59：调查确认 `apps/cli/src/commands/serve.ts` 启动后已经拿到
-  `state.tokenPlaintext`，这是 worker `/api/worker/*` 的 bearer token。
-- 2026-04-30 20:59：worker UI 已在 `apps/web/src/worker/lib/auth.ts` 支持从
-  `#token=...` 读取 token、写入 sessionStorage，并立即清理 URL hash。
-- 2026-04-30 20:59：`serve` 默认挂载 worker bundle；`--no-serve-web` 或静态资源缺失时
-  不应尝试打开 `/admin/`。
-- 2026-04-30 20:59：上一轮 BUG-035 已固定 `serve` 前台生命周期，回归验证应继续覆盖
-  `/health` ready、进程保持存活、SIGTERM 正常退出。
-- 2026-04-30 21:09：实现已完成。`serve` 在 worker web bundle 挂载时输出不含 token 的
-  admin 基础 URL；交互式 TTY 默认打开带 `#token=...` fragment 的 admin URL；
-  `--open` / `--no-open` 可显式控制；完整 bearer 不写入日志。
-- 2026-04-30 21:09：验证通过：聚焦 `serve.integration.test.ts`、`aiworker.test.ts`、
-  CLI package typecheck/test/build、root lint、`git diff --check`。
+- 2026-05-01 12:34：用户反馈两点体验缺口：`init` 后新手不知道下一步；每个 Soul 需要完整测试流程，至少能知道当前各 Soul 具备哪些能力。调查确认 FEAT-039/PLAN-041 已完成 S1 与 S2R，当前缺口不在 Soul 选择本身，而在 post-init onboarding 和 Soul capability surface/test matrix。
+- 2026-05-01 12:39：用户批准 PLAN-053，开始实现。
+- 2026-05-01 12:47：完成实现。`init` 成功后输出 next steps；新增 `aiworker soul list/show`；Soul preset registry 抽为共享模块；所有内置 preset 都覆盖 dry-run 与实际 init 能力草案测试；`docs/cli.md` 已补初始化后验证路径。

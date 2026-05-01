@@ -1,6 +1,6 @@
 # AIWorker CLI — `aiworker`（单二进制）
 
-`@zonease/aiworker-cli` 发布**一枚** bin：`aiworker`，子命令树由 worker-side（dash-form）+ operator-side（两词 form）+ gateway 生命周期 + `install systemd` 构成。原 PLAN-020 之前的 `aiw` / `aim` 双 bin 形态已下线（FEAT-028），命令树形态以本文件为准。
+`@zonease/aiworker-cli` 发布**一枚** bin：`aiworker`，子命令树由 worker-side（dash-form）+ operator-side（两词 form）+ gateway 生命周期 + `install systemd` 构成，命令树形态以本文件为准。
 
 | Surface | 形态 | 例子 |
 |---|---|---|
@@ -65,7 +65,7 @@ PLAN-023 起 `aiworker init` 默认走 **project scope**：
 
 | 模式 | 触发条件 | 落位 |
 |------|----------|------|
-| **project**（默认） | 当前 cwd（未显式 `AIWORKER_HOME`） | `<cwd>/.aiworker/{AGENT.md,SOUL.md,USER.md,MEMORY.md,ROLLUP.md,policy.json,toolsets.json,capability-packs.json,skills/,memories/,mcp.json}` + `<cwd>/.aiworker/local/{worker.db,identity.json,.env,workspaces/}` |
+| **project**（默认） | 当前 cwd（未显式 `AIWORKER_HOME`） | `<cwd>/.aiworker/{AGENT.md,SOUL.md,USER.md,MEMORY.md,ROLLUP.md,policy.json,toolsets.json,capability-packs.json,executor-capabilities.json,skills/,memories/,mcp.json}` + `<cwd>/.aiworker/local/{worker.db,identity.json,.env,workspaces/}` |
 | **user**（legacy） | `--global` flag，或显式 `AIWORKER_HOME=...` | `~/.aiworker/{worker.db,.env,workers/<workerId>/{AGENT.md,SOUL.md,USER.md,brain/skills,brain/memories,workspaces/}}` |
 
 `local/` 目录强制 `.gitignore = "*\n!.gitignore\n"`（worker.db / .env / workspaces 等敏感产物绝不入 git）；`.aiworker/.gitignore = "local/\n"`（其余 persona / policy / toolsets / skills / memories 默认入 git，团队共享 agent 人格定义）。每个 project worker 独立 mint master key（写入 `.aiworker/local/.env`，chmod 0600），与 user 级 `~/.aiworker/.env` 物理隔离——这是数据安全边界。
@@ -90,6 +90,34 @@ aiworker init --global
 aiworker init --force
 ```
 
+初始化完成后建议按这个顺序走：
+
+```sh
+# 1. 确认当前命令会命中刚创建的 project scope
+aiworker scope
+
+# 2. 看当前 Soul 声明了什么职责和能力草案
+aiworker soul show developer
+
+# 3. 静态验证 brain/runtime capability 草案
+aiworker doctor
+
+# 4. 可选：声明并预览 executor 原生 MCP projection
+aiworker executor mcp add context7 --engine codex --url https://mcp.example.com/mcp
+aiworker executor mcp sync --engine codex --dry-run
+
+# 5. 只验证 bootstrap / DB / config 能构建，不真正投递消息
+aiworker run --message "hello" --dry-run
+
+# 6. 配好 executor secret / model 后再做真实一轮
+aiworker run --message "hello"
+
+# 7. 需要 HTTP API 或 worker admin UI 时再启动服务
+aiworker serve --port 9217
+```
+
+注意：`policy.json`、`toolsets.json`、`capability-packs.json` 和 `.aiworker/mcp.json` 仍是 brain/runtime capability 草案；`aiworker doctor` 只做静态 validation，不会启动 MCP server，也不会把 pack/toolset 强制接入 runtime enforcement。executor 原生 MCP/skill/plugin 配置走 `.aiworker/executor-capabilities.json` 与 `aiworker executor ...` 命令。
+
 ### `aiworker scope`
 
 诊断命令（零副作用）。打印当前 cwd 命中的 aiworker scope（user / project / explicit）+ home 路径 + layout 各文件存在性。等同 `git config --list --show-origin` 的角色，运维在跑数据修改命令前先查清楚自己在哪个 scope。
@@ -110,6 +138,109 @@ aiworker scope
 2. `AIWORKER_HOME` env（systemd / docker 通常显式设）
 3. `<cwd>/.aiworker/`（向上搜，遇 git boundary 即停止——不跨 monorepo / repo 边界）
 4. `~/.aiworker/`（user 级 fallback）
+
+### `aiworker doctor`
+
+零副作用诊断命令。当前切片会静态验证：
+
+- `.aiworker/policy.json`
+- `.aiworker/toolsets.json`
+- `.aiworker/capability-packs.json`
+- `.aiworker/mcp.json`
+- `.aiworker/skills/**/SKILL.md` 或 YAML skill metadata
+
+```sh
+aiworker doctor
+# [aiworker doctor] capability validation
+# Scope : project
+# Root  : ~/code/my-project/.aiworker
+# Status: PASS
+#   PASS    policy.json
+#   PASS    toolsets.json
+#   PASS    capability-packs.json
+#   PASS    mcp.json
+#   PASS    skills/
+```
+
+### `aiworker executor mcp add`
+
+声明 executor 原生 MCP server，写入 `.aiworker/executor-capabilities.json`。这个文件只表达 engine project config 的期望状态，不是 brain skill、Soul capability pack 或 `.aiworker/mcp.json` 的替代品。
+
+```sh
+aiworker executor mcp add context7 \
+  --engine codex \
+  --url https://mcp.example.com/mcp \
+  --description "Docs MCP"
+
+aiworker executor mcp add filesystem \
+  --engine claude-code \
+  --command npx \
+  --arg @modelcontextprotocol/server-filesystem \
+  --arg .
+```
+
+支持的 engine：`codex`、`claude-code`。当前 scope 只支持 `project`。
+
+Secret-like 字段必须使用 `secretRef`：
+
+```sh
+aiworker executor mcp add private-docs \
+  --engine codex \
+  --url https://mcp.example.com/mcp \
+  --header Authorization=secretRef:executor.private-docs.authorization
+```
+
+### `aiworker executor mcp sync`
+
+把 `.aiworker/executor-capabilities.json` 投影到 engine 官方 project-scope MCP 配置。默认先 dry-run 看将执行的 engine CLI 命令：
+
+```sh
+aiworker executor mcp sync --engine codex --dry-run
+# codex mcp add context7 --scope project --transport streamable-http --url https://mcp.example.com/mcp
+
+aiworker executor mcp sync --engine codex
+```
+
+非 dry-run 会调用对应 engine CLI（`codex` 或 `claude`），工作目录是 project root，并过滤 `AIWORKER_*`、`INTERNAL_*`、`WORKER_*` 和常见 secret suffix 环境变量。当前 MVP 不会自动 hydrate `secretRef`；带 `secretRef` 的 server 只能 dry-run 或由 operator 解析 secret 后手工运行 engine CLI。
+
+### `aiworker executor doctor`
+
+验证 executor capability manifest、engine CLI 是否在 `PATH`、MCP descriptor 是否完整，以及 secret-like 字段是否使用 `secretRef`：
+
+```sh
+aiworker executor doctor --engine codex
+```
+
+存在错误时整体 `Status: FAIL`，退出码为 `1`。MVP 只做 manifest、CLI availability 和 descriptor 静态检查，不会启动 MCP server 或执行 `listTools`。
+
+### `aiworker soul list` / `aiworker soul show <preset>`
+
+查看内置 Soul preset 的声明能力。它们是 `aiworker init --soul <preset>` 生成
+`SOUL.md`、`AGENT.md`、`policy.json`、`toolsets.json`、`capability-packs.json`
+的同一份数据源。
+
+```sh
+aiworker soul list
+# [aiworker soul] built-in presets
+#   developer          Developer — 开发、调试、代码审查、仓库维护。 packs=code, repo-maintenance, review toolsets=filesystem-read, filesystem-write, shell, git, test
+#   project-manager    Project Manager — 计划、拆解、进度、风险、跨人协作。 packs=planning, coordination, reporting toolsets=filesystem-read, task-tracking, calendar-draft
+#   ...
+#   customize          Custom — 通过 `aiworker init --soul customize` 交互生成职责、边界和能力草案。
+
+aiworker soul show developer
+# [aiworker soul] developer (Developer)
+# Responsibilities:
+#   - 理解代码库并实现小步可验证改动
+# ...
+# Capability packs: code, repo-maintenance, review (draft; project validation via aiworker doctor)
+# Toolsets: filesystem-read, filesystem-write, shell, git, test (draft; project validation via aiworker doctor)
+```
+
+`customize` 是交互生成路径，不是内置静态模板：
+
+```sh
+aiworker init --soul customize
+```
 
 ### `aiworker run --message <text> [--chat-id <id>] [--dry-run] [--timeout-ms <n>]`
 
@@ -185,13 +316,13 @@ OTP 模式 stdout 格式（`apps/cli/src/commands/serve.ts::formatOtpBox`）：
 
 ```sh
 # self-enroll（NAT 后批量部署）：
-AIWORKER_GATEWAY_URL=wss://aiw.example.com/ws \
+AIWORKER_GATEWAY_URL=wss://gateway.example.com/ws \
 AIWORKER_JOIN_TOKEN=<shared> \
 AIWORKER_DISPLAY_NAME=prod-1 \
 aiworker serve --port 9217
 
 # OTP enroll（attended，deployer 无 fleet 凭证）：
-AIWORKER_GATEWAY_URL=wss://aiw.example.com/ws \
+AIWORKER_GATEWAY_URL=wss://gateway.example.com/ws \
 AIWORKER_DISPLAY_NAME=ben-laptop \
 aiworker serve --port 9217
 # stdout 打 OTP 后 deployer 把它带外发给 operator
@@ -315,7 +446,7 @@ operator 通过 WebSocket 与 gateway（`apps/gateway`）对话，由 gateway �
 
 ### 本地状态
 
-`~/.aiworker/aim.json`（权限 `0600`，文件名沿用历史以避免 operator 升级时丢配置）持久化：
+`~/.aiworker/aiworker.json`（权限 `0600`）持久化：
 
 ```jsonc
 {
@@ -326,7 +457,7 @@ operator 通过 WebSocket 与 gateway（`apps/gateway`）对话，由 gateway �
 }
 ```
 
-补充文件：`~/.aiworker/aim-gateway.pid`（本机 daemon PID）、`~/.aiworker/aim-gateway.log`（daemon 日志）。
+补充文件：`~/.aiworker/aiworker-gateway.pid`（本机 daemon PID）、`~/.aiworker/aiworker-gateway.log`（daemon 日志）。
 
 ### Exit code 约定（operator-remote）
 
@@ -338,7 +469,7 @@ operator 通过 WebSocket 与 gateway（`apps/gateway`）对话，由 gateway �
 
 ### `aiworker gateway start [--port <n>] [--no-serve-web]`
 
-本机拉起 gateway daemon。成功后把 `gatewayUrl: ws://localhost:<port>/ws` 回写到 `aim.json`。
+本机拉起 gateway daemon。成功后把 `gatewayUrl: ws://localhost:<port>/ws` 回写到 `aiworker.json`。
 
 Gateway bind host 由 `AIWORKER_GATEWAY_HOST` 控制，默认 `127.0.0.1`。非 loopback host 仍然必须配置 `INTERNAL_SHARED_SECRET`；如果同时实际挂载 fleet `/admin/*` bundle，还必须设置 `AIWORKER_ADMIN_EXTERNAL_AUTH=1` 来确认外部鉴权已覆盖，或用 `--no-serve-web` 关闭 admin 静态资源。
 
@@ -352,8 +483,8 @@ aiworker gateway start --port 9218
 ```sh
 aiworker gateway status
 # ✔ gateway daemon 运行中 pid=12345
-# ℹ pidFile: /root/.aiworker/aim-gateway.pid
-# ℹ logFile: /root/.aiworker/aim-gateway.log
+# ℹ pidFile: /root/.aiworker/aiworker-gateway.pid
+# ℹ logFile: /root/.aiworker/aiworker-gateway.log
 ```
 
 ### `aiworker gateway stop [--timeout-ms <n>]`
@@ -397,7 +528,7 @@ aiworker fleet launch --display-name demo
 
 ### `aiworker fleet remove <workerId>`
 
-从 fleet 中摘除该 worker（deviceToken 作废 + 若在线则踢下线）。若 `defaultWorkerId` 正是它，也会从 `aim.json` 清掉。
+从 fleet 中摘除该 worker（deviceToken 作废 + 若在线则踢下线）。若 `defaultWorkerId` 正是它，也会从 `aiworker.json` 清掉。
 
 ---
 
@@ -405,7 +536,7 @@ aiworker fleet launch --display-name demo
 
 ### `aiworker pair --url <wsUrl> --worker-url <httpUrl> --bootstrap-token <token> [--display-name <name>]`
 
-把一个已启动的 worker 通过 bootstrap token 注册到 gateway。gateway 会调 worker 的 `/info` 验 token，加密落 fleet.db，并把 deviceToken 返回——CLI 把它写回 `aim.json`，之后所有 operator 请求都用它。
+把一个已启动的 worker 通过 bootstrap token 注册到 gateway。gateway 会调 worker 的 `/info` 验 token，加密落 fleet.db，并把 deviceToken 返回——CLI 把它写回 `aiworker.json`，之后所有 operator 请求都用它。
 
 ```sh
 aiworker pair \
@@ -670,10 +801,8 @@ WantedBy=default.target
 
 ---
 
-## 老版 caveats（保留给迁移用户）
+## Caveats
 
-- 历史 PLAN-013 / PLAN-018 / PLAN-019 期间命令为 `aiw <subcmd>`（worker-side）和 `aim <subcmd>`（operator-side），PLAN-020 / FEAT-028 起合并为单二进制 `aiworker`，**无 backwards-compat shim**——脚本里残留的 `aiw` / `aim` 调用必须按本文件 §worker-local / §operator-remote 命令树替换。
-- 历史 task 卡 / changelog 条目仍保留 `aiw` / `aim` 字面（设计如此，史料不动）；新写的脚本与文档统一走 `aiworker`。
 - 子命令名仍是带空格的两词（`config get` / `token rotate`）；`cac` 6 原生不支持，`aiworker.ts` 在入口前做了一次 argv 预处理把 `argv[2]+argv[3]` 合成一个 token。新增两词命令需注册到 `cli.command('foo bar', ...)` 并让多词识别表自动拾取。
 - `aiworker run` 默认频道 `web` 与 chat id `cli:stdin`；webhook-driven 频道（Telegram / Lark / WhatsApp）仍需 `aiworker serve`。
 - 没有 `aiworker repl` / 交互循环；`aiworker run` 是一次性。

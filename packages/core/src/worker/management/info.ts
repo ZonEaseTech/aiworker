@@ -6,20 +6,18 @@ import type {
   WorkerInfo,
   WorkerInfoBrain,
   WorkerInfoChannel,
+  WorkerInfoControlExecutor,
   WorkerInfoExecutor,
 } from '@zonease/aiworker-shared'
 import type { WorkerModeState } from './state'
 import { resolveVariant } from '../executor/default-profiles'
 
 /**
- * Per-process runtime version surfaced on `/api/worker/info`. Matches the
- * value advertised in the OpenAPI document so the manager can detect skew.
+ * Environment inputs consumed by the info builder. Indirected so tests can stub.
  */
-const WORKER_RUNTIME_VERSION = '0.2.0'
-
-/** Environment inputs consumed by the info builder. Indirected so tests can stub. */
 export interface BuildInfoEnv {
   advertisedBaseUrl?: string
+  runtimeVersion: string
 }
 
 function resolveStatus(status: ServiceStatus | null): WorkerComponentStatus {
@@ -102,6 +100,20 @@ export async function buildInfo(
     status: executorStatus,
   }
 
+  const controlExecutorConfig = storedConfig.orchestrator?.decisionPipeline?.executor ?? storedConfig.executor
+  const controlExecutorReusesTaskExecutor = runtime.controlExecutorReusesTaskExecutor
+    ?? (storedConfig.orchestrator?.decisionPipeline?.executor === undefined)
+  const controlExecutorStatus = controlExecutorReusesTaskExecutor
+    ? executorStatus
+    : await probe(() => (runtime.controlExecutor ?? runtime.executor).health())
+  const resolvedControlExecutorModel = executorInfoModel(controlExecutorConfig)
+  const controlExecutor: WorkerInfoControlExecutor = {
+    type: controlExecutorConfig.engine,
+    ...(resolvedControlExecutorModel === undefined ? {} : { model: resolvedControlExecutorModel }),
+    status: controlExecutorStatus,
+    reusesTaskExecutor: controlExecutorReusesTaskExecutor,
+  }
+
   const channels: WorkerInfoChannel[] = storedConfig.channels.map((c) => {
     const url = webhookUrl(env.advertisedBaseUrl, c.channel)
     return {
@@ -113,10 +125,11 @@ export async function buildInfo(
 
   return {
     workerId: state.workerId,
-    runtimeVersion: WORKER_RUNTIME_VERSION,
+    runtimeVersion: env.runtimeVersion,
     configVersion: state.configVersion,
     brains,
     executor,
+    controlExecutor,
     channels,
     evolutionEnabled: storedConfig.evolution.enabled,
     startedAt: state.startedAt,

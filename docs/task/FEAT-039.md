@@ -1,25 +1,44 @@
 # FEAT-039 Worker 初始化与 Soul 生命周期：安全 init、模板预置、能力包与更新治理
 
-- **status**: in_progress
+- **status**: closed
 - **priority**: P1
 - **owner**: BKD h71mijcz
 - **createdAt**: 2026-04-29 17:50
 - **claimedAt**: 2026-04-29 18:04
+- **closedAt**: 2026-05-01 14:53
 - **plan**: PLAN-041
+
+## 关闭标记 / Split Future Work
+
+本任务作为大范围 init / Soul 生命周期计划已关闭。当前已落地的可用范围包括 `aiworker init` safe/no-overwrite、Soul presets / customize、`aiworker soul list/show`、brain/runtime capability 草案、`aiworker doctor` 静态 validation，以及 executor-native capability projection 的独立边界。
+
+剩余事项不再挂在本任务下继续推进，未来按小切片重新发起：
+
+- external agent adapter sync；
+- Soul update / pin / diff；
+- self-iteration admission gate；
+- mutating brain/runtime quick config 命令。
+
+已确认边界：
+
+- 已交付范围包括 `aiworker init`、Soul 生命周期基础、brain/runtime project capability 草案与 `aiworker doctor` 静态 validation。
+- 未来重开 external adapter、Soul update、自我迭代 admission 时仍必须遵守本边界。
+- executor-native MCP/skill/plugin 投影以 FEAT-044 / PLAN-055 为准；Codex / Claude Code 等 engine 的 project-scope MCP 配置不进入本任务。
+- `.aiworker/mcp.json` 只作为 brain/runtime descriptor；`.aiworker/executor-capabilities.json` 才是 executor projection manifest。
 
 ## 描述
 
 在 FEAT-036 已有 project-scope `aiworker init` / `aiworker scope` 基础上，把初始化从“创建目录和 worker.db”升级为“配置一个可长期工作的项目级 worker”。
 
-本任务覆盖用户进入路径：防覆盖初始化、选择或自定义 Soul、快速预置 Skill/MCP/Tool、生成或同步外部 agent 适配文件，以及未来云端 Soul 更新的 diff / pin / approval 机制。它与 FEAT-038 / PLAN-039 配套：PLAN-039 定义 worker runtime 如何决策、执行和自我迭代；本任务定义这些能力如何被安全、快速、可审计地配置出来。
+本任务覆盖用户进入路径：防覆盖初始化、选择或自定义 Soul、快速预置 brain/runtime Skill/MCP/Tool descriptor、生成或同步外部 agent 适配文件，以及未来云端 Soul 更新的 diff / pin / approval 机制。它与 FEAT-038 / PLAN-039 配套：PLAN-039 定义 worker runtime 如何决策、执行和自我迭代；本任务定义这些 brain/runtime 能力如何被安全、快速、可审计地配置出来。executor-native 能力配置已拆到 FEAT-044 / PLAN-055。
 
 ## 验收标准
 
 1. `aiworker init` 默认不覆盖已有 `.aiworker/`、`AGENTS.md`、`CLAUDE.md`、`.agents/`、`.claude/` 等文件；检测到现有 worker 时只进入诊断/合并提示。
 2. 初始化 wizard 支持选择预置 Soul：developer、project-manager、devops-sre、product-designer、qa-reviewer、support-operator、finance-ops、hr-recruiting、general-assistant，以及 `customize`。
 3. `customize` 能通过少量问题生成 `SOUL.md`、`AGENT.md`、policy、toolsets 和 capability pack 选择草案。
-4. 选择 Soul 后能预置对应 Skill、MCP、Toolset、policy 和可选外部 agent adapter；`.aiworker/` 始终是权威源，外部文件只作为投影或导入来源。
-5. Skill/MCP/Tool 快速配置命令必须先 validation 再启用：Skill metadata、MCP server 启动/list tools/schema、tool allowlist/denylist、secret ref 和权限策略都要通过检查。
+4. 选择 Soul 后能预置对应 brain/runtime Skill、MCP descriptor、Toolset、policy 和可选外部 agent adapter；`.aiworker/` 始终是权威源，外部文件只作为投影或导入来源。
+5. Brain/runtime Skill/MCP/Tool 快速配置必须先 validation 再启用：Skill metadata、MCP descriptor、tool allowlist/denylist、secret ref 和权限策略都要通过检查；executor-native projection 的命令与 sync 流程不属于本任务。
 6. 超出 Soul 职责范围的请求有明确响应策略：通用处理、请求启用能力、handoff proposal、拒绝高风险/越权操作。
 7. 未来 `aiworker soul update` 只允许 diff / proposal / approval / backup / apply 流程，不允许云端模板静默覆盖本地 Soul。
 8. 自我迭代写入 memory/skill/policy 前必须带 evidence、scope、confidence、source、review 结果和 rollback/audit 信息；低质量或冲突内容只能保留为 pending proposal。
@@ -36,3 +55,9 @@
 - 2026-04-29 18:04：用户批准开工。按 BKD 编排执行，控制单 session 范围；先派发 S1 init preflight/dry-run diff 小切片。
 - 2026-04-29 18:18：S1 已通过 BKD 子任务 `urey7cyc` 合入 main，merge commit `8284aa5`。本阶段新增 `aiworker init --dry-run`、init preflight 报告、外部 agent 文件检测和 persona 文件保留回归测试。Post-merge 验证：`bun test --timeout=15000 apps/cli/src/commands/init.integration.test.ts`、`bun run --filter @zonease/aiworker-cli test`、`bun run --filter @zonease/aiworker-cli typecheck`、目标 `eslint`、committed diff check 均通过。
 - 2026-04-30 15:47：根据 init 体验反馈移除 brand-new project 对 git repo 的硬性要求；`aiworker init` 默认可在非 git cwd 创建项目级 `.aiworker/`，preflight 仅提示确认 cwd，`--global` 仍用于 host-wide worker，`--force` 保留为兼容旧脚本且不覆盖文件。
+- 2026-05-01 13:08：FEAT-043 与 REFACTOR-013 已完成：`init` 后 next steps、`aiworker soul list/show`、所有内置 Soul 能力草案测试矩阵、Soul preset 独立文件拆分，以及 CLI 包级测试 gate 修复。PLAN-041 下一步建议推进 S3 capability packs + validation。
+- 2026-05-01 13:22：开始实施 PLAN-041 S3 最小切片：capability manifest/schema、policy/toolset/skill/MCP 静态 validation、`aiworker doctor` 输出，以及 init/soul 的 validation 状态呈现。
+- 2026-05-01 13:34：PLAN-041 S3 最小切片完成。新增共享 capability schema、CLI 内置 pack/toolset catalog、静态 validator 与 `aiworker doctor`；`init` 生成结构化 validation 草案并提示 doctor；`soul list/show` 改为指向 project doctor；测试覆盖 valid/invalid manifest、MCP 明文 secret、Skill metadata、doctor exit code 与所有内置 Soul preset。FEAT-039 仍保持 in_progress，后续还有 S4-S6。
+- 2026-05-01 13:54：边界纠偏：S3 保留为 brain/runtime project capability 草案的静态 validator，不继续承载 executor 原生 MCP/skill/plugin 配置。executor capability projection 独立进入 FEAT-044 / PLAN-055。
+- 2026-05-01 14:32：补充 PMA 废案标记：本任务仍有效，但所有 executor-native MCP/skill/plugin 投影需求必须从 FEAT-044 / PLAN-055 进入，不能复用 PLAN-041 S3 的 project capability draft。
+- 2026-05-01 14:53：关闭本大范围任务。已完成 MVP 与边界澄清；S4-S6 作为未来小切片重新发起。

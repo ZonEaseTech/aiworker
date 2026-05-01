@@ -1,17 +1,203 @@
 # AIWorker Changelog
 
-## 2026-04-30 21:09 [progress] FEAT-043 — serve admin auto-open
+## 2026-05-02 02:44 [progress] FEAT-042 / PLAN-051 — Orchestrator control executor
 
-优化 `aiworker serve` 的本地管理入口体验：
+完成 Orchestrator control-plane executor 与 task executor 的解耦：
 
-- worker web bundle 挂载时输出 `/admin/` 基础 URL，日志不打印完整 bearer token。
-- 交互式 TTY 默认尝试打开浏览器，并通过 URL fragment 携带当前 worker bearer；
-  worker UI 继续复用既有 hash → sessionStorage → 清 hash 流程。
-- 新增 `--open` / `--no-open` 控制浏览器打开行为；`--no-serve-web` 或静态资源缺失时不打开。
-- `0.0.0.0` / IPv6 wildcard bind host 会映射为浏览器可访问的 loopback URL。
+- Worker config 新增 `orchestrator.decisionPipeline.executor`，未配置时继续复用主 `config.executor`，保持 FEAT-038 行为兼容。
+- 新增 control executor resolver；LLM intent classifier、conversation continuation classifier、quality gate evaluator、quality repair、compaction summary 和 pre-compaction memory flush 都改走 control executor。
+- 显式 control executor 使用独立 model / timeout / fallback 配置；suppressed control run 默认 `temperature=0`，不传 task workspace、tool list 或 engine native session binding。
+- secret enumeration / redaction / hydration 覆盖 control executor 及其 fallback chain。
+- `GET /api/worker/info` 增加 `controlExecutor` 诊断，标识 engine、model、status 与是否复用 task executor。
 
-验证通过：聚焦 `serve.integration.test.ts`、`aiworker.test.ts`、CLI package
-typecheck/test/build、root lint、`git diff --check`。
+验证：
+
+- `bun test packages/core/src/worker/management/config.test.ts packages/core/src/worker/management/info.test.ts packages/core/src/worker/orchestrator/service.history.test.ts`
+- `bun test packages/core/src/worker/runtime.test.ts -t "control executor"`
+- `bun run --filter '@zonease/aiworker-shared' typecheck`
+- `bun run --filter '@zonease/aiworker-core' typecheck`
+- `bun run --filter '@zonease/aiworker-api' typecheck`
+- focused ESLint on touched core/shared files
+- `git diff --check`
+
+## 2026-05-02 02:01 [bug] BUG-006 / PLAN-061 — reloadRuntime 串行化
+
+修复 worker hot-reload 的并发 swap race：
+
+- `apps/api/src/modes/worker.ts` 的 `reloadRuntime` 现在通过 bootstrap 闭包内的 promise chain 串行执行；后一次 reload 会等前一次 hydrate/build/swap、`onRuntimeReloaded` 和旧 runtime `dispose()` 全部完成后再开始。
+- reload 失败不会 poison 后续链路；下一次 reload 会从上一轮 rejected chain 后恢复排队。
+- 新增 `apps/api/src/modes/worker.reload.test.ts`，用受控 secret hydrate 卡住第一次 reload，再并发触发第二次，断言第二次不会抢先进 hydrate/swap，且最终版本保持后发者。
+- `docs/architecture.md` / `AGENTS.md` 明确该不变量由 `reloadRuntime` 内部 promise chain 强制，而不是依赖 operator 不并发。
+
+验证：
+
+- `bun test apps/api/src/modes/worker.reload.test.ts`
+- `bun test apps/api/src/worker/management/routes.test.ts`
+- `bun run --filter '@zonease/aiworker-api' typecheck`
+
+## 2026-05-02 02:00 [refactor] REFACTOR-014 / PLAN-060 — CLI operator module 内部命名清理
+
+完成 BUG-010 / PLAN-058 的后续内部源码清理，公共 CLI 行为不变：
+
+- `apps/cli/src/aim/` 通过 `git mv` 迁到 `apps/cli/src/operator/`。
+- CLI entry 与 smoke 脚本 import 改为 `operator` 路径。
+- 内部 operator state/client/session 符号从 `Aim*` 改为 `Operator*`，包括 `OperatorState`、`loadOperatorState`、`patchOperatorState`、`OperatorClient`、`createOperatorClient` 和 `OperatorWsError`。
+- `aiworker gateway start` 仍写 `~/.aiworker/aiworker.json`，daemon 文件仍是 `aiworker-gateway.pid` / `aiworker-gateway.log`。
+- BUG-010 / PLAN-058 当前说明补充：`apps/cli/src/aim` 保留只代表当时历史状态，当前实现已迁到 `operator`。
+
+验证：
+
+- `bun run --filter '@zonease/aiworker-cli' test`
+- `bun run --filter '@zonease/aiworker-cli' typecheck`
+- `rg -n "\\baim\\b|\\baiw\\b|aim\\.json|aim-gateway|src/aim" apps/cli/src apps/cli/scripts` 无命中。
+- `git diff --check`
+
+## 2026-05-02 01:38 [bug] BUG-010 / PLAN-058 — CLI runtime 旧命名前缀清理
+
+按最新版本做 clean rename，不保留 legacy operator state 文件名：
+
+- 用户可见 runtime 前缀从 `[aiw ...]` 统一为 `[aiworker ...]`，worker-local dash-form 命令使用 `[aiworker config-set]`、`[aiworker token-rotate]`、`[aiworker schedule-*]`。
+- OTP enrollment 提示从 `aim enroll approve <otp>` 改为 `aiworker enroll approve <otp>`。
+- operator state 从 `~/.aiworker/aim.json` 改为 `~/.aiworker/aiworker.json`；gateway daemon pid/log 从 `aim-gateway.*` 改为 `aiworker-gateway.*`。
+- README、`docs/cli.md`、`docs/gateway.md`、`docs/architecture.md` 与相关 CLI tests 同步。
+
+验证：
+
+- `bun run --filter '@zonease/aiworker-cli' test`
+- `bun run --filter '@zonease/aiworker-cli' typecheck`
+- `rg -n "\\[aiw(\\s|\\])|aim enroll approve|\\baiw\\b|aim\\.json|aim-gateway|~/.aiworker/aim" apps/cli/src apps/cli/scripts packages/core/src packages/gateway/src packages/gateway-proto/src apps/api/src docs/cli.md docs/gateway.md docs/architecture.md README.md` 无命中。
+
+## 2026-05-02 01:14 [bug] BUG-038 / PLAN-059 — worker info runtimeVersion follows CLI package version
+
+Fixed stale worker info version reporting:
+
+- Removed the hard-coded `WORKER_RUNTIME_VERSION = '0.2.0'` from core worker info.
+- `buildInfo` now receives the runtime/package version from its caller.
+- `bootstrapWorkerApp` passes the same runtime version to `/api/worker/info` and the OpenAPI document, with `dev` as the explicit source-mode fallback.
+- `aiworker serve` injects `apps/cli/package.json` version, so published CLI workers report the same version through both `fleet info` and bridged `/w/:workerId/api/worker/info`.
+- Tests now use injected test runtime versions instead of pinning stale release literals.
+
+验证：
+
+- `bun test packages/core/src/worker/management/info.test.ts`
+- `bun test apps/api/src/worker/management/routes.test.ts`
+- `bun test apps/api/src/modes/worker.bearer-auth.test.ts`
+- `bun test apps/cli/src/aiworker.test.ts`
+- `bun test packages/core/src/worker/gateway-client/dispatcher.test.ts`
+- `bun run --filter '@zonease/aiworker-core' typecheck`
+- `bun run --filter '@zonease/aiworker-api' typecheck`
+- `bun run --filter '@zonease/aiworker-cli' typecheck`
+
+## 2026-05-01 14:53 [docs] DOC-004 / PLAN-057 — 陈旧 PMA 待办状态清理
+
+按当前开发成果和 Brain / Executor 能力边界，收敛 remaining pending / in-progress PMA 事项：
+
+- FEAT-032 / PLAN-022 标记 completed：Web UI epic 已由 FEAT-033/034/035、REFACTOR-009/010 吸收并交付。
+- FEAT-037 / PLAN-028 标记 completed：session control plane 已完成 S1-S5，剩余 idle/daily expiry 与 UI observability 以后按小任务重开。
+- FEAT-039 / PLAN-041 标记 closed / rejected：init / Soul / doctor / capability 静态 validation / executor 边界已交付，S4-S6 以后按新边界拆小切片。
+- FEAT-002、FEAT-007、FEAT-008、FEAT-010 标记 closed：远期占位或旧架构入口不再污染当前 backlog。
+- BUG-010、BUG-038、FEAT-042 / PLAN-051 保留，并补充 current-scope note；PLAN-051 detail status 规范为 `draft`。
+
+验证：targeted `rg` active-entry scan，`git diff --check`。
+
+## 2026-05-01 14:37 [docs] DOC-003 / PLAN-056 — PMA 废案标记与 capability 边界治理
+
+对 PMA 管理的 docs 做了一次不删除历史的废案和边界标记：
+
+- FEAT-031 / PLAN-021 已从 pending / implementing 改为 closed / rejected，并在顶部标明不再作为实现规格，替代路径指向 FEAT-036、FEAT-037、FEAT-038、FEAT-039 和 FEAT-044。
+- FEAT-038 / PLAN-039 补充 historical scope：其中 `.aiworker/mcp.json` 和 CapabilityRegistry 只表示 runtime observe-only descriptor，不是 executor-native MCP projection。
+- FEAT-039 / PLAN-041 补充 current scope：继续承载 init / Soul / brain-runtime capability draft / `aiworker doctor`，不再承载 executor-native MCP/skill/plugin projection。
+- BUG-040 标记为历史缺口记录，禁止从旧的 `aiworker mcp add` / `skill add` / `toolset enable` 描述恢复 executor config 命令。
+- FEAT-036 / PLAN-023 / REFACTOR-011 与 `docs/architecture.md` 补充 `.aiworker/mcp.json` 与 `.aiworker/executor-capabilities.json` 的职责边界。
+
+验证：`rg` targeted stale-entry scan，`git diff --check`。
+
+## 2026-05-01 14:05 [progress] FEAT-044 / PLAN-055 — executor capability projection
+
+完成 executor 原生能力快速配置 MVP，并把边界从 PLAN-041 S3 的 project capability 草案中拆出来：
+
+- 新增 `.aiworker/executor-capabilities.json`，只记录 executor-native projection 期望状态；`init` / fs-layout 会种空 manifest。
+- 新增 shared executor capability schema，当前支持 `codex` / `claude-code` 的 project-scope MCP descriptor。
+- 新增 `aiworker executor mcp add`：写入 executor manifest，不修改 `.aiworker/mcp.json` 或 brain skill 目录。
+- 新增 `aiworker executor mcp sync`：dry-run 输出将执行的 engine 官方 CLI 命令；非 dry-run 调用 `codex` / `claude`，cwd 固定为 project root，并过滤 AIWorker / worker / internal secret env。
+- 新增 `aiworker executor doctor`：验证 manifest、engine CLI availability、descriptor 完整性与 secret-like 字段。
+- Secret-like 字段只能用 `secretRef`；MVP 不做隐式 hydrate，非 dry-run projection 遇到 secretRef 会 fail clearly，避免把占位符或明文写进 engine project config。
+- 文档更新：`aiworker doctor` 明确只管 brain/runtime capability 草案；executor MCP/skill/plugin 走 `aiworker executor ...` 与 `executor-capabilities.json`。
+
+验证：
+
+- `bun test packages/shared/src/executor-capabilities.test.ts apps/cli/src/commands/executor.test.ts apps/cli/src/aiworker.test.ts apps/cli/src/commands/init.integration.test.ts packages/fs-layout/src/index.test.ts`
+- `bun run --filter '@zonease/aiworker-cli' typecheck`
+- `bun run --filter '@zonease/aiworker-shared' typecheck`
+- `bun run lint`
+- `git diff --check`
+
+## 2026-05-01 13:34 [progress] FEAT-039 / PLAN-041 S3 — capability 静态 validation
+
+完成 PLAN-041 S3 的最小可交付切片：
+
+- 新增共享 capability manifest schema，覆盖 capability packs、policy、toolsets、MCP descriptor、Skill metadata 和 validation issue/status。
+- 新增 CLI 内置 capability pack / toolset catalog，并校验所有内置 Soul preset 引用的 pack/toolset 都已登记。
+- 新增 `aiworker doctor` 零副作用诊断命令，静态验证 `.aiworker/policy.json`、`toolsets.json`、`capability-packs.json`、`mcp.json` 和 `skills/` metadata。
+- MCP 当前只做 descriptor 与明文 secret 静态检查；不启动 server，不执行 `listTools`。
+- `aiworker init` 现在生成结构化 validation 草案并提示下一步跑 `aiworker doctor`；`aiworker soul list/show` 也指向 project doctor 获取 validation 状态。
+
+验证：
+
+- `bun test packages/shared/src/capabilities.test.ts apps/cli/src/capabilities/validation.test.ts apps/cli/src/commands/doctor.test.ts apps/cli/src/soul/presets.test.ts apps/cli/src/aiworker.test.ts apps/cli/src/commands/init.integration.test.ts`
+- `bun run typecheck`
+- `bun run --filter '@zonease/aiworker-cli' test`
+- `bun run --filter '@zonease/aiworker-shared' test`
+- `bun run lint`
+- `bun run --filter '@zonease/aiworker-web' build`
+- `bun run --filter '@zonease/aiworker-cli' build:bundle`
+- `git diff --check`
+
+## 2026-05-01 13:08 [progress] REFACTOR-013 — CLI test gate 与 Soul preset 拆分
+
+完成 FEAT-043 后续收尾：
+
+- `apps/cli/scripts/aiworker-bin-shim.test.ts` 改用真实路径规范化 expected bundle path，兼容 macOS `/var` 与 `/private/var`。
+- `aim pair` / `aim enroll` command 测试改为依赖注入，不再通过 full-module mock 污染 `./common`，CLI 包级测试恢复通过。
+- 9 个内置 Soul preset 拆到 `apps/cli/src/soul/presets/*.ts`，`apps/cli/src/soul/presets.ts` 保持统一 registry 和外部消费入口。
+
+验证：
+
+- `bun test --timeout=30000 apps/cli/scripts/aiworker-bin-shim.test.ts apps/cli/src/aim/commands/common.test.ts apps/cli/src/aim/commands/pair.test.ts apps/cli/src/aim/commands/enroll.test.ts`
+- `bun test --timeout=30000 apps/cli/src/soul/presets.test.ts apps/cli/src/aiworker.test.ts apps/cli/src/commands/init.integration.test.ts`
+- `bun run --filter '@zonease/aiworker-cli' typecheck`
+- `bun run --filter '@zonease/aiworker-cli' test`
+- `bun run lint`
+- `git diff --check`
+
+## 2026-05-01 12:47 [progress] FEAT-043 — init 后引导与 Soul 能力矩阵
+
+优化 project-scope `aiworker init` 的首次上手体验：
+
+- `aiworker init` 成功后现在打印精简 next steps：确认 scope、审阅
+  `.aiworker/SOUL.md` / `AGENT.md`、查看 Soul 能力、跑 `run --dry-run`、
+  配好 executor 后真实 `run`，以及需要 HTTP/admin/fleet 时的下一步。
+- 内置 Soul preset 从 `init.ts` 抽到共享 registry，`init`、help、测试和
+  新 CLI 命令共用同一份能力数据。
+- 新增 `aiworker soul list` / `aiworker soul show <preset>`，展示每个 Soul
+  的职责、边界、沟通风格、风险策略、capability packs 和 toolsets。输出明确标记
+  pack/toolset 仍是 `draft` / `validation pending`，真实 validation 留给
+  PLAN-041 S3。
+- `soul list/show` 被加入非 mutating bootstrap 例外，不会为了查看能力而 mint
+  `.env` 或写入 worker state。
+- 测试矩阵覆盖所有内置 Soul preset 的 dry-run 与实际 init，校验
+  `SOUL.md`、`AGENT.md`、`policy.json`、`toolsets.json`、
+  `capability-packs.json` 与 preset 声明一致。
+
+验证：
+
+- `bun test --timeout=30000 apps/cli/src/soul/presets.test.ts apps/cli/src/aiworker.test.ts apps/cli/src/commands/init.integration.test.ts`
+- `bun run --filter '@zonease/aiworker-cli' typecheck`
+- `bun run lint`
+- `git diff --check`
+- `bun run --filter '@zonease/aiworker-cli' test` 仍有两处非本次失败：macOS
+  `/var` vs `/private/var` 路径断言，以及整包运行时的 Bun mock 隔离顺序问题
+  （`common.test.ts` 单跑通过）。
 
 ## 2026-04-30 20:34 [progress] REL-007 — 0.4.10 published
 

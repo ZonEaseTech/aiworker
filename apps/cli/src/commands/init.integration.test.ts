@@ -5,12 +5,13 @@ import path from 'node:path'
 import process from 'node:process'
 import { describe, expect, it, setDefaultTimeout } from 'bun:test'
 
+import { BUILTIN_SOUL_PRESETS } from '../soul/presets'
 import { withIntegrationCleanup } from '../test-utils/integration-cleanup'
 
 const cliEntry = path.resolve(import.meta.dir, '..', 'aiworker.ts')
-const HELPER_TIMEOUT_MS = 12_000
+const HELPER_TIMEOUT_MS = 30_000
 
-setDefaultTimeout(15_000)
+setDefaultTimeout(30_000)
 
 async function exists(p: string): Promise<boolean> {
   try {
@@ -102,11 +103,19 @@ describe('aiworker init / scope project placement', () => {
 
       expect(result.exitCode).toBe(0)
       expect(result.output).toContain('Soul         : developer (Developer, flag)')
+      expect(result.output).toContain('[aiworker init] next steps')
+      expect(result.output).toContain('aiworker scope')
+      expect(result.output).toContain('.aiworker/SOUL.md')
+      expect(result.output).toContain('aiworker soul show developer')
+      expect(result.output).toContain('aiworker doctor')
+      expect(result.output).toContain('aiworker run --message "hello" --dry-run')
+      expect(result.output).toContain('aiworker serve --port 9217')
       expect(await exists(path.join(project, '.aiworker', 'AGENT.md'))).toBe(true)
       expect(await exists(path.join(project, '.aiworker', 'SOUL.md'))).toBe(true)
       expect(await exists(path.join(project, '.aiworker', 'policy.json'))).toBe(true)
       expect(await exists(path.join(project, '.aiworker', 'toolsets.json'))).toBe(true)
       expect(await exists(path.join(project, '.aiworker', 'capability-packs.json'))).toBe(true)
+      expect(await exists(path.join(project, '.aiworker', 'executor-capabilities.json'))).toBe(true)
       expect(await exists(path.join(project, '.aiworker', 'local', '.env'))).toBe(true)
       expect(await exists(path.join(project, '.aiworker', 'local', 'worker.db'))).toBe(true)
       expect(await exists(path.join(project, '.aiworker', 'local', 'workers'))).toBe(false)
@@ -117,6 +126,53 @@ describe('aiworker init / scope project placement', () => {
       expect(soul).not.toContain('Voice / style guide')
       const policy = JSON.parse(await readFile(path.join(project, '.aiworker', 'policy.json'), 'utf8'))
       expect(policy.soul.preset).toBe('developer')
+    })
+  })
+
+  it('all built-in Soul presets preview and materialize matching capability drafts', async () => {
+    await withCliIntegrationCleanup(async (cleanup) => {
+      const root = await cleanup.makeTempDir('aiworker-cli-init-soul-matrix-')
+      const home = await cleanup.makeTempDir('aiworker-cli-init-soul-matrix-home-')
+
+      for (const preset of BUILTIN_SOUL_PRESETS) {
+        const dryRunProject = path.join(root, `${preset.id}-dry-run`)
+        await mkdir(dryRunProject, { recursive: true })
+        const dryRun = await runCli(cleanup, ['init', '--dry-run', '--soul', preset.id], dryRunProject, home)
+        expect(dryRun.exitCode).toBe(0)
+        expect(dryRun.output).toContain(`Soul         : ${preset.id} (${preset.label}, flag)`)
+        expect(await exists(path.join(dryRunProject, '.aiworker'))).toBe(false)
+
+        const project = path.join(root, preset.id)
+        await mkdir(project, { recursive: true })
+        const init = await runCli(cleanup, ['init', '--soul', preset.id], project, home)
+        expect(init.exitCode).toBe(0)
+        expect(init.output).toContain(`Soul         : ${preset.id} (${preset.label}, flag)`)
+        expect(init.output).toContain(`aiworker soul show ${preset.id}`)
+
+        const aiworker = path.join(project, '.aiworker')
+        const soul = await readFile(path.join(aiworker, 'SOUL.md'), 'utf8')
+        const agent = await readFile(path.join(aiworker, 'AGENT.md'), 'utf8')
+        const policy = JSON.parse(await readFile(path.join(aiworker, 'policy.json'), 'utf8')) as {
+          soul: { preset: string }
+        }
+        const toolsets = JSON.parse(await readFile(path.join(aiworker, 'toolsets.json'), 'utf8')) as {
+          defaultToolsets: string[]
+          soul: string
+        }
+        const packs = JSON.parse(await readFile(path.join(aiworker, 'capability-packs.json'), 'utf8')) as {
+          packs: Array<{ id: string, status: string, validation: { status: string } }>
+          soul: string
+        }
+
+        expect(soul).toContain(`# ${preset.label} Soul`)
+        expect(agent).toContain(`# ${preset.label} Worker`)
+        expect(policy.soul.preset).toBe(preset.id)
+        expect(toolsets.soul).toBe(preset.id)
+        expect(toolsets.defaultToolsets).toEqual([...preset.toolsets])
+        expect(packs.soul).toBe(preset.id)
+        expect(packs.packs.map(pack => pack.id)).toEqual([...preset.packs])
+        expect(packs.packs.every(pack => pack.status === 'draft' && pack.validation.status === 'pending')).toBe(true)
+      }
     })
   })
 
@@ -139,6 +195,7 @@ describe('aiworker init / scope project placement', () => {
       expect(result.output).toContain('.aiworker/policy.json')
       expect(result.output).toContain('.aiworker/toolsets.json')
       expect(result.output).toContain('.aiworker/capability-packs.json')
+      expect(result.output).toContain('.aiworker/executor-capabilities.json')
       expect(result.output).toContain('.aiworker/local/worker.db (worker bootstrap)')
       expect(after).toEqual(before)
       expect(await exists(path.join(project, '.aiworker'))).toBe(false)

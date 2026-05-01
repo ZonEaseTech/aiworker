@@ -15,7 +15,7 @@ import { broadcastEventToOperators } from '../../events/broadcast'
  *
  * BUG-009 后 approve handler 也负责把 entry.ws 从 node-pending 升级成
  * 正式 node + 注册 NodeRegistry + 广播 worker.online——这一步原本 S2/S3
- * 互相留 TODO 没接，导致 aim workers list 永远 online=false。
+ * 互相留 TODO 没接，导致 aiworker fleet list 永远 online=false。
  */
 
 const otpParamSchema = z.object({ otp: z.string().min(1) })
@@ -107,7 +107,7 @@ export const handleEnrollApprove: LocalHandler = (ctx, params): HandlerResult =>
 
   // BUG-009：把 node-pending ws 升级到正式 node 注册——之前 S2/S3 互相留 TODO，
   // 谁都没接，approve 后 ws 一直停在 node-pending 状态、NodeRegistry 看不到，
-  // 导致 aim workers list 永远 online=false、chat.send 全部 node_offline。
+  // 导致 aiworker fleet list 永远 online=false、chat.send 全部 node_offline。
   // 顺序：升级 role → 注册 NodeRegistry（处理可能的 replaced 老连接） →
   // 推 enrollment.approved → 广播 worker.online。
   entry.ws.data.role = 'node'

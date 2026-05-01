@@ -113,7 +113,7 @@ export function startGatewayServer(options: StartGatewayOptions): StartedGateway
         const remoteAddress = ip?.address
         const loopback = isLoopbackAddress(remoteAddress)
         // BUG-020：远程 IP 处于 brute-force 阻断期 → 升级前直接 429。loopback
-        // 视为信任域（aim CLI / 同机 worker），不参与限频。
+        // 视为信任域（aiworker CLI / 同机 worker），不参与限频。
         if (!loopback && context.connectRateLimiter) {
           const block = context.connectRateLimiter.isBlocked(remoteAddress)
           if (block.blocked) {

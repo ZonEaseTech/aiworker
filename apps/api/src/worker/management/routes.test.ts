@@ -36,6 +36,7 @@ import { buildManagementRoutes } from './routes'
 
 const MASTER_KEY = '00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff'
 const STATE_TOKEN = 'wtk_management_routes_test_token_000000000000'
+const TEST_RUNTIME_VERSION = 'test-runtime-9.8.7'
 
 function healthyBrain(): BrainProvider {
   return {
@@ -128,12 +129,17 @@ function authed(path: string, init: RequestInit = {}, token = STATE_TOKEN): Requ
  * management 自身不再持有中间件。测试需要还原 e2e 守门行为，因此在外层包一层
  * 与 worker.ts 同形态的 wrapper：`app.use('*', bearerAuth)` + `app.route('/', mgmt)`。
  */
-function buildWrapperApp(deps: ManagementRoutesDeps) {
+type ManagementRoutesDepsWithDefault = Omit<ManagementRoutesDeps, 'runtimeVersion'> & Partial<Pick<ManagementRoutesDeps, 'runtimeVersion'>>
+
+function buildWrapperApp(deps: ManagementRoutesDepsWithDefault) {
   const app = new OpenAPIHono()
   app.use('*', buildBearerAuth({
     getIdentity: () => ({ tokenPlaintext: deps.getState().tokenPlaintext }),
   }))
-  app.route('/', buildManagementRoutes(deps))
+  app.route('/', buildManagementRoutes({
+    ...deps,
+    runtimeVersion: deps.runtimeVersion ?? TEST_RUNTIME_VERSION,
+  }))
   return app
 }
 
@@ -150,6 +156,7 @@ describe('buildManagementRoutes', () => {
     const body = await res.json() as Record<string, unknown>
     expect(body.workerId).toBe('w_abcdefghjkmn')
     expect(body.configVersion).toBe(1)
+    expect(body.runtimeVersion).toBe(TEST_RUNTIME_VERSION)
     expect(Array.isArray(body.brains)).toBe(true)
   })
 
@@ -380,7 +387,11 @@ describe('buildManagementRoutes', () => {
 
   it('PUT /secrets/:key 含非法字符 → 400 invalid-key（脏 key 不入 vault）', async () => {
     const { state } = await bootstrap()
-    const routes = buildManagementRoutes({ getState: () => state, reloadRuntime: async () => {} })
+    const routes = buildManagementRoutes({
+      getState: () => state,
+      reloadRuntime: async () => {},
+      runtimeVersion: TEST_RUNTIME_VERSION,
+    })
     // Hono path param decode 后含空格，正则不通过。
     const res = await routes.fetch(authed('/secrets/has%20space', {
       method: 'PUT',
@@ -398,7 +409,11 @@ describe('buildManagementRoutes', () => {
 
   it('PUT /secrets/:key 超长 key → 400 invalid-key', async () => {
     const { state } = await bootstrap()
-    const routes = buildManagementRoutes({ getState: () => state, reloadRuntime: async () => {} })
+    const routes = buildManagementRoutes({
+      getState: () => state,
+      reloadRuntime: async () => {},
+      runtimeVersion: TEST_RUNTIME_VERSION,
+    })
     const longKey = 'a'.repeat(129)
     const res = await routes.fetch(authed(`/secrets/${longKey}`, {
       method: 'PUT',
@@ -412,7 +427,11 @@ describe('buildManagementRoutes', () => {
 
   it('DELETE /secrets/:key 含非法字符 → 400 invalid-key', async () => {
     const { state } = await bootstrap()
-    const routes = buildManagementRoutes({ getState: () => state, reloadRuntime: async () => {} })
+    const routes = buildManagementRoutes({
+      getState: () => state,
+      reloadRuntime: async () => {},
+      runtimeVersion: TEST_RUNTIME_VERSION,
+    })
     const res = await routes.fetch(authed('/secrets/bad%20key', { method: 'DELETE' }))
     expect(res.status).toBe(400)
     const body = await res.json() as { error: { code: string } }

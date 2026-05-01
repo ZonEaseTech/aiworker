@@ -22,7 +22,7 @@ import { z } from 'zod'
  * `ExecutorProfile` (which FEAT-014 owns) and stay independent of any single
  * engine variant body.
  *
- * PLAN-011 phase 1a — parse lazily so `aiw --help` / `aiw --version`, which
+ * PLAN-011 phase 1a — parse lazily so `aiworker --help` / `aiworker --version`, which
  * transitively import this module, don't require a full env at import time.
  * Any consumer that actually *reads* a field still triggers validation.
  *
@@ -82,8 +82,8 @@ const schema = z.object({
 
   /**
    * PLAN-018 / FEAT-024 worker self-enrollment：当 `AIWORKER_GATEWAY_URL` 与
-   * `AIWORKER_JOIN_TOKEN` **都**设置时，`aiw serve` 会在 bootstrap 完成后用
-   * outbound WS 主动 enroll 到 gateway，不需要 operator 手工 `aim pair`。
+   * `AIWORKER_JOIN_TOKEN` **都**设置时，`aiworker serve` 会在 bootstrap 完成后用
+   * outbound WS 主动 enroll 到 gateway，不需要 operator 手工 `aiworker pair`。
    * 缺一不触发（仅 `JOIN_TOKEN` 而无 URL → 启动时 warn）。
    * `DISPLAY_NAME` 仅作 fleet.db 展示用途，未设回落 workerId。
    */
@@ -171,7 +171,7 @@ export function getWorkerEnv(): WorkerEnv {
 /**
  * Back-compat proxy: every existing `import { workerEnv }` keeps working.
  * The actual parse only fires on *property access*, so simply importing this
- * module (e.g. transitively from `aiw --help`) does not require a valid env.
+ * module (e.g. transitively from `aiworker --help`) does not require a valid env.
  */
 export const workerEnv: WorkerEnv = new Proxy({} as WorkerEnv, {
   get(_target, prop) {

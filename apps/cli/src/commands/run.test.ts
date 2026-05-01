@@ -2,7 +2,7 @@ import { WorkerEventBus } from '@zonease/aiworker-core'
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test'
 
 /**
- * BUG-005 回归覆盖：`aiw run` 监听的终态事件必须与 runtime 实际 emit 的契约对齐
+ * BUG-005 回归覆盖：`aiworker run` 监听的终态事件必须与 runtime 实际 emit 的契约对齐
  * （`orchestrator.finished` → exit 0，`orchestrator.error` → exit 1）。
  *
  * 实现策略：mock 掉 `../context` 的 `loadWorkerContext` / `buildRuntime` 返回

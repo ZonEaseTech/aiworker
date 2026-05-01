@@ -6,12 +6,12 @@ import consola from 'consola'
 import { loadWorkerContext } from '../context'
 
 /**
- * `aiw approvals` 子命令——直接走 **本地** worker HTTP（不经 gateway）：
+ * `aiworker approvals` 子命令——直接走 **本地** worker HTTP（不经 gateway）：
  * GET  /api/worker/approvals                              → 列表
  * POST /api/worker/approvals/:taskId/:toolCallId/grant    → 解锁
  *
- * dev 场景常用：管理员 ssh 进 worker 容器，跑 `aiw approvals list` 立刻
- * 看到当前挂起请求；不需要 gateway / aim 操作员链路。
+ * dev 场景常用：管理员 ssh 进 worker 容器，跑 `aiworker approvals list` 立刻
+ * 看到当前挂起请求；不需要 gateway / operator 链路。
  *
  * 端口与 token 的获取：
  * - port 取 `workerEnv.PORT`（env 或 .env，默认 9217）。

@@ -6,6 +6,12 @@
 - **createdAt**: 2026-04-29 17:04
 - **plan**: PLAN-039
 
+## 边界标记 / Historical Scope
+
+本任务已完成，仍是 worker runtime decision pipeline 的有效记录。但文中的 Skill/MCP/tool capability registry 语义只覆盖 runtime observe-only descriptor 和 brain/runtime project capability 输入，不覆盖 executor-native MCP/skill/plugin 投影。
+
+后续若要配置 Codex / Claude Code 等 engine 的 project-scope MCP server，必须走 FEAT-044 / PLAN-055 的 `.aiworker/executor-capabilities.json` 与 `aiworker executor mcp add/sync/doctor`，不得从本任务派生 `worker_config.mcp.servers` 或 `.aiworker/mcp.json` executor 投影实现。
+
 ## 描述
 
 在 FEAT-031 的 worker 项目级 epic 和 FEAT-037 的会话控制面之上，补齐 worker 决策层：把“是否连续会话”“用户意图是什么”“本轮该启用哪些 skill/MCP/tool”“最终回复是否达标”固化为可观测、可回放、可自我迭代的运行管线。
@@ -15,12 +21,12 @@
 ## 验收标准
 
 1. Worker 在每个 inbound turn 开始前产生结构化 intent decision，覆盖连续会话、新 topic、任务型请求、问答型请求、工具/资料需求和风险等级。
-2. Skill/MCP/tool 选择进入独立 capability planning 阶段，选择结果可解释、可观测，并受 worker/channel allowlist 与 toolPolicy 约束。
+2. Skill/MCP/tool 选择进入独立 capability planning 阶段，选择结果可解释、可观测，并受 worker/channel allowlist 与 toolPolicy 约束；这里的 MCP 指 runtime descriptor，不是 executor-native project MCP config。
 3. 最终回复经过可配置 quality gate；初期支持 observe / warn / retry / block 模式，默认 observe，避免无意中改变现有行为。
 4. intent / capability / quality decision 事件进入 worker 事件流，并由 evolution observer 持久化，后续可用于权重调整和自我迭代。
 5. 失败反思只产出 pending memory / skill / policy proposal，不直接写入高风险配置；写盘或启用必须经过 operator/user approval。
 6. 不破坏 FEAT-037 已有 session_entries、compaction、memory flush、engine binding 与 sessions status 行为。
-7. 不把 MCP 继续作为“另一种 chat executor”扩展；MCP 应作为能力源并入 orchestrator tool/capability registry。
+7. 不把 MCP 继续作为“另一种 chat executor”扩展；runtime MCP descriptor 可作为能力源进入 orchestrator tool/capability registry，但 executor-native MCP projection 已拆到 FEAT-044 / PLAN-055。
 
 ## 依赖
 
@@ -40,3 +46,4 @@
 - 2026-04-30 20:10：PLAN-039 S4 完成。QualityGate 支持 observe/warn/retry/block、heuristic/LLM evaluator 和一次 repair；默认 observe 不改变交付。
 - 2026-04-30 20:25：PLAN-039 S5 完成。Evolution proposer 已消费 failed quality gate observation 并生成 pending skill draft；只提案不写配置。
 - 2026-04-30：FEAT-038 / PLAN-039 全阶段完成。S1-S5 已覆盖 Context Manager、Capability Registry、IntentClassifier、QualityGate 与 quality-gate proposer；最终验证通过 core test、全量 typecheck、全量 lint 和 diff check。
+- 2026-05-01 14:32：边界标记：本任务中的 MCP / capability registry 只表示 runtime observe-only descriptor；executor-native MCP/skill/plugin projection 以 FEAT-044 / PLAN-055 为准。

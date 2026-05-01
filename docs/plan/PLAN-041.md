@@ -1,9 +1,28 @@
 # PLAN-041 Worker 初始化与 Soul 生命周期：安全 init、模板预置、能力包与更新治理
 
-- **status**: implementing
+- **status**: rejected
 - **createdAt**: 2026-04-29 17:50
 - **approvedAt**: 2026-04-29 18:04
+- **rejectedAt**: 2026-05-01 14:53
 - **relatedTask**: FEAT-039
+
+## 关闭标记 / Split Future Work
+
+本计划作为一个大范围方案已关闭，不再作为 ongoing implementation 入口。S1-S3 与后续 FEAT-043 / FEAT-044 已经交付当前 MVP：safe init、Soul preset/customize、capability draft、`aiworker doctor` 静态 validation、executor-native projection 独立边界。
+
+未完成的 S4-S6 需要未来重新发起更窄方案，不应继续在本计划里滚动追加：
+
+- External adapter sync；
+- Soul update / pin / diff；
+- Self-iteration admission gate；
+- Mutating brain/runtime quick config。
+
+最终边界保留：
+
+- 已交付且继续有效：`aiworker init`、Soul templates / customize、brain/runtime project capability 草案、`aiworker doctor` 静态 validation。
+- 未来重开时仍有效：external agent adapter、Soul update、self-iteration admission gate 必须保持 proposal/diff/approval/rollback。
+- 已拆出：executor-native MCP/skill/plugin projection。相关实现只以 FEAT-044 / PLAN-055 为准。
+- 命名约束：本文早期草案里的 `aiworker skill add`、`aiworker mcp add`、`toolset enable` 不能作为 executor 命令规格；当前已落地命令是 `aiworker doctor` 与 `aiworker executor mcp add/sync/doctor`。
 
 ## 现状
 
@@ -11,6 +30,7 @@
 2. **当前模板仍是 stub**：`ensureProjectAiworker()` 只 seed 通用占位内容；没有 Soul 模板、能力包、外部 agent adapter、MCP/Skill validation 或 wizard。
 3. **PLAN-039 定义 runtime 决策管线**：Intent Router、Capability Registry、Context Manager、Quality Gate、Learning Loop 解决 worker “运行时怎么做”。本计划解决用户“怎么快速且安全地配置出这样的 worker”。
 4. **防污染是核心约束**：初始化、Soul 更新、自我迭代都可能改写长期上下文。如果没有 diff、approval、scope 和 rollback，低质量记忆或约束会削弱 worker 能力。
+5. **边界更新**：本计划中的 capability packs / `.aiworker/mcp.json` / `.aiworker/skills/` 属于 brain/runtime project capability 草案；executor 原生 MCP/skill/plugin 配置不复用这些文件，独立由 FEAT-044 / PLAN-055 的 `.aiworker/executor-capabilities.json` 投影。
 
 ## 目标效果
 
@@ -25,17 +45,19 @@ aiworker init
 
 ```bash
 aiworker init --soul developer --pack code --pack devops --dry-run
-aiworker skill add ./skills/release-check --enable
-aiworker mcp add context7 --config ./mcp/context7.json
-aiworker toolset enable code,web,memory
-aiworker worker doctor
+aiworker doctor
+aiworker executor mcp add context7 --engine codex -- command ...
+aiworker executor mcp sync --engine codex --dry-run
 ```
+
+历史草案中的 `aiworker skill add`、`aiworker mcp add`、`toolset enable` 尚不是当前规格；尤其 `aiworker mcp add` 不得被用于 executor-native projection。executor MCP 快速配置必须显式挂在 `aiworker executor mcp ...` 下。
 
 最终得到：
 
 - `.aiworker/` 作为权威源；
 - Soul 定义 worker 身份、职责边界、沟通风格和越权策略；
-- Skill/MCP/Toolset 作为 capability packs 进入 registry；
+- Skill/MCP/Toolset 作为 brain/runtime capability packs 进入 registry；
+- executor-native capability 通过 `.aiworker/executor-capabilities.json` 投影到 engine project config；
 - `AGENTS.md` / `CLAUDE.md` / `.agents/` / `.claude/` 等外部文件作为 adapter 投影或导入来源；
 - 云端 Soul 更新必须可 diff、可 pin、可回滚；
 - 自我迭代写入前必须经过高质量收录门禁。
@@ -112,7 +134,7 @@ aiworker init --force      # 明确覆盖，必须二次确认
 Soul 选择后预置 capability packs，包括但不限于：
 
 - Skill pack：拷贝或引用 `.aiworker/skills/<name>/SKILL.md`。
-- MCP pack：写入 `.aiworker/mcp.json` 的 server descriptor。
+- MCP pack：写入 `.aiworker/mcp.json` 的 runtime server descriptor；不写 Codex / Claude Code / Cursor 的 engine project config。
 - Toolset pack：写入 `.aiworker/toolsets.json`，定义默认启用工具组。
 - Policy pack：写入 `.aiworker/policy.json`，定义 allowlist、approval、risk profile、denylist。
 - Adapter pack：准备 `AGENTS.md`、`CLAUDE.md`、`.agents/`、`.claude/` 等外部 agent 适配。
@@ -208,7 +230,7 @@ aiworker soul pin developer@1.2.0
    - 生成 `SOUL.md`、`AGENT.md`、policy/toolset 草案。
 3. **S3：Capability packs + validation**
    - Skill/MCP/Toolset/Policy pack 描述、启用、doctor 检查。
-   - 新增 `skill add`、`mcp add`、`toolset enable` 的设计或最小 CLI。
+   - 已落地最小切片只做静态 schema / validation 与 `aiworker doctor`；mutating brain/runtime quick config 命令需另起计划，executor-native quick config 已由 FEAT-044 / PLAN-055 承接。
 4. **S4：External adapter sync**
    - 实现 adapter manifest、managed section、hash-based conflict detection。
    - 覆盖 `AGENTS.md`、`CLAUDE.md`、`.agents/`、`.claude/` 的安全投影。
@@ -257,6 +279,12 @@ aiworker soul pin developer@1.2.0
 ## 批注
 
 用户已批准开工。先实施 S1（Init preflight + dry-run diff），因为它不会改变运行时行为，却能先把“默认不覆盖、所有变更可预览”的安全基线立住。执行通过 BKD 子任务分片推进，避免单 session 过大。
+
+- 2026-05-01 13:08：S2 的后续可见性与测试收口已完成：init 后 next steps、`aiworker soul list/show`、全内置 Soul init 矩阵、Soul preset 独立文件拆分、CLI test gate 恢复通过。下一 session 可直接调查并推进 S3（Capability packs + validation）。
+- 2026-05-01 13:22：S3 已批准实施。本切片只做静态 schema/validation 与 doctor 展示，不实现 mutating `skill add` / `mcp add` / `toolset enable`，也不启动 MCP server 或接入 runtime enforcement。
+- 2026-05-01 13:34：S3 最小切片完成。交付共享 manifest/schema、CLI 静态 validation、`aiworker doctor`、init/soul validation 状态呈现和聚焦测试；MCP 仍只做 descriptor/secretRef 静态检查，真实 server probe 和 mutating capability commands 留给后续切片。
+- 2026-05-01 14:32：补充废案标记：本文早期关于 `aiworker mcp add` / executor MCP 的隐含方向已经废弃。PLAN-041 后续仅承载 brain/runtime project capability 与 Soul 生命周期治理；executor-native projection 以 PLAN-055 为唯一入口。
+- 2026-05-01 14:53：关闭本大计划。已交付 MVP 和边界澄清；S4-S6 若需要，按新任务/新计划重开。
 
 2026-04-29 18:18：S1 已通过 BKD 子任务 `urey7cyc` 合入 main，merge commit `8284aa5`。后续仍按分片推进，下一阶段才考虑 S2 Soul templates registry skeleton，不在 S1 session 里扩展。
 

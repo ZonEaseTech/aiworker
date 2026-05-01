@@ -11,31 +11,31 @@ import packageJson from '../package.json' with { type: 'json' }
 import {
   runApprovalsGrant as runApprovalsGrantRemote,
   runApprovalsList as runApprovalsListRemote,
-} from './aim/commands/approvals'
+} from './operator/commands/approvals'
 
-import { runChat } from './aim/commands/chat'
+import { runChat } from './operator/commands/chat'
 import {
   runConfigGet,
   runConfigSet as runConfigSetRemote,
-} from './aim/commands/config'
-import { runEnrollApprove, runEnrollList, runEnrollReject } from './aim/commands/enroll'
-import { runGatewayStart, runGatewayStatus, runGatewayStop } from './aim/commands/gateway'
-import { runInstallSystemd } from './aim/commands/install'
-import { runLogs } from './aim/commands/logs'
-import { runPair } from './aim/commands/pair'
+} from './operator/commands/config'
+import { runEnrollApprove, runEnrollList, runEnrollReject } from './operator/commands/enroll'
+import { runGatewayStart, runGatewayStatus, runGatewayStop } from './operator/commands/gateway'
+import { runInstallSystemd } from './operator/commands/install'
+import { runLogs } from './operator/commands/logs'
+import { runPair } from './operator/commands/pair'
 import {
   runScheduleAdd as runScheduleAddRemote,
   runScheduleList as runScheduleListRemote,
   runScheduleRemove as runScheduleRemoveRemote,
-} from './aim/commands/schedule'
-import { runTokenRotate as runTokenRotateRemote } from './aim/commands/token'
+} from './operator/commands/schedule'
+import { runTokenRotate as runTokenRotateRemote } from './operator/commands/token'
 import {
   runWorkersInfo,
   runWorkersLaunch,
   runWorkersList,
   runWorkersRemove,
   runWorkersStop,
-} from './aim/commands/workers'
+} from './operator/commands/workers'
 import {
   runApprovalsGrant as runApprovalsGrantLocal,
   runApprovalsList as runApprovalsListLocal,
@@ -44,6 +44,12 @@ import {
   runConfigSet as runConfigSetLocal,
   runConfigShow,
 } from './commands/config'
+import { runDoctor } from './commands/doctor'
+import {
+  runExecutorDoctor,
+  runExecutorMcpAdd,
+  runExecutorMcpSync,
+} from './commands/executor'
 import { runInit } from './commands/init'
 import { runRun } from './commands/run'
 import {
@@ -58,6 +64,7 @@ import {
   runSessionsMaintenance,
   runSessionsShow,
 } from './commands/sessions'
+import { runSoulList, runSoulShow } from './commands/soul'
 import { runTokenRotate as runTokenRotateLocal } from './commands/token'
 import { configureCliHelp, localizeGlobalOptions } from './help'
 import { bootstrapCliDotenv } from './lib/bootstrap'
@@ -76,7 +83,7 @@ import { bootstrapCliDotenv } from './lib/bootstrap'
  *     approvals list|grant / schedule list|add|remove / enroll list|approve|reject /
  *     logs / install systemd
  *
- * 退出码（详见 aim/commands/common.ts errorToExitCode）：
+ * 退出码（详见 operator commands/common.ts errorToExitCode）：
  *   0 成功；1 泛型错误；2 参数非法 / 未知方法；3 超时；4 连接断开。
  */
 const cli = cac('aiworker')
@@ -105,6 +112,49 @@ cli
   .action(async () => {
     process.exitCode = await runScope()
   })
+
+cli.command('doctor', '静态验证当前 `.aiworker/` capability manifests、Skill metadata 和 MCP descriptors').action(async () => {
+  process.exit(await runDoctor())
+})
+
+cli
+  .command('executor mcp add <name>', '声明一个 executor 原生 MCP server，并写入 `.aiworker/executor-capabilities.json`')
+  .option('--engine <engine>', '目标 engine：codex 或 claude-code')
+  .option('--scope <scope>', 'MCP 配置 scope；当前仅支持 project')
+  .option('--transport <transport>', 'MCP transport：stdio / streamable-http / sse；未指定时按 --url 推断')
+  .option('--url <url>', 'HTTP/SSE MCP server URL')
+  .option('--command <command>', 'stdio MCP server command')
+  .option('--arg <value>', 'stdio command 参数；可重复')
+  .option('--env <key=value>', '投影到 engine CLI 的 env；secret 用 key=secretRef:<ref>；可重复')
+  .option('--header <key=value>', '投影到 engine CLI 的 header；secret 用 key=secretRef:<ref>；可重复')
+  .option('--description <text>', 'MCP server 描述')
+  .option('--dry-run', '只预览 manifest 变更，不写文件')
+  .action(async (name: string, opts: Parameters<typeof runExecutorMcpAdd>[1]) => {
+    process.exit(await runExecutorMcpAdd(name, opts))
+  })
+
+cli
+  .command('executor mcp sync', '把 `.aiworker/executor-capabilities.json` 投影到 engine 官方 project-scope MCP 配置')
+  .option('--engine <engine>', '目标 engine：codex 或 claude-code')
+  .option('--dry-run', '只打印将执行的 engine CLI 命令')
+  .action(async (opts: Parameters<typeof runExecutorMcpSync>[0]) => {
+    process.exit(await runExecutorMcpSync(opts))
+  })
+
+cli
+  .command('executor doctor', '验证 executor capability manifest、engine CLI availability 和安全约束')
+  .option('--engine <engine>', '只检查一个 engine：codex 或 claude-code')
+  .action(async (opts: Parameters<typeof runExecutorDoctor>[0]) => {
+    process.exit(await runExecutorDoctor(opts))
+  })
+
+cli.command('soul list', '列出内置 Soul 预设及其声明能力').action(async () => {
+  process.exit(await runSoulList())
+})
+
+cli.command('soul show <preset>', '查看某个 Soul 预设的职责、边界、能力草案和风险策略').action(async (preset: string) => {
+  process.exit(await runSoulShow(preset))
+})
 
 cli
   .command('run', '不启动 HTTP server，直接给 orchestrator 投递一条消息')
@@ -146,8 +196,7 @@ cli
       serveOptions.gatewayReconnect = false
     if (opts.serveWeb === false)
       serveOptions.serveWeb = false
-    if (opts.open !== undefined)
-      serveOptions.open = opts.open
+    serveOptions.runtimeVersion = packageJson.version
     await runServe(serveOptions)
   })
 
@@ -258,7 +307,7 @@ cli
 // operator-remote（空格形）
 // ============================================================
 
-// --- fleet 子命令组（原 `aim workers ...`）---
+// --- fleet 子命令组（原 operator workers ...）---
 cli.command('fleet list', '列出 fleet 内所有 worker').action(async () => {
   process.exit(await runWorkersList())
 })
@@ -326,7 +375,7 @@ cli
 // --- pair ---
 cli
   .command('pair', '通过 bootstrap token 把一个已启动的 worker 注册到 gateway')
-  .option('--url <wsUrl>', 'gateway WebSocket URL（默认使用 aim.json 里的 gatewayUrl）')
+  .option('--url <wsUrl>', 'gateway WebSocket URL（默认使用 aiworker.json 里的 gatewayUrl）')
   .option('--worker-url <httpUrl>', 'worker HTTP base URL（必填）')
   .option('--bootstrap-token <token>', 'worker 打印的一次性 bootstrap token（必填）')
   .option('--display-name <name>', '可选 worker 展示名')

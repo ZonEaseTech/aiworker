@@ -147,6 +147,58 @@ describe('PLAN-015 hot-reload 不变量', () => {
     })
   })
 
+  it('默认复用 task executor 作为 control executor', () => {
+    const processes = makeProcessManager()
+    try {
+      const runtime = buildWorkerRuntime('w_control_default', buildBareConfig(), { processes })
+      try {
+        expect(runtime.controlExecutor).toBe(runtime.executor)
+        expect(runtime.controlExecutorConfig).toEqual(runtime.config.executor)
+        expect(runtime.controlExecutorReusesTaskExecutor).toBe(true)
+      }
+      finally {
+        runtime.dispose()
+      }
+    }
+    finally {
+      processes.dispose()
+    }
+  })
+
+  it('显式 control executor 会与 task executor 分开构建', () => {
+    const processes = makeProcessManager()
+    try {
+      const controlExecutor: WorkerConfig['executor'] = {
+        engine: 'http',
+        variant: 'default',
+        overrides: {
+          baseUrl: 'https://control.example.com',
+          apiKey: '',
+          model: 'gpt-control',
+        },
+      }
+      const runtime = buildWorkerRuntime('w_control_explicit', {
+        ...buildBareConfig(),
+        orchestrator: {
+          decisionPipeline: {
+            executor: controlExecutor,
+          },
+        },
+      }, { processes })
+      try {
+        expect(runtime.controlExecutor).not.toBe(runtime.executor)
+        expect(runtime.controlExecutorConfig).toEqual(controlExecutor)
+        expect(runtime.controlExecutorReusesTaskExecutor).toBe(false)
+      }
+      finally {
+        runtime.dispose()
+      }
+    }
+    finally {
+      processes.dispose()
+    }
+  })
+
   it('executor workspaceRoot override keeps isolated workspace behavior', async () => {
     await withProjectScope(async ({ projectRoot }) => {
       const processes = makeProcessManager()

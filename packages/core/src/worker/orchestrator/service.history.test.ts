@@ -487,6 +487,75 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
     expect(assistantRows.at(-1)?.content).toBe('repaired response with enough detail')
   })
 
+  it('routes suppressed control calls through an explicit control executor', async () => {
+    const bus = recordingBus()
+    const executor = capturingExecutor(['task executor answer'])
+    const controlExecutor = capturingExecutor([
+      JSON.stringify({
+        intent: 'answer',
+        risk: 'low',
+        requiredContext: ['recent_history'],
+        qualityProfile: 'default',
+        confidence: 0.9,
+        reason: 'control classifier',
+      }),
+      JSON.stringify({
+        score: 3,
+        threshold: 7,
+        dimensions: {},
+        missing: ['needs more detail'],
+        suggestions: ['expand the answer'],
+        action: 'repair',
+        reason: 'control gate',
+      }),
+      'repaired by control executor',
+    ])
+    const controlExecutorConfig: WorkerConfig['executor'] = {
+      engine: 'http',
+      variant: 'default',
+      overrides: {
+        baseUrl: 'https://control.example.com',
+        apiKey: '',
+        model: 'gpt-control',
+      },
+    }
+    const orch = new Orchestrator({
+      config: buildConfig({
+        orchestrator: {
+          decisionPipeline: {
+            executor: controlExecutorConfig,
+            intentClassifier: { evaluator: 'llm' },
+            qualityGate: { evaluator: 'llm', mode: 'retry', threshold: 7 },
+          },
+        },
+      }),
+      brain: stubBrain(),
+      executor,
+      controlExecutor,
+      controlExecutorConfig,
+      controlExecutorReusesTaskExecutor: false,
+      bus,
+      workerId: 'w_history_test',
+      workspaces,
+      processes,
+      approvals: new ApprovalStore(),
+    })
+
+    await orch.ingest(envelope('use a separate control executor'))
+
+    expect(executor.inputs).toHaveLength(1)
+    expect(executor.inputs[0]?.workspacePath).toContain(tmpRoot)
+    expect(controlExecutor.inputs).toHaveLength(3)
+    expect(controlExecutor.inputs.every(input => input.model === 'gpt-control')).toBe(true)
+    expect(controlExecutor.inputs.every(input => input.temperature === 0)).toBe(true)
+    expect(controlExecutor.inputs.every(input => input.workspacePath === undefined)).toBe(true)
+
+    const repair = bus.events.find(event => event.type === 'orchestrator.repair_attempted')
+    expect(repair?.payload.status).toBe('succeeded')
+    const assistantRows = getWorkerDb().select().from(messages).where(eq(messages.role, 'assistant')).all()
+    expect(assistantRows.at(-1)?.content).toBe('repaired by control executor')
+  })
+
   it('updates session_entries.contextTokens from the assembled context', async () => {
     const { executor } = await runIngestAndCapture({
       config: buildConfig({

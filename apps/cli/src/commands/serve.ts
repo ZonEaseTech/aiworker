@@ -32,6 +32,8 @@ import { resolveWebStaticDir } from '../lib/web-static'
 
 export interface ServeOptions {
   port?: number
+  /** Runtime/package version surfaced through worker info. */
+  runtimeVersion?: string
   /** Worker HTTP bind host. Defaults to AIWORKER_WORKER_HOST (127.0.0.1). */
   host?: string
   /** gateway WS URL；留空则不启动 gateway-client（保持纯 HTTP 兼容形态）。 */
@@ -95,16 +97,17 @@ export function buildOpenBrowserCommand(url: string, platform: NodeJS.Platform =
 }
 
 /**
- * `aiw serve` — boot the existing worker HTTP surface. Behaviour is
+ * `aiworker serve` — boot the existing worker HTTP surface. Behaviour is
  * bit-for-bit compatible with `AIWORKER_MODE=worker bun src/index.ts`:
  * same bootstrap, same routes, same hot-reload contract. Intended for
- * production parity; use `aiw run` for CLI-only (no HTTP) workflows.
+ * production parity; use `aiworker run` for CLI-only (no HTTP) workflows.
  *
  * PLAN-013 S4：当 `--gateway` 传入时，在 HTTP server 之外再起一条 gateway
  * WS 连接，把 node 模式能力（chat.send / config.get / token.rotate）接入。
  * 两条路径独立，SIGTERM 时都做优雅关闭。
  */
 export async function runServe(options: ServeOptions = {}): Promise<void> {
+  const runtimeVersion = options.runtimeVersion ?? 'dev'
   // gatewayNode 在 bootstrap 之后才能 start（要拿到 state.workerId / reloadRuntime），
   // 但 bootstrap 自己又需要在 reloadRuntime 完成 swap 后回调 gatewayNode 让 subscriber
   // 重新挂到新 bus——chicken-and-egg。先建可变 ref，bootstrap 闭包里读这个 ref，
@@ -120,7 +123,7 @@ export async function runServe(options: ServeOptions = {}): Promise<void> {
   const serveWeb = options.serveWeb !== false && !envOff
   const webStaticDir = serveWeb ? resolveWebStaticDir('worker') : undefined
   if (serveWeb && !webStaticDir)
-    consola.warn('[aiw serve] web 静态资源未找到（apps/web/dist/worker 缺失？），/admin/* 将返回 404')
+    consola.warn('[aiworker serve] web 静态资源未找到（apps/web/dist/worker 缺失？），/admin/* 将返回 404')
   const host = options.host ?? workerEnv.AIWORKER_WORKER_HOST
   assertAdminServingIsSafe({
     surface: 'worker',
@@ -130,24 +133,15 @@ export async function runServe(options: ServeOptions = {}): Promise<void> {
   })
   const { app, port: envPort, state, reloadRuntime } = await bootstrapWorkerApp({
     onRuntimeReloaded: () => gatewayNode?.notifyRuntimeReloaded(),
+    runtimeVersion,
     ...(webStaticDir ? { webStaticDir } : {}),
   })
   const port = options.port ?? envPort
 
   const server = Bun.serve({ port, hostname: host, fetch: app.fetch })
-  consola.success(`[aiw serve] worker ${state.workerId} listening on ${host}:${port} (config v${state.configVersion})`)
-  if (webStaticDir) {
-    consola.info(`[aiw serve] /admin/* serving worker bundle from ${webStaticDir}`)
-    const adminBaseUrl = buildWorkerAdminBaseUrl({ host, port })
-    consola.info(`[aiw serve] worker admin: ${adminBaseUrl}`)
-    if (shouldOpenWorkerAdminBrowser({ open: options.open, stdoutIsTTY: process.stdout.isTTY === true })) {
-      const adminUrl = buildWorkerAdminTokenUrl({ host, port, token: state.tokenPlaintext })
-      openWorkerAdminBrowser(adminUrl)
-    }
-  }
-  else if (options.open === true) {
-    consola.warn('[aiw serve] --open 已请求，但 worker web 静态资源未挂载，跳过打开浏览器')
-  }
+  consola.success(`[aiworker serve] worker ${state.workerId} listening on ${host}:${port} (config v${state.configVersion})`)
+  if (webStaticDir)
+    consola.info(`[aiworker serve] /admin/* serving worker bundle from ${webStaticDir}`)
 
   // PLAN-018 / FEAT-024 self-enrollment + PLAN-019 / FEAT-026 OTP-attended 接入。
   // 触发表（与 PLAN-019 §Worker side 一致）：
@@ -203,18 +197,18 @@ export async function runServe(options: ServeOptions = {}): Promise<void> {
         ...(envDisplayName ? { displayName: envDisplayName } : {}),
       }
       if (forceOtp && hasJoinToken)
-        consola.info('[aiw serve] AIWORKER_ENROLL_MODE=otp 已生效，忽略 AIWORKER_JOIN_TOKEN')
+        consola.info('[aiworker serve] AIWORKER_ENROLL_MODE=otp 已生效，忽略 AIWORKER_JOIN_TOKEN')
     }
   }
   else if (envJoinToken && envJoinToken.length > 0) {
-    consola.warn('[aiw serve] AIWORKER_JOIN_TOKEN set but AIWORKER_GATEWAY_URL missing; skipping self-enroll')
+    consola.warn('[aiworker serve] AIWORKER_JOIN_TOKEN set but AIWORKER_GATEWAY_URL missing; skipping self-enroll')
   }
 
   if (gatewayUrl) {
     if (mode === 'self-enroll')
-      consola.info(`[aiw serve] self-enrolling to ${gatewayUrl} as ${envDisplayName ?? state.workerId}`)
+      consola.info(`[aiworker serve] self-enrolling to ${gatewayUrl} as ${envDisplayName ?? state.workerId}`)
     else if (mode === 'otp')
-      consola.info(`[aiw serve] OTP enrolling to ${gatewayUrl}; awaiting operator approval`)
+      consola.info(`[aiworker serve] OTP enrolling to ${gatewayUrl}; awaiting operator approval`)
     gatewayNode = startGatewayNode({
       url: gatewayUrl,
       token: gatewayToken,
@@ -227,11 +221,11 @@ export async function runServe(options: ServeOptions = {}): Promise<void> {
               const seconds = Math.max(0, Math.round((expiresAt - Date.now()) / 1000))
               const display = formatOtpBox(otp, seconds)
               process.stdout.write(`${display}\n`)
-              consola.info(`[aiw serve] OTP ${otp} 已签发，请用 \`aim enroll approve ${otp}\` 准入；expires in ${seconds}s`)
+              consola.info(`[aiworker serve] OTP ${otp} 已签发，请用 \`aiworker enroll approve ${otp}\` 准入；expires in ${seconds}s`)
             },
             onEnrollmentApproved: ({ workerId, deviceToken }) => {
               consola.success(
-                `[aiw serve] approved as ${workerId}; deviceToken=${deviceToken.slice(0, 8)}…，已加入 fleet`,
+                `[aiworker serve] approved as ${workerId}; deviceToken=${deviceToken.slice(0, 8)}…，已加入 fleet`,
               )
             },
           }
@@ -241,6 +235,7 @@ export async function runServe(options: ServeOptions = {}): Promise<void> {
         workersInfo: async () => {
           const stored = await readConfig(getWorkerDb())
           return await buildInfo(state, stored.config, {
+            runtimeVersion,
             ...(workerEnv.AIWORKER_ADVERTISED_BASE_URL === undefined
               ? {}
               : { advertisedBaseUrl: workerEnv.AIWORKER_ADVERTISED_BASE_URL }),
@@ -252,7 +247,7 @@ export async function runServe(options: ServeOptions = {}): Promise<void> {
               process.kill(process.pid, 'SIGTERM')
             }
             catch (err) {
-              consola.error(`[aiw serve] workers.stop failed to signal self: ${String(err)}`)
+              consola.error(`[aiworker serve] workers.stop failed to signal self: ${String(err)}`)
             }
           }, 0)
         },
@@ -320,7 +315,7 @@ export async function runServe(options: ServeOptions = {}): Promise<void> {
         },
       },
     })
-    consola.success(`[aiw serve] gateway-client dialing ${gatewayUrl}`)
+    consola.success(`[aiworker serve] gateway-client dialing ${gatewayUrl}`)
   }
 
   // SIGTERM / SIGINT：同时优雅关 HTTP server 与 gateway-client，最长等 5s。
@@ -329,7 +324,7 @@ export async function runServe(options: ServeOptions = {}): Promise<void> {
     if (shuttingDown)
       return
     shuttingDown = true
-    consola.info(`[aiw serve] received ${signal}, shutting down`)
+    consola.info(`[aiworker serve] received ${signal}, shutting down`)
     try {
       if (gatewayNode) {
         await gatewayNode.stop()
@@ -337,13 +332,13 @@ export async function runServe(options: ServeOptions = {}): Promise<void> {
       }
     }
     catch (err) {
-      consola.warn(`[aiw serve] gateway shutdown failed: ${String(err)}`)
+      consola.warn(`[aiworker serve] gateway shutdown failed: ${String(err)}`)
     }
     try {
       server.stop()
     }
     catch (err) {
-      consola.warn(`[aiw serve] http shutdown failed: ${String(err)}`)
+      consola.warn(`[aiworker serve] http shutdown failed: ${String(err)}`)
     }
     process.exit(0)
   }

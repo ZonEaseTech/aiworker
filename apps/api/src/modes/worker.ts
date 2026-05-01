@@ -26,6 +26,8 @@ import { buildBearerAuth } from '../worker/management/bearer-auth'
 import { buildManagementRoutes } from '../worker/management/routes'
 import { buildOrchestratorRoutes } from '../worker/orchestrator/routes'
 
+const DEFAULT_WORKER_RUNTIME_VERSION = 'dev'
+
 async function hydrateStoredConfig(stored: WorkerConfig): Promise<WorkerConfig> {
   const vault = getSecretsVault()
   const expectedPaths = new Set(enumerateSecretPaths(stored).map(p => p.path))
@@ -40,7 +42,7 @@ async function hydrateStoredConfig(stored: WorkerConfig): Promise<WorkerConfig> 
 
 export interface BootstrapWorkerAppOptions {
   /**
-   * 调用方（如 `aiw serve`）注册的 hook，在 `state.runtime` 已经原子换成
+   * 调用方（如 `aiworker serve`）注册的 hook，在 `state.runtime` 已经原子换成
    * `nextRuntime` 之后、`previous.dispose()` 解绑老 bus 之前同步触发。
    * 顺序很关键：必须晚于 swap（hook 里 `state.runtime` 已是新 runtime），
    * 必须早于 dispose（subscriber 重新订阅完成后老 bus 才能被解掉）。
@@ -56,6 +58,8 @@ export interface BootstrapWorkerAppOptions {
    * 阻塞 bootstrap。
    */
   webStaticDir?: string
+  /** Runtime/package version surfaced by `/api/worker/info` and OpenAPI docs. */
+  runtimeVersion?: string
 }
 
 /**
@@ -77,6 +81,8 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
    */
   reloadRuntime: (nextStoredConfig: WorkerConfig, newVersion: number) => Promise<void>
 }> {
+  const runtimeVersion = options.runtimeVersion ?? DEFAULT_WORKER_RUNTIME_VERSION
+
   initWorkerDb(workerEnv.WORKER_DB_PATH)
   runWorkerMigrations(workerEnv.WORKER_MIGRATIONS_FOLDER)
 
@@ -116,7 +122,9 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     tokenPlaintext: identity.token,
   }
 
-  async function reloadRuntime(nextStoredConfig: WorkerConfig, newVersion: number): Promise<void> {
+  let lastReload: Promise<void> = Promise.resolve()
+
+  async function doReloadRuntime(nextStoredConfig: WorkerConfig, newVersion: number): Promise<void> {
     const nextHydrated = await hydrateStoredConfig(nextStoredConfig)
     // ProcessManager 跨 reload 复用——只刷新容量，不重建实例（活跃进程 +
     // 队列保留）。env 现在是 process-level，setLimits 会取最新 env 值。
@@ -146,6 +154,14 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
       consola.warn(`[worker ${state.workerId}] previous runtime dispose failed: ${String(err)}`)
     }
     consola.info(`[worker ${state.workerId}] runtime reloaded to config version ${newVersion}`)
+  }
+
+  function reloadRuntime(nextStoredConfig: WorkerConfig, newVersion: number): Promise<void> {
+    const run = lastReload
+      .catch(() => undefined)
+      .then(() => doReloadRuntime(nextStoredConfig, newVersion))
+    lastReload = run
+    return run
   }
 
   const app = new OpenAPIHono()
@@ -197,13 +213,13 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   app.route('/api/worker/orchestrator', buildOrchestratorRoutes(() => state.runtime))
   app.route('/api/worker/evolution', evolutionRoutes)
   app.route('/api/worker/events', buildEventRoutes(() => state.runtime))
-  app.route('/api/worker', buildManagementRoutes({ getState: () => state, reloadRuntime }))
+  app.route('/api/worker', buildManagementRoutes({ getState: () => state, reloadRuntime, runtimeVersion }))
 
   app.doc('/openapi.json', {
     openapi: '3.1.0',
     info: {
       title: 'AIWorker Worker API',
-      version: '0.2.0',
+      version: runtimeVersion,
       description: `Per-worker surface: channels, orchestrator, memory, skills, execution, evolution. Worker id: ${state.workerId}`,
     },
   })

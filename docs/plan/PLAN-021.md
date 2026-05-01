@@ -1,9 +1,29 @@
 # PLAN-021 Worker 项目级落位 + 上下文连贯 + skill/MCP per-worker + 自我迭代闭环
 
-- **status**: implementing
+- **status**: rejected
 - **createdAt**: 2026-04-27 18:00
 - **approvedAt**: 2026-04-27 18:30
 - **relatedTask**: FEAT-031
+- **rejectedAt**: 2026-05-01 14:32
+
+## 废案标记 / Superseded
+
+本 plan 已废弃，不再作为实现规格、任务拆分依据或 capability 边界依据。原文保留用于历史追溯，但其中“Skill / MCP per-worker 灵活配置”“MCP 合并到 orchestrator tool registry”“`worker_config.mcp.servers`”“`aiworker mcp add` / `skill add` / `toolset enable`”等表述不得继续直接执行。
+
+当前替代路径：
+
+- 项目级落位：FEAT-036 / PLAN-023、REFACTOR-011。
+- 会话控制面与上下文连贯：FEAT-037 / PLAN-028。
+- runtime decision pipeline：FEAT-038 / PLAN-039。
+- init / Soul / brain-runtime project capability draft validation：FEAT-039 / PLAN-041。
+- executor-native MCP projection：FEAT-044 / PLAN-055。
+
+当前硬边界：
+
+- Brain capability 与 Executor capability 在设计、存储、同步、投影上隔离。
+- `.aiworker/mcp.json` 只可作为 brain/runtime capability descriptor 或 observe-only registry 输入，不代表 engine project MCP config。
+- `.aiworker/executor-capabilities.json` 是 executor-native projection manifest；AIWorker 只声明、校验、dry-run，并通过 engine 官方 CLI/config 同步到 Codex / Claude Code 等 engine。
+- secret-like 字段只能存 ref，并由对应边界内的启动 / sync 流程显式 hydrate；禁止把明文 secret 写入 worker config 或 engine manifest。
 
 ## 现状
 
@@ -240,4 +260,4 @@
 | 5 | Phase 推进顺序 | **A → B → D → C → E**（确认） | 子方案按此顺序起 PLAN-022~026 |
 | 6 | 推进节奏 | **一次性批准 master，分批起子 PLAN** | 每个子 PLAN 独立投递审批 + 实现 + 验证后再推下一个 |
 
-下一步：起 PLAN-022（Phase A）+ 配套 task。
+历史下一步记录：起 PLAN-022（Phase A）+ 配套 task。此记录已被后续拆分和本计划废弃标记覆盖，不再代表当前推进方向。

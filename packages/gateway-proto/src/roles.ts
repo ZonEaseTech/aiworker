@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 /**
  * 连接的角色常量：
- * - operator：终端操作员（aim CLI / Web Console / 自动化客户端）
+ * - operator：终端操作员（aiworker operator CLI / Web Console / 自动化客户端）
  * - node：worker 运行时容器
  */
 export const ROLES = {

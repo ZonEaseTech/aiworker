@@ -149,6 +149,7 @@ const orchestratorCompactionSchema = z.object({
 })
 
 const decisionPipelineSchema = z.object({
+  executor: executorSchema.optional(),
   intentClassifier: z.object({
     evaluator: z.enum(['heuristic', 'llm']).optional(),
   }).optional(),

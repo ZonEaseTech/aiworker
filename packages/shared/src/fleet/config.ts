@@ -105,6 +105,11 @@ export interface OrchestratorQualityGateConfig {
 }
 
 export interface OrchestratorDecisionPipelineConfig {
+  /**
+   * Optional control-plane executor for suppressed decision calls. When omitted,
+   * the orchestrator reuses `WorkerConfig.executor` for backward compatibility.
+   */
+  executor?: ExecutorConfig
   intentClassifier?: {
     /**
      * `heuristic` is deterministic and cheap. `llm` runs a suppressed executor

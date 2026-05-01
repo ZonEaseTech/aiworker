@@ -1,9 +1,16 @@
 # PLAN-022 复活并重构 Worker + Fleet Web UI（epic）
 
-- **status**: implementing
+- **status**: completed
 - **createdAt**: 2026-04-27 18:30
 - **approvedAt**: 2026-04-27 18:35
+- **completedAt**: 2026-05-01 14:53
 - **relatedTask**: FEAT-032
+
+## 完成标记 / Absorbed By Child Plans
+
+本 epic plan 已被 FEAT-033、FEAT-034、FEAT-035、REFACTOR-009、REFACTOR-010 的实际交付吸收并完成。当前代码已经具备 fleet / worker 双视角 Web UI、双 bundle、静态托管、gateway WS / worker REST 边界和基础回归保护。
+
+本文保留为历史设计记录，不再作为新的 Web UI 工作入口。
 
 ## 现状
 

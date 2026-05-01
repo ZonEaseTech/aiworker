@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
@@ -204,10 +204,11 @@ describe('worker / brain / workspaces paths in project scope', () => {
       const cwdSave = process.cwd()
       process.chdir(tmp)
       try {
-        expect(resolveWorkerHome('wkr_xyz')).toBe(path.join(tmp, '.aiworker'))
-        expect(resolveBrainHome('wkr_xyz')).toBe(path.join(tmp, '.aiworker'))
-        expect(resolveWorkspacesRoot('wkr_xyz')).toBe(path.join(tmp, '.aiworker', 'local', 'workspaces'))
-        expect(resolveAiworkerHome()).toBe(path.join(tmp, '.aiworker', 'local'))
+        const canonicalTmp = await realpath(tmp)
+        expect(resolveWorkerHome('wkr_xyz')).toBe(path.join(canonicalTmp, '.aiworker'))
+        expect(resolveBrainHome('wkr_xyz')).toBe(path.join(canonicalTmp, '.aiworker'))
+        expect(resolveWorkspacesRoot('wkr_xyz')).toBe(path.join(canonicalTmp, '.aiworker', 'local', 'workspaces'))
+        expect(resolveAiworkerHome()).toBe(path.join(canonicalTmp, '.aiworker', 'local'))
       }
       finally {
         process.chdir(cwdSave)
@@ -240,7 +241,7 @@ describe('ensureProjectAiworker', () => {
       }
 
       // persona docs
-      for (const f of ['AGENT.md', 'SOUL.md', 'USER.md', 'MEMORY.md', 'ROLLUP.md', 'policy.json', 'toolsets.json', 'capability-packs.json']) {
+      for (const f of ['AGENT.md', 'SOUL.md', 'USER.md', 'MEMORY.md', 'ROLLUP.md', 'policy.json', 'toolsets.json', 'capability-packs.json', 'executor-capabilities.json']) {
         const s = await stat(path.join(aiworker, f))
         expect(s.isFile()).toBe(true)
       }
@@ -255,6 +256,8 @@ describe('ensureProjectAiworker', () => {
       expect(toolsets.defaultToolsets).toEqual([])
       const packs = JSON.parse(await readFile(path.join(aiworker, 'capability-packs.json'), 'utf8'))
       expect(packs.packs).toEqual([])
+      const executorCapabilities = JSON.parse(await readFile(path.join(aiworker, 'executor-capabilities.json'), 'utf8'))
+      expect(executorCapabilities).toEqual({ schemaVersion: 1, engines: {} })
 
       // .gitignore in .aiworker/ ignores local/
       const topGitignore = await readFile(path.join(aiworker, '.gitignore'), 'utf8')

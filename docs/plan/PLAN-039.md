@@ -4,15 +4,21 @@
 - **createdAt**: 2026-04-29 17:04
 - **relatedTask**: FEAT-038
 
+## 边界标记 / Historical Scope
+
+本计划仍是 FEAT-038 runtime decision pipeline 的有效设计记录，但其中的 `.aiworker/mcp.json`、CapabilityRegistry 与 MCP descriptor 均限定为 brain/runtime project capability 观察输入。它们不代表 executor-native MCP server 配置，也不负责把 MCP 写入 Codex / Claude Code / Cursor 等 engine 的 project config。
+
+executor-native projection 的当前规格是 FEAT-044 / PLAN-055：`.aiworker/executor-capabilities.json` 声明期望状态，`aiworker executor mcp add/sync/doctor` 做校验、dry-run 与 engine 官方 CLI/config 投影。
+
 ## 现状
 
 用户对 worker 的定位已经明确：一个项目级、兼容多引擎的工作区。当前代码已经完成一部分基础设施：
 
-1. **项目级落位已具备基础**：`packages/fs-layout/src/index.ts` 已支持 `<project>/.aiworker/`、`AGENT.md` / `SOUL.md` / `USER.md` / `MEMORY.md` / `ROLLUP.md`、`skills/`、`memories/`、`mcp.json` 与 `local/` 隔离。
+1. **项目级落位已具备基础**：`packages/fs-layout/src/index.ts` 已支持 `<project>/.aiworker/`、`AGENT.md` / `SOUL.md` / `USER.md` / `MEMORY.md` / `ROLLUP.md`、`skills/`、`memories/`、`mcp.json` 与 `local/` 隔离。FEAT-044 后另有 `executor-capabilities.json`，用于 executor-native projection。
 2. **连续会话已有控制面**：FEAT-037 / PLAN-028 已落到 `session_entries`、token budget、compaction、memory flush、engine native binding、session status/maintenance。也就是说，本计划不应重做 session control plane。
 3. **当前意图识别仍很窄**：`packages/core/src/worker/conversation/router.ts` 的 `classifyContinuation()` 只判断“继续上一会话还是新 topic”，没有产出任务意图、能力需求、风险等级、需要什么上下文、是否要质量复核等结构化结果。
 4. **当前 skill 仅作 prompt 描述**：`Orchestrator.buildSystemPrompt()` 只注入 `brain.listSkills()` 前 10 个 name/description；没有 `load_skill`、没有 skill body progressive disclosure，也没有按 intent 选择 skill。
-5. **当前 MCP 仍是 executor 形态**：`McpExecutor.run()` 未实现 chat，MCP 没有进入 orchestrator 的 tool/capability registry；`WorkerConfig` / config schema 也还没有 per-worker `mcp.servers` 字段。
+5. **历史 MCP 状态**：本计划立项时 `McpExecutor.run()` 未实现 chat，MCP 没有进入 orchestrator 的 tool/capability registry；当时记录的 `worker_config.mcp.servers` 方向已废弃为 executor 规格。当前仅保留 `.aiworker/mcp.json` 作为 runtime descriptor 输入；executor-native MCP 走 FEAT-044 / PLAN-055。
 6. **当前质量门禁只在 tool policy 层**：`toolPolicy` 可以 auto/ask/deny 单个工具，但最终回复没有 reviewer/repair/gate。`evolution` 只记录 tool_call/finished，proposer 仍偏 n-gram，不看最终答复质量。
 
 ## 参照物复调研
@@ -95,7 +101,7 @@
 
 - 建立 `CapabilityRegistry`，统一管理：
   - project/user/package skill descriptors；
-  - per-worker `mcp.json` / `worker_config.mcp.servers` 的 MCP tool descriptors；
+  - per-worker `mcp.json` 的 runtime MCP descriptors；
   - 内置工具如 `load_skill`、`memory_search`；
   - executor 原生 tool descriptors。
 - 输出 strict JSON：

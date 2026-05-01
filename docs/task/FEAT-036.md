@@ -8,6 +8,12 @@
 - **completedAt**: 2026-04-27 19:30
 - **plan**: PLAN-023
 
+## 边界标记 / Historical Scope
+
+本任务只记录 `aiworker init` / `aiworker scope` 的早期 project-scope 落地。后续 FEAT-039、BUG-040、FEAT-043 已改变 init 的 Soul 选择、non-git 体验和 validation 引导；不要从本文恢复旧的“必须 git repo”或 stub init 行为。
+
+`aiworker scope` 中出现的 `mcp.json` 只表示 brain/runtime descriptor 文件；executor-native MCP projection 以 FEAT-044 / PLAN-055 的 `.aiworker/executor-capabilities.json` 为准。
+
 ## 描述
 
 基于 REFACTOR-011 的 fs-layout 改造，把 CLI 命令升级为「项目级优先」：

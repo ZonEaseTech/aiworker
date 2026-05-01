@@ -1,7 +1,7 @@
 import type { AnyWs } from './types'
 
 /**
- * 在线 operator 记录。operator = aim CLI / Web Console / 自动化客户端。
+ * 在线 operator 记录。operator = aiworker operator CLI / Web Console / 自动化客户端。
  *
  * PLAN-013 S2 的订阅模型简化为全量：每条 operator 连接都会收到所有 node
  * 广播的 event。S5 可以细化成按 workerId / event name 过滤（参考

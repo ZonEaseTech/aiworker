@@ -36,6 +36,7 @@ import { buildOrchestratorRoutes } from '../worker/orchestrator/routes'
 
 const MASTER_KEY = '00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff'
 const STATE_TOKEN = 'wtk_worker_bearer_auth_e2e_token_0000000000000'
+const TEST_RUNTIME_VERSION = 'test-runtime-bearer-auth'
 
 function healthyBrain(): BrainProvider {
   return {
@@ -109,7 +110,11 @@ async function bootstrapApp(): Promise<{ app: OpenAPIHono, state: WorkerModeStat
   app.route('/api/worker/orchestrator', buildOrchestratorRoutes(() => state.runtime))
   app.route('/api/worker/evolution', evolutionRoutes)
   app.route('/api/worker/events', buildEventRoutes(() => state.runtime))
-  app.route('/api/worker', buildManagementRoutes({ getState: () => state, reloadRuntime: async () => {} }))
+  app.route('/api/worker', buildManagementRoutes({
+    getState: () => state,
+    reloadRuntime: async () => {},
+    runtimeVersion: TEST_RUNTIME_VERSION,
+  }))
 
   return { app, state }
 }

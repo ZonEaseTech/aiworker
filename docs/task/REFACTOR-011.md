@@ -8,6 +8,10 @@
 - **completedAt**: 2026-04-27 19:15
 - **plan**: PLAN-023
 
+## 边界标记 / Historical Scope
+
+本任务只完成 fs-layout project scope 与 layout 模板。`mcp.json` 在本文中只是 brain/runtime descriptor 占位，不是 executor-native MCP config；后者已由 FEAT-044 / PLAN-055 的 `.aiworker/executor-capabilities.json` 承接。
+
 ## 描述
 
 `packages/fs-layout/src/index.ts` 当前只支持 user 级 `~/.aiworker/workers/<workerId>/`。本任务把 layout 升级为「user / project / 显式」三层 scope 解析：
