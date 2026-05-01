@@ -1,12 +1,23 @@
 # FEAT-037 OpenClaw-style worker session control plane
 
-- **status**: in_progress
+- **status**: completed
 - **priority**: P1
 - **owner**: Codex
 - **createdAt**: 2026-04-28 12:22
 - **claimedAt**: 2026-04-28 12:27
+- **completedAt**: 2026-05-01 14:53
 - **plan**: PLAN-028
 - **bkd**: ug03vh9v
+
+## 完成标记 / Remaining Work Split Out
+
+本 epic 的主线已完成：S1-S5 已覆盖 session store / resolver lifecycle、token-budget context assembly、persistent compaction + memory flush、engine-native binding、session status 和 maintenance surfaces。
+
+以下内容不再挂在本 epic 下继续推进，未来如需要请重新发起小任务：
+
+- idle / daily expiry policy；
+- Worker UI session observability；
+- 更细的 session reset / model override UX。
 
 ## Description
 

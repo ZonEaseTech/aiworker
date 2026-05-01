@@ -1,9 +1,20 @@
 # FEAT-002 Executable skills runtime (sandbox)
 
-- **status**: pending
+- **status**: closed
 - **priority**: P3
-- **owner**: (unassigned)
+- **owner**: local
 - **createdAt**: 2026-04-21 07:30
+- **closedAt**: 2026-05-01 14:53
+
+## 关闭标记 / Reopen Guidance
+
+本任务作为 2026-04-21 的远期占位已关闭。它早于当前 Brain capability / Executor capability 边界，容易被误读为 executor-native plugin 或 engine skill 运行时。
+
+未来如确实需要“可执行 skill”，请重新发起一个更窄的 brain/runtime executable skill sandbox 任务，并明确：
+
+- 不等同于 Codex / Claude Code 等 engine-native plugin。
+- 不复用 `.aiworker/executor-capabilities.json`。
+- 必须先定义 sandbox、权限模型、approval、审计和 rollback。
 
 ## Description
 

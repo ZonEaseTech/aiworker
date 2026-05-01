@@ -1,10 +1,21 @@
 # FEAT-010 Publish registry routes into OpenAPI spec
 
-- **status**: pending
+- **status**: closed
 - **priority**: P3
-- **owner**: (unclaimed)
+- **owner**: local
 - **createdAt**: 2026-04-22 07:35
+- **closedAt**: 2026-05-01 14:53
 - **plan**: (none)
+
+## 关闭标记 / Superseded
+
+本任务引用的 dashboard registry REST 结构已经下线。当前 fleet 控制面走 gateway WebSocket protocol，worker 自管面走 worker REST/OpenAPI；继续修 `apps/api/src/dashboard/registry/routes.ts` 已无意义。
+
+未来如果要改善文档和 SDK 体验，应重新发起更准确的任务：
+
+- gateway WS protocol 文档 / typed client generation；
+- worker REST OpenAPI completeness；
+- fleet UI API contract 文档。
 
 ## Description
 

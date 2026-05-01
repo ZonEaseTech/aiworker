@@ -1,9 +1,16 @@
 # FEAT-007 M:1 channel routing (multiple workers, one chat)
 
-- **status**: pending
+- **status**: closed
 - **priority**: P3
-- **owner**: (unassigned)
+- **owner**: local
 - **createdAt**: 2026-04-21 07:30
+- **closedAt**: 2026-05-01 14:53
+
+## 关闭标记 / Reopen Guidance
+
+本任务作为远期 channel routing 占位关闭。当前没有近期产品或部署证据要求多个 worker 共享同一 chat / bot account；继续保留 pending 会让 backlog 失真。
+
+未来如真实出现 M:1 channel 需求，应按新的 gateway / worker / channel 边界重开，并先明确共享 credential、mention routing、默认 worker、冲突响应和审计模型。
 
 ## Description
 

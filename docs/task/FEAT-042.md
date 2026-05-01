@@ -6,6 +6,12 @@
 - **createdAt**: 2026-04-30 20:05
 - **plan**: PLAN-051
 
+## 当前保留原因 / Current Scope
+
+本后续功能仍有效，并且符合当前边界：Orchestrator control-plane executor 与 task/data-plane executor 应可分离。当前代码中 intent LLM classifier、quality gate evaluator、repair、compaction summary、memory flush 仍复用 `this.deps.executor`。
+
+实现时必须保持默认兼容：未配置 control executor 时继续复用主 executor；显式 control executor 不继承会造成文件/命令副作用的 task tools。
+
 ## 描述
 
 FEAT-038 / PLAN-039 的 MVP 行为是可接受的：Orchestrator 的可选 LLM intent classifier、quality gate、repair 和 compaction suppressed run 默认复用当前 worker 的主 `executor`。这样能让决策管线先闭环，也避免引入第二套 runner 配置。

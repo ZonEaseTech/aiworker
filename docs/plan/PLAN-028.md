@@ -1,10 +1,17 @@
 # PLAN-028 OpenClaw-style worker session control plane
 
-- **status**: implementing
+- **status**: completed
 - **createdAt**: 2026-04-28 12:22
 - **approvedAt**: 2026-04-28 12:27
+- **completedAt**: 2026-05-01 14:53
 - **relatedTask**: FEAT-037
 - **bkd**: ug03vh9v
+
+## 完成标记 / Remaining Work Split Out
+
+本计划的 staged implementation 已完成到 S5。worker.db 已成为 session authority，session_entries、token budget、compaction、memory flush、engine binding、status API/CLI 和 closed transcript maintenance 均已落地。
+
+Idle / daily expiry、Worker UI observability 等剩余想法应作为新的窄任务重新立项，不再让 PLAN-028 保持 implementing。
 
 ## Current State
 

@@ -50,13 +50,13 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-019 Worker OTP-attended enrollment (operator-approved join, CLI-only)**](PLAN-019.md) `2026-04-27`
 - [x] [**PLAN-020 CLI rename to `aiworker` + npm publish under `@zonease/aiworker-cli`**](PLAN-020.md) `2026-04-27`
 - [~] [**PLAN-021 Worker 项目级落位 + 上下文连贯 + skill/MCP per-worker + 自我迭代闭环**](PLAN-021.md) `2026-04-27`
-- [-] [**PLAN-022 复活并重构 Worker + Fleet Web UI（epic）**](PLAN-022.md) `2026-04-27`
+- [x] [**PLAN-022 复活并重构 Worker + Fleet Web UI（epic）**](PLAN-022.md) `2026-04-27`
 - [x] [**PLAN-023 Phase A — Worker 项目级落位（fs-layout scope + CLI init/scope）**](PLAN-023.md) `2026-04-27`
 - [x] [**PLAN-024 Phase A hardening — project-scope CLI placement**](PLAN-024.md) `2026-04-28`
 - [x] [**PLAN-025 Release readiness hardening for 0.4.0**](PLAN-025.md) `2026-04-28`
 - [x] [**PLAN-026 Codex app-server protocol compatibility for 0.4.1**](PLAN-026.md) `2026-04-28`
 - [x] [**PLAN-027 Codex session continuity and reset controls**](PLAN-027.md) `2026-04-28`
-- [-] [**PLAN-028 OpenClaw-style worker session control plane**](PLAN-028.md) `2026-04-28`
+- [x] [**PLAN-028 OpenClaw-style worker session control plane**](PLAN-028.md) `2026-04-28`
 - [x] [**PLAN-029 Gateway chat accepted id continuation**](PLAN-029.md) `2026-04-28`
 - [x] [**PLAN-030 Restore Web Tailwind utility generation**](PLAN-030.md) `2026-04-28`
 - [x] [**PLAN-031 Publish aiworker CLI 0.4.4**](PLAN-031.md) `2026-04-28`
@@ -69,7 +69,7 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-038 Web UI 视觉系统收敛**](PLAN-038.md) `2026-04-29`
 - [x] [**PLAN-039 Worker 决策管线：意图识别、能力选择与质量门禁**](PLAN-039.md) `2026-04-29`
 - [x] [**PLAN-040 发布 aiworker CLI 0.4.6**](PLAN-040.md) `2026-04-29`
-- [-] [**PLAN-041 Worker 初始化与 Soul 生命周期：安全 init、模板预置、能力包与更新治理**](PLAN-041.md) `2026-04-29`
+- [~] [**PLAN-041 Worker 初始化与 Soul 生命周期：安全 init、模板预置、能力包与更新治理**](PLAN-041.md) `2026-04-29`
 - [x] [**PLAN-042 Fleet 统一入口管理非同 host worker**](PLAN-042.md) `2026-04-29`
 - [x] [**PLAN-043 code-review-graph 开发工作流接入**](PLAN-043.md) `2026-04-29`
 - [x] [**PLAN-044 Fleet Audit log 内部表格滚动**](PLAN-044.md) `2026-04-29`
@@ -85,3 +85,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-054 稳定 CLI test gate 并拆分 Soul preset 模块**](PLAN-054.md) `2026-05-01`
 - [x] [**PLAN-055 Executor capability projection commands**](PLAN-055.md) `2026-05-01`
 - [x] [**PLAN-056 标记废弃 PMA 方案与 capability 边界**](PLAN-056.md) `2026-05-01`
+- [x] [**PLAN-057 清理陈旧 PMA 待办状态**](PLAN-057.md) `2026-05-01`

@@ -1,8 +1,12 @@
 # PLAN-051 Orchestrator 控制执行器与任务执行器解耦
 
-- **status**: proposed
+- **status**: draft
 - **createdAt**: 2026-04-30 20:05
 - **relatedTask**: FEAT-042
+
+## 当前保留原因 / Current Scope
+
+本 plan 仍保留为 draft。它不是旧 capability projection 需求，而是 Orchestrator control-plane 与 task executor 的边界拆分。实现前仍需重新审查 config schema、secret hydration、diagnostics 和测试范围。
 
 ## 现状
 

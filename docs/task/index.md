@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-01 14:37
+> Updated: 2026-05-01 14:53
 
 ## Usage
 
@@ -34,15 +34,15 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-001 Build AIWorker middleware product**](FEAT-001.md) `P1`
 - [x] [**REFACTOR-001 Refactor AIWorker into a self-hosted Agent Runtime**](REFACTOR-001.md) `P1`
 - [x] [**REFACTOR-002 Refactor AIWorker into a multi-worker fleet runtime**](REFACTOR-002.md) `P1`
-- [ ] [**FEAT-002 Executable skills runtime (sandbox)**](FEAT-002.md) `P3`
+- [~] [**FEAT-002 Executable skills runtime (sandbox)**](FEAT-002.md) `P3`
 - [x] [**FEAT-003 Telegram channel adapter**](FEAT-003.md) `P2`
 - [x] [**FEAT-004 Lark channel adapter**](FEAT-004.md) `P2`
 - [x] [**FEAT-005 WhatsApp channel adapter (Meta Cloud API)**](FEAT-005.md) `P2`
 - [x] [**FEAT-006 Evolution generator (Hermes-style skill self-learning)**](FEAT-006.md) `P2`
-- [ ] [**FEAT-007 M:1 channel routing (multiple workers, one chat)**](FEAT-007.md) `P3`
-- [ ] [**FEAT-008 Host-level HA and multi-host fleet**](FEAT-008.md) `P3`
+- [~] [**FEAT-007 M:1 channel routing (multiple workers, one chat)**](FEAT-007.md) `P3`
+- [~] [**FEAT-008 Host-level HA and multi-host fleet**](FEAT-008.md) `P3`
 - [x] [**FEAT-009 Deployment automation (aissh-driven fleet deploy)**](FEAT-009.md) `P1`
-- [ ] [**FEAT-010 Publish registry routes into OpenAPI spec**](FEAT-010.md) `P3`
+- [~] [**FEAT-010 Publish registry routes into OpenAPI spec**](FEAT-010.md) `P3`
 - [x] [**FEAT-011 Normalize AgentEvent schema and refactor OpenAI-compat executor**](FEAT-011.md) `P1`
 - [x] [**FEAT-012 Claude Code executor with git worktree workspace**](FEAT-012.md) `P1`
 - [x] [**FEAT-013 ACP harness plus Gemini and Qwen adapters**](FEAT-013.md) `P1`
@@ -89,7 +89,7 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REFACTOR-007 杂项小修：bus 异常吞 / lark cache / fleet count / secrets key**](REFACTOR-007.md) `P2`
 - [x] [**REFACTOR-008 baseline lint debt 清零（package.json sort-keys + cli process global + CI lint step）**](REFACTOR-008.md) `P3`
 - [~] [**FEAT-031 Worker 项目级落位 + 上下文连贯 + skill/MCP per-worker + 自我迭代闭环（epic）**](FEAT-031.md) `P1`
-- [-] [**FEAT-032 复活并重构 Worker + Fleet Web UI（epic）**](FEAT-032.md) `P1`
+- [x] [**FEAT-032 复活并重构 Worker + Fleet Web UI（epic）**](FEAT-032.md) `P1`
 - [x] [**REFACTOR-011 fs-layout 引入 project scope 解析 + project layout 模板**](REFACTOR-011.md) `P1`
 - [x] [**FEAT-036 CLI `aiworker init` / `aiworker scope` 项目级初始化命令**](FEAT-036.md) `P1`
 - [x] [**FEAT-033 Phase 1 — apps/web 静态托管 + 双视角源码骨架**](FEAT-033.md) `P1`
@@ -102,7 +102,7 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-023 Release blockers after v0.3.0 prevent 0.4.0 publishing**](BUG-023.md) `P1`
 - [x] [**BUG-024 Codex executor fails against current Codex app-server protocol**](BUG-024.md) `P1`
 - [x] [**BUG-025 Codex executor drops worker conversation history between turns**](BUG-025.md) `P1`
-- [-] [**FEAT-037 OpenClaw-style worker session control plane**](FEAT-037.md) `P1`
+- [x] [**FEAT-037 OpenClaw-style worker session control plane**](FEAT-037.md) `P1`
 - [x] [**BUG-027 Gateway chat accepted conversation id cannot be reused for continuation**](BUG-027.md) `P1`
 - [x] [**BUG-028 Web UI CSS bundle misses Tailwind utilities**](BUG-028.md) `P1`
 - [x] [**REL-001 Publish aiworker CLI 0.4.4**](REL-001.md) `P1`
@@ -126,7 +126,7 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REFACTOR-012 按 DESIGN.md 收敛 Web UI 视觉系统**](REFACTOR-012.md) `P2`
 - [x] [**FEAT-038 Worker 决策管线：意图识别、能力选择与质量门禁**](FEAT-038.md) `P1`
 - [x] [**REL-003 发布 aiworker CLI 0.4.6**](REL-003.md) `P1`
-- [-] [**FEAT-039 Worker 初始化与 Soul 生命周期：安全 init、模板预置、能力包与更新治理**](FEAT-039.md) `P1`
+- [~] [**FEAT-039 Worker 初始化与 Soul 生命周期：安全 init、模板预置、能力包与更新治理**](FEAT-039.md) `P1`
 - [x] [**FEAT-040 Fleet 统一入口管理非同 host worker**](FEAT-040.md) `P1`
 - [x] [**DOC-002 接入 code-review-graph 开发工作流**](DOC-002.md) `P3`
 - [x] [**BUG-037 Fleet Audit log table scrolls the whole page**](BUG-037.md) `P2`
@@ -144,3 +144,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REFACTOR-013 稳定 CLI test gate 并拆分 Soul preset 模块**](REFACTOR-013.md) `P1`
 - [x] [**FEAT-044 Executor capability projection commands**](FEAT-044.md) `P1`
 - [x] [**DOC-003 标记废弃 PMA 方案与 capability 边界**](DOC-003.md) `P1`
+- [x] [**DOC-004 清理陈旧 PMA 待办状态**](DOC-004.md) `P1`

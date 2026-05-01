@@ -1,5 +1,17 @@
 # AIWorker Changelog
 
+## 2026-05-01 14:53 [docs] DOC-004 / PLAN-057 — 陈旧 PMA 待办状态清理
+
+按当前开发成果和 Brain / Executor 能力边界，收敛 remaining pending / in-progress PMA 事项：
+
+- FEAT-032 / PLAN-022 标记 completed：Web UI epic 已由 FEAT-033/034/035、REFACTOR-009/010 吸收并交付。
+- FEAT-037 / PLAN-028 标记 completed：session control plane 已完成 S1-S5，剩余 idle/daily expiry 与 UI observability 以后按小任务重开。
+- FEAT-039 / PLAN-041 标记 closed / rejected：init / Soul / doctor / capability 静态 validation / executor 边界已交付，S4-S6 以后按新边界拆小切片。
+- FEAT-002、FEAT-007、FEAT-008、FEAT-010 标记 closed：远期占位或旧架构入口不再污染当前 backlog。
+- BUG-006、BUG-010、BUG-038、FEAT-042 / PLAN-051 保留，并补充 current-scope note；PLAN-051 detail status 规范为 `draft`。
+
+验证：targeted `rg` active-entry scan，`git diff --check`。
+
 ## 2026-05-01 14:37 [docs] DOC-003 / PLAN-056 — PMA 废案标记与 capability 边界治理
 
 对 PMA 管理的 docs 做了一次不删除历史的废案和边界标记：

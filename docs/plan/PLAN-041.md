@@ -1,15 +1,26 @@
 # PLAN-041 Worker 初始化与 Soul 生命周期：安全 init、模板预置、能力包与更新治理
 
-- **status**: implementing
+- **status**: rejected
 - **createdAt**: 2026-04-29 17:50
 - **approvedAt**: 2026-04-29 18:04
+- **rejectedAt**: 2026-05-01 14:53
 - **relatedTask**: FEAT-039
 
-## 边界标记 / Current Scope
+## 关闭标记 / Split Future Work
 
-本计划仍是 FEAT-039 的有效工作计划，但 capability 范围已经收敛：
+本计划作为一个大范围方案已关闭，不再作为 ongoing implementation 入口。S1-S3 与后续 FEAT-043 / FEAT-044 已经交付当前 MVP：safe init、Soul preset/customize、capability draft、`aiworker doctor` 静态 validation、executor-native projection 独立边界。
 
-- 继续有效：`aiworker init`、Soul templates / customize、brain/runtime project capability 草案、`aiworker doctor` 静态 validation、external agent adapter、Soul update、self-iteration admission gate。
+未完成的 S4-S6 需要未来重新发起更窄方案，不应继续在本计划里滚动追加：
+
+- External adapter sync；
+- Soul update / pin / diff；
+- Self-iteration admission gate；
+- Mutating brain/runtime quick config。
+
+最终边界保留：
+
+- 已交付且继续有效：`aiworker init`、Soul templates / customize、brain/runtime project capability 草案、`aiworker doctor` 静态 validation。
+- 未来重开时仍有效：external agent adapter、Soul update、self-iteration admission gate 必须保持 proposal/diff/approval/rollback。
 - 已拆出：executor-native MCP/skill/plugin projection。相关实现只以 FEAT-044 / PLAN-055 为准。
 - 命名约束：本文早期草案里的 `aiworker skill add`、`aiworker mcp add`、`toolset enable` 不能作为 executor 命令规格；当前已落地命令是 `aiworker doctor` 与 `aiworker executor mcp add/sync/doctor`。
 
@@ -273,6 +284,7 @@ aiworker soul pin developer@1.2.0
 - 2026-05-01 13:22：S3 已批准实施。本切片只做静态 schema/validation 与 doctor 展示，不实现 mutating `skill add` / `mcp add` / `toolset enable`，也不启动 MCP server 或接入 runtime enforcement。
 - 2026-05-01 13:34：S3 最小切片完成。交付共享 manifest/schema、CLI 静态 validation、`aiworker doctor`、init/soul validation 状态呈现和聚焦测试；MCP 仍只做 descriptor/secretRef 静态检查，真实 server probe 和 mutating capability commands 留给后续切片。
 - 2026-05-01 14:32：补充废案标记：本文早期关于 `aiworker mcp add` / executor MCP 的隐含方向已经废弃。PLAN-041 后续仅承载 brain/runtime project capability 与 Soul 生命周期治理；executor-native projection 以 PLAN-055 为唯一入口。
+- 2026-05-01 14:53：关闭本大计划。已交付 MVP 和边界澄清；S4-S6 若需要，按新任务/新计划重开。
 
 2026-04-29 18:18：S1 已通过 BKD 子任务 `urey7cyc` 合入 main，merge commit `8284aa5`。后续仍按分片推进，下一阶段才考虑 S2 Soul templates registry skeleton，不在 S1 session 里扩展。
 

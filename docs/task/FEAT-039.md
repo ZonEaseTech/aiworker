@@ -1,18 +1,29 @@
 # FEAT-039 Worker 初始化与 Soul 生命周期：安全 init、模板预置、能力包与更新治理
 
-- **status**: in_progress
+- **status**: closed
 - **priority**: P1
 - **owner**: BKD h71mijcz
 - **createdAt**: 2026-04-29 17:50
 - **claimedAt**: 2026-04-29 18:04
+- **closedAt**: 2026-05-01 14:53
 - **plan**: PLAN-041
 
-## 边界标记 / Current Scope
+## 关闭标记 / Split Future Work
 
-本任务仍在推进，但 capability 相关范围已拆边界：
+本任务作为大范围 init / Soul 生命周期计划已关闭。当前已落地的可用范围包括 `aiworker init` safe/no-overwrite、Soul presets / customize、`aiworker soul list/show`、brain/runtime capability 草案、`aiworker doctor` 静态 validation，以及 executor-native capability projection 的独立边界。
 
-- 本任务继续负责 `aiworker init`、Soul 生命周期、brain/runtime project capability 草案、`aiworker doctor` 静态 validation、外部 agent adapter 与自我迭代 admission metadata。
-- 本任务不负责 executor-native MCP/skill/plugin 投影；Codex / Claude Code 等 engine 的 project-scope MCP 配置以 FEAT-044 / PLAN-055 为准。
+剩余事项不再挂在本任务下继续推进，未来按小切片重新发起：
+
+- external agent adapter sync；
+- Soul update / pin / diff；
+- self-iteration admission gate；
+- mutating brain/runtime quick config 命令。
+
+已确认边界：
+
+- 已交付范围包括 `aiworker init`、Soul 生命周期基础、brain/runtime project capability 草案与 `aiworker doctor` 静态 validation。
+- 未来重开 external adapter、Soul update、自我迭代 admission 时仍必须遵守本边界。
+- executor-native MCP/skill/plugin 投影以 FEAT-044 / PLAN-055 为准；Codex / Claude Code 等 engine 的 project-scope MCP 配置不进入本任务。
 - `.aiworker/mcp.json` 只作为 brain/runtime descriptor；`.aiworker/executor-capabilities.json` 才是 executor projection manifest。
 
 ## 描述
@@ -49,3 +60,4 @@
 - 2026-05-01 13:34：PLAN-041 S3 最小切片完成。新增共享 capability schema、CLI 内置 pack/toolset catalog、静态 validator 与 `aiworker doctor`；`init` 生成结构化 validation 草案并提示 doctor；`soul list/show` 改为指向 project doctor；测试覆盖 valid/invalid manifest、MCP 明文 secret、Skill metadata、doctor exit code 与所有内置 Soul preset。FEAT-039 仍保持 in_progress，后续还有 S4-S6。
 - 2026-05-01 13:54：边界纠偏：S3 保留为 brain/runtime project capability 草案的静态 validator，不继续承载 executor 原生 MCP/skill/plugin 配置。executor capability projection 独立进入 FEAT-044 / PLAN-055。
 - 2026-05-01 14:32：补充 PMA 废案标记：本任务仍有效，但所有 executor-native MCP/skill/plugin 投影需求必须从 FEAT-044 / PLAN-055 进入，不能复用 PLAN-041 S3 的 project capability draft。
+- 2026-05-01 14:53：关闭本大范围任务。已完成 MVP 与边界澄清；S4-S6 作为未来小切片重新发起。
