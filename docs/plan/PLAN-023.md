@@ -8,6 +8,12 @@
 
 > 隶属 PLAN-021（master）Phase A。PLAN-024 后续被用于 Phase A hardening（BUG-021）；后续 Phase B/D/C/E 另起子计划承接。
 
+## 边界标记 / Historical Scope
+
+本计划只记录 project layout 与 scope 解析的历史实现，不再继承 PLAN-021 的后续 Phase D/E 设计。文中的 `.aiworker/mcp.json` 是 project layout 中的 brain/runtime descriptor 占位；executor-native MCP/skill/plugin projection 不属于本计划，后续以 FEAT-044 / PLAN-055 的 `.aiworker/executor-capabilities.json` 为准。
+
+`aiworker init` 的交互和 non-git 行为也已经由 FEAT-039、BUG-040、FEAT-043 后续调整覆盖；不要把本文早期 CLI 行为描述当成当前产品规格。
+
 ## 现状
 
 ### 1. fs-layout 当前是「单根多 worker」结构
@@ -129,7 +135,7 @@ seedIfAbsent .aiworker/SOUL.md
 seedIfAbsent .aiworker/USER.md
 seedIfAbsent .aiworker/MEMORY.md         # 长期事实
 seedIfAbsent .aiworker/ROLLUP.md         # 占位（Phase E cron 写入）
-seedIfAbsent .aiworker/mcp.json          # 占位 { "servers": {} }（Phase D 启用）
+seedIfAbsent .aiworker/mcp.json          # brain/runtime descriptor 占位 { "servers": {} }，不是 executor config
 seedIfAbsent .aiworker/local/.gitignore  # *.db、*.db-wal、*.db-shm、identity.json、.env、workspaces/、tmp/
 seedIfAbsent .aiworker/.gitignore        # local/
 chmod 0700 .aiworker/local/              # secrets 目录权限

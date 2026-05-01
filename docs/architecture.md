@@ -94,11 +94,13 @@ project scope 下，团队共享上下文落在 `<project>/.aiworker/`：
   capability-packs.json
   skills/
   memories/
-  mcp.json
+  mcp.json                     # brain/runtime MCP descriptor, not engine config
+  executor-capabilities.json   # executor-native projection manifest
   local/                       # gitignored: worker.db / .env / workspaces
 ```
 
 - **Skills / memories** 读写统一过 `FilesystemBrainProvider`（PLAN-012 将旧 `HermesProvider` 改名并把 HTTP 依赖全部拆掉）；filesystem 是权威，SQLite 只负责 identity 与可索引状态。
+- **Capability 边界**：`.aiworker/mcp.json`、`skills/`、`toolsets.json`、`capability-packs.json` 属于 brain/runtime project capability 或 observe-only descriptor；`.aiworker/executor-capabilities.json` 属于 executor-native projection。Codex / Claude Code 等 engine 的 MCP config 只能通过 `aiworker executor mcp add/sync/doctor` 和 engine 官方 CLI/config 投影。
 - **`config.yaml`** 是 `worker_config.configJson` 的 advisory 镜像——`PUT /api/worker/config` 与 `aiworker config-set`（worker-local）/ `aiworker config set`（operator-remote）落库成功后都会调 `mirrorConfigToYaml`，DB 仍为 source-of-truth（乐观锁 `If-Match` 依赖 DB version）。
 - **`AGENT.md` / `SOUL.md` / `USER.md`** user scope 首次启动由 `ensureWorkerHome(workerId)` 幂等种出；project scope 由 `aiworker init` 根据 Soul preset 种出非 stub 模板，并保持 no-overwrite。
 

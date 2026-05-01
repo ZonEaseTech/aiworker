@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-01 14:05
+> Updated: 2026-05-01 14:37
 
 ## Usage
 
@@ -88,7 +88,7 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REFACTOR-006 orchestrator API 入参 zod 校验 + 历史消息分页窗口**](REFACTOR-006.md) `P2`
 - [x] [**REFACTOR-007 杂项小修：bus 异常吞 / lark cache / fleet count / secrets key**](REFACTOR-007.md) `P2`
 - [x] [**REFACTOR-008 baseline lint debt 清零（package.json sort-keys + cli process global + CI lint step）**](REFACTOR-008.md) `P3`
-- [ ] [**FEAT-031 Worker 项目级落位 + 上下文连贯 + skill/MCP per-worker + 自我迭代闭环（epic）**](FEAT-031.md) `P1`
+- [~] [**FEAT-031 Worker 项目级落位 + 上下文连贯 + skill/MCP per-worker + 自我迭代闭环（epic）**](FEAT-031.md) `P1`
 - [-] [**FEAT-032 复活并重构 Worker + Fleet Web UI（epic）**](FEAT-032.md) `P1`
 - [x] [**REFACTOR-011 fs-layout 引入 project scope 解析 + project layout 模板**](REFACTOR-011.md) `P1`
 - [x] [**FEAT-036 CLI `aiworker init` / `aiworker scope` 项目级初始化命令**](FEAT-036.md) `P1`
@@ -143,3 +143,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-043 优化 init 后引导与 Soul 能力测试流程**](FEAT-043.md) `P1`
 - [x] [**REFACTOR-013 稳定 CLI test gate 并拆分 Soul preset 模块**](REFACTOR-013.md) `P1`
 - [x] [**FEAT-044 Executor capability projection commands**](FEAT-044.md) `P1`
+- [x] [**DOC-003 标记废弃 PMA 方案与 capability 边界**](DOC-003.md) `P1`

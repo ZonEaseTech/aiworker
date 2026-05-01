@@ -49,7 +49,7 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-018 Worker self-enrollment via shared join token**](PLAN-018.md) `2026-04-26`
 - [x] [**PLAN-019 Worker OTP-attended enrollment (operator-approved join, CLI-only)**](PLAN-019.md) `2026-04-27`
 - [x] [**PLAN-020 CLI rename to `aiworker` + npm publish under `@zonease/aiworker-cli`**](PLAN-020.md) `2026-04-27`
-- [-] [**PLAN-021 Worker 项目级落位 + 上下文连贯 + skill/MCP per-worker + 自我迭代闭环**](PLAN-021.md) `2026-04-27`
+- [~] [**PLAN-021 Worker 项目级落位 + 上下文连贯 + skill/MCP per-worker + 自我迭代闭环**](PLAN-021.md) `2026-04-27`
 - [-] [**PLAN-022 复活并重构 Worker + Fleet Web UI（epic）**](PLAN-022.md) `2026-04-27`
 - [x] [**PLAN-023 Phase A — Worker 项目级落位（fs-layout scope + CLI init/scope）**](PLAN-023.md) `2026-04-27`
 - [x] [**PLAN-024 Phase A hardening — project-scope CLI placement**](PLAN-024.md) `2026-04-28`
@@ -84,3 +84,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-053 优化 init 后引导与 Soul 能力测试流程**](PLAN-053.md) `2026-05-01`
 - [x] [**PLAN-054 稳定 CLI test gate 并拆分 Soul preset 模块**](PLAN-054.md) `2026-05-01`
 - [x] [**PLAN-055 Executor capability projection commands**](PLAN-055.md) `2026-05-01`
+- [x] [**PLAN-056 标记废弃 PMA 方案与 capability 边界**](PLAN-056.md) `2026-05-01`

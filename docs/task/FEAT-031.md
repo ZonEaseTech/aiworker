@@ -1,15 +1,30 @@
 # FEAT-031 Worker 项目级落位 + 上下文连贯 + skill/MCP per-worker + 自我迭代闭环（epic）
 
-- **status**: pending
+- **status**: closed
 - **priority**: P1
-- **owner**: (未分配)
+- **owner**: local
 - **createdAt**: 2026-04-27 18:00
+- **closedAt**: 2026-05-01 14:32
+
+## 废案标记 / Superseded
+
+本 epic 已关闭，不再作为可认领或可实现的需求入口。它在 2026-04-27 作为 master epic 记录了“项目级落位、上下文连贯、Skill/MCP per-worker、自我迭代闭环”的早期合并设想，但后续实现已经拆分，并且 Brain capability 与 Executor capability 的边界已经重新定盘。
+
+不要从本文继续派生新的 Skill/MCP/executor 实现任务。替代路径如下：
+
+- 项目级落位与 scope：FEAT-036 / PLAN-023、REFACTOR-011。
+- 会话控制面与上下文连贯：FEAT-037 / PLAN-028。
+- runtime 决策、observe-only capability registry 与质量门禁：FEAT-038 / PLAN-039。
+- init、Soul、brain/runtime project capability 草案与静态 validation：FEAT-039 / PLAN-041。
+- executor-native MCP projection：FEAT-044 / PLAN-055。
+
+边界原则：`.aiworker/mcp.json`、`skills/`、`toolsets.json`、`capability-packs.json` 属于 brain/runtime project capability 草案或 runtime descriptor；`.aiworker/executor-capabilities.json` 属于 executor-native projection。二者不能合并成一个配置面。
 
 ## 描述
 
 将 worker runtime 从「单 host 单 worker、user 级 `~/.aiworker/`」演进为「项目级 `<project>/.aiworker/`、上下文跨会话连贯、skill/MCP per-worker 灵活配置、agent 自演化」的形态。借鉴 OpenClaw 的 dmScope/compaction/progressive disclosure 与 Hermes Agent 的三态记忆 + 自蒸馏闭环，关键产物物理隔离落到项目目录，engine（claude-code/codex/cursor）保持 user 级共享。
 
-承载方案：PLAN-021（master），后续按 phase 拆出 PLAN-022~026 + 配套 task。
+历史承载方案：PLAN-021（已废弃），后续已按实际落地拆出多个独立 task / plan。
 
 最终效果：
 
@@ -25,7 +40,7 @@
 ## 依赖
 
 - **blocked by**: (无；与 FEAT-002 sandbox 解耦，sandbox 是 Phase E 的 nice-to-have)
-- **blocks**: 后续 PLAN-022~026 子方案与配套 task
+- **blocks**: (无；本 epic 已关闭，后续工作见上方替代路径)
 
 ## 笔记
 

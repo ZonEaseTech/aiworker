@@ -1,5 +1,17 @@
 # AIWorker Changelog
 
+## 2026-05-01 14:37 [docs] DOC-003 / PLAN-056 — PMA 废案标记与 capability 边界治理
+
+对 PMA 管理的 docs 做了一次不删除历史的废案和边界标记：
+
+- FEAT-031 / PLAN-021 已从 pending / implementing 改为 closed / rejected，并在顶部标明不再作为实现规格，替代路径指向 FEAT-036、FEAT-037、FEAT-038、FEAT-039 和 FEAT-044。
+- FEAT-038 / PLAN-039 补充 historical scope：其中 `.aiworker/mcp.json` 和 CapabilityRegistry 只表示 runtime observe-only descriptor，不是 executor-native MCP projection。
+- FEAT-039 / PLAN-041 补充 current scope：继续承载 init / Soul / brain-runtime capability draft / `aiworker doctor`，不再承载 executor-native MCP/skill/plugin projection。
+- BUG-040 标记为历史缺口记录，禁止从旧的 `aiworker mcp add` / `skill add` / `toolset enable` 描述恢复 executor config 命令。
+- FEAT-036 / PLAN-023 / REFACTOR-011 与 `docs/architecture.md` 补充 `.aiworker/mcp.json` 与 `.aiworker/executor-capabilities.json` 的职责边界。
+
+验证：`rg` targeted stale-entry scan，`git diff --check`。
+
 ## 2026-05-01 14:05 [progress] FEAT-044 / PLAN-055 — executor capability projection
 
 完成 executor 原生能力快速配置 MVP，并把边界从 PLAN-041 S3 的 project capability 草案中拆出来：
