@@ -372,7 +372,7 @@ export function buildManagementRoutes(deps: ManagementRoutesDeps) {
   })
 
   /**
-   * PLAN-014 F2 — per-tool approvals 本地视图。aiw CLI 不经 gateway，
+   * PLAN-014 F2 — per-tool approvals 本地视图。aiworker CLI 不经 gateway，
    * 直接读 worker 自身的内存 store；甚至 dev / debug 时操作员也可以手动 grant
    * 跳过 gateway WS 路径。bearer-auth 中间件由 `modes/worker.ts` 顶层在
    * `/api/worker/*` 挂载，局域网外的访问者需要持 worker bearer token。

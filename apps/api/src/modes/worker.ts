@@ -42,7 +42,7 @@ async function hydrateStoredConfig(stored: WorkerConfig): Promise<WorkerConfig> 
 
 export interface BootstrapWorkerAppOptions {
   /**
-   * 调用方（如 `aiw serve`）注册的 hook，在 `state.runtime` 已经原子换成
+   * 调用方（如 `aiworker serve`）注册的 hook，在 `state.runtime` 已经原子换成
    * `nextRuntime` 之后、`previous.dispose()` 解绑老 bus 之前同步触发。
    * 顺序很关键：必须晚于 swap（hook 里 `state.runtime` 已是新 runtime），
    * 必须早于 dispose（subscriber 重新订阅完成后老 bus 才能被解掉）。
