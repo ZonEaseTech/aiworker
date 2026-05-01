@@ -29,6 +29,7 @@ import { z } from 'zod'
 
 export interface ManagementRoutesDeps {
   getState: () => WorkerModeState
+  runtimeVersion: string
   /**
    * Hot-reload callback: rebuilds the runtime around the new stored config +
    * the vault, atomically swaps `state.runtime`, and bumps `state.configVersion`
@@ -108,6 +109,7 @@ export function buildManagementRoutes(deps: ManagementRoutesDeps) {
     const state = deps.getState()
     const stored = await readConfig(getWorkerDb())
     const info = await buildInfo(state, stored.config, {
+      runtimeVersion: deps.runtimeVersion,
       ...(workerEnv.AIWORKER_ADVERTISED_BASE_URL === undefined
         ? {}
         : { advertisedBaseUrl: workerEnv.AIWORKER_ADVERTISED_BASE_URL }),

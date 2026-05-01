@@ -31,6 +31,8 @@ import { resolveWebStaticDir } from '../lib/web-static'
 
 export interface ServeOptions {
   port?: number
+  /** Runtime/package version surfaced through worker info. */
+  runtimeVersion?: string
   /** Worker HTTP bind host. Defaults to AIWORKER_WORKER_HOST (127.0.0.1). */
   host?: string
   /** gateway WS URL；留空则不启动 gateway-client（保持纯 HTTP 兼容形态）。 */
@@ -57,6 +59,7 @@ export interface ServeOptions {
  * 两条路径独立，SIGTERM 时都做优雅关闭。
  */
 export async function runServe(options: ServeOptions = {}): Promise<void> {
+  const runtimeVersion = options.runtimeVersion ?? 'dev'
   // gatewayNode 在 bootstrap 之后才能 start（要拿到 state.workerId / reloadRuntime），
   // 但 bootstrap 自己又需要在 reloadRuntime 完成 swap 后回调 gatewayNode 让 subscriber
   // 重新挂到新 bus——chicken-and-egg。先建可变 ref，bootstrap 闭包里读这个 ref，
@@ -82,6 +85,7 @@ export async function runServe(options: ServeOptions = {}): Promise<void> {
   })
   const { app, port: envPort, state, reloadRuntime } = await bootstrapWorkerApp({
     onRuntimeReloaded: () => gatewayNode?.notifyRuntimeReloaded(),
+    runtimeVersion,
     ...(webStaticDir ? { webStaticDir } : {}),
   })
   const port = options.port ?? envPort
@@ -183,6 +187,7 @@ export async function runServe(options: ServeOptions = {}): Promise<void> {
         workersInfo: async () => {
           const stored = await readConfig(getWorkerDb())
           return await buildInfo(state, stored.config, {
+            runtimeVersion,
             ...(workerEnv.AIWORKER_ADVERTISED_BASE_URL === undefined
               ? {}
               : { advertisedBaseUrl: workerEnv.AIWORKER_ADVERTISED_BASE_URL }),

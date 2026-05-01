@@ -194,6 +194,7 @@ cli
       serveOptions.gatewayReconnect = false
     if (opts.serveWeb === false)
       serveOptions.serveWeb = false
+    serveOptions.runtimeVersion = packageJson.version
     await runServe(serveOptions)
   })
 

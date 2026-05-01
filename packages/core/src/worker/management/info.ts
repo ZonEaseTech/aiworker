@@ -12,14 +12,11 @@ import type { WorkerModeState } from './state'
 import { resolveVariant } from '../executor/default-profiles'
 
 /**
- * Per-process runtime version surfaced on `/api/worker/info`. Matches the
- * value advertised in the OpenAPI document so the manager can detect skew.
+ * Environment inputs consumed by the info builder. Indirected so tests can stub.
  */
-const WORKER_RUNTIME_VERSION = '0.2.0'
-
-/** Environment inputs consumed by the info builder. Indirected so tests can stub. */
 export interface BuildInfoEnv {
   advertisedBaseUrl?: string
+  runtimeVersion: string
 }
 
 function resolveStatus(status: ServiceStatus | null): WorkerComponentStatus {
@@ -113,7 +110,7 @@ export async function buildInfo(
 
   return {
     workerId: state.workerId,
-    runtimeVersion: WORKER_RUNTIME_VERSION,
+    runtimeVersion: env.runtimeVersion,
     configVersion: state.configVersion,
     brains,
     executor,

@@ -1,5 +1,26 @@
 # AIWorker Changelog
 
+## 2026-05-02 01:14 [bug] BUG-038 / PLAN-059 — worker info runtimeVersion follows CLI package version
+
+Fixed stale worker info version reporting:
+
+- Removed the hard-coded `WORKER_RUNTIME_VERSION = '0.2.0'` from core worker info.
+- `buildInfo` now receives the runtime/package version from its caller.
+- `bootstrapWorkerApp` passes the same runtime version to `/api/worker/info` and the OpenAPI document, with `dev` as the explicit source-mode fallback.
+- `aiworker serve` injects `apps/cli/package.json` version, so published CLI workers report the same version through both `fleet info` and bridged `/w/:workerId/api/worker/info`.
+- Tests now use injected test runtime versions instead of pinning stale release literals.
+
+验证：
+
+- `bun test packages/core/src/worker/management/info.test.ts`
+- `bun test apps/api/src/worker/management/routes.test.ts`
+- `bun test apps/api/src/modes/worker.bearer-auth.test.ts`
+- `bun test apps/cli/src/aiworker.test.ts`
+- `bun test packages/core/src/worker/gateway-client/dispatcher.test.ts`
+- `bun run --filter '@zonease/aiworker-core' typecheck`
+- `bun run --filter '@zonease/aiworker-api' typecheck`
+- `bun run --filter '@zonease/aiworker-cli' typecheck`
+
 ## 2026-05-01 14:53 [docs] DOC-004 / PLAN-057 — 陈旧 PMA 待办状态清理
 
 按当前开发成果和 Brain / Executor 能力边界，收敛 remaining pending / in-progress PMA 事项：

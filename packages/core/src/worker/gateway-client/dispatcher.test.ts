@@ -53,7 +53,7 @@ function makeDispatcher(handlers?: NodeHandlers, orchestrator: OrchestratorLike 
 function fakeWorkerInfo(workerId = 'w_test'): WorkerInfo {
   return {
     workerId,
-    runtimeVersion: '0.2.0',
+    runtimeVersion: 'test-runtime',
     configVersion: 7,
     brains: [{ id: 'fs-primary', type: 'filesystem', status: 'healthy' }],
     executor: { type: 'http', model: 'gpt-4o-mini', status: 'healthy' },

@@ -11,6 +11,8 @@ import { describe, expect, it } from 'bun:test'
 
 import { buildInfo } from './info'
 
+const TEST_RUNTIME_VERSION = 'test-runtime-1.2.3'
+
 function stubRuntime(
   brain: () => Promise<ServiceStatus>,
   executor: () => Promise<ServiceStatus>,
@@ -88,12 +90,13 @@ describe('buildInfo', () => {
       async () => ({ name: 'http', status: 'healthy', lastChecked: 'x' }),
     )
     const info = await buildInfo(stubState(runtime), CONFIG, {
+      runtimeVersion: TEST_RUNTIME_VERSION,
       advertisedBaseUrl: 'https://worker.example.com',
     })
 
     expect(info.workerId).toBe('w_abcdefghjkmn')
     expect(info.configVersion).toBe(7)
-    expect(info.runtimeVersion).toBe('0.2.0')
+    expect(info.runtimeVersion).toBe(TEST_RUNTIME_VERSION)
     expect(info.advertisedBaseUrl).toBe('https://worker.example.com')
 
     expect(info.brains).toEqual([
@@ -123,7 +126,7 @@ describe('buildInfo', () => {
       async () => ({ name: 'multi', status: 'degraded', lastChecked: 'x' }),
       async () => ({ name: 'http', status: 'healthy', lastChecked: 'x' }),
     )
-    const info = await buildInfo(stubState(runtime), CONFIG, {})
+    const info = await buildInfo(stubState(runtime), CONFIG, { runtimeVersion: TEST_RUNTIME_VERSION })
     expect(info.brains.every(b => b.status === 'degraded')).toBe(true)
     expect(info.executor.status).toBe('healthy')
   })
@@ -133,7 +136,7 @@ describe('buildInfo', () => {
       async () => { throw new Error('nope') },
       async () => { throw new Error('nope') },
     )
-    const info = await buildInfo(stubState(runtime), CONFIG, {})
+    const info = await buildInfo(stubState(runtime), CONFIG, { runtimeVersion: TEST_RUNTIME_VERSION })
     expect(info.brains.every(b => b.status === 'unknown')).toBe(true)
     expect(info.executor.status).toBe('unknown')
   })
@@ -143,7 +146,7 @@ describe('buildInfo', () => {
       async () => ({ name: 'multi', status: 'healthy', lastChecked: 'x' }),
       async () => ({ name: 'http', status: 'healthy', lastChecked: 'x' }),
     )
-    const info = await buildInfo(stubState(runtime), CONFIG, {})
+    const info = await buildInfo(stubState(runtime), CONFIG, { runtimeVersion: TEST_RUNTIME_VERSION })
     expect(info.advertisedBaseUrl).toBeUndefined()
     expect(info.channels.every(c => c.webhookUrl === undefined)).toBe(true)
   })
@@ -161,7 +164,7 @@ describe('buildInfo', () => {
       async () => ({ name: 'multi', status: 'healthy', lastChecked: 'x' }),
       async () => ({ name: 'mcp', status: 'healthy', lastChecked: 'x' }),
     )
-    const info = await buildInfo(stubState(runtime), mcpConfig, {})
+    const info = await buildInfo(stubState(runtime), mcpConfig, { runtimeVersion: TEST_RUNTIME_VERSION })
     expect(info.executor).toEqual({ type: 'mcp', model: 'sonnet', status: 'healthy' })
   })
 })

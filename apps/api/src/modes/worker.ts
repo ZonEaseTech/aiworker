@@ -26,6 +26,8 @@ import { buildBearerAuth } from '../worker/management/bearer-auth'
 import { buildManagementRoutes } from '../worker/management/routes'
 import { buildOrchestratorRoutes } from '../worker/orchestrator/routes'
 
+const DEFAULT_WORKER_RUNTIME_VERSION = 'dev'
+
 async function hydrateStoredConfig(stored: WorkerConfig): Promise<WorkerConfig> {
   const vault = getSecretsVault()
   const expectedPaths = new Set(enumerateSecretPaths(stored).map(p => p.path))
@@ -56,6 +58,8 @@ export interface BootstrapWorkerAppOptions {
    * 阻塞 bootstrap。
    */
   webStaticDir?: string
+  /** Runtime/package version surfaced by `/api/worker/info` and OpenAPI docs. */
+  runtimeVersion?: string
 }
 
 /**
@@ -77,6 +81,8 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
    */
   reloadRuntime: (nextStoredConfig: WorkerConfig, newVersion: number) => Promise<void>
 }> {
+  const runtimeVersion = options.runtimeVersion ?? DEFAULT_WORKER_RUNTIME_VERSION
+
   initWorkerDb(workerEnv.WORKER_DB_PATH)
   runWorkerMigrations(workerEnv.WORKER_MIGRATIONS_FOLDER)
 
@@ -197,13 +203,13 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   app.route('/api/worker/orchestrator', buildOrchestratorRoutes(() => state.runtime))
   app.route('/api/worker/evolution', evolutionRoutes)
   app.route('/api/worker/events', buildEventRoutes(() => state.runtime))
-  app.route('/api/worker', buildManagementRoutes({ getState: () => state, reloadRuntime }))
+  app.route('/api/worker', buildManagementRoutes({ getState: () => state, reloadRuntime, runtimeVersion }))
 
   app.doc('/openapi.json', {
     openapi: '3.1.0',
     info: {
       title: 'AIWorker Worker API',
-      version: '0.2.0',
+      version: runtimeVersion,
       description: `Per-worker surface: channels, orchestrator, memory, skills, execution, evolution. Worker id: ${state.workerId}`,
     },
   })

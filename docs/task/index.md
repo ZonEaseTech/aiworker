@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-01 14:53
+> Updated: 2026-05-02
 
 ## Usage
 
@@ -132,7 +132,7 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-037 Fleet Audit log table scrolls the whole page**](BUG-037.md) `P2`
 - [x] [**REL-004 发布 aiworker CLI 0.4.7**](REL-004.md) `P1`
 - [x] [**REL-005 发布 aiworker CLI 0.4.8**](REL-005.md) `P1`
-- [ ] [**BUG-038 Worker info reports stale runtimeVersion after 0.4.8 upgrade**](BUG-038.md) `P2`
+- [x] [**BUG-038 Worker info reports stale runtimeVersion after 0.4.8 upgrade**](BUG-038.md) `P2`
 - [x] [**BUG-039 优化 npx / bunx CLI 启动体验**](BUG-039.md) `P1`
 - [x] [**FEAT-041 优化 CLI help 信息架构**](FEAT-041.md) `P2`
 - [x] [**REL-006 发布 aiworker CLI 0.4.9**](REL-006.md) `P1`
