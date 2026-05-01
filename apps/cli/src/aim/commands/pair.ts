@@ -1,5 +1,7 @@
-import consola from 'consola'
+import type { AimSession, WithSessionOptions } from './common'
 
+import consola from 'consola'
+import { patchAimState } from '../state'
 import { errorToExitCode, printJson, withSession } from './common'
 
 export interface PairOptions {
@@ -10,14 +12,28 @@ export interface PairOptions {
   displayName?: string
 }
 
+interface PairDeps {
+  errorToExitCode?: typeof errorToExitCode
+  patchAimState?: typeof patchAimState
+  printJson?: typeof printJson
+  withSession?: (
+    fn: (ctx: AimSession) => Promise<{ deviceToken: string, workerId: string }>,
+    opts?: WithSessionOptions,
+  ) => Promise<{ deviceToken: string, workerId: string }>
+}
+
 /**
  * `aim pair` — 把一个已经启动的 worker 通过 bootstrap token 注册到 gateway。
  * 成功后把 `deviceToken` 回写到 aim.json（operator 身份凭据），以及把新 workerId
  * 记到 defaultWorkerId，方便后续命令省略。
  */
-export async function runPair(opts: PairOptions): Promise<number> {
+export async function runPair(opts: PairOptions, deps: PairDeps = {}): Promise<number> {
+  const runWithSession = deps.withSession ?? withSession
+  const writeAimState = deps.patchAimState ?? patchAimState
+  const writeJson = deps.printJson ?? printJson
+  const mapErrorToExitCode = deps.errorToExitCode ?? errorToExitCode
   try {
-    const result = await withSession(async ({ client }) => {
+    const result = await runWithSession(async ({ client }) => {
       return await client.request('workers.pair', {
         workerBaseUrl: opts.workerUrl,
         bootstrapToken: opts.bootstrapToken,
@@ -27,19 +43,18 @@ export async function runPair(opts: PairOptions): Promise<number> {
 
     // 写回 state：deviceToken 是 gateway 颁发给 operator 的，之后所有 aim 命令都要用。
     // 同时把本次 pair 用到的 --url 持久化为 gatewayUrl，否则后续命令会回落到 default。
-    const { patchAimState } = await import('../state')
-    await patchAimState({
+    await writeAimState({
       ...(opts.url === undefined ? {} : { gatewayUrl: opts.url }),
       deviceToken: result.deviceToken,
       defaultWorkerId: result.workerId,
     })
 
     consola.success(`已配对 worker ${result.workerId}`)
-    printJson({ workerId: result.workerId })
+    writeJson({ workerId: result.workerId })
     return 0
   }
   catch (err) {
     consola.error(`pair 失败: ${err instanceof Error ? err.message : String(err)}`)
-    return errorToExitCode(err)
+    return mapErrorToExitCode(err)
   }
 }

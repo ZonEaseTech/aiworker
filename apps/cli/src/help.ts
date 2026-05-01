@@ -48,6 +48,8 @@ const COMMAND_SUMMARIES: Record<string, string> = {
   'sessions list': '列出本地 worker 会话状态',
   'sessions maintenance': '试算或执行已关闭 transcript 清理',
   'sessions show': '查看本地 worker 的单个会话状态',
+  'soul list': '列出内置 Soul 预设及其声明能力',
+  'soul show': '查看某个 Soul 的职责、边界和能力草案',
   'token rotate': '为远端 worker 轮换 deviceToken',
   'token-rotate': '为本地 worker 生成新的 bearer token',
 }
@@ -58,6 +60,8 @@ const HELP_GROUPS: readonly HelpGroup[] = [
     hint: '用于初始化、启动和直接维护当前目录或当前主机上的 worker。',
     commands: [
       'init',
+      'soul list',
+      'soul show',
       'run',
       'serve',
       'config-show',
@@ -160,6 +164,7 @@ function buildHelpSections(cli: CAC, sections: HelpSection[]): HelpSection[] {
       title: '使用引导',
       body: [
         '  新建本地 worker：aiworker init --soul developer -> aiworker serve',
+        '  查看 Soul 能力：aiworker soul list -> aiworker soul show developer',
         '  只试一次消息：aiworker run --message "..."',
         '  管理 fleet：aiworker gateway start -> aiworker pair 或 aiworker enroll list',
         '  已接入 fleet 后对话：aiworker chat <workerId> "..."',

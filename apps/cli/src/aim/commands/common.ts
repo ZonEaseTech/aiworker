@@ -29,6 +29,8 @@ export interface WithSessionOptions {
   token?: string
   /** 建立连接的超时。 */
   connectTimeoutMs?: number
+  /** 测试注入：避免命令单元测试依赖全局 module mock。 */
+  createClient?: () => AimClient
 }
 
 export async function withSession<T>(
@@ -36,7 +38,7 @@ export async function withSession<T>(
   opts: WithSessionOptions = {},
 ): Promise<T> {
   const state = await loadAimState()
-  const client = createAimClient()
+  const client = (opts.createClient ?? createAimClient)()
   try {
     await client.connect({
       url: normalizeGatewayWsUrl(opts.gatewayUrl ?? state.gatewayUrl),

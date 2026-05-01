@@ -1,5 +1,51 @@
 # AIWorker Changelog
 
+## 2026-05-01 13:08 [progress] REFACTOR-013 — CLI test gate 与 Soul preset 拆分
+
+完成 FEAT-043 后续收尾：
+
+- `apps/cli/scripts/aiworker-bin-shim.test.ts` 改用真实路径规范化 expected bundle path，兼容 macOS `/var` 与 `/private/var`。
+- `aim pair` / `aim enroll` command 测试改为依赖注入，不再通过 full-module mock 污染 `./common`，CLI 包级测试恢复通过。
+- 9 个内置 Soul preset 拆到 `apps/cli/src/soul/presets/*.ts`，`apps/cli/src/soul/presets.ts` 保持统一 registry 和外部消费入口。
+
+验证：
+
+- `bun test --timeout=30000 apps/cli/scripts/aiworker-bin-shim.test.ts apps/cli/src/aim/commands/common.test.ts apps/cli/src/aim/commands/pair.test.ts apps/cli/src/aim/commands/enroll.test.ts`
+- `bun test --timeout=30000 apps/cli/src/soul/presets.test.ts apps/cli/src/aiworker.test.ts apps/cli/src/commands/init.integration.test.ts`
+- `bun run --filter '@zonease/aiworker-cli' typecheck`
+- `bun run --filter '@zonease/aiworker-cli' test`
+- `bun run lint`
+- `git diff --check`
+
+## 2026-05-01 12:47 [progress] FEAT-043 — init 后引导与 Soul 能力矩阵
+
+优化 project-scope `aiworker init` 的首次上手体验：
+
+- `aiworker init` 成功后现在打印精简 next steps：确认 scope、审阅
+  `.aiworker/SOUL.md` / `AGENT.md`、查看 Soul 能力、跑 `run --dry-run`、
+  配好 executor 后真实 `run`，以及需要 HTTP/admin/fleet 时的下一步。
+- 内置 Soul preset 从 `init.ts` 抽到共享 registry，`init`、help、测试和
+  新 CLI 命令共用同一份能力数据。
+- 新增 `aiworker soul list` / `aiworker soul show <preset>`，展示每个 Soul
+  的职责、边界、沟通风格、风险策略、capability packs 和 toolsets。输出明确标记
+  pack/toolset 仍是 `draft` / `validation pending`，真实 validation 留给
+  PLAN-041 S3。
+- `soul list/show` 被加入非 mutating bootstrap 例外，不会为了查看能力而 mint
+  `.env` 或写入 worker state。
+- 测试矩阵覆盖所有内置 Soul preset 的 dry-run 与实际 init，校验
+  `SOUL.md`、`AGENT.md`、`policy.json`、`toolsets.json`、
+  `capability-packs.json` 与 preset 声明一致。
+
+验证：
+
+- `bun test --timeout=30000 apps/cli/src/soul/presets.test.ts apps/cli/src/aiworker.test.ts apps/cli/src/commands/init.integration.test.ts`
+- `bun run --filter '@zonease/aiworker-cli' typecheck`
+- `bun run lint`
+- `git diff --check`
+- `bun run --filter '@zonease/aiworker-cli' test` 仍有两处非本次失败：macOS
+  `/var` vs `/private/var` 路径断言，以及整包运行时的 Bun mock 隔离顺序问题
+  （`common.test.ts` 单跑通过）。
+
 ## 2026-04-30 20:34 [progress] REL-007 — 0.4.10 published
 
 Published `@zonease/aiworker-cli@0.4.10`:

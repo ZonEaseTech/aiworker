@@ -20,7 +20,10 @@ export function shouldBootstrapDotenv(argv: string[]): boolean {
     return false
 
   const command = args[0]
-  if (command === 'scope' || command === 'init' || command === 'install')
+  if (command === 'scope' || command === 'init' || command === 'install' || command === 'install systemd')
+    return false
+
+  if (command === 'soul list' || command === 'soul show')
     return false
 
   return true

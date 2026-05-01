@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { chmodSync, copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, copyFileSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
@@ -78,7 +78,7 @@ exit 7
       expect(result.exitCode).toBe(7)
       expect(result.stdout).toContain('fake bun invoked')
       expect(readFileSync(argvLog, 'utf8').trim().split('\n')).toEqual([
-        path.join(fixture.root, 'aiworker-bun.js'),
+        realpathSync(path.join(fixture.root, 'aiworker-bun.js')),
         '--version',
         '--verbose',
       ])

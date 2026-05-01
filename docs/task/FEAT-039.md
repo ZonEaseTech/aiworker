@@ -36,3 +36,4 @@
 - 2026-04-29 18:04：用户批准开工。按 BKD 编排执行，控制单 session 范围；先派发 S1 init preflight/dry-run diff 小切片。
 - 2026-04-29 18:18：S1 已通过 BKD 子任务 `urey7cyc` 合入 main，merge commit `8284aa5`。本阶段新增 `aiworker init --dry-run`、init preflight 报告、外部 agent 文件检测和 persona 文件保留回归测试。Post-merge 验证：`bun test --timeout=15000 apps/cli/src/commands/init.integration.test.ts`、`bun run --filter @zonease/aiworker-cli test`、`bun run --filter @zonease/aiworker-cli typecheck`、目标 `eslint`、committed diff check 均通过。
 - 2026-04-30 15:47：根据 init 体验反馈移除 brand-new project 对 git repo 的硬性要求；`aiworker init` 默认可在非 git cwd 创建项目级 `.aiworker/`，preflight 仅提示确认 cwd，`--global` 仍用于 host-wide worker，`--force` 保留为兼容旧脚本且不覆盖文件。
+- 2026-05-01 13:08：FEAT-043 与 REFACTOR-013 已完成：`init` 后 next steps、`aiworker soul list/show`、所有内置 Soul 能力草案测试矩阵、Soul preset 独立文件拆分，以及 CLI 包级测试 gate 修复。PLAN-041 下一步建议推进 S3 capability packs + validation。

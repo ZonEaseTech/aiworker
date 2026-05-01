@@ -1,6 +1,16 @@
-import consola from 'consola'
+import type { AimSession, WithSessionOptions } from './common'
 
+import consola from 'consola'
 import { errorToExitCode, printJson, withSession } from './common'
+
+interface EnrollDeps {
+  errorToExitCode?: typeof errorToExitCode
+  printJson?: typeof printJson
+  withSession?: (
+    fn: (ctx: AimSession) => Promise<unknown>,
+    opts?: WithSessionOptions,
+  ) => Promise<unknown>
+}
 
 /**
  * `aim enroll` —— PLAN-019 / FEAT-026 OTP-attended enrollment 三件套：
@@ -14,49 +24,58 @@ import { errorToExitCode, printJson, withSession } from './common'
  * （字母-数字，去掉了 0/O/I/1/L/U 这类易混字符）。
  */
 
-export async function runEnrollList(): Promise<number> {
+export async function runEnrollList(deps: EnrollDeps = {}): Promise<number> {
+  const runWithSession = deps.withSession ?? withSession
+  const writeJson = deps.printJson ?? printJson
+  const mapErrorToExitCode = deps.errorToExitCode ?? errorToExitCode
   try {
-    const res = await withSession(async ({ client }) => {
+    const res = await runWithSession(async ({ client }) => {
       return await client.request('enroll.list', {})
     })
-    printJson(res)
+    writeJson(res)
     return 0
   }
   catch (err) {
     consola.error(`enroll list 失败: ${err instanceof Error ? err.message : String(err)}`)
-    return errorToExitCode(err)
+    return mapErrorToExitCode(err)
   }
 }
 
-export async function runEnrollApprove(otp: string): Promise<number> {
+export async function runEnrollApprove(otp: string, deps: EnrollDeps = {}): Promise<number> {
+  const runWithSession = deps.withSession ?? withSession
+  const writeJson = deps.printJson ?? printJson
+  const mapErrorToExitCode = deps.errorToExitCode ?? errorToExitCode
   try {
-    const res = await withSession(async ({ client }) => {
+    const res = await runWithSession(async ({ client }) => {
       return await client.request('enroll.approve', { otp })
-    })
+    }) as { deviceToken: string, workerId: string }
     consola.success(`已批准 OTP ${otp}，workerId=${res.workerId}`)
-    printJson({ workerId: res.workerId, deviceToken: res.deviceToken })
+    writeJson({ workerId: res.workerId, deviceToken: res.deviceToken })
     return 0
   }
   catch (err) {
     consola.error(`enroll approve 失败: ${err instanceof Error ? err.message : String(err)}`)
-    return errorToExitCode(err)
+    return mapErrorToExitCode(err)
   }
 }
 
-export async function runEnrollReject(otp: string): Promise<number> {
+export async function runEnrollReject(otp: string, deps: EnrollDeps = {}): Promise<number> {
+  const runWithSession = deps.withSession ?? withSession
+  const writeJson = deps.printJson ?? printJson
+  const mapErrorToExitCode = deps.errorToExitCode ?? errorToExitCode
   try {
-    const res = await withSession(async ({ client }) => {
+    const res = await runWithSession(async ({ client }) => {
       return await client.request('enroll.reject', { otp })
-    })
+    }) as { rejected: boolean }
     if (res.rejected)
       consola.info(`已拒绝 OTP ${otp}`)
     else
       consola.warn(`OTP ${otp} 不存在或已过期`)
-    printJson(res)
+    writeJson(res)
     return 0
   }
   catch (err) {
     consola.error(`enroll reject 失败: ${err instanceof Error ? err.message : String(err)}`)
-    return errorToExitCode(err)
+    return mapErrorToExitCode(err)
   }
 }

@@ -21,6 +21,8 @@ import { getUngroupedHelpCommands } from './help'
 const EXPECTED_COMMANDS = [
   // worker-local（dash 形）
   'init',
+  'soul list',
+  'soul show',
   'run',
   'scope',
   'serve',
@@ -146,7 +148,9 @@ describe('aiworker cli registration', () => {
       '远端 worker 操作',
       '安装、诊断、高级维护',
       'aiworker init --soul developer -> aiworker serve',
+      'aiworker soul list -> aiworker soul show developer',
       'serve',
+      'soul list',
       'sessions list',
       'fleet list',
       'gateway start',
@@ -235,6 +239,15 @@ describe('preprocessArgv', () => {
     ])
   })
 
+  it('soul show 被折叠', () => {
+    expect(run('soul', 'show', 'developer')).toEqual([
+      '/usr/bin/bun',
+      '/path/to/aiworker.ts',
+      'soul show',
+      'developer',
+    ])
+  })
+
   it('不命中任何多词命令时原样返回', () => {
     expect(run('init')).toEqual([
       '/usr/bin/bun',
@@ -245,6 +258,49 @@ describe('preprocessArgv', () => {
 })
 
 describe('aiworker malformed argv handling', () => {
+  it('soul list shows declared capabilities without bootstrapping state', async () => {
+    const result = await runCli(['soul', 'list'])
+    try {
+      expect(result.exitCode).toBe(0)
+      expect(result.output).toContain('[aiworker soul] built-in presets')
+      expect(result.output).toContain('developer')
+      expect(result.output).toContain('packs=code, repo-maintenance, review')
+      expect(result.output).toContain('validation pending')
+      expect(existsSync(result.aiworkerHome)).toBe(false)
+    }
+    finally {
+      cleanup(result)
+    }
+  })
+
+  it('soul show renders one preset capability profile', async () => {
+    const result = await runCli(['soul', 'show', 'developer'])
+    try {
+      expect(result.exitCode).toBe(0)
+      expect(result.output).toContain('[aiworker soul] developer (Developer)')
+      expect(result.output).toContain('Responsibilities:')
+      expect(result.output).toContain('Capability packs: code, repo-maintenance, review')
+      expect(result.output).toContain('Toolsets: filesystem-read, filesystem-write, shell, git, test')
+      expect(existsSync(result.aiworkerHome)).toBe(false)
+    }
+    finally {
+      cleanup(result)
+    }
+  })
+
+  it('soul show rejects unknown presets', async () => {
+    const result = await runCli(['soul', 'show', 'nope'])
+    try {
+      expect(result.exitCode).toBe(2)
+      expect(result.output).toContain('unknown Soul preset "nope"')
+      expect(result.output).toContain('developer')
+      expect(existsSync(result.aiworkerHome)).toBe(false)
+    }
+    finally {
+      cleanup(result)
+    }
+  })
+
   it('missing command args fail without a raw CAC stack trace or bootstrap side effects', async () => {
     const result = await runCli(['fleet', 'info'])
     try {

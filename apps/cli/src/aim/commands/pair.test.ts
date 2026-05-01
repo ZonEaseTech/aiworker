@@ -1,11 +1,11 @@
-import { beforeEach, describe, expect, it, mock } from 'bun:test'
+import { beforeEach, describe, expect, it } from 'bun:test'
 
 /**
  * BUG-002 回归覆盖：pair 成功后必须把本次使用的 `--url` 持久化为 `gatewayUrl`，
  * 否则后续 aim 命令会回落到 default 的 ws://localhost:9218，造成"pair 后立刻断"的体验。
  *
- * 实现策略：mock 掉 `./common`（绕过真实 WS 连接）与 `../state`（捕获 patchAimState 入参），
- * 然后用 `await import('./pair')` 触发被测模块加载。
+ * 实现策略：通过 `runPair` 的 deps 注入 fake `withSession` 与 `patchAimState`，
+ * 避免 module mock 污染其它命令测试。
  */
 
 interface PatchPayload {
@@ -17,23 +17,20 @@ interface PatchPayload {
 const patchCalls: PatchPayload[] = []
 let withSessionResult = { deviceToken: 'dt', workerId: 'w-1' }
 
-mock.module('../state', () => ({
-  patchAimState: async (patch: PatchPayload) => {
-    patchCalls.push(patch)
-    return { gatewayUrl: 'ws://localhost:9218', deviceId: 'op-test', deviceToken: '', ...patch }
-  },
-}))
-
-mock.module('./common', () => ({
-  withSession: async () => withSessionResult,
-  printJson: () => {},
-  errorToExitCode: () => 1,
-}))
-
 beforeEach(() => {
   patchCalls.length = 0
   withSessionResult = { deviceToken: 'dt', workerId: 'w-1' }
 })
+
+const testDeps = {
+  errorToExitCode: () => 1,
+  patchAimState: async (patch: PatchPayload) => {
+    patchCalls.push(patch)
+    return { gatewayUrl: 'ws://localhost:9218', deviceId: 'op-test', deviceToken: '', ...patch }
+  },
+  printJson: () => {},
+  withSession: async () => withSessionResult,
+}
 
 describe('runPair gatewayUrl 持久化', () => {
   it('传 --url 时把 gatewayUrl 一并写入 patch', async () => {
@@ -42,7 +39,7 @@ describe('runPair gatewayUrl 持久化', () => {
       url: 'ws://127.0.0.1:20300/ws',
       workerUrl: 'http://worker.local',
       bootstrapToken: 'bt',
-    })
+    }, testDeps)
     expect(code).toBe(0)
     expect(patchCalls).toHaveLength(1)
     expect(patchCalls[0]).toEqual({
@@ -57,7 +54,7 @@ describe('runPair gatewayUrl 持久化', () => {
     const code = await runPair({
       workerUrl: 'http://worker.local',
       bootstrapToken: 'bt',
-    })
+    }, testDeps)
     expect(code).toBe(0)
     expect(patchCalls).toHaveLength(1)
     const patch = patchCalls[0]!

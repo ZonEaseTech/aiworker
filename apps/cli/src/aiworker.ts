@@ -58,6 +58,7 @@ import {
   runSessionsMaintenance,
   runSessionsShow,
 } from './commands/sessions'
+import { runSoulList, runSoulShow } from './commands/soul'
 import { runTokenRotate as runTokenRotateLocal } from './commands/token'
 import { configureCliHelp, localizeGlobalOptions } from './help'
 import { bootstrapCliDotenv } from './lib/bootstrap'
@@ -105,6 +106,14 @@ cli
   .action(async () => {
     process.exitCode = await runScope()
   })
+
+cli.command('soul list', '列出内置 Soul 预设及其声明能力').action(async () => {
+  process.exit(await runSoulList())
+})
+
+cli.command('soul show <preset>', '查看某个 Soul 预设的职责、边界、能力草案和风险策略').action(async (preset: string) => {
+  process.exit(await runSoulShow(preset))
+})
 
 cli
   .command('run', '不启动 HTTP server，直接给 orchestrator 投递一条消息')

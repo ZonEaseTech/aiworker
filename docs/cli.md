@@ -90,6 +90,27 @@ aiworker init --global
 aiworker init --force
 ```
 
+初始化完成后建议按这个顺序走：
+
+```sh
+# 1. 确认当前命令会命中刚创建的 project scope
+aiworker scope
+
+# 2. 看当前 Soul 声明了什么职责和能力草案
+aiworker soul show developer
+
+# 3. 只验证 bootstrap / DB / config 能构建，不真正投递消息
+aiworker run --message "hello" --dry-run
+
+# 4. 配好 executor secret / model 后再做真实一轮
+aiworker run --message "hello"
+
+# 5. 需要 HTTP API 或 worker admin UI 时再启动服务
+aiworker serve --port 9217
+```
+
+注意：`policy.json`、`toolsets.json`、`capability-packs.json` 当前是初始化草案，pack / toolset 的真实启用与 validation 会在后续 capability validation 切片中完成。不要把 `validation: pending` 误解成外部 MCP / Skill 已经可用。
+
 ### `aiworker scope`
 
 诊断命令（零副作用）。打印当前 cwd 命中的 aiworker scope（user / project / explicit）+ home 路径 + layout 各文件存在性。等同 `git config --list --show-origin` 的角色，运维在跑数据修改命令前先查清楚自己在哪个 scope。
@@ -110,6 +131,35 @@ aiworker scope
 2. `AIWORKER_HOME` env（systemd / docker 通常显式设）
 3. `<cwd>/.aiworker/`（向上搜，遇 git boundary 即停止——不跨 monorepo / repo 边界）
 4. `~/.aiworker/`（user 级 fallback）
+
+### `aiworker soul list` / `aiworker soul show <preset>`
+
+查看内置 Soul preset 的声明能力。它们是 `aiworker init --soul <preset>` 生成
+`SOUL.md`、`AGENT.md`、`policy.json`、`toolsets.json`、`capability-packs.json`
+的同一份数据源。
+
+```sh
+aiworker soul list
+# [aiworker soul] built-in presets
+#   developer          Developer — 开发、调试、代码审查、仓库维护。 packs=code, repo-maintenance, review toolsets=filesystem-read, filesystem-write, shell, git, test
+#   project-manager    Project Manager — 计划、拆解、进度、风险、跨人协作。 packs=planning, coordination, reporting toolsets=filesystem-read, task-tracking, calendar-draft
+#   ...
+#   customize          Custom — 通过 `aiworker init --soul customize` 交互生成职责、边界和能力草案。
+
+aiworker soul show developer
+# [aiworker soul] developer (Developer)
+# Responsibilities:
+#   - 理解代码库并实现小步可验证改动
+# ...
+# Capability packs: code, repo-maintenance, review (draft, validation pending)
+# Toolsets: filesystem-read, filesystem-write, shell, git, test (draft)
+```
+
+`customize` 是交互生成路径，不是内置静态模板：
+
+```sh
+aiworker init --soul customize
+```
 
 ### `aiworker run --message <text> [--chat-id <id>] [--dry-run] [--timeout-ms <n>]`
 
