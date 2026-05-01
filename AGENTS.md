@@ -44,6 +44,14 @@ AIWorker 是自托管 worker/fleet runtime。Gateway 是 WebSocket 控制面，�
 - 前端：React 19、Vite 8、TanStack Router/Query、Zustand、Base UI/shadcn/ui、Tailwind CSS v4。
 - Runtime：Brain provider 当前以 filesystem 为权威；Executor 支持 `http`、`claude-code`、`codex`、`acp`、`cursor`、`mcp` 等 engine。扩展点见 [`docs/executor-engines.md`](docs/executor-engines.md) 与 [`docs/architecture.md`](docs/architecture.md)。
 
+## 能力边界
+
+- Brain capability 与 Executor capability 必须隔离设计、隔离持久化、隔离同步；不要用 Brain 的 memory/persona/prompt skill/capability-pack 机制去配置 executor 原生能力。
+- Executor capability 指 engine 自身运行时可用的能力，例如 Claude/Codex/Cursor 的 MCP server、engine-native skill/plugin、sandbox、approval 或 project-scope CLI 配置。AIWorker 只做声明、校验、dry-run、sync/projection；具体落地优先通过 engine 官方 CLI 或官方配置格式完成。
+- Brain capability 指 worker 自身的 filesystem brain、长期记忆、persona、prompt skill 与未来学习沉淀；这层如何选择、注入、演化另行设计，不能成为 executor MCP/skill/plugin 配置的前置条件。
+- CLI、API、DB schema、文档里出现 `mcp`、`skill`、`plugin` 等重名概念时必须显式加限定词，例如 `executor mcp`、`engine plugin`、`brain skill`，避免跨层复用语义。
+- Executor capability 涉及 secret 时只能存 ref，经 vault/hydration 在投影或运行时注入；不要把明文 secret 写入 engine project config、`.aiworker/*.json` 或 worker configJson。
+
 ## 架构不变量
 
 - `fleet.db` 只存 `registered_workers` 和 `audit_events` 等 fleet 指针/审计数据；worker 的 config、secrets、conversations、messages 必须留在 `worker.db`。
