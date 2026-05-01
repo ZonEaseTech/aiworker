@@ -53,6 +53,7 @@ const PROJECT_TEMPLATE_PATHS = [
   '.aiworker/policy.json',
   '.aiworker/toolsets.json',
   '.aiworker/capability-packs.json',
+  '.aiworker/executor-capabilities.json',
   '.aiworker/.gitignore',
   '.aiworker/skills/',
   '.aiworker/memories/',
@@ -269,6 +270,10 @@ function buildProjectAiworkerSeed(soul: SelectedSoul): ProjectAiworkerSeed {
     status: 'draft',
     soul: soul.id,
     defaultToolsets: soul.toolsets,
+    validation: {
+      status: 'pending',
+      issues: [],
+    },
   }
   const capabilityPacks = {
     schemaVersion: 1,
@@ -277,7 +282,10 @@ function buildProjectAiworkerSeed(soul: SelectedSoul): ProjectAiworkerSeed {
     packs: soul.packs.map(pack => ({
       id: pack,
       status: 'draft',
-      validation: 'pending',
+      validation: {
+        status: 'pending',
+        issues: [],
+      },
     })),
   }
 
@@ -401,10 +409,11 @@ function printProjectNextSteps(projectRoot: string, soul?: SelectedSoul): void {
     '[aiworker init] next steps',
     `  1. Confirm scope: \`aiworker scope\` (project root: ${projectRoot}).`,
     soulLine,
-    '  3. Smoke bootstrap: `aiworker run --message "hello" --dry-run`.',
-    '  4. After configuring executor secrets/model: `aiworker run --message "hello"`.',
-    '  5. Need HTTP/admin UI: `aiworker serve --port 9217`.',
-    '  6. Need fleet control: start/connect a gateway, then use self-enroll or OTP from `aiworker serve`.',
+    '  3. Validate capability drafts: `aiworker doctor`.',
+    '  4. Smoke bootstrap: `aiworker run --message "hello" --dry-run`.',
+    '  5. After configuring executor secrets/model: `aiworker run --message "hello"`.',
+    '  6. Need HTTP/admin UI: `aiworker serve --port 9217`.',
+    '  7. Need fleet control: start/connect a gateway, then use self-enroll or OTP from `aiworker serve`.',
   ].join('\n'))
   process.stdout.write('\n')
 }

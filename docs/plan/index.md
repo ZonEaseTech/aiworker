@@ -83,3 +83,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-052 发布 aiworker CLI 0.4.10**](PLAN-052.md) `2026-04-30`
 - [x] [**PLAN-053 优化 init 后引导与 Soul 能力测试流程**](PLAN-053.md) `2026-05-01`
 - [x] [**PLAN-054 稳定 CLI test gate 并拆分 Soul preset 模块**](PLAN-054.md) `2026-05-01`
+- [x] [**PLAN-055 Executor capability projection commands**](PLAN-055.md) `2026-05-01`

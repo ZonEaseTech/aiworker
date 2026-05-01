@@ -21,6 +21,10 @@ import { getUngroupedHelpCommands } from './help'
 const EXPECTED_COMMANDS = [
   // worker-local（dash 形）
   'init',
+  'doctor',
+  'executor mcp add',
+  'executor mcp sync',
+  'executor doctor',
   'soul list',
   'soul show',
   'run',
@@ -149,6 +153,8 @@ describe('aiworker cli registration', () => {
       '安装、诊断、高级维护',
       'aiworker init --soul developer -> aiworker serve',
       'aiworker soul list -> aiworker soul show developer',
+      'executor mcp add',
+      'doctor',
       'serve',
       'soul list',
       'sessions list',
@@ -248,6 +254,17 @@ describe('preprocessArgv', () => {
     ])
   })
 
+  it('executor mcp add 被折叠', () => {
+    expect(run('executor', 'mcp', 'add', 'context7', '--engine', 'codex')).toEqual([
+      '/usr/bin/bun',
+      '/path/to/aiworker.ts',
+      'executor mcp add',
+      'context7',
+      '--engine',
+      'codex',
+    ])
+  })
+
   it('不命中任何多词命令时原样返回', () => {
     expect(run('init')).toEqual([
       '/usr/bin/bun',
@@ -265,7 +282,7 @@ describe('aiworker malformed argv handling', () => {
       expect(result.output).toContain('[aiworker soul] built-in presets')
       expect(result.output).toContain('developer')
       expect(result.output).toContain('packs=code, repo-maintenance, review')
-      expect(result.output).toContain('validation pending')
+      expect(result.output).toContain('aiworker doctor')
       expect(existsSync(result.aiworkerHome)).toBe(false)
     }
     finally {
@@ -281,6 +298,7 @@ describe('aiworker malformed argv handling', () => {
       expect(result.output).toContain('Responsibilities:')
       expect(result.output).toContain('Capability packs: code, repo-maintenance, review')
       expect(result.output).toContain('Toolsets: filesystem-read, filesystem-write, shell, git, test')
+      expect(result.output).toContain('project validation via aiworker doctor')
       expect(existsSync(result.aiworkerHome)).toBe(false)
     }
     finally {

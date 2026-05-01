@@ -1,5 +1,46 @@
 # AIWorker Changelog
 
+## 2026-05-01 14:05 [progress] FEAT-044 / PLAN-055 — executor capability projection
+
+完成 executor 原生能力快速配置 MVP，并把边界从 PLAN-041 S3 的 project capability 草案中拆出来：
+
+- 新增 `.aiworker/executor-capabilities.json`，只记录 executor-native projection 期望状态；`init` / fs-layout 会种空 manifest。
+- 新增 shared executor capability schema，当前支持 `codex` / `claude-code` 的 project-scope MCP descriptor。
+- 新增 `aiworker executor mcp add`：写入 executor manifest，不修改 `.aiworker/mcp.json` 或 brain skill 目录。
+- 新增 `aiworker executor mcp sync`：dry-run 输出将执行的 engine 官方 CLI 命令；非 dry-run 调用 `codex` / `claude`，cwd 固定为 project root，并过滤 AIWorker / worker / internal secret env。
+- 新增 `aiworker executor doctor`：验证 manifest、engine CLI availability、descriptor 完整性与 secret-like 字段。
+- Secret-like 字段只能用 `secretRef`；MVP 不做隐式 hydrate，非 dry-run projection 遇到 secretRef 会 fail clearly，避免把占位符或明文写进 engine project config。
+- 文档更新：`aiworker doctor` 明确只管 brain/runtime capability 草案；executor MCP/skill/plugin 走 `aiworker executor ...` 与 `executor-capabilities.json`。
+
+验证：
+
+- `bun test packages/shared/src/executor-capabilities.test.ts apps/cli/src/commands/executor.test.ts apps/cli/src/aiworker.test.ts apps/cli/src/commands/init.integration.test.ts packages/fs-layout/src/index.test.ts`
+- `bun run --filter '@zonease/aiworker-cli' typecheck`
+- `bun run --filter '@zonease/aiworker-shared' typecheck`
+- `bun run lint`
+- `git diff --check`
+
+## 2026-05-01 13:34 [progress] FEAT-039 / PLAN-041 S3 — capability 静态 validation
+
+完成 PLAN-041 S3 的最小可交付切片：
+
+- 新增共享 capability manifest schema，覆盖 capability packs、policy、toolsets、MCP descriptor、Skill metadata 和 validation issue/status。
+- 新增 CLI 内置 capability pack / toolset catalog，并校验所有内置 Soul preset 引用的 pack/toolset 都已登记。
+- 新增 `aiworker doctor` 零副作用诊断命令，静态验证 `.aiworker/policy.json`、`toolsets.json`、`capability-packs.json`、`mcp.json` 和 `skills/` metadata。
+- MCP 当前只做 descriptor 与明文 secret 静态检查；不启动 server，不执行 `listTools`。
+- `aiworker init` 现在生成结构化 validation 草案并提示下一步跑 `aiworker doctor`；`aiworker soul list/show` 也指向 project doctor 获取 validation 状态。
+
+验证：
+
+- `bun test packages/shared/src/capabilities.test.ts apps/cli/src/capabilities/validation.test.ts apps/cli/src/commands/doctor.test.ts apps/cli/src/soul/presets.test.ts apps/cli/src/aiworker.test.ts apps/cli/src/commands/init.integration.test.ts`
+- `bun run typecheck`
+- `bun run --filter '@zonease/aiworker-cli' test`
+- `bun run --filter '@zonease/aiworker-shared' test`
+- `bun run lint`
+- `bun run --filter '@zonease/aiworker-web' build`
+- `bun run --filter '@zonease/aiworker-cli' build:bundle`
+- `git diff --check`
+
 ## 2026-05-01 13:08 [progress] REFACTOR-013 — CLI test gate 与 Soul preset 拆分
 
 完成 FEAT-043 后续收尾：

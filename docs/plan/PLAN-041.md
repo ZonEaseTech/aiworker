@@ -11,6 +11,7 @@
 2. **当前模板仍是 stub**：`ensureProjectAiworker()` 只 seed 通用占位内容；没有 Soul 模板、能力包、外部 agent adapter、MCP/Skill validation 或 wizard。
 3. **PLAN-039 定义 runtime 决策管线**：Intent Router、Capability Registry、Context Manager、Quality Gate、Learning Loop 解决 worker “运行时怎么做”。本计划解决用户“怎么快速且安全地配置出这样的 worker”。
 4. **防污染是核心约束**：初始化、Soul 更新、自我迭代都可能改写长期上下文。如果没有 diff、approval、scope 和 rollback，低质量记忆或约束会削弱 worker 能力。
+5. **边界更新**：本计划中的 capability packs / `.aiworker/mcp.json` / `.aiworker/skills/` 属于 brain/runtime project capability 草案；executor 原生 MCP/skill/plugin 配置不复用这些文件，独立由 FEAT-044 / PLAN-055 的 `.aiworker/executor-capabilities.json` 投影。
 
 ## 目标效果
 
@@ -259,6 +260,8 @@ aiworker soul pin developer@1.2.0
 用户已批准开工。先实施 S1（Init preflight + dry-run diff），因为它不会改变运行时行为，却能先把“默认不覆盖、所有变更可预览”的安全基线立住。执行通过 BKD 子任务分片推进，避免单 session 过大。
 
 - 2026-05-01 13:08：S2 的后续可见性与测试收口已完成：init 后 next steps、`aiworker soul list/show`、全内置 Soul init 矩阵、Soul preset 独立文件拆分、CLI test gate 恢复通过。下一 session 可直接调查并推进 S3（Capability packs + validation）。
+- 2026-05-01 13:22：S3 已批准实施。本切片只做静态 schema/validation 与 doctor 展示，不实现 mutating `skill add` / `mcp add` / `toolset enable`，也不启动 MCP server 或接入 runtime enforcement。
+- 2026-05-01 13:34：S3 最小切片完成。交付共享 manifest/schema、CLI 静态 validation、`aiworker doctor`、init/soul validation 状态呈现和聚焦测试；MCP 仍只做 descriptor/secretRef 静态检查，真实 server probe 和 mutating capability commands 留给后续切片。
 
 2026-04-29 18:18：S1 已通过 BKD 子任务 `urey7cyc` 合入 main，merge commit `8284aa5`。后续仍按分片推进，下一阶段才考虑 S2 Soul templates registry skeleton，不在 S1 session 里扩展。
 

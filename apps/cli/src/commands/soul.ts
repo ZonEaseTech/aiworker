@@ -22,7 +22,7 @@ function printList(): void {
   process.stdout.write(
     `  ${CUSTOMIZE_SOUL_ID.padEnd(width)}  Custom — 通过 \`aiworker init --soul customize\` 交互生成职责、边界和能力草案。\n`,
   )
-  process.stdout.write('\nCapability packs and toolsets are initialized as draft, validation pending until PLAN-041 S3 enables real validation.\n')
+  process.stdout.write('\nCapability packs and toolsets are initialized as draft. Run `aiworker doctor` inside a project for static validation status.\n')
 }
 
 export async function runSoulList(): Promise<number> {
@@ -63,8 +63,8 @@ export async function runSoulShow(id: string): Promise<number> {
     `Risk policy: ${preset.riskPolicy}`,
     `Out-of-scope strategy: ${preset.outOfScope}`,
     '',
-    `Capability packs: ${joinValues(preset.packs)} (draft, validation pending)`,
-    `Toolsets: ${joinValues(preset.toolsets)} (draft)`,
+    `Capability packs: ${joinValues(preset.packs)} (draft; project validation via aiworker doctor)`,
+    `Toolsets: ${joinValues(preset.toolsets)} (draft; project validation via aiworker doctor)`,
   ].join('\n'))
   process.stdout.write('\n')
   return 0

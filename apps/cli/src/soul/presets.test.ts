@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 
+import { isBuiltinCapabilityPack, isBuiltinToolset } from '../capabilities/catalog'
 import {
   BUILTIN_SOUL_PRESETS,
   CUSTOMIZE_SOUL_ID,
@@ -30,6 +31,10 @@ describe('Soul preset registry', () => {
       expect(preset.communicationStyle.length).toBeGreaterThan(0)
       expect(preset.riskPolicy.length).toBeGreaterThan(0)
       expect(preset.outOfScope.length).toBeGreaterThan(0)
+      for (const pack of preset.packs)
+        expect(isBuiltinCapabilityPack(pack)).toBe(true)
+      for (const toolset of preset.toolsets)
+        expect(isBuiltinToolset(toolset)).toBe(true)
     }
   })
 

@@ -22,8 +22,9 @@ import process from 'node:process'
  *
  *   <project>/.aiworker/
  *     AGENT.md / SOUL.md / USER.md / MEMORY.md / ROLLUP.md   # team-shared persona
- *     policy.json / toolsets.json / capability-packs.json     # team-shared drafts
- *     skills/  memories/  mcp.json                            # team-shared
+ *     policy.json / toolsets.json / capability-packs.json     # brain/runtime drafts
+ *     executor-capabilities.json                              # executor-native projection state
+ *     skills/  memories/  mcp.json                            # brain/runtime descriptors
  *     local/                                                  # gitignored
  *       worker.db / identity.json / .env / workspaces/
  */
@@ -256,6 +257,7 @@ async function seedIfAbsent(filePath: string, content: string): Promise<void> {
 export interface ProjectAiworkerSeed {
   agentMd?: string
   capabilityPacksJson?: string
+  executorCapabilitiesJson?: string
   mcpJson?: string
   memoryMd?: string
   policyJson?: string
@@ -286,11 +288,19 @@ const DEFAULT_PROJECT_AIWORKER_SEED: Required<ProjectAiworkerSeed> = {
     schemaVersion: 1,
     status: 'draft',
     defaultToolsets: [],
+    validation: {
+      status: 'pending',
+      issues: [],
+    },
   }, null, 2)}\n`,
   capabilityPacksJson: `${JSON.stringify({
     schemaVersion: 1,
     status: 'draft',
     packs: [],
+  }, null, 2)}\n`,
+  executorCapabilitiesJson: `${JSON.stringify({
+    schemaVersion: 1,
+    engines: {},
   }, null, 2)}\n`,
 }
 
@@ -342,6 +352,7 @@ export async function ensureWorkerHome(workerId: string): Promise<void> {
  * Materialise `<projectRoot>/.aiworker/` with the project-scope template:
  *   - persona docs (AGENT.md / SOUL.md / USER.md / MEMORY.md / ROLLUP.md)
  *   - governance drafts (policy.json / toolsets.json / capability-packs.json)
+ *   - executor-capabilities.json placeholder for engine-native projection
  *   - empty skills/ memories/ dirs
  *   - mcp.json placeholder
  *   - local/ (chmod 0700) with `* + !.gitignore` to silently ignore everything
@@ -396,6 +407,10 @@ export async function ensureProjectAiworker(projectRoot: string, seed: ProjectAi
   await seedIfAbsent(
     path.join(aiworker, 'capability-packs.json'),
     mergedSeed.capabilityPacksJson,
+  )
+  await seedIfAbsent(
+    path.join(aiworker, 'executor-capabilities.json'),
+    mergedSeed.executorCapabilitiesJson,
   )
   await seedIfAbsent(
     path.join(aiworker, '.gitignore'),

@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-01 13:08
+> Updated: 2026-05-01 14:05
 
 ## Usage
 
@@ -142,3 +142,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REL-007 发布 aiworker CLI 0.4.10**](REL-007.md) `P1`
 - [x] [**FEAT-043 优化 init 后引导与 Soul 能力测试流程**](FEAT-043.md) `P1`
 - [x] [**REFACTOR-013 稳定 CLI test gate 并拆分 Soul preset 模块**](REFACTOR-013.md) `P1`
+- [x] [**FEAT-044 Executor capability projection commands**](FEAT-044.md) `P1`

@@ -8,7 +8,7 @@ import { bootstrapDotenv } from './dotenv-bootstrap'
 // `AIWORKER_HOME`. That env var means an operator explicitly pinned a home.
 // Project scope remains cwd-detected by fs-layout for later calls.
 //
-// Diagnostic/setup commands opt out. `scope` / help / version must be
+// Diagnostic/setup commands opt out. `scope` / `doctor` / help / version must be
 // non-mutating, `init` chooses home after applying its own mode flags, and
 // `install systemd` only renders installer artifacts.
 export function shouldBootstrapDotenv(argv: string[]): boolean {
@@ -19,8 +19,11 @@ export function shouldBootstrapDotenv(argv: string[]): boolean {
   if (args.some(arg => arg === '--help' || arg === '-h' || arg === '--version' || arg === '-v'))
     return false
 
-  const command = args[0]
-  if (command === 'scope' || command === 'init' || command === 'install' || command === 'install systemd')
+  const command = args[0] ?? ''
+  if (command === 'scope' || command === 'doctor' || command === 'init' || command === 'install' || command === 'install systemd')
+    return false
+
+  if (command.startsWith('executor '))
     return false
 
   if (command === 'soul list' || command === 'soul show')

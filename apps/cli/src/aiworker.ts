@@ -44,6 +44,12 @@ import {
   runConfigSet as runConfigSetLocal,
   runConfigShow,
 } from './commands/config'
+import { runDoctor } from './commands/doctor'
+import {
+  runExecutorDoctor,
+  runExecutorMcpAdd,
+  runExecutorMcpSync,
+} from './commands/executor'
 import { runInit } from './commands/init'
 import { runRun } from './commands/run'
 import {
@@ -105,6 +111,41 @@ cli
   .command('scope', '打印当前 aiworker scope（user/project/explicit）和关键布局文件状态')
   .action(async () => {
     process.exitCode = await runScope()
+  })
+
+cli.command('doctor', '静态验证当前 `.aiworker/` capability manifests、Skill metadata 和 MCP descriptors').action(async () => {
+  process.exit(await runDoctor())
+})
+
+cli
+  .command('executor mcp add <name>', '声明一个 executor 原生 MCP server，并写入 `.aiworker/executor-capabilities.json`')
+  .option('--engine <engine>', '目标 engine：codex 或 claude-code')
+  .option('--scope <scope>', 'MCP 配置 scope；当前仅支持 project')
+  .option('--transport <transport>', 'MCP transport：stdio / streamable-http / sse；未指定时按 --url 推断')
+  .option('--url <url>', 'HTTP/SSE MCP server URL')
+  .option('--command <command>', 'stdio MCP server command')
+  .option('--arg <value>', 'stdio command 参数；可重复')
+  .option('--env <key=value>', '投影到 engine CLI 的 env；secret 用 key=secretRef:<ref>；可重复')
+  .option('--header <key=value>', '投影到 engine CLI 的 header；secret 用 key=secretRef:<ref>；可重复')
+  .option('--description <text>', 'MCP server 描述')
+  .option('--dry-run', '只预览 manifest 变更，不写文件')
+  .action(async (name: string, opts: Parameters<typeof runExecutorMcpAdd>[1]) => {
+    process.exit(await runExecutorMcpAdd(name, opts))
+  })
+
+cli
+  .command('executor mcp sync', '把 `.aiworker/executor-capabilities.json` 投影到 engine 官方 project-scope MCP 配置')
+  .option('--engine <engine>', '目标 engine：codex 或 claude-code')
+  .option('--dry-run', '只打印将执行的 engine CLI 命令')
+  .action(async (opts: Parameters<typeof runExecutorMcpSync>[0]) => {
+    process.exit(await runExecutorMcpSync(opts))
+  })
+
+cli
+  .command('executor doctor', '验证 executor capability manifest、engine CLI availability 和安全约束')
+  .option('--engine <engine>', '只检查一个 engine：codex 或 claude-code')
+  .action(async (opts: Parameters<typeof runExecutorDoctor>[0]) => {
+    process.exit(await runExecutorDoctor(opts))
   })
 
 cli.command('soul list', '列出内置 Soul 预设及其声明能力').action(async () => {

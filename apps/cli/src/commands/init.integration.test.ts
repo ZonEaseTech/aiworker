@@ -107,6 +107,7 @@ describe('aiworker init / scope project placement', () => {
       expect(result.output).toContain('aiworker scope')
       expect(result.output).toContain('.aiworker/SOUL.md')
       expect(result.output).toContain('aiworker soul show developer')
+      expect(result.output).toContain('aiworker doctor')
       expect(result.output).toContain('aiworker run --message "hello" --dry-run')
       expect(result.output).toContain('aiworker serve --port 9217')
       expect(await exists(path.join(project, '.aiworker', 'AGENT.md'))).toBe(true)
@@ -114,6 +115,7 @@ describe('aiworker init / scope project placement', () => {
       expect(await exists(path.join(project, '.aiworker', 'policy.json'))).toBe(true)
       expect(await exists(path.join(project, '.aiworker', 'toolsets.json'))).toBe(true)
       expect(await exists(path.join(project, '.aiworker', 'capability-packs.json'))).toBe(true)
+      expect(await exists(path.join(project, '.aiworker', 'executor-capabilities.json'))).toBe(true)
       expect(await exists(path.join(project, '.aiworker', 'local', '.env'))).toBe(true)
       expect(await exists(path.join(project, '.aiworker', 'local', 'worker.db'))).toBe(true)
       expect(await exists(path.join(project, '.aiworker', 'local', 'workers'))).toBe(false)
@@ -158,7 +160,7 @@ describe('aiworker init / scope project placement', () => {
           soul: string
         }
         const packs = JSON.parse(await readFile(path.join(aiworker, 'capability-packs.json'), 'utf8')) as {
-          packs: Array<{ id: string, status: string, validation: string }>
+          packs: Array<{ id: string, status: string, validation: { status: string } }>
           soul: string
         }
 
@@ -169,7 +171,7 @@ describe('aiworker init / scope project placement', () => {
         expect(toolsets.defaultToolsets).toEqual([...preset.toolsets])
         expect(packs.soul).toBe(preset.id)
         expect(packs.packs.map(pack => pack.id)).toEqual([...preset.packs])
-        expect(packs.packs.every(pack => pack.status === 'draft' && pack.validation === 'pending')).toBe(true)
+        expect(packs.packs.every(pack => pack.status === 'draft' && pack.validation.status === 'pending')).toBe(true)
       }
     })
   })
@@ -193,6 +195,7 @@ describe('aiworker init / scope project placement', () => {
       expect(result.output).toContain('.aiworker/policy.json')
       expect(result.output).toContain('.aiworker/toolsets.json')
       expect(result.output).toContain('.aiworker/capability-packs.json')
+      expect(result.output).toContain('.aiworker/executor-capabilities.json')
       expect(result.output).toContain('.aiworker/local/worker.db (worker bootstrap)')
       expect(after).toEqual(before)
       expect(await exists(path.join(project, '.aiworker'))).toBe(false)
