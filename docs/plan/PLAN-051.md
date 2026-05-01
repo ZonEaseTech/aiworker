@@ -1,12 +1,14 @@
 # PLAN-051 Orchestrator 控制执行器与任务执行器解耦
 
-- **status**: draft
+- **status**: completed
 - **createdAt**: 2026-04-30 20:05
+- **approvedAt**: 2026-05-02
+- **completedAt**: 2026-05-02
 - **relatedTask**: FEAT-042
 
 ## 当前保留原因 / Current Scope
 
-本 plan 仍保留为 draft。它不是旧 capability projection 需求，而是 Orchestrator control-plane 与 task executor 的边界拆分。实现前仍需重新审查 config schema、secret hydration、diagnostics 和测试范围。
+本 plan 已完成。它不是旧 capability projection 需求，而是 Orchestrator control-plane 与 task executor 的边界拆分，最终实现覆盖 config schema、secret hydration、worker info diagnostics 和 focused tests。
 
 ## 现状
 
@@ -91,3 +93,13 @@ Control executor 默认应偏保守：
 - 不重写 FEAT-038 的 intent / quality 语义。
 - 不改变 `.aiworker` brain 文件加载规则。
 - 不实现外部 agent adapter 投影；该范围仍归 FEAT-039 / PLAN-041。
+
+## 完成记录
+
+- `WorkerConfig.orchestrator.decisionPipeline.executor` 支持独立 control executor。
+- `resolveControlExecutor()` 在未配置时复用 task executor，显式配置时独立构造 control executor。
+- continuation classifier、LLM intent classifier、quality gate、repair、compaction summary 和 memory flush 均走 control executor。
+- 显式 control calls 不传 task workspace、tool list 或 engine binding；默认 `temperature=0`。
+- secret paths 覆盖 control executor 及 fallback chain。
+- Worker info 返回 `controlExecutor` 诊断。
+- Focused tests 覆盖默认 fallback、显式 control executor、schema、secrets 和 diagnostics。

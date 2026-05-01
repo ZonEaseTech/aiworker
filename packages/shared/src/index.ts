@@ -133,6 +133,7 @@ export type {
   WorkerInfo,
   WorkerInfoBrain,
   WorkerInfoChannel,
+  WorkerInfoControlExecutor,
   WorkerInfoExecutor,
   WorkerSkillBinding,
   WorkerStatus,

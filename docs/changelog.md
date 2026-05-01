@@ -1,5 +1,25 @@
 # AIWorker Changelog
 
+## 2026-05-02 02:44 [progress] FEAT-042 / PLAN-051 — Orchestrator control executor
+
+完成 Orchestrator control-plane executor 与 task executor 的解耦：
+
+- Worker config 新增 `orchestrator.decisionPipeline.executor`，未配置时继续复用主 `config.executor`，保持 FEAT-038 行为兼容。
+- 新增 control executor resolver；LLM intent classifier、conversation continuation classifier、quality gate evaluator、quality repair、compaction summary 和 pre-compaction memory flush 都改走 control executor。
+- 显式 control executor 使用独立 model / timeout / fallback 配置；suppressed control run 默认 `temperature=0`，不传 task workspace、tool list 或 engine native session binding。
+- secret enumeration / redaction / hydration 覆盖 control executor 及其 fallback chain。
+- `GET /api/worker/info` 增加 `controlExecutor` 诊断，标识 engine、model、status 与是否复用 task executor。
+
+验证：
+
+- `bun test packages/core/src/worker/management/config.test.ts packages/core/src/worker/management/info.test.ts packages/core/src/worker/orchestrator/service.history.test.ts`
+- `bun test packages/core/src/worker/runtime.test.ts -t "control executor"`
+- `bun run --filter '@zonease/aiworker-shared' typecheck`
+- `bun run --filter '@zonease/aiworker-core' typecheck`
+- `bun run --filter '@zonease/aiworker-api' typecheck`
+- focused ESLint on touched core/shared files
+- `git diff --check`
+
 ## 2026-05-02 02:01 [bug] BUG-006 / PLAN-061 — reloadRuntime 串行化
 
 修复 worker hot-reload 的并发 swap race：

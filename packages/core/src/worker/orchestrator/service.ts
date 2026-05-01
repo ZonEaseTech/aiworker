@@ -6,6 +6,7 @@ import type {
   ConversationState,
   EngineSessionBinding,
   Envelope,
+  ExecutorConfig,
   ExecutorProvider,
   OrchestratorCompactionConfig,
   ToolCall,
@@ -43,6 +44,9 @@ interface OrchestratorDeps {
   config: WorkerConfig
   brain: BrainProvider
   executor: ExecutorProvider
+  controlExecutor?: ExecutorProvider
+  controlExecutorConfig?: ExecutorConfig
+  controlExecutorReusesTaskExecutor?: boolean
   bus: WorkerEventBus
   workerId: string
   workspaces: WorkspaceManager
@@ -140,6 +144,24 @@ export class Orchestrator {
       brain: deps.brain,
       workerId: deps.workerId,
     })
+  }
+
+  private controlExecutor(): ExecutorProvider {
+    return this.deps.controlExecutor ?? this.deps.executor
+  }
+
+  private controlExecutorConfig(): ExecutorConfig {
+    return this.deps.controlExecutorConfig ?? this.deps.config.executor
+  }
+
+  private controlExecutorReusesTaskExecutor(): boolean {
+    return this.deps.controlExecutorReusesTaskExecutor ?? true
+  }
+
+  private controlWorkspacePath(workspace: WorkspaceHandle | null): string | undefined {
+    if (!this.controlExecutorReusesTaskExecutor())
+      return undefined
+    return workspace?.path
   }
 
   /** Entry point for inbound envelopes from any channel. */
@@ -318,15 +340,15 @@ export class Orchestrator {
         conversationId: activeConversation.id,
       },
       evaluator: gateConfig?.evaluator ?? 'heuristic',
-      executor: this.deps.executor,
+      executor: this.controlExecutor(),
       intentDecision,
       mode: gateConfig?.mode ?? 'observe',
-      model,
+      model: resolveExecutorModel(this.controlExecutorConfig()),
       notifyActivity,
       requestText: envelope.text,
       signal,
       threshold: gateConfig?.threshold,
-      workspacePath: workspace?.path,
+      workspacePath: this.controlWorkspacePath(workspace),
     })
     this.deps.bus.emit('orchestrator.quality_gate', qualityGate)
     if (qualityGate.action === 'repair' && gateConfig?.mode === 'retry') {
@@ -449,11 +471,11 @@ export class Orchestrator {
       return classifyIntentWithExecutor({
         classification,
         context: input.decisionContext,
-        executor: this.deps.executor,
-        model: input.model,
+        executor: this.controlExecutor(),
+        model: resolveExecutorModel(this.controlExecutorConfig()),
         notifyActivity: input.notifyActivity,
         signal: input.signal,
-        workspacePath: input.workspace?.path,
+        workspacePath: this.controlWorkspacePath(input.workspace),
       })
     }
     return classifyIntentHeuristic(input.decisionContext, classification)
@@ -524,14 +546,14 @@ export class Orchestrator {
 
     const existingWorkspace = await this.provisionWorkspace(existing.id)
     const recent = await loadRecentMessages(existing.id)
-    const model = resolveExecutorModel(this.deps.config.executor)
+    const model = resolveExecutorModel(this.controlExecutorConfig())
     const decision = await classifyContinuation(
-      this.deps.executor,
+      this.controlExecutor(),
       model,
       existing.summary ?? null,
       recent,
       envelope.text,
-      existingWorkspace?.path,
+      this.controlWorkspacePath(existingWorkspace),
     )
     this.deps.bus.emit('conversation.classifier', { conversationId: existing.id, decision })
     if (decision.continue)
@@ -848,12 +870,13 @@ export class Orchestrator {
     signal: AbortSignal
     notifyActivity: () => void
   }): Promise<string> {
-    const model = resolveExecutorModel(this.deps.config.executor)
+    const model = resolveExecutorModel(this.controlExecutorConfig())
+    const workspacePath = this.controlWorkspacePath(input.workspace)
     let text = ''
-    for await (const event of this.deps.executor.run({
+    for await (const event of this.controlExecutor().run({
       messages: input.messages,
       ...(model ? { model } : {}),
-      ...(input.workspace ? { workspacePath: input.workspace.path } : {}),
+      ...(workspacePath ? { workspacePath } : {}),
       signal: input.signal,
       temperature: 0,
     })) {

@@ -115,6 +115,7 @@ AIWorker 是一个**自托管 Agent Runtime**，由两类 provider 组合而成�
 
 - Gateway 只负责帧转发与 fleet 级控制方法（`workers.*`、`token.rotate`、`system.presence`）。
 - Worker 持有 orchestrator；node 模式通过 `@zonease/aiworker-core` 的 `startGatewayNode` 主动拨一条 WS 连接上报 `WorkerEventBus` 事件、处理 gateway 转发过来的 `chat.send` / `config.get` / `config.put` / `token.rotate` / `logs.tail` 请求。
+- Orchestrator control-plane calls（continuation classifier、LLM intent classifier、quality gate、repair、compaction summary、pre-compaction memory flush）统一通过 control executor resolver。未配置 `orchestrator.decisionPipeline.executor` 时复用主 task executor；显式配置时单独构造 control executor，并使用自己的 model / timeout / fallback / secret hydration。显式 control calls 不传 task workspace、tool list 或 native session binding，避免默认继承任务执行面的文件/命令副作用。
 
 ## System Architecture
 

@@ -105,6 +105,12 @@ describe('buildInfo', () => {
     ])
 
     expect(info.executor).toEqual({ type: 'http', model: 'gpt-4o-mini', status: 'healthy' })
+    expect(info.controlExecutor).toEqual({
+      type: 'http',
+      model: 'gpt-4o-mini',
+      status: 'healthy',
+      reusesTaskExecutor: true,
+    })
     expect(info.evolutionEnabled).toBe(true)
 
     expect(info.channels).toEqual([
@@ -166,5 +172,49 @@ describe('buildInfo', () => {
     )
     const info = await buildInfo(stubState(runtime), mcpConfig, { runtimeVersion: TEST_RUNTIME_VERSION })
     expect(info.executor).toEqual({ type: 'mcp', model: 'sonnet', status: 'healthy' })
+  })
+
+  it('surfaces an explicit control executor separately from the task executor', async () => {
+    const controlExecutorConfig: WorkerConfig['executor'] = {
+      engine: 'http',
+      variant: 'default',
+      overrides: {
+        baseUrl: 'https://control.example.com',
+        apiKey: '',
+        model: 'gpt-control',
+      },
+    }
+    const config: WorkerConfig = {
+      ...CONFIG,
+      orchestrator: {
+        decisionPipeline: {
+          executor: controlExecutorConfig,
+        },
+      },
+    }
+    const runtime = {
+      ...stubRuntime(
+        async () => ({ name: 'multi', status: 'healthy', lastChecked: 'x' }),
+        async () => ({ name: 'http', status: 'healthy', lastChecked: 'x' }),
+      ),
+      controlExecutor: {
+        name: 'control-http',
+        health: async () => ({ name: 'control-http', status: 'degraded' as const, lastChecked: 'x' }),
+        listTools: async () => [],
+        run: () => ({ async* [Symbol.asyncIterator]() {} } as AsyncIterable<never>),
+      } as ExecutorProvider,
+      controlExecutorConfig,
+      controlExecutorReusesTaskExecutor: false,
+    }
+
+    const info = await buildInfo(stubState(runtime), config, { runtimeVersion: TEST_RUNTIME_VERSION })
+
+    expect(info.executor).toEqual({ type: 'http', model: 'gpt-4o-mini', status: 'healthy' })
+    expect(info.controlExecutor).toEqual({
+      type: 'http',
+      model: 'gpt-control',
+      status: 'degraded',
+      reusesTaskExecutor: false,
+    })
   })
 })

@@ -1,8 +1,8 @@
 # FEAT-042 Orchestrator 控制执行器与任务执行器解耦
 
-- **status**: pending
+- **status**: completed
 - **priority**: P1
-- **owner**: unassigned
+- **owner**: local
 - **createdAt**: 2026-04-30 20:05
 - **plan**: PLAN-051
 
@@ -37,3 +37,4 @@ FEAT-038 / PLAN-039 的 MVP 行为是可接受的：Orchestrator 的可选 LLM i
 
 - 2026-04-30：明确接受 FEAT-038 当前 MVP 行为：Orchestrator 的 LLM 分类/评审/修复暂时复用 worker 主 executor。
 - 2026-04-30：记录后续方向：把 Orchestrator control-plane LLM runner 从 task executor 中解耦，默认 fallback 仍复用主 executor，避免破坏现有配置。
+- 2026-05-02：完成实现：`orchestrator.decisionPipeline.executor` 可显式配置 control executor；未配置时继续复用主 executor。LLM intent、continuation classifier、quality gate、repair、compaction 和 memory flush 均走统一 resolver，并补齐 schema、secrets、worker info 与 tests。

@@ -159,6 +159,48 @@ describe('worker management config', () => {
     expect(result.config.orchestrator).toEqual(next.orchestrator)
   })
 
+  it('accepts and redacts an orchestrator control executor', async () => {
+    const vault = new SecretsVault(MASTER_KEY, getWorkerDb())
+    const next = baseConfig()
+    next.orchestrator = {
+      decisionPipeline: {
+        executor: {
+          engine: 'http',
+          variant: 'default',
+          overrides: {
+            baseUrl: 'https://control.example.com',
+            apiKey: 'control-key',
+            model: 'gpt-control',
+          },
+          fallbacks: [
+            {
+              executor: {
+                engine: 'mcp',
+                variant: 'default',
+                overrides: {
+                  url: 'https://fallback.example.com/mcp',
+                  token: 'fallback-token',
+                },
+              },
+              onErrorKinds: ['rate-limit'],
+            },
+          ],
+        },
+        intentClassifier: { evaluator: 'llm' },
+      },
+    }
+
+    const result = await putConfig(getWorkerDb(), vault, next)
+    const control = result.config.orchestrator?.decisionPipeline?.executor
+    const controlOverrides = control?.overrides as { apiKey?: string } | undefined
+    const fallbackOverrides = control?.fallbacks?.[0]?.executor.overrides as { token?: string } | undefined
+
+    expect(controlOverrides?.apiKey).toBe('')
+    expect(fallbackOverrides?.token).toBe('')
+    expect(await vault.get('orchestrator.decisionPipeline.executor.overrides.apiKey')).toBe('control-key')
+    expect(await vault.get('orchestrator.decisionPipeline.executor.fallbacks.0.executor.overrides.token')).toBe('fallback-token')
+  })
+
   it('rejects token reserve values that consume the entire context window', async () => {
     const vault = new SecretsVault(MASTER_KEY, getWorkerDb())
     const bad = baseConfig()

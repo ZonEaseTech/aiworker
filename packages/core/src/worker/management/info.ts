@@ -6,6 +6,7 @@ import type {
   WorkerInfo,
   WorkerInfoBrain,
   WorkerInfoChannel,
+  WorkerInfoControlExecutor,
   WorkerInfoExecutor,
 } from '@zonease/aiworker-shared'
 import type { WorkerModeState } from './state'
@@ -99,6 +100,20 @@ export async function buildInfo(
     status: executorStatus,
   }
 
+  const controlExecutorConfig = storedConfig.orchestrator?.decisionPipeline?.executor ?? storedConfig.executor
+  const controlExecutorReusesTaskExecutor = runtime.controlExecutorReusesTaskExecutor
+    ?? (storedConfig.orchestrator?.decisionPipeline?.executor === undefined)
+  const controlExecutorStatus = controlExecutorReusesTaskExecutor
+    ? executorStatus
+    : await probe(() => (runtime.controlExecutor ?? runtime.executor).health())
+  const resolvedControlExecutorModel = executorInfoModel(controlExecutorConfig)
+  const controlExecutor: WorkerInfoControlExecutor = {
+    type: controlExecutorConfig.engine,
+    ...(resolvedControlExecutorModel === undefined ? {} : { model: resolvedControlExecutorModel }),
+    status: controlExecutorStatus,
+    reusesTaskExecutor: controlExecutorReusesTaskExecutor,
+  }
+
   const channels: WorkerInfoChannel[] = storedConfig.channels.map((c) => {
     const url = webhookUrl(env.advertisedBaseUrl, c.channel)
     return {
@@ -114,6 +129,7 @@ export async function buildInfo(
     configVersion: state.configVersion,
     brains,
     executor,
+    controlExecutor,
     channels,
     evolutionEnabled: storedConfig.evolution.enabled,
     startedAt: state.startedAt,

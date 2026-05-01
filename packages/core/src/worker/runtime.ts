@@ -14,6 +14,7 @@ import { resolveVariant } from './executor/default-profiles'
 import { buildExecutor } from './executor/factory'
 import { WorkspaceManager } from './executor/workspace'
 import { ApprovalStore } from './orchestrator/approvals'
+import { resolveControlExecutor } from './orchestrator/control-executor'
 import { Orchestrator } from './orchestrator/service'
 
 export interface WorkerRuntime {
@@ -21,6 +22,9 @@ export interface WorkerRuntime {
   config: WorkerConfig
   brain: BrainProvider
   executor: ExecutorProvider
+  controlExecutor?: ExecutorProvider
+  controlExecutorConfig?: WorkerConfig['executor']
+  controlExecutorReusesTaskExecutor?: boolean
   channels: ChannelRegistry
   bus: WorkerEventBus
   orchestrator: Orchestrator
@@ -54,6 +58,7 @@ export interface BuildRuntimeDeps {
 export function buildWorkerRuntime(workerId: string, config: WorkerConfig, deps: BuildRuntimeDeps): WorkerRuntime {
   const brain = buildBrain(workerId, config)
   const executor = buildExecutor(config.executor)
+  const controlExecutor = resolveControlExecutor({ config, taskExecutor: executor })
   const channels = new ChannelRegistry(config.channels)
   const bus = new WorkerEventBus()
   const workspaces = buildWorkspaceManager(config)
@@ -62,6 +67,9 @@ export function buildWorkerRuntime(workerId: string, config: WorkerConfig, deps:
     config,
     brain,
     executor,
+    controlExecutor: controlExecutor.executor,
+    controlExecutorConfig: controlExecutor.config,
+    controlExecutorReusesTaskExecutor: controlExecutor.reusesTaskExecutor,
     bus,
     workerId,
     workspaces,
@@ -85,6 +93,9 @@ export function buildWorkerRuntime(workerId: string, config: WorkerConfig, deps:
     config,
     brain,
     executor,
+    controlExecutor: controlExecutor.executor,
+    controlExecutorConfig: controlExecutor.config,
+    controlExecutorReusesTaskExecutor: controlExecutor.reusesTaskExecutor,
     channels,
     bus,
     orchestrator,
