@@ -87,3 +87,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-056 标记废弃 PMA 方案与 capability 边界**](PLAN-056.md) `2026-05-01`
 - [x] [**PLAN-057 清理陈旧 PMA 待办状态**](PLAN-057.md) `2026-05-01`
 - [x] [**PLAN-059 Worker info runtimeVersion 发布版本注入**](PLAN-059.md) `2026-05-02`
+- [x] [**PLAN-061 reloadRuntime in-process serialization**](PLAN-061.md) `2026-05-02`

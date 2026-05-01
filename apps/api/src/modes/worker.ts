@@ -122,7 +122,9 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     tokenPlaintext: identity.token,
   }
 
-  async function reloadRuntime(nextStoredConfig: WorkerConfig, newVersion: number): Promise<void> {
+  let lastReload: Promise<void> = Promise.resolve()
+
+  async function doReloadRuntime(nextStoredConfig: WorkerConfig, newVersion: number): Promise<void> {
     const nextHydrated = await hydrateStoredConfig(nextStoredConfig)
     // ProcessManager 跨 reload 复用——只刷新容量，不重建实例（活跃进程 +
     // 队列保留）。env 现在是 process-level，setLimits 会取最新 env 值。
@@ -152,6 +154,14 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
       consola.warn(`[worker ${state.workerId}] previous runtime dispose failed: ${String(err)}`)
     }
     consola.info(`[worker ${state.workerId}] runtime reloaded to config version ${newVersion}`)
+  }
+
+  function reloadRuntime(nextStoredConfig: WorkerConfig, newVersion: number): Promise<void> {
+    const run = lastReload
+      .catch(() => undefined)
+      .then(() => doReloadRuntime(nextStoredConfig, newVersion))
+    lastReload = run
+    return run
   }
 
   const app = new OpenAPIHono()

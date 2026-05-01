@@ -59,7 +59,7 @@ AIWorker 是自托管 worker/fleet runtime。Gateway 是 WebSocket 控制面，�
 - `worker_config.configJson` 不存明文 secret；配置里只能存 ref，启动/reload 时经 `enumerateSecretPaths`、`hydrateSecrets`、`SecretsVault` 注回。
 - 新 Brain/Executor/Channel 只通过 `packages/core/src/worker/*` 的 provider/adapter 接口扩展；不要在 orchestrator 加 provider-specific 分支。
 - `packages/core` 不依赖 `hono`、`@hono/*`、`@scalar/*`；transport 边界由 ESLint `no-restricted-imports` 守。
-- Hot reload 必须懒取当前 runtime，reload 串行化，旧 runtime 的 `dispose()` 必须解绑长连接资源。
+- Hot reload 必须懒取当前 runtime；reload 由 `reloadRuntime` 内部 promise chain 串行化；旧 runtime 的 `dispose()` 必须解绑长连接资源。
 
 ## 安全
 

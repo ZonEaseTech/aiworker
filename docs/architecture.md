@@ -227,7 +227,7 @@ Caddy :80 (纯反代)  ──►  127.0.0.1:9218  =  aiworker-gateway 容器
 - OTP 路径下 `node-pending` 是中间态：ws 已升级但 `ws.data.role='node-pending'`，**不**进 NodeRegistry，**不**广播 worker.online。任何非 close 帧都会被忽略；只有 operator approve 触发 `enrollment.approved` 事件 + 后续连接升级才会真正成为 node。pending 队列是纯内存（`PendingEnrollmentRegistry`），gateway 重启即丢；UX 上 worker 自动重连重新拿一个新 OTP，fleet.db 真实持久化只在 approve 时发生。
 - 自助 enroll 适用 worker 在 NAT/防火墙后只能出站、批量部署需要 zero-touch、operator 无法逐个手贴 bootstrap token 的场景；OTP-attended enroll 适用 worker 部署方是客户 / 朋友 / CI runner 等不该持有 fleet 凭证的人——operator 用 8 字符 OTP 一次确认即放行，对标 GitHub Device Flow / `gh auth login`；高安全场景（每 worker 显式审批 + 显式 token 注入）保留手动 pair 作为更窄入口。
 - `worker_identity` / `worker_config` 都是 singleton，`pk` 固定为字符串 `'default'`；不要在应用层添加多租户假设。
-- `config.put` / `PUT /api/worker/config` 使用 `ifMatch: <version>` 乐观锁；新版本配置持久化后通过 `reloadRuntime(nextConfig, newVersion)` 原子替换 `state.runtime`。**reload 必须串行化**（禁止并发），防止老版本晚到覆盖新版本。
+- `config.put` / `PUT /api/worker/config` 使用 `ifMatch: <version>` 乐观锁；新版本配置持久化后通过 `reloadRuntime(nextConfig, newVersion)` 原子替换 `state.runtime`。`reloadRuntime` 内部用 in-process promise chain 强制串行化（禁止并发），防止老版本晚到覆盖新版本。
 - 配置中的 secret 以 ref 形式占位，落库时即被 redact；启动和 reload 通过 `enumerateSecretPaths` + `hydrateSecrets` 从 `SecretsVault` 注回明文。Secrets **永不**进 `worker_config.configJson`。
 
 ## Provider 扩展契约
@@ -240,6 +240,7 @@ Caddy :80 (纯反代)  ──►  127.0.0.1:9218  =  aiworker-gateway 容器
 ## Hot-reload 写法
 
 - 路由层一律通过 `() => state.runtime` 闭包懒取 runtime（见 `buildChannelRoutes` / `buildOrchestratorRoutes` / `buildEventRoutes` / `buildManagementRoutes` 以及 gateway node 模式的 `getRuntime()` 注入）。不要缓存 `state.runtime` 实例到中间件或 handler 闭包里。
+- `reloadRuntime` 是 runtime swap 的唯一串行化点：后一次 reload 的 hydrate/build/swap 必须等待前一次 swap、`onRuntimeReloaded` hook 和旧 runtime `dispose()` 全部完成；reload 失败不能 poison 后续重试。
 - 老 runtime 的 `dispose()` 必须解绑 evolution observer / proposer loop / 任何长连接资源。gateway 的 node subscriber 也是 `getBus()` 懒取，reload 后自动追新 bus。
 
 ## Executor engines (PLAN-007 / FEAT-011 → FEAT-016)

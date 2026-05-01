@@ -1,5 +1,20 @@
 # AIWorker Changelog
 
+## 2026-05-02 02:01 [bug] BUG-006 / PLAN-061 — reloadRuntime 串行化
+
+修复 worker hot-reload 的并发 swap race：
+
+- `apps/api/src/modes/worker.ts` 的 `reloadRuntime` 现在通过 bootstrap 闭包内的 promise chain 串行执行；后一次 reload 会等前一次 hydrate/build/swap、`onRuntimeReloaded` 和旧 runtime `dispose()` 全部完成后再开始。
+- reload 失败不会 poison 后续链路；下一次 reload 会从上一轮 rejected chain 后恢复排队。
+- 新增 `apps/api/src/modes/worker.reload.test.ts`，用受控 secret hydrate 卡住第一次 reload，再并发触发第二次，断言第二次不会抢先进 hydrate/swap，且最终版本保持后发者。
+- `docs/architecture.md` / `AGENTS.md` 明确该不变量由 `reloadRuntime` 内部 promise chain 强制，而不是依赖 operator 不并发。
+
+验证：
+
+- `bun test apps/api/src/modes/worker.reload.test.ts`
+- `bun test apps/api/src/worker/management/routes.test.ts`
+- `bun run --filter '@zonease/aiworker-api' typecheck`
+
 ## 2026-05-02 01:14 [bug] BUG-038 / PLAN-059 — worker info runtimeVersion follows CLI package version
 
 Fixed stale worker info version reporting:
@@ -29,7 +44,7 @@ Fixed stale worker info version reporting:
 - FEAT-037 / PLAN-028 标记 completed：session control plane 已完成 S1-S5，剩余 idle/daily expiry 与 UI observability 以后按小任务重开。
 - FEAT-039 / PLAN-041 标记 closed / rejected：init / Soul / doctor / capability 静态 validation / executor 边界已交付，S4-S6 以后按新边界拆小切片。
 - FEAT-002、FEAT-007、FEAT-008、FEAT-010 标记 closed：远期占位或旧架构入口不再污染当前 backlog。
-- BUG-006、BUG-010、BUG-038、FEAT-042 / PLAN-051 保留，并补充 current-scope note；PLAN-051 detail status 规范为 `draft`。
+- BUG-010、BUG-038、FEAT-042 / PLAN-051 保留，并补充 current-scope note；PLAN-051 detail status 规范为 `draft`。
 
 验证：targeted `rg` active-entry scan，`git diff --check`。
 

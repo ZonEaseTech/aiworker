@@ -62,7 +62,7 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-003 Wire config.put handler in aiw serve gateway-client**](BUG-003.md) `P2`
 - [x] [**BUG-004 Refresh gateway-client subscriber after runtime hot-reload**](BUG-004.md) `P1`
 - [x] [**BUG-005 aiw run waits for orchestrator.task.* but runtime emits orchestrator.finished**](BUG-005.md) `P2`
-- [ ] [**BUG-006 Make reloadRuntime serialisation explicit (in-process mutex)**](BUG-006.md) `P3`
+- [x] [**BUG-006 Make reloadRuntime serialisation explicit (in-process mutex)**](BUG-006.md) `P3`
 - [x] [**BUG-007 Public Caddy ingress bypasses gateway authN (loopback misidentification)**](BUG-007.md) `P0`
 - [x] [**FEAT-024 Worker self-enrollment via shared join token**](FEAT-024.md) `P2`
 - [x] [**BUG-008 workerSummarySchema rejects self-enrolled worker (empty baseUrl)**](BUG-008.md) `P1`
