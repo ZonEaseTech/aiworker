@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
@@ -40,7 +40,7 @@ afterEach(() => {
 })
 
 async function makeTmp(prefix: string): Promise<string> {
-  return mkdtemp(path.join(tmpdir(), prefix))
+  return realpath(await mkdtemp(path.join(tmpdir(), prefix)))
 }
 
 describe('loadGatewayConfigFromEnv fleet DB path', () => {

@@ -149,3 +149,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REFACTOR-015 CLI IA canonical worker/fleet/gateway command tree**](REFACTOR-015.md) `P1`
 - [x] [**REL-008 发布 aiworker CLI 0.4.11**](REL-008.md) `P1`
 - [x] [**FEAT-045 Worker quick start `aiworker up`**](FEAT-045.md) `P1`
+- [-] [**REL-009 发布 aiworker CLI 0.5.0**](REL-009.md) `P1`

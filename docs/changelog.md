@@ -1,5 +1,15 @@
 # AIWorker Changelog
 
+## 2026-05-02 19:44 [progress] REL-009 / PLAN-064 — prepare CLI 0.5.0 release
+
+Started the `@zonease/aiworker-cli@0.5.0` release:
+
+- Bumped `apps/cli/package.json` from `0.4.11` to `0.5.0`.
+- Release includes the pre-1.0 CLI IA consolidation and `aiworker up` quick start.
+- Local release gates passed: frozen install, workspace tests, typecheck, lint, root build, CLI run smoke, CLI fleet smoke, release diff check, dist manifest/bundle checks, and publish dry-run up to the local npm authentication boundary.
+- Stabilized two macOS-local path assertions by comparing canonical temporary paths, so release gates pass on machines where `/var` resolves to `/private/var`.
+- Next step: tag `v0.5.0`, verify the tag-triggered GitHub release workflow, then upgrade the test fleet gateway with the published npm package.
+
 ## 2026-05-02 19:18 [feature] FEAT-045 / PLAN-063 — Worker quick start `aiworker up`
 
 新增本地 worker 快速启动入口：

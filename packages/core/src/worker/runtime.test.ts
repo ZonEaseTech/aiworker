@@ -236,7 +236,7 @@ async function withProjectScope(run: (input: { projectRoot: string }) => Promise
     'WORKER_DATA_ROOT',
     'WORKER_WORKSPACE_GIT_ORIGIN',
   ])
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'aiworker-runtime-project-'))
+  const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'aiworker-runtime-project-')))
   const projectRoot = path.join(root, 'project')
   try {
     await fs.mkdir(path.join(projectRoot, '.aiworker', 'local'), { recursive: true })
