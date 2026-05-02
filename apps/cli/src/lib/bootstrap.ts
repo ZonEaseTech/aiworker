@@ -10,7 +10,7 @@ import { bootstrapDotenv } from './dotenv-bootstrap'
 //
 // Diagnostic/setup commands opt out. `scope` / `doctor` / help / version must be
 // non-mutating, `init` chooses home after applying its own mode flags, and
-// `install systemd` only renders installer artifacts.
+// `gateway install systemd` only renders installer artifacts.
 export function shouldBootstrapDotenv(argv: string[]): boolean {
   const args = argv.slice(2)
   if (args.length === 0)
@@ -20,14 +20,29 @@ export function shouldBootstrapDotenv(argv: string[]): boolean {
     return false
 
   const command = args[0] ?? ''
-  if (command === 'scope' || command === 'doctor' || command === 'init' || command === 'install' || command === 'install systemd')
+  if (
+    command === 'scope'
+    || command === 'worker scope'
+    || command === 'doctor'
+    || command === 'worker doctor'
+    || command === 'init'
+    || command === 'worker init'
+    || command === 'gateway install systemd'
+  ) {
+    return false
+  }
+
+  if (command.startsWith('executor ') || command.startsWith('worker executor '))
     return false
 
-  if (command.startsWith('executor '))
+  if (
+    command === 'soul list'
+    || command === 'soul show'
+    || command === 'worker soul list'
+    || command === 'worker soul show'
+  ) {
     return false
-
-  if (command === 'soul list' || command === 'soul show')
-    return false
+  }
 
   return true
 }

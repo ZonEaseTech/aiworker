@@ -18,41 +18,18 @@ import { getUngroupedHelpCommands } from './help'
 
 // cac 在 `Command#name` 上保存的是去掉 `<arg>` / `[arg]` 后的命令名（参数信息存在
 // `Command#args` 上），这里就用 cac 实际归一化后的形态做断言。
-const EXPECTED_COMMANDS = [
-  // worker-local（dash 形）
+const ROOT_WORKER_COMMANDS = [
   'init',
+  'scope',
   'doctor',
+  'executor doctor',
   'executor mcp add',
   'executor mcp sync',
-  'executor doctor',
   'soul list',
   'soul show',
   'run',
-  'scope',
   'serve',
-  'config-show',
-  'config-set',
-  'token-rotate',
-  'approvals-list',
-  'approvals-grant',
-  'schedule-list',
-  'schedule-add',
-  'schedule-remove',
-  'sessions list',
-  'sessions show',
-  'sessions maintenance',
-  // operator-remote（空格形）
-  'fleet list',
-  'fleet info',
-  'fleet launch',
-  'fleet stop',
-  'fleet remove',
-  'gateway start',
-  'gateway status',
-  'gateway stop',
-  'pair',
-  'chat',
-  'config get',
+  'config show',
   'config set',
   'token rotate',
   'approvals list',
@@ -60,11 +37,40 @@ const EXPECTED_COMMANDS = [
   'schedule list',
   'schedule add',
   'schedule remove',
-  'enroll list',
-  'enroll approve',
-  'enroll reject',
-  'logs',
-  'install systemd',
+  'sessions list',
+  'sessions show',
+  'sessions maintenance',
+] as const
+
+const EXPECTED_COMMANDS = [
+  // root worker shortcuts
+  ...ROOT_WORKER_COMMANDS,
+  // worker canonical
+  ...ROOT_WORKER_COMMANDS.map(command => `worker ${command}`),
+  // fleet / gateway
+  'fleet list',
+  'fleet info',
+  'fleet launch',
+  'fleet stop',
+  'fleet remove',
+  'fleet pair',
+  'fleet chat',
+  'fleet config get',
+  'fleet config set',
+  'fleet token rotate',
+  'fleet approvals list',
+  'fleet approvals grant',
+  'fleet schedule list',
+  'fleet schedule add',
+  'fleet schedule remove',
+  'fleet enroll list',
+  'fleet enroll approve',
+  'fleet enroll reject',
+  'fleet logs',
+  'gateway start',
+  'gateway status',
+  'gateway stop',
+  'gateway install systemd',
 ] as const
 
 const cliEntry = path.resolve(import.meta.dir, 'aiworker.ts')
@@ -147,10 +153,10 @@ describe('aiworker cli registration', () => {
     const help = captured.join('\n')
     for (const keyword of [
       '使用引导',
-      '本地 worker',
-      'Gateway / fleet 管理',
-      '远端 worker 操作',
-      '安装、诊断、高级维护',
+      '本地 worker 快捷入口',
+      'Worker canonical 入口',
+      'Fleet 控制面',
+      'Gateway 生命周期',
       'aiworker init --soul developer -> aiworker serve',
       'aiworker soul list -> aiworker soul show developer',
       'executor mcp add',
@@ -160,9 +166,9 @@ describe('aiworker cli registration', () => {
       'sessions list',
       'fleet list',
       'gateway start',
-      'enroll approve',
-      'config get',
-      'install systemd',
+      'fleet enroll approve',
+      'fleet config get',
+      'gateway install systemd',
     ])
       expect(help).toContain(keyword)
     expect(help).not.toContain('For more info, run any command')
@@ -196,41 +202,41 @@ describe('preprocessArgv', () => {
     ])
   })
 
-  it('enroll approve <otp> 折叠后位置参完整保留', () => {
-    expect(run('enroll', 'approve', 'XXXX-YYYY')).toEqual([
+  it('fleet enroll approve <otp> 折叠后位置参完整保留', () => {
+    expect(run('fleet', 'enroll', 'approve', 'XXXX-YYYY')).toEqual([
       '/usr/bin/bun',
       '/path/to/aiworker.ts',
-      'enroll approve',
+      'fleet enroll approve',
       'XXXX-YYYY',
     ])
   })
 
-  it('config get <workerId> 折叠（前缀长度优先于 config 单 token）', () => {
-    expect(run('config', 'get', 'wkr-001')).toEqual([
+  it('fleet config get <workerId> 折叠（前缀长度优先于 fleet config 单 token）', () => {
+    expect(run('fleet', 'config', 'get', 'wkr-001')).toEqual([
       '/usr/bin/bun',
       '/path/to/aiworker.ts',
-      'config get',
+      'fleet config get',
       'wkr-001',
     ])
   })
 
-  it('config-set <json>（dash 形）保持不被折叠', () => {
-    const argv = run('config-set', '{"a":1}', '--if-match', '3')
+  it('config set <json> 折叠为本地 worker 快捷入口', () => {
+    const argv = run('config', 'set', '{"a":1}', '--if-match', '3')
     expect(argv).toEqual([
       '/usr/bin/bun',
       '/path/to/aiworker.ts',
-      'config-set',
+      'config set',
       '{"a":1}',
       '--if-match',
       '3',
     ])
   })
 
-  it('install systemd 被折叠', () => {
-    expect(run('install', 'systemd', '--dry-run')).toEqual([
+  it('gateway install systemd 被折叠', () => {
+    expect(run('gateway', 'install', 'systemd', '--dry-run')).toEqual([
       '/usr/bin/bun',
       '/path/to/aiworker.ts',
-      'install systemd',
+      'gateway install systemd',
       '--dry-run',
     ])
   })
@@ -259,6 +265,17 @@ describe('preprocessArgv', () => {
       '/usr/bin/bun',
       '/path/to/aiworker.ts',
       'executor mcp add',
+      'context7',
+      '--engine',
+      'codex',
+    ])
+  })
+
+  it('worker executor mcp add 被折叠', () => {
+    expect(run('worker', 'executor', 'mcp', 'add', 'context7', '--engine', 'codex')).toEqual([
+      '/usr/bin/bun',
+      '/path/to/aiworker.ts',
+      'worker executor mcp add',
       'context7',
       '--engine',
       'codex',
@@ -360,7 +377,7 @@ describe('aiworker malformed argv handling', () => {
   })
 
   it('rejects malformed numeric options before remote gateway calls', async () => {
-    const result = await runCli(['chat', 'w_test', 'hello', '--timeout-ms', 'nope'])
+    const result = await runCli(['fleet', 'chat', 'w_test', 'hello', '--timeout-ms', 'nope'])
     try {
       expect(result.exitCode).toBe(2)
       expect(result.output).toContain('--timeout-ms must be a finite number')
@@ -400,11 +417,23 @@ describe('aiworker malformed argv handling', () => {
     }
   })
 
-  it('documents config-show bootstrap behavior in command help', async () => {
+  it('documents config show bootstrap behavior in command help', async () => {
     const result = await runCli(['--help'])
     try {
       expect(result.exitCode).toBe(0)
       expect(result.output).toContain('缺失时会初始化本地状态')
+      expect(existsSync(path.join(result.aiworkerHome, '.env'))).toBe(false)
+    }
+    finally {
+      cleanup(result)
+    }
+  })
+
+  it('rejects removed pre-1.0 legacy command spellings', async () => {
+    const result = await runCli(['config-show'])
+    try {
+      expect(result.exitCode).toBe(2)
+      expect(result.output).toContain('Unknown command: config-show')
       expect(existsSync(path.join(result.aiworkerHome, '.env'))).toBe(false)
     }
     finally {

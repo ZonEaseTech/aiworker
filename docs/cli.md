@@ -1,16 +1,17 @@
 # AIWorker CLI — `aiworker`（单二进制）
 
-`@zonease/aiworker-cli` 发布**一枚** bin：`aiworker`，子命令树由 worker-side（dash-form）+ operator-side（两词 form）+ gateway 生命周期 + `install systemd` 构成，命令树形态以本文件为准。
+`@zonease/aiworker-cli` 发布**一枚** bin：`aiworker`。裸 `aiworker <cmd>` 等价于当前本地 worker 快捷入口；显式角色入口按 `worker` / `fleet` / `gateway` 分组，命令树形态以本文件为准。
 
 | Surface | 形态 | 例子 |
 |---|---|---|
-| **worker-local** | dash-form 子命令（worker 容器自身或 ssh 进容器跑） | `aiworker serve` / `aiworker config-show` / `aiworker schedule-list` |
+| **worker-local shortcut** | root 子命令（worker 容器自身或 ssh 进容器跑） | `aiworker serve` / `aiworker config show` / `aiworker schedule list` |
+| **worker canonical** | `worker` 子命令 group | `aiworker worker serve` / `aiworker worker config show` |
 | **fleet 管理** | 两词子命令 group（operator 控 fleet） | `aiworker fleet list` / `aiworker fleet launch` |
 | **gateway 生命周期** | 两词子命令 group（本机起 daemon） | `aiworker gateway start` / `aiworker gateway status` |
-| **operator-remote** | 两词子命令（operator 通过 WS 触达 worker） | `aiworker chat <id> 'hi'` / `aiworker config get <id>` / `aiworker enroll approve` |
-| **`install systemd`** | unit 模板写盘 | `aiworker install systemd --user` |
+| **fleet remote worker** | `fleet` 子命令 group（operator 通过 WS 触达 worker） | `aiworker fleet chat <id> 'hi'` / `aiworker fleet config get <id>` |
+| **gateway install** | unit 模板写盘 | `aiworker gateway install systemd --user` |
 
-> **命名约定**：worker-local 命令统一使用 dash-form（`config-show` 操作本地 `worker.db`），operator-remote 命令统一使用两词 form（`config get <workerId>` 经 gateway WS 触达远端 worker）。两套命令在同一 bin 下共存，靠 cac argv 预处理把 `argv[2]+argv[3]` 合并成两词 token。
+> **命名约定**：`aiworker ...` 默认就是本地 worker；`aiworker worker ...` 是同一套本地 worker canonical 入口；跨 worker/fleet.db/gateway WS 的操作必须显式写 `aiworker fleet ...`；gateway 进程生命周期和 systemd install 必须写 `aiworker gateway ...`。1.0.0 前不保留旧拼写 alias。
 
 ## Installation (dev)
 
@@ -32,9 +33,9 @@ aiworker <subcommand> [options]
 
 ---
 
-## Worker-local 命令（dash-form）
+## Worker-local 命令（root shortcut / worker canonical）
 
-worker 容器内或 ssh 进 worker 主机直接操作 `worker.db` 的子命令。**不**经 gateway，不需要 operator basicauth；运维 fallback / 备份恢复 / dev 自检常用。
+worker 容器内或 ssh 进 worker 主机直接操作 `worker.db` 的子命令。**不**经 gateway，不需要 operator basicauth；运维 fallback / 备份恢复 / dev 自检常用。下文用 root shortcut 展示；所有本地命令都有等价的 `aiworker worker ...` canonical 形态。
 
 ### 环境变量
 
@@ -52,7 +53,7 @@ worker 容器内或 ssh 进 worker 主机直接操作 `worker.db` 的子命令�
 - `AIWORKER_WORKER_HOST` — `aiworker serve` 的 HTTP bind host，默认 `127.0.0.1`。公网或容器网络显式暴露时用 `--host` 覆盖。
 - `AIWORKER_WORKER_NO_SERVE_WEB=1` — 禁用 worker `/admin/*` 静态 bundle。
 - `AIWORKER_ADMIN_EXTERNAL_AUTH=1`（或 `true`）— 仅表示 `/admin/*` 已被外部鉴权层保护。`aiworker serve --host 0.0.0.0` 且实际挂载 admin bundle 时必须设置它，或改用 `--no-serve-web`。
-- `AIWORKER_GATEWAY_URL` / `AIWORKER_JOIN_TOKEN` / `AIWORKER_DISPLAY_NAME`（PLAN-018 / FEAT-024）— self-enroll 三件套：URL + token 同时设 → `aiworker serve` 跳过 operator 手动 `aiworker pair`，bootstrap 完成后用 outbound WS 主动拨 gateway 把自身写入 fleet。`DISPLAY_NAME` 可选，缺省回落 workerId（最长 80 字符）。详见下文 §`aiworker serve` 与 [`docs/deployment.md` § Worker self-enroll quick start](./deployment.md#worker-self-enroll-quick-start-plan-018--feat-024)。
+- `AIWORKER_GATEWAY_URL` / `AIWORKER_JOIN_TOKEN` / `AIWORKER_DISPLAY_NAME`（PLAN-018 / FEAT-024）— self-enroll 三件套：URL + token 同时设 → `aiworker serve` 跳过 operator 手动 `aiworker fleet pair`，bootstrap 完成后用 outbound WS 主动拨 gateway 把自身写入 fleet。`DISPLAY_NAME` 可选，缺省回落 workerId（最长 80 字符）。详见下文 §`aiworker serve` 与 [`docs/deployment.md` § Worker self-enroll quick start](./deployment.md#worker-self-enroll-quick-start-plan-018--feat-024)。
 - `AIWORKER_ENROLL_MODE`（PLAN-019 / FEAT-026）— `'auto' | 'otp'`，缺省 `'auto'`。`'auto'` 下走 self-enroll 还是 OTP 由 `JOIN_TOKEN` 是否设来判定（设 → self-enroll；未设 → OTP）；显式 `'otp'` 强制 attended 路径，即使 `JOIN_TOKEN` 同时存在也忽略它（用于 deployer 拿不到 fleet 凭证的 attended 场景）。详见下文 §`aiworker serve` 与 [`docs/deployment.md` § Worker OTP-attended enroll quick start](./deployment.md#worker-otp-attended-enroll-quick-startplan-019--feat-026)。
 
 ### `aiworker init [--soul <preset>] [--global] [--force]`
@@ -283,7 +284,7 @@ aiworker serve --port 9217 --gateway ws://127.0.0.1:9218/ws
 aiworker serve --host 0.0.0.0 --port 9217 --no-serve-web
 ```
 
-**Self-enroll / OTP enroll via env**（PLAN-018 / FEAT-024 + PLAN-019 / FEAT-026）：当 env 设了 `AIWORKER_GATEWAY_URL` 且**未** 传 `--gateway` flag 时，`aiworker serve` bootstrap 完成后自动拨 gateway，按下面触发表分派 self-enroll（带 join token）或 OTP（attended）路径——operator 完全不用跑 `aiworker pair`。
+**Self-enroll / OTP enroll via env**（PLAN-018 / FEAT-024 + PLAN-019 / FEAT-026）：当 env 设了 `AIWORKER_GATEWAY_URL` 且**未** 传 `--gateway` flag 时，`aiworker serve` bootstrap 完成后自动拨 gateway，按下面触发表分派 self-enroll（带 join token）或 OTP（attended）路径——operator 完全不用跑 `aiworker fleet pair`。
 
 | `--gateway` flag | `AIWORKER_GATEWAY_URL` | `AIWORKER_JOIN_TOKEN` | `AIWORKER_ENROLL_MODE` | 行为 |
 |---|---|---|---|---|
@@ -297,9 +298,9 @@ aiworker serve --host 0.0.0.0 --port 9217 --no-serve-web
 self-enroll vs OTP 差异：
 
 - **self-enroll**：worker 端持 fleet 共享 `AIWORKER_JOIN_TOKEN`，gateway 验签后直接落 fleet.db，无人审；适合 CI / k8s / 自动化批量部署。
-- **OTP**：worker 端**不**持 fleet 凭证，gateway 给 worker 派 8 字符 OTP（`XXXX-YYYY`，去歧义 30 字符 alphabet），worker 通过任意带外通道把 OTP 发给 operator，operator `aiworker enroll approve <otp>` 决定放行；适合给客户 / 朋友 / CI runner 等不该看见 fleet 凭证的人装 worker。
+- **OTP**：worker 端**不**持 fleet 凭证，gateway 给 worker 派 8 字符 OTP（`XXXX-YYYY`，去歧义 30 字符 alphabet），worker 通过任意带外通道把 OTP 发给 operator，operator `aiworker fleet enroll approve <otp>` 决定放行；适合给客户 / 朋友 / CI runner 等不该看见 fleet 凭证的人装 worker。
 
-OTP 模式 stdout 格式（`apps/cli/src/commands/serve.ts::formatOtpBox`）：
+OTP 模式 stdout 格式（`apps/cli/src/commands/worker/serve.ts::formatOtpBox`）：
 
 ```text
 [aiworker serve] OTP enrolling to ws://gateway-host:9218/enroll-ws; awaiting operator approval
@@ -309,7 +310,7 @@ OTP 模式 stdout 格式（`apps/cli/src/commands/serve.ts::formatOtpBox`）：
 │  expires in 300s         │
 └──────────────────────────┘
 
-[aiworker serve] OTP BX7P-K39M 已签发，请用 `aiworker enroll approve BX7P-K39M` 准入；expires in 300s
+[aiworker serve] OTP BX7P-K39M 已签发，请用 `aiworker fleet enroll approve BX7P-K39M` 准入；expires in 300s
 ```
 
 适用场景与运维 / 排错见 [`docs/deployment.md` § Worker self-enroll quick start](./deployment.md#worker-self-enroll-quick-start-plan-018--feat-024) 与 [§ Worker OTP-attended enroll quick start](./deployment.md#worker-otp-attended-enroll-quick-startplan-019--feat-026)。
@@ -328,49 +329,49 @@ aiworker serve --port 9217
 # stdout 打 OTP 后 deployer 把它带外发给 operator
 ```
 
-### `aiworker config-show`
+### `aiworker config show`
 
 打印当前（已 redact）worker 配置与 monotonic version。若本地 worker state 尚不存在，
 该命令会执行与 worker-local 命令一致的轻量 bootstrap：创建 `.env` / `worker.db`、
 运行迁移并 seed 默认配置，但不会启动 HTTP server：
 
 ```sh
-aiworker config-show
+aiworker config show
 # {
 #   "version": 1,
 #   "config": { ... }
 # }
 ```
 
-### `aiworker config-set <json> [--if-match <version>]`
+### `aiworker config set <json> [--if-match <version>]`
 
 替换 worker config。Payload 与 WS 方法 `config.put` / 旧 REST `PUT /api/worker/config` 一致。`--if-match` 触发乐观锁——存储 version 不等则拒绝。成功后把 redact 后的 config mirror 写入 `~/.aiworker/workers/<workerId>/config.yaml`（advisory）。
 
 ```sh
-aiworker config-set "$(cat new-config.json)" --if-match 1
-# → [aiworker config-set] stored config v2
+aiworker config set "$(cat new-config.json)" --if-match 1
+# → [aiworker config set] stored config v2
 ```
 
 Exit codes: 0 success, 2 invalid JSON / validation failure, 3 version conflict.
 
-### `aiworker token-rotate`
+### `aiworker token rotate`
 
 Mint 新 API token，AES-GCM 加密后覆盖 `worker_identity.api_token_enc`，明文打印一次：
 
 ```sh
-aiworker token-rotate
-# [aiworker token-rotate] worker w_xxxxxxxxxxxx token rotated
+aiworker token rotate
+# [aiworker token rotate] worker w_xxxxxxxxxxxx token rotated
 # wtk_NEWTOKENHERE
 ```
 
 旧 token 立即失效。保存明文；存储里只留密文。
 
-### `aiworker approvals-list`（PLAN-014 F2）
+### `aiworker approvals list`（PLAN-014 F2）
 
 读取**本地** worker HTTP 端点 `GET /api/worker/approvals`，列出当前进程内所有挂起的 per-tool 审批：
 
 ```sh
-aiworker approvals-list
+aiworker approvals list
 # {
 #   "approvals": [
 #     { "taskId":"...","toolCallId":"...","toolName":"...","params":{...},"expiresAt":1714... }
@@ -380,23 +381,23 @@ aiworker approvals-list
 
 不经 gateway，是 dev / 运维兜底路径——管理员 ssh 进 worker 容器即可观察。端口取 `workerEnv.PORT`（默认 9217），bearer 由 `loadWorkerContext()` 从 worker.db / vault 解出。
 
-### `aiworker approvals-grant <taskId> <toolCallId> [--deny]`（PLAN-014 F2）
+### `aiworker approvals grant <taskId> <toolCallId> [--deny]`（PLAN-014 F2）
 
 调 `POST /api/worker/approvals/:taskId/:toolCallId/grant`，下发决策。默认 `decision=allow`；带 `--deny` 改为 `deny`：
 
 ```sh
-aiworker approvals-grant tsk_xxx call_yyy            # allow
-aiworker approvals-grant tsk_xxx call_yyy --deny     # deny
+aiworker approvals grant tsk_xxx call_yyy            # allow
+aiworker approvals grant tsk_xxx call_yyy --deny     # deny
 ```
 
 `deny` 路径会在 worker 内合成助手消息 `"tool {name} blocked by policy"` 短路返回。
 
-### `aiworker schedule-list`（PLAN-014 F4）
+### `aiworker schedule list`（PLAN-014 F4）
 
 读取本地 `worker.db` 的 `cron_jobs` 表，输出全部 job：
 
 ```sh
-aiworker schedule-list
+aiworker schedule list
 # {
 #   "jobs": [
 #     { "id":"...","expression":"0 9 * * *","prompt":"早报","channel":"web","chatId":"...","accountId":"sys:cron","enabled":true,"lastRunAt":null,"nextRunAt":"..." }
@@ -404,14 +405,14 @@ aiworker schedule-list
 # }
 ```
 
-实现复用 in-process `CronService`（一次性 boot + CRUD + 退出），与 `aiworker config-show` / `aiworker config-set` 模式一致——不绑 server，不进 orchestrator hot path。
+实现复用 in-process `CronService`（一次性 boot + CRUD + 退出），与 `aiworker config show` / `aiworker config set` 模式一致——不绑 server，不进 orchestrator hot path。
 
-### `aiworker schedule-add --expression <expr> --prompt <text> --channel <channel> --chat-id <id> [--account-id <id>] [--disabled]`（PLAN-014 F4）
+### `aiworker schedule add --expression <expr> --prompt <text> --channel <channel> --chat-id <id> [--account-id <id>] [--disabled]`（PLAN-014 F4）
 
 新增一条 cron job。`--expression` 走 `cron-parser` 校验，无效立即拒绝；`--account-id` 缺省 `sys:cron`（PLAN-014 F1 sys:* 保留前缀）；`--disabled` 把 `enabled` 置 false。
 
 ```sh
-aiworker schedule-add \
+aiworker schedule add \
   --expression "0 9 * * *" \
   --prompt "晨间日报" \
   --channel web \
@@ -419,12 +420,12 @@ aiworker schedule-add \
 # { "job": { "id":"...","expression":"0 9 * * *",... } }
 ```
 
-### `aiworker schedule-remove <jobId>`（PLAN-014 F4）
+### `aiworker schedule remove <jobId>`（PLAN-014 F4）
 
 按 id 删除：
 
 ```sh
-aiworker schedule-remove crn_xxxxxxxxxxxx
+aiworker schedule remove crn_xxxxxxxxxxxx
 # { "removed": true }
 ```
 
@@ -435,14 +436,14 @@ aiworker schedule-remove crn_xxxxxxxxxxxx
 - `0` — 成功；
 - `1` — 失败（task 失败、rotate 写错等）；
 - `2` — 参数非法（缺 `--message` / JSON 不对 / schema 校验失败）；
-- `3` — 业务冲突（例：`config-set` version 不匹配）；
+- `3` — 业务冲突（例：`config set` version 不匹配）；
 - `124` — 超时。
 
 ---
 
-## Operator-remote 命令（两词 form）
+## Fleet 命令
 
-operator 通过 WebSocket 与 gateway（`apps/gateway`）对话，由 gateway 转发到目标 worker。所有请求 / 响应 / 事件的帧结构与 METHODS / EVENTS schema 定义在 `@zonease/aiworker-gateway-proto`，由 CLI 与 gateway 共用。
+operator 通过 `aiworker fleet ...` 与 gateway（`apps/gateway`）对话，由 gateway 转发到目标 worker。所有请求 / 响应 / 事件的帧结构与 METHODS / EVENTS schema 定义在 `@zonease/aiworker-gateway-proto`，由 CLI 与 gateway 共用。
 
 ### 本地状态
 
@@ -451,15 +452,15 @@ operator 通过 WebSocket 与 gateway（`apps/gateway`）对话，由 gateway �
 ```jsonc
 {
   "gatewayUrl": "ws://localhost:9218/ws", // 默认；aiworker gateway start 会改写
-  "deviceId":   "op-<uuid>",              // 首次 aiworker gateway/pair 时生成
-  "deviceToken":"",                       // pair 成功后由 gateway 颁发
+  "deviceId":   "op-<uuid>",              // 首次 aiworker gateway start / fleet pair 时生成
+  "deviceToken":"",                       // fleet pair 成功后由 gateway 颁发
   "defaultWorkerId": "w_..."              // 省略 <workerId> 参数时的回退
 }
 ```
 
 补充文件：`~/.aiworker/aiworker-gateway.pid`（本机 daemon PID）、`~/.aiworker/aiworker-gateway.log`（daemon 日志）。
 
-### Exit code 约定（operator-remote）
+### Exit code 约定（fleet）
 
 - `0` 成功；`1` 泛型失败；`2` 参数非法 / 未知方法；`3` WS 等待超时；`4` 连接断开。
 
@@ -534,12 +535,12 @@ aiworker fleet launch --display-name demo
 
 ## Pair / chat / config / token
 
-### `aiworker pair --url <wsUrl> --worker-url <httpUrl> --bootstrap-token <token> [--display-name <name>]`
+### `aiworker fleet pair --url <wsUrl> --worker-url <httpUrl> --bootstrap-token <token> [--display-name <name>]`
 
 把一个已启动的 worker 通过 bootstrap token 注册到 gateway。gateway 会调 worker 的 `/info` 验 token，加密落 fleet.db，并把 deviceToken 返回——CLI 把它写回 `aiworker.json`，之后所有 operator 请求都用它。
 
 ```sh
-aiworker pair \
+aiworker fleet pair \
   --url ws://127.0.0.1:9218/ws \
   --worker-url http://aiworker-worker:9217 \
   --bootstrap-token wtk_xxxxxxxxxxxx \
@@ -550,35 +551,35 @@ aiworker pair \
 
 失败码：`auth_failed` / `worker_unreachable` / `already_registered` / `quota_exceeded` / `master_key_missing`。
 
-### `aiworker chat <workerId> '<text>' [--conversation-id <id>] [--timeout-ms <n>]`
+### `aiworker fleet chat <workerId> '<text>' [--conversation-id <id>] [--timeout-ms <n>]`
 
 给 worker 的某个会话追加一条用户消息并触发一次 run，阻塞到 `agent.done` 事件。stdout 输出 NDJSON：`chat.message` / `agent.thinking` / `agent.tool_call` / `agent.done`。
 
 ```sh
-aiworker chat w_xxxxxxxxxxxx '查一下今天东京天气'
+aiworker fleet chat w_xxxxxxxxxxxx '查一下今天东京天气'
 # {"type":"event","name":"agent.thinking",...}
 # {"type":"event","name":"agent.tool_call",...}
 # {"type":"event","name":"agent.done",...}
 ```
 
-### `aiworker config get <workerId>`
+### `aiworker fleet config get <workerId>`
 
 读 worker 当前 config + version：
 
 ```sh
-aiworker config get w_xxxxxxxxxxxx
+aiworker fleet config get w_xxxxxxxxxxxx
 # { "version": 2, "config": { ... } }
 ```
 
-### `aiworker config set <workerId> <json> --if-match <version>`
+### `aiworker fleet config set <workerId> <json> --if-match <version>`
 
 乐观锁更新 config。`--if-match` 必填，防止误覆盖。
 
 ```sh
-aiworker config set w_xxxxxxxxxxxx "$(cat new-config.json)" --if-match 2
+aiworker fleet config set w_xxxxxxxxxxxx "$(cat new-config.json)" --if-match 2
 ```
 
-### `aiworker token rotate <workerId>`
+### `aiworker fleet token rotate <workerId>`
 
 为目标 worker 轮换 deviceToken；gateway 会：
 
@@ -587,7 +588,7 @@ aiworker config set w_xxxxxxxxxxxx "$(cat new-config.json)" --if-match 2
 3. 把新 deviceToken 返回给 operator。
 
 ```sh
-aiworker token rotate w_xxxxxxxxxxxx
+aiworker fleet token rotate w_xxxxxxxxxxxx
 # { "deviceToken": "wtk_NEWTOKENHERE" }
 ```
 
@@ -595,12 +596,12 @@ aiworker token rotate w_xxxxxxxxxxxx
 
 ## OTP enrollment（operator 侧人审）
 
-### `aiworker enroll list`（PLAN-019 / FEAT-026）
+### `aiworker fleet enroll list`（PLAN-019 / FEAT-026）
 
 通过 gateway WS 协议 `enroll.list` 列出当前所有 pending OTP enrollment——它们是**已 submit 但 operator 还没 approve / reject**的 worker，连接挂在 `apps/gateway/src/registry/pending.ts::PendingEnrollmentRegistry` 内存队列里。
 
 ```sh
-aiworker enroll list
+aiworker fleet enroll list
 # {
 #   "pending": [
 #     {
@@ -616,12 +617,12 @@ aiworker enroll list
 
 返回字段刻意不含 worker 自报的 `apiToken`（仅在 approve 时落 fleet.db）；`expiresAt` 由 `AIWORKER_ENROLL_OTP_TTL_SEC`（默认 300s）算出。空列表也是合法返回。
 
-### `aiworker enroll approve <otp>`（PLAN-019 / FEAT-026）
+### `aiworker fleet enroll approve <otp>`（PLAN-019 / FEAT-026）
 
 调 gateway 协议 `enroll.approve`，参数即 worker stdout 上看到的 OTP（`XXXX-YYYY` 形态）。gateway 在原 ws 上推 `enrollment.approved` 事件回 worker，worker 立即升级为 fleet 内正式 node：
 
 ```sh
-aiworker enroll approve BX7P-K39M
+aiworker fleet enroll approve BX7P-K39M
 # ✔ 已批准 OTP BX7P-K39M，workerId=w_xxxxxxxxxxxx
 # {
 #   "workerId": "w_xxxxxxxxxxxx",
@@ -636,10 +637,10 @@ approve 在 fleet.db 写 `addedBy='otp'` 行（与 self-enroll 共用 `upsertEnr
 - `quota_exceeded` — `AIWORKER_MAX_WORKERS` 已满（已注册 workerId 重批不占新名额）
 - `feature_disabled` — gateway 未注入 pending registry（异常 / 测试场景）
 
-### `aiworker enroll reject <otp>`（PLAN-019 / FEAT-026）
+### `aiworker fleet enroll reject <otp>`（PLAN-019 / FEAT-026）
 
 ```sh
-aiworker enroll reject BX7P-K39M
+aiworker fleet enroll reject BX7P-K39M
 # ℹ 已拒绝 OTP BX7P-K39M
 # { "rejected": true }
 ```
@@ -652,14 +653,14 @@ OTP 不存在时返回 `{ rejected: false }` + warn——非错误，幂等。
 
 ## Per-tool approvals（operator 侧）
 
-### `aiworker approvals list [--worker <id>]`（PLAN-014 F2）
+### `aiworker fleet approvals list [--worker <id>]`（PLAN-014 F2）
 
 通过 gateway WS 协议 `approval.list` 列出挂起的 per-tool 审批。带 `--worker` 时只查指定 worker；不带时先 `workers.list` 拉全部 online worker，再并行查每个 worker 的 approvals 并聚合：
 
 ```sh
-aiworker approvals list
+aiworker fleet approvals list
 # 聚合所有 online worker
-aiworker approvals list --worker w_xxxxxxxxxxxx
+aiworker fleet approvals list --worker w_xxxxxxxxxxxx
 # 只查指定
 # {
 #   "approvals": [
@@ -668,7 +669,7 @@ aiworker approvals list --worker w_xxxxxxxxxxxx
 # }
 ```
 
-### `aiworker approvals grant <workerId> <taskId> <toolCallId> [--deny]`（PLAN-014 F2）
+### `aiworker fleet approvals grant <workerId> <taskId> <toolCallId> [--deny]`（PLAN-014 F2）
 
 调 gateway 协议 `approval.grant`，下发 `allow` / `deny` 决策。worker 收到后：
 
@@ -676,39 +677,39 @@ aiworker approvals list --worker w_xxxxxxxxxxxx
 - `deny`：合成 `"tool {name} blocked by policy"` 助手消息短路。
 
 ```sh
-aiworker approvals grant w_xxxxxxxxxxxx tsk_xxx call_yyy
-aiworker approvals grant w_xxxxxxxxxxxx tsk_xxx call_yyy --deny
+aiworker fleet approvals grant w_xxxxxxxxxxxx tsk_xxx call_yyy
+aiworker fleet approvals grant w_xxxxxxxxxxxx tsk_xxx call_yyy --deny
 ```
 
 ---
 
 ## Cron schedule（operator 侧）
 
-### `aiworker schedule list <workerId>`（PLAN-014 F4）
+### `aiworker fleet schedule list <workerId>`（PLAN-014 F4）
 
 读取目标 worker 上 `cron_jobs` 表全量：
 
 ```sh
-aiworker schedule list w_xxxxxxxxxxxx
+aiworker fleet schedule list w_xxxxxxxxxxxx
 # { "jobs": [ { "id":"...","expression":"0 9 * * *","prompt":"...","channel":"web","chatId":"...","accountId":"sys:cron","enabled":true,... } ] }
 ```
 
-### `aiworker schedule add <workerId> --expression <expr> --prompt <text> --channel <channel> --chat-id <id> [--account-id <id>] [--disabled]`（PLAN-014 F4）
+### `aiworker fleet schedule add <workerId> --expression <expr> --prompt <text> --channel <channel> --chat-id <id> [--account-id <id>] [--disabled]`（PLAN-014 F4）
 
 通过 gateway 协议 `cron.add` 在远端 worker 落库一条 cron job。`--account-id` 缺省 `sys:cron`，`--disabled` 把初始 `enabled` 置 false。
 
 ```sh
-aiworker schedule add w_xxxxxxxxxxxx \
+aiworker fleet schedule add w_xxxxxxxxxxxx \
   --expression "*/15 * * * *" \
   --prompt "每 15 分钟巡检" \
   --channel web \
   --chat-id ops-monitor
 ```
 
-### `aiworker schedule remove <workerId> <jobId>`（PLAN-014 F4）
+### `aiworker fleet schedule remove <workerId> <jobId>`（PLAN-014 F4）
 
 ```sh
-aiworker schedule remove w_xxxxxxxxxxxx crn_xxxxxxxxxxxx
+aiworker fleet schedule remove w_xxxxxxxxxxxx crn_xxxxxxxxxxxx
 # { "removed": true }
 ```
 
@@ -716,23 +717,23 @@ aiworker schedule remove w_xxxxxxxxxxxx crn_xxxxxxxxxxxx
 
 ## Logs
 
-### `aiworker logs <workerId> [--follow] [--tail N] [--timeout-ms <n>]`
+### `aiworker fleet logs <workerId> [--follow] [--tail N] [--timeout-ms <n>]`
 
 订阅 worker 的日志尾部，stdout 输出 NDJSON `logs.line` 事件。`--follow` 持续订阅直到超时或 Ctrl-C；`--tail N` 请求历史行数（上限 1000）。
 
 ```sh
-aiworker logs w_xxxxxxxxxxxx --follow --tail 200
+aiworker fleet logs w_xxxxxxxxxxxx --follow --tail 200
 # {"type":"event","name":"logs.line","payload":{"stream":"stdout","line":"...","ts":...}}
 ```
 
 ---
 
-## `aiworker install systemd`（PLAN-016）
+## `aiworker gateway install systemd`（PLAN-016）
 
 把 gateway daemon 包成 systemd unit，开机自启 / 长跑。前台跑 `aiworker gateway start` 适合开发，**生产推荐用 systemd**——这是部署主路径，详见 [`docs/deployment.md` § 形态二：systemd 服务化](./deployment.md#形态二systemd-服务化推荐-linux-服务器)。
 
 ```sh
-aiworker install systemd [--user|--system] [--dry-run] [--out <path>] [--no-enable] [--exec-start <command>]
+aiworker gateway install systemd [--user|--system] [--dry-run] [--out <path>] [--no-enable] [--exec-start <command>]
 ```
 
 | Flag | 默认 | 含义 |
@@ -773,7 +774,7 @@ WantedBy=default.target
 
 `--system` 形态使用 `/etc/aiworker/gateway.env`、`AIWORKER_HOME=/var/lib/aiworker`、`StateDirectory=aiworker`、`User=root` / `Group=root`，`WantedBy` 改 `multi-user.target`。
 
-幂等：同一 `--out` 路径反复跑产生**字节级一致**的 unit 内容；只有 `aiworker install systemd --dry-run` 输出与最终写盘一致，才算合法实现。
+幂等：同一 `--out` 路径反复跑产生**字节级一致**的 unit 内容；只有 `aiworker gateway install systemd --dry-run` 输出与最终写盘一致，才算合法实现。
 
 远程 PATH / version 诊断：
 
@@ -803,7 +804,7 @@ WantedBy=default.target
 
 ## Caveats
 
-- 子命令名仍是带空格的两词（`config get` / `token rotate`）；`cac` 6 原生不支持，`aiworker.ts` 在入口前做了一次 argv 预处理把 `argv[2]+argv[3]` 合成一个 token。新增两词命令需注册到 `cli.command('foo bar', ...)` 并让多词识别表自动拾取。
+- 子命令名包含多词形态（例如 `fleet config get` / `worker executor mcp add` / `gateway install systemd`）；`cac` 6 原生不支持，`aiworker.ts` 在入口前做 argv 预处理，把最长匹配命令前缀合成一个 token。新增多词命令需注册到 `cli.command('foo bar', ...)` 并让多词识别表自动拾取。
 - `aiworker run` 默认频道 `web` 与 chat id `cli:stdin`；webhook-driven 频道（Telegram / Lark / WhatsApp）仍需 `aiworker serve`。
 - 没有 `aiworker repl` / 交互循环；`aiworker run` 是一次性。
-- PLAN-013 下线了 dashboard 模式；任何仍走 REST 的脚本需要切到 `aiworker` operator-remote 子命令或 gateway WS 客户端。变更明细见 `docs/changelog.md` 的 PLAN-013 条目。
+- PLAN-013 下线了 dashboard 模式；任何仍走 REST 的脚本需要切到 `aiworker fleet ...` 子命令或 gateway WS 客户端。变更明细见 `docs/changelog.md` 的 PLAN-013 条目。

@@ -1,5 +1,23 @@
 # AIWorker Changelog
 
+## 2026-05-02 14:07 [refactor] REFACTOR-015 / PLAN-062 — CLI worker/fleet/gateway 命令树收敛
+
+按 pre-1.0 策略完成 CLI 信息架构破坏性收敛，不保留旧拼写 alias：
+
+- 裸 `aiworker ...` 现在只表示本地 worker 快捷入口；`aiworker worker ...` 是等价的 canonical worker tree。
+- fleet 控制面和远端 worker 操作统一迁到 `aiworker fleet ...`，包括 `fleet pair`、`fleet enroll ...`、`fleet chat`、`fleet config ...`、`fleet approvals ...`、`fleet schedule ...` 和 `fleet logs`。
+- gateway 生命周期和 systemd install 统一迁到 `aiworker gateway ...`，包括 `gateway install systemd`。
+- CLI command 实现目录按角色拆成 `apps/cli/src/commands/worker/`、`apps/cli/src/commands/fleet/`、`apps/cli/src/commands/gateway/`。
+- CLI help、argv folding、numeric option validation、runtime hints、README、`docs/cli.md`、`docs/architecture.md`、`docs/gateway.md` 和 `AGENTS.md` 已同步新命令树。
+
+验证：
+
+- `bun run --filter '@zonease/aiworker-cli' test`
+- `bun run --filter '@zonease/aiworker-cli' test:stress`
+- `bun run --filter '@zonease/aiworker-cli' typecheck`
+- `bunx eslint apps/cli/src/aiworker.ts apps/cli/src/help.ts apps/cli/src/lib/bootstrap.ts apps/cli/src/commands/worker apps/cli/src/commands/fleet apps/cli/src/commands/gateway`
+- `git diff --check`
+
 ## 2026-05-02 02:44 [progress] FEAT-042 / PLAN-051 — Orchestrator control executor
 
 完成 Orchestrator control-plane executor 与 task executor 的解耦：

@@ -8,8 +8,8 @@ import { resolveAiworkerHome } from '@zonease/aiworker-fs-layout'
  *
  * 设计目标：
  * - gatewayUrl / deviceId / deviceToken 是 aiworker 与 gateway 建立 WS 连接的三要素。
- * - deviceId 在首次 `aiworker gateway start` 或 `aiworker pair` 时生成并持久化，之后不变。
- * - deviceToken 在 `aiworker pair` 完成后由 gateway 返回；loopback 场景（本地 stub gateway）
+ * - deviceId 在首次 `aiworker gateway start` 或 `aiworker fleet pair` 时生成并持久化，之后不变。
+ * - deviceToken 在 `aiworker fleet pair` 完成后由 gateway 返回；loopback 场景（本地 stub gateway）
  *   允许空串。
  * - defaultWorkerId 作为省略 `<worker-id>` 参数时的回退，避免用户每次敲完整 id。
  */

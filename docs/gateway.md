@@ -10,7 +10,7 @@ PLAN-013 引入的 WebSocket 控制面：operator（aiworker CLI / web）与 nod
   - `GET /ws` — WebSocket 升级端点（必需 `Upgrade: websocket`）。
   - 其它路径 → 404。
 - 三角色：
-  - `operator` — 发起请求、订阅事件；aiworker CLI（operator-remote 子命令）/ web SPA 都是 operator。
+  - `operator` — 发起请求、订阅事件；aiworker CLI（`fleet` / `gateway` 子命令）/ web SPA 都是 operator。
   - `node` — worker 进程；通过 `aiworker serve --gateway` 作为 node 拨号。
   - `gateway` — 中枢，不对外以 client 身份连接。
 - 首帧：`connect`；然后按 role + `type` 分流 `request` / `response` / `event`。
@@ -111,11 +111,11 @@ gateway → operator 的推送。payload 由 `EVENT_PAYLOADS` 约束：
 |--------|---------|----------|
 | `workers.list` | operator-to-gateway | 面板首页、`aiworker fleet list` |
 | `workers.info` | operator-to-node | 详情页刷新、`aiworker fleet info` |
-| `workers.pair` | operator-to-gateway | `aiworker pair`（手动 bootstrap token 注册） |
+| `workers.pair` | operator-to-gateway | `aiworker fleet pair`（手动 bootstrap token 注册） |
 | `workers.launch` | operator-to-gateway | `aiworker fleet launch`（gateway supervisor 自动创建容器） |
 | `workers.stop` | operator-to-node | 向 node 下停止指令 |
 | `workers.remove` | operator-to-gateway | 从 fleet 摘除（deviceToken 作废） |
-| `chat.send` | operator-to-node | 面板 / `aiworker chat` 追加一条用户消息并触发 run |
+| `chat.send` | operator-to-node | 面板 / `aiworker fleet chat` 追加一条用户消息并触发 run |
 | `config.get` | operator-to-node | 读 worker 配置 + version |
 | `config.put` | operator-to-node | 乐观锁（`ifMatch`）更新配置 |
 | `token.rotate` | operator-to-gateway | 轮换 deviceToken，旧 token 立即失效 |
@@ -158,7 +158,7 @@ gateway 自己在 close WS 时派发 `worker.offline`（`inferOfflineReason` 把
 
 ## Pairing 流程
 
-### 手动 pair（aiworker pair）
+### 手动 pair（aiworker fleet pair）
 
 1. worker 容器首次启动（`aiworker init` / `aiworker serve` 首跑）在 stdout 打印一次性 bootstrap line：
    ```
@@ -167,7 +167,7 @@ gateway 自己在 close WS 时派发 `worker.offline`（`inferOfflineReason` 把
 2. 操作员抓取这一行（`docker logs <worker-container>`）。
 3. 运行 aiworker CLI：
    ```sh
-   aiworker pair --url ws://127.0.0.1:9218/ws \
+   aiworker fleet pair --url ws://127.0.0.1:9218/ws \
                  --worker-url http://aiworker-worker:9217 \
                  --bootstrap-token wtk_xxxxxxxxxxxx \
                  --display-name test
@@ -199,10 +199,10 @@ gateway 自己在 close WS 时派发 `worker.offline`（`inferOfflineReason` 把
 
 ## 故障恢复
 
-- **`AIWORKER_MASTER_KEY` 丢失** = 所有 `registered_workers.apiTokenEnc` 无法解密 → 必须对每个 worker 重新 `aiworker pair`。
+- **`AIWORKER_MASTER_KEY` 丢失** = 所有 `registered_workers.apiTokenEnc` 无法解密 → 必须对每个 worker 重新 `aiworker fleet pair`。
 - **单个 node 掉线**：gateway `handleClose` 把它从 `NodeRegistry` 摘掉，广播 `worker.offline`，写 `audit_events(action='gateway.node.disconnected')`；已发到该 worker 但未收到 response 的 request 由 `ForwardTable.onExpire('node_gone')` 给 operator 回一条 `response(ok=false, error.code='node_gone')`，避免 aiworker CLI 永久挂起。
 - **gateway 重启**：所有 in-flight forward 在 `ForwardTable.dispose()` 里取消；operator 会看到补偿错误响应；node 侧的 `startGatewayNode` 默认开启自动重连（`--no-reconnect` 可关），连回来后 subscriber 重新挂 bus。
-- **操作员 aiworker.json 失密**：deviceToken 等价于 operator 的 bearer，任何能读到 `~/.aiworker/aiworker.json` 的本机用户都能冒充 operator。文件保存时强制 `0600`；疑似泄露时走 `aiworker token rotate` 或 `aiworker fleet remove` + `aiworker pair` 重建。
+- **操作员 aiworker.json 失密**：deviceToken 等价于 operator 的 bearer，任何能读到 `~/.aiworker/aiworker.json` 的本机用户都能冒充 operator。文件保存时强制 `0600`；疑似泄露时走 `aiworker fleet token rotate` 或 `aiworker fleet remove` + `aiworker fleet pair` 重建。
 
 ## Backup 清单
 

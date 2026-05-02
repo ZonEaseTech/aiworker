@@ -33,8 +33,8 @@
            │  ┌─────────────────────────────────────────────┴──┐
            │  │  Step 4: operator 在 gateway 同机 loopback     │
            │  │  ws://127.0.0.1:9218/ws (空 token bypass)      │
-           │  │  $ aiworker enroll list                        │
-           │  │  $ aiworker enroll approve YDCR-ZD8M           │
+           │  │  $ aiworker fleet enroll list                        │
+           │  │  $ aiworker fleet enroll approve YDCR-ZD8M           │
            │  └─────────────────────────────────────────────┬──┘
            │                                                │
            │ ◄─────── enrollment.approved (deviceToken) ────┤
@@ -80,10 +80,10 @@ i [aiworker serve] OTP enrolling to wss://your-gateway.example/enroll-ws
 **Operator 端**（gateway 主机或 basicauth 远端）：
 
 ```sh
-aiworker enroll list                       # 看 pending OTP
-aiworker enroll approve YDCR-ZD8M          # ✔ 已批准
+aiworker fleet enroll list                       # 看 pending OTP
+aiworker fleet enroll approve YDCR-ZD8M          # ✔ 已批准
 aiworker fleet list                        # online: true
-aiworker chat w_ntssfzwwzzq0 'hello'       # NDJSON 流式输出
+aiworker fleet chat w_ntssfzwwzzq0 'hello'       # NDJSON 流式输出
 ```
 
 完整端到端实测见 [docs/changelog.md](docs/changelog.md) 11:50 条目。
@@ -127,7 +127,7 @@ bun apps/cli/src/aiworker.ts <subcmd>      # = aiworker <subcmd>
 |---|---|---|---|
 | 朋友/客户/CI 临时装 worker | **OTP（推荐）** | 零（worker 不持任何 fleet 共享 secret） | 看 8 字符 OTP → approve |
 | k8s/docker compose 批量 unattended | self-enroll | `AIWORKER_JOIN_TOKEN`（fleet 共享） | 无（自动入网） |
-| 高安全单 worker 手动 | 手动 pair | worker 启动后输出 `wtk_xxx` bootstrap token | `aiworker pair --bootstrap-token wtk_...` |
+| 高安全单 worker 手动 | 手动 pair | worker 启动后输出 `wtk_xxx` bootstrap token | `aiworker fleet pair --bootstrap-token wtk_...` |
 | docker fast-launch（gateway 同机） | `aiworker fleet launch` | gateway 自动注入 | 一行命令 |
 
 ### OTP（推荐）
@@ -141,8 +141,8 @@ aiworker serve
 
 Operator:
 ```sh
-aiworker enroll list                       # → pending [{ otp, workerId, displayName }]
-aiworker enroll approve <OTP>
+aiworker fleet enroll list                       # → pending [{ otp, workerId, displayName }]
+aiworker fleet enroll approve <OTP>
 ```
 
 ### self-enroll（自动化）
@@ -166,7 +166,7 @@ aiworker serve --gateway 'wss://operator:<pwd>@gateway/ws'
 # 抓 stdout 的 wtk_xxx
 
 # Operator:
-aiworker pair --url 'wss://operator:<pwd>@gateway/ws' \
+aiworker fleet pair --url 'wss://operator:<pwd>@gateway/ws' \
               --worker-url http://<worker-host>:9217 \
               --bootstrap-token wtk_xxx \
               --display-name production-1
@@ -195,31 +195,31 @@ aiworker fleet list                                # 谁在线
 aiworker fleet remove <workerId>                   # 摘除（deviceToken 立即失效）
 
 # chat（流式 NDJSON）
-aiworker chat <workerId> 'hello'
-aiworker chat <workerId> '继续' --conversation-id <prev-id>
+aiworker fleet chat <workerId> 'hello'
+aiworker fleet chat <workerId> '继续' --conversation-id <prev-id>
 
 # 配置（乐观锁必须带 --if-match）
-aiworker config get <workerId>                     # 读出含 version
-aiworker config set <workerId> "$(cat new.json)" --if-match <version>
+aiworker fleet config get <workerId>                     # 读出含 version
+aiworker fleet config set <workerId> "$(cat new.json)" --if-match <version>
 
 # Token 轮换
-aiworker token rotate <workerId>
+aiworker fleet token rotate <workerId>
 
 # OTP 审批
-aiworker enroll list / approve <OTP> / reject <OTP>
+aiworker fleet enroll list / approve <OTP> / reject <OTP>
 
 # 日志订阅
-aiworker logs <workerId> --follow --tail 200
+aiworker fleet logs <workerId> --follow --tail 200
 
 # Per-tool approvals
-aiworker approvals list
-aiworker approvals grant <workerId> <taskId> <toolCallId>           # allow
-aiworker approvals grant <workerId> <taskId> <toolCallId> --deny
+aiworker fleet approvals list
+aiworker fleet approvals grant <workerId> <taskId> <toolCallId>           # allow
+aiworker fleet approvals grant <workerId> <taskId> <toolCallId> --deny
 
 # Cron
-aiworker schedule list <workerId>
-aiworker schedule add <workerId> --expression '0 9 * * *' --prompt '早报' --channel web --chat-id daily
-aiworker schedule remove <workerId> <jobId>
+aiworker fleet schedule list <workerId>
+aiworker fleet schedule add <workerId> --expression '0 9 * * *' --prompt '早报' --channel web --chat-id daily
+aiworker fleet schedule remove <workerId> <jobId>
 ```
 
 Operator 端首次需写 `~/.aiworker/aiworker.json`：
@@ -249,7 +249,7 @@ chmod 600 ~/.aiworker/aiworker.json
 
 ```sh
 # 1. 拿 worker 当前 config + version
-aiworker config get <workerId>
+aiworker fleet config get <workerId>
 # → { "version": 1, "config": {...} }
 
 # 2. 切到 claude-code default variant（model=sonnet, timeout=120s）
@@ -261,10 +261,10 @@ NEW='{
   "channels": [],
   "evolution": { "enabled": false, "observationRetentionDays": 7 }
 }'
-aiworker config set <workerId> "$NEW" --if-match 1
+aiworker fleet config set <workerId> "$NEW" --if-match 1
 
 # 3. chat 验证
-aiworker chat <workerId> '请用中文回我一句话'
+aiworker fleet chat <workerId> '请用中文回我一句话'
 # {"kind":"accepted",...}
 # {"kind":"chat.message","payload":{"role":"assistant","content":"...claude 真实回复..."}}
 # {"kind":"done","payload":{"finishReason":"stop"}}
@@ -324,7 +324,7 @@ apps/{api, cli, web} + packages/{core, gateway, gateway-proto, shared, storage-s
 | 形态 | 适用 | 入口 | docker |
 |------|------|------|--------|
 | **裸跑** | 开发 / CI | `aiworker gateway start` / `aiworker serve` 前台 | 无 |
-| **systemd**（Linux 推荐） | 服务器长跑 | `aiworker install systemd [--user\|--system]` | 无 |
+| **systemd**（Linux 推荐） | 服务器长跑 | `aiworker gateway install systemd [--user\|--system]` | 无 |
 | **docker compose** | 不愿装 bun / per-worker 隔离 | `ops/compose/docker-compose.yml`（GHCR 镜像） | 有 |
 
 ---
@@ -358,7 +358,7 @@ apps/{api, cli, web} + packages/{core, gateway, gateway-proto, shared, storage-s
 |---|---|---|
 | `aiworker fleet list` → `WebSocket Expected 101 status code` | aiworker.json `gatewayUrl` 缺 `/ws` 或 basicauth | 重写 `~/.aiworker/aiworker.json`（见上） |
 | 公网 `/health` 返回 401 | Caddy basicauth | `curl -u operator:<pwd> https://your-gateway/health` |
-| OTP enroll 后 `aiworker chat` `executor error: OpenAI API key is not configured` | worker 没配 LLM | 走"Worker 配 LLM executor"段，切 claude-code / 配 OpenAI key |
+| OTP enroll 后 `aiworker fleet chat` `executor error: OpenAI API key is not configured` | worker 没配 LLM | 走"Worker 配 LLM executor"段，切 claude-code / 配 OpenAI key |
 | systemd `aiworker-gateway` exit 1 `gateway 入口未找到` | 用了 0.2.0 旧 cli | `bun install -g @zonease/aiworker-cli@latest`（≥0.2.1）+ restart |
 
 ---
