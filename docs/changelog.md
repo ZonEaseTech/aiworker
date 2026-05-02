@@ -1,5 +1,15 @@
 # AIWorker Changelog
 
+## 2026-05-02 19:51 [release] REL-009 / PLAN-064 — CLI 0.5.0 published and test fleet upgraded
+
+Released `@zonease/aiworker-cli@0.5.0`:
+
+- GitHub Actions release workflow `25251183256` passed for `v0.5.0`; npm `latest` resolves to `0.5.0`.
+- GitHub Release `v0.5.0` contains linux-x64, linux-arm64, darwin-x64, and darwin-arm64 tarballs.
+- Published-package smoke passed with explicit bin invocation: version reports `aiworker/0.5.0`, `aiworker up --help` renders the quick-start command, and `aiworker up --soul developer --dry-run --no-open --no-serve-web` completes without writing project state.
+- Test fleet gateway was upgraded from `0.4.11` to `0.5.0` through the published npm package and restarted; service remained active, `/health` returned ok, `/admin/` served Fleet Web assets, and `aiworker fleet list` returned successfully.
+- Follow-up recorded: BUG-042 tracks the non-blocking dry-run display issue where an omitted `--port` prints `NaN`.
+
 ## 2026-05-02 19:44 [progress] REL-009 / PLAN-064 — prepare CLI 0.5.0 release
 
 Started the `@zonease/aiworker-cli@0.5.0` release:

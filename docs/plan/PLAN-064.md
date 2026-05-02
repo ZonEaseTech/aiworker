@@ -1,8 +1,9 @@
 # PLAN-064 发布 aiworker CLI 0.5.0
 
-- **status**: implementing
+- **status**: completed
 - **createdAt**: 2026-05-02 19:41
 - **approvedAt**: 2026-05-02 19:41
+- **completedAt**: 2026-05-02 19:51
 - **relatedTask**: REL-009
 
 ## 现状
@@ -73,7 +74,19 @@
 - Passed: Fleet and Worker Web bundles are present in `apps/cli/dist/web`
 - Passed to local auth boundary: `cd apps/cli/dist && bun publish --dry-run --access public` packed 26 files / 2.45MB, then stopped with missing local npm authentication.
 - Passed: `git diff --check`
-- Pending: GitHub Actions release workflow for `v0.5.0`
-- Pending: npm registry latest resolves to `0.5.0`
-- Pending: published CLI smoke reports `aiworker/0.5.0`
-- Pending: 测试服 gateway/fleet health and installed CLI version report `0.5.0`
+- Passed: GitHub Actions release workflow `25251183256` for `v0.5.0`
+- Passed: npm registry latest resolves to `0.5.0`
+- Passed: GitHub Release `v0.5.0` has linux-x64, linux-arm64, darwin-x64, and darwin-arm64 tarballs
+- Passed: published CLI smoke reports `aiworker/0.5.0`
+- Passed: published CLI `aiworker up --help`
+- Passed: published CLI `aiworker up --soul developer --dry-run --no-open --no-serve-web`
+- Passed: 测试服 gateway/fleet health and installed CLI version report `0.5.0`
+- Passed: 测试服 gateway `/admin/` serves Fleet Web index, CSS, and JS assets
+- Passed: 测试服 `aiworker fleet list`
+
+## 结果
+
+- `@zonease/aiworker-cli@0.5.0` 已发布到 npm latest。
+- `v0.5.0` GitHub Release 已创建并上传四个平台的 standalone tarball。
+- 测试服 gateway/fleet 已升级到 `0.5.0`，服务和 admin bundle smoke 正常。
+- 发现一个非阻断 follow-up：BUG-042 跟踪 `up --dry-run` 未传 `--port` 时显示 `NaN`。
