@@ -424,6 +424,18 @@ export async function submitTask(prompt: string): Promise<AgentTaskRow> {
   return res.task
 }
 
+export async function continueConversation(conversationId: string, prompt: string): Promise<AgentTaskRow> {
+  const res = await workerFetch<{ task: AgentTaskRow }>(
+    `/api/worker/orchestrator/conversations/${encodeURIComponent(conversationId)}/messages`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt }),
+    },
+  )
+  return res.task
+}
+
 export function listConversations(): Promise<{ conversations: ConversationRow[] }> {
   return workerFetch<{ conversations: ConversationRow[] }>('/api/worker/orchestrator/conversations')
 }

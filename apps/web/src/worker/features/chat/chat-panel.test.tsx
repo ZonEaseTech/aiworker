@@ -6,6 +6,7 @@ import { ChatPanel } from './chat-panel'
 
 const mocks = vi.hoisted(() => ({
   conversations: [] as Array<{ id: string, channel: string, chatId: string, lastActiveAt: string }>,
+  continueConversation: vi.fn(),
   invalidateMessages: vi.fn(),
   invalidateTasks: vi.fn(),
   messageConversationIds: [] as Array<string | undefined>,
@@ -29,6 +30,10 @@ vi.mock('@/worker/lib/hooks', () => ({
     isLoading: false,
     data: { conversations: mocks.conversations },
   }),
+  useContinueConversation: () => ({
+    isPending: false,
+    mutateAsync: mocks.continueConversation,
+  }),
   useInvalidateMessages: () => mocks.invalidateMessages,
   useInvalidateTasks: () => mocks.invalidateTasks,
   useMessages: (conversationId: string | undefined) => {
@@ -48,6 +53,8 @@ vi.mock('@/worker/lib/hooks', () => ({
 describe('worker chat panel', () => {
   beforeEach(() => {
     mocks.conversations = []
+    mocks.continueConversation.mockReset()
+    mocks.continueConversation.mockResolvedValue({ id: 'task-continue' })
     mocks.invalidateMessages.mockReset()
     mocks.invalidateTasks.mockReset()
     mocks.messageConversationIds = []
@@ -129,5 +136,66 @@ describe('worker chat panel', () => {
     expect(screen.queryByText('legacy stream')).toBeNull()
     expect(await screen.findByText('right stream', {}, asyncRenderWait)).toBeTruthy()
     expect(mocks.messageConversationIds).toContain('conv-1')
+  })
+
+  it('continues the selected conversation instead of creating a new task conversation', async () => {
+    mocks.conversations = [{
+      id: 'conv-existing',
+      channel: 'web',
+      chatId: 'chat-existing',
+      lastActiveAt: '2026-05-02T21:00:00.000Z',
+    }]
+    mocks.continueConversation.mockResolvedValue({ id: 'task-continue' })
+
+    render(<ChatPanel />)
+
+    const conversationButton = screen.getByText('web:chat-existing').closest('button')
+    expect(conversationButton).toBeTruthy()
+    fireEvent.click(conversationButton!)
+    fireEvent.change(screen.getByLabelText('Prompt'), { target: { value: 'second turn' } })
+    fireEvent.click(screen.getByRole('button', { name: /发送/ }))
+
+    await waitFor(() => expect(mocks.continueConversation).toHaveBeenCalledWith({
+      conversationId: 'conv-existing',
+      prompt: 'second turn',
+    }))
+    expect(mocks.submitTask).not.toHaveBeenCalled()
+    await waitFor(() => expect(mocks.subscribeEvents).toHaveBeenCalled())
+
+    await act(async () => {
+      mocks.sseHandler?.({
+        type: 'orchestrator.text',
+        data: { conversationId: 'conv-existing', taskId: 'task-continue', delta: 'continued reply' },
+      })
+      mocks.sseHandler?.({
+        type: 'orchestrator.finished',
+        data: { conversationId: 'conv-existing', taskId: 'task-continue' },
+      })
+    })
+
+    expect(await screen.findByText('continued reply', {}, asyncRenderWait)).toBeTruthy()
+    expect(mocks.invalidateMessages).toHaveBeenCalledWith('conv-existing')
+    expect(mocks.messageConversationIds).toContain('conv-existing')
+  })
+
+  it('uses the explicit new conversation mode after a conversation was selected', async () => {
+    mocks.conversations = [{
+      id: 'conv-existing',
+      channel: 'web',
+      chatId: 'chat-existing',
+      lastActiveAt: '2026-05-02T21:00:00.000Z',
+    }]
+
+    render(<ChatPanel />)
+
+    const conversationButton = screen.getByText('web:chat-existing').closest('button')
+    expect(conversationButton).toBeTruthy()
+    fireEvent.click(conversationButton!)
+    fireEvent.click(screen.getByRole('button', { name: /新会话/ }))
+    fireEvent.change(screen.getByLabelText('Prompt'), { target: { value: 'fresh turn' } })
+    fireEvent.click(screen.getByRole('button', { name: /发送/ }))
+
+    await waitFor(() => expect(mocks.submitTask).toHaveBeenCalledWith('fresh turn'))
+    expect(mocks.continueConversation).not.toHaveBeenCalled()
   })
 })

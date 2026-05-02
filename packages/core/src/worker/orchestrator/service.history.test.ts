@@ -196,6 +196,15 @@ function parseAuditMetadata(row: { richMetadata: string | null }): Record<string
   return JSON.parse(row.richMetadata) as Record<string, unknown>
 }
 
+async function waitUntil(predicate: () => boolean, label: string): Promise<void> {
+  for (let i = 0; i < 50; i++) {
+    if (predicate())
+      return
+    await new Promise(resolve => setTimeout(resolve, 10))
+  }
+  throw new Error(`timed out waiting for ${label}`)
+}
+
 describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
   let tmpRoot: string
   let workspaces: WorkspaceManager
@@ -1022,6 +1031,49 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
     expect(executor.inputs[0]?.engineBinding).toBeUndefined()
     expect(executor.inputs[1]?.engineBinding).toBeUndefined()
     expect(executor.inputs[2]?.engineBinding).toEqual(firstBinding)
+    expect(getSessionEntry(sessionKey)?.engineBindings).toEqual({ codex: secondBinding })
+  })
+
+  it('continues a selected Worker Admin conversation on the same session entry', async () => {
+    const firstBinding = { protocol: 'current', threadId: 'selected-thread-1' }
+    const secondBinding = { protocol: 'current', threadId: 'selected-thread-2' }
+    const executor = scriptedExecutor([
+      { engine: 'codex', binding: firstBinding, text: 'first selected response' },
+      { engine: 'codex', binding: secondBinding, text: 'second selected response' },
+    ])
+    const orch = new Orchestrator({
+      config: buildConfig({ executor: { engine: 'codex', variant: 'default' } }),
+      brain: stubBrain(),
+      executor,
+      bus: silentBus(),
+      workerId: 'w_history_test',
+      workspaces,
+      processes,
+      approvals: new ApprovalStore(),
+    })
+
+    const first = envelope('first selected turn')
+    const sessionKey = resolveSessionKey(first)
+    await orch.ingest(first)
+    const firstEntry = getSessionEntry(sessionKey)
+    expect(firstEntry?.currentConversationId).toBeDefined()
+    const conversationId = firstEntry!.currentConversationId
+
+    const task = await orch.continueConversation(conversationId, 'second selected turn')
+    expect(task.id.length).toBeGreaterThan(0)
+    await waitUntil(() => {
+      const rows = getWorkerDb().select().from(messages).where(eq(messages.conversationId, conversationId)).all()
+      return rows.some(row => row.content === 'second selected response')
+    }, 'selected conversation continuation')
+
+    const db = getWorkerDb()
+    const rows = db.select().from(messages).where(eq(messages.conversationId, conversationId)).all()
+    expect(rows.some(row => row.content === 'first selected turn')).toBe(true)
+    expect(rows.some(row => row.content === 'second selected turn')).toBe(true)
+    expect(rows.some(row => row.content === 'second selected response')).toBe(true)
+    expect(db.select().from(conversations).all()).toHaveLength(1)
+    expect(executor.inputs[1]?.engineBinding).toEqual(firstBinding)
+    expect(getSessionEntry(sessionKey)?.currentConversationId).toBe(conversationId)
     expect(getSessionEntry(sessionKey)?.engineBindings).toEqual({ codex: secondBinding })
   })
 

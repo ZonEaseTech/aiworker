@@ -1,6 +1,7 @@
 import type { WorkerRuntime } from '@zonease/aiworker-core'
 import { OpenAPIHono } from '@hono/zod-openapi'
 
+import { AppError } from '@zonease/aiworker-shared'
 import { agentTasks, conversations, getWorkerDb, messages } from '@zonease/aiworker-storage-sqlite/worker'
 import { desc, eq } from 'drizzle-orm'
 import { z } from 'zod'
@@ -38,6 +39,29 @@ export function buildOrchestratorRoutes(getRuntime: () => WorkerRuntime) {
     }
     const task = await getRuntime().orchestrator.submitTask(parsed.data.prompt)
     return c.json({ task }, 201)
+  })
+
+  routes.post('/conversations/:id/messages', async (c) => {
+    const raw = await c.req.json().catch(() => null)
+    const parsed = submitTaskBody.safeParse(raw)
+    if (!parsed.success) {
+      return c.json({
+        error: {
+          code: 'invalid-body',
+          message: 'invalid conversation message body',
+          details: parsed.error.flatten().fieldErrors,
+        },
+      }, 400)
+    }
+    try {
+      const task = await getRuntime().orchestrator.continueConversation(c.req.param('id'), parsed.data.prompt)
+      return c.json({ task }, 201)
+    }
+    catch (err) {
+      if (err instanceof AppError)
+        return c.json(err.toJSON(), err.status as 400)
+      throw err
+    }
   })
 
   routes.get('/conversations', (c) => {

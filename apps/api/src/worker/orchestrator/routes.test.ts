@@ -4,6 +4,7 @@ import { mkdtempSync } from 'node:fs'
 import fs from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { AppError } from '@zonease/aiworker-shared'
 import { closeWorkerDb, initWorkerDb, runWorkerMigrations } from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
@@ -15,7 +16,10 @@ import { buildOrchestratorRoutes } from './routes'
  * 一票否决，不进 orchestrator.submitTask。
  */
 
-function stubRuntime(submit: (prompt: string) => Promise<{ id: string }>): WorkerRuntime {
+function stubRuntime(
+  submit: (prompt: string) => Promise<{ id: string }>,
+  continueConversation: (conversationId: string, prompt: string) => Promise<{ id: string }> = async () => ({ id: 'task-continue' }),
+): WorkerRuntime {
   return {
     workerId: 'w_routes_test',
     config: {} as WorkerRuntime['config'],
@@ -23,7 +27,7 @@ function stubRuntime(submit: (prompt: string) => Promise<{ id: string }>): Worke
     executor: {} as WorkerRuntime['executor'],
     channels: {} as WorkerRuntime['channels'],
     bus: {} as WorkerRuntime['bus'],
-    orchestrator: { submitTask: submit } as unknown as WorkerRuntime['orchestrator'],
+    orchestrator: { continueConversation, submitTask: submit } as unknown as WorkerRuntime['orchestrator'],
     cron: {} as WorkerRuntime['cron'],
     workspaces: {} as WorkerRuntime['workspaces'],
     processes: {} as WorkerRuntime['processes'],
@@ -139,5 +143,62 @@ describe('buildOrchestratorRoutes — POST /tasks zod validation', () => {
       body: 'not-json',
     }))
     expect(res.status).toBe(400)
+  })
+
+  it('accepts a selected conversation message and forwards the trimmed prompt', async () => {
+    const received: Array<{ conversationId: string, prompt: string }> = []
+    const routes = buildOrchestratorRoutes(() => stubRuntime(
+      async () => ({ id: 'unused' }),
+      async (conversationId, prompt) => {
+        received.push({ conversationId, prompt })
+        return { id: 'task-selected' }
+      },
+    ))
+    const res = await routes.fetch(new Request('http://w/conversations/conv-1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: '  continue this  ' }),
+    }))
+    expect(res.status).toBe(201)
+    const body = await res.json() as { task: { id: string } }
+    expect(body.task.id).toBe('task-selected')
+    expect(received).toEqual([{ conversationId: 'conv-1', prompt: 'continue this' }])
+  })
+
+  it('rejects an empty selected conversation message before dispatch', async () => {
+    let called = false
+    const routes = buildOrchestratorRoutes(() => stubRuntime(
+      async () => ({ id: 'unused' }),
+      async () => {
+        called = true
+        return { id: 'never' }
+      },
+    ))
+    const res = await routes.fetch(new Request('http://w/conversations/conv-1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: '   ' }),
+    }))
+    expect(res.status).toBe(400)
+    const body = await res.json() as { error: { code: string } }
+    expect(body.error.code).toBe('invalid-body')
+    expect(called).toBe(false)
+  })
+
+  it('maps selected conversation dispatch errors to AppError responses', async () => {
+    const routes = buildOrchestratorRoutes(() => stubRuntime(
+      async () => ({ id: 'unused' }),
+      async () => {
+        throw AppError.notFound('conversation not found', 'not-found')
+      },
+    ))
+    const res = await routes.fetch(new Request('http://w/conversations/missing/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: 'hello' }),
+    }))
+    expect(res.status).toBe(404)
+    const body = await res.json() as { error: { code: string, message: string } }
+    expect(body.error).toEqual({ code: 'not-found', message: 'conversation not found' })
   })
 })

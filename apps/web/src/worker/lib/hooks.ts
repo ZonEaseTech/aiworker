@@ -14,6 +14,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback } from 'react'
 import {
   addCron,
+  continueConversation,
   deleteCron,
   deleteSecret,
   getConfig,
@@ -280,6 +281,19 @@ export function useSubmitTask() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: TASKS_KEY })
       qc.invalidateQueries({ queryKey: CONVERSATIONS_KEY })
+    },
+  })
+}
+
+export function useContinueConversation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ conversationId, prompt }: { conversationId: string, prompt: string }) =>
+      continueConversation(conversationId, prompt),
+    onSuccess: (_task, variables) => {
+      qc.invalidateQueries({ queryKey: TASKS_KEY })
+      qc.invalidateQueries({ queryKey: CONVERSATIONS_KEY })
+      qc.invalidateQueries({ queryKey: messagesKey(variables.conversationId) })
     },
   })
 }

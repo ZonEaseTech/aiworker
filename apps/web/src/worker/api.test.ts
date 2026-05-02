@@ -1,6 +1,6 @@
 import type { WorkerSSEEvent } from './api'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { subscribeEvents } from './api'
+import { continueConversation, subscribeEvents } from './api'
 import { __resetBearerForTests, setBearerToken } from './lib/auth'
 
 function sseResponse(chunks: string[]): Response {
@@ -47,5 +47,30 @@ describe('worker api subscribeEvents', () => {
         data: { conversationId: 'conv-1', taskId: 'task-1' },
       },
     ])
+  })
+
+  it('posts continuation prompts to the selected conversation messages path', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      task: {
+        id: 'task-continue',
+        status: 'queued',
+        prompt: 'hello',
+        createdAt: '2026-05-02T21:00:00.000Z',
+      },
+    }), {
+      headers: { 'Content-Type': 'application/json' },
+      status: 201,
+    }))
+
+    const task = await continueConversation('conv/with/slash', 'hello')
+
+    expect(task.id).toBe('task-continue')
+    expect(fetchMock).toHaveBeenCalledWith('/api/worker/orchestrator/conversations/conv%2Fwith%2Fslash/messages', {
+      method: 'POST',
+      headers: expect.any(Headers),
+      body: JSON.stringify({ prompt: 'hello' }),
+    })
+    const headers = fetchMock.mock.calls[0]?.[1]?.headers as Headers
+    expect(headers.get('Content-Type')).toBe('application/json')
   })
 })

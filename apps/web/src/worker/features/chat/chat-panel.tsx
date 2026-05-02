@@ -1,9 +1,10 @@
-import { Loader2, Send } from 'lucide-react'
+import { Loader2, Plus, Send } from 'lucide-react'
 import { useEffect, useId, useRef, useState } from 'react'
 import { Button } from '@/shared/components/ui/button'
 import { Skeleton } from '@/shared/components/ui/skeleton'
 import { subscribeEvents, WorkerApiError } from '@/worker/api'
 import {
+  useContinueConversation,
   useConversations,
   useInvalidateMessages,
   useInvalidateTasks,
@@ -33,13 +34,12 @@ interface StreamChunk {
  */
 export function ChatPanel() {
   const conversationsQ = useConversations()
-  // 用户显式选中的会话；为空时回退到列表第一条（最近活跃）。这样用 useMemo
-  // 派生而非 useState + useEffect，避免 react-hooks-extra 报「在 effect 里
-  // 直接 setState」。
+  // null 表示显式新会话模式；点选左侧历史后，composer 才继续该会话。
   const [pickedId, setPickedId] = useState<string | null>(null)
-  const activeId = pickedId ?? conversationsQ.data?.conversations[0]?.id ?? null
+  const activeId = pickedId
   const messagesQ = useMessages(activeId ?? undefined)
   const submit = useSubmitTask()
+  const continueSelected = useContinueConversation()
   const invalidateMessages = useInvalidateMessages()
   const invalidateTasks = useInvalidateTasks()
 
@@ -58,17 +58,21 @@ export function ChatPanel() {
 
   async function send() {
     const text = prompt.trim()
-    if (text.length === 0 || submit.isPending)
+    const selectedConversationId = pickedId
+    const isPending = submit.isPending || continueSelected.isPending
+    if (text.length === 0 || isPending)
       return
     setError(null)
     try {
-      const task = await submit.mutateAsync(text)
+      const task = selectedConversationId
+        ? await continueSelected.mutateAsync({ conversationId: selectedConversationId, prompt: text })
+        : await submit.mutateAsync(text)
       setPrompt('')
       // 启动当前 task 的 SSE 订阅；上一次的订阅取消。
       subRef.current?.abort()
       const ctrl = new AbortController()
       subRef.current = ctrl
-      setStreaming({ taskId: task.id, conversationId: null, text: '', done: false })
+      setStreaming({ taskId: task.id, conversationId: selectedConversationId, text: '', done: false })
       void runSSE(ctrl, task.id, {
         onConversation: (conversationId) => {
           setPickedId(conversationId)
@@ -108,7 +112,19 @@ export function ChatPanel() {
       className="grid min-w-0 grid-cols-1 gap-4 lg:h-[calc(100vh-200px)] lg:min-h-[420px] lg:grid-cols-[280px_1fr]"
     >
       <aside className="flex max-h-56 min-h-0 min-w-0 flex-col gap-2 overflow-y-auto rounded-md border bg-card p-3 lg:max-h-none">
-        <h2 className="px-1 text-sm font-bold">Conversations</h2>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="px-1 text-sm font-bold">Conversations</h2>
+          <Button
+            type="button"
+            variant={pickedId === null ? 'secondary' : 'outline'}
+            size="sm"
+            className="min-h-8 px-2 py-1 text-xs"
+            onClick={() => setPickedId(null)}
+          >
+            <Plus className="size-3.5" />
+            新会话
+          </Button>
+        </div>
         {conversationsQ.isLoading
           ? <Skeleton className="h-20" />
           : (conversationsQ.data?.conversations ?? []).length === 0
@@ -148,7 +164,7 @@ export function ChatPanel() {
           {!activeId
             ? (
                 <p className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground sm:p-6">
-                  发一条消息会创建新会话。
+                  新会话
                 </p>
               )
             : messagesQ.isLoading
@@ -221,9 +237,9 @@ export function ChatPanel() {
           <Button
             type="submit"
             className="w-full sm:w-auto"
-            disabled={submit.isPending || prompt.trim().length === 0}
+            disabled={submit.isPending || continueSelected.isPending || prompt.trim().length === 0}
           >
-            {submit.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+            {submit.isPending || continueSelected.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
             发送
           </Button>
         </form>
@@ -240,12 +256,11 @@ interface SSEHandlers {
 }
 
 /**
- * 订阅一次 SSE，尽量锁定当前 `submitTask()` 创建的 conversation。
+ * 订阅一次 SSE，尽量锁定当前 operator send 对应的 conversation。
  *
- * 后端 submitTask 使用 `chatId = task:<taskId>` 创建 web conversation，并在
- * 这条 web task 的 `orchestrator.*` SSE payload 里带 `taskId`。如果
- * `conversation.created` 因 race 没赶上，带匹配 taskId 的首个 orchestrator
- * 事件也能补齐 conversationId；不带 taskId 的其他通道任务不能抢占绑定。
+ * 新会话路径会先发 `conversation.created`；继续会话路径则由带匹配 taskId 的
+ * `orchestrator.*` 事件补齐 conversationId。不带 taskId 的其他通道任务不能
+ * 抢占绑定。
  */
 async function runSSE(ctrl: AbortController, taskId: string, handlers: SSEHandlers): Promise<void> {
   let conversationId: string | null = null

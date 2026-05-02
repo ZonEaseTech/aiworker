@@ -18,8 +18,8 @@ import type { ApprovalDecision, ApprovalStore } from './approvals'
 import type { DecisionContext } from './decisions'
 import type { ProcessManager } from './process-manager'
 
-import { DEFAULT_MAX_HISTORY_MESSAGES } from '@zonease/aiworker-shared'
-import { agentTasks, conversations, getSessionEntry, getWorkerDb, messages, recordSessionCompaction, rotateSessionConversation, touchSessionEntry, updateSessionEngineBinding, upsertSessionEntry } from '@zonease/aiworker-storage-sqlite/worker'
+import { AppError, DEFAULT_MAX_HISTORY_MESSAGES } from '@zonease/aiworker-shared'
+import { agentTasks, conversations, getSessionEntry, getWorkerDb, messages, recordSessionCompaction, rotateSessionConversation, sessionEntries, touchSessionEntry, updateSessionEngineBinding, upsertSessionEntry } from '@zonease/aiworker-storage-sqlite/worker'
 
 import consola from 'consola'
 import { and, asc, desc, eq, gt } from 'drizzle-orm'
@@ -109,6 +109,7 @@ interface ExecutorTextResult {
 
 const DEFAULT_COMPACTION_MAX_SUMMARY_MESSAGES = 120
 const TRANSCRIPT_METADATA_VERSION = 1
+const WORKER_ADMIN_CONTINUATION = Symbol('worker-admin-continuation')
 
 /** `runTool` 输入。`taskId` / `toolCallId` 用作 ApprovalStore 的 key。 */
 export interface RunToolInput {
@@ -543,6 +544,9 @@ export class Orchestrator {
       this.rotateSession(sessionKey, envelope, conversation.id, gatewayResetReason(envelope))
       return { conversation, sessionAction: 'reset_requested', sessionReason: 'gateway-reset', sessionKey }
     }
+
+    if (isWorkerAdminContinuation(envelope, existing.id))
+      return { conversation: rowToState(existing), sessionAction: 'continue', sessionReason: 'worker-admin-selected-conversation', sessionKey }
 
     const existingWorkspace = await this.provisionWorkspace(existing.id)
     const recent = await loadRecentMessages(existing.id)
@@ -1088,6 +1092,53 @@ export class Orchestrator {
 
     return { id }
   }
+
+  async continueConversation(conversationId: string, prompt: string): Promise<{ id: string }> {
+    const db = getWorkerDb()
+    const conversation = db.select()
+      .from(conversations)
+      .where(and(eq(conversations.id, conversationId), eq(conversations.status, 'open')))
+      .get()
+    if (!conversation)
+      throw AppError.notFound('conversation not found', 'not-found')
+
+    const entry = db.select()
+      .from(sessionEntries)
+      .where(and(eq(sessionEntries.currentConversationId, conversation.id), eq(sessionEntries.status, 'active')))
+      .orderBy(desc(sessionEntries.lastInteractionAt))
+      .get()
+    if (!entry || entry.accountId === null)
+      throw AppError.notFound('active conversation session not found', 'not-found')
+
+    const id = crypto.randomUUID()
+    const now = new Date().toISOString()
+    db.insert(agentTasks).values({
+      id,
+      prompt,
+      status: 'queued',
+      createdAt: now,
+    }).run()
+
+    const raw = {
+      taskId: id,
+      source: 'worker-admin',
+      conversationId: conversation.id,
+      [WORKER_ADMIN_CONTINUATION]: conversation.id,
+    }
+    const envelope: Envelope = {
+      workerId: this.deps.workerId,
+      channel: entry.channel,
+      accountId: entry.accountId,
+      chatId: entry.chatId,
+      ...(entry.threadId === null ? {} : { threadId: entry.threadId }),
+      text: prompt,
+      receivedAt: now,
+      raw,
+    }
+    void this.ingest(envelope).catch(err => consola.error(`[orchestrator] continueConversation ingest failed: ${String(err)}`))
+
+    return { id }
+  }
 }
 
 function taskIdFromEnvelope(envelope: Envelope): string | undefined {
@@ -1095,6 +1146,12 @@ function taskIdFromEnvelope(envelope: Envelope): string | undefined {
     return undefined
   const taskId = (envelope.raw as Record<string, unknown>).taskId
   return typeof taskId === 'string' && taskId.length > 0 ? taskId : undefined
+}
+
+function isWorkerAdminContinuation(envelope: Envelope, conversationId: string): boolean {
+  if (!envelope.raw || typeof envelope.raw !== 'object' || Array.isArray(envelope.raw))
+    return false
+  return (envelope.raw as { [WORKER_ADMIN_CONTINUATION]?: string })[WORKER_ADMIN_CONTINUATION] === conversationId
 }
 
 function rowToChatMessage(row: Pick<TranscriptRow, 'role' | 'content' | 'toolCalls' | 'toolCallId'>): ChatMessage {

@@ -1,5 +1,30 @@
 # AIWorker Changelog
 
+## 2026-05-02 21:29 [BUG-P1] BUG-044 / PLAN-066 — Worker Admin selected conversation continuation
+
+Fixed Worker Admin Chat continuation for selected conversations:
+
+- Added a selected conversation continuation API at
+  `POST /api/worker/orchestrator/conversations/:id/messages`.
+- Added `Orchestrator.continueConversation()`, which reuses the selected
+  conversation's active session route instead of creating `chatId =
+  task:<task-id>`.
+- Worker Admin Chat now separates explicit new-conversation sends from
+  selected-conversation continuation sends.
+- Focused core coverage verifies that continuation appends to the same
+  conversation row and reuses the executor-native binding.
+
+Validation:
+
+- `bun test packages/core/src/worker/orchestrator/service.history.test.ts`
+- `bun test apps/api/src/worker/orchestrator/routes.test.ts`
+- `bun run --filter '@zonease/aiworker-web' test -- src/worker/features/chat/chat-panel.test.tsx src/worker/api.test.ts`
+- `bun run --filter '@zonease/aiworker-core' typecheck`
+- `bun run --filter '@zonease/aiworker-api' typecheck`
+- `bun run --filter '@zonease/aiworker-web' typecheck`
+- focused ESLint on touched core/API/Web files
+- `git diff --check`
+
 ## 2026-05-02 21:02 [BUG-P1] BUG-043 / PLAN-065 — Worker Admin SSE keepalive
 
 Fixed Worker Admin Chat live updates for slow executor replies:
