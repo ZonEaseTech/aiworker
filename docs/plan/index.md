@@ -93,3 +93,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-062 CLI IA canonical worker/fleet/gateway command tree**](PLAN-062.md) `2026-05-02`
 - [x] [**PLAN-063 Worker quick start `aiworker up`**](PLAN-063.md) `2026-05-02`
 - [x] [**PLAN-064 发布 aiworker CLI 0.5.0**](PLAN-064.md) `2026-05-02`
+- [x] [**PLAN-065 Worker Admin SSE keepalive for slow replies**](PLAN-065.md) `2026-05-02`

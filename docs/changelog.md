@@ -1,5 +1,32 @@
 # AIWorker Changelog
 
+## 2026-05-02 21:02 [BUG-P1] BUG-043 / PLAN-065 — Worker Admin SSE keepalive
+
+Fixed Worker Admin Chat live updates for slow executor replies:
+
+- Direct worker `GET /api/worker/events/stream` now writes initial
+  `: connected` and periodic `: keepalive` SSE comment frames below Bun's
+  default HTTP idle timeout.
+- Stream cleanup now runs on request/stream abort so heartbeat timers and bus
+  subscriptions do not leak after the browser closes the subscription.
+- Added API coverage for a byte-idle stream that receives no intermediate text
+  events before a later worker bus event, and Web coverage that keepalive
+  comments are ignored by the Worker Admin SSE parser.
+- Real local Worker Admin smoke passed with a temporary Codex-backed worker:
+  a prompt submitted at 21:00:58 displayed `BUG043_LIVE_OK` live at 21:01:22
+  without a page reload.
+
+Validation:
+
+- `bun test apps/api/src/worker/events/routes.test.ts`
+- `bun run --filter '@zonease/aiworker-web' test -- src/worker/api.test.ts`
+- `bun run --filter '@zonease/aiworker-api' typecheck`
+- `bun run --filter '@zonease/aiworker-web' typecheck`
+- `bunx eslint apps/api/src/worker/events/routes.ts apps/api/src/worker/events/routes.test.ts apps/web/src/worker/api.ts apps/web/src/worker/api.test.ts`
+- `bun run --filter '@zonease/aiworker-api' test`
+- `bun run --filter '@zonease/aiworker-web' test`
+- `git diff --check`
+
 ## 2026-05-02 19:51 [release] REL-009 / PLAN-064 — CLI 0.5.0 published and test fleet upgraded
 
 Released `@zonease/aiworker-cli@0.5.0`:
