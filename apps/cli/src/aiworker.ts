@@ -66,6 +66,7 @@ import {
 } from './commands/worker/sessions'
 import { runSoulList, runSoulShow } from './commands/worker/soul'
 import { runTokenRotate as runTokenRotateLocal } from './commands/worker/token'
+import { runUp } from './commands/worker/up'
 import { configureCliHelp, localizeGlobalOptions } from './help'
 import { bootstrapCliDotenv } from './lib/bootstrap'
 
@@ -108,6 +109,43 @@ cli
       ...(opts.force === true ? { force: true } : {}),
       ...(opts.dryRun === true ? { dryRun: true } : {}),
       ...(opts.soul === undefined ? {} : { soul: opts.soul }),
+    }))
+  })
+
+cli
+  .command('up', '一条命令初始化、验证并启动本地 worker HTTP/admin')
+  .option('--soul <preset>', 'brand-new project 初始化使用的 Soul 预设；已初始化项目不会消费此参数')
+  .option('--dry-run', '只打印 up 阶段和预检结果，不初始化、不启动 HTTP server、不打开浏览器')
+  .option('--port <n>', '覆盖 PORT 环境变量', { type: [Number] })
+  .option('--host <host>', '覆盖 AIWORKER_WORKER_HOST（默认 127.0.0.1）')
+  .option('--gateway <url>', '随 HTTP server 一起连接指定 gateway WebSocket URL')
+  .option('--gateway-token <token>', '连接 gateway 时使用的 bearer token（loopback 可省略）')
+  .option('--no-reconnect', '关闭 gateway-client 自动重连（smoke / 测试时使用）')
+  .option('--no-serve-web', '不挂载 worker bundle 到 /admin/*（默认挂载）')
+  .option('--open', '启动后打开 worker admin')
+  .option('--no-open', '启动后不自动打开 worker admin')
+  .action(async (opts: {
+    dryRun?: boolean
+    gateway?: string
+    gatewayToken?: string
+    host?: string
+    port?: number[]
+    reconnect?: boolean
+    serveWeb?: boolean
+    soul?: string
+  }) => {
+    const open = readServeOpenOption()
+    process.exit(await runUp({
+      ...(opts.soul === undefined ? {} : { soul: opts.soul }),
+      ...(opts.dryRun === true ? { dryRun: true } : {}),
+      ...(opts.port?.[0] === undefined ? {} : { port: opts.port[0] }),
+      ...(opts.host === undefined ? {} : { host: opts.host }),
+      ...(opts.gateway === undefined ? {} : { gateway: opts.gateway }),
+      ...(opts.gatewayToken === undefined ? {} : { gatewayToken: opts.gatewayToken }),
+      ...(opts.reconnect === false ? { gatewayReconnect: false } : {}),
+      ...(opts.serveWeb === false ? { serveWeb: false } : {}),
+      ...(open === undefined ? {} : { open }),
+      runtimeVersion: packageJson.version,
     }))
   })
 
@@ -326,6 +364,43 @@ cli
       ...(opts.force === true ? { force: true } : {}),
       ...(opts.dryRun === true ? { dryRun: true } : {}),
       ...(opts.soul === undefined ? {} : { soul: opts.soul }),
+    }))
+  })
+
+cli
+  .command('worker up', '一条命令初始化、验证并启动本地 worker HTTP/admin')
+  .option('--soul <preset>', 'brand-new project 初始化使用的 Soul 预设；已初始化项目不会消费此参数')
+  .option('--dry-run', '只打印 up 阶段和预检结果，不初始化、不启动 HTTP server、不打开浏览器')
+  .option('--port <n>', '覆盖 PORT 环境变量', { type: [Number] })
+  .option('--host <host>', '覆盖 AIWORKER_WORKER_HOST（默认 127.0.0.1）')
+  .option('--gateway <url>', '随 HTTP server 一起连接指定 gateway WebSocket URL')
+  .option('--gateway-token <token>', '连接 gateway 时使用的 bearer token（loopback 可省略）')
+  .option('--no-reconnect', '关闭 gateway-client 自动重连（smoke / 测试时使用）')
+  .option('--no-serve-web', '不挂载 worker bundle 到 /admin/*（默认挂载）')
+  .option('--open', '启动后打开 worker admin')
+  .option('--no-open', '启动后不自动打开 worker admin')
+  .action(async (opts: {
+    dryRun?: boolean
+    gateway?: string
+    gatewayToken?: string
+    host?: string
+    port?: number[]
+    reconnect?: boolean
+    serveWeb?: boolean
+    soul?: string
+  }) => {
+    const open = readServeOpenOption()
+    process.exit(await runUp({
+      ...(opts.soul === undefined ? {} : { soul: opts.soul }),
+      ...(opts.dryRun === true ? { dryRun: true } : {}),
+      ...(opts.port?.[0] === undefined ? {} : { port: opts.port[0] }),
+      ...(opts.host === undefined ? {} : { host: opts.host }),
+      ...(opts.gateway === undefined ? {} : { gateway: opts.gateway }),
+      ...(opts.gatewayToken === undefined ? {} : { gatewayToken: opts.gatewayToken }),
+      ...(opts.reconnect === false ? { gatewayReconnect: false } : {}),
+      ...(opts.serveWeb === false ? { serveWeb: false } : {}),
+      ...(open === undefined ? {} : { open }),
+      runtimeVersion: packageJson.version,
     }))
   })
 
@@ -862,6 +937,7 @@ const NUMERIC_RULES: Record<string, Record<string, NumericRule>> = {
   'gateway stop': { timeoutMs: { integer: true, min: 0 } },
   'run': { timeoutMs: { integer: true, min: 1 } },
   'serve': { port: { integer: true, min: 1, max: 65_535 } },
+  'up': { port: { integer: true, min: 1, max: 65_535 } },
   'sessions list': {
     limit: { integer: true, min: 1, max: 200 },
     offset: { integer: true, min: 0 },
@@ -873,6 +949,7 @@ const NUMERIC_RULES: Record<string, Record<string, NumericRule>> = {
   'worker config set': { ifMatch: { integer: true, min: 1 } },
   'worker run': { timeoutMs: { integer: true, min: 1 } },
   'worker serve': { port: { integer: true, min: 1, max: 65_535 } },
+  'worker up': { port: { integer: true, min: 1, max: 65_535 } },
   'worker sessions list': {
     limit: { integer: true, min: 1, max: 200 },
     offset: { integer: true, min: 0 },

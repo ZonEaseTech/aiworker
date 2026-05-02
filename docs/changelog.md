@@ -1,5 +1,24 @@
 # AIWorker Changelog
 
+## 2026-05-02 19:18 [feature] FEAT-045 / PLAN-063 — Worker quick start `aiworker up`
+
+新增本地 worker 快速启动入口：
+
+- `aiworker up` 与 `aiworker worker up` 已注册；root shortcut 仍等价于 worker canonical tree，不新增 `fleet up` / `gateway up`。
+- `up` 编排固定阶段：scope 解析、init if needed、project capability validation、executor readiness、serve。brand-new 非交互项目必须显式 `--soul <preset>`；已初始化 project 下 `--soul` 不会被消费，避免误刷新 Soul 模板。
+- `up --dry-run` 只打印阶段、init preflight 和 serve 参数，不写 `.aiworker/`、不启动 HTTP server、不打开浏览器。
+- project capability validation 的 error 会阻断启动；executor readiness 只做 non-blocking 提示，缺某个 engine CLI 不会阻止 worker HTTP/admin 启动。
+- `up` 透传现有 `serve` 参数：`--port`、`--host`、`--gateway`、`--gateway-token`、`--no-reconnect`、`--no-serve-web`、`--open`、`--no-open`。
+- CLI help、`aiworker init` next steps、README、`docs/cli.md` 和 `docs/architecture.md` 已同步快速启动路径。
+
+验证：
+
+- `bun test apps/cli/src/commands/worker/init.integration.test.ts apps/cli/src/commands/worker/up.integration.test.ts apps/cli/src/commands/worker/up.test.ts apps/cli/src/lib/bootstrap.test.ts apps/cli/src/aiworker.test.ts`
+- `bun run --filter '@zonease/aiworker-cli' typecheck`
+- `bun run --filter '@zonease/aiworker-cli' test`
+- `bun run lint`
+- `git diff --check`
+
 ## 2026-05-02 14:07 [refactor] REFACTOR-015 / PLAN-062 — CLI worker/fleet/gateway 命令树收敛
 
 按 pre-1.0 策略完成 CLI 信息架构破坏性收敛，不保留旧拼写 alias：

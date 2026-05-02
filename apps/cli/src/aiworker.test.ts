@@ -20,6 +20,7 @@ import { getUngroupedHelpCommands } from './help'
 // `Command#args` 上），这里就用 cac 实际归一化后的形态做断言。
 const ROOT_WORKER_COMMANDS = [
   'init',
+  'up',
   'scope',
   'doctor',
   'executor doctor',
@@ -157,10 +158,12 @@ describe('aiworker cli registration', () => {
       'Worker canonical 入口',
       'Fleet 控制面',
       'Gateway 生命周期',
-      'aiworker init --soul developer -> aiworker serve',
+      'aiworker up --soul developer',
+      'aiworker worker up --soul developer',
       'aiworker soul list -> aiworker soul show developer',
       'executor mcp add',
       'doctor',
+      'up',
       'serve',
       'soul list',
       'sessions list',
@@ -185,6 +188,23 @@ describe('aiworker cli registration', () => {
       expect(result.output).toContain('--open')
       expect(result.output).toContain('--no-open')
       expect(result.output).toContain('打开 worker admin')
+    }
+    finally {
+      cleanup(result)
+    }
+  })
+
+  it('up help 暴露快速启动和 serve 透传参数', async () => {
+    const result = await runCli(['up', '--help'])
+    try {
+      expect(result.exitCode).toBe(0)
+      expect(result.output).toContain('--soul <preset>')
+      expect(result.output).toContain('--dry-run')
+      expect(result.output).toContain('--port <n>')
+      expect(result.output).toContain('--gateway <url>')
+      expect(result.output).toContain('--no-open')
+      expect(result.output).toContain('brand-new project 初始化')
+      expect(result.output).toContain('不初始化、不启动 HTTP server')
     }
     finally {
       cleanup(result)
@@ -281,6 +301,15 @@ describe('preprocessArgv', () => {
       'context7',
       '--engine',
       'codex',
+    ])
+  })
+
+  it('worker up 被折叠为 canonical command', () => {
+    expect(run('worker', 'up', '--dry-run')).toEqual([
+      '/usr/bin/bun',
+      '/path/to/aiworker.ts',
+      'worker up',
+      '--dry-run',
     ])
   })
 
@@ -410,6 +439,20 @@ describe('aiworker malformed argv handling', () => {
       expect(result.output).toContain('--port must be a finite number')
       expect(result.output).not.toContain('worker.db ready')
       expect(result.output).not.toContain('listening on :NaN')
+      expect(existsSync(path.join(result.aiworkerHome, '.env'))).toBe(false)
+    }
+    finally {
+      cleanup(result)
+    }
+  })
+
+  it('rejects malformed up port options before init or serve side effects', async () => {
+    const result = await runCli(['up', '--soul', 'developer', '--port', 'nope'])
+    try {
+      expect(result.exitCode).toBe(2)
+      expect(result.output).toContain('--port must be a finite number')
+      expect(result.output).not.toContain('[aiworker up] stage')
+      expect(existsSync(path.join(result.root, '.aiworker'))).toBe(false)
       expect(existsSync(path.join(result.aiworkerHome, '.env'))).toBe(false)
     }
     finally {

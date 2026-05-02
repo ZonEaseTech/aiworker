@@ -91,3 +91,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-060 Rename CLI operator module away from aim**](PLAN-060.md) `2026-05-02`
 - [x] [**PLAN-061 reloadRuntime in-process serialization**](PLAN-061.md) `2026-05-02`
 - [x] [**PLAN-062 CLI IA canonical worker/fleet/gateway command tree**](PLAN-062.md) `2026-05-02`
+- [x] [**PLAN-063 Worker quick start `aiworker up`**](PLAN-063.md) `2026-05-02`

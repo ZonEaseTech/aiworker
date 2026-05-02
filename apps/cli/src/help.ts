@@ -13,6 +13,7 @@ interface HelpGroup {
 
 const ROOT_WORKER_COMMANDS = [
   'init',
+  'up',
   'scope',
   'doctor',
   'executor doctor',
@@ -76,6 +77,7 @@ const ROOT_WORKER_SUMMARIES: Record<(typeof ROOT_WORKER_COMMANDS)[number], strin
   'executor mcp add': '声明一个 executor 原生 MCP server',
   'executor mcp sync': '投影 executor MCP 声明到 engine 官方 project 配置',
   'init': '初始化 worker.db、身份、token 和默认配置',
+  'up': '一条命令初始化、验证并启动本地 worker',
   'run': '不启动 HTTP server，直接给 orchestrator 投递一条消息',
   'schedule add': '在本地 worker.db 中新增一条 cron 任务',
   'schedule list': '列出本地 worker.db 中的 cron 任务',
@@ -187,8 +189,8 @@ function buildHelpSections(cli: CAC, sections: HelpSection[]): HelpSection[] {
     {
       title: '使用引导',
       body: [
-        '  新建本地 worker：aiworker init --soul developer -> aiworker serve',
-        '  显式角色入口：aiworker worker init --soul developer -> aiworker worker serve',
+        '  新建本地 worker：aiworker up --soul developer',
+        '  显式角色入口：aiworker worker up --soul developer',
         '  查看 Soul 能力：aiworker soul list -> aiworker soul show developer',
         '  只试一次消息：aiworker run --message "..."',
         '  管理 fleet：aiworker gateway start -> aiworker fleet pair 或 aiworker fleet enroll list',

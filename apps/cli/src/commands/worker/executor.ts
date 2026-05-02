@@ -68,6 +68,27 @@ interface ValidationIssue {
   path: string
 }
 
+export type ExecutorReadinessStatus = 'fail' | 'pass' | 'warn'
+
+export interface ExecutorReadinessEngine {
+  binary: string
+  binaryFound: boolean
+  engine: ExecutorCapabilityEngine
+  mcpCount: number
+}
+
+export interface ExecutorReadinessIssue extends ValidationIssue {
+  severity: 'error' | 'warning'
+}
+
+export interface ExecutorReadinessReport {
+  engines: ExecutorReadinessEngine[]
+  file: string
+  issues: ExecutorReadinessIssue[]
+  root: string
+  status: ExecutorReadinessStatus
+}
+
 export async function runExecutorMcpAdd(name: string, options: ExecutorMcpAddOptions): Promise<number> {
   const context = resolveProjectExecutorContext()
   if (!context.ok)
@@ -202,10 +223,71 @@ export async function runExecutorDoctor(options: { engine?: string } = {}): Prom
   return issues.length > 0 ? 1 : 0
 }
 
-function resolveProjectExecutorContext(): { code: number, ok: false } | { ok: true, value: ProjectExecutorContext } {
+export async function inspectExecutorReadiness(): Promise<
+  | { code: number, ok: false }
+  | { ok: true, report: ExecutorReadinessReport }
+> {
+  const context = resolveProjectExecutorContext({ quiet: true })
+  if (!context.ok)
+    return context
+
+  const manifestResult = await loadManifestForInspection(context.value.manifestPath)
+  if (!manifestResult.ok) {
+    const issues = manifestResult.issues.map(issue => ({ ...issue, severity: 'error' as const }))
+    return {
+      ok: true,
+      report: {
+        engines: [],
+        file: context.value.manifestPath,
+        issues,
+        root: context.value.root,
+        status: rollupReadinessStatus(issues),
+      },
+    }
+  }
+
+  const engines = Object.keys(manifestResult.manifest.engines) as ExecutorCapabilityEngine[]
+  const issues: ExecutorReadinessIssue[] = []
+  const summaries: ExecutorReadinessEngine[] = []
+
+  for (const engine of engines) {
+    const binary = SUPPORTED_ENGINES[engine].binary
+    const binaryFound = findBinary(binary) !== null
+    const mcpCount = Object.values(manifestResult.manifest.engines[engine]?.mcp ?? {})
+      .filter(server => server.disabled !== true)
+      .length
+    summaries.push({ binary, binaryFound, engine, mcpCount })
+
+    if (!binaryFound) {
+      issues.push({
+        code: 'executor.binary_missing',
+        message: `Engine CLI "${binary}" was not found on PATH; configure the engine CLI or continue with another executor.`,
+        path: `engines.${engine}`,
+        severity: 'warning',
+      })
+    }
+
+    issues.push(...collectEngineIssues(manifestResult.manifest, engine, { requireBinary: false })
+      .map(issue => ({ ...issue, severity: 'error' as const })))
+  }
+
+  return {
+    ok: true,
+    report: {
+      engines: summaries,
+      file: context.value.manifestPath,
+      issues,
+      root: context.value.root,
+      status: rollupReadinessStatus(issues),
+    },
+  }
+}
+
+function resolveProjectExecutorContext(options: { quiet?: boolean } = {}): { code: number, ok: false } | { ok: true, value: ProjectExecutorContext } {
   const scope = resolveAiworkerScope()
   if (scope.scope !== 'project' || !scope.projectRoot) {
-    consola.error('[aiworker executor] executor capability commands require project scope; run `aiworker init --soul <preset>` in a project first')
+    if (options.quiet !== true)
+      consola.error('[aiworker executor] executor capability commands require project scope; run `aiworker init --soul <preset>` in a project first')
     return { code: 2, ok: false }
   }
 
@@ -337,6 +419,41 @@ async function loadManifest(manifestPath: string): Promise<
     const message = err instanceof Error ? err.message : String(err)
     consola.error(`[aiworker executor] failed to read ${manifestPath}: ${message}`)
     return { code: 1, ok: false }
+  }
+}
+
+async function loadManifestForInspection(manifestPath: string): Promise<
+  | { issues: ValidationIssue[], ok: false }
+  | { manifest: ExecutorCapabilityManifest, ok: true }
+> {
+  if (!existsSync(manifestPath))
+    return { manifest: DEFAULT_MANIFEST, ok: true }
+
+  try {
+    const parsed = JSON.parse(await readFile(manifestPath, 'utf8')) as unknown
+    const result = executorCapabilityManifestSchema.safeParse(parsed)
+    if (!result.success) {
+      return {
+        issues: result.error.issues.map(issue => ({
+          code: 'manifest.invalid',
+          message: issue.message,
+          path: issue.path.join('.') || MANIFEST_FILE,
+        })),
+        ok: false,
+      }
+    }
+    return { manifest: result.data, ok: true }
+  }
+  catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    return {
+      issues: [{
+        code: 'manifest.read_failed',
+        message,
+        path: manifestPath,
+      }],
+      ok: false,
+    }
   }
 }
 
@@ -548,6 +665,14 @@ function printValidationIssues(title: string, issues: ValidationIssue[]): void {
   consola.error(title)
   for (const issue of issues)
     process.stderr.write(`  - ${issue.code} ${issue.path}: ${issue.message}\n`)
+}
+
+function rollupReadinessStatus(issues: ExecutorReadinessIssue[]): ExecutorReadinessStatus {
+  if (issues.some(issue => issue.severity === 'error'))
+    return 'fail'
+  if (issues.some(issue => issue.severity === 'warning'))
+    return 'warn'
+  return 'pass'
 }
 
 function shellQuote(argv: string[]): string {

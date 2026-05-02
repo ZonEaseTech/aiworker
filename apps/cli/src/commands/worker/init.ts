@@ -412,7 +412,7 @@ function printProjectNextSteps(projectRoot: string, soul?: SelectedSoul): void {
     '  3. Validate capability drafts: `aiworker doctor`.',
     '  4. Smoke bootstrap: `aiworker run --message "hello" --dry-run`.',
     '  5. After configuring executor secrets/model: `aiworker run --message "hello"`.',
-    '  6. Need HTTP/admin UI: `aiworker serve --port 9217`.',
+    '  6. Need HTTP/admin UI: `aiworker up --port 9217` (or explicit `aiworker serve --port 9217`).',
     '  7. Need fleet control: start/connect a gateway, then use self-enroll or OTP from `aiworker serve`.',
   ].join('\n'))
   process.stdout.write('\n')
@@ -425,7 +425,7 @@ function printUserScopeNextSteps(): void {
     '  2. Inspect config: `aiworker config show`.',
     '  3. Smoke bootstrap: `aiworker run --message "hello" --dry-run`.',
     '  4. After configuring executor secrets/model: `aiworker run --message "hello"`.',
-    '  5. Need HTTP/admin UI: `aiworker serve --port 9217`.',
+    '  5. Need HTTP/admin UI: `aiworker up --port 9217` (or explicit `aiworker serve --port 9217`).',
   ].join('\n'))
   process.stdout.write('\n')
 }

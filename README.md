@@ -107,7 +107,12 @@ npm install -g @zonease/aiworker-cli
 
 AIWorker CLI 是 Bun-native：`npx` / `npm install -g` 不会把 runtime 改成 Node。没有 Bun 时，CLI 会提示安装 Bun 或改用 GitHub Releases 的 standalone binary。binary 跑在 `~/.bun/bin/aiworker` 或 `$(npm bin -g)/aiworker`。第一次跑任意命令时自动 mint master key 写到 `~/.aiworker/.env`（chmod 0600）。
 
-**项目级 worker**（PLAN-023，可选）：`aiworker init` 默认在当前目录 `<cwd>/.aiworker/` 落项目级 layout（每 project 一份独立 worker.db / master key / persona / skills；不要求当前目录是 git repo），engine（claude / codex / cursor）保持 user 级共享。`aiworker scope` 诊断当前命中的 layout。详见 [docs/cli.md §`aiworker init`](docs/cli.md)。
+**项目级 worker**（PLAN-023，可选）：`aiworker up --soul developer` 会在当前目录 `<cwd>/.aiworker/` 落项目级 layout（每 project 一份独立 worker.db / master key / persona / skills；不要求当前目录是 git repo），随后完成能力预检并启动本地 HTTP/admin。engine（claude / codex / cursor）保持 user 级共享。`aiworker scope` 诊断当前命中的 layout；显式拆步时仍可用 `aiworker init` / `aiworker doctor` / `aiworker serve`。详见 [docs/cli.md §`aiworker up`](docs/cli.md)。
+
+```sh
+cd ~/code/my-project
+aiworker up --soul developer --port 9217
+```
 
 ### 本地开发
 

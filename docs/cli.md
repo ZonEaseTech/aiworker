@@ -4,8 +4,8 @@
 
 | Surface | 形态 | 例子 |
 |---|---|---|
-| **worker-local shortcut** | root 子命令（worker 容器自身或 ssh 进容器跑） | `aiworker serve` / `aiworker config show` / `aiworker schedule list` |
-| **worker canonical** | `worker` 子命令 group | `aiworker worker serve` / `aiworker worker config show` |
+| **worker-local shortcut** | root 子命令（worker 容器自身或 ssh 进容器跑） | `aiworker up` / `aiworker serve` / `aiworker config show` / `aiworker schedule list` |
+| **worker canonical** | `worker` 子命令 group | `aiworker worker up` / `aiworker worker serve` / `aiworker worker config show` |
 | **fleet 管理** | 两词子命令 group（operator 控 fleet） | `aiworker fleet list` / `aiworker fleet launch` |
 | **gateway 生命周期** | 两词子命令 group（本机起 daemon） | `aiworker gateway start` / `aiworker gateway status` |
 | **fleet remote worker** | `fleet` 子命令 group（operator 通过 WS 触达 worker） | `aiworker fleet chat <id> 'hi'` / `aiworker fleet config get <id>` |
@@ -56,6 +56,34 @@ worker 容器内或 ssh 进 worker 主机直接操作 `worker.db` 的子命令�
 - `AIWORKER_GATEWAY_URL` / `AIWORKER_JOIN_TOKEN` / `AIWORKER_DISPLAY_NAME`（PLAN-018 / FEAT-024）— self-enroll 三件套：URL + token 同时设 → `aiworker serve` 跳过 operator 手动 `aiworker fleet pair`，bootstrap 完成后用 outbound WS 主动拨 gateway 把自身写入 fleet。`DISPLAY_NAME` 可选，缺省回落 workerId（最长 80 字符）。详见下文 §`aiworker serve` 与 [`docs/deployment.md` § Worker self-enroll quick start](./deployment.md#worker-self-enroll-quick-start-plan-018--feat-024)。
 - `AIWORKER_ENROLL_MODE`（PLAN-019 / FEAT-026）— `'auto' | 'otp'`，缺省 `'auto'`。`'auto'` 下走 self-enroll 还是 OTP 由 `JOIN_TOKEN` 是否设来判定（设 → self-enroll；未设 → OTP）；显式 `'otp'` 强制 attended 路径，即使 `JOIN_TOKEN` 同时存在也忽略它（用于 deployer 拿不到 fleet 凭证的 attended 场景）。详见下文 §`aiworker serve` 与 [`docs/deployment.md` § Worker OTP-attended enroll quick start](./deployment.md#worker-otp-attended-enroll-quick-startplan-019--feat-026)。
 
+### `aiworker up [--soul <preset>] [--dry-run] [serve options]`
+
+本地 worker 快速启动入口。`aiworker up` 等价于 `aiworker worker up`，只表达“把当前本地 worker 拉起来”；不新增 `fleet up` / `gateway up` 语义。
+
+执行阶段固定为：
+
+1. resolve scope：识别当前是 project / explicit scope，或 brand-new cwd。
+2. init if needed：brand-new cwd 走 project-scope 初始化；非交互必须传 `--soul <preset>`。已初始化 project / explicit scope 只补齐缺失的本地 state，不刷新 Soul 模板。
+3. worker validation：静态验证 `.aiworker/policy.json`、`toolsets.json`、`capability-packs.json`、`mcp.json`、`skills/`；error 阻断启动，warning/info 只展示。
+4. executor readiness：读取 `.aiworker/executor-capabilities.json`，提示 engine CLI 是否在 `PATH`、descriptor 是否有明显问题；本阶段不自动写 engine config，也不会因缺某个 engine CLI 阻断 worker 启动。
+5. serve：复用 `aiworker serve` 的 foreground 生命周期。
+
+```sh
+# brand-new project：一条命令完成初始化、预检和 HTTP/admin 启动
+aiworker up --soul developer --port 9217
+
+# canonical worker tree 等价形态
+aiworker worker up --soul developer --port 9217
+
+# 只看计划和预检；不写文件、不启动 server、不打开浏览器
+aiworker up --soul developer --dry-run
+
+# 已初始化 project：不再传 --soul，直接拉起
+aiworker up --port 9217 --no-open
+```
+
+`up` 透传 `serve` 参数：`--port`、`--host`、`--gateway`、`--gateway-token`、`--no-reconnect`、`--no-serve-web`、`--open`、`--no-open`。`--dry-run` 会强制跳过 server 和浏览器副作用。
+
 ### `aiworker init [--soul <preset>] [--global] [--force]`
 
 初始化 `worker.db`，跑迁移，首次启动 mint identity + bootstrap token，种 default config，落 layout 模板。幂等——重复跑不会重打 bootstrap token，也不会覆盖既有 seed。
@@ -91,7 +119,13 @@ aiworker init --global
 aiworker init --force
 ```
 
-初始化完成后建议按这个顺序走：
+初始化完成后如果要直接启动 HTTP/admin，推荐：
+
+```sh
+aiworker up --port 9217
+```
+
+需要显式拆步调试时，按这个顺序走：
 
 ```sh
 # 1. 确认当前命令会命中刚创建的 project scope
@@ -113,7 +147,9 @@ aiworker run --message "hello" --dry-run
 # 6. 配好 executor secret / model 后再做真实一轮
 aiworker run --message "hello"
 
-# 7. 需要 HTTP API 或 worker admin UI 时再启动服务
+# 7. 需要 HTTP API 或 worker admin UI 时启动服务
+aiworker up --port 9217
+# 或只表达显式 server 生命周期：
 aiworker serve --port 9217
 ```
 

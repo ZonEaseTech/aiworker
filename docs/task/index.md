@@ -147,3 +147,5 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**DOC-004 清理陈旧 PMA 待办状态**](DOC-004.md) `P1`
 - [x] [**REFACTOR-014 Rename internal CLI operator module away from `aim`**](REFACTOR-014.md) `P2`
 - [x] [**REFACTOR-015 CLI IA canonical worker/fleet/gateway command tree**](REFACTOR-015.md) `P1`
+- [x] [**REL-008 发布 aiworker CLI 0.4.11**](REL-008.md) `P1`
+- [x] [**FEAT-045 Worker quick start `aiworker up`**](FEAT-045.md) `P1`

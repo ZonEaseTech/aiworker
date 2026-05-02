@@ -109,7 +109,7 @@ describe('aiworker init / scope project placement', () => {
       expect(result.output).toContain('aiworker soul show developer')
       expect(result.output).toContain('aiworker doctor')
       expect(result.output).toContain('aiworker run --message "hello" --dry-run')
-      expect(result.output).toContain('aiworker serve --port 9217')
+      expect(result.output).toContain('aiworker up --port 9217')
       expect(await exists(path.join(project, '.aiworker', 'AGENT.md'))).toBe(true)
       expect(await exists(path.join(project, '.aiworker', 'SOUL.md'))).toBe(true)
       expect(await exists(path.join(project, '.aiworker', 'policy.json'))).toBe(true)
@@ -148,6 +148,7 @@ describe('aiworker init / scope project placement', () => {
         expect(init.exitCode).toBe(0)
         expect(init.output).toContain(`Soul         : ${preset.id} (${preset.label}, flag)`)
         expect(init.output).toContain(`aiworker soul show ${preset.id}`)
+        expect(init.output).toContain('aiworker up --port 9217')
 
         const aiworker = path.join(project, '.aiworker')
         const soul = await readFile(path.join(aiworker, 'SOUL.md'), 'utf8')

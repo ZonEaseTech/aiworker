@@ -27,6 +27,8 @@ export function shouldBootstrapDotenv(argv: string[]): boolean {
     || command === 'worker doctor'
     || command === 'init'
     || command === 'worker init'
+    || command === 'up'
+    || command === 'worker up'
     || command === 'gateway install systemd'
   ) {
     return false
