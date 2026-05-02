@@ -177,6 +177,19 @@ describe('aiworker cli registration', () => {
   it('help 分组覆盖所有显式注册命令', () => {
     expect(getUngroupedHelpCommands(cli)).toEqual([])
   })
+
+  it('serve help 暴露浏览器打开控制参数', async () => {
+    const result = await runCli(['serve', '--help'])
+    try {
+      expect(result.exitCode).toBe(0)
+      expect(result.output).toContain('--open')
+      expect(result.output).toContain('--no-open')
+      expect(result.output).toContain('打开 worker admin')
+    }
+    finally {
+      cleanup(result)
+    }
+  })
 })
 
 describe('preprocessArgv', () => {
