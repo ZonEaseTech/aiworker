@@ -107,3 +107,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-076 Executor selection bootstrap command**](PLAN-076.md) `2026-05-03`
 - [x] [**PLAN-077 Engine-native capability lifecycle beyond MCP**](PLAN-077.md) `2026-05-03`
 - [x] [**PLAN-078 Real Codex-backed worker validation campaign**](PLAN-078.md) `2026-05-03`
+- [-] [**PLAN-079 发布 aiworker CLI 0.5.3**](PLAN-079.md) `2026-05-03`

@@ -1,5 +1,27 @@
 # AIWorker Changelog
 
+## 2026-05-03 21:35 [progress] REL-012 / PLAN-079 — prepare CLI 0.5.3 release
+
+启动 `@zonease/aiworker-cli@0.5.3` patch release：
+
+- 当前 npm latest、GitHub Release 和远端 tag 均为 `0.5.2`。
+- 本次 release 包含 `FEAT-046` worker local brain activation、`FEAT-047`
+  executor bootstrap lifecycle，以及 `BUG-049` user/explicit init next-step polish。
+- 本地 release gates 已通过；等待 release commit、`v0.5.3` tag push、
+  GitHub Actions release workflow、npm / GitHub Release 验证和 published-package smoke。
+
+验证：
+
+- `bun run test`
+- `bun run typecheck`
+- `bun run lint`
+- `bun run build`
+- `bun run --filter '@zonease/aiworker-cli' smoke:aiworker-run`
+- `bun run --filter '@zonease/aiworker-cli' smoke:aiworker-fleet`
+- built CLI `--version` / `init --global` / `up --dry-run` smoke
+- `cd apps/cli/dist && bun publish --dry-run --access public`（完成 pack 后停在本机 npm auth boundary）
+- `git diff --check`
+
 ## 2026-05-03 21:27 [completed] BUG-049 — user-scope init next-step polish
 
 修复 `aiworker init --global` / explicit `AIWORKER_HOME` init 的 next steps：

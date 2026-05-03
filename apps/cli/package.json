@@ -1,7 +1,7 @@
 {
   "name": "@zonease/aiworker-cli",
   "type": "module",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "AIWorker fleet CLI — gateway / worker / operator 单一二进制",
   "license": "MIT",
   "homepage": "https://github.com/ZonEaseTech/aiworker#readme",
