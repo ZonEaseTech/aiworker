@@ -1,5 +1,22 @@
 # AIWorker Changelog
 
+## 2026-05-03 11:19 [progress] REL-011 / PLAN-072 — prepare CLI 0.5.2 release
+
+Started the `@zonease/aiworker-cli@0.5.2` superseding patch release:
+
+- Bumped `apps/cli/package.json` from `0.5.1` to `0.5.2`.
+- Release scope is the command-layer `BUG-042` fix plus the already published
+  post-0.5.0 fixes from `0.5.1`.
+- Published-package smoke for `0.5.2` must verify omitted `--port` prints
+  `(env/default)` and does not contain `NaN`.
+
+Next step: run local release gates, commit the release bump, tag `v0.5.2`,
+then verify the tag-triggered GitHub release workflow and published package.
+
+Local release gates passed: workspace tests, typecheck, lint, build, CLI smoke
+scripts, dist artifact checks, built CLI omitted-port smoke, publish dry-run to
+the local auth boundary, and `git diff --check`.
+
 ## 2026-05-03 11:18 [BUG-P3] BUG-042 — command-layer optional number normalization
 
 Fixed the remaining `aiworker up --dry-run` omitted-port path after published
