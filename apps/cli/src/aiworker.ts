@@ -93,6 +93,11 @@ function readServeOpenOption(argv: string[] = process.argv): boolean | undefined
   return undefined
 }
 
+function optionalNumber(values: number[] | undefined): number | undefined {
+  const value = values?.[0]
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
 // ============================================================
 // worker-local（root shortcuts）
 // ============================================================
@@ -135,10 +140,11 @@ cli
     soul?: string
   }) => {
     const open = readServeOpenOption()
+    const port = optionalNumber(opts.port)
     process.exit(await runUp({
       ...(opts.soul === undefined ? {} : { soul: opts.soul }),
       ...(opts.dryRun === true ? { dryRun: true } : {}),
-      ...(opts.port?.[0] === undefined ? {} : { port: opts.port[0] }),
+      ...(port === undefined ? {} : { port }),
       ...(opts.host === undefined ? {} : { host: opts.host }),
       ...(opts.gateway === undefined ? {} : { gateway: opts.gateway }),
       ...(opts.gatewayToken === undefined ? {} : { gatewayToken: opts.gatewayToken }),
@@ -209,7 +215,7 @@ cli
       message: opts.message,
       chatId: opts.chatId,
       dryRun: opts.dryRun,
-      timeoutMs: opts.timeoutMs?.[0],
+      timeoutMs: optionalNumber(opts.timeoutMs),
     })
     process.exit(code)
   })
@@ -226,8 +232,9 @@ cli
   .option('--no-open', '启动后不自动打开 worker admin')
   .action(async (opts: { port?: number[], host?: string, gateway?: string, gatewayToken?: string, reconnect?: boolean, serveWeb?: boolean }) => {
     const serveOptions: Parameters<typeof runServe>[0] = {}
-    if (opts.port?.[0] !== undefined)
-      serveOptions.port = opts.port[0]
+    const port = optionalNumber(opts.port)
+    if (port !== undefined)
+      serveOptions.port = port
     if (opts.host !== undefined)
       serveOptions.host = opts.host
     if (opts.gateway !== undefined)
@@ -253,7 +260,7 @@ cli
   .command('config set <json>', '替换本地 worker 配置')
   .option('--if-match <version>', '乐观锁；当前存储 version 不等于此值则拒绝', { type: [Number] })
   .action(async (json: string, opts: { ifMatch?: number[] }) => {
-    process.exit(await runConfigSetLocal({ json, ifMatch: opts.ifMatch?.[0] }))
+    process.exit(await runConfigSetLocal({ json, ifMatch: optionalNumber(opts.ifMatch) }))
   })
 
 cli.command('token rotate', '生成新的 bearer token；明文只打印一次').action(async () => {
@@ -323,8 +330,8 @@ cli
   .option('--status <status>', '按状态过滤：active 或 closed')
   .action(async (opts: { limit?: number[], offset?: number[], status?: string }) => {
     process.exit(await runSessionsList({
-      limit: opts.limit?.[0],
-      offset: opts.offset?.[0],
+      limit: optionalNumber(opts.limit),
+      offset: optionalNumber(opts.offset),
       ...(opts.status === undefined ? {} : { status: opts.status }),
     }))
   })
@@ -342,8 +349,8 @@ cli
   .option('--apply', '实际删除计划内的已关闭 transcript，而不是 dry-run')
   .action(async (opts: { olderThanDays?: number[], limit?: number[], apply?: boolean }) => {
     process.exit(await runSessionsMaintenance({
-      olderThanDays: opts.olderThanDays?.[0],
-      limit: opts.limit?.[0],
+      olderThanDays: optionalNumber(opts.olderThanDays),
+      limit: optionalNumber(opts.limit),
       ...(opts.apply === undefined ? {} : { apply: opts.apply }),
     }))
   })
@@ -390,10 +397,11 @@ cli
     soul?: string
   }) => {
     const open = readServeOpenOption()
+    const port = optionalNumber(opts.port)
     process.exit(await runUp({
       ...(opts.soul === undefined ? {} : { soul: opts.soul }),
       ...(opts.dryRun === true ? { dryRun: true } : {}),
-      ...(opts.port?.[0] === undefined ? {} : { port: opts.port[0] }),
+      ...(port === undefined ? {} : { port }),
       ...(opts.host === undefined ? {} : { host: opts.host }),
       ...(opts.gateway === undefined ? {} : { gateway: opts.gateway }),
       ...(opts.gatewayToken === undefined ? {} : { gatewayToken: opts.gatewayToken }),
@@ -464,7 +472,7 @@ cli
       message: opts.message,
       chatId: opts.chatId,
       dryRun: opts.dryRun,
-      timeoutMs: opts.timeoutMs?.[0],
+      timeoutMs: optionalNumber(opts.timeoutMs),
     })
     process.exit(code)
   })
@@ -481,8 +489,9 @@ cli
   .option('--no-open', '启动后不自动打开 worker admin')
   .action(async (opts: { port?: number[], host?: string, gateway?: string, gatewayToken?: string, reconnect?: boolean, serveWeb?: boolean }) => {
     const serveOptions: Parameters<typeof runServe>[0] = {}
-    if (opts.port?.[0] !== undefined)
-      serveOptions.port = opts.port[0]
+    const port = optionalNumber(opts.port)
+    if (port !== undefined)
+      serveOptions.port = port
     if (opts.host !== undefined)
       serveOptions.host = opts.host
     if (opts.gateway !== undefined)
@@ -508,7 +517,7 @@ cli
   .command('worker config set <json>', '替换本地 worker 配置')
   .option('--if-match <version>', '乐观锁；当前存储 version 不等于此值则拒绝', { type: [Number] })
   .action(async (json: string, opts: { ifMatch?: number[] }) => {
-    process.exit(await runConfigSetLocal({ json, ifMatch: opts.ifMatch?.[0] }))
+    process.exit(await runConfigSetLocal({ json, ifMatch: optionalNumber(opts.ifMatch) }))
   })
 
 cli.command('worker token rotate', '生成新的 bearer token；明文只打印一次').action(async () => {
@@ -578,8 +587,8 @@ cli
   .option('--status <status>', '按状态过滤：active 或 closed')
   .action(async (opts: { limit?: number[], offset?: number[], status?: string }) => {
     process.exit(await runSessionsList({
-      limit: opts.limit?.[0],
-      offset: opts.offset?.[0],
+      limit: optionalNumber(opts.limit),
+      offset: optionalNumber(opts.offset),
       ...(opts.status === undefined ? {} : { status: opts.status }),
     }))
   })
@@ -597,8 +606,8 @@ cli
   .option('--apply', '实际删除计划内的已关闭 transcript，而不是 dry-run')
   .action(async (opts: { olderThanDays?: number[], limit?: number[], apply?: boolean }) => {
     process.exit(await runSessionsMaintenance({
-      olderThanDays: opts.olderThanDays?.[0],
-      limit: opts.limit?.[0],
+      olderThanDays: optionalNumber(opts.olderThanDays),
+      limit: optionalNumber(opts.limit),
       ...(opts.apply === undefined ? {} : { apply: opts.apply }),
     }))
   })
@@ -654,8 +663,9 @@ cli
     // 即便误带 --detach（无害）。
     const internal = process.env.AIWORKER_GATEWAY_INTERNAL_FOREGROUND === '1'
     const detach = internal ? false : opts.detach === true
+    const port = optionalNumber(opts.port)
     process.exit(await runGatewayStart({
-      ...(opts.port?.[0] === undefined ? {} : { port: opts.port[0] }),
+      ...(port === undefined ? {} : { port }),
       detach,
       ...(opts.serveWeb === false ? { serveWeb: false } : {}),
     }))
@@ -669,7 +679,8 @@ cli
   .command('gateway stop', '停止后台 gateway 守护进程（foreground/systemd 实例请由其 supervisor 停止）')
   .option('--timeout-ms <n>', 'SIGTERM 超时时间（默认 5000ms）', { type: [Number] })
   .action(async (opts: { timeoutMs?: number[] }) => {
-    process.exit(await runGatewayStop(opts.timeoutMs?.[0] === undefined ? {} : { timeoutMs: opts.timeoutMs[0] }))
+    const timeoutMs = optionalNumber(opts.timeoutMs)
+    process.exit(await runGatewayStop(timeoutMs === undefined ? {} : { timeoutMs }))
   })
 
 // --- fleet pair ---
@@ -698,11 +709,12 @@ cli
   .option('--conversation-id <id>', '显式指定会话 id；不传则由 worker 新建')
   .option('--timeout-ms <n>', '等待 agent.done 的总超时时间（默认 120000）', { type: [Number] })
   .action(async (workerId: string, text: string, opts: { conversationId?: string, timeoutMs?: number[] }) => {
+    const timeoutMs = optionalNumber(opts.timeoutMs)
     process.exit(await runChat({
       workerId,
       content: text,
       ...(opts.conversationId === undefined ? {} : { conversationId: opts.conversationId }),
-      ...(opts.timeoutMs?.[0] === undefined ? {} : { timeoutMs: opts.timeoutMs[0] }),
+      ...(timeoutMs === undefined ? {} : { timeoutMs }),
     }))
   })
 
@@ -717,7 +729,7 @@ cli
   .command('fleet config set <workerId> <json>', '更新 worker 配置（需要 --if-match 提供当前版本）')
   .option('--if-match <version>', '乐观锁；当前存储的 version 不等于此值则拒绝', { type: [Number] })
   .action(async (workerId: string, json: string, opts: { ifMatch?: number[] }) => {
-    const ifMatch = opts.ifMatch?.[0]
+    const ifMatch = optionalNumber(opts.ifMatch)
     if (ifMatch === undefined) {
       consola.error('fleet config set 必须显式提供 --if-match <version> 以防止误覆盖')
       process.exit(2)
@@ -820,11 +832,13 @@ cli
   .option('--tail <n>', '请求历史行数，上限 1000', { type: [Number] })
   .option('--timeout-ms <n>', '订阅总超时', { type: [Number] })
   .action(async (workerId: string, opts: { follow?: boolean, tail?: number[], timeoutMs?: number[] }) => {
+    const tail = optionalNumber(opts.tail)
+    const timeoutMs = optionalNumber(opts.timeoutMs)
     process.exit(await runLogs({
       workerId,
       ...(opts.follow === undefined ? {} : { follow: opts.follow }),
-      ...(opts.tail?.[0] === undefined ? {} : { tail: opts.tail[0] }),
-      ...(opts.timeoutMs?.[0] === undefined ? {} : { timeoutMs: opts.timeoutMs[0] }),
+      ...(tail === undefined ? {} : { tail }),
+      ...(timeoutMs === undefined ? {} : { timeoutMs }),
     }))
   })
 

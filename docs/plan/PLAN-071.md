@@ -1,8 +1,9 @@
 # PLAN-071 发布 aiworker CLI 0.5.1
 
-- **status**: implementing
+- **status**: completed
 - **createdAt**: 2026-05-03 10:59
 - **approvedAt**: 2026-05-03 10:59
+- **completedAt**: 2026-05-03 11:18
 - **relatedTask**: REL-010
 
 ## 现状
@@ -71,7 +72,12 @@
 - Passed: Fleet and Worker Web bundles are present in `apps/cli/dist/web`
 - Passed to local auth boundary: `cd apps/cli/dist && bun publish --dry-run --access public` packed 26 files / 2.46MB, then stopped with missing local npm authentication.
 - Passed: `git diff --check`
+- Passed: GitHub Actions release workflow `25268314569` for `v0.5.1`
+- Passed: npm registry latest resolved to `0.5.1`
+- Passed: GitHub Release `v0.5.1` has linux-x64, linux-arm64, darwin-x64, and darwin-arm64 tarballs
+- Failed post-publish smoke: published CLI `aiworker up --soul developer --dry-run --no-open --no-serve-web` still printed `port         : NaN`
 
 ## 结果
 
-- Local release gates passed. Pending release bump commit, `v0.5.1` tag, GitHub Actions release workflow, npm verification, and optional test fleet upgrade.
+- `@zonease/aiworker-cli@0.5.1` was published to npm and GitHub Release.
+- Post-publish smoke found `BUG-042` still reproduced at the CLI command layer, so this release is superseded by `REL-011` / `0.5.2`.

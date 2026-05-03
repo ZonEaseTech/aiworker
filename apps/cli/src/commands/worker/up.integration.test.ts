@@ -148,6 +148,22 @@ describe('aiworker up quick start', () => {
     })
   })
 
+  it('dry-runs with omitted port as env/default instead of NaN', async () => {
+    await withCliIntegrationCleanup(async (cleanup) => {
+      const project = await cleanup.makeTempDir('aiworker-up-dry-run-default-port-')
+      const home = await cleanup.makeTempDir('aiworker-up-dry-run-default-port-home-')
+
+      const result = await runCli(cleanup, ['up', '--dry-run', '--soul', 'developer', '--no-open', '--no-serve-web'], project, home)
+
+      expect(result.exitCode).toBe(0)
+      expect(result.output).toContain('stage 5/5 serve')
+      expect(result.output).toContain('port         : (env/default)')
+      expect(result.output).not.toContain('NaN')
+      expect(await exists(path.join(project, '.aiworker'))).toBe(false)
+      expect(await exists(path.join(home, '.aiworker', '.env'))).toBe(false)
+    })
+  })
+
   it('initializes a brand-new project and starts the worker server', async () => {
     await withCliIntegrationCleanup(async (cleanup) => {
       const project = await cleanup.makeTempDir('aiworker-up-serve-')

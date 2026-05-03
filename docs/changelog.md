@@ -1,5 +1,35 @@
 # AIWorker Changelog
 
+## 2026-05-03 11:18 [BUG-P3] BUG-042 — command-layer optional number normalization
+
+Fixed the remaining `aiworker up --dry-run` omitted-port path after published
+`0.5.1` smoke showed the direct `runUp()` fix was not enough:
+
+- CLI command actions now normalize omitted optional numeric arrays from CAC
+  before calling command handlers, so missing `--port` / timeout / pagination
+  options do not leak `[NaN]` into command options.
+- `aiworker up` integration coverage now exercises the actual CLI entrypoint
+  with omitted `--port` and asserts `(env/default)` instead of `NaN`.
+
+Validation:
+
+- Manual CLI entrypoint check: `bun apps/cli/src/aiworker.ts up --soul developer --dry-run --no-open --no-serve-web`
+- `bun test apps/cli/src/commands/worker/up.integration.test.ts apps/cli/src/commands/worker/up.test.ts apps/cli/src/aiworker.test.ts`
+- `bun run --filter '@zonease/aiworker-cli' typecheck`
+
+## 2026-05-03 11:18 [release] REL-010 / PLAN-071 — CLI 0.5.1 published, superseded by 0.5.2
+
+Released `@zonease/aiworker-cli@0.5.1`, but post-publish smoke found
+`BUG-042` still reproduced through the CLI command layer:
+
+- GitHub Actions release workflow `25268314569` passed for `v0.5.1`; npm
+  `latest` resolved to `0.5.1`; GitHub Release uploaded the four platform
+  tarballs.
+- Published-package smoke reported `aiworker/0.5.1`, then
+  `aiworker up --soul developer --dry-run --no-open --no-serve-web` still
+  printed `port         : NaN`.
+- `0.5.1` is therefore superseded by the follow-up `0.5.2` release.
+
 ## 2026-05-03 10:59 [progress] REL-010 / PLAN-071 — prepare CLI 0.5.1 release
 
 Started the `@zonease/aiworker-cli@0.5.1` patch release:
