@@ -1,8 +1,9 @@
 # PLAN-072 发布 aiworker CLI 0.5.2
 
-- **status**: implementing
+- **status**: completed
 - **createdAt**: 2026-05-03 11:19
 - **approvedAt**: 2026-05-03 11:19
+- **completedAt**: 2026-05-03 11:25
 - **relatedTask**: REL-011
 
 ## 现状
@@ -73,8 +74,16 @@
 - Passed: Fleet and Worker Web bundles are present in `apps/cli/dist/web`
 - Passed to pack/auth boundary: `cd apps/cli/dist && bun publish --dry-run --access public`
 - Passed: `git diff --check`
+- Passed: GitHub Actions release workflow `25268701486` for `v0.5.2`
+- Passed: npm registry latest resolved to `0.5.2`
+- Passed: GitHub Release `v0.5.2` has linux-x64, linux-arm64, darwin-x64, and darwin-arm64 tarballs
+- Passed: published CLI `bunx --bun --package @zonease/aiworker-cli@0.5.2 aiworker --version`
+  reports `aiworker/0.5.2`
+- Passed: published CLI `aiworker up --soul developer --dry-run --no-open --no-serve-web`
+  prints `port         : (env/default)` and no `NaN`
 
 ## 结果
 
-- Local release gates passed. Pending `v0.5.2` tag push, GitHub Actions release,
-  npm verification, GitHub Release asset verification, and published-package smoke.
+- `@zonease/aiworker-cli@0.5.2` was published to npm and GitHub Release.
+- `0.5.2` supersedes `0.5.1`; the published-package smoke confirms the
+  command-layer `BUG-042` fix works for omitted `--port`.

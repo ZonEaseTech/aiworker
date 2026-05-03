@@ -1,5 +1,17 @@
 # AIWorker Changelog
 
+## 2026-05-03 11:25 [release] REL-011 / PLAN-072 — CLI 0.5.2 published
+
+Released `@zonease/aiworker-cli@0.5.2` as the superseding patch for `0.5.1`:
+
+- GitHub Actions release workflow `25268701486` passed for `v0.5.2`.
+- npm `@zonease/aiworker-cli` latest resolves to `0.5.2`.
+- GitHub Release `v0.5.2` includes linux-x64, linux-arm64, darwin-x64, and
+  darwin-arm64 tarballs.
+- Published-package smoke reports `aiworker/0.5.2`; `aiworker up --soul
+  developer --dry-run --no-open --no-serve-web` now prints
+  `port         : (env/default)` and does not contain `NaN`.
+
 ## 2026-05-03 11:19 [progress] REL-011 / PLAN-072 — prepare CLI 0.5.2 release
 
 Started the `@zonease/aiworker-cli@0.5.2` superseding patch release:
