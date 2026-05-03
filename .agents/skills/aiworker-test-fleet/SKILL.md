@@ -14,6 +14,10 @@ without retyping the long operator prompt.
   changelogs, or bug reports.
 - Redact or summarize any `aissh`, env, config, token, master key, device token,
   bearer token, basic-auth, cookie, or private URL output before showing it.
+- When browser-testing Caddy basic auth, never put credentials in a navigated URL,
+  screenshot name, console output, or final report. Prefer a local proxy that
+  reads credentials from the repo-root `.env` and injects the `Authorization`
+  header for Playwright.
 - Use placeholders such as `<server-id>`, `<gateway-url>`, `<admin-url>`,
   `<worker-id>`, and `<conversation-id>` in docs.
 - Do not hardcode test-server identifiers, hostnames, credentials, or token
@@ -26,8 +30,8 @@ without retyping the long operator prompt.
   load its auth and sandbox configuration. Isolate AIWorker with
   `AIWORKER_HOME`, database paths, data roots, logs, and pidfiles instead of
   changing `HOME`.
-- If named MCP tools such as Context7, Exa, Serena, or code-review-graph are not
-  available, continue with local repo and shell inspection and state that briefly.
+- If Playwright MCP is unavailable, fall back to curl-based ingress checks and
+  state that browser/WS rendering was not exercised.
 
 ## Inputs
 
@@ -51,7 +55,11 @@ Start from the repo root and preserve unrelated dirty work.
    git status --short
    ```
 
-2. Run the root gates, with Bun on PATH when needed:
+2. Run root gates when validating a release candidate, validating local changes,
+   or when the user explicitly asks for the full test flow. If the target has
+   already been released and this turn is test-server-only, it is acceptable to
+   reference the just-completed release gates and run only focused smoke checks.
+   Use Bun on PATH when needed:
 
    ```bash
    PATH="$HOME/.bun/bin:$PATH" bun run --filter '*' test
@@ -80,26 +88,48 @@ Use `aissh` for remote commands. Keep `--reason` concise and non-sensitive.
    - installed CLI/package version matches the target when upgrade is in scope.
 
 2. If the user requested an upgrade:
-   - follow the current install method discovered on the server;
+   - install only from the already-published CLI package, for example
+     `bun install -g @zonease/aiworker-cli@<version>` or the server's existing
+     published-package install method;
+   - do not clone the repo, run remote source builds, run docker compose, or
+     publish artifacts from the test server;
    - preserve existing env/config files;
    - restart only the gateway service needed for the test;
    - re-check service status, health, and version.
 
-3. If Web UI is in scope:
+3. If Fleet Web UI is in scope, run direct gateway checks first:
    - direct gateway `/admin/` should return HTML;
    - direct gateway `/admin/assets/*.css` and `*.js` should return 200 with
      expected content types;
-   - public ingress should return 401/403 before auth if protected, then 200
-     after auth;
    - inspect CSS bundle content for representative Tailwind selectors such as
      `.flex`, `.bg-background`, `.rounded-md`, and `.p-6` when styling appears
      broken.
 
-## Local Worker E2E
+4. If public Caddy ingress is in scope, prefer Playwright MCP browser checks:
+   - read only the presence of repo-root `.env` credentials
+     `CADDY_BASIC_AUTH_USERNAME` and `CADDY_BASIC_AUTH_PASSWORD`; do not print
+     the values;
+   - verify unauthenticated `/admin/` returns 401 or 403;
+   - create a temporary localhost proxy that injects Basic Auth from `.env`
+     instead of embedding credentials in the Playwright URL;
+   - the proxy must support both normal HTTP requests and WebSocket
+     `Upgrade`, otherwise the Fleet Admin can load static assets while the
+     live gateway data path remains untested;
+   - navigate Playwright to the localhost proxy, then verify page title
+     `AIWorker · Fleet`, navigation entries Workers / Enrollments / Audit /
+     Presence, and either a Workers empty state or worker list;
+   - verify static resources return 200 and browser console has no errors or
+     warnings;
+   - put screenshots and transient browser artifacts under `tmp/playwright/`
+     so they stay out of git.
 
-Use the local machine for the worker and configure the executor as Codex. The
-user has already authorized Codex token usage when they say so; do not conserve
-tokens at the cost of coverage.
+## Fleet-Attached Worker E2E
+
+This section covers the cross-boundary path where a local worker joins the
+shared fleet and is driven through gateway commands. For local-only worker
+setup, Worker Admin, worker REST/SSE, and `worker run` continuity checks, follow
+`aiworker-test-worker`; this skill owns enrollment, fleet visibility, gateway
+chat routing, and remote cleanup.
 
 1. Create isolated local state:
    - temporary `AIWORKER_HOME` for operator and worker commands;
@@ -117,9 +147,12 @@ tokens at the cost of coverage.
    - model: use the project default unless the user asks otherwise;
    - use `tmux` only when it is installed and required by the repo rules;
      otherwise use `setsid` or `nohup` with explicit log and pidfile cleanup;
+   - when neither `tmux` nor `setsid` is available and the shell environment
+     reaps background jobs, keep the worker in a tracked foreground tool
+     session and stop it explicitly at cleanup;
    - wait until the fleet reports the worker online.
 
-4. Verify session behavior:
+4. Verify gateway-routed session behavior:
    - explicit conversation id turn 1 stores a unique non-secret marker;
    - same explicit conversation id turn 2 recalls the marker exactly;
    - `/new` or `/reset` rotates the worker session and forgets the old marker;
