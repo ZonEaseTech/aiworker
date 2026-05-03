@@ -1,5 +1,21 @@
 # AIWorker Changelog
 
+## 2026-05-03 23:33 [progress] QA-003 / PLAN-080 — Soul brain executor validation follow-ups
+
+记录 `/Users/ben/projects/aiben` 本地 Soul / brain / executor 调试样本，并落盘
+后续优化/修复计划：
+
+- `QA-003` 完成本次验证记录：9 个内置 Soul 的 fresh init、runtime brain
+  diagnostics、executor readiness、真实 Codex-backed identity replies，以及
+  Codex hand probe。
+- `BUG-050` 跟进真实 Codex shell/file activity 未进入 AIWorker
+  `orchestrator.tool_call` 事件流的问题。
+- `BUG-051` 跟进 `executor mcp add --arg -y` 被 CLI parser 解析为 unknown
+  option 的 stdio argument UX 问题。
+- `TODO-008` 跟进把本次手工矩阵沉淀成可重复、可脱敏、local-only 的 Soul /
+  brain / executor validation harness。
+- `PLAN-080` 作为 draft 方案，等待批准后再实现。
+
 ## 2026-05-03 21:39 [completed] REL-012 / PLAN-079 — publish CLI 0.5.3
 
 发布 `@zonease/aiworker-cli@0.5.3`：

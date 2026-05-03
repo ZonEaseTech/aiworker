@@ -165,3 +165,7 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-047 Worker executor bootstrap and capability lifecycle**](FEAT-047.md) `P1`
 - [x] [**BUG-049 User-scope init points to project-only executor doctor**](BUG-049.md) `P3`
 - [x] [**REL-012 发布 aiworker CLI 0.5.3**](REL-012.md) `P1`
+- [x] [**QA-003 Record Soul brain executor validation campaign**](QA-003.md) `P1`
+- [ ] [**BUG-050 Surface live Codex tool activity as AIWorker tool events**](BUG-050.md) `P2`
+- [ ] [**BUG-051 Preserve hyphenated executor MCP arg values**](BUG-051.md) `P3`
+- [ ] [**TODO-008 Create repeatable Soul brain executor validation harness**](TODO-008.md) `P2`
