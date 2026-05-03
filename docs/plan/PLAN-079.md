@@ -1,8 +1,9 @@
 # PLAN-079 发布 aiworker CLI 0.5.3
 
-- **status**: implementing
+- **status**: completed
 - **createdAt**: 2026-05-03 21:33
 - **approvedAt**: 2026-05-03 21:33
+- **completedAt**: 2026-05-03 21:39
 - **relatedTask**: REL-012
 
 ## 现状
@@ -74,8 +75,17 @@
   reports capability `PASS`, executor readiness `WARN (non-blocking)`, omitted port `(env/default)`, and no `NaN`
 - Passed to pack/auth boundary: `cd apps/cli/dist && bun publish --dry-run --access public`
 - Passed: `git diff --check`
+- Passed: GitHub Actions release workflow `25280654558` for `v0.5.3`
+- Passed: npm registry latest resolved to `0.5.3`
+- Passed: GitHub Release `v0.5.3` has linux-x64, linux-arm64, darwin-x64, and darwin-arm64 tarballs
+- Passed: published CLI `bunx --bun --package @zonease/aiworker-cli@0.5.3 aiworker --version`
+  reports `aiworker/0.5.3`
+- Passed: published CLI `init --global` next steps do not include `aiworker executor doctor`
+- Passed: published CLI `up --soul developer --dry-run --no-open --no-serve-web`
+  reports omitted port `(env/default)` and no `NaN`
 
 ## 结果
 
-- Local release gates passed. Pending `v0.5.3` tag push, GitHub Actions release,
-  npm verification, GitHub Release asset verification, and published-package smoke.
+- `@zonease/aiworker-cli@0.5.3` was published to npm and GitHub Release.
+- `0.5.3` ships worker local brain activation, executor bootstrap lifecycle,
+  and the user/explicit init next-step polish.

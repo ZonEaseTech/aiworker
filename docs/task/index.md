@@ -164,4 +164,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-046 Worker local brain activation and lifecycle**](FEAT-046.md) `P1`
 - [x] [**FEAT-047 Worker executor bootstrap and capability lifecycle**](FEAT-047.md) `P1`
 - [x] [**BUG-049 User-scope init points to project-only executor doctor**](BUG-049.md) `P3`
-- [-] [**REL-012 发布 aiworker CLI 0.5.3**](REL-012.md) `P1`
+- [x] [**REL-012 发布 aiworker CLI 0.5.3**](REL-012.md) `P1`

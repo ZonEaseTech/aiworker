@@ -1,5 +1,16 @@
 # AIWorker Changelog
 
+## 2026-05-03 21:39 [completed] REL-012 / PLAN-079 — publish CLI 0.5.3
+
+发布 `@zonease/aiworker-cli@0.5.3`：
+
+- GitHub Actions release workflow `25280654558` 成功。
+- npm latest 解析到 `0.5.3`。
+- GitHub Release `v0.5.3` 上传 linux-x64、linux-arm64、darwin-x64、darwin-arm64 tarballs。
+- published CLI smoke 通过：`--version` 报告 `aiworker/0.5.3`；
+  `init --global` next steps 不再包含 project-only `aiworker executor doctor`；
+  `up --dry-run` 继续显示 omitted port `(env/default)` 且不含 `NaN`。
+
 ## 2026-05-03 21:35 [progress] REL-012 / PLAN-079 — prepare CLI 0.5.3 release
 
 启动 `@zonease/aiworker-cli@0.5.3` patch release：
