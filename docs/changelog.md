@@ -1,5 +1,20 @@
 # AIWorker Changelog
 
+## 2026-05-04 02:07 [progress] BUG-052 — remote published CLI Claude Code validation follow-up
+
+记录远端 Coder workspace 中发布版 CLI + Claude Code executor 的验证发现：
+
+- 使用 `@zonease/aiworker-cli@0.5.3` npm 发布包在
+  `/home/ben/projects/debug-aiworker/release-cli-claude-code` 初始化
+  project-scope worker，并选择 `claude-code/default`。
+- `aiworker doctor` 通过；`executor doctor --engine claude-code` 的核心
+  readiness 通过，仅有空 executor capability manifest / 空 MCP 声明警告。
+- 真实 `aiworker run`、同 `chat-id` 连续性、`sessions list/show` 的脱敏
+  engine binding、loopback `serve`、`/health`、`/admin/` 和未认证
+  `/api/worker/info` 401 行为均验证通过。
+- 新增 `BUG-052` 跟进 `orchestrator.text` 在分段 delta 之后又以 `delta`
+  发送完整最终文本，导致 append-only SSE/CLI consumer 可能渲染重复内容。
+
 ## 2026-05-03 23:33 [progress] QA-003 / PLAN-080 — Soul brain executor validation follow-ups
 
 记录 `/Users/ben/projects/aiben` 本地 Soul / brain / executor 调试样本，并落盘
