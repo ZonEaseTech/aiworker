@@ -109,6 +109,7 @@ interface ExecutorTextResult {
 
 const DEFAULT_COMPACTION_MAX_SUMMARY_MESSAGES = 120
 const TRANSCRIPT_METADATA_VERSION = 1
+const TASK_ERROR_MAX_LENGTH = 1000
 const WORKER_ADMIN_CONTINUATION = Symbol('worker-admin-continuation')
 
 /** `runTool` 输入。`taskId` / `toolCallId` 用作 ApprovalStore 的 key。 */
@@ -167,41 +168,53 @@ export class Orchestrator {
 
   /** Entry point for inbound envelopes from any channel. */
   async ingest(envelope: Envelope): Promise<void> {
-    this.deps.bus.emit('channel.inbound', { channel: envelope.channel, chatId: envelope.chatId, text: envelope.text })
-    const resolved = await this.resolveConversation(envelope)
-    const { conversation, sessionKey } = resolved
-    const workspace = await this.provisionWorkspace(conversation.id)
-    const userMessage = this.persistUserMessage(conversation.id, envelope, sessionKey)
-    const gatewayConversationId = gatewayConversationIdFromEnvelope(envelope)
-    this.deps.bus.emit('conversation.message', {
-      conversationId: conversation.id,
-      ...(gatewayConversationId === undefined ? {} : { gatewayConversationId }),
-      messageId: userMessage.id,
-      role: 'user',
-    })
+    const taskId = taskIdFromEnvelope(envelope)
+    let taskConversationId: string | undefined
+    try {
+      this.deps.bus.emit('channel.inbound', { channel: envelope.channel, chatId: envelope.chatId, text: envelope.text })
+      const resolved = await this.resolveConversation(envelope)
+      const { conversation, sessionKey } = resolved
+      taskConversationId = conversation.id
+      const workspace = await this.provisionWorkspace(conversation.id)
+      const userMessage = this.persistUserMessage(conversation.id, envelope, sessionKey)
+      const gatewayConversationId = gatewayConversationIdFromEnvelope(envelope)
+      this.deps.bus.emit('conversation.message', {
+        conversationId: conversation.id,
+        ...(gatewayConversationId === undefined ? {} : { gatewayConversationId }),
+        messageId: userMessage.id,
+        role: 'user',
+      })
 
-    // ProcessManager controls cancellation via an AbortController; its `cancel`
-    // hook flips this controller, which propagates through `input.signal` to
-    // the engine and triggers SIGTERM/SIGKILL on any spawned child process.
-    const controller = new AbortController()
-    let activityCb: (() => void) | null = null
-    await this.deps.processes.run({
-      group: conversation.id,
-      engine: this.deps.config.executor.engine,
-      class: 'interactive',
-      meta: { conversationId: conversation.id, channel: envelope.channel },
-      onSpawn: async () => ({
-        cancel: async () => controller.abort(),
-        onActivity: (cb) => {
-          activityCb = cb
-          return () => {
-            if (activityCb === cb)
-              activityCb = null
+      // ProcessManager controls cancellation via an AbortController; its `cancel`
+      // hook flips this controller, which propagates through `input.signal` to
+      // the engine and triggers SIGTERM/SIGKILL on any spawned child process.
+      const controller = new AbortController()
+      let activityCb: (() => void) | null = null
+      await this.deps.processes.run({
+        group: conversation.id,
+        engine: this.deps.config.executor.engine,
+        class: 'interactive',
+        meta: { conversationId: conversation.id, channel: envelope.channel },
+        onSpawn: async () => {
+          this.markTaskRunning(taskId, conversation.id)
+          return {
+            cancel: async () => controller.abort(),
+            onActivity: (cb) => {
+              activityCb = cb
+              return () => {
+                if (activityCb === cb)
+                  activityCb = null
+              }
+            },
           }
         },
-      }),
-      job: () => this.run(conversation, envelope, workspace, controller.signal, () => activityCb?.(), resolved),
-    })
+        job: () => this.run(conversation, envelope, workspace, controller.signal, () => activityCb?.(), resolved),
+      })
+    }
+    catch (err) {
+      this.markTaskFailed(taskId, taskConversationId, taskErrorMessage(err), isCancellationError(err))
+      throw err
+    }
   }
 
   private async run(
@@ -322,6 +335,7 @@ export class Orchestrator {
     if (!result.ok) {
       const error = result.error ?? 'executor error'
       consola.warn(`[orchestrator] executor error: ${error}`)
+      this.markTaskFailed(taskId, activeConversation.id, error, signal.aborted)
       this.deps.bus.emit('orchestrator.error', {
         conversationId: activeConversation.id,
         ...(gatewayConversationId === undefined ? {} : { gatewayConversationId }),
@@ -381,14 +395,20 @@ export class Orchestrator {
       ].join('\n')
     }
     const now = new Date().toISOString()
-    db.insert(messages).values({
+    const inserted = db.insert(messages).values({
       conversationId: activeConversation.id,
       role: 'assistant',
       content: assistantText,
       createdAt: now,
-    }).run()
+    }).returning({ id: messages.id }).all()
     db.update(conversations).set({ lastActiveAt: now }).where(eq(conversations.id, activeConversation.id)).run()
     touchSessionEntry(sessionKey, { at: now })
+    const assistantMessageId = inserted[0]?.id
+    this.markTaskSucceeded(taskId, activeConversation.id, {
+      conversationId: activeConversation.id,
+      assistantTextLength: assistantText.length,
+      ...(assistantMessageId === undefined ? {} : { assistantMessageId }),
+    })
     this.deps.bus.emit('orchestrator.finished', {
       conversationId: activeConversation.id,
       ...(gatewayConversationId === undefined ? {} : { gatewayConversationId }),
@@ -619,8 +639,11 @@ export class Orchestrator {
     const db = getWorkerDb()
     const id = crypto.randomUUID()
     const now = new Date().toISOString()
+    const taskId = taskIdFromEnvelope(envelope)
+    const persistedTaskId = this.persistedAgentTaskId(taskId)
     db.insert(conversations).values({
       id,
+      ...(persistedTaskId === undefined ? {} : { taskId: persistedTaskId }),
       channel: envelope.channel,
       chatId: envelope.chatId,
       ...(envelope.threadId === undefined ? {} : { threadId: envelope.threadId }),
@@ -629,7 +652,6 @@ export class Orchestrator {
       lastActiveAt: now,
     }).run()
     const rowRaw = db.select().from(conversations).where(eq(conversations.id, id)).get()!
-    const taskId = taskIdFromEnvelope(envelope)
     this.deps.bus.emit('conversation.created', {
       conversationId: id,
       channel: envelope.channel,
@@ -637,6 +659,50 @@ export class Orchestrator {
       ...(taskId === undefined ? {} : { taskId }),
     })
     return rowToState(rowRaw)
+  }
+
+  private persistedAgentTaskId(taskId: string | undefined): string | undefined {
+    if (taskId === undefined)
+      return undefined
+    const row = getWorkerDb().select({ id: agentTasks.id }).from(agentTasks).where(eq(agentTasks.id, taskId)).get()
+    return row?.id
+  }
+
+  private markTaskRunning(taskId: string | undefined, conversationId: string): void {
+    if (taskId === undefined)
+      return
+    getWorkerDb().update(agentTasks).set({
+      status: 'running',
+      conversationId,
+      finishedAt: null,
+      result: null,
+      error: null,
+    }).where(eq(agentTasks.id, taskId)).run()
+  }
+
+  private markTaskSucceeded(taskId: string | undefined, conversationId: string, result: Record<string, unknown>): void {
+    if (taskId === undefined)
+      return
+    getWorkerDb().update(agentTasks).set({
+      status: 'succeeded',
+      conversationId,
+      finishedAt: new Date().toISOString(),
+      result,
+      error: null,
+    }).where(eq(agentTasks.id, taskId)).run()
+  }
+
+  private markTaskFailed(taskId: string | undefined, conversationId: string | undefined, error: string, cancelled = false): void {
+    if (taskId === undefined)
+      return
+    const status: 'failed' | 'cancelled' = cancelled ? 'cancelled' : 'failed'
+    getWorkerDb().update(agentTasks).set({
+      status,
+      ...(conversationId === undefined ? {} : { conversationId }),
+      finishedAt: new Date().toISOString(),
+      result: null,
+      error: redactTaskError(error),
+    }).where(eq(agentTasks.id, taskId)).run()
   }
 
   private upsertSession(sessionKey: string, envelope: Envelope, conversationId: string): void {
@@ -1146,6 +1212,27 @@ function taskIdFromEnvelope(envelope: Envelope): string | undefined {
     return undefined
   const taskId = (envelope.raw as Record<string, unknown>).taskId
   return typeof taskId === 'string' && taskId.length > 0 ? taskId : undefined
+}
+
+function taskErrorMessage(err: unknown): string {
+  if (err instanceof Error && err.message.length > 0)
+    return err.message
+  return String(err)
+}
+
+function isCancellationError(err: unknown): boolean {
+  return err instanceof Error && err.message === 'cancelled'
+}
+
+function redactTaskError(error: string): string {
+  const redacted = error
+    .replace(/\b([\w.-]*(?:api[_-]?key|token|secret|password|authorization)[\w.-]*)\b(\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi, '$1$2[redacted]')
+    .replace(/\bBearer\s+[^\s,;]+/gi, 'Bearer [redacted]')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (redacted.length <= TASK_ERROR_MAX_LENGTH)
+    return redacted
+  return `${redacted.slice(0, TASK_ERROR_MAX_LENGTH - 3)}...`
 }
 
 function isWorkerAdminContinuation(envelope: Envelope, conversationId: string): boolean {

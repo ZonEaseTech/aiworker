@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 
-import { closeWorkerDb, conversations, getSessionEntry, getWorkerDb, initWorkerDb, messages, runWorkerMigrations, upsertSessionEntry } from '@zonease/aiworker-storage-sqlite/worker'
+import { agentTasks, closeWorkerDb, conversations, getSessionEntry, getWorkerDb, initWorkerDb, messages, runWorkerMigrations, upsertSessionEntry } from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { resolveSessionKey } from '../conversation/router'
@@ -83,6 +83,10 @@ interface CapturingExecutor extends ExecutorProvider {
   inputs: AgentRunInput[]
 }
 
+interface PausingExecutor extends CapturingExecutor {
+  release: () => void
+}
+
 type ExecutorStep = string | { error: string } | { binding: Record<string, unknown> | null, engine?: string, error?: string, text?: string }
 
 function capturingExecutor(outputs: string[] = ['ok']): CapturingExecutor {
@@ -128,6 +132,31 @@ function scriptedExecutor(outputs: ExecutorStep[] = ['ok']): CapturingExecutor {
     },
   }
   return exec
+}
+
+function pausingExecutor(output = 'ok'): PausingExecutor {
+  const captured: ChatMessage[][] = []
+  const inputs: AgentRunInput[] = []
+  let releaseGate: () => void = () => {}
+  const gate = new Promise<void>((resolve) => {
+    releaseGate = resolve
+  })
+  return {
+    name: 'pausing',
+    captured,
+    inputs,
+    release: () => releaseGate(),
+    health: async () => ({ name: 'pausing', status: 'healthy', lastChecked: 'x' }),
+    listTools: async () => [],
+    run: (input: AgentRunInput) => {
+      inputs.push(input)
+      captured.push(input.messages.map(m => ({ role: m.role, content: m.content })))
+      return (async function* () {
+        await gate
+        yield { type: 'assistant_message_delta' as const, delta: output }
+      })()
+    },
+  }
 }
 
 function silentBus(): WorkerEventBus {
@@ -242,6 +271,10 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
       receivedAt: new Date().toISOString(),
       raw: {},
     }
+  }
+
+  function loadTask(id: string) {
+    return getWorkerDb().select().from(agentTasks).where(eq(agentTasks.id, id)).get()
   }
 
   async function runIngestAndCapture(opts: {
@@ -1034,6 +1067,71 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
     expect(getSessionEntry(sessionKey)?.engineBindings).toEqual({ codex: secondBinding })
   })
 
+  it('persists submitted task lifecycle from running to succeeded', async () => {
+    const answer = 'task lifecycle answer'
+    const executor = pausingExecutor(answer)
+    const orch = new Orchestrator({
+      config: buildConfig(),
+      brain: stubBrain(),
+      executor,
+      bus: silentBus(),
+      workerId: 'w_history_test',
+      workspaces,
+      processes,
+      approvals: new ApprovalStore(),
+    })
+
+    const task = await orch.submitTask('task lifecycle prompt')
+    await waitUntil(() => loadTask(task.id)?.status === 'running', 'submitted task running')
+
+    const running = loadTask(task.id)!
+    expect(running.conversationId).toBeTruthy()
+    expect(running.finishedAt).toBeNull()
+    expect(running.result).toBeNull()
+    expect(running.error).toBeNull()
+    const conversation = getWorkerDb().select().from(conversations).where(eq(conversations.id, running.conversationId!)).get()
+    expect(conversation?.taskId).toBe(task.id)
+
+    executor.release()
+    await waitUntil(() => loadTask(task.id)?.status === 'succeeded', 'submitted task succeeded')
+
+    const succeeded = loadTask(task.id)!
+    expect(succeeded.conversationId).toBe(running.conversationId)
+    expect(succeeded.finishedAt).toBeTruthy()
+    expect(succeeded.error).toBeNull()
+    expect(succeeded.result?.conversationId).toBe(succeeded.conversationId)
+    expect(succeeded.result?.assistantTextLength).toBe(answer.length)
+    expect(typeof succeeded.result?.assistantMessageId).toBe('number')
+  })
+
+  it('persists submitted task failure with redacted error metadata', async () => {
+    const executor = scriptedExecutor([{ error: 'API_TOKEN=super-secret Bearer raw-token executor failed' }])
+    const orch = new Orchestrator({
+      config: buildConfig(),
+      brain: stubBrain(),
+      executor,
+      bus: silentBus(),
+      workerId: 'w_history_test',
+      workspaces,
+      processes,
+      approvals: new ApprovalStore(),
+    })
+
+    const task = await orch.submitTask('task lifecycle failure prompt')
+    await waitUntil(() => loadTask(task.id)?.status === 'failed', 'submitted task failed')
+
+    const failed = loadTask(task.id)!
+    expect(failed.conversationId).toBeTruthy()
+    expect(failed.finishedAt).toBeTruthy()
+    expect(failed.result).toBeNull()
+    expect(failed.error).toContain('API_TOKEN=')
+    expect(failed.error).toContain('[redacted]')
+    expect(failed.error).not.toContain('super-secret')
+    expect(failed.error).not.toContain('raw-token')
+    const conversation = getWorkerDb().select().from(conversations).where(eq(conversations.id, failed.conversationId!)).get()
+    expect(conversation?.taskId).toBe(task.id)
+  })
+
   it('continues a selected Worker Admin conversation on the same session entry', async () => {
     const firstBinding = { protocol: 'current', threadId: 'selected-thread-1' }
     const secondBinding = { protocol: 'current', threadId: 'selected-thread-2' }
@@ -1072,6 +1170,14 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
     expect(rows.some(row => row.content === 'second selected turn')).toBe(true)
     expect(rows.some(row => row.content === 'second selected response')).toBe(true)
     expect(db.select().from(conversations).all()).toHaveLength(1)
+    const taskRow = db.select().from(agentTasks).where(eq(agentTasks.id, task.id)).get()
+    expect(taskRow?.status).toBe('succeeded')
+    expect(taskRow?.conversationId).toBe(conversationId)
+    expect(taskRow?.error).toBeNull()
+    expect(taskRow?.result?.conversationId).toBe(conversationId)
+    expect(taskRow?.result?.assistantTextLength).toBe('second selected response'.length)
+    const conversation = db.select().from(conversations).where(eq(conversations.id, conversationId)).get()
+    expect(conversation?.taskId).toBeNull()
     expect(executor.inputs[1]?.engineBinding).toEqual(firstBinding)
     expect(getSessionEntry(sessionKey)?.currentConversationId).toBe(conversationId)
     expect(getSessionEntry(sessionKey)?.engineBindings).toEqual({ codex: secondBinding })

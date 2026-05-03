@@ -1,5 +1,30 @@
 # AIWorker Changelog
 
+## 2026-05-02 21:46 [BUG-P1] BUG-045 / PLAN-068 — orchestrator task lifecycle persistence
+
+Fixed stale Worker Admin / HTTP orchestrator task rows:
+
+- `agent_tasks` now records `running`, `succeeded`, `failed`, and `cancelled`
+  lifecycle transitions instead of staying at the initial `queued` state.
+- Task-backed conversations now persist `conversations.task_id`, and task rows
+  persist `conversation_id` so the Worker Admin task view can join work back to
+  the conversation that processed it.
+- Successful tasks write compact result metadata with the conversation id,
+  assistant message id, and assistant text length.
+- Failed tasks write a completion timestamp and a truncated, redacted error
+  string.
+- Selected conversation continuations link their `agent_tasks` row to the
+  existing conversation without overwriting the single-value
+  `conversations.task_id` field.
+
+Validation:
+
+- `bun test packages/core/src/worker/orchestrator/service.history.test.ts`
+- `bun run --filter '@zonease/aiworker-core' typecheck`
+- `bunx eslint packages/core/src/worker/orchestrator/service.ts packages/core/src/worker/orchestrator/service.history.test.ts`
+- `bun run --filter '@zonease/aiworker-core' test`
+- `git diff --check`
+
 ## 2026-05-02 21:29 [BUG-P1] BUG-044 / PLAN-066 — Worker Admin selected conversation continuation
 
 Fixed Worker Admin Chat continuation for selected conversations:

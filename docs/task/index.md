@@ -153,3 +153,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [ ] [**BUG-042 `aiworker up --dry-run` prints `NaN` for omitted port**](BUG-042.md) `P3`
 - [x] [**BUG-043 Worker Admin chat event stream times out before slow replies**](BUG-043.md) `P1`
 - [x] [**BUG-044 Worker Admin chat does not continue the selected conversation**](BUG-044.md) `P1`
+- [x] [**BUG-045 Orchestrator task rows stay queued after successful worker execution**](BUG-045.md) `P1`
