@@ -14,7 +14,8 @@ import { getBearerToken } from './lib/auth'
  * - 所有请求走宿主 worker 自己的 HTTP `/api/worker/*`。
  * - 公网部署：浏览器先过 Caddy basic-auth（BUG-007 fail-closed），随后 `lib/auth.ts`
  *   从 URL hash 一次性塞 sessionStorage 的 bearer token，这里读取并加进 Authorization。
- * - loopback 部署：worker 顶层 `buildBearerAuth` 中间件放行 loopback，token 缺失也能用。
+ * - loopback 部署：静态 `/admin/*` 可直接打开，但受保护的 `/api/worker/*`
+ *   仍需要 bearer；缺 token 时 root layout 渲染锁定态，不主动发 API 请求。
  *
  * 错误统一以 `WorkerApiError` 暴露——把 worker 端 ErrorPayload (`{ error: { code,
  * message, ... } }`) 拍平到 `code`/`message`/`details`，UI 仍能 instanceof 收敛。
@@ -91,7 +92,7 @@ async function workerFetch<T>(path: string, init: RequestInit = {}): Promise<T> 
   if (!res.ok) {
     // worker apps/api 错误形态统一为 `{ error: { code, message, ... } }`，但
     // bearer-auth middleware 等基础设施会直接返 `{ error: 'auth_required' }`
-    // 等老 shape——两种都收敛到 WorkerApiError。
+    // 或顶层 `{ code, message }` 等老 shape——这些都收敛到 WorkerApiError。
     if (body && typeof body === 'object' && 'error' in body) {
       const errBody = (body as { error: unknown }).error
       if (typeof errBody === 'string') {
@@ -106,6 +107,17 @@ async function workerFetch<T>(path: string, init: RequestInit = {}): Promise<T> 
           details: e.details,
           ...(typeof e.expected === 'number' ? { expected: e.expected } : {}),
           ...(typeof e.actual === 'number' ? { actual: e.actual } : {}),
+        })
+      }
+    }
+    if (body && typeof body === 'object') {
+      const e = body as Record<string, unknown>
+      if (typeof e.message === 'string' || typeof e.code === 'string') {
+        const code = typeof e.code === 'string' ? mapErrCode(e.code) : mapStatusToCode(res.status)
+        const message = typeof e.message === 'string' ? e.message : res.statusText
+        throw new WorkerApiError(code, message, {
+          status: res.status,
+          details: e.details,
         })
       }
     }
@@ -128,6 +140,9 @@ function mapStatusToCode(status: number): WorkerApiErrorCode {
 }
 
 function mapErrCode(raw: string): WorkerApiErrorCode {
+  if (raw === 'auth-failed' || raw === 'auth_failed' || raw === 'auth_required')
+    return 'auth-required'
+
   const allowed: WorkerApiErrorCode[] = [
     'auth-required',
     'invalid-body',

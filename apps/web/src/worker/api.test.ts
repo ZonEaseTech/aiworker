@@ -1,6 +1,6 @@
 import type { WorkerSSEEvent } from './api'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { continueConversation, subscribeEvents, testExecutor } from './api'
+import { continueConversation, getInfo, subscribeEvents, testExecutor } from './api'
 import { __resetBearerForTests, setBearerToken } from './lib/auth'
 
 function sseResponse(chunks: string[]): Response {
@@ -72,6 +72,23 @@ describe('worker api subscribeEvents', () => {
     })
     const headers = fetchMock.mock.calls[0]?.[1]?.headers as Headers
     expect(headers.get('Content-Type')).toBe('application/json')
+  })
+
+  it('normalizes top-level bearer auth failures without exposing raw JSON', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      code: 'auth-failed',
+      message: 'missing Authorization header',
+    }), {
+      headers: { 'Content-Type': 'application/json' },
+      status: 401,
+    }))
+
+    await expect(getInfo()).rejects.toMatchObject({
+      code: 'auth-required',
+      message: 'missing Authorization header',
+      name: 'WorkerApiError',
+      status: 401,
+    })
   })
 
   it('times out executor test requests and aborts the fetch', async () => {

@@ -1,5 +1,29 @@
 # AIWorker Changelog
 
+## 2026-05-03 10:39 [BUG-P2] BUG-047 / PLAN-070 — Worker Admin no-token locked state
+
+Fixed the Worker Admin no-token experience:
+
+- Worker Admin now renders a locked state before protected query hooks mount
+  when the browser has no bearer token, preventing background `/api/worker/*`
+  polling from flooding 401s.
+- The locked state lets an operator paste the current worker bearer token into
+  the current tab, using the existing `sessionStorage` auth model.
+- Worker API client error normalization now handles legacy top-level
+  `{ code, message }` auth failures without rendering raw JSON.
+- Worker Web auth comments and `aiworker serve` admin URL output now agree that
+  `/api/worker/*` requires bearer auth; `serve` still avoids printing tokenized
+  URLs and points operators to `--open` for URL-fragment injection.
+
+Validation:
+
+- `bun run --filter '@zonease/aiworker-web' test -- src/worker/__tests__/bootstrap.test.tsx src/worker/__tests__/responsive-shell.test.tsx src/worker/api.test.ts`
+- `bun test apps/cli/src/commands/worker/serve.test.ts`
+- `bun run --filter '@zonease/aiworker-web' typecheck`
+- `bun run --filter '@zonease/aiworker-cli' typecheck`
+- focused ESLint on touched Worker Web and CLI files
+- `git diff --check`
+
 ## 2026-05-03 10:38 [BUG-P2] BUG-046 / PLAN-069 — Executor tiny probe hard timeout
 
 修复 Worker Admin executor tiny probe 可能长期 pending 的问题：

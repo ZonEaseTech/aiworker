@@ -3,8 +3,9 @@
  *
  * 三种部署形态：
  *
- * 1. **loopback dev**：worker apps/api 的 `buildBearerAuth` 中间件对 loopback
- *    （127.0.0.1 / ::1）放行。UI 不需要 token，API call 走相对路径即可。
+ * 1. **loopback dev**：`aiworker serve --open` 打开带 `#token=<bearer>` 的
+ *    admin URL；手动打开 `/admin/` 且没有 session token 时，UI 进入锁定态。
+ *    `/api/worker/*` 始终需要 bearer token，loopback 只影响静态 admin 能否访问。
  *
  * 2. **公网叠 Caddy basic-auth**：浏览器先过 basic-auth 才能进 `/admin/`。
  *    UI 启动时从 `location.hash` 读 `#token=<bearer>`：
@@ -89,9 +90,9 @@ function clearTokenHash(location: Location, history: History): void {
 }
 
 /**
- * 取当前 token。loopback 场景调用方应 tolerant：
- *   - `null` → 不带 Authorization header（worker 中间件放行 loopback）
- *   - `string` → 公网通过 basic-auth 后塞进来的 bearer
+ * 取当前 token：
+ *   - `null` → Worker Admin 应保持锁定态，不主动调用受保护 API。
+ *   - `string` → 后续 fetch 通过 `Authorization: Bearer <token>` 带上它。
  */
 export function getBearerToken(): string | null {
   if (cached !== undefined)

@@ -1,18 +1,25 @@
+import type { FormEvent } from 'react'
 import type { WorkerPath } from '@/worker/lib/link'
 import { createRootRoute, Outlet } from '@tanstack/react-router'
 import {
   ClipboardList,
   Cpu,
   KeyRound,
+  LockKeyhole,
   MessageSquare,
   ShieldCheck,
   SlidersHorizontal,
   Timer,
   Wrench,
 } from 'lucide-react'
+import { useState } from 'react'
 import { ThemeToggle } from '@/shared/components/theme-toggle'
+import { Button } from '@/shared/components/ui/button'
+import { Input } from '@/shared/components/ui/input'
+import { Label } from '@/shared/components/ui/label'
 import { Separator } from '@/shared/components/ui/separator'
 import { TooltipProvider } from '@/shared/components/ui/tooltip'
+import { getBearerToken, setBearerToken } from '@/worker/lib/auth'
 import { useWorkerHealth, useWorkerInfo } from '@/worker/lib/hooks'
 import { WorkerLink } from '@/worker/lib/link'
 
@@ -94,6 +101,19 @@ function Stat({
 }
 
 function RootLayout() {
+  const [bearer, setBearer] = useState(() => getBearerToken())
+
+  if (!bearer) {
+    return (
+      <WorkerAdminLocked
+        onUnlock={(token) => {
+          setBearerToken(token)
+          setBearer(token)
+        }}
+      />
+    )
+  }
+
   return (
     <TooltipProvider delay={300}>
       <div className="flex min-h-screen w-full flex-col bg-background text-foreground">
@@ -138,6 +158,64 @@ function RootLayout() {
         </div>
       </div>
     </TooltipProvider>
+  )
+}
+
+function WorkerAdminLocked({ onUnlock }: { onUnlock: (token: string) => void }) {
+  const [token, setToken] = useState('')
+  const [error, setError] = useState<string | null>(null)
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const nextToken = token.trim()
+    if (!nextToken) {
+      setError('请输入 bearer token。')
+      return
+    }
+    setError(null)
+    onUnlock(nextToken)
+  }
+
+  return (
+    <main className="flex min-h-screen w-full items-center justify-center bg-background px-4 py-8 text-foreground">
+      <section className="flex w-full max-w-md flex-col gap-5 rounded-md border bg-card p-5 shadow-sm">
+        <header className="flex min-w-0 items-start gap-3">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-md border border-border bg-muted">
+            <LockKeyhole className="size-5 text-muted-foreground" aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-xs font-bold uppercase text-muted-foreground">Worker Admin</p>
+            <h1 className="text-xl font-bold">需要 bearer token</h1>
+          </div>
+        </header>
+
+        <p className="text-sm text-muted-foreground">
+          请使用
+          {' '}
+          <code className="font-mono text-xs">aiworker serve --open</code>
+          {' '}
+          打开的页面进入，或粘贴当前 worker token 解锁本 tab。
+        </p>
+
+        <form className="flex flex-col gap-3" onSubmit={submit}>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="worker-admin-token">Bearer token</Label>
+            <Input
+              id="worker-admin-token"
+              autoComplete="off"
+              value={token}
+              onChange={event => setToken(event.target.value)}
+              type="password"
+            />
+          </div>
+          {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+          <Button type="submit">
+            <KeyRound aria-hidden="true" />
+            解锁
+          </Button>
+        </form>
+      </section>
+    </main>
   )
 }
 

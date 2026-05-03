@@ -77,6 +77,10 @@ export function buildWorkerAdminTokenUrl({ token, ...baseOptions }: WorkerAdminT
   return `${buildWorkerAdminBaseUrl(baseOptions)}#token=${encodeURIComponent(token)}`
 }
 
+export function formatWorkerAdminBaseUrlMessage(adminBaseUrl: string): string {
+  return `[aiworker serve] worker admin: ${adminBaseUrl}（无 token 会显示锁定态；使用 --open 打开会通过 URL fragment 注入 bearer）`
+}
+
 export function shouldOpenWorkerAdminBrowser({ open, stdoutIsTTY }: {
   open?: boolean
   stdoutIsTTY: boolean
@@ -143,7 +147,7 @@ export async function runServe(options: ServeOptions = {}): Promise<void> {
   if (webStaticDir) {
     consola.info(`[aiworker serve] /admin/* serving worker bundle from ${webStaticDir}`)
     const adminBaseUrl = buildWorkerAdminBaseUrl({ host, port })
-    consola.info(`[aiworker serve] worker admin: ${adminBaseUrl}`)
+    consola.info(formatWorkerAdminBaseUrlMessage(adminBaseUrl))
     if (shouldOpenWorkerAdminBrowser({ open: options.open, stdoutIsTTY: process.stdout.isTTY === true })) {
       const adminUrl = buildWorkerAdminTokenUrl({ host, port, token: state.tokenPlaintext })
       openWorkerAdminBrowser(adminUrl)

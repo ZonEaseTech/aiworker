@@ -5,8 +5,9 @@ import {
   RouterProvider,
 } from '@tanstack/react-router'
 import { render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resolveWebRouterBasepath } from '@/shared/lib/router-basepath'
+import { __resetBearerForTests, setBearerToken } from '@/worker/lib/auth'
 import { routeTree } from '@/worker/routeTree.gen'
 
 vi.mock('@/worker/api', () => {
@@ -65,6 +66,8 @@ function classListOf(element: HTMLElement): string[] {
 }
 
 async function renderWorkerRoute(initialEntry: string, width: number, height: number) {
+  setBearerToken('wtk_responsive_test_token')
+
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: width })
   Object.defineProperty(window, 'innerHeight', { configurable: true, value: height })
   window.dispatchEvent(new Event('resize'))
@@ -89,6 +92,10 @@ async function renderWorkerRoute(initialEntry: string, width: number, height: nu
 }
 
 describe('worker responsive shell', () => {
+  afterEach(() => {
+    __resetBearerForTests()
+  })
+
   it('uses a top navigation shell at 390 px for the overview route', async () => {
     await renderWorkerRoute('/admin/', 390, 844)
 
