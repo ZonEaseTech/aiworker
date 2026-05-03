@@ -169,3 +169,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [ ] [**BUG-050 Surface live Codex tool activity as AIWorker tool events**](BUG-050.md) `P2`
 - [ ] [**BUG-051 Preserve hyphenated executor MCP arg values**](BUG-051.md) `P3`
 - [ ] [**TODO-008 Create repeatable Soul brain executor validation harness**](TODO-008.md) `P2`
+- [ ] [**BUG-052 `orchestrator.text` emits duplicate final text after streamed deltas**](BUG-052.md) `P2`
