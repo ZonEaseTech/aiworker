@@ -108,6 +108,7 @@ npm install -g @zonease/aiworker-cli
 AIWorker CLI 是 Bun-native：`npx` / `npm install -g` 不会把 runtime 改成 Node。没有 Bun 时，CLI 会提示安装 Bun 或改用 GitHub Releases 的 standalone binary。binary 跑在 `~/.bun/bin/aiworker` 或 `$(npm bin -g)/aiworker`。第一次跑任意命令时自动 mint master key 写到 `~/.aiworker/.env`（chmod 0600）。
 
 **项目级 worker**（PLAN-023，可选）：`aiworker up --soul developer` 会在当前目录 `<cwd>/.aiworker/` 落项目级 layout（每 project 一份独立 worker.db / master key / persona / skills；不要求当前目录是 git repo），随后完成能力预检并启动本地 HTTP/admin。engine（claude / codex / cursor）保持 user 级共享。`aiworker scope` 诊断当前命中的 layout；显式拆步时仍可用 `aiworker init` / `aiworker doctor` / `aiworker serve`。详见 [docs/cli.md §`aiworker up`](docs/cli.md)。
+新项目默认使用安全的 `http/default` stub executor；准备好 Codex / Claude 等本机 CLI 后，用 `aiworker executor select --engine codex --apply` 显式切换 task executor，再用 `aiworker executor doctor --engine codex` 检查 engine CLI、executor-native capability manifest 与 projection compatibility。
 
 ```sh
 cd ~/code/my-project
@@ -259,8 +260,16 @@ aiworker fleet config get <workerId>
 
 # 2. 切到 claude-code default variant（model=sonnet, timeout=120s）
 NEW='{
-  "brains": [],
-  "brainWriteTarget": "",
+  "brains": [
+    {
+      "id": "local-filesystem",
+      "type": "filesystem",
+      "priority": 100,
+      "readOnly": false,
+      "config": {}
+    }
+  ],
+  "brainWriteTarget": "local-filesystem",
   "brainRetrieval": "first-match",
   "executor": { "engine": "claude-code", "variant": "default" },
   "channels": [],
@@ -268,7 +277,12 @@ NEW='{
 }'
 aiworker fleet config set <workerId> "$NEW" --if-match 1
 
-# 3. chat 验证
+# 3. 如果是在该 worker 主机 / 项目目录内调试，可只读确认 brain source / skills / memories
+aiworker brain status
+aiworker brain skills
+aiworker brain memories --limit 20
+
+# 4. chat 验证
 aiworker fleet chat <workerId> '请用中文回我一句话'
 # {"kind":"accepted",...}
 # {"kind":"chat.message","payload":{"role":"assistant","content":"...claude 真实回复..."}}

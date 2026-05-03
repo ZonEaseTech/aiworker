@@ -134,20 +134,27 @@ aiworker scope
 # 2. 看当前 Soul 声明了什么职责和能力草案
 aiworker soul show developer
 
-# 3. 静态验证 brain/runtime capability 草案
+# 3. 看 runtime 实际挂载的 brain source、skills 和 memories
+aiworker brain status
+aiworker brain skills
+aiworker brain memories --limit 20
+
+# 4. 静态验证 brain/runtime capability 草案
 aiworker doctor
 
-# 4. 可选：声明并预览 executor 原生 MCP projection
+# 5. 可选：声明并预览 executor 原生 MCP projection
+aiworker executor select --engine codex --apply
+aiworker executor doctor --engine codex
 aiworker executor mcp add context7 --engine codex --url https://mcp.example.com/mcp
 aiworker executor mcp sync --engine codex --dry-run
 
-# 5. 只验证 bootstrap / DB / config 能构建，不真正投递消息
+# 6. 只验证 bootstrap / DB / config 能构建，不真正投递消息
 aiworker run --message "hello" --dry-run
 
-# 6. 配好 executor secret / model 后再做真实一轮
+# 7. 配好 executor secret / model 后再做真实一轮
 aiworker run --message "hello"
 
-# 7. 需要 HTTP API 或 worker admin UI 时启动服务
+# 8. 需要 HTTP API 或 worker admin UI 时启动服务
 aiworker up --port 9217
 # 或只表达显式 server 生命周期：
 aiworker serve --port 9217
@@ -217,6 +224,8 @@ aiworker executor mcp add filesystem \
 ```
 
 支持的 engine：`codex`、`claude-code`。当前 scope 只支持 `project`。
+Codex HTTP MCP 的 bearer token 使用 `--bearer-token-env-var <ENV_VAR>` 表达；
+AIWorker 不会把 secretRef hydrate 成明文写入 engine config。
 
 Secret-like 字段必须使用 `secretRef`：
 
@@ -233,12 +242,30 @@ aiworker executor mcp add private-docs \
 
 ```sh
 aiworker executor mcp sync --engine codex --dry-run
-# codex mcp add context7 --scope project --transport streamable-http --url https://mcp.example.com/mcp
+# codex mcp add context7 --url https://mcp.example.com/mcp
 
 aiworker executor mcp sync --engine codex
 ```
 
 非 dry-run 会调用对应 engine CLI（`codex` 或 `claude`），工作目录是 project root，并过滤 `AIWORKER_*`、`INTERNAL_*`、`WORKER_*` 和常见 secret suffix 环境变量。当前 MVP 不会自动 hydrate `secretRef`；带 `secretRef` 的 server 只能 dry-run 或由 operator 解析 secret 后手工运行 engine CLI。
+Codex projection 使用当前 `codex mcp add` 参数面：stdio 走 `codex mcp add <name> -- <command> ...args`，streamable HTTP 走 `codex mcp add <name> --url <url>`；不生成 `--scope`、`--transport` 或通用 `--header`。
+
+### `aiworker executor select`
+
+显式选择本地 worker 的 task executor，只更新 `worker_config.configJson.executor`，
+不写 Codex / Claude project config，也不修改 `.aiworker/executor-capabilities.json`。
+默认 dry-run；持久化必须显式传 `--apply`，可配合 `--if-match <version>` 做乐观锁。
+
+```sh
+aiworker executor select --engine codex
+# dry-run, shows current -> target executor
+
+aiworker executor select --engine codex --variant default --apply --if-match 1
+```
+
+该命令解决的是 task executor selection；executor-native MCP / engine plugin /
+engine skill 的声明与投影仍走 `aiworker executor mcp ...` 或只读
+`aiworker executor capability ...`。
 
 ### `aiworker executor doctor`
 
@@ -248,7 +275,18 @@ aiworker executor mcp sync --engine codex
 aiworker executor doctor --engine codex
 ```
 
-存在错误时整体 `Status: FAIL`，退出码为 `1`。MVP 只做 manifest、CLI availability 和 descriptor 静态检查，不会启动 MCP server 或执行 `listTools`。
+输出会区分 configured task executor、engine CLI availability、declared executor-native capabilities 和 projection compatibility。空 manifest 或默认 `http/default` stub executor 会显示 `Status: WARN` 但退出码仍为 `0`；存在错误时整体 `Status: FAIL`，退出码为 `1`。MVP 只做 manifest、CLI availability 和 descriptor 静态检查，不会启动 MCP server 或执行 `listTools`。
+
+### `aiworker executor capability list` / `show`
+
+只读查看 `.aiworker/executor-capabilities.json` 中的 executor-native 声明，
+覆盖 MCP、engine plugin、engine skill 和 engine policy。它不会读取
+`.aiworker/mcp.json`、brain skill、Soul capability pack 或 runtime toolset。
+
+```sh
+aiworker executor capability list
+aiworker executor capability show codex.mcp.context7
+```
 
 ### `aiworker soul list` / `aiworker soul show <preset>`
 
@@ -278,6 +316,44 @@ aiworker soul show developer
 ```sh
 aiworker init --soul customize
 ```
+
+### `aiworker brain status` / `aiworker brain skills` / `aiworker brain memories`
+
+只读检查 runtime brain，不启动 HTTP server 或 worker admin，也不会写入
+`skills/`、`memories/` 或 capability manifest。显式 canonical 写法为
+`aiworker worker brain ...`。
+
+```sh
+aiworker brain status
+# {
+#   "workerId": "w_...",
+#   "configVersion": 1,
+#   "status": "healthy",
+#   "brainRetrieval": "first-match",
+#   "brainWriteTarget": "local-filesystem",
+#   "brains": [
+#     {
+#       "id": "local-filesystem",
+#       "type": "filesystem",
+#       "priority": 100,
+#       "readOnly": false,
+#       "writeTarget": true,
+#       "home": "/repo/.aiworker"
+#     }
+#   ]
+# }
+
+aiworker brain skills
+# { "workerId": "w_...", "count": 0, "skills": [] }
+
+aiworker brain memories --query "deployment" --limit 20
+# { "workerId": "w_...", "query": "deployment", "count": 0, "memories": [] }
+```
+
+`brain status` 读取 `WorkerConfig.brains` 并拼上当前 source 的 effective
+filesystem home、priority、read-only 与 write-target 标记；`brain skills`
+和 `brain memories` 则直接走 live `BrainProvider`。这些命令展示的是 runtime
+已挂载状态，和 `aiworker doctor` 的静态 capability draft validation 是两个边界。
 
 ### `aiworker run --message <text> [--chat-id <id>] [--dry-run] [--timeout-ms <n>]`
 
@@ -377,6 +453,24 @@ aiworker config show
 #   "version": 1,
 #   "config": { ... }
 # }
+```
+
+新 seed 的 worker 默认会挂载一个 writable local filesystem brain source：
+
+```json
+{
+  "brains": [
+    {
+      "id": "local-filesystem",
+      "type": "filesystem",
+      "priority": 100,
+      "readOnly": false,
+      "config": {}
+    }
+  ],
+  "brainWriteTarget": "local-filesystem",
+  "brainRetrieval": "first-match"
+}
 ```
 
 ### `aiworker config set <json> [--if-match <version>]`

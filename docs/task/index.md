@@ -161,3 +161,5 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-048 `aiworker init` skips Soul prompt when legacy home looks like project scope**](BUG-048.md) `P1`
 - [x] [**REL-010 发布 aiworker CLI 0.5.1**](REL-010.md) `P1`
 - [x] [**REL-011 发布 aiworker CLI 0.5.2**](REL-011.md) `P1`
+- [x] [**FEAT-046 Worker local brain activation and lifecycle**](FEAT-046.md) `P1`
+- [x] [**FEAT-047 Worker executor bootstrap and capability lifecycle**](FEAT-047.md) `P1`

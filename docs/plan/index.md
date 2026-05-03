@@ -101,3 +101,9 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-070 Worker Admin locked state without bearer token**](PLAN-070.md) `2026-05-02`
 - [x] [**PLAN-071 发布 aiworker CLI 0.5.1**](PLAN-071.md) `2026-05-03`
 - [x] [**PLAN-072 发布 aiworker CLI 0.5.2**](PLAN-072.md) `2026-05-03`
+- [x] [**PLAN-073 Worker local brain activation and lifecycle**](PLAN-073.md) `2026-05-03`
+- [x] [**PLAN-074 Executor readiness semantics and first-run guidance**](PLAN-074.md) `2026-05-03`
+- [x] [**PLAN-075 Codex MCP projection compatibility**](PLAN-075.md) `2026-05-03`
+- [x] [**PLAN-076 Executor selection bootstrap command**](PLAN-076.md) `2026-05-03`
+- [x] [**PLAN-077 Engine-native capability lifecycle beyond MCP**](PLAN-077.md) `2026-05-03`
+- [x] [**PLAN-078 Real Codex-backed worker validation campaign**](PLAN-078.md) `2026-05-03`

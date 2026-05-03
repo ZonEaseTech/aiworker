@@ -1,5 +1,90 @@
 # AIWorker Changelog
 
+## 2026-05-03 13:44 [completed] FEAT-047 / PLAN-074..078 — executor bootstrap lifecycle
+
+完成 worker executor bootstrap lifecycle track：
+
+- `executor doctor` 与 `aiworker up` 的 executor readiness 输出现在区分
+  configured task executor、engine CLI availability、declared executor-native
+  capabilities 和 projection compatibility；空 manifest / 默认 stub executor
+  显示为 WARN，不再被误读成完整 bootstrap PASS。
+- Codex MCP projection 改为当前 `codex mcp add` 参数面：HTTP 只生成
+  `--url` / `--bearer-token-env-var`，stdio 走 `-- <command> ...args`，不再
+  输出 Codex 不支持的 `--scope` / `--transport` / generic `--header`。
+- 新增 `aiworker executor select`，默认 dry-run，`--apply` 才只替换
+  `worker_config.configJson.executor`，保留 `--if-match` version guard，且不写
+  engine project config 或 executor capability manifest。
+- `.aiworker/executor-capabilities.json` 增加 engine plugin / skill / policy
+  lifecycle descriptor，并新增只读 `executor capability list/show`；brain skill、
+  Soul capability pack、runtime toolset 与 `.aiworker/mcp.json` 仍保持隔离。
+- `/Users/ben/projects/aiben` 真实 HOME smoke：`codex-cli 0.128.0`，project
+  scope 与 `doctor` PASS，当前 task executor 已是 `codex/default`，executor
+  doctor/up dry-run 对空 executor-native manifest 给出 non-blocking WARN，
+  `aiworker run --message "hello" --dry-run` 可构建 Codex runtime。
+
+验证：
+
+- `bun test apps/cli/src/commands/worker/executor.test.ts`
+- `bun test apps/cli/src/commands/worker/up.test.ts apps/cli/src/aiworker.test.ts apps/cli/src/commands/worker/init.integration.test.ts packages/shared/src/executor-capabilities.test.ts`
+- `bun run --filter '@zonease/aiworker-cli' typecheck`
+- `bun run --filter '@zonease/aiworker-core' typecheck`
+- `bun run --filter '@zonease/aiworker-shared' typecheck`
+- `bun run typecheck`
+- `bun run lint -- apps/cli/src/commands/worker/executor.ts apps/cli/src/commands/worker/up.ts apps/cli/src/aiworker.ts apps/cli/src/help.ts packages/shared/src/executor-capabilities.ts packages/core/src/index.ts`
+
+## 2026-05-03 13:28 [completed] FEAT-046 / PLAN-073 — worker local brain activation
+
+完成 worker local brain activation track：
+
+- 新 seed worker 默认挂载 writable `local-filesystem` brain source，project
+  scope 指向 `<project>/.aiworker/`，user / explicit scope 仍走 worker home
+  下的 brain layout。
+- `GET /api/worker/info`、`POST /api/worker/brain/test`、Worker Admin Test
+  面板和新增 `aiworker brain status|skills|memories` 只读命令都会展示 runtime
+  brain source 的 health、priority、read-only、write-target 与 effective home。
+- Brain admission 边界写入架构文档：generated memory / brain skill / policy
+  proposal 入 filesystem 前必须经过带 evidence / scope / confidence / rollback
+  的显式 approval；executor-native capability 继续只走
+  `.aiworker/executor-capabilities.json` 与 `aiworker executor ...`。
+- `/Users/ben/projects/aiben` 已完成真实 Codex-backed worker smoke：filesystem
+  skill / memory 被 runtime 扫出，`doctor` PASS，dry-run runtime 可构建，真实
+  `aiworker run` 到达 `orchestrator.finished`，worker HTTP `/info` 与
+  `/brain/test` 均报告 `local-filesystem` healthy。
+
+## 2026-05-03 13:09 [progress] FEAT-047 / PLAN-074..078 — executor bootstrap lifecycle planning
+
+启动长期 worker executor bootstrap track：
+
+- 新建 `FEAT-047`，作为 executor readiness、engine selection、
+  engine-native capability projection 和真实 Codex-backed validation 的
+  umbrella task。
+- 拆出 draft plans：
+  - `PLAN-074` executor readiness semantics and first-run guidance。
+  - `PLAN-075` Codex MCP projection compatibility with the current Codex CLI。
+  - `PLAN-076` explicit executor selection/bootstrap command。
+  - `PLAN-077` engine-native capability lifecycle beyond MCP。
+  - `PLAN-078` real Codex-backed worker validation campaign。
+- 记录 `/Users/ben/projects/aiben` 当前调查结论：`executor doctor --engine
+  codex` 会因为 Codex CLI 存在而通过，但 `.aiworker/executor-capabilities.json`
+  仍可能为空；当前 Codex MCP dry-run 生成的 command 还包含
+  `codex-cli 0.125.0` 不支持的 `--scope` / `--transport` 参数。
+
+## 2026-05-03 13:03 [progress] FEAT-046 / PLAN-073 — local filesystem brain activation
+
+启动长期 worker brain activation track：
+
+- 在 `/Users/ben/projects/aiben` 复现缺口：Soul/project brain 文件存在，
+  `aiworker doctor` 通过，但 `aiworker config show` 仍显示 `brains: []`。
+- 新建 `FEAT-046` / `PLAN-073`，按阶段推进：默认本地 filesystem brain、
+  runtime diagnostics、brain inspection commands、admission gates，以及真实
+  Codex-backed 验证。
+- S1 将新 seed 的默认 worker config 改为挂载 writable `local-filesystem`
+  source，同时继续把 executor-native capability 隔离在
+  `.aiworker/executor-capabilities.json`。
+- 聚焦验证已通过：core bootstrap/config tests、CLI init integration test、
+  core typecheck、CLI typecheck、完整 `@zonease/aiworker-core` test，以及
+  `/Users/ben/projects/aiben` fresh-project smoke。
+
 ## 2026-05-03 11:25 [release] REL-011 / PLAN-072 — CLI 0.5.2 published
 
 Released `@zonease/aiworker-cli@0.5.2` as the superseding patch for `0.5.1`:
