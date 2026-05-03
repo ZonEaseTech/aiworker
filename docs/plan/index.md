@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-02
+> Updated: 2026-05-03
 
 ## Usage
 
@@ -96,3 +96,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-065 Worker Admin SSE keepalive for slow replies**](PLAN-065.md) `2026-05-02`
 - [x] [**PLAN-066 Worker Admin selected conversation continuation**](PLAN-066.md) `2026-05-02`
 - [x] [**PLAN-068 Persist orchestrator task lifecycle rows**](PLAN-068.md) `2026-05-02`
+- [x] [**PLAN-069 Executor tiny probe hard timeout**](PLAN-069.md) `2026-05-02`

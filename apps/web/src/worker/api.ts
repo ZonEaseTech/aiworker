@@ -267,12 +267,35 @@ export interface ExecutorTestRow {
   probeError?: string
 }
 
-export function testExecutor(body: { probe?: boolean } = {}): Promise<{ executor: ExecutorTestRow }> {
-  return workerFetch<{ executor: ExecutorTestRow }>('/api/worker/executor/test', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
+const EXECUTOR_TEST_REQUEST_TIMEOUT_MS = 12_000
+
+export async function testExecutor(
+  body: { probe?: boolean } = {},
+  options: { timeoutMs?: number } = {},
+): Promise<{ executor: ExecutorTestRow }> {
+  const timeoutMs = options.timeoutMs ?? EXECUTOR_TEST_REQUEST_TIMEOUT_MS
+  const controller = new AbortController()
+  let timedOut = false
+  const timer = setTimeout(() => {
+    timedOut = true
+    controller.abort()
+  }, timeoutMs)
+  try {
+    return await workerFetch<{ executor: ExecutorTestRow }>('/api/worker/executor/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    })
+  }
+  catch (err) {
+    if (timedOut)
+      throw new WorkerApiError('network', `executor test timed out after ${timeoutMs}ms`)
+    throw err
+  }
+  finally {
+    clearTimeout(timer)
+  }
 }
 
 export interface ChannelTestResponse {

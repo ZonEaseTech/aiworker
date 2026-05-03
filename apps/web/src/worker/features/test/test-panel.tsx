@@ -89,6 +89,13 @@ function BrainTestCard() {
 function ExecutorTestCard() {
   const [probe, setProbe] = useState(false)
   const mut = useTestWorkerExecutor()
+  const executorTimeoutHint = 'Tiny probe 请求已超时。可以先关闭 Tiny probe 只测 health，或检查 executor 日志后重试。'
+  const executorErrorHint = isExecutorTimeoutError(mut.error)
+    ? executorTimeoutHint
+    : undefined
+  const probeErrorHint = isTimeoutMessage(mut.data?.executor.probeError)
+    ? executorTimeoutHint
+    : undefined
   return (
     <section className="flex flex-col gap-3 rounded-md border bg-card p-6">
       <div className="flex items-start justify-between gap-4">
@@ -120,7 +127,7 @@ function ExecutorTestCard() {
           </Button>
         </div>
       </div>
-      {mut.isError && <ErrorRow err={mut.error} />}
+      {mut.isError && <ErrorRow err={mut.error} hint={executorErrorHint} />}
       {mut.data && (
         <div className="flex flex-col gap-2 rounded-md border bg-background p-3 text-sm">
           <div className="flex items-center justify-between">
@@ -151,12 +158,19 @@ function ExecutorTestCard() {
             </p>
           )}
           {mut.data.executor.probeError && (
-            <details className="text-xs text-destructive">
-              <summary className="cursor-pointer">probe 错误</summary>
-              <pre className="mt-1 whitespace-pre-wrap break-words rounded bg-muted p-2 text-foreground">
-                {mut.data.executor.probeError}
-              </pre>
-            </details>
+            <div className="flex flex-col gap-1">
+              <details className="text-xs text-destructive">
+                <summary className="cursor-pointer">probe 错误</summary>
+                <pre className="mt-1 whitespace-pre-wrap break-words rounded bg-muted p-2 text-foreground">
+                  {mut.data.executor.probeError}
+                </pre>
+              </details>
+              {probeErrorHint && (
+                <p className="text-xs text-muted-foreground">
+                  {probeErrorHint}
+                </p>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -264,18 +278,38 @@ function StatusBadge({ status }: { status: string }) {
   return <Badge variant={variant}>{status}</Badge>
 }
 
-function ErrorRow({ err }: { err: unknown }) {
+function isExecutorTimeoutError(err: unknown): boolean {
+  if (!err)
+    return false
+  const msg = err instanceof Error ? err.message : String(err)
+  return isTimeoutMessage(msg)
+}
+
+function isTimeoutMessage(msg: string | undefined): boolean {
+  if (!msg)
+    return false
+  return /executor test timed out|tiny probe.*timed out|timeout/i.test(msg)
+}
+
+function ErrorRow({ err, hint }: { err: unknown, hint?: string }) {
   const msg = err instanceof Error ? err.message : '测试失败。'
   return (
-    <details className="text-sm text-destructive">
-      <summary className="cursor-pointer">
-        错误：
-        {msg.slice(0, 80)}
-        {msg.length > 80 ? '…' : ''}
-      </summary>
-      <pre className="mt-1 whitespace-pre-wrap break-words rounded border bg-muted p-2 text-xs text-foreground">
-        {msg}
-      </pre>
-    </details>
+    <div className="flex flex-col gap-1">
+      <details className="text-sm text-destructive">
+        <summary className="cursor-pointer">
+          错误：
+          {msg.slice(0, 80)}
+          {msg.length > 80 ? '…' : ''}
+        </summary>
+        <pre className="mt-1 whitespace-pre-wrap break-words rounded border bg-muted p-2 text-xs text-foreground">
+          {msg}
+        </pre>
+      </details>
+      {hint && (
+        <p className="text-xs text-muted-foreground">
+          {hint}
+        </p>
+      )}
+    </div>
   )
 }

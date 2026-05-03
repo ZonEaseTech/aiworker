@@ -1,5 +1,28 @@
 # AIWorker Changelog
 
+## 2026-05-03 10:38 [BUG-P2] BUG-046 / PLAN-069 — Executor tiny probe hard timeout
+
+修复 Worker Admin executor tiny probe 可能长期 pending 的问题：
+
+- `handleExecutorTest()` 的 tiny probe stream iteration 现在带管理层 hard
+  timeout；即使 executor stream 忽略 abort 且永不 yield，也会返回 degraded
+  timeout 结果。
+- Tiny probe 超时仍保持现有 API shape：HTTP 200、`status: degraded`、
+  `tinyProbe.ok=false` 和 timeout `probeError`。
+- Worker Admin `testExecutor()` 增加客户端请求 timeout，避免后端或网络不返回时
+  mutation 永久 pending。
+- Test panel 对 tiny probe timeout 展示恢复提示，按钮会在 error/degraded 后恢复
+  可点击。
+
+Validation:
+
+- `bun test packages/core/src/worker/management/executor-test.test.ts`
+- `bun run --filter '@zonease/aiworker-web' test -- src/worker/api.test.ts src/worker/features/test/test-panel.test.tsx`
+- `bun run --filter '@zonease/aiworker-core' typecheck`
+- `bun run --filter '@zonease/aiworker-web' typecheck`
+- focused ESLint on touched core/Web files
+- `git diff --check`
+
 ## 2026-05-02 21:46 [BUG-P1] BUG-045 / PLAN-068 — orchestrator task lifecycle persistence
 
 Fixed stale Worker Admin / HTTP orchestrator task rows:

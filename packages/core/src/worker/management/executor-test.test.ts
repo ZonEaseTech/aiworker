@@ -110,6 +110,35 @@ describe('handleExecutorTest', () => {
     expect(res.executor.probeError).toBe('upstream 500')
   })
 
+  it('hard-times out when the stream ignores abort and never yields', async () => {
+    let returnCalled = false
+    let probeSignal: AbortSignal | undefined
+    const chat = (input: AgentRunInput): AsyncIterable<AgentEvent> => {
+      probeSignal = input.signal
+      return {
+        [Symbol.asyncIterator](): AsyncIterator<AgentEvent> {
+          return {
+            next: () => new Promise<IteratorResult<AgentEvent>>(() => {}),
+            return: async () => {
+              returnCalled = true
+              return { done: true, value: undefined as never }
+            },
+          }
+        },
+      }
+    }
+    const state = stubState(stubExecutor(async () => ({ status: 'healthy' }), chat))
+
+    const res = await handleExecutorTest(state, STORED, { probe: true, probeTimeoutMs: 10 })
+
+    expect(res.executor.status).toBe('degraded')
+    expect(res.executor.tinyProbe?.ok).toBe(false)
+    expect(res.executor.tinyProbe?.latencyMs).toBeGreaterThanOrEqual(0)
+    expect(res.executor.probeError).toContain('timed out')
+    expect(probeSignal?.aborted).toBe(true)
+    expect(returnCalled).toBe(true)
+  })
+
   it('truncates probe output to 100 chars', async () => {
     const long = 'x'.repeat(500)
     const chat = (): AsyncIterable<AgentEvent> => ({

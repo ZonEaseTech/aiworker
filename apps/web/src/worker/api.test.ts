@@ -1,6 +1,6 @@
 import type { WorkerSSEEvent } from './api'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { continueConversation, subscribeEvents } from './api'
+import { continueConversation, subscribeEvents, testExecutor } from './api'
 import { __resetBearerForTests, setBearerToken } from './lib/auth'
 
 function sseResponse(chunks: string[]): Response {
@@ -72,5 +72,27 @@ describe('worker api subscribeEvents', () => {
     })
     const headers = fetchMock.mock.calls[0]?.[1]?.headers as Headers
     expect(headers.get('Content-Type')).toBe('application/json')
+  })
+
+  it('times out executor test requests and aborts the fetch', async () => {
+    let signal: AbortSignal | undefined
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((_input, init) => {
+      signal = init?.signal as AbortSignal | undefined
+      return new Promise<Response>((_resolve, reject) => {
+        signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), { once: true })
+      })
+    })
+
+    await expect(testExecutor({ probe: true }, { timeoutMs: 1 }))
+      .rejects
+      .toMatchObject({ code: 'network', message: 'executor test timed out after 1ms' })
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/worker/executor/test', {
+      method: 'POST',
+      headers: expect.any(Headers),
+      body: JSON.stringify({ probe: true }),
+      signal: expect.any(AbortSignal),
+    })
+    expect(signal?.aborted).toBe(true)
   })
 })

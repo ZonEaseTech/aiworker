@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-02
+> Updated: 2026-05-03
 
 ## Usage
 
@@ -154,3 +154,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-043 Worker Admin chat event stream times out before slow replies**](BUG-043.md) `P1`
 - [x] [**BUG-044 Worker Admin chat does not continue the selected conversation**](BUG-044.md) `P1`
 - [x] [**BUG-045 Orchestrator task rows stay queued after successful worker execution**](BUG-045.md) `P1`
+- [x] [**BUG-046 Executor tiny probe can hang beyond the configured timeout**](BUG-046.md) `P2`
