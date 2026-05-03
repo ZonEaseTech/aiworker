@@ -15,6 +15,16 @@ export interface WorkerInfoBrain {
   id: string
   type: BrainSourceConfig['type']
   status: WorkerComponentStatus
+  /** Configured merge priority; larger values are read first. */
+  priority?: number
+  /** True when this source cannot receive worker memory writes. */
+  readOnly?: boolean
+  /** True when this source is `WorkerConfig.brainWriteTarget`. */
+  writeTarget?: boolean
+  /** Effective filesystem brain home; omitted for non-filesystem sources. */
+  home?: string
+  /** Cloud brain endpoint; secret tokens are never surfaced here. */
+  url?: string
 }
 
 /**

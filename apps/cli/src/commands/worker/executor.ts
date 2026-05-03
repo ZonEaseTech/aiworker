@@ -1,6 +1,9 @@
 import type {
+  EngineKind,
   ExecutorCapabilityEngine,
+  ExecutorCapabilityEngineConfig,
   ExecutorCapabilityManifest,
+  ExecutorConfig,
   ExecutorMcpServerDescriptor,
   ExecutorMcpTransport,
 } from '@zonease/aiworker-shared'
@@ -10,6 +13,17 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 
+import {
+  ConfigVersionConflictError,
+  DEFAULT_EXECUTOR_PROFILE,
+  DEFAULT_PROFILES,
+  getSecretsVault,
+  InvalidConfigError,
+  mirrorConfigToYaml,
+  putConfig,
+  readConfig,
+  resolveVariant,
+} from '@zonease/aiworker-core'
 import { resolveAiworkerScope } from '@zonease/aiworker-fs-layout'
 import {
   executorCapabilityEngineSchema,
@@ -18,6 +32,7 @@ import {
   executorMcpTransportSchema,
 } from '@zonease/aiworker-shared'
 import consola from 'consola'
+import { loadWorkerContext } from '../../context'
 
 const MANIFEST_FILE = 'executor-capabilities.json'
 const SUPPORTED_ENGINES: Record<ExecutorCapabilityEngine, { binary: string }> = {
@@ -34,6 +49,7 @@ const SENSITIVE_KEY_PATTERN = /authorization|bearer|token|secret|api[-_]?key|pri
 
 export interface ExecutorMcpAddOptions {
   arg?: string | string[]
+  bearerTokenEnvVar?: string
   command?: string
   description?: string
   dryRun?: boolean
@@ -47,6 +63,21 @@ export interface ExecutorMcpAddOptions {
 
 export interface ExecutorEngineOptions {
   dryRun?: boolean
+  engine?: string
+}
+
+export interface ExecutorSelectOptions {
+  apply?: boolean
+  dryRun?: boolean
+  engine?: string
+  ifMatch?: number
+  modelId?: string
+  permissionPolicy?: string
+  reasoningId?: string
+  variant?: string
+}
+
+export interface ExecutorCapabilityListOptions {
   engine?: string
 }
 
@@ -81,10 +112,33 @@ export interface ExecutorReadinessIssue extends ValidationIssue {
   severity: 'error' | 'warning'
 }
 
+export interface ExecutorConfiguredSelection {
+  defaultStub: boolean
+  engine: EngineKind
+  source: 'worker-config'
+  variant: string
+  version: number
+}
+
+export interface ExecutorConfiguredUnavailable {
+  message: string
+  source: 'unavailable'
+}
+
+export type ExecutorConfiguredReport = ExecutorConfiguredSelection | ExecutorConfiguredUnavailable
+
+export interface ExecutorReadinessManifest {
+  declaredCapabilities: number
+  declaredEngines: number
+  empty: boolean
+}
+
 export interface ExecutorReadinessReport {
+  configuredExecutor: ExecutorConfiguredReport
   engines: ExecutorReadinessEngine[]
   file: string
   issues: ExecutorReadinessIssue[]
+  manifest: ExecutorReadinessManifest
   root: string
   status: ExecutorReadinessStatus
 }
@@ -150,6 +204,7 @@ export async function runExecutorMcpSync(options: ExecutorEngineOptions): Promis
   const issues = collectEngineIssues(manifestResult.manifest, engine.value, {
     rejectSecretRefs: options.dryRun !== true,
     requireBinary: options.dryRun !== true,
+    requireProjectionCompatibility: true,
   })
   if (issues.length > 0) {
     printValidationIssues('[aiworker executor mcp sync] cannot sync', issues)
@@ -201,26 +256,162 @@ export async function runExecutorDoctor(options: { engine?: string } = {}): Prom
   if (!manifestResult.ok)
     return manifestResult.code
 
+  const configuredExecutor = await inspectConfiguredExecutor()
   const engines = engine ? [engine.value] : Object.keys(manifestResult.manifest.engines) as ExecutorCapabilityEngine[]
-  const issues = engines.flatMap(item => collectEngineIssues(manifestResult.manifest, item, { requireBinary: true }))
-  const status = issues.length === 0 ? 'PASS' : 'FAIL'
+  const issues = engines.flatMap(item => collectEngineIssues(manifestResult.manifest, item, {
+    rejectSecretRefs: false,
+    requireBinary: true,
+    requireProjectionCompatibility: true,
+  }))
+  const warnings = collectDoctorWarnings(manifestResult.manifest, configuredExecutor, engines)
+  const status = issues.length > 0 ? 'FAIL' : warnings.length > 0 ? 'WARN' : 'PASS'
 
   process.stdout.write('[aiworker executor doctor] executor capability validation\n')
   process.stdout.write(`Root  : ${context.value.root}\n`)
   process.stdout.write(`File  : ${context.value.manifestPath}\n`)
   process.stdout.write(`Status: ${status}\n`)
-  if (engines.length === 0)
-    process.stdout.write('  PASS    no executor capabilities declared\n')
+  printConfiguredExecutor(process.stdout.write.bind(process.stdout), configuredExecutor)
+  const manifestSummary = summarizeManifest(manifestResult.manifest)
+  process.stdout.write(`  ${manifestSummary.empty ? 'WARN' : 'PASS'}    declared executor-native capabilities: ${manifestSummary.declaredCapabilities}\n`)
   for (const item of engines) {
     const binary = SUPPORTED_ENGINES[item].binary
     const binaryStatus = findBinary(binary) ? 'PASS' : 'FAIL'
     const mcpCount = Object.values(manifestResult.manifest.engines[item]?.mcp ?? {}).filter(server => server.disabled !== true).length
     process.stdout.write(`  ${binaryStatus.padEnd(7)} ${item} (binary: ${binary}, mcp: ${mcpCount})\n`)
   }
+  for (const issue of warnings)
+    process.stdout.write(`    - [warning] ${issue.code} ${issue.path}: ${issue.message}\n`)
   for (const issue of issues)
     process.stdout.write(`    - [error] ${issue.code} ${issue.path}: ${issue.message}\n`)
 
   return issues.length > 0 ? 1 : 0
+}
+
+export async function runExecutorSelect(options: ExecutorSelectOptions): Promise<number> {
+  const engine = parseTaskExecutorEngine(options.engine)
+  if (!engine.ok)
+    return engine.code
+
+  const variant = options.variant ?? 'default'
+  if (options.permissionPolicy !== undefined && !isPermissionPolicy(options.permissionPolicy)) {
+    consola.error('[aiworker executor select] --permission-policy must be auto, supervised, or plan')
+    return 2
+  }
+  const target: ExecutorConfig = {
+    engine: engine.value,
+    variant,
+    ...(options.modelId === undefined ? {} : { modelId: options.modelId }),
+    ...(options.reasoningId === undefined ? {} : { reasoningId: options.reasoningId }),
+    ...(options.permissionPolicy === undefined ? {} : { permissionPolicy: options.permissionPolicy }),
+  }
+  try {
+    resolveVariant(target)
+  }
+  catch (err) {
+    consola.error(`[aiworker executor select] ${err instanceof Error ? err.message : String(err)}`)
+    return 2
+  }
+
+  await loadExistingScopeDotenv()
+  const ctx = await loadWorkerContext({ silent: true })
+  const stored = await readConfig(ctx.db)
+  const nextConfig: typeof stored.config = {
+    ...stored.config,
+    executor: target,
+  }
+
+  process.stdout.write('[aiworker executor select] ')
+  process.stdout.write(options.apply === true ? 'apply\n' : 'dry-run\n')
+  process.stdout.write(`Current : ${formatExecutorProfile(stored.config.executor)} (config v${stored.version})\n`)
+  process.stdout.write(`Target  : ${formatExecutorProfile(target)}\n`)
+  if (options.ifMatch !== undefined)
+    process.stdout.write(`If-Match: ${options.ifMatch}\n`)
+  if (options.apply !== true) {
+    process.stdout.write('Write   : skipped; pass --apply to persist this executor selection.\n')
+    process.stdout.write('Next    : aiworker executor doctor --engine ')
+    process.stdout.write(`${engine.value === 'claude-code' ? 'claude-code' : engine.value}\n`)
+    return 0
+  }
+
+  try {
+    const result = await putConfig(
+      ctx.db,
+      getSecretsVault(),
+      nextConfig,
+      options.ifMatch === undefined ? {} : { ifMatchVersion: options.ifMatch },
+    )
+    await mirrorConfigToYaml(ctx.workerId, result.config, result.version)
+    process.stdout.write(`Stored  : config v${result.version}\n`)
+    process.stdout.write('Next    : aiworker run --message "hello" --dry-run\n')
+    return 0
+  }
+  catch (err) {
+    if (err instanceof InvalidConfigError) {
+      consola.error(`[aiworker executor select] invalid config: ${JSON.stringify(err.issues, null, 2)}`)
+      return 2
+    }
+    if (err instanceof ConfigVersionConflictError) {
+      consola.error(`[aiworker executor select] version conflict: expected ${err.expected}, stored is ${err.actual}`)
+      return 3
+    }
+    throw err
+  }
+}
+
+export async function runExecutorCapabilityList(options: ExecutorCapabilityListOptions = {}): Promise<number> {
+  const context = resolveProjectExecutorContext()
+  if (!context.ok)
+    return context.code
+
+  const engine = options.engine === undefined ? undefined : parseEngine(options.engine)
+  if (engine && !engine.ok)
+    return engine.code
+
+  const manifestResult = await loadManifest(context.value.manifestPath)
+  if (!manifestResult.ok)
+    return manifestResult.code
+
+  const entries = listCapabilityEntries(manifestResult.manifest)
+    .filter(entry => engine === undefined || entry.engine === engine.value)
+
+  process.stdout.write('[aiworker executor capability list]\n')
+  process.stdout.write(`Root  : ${context.value.root}\n`)
+  process.stdout.write(`File  : ${context.value.manifestPath}\n`)
+  if (entries.length === 0) {
+    process.stdout.write('  WARN    no executor-native capabilities declared\n')
+    return 0
+  }
+  for (const entry of entries) {
+    const disabled = entry.disabled ? 'disabled' : 'enabled'
+    process.stdout.write(`  ${entry.engine}.${entry.kind}.${entry.name} (${entry.status}, ${disabled})\n`)
+  }
+  return 0
+}
+
+export async function runExecutorCapabilityShow(ref: string): Promise<number> {
+  const context = resolveProjectExecutorContext()
+  if (!context.ok)
+    return context.code
+
+  const parsed = parseCapabilityRef(ref)
+  if (!parsed.ok)
+    return parsed.code
+
+  const manifestResult = await loadManifest(context.value.manifestPath)
+  if (!manifestResult.ok)
+    return manifestResult.code
+
+  const descriptor = readCapabilityDescriptor(manifestResult.manifest, parsed.value)
+  if (descriptor === undefined) {
+    consola.error(`[aiworker executor capability show] capability not found: ${ref}`)
+    return 2
+  }
+
+  process.stdout.write(`${JSON.stringify({
+    ref,
+    descriptor,
+  }, null, 2)}\n`)
+  return 0
 }
 
 export async function inspectExecutorReadiness(): Promise<
@@ -232,23 +423,44 @@ export async function inspectExecutorReadiness(): Promise<
     return context
 
   const manifestResult = await loadManifestForInspection(context.value.manifestPath)
+  const configuredExecutor = await inspectConfiguredExecutor()
   if (!manifestResult.ok) {
     const issues = manifestResult.issues.map(issue => ({ ...issue, severity: 'error' as const }))
     return {
       ok: true,
       report: {
+        configuredExecutor,
         engines: [],
         file: context.value.manifestPath,
         issues,
+        manifest: { declaredCapabilities: 0, declaredEngines: 0, empty: true },
         root: context.value.root,
         status: rollupReadinessStatus(issues),
       },
     }
   }
 
-  const engines = Object.keys(manifestResult.manifest.engines) as ExecutorCapabilityEngine[]
+  const engines = executorEnginesToInspect(manifestResult.manifest, configuredExecutor)
   const issues: ExecutorReadinessIssue[] = []
   const summaries: ExecutorReadinessEngine[] = []
+  const manifestSummary = summarizeManifest(manifestResult.manifest)
+
+  if (configuredExecutor.source === 'worker-config' && configuredExecutor.defaultStub) {
+    issues.push({
+      code: 'executor.config_default_stub',
+      message: 'Worker config still selects the safe http/default stub executor; run `aiworker executor select --engine codex --apply` when ready.',
+      path: 'worker_config.executor',
+      severity: 'warning',
+    })
+  }
+  if (manifestSummary.empty) {
+    issues.push({
+      code: 'executor.capability_manifest_empty',
+      message: 'No executor-native capabilities are declared; this is runnable but means MCP/plugin/skill projection has not been bootstrapped.',
+      path: MANIFEST_FILE,
+      severity: 'warning',
+    })
+  }
 
   for (const engine of engines) {
     const binary = SUPPORTED_ENGINES[engine].binary
@@ -267,16 +479,21 @@ export async function inspectExecutorReadiness(): Promise<
       })
     }
 
-    issues.push(...collectEngineIssues(manifestResult.manifest, engine, { requireBinary: false })
+    issues.push(...collectEngineIssues(manifestResult.manifest, engine, {
+      requireBinary: false,
+      requireProjectionCompatibility: true,
+    })
       .map(issue => ({ ...issue, severity: 'error' as const })))
   }
 
   return {
     ok: true,
     report: {
+      configuredExecutor,
       engines: summaries,
       file: context.value.manifestPath,
       issues,
+      manifest: manifestSummary,
       root: context.value.root,
       status: rollupReadinessStatus(issues),
     },
@@ -315,6 +532,21 @@ function parseEngine(value: string | undefined): { code: number, ok: false } | {
   return { ok: true, value: parsed.data }
 }
 
+function parseTaskExecutorEngine(value: string | undefined): { code: number, ok: false } | { ok: true, value: EngineKind } {
+  if (value === undefined) {
+    consola.error(`[aiworker executor select] --engine is required; supported engines: ${Object.keys(DEFAULT_PROFILES).join(', ')}`)
+    return { code: 2, ok: false }
+  }
+  if (value in DEFAULT_PROFILES)
+    return { ok: true, value: value as EngineKind }
+  consola.error(`[aiworker executor select] unsupported engine "${value}". Supported engines: ${Object.keys(DEFAULT_PROFILES).join(', ')}`)
+  return { code: 2, ok: false }
+}
+
+function isPermissionPolicy(value: string): value is NonNullable<ExecutorConfig['permissionPolicy']> {
+  return value === 'auto' || value === 'supervised' || value === 'plan'
+}
+
 function buildMcpServerDescriptor(options: ExecutorMcpAddOptions): { code: number, ok: false } | { ok: true, value: ExecutorMcpServerDescriptor } {
   const scope = options.scope ?? 'project'
   if (scope !== 'project') {
@@ -332,6 +564,7 @@ function buildMcpServerDescriptor(options: ExecutorMcpAddOptions): { code: numbe
     ...(options.description === undefined ? {} : { description: options.description }),
     ...(options.command === undefined ? {} : { command: options.command }),
     ...(options.url === undefined ? {} : { url: options.url }),
+    ...(options.bearerTokenEnvVar === undefined ? {} : { bearerTokenEnvVar: options.bearerTokenEnvVar }),
   }
 
   const args = valuesOf(options.arg)
@@ -486,7 +719,7 @@ function upsertMcpServer(
 function collectEngineIssues(
   manifest: ExecutorCapabilityManifest,
   engine: ExecutorCapabilityEngine,
-  options: { rejectSecretRefs?: boolean, requireBinary: boolean },
+  options: { rejectSecretRefs?: boolean, requireBinary: boolean, requireProjectionCompatibility?: boolean },
 ): ValidationIssue[] {
   const issues: ValidationIssue[] = []
   const config = manifest.engines[engine]
@@ -505,7 +738,10 @@ function collectEngineIssues(
     issues.push(...validateServerDescriptor(server, `engines.${engine}.mcp.${name}`))
     if (options.rejectSecretRefs === true)
       issues.push(...collectSecretRefProjectionIssues(server, `engines.${engine}.mcp.${name}`))
+    if (options.requireProjectionCompatibility === true)
+      issues.push(...collectProjectionCompatibilityIssues(engine, server, `engines.${engine}.mcp.${name}`))
   }
+  issues.push(...collectNativeCapabilityIssues(config, `engines.${engine}`))
   return issues
 }
 
@@ -548,7 +784,7 @@ function collectSecretIssues(value: unknown, pathValue: string): ValidationIssue
 
   for (const [key, child] of Object.entries(value)) {
     const childPath = `${pathValue}.${key}`
-    if (key === 'secretRef')
+    if (key === 'secretRef' || key === 'bearerTokenEnvVar')
       continue
     if (SENSITIVE_KEY_PATTERN.test(key) && !isSecretRef(child)) {
       issues.push({
@@ -586,6 +822,62 @@ function collectSecretRefProjectionIssues(value: unknown, pathValue: string): Va
   return issues
 }
 
+function collectNativeCapabilityIssues(config: ExecutorCapabilityEngineConfig | undefined, basePath: string): ValidationIssue[] {
+  const issues: ValidationIssue[] = []
+  if (!config)
+    return issues
+  for (const kind of ['plugins', 'policies', 'skills'] as const)
+    issues.push(...collectGenericSecretIssues(config[kind], `${basePath}.${kind}`))
+  return issues
+}
+
+function collectGenericSecretIssues(value: unknown, pathValue: string): ValidationIssue[] {
+  return collectSecretIssues(value, pathValue).map(issue => ({
+    ...issue,
+    code: 'executor.capability.plaintext_secret',
+    message: issue.message.replace('Secret-like field', 'Secret-like executor-native capability field'),
+  }))
+}
+
+function collectProjectionCompatibilityIssues(
+  engine: ExecutorCapabilityEngine,
+  server: ExecutorMcpServerDescriptor,
+  basePath: string,
+): ValidationIssue[] {
+  const issues: ValidationIssue[] = []
+  if (engine === 'codex') {
+    if (server.transport === 'sse') {
+      issues.push({
+        code: 'executor.mcp.codex_transport_unsupported',
+        message: 'Codex CLI `mcp add` supports stdio and streamable HTTP; SSE projection is not supported.',
+        path: `${basePath}.transport`,
+      })
+    }
+    if (server.headers && Object.keys(server.headers).length > 0) {
+      issues.push({
+        code: 'executor.mcp.codex_headers_unsupported',
+        message: 'Codex CLI does not expose generic HTTP header projection; use bearerTokenEnvVar when a bearer token is needed.',
+        path: `${basePath}.headers`,
+      })
+    }
+    if (server.transport !== 'stdio' && server.env && Object.keys(server.env).length > 0) {
+      issues.push({
+        code: 'executor.mcp.codex_env_http_unsupported',
+        message: 'Codex CLI only accepts --env for stdio MCP servers.',
+        path: `${basePath}.env`,
+      })
+    }
+    if (server.transport === 'stdio' && server.bearerTokenEnvVar !== undefined) {
+      issues.push({
+        code: 'executor.mcp.codex_bearer_stdio_unsupported',
+        message: 'Codex CLI only accepts --bearer-token-env-var for streamable HTTP MCP servers.',
+        path: `${basePath}.bearerTokenEnvVar`,
+      })
+    }
+  }
+  return issues
+}
+
 function buildProjectionCommands(manifest: ExecutorCapabilityManifest, engine: ExecutorCapabilityEngine): ProjectionCommand[] {
   const config = manifest.engines[engine]
   if (!config?.mcp)
@@ -594,23 +886,50 @@ function buildProjectionCommands(manifest: ExecutorCapabilityManifest, engine: E
   return Object.entries(config.mcp)
     .filter(([, server]) => server.disabled !== true)
     .map(([serverName, server]) => ({
-      args: buildMcpAddArgs(serverName, server),
+      args: buildMcpAddArgs(engine, serverName, server),
       binary,
       serverName,
     }))
 }
 
-function buildMcpAddArgs(name: string, server: ExecutorMcpServerDescriptor): string[] {
-  const args = ['mcp', 'add', name, '--scope', server.scope]
-  if (server.transport !== 'stdio')
-    args.push('--transport', server.transport)
+function buildMcpAddArgs(engine: ExecutorCapabilityEngine, name: string, server: ExecutorMcpServerDescriptor): string[] {
+  if (engine === 'codex')
+    return buildCodexMcpAddArgs(name, server)
+  return buildClaudeMcpAddArgs(name, server)
+}
+
+function buildCodexMcpAddArgs(name: string, server: ExecutorMcpServerDescriptor): string[] {
+  const args = ['mcp', 'add', name]
+  if (server.transport === 'stdio') {
+    appendAssignments(args, '--env', server.env)
+    if (server.command)
+      args.push('--', server.command, ...(server.args ?? []))
+    return args
+  }
   if (server.url)
     args.push('--url', server.url)
-  appendAssignments(args, '--env', server.env)
-  appendAssignments(args, '--header', server.headers)
-  if (server.transport === 'stdio' && server.command)
-    args.push('--', server.command, ...(server.args ?? []))
+  if (server.bearerTokenEnvVar)
+    args.push('--bearer-token-env-var', server.bearerTokenEnvVar)
   return args
+}
+
+function buildClaudeMcpAddArgs(name: string, server: ExecutorMcpServerDescriptor): string[] {
+  const args = ['mcp', 'add', '--scope', server.scope, '--transport', toClaudeTransport(server.transport)]
+  appendAssignments(args, '--env', server.env)
+  appendHeaders(args, server.headers)
+  if (server.transport === 'stdio') {
+    if (server.command)
+      args.push(name, '--', server.command, ...(server.args ?? []))
+    return args
+  }
+  args.push(name)
+  if (server.url)
+    args.push(server.url)
+  return args
+}
+
+function toClaudeTransport(transport: ExecutorMcpTransport): string {
+  return transport === 'streamable-http' ? 'http' : transport
 }
 
 function appendAssignments(args: string[], flag: string, values: Record<string, string | { secretRef: string }> | undefined): void {
@@ -619,6 +938,15 @@ function appendAssignments(args: string[], flag: string, values: Record<string, 
   for (const [key, value] of Object.entries(values)) {
     const rendered = isSecretRef(value) ? `secretRef:${value.secretRef}` : value
     args.push(flag, `${key}=${rendered}`)
+  }
+}
+
+function appendHeaders(args: string[], values: Record<string, string | { secretRef: string }> | undefined): void {
+  if (!values)
+    return
+  for (const [key, value] of Object.entries(values)) {
+    const rendered = isSecretRef(value) ? `secretRef:${value.secretRef}` : value
+    args.push('--header', `${key}: ${rendered}`)
   }
 }
 
@@ -659,6 +987,206 @@ function buildProjectionEnv(source: NodeJS.ProcessEnv = process.env): NodeJS.Pro
     out[key] = value
   }
   return out
+}
+
+async function loadExistingScopeDotenv(): Promise<void> {
+  const scope = resolveAiworkerScope()
+  const envFile = path.join(scope.home, '.env')
+  if (!existsSync(envFile))
+    return
+  const parsed = parseDotenv(await readFile(envFile, 'utf8'))
+  for (const [key, value] of Object.entries(parsed)) {
+    if (process.env[key] === undefined)
+      process.env[key] = value
+  }
+}
+
+function parseDotenv(text: string): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const rawLine of text.split('\n')) {
+    const line = rawLine.trim()
+    if (!line || line.startsWith('#'))
+      continue
+    const index = line.indexOf('=')
+    if (index <= 0)
+      continue
+    out[line.slice(0, index).trim()] = line.slice(index + 1).trim()
+  }
+  return out
+}
+
+async function inspectConfiguredExecutor(): Promise<ExecutorConfiguredReport> {
+  try {
+    await loadExistingScopeDotenv()
+    const ctx = await loadWorkerContext({ silent: true })
+    return {
+      defaultStub: isDefaultStubExecutor(ctx.hydrated.executor),
+      engine: ctx.hydrated.executor.engine,
+      source: 'worker-config',
+      variant: ctx.hydrated.executor.variant,
+      version: ctx.configVersion,
+    }
+  }
+  catch (err) {
+    return {
+      message: err instanceof Error ? err.message : String(err),
+      source: 'unavailable',
+    }
+  }
+}
+
+function isDefaultStubExecutor(executor: ExecutorConfig): boolean {
+  return executor.engine === DEFAULT_EXECUTOR_PROFILE.engine
+    && executor.variant === DEFAULT_EXECUTOR_PROFILE.variant
+    && JSON.stringify(executor.overrides ?? {}) === JSON.stringify(DEFAULT_EXECUTOR_PROFILE.overrides ?? {})
+}
+
+function formatExecutorProfile(executor: ExecutorConfig): string {
+  const extras = [
+    executor.modelId === undefined ? undefined : `model=${executor.modelId}`,
+    executor.permissionPolicy === undefined ? undefined : `permission=${executor.permissionPolicy}`,
+    executor.reasoningId === undefined ? undefined : `reasoning=${executor.reasoningId}`,
+  ].filter((item): item is string => item !== undefined)
+  return `${executor.engine}/${executor.variant}${extras.length === 0 ? '' : ` (${extras.join(', ')})`}`
+}
+
+function printConfiguredExecutor(write: (text: string) => void, configured: ExecutorConfiguredReport): void {
+  if (configured.source === 'unavailable') {
+    write('  WARN    configured task executor unavailable\n')
+    write(`    - [warning] executor.config_unavailable worker_config.executor: ${configured.message}\n`)
+    return
+  }
+  const status = configured.defaultStub ? 'WARN' : 'PASS'
+  write(`  ${status.padEnd(7)} configured task executor: ${configured.engine}/${configured.variant} (config v${configured.version})\n`)
+}
+
+function summarizeManifest(manifest: ExecutorCapabilityManifest): ExecutorReadinessManifest {
+  const engines = Object.values(manifest.engines)
+  const declaredCapabilities = engines.reduce((sum, config) => {
+    return sum
+      + countEnabled(config.mcp)
+      + countEnabled(config.plugins)
+      + countEnabled(config.policies)
+      + countEnabled(config.skills)
+  }, 0)
+  return {
+    declaredCapabilities,
+    declaredEngines: Object.keys(manifest.engines).length,
+    empty: declaredCapabilities === 0,
+  }
+}
+
+function countEnabled(values: Record<string, unknown> | undefined): number {
+  if (!values)
+    return 0
+  return Object.values(values).filter(value => !isRecord(value) || value.disabled !== true).length
+}
+
+function collectDoctorWarnings(
+  manifest: ExecutorCapabilityManifest,
+  configured: ExecutorConfiguredReport,
+  engines: ExecutorCapabilityEngine[],
+): ValidationIssue[] {
+  const warnings: ValidationIssue[] = []
+  if (configured.source === 'unavailable') {
+    warnings.push({
+      code: 'executor.config_unavailable',
+      message: configured.message,
+      path: 'worker_config.executor',
+    })
+  }
+  else if (configured.defaultStub) {
+    warnings.push({
+      code: 'executor.config_default_stub',
+      message: 'Worker config still selects the safe http/default stub executor.',
+      path: 'worker_config.executor',
+    })
+  }
+  if (summarizeManifest(manifest).empty) {
+    warnings.push({
+      code: 'executor.capability_manifest_empty',
+      message: 'No executor-native MCP/plugin/skill/policy capabilities are declared.',
+      path: MANIFEST_FILE,
+    })
+  }
+  for (const engine of engines) {
+    const declared = manifest.engines[engine]
+    if (!declared || countEnabled(declared.mcp) === 0) {
+      warnings.push({
+        code: 'executor.mcp_empty',
+        message: `No enabled executor MCP servers are declared for ${engine}.`,
+        path: `engines.${engine}.mcp`,
+      })
+    }
+  }
+  return warnings
+}
+
+function executorEnginesToInspect(
+  manifest: ExecutorCapabilityManifest,
+  configured: ExecutorConfiguredReport,
+): ExecutorCapabilityEngine[] {
+  const engines = new Set(Object.keys(manifest.engines) as ExecutorCapabilityEngine[])
+  if (configured.source === 'worker-config' && isExecutorCapabilityEngine(configured.engine))
+    engines.add(configured.engine)
+  return [...engines]
+}
+
+function isExecutorCapabilityEngine(engine: EngineKind): engine is ExecutorCapabilityEngine {
+  return engine === 'codex' || engine === 'claude-code'
+}
+
+interface CapabilityEntry {
+  disabled: boolean
+  engine: ExecutorCapabilityEngine
+  kind: 'mcp' | 'plugins' | 'policies' | 'skills'
+  name: string
+  status: string
+}
+
+function listCapabilityEntries(manifest: ExecutorCapabilityManifest): CapabilityEntry[] {
+  const entries: CapabilityEntry[] = []
+  for (const [engine, config] of Object.entries(manifest.engines) as Array<[ExecutorCapabilityEngine, ExecutorCapabilityEngineConfig]>) {
+    for (const kind of ['mcp', 'plugins', 'policies', 'skills'] as const) {
+      const values = config[kind]
+      if (!values)
+        continue
+      for (const [name, descriptor] of Object.entries(values)) {
+        entries.push({
+          disabled: isRecord(descriptor) && descriptor.disabled === true,
+          engine,
+          kind,
+          name,
+          status: isRecord(descriptor) && typeof descriptor.status === 'string' ? descriptor.status : 'declared',
+        })
+      }
+    }
+  }
+  return entries
+}
+
+interface CapabilityRef {
+  engine: ExecutorCapabilityEngine
+  kind: CapabilityEntry['kind']
+  name: string
+}
+
+function parseCapabilityRef(ref: string): { code: number, ok: false } | { ok: true, value: CapabilityRef } {
+  const [engineRaw, kindRaw, ...nameParts] = ref.split('.')
+  const engine = executorCapabilityEngineSchema.safeParse(engineRaw)
+  const kind = kindRaw === 'mcp' || kindRaw === 'plugins' || kindRaw === 'policies' || kindRaw === 'skills'
+    ? kindRaw
+    : null
+  const name = nameParts.join('.')
+  if (!engine.success || kind === null || name.length === 0) {
+    consola.error('[aiworker executor capability show] ref must use <engine>.<kind>.<name>, for example codex.mcp.context7')
+    return { code: 2, ok: false }
+  }
+  return { ok: true, value: { engine: engine.data, kind, name } }
+}
+
+function readCapabilityDescriptor(manifest: ExecutorCapabilityManifest, ref: CapabilityRef): unknown {
+  return manifest.engines[ref.engine]?.[ref.kind]?.[ref.name]
 }
 
 function printValidationIssues(title: string, issues: ValidationIssue[]): void {

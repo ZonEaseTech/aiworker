@@ -7,7 +7,7 @@ import { closeWorkerDb, getWorkerDb, initWorkerDb, runWorkerMigrations } from '@
 import { beforeEach, describe, expect, it } from 'bun:test'
 import { SecretsVault } from '../secrets/vault'
 import { loadOrSeedConfig } from './config'
-import { DEFAULT_EMPTY_CONFIG } from './default-config'
+import { DEFAULT_EMPTY_CONFIG, DEFAULT_FILESYSTEM_BRAIN_SOURCE_ID } from './default-config'
 import { loadOrMintIdentity, mintApiToken, mintWorkerId } from './identity'
 import { printBootstrapIfJustMinted } from './print'
 
@@ -104,7 +104,16 @@ describe('bootstrap', () => {
     })
 
     it('returns the shape required by WorkerConfig for DEFAULT_EMPTY_CONFIG', () => {
-      expect(DEFAULT_EMPTY_CONFIG.brains).toEqual([])
+      expect(DEFAULT_EMPTY_CONFIG.brains).toEqual([
+        {
+          id: DEFAULT_FILESYSTEM_BRAIN_SOURCE_ID,
+          type: 'filesystem',
+          priority: 100,
+          readOnly: false,
+          config: {},
+        },
+      ])
+      expect(DEFAULT_EMPTY_CONFIG.brainWriteTarget).toBe(DEFAULT_FILESYSTEM_BRAIN_SOURCE_ID)
       expect(DEFAULT_EMPTY_CONFIG.executor.engine).toBe('http')
       expect(DEFAULT_EMPTY_CONFIG.executor.variant).toBe('default')
       expect(DEFAULT_EMPTY_CONFIG.channels).toEqual([])

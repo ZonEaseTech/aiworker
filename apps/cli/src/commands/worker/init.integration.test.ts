@@ -1,3 +1,4 @@
+import type { WorkerConfig } from '@zonease/aiworker-shared'
 import type { IntegrationCleanup } from '../../test-utils/integration-cleanup'
 import { mkdir, readdir, readFile, realpath, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
@@ -200,6 +201,101 @@ describe('aiworker init / scope project placement', () => {
       expect(soul).not.toContain('Voice / style guide')
       const policy = JSON.parse(await readFile(path.join(project, '.aiworker', 'policy.json'), 'utf8'))
       expect(policy.soul.preset).toBe('developer')
+
+      const configShow = await runCli(cleanup, ['config', 'show'], project, home)
+      expect(configShow.exitCode).toBe(0)
+      const stored = JSON.parse(configShow.output) as { config: WorkerConfig }
+      expect(stored.config.brains).toEqual([
+        {
+          id: 'local-filesystem',
+          type: 'filesystem',
+          priority: 100,
+          readOnly: false,
+          config: {},
+        },
+      ])
+      expect(stored.config.brainWriteTarget).toBe('local-filesystem')
+
+      const brainStatus = await runCli(cleanup, ['brain', 'status'], project, home)
+      expect(brainStatus.exitCode).toBe(0)
+      const canonicalProject = await realpath(project)
+      const statusBody = JSON.parse(brainStatus.output) as {
+        brainWriteTarget: string
+        brains: Array<{
+          home: string
+          id: string
+          priority: number
+          readOnly: boolean
+          type: string
+          writeTarget: boolean
+        }>
+        status: string
+      }
+      expect(statusBody.status).toBe('healthy')
+      expect(statusBody.brainWriteTarget).toBe('local-filesystem')
+      expect(statusBody.brains).toEqual([
+        {
+          id: 'local-filesystem',
+          type: 'filesystem',
+          priority: 100,
+          readOnly: false,
+          writeTarget: true,
+          home: path.join(canonicalProject, '.aiworker'),
+        },
+      ])
+
+      const brainSkills = await runCli(cleanup, ['worker', 'brain', 'skills'], project, home)
+      expect(brainSkills.exitCode).toBe(0)
+      expect(JSON.parse(brainSkills.output)).toMatchObject({ count: 0, skills: [] })
+
+      const brainMemories = await runCli(cleanup, ['brain', 'memories', '--limit', '5'], project, home)
+      expect(brainMemories.exitCode).toBe(0)
+      expect(JSON.parse(brainMemories.output)).toMatchObject({ count: 0, memories: [] })
+
+      await mkdir(path.join(project, '.aiworker', 'skills', 'smoke'), { recursive: true })
+      await writeFile(
+        path.join(project, '.aiworker', 'skills', 'smoke', 'SKILL.md'),
+        [
+          '---',
+          'name: Smoke Skill',
+          'description: Runtime brain inspection smoke skill',
+          'version: 1.0.0',
+          'capabilities:',
+          '  - smoke',
+          '---',
+          'Use this only for integration smoke tests.',
+          '',
+        ].join('\n'),
+        'utf8',
+      )
+      await mkdir(path.join(project, '.aiworker', 'memories'), { recursive: true })
+      await writeFile(
+        path.join(project, '.aiworker', 'memories', 'runtime-brain-smoke.md'),
+        [
+          '---',
+          'title: Runtime Brain Smoke',
+          'createdAt: 2026-05-03T00:00:00.000Z',
+          'updatedAt: 2026-05-03T00:00:00.000Z',
+          '---',
+          'runtime-brain-smoke memory is visible through the local filesystem brain.',
+          '',
+        ].join('\n'),
+        'utf8',
+      )
+
+      const populatedSkills = await runCli(cleanup, ['brain', 'skills'], project, home)
+      expect(populatedSkills.exitCode).toBe(0)
+      expect(JSON.parse(populatedSkills.output)).toMatchObject({
+        count: 1,
+        skills: [{ name: 'Smoke Skill', version: '1.0.0', tags: ['smoke'] }],
+      })
+
+      const populatedMemories = await runCli(cleanup, ['brain', 'memories', '--query', 'runtime-brain-smoke'], project, home)
+      expect(populatedMemories.exitCode).toBe(0)
+      expect(JSON.parse(populatedMemories.output)).toMatchObject({
+        count: 1,
+        memories: [{ id: 'runtime-brain-smoke' }],
+      })
     })
   })
 

@@ -6,6 +6,7 @@ import { closeWorkerDb, getWorkerDb, initWorkerDb, runWorkerMigrations } from '@
 
 import { beforeEach, describe, expect, it } from 'bun:test'
 import { loadOrSeedConfig } from '../bootstrap/config'
+import { DEFAULT_FILESYSTEM_BRAIN_SOURCE_ID } from '../bootstrap/default-config'
 import { SecretsVault } from '../secrets/vault'
 import { ConfigVersionConflictError, InvalidConfigError, putConfig, readConfig } from './config'
 
@@ -57,7 +58,16 @@ describe('worker management config', () => {
   it('readConfig returns the seeded default at version 1', async () => {
     const stored = await readConfig(getWorkerDb())
     expect(stored.version).toBe(1)
-    expect(stored.config.brains).toEqual([])
+    expect(stored.config.brains).toEqual([
+      {
+        id: DEFAULT_FILESYSTEM_BRAIN_SOURCE_ID,
+        type: 'filesystem',
+        priority: 100,
+        readOnly: false,
+        config: {},
+      },
+    ])
+    expect(stored.config.brainWriteTarget).toBe(DEFAULT_FILESYSTEM_BRAIN_SOURCE_ID)
   })
 
   it('putConfig bumps version, redacts secrets, and persists them to the vault', async () => {

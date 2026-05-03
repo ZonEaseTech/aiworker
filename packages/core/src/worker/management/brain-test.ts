@@ -1,19 +1,22 @@
 import type { BrainSourceConfig, ServiceStatus } from '@zonease/aiworker-shared'
+import type { BrainSourceDiagnostic } from '../brain/diagnostics'
 import type { WorkerModeState } from './state'
+import { describeBrainSource } from '../brain/diagnostics'
 
 /**
  * Per-source brain status surfaced by `POST /api/worker/brain/test`. The
- * runtime's `MultiBrainProvider` only exposes an aggregate `health()`, so
- * `handleBrainTest` flattens that into one row (id = `aggregate`) whose type
- * is either `multi` (for >1 source) or the single source's type.
+ * runtime's `MultiBrainProvider` exposes aggregate `health()`, so multiple
+ * configured sources receive the same aggregate verdict while still exposing
+ * each source's read-only/write-target/home metadata.
  *
- * If an individual source throws, its row is marked `down` with the error
- * message; if the aggregate throws, a single `aggregate` row reports `down`.
+ * If the aggregate throws, each configured source is marked `down` with the
+ * error message. Empty config falls back to one `aggregate` row.
  */
-export interface BrainTestRow {
+export interface BrainTestRow extends Omit<Partial<BrainSourceDiagnostic>, 'type'> {
   id: string
   type: BrainSourceConfig['type'] | 'multi'
   status: ServiceStatus['status'] | 'unknown'
+  healthScope?: 'source' | 'aggregate'
   errorMessage?: string
 }
 
@@ -28,21 +31,26 @@ function errorMessage(err: unknown): string {
 }
 
 /**
- * Probe the worker's brain provider and return its health. We inspect the
- * stored config shape to decide whether to report an `aggregate` row or a
- * single-source row with the real source type.
+ * Probe the worker's brain provider and join the aggregate health verdict
+ * with stored source metadata. That keeps API consumers aware of which
+ * source is writable even when health is only available at provider level.
  */
 export async function handleBrainTest(
   state: WorkerModeState,
-  storedConfig: { brains: BrainSourceConfig[] },
+  storedConfig: { brains: BrainSourceConfig[], brainWriteTarget?: string },
 ): Promise<BrainTestResponse> {
   const sources = storedConfig.brains
+  const rows = sources.map(source => describeBrainSource(
+    state.workerId,
+    source,
+    storedConfig.brainWriteTarget ?? '',
+  ))
+  const healthScope: BrainTestRow['healthScope'] = sources.length <= 1 ? 'source' : 'aggregate'
   try {
     const status = await state.runtime.brain.health()
-    if (sources.length === 1) {
-      const source = sources[0]!
+    if (rows.length > 0) {
       return {
-        brains: [{ id: source.id, type: source.type, status: status.status }],
+        brains: rows.map(row => ({ ...row, status: status.status, healthScope })),
       }
     }
     return {
@@ -50,12 +58,23 @@ export async function handleBrainTest(
     }
   }
   catch (err) {
+    const error = errorMessage(err)
+    if (rows.length > 0) {
+      return {
+        brains: rows.map(row => ({
+          ...row,
+          status: 'down',
+          healthScope,
+          errorMessage: error,
+        })),
+      }
+    }
     return {
       brains: [{
-        id: sources.length === 1 ? sources[0]!.id : 'aggregate',
-        type: sources.length === 1 ? sources[0]!.type : 'multi',
+        id: 'aggregate',
+        type: 'multi',
         status: 'down',
-        errorMessage: errorMessage(err),
+        errorMessage: error,
       }],
     }
   }

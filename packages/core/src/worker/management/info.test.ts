@@ -100,8 +100,24 @@ describe('buildInfo', () => {
     expect(info.advertisedBaseUrl).toBe('https://worker.example.com')
 
     expect(info.brains).toEqual([
-      { id: 'fs-primary', type: 'filesystem', status: 'healthy' },
-      { id: 'cloud-fallback', type: 'cloud-gateway', status: 'healthy' },
+      {
+        id: 'fs-primary',
+        type: 'filesystem',
+        status: 'healthy',
+        priority: 10,
+        readOnly: false,
+        writeTarget: true,
+        home: '/tmp/h',
+      },
+      {
+        id: 'cloud-fallback',
+        type: 'cloud-gateway',
+        status: 'healthy',
+        priority: 1,
+        readOnly: true,
+        writeTarget: false,
+        url: 'https://cloud.example.com',
+      },
     ])
 
     expect(info.executor).toEqual({ type: 'http', model: 'gpt-4o-mini', status: 'healthy' })

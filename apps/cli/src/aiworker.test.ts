@@ -24,10 +24,16 @@ const ROOT_WORKER_COMMANDS = [
   'scope',
   'doctor',
   'executor doctor',
+  'executor select',
+  'executor capability list',
+  'executor capability show',
   'executor mcp add',
   'executor mcp sync',
   'soul list',
   'soul show',
+  'brain status',
+  'brain skills',
+  'brain memories',
   'run',
   'serve',
   'config show',
@@ -161,6 +167,11 @@ describe('aiworker cli registration', () => {
       'aiworker up --soul developer',
       'aiworker worker up --soul developer',
       'aiworker soul list -> aiworker soul show developer',
+      'aiworker brain status -> aiworker brain skills',
+      'brain status',
+      'brain memories',
+      'executor select',
+      'executor capability list',
       'executor mcp add',
       'doctor',
       'up',
@@ -304,6 +315,15 @@ describe('preprocessArgv', () => {
     ])
   })
 
+  it('executor capability show 被折叠', () => {
+    expect(run('executor', 'capability', 'show', 'codex.mcp.context7')).toEqual([
+      '/usr/bin/bun',
+      '/path/to/aiworker.ts',
+      'executor capability show',
+      'codex.mcp.context7',
+    ])
+  })
+
   it('worker up 被折叠为 canonical command', () => {
     expect(run('worker', 'up', '--dry-run')).toEqual([
       '/usr/bin/bun',
@@ -319,6 +339,16 @@ describe('preprocessArgv', () => {
       '/path/to/aiworker.ts',
       'worker executor mcp add',
       'context7',
+      '--engine',
+      'codex',
+    ])
+  })
+
+  it('worker executor select 被折叠', () => {
+    expect(run('worker', 'executor', 'select', '--engine', 'codex')).toEqual([
+      '/usr/bin/bun',
+      '/path/to/aiworker.ts',
+      'worker executor select',
       '--engine',
       'codex',
     ])

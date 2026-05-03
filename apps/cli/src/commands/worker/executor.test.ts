@@ -99,7 +99,31 @@ describe('aiworker executor capability commands', () => {
 
     expect(sync.exitCode).toBe(0)
     expect(sync.output).toContain('[aiworker executor mcp sync] dry-run claude-code')
-    expect(sync.output).toContain('claude mcp add filesystem --scope project -- npx @modelcontextprotocol/server-filesystem .')
+    expect(sync.output).toContain('claude mcp add --scope project --transport stdio filesystem -- npx @modelcontextprotocol/server-filesystem .')
+  })
+
+  it('dry-runs Codex MCP projection with the current Codex CLI argument surface', async () => {
+    const { home, project } = await initProject()
+    const add = await runCli([
+      'executor',
+      'mcp',
+      'add',
+      'context7',
+      '--engine',
+      'codex',
+      '--url',
+      'https://mcp.example.com/mcp',
+      '--bearer-token-env-var',
+      'MCP_CONTEXT7_TOKEN',
+    ], project, home)
+    expect(add.exitCode).toBe(0)
+
+    const sync = await runCli(['executor', 'mcp', 'sync', '--engine', 'codex', '--dry-run'], project, home)
+
+    expect(sync.exitCode).toBe(0)
+    expect(sync.output).toContain('codex mcp add context7 --url https://mcp.example.com/mcp --bearer-token-env-var MCP_CONTEXT7_TOKEN')
+    expect(sync.output).not.toContain('--scope')
+    expect(sync.output).not.toContain('--transport')
   })
 
   it('doctor rejects plaintext secret-like executor MCP fields', async () => {
@@ -154,6 +178,32 @@ describe('aiworker executor capability commands', () => {
     expect(sync.output).toContain('executor.mcp.secret_ref_projection_unsupported')
   })
 
+  it('Codex projection rejects generic HTTP headers clearly', async () => {
+    const { home, project } = await initProject()
+    await writeFile(path.join(project, '.aiworker', 'executor-capabilities.json'), `${JSON.stringify({
+      engines: {
+        codex: {
+          mcp: {
+            privateDocs: {
+              headers: {
+                'X-Api-Key': 'not-secret-by-name',
+              },
+              scope: 'project',
+              transport: 'streamable-http',
+              url: 'https://mcp.example.com/mcp',
+            },
+          },
+        },
+      },
+      schemaVersion: 1,
+    }, null, 2)}\n`, 'utf8')
+
+    const sync = await runCli(['executor', 'mcp', 'sync', '--engine', 'codex', '--dry-run'], project, home)
+
+    expect(sync.exitCode).toBe(1)
+    expect(sync.output).toContain('executor.mcp.codex_headers_unsupported')
+  })
+
   it('sync runs engine CLI with project cwd and without AIWorker secrets', async () => {
     const { home, project } = await initProject()
     const binDir = await mkdtemp(path.join(tmpdir(), 'aiworker-fake-codex-bin-'))
@@ -204,14 +254,82 @@ describe('aiworker executor capability commands', () => {
       'mcp',
       'add',
       'context7',
-      '--scope',
-      'project',
-      '--transport',
-      'streamable-http',
       '--url',
       'https://mcp.example.com/mcp',
     ])
     expect(trace.env.AIWORKER_MASTER_KEY).toBeNull()
     expect(trace.env.CODEX_TRACE_FILE).toBe(traceFile)
+  })
+
+  it('doctor warns when task executor remains the default stub and no executor-native capabilities are declared', async () => {
+    const { home, project } = await initProject()
+
+    const doctor = await runCli(['executor', 'doctor'], project, home)
+
+    expect(doctor.exitCode).toBe(0)
+    expect(doctor.output).toContain('Status: WARN')
+    expect(doctor.output).toContain('configured task executor: http/default')
+    expect(doctor.output).toContain('declared executor-native capabilities: 0')
+    expect(doctor.output).toContain('executor.capability_manifest_empty')
+  })
+
+  it('selects a task executor with dry-run by default and apply guarded by config version', async () => {
+    const { home, project } = await initProject()
+
+    const dryRun = await runCli(['executor', 'select', '--engine', 'codex'], project, home)
+    expect(dryRun.exitCode).toBe(0)
+    expect(dryRun.output).toContain('[aiworker executor select] dry-run')
+    expect(dryRun.output).toContain('Write   : skipped')
+
+    const before = JSON.parse((await runCli(['config', 'show'], project, home)).output) as { config: { executor: { engine: string } }, version: number }
+    expect(before.config.executor.engine).toBe('http')
+
+    const apply = await runCli(['executor', 'select', '--engine', 'codex', '--apply', '--if-match', String(before.version)], project, home)
+    expect(apply.exitCode).toBe(0)
+    expect(apply.output).toContain('[aiworker executor select] apply')
+
+    const after = JSON.parse((await runCli(['config', 'show'], project, home)).output) as { config: { executor: { engine: string, variant: string } }, version: number }
+    expect(after.config.executor).toMatchObject({ engine: 'codex', variant: 'default' })
+    expect(after.version).toBe(before.version + 1)
+  })
+
+  it('lists and shows executor-native capability lifecycle descriptors beyond MCP', async () => {
+    const { home, project } = await initProject()
+    await writeFile(path.join(project, '.aiworker', 'executor-capabilities.json'), `${JSON.stringify({
+      engines: {
+        codex: {
+          plugins: {
+            review: {
+              scope: 'project',
+              source: { type: 'registry', ref: 'codex-review' },
+              status: 'declared',
+              validation: { status: 'pending' },
+            },
+          },
+          skills: {
+            repoContext: {
+              disabled: true,
+              source: { type: 'path', ref: './.codex/skills/repo-context' },
+            },
+          },
+        },
+      },
+      schemaVersion: 1,
+    }, null, 2)}\n`, 'utf8')
+
+    const list = await runCli(['executor', 'capability', 'list'], project, home)
+    expect(list.exitCode).toBe(0)
+    expect(list.output).toContain('codex.plugins.review (declared, enabled)')
+    expect(list.output).toContain('codex.skills.repoContext (declared, disabled)')
+
+    const show = await runCli(['executor', 'capability', 'show', 'codex.plugins.review'], project, home)
+    expect(show.exitCode).toBe(0)
+    expect(JSON.parse(show.output)).toMatchObject({
+      ref: 'codex.plugins.review',
+      descriptor: {
+        scope: 'project',
+        status: 'declared',
+      },
+    })
   })
 })

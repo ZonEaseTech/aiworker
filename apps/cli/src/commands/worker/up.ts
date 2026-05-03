@@ -232,8 +232,14 @@ function printExecutorReport(write: (text: string) => void, report: ExecutorRead
   write(`Root  : ${report.root}\n`)
   write(`File  : ${report.file}\n`)
   write(`Status: ${formatStatus(report.status)} (non-blocking)\n`)
-  if (report.engines.length === 0)
-    write('  PASS    no executor capabilities declared\n')
+  if (report.configuredExecutor.source === 'worker-config') {
+    const status = report.configuredExecutor.defaultStub ? 'WARN' : 'PASS'
+    write(`  ${status.padEnd(7)} configured task executor: ${report.configuredExecutor.engine}/${report.configuredExecutor.variant} (config v${report.configuredExecutor.version})\n`)
+  }
+  else {
+    write('  WARN    configured task executor unavailable\n')
+  }
+  write(`  ${report.manifest.empty ? 'WARN' : 'PASS'}    declared executor-native capabilities: ${report.manifest.declaredCapabilities}\n`)
   for (const item of report.engines) {
     const status = item.binaryFound ? 'PASS' : 'WARN'
     write(`  ${status.padEnd(7)} ${item.engine} (binary: ${item.binary}, mcp: ${item.mcpCount})\n`)

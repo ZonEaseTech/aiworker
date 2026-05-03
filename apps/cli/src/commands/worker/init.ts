@@ -415,10 +415,12 @@ function printProjectNextSteps(projectRoot: string, soul?: SelectedSoul): void {
     `  1. Confirm scope: \`aiworker scope\` (project root: ${projectRoot}).`,
     soulLine,
     '  3. Validate capability drafts: `aiworker doctor`.',
-    '  4. Smoke bootstrap: `aiworker run --message "hello" --dry-run`.',
-    '  5. After configuring executor secrets/model: `aiworker run --message "hello"`.',
-    '  6. Need HTTP/admin UI: `aiworker up --port 9217` (or explicit `aiworker serve --port 9217`).',
-    '  7. Need fleet control: start/connect a gateway, then use self-enroll or OTP from `aiworker serve`.',
+    '  4. Select task executor when ready: `aiworker executor select --engine codex --apply`.',
+    '  5. Check executor readiness: `aiworker executor doctor --engine codex`.',
+    '  6. Smoke bootstrap: `aiworker run --message "hello" --dry-run`.',
+    '  7. After configuring executor secrets/model: `aiworker run --message "hello"`.',
+    '  8. Need HTTP/admin UI: `aiworker up --port 9217` (or explicit `aiworker serve --port 9217`).',
+    '  9. Need fleet control: start/connect a gateway, then use self-enroll or OTP from `aiworker serve`.',
   ].join('\n'))
   process.stdout.write('\n')
 }
@@ -428,9 +430,11 @@ function printUserScopeNextSteps(): void {
     '[aiworker init] next steps',
     '  1. Confirm scope: `aiworker scope`.',
     '  2. Inspect config: `aiworker config show`.',
-    '  3. Smoke bootstrap: `aiworker run --message "hello" --dry-run`.',
-    '  4. After configuring executor secrets/model: `aiworker run --message "hello"`.',
-    '  5. Need HTTP/admin UI: `aiworker up --port 9217` (or explicit `aiworker serve --port 9217`).',
+    '  3. Select task executor when ready: `aiworker executor select --engine codex --apply`.',
+    '  4. Check executor readiness: `aiworker executor doctor --engine codex`.',
+    '  5. Smoke bootstrap: `aiworker run --message "hello" --dry-run`.',
+    '  6. After configuring executor secrets/model: `aiworker run --message "hello"`.',
+    '  7. Need HTTP/admin UI: `aiworker up --port 9217` (or explicit `aiworker serve --port 9217`).',
   ].join('\n'))
   process.stdout.write('\n')
 }

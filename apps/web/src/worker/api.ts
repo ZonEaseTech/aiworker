@@ -264,6 +264,12 @@ export interface BrainTestRow {
   id: string
   type: string
   status: string
+  priority?: number
+  readOnly?: boolean
+  writeTarget?: boolean
+  home?: string
+  url?: string
+  healthScope?: 'source' | 'aggregate'
   errorMessage?: string
 }
 

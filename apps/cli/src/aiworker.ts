@@ -41,14 +41,22 @@ import {
   runApprovalsList as runApprovalsListLocal,
 } from './commands/worker/approvals'
 import {
+  runBrainMemories,
+  runBrainSkills,
+  runBrainStatus,
+} from './commands/worker/brain'
+import {
   runConfigSet as runConfigSetLocal,
   runConfigShow,
 } from './commands/worker/config'
 import { runDoctor } from './commands/worker/doctor'
 import {
+  runExecutorCapabilityList,
+  runExecutorCapabilityShow,
   runExecutorDoctor,
   runExecutorMcpAdd,
   runExecutorMcpSync,
+  runExecutorSelect,
 } from './commands/worker/executor'
 import { runInit } from './commands/worker/init'
 import { runRun } from './commands/worker/run'
@@ -175,6 +183,7 @@ cli
   .option('--arg <value>', 'stdio command 参数；可重复')
   .option('--env <key=value>', '投影到 engine CLI 的 env；secret 用 key=secretRef:<ref>；可重复')
   .option('--header <key=value>', '投影到 engine CLI 的 header；secret 用 key=secretRef:<ref>；可重复')
+  .option('--bearer-token-env-var <env>', 'Codex streamable HTTP MCP bearer token 环境变量名')
   .option('--description <text>', 'MCP server 描述')
   .option('--dry-run', '只预览 manifest 变更，不写文件')
   .action(async (name: string, opts: Parameters<typeof runExecutorMcpAdd>[1]) => {
@@ -190,10 +199,46 @@ cli
   })
 
 cli
+  .command('executor select', '显式选择本地 worker 的 task executor，不写 engine project config')
+  .option('--engine <engine>', '目标 task executor engine，例如 codex / claude-code / http')
+  .option('--variant <variant>', 'executor variant（默认 default）')
+  .option('--model-id <model>', '可选 per-request model override')
+  .option('--reasoning-id <id>', '可选 reasoning preset')
+  .option('--permission-policy <policy>', '可选权限策略：auto / supervised / plan')
+  .option('--if-match <version>', 'apply 时使用的乐观锁；当前 config version 不等于此值则拒绝', { type: [Number] })
+  .option('--apply', '持久化 executor 选择；默认只 dry-run')
+  .option('--dry-run', '只打印将更新的 executor 选择')
+  .action(async (opts: { apply?: boolean, dryRun?: boolean, engine?: string, ifMatch?: number[], modelId?: string, permissionPolicy?: string, reasoningId?: string, variant?: string }) => {
+    process.exit(await runExecutorSelect({
+      ...(opts.apply === true ? { apply: true } : {}),
+      ...(opts.dryRun === true ? { dryRun: true } : {}),
+      ...(opts.engine === undefined ? {} : { engine: opts.engine }),
+      ...(opts.variant === undefined ? {} : { variant: opts.variant }),
+      ...(opts.modelId === undefined ? {} : { modelId: opts.modelId }),
+      ...(opts.reasoningId === undefined ? {} : { reasoningId: opts.reasoningId }),
+      ...(opts.permissionPolicy === undefined ? {} : { permissionPolicy: opts.permissionPolicy }),
+      ifMatch: optionalNumber(opts.ifMatch),
+    }))
+  })
+
+cli
   .command('executor doctor', '验证 executor capability manifest、engine CLI availability 和安全约束')
   .option('--engine <engine>', '只检查一个 engine：codex 或 claude-code')
   .action(async (opts: Parameters<typeof runExecutorDoctor>[0]) => {
     process.exit(await runExecutorDoctor(opts))
+  })
+
+cli
+  .command('executor capability list', '只读列出 executor-native MCP / engine plugin / engine skill / policy 声明')
+  .option('--engine <engine>', '只列出一个 engine：codex 或 claude-code')
+  .action(async (opts: Parameters<typeof runExecutorCapabilityList>[0]) => {
+    process.exit(await runExecutorCapabilityList(opts))
+  })
+
+cli
+  .command('executor capability show <ref>', '只读查看 executor-native capability descriptor，ref 形如 codex.mcp.context7')
+  .action(async (ref: string) => {
+    process.exit(await runExecutorCapabilityShow(ref))
   })
 
 cli.command('soul list', '列出内置 Soul 预设及其声明能力').action(async () => {
@@ -203,6 +248,25 @@ cli.command('soul list', '列出内置 Soul 预设及其声明能力').action(as
 cli.command('soul show <preset>', '查看某个 Soul 预设的职责、边界、能力草案和风险策略').action(async (preset: string) => {
   process.exit(await runSoulShow(preset))
 })
+
+cli.command('brain status', '只读诊断本地 worker runtime brain source、写入目标和健康状态').action(async () => {
+  process.exit(await runBrainStatus())
+})
+
+cli.command('brain skills', '只读列出本地 runtime brain 暴露的 brain skill').action(async () => {
+  process.exit(await runBrainSkills())
+})
+
+cli
+  .command('brain memories', '只读列出或搜索本地 runtime brain memory')
+  .option('--query <text>', '搜索 memory 内容、标题或 metadata')
+  .option('--limit <n>', '最多返回 memory 数量（1-200，默认 50）', { type: [Number] })
+  .action(async (opts: { limit?: number[], query?: string }) => {
+    process.exit(await runBrainMemories({
+      limit: optionalNumber(opts.limit),
+      ...(opts.query === undefined ? {} : { query: opts.query }),
+    }))
+  })
 
 cli
   .command('run', '不启动 HTTP server，直接给 orchestrator 投递一条消息')
@@ -432,6 +496,7 @@ cli
   .option('--arg <value>', 'stdio command 参数；可重复')
   .option('--env <key=value>', '投影到 engine CLI 的 env；secret 用 key=secretRef:<ref>；可重复')
   .option('--header <key=value>', '投影到 engine CLI 的 header；secret 用 key=secretRef:<ref>；可重复')
+  .option('--bearer-token-env-var <env>', 'Codex streamable HTTP MCP bearer token 环境变量名')
   .option('--description <text>', 'MCP server 描述')
   .option('--dry-run', '只预览 manifest 变更，不写文件')
   .action(async (name: string, opts: Parameters<typeof runExecutorMcpAdd>[1]) => {
@@ -447,10 +512,46 @@ cli
   })
 
 cli
+  .command('worker executor select', '显式选择本地 worker 的 task executor，不写 engine project config')
+  .option('--engine <engine>', '目标 task executor engine，例如 codex / claude-code / http')
+  .option('--variant <variant>', 'executor variant（默认 default）')
+  .option('--model-id <model>', '可选 per-request model override')
+  .option('--reasoning-id <id>', '可选 reasoning preset')
+  .option('--permission-policy <policy>', '可选权限策略：auto / supervised / plan')
+  .option('--if-match <version>', 'apply 时使用的乐观锁；当前 config version 不等于此值则拒绝', { type: [Number] })
+  .option('--apply', '持久化 executor 选择；默认只 dry-run')
+  .option('--dry-run', '只打印将更新的 executor 选择')
+  .action(async (opts: { apply?: boolean, dryRun?: boolean, engine?: string, ifMatch?: number[], modelId?: string, permissionPolicy?: string, reasoningId?: string, variant?: string }) => {
+    process.exit(await runExecutorSelect({
+      ...(opts.apply === true ? { apply: true } : {}),
+      ...(opts.dryRun === true ? { dryRun: true } : {}),
+      ...(opts.engine === undefined ? {} : { engine: opts.engine }),
+      ...(opts.variant === undefined ? {} : { variant: opts.variant }),
+      ...(opts.modelId === undefined ? {} : { modelId: opts.modelId }),
+      ...(opts.reasoningId === undefined ? {} : { reasoningId: opts.reasoningId }),
+      ...(opts.permissionPolicy === undefined ? {} : { permissionPolicy: opts.permissionPolicy }),
+      ifMatch: optionalNumber(opts.ifMatch),
+    }))
+  })
+
+cli
   .command('worker executor doctor', '验证 executor capability manifest、engine CLI availability 和安全约束')
   .option('--engine <engine>', '只检查一个 engine：codex 或 claude-code')
   .action(async (opts: Parameters<typeof runExecutorDoctor>[0]) => {
     process.exit(await runExecutorDoctor(opts))
+  })
+
+cli
+  .command('worker executor capability list', '只读列出 executor-native MCP / engine plugin / engine skill / policy 声明')
+  .option('--engine <engine>', '只列出一个 engine：codex 或 claude-code')
+  .action(async (opts: Parameters<typeof runExecutorCapabilityList>[0]) => {
+    process.exit(await runExecutorCapabilityList(opts))
+  })
+
+cli
+  .command('worker executor capability show <ref>', '只读查看 executor-native capability descriptor，ref 形如 codex.mcp.context7')
+  .action(async (ref: string) => {
+    process.exit(await runExecutorCapabilityShow(ref))
   })
 
 cli.command('worker soul list', '列出内置 Soul 预设及其声明能力').action(async () => {
@@ -460,6 +561,25 @@ cli.command('worker soul list', '列出内置 Soul 预设及其声明能力').ac
 cli.command('worker soul show <preset>', '查看某个 Soul 预设的职责、边界、能力草案和风险策略').action(async (preset: string) => {
   process.exit(await runSoulShow(preset))
 })
+
+cli.command('worker brain status', '只读诊断本地 worker runtime brain source、写入目标和健康状态').action(async () => {
+  process.exit(await runBrainStatus())
+})
+
+cli.command('worker brain skills', '只读列出本地 runtime brain 暴露的 brain skill').action(async () => {
+  process.exit(await runBrainSkills())
+})
+
+cli
+  .command('worker brain memories', '只读列出或搜索本地 runtime brain memory')
+  .option('--query <text>', '搜索 memory 内容、标题或 metadata')
+  .option('--limit <n>', '最多返回 memory 数量（1-200，默认 50）', { type: [Number] })
+  .action(async (opts: { limit?: number[], query?: string }) => {
+    process.exit(await runBrainMemories({
+      limit: optionalNumber(opts.limit),
+      ...(opts.query === undefined ? {} : { query: opts.query }),
+    }))
+  })
 
 cli
   .command('worker run', '不启动 HTTP server，直接给 orchestrator 投递一条消息')
@@ -941,6 +1061,7 @@ interface CliCommandShape {
 
 const NUMERIC_RULES: Record<string, Record<string, NumericRule>> = {
   'config set': { ifMatch: { integer: true, min: 1 } },
+  'executor select': { ifMatch: { integer: true, min: 1 } },
   'fleet chat': { timeoutMs: { integer: true, min: 1 } },
   'fleet config set': { ifMatch: { integer: true, min: 1 } },
   'fleet logs': {
@@ -961,6 +1082,7 @@ const NUMERIC_RULES: Record<string, Record<string, NumericRule>> = {
     olderThanDays: { integer: true, min: 0, max: 3650 },
   },
   'worker config set': { ifMatch: { integer: true, min: 1 } },
+  'worker executor select': { ifMatch: { integer: true, min: 1 } },
   'worker run': { timeoutMs: { integer: true, min: 1 } },
   'worker serve': { port: { integer: true, min: 1, max: 65_535 } },
   'worker up': { port: { integer: true, min: 1, max: 65_535 } },

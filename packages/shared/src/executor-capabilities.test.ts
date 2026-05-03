@@ -61,4 +61,36 @@ describe('executor capability manifest schemas', () => {
 
     expect(parsed.success).toBe(true)
   })
+
+  it('accepts engine-native skill, plugin, and policy lifecycle descriptors', () => {
+    const parsed = executorCapabilityManifestSchema.safeParse({
+      engines: {
+        codex: {
+          plugins: {
+            review: {
+              scope: 'project',
+              source: { type: 'registry', ref: 'codex-review' },
+              status: 'declared',
+              validation: { status: 'pending' },
+            },
+          },
+          policies: {
+            sandbox: {
+              source: { type: 'manual' },
+              status: 'draft',
+            },
+          },
+          skills: {
+            repoContext: {
+              disabled: true,
+              source: { type: 'path', ref: './.codex/skills/repo-context' },
+            },
+          },
+        },
+      },
+      schemaVersion: 1,
+    })
+
+    expect(parsed.success).toBe(true)
+  })
 })

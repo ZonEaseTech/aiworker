@@ -58,14 +58,21 @@ function BrainTestCard() {
       {mut.data && (
         <ul className="flex flex-col gap-2 text-sm">
           {mut.data.brains.map(row => (
-            <li key={row.id} className="flex items-center justify-between gap-2 rounded-md border bg-background p-3">
-              <div className="flex items-center gap-2">
-                <code className="font-mono text-xs">{row.id}</code>
-                <span className="text-xs text-muted-foreground">
-                  (
-                  {row.type}
-                  )
-                </span>
+            <li key={row.id} className="flex items-start justify-between gap-2 rounded-md border bg-background p-3">
+              <div className="flex min-w-0 flex-col gap-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <code className="font-mono text-xs">{row.id}</code>
+                  <span className="text-xs text-muted-foreground">
+                    (
+                    {row.type}
+                    )
+                  </span>
+                  {row.writeTarget && <Badge variant="secondary">write target</Badge>}
+                  {row.readOnly && <Badge variant="outline">read only</Badge>}
+                </div>
+                <div className="min-w-0 break-words text-xs text-muted-foreground">
+                  {brainDetailText(row)}
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 <StatusBadge status={row.status} />
@@ -84,6 +91,24 @@ function BrainTestCard() {
       )}
     </section>
   )
+}
+
+function brainDetailText(row: {
+  healthScope?: 'source' | 'aggregate'
+  home?: string
+  priority?: number
+  url?: string
+}): string {
+  const details: string[] = []
+  if (typeof row.priority === 'number')
+    details.push(`priority ${row.priority}`)
+  if (row.healthScope === 'aggregate')
+    details.push('aggregate health')
+  if (row.home)
+    details.push(row.home)
+  if (row.url)
+    details.push(row.url)
+  return details.join(' / ')
 }
 
 function ExecutorTestCard() {

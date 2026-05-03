@@ -10,6 +10,7 @@ import type {
   WorkerInfoExecutor,
 } from '@zonease/aiworker-shared'
 import type { WorkerModeState } from './state'
+import { describeBrainSource } from '../brain/diagnostics'
 import { resolveVariant } from '../executor/default-profiles'
 
 /**
@@ -88,6 +89,7 @@ export async function buildInfo(
   const brainAggregate = await probe(() => runtime.brain.health())
 
   const brains: WorkerInfoBrain[] = storedConfig.brains.map(b => ({
+    ...describeBrainSource(state.workerId, b, storedConfig.brainWriteTarget),
     id: b.id,
     type: b.type,
     status: brainAggregate,

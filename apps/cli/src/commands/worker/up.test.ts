@@ -55,9 +55,21 @@ const failCapabilityReport: CapabilityDoctorReport = {
 }
 
 const passExecutorReport: ExecutorReadinessReport = {
+  configuredExecutor: {
+    defaultStub: false,
+    engine: 'codex',
+    source: 'worker-config',
+    variant: 'default',
+    version: 2,
+  },
   engines: [],
   file: '/repo/.aiworker/executor-capabilities.json',
   issues: [],
+  manifest: {
+    declaredCapabilities: 1,
+    declaredEngines: 1,
+    empty: false,
+  },
   root: '/repo/.aiworker',
   status: 'pass',
 }
@@ -161,6 +173,13 @@ describe('runUp', () => {
     const output = collectOutput()
     let serveOptions: ServeOptions | undefined
     const executorReport: ExecutorReadinessReport = {
+      configuredExecutor: {
+        defaultStub: true,
+        engine: 'http',
+        source: 'worker-config',
+        variant: 'default',
+        version: 1,
+      },
       engines: [{
         binary: 'codex',
         binaryFound: false,
@@ -169,11 +188,21 @@ describe('runUp', () => {
       }],
       file: '/repo/.aiworker/executor-capabilities.json',
       issues: [{
+        code: 'executor.config_default_stub',
+        message: 'default stub',
+        path: 'worker_config.executor',
+        severity: 'warning',
+      }, {
         code: 'executor.binary_missing',
         message: 'missing codex',
         path: 'engines.codex',
         severity: 'warning',
       }],
+      manifest: {
+        declaredCapabilities: 1,
+        declaredEngines: 1,
+        empty: false,
+      },
       root: '/repo/.aiworker',
       status: 'warn',
     }
@@ -208,6 +237,7 @@ describe('runUp', () => {
       serveWeb: false,
     })
     expect(output.lines.join('')).toContain('Status: WARN (non-blocking)')
+    expect(output.lines.join('')).toContain('configured task executor: http/default')
     expect(output.lines.join('')).toContain('stage 5/5 serve')
   })
 })

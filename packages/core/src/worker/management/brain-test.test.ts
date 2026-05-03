@@ -53,17 +53,45 @@ const TWO_SOURCES: BrainSourceConfig[] = [
 describe('handleBrainTest', () => {
   it('reports single-source row when config has exactly one brain', async () => {
     const state = stubState(stubBrain(async () => ({ status: 'healthy' })))
-    const res = await handleBrainTest(state, { brains: ONE_SOURCE })
+    const res = await handleBrainTest(state, { brains: ONE_SOURCE, brainWriteTarget: 'fs-primary' })
     expect(res.brains).toEqual([
-      { id: 'fs-primary', type: 'filesystem', status: 'healthy' },
+      {
+        id: 'fs-primary',
+        type: 'filesystem',
+        status: 'healthy',
+        priority: 10,
+        readOnly: false,
+        writeTarget: true,
+        home: '/tmp',
+        healthScope: 'source',
+      },
     ])
   })
 
-  it('reports an aggregate row when config has multiple brains', async () => {
+  it('reports source rows with aggregate health when config has multiple brains', async () => {
     const state = stubState(stubBrain(async () => ({ status: 'degraded' })))
-    const res = await handleBrainTest(state, { brains: TWO_SOURCES })
+    const res = await handleBrainTest(state, { brains: TWO_SOURCES, brainWriteTarget: 'fs-primary' })
     expect(res.brains).toEqual([
-      { id: 'aggregate', type: 'multi', status: 'degraded' },
+      {
+        id: 'fs-primary',
+        type: 'filesystem',
+        status: 'degraded',
+        priority: 10,
+        readOnly: false,
+        writeTarget: true,
+        home: '/tmp',
+        healthScope: 'aggregate',
+      },
+      {
+        id: 'cloud',
+        type: 'cloud-gateway',
+        status: 'degraded',
+        priority: 1,
+        readOnly: true,
+        writeTarget: false,
+        url: 'https://c',
+        healthScope: 'aggregate',
+      },
     ])
   })
 
@@ -76,7 +104,7 @@ describe('handleBrainTest', () => {
       searchMemories: async () => [],
       writeMemory: async () => { throw new Error('unused') },
     })
-    const res = await handleBrainTest(state, { brains: ONE_SOURCE })
+    const res = await handleBrainTest(state, { brains: ONE_SOURCE, brainWriteTarget: 'fs-primary' })
     expect(res.brains[0]?.status).toBe('down')
     expect(res.brains[0]?.errorMessage).toBe('brain boom')
   })

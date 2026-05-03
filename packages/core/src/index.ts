@@ -26,6 +26,9 @@ export {
   type StoredConfig,
 } from './worker/bootstrap'
 
+// Brain diagnostics：CLI / 管理 API 共用的只读 source 摘要。
+export { type BrainSourceDiagnostic, describeBrainSource } from './worker/brain/diagnostics'
+
 // Channel registry：路由 / 管理 API 都通过这个枚举 + 注册表挂 adapter。
 export { ChannelRegistry, getChannelAdapter } from './worker/channels/registry'
 
@@ -44,6 +47,13 @@ export {
   getAvailabilityProbe,
   resetAvailabilityProbeForTests,
 } from './worker/executor/availability'
+
+export {
+  DEFAULT_EXECUTOR_PROFILE,
+  DEFAULT_PROFILES,
+  type ResolvedVariant,
+  resolveVariant,
+} from './worker/executor/default-profiles'
 
 // Gateway-client（PLAN-013 S4）：worker node 主动接入 gateway 的 WS 客户端。
 export {
