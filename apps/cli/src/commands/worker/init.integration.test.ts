@@ -167,6 +167,30 @@ describe('aiworker init / scope project placement', () => {
     })
   })
 
+  it('user and explicit init next steps do not point to project-only executor doctor', async () => {
+    await withCliIntegrationCleanup(async (cleanup) => {
+      const home = await cleanup.makeTempDir('aiworker-cli-init-user-next-steps-home-')
+      const globalInit = await runCli(cleanup, ['init', '--global'], home, home)
+
+      expect(globalInit.exitCode).toBe(0)
+      expect(globalInit.output).toContain('[aiworker init] next steps')
+      expect(globalInit.output).toContain('aiworker executor select --engine codex --apply')
+      expect(globalInit.output).toContain('aiworker run --message "hello" --dry-run')
+      expect(globalInit.output).not.toContain('aiworker executor doctor')
+
+      const explicitHome = path.join(home, 'explicit-aiworker-home')
+      const explicitInit = await runCli(cleanup, ['init'], home, home, {
+        AIWORKER_HOME: explicitHome,
+      })
+
+      expect(explicitInit.exitCode).toBe(0)
+      expect(explicitInit.output).toContain('[aiworker init] next steps')
+      expect(explicitInit.output).toContain('aiworker executor select --engine codex --apply')
+      expect(explicitInit.output).toContain('aiworker run --message "hello" --dry-run')
+      expect(explicitInit.output).not.toContain('aiworker executor doctor')
+    })
+  })
+
   it('init in a fresh git repo creates project layout without user-scope fallback', async () => {
     await withCliIntegrationCleanup(async (cleanup) => {
       const root = await cleanup.makeTempDir('aiworker-cli-init-')
@@ -183,6 +207,7 @@ describe('aiworker init / scope project placement', () => {
       expect(result.output).toContain('.aiworker/SOUL.md')
       expect(result.output).toContain('aiworker soul show developer')
       expect(result.output).toContain('aiworker doctor')
+      expect(result.output).toContain('aiworker executor doctor --engine codex')
       expect(result.output).toContain('aiworker run --message "hello" --dry-run')
       expect(result.output).toContain('aiworker up --port 9217')
       expect(await exists(path.join(project, '.aiworker', 'AGENT.md'))).toBe(true)

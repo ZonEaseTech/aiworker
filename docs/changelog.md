@@ -1,5 +1,18 @@
 # AIWorker Changelog
 
+## 2026-05-03 21:27 [completed] BUG-049 — user-scope init next-step polish
+
+修复 `aiworker init --global` / explicit `AIWORKER_HOME` init 的 next steps：
+不再提示 project-only 的 `aiworker executor doctor --engine codex`，避免用户按
+引导在 user/explicit scope 立即撞到 exit 2。Project-scope init 仍保留 executor
+readiness guidance。
+
+验证：
+
+- `bun test --timeout=30000 apps/cli/src/commands/worker/init.integration.test.ts`
+- `bun run --filter '@zonease/aiworker-cli' typecheck`
+- `bun run --filter '@zonease/aiworker-cli' build:bundle`
+
 ## 2026-05-03 13:44 [completed] FEAT-047 / PLAN-074..078 — executor bootstrap lifecycle
 
 完成 worker executor bootstrap lifecycle track：

@@ -431,10 +431,9 @@ function printUserScopeNextSteps(): void {
     '  1. Confirm scope: `aiworker scope`.',
     '  2. Inspect config: `aiworker config show`.',
     '  3. Select task executor when ready: `aiworker executor select --engine codex --apply`.',
-    '  4. Check executor readiness: `aiworker executor doctor --engine codex`.',
-    '  5. Smoke bootstrap: `aiworker run --message "hello" --dry-run`.',
-    '  6. After configuring executor secrets/model: `aiworker run --message "hello"`.',
-    '  7. Need HTTP/admin UI: `aiworker up --port 9217` (or explicit `aiworker serve --port 9217`).',
+    '  4. Smoke bootstrap: `aiworker run --message "hello" --dry-run`.',
+    '  5. After configuring executor secrets/model: `aiworker run --message "hello"`.',
+    '  6. Need HTTP/admin UI: `aiworker up --port 9217` (or explicit `aiworker serve --port 9217`).',
   ].join('\n'))
   process.stdout.write('\n')
 }
