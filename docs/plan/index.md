@@ -99,3 +99,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-068 Persist orchestrator task lifecycle rows**](PLAN-068.md) `2026-05-02`
 - [x] [**PLAN-069 Executor tiny probe hard timeout**](PLAN-069.md) `2026-05-02`
 - [x] [**PLAN-070 Worker Admin locked state without bearer token**](PLAN-070.md) `2026-05-02`
+- [-] [**PLAN-071 发布 aiworker CLI 0.5.1**](PLAN-071.md) `2026-05-03`

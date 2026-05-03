@@ -1,5 +1,21 @@
 # AIWorker Changelog
 
+## 2026-05-03 10:59 [progress] REL-010 / PLAN-071 — prepare CLI 0.5.1 release
+
+Started the `@zonease/aiworker-cli@0.5.1` patch release:
+
+- Bumped `apps/cli/package.json` from `0.5.0` to `0.5.1`.
+- Release scope includes completed post-0.5.0 fixes `BUG-042` through
+  `BUG-048` plus the `QA-002` validation record.
+- `TODO-007` remains a P3 polish follow-up and is not a release blocker.
+
+Local release gates passed: workspace tests, typecheck, lint, build, CLI smoke
+scripts, artifact checks, publish dry-run to the local auth boundary, and
+`git diff --check`.
+
+Next step: commit the release bump, tag `v0.5.1`, then verify the
+tag-triggered GitHub release workflow and published package.
+
 ## 2026-05-03 10:59 [BUG-P3] BUG-042 — `aiworker up --dry-run` omitted port output
 
 Fixed a dry-run display bug in `aiworker up`:
