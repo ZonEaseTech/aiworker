@@ -47,6 +47,26 @@ Validation:
 - focused ESLint on touched core/Web files
 - `git diff --check`
 
+## 2026-05-03 10:37 [BUG-P1] BUG-048 / PLAN-067 — legacy HOME `.aiworker` no longer skips Soul
+
+修复 `aiworker init` 在旧 user-scope `~/.aiworker/` 下误判 project scope 的问题：
+
+- 未带 project Soul markers 的 `$HOME/.aiworker/` 不再被 `resolveProjectRoot()` 当作 project root，`aiworker scope` 会报告 `user`。
+- existing project init 分支如果缺少 `.aiworker/AGENT.md` 或 `.aiworker/SOUL.md`，会重新要求 Soul；非交互模式继续 fail closed 并提示 `--soul <preset>`。
+- 已有 Soul material 的 project root 保持幂等 re-init，不覆盖现有 persona 文件。
+- `--global` 和 `AIWORKER_HOME` 显式路径仍走 legacy user/explicit scope。
+
+Validation:
+
+- `bun test packages/fs-layout/src/index.test.ts`
+- `bun test apps/cli/src/commands/worker/init.integration.test.ts`
+- `bun test apps/cli/src/aiworker.test.ts`
+- `bun run --filter '@zonease/aiworker-cli' test`
+- `bun run --filter '@zonease/aiworker-cli' typecheck`
+- `bun run --filter '@zonease/aiworker-fs-layout' typecheck`
+- Manual reproduction for legacy `$HOME/.aiworker/`
+- `git diff --check`
+
 ## 2026-05-02 21:46 [BUG-P1] BUG-045 / PLAN-068 — orchestrator task lifecycle persistence
 
 Fixed stale Worker Admin / HTTP orchestrator task rows:

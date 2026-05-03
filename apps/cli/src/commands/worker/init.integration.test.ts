@@ -1,5 +1,5 @@
 import type { IntegrationCleanup } from '../../test-utils/integration-cleanup'
-import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, realpath, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
 import process from 'node:process'
@@ -89,6 +89,80 @@ describe('aiworker init / scope project placement', () => {
       expect(await exists(path.join(project, '.aiworker'))).toBe(false)
       expect(await exists(path.join(home, '.aiworker', '.env'))).toBe(false)
       expect(await exists(path.join(home, '.aiworker', 'worker.db'))).toBe(false)
+    })
+  })
+
+  it('init from HOME with legacy .aiworker requires Soul and scope reports user', async () => {
+    await withCliIntegrationCleanup(async (cleanup) => {
+      const home = await cleanup.makeTempDir('aiworker-cli-init-legacy-home-')
+      const aiworker = path.join(home, '.aiworker')
+      await mkdir(aiworker, { recursive: true })
+      await writeFile(path.join(aiworker, '.env'), 'AIWORKER_MASTER_KEY=legacy\n', 'utf8')
+      await writeFile(path.join(aiworker, 'worker.db'), '', 'utf8')
+
+      const init = await runCli(cleanup, ['init', '--dry-run'], home, home)
+
+      expect(init.exitCode).toBe(2)
+      expect(init.output).toContain('brand-new project init requires a Soul preset in non-interactive mode')
+      expect(init.output).not.toContain('[aiworker init] preflight (project-scope)')
+      expect(await exists(path.join(aiworker, 'AGENT.md'))).toBe(false)
+      expect(await exists(path.join(aiworker, 'SOUL.md'))).toBe(false)
+      expect(await exists(path.join(aiworker, 'local', 'worker.db'))).toBe(false)
+
+      const scope = await runCli(cleanup, ['scope'], home, home)
+      expect(scope.exitCode).toBe(0)
+      expect(scope.output).toContain('Scope        : user')
+      expect(scope.output).toContain('Source       : user-default')
+      expect(scope.output).not.toContain('Project root :')
+    })
+  })
+
+  it('init --soul can adopt legacy HOME .aiworker into project layout', async () => {
+    await withCliIntegrationCleanup(async (cleanup) => {
+      const home = await cleanup.makeTempDir('aiworker-cli-init-adopt-home-')
+      const aiworker = path.join(home, '.aiworker')
+      const legacyEnv = 'AIWORKER_MASTER_KEY=legacy\n'
+      await mkdir(aiworker, { recursive: true })
+      await writeFile(path.join(aiworker, '.env'), legacyEnv, 'utf8')
+      await writeFile(path.join(aiworker, 'worker.db'), 'legacy db marker', 'utf8')
+
+      const init = await runCli(cleanup, ['init', '--soul', 'developer'], home, home)
+
+      expect(init.exitCode).toBe(0)
+      expect(init.output).toContain('[aiworker init] preflight (project-scope)')
+      expect(init.output).toContain('Soul         : developer (Developer, flag)')
+      expect(await readFile(path.join(aiworker, '.env'), 'utf8')).toBe(legacyEnv)
+      expect(await readFile(path.join(aiworker, 'worker.db'), 'utf8')).toBe('legacy db marker')
+      expect(await exists(path.join(aiworker, 'AGENT.md'))).toBe(true)
+      expect(await exists(path.join(aiworker, 'SOUL.md'))).toBe(true)
+      expect(await exists(path.join(aiworker, 'local', 'worker.db'))).toBe(true)
+
+      const scope = await runCli(cleanup, ['scope'], home, home)
+      const canonicalHome = await realpath(home)
+      expect(scope.exitCode).toBe(0)
+      expect(scope.output).toContain('Scope        : project')
+      expect(scope.output).toContain('Source       : project-detect')
+      expect(scope.output).toContain(`Project root : ${canonicalHome}`)
+    })
+  })
+
+  it('explicit user-scope init paths remain available under legacy HOME .aiworker', async () => {
+    await withCliIntegrationCleanup(async (cleanup) => {
+      const home = await cleanup.makeTempDir('aiworker-cli-init-legacy-explicit-home-')
+      const explicitHome = path.join(home, 'custom-aiworker-home')
+      await mkdir(path.join(home, '.aiworker'), { recursive: true })
+
+      const globalInit = await runCli(cleanup, ['init', '--global', '--dry-run'], home, home)
+      expect(globalInit.exitCode).toBe(0)
+      expect(globalInit.output).toContain('[aiworker init] preflight (user-scope)')
+      expect(globalInit.output).toContain(`Home         : ${path.join(home, '.aiworker')}`)
+
+      const explicitInit = await runCli(cleanup, ['init', '--dry-run'], home, home, {
+        AIWORKER_HOME: explicitHome,
+      })
+      expect(explicitInit.exitCode).toBe(0)
+      expect(explicitInit.output).toContain('[aiworker init] preflight (explicit-scope)')
+      expect(explicitInit.output).toContain(`Home         : ${explicitHome}`)
     })
   })
 

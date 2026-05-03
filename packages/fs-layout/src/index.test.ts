@@ -93,6 +93,53 @@ describe('resolveAiworkerScope priority', () => {
     }
   })
 
+  it('does not treat unmarked HOME .aiworker as project scope', async () => {
+    const tmp = await makeTmpDir()
+    const savedHome = process.env.HOME
+    try {
+      process.env.HOME = tmp
+      await mkdir(path.join(tmp, '.aiworker'), { recursive: true })
+
+      expect(resolveProjectRoot(tmp)).toBe(null)
+      const result = resolveAiworkerScope({ cwd: tmp })
+      expect(result.scope).toBe('user')
+      expect(result.home).toBe(path.join(tmp, '.aiworker'))
+      expect(result.source).toBe('user-default')
+    }
+    finally {
+      if (savedHome === undefined)
+        delete process.env.HOME
+      else
+        process.env.HOME = savedHome
+      await cleanup(tmp)
+    }
+  })
+
+  it('keeps marked HOME .aiworker as project scope', async () => {
+    const tmp = await makeTmpDir()
+    const savedHome = process.env.HOME
+    try {
+      process.env.HOME = tmp
+      const aiworker = path.join(tmp, '.aiworker')
+      await mkdir(aiworker, { recursive: true })
+      await writeFile(path.join(aiworker, 'AGENT.md'), '# Agent\n', 'utf8')
+      await writeFile(path.join(aiworker, 'SOUL.md'), '# Soul\n', 'utf8')
+
+      expect(resolveProjectRoot(tmp)).toBe(tmp)
+      const result = resolveAiworkerScope({ cwd: tmp })
+      expect(result.scope).toBe('project')
+      expect(result.projectRoot).toBe(tmp)
+      expect(result.home).toBe(path.join(tmp, '.aiworker', 'local'))
+    }
+    finally {
+      if (savedHome === undefined)
+        delete process.env.HOME
+      else
+        process.env.HOME = savedHome
+      await cleanup(tmp)
+    }
+  })
+
   it('disableProjectDetect skips upward search → user-default', async () => {
     const tmp = await makeTmpDir()
     try {

@@ -98,13 +98,16 @@ async function resolveOptionalProjectSoul(options: InitOptions): Promise<Resolve
   return resolveProjectSoulFromValue(options.soul, 'flag')
 }
 
-async function resolveRequiredProjectSoul(options: InitOptions): Promise<ResolveSoulResult> {
+async function resolveRequiredProjectSoul(
+  options: InitOptions,
+  context = 'brand-new project init',
+): Promise<ResolveSoulResult> {
   if (options.soul !== undefined)
     return resolveProjectSoulFromValue(options.soul, 'flag')
 
   if (!isInteractiveTerminal()) {
     return {
-      code: printInitUsageError(`brand-new project init requires a Soul preset in non-interactive mode; pass --soul <preset>. Available presets: ${supportedSoulIds()}`),
+      code: printInitUsageError(`${context} requires a Soul preset in non-interactive mode; pass --soul <preset>. Available presets: ${supportedSoulIds()}`),
     }
   }
 
@@ -356,7 +359,9 @@ export async function runInit(options: InitOptions = {}): Promise<number> {
   // already aimed AIWORKER_HOME at the existing local/ via resolveAiworkerScope.
   const existingRoot = resolveProjectRoot(cwd)
   if (existingRoot) {
-    const soulResult = await resolveOptionalProjectSoul(options)
+    const soulResult = hasProjectSoulMaterial(existingRoot)
+      ? await resolveOptionalProjectSoul(options)
+      : await resolveRequiredProjectSoul(options, 'project init with missing Soul material')
     if (soulResult.code !== undefined)
       return soulResult.code
 
@@ -440,6 +445,12 @@ function isGitRepo(cwd: string): boolean {
       return false
     cur = parent
   }
+}
+
+function hasProjectSoulMaterial(projectRoot: string): boolean {
+  const aiworker = path.join(projectRoot, '.aiworker')
+  return existsSync(path.join(aiworker, 'AGENT.md'))
+    && existsSync(path.join(aiworker, 'SOUL.md'))
 }
 
 function buildProjectPreflight(

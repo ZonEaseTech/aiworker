@@ -1,4 +1,4 @@
-import { statSync } from 'node:fs'
+import { realpathSync, statSync } from 'node:fs'
 import { access, mkdir, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
@@ -54,7 +54,11 @@ export interface ResolveScopeOptions {
 }
 
 function expandTilde(p: string): string {
-  return p.startsWith('~') ? path.join(homedir(), p.slice(1)) : p
+  return p.startsWith('~') ? path.join(currentHomeDir(), p.slice(1)) : p
+}
+
+function currentHomeDir(): string {
+  return process.env.HOME && process.env.HOME.length > 0 ? process.env.HOME : homedir()
 }
 
 async function isDir(p: string): Promise<boolean> {
@@ -76,6 +80,38 @@ function isDirSync(p: string): boolean {
   }
 }
 
+function isFileSync(p: string): boolean {
+  try {
+    return statSync(p).isFile()
+  }
+  catch {
+    return false
+  }
+}
+
+function realPathOrResolve(p: string): string {
+  try {
+    return realpathSync(p)
+  }
+  catch {
+    return path.resolve(p)
+  }
+}
+
+function isSamePath(left: string, right: string): boolean {
+  return realPathOrResolve(left) === realPathOrResolve(right)
+}
+
+function hasProjectScopeMarkers(projectRoot: string): boolean {
+  const aiworkerDir = path.join(projectRoot, DEFAULT_HOME_DIR)
+  return isFileSync(path.join(aiworkerDir, 'AGENT.md'))
+    && isFileSync(path.join(aiworkerDir, 'SOUL.md'))
+}
+
+function isUnmarkedHomeAiworkerDir(projectRoot: string): boolean {
+  return isSamePath(projectRoot, currentHomeDir()) && !hasProjectScopeMarkers(projectRoot)
+}
+
 /**
  * Walk from `cwd` upward looking for the closest ancestor that contains a
  * `.aiworker/` directory. Stops at:
@@ -94,8 +130,11 @@ export function resolveProjectRoot(cwd?: string): string | null {
 
   while (true) {
     const aiworkerDir = path.join(cur, DEFAULT_HOME_DIR)
-    if (isDirSync(aiworkerDir))
+    if (isDirSync(aiworkerDir)) {
+      if (isUnmarkedHomeAiworkerDir(cur))
+        return null
       return cur
+    }
 
     // git boundary: stop if this dir has .git but no .aiworker (already
     // checked above), so we never escape into a parent repo / sibling project.
@@ -152,7 +191,7 @@ export function resolveAiworkerScope(opts: ResolveScopeOptions = {}): AiworkerSc
 
   return {
     scope: 'user',
-    home: path.resolve(homedir(), DEFAULT_HOME_DIR),
+    home: path.resolve(currentHomeDir(), DEFAULT_HOME_DIR),
     source: 'user-default',
   }
 }
