@@ -150,10 +150,12 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REL-008 发布 aiworker CLI 0.4.11**](REL-008.md) `P1`
 - [x] [**FEAT-045 Worker quick start `aiworker up`**](FEAT-045.md) `P1`
 - [x] [**REL-009 发布 aiworker CLI 0.5.0**](REL-009.md) `P1`
-- [ ] [**BUG-042 `aiworker up --dry-run` prints `NaN` for omitted port**](BUG-042.md) `P3`
+- [x] [**BUG-042 `aiworker up --dry-run` prints `NaN` for omitted port**](BUG-042.md) `P3`
+- [x] [**QA-002 Run local Codex-backed worker validation campaign**](QA-002.md) `P1`
 - [x] [**BUG-043 Worker Admin chat event stream times out before slow replies**](BUG-043.md) `P1`
 - [x] [**BUG-044 Worker Admin chat does not continue the selected conversation**](BUG-044.md) `P1`
 - [x] [**BUG-045 Orchestrator task rows stay queued after successful worker execution**](BUG-045.md) `P1`
 - [x] [**BUG-046 Executor tiny probe can hang beyond the configured timeout**](BUG-046.md) `P2`
 - [x] [**BUG-047 Worker Admin no-token state renders raw auth errors**](BUG-047.md) `P2`
+- [ ] [**TODO-007 Polish Worker Admin validation UX from local worker testing**](TODO-007.md) `P3`
 - [x] [**BUG-048 `aiworker init` skips Soul prompt when legacy home looks like project scope**](BUG-048.md) `P1`

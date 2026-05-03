@@ -94,6 +94,29 @@ describe('runUp', () => {
     expect(served).toBe(false)
     expect(output.lines.join('')).toContain('brand-new-project')
     expect(output.lines.join('')).toContain('dry-run: server not started')
+    expect(output.lines.join('')).toContain('port         : (env/default)')
+    expect(output.lines.join('')).not.toContain('NaN')
+  })
+
+  it('prints explicit dry-run port without starting serve', async () => {
+    const output = collectOutput()
+    let served = false
+
+    const code = await runUp({ dryRun: true, port: 9123 }, {
+      inspectExecutorReadiness: async () => ({ ok: true, report: passExecutorReport }),
+      resolveScope: () => projectScope,
+      runInit: async () => 0,
+      runServe: async () => {
+        served = true
+      },
+      validateCapabilityProject: async () => passCapabilityReport,
+      write: output.write,
+    })
+
+    expect(code).toBe(0)
+    expect(served).toBe(false)
+    expect(output.lines.join('')).toContain('dry-run: server not started')
+    expect(output.lines.join('')).toContain('port         : 9123')
   })
 
   it('does not consume --soul for an already initialized project', async () => {

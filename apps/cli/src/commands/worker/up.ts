@@ -205,11 +205,15 @@ function printServeStage(write: (text: string) => void, options: UpOptions, dryR
   }
 
   write('  dry-run: server not started and browser not opened\n')
-  write(`  port         : ${options.port ?? '(env/default)'}\n`)
+  write(`  port         : ${formatOptionalPort(options.port)}\n`)
   write(`  host         : ${options.host ?? '(env/default)'}\n`)
   write(`  gateway      : ${options.gateway ?? '(none/env)'}\n`)
   write(`  serve web    : ${options.serveWeb === false ? 'false' : 'true/env'}\n`)
   write(`  open browser : ${options.open === undefined ? '(tty/default)' : String(options.open)}\n`)
+}
+
+function formatOptionalPort(port: number | undefined): string {
+  return port === undefined ? '(env/default)' : String(port)
 }
 
 function printCapabilityReport(write: (text: string) => void, report: CapabilityDoctorReport): void {

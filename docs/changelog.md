@@ -1,5 +1,19 @@
 # AIWorker Changelog
 
+## 2026-05-03 10:59 [BUG-P3] BUG-042 — `aiworker up --dry-run` omitted port output
+
+Fixed a dry-run display bug in `aiworker up`:
+
+- Omitted `--port` now prints `port         : (env/default)` instead of
+  `port         : NaN`.
+- Explicit dry-run port output is preserved.
+- Serve startup behavior is unchanged.
+
+Validation:
+
+- `bun test apps/cli/src/commands/worker/up.test.ts`
+- `bun run --filter '@zonease/aiworker-cli' typecheck`
+
 ## 2026-05-03 10:39 [BUG-P2] BUG-047 / PLAN-070 — Worker Admin no-token locked state
 
 Fixed the Worker Admin no-token experience:
@@ -143,6 +157,21 @@ Validation:
 - `bun run --filter '@zonease/aiworker-api' test`
 - `bun run --filter '@zonease/aiworker-web' test`
 - `git diff --check`
+
+## 2026-05-02 20:39 [qa] QA-002 — local Codex-backed worker validation follow-ups
+
+Recorded a local real-machine worker validation pass without implementing
+source fixes:
+
+- Confirmed project-scoped Worker CLI init/doctor, Codex executor doctor, and
+  CLI chat continuity with a stable `--chat-id`.
+- Smoked authenticated Worker Admin pages for Chat, Config, Secrets, Test,
+  Cron, Approvals, and mobile layout; Secrets CRUD and disabled Cron
+  create/delete worked.
+- Recorded follow-up tasks: `BUG-043` for Worker Admin Chat SSE timeout,
+  `BUG-044` for Web chat continuation, `BUG-045` for stale task lifecycle
+  rows, `BUG-046` for tiny probe timeout handling, `BUG-047` for no-token admin
+  UX, and `TODO-007` for lower-priority admin polish.
 
 ## 2026-05-02 19:51 [release] REL-009 / PLAN-064 — CLI 0.5.0 published and test fleet upgraded
 
