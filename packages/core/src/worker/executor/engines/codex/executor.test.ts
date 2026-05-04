@@ -166,8 +166,11 @@ describe('CodexExecutor — smoke over stub app-server', () => {
     expect(trace.some(msg => msg.method === 'thread/start')).toBe(false)
     const turnStart = trace.find(msg => msg.method === 'turn/start')
     expect((turnStart?.params as { threadId?: string } | undefined)?.threadId).toBe('thr_existing')
+    // FEAT-054 / BUG-056: resumed turns still receive the freshly composed
+    // Project Brain transcript so SOUL.md / MEMORY.md updates between turns
+    // reach the LLM instead of being shadowed by the thread's stale system.
     const prompt = (turnStart?.params as { input?: Array<{ text?: string }> } | undefined)?.input?.[0]?.text
-    expect(prompt).toBe('continue native thread')
+    expect(prompt).toBe('<User>\ncontinue native thread\n</User>')
     expect(events).toContainEqual({
       type: 'engine_binding',
       engine: 'codex',

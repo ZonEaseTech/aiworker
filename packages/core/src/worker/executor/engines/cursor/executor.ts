@@ -14,6 +14,7 @@ import path from 'node:path'
 import process from 'node:process'
 
 import { buildSafeChildEnv } from '../../safe-env'
+import { extractRunMessages, renderHistoryAsUserPreamble } from '../common/run-input'
 import { extractSessionId, normalizeCursorLine, parseCursorLine, splitNdjson } from './normalize'
 
 /** Hard cap on one Cursor turn. Overridable via options. */
@@ -86,8 +87,8 @@ export class CursorExecutor implements ExecutorProvider {
   }
 
   private async* runIterable(input: AgentRunInput): AsyncGenerator<AgentEvent> {
-    const latestUser = lastUserMessage(input.messages)
-    if (!latestUser) {
+    const { systemText, history, latestUser } = extractRunMessages(input.messages)
+    if (latestUser === null) {
       yield { type: 'error', error: 'Cursor executor requires a user message' }
       yield { type: 'finish', reason: 'error' }
       return
@@ -114,10 +115,15 @@ export class CursorExecutor implements ExecutorProvider {
       env: buildSafeChildEnv(this.options.env),
     })
 
+    // FEAT-054 / BUG-056: cursor-agent has no system-prompt flag in -p mode,
+    // so the freshly-composed Project Brain (system text) and recent
+    // conversation preamble are folded into the stdin prompt every turn.
+    const promptText = composeCursorPrompt({ systemText, history, latestUser })
+
     // Pipe the prompt through stdin then close it — Cursor's -p mode expects
     // the prompt on stdin and exits the turn when stdin drains.
     try {
-      child.stdin.write(latestUser)
+      child.stdin.write(promptText)
       child.stdin.end()
     }
     catch {
@@ -273,13 +279,24 @@ function safeEndStdin(child: ChildProcessWithoutNullStreams): void {
   }
 }
 
-function lastUserMessage(messages: AgentRunInput['messages']): string | null {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const m = messages[i]
-    if (m && m.role === 'user' && typeof m.content === 'string' && m.content.length > 0)
-      return m.content
-  }
-  return null
+/**
+ * Compose the single stdin prompt for Cursor's `-p` mode by stitching
+ * together the orchestrator-composed Project Brain (system text), the prior
+ * conversation preamble, and the user's new turn. Public for unit tests.
+ */
+export function composeCursorPrompt(input: {
+  systemText: string
+  history: ReturnType<typeof extractRunMessages>['history']
+  latestUser: string
+}): string {
+  const sections: string[] = []
+  if (input.systemText.length > 0)
+    sections.push(`[SYSTEM]\n${input.systemText}`)
+  const historyPreamble = renderHistoryAsUserPreamble(input.history)
+  if (historyPreamble.length > 0)
+    sections.push(historyPreamble)
+  sections.push(`New message:\n${input.latestUser}`)
+  return sections.join('\n\n')
 }
 
 function readSessionIdBinding(binding: AgentRunInput['engineBinding']): string | undefined {

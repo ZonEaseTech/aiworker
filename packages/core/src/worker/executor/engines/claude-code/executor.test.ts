@@ -1,5 +1,6 @@
 import type { AgentEvent } from '@zonease/aiworker-shared'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
+import { Buffer } from 'node:buffer'
 import { spawn } from 'node:child_process'
 import fs from 'node:fs/promises'
 import os from 'node:os'
@@ -87,7 +88,45 @@ describe('ClaudeCodeExecutor (stub CLI)', () => {
     })
   })
 
-  it('passes a stored native session id through --resume', async () => {
+  it('forwards system role text through --append-system-prompt and history into the user envelope', async () => {
+    let capturedArgs: string[] = []
+    let capturedStdin = ''
+    const executor = new ClaudeCodeExecutor({
+      resolveClaudeBinary: async () => STUB_PATH,
+      spawn: (_cmd, args, opts): ChildProcessWithoutNullStreams => {
+        capturedArgs = args
+        const child = spawn(STUB_PATH, [], { cwd: opts.cwd, env: opts.env, stdio: ['pipe', 'pipe', 'pipe'] }) as ChildProcessWithoutNullStreams
+        const origWrite = child.stdin.write.bind(child.stdin) as typeof child.stdin.write
+        child.stdin.write = ((chunk: string | Uint8Array, ...rest: unknown[]) => {
+          capturedStdin += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8')
+          return (origWrite as (...args: unknown[]) => boolean)(chunk, ...rest)
+        }) as typeof child.stdin.write
+        return child
+      },
+    })
+
+    await collect(executor.run({
+      messages: [
+        { role: 'system', content: 'You are worker dev-soul, voice = direct.' },
+        { role: 'user', content: 'first turn' },
+        { role: 'assistant', content: 'sure' },
+        { role: 'user', content: 'second turn' },
+      ],
+      workspacePath: workspace,
+    }))
+
+    const idx = capturedArgs.indexOf('--append-system-prompt')
+    expect(idx).toBeGreaterThanOrEqual(0)
+    expect(capturedArgs[idx + 1]).toBe('You are worker dev-soul, voice = direct.')
+    expect(capturedArgs).not.toContain('--resume')
+
+    expect(capturedStdin).toContain('Recent conversation:')
+    expect(capturedStdin).toContain('first turn')
+    expect(capturedStdin).toContain('second turn')
+    expect(capturedStdin).toContain('New message:')
+  })
+
+  it('ignores any inbound engineBinding (stateless per-turn invocation)', async () => {
     let capturedArgs: string[] = []
     const executor = new ClaudeCodeExecutor({
       resolveClaudeBinary: async () => STUB_PATH,
@@ -103,8 +142,8 @@ describe('ClaudeCodeExecutor (stub CLI)', () => {
       engineBinding: { sessionId: 'sess_existing' },
     }))
 
-    expect(capturedArgs).toContain('--resume')
-    expect(capturedArgs).toContain('sess_existing')
+    expect(capturedArgs).not.toContain('--resume')
+    expect(capturedArgs).not.toContain('sess_existing')
   })
 
   it('yields error when workspacePath is missing', async () => {
@@ -140,9 +179,20 @@ describe('ClaudeCodeExecutor (stub CLI)', () => {
 })
 
 describe('buildBaseArgs', () => {
-  it('appends --resume when a native session id is provided', () => {
-    const args = buildBaseArgs(undefined, undefined, 'sess_1')
-    expect(args).toContain('--resume')
-    expect(args).toContain('sess_1')
+  it('appends --append-system-prompt when system text is provided', () => {
+    const args = buildBaseArgs(undefined, undefined, 'persona text')
+    const idx = args.indexOf('--append-system-prompt')
+    expect(idx).toBeGreaterThanOrEqual(0)
+    expect(args[idx + 1]).toBe('persona text')
+  })
+
+  it('omits --append-system-prompt when system text is empty', () => {
+    const args = buildBaseArgs(undefined, undefined, '')
+    expect(args).not.toContain('--append-system-prompt')
+  })
+
+  it('never threads --resume in the stateless adapter path', () => {
+    const args = buildBaseArgs('sonnet', undefined, 'sys')
+    expect(args).not.toContain('--resume')
   })
 })

@@ -123,6 +123,46 @@ describe('AcpExecutor — smoke over stub CLI', () => {
       expect(last.reason).toBe('error')
   })
 
+  it('forwards system prompt and history into session/prompt content blocks', async () => {
+    const traceFile = path.join(tmpWorkspace, 'acp-prompt-trace.jsonl')
+    const executor = new AcpExecutor({
+      agent: geminiAgent,
+      timeoutMs: 10_000,
+      resolveBinary: async () => STUB_PATH,
+      spawn: (_cmd, args, opts) =>
+        spawn('node', [STUB_PATH, ...args], {
+          cwd: opts.cwd,
+          env: { ...opts.env, ACP_PROMPT_TRACE_FILE: traceFile },
+          stdio: ['pipe', 'pipe', 'pipe'],
+        }),
+    })
+
+    await collect(executor.run({
+      messages: [
+        { role: 'system', content: 'You are HR-soul. Voice = empathetic.' },
+        { role: 'user', content: 'first turn' },
+        { role: 'assistant', content: 'noted' },
+        { role: 'user', content: 'second turn' },
+      ],
+      workspacePath: tmpWorkspace,
+    }))
+
+    const trace = await fs.readFile(traceFile, 'utf8')
+    const promptParams = trace
+      .trim()
+      .split('\n')
+      .map(line => JSON.parse(line) as { method: string, params: unknown })
+      .find(entry => entry.method === 'session/prompt')
+    expect(promptParams).toBeDefined()
+    const blocks = (promptParams?.params as { prompt?: Array<{ type: string, text: string }> } | undefined)?.prompt ?? []
+    const flattened = blocks.map(b => b.text).join('\n')
+    expect(flattened).toContain('[SYSTEM]')
+    expect(flattened).toContain('You are HR-soul. Voice = empathetic.')
+    expect(flattened).toContain('Recent conversation:')
+    expect(flattened).toContain('first turn')
+    expect(flattened).toContain('second turn')
+  }, 15_000)
+
   it('falls back to process.cwd() when no workspacePath is provided', async () => {
     // Just verifying we don't throw on missing workspace — the stub ignores cwd.
     const executor = makeExecutor(geminiAgent)

@@ -12,11 +12,24 @@
 // The transcript is identical for both gemini + qwen so the two adapters
 // share one fixture, discriminating purely via argv inspection if needed.
 
+import { appendFileSync } from 'node:fs'
 import process from 'node:process'
 import readline from 'node:readline'
 
 const argv = process.argv.slice(2)
 const wantsAcp = argv.includes('--acp') || argv.includes('--experimental-acp')
+const promptTraceFile = process.env.ACP_PROMPT_TRACE_FILE
+
+function tracePrompt(params) {
+  if (!promptTraceFile)
+    return
+  try {
+    appendFileSync(promptTraceFile, `${JSON.stringify({ method: 'session/prompt', params })}\n`)
+  }
+  catch {
+    // best-effort tracing — never break the stub on a write failure.
+  }
+}
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -126,6 +139,7 @@ rl.on('line', (line) => {
     return
   }
   if (msg.method === 'session/prompt') {
+    tracePrompt(msg.params)
     const sessionId = msg.params?.sessionId ?? 'sess_stub'
     void runPromptTurn(sessionId, msg.id)
     return

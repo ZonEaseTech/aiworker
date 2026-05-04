@@ -33,6 +33,23 @@ function jsonExecutor(response: string): ExecutorProvider {
   }
 }
 
+function sequencedExecutor(responses: string[]): { provider: ExecutorProvider, callCount: () => number } {
+  let calls = 0
+  const provider: ExecutorProvider = {
+    name: 'sequenced',
+    health: async () => ({ name: 'sequenced', status: 'healthy', lastChecked: 'x' }),
+    listTools: async () => [],
+    run: (_input: AgentRunInput) => {
+      const response = responses[calls] ?? responses.at(-1) ?? ''
+      calls += 1
+      return (async function* () {
+        yield { type: 'assistant_message_delta' as const, delta: response }
+      })()
+    },
+  }
+  return { provider, callCount: () => calls }
+}
+
 describe('intent classifier', () => {
   it('classifies code work with workspace and skill context', () => {
     const decision = classifyIntentHeuristic(context(), classification('请修复这个 bug，跑测试并提交'))
@@ -74,18 +91,47 @@ describe('intent classifier', () => {
     expect(decision.source).toBe('intent-llm')
   })
 
-  it('falls back to heuristic when LLM output is invalid', async () => {
+  it('retries once with a stricter prompt before falling back', async () => {
+    const { provider, callCount } = sequencedExecutor([
+      'React 19 introduces useTransition...', // first attempt prose
+      JSON.stringify({
+        intent: 'research',
+        risk: 'low',
+        requiredContext: ['recent_history', 'memory_search'],
+        qualityProfile: 'default',
+        confidence: 0.7,
+        reason: 'recovered',
+      }),
+    ])
     const decision = await classifyIntentWithExecutor({
-      classification: classification('制定一个方案'),
+      classification: classification('React 19 useTransition 行为'),
       context: context(),
-      executor: jsonExecutor('not json'),
+      executor: provider,
       model: undefined,
       notifyActivity: () => {},
       signal: new AbortController().signal,
       workspacePath: undefined,
     })
+    expect(callCount()).toBe(2)
+    expect(decision.source).toBe('intent-llm')
+    expect(decision.intent).toBe('research')
+  })
+
+  it('falls back to heuristic with llm-retry-exhausted reason when both attempts fail', async () => {
+    const { provider, callCount } = sequencedExecutor(['not json', 'still not json'])
+    const decision = await classifyIntentWithExecutor({
+      classification: classification('制定一个方案'),
+      context: context(),
+      executor: provider,
+      model: undefined,
+      notifyActivity: () => {},
+      signal: new AbortController().signal,
+      workspacePath: undefined,
+    })
+    expect(callCount()).toBe(2)
     expect(decision.intent).toBe('planning')
     expect(decision.source).toBe('intent-fallback')
     expect(decision.confidence).toBeLessThanOrEqual(0.4)
+    expect(decision.reason).toContain('llm-retry-exhausted')
   })
 })

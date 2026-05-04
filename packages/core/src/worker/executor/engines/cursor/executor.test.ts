@@ -6,7 +6,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
-import { buildArgs, CursorExecutor } from './executor'
+import { buildArgs, composeCursorPrompt, CursorExecutor } from './executor'
 
 const STUB_PATH = path.resolve(
   import.meta.dirname,
@@ -150,5 +150,35 @@ describe('buildArgs', () => {
     const args = buildArgs({ extraArgs: ['--foo', 'bar'] })
     expect(args.at(-2)).toBe('--foo')
     expect(args.at(-1)).toBe('bar')
+  })
+})
+
+describe('composeCursorPrompt', () => {
+  it('folds system, history preamble, and the latest user turn into stdin', () => {
+    const text = composeCursorPrompt({
+      systemText: 'You are designer-soul.',
+      history: [
+        { role: 'user', content: 'first' },
+        { role: 'assistant', content: 'reply' },
+      ],
+      latestUser: 'second',
+    })
+    expect(text).toContain('[SYSTEM]')
+    expect(text).toContain('You are designer-soul.')
+    expect(text).toContain('Recent conversation:')
+    expect(text).toContain('- user: first')
+    expect(text).toContain('- assistant: reply')
+    expect(text).toContain('New message:\nsecond')
+  })
+
+  it('omits empty system / empty history sections', () => {
+    const text = composeCursorPrompt({
+      systemText: '',
+      history: [],
+      latestUser: 'hello',
+    })
+    expect(text).not.toContain('[SYSTEM]')
+    expect(text).not.toContain('Recent conversation:')
+    expect(text).toContain('New message:\nhello')
   })
 })

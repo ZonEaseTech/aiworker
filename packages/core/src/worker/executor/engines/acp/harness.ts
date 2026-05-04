@@ -23,6 +23,7 @@ import path from 'node:path'
 import process from 'node:process'
 
 import { buildSafeChildEnv } from '../../safe-env'
+import { extractRunMessages, renderHistoryAsUserPreamble } from '../common/run-input'
 import { mapStopReason, normalizeSessionUpdate } from './normalize'
 import { JsonRpcPeer, splitNdjson } from './protocol'
 
@@ -129,8 +130,8 @@ export class AcpExecutor implements ExecutorProvider {
   }
 
   private async* runIterable(input: AgentRunInput): AsyncGenerator<AgentEvent> {
-    const latestUser = lastUserMessage(input.messages)
-    if (!latestUser) {
+    const { systemText, history, latestUser } = extractRunMessages(input.messages)
+    if (latestUser === null) {
       yield { type: 'error', error: `${this.name} executor requires a user message` }
       yield { type: 'finish', reason: 'error' }
       return
@@ -232,9 +233,22 @@ export class AcpExecutor implements ExecutorProvider {
         return
       }
 
+      // FEAT-054 / BUG-056: ACP `session/prompt` accepts a content-block
+      // array, so the freshly-composed Project Brain (system text) and the
+      // recent conversation preamble are sent as their own blocks every turn.
+      // Without these blocks the agent only ever sees the latest user message
+      // and loses Soul / persona / memory grounding.
+      const promptBlocks: Array<{ type: 'text', text: string }> = []
+      if (systemText.length > 0)
+        promptBlocks.push({ type: 'text', text: `[SYSTEM]\n${systemText}` })
+      const historyPreamble = renderHistoryAsUserPreamble(history)
+      if (historyPreamble.length > 0)
+        promptBlocks.push({ type: 'text', text: historyPreamble })
+      promptBlocks.push({ type: 'text', text: latestUser })
+
       const promptPromise = peer.request<AcpPromptResult>('session/prompt', {
         sessionId,
-        prompt: [{ type: 'text', text: latestUser }],
+        prompt: promptBlocks,
       })
 
       // Close the queue as soon as the prompt request resolves / rejects so
@@ -430,13 +444,4 @@ function safeEndStdin(child: ChildProcessWithoutNullStreams): void {
   catch {
     // already closed
   }
-}
-
-function lastUserMessage(messages: AgentRunInput['messages']): string | null {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const m = messages[i]
-    if (m && m.role === 'user' && typeof m.content === 'string' && m.content.length > 0)
-      return m.content
-  }
-  return null
 }

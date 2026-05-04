@@ -208,7 +208,12 @@ export class CodexExecutor implements ExecutorProvider {
         return
       }
 
-      let prompt = thread.resumed ? latestUser : fullPrompt
+      // FEAT-054 / BUG-056: every turn re-renders system + history + latest
+      // user via `renderCodexPrompt`. Resumed Codex threads still receive the
+      // freshly-composed Project Brain so SOUL.md / MEMORY.md edits between
+      // turns are honoured instead of being shadowed by the thread's stale
+      // system state.
+      const prompt = fullPrompt
       if (thread.protocol === 'legacy') {
         const turnPromise = peer.request<CodexNewTurnResult>('newTurn', {
           threadId: thread.threadId,
@@ -228,7 +233,6 @@ export class CodexExecutor implements ExecutorProvider {
             throw err
           yield { type: 'engine_binding', engine: CODEX_ENGINE, binding: null }
           thread = await this.startThread(peer, model, workspacePath)
-          prompt = fullPrompt
           await this.startCurrentTurn(peer, thread.threadId, prompt)
         }
         yield { type: 'engine_binding', engine: CODEX_ENGINE, binding: { ...codexBindingFromThread(thread) } }

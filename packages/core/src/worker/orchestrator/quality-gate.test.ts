@@ -24,6 +24,23 @@ function executor(response: string): ExecutorProvider {
   }
 }
 
+function sequencedExecutor(responses: string[]): { provider: ExecutorProvider, callCount: () => number } {
+  let calls = 0
+  const provider: ExecutorProvider = {
+    name: 'sequenced-quality',
+    health: async () => ({ name: 'sequenced-quality', status: 'healthy', lastChecked: 'x' }),
+    listTools: async () => [],
+    run: (_input: AgentRunInput) => {
+      const response = responses[calls] ?? responses.at(-1) ?? ''
+      calls += 1
+      return (async function* () {
+        yield { type: 'assistant_message_delta' as const, delta: response }
+      })()
+    },
+  }
+  return { provider, callCount: () => calls }
+}
+
 const intentDecision = buildIntentDecision(context(), {
   confidence: 0.8,
   intent: 'answer',
@@ -86,6 +103,62 @@ describe('quality gate', () => {
     expect(gate.status).toBe('failed')
     expect(gate.action).toBe('repair')
     expect(gate.missing.length).toBeGreaterThan(0)
+  })
+
+  it('retries once with a stricter prompt when LLM emits prose', async () => {
+    const { provider, callCount } = sequencedExecutor([
+      'The answer looks fine to me.',
+      JSON.stringify({
+        score: 7,
+        threshold: 5,
+        dimensions: { completeness: 7 },
+        missing: [],
+        suggestions: [],
+        action: 'pass',
+        reason: 'recovered',
+      }),
+    ])
+    const gate = await evaluateQualityGate({
+      assistantText: 'detailed answer',
+      capabilityDecision,
+      context: context(),
+      evaluator: 'llm',
+      executor: provider,
+      intentDecision,
+      mode: 'observe',
+      model: undefined,
+      notifyActivity: () => {},
+      requestText: 'question',
+      signal: new AbortController().signal,
+      threshold: undefined,
+      workspacePath: undefined,
+    })
+    expect(callCount()).toBe(2)
+    expect(gate.evaluator).toBe('llm')
+    expect(gate.score).toBe(7)
+    expect(gate.action).toBe('pass')
+  })
+
+  it('falls back to heuristic with llm-retry-exhausted when both attempts fail', async () => {
+    const { provider, callCount } = sequencedExecutor(['not json', 'still prose'])
+    const gate = await evaluateQualityGate({
+      assistantText: 'detailed answer',
+      capabilityDecision,
+      context: context(),
+      evaluator: 'llm',
+      executor: provider,
+      intentDecision,
+      mode: 'observe',
+      model: undefined,
+      notifyActivity: () => {},
+      requestText: 'question',
+      signal: new AbortController().signal,
+      threshold: undefined,
+      workspacePath: undefined,
+    })
+    expect(callCount()).toBe(2)
+    expect(gate.evaluator).toBe('heuristic')
+    expect(gate.reason).toContain('llm-retry-exhausted')
   })
 
   it('accepts strict JSON from the LLM evaluator', async () => {

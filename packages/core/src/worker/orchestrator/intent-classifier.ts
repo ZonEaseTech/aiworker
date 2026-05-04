@@ -52,10 +52,57 @@ export async function classifyIntentWithExecutor(input: {
   classification: IntentClassificationInput
   notifyActivity: () => void
 }): Promise<IntentDecisionPayload> {
+  // BUG-057: when the LLM emits non-JSON, retry once with a stricter
+  // re-prompt before falling back to the heuristic classifier. Two attempts
+  // total — the second appends an instruction to output JSON only.
+  const firstAttempt = await runIntentLlm(input, buildIntentPrompt(input.classification))
+  if (firstAttempt.kind === 'ok')
+    return firstAttempt.decision
+
+  const stricter = [
+    ...buildIntentPrompt(input.classification),
+    {
+      role: 'user' as const,
+      content: [
+        'Previous output was not valid JSON. Output the JSON object only,',
+        'no markdown, no surrounding prose, no code fence.',
+      ].join('\n'),
+    },
+  ]
+  const secondAttempt = await runIntentLlm(input, stricter)
+  if (secondAttempt.kind === 'ok')
+    return secondAttempt.decision
+
+  const fallback = classifyIntentHeuristic(input.context, input.classification)
+  const lastError = secondAttempt.error ?? firstAttempt.error ?? 'unknown error'
+  return buildIntentDecision(input.context, {
+    ...fallback,
+    confidence: Math.min(fallback.confidence, 0.4),
+    reason: `llm-retry-exhausted: ${lastError.slice(0, 120)}`,
+    source: 'intent-fallback',
+  })
+}
+
+type IntentLlmAttemptResult
+  = | { kind: 'ok', decision: IntentDecisionPayload }
+    | { kind: 'error', error: string }
+
+async function runIntentLlm(
+  input: {
+    context: DecisionContext
+    executor: ExecutorProvider
+    model: string | undefined
+    signal: AbortSignal
+    workspacePath: string | undefined
+    classification: IntentClassificationInput
+    notifyActivity: () => void
+  },
+  messages: ChatMessage[],
+): Promise<IntentLlmAttemptResult> {
   let text = ''
   try {
     for await (const event of input.executor.run({
-      messages: buildIntentPrompt(input.classification),
+      messages,
       ...(input.model ? { model: input.model } : {}),
       ...(input.workspacePath ? { workspacePath: input.workspacePath } : {}),
       signal: input.signal,
@@ -67,16 +114,11 @@ export async function classifyIntentWithExecutor(input: {
       else if (event.type === 'error')
         throw new Error(event.error)
     }
-    return normalizeIntentDecision(input.context, input.classification, JSON.parse(text.trim()))
+    const decision = normalizeIntentDecision(input.context, input.classification, JSON.parse(text.trim()))
+    return { kind: 'ok', decision }
   }
   catch (err) {
-    const fallback = classifyIntentHeuristic(input.context, input.classification)
-    return buildIntentDecision(input.context, {
-      ...fallback,
-      confidence: Math.min(fallback.confidence, 0.4),
-      reason: `llm-intent-classifier-error: ${String(err).slice(0, 120)}`,
-      source: 'intent-fallback',
-    })
+    return { kind: 'error', error: String(err) }
   }
 }
 

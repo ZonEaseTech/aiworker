@@ -16,6 +16,7 @@ import path from 'node:path'
 import process from 'node:process'
 
 import { buildSafeChildEnv } from '../../safe-env'
+import { extractRunMessages, renderHistoryAsUserPreamble } from '../common/run-input'
 import { normalizeLine, parseLine, splitNdjson } from './normalize'
 import { autoApprovePolicy, ControlProtocolPeer } from './protocol'
 
@@ -92,8 +93,8 @@ export class ClaudeCodeExecutor implements ExecutorProvider {
   }
 
   private async* runIterable(input: AgentRunInput): AsyncGenerator<AgentEvent> {
-    const latestUser = lastUserMessage(input.messages)
-    if (!latestUser) {
+    const { systemText, history, latestUser } = extractRunMessages(input.messages)
+    if (latestUser === null) {
       yield { type: 'error', error: 'Claude Code executor requires a user message' }
       yield { type: 'finish', reason: 'error' }
       return
@@ -106,15 +107,17 @@ export class ClaudeCodeExecutor implements ExecutorProvider {
       return
     }
 
+    // FEAT-054 / BUG-056: the adapter is stateless per turn — `--resume` is
+    // not threaded through, so any inbound `engineBinding` is ignored for
+    // resume purposes. The orchestrator-stored sessionId is overwritten by
+    // the next `engine_binding` event emitted from the new spawn's stdout.
+
     const spawnFn = this.options.spawn ?? (spawn as unknown as NonNullable<ClaudeCodeExecutorOptions['spawn']>)
-    const resumeSessionId = readSessionIdBinding(input.engineBinding)
-    if (input.engineBinding !== undefined && resumeSessionId === undefined)
-      yield { type: 'engine_binding', engine: CLAUDE_CODE_ENGINE, binding: null }
 
     let resolvedCmd: string
     let resolvedArgs: string[]
     try {
-      ({ cmd: resolvedCmd, args: resolvedArgs } = await this.resolveCommand(input.model, resumeSessionId))
+      ({ cmd: resolvedCmd, args: resolvedArgs } = await this.resolveCommand(input.model, systemText))
     }
     catch (err) {
       yield { type: 'error', error: err instanceof Error ? err.message : String(err) }
@@ -140,7 +143,11 @@ export class ClaudeCodeExecutor implements ExecutorProvider {
       },
     })
 
-    peer.sendUserMessage(latestUser)
+    const historyPreamble = renderHistoryAsUserPreamble(history)
+    const userText = historyPreamble.length > 0
+      ? `${historyPreamble}\n\nNew message:\n${latestUser}`
+      : latestUser
+    peer.sendUserMessage(userText)
 
     const timeoutMs = this.options.timeoutMs ?? DEFAULT_TIMEOUT_MS
     const timeoutHandle = setTimeout(() => safeKill(child, 'SIGKILL'), timeoutMs)
@@ -187,8 +194,6 @@ export class ClaudeCodeExecutor implements ExecutorProvider {
           }
           const events = filterReplayedFinalText(parsed, normalizeLine(parsed), textReplayState)
           for (const event of events) {
-            if (event.type === 'error' && resumeSessionId !== undefined)
-              yield { type: 'engine_binding', engine: CLAUDE_CODE_ENGINE, binding: null }
             yield event
             if (event.type === 'finish')
               sawFinish = true
@@ -212,8 +217,6 @@ export class ClaudeCodeExecutor implements ExecutorProvider {
     const exitCode = await exitPromise
 
     if (!sawFinish) {
-      if (resumeSessionId !== undefined)
-        yield { type: 'engine_binding', engine: CLAUDE_CODE_ENGINE, binding: null }
       if (childError) {
         yield { type: 'error', error: childError }
       }
@@ -224,8 +227,8 @@ export class ClaudeCodeExecutor implements ExecutorProvider {
     }
   }
 
-  private async resolveCommand(runModel: string | undefined, resumeSessionId: string | undefined): Promise<{ cmd: string, args: string[] }> {
-    const baseArgs = buildBaseArgs(runModel ?? this.options.model, this.options.extraArgs, resumeSessionId)
+  private async resolveCommand(runModel: string | undefined, systemPromptText: string): Promise<{ cmd: string, args: string[] }> {
+    const baseArgs = buildBaseArgs(runModel ?? this.options.model, this.options.extraArgs, systemPromptText)
 
     const resolver = this.options.resolveClaudeBinary ?? resolveClaudeOnPath
     const direct = await resolver()
@@ -240,7 +243,16 @@ export class ClaudeCodeExecutor implements ExecutorProvider {
   }
 }
 
-export function buildBaseArgs(model: string | undefined, extra: string[] | undefined, resumeSessionId?: string): string[] {
+/**
+ * Build the Claude Code CLI argument vector. When `systemPromptText` is
+ * non-empty the orchestrator-composed Project Brain (SOUL / AGENT / MEMORY /
+ * ROLLUP / persona / scope manifest) is forwarded via `--append-system-prompt`
+ * so each turn re-injects the latest brain. The adapter is stateless per turn
+ * — `--resume` is intentionally not threaded through; the orchestrator owns
+ * conversation history through `AgentRunInput.messages` and re-renders it
+ * each call.
+ */
+export function buildBaseArgs(model: string | undefined, extra: string[] | undefined, systemPromptText: string): string[] {
   const args = [
     '-p',
     '--verbose',
@@ -250,8 +262,8 @@ export function buildBaseArgs(model: string | undefined, extra: string[] | undef
     '--replay-user-messages',
     '--dangerously-skip-permissions',
   ]
-  if (resumeSessionId && resumeSessionId.length > 0)
-    args.push('--resume', resumeSessionId)
+  if (systemPromptText.length > 0)
+    args.push('--append-system-prompt', systemPromptText)
   if (model && model.length > 0)
     args.push('--model', model)
   if (extra && extra.length > 0)
@@ -302,21 +314,6 @@ function safeEndStdin(child: ChildProcessWithoutNullStreams): void {
   catch {
     // already closed
   }
-}
-
-function lastUserMessage(messages: AgentRunInput['messages']): string | null {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const m = messages[i]
-    if (m && m.role === 'user' && typeof m.content === 'string' && m.content.length > 0)
-      return m.content
-  }
-  return null
-}
-
-function readSessionIdBinding(binding: AgentRunInput['engineBinding']): string | undefined {
-  if (!binding || typeof binding.sessionId !== 'string' || binding.sessionId.length === 0)
-    return undefined
-  return binding.sessionId
 }
 
 function readClaudeSessionId(line: unknown): string {

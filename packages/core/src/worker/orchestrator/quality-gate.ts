@@ -23,12 +23,41 @@ export interface QualityGateInput {
 export async function evaluateQualityGate(input: QualityGateInput): Promise<QualityGatePayload> {
   const evaluator = input.evaluator ?? 'heuristic'
   if (evaluator === 'llm') {
-    try {
-      return await evaluateWithExecutor(input)
-    }
-    catch {
-      return evaluateHeuristic({ ...input, evaluator: 'heuristic' })
-    }
+    // BUG-057: same retry pattern as the intent classifier — the LLM may
+    // emit prose on the first try, so retry once with a stricter re-prompt
+    // before falling back to the heuristic gate.
+    const firstAttempt = await runQualityGateLlm(input, buildGatePrompt(input))
+    if (firstAttempt.kind === 'ok')
+      return firstAttempt.payload
+    const stricter = [
+      ...buildGatePrompt(input),
+      {
+        role: 'user' as const,
+        content: [
+          'Previous output was not valid JSON. Output the JSON object only,',
+          'no markdown, no surrounding prose, no code fence.',
+        ].join('\n'),
+      },
+    ]
+    const secondAttempt = await runQualityGateLlm(input, stricter)
+    if (secondAttempt.kind === 'ok')
+      return secondAttempt.payload
+
+    const fallback = evaluateHeuristic({ ...input, evaluator: 'heuristic' })
+    const lastError = secondAttempt.error ?? firstAttempt.error ?? 'unknown error'
+    return buildQualityGatePayload(input.context, {
+      action: fallback.action,
+      dimensions: fallback.dimensions,
+      evaluator: 'heuristic',
+      finalAnswerLength: fallback.finalAnswerLength,
+      missing: fallback.missing,
+      gateMode: fallback.gateMode,
+      reason: `llm-retry-exhausted: ${lastError.slice(0, 120)}`,
+      score: fallback.score,
+      status: fallback.status,
+      suggestions: fallback.suggestions,
+      threshold: fallback.threshold,
+    })
   }
   return evaluateHeuristic({ ...input, evaluator: 'heuristic' })
 }
@@ -107,40 +136,55 @@ function evaluateHeuristic(input: QualityGateInput): QualityGatePayload {
   })
 }
 
-async function evaluateWithExecutor(input: QualityGateInput): Promise<QualityGatePayload> {
+type QualityGateLlmAttemptResult
+  = | { kind: 'ok', payload: QualityGatePayload }
+    | { kind: 'error', error: string }
+
+async function runQualityGateLlm(
+  input: QualityGateInput,
+  messages: ChatMessage[],
+): Promise<QualityGateLlmAttemptResult> {
   let text = ''
-  for await (const event of input.executor.run({
-    messages: buildGatePrompt(input),
-    ...(input.model ? { model: input.model } : {}),
-    ...(input.workspacePath ? { workspacePath: input.workspacePath } : {}),
-    signal: input.signal,
-    temperature: 0,
-  })) {
-    input.notifyActivity()
-    if (event.type === 'assistant_message_delta')
-      text += event.delta
-    else if (event.type === 'error')
-      throw new Error(event.error)
+  try {
+    for await (const event of input.executor.run({
+      messages,
+      ...(input.model ? { model: input.model } : {}),
+      ...(input.workspacePath ? { workspacePath: input.workspacePath } : {}),
+      signal: input.signal,
+      temperature: 0,
+    })) {
+      input.notifyActivity()
+      if (event.type === 'assistant_message_delta')
+        text += event.delta
+      else if (event.type === 'error')
+        throw new Error(event.error)
+    }
+    const parsed = JSON.parse(text.trim()) as unknown
+    const data = recordValue(parsed)
+    if (!data)
+      throw new Error('quality gate returned non-object JSON')
+    const threshold = numeric(data.threshold) ?? input.threshold ?? defaultThreshold(input.intentDecision.qualityProfile)
+    const score = Math.max(0, Math.min(10, numeric(data.score) ?? 0))
+    return {
+      kind: 'ok',
+      payload: buildQualityGatePayload(input.context, {
+        action: oneOf(data.action, ['pass', 'repair', 'warn', 'block'] as const) ?? actionFor(score, threshold, input.mode ?? 'observe'),
+        dimensions: recordValue(data.dimensions) ?? {},
+        evaluator: 'llm',
+        finalAnswerLength: input.assistantText.length,
+        missing: stringArray(data.missing),
+        gateMode: input.mode ?? 'observe',
+        reason: typeof data.reason === 'string' ? data.reason.slice(0, 240) : 'llm quality gate',
+        score,
+        status: score >= threshold ? 'passed' : 'failed',
+        suggestions: stringArray(data.suggestions),
+        threshold,
+      }),
+    }
   }
-  const parsed = JSON.parse(text.trim()) as unknown
-  const data = recordValue(parsed)
-  if (!data)
-    throw new Error('quality gate returned non-object JSON')
-  const threshold = numeric(data.threshold) ?? input.threshold ?? defaultThreshold(input.intentDecision.qualityProfile)
-  const score = Math.max(0, Math.min(10, numeric(data.score) ?? 0))
-  return buildQualityGatePayload(input.context, {
-    action: oneOf(data.action, ['pass', 'repair', 'warn', 'block'] as const) ?? actionFor(score, threshold, input.mode ?? 'observe'),
-    dimensions: recordValue(data.dimensions) ?? {},
-    evaluator: 'llm',
-    finalAnswerLength: input.assistantText.length,
-    missing: stringArray(data.missing),
-    gateMode: input.mode ?? 'observe',
-    reason: typeof data.reason === 'string' ? data.reason.slice(0, 240) : 'llm quality gate',
-    score,
-    status: score >= threshold ? 'passed' : 'failed',
-    suggestions: stringArray(data.suggestions),
-    threshold,
-  })
+  catch (err) {
+    return { kind: 'error', error: String(err) }
+  }
 }
 
 function buildGatePrompt(input: QualityGateInput): ChatMessage[] {
