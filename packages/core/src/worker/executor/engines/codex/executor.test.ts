@@ -97,7 +97,12 @@ describe('CodexExecutor — smoke over stub app-server', () => {
     }))
 
     expect(events).toContainEqual({ type: 'thinking_delta', delta: 'Planning the edit...' })
-    expect(events).toContainEqual({ type: 'assistant_message_delta', delta: 'OK' })
+    const textDeltas = events
+      .filter(e => e.type === 'assistant_message_delta')
+      .map(e => e.delta)
+    expect(textDeltas).toEqual(['BUG', '053', '_MARK', 'ER', '_', '202', '605', '04'])
+    expect(textDeltas.join('')).toBe('BUG053_MARKER_20260504')
+    expect(textDeltas).not.toContain('BUG053_MARKER_20260504')
     expect(events).toContainEqual({
       type: 'token_usage',
       usage: { inputTokens: 12, outputTokens: 9 },
@@ -135,7 +140,11 @@ describe('CodexExecutor — smoke over stub app-server', () => {
     }))
 
     expect(events.some(e => e.type === 'error')).toBe(false)
-    expect(events).toContainEqual({ type: 'assistant_message_delta', delta: 'OK' })
+    const text = events
+      .filter(e => e.type === 'assistant_message_delta')
+      .map(e => e.delta)
+      .join('')
+    expect(text).toBe('BUG053_MARKER_20260504')
     expect(events.at(-1)).toEqual({ type: 'finish', reason: 'stop' })
   }, 15_000)
 

@@ -1,5 +1,37 @@
 # AIWorker Changelog
 
+## 2026-05-04 10:34 [completed] BUG-053 / PLAN-082 — Codex text replay evidence closeout
+
+关闭 Codex executor 疑似 final text replay 跟踪：
+
+- 本地真实 `codex-cli 0.128.0` + 临时 project-scope worker 的安全 marker
+  探针只观察到多段 append-only `orchestrator.text` delta，随后
+  `orchestrator.finished`，未出现完整最终文本重放。
+- 直接 `codex app-server` 探针确认当前协议路径为
+  `item/agentMessage/delta` → `thread/tokenUsage/updated` →
+  `turn/completed`，未观察到 legacy `codex/event/assistant_message` full-text
+  snapshot；fallback pin `@openai/codex@0.121.0` 也走 current protocol。
+- 保持 production Codex executor 行为不变；仅把 Codex current-protocol stub
+  改成多段 delta，并新增回归断言：delta 串联后只出现一次最终文本。
+
+验证：
+
+- `bun test packages/core/src/worker/executor/engines/codex/executor.test.ts`
+- `bun test packages/core/src/worker/executor/engines/codex/normalize.test.ts`
+- `bun run --filter '@zonease/aiworker-core' typecheck`
+
+## 2026-05-04 10:04 [progress] BUG-053 — Codex text replay follow-up
+
+新增 `BUG-053` 跟踪 Codex executor 下疑似同类文本重复问题：
+
+- 用户反馈在 Codex executor 下也遇到过类似现象：append-only text delta
+  已渲染后，后续疑似又 replay 最终完整文本，导致下游重复显示。
+- 该问题与 `BUG-052` 相关但不合并处理；`BUG-052` 已确认并修复 Claude Code
+  path，`BUG-053` 先要求捕获或排除 Codex 的真实 event shape。
+- 当前 Codex normalizer 对 legacy `codex/event/assistant_message` 支持
+  `delta` 与 full `text` fallback；current protocol `item/agentMessage/delta`
+  已作为 delta 映射，尚缺 streamed-delta-then-final-text 的聚焦覆盖。
+
 ## 2026-05-04 02:47 [completed] BUG-052 / PLAN-081 — Claude Code streamed text append-only
 
 修复 Claude Code executor 在 partial `stream_event` 文本之后又把完整

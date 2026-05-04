@@ -10,6 +10,7 @@
 // - codex/event/tool_result (paired with the tool_call ids)
 // - codex/event/token_usage
 // - codex/event/stop
+// - item/agentMessage/delta (current protocol, multiple append-only chunks)
 
 import fs from 'node:fs'
 import process from 'node:process'
@@ -21,6 +22,7 @@ const protocol = process.env.CODEX_STUB_PROTOCOL ?? 'legacy'
 const traceFile = process.env.CODEX_STUB_TRACE_FILE
 const failResume = process.env.CODEX_STUB_FAIL_RESUME === '1'
 const transientReconnect = process.env.CODEX_STUB_TRANSIENT_RECONNECT === '1'
+const currentAssistantDeltas = ['BUG', '053', '_MARK', 'ER', '_', '202', '605', '04']
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -87,12 +89,14 @@ function runCurrentTurn(threadId) {
     itemId: 'reason_stub',
     delta: 'Planning the edit...',
   })
-  emitNotification('item/agentMessage/delta', {
-    threadId,
-    turnId: 'turn_stub',
-    itemId: 'msg_stub',
-    delta: 'OK',
-  })
+  for (const delta of currentAssistantDeltas) {
+    emitNotification('item/agentMessage/delta', {
+      threadId,
+      turnId: 'turn_stub',
+      itemId: 'msg_stub',
+      delta,
+    })
+  }
   emitNotification('thread/tokenUsage/updated', {
     threadId,
     turnId: 'turn_stub',
