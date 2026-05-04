@@ -1,0 +1,1 @@
+./.agents/hooks/session-start.sh
