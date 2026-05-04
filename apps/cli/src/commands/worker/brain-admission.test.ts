@@ -35,6 +35,7 @@ const {
   runBrainAdmissionApply,
   runBrainAdmissionApprove,
   runBrainAdmissionList,
+  runBrainAdmissionPropose,
   runBrainAdmissionReject,
   runBrainAdmissionShow,
 } = await import('./brain')
@@ -312,5 +313,48 @@ describe('aiworker brain admission commands (PLAN-101)', () => {
     expect(await runBrainAdmissionApprove('', { decidedBy: 'op-1' })).toBe(2)
     expect(await runBrainAdmissionReject('', { decidedBy: 'op-1' })).toBe(2)
     expect(await runBrainAdmissionApply('', { decidedBy: 'op-1' })).toBe(2)
+  })
+
+  it('propose injects a fixture proposal end-to-end (TODO-009)', async () => {
+    const { result, output } = await captureConsole(() => runBrainAdmissionPropose({
+      id: 'p-propose-cli',
+      target: 'memories/qa-fixture',
+      summary: 'CLI debug propose smoke',
+      rollback: 'rm memories/qa-fixture.md',
+      soulId: 'developer',
+      kind: 'memory-add',
+      risk: 'low',
+      confidence: 0.5,
+    }))
+    expect(result).toBe(0)
+    const parsed = JSON.parse(output) as { proposal: { id: string, status: string }, debugWarning: string }
+    expect(parsed.proposal.id).toBe('p-propose-cli')
+    expect(parsed.proposal.status).toBe('pending')
+    expect(parsed.debugWarning).toContain('debug-only')
+    expect(service.requireById('p-propose-cli').summary).toBe('CLI debug propose smoke')
+  })
+
+  it('propose returns 2 when required flags are missing', async () => {
+    expect(await runBrainAdmissionPropose({})).toBe(2)
+    expect(await runBrainAdmissionPropose({ id: 'p' })).toBe(2)
+    expect(await runBrainAdmissionPropose({
+      id: 'p',
+      target: 't',
+      summary: 's',
+      rollback: 'r',
+      soulId: 'developer',
+      risk: 'urgent',
+    })).toBe(2)
+  })
+
+  it('propose surfaces zod errors as exit 1', async () => {
+    const exit = await runBrainAdmissionPropose({
+      id: 'BAD ID WITH SPACES',
+      target: 't',
+      summary: 's',
+      rollback: 'r',
+      soulId: 'developer',
+    })
+    expect(exit).toBe(1)
   })
 })

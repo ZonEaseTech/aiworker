@@ -134,6 +134,44 @@ describe('aiworker brain brief command (PLAN-102)', () => {
     expect(summary?.body).toContain('not found in brain artifact registry')
   })
 
+  it('omits artifact-summary section when no --artifact is passed (BUG-054)', async () => {
+    const { output } = await captureConsole(() =>
+      runBrainBrief({
+        soulId: 'developer',
+        task: 'plain brief without artifact refs',
+      }),
+    )
+    const parsed = JSON.parse(output) as BriefOutput
+    const summary = parsed.brief.sections.find(s => s.id === 'artifact-summary')
+    expect(summary).toBeUndefined()
+    const fullText = JSON.stringify(parsed.brief)
+    expect(fullText).not.toContain('undefined: not found in brain artifact registry')
+  })
+
+  it('normalizes a single repeated --artifact value into the array form', async () => {
+    const { BrainArtifactRegistry } = await import('@zonease/aiworker-core')
+    const registry = new BrainArtifactRegistry()
+    registry.register({
+      id: 'single-ref',
+      ref: 'docs/single.md',
+      sensitivity: 'internal',
+      source: 'operator',
+      summary: 'single ref',
+      type: 'doc',
+    })
+    const { output } = await captureConsole(() =>
+      runBrainBrief({
+        artifactRefs: 'single-ref' as unknown as readonly string[],
+        soulId: 'developer',
+        task: 'single artifact ref',
+      }),
+    )
+    const parsed = JSON.parse(output) as BriefOutput
+    const summary = parsed.brief.sections.find(s => s.id === 'artifact-summary')
+    expect(summary).toBeDefined()
+    expect(summary?.body).toContain('single-ref')
+  })
+
   it('drops non-protected sections when --token-budget is tight; keeps risk-policy', async () => {
     const longLine = 'x'.repeat(2000)
     await writeFile(join(brainHome, 'AGENT.md'), longLine, 'utf8')

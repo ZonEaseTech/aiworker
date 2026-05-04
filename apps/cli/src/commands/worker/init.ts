@@ -427,10 +427,50 @@ export async function runInit(options: InitOptions = {}): Promise<number> {
   return 0
 }
 
+/**
+ * TODO-011: pick a recommended bring-your-own engine per Soul. The hint is
+ * informational only — operators can pick anything from the candidate list,
+ * which always includes `claude-code` as the broadest baseline. Soul-specific
+ * suggestions reflect FEAT-053 (Project scope = worker-bound business scope,
+ * not just code).
+ */
+const ENGINE_CANDIDATES = ['claude-code', 'codex', 'acp', 'cursor', 'mcp', 'http'] as const
+
+function recommendedEnginesForSoul(soulId: InitSoulId | undefined): { primary: string, alternates: readonly string[] } {
+  switch (soulId) {
+    case 'developer':
+    case 'devops-sre':
+      return { primary: 'claude-code', alternates: ['codex'] }
+    case 'general-assistant':
+    case undefined:
+      return { primary: 'claude-code', alternates: ['cursor'] }
+    case 'product-designer':
+    case 'qa-reviewer':
+    case 'project-manager':
+    case 'hr-recruiting':
+    case 'finance-ops':
+    case 'support-operator':
+      return { primary: 'claude-code', alternates: ['mcp'] }
+    default:
+      return { primary: 'claude-code', alternates: ['codex'] }
+  }
+}
+
+function executorChoicePreface(soul?: SelectedSoul): string[] {
+  const recommendation = recommendedEnginesForSoul(soul?.id)
+  const candidates = ENGINE_CANDIDATES.join(' | ')
+  return [
+    `     Default executor is the safe \`http://localhost:9999\` stub; pick a real engine before running tasks.`,
+    `     Recommended for ${soul ? `Soul \`${soul.id}\`` : 'general use'}: \`${recommendation.primary}\`${recommendation.alternates.length > 0 ? ` (alternates: ${recommendation.alternates.join(', ')})` : ''}.`,
+    `     Candidates: ${candidates}.`,
+  ]
+}
+
 function printProjectNextSteps(projectRoot: string, soul?: SelectedSoul): void {
   const soulLine = soul
     ? `  2. Review brain identity: .aiworker/SOUL.md / AGENT.md / USER.md (preset \`${soul.id}\`); inspect capabilities with \`aiworker soul show ${soul.id}\`.`
     : '  2. Review brain identity: .aiworker/SOUL.md / AGENT.md / USER.md; list presets with `aiworker soul list`.'
+  const recommendation = recommendedEnginesForSoul(soul?.id)
   process.stdout.write([
     '[aiworker init] next steps — Project Brain comes first; executor is bring-your-own',
     `  1. Confirm scope: \`aiworker scope\` (project root: ${projectRoot}).`,
@@ -438,8 +478,9 @@ function printProjectNextSteps(projectRoot: string, soul?: SelectedSoul): void {
     '  3. Inspect brain runtime: `aiworker brain status` (then `aiworker brain skills` / `aiworker brain memories`).',
     '  4. Validate brain capability drafts: `aiworker doctor`.',
     '  5. (Optional) declare project executor overlay hints: `aiworker executor mcp add ... --engine <engine>` then `aiworker executor mcp sync --engine <engine> --dry-run`.',
-    '  6. Select task executor when ready: `aiworker executor select --engine codex --apply`.',
-    '  7. Check executor readiness: `aiworker executor doctor --engine codex` (engine login/auth lives outside AIWorker).',
+    `  6. Select task executor when ready: \`aiworker executor select --engine <YOUR_ENGINE> --apply\`.`,
+    ...executorChoicePreface(soul),
+    `  7. Check executor readiness: \`aiworker executor doctor --engine <YOUR_ENGINE>\` (engine login/auth lives outside AIWorker; suggested: \`${recommendation.primary}\`).`,
     '  8. Smoke bootstrap: `aiworker run --message "hello" --dry-run`.',
     '  9. After configuring executor secrets/model: `aiworker run --message "hello"`.',
     ' 10. Need HTTP/admin UI: `aiworker up --port 9217` (or explicit `aiworker serve --port 9217`).',
@@ -449,12 +490,15 @@ function printProjectNextSteps(projectRoot: string, soul?: SelectedSoul): void {
 }
 
 function printUserScopeNextSteps(): void {
+  const recommendation = recommendedEnginesForSoul(undefined)
   process.stdout.write([
     '[aiworker init] next steps — Project Brain comes first; executor is bring-your-own',
     '  1. Confirm scope: `aiworker scope`.',
     '  2. Inspect brain runtime: `aiworker brain status` (then `aiworker brain skills` / `aiworker brain memories`).',
     '  3. Inspect config: `aiworker config show`.',
-    '  4. Select task executor when ready: `aiworker executor select --engine codex --apply`.',
+    `  4. Select task executor when ready: \`aiworker executor select --engine <YOUR_ENGINE> --apply\`.`,
+    ...executorChoicePreface(undefined),
+    `     Tip: \`aiworker executor doctor --engine ${recommendation.primary}\` checks readiness without running a turn.`,
     '  5. Smoke bootstrap: `aiworker run --message "hello" --dry-run`.',
     '  6. After configuring executor secrets/model: `aiworker run --message "hello"`.',
     '  7. Need HTTP/admin UI: `aiworker up --port 9217` (or explicit `aiworker serve --port 9217`).',

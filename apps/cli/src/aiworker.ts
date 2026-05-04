@@ -44,6 +44,7 @@ import {
   runBrainAdmissionApply,
   runBrainAdmissionApprove,
   runBrainAdmissionList,
+  runBrainAdmissionPropose,
   runBrainAdmissionReject,
   runBrainAdmissionShow,
   runBrainArtifactsList,
@@ -382,14 +383,70 @@ cli
   .command('brain admission apply <id>', '执行 approved proposal（默认 dry-run；MVP 仅支持 memory-add）')
   .option('--decided-by <name>', '记录决策操作者（必填）')
   .option('--commit', '真正写 filesystem；默认 dry-run 仅打印 diff')
-  .action(async (id: string, opts: { decidedBy?: string, commit?: boolean }) => {
+  .option('--allow-secret-body <mode>', 'BUG-055 secret-body 处理策略：block | redact | raw（默认 block）')
+  .action(async (id: string, opts: { decidedBy?: string, commit?: boolean, allowSecretBody?: string }) => {
     if (opts.decidedBy === undefined || opts.decidedBy === '') {
       consola.error('[aiworker brain admission apply] --decided-by is required')
+      process.exit(2)
+    }
+    if (opts.allowSecretBody !== undefined
+      && opts.allowSecretBody !== 'block'
+      && opts.allowSecretBody !== 'redact'
+      && opts.allowSecretBody !== 'raw') {
+      consola.error(`[aiworker brain admission apply] --allow-secret-body must be one of block | redact | raw, got "${opts.allowSecretBody}"`)
       process.exit(2)
     }
     process.exit(await runBrainAdmissionApply(id, {
       decidedBy: opts.decidedBy,
       ...(opts.commit === undefined ? {} : { commit: opts.commit }),
+      ...(opts.allowSecretBody === undefined ? {} : { allowSecretBody: opts.allowSecretBody as 'block' | 'redact' | 'raw' }),
+    }))
+  })
+
+cli
+  .command('brain admission propose', 'TODO-009 调试入口：直接构造一条 admission proposal（仅供 fixture / 演示）')
+  .option('--i-know-this-is-debug', '必须显式声明这是调试场景；缺失即拒绝执行')
+  .option('--id <id>', 'proposal id（必填，kebab-case）')
+  .option('--kind <kind>', 'proposal kind（默认 memory-add）')
+  .option('--target <text>', 'target 路径或 artifact id（必填）')
+  .option('--summary <text>', 'proposal 摘要（必填）')
+  .option('--rollback <text>', 'rollback 描述（必填）')
+  .option('--soul <id>', 'soul id（必填）')
+  .option('--scope <id>', 'scope id（可选）')
+  .option('--risk <level>', 'low | medium | high（默认 high）')
+  .option('--confidence <n>', '0..1 之间的小数（默认 0.5）', { type: [Number] })
+  .option('--evidence <path>', '从 JSON 文件读取 evidence 数组（可选）')
+  .option('--payload <path>', '从 JSON 文件读取 payload 对象（可选）')
+  .action(async (opts: {
+    iKnowThisIsDebug?: boolean
+    id?: string
+    kind?: string
+    target?: string
+    summary?: string
+    rollback?: string
+    soul?: string
+    scope?: string
+    risk?: string
+    confidence?: number[]
+    evidence?: string
+    payload?: string
+  }) => {
+    if (opts.iKnowThisIsDebug !== true) {
+      consola.error('[aiworker brain admission propose] --i-know-this-is-debug is required (debug-only entry)')
+      process.exit(2)
+    }
+    process.exit(await runBrainAdmissionPropose({
+      ...(opts.id === undefined ? {} : { id: opts.id }),
+      ...(opts.kind === undefined ? {} : { kind: opts.kind }),
+      ...(opts.target === undefined ? {} : { target: opts.target }),
+      ...(opts.summary === undefined ? {} : { summary: opts.summary }),
+      ...(opts.rollback === undefined ? {} : { rollback: opts.rollback }),
+      ...(opts.soul === undefined ? {} : { soulId: opts.soul }),
+      ...(opts.scope === undefined ? {} : { scopeId: opts.scope }),
+      ...(opts.risk === undefined ? {} : { risk: opts.risk }),
+      confidence: optionalNumber(opts.confidence),
+      ...(opts.evidence === undefined ? {} : { evidencePath: opts.evidence }),
+      ...(opts.payload === undefined ? {} : { payloadPath: opts.payload }),
     }))
   })
 
@@ -842,14 +899,70 @@ cli
   .command('worker brain admission apply <id>', '执行 approved proposal（默认 dry-run；MVP 仅支持 memory-add）')
   .option('--decided-by <name>', '记录决策操作者（必填）')
   .option('--commit', '真正写 filesystem；默认 dry-run 仅打印 diff')
-  .action(async (id: string, opts: { decidedBy?: string, commit?: boolean }) => {
+  .option('--allow-secret-body <mode>', 'BUG-055 secret-body 处理策略：block | redact | raw（默认 block）')
+  .action(async (id: string, opts: { decidedBy?: string, commit?: boolean, allowSecretBody?: string }) => {
     if (opts.decidedBy === undefined || opts.decidedBy === '') {
       consola.error('[aiworker worker brain admission apply] --decided-by is required')
+      process.exit(2)
+    }
+    if (opts.allowSecretBody !== undefined
+      && opts.allowSecretBody !== 'block'
+      && opts.allowSecretBody !== 'redact'
+      && opts.allowSecretBody !== 'raw') {
+      consola.error(`[aiworker worker brain admission apply] --allow-secret-body must be one of block | redact | raw, got "${opts.allowSecretBody}"`)
       process.exit(2)
     }
     process.exit(await runBrainAdmissionApply(id, {
       decidedBy: opts.decidedBy,
       ...(opts.commit === undefined ? {} : { commit: opts.commit }),
+      ...(opts.allowSecretBody === undefined ? {} : { allowSecretBody: opts.allowSecretBody as 'block' | 'redact' | 'raw' }),
+    }))
+  })
+
+cli
+  .command('worker brain admission propose', 'TODO-009 调试入口：直接构造一条 admission proposal（仅供 fixture / 演示）')
+  .option('--i-know-this-is-debug', '必须显式声明这是调试场景；缺失即拒绝执行')
+  .option('--id <id>', 'proposal id（必填，kebab-case）')
+  .option('--kind <kind>', 'proposal kind（默认 memory-add）')
+  .option('--target <text>', 'target 路径或 artifact id（必填）')
+  .option('--summary <text>', 'proposal 摘要（必填）')
+  .option('--rollback <text>', 'rollback 描述（必填）')
+  .option('--soul <id>', 'soul id（必填）')
+  .option('--scope <id>', 'scope id（可选）')
+  .option('--risk <level>', 'low | medium | high（默认 high）')
+  .option('--confidence <n>', '0..1 之间的小数（默认 0.5）', { type: [Number] })
+  .option('--evidence <path>', '从 JSON 文件读取 evidence 数组（可选）')
+  .option('--payload <path>', '从 JSON 文件读取 payload 对象（可选）')
+  .action(async (opts: {
+    iKnowThisIsDebug?: boolean
+    id?: string
+    kind?: string
+    target?: string
+    summary?: string
+    rollback?: string
+    soul?: string
+    scope?: string
+    risk?: string
+    confidence?: number[]
+    evidence?: string
+    payload?: string
+  }) => {
+    if (opts.iKnowThisIsDebug !== true) {
+      consola.error('[aiworker worker brain admission propose] --i-know-this-is-debug is required (debug-only entry)')
+      process.exit(2)
+    }
+    process.exit(await runBrainAdmissionPropose({
+      ...(opts.id === undefined ? {} : { id: opts.id }),
+      ...(opts.kind === undefined ? {} : { kind: opts.kind }),
+      ...(opts.target === undefined ? {} : { target: opts.target }),
+      ...(opts.summary === undefined ? {} : { summary: opts.summary }),
+      ...(opts.rollback === undefined ? {} : { rollback: opts.rollback }),
+      ...(opts.soul === undefined ? {} : { soulId: opts.soul }),
+      ...(opts.scope === undefined ? {} : { scopeId: opts.scope }),
+      ...(opts.risk === undefined ? {} : { risk: opts.risk }),
+      confidence: optionalNumber(opts.confidence),
+      ...(opts.evidence === undefined ? {} : { evidencePath: opts.evidence }),
+      ...(opts.payload === undefined ? {} : { payloadPath: opts.payload }),
     }))
   })
 

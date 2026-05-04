@@ -333,6 +333,8 @@ export interface BrainAdmissionApplyOptions {
   decidedBy: string
   /** Default `false` (dry-run). */
   commit?: boolean
+  /** BUG-055 secret-body policy. Default `'block'`. */
+  allowSecretBody?: 'block' | 'redact' | 'raw'
 }
 
 function admissionSummary(p: BrainAdmissionProposal): Record<string, unknown> {
@@ -375,12 +377,13 @@ export async function runBrainAdmissionList(options: BrainAdmissionListOptions =
         filterOptions.scopeId = options.scopeId
       if (options.soulId !== undefined)
         filterOptions.soulId = options.soulId
-      const proposals = service.list(filterOptions, { redactSensitive: options.showSensitive !== true })
+      const result = service.list(filterOptions, { redactSensitive: options.showSensitive !== true })
       console.log(JSON.stringify({
         workerId: ctx.workerId,
-        count: proposals.length,
+        count: result.proposals.length,
         redacted: options.showSensitive !== true,
-        proposals: proposals.map(admissionSummary),
+        proposals: result.proposals.map(admissionSummary),
+        skipped: result.skipped,
       }, null, 2))
       return 0
     })
@@ -462,9 +465,24 @@ export interface BrainBriefOptions {
   task: string
   scopeId?: string
   soulId?: string
-  artifactRefs?: readonly string[]
+  /**
+   * Raw value from cac: `undefined` (flag missing), a single string (flag
+   * passed once), or an array (flag repeated). The runner normalizes this
+   * via `normalizeRepeatableStringOption` before forwarding to the compiler.
+   */
+  artifactRefs?: readonly string[] | string
   executor?: string
   tokenBudget?: number
+}
+
+function normalizeRepeatableStringOption(value: readonly string[] | string | undefined): string[] {
+  if (value === undefined)
+    return []
+  const arr = Array.isArray(value) ? [...value] : [value]
+  return arr
+    .filter((entry): entry is string => typeof entry === 'string')
+    .map(entry => entry.trim())
+    .filter(entry => entry.length > 0)
 }
 
 export async function runBrainBrief(options: BrainBriefOptions): Promise<number> {
@@ -472,6 +490,12 @@ export async function runBrainBrief(options: BrainBriefOptions): Promise<number>
     consola.error('[aiworker brain brief] --task is required')
     return 2
   }
+  // BUG-054: cac normalizes `--artifact <id>` to undefined when missing, a
+  // single string when passed once, or an array when passed multiple times.
+  // Normalize all three into a clean array of non-empty strings so callers
+  // never accidentally produce `artifactRefs: [undefined]` (which used to
+  // surface as a literal "undefined" line in the brief artifact-summary).
+  const artifactRefs = normalizeRepeatableStringOption(options.artifactRefs)
   try {
     return await withWorkerContext(async (ctx) => {
       const brainHome = resolveBrainHome(ctx.workerId)
@@ -497,7 +521,7 @@ export async function runBrainBrief(options: BrainBriefOptions): Promise<number>
         task: options.task,
         ...(options.scopeId === undefined ? {} : { scopeId: options.scopeId }),
         ...(options.soulId === undefined ? {} : { soulId: options.soulId }),
-        ...(options.artifactRefs === undefined || options.artifactRefs.length === 0 ? {} : { artifactRefs: options.artifactRefs }),
+        ...(artifactRefs.length === 0 ? {} : { artifactRefs }),
         ...(options.executor === undefined ? {} : { executor: options.executor }),
         ...(options.tokenBudget === undefined ? {} : { tokenBudget: options.tokenBudget }),
       })
@@ -515,6 +539,98 @@ export async function runBrainBrief(options: BrainBriefOptions): Promise<number>
   }
 }
 
+export interface BrainAdmissionProposeOptions {
+  id?: string
+  kind?: string
+  target?: string
+  summary?: string
+  rollback?: string
+  soulId?: string
+  scopeId?: string
+  risk?: string
+  confidence?: number
+  evidencePath?: string
+  payloadPath?: string
+}
+
+/**
+ * TODO-009: debug-only entry that lets operators inject admission proposals
+ * without needing to drive a full orchestrator turn. Goes through the same
+ * zod-validated path as `BrainAdmissionService.propose`, so fixtures
+ * generated here are functionally identical to runtime-emitted ones.
+ */
+export async function runBrainAdmissionPropose(options: BrainAdmissionProposeOptions): Promise<number> {
+  const required: Array<[keyof BrainAdmissionProposeOptions, string]> = [
+    ['id', '--id'],
+    ['target', '--target'],
+    ['summary', '--summary'],
+    ['rollback', '--rollback'],
+    ['soulId', '--soul'],
+  ]
+  for (const [key, flag] of required) {
+    const value = options[key]
+    if (value === undefined || (typeof value === 'string' && value.trim() === '')) {
+      consola.error(`[aiworker brain admission propose] ${flag} is required`)
+      return 2
+    }
+  }
+  const risk = options.risk
+  if (risk !== undefined && risk !== 'low' && risk !== 'medium' && risk !== 'high') {
+    consola.error(`[aiworker brain admission propose] --risk must be one of low | medium | high, got "${risk}"`)
+    return 2
+  }
+  let evidence: unknown
+  let payload: unknown
+  try {
+    if (options.evidencePath !== undefined)
+      evidence = JSON.parse(await readFile(options.evidencePath, 'utf8'))
+    if (options.payloadPath !== undefined)
+      payload = JSON.parse(await readFile(options.payloadPath, 'utf8'))
+  }
+  catch (err) {
+    consola.error(`[aiworker brain admission propose] failed to read fixture file: ${err instanceof Error ? err.message : String(err)}`)
+    return 2
+  }
+  if (evidence !== undefined && !Array.isArray(evidence)) {
+    consola.error('[aiworker brain admission propose] --evidence file must contain a JSON array')
+    return 2
+  }
+  if (payload !== undefined && (payload === null || typeof payload !== 'object' || Array.isArray(payload))) {
+    consola.error('[aiworker brain admission propose] --payload file must contain a JSON object')
+    return 2
+  }
+
+  try {
+    return await withWorkerContext(async (ctx) => {
+      const service = new BrainAdmissionService()
+      const input = {
+        confidence: options.confidence ?? 0.5,
+        id: options.id!,
+        kind: options.kind ?? 'memory-add',
+        rollback: options.rollback!,
+        soulId: options.soulId!,
+        summary: options.summary!,
+        target: options.target!,
+        ...(risk === undefined ? {} : { risk: risk as 'low' | 'medium' | 'high' }),
+        ...(options.scopeId === undefined ? {} : { scopeId: options.scopeId }),
+        ...(evidence === undefined ? {} : { evidence: evidence as never }),
+        ...(payload === undefined ? {} : { payload: payload as Record<string, unknown> }),
+      }
+      const proposal = service.propose(input)
+      console.log(JSON.stringify({
+        workerId: ctx.workerId,
+        debugWarning: 'this proposal was injected via debug-only CLI; do not enable in production workflows',
+        proposal: admissionFullView(proposal),
+      }, null, 2))
+      return 0
+    })
+  }
+  catch (err) {
+    consola.error(`[aiworker brain admission propose] failed: ${err instanceof Error ? err.message : String(err)}`)
+    return 1
+  }
+}
+
 export async function runBrainAdmissionApply(id: string, options: BrainAdmissionApplyOptions): Promise<number> {
   if (id === undefined || id === '') {
     consola.error('[aiworker brain admission apply] id is required')
@@ -528,12 +644,15 @@ export async function runBrainAdmissionApply(id: string, options: BrainAdmission
         brainHome,
         commit: options.commit === true,
         decidedBy: options.decidedBy,
+        ...(options.allowSecretBody === undefined ? {} : { allowSecretBody: options.allowSecretBody }),
       })
       console.log(JSON.stringify({
         workerId: ctx.workerId,
         outcome: result,
       }, null, 2))
-      return result.kind === 'failed' ? 1 : 0
+      if (result.kind === 'failed' || result.kind === 'blocked-by-secret-scan')
+        return 1
+      return 0
     })
   }
   catch (err) {

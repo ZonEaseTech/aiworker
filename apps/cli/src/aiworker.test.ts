@@ -41,6 +41,7 @@ const ROOT_WORKER_COMMANDS = [
   'brain admission approve',
   'brain admission reject',
   'brain admission apply',
+  'brain admission propose',
   'brain brief',
   'run',
   'serve',

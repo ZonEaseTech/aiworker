@@ -174,9 +174,12 @@ describe('aiworker init / scope project placement', () => {
 
       expect(globalInit.exitCode).toBe(0)
       expect(globalInit.output).toContain('[aiworker init] next steps')
-      expect(globalInit.output).toContain('aiworker executor select --engine codex --apply')
+      expect(globalInit.output).toContain('aiworker executor select --engine <YOUR_ENGINE> --apply')
+      expect(globalInit.output).toContain('Recommended for general use')
+      expect(globalInit.output).toContain('Candidates: claude-code | codex | acp | cursor | mcp | http')
       expect(globalInit.output).toContain('aiworker run --message "hello" --dry-run')
-      expect(globalInit.output).not.toContain('aiworker executor doctor')
+      // User-scope next-steps hint at executor doctor without forcing a single engine.
+      expect(globalInit.output).toContain('aiworker executor doctor --engine claude-code')
 
       const explicitHome = path.join(home, 'explicit-aiworker-home')
       const explicitInit = await runCli(cleanup, ['init'], home, home, {
@@ -185,9 +188,9 @@ describe('aiworker init / scope project placement', () => {
 
       expect(explicitInit.exitCode).toBe(0)
       expect(explicitInit.output).toContain('[aiworker init] next steps')
-      expect(explicitInit.output).toContain('aiworker executor select --engine codex --apply')
+      expect(explicitInit.output).toContain('aiworker executor select --engine <YOUR_ENGINE> --apply')
+      expect(explicitInit.output).toContain('Recommended for general use')
       expect(explicitInit.output).toContain('aiworker run --message "hello" --dry-run')
-      expect(explicitInit.output).not.toContain('aiworker executor doctor')
     })
   })
 
@@ -207,7 +210,9 @@ describe('aiworker init / scope project placement', () => {
       expect(result.output).toContain('.aiworker/SOUL.md')
       expect(result.output).toContain('aiworker soul show developer')
       expect(result.output).toContain('aiworker doctor')
-      expect(result.output).toContain('aiworker executor doctor --engine codex')
+      expect(result.output).toContain('aiworker executor doctor --engine <YOUR_ENGINE>')
+      expect(result.output).toContain('Recommended for Soul `developer`')
+      expect(result.output).toContain('Candidates: claude-code | codex | acp | cursor | mcp | http')
       expect(result.output).toContain('aiworker run --message "hello" --dry-run')
       expect(result.output).toContain('aiworker up --port 9217')
       expect(await exists(path.join(project, '.aiworker', 'AGENT.md'))).toBe(true)

@@ -459,7 +459,7 @@ export async function inspectExecutorReadiness(): Promise<
   if (configuredExecutor.source === 'worker-config' && configuredExecutor.defaultStub) {
     issues.push({
       code: 'executor.config_default_stub',
-      message: 'Worker config still selects the safe http/default stub executor; run `aiworker executor select --engine codex --apply` when ready.',
+      message: 'Worker config still selects the safe http/default stub executor; run `aiworker executor select --engine <engine> --apply` (candidates: claude-code | codex | acp | cursor | mcp | http) when ready.',
       path: 'worker_config.executor',
       severity: 'warning',
     })
