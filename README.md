@@ -12,7 +12,7 @@ plugins、auth、sandbox、approval 和 native sessions，AIWorker 只通过薄 
 
 ## Features
 
-- **Project Brain**：每个项目一份 Soul / persona / USER / MEMORY / brain skills / project policy，filesystem 为权威，便于迁移和审计
+- **Project Brain**：每个项目一份 5 类 brain 资产 — identity（`AGENT/SOUL/USER`）、memory（`MEMORY.md` + `memories/`）、brain skills（`.aiworker/skills/**`）、policy & drafts（`policy.json` / `toolsets.json` / `capability-packs.json` / `.aiworker/mcp.json`）、admission state（roadmap）；filesystem 为权威，便于迁移和审计
 - **Worker/Fleet 聚合**：gateway 管 workers、presence、audit、routing；worker 自持 worker.db、Project Brain 和外部 executor adapter
 - **4 种入网路径**：OTP-attended（worker deployer 零凭证）/ self-enroll（unattended 批量）/ 手动 pair / docker auto-launch
 - **WS 控制面**：operator + worker 共享同一 gateway 入口，按 path 分流（`/ws` basicauth + `/enroll-ws` OTP 专用）

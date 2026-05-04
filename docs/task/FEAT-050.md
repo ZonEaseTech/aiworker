@@ -1,9 +1,10 @@
 # FEAT-050 Strengthen Project Brain product surface
 
-- **status**: pending
+- **status**: in-progress
 - **priority**: P1
-- **owner**: unassigned
+- **owner**: local
 - **createdAt**: 2026-05-04 11:22
+- **claimedAt**: 2026-05-04 12:30
 - **plans**: PLAN-088, PLAN-089, PLAN-090
 
 ## 描述
@@ -40,3 +41,4 @@ runtime，但 Project Brain 必须保持可检查、可迁移、可审计、可�
 ## 笔记
 
 - 2026-05-04 11:22：该任务接续 FEAT-046；优先强化 AIWorker 自己拥有的 brain surface。
+- 2026-05-04 12:35：完成 PLAN-088。`docs/architecture.md` 新增 “Project Brain asset model” 章节用表格枚举五类资产；`docs/cli.md` brain 段落顶部加同步表；README Features 把 Project Brain 行展开成五类资产摘要。不新增 mutating brain command，不实现 admission DB schema。

@@ -1,5 +1,15 @@
 # AIWorker Changelog
 
+## 2026-05-04 12:35 [progress] FEAT-050 / PLAN-088 — Project Brain asset model
+
+把 Project Brain 显式拆成五类资产，明确每类的所有者、读写规则与当前 CLI 入口，建立 brain ↔ executor capability 的命名隔离：
+
+- `docs/architecture.md` 新增 “Project Brain asset model” 子章节，表格枚举 identity / memory / brain skills / policy & drafts / admission state；明确 `.aiworker/executor-capabilities.json` 不属于 brain 资产。
+- `docs/cli.md` brain 命令段顶部加入同样的五类资产小表，跟 brain 只读命令本身的描述衔接。
+- `README.md` Features 中 Project Brain 一行从笼统措辞展开为五类资产摘要。
+
+不新增 mutating brain command，不实现 admission DB schema；admission state 只指向 PLAN-090 roadmap。
+
 ## 2026-05-04 12:25 [completed] FEAT-049 — simplify executor surface around bring-your-own runtimes
 
 合并 PLAN-085/086/087 三个切片：

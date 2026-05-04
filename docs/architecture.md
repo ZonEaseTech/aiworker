@@ -162,6 +162,20 @@ project scope 下，团队共享上下文落在 `<project>/.aiworker/`：
 - **Skills / memories** 读写统一过 `FilesystemBrainProvider`（PLAN-012 将旧 `HermesProvider` 改名并把 HTTP 依赖全部拆掉）；filesystem 是权威，SQLite 只负责 identity 与可索引状态。新 worker 默认挂载 writable `local-filesystem` brain source，路径由 `resolveBrainHome(workerId)` 决定：project scope 指向 `<project>/.aiworker/`，user / explicit scope 指向 worker home 下的 `brain/`。operator 可用 `aiworker brain status` / `aiworker brain skills` / `aiworker brain memories` 做只读检查；这些命令不写入 brain artifact。
 - **Capability 边界**：`.aiworker/mcp.json`、`skills/`、`toolsets.json`、`capability-packs.json` 属于 brain/runtime project capability 或 observe-only descriptor；`.aiworker/executor-capabilities.json` 只是 executor overlay / bootstrap hint。Codex / Claude Code / Hermes / OpenClaw 等外部 executor 可能加载 user/host-level MCP、skills、plugins、auth 和 native sessions；AIWorker 不把 project overlay 当成完整 effective capability source of truth。
 - **Brain admission 边界**：generated memory / brain skill / policy proposal 进入 filesystem 前必须保留 evidence、scope、confidence 与 rollback 信息，并经过显式 operator approval。当前已允许的 runtime 写入只有配置启用后的 pre-compaction memory flush；新 CLI/API mutating brain command 必须另开 PMA 任务并显式命名为 brain memory / brain skill，不得复用 executor MCP / engine plugin 语义。
+
+### Project Brain asset model
+
+Project Brain 由五类资产组成。命名上 *brain memory / brain skill / project policy* 与 *executor MCP / engine plugin / engine skill* 严格区分；不要把 brain 资产用 executor capability 通路配置，反之亦然。
+
+| 资产 | 文件 / 目录 | 所有者 | 读写规则 | 当前 CLI |
+|------|------------|--------|---------|----------|
+| **Identity** | `AGENT.md`、`SOUL.md`、`USER.md` | operator + Soul preset | `aiworker init` 按 Soul 一次性种出，after that 视为 git-tracked persona doc，AIWorker runtime 不主动改写。 | `aiworker init`、`aiworker soul list/show` |
+| **Memory** | `MEMORY.md`、`memories/*.md` | operator + brain runtime（仅 pre-compaction flush） | filesystem 为权威；runtime 只允许配置启用后的 pre-compaction memory flush，其它写入必须走 admission（见下条）。 | `aiworker brain memories`（只读检索） |
+| **Brain skills** | `.aiworker/skills/<name>/SKILL.md`（+ asset files） | operator | 仅人写；CLI 不提供 mutating skill commands。`brain skills` 只读列出 live `BrainProvider` 中已挂载的 skill。 | `aiworker brain skills` |
+| **Policy & drafts** | `policy.json`、`toolsets.json`、`capability-packs.json`、`.aiworker/mcp.json` | operator + Soul preset | brain/runtime 草案；`aiworker doctor` 静态校验，不接入 runtime enforcement。`mcp.json` 是 brain/runtime descriptor，不是 engine MCP config。 | `aiworker doctor`、`aiworker brain status` |
+| **Admission state** | （roadmap：单独 admission store，未落 DB） | brain runtime（proposal）+ operator（approval） | 任何 generated memory / skill / policy proposal 必须保留 evidence、scope、confidence、rollback；当前只允许 pre-compaction memory flush 的 runtime 写入路径，其它 mutating 必须显式 operator approval。CLI/API/UI approval surface 由 PLAN-090 roadmap 推进。 | （roadmap） |
+
+`<project>/.aiworker/executor-capabilities.json` **不是** brain 资产；它是外部 executor 的 project overlay / hint，与上面五类完全独立。fleet.db 与 worker.db 都不持久化 brain 内容；filesystem 是唯一权威源，便于 git review 与跨机迁移。
 - **`config.yaml`** 是 `worker_config.configJson` 的 advisory 镜像——`PUT /api/worker/config` 与 `aiworker config set`（worker-local）/ `aiworker fleet config set`（远端 worker）落库成功后都会调 `mirrorConfigToYaml`，DB 仍为 source-of-truth（乐观锁 `If-Match` 依赖 DB version）。
 - **`AGENT.md` / `SOUL.md` / `USER.md`** user scope 首次启动由 `ensureWorkerHome(workerId)` 幂等种出；project scope 由 `aiworker init` 根据 Soul preset 种出非 stub 模板，并保持 no-overwrite。
 
