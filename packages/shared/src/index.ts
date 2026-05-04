@@ -1,4 +1,23 @@
 export {
+  brainArtifactIdSchema,
+  brainArtifactRegisterInputSchema,
+  brainArtifactSchema,
+  brainArtifactSensitivitySchema,
+  brainArtifactSourceSchema,
+  brainArtifactStatusSchema,
+  brainArtifactTypeSchema,
+  isSensitiveBrainArtifact,
+  redactBrainArtifact,
+} from './brain'
+export type {
+  BrainArtifact,
+  BrainArtifactRegisterInput,
+  BrainArtifactSensitivity,
+  BrainArtifactSource,
+  BrainArtifactStatus,
+} from './brain'
+
+export {
   capabilityIdSchema,
   capabilityManifestStatusSchema,
   capabilityPackEntrySchema,

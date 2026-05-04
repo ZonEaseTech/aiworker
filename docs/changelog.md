@@ -1,5 +1,30 @@
 # AIWorker Changelog
 
+## 2026-05-04 15:35 [completed] FEAT-054 / PLAN-099 — Artifact registry kernel
+
+把 worker scope 的业务资料登记从概念升级为 worker.db 中的 `brain_artifacts` 表 + core registry service + CLI 只读 inspector。Brain Kernel 不复制 artifact 内容，只存 ref / hash / sensitivity / retention / status / 通用 workflow 状态 + opaque metadata；Soul module 解释业务语义（PLAN-100 接续）。
+
+- shared 新增 `packages/shared/src/brain/artifact.ts`：`BrainArtifact` zod schema（id / scopeId / type / ref / hash / source / sensitivity / retention / status / summary / evidenceRefs / metadata / createdAt / updatedAt） + `brainArtifactRegisterInputSchema` 默认 `sensitivity=internal` / `status=active` + `redactBrainArtifact` 工具：confidential / secret artifact 的 ref + hash 自动替换为 `<redacted>`，summary 保留。
+- storage 加 `brain_artifacts` 表 + `(scope_id, type)` / `(status, type)` / `updated_at` 三索引；`bun run db:generate:worker` 生成 `0005_worthless_whiplash.sql` 迁移。
+- core 新增 `packages/core/src/worker/brain/artifacts/registry.ts`：`BrainArtifactRegistry`（register / get / requireById / list / setStatus / count）；`list` / `get` / `setStatus` 默认 `redactSensitive=true`；支持 `scopeId` / `type` / `status` / `minSensitivity` 过滤。
+- CLI `aiworker brain artifacts list / show`（root + worker namespace）：默认 redact，`--show-sensitive` 才显示 confidential / secret 的 ref + hash；`--scope` / `--type` / `--status` / `--min-sensitivity` / `--limit` 过滤；不构建 WorkerRuntime（仅读 worker.db），`aiworker.test.ts` + `help.ts` 同步注册元数据。
+- 测试覆盖：shared 双样本（developer code-module、HR candidate-resume）+ redact 行为；storage `EXPLAIN QUERY PLAN` 命中三索引；core 10 个 registry case；CLI 7 个 inspector case。
+
+边界遵守：
+- 默认只存 ref / hash / summary，不复制全文。
+- 不上传 artifact 到 gateway，不进 fleet.db。
+- 不做 OCR / PDF / vector index。
+- workflow status 只保留通用三态（active / archived / removed），Soul 业务状态在 PLAN-100 通过 `metadata` 表达。
+
+验证：
+
+- `bun run --filter '@zonease/aiworker-shared' test` ✅ 75 pass
+- `bun run --filter '@zonease/aiworker-storage-sqlite' test` ✅ 17 pass
+- `bun run --filter '@zonease/aiworker-core' test` ✅ 531 pass
+- `bun run --filter '@zonease/aiworker-cli' test` ✅ 137 pass
+- `bun run typecheck` ✅ 全 workspace 通过
+- `bun run lint` ✅
+
 ## 2026-05-04 14:55 [completed] FEAT-054 / PLAN-098 — Scope manifest and business-scope bootstrap
 
 把 worker scope 的业务作用域从隐式（目录位置 + Soul preset）升级为显式 `<project>/.aiworker/scope.json` 声明，与 `policy.json` / `toolsets.json` 同款 JSON，零新依赖。

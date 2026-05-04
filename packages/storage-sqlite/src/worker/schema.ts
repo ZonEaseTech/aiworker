@@ -1,4 +1,14 @@
-import type { ChannelType, SkillBindingSource, SkillDraftSource, SkillDraftStatus, ToolCall, WorkerConfig } from '@zonease/aiworker-shared'
+import type {
+  BrainArtifactSensitivity,
+  BrainArtifactSource,
+  BrainArtifactStatus,
+  ChannelType,
+  SkillBindingSource,
+  SkillDraftSource,
+  SkillDraftStatus,
+  ToolCall,
+  WorkerConfig,
+} from '@zonease/aiworker-shared'
 import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 
 /**
@@ -201,6 +211,40 @@ export const cronJobs = sqliteTable(
   table => ({
     // tick: WHERE enabled=true AND next_run_at <= now —— 复合索引让 planner 走 range scan
     dueIdx: index('cron_jobs_due_idx').on(table.enabled, table.nextRunAt),
+  }),
+)
+
+/**
+ * Brain artifact registry (PLAN-099). Each row registers a piece of business
+ * material (resume, code module, ticket, contract, etc.) by ref/hash; the
+ * Kernel never copies the content. Soul module declares the artifact `type`
+ * universe (PLAN-100); workflow status beyond `active`/`archived`/`removed`
+ * is encoded in opaque `metadata`.
+ */
+export const brainArtifacts = sqliteTable(
+  'brain_artifacts',
+  {
+    id: text('id').primaryKey(),
+    scopeId: text('scope_id'),
+    type: text('type').notNull(),
+    ref: text('ref').notNull(),
+    hash: text('hash'),
+    source: text('source').$type<BrainArtifactSource>().notNull(),
+    sensitivity: text('sensitivity').$type<BrainArtifactSensitivity>().notNull().default('internal'),
+    retention: text('retention'),
+    status: text('status').$type<BrainArtifactStatus>().notNull().default('active'),
+    summary: text('summary'),
+    evidenceRefs: text('evidence_refs', { mode: 'json' }).$type<readonly string[]>().notNull().$defaultFn(() => []),
+    metadata: text('metadata', { mode: 'json' }).$type<Record<string, unknown>>(),
+    createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+    updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()),
+  },
+  table => ({
+    // list-by-scope+type: fleet/UI inspector path.
+    scopeTypeIdx: index('brain_artifacts_scope_type_idx').on(table.scopeId, table.type),
+    // list-by-status+type: routing pending review / archived inspections.
+    statusTypeIdx: index('brain_artifacts_status_type_idx').on(table.status, table.type),
+    updatedAtIdx: index('brain_artifacts_updated_at_idx').on(table.updatedAt),
   }),
 )
 

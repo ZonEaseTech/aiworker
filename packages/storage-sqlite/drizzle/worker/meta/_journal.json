@@ -36,6 +36,13 @@
       "when": 1777380396323,
       "tag": "0004_daffy_thing",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1777885737420,
+      "tag": "0005_worthless_whiplash",
+      "breakpoints": true
     }
   ]
 }

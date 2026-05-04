@@ -41,6 +41,8 @@ import {
   runApprovalsList as runApprovalsListLocal,
 } from './commands/worker/approvals'
 import {
+  runBrainArtifactsList,
+  runBrainArtifactsShow,
   runBrainMemories,
   runBrainSkills,
   runBrainStatus,
@@ -265,6 +267,43 @@ cli
     process.exit(await runBrainMemories({
       limit: optionalNumber(opts.limit),
       ...(opts.query === undefined ? {} : { query: opts.query }),
+    }))
+  })
+
+cli
+  .command('brain artifacts list', '只读列出本地 worker scope 注册的 brain artifact')
+  .option('--scope <id>', '按 scope id 过滤')
+  .option('--type <id>', '按 artifact type 过滤')
+  .option('--status <s>', 'active / archived / removed')
+  .option('--min-sensitivity <s>', 'public / internal / confidential / secret')
+  .option('--limit <n>', '最多返回 artifact 数量（1-200，默认 50）', { type: [Number] })
+  .option('--show-sensitive', '不再 redact confidential / secret artifact 的 ref / hash')
+  .action(async (opts: {
+    scope?: string
+    type?: string
+    status?: string
+    minSensitivity?: string
+    limit?: number[]
+    showSensitive?: boolean
+  }) => {
+    process.exit(await runBrainArtifactsList({
+      ...(opts.scope === undefined ? {} : { scopeId: opts.scope }),
+      ...(opts.type === undefined ? {} : { type: opts.type }),
+      ...(opts.status === undefined ? {} : { status: opts.status as 'active' | 'archived' | 'removed' }),
+      ...(opts.minSensitivity === undefined
+        ? {}
+        : { minSensitivity: opts.minSensitivity as 'public' | 'internal' | 'confidential' | 'secret' }),
+      limit: optionalNumber(opts.limit),
+      ...(opts.showSensitive === undefined ? {} : { showSensitive: opts.showSensitive }),
+    }))
+  })
+
+cli
+  .command('brain artifacts show <id>', '只读查看单个 brain artifact')
+  .option('--show-sensitive', '不再 redact confidential / secret artifact 的 ref / hash')
+  .action(async (id: string, opts: { showSensitive?: boolean }) => {
+    process.exit(await runBrainArtifactsShow(id, {
+      ...(opts.showSensitive === undefined ? {} : { showSensitive: opts.showSensitive }),
     }))
   })
 
@@ -578,6 +617,43 @@ cli
     process.exit(await runBrainMemories({
       limit: optionalNumber(opts.limit),
       ...(opts.query === undefined ? {} : { query: opts.query }),
+    }))
+  })
+
+cli
+  .command('worker brain artifacts list', '只读列出本地 worker scope 注册的 brain artifact')
+  .option('--scope <id>', '按 scope id 过滤')
+  .option('--type <id>', '按 artifact type 过滤')
+  .option('--status <s>', 'active / archived / removed')
+  .option('--min-sensitivity <s>', 'public / internal / confidential / secret')
+  .option('--limit <n>', '最多返回 artifact 数量（1-200，默认 50）', { type: [Number] })
+  .option('--show-sensitive', '不再 redact confidential / secret artifact 的 ref / hash')
+  .action(async (opts: {
+    scope?: string
+    type?: string
+    status?: string
+    minSensitivity?: string
+    limit?: number[]
+    showSensitive?: boolean
+  }) => {
+    process.exit(await runBrainArtifactsList({
+      ...(opts.scope === undefined ? {} : { scopeId: opts.scope }),
+      ...(opts.type === undefined ? {} : { type: opts.type }),
+      ...(opts.status === undefined ? {} : { status: opts.status as 'active' | 'archived' | 'removed' }),
+      ...(opts.minSensitivity === undefined
+        ? {}
+        : { minSensitivity: opts.minSensitivity as 'public' | 'internal' | 'confidential' | 'secret' }),
+      limit: optionalNumber(opts.limit),
+      ...(opts.showSensitive === undefined ? {} : { showSensitive: opts.showSensitive }),
+    }))
+  })
+
+cli
+  .command('worker brain artifacts show <id>', '只读查看单个 brain artifact')
+  .option('--show-sensitive', '不再 redact confidential / secret artifact 的 ref / hash')
+  .action(async (id: string, opts: { showSensitive?: boolean }) => {
+    process.exit(await runBrainArtifactsShow(id, {
+      ...(opts.showSensitive === undefined ? {} : { showSensitive: opts.showSensitive }),
     }))
   })
 

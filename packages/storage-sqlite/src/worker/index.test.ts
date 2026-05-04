@@ -76,6 +76,17 @@ describe('worker schema indexes (REFACTOR-005)', () => {
     expect(plan).toContain('agent_tasks_created_at_idx')
   })
 
+  it('brain_artifacts indexes服务 scope+type 与 status+type 列表查询 (PLAN-099)', () => {
+    const byScopeType = explain(`SELECT * FROM brain_artifacts WHERE scope_id = 'backend-hire-q3' AND type = 'candidate-resume'`)
+    expect(byScopeType).toContain('brain_artifacts_scope_type_idx')
+
+    const byStatusType = explain(`SELECT * FROM brain_artifacts WHERE status = 'active' AND type = 'code-module'`)
+    expect(byStatusType).toContain('brain_artifacts_status_type_idx')
+
+    const byUpdated = explain(`SELECT * FROM brain_artifacts ORDER BY updated_at DESC LIMIT 50`)
+    expect(byUpdated).toContain('brain_artifacts_updated_at_idx')
+  })
+
   it('session_entries indexes support active-session lookup and maintenance scans', () => {
     const byConversation = explain(`SELECT * FROM session_entries WHERE current_conversation_id = 'c1'`)
     expect(byConversation).toContain('session_entries_current_conversation_id_idx')

@@ -34,6 +34,8 @@ const ROOT_WORKER_COMMANDS = [
   'brain status',
   'brain skills',
   'brain memories',
+  'brain artifacts list',
+  'brain artifacts show',
   'run',
   'serve',
   'config show',

@@ -1,16 +1,21 @@
 import type { WorkerRuntime } from '@zonease/aiworker-core'
-import type { BrainMemory, BrainSkill, ScopeManifest } from '@zonease/aiworker-shared'
+import type { BrainArtifact, BrainArtifactSensitivity, BrainArtifactStatus, BrainMemory, BrainSkill, ScopeManifest } from '@zonease/aiworker-shared'
 import type { WorkerContext } from '../../context'
 
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 
-import { describeBrainSource } from '@zonease/aiworker-core'
+import { BrainArtifactRegistry, describeBrainSource } from '@zonease/aiworker-core'
 import { resolveAiworkerScope } from '@zonease/aiworker-fs-layout'
 import { parseScopeManifestJson } from '@zonease/aiworker-shared'
 import consola from 'consola'
 
 import { buildRuntime, loadWorkerContext } from '../../context'
+
+async function withWorkerContext<T>(fn: (ctx: WorkerContext) => Promise<T>): Promise<T> {
+  const ctx = await loadWorkerContext({ silent: true })
+  return await fn(ctx)
+}
 
 export interface BrainMemoriesOptions {
   limit?: number
@@ -205,3 +210,100 @@ export async function runBrainMemories(options: BrainMemoriesOptions = {}): Prom
 }
 
 class InvalidBrainLimitError extends Error {}
+
+export interface BrainArtifactsListOptions {
+  scopeId?: string
+  type?: string
+  status?: BrainArtifactStatus
+  minSensitivity?: BrainArtifactSensitivity
+  limit?: number
+  showSensitive?: boolean
+}
+
+export interface BrainArtifactsShowOptions {
+  showSensitive?: boolean
+}
+
+function clampArtifactLimit(limit: number | undefined): number {
+  if (limit === undefined)
+    return 50
+  if (!Number.isInteger(limit) || limit < 1 || limit > 200)
+    throw new InvalidBrainLimitError('limit must be an integer between 1 and 200')
+  return limit
+}
+
+function artifactSummary(artifact: BrainArtifact): Record<string, unknown> {
+  return {
+    id: artifact.id,
+    type: artifact.type,
+    sensitivity: artifact.sensitivity,
+    source: artifact.source,
+    status: artifact.status,
+    ref: artifact.ref,
+    ...(artifact.scopeId === undefined ? {} : { scopeId: artifact.scopeId }),
+    ...(artifact.hash === undefined ? {} : { hash: artifact.hash }),
+    ...(artifact.retention === undefined ? {} : { retention: artifact.retention }),
+    ...(artifact.summary === undefined ? {} : { summary: artifact.summary }),
+    evidenceRefs: artifact.evidenceRefs,
+    ...(artifact.metadata === undefined ? {} : { metadata: artifact.metadata }),
+    createdAt: artifact.createdAt,
+    updatedAt: artifact.updatedAt,
+  }
+}
+
+export async function runBrainArtifactsList(options: BrainArtifactsListOptions = {}): Promise<number> {
+  try {
+    const limit = clampArtifactLimit(options.limit)
+    return await withWorkerContext(async (ctx) => {
+      const registry = new BrainArtifactRegistry()
+      const filterOptions: Parameters<BrainArtifactRegistry['list']>[0] = { limit }
+      if (options.scopeId !== undefined)
+        filterOptions.scopeId = options.scopeId
+      if (options.type !== undefined)
+        filterOptions.type = options.type
+      if (options.status !== undefined)
+        filterOptions.status = options.status
+      if (options.minSensitivity !== undefined)
+        filterOptions.minSensitivity = options.minSensitivity
+      const artifacts = registry.list(filterOptions, { redactSensitive: options.showSensitive !== true })
+      console.log(JSON.stringify({
+        workerId: ctx.workerId,
+        count: artifacts.length,
+        redacted: options.showSensitive !== true,
+        artifacts: artifacts.map(artifactSummary),
+      }, null, 2))
+      return 0
+    })
+  }
+  catch (err) {
+    consola.error(`[aiworker brain artifacts list] failed: ${err instanceof Error ? err.message : String(err)}`)
+    return err instanceof InvalidBrainLimitError ? 2 : 1
+  }
+}
+
+export async function runBrainArtifactsShow(id: string, options: BrainArtifactsShowOptions = {}): Promise<number> {
+  if (id === undefined || id === '') {
+    consola.error('[aiworker brain artifacts show] id is required')
+    return 2
+  }
+  try {
+    return await withWorkerContext(async (ctx) => {
+      const registry = new BrainArtifactRegistry()
+      const artifact = registry.get(id, { redactSensitive: options.showSensitive !== true })
+      if (artifact === null) {
+        consola.error(`[aiworker brain artifacts show] artifact "${id}" not found`)
+        return 1
+      }
+      console.log(JSON.stringify({
+        workerId: ctx.workerId,
+        redacted: options.showSensitive !== true,
+        artifact: artifactSummary(artifact),
+      }, null, 2))
+      return 0
+    })
+  }
+  catch (err) {
+    consola.error(`[aiworker brain artifacts show] failed: ${err instanceof Error ? err.message : String(err)}`)
+    return 1
+  }
+}
