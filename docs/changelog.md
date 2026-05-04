@@ -1,5 +1,21 @@
 # AIWorker Changelog
 
+## 2026-05-04 14:30 [completed] FEAT-053 / PLAN-096 — Project scope business-scope boundary
+
+收口 FEAT-053 / PLAN-096。Project Brain 的 Project 语义已经在 AGENTS.md / README.md / docs/architecture.md 中固化为 worker-bound business scope（不等同于 software project / git repo）：
+
+- **AGENTS.md**：产品定位段 (line 23-26) 与能力边界段 (line 75) 显式写明 Project scope 是 worker 在 host/workspace 维度绑定的业务作用域，并以 developer / HR / legal / finance / ops Soul 为示例；能力边界把 “project policy” 收口为 “scope policy”。
+- **README.md**：顶部定位段 (line 11-14) 加 Soul-scope 例子；Features 中 Project Brain 一行改为 “每个业务作用域一份 5 类 brain 资产”。
+- **docs/architecture.md**：Product Positioning 段加 scope 语义解释；topology 图节点从 `Project["Project repo"]` 改为 `Project["Host / Workspace Scope<br/>repo / hiring role / resume pool / case / queue"]`，brain 节点 “project policy” 改 “scope policy”；filesystem layout 段新增 “Project scope 语义” 子条；Overview 段 Brain provider 描述展开为 scope identity / artifacts / policies / workflow state / audit / retention。
+
+零代码 / 零 schema / 零 CLI 改动；不修改已 completed 的 FEAT-050 / PLAN-088 文件与 changelog 条目。
+
+验证：
+
+- `git diff --check` ✅
+- `rg -n "^<{7}|^>{7}|^={7}$"` ✅ 无真实 conflict marker
+- AC1/2/3 grep 全部命中预期位置
+
 ## 2026-05-04 14:05 [completed] FEAT-052 — bring-your-own executor integration strategy
 
 合并 PLAN-093/094/095 三个切片：

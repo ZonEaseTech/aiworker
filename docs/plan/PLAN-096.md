@@ -1,7 +1,8 @@
 # PLAN-096 Project scope business-scope boundary docs
 
-- **status**: in_progress
+- **status**: completed
 - **createdAt**: 2026-05-04 13:13
+- **completedAt**: 2026-05-04 14:30
 - **relatedTask**: FEAT-053
 
 ## 现状
@@ -55,3 +56,8 @@ PMA 槽位会让扫盘误判该工作已经包含本会话新增的 scope 语义
 ## 进度
 
 - 2026-05-04 13:13：文档改动已 staged；等待本会话 review 后再收口 completed。
+- 2026-05-04 14:30：本会话 review 完成，收口为 completed。验证：
+  - `git diff --check` ✅ 无 trailing whitespace / mixed indentation
+  - `rg -n "^<{7}|^>{7}|^={7}$" --glob '!**/node_modules/**' --glob '!**/dist/**'` ✅ 无真实 conflict marker
+  - AC1/2/3 grep 全部命中：AGENTS.md line 23-24/75、README.md line 60、docs/architecture.md topology 节点 / Product Positioning / filesystem layout 段
+  - 已 completed 的 FEAT-050 / PLAN-088 文件与 changelog 条目均未被回写
