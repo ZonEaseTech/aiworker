@@ -26,10 +26,10 @@ export const supportOperatorSoulModule = {
     riskNotes: '涉及账号、付款、隐私和权限变更必须请求人工确认。',
   },
   schemaPack: {
-    artifactTypes: [],
-    entityTypes: [],
-    proposalTypes: [],
-    workflowStates: [],
+    artifactTypes: ['ticket', 'response-template', 'escalation-note'],
+    entityTypes: ['account', 'product-issue'],
+    proposalTypes: ['memory-add'],
+    workflowStates: ['received', 'investigating', 'awaiting-customer', 'resolved', 'closed'],
   },
   supportedScopeKinds: ['support-queue', 'general'],
 } satisfies SoulModule

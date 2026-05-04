@@ -26,10 +26,10 @@ export const financeOpsSoulModule = {
     riskNotes: '资金、发票、税务和审计动作必须人工批准。',
   },
   schemaPack: {
-    artifactTypes: [],
-    entityTypes: [],
-    proposalTypes: [],
-    workflowStates: [],
+    artifactTypes: ['reconciliation-report', 'audit-trail-entry', 'invoice-snapshot'],
+    entityTypes: ['accounting-period', 'cost-center'],
+    proposalTypes: ['memory-add'],
+    workflowStates: ['draft', 'matched', 'awaiting-signoff', 'archived', 'flagged'],
   },
   supportedScopeKinds: ['finance-period', 'general'],
 } satisfies SoulModule

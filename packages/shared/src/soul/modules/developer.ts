@@ -26,10 +26,31 @@ export const developerSoulModule = {
     riskNotes: '文件写入、数据库写入、部署和发布类动作需要明确意图；生产写入必须先 dry-run。',
   },
   schemaPack: {
-    artifactTypes: [],
-    entityTypes: [],
-    proposalTypes: [],
-    workflowStates: [],
+    artifactTypes: [
+      'code-module',
+      'adr',
+      'design-doc',
+      'test-suite',
+      'release-note',
+      'changelog-entry',
+    ],
+    entityTypes: [
+      'repository',
+      'release-tag',
+      'incident-postmortem',
+    ],
+    proposalTypes: [
+      'memory-add',
+      'brain-skill-add',
+      'policy-update',
+    ],
+    workflowStates: [
+      'draft',
+      'review',
+      'merged',
+      'released',
+      'rolled-back',
+    ],
   },
   supportedScopeKinds: ['developer-repo', 'general'],
 } satisfies SoulModule

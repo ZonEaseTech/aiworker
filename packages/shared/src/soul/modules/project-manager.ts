@@ -26,10 +26,10 @@ export const projectManagerSoulModule = {
     riskNotes: '状态变更、任务关闭和对外承诺需要可引用证据。',
   },
   schemaPack: {
-    artifactTypes: [],
-    entityTypes: [],
-    proposalTypes: [],
-    workflowStates: [],
+    artifactTypes: ['task-card', 'roadmap-entry', 'status-update'],
+    entityTypes: ['stakeholder'],
+    proposalTypes: ['memory-add'],
+    workflowStates: ['planned', 'in-progress', 'blocked', 'done', 'dropped'],
   },
   supportedScopeKinds: ['pm-roadmap', 'developer-repo', 'general'],
 } satisfies SoulModule

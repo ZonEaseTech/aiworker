@@ -1,5 +1,23 @@
 # AIWorker Changelog
 
+## 2026-05-04 16:00 [completed] FEAT-054 / PLAN-100 — Soul-specific schema packs and validation samples
+
+把 PLAN-097 留下的 `SoulModule.schemaPack` 占位填上每个 Soul 的领域 schema：artifactTypes / entityTypes / proposalTypes / workflowStates；developer + hr-recruiting 完整覆盖，其余 7 个 Soul skeleton。Brain Kernel 仍只验 shape — Soul 拥有领域语义；artifact type 可跨 Soul 共享（PLAN-100 风险条目落实）。
+
+- 9 个 Soul module 同步填充 schemaPack。developer：6 个 artifactTypes（code-module / adr / design-doc / test-suite / release-note / changelog-entry）+ workflow `draft → review → merged → released → rolled-back` + 3 个 proposalTypes。hr-recruiting：5 个 artifactTypes（candidate-resume / screening-decision / interview-note / offer-letter / reference-check）+ workflow `applied → screening → interview → offer → hired/rejected/archived` + 3 个 entityTypes。其余 Soul 提供 1+ artifactTypes / 4-5 个 workflowStates。所有 Soul 把 `memory-add` 列入 proposalTypes（admission MVP baseline）。
+- `SoulRegistry` 新增三个反查 helper：`findByArtifactType` / `findByProposalType` / `getSchemaPack`。`design-doc` artifact type 在 developer + product-designer 共享，验证 Kernel 不假设 type 唯一归属。
+- CLI `aiworker soul show` 在已有 Capability packs / Toolsets 之后追加 Schema pack 段：primary scope kind、supported scopes、artifact / entity / proposal / workflow types。
+- 测试覆盖：shared `registry.test.ts` 加 5 个 helper case；`schema-packs.test.ts` 12 个 case 覆盖 developer / HR fixture（synthetic, 无 PII）+ kebab-case 不变量 + 跨 Soul 共享 + memory-add baseline；CLI `soul.test.ts` 4 个 case 验证 `soul show` 的 schema pack 输出。
+
+约束遵守：HR / finance / support fixtures 全部 synthetic；不引入实际业务自动化；不做 UI 表单生成；每个 Soul 的 schema pack 在 module 自身内维护，没有中央大表。
+
+验证：
+
+- `bun run --filter '@zonease/aiworker-shared' test` ✅ 91 pass
+- `bun run --filter '@zonease/aiworker-cli' test` ✅ 141 pass
+- `bun run typecheck` ✅ 全 workspace 通过
+- `bun run lint` ✅
+
 ## 2026-05-04 15:35 [completed] FEAT-054 / PLAN-099 — Artifact registry kernel
 
 把 worker scope 的业务资料登记从概念升级为 worker.db 中的 `brain_artifacts` 表 + core registry service + CLI 只读 inspector。Brain Kernel 不复制 artifact 内容，只存 ref / hash / sensitivity / retention / status / 通用 workflow 状态 + opaque metadata；Soul module 解释业务语义（PLAN-100 接续）。

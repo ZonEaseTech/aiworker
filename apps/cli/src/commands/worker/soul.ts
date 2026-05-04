@@ -1,11 +1,14 @@
 import process from 'node:process'
 
+import { createBuiltinSoulRegistry } from '@zonease/aiworker-shared'
 import {
   BUILTIN_SOUL_PRESETS,
   CUSTOMIZE_SOUL_ID,
   findBuiltinSoul,
   supportedSoulIds,
 } from '../../soul/presets'
+
+const SOUL_REGISTRY = createBuiltinSoulRegistry()
 
 function joinValues(values: readonly string[]): string {
   return values.join(', ')
@@ -49,6 +52,20 @@ export async function runSoulShow(id: string): Promise<number> {
     return 2
   }
 
+  const module = SOUL_REGISTRY.get(preset.id)
+  const schemaPackLines: string[] = module
+    ? [
+        '',
+        'Schema pack (PLAN-100; Brain Kernel checks shape, Soul interprets semantics):',
+        `  Primary scope kind : ${module.primaryScopeKind}`,
+        `  Supported scopes   : ${joinValues(module.supportedScopeKinds)}`,
+        `  Artifact types     : ${formatPackList(module.schemaPack.artifactTypes)}`,
+        `  Entity types       : ${formatPackList(module.schemaPack.entityTypes)}`,
+        `  Proposal types     : ${formatPackList(module.schemaPack.proposalTypes)}`,
+        `  Workflow states    : ${formatPackList(module.schemaPack.workflowStates)}`,
+      ]
+    : []
+
   process.stdout.write([
     `[aiworker soul] ${preset.id} (${preset.label})`,
     `Description: ${preset.description}`,
@@ -65,7 +82,12 @@ export async function runSoulShow(id: string): Promise<number> {
     '',
     `Capability packs: ${joinValues(preset.packs)} (draft; project validation via aiworker doctor)`,
     `Toolsets: ${joinValues(preset.toolsets)} (draft; project validation via aiworker doctor)`,
+    ...schemaPackLines,
   ].join('\n'))
   process.stdout.write('\n')
   return 0
+}
+
+function formatPackList(values: readonly string[]): string {
+  return values.length === 0 ? '<none>' : values.join(', ')
 }

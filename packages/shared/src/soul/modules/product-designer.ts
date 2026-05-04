@@ -26,10 +26,10 @@ export const productDesignerSoulModule = {
     riskNotes: '影响核心流程或品牌表达的变更需要先给出方案对比。',
   },
   schemaPack: {
-    artifactTypes: [],
-    entityTypes: [],
-    proposalTypes: [],
-    workflowStates: [],
+    artifactTypes: ['design-doc', 'flow-spec', 'ui-component-spec'],
+    entityTypes: ['user-journey', 'design-system-token'],
+    proposalTypes: ['memory-add'],
+    workflowStates: ['concept', 'review', 'approved', 'shipped', 'deprecated'],
   },
   supportedScopeKinds: ['design-workspace', 'developer-repo', 'general'],
 } satisfies SoulModule

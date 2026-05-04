@@ -26,10 +26,10 @@ export const qaReviewerSoulModule = {
     riskNotes: '跳过 gate 必须记录原因和替代证据。',
   },
   schemaPack: {
-    artifactTypes: [],
-    entityTypes: [],
-    proposalTypes: [],
-    workflowStates: [],
+    artifactTypes: ['verification-matrix', 'regression-report', 'bug-repro'],
+    entityTypes: ['test-suite', 'release-gate'],
+    proposalTypes: ['memory-add'],
+    workflowStates: ['planned', 'running', 'passed', 'failed', 'waived'],
   },
   supportedScopeKinds: ['qa-suite', 'developer-repo', 'general'],
 } satisfies SoulModule

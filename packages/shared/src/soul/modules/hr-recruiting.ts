@@ -26,10 +26,31 @@ export const hrRecruitingSoulModule = {
     riskNotes: '薪酬、录用、拒信和员工关系内容必须人工确认。',
   },
   schemaPack: {
-    artifactTypes: [],
-    entityTypes: [],
-    proposalTypes: [],
-    workflowStates: [],
+    artifactTypes: [
+      'candidate-resume',
+      'screening-decision',
+      'interview-note',
+      'offer-letter',
+      'reference-check',
+    ],
+    entityTypes: [
+      'role',
+      'candidate',
+      'hiring-pipeline-stage',
+    ],
+    proposalTypes: [
+      'memory-add',
+      'brain-skill-add',
+    ],
+    workflowStates: [
+      'applied',
+      'screening',
+      'interview',
+      'offer',
+      'hired',
+      'rejected',
+      'archived',
+    ],
   },
   supportedScopeKinds: ['hiring-pool', 'general'],
 } satisfies SoulModule

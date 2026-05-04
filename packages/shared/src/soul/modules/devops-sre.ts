@@ -26,10 +26,10 @@ export const devopsSreSoulModule = {
     riskNotes: '重启、扩缩容、数据库写入和配置发布必须先说明影响面与回滚方式。',
   },
   schemaPack: {
-    artifactTypes: [],
-    entityTypes: [],
-    proposalTypes: [],
-    workflowStates: [],
+    artifactTypes: ['runbook', 'incident-record', 'rollback-plan'],
+    entityTypes: ['environment', 'deployment-target'],
+    proposalTypes: ['memory-add', 'brain-skill-add'],
+    workflowStates: ['detected', 'mitigating', 'resolved', 'archived'],
   },
   supportedScopeKinds: ['ops-runbook', 'developer-repo', 'general'],
 } satisfies SoulModule

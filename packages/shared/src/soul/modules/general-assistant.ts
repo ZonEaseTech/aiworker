@@ -26,10 +26,10 @@ export const generalAssistantSoulModule = {
     riskNotes: '不确定或高影响动作默认请求确认。',
   },
   schemaPack: {
-    artifactTypes: [],
+    artifactTypes: ['note'],
     entityTypes: [],
-    proposalTypes: [],
-    workflowStates: [],
+    proposalTypes: ['memory-add'],
+    workflowStates: ['active', 'archived'],
   },
   supportedScopeKinds: ['general'],
 } satisfies SoulModule

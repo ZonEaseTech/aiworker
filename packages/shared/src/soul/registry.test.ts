@@ -65,4 +65,44 @@ describe('SoulRegistry', () => {
     const ids = BUILTIN_SOUL_MODULES.map(module => module.manifest.id)
     expect(new Set(ids).size).toBe(ids.length)
   })
+
+  it('findByArtifactType returns Souls whose schemaPack declares the type', () => {
+    const registry = createBuiltinSoulRegistry()
+    const candidateOwners = registry.findByArtifactType('candidate-resume').map(module => module.manifest.id)
+    expect(candidateOwners).toEqual(['hr-recruiting'])
+
+    const codeModuleOwners = registry.findByArtifactType('code-module').map(module => module.manifest.id)
+    expect(codeModuleOwners).toEqual(['developer'])
+
+    expect(registry.findByArtifactType('not-a-real-type')).toEqual([])
+  })
+
+  it('findByArtifactType is reverse-lookup-friendly when types are shared across Souls', () => {
+    const registry = createBuiltinSoulRegistry()
+    // `design-doc` appears in both developer and product-designer schema packs
+    const owners = registry.findByArtifactType('design-doc').map(module => module.manifest.id).sort()
+    expect(owners).toEqual(['developer', 'product-designer'])
+  })
+
+  it('findByProposalType filters by schema pack proposal types', () => {
+    const registry = createBuiltinSoulRegistry()
+    const policyOwners = registry.findByProposalType('policy-update').map(module => module.manifest.id)
+    expect(policyOwners).toEqual(['developer'])
+    // memory-add is universal — every Soul declares it.
+    const memoryOwners = registry.findByProposalType('memory-add').map(module => module.manifest.id)
+    expect(memoryOwners.length).toBe(BUILTIN_SOUL_MODULES.length)
+  })
+
+  it('getSchemaPack returns the structured schema pack for a registered Soul', () => {
+    const registry = createBuiltinSoulRegistry()
+    const pack = registry.getSchemaPack('hr-recruiting')
+    expect(pack.artifactTypes).toContain('candidate-resume')
+    expect(pack.workflowStates).toContain('offer')
+    expect(pack.proposalTypes).toContain('memory-add')
+  })
+
+  it('getSchemaPack throws for unknown Souls', () => {
+    const registry = createBuiltinSoulRegistry()
+    expect(() => registry.getSchemaPack('not-real')).toThrow(/unknown Soul id/)
+  })
 })

@@ -1,8 +1,9 @@
 # PLAN-100 Soul-specific schema packs and validation samples
 
-- **status**: draft
+- **status**: completed
 - **createdAt**: 2026-05-04 13:52
-- **approvedAt**: (pending)
+- **approvedAt**: 2026-05-04 15:45
+- **completedAt**: 2026-05-04 16:00
 - **relatedTask**: FEAT-054
 
 ## 现状
@@ -49,3 +50,14 @@ developer 的 module / test rule / architecture decision 是不同业务对象�
 - synthetic developer / HR validation fixtures。
 - `bun run --filter '@zonease/aiworker-cli' test`
 - `bun run --filter '@zonease/aiworker-core' typecheck`
+
+## 进度
+
+- 2026-05-04 15:45：用户批准方案。
+- 2026-05-04 16:00：实现完成。
+  - 9 个内置 Soul 在 `packages/shared/src/soul/modules/<id>.ts` 中填充 `schemaPack`：developer / hr-recruiting 完整覆盖（≥5 个 artifactTypes、完整 workflow lifecycle）；project-manager / devops-sre / product-designer / qa-reviewer / support-operator / finance-ops / general-assistant skeleton（每个 1+ artifactTypes、4-5 个 workflowStates）。所有 Soul 都把 `memory-add` 列入 `proposalTypes`（admission MVP baseline）。
+  - `SoulRegistry` 加 `findByArtifactType(type)` / `findByProposalType(type)` / `getSchemaPack(soulId)` 三个反查 helper，PLAN-101 / PLAN-102 直接消费。
+  - CLI `aiworker soul show` 在已有 Capability packs / Toolsets 之后追加 `Schema pack` 段：primary scope kind、supported scopes、artifact types、entity types、proposal types、workflow states；entity types 为空时输出 `<none>`。
+  - 测试：`registry.test.ts` 加 5 个 case 覆盖 findByArtifactType / findByProposalType / getSchemaPack；新建 `schema-packs.test.ts` 12 个 case 覆盖 developer + HR fixture validation、跨 Soul artifact type 共享（design-doc 同时归 developer + product-designer）、kebab-case 不变量、memory-add baseline；CLI 新建 `soul.test.ts` 4 个 case 验证 schema pack 输出。
+  - 边界遵守：fixtures 全部 synthetic（无 PII）；HR / finance 不引入业务自动化；Brain Kernel 仍只验 shape 不强制 artifact type 唯一归属。
+  - 验证：`bun run --filter '@zonease/aiworker-shared' test` 91 pass、`bun run --filter '@zonease/aiworker-cli' test` 141 pass、`bun run typecheck` 全 workspace 通过、`bun run lint` 通过。
