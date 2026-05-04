@@ -54,7 +54,18 @@ export const brainBriefDroppedSectionSchema = z.object({
 export type BrainBriefDroppedSection = z.infer<typeof brainBriefDroppedSectionSchema>
 
 export const brainBriefRequestSchema = z.object({
-  artifactRefs: z.array(z.string().min(1)).readonly().optional(),
+  // BUG-054: pre-filter the array so callers that accidentally pass
+  // `[undefined]` / blanks (e.g. cac normalizing missing repeat options)
+  // don't surface as `- undefined: not found in brain artifact registry`
+  // lines downstream. After transform we re-assert min length on each entry.
+  artifactRefs: z
+    .array(z.unknown())
+    .transform(arr => arr
+      .filter((entry): entry is string => typeof entry === 'string')
+      .map(entry => entry.trim())
+      .filter(entry => entry.length > 0))
+    .pipe(z.array(z.string().min(1)).readonly())
+    .optional(),
   executor: z.string().min(1).optional(),
   risk: brainAdmissionRiskSchema.optional(),
   scopeId: z.string().min(1).optional(),

@@ -37,6 +37,26 @@ describe('BrainBriefRequest schema', () => {
   it('rejects malformed risk values', () => {
     expect(brainBriefRequestSchema.safeParse({ task: 'x', risk: 'critical' }).success).toBe(false)
   })
+
+  it('strips undefined / blank artifactRefs entries (BUG-054)', () => {
+    const result = brainBriefRequestSchema.safeParse({
+      task: 'inspect',
+      artifactRefs: [undefined, '', '   ', 'src-bus', null, 7],
+    } as unknown as Record<string, unknown>)
+    expect(result.success).toBe(true)
+    if (result.success)
+      expect(result.data.artifactRefs).toEqual(['src-bus'])
+  })
+
+  it('drops artifactRefs to undefined when only blanks are passed', () => {
+    const result = brainBriefRequestSchema.safeParse({
+      task: 'inspect',
+      artifactRefs: [undefined, '', '   '],
+    } as unknown as Record<string, unknown>)
+    expect(result.success).toBe(true)
+    if (result.success)
+      expect(result.data.artifactRefs).toEqual([])
+  })
 })
 
 describe('BrainBrief schema', () => {
