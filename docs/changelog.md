@@ -1,5 +1,23 @@
 # AIWorker Changelog
 
+## 2026-05-04 13:52 [proposal] FEAT-054 / PLAN-097..103 — Soul modules and Scope Brain kernel
+
+确认最新 PMA 槽位后，新增 `FEAT-054` 与 `PLAN-097..103`，承接 Project Brain
+下一阶段演进：
+
+- `FEAT-053` / `PLAN-096` 已占用并完成 Project scope business-scope boundary；
+  本轮不回写旧槽位。
+- 新主线从 `FEAT-054` 开始，目标是把 Project Brain 演进成 worker-bound
+  business scope 的 Brain Kernel + 独立 Soul Modules。
+- 前置准备：`PLAN-097` Soul module contract 与 registry 归属、`PLAN-098`
+  scope manifest 和 business-scope bootstrap。
+- 主体开发：`PLAN-099` artifact registry、`PLAN-100` Soul-specific schema
+  packs、`PLAN-101` Brain admission MVP。
+- 后置收口：`PLAN-102` task-specific Brain brief compiler 与 projection
+  boundary、`PLAN-103` Worker/Fleet Brain surface closeout。
+
+本条仅建立 PMA tracking 与路线拆分，不修改 runtime / schema / CLI / UI。
+
 ## 2026-05-04 13:33 [completed] FEAT-053 / PLAN-096 — Project scope business-scope boundary
 
 收口 FEAT-053 / PLAN-096。Project Brain 的 Project 语义已经在 AGENTS.md / README.md / docs/architecture.md 中固化为 worker-bound business scope（不等同于 software project / git repo）：
