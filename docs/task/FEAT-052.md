@@ -1,10 +1,11 @@
 # FEAT-052 Define bring-your-own executor integration strategy
 
-- **status**: in-progress
+- **status**: completed
 - **priority**: P2
 - **owner**: local
 - **createdAt**: 2026-05-04 11:22
 - **claimedAt**: 2026-05-04 13:35
+- **completedAt**: 2026-05-04 14:05
 - **plans**: PLAN-093, PLAN-094, PLAN-095
 
 ## 描述
@@ -45,3 +46,4 @@ events、cancel、resume/native binding 和基础错误分类。Hermes、OpenCla
 - 2026-05-04 13:40：完成 PLAN-093。`packages/shared/src/providers/executor.ts` 与 `packages/core/src/worker/executor/factory.ts` 加 thin adapter contract JSDoc；`docs/architecture.md` 新增 “Thin executor adapter contract” 章节，方法表 + 显式不承诺（no isolation / no capability source of truth / no tool loop ownership）+ engine-specific extension 留在 engine module 的硬要求。
 - 2026-05-04 13:50：完成 PLAN-094 spike plan 文档化。本次 sandbox 不能联网调用 Hermes CLI，按 PLAN-094 “是否落代码视 spike 结果” 的范围只留 spike plan：触发条件（machine-readable 输出 + 真实 user HOME）、6 步 spike 任务、显式不做（不接管 Hermes memory/skills/MCP/profile、不改 ExecutorProvider/AgentEvent schema），以及 AIWorker 侧已就位的前置准备（PLAN-093 契约 + PLAN-086 doctor 行）。
 - 2026-05-04 14:00：完成 PLAN-095 OpenClaw configured runtime spec。spec 固化 4 条硬约束（Configured runtime only / Workspace 由 OpenClaw 管 / Project overlay 只能是 bootstrap helper / 只接 agent run surface 不启用 OpenClaw channel/gateway hosting）+ adapter 输入输出契约表（health/listTools/run/cancel/resume/error 都按 OpenClaw 实际能力收敛）。本切片仅 spec docs，不落 adapter 代码、不动 schema。
+- 2026-05-04 14:05：FEAT-052 整体收口完成。bring-your-own executor strategy 已经成形：thin adapter contract 固化在 shared/core 的代码注释 + architecture docs；Hermes 与 OpenClaw 的接入 spec 都明确 “只接 agent run surface，保留 user/host config/profile/skills/MCP”。后续真正接入 Hermes / OpenClaw adapter 各自走独立 PMA。Epic 最终全量 gate `bun run check` / `bun run test`（约 1029 spec 通过）/ `bun run build`（cli bundle 0.98MB / web fleet+worker dist 通过 css 检查）/ `git diff --check` 全部通过。

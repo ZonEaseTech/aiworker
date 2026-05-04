@@ -1,5 +1,38 @@
 # AIWorker Changelog
 
+## 2026-05-04 14:05 [completed] FEAT-052 — bring-your-own executor integration strategy
+
+合并 PLAN-093/094/095 三个切片：
+
+- **Thin adapter contract**：`packages/shared/src/providers/executor.ts` 文件头与 `ExecutorProvider` 字段 JSDoc、`packages/core/src/worker/executor/factory.ts` 的 `buildExecutor` JSDoc、`docs/architecture.md` 的 “Thin executor adapter contract” 章节统一固化 5 项最小契约（health / run / cancel / resume / error classification）+ 3 条显式不承诺（no isolation / no effective capability source of truth / no tool loop ownership）。
+- **Hermes spike plan**：当前 sandbox 不能联网调用 Hermes CLI，按 plan 范围 “是否落代码视 spike 结果” 只产 spike plan：触发条件、6 步任务、显式不做、AIWorker 侧已就位的前置准备。
+- **OpenClaw configured runtime spec**：4 条硬约束（Configured runtime only / Workspace 由 OpenClaw 管 / Project overlay 只能是 bootstrap helper / 只接 agent run surface 不启用 OpenClaw channel-gateway hosting）+ adapter 输入输出契约表。
+
+执行边界：本 task 全部产物为 docs + 代码注释，**没有**接入 Hermes / OpenClaw adapter，**没有**改 `ExecutorProvider` / `AgentEvent` schema。后续真正接入这两个 engine 各自走独立 PMA。
+
+Epic 最终全量 gate（FEAT-048..052）：
+
+- `bun run check`（typecheck + lint）✅
+- `bun run test` ✅（shared 33 / fs-layout 18 / gateway-proto 19 / storage-sqlite 16 / gateway 148 / core 521 / api 71 / web 59 / cli 124 ≈ 1029 spec）
+- `bun run build` ✅（cli bundle 0.98 MB / web fleet+worker dist 通过 CSS utility 检查）
+- `git diff --check` ✅
+
+---
+
+## Product positioning pivot epic 总结（FEAT-048..052）
+
+`AIWorker` 的产品定位转向已通过 5 个 task / 13 个 plan 完整落地：
+
+| Task | 状态 | 核心交付 |
+|------|------|---------|
+| FEAT-048 | completed | 文档化产品定位为 Project Brain + Worker/Fleet aggregation runtime（PLAN-083/084） |
+| FEAT-049 | completed | executor surface 收口为 BYO + project overlay；CLI 文案、schema 注释、doctor 输出按四档 readiness 重塑（PLAN-085/086/087） |
+| FEAT-050 | completed | Project Brain 五类资产模型、brain-first onboarding、admission roadmap 全部成型（PLAN-088/089/090） |
+| FEAT-051 | completed | 单张 canonical operator topology + 两层 status 契约固化（PLAN-091/092） |
+| FEAT-052 | completed | thin adapter contract 固化 + Hermes/OpenClaw 接入 spec（PLAN-093/094/095） |
+
+零 schema migration、零 runtime 行为破坏、零外部新接入；命令名 / 文件名 / 导出名 / issue code / 退出码 / 接口签名全部向后兼容。
+
 ## 2026-05-04 14:00 [progress] FEAT-052 / PLAN-095 — OpenClaw configured runtime spec
 
 固化 OpenClaw 接入 AIWorker 的 spec：
