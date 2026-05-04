@@ -50,8 +50,12 @@ describe('aiworker doctor', () => {
     const doctor = await runCli(['doctor'], project, home)
 
     expect(doctor.exitCode).toBe(0)
-    expect(doctor.output).toContain('[aiworker doctor] capability validation')
+    expect(doctor.output).toContain('[aiworker doctor] Project Brain capability validation')
     expect(doctor.output).toContain('Status: PASS')
+    expect(doctor.output).toContain('Brain identity:')
+    expect(doctor.output).toContain('PASS    AGENT.md')
+    expect(doctor.output).toContain('PASS    SOUL.md')
+    expect(doctor.output).toContain('Brain runtime: run `aiworker brain status`')
     expect(doctor.output).toContain('PASS    policy.json')
     expect(doctor.output).toContain('PASS    capability-packs.json')
   })

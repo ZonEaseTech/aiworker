@@ -117,7 +117,7 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-086 Ambient executor readiness and doctor semantics**](PLAN-086.md) `2026-05-04`
 - [x] [**PLAN-087 Executor CLI wording and help cleanup**](PLAN-087.md) `2026-05-04`
 - [x] [**PLAN-088 Project Brain asset model**](PLAN-088.md) `2026-05-04`
-- [ ] [**PLAN-089 Brain diagnostics and onboarding UX**](PLAN-089.md) `2026-05-04`
+- [x] [**PLAN-089 Brain diagnostics and onboarding UX**](PLAN-089.md) `2026-05-04`
 - [ ] [**PLAN-090 Brain admission and approval roadmap**](PLAN-090.md) `2026-05-04`
 - [ ] [**PLAN-091 Worker/Fleet topology and operator docs**](PLAN-091.md) `2026-05-04`
 - [ ] [**PLAN-092 Worker/Fleet status, events, and audit aggregation**](PLAN-092.md) `2026-05-04`

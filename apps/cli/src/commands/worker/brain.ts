@@ -2,7 +2,11 @@ import type { WorkerRuntime } from '@zonease/aiworker-core'
 import type { BrainMemory, BrainSkill } from '@zonease/aiworker-shared'
 import type { WorkerContext } from '../../context'
 
+import { existsSync } from 'node:fs'
+import path from 'node:path'
+
 import { describeBrainSource } from '@zonease/aiworker-core'
+import { resolveAiworkerScope } from '@zonease/aiworker-fs-layout'
 import consola from 'consola'
 
 import { buildRuntime, loadWorkerContext } from '../../context'
@@ -58,6 +62,10 @@ export async function runBrainStatus(): Promise<number> {
   try {
     return await withBrainRuntime(async (ctx, runtime) => {
       const health = await runtime.brain.health()
+      const skills = await runtime.brain.listSkills().catch(() => [])
+      const memories = await runtime.brain.listMemories({ limit: 200 }).catch(() => [])
+      const memoryCount = memories.length
+      const identity = inspectBrainIdentity()
       console.log(JSON.stringify({
         workerId: ctx.workerId,
         configVersion: ctx.configVersion,
@@ -69,6 +77,14 @@ export async function runBrainStatus(): Promise<number> {
           source,
           ctx.hydrated.brainWriteTarget,
         )),
+        assets: {
+          identity,
+          skillCount: skills.length,
+          memoryCount,
+          hint: skills.length === 0 && memoryCount === 0
+            ? 'No brain skills or memories yet. Add `.aiworker/skills/<name>/SKILL.md` or `.aiworker/memories/<topic>.md` directly; brain runtime does not write them automatically.'
+            : undefined,
+        },
       }, null, 2))
       return 0
     })
@@ -76,6 +92,26 @@ export async function runBrainStatus(): Promise<number> {
   catch (err) {
     consola.error(`[aiworker brain status] failed: ${err instanceof Error ? err.message : String(err)}`)
     return 1
+  }
+}
+
+interface BrainIdentitySummary {
+  agent: boolean
+  soul: boolean
+  user: boolean
+  root?: string
+}
+
+function inspectBrainIdentity(): BrainIdentitySummary {
+  const scope = resolveAiworkerScope()
+  if (scope.scope !== 'project' || !scope.projectRoot)
+    return { agent: false, soul: false, user: false }
+  const root = path.join(scope.projectRoot, '.aiworker')
+  return {
+    root,
+    agent: existsSync(path.join(root, 'AGENT.md')),
+    soul: existsSync(path.join(root, 'SOUL.md')),
+    user: existsSync(path.join(root, 'USER.md')),
   }
 }
 

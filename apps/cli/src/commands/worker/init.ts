@@ -408,32 +408,35 @@ export async function runInit(options: InitOptions = {}): Promise<number> {
 
 function printProjectNextSteps(projectRoot: string, soul?: SelectedSoul): void {
   const soulLine = soul
-    ? `  2. Review Soul: .aiworker/SOUL.md and .aiworker/AGENT.md; inspect capabilities with \`aiworker soul show ${soul.id}\`.`
-    : '  2. Review Soul: .aiworker/SOUL.md and .aiworker/AGENT.md; list presets with `aiworker soul list`.'
+    ? `  2. Review brain identity: .aiworker/SOUL.md / AGENT.md / USER.md (preset \`${soul.id}\`); inspect capabilities with \`aiworker soul show ${soul.id}\`.`
+    : '  2. Review brain identity: .aiworker/SOUL.md / AGENT.md / USER.md; list presets with `aiworker soul list`.'
   process.stdout.write([
-    '[aiworker init] next steps',
+    '[aiworker init] next steps — Project Brain comes first; executor is bring-your-own',
     `  1. Confirm scope: \`aiworker scope\` (project root: ${projectRoot}).`,
     soulLine,
-    '  3. Validate capability drafts: `aiworker doctor`.',
-    '  4. Select task executor when ready: `aiworker executor select --engine codex --apply`.',
-    '  5. Check executor readiness: `aiworker executor doctor --engine codex`.',
-    '  6. Smoke bootstrap: `aiworker run --message "hello" --dry-run`.',
-    '  7. After configuring executor secrets/model: `aiworker run --message "hello"`.',
-    '  8. Need HTTP/admin UI: `aiworker up --port 9217` (or explicit `aiworker serve --port 9217`).',
-    '  9. Need fleet control: start/connect a gateway, then use self-enroll or OTP from `aiworker serve`.',
+    '  3. Inspect brain runtime: `aiworker brain status` (then `aiworker brain skills` / `aiworker brain memories`).',
+    '  4. Validate brain capability drafts: `aiworker doctor`.',
+    '  5. (Optional) declare project executor overlay hints: `aiworker executor mcp add ... --engine <engine>` then `aiworker executor mcp sync --engine <engine> --dry-run`.',
+    '  6. Select task executor when ready: `aiworker executor select --engine codex --apply`.',
+    '  7. Check executor readiness: `aiworker executor doctor --engine codex` (engine login/auth lives outside AIWorker).',
+    '  8. Smoke bootstrap: `aiworker run --message "hello" --dry-run`.',
+    '  9. After configuring executor secrets/model: `aiworker run --message "hello"`.',
+    ' 10. Need HTTP/admin UI: `aiworker up --port 9217` (or explicit `aiworker serve --port 9217`).',
+    ' 11. Need fleet control: start/connect a gateway, then use self-enroll or OTP from `aiworker serve`.',
   ].join('\n'))
   process.stdout.write('\n')
 }
 
 function printUserScopeNextSteps(): void {
   process.stdout.write([
-    '[aiworker init] next steps',
+    '[aiworker init] next steps — Project Brain comes first; executor is bring-your-own',
     '  1. Confirm scope: `aiworker scope`.',
-    '  2. Inspect config: `aiworker config show`.',
-    '  3. Select task executor when ready: `aiworker executor select --engine codex --apply`.',
-    '  4. Smoke bootstrap: `aiworker run --message "hello" --dry-run`.',
-    '  5. After configuring executor secrets/model: `aiworker run --message "hello"`.',
-    '  6. Need HTTP/admin UI: `aiworker up --port 9217` (or explicit `aiworker serve --port 9217`).',
+    '  2. Inspect brain runtime: `aiworker brain status` (then `aiworker brain skills` / `aiworker brain memories`).',
+    '  3. Inspect config: `aiworker config show`.',
+    '  4. Select task executor when ready: `aiworker executor select --engine codex --apply`.',
+    '  5. Smoke bootstrap: `aiworker run --message "hello" --dry-run`.',
+    '  6. After configuring executor secrets/model: `aiworker run --message "hello"`.',
+    '  7. Need HTTP/admin UI: `aiworker up --port 9217` (or explicit `aiworker serve --port 9217`).',
   ].join('\n'))
   process.stdout.write('\n')
 }

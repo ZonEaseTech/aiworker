@@ -1,5 +1,22 @@
 # AIWorker Changelog
 
+## 2026-05-04 12:50 [progress] FEAT-050 / PLAN-089 — brain diagnostics and onboarding UX
+
+把 Project Brain 显式抬到 onboarding 与 diagnostics 输出最前：
+
+- `aiworker init` 的 project 与 user 两组 next-steps 都重排，标题加 “Project Brain comes first; executor is bring-your-own”；step 2/3 把 brain identity 与 `aiworker brain status` 排在 doctor 与 executor 前。
+- `aiworker doctor` 输出在 capability validation 之前加 Brain identity 子段（AGENT/SOUL/USER/MEMORY PASS/WARN），并提示用 `aiworker brain status` 拿运行时 skill/memory 计数。
+- `aiworker brain status` JSON 输出新增 `assets`：`identity` 三件套存在性 + root、`skillCount`、`memoryCount`，空状态给出非强制 hint，operator 不会被默认推动写入 brain 资产。
+- Worker Admin Test 面板 header 文案明确 brain → executor → channel 顺序，BrainTestCard 已经在前。
+
+验证：
+
+- `bun run --filter '@zonease/aiworker-cli' typecheck`
+- `bun test apps/cli/src/commands/worker/doctor.test.ts apps/cli/src/commands/worker/init.integration.test.ts` (18/18)
+- `bun run --filter '@zonease/aiworker-web' typecheck`
+- `bun run --filter '@zonease/aiworker-web' test` (16 files / 59 tests)
+- `bun x eslint <changed files>` 无告警
+
 ## 2026-05-04 12:35 [progress] FEAT-050 / PLAN-088 — Project Brain asset model
 
 把 Project Brain 显式拆成五类资产，明确每类的所有者、读写规则与当前 CLI 入口，建立 brain ↔ executor capability 的命名隔离：

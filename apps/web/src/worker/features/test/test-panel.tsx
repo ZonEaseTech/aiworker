@@ -22,7 +22,7 @@ export function TestPanel() {
       <header>
         <h1 className="text-2xl font-bold">Test</h1>
         <p className="text-sm text-muted-foreground">
-          针对 brain / executor / channel 跑一次活体探测。
+          先确认 Project Brain 可用，再验证 bring-your-own executor，最后跑各 channel 的活体探测。Brain 卡片先出，executor 与 channel 紧随其后。
         </p>
       </header>
 
