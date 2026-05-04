@@ -174,5 +174,5 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-048 Product positioning pivot to Project Brain and Worker/Fleet aggregation**](FEAT-048.md) `P1`
 - [x] [**FEAT-049 Simplify executor surface around bring-your-own runtimes**](FEAT-049.md) `P1`
 - [x] [**FEAT-050 Strengthen Project Brain product surface**](FEAT-050.md) `P1`
-- [-] [**FEAT-051 Strengthen Worker/Fleet aggregation surface**](FEAT-051.md) `P1`
+- [x] [**FEAT-051 Strengthen Worker/Fleet aggregation surface**](FEAT-051.md) `P1`
 - [ ] [**FEAT-052 Define bring-your-own executor integration strategy**](FEAT-052.md) `P2`

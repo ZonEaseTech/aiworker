@@ -1,5 +1,14 @@
 # AIWorker Changelog
 
+## 2026-05-04 13:30 [completed] FEAT-051 — strengthen Worker/Fleet aggregation surface
+
+合并 PLAN-091/092 两个切片：
+
+- **Topology**：architecture.md 的两张 mermaid 图作为 canonical source；README 顶部 ASCII 拓扑 + deployment.md 顶部 “Operator topology” 段同源。三处都强调 gateway = control plane（fleet.db 只持指针 + audit）/ worker = data plane（worker.db + Project Brain）/ external executor 只在 worker 内由薄 adapter 调用。
+- **Aggregation 契约**：architecture.md 新增 “Worker/Fleet aggregation surface” 章节，固化两层数据源 + status summary 字段表 + UI/CLI 边界。`docs/cli.md` Fleet 管理段对齐两层输出分流。
+
+PLAN-091/092 均为文档变更；运行时与 schema 零改动。后续 fleet UI 与 CLI fleet 命令按需在新契约下迭代。
+
 ## 2026-05-04 13:25 [progress] FEAT-051 / PLAN-092 — worker/fleet aggregation surface
 
 固化 worker status 聚合契约：
