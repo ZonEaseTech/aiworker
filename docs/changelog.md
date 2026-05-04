@@ -1,5 +1,15 @@
 # AIWorker Changelog
 
+## 2026-05-04 13:40 [progress] FEAT-052 / PLAN-093 — bring-your-own executor thin adapter contract
+
+把 ExecutorProvider 接口的 thin adapter 契约固化到代码注释与 architecture docs：
+
+- `packages/shared/src/providers/executor.ts` 加文件头 JSDoc，列出 5 项最小契约（health / run / cancel / resume / error classification）和 3 条显式不承诺（no isolation / no effective capability source of truth / no tool loop ownership）；`ExecutorProvider` interface 的每个方法补 inline JSDoc。
+- `packages/core/src/worker/executor/factory.ts` `buildExecutor` JSDoc 增 “Each constructed engine MUST honour …” 段，引用 shared 文件头。
+- `docs/architecture.md` 新增 “Thin executor adapter contract” 子章节：方法表 + 显式不承诺 + engine-specific extension 留在 engine module 的硬要求；这是后续 Hermes / OpenClaw 等 engine 接入的 baseline。
+
+零运行时变化、不接入新 engine、不改 `AgentEvent` schema。
+
 ## 2026-05-04 13:30 [completed] FEAT-051 — strengthen Worker/Fleet aggregation surface
 
 合并 PLAN-091/092 两个切片：

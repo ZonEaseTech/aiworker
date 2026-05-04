@@ -1,7 +1,8 @@
 # PLAN-093 Bring-your-own executor thin adapter contract
 
-- **status**: draft
+- **status**: completed
 - **createdAt**: 2026-05-04 11:22
+- **completedAt**: 2026-05-04 13:40
 - **relatedTask**: FEAT-052
 
 ## 现状
@@ -37,3 +38,15 @@ Thin adapter contract:
 ## 验证
 
 - existing executor tests。
+
+## 完成记录
+
+- 2026-05-04 13:40：完成 thin adapter contract 文档化。
+  - `packages/shared/src/providers/executor.ts` 加文件头 JSDoc，列出 5 项最小契约（health/run/cancel/resume/error）和 3 条显式不承诺（no isolation / no capability source of truth / no tool loop ownership）；`ExecutorProvider` interface 与 `run` 字段补齐 inline JSDoc。
+  - `packages/core/src/worker/executor/factory.ts` `buildExecutor` JSDoc 增加 “Each constructed engine MUST honour the thin adapter contract …” 段，引用 shared 文件头并列出显式不承诺。
+  - `docs/architecture.md` 新增 “Thin executor adapter contract” 子章节，给出方法表 + 显式不承诺 + engine-specific extension 留在 engine module 的硬要求。
+- 不接入新 engine、不改 `AgentEvent` schema。
+- 验证：
+  - `bun run --filter '@zonease/aiworker-shared' typecheck` ✅
+  - `bun run --filter '@zonease/aiworker-core' typecheck` ✅
+  - `bun x eslint packages/shared/src/providers/executor.ts packages/core/src/worker/executor/factory.ts` 无告警

@@ -1,9 +1,10 @@
 # FEAT-052 Define bring-your-own executor integration strategy
 
-- **status**: pending
+- **status**: in-progress
 - **priority**: P2
-- **owner**: unassigned
+- **owner**: local
 - **createdAt**: 2026-05-04 11:22
+- **claimedAt**: 2026-05-04 13:35
 - **plans**: PLAN-093, PLAN-094, PLAN-095
 
 ## 描述
@@ -41,3 +42,4 @@ events、cancel、resume/native binding 和基础错误分类。Hermes、OpenCla
 ## 笔记
 
 - 2026-05-04 11:22：该任务排在 executor surface 收口之后，避免先接入新 engine 又扩大旧抽象。
+- 2026-05-04 13:40：完成 PLAN-093。`packages/shared/src/providers/executor.ts` 与 `packages/core/src/worker/executor/factory.ts` 加 thin adapter contract JSDoc；`docs/architecture.md` 新增 “Thin executor adapter contract” 章节，方法表 + 显式不承诺（no isolation / no capability source of truth / no tool loop ownership）+ engine-specific extension 留在 engine module 的硬要求。

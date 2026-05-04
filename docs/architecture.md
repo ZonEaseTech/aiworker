@@ -226,6 +226,27 @@ UI / CLI 边界：
 - **CLI `aiworker fleet list / info / chat / config get / logs`** 走 gateway WS：`fleet list` 出 fleet.db pointer + presence；`fleet info <workerId>` 经 gateway routing 到 worker `/info`；`fleet chat / config get / logs` 都按 method routing 表分流，没有任何路径绕过 gateway 直接拨 worker REST。
 
 External executor 永远只在 worker 进程内被薄 adapter 调用；gateway 与 fleet UI **不**直接和 engine binary / engine session / engine MCP 通信，也不在 fleet.db 持有 engine state。
+
+### Thin executor adapter contract
+
+每个 engine adapter 在 `packages/core/src/worker/executor/engines/<engine>/` 或 `packages/core/src/worker/executor/providers/<provider>/` 实现，统一暴露 `ExecutorProvider`（定义见 `packages/shared/src/providers/executor.ts` 顶部 JSDoc）。最小契约：
+
+| 方法 | 期望 | 说明 |
+|------|------|------|
+| `health()` | 廉价 readiness 探针 | 返回 `ServiceStatus`；不做多秒级深度探测，深度诊断走 `aiworker executor doctor`。 |
+| `listTools()` | 当前可向 orchestrator 暴露的工具集 | engine 自管工具的（Codex、Claude Code）通常返回空数组。 |
+| `run(input)` | 单轮 `AsyncIterable<AgentEvent>` | 不暴露 wire 格式；orchestrator 只识 `AgentEvent`。 |
+| Cancel | `input.signal` 协作 abort | adapter 在 signal aborted 后停止产 event。 |
+| Resume（可选） | `input.engineBinding` | engine 支持 native session/thread 时使用；不支持的 engine 忽略。 |
+| Error | 抛出带 `kind` 的错误 | `FallbackExecutor.onErrorKinds` 据此分支；adapter-specific extension 留在 engine module 里，不污染 orchestrator。 |
+
+显式不承诺：
+
+- 不做 isolation：engine 在 operator 自己的 user/host 环境里跑；adapter 不 sandbox engine、不擦 env、不屏蔽 user/host 级 MCP / skills / plugins / auth / native sessions。
+- 不是 effective capability source of truth：`.aiworker/executor-capabilities.json` 只是 project overlay / bootstrap hint，可能被 engine best-effort projection 接受；AIWorker 不枚举或保证 engine 实际加载的能力集。
+- 不接管 tool loop / approval / sandbox / native session：这些都属于 engine。AIWorker 只负责把事件归一化到 `AgentEvent`，把 brain 上下文以 prompt/context 注入。
+
+新加 engine adapter（例如 Hermes、OpenClaw）只需在自己的 engine module 内实现 `ExecutorProvider`，并把任何 engine-specific extension 留在该 module；不能在 `packages/core/src/worker/orchestrator` 等通用层加 engine-specific 分支。
 - **`config.yaml`** 是 `worker_config.configJson` 的 advisory 镜像——`PUT /api/worker/config` 与 `aiworker config set`（worker-local）/ `aiworker fleet config set`（远端 worker）落库成功后都会调 `mirrorConfigToYaml`，DB 仍为 source-of-truth（乐观锁 `If-Match` 依赖 DB version）。
 - **`AGENT.md` / `SOUL.md` / `USER.md`** user scope 首次启动由 `ensureWorkerHome(workerId)` 幂等种出；project scope 由 `aiworker init` 根据 Soul preset 种出非 stub 模板，并保持 no-overwrite。
 

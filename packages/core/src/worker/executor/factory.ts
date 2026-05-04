@@ -30,6 +30,17 @@ import { McpExecutor } from './providers/mcp'
  * If the profile carries a non-empty `fallbacks` chain (PLAN-014 §F3), the
  * primary executor is wrapped in a `FallbackExecutor`. Each fallback entry's
  * executor is itself built recursively, so chains can nest.
+ *
+ * Each constructed engine MUST honour the thin adapter contract documented in
+ * `@zonease/aiworker-shared/providers/executor` (file header):
+ *   - cheap `health()`,
+ *   - `listTools()`（engine 自管 tools 时返回空数组），
+ *   - `run(input)` 输出 `AsyncIterable<AgentEvent>`（cooperative cancel via
+ *     `input.signal`，optional resume via `input.engineBinding`），
+ *   - 抛出的错误带 `kind` 以便 fallback/retry 层判定。
+ *
+ * 显式不承诺：isolation、effective capability source of truth、tool loop /
+ * approval / sandbox / native session 的接管。这些都归外部 engine 自己负责。
  */
 export function buildExecutor(profile: ExecutorConfig): ExecutorProvider {
   const primary = buildPrimaryExecutor(profile)
