@@ -56,6 +56,11 @@ function fakeWorkerInfo(workerId = 'w_test'): WorkerInfo {
     runtimeVersion: 'test-runtime',
     configVersion: 7,
     brains: [{ id: 'fs-primary', type: 'filesystem', status: 'healthy' }],
+    brainSummary: {
+      admissions: { byStatus: {} },
+      artifacts: { byStatus: {}, total: 0 },
+      scopeManifest: { status: 'not-applicable' },
+    },
     executor: { type: 'http', model: 'gpt-4o-mini', status: 'healthy' },
     channels: [{ channel: 'web', enabled: true }],
     evolutionEnabled: true,

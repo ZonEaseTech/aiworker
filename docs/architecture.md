@@ -191,6 +191,8 @@ Project Brain 由五类资产组成。命名上 *brain memory / brain skill / pr
 
 ### Brain admission roadmap
 
+> FEAT-054 / PLAN-097..103 已落地：Soul module + scope manifest（`scope.json`）+ artifact registry（`brain_artifacts`）+ admission MVP（`brain_admission_proposals` + `brain_admission_decisions`）+ brain brief preview。本节继续作为产品边界与红线说明。
+
 任何 brain runtime 自动生成的 memory / brain skill / policy proposal 在落到 filesystem（即 `MEMORY.md`、`memories/`、`.aiworker/skills/`、`policy.json`、`toolsets.json`、`capability-packs.json`、`.aiworker/mcp.json`）之前都要走 admission flow。当前 PMA 阶段不直接落 DB migration，roadmap 分四段：
 
 1. **Proposal 模型**（设计阶段）：每条 admission proposal 必须携带：
@@ -200,11 +202,13 @@ Project Brain 由五类资产组成。命名上 *brain memory / brain skill / pr
    - `rollback`：能把目标资产恢复到 proposal 之前状态的精确指令（diff / restore-from-backup / 删除新增文件）。
    - `summary`：一句话给 operator 看的人话描述。
 2. **Storage 选型**（设计阶段）：admission proposal 与 audit 记录持久化到 worker.db（**不**进 fleet.db），通过新表 `brain_admission_proposals` + `brain_admission_decisions`；fleet 视角通过 worker REST 间接读取，不在 fleet.db 复制 proposal 全文。schema migration 走 `packages/storage-sqlite/drizzle/worker/*` 单独 PMA。
-3. **Approval surface**（实现阶段）：
-   - CLI: `aiworker brain admission list/show/approve/reject`，project scope；显式与 executor capability 的 `executor capability list/show` 在命名上隔离。
-   - API: `apps/api/src/worker/brain/admission/*` REST endpoints + bearer-auth。
-   - UI: Worker Admin 新增 “Brain admission” 视图，列待审 proposal、diff、approve/reject。Fleet UI 不持有 admission state，只链接到对应 worker UI。
+3. **Approval surface**（已实现，PLAN-101 / PLAN-103）：
+   - CLI: `aiworker brain admission list/show/approve/reject/apply`（root + worker namespace 双注册），`apply` 默认 dry-run；`--decided-by` 必填用于 audit；`--show-sensitive` 才显示 evidence / payload 中 secret-like 字段。
+   - API: `/api/worker/brain/{summary,admission*,artifacts*}` REST endpoints，bearer-auth；`POST /admission/:id/{approve,reject,apply}` 写端点，`apply` 默认 `commit:false`。
+   - UI: Worker Admin `/brain` 视图列出 scope manifest 摘要、pending admissions（带 approve/reject/apply 按钮）、redacted artifact 列表。Fleet UI 不持有 admission / artifact state，仅在 worker detail 上挂 “Open worker Brain admin” 深链。
 4. **唯一允许的免审写入**：pre-compaction memory flush（runtime 把易失 memory rollup 到 `MEMORY.md` 的批量收口）继续作为已批准的 runtime 写入路径；任何其它 mutating brain CLI/API/UI 命令必须先经过本 roadmap 接入。
+
+**MVP materializer 范围（PLAN-101）**：`apply` 仅对 `kind === 'memory-add'` 自动写 `<brainHome>/MEMORY.md` 或 `<brainHome>/memories/<topic>.md`；其它 proposal kind（`brain-skill-add`、`policy-update` 等）进表后可 approve，但 `apply` 返回 `unsupported`，留待人工或后续 plan 拓展。
 
 红线：admission flow 不复用 executor MCP / engine plugin / engine skill / project executor overlay 通路；命名上严格使用 `brain admission` / `brain memory` / `brain skill` / `project policy`，避免与 `executor capability` / `executor mcp` 重名。
 
@@ -213,7 +217,8 @@ Project Brain 由五类资产组成。命名上 *brain memory / brain skill / pr
 Worker/Fleet aggregation 是 AIWorker 的第二个差异化卖点。它**不是**把 worker conversations / secrets / brain 拷到 fleet.db；而是用两层数据源拼出 operator 视角：
 
 - **Layer 1 — fleet.db pointer + audit**（gateway 持有）：`registered_workers`（workerId / displayName / online / deviceId / baseUrl / lastSeenAt）+ `audit_events`（enrollment、approval、token rotation 等 control-plane 事件）。`workers.list` 与 `audit.list` 都从这里读，**永远不**含 brain/对话/明文 secret。
-- **Layer 2 — per-worker `/api/worker/info`**（worker 本机持有，按需拉取）：worker REST 的 `/info` 返回 `WorkerInfo`：runtime version、brain sources（id / type / status / writeTarget / readOnly）、executor（type / model / status）+ control executor、channels（含 webhookUrl）。Fleet 视角通过 `workers.info`（routing=`operator-to-node`）经 gateway 帧转发到目标 worker，**不**反向缓存到 fleet.db。
+- **Layer 2 — per-worker `/api/worker/info`**（worker 本机持有，按需拉取）：worker REST 的 `/info` 返回 `WorkerInfo`：runtime version、brain sources（id / type / status / writeTarget / readOnly）、executor（type / model / status）+ control executor、channels（含 webhookUrl）+ `brainSummary`（PLAN-103：scope manifest 摘要、artifact `byStatus` 计数、admission `byStatus` 计数与 `lastUpdatedAt`，**不**含 proposal 全文 / artifact ref / canonical brain）。Fleet 视角通过 `workers.info`（routing=`operator-to-node`）经 gateway 帧转发到目标 worker，**不**反向缓存到 fleet.db。
+- **Brain 数据面隔离（PLAN-103）**：scope manifest / Soul module 元数据 / artifact 注册表 / admission 状态机 都在 worker 数据面（`<project>/.aiworker/`、`worker.db`）。fleet 控制面只持有 `registered_workers` + `audit_events`，没有任何 `brain_artifacts` / `brain_admission_proposals` / `scope.json` 反向缓存；fleet UI 通过 “Open worker Brain admin” 深链跳到 worker UI 自己的 `/brain` 视图，approve / reject / apply 在 worker 上完成。
 
 由此推出 **Worker status summary** 这套契约（已在 `WorkerInfo` schema 内，本节是文档化）：
 

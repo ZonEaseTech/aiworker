@@ -2,6 +2,7 @@ import type { FormEvent } from 'react'
 import type { WorkerPath } from '@/worker/lib/link'
 import { createRootRoute, Outlet } from '@tanstack/react-router'
 import {
+  Brain as BrainIcon,
   ClipboardList,
   Cpu,
   KeyRound,
@@ -32,6 +33,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { to: '/', label: '概览', exact: true, icon: ClipboardList },
+  { to: '/brain', label: 'Brain', icon: BrainIcon },
   { to: '/config', label: '配置', icon: SlidersHorizontal },
   { to: '/secrets', label: 'Secrets', icon: KeyRound },
   { to: '/test', label: '探测', icon: Wrench },

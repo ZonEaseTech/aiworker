@@ -1,6 +1,6 @@
 import type { SafeRegisteredWorker } from '@zonease/aiworker-shared'
 import { createFileRoute, Link, useParams } from '@tanstack/react-router'
-import { ArrowLeft, ExternalLink, Power, RefreshCw, Trash2 } from 'lucide-react'
+import { ArrowLeft, Brain as BrainIcon, ExternalLink, Power, RefreshCw, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { WorkerApiError } from '@/fleet/api'
 import { RemoveWorkerDialog } from '@/fleet/features/workers/components/remove-worker-dialog'
@@ -121,6 +121,8 @@ function WorkerDetailPage() {
 
       <FleetMetadataCard worker={worker} />
 
+      <BrainSurfaceHint worker={worker} />
+
       <SelfManageHint worker={worker} />
 
       {pendingAction === 'rotate' && (
@@ -208,6 +210,35 @@ function SelfManageHint({ worker }: { worker: SafeRegisteredWorker }) {
 
 function workerUiPath(workerId: string): string {
   return `/w/${workerId}/`
+}
+
+function workerBrainPath(workerId: string): string {
+  return `/w/${workerId}/#/brain`
+}
+
+function BrainSurfaceHint({ worker }: { worker: SafeRegisteredWorker }) {
+  const brainUrl = workerBrainPath(worker.id)
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Brain (PLAN-103)</CardTitle>
+        <CardDescription>
+          scope manifest、Soul、artifact 注册表与 admission 审批由 worker 数据面拥有；fleet 控制面只持有 fleet.db 指针 + audit，不复制 proposal 全文、artifact 内容或 canonical brain。请打开 worker UI 的 Brain 视图进行审批。
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <a
+          href={brainUrl}
+          target="_blank"
+          rel="noreferrer"
+          className={buttonVariants({ variant: 'outline' })}
+        >
+          <BrainIcon className="size-4" />
+          Open worker Brain admin
+        </a>
+      </CardContent>
+    </Card>
+  )
 }
 
 function WorkerNotFound({ id }: { id: string }) {

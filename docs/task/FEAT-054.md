@@ -1,10 +1,11 @@
 # FEAT-054 Soul modules and Scope Brain kernel
 
-- **status**: in-progress
+- **status**: completed
 - **priority**: P1
 - **owner**: local
 - **createdAt**: 2026-05-04 13:52
 - **claimedAt**: 2026-05-04 14:05
+- **completedAt**: 2026-05-04 19:00
 - **plans**: PLAN-097, PLAN-098, PLAN-099, PLAN-100, PLAN-101, PLAN-102, PLAN-103
 
 ## 描述
@@ -53,3 +54,11 @@ registry、evidence、policy、audit、retention、admission 和 context compila
 - 2026-05-04 13:52：确认最新 PMA 槽位后创建本 Epic。`FEAT-053` / `PLAN-096` 已被 Project scope business-scope boundary 占用，因此本主线从 `FEAT-054` / `PLAN-097` 开始。
 - 本 Epic 的前置准备是 `PLAN-097` + `PLAN-098`，避免后续 artifact / admission / brief compiler 继续依赖 CLI preset 形态。
 - 本 Epic 的后置收口是 `PLAN-102` + `PLAN-103`，确保 Brain 最终能被 executor 消费，并被 Worker/Fleet surface 可见但不越界复制。
+- 2026-05-04 19:00：Epic 收口完成，AC1..6 全部满足：
+  1. Soul 已是 cross-package module（PLAN-097）：`packages/shared/src/soul/{module,registry,modules/<id>.ts}` 暴露 contract + 9 个内置 Soul + `BUILTIN_SOUL_MODULES` / `createBuiltinSoulRegistry`；CLI preset 是 projection 层；schemaPack 在 PLAN-100 填充。
+  2. `<project>/.aiworker/scope.json`（PLAN-098）：zod schema + parser + builder 在 shared，fs-layout `ensureProjectAiworker` 在 init 写最小 skeleton；doctor / brain status 展示状态。
+  3. Brain Kernel `brain_artifacts` 表 + `BrainArtifactRegistry`（PLAN-099）：登记 ref / hash / sensitivity / retention / status / evidenceRefs / metadata；不假设 artifact 是代码文件；developer + HR 双 fixture。
+  4. Brain admission MVP（PLAN-101）：`brain_admission_proposals` + `brain_admission_decisions` 落 worker.db；`generated durable brain change → filesystem` 必须经 evidence + risk + confidence + rollback + approval 才能 apply；`apply` MVP 只对 `memory-add` 自动 materialize。
+  5. `brain brief --task ...`（PLAN-102）：CLI 与 core compiler 都按 task / scope / Soul / artifactRefs / risk / executor / tokenBudget 编译；developer + HR 双 fixture；preview-only 不替换 orchestrator。
+  6. Worker/Fleet surface（PLAN-103）：`WorkerInfo.brainSummary` 聚合 + Worker REST `/api/worker/brain/{summary,admission*,artifacts*}` + Worker Admin `/brain` 视图；fleet UI 仅持 pointer + audit + brain 深链，未在 fleet.db 加任何 brain / admission / artifact 行。
+- 7 commits（cd5c589, b3e1c48, b56287b, 864e5f2, 862612b, 51b69af, [本提交]）跨 PLAN-097..103；shared 120 / fs-layout 20 / gateway-proto 19 / storage 19 / gateway 148 / core 554 / web 59 / api 83 / cli 159 = 1181 tests 全绿，typecheck 全 workspace 通过，lint 通过，build 通过，`git diff --check` 干净。

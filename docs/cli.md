@@ -139,6 +139,22 @@ aiworker brain status
 aiworker brain skills
 aiworker brain memories --limit 20
 
+# 3.1 看 brain artifact 注册表（PLAN-099；confidential / secret 默认 redact）
+aiworker brain artifacts list
+aiworker brain artifacts show src-orchestrator-service
+aiworker brain artifacts list --show-sensitive  # 操作者显式解锁
+
+# 3.2 审批 brain admission proposal（PLAN-101；--decided-by 必填）
+aiworker brain admission list --status pending
+aiworker brain admission show prop-2026-05-04-001
+aiworker brain admission approve prop-2026-05-04-001 --decided-by op-1 --reason "safe"
+aiworker brain admission apply prop-2026-05-04-001 --decided-by op-1            # dry-run
+aiworker brain admission apply prop-2026-05-04-001 --decided-by op-1 --commit   # 写 filesystem
+
+# 3.3 预览 task-specific Brain brief（PLAN-102；preview-only，不替换 orchestrator 系统提示）
+aiworker brain brief --task "review the new orchestrator service"
+aiworker brain brief --task "screen candidate c-001" --soul hr-recruiting --artifact candidate-c-001 --token-budget 6000
+
 # 4. 静态验证 brain/runtime capability 草案
 aiworker doctor
 

@@ -63,6 +63,11 @@ export {
 // Brain diagnostics：CLI / 管理 API 共用的只读 source 摘要。
 export { type BrainSourceDiagnostic, describeBrainSource } from './worker/brain/diagnostics'
 
+// Brain summary 聚合（PLAN-103）：从 worker.db 读 admission / artifact 计数 +
+// scope manifest 状态，喂给 buildInfo 与 fleet UI；不复制 payload / artifact
+// ref / canonical brain 文本。
+export { buildBrainSummary } from './worker/brain/summary'
+
 // Channel registry：路由 / 管理 API 都通过这个枚举 + 注册表挂 adapter。
 export { ChannelRegistry, getChannelAdapter } from './worker/channels/registry'
 

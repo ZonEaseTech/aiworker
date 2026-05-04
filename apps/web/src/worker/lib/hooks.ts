@@ -4,6 +4,8 @@ import type {
   WorkerConfig,
 } from '@zonease/aiworker-shared'
 import type {
+  BrainAdmissionListOptions,
+  BrainArtifactsListOptions,
   CronAddInput,
   CronJobRow,
   CronPatchInput,
@@ -14,15 +16,21 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback } from 'react'
 import {
   addCron,
+  applyAdmission,
+  approveAdmission,
   continueConversation,
   deleteCron,
   deleteSecret,
+  getAdmission,
+  getBrainSummary,
   getConfig,
   getEngines,
   getInfo,
   getWorkerHealth,
   grantApproval,
+  listAdmissions,
   listApprovals,
+  listArtifacts,
   listConversations,
   listCron,
   listMessages,
@@ -31,6 +39,7 @@ import {
   patchCron,
   putConfig,
   putSecret,
+  rejectAdmission,
   submitTask,
   testBrain,
   testChannel,
@@ -52,8 +61,18 @@ const APPROVALS_KEY = ['worker', 'approvals'] as const
 const CRON_KEY = ['worker', 'cron'] as const
 const TASKS_KEY = ['worker', 'tasks'] as const
 const CONVERSATIONS_KEY = ['worker', 'conversations'] as const
+const BRAIN_SUMMARY_KEY = ['worker', 'brain', 'summary'] as const
 function messagesKey(conversationId: string) {
   return ['worker', 'conversations', conversationId, 'messages'] as const
+}
+function admissionsKey(opts: BrainAdmissionListOptions) {
+  return ['worker', 'brain', 'admissions', opts] as const
+}
+function admissionKey(id: string) {
+  return ['worker', 'brain', 'admission', id] as const
+}
+function artifactsKey(opts: BrainArtifactsListOptions) {
+  return ['worker', 'brain', 'artifacts', opts] as const
 }
 
 // ---------------------------------------------------------------------------
@@ -328,4 +347,75 @@ export function useInvalidateTasks() {
     qc.invalidateQueries({ queryKey: TASKS_KEY })
     qc.invalidateQueries({ queryKey: CONVERSATIONS_KEY })
   }, [qc])
+}
+
+// ---------------------------------------------------------------------------
+// Brain (FEAT-054 / PLAN-103)
+// ---------------------------------------------------------------------------
+
+export function useBrainSummary() {
+  return useQuery({
+    queryKey: BRAIN_SUMMARY_KEY,
+    queryFn: getBrainSummary,
+    staleTime: 15_000,
+    refetchInterval: 60_000,
+  })
+}
+
+export function useAdmissions(opts: BrainAdmissionListOptions = {}) {
+  return useQuery({
+    queryKey: admissionsKey(opts),
+    queryFn: () => listAdmissions(opts),
+    staleTime: 10_000,
+  })
+}
+
+export function useAdmission(id: string | undefined, showSensitive = false) {
+  return useQuery({
+    queryKey: id === undefined ? ['worker', 'brain', 'admission', '__missing__'] : admissionKey(id),
+    queryFn: () => getAdmission(id as string, showSensitive),
+    enabled: Boolean(id),
+    staleTime: 5_000,
+  })
+}
+
+export function useApproveAdmission() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, decidedBy, reason }: { id: string, decidedBy: string, reason?: string }) =>
+      approveAdmission(id, { decidedBy, ...(reason === undefined ? {} : { reason }) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['worker', 'brain'] })
+    },
+  })
+}
+
+export function useRejectAdmission() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, decidedBy, reason }: { id: string, decidedBy: string, reason?: string }) =>
+      rejectAdmission(id, { decidedBy, ...(reason === undefined ? {} : { reason }) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['worker', 'brain'] })
+    },
+  })
+}
+
+export function useApplyAdmission() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, decidedBy, commit }: { id: string, decidedBy: string, commit?: boolean }) =>
+      applyAdmission(id, { decidedBy, ...(commit === undefined ? {} : { commit }) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['worker', 'brain'] })
+    },
+  })
+}
+
+export function useArtifacts(opts: BrainArtifactsListOptions = {}) {
+  return useQuery({
+    queryKey: artifactsKey(opts),
+    queryFn: () => listArtifacts(opts),
+    staleTime: 15_000,
+  })
 }

@@ -103,6 +103,7 @@ export type {
   WorkerComponentStatus,
   WorkerInfo,
   WorkerInfoBrain,
+  WorkerInfoBrainSummary,
   WorkerInfoChannel,
   WorkerInfoControlExecutor,
   WorkerInfoExecutor,

@@ -1,8 +1,15 @@
 import type {
+  BrainAdmissionDecision,
+  BrainAdmissionProposal,
+  BrainAdmissionStatus,
+  BrainArtifact,
+  BrainArtifactSensitivity,
+  BrainArtifactStatus,
   ChannelType,
   EngineAvailabilityResponse,
   WorkerConfig,
   WorkerInfo,
+  WorkerInfoBrainSummary,
 } from '@zonease/aiworker-shared'
 import { jsonFetch as sharedJsonFetch, WebApiError } from '@/shared/api'
 import { isFleetHostedWorkerPath, workerApiUrl } from './lib/api-base'
@@ -572,6 +579,133 @@ function parseSSEBlock(block: string): WorkerSSEEvent | null {
   catch {
     return null
   }
+}
+
+// ---------------------------------------------------------------------------
+// Brain surface (FEAT-054 / PLAN-103)
+// ---------------------------------------------------------------------------
+
+export interface WorkerBrainSummaryResponse {
+  workerId: string
+  brainSummary: WorkerInfoBrainSummary
+  checkedAt: string
+}
+
+export function getBrainSummary(): Promise<WorkerBrainSummaryResponse> {
+  return workerFetch<WorkerBrainSummaryResponse>('/api/worker/brain/summary')
+}
+
+export interface BrainAdmissionListResponse {
+  count: number
+  redacted: boolean
+  proposals: BrainAdmissionProposal[]
+}
+
+export interface BrainAdmissionListOptions {
+  status?: BrainAdmissionStatus
+  kind?: string
+  scopeId?: string
+  soulId?: string
+  limit?: number
+  showSensitive?: boolean
+}
+
+function admissionListQueryString(opts: BrainAdmissionListOptions = {}): string {
+  const params = new URLSearchParams()
+  if (opts.status !== undefined)
+    params.set('status', opts.status)
+  if (opts.kind !== undefined)
+    params.set('kind', opts.kind)
+  if (opts.scopeId !== undefined)
+    params.set('scopeId', opts.scopeId)
+  if (opts.soulId !== undefined)
+    params.set('soulId', opts.soulId)
+  if (opts.limit !== undefined)
+    params.set('limit', String(opts.limit))
+  if (opts.showSensitive === true)
+    params.set('showSensitive', 'true')
+  const qs = params.toString()
+  return qs.length === 0 ? '' : `?${qs}`
+}
+
+export function listAdmissions(opts: BrainAdmissionListOptions = {}): Promise<BrainAdmissionListResponse> {
+  return workerFetch<BrainAdmissionListResponse>(`/api/worker/brain/admission${admissionListQueryString(opts)}`)
+}
+
+export interface BrainAdmissionShowResponse {
+  redacted: boolean
+  proposal: BrainAdmissionProposal
+  decisions: BrainAdmissionDecision[]
+}
+
+export function getAdmission(id: string, showSensitive = false): Promise<BrainAdmissionShowResponse> {
+  const qs = showSensitive ? '?showSensitive=true' : ''
+  return workerFetch<BrainAdmissionShowResponse>(`/api/worker/brain/admission/${encodeURIComponent(id)}${qs}`)
+}
+
+export async function approveAdmission(id: string, body: { decidedBy: string, reason?: string }): Promise<{ decision: 'approved', proposal: BrainAdmissionProposal }> {
+  return workerFetch<{ decision: 'approved', proposal: BrainAdmissionProposal }>(`/api/worker/brain/admission/${encodeURIComponent(id)}/approve`, {
+    body: JSON.stringify(body),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  })
+}
+
+export async function rejectAdmission(id: string, body: { decidedBy: string, reason?: string }): Promise<{ decision: 'rejected', proposal: BrainAdmissionProposal }> {
+  return workerFetch<{ decision: 'rejected', proposal: BrainAdmissionProposal }>(`/api/worker/brain/admission/${encodeURIComponent(id)}/reject`, {
+    body: JSON.stringify(body),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  })
+}
+
+export interface ApplyAdmissionResponse {
+  outcome:
+    | { kind: 'dry-run', diff: string, target: string }
+    | { kind: 'applied', target: string }
+    | { kind: 'failed', reason: string }
+    | { kind: 'unsupported', proposalKind: string, reason: string }
+}
+
+export async function applyAdmission(id: string, body: { decidedBy: string, commit?: boolean }): Promise<ApplyAdmissionResponse> {
+  return workerFetch<ApplyAdmissionResponse>(`/api/worker/brain/admission/${encodeURIComponent(id)}/apply`, {
+    body: JSON.stringify(body),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  })
+}
+
+export interface BrainArtifactsListResponse {
+  count: number
+  redacted: boolean
+  artifacts: BrainArtifact[]
+}
+
+export interface BrainArtifactsListOptions {
+  scopeId?: string
+  type?: string
+  status?: BrainArtifactStatus
+  minSensitivity?: BrainArtifactSensitivity
+  limit?: number
+  showSensitive?: boolean
+}
+
+export function listArtifacts(opts: BrainArtifactsListOptions = {}): Promise<BrainArtifactsListResponse> {
+  const params = new URLSearchParams()
+  if (opts.scopeId !== undefined)
+    params.set('scopeId', opts.scopeId)
+  if (opts.type !== undefined)
+    params.set('type', opts.type)
+  if (opts.status !== undefined)
+    params.set('status', opts.status)
+  if (opts.minSensitivity !== undefined)
+    params.set('minSensitivity', opts.minSensitivity)
+  if (opts.limit !== undefined)
+    params.set('limit', String(opts.limit))
+  if (opts.showSensitive === true)
+    params.set('showSensitive', 'true')
+  const qs = params.toString()
+  return workerFetch<BrainArtifactsListResponse>(`/api/worker/brain/artifacts${qs.length === 0 ? '' : `?${qs}`}`)
 }
 
 export { WebApiError }

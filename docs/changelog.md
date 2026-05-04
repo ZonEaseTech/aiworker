@@ -1,5 +1,45 @@
 # AIWorker Changelog
 
+## 2026-05-04 19:00 [completed] FEAT-054 / PLAN-103 — Worker/Fleet Brain surface closeout
+
+把 PLAN-097..102 的 Soul / scope / artifact / admission / brief 落到 Worker REST + Worker Admin UI + Fleet UI（deep-link only），并跑接近全量 gate 作为 FEAT-054 epic 收口。
+
+- shared `WorkerInfo.brainSummary`：scope manifest 状态 + artifact `byStatus` 计数 + admission `byStatus` 计数 + `lastUpdatedAt`。聚合不复制 payload / artifact ref / canonical brain。
+- core `packages/core/src/worker/brain/summary.ts:buildBrainSummary`：worker.db group-by 计数 + `<project>/.aiworker/scope.json` 解析；`buildInfo` 注入 `brainSummary`。
+- apps/api 新增 `/api/worker/brain/{summary,admission*,artifacts*}` REST：bearer-auth 由顶层 `/api/worker/*` 守门；`POST /admission/:id/{approve,reject,apply}` 写端点 + dry-run 默认；`?showSensitive=true` 才解锁 redact。12 个 route test 覆盖 summary / list redaction / approve/reject 状态机 / apply dry-run+commit / artifacts redact / 409 invalid transition / 项目 scope manifest 解析。
+- apps/web Worker Admin `/brain` 视图（`features/brain/brain-panel.tsx` + `routes/brain.tsx`）：scope manifest 摘要 + admission 审批（approve / reject / apply / apply --commit）+ redacted artifact 列表；要求填 `--decided-by`。Nav 增加 Brain 入口。`api.ts` + `lib/hooks.ts` 加全套 brain 客户端 + TanStack Query hooks。
+- apps/web Fleet UI worker detail 增加 "Brain (PLAN-103)" 深链卡：明确 fleet 控制面不持 admission / artifact state，仅深链 `/w/<workerId>/#/brain`，维持 fleet UI 不消费 worker brain 数据的边界。
+- docs/architecture.md Brain admission roadmap 段标记完成 + Approval surface 改为已实现描述 + MVP materializer 范围 + Worker/Fleet aggregation surface 增加 brainSummary 字段说明与 “Brain 数据面隔离” 子段。docs/cli.md 在 init 后续步骤示例补 brain artifacts / admission / brief 三组命令。
+
+边界遵守：
+
+- fleet.db 没有新增表 / 列 / 行；没有任何 brain artifact / admission proposal / scope manifest 反向缓存。
+- fleet UI 不读取 worker brain 数据；通过深链跳到 worker UI 自身的 `/brain` 视图完成审批。
+- admission write endpoints `apply` 默认 `commit:false`（dry-run）；写 filesystem 必须显式 `commit:true`。
+- redact 默认开；CLI / API 输出 secret-like 字段必须显式 `--show-sensitive` / `?showSensitive=true`。
+- MVP materializer 仅 `memory-add`；其他 proposalType `apply` 返回 `unsupported`，留人工跟进。
+
+验证：
+
+- `bun run check` ✅ typecheck + lint 全 workspace 通过
+- `bun run test` ✅ 9/9 workspace 全绿（shared 120 / fs-layout 20 / gateway-proto 19 / storage 19 / gateway 148 / core 554 / web 59 / api 83 / cli 159 = 1181 tests）
+- `bun run build` ✅ web (fleet + worker bundle) + cli bundle + api 全通过
+- `git diff --check` ✅
+
+## 2026-05-04 19:00 [completed] FEAT-054 — Soul modules and Scope Brain kernel epic 收口
+
+FEAT-054 epic 跨 7 个 PLAN（PLAN-097..103）收口完成。Project Brain 从 filesystem-only memories / skills / persona surface 演进为 worker-bound business scope 的 Brain Kernel + 独立 Soul Modules：
+
+- **PLAN-097** 落 `SoulModule` contract + `SoulRegistry`，9 个内置 Soul 迁到 `packages/shared/src/soul/modules/`，CLI preset 退化为 projection。
+- **PLAN-098** 落 `<project>/.aiworker/scope.json` 显式声明业务作用域；`init` 写最小 skeleton，`doctor` / `brain status` 展示状态。
+- **PLAN-099** 落 `brain_artifacts` 表 + `BrainArtifactRegistry` + CLI inspector；ref/hash/sensitivity/retention/status/metadata 通用登记，不复制 artifact 内容。
+- **PLAN-100** 填上每个 Soul 的 schemaPack（artifactTypes / entityTypes / proposalTypes / workflowStates）；developer + HR 完整覆盖；7 个其他 Soul skeleton；`memory-add` 是所有 Soul 共享的 admission baseline。
+- **PLAN-101** 落 admission MVP：`brain_admission_proposals` + `brain_admission_decisions` 双表 + `BrainAdmissionService` 状态机 + CLI 五命令。
+- **PLAN-102** 落 `BrainBriefCompiler`：preview-only，按 task / scope / Soul / artifact / risk / token budget 投影 canonical brain；`AGENTS.md` / `CLAUDE.md` / Copilot instructions / executor hints 都是 projection 不是 source of truth。
+- **PLAN-103** 收口 Worker REST + Worker Admin UI + Fleet UI 边界，跑接近全量 gate。
+
+7 个 git commit 串起整条主线。所有 Soul 元数据现在跨 CLI / core / API / web 共享同一份 registry；admission 写路径有 evidence / risk / confidence / rollback / dry-run / redact 多层 guard；fleet 控制面与 worker 数据面边界明确。
+
 ## 2026-05-04 17:35 [completed] FEAT-054 / PLAN-102 — Brain brief compiler
 
 把 ContextManager 当前粗粒度的「AGENT/SOUL/USER/MEMORY/ROLLUP + 前 N 个 brain skill」拼接，扩成 task-specific brief compiler 的 preview。Brief 是 canonical brain 的**投影**，不替换 orchestrator 系统提示；`AGENTS.md` / `CLAUDE.md` / Copilot instructions / executor hints 都是 projection 不是 source of truth。

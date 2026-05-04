@@ -44,6 +44,34 @@ export interface WorkerInfoControlExecutor extends WorkerInfoExecutor {
   reusesTaskExecutor: boolean
 }
 
+/**
+ * Brain admission / artifact / scope aggregate surfaced through `/info` for
+ * fleet operators (PLAN-103). Counts only — fleet.db never replicates the
+ * proposal / artifact payloads; operators drill down via worker REST.
+ */
+export interface WorkerInfoBrainSummary {
+  /** Snapshot of `<project>/.aiworker/scope.json` parse status. */
+  scopeManifest: {
+    status: 'ok' | 'missing' | 'malformed' | 'not-applicable'
+    kind?: string
+    primarySoul?: string
+    privacy?: 'private' | 'team' | 'public'
+    approval?: 'manual-approval' | 'auto-low-risk'
+    error?: string
+  }
+  artifacts: {
+    total: number
+    /** `byStatus.active`, `byStatus.archived`, `byStatus.removed`. */
+    byStatus: Record<string, number>
+  }
+  admissions: {
+    /** Aggregated by `BrainAdmissionStatus`; missing keys mean 0. */
+    byStatus: Record<string, number>
+    /** ISO timestamp of the most recent proposal `updatedAt`, if any. */
+    lastUpdatedAt?: string
+  }
+}
+
 /** One channel binding row inside the `WorkerInfo` response. */
 export interface WorkerInfoChannel {
   channel: ChannelBinding['channel']
@@ -67,6 +95,13 @@ export interface WorkerInfo {
   controlExecutor?: WorkerInfoControlExecutor
   channels: WorkerInfoChannel[]
   evolutionEnabled: boolean
+  /**
+   * Aggregate brain state (PLAN-103). Always present; counts default to 0
+   * when worker.db has no admissions / artifacts and project scope has no
+   * scope manifest. Fleet UI consumes this directly without re-reading
+   * worker.db.
+   */
+  brainSummary: WorkerInfoBrainSummary
   /** ISO-8601 timestamp the current worker process started. */
   startedAt: string
   /**

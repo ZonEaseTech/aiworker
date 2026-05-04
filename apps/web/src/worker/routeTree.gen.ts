@@ -14,6 +14,7 @@ import { Route as SecretsRouteImport } from './routes/secrets'
 import { Route as CronRouteImport } from './routes/cron'
 import { Route as ConfigRouteImport } from './routes/config'
 import { Route as ChatRouteImport } from './routes/chat'
+import { Route as BrainRouteImport } from './routes/brain'
 import { Route as ApprovalsRouteImport } from './routes/approvals'
 import { Route as IndexRouteImport } from './routes/index'
 
@@ -42,6 +43,11 @@ const ChatRoute = ChatRouteImport.update({
   path: '/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BrainRoute = BrainRouteImport.update({
+  id: '/brain',
+  path: '/brain',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApprovalsRoute = ApprovalsRouteImport.update({
   id: '/approvals',
   path: '/approvals',
@@ -56,6 +62,7 @@ const IndexRoute = IndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/approvals': typeof ApprovalsRoute
+  '/brain': typeof BrainRoute
   '/chat': typeof ChatRoute
   '/config': typeof ConfigRoute
   '/cron': typeof CronRoute
@@ -65,6 +72,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/approvals': typeof ApprovalsRoute
+  '/brain': typeof BrainRoute
   '/chat': typeof ChatRoute
   '/config': typeof ConfigRoute
   '/cron': typeof CronRoute
@@ -75,6 +83,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/approvals': typeof ApprovalsRoute
+  '/brain': typeof BrainRoute
   '/chat': typeof ChatRoute
   '/config': typeof ConfigRoute
   '/cron': typeof CronRoute
@@ -86,17 +95,27 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/approvals'
+    | '/brain'
     | '/chat'
     | '/config'
     | '/cron'
     | '/secrets'
     | '/test'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/approvals' | '/chat' | '/config' | '/cron' | '/secrets' | '/test'
+  to:
+    | '/'
+    | '/approvals'
+    | '/brain'
+    | '/chat'
+    | '/config'
+    | '/cron'
+    | '/secrets'
+    | '/test'
   id:
     | '__root__'
     | '/'
     | '/approvals'
+    | '/brain'
     | '/chat'
     | '/config'
     | '/cron'
@@ -107,6 +126,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApprovalsRoute: typeof ApprovalsRoute
+  BrainRoute: typeof BrainRoute
   ChatRoute: typeof ChatRoute
   ConfigRoute: typeof ConfigRoute
   CronRoute: typeof CronRoute
@@ -151,6 +171,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/brain': {
+      id: '/brain'
+      path: '/brain'
+      fullPath: '/brain'
+      preLoaderRoute: typeof BrainRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/approvals': {
       id: '/approvals'
       path: '/approvals'
@@ -171,6 +198,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApprovalsRoute: ApprovalsRoute,
+  BrainRoute: BrainRoute,
   ChatRoute: ChatRoute,
   ConfigRoute: ConfigRoute,
   CronRoute: CronRoute,

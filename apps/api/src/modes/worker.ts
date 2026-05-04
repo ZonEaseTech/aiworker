@@ -19,6 +19,7 @@ import consola from 'consola'
 import { errorHandler } from '../shared/middleware/error-handler'
 import { requestLogger } from '../shared/middleware/logger'
 import { adminStaticMiddleware } from '../worker/admin/serve-static'
+import { buildBrainRoutes } from '../worker/brain/routes'
 import { buildChannelRoutes } from '../worker/channels/routes'
 import { buildEventRoutes } from '../worker/events/routes'
 import { evolutionRoutes } from '../worker/evolution/routes'
@@ -213,6 +214,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   app.route('/api/worker/orchestrator', buildOrchestratorRoutes(() => state.runtime))
   app.route('/api/worker/evolution', evolutionRoutes)
   app.route('/api/worker/events', buildEventRoutes(() => state.runtime))
+  app.route('/api/worker/brain', buildBrainRoutes({ getWorkerId: () => state.workerId }))
   app.route('/api/worker', buildManagementRoutes({ getState: () => state, reloadRuntime, runtimeVersion }))
 
   app.doc('/openapi.json', {

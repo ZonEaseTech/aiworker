@@ -189,6 +189,7 @@ export type {
   WorkerIdentity,
   WorkerInfo,
   WorkerInfoBrain,
+  WorkerInfoBrainSummary,
   WorkerInfoChannel,
   WorkerInfoControlExecutor,
   WorkerInfoExecutor,

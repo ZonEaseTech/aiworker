@@ -11,6 +11,7 @@ import type {
 } from '@zonease/aiworker-shared'
 import type { WorkerModeState } from './state'
 import { describeBrainSource } from '../brain/diagnostics'
+import { buildBrainSummary } from '../brain/summary'
 import { resolveVariant } from '../executor/default-profiles'
 
 /**
@@ -130,6 +131,7 @@ export async function buildInfo(
     runtimeVersion: env.runtimeVersion,
     configVersion: state.configVersion,
     brains,
+    brainSummary: buildBrainSummary(),
     executor,
     controlExecutor,
     channels,
