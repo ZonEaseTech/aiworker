@@ -174,7 +174,7 @@ cli.command('doctor', '静态验证当前 `.aiworker/` capability manifests、Sk
 })
 
 cli
-  .command('executor mcp add <name>', '声明一个 executor 原生 MCP server，并写入 `.aiworker/executor-capabilities.json`')
+  .command('executor mcp add <name>', '在 project executor overlay 中声明一个 MCP server hint，写入 `.aiworker/executor-capabilities.json`')
   .option('--engine <engine>', '目标 engine：codex 或 claude-code')
   .option('--scope <scope>', 'MCP 配置 scope；当前仅支持 project')
   .option('--transport <transport>', 'MCP transport：stdio / streamable-http / sse；未指定时按 --url 推断')
@@ -191,7 +191,7 @@ cli
   })
 
 cli
-  .command('executor mcp sync', '把 `.aiworker/executor-capabilities.json` 投影到 engine 官方 project-scope MCP 配置')
+  .command('executor mcp sync', '把 project executor overlay best-effort 投影到 engine 官方 project-scope MCP 配置（非 effective capability source of truth）')
   .option('--engine <engine>', '目标 engine：codex 或 claude-code')
   .option('--dry-run', '只打印将执行的 engine CLI 命令')
   .action(async (opts: Parameters<typeof runExecutorMcpSync>[0]) => {
@@ -222,21 +222,21 @@ cli
   })
 
 cli
-  .command('executor doctor', '验证 executor capability manifest、engine CLI availability 和安全约束')
+  .command('executor doctor', '校验 project executor overlay 与 engine CLI readiness（不探测 user/host ambient capabilities）')
   .option('--engine <engine>', '只检查一个 engine：codex 或 claude-code')
   .action(async (opts: Parameters<typeof runExecutorDoctor>[0]) => {
     process.exit(await runExecutorDoctor(opts))
   })
 
 cli
-  .command('executor capability list', '只读列出 executor-native MCP / engine plugin / engine skill / policy 声明')
+  .command('executor capability list', '只读列出 .aiworker/executor-capabilities.json 中的 project executor overlay 条目')
   .option('--engine <engine>', '只列出一个 engine：codex 或 claude-code')
   .action(async (opts: Parameters<typeof runExecutorCapabilityList>[0]) => {
     process.exit(await runExecutorCapabilityList(opts))
   })
 
 cli
-  .command('executor capability show <ref>', '只读查看 executor-native capability descriptor，ref 形如 codex.mcp.context7')
+  .command('executor capability show <ref>', '只读查看单条 project executor overlay descriptor，ref 形如 codex.mcp.context7')
   .action(async (ref: string) => {
     process.exit(await runExecutorCapabilityShow(ref))
   })
@@ -487,7 +487,7 @@ cli.command('worker doctor', '静态验证当前 `.aiworker/` capability manifes
 })
 
 cli
-  .command('worker executor mcp add <name>', '声明一个 executor 原生 MCP server，并写入 `.aiworker/executor-capabilities.json`')
+  .command('worker executor mcp add <name>', '在 project executor overlay 中声明一个 MCP server hint，写入 `.aiworker/executor-capabilities.json`')
   .option('--engine <engine>', '目标 engine：codex 或 claude-code')
   .option('--scope <scope>', 'MCP 配置 scope；当前仅支持 project')
   .option('--transport <transport>', 'MCP transport：stdio / streamable-http / sse；未指定时按 --url 推断')
@@ -504,7 +504,7 @@ cli
   })
 
 cli
-  .command('worker executor mcp sync', '把 `.aiworker/executor-capabilities.json` 投影到 engine 官方 project-scope MCP 配置')
+  .command('worker executor mcp sync', '把 project executor overlay best-effort 投影到 engine 官方 project-scope MCP 配置（非 effective capability source of truth）')
   .option('--engine <engine>', '目标 engine：codex 或 claude-code')
   .option('--dry-run', '只打印将执行的 engine CLI 命令')
   .action(async (opts: Parameters<typeof runExecutorMcpSync>[0]) => {
@@ -535,21 +535,21 @@ cli
   })
 
 cli
-  .command('worker executor doctor', '验证 executor capability manifest、engine CLI availability 和安全约束')
+  .command('worker executor doctor', '校验 project executor overlay 与 engine CLI readiness（不探测 user/host ambient capabilities）')
   .option('--engine <engine>', '只检查一个 engine：codex 或 claude-code')
   .action(async (opts: Parameters<typeof runExecutorDoctor>[0]) => {
     process.exit(await runExecutorDoctor(opts))
   })
 
 cli
-  .command('worker executor capability list', '只读列出 executor-native MCP / engine plugin / engine skill / policy 声明')
+  .command('worker executor capability list', '只读列出 .aiworker/executor-capabilities.json 中的 project executor overlay 条目')
   .option('--engine <engine>', '只列出一个 engine：codex 或 claude-code')
   .action(async (opts: Parameters<typeof runExecutorCapabilityList>[0]) => {
     process.exit(await runExecutorCapabilityList(opts))
   })
 
 cli
-  .command('worker executor capability show <ref>', '只读查看 executor-native capability descriptor，ref 形如 codex.mcp.context7')
+  .command('worker executor capability show <ref>', '只读查看单条 project executor overlay descriptor，ref 形如 codex.mcp.context7')
   .action(async (ref: string) => {
     process.exit(await runExecutorCapabilityShow(ref))
   })

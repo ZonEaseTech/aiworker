@@ -1,5 +1,23 @@
 # AIWorker Changelog
 
+## 2026-05-04 12:20 [progress] FEAT-049 / PLAN-087 — executor CLI wording and help cleanup
+
+把 CLI 中残留的 “executor 原生能力 manifest / executor-native capability lifecycle” 等措辞收口到 project executor overlay 语义：
+
+- `apps/cli/src/help.ts` 的 6 条 executor command summary 改写：`executor doctor` 明确 “不探测 user/host ambient capabilities”，`executor mcp add/sync` 表述为 overlay hint / best-effort projection。
+- `apps/cli/src/aiworker.ts` 顶层与 `worker executor ...` 镜像入口的 10 条 command description 同步。
+- `apps/cli/src/commands/worker/up.ts` stage 4 readiness 的注释、跳过文案、next-step 提示同步成 overlay 措辞。
+- `apps/cli/src/commands/worker/executor.ts` 的 `invalid project executor overlay manifest` 与 `Secret-like project executor overlay field` 两条文案同步。
+
+不重命名命令（`executor capability ...` 仍存在）、不删除子命令、不变 issue code、不变 zod schema。
+
+验证：
+
+- `bun run --filter '@zonease/aiworker-cli' typecheck`
+- `bun test apps/cli/src/commands/worker/executor.test.ts` (11/11)
+- `bun test apps/cli/src/commands/worker/up.test.ts apps/cli/src/aiworker.test.ts` (38/38)
+- `bun x eslint <changed files>` 无告警
+
 ## 2026-05-04 12:10 [progress] FEAT-049 / PLAN-086 — ambient executor readiness and doctor semantics
 
 把 `aiworker executor doctor` 与 `aiworker up` doctor stage 的输出统一重塑为四档 readiness：

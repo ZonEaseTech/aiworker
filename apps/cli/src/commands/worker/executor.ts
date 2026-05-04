@@ -650,7 +650,7 @@ async function loadManifest(manifestPath: string): Promise<
     const parsed = JSON.parse(await readFile(manifestPath, 'utf8')) as unknown
     const result = executorCapabilityManifestSchema.safeParse(parsed)
     if (!result.success) {
-      printValidationIssues('[aiworker executor] invalid executor capability manifest', result.error.issues.map(issue => ({
+      printValidationIssues('[aiworker executor] invalid project executor overlay manifest', result.error.issues.map(issue => ({
         code: 'manifest.invalid',
         message: issue.message,
         path: issue.path.join('.') || MANIFEST_FILE,
@@ -846,7 +846,7 @@ function collectGenericSecretIssues(value: unknown, pathValue: string): Validati
   return collectSecretIssues(value, pathValue).map(issue => ({
     ...issue,
     code: 'executor.capability.plaintext_secret',
-    message: issue.message.replace('Secret-like field', 'Secret-like executor-native capability field'),
+    message: issue.message.replace('Secret-like field', 'Secret-like project executor overlay field'),
   }))
 }
 

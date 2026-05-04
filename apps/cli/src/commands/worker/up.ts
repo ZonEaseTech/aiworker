@@ -49,8 +49,9 @@ interface UpPlan {
 
 /**
  * `aiworker up` is the local worker quick start path: initialize if needed,
- * validate project capability drafts, report executor-native readiness, then
- * hand off to the existing foreground `serve` lifecycle.
+ * validate project capability drafts, report project executor overlay readiness
+ * (engine CLI availability + ambient runtime hints), then hand off to the
+ * existing foreground `serve` lifecycle.
  */
 export async function runUp(options: UpOptions = {}, deps: UpDeps = {}): Promise<number> {
   const write = deps.write ?? ((text: string) => process.stdout.write(text))
@@ -183,7 +184,7 @@ async function runExecutorReadinessStage(
 ): Promise<void> {
   write('[aiworker up] stage 4/5 executor readiness\n')
   if (scope.scope !== 'project' || !scope.projectRoot) {
-    write(`  skipped: ${scope.scope} scope has no project executor capability manifest.\n`)
+    write(`  skipped: ${scope.scope} scope has no project executor overlay.\n`)
     return
   }
 
@@ -194,7 +195,7 @@ async function runExecutorReadinessStage(
   }
   printExecutorReport(write, readiness.report)
   if (readiness.report.status !== 'pass')
-    write('  Next    : run `aiworker executor doctor` for strict executor-native diagnostics.\n')
+    write('  Next    : run `aiworker executor doctor` for the full project overlay diagnostics.\n')
 }
 
 function printServeStage(write: (text: string) => void, options: UpOptions, dryRun: boolean): void {
