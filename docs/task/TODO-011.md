@@ -1,10 +1,11 @@
 # TODO-011 `aiworker init` next-steps text recommends `--engine codex` regardless of Soul
 
-- **status**: pending
+- **status**: completed
 - **priority**: P3
-- **owner**: unassigned
+- **owner**: aiworker-maintainer
 - **createdAt**: 2026-05-04 22:40
-- **plan**: TBD
+- **completedAt**: 2026-05-05 02:00
+- **plan**: PLAN-107
 - **relatesTo**: FEAT-049, FEAT-052
 
 ## Description

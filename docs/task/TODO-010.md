@@ -1,10 +1,11 @@
 # TODO-010 Admission evidence entries lose summary fields after zod parse
 
-- **status**: pending
+- **status**: completed
 - **priority**: P3
-- **owner**: unassigned
+- **owner**: aiworker-maintainer
 - **createdAt**: 2026-05-04 22:35
-- **plan**: TBD
+- **completedAt**: 2026-05-05 01:30
+- **plan**: PLAN-106
 - **relatesTo**: PLAN-101, PLAN-103
 
 ## Description

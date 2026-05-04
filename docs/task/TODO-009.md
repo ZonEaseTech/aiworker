@@ -1,10 +1,11 @@
 # TODO-009 Add operator-facing `aiworker brain admission propose` debug entry
 
-- **status**: pending
+- **status**: completed
 - **priority**: P3
-- **owner**: unassigned
+- **owner**: aiworker-maintainer
 - **createdAt**: 2026-05-04 22:30
-- **plan**: TBD
+- **completedAt**: 2026-05-05 01:30
+- **plan**: PLAN-106
 - **relatesTo**: PLAN-101
 
 ## Description

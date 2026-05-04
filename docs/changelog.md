@@ -1,5 +1,21 @@
 # AIWorker Changelog
 
+## 2026-05-05 02:00 [completed] PLAN-105 / 106 / 107 — 0.6.0 QA-004 缺陷收口
+
+QA-004（0.6.0 published claude-code Soul/Brain end-to-end debug campaign）登记的 9 个 task 全部完成，分三个 plan 落地：
+
+- `PLAN-105` Project Brain 注入贯穿 4 个 executor adapter（claude-code / codex / acp / cursor；`http` provider 已正确，`cli` / `mcp` providers 不实现 chat 不在范围）。新增共享 `engines/common/run-input.ts`（`extractRunMessages` / `composeSystemPromptText` / `renderHistoryAsUserPreamble` + 10 单元测试）：claude-code 走 `--append-system-prompt` + history user-envelope（弃用 `--resume`，stateless per turn）；codex resume / 非 resume 统一发 `renderCodexPrompt` 全 messages；acp `session/prompt` 改为 `[system_block, history_block, user_block]` content blocks；cursor stdin 折成 `[SYSTEM] / Recent conversation / New message` 三段。orchestrator `intent-classifier` / `quality-gate` 抽 `runIntentLlm` / `runQualityGateLlm` 走 1 次 strict re-prompt 重试，失败 fallback heuristic + reason 含 `llm-retry-exhausted`。覆盖 BUG-056 (P0) / BUG-057 (P1)。
+- `PLAN-106` Brain admission MVP 安全 / 鲁棒 / 可观察性补齐。新增共享 `scan-body.ts`（sk-token / JWT / bearer / AWS / GitHub / 高熵兜底 + `redactBodySecrets`）。`BrainAdmissionService.apply` 接 secret scan 三档：默认 `block`（HTTP 409 / exit 1） / `redact`（标 `[REDACTED:<rule>]` 写盘） / `raw`（原文落盘 + decision row reason 标识）；dry-run JSON 始终含 `secretScan: { hits, action, policy }`。`list` / `get` 走 per-row `safeParse`，`BrainAdmissionListResult` 新增 `skipped: { count, ids, reasons }`，CLI / REST footer 同步；新增 `getSafe` 暴露 skip reason。`apply` unsupported `kind` `commit=true` 时写 `failed` decision row + 状态机迁移到 `failed`（`failureReason='unsupported-kind:<kind>'`），dry-run 不变状态。`BrainAdmissionEvidence` schema 增加 `summary?: string ≤ 500` / `notes?: string ≤ 2000`（与 PLAN-101 现有 field-name redact 协同）。CLI 新增 `aiworker brain admission propose --i-know-this-is-debug`（root + worker 双入口），REST 新增 `POST /admission`（仅 `WORKER_DEV_TOOLS=true` 启用，否则 403）。覆盖 BUG-055 (P0) / BUG-058 (P2) / BUG-059 (P3) / TODO-009 / TODO-010。
+- `PLAN-107` CLI brief 与 init next-steps 文案修复。`brain brief` CLI normalize cac repeat-option 三种形态（undefined / single / array）；`brainBriefRequestSchema.artifactRefs` 走 zod transform strip undefined / blank / 非 string，避免下游 `- undefined: not found in brain artifact registry` 字面输出。`aiworker init` next-steps 不再写死 `--engine codex`：`recommendedEnginesForSoul` 按 Soul preset 给主 / 备 engine 提示，候选 `claude-code | codex | acp | cursor | mcp | http` 全列；`executor doctor` `executor.config_default_stub` 文案同步。覆盖 BUG-054 (P2) / TODO-011 (P3)。
+
+验证：
+
+- `bun run typecheck` ✅（9 workspace 全 0 退出）
+- `bun run lint` ✅（0 violation）
+- `bun run --filter '*' test` ✅（fs-layout 20 / shared 131 / gateway-proto 19 / storage 19 / gateway 148 / core 579 / api 83 / web 59 / cli 164 = 1222 tests，对比 0.6.0 baseline 1181 多 41 个新覆盖）
+
+未发布；BUG-055 / BUG-056 / BUG-057 是 P0/P1 安全 + 产品定位关键修复，建议尽快切 0.6.1 patch 发版。
+
 ## 2026-05-04 23:15 [completed] REL-013 / PLAN-104 — CLI 0.6.0 released
 
 `@zonease/aiworker-cli@0.6.0` minor release 完成。
