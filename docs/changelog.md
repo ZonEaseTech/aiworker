@@ -1,5 +1,24 @@
 # AIWorker Changelog
 
+## 2026-05-04 17:35 [completed] FEAT-054 / PLAN-102 — Brain brief compiler
+
+把 ContextManager 当前粗粒度的「AGENT/SOUL/USER/MEMORY/ROLLUP + 前 N 个 brain skill」拼接，扩成 task-specific brief compiler 的 preview。Brief 是 canonical brain 的**投影**，不替换 orchestrator 系统提示；`AGENTS.md` / `CLAUDE.md` / Copilot instructions / executor hints 都是 projection 不是 source of truth。
+
+- shared 新增 `packages/shared/src/brain/brief.ts`：`BrainBriefRequest` / `BrainBrief` zod schema + 7 个 source 枚举（agent-doc / soul-doc / memory-doc / rollup-doc / risk-policy / admission-summary / artifact-summary / scope-manifest / soul-skeleton）+ `estimateBrainBriefTokens` 启发式（~4 char/token）+ `DEFAULT_BRAIN_BRIEF_TOKEN_BUDGET=4000`。
+- core `packages/core/src/worker/brain/brief/compiler.ts`：`BrainBriefCompiler` + `createBrainBriefCompiler(deps)`，依赖注入 `brainHome / soulRegistry / scopeManifestReader? / artifactRegistry? / admissionService? / estimateTokens? / now?`。流程：scope manifest → 推 soulId（request → manifest.primarySoul → general-assistant fallback）→ 用 Soul.briefHooks.defaultSections 构建段（AGENT/SOUL/MEMORY/ROLLUP 文件 + risk-policy 合成 + 7 类 Soul-specific skeleton）→ artifact-summary 可选段（artifactRegistry.get） → token budget 截断（protected 优先；超预算时 protected 强制保留并 warning）→ 还原段顺序。
+- CLI `aiworker brain brief`（root + worker namespace）：`--task` 必填；`--scope` / `--soul` / `--artifact` (重复) / `--executor` / `--token-budget` 可选；JSON 输出含 brief + projection-note。
+- 测试：shared 11 case；core compiler 8 case 覆盖文件加载 / scope fallback / token budget / artifact-summary（命中 + missing）/ 缺失文件 / 未知 soulId / executor 透传；CLI brief 6 case 覆盖 --task 必填 / 文件加载 / artifact 注入 / token 预算 / --executor / 未知 soulId 错误。
+
+边界遵守：preview-only；不替换 orchestrator 系统提示；不写 executor-specific 文件；不改 executor adapter contract；不做 semantic vector retrieval。
+
+验证：
+
+- `bun run --filter '@zonease/aiworker-shared' test` ✅ 120 pass
+- `bun run --filter '@zonease/aiworker-core' test` ✅ 554 pass
+- `bun run --filter '@zonease/aiworker-cli' test` ✅ 159 pass
+- `bun run typecheck` ✅ 全 workspace 通过
+- `bun run lint` ✅
+
 ## 2026-05-04 16:50 [completed] FEAT-054 / PLAN-101 — Brain admission MVP
 
 把 admission roadmap 从 architecture 文本落成 worker.db 双表 + core 服务 + CLI 五个命令。Generated brain change（memory / brain-skill / policy / artifact-status）必须先进 `brain_admission_proposals`，经 operator approve / reject 才能 transition；`apply` 默认 dry-run，MVP 仅对 `kind === 'memory-add'` 自动落 filesystem。

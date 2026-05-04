@@ -50,6 +50,16 @@ export {
   type ReadBrainArtifactsOptions,
 } from './worker/brain/artifacts'
 
+// Brain brief compiler (PLAN-102)：把 canonical brain（AGENT/SOUL/USER/MEMORY
+// /ROLLUP、scope manifest、Soul module、artifact registry、admission service）
+// 投影成 task-specific brief。preview-only：orchestrator 不默认替换粗粒度
+// persona 拼接，CLI `aiworker brain brief` 给 operator 预览用。
+export {
+  BrainBriefCompiler,
+  type BrainBriefCompilerDeps,
+  createBrainBriefCompiler,
+} from './worker/brain/brief'
+
 // Brain diagnostics：CLI / 管理 API 共用的只读 source 摘要。
 export { type BrainSourceDiagnostic, describeBrainSource } from './worker/brain/diagnostics'
 

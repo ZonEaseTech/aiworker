@@ -3,14 +3,17 @@ import type { BrainAdmissionProposal, BrainAdmissionStatus, BrainArtifact, Brain
 import type { WorkerContext } from '../../context'
 
 import { existsSync, readFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 
-import { BrainAdmissionService, BrainArtifactRegistry, describeBrainSource } from '@zonease/aiworker-core'
-import { resolveAiworkerScope, resolveBrainHome } from '@zonease/aiworker-fs-layout'
-import { parseScopeManifestJson } from '@zonease/aiworker-shared'
+import { BrainAdmissionService, BrainArtifactRegistry, BrainBriefCompiler, describeBrainSource } from '@zonease/aiworker-core'
+import { projectScopeManifestPath, resolveAiworkerScope, resolveBrainHome } from '@zonease/aiworker-fs-layout'
+import { createBuiltinSoulRegistry, parseScopeManifestJson } from '@zonease/aiworker-shared'
 import consola from 'consola'
 
 import { buildRuntime, loadWorkerContext } from '../../context'
+
+const SOUL_REGISTRY = createBuiltinSoulRegistry()
 
 async function withWorkerContext<T>(fn: (ctx: WorkerContext) => Promise<T>): Promise<T> {
   const ctx = await loadWorkerContext({ silent: true })
@@ -451,6 +454,63 @@ export async function runBrainAdmissionReject(id: string, options: BrainAdmissio
   }
   catch (err) {
     consola.error(`[aiworker brain admission reject] failed: ${err instanceof Error ? err.message : String(err)}`)
+    return 1
+  }
+}
+
+export interface BrainBriefOptions {
+  task: string
+  scopeId?: string
+  soulId?: string
+  artifactRefs?: readonly string[]
+  executor?: string
+  tokenBudget?: number
+}
+
+export async function runBrainBrief(options: BrainBriefOptions): Promise<number> {
+  if (options.task === undefined || options.task.trim() === '') {
+    consola.error('[aiworker brain brief] --task is required')
+    return 2
+  }
+  try {
+    return await withWorkerContext(async (ctx) => {
+      const brainHome = resolveBrainHome(ctx.workerId)
+      const scope = resolveAiworkerScope()
+      const compiler = new BrainBriefCompiler({
+        artifactRegistry: new BrainArtifactRegistry(),
+        brainHome,
+        scopeManifestReader: async () => {
+          if (scope.scope !== 'project' || !scope.projectRoot)
+            return null
+          try {
+            const raw = await readFile(projectScopeManifestPath(scope.projectRoot), 'utf8')
+            const parsed = parseScopeManifestJson(raw)
+            return parsed.status === 'ok' ? parsed.manifest : null
+          }
+          catch {
+            return null
+          }
+        },
+        soulRegistry: SOUL_REGISTRY,
+      })
+      const brief = await compiler.compile({
+        task: options.task,
+        ...(options.scopeId === undefined ? {} : { scopeId: options.scopeId }),
+        ...(options.soulId === undefined ? {} : { soulId: options.soulId }),
+        ...(options.artifactRefs === undefined || options.artifactRefs.length === 0 ? {} : { artifactRefs: options.artifactRefs }),
+        ...(options.executor === undefined ? {} : { executor: options.executor }),
+        ...(options.tokenBudget === undefined ? {} : { tokenBudget: options.tokenBudget }),
+      })
+      console.log(JSON.stringify({
+        workerId: ctx.workerId,
+        brief,
+        note: 'Brief is a projection of canonical brain (<brainHome>); orchestrator system prompt is unchanged.',
+      }, null, 2))
+      return 0
+    })
+  }
+  catch (err) {
+    consola.error(`[aiworker brain brief] failed: ${err instanceof Error ? err.message : String(err)}`)
     return 1
   }
 }

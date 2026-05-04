@@ -48,6 +48,7 @@ import {
   runBrainAdmissionShow,
   runBrainArtifactsList,
   runBrainArtifactsShow,
+  runBrainBrief,
   runBrainMemories,
   runBrainSkills,
   runBrainStatus,
@@ -389,6 +390,36 @@ cli
     process.exit(await runBrainAdmissionApply(id, {
       decidedBy: opts.decidedBy,
       ...(opts.commit === undefined ? {} : { commit: opts.commit }),
+    }))
+  })
+
+cli
+  .command('brain brief', '把 canonical brain（AGENT/SOUL/USER/MEMORY/ROLLUP + scope manifest + Soul + artifacts）投影成 task-specific brief；preview-only')
+  .option('--task <text>', '任务描述（必填）')
+  .option('--scope <id>', '指定 scope id（默认从 .aiworker/scope.json 读取）')
+  .option('--soul <id>', '指定 Soul id（默认 scope manifest 的 primarySoul）')
+  .option('--artifact <id>', '关联的 brain artifact id；可重复出现', { type: [String] })
+  .option('--executor <engine>', '记录目标 executor engine 提示，不实际启动 executor')
+  .option('--token-budget <n>', '默认 4000；范围 200..50000', { type: [Number] })
+  .action(async (opts: {
+    task?: string
+    scope?: string
+    soul?: string
+    artifact?: string[]
+    executor?: string
+    tokenBudget?: number[]
+  }) => {
+    if (opts.task === undefined || opts.task.trim() === '') {
+      consola.error('[aiworker brain brief] --task is required')
+      process.exit(2)
+    }
+    process.exit(await runBrainBrief({
+      task: opts.task,
+      ...(opts.scope === undefined ? {} : { scopeId: opts.scope }),
+      ...(opts.soul === undefined ? {} : { soulId: opts.soul }),
+      ...(opts.artifact === undefined ? {} : { artifactRefs: opts.artifact }),
+      ...(opts.executor === undefined ? {} : { executor: opts.executor }),
+      tokenBudget: optionalNumber(opts.tokenBudget),
     }))
   })
 
@@ -819,6 +850,36 @@ cli
     process.exit(await runBrainAdmissionApply(id, {
       decidedBy: opts.decidedBy,
       ...(opts.commit === undefined ? {} : { commit: opts.commit }),
+    }))
+  })
+
+cli
+  .command('worker brain brief', '把 canonical brain 投影成 task-specific brief；preview-only')
+  .option('--task <text>', '任务描述（必填）')
+  .option('--scope <id>', '指定 scope id（默认从 .aiworker/scope.json 读取）')
+  .option('--soul <id>', '指定 Soul id（默认 scope manifest 的 primarySoul）')
+  .option('--artifact <id>', '关联的 brain artifact id；可重复出现', { type: [String] })
+  .option('--executor <engine>', '记录目标 executor engine 提示')
+  .option('--token-budget <n>', '默认 4000；范围 200..50000', { type: [Number] })
+  .action(async (opts: {
+    task?: string
+    scope?: string
+    soul?: string
+    artifact?: string[]
+    executor?: string
+    tokenBudget?: number[]
+  }) => {
+    if (opts.task === undefined || opts.task.trim() === '') {
+      consola.error('[aiworker worker brain brief] --task is required')
+      process.exit(2)
+    }
+    process.exit(await runBrainBrief({
+      task: opts.task,
+      ...(opts.scope === undefined ? {} : { scopeId: opts.scope }),
+      ...(opts.soul === undefined ? {} : { soulId: opts.soul }),
+      ...(opts.artifact === undefined ? {} : { artifactRefs: opts.artifact }),
+      ...(opts.executor === undefined ? {} : { executor: opts.executor }),
+      tokenBudget: optionalNumber(opts.tokenBudget),
     }))
   })
 

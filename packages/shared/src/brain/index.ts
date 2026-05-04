@@ -47,3 +47,21 @@ export type {
   BrainArtifactSource,
   BrainArtifactStatus,
 } from './artifact'
+
+export {
+  brainBriefDroppedSectionSchema,
+  brainBriefRequestSchema,
+  brainBriefSchema,
+  brainBriefSectionIdSchema,
+  brainBriefSectionSchema,
+  brainBriefSectionSourceSchema,
+  DEFAULT_BRAIN_BRIEF_TOKEN_BUDGET,
+  estimateBrainBriefTokens,
+} from './brief'
+export type {
+  BrainBrief,
+  BrainBriefDroppedSection,
+  BrainBriefRequest,
+  BrainBriefSection,
+  BrainBriefSectionSource,
+} from './brief'

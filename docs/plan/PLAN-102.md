@@ -1,8 +1,9 @@
 # PLAN-102 Brain brief compiler and projection boundary
 
-- **status**: draft
+- **status**: completed
 - **createdAt**: 2026-05-04 13:52
-- **approvedAt**: (pending)
+- **approvedAt**: 2026-05-04 17:00
+- **completedAt**: 2026-05-04 17:35
 - **relatedTask**: FEAT-054
 
 ## 现状
@@ -51,3 +52,14 @@
 - developer / HR fixture coverage。
 - `bun run --filter '@zonease/aiworker-core' test`
 - `bun run --filter '@zonease/aiworker-cli' test`
+
+## 进度
+
+- 2026-05-04 17:00：用户批准方案（preview-only、token budget 默认 4000、protected sections 强制保留、artifact summary 作为可选额外段）。
+- 2026-05-04 17:35：实现完成。
+  - shared `packages/shared/src/brain/brief.ts`：`BrainBriefRequest` / `BrainBrief` zod schema + 7 个 source 枚举（agent-doc / soul-doc / memory-doc / rollup-doc / risk-policy / admission-summary / artifact-summary / scope-manifest / soul-skeleton）+ `estimateBrainBriefTokens` 启发式 (~4 char/token，1 char min) + `DEFAULT_BRAIN_BRIEF_TOKEN_BUDGET=4000`。
+  - core `packages/core/src/worker/brain/brief/compiler.ts`：`BrainBriefCompiler` + `createBrainBriefCompiler(deps)`。依赖注入 `brainHome` / `soulRegistry` / `scopeManifestReader?` / `artifactRegistry?` / `admissionService?` / `estimateTokens?` / `now?`。流程：scope manifest → 推 soulId（请求 → manifest.primarySoul → general-assistant fallback）→ 用 Soul.briefHooks.defaultSections 构建段（AGENT/SOUL/MEMORY/ROLLUP 文件 + risk-policy 合成 + 7 类 Soul-specific skeleton）→ 可选 artifact-summary（解析 artifactRefs → artifactRegistry.get） → token budget 截断（protected 优先；超预算时 protected 强制保留并 warning，非 protected 丢入 droppedSections）→ 还原原始段顺序。
+  - CLI `aiworker brain brief`（root + worker namespace）：`--task` 必填；`--scope` / `--soul` / `--artifact <id>` (重复) / `--executor` / `--token-budget` 可选；输出 JSON 包含 brief + projection note。`brainHome` 来自 `resolveBrainHome(workerId)`；scopeManifestReader 通过 `projectScopeManifestPath` + `parseScopeManifestJson` 加载；artifactRegistry 默认接 `BrainArtifactRegistry`。`apps/cli/src/aiworker.test.ts` + `help.ts` 同步注册元数据。
+  - 测试：shared 11 个 case 覆盖 schema / 默认值 / token estimator 边界；core compiler 8 个 case 覆盖 developer 文件加载 + risk-policy 合成、scope manifest fallback 推 soulId、token budget 截断保留 protected、artifact-summary 解析（命中 + missing）、artifactRefs 但无 registry 警告、缺失 canonical 文件、未知 soulId 抛错、executor 字段透传；CLI brief 6 个 case 覆盖 --task 必填、developer 文件加载、artifact 注入、token 预算、--executor 透传、未知 soulId 错误。
+  - 边界：preview-only；orchestrator 没改；不写 executor-specific 文件；不改 executor adapter contract；不做 vector retrieval；CLI 输出包含 projection-note 提醒 canonical brain 在 `<brainHome>`。
+  - 验证：`bun run --filter '@zonease/aiworker-shared' test` 120 pass、`bun run --filter '@zonease/aiworker-core' test` 554 pass、`bun run --filter '@zonease/aiworker-cli' test` 159 pass、`bun run typecheck` 全 workspace 通过、`bun run lint` 通过。
