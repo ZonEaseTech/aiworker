@@ -276,7 +276,14 @@ best-effort projection 仍走 `aiworker executor mcp ...` 或只读
 aiworker executor doctor --engine codex
 ```
 
-输出会区分 configured task executor、engine CLI availability、project overlay descriptor 和 best-effort projection compatibility。空 overlay 或默认 `http/default` stub executor 会显示 `Status: WARN` 但退出码仍为 `0`；存在错误时整体 `Status: FAIL`，退出码为 `1`。MVP 只做 CLI availability、overlay 和 descriptor 静态检查，不会启动 MCP server 或执行 `listTools`，也不会枚举或屏蔽 user/host ambient capabilities。
+输出按四档 readiness 分组：
+
+1. **binary likely ready**：每个声明的 engine 单独检查 CLI 是否在 `PATH`。缺失只是 `WARN` 而非 `FAIL`，operator 可以仍跑别的 task executor。
+2. **ambient runtime**：每个 engine 都会出一行 `INFO`，明确 user/host MCP、skills、plugins、auth、native sessions 由 engine 自己负责，AIWorker 不会枚举或屏蔽。
+3. **project overlay**：检查 `.aiworker/executor-capabilities.json` 的格式与 best-effort projection 兼容性；空 overlay 是 `WARN`，不阻塞。
+4. **blocking policy**：descriptor 不合法、`secretRef` 字段写成明文或 projection 命令失败才会让整体 `Status: FAIL`，退出码为 `1`。其它情况 `Status: PASS / WARN`，退出码 `0`。
+
+doctor 不会启动 MCP server 或 `listTools`，也不会探测 engine 的 login/auth 状态；这些由 engine 自身 CLI 负责。
 
 ### `aiworker executor capability list` / `show`
 

@@ -260,11 +260,19 @@ export async function runExecutorDoctor(options: { engine?: string } = {}): Prom
   const engines = engine ? [engine.value] : Object.keys(manifestResult.manifest.engines) as ExecutorCapabilityEngine[]
   const issues = engines.flatMap(item => collectEngineIssues(manifestResult.manifest, item, {
     rejectSecretRefs: false,
-    requireBinary: true,
+    requireBinary: false,
     requireProjectionCompatibility: true,
   }))
   const warnings = collectDoctorWarnings(manifestResult.manifest, configuredExecutor, engines)
-  const status = issues.length > 0 ? 'FAIL' : warnings.length > 0 ? 'WARN' : 'PASS'
+  const binaryWarnings = engines
+    .filter(item => !findBinary(SUPPORTED_ENGINES[item].binary))
+    .map<ValidationIssue>(item => ({
+      code: 'executor.binary_missing',
+      message: `Engine CLI "${SUPPORTED_ENGINES[item].binary}" was not found on PATH; install it before running tasks against ${item}, or pick a different task executor.`,
+      path: `engines.${item}`,
+    }))
+  const allWarnings = [...warnings, ...binaryWarnings]
+  const status = issues.length > 0 ? 'FAIL' : allWarnings.length > 0 ? 'WARN' : 'PASS'
 
   process.stdout.write('[aiworker executor doctor] project executor overlay validation\n')
   process.stdout.write(`Root  : ${context.value.root}\n`)
@@ -275,11 +283,14 @@ export async function runExecutorDoctor(options: { engine?: string } = {}): Prom
   process.stdout.write(`  ${manifestSummary.empty ? 'WARN' : 'PASS'}    declared project executor overlay entries: ${manifestSummary.declaredCapabilities}\n`)
   for (const item of engines) {
     const binary = SUPPORTED_ENGINES[item].binary
-    const binaryStatus = findBinary(binary) ? 'PASS' : 'FAIL'
+    const binaryFound = findBinary(binary) !== null
+    const binaryStatus = binaryFound ? 'PASS' : 'WARN'
     const mcpCount = Object.values(manifestResult.manifest.engines[item]?.mcp ?? {}).filter(server => server.disabled !== true).length
-    process.stdout.write(`  ${binaryStatus.padEnd(7)} ${item} (binary: ${binary}, mcp: ${mcpCount})\n`)
+    process.stdout.write(`  ${binaryStatus.padEnd(7)} ${item} binary likely ready (cli: ${binary}, overlay mcp: ${mcpCount})\n`)
+    process.stdout.write(`  INFO    ${item} ambient runtime: user/host MCP, skills, plugins, auth and native sessions live outside AIWorker\n`)
   }
-  for (const issue of warnings)
+  process.stdout.write('  INFO    engine login/auth state is managed by each engine CLI; AIWorker does not probe it\n')
+  for (const issue of allWarnings)
     process.stdout.write(`    - [warning] ${issue.code} ${issue.path}: ${issue.message}\n`)
   for (const issue of issues)
     process.stdout.write(`    - [error] ${issue.code} ${issue.path}: ${issue.message}\n`)

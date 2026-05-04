@@ -43,3 +43,4 @@ bootstrap hint；`executor doctor` 只报告外部 runtime 的可用性、ambien
 
 - 2026-05-04 11:22：该任务是后续实现收口，不在 PLAN-083/084 的文档落地中改代码。
 - 2026-05-04 12:00：完成 PLAN-085。manifest 语义在 shared schema、CLI 输出文案、fs-layout 注释三处全部降级为 project executor overlay / hint；issue code、命令名、文件名、导出名都保持向后兼容。
+- 2026-05-04 12:10：完成 PLAN-086。`executor doctor` 与 `aiworker up` doctor stage 渲染统一为四档 readiness：binary likely ready（缺失 WARN 不 FAIL）、ambient runtime INFO、project overlay 静态检查、blocking policy（仅 invalid descriptor / 明文 secret / projection 错误 FAIL）；新增 INFO 行说明 engine login/auth 不归 AIWorker 探测。

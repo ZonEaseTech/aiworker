@@ -239,11 +239,14 @@ function printExecutorReport(write: (text: string) => void, report: ExecutorRead
   else {
     write('  WARN    configured task executor unavailable\n')
   }
-  write(`  ${report.manifest.empty ? 'WARN' : 'PASS'}    declared executor-native capabilities: ${report.manifest.declaredCapabilities}\n`)
+  write(`  ${report.manifest.empty ? 'WARN' : 'PASS'}    declared project executor overlay entries: ${report.manifest.declaredCapabilities}\n`)
   for (const item of report.engines) {
     const status = item.binaryFound ? 'PASS' : 'WARN'
-    write(`  ${status.padEnd(7)} ${item.engine} (binary: ${item.binary}, mcp: ${item.mcpCount})\n`)
+    write(`  ${status.padEnd(7)} ${item.engine} binary likely ready (cli: ${item.binary}, overlay mcp: ${item.mcpCount})\n`)
+    write(`  INFO    ${item.engine} ambient runtime: user/host MCP, skills, plugins, auth and native sessions live outside AIWorker\n`)
   }
+  if (report.engines.length > 0)
+    write('  INFO    engine login/auth state is managed by each engine CLI; AIWorker does not probe it\n')
   for (const issue of report.issues)
     write(`    - [${issue.severity}] ${issue.code} ${issue.path}: ${issue.message}\n`)
 }

@@ -1,5 +1,22 @@
 # AIWorker Changelog
 
+## 2026-05-04 12:10 [progress] FEAT-049 / PLAN-086 — ambient executor readiness and doctor semantics
+
+把 `aiworker executor doctor` 与 `aiworker up` doctor stage 的输出统一重塑为四档 readiness：
+
+1. **binary likely ready**：每个 engine 检查 CLI 是否在 PATH；缺失只 WARN 不 FAIL，operator 可以继续跑别的 task executor。
+2. **ambient runtime**：每个 engine 输出 `INFO ambient runtime: user/host MCP/skills/plugins/auth/native sessions live outside AIWorker`，外加全局 `INFO engine login/auth state is managed by each engine CLI`。
+3. **project overlay**：保留对 `.aiworker/executor-capabilities.json` 的静态校验；空 overlay 仍是 WARN。
+4. **blocking policy**：只有 invalid descriptor、明文 secret 或 projection 命令失败才让整体 Status FAIL（退出码 1）。
+
+`docs/cli.md` doctor 章节同步改写。`runExecutorDoctor` 把 binary 缺失从 issue（error）改为 binary warning，整体 status 由 issues + warnings 共同 rollup；`inspectExecutorReadiness` 数据结构无破坏性变化，up.ts `printExecutorReport` 共享同一套 wording。
+
+验证：
+
+- `bun run --filter '@zonease/aiworker-cli' typecheck`
+- `bun test apps/cli/src/commands/worker/executor.test.ts` (11/11)
+- `bun test apps/cli/src/commands/worker/up.test.ts` (5/5)
+
 ## 2026-05-04 12:00 [progress] FEAT-049 / PLAN-085 — executor capability overlay semantics
 
 完成 FEAT-049 的第一步切片，把 `.aiworker/executor-capabilities.json` 的产品语义从 “executor-native capability manifest” 显式降级为 **project executor overlay / bootstrap hint**：

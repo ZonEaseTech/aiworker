@@ -1,7 +1,8 @@
 # PLAN-086 Ambient executor readiness and doctor semantics
 
-- **status**: draft
+- **status**: completed
 - **createdAt**: 2026-05-04 11:22
+- **completedAt**: 2026-05-04 12:10
 - **relatedTask**: FEAT-049
 
 ## 现状
@@ -39,3 +40,15 @@
 
 - Focused executor CLI tests。
 - `aiworker executor doctor --engine codex` smoke。
+
+## 完成记录
+
+- 2026-05-04 12:10：完成 ambient runtime / 四档 readiness 重塑。
+  - `runExecutorDoctor`（`apps/cli/src/commands/worker/executor.ts`）：每个 declared engine 输出 `binary likely ready (cli, overlay mcp)` + `INFO ambient runtime: ...`，全局加 `INFO engine login/auth state ...`。binary 缺失改为 `WARN`，不再 FAIL；只有 invalid descriptor / 明文 secret / projection-incompatible 才 FAIL。
+  - `printExecutorReport`（`apps/cli/src/commands/worker/up.ts`）：同步同样的渲染语义到 `aiworker up` doctor stage 输出，wording 与 `executor doctor` 对齐。
+  - `docs/cli.md` doctor 章节重写为四档（binary likely ready / ambient runtime / project overlay / blocking policy），明确 doctor 不探测 login 状态。
+  - `apps/cli/src/commands/worker/executor.test.ts` 加 ambient runtime / `binary likely ready` / `executor.binary_missing` 断言；旧 default-stub 测试沿用新 wording。
+- 验证：
+  - `bun run --filter '@zonease/aiworker-cli' typecheck` ✅
+  - `bun test apps/cli/src/commands/worker/executor.test.ts` ✅ 11/11 pass
+  - `bun test apps/cli/src/commands/worker/up.test.ts` ✅ 5/5 pass

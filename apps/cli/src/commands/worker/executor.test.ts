@@ -273,6 +273,35 @@ describe('aiworker executor capability commands', () => {
     expect(doctor.output).toContain('executor.capability_manifest_empty')
   })
 
+  it('doctor renders ambient runtime and auth INFO lines per declared engine without failing on missing binary', async () => {
+    const { home, project } = await initProject()
+    await writeFile(path.join(project, '.aiworker', 'executor-capabilities.json'), `${JSON.stringify({
+      engines: {
+        codex: {
+          mcp: {
+            context7: {
+              scope: 'project',
+              transport: 'streamable-http',
+              url: 'https://mcp.example.com/mcp',
+            },
+          },
+        },
+      },
+      schemaVersion: 1,
+    }, null, 2)}\n`, 'utf8')
+
+    const doctor = await runCli(['executor', 'doctor', '--engine', 'codex'], project, home, {
+      PATH: '/usr/bin',
+    })
+
+    expect(doctor.exitCode).toBe(0)
+    expect(doctor.output).toContain('Status: WARN')
+    expect(doctor.output).toContain('codex binary likely ready (cli: codex, overlay mcp: 1)')
+    expect(doctor.output).toContain('codex ambient runtime: user/host MCP, skills, plugins, auth and native sessions live outside AIWorker')
+    expect(doctor.output).toContain('engine login/auth state is managed by each engine CLI; AIWorker does not probe it')
+    expect(doctor.output).toContain('executor.binary_missing')
+  })
+
   it('selects a task executor with dry-run by default and apply guarded by config version', async () => {
     const { home, project } = await initProject()
 

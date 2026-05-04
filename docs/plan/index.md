@@ -114,7 +114,7 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-083 Product positioning PMA tracking and AGENTS guidance**](PLAN-083.md) `2026-05-04`
 - [x] [**PLAN-084 Product positioning docs refresh**](PLAN-084.md) `2026-05-04`
 - [x] [**PLAN-085 Executor capability overlay semantics**](PLAN-085.md) `2026-05-04`
-- [ ] [**PLAN-086 Ambient executor readiness and doctor semantics**](PLAN-086.md) `2026-05-04`
+- [x] [**PLAN-086 Ambient executor readiness and doctor semantics**](PLAN-086.md) `2026-05-04`
 - [ ] [**PLAN-087 Executor CLI wording and help cleanup**](PLAN-087.md) `2026-05-04`
 - [ ] [**PLAN-088 Project Brain asset model**](PLAN-088.md) `2026-05-04`
 - [ ] [**PLAN-089 Brain diagnostics and onboarding UX**](PLAN-089.md) `2026-05-04`
