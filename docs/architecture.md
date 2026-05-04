@@ -176,6 +176,25 @@ Project Brain 由五类资产组成。命名上 *brain memory / brain skill / pr
 | **Admission state** | （roadmap：单独 admission store，未落 DB） | brain runtime（proposal）+ operator（approval） | 任何 generated memory / skill / policy proposal 必须保留 evidence、scope、confidence、rollback；当前只允许 pre-compaction memory flush 的 runtime 写入路径，其它 mutating 必须显式 operator approval。CLI/API/UI approval surface 由 PLAN-090 roadmap 推进。 | （roadmap） |
 
 `<project>/.aiworker/executor-capabilities.json` **不是** brain 资产；它是外部 executor 的 project overlay / hint，与上面五类完全独立。fleet.db 与 worker.db 都不持久化 brain 内容；filesystem 是唯一权威源，便于 git review 与跨机迁移。
+
+### Brain admission roadmap
+
+任何 brain runtime 自动生成的 memory / brain skill / policy proposal 在落到 filesystem（即 `MEMORY.md`、`memories/`、`.aiworker/skills/`、`policy.json`、`toolsets.json`、`capability-packs.json`、`.aiworker/mcp.json`）之前都要走 admission flow。当前 PMA 阶段不直接落 DB migration，roadmap 分四段：
+
+1. **Proposal 模型**（设计阶段）：每条 admission proposal 必须携带：
+   - `evidence`：触发该 proposal 的 conversation id / span / 时间窗。
+   - `scope`：会修改的具体文件 / 资产路径与字段。
+   - `confidence`：runtime 自报的可靠度（rule-based 或 model-self-rated），admission UI 不假装这是绝对真值。
+   - `rollback`：能把目标资产恢复到 proposal 之前状态的精确指令（diff / restore-from-backup / 删除新增文件）。
+   - `summary`：一句话给 operator 看的人话描述。
+2. **Storage 选型**（设计阶段）：admission proposal 与 audit 记录持久化到 worker.db（**不**进 fleet.db），通过新表 `brain_admission_proposals` + `brain_admission_decisions`；fleet 视角通过 worker REST 间接读取，不在 fleet.db 复制 proposal 全文。schema migration 走 `packages/storage-sqlite/drizzle/worker/*` 单独 PMA。
+3. **Approval surface**（实现阶段）：
+   - CLI: `aiworker brain admission list/show/approve/reject`，project scope；显式与 executor capability 的 `executor capability list/show` 在命名上隔离。
+   - API: `apps/api/src/worker/brain/admission/*` REST endpoints + bearer-auth。
+   - UI: Worker Admin 新增 “Brain admission” 视图，列待审 proposal、diff、approve/reject。Fleet UI 不持有 admission state，只链接到对应 worker UI。
+4. **唯一允许的免审写入**：pre-compaction memory flush（runtime 把易失 memory rollup 到 `MEMORY.md` 的批量收口）继续作为已批准的 runtime 写入路径；任何其它 mutating brain CLI/API/UI 命令必须先经过本 roadmap 接入。
+
+红线：admission flow 不复用 executor MCP / engine plugin / engine skill / project executor overlay 通路；命名上严格使用 `brain admission` / `brain memory` / `brain skill` / `project policy`，避免与 `executor capability` / `executor mcp` 重名。
 - **`config.yaml`** 是 `worker_config.configJson` 的 advisory 镜像——`PUT /api/worker/config` 与 `aiworker config set`（worker-local）/ `aiworker fleet config set`（远端 worker）落库成功后都会调 `mirrorConfigToYaml`，DB 仍为 source-of-truth（乐观锁 `If-Match` 依赖 DB version）。
 - **`AGENT.md` / `SOUL.md` / `USER.md`** user scope 首次启动由 `ensureWorkerHome(workerId)` 幂等种出；project scope 由 `aiworker init` 根据 Soul preset 种出非 stub 模板，并保持 no-overwrite。
 

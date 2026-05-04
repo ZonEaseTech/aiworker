@@ -1,5 +1,13 @@
 # AIWorker Changelog
 
+## 2026-05-04 13:00 [progress] FEAT-050 / PLAN-090 — brain admission and approval roadmap
+
+`docs/architecture.md` 新增 “Brain admission roadmap” 子章节，把 brain runtime 自动生成 proposal 的 admission 流程拆成 4 段：proposal 模型字段（evidence / scope / confidence / rollback / summary）、storage 选型（worker.db 新表，**不**进 fleet.db）、approval surface 三档（CLI `aiworker brain admission ...` / API `apps/api/src/worker/brain/admission/*` / Worker Admin 新视图）、唯一免审 runtime 写入（pre-compaction memory flush）。
+
+明确红线：admission flow 不复用 executor MCP / engine plugin 通路；命名严格使用 `brain admission` / `brain memory` / `brain skill` / `project policy`，与 `executor capability` / `executor mcp` 完全隔离。
+
+本计划不落 DB migration、不实施 admission CLI/API/UI；后续这些进入独立 PMA 任务。
+
 ## 2026-05-04 12:50 [progress] FEAT-050 / PLAN-089 — brain diagnostics and onboarding UX
 
 把 Project Brain 显式抬到 onboarding 与 diagnostics 输出最前：

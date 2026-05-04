@@ -1,7 +1,8 @@
 # PLAN-090 Brain admission and approval roadmap
 
-- **status**: draft
+- **status**: completed
 - **createdAt**: 2026-05-04 11:22
+- **completedAt**: 2026-05-04 13:00
 - **relatedTask**: FEAT-050
 
 ## 现状
@@ -33,3 +34,17 @@ filesystem 前必须经 operator approval，但还没有可执行 roadmap。
 ## 验证
 
 - docs/task + docs/plan review。
+
+## 完成记录
+
+- 2026-05-04 13:00：完成 admission roadmap 文档化。
+  - `docs/architecture.md` 在 Project Brain asset model 后新增 “Brain admission roadmap” 子章节，明确 4 段路线：
+    1. Proposal 模型字段（evidence / scope / confidence / rollback / summary）。
+    2. Storage 选型（worker.db 新表 `brain_admission_proposals` + `brain_admission_decisions`，**不**进 fleet.db；schema migration 单独 PMA）。
+    3. Approval surface 三档：CLI `aiworker brain admission ...`、API `apps/api/src/worker/brain/admission/*`、Worker Admin 新视图。
+    4. 唯一免审 runtime 写入：pre-compaction memory flush。
+  - 显式红线：admission flow 不复用 executor MCP / engine plugin 通路，命名严格 `brain admission` / `brain memory` / `brain skill` / `project policy`。
+- 不直接落 DB migration、不实现 admission CLI/API/UI；这些进入后续独立 PMA 任务。
+- 验证：
+  - `rg -n "Brain admission roadmap" docs/architecture.md` 命中预期位置
+  - 没有触及代码，无需 typecheck/test gate

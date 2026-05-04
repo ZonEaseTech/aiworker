@@ -43,3 +43,4 @@ runtime，但 Project Brain 必须保持可检查、可迁移、可审计、可�
 - 2026-05-04 11:22：该任务接续 FEAT-046；优先强化 AIWorker 自己拥有的 brain surface。
 - 2026-05-04 12:35：完成 PLAN-088。`docs/architecture.md` 新增 “Project Brain asset model” 章节用表格枚举五类资产；`docs/cli.md` brain 段落顶部加同步表；README Features 把 Project Brain 行展开成五类资产摘要。不新增 mutating brain command，不实现 admission DB schema。
 - 2026-05-04 12:50：完成 PLAN-089。`init` next-steps 重排（brain identity → brain status → doctor → executor）；`doctor` 输出加 Brain identity 段；`brain status` 输出加 `assets` 块（identity + skill/memory count + 空状态 hint）；Worker Admin Test 面板 header 强调 brain → executor → channel 顺序，组件位置已经是 brain-first 不需要重排。
+- 2026-05-04 13:00：完成 PLAN-090。`docs/architecture.md` 增加 “Brain admission roadmap” 4 段路线（proposal 模型 / storage 选型 / approval surface / 唯一免审写入），明确不复用 executor capability 通路、命名隔离规则。本计划不落 DB migration、不实施 CLI/API/UI；后续 admission CLI/API/UI 单独走 PMA。
