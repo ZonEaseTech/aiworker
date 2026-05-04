@@ -1,9 +1,10 @@
 # FEAT-051 Strengthen Worker/Fleet aggregation surface
 
-- **status**: pending
+- **status**: in-progress
 - **priority**: P1
-- **owner**: unassigned
+- **owner**: local
 - **createdAt**: 2026-05-04 11:22
+- **claimedAt**: 2026-05-04 13:10
 - **plans**: PLAN-091, PLAN-092
 
 ## 描述
@@ -37,3 +38,4 @@ worker 可注册、可路由、可观察、可审计、可远程操作；gateway
 ## 笔记
 
 - 2026-05-04 11:22：该任务聚焦 control plane 与 aggregation surface，不引入 executor isolation。
+- 2026-05-04 13:15：完成 PLAN-091。`docs/architecture.md` 的 mermaid topology 标注为 canonical source；`README.md` 与 `docs/deployment.md` 顶部都加 “Operator topology” 段，ASCII / 文字版同源，明确 gateway = control plane 只持指针 + audit，worker = data plane 持 worker.db + Project Brain，external executor 只在 worker 内由薄 adapter 调用。

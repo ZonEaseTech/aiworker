@@ -41,6 +41,10 @@ AIWorker 是轻量自托管 **Project Brain + Worker/Fleet aggregation runtime**
   project 希望外部 executor 具备的 overlay / bootstrap hint；它不是 effective
   executor capability source of truth，也不是安全隔离边界。
 
+下面两张 mermaid 图是 AIWorker operator topology 的 **canonical source**：README
+顶部的 ASCII 简版与 `docs/deployment.md` 顶部的描述都源自这两张图。修改 topology
+时只动这里，下游引用应保持一致。
+
 ```mermaid
 flowchart TB
   Operator["Operator / Admin"] --> Gateway["AIWorker Gateway<br/>fleet.db: workers + audit + routing"]

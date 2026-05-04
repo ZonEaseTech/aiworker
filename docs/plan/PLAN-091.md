@@ -1,7 +1,8 @@
 # PLAN-091 Worker/Fleet topology and operator docs
 
-- **status**: draft
+- **status**: completed
 - **createdAt**: 2026-05-04 11:22
+- **completedAt**: 2026-05-04 13:15
 - **relatedTask**: FEAT-051
 
 ## 现状
@@ -32,3 +33,14 @@ Gateway / worker / fleet topology 已经可用，但产品文档仍容易被 exe
 ## 验证
 
 - docs review。
+
+## 完成记录
+
+- 2026-05-04 13:15：完成 operator topology 收口。
+  - `docs/architecture.md` Product Positioning 段标注两张 mermaid 图为 **canonical source**，README 与 deployment.md 都引用它。
+  - `README.md` 顶部新增 “Operator topology（一图 canonical）” 章节，ASCII 拓扑图明确 Gateway = control plane（fleet.db 只持指针 + audit）/ Worker = data plane（worker.db + Project Brain）/ External executor 只在 worker 内被薄 adapter 调用三条要点。
+  - `docs/deployment.md` 顶部加 “Operator topology（部署前必读）” 段，三档部署形态都共享同一拓扑。
+- 不改 gateway protocol、不改 enrollment。
+- 验证：
+  - `rg -n "Operator topology" README.md docs/deployment.md docs/architecture.md` 命中预期位置
+  - 没有触及代码，无需 typecheck/test gate

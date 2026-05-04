@@ -10,6 +10,46 @@ plugins、auth、sandbox、approval 和 native sessions，AIWorker 只通过薄 
 
 工作站、服务器、k8s pod、docker container 都能跑成一个 worker 加入同一个 fleet。Operator 用一个 CLI 控制所有 worker。
 
+## Operator topology（一图 canonical）
+
+```text
+        ┌──────────────────────────────────────────────────────────────┐
+        │ Operator / Admin                                             │
+        │   $ aiworker fleet ...    $ aiworker gateway ...             │
+        └───────────────────┬──────────────────────────────────────────┘
+                            │ WS  /ws (basicauth) + /enroll-ws (OTP)
+                            ▼
+        ┌──────────────────────────────────────────────────────────────┐
+        │ AIWorker Gateway (control plane)                             │
+        │   fleet.db: registered_workers + audit_events                │
+        │   只持指针 / presence / routing / audit ── 不持 brain / 对话 │
+        └───────────────────┬──────────────────────────────────────────┘
+                            │ WS frame relay
+       ┌────────────────────┼────────────────────┐
+       ▼                    ▼                    ▼
+   ┌──────────┐         ┌──────────┐        ┌──────────┐
+   │ Worker A │         │ Worker B │        │ Worker N │
+   └────┬─────┘         └────┬─────┘        └────┬─────┘
+        │                    │                   │
+        ▼ (data plane, per worker)              ...
+   ┌─────────────────────────────────────────────────────────────┐
+   │ worker.db (identity + config + conversations, AES-256-GCM)  │
+   │ Project Brain (filesystem 权威，5 类资产)                   │
+   │ Thin Executor Adapter   →  External Engine                  │
+   │   health / run / stream / cancel / resume                   │
+   │                            └─→ user/host MCP / skills /     │
+   │                                plugins / auth / sessions    │
+   └─────────────────────────────────────────────────────────────┘
+```
+
+详见 [`docs/architecture.md` § Product Positioning](docs/architecture.md#product-positioning)（同一份 mermaid 图，operator 与 dataplane 视角分开画）；部署形态对照见 [`docs/deployment.md`](docs/deployment.md)。
+
+要点：
+
+- **Gateway = control plane**：fleet.db 只存 worker 指针 / presence / audit；从不缓存 conversations / messages / secrets，也不主动持有 brain 资产。
+- **Worker = data plane**：worker.db 与 Project Brain 都在 worker 本机；fleet 视角通过 gateway WS 发指令读 worker，**不**反向 fetch worker REST。
+- **External executor only inside the worker**：Codex / Claude Code / Hermes / OpenClaw / Cursor 等 engine 在 worker 内由薄 adapter 调用，永不被 gateway 直接接触；engine 自己持 user/host 级 MCP / skills / plugins / auth / native sessions，AIWorker 不默认隔离这些 ambient capabilities。
+
 ## Features
 
 - **Project Brain**：每个项目一份 5 类 brain 资产 — identity（`AGENT/SOUL/USER`）、memory（`MEMORY.md` + `memories/`）、brain skills（`.aiworker/skills/**`）、policy & drafts（`policy.json` / `toolsets.json` / `capability-packs.json` / `.aiworker/mcp.json`）、admission state（roadmap）；filesystem 为权威，便于迁移和审计

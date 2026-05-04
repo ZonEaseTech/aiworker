@@ -1,5 +1,15 @@
 # AIWorker Changelog
 
+## 2026-05-04 13:15 [progress] FEAT-051 / PLAN-091 — operator topology 共享 canonical 图
+
+把 worker/fleet topology 用同一份描述贯穿三个文档：
+
+- `docs/architecture.md` 的两张 mermaid 拓扑图标注为 **canonical source**，README / deployment.md 引用它。
+- `README.md` 顶部新增 “Operator topology（一图 canonical）” 章节，ASCII 图 + 三句要点强调：Gateway = control plane（fleet.db 只持指针 + audit）/ Worker = data plane（worker.db + Project Brain）/ External executor 只在 worker 内由薄 adapter 调用，AIWorker 不通过 gateway 触达 engine。
+- `docs/deployment.md` 顶部新增 “Operator topology（部署前必读）” 段，三档部署形态都共享同一拓扑。
+
+不改 gateway protocol、不改 enrollment。
+
 ## 2026-05-04 13:05 [completed] FEAT-050 — strengthen Project Brain product surface
 
 合并 PLAN-088/089/090 三个切片：

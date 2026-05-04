@@ -6,6 +6,18 @@
 
 ---
 
+## Operator topology（部署前必读）
+
+部署任何一档前先理清角色：
+
+- **Gateway** 是 control plane，持 `fleet.db`（`registered_workers` + `audit_events`），通过 `/ws` 与 `/enroll-ws` 给 operator 与 worker 转发帧。它**不**复制 worker 的 brain、对话、配置或 secret。
+- **Worker** 是 data plane，每个 worker 持自己的 `worker.db`（identity / config / conversations，AES-256-GCM）与 `<project>/.aiworker/` 下的 Project Brain 五类资产。worker 通过 WS 接 gateway，HTTP/admin 仅暴露给本机或受外部鉴权保护的反代。
+- **External executor**（Codex / Claude Code / Hermes / OpenClaw / Cursor 等）只在 worker 进程内被薄 adapter 调用；engine 自己持 user/host 级 MCP / skills / plugins / auth / native sessions，AIWorker 不默认隔离这些 ambient capabilities，也不通过 gateway 触达 engine。
+
+完整 mermaid topology 见 [`architecture.md` § Product Positioning](./architecture.md#product-positioning)；README 顶部 ASCII 简版与本文同源。下面三档部署只是把这套 topology 用不同的进程拓扑/系统服务/容器编排表达出来；fleet.db 与 worker.db 的边界在每一档都不变。
+
+---
+
 ## 三档形态对比
 
 | 形态 | 适用场景 | 典型命令 | docker | 公网入口 |
