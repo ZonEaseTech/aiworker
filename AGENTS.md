@@ -1,6 +1,11 @@
 # AIWorker
 
-AIWorker 是自托管 worker/fleet runtime。Gateway 是 WebSocket 控制面，持有 `fleet.db`；worker 是数据面，持有各自的 `worker.db`。完整架构以 [`docs/architecture.md`](docs/architecture.md) 为准。
+AIWorker 是轻量自托管 **Project Brain + Worker/Fleet aggregation runtime**。
+Gateway 是 WebSocket 控制面，持有 `fleet.db`；worker 是数据面，持有各自的
+`worker.db` 与 Project Brain。Executor 是 bring-your-own 外部 agent runtime
+（Codex / Claude Code / Hermes / OpenClaw / Cursor 等），AIWorker 只通过薄
+adapter 调用和观察它们，不把自己做成 executor 平台。完整架构以
+[`docs/architecture.md`](docs/architecture.md) 为准。
 
 ## 工作规则
 
@@ -9,6 +14,21 @@ AIWorker 是自托管 worker/fleet runtime。Gateway 是 WebSocket 控制面，�
 - 开发任务使用 `/pma`：先调查，再 proposal，获批后实现，并同步 `docs/task/*.md`。后端用 `/pma-bun`，前端用 `/pma-web`，代码评审用 `/pma-cr`，复杂编排按需用 `/bkd`。
 - 不创建非必要说明文件。临时产物放 `tmp/`。
 - 1.0.0 正式发布以前不考虑 legacy 兼容；不为未发布的旧 CLI/API/config 形态保留 alias、shim 或迁移层，破坏性收敛时优先架构语义、代码归属和当前文档一致性。
+
+## 产品定位
+
+- AIWorker 的核心卖点是 **Project Brain** 与 **Worker/Fleet 聚合控制面**：
+  Soul/persona、项目记忆、brain skill、worker identity/state、gateway
+  routing、fleet presence、audit、admin UI 和远程 worker 管理。
+- AIWorker 不与成熟 executor runtime 竞争 MCP、skill、plugin、sandbox、
+  approval、native session、subagent 或模型生态；这些能力由 Codex、Claude
+  Code、Hermes、OpenClaw、Cursor 等外部 executor 自己负责。
+- 默认不做通用 executor isolation。AIWorker 隔离和治理的是 brain、worker
+  state、fleet control plane 与 secret vault；executor 运行在 operator 提供的
+  user/host 环境中，可能加载 user-level MCP / skill / plugin / auth / native
+  session。
+- Project 级 executor 配置只能表达 overlay / bootstrap hint / best-effort
+  projection，不是 executor 的完整 effective capability source of truth。
 
 ## 常用命令
 
@@ -48,10 +68,11 @@ AIWorker 是自托管 worker/fleet runtime。Gateway 是 WebSocket 控制面，�
 ## 能力边界
 
 - Brain capability 与 Executor capability 必须隔离设计、隔离持久化、隔离同步；不要用 Brain 的 memory/persona/prompt skill/capability-pack 机制去配置 executor 原生能力。
-- Executor capability 指 engine 自身运行时可用的能力，例如 Claude/Codex/Cursor 的 MCP server、engine-native skill/plugin、sandbox、approval 或 project-scope CLI 配置。AIWorker 只做声明、校验、dry-run、sync/projection；具体落地优先通过 engine 官方 CLI 或官方配置格式完成。
-- Brain capability 指 worker 自身的 filesystem brain、长期记忆、persona、prompt skill 与未来学习沉淀；这层如何选择、注入、演化另行设计，不能成为 executor MCP/skill/plugin 配置的前置条件。
-- CLI、API、DB schema、文档里出现 `mcp`、`skill`、`plugin` 等重名概念时必须显式加限定词，例如 `executor mcp`、`engine plugin`、`brain skill`，避免跨层复用语义。
-- Executor capability 涉及 secret 时只能存 ref，经 vault/hydration 在投影或运行时注入；不要把明文 secret 写入 engine project config、`.aiworker/*.json` 或 worker configJson。
+- Brain capability 指 worker 自身的 filesystem brain、长期记忆、persona、brain skill、project policy 与未来学习沉淀。这是 AIWorker 的核心资产，project scope 下绑定 `<project>/.aiworker/`。
+- Executor capability 指外部 engine 自身运行时可用的能力，例如 user-level 或 engine-native MCP server、skill/plugin、sandbox、approval、native session、profile/config。AIWorker 默认只做薄 adapter、readiness、事件归一化和可选 project overlay hint，不承诺拥有或隔离这些能力。
+- `.aiworker/executor-capabilities.json` 只表达 project executor overlay / bootstrap hint；它不是 executor effective capability 的完整来源，也不应被当成安全隔离边界。
+- CLI、API、DB schema、文档里出现 `mcp`、`skill`、`plugin` 等重名概念时必须显式加限定词，例如 `executor mcp overlay`、`engine plugin`、`brain skill`，避免跨层复用语义。
+- Executor overlay 涉及 secret 时只能存 ref；不要把明文 secret 写入 engine project config、`.aiworker/*.json` 或 worker configJson。外部 executor 的 user/host auth 由 operator 自己管理。
 
 ## 架构不变量
 

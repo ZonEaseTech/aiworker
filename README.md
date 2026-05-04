@@ -1,14 +1,22 @@
 # AIWorker
 
-自托管 Agent Runtime — 由 **Brain provider**（知识 / 记忆 / 技能）与 **Executor provider**（OpenAI 兼容 / claude-code / codex / gemini-cli / qwen-code / cursor / MCP）组合而成。
+轻量自托管 **Project Brain + Worker/Fleet aggregation runtime**。
+
+AIWorker 负责 Project Brain、worker identity/state、gateway routing、fleet
+presence、audit 和 admin surface。Executor 是 bring-your-own 外部 agent runtime：
+Codex、Claude Code、Hermes、OpenClaw、Cursor 等继续拥有自己的 MCP、skills、
+plugins、auth、sandbox、approval 和 native sessions，AIWorker 只通过薄 adapter
+调用、观察和聚合它们。
 
 工作站、服务器、k8s pod、docker container 都能跑成一个 worker 加入同一个 fleet。Operator 用一个 CLI 控制所有 worker。
 
 ## Features
 
+- **Project Brain**：每个项目一份 Soul / persona / USER / MEMORY / brain skills / project policy，filesystem 为权威，便于迁移和审计
+- **Worker/Fleet 聚合**：gateway 管 workers、presence、audit、routing；worker 自持 worker.db、Project Brain 和外部 executor adapter
 - **4 种入网路径**：OTP-attended（worker deployer 零凭证）/ self-enroll（unattended 批量）/ 手动 pair / docker auto-launch
 - **WS 控制面**：operator + worker 共享同一 gateway 入口，按 path 分流（`/ws` basicauth + `/enroll-ws` OTP 专用）
-- **多 LLM engine**：`http` (OpenAI / DeepSeek / SiliconFlow / 任意 OpenAI 兼容) / `claude-code` / `codex` / `acp` (gemini / qwen) / `cursor` / `mcp`
+- **Bring-your-own executor**：`http` baseline / `claude-code` / `codex` / `acp` (gemini / qwen) / `cursor` / `mcp`，外部 engine 自己管理 user/host 级能力
 - **多 channel webhook**：Telegram / WhatsApp / Lark / LINE / Web，全部强制验签
 - **Cron / per-tool approvals / hot-reload / fallback chain** 内建
 - **数据物理隔离**：fleet.db（gateway）与 worker.db（每 worker）AES-256-GCM 各自加密
@@ -107,8 +115,8 @@ npm install -g @zonease/aiworker-cli
 
 AIWorker CLI 是 Bun-native：`npx` / `npm install -g` 不会把 runtime 改成 Node。没有 Bun 时，CLI 会提示安装 Bun 或改用 GitHub Releases 的 standalone binary。binary 跑在 `~/.bun/bin/aiworker` 或 `$(npm bin -g)/aiworker`。第一次跑任意命令时自动 mint master key 写到 `~/.aiworker/.env`（chmod 0600）。
 
-**项目级 worker**（PLAN-023，可选）：`aiworker up --soul developer` 会在当前目录 `<cwd>/.aiworker/` 落项目级 layout（每 project 一份独立 worker.db / master key / persona / skills；不要求当前目录是 git repo），随后完成能力预检并启动本地 HTTP/admin。engine（claude / codex / cursor）保持 user 级共享。`aiworker scope` 诊断当前命中的 layout；显式拆步时仍可用 `aiworker init` / `aiworker doctor` / `aiworker serve`。详见 [docs/cli.md §`aiworker up`](docs/cli.md)。
-新项目默认使用安全的 `http/default` stub executor；准备好 Codex / Claude 等本机 CLI 后，用 `aiworker executor select --engine codex --apply` 显式切换 task executor，再用 `aiworker executor doctor --engine codex` 检查 engine CLI、executor-native capability manifest 与 projection compatibility。
+**项目级 worker**（PLAN-023，可选）：`aiworker up --soul developer` 会在当前目录 `<cwd>/.aiworker/` 落 Project Brain layout（每 project 一份独立 worker.db / master key / persona / brain skills；不要求当前目录是 git repo），随后完成 brain/runtime 静态预检并启动本地 HTTP/admin。executor（claude / codex / cursor / Hermes / OpenClaw 等）默认是 operator 自己提供的外部运行时，可能加载 user/host 级 MCP、skills、plugins、auth 和 native sessions；AIWorker 不默认做 executor isolation。`aiworker scope` 诊断当前命中的 layout；显式拆步时仍可用 `aiworker init` / `aiworker doctor` / `aiworker serve`。详见 [docs/cli.md §`aiworker up`](docs/cli.md)。
+新项目默认使用安全的 `http/default` stub executor；准备好 Codex / Claude 等本机 CLI 后，用 `aiworker executor select --engine codex --apply` 显式切换 task executor，再用 `aiworker executor doctor --engine codex` 检查 engine CLI 和可选 project executor overlay。`.aiworker/executor-capabilities.json` 只是 bootstrap hint / best-effort projection helper，不是 executor effective capability 的完整来源。
 
 ```sh
 cd ~/code/my-project

@@ -64,8 +64,8 @@ worker 容器内或 ssh 进 worker 主机直接操作 `worker.db` 的子命令�
 
 1. resolve scope：识别当前是 project / explicit scope，或 brand-new cwd。
 2. init if needed：brand-new cwd 走 project-scope 初始化；非交互必须传 `--soul <preset>`。已初始化 project / explicit scope 只补齐缺失的本地 state，不刷新 Soul 模板。
-3. worker validation：静态验证 `.aiworker/policy.json`、`toolsets.json`、`capability-packs.json`、`mcp.json`、`skills/`；error 阻断启动，warning/info 只展示。
-4. executor readiness：读取 `.aiworker/executor-capabilities.json`，提示 engine CLI 是否在 `PATH`、descriptor 是否有明显问题；本阶段不自动写 engine config，也不会因缺某个 engine CLI 阻断 worker 启动。
+3. worker validation：静态验证 Project Brain 与 brain/runtime capability 草案（`.aiworker/policy.json`、`toolsets.json`、`capability-packs.json`、`mcp.json`、`skills/`）；error 阻断启动，warning/info 只展示。
+4. executor readiness：检查已选择的外部 executor 是否基本可调用，并读取可选 `.aiworker/executor-capabilities.json` project overlay；本阶段不自动写 engine config，也不会因缺某个 engine CLI 阻断 worker 启动。外部 executor 可能加载 user/host 级 MCP、skills、plugins、auth 和 native sessions，AIWorker 不默认隔离这些 ambient capabilities。
 5. serve：复用 `aiworker serve` 的 foreground 生命周期。
 
 ```sh
@@ -97,7 +97,7 @@ PLAN-023 起 `aiworker init` 默认走 **project scope**：
 | **project**（默认） | 当前 cwd（未显式 `AIWORKER_HOME`） | `<cwd>/.aiworker/{AGENT.md,SOUL.md,USER.md,MEMORY.md,ROLLUP.md,policy.json,toolsets.json,capability-packs.json,executor-capabilities.json,skills/,memories/,mcp.json}` + `<cwd>/.aiworker/local/{worker.db,identity.json,.env,workspaces/}` |
 | **user**（legacy） | `--global` flag，或显式 `AIWORKER_HOME=...` | `~/.aiworker/{worker.db,.env,workers/<workerId>/{AGENT.md,SOUL.md,USER.md,brain/skills,brain/memories,workspaces/}}` |
 
-`local/` 目录强制 `.gitignore = "*\n!.gitignore\n"`（worker.db / .env / workspaces 等敏感产物绝不入 git）；`.aiworker/.gitignore = "local/\n"`（其余 persona / policy / toolsets / skills / memories 默认入 git，团队共享 agent 人格定义）。每个 project worker 独立 mint master key（写入 `.aiworker/local/.env`，chmod 0600），与 user 级 `~/.aiworker/.env` 物理隔离——这是数据安全边界。
+`local/` 目录强制 `.gitignore = "*\n!.gitignore\n"`（worker.db / .env / workspaces 等敏感产物绝不入 git）；`.aiworker/.gitignore = "local/\n"`（其余 persona / policy / toolsets / brain skills / memories 默认入 git，团队共享 Project Brain）。每个 project worker 独立 mint master key（写入 `.aiworker/local/.env`，chmod 0600），与 user 级 `~/.aiworker/.env` 物理隔离——这是 AIWorker brain/worker 数据安全边界，不代表外部 executor 的 user/host 配置被隔离。
 
 ```sh
 # 进入要拥有这个 worker 的项目目录（不要求 git repo）
@@ -142,7 +142,7 @@ aiworker brain memories --limit 20
 # 4. 静态验证 brain/runtime capability 草案
 aiworker doctor
 
-# 5. 可选：声明并预览 executor 原生 MCP projection
+# 5. 可选：声明并预览 project executor overlay / bootstrap hint
 aiworker executor select --engine codex --apply
 aiworker executor doctor --engine codex
 aiworker executor mcp add context7 --engine codex --url https://mcp.example.com/mcp
@@ -160,7 +160,7 @@ aiworker up --port 9217
 aiworker serve --port 9217
 ```
 
-注意：`policy.json`、`toolsets.json`、`capability-packs.json` 和 `.aiworker/mcp.json` 仍是 brain/runtime capability 草案；`aiworker doctor` 只做静态 validation，不会启动 MCP server，也不会把 pack/toolset 强制接入 runtime enforcement。executor 原生 MCP/skill/plugin 配置走 `.aiworker/executor-capabilities.json` 与 `aiworker executor ...` 命令。
+注意：`policy.json`、`toolsets.json`、`capability-packs.json` 和 `.aiworker/mcp.json` 是 brain/runtime capability 草案；`aiworker doctor` 只做静态 validation，不会启动 MCP server，也不会把 pack/toolset 强制接入 runtime enforcement。`.aiworker/executor-capabilities.json` 只是 project executor overlay / bootstrap hint，可辅助 Codex / Claude 等支持 project config 的 engine 做 best-effort projection；它不是外部 executor 的完整 effective capability source of truth，也不是 executor isolation 边界。
 
 ### `aiworker scope`
 
@@ -208,7 +208,7 @@ aiworker doctor
 
 ### `aiworker executor mcp add`
 
-声明 executor 原生 MCP server，写入 `.aiworker/executor-capabilities.json`。这个文件只表达 engine project config 的期望状态，不是 brain skill、Soul capability pack 或 `.aiworker/mcp.json` 的替代品。
+声明 project executor MCP overlay，写入 `.aiworker/executor-capabilities.json`。这个文件只表达项目希望外部 executor 具备的 bootstrap hint / best-effort projection 输入，不是 brain skill、Soul capability pack、`.aiworker/mcp.json` 的替代品，也不是 executor effective capability 的完整来源。
 
 ```sh
 aiworker executor mcp add context7 \
@@ -223,7 +223,7 @@ aiworker executor mcp add filesystem \
   --arg .
 ```
 
-支持的 engine：`codex`、`claude-code`。当前 scope 只支持 `project`。
+支持的 engine：`codex`、`claude-code`。当前 overlay scope 只支持 `project`，但外部 executor 运行时仍可能加载 user/host 级 MCP、skills、plugins、auth 和 native sessions。
 Codex HTTP MCP 的 bearer token 使用 `--bearer-token-env-var <ENV_VAR>` 表达；
 AIWorker 不会把 secretRef hydrate 成明文写入 engine config。
 
@@ -238,7 +238,7 @@ aiworker executor mcp add private-docs \
 
 ### `aiworker executor mcp sync`
 
-把 `.aiworker/executor-capabilities.json` 投影到 engine 官方 project-scope MCP 配置。默认先 dry-run 看将执行的 engine CLI 命令：
+把 `.aiworker/executor-capabilities.json` 中的 project overlay best-effort 投影到支持的 engine 官方 project-scope MCP 配置。默认先 dry-run 看将执行的 engine CLI 命令：
 
 ```sh
 aiworker executor mcp sync --engine codex --dry-run
@@ -247,7 +247,7 @@ aiworker executor mcp sync --engine codex --dry-run
 aiworker executor mcp sync --engine codex
 ```
 
-非 dry-run 会调用对应 engine CLI（`codex` 或 `claude`），工作目录是 project root，并过滤 `AIWORKER_*`、`INTERNAL_*`、`WORKER_*` 和常见 secret suffix 环境变量。当前 MVP 不会自动 hydrate `secretRef`；带 `secretRef` 的 server 只能 dry-run 或由 operator 解析 secret 后手工运行 engine CLI。
+非 dry-run 会调用对应 engine CLI（`codex` 或 `claude`），工作目录是 project root，并过滤 `AIWORKER_*`、`INTERNAL_*`、`WORKER_*` 和常见 secret suffix 环境变量。当前 MVP 不会自动 hydrate `secretRef`；带 `secretRef` 的 server 只能 dry-run 或由 operator 解析 secret 后手工运行 engine CLI。投影成功也只代表 project overlay 被写入该 engine 支持的配置面，不代表 AIWorker 已隔离或枚举所有 user/host ambient capabilities。
 Codex projection 使用当前 `codex mcp add` 参数面：stdio 走 `codex mcp add <name> -- <command> ...args`，streamable HTTP 走 `codex mcp add <name> --url <url>`；不生成 `--scope`、`--transport` 或通用 `--header`。
 
 ### `aiworker executor select`
@@ -263,25 +263,27 @@ aiworker executor select --engine codex
 aiworker executor select --engine codex --variant default --apply --if-match 1
 ```
 
-该命令解决的是 task executor selection；executor-native MCP / engine plugin /
-engine skill 的声明与投影仍走 `aiworker executor mcp ...` 或只读
-`aiworker executor capability ...`。
+该命令解决的是 task executor selection；project executor overlay 的声明与
+best-effort projection 仍走 `aiworker executor mcp ...` 或只读
+`aiworker executor capability ...`。外部 executor 自己的 user/host 配置不会被
+`executor select` 修改。
 
 ### `aiworker executor doctor`
 
-验证 executor capability manifest、engine CLI 是否在 `PATH`、MCP descriptor 是否完整，以及 secret-like 字段是否使用 `secretRef`：
+验证已选择的外部 executor 是否基本可用、engine CLI 是否在 `PATH`、project overlay descriptor 是否完整，以及 secret-like 字段是否使用 `secretRef`：
 
 ```sh
 aiworker executor doctor --engine codex
 ```
 
-输出会区分 configured task executor、engine CLI availability、declared executor-native capabilities 和 projection compatibility。空 manifest 或默认 `http/default` stub executor 会显示 `Status: WARN` 但退出码仍为 `0`；存在错误时整体 `Status: FAIL`，退出码为 `1`。MVP 只做 manifest、CLI availability 和 descriptor 静态检查，不会启动 MCP server 或执行 `listTools`。
+输出会区分 configured task executor、engine CLI availability、project overlay descriptor 和 best-effort projection compatibility。空 overlay 或默认 `http/default` stub executor 会显示 `Status: WARN` 但退出码仍为 `0`；存在错误时整体 `Status: FAIL`，退出码为 `1`。MVP 只做 CLI availability、overlay 和 descriptor 静态检查，不会启动 MCP server 或执行 `listTools`，也不会枚举或屏蔽 user/host ambient capabilities。
 
 ### `aiworker executor capability list` / `show`
 
-只读查看 `.aiworker/executor-capabilities.json` 中的 executor-native 声明，
-覆盖 MCP、engine plugin、engine skill 和 engine policy。它不会读取
-`.aiworker/mcp.json`、brain skill、Soul capability pack 或 runtime toolset。
+只读查看 `.aiworker/executor-capabilities.json` 中的 project executor overlay
+descriptor，覆盖 MCP、engine plugin、engine skill 和 engine policy 的 hint。
+它不会读取 `.aiworker/mcp.json`、brain skill、Soul capability pack 或 runtime
+toolset，也不会枚举外部 executor 的 user/host ambient capabilities。
 
 ```sh
 aiworker executor capability list

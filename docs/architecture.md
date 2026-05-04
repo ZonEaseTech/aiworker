@@ -25,6 +25,66 @@ packages/
 - **`packages/storage-sqlite`** 是 fleet.db 与 worker.db 的唯一 schema 源。通过 subpath `./fleet` 与 `./worker` 保持数据域边界；`defaultFleetMigrationsFolder` / `defaultWorkerMigrationsFolder` 通过 `import.meta.url` 解析，避免调用方硬编码 `./drizzle/...`。
 - **`packages/fs-layout`** 管理 user scope 的 `~/.aiworker/workers/<id>/` 与 project scope 的 `<project>/.aiworker/` 目录布局。gateway 与 worker 都复用它解析 `AGENT.md` / `SOUL.md` / `USER.md` / `config.yaml` / `brain/` 等路径。
 
+## Product Positioning
+
+AIWorker 是轻量自托管 **Project Brain + Worker/Fleet aggregation runtime**。
+它的核心资产是 project-scoped brain 与 worker/fleet 控制面，而不是另一个
+完整 executor 平台。
+
+- **AIWorker owns**：Project Brain、worker identity/state、worker.db、
+  gateway routing、fleet presence、audit、admin UI、conversation persistence
+  和外部 executor 的薄 adapter。
+- **External executors own**：tool loop、MCP / skills / plugins、sandbox、
+  approval、native session、subagent、model/provider/auth 与 user/host-level
+  config。AIWorker 不默认隔离或重实现这些生态。
+- **Project executor overlay**：`.aiworker/executor-capabilities.json` 只表达
+  project 希望外部 executor 具备的 overlay / bootstrap hint；它不是 effective
+  executor capability source of truth，也不是安全隔离边界。
+
+```mermaid
+flowchart TB
+  Operator["Operator / Admin"] --> Gateway["AIWorker Gateway<br/>fleet.db: workers + audit + routing"]
+  Gateway --> WorkerA["Worker A"]
+  Gateway --> WorkerB["Worker B"]
+  Gateway --> WorkerN["Worker N"]
+
+  subgraph Worker["Worker data plane"]
+    Brain["Project Brain<br/>AGENT / SOUL / USER / MEMORY<br/>brain skills / project policy"]
+    State["worker.db<br/>identity / config / conversations"]
+    Adapter["Thin Executor Adapter<br/>health / run / stream / cancel / resume"]
+    Brain --> Adapter
+    State --> Adapter
+  end
+
+  WorkerA --> Worker
+  Adapter --> Executor["External Agent Runtime<br/>Codex / Claude Code / Hermes / OpenClaw / Cursor"]
+  Executor --> Ambient["User/Host Native Capabilities<br/>MCP / skills / plugins / auth / sessions"]
+  Project["Project repo"] --> Brain
+  Project -. "optional hints only" .-> Overlay["Project Executor Overlay"]
+  Overlay -. "best-effort when supported" .-> Executor
+```
+
+```mermaid
+flowchart LR
+  subgraph AIWorkerOwns["AIWorker owns"]
+    B["Project Brain"]
+    F["Worker/Fleet aggregation"]
+    G["Gateway control plane"]
+    S["Worker state + audit"]
+    O["Admin / routing / observability"]
+  end
+
+  subgraph ExecutorOwns["Executor owns"]
+    T["Tool loop"]
+    C["MCP / skills / plugins"]
+    A["Auth / user config"]
+    N["Native sessions"]
+    P["Sandbox / approval policy"]
+  end
+
+  AIWorkerOwns -->|"thin adapter, no default isolation promise"| ExecutorOwns
+```
+
 ## 部署模型（PLAN-016）
 
 部署形态降级为三档并列，docker 不再是默认：
@@ -95,24 +155,28 @@ project scope 下，团队共享上下文落在 `<project>/.aiworker/`：
   skills/
   memories/
   mcp.json                     # brain/runtime MCP descriptor, not engine config
-  executor-capabilities.json   # executor-native projection manifest
+  executor-capabilities.json   # optional executor overlay / bootstrap hints
   local/                       # gitignored: worker.db / .env / workspaces
 ```
 
 - **Skills / memories** 读写统一过 `FilesystemBrainProvider`（PLAN-012 将旧 `HermesProvider` 改名并把 HTTP 依赖全部拆掉）；filesystem 是权威，SQLite 只负责 identity 与可索引状态。新 worker 默认挂载 writable `local-filesystem` brain source，路径由 `resolveBrainHome(workerId)` 决定：project scope 指向 `<project>/.aiworker/`，user / explicit scope 指向 worker home 下的 `brain/`。operator 可用 `aiworker brain status` / `aiworker brain skills` / `aiworker brain memories` 做只读检查；这些命令不写入 brain artifact。
-- **Capability 边界**：`.aiworker/mcp.json`、`skills/`、`toolsets.json`、`capability-packs.json` 属于 brain/runtime project capability 或 observe-only descriptor；`.aiworker/executor-capabilities.json` 属于 executor-native projection。Codex / Claude Code 等 engine 的 MCP config 只能通过 `aiworker executor mcp add/sync/doctor` 和 engine 官方 CLI/config 投影。
+- **Capability 边界**：`.aiworker/mcp.json`、`skills/`、`toolsets.json`、`capability-packs.json` 属于 brain/runtime project capability 或 observe-only descriptor；`.aiworker/executor-capabilities.json` 只是 executor overlay / bootstrap hint。Codex / Claude Code / Hermes / OpenClaw 等外部 executor 可能加载 user/host-level MCP、skills、plugins、auth 和 native sessions；AIWorker 不把 project overlay 当成完整 effective capability source of truth。
 - **Brain admission 边界**：generated memory / brain skill / policy proposal 进入 filesystem 前必须保留 evidence、scope、confidence 与 rollback 信息，并经过显式 operator approval。当前已允许的 runtime 写入只有配置启用后的 pre-compaction memory flush；新 CLI/API mutating brain command 必须另开 PMA 任务并显式命名为 brain memory / brain skill，不得复用 executor MCP / engine plugin 语义。
 - **`config.yaml`** 是 `worker_config.configJson` 的 advisory 镜像——`PUT /api/worker/config` 与 `aiworker config set`（worker-local）/ `aiworker fleet config set`（远端 worker）落库成功后都会调 `mirrorConfigToYaml`，DB 仍为 source-of-truth（乐观锁 `If-Match` 依赖 DB version）。
 - **`AGENT.md` / `SOUL.md` / `USER.md`** user scope 首次启动由 `ensureWorkerHome(workerId)` 幂等种出；project scope 由 `aiworker init` 根据 Soul preset 种出非 stub 模板，并保持 no-overwrite。
 
 ## Overview
 
-AIWorker 是一个**自托管 Agent Runtime**，由两类 provider 组合而成：
+AIWorker 是一个**Project Brain + Worker/Fleet aggregation runtime**，由 worker
+runtime、gateway control plane 和外部 executor adapter 组合而成：
 
-- **Brain provider** — 知识 / 记忆 / 技能目录。当前：`FilesystemBrainProvider`（纯 filesystem）。
-- **Executor provider** — OpenAI 兼容 chat completions + tool calling。当前：`OpenAICompatibleExecutor` 作为 baseline，外加多引擎注册表（claude-code / codex / gemini-cli / qwen-code / cursor-agent / ACP / MCP）。
+- **Brain provider** — AIWorker-owned 知识 / 记忆 / brain skill / persona。当前：`FilesystemBrainProvider`（纯 filesystem）。
+- **Executor adapter** — bring-your-own 外部 agent runtime 的薄适配层。当前支持 `http` baseline，外加 claude-code / codex / gemini-cli / qwen-code / cursor-agent / ACP / MCP 等 engine adapter。外部 executor 的 MCP / skills / plugins / auth / native sessions 由 executor 自己负责。
 
-**Orchestrator** 驱动 agent loop（submit prompt → stream completions → execute tools → persist transcript → emit `WorkerEventBus` 事件）。网络层（WS gateway / HTTP worker）与 orchestrator 解耦：
+**Orchestrator** 负责把 Project Brain、conversation state 与 executor adapter
+连接起来（submit prompt → stream normalized events → persist transcript →
+emit `WorkerEventBus` 事件）。真正的 tool loop 可以由外部 executor runtime
+持有。网络层（WS gateway / HTTP worker）与 orchestrator 解耦：
 
 - Gateway 只负责帧转发与 fleet 级控制方法（`workers.*`、`token.rotate`、`system.presence`）。
 - Worker 持有 orchestrator；node 模式通过 `@zonease/aiworker-core` 的 `startGatewayNode` 主动拨一条 WS 连接上报 `WorkerEventBus` 事件、处理 gateway 转发过来的 `chat.send` / `config.get` / `config.put` / `token.rotate` / `logs.tail` 请求。
@@ -158,7 +222,7 @@ AIWorker 是一个**自托管 Agent Runtime**，由两类 provider 组合而成�
 │   - bootstrap：mintWorkerId + mintApiToken（一次性 stdout），│
 │     `worker_identity` / `worker_config` singleton（pk='default')│
 │   - orchestrator + WorkerEventBus（hot path）                │
-│   - Brain + Executor provider（PLAN-012）                    │
+│   - Project Brain + thin Executor adapter                    │
 │   - `startGatewayNode`：订阅 bus → emit event；              │
 │     dispatcher 处理入站 request 并回 response                 │
 └──────────────────────────────────────────────────────────────┘

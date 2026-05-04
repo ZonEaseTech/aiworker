@@ -171,3 +171,8 @@ Each task is a single line linking to its detail file. All detailed information 
 - [ ] [**TODO-008 Create repeatable Soul brain executor validation harness**](TODO-008.md) `P2`
 - [x] [**BUG-052 `orchestrator.text` emits duplicate final text after streamed deltas**](BUG-052.md) `P2`
 - [x] [**BUG-053 Codex executor may replay final text after streamed deltas**](BUG-053.md) `P2`
+- [x] [**FEAT-048 Product positioning pivot to Project Brain and Worker/Fleet aggregation**](FEAT-048.md) `P1`
+- [ ] [**FEAT-049 Simplify executor surface around bring-your-own runtimes**](FEAT-049.md) `P1`
+- [ ] [**FEAT-050 Strengthen Project Brain product surface**](FEAT-050.md) `P1`
+- [ ] [**FEAT-051 Strengthen Worker/Fleet aggregation surface**](FEAT-051.md) `P1`
+- [ ] [**FEAT-052 Define bring-your-own executor integration strategy**](FEAT-052.md) `P2`

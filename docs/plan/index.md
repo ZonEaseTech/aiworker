@@ -111,3 +111,16 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [ ] [**PLAN-080 Soul brain executor validation follow-up fixes**](PLAN-080.md) `2026-05-03`
 - [x] [**PLAN-081 Claude Code streamed text append-only contract**](PLAN-081.md) `2026-05-04`
 - [x] [**PLAN-082 Codex text replay evidence closeout**](PLAN-082.md) `2026-05-04`
+- [x] [**PLAN-083 Product positioning PMA tracking and AGENTS guidance**](PLAN-083.md) `2026-05-04`
+- [x] [**PLAN-084 Product positioning docs refresh**](PLAN-084.md) `2026-05-04`
+- [ ] [**PLAN-085 Executor capability overlay semantics**](PLAN-085.md) `2026-05-04`
+- [ ] [**PLAN-086 Ambient executor readiness and doctor semantics**](PLAN-086.md) `2026-05-04`
+- [ ] [**PLAN-087 Executor CLI wording and help cleanup**](PLAN-087.md) `2026-05-04`
+- [ ] [**PLAN-088 Project Brain asset model**](PLAN-088.md) `2026-05-04`
+- [ ] [**PLAN-089 Brain diagnostics and onboarding UX**](PLAN-089.md) `2026-05-04`
+- [ ] [**PLAN-090 Brain admission and approval roadmap**](PLAN-090.md) `2026-05-04`
+- [ ] [**PLAN-091 Worker/Fleet topology and operator docs**](PLAN-091.md) `2026-05-04`
+- [ ] [**PLAN-092 Worker/Fleet status, events, and audit aggregation**](PLAN-092.md) `2026-05-04`
+- [ ] [**PLAN-093 Bring-your-own executor thin adapter contract**](PLAN-093.md) `2026-05-04`
+- [ ] [**PLAN-094 Hermes thin adapter spike**](PLAN-094.md) `2026-05-04`
+- [ ] [**PLAN-095 OpenClaw configured runtime spec**](PLAN-095.md) `2026-05-04`

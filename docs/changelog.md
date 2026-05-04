@@ -1,5 +1,24 @@
 # AIWorker Changelog
 
+## 2026-05-04 11:22 [decision] FEAT-048 / PLAN-083..084 — product positioning pivot
+
+确认 AIWorker 产品定位收敛为 **Project Brain + Worker/Fleet aggregation runtime**：
+
+- AIWorker 的核心卖点是 Project Brain、worker identity/state、gateway routing、
+  fleet presence、audit、admin UI 和远程 worker 管理。
+- Executor 采用 bring-your-own external agent runtime 模型；Codex、Claude
+  Code、Hermes、OpenClaw、Cursor 等继续拥有自己的 MCP、skills、plugins、
+  auth、sandbox、approval 和 native sessions。
+- AIWorker 默认不做通用 executor isolation，也不把 project executor overlay
+  表达为完整 effective capability source of truth。
+- 新增 `FEAT-048..052` 与 `PLAN-083..095`，后续按 PMA 分阶段收口 executor
+  surface、强化 Project Brain、强化 Worker/Fleet aggregation，并定义 Hermes /
+  OpenClaw 等外部 executor 的薄 adapter 策略。
+
+验证：
+
+- `git diff --check`
+
 ## 2026-05-04 10:34 [completed] BUG-053 / PLAN-082 — Codex text replay evidence closeout
 
 关闭 Codex executor 疑似 final text replay 跟踪：
