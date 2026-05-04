@@ -179,3 +179,13 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-053 Clarify Project scope as worker-bound business scope**](FEAT-053.md) `P1`
 - [x] [**FEAT-054 Soul modules and Scope Brain kernel**](FEAT-054.md) `P1`
 - [x] [**REL-013 发布 aiworker CLI 0.6.0**](REL-013.md) `P1`
+- [x] [**QA-004 0.6.0 published claude-code Soul/Brain end-to-end debug campaign**](QA-004.md) `P1`
+- [ ] [**BUG-054 `aiworker brain brief` emits spurious `undefined: not found` artifact line when no `--artifact` is passed**](BUG-054.md) `P2`
+- [ ] [**BUG-055 Admission `apply --commit` writes plaintext secrets in payload.body to brain memory**](BUG-055.md) `P0`
+- [ ] [**BUG-056 Project Brain not injected into claude-code executor LLM**](BUG-056.md) `P0`
+- [ ] [**BUG-057 Brain decision-layer LLM evaluator never produces valid JSON**](BUG-057.md) `P1`
+- [ ] [**BUG-058 `aiworker brain admission list/show` aborts entirely when a single proposal row has schema drift**](BUG-058.md) `P2`
+- [ ] [**BUG-059 Admission `apply --commit` on unsupported kind leaves proposal stuck in `approved` with no audit row**](BUG-059.md) `P3`
+- [ ] [**TODO-009 Add operator-facing `aiworker brain admission propose` debug entry**](TODO-009.md) `P3`
+- [ ] [**TODO-010 Admission evidence entries lose summary fields after zod parse**](TODO-010.md) `P3`
+- [ ] [**TODO-011 `aiworker init` next-steps text recommends `--engine codex` regardless of Soul**](TODO-011.md) `P3`
