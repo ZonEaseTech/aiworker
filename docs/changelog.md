@@ -1,5 +1,14 @@
 # AIWorker Changelog
 
+## 2026-05-04 13:50 [progress] FEAT-052 / PLAN-094 — Hermes thin adapter spike plan
+
+PLAN-094 在当前 sandbox 不能联网调用 Hermes CLI，按 plan “是否落代码视 spike 结果” 的范围只产 spike plan，不引入 Hermes adapter 代码：
+
+- **触发条件**：operator 提供能跑真实 Hermes CLI 的环境（保留真实 user HOME / HERMES_HOME），且 Hermes CLI 暴露 machine-readable JSONL 或 JSON-RPC 输出。
+- **6 步 spike 任务**：binary path / version → non-interactive run JSON 形态 → session/resume binding → cwd-context 文件加载 → user/host config 隔离实验 → 输出 AgentEvent 映射草案 + cancel/abort 实现路径 + 错误分类建议。
+- **显式不做**：不接管 Hermes memory / skills / MCP / profile；不改 `ExecutorProvider` 或 `AgentEvent` schema；spike 阶段代码原型只放 `tmp/hermes-spike/`。
+- **AIWorker 侧前置已就位**：PLAN-093 thin adapter 契约、PLAN-086 doctor 四档 readiness（含 ambient runtime INFO 行）、`aiworker executor mcp` 当前 codex/claude-code 两 engine 限制。
+
 ## 2026-05-04 13:40 [progress] FEAT-052 / PLAN-093 — bring-your-own executor thin adapter contract
 
 把 ExecutorProvider 接口的 thin adapter 契约固化到代码注释与 architecture docs：

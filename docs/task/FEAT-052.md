@@ -43,3 +43,4 @@ events、cancel、resume/native binding 和基础错误分类。Hermes、OpenCla
 
 - 2026-05-04 11:22：该任务排在 executor surface 收口之后，避免先接入新 engine 又扩大旧抽象。
 - 2026-05-04 13:40：完成 PLAN-093。`packages/shared/src/providers/executor.ts` 与 `packages/core/src/worker/executor/factory.ts` 加 thin adapter contract JSDoc；`docs/architecture.md` 新增 “Thin executor adapter contract” 章节，方法表 + 显式不承诺（no isolation / no capability source of truth / no tool loop ownership）+ engine-specific extension 留在 engine module 的硬要求。
+- 2026-05-04 13:50：完成 PLAN-094 spike plan 文档化。本次 sandbox 不能联网调用 Hermes CLI，按 PLAN-094 “是否落代码视 spike 结果” 的范围只留 spike plan：触发条件（machine-readable 输出 + 真实 user HOME）、6 步 spike 任务、显式不做（不接管 Hermes memory/skills/MCP/profile、不改 ExecutorProvider/AgentEvent schema），以及 AIWorker 侧已就位的前置准备（PLAN-093 契约 + PLAN-086 doctor 行）。
