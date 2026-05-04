@@ -189,4 +189,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**TODO-009 Add operator-facing `aiworker brain admission propose` debug entry**](TODO-009.md) `P3`
 - [x] [**TODO-010 Admission evidence entries lose summary fields after zod parse**](TODO-010.md) `P3`
 - [x] [**TODO-011 `aiworker init` next-steps text recommends `--engine codex` regardless of Soul**](TODO-011.md) `P3`
-- [-] [**REL-014 发布 aiworker CLI 0.7.0**](REL-014.md) `P1`
+- [x] [**REL-014 发布 aiworker CLI 0.7.0**](REL-014.md) `P1`

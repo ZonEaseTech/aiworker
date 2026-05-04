@@ -136,4 +136,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-105 Project Brain 注入贯穿 4 个 executor adapter**](PLAN-105.md) `2026-05-04`
 - [x] [**PLAN-106 Brain admission MVP 安全 / 鲁棒 / 可观察性补齐**](PLAN-106.md) `2026-05-04`
 - [x] [**PLAN-107 CLI brief 与 init next-steps 文案修复**](PLAN-107.md) `2026-05-04`
-- [-] [**PLAN-108 发布 aiworker CLI 0.7.0**](PLAN-108.md) `2026-05-05`
+- [x] [**PLAN-108 发布 aiworker CLI 0.7.0**](PLAN-108.md) `2026-05-05`

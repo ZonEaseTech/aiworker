@@ -1,8 +1,9 @@
 # PLAN-108 发布 aiworker CLI 0.7.0
 
-- **status**: implementing
+- **status**: completed
 - **createdAt**: 2026-05-05 02:30
 - **approvedAt**: 2026-05-05 02:30
+- **completedAt**: 2026-05-05 06:00
 - **relatedTask**: REL-014
 
 ## 现状
@@ -64,16 +65,28 @@
 
 ## 验证
 
-- Pending: `bun run typecheck`
-- Pending: `bun run lint`
-- Pending: `bun run test`
-- Pending: `bun run build`
-- Pending: `apps/cli/dist/package.json` 版本字段 = `0.7.0`
-- Pending: `git diff --check`
-- Pending: GitHub Actions release workflow 全绿
-- Pending: `npm view @zonease/aiworker-cli version` → `0.7.0`
-- Pending: `gh release view v0.7.0` → 4 个平台 binary uploaded
+- Passed: `bun run typecheck`（9 workspace 全 0 退出）
+- Passed: `bun run lint`（无 violation）
+- Passed: `bun run test`（fs-layout 20 / shared 131 / gateway-proto 19 / storage 19 / gateway 148 / core 579 / api 83 / web 59 / cli 164 = 1222 tests）
+- Passed: `bun run build`（api 1.44 MB / fleet 639 kB / worker 664 kB / cli aiworker-bun.js 1.1 MB；CSS utility check 通过）
+- Passed: `apps/cli/dist/package.json` 版本字段 = `0.7.0`
+- Passed: `git diff --check`
+- Passed: GitHub Actions release workflow run id `25342991825` 2m2s 全绿
+- Passed: `npm view @zonease/aiworker-cli version` → `0.7.0`
+- Passed: `gh release view v0.7.0` → published, 4 assets uploaded
+
+## 结果
+
+- Release commit `4968d63 chore(release): 发布 CLI 0.7.0` 已 push 到 `origin/main`（main push 时合入了来自其它 working copy 的 4 个 hooks/skills tooling commit + 1 个 merge `803648a`，tag 仍指向 `4968d63`，release workflow checkout 走 tag ref 不受影响）。
+- Annotated tag `v0.7.0` 已 push 到 origin，触发 GitHub Actions release workflow（run id `25342991825`，2m2s 全绿）。
+- npm `@zonease/aiworker-cli` `latest = 0.7.0`。
+- GitHub Release `v0.7.0` 已发布（非 draft / 非 prerelease），4 个平台 binary 全部 uploaded：
+  - `aiworker-darwin-arm64.tar.gz` 23.94 MB
+  - `aiworker-darwin-x64.tar.gz` 26.37 MB
+  - `aiworker-linux-arm64.tar.gz` 39.64 MB
+  - `aiworker-linux-x64.tar.gz` 39.97 MB
 
 ## 进度
 
 - 2026-05-05 02:30: PLAN-108 / REL-014 创建，进入 implementing。
+- 2026-05-05 06:00: release workflow 全绿、npm + GH Release 验证通过，REL-014 / PLAN-108 标记 completed。

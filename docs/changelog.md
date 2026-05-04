@@ -1,5 +1,28 @@
 # AIWorker Changelog
 
+## 2026-05-05 06:00 [completed] REL-014 / PLAN-108 — CLI 0.7.0 released
+
+`@zonease/aiworker-cli@0.7.0` minor release 完成。
+
+- 自 `v0.6.0` (release commit `425601a`) 至 release commit `4968d63` 共 9 个 commit；按 semver 0.x 走 minor（PLAN-105 让 SOUL/AGENT/MEMORY 真正注入 LLM、PLAN-106 新增 CLI/REST surface，用户可观察行为质变）。
+- 本次 release 收口 QA-004（0.6.0 published claude-code Soul/Brain 端到端调试）登记的 9 个 task：
+  - `PLAN-105` Project Brain 注入贯穿 4 个 executor adapter（claude-code / codex / acp / cursor）+ orchestrator decision retry。覆盖 `BUG-056` (P0 产品定位) / `BUG-057` (P1 brain LLM evaluator)。
+  - `PLAN-106` Brain admission MVP 安全 / 鲁棒 / 可观察性补齐：secret scan 三档 policy（block / redact / raw）+ per-row safeParse + unsupported kind audit + REST `POST /admission`（仅 `WORKER_DEV_TOOLS=true`）+ CLI `aiworker brain admission propose`。覆盖 `BUG-055` (P0 安全) / `BUG-058` (P2) / `BUG-059` (P3) / `TODO-009` / `TODO-010`。
+  - `PLAN-107` CLI `brain brief --artifact` 兜底 + `aiworker init` next-steps 文案修复。覆盖 `BUG-054` (P2) / `TODO-011` (P3)。
+- 本地 release gates 全通过；release commit `4968d63 chore(release): 发布 CLI 0.7.0` 与 annotated tag `v0.7.0` 已 push 到 origin。
+- GitHub Actions release workflow run id `25342991825` 2m2s 全绿；npm `@zonease/aiworker-cli` `latest=0.7.0` 已上线；GitHub Release `v0.7.0` 已发布（非 draft / 非 prerelease），4 个平台 binary 全部 uploaded（aiworker-darwin-arm64 23.94 MB / aiworker-darwin-x64 26.37 MB / aiworker-linux-arm64 39.64 MB / aiworker-linux-x64 39.97 MB）。
+
+验证：
+
+- `bun run typecheck` ✅
+- `bun run lint` ✅
+- `bun run test` ✅（fs-layout 20 / shared 131 / gateway-proto 19 / storage 19 / gateway 148 / core 579 / api 83 / web 59 / cli 164 = 1222 tests）
+- `bun run build` ✅（api 1.44 MB / fleet 639 kB / worker 664 kB / cli aiworker-bun.js 1.1 MB；CSS utility check 通过）
+- `apps/cli/dist/package.json` 版本字段 = `0.7.0` ✅
+- `git diff --check` ✅
+- `npm view @zonease/aiworker-cli version` → `0.7.0` ✅
+- `gh release view v0.7.0` → published, 4 assets uploaded ✅
+
 ## 2026-05-05 02:00 [completed] PLAN-105 / 106 / 107 — 0.6.0 QA-004 缺陷收口
 
 QA-004（0.6.0 published claude-code Soul/Brain end-to-end debug campaign）登记的 9 个 task 全部完成，分三个 plan 落地：
