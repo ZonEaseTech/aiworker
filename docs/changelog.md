@@ -1,5 +1,19 @@
 # AIWorker Changelog
 
+## 2026-05-04 12:25 [completed] FEAT-049 — simplify executor surface around bring-your-own runtimes
+
+合并 PLAN-085/086/087 三个切片：
+
+- AIWorker 显式不再把自己当成 executor-native capability lifecycle 平台。`.aiworker/executor-capabilities.json` 在 schema 注释、CLI 输出、CLI help、aiworker.ts 命令描述、up.ts readiness 注释中统一表达为 **project executor overlay / bootstrap hint**。
+- `aiworker executor doctor` 与 `aiworker up` doctor stage 输出按四档 readiness 分组：binary likely ready（缺失 WARN 不 FAIL）、ambient runtime INFO（提示 user/host MCP/skills/plugins/auth/native sessions 不归 AIWorker 管）、project overlay 静态校验、blocking policy（仅 invalid descriptor / 明文 secret / projection 错误才 FAIL）。
+- 命令名（`executor mcp add/sync`、`executor capability list/show`、`executor doctor`、`executor select`）、文件名（`.aiworker/executor-capabilities.json`）、所有 zod schema 导出（含 `executorNativeCapabilityDescriptorSchema`）、issue code、退出码语义全部保持向后兼容；零运行时行为变化。
+
+验证：
+
+- `bun run typecheck` ✅
+- `bun run lint` ✅
+- `bun run test` ✅（shared 33 / fs-layout 18 / gateway-proto 19 / storage-sqlite 16 / gateway 148 / core 521 / api 71 / cli 124 ≈ 970 spec）
+
 ## 2026-05-04 12:20 [progress] FEAT-049 / PLAN-087 — executor CLI wording and help cleanup
 
 把 CLI 中残留的 “executor 原生能力 manifest / executor-native capability lifecycle” 等措辞收口到 project executor overlay 语义：

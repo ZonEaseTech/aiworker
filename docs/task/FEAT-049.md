@@ -1,10 +1,11 @@
 # FEAT-049 Simplify executor surface around bring-your-own runtimes
 
-- **status**: in-progress
+- **status**: completed
 - **priority**: P1
 - **owner**: local
 - **createdAt**: 2026-05-04 11:22
 - **claimedAt**: 2026-05-04 12:00
+- **completedAt**: 2026-05-04 12:25
 - **plans**: PLAN-085, PLAN-086, PLAN-087
 
 ## 描述
@@ -45,3 +46,4 @@ bootstrap hint；`executor doctor` 只报告外部 runtime 的可用性、ambien
 - 2026-05-04 12:00：完成 PLAN-085。manifest 语义在 shared schema、CLI 输出文案、fs-layout 注释三处全部降级为 project executor overlay / hint；issue code、命令名、文件名、导出名都保持向后兼容。
 - 2026-05-04 12:10：完成 PLAN-086。`executor doctor` 与 `aiworker up` doctor stage 渲染统一为四档 readiness：binary likely ready（缺失 WARN 不 FAIL）、ambient runtime INFO、project overlay 静态检查、blocking policy（仅 invalid descriptor / 明文 secret / projection 错误 FAIL）；新增 INFO 行说明 engine login/auth 不归 AIWorker 探测。
 - 2026-05-04 12:20：完成 PLAN-087。help.ts / aiworker.ts （root 与 worker 镜像入口）的 executor 命令描述、up.ts stage 4 注释与提示、executor.ts 的两条错误/issue 文案全部改成 overlay/hint 措辞；命令名、文件名与 issue code 全保留。
+- 2026-05-04 12:25：FEAT-049 整体收口完成。全量 `bun run typecheck` / `bun run lint` / `bun run test`（shared 33、fs-layout 18、gateway-proto 19、storage-sqlite 16、gateway 148、core 521、api 71、cli 124，合计约 970 项 spec）全部通过。executor surface 现在显式表达为 bring-your-own external runtime + 薄 adapter + project overlay；不留 “executor-native capability lifecycle” 平台化暗示，AIWorker 不承诺 isolation 或完整 effective capability source of truth。
