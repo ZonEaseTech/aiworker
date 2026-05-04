@@ -132,4 +132,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-101 Brain admission MVP for scope assets**](PLAN-101.md) `2026-05-04`
 - [x] [**PLAN-102 Brain brief compiler and projection boundary**](PLAN-102.md) `2026-05-04`
 - [x] [**PLAN-103 Worker/Fleet Brain surface closeout**](PLAN-103.md) `2026-05-04`
-- [-] [**PLAN-104 发布 aiworker CLI 0.6.0**](PLAN-104.md) `2026-05-04`
+- [x] [**PLAN-104 发布 aiworker CLI 0.6.0**](PLAN-104.md) `2026-05-04`

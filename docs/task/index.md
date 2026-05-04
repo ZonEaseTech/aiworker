@@ -178,4 +178,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-052 Define bring-your-own executor integration strategy**](FEAT-052.md) `P2`
 - [x] [**FEAT-053 Clarify Project scope as worker-bound business scope**](FEAT-053.md) `P1`
 - [x] [**FEAT-054 Soul modules and Scope Brain kernel**](FEAT-054.md) `P1`
-- [-] [**REL-013 发布 aiworker CLI 0.6.0**](REL-013.md) `P1`
+- [x] [**REL-013 发布 aiworker CLI 0.6.0**](REL-013.md) `P1`

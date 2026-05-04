@@ -1,21 +1,23 @@
 # AIWorker Changelog
 
-## 2026-05-04 22:30 [progress] REL-013 / PLAN-104 — prepare CLI 0.6.0 release
+## 2026-05-04 23:15 [completed] REL-013 / PLAN-104 — CLI 0.6.0 released
 
-启动 `@zonease/aiworker-cli@0.6.0` minor release：
+`@zonease/aiworker-cli@0.6.0` minor release 完成。
 
-- 当前 npm latest、GitHub Release 和远端 tag 均为 `0.5.3`。
+- 自 `v0.5.3` 至 release commit 前 `HEAD (191ba02)` 共 30 个 commit；按 semver 0.x 走 minor。
 - 本次 release 跨 6 个 FEAT epic 收口：`FEAT-048` 产品定位 pivot、`FEAT-049` executor 改 BYO + project overlay、`FEAT-050` Project Brain product surface 强化、`FEAT-051` Worker/Fleet aggregation surface 强化、`FEAT-052` BYO executor integration strategy、`FEAT-053` Project scope = worker-bound business scope、`FEAT-054` Soul modules + Scope Brain kernel（PLAN-097..103 完整落地 SoulModule registry / scope manifest / artifact registry / Soul schema pack / admission MVP / brief compiler / Worker REST + Worker Admin UI + Fleet UI 收口）；外加 `BUG-052` / `BUG-053` 两个流式文本去重 fix。
-- 自 `v0.5.3` 至 `HEAD (191ba02)` 共 30 个 commit；按 semver 0.x 走 minor。
-- 本地 release gates 已通过；等待 release commit、`v0.6.0` tag push、GitHub Actions release workflow、npm / GitHub Release 验证。
+- 本地 release gates 全通过；release commit `425601a chore(release): 发布 CLI 0.6.0` 与 annotated tag `v0.6.0` 已 push 到 origin。
+- GitHub Actions release workflow run id `25318251246` 1m58s 全绿；npm `@zonease/aiworker-cli` `latest=0.6.0` 已上线；GitHub Release `v0.6.0` 已发布（非 draft / 非 prerelease），4 个平台 binary 全部 uploaded（aiworker-darwin-arm64 / aiworker-darwin-x64 / aiworker-linux-arm64 / aiworker-linux-x64）。
 
 验证：
 
-- `bun run typecheck`
-- `bun run lint`
-- `bun run test`
-- `bun run build`
-- `git diff --check`
+- `bun run typecheck` ✅
+- `bun run lint` ✅
+- `bun run test` ✅（fs-layout 20 / shared 120 / gateway-proto 19 / storage 19 / gateway 148 / core 554 / api 83 / web 59 / cli 159 = 1181 tests）
+- `bun run build` ✅（api / fleet bundle / worker bundle / cli bundle）
+- `git diff --check` ✅
+- `npm view @zonease/aiworker-cli version` → `0.6.0` ✅
+- `gh release view v0.6.0` → published, 4 assets uploaded ✅
 
 ## 2026-05-04 19:00 [completed] FEAT-054 / PLAN-103 — Worker/Fleet Brain surface closeout
 

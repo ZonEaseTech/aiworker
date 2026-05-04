@@ -1,8 +1,9 @@
 # PLAN-104 发布 aiworker CLI 0.6.0
 
-- **status**: implementing
+- **status**: completed
 - **createdAt**: 2026-05-04 22:30
 - **approvedAt**: 2026-05-04 22:30
+- **completedAt**: 2026-05-04 23:15
 - **relatedTask**: REL-013
 
 ## 现状
@@ -63,4 +64,11 @@
 
 ## 结果
 
-- 发版 commit + `v0.6.0` tag 在本地就绪后，暂停等待用户确认，再推送触发 release workflow。
+- Release commit `425601a chore(release): 发布 CLI 0.6.0` 已 push 到 `origin/main`。
+- Annotated tag `v0.6.0` 已 push 到 origin，触发 GitHub Actions release workflow（run id `25318251246`，1m58s 全绿）。
+- npm `@zonease/aiworker-cli` `latest = 0.6.0`。
+- GitHub Release `v0.6.0` 已发布（非 draft / 非 prerelease），4 个平台 binary 全部 uploaded：
+  - `aiworker-darwin-arm64.tar.gz` 23.9 MB（sha256 `a44450ae...`）
+  - `aiworker-darwin-x64.tar.gz` 26.3 MB（sha256 `5750fb41...`）
+  - `aiworker-linux-arm64.tar.gz` 39.6 MB（sha256 `3845a856...`）
+  - `aiworker-linux-x64.tar.gz` 39.9 MB（sha256 `895838bd...`）
