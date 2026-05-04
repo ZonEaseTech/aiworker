@@ -6,6 +6,7 @@ import type {
   BrainAdmissionProposalInput,
   BrainAdmissionRisk,
   BrainAdmissionStatus,
+  SecretHit,
 } from '@zonease/aiworker-shared'
 
 import { mkdir, writeFile } from 'node:fs/promises'
@@ -16,7 +17,9 @@ import {
   brainAdmissionProposalInputSchema,
   brainAdmissionProposalSchema,
   isMaterializedProposalKind,
+  redactBodySecrets,
   redactBrainAdmissionProposal,
+  scanBodyForSecrets,
 } from '@zonease/aiworker-shared'
 import { brainAdmissionDecisions, brainAdmissionProposals, getWorkerDb } from '@zonease/aiworker-storage-sqlite/worker'
 import { and, desc, eq } from 'drizzle-orm'
@@ -50,17 +53,36 @@ export interface ApprovalContext {
   at?: string
 }
 
+/**
+ * BUG-055: gate on secret-like substrings inside `payload.body` before any
+ * filesystem write.
+ *  - `block` (default): refuse to materialize when any hit is found.
+ *  - `redact`: replace each hit with `[REDACTED:<rule>]` and persist that.
+ *  - `raw`: write the body verbatim (escape hatch for ops); decision row
+ *    records the override so audit shows operator intent.
+ */
+export type SecretBodyPolicy = 'block' | 'redact' | 'raw'
+
 export interface ApplyOptions {
   brainHome: string
   decidedBy: string
   /** Default `false` (dry-run). Pass `true` to actually write filesystem state. */
   commit?: boolean
   at?: string
+  /** BUG-055 secret-body policy. Default `'block'`. */
+  allowSecretBody?: SecretBodyPolicy
+}
+
+export interface SecretScanReport {
+  hits: SecretHit[]
+  action: 'allow-clean' | 'block' | 'redact' | 'allow-raw'
+  policy: SecretBodyPolicy
 }
 
 export type ApplyOutcome
-  = | { kind: 'dry-run', diff: string, target: string }
-    | { kind: 'applied', target: string }
+  = | { kind: 'dry-run', diff: string, target: string, secretScan: SecretScanReport }
+    | { kind: 'applied', target: string, secretScan: SecretScanReport }
+    | { kind: 'blocked-by-secret-scan', secretScan: SecretScanReport }
     | { kind: 'failed', reason: string }
     | { kind: 'unsupported', proposalKind: string, reason: string }
 
@@ -76,6 +98,12 @@ function buildStateError(code: BrainAdmissionStateError['code'], message: string
 
 const DEFAULT_LIMIT = 50
 const MAX_LIMIT = 500
+
+export interface BrainAdmissionListResult {
+  proposals: BrainAdmissionProposal[]
+  /** BUG-058: rows that failed schema parse — surfaced in CLI / REST footers. */
+  skipped: { count: number, ids: string[], reasons: string[] }
+}
 
 interface ProposalRow {
   id: string
@@ -94,8 +122,13 @@ interface ProposalRow {
   updatedAt: string
 }
 
-function rowToProposal(row: ProposalRow): BrainAdmissionProposal {
-  const proposal: BrainAdmissionProposal = {
+/**
+ * BUG-058: per-row safeParse so a single schema-drift row no longer blackholes
+ * the whole admission view. Returns either a parsed proposal or a structured
+ * skip reason that the caller surfaces as a footer warning.
+ */
+function safeRowToProposal(row: ProposalRow): { ok: true, proposal: BrainAdmissionProposal } | { ok: false, id: string, reason: string } {
+  const candidate: BrainAdmissionProposal = {
     confidence: row.confidence,
     createdAt: row.createdAt,
     evidence: row.evidence ?? [],
@@ -110,10 +143,17 @@ function rowToProposal(row: ProposalRow): BrainAdmissionProposal {
     updatedAt: row.updatedAt,
   }
   if (row.scopeId !== null)
-    proposal.scopeId = row.scopeId
+    candidate.scopeId = row.scopeId
   if (row.payload !== null)
-    proposal.payload = row.payload
-  return brainAdmissionProposalSchema.parse(proposal)
+    candidate.payload = row.payload
+  const parsed = brainAdmissionProposalSchema.safeParse(candidate)
+  if (parsed.success)
+    return { ok: true, proposal: parsed.data }
+  const summary = parsed.error.issues
+    .slice(0, 4)
+    .map(issue => `${issue.path.join('.') || '<root>'}: ${issue.message}`)
+    .join('; ')
+  return { ok: false, id: row.id, reason: `schema-drift: ${summary}` }
 }
 
 function maybeRedact(p: BrainAdmissionProposal, options?: ReadBrainAdmissionOptions): BrainAdmissionProposal {
@@ -196,7 +236,31 @@ export class BrainAdmissionService {
       .get()
     if (row === undefined)
       return null
-    return maybeRedact(rowToProposal(row as ProposalRow), options)
+    // BUG-058: schema-drift rows return null instead of throwing so the
+    // operator-facing CLI / REST surface stays usable. Strict callers use
+    // `getSafe` to inspect the skipped reason; `requireById` still throws.
+    const result = safeRowToProposal(row as ProposalRow)
+    if (!result.ok)
+      return null
+    return maybeRedact(result.proposal, options)
+  }
+
+  /**
+   * BUG-058: safe variant of `get` — returns either the proposal or a
+   * skipped reason instead of throwing on schema drift.
+   */
+  getSafe(id: string, options?: ReadBrainAdmissionOptions): { ok: true, proposal: BrainAdmissionProposal } | { ok: false, reason: string } | null {
+    const row = getWorkerDb()
+      .select()
+      .from(brainAdmissionProposals)
+      .where(eq(brainAdmissionProposals.id, id))
+      .get()
+    if (row === undefined)
+      return null
+    const result = safeRowToProposal(row as ProposalRow)
+    if (!result.ok)
+      return { ok: false, reason: result.reason }
+    return { ok: true, proposal: maybeRedact(result.proposal, options) }
   }
 
   requireById(id: string, options?: ReadBrainAdmissionOptions): BrainAdmissionProposal {
@@ -206,7 +270,7 @@ export class BrainAdmissionService {
     return proposal
   }
 
-  list(options?: ListBrainAdmissionOptions, readOptions?: ReadBrainAdmissionOptions): BrainAdmissionProposal[] {
+  list(options?: ListBrainAdmissionOptions, readOptions?: ReadBrainAdmissionOptions): BrainAdmissionListResult {
     const limit = clampLimit(options?.limit)
     const filters = []
     if (options?.status !== undefined)
@@ -228,7 +292,24 @@ export class BrainAdmissionService {
       .limit(limit)
 
     const rows = (filters.length === 0 ? query : query.where(and(...filters))).all()
-    return rows.map(row => maybeRedact(rowToProposal(row as ProposalRow), readOptions))
+    const proposals: BrainAdmissionProposal[] = []
+    const skippedIds: string[] = []
+    const skipReasons: string[] = []
+    for (const raw of rows) {
+      const row = raw as ProposalRow
+      const result = safeRowToProposal(row)
+      if (result.ok) {
+        proposals.push(maybeRedact(result.proposal, readOptions))
+      }
+      else {
+        skippedIds.push(result.id)
+        skipReasons.push(result.reason)
+      }
+    }
+    return {
+      proposals,
+      skipped: { count: skippedIds.length, ids: skippedIds, reasons: skipReasons },
+    }
   }
 
   count(options?: Pick<ListBrainAdmissionOptions, 'status' | 'kind' | 'scopeId' | 'soulId'>): number {
@@ -301,10 +382,18 @@ export class BrainAdmissionService {
 
   /**
    * Materialize an approved proposal. MVP only supports `memory-add`; other
-   * kinds resolve to `unsupported` without changing state.
+   * kinds (BUG-059) record an `unsupported-skip` decision row and flip the
+   * proposal to `failed` so the operator no longer sees them under
+   * `--status approved`.
    *
    * `commit` defaults to `false` (dry-run). Dry-run never writes filesystem;
-   * `commit: true` writes file + records `applied` decision + flips status.
+   * `commit: true` writes the file + records an `applied` decision + flips
+   * status.
+   *
+   * BUG-055: `payload.body` is scanned for secret-like substrings before any
+   * filesystem write. Default policy is `'block'` — operator must opt into
+   * `'redact'` (replace hits with `[REDACTED:<rule>]`) or `'raw'` (write the
+   * body verbatim) to proceed.
    */
   async apply(id: string, options: ApplyOptions): Promise<ApplyOutcome> {
     const proposal = this.requireById(id, { redactSensitive: false })
@@ -314,13 +403,8 @@ export class BrainAdmissionService {
         `cannot apply proposal "${id}" with status "${proposal.status}" (must be "approved")`,
       )
     }
-    if (!isMaterializedProposalKind(proposal.kind)) {
-      return {
-        kind: 'unsupported',
-        proposalKind: proposal.kind,
-        reason: `MVP materializer only supports memory-add; kind "${proposal.kind}" requires manual follow-up`,
-      }
-    }
+    if (!isMaterializedProposalKind(proposal.kind))
+      return this.handleUnsupportedKind(id, proposal.kind, options)
 
     const payloadResult = brainAdmissionMemoryAddPayloadSchema.safeParse(proposal.payload)
     if (!payloadResult.success) {
@@ -333,19 +417,42 @@ export class BrainAdmissionService {
     }
 
     const payload = payloadResult.data
+    const policy: SecretBodyPolicy = options.allowSecretBody ?? 'block'
+    const scan = scanBodyForSecrets(payload.body)
+    const hasHits = scan.hits.length > 0
+    let bodyToWrite = payload.body
+    let scanReport: SecretScanReport
+    if (!hasHits) {
+      scanReport = { hits: [], action: 'allow-clean', policy }
+    }
+    else if (policy === 'block') {
+      scanReport = { hits: scan.hits, action: 'block', policy }
+      // BUG-055: refuse to materialize. Operator can opt into redact / raw
+      // explicitly by re-running with `--allow-secret-body`.
+      return { kind: 'blocked-by-secret-scan', secretScan: scanReport }
+    }
+    else if (policy === 'redact') {
+      const redacted = redactBodySecrets(payload.body)
+      bodyToWrite = redacted.body
+      scanReport = { hits: scan.hits, action: 'redact', policy }
+    }
+    else {
+      scanReport = { hits: scan.hits, action: 'allow-raw', policy }
+    }
+
     const targetPath = payload.topic === undefined
       ? path.join(options.brainHome, 'MEMORY.md')
       : path.join(options.brainHome, 'memories', `${payload.topic}.md`)
 
-    const diff = formatMemoryAddDiff(targetPath, payload.body, payload.indexEntry)
+    const diff = formatMemoryAddDiff(targetPath, bodyToWrite, payload.indexEntry, scanReport)
 
     if (options.commit !== true)
-      return { diff, kind: 'dry-run', target: targetPath }
+      return { diff, kind: 'dry-run', target: targetPath, secretScan: scanReport }
 
     const at = options.at ?? new Date().toISOString()
     try {
       await mkdir(path.dirname(targetPath), { recursive: true })
-      const body = ensureTrailingNewline(payload.body)
+      const body = ensureTrailingNewline(bodyToWrite)
       await writeFile(targetPath, body, { encoding: 'utf8', flag: 'a' })
       if (payload.topic !== undefined && payload.indexEntry !== undefined) {
         const indexPath = path.join(options.brainHome, 'MEMORY.md')
@@ -381,8 +488,38 @@ export class BrainAdmissionService {
       decidedBy: options.decidedBy,
       decision: 'applied',
       proposalId: id,
+      reason: secretScanReason(scanReport),
     }).run()
-    return { kind: 'applied', target: targetPath }
+    return { kind: 'applied', target: targetPath, secretScan: scanReport }
+  }
+
+  /**
+   * BUG-059: unsupported `kind` no longer leaves the proposal stuck in
+   * `approved`. We emit a `failed` decision row carrying
+   * `failureReason='unsupported-kind:<kind>'` and flip the proposal status
+   * to `failed` so subsequent `list --status approved` queries don't surface
+   * orphaned proposals.
+   */
+  private handleUnsupportedKind(id: string, proposalKind: string, options: ApplyOptions): ApplyOutcome {
+    const reason = `MVP materializer only supports memory-add; kind "${proposalKind}" requires manual follow-up`
+    if (options.commit !== true)
+      return { kind: 'unsupported', proposalKind, reason }
+    const at = options.at ?? new Date().toISOString()
+    const failureReason = `unsupported-kind:${proposalKind}`
+    const db = getWorkerDb()
+    db.update(brainAdmissionProposals)
+      .set({ status: 'failed', updatedAt: at })
+      .where(eq(brainAdmissionProposals.id, id))
+      .run()
+    db.insert(brainAdmissionDecisions).values({
+      decidedAt: at,
+      decidedBy: options.decidedBy,
+      decision: 'failed',
+      failureReason,
+      proposalId: id,
+      reason,
+    }).run()
+    return { kind: 'unsupported', proposalKind, reason }
   }
 
   listDecisions(proposalId: string): BrainAdmissionDecision[] {
@@ -408,16 +545,30 @@ function ensureTrailingNewline(body: string): string {
   return `${body}\n\n`
 }
 
-function formatMemoryAddDiff(targetPath: string, body: string, indexEntry: string | undefined): string {
+function formatMemoryAddDiff(targetPath: string, body: string, indexEntry: string | undefined, scan: SecretScanReport): string {
   const lines = body.split('\n')
   const preview = lines.slice(0, 12).join('\n')
   const truncated = lines.length > 12 ? `\n  ... (+${lines.length - 12} more lines)` : ''
   const indexHint = indexEntry === undefined
     ? ''
     : `\n  index entry → MEMORY.md:\n    ${indexEntry}`
+  const scanLine = scan.hits.length === 0
+    ? '  secret scan: clean'
+    : `  secret scan: ${scan.action} (${scan.hits.length} hit${scan.hits.length === 1 ? '' : 's'} — ${scan.hits.map(h => `${h.rule}:${h.preview}`).join(', ')})`
   return [
     `dry-run: would append memory body to ${targetPath}`,
     `  body preview:\n    ${preview.split('\n').join('\n    ')}${truncated}`,
     indexHint,
+    scanLine,
   ].filter(line => line !== '').join('\n')
+}
+
+function secretScanReason(scan: SecretScanReport): string | null {
+  if (scan.hits.length === 0)
+    return null
+  if (scan.action === 'redact')
+    return `operator-redacted-secret-scan: ${scan.hits.length} hit${scan.hits.length === 1 ? '' : 's'}`
+  if (scan.action === 'allow-raw')
+    return `operator-overrode-secret-scan-raw: ${scan.hits.length} hit${scan.hits.length === 1 ? '' : 's'}`
+  return null
 }

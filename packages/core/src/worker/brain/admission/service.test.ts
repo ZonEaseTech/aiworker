@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { closeWorkerDb, initWorkerDb, runWorkerMigrations } from '@zonease/aiworker-storage-sqlite/worker'
+import { brainAdmissionProposals, closeWorkerDb, getWorkerDb, initWorkerDb, runWorkerMigrations } from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 import { BrainAdmissionService } from './service'
@@ -161,8 +161,52 @@ describe('BrainAdmissionService propose / approve / reject (PLAN-101)', () => {
 
     expect(ctx.service.count({ status: 'pending' })).toBe(2)
     expect(ctx.service.count({ status: 'approved' })).toBe(1)
-    expect(ctx.service.list({ status: 'pending' }).map(p => p.id).sort()).toEqual(['p-b', 'p-c'])
-    expect(ctx.service.list({ kind: 'brain-skill-add' }).map(p => p.id)).toEqual(['p-c'])
+    expect(ctx.service.list({ status: 'pending' }).proposals.map(p => p.id).sort()).toEqual(['p-b', 'p-c'])
+    expect(ctx.service.list({ kind: 'brain-skill-add' }).proposals.map(p => p.id)).toEqual(['p-c'])
+  })
+
+  it('list / get skip rows that fail schema parse and surface them via skipped (BUG-058)', () => {
+    ctx.service.propose({
+      confidence: 0.5,
+      id: 'p-good',
+      kind: 'memory-add',
+      payload: { body: 'fine' },
+      rollback: 'manual',
+      soulId: 'developer',
+      summary: 'ok',
+      target: '.aiworker/MEMORY.md',
+    }, NOW)
+    // Inject a row whose evidence column is missing required fields. Cast to
+    // `any` because the typed Drizzle insert refuses partial evidence —
+    // runtime validation (BUG-058) is exactly what we're exercising here.
+    getWorkerDb().insert(brainAdmissionProposals).values({
+      confidence: 0.4,
+      createdAt: NOW,
+      evidence: [{ summary: 'missing at/kind/ref' }] as unknown as never,
+      id: 'p-broken',
+      kind: 'memory-add',
+      payload: { body: 'broken' },
+      risk: 'low',
+      rollback: 'manual',
+      soulId: 'developer',
+      status: 'pending',
+      summary: 'broken',
+      target: '.aiworker/MEMORY.md',
+      updatedAt: NOW,
+    }).run()
+
+    const result = ctx.service.list()
+    expect(result.proposals.map(p => p.id)).toEqual(['p-good'])
+    expect(result.skipped.count).toBe(1)
+    expect(result.skipped.ids).toEqual(['p-broken'])
+    expect(result.skipped.reasons[0]).toContain('schema-drift')
+
+    expect(ctx.service.get('p-good')).not.toBeNull()
+    expect(ctx.service.get('p-broken')).toBeNull()
+    const safe = ctx.service.getSafe('p-broken')
+    expect(safe).not.toBeNull()
+    if (safe && !('proposal' in safe))
+      expect(safe.reason).toContain('schema-drift')
   })
 
   it('list redacts payload secret-like fields by default', () => {
@@ -176,8 +220,8 @@ describe('BrainAdmissionService propose / approve / reject (PLAN-101)', () => {
       summary: 's',
       target: '.aiworker/MEMORY.md',
     })
-    const [defaultView] = ctx.service.list()
-    const [unlocked] = ctx.service.list(undefined, { redactSensitive: false })
+    const defaultView = ctx.service.list().proposals[0]
+    const unlocked = ctx.service.list(undefined, { redactSensitive: false }).proposals[0]
     expect(((defaultView?.payload as { connection?: { token?: string } } | undefined)?.connection?.token)).toBe('<redacted>')
     expect(((unlocked?.payload as { connection?: { token?: string } } | undefined)?.connection?.token)).toBe('super-secret')
   })
@@ -289,7 +333,7 @@ describe('BrainAdmissionService.apply (PLAN-101 MVP materializer)', () => {
     expect(indexFile).toContain('- [Dry-run policy](dry-run-policy.md)')
   })
 
-  it('non-memory-add proposal returns unsupported and does not change status', async () => {
+  it('non-memory-add proposal commit flips status to failed and writes a decision (BUG-059)', async () => {
     await mkdir(ctx.brainHome, { recursive: true })
     ctx.service.propose({
       confidence: 0.5,
@@ -311,7 +355,31 @@ describe('BrainAdmissionService.apply (PLAN-101 MVP materializer)', () => {
     if (result.kind === 'unsupported')
       expect(result.proposalKind).toBe('brain-skill-add')
     const after = ctx.service.requireById('p-unsupported')
-    expect(after.status).toBe('approved')
+    expect(after.status).toBe('failed')
+    const decisions = ctx.service.listDecisions('p-unsupported')
+    const failure = decisions.find(d => d.decision === 'failed')
+    expect(failure?.failureReason).toBe('unsupported-kind:brain-skill-add')
+    expect(ctx.service.list({ status: 'approved' }).proposals.find(p => p.id === 'p-unsupported')).toBeUndefined()
+  })
+
+  it('non-memory-add proposal dry-run returns unsupported without changing status', async () => {
+    await mkdir(ctx.brainHome, { recursive: true })
+    ctx.service.propose({
+      confidence: 0.5,
+      id: 'p-unsupported-dry',
+      kind: 'policy-update',
+      rollback: 'manual',
+      soulId: 'developer',
+      summary: 'policy update is not materialized',
+      target: '.aiworker/policy.json',
+    })
+    ctx.service.approve('p-unsupported-dry', { decidedBy: 'op-1' })
+    const result = await ctx.service.apply('p-unsupported-dry', {
+      brainHome: ctx.brainHome,
+      decidedBy: 'op-1',
+    })
+    expect(result.kind).toBe('unsupported')
+    expect(ctx.service.requireById('p-unsupported-dry').status).toBe('approved')
   })
 
   it('memory-add with malformed payload returns failed', async () => {
@@ -335,5 +403,114 @@ describe('BrainAdmissionService.apply (PLAN-101 MVP materializer)', () => {
     expect(result.kind).toBe('failed')
     if (result.kind === 'failed')
       expect(result.reason).toContain('memory-add schema')
+  })
+
+  it('blocks secret-bearing payload.body by default (BUG-055)', async () => {
+    await mkdir(ctx.brainHome, { recursive: true })
+    ctx.service.propose({
+      confidence: 0.5,
+      id: 'p-secret-block',
+      kind: 'memory-add',
+      payload: { body: 'apiKey=sk-LIVE-abcdefghijklmnopqrstuv', topic: 'leak' },
+      rollback: 'rm memories/leak.md',
+      soulId: 'developer',
+      summary: 'leak',
+      target: 'memories/leak',
+    })
+    ctx.service.approve('p-secret-block', { decidedBy: 'op-1' })
+    const result = await ctx.service.apply('p-secret-block', {
+      brainHome: ctx.brainHome,
+      commit: true,
+      decidedBy: 'op-1',
+    })
+    expect(result.kind).toBe('blocked-by-secret-scan')
+    if (result.kind === 'blocked-by-secret-scan') {
+      expect(result.secretScan.action).toBe('block')
+      expect(result.secretScan.hits.find(h => h.rule === 'sk-token')).toBeDefined()
+    }
+    expect(ctx.service.requireById('p-secret-block').status).toBe('approved')
+  })
+
+  it('redacts secret-bearing body when allowSecretBody=redact (BUG-055)', async () => {
+    await mkdir(ctx.brainHome, { recursive: true })
+    ctx.service.propose({
+      confidence: 0.5,
+      id: 'p-secret-redact',
+      kind: 'memory-add',
+      payload: { body: 'apiKey=sk-LIVE-abcdefghijklmnopqrstuv', topic: 'leak-redact' },
+      rollback: 'rm memories/leak-redact.md',
+      soulId: 'developer',
+      summary: 'leak-redact',
+      target: 'memories/leak-redact',
+    })
+    ctx.service.approve('p-secret-redact', { decidedBy: 'op-1' })
+    const result = await ctx.service.apply('p-secret-redact', {
+      allowSecretBody: 'redact',
+      brainHome: ctx.brainHome,
+      commit: true,
+      decidedBy: 'op-1',
+    })
+    expect(result.kind).toBe('applied')
+    if (result.kind === 'applied')
+      expect(result.secretScan.action).toBe('redact')
+    const file = await readFile(join(ctx.brainHome, 'memories', 'leak-redact.md'), 'utf8')
+    expect(file).toContain('[REDACTED:sk-token]')
+    expect(file).not.toContain('sk-LIVE-')
+    const decisions = ctx.service.listDecisions('p-secret-redact')
+    const applied = decisions.find(d => d.decision === 'applied')
+    expect(applied?.reason).toContain('operator-redacted-secret-scan')
+  })
+
+  it('writes secret-bearing body verbatim when allowSecretBody=raw and tags decision reason (BUG-055)', async () => {
+    await mkdir(ctx.brainHome, { recursive: true })
+    ctx.service.propose({
+      confidence: 0.5,
+      id: 'p-secret-raw',
+      kind: 'memory-add',
+      payload: { body: 'sk-LIVE-abcdefghijklmnopqrstuv', topic: 'leak-raw' },
+      rollback: 'rm memories/leak-raw.md',
+      soulId: 'developer',
+      summary: 'leak-raw',
+      target: 'memories/leak-raw',
+    })
+    ctx.service.approve('p-secret-raw', { decidedBy: 'op-1' })
+    const result = await ctx.service.apply('p-secret-raw', {
+      allowSecretBody: 'raw',
+      brainHome: ctx.brainHome,
+      commit: true,
+      decidedBy: 'op-1',
+    })
+    expect(result.kind).toBe('applied')
+    if (result.kind === 'applied')
+      expect(result.secretScan.action).toBe('allow-raw')
+    const file = await readFile(join(ctx.brainHome, 'memories', 'leak-raw.md'), 'utf8')
+    expect(file).toContain('sk-LIVE-abcdefghijklmnopqrstuv')
+    const applied = ctx.service.listDecisions('p-secret-raw').find(d => d.decision === 'applied')
+    expect(applied?.reason).toContain('operator-overrode-secret-scan-raw')
+  })
+
+  it('dry-run reports a secret scan summary without writing files', async () => {
+    await mkdir(ctx.brainHome, { recursive: true })
+    ctx.service.propose({
+      confidence: 0.5,
+      id: 'p-secret-dryrun',
+      kind: 'memory-add',
+      payload: { body: 'sk-LIVE-abcdefghijklmnopqrstuv', topic: 'leak-dry' },
+      rollback: 'noop',
+      soulId: 'developer',
+      summary: 'dry',
+      target: 'memories/leak-dry',
+    })
+    ctx.service.approve('p-secret-dryrun', { decidedBy: 'op-1' })
+    const result = await ctx.service.apply('p-secret-dryrun', {
+      allowSecretBody: 'redact',
+      brainHome: ctx.brainHome,
+      decidedBy: 'op-1',
+    })
+    expect(result.kind).toBe('dry-run')
+    if (result.kind === 'dry-run') {
+      expect(result.secretScan.action).toBe('redact')
+      expect(result.diff).toContain('secret scan: redact')
+    }
   })
 })

@@ -51,7 +51,10 @@ export type BrainAdmissionEvidenceKind = z.infer<typeof brainAdmissionEvidenceKi
 export const brainAdmissionEvidenceSchema = z.object({
   at: z.string().min(1),
   kind: brainAdmissionEvidenceKindSchema,
-  note: z.string().max(2000).optional(),
+  /** Short headline that helps an operator decide approve / reject. */
+  summary: z.string().max(500).optional(),
+  /** Longer free-form note. Same redact pass as `summary`. */
+  notes: z.string().max(2000).optional(),
   ref: z.string().min(1),
 })
 export type BrainAdmissionEvidence = z.infer<typeof brainAdmissionEvidenceSchema>

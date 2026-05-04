@@ -65,3 +65,13 @@ export type {
   BrainBriefSection,
   BrainBriefSectionSource,
 } from './brief'
+
+export {
+  redactBodySecrets,
+  scanBodyForSecrets,
+} from './scan-body'
+export type {
+  ScanBodyForSecretsResult,
+  SecretHit,
+  SecretRuleId,
+} from './scan-body'

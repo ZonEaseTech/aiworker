@@ -169,7 +169,7 @@ describe('redactBrainAdmissionProposal', () => {
   it('redacts secret-like values inside evidence + payload, keeps summary / rollback / target', () => {
     const original = proposal({
       evidence: [
-        { at: NOW, kind: 'tool-call', note: 'public note', ref: 'tool-1' },
+        { at: NOW, kind: 'tool-call', summary: 'public summary', notes: 'long context', ref: 'tool-1' },
       ],
       payload: {
         body: 'memory body',
@@ -183,6 +183,8 @@ describe('redactBrainAdmissionProposal', () => {
     expect(redacted.summary).toBe(original.summary)
     expect(redacted.rollback).toBe(original.rollback)
     expect(redacted.target).toBe(original.target)
+    expect(redacted.evidence[0]?.summary).toBe('public summary')
+    expect(redacted.evidence[0]?.notes).toBe('long context')
     expect(redacted.payload).toEqual({
       body: 'memory body',
       connection: { token: '<redacted>', user: 'alice' },

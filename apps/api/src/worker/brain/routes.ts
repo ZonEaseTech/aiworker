@@ -1,3 +1,5 @@
+import process from 'node:process'
+
 import { OpenAPIHono } from '@hono/zod-openapi'
 import {
   BrainAdmissionService,
@@ -60,7 +62,30 @@ const applyBody = z.object({
   decidedBy: z.string().min(1).max(200),
   /** Default false (dry-run). Caller must opt in to filesystem write. */
   commit: z.boolean().optional(),
+  /** BUG-055 secret-body policy. Default `'block'`. */
+  allowSecretBody: z.enum(['block', 'redact', 'raw']).optional(),
 })
+
+/**
+ * TODO-009: debug-only inbound `propose` body. The route is gated by the
+ * `WORKER_DEV_TOOLS=true` env so production deployments cannot accept these
+ * inserts even with a valid bearer.
+ */
+const proposeBody = z.object({
+  confidence: z.number().min(0).max(1).default(0.5),
+  evidence: z.array(z.record(z.string(), z.unknown())).optional(),
+  id: z.string().min(1).max(200),
+  kind: z.string().min(1).max(80).default('memory-add'),
+  payload: z.record(z.string(), z.unknown()).optional(),
+  risk: z.enum(['low', 'medium', 'high']).optional(),
+  rollback: z.string().min(1).max(4000),
+  scopeId: z.string().min(1).max(200).optional(),
+  soulId: z.string().min(1).max(200),
+  summary: z.string().min(1).max(2000),
+  target: z.string().min(1).max(2000),
+})
+
+const DEV_TOOLS_ENABLED = process.env.WORKER_DEV_TOOLS === 'true'
 
 function admissionService() {
   return new BrainAdmissionService()
@@ -101,8 +126,13 @@ export function buildBrainRoutes(deps: BrainRoutesDeps) {
       filterOptions.soulId = q.soulId
     if (q.limit !== undefined)
       filterOptions.limit = q.limit
-    const proposals = admissionService().list(filterOptions, { redactSensitive: redact })
-    return c.json({ count: proposals.length, redacted: redact, proposals })
+    const result = admissionService().list(filterOptions, { redactSensitive: redact })
+    return c.json({
+      count: result.proposals.length,
+      redacted: redact,
+      proposals: result.proposals,
+      skipped: result.skipped,
+    })
   })
 
   routes.get('/admission/:id', (c) => {
@@ -117,6 +147,50 @@ export function buildBrainRoutes(deps: BrainRoutesDeps) {
     }
     const decisions = service.listDecisions(id)
     return c.json({ redacted: !showSensitive, proposal, decisions })
+  })
+
+  routes.post('/admission', async (c) => {
+    // TODO-009: debug-only injection path. Returns 403 in normal worker
+    // deployments — operators must explicitly enable `WORKER_DEV_TOOLS=true`
+    // to use it for fixture / demo flows.
+    if (!DEV_TOOLS_ENABLED) {
+      return c.json({
+        error: {
+          code: 'dev-tools-disabled',
+          message: 'POST /admission is debug-only; set WORKER_DEV_TOOLS=true to enable',
+        },
+      }, 403)
+    }
+    const raw = await c.req.json().catch(() => null)
+    const parsed = proposeBody.safeParse(raw)
+    if (!parsed.success) {
+      return c.json({
+        error: { code: 'invalid-body', message: parsed.error.message },
+      }, 400)
+    }
+    try {
+      const input = parsed.data
+      const proposal = admissionService().propose({
+        confidence: input.confidence,
+        id: input.id,
+        kind: input.kind,
+        rollback: input.rollback,
+        soulId: input.soulId,
+        summary: input.summary,
+        target: input.target,
+        ...(input.risk === undefined ? {} : { risk: input.risk }),
+        ...(input.scopeId === undefined ? {} : { scopeId: input.scopeId }),
+        ...(input.evidence === undefined ? {} : { evidence: input.evidence as never }),
+        ...(input.payload === undefined ? {} : { payload: input.payload }),
+      })
+      return c.json({
+        debugWarning: 'this proposal was injected via debug-only POST /admission; do not enable in production workflows',
+        proposal,
+      }, 201)
+    }
+    catch (err) {
+      return mapAdmissionError(c, err)
+    }
   })
 
   routes.post('/admission/:id/approve', async (c) => {
@@ -176,8 +250,13 @@ export function buildBrainRoutes(deps: BrainRoutesDeps) {
         brainHome,
         commit: parsed.data.commit === true,
         decidedBy: parsed.data.decidedBy,
+        ...(parsed.data.allowSecretBody === undefined ? {} : { allowSecretBody: parsed.data.allowSecretBody }),
       })
-      const status = outcome.kind === 'failed' ? 500 : 200
+      const status = outcome.kind === 'failed'
+        ? 500
+        : outcome.kind === 'blocked-by-secret-scan'
+          ? 409
+          : 200
       return c.json({ outcome }, status)
     }
     catch (err) {

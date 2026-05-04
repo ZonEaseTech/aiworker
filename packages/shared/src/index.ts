@@ -28,9 +28,11 @@ export {
   isMaterializedProposalKind,
   isSensitiveBrainArtifact,
   MATERIALIZED_PROPOSAL_KINDS,
+  redactBodySecrets,
   redactBrainAdmissionProposal,
   redactBrainArtifact,
   redactSecretLikeValues,
+  scanBodyForSecrets,
 } from './brain'
 export type {
   BrainAdmissionDecision,
@@ -53,6 +55,9 @@ export type {
   BrainBriefSection,
   BrainBriefSectionSource,
   MaterializedProposalKind,
+  ScanBodyForSecretsResult,
+  SecretHit,
+  SecretRuleId,
 } from './brain'
 
 export {
