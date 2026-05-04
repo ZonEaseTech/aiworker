@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-03
+> Updated: 2026-05-04
 
 ## Usage
 
@@ -109,3 +109,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-078 Real Codex-backed worker validation campaign**](PLAN-078.md) `2026-05-03`
 - [x] [**PLAN-079 发布 aiworker CLI 0.5.3**](PLAN-079.md) `2026-05-03`
 - [ ] [**PLAN-080 Soul brain executor validation follow-up fixes**](PLAN-080.md) `2026-05-03`
+- [x] [**PLAN-081 Claude Code streamed text append-only contract**](PLAN-081.md) `2026-05-04`

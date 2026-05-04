@@ -8,6 +8,7 @@ import type {
 import type { Buffer } from 'node:buffer'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import type { ApprovalPolicy } from './protocol'
+import type { ClaudeStdoutLine } from './types'
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
 import fs from 'node:fs/promises'
@@ -148,6 +149,7 @@ export class ClaudeCodeExecutor implements ExecutorProvider {
     let childError: string | null = null
     let reportedSessionId = ''
     let sawFinish = false
+    const textReplayState: StreamingTextReplayState = { streamedAssistantText: '' }
     // `once(child, 'exit')` rejects on 'error'; wrap it so we never throw on
     // an early spawn failure and always resolve to either a numeric code or
     // `null` for unknown exit.
@@ -183,7 +185,8 @@ export class ClaudeCodeExecutor implements ExecutorProvider {
               yield event
             continue
           }
-          for (const event of normalizeLine(parsed)) {
+          const events = filterReplayedFinalText(parsed, normalizeLine(parsed), textReplayState)
+          for (const event of events) {
             if (event.type === 'error' && resumeSessionId !== undefined)
               yield { type: 'engine_binding', engine: CLAUDE_CODE_ENGINE, binding: null }
             yield event
@@ -321,4 +324,75 @@ function readClaudeSessionId(line: unknown): string {
     return ''
   const raw = (line as { session_id?: unknown }).session_id
   return typeof raw === 'string' && raw.length > 0 ? raw : ''
+}
+
+interface StreamingTextReplayState {
+  streamedAssistantText: string
+}
+
+function filterReplayedFinalText(
+  line: ClaudeStdoutLine,
+  events: AgentEvent[],
+  state: StreamingTextReplayState,
+): AgentEvent[] {
+  const streamDelta = readStreamTextDelta(line)
+  if (streamDelta.length > 0) {
+    state.streamedAssistantText += streamDelta
+    return events
+  }
+
+  if (line.type !== 'assistant' || state.streamedAssistantText.length === 0)
+    return events
+
+  const streamedText = state.streamedAssistantText
+  state.streamedAssistantText = ''
+
+  const assistantText = events
+    .filter(event => event.type === 'assistant_message_delta')
+    .map(event => event.delta)
+    .join('')
+
+  if (assistantText.length === 0 || !assistantText.startsWith(streamedText))
+    return events
+
+  return removeStreamedTextPrefix(events, streamedText)
+}
+
+function readStreamTextDelta(line: ClaudeStdoutLine): string {
+  if (line.type !== 'stream_event')
+    return ''
+  const event = (line as { event?: { delta?: { type?: unknown, text?: unknown } } }).event
+  const delta = event?.delta
+  if (delta?.type === 'text_delta' && typeof delta.text === 'string' && delta.text.length > 0)
+    return delta.text
+  return ''
+}
+
+function removeStreamedTextPrefix(events: AgentEvent[], prefix: string): AgentEvent[] {
+  let remainingPrefix = prefix
+  const out: AgentEvent[] = []
+
+  for (const event of events) {
+    if (event.type !== 'assistant_message_delta' || remainingPrefix.length === 0) {
+      out.push(event)
+      continue
+    }
+
+    if (remainingPrefix.startsWith(event.delta)) {
+      remainingPrefix = remainingPrefix.slice(event.delta.length)
+      continue
+    }
+
+    if (event.delta.startsWith(remainingPrefix)) {
+      const delta = event.delta.slice(remainingPrefix.length)
+      remainingPrefix = ''
+      if (delta.length > 0)
+        out.push({ ...event, delta })
+      continue
+    }
+
+    out.push(event)
+  }
+
+  return out
 }

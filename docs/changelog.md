@@ -1,5 +1,27 @@
 # AIWorker Changelog
 
+## 2026-05-04 02:47 [completed] BUG-052 / PLAN-081 — Claude Code streamed text append-only
+
+修复 Claude Code executor 在 partial `stream_event` 文本之后又把完整
+assistant text block 作为 `orchestrator.text.payload.delta` 重放的问题：
+
+- 明确 `orchestrator.text.payload.delta` 是 append-only 文本增量，不是最终
+  完整快照；`docs/cli.md` 已补充该契约。
+- Claude Code executor 现在记录本轮已流出的 assistant 文本前缀，并在后续
+  final assistant block 到达时移除已流前缀；无 partial text 的 buffered 输出
+  仍保留原 final text fallback。
+- 保持 tool events、token usage、finish、engine binding 和 `--resume` 行为不变。
+
+验证：
+
+- `bun test packages/core/src/worker/executor/engines/claude-code/executor.test.ts`
+- `bun test packages/core/src/worker/orchestrator/service.claude-code.test.ts`
+- `bun run --filter '@zonease/aiworker-core' typecheck`
+- `bun run --filter '@zonease/aiworker-core' test`
+- `bun run --filter '@zonease/aiworker-cli' smoke:aiworker-run`
+- `bunx eslint packages/core/src/worker/executor/engines/claude-code/executor.ts packages/core/src/worker/executor/engines/claude-code/executor.test.ts packages/core/src/worker/orchestrator/service.claude-code.test.ts`
+- `git diff --check`
+
 ## 2026-05-04 02:07 [progress] BUG-052 — remote published CLI Claude Code validation follow-up
 
 记录远端 Coder workspace 中发布版 CLI + Claude Code executor 的验证发现：

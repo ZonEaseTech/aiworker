@@ -53,8 +53,12 @@ describe('ClaudeCodeExecutor (stub CLI)', () => {
       workspacePath: workspace,
     }))
 
-    // At least one assistant_message_delta (from partial + full)
-    expect(events.some(e => e.type === 'assistant_message_delta')).toBe(true)
+    // Partial text is append-only; the later full assistant block must not
+    // replay the same text as another delta.
+    const textDeltas = events
+      .filter(e => e.type === 'assistant_message_delta')
+      .map(e => e.delta)
+    expect(textDeltas).toEqual(['Checking files', 'Done.'])
     // Exactly one tool_use for Read with file_read action
     const toolUses = events.filter(e => e.type === 'tool_use')
     expect(toolUses).toHaveLength(1)

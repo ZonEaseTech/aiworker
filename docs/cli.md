@@ -367,6 +367,10 @@ aiworker run --message "hello"
 # {"type":"orchestrator.finished",...}
 ```
 
+`orchestrator.text.payload.delta` 是 append-only 文本增量，不是最终完整快照；
+消费者应按事件顺序拼接 `delta`，直到收到 `orchestrator.finished` 或
+`orchestrator.error`。
+
 - `--dry-run` — 完整 bootstrap 但不投递消息，用于 CI 冒烟。
 - `--timeout-ms` — 硬上限，默认 120000；未按时到达终态事件 → 退出 124。
 

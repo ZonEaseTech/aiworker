@@ -146,6 +146,8 @@ describe('Orchestrator + ClaudeCodeExecutor (stub CLI)', () => {
     const textEvents = bus.recorded.filter(r => r.kind === 'orchestrator.text')
     expect(textEvents.length).toBeGreaterThan(0)
     expect(textEvents.every(r => (r.payload as { taskId?: string }).taskId === 'task-test')).toBe(true)
+    const textDeltas = textEvents.map(r => (r.payload as { delta?: string }).delta ?? '')
+    expect(textDeltas).toEqual(['Checking files', 'Done.'])
 
     const created = bus.recorded.find(r => r.kind === 'conversation.created')
     expect((created?.payload as { taskId?: string } | undefined)?.taskId).toBe('task-test')
