@@ -5,7 +5,7 @@
 - **owner**: local
 - **createdAt**: 2026-05-04 13:13
 - **claimedAt**: 2026-05-04 13:13
-- **completedAt**: 2026-05-04 14:30
+- **completedAt**: 2026-05-04 13:33
 - **plans**: PLAN-096
 
 ## 描述
@@ -43,7 +43,7 @@ Project Brain 产品定位保持不变，但文档必须避免把 Project scope 
 
 - 2026-05-04 13:13：该任务专门承接本会话补充决策；不要回写已 completed 的 FEAT-050 / PLAN-088。
 - 2026-05-04 13:13：文档改动已 staged 并通过 `git diff --cached --check`；等待本会话 review 后再标记 completed。
-- 2026-05-04 14:30：本会话完成 review，收口 FEAT-053。AC 全部满足：
+- 2026-05-04 13:33：本会话完成 review，收口 FEAT-053。AC 全部满足：
   1. AGENTS.md 顶部产品定位段（line 23-26）+ 能力边界段（line 75）明确 Project scope 是 worker-bound business scope，不等同于 software project。
   2. README 顶部 (line 11-14) 与 Features (line 60) 把 Project Brain 表达为每个业务作用域一份 5 类资产。
   3. docs/architecture.md Product Positioning 段加 scope 解释；topology 图节点从 `Project["Project repo"]` 改为 `Project["Host / Workspace Scope<br/>repo / hiring role / resume pool / case / queue"]`；filesystem layout 段加 “Project scope 语义” 子条；Overview 段 Brain provider 描述展开为 scope identity / artifacts / policies / workflow state / audit / retention。

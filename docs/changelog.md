@@ -1,6 +1,6 @@
 # AIWorker Changelog
 
-## 2026-05-04 14:30 [completed] FEAT-053 / PLAN-096 — Project scope business-scope boundary
+## 2026-05-04 13:33 [completed] FEAT-053 / PLAN-096 — Project scope business-scope boundary
 
 收口 FEAT-053 / PLAN-096。Project Brain 的 Project 语义已经在 AGENTS.md / README.md / docs/architecture.md 中固化为 worker-bound business scope（不等同于 software project / git repo）：
 
@@ -16,7 +16,27 @@
 - `rg -n "^<{7}|^>{7}|^={7}$"` ✅ 无真实 conflict marker
 - AC1/2/3 grep 全部命中预期位置
 
-## 2026-05-04 14:05 [completed] FEAT-052 — bring-your-own executor integration strategy
+## 2026-05-04 13:24 [progress] FEAT-053 / PLAN-096 — Project scope business-scope boundary
+
+补充 Project Brain 的关键产品边界，并用独立 PMA 槽位承接，避免回写已经
+completed 的 FEAT-050 / PLAN-088：
+
+- `Project scope` 是 worker 在 host/workspace 维度绑定的业务作用域，不等同于
+  software project、代码仓库或 PMA 项目。
+- developer Soul 的 scope 可以是 repo；HR Soul 的 scope 可以是岗位、候选人池、
+  简历库、筛选/归档/备份/审核流程；legal、finance、ops 等 Soul 也应围绕各自
+  业务对象和证据链建模。
+- Project Brain 的通用内核应服务 scope identity、artifacts、policies、
+  workflow state、audit、retention、backup 和 context compilation，不内建
+  developer-only 假设。
+- 当前状态为 in_progress：文档改动已 staged，等待本会话 review 后再收口
+  completed。
+
+验证：
+
+- `git diff --cached --check`
+
+## 2026-05-04 13:04 [completed] FEAT-052 — bring-your-own executor integration strategy
 
 合并 PLAN-093/094/095 三个切片：
 
@@ -49,7 +69,7 @@ Epic 最终全量 gate（FEAT-048..052）：
 
 零 schema migration、零 runtime 行为破坏、零外部新接入；命令名 / 文件名 / 导出名 / issue code / 退出码 / 接口签名全部向后兼容。
 
-## 2026-05-04 14:00 [progress] FEAT-052 / PLAN-095 — OpenClaw configured runtime spec
+## 2026-05-04 13:00 [progress] FEAT-052 / PLAN-095 — OpenClaw configured runtime spec
 
 固化 OpenClaw 接入 AIWorker 的 spec：
 
@@ -62,7 +82,7 @@ adapter 输入/输出契约表（health / listTools / run / cancel / resume / er
 
 本切片仅 spec docs，不落 adapter 代码、不在 `packages/core/src/worker/executor/engines/` 创建 openclaw 子目录、不动 `executor-capabilities.json` schema。
 
-## 2026-05-04 13:50 [progress] FEAT-052 / PLAN-094 — Hermes thin adapter spike plan
+## 2026-05-04 12:58 [progress] FEAT-052 / PLAN-094 — Hermes thin adapter spike plan
 
 PLAN-094 在当前 sandbox 不能联网调用 Hermes CLI，按 plan “是否落代码视 spike 结果” 的范围只产 spike plan，不引入 Hermes adapter 代码：
 
@@ -71,7 +91,7 @@ PLAN-094 在当前 sandbox 不能联网调用 Hermes CLI，按 plan “是否落
 - **显式不做**：不接管 Hermes memory / skills / MCP / profile；不改 `ExecutorProvider` 或 `AgentEvent` schema；spike 阶段代码原型只放 `tmp/hermes-spike/`。
 - **AIWorker 侧前置已就位**：PLAN-093 thin adapter 契约、PLAN-086 doctor 四档 readiness（含 ambient runtime INFO 行）、`aiworker executor mcp` 当前 codex/claude-code 两 engine 限制。
 
-## 2026-05-04 13:40 [progress] FEAT-052 / PLAN-093 — bring-your-own executor thin adapter contract
+## 2026-05-04 12:57 [progress] FEAT-052 / PLAN-093 — bring-your-own executor thin adapter contract
 
 把 ExecutorProvider 接口的 thin adapter 契约固化到代码注释与 architecture docs：
 
@@ -81,7 +101,7 @@ PLAN-094 在当前 sandbox 不能联网调用 Hermes CLI，按 plan “是否落
 
 零运行时变化、不接入新 engine、不改 `AgentEvent` schema。
 
-## 2026-05-04 13:30 [completed] FEAT-051 — strengthen Worker/Fleet aggregation surface
+## 2026-05-04 12:54 [completed] FEAT-051 — strengthen Worker/Fleet aggregation surface
 
 合并 PLAN-091/092 两个切片：
 
@@ -90,7 +110,7 @@ PLAN-094 在当前 sandbox 不能联网调用 Hermes CLI，按 plan “是否落
 
 PLAN-091/092 均为文档变更；运行时与 schema 零改动。后续 fleet UI 与 CLI fleet 命令按需在新契约下迭代。
 
-## 2026-05-04 13:25 [progress] FEAT-051 / PLAN-092 — worker/fleet aggregation surface
+## 2026-05-04 12:53 [progress] FEAT-051 / PLAN-092 — worker/fleet aggregation surface
 
 固化 worker status 聚合契约：
 
@@ -103,27 +123,7 @@ PLAN-091/092 均为文档变更；运行时与 schema 零改动。后续 fleet U
 
 不新增 executor capability inventory；fleet.db 仍只持指针 + audit。
 
-## 2026-05-04 13:22 [progress] FEAT-053 / PLAN-096 — Project scope business-scope boundary
-
-补充 Project Brain 的关键产品边界，并用独立 PMA 槽位承接，避免回写已经
-completed 的 FEAT-050 / PLAN-088：
-
-- `Project scope` 是 worker 在 host/workspace 维度绑定的业务作用域，不等同于
-  software project、代码仓库或 PMA 项目。
-- developer Soul 的 scope 可以是 repo；HR Soul 的 scope 可以是岗位、候选人池、
-  简历库、筛选/归档/备份/审核流程；legal、finance、ops 等 Soul 也应围绕各自
-  业务对象和证据链建模。
-- Project Brain 的通用内核应服务 scope identity、artifacts、policies、
-  workflow state、audit、retention、backup 和 context compilation，不内建
-  developer-only 假设。
-- 当前状态为 in_progress：文档改动已 staged，等待本会话 review 后再收口
-  completed。
-
-验证：
-
-- `git diff --cached --check`
-
-## 2026-05-04 13:15 [progress] FEAT-051 / PLAN-091 — operator topology 共享 canonical 图
+## 2026-05-04 12:51 [progress] FEAT-051 / PLAN-091 — operator topology 共享 canonical 图
 
 把 worker/fleet topology 用同一份描述贯穿三个文档：
 
@@ -133,7 +133,7 @@ completed 的 FEAT-050 / PLAN-088：
 
 不改 gateway protocol、不改 enrollment。
 
-## 2026-05-04 13:05 [completed] FEAT-050 — strengthen Project Brain product surface
+## 2026-05-04 12:49 [completed] FEAT-050 — strengthen Project Brain product surface
 
 合并 PLAN-088/089/090 三个切片：
 
@@ -147,7 +147,7 @@ completed 的 FEAT-050 / PLAN-088：
 - `bun run lint` ✅
 - `bun run test` ✅（shared 33 / fs-layout 18 / gateway-proto 19 / storage-sqlite 16 / gateway 148 / core 521 / api 71 / web 59 / cli 124 ≈ 1029 spec）
 
-## 2026-05-04 13:00 [progress] FEAT-050 / PLAN-090 — brain admission and approval roadmap
+## 2026-05-04 12:46 [progress] FEAT-050 / PLAN-090 — brain admission and approval roadmap
 
 `docs/architecture.md` 新增 “Brain admission roadmap” 子章节，把 brain runtime 自动生成 proposal 的 admission 流程拆成 4 段：proposal 模型字段（evidence / scope / confidence / rollback / summary）、storage 选型（worker.db 新表，**不**进 fleet.db）、approval surface 三档（CLI `aiworker brain admission ...` / API `apps/api/src/worker/brain/admission/*` / Worker Admin 新视图）、唯一免审 runtime 写入（pre-compaction memory flush）。
 
@@ -155,7 +155,7 @@ completed 的 FEAT-050 / PLAN-088：
 
 本计划不落 DB migration、不实施 admission CLI/API/UI；后续这些进入独立 PMA 任务。
 
-## 2026-05-04 12:50 [progress] FEAT-050 / PLAN-089 — brain diagnostics and onboarding UX
+## 2026-05-04 12:44 [progress] FEAT-050 / PLAN-089 — brain diagnostics and onboarding UX
 
 把 Project Brain 显式抬到 onboarding 与 diagnostics 输出最前：
 
@@ -172,7 +172,7 @@ completed 的 FEAT-050 / PLAN-088：
 - `bun run --filter '@zonease/aiworker-web' test` (16 files / 59 tests)
 - `bun x eslint <changed files>` 无告警
 
-## 2026-05-04 12:35 [progress] FEAT-050 / PLAN-088 — Project Brain asset model
+## 2026-05-04 12:39 [progress] FEAT-050 / PLAN-088 — Project Brain asset model
 
 把 Project Brain 显式拆成五类资产，明确每类的所有者、读写规则与当前 CLI 入口，建立 brain ↔ executor capability 的命名隔离：
 
@@ -182,7 +182,7 @@ completed 的 FEAT-050 / PLAN-088：
 
 不新增 mutating brain command，不实现 admission DB schema；admission state 只指向 PLAN-090 roadmap。
 
-## 2026-05-04 12:25 [completed] FEAT-049 — simplify executor surface around bring-your-own runtimes
+## 2026-05-04 12:37 [completed] FEAT-049 — simplify executor surface around bring-your-own runtimes
 
 合并 PLAN-085/086/087 三个切片：
 
@@ -196,7 +196,7 @@ completed 的 FEAT-050 / PLAN-088：
 - `bun run lint` ✅
 - `bun run test` ✅（shared 33 / fs-layout 18 / gateway-proto 19 / storage-sqlite 16 / gateway 148 / core 521 / api 71 / cli 124 ≈ 970 spec）
 
-## 2026-05-04 12:20 [progress] FEAT-049 / PLAN-087 — executor CLI wording and help cleanup
+## 2026-05-04 12:33 [progress] FEAT-049 / PLAN-087 — executor CLI wording and help cleanup
 
 把 CLI 中残留的 “executor 原生能力 manifest / executor-native capability lifecycle” 等措辞收口到 project executor overlay 语义：
 
@@ -214,7 +214,7 @@ completed 的 FEAT-050 / PLAN-088：
 - `bun test apps/cli/src/commands/worker/up.test.ts apps/cli/src/aiworker.test.ts` (38/38)
 - `bun x eslint <changed files>` 无告警
 
-## 2026-05-04 12:10 [progress] FEAT-049 / PLAN-086 — ambient executor readiness and doctor semantics
+## 2026-05-04 12:29 [progress] FEAT-049 / PLAN-086 — ambient executor readiness and doctor semantics
 
 把 `aiworker executor doctor` 与 `aiworker up` doctor stage 的输出统一重塑为四档 readiness：
 
@@ -231,7 +231,7 @@ completed 的 FEAT-050 / PLAN-088：
 - `bun test apps/cli/src/commands/worker/executor.test.ts` (11/11)
 - `bun test apps/cli/src/commands/worker/up.test.ts` (5/5)
 
-## 2026-05-04 12:00 [progress] FEAT-049 / PLAN-085 — executor capability overlay semantics
+## 2026-05-04 12:25 [progress] FEAT-049 / PLAN-085 — executor capability overlay semantics
 
 完成 FEAT-049 的第一步切片，把 `.aiworker/executor-capabilities.json` 的产品语义从 “executor-native capability manifest” 显式降级为 **project executor overlay / bootstrap hint**：
 
