@@ -123,4 +123,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-092 Worker/Fleet status, events, and audit aggregation**](PLAN-092.md) `2026-05-04`
 - [x] [**PLAN-093 Bring-your-own executor thin adapter contract**](PLAN-093.md) `2026-05-04`
 - [x] [**PLAN-094 Hermes thin adapter spike**](PLAN-094.md) `2026-05-04`
-- [ ] [**PLAN-095 OpenClaw configured runtime spec**](PLAN-095.md) `2026-05-04`
+- [x] [**PLAN-095 OpenClaw configured runtime spec**](PLAN-095.md) `2026-05-04`

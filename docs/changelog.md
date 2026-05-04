@@ -1,5 +1,18 @@
 # AIWorker Changelog
 
+## 2026-05-04 14:00 [progress] FEAT-052 / PLAN-095 — OpenClaw configured runtime spec
+
+固化 OpenClaw 接入 AIWorker 的 spec：
+
+- **Configured runtime only**：OpenClaw 必须由 operator 提供 `OPENCLAW_CONFIG_PATH` + `OPENCLAW_STATE_DIR`（或显式 agent profile / workspace），AIWorker 不默认 mint 一份 hermetic OpenClaw 运行环境。
+- **Workspace 由 OpenClaw 管**：AIWorker 只把 per-conversation workspace 通过 `AgentRunInput.workspacePath` 传过去；Project Brain 通过 prompt / context 注入，不写 OpenClaw workspace。
+- **Project overlay 只能是 bootstrap helper**：未来若 `executor-capabilities.json` 出现 `engines.openclaw.*`，只能表达 profile/workspace hint，不能替代 `OPENCLAW_CONFIG_PATH` 内容。
+- **只接 agent run surface**：AIWorker 不启用 OpenClaw 的 channel / webhook / gateway hosting，避免与 AIWorker gateway / channels 语义重叠。
+
+adapter 输入/输出契约表（health / listTools / run / cancel / resume / error）按 OpenClaw 实际能力收敛；具体 PLAN-093 契约 + 4 类错误分类（`not-configured` / `binary-missing` / `runtime-error` / `cancelled`）对齐 `FallbackExecutor`。
+
+本切片仅 spec docs，不落 adapter 代码、不在 `packages/core/src/worker/executor/engines/` 创建 openclaw 子目录、不动 `executor-capabilities.json` schema。
+
 ## 2026-05-04 13:50 [progress] FEAT-052 / PLAN-094 — Hermes thin adapter spike plan
 
 PLAN-094 在当前 sandbox 不能联网调用 Hermes CLI，按 plan “是否落代码视 spike 结果” 的范围只产 spike plan，不引入 Hermes adapter 代码：
