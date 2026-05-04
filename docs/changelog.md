@@ -1,5 +1,22 @@
 # AIWorker Changelog
 
+## 2026-05-04 22:30 [progress] REL-013 / PLAN-104 — prepare CLI 0.6.0 release
+
+启动 `@zonease/aiworker-cli@0.6.0` minor release：
+
+- 当前 npm latest、GitHub Release 和远端 tag 均为 `0.5.3`。
+- 本次 release 跨 6 个 FEAT epic 收口：`FEAT-048` 产品定位 pivot、`FEAT-049` executor 改 BYO + project overlay、`FEAT-050` Project Brain product surface 强化、`FEAT-051` Worker/Fleet aggregation surface 强化、`FEAT-052` BYO executor integration strategy、`FEAT-053` Project scope = worker-bound business scope、`FEAT-054` Soul modules + Scope Brain kernel（PLAN-097..103 完整落地 SoulModule registry / scope manifest / artifact registry / Soul schema pack / admission MVP / brief compiler / Worker REST + Worker Admin UI + Fleet UI 收口）；外加 `BUG-052` / `BUG-053` 两个流式文本去重 fix。
+- 自 `v0.5.3` 至 `HEAD (191ba02)` 共 30 个 commit；按 semver 0.x 走 minor。
+- 本地 release gates 已通过；等待 release commit、`v0.6.0` tag push、GitHub Actions release workflow、npm / GitHub Release 验证。
+
+验证：
+
+- `bun run typecheck`
+- `bun run lint`
+- `bun run test`
+- `bun run build`
+- `git diff --check`
+
 ## 2026-05-04 19:00 [completed] FEAT-054 / PLAN-103 — Worker/Fleet Brain surface closeout
 
 把 PLAN-097..102 的 Soul / scope / artifact / admission / brief 落到 Worker REST + Worker Admin UI + Fleet UI（deep-link only），并跑接近全量 gate 作为 FEAT-054 epic 收口。
