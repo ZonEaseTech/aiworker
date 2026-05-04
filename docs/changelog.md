@@ -1,5 +1,19 @@
 # AIWorker Changelog
 
+## 2026-05-04 13:05 [completed] FEAT-050 — strengthen Project Brain product surface
+
+合并 PLAN-088/089/090 三个切片：
+
+- **资产模型**：architecture / cli docs / README 把 Project Brain 拆成五类资产（identity、memory、brain skills、policy & drafts、admission state），明确所有者、读写规则与 CLI 入口；`.aiworker/executor-capabilities.json` 从 brain 资产中显式排除。
+- **Diagnostics & onboarding**：`aiworker init` next-steps 重排成 brain-first；`aiworker doctor` 输出加 Brain identity 子段并指向 `aiworker brain status`；`brain status` JSON 加 `assets` 块（identity + skill/memory count + 空状态非强制 hint）；Worker Admin Test 面板 header 强调 brain → executor → channel 顺序。
+- **Admission roadmap**：architecture.md 新增 4 段路线（proposal 模型 / storage 选型 / approval surface / 唯一免审 runtime 写入），明确 admission flow 不复用 executor capability 通路；本切片不落 DB migration、不实施 CLI/API/UI。
+
+验证：
+
+- `bun run typecheck` ✅
+- `bun run lint` ✅
+- `bun run test` ✅（shared 33 / fs-layout 18 / gateway-proto 19 / storage-sqlite 16 / gateway 148 / core 521 / api 71 / web 59 / cli 124 ≈ 1029 spec）
+
 ## 2026-05-04 13:00 [progress] FEAT-050 / PLAN-090 — brain admission and approval roadmap
 
 `docs/architecture.md` 新增 “Brain admission roadmap” 子章节，把 brain runtime 自动生成 proposal 的 admission 流程拆成 4 段：proposal 模型字段（evidence / scope / confidence / rollback / summary）、storage 选型（worker.db 新表，**不**进 fleet.db）、approval surface 三档（CLI `aiworker brain admission ...` / API `apps/api/src/worker/brain/admission/*` / Worker Admin 新视图）、唯一免审 runtime 写入（pre-compaction memory flush）。
