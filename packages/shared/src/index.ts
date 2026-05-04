@@ -181,6 +181,30 @@ export type {
 } from './providers'
 
 export {
+  buildScopeManifest,
+  parseOptionalScopeManifestJson,
+  parseScopeManifestJson,
+  scopeApprovalSchema,
+  scopeArtifactRootSchema,
+  scopeIdSchema,
+  scopeKindSchema,
+  scopeManifestSchema,
+  scopePrivacySchema,
+  scopeSoulIdSchema,
+} from './scope'
+export type {
+  BuildScopeManifestInput,
+  ScopeApproval,
+  ScopeArtifactRoot,
+  ScopeManifest,
+  ScopeManifestReadMalformed,
+  ScopeManifestReadMissing,
+  ScopeManifestReadOk,
+  ScopeManifestReadResult,
+  ScopePrivacy,
+} from './scope'
+
+export {
   assertSoulModule,
   BUILTIN_SOUL_MODULES,
   createBuiltinSoulRegistry,

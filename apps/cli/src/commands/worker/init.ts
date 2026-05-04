@@ -1,14 +1,16 @@
 import type { ProjectAiworkerSeed } from '@zonease/aiworker-fs-layout'
 import type { InitSoulId, SelectedSoul } from '../../soul/presets'
+
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
-
 import { createInterface } from 'node:readline/promises'
-import { ensureProjectAiworker, resolveAiworkerScope, resolveProjectRoot } from '@zonease/aiworker-fs-layout'
 
+import { ensureProjectAiworker, resolveAiworkerScope, resolveProjectRoot } from '@zonease/aiworker-fs-layout'
+import { buildScopeManifest, createBuiltinSoulRegistry } from '@zonease/aiworker-shared'
 import consola from 'consola'
+
 import { loadWorkerContext } from '../../context'
 import { bootstrapDotenv } from '../../lib/dotenv-bootstrap'
 import {
@@ -18,6 +20,8 @@ import {
   supportedSoulIds,
   toSelectedSoul,
 } from '../../soul/presets'
+
+const BUILTIN_SOUL_REGISTRY = createBuiltinSoulRegistry()
 
 export interface InitOptions {
   /** Force user-scope at `~/.aiworker/`. Skips cwd project detection. */
@@ -54,6 +58,7 @@ const PROJECT_TEMPLATE_PATHS = [
   '.aiworker/toolsets.json',
   '.aiworker/capability-packs.json',
   '.aiworker/executor-capabilities.json',
+  '.aiworker/scope.json',
   '.aiworker/.gitignore',
   '.aiworker/skills/',
   '.aiworker/memories/',
@@ -242,6 +247,21 @@ function markdownList(items: readonly string[]): string {
   return items.map(item => `- ${item}`).join('\n')
 }
 
+function resolveSoulPrimaryScopeKind(soulId: InitSoulId): string {
+  const module = soulId === CUSTOMIZE_SOUL_ID ? undefined : BUILTIN_SOUL_REGISTRY.get(soulId)
+  return module?.primaryScopeKind ?? 'general'
+}
+
+function buildScopeManifestSeed(soul: SelectedSoul): string {
+  const manifest = buildScopeManifest({
+    approval: soul.highRiskRequiresApproval ? 'manual-approval' : 'auto-low-risk',
+    kind: resolveSoulPrimaryScopeKind(soul.id),
+    primarySoul: soul.id === CUSTOMIZE_SOUL_ID ? 'general-assistant' : soul.id,
+    privacy: 'private',
+  })
+  return `${JSON.stringify(manifest, null, 2)}\n`
+}
+
 function buildProjectAiworkerSeed(soul: SelectedSoul): ProjectAiworkerSeed {
   const policy = {
     schemaVersion: 1,
@@ -294,10 +314,11 @@ function buildProjectAiworkerSeed(soul: SelectedSoul): ProjectAiworkerSeed {
 
   return {
     agentMd: `# ${soul.label} Worker\n\n## 主要职责\n${markdownList(soul.responsibilities)}\n\n## 明确边界\n${markdownList(soul.boundaries)}\n\n## 职责外响应\n${soul.outOfScope}\n\n## 默认 capability packs\n${markdownList(soul.packs)}\n`,
-    soulMd: `# ${soul.label} Soul\n\n## 预设\n- id: ${soul.id}\n- source: ${soul.source}\n\n## 沟通风格\n${soul.communicationStyle}\n\n## 高风险操作策略\n${soul.riskPolicy}\n\n## 职责边界\n${markdownList(soul.boundaries)}\n`,
-    policyJson: `${JSON.stringify(policy, null, 2)}\n`,
-    toolsetsJson: `${JSON.stringify(toolsets, null, 2)}\n`,
     capabilityPacksJson: `${JSON.stringify(capabilityPacks, null, 2)}\n`,
+    policyJson: `${JSON.stringify(policy, null, 2)}\n`,
+    scopeJson: buildScopeManifestSeed(soul),
+    soulMd: `# ${soul.label} Soul\n\n## 预设\n- id: ${soul.id}\n- source: ${soul.source}\n\n## 沟通风格\n${soul.communicationStyle}\n\n## 高风险操作策略\n${soul.riskPolicy}\n\n## 职责边界\n${markdownList(soul.boundaries)}\n`,
+    toolsetsJson: `${JSON.stringify(toolsets, null, 2)}\n`,
   }
 }
 

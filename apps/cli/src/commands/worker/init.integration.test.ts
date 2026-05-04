@@ -216,6 +216,7 @@ describe('aiworker init / scope project placement', () => {
       expect(await exists(path.join(project, '.aiworker', 'toolsets.json'))).toBe(true)
       expect(await exists(path.join(project, '.aiworker', 'capability-packs.json'))).toBe(true)
       expect(await exists(path.join(project, '.aiworker', 'executor-capabilities.json'))).toBe(true)
+      expect(await exists(path.join(project, '.aiworker', 'scope.json'))).toBe(true)
       expect(await exists(path.join(project, '.aiworker', 'local', '.env'))).toBe(true)
       expect(await exists(path.join(project, '.aiworker', 'local', 'worker.db'))).toBe(true)
       expect(await exists(path.join(project, '.aiworker', 'local', 'workers'))).toBe(false)
@@ -226,6 +227,14 @@ describe('aiworker init / scope project placement', () => {
       expect(soul).not.toContain('Voice / style guide')
       const policy = JSON.parse(await readFile(path.join(project, '.aiworker', 'policy.json'), 'utf8'))
       expect(policy.soul.preset).toBe('developer')
+      const scopeManifest = JSON.parse(await readFile(path.join(project, '.aiworker', 'scope.json'), 'utf8'))
+      expect(scopeManifest).toEqual({
+        approval: 'manual-approval',
+        kind: 'developer-repo',
+        primarySoul: 'developer',
+        privacy: 'private',
+        schemaVersion: 1,
+      })
 
       const configShow = await runCli(cleanup, ['config', 'show'], project, home)
       expect(configShow.exitCode).toBe(0)
@@ -254,6 +263,17 @@ describe('aiworker init / scope project placement', () => {
           type: string
           writeTarget: boolean
         }>
+        scope: {
+          status: string
+          manifest?: {
+            approval?: string
+            artifactRootCount: number
+            kind: string
+            labels: string[]
+            primarySoul: string
+            privacy?: string
+          }
+        }
         status: string
       }
       expect(statusBody.status).toBe('healthy')
@@ -268,6 +288,14 @@ describe('aiworker init / scope project placement', () => {
           home: path.join(canonicalProject, '.aiworker'),
         },
       ])
+      expect(statusBody.scope.status).toBe('ok')
+      expect(statusBody.scope.manifest).toMatchObject({
+        approval: 'manual-approval',
+        artifactRootCount: 0,
+        kind: 'developer-repo',
+        primarySoul: 'developer',
+        privacy: 'private',
+      })
 
       const brainSkills = await runCli(cleanup, ['worker', 'brain', 'skills'], project, home)
       expect(brainSkills.exitCode).toBe(0)
@@ -359,6 +387,13 @@ describe('aiworker init / scope project placement', () => {
           packs: Array<{ id: string, status: string, validation: { status: string } }>
           soul: string
         }
+        const scopeManifest = JSON.parse(await readFile(path.join(aiworker, 'scope.json'), 'utf8')) as {
+          approval: string
+          kind: string
+          primarySoul: string
+          privacy: string
+          schemaVersion: number
+        }
 
         expect(soul).toContain(`# ${preset.label} Soul`)
         expect(agent).toContain(`# ${preset.label} Worker`)
@@ -368,6 +403,12 @@ describe('aiworker init / scope project placement', () => {
         expect(packs.soul).toBe(preset.id)
         expect(packs.packs.map(pack => pack.id)).toEqual([...preset.packs])
         expect(packs.packs.every(pack => pack.status === 'draft' && pack.validation.status === 'pending')).toBe(true)
+        expect(scopeManifest.schemaVersion).toBe(1)
+        expect(scopeManifest.primarySoul).toBe(preset.id)
+        expect(scopeManifest.privacy).toBe('private')
+        expect(scopeManifest.approval).toBe('manual-approval')
+        expect(typeof scopeManifest.kind).toBe('string')
+        expect(scopeManifest.kind.length).toBeGreaterThan(0)
       }
     })
   })
@@ -392,6 +433,7 @@ describe('aiworker init / scope project placement', () => {
       expect(result.output).toContain('.aiworker/toolsets.json')
       expect(result.output).toContain('.aiworker/capability-packs.json')
       expect(result.output).toContain('.aiworker/executor-capabilities.json')
+      expect(result.output).toContain('.aiworker/scope.json')
       expect(result.output).toContain('.aiworker/local/worker.db (worker bootstrap)')
       expect(after).toEqual(before)
       expect(await exists(path.join(project, '.aiworker'))).toBe(false)

@@ -1,5 +1,24 @@
 # AIWorker Changelog
 
+## 2026-05-04 14:55 [completed] FEAT-054 / PLAN-098 — Scope manifest and business-scope bootstrap
+
+把 worker scope 的业务作用域从隐式（目录位置 + Soul preset）升级为显式 `<project>/.aiworker/scope.json` 声明，与 `policy.json` / `toolsets.json` 同款 JSON，零新依赖。
+
+- shared 新增 `packages/shared/src/scope/manifest.ts`：`ScopeManifest` zod schema（必填 `schemaVersion=1` / `kind` / `primarySoul`，可选 `id` / `subject` / `artifactRoots` / `privacy` / `retention` / `approval` / `labels`）+ `parseScopeManifestJson` / `parseOptionalScopeManifestJson` / `buildScopeManifest`，在 `packages/shared/src/index.ts` 暴露。
+- fs-layout 加 `resolveScopeManifestPath` / `projectScopeManifestPath`；`ProjectAiworkerSeed` 加可选 `scopeJson`；`ensureProjectAiworker` 仅在 seed 提供时写 `scope.json`，保留 idempotent 写入。fs-layout 保持零运行时依赖。
+- CLI `aiworker init`：从 shared `BUILTIN_SOUL_REGISTRY` 取 Soul 的 `primaryScopeKind`，用 `buildScopeManifest` 生成最小 skeleton 写入 `.aiworker/scope.json`（`kind` = Soul.primaryScopeKind、`primarySoul` = Soul.id、`privacy=private`、`approval=manual-approval`）；dry-run preflight 同步 `.aiworker/scope.json`。
+- CLI `aiworker doctor`：新增 `Scope manifest:` 段，五状态 `ok` / `missing` / `malformed` / `unknown-soul` / `kind-mismatch`，分别返回 0 / 0 / 1 / 1 / 1；`ok` 显示 kind / primary soul / privacy / retention / approval / artifactRoots。
+- CLI `aiworker brain status`：JSON 输出新增 `scope` 字段（status + manifest 摘要），仅暴露 artifactRootCount 与 labels 等聚合字段，不复制 manifest 原始内容。
+- 测试覆盖：shared `manifest.test.ts`（schema 必填 + 双样本 + buildScopeManifest）、fs-layout `scope.json` idempotent 行为、CLI doctor 四种异常路径、CLI init.integration 验证 9 个 Soul preset 写入的 scope.json 与 brain status 输出。
+
+验证：
+
+- `bun run --filter '@zonease/aiworker-shared' test` ✅ 62 pass
+- `bun run --filter '@zonease/aiworker-fs-layout' test` ✅ 20 pass
+- `bun run --filter '@zonease/aiworker-cli' test` ✅ 130 pass
+- `bun run typecheck` ✅ 全 workspace 通过
+- `bun run lint` ✅
+
 ## 2026-05-04 14:25 [completed] FEAT-054 / PLAN-097 — Soul module contract and registry ownership
 
 把 Soul 从 CLI-private preset 升级为跨 CLI / core / API / web 共消费的 Soul module。

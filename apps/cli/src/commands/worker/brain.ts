@@ -1,12 +1,13 @@
 import type { WorkerRuntime } from '@zonease/aiworker-core'
-import type { BrainMemory, BrainSkill } from '@zonease/aiworker-shared'
+import type { BrainMemory, BrainSkill, ScopeManifest } from '@zonease/aiworker-shared'
 import type { WorkerContext } from '../../context'
 
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 
 import { describeBrainSource } from '@zonease/aiworker-core'
 import { resolveAiworkerScope } from '@zonease/aiworker-fs-layout'
+import { parseScopeManifestJson } from '@zonease/aiworker-shared'
 import consola from 'consola'
 
 import { buildRuntime, loadWorkerContext } from '../../context'
@@ -77,6 +78,7 @@ export async function runBrainStatus(): Promise<number> {
           source,
           ctx.hydrated.brainWriteTarget,
         )),
+        scope: inspectScopeSummary(),
         assets: {
           identity,
           skillCount: skills.length,
@@ -92,6 +94,52 @@ export async function runBrainStatus(): Promise<number> {
   catch (err) {
     consola.error(`[aiworker brain status] failed: ${err instanceof Error ? err.message : String(err)}`)
     return 1
+  }
+}
+
+interface ScopeSummary {
+  status: 'ok' | 'missing' | 'malformed' | 'not-applicable'
+  manifest?: {
+    kind: ScopeManifest['kind']
+    primarySoul: ScopeManifest['primarySoul']
+    privacy?: ScopeManifest['privacy']
+    retention?: ScopeManifest['retention']
+    approval?: ScopeManifest['approval']
+    artifactRootCount: number
+    labels: readonly string[]
+  }
+  error?: string
+}
+
+function inspectScopeSummary(): ScopeSummary {
+  const scope = resolveAiworkerScope()
+  if (scope.scope !== 'project' || !scope.projectRoot)
+    return { status: 'not-applicable' }
+  const scopePath = path.join(scope.projectRoot, '.aiworker', 'scope.json')
+  if (!existsSync(scopePath))
+    return { status: 'missing' }
+  let raw: string
+  try {
+    raw = readFileSync(scopePath, 'utf8')
+  }
+  catch (err) {
+    return { error: err instanceof Error ? err.message : String(err), status: 'malformed' }
+  }
+  const parsed = parseScopeManifestJson(raw)
+  if (parsed.status === 'malformed')
+    return { error: parsed.error, status: 'malformed' }
+  const m = parsed.manifest
+  return {
+    manifest: {
+      ...(m.approval === undefined ? {} : { approval: m.approval }),
+      artifactRootCount: m.artifactRoots?.length ?? 0,
+      kind: m.kind,
+      labels: m.labels ?? [],
+      primarySoul: m.primarySoul,
+      ...(m.privacy === undefined ? {} : { privacy: m.privacy }),
+      ...(m.retention === undefined ? {} : { retention: m.retention }),
+    },
+    status: 'ok',
   }
 }
 

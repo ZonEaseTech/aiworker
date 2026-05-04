@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
@@ -55,9 +55,82 @@ describe('aiworker doctor', () => {
     expect(doctor.output).toContain('Brain identity:')
     expect(doctor.output).toContain('PASS    AGENT.md')
     expect(doctor.output).toContain('PASS    SOUL.md')
+    expect(doctor.output).toContain('Scope manifest:')
+    expect(doctor.output).toContain('PASS    scope.json')
+    expect(doctor.output).toContain('kind         : developer-repo')
+    expect(doctor.output).toContain('primary soul : developer')
+    expect(doctor.output).toContain('privacy      : private')
     expect(doctor.output).toContain('Brain runtime: run `aiworker brain status`')
     expect(doctor.output).toContain('PASS    policy.json')
     expect(doctor.output).toContain('PASS    capability-packs.json')
+  })
+
+  it('reports WARN when scope.json is missing in an otherwise valid project', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'aiworker-doctor-noscope-'))
+    const home = await mkdtemp(path.join(tmpdir(), 'aiworker-doctor-noscope-home-'))
+    const project = path.join(root, 'repo')
+    await mkdir(project, { recursive: true })
+
+    const init = await runCli(['init', '--soul', 'developer'], project, home)
+    expect(init.exitCode).toBe(0)
+    await rm(path.join(project, '.aiworker', 'scope.json'))
+
+    const doctor = await runCli(['doctor'], project, home)
+    expect(doctor.exitCode).toBe(0)
+    expect(doctor.output).toContain('WARN    scope.json (no business-scope manifest declared')
+  })
+
+  it('fails when scope.json references an unknown Soul', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'aiworker-doctor-bad-soul-'))
+    const home = await mkdtemp(path.join(tmpdir(), 'aiworker-doctor-bad-soul-home-'))
+    const project = path.join(root, 'repo')
+    await mkdir(project, { recursive: true })
+
+    const init = await runCli(['init', '--soul', 'developer'], project, home)
+    expect(init.exitCode).toBe(0)
+    await writeFile(path.join(project, '.aiworker', 'scope.json'), `${JSON.stringify({
+      kind: 'developer-repo',
+      primarySoul: 'not-a-real-soul',
+      schemaVersion: 1,
+    }, null, 2)}\n`, 'utf8')
+
+    const doctor = await runCli(['doctor'], project, home)
+    expect(doctor.exitCode).toBe(1)
+    expect(doctor.output).toContain('FAIL    scope.json — unknown-soul')
+  })
+
+  it('fails when scope.json kind does not belong to its Soul', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'aiworker-doctor-kind-mismatch-'))
+    const home = await mkdtemp(path.join(tmpdir(), 'aiworker-doctor-kind-mismatch-home-'))
+    const project = path.join(root, 'repo')
+    await mkdir(project, { recursive: true })
+
+    const init = await runCli(['init', '--soul', 'developer'], project, home)
+    expect(init.exitCode).toBe(0)
+    await writeFile(path.join(project, '.aiworker', 'scope.json'), `${JSON.stringify({
+      kind: 'finance-period',
+      primarySoul: 'developer',
+      schemaVersion: 1,
+    }, null, 2)}\n`, 'utf8')
+
+    const doctor = await runCli(['doctor'], project, home)
+    expect(doctor.exitCode).toBe(1)
+    expect(doctor.output).toContain('FAIL    scope.json — kind-mismatch')
+  })
+
+  it('fails when scope.json is malformed JSON', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'aiworker-doctor-malformed-'))
+    const home = await mkdtemp(path.join(tmpdir(), 'aiworker-doctor-malformed-home-'))
+    const project = path.join(root, 'repo')
+    await mkdir(project, { recursive: true })
+
+    const init = await runCli(['init', '--soul', 'developer'], project, home)
+    expect(init.exitCode).toBe(0)
+    await writeFile(path.join(project, '.aiworker', 'scope.json'), '{ not json', 'utf8')
+
+    const doctor = await runCli(['doctor'], project, home)
+    expect(doctor.exitCode).toBe(1)
+    expect(doctor.output).toContain('FAIL    scope.json — malformed')
   })
 
   it('fails when MCP descriptors contain plaintext secrets', async () => {

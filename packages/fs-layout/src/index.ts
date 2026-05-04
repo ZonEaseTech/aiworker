@@ -280,6 +280,20 @@ export function resolveMcpJsonPath(workerId: string): string {
   return path.join(resolveWorkerHome(workerId), 'mcp.json')
 }
 
+/**
+ * Scope manifest path (PLAN-098). Lives at `<project>/.aiworker/scope.json`
+ * for project scope; for user / explicit scope returns the resolved location
+ * even though the bootstrap may not seed it (doctor reports `missing`).
+ */
+export function resolveScopeManifestPath(workerId: string): string {
+  return path.join(resolveWorkerHome(workerId), 'scope.json')
+}
+
+/** Resolve `<project>/.aiworker/scope.json` directly from a project root. */
+export function projectScopeManifestPath(projectRoot: string): string {
+  return path.join(projectRoot, DEFAULT_HOME_DIR, 'scope.json')
+}
+
 async function ensureDir(dir: string, mode?: number): Promise<void> {
   await mkdir(dir, { recursive: true, ...(mode === undefined ? {} : { mode }) })
 }
@@ -301,12 +315,20 @@ export interface ProjectAiworkerSeed {
   memoryMd?: string
   policyJson?: string
   rollupMd?: string
+  /**
+   * PLAN-098 scope manifest content. Only written when explicitly provided
+   * (project init with a Soul selection); user/explicit scope or re-init
+   * without --soul leaves this absent.
+   */
+  scopeJson?: string
   soulMd?: string
   toolsetsJson?: string
   userMd?: string
 }
 
-const DEFAULT_PROJECT_AIWORKER_SEED: Required<ProjectAiworkerSeed> = {
+type RequiredDefaultSeed = Required<Omit<ProjectAiworkerSeed, 'scopeJson'>>
+
+const DEFAULT_PROJECT_AIWORKER_SEED: RequiredDefaultSeed = {
   agentMd: `# Agent\n\n> Persona / role document for the agent that lives in this project. The orchestrator injects this file into the system prompt.\n`,
   soulMd: `# Voice & style\n\n> Voice / style guide. Influences how the agent phrases responses across channels.\n`,
   userMd: `# User profile\n\n> The agent writes learned facts about the primary user here over time. Edit by hand to bootstrap.\n`,
@@ -451,6 +473,12 @@ export async function ensureProjectAiworker(projectRoot: string, seed: ProjectAi
     path.join(aiworker, 'executor-capabilities.json'),
     mergedSeed.executorCapabilitiesJson,
   )
+  if (mergedSeed.scopeJson !== undefined) {
+    await seedIfAbsent(
+      path.join(aiworker, 'scope.json'),
+      mergedSeed.scopeJson,
+    )
+  }
   await seedIfAbsent(
     path.join(aiworker, '.gitignore'),
     `${PROJECT_LOCAL_DIR}/\n`,

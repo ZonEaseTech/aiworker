@@ -335,6 +335,53 @@ describe('ensureProjectAiworker', () => {
     }
   })
 
+  it('does not write scope.json when seed.scopeJson is omitted', async () => {
+    const tmp = await makeTmpDir()
+    try {
+      await ensureProjectAiworker(tmp)
+      const scopePath = path.join(tmp, '.aiworker', 'scope.json')
+      let exists = true
+      try {
+        await stat(scopePath)
+      }
+      catch {
+        exists = false
+      }
+      expect(exists).toBe(false)
+    }
+    finally {
+      await cleanup(tmp)
+    }
+  })
+
+  it('writes scope.json when seed.scopeJson is provided and preserves existing content on re-run', async () => {
+    const tmp = await makeTmpDir()
+    try {
+      const initial = `${JSON.stringify({
+        kind: 'developer-repo',
+        primarySoul: 'developer',
+        schemaVersion: 1,
+      }, null, 2)}\n`
+
+      await ensureProjectAiworker(tmp, { scopeJson: initial })
+      const scopePath = path.join(tmp, '.aiworker', 'scope.json')
+      const written = await readFile(scopePath, 'utf8')
+      expect(written).toBe(initial)
+
+      const overwriteAttempt = `${JSON.stringify({
+        kind: 'hiring-pool',
+        primarySoul: 'hr-recruiting',
+        schemaVersion: 1,
+      }, null, 2)}\n`
+      await ensureProjectAiworker(tmp, { scopeJson: overwriteAttempt })
+      const persisted = await readFile(scopePath, 'utf8')
+      expect(persisted).toBe(initial)
+    }
+    finally {
+      await cleanup(tmp)
+    }
+  })
+
   it('projectAiworkerExists reflects state', async () => {
     const tmp = await makeTmpDir()
     try {
