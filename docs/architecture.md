@@ -28,8 +28,15 @@ packages/
 ## Product Positioning
 
 AIWorker 是轻量自托管 **Project Brain + Worker/Fleet aggregation runtime**。
-它的核心资产是 project-scoped brain 与 worker/fleet 控制面，而不是另一个
+它的核心资产是 scope-bound Project Brain 与 worker/fleet 控制面，而不是另一个
 完整 executor 平台。
+
+这里的 Project 是 worker 在 host/workspace 维度绑定的业务作用域，不等同于
+software project 或代码仓库。developer Soul 可以把 scope 绑定到 repo；HR Soul
+可以把 scope 绑定到岗位、候选人池、简历库、筛选/归档/审核流程；legal、
+finance、ops 等 Soul 也应围绕各自业务对象和证据链建模。Project Brain 的通用
+内核应服务 scope identity、artifacts、policies、workflow state、audit、
+retention、backup 和 context compilation，而不是内建 PMA/代码项目假设。
 
 - **AIWorker owns**：Project Brain、worker identity/state、worker.db、
   gateway routing、fleet presence、audit、admin UI、conversation persistence
@@ -53,7 +60,7 @@ flowchart TB
   Gateway --> WorkerN["Worker N"]
 
   subgraph Worker["Worker data plane"]
-    Brain["Project Brain<br/>AGENT / SOUL / USER / MEMORY<br/>brain skills / project policy"]
+    Brain["Project Brain<br/>AGENT / SOUL / USER / MEMORY<br/>brain skills / scope policy"]
     State["worker.db<br/>identity / config / conversations"]
     Adapter["Thin Executor Adapter<br/>health / run / stream / cancel / resume"]
     Brain --> Adapter
@@ -63,7 +70,7 @@ flowchart TB
   WorkerA --> Worker
   Adapter --> Executor["External Agent Runtime<br/>Codex / Claude Code / Hermes / OpenClaw / Cursor"]
   Executor --> Ambient["User/Host Native Capabilities<br/>MCP / skills / plugins / auth / sessions"]
-  Project["Project repo"] --> Brain
+  Project["Host / Workspace Scope<br/>repo / hiring role / resume pool / case / queue"] --> Brain
   Project -. "optional hints only" .-> Overlay["Project Executor Overlay"]
   Overlay -. "best-effort when supported" .-> Executor
 ```
@@ -163,6 +170,7 @@ project scope 下，团队共享上下文落在 `<project>/.aiworker/`：
   local/                       # gitignored: worker.db / .env / workspaces
 ```
 
+- **Project scope 语义**：`<project>/.aiworker/` 是当前目录命名沿用的 filesystem layout；产品语义是 worker-bound business scope，不限定为 git repo、代码仓库或软件项目。Soul 负责解释该 scope 的领域对象和工作流，例如 developer 的架构/测试/发布，HR 的简历筛选/归档/备份/审核，legal 的合同/案件审查，ops 的队列/交接/升级。
 - **Skills / memories** 读写统一过 `FilesystemBrainProvider`（PLAN-012 将旧 `HermesProvider` 改名并把 HTTP 依赖全部拆掉）；filesystem 是权威，SQLite 只负责 identity 与可索引状态。新 worker 默认挂载 writable `local-filesystem` brain source，路径由 `resolveBrainHome(workerId)` 决定：project scope 指向 `<project>/.aiworker/`，user / explicit scope 指向 worker home 下的 `brain/`。operator 可用 `aiworker brain status` / `aiworker brain skills` / `aiworker brain memories` 做只读检查；这些命令不写入 brain artifact。
 - **Capability 边界**：`.aiworker/mcp.json`、`skills/`、`toolsets.json`、`capability-packs.json` 属于 brain/runtime project capability 或 observe-only descriptor；`.aiworker/executor-capabilities.json` 只是 executor overlay / bootstrap hint。Codex / Claude Code / Hermes / OpenClaw 等外部 executor 可能加载 user/host-level MCP、skills、plugins、auth 和 native sessions；AIWorker 不把 project overlay 当成完整 effective capability source of truth。
 - **Brain admission 边界**：generated memory / brain skill / policy proposal 进入 filesystem 前必须保留 evidence、scope、confidence 与 rollback 信息，并经过显式 operator approval。当前已允许的 runtime 写入只有配置启用后的 pre-compaction memory flush；新 CLI/API mutating brain command 必须另开 PMA 任务并显式命名为 brain memory / brain skill，不得复用 executor MCP / engine plugin 语义。
@@ -255,7 +263,7 @@ External executor 永远只在 worker 进程内被薄 adapter 调用；gateway �
 AIWorker 是一个**Project Brain + Worker/Fleet aggregation runtime**，由 worker
 runtime、gateway control plane 和外部 executor adapter 组合而成：
 
-- **Brain provider** — AIWorker-owned 知识 / 记忆 / brain skill / persona。当前：`FilesystemBrainProvider`（纯 filesystem）。
+- **Brain provider** — AIWorker-owned scope identity / artifacts / policies / workflow state / audit / retention / knowledge / memory / brain skill / persona。当前：`FilesystemBrainProvider`（纯 filesystem）。
 - **Executor adapter** — bring-your-own 外部 agent runtime 的薄适配层。当前支持 `http` baseline，外加 claude-code / codex / gemini-cli / qwen-code / cursor-agent / ACP / MCP 等 engine adapter。外部 executor 的 MCP / skills / plugins / auth / native sessions 由 executor 自己负责。
 
 **Orchestrator** 负责把 Project Brain、conversation state 与 executor adapter

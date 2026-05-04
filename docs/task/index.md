@@ -176,3 +176,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-050 Strengthen Project Brain product surface**](FEAT-050.md) `P1`
 - [x] [**FEAT-051 Strengthen Worker/Fleet aggregation surface**](FEAT-051.md) `P1`
 - [x] [**FEAT-052 Define bring-your-own executor integration strategy**](FEAT-052.md) `P2`
+- [~] [**FEAT-053 Clarify Project scope as worker-bound business scope**](FEAT-053.md) `P1`

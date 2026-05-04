@@ -124,3 +124,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-093 Bring-your-own executor thin adapter contract**](PLAN-093.md) `2026-05-04`
 - [x] [**PLAN-094 Hermes thin adapter spike**](PLAN-094.md) `2026-05-04`
 - [x] [**PLAN-095 OpenClaw configured runtime spec**](PLAN-095.md) `2026-05-04`
+- [~] [**PLAN-096 Project scope business-scope boundary docs**](PLAN-096.md) `2026-05-04`

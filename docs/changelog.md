@@ -87,6 +87,26 @@ PLAN-091/092 均为文档变更；运行时与 schema 零改动。后续 fleet U
 
 不新增 executor capability inventory；fleet.db 仍只持指针 + audit。
 
+## 2026-05-04 13:22 [progress] FEAT-053 / PLAN-096 — Project scope business-scope boundary
+
+补充 Project Brain 的关键产品边界，并用独立 PMA 槽位承接，避免回写已经
+completed 的 FEAT-050 / PLAN-088：
+
+- `Project scope` 是 worker 在 host/workspace 维度绑定的业务作用域，不等同于
+  software project、代码仓库或 PMA 项目。
+- developer Soul 的 scope 可以是 repo；HR Soul 的 scope 可以是岗位、候选人池、
+  简历库、筛选/归档/备份/审核流程；legal、finance、ops 等 Soul 也应围绕各自
+  业务对象和证据链建模。
+- Project Brain 的通用内核应服务 scope identity、artifacts、policies、
+  workflow state、audit、retention、backup 和 context compilation，不内建
+  developer-only 假设。
+- 当前状态为 in_progress：文档改动已 staged，等待本会话 review 后再收口
+  completed。
+
+验证：
+
+- `git diff --cached --check`
+
 ## 2026-05-04 13:15 [progress] FEAT-051 / PLAN-091 — operator topology 共享 canonical 图
 
 把 worker/fleet topology 用同一份描述贯穿三个文档：

@@ -18,8 +18,12 @@ adapter 调用和观察它们，不把自己做成 executor 平台。完整架�
 ## 产品定位
 
 - AIWorker 的核心卖点是 **Project Brain** 与 **Worker/Fleet 聚合控制面**：
-  Soul/persona、项目记忆、brain skill、worker identity/state、gateway
+  Soul/persona、scope memory、brain skill、worker identity/state、gateway
   routing、fleet presence、audit、admin UI 和远程 worker 管理。
+- 这里的 Project 是 worker 在 host/workspace 维度绑定的业务作用域，不等同于
+  software project。developer Soul 的 scope 可以是代码仓库；HR Soul 的 scope
+  可以是岗位、候选人池或简历库；legal/finance/ops 等 Soul 也应按各自业务对象
+  建模。不要把 Project Brain 设计收窄成代码项目管理或 PMA 专用能力。
 - AIWorker 不与成熟 executor runtime 竞争 MCP、skill、plugin、sandbox、
   approval、native session、subagent 或模型生态；这些能力由 Codex、Claude
   Code、Hermes、OpenClaw、Cursor 等外部 executor 自己负责。
@@ -68,7 +72,7 @@ adapter 调用和观察它们，不把自己做成 executor 平台。完整架�
 ## 能力边界
 
 - Brain capability 与 Executor capability 必须隔离设计、隔离持久化、隔离同步；不要用 Brain 的 memory/persona/prompt skill/capability-pack 机制去配置 executor 原生能力。
-- Brain capability 指 worker 自身的 filesystem brain、长期记忆、persona、brain skill、project policy 与未来学习沉淀。这是 AIWorker 的核心资产，project scope 下绑定 `<project>/.aiworker/`。
+- Brain capability 指 worker 自身的 filesystem brain、长期记忆、persona、brain skill、scope policy 与未来学习沉淀。这是 AIWorker 的核心资产，project scope 下绑定 `<project>/.aiworker/`，但语义上表示 worker-bound business scope，不限定为 git repo 或软件工程项目。
 - Executor capability 指外部 engine 自身运行时可用的能力，例如 user-level 或 engine-native MCP server、skill/plugin、sandbox、approval、native session、profile/config。AIWorker 默认只做薄 adapter、readiness、事件归一化和可选 project overlay hint，不承诺拥有或隔离这些能力。
 - `.aiworker/executor-capabilities.json` 只表达 project executor overlay / bootstrap hint；它不是 executor effective capability 的完整来源，也不应被当成安全隔离边界。
 - CLI、API、DB schema、文档里出现 `mcp`、`skill`、`plugin` 等重名概念时必须显式加限定词，例如 `executor mcp overlay`、`engine plugin`、`brain skill`，避免跨层复用语义。
