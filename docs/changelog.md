@@ -1,5 +1,24 @@
 # AIWorker Changelog
 
+## 2026-05-04 14:25 [completed] FEAT-054 / PLAN-097 — Soul module contract and registry ownership
+
+把 Soul 从 CLI-private preset 升级为跨 CLI / core / API / web 共消费的 Soul module。
+
+- 新增 `packages/shared/src/soul/`：`SoulModule` zod 契约（manifest、supportedScopeKinds、primaryScopeKind、riskPolicy、retentionDefaults、schemaPack 占位、briefHooks 占位、initProjection），`SoulRegistry` 负责注册 / 查找 / 按 scope kind 过滤 / 拒绝重复 id。Schema 校验保证 primaryScopeKind ⊆ supportedScopeKinds、protectedSections ⊆ defaultSections、initProjection 必填。
+- 9 个内置 Soul（developer / project-manager / devops-sre / product-designer / qa-reviewer / support-operator / finance-ops / hr-recruiting / general-assistant）迁到 `packages/shared/src/soul/modules/<id>.ts` 并在 `BUILTIN_SOUL_MODULES` 中聚合；`createBuiltinSoulRegistry()` 暴露给下游 plan 直接消费。
+- CLI `apps/cli/src/soul/presets.ts` 退化为 projection 层：从 shared registry 派生 `SoulPresetDefinition`，保持 `BUILTIN_SOUL_PRESETS` / `findBuiltinSoul` / `supportedSoulIds` / `toSelectedSoul` 接口稳定，`apps/cli/src/soul/presets/*.ts` 9 个旧文件删除（1.0 前不留 alias）。
+- 测试：新增 `packages/shared/src/soul/{module,registry}.test.ts` 覆盖 contract / registry 行为与 developer + HR 双样本；`apps/cli/src/soul/presets.test.ts` 新增 projection 一致性与未知 id 行为断言。
+- schemaPack / retentionDefaults 当前为空数组占位，PLAN-100 / PLAN-099 接续填充。
+
+验证：
+
+- `bun run --filter '@zonease/aiworker-shared' typecheck` ✅
+- `bun run --filter '@zonease/aiworker-shared' test` ✅ 48 pass
+- `bun run --filter '@zonease/aiworker-cli' typecheck` ✅
+- `bun run --filter '@zonease/aiworker-cli' test` ✅ 126 pass
+- `bun run typecheck` ✅ 全 workspace 通过
+- `bun run lint` ✅
+
 ## 2026-05-04 13:52 [proposal] FEAT-054 / PLAN-097..103 — Soul modules and Scope Brain kernel
 
 确认最新 PMA 槽位后，新增 `FEAT-054` 与 `PLAN-097..103`，承接 Project Brain

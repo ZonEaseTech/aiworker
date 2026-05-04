@@ -1,9 +1,10 @@
 # FEAT-054 Soul modules and Scope Brain kernel
 
-- **status**: pending
+- **status**: in-progress
 - **priority**: P1
-- **owner**: unassigned
+- **owner**: local
 - **createdAt**: 2026-05-04 13:52
+- **claimedAt**: 2026-05-04 14:05
 - **plans**: PLAN-097, PLAN-098, PLAN-099, PLAN-100, PLAN-101, PLAN-102, PLAN-103
 
 ## 描述

@@ -180,4 +180,41 @@ export type {
   WriteMemoryInput,
 } from './providers'
 
+export {
+  assertSoulModule,
+  BUILTIN_SOUL_MODULES,
+  createBuiltinSoulRegistry,
+  createSoulRegistry,
+  developerSoulModule,
+  devopsSreSoulModule,
+  financeOpsSoulModule,
+  generalAssistantSoulModule,
+  hrRecruitingSoulModule,
+  isSoulModule,
+  productDesignerSoulModule,
+  projectManagerSoulModule,
+  qaReviewerSoulModule,
+  soulBriefHooksSchema,
+  soulIdSchema,
+  soulInitProjectionSchema,
+  soulManifestSchema,
+  soulModuleSchema,
+  SoulRegistry,
+  soulRetentionDefaultSchema,
+  soulRiskPolicySchema,
+  soulSchemaPackSchema,
+  soulScopeKindSchema,
+  soulVersionSchema,
+  supportOperatorSoulModule,
+} from './soul'
+export type {
+  SoulBriefHooks,
+  SoulInitProjection,
+  SoulManifest,
+  SoulModule,
+  SoulRetentionDefault,
+  SoulRiskPolicy,
+  SoulSchemaPack,
+} from './soul'
+
 export type { ExecutionEvent, MemoryEntry, ServiceStatus, SkillMeta } from './types'

@@ -1,3 +1,4 @@
+import { BUILTIN_SOUL_MODULES } from '@zonease/aiworker-shared'
 import { describe, expect, it } from 'bun:test'
 
 import { isBuiltinCapabilityPack, isBuiltinToolset } from '../capabilities/catalog'
@@ -50,5 +51,22 @@ describe('Soul preset registry', () => {
     expect(selected.highRiskRequiresApproval).toBe(true)
     expect(selected.packs).toEqual(preset.packs)
     expect(selected.toolsets).toEqual(preset.toolsets)
+  })
+
+  it('projects every shared Soul module into a CLI preset', () => {
+    expect(BUILTIN_SOUL_PRESETS.length).toBe(BUILTIN_SOUL_MODULES.length)
+    for (const module of BUILTIN_SOUL_MODULES) {
+      const preset = findBuiltinSoul(module.manifest.id)
+      expect(preset?.label).toBe(module.manifest.label)
+      expect(preset?.communicationStyle).toBe(module.riskPolicy.communicationStyle)
+      expect(preset?.outOfScope).toBe(module.riskPolicy.outOfScopeStrategy)
+      expect(preset?.packs).toEqual(module.initProjection.packs)
+      expect(preset?.toolsets).toEqual(module.initProjection.toolsets)
+    }
+  })
+
+  it('returns undefined for unknown ids without coercing strings into BuiltinSoulPresetId', () => {
+    expect(findBuiltinSoul('not-a-real-soul')).toBeUndefined()
+    expect(findBuiltinSoul(CUSTOMIZE_SOUL_ID)).toBeUndefined()
   })
 })

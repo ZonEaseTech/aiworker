@@ -1,8 +1,9 @@
 # PLAN-097 Soul module contract and registry ownership
 
-- **status**: draft
+- **status**: completed
 - **createdAt**: 2026-05-04 13:52
-- **approvedAt**: (pending)
+- **approvedAt**: 2026-05-04 14:05
+- **completedAt**: 2026-05-04 14:25
 - **relatedTask**: FEAT-054
 
 ## 现状
@@ -48,3 +49,13 @@ Soul 需要成为跨 CLI / core / API / web 可消费的领域模块，而不是
 - `bun test apps/cli/src/soul/presets.test.ts`
 - `bun test apps/cli/src/commands/worker/init.integration.test.ts`
 - `bun run --filter '@zonease/aiworker-cli' typecheck`
+
+## 进度
+
+- 2026-05-04 14:05：用户批准 epic 执行。开始落地 SoulModule contract / registry 与 9 个内置 Soul 在 shared 中的迁移。
+- 2026-05-04 14:25：实现完成。
+  - shared 新增 `packages/shared/src/soul/{module,registry,index}.ts` + `modules/<id>.ts × 9` + `modules/index.ts`，并在 `packages/shared/src/index.ts` 暴露。
+  - CLI projection 改为消费 shared registry；`apps/cli/src/soul/presets/*.ts` 旧文件删除。
+  - 新增 shared `module.test.ts` / `registry.test.ts`，扩展 CLI `presets.test.ts`。
+  - schemaPack / retentionDefaults 留空占位，PLAN-099 / PLAN-100 接续填充；briefHooks 已为每个 Soul 声明合理 default + protected sections，PLAN-102 直接消费。
+  - 验证：`bun run --filter '@zonease/aiworker-shared' test` 48 pass、`bun run --filter '@zonease/aiworker-cli' test` 126 pass、`bun run typecheck` 全 workspace 通过、`bun run lint` 通过。

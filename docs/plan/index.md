@@ -125,7 +125,7 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-094 Hermes thin adapter spike**](PLAN-094.md) `2026-05-04`
 - [x] [**PLAN-095 OpenClaw configured runtime spec**](PLAN-095.md) `2026-05-04`
 - [x] [**PLAN-096 Project scope business-scope boundary docs**](PLAN-096.md) `2026-05-04`
-- [ ] [**PLAN-097 Soul module contract and registry ownership**](PLAN-097.md) `2026-05-04`
+- [x] [**PLAN-097 Soul module contract and registry ownership**](PLAN-097.md) `2026-05-04`
 - [ ] [**PLAN-098 Scope manifest and business-scope bootstrap**](PLAN-098.md) `2026-05-04`
 - [ ] [**PLAN-099 Artifact registry kernel**](PLAN-099.md) `2026-05-04`
 - [ ] [**PLAN-100 Soul-specific schema packs and validation samples**](PLAN-100.md) `2026-05-04`
