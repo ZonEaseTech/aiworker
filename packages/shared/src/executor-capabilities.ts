@@ -1,3 +1,18 @@
+/**
+ * Project executor overlay schema, persisted to `.aiworker/executor-capabilities.json`.
+ *
+ * The overlay records bootstrap hints / best-effort projections that AIWorker can
+ * hand to engines supporting project-level config (Codex CLI, Claude Code CLI, ...).
+ *
+ * It is NOT the source of truth for an executor's effective capabilities, and it
+ * is NOT a security or isolation boundary. Engines may load additional user/host
+ * level MCP servers, skills, plugins, auth and native sessions outside AIWorker's
+ * scope; AIWorker only declares the overlay, validates its shape, and best-effort
+ * projects supported descriptors via the engine's own CLI.
+ *
+ * Some legacy export names contain "Native" / "Capability" — kept for compatibility;
+ * treat them as overlay-level descriptors.
+ */
 import { z } from 'zod'
 
 import { secretRefSchema } from './capabilities'
@@ -17,6 +32,10 @@ export const executorSecretValueSchema = z.union([
 ])
 export type ExecutorSecretValue = z.infer<typeof executorSecretValueSchema>
 
+/**
+ * Project-level MCP overlay descriptor. Engines may also load user/host-level
+ * MCP servers; this descriptor only declares what the project wants to advertise.
+ */
 export const executorMcpServerDescriptorSchema = z.object({
   args: z.array(z.string()).optional(),
   bearerTokenEnvVar: z.string().min(1).optional(),
@@ -41,6 +60,11 @@ export const executorNativeCapabilityValidationSchema = z.object({
   status: z.enum(['pending', 'pass', 'warn', 'fail']),
 }).passthrough()
 
+/**
+ * Overlay descriptor for non-MCP engine capabilities (engine plugin / engine
+ * skill / engine policy). The legacy `Native` in the type name historically
+ * referred to engine-native plumbing; today this is overlay metadata only.
+ */
 export const executorNativeCapabilityDescriptorSchema = z.object({
   disabled: z.boolean().optional(),
   scope: executorCapabilityScopeSchema.optional(),
@@ -63,6 +87,11 @@ export const executorCapabilityEngineConfigSchema = z.object({
 
 export type ExecutorCapabilityEngineConfig = z.infer<typeof executorCapabilityEngineConfigSchema>
 
+/**
+ * Project executor overlay manifest (file: `.aiworker/executor-capabilities.json`).
+ * The "manifest" suffix is historical; this is an overlay/hint container, not the
+ * effective executor capability source of truth.
+ */
 export const executorCapabilityManifestSchema = z.object({
   engines: z.record(executorCapabilityEngineSchema, executorCapabilityEngineConfigSchema),
   schemaVersion: z.literal(1),

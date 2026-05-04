@@ -261,7 +261,7 @@ describe('aiworker executor capability commands', () => {
     expect(trace.env.CODEX_TRACE_FILE).toBe(traceFile)
   })
 
-  it('doctor warns when task executor remains the default stub and no executor-native capabilities are declared', async () => {
+  it('doctor warns when task executor remains the default stub and no project executor overlay is declared', async () => {
     const { home, project } = await initProject()
 
     const doctor = await runCli(['executor', 'doctor'], project, home)
@@ -269,7 +269,7 @@ describe('aiworker executor capability commands', () => {
     expect(doctor.exitCode).toBe(0)
     expect(doctor.output).toContain('Status: WARN')
     expect(doctor.output).toContain('configured task executor: http/default')
-    expect(doctor.output).toContain('declared executor-native capabilities: 0')
+    expect(doctor.output).toContain('declared project executor overlay entries: 0')
     expect(doctor.output).toContain('executor.capability_manifest_empty')
   })
 
@@ -293,7 +293,7 @@ describe('aiworker executor capability commands', () => {
     expect(after.version).toBe(before.version + 1)
   })
 
-  it('lists and shows executor-native capability lifecycle descriptors beyond MCP', async () => {
+  it('lists and shows project executor overlay descriptors beyond MCP', async () => {
     const { home, project } = await initProject()
     await writeFile(path.join(project, '.aiworker', 'executor-capabilities.json'), `${JSON.stringify({
       engines: {

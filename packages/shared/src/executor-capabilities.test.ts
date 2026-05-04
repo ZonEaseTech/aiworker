@@ -5,7 +5,7 @@ import {
   executorMcpServerDescriptorSchema,
 } from './executor-capabilities'
 
-describe('executor capability manifest schemas', () => {
+describe('project executor overlay schemas', () => {
   it('accepts project-scope MCP descriptors for supported engines', () => {
     const parsed = executorCapabilityManifestSchema.safeParse({
       engines: {

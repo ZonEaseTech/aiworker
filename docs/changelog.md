@@ -1,5 +1,24 @@
 # AIWorker Changelog
 
+## 2026-05-04 12:00 [progress] FEAT-049 / PLAN-085 — executor capability overlay semantics
+
+完成 FEAT-049 的第一步切片，把 `.aiworker/executor-capabilities.json` 的产品语义从 “executor-native capability manifest” 显式降级为 **project executor overlay / bootstrap hint**：
+
+- `packages/shared/src/executor-capabilities.ts` 加文件头 JSDoc 与每个导出的语义注释，强调它不是 effective executor capability source of truth、不是 isolation 边界。保留所有导出名（含 `executorNativeCapabilityDescriptorSchema`）以避免破坏外部引用。
+- `apps/cli/src/commands/worker/executor.ts` 收口 4 处用户可见文案：doctor 标题、overlay entries 计数、`executor capability list` 空提示、empty-manifest issue/warning message；issue code、`Status: PASS/WARN/FAIL` 标签、退出码语义全部保持。
+- `packages/fs-layout/src/index.ts` 把 layout 顶部与 `ensureProjectAiworker` 上方的注释从 “executor-native projection state” 改为 overlay/hint。
+- 跟随更新 `executor.test.ts` 与 `executor-capabilities.test.ts` 的 describe/assert 文案。
+
+验证：
+
+- `bun run --filter '@zonease/aiworker-shared' typecheck`
+- `bun test packages/shared/src/executor-capabilities.test.ts` (4/4)
+- `bun run --filter '@zonease/aiworker-cli' typecheck`
+- `bun test apps/cli/src/commands/worker/executor.test.ts` (10/10)
+- `bun run --filter '@zonease/aiworker-fs-layout' typecheck`
+- `bun test packages/fs-layout/src/index.test.ts` (18/18)
+- `bun x eslint <changed files>` 无告警
+
 ## 2026-05-04 11:22 [decision] FEAT-048 / PLAN-083..084 — product positioning pivot
 
 确认 AIWorker 产品定位收敛为 **Project Brain + Worker/Fleet aggregation runtime**：

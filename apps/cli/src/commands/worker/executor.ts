@@ -266,13 +266,13 @@ export async function runExecutorDoctor(options: { engine?: string } = {}): Prom
   const warnings = collectDoctorWarnings(manifestResult.manifest, configuredExecutor, engines)
   const status = issues.length > 0 ? 'FAIL' : warnings.length > 0 ? 'WARN' : 'PASS'
 
-  process.stdout.write('[aiworker executor doctor] executor capability validation\n')
+  process.stdout.write('[aiworker executor doctor] project executor overlay validation\n')
   process.stdout.write(`Root  : ${context.value.root}\n`)
   process.stdout.write(`File  : ${context.value.manifestPath}\n`)
   process.stdout.write(`Status: ${status}\n`)
   printConfiguredExecutor(process.stdout.write.bind(process.stdout), configuredExecutor)
   const manifestSummary = summarizeManifest(manifestResult.manifest)
-  process.stdout.write(`  ${manifestSummary.empty ? 'WARN' : 'PASS'}    declared executor-native capabilities: ${manifestSummary.declaredCapabilities}\n`)
+  process.stdout.write(`  ${manifestSummary.empty ? 'WARN' : 'PASS'}    declared project executor overlay entries: ${manifestSummary.declaredCapabilities}\n`)
   for (const item of engines) {
     const binary = SUPPORTED_ENGINES[item].binary
     const binaryStatus = findBinary(binary) ? 'PASS' : 'FAIL'
@@ -378,7 +378,7 @@ export async function runExecutorCapabilityList(options: ExecutorCapabilityListO
   process.stdout.write(`Root  : ${context.value.root}\n`)
   process.stdout.write(`File  : ${context.value.manifestPath}\n`)
   if (entries.length === 0) {
-    process.stdout.write('  WARN    no executor-native capabilities declared\n')
+    process.stdout.write('  WARN    no project executor overlay declared\n')
     return 0
   }
   for (const entry of entries) {
@@ -456,7 +456,7 @@ export async function inspectExecutorReadiness(): Promise<
   if (manifestSummary.empty) {
     issues.push({
       code: 'executor.capability_manifest_empty',
-      message: 'No executor-native capabilities are declared; this is runnable but means MCP/plugin/skill projection has not been bootstrapped.',
+      message: 'Project executor overlay is empty; AIWorker treats it as a bootstrap hint only, not as the complete view of effective executor capabilities.',
       path: MANIFEST_FILE,
       severity: 'warning',
     })
@@ -1105,7 +1105,7 @@ function collectDoctorWarnings(
   if (summarizeManifest(manifest).empty) {
     warnings.push({
       code: 'executor.capability_manifest_empty',
-      message: 'No executor-native MCP/plugin/skill/policy capabilities are declared.',
+      message: 'No project executor overlay entries are declared.',
       path: MANIFEST_FILE,
     })
   }

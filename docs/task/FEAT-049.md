@@ -1,9 +1,10 @@
 # FEAT-049 Simplify executor surface around bring-your-own runtimes
 
-- **status**: pending
+- **status**: in-progress
 - **priority**: P1
-- **owner**: unassigned
+- **owner**: local
 - **createdAt**: 2026-05-04 11:22
+- **claimedAt**: 2026-05-04 12:00
 - **plans**: PLAN-085, PLAN-086, PLAN-087
 
 ## 描述
@@ -41,3 +42,4 @@ bootstrap hint；`executor doctor` 只报告外部 runtime 的可用性、ambien
 ## 笔记
 
 - 2026-05-04 11:22：该任务是后续实现收口，不在 PLAN-083/084 的文档落地中改代码。
+- 2026-05-04 12:00：完成 PLAN-085。manifest 语义在 shared schema、CLI 输出文案、fs-layout 注释三处全部降级为 project executor overlay / hint；issue code、命令名、文件名、导出名都保持向后兼容。

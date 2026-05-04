@@ -23,7 +23,7 @@ import process from 'node:process'
  *   <project>/.aiworker/
  *     AGENT.md / SOUL.md / USER.md / MEMORY.md / ROLLUP.md   # team-shared persona
  *     policy.json / toolsets.json / capability-packs.json     # brain/runtime drafts
- *     executor-capabilities.json                              # executor-native projection state
+ *     executor-capabilities.json                              # project executor overlay / bootstrap hint
  *     skills/  memories/  mcp.json                            # brain/runtime descriptors
  *     local/                                                  # gitignored
  *       worker.db / identity.json / .env / workspaces/
@@ -391,7 +391,7 @@ export async function ensureWorkerHome(workerId: string): Promise<void> {
  * Materialise `<projectRoot>/.aiworker/` with the project-scope template:
  *   - persona docs (AGENT.md / SOUL.md / USER.md / MEMORY.md / ROLLUP.md)
  *   - governance drafts (policy.json / toolsets.json / capability-packs.json)
- *   - executor-capabilities.json placeholder for engine-native projection
+ *   - executor-capabilities.json placeholder for project executor overlay / hint
  *   - empty skills/ memories/ dirs
  *   - mcp.json placeholder
  *   - local/ (chmod 0700) with `* + !.gitignore` to silently ignore everything
