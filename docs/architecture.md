@@ -199,6 +199,33 @@ Project Brain 由五类资产组成。命名上 *brain memory / brain skill / pr
 4. **唯一允许的免审写入**：pre-compaction memory flush（runtime 把易失 memory rollup 到 `MEMORY.md` 的批量收口）继续作为已批准的 runtime 写入路径；任何其它 mutating brain CLI/API/UI 命令必须先经过本 roadmap 接入。
 
 红线：admission flow 不复用 executor MCP / engine plugin / engine skill / project executor overlay 通路；命名上严格使用 `brain admission` / `brain memory` / `brain skill` / `project policy`，避免与 `executor capability` / `executor mcp` 重名。
+
+### Worker/Fleet aggregation surface
+
+Worker/Fleet aggregation 是 AIWorker 的第二个差异化卖点。它**不是**把 worker conversations / secrets / brain 拷到 fleet.db；而是用两层数据源拼出 operator 视角：
+
+- **Layer 1 — fleet.db pointer + audit**（gateway 持有）：`registered_workers`（workerId / displayName / online / deviceId / baseUrl / lastSeenAt）+ `audit_events`（enrollment、approval、token rotation 等 control-plane 事件）。`workers.list` 与 `audit.list` 都从这里读，**永远不**含 brain/对话/明文 secret。
+- **Layer 2 — per-worker `/api/worker/info`**（worker 本机持有，按需拉取）：worker REST 的 `/info` 返回 `WorkerInfo`：runtime version、brain sources（id / type / status / writeTarget / readOnly）、executor（type / model / status）+ control executor、channels（含 webhookUrl）。Fleet 视角通过 `workers.info`（routing=`operator-to-node`）经 gateway 帧转发到目标 worker，**不**反向缓存到 fleet.db。
+
+由此推出 **Worker status summary** 这套契约（已在 `WorkerInfo` schema 内，本节是文档化）：
+
+| 维度 | 字段 | 来源 | fleet 列表是否含 |
+|------|------|------|------------------|
+| Identity | `workerId` / `displayName` / `deviceId` / `baseUrl` | fleet.db | ✅ |
+| Presence | `online` / `lastSeenAt` | fleet.db（gateway 持续 ping/heartbeat） | ✅ |
+| Runtime version | `runtimeVersion` | per-worker `/info` | ❌（按需拉） |
+| Brain | `brains[]` (id, type, writeTarget, readOnly, status) | per-worker `/info` | ❌（按需拉） |
+| Executor adapter | `executor.type / model / status`、`controlExecutor.*` | per-worker `/info` | ❌（按需拉） |
+| Channels | `channels[]` (channel, enabled, webhookUrl) | per-worker `/info` | ❌（按需拉） |
+| Conversations / messages | n/a | worker.db 本地，**不**对外聚合 | 永不 |
+
+UI / CLI 边界：
+
+- **Fleet UI** 只走 gateway WS：列 workers + presence + audit + recent events；点开某条记录才发 `workers.info` 拉详情。它**不**直接 fetch worker REST，也不试图持有完整 brain / 对话视图。
+- **Worker Admin** 只走本机 `/api/worker/*` REST/SSE + bearer-auth：是 worker-local data plane，不跨视角读 fleet.db、不直连 gateway WS。
+- **CLI `aiworker fleet list / info / chat / config get / logs`** 走 gateway WS：`fleet list` 出 fleet.db pointer + presence；`fleet info <workerId>` 经 gateway routing 到 worker `/info`；`fleet chat / config get / logs` 都按 method routing 表分流，没有任何路径绕过 gateway 直接拨 worker REST。
+
+External executor 永远只在 worker 进程内被薄 adapter 调用；gateway 与 fleet UI **不**直接和 engine binary / engine session / engine MCP 通信，也不在 fleet.db 持有 engine state。
 - **`config.yaml`** 是 `worker_config.configJson` 的 advisory 镜像——`PUT /api/worker/config` 与 `aiworker config set`（worker-local）/ `aiworker fleet config set`（远端 worker）落库成功后都会调 `mirrorConfigToYaml`，DB 仍为 source-of-truth（乐观锁 `If-Match` 依赖 DB version）。
 - **`AGENT.md` / `SOUL.md` / `USER.md`** user scope 首次启动由 `ensureWorkerHome(workerId)` 幂等种出；project scope 由 `aiworker init` 根据 Soul preset 种出非 stub 模板，并保持 no-overwrite。
 

@@ -651,6 +651,11 @@ SIGTERM → 等 `timeoutMs` → SIGKILL 兜底。
 
 ## Fleet 管理
 
+Fleet 命令的输出按 worker status 两层模型分流（详见 [`architecture.md` § Worker/Fleet aggregation surface](architecture.md#workerfleet-aggregation-surface)）：
+
+- **fleet.db pointer + audit**（`fleet list`、`fleet enroll list`、audit）：只含 identity / presence / lastSeenAt / 控制面事件，永不含 brain / 对话 / 明文 secret。
+- **per-worker `/info`**（`fleet info`、`fleet config get`、`fleet logs`、`fleet chat`）：经 gateway routing 转发到目标 worker；返回的 brain / executor adapter / runtime version / channels 状态都来自 worker 本机，不在 fleet.db 复制。
+
 ### `aiworker fleet list`
 
 ```sh
@@ -663,9 +668,11 @@ aiworker fleet list
 # }
 ```
 
+`workers[].online` / `lastSeenAt` 来自 gateway 持续 ping/heartbeat；list 不包含 brain / executor / runtime version 等需要触达 worker 本机的字段，需要的话用 `fleet info <workerId>` 单点拉。
+
 ### `aiworker fleet info <workerId>`
 
-转发到目标 worker 的运行时快照（原 REST `GET /api/worker/info` 等价物）。
+经 gateway routing 转发到目标 worker 的 `/api/worker/info`，返回 `WorkerInfo` 快照：runtime version、brain sources（id / type / status / writeTarget / readOnly）、executor 与 controlExecutor（type / model / status）、channels（含 webhookUrl）。该数据不被缓存到 fleet.db；每次调用都是从目标 worker 本机现取。
 
 ### `aiworker fleet launch [--display-name <name>] [--image <image>] [--force-id <workerId>]`
 

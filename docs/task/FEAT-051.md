@@ -39,3 +39,4 @@ worker 可注册、可路由、可观察、可审计、可远程操作；gateway
 
 - 2026-05-04 11:22：该任务聚焦 control plane 与 aggregation surface，不引入 executor isolation。
 - 2026-05-04 13:15：完成 PLAN-091。`docs/architecture.md` 的 mermaid topology 标注为 canonical source；`README.md` 与 `docs/deployment.md` 顶部都加 “Operator topology” 段，ASCII / 文字版同源，明确 gateway = control plane 只持指针 + audit，worker = data plane 持 worker.db + Project Brain，external executor 只在 worker 内由薄 adapter 调用。
+- 2026-05-04 13:25：完成 PLAN-092。`docs/architecture.md` 新增 “Worker/Fleet aggregation surface” 章节，定义 status summary 两层数据源（fleet.db pointer/presence/audit + per-worker `/info`）与字段表；明确 fleet UI 不直连 worker REST、worker admin 不读 fleet.db、CLI fleet 命令按 method routing 分流。`docs/cli.md` Fleet 管理段加入对应输出分流说明。本切片不改 schema、不缓存 worker 状态到 fleet.db。

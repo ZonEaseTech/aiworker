@@ -1,5 +1,18 @@
 # AIWorker Changelog
 
+## 2026-05-04 13:25 [progress] FEAT-051 / PLAN-092 — worker/fleet aggregation surface
+
+固化 worker status 聚合契约：
+
+- `docs/architecture.md` 新增 “Worker/Fleet aggregation surface” 章节，定义两层数据源：
+  - **Layer 1 — fleet.db pointer + audit**（gateway 持有）：identity、presence、lastSeenAt、控制面事件，永不含 brain / 对话 / secret。
+  - **Layer 2 — per-worker `/api/worker/info`**（按需经 gateway routing 拉）：runtimeVersion、brain sources、executor + controlExecutor、channels。
+- 表格列出 status summary 字段，说明 conversations / messages 永不出 worker.db。
+- 明确 UI/CLI 边界：Fleet UI 只走 gateway WS / Worker Admin 只走本机 worker REST / CLI fleet 命令按 method routing 分流；任何路径都不绕过 gateway 直连 worker REST。
+- `docs/cli.md` Fleet 管理段加入两层输出分流说明，`fleet list` 与 `fleet info` 章节同步指出 brain / executor / runtimeVersion 字段现取不缓存。
+
+不新增 executor capability inventory；fleet.db 仍只持指针 + audit。
+
 ## 2026-05-04 13:15 [progress] FEAT-051 / PLAN-091 — operator topology 共享 canonical 图
 
 把 worker/fleet topology 用同一份描述贯穿三个文档：
