@@ -1,4 +1,34 @@
 export {
+  brainAdmissionDecisionKindSchema,
+  brainAdmissionDecisionSchema,
+  brainAdmissionEvidenceKindSchema,
+  brainAdmissionEvidenceSchema,
+  brainAdmissionIdSchema,
+  brainAdmissionKindSchema,
+  brainAdmissionMemoryAddPayloadSchema,
+  brainAdmissionProposalInputSchema,
+  brainAdmissionProposalSchema,
+  brainAdmissionRiskSchema,
+  brainAdmissionStatusSchema,
+  isMaterializedProposalKind,
+  MATERIALIZED_PROPOSAL_KINDS,
+  redactBrainAdmissionProposal,
+  redactSecretLikeValues,
+} from './admission'
+export type {
+  BrainAdmissionDecision,
+  BrainAdmissionDecisionKind,
+  BrainAdmissionEvidence,
+  BrainAdmissionEvidenceKind,
+  BrainAdmissionMemoryAddPayload,
+  BrainAdmissionProposal,
+  BrainAdmissionProposalInput,
+  BrainAdmissionRisk,
+  BrainAdmissionStatus,
+  MaterializedProposalKind,
+} from './admission'
+
+export {
   brainArtifactIdSchema,
   brainArtifactRegisterInputSchema,
   brainArtifactSchema,

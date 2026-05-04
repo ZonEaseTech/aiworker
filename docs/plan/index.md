@@ -129,6 +129,6 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-098 Scope manifest and business-scope bootstrap**](PLAN-098.md) `2026-05-04`
 - [x] [**PLAN-099 Artifact registry kernel**](PLAN-099.md) `2026-05-04`
 - [x] [**PLAN-100 Soul-specific schema packs and validation samples**](PLAN-100.md) `2026-05-04`
-- [ ] [**PLAN-101 Brain admission MVP for scope assets**](PLAN-101.md) `2026-05-04`
+- [x] [**PLAN-101 Brain admission MVP for scope assets**](PLAN-101.md) `2026-05-04`
 - [ ] [**PLAN-102 Brain brief compiler and projection boundary**](PLAN-102.md) `2026-05-04`
 - [ ] [**PLAN-103 Worker/Fleet Brain surface closeout**](PLAN-103.md) `2026-05-04`

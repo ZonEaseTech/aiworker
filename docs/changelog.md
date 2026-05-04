@@ -1,5 +1,31 @@
 # AIWorker Changelog
 
+## 2026-05-04 16:50 [completed] FEAT-054 / PLAN-101 — Brain admission MVP
+
+把 admission roadmap 从 architecture 文本落成 worker.db 双表 + core 服务 + CLI 五个命令。Generated brain change（memory / brain-skill / policy / artifact-status）必须先进 `brain_admission_proposals`，经 operator approve / reject 才能 transition；`apply` 默认 dry-run，MVP 仅对 `kind === 'memory-add'` 自动落 filesystem。
+
+- shared 新增 `packages/shared/src/brain/admission.ts`：`BrainAdmissionProposal` / `BrainAdmissionDecision` zod schema + `brainAdmissionProposalInputSchema`（默认 risk=high）+ `brainAdmissionMemoryAddPayloadSchema`（body / topic / indexEntry）+ `redactSecretLikeValues`（递归 token / apiKey / password / secret / bearer / auth / credential）+ `redactBrainAdmissionProposal` + `MATERIALIZED_PROPOSAL_KINDS=['memory-add']`。
+- storage 加 `brain_admission_proposals` + `brain_admission_decisions`，加 `(status, kind)` / `scope_id` / `created_at` / `proposal_id` / `decided_at` 五个索引；migration `0006_fair_jetstream.sql`。`brain_admission_decisions.proposal_id` 是 FK，cascade delete 跟随 proposal。
+- core `BrainAdmissionService`（`packages/core/src/worker/brain/admission/service.ts`）：`propose / get / list / count / approve / reject / apply / listDecisions`。状态机严格守 `pending → approved | rejected → applied | failed`；`apply` 默认 dry-run，`commit: true` 才写文件 + 更新状态 + 写决策行；非 `memory-add` kind 返回 `unsupported` 不改状态；写 IO 失败 → `failed` + 决策行带 `failureReason`；`list` / `get` 默认 `redactSensitive=true`。
+- CLI `aiworker brain admission list/show/approve/reject/apply`（root + worker namespace 双注册）：`--decided-by` 必填用于 audit；`apply` 默认 dry-run，`--commit` 才落 `<brainHome>/MEMORY.md` 或 `<brainHome>/memories/<topic>.md`；`--show-sensitive` 才显示 secret-like 字段；`brainHome` 通过 `resolveBrainHome(workerId)` 解析（project scope → `<project>/.aiworker/`，user scope → `<home>/workers/<id>/brain/`）。
+- 测试：shared 16 个 case 覆盖 schema / defaults / payload / redaction；storage `EXPLAIN QUERY PLAN` 命中四个新索引；core 15 个 case 覆盖状态机 / dry-run / commit / topic+index entry / unsupported / failed payload / list+count 过滤；CLI 12 个 case 覆盖默认 redact / unlock / 过滤 / 状态机 / dry-run / commit / id 必填。
+
+边界遵守：
+
+- admission 全文不写 fleet.db
+- 不复用 executor MCP / engine plugin 通路
+- redaction 默认开；CLI 输出 secret-like 字段必须显式 `--show-sensitive`
+- MVP 只 materialize `memory-add`；其他 proposalType 进表但 `apply` 返回 unsupported，留人工跟进
+
+验证：
+
+- `bun run --filter '@zonease/aiworker-shared' test` ✅ 110 pass
+- `bun run --filter '@zonease/aiworker-storage-sqlite' test` ✅ 19 pass
+- `bun run --filter '@zonease/aiworker-core' test` ✅ 546 pass
+- `bun run --filter '@zonease/aiworker-cli' test` ✅ 153 pass
+- `bun run typecheck` ✅ 全 workspace 通过
+- `bun run lint` ✅
+
 ## 2026-05-04 16:00 [completed] FEAT-054 / PLAN-100 — Soul-specific schema packs and validation samples
 
 把 PLAN-097 留下的 `SoulModule.schemaPack` 占位填上每个 Soul 的领域 schema：artifactTypes / entityTypes / proposalTypes / workflowStates；developer + hr-recruiting 完整覆盖，其余 7 个 Soul skeleton。Brain Kernel 仍只验 shape — Soul 拥有领域语义；artifact type 可跨 Soul 共享（PLAN-100 风险条目落实）。

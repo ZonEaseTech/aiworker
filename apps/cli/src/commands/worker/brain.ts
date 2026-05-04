@@ -1,12 +1,12 @@
 import type { WorkerRuntime } from '@zonease/aiworker-core'
-import type { BrainArtifact, BrainArtifactSensitivity, BrainArtifactStatus, BrainMemory, BrainSkill, ScopeManifest } from '@zonease/aiworker-shared'
+import type { BrainAdmissionProposal, BrainAdmissionStatus, BrainArtifact, BrainArtifactSensitivity, BrainArtifactStatus, BrainMemory, BrainSkill, ScopeManifest } from '@zonease/aiworker-shared'
 import type { WorkerContext } from '../../context'
 
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 
-import { BrainArtifactRegistry, describeBrainSource } from '@zonease/aiworker-core'
-import { resolveAiworkerScope } from '@zonease/aiworker-fs-layout'
+import { BrainAdmissionService, BrainArtifactRegistry, describeBrainSource } from '@zonease/aiworker-core'
+import { resolveAiworkerScope, resolveBrainHome } from '@zonease/aiworker-fs-layout'
 import { parseScopeManifestJson } from '@zonease/aiworker-shared'
 import consola from 'consola'
 
@@ -304,6 +304,180 @@ export async function runBrainArtifactsShow(id: string, options: BrainArtifactsS
   }
   catch (err) {
     consola.error(`[aiworker brain artifacts show] failed: ${err instanceof Error ? err.message : String(err)}`)
+    return 1
+  }
+}
+
+export interface BrainAdmissionListOptions {
+  status?: BrainAdmissionStatus
+  kind?: string
+  scopeId?: string
+  soulId?: string
+  limit?: number
+  showSensitive?: boolean
+}
+
+export interface BrainAdmissionShowOptions {
+  showSensitive?: boolean
+}
+
+export interface BrainAdmissionApprovalOptions {
+  decidedBy: string
+  reason?: string
+}
+
+export interface BrainAdmissionApplyOptions {
+  decidedBy: string
+  /** Default `false` (dry-run). */
+  commit?: boolean
+}
+
+function admissionSummary(p: BrainAdmissionProposal): Record<string, unknown> {
+  return {
+    id: p.id,
+    soulId: p.soulId,
+    kind: p.kind,
+    status: p.status,
+    risk: p.risk,
+    confidence: p.confidence,
+    target: p.target,
+    summary: p.summary,
+    rollback: p.rollback,
+    ...(p.scopeId === undefined ? {} : { scopeId: p.scopeId }),
+    evidenceCount: p.evidence.length,
+    ...(p.payload === undefined ? {} : { payload: p.payload }),
+    createdAt: p.createdAt,
+    updatedAt: p.updatedAt,
+  }
+}
+
+function admissionFullView(p: BrainAdmissionProposal): Record<string, unknown> {
+  return {
+    ...admissionSummary(p),
+    evidence: p.evidence,
+  }
+}
+
+export async function runBrainAdmissionList(options: BrainAdmissionListOptions = {}): Promise<number> {
+  try {
+    const limit = clampArtifactLimit(options.limit)
+    return await withWorkerContext(async (ctx) => {
+      const service = new BrainAdmissionService()
+      const filterOptions: Parameters<BrainAdmissionService['list']>[0] = { limit }
+      if (options.status !== undefined)
+        filterOptions.status = options.status
+      if (options.kind !== undefined)
+        filterOptions.kind = options.kind
+      if (options.scopeId !== undefined)
+        filterOptions.scopeId = options.scopeId
+      if (options.soulId !== undefined)
+        filterOptions.soulId = options.soulId
+      const proposals = service.list(filterOptions, { redactSensitive: options.showSensitive !== true })
+      console.log(JSON.stringify({
+        workerId: ctx.workerId,
+        count: proposals.length,
+        redacted: options.showSensitive !== true,
+        proposals: proposals.map(admissionSummary),
+      }, null, 2))
+      return 0
+    })
+  }
+  catch (err) {
+    consola.error(`[aiworker brain admission list] failed: ${err instanceof Error ? err.message : String(err)}`)
+    return err instanceof InvalidBrainLimitError ? 2 : 1
+  }
+}
+
+export async function runBrainAdmissionShow(id: string, options: BrainAdmissionShowOptions = {}): Promise<number> {
+  if (id === undefined || id === '') {
+    consola.error('[aiworker brain admission show] id is required')
+    return 2
+  }
+  try {
+    return await withWorkerContext(async (ctx) => {
+      const service = new BrainAdmissionService()
+      const proposal = service.get(id, { redactSensitive: options.showSensitive !== true })
+      if (proposal === null) {
+        consola.error(`[aiworker brain admission show] proposal "${id}" not found`)
+        return 1
+      }
+      const decisions = service.listDecisions(id)
+      console.log(JSON.stringify({
+        workerId: ctx.workerId,
+        redacted: options.showSensitive !== true,
+        proposal: admissionFullView(proposal),
+        decisions,
+      }, null, 2))
+      return 0
+    })
+  }
+  catch (err) {
+    consola.error(`[aiworker brain admission show] failed: ${err instanceof Error ? err.message : String(err)}`)
+    return 1
+  }
+}
+
+export async function runBrainAdmissionApprove(id: string, options: BrainAdmissionApprovalOptions): Promise<number> {
+  if (id === undefined || id === '') {
+    consola.error('[aiworker brain admission approve] id is required')
+    return 2
+  }
+  try {
+    return await withWorkerContext(async (ctx) => {
+      const service = new BrainAdmissionService()
+      const updated = service.approve(id, { decidedBy: options.decidedBy, ...(options.reason === undefined ? {} : { reason: options.reason }) })
+      console.log(JSON.stringify({ workerId: ctx.workerId, decision: 'approved', proposal: admissionSummary(updated) }, null, 2))
+      return 0
+    })
+  }
+  catch (err) {
+    consola.error(`[aiworker brain admission approve] failed: ${err instanceof Error ? err.message : String(err)}`)
+    return 1
+  }
+}
+
+export async function runBrainAdmissionReject(id: string, options: BrainAdmissionApprovalOptions): Promise<number> {
+  if (id === undefined || id === '') {
+    consola.error('[aiworker brain admission reject] id is required')
+    return 2
+  }
+  try {
+    return await withWorkerContext(async (ctx) => {
+      const service = new BrainAdmissionService()
+      const updated = service.reject(id, { decidedBy: options.decidedBy, ...(options.reason === undefined ? {} : { reason: options.reason }) })
+      console.log(JSON.stringify({ workerId: ctx.workerId, decision: 'rejected', proposal: admissionSummary(updated) }, null, 2))
+      return 0
+    })
+  }
+  catch (err) {
+    consola.error(`[aiworker brain admission reject] failed: ${err instanceof Error ? err.message : String(err)}`)
+    return 1
+  }
+}
+
+export async function runBrainAdmissionApply(id: string, options: BrainAdmissionApplyOptions): Promise<number> {
+  if (id === undefined || id === '') {
+    consola.error('[aiworker brain admission apply] id is required')
+    return 2
+  }
+  try {
+    return await withWorkerContext(async (ctx) => {
+      const service = new BrainAdmissionService()
+      const brainHome = resolveBrainHome(ctx.workerId)
+      const result = await service.apply(id, {
+        brainHome,
+        commit: options.commit === true,
+        decidedBy: options.decidedBy,
+      })
+      console.log(JSON.stringify({
+        workerId: ctx.workerId,
+        outcome: result,
+      }, null, 2))
+      return result.kind === 'failed' ? 1 : 0
+    })
+  }
+  catch (err) {
+    consola.error(`[aiworker brain admission apply] failed: ${err instanceof Error ? err.message : String(err)}`)
     return 1
   }
 }

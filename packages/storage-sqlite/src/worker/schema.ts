@@ -1,4 +1,8 @@
 import type {
+  BrainAdmissionDecisionKind,
+  BrainAdmissionEvidence,
+  BrainAdmissionRisk,
+  BrainAdmissionStatus,
   BrainArtifactSensitivity,
   BrainArtifactSource,
   BrainArtifactStatus,
@@ -9,7 +13,7 @@ import type {
   ToolCall,
   WorkerConfig,
 } from '@zonease/aiworker-shared'
-import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
+import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 
 /**
  * worker.db — owned by a single worker container. Every row belongs to the
@@ -245,6 +249,60 @@ export const brainArtifacts = sqliteTable(
     // list-by-status+type: routing pending review / archived inspections.
     statusTypeIdx: index('brain_artifacts_status_type_idx').on(table.status, table.type),
     updatedAtIdx: index('brain_artifacts_updated_at_idx').on(table.updatedAt),
+  }),
+)
+
+/**
+ * Brain admission proposals (PLAN-101). Generated brain change must enter
+ * this table first; service approves / rejects / applies via state machine
+ * `pending → approved | rejected → applied | failed`. MVP only materializes
+ * `kind === 'memory-add'`; other kinds may approve but stay pre-apply.
+ */
+export const brainAdmissionProposals = sqliteTable(
+  'brain_admission_proposals',
+  {
+    id: text('id').primaryKey(),
+    scopeId: text('scope_id'),
+    soulId: text('soul_id').notNull(),
+    kind: text('kind').notNull(),
+    target: text('target').notNull(),
+    summary: text('summary').notNull(),
+    evidence: text('evidence', { mode: 'json' }).$type<readonly BrainAdmissionEvidence[]>().notNull().$defaultFn(() => []),
+    risk: text('risk').$type<BrainAdmissionRisk>().notNull().default('high'),
+    confidence: real('confidence').notNull(),
+    rollback: text('rollback').notNull(),
+    payload: text('payload', { mode: 'json' }).$type<Record<string, unknown> | null>(),
+    status: text('status').$type<BrainAdmissionStatus>().notNull().default('pending'),
+    createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+    updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()),
+  },
+  table => ({
+    statusKindIdx: index('brain_admission_proposals_status_kind_idx').on(table.status, table.kind),
+    scopeIdx: index('brain_admission_proposals_scope_id_idx').on(table.scopeId),
+    createdAtIdx: index('brain_admission_proposals_created_at_idx').on(table.createdAt),
+  }),
+)
+
+/**
+ * Brain admission decision log (PLAN-101). Append-only audit trail for
+ * approvals / rejections / apply outcomes. Brain Kernel never deletes rows
+ * here; CLI / API surfaces redact secret-like values before display.
+ */
+export const brainAdmissionDecisions = sqliteTable(
+  'brain_admission_decisions',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    proposalId: text('proposal_id').notNull().references(() => brainAdmissionProposals.id, { onDelete: 'cascade' }),
+    decision: text('decision').$type<BrainAdmissionDecisionKind>().notNull(),
+    decidedBy: text('decided_by').notNull(),
+    decidedAt: text('decided_at').notNull().$defaultFn(() => new Date().toISOString()),
+    reason: text('reason'),
+    appliedAt: text('applied_at'),
+    failureReason: text('failure_reason'),
+  },
+  table => ({
+    proposalIdx: index('brain_admission_decisions_proposal_id_idx').on(table.proposalId),
+    decidedAtIdx: index('brain_admission_decisions_decided_at_idx').on(table.decidedAt),
   }),
 )
 

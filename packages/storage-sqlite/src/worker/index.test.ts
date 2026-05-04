@@ -76,6 +76,25 @@ describe('worker schema indexes (REFACTOR-005)', () => {
     expect(plan).toContain('agent_tasks_created_at_idx')
   })
 
+  it('brain_admission_proposals indexes 服务 status+kind 与 scope 过滤 (PLAN-101)', () => {
+    const byStatusKind = explain(`SELECT * FROM brain_admission_proposals WHERE status = 'pending' AND kind = 'memory-add'`)
+    expect(byStatusKind).toContain('brain_admission_proposals_status_kind_idx')
+
+    const byScope = explain(`SELECT * FROM brain_admission_proposals WHERE scope_id = 'backend-hire-q3'`)
+    expect(byScope).toContain('brain_admission_proposals_scope_id_idx')
+
+    const byCreatedAt = explain(`SELECT * FROM brain_admission_proposals ORDER BY created_at DESC LIMIT 50`)
+    expect(byCreatedAt).toContain('brain_admission_proposals_created_at_idx')
+  })
+
+  it('brain_admission_decisions indexes 服务 proposalId join 与按时间扫描 (PLAN-101)', () => {
+    const byProposal = explain(`SELECT * FROM brain_admission_decisions WHERE proposal_id = 'p-1'`)
+    expect(byProposal).toContain('brain_admission_decisions_proposal_id_idx')
+
+    const byDecidedAt = explain(`SELECT * FROM brain_admission_decisions ORDER BY decided_at DESC LIMIT 50`)
+    expect(byDecidedAt).toContain('brain_admission_decisions_decided_at_idx')
+  })
+
   it('brain_artifacts indexes服务 scope+type 与 status+type 列表查询 (PLAN-099)', () => {
     const byScopeType = explain(`SELECT * FROM brain_artifacts WHERE scope_id = 'backend-hire-q3' AND type = 'candidate-resume'`)
     expect(byScopeType).toContain('brain_artifacts_scope_type_idx')

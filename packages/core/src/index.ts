@@ -26,6 +26,20 @@ export {
   type StoredConfig,
 } from './worker/bootstrap'
 
+// Brain admission service (PLAN-101)：generated brain change 必须先进 admission
+// proposal，state machine pending → approved | rejected → applied | failed；
+// MVP 只对 `memory-add` 自动 materialize，其他 kind 进表但不自动落 filesystem。
+export {
+  type ApplyOptions,
+  type ApplyOutcome,
+  type ApprovalContext,
+  BrainAdmissionService,
+  type BrainAdmissionStateError,
+  createBrainAdmissionService,
+  type ListBrainAdmissionOptions,
+  type ReadBrainAdmissionOptions,
+} from './worker/brain/admission'
+
 // Brain artifact registry (PLAN-099)：scope-bound business material 登记，
 // 不复制内容；CLI / API 通过 ListBrainArtifactsOptions / ReadBrainArtifactsOptions
 // 控制 sensitivity 过滤与 ref/hash 默认 redact 行为。

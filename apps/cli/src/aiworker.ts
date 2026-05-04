@@ -41,6 +41,11 @@ import {
   runApprovalsList as runApprovalsListLocal,
 } from './commands/worker/approvals'
 import {
+  runBrainAdmissionApply,
+  runBrainAdmissionApprove,
+  runBrainAdmissionList,
+  runBrainAdmissionReject,
+  runBrainAdmissionShow,
   runBrainArtifactsList,
   runBrainArtifactsShow,
   runBrainMemories,
@@ -304,6 +309,86 @@ cli
   .action(async (id: string, opts: { showSensitive?: boolean }) => {
     process.exit(await runBrainArtifactsShow(id, {
       ...(opts.showSensitive === undefined ? {} : { showSensitive: opts.showSensitive }),
+    }))
+  })
+
+cli
+  .command('brain admission list', '列出本地 worker 的 brain admission proposal')
+  .option('--status <s>', 'pending / approved / rejected / applied / failed')
+  .option('--kind <k>', '按 proposal kind 过滤（来自 Soul.schemaPack.proposalTypes）')
+  .option('--scope <id>', '按 scope id 过滤')
+  .option('--soul <id>', '按 Soul id 过滤')
+  .option('--limit <n>', '最多返回 proposal 数量（1-200，默认 50）', { type: [Number] })
+  .option('--show-sensitive', '不再 redact evidence / payload 中 secret-like 字段')
+  .action(async (opts: {
+    status?: string
+    kind?: string
+    scope?: string
+    soul?: string
+    limit?: number[]
+    showSensitive?: boolean
+  }) => {
+    process.exit(await runBrainAdmissionList({
+      ...(opts.status === undefined ? {} : { status: opts.status as 'pending' | 'approved' | 'rejected' | 'applied' | 'failed' }),
+      ...(opts.kind === undefined ? {} : { kind: opts.kind }),
+      ...(opts.scope === undefined ? {} : { scopeId: opts.scope }),
+      ...(opts.soul === undefined ? {} : { soulId: opts.soul }),
+      limit: optionalNumber(opts.limit),
+      ...(opts.showSensitive === undefined ? {} : { showSensitive: opts.showSensitive }),
+    }))
+  })
+
+cli
+  .command('brain admission show <id>', '只读查看单个 admission proposal 与 decision 历史')
+  .option('--show-sensitive', '不再 redact evidence / payload 中 secret-like 字段')
+  .action(async (id: string, opts: { showSensitive?: boolean }) => {
+    process.exit(await runBrainAdmissionShow(id, {
+      ...(opts.showSensitive === undefined ? {} : { showSensitive: opts.showSensitive }),
+    }))
+  })
+
+cli
+  .command('brain admission approve <id>', '把 pending proposal 标记为 approved（不会自动 apply）')
+  .option('--decided-by <name>', '记录决策操作者（必填）')
+  .option('--reason <text>', '审批理由')
+  .action(async (id: string, opts: { decidedBy?: string, reason?: string }) => {
+    if (opts.decidedBy === undefined || opts.decidedBy === '') {
+      consola.error('[aiworker brain admission approve] --decided-by is required')
+      process.exit(2)
+    }
+    process.exit(await runBrainAdmissionApprove(id, {
+      decidedBy: opts.decidedBy,
+      ...(opts.reason === undefined ? {} : { reason: opts.reason }),
+    }))
+  })
+
+cli
+  .command('brain admission reject <id>', '把 pending proposal 标记为 rejected')
+  .option('--decided-by <name>', '记录决策操作者（必填）')
+  .option('--reason <text>', '拒绝理由')
+  .action(async (id: string, opts: { decidedBy?: string, reason?: string }) => {
+    if (opts.decidedBy === undefined || opts.decidedBy === '') {
+      consola.error('[aiworker brain admission reject] --decided-by is required')
+      process.exit(2)
+    }
+    process.exit(await runBrainAdmissionReject(id, {
+      decidedBy: opts.decidedBy,
+      ...(opts.reason === undefined ? {} : { reason: opts.reason }),
+    }))
+  })
+
+cli
+  .command('brain admission apply <id>', '执行 approved proposal（默认 dry-run；MVP 仅支持 memory-add）')
+  .option('--decided-by <name>', '记录决策操作者（必填）')
+  .option('--commit', '真正写 filesystem；默认 dry-run 仅打印 diff')
+  .action(async (id: string, opts: { decidedBy?: string, commit?: boolean }) => {
+    if (opts.decidedBy === undefined || opts.decidedBy === '') {
+      consola.error('[aiworker brain admission apply] --decided-by is required')
+      process.exit(2)
+    }
+    process.exit(await runBrainAdmissionApply(id, {
+      decidedBy: opts.decidedBy,
+      ...(opts.commit === undefined ? {} : { commit: opts.commit }),
     }))
   })
 
@@ -654,6 +739,86 @@ cli
   .action(async (id: string, opts: { showSensitive?: boolean }) => {
     process.exit(await runBrainArtifactsShow(id, {
       ...(opts.showSensitive === undefined ? {} : { showSensitive: opts.showSensitive }),
+    }))
+  })
+
+cli
+  .command('worker brain admission list', '列出本地 worker 的 brain admission proposal')
+  .option('--status <s>', 'pending / approved / rejected / applied / failed')
+  .option('--kind <k>', '按 proposal kind 过滤')
+  .option('--scope <id>', '按 scope id 过滤')
+  .option('--soul <id>', '按 Soul id 过滤')
+  .option('--limit <n>', '最多返回 proposal 数量（1-200，默认 50）', { type: [Number] })
+  .option('--show-sensitive', '不再 redact evidence / payload 中 secret-like 字段')
+  .action(async (opts: {
+    status?: string
+    kind?: string
+    scope?: string
+    soul?: string
+    limit?: number[]
+    showSensitive?: boolean
+  }) => {
+    process.exit(await runBrainAdmissionList({
+      ...(opts.status === undefined ? {} : { status: opts.status as 'pending' | 'approved' | 'rejected' | 'applied' | 'failed' }),
+      ...(opts.kind === undefined ? {} : { kind: opts.kind }),
+      ...(opts.scope === undefined ? {} : { scopeId: opts.scope }),
+      ...(opts.soul === undefined ? {} : { soulId: opts.soul }),
+      limit: optionalNumber(opts.limit),
+      ...(opts.showSensitive === undefined ? {} : { showSensitive: opts.showSensitive }),
+    }))
+  })
+
+cli
+  .command('worker brain admission show <id>', '只读查看单个 admission proposal 与 decision 历史')
+  .option('--show-sensitive', '不再 redact evidence / payload 中 secret-like 字段')
+  .action(async (id: string, opts: { showSensitive?: boolean }) => {
+    process.exit(await runBrainAdmissionShow(id, {
+      ...(opts.showSensitive === undefined ? {} : { showSensitive: opts.showSensitive }),
+    }))
+  })
+
+cli
+  .command('worker brain admission approve <id>', '把 pending proposal 标记为 approved（不会自动 apply）')
+  .option('--decided-by <name>', '记录决策操作者（必填）')
+  .option('--reason <text>', '审批理由')
+  .action(async (id: string, opts: { decidedBy?: string, reason?: string }) => {
+    if (opts.decidedBy === undefined || opts.decidedBy === '') {
+      consola.error('[aiworker worker brain admission approve] --decided-by is required')
+      process.exit(2)
+    }
+    process.exit(await runBrainAdmissionApprove(id, {
+      decidedBy: opts.decidedBy,
+      ...(opts.reason === undefined ? {} : { reason: opts.reason }),
+    }))
+  })
+
+cli
+  .command('worker brain admission reject <id>', '把 pending proposal 标记为 rejected')
+  .option('--decided-by <name>', '记录决策操作者（必填）')
+  .option('--reason <text>', '拒绝理由')
+  .action(async (id: string, opts: { decidedBy?: string, reason?: string }) => {
+    if (opts.decidedBy === undefined || opts.decidedBy === '') {
+      consola.error('[aiworker worker brain admission reject] --decided-by is required')
+      process.exit(2)
+    }
+    process.exit(await runBrainAdmissionReject(id, {
+      decidedBy: opts.decidedBy,
+      ...(opts.reason === undefined ? {} : { reason: opts.reason }),
+    }))
+  })
+
+cli
+  .command('worker brain admission apply <id>', '执行 approved proposal（默认 dry-run；MVP 仅支持 memory-add）')
+  .option('--decided-by <name>', '记录决策操作者（必填）')
+  .option('--commit', '真正写 filesystem；默认 dry-run 仅打印 diff')
+  .action(async (id: string, opts: { decidedBy?: string, commit?: boolean }) => {
+    if (opts.decidedBy === undefined || opts.decidedBy === '') {
+      consola.error('[aiworker worker brain admission apply] --decided-by is required')
+      process.exit(2)
+    }
+    process.exit(await runBrainAdmissionApply(id, {
+      decidedBy: opts.decidedBy,
+      ...(opts.commit === undefined ? {} : { commit: opts.commit }),
     }))
   })
 

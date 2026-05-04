@@ -43,6 +43,13 @@
       "when": 1777885737420,
       "tag": "0005_worthless_whiplash",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1777888861849,
+      "tag": "0006_fair_jetstream",
+      "breakpoints": true
     }
   ]
 }
