@@ -1,1 +1,1 @@
-./.agents/hooks/session-start.sh
+../../.agents/hooks/session-start.sh
