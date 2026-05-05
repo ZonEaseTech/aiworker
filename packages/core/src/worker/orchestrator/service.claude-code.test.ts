@@ -1,6 +1,8 @@
 import type {
+  AgentEvent,
   BrainProvider,
   Envelope,
+  ExecutorProvider,
   WorkerConfig,
 } from '@zonease/aiworker-shared'
 import type { WorkerEventBus } from '../events/bus'
@@ -18,7 +20,7 @@ import { ClaudeCodeExecutor } from '../executor/engines/claude-code'
 import { WorkspaceManager as RealWorkspaceManager } from '../executor/workspace'
 import { ApprovalStore } from './approvals'
 import { ProcessManager } from './process-manager'
-import { Orchestrator } from './service'
+import { detectAdmissionSuccessClaim, Orchestrator } from './service'
 
 /**
  * End-to-end smoke of the FEAT-012 hot path:
@@ -180,6 +182,55 @@ describe('Orchestrator + ClaudeCodeExecutor (stub CLI)', () => {
       return delta.includes('"type":"assistant"') || delta.includes('"type":"result"')
     })
     expect(leakedEvent).toBeUndefined()
+  })
+
+  it('emits a brain governance bypass warning when admission is claimed without a DB delta', async () => {
+    const config = validConfig()
+    const bus = stubBus() as WorkerEventBus & { recorded: Array<{ kind: string, payload: unknown }> }
+    const executor: ExecutorProvider = {
+      name: 'claiming-executor',
+      health: async () => ({ name: 'claiming-executor', status: 'healthy' as const, lastChecked: 'x' }),
+      listTools: async () => [],
+      async* run(): AsyncGenerator<AgentEvent> {
+        yield {
+          type: 'assistant_message_delta',
+          delta: 'Admission proposal submitted and saved for approval.',
+        }
+        yield { type: 'finish', reason: 'stop' }
+      },
+    }
+
+    const orchestrator = new Orchestrator({
+      config,
+      brain: stubBrain(),
+      executor,
+      bus,
+      workerId: 'w_testtesttest',
+      workspaces,
+      processes,
+      approvals: new ApprovalStore(),
+    })
+
+    await orchestrator.ingest({
+      workerId: 'w_testtesttest',
+      channel: 'web',
+      accountId: 'test',
+      chatId: 'chat-bypass',
+      text: 'remember this via admission',
+      receivedAt: new Date().toISOString(),
+      raw: { taskId: 'task-bypass' },
+    })
+
+    const bypass = bus.recorded.find(r => r.kind === 'brain.governance.bypass_suspected')
+    expect(bypass).toBeDefined()
+    expect((bypass?.payload as { reason?: string, taskId?: string }).reason).toBe('assistant-claimed-admission-without-db-delta')
+    expect((bypass?.payload as { taskId?: string }).taskId).toBe('task-bypass')
+  })
+
+  it('classifies multilingual admission and long-term memory success claims', () => {
+    expect(detectAdmissionSuccessClaim('Admission proposal submitted for approval.')).toBe('assistant-claimed-admission-without-db-delta')
+    expect(detectAdmissionSuccessClaim('该长期记忆已落盘。')).toBe('assistant-claimed-memory-without-admission-delta')
+    expect(detectAdmissionSuccessClaim('I can draft a proposal if you want.')).toBeNull()
   })
 
   it('passes the shared project root cwd to Claude Code in project-scope workspace mode', async () => {

@@ -457,6 +457,21 @@ describe('aiworker malformed argv handling', () => {
     }
   })
 
+  it('BUG-073: group-level help shows scoped subcommands instead of top-level help', async () => {
+    const result = await runCli(['soul', '--help'])
+    try {
+      expect(result.exitCode).toBe(0)
+      expect(result.output).toContain('[aiworker soul] command group')
+      expect(result.output).toContain('这是命令组')
+      expect(result.output).toContain('soul list')
+      expect(result.output).toContain('soul show')
+      expect(result.output).not.toContain('使用引导')
+    }
+    finally {
+      cleanup(result)
+    }
+  })
+
   it('rejects malformed numeric options before remote gateway calls', async () => {
     const result = await runCli(['fleet', 'chat', 'w_test', 'hello', '--timeout-ms', 'nope'])
     try {

@@ -84,7 +84,7 @@ aiworker up --port 9217 --no-open
 
 `up` 透传 `serve` 参数：`--port`、`--host`、`--gateway`、`--gateway-token`、`--no-reconnect`、`--no-serve-web`、`--open`、`--no-open`。`--dry-run` 会强制跳过 server 和浏览器副作用。
 
-### `aiworker init [--soul <preset>] [--global] [--force]`
+### `aiworker init [--soul <preset>] [--global] [--force] [--token-file <path>] [--show-token]`
 
 初始化 `worker.db`，跑迁移，首次启动 mint identity + bootstrap token，种 default config，落 layout 模板。幂等——重复跑不会重打 bootstrap token，也不会覆盖既有 seed。
 
@@ -99,6 +99,16 @@ PLAN-023 起 `aiworker init` 默认走 **project scope**：
 
 `local/` 目录强制 `.gitignore = "*\n!.gitignore\n"`（worker.db / .env / workspaces 等敏感产物绝不入 git）；`.aiworker/.gitignore = "local/\n"`（其余 persona / policy / toolsets / brain skills / memories 默认入 git，团队共享 Project Brain）。每个 project worker 独立 mint master key（写入 `.aiworker/local/.env`，chmod 0600），与 user 级 `~/.aiworker/.env` 物理隔离——这是 AIWorker brain/worker 数据安全边界，不代表外部 executor 的 user/host 配置被隔离。
 
+首次 init 的 bootstrap token 默认不再以完整值打印到 stdout。CLI 会把完整值写入 chmod 0600 token file（project 默认 `.aiworker/local/bootstrap-token.txt`，user/explicit scope 默认对应 home 下 `bootstrap-token.txt`），stdout 只显示 masked token 与文件路径。需要迁移旧脚本时，把原先 grep stdout 的逻辑改为读取 token file：
+
+```sh
+aiworker init --soul developer --token-file ./tmp/bootstrap.env
+TOKEN="$(cut -d= -f2 < ./tmp/bootstrap.env)"
+aiworker fleet pair --worker-url http://127.0.0.1:9217 --bootstrap-token "$TOKEN"
+```
+
+只有在私有终端中确实需要一次性明文显示时才使用 `--show-token`；该 flag 仍会同时写 token file。master key 默认只提示 `.env` 路径与离线备份要求，不打印值；备份 `.aiworker/local/.env`（或 user/explicit scope 的 `.env`）即可。
+
 ```sh
 # 进入要拥有这个 worker 的项目目录（不要求 git repo）
 cd ~/code/my-project
@@ -106,8 +116,8 @@ cd ~/code/my-project
 # 非交互或脚本里显式选择 Soul preset
 aiworker init --soul developer
 # → ✓ project-scope worker w_xxxxxxxxxxxx ready (~/code/my-project)
-# → AIWORKER_MASTER_KEY 写入 .aiworker/local/.env（仅首次输出明文）
-# → bootstrap token 打印（仅一次）
+# → AIWORKER_MASTER_KEY 写入 .aiworker/local/.env（chmod 0600；默认不打印明文）
+# → bootstrap token 写入 .aiworker/local/bootstrap-token.txt（chmod 0600；stdout 只显示 masked token）
 
 # 交互终端可省略 --soul，按 wizard 选择 preset 或 customize
 aiworker init
@@ -145,6 +155,14 @@ aiworker brain artifacts show src-orchestrator-service
 aiworker brain artifacts list --show-sensitive  # 操作者显式解锁
 
 # 3.2 审批 brain admission proposal（PLAN-101；--decided-by 必填）
+aiworker brain admission propose \
+  --id project-test-policy \
+  --kind memory-add \
+  --target memories/project-test-policy \
+  --summary "Record project test policy" \
+  --rollback "Remove memories/project-test-policy.md and MEMORY.md index entry" \
+  --soul developer \
+  --payload ./proposal-payload.json
 aiworker brain admission list --status pending
 aiworker brain admission show prop-2026-05-04-001
 aiworker brain admission approve prop-2026-05-04-001 --decided-by op-1 --reason "safe"
@@ -235,11 +253,12 @@ aiworker executor mcp add context7 \
 aiworker executor mcp add filesystem \
   --engine claude-code \
   --command npx \
+  --arg -y \
   --arg @modelcontextprotocol/server-filesystem \
   --arg .
 ```
 
-支持的 engine：`codex`、`claude-code`。当前 overlay scope 只支持 `project`，但外部 executor 运行时仍可能加载 user/host 级 MCP、skills、plugins、auth 和 native sessions。
+支持的 engine：`codex`、`claude-code`。`--arg <value>` 可重复，hyphenated value 如 `-y` 可直接作为 `--arg -y` 传入；`--arg=-y` 仍兼容。当前 overlay scope 只支持 `project`，但外部 executor 运行时仍可能加载 user/host 级 MCP、skills、plugins、auth 和 native sessions。
 Codex HTTP MCP 的 bearer token 使用 `--bearer-token-env-var <ENV_VAR>` 表达；
 AIWorker 不会把 secretRef hydrate 成明文写入 engine config。
 
@@ -282,7 +301,9 @@ aiworker executor select --engine codex --variant default --apply --if-match 1
 该命令解决的是 task executor selection；project executor overlay 的声明与
 best-effort projection 仍走 `aiworker executor mcp ...` 或只读
 `aiworker executor capability ...`。外部 executor 自己的 user/host 配置不会被
-`executor select` 修改。
+`executor select` 修改。`aiworker init` 打印的 suggested / also tested engine 是
+advisory onboarding hint，不是 enforced Soul compatibility matrix；`executor select`
+允许选择任一 supported engine。
 
 ### `aiworker executor doctor`
 
@@ -296,8 +317,8 @@ aiworker executor doctor --engine codex
 
 1. **binary likely ready**：每个声明的 engine 单独检查 CLI 是否在 `PATH`。缺失只是 `WARN` 而非 `FAIL`，operator 可以仍跑别的 task executor。
 2. **ambient runtime**：每个 engine 都会出一行 `INFO`，明确 user/host MCP、skills、plugins、auth、native sessions 由 engine 自己负责，AIWorker 不会枚举或屏蔽。
-3. **project overlay**：检查 `.aiworker/executor-capabilities.json` 的格式与 best-effort projection 兼容性；空 overlay 是 `WARN`，不阻塞。
-4. **blocking policy**：descriptor 不合法、`secretRef` 字段写成明文或 projection 命令失败才会让整体 `Status: FAIL`，退出码为 `1`。其它情况 `Status: PASS / WARN`，退出码 `0`。
+3. **project overlay**：检查 `.aiworker/executor-capabilities.json` 的格式与 best-effort projection 兼容性。fresh-init 的空 overlay 是 `PASS` 信息，因为 overlay hint 可选；一旦 operator 显式声明 engine 但留下空 MCP / capability 段，对应项才会成为 `WARN`。
+4. **blocking policy**：descriptor 不合法、`secretRef` 字段写成明文或 projection 命令失败才会让整体 `Status: FAIL`，退出码为 `1`。INFO 行不提升 status；其它情况 `Status: PASS / WARN`，退出码 `0`。顶部 banner 的 ERR/WARN 计数与 `Status:` 使用同一套 surfaced rubric。
 
 doctor 不会启动 MCP server 或 `listTools`，也不会探测 engine 的 login/auth 状态；这些由 engine 自身 CLI 负责。
 

@@ -57,7 +57,7 @@ function fakeWorkerInfo(workerId = 'w_test'): WorkerInfo {
     configVersion: 7,
     brains: [{ id: 'fs-primary', type: 'filesystem', status: 'healthy' }],
     brainSummary: {
-      admissions: { byStatus: {} },
+      admissions: { bypassRisk: { recentCount: 0, status: 'none' }, byStatus: {} },
       artifacts: { byStatus: {}, total: 0 },
       scopeManifest: { status: 'not-applicable' },
       decisionPipeline: {

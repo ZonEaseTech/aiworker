@@ -1,5 +1,48 @@
 # AIWorker Changelog
 
+## 2026-05-06 03:05 [completed] PLAN-120 — CLI onboarding polish for command groups and executor hints
+
+完成 PLAN-115 剩余 onboarding polish：BUG-073、TODO-026、BUG-051。
+
+- `apps/cli/src/help.ts` / `apps/cli/src/aiworker.ts`：新增 group-level help renderer；`aiworker soul --help`、`aiworker brain --help`、`aiworker executor --help` 等 unmatched command group 在 parse 前输出 scoped subcommands，不再先落回顶级 help。真实 unknown command 仍返回 usage error。
+- `apps/cli/src/aiworker.ts`：仅对 `executor mcp add` / `worker executor mcp add` 做定向 argv 预处理，把 `--arg -y` 保留为 stdio MCP arg value；其它命令的 unknown-option validation 不放宽。
+- `apps/cli/src/commands/worker/init.ts`：executor recommendation 文案改成 `Suggested` / `also tested` / `Advisory only`，明确不是 enforced Soul compatibility matrix。
+- `docs/cli.md` / `docs/executor-engines.md`：记录 `--arg -y` 支持、`--arg=-y` 兼容，以及 Soul recommendation advisory-only contract。
+- 测试：新增 group help snapshot、hyphenated MCP arg regression、init advisory wording assertions；聚焦测试 64 pass，CLI typecheck 与 lint 通过。
+
+PLAN-115 要求的后续 regression harness 入口已重开为 `TODO-027`。它是发布后/后续验证专项，不阻塞本轮 retained defects closeout。
+
+## 2026-05-06 02:35 [completed] PLAN-119 — Init secret handling and executor doctor status truthfulness
+
+按 PLAN-115 第 4 阶段完成 BUG-071 + BUG-072 收口。operator-facing status 与 first-run secret 输出现在使用更一致、更安全的默认 contract。
+
+- `apps/cli/src/commands/worker/executor.ts`：`aiworker executor doctor` 的正文 `Status:` 改用与顶部 banner 相同的 surfaced warning rubric；fresh-init optional overlay 不再让正文显示 WARN，但 default http stub / binary missing 等真实 warning 仍会保留 WARN。
+- `apps/cli/src/commands/worker/init.ts` + `apps/cli/src/context.ts`：`aiworker init` 静默 bootstrap worker identity，自行处理首次 token delivery；默认写 chmod 0600 `bootstrap-token.txt`，stdout 只显示 masked token、token file 路径、master-key `.env` 路径与离线备份提示；`--token-file` 覆盖路径，`--show-token` 才显示完整 token warning block。
+- `packages/core/src/worker/bootstrap/print.ts`：抽出 `markBootstrapShown`，保留容器 / supervisor 旧 stdout token scrape 路径，同时让 CLI init 可在安全输出后标记一次性 token 已交付。
+- `apps/cli/src/aiworker.ts` / `apps/cli/src/help.ts` / `docs/cli.md` / `docs/architecture.md` / `docs/executor-engines.md`：同步 `--token-file`、`--show-token`、token-file migration path、master-key backup 和 doctor PASS/WARN/FAIL rubric。
+- 测试：新增 init 默认 token file + masked stdout + no master-key value assertion、`--show-token` gated raw output assertion、BUG-071 selected-engine fresh-init snapshot；聚焦测试 37 pass，CLI/core typecheck 与 lint 通过。
+
+## 2026-05-06 01:55 [completed] PLAN-118 — Codex continuity and tool-call parity
+
+按 PLAN-115 第 3 阶段完成 BUG-069 + BUG-070 收口。Codex 显式 `chat-id` 连续性现在优先于 conversation classifier，当前 Codex app-server 的 tool/function/command frames 也会进入 AIWorker shared tool event surface。
+
+- `packages/core/src/worker/orchestrator/service.ts`：已有 Codex session entry 命中时，在 gateway reset / Worker Admin selected continuation 之后、classifier 之前直接继续当前 conversation，避免同一 `--chat-id` 被 classifier 拆成多个 AIWorker conversation。
+- `packages/core/src/worker/executor/engines/codex/types.ts` / `normalize.ts`：补齐当前协议 `rawResponseItem/completed` function_call / function_call_output 与 `item/started|completed` commandExecution 归一化；`exec_command` / `commandExecution` 映射为 `command_run` action，并保留 correlation id、arguments、status、tool_result。
+- `packages/core/test-fixtures/cli/codex-stub.mjs` + Codex tests：current protocol fixture 发出真实 probe 中观察到的 tool frames；normalizer / executor tests 覆盖 `tool_use` 与 `tool_result`。
+- `packages/core/src/worker/orchestrator/service.history.test.ts`：新增 5-turn Codex same chat-id regression，证明 1 个 conversation、消息累积、native engine binding 复用与更新；同步更新 stale binding 断言以反映 Codex session continuity bypass。
+- `docs/executor-engines.md`：记录 Codex shell exec 当前以 logical `exec_command` + actual `commandExecution` lifecycle 暴露，同一 correlation id 可供消费者合并。
+- 验证：聚焦 `bun test ./packages/core/src/worker/executor/engines/codex/normalize.test.ts ./packages/core/src/worker/executor/engines/codex/executor.test.ts ./packages/core/src/worker/orchestrator/service.history.test.ts` 74 pass；`bun run --filter '@zonease/aiworker-core' typecheck`、`bun run lint`、`bun run typecheck`、`bun run test` 全部 0 退出。
+
+## 2026-05-06 01:20 [completed] PLAN-117 — Admission governance bridge and bypass guardrail
+
+按 PLAN-115 第 2 阶段完成 BUG-068 + BUG-074 收口。`aiworker brain admission propose` 从 debug-only 提升为正式 pending proposal 入口；`aiworker init` 新生成的 `AGENT.md` / `SOUL.md` 明确长期记忆 / policy / brain skill proposal 必须走 AIWorker admission，executor native memory 不是 canonical Brain。
+
+- `apps/cli/src/aiworker.ts` / `apps/cli/src/help.ts` / `apps/cli/src/commands/worker/brain.ts`：去掉 `--i-know-this-is-debug` gate 与 debugWarning，保留同一 zod + worker.db `BrainAdmissionService.propose` 写入路径。
+- `apps/cli/src/commands/worker/init.ts`：新 scope 的 `AGENT.md` / `SOUL.md` 增加 Brain admission governance 指引和 CLI 示例。
+- `packages/core/src/worker/orchestrator/service.ts` + `packages/core/src/worker/brain/governance-bypass.ts`：每轮前后比较 admission count；assistant 声称 admission / 长期记忆已提交或已落盘但本轮 DB delta=0 时 emit `brain.governance.bypass_suspected`，并记录进程内最近 warnings。
+- `packages/core/src/worker/brain/summary.ts` + `packages/shared/src/fleet/worker-info.ts` + Worker Admin Brain panel：`brainSummary.admissions.bypassRisk` 暴露 observe-only 风险，pending admissions 空状态显示 engine-native memory bypass 提示。
+- 测试：扩展 admission CLI、init integration、orchestrator stub turn、brain summary、gateway WorkerInfo fixture；聚焦 CLI/core/API/Web 测试通过；`bun run typecheck`、`bun run lint`、`bun run test`、`bun run check`、`git diff --check` 全部通过。
+
 ## 2026-05-06 00:30 [completed] PLAN-116 — Truthfulness contract for orchestrator decision events and brain status surface
 
 按 DOC-006 指定的 P1 Truthfulness layer 切片完成 BUG-066 + BUG-067 收口。**heuristic + observe-only 仍是默认安全路径**，本 PLAN 不引入默认接管 LLM brain decision，只让 runtime / CLI / REST 如实暴露 source、mode、evaluator、fallback 诊断。

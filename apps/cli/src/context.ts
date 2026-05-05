@@ -31,6 +31,7 @@ import {
 export interface WorkerContext {
   workerId: string
   token: string
+  tokenJustMinted: boolean
   configVersion: number
   hydrated: WorkerConfig
   db: WorkerDatabase
@@ -87,6 +88,7 @@ export async function loadWorkerContext(options: { silent?: boolean } = {}): Pro
   return {
     workerId: identity.workerId,
     token: identity.token,
+    tokenJustMinted: identity.justMinted,
     configVersion: stored.version,
     hydrated,
     db,

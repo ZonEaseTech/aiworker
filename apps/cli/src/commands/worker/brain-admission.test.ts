@@ -370,7 +370,7 @@ describe('aiworker brain admission commands (PLAN-101)', () => {
     expect(await runBrainAdmissionApply('', { decidedBy: 'op-1' })).toBe(2)
   })
 
-  it('propose injects a fixture proposal end-to-end (TODO-009)', async () => {
+  it('propose creates a pending proposal end-to-end (BUG-068)', async () => {
     const { result, output } = await captureConsole(() => runBrainAdmissionPropose({
       id: 'p-propose-cli',
       target: 'memories/qa-fixture',
@@ -382,10 +382,10 @@ describe('aiworker brain admission commands (PLAN-101)', () => {
       confidence: 0.5,
     }))
     expect(result).toBe(0)
-    const parsed = JSON.parse(output) as { proposal: { id: string, status: string }, debugWarning: string }
+    const parsed = JSON.parse(output) as { proposal: { id: string, status: string }, debugWarning?: string }
     expect(parsed.proposal.id).toBe('p-propose-cli')
     expect(parsed.proposal.status).toBe('pending')
-    expect(parsed.debugWarning).toContain('debug-only')
+    expect(parsed.debugWarning).toBeUndefined()
     expect(service.requireById('p-propose-cli').summary).toBe('CLI debug propose smoke')
   })
 

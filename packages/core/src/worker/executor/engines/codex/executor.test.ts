@@ -103,6 +103,10 @@ describe('CodexExecutor — smoke over stub app-server', () => {
     expect(textDeltas).toEqual(['BUG', '053', '_MARK', 'ER', '_', '202', '605', '04'])
     expect(textDeltas.join('')).toBe('BUG053_MARKER_20260504')
     expect(textDeltas).not.toContain('BUG053_MARKER_20260504')
+    const toolUses = events.filter(e => e.type === 'tool_use')
+    expect(toolUses.some(e => e.type === 'tool_use' && e.name === 'exec_command' && e.id === 'call_exec')).toBe(true)
+    expect(toolUses.some(e => e.type === 'tool_use' && e.name === 'commandExecution' && e.id === 'call_exec' && e.status === 'running')).toBe(true)
+    expect(events.some(e => e.type === 'tool_result' && e.id === 'call_exec')).toBe(true)
     expect(events).toContainEqual({
       type: 'token_usage',
       usage: { inputTokens: 12, outputTokens: 9 },

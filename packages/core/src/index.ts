@@ -20,6 +20,7 @@ export {
   type IdentityLoadResult,
   loadOrMintIdentity,
   loadOrSeedConfig,
+  markBootstrapShown,
   mintApiToken,
   mintWorkerId,
   printBootstrapIfJustMinted,

@@ -267,14 +267,14 @@ Project Brain 由五类资产组成。命名上 *brain memory / brain skill / pr
    - `summary`：一句话给 operator 看的人话描述。
 2. **Storage 选型**（已实现 MVP）：admission proposal 与 audit 记录持久化到 worker.db（**不**进 fleet.db），通过 `brain_admission_proposals` + `brain_admission_decisions`；fleet 视角通过 worker REST 间接读取，不在 fleet.db 复制 proposal 全文。后续 schema migration 仍走 `packages/storage-sqlite/drizzle/worker/*` 单独 PMA。
 3. **Approval surface**（已实现，PLAN-101 / PLAN-103）：
-   - CLI: `aiworker brain admission list/show/approve/reject/apply`（root + worker namespace 双注册），`apply` 默认 dry-run；`--decided-by` 必填用于 audit；`--show-sensitive` 才显示 evidence / payload 中 secret-like 字段。
+   - CLI: `aiworker brain admission propose/list/show/approve/reject/apply`（root + worker namespace 双注册）。`propose` 是正式 LLM/operator-facing pending proposal 入口；`apply` 默认 dry-run；`--decided-by` 必填用于 audit；`--show-sensitive` 才显示 evidence / payload 中 secret-like 字段。
    - API: `/api/worker/brain/{summary,admission*,artifacts*}` REST endpoints，bearer-auth；`POST /admission/:id/{approve,reject,apply}` 写端点，`apply` 默认 `commit:false`。
    - UI: Worker Admin `/brain` 视图列出 scope manifest 摘要、pending admissions（带 approve/reject/apply 按钮）、redacted artifact 列表。Fleet UI 不持有 admission / artifact state，仅在 worker detail 上挂 “Open worker Brain admin” 深链。
 4. **唯一允许的免审写入**：pre-compaction memory flush（runtime 把易失 memory rollup 到 `MEMORY.md` 的批量收口）继续作为已批准的 runtime 写入路径；任何其它 mutating brain CLI/API/UI 命令必须先经过 admission flow 接入。
 
 **MVP materializer 范围（PLAN-101）**：`apply` 仅对 `kind === 'memory-add'` 自动写 `<brainHome>/MEMORY.md` 或 `<brainHome>/memories/<topic>.md`；其它 proposal kind（`brain-skill-add`、`policy-update` 等）进表后可 approve，但 `apply` 返回 `unsupported`，留待人工或后续 plan 拓展。
 
-红线：admission flow 不复用 executor MCP / engine plugin / engine skill / project executor overlay 通路；命名上严格使用 `brain admission` / `brain memory` / `brain skill` / `project policy`，避免与 `executor capability` / `executor mcp` 重名。
+红线：admission flow 不复用 executor MCP / engine plugin / engine skill / project executor overlay 通路；命名上严格使用 `brain admission` / `brain memory` / `brain skill` / `project policy`，避免与 `executor capability` / `executor mcp` 重名。Worker 会 observe-only 检测“assistant 声称已提交 admission / 已写入长期记忆但本轮 worker.db admission row 未增加”的风险，并通过 `brain.governance.bypass_suspected` 事件与 `brainSummary.admissions.bypassRisk` 暴露；这不是成功写入，也不会把 engine-native memory 采信为 canonical Brain。
 
 ### Worker/Fleet aggregation surface
 
@@ -436,9 +436,9 @@ Caddy :80 (纯反代)  ──►  127.0.0.1:9218  =  aiworker-gateway 容器
 
 ## 身份与配置自举
 
-- Worker 首次启动在容器内 `mintWorkerId + mintApiToken`（`worker/bootstrap/identity.ts`），token 明文只打印一次（`[worker] AIWORKER_BOOTSTRAP_TOKEN=wtk_...`），密文写入 `worker_identity` 后不再重新打印。
+- Worker 首次启动在容器内 `mintWorkerId + mintApiToken`（`worker/bootstrap/identity.ts`），token 密文写入 `worker_identity` 后不再重新打印。容器 / supervisor bootstrap 路径仍可把 `[worker] AIWORKER_BOOTSTRAP_TOKEN=wtk_...` 明文日志作为一次性 pair 输入；交互式 `aiworker init` 默认改为把完整 token 写入 chmod 0600 token file，并在 stdout 只显示 masked token 与文件路径，`--show-token` 才会显式打印明文。
 - worker 进 fleet 的四条路径（`registered_workers.addedBy` 对应四态）：
-  1. **手动 pair**（`aiworker fleet pair --url ws://... --worker-url http://... --bootstrap-token wtk_...`）：操作员从 worker stdout 抓 bootstrap 日志行 → gateway 调 worker `/info` 校验 → 加密存 fleet.db → 返回 deviceToken 写回 `~/.aiworker/aiworker.json`。**inbound** 方向：gateway 必须能 HTTP 回拨 worker `/info`，因此 worker 在 NAT/防火墙后会失败。`addedBy='manual'`。
+  1. **手动 pair**（`aiworker fleet pair --url ws://... --worker-url http://... --bootstrap-token wtk_...`）：容器 / supervisor 场景可从 worker stdout 抓一次性 bootstrap 日志行；交互式 `aiworker init` 场景默认从 token file 读取完整 token → gateway 调 worker `/info` 校验 → 加密存 fleet.db → 返回 deviceToken 写回 `~/.aiworker/aiworker.json`。**inbound** 方向：gateway 必须能 HTTP 回拨 worker `/info`，因此 worker 在 NAT/防火墙后会失败。`addedBy='manual'`。
   2. **自动 launch**（`aiworker fleet launch --display-name foo`）：需 `AIWORKER_GATEWAY_CAN_LAUNCH=true`；gateway supervisor 拉 worker 容器、scrape stdout、自动 pair。仅限 docker 形态、与 gateway 同主机。`addedBy='launch-local'`。
   3. **自助 enroll**（PLAN-018 / FEAT-024）：worker 容器 env 同时设 `AIWORKER_GATEWAY_URL` + `AIWORKER_JOIN_TOKEN`，`aiworker serve` bootstrap 完成后用 outbound WS 主动拨 gateway `/ws`，并把 enroll 块（`mode='join-token'` + `joinToken` + 自身 mint 的 `apiToken` + 可选 `displayName`）塞进 `connect` 帧第一帧；gateway 验 `joinToken` 后直接 upsert fleet.db 行。**outbound-only**，worker 不需要任何 inbound 端口暴露——是 NAT 后部署、批量 docker / k8s 节点、residential network 上 worker 的标准路径。`addedBy='self-enroll'`。
   4. **OTP-attended enroll**（PLAN-019 / FEAT-026）：worker 只设 `AIWORKER_GATEWAY_URL`（无 `AIWORKER_JOIN_TOKEN`）或显式 `AIWORKER_ENROLL_MODE=otp`，`aiworker serve` bootstrap 后用 outbound WS 拨 gateway `/enroll-ws`（不同于 self-enroll 的 `/ws`），connect 帧 `enroll.mode='otp'` 带自身 `apiToken` + 可选 `displayName`，**不**带 join token；gateway 在 `apps/gateway/src/registry/pending.ts::PendingEnrollmentRegistry` 内存队列里挂起，回推 `enrollment.otp` 事件给 worker，worker 把 8 字符 OTP（`XXXX-YYYY`，去歧义 30 字符 alphabet）打到 stdout 等待人审。operator 在 `/ws` 通道上 `aiworker fleet enroll list / approve <otp> / reject <otp>` 决定去留，approve 时才 `upsertEnrolledWorker(addedBy='otp')` 落 fleet.db 并通过原 ws 推 `enrollment.approved` 事件回 worker。`addedBy='otp'`。**Worker 部署方完全不需要持有任何 fleet 凭证**——`/enroll-ws` 端 Caddy 不挂 basicauth，OTP submit 在 operator approve 前不会落库。

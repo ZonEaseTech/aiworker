@@ -145,3 +145,7 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-114 Brain Governance Kernel 决策落盘**](PLAN-114.md) `2026-05-05`
 - [x] [**PLAN-115 Brain Governance Kernel 决策后的 backlog reset**](PLAN-115.md) `2026-05-05`
 - [x] [**PLAN-116 Truthfulness contract for orchestrator decision events and brain status surface**](PLAN-116.md) `2026-05-06`
+- [x] [**PLAN-117 Admission governance bridge and bypass guardrail**](PLAN-117.md) `2026-05-06`
+- [x] [**PLAN-118 Codex continuity and tool-call parity**](PLAN-118.md) `2026-05-06`
+- [x] [**PLAN-119 Init secret handling and executor doctor status truthfulness**](PLAN-119.md) `2026-05-06`
+- [x] [**PLAN-120 CLI onboarding polish for command groups and executor hints**](PLAN-120.md) `2026-05-06`

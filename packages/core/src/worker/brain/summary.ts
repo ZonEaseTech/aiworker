@@ -9,6 +9,7 @@ import { brainAdmissionProposals, brainArtifacts, getWorkerDb } from '@zonease/a
 import { sql } from 'drizzle-orm'
 
 import { getDecisionPipelineSnapshot } from '../orchestrator/decision-pipeline-stats'
+import { getBrainGovernanceBypassSnapshot } from './governance-bypass'
 
 /** PLAN-116 decision pipeline config view used by brainSummary builders. */
 export interface BrainSummaryDecisionPipelineConfig {
@@ -69,7 +70,10 @@ function buildAdmissionSummary(): WorkerInfoBrainSummary['admissions'] {
     .limit(1)
     .all()
   const lastUpdatedAt = latest[0]?.updatedAt
-  const result: WorkerInfoBrainSummary['admissions'] = { byStatus }
+  const result: WorkerInfoBrainSummary['admissions'] = {
+    bypassRisk: getBrainGovernanceBypassSnapshot(),
+    byStatus,
+  }
   if (lastUpdatedAt !== undefined)
     result.lastUpdatedAt = lastUpdatedAt
   return result

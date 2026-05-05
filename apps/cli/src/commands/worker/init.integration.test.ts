@@ -175,7 +175,8 @@ describe('aiworker init / scope project placement', () => {
       expect(globalInit.exitCode).toBe(0)
       expect(globalInit.output).toContain('[aiworker init] next steps')
       expect(globalInit.output).toContain('aiworker executor select --engine <YOUR_ENGINE> --apply')
-      expect(globalInit.output).toContain('Recommended for general use')
+      expect(globalInit.output).toContain('Suggested for general use')
+      expect(globalInit.output).toContain('Advisory only')
       expect(globalInit.output).toContain('Candidates: claude-code | codex | acp | cursor | mcp | http')
       expect(globalInit.output).toContain('aiworker run --message "hello" --dry-run')
       // User-scope next-steps hint at executor doctor without forcing a single engine.
@@ -189,7 +190,8 @@ describe('aiworker init / scope project placement', () => {
       expect(explicitInit.exitCode).toBe(0)
       expect(explicitInit.output).toContain('[aiworker init] next steps')
       expect(explicitInit.output).toContain('aiworker executor select --engine <YOUR_ENGINE> --apply')
-      expect(explicitInit.output).toContain('Recommended for general use')
+      expect(explicitInit.output).toContain('Suggested for general use')
+      expect(explicitInit.output).toContain('Advisory only')
       expect(explicitInit.output).toContain('aiworker run --message "hello" --dry-run')
     })
   })
@@ -211,7 +213,8 @@ describe('aiworker init / scope project placement', () => {
       expect(result.output).toContain('aiworker soul show developer')
       expect(result.output).toContain('aiworker doctor')
       expect(result.output).toContain('aiworker executor doctor --engine <YOUR_ENGINE>')
-      expect(result.output).toContain('Recommended for Soul `developer`')
+      expect(result.output).toContain('Suggested for Soul `developer`')
+      expect(result.output).toContain('Advisory only')
       expect(result.output).toContain('Candidates: claude-code | codex | acp | cursor | mcp | http')
       expect(result.output).toContain('aiworker run --message "hello" --dry-run')
       expect(result.output).toContain('aiworker up --port 9217')
@@ -224,6 +227,21 @@ describe('aiworker init / scope project placement', () => {
       expect(await exists(path.join(project, '.aiworker', 'scope.json'))).toBe(true)
       expect(await exists(path.join(project, '.aiworker', 'local', '.env'))).toBe(true)
       expect(await exists(path.join(project, '.aiworker', 'local', 'worker.db'))).toBe(true)
+      const tokenFile = path.join(project, '.aiworker', 'local', 'bootstrap-token.txt')
+      expect(await exists(tokenFile)).toBe(true)
+      const tokenStat = await stat(tokenFile)
+      expect(tokenStat.mode & 0o777).toBe(0o600)
+      const tokenText = await readFile(tokenFile, 'utf8')
+      const token = /^AIWORKER_BOOTSTRAP_TOKEN=(wtk_[\w-]+)$/m.exec(tokenText)?.[1]
+      expect(token).toBeDefined()
+      expect(result.output).toContain('Raw token stdout: hidden by default')
+      expect(result.output).toContain('Bootstrap token : wtk_')
+      expect(result.output).not.toContain(`AIWORKER_BOOTSTRAP_TOKEN=${token}`)
+      const dotenv = await readFile(path.join(project, '.aiworker', 'local', '.env'), 'utf8')
+      const masterKey = /^AIWORKER_MASTER_KEY=([0-9a-f]{64})$/m.exec(dotenv)?.[1]
+      expect(masterKey).toBeDefined()
+      expect(result.output).not.toContain(`AIWORKER_MASTER_KEY=${masterKey}`)
+      expect(result.output).not.toContain(masterKey!)
       expect(await exists(path.join(project, '.aiworker', 'local', 'workers'))).toBe(false)
       expect(await exists(path.join(home, '.aiworker', '.env'))).toBe(false)
       expect(await exists(path.join(home, '.aiworker', 'worker.db'))).toBe(false)
@@ -357,6 +375,28 @@ describe('aiworker init / scope project placement', () => {
     })
   })
 
+  it('init --token-file writes the token to the requested file and --show-token gates raw stdout', async () => {
+    await withCliIntegrationCleanup(async (cleanup) => {
+      const root = await cleanup.makeTempDir('aiworker-cli-init-token-file-')
+      const home = await cleanup.makeTempDir('aiworker-cli-init-token-file-home-')
+      const project = path.join(root, 'repo')
+      const tokenFile = path.join(root, 'secrets', 'bootstrap.env')
+      await mkdir(path.join(project, '.git'), { recursive: true })
+
+      const result = await runCli(cleanup, ['init', '--soul', 'developer', '--token-file', tokenFile, '--show-token'], project, home)
+
+      expect(result.exitCode).toBe(0)
+      const tokenStat = await stat(tokenFile)
+      expect(tokenStat.mode & 0o777).toBe(0o600)
+      const tokenText = await readFile(tokenFile, 'utf8')
+      const token = /^AIWORKER_BOOTSTRAP_TOKEN=(wtk_[\w-]+)$/m.exec(tokenText)?.[1]
+      expect(token).toBeDefined()
+      expect(result.output).toContain('STORE THIS NOW')
+      expect(result.output).toContain(`AIWORKER_BOOTSTRAP_TOKEN=${token}`)
+      expect(result.output).toContain(tokenFile)
+    })
+  })
+
   it('all built-in Soul presets preview and materialize matching capability drafts', async () => {
     await withCliIntegrationCleanup(async (cleanup) => {
       const root = await cleanup.makeTempDir('aiworker-cli-init-soul-matrix-')
@@ -402,6 +442,9 @@ describe('aiworker init / scope project placement', () => {
 
         expect(soul).toContain(`# ${preset.label} Soul`)
         expect(agent).toContain(`# ${preset.label} Worker`)
+        expect(soul).toContain('## Brain admission governance')
+        expect(agent).toContain('aiworker brain admission propose')
+        expect(agent).toContain('Executor native memory is not canonical AIWorker Brain')
         expect(policy.soul.preset).toBe(preset.id)
         expect(toolsets.soul).toBe(preset.id)
         expect(toolsets.defaultToolsets).toEqual([...preset.toolsets])

@@ -2,6 +2,11 @@ import type { AgentEvent, AgentFinishReason, ToolAction } from '@zonease/aiworke
 import type { JsonRpcNotification } from '../acp/types'
 import type {
   CodexAssistantMessageEvent,
+  CodexCurrentCommandExecutionItem,
+  CodexCurrentItemEvent,
+  CodexCurrentRawFunctionCallItem,
+  CodexCurrentRawFunctionCallOutputItem,
+  CodexCurrentRawResponseItemEvent,
   CodexStopEvent,
   CodexStopReason,
   CodexThinkingEvent,
@@ -41,6 +46,12 @@ export function normalizeCodexNotification(notification: JsonRpcNotification): A
     case 'item/reasoning/textDelta':
     case 'item/reasoning/summaryTextDelta':
       return normalizeThinking(params as { delta?: string })
+    case 'rawResponseItem/completed':
+      return normalizeCurrentRawResponseItem(params as unknown as CodexCurrentRawResponseItemEvent)
+    case 'item/started':
+      return normalizeCurrentItem(params as unknown as CodexCurrentItemEvent, 'started')
+    case 'item/completed':
+      return normalizeCurrentItem(params as unknown as CodexCurrentItemEvent, 'completed')
     case 'thread/tokenUsage/updated':
       return normalizeCurrentTokenUsage(params)
     case 'turn/completed':
@@ -101,6 +112,89 @@ function normalizeToolResult(event: CodexToolResultEvent): AgentEvent[] {
     content: typeof event.content === 'string' ? event.content : '',
     ...(event.isError === true ? { isError: true } : {}),
   }]
+}
+
+function normalizeCurrentRawResponseItem(event: CodexCurrentRawResponseItemEvent): AgentEvent[] {
+  const item = event.item
+  if (!item || typeof item !== 'object')
+    return []
+  if (item.type === 'function_call')
+    return normalizeCurrentFunctionCall(item as CodexCurrentRawFunctionCallItem)
+  if (item.type === 'function_call_output')
+    return normalizeCurrentFunctionCallOutput(item as CodexCurrentRawFunctionCallOutputItem)
+  return []
+}
+
+function normalizeCurrentFunctionCall(item: CodexCurrentRawFunctionCallItem): AgentEvent[] {
+  const id = pickText(item.call_id, item.id)
+  const name = item.name
+  if (!id || typeof name !== 'string' || name.length === 0)
+    return []
+  const args = parseToolArguments(item.arguments)
+  return [{
+    type: 'tool_use',
+    id,
+    name,
+    arguments: args,
+    action: inferToolAction(name, args),
+    status: 'pending',
+  }]
+}
+
+function normalizeCurrentFunctionCallOutput(item: CodexCurrentRawFunctionCallOutputItem): AgentEvent[] {
+  const id = pickText(item.call_id, item.id)
+  if (!id)
+    return []
+  return [{
+    type: 'tool_result',
+    id,
+    name: '',
+    content: typeof item.output === 'string' ? item.output : '',
+  }]
+}
+
+function normalizeCurrentItem(event: CodexCurrentItemEvent, phase: 'started' | 'completed'): AgentEvent[] {
+  const item = event.item
+  if (!item || typeof item !== 'object' || item.type !== 'commandExecution')
+    return []
+  return normalizeCurrentCommandExecution(item as CodexCurrentCommandExecutionItem, phase)
+}
+
+function normalizeCurrentCommandExecution(item: CodexCurrentCommandExecutionItem, phase: 'started' | 'completed'): AgentEvent[] {
+  const id = item.id
+  if (typeof id !== 'string' || id.length === 0)
+    return []
+  const args = {
+    ...(typeof item.command === 'string' ? { command: item.command } : {}),
+    ...(typeof item.cwd === 'string' ? { cwd: item.cwd } : {}),
+    ...(typeof item.source === 'string' ? { source: item.source } : {}),
+    ...(typeof item.status === 'string' ? { status: item.status } : {}),
+    ...(typeof item.exitCode === 'number' ? { exitCode: item.exitCode } : {}),
+  }
+  const toolUse: AgentEvent = {
+    type: 'tool_use',
+    id,
+    name: 'commandExecution',
+    arguments: args,
+    action: inferToolAction('commandExecution', args),
+    status: phase === 'started' ? 'running' : mapToolStatus(item.status ?? 'completed'),
+  }
+  if (phase === 'started')
+    return [toolUse]
+  const contentParts = [
+    typeof item.aggregatedOutput === 'string' ? item.aggregatedOutput : '',
+    typeof item.exitCode === 'number' ? `exitCode=${item.exitCode}` : '',
+  ].filter(Boolean)
+  return [
+    toolUse,
+    {
+      type: 'tool_result',
+      id,
+      name: 'commandExecution',
+      content: contentParts.join('\n'),
+      ...(item.status === 'failed' || (typeof item.exitCode === 'number' && item.exitCode !== 0) ? { isError: true } : {}),
+    },
+  ]
 }
 
 function normalizeStop(event: CodexStopEvent): AgentEvent[] {
@@ -181,7 +275,7 @@ export function inferToolAction(name: string, input: Record<string, unknown>): T
     const diff = buildEditDiff(input)
     return { kind: 'file_edit', path: rawPath, ...(diff ? { diff } : {}) }
   }
-  if (lower === 'bash' || lower === 'run_shell' || lower === 'shell' || lower === 'exec') {
+  if (lower === 'bash' || lower === 'run_shell' || lower === 'shell' || lower === 'exec' || lower === 'exec_command' || lower === 'commandexecution') {
     const command = pickString(input, ['command', 'cmd', 'script'])
     return { kind: 'command_run', command }
   }
@@ -219,6 +313,7 @@ function mapToolStatus(status: string): 'pending' | 'running' | 'success' | 'fai
     case 'pending':
       return 'pending'
     case 'in_progress':
+    case 'inProgress':
       return 'running'
     case 'completed':
       return 'success'
@@ -246,6 +341,22 @@ function pickString(input: Record<string, unknown>, keys: readonly string[]): st
       return v
   }
   return ''
+}
+
+function parseToolArguments(value: string | Record<string, unknown> | undefined): Record<string, unknown> {
+  if (value === undefined)
+    return {}
+  if (typeof value !== 'string')
+    return value
+  try {
+    const parsed = JSON.parse(value) as unknown
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed))
+      return parsed as Record<string, unknown>
+  }
+  catch {
+    return { arguments: value }
+  }
+  return { arguments: value }
 }
 
 function extractErrorMessage(value: unknown): string | undefined {

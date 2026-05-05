@@ -148,6 +148,7 @@ function statusBadgeVariant(status: BrainAdmissionProposal['status']): 'default'
 
 function AdmissionsCard() {
   const [decidedBy, setDecidedBy] = useState('')
+  const summary = useBrainSummary()
   const admissions = useAdmissions({ status: 'pending' })
   const approve = useApproveAdmission()
   const reject = useRejectAdmission()
@@ -177,7 +178,15 @@ function AdmissionsCard() {
         </p>
       )}
       {!admissions.isLoading && proposals.length === 0 && (
-        <p className="text-sm text-muted-foreground">暂无 pending 的 admission proposal。</p>
+        <div className="space-y-2 text-sm text-muted-foreground">
+          <p>暂无 pending 的 admission proposal。</p>
+          {summary.data?.brainSummary.admissions.bypassRisk.status === 'suspected' && (
+            <p className="text-warning">
+              最近有回复声称已提交 admission 或已写入长期记忆，但 AIWorker admission
+              数据库没有新增记录；外部 executor 可能写入了自己的 native memory。
+            </p>
+          )}
+        </div>
       )}
       <ul className="space-y-3">
         {proposals.map(p => (

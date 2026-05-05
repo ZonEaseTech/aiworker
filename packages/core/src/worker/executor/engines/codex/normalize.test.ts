@@ -162,6 +162,119 @@ describe('normalizeCodexNotification', () => {
     expect(out).toEqual([{ type: 'assistant_message_delta', delta: 'OK' }])
   })
 
+  it('turns current raw function_call into tool_use with parsed arguments', () => {
+    const out = normalizeCodexNotification({
+      jsonrpc: '2.0',
+      method: 'rawResponseItem/completed',
+      params: {
+        item: {
+          type: 'function_call',
+          name: 'exec_command',
+          arguments: '{"cmd":"printf hi","workdir":"/tmp"}',
+          call_id: 'call_exec',
+        },
+      },
+    })
+    expect(out).toEqual([{
+      type: 'tool_use',
+      id: 'call_exec',
+      name: 'exec_command',
+      arguments: { cmd: 'printf hi', workdir: '/tmp' },
+      action: { kind: 'command_run', command: 'printf hi' },
+      status: 'pending',
+    }])
+  })
+
+  it('turns current commandExecution start into command_run tool_use', () => {
+    const out = normalizeCodexNotification({
+      jsonrpc: '2.0',
+      method: 'item/started',
+      params: {
+        item: {
+          type: 'commandExecution',
+          id: 'call_exec',
+          command: '/bin/bash -lc printf\\ hi',
+          cwd: '/tmp',
+          source: 'unifiedExecStartup',
+          status: 'inProgress',
+        },
+      },
+    })
+    expect(out).toEqual([{
+      type: 'tool_use',
+      id: 'call_exec',
+      name: 'commandExecution',
+      arguments: {
+        command: '/bin/bash -lc printf\\ hi',
+        cwd: '/tmp',
+        source: 'unifiedExecStartup',
+        status: 'inProgress',
+      },
+      action: { kind: 'command_run', command: '/bin/bash -lc printf\\ hi' },
+      status: 'running',
+    }])
+  })
+
+  it('turns current commandExecution completion into tool_use lifecycle and tool_result', () => {
+    const out = normalizeCodexNotification({
+      jsonrpc: '2.0',
+      method: 'item/completed',
+      params: {
+        item: {
+          type: 'commandExecution',
+          id: 'call_exec',
+          command: '/bin/bash -lc false',
+          cwd: '/tmp',
+          status: 'failed',
+          exitCode: 1,
+          aggregatedOutput: 'boom',
+        },
+      },
+    })
+    expect(out).toEqual([
+      {
+        type: 'tool_use',
+        id: 'call_exec',
+        name: 'commandExecution',
+        arguments: {
+          command: '/bin/bash -lc false',
+          cwd: '/tmp',
+          status: 'failed',
+          exitCode: 1,
+        },
+        action: { kind: 'command_run', command: '/bin/bash -lc false' },
+        status: 'failed',
+      },
+      {
+        type: 'tool_result',
+        id: 'call_exec',
+        name: 'commandExecution',
+        content: 'boom\nexitCode=1',
+        isError: true,
+      },
+    ])
+  })
+
+  it('turns current function_call_output into paired tool_result', () => {
+    const out = normalizeCodexNotification({
+      jsonrpc: '2.0',
+      method: 'rawResponseItem/completed',
+      params: {
+        item: {
+          type: 'function_call_output',
+          call_id: 'call_exec',
+          output: 'done',
+        },
+      },
+    })
+    expect(out).toEqual([{
+      type: 'tool_result',
+      id: 'call_exec',
+      name: '',
+      content: 'done',
+    }])
+  })
+
   it('turns current thread/tokenUsage/updated into token_usage', () => {
     const out = normalizeCodexNotification({
       jsonrpc: '2.0',

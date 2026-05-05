@@ -7,4 +7,4 @@ export {
   mintApiToken,
   mintWorkerId,
 } from './identity'
-export { printBootstrapIfJustMinted } from './print'
+export { markBootstrapShown, printBootstrapIfJustMinted } from './print'

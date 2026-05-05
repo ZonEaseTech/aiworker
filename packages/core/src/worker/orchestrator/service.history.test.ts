@@ -1042,7 +1042,6 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
     const secondBinding = { protocol: 'current', threadId: 'thread-2' }
     const executor = scriptedExecutor([
       { engine: 'codex', binding: firstBinding, text: 'first response' },
-      '{"continue":true,"reason":"same topic"}',
       { engine: 'codex', binding: secondBinding, text: 'second response' },
     ])
     const orch = new Orchestrator({
@@ -1062,9 +1061,49 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
 
     await orch.ingest(envelope('second turn with native binding'))
     expect(executor.inputs[0]?.engineBinding).toBeUndefined()
-    expect(executor.inputs[1]?.engineBinding).toBeUndefined()
-    expect(executor.inputs[2]?.engineBinding).toEqual(firstBinding)
+    expect(executor.inputs[1]?.engineBinding).toEqual(firstBinding)
     expect(getSessionEntry(sessionKey)?.engineBindings).toEqual({ codex: secondBinding })
+  })
+
+  it('keeps one Codex conversation for five sequential turns under the same chat-id', async () => {
+    const bindings = Array.from({ length: 5 }, (_, index) => ({ protocol: 'current', threadId: `thread-${index + 1}` }))
+    const executor = scriptedExecutor(bindings.map((binding, index) => ({
+      engine: 'codex',
+      binding,
+      text: index === 3 ? 'recall MARKER_DEV_CODEX_T1=bravo-5108' : `turn ${index + 1} response`,
+    })))
+    const orch = new Orchestrator({
+      config: buildConfig({ executor: { engine: 'codex', variant: 'default' } }),
+      brain: stubBrain(),
+      executor,
+      bus: silentBus(),
+      workerId: 'w_history_test',
+      workspaces,
+      processes,
+      approvals: new ApprovalStore(),
+    })
+
+    for (let i = 0; i < 5; i++) {
+      await orch.ingest(envelope(i === 0
+        ? 'Remember marker MARKER_DEV_CODEX_T1=bravo-5108.'
+        : `turn ${i + 1}: continue the same codex chat-id`))
+    }
+
+    const sessionKey = resolveSessionKey(envelope())
+    const entry = getSessionEntry(sessionKey)
+    expect(entry?.currentConversationId).toBeDefined()
+    expect(entry?.engineBindings).toEqual({ codex: bindings.at(-1)! })
+    const db = getWorkerDb()
+    const rows = db.select().from(conversations).where(eq(conversations.chatId, 'chat-history')).all()
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.id).toBe(entry!.currentConversationId)
+    const transcript = db.select().from(messages).where(eq(messages.conversationId, entry!.currentConversationId)).all()
+    expect(transcript.filter(row => row.role === 'user')).toHaveLength(5)
+    expect(transcript.filter(row => row.role === 'assistant')).toHaveLength(5)
+    expect(executor.inputs).toHaveLength(5)
+    expect(executor.inputs[0]?.engineBinding).toBeUndefined()
+    expect(executor.inputs[1]?.engineBinding).toEqual(bindings[0])
+    expect(executor.inputs[4]?.engineBinding).toEqual(bindings[3])
   })
 
   it('persists submitted task lifecycle from running to succeeded', async () => {
@@ -1249,7 +1288,6 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
     const freshBinding = { protocol: 'current', threadId: 'fresh-thread' }
     const executor = scriptedExecutor([
       { engine: 'codex', binding: staleBinding, text: 'first response' },
-      '{"continue":true,"reason":"same topic"}',
       { engine: 'codex', binding: null, error: 'native thread not found' },
       { engine: 'codex', binding: freshBinding, text: 'recovered response' },
     ])
@@ -1268,8 +1306,8 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
     await orch.ingest(envelope('first native turn'))
     await orch.ingest(envelope('second native turn'))
 
-    expect(executor.inputs[2]?.engineBinding).toEqual(staleBinding)
-    expect(executor.inputs[3]?.engineBinding).toBeUndefined()
+    expect(executor.inputs[1]?.engineBinding).toEqual(staleBinding)
+    expect(executor.inputs[2]?.engineBinding).toBeUndefined()
     expect(getSessionEntry(sessionKey)?.engineBindings).toEqual({ codex: freshBinding })
 
     const conversationId = getSessionEntry(sessionKey)!.currentConversationId

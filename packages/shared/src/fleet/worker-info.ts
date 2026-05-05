@@ -69,6 +69,17 @@ export interface WorkerInfoBrainSummary {
     byStatus: Record<string, number>
     /** ISO timestamp of the most recent proposal `updatedAt`, if any. */
     lastUpdatedAt?: string
+    /**
+     * Observe-only governance warning. Set when a recent assistant reply
+     * claimed durable Brain admission / memory success but no AIWorker
+     * admission row was created in that turn.
+     */
+    bypassRisk: {
+      status: 'none' | 'suspected'
+      recentCount: number
+      lastDetectedAt?: string
+      reason?: string
+    }
   }
   /**
    * Decision pipeline truthfulness snapshot (PLAN-116 / BUG-066 / BUG-067).

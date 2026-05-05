@@ -272,8 +272,6 @@ export async function runExecutorDoctor(options: { engine?: string } = {}): Prom
       path: `engines.${item}`,
     }))
   const allWarnings = [...warnings, ...binaryWarnings]
-  const status = issues.length > 0 ? 'FAIL' : allWarnings.length > 0 ? 'WARN' : 'PASS'
-
   // TODO-015: detect fresh-init project so executor doctor can suppress
   // overlay-empty warnings that fire on every default `aiworker init`.
   // Fresh-init = scope.json exists AND no engine has been declared in the
@@ -287,6 +285,9 @@ export async function runExecutorDoctor(options: { engine?: string } = {}): Prom
   const surfacedStatus = issues.length > 0
     ? 'FAIL'
     : surfacedWarnings.length > 0 ? 'WARN' : 'OK'
+  const sectionStatus = issues.length > 0
+    ? 'FAIL'
+    : surfacedWarnings.length > 0 ? 'WARN' : 'PASS'
   const freshSuffix = freshInit ? ' (fresh-init defaults; overlay declarations are optional)' : ''
 
   // TODO-015: leading summary line so operators have a top-level verdict
@@ -295,7 +296,7 @@ export async function runExecutorDoctor(options: { engine?: string } = {}): Prom
   process.stdout.write('[aiworker executor doctor] project executor overlay validation\n')
   process.stdout.write(`Root  : ${context.value.root}\n`)
   process.stdout.write(`File  : ${context.value.manifestPath}\n`)
-  process.stdout.write(`Status: ${status}\n`)
+  process.stdout.write(`Status: ${sectionStatus}\n`)
   printConfiguredExecutor(process.stdout.write.bind(process.stdout), configuredExecutor)
   const manifestSummary = summarizeManifest(manifestResult.manifest)
   if (manifestSummary.empty && freshInit) {

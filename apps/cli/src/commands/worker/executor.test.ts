@@ -102,6 +102,33 @@ describe('aiworker executor capability commands', () => {
     expect(sync.output).toContain('claude mcp add --scope project --transport stdio filesystem -- npx @modelcontextprotocol/server-filesystem .')
   })
 
+  it('BUG-051: preserves hyphenated stdio MCP arg values passed as --arg -y', async () => {
+    const { home, project } = await initProject()
+    const add = await runCli([
+      'executor',
+      'mcp',
+      'add',
+      'filesystem-probe',
+      '--engine',
+      'codex',
+      '--transport',
+      'stdio',
+      '--command',
+      'npx',
+      '--arg',
+      '-y',
+      '--arg',
+      '@modelcontextprotocol/server-filesystem',
+    ], project, home)
+
+    expect(add.exitCode).toBe(0)
+    const manifest = JSON.parse(await readFile(path.join(project, '.aiworker', 'executor-capabilities.json'), 'utf8'))
+    expect(manifest.engines.codex.mcp['filesystem-probe'].args).toEqual([
+      '-y',
+      '@modelcontextprotocol/server-filesystem',
+    ])
+  })
+
   it('dry-runs Codex MCP projection with the current Codex CLI argument surface', async () => {
     const { home, project } = await initProject()
     const add = await runCli([
@@ -261,14 +288,15 @@ describe('aiworker executor capability commands', () => {
     expect(trace.env.CODEX_TRACE_FILE).toBe(traceFile)
   })
 
-  it('TODO-015: doctor on fresh-init defaults shows OK summary line and suppresses overlay-empty noise', async () => {
+  it('TODO-015: doctor on fresh-init defaults suppresses overlay-empty noise without hiding default-stub warning', async () => {
     const { home, project } = await initProject()
 
     const doctor = await runCli(['executor', 'doctor'], project, home)
 
     expect(doctor.exitCode).toBe(0)
-    // Fresh-init should produce OK summary (no error, no warning surfaced)
     expect(doctor.output).toContain('configured task executor: http/default')
+    expect(doctor.output).toContain('0 ERR · 1 WARN')
+    expect(doctor.output).toContain('Status: WARN')
     // Declared overlay entries line stays informative but is no longer flagged WARN
     expect(doctor.output).toContain('declared project executor overlay entries: 0')
     // Old code dropped, replaced by namespaced one — and on fresh-init it must be suppressed
@@ -276,6 +304,25 @@ describe('aiworker executor capability commands', () => {
     expect(doctor.output).not.toContain('executor-overlay.capabilities.empty')
     // New summary line carries the fresh-init annotation
     expect(doctor.output).toContain('fresh-init defaults')
+  })
+
+  it('BUG-071: doctor selected-engine fresh-init banner and Status use the same PASS rubric', async () => {
+    const { home, project } = await initProject()
+    const bin = path.join(project, 'bin')
+    await mkdir(bin, { recursive: true })
+    const fakeClaude = path.join(bin, 'claude')
+    await writeFile(fakeClaude, '#!/usr/bin/env sh\nexit 0\n', 'utf8')
+    await chmod(fakeClaude, 0o755)
+    const before = JSON.parse((await runCli(['config', 'show'], project, home)).output) as { version: number }
+    const select = await runCli(['executor', 'select', '--engine', 'claude-code', '--apply', '--if-match', String(before.version)], project, home)
+    expect(select.exitCode).toBe(0)
+
+    const doctor = await runCli(['executor', 'doctor', '--engine', 'claude-code'], project, home, { PATH: `${bin}:${process.env.PATH ?? ''}` })
+
+    expect(doctor.exitCode).toBe(0)
+    expect(doctor.output).toContain('0 ERR · 0 WARN')
+    expect(doctor.output).toContain('Status: PASS')
+    expect(doctor.output).not.toContain('Status: WARN')
   })
 
   it('TODO-015: doctor surfaces executor-overlay.mcp.empty once an engine is declared but its mcp is still empty (non-fresh-init)', async () => {

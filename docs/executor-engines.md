@@ -82,6 +82,21 @@ volume 就能持续化 `/root` 下所有登录态。
 这三类引擎不依赖本地 CLI —— 它们走远端 HTTP / MCP / 任意命令，因此探测
 结果恒为 `ready`。自 configure panel 上的徽标即可看到 "ready" 标签。
 
+## Doctor status rubric
+
+`aiworker executor doctor` 的顶部 banner 与正文 `Status:` 使用同一套 surfaced
+rubric：blocking descriptor / secret / projection 错误是 `FAIL`；缺 binary、显式声明
+后的空 overlay 或其它可继续运行但需要 operator 处理的情况是 `WARN`；fresh-init 的空
+overlay 和 ambient runtime/auth 说明是 `PASS` / `INFO`，不会提升为 WARN。
+
+## Soul recommendation contract
+
+`aiworker init` 针对 Soul 打印的 suggested / also-tested executor 只是 onboarding
+hint，不是 enforced compatibility matrix。`aiworker executor select` 不会因为某个
+engine 不在建议列表中而 warn 或 block；只要 engine 在 AIWorker 支持集合内，operator
+可以选择它。实际可用能力仍以外部 executor 自身登录态、host/user 配置和 `executor
+doctor` 输出为准。
+
 ## claude-code <a id="claude-code"></a>
 
 - **npm 包**：`@anthropic-ai/claude-code`
@@ -168,6 +183,11 @@ ACP harness 支持两个 agent：**Gemini CLI** 与 **Qwen Code**。探测结果
   1. 镜像里预装 CLI。
   2. 启动脚本若检测不到 `~/.codex/auth.json` 则要求操作员在主机侧登录后把
      文件挂到容器 `/root/.codex/auth.json`。
+- **事件粒度**：当前 `app-server` 协议下，Codex 的 function call 与 shell command
+  lifecycle 会被归一化为 `orchestrator.tool_call`。shell exec 目前以同一 correlation id
+  暴露 logical `exec_command` 与实际 `commandExecution` lifecycle；消费者需要更细粒度
+  file-level diff 时仍应读取 executor 自身输出或后续 audit，而不能假设 Codex 提供与
+  claude-code 完全相同的 built-in tool 名称。
 
 ## cursor <a id="cursor"></a>
 

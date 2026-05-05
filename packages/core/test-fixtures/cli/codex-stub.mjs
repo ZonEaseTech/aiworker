@@ -11,6 +11,7 @@
 // - codex/event/token_usage
 // - codex/event/stop
 // - item/agentMessage/delta (current protocol, multiple append-only chunks)
+// - rawResponseItem/completed + item/started/completed current tool frames
 
 import fs from 'node:fs'
 import process from 'node:process'
@@ -88,6 +89,52 @@ function runCurrentTurn(threadId) {
     turnId: 'turn_stub',
     itemId: 'reason_stub',
     delta: 'Planning the edit...',
+  })
+  emitNotification('rawResponseItem/completed', {
+    threadId,
+    turnId: 'turn_stub',
+    item: {
+      type: 'function_call',
+      name: 'exec_command',
+      arguments: JSON.stringify({ cmd: 'printf AIWORKER_TOOL_PROBE > probe.txt', workdir: '/tmp' }),
+      call_id: 'call_exec',
+    },
+  })
+  emitNotification('item/started', {
+    threadId,
+    turnId: 'turn_stub',
+    item: {
+      type: 'commandExecution',
+      id: 'call_exec',
+      command: '/bin/bash -lc printf\\ AIWORKER_TOOL_PROBE\\ \\>\\ probe.txt',
+      cwd: '/tmp',
+      source: 'unifiedExecStartup',
+      status: 'inProgress',
+    },
+  })
+  emitNotification('item/completed', {
+    threadId,
+    turnId: 'turn_stub',
+    item: {
+      type: 'commandExecution',
+      id: 'call_exec',
+      command: '/bin/bash -lc printf\\ AIWORKER_TOOL_PROBE\\ \\>\\ probe.txt',
+      cwd: '/tmp',
+      source: 'unifiedExecStartup',
+      status: 'completed',
+      exitCode: 0,
+      aggregatedOutput: '',
+      durationMs: 1,
+    },
+  })
+  emitNotification('rawResponseItem/completed', {
+    threadId,
+    turnId: 'turn_stub',
+    item: {
+      type: 'function_call_output',
+      call_id: 'call_exec',
+      output: 'Chunk ID: stub\\nOutput:\\n',
+    },
   })
   for (const delta of currentAssistantDeltas) {
     emitNotification('item/agentMessage/delta', {

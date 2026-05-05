@@ -142,6 +142,41 @@ export interface CodexToolResultEvent {
   isError?: boolean
 }
 
+export interface CodexCurrentRawResponseItemEvent {
+  item?: CodexCurrentRawFunctionCallItem | CodexCurrentRawFunctionCallOutputItem | Record<string, unknown>
+}
+
+export interface CodexCurrentItemEvent {
+  item?: CodexCurrentCommandExecutionItem | Record<string, unknown>
+}
+
+export interface CodexCurrentRawFunctionCallItem {
+  type: 'function_call'
+  name?: string
+  arguments?: string | Record<string, unknown>
+  call_id?: string
+  id?: string
+}
+
+export interface CodexCurrentRawFunctionCallOutputItem {
+  type: 'function_call_output'
+  call_id?: string
+  id?: string
+  output?: string
+}
+
+export interface CodexCurrentCommandExecutionItem {
+  type: 'commandExecution'
+  id?: string
+  command?: string
+  cwd?: string
+  source?: string
+  status?: 'inProgress' | 'completed' | 'failed' | 'cancelled' | string
+  exitCode?: number | null
+  durationMs?: number | null
+  aggregatedOutput?: string | null
+}
+
 export interface CodexStopEvent {
   reason?: CodexStopReason
   /** Optional trailing usage tally mirrored from `token_usage`. */
@@ -161,3 +196,6 @@ export type CodexKnownEvent
     | { method: 'codex/event/tool_result', params: CodexToolResultEvent }
     | { method: 'codex/event/stop', params: CodexStopEvent }
     | { method: 'codex/event/error', params: CodexErrorEvent }
+    | { method: 'rawResponseItem/completed', params: CodexCurrentRawResponseItemEvent }
+    | { method: 'item/started', params: CodexCurrentItemEvent }
+    | { method: 'item/completed', params: CodexCurrentItemEvent }

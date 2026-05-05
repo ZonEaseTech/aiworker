@@ -23,6 +23,8 @@ import { agentTasks, conversations, getSessionEntry, getWorkerDb, messages, reco
 
 import consola from 'consola'
 import { and, asc, desc, eq, gt } from 'drizzle-orm'
+import { BrainAdmissionService } from '../brain/admission'
+import { recordBrainGovernanceBypassWarning } from '../brain/governance-bypass'
 import { getChannelAdapter } from '../channels/registry'
 import { classifyContinuation, findOpenConversation, findSessionConversation, hasSessionEntryForRoute, loadRecentMessages, resolveSessionKey } from '../conversation/router'
 import { DEFAULT_APPROVAL_TIMEOUT_MS } from './approvals'
@@ -286,6 +288,7 @@ export class Orchestrator {
     let systemPrompt = systemContext.systemPrompt
     let chatMessages = await this.buildRunContext(activeConversation.id, systemPrompt)
     touchSessionEntry(sessionKey, { contextTokens: estimateChatMessagesTokens(chatMessages) })
+    const admissionCountBefore = this.countAdmissionProposals()
 
     let runInput = this.buildAgentRunInput({
       messages: chatMessages,
@@ -357,6 +360,15 @@ export class Orchestrator {
     }
 
     let assistantText = result.text
+    this.detectAdmissionBypass({
+      admissionCountBefore,
+      assistantText,
+      conversationId: activeConversation.id,
+      engine,
+      gatewayConversationId,
+      sessionKey,
+      taskId,
+    })
     const gateConfig = this.deps.config.orchestrator?.decisionPipeline?.qualityGate
     const qualityGate = await evaluateQualityGate({
       assistantText,
@@ -501,6 +513,51 @@ export class Orchestrator {
     }
   }
 
+  private countAdmissionProposals(): number {
+    try {
+      return new BrainAdmissionService().count()
+    }
+    catch {
+      return -1
+    }
+  }
+
+  private detectAdmissionBypass(input: {
+    admissionCountBefore: number
+    assistantText: string
+    conversationId: string
+    engine: string
+    gatewayConversationId: string | undefined
+    sessionKey: string
+    taskId: string | undefined
+  }): void {
+    if (input.admissionCountBefore < 0)
+      return
+    const admissionCountAfter = this.countAdmissionProposals()
+    if (admissionCountAfter > input.admissionCountBefore)
+      return
+    const reason = detectAdmissionSuccessClaim(input.assistantText)
+    if (reason === null)
+      return
+    const at = new Date().toISOString()
+    recordBrainGovernanceBypassWarning({
+      at,
+      conversationId: input.conversationId,
+      engine: input.engine,
+      reason,
+      sessionKey: input.sessionKey,
+    })
+    this.deps.bus.emit('brain.governance.bypass_suspected', {
+      at,
+      conversationId: input.conversationId,
+      engine: input.engine,
+      ...(input.gatewayConversationId === undefined ? {} : { gatewayConversationId: input.gatewayConversationId }),
+      heuristic: true,
+      ...(input.taskId === undefined ? {} : { taskId: input.taskId }),
+      reason,
+    })
+  }
+
   private async classifyIntentDecision(input: {
     decisionContext: DecisionContext
     envelope: Envelope
@@ -598,6 +655,9 @@ export class Orchestrator {
 
     if (isWorkerAdminContinuation(envelope, existing.id))
       return { conversation: rowToState(existing), sessionAction: 'continue', sessionReason: 'worker-admin-selected-conversation', sessionKey }
+
+    if (sessionConversation && this.deps.config.executor.engine === 'codex')
+      return { conversation: rowToState(existing), sessionAction: 'continue', sessionReason: 'codex-chat-id-continuity', sessionKey }
 
     const existingWorkspace = await this.provisionWorkspace(existing.id)
     const recent = await loadRecentMessages(existing.id)
@@ -1238,6 +1298,26 @@ export class Orchestrator {
 
     return { id }
   }
+}
+
+export function detectAdmissionSuccessClaim(text: string): string | null {
+  const normalized = text.toLowerCase()
+  const hasAdmissionClaim = /\b(?:admission|proposal)\b/.test(normalized)
+    && /\b(?:submitted|created|queued|pending|approved|accepted|applied|persisted|saved|recorded)\b/.test(normalized)
+  if (hasAdmissionClaim)
+    return 'assistant-claimed-admission-without-db-delta'
+
+  const chineseAdmissionClaim = /admission|proposal|提案|申请|审批/i.test(text)
+    && /已提交|已创建|已加入|待审批|已落盘|已持久化|已记录|已采纳|已批准/.test(text)
+  if (chineseAdmissionClaim)
+    return 'assistant-claimed-admission-without-db-delta'
+
+  const memoryClaim = /长期记忆|brain memory|project brain|canonical brain|记忆/i.test(text)
+    && /已写入|已保存|已落盘|已持久化|已记录|remembered|saved|persisted/i.test(text)
+  if (memoryClaim)
+    return 'assistant-claimed-memory-without-admission-delta'
+
+  return null
 }
 
 function taskIdFromEnvelope(envelope: Envelope): string | undefined {

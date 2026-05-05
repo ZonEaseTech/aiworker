@@ -598,10 +598,8 @@ export interface BrainAdmissionProposeOptions {
 }
 
 /**
- * TODO-009: debug-only entry that lets operators inject admission proposals
- * without needing to drive a full orchestrator turn. Goes through the same
- * zod-validated path as `BrainAdmissionService.propose`, so fixtures
- * generated here are functionally identical to runtime-emitted ones.
+ * Formal operator / LLM-facing admission proposal entry point. It only writes
+ * a pending worker.db row; operator approval + apply remain separate steps.
  */
 export async function runBrainAdmissionPropose(options: BrainAdmissionProposeOptions): Promise<number> {
   const required: Array<[keyof BrainAdmissionProposeOptions, string]> = [
@@ -663,7 +661,6 @@ export async function runBrainAdmissionPropose(options: BrainAdmissionProposeOpt
       const proposal = service.propose(input)
       console.log(JSON.stringify({
         workerId: ctx.workerId,
-        debugWarning: 'this proposal was injected via debug-only CLI; do not enable in production workflows',
         proposal: admissionFullView(proposal),
       }, null, 2))
       return 0

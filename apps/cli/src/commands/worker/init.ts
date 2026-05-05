@@ -1,12 +1,13 @@
 import type { ProjectAiworkerSeed } from '@zonease/aiworker-fs-layout'
 import type { InitSoulId, SelectedSoul } from '../../soul/presets'
 
-import { existsSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { createInterface } from 'node:readline/promises'
 
+import { markBootstrapShown } from '@zonease/aiworker-core'
 import { ensureProjectAiworker, resolveAiworkerScope, resolveProjectRoot } from '@zonease/aiworker-fs-layout'
 import { buildScopeManifest, createBuiltinSoulRegistry } from '@zonease/aiworker-shared'
 import consola from 'consola'
@@ -33,6 +34,10 @@ export interface InitOptions {
   dryRun?: boolean
   /** Project Soul preset id. Required for non-interactive brand-new project init. */
   soul?: string
+  /** Write the first-run bootstrap token to this chmod 0600 file. */
+  tokenFile?: string
+  /** Explicitly print the full bootstrap token in a warning block. */
+  showToken?: boolean
 }
 
 interface PreflightReport {
@@ -249,6 +254,14 @@ function markdownList(items: readonly string[]): string {
   return items.map(item => `- ${item}`).join('\n')
 }
 
+const BRAIN_ADMISSION_GUIDANCE = [
+  '## Brain admission governance',
+  '- Long-term memory, policy, brain skill, and other durable Project Brain mutations must be proposed through AIWorker brain admission.',
+  '- Use `aiworker brain admission propose --id <kebab-id> --kind memory-add --target memories/<topic> --summary "<summary>" --rollback "<rollback>" --soul <soul-id> --payload <payload.json>`; the result is pending until an operator runs approve/apply.',
+  '- Do not write executor-native memory and claim that AIWorker admission was submitted. Executor native memory is not canonical AIWorker Brain.',
+  '- Domain meaning and next-step planning belong to the external executor; admission only owns evidence, approval, rollback, audit, and durable mutation boundaries.',
+].join('\n')
+
 function resolveSoulPrimaryScopeKind(soulId: InitSoulId): string {
   const module = soulId === CUSTOMIZE_SOUL_ID ? undefined : BUILTIN_SOUL_REGISTRY.get(soulId)
   return module?.primaryScopeKind ?? 'general'
@@ -315,11 +328,11 @@ function buildProjectAiworkerSeed(soul: SelectedSoul): ProjectAiworkerSeed {
   }
 
   return {
-    agentMd: `# ${soul.label} Worker\n\n## 主要职责\n${markdownList(soul.responsibilities)}\n\n## 明确边界\n${markdownList(soul.boundaries)}\n\n## 职责外响应\n${soul.outOfScope}\n\n## 默认 capability packs\n${markdownList(soul.packs)}\n`,
+    agentMd: `# ${soul.label} Worker\n\n## 主要职责\n${markdownList(soul.responsibilities)}\n\n## 明确边界\n${markdownList(soul.boundaries)}\n\n## 职责外响应\n${soul.outOfScope}\n\n${BRAIN_ADMISSION_GUIDANCE}\n\n## 默认 capability packs\n${markdownList(soul.packs)}\n`,
     capabilityPacksJson: `${JSON.stringify(capabilityPacks, null, 2)}\n`,
     policyJson: `${JSON.stringify(policy, null, 2)}\n`,
     scopeJson: buildScopeManifestSeed(soul),
-    soulMd: `# ${soul.label} Soul\n\n## 预设\n- id: ${soul.id}\n- source: ${soul.source}\n\n## 沟通风格\n${soul.communicationStyle}\n\n## 高风险操作策略\n${soul.riskPolicy}\n\n## 职责边界\n${markdownList(soul.boundaries)}\n\n## 模糊或缺失上下文\n收到不完整 prompt（< 20 字 / 无可定位 artifact / 仅 "挂了 / 失败 / 不行" 等）时：先用一句话反问关键缺失信息，不要直接调 tool 探索，让用户先补齐上下文；不要为了避免反问而扩大搜索范围越过当前 scope。\n\n${soul.vagueContextStrategy}\n`,
+    soulMd: `# ${soul.label} Soul\n\n## 预设\n- id: ${soul.id}\n- source: ${soul.source}\n\n## 沟通风格\n${soul.communicationStyle}\n\n## 高风险操作策略\n${soul.riskPolicy}\n\n## 职责边界\n${markdownList(soul.boundaries)}\n\n${BRAIN_ADMISSION_GUIDANCE}\n\n## 模糊或缺失上下文\n收到不完整 prompt（< 20 字 / 无可定位 artifact / 仅 "挂了 / 失败 / 不行" 等）时：先用一句话反问关键缺失信息，不要直接调 tool 探索，让用户先补齐上下文；不要为了避免反问而扩大搜索范围越过当前 scope。\n\n${soul.vagueContextStrategy}\n`,
     toolsetsJson: `${JSON.stringify(toolsets, null, 2)}\n`,
   }
 }
@@ -349,8 +362,9 @@ export async function runInit(options: InitOptions = {}): Promise<number> {
       return 0
 
     process.env.AIWORKER_HOME = home
-    bootstrapDotenv({ home })
-    const ctx = await loadWorkerContext()
+    const dotenv = bootstrapDotenv({ home, printOnMint: false })
+    const ctx = await loadWorkerContext({ silent: true })
+    printInitSecrets({ ctx, dotenv, options, tokenHome: home })
     consola.success(`[aiworker init] user-scope worker ${ctx.workerId} ready (config v${ctx.configVersion})`)
     printUserScopeNextSteps()
     return 0
@@ -369,8 +383,9 @@ export async function runInit(options: InitOptions = {}): Promise<number> {
     if (options.dryRun === true)
       return 0
 
-    bootstrapDotenv({ home: scope.home })
-    const ctx = await loadWorkerContext()
+    const dotenv = bootstrapDotenv({ home: scope.home, printOnMint: false })
+    const ctx = await loadWorkerContext({ silent: true })
+    printInitSecrets({ ctx, dotenv, options, tokenHome: scope.home })
     consola.success(`[aiworker init] explicit-scope worker ${ctx.workerId} ready (${scope.home})`)
     printUserScopeNextSteps()
     return 0
@@ -397,8 +412,10 @@ export async function runInit(options: InitOptions = {}): Promise<number> {
       existingRoot,
       soulResult.soul === undefined ? {} : buildProjectAiworkerSeed(soulResult.soul),
     )
-    bootstrapDotenv({ home: path.join(existingRoot, '.aiworker', 'local') })
-    const ctx = await loadWorkerContext()
+    const projectLocal = path.join(existingRoot, '.aiworker', 'local')
+    const dotenv = bootstrapDotenv({ home: projectLocal, printOnMint: false })
+    const ctx = await loadWorkerContext({ silent: true })
+    printInitSecrets({ ctx, dotenv, options, tokenHome: projectLocal })
     consola.success(`[aiworker init] project-scope worker ${ctx.workerId} ready (${existingRoot})`)
     printProjectNextSteps(existingRoot, soulResult.soul)
     return 0
@@ -422,11 +439,70 @@ export async function runInit(options: InitOptions = {}): Promise<number> {
   // would make the freshly written worker_identity row undecryptable.
   const projectLocal = path.join(cwd, '.aiworker', 'local')
   delete process.env.AIWORKER_HOME
-  bootstrapDotenv({ home: projectLocal })
-  const ctx = await loadWorkerContext()
+  const dotenv = bootstrapDotenv({ home: projectLocal, printOnMint: false })
+  const ctx = await loadWorkerContext({ silent: true })
+  printInitSecrets({ ctx, dotenv, options, tokenHome: projectLocal })
   consola.success(`[aiworker init] project-scope worker ${ctx.workerId} ready (${cwd})`)
   printProjectNextSteps(cwd, soul)
   return 0
+}
+
+interface InitSecretsInput {
+  ctx: Awaited<ReturnType<typeof loadWorkerContext>>
+  dotenv: ReturnType<typeof bootstrapDotenv>
+  options: InitOptions
+  tokenHome: string
+}
+
+function printInitSecrets({ ctx, dotenv, options, tokenHome }: InitSecretsInput): void {
+  process.stdout.write('[aiworker init] secret material\n')
+  process.stdout.write(`  Worker id       : ${ctx.workerId}\n`)
+  process.stdout.write(`  Master key file : ${dotenv.envFile} (chmod 600; back this file up offline)\n`)
+  if (!ctx.tokenJustMinted) {
+    process.stdout.write('  Bootstrap token : already delivered on first init; rotate with `aiworker token rotate` if it may be exposed.\n')
+    return
+  }
+
+  const tokenFile = resolveTokenFile(options.tokenFile, tokenHome)
+  writeTokenFile(tokenFile, ctx.token)
+  process.stdout.write(`  Bootstrap token : ${maskToken(ctx.token)} (full value written to ${tokenFile}, chmod 600)\n`)
+  process.stdout.write('  Fleet pairing   : `aiworker fleet pair --bootstrap-token "$(cut -d= -f2 < TOKEN_FILE)" ...`\n')
+  if (options.showToken === true)
+    printFullTokenWarning(ctx.token)
+  else
+    process.stdout.write('  Raw token stdout: hidden by default; pass --show-token only in a private terminal.\n')
+  markBootstrapShown(ctx.db)
+}
+
+function resolveTokenFile(input: string | undefined, tokenHome: string): string {
+  if (input && input.trim().length > 0)
+    return path.resolve(input.trim())
+  return path.join(tokenHome, 'bootstrap-token.txt')
+}
+
+function writeTokenFile(file: string, token: string): void {
+  const dir = path.dirname(file)
+  if (!existsSync(dir))
+    mkdirSync(dir, { recursive: true, mode: 0o700 })
+  writeFileSync(file, `AIWORKER_BOOTSTRAP_TOKEN=${token}\n`, { mode: 0o600 })
+  chmodSync(file, 0o600)
+}
+
+function maskToken(token: string): string {
+  if (token.length <= 12)
+    return '<hidden>'
+  return `${token.slice(0, 4)}${'x'.repeat(8)}${token.slice(-4)}`
+}
+
+function printFullTokenWarning(token: string): void {
+  process.stdout.write([
+    '  ┌────────────────────────────────────────────────────────────┐',
+    '  │ STORE THIS NOW - shown only because --show-token was used. │',
+    '  │ Do not paste this block into issues, chat, or screenshots. │',
+    `  │ AIWORKER_BOOTSTRAP_TOKEN=${token.padEnd(25)} │`,
+    '  └────────────────────────────────────────────────────────────┘',
+  ].join('\n'))
+  process.stdout.write('\n')
 }
 
 /**
@@ -463,7 +539,8 @@ function executorChoicePreface(soul?: SelectedSoul): string[] {
   const candidates = ENGINE_CANDIDATES.join(' | ')
   return [
     `     Default executor is the safe \`http://localhost:9999\` stub; pick a real engine before running tasks.`,
-    `     Recommended for ${soul ? `Soul \`${soul.id}\`` : 'general use'}: \`${recommendation.primary}\`${recommendation.alternates.length > 0 ? ` (alternates: ${recommendation.alternates.join(', ')})` : ''}.`,
+    `     Suggested for ${soul ? `Soul \`${soul.id}\`` : 'general use'}: \`${recommendation.primary}\`${recommendation.alternates.length > 0 ? ` (also tested: ${recommendation.alternates.join(', ')})` : ''}.`,
+    '     Advisory only: other listed engines are technically supported; this suggestion is not enforced by `executor select`.',
     `     Candidates: ${candidates}.`,
   ]
 }

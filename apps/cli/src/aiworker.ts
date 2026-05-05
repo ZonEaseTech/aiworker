@@ -84,7 +84,7 @@ import {
 import { runSoulList, runSoulShow } from './commands/worker/soul'
 import { runTokenRotate as runTokenRotateLocal } from './commands/worker/token'
 import { runUp } from './commands/worker/up'
-import { configureCliHelp, localizeGlobalOptions } from './help'
+import { configureCliHelp, findCommandGroupHelpArg, localizeGlobalOptions, renderCommandGroupHelp } from './help'
 import { bootstrapCliDotenv } from './lib/bootstrap'
 
 /**
@@ -125,12 +125,16 @@ cli
   .option('--force', '兼容旧脚本；项目初始化允许在非 git 目录运行，且仍不会覆盖现有文件')
   .option('--dry-run', '只打印初始化预检和计划写入，不创建或修改文件')
   .option('--soul <preset>', '项目级初始化使用的 Soul 预设；非交互 brand-new init 必填，可选 developer/project-manager/devops-sre/product-designer/qa-reviewer/support-operator/finance-ops/hr-recruiting/general-assistant/customize')
-  .action(async (opts: { dryRun?: boolean, global?: boolean, force?: boolean, soul?: string }) => {
+  .option('--token-file <path>', '首次初始化时把完整 bootstrap token 写入 chmod 600 文件；默认写入 worker local bootstrap-token.txt')
+  .option('--show-token', '首次初始化时在 stdout 高可见 warning block 中显示完整 bootstrap token')
+  .action(async (opts: { dryRun?: boolean, global?: boolean, force?: boolean, showToken?: boolean, soul?: string, tokenFile?: string }) => {
     process.exit(await runInit({
       ...(opts.global === true ? { global: true } : {}),
       ...(opts.force === true ? { force: true } : {}),
       ...(opts.dryRun === true ? { dryRun: true } : {}),
       ...(opts.soul === undefined ? {} : { soul: opts.soul }),
+      ...(opts.tokenFile === undefined ? {} : { tokenFile: opts.tokenFile }),
+      ...(opts.showToken === true ? { showToken: true } : {}),
     }))
   })
 
@@ -404,8 +408,7 @@ cli
   })
 
 cli
-  .command('brain admission propose', 'TODO-009 调试入口：直接构造一条 admission proposal（仅供 fixture / 演示）')
-  .option('--i-know-this-is-debug', '必须显式声明这是调试场景；缺失即拒绝执行')
+  .command('brain admission propose', '提交一条 pending brain admission proposal（需 operator 后续 approve/apply）')
   .option('--id <id>', 'proposal id（必填，kebab-case）')
   .option('--kind <kind>', 'proposal kind（默认 memory-add）')
   .option('--target <text>', 'target 路径或 artifact id（必填）')
@@ -418,7 +421,6 @@ cli
   .option('--evidence <path>', '从 JSON 文件读取 evidence 数组（可选）')
   .option('--payload <path>', '从 JSON 文件读取 payload 对象（可选）')
   .action(async (opts: {
-    iKnowThisIsDebug?: boolean
     id?: string
     kind?: string
     target?: string
@@ -431,10 +433,6 @@ cli
     evidence?: string
     payload?: string
   }) => {
-    if (opts.iKnowThisIsDebug !== true) {
-      consola.error('[aiworker brain admission propose] --i-know-this-is-debug is required (debug-only entry)')
-      process.exit(2)
-    }
     process.exit(await runBrainAdmissionPropose({
       ...(opts.id === undefined ? {} : { id: opts.id }),
       ...(opts.kind === undefined ? {} : { kind: opts.kind }),
@@ -644,12 +642,16 @@ cli
   .option('--force', '项目初始化允许在非 git 目录运行，且仍不会覆盖现有文件')
   .option('--dry-run', '只打印初始化预检和计划写入，不创建或修改文件')
   .option('--soul <preset>', '项目级初始化使用的 Soul 预设；非交互 brand-new init 必填，可选 developer/project-manager/devops-sre/product-designer/qa-reviewer/support-operator/finance-ops/hr-recruiting/general-assistant/customize')
-  .action(async (opts: { dryRun?: boolean, global?: boolean, force?: boolean, soul?: string }) => {
+  .option('--token-file <path>', '首次初始化时把完整 bootstrap token 写入 chmod 600 文件；默认写入 worker local bootstrap-token.txt')
+  .option('--show-token', '首次初始化时在 stdout 高可见 warning block 中显示完整 bootstrap token')
+  .action(async (opts: { dryRun?: boolean, global?: boolean, force?: boolean, showToken?: boolean, soul?: string, tokenFile?: string }) => {
     process.exit(await runInit({
       ...(opts.global === true ? { global: true } : {}),
       ...(opts.force === true ? { force: true } : {}),
       ...(opts.dryRun === true ? { dryRun: true } : {}),
       ...(opts.soul === undefined ? {} : { soul: opts.soul }),
+      ...(opts.tokenFile === undefined ? {} : { tokenFile: opts.tokenFile }),
+      ...(opts.showToken === true ? { showToken: true } : {}),
     }))
   })
 
@@ -923,8 +925,7 @@ cli
   })
 
 cli
-  .command('worker brain admission propose', 'TODO-009 调试入口：直接构造一条 admission proposal（仅供 fixture / 演示）')
-  .option('--i-know-this-is-debug', '必须显式声明这是调试场景；缺失即拒绝执行')
+  .command('worker brain admission propose', '提交一条 pending brain admission proposal（需 operator 后续 approve/apply）')
   .option('--id <id>', 'proposal id（必填，kebab-case）')
   .option('--kind <kind>', 'proposal kind（默认 memory-add）')
   .option('--target <text>', 'target 路径或 artifact id（必填）')
@@ -937,7 +938,6 @@ cli
   .option('--evidence <path>', '从 JSON 文件读取 evidence 数组（可选）')
   .option('--payload <path>', '从 JSON 文件读取 payload 对象（可选）')
   .action(async (opts: {
-    iKnowThisIsDebug?: boolean
     id?: string
     kind?: string
     target?: string
@@ -950,10 +950,6 @@ cli
     evidence?: string
     payload?: string
   }) => {
-    if (opts.iKnowThisIsDebug !== true) {
-      consola.error('[aiworker worker brain admission propose] --i-know-this-is-debug is required (debug-only entry)')
-      process.exit(2)
-    }
     process.exit(await runBrainAdmissionPropose({
       ...(opts.id === undefined ? {} : { id: opts.id }),
       ...(opts.kind === undefined ? {} : { kind: opts.kind }),
@@ -1443,10 +1439,22 @@ export function preprocessArgv(argv: string[], cliInstance: { commands: Array<{ 
     if (multiWordNames.has(combined)) {
       const out = argv.slice()
       out.splice(2, depth, combined)
-      return out
+      return preprocessExecutorMcpArgValues(out)
     }
   }
-  return argv
+  return preprocessExecutorMcpArgValues(argv)
+}
+
+function preprocessExecutorMcpArgValues(argv: string[]): string[] {
+  const command = argv[2]
+  if (command !== 'executor mcp add' && command !== 'worker executor mcp add')
+    return argv
+  const out = argv.slice()
+  for (let i = 3; i < out.length - 1; i++) {
+    if (out[i] === '--arg' && out[i + 1]?.startsWith('-') === true)
+      out.splice(i, 2, `--arg=${out[i + 1]}`)
+  }
+  return out
 }
 
 export { cli }
@@ -1581,6 +1589,11 @@ export async function runCli(argv: string[] = process.argv): Promise<number> {
   const preprocessed = preprocessArgv(argv)
   try {
     cli.unsetMatchedCommand()
+    const preparseGroupName = findCommandGroupHelpArg(preprocessed, cli)
+    if (preparseGroupName !== null) {
+      process.stdout.write(`${renderCommandGroupHelp(cli, preparseGroupName)}\n`)
+      return 0
+    }
     const parsed = cli.parse(preprocessed, { run: false })
     if (shouldExitAfterParse())
       return 0

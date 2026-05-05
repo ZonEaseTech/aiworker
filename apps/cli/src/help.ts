@@ -98,7 +98,7 @@ const ROOT_WORKER_SUMMARIES: Record<(typeof ROOT_WORKER_COMMANDS)[number], strin
   'brain brief': '把 canonical brain 投影成 task-specific brief（preview-only，不替换 orchestrator 系统提示）',
   'brain admission approve': '把 pending proposal 标记为 approved（不会自动 apply）',
   'brain admission list': '列出本地 worker 的 brain admission proposal',
-  'brain admission propose': 'TODO-009 调试入口：直接构造一条 admission proposal（仅供 fixture / 演示）',
+  'brain admission propose': '提交一条 pending brain admission proposal（需 operator 后续 approve/apply）',
   'brain admission reject': '把 pending proposal 标记为 rejected',
   'brain admission show': '只读查看单个 admission proposal 与 decision 历史',
   'brain artifacts list': '只读列出本地 worker scope 注册的 brain artifact',
@@ -106,7 +106,7 @@ const ROOT_WORKER_SUMMARIES: Record<(typeof ROOT_WORKER_COMMANDS)[number], strin
   'brain memories': '只读列出或搜索 runtime brain memory',
   'brain skills': '只读列出 runtime brain skill',
   'brain status': '诊断 runtime brain source、写入目标、decision pipeline truthfulness 和健康状态',
-  'init': '初始化 worker.db、身份、token 和默认配置',
+  'init': '初始化 worker.db、身份、token 和默认配置；首次 token 默认写入 chmod 600 文件',
   'up': '一条命令初始化、验证并启动本地 worker',
   'run': '不启动 HTTP server，直接给 orchestrator 投递一条消息',
   'schedule add': '在本地 worker.db 中新增一条 cron 任务',
@@ -197,6 +197,45 @@ export function getUngroupedHelpCommands(cli: Pick<CAC, 'commands'>): string[] {
     .filter(command => command.name !== '')
     .map(command => command.name)
     .filter(name => !grouped.has(name))
+}
+
+export function renderCommandGroupHelp(cli: Pick<CAC, 'commands'>, groupName: string): string | null {
+  const prefix = groupName.trim()
+  if (!prefix)
+    return null
+  const rows = cli.commands
+    .filter(command => command.name.startsWith(`${prefix} `))
+    .map(command => ({
+      name: command.rawName ?? command.name,
+      summary: COMMAND_SUMMARIES[command.name] ?? command.description ?? '',
+    }))
+  if (rows.length === 0)
+    return null
+
+  const width = Math.max(...rows.map(row => row.name.length))
+  return [
+    `[aiworker ${prefix}] command group`,
+    '',
+    '这是命令组，不是可直接执行的命令。可用子命令：',
+    '',
+    ...rows.map(row => `  ${row.name.padEnd(width)}  ${row.summary}`),
+    '',
+    `Run \`aiworker ${rows[0]?.name ?? prefix} --help\` for command options.`,
+  ].join('\n')
+}
+
+export function findCommandGroupHelpArg(argv: string[], cli: Pick<CAC, 'commands'>): string | null {
+  const args = argv.slice(2)
+  const helpIndex = args.findIndex(arg => arg === '--help' || arg === '-h')
+  if (helpIndex < 0)
+    return null
+  const prefixTokens = args.slice(0, helpIndex).filter(arg => !arg.startsWith('-'))
+  for (let depth = prefixTokens.length; depth >= 1; depth--) {
+    const prefix = prefixTokens.slice(0, depth).join(' ')
+    if (renderCommandGroupHelp(cli, prefix) !== null)
+      return prefix
+  }
+  return null
 }
 
 function buildHelpSections(cli: CAC, sections: HelpSection[]): HelpSection[] {

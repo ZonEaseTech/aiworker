@@ -29,6 +29,10 @@ export function printBootstrapIfJustMinted(
   stdout.write(`[worker] AIWORKER_BOOTSTRAP_TOKEN=${token}\n`)
   stdout.write(`[worker] save this token; it will not be printed again.\n`)
 
+  markBootstrapShown(db)
+}
+
+export function markBootstrapShown(db: WorkerDatabase): void {
   db.update(workerIdentity)
     .set({ bootstrapShownAt: new Date().toISOString() })
     .where(eq(workerIdentity.pk, 'default'))
