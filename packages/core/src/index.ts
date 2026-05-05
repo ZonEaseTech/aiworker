@@ -66,7 +66,7 @@ export { type BrainSourceDiagnostic, describeBrainSource } from './worker/brain/
 // Brain summary 聚合（PLAN-103）：从 worker.db 读 admission / artifact 计数 +
 // scope manifest 状态，喂给 buildInfo 与 fleet UI；不复制 payload / artifact
 // ref / canonical brain 文本。
-export { buildBrainSummary } from './worker/brain/summary'
+export { type BrainSummaryDecisionPipelineConfig, buildBrainSummary } from './worker/brain/summary'
 
 // Channel registry：路由 / 管理 API 都通过这个枚举 + 注册表挂 adapter。
 export { ChannelRegistry, getChannelAdapter } from './worker/channels/registry'
@@ -131,6 +131,15 @@ export type { WorkerModeState } from './worker/management/state'
 
 // Orchestrator 内部 store + ProcessManager（hot-reload 跨实例持久化）。
 export { ApprovalStore } from './worker/orchestrator/approvals'
+// PLAN-116 decision pipeline truthfulness ring buffer.
+export {
+  getDecisionPipelineSnapshot,
+  recordConversationClassifier,
+  recordIntentDecision,
+  recordQualityGate,
+  resetDecisionPipelineStats,
+} from './worker/orchestrator/decision-pipeline-stats'
+
 export { ProcessManager } from './worker/orchestrator/process-manager'
 
 // Runtime builder + 类型。

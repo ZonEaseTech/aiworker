@@ -43,6 +43,7 @@ function sequencedExecutor(responses: string[]): { provider: ExecutorProvider, c
 
 const intentDecision = buildIntentDecision(context(), {
   confidence: 0.8,
+  evaluator: 'heuristic',
   intent: 'answer',
   qualityProfile: 'default',
   reason: 'test',
@@ -82,6 +83,8 @@ describe('quality gate', () => {
     expect(gate.status).toBe('passed')
     expect(gate.action).toBe('pass')
     expect(gate.score).toBeGreaterThanOrEqual(5)
+    // PLAN-116: pass / observe → top-level mode stays observe_only.
+    expect(gate.mode).toBe('observe_only')
   })
 
   it('recommends repair in retry mode for too-short answers', async () => {
@@ -103,6 +106,8 @@ describe('quality gate', () => {
     expect(gate.status).toBe('failed')
     expect(gate.action).toBe('repair')
     expect(gate.missing.length).toBeGreaterThan(0)
+    // PLAN-116 truthful enforce: configured retry + actual repair → enforced.
+    expect(gate.mode).toBe('enforced')
   })
 
   it('retries once with a stricter prompt when LLM emits prose', async () => {

@@ -222,7 +222,21 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   app.route('/api/worker/orchestrator', buildOrchestratorRoutes(() => state.runtime))
   app.route('/api/worker/evolution', evolutionRoutes)
   app.route('/api/worker/events', buildEventRoutes(() => state.runtime))
-  app.route('/api/worker/brain', buildBrainRoutes({ getWorkerId: () => state.workerId }))
+  app.route('/api/worker/brain', buildBrainRoutes({
+    getWorkerId: () => state.workerId,
+    getDecisionPipelineConfig: () => {
+      const decisionPipeline = state.runtime.config.orchestrator?.decisionPipeline
+      const result: { intentEvaluator?: 'heuristic' | 'llm', qualityEvaluator?: 'heuristic' | 'llm', qualityMode?: 'observe' | 'warn' | 'retry' | 'block', qualityThreshold?: number, conversationClassifierEnabled?: boolean } = {
+        intentEvaluator: decisionPipeline?.intentClassifier?.evaluator ?? 'heuristic',
+        qualityEvaluator: decisionPipeline?.qualityGate?.evaluator ?? 'heuristic',
+        qualityMode: decisionPipeline?.qualityGate?.mode ?? 'observe',
+        conversationClassifierEnabled: true,
+      }
+      if (decisionPipeline?.qualityGate?.threshold !== undefined)
+        result.qualityThreshold = decisionPipeline.qualityGate.threshold
+      return result
+    },
+  }))
   app.route('/api/worker', buildManagementRoutes({ getState: () => state, reloadRuntime, runtimeVersion }))
 
   // BUG-065: sub-router endpoints register paths via plain `app.get(...)` so

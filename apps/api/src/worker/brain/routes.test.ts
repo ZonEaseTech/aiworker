@@ -71,12 +71,27 @@ describe('buildBrainRoutes (PLAN-103)', () => {
         admissions: { byStatus: Record<string, number> }
         artifacts: { total: number }
         scopeManifest: { status: string }
+        decisionPipeline: {
+          intentClassifier: { evaluator: string, mode: string, recent: { windowSize: number, samples: number, fallbackRate: number } }
+          capabilityRouter: { source: string, mode: string, note: string }
+          qualityGate: { evaluator: string, configuredMode: string, recent: { windowSize: number, samples: number } }
+          conversationClassifier: { enabled: boolean, recent: { fallbackByReason: Record<string, number> } }
+        }
       }
     }
     expect(json.workerId).toBe(TEST_WORKER_ID)
     expect(json.brainSummary.admissions.byStatus.pending).toBe(1)
     expect(json.brainSummary.artifacts.total).toBe(1)
     expect(['ok', 'missing', 'not-applicable']).toContain(json.brainSummary.scopeManifest.status)
+    // PLAN-116: decisionPipeline truthfulness section is always present.
+    expect(json.brainSummary.decisionPipeline.intentClassifier.evaluator).toBe('heuristic')
+    expect(json.brainSummary.decisionPipeline.intentClassifier.mode).toBe('observe_only')
+    expect(json.brainSummary.decisionPipeline.intentClassifier.recent.windowSize).toBe(50)
+    expect(json.brainSummary.decisionPipeline.capabilityRouter.source).toBe('capability-registry')
+    expect(json.brainSummary.decisionPipeline.capabilityRouter.mode).toBe('observe_only')
+    expect(json.brainSummary.decisionPipeline.qualityGate.evaluator).toBe('heuristic')
+    expect(json.brainSummary.decisionPipeline.qualityGate.configuredMode).toBe('observe')
+    expect(json.brainSummary.decisionPipeline.conversationClassifier.enabled).toBe(true)
   })
 
   it('GET /admission lists pending proposals and redacts payload secret-like values by default', async () => {

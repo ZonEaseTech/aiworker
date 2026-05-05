@@ -59,6 +59,13 @@ describe('intent classifier', () => {
     expect(decision.requiredContext).toContain('skill_load')
     expect(decision.qualityProfile).toBe('default')
     expect(decision.source).toBe('intent-heuristic')
+    // PLAN-116 truthfulness: heuristic decisions stay observe_only, mark
+    // evaluator and templateId so consumers can distinguish from LLM.
+    expect(decision.mode).toBe('observe_only')
+    expect(decision.evaluator).toBe('heuristic')
+    expect(decision.templateId).toBe('intent-classifier-v1')
+    expect(decision.rawOutput).toBeUndefined()
+    expect(decision.parseError).toBeUndefined()
   })
 
   it('classifies high-risk config/admin turns', () => {
@@ -116,6 +123,10 @@ describe('intent classifier', () => {
     expect(decision.intent).toBe('research')
     expect(decision.confidence).toBe(0.82)
     expect(decision.source).toBe('intent-llm')
+    expect(decision.evaluator).toBe('llm')
+    expect(decision.templateId).toBe('intent-classifier-v1')
+    expect(decision.attempt).toBe(1)
+    expect(decision.mode).toBe('observe_only')
   })
 
   it('retries once with a stricter prompt before falling back', async () => {
@@ -160,5 +171,36 @@ describe('intent classifier', () => {
     expect(decision.source).toBe('intent-fallback')
     expect(decision.confidence).toBeLessThanOrEqual(0.4)
     expect(decision.reason).toContain('llm-retry-exhausted')
+    // PLAN-116: fallback decisions carry diagnostic evidence so operators can
+    // tell whether the LLM was misconfigured / non-compliant / over budget.
+    expect(decision.evaluator).toBe('heuristic')
+    expect(decision.attempt).toBe(2)
+    expect(decision.templateId).toBe('intent-classifier-v1')
+    expect(decision.parseError).toBeDefined()
+    expect(decision.rawOutput).toBeDefined()
+    expect(decision.rawOutput).toContain('still not json')
+    expect(decision.mode).toBe('observe_only')
+  })
+
+  it('fallback rawOutput is redacted and truncated', async () => {
+    const longSecret = `sk-LIVE-${'A'.repeat(40)}`
+    const longProse = `prompt junk ${'X'.repeat(2200)} ${longSecret}`
+    const { provider } = sequencedExecutor([longProse, longProse])
+    const decision = await classifyIntentWithExecutor({
+      classification: classification('plan something'),
+      context: context(),
+      executor: provider,
+      model: undefined,
+      notifyActivity: () => {},
+      signal: new AbortController().signal,
+      workspacePath: undefined,
+    })
+    expect(decision.source).toBe('intent-fallback')
+    expect(decision.rawOutput).toBeDefined()
+    // Redaction removes the literal secret token.
+    expect(decision.rawOutput).not.toContain('sk-LIVE-')
+    // Truncation cap: rawOutput length <= 2048 + truncation marker.
+    expect((decision.rawOutput ?? '').length).toBeLessThanOrEqual(2100)
+    expect(decision.rawOutput).toContain('…[truncated]')
   })
 })

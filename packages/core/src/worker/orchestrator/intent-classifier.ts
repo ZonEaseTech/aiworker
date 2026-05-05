@@ -10,9 +10,18 @@ import type {
   WorkerRisk,
 } from './decisions'
 
+import { redactBodySecrets } from '@zonease/aiworker-shared'
 import { buildIntentDecision } from './decisions'
 
 export type IntentEvaluator = 'heuristic' | 'llm'
+
+const INTENT_TEMPLATE_ID = 'intent-classifier-v1'
+const RAW_OUTPUT_LIMIT = 2048
+
+function truncateRedactedRawOutput(raw: string): string {
+  const redacted = redactBodySecrets(raw).body
+  return redacted.length > RAW_OUTPUT_LIMIT ? `${redacted.slice(0, RAW_OUTPUT_LIMIT)}…[truncated]` : redacted
+}
 
 export interface IntentClassificationInput {
   envelopeText: string
@@ -33,6 +42,7 @@ export function classifyIntentHeuristic(
   const qualityProfile = inferQualityProfile(text, intent, risk)
   return buildIntentDecision(context, {
     confidence: intent === 'answer' ? 0.55 : 0.7,
+    evaluator: 'heuristic',
     intent,
     qualityProfile,
     reason: `${input.sessionReason}; heuristic intent=${intent}`,
@@ -40,6 +50,7 @@ export function classifyIntentHeuristic(
     risk,
     sessionAction: input.sessionAction,
     source: 'intent-heuristic',
+    templateId: INTENT_TEMPLATE_ID,
   })
 }
 
@@ -55,7 +66,7 @@ export async function classifyIntentWithExecutor(input: {
   // BUG-057: when the LLM emits non-JSON, retry once with a stricter
   // re-prompt before falling back to the heuristic classifier. Two attempts
   // total — the second appends an instruction to output JSON only.
-  const firstAttempt = await runIntentLlm(input, buildIntentPrompt(input.classification))
+  const firstAttempt = await runIntentLlm(input, buildIntentPrompt(input.classification), 1)
   if (firstAttempt.kind === 'ok')
     return firstAttempt.decision
 
@@ -69,23 +80,34 @@ export async function classifyIntentWithExecutor(input: {
       ].join('\n'),
     },
   ]
-  const secondAttempt = await runIntentLlm(input, stricter)
+  const secondAttempt = await runIntentLlm(input, stricter, 2)
   if (secondAttempt.kind === 'ok')
     return secondAttempt.decision
 
   const fallback = classifyIntentHeuristic(input.context, input.classification)
-  const lastError = secondAttempt.error ?? firstAttempt.error ?? 'unknown error'
+  const last = secondAttempt.kind === 'error' ? secondAttempt : firstAttempt as Extract<IntentLlmAttemptResult, { kind: 'error' }>
+  const parseError = last.error
+  const rawOutput = last.rawOutput.length > 0 ? truncateRedactedRawOutput(last.rawOutput) : undefined
   return buildIntentDecision(input.context, {
-    ...fallback,
+    attempt: last.attempt,
     confidence: Math.min(fallback.confidence, 0.4),
-    reason: `llm-retry-exhausted: ${lastError.slice(0, 120)}`,
+    evaluator: 'heuristic',
+    intent: fallback.intent,
+    parseError,
+    qualityProfile: fallback.qualityProfile,
+    ...(rawOutput === undefined ? {} : { rawOutput }),
+    reason: `llm-retry-exhausted: ${parseError.slice(0, 120)}`,
+    requiredContext: fallback.requiredContext,
+    risk: fallback.risk,
+    sessionAction: fallback.sessionAction,
     source: 'intent-fallback',
+    templateId: INTENT_TEMPLATE_ID,
   })
 }
 
 type IntentLlmAttemptResult
   = | { kind: 'ok', decision: IntentDecisionPayload }
-    | { kind: 'error', error: string }
+    | { kind: 'error', error: string, rawOutput: string, attempt: number }
 
 async function runIntentLlm(
   input: {
@@ -98,6 +120,7 @@ async function runIntentLlm(
     notifyActivity: () => void
   },
   messages: ChatMessage[],
+  attempt: number,
 ): Promise<IntentLlmAttemptResult> {
   let text = ''
   try {
@@ -114,11 +137,11 @@ async function runIntentLlm(
       else if (event.type === 'error')
         throw new Error(event.error)
     }
-    const decision = normalizeIntentDecision(input.context, input.classification, JSON.parse(text.trim()))
+    const decision = normalizeIntentDecision(input.context, input.classification, JSON.parse(text.trim()), attempt)
     return { kind: 'ok', decision }
   }
   catch (err) {
-    return { kind: 'error', error: String(err) }
+    return { kind: 'error', error: String(err), rawOutput: text, attempt }
   }
 }
 
@@ -152,6 +175,7 @@ function normalizeIntentDecision(
   context: DecisionContext,
   input: IntentClassificationInput,
   raw: unknown,
+  attempt: number,
 ): IntentDecisionPayload {
   const data = recordValue(raw)
   if (!data)
@@ -167,7 +191,9 @@ function normalizeIntentDecision(
     ? data.reason.slice(0, 240)
     : 'llm intent classifier'
   return buildIntentDecision(context, {
+    attempt,
     confidence,
+    evaluator: 'llm',
     intent,
     qualityProfile,
     reason,
@@ -175,6 +201,7 @@ function normalizeIntentDecision(
     risk,
     sessionAction: input.sessionAction,
     source: 'intent-llm',
+    templateId: INTENT_TEMPLATE_ID,
   })
 }
 

@@ -36,6 +36,7 @@ import {
 } from './context'
 import { ContextManager, RunContextComposer } from './context-manager'
 import { deadLoopDetectorFromConfig } from './dead-loop'
+import { recordConversationClassifier, recordIntentDecision, recordQualityGate } from './decision-pipeline-stats'
 import { buildPromptCapabilityDecision } from './decisions'
 import { classifyIntentHeuristic, classifyIntentWithExecutor } from './intent-classifier'
 import { evaluateToolPolicy } from './policy'
@@ -269,6 +270,7 @@ export class Orchestrator {
       this.contextManager.buildSystemPrompt({ priorSummary: activeConversation.summary ?? null }),
     ])
     this.deps.bus.emit('orchestrator.intent_decision', intentDecision)
+    recordIntentDecision(intentDecision)
     const registry = await this.capabilityRegistry.snapshot({ skills: systemContext.availableSkills })
     const capabilityPlan = planCapabilities({
       intent: intentDecision.intent,
@@ -376,6 +378,7 @@ export class Orchestrator {
       ...(gateConfig?.budgetMs === undefined ? {} : { budgetMs: gateConfig.budgetMs }),
     })
     this.deps.bus.emit('orchestrator.quality_gate', qualityGate)
+    recordQualityGate(qualityGate)
     if (qualityGate.action === 'repair' && gateConfig?.mode === 'retry') {
       const repaired = await this.runSuppressedExecutor({
         messages: buildRepairPrompt({ assistantText, gate: qualityGate, requestText: envelope.text }),
@@ -606,8 +609,10 @@ export class Orchestrator {
       recent,
       envelope.text,
       this.controlWorkspacePath(existingWorkspace),
+      this.deps.config.executor.engine,
     )
     this.deps.bus.emit('conversation.classifier', { conversationId: existing.id, decision })
+    recordConversationClassifier(decision)
     if (decision.continue)
       return { conversation: rowToState(existing), sessionAction: 'continue', sessionReason: decision.reason, sessionKey }
 

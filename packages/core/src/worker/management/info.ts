@@ -131,7 +131,15 @@ export async function buildInfo(
     runtimeVersion: env.runtimeVersion,
     configVersion: state.configVersion,
     brains,
-    brainSummary: buildBrainSummary(),
+    brainSummary: buildBrainSummary({
+      intentEvaluator: storedConfig.orchestrator?.decisionPipeline?.intentClassifier?.evaluator ?? 'heuristic',
+      qualityEvaluator: storedConfig.orchestrator?.decisionPipeline?.qualityGate?.evaluator ?? 'heuristic',
+      qualityMode: storedConfig.orchestrator?.decisionPipeline?.qualityGate?.mode ?? 'observe',
+      ...(storedConfig.orchestrator?.decisionPipeline?.qualityGate?.threshold === undefined
+        ? {}
+        : { qualityThreshold: storedConfig.orchestrator.decisionPipeline.qualityGate.threshold }),
+      conversationClassifierEnabled: true,
+    }),
     executor,
     controlExecutor,
     channels,

@@ -1,5 +1,36 @@
 # AIWorker Changelog
 
+## 2026-05-06 00:30 [completed] PLAN-116 — Truthfulness contract for orchestrator decision events and brain status surface
+
+按 DOC-006 指定的 P1 Truthfulness layer 切片完成 BUG-066 + BUG-067 收口。**heuristic + observe-only 仍是默认安全路径**，本 PLAN 不引入默认接管 LLM brain decision，只让 runtime / CLI / REST 如实暴露 source、mode、evaluator、fallback 诊断。
+
+代码改动：
+
+- `packages/core/src/worker/orchestrator/decisions.ts`：`DecisionMode` 扩展为 `'observe_only' | 'enforced'`；新增 `DecisionEvaluator = 'heuristic' | 'llm' | 'none'`；`IntentDecisionPayload` 新增 optional `evaluator / templateId / attempt / rawOutput / parseError`；新增 `resolveQualityGateMode(configuredMode, action)` 真值表（仅当 retry+repair / block+block 才标 enforced）；`buildQualityGatePayload` 接 `{ mode }` option；`ORCHESTRATOR_DECISION_SCHEMA_VERSION` bump 至 2（不做向后兼容）。
+- `packages/core/src/worker/orchestrator/intent-classifier.ts`：heuristic / LLM-ok / LLM-fallback 三态都填 `evaluator + templateId='intent-classifier-v1' + attempt`；fallback 时携带经 `redactBodySecrets` 脱敏并截断到 ≤2KB 的 `rawOutput` 与完整 `parseError`，保留 `intent-fallback` source。
+- `packages/core/src/worker/orchestrator/quality-gate.ts`：所有 `buildQualityGatePayload` 走新增 `buildPayload(input, fields)` helper，自动按 `resolveQualityGateMode` 计算顶层 `mode`；retry+repair / block+block 真改写下游时事件 `mode='enforced'`，其余 `'observe_only'`。
+- `packages/core/src/worker/conversation/router.ts` + `packages/shared/src/fleet/conversation.ts`：`ConversationDecision` 新增 `source ∈ {classifier-llm, classifier-fallback, classifier-disabled}` / `evaluator` / `engine` / `model` / `templateId='conversation-classifier-v1'` / `attempt` / `rawOutput` / `parseError`；3 种 fallback 路径（`non-json-classifier-output` / `malformed-response` / `classifier-error-default-continue`）均带 redacted+truncated rawOutput 与完整 parseError；`service.ts` 把 engine 透传给 classifier。
+- `packages/core/src/worker/orchestrator/decision-pipeline-stats.ts`：新建进程内 ring buffer（windowSize=50），`recordIntentDecision` / `recordQualityGate` / `recordConversationClassifier` 在 `service.ts` emit 后立即喂数据；`getDecisionPipelineSnapshot(config)` 返回 `WorkerInfoDecisionPipelineSummary`。**重启清空，不入 worker.db**。
+- `packages/core/src/worker/brain/summary.ts` + `packages/shared/src/fleet/worker-info.ts`：`buildBrainSummary(decisionPipelineConfig)` 新增 `decisionPipeline` 段；`WorkerInfoBrainSummary` 新增 `decisionPipeline: WorkerInfoDecisionPipelineSummary` 必含字段（包括 intentClassifier / capabilityRouter / qualityGate / conversationClassifier 四组 evaluator+mode+recent）。
+- `packages/core/src/worker/management/info.ts`：`/api/worker/info` 的 `brainSummary` 调用注入实际 decisionPipeline 配置。
+- `apps/api/src/worker/brain/routes.ts` + `apps/api/src/modes/worker.ts`：`BrainRoutesDeps` 新增 `getDecisionPipelineConfig?` 注入；`/api/worker/brain/summary` 返回新 `decisionPipeline` 段。
+- `apps/cli/src/commands/worker/brain.ts`：`aiworker brain status` 输出新 `decisionPipeline` 段；CLI 子命令描述同步更新。
+- 测试：新增 `decisions.test.ts`（schema bump、mode 真值表、capability advisory、QualityGate enforced 切换）、`decision-pipeline-stats.test.ts`（ring buffer + fallback rate + reason histogram + windowSize 上限）、`conversation/router.test.ts`（4 种 fallback 路径 + 脱敏截断）；扩展 `intent-classifier.test.ts`（heuristic/LLM/fallback 三态 evaluator+templateId+attempt + rawOutput 脱敏截断）、`quality-gate.test.ts`（observe_only / enforced mode 切换断言）、`apps/api/src/worker/brain/routes.test.ts`（`/summary` 暴露 decisionPipeline）。
+
+不做事项（明确边界）：
+
+- 不引入默认 LLM brain decider；intent / quality 默认仍 heuristic，capability 仍 advisory registry。
+- 不向后兼容（1.0.0 前不留 alias / shim）：consumer schema 一次性同步，不保留旧字段。
+- 不修 admission governance bridge（BUG-068 / BUG-074）；留给下一 PLAN slice。
+- 不修 codex executor parity（BUG-069 / BUG-070）；留给下一 PLAN slice。
+- 不新增 DB migration / worker.db schema 改动；recent stats 全 in-memory ring buffer，重启清空。
+
+验证：
+
+- `bun run typecheck` ✅（9 workspace 全 0 退出）
+- `bun run lint` ✅（0 violation）
+- `bun run test` ✅（fs-layout 20 / shared 140 / gateway-proto 19 / storage 19 / gateway 148 / core 612 / api 86 / cli 171 / web 59 = 1274 tests，0 fail）
+
 ## 2026-05-05 23:48 [completed] DOC-006 / PLAN-115 — Brain Governance Kernel 决策后的 backlog reset
 
 按 DOC-005 / PLAN-114 的 Governance Brain Kernel 决策，对所有旧 pending / draft PMA 项做断代收口：旧入口失去直接实施资格，真实发布缺陷保留为决策后的开发队列。

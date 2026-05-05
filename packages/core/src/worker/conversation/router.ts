@@ -1,12 +1,20 @@
 import type { ChatMessage, ConversationDecision, Envelope, ExecutorProvider } from '@zonease/aiworker-shared'
 import type { conversations as conversationsTable } from '@zonease/aiworker-storage-sqlite/worker'
+import { redactBodySecrets } from '@zonease/aiworker-shared'
 import { conversations, getSessionEntry, getWorkerDb, messages, sessionEntries } from '@zonease/aiworker-storage-sqlite/worker'
 
 import consola from 'consola'
 import { and, desc, eq, isNull } from 'drizzle-orm'
 
 const MAX_RECENT_MESSAGES = 4
+const CONVERSATION_CLASSIFIER_TEMPLATE_ID = 'conversation-classifier-v1'
+const RAW_OUTPUT_LIMIT = 2048
 type ConversationRow = typeof conversationsTable.$inferSelect
+
+function truncateRedactedRawOutput(raw: string): string {
+  const redacted = redactBodySecrets(raw).body
+  return redacted.length > RAW_OUTPUT_LIMIT ? `${redacted.slice(0, RAW_OUTPUT_LIMIT)}…[truncated]` : redacted
+}
 
 export function resolveSessionKey(envelope: Envelope): string {
   const parts = [envelope.channel, envelope.accountId, envelope.chatId]
@@ -79,12 +87,19 @@ export async function classifyContinuation(
   recent: Array<{ role: string, content: string }>,
   incoming: string,
   workspacePath?: string,
+  engine?: string,
 ): Promise<ConversationDecision> {
   const input = {
     messages: buildPrompt(priorSummary, recent, incoming),
     ...(model ? { model } : {}),
     ...(workspacePath ? { workspacePath } : {}),
     temperature: 0,
+  }
+  const provenance = {
+    ...(engine === undefined ? {} : { engine }),
+    ...(model === undefined ? {} : { model }),
+    templateId: CONVERSATION_CLASSIFIER_TEMPLATE_ID,
+    attempt: 1,
   }
   let text = ''
   try {
@@ -96,17 +111,51 @@ export async function classifyContinuation(
     }
   }
   catch (err) {
-    consola.warn(`[conversation] classifier error, defaulting to continue: ${String(err)}`)
-    return { continue: true, reason: 'classifier-error-default-continue' }
+    const error = String(err)
+    consola.warn(`[conversation] classifier error, defaulting to continue: ${error}`)
+    const rawOutput = text.length > 0 ? truncateRedactedRawOutput(text) : undefined
+    return {
+      continue: true,
+      reason: 'classifier-error-default-continue',
+      source: 'classifier-fallback',
+      evaluator: 'none',
+      ...provenance,
+      ...(rawOutput === undefined ? {} : { rawOutput }),
+      parseError: error,
+    }
   }
+  let parsed: { continue?: unknown, reason?: unknown } | null = null
   try {
-    const parsed = JSON.parse(text.trim()) as ConversationDecision
-    if (typeof parsed.continue === 'boolean')
-      return { continue: parsed.continue, reason: String(parsed.reason ?? '') }
-    return { continue: true, reason: 'malformed-response' }
+    parsed = JSON.parse(text.trim())
   }
-  catch {
-    return { continue: true, reason: 'non-json-classifier-output' }
+  catch (err) {
+    return {
+      continue: true,
+      reason: 'non-json-classifier-output',
+      source: 'classifier-fallback',
+      evaluator: 'heuristic',
+      ...provenance,
+      rawOutput: truncateRedactedRawOutput(text),
+      parseError: String(err),
+    }
+  }
+  if (parsed && typeof parsed.continue === 'boolean') {
+    return {
+      continue: parsed.continue,
+      reason: String(parsed.reason ?? ''),
+      source: 'classifier-llm',
+      evaluator: 'llm',
+      ...provenance,
+    }
+  }
+  return {
+    continue: true,
+    reason: 'malformed-response',
+    source: 'classifier-fallback',
+    evaluator: 'heuristic',
+    ...provenance,
+    rawOutput: truncateRedactedRawOutput(text),
+    parseError: 'classifier output missing boolean `continue` field',
   }
 }
 

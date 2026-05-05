@@ -37,6 +37,11 @@ export type {
 } from './conversation'
 
 export type {
+  ConversationClassifierEvaluator,
+  ConversationClassifierSource,
+} from './conversation'
+
+export type {
   EvolutionObservation,
   SkillDraft,
   SkillDraftSource,
@@ -75,11 +80,11 @@ export type {
   SkillBindingSource,
   WorkerSkillBinding,
 } from './skill-binding'
-
 export {
   WORKER_ID_ALPHABET,
   WORKER_ID_PATTERN,
 } from './worker'
+
 export type {
   CreateWorkerInput,
   UpdateWorkerInput,
@@ -88,24 +93,27 @@ export type {
   WorkerStatus,
   WorkerSummary,
 } from './worker'
-
 export {
   generateWorkerApiToken,
   isWorkerApiToken,
   WORKER_API_TOKEN_PATTERN,
   WORKER_API_TOKEN_PREFIX,
 } from './worker-identity'
+
 export type {
   WorkerApiToken,
   WorkerIdentity,
 } from './worker-identity'
 
 export type {
+  ConversationClassifierRecent,
+  DecisionPipelineRecent,
   WorkerComponentStatus,
   WorkerInfo,
   WorkerInfoBrain,
   WorkerInfoBrainSummary,
   WorkerInfoChannel,
   WorkerInfoControlExecutor,
+  WorkerInfoDecisionPipelineSummary,
   WorkerInfoExecutor,
 } from './worker-info'

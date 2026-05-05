@@ -1,5 +1,6 @@
-import process from 'node:process'
+import type { BrainSummaryDecisionPipelineConfig } from '@zonease/aiworker-core'
 
+import process from 'node:process'
 import { OpenAPIHono } from '@hono/zod-openapi'
 import {
   BrainAdmissionService,
@@ -28,6 +29,12 @@ import { z } from 'zod'
 
 export interface BrainRoutesDeps {
   getWorkerId: () => string
+  /**
+   * PLAN-116: caller supplies the current decision-pipeline config so the
+   * `/summary` response can report truthful evaluator / mode / threshold.
+   * Optional — if omitted, reasonable defaults (heuristic + observe) apply.
+   */
+  getDecisionPipelineConfig?: () => BrainSummaryDecisionPipelineConfig
 }
 
 const limitQuery = z.object({
@@ -112,7 +119,7 @@ export function buildBrainRoutes(deps: BrainRoutesDeps) {
   const routes = new OpenAPIHono()
 
   routes.get('/summary', (c) => {
-    const summary = buildBrainSummary()
+    const summary = buildBrainSummary(deps.getDecisionPipelineConfig?.() ?? {})
     return c.json({
       workerId: deps.getWorkerId(),
       brainSummary: summary,

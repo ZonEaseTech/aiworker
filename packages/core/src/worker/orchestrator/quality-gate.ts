@@ -1,8 +1,8 @@
 import type { ChatMessage, ExecutorProvider, OrchestratorQualityGateConfig } from '@zonease/aiworker-shared'
 
-import type { CapabilityDecisionPayload, DecisionContext, IntentDecisionPayload, QualityGatePayload } from './decisions'
+import type { CapabilityDecisionPayload, DecisionContext, IntentDecisionPayload, QualityGateFields, QualityGatePayload } from './decisions'
 
-import { buildQualityGatePayload } from './decisions'
+import { buildQualityGatePayload, resolveQualityGateMode } from './decisions'
 
 export interface QualityGateInput {
   assistantText: string
@@ -27,6 +27,17 @@ export interface QualityGateInput {
 
 /** TODO-013 default LLM gate budget. */
 export const DEFAULT_QUALITY_GATE_BUDGET_MS = 30_000
+
+/**
+ * PLAN-116: every quality_gate event carries the truthful top-level
+ * `mode`: only when configured `mode ∈ {retry, block}` produces an `action`
+ * that actually mutates downstream behavior do we mark `mode='enforced'`.
+ */
+function buildPayload(input: QualityGateInput, fields: QualityGateFields): QualityGatePayload {
+  return buildQualityGatePayload(input.context, fields, {
+    mode: resolveQualityGateMode(input.mode, fields.action),
+  })
+}
 
 export async function evaluateQualityGate(input: QualityGateInput): Promise<QualityGatePayload> {
   const evaluator = input.evaluator ?? 'heuristic'
@@ -64,7 +75,7 @@ export async function evaluateQualityGate(input: QualityGateInput): Promise<Qual
 
     const fallback = evaluateHeuristic({ ...input, evaluator: 'heuristic' })
     const lastError = secondAttempt.error ?? firstAttempt.error ?? 'unknown error'
-    return buildQualityGatePayload(input.context, {
+    return buildPayload(input, {
       action: fallback.action,
       dimensions: fallback.dimensions,
       evaluator: 'heuristic',
@@ -83,7 +94,7 @@ export async function evaluateQualityGate(input: QualityGateInput): Promise<Qual
 
 function budgetExhaustedFallback(input: QualityGateInput, budgetMs: number, elapsedMs: number): QualityGatePayload {
   const fallback = evaluateHeuristic({ ...input, evaluator: 'heuristic' })
-  return buildQualityGatePayload(input.context, {
+  return buildPayload(input, {
     action: fallback.action,
     dimensions: fallback.dimensions,
     evaluator: 'heuristic',
@@ -173,7 +184,7 @@ function evaluateHeuristic(input: QualityGateInput): QualityGatePayload {
     missing.push('high-risk answer lacks enough detail')
     suggestions.push('include concrete verification, risk, and approval boundaries')
   }
-  return buildQualityGatePayload(input.context, {
+  return buildPayload(input, {
     action: actionFor(score, threshold, input.mode ?? 'observe'),
     dimensions: {
       completeness: score,
@@ -225,7 +236,7 @@ async function runQualityGateLlm(
     const score = Math.max(0, Math.min(10, numeric(data.score) ?? 0))
     return {
       kind: 'ok',
-      payload: buildQualityGatePayload(input.context, {
+      payload: buildPayload(input, {
         action: oneOf(data.action, ['pass', 'repair', 'warn', 'block'] as const) ?? actionFor(score, threshold, input.mode ?? 'observe'),
         dimensions: recordValue(data.dimensions) ?? {},
         evaluator: 'llm',

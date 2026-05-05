@@ -70,6 +70,62 @@ export interface WorkerInfoBrainSummary {
     /** ISO timestamp of the most recent proposal `updatedAt`, if any. */
     lastUpdatedAt?: string
   }
+  /**
+   * Decision pipeline truthfulness snapshot (PLAN-116 / BUG-066 / BUG-067).
+   * Reports the configured evaluator + top-level mode for each decision step,
+   * plus an in-memory ring-buffer summary of recent classifier outcomes.
+   * Counts reset on worker restart; this is observability, not audit.
+   */
+  decisionPipeline: WorkerInfoDecisionPipelineSummary
+}
+
+/** PLAN-116 decision pipeline truthfulness summary. */
+export interface WorkerInfoDecisionPipelineSummary {
+  intentClassifier: {
+    evaluator: 'heuristic' | 'llm'
+    mode: 'observe_only' | 'enforced'
+    recent: DecisionPipelineRecent
+  }
+  capabilityRouter: {
+    source: 'capability-registry'
+    mode: 'observe_only' | 'enforced'
+    note: string
+  }
+  qualityGate: {
+    evaluator: 'heuristic' | 'llm'
+    configuredMode: 'observe' | 'warn' | 'retry' | 'block'
+    threshold?: number
+    recent: DecisionPipelineRecent
+  }
+  conversationClassifier: {
+    /** True whenever an executor is wired up; false only if explicitly disabled. */
+    enabled: boolean
+    recent: ConversationClassifierRecent
+  }
+}
+
+/** Ring-buffer summary for a single decision step. */
+export interface DecisionPipelineRecent {
+  /** Maximum samples the buffer can hold (currently 50). */
+  windowSize: number
+  /** Number of samples currently retained. */
+  samples: number
+  /** Fraction in `[0,1]`: samples whose `source` indicates fallback. */
+  fallbackRate: number
+  /** Most recent fallback `reason` (string), or `null` if none. */
+  lastFallbackReason: string | null
+  /** Most recent fallback ISO timestamp, or `null` if none. */
+  lastFallbackAt: string | null
+}
+
+/** Conversation classifier ring-buffer summary (PLAN-116). */
+export interface ConversationClassifierRecent extends DecisionPipelineRecent {
+  /**
+   * Histogram of `decision.reason` strings observed in the buffer (e.g.
+   * `non-json-classifier-output`, `malformed-response`,
+   * `classifier-error-default-continue`).
+   */
+  fallbackByReason: Record<string, number>
 }
 
 /** One channel binding row inside the `WorkerInfo` response. */

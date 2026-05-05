@@ -105,7 +105,7 @@ const ROOT_WORKER_SUMMARIES: Record<(typeof ROOT_WORKER_COMMANDS)[number], strin
   'brain artifacts show': '只读查看单个 brain artifact',
   'brain memories': '只读列出或搜索 runtime brain memory',
   'brain skills': '只读列出 runtime brain skill',
-  'brain status': '诊断 runtime brain source、写入目标和健康状态',
+  'brain status': '诊断 runtime brain source、写入目标、decision pipeline truthfulness 和健康状态',
   'init': '初始化 worker.db、身份、token 和默认配置',
   'up': '一条命令初始化、验证并启动本地 worker',
   'run': '不启动 HTTP server，直接给 orchestrator 投递一条消息',

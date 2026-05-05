@@ -204,8 +204,8 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**TODO-016 `aiworker serve` silently succeeds when port already bound, curl hits stale serve**](TODO-016.md) `P2`
 - [x] [**REL-015 发布 aiworker CLI 0.8.0**](REL-015.md) `P1`
 - [x] [**QA-006 0.8.0 published end-to-end debug campaign — 5 Souls × 12 turns × 2 engines**](QA-006.md) `P1`
-- [ ] [**BUG-066 Brain decision layer source/mode is heuristic + observe-only and must be exposed truthfully**](BUG-066.md) `P1`
-- [ ] [**BUG-067 `conversation.classifier` silently falls back to heuristic on `non-json-classifier-output` without preserving the raw LLM output**](BUG-067.md) `P1`
+- [x] [**BUG-066 Brain decision layer source/mode is heuristic + observe-only and must be exposed truthfully**](BUG-066.md) `P1`
+- [x] [**BUG-067 `conversation.classifier` silently falls back to heuristic on `non-json-classifier-output` without preserving the raw LLM output**](BUG-067.md) `P1`
 - [ ] [**BUG-068 Brain admission proposal pipeline has no LLM-discoverable entry-point — Souls on claude-code never trigger AIWorker admission**](BUG-068.md) `P1`
 - [ ] [**BUG-069 codex executor session continuity is broken — same chat-id splits into multiple conversations, marker recall fails**](BUG-069.md) `P1`
 - [ ] [**BUG-070 codex executor emits no `orchestrator.tool_call` events — observability badly degraded vs claude-code**](BUG-070.md) `P1`

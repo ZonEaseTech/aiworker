@@ -144,3 +144,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-113 发布 aiworker CLI 0.8.0**](PLAN-113.md) `2026-05-05`
 - [x] [**PLAN-114 Brain Governance Kernel 决策落盘**](PLAN-114.md) `2026-05-05`
 - [x] [**PLAN-115 Brain Governance Kernel 决策后的 backlog reset**](PLAN-115.md) `2026-05-05`
+- [x] [**PLAN-116 Truthfulness contract for orchestrator decision events and brain status surface**](PLAN-116.md) `2026-05-06`

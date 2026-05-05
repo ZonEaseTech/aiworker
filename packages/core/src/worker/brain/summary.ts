@@ -8,16 +8,31 @@ import { parseScopeManifestJson } from '@zonease/aiworker-shared'
 import { brainAdmissionProposals, brainArtifacts, getWorkerDb } from '@zonease/aiworker-storage-sqlite/worker'
 import { sql } from 'drizzle-orm'
 
+import { getDecisionPipelineSnapshot } from '../orchestrator/decision-pipeline-stats'
+
+/** PLAN-116 decision pipeline config view used by brainSummary builders. */
+export interface BrainSummaryDecisionPipelineConfig {
+  intentEvaluator?: 'heuristic' | 'llm'
+  qualityEvaluator?: 'heuristic' | 'llm'
+  qualityMode?: 'observe' | 'warn' | 'retry' | 'block'
+  qualityThreshold?: number
+  conversationClassifierEnabled?: boolean
+}
+
 /**
- * Build the WorkerInfo brain summary (PLAN-103). Pure aggregation —
+ * Build the WorkerInfo brain summary (PLAN-103, extended in PLAN-116 with the
+ * decision pipeline truthfulness snapshot). Pure aggregation —
  * `byStatus` counters + the most recent admission `updatedAt`. Never
  * surfaces proposal payloads, artifact refs, evidence, or canonical brain
  * file content; fleet.db consumers must drill down via worker REST.
  */
-export function buildBrainSummary(): WorkerInfoBrainSummary {
+export function buildBrainSummary(
+  decisionPipelineConfig: BrainSummaryDecisionPipelineConfig = {},
+): WorkerInfoBrainSummary {
   return {
     admissions: buildAdmissionSummary(),
     artifacts: buildArtifactSummary(),
+    decisionPipeline: getDecisionPipelineSnapshot(decisionPipelineConfig),
     scopeManifest: buildScopeManifestSummary(),
   }
 }

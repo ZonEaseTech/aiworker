@@ -258,7 +258,7 @@ cli.command('soul show <preset>', '查看某个 Soul 预设的职责、边界、
   process.exit(await runSoulShow(preset))
 })
 
-cli.command('brain status', '只读诊断本地 worker runtime brain source、写入目标和健康状态').action(async () => {
+cli.command('brain status', '只读诊断本地 worker runtime brain source、写入目标、decision pipeline（heuristic/LLM、observe_only/enforced、recent fallback）和健康状态').action(async () => {
   process.exit(await runBrainStatus())
 })
 

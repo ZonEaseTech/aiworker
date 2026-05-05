@@ -1,8 +1,9 @@
 import type { ChannelType } from '@zonease/aiworker-shared'
 
-export const ORCHESTRATOR_DECISION_SCHEMA_VERSION = 1
+export const ORCHESTRATOR_DECISION_SCHEMA_VERSION = 2
 
-export type DecisionMode = 'observe_only'
+export type DecisionMode = 'observe_only' | 'enforced'
+export type DecisionEvaluator = 'heuristic' | 'llm' | 'none'
 export type DecisionSource = 's1-default' | 'capability-registry' | 'intent-heuristic' | 'intent-llm' | 'intent-fallback' | 'quality-gate'
 
 export type SessionAction = 'continue' | 'new_topic' | 'reset_requested' | 'isolated_task'
@@ -35,13 +36,18 @@ export type DecisionBasePayload = Record<string, unknown> & {
 }
 
 export type IntentDecisionPayload = DecisionBasePayload & {
+  attempt?: number
   confidence: number
+  evaluator: DecisionEvaluator
   intent: WorkerIntent
+  parseError?: string
   qualityProfile: QualityProfile
+  rawOutput?: string
   reason: string
   requiredContext: RequiredContext[]
   risk: WorkerRisk
   sessionAction: SessionAction
+  templateId?: string
 }
 
 export interface CapabilitySkillDescriptor {
@@ -83,6 +89,7 @@ export type QualityGatePayload = DecisionBasePayload & QualityGateFields
 export function buildDefaultIntentDecision(input: DecisionContext): IntentDecisionPayload {
   return buildIntentDecision(input, {
     confidence: 0,
+    evaluator: 'none',
     intent: 'unknown',
     qualityProfile: 'default',
     reason: 'S1 observe-only default; intent classifier is not enabled yet.',
@@ -94,24 +101,34 @@ export function buildDefaultIntentDecision(input: DecisionContext): IntentDecisi
 }
 
 export function buildIntentDecision(input: DecisionContext, decision: {
+  attempt?: number
   confidence: number
+  evaluator: DecisionEvaluator
   intent: WorkerIntent
+  parseError?: string
   qualityProfile: QualityProfile
+  rawOutput?: string
   reason: string
   requiredContext: RequiredContext[]
   risk: WorkerRisk
   sessionAction: SessionAction
   source: DecisionSource
+  templateId?: string
 }): IntentDecisionPayload {
   return {
-    ...decisionBase(input, decision.source),
+    ...decisionBase(input, decision.source, 'observe_only'),
+    ...(decision.attempt === undefined ? {} : { attempt: decision.attempt }),
     confidence: decision.confidence,
+    evaluator: decision.evaluator,
     intent: decision.intent,
+    ...(decision.parseError === undefined ? {} : { parseError: decision.parseError }),
     qualityProfile: decision.qualityProfile,
+    ...(decision.rawOutput === undefined ? {} : { rawOutput: decision.rawOutput }),
     reason: decision.reason,
     requiredContext: decision.requiredContext,
     risk: decision.risk,
     sessionAction: decision.sessionAction,
+    ...(decision.templateId === undefined ? {} : { templateId: decision.templateId }),
   }
 }
 
@@ -128,7 +145,7 @@ export function buildPromptCapabilityDecision(input: DecisionContext & {
   source?: DecisionSource
 }): CapabilityDecisionPayload {
   return {
-    ...decisionBase(input, input.source ?? 'capability-registry'),
+    ...decisionBase(input, input.source ?? 'capability-registry', 'observe_only'),
     ...(input.availableBuiltinCount === undefined ? {} : { availableBuiltinCount: input.availableBuiltinCount }),
     ...(input.availableMcpToolCount === undefined ? {} : { availableMcpToolCount: input.availableMcpToolCount }),
     availableSkillCount: input.availableSkillCount,
@@ -159,17 +176,45 @@ export function buildDefaultQualityGate(input: DecisionContext & {
   })
 }
 
-export function buildQualityGatePayload(input: DecisionContext, gate: QualityGateFields): QualityGatePayload {
+export function buildQualityGatePayload(
+  input: DecisionContext,
+  gate: QualityGateFields,
+  options: { mode?: DecisionMode } = {},
+): QualityGatePayload {
   return {
-    ...decisionBase(input, 'quality-gate'),
+    ...decisionBase(input, 'quality-gate', options.mode ?? 'observe_only'),
     ...gate,
   }
 }
 
-function decisionBase(input: DecisionContext, source: DecisionSource = 's1-default'): DecisionBasePayload {
+/**
+ * Compute the truthful top-level `mode` for a quality_gate event.
+ *
+ * `mode='enforced'` if and only if the configured gate mode would actually
+ * mutate downstream behavior (retry/block) AND the gate produced an action
+ * that triggers that path. Anything else is `observe_only`. This keeps the
+ * top-level mode honest even though `gateMode` and `action` already exist
+ * as inner fields.
+ */
+export function resolveQualityGateMode(
+  configuredMode: 'observe' | 'warn' | 'retry' | 'block' | undefined,
+  action: QualityGateFields['action'],
+): DecisionMode {
+  if (configuredMode === 'retry' && action === 'repair')
+    return 'enforced'
+  if (configuredMode === 'block' && action === 'block')
+    return 'enforced'
+  return 'observe_only'
+}
+
+function decisionBase(
+  input: DecisionContext,
+  source: DecisionSource = 's1-default',
+  mode: DecisionMode = 'observe_only',
+): DecisionBasePayload {
   return {
     schemaVersion: ORCHESTRATOR_DECISION_SCHEMA_VERSION,
-    mode: 'observe_only',
+    mode,
     source,
     channel: input.channel,
     conversationId: input.conversationId,

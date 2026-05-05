@@ -60,6 +60,27 @@ function fakeWorkerInfo(workerId = 'w_test'): WorkerInfo {
       admissions: { byStatus: {} },
       artifacts: { byStatus: {}, total: 0 },
       scopeManifest: { status: 'not-applicable' },
+      decisionPipeline: {
+        intentClassifier: {
+          evaluator: 'heuristic',
+          mode: 'observe_only',
+          recent: { windowSize: 50, samples: 0, fallbackRate: 0, lastFallbackReason: null, lastFallbackAt: null },
+        },
+        capabilityRouter: {
+          source: 'capability-registry',
+          mode: 'observe_only',
+          note: 'capability registry advisory; selections are recorded but not enforced',
+        },
+        qualityGate: {
+          evaluator: 'heuristic',
+          configuredMode: 'observe',
+          recent: { windowSize: 50, samples: 0, fallbackRate: 0, lastFallbackReason: null, lastFallbackAt: null },
+        },
+        conversationClassifier: {
+          enabled: true,
+          recent: { windowSize: 50, samples: 0, fallbackRate: 0, lastFallbackReason: null, lastFallbackAt: null, fallbackByReason: {} },
+        },
+      },
     },
     executor: { type: 'http', model: 'gpt-4o-mini', status: 'healthy' },
     channels: [{ channel: 'web', enabled: true }],

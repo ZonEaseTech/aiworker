@@ -7,7 +7,7 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 
-import { BrainAdmissionService, BrainArtifactRegistry, BrainBriefCompiler, describeBrainSource } from '@zonease/aiworker-core'
+import { BrainAdmissionService, BrainArtifactRegistry, BrainBriefCompiler, describeBrainSource, getDecisionPipelineSnapshot } from '@zonease/aiworker-core'
 import { projectScopeManifestPath, resolveAiworkerScope, resolveBrainHome } from '@zonease/aiworker-fs-layout'
 import { createBuiltinSoulRegistry, parseScopeManifestJson } from '@zonease/aiworker-shared'
 import consola from 'consola'
@@ -102,6 +102,16 @@ export async function runBrainStatus(): Promise<number> {
       const memories = await runtime.brain.listMemories({ limit: 200 }).catch(() => [])
       const memoryCount = memories.length
       const identity = inspectBrainIdentity()
+      const decisionPipeline = ctx.hydrated.orchestrator?.decisionPipeline
+      const decisionPipelineConfig = {
+        intentEvaluator: decisionPipeline?.intentClassifier?.evaluator ?? 'heuristic' as const,
+        qualityEvaluator: decisionPipeline?.qualityGate?.evaluator ?? 'heuristic' as const,
+        qualityMode: decisionPipeline?.qualityGate?.mode ?? 'observe' as const,
+        ...(decisionPipeline?.qualityGate?.threshold === undefined
+          ? {}
+          : { qualityThreshold: decisionPipeline.qualityGate.threshold }),
+        conversationClassifierEnabled: true,
+      }
       console.log(JSON.stringify({
         workerId: ctx.workerId,
         configVersion: ctx.configVersion,
@@ -114,6 +124,7 @@ export async function runBrainStatus(): Promise<number> {
           ctx.hydrated.brainWriteTarget,
         )),
         scope: inspectScopeSummary(),
+        decisionPipeline: getDecisionPipelineSnapshot(decisionPipelineConfig),
         assets: {
           identity,
           skillCount: skills.length,
