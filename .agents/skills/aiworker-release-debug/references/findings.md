@@ -124,10 +124,60 @@ cd "$AIWORKER_REPO"
 
 调试结束时给用户的最终汇报必须包含：
 
-- [ ] `$DEBUG_ROOT/REPORT.md` —— 总报告
+- [ ] `$DEBUG_ROOT/REPORT.md` —— 总报告，**必含上一版修复确认表 + 本版仍存在表 + 本版新发现表**（详见下面 QA-NNN.md 必含段）
 - [ ] `$DEBUG_ROOT/findings/*.md` —— 每条独立 finding
 - [ ] `$DEBUG_ROOT/samples/*.txt|.log` —— 业务采样原文（不只是 final text，要保留 stream log）
-- [ ] `$DEBUG_ROOT/dump/claude-*.txt` —— fake-claude shim 抓的 stdin / argv 证据
+- [ ] `$DEBUG_ROOT/dump/claude-*.txt` + `$DEBUG_ROOT/dump/codex-*.txt`（如做了 cross-engine） —— shim 抓的 stdin / argv 证据
+- [ ] `$DEBUG_ROOT/findings/SOUL-prod-grade-suggestions.md` —— cross-engine 软越界等"非 BUG 但需要 SOUL 模板调教"的建议集中地
 - [ ] `$AIWORKER_REPO/docs/task/<TYPE>-NNN.md` × N —— PMA task 文件
 - [ ] `$AIWORKER_REPO/docs/task/index.md` —— 末尾 N 行新任务追加
-- [ ] 一份 finding ↔ task 对照表（在 QA-NNN.md 的 Findings 段或 REPORT.md 末尾）
+- [ ] `$AIWORKER_REPO/docs/task/QA-NNN.md` —— campaign 总结，含 finding ↔ task 对照表 + 上一版修复确认核对表
+
+## QA-NNN.md 必含段（campaign 总结）
+
+每次 campaign 收尾的 QA-NNN.md 必须包含下面三个核对表，**不允许只列新 BUG 不做修复确认**：
+
+### 段 1 — 上一版关键修复确认（不要错杀）
+
+```markdown
+## 上一版关键修复确认
+
+| 上一版 BUG/TODO | 本版状态 | 证据 |
+|-----------------|----------|------|
+| BUG-NNN <短描述> | **已修** / **仍存在** / **部分修** / **未验证** | <dump 路径 + grep 关键词 + ablation 对照行号> |
+```
+
+判定规则：
+
+- **已修**：必须配 dump grep 证据 + ablation 对照 + 横向 ≥3 Soul 都通过；不能只看上层接口
+- **仍存在**：直接复用上一版 QA 的复现路径，给本版 dump 路径
+- **部分修**（partial-injection / partial-redact 等）：**这是新发现，要单独建 BUG**，不能合并到"已修"。例如：
+  - MEMORY.md 索引行进 stdin 但 body 没进（BUG-060）
+  - admission show 顶层 apiKey redacted 但 payload.body 字段明文（BUG-061）
+- **未验证**：明确说原因（如 acp/cursor/mcp adapter 没人手抽样），登记到 REPORT.md outstanding risks 段
+
+### 段 2 — 本版仍存在的旧 BUG / TODO（如有）
+
+```markdown
+## 仍存在的已知问题
+
+- BUG-NNN <短描述> — 上一版未修，本版**仍存在**：<复现路径>
+```
+
+### 段 3 — 本版新发现
+
+```markdown
+## 新发现
+
+| Finding | Task | Severity |
+|---------|------|----------|
+| <一句话> | [BUG-NNN](BUG-NNN.md) | `P0`/`P1`/`P2`/`P3` |
+```
+
+### 段 4 — Verified Working in <version>
+
+正面也要列。"经过 ablation + dump 验证 brain 真注入 LLM"、"9 Soul × 4 必跑全部 on-character"等，列出来便于下次回归对比。
+
+### 段 5 — Out of Scope
+
+明确说明本次没测的：gateway/fleet 控制面、acp/cursor/mcp 等 engine 横向、channel inbound 验签、evolution cron 实路径等。下一版 campaign 可以接力。

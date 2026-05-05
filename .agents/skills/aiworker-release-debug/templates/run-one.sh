@@ -20,8 +20,12 @@ DEBUG_ROOT="${DEBUG_ROOT:-/home/ben/projects/debug-aiworker/qa-$(date +%Y-%m-%d)
 SAMPLES="${SAMPLES:-$DEBUG_ROOT/samples}"
 mkdir -p "$SAMPLES"
 cd "$PROJ"
-echo "=== $LABEL ($PROJ) ==="
-aiworker run --message "$MSG" --timeout-ms 120000 2>&1 \
+# 唯一 chat-id 隔离：避免 conversation history 污染让上一轮回答漂进下一轮判读
+CHAT_ID="${CHAT_ID:-$LABEL:$(date +%s%N)}"
+# timeout 240s：开 LLM evaluator 时单轮变 4-5 次串行 cold-start，默认 90s 不够（详见 TODO-013）
+TIMEOUT_MS="${TIMEOUT_MS:-240000}"
+echo "=== $LABEL ($PROJ) chat-id=$CHAT_ID ==="
+aiworker run --message "$MSG" --chat-id "$CHAT_ID" --timeout-ms "$TIMEOUT_MS" 2>&1 \
   | tee "$SAMPLES/$LABEL.log" \
   | python3 -c '
 import json, sys

@@ -1,4 +1,11 @@
--- 直写 worker.db 注入 admission fixture（CLI 没暴露 propose 入口，详见 TODO-009）
+-- 直写 worker.db 注入 admission fixture
+--
+-- 0.7.0+ CLI 已暴露 `aiworker brain admission propose --i-know-this-is-debug` debug 入口，
+-- happy-path fixture 优先走 CLI 路径。这个 SQL 文件保留作为 schema-drift / 边界 fixture：
+--   - 刻意 craft malformed evidence
+--   - unsupported kind（policy-update 等 CLI 不允许的 kind）
+--   - 明文 secret payload（CLI 默认 secret-scan 会 block）
+--   - 多种 secret type 同时注入（覆盖 sk-token 之外的 JWT/AWS/GitHub PAT，配合 TODO-012）
 --
 -- 用法：
 --   sqlite3 $PROJ/.aiworker/local/worker.db < admission-fixture.sql
