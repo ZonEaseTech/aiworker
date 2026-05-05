@@ -217,3 +217,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [ ] [**TODO-027 Create Governance Kernel regression harness**](TODO-027.md) `P2`
 - [x] [**DOC-005 Brain Governance Kernel 架构决策落盘**](DOC-005.md) `P1`
 - [x] [**DOC-006 Brain Governance Kernel 决策后的 backlog 断代收口**](DOC-006.md) `P1`
+- [~] [**REL-016 发布 aiworker CLI 0.9.0**](REL-016.md) `P1`
