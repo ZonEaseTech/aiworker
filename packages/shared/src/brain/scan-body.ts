@@ -29,6 +29,10 @@ export type SecretRuleId
     | 'bearer-token'
     | 'aws-access-key'
     | 'github-token'
+    | 'slack-token'
+    | 'stripe-live'
+    | 'gcp-api-key'
+    | 'pem-private-key'
     | 'high-entropy'
 
 interface SecretRule {
@@ -41,8 +45,12 @@ const RULES: readonly SecretRule[] = [
   { id: 'sk-token', label: 'OpenAI/Anthropic-style sk- token', regex: /sk-[\w-]{20,}/g },
   { id: 'jwt', label: 'JWT-like token', regex: /eyJ[\w=.-]{20,}/g },
   { id: 'bearer-token', label: 'Bearer authorization token', regex: /\b[Bb]earer\s+[\w.-]{20,}/g },
-  { id: 'aws-access-key', label: 'AWS access key id', regex: /\bAKIA[0-9A-Z]{16}\b/g },
+  { id: 'aws-access-key', label: 'AWS access key id', regex: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/g },
   { id: 'github-token', label: 'GitHub-style token (ghp / gho / ghs / ghu / ghr)', regex: /\bgh[posur]_[A-Za-z0-9]{36,}\b/g },
+  { id: 'slack-token', label: 'Slack token (xoxa / xoxb / xoxp / xoxr / xoxs)', regex: /\bxox[abprs]-[A-Za-z0-9-]{10,}/g },
+  { id: 'stripe-live', label: 'Stripe live secret key', regex: /\bsk_live_[A-Za-z0-9]{16,}/g },
+  { id: 'gcp-api-key', label: 'Google Cloud / Firebase API key', regex: /\bAIza[\w-]{35}\b/g },
+  { id: 'pem-private-key', label: 'PEM-formatted private key block', regex: /-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----[\s\S]+?-----END (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----/g },
 ]
 
 const HIGH_ENTROPY_CANDIDATE_RE = /[\w+/=-]{32,}/g

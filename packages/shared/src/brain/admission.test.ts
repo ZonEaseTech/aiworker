@@ -166,7 +166,7 @@ describe('redactSecretLikeValues', () => {
 })
 
 describe('redactBrainAdmissionProposal', () => {
-  it('redacts secret-like values inside evidence + payload, keeps summary / rollback / target', () => {
+  it('redacts secret-like values inside evidence + payload, keeps benign summary / rollback / target prose', () => {
     const original = proposal({
       evidence: [
         { at: NOW, kind: 'tool-call', summary: 'public summary', notes: 'long context', ref: 'tool-1' },
@@ -189,6 +189,35 @@ describe('redactBrainAdmissionProposal', () => {
       body: 'memory body',
       connection: { token: '<redacted>', user: 'alice' },
     })
+  })
+
+  it('BUG-061: redacts secret-shaped substrings embedded inside payload.body even when key name is benign', () => {
+    const original = proposal({
+      payload: {
+        body: '# leak test\n\napiKey=sk-LIVE-shouldnotpersist1234567\nbearer eyJabcdefghijklmnopqrstuv',
+      },
+    })
+    const redacted = redactBrainAdmissionProposal(original)
+    const payload = redacted.payload as Record<string, unknown>
+    const body = String(payload.body)
+    expect(body).toContain('[REDACTED:sk-token]')
+    expect(body).toContain('[REDACTED:jwt]')
+    expect(body).not.toContain('sk-LIVE')
+    expect(body).not.toContain('eyJabcdef')
+  })
+
+  it('BUG-061: redacts secret-shaped substrings embedded inside summary / rollback / target', () => {
+    const original = proposal({
+      summary: 'leaked summary apiKey=sk-LIVE-shouldnotpersist1234567 in prose',
+      rollback: 'undo path bearer eyJabcdefghijklmnopqrstuv',
+      target: '.aiworker/MEMORY.md',
+    })
+    const redacted = redactBrainAdmissionProposal(original)
+    expect(redacted.summary).toContain('[REDACTED:sk-token]')
+    expect(redacted.summary).not.toContain('sk-LIVE')
+    expect(redacted.rollback).toContain('[REDACTED:jwt]')
+    expect(redacted.rollback).not.toContain('eyJabcdef')
+    expect(redacted.target).toBe('.aiworker/MEMORY.md')
   })
 
   it('passes through proposals without payload', () => {

@@ -5,6 +5,7 @@ import type { WorkerContext } from '../../context'
 import { existsSync, readFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
+import process from 'node:process'
 
 import { BrainAdmissionService, BrainArtifactRegistry, BrainBriefCompiler, describeBrainSource } from '@zonease/aiworker-core'
 import { projectScopeManifestPath, resolveAiworkerScope, resolveBrainHome } from '@zonease/aiworker-fs-layout'
@@ -44,6 +45,32 @@ function clampLimit(limit: number | undefined): number {
   if (!Number.isInteger(limit) || limit < 1 || limit > 200)
     throw new InvalidBrainLimitError('limit must be an integer between 1 and 200')
   return limit
+}
+
+/**
+ * BUG-061 read-path redact gate.
+ *
+ * Two doors must be open before plaintext leaves the worker process:
+ *   - the operator passes `--show-sensitive=true` (intent),
+ *   - the worker process env carries `AIWORKER_ADMIN_REVEAL=1` (capability).
+ *
+ * Either missing falls back to the default redacted view and emits a stderr
+ * hint explaining what would be needed. This keeps the existing CLI flag
+ * usable for trusted local debug while making admin-UI / fleet relays
+ * incapable of accidentally surfacing plaintext.
+ */
+export function resolveAdmissionRedactPolicy(input: { showSensitive: boolean | undefined, env?: NodeJS.ProcessEnv }): {
+  redactSensitive: boolean
+  showSensitiveDeniedReason?: 'missing-env-gate'
+} {
+  const env = input.env ?? process.env
+  const wantsReveal = input.showSensitive === true
+  const envOpened = env.AIWORKER_ADMIN_REVEAL === '1'
+  if (wantsReveal && envOpened)
+    return { redactSensitive: false }
+  if (wantsReveal && !envOpened)
+    return { redactSensitive: true, showSensitiveDeniedReason: 'missing-env-gate' }
+  return { redactSensitive: true }
 }
 
 function memorySummary(memory: BrainMemory): Record<string, unknown> {
@@ -377,11 +404,14 @@ export async function runBrainAdmissionList(options: BrainAdmissionListOptions =
         filterOptions.scopeId = options.scopeId
       if (options.soulId !== undefined)
         filterOptions.soulId = options.soulId
-      const result = service.list(filterOptions, { redactSensitive: options.showSensitive !== true })
+      const policy = resolveAdmissionRedactPolicy({ showSensitive: options.showSensitive })
+      if (policy.showSensitiveDeniedReason === 'missing-env-gate')
+        consola.warn('[aiworker brain admission list] --show-sensitive ignored: set AIWORKER_ADMIN_REVEAL=1 in the worker process env to unlock plaintext')
+      const result = service.list(filterOptions, { redactSensitive: policy.redactSensitive })
       console.log(JSON.stringify({
         workerId: ctx.workerId,
         count: result.proposals.length,
-        redacted: options.showSensitive !== true,
+        redacted: policy.redactSensitive,
         proposals: result.proposals.map(admissionSummary),
         skipped: result.skipped,
       }, null, 2))
@@ -402,7 +432,10 @@ export async function runBrainAdmissionShow(id: string, options: BrainAdmissionS
   try {
     return await withWorkerContext(async (ctx) => {
       const service = new BrainAdmissionService()
-      const proposal = service.get(id, { redactSensitive: options.showSensitive !== true })
+      const policy = resolveAdmissionRedactPolicy({ showSensitive: options.showSensitive })
+      if (policy.showSensitiveDeniedReason === 'missing-env-gate')
+        consola.warn('[aiworker brain admission show] --show-sensitive ignored: set AIWORKER_ADMIN_REVEAL=1 in the worker process env to unlock plaintext')
+      const proposal = service.get(id, { redactSensitive: policy.redactSensitive })
       if (proposal === null) {
         consola.error(`[aiworker brain admission show] proposal "${id}" not found`)
         return 1
@@ -410,7 +443,7 @@ export async function runBrainAdmissionShow(id: string, options: BrainAdmissionS
       const decisions = service.listDecisions(id)
       console.log(JSON.stringify({
         workerId: ctx.workerId,
-        redacted: options.showSensitive !== true,
+        redacted: policy.redactSensitive,
         proposal: admissionFullView(proposal),
         decisions,
       }, null, 2))

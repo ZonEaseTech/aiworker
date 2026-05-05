@@ -130,7 +130,7 @@ describe('aiworker brain admission commands (PLAN-101)', () => {
     expect(payload?.connection?.token).toBe('<redacted>')
   })
 
-  it('list --show-sensitive returns original payload values', async () => {
+  it('list --show-sensitive + AIWORKER_ADMIN_REVEAL=1 returns original payload values (BUG-061 gate)', async () => {
     service.propose({
       confidence: 0.7,
       id: 'p-2',
@@ -141,11 +141,66 @@ describe('aiworker brain admission commands (PLAN-101)', () => {
       summary: 's',
       target: '.aiworker/MEMORY.md',
     })
-    const { output } = await captureConsole(() => runBrainAdmissionList({ showSensitive: true }))
+    const previous = process.env.AIWORKER_ADMIN_REVEAL
+    process.env.AIWORKER_ADMIN_REVEAL = '1'
+    try {
+      const { output } = await captureConsole(() => runBrainAdmissionList({ showSensitive: true }))
+      const parsed = JSON.parse(output) as AdmissionListOutput
+      expect(parsed.redacted).toBe(false)
+      const payload = parsed.proposals[0]?.payload as { connection?: { token?: string } } | undefined
+      expect(payload?.connection?.token).toBe('super-secret')
+    }
+    finally {
+      if (previous === undefined)
+        delete process.env.AIWORKER_ADMIN_REVEAL
+      else
+        process.env.AIWORKER_ADMIN_REVEAL = previous
+    }
+  })
+
+  it('BUG-061: list --show-sensitive without AIWORKER_ADMIN_REVEAL keeps redacted view', async () => {
+    service.propose({
+      confidence: 0.7,
+      id: 'p-2-gate',
+      kind: 'memory-add',
+      payload: { body: 'note', connection: { token: 'super-secret' } },
+      rollback: 'm',
+      soulId: 'developer',
+      summary: 's',
+      target: '.aiworker/MEMORY.md',
+    })
+    const previous = process.env.AIWORKER_ADMIN_REVEAL
+    delete process.env.AIWORKER_ADMIN_REVEAL
+    try {
+      const { output } = await captureConsole(() => runBrainAdmissionList({ showSensitive: true }))
+      const parsed = JSON.parse(output) as AdmissionListOutput
+      expect(parsed.redacted).toBe(true)
+      const payload = parsed.proposals[0]?.payload as { connection?: { token?: string } } | undefined
+      expect(payload?.connection?.token).toBe('<redacted>')
+    }
+    finally {
+      if (previous !== undefined)
+        process.env.AIWORKER_ADMIN_REVEAL = previous
+    }
+  })
+
+  it('BUG-061: payload.body secret-shaped substring is redacted by default', async () => {
+    service.propose({
+      confidence: 0.7,
+      id: 'p-2-bodysecret',
+      kind: 'memory-add',
+      payload: { body: '# leak\n\napiKey=sk-LIVE-shouldnotpersist1234567' },
+      rollback: 'm',
+      soulId: 'developer',
+      summary: 's',
+      target: '.aiworker/MEMORY.md',
+    })
+    const { output } = await captureConsole(() => runBrainAdmissionList())
     const parsed = JSON.parse(output) as AdmissionListOutput
-    expect(parsed.redacted).toBe(false)
-    const payload = parsed.proposals[0]?.payload as { connection?: { token?: string } } | undefined
-    expect(payload?.connection?.token).toBe('super-secret')
+    expect(parsed.redacted).toBe(true)
+    const payload = parsed.proposals[0]?.payload as { body?: string } | undefined
+    expect(payload?.body ?? '').toContain('[REDACTED:sk-token]')
+    expect(payload?.body ?? '').not.toContain('sk-LIVE')
   })
 
   it('list filters by status / kind', async () => {

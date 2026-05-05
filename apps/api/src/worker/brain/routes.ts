@@ -87,6 +87,20 @@ const proposeBody = z.object({
 
 const DEV_TOOLS_ENABLED = process.env.WORKER_DEV_TOOLS === 'true'
 
+/**
+ * BUG-061: read-path redact gate. `?showSensitive=true` alone is not enough —
+ * the worker process env must carry `AIWORKER_ADMIN_REVEAL=1`. This keeps
+ * existing CLI / admin debug flows usable while making admin UI / fleet
+ * relays incapable of accidentally surfacing plaintext through query string.
+ */
+function resolveAdmissionRedact(showSensitive: boolean): { redact: boolean, denied: boolean } {
+  if (!showSensitive)
+    return { redact: true, denied: false }
+  if (process.env.AIWORKER_ADMIN_REVEAL === '1')
+    return { redact: false, denied: false }
+  return { redact: true, denied: true }
+}
+
 function admissionService() {
   return new BrainAdmissionService()
 }
@@ -114,7 +128,8 @@ export function buildBrainRoutes(deps: BrainRoutesDeps) {
       }, 400)
     }
     const q = parsed.data
-    const redact = q.showSensitive !== true
+    const gate = resolveAdmissionRedact(q.showSensitive === true)
+    const redact = gate.redact
     const filterOptions: Parameters<BrainAdmissionService['list']>[0] = {}
     if (q.status !== undefined)
       filterOptions.status = q.status
@@ -130,6 +145,7 @@ export function buildBrainRoutes(deps: BrainRoutesDeps) {
     return c.json({
       count: result.proposals.length,
       redacted: redact,
+      ...(gate.denied ? { showSensitiveDenied: 'missing-env-gate: set AIWORKER_ADMIN_REVEAL=1 in worker env' } : {}),
       proposals: result.proposals,
       skipped: result.skipped,
     })
@@ -137,16 +153,22 @@ export function buildBrainRoutes(deps: BrainRoutesDeps) {
 
   routes.get('/admission/:id', (c) => {
     const showSensitive = c.req.query('showSensitive') === 'true'
+    const gate = resolveAdmissionRedact(showSensitive)
     const id = c.req.param('id')
     const service = admissionService()
-    const proposal = service.get(id, { redactSensitive: !showSensitive })
+    const proposal = service.get(id, { redactSensitive: gate.redact })
     if (proposal === null) {
       return c.json({
         error: { code: 'not-found', message: `admission proposal "${id}" not found` },
       }, 404)
     }
     const decisions = service.listDecisions(id)
-    return c.json({ redacted: !showSensitive, proposal, decisions })
+    return c.json({
+      redacted: gate.redact,
+      ...(gate.denied ? { showSensitiveDenied: 'missing-env-gate: set AIWORKER_ADMIN_REVEAL=1 in worker env' } : {}),
+      proposal,
+      decisions,
+    })
   })
 
   routes.post('/admission', async (c) => {

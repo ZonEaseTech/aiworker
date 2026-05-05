@@ -207,4 +207,92 @@ describe('BrainBriefCompiler (PLAN-102)', () => {
     })
     expect(brief.executor).toBe('codex')
   })
+
+  it('BUG-060: injects task-matched memory body files alongside the MEMORY.md index', async () => {
+    await writeFile(join(ctx.brainHome, 'MEMORY.md'), [
+      '# Long-term memory',
+      '> Durable facts.',
+      '- [QA fixture](qa-fixture.md) — admission MVP smoke',
+      '- [Cron schedule](cron-schedule.md) — background jobs',
+    ].join('\n'), 'utf8')
+    await mkdir(join(ctx.brainHome, 'memories'), { recursive: true })
+    await writeFile(join(ctx.brainHome, 'memories', 'qa-fixture.md'), '# QA fixture\n\nadmission MVP 验证通过.', 'utf8')
+    await writeFile(join(ctx.brainHome, 'memories', 'cron-schedule.md'), '# Cron schedule\n\nrollup runs daily.', 'utf8')
+
+    const compiler = new BrainBriefCompiler({
+      brainHome: ctx.brainHome,
+      now: () => NOW,
+      soulRegistry: REGISTRY,
+    })
+    const brief = await compiler.compile({
+      soulId: 'developer',
+      task: 'admission MVP qa fixture status',
+    })
+
+    const memorySection = brief.sections.find(s => s.id === 'memory')
+    expect(memorySection).toBeDefined()
+    expect(memorySection?.body).toContain('QA fixture')
+    expect(memorySection?.body).toContain('admission MVP 验证通过')
+    expect(memorySection?.body).toContain('memories/qa-fixture.md')
+    // Unmatched memory bodies should not be eagerly included
+    expect(memorySection?.body).not.toContain('rollup runs daily')
+  })
+
+  it('BUG-060: falls back to index-only memory section when no body matches the task', async () => {
+    await writeFile(join(ctx.brainHome, 'MEMORY.md'), [
+      '# Long-term memory',
+      '- [Cron schedule](cron-schedule.md) — background jobs',
+    ].join('\n'), 'utf8')
+    await mkdir(join(ctx.brainHome, 'memories'), { recursive: true })
+    await writeFile(join(ctx.brainHome, 'memories', 'cron-schedule.md'), '# Cron schedule\n\nrollup runs daily.', 'utf8')
+
+    const compiler = new BrainBriefCompiler({
+      brainHome: ctx.brainHome,
+      now: () => NOW,
+      soulRegistry: REGISTRY,
+    })
+    const brief = await compiler.compile({
+      soulId: 'developer',
+      task: 'completely unrelated topic xyz',
+    })
+    const memorySection = brief.sections.find(s => s.id === 'memory')
+    expect(memorySection).toBeDefined()
+    expect(memorySection?.body).not.toContain('rollup runs daily')
+    expect(memorySection?.body).toContain('Long-term memory')
+  })
+
+  it('BUG-062: never emits an artifact-summary section when artifactRefs are empty / falsy', async () => {
+    closeWorkerDb()
+    initWorkerDb(join(ctx.brainHome, 'worker.db'))
+    runWorkerMigrations()
+    const registry = new BrainArtifactRegistry()
+
+    const compiler = new BrainBriefCompiler({
+      artifactRegistry: registry,
+      brainHome: ctx.brainHome,
+      now: () => NOW,
+      soulRegistry: REGISTRY,
+    })
+    const briefNoRefs = await compiler.compile({
+      soulId: 'developer',
+      task: 'no artifacts please',
+    })
+    closeWorkerDb()
+    expect(briefNoRefs.sections.find(s => s.id === 'artifact-summary')).toBeUndefined()
+
+    closeWorkerDb()
+    initWorkerDb(join(ctx.brainHome, 'worker.db'))
+    runWorkerMigrations()
+    const briefRogueRefs = await compiler.compile({
+      // Simulates downstream caller that forwarded a degenerate cac value.
+      artifactRefs: ['', '   ', undefined as unknown as string],
+      soulId: 'developer',
+      task: 'no artifacts please',
+    })
+    closeWorkerDb()
+    expect(briefRogueRefs.sections.find(s => s.id === 'artifact-summary')).toBeUndefined()
+    // The 'undefined: not found' literal must not show up regardless.
+    for (const section of briefRogueRefs.sections)
+      expect(section.body).not.toContain('undefined: not found')
+  })
 })

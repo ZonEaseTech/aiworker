@@ -104,7 +104,7 @@ describe('buildBrainRoutes (PLAN-103)', () => {
     expect(auth?.token).toBe('<redacted>')
   })
 
-  it('GET /admission?showSensitive=true exposes raw payload secret-like values', async () => {
+  it('GET /admission?showSensitive=true + AIWORKER_ADMIN_REVEAL=1 exposes raw payload secret-like values (BUG-061 gate)', async () => {
     admissionService.propose({
       confidence: 0.5,
       id: 'p-unlock',
@@ -115,11 +115,71 @@ describe('buildBrainRoutes (PLAN-103)', () => {
       summary: 's',
       target: '.aiworker/MEMORY.md',
     })
+    const previous = process.env.AIWORKER_ADMIN_REVEAL
+    process.env.AIWORKER_ADMIN_REVEAL = '1'
+    try {
+      const app = buildApp()
+      const res = await app.fetch(new Request('http://w/api/worker/brain/admission?showSensitive=true'))
+      const json = await res.json() as { redacted: boolean, proposals: Array<{ payload?: { token?: string } }> }
+      expect(json.redacted).toBe(false)
+      expect(json.proposals[0]?.payload?.token).toBe('super-secret')
+    }
+    finally {
+      if (previous === undefined)
+        delete process.env.AIWORKER_ADMIN_REVEAL
+      else
+        process.env.AIWORKER_ADMIN_REVEAL = previous
+    }
+  })
+
+  it('BUG-061: GET /admission?showSensitive=true without AIWORKER_ADMIN_REVEAL keeps redacted view + flags denial', async () => {
+    admissionService.propose({
+      confidence: 0.5,
+      id: 'p-unlock-denied',
+      kind: 'memory-add',
+      payload: { body: 'note', token: 'super-secret' },
+      rollback: 'manual',
+      soulId: 'developer',
+      summary: 's',
+      target: '.aiworker/MEMORY.md',
+    })
+    const previous = process.env.AIWORKER_ADMIN_REVEAL
+    delete process.env.AIWORKER_ADMIN_REVEAL
+    try {
+      const app = buildApp()
+      const res = await app.fetch(new Request('http://w/api/worker/brain/admission?showSensitive=true'))
+      const json = await res.json() as {
+        redacted: boolean
+        showSensitiveDenied?: string
+        proposals: Array<{ payload?: { token?: string } }>
+      }
+      expect(json.redacted).toBe(true)
+      expect(json.showSensitiveDenied ?? '').toContain('AIWORKER_ADMIN_REVEAL')
+      expect(json.proposals[0]?.payload?.token).toBe('<redacted>')
+    }
+    finally {
+      if (previous !== undefined)
+        process.env.AIWORKER_ADMIN_REVEAL = previous
+    }
+  })
+
+  it('BUG-061: GET /admission default redacts secret-shaped substrings inside payload.body', async () => {
+    admissionService.propose({
+      confidence: 0.5,
+      id: 'p-bodysecret',
+      kind: 'memory-add',
+      payload: { body: 'apiKey=sk-LIVE-shouldnotpersist1234567' },
+      rollback: 'manual',
+      soulId: 'developer',
+      summary: 's',
+      target: '.aiworker/MEMORY.md',
+    })
     const app = buildApp()
-    const res = await app.fetch(new Request('http://w/api/worker/brain/admission?showSensitive=true'))
-    const json = await res.json() as { redacted: boolean, proposals: Array<{ payload?: { token?: string } }> }
-    expect(json.redacted).toBe(false)
-    expect(json.proposals[0]?.payload?.token).toBe('super-secret')
+    const res = await app.fetch(new Request('http://w/api/worker/brain/admission'))
+    const json = await res.json() as { proposals: Array<{ payload?: { body?: string } }> }
+    const body = json.proposals[0]?.payload?.body ?? ''
+    expect(body).toContain('[REDACTED:sk-token]')
+    expect(body).not.toContain('sk-LIVE')
   })
 
   it('GET /admission/:id returns 404 for unknown id', async () => {

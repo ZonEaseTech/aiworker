@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+import { redactBodySecrets } from './scan-body'
+
 /**
  * Brain admission MVP (PLAN-101).
  *
@@ -159,24 +161,40 @@ export function redactSecretLikeValues<T>(value: T): T {
     for (const [key, child] of Object.entries(value)) {
       if (typeof child === 'string' && isSecretKey(key))
         out[key] = REDACTED
+      else if (typeof child === 'string')
+        // BUG-061: even when the key name is benign (e.g. `body`, `summary`),
+        // scan the string content for secret-shaped substrings and replace
+        // each hit with `[REDACTED:<rule>]`. Reuses the same scanner that
+        // admission apply runs against `payload.body` so read and write paths
+        // converge on a single redaction policy.
+        out[key] = redactBodySecrets(child).body
       else
         out[key] = redactSecretLikeValues(child)
     }
     return out as unknown as T
   }
+  if (typeof value === 'string')
+    // BUG-061: top-level string values (rare, but possible when a primitive
+    // surfaces from a recursive call) also pass through the content scanner.
+    return redactBodySecrets(value).body as unknown as T
   return value
 }
 
 /**
  * Default redaction for proposal evidence + payload. `summary`, `rollback`,
  * and `target` are operator-controlled fields that the Soul author owns —
- * they pass through. Caller can opt out via the `--show-sensitive` flag in
- * CLI / `redact: false` in core.
+ * they pass through field-name redaction but their string content is still
+ * scanned for secret-shaped substrings (BUG-061). Caller can opt out via the
+ * `--show-sensitive` flag in CLI / `redact: false` in core.
  */
 export function redactBrainAdmissionProposal(proposal: BrainAdmissionProposal): BrainAdmissionProposal {
-  return {
+  const redacted: BrainAdmissionProposal = {
     ...proposal,
+    summary: redactBodySecrets(proposal.summary).body,
+    rollback: redactBodySecrets(proposal.rollback).body,
+    target: redactBodySecrets(proposal.target).body,
     evidence: proposal.evidence.map(entry => redactSecretLikeValues(entry)),
     ...(proposal.payload === undefined ? {} : { payload: redactSecretLikeValues(proposal.payload) }),
   }
+  return redacted
 }

@@ -48,6 +48,32 @@ describe('scanBodyForSecrets', () => {
     expect(hits[0]?.rule).toBe('aws-access-key')
     expect(hits[1]?.rule).toBe('sk-token')
   })
+
+  it('catches Slack tokens', () => {
+    const { hits } = scanBodyForSecrets('slack=xoxb-12345-67890-abcdef')
+    expect(hits.find(h => h.rule === 'slack-token')).toBeDefined()
+  })
+
+  it('catches Stripe live secret keys', () => {
+    const { hits } = scanBodyForSecrets('billing=sk_live_abcdefghijklmnop')
+    expect(hits.find(h => h.rule === 'stripe-live')).toBeDefined()
+  })
+
+  it('catches GCP / Firebase API keys', () => {
+    const { hits } = scanBodyForSecrets('FIREBASE=AIzaSyB1234567890ABCDEFGHIJKLMNOPQRSTUV')
+    expect(hits.find(h => h.rule === 'gcp-api-key')).toBeDefined()
+  })
+
+  it('catches PEM private key blocks', () => {
+    const pem = '-----BEGIN PRIVATE KEY-----\nMIIBVQIBADANBgkqhki\nfake-body\n-----END PRIVATE KEY-----'
+    const { hits } = scanBodyForSecrets(`creds:\n${pem}\n`)
+    expect(hits.find(h => h.rule === 'pem-private-key')).toBeDefined()
+  })
+
+  it('catches AWS temporary credentials (ASIA prefix)', () => {
+    const { hits } = scanBodyForSecrets('AWS_SESSION=ASIAIOSFODNN7EXAMPLE')
+    expect(hits.find(h => h.rule === 'aws-access-key')).toBeDefined()
+  })
 })
 
 describe('redactBodySecrets', () => {
@@ -64,5 +90,24 @@ describe('redactBodySecrets', () => {
     const { body, hits } = redactBodySecrets('plain prose with no secrets')
     expect(hits).toEqual([])
     expect(body).toBe('plain prose with no secrets')
+  })
+
+  it('redacts the new rule set markers (TODO-012)', () => {
+    const cases = [
+      { body: 'slack=xoxb-12345-67890-abcdefxyz', marker: '[REDACTED:slack-token]' },
+      { body: 'billing=sk_live_abcdefghijklmnop', marker: '[REDACTED:stripe-live]' },
+      { body: 'gcp=AIzaSyB1234567890ABCDEFGHIJKLMNOPQRSTUV', marker: '[REDACTED:gcp-api-key]' },
+    ]
+    for (const c of cases) {
+      const { body } = redactBodySecrets(c.body)
+      expect(body).toContain(c.marker)
+    }
+  })
+
+  it('redacts PEM private key blocks (TODO-012)', () => {
+    const pem = '-----BEGIN PRIVATE KEY-----\nMIIBVQIBADANBgkqhki\nfake-body\n-----END PRIVATE KEY-----'
+    const { body } = redactBodySecrets(`creds:\n${pem}\n`)
+    expect(body).toContain('[REDACTED:pem-private-key]')
+    expect(body).not.toContain('BEGIN PRIVATE KEY')
   })
 })
