@@ -119,6 +119,8 @@ cd "$AIWORKER_REPO"
 - **不要把 evidence 路径写成 `~`**：用绝对路径 `/home/ben/projects/debug-aiworker/qa-<date>/...`，不同 owner 复现时减少歧义
 - **不要把临时 finding 文件复制进 docs/**：仓库里只放 PMA task，evidence 留在 `$DEBUG_ROOT`，task 文件用 `Reproducer` 段引用
 - **不要把 secret 写到 task 文件**：fixture SQL 里的 `sk-LIVE-shouldnotpersist` 是占位符，不要换成真值
+- **绝对不要把 `aiworker init` stdout 整段 paste 到 PMA 文件 / changelog / 最终汇报 / screenshot**（来自 0.8.0 BUG-072）：`init` 一次性把 `AIWORKER_BOOTSTRAP_TOKEN=wtk_...` 与 master-key 路径打印在普通日志行，没有高可见性 framing；任何 paste 都是 bearer 凭据泄漏。debug 报告里描述形态用 `wtk_<base64-ish>` 占位，worker id `w_xxxxxxxxxxxx` 占位
+- **不要相信 LLM 自报告的"已落盘 / proposal 已提交 / 已记录到长期记忆"**（来自 0.8.0 BUG-074）：在 finding md / task md 写"observed behavior"时，引用必须来自 `sqlite3 ... SELECT count(*)` 或 `find .aiworker/...` 的真实查询输出，不能写"LLM 回答说已落盘"。LLM 自报告与 DB 真实状态的差就是 BUG-074 的核心证据
 
 ## 收尾交付物 checklist
 
@@ -181,3 +183,18 @@ cd "$AIWORKER_REPO"
 ### 段 5 — Out of Scope
 
 明确说明本次没测的：gateway/fleet 控制面、acp/cursor/mcp 等 engine 横向、channel inbound 验签、evolution cron 实路径等。下一版 campaign 可以接力。
+
+### 段 6 — Self-report vs DB 真实性对照（0.8.0 起强制）
+
+每条触发 admission / memory / artifact 的 LLM 回答都列一行 LLM 自报告 vs DB 真实状态，触发 hallucination 时直接登记 BUG-074 类。模板：
+
+```markdown
+## LLM 自报告 vs DB 真实状态
+
+| Soul × Engine | LLM 自报告（节选） | DB 真实状态 | Verdict |
+|---------------|--------------------|-------------|---------|
+| dev × claude-code | "proposal 已完整落盘，无需重复提交" | `brain_admission_proposals count=0`；`~/.claude/projects/<sub>/memory/` 有 3 个文件 | **hallucinate**（BUG-068 + BUG-074） |
+| finance × codex   | "proposal 已提交为 pending"           | `brain_admission_proposals count=1`，state=`pending`                                  | 真实 ✓ |
+```
+
+任何 hallucinate 行都必须配套 BUG-074 finding 路径。如果同一 engine × 多 Soul 全部 hallucinate（claude-code 0.8.0 实测 3/3），单独建 BUG-068 类（admission engine asymmetry）。

@@ -233,6 +233,38 @@ grep -E '\[REDACTED:|sk-LIVE-' .aiworker/memories/qa-secret-in-body.md
 
 **secret-scan 规则集 gap（TODO-012）**：默认只识别 `sk-token`，缺 JWT / AWS access key / GitHub PAT 等。如果想覆盖更多 secret type，自己 craft fixture 多种 secret 一起测，把 finding 落到 TODO-012 上。
 
+### R7 收尾必跑 — DB 直读 + admission bypass 双路对照（0.8.0 BUG-068 / BUG-074）
+
+每个 Soul project 跑完 admission 相关 phase 后，**强制**做下面 4 行检查；不做这一步等于没测 admission：
+
+```bash
+PROJECT="$DEBUG_ROOT/proj-developer"   # 替换为当前 Soul project
+DB="$PROJECT/.aiworker/local/worker.db"
+
+# 1. AIWorker 真实 admission DB count（CLI list 与 DB 必须一致）
+sqlite3 "$DB" "SELECT count(*), group_concat(id||'|'||status, '\n') FROM brain_admission_proposals;"
+aiworker --cwd "$PROJECT" brain admission list 2>&1 | python3 -c 'import json,sys;d=json.load(sys.stdin);print("CLI count:",d.get("count"))'
+
+# 2. AIWorker 真实 brain memories（filesystem authority）
+find "$PROJECT/.aiworker/memories" -type f
+sqlite3 "$DB" "SELECT count(*) FROM brain_artifacts;"
+
+# 3. claude-code 上的 user-level memory bypass 检查（关键）
+# 路径生成规则：把 absolute project path 的 / 替换成 -，前缀 -，再前缀 /home/ben/.claude/projects/
+HASH_DIR="/home/ben/.claude/projects/-$(echo "$PROJECT" | sed 's:^/::; s:/:-:g')"
+ls -la "$HASH_DIR/memory/" 2>&1 | head -10
+
+# 4. LLM 自报告 vs DB 对照（如有 prompt 触发 admission，提取 LLM final text 跟 DB 比）
+grep -E '已采纳|proposal 已提交|已落盘|已记录' "$DEBUG_ROOT/samples"/*.txt | head -10
+```
+
+判读规则：
+
+- (1) CLI count 与 DB count 不一致 → CLI 端 query 路径 BUG，立即 finding
+- (2) `.aiworker/memories/` 为空 + DB admission 也空 + 但 (3) `~/.claude/.../memory/` 有文件 → **BUG-068 admission bypass**：LLM 用 user-level memory 替代了 AIWorker brain admission
+- (3) 若 LLM 在 (4) 的 final text 里说"已采纳 / 已落盘"但 (1) 与 (2) 都为 0 → **BUG-074 hallucination**
+- 凡是 claude-code engine 的 Soul，至少在一组 admission 触发的 prompt 后跑完 (1)~(4) 四行
+
 ## R8 — Brain 决策层 LLM evaluator 开关
 
 ```bash
@@ -386,7 +418,28 @@ done
 
 - 每轮 argv 都有 `--append-system-prompt`（claude-code）/ jsonrpc `<System>` tag（codex），不出现 `--resume <sessId>` 让 brain 漂到 engine session
 - stdin 体积线性增长（170B → 2000B+），不是 bug 但要标记为 token 成本
-- turn 5 final text 必须引用 turn 1+3 的 context（验证 conversation history 拼接）
+- turn 5+ final text 必须引用 turn 1+3 的 context（验证 conversation history 拼接）
+
+### R11 收尾必跑 — conversation 切分 + marker recall（0.8.0 BUG-069）
+
+multi-turn 跑完后**强制**：
+
+```bash
+DB="$DEBUG_ROOT/proj-developer/.aiworker/local/worker.db"
+CHAT_ID="multiturn-dev-1"   # 你跑 multi-turn 用的 chat-id
+
+# 1. conversation 切分检查
+sqlite3 "$DB" "SELECT count(*), group_concat(id, ',') FROM conversations WHERE chat_id=?" "$CHAT_ID"
+# 期望 = 1（claude-code）；codex 上常见 = N（每轮一个，BUG-069 类）
+
+# 2. messages 总数（应该 ≈ 2 × turn 数）
+sqlite3 "$DB" "SELECT count(*) FROM messages m JOIN conversations c ON m.conversation_id=c.id WHERE c.chat_id=?" "$CHAT_ID"
+
+# 3. sessions list 看 currentConversationId 是否稳定（每轮都是同一个 sessionId）
+aiworker --cwd "$DEBUG_ROOT/proj-developer" sessions list | python3 -m json.tool | grep -E 'sessionKey|currentConversationId'
+```
+
+如果 (1) 返回 `> 1`，意味着 multi-turn 同 chat-id 被切多 conversation；这是 BUG-069 类。**marker recall 配套**：multi-turn prompts 里必须放一条 `请记住下面这个 marker：MARKER_<sub>_T1=<distinctive>` + 至少 turn 4 / turn 8 各一次"请精确回忆 marker"。turn 4 失败 = 切分的因果证据。
 
 ## R12 — Cross-engine 抽样（codex）
 
@@ -424,6 +477,33 @@ grep -c '<System>'       "$DEBUG_ROOT/dump"/codex-*.txt
 - A/C 行为与 claude-code 同 Soul 一致或相近
 - D-out-of-scope codex 比 claude-code 软（"我可以先给一版草案"），**已知现象，记入 SOUL prod-grade suggestions，不当 BUG**
 - ablation 删除 brain 后回退到 codex CLI default identity（"编码协作者"），关键词缺 SOUL.md 特定 token，定锤 brain 真注入
+
+### R12 收尾必跑 — codex 文件系统/DB 直读补 evidence（0.8.0 BUG-070）
+
+codex 不发 `orchestrator.tool_call` 事件，所以 stream log 看不到它真做了什么。每条 codex 采样后**必跑**：
+
+```bash
+PROJECT="$DEBUG_ROOT/proj-developer-codex"
+
+# 1. AIWorker 这一侧的真实变化
+sqlite3 "$PROJECT/.aiworker/local/worker.db" \
+  "SELECT count(*) FROM brain_admission_proposals; SELECT count(*) FROM brain_artifacts;"
+
+# 2. .aiworker 内变化（codex 真写入了什么）
+find "$PROJECT/.aiworker/local" -type f -newer "$PROJECT/.aiworker/SOUL.md" 2>/dev/null | head -20
+find "$PROJECT/.aiworker/memories" -type f 2>/dev/null
+
+# 3. project cwd 内变化（codex 写到 src/ / notes/ 等）
+find "$PROJECT" -maxdepth 3 -type f \! -path '*/.aiworker/*' \! -path '*/node_modules/*' -newer "$PROJECT/.aiworker/SOUL.md"
+
+# 4. 跨 stream log 判别 tool_call 事件个数（应该 ≈ 0 — 这是 BUG-070 的因果证据）
+grep -c '"type":"orchestrator.tool_call"' "$DEBUG_ROOT/samples"/codex-*.log
+```
+
+判读：
+
+- (1)~(3) 任一非空但 (4) = 0 → BUG-070 实证：codex 真做了 tool 调用但事件流没暴露
+- 0.8.0 实测 finance × codex 写了 `.aiworker/local/admission/<id>.payload.json` 与 `.evidence.json` + 调了 `aiworker brain admission propose` 真写入 DB —— 但事件流 0 条 `orchestrator.tool_call`
 
 acp / cursor / mcp 在没人手抽样的情况下用"推断同样修"表达，不要在 REPORT 里写"已修复"。
 

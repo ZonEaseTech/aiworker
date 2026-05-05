@@ -106,6 +106,19 @@ grep '\[QA fixture\]'         "$DEBUG_ROOT/dump"/claude-*.txt
 
 **Pitfall**：如果改写 prompt 后 LLM 能读到，不代表 brain 注入成功 —— 这只是 LLM 用 Read 工具自己 grep cwd 文件系统。真正的成功标志是**不写路径**也能引用 body 的具体一句话。
 
+**0.8.0 新增检测点 — admission bypass（BUG-068）**：claude-code engine 上的 LLM 经常**不**调 AIWorker brain admission，而是把"长期记忆"直接写到 user-level memory（`~/.claude/projects/-home-...-<sub>/memory/MEMORY.md` + topic 文件）。每条 Type E 跑完必查：
+
+```bash
+DB="$PROJECT/.aiworker/local/worker.db"
+HASH_DIR="/home/ben/.claude/projects/-$(echo "$PROJECT" | sed 's:^/::; s:/:-:g')"
+
+sqlite3 "$DB" "SELECT count(*) FROM brain_admission_proposals;"   # 期望 ≥1（claude-code 实测常见 0）
+ls "$HASH_DIR/memory/" 2>/dev/null                                 # claude-code 实测常见 ≥1（bypass 证据）
+```
+
+- 前者 ≥1 + 后者 0 → admission 走对了
+- 前者 0 + 后者 ≥1 → BUG-068 类 admission bypass，要登记 finding；并对照 LLM final text 里的"已采纳 / 已落盘"措辞，配套 BUG-074 类 hallucination finding
+
 ### Type F — edge-case（vague 模糊 prompt，触发 BUG-063 类）
 
 每个 Soul 用同一条**开放、模糊、缺少明确目标**的 prompt，看 Soul 是否反问澄清，还是 brute-force 拿工具就探（developer Soul 可能触发 read-many-tool / glob / find loop + 越界 cwd 扫描）。
