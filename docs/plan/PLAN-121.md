@@ -1,9 +1,9 @@
 # PLAN-121 发布 aiworker CLI 0.9.0
 
-- **status**: in-progress
+- **status**: completed
 - **createdAt**: 2026-05-06 03:20
 - **approvedAt**: 2026-05-06 03:20
-- **completedAt**:
+- **completedAt**: 2026-05-06 03:55
 - **relatedTask**: REL-016
 
 ## 现状
@@ -98,3 +98,14 @@
   在 `apps/cli/dist` 完成 pack 阶段（30 files / 2.69 MB），随后停在本机
   npm authentication boundary；正式发布仍走 tag-triggered GitHub Actions
   workflow 的 `NPM_TOKEN`。
+- 2026-05-06 03:55：实施完成。
+  - Release commit `fe3f57f chore(release): 发布 CLI 0.9.0` + annotated tag
+    `v0.9.0` 已 push 到 origin。
+  - GitHub Actions release workflow run id `25393952863`（job `74475583117`）
+    2m4s 全绿。
+  - npm `@zonease/aiworker-cli` `latest=0.9.0` 已上线；`bunx
+    @zonease/aiworker-cli@0.9.0 --version` 返回 `aiworker/0.9.0 linux-x64
+    node-v24.3.0`。
+  - GitHub Release `v0.9.0` 非 draft / 非 prerelease；4 个平台 binary
+    全部 uploaded（darwin-arm64 23.95 MB / darwin-x64 26.38 MB /
+    linux-arm64 39.66 MB / linux-x64 39.98 MB）。

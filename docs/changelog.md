@@ -1,14 +1,14 @@
 # AIWorker Changelog
 
-## 2026-05-06 03:20 [in-progress] REL-016 / PLAN-121 — CLI 0.9.0 release in flight
+## 2026-05-06 03:55 [completed] REL-016 / PLAN-121 — CLI 0.9.0 released
 
-`@zonease/aiworker-cli@0.9.0` minor release 准备中。
+`@zonease/aiworker-cli@0.9.0` minor release 完成。
 
-- npm `@zonease/aiworker-cli` latest 确认为 `0.8.0`；GitHub Release latest 是 `v0.8.0`；本地与远端最新 release tag 是 `v0.8.0`，远端不存在 `v0.9.0` tag。
+- 自 `v0.8.0` (release commit `2230deb`) 至 release-bump commit `fe3f57f` 共 7 个 commit；按 semver 0.x 走 minor（Brain Governance Kernel truthfulness / admission path / Codex parity / init secret UX / command help 行为均为用户可观察变化）。
 - 本次 release 承载 QA-006 之后的 Brain Governance Kernel retained defects 收口：`PLAN-116` decision truthfulness / fallback diagnostics、`PLAN-117` admission propose 正式入口 + bypass guardrail、`PLAN-118` Codex continuity + tool-call parity、`PLAN-119` init secret safe defaults + doctor status truthfulness、`PLAN-120` CLI group help / advisory recommendation / `--arg -y` parser polish。
-- 按 semver 0.x 走 minor：decision event/status schema、LLM-facing admission path、Codex session / tool event behavior、init token delivery 默认行为和 CLI unknown-command/help UX 都是用户可观察变化。
 - `TODO-027` 已作为发布后 Governance Kernel regression harness 入口保留为 pending，不阻塞本次 release。
-- 本地 release gates 全通过。
+- 本地 release gates 全通过；release commit `fe3f57f chore(release): 发布 CLI 0.9.0` + annotated tag `v0.9.0` 已 push 到 origin。
+- GitHub Actions release workflow run id `25393952863`（job `74475583117`）2m4s 全绿；npm `@zonease/aiworker-cli` `latest=0.9.0` 已上线；GitHub Release `v0.9.0` 已发布（非 draft / 非 prerelease），4 个平台 binary 全部 uploaded（aiworker-darwin-arm64 23.95 MB / aiworker-darwin-x64 26.38 MB / aiworker-linux-arm64 39.66 MB / aiworker-linux-x64 39.98 MB）。
 
 验证：
 
@@ -23,7 +23,9 @@
 - `bun apps/cli/dist/aiworker-bun.js --version` → `aiworker/0.9.0 linux-x64 node-v24.3.0` ✅
 - `git diff --check` ✅
 - `bun publish --dry-run --access public` 在 `apps/cli/dist` 完成 pack 阶段（30 files / 2.69 MB），随后停在本机 npm authentication boundary；正式发布继续依赖 tag-triggered GitHub Actions release workflow 的 `NPM_TOKEN`。
-- 下一步：提交 `chore(release): 发布 CLI 0.9.0`，打 `v0.9.0` tag，push 后监控 GitHub Actions release workflow，并验证 npm / GitHub Release。
+- `npm view @zonease/aiworker-cli version` → `0.9.0` ✅
+- `bunx @zonease/aiworker-cli@0.9.0 --version` → `aiworker/0.9.0 linux-x64 node-v24.3.0` ✅
+- `gh release view v0.9.0` → published, 4 assets uploaded ✅
 
 ## 2026-05-06 03:05 [completed] PLAN-120 — CLI onboarding polish for command groups and executor hints
 

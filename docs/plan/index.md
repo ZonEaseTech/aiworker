@@ -149,4 +149,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-118 Codex continuity and tool-call parity**](PLAN-118.md) `2026-05-06`
 - [x] [**PLAN-119 Init secret handling and executor doctor status truthfulness**](PLAN-119.md) `2026-05-06`
 - [x] [**PLAN-120 CLI onboarding polish for command groups and executor hints**](PLAN-120.md) `2026-05-06`
-- [~] [**PLAN-121 发布 aiworker CLI 0.9.0**](PLAN-121.md) `2026-05-06`
+- [x] [**PLAN-121 发布 aiworker CLI 0.9.0**](PLAN-121.md) `2026-05-06`
