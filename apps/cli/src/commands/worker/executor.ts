@@ -274,13 +274,36 @@ export async function runExecutorDoctor(options: { engine?: string } = {}): Prom
   const allWarnings = [...warnings, ...binaryWarnings]
   const status = issues.length > 0 ? 'FAIL' : allWarnings.length > 0 ? 'WARN' : 'PASS'
 
+  // TODO-015: detect fresh-init project so executor doctor can suppress
+  // overlay-empty warnings that fire on every default `aiworker init`.
+  // Fresh-init = scope.json exists AND no engine has been declared in the
+  // manifest. Once an operator declares an engine (even with empty mcp),
+  // the warning becomes meaningful — they explicitly opted into the layer.
+  const freshInit = detectFreshInitForExecutorDoctor(context.value.root, manifestResult.manifest)
+  const overlayEmptyCodes = new Set(['executor-overlay.capabilities.empty', 'executor-overlay.mcp.empty'])
+  const surfacedWarnings = freshInit
+    ? allWarnings.filter(w => !overlayEmptyCodes.has(w.code))
+    : allWarnings
+  const surfacedStatus = issues.length > 0
+    ? 'FAIL'
+    : surfacedWarnings.length > 0 ? 'WARN' : 'OK'
+  const freshSuffix = freshInit ? ' (fresh-init defaults; overlay declarations are optional)' : ''
+
+  // TODO-015: leading summary line so operators have a top-level verdict
+  // before scanning per-engine PASS / WARN rows.
+  process.stdout.write(`[aiworker executor doctor] ${surfacedStatus} — ${engines.length} engine${engines.length === 1 ? '' : 's'}; ${issues.length} ERR · ${surfacedWarnings.length} WARN${freshSuffix}\n`)
   process.stdout.write('[aiworker executor doctor] project executor overlay validation\n')
   process.stdout.write(`Root  : ${context.value.root}\n`)
   process.stdout.write(`File  : ${context.value.manifestPath}\n`)
   process.stdout.write(`Status: ${status}\n`)
   printConfiguredExecutor(process.stdout.write.bind(process.stdout), configuredExecutor)
   const manifestSummary = summarizeManifest(manifestResult.manifest)
-  process.stdout.write(`  ${manifestSummary.empty ? 'WARN' : 'PASS'}    declared project executor overlay entries: ${manifestSummary.declaredCapabilities}\n`)
+  if (manifestSummary.empty && freshInit) {
+    process.stdout.write(`  PASS    declared project executor overlay entries: 0 (fresh-init default; declare an overlay only when project pins MCP / config)\n`)
+  }
+  else {
+    process.stdout.write(`  ${manifestSummary.empty ? 'WARN' : 'PASS'}    declared project executor overlay entries: ${manifestSummary.declaredCapabilities}\n`)
+  }
   for (const item of engines) {
     const binary = SUPPORTED_ENGINES[item].binary
     const binaryFound = findBinary(binary) !== null
@@ -290,12 +313,36 @@ export async function runExecutorDoctor(options: { engine?: string } = {}): Prom
     process.stdout.write(`  INFO    ${item} ambient runtime: user/host MCP, skills, plugins, auth and native sessions live outside AIWorker\n`)
   }
   process.stdout.write('  INFO    engine login/auth state is managed by each engine CLI; AIWorker does not probe it\n')
-  for (const issue of allWarnings)
+  for (const issue of surfacedWarnings)
     process.stdout.write(`    - [warning] ${issue.code} ${issue.path}: ${issue.message}\n`)
   for (const issue of issues)
     process.stdout.write(`    - [error] ${issue.code} ${issue.path}: ${issue.message}\n`)
 
   return issues.length > 0 ? 1 : 0
+}
+
+/**
+ * TODO-015: fresh-init detection. Fresh = scope.json exists (so init has
+ * run) AND the executor capability manifest declares zero engines. The
+ * default `aiworker init` writes `executor-capabilities.json` with an
+ * empty `engines` map, so file existence alone is not a useful signal —
+ * we look at semantic content. Once an operator declares any engine, the
+ * project leaves fresh-init mode and the empty-overlay warning becomes
+ * informative (they opted into the layer).
+ *
+ * `aiworkerRoot` here is `.aiworker/` itself (resolved by
+ * `resolveProjectExecutorContext`), not the surrounding project root —
+ * `path.join(aiworkerRoot, 'scope.json')` is correct as-is.
+ */
+function detectFreshInitForExecutorDoctor(
+  aiworkerRoot: string,
+  manifest: ExecutorCapabilityManifest,
+): boolean {
+  if (!existsSync(path.join(aiworkerRoot, 'scope.json')))
+    return false
+  if (Object.keys(manifest.engines).length > 0)
+    return false
+  return true
 }
 
 export async function runExecutorSelect(options: ExecutorSelectOptions): Promise<number> {
@@ -1114,9 +1161,15 @@ function collectDoctorWarnings(
     })
   }
   if (summarizeManifest(manifest).empty) {
+    // TODO-015: disambiguate "skill" / "MCP" / "overlay" naming. The code
+    // changes from `executor.capability_manifest_empty` →
+    // `executor-overlay.capabilities.empty` (project executor overlay,
+    // distinct from brain skills + engine plugins). Same message
+    // explicitly names the file and notes the optional nature on first-run
+    // defaults.
     warnings.push({
-      code: 'executor.capability_manifest_empty',
-      message: 'No project executor overlay entries are declared.',
+      code: 'executor-overlay.capabilities.empty',
+      message: 'No project executor overlay entries are declared (optional — projects only need an overlay when they pin engine-specific MCP / config).',
       path: MANIFEST_FILE,
     })
   }
@@ -1124,8 +1177,8 @@ function collectDoctorWarnings(
     const declared = manifest.engines[engine]
     if (!declared || countEnabled(declared.mcp) === 0) {
       warnings.push({
-        code: 'executor.mcp_empty',
-        message: `No enabled executor MCP servers are declared for ${engine}.`,
+        code: 'executor-overlay.mcp.empty',
+        message: `No executor MCP overlay entries declared for engine "${engine}" (optional unless this project must pin engine-specific MCP servers; distinct from brain skills under .aiworker/skills/).`,
         path: `engines.${engine}.mcp`,
       })
     }

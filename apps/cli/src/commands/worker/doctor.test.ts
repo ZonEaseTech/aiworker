@@ -169,4 +169,44 @@ describe('aiworker doctor', () => {
     expect(existsSync(path.join(home, '.aiworker', '.env'))).toBe(false)
     expect(existsSync(path.join(home, '.aiworker', 'worker.db'))).toBe(false)
   })
+
+  it('TODO-015: emits a leading OK summary line on fresh-init defaults and suppresses brain-skills.empty noise', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'aiworker-doctor-summary-'))
+    const home = await mkdtemp(path.join(tmpdir(), 'aiworker-doctor-summary-home-'))
+    const project = path.join(root, 'repo')
+    await mkdir(project, { recursive: true })
+
+    const init = await runCli(['init', '--soul', 'developer'], project, home)
+    expect(init.exitCode).toBe(0)
+
+    const doctor = await runCli(['doctor'], project, home)
+
+    expect(doctor.exitCode).toBe(0)
+    // Leading summary line that calls out fresh-init mode
+    expect(doctor.output).toMatch(/\[aiworker doctor\] OK — \d+ checks; \d+ PASS · \d+ info · \d+ WARN · \d+ FAIL \(fresh-init defaults; expected to be sparse\)/)
+    // Old code dropped, new namespaced one suppressed on fresh-init
+    expect(doctor.output).not.toContain('skills.empty')
+    expect(doctor.output).not.toContain('brain-skills.empty')
+    // Original Status: PASS line still printed for compatibility
+    expect(doctor.output).toContain('Status: PASS')
+  })
+
+  it('TODO-015: drops the legacy `skills.empty` info code in favour of namespaced `brain-skills.empty`', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'aiworker-doctor-skills-'))
+    const home = await mkdtemp(path.join(tmpdir(), 'aiworker-doctor-skills-home-'))
+    const project = path.join(root, 'repo')
+    await mkdir(project, { recursive: true })
+
+    const init = await runCli(['init', '--soul', 'developer'], project, home)
+    expect(init.exitCode).toBe(0)
+
+    const doctor = await runCli(['doctor'], project, home)
+    expect(doctor.exitCode).toBe(0)
+    // The legacy `skills.empty` code must not surface in any path — it has
+    // been renamed to `brain-skills.empty`. (Whether fresh-init suppresses
+    // the line or not is asserted by the previous test; here we just guard
+    // the rename so old downstream parsers don't silently keep the old code
+    // and miss the disambiguation.)
+    expect(doctor.output).not.toContain('[info] skills.empty')
+  })
 })

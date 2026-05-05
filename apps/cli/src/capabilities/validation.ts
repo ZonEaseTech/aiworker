@@ -279,8 +279,20 @@ async function validateSkills(dirPath: string): Promise<ParsedJson<SkillMetadata
     parsedSkills.push(result.data)
   }
 
-  if (count === 0)
-    issues.push(issue('info', 'skills.empty', 'No skill files are configured yet.', 'skills'))
+  if (count === 0) {
+    // TODO-015: disambiguate "skill" naming. AIWorker has three "skill"-
+    // like layers (brain skills under `.aiworker/skills/`, executor MCP
+    // overlays, engine plugins) — doctor must qualify which layer is
+    // affected so operators don't conflate them. The new code is
+    // `brain-skills.empty`; the human message states the layer + the
+    // exact directory + the next-step CLI hint.
+    issues.push(issue(
+      'info',
+      'brain-skills.empty',
+      'No brain skill files configured yet (.aiworker/skills/ is empty). Optional — see `aiworker brain skills add --help`.',
+      '.aiworker/skills/',
+    ))
+  }
 
   return { data: parsedSkills, issues }
 }

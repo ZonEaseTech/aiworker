@@ -140,4 +140,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-109 Brain brief / admission read-path 收口**](PLAN-109.md) `2026-05-05`
 - [x] [**PLAN-110 Decision pipeline 强化（Soul guard / heuristic / LLM evaluator）**](PLAN-110.md) `2026-05-05`
 - [x] [**PLAN-111 Worker API surface 修复（OpenAPI / serve preflight / debug env）**](PLAN-111.md) `2026-05-05`
-- [ ] [**PLAN-112 Doctor first-run UX（噪声收口 + 命名消歧）**](PLAN-112.md) `2026-05-05`
+- [x] [**PLAN-112 Doctor first-run UX（噪声收口 + 命名消歧）**](PLAN-112.md) `2026-05-05`

@@ -1,11 +1,13 @@
 # TODO-015 `aiworker doctor` emits noisy `[info] skills.empty` and `WARN executor.capability_manifest_empty` on first-run defaults
 
-- **status**: pending
+- **status**: completed
 - **priority**: P3
-- **owner**: unassigned
+- **owner**: aiworker-maintainer
 - **createdAt**: 2026-05-04 22:10
 - **discoveredAt**: 2026-05-04 21:18
-- **plan**: TBD
+- **claimedAt**: 2026-05-05 06:00
+- **completedAt**: 2026-05-05 06:25
+- **plan**: PLAN-112
 - **relatesTo**: doctor / first-run UX
 
 ## Observed Behavior

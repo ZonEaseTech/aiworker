@@ -1,7 +1,9 @@
 # PLAN-112 Doctor first-run UX（噪声收口 + 命名消歧）
 
-- **status**: pending
+- **status**: completed
 - **createdAt**: 2026-05-05 04:25
+- **approvedAt**: 2026-05-05 06:00
+- **completedAt**: 2026-05-05 06:25
 - **relatedTask**: TODO-015
 
 ## 现状
@@ -99,3 +101,33 @@ QA-005 调试在 fresh-init 项目上跑 `aiworker doctor` 与 `aiworker executo
 ## 进度
 
 - 2026-05-05 04:25：plan created。
+- 2026-05-05 06:25：实施完成。
+  - `apps/cli/src/capabilities/validation.ts` `skills.empty` 重命名为
+    `brain-skills.empty`，message 显式带上 `.aiworker/skills/` 路径
+    和 `aiworker brain skills add --help` 引导。
+  - `apps/cli/src/commands/worker/executor.ts` `executor.capability_
+    manifest_empty` → `executor-overlay.capabilities.empty`、
+    `executor.mcp_empty` → `executor-overlay.mcp.empty`，文案显式
+    标注与 brain skills 的边界，并指出 overlay 在大多数项目下是可选
+    的。
+  - `apps/cli/src/commands/worker/doctor.ts` 新增
+    `detectFreshInitDefaults` 与顶层 summary line（`OK / WARN / FAIL
+    — N checks; pass / info / warn / fail` + fresh-init 注解）；
+    fresh-init 模式抑制 `*.empty` info 噪声。`runDoctor` 的检测仅
+    依赖 `scope.json` + `.aiworker/skills/` 是否空，避免与 executor
+    overlay 检测耦合。
+  - `apps/cli/src/commands/worker/executor.ts` `runExecutorDoctor`
+    增加 `detectFreshInitForExecutorDoctor`（`scope.json` 存在 +
+    manifest engines 集合为空），fresh-init 时把
+    `executor-overlay.*.empty` warning 折叠成 PASS 行带 hint，并在
+    summary line 标注 `(fresh-init defaults; overlay declarations are
+    optional)`。
+  - 测试更新：`apps/cli/src/commands/worker/doctor.test.ts` 新增 2
+    条 fresh-init / 命名消歧用例；`executor.test.ts` 把旧的
+    `executor.capability_manifest_empty` 检查替换为新代码 +
+    fresh-init 行为断言 + 显式声明 engine 后 warning 重新出现的非
+    fresh-init 用例。
+- 2026-05-05 06:25：验证通过：fs-layout 20 / shared 140 / gateway-proto
+  19 / storage-sqlite 19 / gateway 148 / core 592 / api 86 / cli 171
+  全 pass；workspace typecheck 9/9；root lint 0 violation。TODO-015
+  completed。

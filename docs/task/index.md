@@ -200,5 +200,5 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**TODO-012 Expand admission `secret-scan` rule set beyond `sk-token`**](TODO-012.md) `P2`
 - [x] [**TODO-013 LLM evaluator inflates per-prompt latency to 60-120s, exceeds default 90s timeout**](TODO-013.md) `P2`
 - [x] [**TODO-014 Engine child env allowlist drops `AIWORKER_*`/`DEBUG_*` env, breaking debug shim**](TODO-014.md) `P3`
-- [ ] [**TODO-015 `aiworker doctor` emits noisy `[info] skills.empty` and `WARN executor.capability_manifest_empty` on first-run defaults**](TODO-015.md) `P3`
+- [x] [**TODO-015 `aiworker doctor` emits noisy `[info] skills.empty` and `WARN executor.capability_manifest_empty` on first-run defaults**](TODO-015.md) `P3`
 - [x] [**TODO-016 `aiworker serve` silently succeeds when port already bound, curl hits stale serve**](TODO-016.md) `P2`

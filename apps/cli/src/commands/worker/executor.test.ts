@@ -261,16 +261,40 @@ describe('aiworker executor capability commands', () => {
     expect(trace.env.CODEX_TRACE_FILE).toBe(traceFile)
   })
 
-  it('doctor warns when task executor remains the default stub and no project executor overlay is declared', async () => {
+  it('TODO-015: doctor on fresh-init defaults shows OK summary line and suppresses overlay-empty noise', async () => {
     const { home, project } = await initProject()
 
     const doctor = await runCli(['executor', 'doctor'], project, home)
 
     expect(doctor.exitCode).toBe(0)
-    expect(doctor.output).toContain('Status: WARN')
+    // Fresh-init should produce OK summary (no error, no warning surfaced)
     expect(doctor.output).toContain('configured task executor: http/default')
+    // Declared overlay entries line stays informative but is no longer flagged WARN
     expect(doctor.output).toContain('declared project executor overlay entries: 0')
-    expect(doctor.output).toContain('executor.capability_manifest_empty')
+    // Old code dropped, replaced by namespaced one — and on fresh-init it must be suppressed
+    expect(doctor.output).not.toContain('executor.capability_manifest_empty')
+    expect(doctor.output).not.toContain('executor-overlay.capabilities.empty')
+    // New summary line carries the fresh-init annotation
+    expect(doctor.output).toContain('fresh-init defaults')
+  })
+
+  it('TODO-015: doctor surfaces executor-overlay.mcp.empty once an engine is declared but its mcp is still empty (non-fresh-init)', async () => {
+    const { home, project } = await initProject()
+    // User explicitly declared the engine slot but left mcp empty — that is
+    // a real configuration intent, not a fresh-init default, so the
+    // overlay-empty warning must surface.
+    await writeFile(path.join(project, '.aiworker', 'executor-capabilities.json'), `${JSON.stringify({
+      schemaVersion: 1,
+      engines: {
+        'claude-code': { mcp: {} },
+      },
+    }, null, 2)}\n`, 'utf8')
+
+    const doctor = await runCli(['executor', 'doctor'], project, home)
+
+    expect(doctor.exitCode).toBe(0)
+    expect(doctor.output).toContain('executor-overlay.mcp.empty')
+    expect(doctor.output).not.toContain('fresh-init defaults')
   })
 
   it('doctor renders ambient runtime and auth INFO lines per declared engine without failing on missing binary', async () => {

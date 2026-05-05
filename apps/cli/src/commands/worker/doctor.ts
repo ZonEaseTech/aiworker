@@ -79,6 +79,52 @@ function formatScopeArtifactRoots(manifest: ScopeManifest): string {
   return manifest.artifactRoots.map(root => root.path).join(', ')
 }
 
+/**
+ * TODO-015: detect a fresh-init project so we can suppress info-level
+ * "X.empty" noise that fires on every `aiworker init` default. Scope is
+ * intentionally narrow — `runDoctor` is about brain capability validation,
+ * so fresh = scope.json exists (init ran) AND `.aiworker/skills/` is still
+ * empty (user has not declared any brain skill yet). Executor overlay /
+ * schedule fresh-detection is handled separately in their own commands.
+ */
+export function detectFreshInitDefaults(root: string): boolean {
+  const exists = (sub: string) => existsSync(path.join(root, sub))
+  const skillsEmpty = (): boolean => {
+    const skillsDir = path.join(root, 'skills')
+    if (!existsSync(skillsDir))
+      return true
+    try {
+      // eslint-disable-next-line ts/no-require-imports
+      const entries = require('node:fs').readdirSync(skillsDir) as string[]
+      return entries.length === 0
+    }
+    catch {
+      return true
+    }
+  }
+  if (!exists('scope.json'))
+    return false
+  if (!skillsEmpty())
+    return false
+  return true
+}
+
+interface DoctorRollup {
+  pass: number
+  info: number
+  warn: number
+  fail: number
+}
+
+function tallyRollup(rollup: DoctorRollup, severity: string): void {
+  if (severity === 'error')
+    rollup.fail += 1
+  else if (severity === 'warning')
+    rollup.warn += 1
+  else
+    rollup.info += 1
+}
+
 export async function runDoctor(): Promise<number> {
   const scope = resolveAiworkerScope()
   const root = scope.scope === 'project' && scope.projectRoot
@@ -87,7 +133,29 @@ export async function runDoctor(): Promise<number> {
 
   const report = await validateCapabilityProject(root)
   const scopeManifest = inspectScopeManifest(root)
+  const freshInit = detectFreshInitDefaults(root)
 
+  // TODO-015: build rollup before printing so the summary line can lead.
+  // Fresh-init mode silences `*.empty` info noise at the source instead of
+  // printing first and asking operators to ignore.
+  const rollup: DoctorRollup = { pass: 0, info: 0, warn: 0, fail: 0 }
+  for (const check of report.checks) {
+    if (check.status === 'pass')
+      rollup.pass += 1
+    else if (check.status === 'fail')
+      rollup.fail += 1
+    else
+      rollup.warn += 1
+    for (const item of check.issues) {
+      if (freshInit && item.severity === 'info' && item.code.endsWith('.empty'))
+        continue
+      tallyRollup(rollup, item.severity)
+    }
+  }
+
+  const summaryStatus = rollup.fail > 0 ? 'FAIL' : rollup.warn > 0 ? 'WARN' : 'OK'
+  const freshSuffix = freshInit ? ' (fresh-init defaults; expected to be sparse)' : ''
+  process.stdout.write(`[aiworker doctor] ${summaryStatus} — ${report.checks.length} checks; ${rollup.pass} PASS · ${rollup.info} info · ${rollup.warn} WARN · ${rollup.fail} FAIL${freshSuffix}\n`)
   process.stdout.write('[aiworker doctor] Project Brain capability validation\n')
   process.stdout.write(`Scope : ${scope.scope}\n`)
   process.stdout.write(`Root  : ${report.root}\n`)
@@ -126,6 +194,11 @@ export async function runDoctor(): Promise<number> {
   for (const check of report.checks) {
     process.stdout.write(`  ${formatStatus(check.status).padEnd(7)} ${check.label}\n`)
     for (const item of check.issues) {
+      // TODO-015: silence info-level `*.empty` noise on fresh-init defaults
+      // (e.g. `brain-skills.empty`). Operators with a freshly-initialized
+      // project shouldn't have to scan past INFO lines they didn't trigger.
+      if (freshInit && item.severity === 'info' && item.code.endsWith('.empty'))
+        continue
       const location = item.path ? ` ${item.path}` : ''
       process.stdout.write(`    - [${item.severity}] ${item.code}${location}: ${item.message}\n`)
     }
