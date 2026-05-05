@@ -1,8 +1,9 @@
 # PLAN-113 发布 aiworker CLI 0.8.0
 
-- **status**: in-progress
+- **status**: completed
 - **createdAt**: 2026-05-05 06:30
 - **approvedAt**: 2026-05-05 06:30
+- **completedAt**: 2026-05-05 06:50
 - **relatedTask**: REL-015
 
 ## 现状
@@ -82,3 +83,18 @@
 ## 进度
 
 - 2026-05-05 06:30：PLAN-113 / REL-015 创建，进入 implementing。
+- 2026-05-05 06:50：实施完成。
+  - Release gates 全通过：typecheck 9/9、lint 0 violation、test 1195
+    pass（fs-layout 20 / shared 140 / gateway-proto 19 / storage 19 /
+    gateway 148 / core 592 / api 86 / cli 171）、build OK（fleet
+    639 kB / worker 664 kB / cli aiworker-bun.js 1.1 MB）、
+    `apps/cli/dist/package.json` 版本字段 = `0.8.0`、`git diff
+    --check` 干净。
+  - Release commit `2230deb chore(release): 发布 CLI 0.8.0` +
+    annotated tag `v0.8.0` 已 push 到 origin。
+  - GitHub Actions release workflow run id `25377089930`（job
+    `74415001398`）2m5s 全绿。
+  - npm `@zonease/aiworker-cli` `latest=0.8.0` 已上线。
+  - GitHub Release `v0.8.0` 非 draft / 非 prerelease；4 个平台
+    binary 全部 uploaded（darwin-arm64 23.95 MB / darwin-x64 26.37
+    MB / linux-arm64 39.65 MB / linux-x64 39.98 MB）。

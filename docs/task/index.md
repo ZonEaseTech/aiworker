@@ -202,4 +202,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**TODO-014 Engine child env allowlist drops `AIWORKER_*`/`DEBUG_*` env, breaking debug shim**](TODO-014.md) `P3`
 - [x] [**TODO-015 `aiworker doctor` emits noisy `[info] skills.empty` and `WARN executor.capability_manifest_empty` on first-run defaults**](TODO-015.md) `P3`
 - [x] [**TODO-016 `aiworker serve` silently succeeds when port already bound, curl hits stale serve**](TODO-016.md) `P2`
-- [-] [**REL-015 发布 aiworker CLI 0.8.0**](REL-015.md) `P1`
+- [x] [**REL-015 发布 aiworker CLI 0.8.0**](REL-015.md) `P1`
