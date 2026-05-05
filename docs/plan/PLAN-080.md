@@ -1,9 +1,21 @@
 # PLAN-080 Soul brain executor validation follow-up fixes
 
-- **status**: draft
+- **status**: rejected
 - **createdAt**: 2026-05-03 23:33
 - **approvedAt**: (pending)
+- **rejectedAt**: 2026-05-05 23:48
 - **relatedTask**: QA-003
+
+## 关闭标记 / Superseded by DOC-006
+
+本计划已在 DOC-006 / PLAN-115 中关闭，不再作为实现入口。原因：
+
+- `BUG-050` 已被 0.8.0 发布验证中的 `BUG-070` 覆盖，后者证据更完整；
+- `TODO-008` 的旧 harness 范围过宽，未来需要按 Governance Brain Kernel 的真实
+  regression 目标重开；
+- `BUG-051` 仍是有效低优先级 UX 缺陷，但已脱离本大包，后续单独排期；
+- DOC-005 之后，后续开发必须围绕 truthfulness、admission governance bridge、
+  executor parity 和 operator trust 重新切片。
 
 ## 现状
 

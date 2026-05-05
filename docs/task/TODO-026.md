@@ -6,6 +6,12 @@
 - **createdAt**: 2026-05-05 14:18
 - **discoveredAt**: 2026-05-05 13:55
 
+## DOC-006 framing
+
+This remains an onboarding contract task. Post-DOC-005, executor recommendations
+should be explicit about advisory vs enforced semantics because executor choice
+is external runtime selection, not Brain capability selection.
+
 ## Context
 
 `aiworker init --soul <preset>` prints a "Recommended for Soul X" hint with

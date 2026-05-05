@@ -48,6 +48,70 @@ retention、backup 和 context compilation，而不是内建 PMA/代码项目假
   project 希望外部 executor 具备的 overlay / bootstrap hint；它不是 effective
   executor capability source of truth，也不是安全隔离边界。
 
+### Brain Governance Kernel 决策
+
+AIWorker 的 Brain 层定位为 **Governance Brain Kernel**：治理型上下文内核，而不是
+硬编码领域自动化引擎。这个决策覆盖 FEAT-054 / PLAN-097..103 已落地的 Soul
+module、scope manifest、artifact registry、schema pack、admission MVP、brief
+compiler 与 Worker/Fleet Brain surface，并作为后续 Brain 开发的默认边界。
+
+一句话规则：**hard logic owns invariants, LLM owns semantics**。
+
+- **硬逻辑只守不变量**：scope identity、数据面隔离、provenance/evidence、
+  admission 状态机、secret/sensitivity redaction、权限收口、token budget、
+  source tagging、rollback/audit、fleet 不复制 worker brain 等治理问题，必须由
+  AIWorker hard logic 明确守住。
+- **语义判断交给 LLM / executor**：候选人是否匹配岗位、合同条款是否重要、财务异常
+  是否值得升级、代码变更是否合理、下一步该查哪个证据、某条 memory 是否该被引用等
+  领域判断，不进入 Brain Kernel 的 hardcoded workflow。Brain 负责把证据、安全边界和
+  scope context 投影给 executor，不能把自己做成 HR/finance/legal/dev 的业务规则引擎。
+- **AIWorker 不承诺替代 executor**：tool loop、engine-native memory、MCP、plugins、
+  sandbox、approval、native session 与 subagent 仍归外部 executor。Brain Kernel 可以
+  观察、标注、警告和生成 admission proposal，但不接管 executor 的 effective capability
+  或 user/host-level auth。
+
+这个边界不是“Brain 变弱”，而是避免把 Project Brain 做重到不可维护：Brain Kernel
+保留可审计、可迁移、可治理的长期资产；LLM 保留语义弹性；operator 保留最终批准权。
+如果新增逻辑无法回答“它守的是哪个治理不变量”，它默认不应该进入 Brain hard logic。
+
+现有组件按下面方式解释，后续实现不得把它们升级成隐藏的领域引擎：
+
+| 组件 | 正确定位 | 允许的 hard logic | 明确禁止 |
+|------|----------|-------------------|----------|
+| **Soul module** | LLM-readable role package：persona、语气、风险偏好、领域词汇、默认 brief sections。 | schema validation、preset registry、版本/owner 元数据、风险提示模板。 | 把 Soul 写成 HR/finance/legal/dev 的 deterministic planner，或让 preset 自动执行领域 workflow。 |
+| **Scope manifest** | worker-bound business scope 的身份与证据目录，不限定为 git repo。 | scope id/path 解析、owner/status、source refs、manifest schema、跨 worker/fleet 边界。 | 假定所有 Project 都是软件项目，或在 manifest 里内建 PMA/代码仓库专用状态机。 |
+| **Artifact registry** | evidence index：记录 ref、hash、来源、敏感级别、摘要与读取状态。 | 去重、redaction、missing/unreadable 标记、source tagging、worker.db 数据面隔离。 | 当成 ATS/CRM/ticket/contract/finance database；用 hard logic 解释 artifact 的业务含义并自动推进流程。 |
+| **Schema pack** | Soul-specific vocabulary / lightweight validation hints。 | 字段名、枚举、样例、presentation hint、静态校验。 | 把 `workflowStates` 变成可执行 workflow engine，或把领域政策做成不可见 hard gate。 |
+| **Brain admission** | durable Brain mutation 的权限与审计边界。 | proposal/decision 状态机、evidence/confidence/rollback、secret scan、apply dry-run、operator approval。 | 把 admission 当成通用 workflow system；绕过 admission 自动写 memory/skill/policy；复用 executor MCP / engine plugin 通路。 |
+| **Brief compiler** | projection layer：按任务预算把 Brain 资产投影进 executor context。 | source 选择、token budget、source 标注、sensitive content redaction、missing refs warning。 | 充当 planner/decider；在 compiler 中决定领域下一步；隐藏地改写 Brain 资产。 |
+| **Decision events** | observability contract：如实说明 intent / capability / quality gate 的 source、mode、是否 enforce。 | heuristic/LLM source 标记、observe/enforce mode 标记、fallback reason、latency/budget 记录。 | 对 heuristic + observe-only 事件包装成“Brain LLM 已接管”；在未接入真实 LLM decider 时做产品承诺。 |
+
+新增 Brain hard logic 前必须做四个自检：
+
+1. **Invariant test**：这段逻辑守的是 scope、权限、证据、审计、redaction、rollback、
+   数据面隔离、token/source budget 里的哪一个不变量？如果答案是“判断业务含义”，改成
+   Soul guidance、brief context、LLM-facing tool 或 admission proposal。
+2. **Mutation test**：它是否会写入 `MEMORY.md`、`memories/`、brain skill、policy、
+   scope manifest 或 worker.db brain tables？如果会写，必须走 admission 或另起 PMA
+   明确免审理由；默认不能让 executor reply 触发隐式落盘。
+3. **Executor-boundary test**：它是否在配置 MCP、engine plugin、sandbox、approval、
+   native session 或 auth？如果是 executor native capability，只能表达 overlay/hint，
+   不能放进 Brain capability，也不能承诺隔离。
+4. **Truthfulness test**：runtime event、CLI、UI、README 是否准确说明该能力是
+   `heuristic`、`llm`、`observe_only` 还是 `enforced`？如果实际只是 observe-only，就
+   必须把 observe-only 作为产品现实写出来。
+
+当前 0.8.x 现实尤其需要诚实标注：QA-006 已证明 `orchestrator.intent_decision`、
+`orchestrator.capability_decision` 与 `orchestrator.quality_gate` 在验证矩阵中都是
+heuristic / observe-only，没有真实 LLM-backed Brain decider 事件。后续可以新增
+LLM-backed decider，但必须显式 opt-in、清楚标 source/mode，并继续保留 heuristic
+fallback。不能把“Project Brain 注入 LLM prompt”误写成“Brain decision LLM 已经接管”。
+
+同理，Brain admission 的目标是把 durable mutation 收口到 operator approval，而不是让
+LLM 自行决定长期记忆是否已经成功落盘。外部 executor 的 native memory（例如 user/host
+级 memory）不是 AIWorker canonical Brain。任何“LLM 声称已提交 admission 但
+`brain_admission_proposals` 为空”的路径都应被视为 governance bypass 风险，而不是成功。
+
 下面两张 mermaid 图是 AIWorker operator topology 的 **canonical source**：README
 顶部的 ASCII 简版与 `docs/deployment.md` 顶部的描述都源自这两张图。修改 topology
 时只动这里，下游引用应保持一致。
@@ -185,28 +249,28 @@ Project Brain 由五类资产组成。命名上 *brain memory / brain skill / pr
 | **Memory** | `MEMORY.md`、`memories/*.md` | operator + brain runtime（仅 pre-compaction flush） | filesystem 为权威；runtime 只允许配置启用后的 pre-compaction memory flush，其它写入必须走 admission（见下条）。 | `aiworker brain memories`（只读检索） |
 | **Brain skills** | `.aiworker/skills/<name>/SKILL.md`（+ asset files） | operator | 仅人写；CLI 不提供 mutating skill commands。`brain skills` 只读列出 live `BrainProvider` 中已挂载的 skill。 | `aiworker brain skills` |
 | **Policy & drafts** | `policy.json`、`toolsets.json`、`capability-packs.json`、`.aiworker/mcp.json` | operator + Soul preset | brain/runtime 草案；`aiworker doctor` 静态校验，不接入 runtime enforcement。`mcp.json` 是 brain/runtime descriptor，不是 engine MCP config。 | `aiworker doctor`、`aiworker brain status` |
-| **Admission state** | （roadmap：单独 admission store，未落 DB） | brain runtime（proposal）+ operator（approval） | 任何 generated memory / skill / policy proposal 必须保留 evidence、scope、confidence、rollback；当前只允许 pre-compaction memory flush 的 runtime 写入路径，其它 mutating 必须显式 operator approval。CLI/API/UI approval surface 由 PLAN-090 roadmap 推进。 | （roadmap） |
+| **Admission state** | worker.db `brain_admission_proposals` / `brain_admission_decisions` | brain runtime（proposal）+ operator（approval） | 任何 generated memory / skill / policy proposal 必须保留 evidence、scope、confidence、rollback；当前只允许 pre-compaction memory flush 的 runtime 写入路径，其它 mutating 必须显式 operator approval。CLI/API/UI approval surface 已由 PLAN-101 / PLAN-103 落地 MVP。 | `aiworker brain admission *`、Worker Admin `/brain` |
 
-`<project>/.aiworker/executor-capabilities.json` **不是** brain 资产；它是外部 executor 的 project overlay / hint，与上面五类完全独立。fleet.db 与 worker.db 都不持久化 brain 内容；filesystem 是唯一权威源，便于 git review 与跨机迁移。
+`<project>/.aiworker/executor-capabilities.json` **不是** brain 资产；它是外部 executor 的 project overlay / hint，与上面五类完全独立。fleet.db 不持久化 brain 内容；worker.db 只持有 artifact/admission/conversation 等可索引状态，不是 canonical brain filesystem 内容。`AGENT.md` / `SOUL.md` / `MEMORY.md` / `memories/` / `skills/` 等仍以 filesystem 为权威，便于 git review 与跨机迁移。
 
 ### Brain admission roadmap
 
 > FEAT-054 / PLAN-097..103 已落地：Soul module + scope manifest（`scope.json`）+ artifact registry（`brain_artifacts`）+ admission MVP（`brain_admission_proposals` + `brain_admission_decisions`）+ brain brief preview。本节继续作为产品边界与红线说明。
 
-任何 brain runtime 自动生成的 memory / brain skill / policy proposal 在落到 filesystem（即 `MEMORY.md`、`memories/`、`.aiworker/skills/`、`policy.json`、`toolsets.json`、`capability-packs.json`、`.aiworker/mcp.json`）之前都要走 admission flow。当前 PMA 阶段不直接落 DB migration，roadmap 分四段：
+任何 brain runtime 自动生成的 memory / brain skill / policy proposal 在落到 filesystem（即 `MEMORY.md`、`memories/`、`.aiworker/skills/`、`policy.json`、`toolsets.json`、`capability-packs.json`、`.aiworker/mcp.json`）之前都要走 admission flow。PLAN-101 / PLAN-103 已落地 worker.db admission MVP；后续新增 proposal kind、LLM-facing entry point 或 guardrail 仍必须按独立 PMA 扩展，不得绕过当前状态机。admission 模型分四段：
 
-1. **Proposal 模型**（设计阶段）：每条 admission proposal 必须携带：
+1. **Proposal 模型**（已实现 MVP）：每条 admission proposal 必须携带：
    - `evidence`：触发该 proposal 的 conversation id / span / 时间窗。
    - `scope`：会修改的具体文件 / 资产路径与字段。
    - `confidence`：runtime 自报的可靠度（rule-based 或 model-self-rated），admission UI 不假装这是绝对真值。
    - `rollback`：能把目标资产恢复到 proposal 之前状态的精确指令（diff / restore-from-backup / 删除新增文件）。
    - `summary`：一句话给 operator 看的人话描述。
-2. **Storage 选型**（设计阶段）：admission proposal 与 audit 记录持久化到 worker.db（**不**进 fleet.db），通过新表 `brain_admission_proposals` + `brain_admission_decisions`；fleet 视角通过 worker REST 间接读取，不在 fleet.db 复制 proposal 全文。schema migration 走 `packages/storage-sqlite/drizzle/worker/*` 单独 PMA。
+2. **Storage 选型**（已实现 MVP）：admission proposal 与 audit 记录持久化到 worker.db（**不**进 fleet.db），通过 `brain_admission_proposals` + `brain_admission_decisions`；fleet 视角通过 worker REST 间接读取，不在 fleet.db 复制 proposal 全文。后续 schema migration 仍走 `packages/storage-sqlite/drizzle/worker/*` 单独 PMA。
 3. **Approval surface**（已实现，PLAN-101 / PLAN-103）：
    - CLI: `aiworker brain admission list/show/approve/reject/apply`（root + worker namespace 双注册），`apply` 默认 dry-run；`--decided-by` 必填用于 audit；`--show-sensitive` 才显示 evidence / payload 中 secret-like 字段。
    - API: `/api/worker/brain/{summary,admission*,artifacts*}` REST endpoints，bearer-auth；`POST /admission/:id/{approve,reject,apply}` 写端点，`apply` 默认 `commit:false`。
    - UI: Worker Admin `/brain` 视图列出 scope manifest 摘要、pending admissions（带 approve/reject/apply 按钮）、redacted artifact 列表。Fleet UI 不持有 admission / artifact state，仅在 worker detail 上挂 “Open worker Brain admin” 深链。
-4. **唯一允许的免审写入**：pre-compaction memory flush（runtime 把易失 memory rollup 到 `MEMORY.md` 的批量收口）继续作为已批准的 runtime 写入路径；任何其它 mutating brain CLI/API/UI 命令必须先经过本 roadmap 接入。
+4. **唯一允许的免审写入**：pre-compaction memory flush（runtime 把易失 memory rollup 到 `MEMORY.md` 的批量收口）继续作为已批准的 runtime 写入路径；任何其它 mutating brain CLI/API/UI 命令必须先经过 admission flow 接入。
 
 **MVP materializer 范围（PLAN-101）**：`apply` 仅对 `kind === 'memory-add'` 自动写 `<brainHome>/MEMORY.md` 或 `<brainHome>/memories/<topic>.md`；其它 proposal kind（`brain-skill-add`、`policy-update` 等）进表后可 approve，但 `apply` 返回 `unsupported`，留待人工或后续 plan 拓展。
 

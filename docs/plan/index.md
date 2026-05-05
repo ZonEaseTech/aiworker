@@ -108,7 +108,7 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-077 Engine-native capability lifecycle beyond MCP**](PLAN-077.md) `2026-05-03`
 - [x] [**PLAN-078 Real Codex-backed worker validation campaign**](PLAN-078.md) `2026-05-03`
 - [x] [**PLAN-079 发布 aiworker CLI 0.5.3**](PLAN-079.md) `2026-05-03`
-- [ ] [**PLAN-080 Soul brain executor validation follow-up fixes**](PLAN-080.md) `2026-05-03`
+- [x] [**PLAN-080 Soul brain executor validation follow-up fixes**](PLAN-080.md) `2026-05-03`
 - [x] [**PLAN-081 Claude Code streamed text append-only contract**](PLAN-081.md) `2026-05-04`
 - [x] [**PLAN-082 Codex text replay evidence closeout**](PLAN-082.md) `2026-05-04`
 - [x] [**PLAN-083 Product positioning PMA tracking and AGENTS guidance**](PLAN-083.md) `2026-05-04`
@@ -142,3 +142,5 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-111 Worker API surface 修复（OpenAPI / serve preflight / debug env）**](PLAN-111.md) `2026-05-05`
 - [x] [**PLAN-112 Doctor first-run UX（噪声收口 + 命名消歧）**](PLAN-112.md) `2026-05-05`
 - [x] [**PLAN-113 发布 aiworker CLI 0.8.0**](PLAN-113.md) `2026-05-05`
+- [x] [**PLAN-114 Brain Governance Kernel 决策落盘**](PLAN-114.md) `2026-05-05`
+- [x] [**PLAN-115 Brain Governance Kernel 决策后的 backlog reset**](PLAN-115.md) `2026-05-05`

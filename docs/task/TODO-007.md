@@ -1,10 +1,18 @@
 # TODO-007 Polish Worker Admin validation UX from local worker testing
 
-- **status**: pending
+- **status**: rejected
 - **priority**: P3
 - **owner**: unassigned
 - **createdAt**: 2026-05-02 20:39
 - **discoveredAt**: 2026-05-02 20:34
+- **rejectedAt**: 2026-05-05 23:48
+
+## 关闭标记 / Deferred after DOC-006
+
+本任务在 DOC-006 / PLAN-115 中关闭，不再属于 Brain Governance Kernel 决策后的开发
+队列。它记录的是旧 Worker Admin 本地验证中的 P3 polish，不阻塞当前架构断代后的
+truthfulness / admission / executor parity / safety 工作。未来如重开 Worker Admin UX
+专项，应重新立项并重新验证现状。
 
 ## Description
 

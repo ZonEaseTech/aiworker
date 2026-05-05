@@ -1,5 +1,30 @@
 # AIWorker Changelog
 
+## 2026-05-05 23:48 [completed] DOC-006 / PLAN-115 — Brain Governance Kernel 决策后的 backlog reset
+
+按 DOC-005 / PLAN-114 的 Governance Brain Kernel 决策，对所有旧 pending / draft PMA 项做断代收口：旧入口失去直接实施资格，真实发布缺陷保留为决策后的开发队列。
+
+- 关闭旧入口：`PLAN-080` rejected；`BUG-050` rejected / superseded by `BUG-070`；`TODO-008` rejected / future post-decision regression harness；`TODO-007` rejected / deferred。
+- 完成验证证据：`QA-006` 标记 completed，并把所有发现 triage 到后续任务。
+- 同步 stale 状态：`BUG-015` / `REFACTOR-007` 在 index 已关闭且代码实现存在，本轮把详情文件内的 `in-progress` / `in-review` 同步为 completed。
+- 保留并重写口径：`BUG-066` 变成 truthfulness contract（先暴露 heuristic / LLM、observe_only / enforced，不默认实现 heavy Brain decision LLM）；`BUG-067` 是 classifier fallback diagnostics；`BUG-068` / `BUG-074` 是 admission governance bridge 与 bypass guardrail；`BUG-069` / `BUG-070` 是 executor parity；`BUG-071` / `BUG-072` 是 operator trust / safety；`BUG-073` / `TODO-026` / `BUG-051` 是 onboarding polish。
+- 后续开发顺序写入 `PLAN-115`：Truthfulness layer → Admission governance bridge → Executor parity → Safety/operator trust → Onboarding polish → post-decision regression harness。
+
+验证：`git diff --check`。
+
+## 2026-05-05 22:58 [completed] DOC-005 / PLAN-114 — Brain Governance Kernel 决策落盘
+
+拉取最新主线到 `7adc00a` 后，针对 Brain 层已经大量实现但产品边界开始变重的问题，完成架构决策落盘：AIWorker Brain 是 **Governance Brain Kernel**，不是硬编码领域自动化引擎。
+
+- `docs/architecture.md` 新增 `Brain Governance Kernel 决策`：明确 `hard logic owns invariants, LLM owns semantics`，Brain hard logic 只守 scope identity、数据面隔离、evidence/provenance、admission 状态机、secret redaction、rollback/audit、token budget、source tagging 等治理不变量；候选人/代码/合同/财务等领域语义、下一步规划与业务判断交给 LLM / executor。
+- 逐一重解释 FEAT-054 / PLAN-097..103 已落地组件：Soul module 是 LLM-readable role package，scope manifest 是 business scope identity，artifact registry 是 evidence index，schema pack 是 vocabulary / validation hints，admission 是 durable mutation permission boundary，brief compiler 是 projection layer，decision events 是 truthfulness / observability contract。
+- 文档化新增 Brain hard logic 前的四个自检：invariant test、mutation test、executor-boundary test、truthfulness test，避免把 Brain Kernel 继续推向 HR/finance/legal/dev 的 hardcoded workflow engine。
+- 诚实记录 0.8.x 现实：QA-006 观察到 `intent_decision` / `capability_decision` / `quality_gate` 仍是 heuristic / observe-only，不能包装成 LLM-backed Brain decider；未来 LLM decider 必须显式 opt-in，并清楚标注 source/mode。
+- 修正 architecture 中 admission state 仍写成 roadmap / 未落 DB 的过期表述，改为 PLAN-101 / PLAN-103 已落地 worker.db admission MVP；后续 admission LLM-facing entry point 或 guardrail 仍需独立 PMA。
+- `AGENTS.md` 增加短红线：Brain 硬逻辑只守治理不变量，领域语义和 workflow planning 交给 LLM / executor。
+
+验证：`git diff --check`。
+
 ## 2026-05-05 14:20 [progress] QA-006 — 0.8.0 published end-to-end debug campaign (5 Souls × 12 turns × 2 engines)
 
 按 `aiworker-coder-claude-engine` skill 在本机对 `@zonease/aiworker-cli@0.8.0` 跑了 60 turn 的 Project Brain 与 executor 端到端验证。Souls × engines 矩阵：developer × claude-code、developer × codex、hr-recruiting × claude-code、finance-ops × codex、qa-reviewer × claude-code，每个 Soul 用同一 `--chat-id` 跑 12 轮，覆盖身份、scope、跨轮 marker recall、out-of-scope 拒绝、risk policy gating、admission proposal、self-summary 与文件落盘连续性。

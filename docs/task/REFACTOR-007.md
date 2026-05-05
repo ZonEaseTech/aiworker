@@ -1,10 +1,17 @@
 # REFACTOR-007 杂项小修：bus 异常吞 / lark cache / fleet count / secrets key
 
-- **status**: in-review
+- **status**: completed
 - **priority**: P2
 - **owner**: bkd/scj2356z
 - **createdAt**: 2026-04-27
+- **completedAt**: 2026-05-05 23:48
 - **trigger**: 代码审查（root issue `nnid9urk`）落到 `8s9tprje` 协调，scj2356z 子任务
+
+## DOC-006 status sync
+
+`docs/task/index.md` 已将本任务标为 completed，当前代码中也能看到对应实现面：
+`WorkerEventBus` 测试、`resetLarkTokenCache`、fleet persistence count/list 优化、
+`secretKeySchema`。DOC-006 仅同步文件内 stale `in-review` 状态，不重开实现。
 
 ## Description
 

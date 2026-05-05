@@ -1,10 +1,19 @@
 # TODO-008 Create repeatable Soul brain executor validation harness
 
-- **status**: pending
+- **status**: rejected
 - **priority**: P2
 - **owner**: unassigned
 - **createdAt**: 2026-05-03 23:33
 - **plan**: PLAN-080
+- **rejectedAt**: 2026-05-05 23:48
+
+## 关闭标记 / Superseded by post-decision regression harness
+
+本任务在 DOC-006 / PLAN-115 中关闭。旧 harness 目标来自 QA-003，范围偏“所有 Soul /
+brain / executor 能力都跑一遍”。DOC-005 后，新的 regression harness 必须围绕
+Governance Brain Kernel 的不变量重开：decision truthfulness、admission DB delta、
+engine-native memory bypass warning、chat-id continuity、tool-call observability、
+Soul boundary/risk policy。本任务不再作为实现入口。
 
 ## Description
 
