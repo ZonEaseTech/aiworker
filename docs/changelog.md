@@ -1,5 +1,27 @@
 # AIWorker Changelog
 
+## 2026-05-05 06:30 [in-progress] REL-015 / PLAN-113 — CLI 0.8.0 release in flight
+
+`@zonease/aiworker-cli@0.8.0` minor release 准备中。
+
+- 自 `v0.7.0` (release commit `4968d63`) 至 release-bump commit 共 5 个 release-relevant commit；按 semver 0.x 走 minor（多个用户可观察行为质变 + 新 CLI flag + 新 worker config schema 字段）。
+- 本次 release 收口 QA-005（0.7.0 published claude-code Soul/Brain 端到端调试）登记的 11 个 task：
+  - `PLAN-109` Brain brief / admission read-path 收口。覆盖 `BUG-060` (P1 brain memory body 注入) / `BUG-061` (P1 admission redact 双闸 — `--show-sensitive` × `AIWORKER_ADMIN_REVEAL=1`，content-scan reuse `redactBodySecrets`) / `BUG-062` (P3 brief artifact-summary 防御性过滤) / `TODO-012` (P2 secret-scan ruleset +slack-token / +stripe-live / +gcp-api-key / +pem-private-key / ASIA AWS)。
+  - `PLAN-110` Decision pipeline 强化。覆盖 `BUG-063` (P1 dev-Soul tool loop — 9 个 Soul 在 SOUL.md 加 "模糊或缺失上下文" + dead-loop detector +`orchestrator.deadLoop` config) / `BUG-064` (P2 intent risk 词典扩展 force-push / drop table / 落账 直接 / 立即上线 等) / `TODO-013` (P2 LLM evaluator 并行 + `orchestrator.qualityGate.budgetMs` 默认 30s 超时降级 heuristic)。
+  - `PLAN-111` Worker API surface 修复。覆盖 `BUG-065` (P2 OpenAPI 12 typed paths) / `TODO-014` (P3 safe-env explicit-allow `AIWORKER_DEBUG_*` / `DEBUG_*`，AIWORKER_MASTER_KEY / AIWORKER_JOIN_TOKEN 仍被 BLOCK_PREFIXES 拦下) / `TODO-016` (P2 serve `tryBindPreflight` + `--pid-file` flag + `/health` 自描述)。
+  - `PLAN-112` Doctor first-run UX。覆盖 `TODO-015` (P3 doctor 顶部 summary line + fresh-init `*.empty` info 抑制 + `brain-skills.empty` / `executor-overlay.{capabilities,mcp}.empty` 命名消歧)。
+- 本地 release gates 全通过。
+
+验证：
+
+- `bun run typecheck` ✅（9 workspace 全 0 退出）
+- `bun run lint` ✅（0 violation）
+- `bun run test` ✅（fs-layout 20 / shared 140 / gateway-proto 19 / storage 19 / gateway 148 / core 592 / api 86 / cli 171 = 1195 tests）
+- `bun run build` ✅（fleet 639 kB / worker 664 kB / cli aiworker-bun.js 1.1 MB；CSS utility check 通过）
+- `apps/cli/dist/package.json` 版本字段 = `0.8.0` ✅
+- `git diff --check` ✅
+- 待 release commit / tag push 后验证 GitHub Actions release workflow + npm + GH Release。
+
 ## 2026-05-05 06:00 [completed] REL-014 / PLAN-108 — CLI 0.7.0 released
 
 `@zonease/aiworker-cli@0.7.0` minor release 完成。
