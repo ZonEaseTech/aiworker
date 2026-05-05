@@ -203,3 +203,14 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**TODO-015 `aiworker doctor` emits noisy `[info] skills.empty` and `WARN executor.capability_manifest_empty` on first-run defaults**](TODO-015.md) `P3`
 - [x] [**TODO-016 `aiworker serve` silently succeeds when port already bound, curl hits stale serve**](TODO-016.md) `P2`
 - [x] [**REL-015 发布 aiworker CLI 0.8.0**](REL-015.md) `P1`
+- [ ] [**QA-006 0.8.0 published end-to-end debug campaign — 5 Souls × 12 turns × 2 engines**](QA-006.md) `P1`
+- [ ] [**BUG-066 Brain decision layer is heuristic-only and observe-only — does not match "Brain decision LLM" product positioning**](BUG-066.md) `P1`
+- [ ] [**BUG-067 `conversation.classifier` silently falls back to heuristic on `non-json-classifier-output` without preserving the raw LLM output**](BUG-067.md) `P1`
+- [ ] [**BUG-068 Brain admission proposal pipeline has no LLM-discoverable entry-point — Souls on claude-code never trigger AIWorker admission**](BUG-068.md) `P1`
+- [ ] [**BUG-069 codex executor session continuity is broken — same chat-id splits into multiple conversations, marker recall fails**](BUG-069.md) `P1`
+- [ ] [**BUG-070 codex executor emits no `orchestrator.tool_call` events — observability badly degraded vs claude-code**](BUG-070.md) `P1`
+- [ ] [**BUG-071 `aiworker executor doctor` prints contradictory banner: header says "0 ERR · 0 WARN" but body says `Status: WARN`**](BUG-071.md) `P2`
+- [ ] [**BUG-072 `aiworker init` prints bootstrap token + master-key to stdout with weak warning UX, easy to leak**](BUG-072.md) `P2`
+- [ ] [**BUG-073 Unknown subcommand silently falls back to top-level help — `aiworker soul --help` etc. show no error**](BUG-073.md) `P3`
+- [ ] [**BUG-074 LLM hallucinates "admission proposal submitted" while AIWorker brain admission DB stays empty (claude-code engine)**](BUG-074.md) `P2`
+- [ ] [**TODO-026 `aiworker init` "alternates" recommendation list is advisory but not enforced — define the contract**](TODO-026.md) `P3`

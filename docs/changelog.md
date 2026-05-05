@@ -1,5 +1,29 @@
 # AIWorker Changelog
 
+## 2026-05-05 14:20 [progress] QA-006 — 0.8.0 published end-to-end debug campaign (5 Souls × 12 turns × 2 engines)
+
+按 `aiworker-coder-claude-engine` skill 在本机对 `@zonease/aiworker-cli@0.8.0` 跑了 60 turn 的 Project Brain 与 executor 端到端验证。Souls × engines 矩阵：developer × claude-code、developer × codex、hr-recruiting × claude-code、finance-ops × codex、qa-reviewer × claude-code，每个 Soul 用同一 `--chat-id` 跑 12 轮，覆盖身份、scope、跨轮 marker recall、out-of-scope 拒绝、risk policy gating、admission proposal、self-summary 与文件落盘连续性。
+
+正面发现：
+
+- Soul / persona / scope / capability 注入 LLM 真实工作；5/5 Soul 对 out-of-scope 请求按 boundary 转交、对高风险请求按 risk policy 阻断（HR 拒发 offer letter、QA 拒跳 P1 回归、finance 拒未授权账务调整、developer 对 `rm -rf` dry-run + 回滚 memo）。
+- claude-code 引擎单 chat-id 跨 12 轮维持单一 conversation（dev-cc 21 messages，hr 16，qa 13），marker recall 精确；`/health` mode=worker、brain healthy、executor healthy；`/openapi.json` 12 paths（确认 BUG-065 已在 0.8.0 修复）。
+
+负面发现（已按 PMA 标准落盘）：
+
+- `BUG-066 P1` Brain decision layer (intent / capability / quality_gate) 全部 heuristic + observe_only，与"Brain decision LLM"的产品定位不符；60 turn 中**无任何**事件 source 指向 LLM-backed decider。
+- `BUG-067 P1` `conversation.classifier` 每轮 `reason: "non-json-classifier-output"` 静默回退，无原始 LLM 输出可追责。
+- `BUG-068 P1` Brain admission proposal 无 LLM-discoverable 入口；claude-code 上 0/3 Soul 触发真实 admission，全部把"长期记忆"写到 `~/.claude/projects/<scope>/memory/`；codex 上 2/2 Soul 真的写入 `brain_admission_proposals` DB。是 admission pipeline 的根本设计 gap。
+- `BUG-069 P1` codex executor 同 chat-id 切成多 conversation（12 turn 跑完后 dev-codex 7 conv / 24 msg、finance 6 conv / 24 msg），导致 dev-codex turn-4 marker recall 失败。claude-code 三 Soul 同条件下全部 1 conv / 24 msg。
+- `BUG-070 P1` codex executor 在 AIWorker 事件流里完全没有 `orchestrator.tool_call` 事件，observability 严重不对等。
+- `BUG-071 P2` `aiworker executor doctor` banner "0 ERR · 0 WARN" 与 body `Status: WARN` 自相矛盾。
+- `BUG-072 P2` `aiworker init` stdout 直接打印 bootstrap token + master-key，warning UX 弱，易随 stdout 泄漏。
+- `BUG-073 P3` `aiworker soul --help` 等未知子命令静默回退到顶级 help，没有 "unknown command" 提示。
+- `BUG-074 P2` claude-code 上 LLM 自信宣称 "proposal 已采纳" 但 admission DB 0；hallucination 让 operator 看不到任何待审批项。
+- `TODO-026 P3` `aiworker init` "alternates" 推荐文案是 advisory 但渲染得像权威 — finance-ops 选 codex 也允许；需要在 advisory 与 enforced 之间二选一。
+
+全部细节、复现命令、acceptance criteria 已写入 `docs/task/QA-006.md` 与对应 `BUG-066..074` / `TODO-026`。
+
 ## 2026-05-05 06:50 [completed] REL-015 / PLAN-113 — CLI 0.8.0 released
 
 `@zonease/aiworker-cli@0.8.0` minor release 完成。
