@@ -1,11 +1,13 @@
 # TODO-016 `aiworker serve` silently succeeds when port already bound, curl hits stale serve
 
-- **status**: pending
+- **status**: completed
 - **priority**: P2
-- **owner**: unassigned
+- **owner**: aiworker-maintainer
 - **createdAt**: 2026-05-04 22:10
 - **discoveredAt**: 2026-05-04 22:07
-- **plan**: TBD
+- **claimedAt**: 2026-05-05 05:30
+- **completedAt**: 2026-05-05 05:55
+- **plan**: PLAN-111
 - **relatesTo**: serve / process management
 
 ## Observed Behavior

@@ -64,6 +64,23 @@ describe('buildSafeChildEnv', () => {
     expect(env.WORKER_DB_PATH).toBeUndefined()
   })
 
+  it('TODO-014: explicit-allow lets debug-only AIWORKER_DEBUG_* / DEBUG_* names reach the engine subprocess', () => {
+    const env = buildSafeChildEnv(undefined, {
+      PATH: '/usr/bin',
+      AIWORKER_DEBUG_DUMP_DIR: '/tmp/aiworker-debug/dump',
+      AIWORKER_DEBUG_TRACE: 'verbose',
+      DEBUG_ROOT: '/tmp/aiworker-debug',
+      // Explicit-allow must NOT bypass real secrets — these stay blocked.
+      AIWORKER_MASTER_KEY: 'deadbeef'.repeat(8),
+      AIWORKER_JOIN_TOKEN: 'join-token',
+    })
+    expect(env.AIWORKER_DEBUG_DUMP_DIR).toBe('/tmp/aiworker-debug/dump')
+    expect(env.AIWORKER_DEBUG_TRACE).toBe('verbose')
+    expect(env.DEBUG_ROOT).toBe('/tmp/aiworker-debug')
+    expect(env.AIWORKER_MASTER_KEY).toBeUndefined()
+    expect(env.AIWORKER_JOIN_TOKEN).toBeUndefined()
+  })
+
   it('strips arbitrary *_TOKEN / *_SECRET / *_API_KEY suffix vars from process.env', () => {
     const env = buildSafeChildEnv(undefined, {
       PATH: '/usr/bin',

@@ -1,7 +1,9 @@
 # PLAN-111 Worker API surface 修复（OpenAPI / serve preflight / debug env）
 
-- **status**: pending
+- **status**: completed
 - **createdAt**: 2026-05-05 04:25
+- **approvedAt**: 2026-05-05 05:30
+- **completedAt**: 2026-05-05 05:55
 - **relatedTask**: BUG-065, TODO-016, TODO-014
 
 ## 现状
@@ -108,3 +110,30 @@ QA-005 在 worker REST 与 process surface 上发现 3 个互锁缺陷：
 ## 进度
 
 - 2026-05-05 04:25：plan created。
+- 2026-05-05 05:55：实施完成。
+  - **BUG-065** 改为 minimal-diff: `apps/api/src/modes/worker.ts` 在
+    `app.doc()` 之前新增 `registerWorkerOpenApiPaths()` —— 用
+    `app.openAPIRegistry.registerPath()` 把 12 个核心 endpoint 的
+    method / path / summary / tags / security 直接挂到 OpenAPIHono
+    registry，不需要触动 6 个 sub-router 的 70+ plain handler。
+    `registerComponent('securitySchemes', 'bearerAuth', ...)` 同步注册。
+    新增 `worker.openapi.test.ts` 覆盖 paths >= 10、含安全字段、Scalar
+    可消费。注释里说明跟 follow-up 全 typed 的差异。
+  - **TODO-016** `apps/cli/src/commands/worker/serve.ts` 新增导出
+    `tryBindPreflight(host, port)`：用 `node:net.createServer` 做同步
+    探测，命中 `EADDRINUSE` 就 `consola.error` + `process.exit(1)`，
+    `setsid + > log 2>&1 &` wrapper 也能拿到非 0 退出码。新增
+    `--pid-file <path>` CLI flag（root + worker subcommand 双入口），
+    `writeFileSync` + shutdown hook `unlink` 清理。`/health`
+    新增 `workerHome` + `runtimeVersion` 字段，curl 不带 token 也能
+    确认对的 worker。`serve.test.ts` 加 2 条 preflight 测试。
+  - **TODO-014** `packages/core/src/worker/executor/safe-env.ts` 新增
+    `EXPLICIT_PASSTHROUGH_PREFIXES = ['AIWORKER_DEBUG_', 'DEBUG_']`，
+    `buildFilteredEnv` 增加 `allowExplicit` 参数；`buildSafeChildEnv`
+    打开开关，`buildSafeGitEnv` 不动。`AIWORKER_MASTER_KEY` /
+    `AIWORKER_JOIN_TOKEN` 仍被 `BLOCK_PREFIXES` 拦下；只有调试 prefix
+    旁路。`safe-env.test.ts` 加 1 条 explicit-allow + secret-block 共
+    存断言。
+- 2026-05-05 05:55：验证通过：core 592 / cli 168 / api 86 全 pass；
+  workspace typecheck 9/9；root lint 0 violation。BUG-065 / TODO-014 /
+  TODO-016 全部 completed。

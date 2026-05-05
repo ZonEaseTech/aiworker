@@ -100,6 +100,22 @@ const BLOCK_SUFFIXES = [
   '_PASSWORD',
 ]
 
+/**
+ * TODO-014: explicit-allow override for debug-only prefixes. Names matching
+ * these prefixes bypass the BLOCK / passthrough rules so release-debug
+ * skill workflows (`AIWORKER_DEBUG_DUMP_DIR`, `DEBUG_ROOT`, etc.) can reach
+ * the engine subprocess and write evidence to per-campaign locations. The
+ * narrow scope keeps `AIWORKER_MASTER_KEY` / `AIWORKER_JOIN_TOKEN` blocked.
+ */
+const EXPLICIT_PASSTHROUGH_PREFIXES = [
+  'AIWORKER_DEBUG_',
+  'DEBUG_',
+]
+
+function isExplicitlyAllowed(name: string): boolean {
+  return EXPLICIT_PASSTHROUGH_PREFIXES.some(prefix => name.startsWith(prefix))
+}
+
 function isPassthrough(
   name: string,
   exact: ReadonlySet<string>,
@@ -122,11 +138,19 @@ function buildFilteredEnv(
   source: NodeJS.ProcessEnv,
   exact: ReadonlySet<string>,
   prefixes: readonly string[],
+  options: { allowExplicit?: boolean } = {},
 ): NodeJS.ProcessEnv {
+  const allowExplicit = options.allowExplicit === true
   const out: NodeJS.ProcessEnv = {}
   for (const [key, value] of Object.entries(source)) {
     if (value === undefined)
       continue
+    // TODO-014: explicit-allow takes precedence so AIWORKER_DEBUG_* names
+    // reach the engine even though `AIWORKER_` is in BLOCK_PREFIXES.
+    if (allowExplicit && isExplicitlyAllowed(key)) {
+      out[key] = value
+      continue
+    }
     if (isBlocked(key))
       continue
     if (!isPassthrough(key, exact, prefixes))
@@ -151,7 +175,7 @@ export function buildSafeChildEnv(
   extra?: Record<string, string>,
   source: NodeJS.ProcessEnv = process.env,
 ): NodeJS.ProcessEnv {
-  const out = buildFilteredEnv(source, PASSTHROUGH_EXACT, PASSTHROUGH_PREFIXES)
+  const out = buildFilteredEnv(source, PASSTHROUGH_EXACT, PASSTHROUGH_PREFIXES, { allowExplicit: true })
   if (extra) {
     for (const [key, value] of Object.entries(extra))
       out[key] = value

@@ -1,11 +1,13 @@
 # TODO-014 Engine child env allowlist drops `AIWORKER_*`/`DEBUG_*` env, breaking debug shim
 
-- **status**: pending
+- **status**: completed
 - **priority**: P3
-- **owner**: unassigned
+- **owner**: aiworker-maintainer
 - **createdAt**: 2026-05-04 22:10
 - **discoveredAt**: 2026-05-04 21:30
-- **plan**: TBD
+- **claimedAt**: 2026-05-05 05:30
+- **completedAt**: 2026-05-05 05:55
+- **plan**: PLAN-111
 - **relatesTo**: aiworker-release-debug skill workflow
 
 ## Observed Behavior

@@ -1,5 +1,8 @@
 import type { GatewayNode, GatewayNodeEnrollOptions } from '@zonease/aiworker-core'
 import { spawn } from 'node:child_process'
+import { writeFileSync } from 'node:fs'
+import { unlink } from 'node:fs/promises'
+import { createServer } from 'node:net'
 import process from 'node:process'
 
 import { bootstrapWorkerApp } from '@zonease/aiworker-api/bootstrap'
@@ -52,6 +55,43 @@ export interface ServeOptions {
    * undefined = 交互式 TTY 自动打开；true = 强制打开；false = 禁用。
    */
   open?: boolean
+  /**
+   * TODO-016: write the daemon pid to this path so callers using
+   * `setsid + > log 2>&1 &` wrappers don't have to chase `$!` (which captures
+   * the wrapper, not aiworker). File is removed on graceful shutdown.
+   */
+  pidFile?: string
+}
+
+/**
+ * TODO-016: synchronous bind preflight. Returns null on success. On
+ * failure returns the error message — caller must surface this to stderr
+ * and exit with non-zero. Without this, `Bun.serve({ port })` rejects with
+ * EADDRINUSE asynchronously and the error is swallowed by the
+ * `setsid + > log 2>&1 &` wrapper, leaving the operator pointing curl at a
+ * stale serve from a previous campaign.
+ */
+export async function tryBindPreflight(host: string, port: number): Promise<string | null> {
+  const bindHost = host === '*' ? '0.0.0.0' : host
+  return new Promise<string | null>((resolve) => {
+    const server = createServer()
+    const onError = (err: NodeJS.ErrnoException) => {
+      server.removeAllListeners()
+      const code = err.code ?? 'ERROR'
+      resolve(`port ${port} on host ${bindHost} unavailable: ${code} (${err.message})`)
+    }
+    server.once('error', onError)
+    server.once('listening', () => {
+      server.removeAllListeners()
+      server.close(() => resolve(null))
+    })
+    try {
+      server.listen({ host: bindHost, port })
+    }
+    catch (err) {
+      onError(err as NodeJS.ErrnoException)
+    }
+  })
 }
 
 interface WorkerAdminUrlOptions {
@@ -142,8 +182,32 @@ export async function runServe(options: ServeOptions = {}): Promise<void> {
   })
   const port = options.port ?? envPort
 
+  // TODO-016: fail fast on EADDRINUSE before forking off Bun.serve so
+  // wrapper scripts that lose the real exit code (`setsid + > log 2>&1 &`)
+  // see a clear non-zero exit instead of pointing curl at a stale serve.
+  const preflightError = await tryBindPreflight(host, port)
+  if (preflightError !== null) {
+    consola.error(`[aiworker serve] ${preflightError}`)
+    consola.error(`[aiworker serve] hint: \`lsof -tiTCP:${port} -sTCP:LISTEN\` to find the holding pid, then \`kill -TERM <pid>\` and retry.`)
+    process.exit(1)
+  }
+
   const server = Bun.serve({ port, hostname: host, fetch: app.fetch })
   consola.success(`[aiworker serve] worker ${state.workerId} listening on ${host}:${port} (config v${state.configVersion})`)
+
+  // TODO-016: pid file lets wrappers track the real daemon pid without
+  // depending on `$!` (which captures the setsid wrapper).
+  let pidFileWritten: string | null = null
+  if (options.pidFile !== undefined) {
+    try {
+      writeFileSync(options.pidFile, `${process.pid}\n`, { encoding: 'utf8' })
+      pidFileWritten = options.pidFile
+      consola.info(`[aiworker serve] pid ${process.pid} written to ${options.pidFile}`)
+    }
+    catch (err) {
+      consola.warn(`[aiworker serve] pid-file write failed: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
   if (webStaticDir) {
     consola.info(`[aiworker serve] /admin/* serving worker bundle from ${webStaticDir}`)
     const adminBaseUrl = buildWorkerAdminBaseUrl({ host, port })
@@ -353,6 +417,14 @@ export async function runServe(options: ServeOptions = {}): Promise<void> {
     }
     catch (err) {
       consola.warn(`[aiworker serve] http shutdown failed: ${String(err)}`)
+    }
+    if (pidFileWritten !== null) {
+      try {
+        await unlink(pidFileWritten)
+      }
+      catch {
+        // Best-effort cleanup; missing file is fine.
+      }
     }
     process.exit(0)
   }

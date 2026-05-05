@@ -196,9 +196,9 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-062 `aiworker brain brief` still emits `undefined: not found` artifact line in 0.7.0 when `--artifact` is omitted**](BUG-062.md) `P3`
 - [x] [**BUG-063 Vague developer-Soul prompt triggers brute-force tool loop and crosses cwd boundary**](BUG-063.md) `P1`
 - [x] [**BUG-064 Heuristic intent classifier misclassifies high-risk git/db verbs as risk=low**](BUG-064.md) `P2`
-- [ ] [**BUG-065 `/openapi.json` returns empty `paths`, all worker REST endpoints missing from API doc**](BUG-065.md) `P2`
+- [x] [**BUG-065 `/openapi.json` returns empty `paths`, all worker REST endpoints missing from API doc**](BUG-065.md) `P2`
 - [x] [**TODO-012 Expand admission `secret-scan` rule set beyond `sk-token`**](TODO-012.md) `P2`
 - [x] [**TODO-013 LLM evaluator inflates per-prompt latency to 60-120s, exceeds default 90s timeout**](TODO-013.md) `P2`
-- [ ] [**TODO-014 Engine child env allowlist drops `AIWORKER_*`/`DEBUG_*` env, breaking debug shim**](TODO-014.md) `P3`
+- [x] [**TODO-014 Engine child env allowlist drops `AIWORKER_*`/`DEBUG_*` env, breaking debug shim**](TODO-014.md) `P3`
 - [ ] [**TODO-015 `aiworker doctor` emits noisy `[info] skills.empty` and `WARN executor.capability_manifest_empty` on first-run defaults**](TODO-015.md) `P3`
-- [ ] [**TODO-016 `aiworker serve` silently succeeds when port already bound, curl hits stale serve**](TODO-016.md) `P2`
+- [x] [**TODO-016 `aiworker serve` silently succeeds when port already bound, curl hits stale serve**](TODO-016.md) `P2`

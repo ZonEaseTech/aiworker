@@ -506,7 +506,8 @@ cli
   .option('--no-serve-web', '不挂载 worker bundle 到 /admin/*（默认挂载）')
   .option('--open', '启动后打开 worker admin')
   .option('--no-open', '启动后不自动打开 worker admin')
-  .action(async (opts: { port?: number[], host?: string, gateway?: string, gatewayToken?: string, reconnect?: boolean, serveWeb?: boolean }) => {
+  .option('--pid-file <path>', 'TODO-016：daemon pid 写入指定路径（关闭时清理）；适合 setsid 包装下的进程跟踪')
+  .action(async (opts: { port?: number[], host?: string, gateway?: string, gatewayToken?: string, reconnect?: boolean, serveWeb?: boolean, pidFile?: string }) => {
     const serveOptions: Parameters<typeof runServe>[0] = {}
     const port = optionalNumber(opts.port)
     if (port !== undefined)
@@ -521,6 +522,8 @@ cli
       serveOptions.gatewayReconnect = false
     if (opts.serveWeb === false)
       serveOptions.serveWeb = false
+    if (opts.pidFile !== undefined && opts.pidFile.trim().length > 0)
+      serveOptions.pidFile = opts.pidFile.trim()
     const open = readServeOpenOption()
     if (open !== undefined)
       serveOptions.open = open
@@ -1022,7 +1025,8 @@ cli
   .option('--no-serve-web', '不挂载 worker bundle 到 /admin/*（默认挂载）')
   .option('--open', '启动后打开 worker admin')
   .option('--no-open', '启动后不自动打开 worker admin')
-  .action(async (opts: { port?: number[], host?: string, gateway?: string, gatewayToken?: string, reconnect?: boolean, serveWeb?: boolean }) => {
+  .option('--pid-file <path>', 'TODO-016：daemon pid 写入指定路径（关闭时清理）；适合 setsid 包装下的进程跟踪')
+  .action(async (opts: { port?: number[], host?: string, gateway?: string, gatewayToken?: string, reconnect?: boolean, serveWeb?: boolean, pidFile?: string }) => {
     const serveOptions: Parameters<typeof runServe>[0] = {}
     const port = optionalNumber(opts.port)
     if (port !== undefined)
@@ -1037,6 +1041,8 @@ cli
       serveOptions.gatewayReconnect = false
     if (opts.serveWeb === false)
       serveOptions.serveWeb = false
+    if (opts.pidFile !== undefined && opts.pidFile.trim().length > 0)
+      serveOptions.pidFile = opts.pidFile.trim()
     const open = readServeOpenOption()
     if (open !== undefined)
       serveOptions.open = open

@@ -1,6 +1,8 @@
 import type { WorkerModeState } from '@zonease/aiworker-core'
 import type { WorkerConfig } from '@zonease/aiworker-shared'
-import { OpenAPIHono } from '@hono/zod-openapi'
+import path from 'node:path'
+
+import { OpenAPIHono, z } from '@hono/zod-openapi'
 import { apiReference } from '@scalar/hono-api-reference'
 import {
   buildWorkerRuntime,
@@ -193,6 +195,12 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
       configVersion: state.configVersion,
       startedAt: state.startedAt,
       checkedAt: new Date().toISOString(),
+      // TODO-016: self-identification fields so callers using a stale
+      // bearer can diagnose "I'm talking to the wrong worker" without auth.
+      // Paths are non-sensitive (no token, no secret); they let curl-based
+      // smoke scripts confirm they hit the expected worker.db / project.
+      workerHome: path.dirname(workerEnv.WORKER_DB_PATH),
+      runtimeVersion,
     })
   })
 
@@ -217,6 +225,14 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   app.route('/api/worker/brain', buildBrainRoutes({ getWorkerId: () => state.workerId }))
   app.route('/api/worker', buildManagementRoutes({ getState: () => state, reloadRuntime, runtimeVersion }))
 
+  // BUG-065: sub-router endpoints register paths via plain `app.get(...)` so
+  // `OpenAPIHono.doc()` can't reflect them. Re-register the operator-facing
+  // surface here as typed routes pointing at the existing handlers — keeps
+  // diff small while populating `/openapi.json` paths and unblocking the
+  // `/docs` Scalar UI. Coverage is intentionally partial; full conversion
+  // tracked separately.
+  registerWorkerOpenApiPaths(app)
+
   app.doc('/openapi.json', {
     openapi: '3.1.0',
     info: {
@@ -235,4 +251,76 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
 export async function createWorkerApp(): Promise<{ app: OpenAPIHono, port: number }> {
   const { app, port } = await bootstrapWorkerApp()
   return { app, port }
+}
+
+/**
+ * BUG-065 minimal-diff fix. Re-declares the operator-facing endpoints at the
+ * doc level so `app.doc('/openapi.json')` returns a non-empty `paths`
+ * object. Each entry mirrors the canonical handler URL; the response schema
+ * is intentionally lightweight (`z.object({}).passthrough()`) — the goal is
+ * to populate the doc surface and unblock typed clients, not to fully
+ * express every shape. Sub-routers continue serving the actual handlers.
+ */
+function registerWorkerOpenApiPaths(app: OpenAPIHono): void {
+  const lightObject = z.object({}).passthrough().openapi('WorkerEndpointResponse')
+  const errorObject = z.object({
+    error: z.object({
+      code: z.string(),
+      message: z.string(),
+    }),
+  }).openapi('WorkerErrorResponse')
+
+  const okJson = {
+    200: {
+      description: 'OK',
+      content: { 'application/json': { schema: lightObject } },
+    },
+  } as const
+  const errJson = {
+    description: 'Error',
+    content: { 'application/json': { schema: errorObject } },
+  } as const
+
+  const docs: Array<{
+    method: 'get' | 'post' | 'put' | 'delete'
+    path: string
+    summary: string
+    tags: string[]
+    requireAuth?: boolean
+  }> = [
+    { method: 'get', path: '/health', summary: 'Worker health snapshot (public)', tags: ['health'] },
+    { method: 'get', path: '/api/worker/info', summary: 'Worker identity, brainSummary, scope manifest, runtime version', tags: ['management'], requireAuth: true },
+    { method: 'get', path: '/api/worker/sessions', summary: 'Active orchestrator sessions', tags: ['management'], requireAuth: true },
+    { method: 'get', path: '/api/worker/schedule', summary: 'Worker cron schedule snapshot', tags: ['management'], requireAuth: true },
+    { method: 'get', path: '/api/worker/approvals', summary: 'Pending tool approval requests', tags: ['management'], requireAuth: true },
+    { method: 'get', path: '/api/worker/brain/summary', summary: 'Brain summary aggregate (memories / skills / artifacts / admission)', tags: ['brain'], requireAuth: true },
+    { method: 'get', path: '/api/worker/brain/admission', summary: 'List admission proposals', tags: ['brain'], requireAuth: true },
+    { method: 'get', path: '/api/worker/brain/admission/{id}', summary: 'Show admission proposal + decisions', tags: ['brain'], requireAuth: true },
+    { method: 'post', path: '/api/worker/brain/admission/{id}/approve', summary: 'Approve a pending admission proposal', tags: ['brain'], requireAuth: true },
+    { method: 'post', path: '/api/worker/brain/admission/{id}/apply', summary: 'Materialize an approved admission proposal (dry-run unless commit=true)', tags: ['brain'], requireAuth: true },
+    { method: 'post', path: '/api/worker/orchestrator/chat', summary: 'Submit an orchestrator chat envelope', tags: ['orchestrator'], requireAuth: true },
+    { method: 'get', path: '/api/worker/events/stream', summary: 'SSE stream of orchestrator events', tags: ['events'], requireAuth: true },
+  ]
+
+  for (const doc of docs) {
+    const responses: Record<string, unknown> = { ...okJson }
+    if (doc.requireAuth) {
+      responses[401] = errJson
+      responses[403] = errJson
+    }
+    app.openAPIRegistry.registerPath({
+      method: doc.method,
+      path: doc.path,
+      summary: doc.summary,
+      tags: doc.tags,
+      ...(doc.requireAuth ? { security: [{ bearerAuth: [] }] } : {}),
+      responses: responses as never,
+    })
+  }
+
+  app.openAPIRegistry.registerComponent('securitySchemes', 'bearerAuth', {
+    type: 'http',
+    scheme: 'bearer',
+    description: 'Worker bearer token. Obtain via `aiworker token rotate` or first-run mint.',
+  })
 }
