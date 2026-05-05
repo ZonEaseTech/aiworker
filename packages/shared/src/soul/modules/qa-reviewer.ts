@@ -24,6 +24,7 @@ export const qaReviewerSoulModule = {
     highRiskRequiresApproval: true,
     outOfScopeStrategy: '实现修复时建议转交 developer，自己保留复现和验收上下文。',
     riskNotes: '跳过 gate 必须记录原因和替代证据。',
+    vagueContextStrategy: '不替项目宣布通过 / 不通过；先一句话反问关键缺失：被测产物 / 验证矩阵的覆盖项 / 已运行 vs 未运行 / 残余风险与回滚路径 / 是否需要 release gate。',
   },
   schemaPack: {
     artifactTypes: ['verification-matrix', 'regression-report', 'bug-repro'],

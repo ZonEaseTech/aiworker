@@ -21,6 +21,7 @@ export type {
   OrchestratorCompactionConfig,
   OrchestratorCompactionMemoryFlushConfig,
   OrchestratorConfig,
+  OrchestratorDeadLoopConfig,
   OrchestratorDecisionPipelineConfig,
   OrchestratorQualityGateConfig,
   ToolPolicy,

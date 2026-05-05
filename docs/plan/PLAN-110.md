@@ -1,7 +1,9 @@
 # PLAN-110 Decision pipeline 强化（Soul guard / heuristic / LLM evaluator）
 
-- **status**: pending
+- **status**: completed
 - **createdAt**: 2026-05-05 04:25
+- **approvedAt**: 2026-05-05 04:55
+- **completedAt**: 2026-05-05 05:25
 - **relatedTask**: BUG-063, BUG-064, TODO-013
 
 ## 现状
@@ -129,3 +131,34 @@ config schema：`packages/shared/src/worker.ts` `orchestrator.decisionPipeline` 
 ## 进度
 
 - 2026-05-05 04:25：plan created。
+- 2026-05-05 05:25：实施完成。
+  - `packages/shared/src/soul/module.ts` `SoulRiskPolicy` 增加可选
+    `vagueContextStrategy`；9 个 Soul module 全部填入 persona-tuned 反问引导。
+  - `apps/cli/src/soul/presets.ts` 把字段投影到 `SoulPresetDefinition` /
+    `SelectedSoul`，新增 `DEFAULT_VAGUE_CONTEXT_STRATEGY` 兜底；`init.ts`
+    SOUL.md 模板新增 "## 模糊或缺失上下文" section；`promptForCustomSoul`
+    使用 default 兜底。preset.test.ts 增加非空断言。
+  - `packages/core/src/worker/orchestrator/intent-classifier.ts`
+    `inferRisk` 改为 `HIGH_RISK_PATTERNS` 数组扩展词典：force-push /
+    force-kill / `--force` / `reset --hard` / `drop table` / `truncate` /
+    `落账 直接` / `跳过审批` / `立即上线 不要确认` 等。新增 2 条 BUG-064
+    单元测试。
+  - 新文件 `packages/core/src/worker/orchestrator/dead-loop.ts` —
+    `createDeadLoopDetector` / `deadLoopDetectorFromConfig`，threshold
+    默认 8；6 条单元测试。`service.ts collectAssistantText` 接入：
+    每次 `assistant_message_delta` 重置；连续 `tool_use` ≥ threshold
+    时 emit `orchestrator.aborted` 事件 + 返回 error。
+  - `packages/shared/src/fleet/config.ts` 新增 `OrchestratorDeadLoopConfig`
+    + `OrchestratorQualityGateConfig.budgetMs`；export through fleet/index +
+    shared/index。
+  - `packages/core/src/worker/orchestrator/quality-gate.ts` 新增
+    `DEFAULT_QUALITY_GATE_BUDGET_MS = 30_000`；`runQualityGateLlmBudgeted`
+    用 `Promise.race` 实现 wall-clock budget；超时 fall-back heuristic
+    并写 `reason='llm-budget-exhausted:Nms'`。1 条 budget timeout 单元
+    测试。
+  - `service.ts` `Promise.all` 并行 intent classifier 与
+    `contextManager.buildSystemPrompt`，capability snapshot 仍依赖 intent
+    串行；intent_decision / capability_decision 事件序保留。
+- 2026-05-05 05:25：验证通过：core 591 / shared 140 / cli 166 / api 85
+  全 pass；workspace typecheck 9/9；root lint 0 violation。BUG-063 /
+  BUG-064 / TODO-013 全部 completed。

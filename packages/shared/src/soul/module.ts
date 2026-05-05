@@ -35,6 +35,15 @@ export const soulRiskPolicySchema = z.object({
   highRiskRequiresApproval: z.boolean(),
   outOfScopeStrategy: z.string().min(1),
   riskNotes: z.string().min(1),
+  /**
+   * BUG-063: per-Soul guidance for vague / underspecified prompts. Used to
+   * produce the "模糊或缺失上下文" section in the materialized SOUL.md so the
+   * LLM knows to ask back instead of brute-forcing tool calls. Optional with
+   * a sensible default at render time, but every shipped preset declares one
+   * tuned to its domain (developer asks for stack traces, hr asks for role
+   * context, etc.).
+   */
+  vagueContextStrategy: z.string().min(1).optional(),
 })
 export type SoulRiskPolicy = z.infer<typeof soulRiskPolicySchema>
 

@@ -32,6 +32,10 @@ describe('Soul preset registry', () => {
       expect(preset.communicationStyle.length).toBeGreaterThan(0)
       expect(preset.riskPolicy.length).toBeGreaterThan(0)
       expect(preset.outOfScope.length).toBeGreaterThan(0)
+      // BUG-063: every shipped Soul preset must declare its own
+      // vague-context strategy so SOUL.md guides the LLM to ask for missing
+      // information instead of brute-forcing tool exploration.
+      expect(preset.vagueContextStrategy.length).toBeGreaterThan(0)
       for (const pack of preset.packs)
         expect(isBuiltinCapabilityPack(pack)).toBe(true)
       for (const toolset of preset.toolsets)

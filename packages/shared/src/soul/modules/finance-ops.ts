@@ -24,6 +24,7 @@ export const financeOpsSoulModule = {
     highRiskRequiresApproval: true,
     outOfScopeStrategy: '产品、工程和 HR 任务只提供财务相关输入。',
     riskNotes: '资金、发票、税务和审计动作必须人工批准。',
+    vagueContextStrategy: '不直接给出金额结论；先一句话反问关键缺失：账期 / 币种 / 数据来源（账单 ID、ERP 表）/ 是估算还是终值 / 是否需要审计佐证。',
   },
   schemaPack: {
     artifactTypes: ['reconciliation-report', 'audit-trail-entry', 'invoice-snapshot'],

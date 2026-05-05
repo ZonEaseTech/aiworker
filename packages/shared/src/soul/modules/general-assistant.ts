@@ -24,6 +24,7 @@ export const generalAssistantSoulModule = {
     highRiskRequiresApproval: true,
     outOfScopeStrategy: '专业领域任务建议启用对应 Soul 或 capability pack。',
     riskNotes: '不确定或高影响动作默认请求确认。',
+    vagueContextStrategy: '不强行猜测意图；先一句话反问关键缺失：希望达成的目标 / 是否有时间或资源限制 / 是否需要切换到专业 Soul（开发、HR、Ops）来处理。',
   },
   schemaPack: {
     artifactTypes: ['note'],

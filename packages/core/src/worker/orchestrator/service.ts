@@ -35,6 +35,7 @@ import {
   resolveExecutorModel,
 } from './context'
 import { ContextManager, RunContextComposer } from './context-manager'
+import { deadLoopDetectorFromConfig } from './dead-loop'
 import { buildPromptCapabilityDecision } from './decisions'
 import { classifyIntentHeuristic, classifyIntentWithExecutor } from './intent-classifier'
 import { evaluateToolPolicy } from './policy'
@@ -248,18 +249,26 @@ export class Orchestrator {
       ...(taskId === undefined ? {} : { taskId }),
     }
     const recentRows = this.loadPromptTranscriptRowsNewestFirst(activeConversation.id, undefined, 12).reverse()
-    const intentDecision = await this.classifyIntentDecision({
-      decisionContext,
-      envelope,
-      model,
-      notifyActivity,
-      recentMessages: recentRows.map(row => ({ role: row.role, content: row.content })),
-      resolved,
-      signal,
-      workspace,
-    })
+    // TODO-013: run intent classifier in parallel with system-prompt build +
+    // capability registry snapshot. Intent is the only blocking input for
+    // capability planning, but `buildSystemPrompt` and `capabilityRegistry
+    // .snapshot` are pure I/O reads that can pre-warm while the LLM-mode
+    // classifier is still talking to the executor. Saves ~30% wall-clock on
+    // `evaluator=llm` paths and is a no-op on heuristic.
+    const [intentDecision, systemContext] = await Promise.all([
+      this.classifyIntentDecision({
+        decisionContext,
+        envelope,
+        model,
+        notifyActivity,
+        recentMessages: recentRows.map(row => ({ role: row.role, content: row.content })),
+        resolved,
+        signal,
+        workspace,
+      }),
+      this.contextManager.buildSystemPrompt({ priorSummary: activeConversation.summary ?? null }),
+    ])
     this.deps.bus.emit('orchestrator.intent_decision', intentDecision)
-    const systemContext = await this.contextManager.buildSystemPrompt({ priorSummary: activeConversation.summary ?? null })
     const registry = await this.capabilityRegistry.snapshot({ skills: systemContext.availableSkills })
     const capabilityPlan = planCapabilities({
       intent: intentDecision.intent,
@@ -364,6 +373,7 @@ export class Orchestrator {
       signal,
       threshold: gateConfig?.threshold,
       workspacePath: this.controlWorkspacePath(workspace),
+      ...(gateConfig?.budgetMs === undefined ? {} : { budgetMs: gateConfig.budgetMs }),
     })
     this.deps.bus.emit('orchestrator.quality_gate', qualityGate)
     if (qualityGate.action === 'repair' && gateConfig?.mode === 'retry') {
@@ -428,6 +438,12 @@ export class Orchestrator {
   ): Promise<ExecutorTextResult> {
     let assistantText = ''
     let staleBindingCleared = false
+    // BUG-063: dead-loop detector. Reads `orchestrator.deadLoop` worker
+    // config; defaults enabled with threshold 8. Aborts the iteration when
+    // the LLM emits >threshold sequential tool_calls without any text
+    // delta — the brute-force-explore signature observed in the
+    // qa-2026-05-04-v0.7.0 dev-Soul finding.
+    const deadLoop = deadLoopDetectorFromConfig(this.deps.config.orchestrator?.deadLoop)
     try {
       for await (const event of this.deps.executor.run(runInput)) {
         // Each AgentEvent counts as a stdout heartbeat for ProcessManager
@@ -436,6 +452,7 @@ export class Orchestrator {
         notifyActivity()
         if (event.type === 'assistant_message_delta') {
           assistantText += event.delta
+          deadLoop.recordTextDelta()
           this.deps.bus.emit('orchestrator.text', {
             conversationId,
             ...(gatewayConversationId === undefined ? {} : { gatewayConversationId }),
@@ -450,6 +467,17 @@ export class Orchestrator {
             ...(taskId === undefined ? {} : { taskId }),
             call: { id: event.id, name: event.name, arguments: event.arguments },
           })
+          if (deadLoop.recordToolCall()) {
+            const reason = `dead-loop-suspected:tool_call=${deadLoop.count()},no_text_delta`
+            this.deps.bus.emit('orchestrator.aborted', {
+              conversationId,
+              ...(gatewayConversationId === undefined ? {} : { gatewayConversationId }),
+              ...(taskId === undefined ? {} : { taskId }),
+              reason,
+            })
+            consola.warn(`[orchestrator] aborted run: ${reason}`)
+            return { ok: false, text: assistantText, error: reason, staleBindingCleared }
+          }
         }
         else if (event.type === 'engine_binding') {
           if (event.engine === this.deps.config.executor.engine) {

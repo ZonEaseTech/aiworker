@@ -39,6 +39,8 @@ export interface SoulPresetDefinition {
   responsibilities: readonly string[]
   riskPolicy: string
   toolsets: readonly string[]
+  /** BUG-063: Soul-specific guidance for vague / underspecified prompts. */
+  vagueContextStrategy: string
 }
 
 export interface SelectedSoul {
@@ -54,7 +56,17 @@ export interface SelectedSoul {
   riskPolicy: string
   source: 'flag' | 'interactive'
   toolsets: readonly string[]
+  /** BUG-063: see SoulPresetDefinition.vagueContextStrategy. */
+  vagueContextStrategy: string
 }
+
+/**
+ * BUG-063: shared fallback for Soul modules / interactive paths that did not
+ * yet declare a domain-specific clarifying-question prompt. Built-in presets
+ * all override this with a tighter, persona-specific guidance string.
+ */
+export const DEFAULT_VAGUE_CONTEXT_STRATEGY
+  = '不直接调用工具探索；先一句话反问关键缺失：用户的目标 / 输入或证据 / 时间或资源约束 / 期望产出形态。'
 
 const BUILTIN_PRESET_IDS: ReadonlySet<BuiltinSoulPresetId> = new Set([
   'developer',
@@ -87,6 +99,7 @@ function projectModuleToPreset(module: SoulModule): SoulPresetDefinition {
     responsibilities: module.initProjection.responsibilities,
     riskPolicy: module.riskPolicy.riskNotes,
     toolsets: module.initProjection.toolsets,
+    vagueContextStrategy: module.riskPolicy.vagueContextStrategy ?? DEFAULT_VAGUE_CONTEXT_STRATEGY,
   }
 }
 

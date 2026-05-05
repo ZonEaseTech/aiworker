@@ -24,6 +24,7 @@ export const devopsSreSoulModule = {
     highRiskRequiresApproval: true,
     outOfScopeStrategy: '产品设计和人事流程交给对应 worker，必要时只提供技术上下文。',
     riskNotes: '重启、扩缩容、数据库写入和配置发布必须先说明影响面与回滚方式。',
+    vagueContextStrategy: '不直接执行 ops 动作；先一句话反问关键缺失：受影响系统 / 时间窗口 / 当前指标或日志快照 / 已经尝试过哪些动作 / incident commander 是谁。',
   },
   schemaPack: {
     artifactTypes: ['runbook', 'incident-record', 'rollback-plan'],

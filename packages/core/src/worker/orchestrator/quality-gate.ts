@@ -18,17 +18,34 @@ export interface QualityGateInput {
   signal: AbortSignal
   threshold: number | undefined
   workspacePath: string | undefined
+  /**
+   * TODO-013: hard wall-clock budget for the LLM call path (milliseconds).
+   * Falls back to the heuristic evaluator on overrun. Default 30_000 ms.
+   */
+  budgetMs?: number
 }
+
+/** TODO-013 default LLM gate budget. */
+export const DEFAULT_QUALITY_GATE_BUDGET_MS = 30_000
 
 export async function evaluateQualityGate(input: QualityGateInput): Promise<QualityGatePayload> {
   const evaluator = input.evaluator ?? 'heuristic'
   if (evaluator === 'llm') {
+    const budgetMs = input.budgetMs ?? DEFAULT_QUALITY_GATE_BUDGET_MS
+    const startedAt = Date.now()
+    const remaining = () => Math.max(0, budgetMs - (Date.now() - startedAt))
+
     // BUG-057: same retry pattern as the intent classifier — the LLM may
     // emit prose on the first try, so retry once with a stricter re-prompt
     // before falling back to the heuristic gate.
-    const firstAttempt = await runQualityGateLlm(input, buildGatePrompt(input))
+    // TODO-013: race each attempt against the per-call budget. On timeout
+    // the heuristic fallback fires with reason `llm-budget-exhausted:Nms`.
+    const firstAttempt = await runQualityGateLlmBudgeted(input, buildGatePrompt(input), remaining())
     if (firstAttempt.kind === 'ok')
       return firstAttempt.payload
+    if (firstAttempt.kind === 'timeout')
+      return budgetExhaustedFallback(input, budgetMs, firstAttempt.elapsedMs)
+
     const stricter = [
       ...buildGatePrompt(input),
       {
@@ -39,9 +56,11 @@ export async function evaluateQualityGate(input: QualityGateInput): Promise<Qual
         ].join('\n'),
       },
     ]
-    const secondAttempt = await runQualityGateLlm(input, stricter)
+    const secondAttempt = await runQualityGateLlmBudgeted(input, stricter, remaining())
     if (secondAttempt.kind === 'ok')
       return secondAttempt.payload
+    if (secondAttempt.kind === 'timeout')
+      return budgetExhaustedFallback(input, budgetMs, secondAttempt.elapsedMs)
 
     const fallback = evaluateHeuristic({ ...input, evaluator: 'heuristic' })
     const lastError = secondAttempt.error ?? firstAttempt.error ?? 'unknown error'
@@ -60,6 +79,45 @@ export async function evaluateQualityGate(input: QualityGateInput): Promise<Qual
     })
   }
   return evaluateHeuristic({ ...input, evaluator: 'heuristic' })
+}
+
+function budgetExhaustedFallback(input: QualityGateInput, budgetMs: number, elapsedMs: number): QualityGatePayload {
+  const fallback = evaluateHeuristic({ ...input, evaluator: 'heuristic' })
+  return buildQualityGatePayload(input.context, {
+    action: fallback.action,
+    dimensions: fallback.dimensions,
+    evaluator: 'heuristic',
+    finalAnswerLength: fallback.finalAnswerLength,
+    missing: fallback.missing,
+    gateMode: fallback.gateMode,
+    reason: `llm-budget-exhausted:${budgetMs}ms (consumed ${elapsedMs}ms)`,
+    score: fallback.score,
+    status: fallback.status,
+    suggestions: fallback.suggestions,
+    threshold: fallback.threshold,
+  })
+}
+
+async function runQualityGateLlmBudgeted(
+  input: QualityGateInput,
+  messages: ChatMessage[],
+  budgetMs: number,
+): Promise<QualityGateLlmAttemptResult | { kind: 'timeout', elapsedMs: number }> {
+  if (budgetMs <= 0)
+    return { kind: 'timeout', elapsedMs: 0 }
+  const startedAt = Date.now()
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeoutPromise = new Promise<{ kind: 'timeout', elapsedMs: number }>((resolve) => {
+    timer = setTimeout(() => resolve({ kind: 'timeout', elapsedMs: Date.now() - startedAt }), budgetMs)
+  })
+  try {
+    const result = await Promise.race([runQualityGateLlm(input, messages), timeoutPromise])
+    return result
+  }
+  finally {
+    if (timer !== undefined)
+      clearTimeout(timer)
+  }
 }
 
 export function buildRepairPrompt(input: {

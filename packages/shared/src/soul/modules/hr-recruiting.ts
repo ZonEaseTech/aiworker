@@ -24,6 +24,7 @@ export const hrRecruitingSoulModule = {
     highRiskRequiresApproval: true,
     outOfScopeStrategy: '工程实现、财务对账和生产运维转交对应 worker。',
     riskNotes: '薪酬、录用、拒信和员工关系内容必须人工确认。',
+    vagueContextStrategy: '不直接做候选人判断；先一句话反问关键缺失：岗位 / 候选人识别符 / 流程阶段（screening/interview/offer）/ 评估维度 / 是否需要合规备注。',
   },
   schemaPack: {
     artifactTypes: [

@@ -16,6 +16,7 @@ import { bootstrapDotenv } from '../../lib/dotenv-bootstrap'
 import {
   BUILTIN_SOUL_PRESETS,
   CUSTOMIZE_SOUL_ID,
+  DEFAULT_VAGUE_CONTEXT_STRATEGY,
   findBuiltinSoul,
   supportedSoulIds,
   toSelectedSoul,
@@ -236,6 +237,7 @@ async function promptForCustomSoul(source: SelectedSoul['source']): Promise<Sele
       packs,
       source,
       toolsets,
+      vagueContextStrategy: DEFAULT_VAGUE_CONTEXT_STRATEGY,
     }
   }
   finally {
@@ -317,7 +319,7 @@ function buildProjectAiworkerSeed(soul: SelectedSoul): ProjectAiworkerSeed {
     capabilityPacksJson: `${JSON.stringify(capabilityPacks, null, 2)}\n`,
     policyJson: `${JSON.stringify(policy, null, 2)}\n`,
     scopeJson: buildScopeManifestSeed(soul),
-    soulMd: `# ${soul.label} Soul\n\n## 预设\n- id: ${soul.id}\n- source: ${soul.source}\n\n## 沟通风格\n${soul.communicationStyle}\n\n## 高风险操作策略\n${soul.riskPolicy}\n\n## 职责边界\n${markdownList(soul.boundaries)}\n`,
+    soulMd: `# ${soul.label} Soul\n\n## 预设\n- id: ${soul.id}\n- source: ${soul.source}\n\n## 沟通风格\n${soul.communicationStyle}\n\n## 高风险操作策略\n${soul.riskPolicy}\n\n## 职责边界\n${markdownList(soul.boundaries)}\n\n## 模糊或缺失上下文\n收到不完整 prompt（< 20 字 / 无可定位 artifact / 仅 "挂了 / 失败 / 不行" 等）时：先用一句话反问关键缺失信息，不要直接调 tool 探索，让用户先补齐上下文；不要为了避免反问而扩大搜索范围越过当前 scope。\n\n${soul.vagueContextStrategy}\n`,
     toolsetsJson: `${JSON.stringify(toolsets, null, 2)}\n`,
   }
 }

@@ -24,6 +24,7 @@ export const supportOperatorSoulModule = {
     highRiskRequiresApproval: true,
     outOfScopeStrategy: '工程改动、财务结算和 HR 流程需要交接给对应 worker。',
     riskNotes: '涉及账号、付款、隐私和权限变更必须请求人工确认。',
+    vagueContextStrategy: '不直接承诺补偿或回复模板；先一句话反问关键缺失：用户标识 / 产品或服务 / 期望结果 / 历史工单 ID / 是否需要升级。',
   },
   schemaPack: {
     artifactTypes: ['ticket', 'response-template', 'escalation-note'],

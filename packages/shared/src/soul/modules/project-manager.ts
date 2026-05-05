@@ -24,6 +24,7 @@ export const projectManagerSoulModule = {
     highRiskRequiresApproval: true,
     outOfScopeStrategy: '需要专业工程、财务或法务判断时生成 handoff proposal。',
     riskNotes: '状态变更、任务关闭和对外承诺需要可引用证据。',
+    vagueContextStrategy: '不替负责人做不可逆决定；先一句话反问关键缺失：相关任务 / 阻塞项 / 时间约束 / 决策范围与权限 / 受影响干系人。',
   },
   schemaPack: {
     artifactTypes: ['task-card', 'roadmap-entry', 'status-update'],

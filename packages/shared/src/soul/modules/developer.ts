@@ -24,6 +24,7 @@ export const developerSoulModule = {
     highRiskRequiresApproval: true,
     outOfScopeStrategy: '非代码类运营、财务、人事任务先说明不属于核心职责，并建议切换或新增对应能力。',
     riskNotes: '文件写入、数据库写入、部署和发布类动作需要明确意图；生产写入必须先 dry-run。',
+    vagueContextStrategy: '不直接 ls / grep 探索整个项目；先一句话反问关键缺失：具体报错文本、复现步骤、最近改动的文件或提交、是否能在干净 checkout 上复现。',
   },
   schemaPack: {
     artifactTypes: [

@@ -102,6 +102,12 @@ export interface OrchestratorQualityGateConfig {
   evaluator?: QualityGateEvaluator
   mode?: QualityGateMode
   threshold?: number
+  /**
+   * TODO-013: hard wall-clock budget per LLM gate call (milliseconds). When
+   * the budget is exhausted, the gate falls back to the heuristic evaluator
+   * with reason `llm-budget-exhausted:Nms`. Default 30_000 ms.
+   */
+  budgetMs?: number
 }
 
 export interface OrchestratorDecisionPipelineConfig {
@@ -128,6 +134,21 @@ export interface OrchestratorDecisionPipelineConfig {
  * assembly: the system prompt is always included first, then recent history is
  * selected newest-backward until the configured token budget is filled.
  */
+/**
+ * BUG-063: dead-loop detector. When the executor stream emits >`threshold`
+ * `tool_call` events without any intervening `assistant_message_delta`,
+ * abort the run and emit `orchestrator.aborted` with reason
+ * `dead-loop-suspected:tool_call=N,no_text_delta`.
+ *
+ * Defaults: `{ enabled: true, threshold: 8 }`. Operators can disable in
+ * worker config when the workflow legitimately involves long pure-tool
+ * sequences.
+ */
+export interface OrchestratorDeadLoopConfig {
+  enabled?: boolean
+  threshold?: number
+}
+
 export interface OrchestratorConfig {
   contextWindowTokens?: number
   reserveTokens?: number
@@ -135,6 +156,7 @@ export interface OrchestratorConfig {
   maxHistoryMessages?: number
   compaction?: OrchestratorCompactionConfig
   decisionPipeline?: OrchestratorDecisionPipelineConfig
+  deadLoop?: OrchestratorDeadLoopConfig
 }
 
 export const DEFAULT_MAX_HISTORY_MESSAGES = 20

@@ -24,6 +24,7 @@ export const productDesignerSoulModule = {
     highRiskRequiresApproval: true,
     outOfScopeStrategy: '底层部署、财务、人事问题生成 handoff proposal。',
     riskNotes: '影响核心流程或品牌表达的变更需要先给出方案对比。',
+    vagueContextStrategy: '不直接给视觉建议；先一句话反问关键缺失：用户场景 / 当前痛点或数据 / 业务目标 / 是否有现成 design system token / 期望产出（草图、规范、文案）。',
   },
   schemaPack: {
     artifactTypes: ['design-doc', 'flow-spec', 'ui-component-spec'],

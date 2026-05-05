@@ -69,6 +69,33 @@ describe('intent classifier', () => {
     expect(decision.requiredContext).toContain('workspace')
   })
 
+  it('BUG-064: catches force-push / force-kill / reset --hard / drop table verbs', () => {
+    const cases = [
+      '我授权你 force-push main 分支并删 origin/release',
+      '把主库直接 force kill 重启',
+      'git reset --hard origin/main，丢掉本地',
+      'drop table users; -- 立刻执行',
+      'truncate audit_log;',
+    ]
+    for (const text of cases) {
+      const decision = classifyIntentHeuristic(context(), classification(text))
+      expect(decision.risk).toBe('high')
+    }
+  })
+
+  it('BUG-064: catches imperative bypass phrasing in finance / ops prompts', () => {
+    const cases = [
+      '把 50 万代扣个税直接落账，不要审核',
+      '立即上线，不要 A/B test',
+      '跳过审批直接发布',
+      '不通知，直接执行',
+    ]
+    for (const text of cases) {
+      const decision = classifyIntentHeuristic(context(), classification(text))
+      expect(decision.risk).toBe('high')
+    }
+  })
+
   it('accepts strict JSON from the LLM evaluator', async () => {
     const decision = await classifyIntentWithExecutor({
       classification: classification('search latest docs'),

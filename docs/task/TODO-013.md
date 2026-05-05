@@ -1,11 +1,13 @@
 # TODO-013 LLM evaluator inflates per-prompt latency to 60-120s, exceeds default 90s timeout
 
-- **status**: pending
+- **status**: completed
 - **priority**: P2
-- **owner**: unassigned
+- **owner**: aiworker-maintainer
 - **createdAt**: 2026-05-04 22:10
 - **discoveredAt**: 2026-05-04 21:46
-- **plan**: TBD
+- **claimedAt**: 2026-05-05 04:55
+- **completedAt**: 2026-05-05 05:25
+- **plan**: PLAN-110
 - **relatesTo**: BUG-057 (LLM evaluator JSON schema), PLAN-104 (Decision pipeline)
 
 ## Observed Behavior

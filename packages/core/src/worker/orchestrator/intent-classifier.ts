@@ -196,8 +196,22 @@ function inferIntent(text: string): WorkerIntent {
   return text.trim().length === 0 ? 'unknown' : 'answer'
 }
 
+/**
+ * BUG-064: heuristic risk keywords. Existing list missed common destructive
+ * git / db / money / ops verbs (`force-push main`, `force kill`, `reset
+ * --hard`, `drop table`, `truncate`, `落账 直接`, `跳过审批`, `立即上线 不
+ * 要确认`). Without these the orchestrator routes high-risk prompts through
+ * the low-risk quality gate threshold and pollutes the audit risk signal.
+ */
+const HIGH_RISK_PATTERNS: readonly RegExp[] = [
+  /prod(?:uction)?|deploy|delete|reset|secret|token|key|生产|部署|删除|重置|密钥|令牌/i,
+  /force[- ]?push|force[- ]?kill|--force\b|reset --hard|drop\s+(?:table|database|index)|truncate/i,
+  /落账\s*直接|代扣\s*个税|跳过\s*(?:审批|审核|dry[- ]?run|review|确认)|不\s*(?:审核|review|确认|通知)|不\s*(?:做\s*)?A\/?B[\s-]*test/i,
+  /立即上线|强制\s*(?:上线|发布|执行)|直接(?:落账|执行|上线)|不要\s*(?:确认|审批)/,
+]
+
 function inferRisk(text: string, intent: WorkerIntent): WorkerRisk {
-  if (/prod(?:uction)?|deploy|delete|reset|secret|token|key|生产|部署|删除|重置|密钥|令牌/i.test(text))
+  if (HIGH_RISK_PATTERNS.some(re => re.test(text)))
     return 'high'
   if (intent === 'code_work' || intent === 'config_admin')
     return 'medium'

@@ -189,4 +189,34 @@ describe('quality gate', () => {
     expect(gate.action).toBe('block')
     expect(gate.missing).toEqual(['detail'])
   })
+
+  it('TODO-013: falls back to heuristic with llm-budget-exhausted when LLM exceeds budgetMs', async () => {
+    const slowExecutor: ExecutorProvider = {
+      name: 'slow',
+      health: async () => ({ name: 'slow', status: 'healthy', lastChecked: 'x' }),
+      listTools: async () => [],
+      run: (_input: AgentRunInput) => (async function* () {
+        await new Promise(resolve => setTimeout(resolve, 200))
+        yield { type: 'assistant_message_delta' as const, delta: '{}' }
+      })(),
+    }
+    const gate = await evaluateQualityGate({
+      assistantText: 'detailed answer suitable for fallback evaluation',
+      capabilityDecision,
+      context: context(),
+      evaluator: 'llm',
+      executor: slowExecutor,
+      intentDecision,
+      mode: 'observe',
+      model: undefined,
+      notifyActivity: () => {},
+      requestText: 'question',
+      signal: new AbortController().signal,
+      threshold: undefined,
+      workspacePath: undefined,
+      budgetMs: 50,
+    })
+    expect(gate.evaluator).toBe('heuristic')
+    expect(gate.reason).toContain('llm-budget-exhausted:50ms')
+  })
 })
