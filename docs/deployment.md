@@ -463,8 +463,8 @@ approve 后 worker 端会打 `[aiworker serve] approved as w_xxx; deviceToken=wt
 
 - **Worker deployer 不持有任何 fleet 凭证**——`/enroll-ws` 端 Caddy 不挂 basicauth，OTP submit 在 operator approve 前不会落 fleet.db；任何 attacker 拿不到 OTP，从外部 spam 该 path 不会污染 fleet。
 - **OTP 单次有效 + 短 TTL**：`AIWORKER_ENROLL_OTP_TTL_SEC` 默认 300 秒；过期由 setTimeout 触发 `gateway.enrollment.expired` audit + close 4408；approve / reject 走的 entry 立即从 pending Map 中删除。OTP 不可重放（in-memory，gateway 重启即丢；所有持久化都在 approve 时才发生）。
-- **OTP 不进 audit 明文**：所有 audit detail 仅落 `sha256(otp).slice(0, 8)`（`gateway.enrollment.requested` / `.rejected` / `.abandoned` 都走这个路径，由 `apps/gateway/src/server.ts::hashOtpForAudit` 与 `apps/gateway/src/router/methods/enroll.ts::hashOtp` 实现）；明文 OTP 只在 worker stdout / `aiworker enroll list` 输出里出现。运维 fleet.db 拷贝出去后无法据此批准已过期 / 已 reject 的请求。
-- **Path-aware 拒绝**：在 `/ws` 上发 `enroll.mode='otp'` → close 4400 `wrong_path:otp_must_use_enroll_ws`；在 `/enroll-ws` 上发 operator connect / 普通 node connect → close 4400 `wrong_path:expected_enroll_otp`。两条 close code 由 `apps/gateway/src/auth/token.ts::authorizeConnection` 集中产出。
+- **OTP 不进 audit 明文**：所有 audit detail 仅落 `sha256(otp).slice(0, 8)`（`gateway.enrollment.requested` / `.rejected` / `.abandoned` 都走这个路径，由 `packages/gateway/src/server.ts::hashOtpForAudit` 与 `packages/gateway/src/router/methods/enroll.ts::hashOtp` 实现）；明文 OTP 只在 worker stdout / `aiworker enroll list` 输出里出现。运维 fleet.db 拷贝出去后无法据此批准已过期 / 已 reject 的请求。
+- **Path-aware 拒绝**：在 `/ws` 上发 `enroll.mode='otp'` → close 4400 `wrong_path:otp_must_use_enroll_ws`；在 `/enroll-ws` 上发 operator connect / 普通 node connect → close 4400 `wrong_path:expected_enroll_otp`。两条 close code 由 `packages/gateway/src/auth/token.ts::authorizeConnection` 集中产出。
 - **`enroll.approve` 在 `/ws` operator 侧**——attacker 即使知道 OTP，也必须先穿透 Caddy basicauth 才能调 approve。无新攻击面 vs PLAN-018。
 - **Pending state 重启即丢**：UX acceptable—worker 自动重连重新拿一个新 OTP。**不要**指望 OTP 跨 gateway 重启。
 - **配额仍生效**：approve 时再查一次 `AIWORKER_MAX_WORKERS`（已注册 workerId 重批不占新配额）；超额 → `quota_exceeded`，pending entry 已被 pop，worker 端拿不到 approved 事件，需重新发起。

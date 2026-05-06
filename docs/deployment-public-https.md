@@ -92,14 +92,14 @@ Caddy :80（纯反代）  ──►  127.0.0.1:9218  =  aiworker-gateway 容器
 `ops/compose/docker-compose.yml` 定义了一个 service `gateway`（容器名 `aiworker-gateway`）：
 
 - 镜像：`ghcr.io/zoneasetech/aiworker:${AIWORKER_IMAGE_TAG}${AIWORKER_IMAGE_VARIANT_SUFFIX}`
-- 启动命令：`bun apps/gateway/src/index.ts`（覆盖 Dockerfile 默认 `bun run dist/index.js` 的 worker 入口）
+- 启动命令：`bun packages/gateway/src/index.ts`（覆盖 Dockerfile 默认 `bun run dist/index.js` 的 worker 入口）
 - 端口：`127.0.0.1:9218:9218`（WS + `/health` 都走这个）
 - 关键 env：`AIWORKER_GATEWAY_HOST=0.0.0.0` / `AIWORKER_GATEWAY_PORT=9218` / `AIWORKER_FLEET_DB_PATH=/var/lib/aiworker/fleet.db` / `AIWORKER_MASTER_KEY` / `INTERNAL_SHARED_SECRET`。如果用 `aiworker gateway start` 并默认挂载 `/admin/*`，还需要在 Caddy / Access / allowlist 生效后设置 `AIWORKER_ADMIN_EXTERNAL_AUTH=1`；当前 compose 直接跑 gateway 源码且不挂 admin bundle，不需要该确认。
 - 卷：`aiworker_fleet:/var/lib/aiworker`（fleet.db 持久化）
 
 Dockerfile 单镜像两种入口（见 `Dockerfile` 顶部注释）：
 
-- **gateway**（控制面）：compose 显式设置 `command: ['bun', 'apps/gateway/src/index.ts']`，监听 9218/tcp（WS，FEAT-030）。
+- **gateway**（控制面）：compose 显式设置 `command: ['bun', 'packages/gateway/src/index.ts']`，监听 9218/tcp（WS，FEAT-030）。
 - **worker**（数据面）：`ENTRYPOINT ["/usr/bin/tini", "--", "bun", "run", "dist/index.js"]`（镜像默认），监听 9217/tcp（HTTP，FEAT-030）；由 `aim workers launch` 或独立的 worker compose 拉起。
 
 Caddy（`ops/caddy/Caddyfile.tmpl`）反代 `:80 → 127.0.0.1:9218`，TLS 由 Cloudflare 橙云代理终止。`flush_interval -1` + `read_timeout 0` 保证 WebSocket 不被切流。**自 BUG-007 起 Caddy 必须叠 basic-auth（fail-closed）**——见下文 §"Caddy basic-auth setup（BUG-007）"。

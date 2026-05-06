@@ -5,7 +5,7 @@
 # AIWorker public ingress.
 #
 # SECURITY (BUG-007): Caddy reverse proxies traffic to 127.0.0.1:9218,
-# which makes gateway's loopback authN check (`apps/gateway/src/auth/loopback.ts`)
+# which makes gateway's loopback authN check (`packages/gateway/src/auth/loopback.ts`)
 # pass for ANY request that reaches Caddy — gateway sees `requestIP() == 127.0.0.1`
 # regardless of the original client. Therefore THIS Caddyfile MUST enforce
 # its own authN before forwarding.

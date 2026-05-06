@@ -2,9 +2,9 @@
 # Single-image runtime serving两种入口:
 #
 #   - gateway(控制面, PLAN-013 S5):compose 以
-#       command: ['bun', 'apps/gateway/src/index.ts']
-#     启动镜像,监听 3000/tcp(WS 协议)。
-#   - worker(数据面):`bun run dist/index.js` 启动,监听 3001/tcp(HTTP)。
+#       command: ['bun', 'packages/gateway/src/index.ts']
+#     启动镜像,监听 9218/tcp(WS 协议)。
+#   - worker(数据面):`bun run dist/index.js` 启动,监听 9217/tcp(HTTP)。
 #     这是 Dockerfile 默认的 ENTRYPOINT,docker compose 为 gateway 服务显式
 #     覆盖 command 字段即可。
 #
@@ -30,10 +30,10 @@ WORKDIR /app
 COPY package.json bun.lock ./
 COPY apps/api/package.json apps/api/
 COPY apps/cli/package.json apps/cli/
-COPY apps/gateway/package.json apps/gateway/
 COPY apps/web/package.json apps/web/
 COPY packages/core/package.json packages/core/
 COPY packages/fs-layout/package.json packages/fs-layout/
+COPY packages/gateway/package.json packages/gateway/
 COPY packages/gateway-proto/package.json packages/gateway-proto/
 COPY packages/shared/package.json packages/shared/
 COPY packages/storage-sqlite/package.json packages/storage-sqlite/
@@ -62,8 +62,8 @@ COPY --from=build /app/apps/api/node_modules /app/apps/api/node_modules
 COPY --from=build /app/packages/core /app/packages/core
 COPY --from=build /app/packages/shared /app/packages/shared
 COPY --from=build /app/packages/storage-sqlite /app/packages/storage-sqlite
-# gateway 源码(未 bundle,直接 bun 执行)——compose 以 `bun apps/gateway/src/index.ts` 启动。
-COPY --from=build /app/apps/gateway /app/apps/gateway
+# gateway 源码(未 bundle,直接 bun 执行)——compose 以 `bun packages/gateway/src/index.ts` 启动。
+COPY --from=build /app/packages/gateway /app/packages/gateway
 COPY --from=build /app/packages/fs-layout /app/packages/fs-layout
 COPY --from=build /app/packages/gateway-proto /app/packages/gateway-proto
 # 根 package.json 定义 workspace,bun 需要它来定位 workspace:* 依赖。

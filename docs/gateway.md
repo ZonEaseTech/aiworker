@@ -4,7 +4,7 @@ PLAN-013 引入的 WebSocket 控制面：operator（aiworker CLI / web）与 nod
 
 ## 概览
 
-- 服务端实现：`apps/gateway/src/server.ts`（`Bun.serve(:9218, { websocket })`）。
+- 服务端实现：`packages/gateway/src/server.ts`（`Bun.serve(:9218, { websocket })`）。
 - 路径：
   - `GET /health` — JSON 心跳（`{ ok, service: 'aiworker-gateway', ts }`）；loopback / Caddy / 部署脚本 readiness 探针用。
   - `GET /ws` — WebSocket 升级端点（必需 `Upgrade: websocket`）。

@@ -19,7 +19,7 @@ services:
     image: ghcr.io/zoneasetech/aiworker:${AIWORKER_IMAGE_TAG}${AIWORKER_IMAGE_VARIANT_SUFFIX}
     container_name: aiworker-gateway
     restart: unless-stopped
-    command: [bun, apps/gateway/src/index.ts]
+    command: [bun, packages/gateway/src/index.ts]
     ports:
       - '127.0.0.1:9218:9218'
     environment:
