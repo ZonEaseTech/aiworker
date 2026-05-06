@@ -7,40 +7,48 @@ Self-hosted, lightweight **Project Brain + Worker/Fleet aggregation runtime**.
 - **Worker** owns the Project Brain (filesystem is the source of truth), worker.db, and conversations. External executors (Codex / Claude Code / Hermes / OpenClaw / Cursor, etc.) are invoked through a thin adapter only.
 - **Gateway is an optional control plane**: a single worker runs without one. With multiple workers, the gateway aggregates presence, routing, and audit — it never holds brain or conversation data.
 
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│ Operator / Admin                                                     │
-│   $ aiworker fleet ...       ws://gateway/ws (basicauth + token)     │
-└──────────────────────────────────┬───────────────────────────────────┘
-                                   │
-                                   ▼     (control plane — optional)
-┌──────────────────────────────────────────────────────────────────────┐
-│ AIWorker Gateway                                                     │
-│   fleet.db : registered_workers + audit_events                       │
-│   pointers / presence / routing / audit only — no brain / chat data  │
-└──┬─────────────────┬─────────────────┬───────────────────────────────┘
-   │ WS frame relay  │                 │
-   ▼                 ▼                 ▼
-┌─────────┐     ┌─────────┐       ┌─────────┐
-│ Worker A│     │ Worker B│  ...  │ Worker N│   ← a single worker can run
-└────┬────┘     └─────────┘       └─────────┘     standalone, no gateway
-     │
-     ▼     (data plane, per worker — gateway never participates)
-┌──────────────────────────────────────────────────────────────────────┐
-│ worker.db   identity / config / conversations  (AES-256-GCM)         │
-│ Project Brain   filesystem authoritative: AGENT / SOUL / USER +      │
-│                 memories + brain skills + policy + admission state   │
-│ Thin Executor Adapter   →   External Engine                          │
-│   health / run / stream /       Codex / Claude Code / Hermes /       │
-│   cancel / resume               OpenClaw / Cursor / ACP / MCP / HTTP │
-│                                   └─→ user/host MCP / skills /       │
-│                                       plugins / auth / native        │
-│                                       sessions (not owned by         │
-│                                       AIWorker)                      │
-└──────────────────────────────────────────────────────────────────────┘
+```text
+                Operator / Admin
+                      |  aiworker fleet ...
+                      |  WS  basicauth + token
+                      v
+   +------------------------------------------------+
+   |  AIWorker Gateway   (optional control plane)   |
+   |  fleet.db : pointers + audit only              |
+   |  no brain  no chat data  no secrets            |
+   +------+-------------+-------------+-------------+
+          v             v             v   WS relay
+      Worker A      Worker B  ...  Worker N
+          |
+          |   a single worker also runs without a gateway
+          v
+   +------------------------------------------------+
+   |  Per-worker data plane                         |
+   |                                                |
+   |  worker.db       identity / config / chat      |
+   |                  AES-256-GCM                   |
+   |                                                |
+   |  Project Brain   filesystem authoritative      |
+   |                  AGENT / SOUL / USER           |
+   |                  memories / brain skills       |
+   |                  policy / admission state      |
+   |                                                |
+   |  Thin Adapter    health / run / stream         |
+   |                  cancel / resume               |
+   |       |                                        |
+   |       v   invoke                               |
+   |  External Engine                               |
+   |       Codex / Claude Code / Hermes             |
+   |       OpenClaw / Cursor / ACP / MCP / HTTP     |
+   |       |                                        |
+   |       v   loads ambient                        |
+   |  user/host MCP / skills / plugins              |
+   |  auth / native sessions                        |
+   |  (not owned by AIWorker)                       |
+   +------------------------------------------------+
 ```
 
-The control plane and the data plane are physically isolated: fleet.db never stores brain / conversations / secrets, and worker.db is never reverse-fetched by the gateway. Full architecture and dual-view mermaid diagrams: [`docs/architecture.md`](docs/architecture.md). Whether this build meets the Project Brain governance node target: [`docs/governance-node-status.md`](docs/governance-node-status.md).
+A single worker can run standalone — the gateway is needed only when you want to aggregate multiple workers. The control plane and the data plane are physically isolated: fleet.db never stores brain / conversations / secrets, and worker.db is never reverse-fetched by the gateway. Full architecture and dual-view mermaid diagrams: [`docs/architecture.md`](docs/architecture.md). Whether this build meets the Project Brain governance node target: [`docs/governance-node-status.md`](docs/governance-node-status.md).
 
 ---
 

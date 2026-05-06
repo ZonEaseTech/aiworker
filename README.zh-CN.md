@@ -7,39 +7,48 @@
 - **Worker** 持 Project Brain（filesystem 权威）、worker.db 和 conversations；外部 executor（Codex / Claude Code / Hermes / OpenClaw / Cursor 等）只通过薄 adapter 调用。
 - **Gateway 是可选的 control plane**：单 worker 不需要 gateway 就能用；多 worker 时 gateway 聚合 presence、routing、audit，不持有任何 brain / 对话数据。
 
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│ Operator / Admin                                                     │
-│   $ aiworker fleet ...       ws://gateway/ws (basicauth + token)     │
-└──────────────────────────────────┬───────────────────────────────────┘
-                                   │
-                                   ▼     (control plane — optional)
-┌──────────────────────────────────────────────────────────────────────┐
-│ AIWorker Gateway                                                     │
-│   fleet.db : registered_workers + audit_events                       │
-│   只持指针 / presence / routing / audit ── 不持 brain / 对话         │
-└──┬─────────────────┬─────────────────┬───────────────────────────────┘
-   │ WS frame relay  │                 │
-   ▼                 ▼                 ▼
-┌─────────┐     ┌─────────┐       ┌─────────┐
-│ Worker A│     │ Worker B│  ...  │ Worker N│   ← 单 worker 可直接跑，不连 gateway
-└────┬────┘     └─────────┘       └─────────┘
-     │
-     ▼     (data plane, per worker — gateway 不参与)
-┌──────────────────────────────────────────────────────────────────────┐
-│ worker.db   identity / config / conversations  (AES-256-GCM)         │
-│ Project Brain   filesystem 权威：AGENT / SOUL / USER + memories +    │
-│                 brain skills + policy + admission state              │
-│ Thin Executor Adapter   →   External Engine                          │
-│   health / run / stream /       Codex / Claude Code / Hermes /       │
-│   cancel / resume               OpenClaw / Cursor / ACP / MCP / HTTP │
-│                                   └─→ user/host MCP / skills /       │
-│                                       plugins / auth / native        │
-│                                       sessions（AIWorker 不接管）     │
-└──────────────────────────────────────────────────────────────────────┘
+```text
+                Operator / Admin
+                      |  aiworker fleet ...
+                      |  WS  basicauth + token
+                      v
+   +------------------------------------------------+
+   |  AIWorker Gateway   (optional control plane)   |
+   |  fleet.db : 只存指针 + audit                   |
+   |  不持 brain  不持对话  不持 secrets            |
+   +------+-------------+-------------+-------------+
+          v             v             v   WS relay
+      Worker A      Worker B  ...  Worker N
+          |
+          |   单 worker 也可以不连 gateway 直接跑
+          v
+   +------------------------------------------------+
+   |  Per-worker data plane                         |
+   |                                                |
+   |  worker.db       identity / config / 对话      |
+   |                  AES-256-GCM                   |
+   |                                                |
+   |  Project Brain   filesystem 权威               |
+   |                  AGENT / SOUL / USER           |
+   |                  memories / brain skills       |
+   |                  policy / admission state      |
+   |                                                |
+   |  Thin Adapter    health / run / stream         |
+   |                  cancel / resume               |
+   |       |                                        |
+   |       v   invoke                               |
+   |  External Engine                               |
+   |       Codex / Claude Code / Hermes             |
+   |       OpenClaw / Cursor / ACP / MCP / HTTP     |
+   |       |                                        |
+   |       v   loads ambient                        |
+   |  user/host MCP / skills / plugins              |
+   |  auth / native sessions                        |
+   |  （AIWorker 不接管）                           |
+   +------------------------------------------------+
 ```
 
-控制面与数据面物理隔离：fleet.db 永不存 brain / conversations / secrets；worker.db 永不被 gateway 反向 fetch。完整架构与 mermaid 双视角：[`docs/architecture.md`](docs/architecture.md)。当前是否符合 Project Brain governance node 目标：[`docs/governance-node-status.md`](docs/governance-node-status.md)。
+单 worker 可直接跑——gateway 只在需要聚合多个 worker 时才用。控制面与数据面物理隔离：fleet.db 永不存 brain / conversations / secrets；worker.db 永不被 gateway 反向 fetch。完整架构与 mermaid 双视角：[`docs/architecture.md`](docs/architecture.md)。当前是否符合 Project Brain governance node 目标：[`docs/governance-node-status.md`](docs/governance-node-status.md)。
 
 ---
 
