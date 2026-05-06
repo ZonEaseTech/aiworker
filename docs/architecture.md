@@ -48,6 +48,10 @@ retention、backup 和 context compilation，而不是内建 PMA/代码项目假
   project 希望外部 executor 具备的 overlay / bootstrap hint；它不是 effective
   executor capability source of truth，也不是安全隔离边界。
 
+> Conformance snapshot — see `docs/governance-node-status.md` for the
+> evidence-backed summary of where the worker meets the Project Brain
+> governance node target and where residual boundary / risk remains.
+
 ### Brain Governance Kernel 决策
 
 AIWorker 的 Brain 层定位为 **Governance Brain Kernel**：治理型上下文内核，而不是
