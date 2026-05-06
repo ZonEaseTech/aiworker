@@ -11,7 +11,7 @@
 #   export PATH="$DEBUG_ROOT/bin:$PATH"
 #   which codex   # 必须返回 $DEBUG_ROOT/bin/codex
 #
-# 由 aiworker-release-debug skill 维护。结构变更同步更新 references/recipes.md。
+# 由 aiworker-validate skill 维护。结构变更同步更新 references/release-debug-recipes.md。
 
 set -u
 

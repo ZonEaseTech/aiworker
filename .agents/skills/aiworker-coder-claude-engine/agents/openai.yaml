@@ -1,4 +1,0 @@
-interface:
-  display_name: "AIWorker Coder Claude Engine"
-  short_description: "Validate AIWorker with Coder and Claude Code"
-  default_prompt: "Use $aiworker-coder-claude-engine to validate a published AIWorker CLI in a Coder workspace with Claude Code as the worker engine."

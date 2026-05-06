@@ -1,4 +1,0 @@
-interface:
-  display_name: "AIWorker Fleet Test"
-  short_description: "Run AIWorker release and fleet session tests"
-  default_prompt: "Use $aiworker-test-fleet to validate the current AIWorker release against the test fleet."

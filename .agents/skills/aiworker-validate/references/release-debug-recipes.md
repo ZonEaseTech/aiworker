@@ -72,7 +72,7 @@ mkdir -p "$DEBUG_ROOT/bin" "$DEBUG_ROOT/dump"
 # === 关键：DUMP_DIR 必须 hard-code absolute 路径 ===
 # engine adapter 给 child 进程的 env allowlist 不放 AIWORKER_*/DEBUG_*/DEBUG_ROOT
 # 用 ${DEBUG_ROOT:-/tmp}/dump 这种 fallback 会让 dump 落到 /tmp/dump，你以为 shim 没工作
-cp "$AIWORKER_REPO/.claude/skills/aiworker-release-debug/templates/claude-shim.sh" "$DEBUG_ROOT/bin/claude"
+cp "$AIWORKER_REPO/.claude/skills/aiworker-validate/templates/claude-shim.sh" "$DEBUG_ROOT/bin/claude"
 sed -i "s#__DUMP_DIR__#$DEBUG_ROOT/dump#" "$DEBUG_ROOT/bin/claude"
 chmod +x "$DEBUG_ROOT/bin/claude"
 
@@ -90,7 +90,7 @@ shim 本身见 `templates/claude-shim.sh`。它把每次调用的 argv / stdin /
 ## R3.5 — 装 fake-codex shim（cross-engine 验证用）
 
 ```bash
-cp "$AIWORKER_REPO/.claude/skills/aiworker-release-debug/templates/codex-shim.sh" "$DEBUG_ROOT/bin/codex"
+cp "$AIWORKER_REPO/.claude/skills/aiworker-validate/templates/codex-shim.sh" "$DEBUG_ROOT/bin/codex"
 sed -i "s#__DUMP_DIR__#$DEBUG_ROOT/dump#" "$DEBUG_ROOT/bin/codex"
 chmod +x "$DEBUG_ROOT/bin/codex"
 which codex   # 必须返回 $DEBUG_ROOT/bin/codex
@@ -102,7 +102,7 @@ codex 用 jsonrpc app-server 模式（与 claude-code 完全不同的注入路�
 
 ```bash
 mkdir -p "$DEBUG_ROOT/samples"
-cp "$AIWORKER_REPO/.claude/skills/aiworker-release-debug/templates/run-one.sh" "$DEBUG_ROOT/samples/run-one.sh"
+cp "$AIWORKER_REPO/.claude/skills/aiworker-validate/templates/run-one.sh" "$DEBUG_ROOT/samples/run-one.sh"
 chmod +x "$DEBUG_ROOT/samples/run-one.sh"
 
 # 单条采样：./run-one.sh <project-dir> <label> <message>
@@ -203,7 +203,7 @@ aiworker brain admission propose --i-know-this-is-debug \
 
 # === 路径 B：SQL 直写（schema-drift / unsupported-kind / 明文 secret 等 corner case）===
 sqlite3 "$DEBUG_ROOT/proj-developer/.aiworker/local/worker.db" \
-  < "$AIWORKER_REPO/.claude/skills/aiworker-release-debug/templates/admission-fixture.sql"
+  < "$AIWORKER_REPO/.claude/skills/aiworker-validate/templates/admission-fixture.sql"
 
 # 状态机覆盖
 aiworker brain admission list --status pending
@@ -390,7 +390,7 @@ grep -E '^\- \[ \] \[\*\*BUG-' docs/task/index.md | tail -5
 
 ```bash
 mkdir -p "$DEBUG_ROOT/samples"
-cp "$AIWORKER_REPO/.claude/skills/aiworker-release-debug/templates/run-multi-turn.sh" "$DEBUG_ROOT/samples/"
+cp "$AIWORKER_REPO/.claude/skills/aiworker-validate/templates/run-multi-turn.sh" "$DEBUG_ROOT/samples/"
 chmod +x "$DEBUG_ROOT/samples/run-multi-turn.sh"
 
 # 准备 5 轮 prompt（要求 turn 5 引用 turn 1+3 的 context）

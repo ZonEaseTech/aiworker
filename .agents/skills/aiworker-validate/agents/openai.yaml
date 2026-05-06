@@ -1,0 +1,6 @@
+interface:
+  display_name: "AIWorker Validate"
+  short_description: "Validate fleet, source worker, or CLI release"
+  default_prompt: "Use $aiworker-validate to choose the right AIWorker validation mode and run the requested checks."
+policy:
+  allow_implicit_invocation: false

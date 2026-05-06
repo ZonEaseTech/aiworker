@@ -12,7 +12,7 @@
 #
 # 然后正常跑 aiworker run，所有 claude 子进程的 stdin / argv / env 都会落盘到 dump/。
 #
-# 由 aiworker-release-debug skill 维护。结构变更同步更新 references/recipes.md。
+# 由 aiworker-validate skill 维护。结构变更同步更新 references/release-debug-recipes.md。
 #
 # === 重要约束 ===
 #

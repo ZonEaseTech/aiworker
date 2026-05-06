@@ -1,5 +1,15 @@
 # AIWorker Changelog
 
+## 2026-05-06 04:25 [completed] TODO-030 / PLAN-125 — AIWorker testing skill consolidation
+
+新增 canonical `aiworker-validate` skill，把标准验证入口收口成四个 mode：`fleet-remote`（远端 fleet/gateway/Fleet UI/挂载 worker E2E）、`worker-source-local`（本地源码版本 worker 验证）、`cli-release-local`（本地已发版 CLI 黑盒验证）、`coder-claude-code`（远端 Coder + Claude Code executor 验证）。
+
+删除冗余顶层 skill：`aiworker-test`、`aiworker-test-fleet`、`aiworker-test-worker`、`aiworker-release-debug`、`aiworker-coder-claude-engine` 不再作为 skill 暴露；只保留 `aiworker-validate`。release-debug 的 historical references/templates 已搬到 `aiworker-validate` 的 supporting files 中，仍可按需加载。
+
+按 Claude Code 官方 skill 写法继续收口：保留现有 `.agents/skills` 源目录 + `.claude/skills` 软链布局，不迁移目录；给有副作用的测试入口加 manual invocation frontmatter；`aiworker-validate/SKILL.md` 缩为 mode router、安全边界和 completion checklist，详细流程拆到一层 `references/`。
+
+最终命名收敛为 canonical `aiworker-validate`；新增 `.claude/skills/aiworker-validate` 软链。`aiworker-coder-claude-engine` 不再作为独立 skill 维护，具体 Coder + Claude Code 流程移入 `aiworker-validate/references/coder-claude-code.md`。
+
 ## 2026-05-06 04:24 [completed] REL-017 / PLAN-124 — CLI 0.9.1 released
 
 `@zonease/aiworker-cli@0.9.1` patch release 完成，承载 QA-007 / PLAN-123 的 Brain Governance Kernel 后续修复：quality gate control prompt、decision pipeline recent samples 持久化、Claude Code no-tools control calls、Codex tool progress dead-loop、Worker OpenAPI route truthfulness、bypass heuristic 降噪。
