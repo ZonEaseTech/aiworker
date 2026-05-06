@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-06 (QA-010 source Governance Kernel harness completed)
+> Updated: 2026-05-06 (QA-011 admission roundtrip evidence completed)
 
 ## Usage
 
@@ -230,3 +230,5 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**QA-008 0.9.1 published CLI `cli-release-local` validation**](QA-008.md) `P1`
 - [x] [**QA-009 Run Governance Kernel regression harness against CLI 0.9.1**](QA-009.md) `P1`
 - [x] [**QA-010 Run Governance Kernel regression harness against source worker**](QA-010.md) `P1`
+- [x] [**TODO-031 Extend Governance Kernel harness with admission roundtrip evidence**](TODO-031.md) `P2`
+- [x] [**QA-011 Governance Kernel harness — admission roundtrip evidence**](QA-011.md) `P1`

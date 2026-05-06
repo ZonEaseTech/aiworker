@@ -688,6 +688,43 @@ function safeJson(text: string): Record<string, unknown> | undefined {
   }
 }
 
+function parseFirstJsonObject(text: string): Record<string, unknown> | undefined {
+  const start = text.indexOf('{')
+  if (start < 0)
+    return undefined
+  let depth = 0
+  let inString = false
+  let escape = false
+  for (let i = start; i < text.length; i += 1) {
+    const ch = text[i]
+    if (escape) {
+      escape = false
+      continue
+    }
+    if (inString && ch === '\\') {
+      escape = true
+      continue
+    }
+    if (ch === '"') {
+      inString = !inString
+      continue
+    }
+    if (inString)
+      continue
+    if (ch === '{') {
+      depth += 1
+    }
+    else if (ch === '}') {
+      depth -= 1
+      if (depth === 0) {
+        const slice = text.slice(start, i + 1)
+        return safeJson(slice)
+      }
+    }
+  }
+  return undefined
+}
+
 function countOpenApiPaths(value: Record<string, unknown> | undefined): number {
   const paths = value?.paths
   if (typeof paths !== 'object' || paths === null || Array.isArray(paths))
@@ -706,15 +743,32 @@ function buildPrompts(pairId: string, soul: string, engine: ExecutorEngine, mark
   ]
 }
 
-function writeFixtureFiles(projectDir: string, pairId: string, soul: string): { evidence: string, payload: string, proposalId: string } {
+interface HarnessFixture {
+  body: string
+  evidence: string
+  indexEntry: string
+  payload: string
+  proposalId: string
+  topic: string
+}
+
+function writeFixtureFiles(projectDir: string, pairId: string, soul: string): HarnessFixture {
   const fixtureDir = path.join(projectDir, '.aiworker/local/harness-fixtures')
   ensureDir(fixtureDir)
   const proposalId = `harness-${pairId}`
+  const topic = `harness-${pairId}`
+  const indexEntry = `- [${pairId} harness](memories/${topic}.md) — Governance Kernel roundtrip evidence.`
+  const body = `${pairId} prefers source-backed validation evidence (governance-kernel-harness).`
   const payload = path.join(fixtureDir, `${proposalId}.payload.json`)
   const evidence = path.join(fixtureDir, `${proposalId}.evidence.json`)
+  // memory-add payload schema accepts `body`, optional `topic`, optional
+  // `indexEntry`. Extra keys are dropped by the non-strict zod object, but we
+  // intentionally keep the payload minimal so the apply materializer writes a
+  // single deterministic memory file under `memories/<topic>.md`.
   writeFileSync(payload, `${JSON.stringify({
-    body: `${pairId} prefers source-backed validation evidence.`,
-    source: 'governance-kernel-harness',
+    body,
+    indexEntry,
+    topic,
   }, null, 2)}\n`, 'utf8')
   writeFileSync(evidence, `${JSON.stringify([
     {
@@ -725,7 +779,7 @@ function writeFixtureFiles(projectDir: string, pairId: string, soul: string): { 
       summary: `Direct formal admission path check for ${soul}.`,
     },
   ], null, 2)}\n`, 'utf8')
-  return { evidence, payload, proposalId }
+  return { body, evidence, indexEntry, payload, proposalId, topic }
 }
 
 async function runPair(
@@ -935,9 +989,9 @@ async function runPair(
     status: directAdmissionPresent ? 'pass' : 'fail',
   })
   checks.push({
-    detail: `memory files=${memoryFiles.length}; pending proposals must not imply applied canonical memory`,
+    detail: `pre-apply memory files=${memoryFiles.length}; pending proposals must not imply applied canonical memory`,
     evidence: path.join(projectDir, '.aiworker/memories'),
-    name: `${pairId} canonical memory boundary`,
+    name: `${pairId} pre-apply canonical memory boundary`,
     status: memoryFiles.length === 0 ? 'pass' : 'fail',
   })
   checks.push({
@@ -945,6 +999,148 @@ async function runPair(
     evidence: decisionRows.logPath,
     name: `${pairId} decision samples persisted`,
     status: decisionRows.code === 0 && decisionRows.stdout.trim().length > 0 ? 'pass' : 'fail',
+  })
+
+  // PLAN-128: positive admission roundtrip evidence. Approve and apply the
+  // direct fixture proposal, then verify the materializer wrote the canonical
+  // memory file, appended the MEMORY.md index entry, transitioned proposal /
+  // decision rows to `applied`, and that `brain brief` projects the new
+  // memory. Without this block the harness only proves the negative
+  // invariant (pending proposals do not bypass admission).
+  const approve = runAiworker(options.debugRoot, product, `${pairId}-direct-admission-approve`, [
+    'brain',
+    'admission',
+    'approve',
+    direct.proposalId,
+    '--decided-by',
+    'governance-kernel-harness',
+    '--reason',
+    'harness-roundtrip',
+  ], {
+    cwd: projectDir,
+    env,
+    timeoutMs: 30_000,
+  })
+  const approveSnapshot = sqlite(
+    options.debugRoot,
+    dbPath,
+    `${pairId}-db-admission-after-approve`,
+    `SELECT status FROM brain_admission_proposals WHERE id = ${sqlString(direct.proposalId)};`,
+  )
+  const decisionsAfterApprove = sqlite(
+    options.debugRoot,
+    dbPath,
+    `${pairId}-db-decisions-after-approve`,
+    `SELECT decision FROM brain_admission_decisions WHERE proposal_id = ${sqlString(direct.proposalId)} ORDER BY decided_at;`,
+  )
+  const approveStatus = approveSnapshot.stdout.trim().split('\n')[0] ?? ''
+  const approveDecisions = decisionsAfterApprove.stdout.trim().split('\n').filter(Boolean)
+  checks.push({
+    detail: `exit=${approve.code}, proposal status=${approveStatus}, decisions=${approveDecisions.join(',')}`,
+    evidence: `${approve.logPath}; ${approveSnapshot.logPath}; ${decisionsAfterApprove.logPath}`,
+    name: `${pairId} admission approve`,
+    status: approve.code === 0 && approveStatus === 'approved' && approveDecisions.includes('approved')
+      ? 'pass'
+      : 'fail',
+  })
+
+  const apply = runAiworker(options.debugRoot, product, `${pairId}-direct-admission-apply`, [
+    'brain',
+    'admission',
+    'apply',
+    direct.proposalId,
+    '--commit',
+    '--decided-by',
+    'governance-kernel-harness',
+  ], {
+    cwd: projectDir,
+    env,
+    timeoutMs: 30_000,
+  })
+  const applyOutcome = parseFirstJsonObject(apply.stdout)
+  const outcomeBlock = applyOutcome?.outcome
+  const outcomeKind = typeof outcomeBlock === 'object' && outcomeBlock !== null && 'kind' in outcomeBlock
+    ? (outcomeBlock as { kind?: unknown }).kind
+    : undefined
+  const outcomeTarget = typeof outcomeBlock === 'object' && outcomeBlock !== null && 'target' in outcomeBlock
+    ? (outcomeBlock as { target?: unknown }).target
+    : undefined
+  const expectedMemoryFile = path.join(projectDir, '.aiworker/memories', `${direct.topic}.md`)
+  const memoryFilesAfterApply = listMarkdownFiles(path.join(projectDir, '.aiworker/memories'))
+  const memoryFileExists = existsSync(expectedMemoryFile)
+  const memoryBody = memoryFileExists ? readFileSync(expectedMemoryFile, 'utf8') : ''
+  const memoryIndexPath = path.join(projectDir, '.aiworker/MEMORY.md')
+  const memoryIndexExists = existsSync(memoryIndexPath)
+  const memoryIndex = memoryIndexExists ? readFileSync(memoryIndexPath, 'utf8') : ''
+  const indexEntryPresent = memoryIndex.includes(direct.indexEntry)
+  const applySnapshot = sqlite(
+    options.debugRoot,
+    dbPath,
+    `${pairId}-db-admission-after-apply`,
+    `SELECT status FROM brain_admission_proposals WHERE id = ${sqlString(direct.proposalId)};`,
+  )
+  const decisionsAfterApply = sqlite(
+    options.debugRoot,
+    dbPath,
+    `${pairId}-db-decisions-after-apply`,
+    `SELECT decision FROM brain_admission_decisions WHERE proposal_id = ${sqlString(direct.proposalId)} ORDER BY decided_at;`,
+  )
+  const applyStatus = applySnapshot.stdout.trim().split('\n')[0] ?? ''
+  const applyDecisions = decisionsAfterApply.stdout.trim().split('\n').filter(Boolean)
+  checks.push({
+    detail: `exit=${apply.code}, outcome.kind=${String(outcomeKind ?? 'unknown')}, target=${String(outcomeTarget ?? 'unknown')}`,
+    evidence: apply.logPath,
+    name: `${pairId} admission apply commit`,
+    status: apply.code === 0 && outcomeKind === 'applied' && outcomeTarget === expectedMemoryFile
+      ? 'pass'
+      : 'fail',
+  })
+  checks.push({
+    detail: `post-apply memory files=${memoryFilesAfterApply.length}, target exists=${memoryFileExists}, body matches=${memoryBody.includes(direct.body)}`,
+    evidence: path.join(projectDir, '.aiworker/memories'),
+    name: `${pairId} post-apply canonical memory file`,
+    status: memoryFileExists
+      && memoryFilesAfterApply.length === 1
+      && memoryBody.includes(direct.body)
+      ? 'pass'
+      : 'fail',
+  })
+  checks.push({
+    detail: `MEMORY.md exists=${memoryIndexExists}, index entry present=${indexEntryPresent}`,
+    evidence: memoryIndexPath,
+    name: `${pairId} post-apply MEMORY.md index entry`,
+    status: memoryIndexExists && indexEntryPresent ? 'pass' : 'fail',
+  })
+  checks.push({
+    detail: `proposal status=${applyStatus}, decisions=${applyDecisions.join(',')}`,
+    evidence: `${applySnapshot.logPath}; ${decisionsAfterApply.logPath}`,
+    name: `${pairId} post-apply DB transitions`,
+    status: applyStatus === 'applied'
+      && applyDecisions.includes('approved')
+      && applyDecisions.includes('applied')
+      ? 'pass'
+      : 'fail',
+  })
+
+  const brief = runAiworker(options.debugRoot, product, `${pairId}-brain-brief-after-apply`, [
+    'brain',
+    'brief',
+    '--task',
+    `Recall harness preference for ${pairId}`,
+    '--soul',
+    pair.soul,
+  ], {
+    cwd: projectDir,
+    env,
+    timeoutMs: 30_000,
+  })
+  const briefHasTopic = brief.stdout.includes(direct.topic)
+  const briefHasBody = brief.stdout.includes(direct.body)
+  checks.push({
+    detail: `exit=${brief.code}, topic in brief=${briefHasTopic}, body in brief=${briefHasBody}`,
+    evidence: brief.logPath,
+    name: `${pairId} brain brief reflects applied memory`,
+    status: brief.code === 0 && (briefHasTopic || briefHasBody) ? 'pass' : 'fail',
   })
 
   const decisionEvents = allEvents.filter(event =>
