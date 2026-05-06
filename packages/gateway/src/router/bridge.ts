@@ -22,6 +22,7 @@ interface BridgeRequest {
   method: MethodName
   params: Record<string, unknown>
   transformResult?: (result: unknown) => unknown
+  statusForResult?: (result: unknown) => number
 }
 
 interface BridgeRouteAudit {
@@ -86,7 +87,7 @@ export async function handleWorkerApiBridge(
     params: route.value.params,
     signal: req.signal,
   })
-  const response = responseFrameToHttp(frame, route.value.transformResult)
+  const response = responseFrameToHttp(frame, route.value.transformResult, route.value.statusForResult)
   recordBridgeAudit(ctx, {
     workerId: parsed.value.workerId,
     method: route.value.method,
@@ -419,6 +420,111 @@ async function buildBridgeRequest(
     }
   }
 
+  if (path.workerApiPath === `${WORKER_API_PREFIX}/brain/summary`) {
+    if (req.method !== 'GET')
+      return { ok: false, response: methodNotAllowed('GET') }
+    return {
+      ok: true,
+      value: { method: 'brain.summary', params: { workerId: path.workerId } },
+    }
+  }
+
+  if (path.workerApiPath === `${WORKER_API_PREFIX}/brain/admission`) {
+    if (req.method !== 'GET')
+      return { ok: false, response: methodNotAllowed('GET') }
+    const query = brainAdmissionListParams(url)
+    if (!query.ok)
+      return { ok: false, response: jsonError(400, 'invalid-query', query.message) }
+    return {
+      ok: true,
+      value: {
+        method: 'brain.admission.list',
+        params: { workerId: path.workerId, ...query.value },
+      },
+    }
+  }
+
+  const brainAdmissionDecisionMatch = path.workerApiPath.match(/^\/api\/worker\/brain\/admission\/([^/]+)\/(approve|reject|apply)$/)
+  if (brainAdmissionDecisionMatch) {
+    const id = decodeURIComponent(brainAdmissionDecisionMatch[1]!)
+    const action = brainAdmissionDecisionMatch[2]!
+    if (req.method !== 'POST')
+      return { ok: false, response: methodNotAllowed('POST') }
+    const body = await readJsonBody(req)
+    if (!body.ok) {
+      return {
+        ok: false,
+        response: jsonError(body.status, body.code, body.message),
+        audit: { method: `brain.admission.${action}`, errorCode: body.code },
+      }
+    }
+    const parsed = brainAdmissionDecisionBody(body.value, action)
+    if (!parsed.ok) {
+      return {
+        ok: false,
+        response: jsonError(400, 'invalid-body', parsed.message),
+        audit: { method: `brain.admission.${action}`, errorCode: 'invalid-body' },
+      }
+    }
+    return {
+      ok: true,
+      value: {
+        method: `brain.admission.${action}` as MethodName,
+        params: { workerId: path.workerId, id, ...parsed.value },
+        ...(action === 'apply' ? { statusForResult: admissionApplyStatusToRest } : {}),
+      },
+    }
+  }
+
+  const brainAdmissionShowMatch = path.workerApiPath.match(/^\/api\/worker\/brain\/admission\/([^/]+)$/)
+  if (brainAdmissionShowMatch) {
+    if (req.method !== 'GET')
+      return { ok: false, response: methodNotAllowed('GET') }
+    return {
+      ok: true,
+      value: {
+        method: 'brain.admission.show',
+        params: {
+          workerId: path.workerId,
+          id: decodeURIComponent(brainAdmissionShowMatch[1]!),
+          ...booleanQueryParam(url, 'showSensitive'),
+        },
+      },
+    }
+  }
+
+  if (path.workerApiPath === `${WORKER_API_PREFIX}/brain/artifacts`) {
+    if (req.method !== 'GET')
+      return { ok: false, response: methodNotAllowed('GET') }
+    const query = brainArtifactsListParams(url)
+    if (!query.ok)
+      return { ok: false, response: jsonError(400, 'invalid-query', query.message) }
+    return {
+      ok: true,
+      value: {
+        method: 'brain.artifacts.list',
+        params: { workerId: path.workerId, ...query.value },
+      },
+    }
+  }
+
+  const brainArtifactShowMatch = path.workerApiPath.match(/^\/api\/worker\/brain\/artifacts\/([^/]+)$/)
+  if (brainArtifactShowMatch) {
+    if (req.method !== 'GET')
+      return { ok: false, response: methodNotAllowed('GET') }
+    return {
+      ok: true,
+      value: {
+        method: 'brain.artifacts.show',
+        params: {
+          workerId: path.workerId,
+          id: decodeURIComponent(brainArtifactShowMatch[1]!),
+          ...booleanQueryParam(url, 'showSensitive'),
+        },
+      },
+    }
+  }
+
   if (path.workerApiPath === `${WORKER_API_PREFIX}/executor/test`) {
     if (req.method !== 'POST')
       return { ok: false, response: methodNotAllowed('POST') }
@@ -527,6 +633,111 @@ async function buildBridgeRequest(
     ok: false,
     response: jsonError(404, 'not-found', `Unsupported worker bridge path ${path.workerApiPath}`),
   }
+}
+
+type QueryParseResult = { ok: true, value: Record<string, string | number | boolean> } | { ok: false, message: string }
+
+function brainAdmissionListParams(url: URL): QueryParseResult {
+  const limit = optionalPositiveInt(url, 'limit')
+  if (!limit.ok)
+    return limit
+  return {
+    ok: true,
+    value: {
+      ...optionalStringParam(url, 'status'),
+      ...optionalStringParam(url, 'kind'),
+      ...optionalStringParam(url, 'scopeId'),
+      ...optionalStringParam(url, 'soulId'),
+      ...(limit.value === undefined ? {} : { limit: limit.value }),
+      ...booleanQueryParam(url, 'showSensitive'),
+    },
+  }
+}
+
+function brainArtifactsListParams(url: URL): QueryParseResult {
+  const limit = optionalPositiveInt(url, 'limit')
+  if (!limit.ok)
+    return limit
+  return {
+    ok: true,
+    value: {
+      ...optionalStringParam(url, 'scopeId'),
+      ...optionalStringParam(url, 'type'),
+      ...optionalStringParam(url, 'status'),
+      ...optionalStringParam(url, 'minSensitivity'),
+      ...(limit.value === undefined ? {} : { limit: limit.value }),
+      ...booleanQueryParam(url, 'showSensitive'),
+    },
+  }
+}
+
+function optionalStringParam(url: URL, key: string): Record<string, string> {
+  const value = url.searchParams.get(key)
+  if (value === null)
+    return {}
+  return value.length === 0 ? {} : { [key]: value }
+}
+
+function booleanQueryParam(url: URL, key: string): Record<string, boolean> {
+  const value = url.searchParams.get(key)
+  if (value === null)
+    return {}
+  return { [key]: value === 'true' }
+}
+
+function optionalPositiveInt(url: URL, key: string): { ok: true, value?: number } | { ok: false, message: string } {
+  const value = url.searchParams.get(key)
+  if (value === null)
+    return { ok: true }
+  if (!/^\d+$/.test(value))
+    return { ok: false, message: `${key} must be a positive integer` }
+  const parsed = Number.parseInt(value, 10)
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 500)
+    return { ok: false, message: `${key} must be between 1 and 500` }
+  return { ok: true, value: parsed }
+}
+
+function brainAdmissionDecisionBody(
+  value: unknown,
+  action: string,
+): { ok: true, value: Record<string, string | boolean> } | { ok: false, message: string } {
+  if (value === null || typeof value !== 'object' || Array.isArray(value))
+    return { ok: false, message: 'request body must be a JSON object' }
+  const body = value as Record<string, unknown>
+  const decidedBy = body.decidedBy
+  if (typeof decidedBy !== 'string' || decidedBy.trim().length === 0)
+    return { ok: false, message: 'decidedBy is required' }
+  const out: Record<string, string | boolean> = { decidedBy }
+  if (body.reason !== undefined && (typeof body.reason !== 'string' || body.reason.length === 0))
+    return { ok: false, message: 'reason must be a non-empty string when provided' }
+  if (typeof body.reason === 'string')
+    out.reason = body.reason
+  if (action === 'apply') {
+    if (body.commit !== undefined && typeof body.commit !== 'boolean')
+      return { ok: false, message: 'commit must be a boolean when provided' }
+    if (typeof body.commit === 'boolean')
+      out.commit = body.commit
+    if (
+      body.allowSecretBody !== undefined
+      && body.allowSecretBody !== 'block'
+      && body.allowSecretBody !== 'redact'
+      && body.allowSecretBody !== 'raw'
+    ) {
+      return { ok: false, message: 'allowSecretBody must be one of block | redact | raw when provided' }
+    }
+    if (body.allowSecretBody === 'block' || body.allowSecretBody === 'redact' || body.allowSecretBody === 'raw')
+      out.allowSecretBody = body.allowSecretBody
+  }
+  return { ok: true, value: out }
+}
+
+function admissionApplyStatusToRest(result: unknown): number {
+  const outcome = (result as { outcome?: { kind?: string } }).outcome
+  if (outcome?.kind === 'failed')
+    return 500
+  if (outcome?.kind === 'blocked-by-secret-scan')
+    return 409
+  return 200
 }
 
 type JsonBodyResult
@@ -853,9 +1064,13 @@ function forwardBridgeRequestToNode(args: ForwardBridgeArgs): Promise<ResponseFr
   })
 }
 
-function responseFrameToHttp(frame: ResponseFrame, transformResult?: (result: unknown) => unknown): Response {
+function responseFrameToHttp(
+  frame: ResponseFrame,
+  transformResult?: (result: unknown) => unknown,
+  statusForResult?: (result: unknown) => number,
+): Response {
   if (frame.ok)
-    return json(transformResult ? transformResult(frame.result) : frame.result, 200)
+    return json(transformResult ? transformResult(frame.result) : frame.result, statusForResult?.(frame.result) ?? 200)
 
   const code = normalizeRestErrorCode(frame.error.code)
   return json({
@@ -896,8 +1111,11 @@ function statusForError(code: string): number {
     case 'invalid_body':
     case 'invalid_key':
     case 'invalid_cron':
+    case 'invalid_state':
       return 400
     case 'version_conflict':
+    case 'conflict':
+    case 'invalid_transition':
       return 409
     case 'not_found':
       return 404
@@ -922,6 +1140,10 @@ function normalizeRestErrorCode(code: string): string {
       return 'invalid-config'
     case 'version_conflict':
       return 'version-conflict'
+    case 'invalid_transition':
+      return 'invalid-transition'
+    case 'invalid_state':
+      return 'invalid-state'
     case 'invalid_body':
       return 'invalid-body'
     case 'invalid_key':

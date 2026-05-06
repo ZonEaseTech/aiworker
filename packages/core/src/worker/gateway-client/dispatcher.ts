@@ -1,5 +1,12 @@
 import type { RequestFrame, ResponseFrame } from '@zonease/aiworker-gateway-proto'
-import type { ChannelType, Envelope, WorkerInfo } from '@zonease/aiworker-shared'
+import type {
+  BrainAdmissionStatus,
+  BrainArtifactSensitivity,
+  BrainArtifactStatus,
+  ChannelType,
+  Envelope,
+  WorkerInfo,
+} from '@zonease/aiworker-shared'
 import type { CronJobInput, CronJobPatch, CronJobRecord } from '../cron/types'
 import type { WorkerEventBus } from '../events/bus'
 import type { ApprovalStore } from '../orchestrator/approvals'
@@ -71,6 +78,33 @@ export interface NodeHandlers {
   secretsDelete?: (input: { key: string }) => Promise<{ ok: true }>
   enginesList?: (input: { refresh?: boolean }) => Promise<{ engines: unknown[] }>
   brainTest?: () => Promise<unknown>
+  brainSummary?: () => Promise<unknown>
+  brainAdmissionList?: (input: {
+    status?: BrainAdmissionStatus
+    kind?: string
+    scopeId?: string
+    soulId?: string
+    limit?: number
+    showSensitive?: boolean
+  }) => Promise<unknown>
+  brainAdmissionShow?: (input: { id: string, showSensitive?: boolean }) => Promise<unknown>
+  brainAdmissionApprove?: (input: { id: string, decidedBy: string, reason?: string }) => Promise<unknown>
+  brainAdmissionReject?: (input: { id: string, decidedBy: string, reason?: string }) => Promise<unknown>
+  brainAdmissionApply?: (input: {
+    id: string
+    decidedBy: string
+    commit?: boolean
+    allowSecretBody?: 'block' | 'redact' | 'raw'
+  }) => Promise<unknown>
+  brainArtifactsList?: (input: {
+    scopeId?: string
+    type?: string
+    status?: BrainArtifactStatus
+    minSensitivity?: BrainArtifactSensitivity
+    limit?: number
+    showSensitive?: boolean
+  }) => Promise<unknown>
+  brainArtifactsShow?: (input: { id: string, showSensitive?: boolean }) => Promise<unknown>
   executorTest?: (input: { probe?: boolean }) => Promise<unknown>
   channelTest?: (input: { channel: ChannelType, body?: { chatId?: string, text?: string } }) => Promise<unknown>
   tasksList?: () => Promise<{ tasks: unknown[] }>
@@ -170,6 +204,30 @@ export class GatewayDispatcher {
           break
         case METHODS['brain.test'].method:
           await this.handleBrainTest(id, p)
+          break
+        case METHODS['brain.summary'].method:
+          await this.handleBrainSummary(id, p)
+          break
+        case METHODS['brain.admission.list'].method:
+          await this.handleBrainAdmissionList(id, p)
+          break
+        case METHODS['brain.admission.show'].method:
+          await this.handleBrainAdmissionShow(id, p)
+          break
+        case METHODS['brain.admission.approve'].method:
+          await this.handleBrainAdmissionApprove(id, p)
+          break
+        case METHODS['brain.admission.reject'].method:
+          await this.handleBrainAdmissionReject(id, p)
+          break
+        case METHODS['brain.admission.apply'].method:
+          await this.handleBrainAdmissionApply(id, p)
+          break
+        case METHODS['brain.artifacts.list'].method:
+          await this.handleBrainArtifactsList(id, p)
+          break
+        case METHODS['brain.artifacts.show'].method:
+          await this.handleBrainArtifactsShow(id, p)
           break
         case METHODS['executor.test'].method:
           await this.handleExecutorTest(id, p)
@@ -513,6 +571,144 @@ export class GatewayDispatcher {
     this.replyOk(id, await this.deps.handlers.brainTest())
   }
 
+  private async handleBrainSummary(id: string, params: Record<string, unknown>): Promise<void> {
+    if (!this.deps.handlers?.brainSummary) {
+      this.replyError(id, 'method_not_implemented', 'brain.summary handler not wired')
+      return
+    }
+    if (!this.ensureWorkerMatch(id, params))
+      return
+    this.replyOk(id, await this.deps.handlers.brainSummary())
+  }
+
+  private async handleBrainAdmissionList(id: string, params: Record<string, unknown>): Promise<void> {
+    if (!this.deps.handlers?.brainAdmissionList) {
+      this.replyError(id, 'method_not_implemented', 'brain.admission.list handler not wired')
+      return
+    }
+    if (!this.ensureWorkerMatch(id, params))
+      return
+    this.replyOk(id, await this.deps.handlers.brainAdmissionList({
+      ...(params.status === undefined ? {} : { status: params.status as BrainAdmissionStatus }),
+      ...(params.kind === undefined ? {} : { kind: String(params.kind) }),
+      ...(params.scopeId === undefined ? {} : { scopeId: String(params.scopeId) }),
+      ...(params.soulId === undefined ? {} : { soulId: String(params.soulId) }),
+      ...(typeof params.limit === 'number' ? { limit: params.limit } : {}),
+      ...(typeof params.showSensitive === 'boolean' ? { showSensitive: params.showSensitive } : {}),
+    }))
+  }
+
+  private async handleBrainAdmissionShow(id: string, params: Record<string, unknown>): Promise<void> {
+    if (!this.deps.handlers?.brainAdmissionShow) {
+      this.replyError(id, 'method_not_implemented', 'brain.admission.show handler not wired')
+      return
+    }
+    if (!this.ensureWorkerMatch(id, params))
+      return
+    try {
+      this.replyOk(id, await this.deps.handlers.brainAdmissionShow({
+        id: String(params.id),
+        ...(typeof params.showSensitive === 'boolean' ? { showSensitive: params.showSensitive } : {}),
+      }))
+    }
+    catch (err) {
+      this.replyBrainError(id, err)
+    }
+  }
+
+  private async handleBrainAdmissionApprove(id: string, params: Record<string, unknown>): Promise<void> {
+    if (!this.deps.handlers?.brainAdmissionApprove) {
+      this.replyError(id, 'method_not_implemented', 'brain.admission.approve handler not wired')
+      return
+    }
+    if (!this.ensureWorkerMatch(id, params))
+      return
+    try {
+      this.replyOk(id, await this.deps.handlers.brainAdmissionApprove({
+        id: String(params.id),
+        decidedBy: String(params.decidedBy),
+        ...(params.reason === undefined ? {} : { reason: String(params.reason) }),
+      }))
+    }
+    catch (err) {
+      this.replyBrainError(id, err)
+    }
+  }
+
+  private async handleBrainAdmissionReject(id: string, params: Record<string, unknown>): Promise<void> {
+    if (!this.deps.handlers?.brainAdmissionReject) {
+      this.replyError(id, 'method_not_implemented', 'brain.admission.reject handler not wired')
+      return
+    }
+    if (!this.ensureWorkerMatch(id, params))
+      return
+    try {
+      this.replyOk(id, await this.deps.handlers.brainAdmissionReject({
+        id: String(params.id),
+        decidedBy: String(params.decidedBy),
+        ...(params.reason === undefined ? {} : { reason: String(params.reason) }),
+      }))
+    }
+    catch (err) {
+      this.replyBrainError(id, err)
+    }
+  }
+
+  private async handleBrainAdmissionApply(id: string, params: Record<string, unknown>): Promise<void> {
+    if (!this.deps.handlers?.brainAdmissionApply) {
+      this.replyError(id, 'method_not_implemented', 'brain.admission.apply handler not wired')
+      return
+    }
+    if (!this.ensureWorkerMatch(id, params))
+      return
+    try {
+      this.replyOk(id, await this.deps.handlers.brainAdmissionApply({
+        id: String(params.id),
+        decidedBy: String(params.decidedBy),
+        ...(typeof params.commit === 'boolean' ? { commit: params.commit } : {}),
+        ...(params.allowSecretBody === undefined ? {} : { allowSecretBody: params.allowSecretBody as 'block' | 'redact' | 'raw' }),
+      }))
+    }
+    catch (err) {
+      this.replyBrainError(id, err)
+    }
+  }
+
+  private async handleBrainArtifactsList(id: string, params: Record<string, unknown>): Promise<void> {
+    if (!this.deps.handlers?.brainArtifactsList) {
+      this.replyError(id, 'method_not_implemented', 'brain.artifacts.list handler not wired')
+      return
+    }
+    if (!this.ensureWorkerMatch(id, params))
+      return
+    this.replyOk(id, await this.deps.handlers.brainArtifactsList({
+      ...(params.scopeId === undefined ? {} : { scopeId: String(params.scopeId) }),
+      ...(params.type === undefined ? {} : { type: String(params.type) }),
+      ...(params.status === undefined ? {} : { status: params.status as BrainArtifactStatus }),
+      ...(params.minSensitivity === undefined ? {} : { minSensitivity: params.minSensitivity as BrainArtifactSensitivity }),
+      ...(typeof params.limit === 'number' ? { limit: params.limit } : {}),
+      ...(typeof params.showSensitive === 'boolean' ? { showSensitive: params.showSensitive } : {}),
+    }))
+  }
+
+  private async handleBrainArtifactsShow(id: string, params: Record<string, unknown>): Promise<void> {
+    if (!this.deps.handlers?.brainArtifactsShow) {
+      this.replyError(id, 'method_not_implemented', 'brain.artifacts.show handler not wired')
+      return
+    }
+    if (!this.ensureWorkerMatch(id, params))
+      return
+    try {
+      this.replyOk(id, await this.deps.handlers.brainArtifactsShow({
+        id: String(params.id),
+        ...(typeof params.showSensitive === 'boolean' ? { showSensitive: params.showSensitive } : {}),
+      }))
+    }
+    catch (err) {
+      this.replyBrainError(id, err)
+    }
+  }
+
   private async handleExecutorTest(id: string, params: Record<string, unknown>): Promise<void> {
     if (!this.deps.handlers?.executorTest) {
       this.replyError(id, 'method_not_implemented', 'executor.test handler not wired')
@@ -603,6 +799,28 @@ export class GatewayDispatcher {
       ok: false,
       error: details === undefined ? { code, message } : { code, message, details },
     })
+  }
+
+  private replyBrainError(id: string, err: unknown): void {
+    const code = (err as { code?: string }).code
+    const message = err instanceof Error ? err.message : String(err)
+    if (code === 'not-found') {
+      this.replyError(id, 'not_found', message)
+      return
+    }
+    if (code === 'invalid-transition') {
+      this.replyError(id, 'invalid_transition', message)
+      return
+    }
+    if (code === 'duplicate-id') {
+      this.replyError(id, 'conflict', message)
+      return
+    }
+    if (code === 'invalid-payload') {
+      this.replyError(id, 'invalid_state', message)
+      return
+    }
+    throw err
   }
 
   private replyAppError(id: string, err: unknown): void {

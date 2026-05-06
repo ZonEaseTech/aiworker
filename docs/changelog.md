@@ -1,5 +1,23 @@
 # AIWorker Changelog
 
+## 2026-05-06 14:29 [completed] BUG-082 / PLAN-140 — Fleet-hosted Worker Admin Brain bridge routes
+
+Fixed the fleet-hosted Worker Admin Brain page bridge gap. Gateway now maps the
+Brain governance routes used by Worker Admin to explicit node RPC methods
+instead of rejecting them as unsupported bridge paths:
+
+- `brain.summary`
+- `brain.admission.{list,show,approve,reject,apply}`
+- `brain.artifacts.{list,show}`
+
+The fix keeps the narrow gateway bridge model: no generic worker HTTP proxy was
+introduced, `/w/:workerId/api/worker/*` remains guarded by worker bearer auth,
+and Brain proposal/artifact data remains in worker-owned storage.
+
+Verification passed: gateway worker bridge regression, worker node dispatcher
+regression, focused proto/core/gateway/cli typechecks, repository lint, and
+`git diff --check`.
+
 ## 2026-05-06 14:07 [completed] REL-020 / PLAN-139 — 发布 aiworker CLI 0.9.4
 
 发布 `@zonease/aiworker-cli@0.9.4`，作为 0.9.3 之后的 patch release，

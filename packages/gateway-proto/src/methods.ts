@@ -359,6 +359,112 @@ const brainTestMethod = defineMethod({
   routing: 'operator-to-node',
 })
 
+const brainAdmissionStatusEnum = z.enum(['pending', 'approved', 'rejected', 'applied', 'failed'])
+const brainArtifactStatusEnum = z.enum(['active', 'archived', 'removed'])
+const brainArtifactSensitivityEnum = z.enum(['public', 'internal', 'confidential', 'secret'])
+const brainSecretBodyPolicyEnum = z.enum(['block', 'redact', 'raw'])
+
+const brainSummaryMethod = defineMethod({
+  method: 'brain.summary',
+  description: '读取目标 worker 的 Brain summary aggregate。',
+  params: z.object({ workerId: z.string().min(1) }),
+  result: z.unknown(),
+  routing: 'operator-to-node',
+})
+
+const brainAdmissionListMethod = defineMethod({
+  method: 'brain.admission.list',
+  description: '列出目标 worker 的 Brain admission proposals。',
+  params: z.object({
+    workerId: z.string().min(1),
+    status: brainAdmissionStatusEnum.optional(),
+    kind: z.string().min(1).optional(),
+    scopeId: z.string().min(1).optional(),
+    soulId: z.string().min(1).optional(),
+    limit: z.number().int().min(1).max(500).optional(),
+    showSensitive: z.boolean().optional(),
+  }),
+  result: z.unknown(),
+  routing: 'operator-to-node',
+})
+
+const brainAdmissionShowMethod = defineMethod({
+  method: 'brain.admission.show',
+  description: '读取目标 worker 的单条 Brain admission proposal。',
+  params: z.object({
+    workerId: z.string().min(1),
+    id: z.string().min(1),
+    showSensitive: z.boolean().optional(),
+  }),
+  result: z.unknown(),
+  routing: 'operator-to-node',
+})
+
+const brainAdmissionDecisionParams = z.object({
+  workerId: z.string().min(1),
+  id: z.string().min(1),
+  decidedBy: z.string().min(1).max(200),
+  reason: z.string().min(1).max(2000).optional(),
+})
+
+const brainAdmissionApproveMethod = defineMethod({
+  method: 'brain.admission.approve',
+  description: '批准目标 worker 的 pending Brain admission proposal。',
+  params: brainAdmissionDecisionParams,
+  result: z.unknown(),
+  routing: 'operator-to-node',
+})
+
+const brainAdmissionRejectMethod = defineMethod({
+  method: 'brain.admission.reject',
+  description: '拒绝目标 worker 的 pending Brain admission proposal。',
+  params: brainAdmissionDecisionParams,
+  result: z.unknown(),
+  routing: 'operator-to-node',
+})
+
+const brainAdmissionApplyMethod = defineMethod({
+  method: 'brain.admission.apply',
+  description: '执行目标 worker 的 approved Brain admission proposal。',
+  params: z.object({
+    workerId: z.string().min(1),
+    id: z.string().min(1),
+    decidedBy: z.string().min(1).max(200),
+    commit: z.boolean().optional(),
+    allowSecretBody: brainSecretBodyPolicyEnum.optional(),
+  }),
+  result: z.unknown(),
+  routing: 'operator-to-node',
+})
+
+const brainArtifactsListMethod = defineMethod({
+  method: 'brain.artifacts.list',
+  description: '列出目标 worker 的 Brain artifact registry。',
+  params: z.object({
+    workerId: z.string().min(1),
+    scopeId: z.string().min(1).optional(),
+    type: z.string().min(1).optional(),
+    status: brainArtifactStatusEnum.optional(),
+    minSensitivity: brainArtifactSensitivityEnum.optional(),
+    limit: z.number().int().min(1).max(500).optional(),
+    showSensitive: z.boolean().optional(),
+  }),
+  result: z.unknown(),
+  routing: 'operator-to-node',
+})
+
+const brainArtifactsShowMethod = defineMethod({
+  method: 'brain.artifacts.show',
+  description: '读取目标 worker 的单条 Brain artifact。',
+  params: z.object({
+    workerId: z.string().min(1),
+    id: z.string().min(1),
+    showSensitive: z.boolean().optional(),
+  }),
+  result: z.unknown(),
+  routing: 'operator-to-node',
+})
+
 const executorTestMethod = defineMethod({
   method: 'executor.test',
   description: '在目标 worker 上执行 executor health / tiny probe。',
@@ -545,6 +651,14 @@ export const METHODS = {
   'secrets.delete': secretsDeleteMethod,
   'engines.list': enginesListMethod,
   'brain.test': brainTestMethod,
+  'brain.summary': brainSummaryMethod,
+  'brain.admission.list': brainAdmissionListMethod,
+  'brain.admission.show': brainAdmissionShowMethod,
+  'brain.admission.approve': brainAdmissionApproveMethod,
+  'brain.admission.reject': brainAdmissionRejectMethod,
+  'brain.admission.apply': brainAdmissionApplyMethod,
+  'brain.artifacts.list': brainArtifactsListMethod,
+  'brain.artifacts.show': brainArtifactsShowMethod,
   'executor.test': executorTestMethod,
   'channel.test': channelTestMethod,
   'orchestrator.tasks.list': orchestratorTasksListMethod,

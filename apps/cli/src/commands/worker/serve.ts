@@ -1,4 +1,12 @@
-import type { GatewayNode, GatewayNodeEnrollOptions } from '@zonease/aiworker-core'
+import type {
+  ApplyOptions,
+  BrainSummaryDecisionPipelineConfig,
+  GatewayNode,
+  GatewayNodeEnrollOptions,
+  ListBrainAdmissionOptions,
+  ListBrainArtifactsOptions,
+  ReadBrainArtifactsOptions,
+} from '@zonease/aiworker-core'
 import { spawn } from 'node:child_process'
 import { writeFileSync } from 'node:fs'
 import { unlink } from 'node:fs/promises'
@@ -8,6 +16,9 @@ import process from 'node:process'
 import { bootstrapWorkerApp } from '@zonease/aiworker-api/bootstrap'
 import {
   applyConfigUpdate,
+  BrainAdmissionService,
+  BrainArtifactRegistry,
+  buildBrainSummary,
   buildCronHandlers,
   buildInfo,
   deleteSecret,
@@ -23,6 +34,7 @@ import {
   startGatewayNode,
   workerEnv,
 } from '@zonease/aiworker-core'
+import { resolveBrainHome } from '@zonease/aiworker-fs-layout'
 import { assertAdminServingIsSafe } from '@zonease/aiworker-shared'
 import {
   getWorkerDb,
@@ -138,6 +150,20 @@ export function buildOpenBrowserCommand(url: string, platform: NodeJS.Platform =
   if (platform === 'win32')
     return { command: 'cmd', args: ['/c', 'start', '', url] }
   return { command: 'xdg-open', args: [url] }
+}
+
+function resolveAdmissionRedact(showSensitive: boolean): { redact: boolean, denied: boolean } {
+  if (!showSensitive)
+    return { redact: true, denied: false }
+  if (process.env.AIWORKER_ADMIN_REVEAL === '1')
+    return { redact: false, denied: false }
+  return { redact: true, denied: true }
+}
+
+function stateError(code: 'not-found', message: string): Error & { code: 'not-found' } {
+  const err = new Error(message) as Error & { code: 'not-found' }
+  err.code = code
+  return err
 }
 
 /**
@@ -370,6 +396,105 @@ export async function runServe(options: ServeOptions = {}): Promise<void> {
         brainTest: async () => {
           const stored = await readConfig(getWorkerDb())
           return await handleBrainTest(state, stored.config)
+        },
+        brainSummary: async () => {
+          const decisionPipeline = state.runtime.config.orchestrator?.decisionPipeline
+          const decisionPipelineConfig: BrainSummaryDecisionPipelineConfig = {
+            intentEvaluator: decisionPipeline?.intentClassifier?.evaluator ?? 'heuristic',
+            qualityEvaluator: decisionPipeline?.qualityGate?.evaluator ?? 'heuristic',
+            qualityMode: decisionPipeline?.qualityGate?.mode ?? 'observe',
+            conversationClassifierEnabled: true,
+          }
+          if (decisionPipeline?.qualityGate?.threshold !== undefined)
+            decisionPipelineConfig.qualityThreshold = decisionPipeline.qualityGate.threshold
+          return {
+            workerId: state.workerId,
+            brainSummary: buildBrainSummary(decisionPipelineConfig),
+            checkedAt: new Date().toISOString(),
+          }
+        },
+        brainAdmissionList: async (input) => {
+          const gate = resolveAdmissionRedact(input.showSensitive === true)
+          const filterOptions: ListBrainAdmissionOptions = {}
+          if (input.status !== undefined)
+            filterOptions.status = input.status
+          if (input.kind !== undefined)
+            filterOptions.kind = input.kind
+          if (input.scopeId !== undefined)
+            filterOptions.scopeId = input.scopeId
+          if (input.soulId !== undefined)
+            filterOptions.soulId = input.soulId
+          if (input.limit !== undefined)
+            filterOptions.limit = input.limit
+          const result = new BrainAdmissionService().list(filterOptions, { redactSensitive: gate.redact })
+          return {
+            count: result.proposals.length,
+            redacted: gate.redact,
+            ...(gate.denied ? { showSensitiveDenied: 'missing-env-gate: set AIWORKER_ADMIN_REVEAL=1 in worker env' } : {}),
+            proposals: result.proposals,
+            skipped: result.skipped,
+          }
+        },
+        brainAdmissionShow: async ({ id, showSensitive }) => {
+          const gate = resolveAdmissionRedact(showSensitive === true)
+          const service = new BrainAdmissionService()
+          const proposal = service.get(id, { redactSensitive: gate.redact })
+          if (proposal === null)
+            throw stateError('not-found', `admission proposal "${id}" not found`)
+          return {
+            redacted: gate.redact,
+            ...(gate.denied ? { showSensitiveDenied: 'missing-env-gate: set AIWORKER_ADMIN_REVEAL=1 in worker env' } : {}),
+            proposal,
+            decisions: service.listDecisions(id),
+          }
+        },
+        brainAdmissionApprove: async ({ id, decidedBy, reason }) => {
+          const proposal = new BrainAdmissionService().approve(id, {
+            decidedBy,
+            ...(reason === undefined ? {} : { reason }),
+          })
+          return { decision: 'approved', proposal }
+        },
+        brainAdmissionReject: async ({ id, decidedBy, reason }) => {
+          const proposal = new BrainAdmissionService().reject(id, {
+            decidedBy,
+            ...(reason === undefined ? {} : { reason }),
+          })
+          return { decision: 'rejected', proposal }
+        },
+        brainAdmissionApply: async ({ id, decidedBy, commit, allowSecretBody }) => {
+          const options: ApplyOptions = {
+            brainHome: resolveBrainHome(state.workerId),
+            commit: commit === true,
+            decidedBy,
+          }
+          if (allowSecretBody !== undefined)
+            options.allowSecretBody = allowSecretBody
+          return { outcome: await new BrainAdmissionService().apply(id, options) }
+        },
+        brainArtifactsList: async (input) => {
+          const redact = input.showSensitive !== true
+          const filterOptions: ListBrainArtifactsOptions = {}
+          if (input.scopeId !== undefined)
+            filterOptions.scopeId = input.scopeId
+          if (input.type !== undefined)
+            filterOptions.type = input.type
+          if (input.status !== undefined)
+            filterOptions.status = input.status
+          if (input.minSensitivity !== undefined)
+            filterOptions.minSensitivity = input.minSensitivity
+          if (input.limit !== undefined)
+            filterOptions.limit = input.limit
+          const readOptions: ReadBrainArtifactsOptions = { redactSensitive: redact }
+          const artifacts = new BrainArtifactRegistry().list(filterOptions, readOptions)
+          return { count: artifacts.length, redacted: redact, artifacts }
+        },
+        brainArtifactsShow: async ({ id, showSensitive }) => {
+          const redact = showSensitive !== true
+          const artifact = new BrainArtifactRegistry().get(id, { redactSensitive: redact })
+          if (artifact === null)
+            throw stateError('not-found', `brain artifact "${id}" not found`)
+          return { redacted: redact, artifact }
         },
         executorTest: async ({ probe }) => {
           const stored = await readConfig(getWorkerDb())

@@ -409,6 +409,7 @@ describe('gateway worker HTTP bridge', () => {
       params: unknown
       result: unknown
       body?: unknown
+      status?: number
     }) {
       node.sent.length = 0
       const pendingFetch = fetch(`http://127.0.0.1:${started.port}${args.path}`, withBridgeAuth(args.init))
@@ -422,7 +423,7 @@ describe('gateway worker HTTP bridge', () => {
         result: args.result,
       })
       const res = await pendingFetch
-      expect(res.status).toBe(200)
+      expect(res.status).toBe(args.status ?? 200)
       if (args.body !== undefined)
         expect(await res.json()).toEqual(args.body)
       else
@@ -516,6 +517,78 @@ describe('gateway worker HTTP bridge', () => {
         params: { workerId: WORKER_ID, refresh: true },
         result: { engines: [{ kind: 'http' }] },
         body: { engines: [{ kind: 'http' }] },
+      })
+      await expectForward({
+        path: `/w/${WORKER_ID}/api/worker/brain/summary`,
+        method: 'brain.summary',
+        params: { workerId: WORKER_ID },
+        result: { workerId: WORKER_ID, brainSummary: { artifacts: { total: 0 } }, checkedAt: 'now' },
+        body: { workerId: WORKER_ID, brainSummary: { artifacts: { total: 0 } }, checkedAt: 'now' },
+      })
+      await expectForward({
+        path: `/w/${WORKER_ID}/api/worker/brain/admission?status=pending&kind=memory-add&limit=25&showSensitive=true`,
+        method: 'brain.admission.list',
+        params: { workerId: WORKER_ID, status: 'pending', kind: 'memory-add', limit: 25, showSensitive: true },
+        result: { count: 0, redacted: true, proposals: [] },
+        body: { count: 0, redacted: true, proposals: [] },
+      })
+      await expectForward({
+        path: `/w/${WORKER_ID}/api/worker/brain/admission/p-1?showSensitive=true`,
+        method: 'brain.admission.show',
+        params: { workerId: WORKER_ID, id: 'p-1', showSensitive: true },
+        result: { redacted: true, proposal: { id: 'p-1' }, decisions: [] },
+        body: { redacted: true, proposal: { id: 'p-1' }, decisions: [] },
+      })
+      await expectForward({
+        path: `/w/${WORKER_ID}/api/worker/brain/admission/p-1/approve`,
+        init: {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ decidedBy: 'operator', reason: 'ok' }),
+        },
+        method: 'brain.admission.approve',
+        params: { workerId: WORKER_ID, id: 'p-1', decidedBy: 'operator', reason: 'ok' },
+        result: { decision: 'approved', proposal: { id: 'p-1', status: 'approved' } },
+        body: { decision: 'approved', proposal: { id: 'p-1', status: 'approved' } },
+      })
+      await expectForward({
+        path: `/w/${WORKER_ID}/api/worker/brain/admission/p-1/reject`,
+        init: {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ decidedBy: 'operator' }),
+        },
+        method: 'brain.admission.reject',
+        params: { workerId: WORKER_ID, id: 'p-1', decidedBy: 'operator' },
+        result: { decision: 'rejected', proposal: { id: 'p-1', status: 'rejected' } },
+        body: { decision: 'rejected', proposal: { id: 'p-1', status: 'rejected' } },
+      })
+      await expectForward({
+        path: `/w/${WORKER_ID}/api/worker/brain/admission/p-1/apply`,
+        init: {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ allowSecretBody: 'block', commit: true, decidedBy: 'operator' }),
+        },
+        method: 'brain.admission.apply',
+        params: { workerId: WORKER_ID, id: 'p-1', decidedBy: 'operator', commit: true, allowSecretBody: 'block' },
+        result: { outcome: { kind: 'blocked-by-secret-scan', secretScan: { hits: [] } } },
+        body: { outcome: { kind: 'blocked-by-secret-scan', secretScan: { hits: [] } } },
+        status: 409,
+      })
+      await expectForward({
+        path: `/w/${WORKER_ID}/api/worker/brain/artifacts?scopeId=s-1&type=resume&status=active&minSensitivity=internal&limit=50`,
+        method: 'brain.artifacts.list',
+        params: { workerId: WORKER_ID, scopeId: 's-1', type: 'resume', status: 'active', minSensitivity: 'internal', limit: 50 },
+        result: { count: 1, redacted: true, artifacts: [{ id: 'a-1' }] },
+        body: { count: 1, redacted: true, artifacts: [{ id: 'a-1' }] },
+      })
+      await expectForward({
+        path: `/w/${WORKER_ID}/api/worker/brain/artifacts/a-1?showSensitive=true`,
+        method: 'brain.artifacts.show',
+        params: { workerId: WORKER_ID, id: 'a-1', showSensitive: true },
+        result: { redacted: false, artifact: { id: 'a-1' } },
+        body: { redacted: false, artifact: { id: 'a-1' } },
       })
       await expectForward({
         path: `/w/${WORKER_ID}/api/worker/executor/test`,

@@ -439,6 +439,135 @@ describe('GatewayDispatcher — workers.info / workers.stop', () => {
   })
 })
 
+describe('GatewayDispatcher — brain bridge methods', () => {
+  it('brain.summary replies with the injected summary payload', async () => {
+    const { dispatcher, approvals, responses } = makeDispatcher({
+      brainSummary: async () => ({ workerId: 'w_test', brainSummary: { artifacts: { total: 0 } } }),
+    })
+
+    await dispatcher.handleRequest({
+      type: 'request',
+      id: 'req-brain-summary',
+      method: 'brain.summary',
+      params: { workerId: 'w_test' },
+    })
+
+    expect(responses).toHaveLength(1)
+    expect(responses[0]?.ok).toBe(true)
+    if (responses[0]?.ok)
+      expect(responses[0].result).toEqual({ workerId: 'w_test', brainSummary: { artifacts: { total: 0 } } })
+    approvals.dispose()
+  })
+
+  it('brain.admission.list forwards filter and reveal options', async () => {
+    const seen: unknown[] = []
+    const { dispatcher, approvals, responses } = makeDispatcher({
+      brainAdmissionList: async (input) => {
+        seen.push(input)
+        return { count: 0, redacted: true, proposals: [] }
+      },
+    })
+
+    await dispatcher.handleRequest({
+      type: 'request',
+      id: 'req-admission-list',
+      method: 'brain.admission.list',
+      params: {
+        workerId: 'w_test',
+        status: 'pending',
+        kind: 'memory-add',
+        scopeId: 'scope-1',
+        soulId: 'developer',
+        limit: 25,
+        showSensitive: true,
+      },
+    })
+
+    expect(seen).toEqual([{
+      status: 'pending',
+      kind: 'memory-add',
+      scopeId: 'scope-1',
+      soulId: 'developer',
+      limit: 25,
+      showSensitive: true,
+    }])
+    expect(responses[0]?.ok).toBe(true)
+    approvals.dispose()
+  })
+
+  it('brain.admission.apply forwards commit and secret body policy', async () => {
+    const seen: unknown[] = []
+    const { dispatcher, approvals, responses } = makeDispatcher({
+      brainAdmissionApply: async (input) => {
+        seen.push(input)
+        return { outcome: { kind: 'dry-run', target: 'memories/x', diff: '' } }
+      },
+    })
+
+    await dispatcher.handleRequest({
+      type: 'request',
+      id: 'req-admission-apply',
+      method: 'brain.admission.apply',
+      params: {
+        workerId: 'w_test',
+        id: 'p-1',
+        decidedBy: 'operator',
+        commit: true,
+        allowSecretBody: 'redact',
+      },
+    })
+
+    expect(seen).toEqual([{ id: 'p-1', decidedBy: 'operator', commit: true, allowSecretBody: 'redact' }])
+    expect(responses[0]?.ok).toBe(true)
+    approvals.dispose()
+  })
+
+  it('brain.artifacts.show maps coded not-found errors to not_found', async () => {
+    const err = new Error('brain artifact "a-missing" not found') as Error & { code: 'not-found' }
+    err.code = 'not-found'
+    const { dispatcher, approvals, responses } = makeDispatcher({
+      brainArtifactsShow: async () => { throw err },
+    })
+
+    await dispatcher.handleRequest({
+      type: 'request',
+      id: 'req-artifact-show',
+      method: 'brain.artifacts.show',
+      params: { workerId: 'w_test', id: 'a-missing' },
+    })
+
+    expect(responses).toHaveLength(1)
+    const frame = responses[0]!
+    expect(frame.ok).toBe(false)
+    if (!frame.ok)
+      expect(frame.error.code).toBe('not_found')
+    approvals.dispose()
+  })
+
+  it('brain.summary rejects workerId mismatch before invoking the handler', async () => {
+    let called = 0
+    const { dispatcher, approvals, responses } = makeDispatcher({
+      brainSummary: async () => {
+        called += 1
+        return {}
+      },
+    })
+
+    await dispatcher.handleRequest({
+      type: 'request',
+      id: 'req-brain-mismatch',
+      method: 'brain.summary',
+      params: { workerId: 'w_other' },
+    })
+
+    expect(called).toBe(0)
+    expect(responses[0]?.ok).toBe(false)
+    if (responses[0]?.ok === false)
+      expect(responses[0].error.code).toBe('worker_mismatch')
+    approvals.dispose()
+  })
+})
+
 /**
  * BUG-003 — config.put dispatcher 桥接：保证 handler 注入后不再 method_not_implemented，
  * 且 putConfig 抛的两个边界错（InvalidConfig / VersionConflict）映射到对应 wire code，
