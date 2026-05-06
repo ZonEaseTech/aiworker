@@ -1,8 +1,9 @@
 # PLAN-146 发布 aiworker CLI 0.9.6
 
-- **status**: implementing
+- **status**: completed
 - **createdAt**: 2026-05-07 00:49
 - **approvedAt**: 2026-05-07 00:49
+- **completedAt**: 2026-05-07 00:56
 - **relatedTask**: REL-022
 
 ## 现状
@@ -61,3 +62,8 @@
 ## 进度
 
 - 2026-05-07 00:49：PLAN-146 / REL-022 创建，开始 0.9.6 release gates。
+- 2026-05-07 00:56：`chore(release): 发布 CLI 0.9.6` 已推送到 `main`，
+  annotated tag `v0.9.6` 已推送；release workflow `25449077642` 成功；
+  `npm view @zonease/aiworker-cli version` 返回 `0.9.6`；指定版本 `bunx`
+  返回 `aiworker/0.9.6 ...`；GitHub Release `v0.9.6` 已上传 4 个平台
+  binary。
