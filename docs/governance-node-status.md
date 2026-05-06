@@ -1,4 +1,4 @@
-# Project Brain Governance Node — Status (2026-05-06)
+# Project Brain Governance Node — Status (2026-05-07)
 
 > Sanitized status snapshot. Companion artifact to `docs/architecture.md`'s
 > "Brain Governance Kernel 决策" section. Anchored to evidence in
@@ -25,12 +25,13 @@ inline.
 | Truthfulness contract (decision events expose `source` / `mode` / `evaluator` / `fallback`) | conforming | QA-009 / QA-010 / QA-011 — every `orchestrator.intent_decision`, `orchestrator.capability_decision`, `orchestrator.quality_gate` carries source-tagged truthfulness fields, persisted to `decision_pipeline_samples`. |
 | LLM bypass detection | conforming | QA-009 / QA-010 / QA-011 — assistants that claim admission was submitted while `brain_admission_proposals` shows no row trigger `brain.governance.bypass_suspected` events, asserted via the `admission claim vs DB` harness check. |
 | Executor session continuity (same `chat-id` continuation across both supported executors) | conforming | QA-009 / QA-010 / QA-011 — six same-`chat-id` turns produce one conversation row and 12 messages per pair; both Codex and Claude Code. |
+| Multi-conversation isolation across `chat-id` boundaries inside one worker | conforming in source | TODO-036 / PLAN-144 — source compact harness creates a distinct alternate `chat-id` per pair and asserts primary/alternate conversation ids are separate in `worker.db`; both compact pairs PASS. |
 | Executor tool-call observability | conforming for both engines | QA-009 / QA-010 / QA-011 — `orchestrator.tool_call` events emitted by Codex (28 typical) and Claude Code (7 typical); harness asserts non-zero on Codex and accepts emitted-or-not on Claude Code per executor contract. |
 | Risk-policy signal (high-risk verbs surface `risk=high`) | conforming | QA-009 / QA-010 / QA-011 — turn 4 high-risk prompt produces `orchestrator.intent_decision` with `risk=high` for both pairs. |
 | Worker REST surface auth boundary | conforming | QA-009 / QA-010 / QA-011 — `/health=200`, authenticated `/api/worker/info=200`, unauthenticated and bad-bearer `/api/worker/info=401`, `/api/worker/brain/summary=200`, OpenAPI path count > 0, SSE connects, `/admin/=200`. |
 | Operator-trust surfaces (init secret handling, doctor PASS/WARN/INFO consistency) | conforming | PLAN-119 implementation; QA-006 / QA-007 evidence; PLAN-112 doctor noise closeout. |
 | Onboarding polish (CLI command groups, executor recommendation, MCP arg passthrough) | conforming | PLAN-120 implementation; TODO-026 contract; BUG-051 / BUG-073 fixes. |
-| Regression validation (repeatable harness covering above invariants) | conforming | `scripts/governance-kernel-harness.ts` with 30 source-backed checks per pair; PLAN-127 (initial harness), PLAN-128 (positive roundtrip), PLAN-129 (reject + secret-scan-block), PLAN-130 (full 5×2 matrix evidence). |
+| Regression validation (repeatable harness covering above invariants) | conforming | `scripts/governance-kernel-harness.ts` with 35 source-backed checks per pair; PLAN-127 (initial harness), PLAN-128 (positive roundtrip), PLAN-129 (reject + secret-scan-block), PLAN-130 (full 5×2 matrix evidence), PLAN-144 (cross `chat-id` isolation). |
 | Soul-agnostic kernel (every Soul × executor satisfies same invariants) | conforming on source + published | QA-013 — full 5×2 matrix on source-local: 300 PASS / 0 FAIL / 0 SKIPPED; QA-014 — same matrix on `cli-release-local` 0.9.1: 300 PASS / 0 FAIL / 0 SKIPPED. |
 | Long-running `aiworker serve` REST multi-turn (orchestrator persistence + bearer auth) | conforming | QA-015 — POST /tasks unauth → 401, authenticated submit → 201 + agent_tasks.status=succeeded, POST /conversations/:id/messages → second task succeeded on same conversation, GET /conversations/:id/messages → ≥4 messages. Both pairs PASS. |
 
@@ -47,7 +48,9 @@ read as a stronger statement than the evidence supports.
   plugins, sandbox, approval, native session, auth, model/provider routing
   remain owned by the external executor. AIWorker's `executor-capabilities.json`
   is overlay/hint only. We do not claim isolation or canonical capability
-  source-of-truth.
+  source-of-truth. BUG-086 / PLAN-145 removed the Claude Code default model pin
+  so `claude-code/default` now uses the external CLI default unless the operator
+  explicitly configures a model hint.
 - **Materializer scope**: only `kind=memory-add` is materialized. Other
   proposal kinds emit `unsupported` outcomes and write a `failed` decision
   row. Rollback after `apply --commit` is not implemented in the materializer
@@ -66,9 +69,6 @@ read as a stronger statement than the evidence supports.
   `packages/core/src/worker/brain/admission/service.test.ts` but are not in
   the harness, since the regression risk is at the CLI surface for the
   default `block` policy.
-- **Multi-conversation isolation across `chat-id` boundaries inside one
-  worker**: implicitly relied on by the prompts file but not asserted by a
-  dedicated check.
 - **Worker process restart between turns**: each `aiworker run` invocation is
   a fresh process; the long-lived `aiworker serve` orchestrator is now
   exercised via the multi-turn REST block (QA-015). Cross-restart of the
@@ -99,6 +99,12 @@ read as a stronger statement than the evidence supports.
 - `docs/task/BUG-085.md` / `docs/plan/PLAN-143.md` — pre-compaction generated
   memory no-direct-write fix; focused source tests assert pending admission
   proposal creation and no canonical memory write.
+- `docs/task/TODO-036.md` / `docs/plan/PLAN-144.md` — cross `chat-id`
+  isolation check added to the Governance Kernel harness; final source compact
+  run passed 70 / 70 checks.
+- `docs/task/BUG-086.md` / `docs/plan/PLAN-145.md` — Claude Code default
+  profile no longer forces a volatile model alias; model/provider routing
+  remains executor-owned by default.
 - `docs/architecture.md` — canonical Brain Governance Kernel decision and
   ownership table.
 - `scripts/governance-kernel-harness.ts` — repeatable harness; the canonical

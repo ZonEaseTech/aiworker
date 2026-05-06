@@ -1,5 +1,21 @@
 # AIWorker Changelog
 
+## 2026-05-07 00:30 [completed] TODO-036 / PLAN-144 + BUG-086 / PLAN-145 — Worker governance harness isolation and executor-owned Claude model
+
+Continued the lightweight Brain direction by improving verification rather
+than adding Brain domain logic:
+
+- Governance Kernel harness now creates an alternate `chat-id` per pair and
+  asserts primary/alternate conversation separation directly in `worker.db`.
+- Fixed a source compact failure where `claude-code/default` forced
+  `--model sonnet`; Claude Code default now leaves model/provider routing to
+  the external CLI unless the operator explicitly configures a model hint.
+- Worker Admin copy and executor engine docs now describe Claude Code default
+  as CLI-owned instead of Sonnet-owned.
+- Verification passed: focused executor profile tests, Claude Code adapter
+  tests, repository lint/typecheck/test, and source compact Governance Kernel
+  harness (`tmp/governance-kernel-plan144-source-3`, 70 PASS / 0 FAIL).
+
 ## 2026-05-06 23:55 [completed] BUG-085 / PLAN-143 — Pre-compaction memory through admission
 
 Closed the last known generated durable Brain memory bypass in session

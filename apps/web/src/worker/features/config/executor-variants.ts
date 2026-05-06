@@ -168,8 +168,8 @@ export const ENGINE_CATALOG: Record<EngineKind, EngineMeta> = {
     description: 'Anthropic Claude Code CLI in stream-json mode (FEAT-012).',
     variants: {
       'default': {
-        label: 'Default (sonnet)',
-        description: 'Auto-approve, sonnet model, 120s turn timeout.',
+        label: 'Default',
+        description: 'Auto-approve, CLI default model, 120s turn timeout.',
         schema: claudeCodeVariantSchema,
         fieldHints: { model: CLAUDE_CODE_MODELS },
       },

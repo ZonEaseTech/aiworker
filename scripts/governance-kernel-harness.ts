@@ -1156,6 +1156,61 @@ async function runPair(
     })
   }
 
+  const dbPath = path.join(projectDir, '.aiworker/local/worker.db')
+  const alternateChatId = `gk:${pairId}:alt:${Date.now()}`
+  const alternate = runAiworker(options.debugRoot, product, `${pairId}-alternate-chat-id`, [
+    'run',
+    '--message',
+    `Cross chat-id isolation probe for ${pairId}: this is a distinct conversation. Do not use the primary marker ${marker}; just confirm this alternate chat is isolated.`,
+    '--chat-id',
+    alternateChatId,
+    '--timeout-ms',
+    String(options.timeoutMs),
+  ], {
+    cwd: projectDir,
+    env,
+    timeoutMs: options.timeoutMs + 15_000,
+  })
+  const alternateEvents = readJsonEvents(alternate.logPath)
+  const alternateFinished = alternateEvents.some(event => event.type === 'orchestrator.finished')
+  const primaryConversationIds = sqlite(
+    options.debugRoot,
+    dbPath,
+    `${pairId}-db-primary-chat-conversation-ids`,
+    `SELECT id FROM conversations WHERE chat_id = ${sqlString(chatId)} ORDER BY started_at;`,
+  )
+  const alternateConversationIds = sqlite(
+    options.debugRoot,
+    dbPath,
+    `${pairId}-db-alternate-chat-conversation-ids`,
+    `SELECT id FROM conversations WHERE chat_id = ${sqlString(alternateChatId)} ORDER BY started_at;`,
+  )
+  const alternateMessageCount = sqlite(
+    options.debugRoot,
+    dbPath,
+    `${pairId}-db-alternate-chat-message-count`,
+    `SELECT count(*) FROM messages WHERE conversation_id IN (SELECT id FROM conversations WHERE chat_id = ${sqlString(alternateChatId)});`,
+  )
+  const primaryIds = primaryConversationIds.stdout.trim().split('\n').filter(Boolean)
+  const alternateIds = alternateConversationIds.stdout.trim().split('\n').filter(Boolean)
+  const alternateMessages = numberFromOutput(alternateMessageCount)
+  checks.push({
+    detail: `alternate exit=${alternate.code}, finished=${alternateFinished}, db query exits=${primaryConversationIds.code}/${alternateConversationIds.code}/${alternateMessageCount.code}, primary conversations=${primaryIds.length}, alternate conversations=${alternateIds.length}, separate=${primaryIds[0] !== alternateIds[0]}, alternate messages=${alternateMessages}`,
+    evidence: `${alternate.logPath}; ${primaryConversationIds.logPath}; ${alternateConversationIds.logPath}; ${alternateMessageCount.logPath}`,
+    name: `${pairId} cross chat-id isolation DB`,
+    status: alternate.code === 0
+      && alternateFinished
+      && primaryConversationIds.code === 0
+      && alternateConversationIds.code === 0
+      && alternateMessageCount.code === 0
+      && primaryIds.length === 1
+      && alternateIds.length === 1
+      && primaryIds[0] !== alternateIds[0]
+      && alternateMessages >= 2
+      ? 'pass'
+      : 'fail',
+  })
+
   const direct = writeFixtureFiles(projectDir, pairId, pair.soul)
   const directProposal = runAiworker(options.debugRoot, product, `${pairId}-direct-admission-propose`, [
     'brain',
@@ -1193,7 +1248,6 @@ async function runPair(
     status: directProposal.code === 0 ? 'pass' : 'fail',
   })
 
-  const dbPath = path.join(projectDir, '.aiworker/local/worker.db')
   const conversationCount = sqlite(
     options.debugRoot,
     dbPath,

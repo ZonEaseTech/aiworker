@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-06 (BUG-085 completed)
+> Updated: 2026-05-07 (TODO-036 / BUG-086 completed)
 
 ## Usage
 
@@ -252,3 +252,5 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REL-021 发布 aiworker CLI 0.9.5**](REL-021.md) `P1`
 - [x] [**BUG-084 Docker image build still assumes removed apps/gateway package**](BUG-084.md) `P1`
 - [x] [**BUG-085 Pre-compaction memory flush bypasses Brain admission**](BUG-085.md) `P1`
+- [x] [**TODO-036 Add cross chat-id isolation coverage to Governance Kernel harness**](TODO-036.md) `P2`
+- [x] [**BUG-086 Claude Code default profile forces a volatile model alias**](BUG-086.md) `P2`

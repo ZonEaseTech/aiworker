@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-06 (PLAN-143 completed)
+> Updated: 2026-05-07 (PLAN-144 / PLAN-145 completed)
 
 ## Usage
 
@@ -172,3 +172,5 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-141 发布 aiworker CLI 0.9.5**](PLAN-141.md) `2026-05-06`
 - [x] [**PLAN-142 Docker image gateway path correction**](PLAN-142.md) `2026-05-06`
 - [x] [**PLAN-143 Route pre-compaction memory flush through Brain admission**](PLAN-143.md) `2026-05-06`
+- [x] [**PLAN-144 Governance harness cross chat-id isolation coverage**](PLAN-144.md) `2026-05-07`
+- [x] [**PLAN-145 Claude Code default model belongs to the external CLI**](PLAN-145.md) `2026-05-07`

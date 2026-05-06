@@ -85,7 +85,6 @@ export const DEFAULT_PROFILES: {
   'claude-code': {
     variants: {
       'default': {
-        model: 'sonnet',
         contextWindowTokens: 200_000,
         timeoutMs: 120_000,
       } satisfies ClaudeCodeVariantBody,

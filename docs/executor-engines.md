@@ -120,6 +120,10 @@ doctor` 输出为准。
   1. Dockerfile 里 `RUN npm i -g @anthropic-ai/claude-code@<v>`
   2. 启动脚本判断 `$ANTHROPIC_API_KEY` 或挂载宿主 `~/.claude.json` 到容器
      `/root/.claude.json`（目录权限 `600`）。
+- **默认模型**：`claude-code/default` 不主动传 `--model`，让 Claude Code
+  使用当前 operator account / host config 的 engine-native 默认模型。只有
+  operator 显式配置 `model` / `modelId` 时，AIWorker 才把它作为 best-effort
+  hint 转发给 CLI；这不是 AIWorker 的模型兼容性来源。
 
 ## acp <a id="acp"></a>
 

@@ -63,6 +63,11 @@ describe('resolveVariant', () => {
     expect(r.permissionPolicy).toBe('plan')
   })
 
+  it('leaves claude-code default model to the external CLI', () => {
+    const r = resolveVariant({ engine: 'claude-code', variant: 'default' })
+    expect((r.body as { model?: string }).model).toBeUndefined()
+  })
+
   it('throws on unknown engine', () => {
     expect(() => resolveVariant({ engine: 'nope' as never, variant: 'default' })).toThrow(/unknown executor engine/)
   })
