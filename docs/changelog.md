@@ -1,6 +1,6 @@
 # AIWorker Changelog
 
-## 2026-05-06 [pending] REL-018 / PLAN-132 — 发布 aiworker CLI 0.9.2
+## 2026-05-06 09:54 [completed] REL-018 / PLAN-132 — 发布 aiworker CLI 0.9.2
 
 发布 `@zonease/aiworker-cli@0.9.2`，作为 0.9.1 之后的 patch release，
 标记 Brain Governance Kernel 回归 harness 在源码与已发布 CLI 双侧的
