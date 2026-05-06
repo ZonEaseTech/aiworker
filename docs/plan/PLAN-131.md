@@ -1,7 +1,9 @@
 # PLAN-131 Governance Kernel harness — full 5×2 matrix on cli-release-local
 
-- **status**: pending
+- **status**: completed
 - **createdAt**: 2026-05-06 09:05
+- **approvedAt**: 2026-05-06 09:05
+- **completedAt**: 2026-05-06 09:46
 - **relatedTask**: TODO-034
 
 ## Context
@@ -59,3 +61,6 @@ QA-009 / QA-011 / QA-012 each ran two pairs against
 - 2026-05-06 09:05: Approved under the active Project Brain governance
   objective. Verification-only run; no product behavior or release-only
   paths touched.
+- 2026-05-06 09:46: Completed. Full 5×2 matrix on cli-release-local 0.9.1:
+  10 pairs, 30 source-backed checks each, 300 PASS / 0 FAIL / 0 SKIPPED.
+  Evidence in QA-014.

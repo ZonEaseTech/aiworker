@@ -1,9 +1,11 @@
 # TODO-034 Run Governance Kernel harness against the full 5×2 matrix on `cli-release-local`
 
-- **status**: pending
+- **status**: completed
 - **priority**: P2
 - **owner**: local
 - **createdAt**: 2026-05-06 09:05
+- **claimedAt**: 2026-05-06 09:05
+- **completedAt**: 2026-05-06 09:46
 - **plan**: PLAN-131
 - **sourceObjective**: Project Brain governance node closeout — Soul-agnostic
   kernel claim must hold on the published CLI as well as source
@@ -38,3 +40,6 @@ Run the harness with `--mode cli-release-local --version 0.9.1
 
 - 2026-05-06 09:05: Opened to extend the Soul-agnostic kernel proof from
   source-local to the published 0.9.1 CLI. PLAN-131 carries the run.
+- 2026-05-06 09:46: Completed under PLAN-131. Full 5×2 matrix on
+  `cli-release-local` produced 300 PASS / 0 FAIL / 0 SKIPPED. Evidence in
+  QA-014.

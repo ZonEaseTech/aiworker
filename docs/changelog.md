@@ -1,5 +1,16 @@
 # AIWorker Changelog
 
+## 2026-05-06 09:46 [completed] TODO-034 / PLAN-131 / QA-014 — Soul-agnostic Governance Kernel full 5×2 matrix on cli-release-local
+
+`cli-release-local --version 0.9.1 --matrix full` 跑完 5 Soul × 2 executor
+共 10 对，每对 30 项 source-backed 检查，总计 300 PASS / 0 FAIL / 0 SKIPPED。
+
+- 证据根目录：`/home/ben/projects/debug-aiworker/qa-2026-05-06-governance-full-cli`。
+- Soul-agnostic Brain Governance Kernel 现在在源码（QA-013）与已发布
+  `@zonease/aiworker-cli@0.9.1`（QA-014）两侧都有 full-matrix 证据。
+- `docs/governance-node-status.md` 同步把 Soul-agnostic 行升级为
+  "conforming on source + published"。
+
 ## 2026-05-06 09:01 [completed] TODO-033 / PLAN-130 / QA-013 — Soul-agnostic Governance Kernel full 5×2 matrix evidence
 
 `worker-source-local --matrix full` 一次性跑完 5 Soul × 2 executor 共 10 对，

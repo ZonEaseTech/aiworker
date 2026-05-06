@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-06 (QA-013 full 5×2 matrix evidence completed)
+> Updated: 2026-05-06 (QA-014 full 5×2 matrix on cli-release-local completed)
 
 ## Usage
 
@@ -236,5 +236,5 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**QA-012 Governance Kernel harness — reject and secret-scan-block evidence**](QA-012.md) `P1`
 - [x] [**TODO-033 Run Governance Kernel harness against the full 5×2 matrix**](TODO-033.md) `P2`
 - [x] [**QA-013 Governance Kernel harness — full 5×2 matrix evidence**](QA-013.md) `P1`
-- [-] [**TODO-034 Run Governance Kernel harness against the full 5×2 matrix on `cli-release-local`**](TODO-034.md) `P2`
-- [ ] [**QA-014 Governance Kernel harness — full 5×2 matrix on cli-release-local**](QA-014.md) `P1`
+- [x] [**TODO-034 Run Governance Kernel harness against the full 5×2 matrix on `cli-release-local`**](TODO-034.md) `P2`
+- [x] [**QA-014 Governance Kernel harness — full 5×2 matrix on cli-release-local**](QA-014.md) `P1`

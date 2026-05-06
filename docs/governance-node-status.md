@@ -30,7 +30,7 @@ inline.
 | Operator-trust surfaces (init secret handling, doctor PASS/WARN/INFO consistency) | conforming | PLAN-119 implementation; QA-006 / QA-007 evidence; PLAN-112 doctor noise closeout. |
 | Onboarding polish (CLI command groups, executor recommendation, MCP arg passthrough) | conforming | PLAN-120 implementation; TODO-026 contract; BUG-051 / BUG-073 fixes. |
 | Regression validation (repeatable harness covering above invariants) | conforming | `scripts/governance-kernel-harness.ts` with 30 source-backed checks per pair; PLAN-127 (initial harness), PLAN-128 (positive roundtrip), PLAN-129 (reject + secret-scan-block), PLAN-130 (full 5×2 matrix evidence). |
-| Soul-agnostic kernel (every Soul × executor satisfies same invariants) | conforming | QA-013 — full 5×2 matrix on source-local: 10 pairs (5 Souls × 2 executors), 30 checks each, 300 PASS / 0 FAIL / 0 SKIPPED. |
+| Soul-agnostic kernel (every Soul × executor satisfies same invariants) | conforming on source + published | QA-013 — full 5×2 matrix on source-local: 300 PASS / 0 FAIL / 0 SKIPPED; QA-014 — same matrix on `cli-release-local` 0.9.1: 300 PASS / 0 FAIL / 0 SKIPPED. |
 
 ## Boundary and residual risk
 
@@ -85,7 +85,11 @@ read as a stronger statement than the evidence supports.
   negative-path checks PASS.
 - `docs/task/QA-013.md` — Full 5×2 matrix evidence on source-local: 10
   pairs × 30 checks = 300 PASS / 0 FAIL / 0 SKIPPED, proving the
-  Soul-agnostic kernel claim for every Soul on every supported executor.
+  Soul-agnostic kernel claim for every Soul on every supported executor on
+  the source build.
+- `docs/task/QA-014.md` — Full 5×2 matrix evidence on `cli-release-local`
+  0.9.1: 300 PASS / 0 FAIL / 0 SKIPPED, extending the Soul-agnostic kernel
+  claim to the published CLI.
 - `docs/architecture.md` — canonical Brain Governance Kernel decision and
   ownership table.
 - `scripts/governance-kernel-harness.ts` — repeatable harness; the canonical
