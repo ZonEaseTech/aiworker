@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-06 (PLAN-129 reject + secret-scan-block coverage completed)
+> Updated: 2026-05-06 (PLAN-130 full 5×2 matrix run completed)
 
 ## Usage
 
@@ -158,3 +158,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-127 Governance Kernel regression harness**](PLAN-127.md) `2026-05-06`
 - [x] [**PLAN-128 Governance Kernel harness — admission roundtrip evidence**](PLAN-128.md) `2026-05-06`
 - [x] [**PLAN-129 Governance Kernel harness — reject and secret-scan-block coverage**](PLAN-129.md) `2026-05-06`
+- [x] [**PLAN-130 Governance Kernel harness — full 5×2 matrix run**](PLAN-130.md) `2026-05-06`

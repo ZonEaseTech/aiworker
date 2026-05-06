@@ -29,7 +29,8 @@ inline.
 | Worker REST surface auth boundary | conforming | QA-009 / QA-010 / QA-011 — `/health=200`, authenticated `/api/worker/info=200`, unauthenticated and bad-bearer `/api/worker/info=401`, `/api/worker/brain/summary=200`, OpenAPI path count > 0, SSE connects, `/admin/=200`. |
 | Operator-trust surfaces (init secret handling, doctor PASS/WARN/INFO consistency) | conforming | PLAN-119 implementation; QA-006 / QA-007 evidence; PLAN-112 doctor noise closeout. |
 | Onboarding polish (CLI command groups, executor recommendation, MCP arg passthrough) | conforming | PLAN-120 implementation; TODO-026 contract; BUG-051 / BUG-073 fixes. |
-| Regression validation (repeatable harness covering above invariants) | conforming | `scripts/governance-kernel-harness.ts` with 50 source-backed checks per pair; PLAN-127 (initial harness), PLAN-128 (positive roundtrip), PLAN-129 (reject + secret-scan-block). |
+| Regression validation (repeatable harness covering above invariants) | conforming | `scripts/governance-kernel-harness.ts` with 30 source-backed checks per pair; PLAN-127 (initial harness), PLAN-128 (positive roundtrip), PLAN-129 (reject + secret-scan-block), PLAN-130 (full 5×2 matrix evidence). |
+| Soul-agnostic kernel (every Soul × executor satisfies same invariants) | conforming | QA-013 — full 5×2 matrix on source-local: 10 pairs (5 Souls × 2 executors), 30 checks each, 300 PASS / 0 FAIL / 0 SKIPPED. |
 
 ## Boundary and residual risk
 
@@ -52,10 +53,12 @@ read as a stronger statement than the evidence supports.
 - **Soul / scope cross-contamination**: Project Brain memory is per-scope on
   the filesystem, not enforced by hard logic at runtime. The harness uses
   one scope per pair; it does not test cross-scope isolation.
-- **Compact harness matrix**: PLAN-127's compact matrix uses
-  `developer + codex/default` and `general-assistant + claude-code/default`.
-  The full 5 Soul × 2 executor matrix is supported by `--matrix full` but is
-  not the default; environment-limited skips are recorded explicitly.
+- **Compact harness matrix as the recurring default**: PLAN-127's compact
+  matrix uses `developer + codex/default` and
+  `general-assistant + claude-code/default`. Compact remains the default for
+  routine repeatable runs because the full matrix is heavier. The full 5 ×
+  2 matrix has been run once on source-local (QA-013); compact + occasional
+  full is the recommended cadence.
 - **Secret-body redact / raw paths**: `--allow-secret-body redact` and
   `--allow-secret-body raw` are unit-tested in
   `packages/core/src/worker/brain/admission/service.test.ts` but are not in
@@ -80,6 +83,9 @@ read as a stronger statement than the evidence supports.
 - `docs/task/QA-012.md` — Admission negative paths (reject +
   secret-scan-block) evidence, source + `cli-release-local` 0.9.1, all 8 new
   negative-path checks PASS.
+- `docs/task/QA-013.md` — Full 5×2 matrix evidence on source-local: 10
+  pairs × 30 checks = 300 PASS / 0 FAIL / 0 SKIPPED, proving the
+  Soul-agnostic kernel claim for every Soul on every supported executor.
 - `docs/architecture.md` — canonical Brain Governance Kernel decision and
   ownership table.
 - `scripts/governance-kernel-harness.ts` — repeatable harness; the canonical
