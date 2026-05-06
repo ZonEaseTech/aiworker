@@ -1,5 +1,26 @@
 # AIWorker Changelog
 
+## 2026-05-06 05:58 [completed] QA-008 / PLAN-126 — CLI 0.9.1 `cli-release-local` validation recorded
+
+按 canonical `aiworker-validate` 的 `cli-release-local` mode 完成并落盘一次
+`@zonease/aiworker-cli@0.9.1` 已发布包本地黑盒验证。产品被测对象是隔离 npm
+安装路径下的发布包，不是当前源码 checkout。
+
+- Evidence root:
+  `/home/ben/projects/debug-aiworker/qa-2026-05-06-cli-0.9.1`。
+- Isolated CLI version:
+  `aiworker/0.9.1 linux-x64 node-v24.3.0`。
+- `developer` + `codex/default`：fresh init、executor doctor、doctor、
+  brain status、single run、8-turn continuity run、DB/filesystem assertions
+  全部通过。
+- `general-assistant` + `claude-code/default`：fresh init、executor doctor、
+  doctor、brain status、single run 全部通过。
+- Worker REST/SSE：`runtimeVersion: "0.9.1"`、未授权 info=401、授权 info /
+  brain summary / OpenAPI task/conversation/event routes / SSE connection
+  验证通过。
+- Serve cleanup：进程已退出，端口 `19391` 已释放。
+- 未确认新产品缺陷；未修改源码。
+
 ## 2026-05-06 04:25 [completed] TODO-030 / PLAN-125 — AIWorker testing skill consolidation
 
 新增 canonical `aiworker-validate` skill，把标准验证入口收口成四个 mode：`fleet-remote`（远端 fleet/gateway/Fleet UI/挂载 worker E2E）、`worker-source-local`（本地源码版本 worker 验证）、`cli-release-local`（本地已发版 CLI 黑盒验证）、`coder-claude-code`（远端 Coder + Claude Code executor 验证）。

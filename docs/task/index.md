@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-06 (REL-017 completed CLI 0.9.1 release)
+> Updated: 2026-05-06 (QA-008 recorded CLI 0.9.1 cli-release-local validation)
 
 ## Usage
 
@@ -227,3 +227,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**TODO-029 Tune brain.governance.bypass_suspected heuristic to avoid noisy false positives**](TODO-029.md) `P3`
 - [x] [**REL-017 发布 aiworker CLI 0.9.1**](REL-017.md) `P1`
 - [x] [**TODO-030 Consolidate AIWorker validation skills into one entrypoint**](TODO-030.md) `P2`
+- [x] [**QA-008 0.9.1 published CLI `cli-release-local` validation**](QA-008.md) `P1`
