@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-07 (REL-022 completed)
+> Updated: 2026-05-07 (TODO-037 / QA-016 completed)
 
 ## Usage
 
@@ -255,3 +255,5 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**TODO-036 Add cross chat-id isolation coverage to Governance Kernel harness**](TODO-036.md) `P2`
 - [x] [**BUG-086 Claude Code default profile forces a volatile model alias**](BUG-086.md) `P2`
 - [x] [**REL-022 发布 aiworker CLI 0.9.6**](REL-022.md) `P1`
+- [x] [**TODO-037 Harness — serve process restart continuity regression**](TODO-037.md) `P2`
+- [x] [**QA-016 Governance Kernel harness — serve process restart continuity evidence**](QA-016.md) `P1`

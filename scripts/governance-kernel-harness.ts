@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { Buffer } from 'node:buffer'
 import { spawn, spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 
@@ -81,6 +81,19 @@ interface RestEvidence {
   openapiPathCount: number
   sseConnected: boolean
   unauthInfoStatus: number
+}
+
+interface ServeHandle {
+  chunks: Buffer[]
+  logPath: string
+  process: ReturnType<typeof spawn>
+  wroteLog: boolean
+}
+
+interface ServeRestartResult {
+  detail: string
+  evidence: string
+  status: CheckStatus
 }
 
 const PACKAGE_NAME = '@zonease/aiworker-cli'
@@ -525,6 +538,22 @@ async function waitForHealth(port: number, timeoutMs: number): Promise<boolean> 
   return false
 }
 
+async function waitForHealthDown(port: number, timeoutMs: number): Promise<boolean> {
+  const started = Date.now()
+  while (Date.now() - started < timeoutMs) {
+    try {
+      const response = await fetch(`http://127.0.0.1:${port}/health`)
+      if (response.status !== 200)
+        return true
+    }
+    catch {
+      return true
+    }
+    await Bun.sleep(250)
+  }
+  return false
+}
+
 async function readSse(port: number, token: string): Promise<boolean> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 3_000)
@@ -549,6 +578,68 @@ async function readSse(port: number, token: string): Promise<boolean> {
   }
 }
 
+function launchServe(args: {
+  env: NodeJS.ProcessEnv
+  label: string
+  pairId: string
+  pidFile: string
+  port: number
+  product: AiworkerCommand
+  projectDir: string
+  runDir: string
+}): ServeHandle {
+  const logName = args.label === 'primary'
+    ? `${args.pairId}-serve.log`
+    : `${args.pairId}-serve-${args.label}.log`
+  const logPath = path.join(args.runDir, logName)
+  rmSync(args.pidFile, { force: true })
+  const serve = spawn(args.product.command, [
+    ...args.product.argsPrefix,
+    'serve',
+    '--host',
+    '127.0.0.1',
+    '--port',
+    String(args.port),
+    '--no-open',
+    '--pid-file',
+    args.pidFile,
+  ], {
+    cwd: args.projectDir,
+    env: args.env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  const chunks: Buffer[] = []
+  serve.stdout.on('data', chunk => chunks.push(Buffer.from(chunk)))
+  serve.stderr.on('data', chunk => chunks.push(Buffer.from(chunk)))
+  return {
+    chunks,
+    logPath,
+    process: serve,
+    wroteLog: false,
+  }
+}
+
+async function stopServe(handle: ServeHandle, port: number): Promise<{ logPath: string, stopped: boolean }> {
+  if (handle.process.exitCode === null)
+    handle.process.kill('SIGTERM')
+
+  let stopped = await waitForHealthDown(port, 5_000)
+  if (!stopped && handle.process.exitCode === null) {
+    handle.process.kill('SIGKILL')
+    stopped = await waitForHealthDown(port, 5_000)
+  }
+
+  if (!handle.wroteLog) {
+    writeFileSync(handle.logPath, redact(Buffer.concat(handle.chunks).toString('utf8')), 'utf8')
+    handle.wroteLog = true
+  }
+
+  return {
+    logPath: handle.logPath,
+    stopped,
+  }
+}
+
 async function restSmoke(
   debugRoot: string,
   product: AiworkerCommand,
@@ -559,34 +650,25 @@ async function restSmoke(
 ): Promise<{ checks: HarnessCheck[], evidence?: RestEvidence }> {
   const runDir = path.join(debugRoot, 'run')
   ensureDir(runDir)
-  const serveLog = path.join(runDir, `${pairId}-serve.log`)
   const pidFile = path.join(runDir, `${pairId}.pid`)
-  const serve = spawn(product.command, [
-    ...product.argsPrefix,
-    'serve',
-    '--host',
-    '127.0.0.1',
-    '--port',
-    String(port),
-    '--no-open',
-    '--pid-file',
-    pidFile,
-  ], {
-    cwd: projectDir,
+  let serve = launchServe({
     env,
-    stdio: ['ignore', 'pipe', 'pipe'],
+    label: 'primary',
+    pairId,
+    pidFile,
+    port,
+    product,
+    projectDir,
+    runDir,
   })
-  const chunks: Buffer[] = []
-  serve.stdout.on('data', chunk => chunks.push(Buffer.from(chunk)))
-  serve.stderr.on('data', chunk => chunks.push(Buffer.from(chunk)))
 
   const checks: HarnessCheck[] = []
   try {
     const healthy = await waitForHealth(port, 15_000)
     if (!healthy) {
       checks.push({
-        detail: `serve did not expose /health before timeout; log ${serveLog}`,
-        evidence: serveLog,
+        detail: `serve did not expose /health before timeout; log ${serve.logPath}`,
+        evidence: serve.logPath,
         name: `${pairId} REST health`,
         status: 'fail',
       })
@@ -665,12 +747,11 @@ async function restSmoke(
       status: admin.status === 200 ? 'pass' : 'fail',
     })
 
-    // PLAN-133: long-running serve REST multi-turn regression. The existing
+    // PLAN-147: serve REST multi-turn restart regression. The existing
     // GETs above prove the auth boundary and read-side surface; this block
-    // exercises the orchestrator submit / continue / read sequence within
-    // the same long-lived serve process so admission + conversation +
-    // chat-id continuity are validated through the production REST surface,
-    // not just the per-turn `aiworker run` CLI invocation.
+    // now restarts `aiworker serve` between submit and continue so admission
+    // + conversation + chat-id continuity are validated through persisted
+    // worker state, not just an in-memory orchestrator or per-turn CLI run.
     const dbPath = path.join(projectDir, '.aiworker/local/worker.db')
     const restMultiChecks = await runRestMultiTurnRegression({
       debugRoot,
@@ -678,18 +759,40 @@ async function restSmoke(
       port,
       token,
       dbPath,
+      restartServe: async () => {
+        const stopped = await stopServe(serve, port)
+        if (!stopped.stopped) {
+          return {
+            detail: 'pre-restart serve process did not release /health before timeout',
+            evidence: stopped.logPath,
+            status: 'fail',
+          }
+        }
+
+        serve = launchServe({
+          env,
+          label: 'restart',
+          pairId,
+          pidFile,
+          port,
+          product,
+          projectDir,
+          runDir,
+        })
+        const restarted = await waitForHealth(port, 15_000)
+        return {
+          detail: `pre-restart stopped=${stopped.stopped}, restarted health=${restarted}`,
+          evidence: `${stopped.logPath}; ${serve.logPath}`,
+          status: restarted ? 'pass' : 'fail',
+        }
+      },
     })
     checks.push(...restMultiChecks)
 
     return { checks, evidence }
   }
   finally {
-    if (!serve.killed)
-      serve.kill('SIGTERM')
-    await Bun.sleep(500)
-    if (serve.exitCode === null && !serve.killed)
-      serve.kill('SIGKILL')
-    writeFileSync(serveLog, redact(Buffer.concat(chunks).toString('utf8')), 'utf8')
+    await stopServe(serve, port)
   }
 }
 
@@ -719,6 +822,7 @@ interface RestMultiTurnArgs {
   debugRoot: string
   pairId: string
   port: number
+  restartServe: () => Promise<ServeRestartResult>
   token: string
   dbPath: string
 }
@@ -741,7 +845,7 @@ async function runRestMultiTurnRegression(args: RestMultiTurnArgs): Promise<Harn
 
   // 2. Authenticated submit: /tasks → returns task id; orchestrator drives it
   // to `succeeded` and writes a conversation row.
-  const probe1 = `Long-running serve REST probe for ${pairId} turn 1: state your Soul id and confirm the long-lived orchestrator is the producer.`
+  const probe1 = `Serve restart REST probe for ${pairId} turn 1: state your Soul id before the worker process restart.`
   const submitResp = await fetchPostJson(`${baseUrl}/tasks`, { prompt: probe1 }, {
     headers: { Authorization: `Bearer ${token}` },
     timeoutMs: 15_000,
@@ -774,8 +878,20 @@ async function runRestMultiTurnRegression(args: RestMultiTurnArgs): Promise<Harn
 
   const conversationId = await1.conversationId
 
-  // 3. Authenticated continue on same conversation id.
-  const probe2 = `Long-running serve REST probe for ${pairId} turn 2: confirm you remember the previous turn within this conversation.`
+  // 3. Restart the serve process, then continue on the same persisted
+  // conversation id. This proves continuity is backed by worker.db rather
+  // than only by the live orchestrator process.
+  const restart = await args.restartServe()
+  checks.push({
+    detail: restart.detail,
+    evidence: restart.evidence,
+    name: `${pairId} REST serve restart continuity setup`,
+    status: restart.status,
+  })
+  if (restart.status !== 'pass')
+    return checks
+
+  const probe2 = `Serve restart REST probe for ${pairId} turn 2: continue this same conversation after the worker process restarted.`
   const continueResp = await fetchPostJson(`${baseUrl}/conversations/${conversationId}/messages`, { prompt: probe2 }, {
     headers: { Authorization: `Bearer ${token}` },
     timeoutMs: 15_000,

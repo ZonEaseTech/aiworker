@@ -1,5 +1,21 @@
 # AIWorker Changelog
 
+## 2026-05-07 01:12 [completed] TODO-037 / PLAN-147 — Serve process restart continuity harness
+
+Closed the remaining worker-only Governance Kernel harness gap around
+`aiworker serve` process restart between REST turns:
+
+- `scripts/governance-kernel-harness.ts` now stops the active `serve` process
+  after REST turn 1, waits for `/health` to go down, relaunches `serve` on
+  the same project/port, and then continues the same conversation id.
+- Added one explicit check per compact pair:
+  `REST serve restart continuity setup`.
+- `docs/governance-node-status.md` now marks serve process restart between
+  REST turns as conforming in source and removes it from residual risks.
+- Validation passed: `--help`, lint, Bun bundle check, and source-local
+  compact Governance Kernel harness
+  (`tmp/governance-kernel-plan147-source`, 72 PASS / 0 FAIL / 0 SKIPPED).
+
 ## 2026-05-07 00:49 [completed] REL-022 / PLAN-146 — 发布 aiworker CLI 0.9.6
 
 准备发布 `@zonease/aiworker-cli@0.9.6`，作为 0.9.5 之后的 patch release，

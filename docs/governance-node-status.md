@@ -31,9 +31,10 @@ inline.
 | Worker REST surface auth boundary | conforming | QA-009 / QA-010 / QA-011 — `/health=200`, authenticated `/api/worker/info=200`, unauthenticated and bad-bearer `/api/worker/info=401`, `/api/worker/brain/summary=200`, OpenAPI path count > 0, SSE connects, `/admin/=200`. |
 | Operator-trust surfaces (init secret handling, doctor PASS/WARN/INFO consistency) | conforming | PLAN-119 implementation; QA-006 / QA-007 evidence; PLAN-112 doctor noise closeout. |
 | Onboarding polish (CLI command groups, executor recommendation, MCP arg passthrough) | conforming | PLAN-120 implementation; TODO-026 contract; BUG-051 / BUG-073 fixes. |
-| Regression validation (repeatable harness covering above invariants) | conforming | `scripts/governance-kernel-harness.ts` with 35 source-backed checks per pair; PLAN-127 (initial harness), PLAN-128 (positive roundtrip), PLAN-129 (reject + secret-scan-block), PLAN-130 (full 5×2 matrix evidence), PLAN-144 (cross `chat-id` isolation). |
+| Regression validation (repeatable harness covering above invariants) | conforming | `scripts/governance-kernel-harness.ts` with 36 source-backed compact checks per pair; PLAN-127 (initial harness), PLAN-128 (positive roundtrip), PLAN-129 (reject + secret-scan-block), PLAN-130 (full 5×2 matrix evidence), PLAN-144 (cross `chat-id` isolation), PLAN-147 (serve process restart continuity). |
 | Soul-agnostic kernel (every Soul × executor satisfies same invariants) | conforming on source + published | QA-013 — full 5×2 matrix on source-local: 300 PASS / 0 FAIL / 0 SKIPPED; QA-014 — same matrix on `cli-release-local` 0.9.1: 300 PASS / 0 FAIL / 0 SKIPPED. |
 | Long-running `aiworker serve` REST multi-turn (orchestrator persistence + bearer auth) | conforming | QA-015 — POST /tasks unauth → 401, authenticated submit → 201 + agent_tasks.status=succeeded, POST /conversations/:id/messages → second task succeeded on same conversation, GET /conversations/:id/messages → ≥4 messages. Both pairs PASS. |
+| Serve process restart between REST turns | conforming in source | QA-016 / PLAN-147 — source compact harness stops `aiworker serve` after REST turn 1, verifies `/health` goes down, relaunches on the same project/port, then continues the same conversation id; both compact pairs PASS. |
 
 ## Boundary and residual risk
 
@@ -69,11 +70,6 @@ read as a stronger statement than the evidence supports.
   `packages/core/src/worker/brain/admission/service.test.ts` but are not in
   the harness, since the regression risk is at the CLI surface for the
   default `block` policy.
-- **Worker process restart between turns**: each `aiworker run` invocation is
-  a fresh process; the long-lived `aiworker serve` orchestrator is now
-  exercised via the multi-turn REST block (QA-015). Cross-restart of the
-  serve process itself (kill + relaunch + same conversation continues) is
-  not yet covered by harness assertions.
 
 ## Evidence catalog
 
@@ -96,6 +92,10 @@ read as a stronger statement than the evidence supports.
 - `docs/task/QA-015.md` — Long-running `serve` multi-turn REST regression
   evidence: 4 new orchestrator REST checks per pair (unauth boundary,
   submit, continue, read), all PASS on both compact pairs.
+- `docs/task/QA-016.md` — `serve` process restart continuity evidence: after
+  turn 1 succeeds, the harness stops `serve`, waits for `/health` to go down,
+  relaunches `serve`, and continues the same conversation id; compact
+  source-local run passed 72 / 72 checks.
 - `docs/task/BUG-085.md` / `docs/plan/PLAN-143.md` — pre-compaction generated
   memory no-direct-write fix; focused source tests assert pending admission
   proposal creation and no canonical memory write.
