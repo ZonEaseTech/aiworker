@@ -36,7 +36,7 @@
     },
     "apps/cli": {
       "name": "@zonease/aiworker-cli",
-      "version": "0.4.10",
+      "version": "0.9.7",
       "bin": {
         "aiworker": "./dist/aiworker.js",
       },
@@ -149,6 +149,7 @@
     "packages/shared": {
       "name": "@zonease/aiworker-shared",
       "dependencies": {
+        "yaml": "^2.8.3",
         "zod": "^3.24.4",
       },
       "devDependencies": {

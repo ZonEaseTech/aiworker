@@ -3,6 +3,7 @@ import type { SoulModule } from '@zonease/aiworker-shared'
 import {
   BUILTIN_SOUL_MODULES,
   createBuiltinSoulRegistry,
+  findBuiltinSoulPack,
 } from '@zonease/aiworker-shared'
 
 /**
@@ -29,6 +30,7 @@ export const CUSTOMIZE_SOUL_ID = 'customize' as const
 export type InitSoulId = BuiltinSoulPresetId | typeof CUSTOMIZE_SOUL_ID
 
 export interface SoulPresetDefinition {
+  agentMd: string
   boundaries: readonly string[]
   communicationStyle: string
   description: string
@@ -38,12 +40,14 @@ export interface SoulPresetDefinition {
   packs: readonly string[]
   responsibilities: readonly string[]
   riskPolicy: string
+  soulMd: string
   toolsets: readonly string[]
   /** BUG-063: Soul-specific guidance for vague / underspecified prompts. */
   vagueContextStrategy: string
 }
 
 export interface SelectedSoul {
+  agentMd?: string
   boundaries: readonly string[]
   communicationStyle: string
   description: string
@@ -54,6 +58,7 @@ export interface SelectedSoul {
   packs: readonly string[]
   responsibilities: readonly string[]
   riskPolicy: string
+  soulMd?: string
   source: 'flag' | 'interactive'
   toolsets: readonly string[]
   /** BUG-063: see SoulPresetDefinition.vagueContextStrategy. */
@@ -88,7 +93,11 @@ function projectModuleToPreset(module: SoulModule): SoulPresetDefinition {
   const id = module.manifest.id
   if (!isBuiltinPresetId(id))
     throw new Error(`unsupported Soul module id "${id}" — projection layer expects a built-in id`)
+  const pack = findBuiltinSoulPack(id)
+  if (!pack)
+    throw new Error(`missing file-first Soul pack for built-in id "${id}"`)
   return {
+    agentMd: pack.agentMd,
     boundaries: module.initProjection.boundaries,
     communicationStyle: module.riskPolicy.communicationStyle,
     description: module.manifest.description,
@@ -98,6 +107,7 @@ function projectModuleToPreset(module: SoulModule): SoulPresetDefinition {
     packs: module.initProjection.packs,
     responsibilities: module.initProjection.responsibilities,
     riskPolicy: module.riskPolicy.riskNotes,
+    soulMd: pack.soulMd,
     toolsets: module.initProjection.toolsets,
     vagueContextStrategy: module.riskPolicy.vagueContextStrategy ?? DEFAULT_VAGUE_CONTEXT_STRATEGY,
   }

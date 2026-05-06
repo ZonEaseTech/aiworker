@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-07 (REL-023 / QA-017 completed)
+> Updated: 2026-05-07 (REFACTOR-016 completed)
 
 ## Usage
 
@@ -259,3 +259,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**QA-016 Governance Kernel harness — serve process restart continuity evidence**](QA-016.md) `P1`
 - [x] [**REL-023 发布 aiworker CLI 0.9.7**](REL-023.md) `P1`
 - [x] [**QA-017 Governance Kernel harness — 0.9.7 cli-release-local compact evidence**](QA-017.md) `P1`
+- [x] [**REFACTOR-016 File-first Soul and Brain Pack authoring**](REFACTOR-016.md) `P1`

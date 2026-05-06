@@ -1,6 +1,7 @@
 import type { BrainProvider, BrainSkill, ChatMessage, WorkerConfig } from '@zonease/aiworker-shared'
 
 import { readFile } from 'node:fs/promises'
+
 import {
   resolveAgentMdPath,
   resolveMemoryIndexPath,
@@ -8,6 +9,7 @@ import {
   resolveSoulMdPath,
   resolveUserMdPath,
 } from '@zonease/aiworker-fs-layout'
+import { stripMarkdownFrontmatter } from '@zonease/aiworker-shared'
 
 import {
   assembleTokenBudgetContext,
@@ -116,7 +118,7 @@ export class RunContextComposer {
 
 async function readPromptFile(filePath: string): Promise<string | null> {
   try {
-    const content = (await readFile(filePath, 'utf8')).trim()
+    const content = stripMarkdownFrontmatter(await readFile(filePath, 'utf8'))
     if (content.length === 0)
       return null
     return content.length <= SYSTEM_PROMPT_FILE_MAX_CHARS

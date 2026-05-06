@@ -32,6 +32,8 @@ describe('Soul preset registry', () => {
       expect(preset.communicationStyle.length).toBeGreaterThan(0)
       expect(preset.riskPolicy.length).toBeGreaterThan(0)
       expect(preset.outOfScope.length).toBeGreaterThan(0)
+      expect(preset.soulMd).toContain(`# ${preset.label} Soul`)
+      expect(preset.agentMd).toContain(`# ${preset.label} Worker`)
       // BUG-063: every shipped Soul preset must declare its own
       // vague-context strategy so SOUL.md guides the LLM to ask for missing
       // information instead of brute-forcing tool exploration.
@@ -55,6 +57,8 @@ describe('Soul preset registry', () => {
     expect(selected.highRiskRequiresApproval).toBe(true)
     expect(selected.packs).toEqual(preset.packs)
     expect(selected.toolsets).toEqual(preset.toolsets)
+    expect(selected.soulMd).toBe(preset.soulMd)
+    expect(selected.agentMd).toBe(preset.agentMd)
   })
 
   it('projects every shared Soul module into a CLI preset', () => {

@@ -1,5 +1,27 @@
 # AIWorker Changelog
 
+## 2026-05-07 02:04 [completed] REFACTOR-016 / PLAN-149 — File-first Soul and Brain Pack authoring
+
+Continued the lightweight Brain direction by moving built-in Soul authoring
+from TypeScript literals into open-design-style Markdown packs:
+
+- Added `packages/shared/src/soul/packs/<id>/SOUL.md` and `AGENT.md` for all
+  9 built-in Souls. `SOUL.md` uses YAML frontmatter for `SoulModule` structure
+  and Markdown body for LLM-facing Soul semantics.
+- Added the Soul Pack loader in `@zonease/aiworker-shared`; `BUILTIN_SOUL_MODULES`
+  is now derived from pack loader output, while existing registry/doctor/brief
+  consumers keep using the structured `SoulModule` contract.
+- `aiworker init --soul <id>` now materializes pack-authored `SOUL.md` /
+  `AGENT.md` instead of assembling built-in persona docs from TS strings.
+- `BrainBriefCompiler` strips Markdown frontmatter before projecting canonical
+  docs into executor context, so structured pack metadata does not pollute the
+  LLM-facing brief.
+- Architecture docs now name Soul Pack as the authoring surface and state that
+  new Soul semantics should go into Markdown packs, not TS/JSON registries.
+
+Verification passed: shared tests, CLI tests, core tests, full typecheck,
+CLI bundle, lint, and `git diff --check`.
+
 ## 2026-05-07 01:17 [completed] REL-023 / PLAN-148 — 发布 aiworker CLI 0.9.7
 
 发布 `@zonease/aiworker-cli@0.9.7`，作为 0.9.6 之后的 patch release，

@@ -18,6 +18,7 @@ import {
   brainBriefRequestSchema,
   DEFAULT_BRAIN_BRIEF_TOKEN_BUDGET,
   estimateBrainBriefTokens,
+  stripMarkdownFrontmatter,
 } from '@zonease/aiworker-shared'
 
 /**
@@ -242,7 +243,7 @@ export class BrainBriefCompiler {
   ): Promise<Omit<BrainBriefSection, 'protected' | 'tokens'> | null> {
     try {
       const raw = await readFile(path.join(this.deps.brainHome, filename), 'utf8')
-      const trimmed = raw.trim()
+      const trimmed = stripMarkdownFrontmatter(raw)
       if (trimmed.length === 0)
         return null
       const body = trimmed.length > sliceLimit

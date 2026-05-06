@@ -254,6 +254,10 @@ function markdownList(items: readonly string[]): string {
   return items.map(item => `- ${item}`).join('\n')
 }
 
+function ensureTrailingNewline(text: string): string {
+  return text.endsWith('\n') ? text : `${text}\n`
+}
+
 const BRAIN_ADMISSION_GUIDANCE = [
   '## Brain admission governance',
   '- Long-term memory, policy, brain skill, and other durable Project Brain mutations must be proposed through AIWorker brain admission.',
@@ -326,13 +330,15 @@ function buildProjectAiworkerSeed(soul: SelectedSoul): ProjectAiworkerSeed {
       },
     })),
   }
+  const generatedAgentMd = `# ${soul.label} Worker\n\n## 主要职责\n${markdownList(soul.responsibilities)}\n\n## 明确边界\n${markdownList(soul.boundaries)}\n\n## 职责外响应\n${soul.outOfScope}\n\n${BRAIN_ADMISSION_GUIDANCE}\n\n## 默认 capability packs\n${markdownList(soul.packs)}\n`
+  const generatedSoulMd = `# ${soul.label} Soul\n\n## 预设\n- id: ${soul.id}\n- source: ${soul.source}\n\n## 沟通风格\n${soul.communicationStyle}\n\n## 高风险操作策略\n${soul.riskPolicy}\n\n## 职责边界\n${markdownList(soul.boundaries)}\n\n${BRAIN_ADMISSION_GUIDANCE}\n\n## 模糊或缺失上下文\n收到不完整 prompt（< 20 字 / 无可定位 artifact / 仅 "挂了 / 失败 / 不行" 等）时：先用一句话反问关键缺失信息，不要直接调 tool 探索，让用户先补齐上下文；不要为了避免反问而扩大搜索范围越过当前 scope。\n\n${soul.vagueContextStrategy}\n`
 
   return {
-    agentMd: `# ${soul.label} Worker\n\n## 主要职责\n${markdownList(soul.responsibilities)}\n\n## 明确边界\n${markdownList(soul.boundaries)}\n\n## 职责外响应\n${soul.outOfScope}\n\n${BRAIN_ADMISSION_GUIDANCE}\n\n## 默认 capability packs\n${markdownList(soul.packs)}\n`,
+    agentMd: ensureTrailingNewline(soul.agentMd ?? generatedAgentMd),
     capabilityPacksJson: `${JSON.stringify(capabilityPacks, null, 2)}\n`,
     policyJson: `${JSON.stringify(policy, null, 2)}\n`,
     scopeJson: buildScopeManifestSeed(soul),
-    soulMd: `# ${soul.label} Soul\n\n## 预设\n- id: ${soul.id}\n- source: ${soul.source}\n\n## 沟通风格\n${soul.communicationStyle}\n\n## 高风险操作策略\n${soul.riskPolicy}\n\n## 职责边界\n${markdownList(soul.boundaries)}\n\n${BRAIN_ADMISSION_GUIDANCE}\n\n## 模糊或缺失上下文\n收到不完整 prompt（< 20 字 / 无可定位 artifact / 仅 "挂了 / 失败 / 不行" 等）时：先用一句话反问关键缺失信息，不要直接调 tool 探索，让用户先补齐上下文；不要为了避免反问而扩大搜索范围越过当前 scope。\n\n${soul.vagueContextStrategy}\n`,
+    soulMd: ensureTrailingNewline(soul.soulMd ?? generatedSoulMd),
     toolsetsJson: `${JSON.stringify(toolsets, null, 2)}\n`,
   }
 }

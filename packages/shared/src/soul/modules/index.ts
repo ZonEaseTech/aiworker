@@ -1,40 +1,30 @@
 import type { SoulModule } from '../module'
-import type { SoulRegistry } from '../registry'
-import { createSoulRegistry } from '../registry'
-import { developerSoulModule } from './developer'
-import { devopsSreSoulModule } from './devops-sre'
-import { financeOpsSoulModule } from './finance-ops'
-import { generalAssistantSoulModule } from './general-assistant'
-import { hrRecruitingSoulModule } from './hr-recruiting'
-import { productDesignerSoulModule } from './product-designer'
-import { projectManagerSoulModule } from './project-manager'
-import { qaReviewerSoulModule } from './qa-reviewer'
-import { supportOperatorSoulModule } from './support-operator'
+
+import {
+  BUILTIN_SOUL_MODULES,
+  createBuiltinSoulRegistry,
+  developerSoulPack,
+  devopsSreSoulPack,
+  financeOpsSoulPack,
+  generalAssistantSoulPack,
+  hrRecruitingSoulPack,
+  productDesignerSoulPack,
+  projectManagerSoulPack,
+  qaReviewerSoulPack,
+  supportOperatorSoulPack,
+} from '../packs'
+
+export const developerSoulModule: SoulModule = developerSoulPack.module
+export const devopsSreSoulModule: SoulModule = devopsSreSoulPack.module
+export const financeOpsSoulModule: SoulModule = financeOpsSoulPack.module
+export const generalAssistantSoulModule: SoulModule = generalAssistantSoulPack.module
+export const hrRecruitingSoulModule: SoulModule = hrRecruitingSoulPack.module
+export const productDesignerSoulModule: SoulModule = productDesignerSoulPack.module
+export const projectManagerSoulModule: SoulModule = projectManagerSoulPack.module
+export const qaReviewerSoulModule: SoulModule = qaReviewerSoulPack.module
+export const supportOperatorSoulModule: SoulModule = supportOperatorSoulPack.module
 
 export {
-  developerSoulModule,
-  devopsSreSoulModule,
-  financeOpsSoulModule,
-  generalAssistantSoulModule,
-  hrRecruitingSoulModule,
-  productDesignerSoulModule,
-  projectManagerSoulModule,
-  qaReviewerSoulModule,
-  supportOperatorSoulModule,
-}
-
-export const BUILTIN_SOUL_MODULES: readonly SoulModule[] = [
-  developerSoulModule,
-  projectManagerSoulModule,
-  devopsSreSoulModule,
-  productDesignerSoulModule,
-  qaReviewerSoulModule,
-  supportOperatorSoulModule,
-  financeOpsSoulModule,
-  hrRecruitingSoulModule,
-  generalAssistantSoulModule,
-]
-
-export function createBuiltinSoulRegistry(): SoulRegistry {
-  return createSoulRegistry(BUILTIN_SOUL_MODULES)
+  BUILTIN_SOUL_MODULES,
+  createBuiltinSoulRegistry,
 }

@@ -37,4 +37,27 @@ export {
   supportOperatorSoulModule,
 } from './modules'
 
+export {
+  createSoulPack,
+  stripMarkdownFrontmatter,
+} from './pack'
+export type {
+  SoulPack,
+  SoulPackSource,
+} from './pack'
+
+export {
+  BUILTIN_SOUL_PACKS,
+  developerSoulPack,
+  devopsSreSoulPack,
+  financeOpsSoulPack,
+  findBuiltinSoulPack,
+  generalAssistantSoulPack,
+  hrRecruitingSoulPack,
+  productDesignerSoulPack,
+  projectManagerSoulPack,
+  qaReviewerSoulPack,
+  supportOperatorSoulPack,
+} from './packs'
+
 export { createSoulRegistry, SoulRegistry } from './registry'

@@ -44,7 +44,7 @@ describe('BrainBriefCompiler (PLAN-102)', () => {
 
   it('compiles a developer brief from canonical brain files + risk-policy synth', async () => {
     await writeFile(join(ctx.brainHome, 'AGENT.md'), '# Developer worker\nResponsible for code review\n', 'utf8')
-    await writeFile(join(ctx.brainHome, 'SOUL.md'), '# Voice\n直接、证据优先\n', 'utf8')
+    await writeFile(join(ctx.brainHome, 'SOUL.md'), '---\nmanifest:\n  id: developer\n---\n# Voice\n直接、证据优先\n', 'utf8')
     await writeFile(join(ctx.brainHome, 'MEMORY.md'), '# memory\nprefer dry-run for shell\n', 'utf8')
     await writeFile(join(ctx.brainHome, 'ROLLUP.md'), '# rollup\nRecent decisions: PLAN-099 shipped\n', 'utf8')
 
@@ -70,6 +70,9 @@ describe('BrainBriefCompiler (PLAN-102)', () => {
     expect(riskPolicy?.protected).toBe(true)
     expect(riskPolicy?.body).toContain('Soul: developer')
     expect(riskPolicy?.body).toContain('High-risk approval required: true')
+    const soulSection = brief.sections.find(s => s.id === 'soul')
+    expect(soulSection?.body).toContain('# Voice')
+    expect(soulSection?.body).not.toContain('manifest:')
 
     expect(brief.compiledAt).toBe('2026-05-04T17:10:00.000Z')
     expect(brief.tokensUsed).toBeGreaterThan(0)

@@ -82,7 +82,7 @@ compiler 与 Worker/Fleet Brain surface，并作为后续 Brain 开发的默认�
 
 | 组件 | 正确定位 | 允许的 hard logic | 明确禁止 |
 |------|----------|-------------------|----------|
-| **Soul module** | LLM-readable role package：persona、语气、风险偏好、领域词汇、默认 brief sections。 | schema validation、preset registry、版本/owner 元数据、风险提示模板。 | 把 Soul 写成 HR/finance/legal/dev 的 deterministic planner，或让 preset 自动执行领域 workflow。 |
+| **Soul Pack** | LLM-readable file package：`SOUL.md` / `AGENT.md` + YAML frontmatter，承载 persona、语气、风险偏好、领域词汇、默认 brief sections。`SoulModule` 只是 loader 输出。 | frontmatter schema validation、pack discovery、版本/owner 元数据、风险提示模板。 | 把 Soul 写成 HR/finance/legal/dev 的 deterministic planner；把 Soul 语义继续维护在 TS/JSON registry；或让 preset 自动执行领域 workflow。 |
 | **Scope manifest** | worker-bound business scope 的身份与证据目录，不限定为 git repo。 | scope id/path 解析、owner/status、source refs、manifest schema、跨 worker/fleet 边界。 | 假定所有 Project 都是软件项目，或在 manifest 里内建 PMA/代码仓库专用状态机。 |
 | **Artifact registry** | evidence index：记录 ref、hash、来源、敏感级别、摘要与读取状态。 | 去重、redaction、missing/unreadable 标记、source tagging、worker.db 数据面隔离。 | 当成 ATS/CRM/ticket/contract/finance database；用 hard logic 解释 artifact 的业务含义并自动推进流程。 |
 | **Schema pack** | Soul-specific vocabulary / lightweight validation hints。 | 字段名、枚举、样例、presentation hint、静态校验。 | 把 `workflowStates` 变成可执行 workflow engine，或把领域政策做成不可见 hard gate。 |
@@ -249,7 +249,7 @@ Project Brain 由五类资产组成。命名上 *brain memory / brain skill / pr
 
 | 资产 | 文件 / 目录 | 所有者 | 读写规则 | 当前 CLI |
 |------|------------|--------|---------|----------|
-| **Identity** | `AGENT.md`、`SOUL.md`、`USER.md` | operator + Soul preset | `aiworker init` 按 Soul 一次性种出，after that 视为 git-tracked persona doc，AIWorker runtime 不主动改写。 | `aiworker init`、`aiworker soul list/show` |
+| **Identity** | `AGENT.md`、`SOUL.md`、`USER.md` | operator + Soul Pack | `aiworker init` 从 file-first Soul Pack 一次性种出，after that 视为 git-tracked persona doc，AIWorker runtime 不主动改写。新增或修改 Soul 语义应优先编辑 Markdown pack；结构化 `SoulModule` 只作为 loader 输出供 Kernel 消费。 | `aiworker init`、`aiworker soul list/show` |
 | **Memory** | `MEMORY.md`、`memories/*.md` | operator + admission materializer | filesystem 为权威；generated runtime memory 只能先进入 admission proposal，operator approve/apply 后由 materializer 写入。 | `aiworker brain memories`（只读检索） |
 | **Brain skills** | `.aiworker/skills/<name>/SKILL.md`（+ asset files） | operator | 仅人写；CLI 不提供 mutating skill commands。`brain skills` 只读列出 live `BrainProvider` 中已挂载的 skill。 | `aiworker brain skills` |
 | **Policy & drafts** | `policy.json`、`toolsets.json`、`capability-packs.json`、`.aiworker/mcp.json` | operator + Soul preset | brain/runtime 草案；`aiworker doctor` 静态校验，不接入 runtime enforcement。`mcp.json` 是 brain/runtime descriptor，不是 engine MCP config。 | `aiworker doctor`、`aiworker brain status` |
