@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-06 (PLAN-139 implementing)
+> Updated: 2026-05-06 (PLAN-139 completed)
 
 ## Usage
 
@@ -167,4 +167,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-136 Restore public Caddy routing for fleet-hosted worker UI**](PLAN-136.md) `2026-05-06`
 - [x] [**PLAN-137 Accept approved OTP worker reconnects without reopening public /ws**](PLAN-137.md) `2026-05-06`
 - [x] [**PLAN-138 Move fleet-hosted Worker Admin auth from Caddy Basic Auth to gateway bearer bridge auth**](PLAN-138.md) `2026-05-06`
-- [-] [**PLAN-139 发布 aiworker CLI 0.9.4**](PLAN-139.md) `2026-05-06`
+- [x] [**PLAN-139 发布 aiworker CLI 0.9.4**](PLAN-139.md) `2026-05-06`

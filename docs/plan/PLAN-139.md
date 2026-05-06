@@ -1,8 +1,9 @@
 # PLAN-139 发布 aiworker CLI 0.9.4
 
-- **status**: implementing
+- **status**: completed
 - **createdAt**: 2026-05-06 14:07
 - **approvedAt**: 2026-05-06 14:07
+- **completedAt**: 2026-05-06 14:17
 - **relatedTask**: REL-020
 
 ## 现状
@@ -71,3 +72,8 @@
 - 2026-05-06 14:12：本地 release gates 通过：install frozen lockfile、
   typecheck、lint、test、build、CLI run/fleet smoke、dist 版本检查、built CLI
   `--version`、`git diff --check`、npm dry-run pack。
+- 2026-05-06 14:17：发布完成。Release commit `2026988` + annotated tag
+  `v0.9.4` 已 push；GitHub Actions release workflow `25440741823` 全绿；
+  npm `latest=0.9.4`；GitHub Release `v0.9.4` 非 draft / 非 prerelease；
+  4 平台 binary 全 uploaded。`bunx @zonease/aiworker-cli@0.9.4 --version`
+  返回 `aiworker/0.9.4 linux-x64 node-v24.3.0`。

@@ -1,6 +1,6 @@
 # AIWorker Changelog
 
-## 2026-05-06 14:07 [in_progress] REL-020 / PLAN-139 — 发布 aiworker CLI 0.9.4
+## 2026-05-06 14:07 [completed] REL-020 / PLAN-139 — 发布 aiworker CLI 0.9.4
 
 发布 `@zonease/aiworker-cli@0.9.4`，作为 0.9.3 之后的 patch release，
 交付远端 fleet Worker Admin hotfix：
@@ -10,6 +10,9 @@
   registered worker token 重连。
 - `BUG-081 / PLAN-138`：`/w/:workerId/api/worker/*` 由 gateway worker bearer
   token 校验，Caddy 不再对 `/w*` 做 Basic Auth。
+- Release commit `2026988` + annotated tag `v0.9.4` 已 push；GitHub Actions
+  release workflow `25440741823` 全绿；npm latest 已是 `0.9.4`；GitHub
+  Release `v0.9.4` 非 draft / 非 prerelease，4 个平台 binary 全 uploaded。
 
 ## 2026-05-06 13:58 [completed] BUG-081 / PLAN-138 — `/w/*` uses worker bearer auth, not Caddy Basic Auth
 

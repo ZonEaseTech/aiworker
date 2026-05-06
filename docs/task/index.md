@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-06 (REL-020 in progress)
+> Updated: 2026-05-06 (REL-020 completed)
 
 ## Usage
 
@@ -246,4 +246,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-079 Public Caddy ingress does not route fleet-hosted worker UI**](BUG-079.md) `P1`
 - [x] [**BUG-080 OTP-approved worker reconnects to /enroll-ws as a plain node and is rejected**](BUG-080.md) `P1`
 - [x] [**BUG-081 Fleet-hosted Worker Admin is blocked by Caddy Basic Auth before worker bearer auth**](BUG-081.md) `P1`
-- [-] [**REL-020 发布 aiworker CLI 0.9.4**](REL-020.md) `P1`
+- [x] [**REL-020 发布 aiworker CLI 0.9.4**](REL-020.md) `P1`
