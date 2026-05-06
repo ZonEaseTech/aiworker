@@ -1,5 +1,19 @@
 # AIWorker Changelog
 
+## 2026-05-06 14:46 [completed] REL-021 / PLAN-141 — 发布 aiworker CLI 0.9.5
+
+发布 `@zonease/aiworker-cli@0.9.5`，作为 0.9.4 之后的 patch release，
+交付 fleet-hosted Worker Admin Brain bridge 修复：
+
+- `BUG-082 / PLAN-140`：gateway worker bridge 显式支持 Worker Admin Brain
+  页面使用的 `brain.summary`、`brain.admission.*` 与 `brain.artifacts.*`
+  路径，保持 allowlist bridge，不引入通用 proxy。
+- `BUG-083`：fleet-hosted chat continuation bridge 问题仅补 PMA backlog
+  文档，未进入本次修复范围。
+- Release commit `01372c8` + annotated tag `v0.9.5` 已 push；GitHub Actions
+  release workflow `25442359652` 全绿；npm latest 已是 `0.9.5`；GitHub
+  Release `v0.9.5` 非 draft / 非 prerelease，4 个平台 binary 全 uploaded。
+
 ## 2026-05-06 14:29 [completed] BUG-082 / PLAN-140 — Fleet-hosted Worker Admin Brain bridge routes
 
 Fixed the fleet-hosted Worker Admin Brain page bridge gap. Gateway now maps the

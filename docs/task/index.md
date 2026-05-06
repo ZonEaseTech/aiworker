@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-06 (REL-021 in progress)
+> Updated: 2026-05-06 (REL-021 completed)
 
 ## Usage
 
@@ -249,4 +249,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REL-020 发布 aiworker CLI 0.9.4**](REL-020.md) `P1`
 - [x] [**BUG-082 Fleet-hosted Worker Admin cannot load brain governance routes**](BUG-082.md) `P1`
 - [ ] [**BUG-083 Fleet-hosted Worker Admin cannot continue selected chat conversations**](BUG-083.md) `P1`
-- [-] [**REL-021 发布 aiworker CLI 0.9.5**](REL-021.md) `P1`
+- [x] [**REL-021 发布 aiworker CLI 0.9.5**](REL-021.md) `P1`

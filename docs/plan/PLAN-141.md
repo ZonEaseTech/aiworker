@@ -1,8 +1,9 @@
 # PLAN-141 发布 aiworker CLI 0.9.5
 
-- **status**: implementing
+- **status**: completed
 - **createdAt**: 2026-05-06 14:35
 - **approvedAt**: 2026-05-06 14:35
+- **completedAt**: 2026-05-06 14:46
 - **relatedTask**: REL-021
 
 ## 现状
@@ -62,3 +63,6 @@
 
 - 2026-05-06 14:35：PLAN-141 / REL-021 创建；chat issue 记录为
   `BUG-083` pending；开始 0.9.5 release gates。
+- 2026-05-06 14:46：本地 release gates、publish dry-run pack 阶段、release
+  commit/tag push、GitHub Actions release、npm latest、bunx 与 GitHub Release
+  asset 验证均完成；`BUG-083` 仍保持 pending backlog。
