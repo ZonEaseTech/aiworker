@@ -664,6 +664,23 @@ async function restSmoke(
       name: `${pairId} Worker Admin mount`,
       status: admin.status === 200 ? 'pass' : 'fail',
     })
+
+    // PLAN-133: long-running serve REST multi-turn regression. The existing
+    // GETs above prove the auth boundary and read-side surface; this block
+    // exercises the orchestrator submit / continue / read sequence within
+    // the same long-lived serve process so admission + conversation +
+    // chat-id continuity are validated through the production REST surface,
+    // not just the per-turn `aiworker run` CLI invocation.
+    const dbPath = path.join(projectDir, '.aiworker/local/worker.db')
+    const restMultiChecks = await runRestMultiTurnRegression({
+      debugRoot,
+      pairId,
+      port,
+      token,
+      dbPath,
+    })
+    checks.push(...restMultiChecks)
+
     return { checks, evidence }
   }
   finally {
@@ -673,6 +690,187 @@ async function restSmoke(
     if (serve.exitCode === null && !serve.killed)
       serve.kill('SIGKILL')
     writeFileSync(serveLog, redact(Buffer.concat(chunks).toString('utf8')), 'utf8')
+  }
+}
+
+async function fetchPostJson(
+  url: string,
+  body: Record<string, unknown>,
+  options: { headers?: Record<string, string>, timeoutMs?: number } = {},
+): Promise<{ body: string, status: number }> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 15_000)
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}) },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    })
+    const text = await response.text()
+    return { body: text, status: response.status }
+  }
+  finally {
+    clearTimeout(timer)
+  }
+}
+
+interface RestMultiTurnArgs {
+  debugRoot: string
+  pairId: string
+  port: number
+  token: string
+  dbPath: string
+}
+
+async function runRestMultiTurnRegression(args: RestMultiTurnArgs): Promise<HarnessCheck[]> {
+  const checks: HarnessCheck[] = []
+  const { debugRoot, pairId, port, token, dbPath } = args
+  const baseUrl = `http://127.0.0.1:${port}/api/worker/orchestrator`
+
+  // 1. Unauthenticated boundary: /tasks must reject without bearer.
+  const unauthResp = await fetchPostJson(`${baseUrl}/tasks`, { prompt: 'unauth probe' }, { timeoutMs: 5_000 })
+  const unauthLog = path.join(debugRoot, 'logs', `${pairId}-rest-multi-unauth.log`)
+  writeFileSync(unauthLog, redact(`POST ${baseUrl}/tasks (no bearer)\nstatus=${unauthResp.status}\nbody=${unauthResp.body}\n`), 'utf8')
+  checks.push({
+    detail: `unauthenticated POST /tasks status=${unauthResp.status}`,
+    evidence: unauthLog,
+    name: `${pairId} REST orchestrator unauth boundary`,
+    status: unauthResp.status === 401 ? 'pass' : 'fail',
+  })
+
+  // 2. Authenticated submit: /tasks → returns task id; orchestrator drives it
+  // to `succeeded` and writes a conversation row.
+  const probe1 = `Long-running serve REST probe for ${pairId} turn 1: state your Soul id and confirm the long-lived orchestrator is the producer.`
+  const submitResp = await fetchPostJson(`${baseUrl}/tasks`, { prompt: probe1 }, {
+    headers: { Authorization: `Bearer ${token}` },
+    timeoutMs: 15_000,
+  })
+  const submitLog = path.join(debugRoot, 'logs', `${pairId}-rest-multi-submit.log`)
+  writeFileSync(submitLog, redact(`POST ${baseUrl}/tasks\nstatus=${submitResp.status}\nbody=${submitResp.body}\n`), 'utf8')
+  const submitJson = safeJson(submitResp.body)
+  const submitTask = typeof submitJson?.task === 'object' && submitJson.task !== null
+    ? submitJson.task as { id?: unknown }
+    : undefined
+  const taskId1 = typeof submitTask?.id === 'string' ? submitTask.id : undefined
+  if (submitResp.status !== 201 || taskId1 === undefined) {
+    checks.push({
+      detail: `submit status=${submitResp.status}, task id=${String(taskId1 ?? 'missing')}`,
+      evidence: submitLog,
+      name: `${pairId} REST orchestrator submit`,
+      status: 'fail',
+    })
+    return checks
+  }
+  const await1 = await waitForAgentTask(debugRoot, pairId, dbPath, taskId1, 'turn-1', 90_000)
+  checks.push({
+    detail: `submit status=${submitResp.status}, task id=${taskId1}, terminal status=${await1.status}, conversationId=${await1.conversationId ?? 'unknown'}`,
+    evidence: `${submitLog}; ${await1.logPath}`,
+    name: `${pairId} REST orchestrator submit`,
+    status: await1.status === 'succeeded' && typeof await1.conversationId === 'string' ? 'pass' : 'fail',
+  })
+  if (await1.status !== 'succeeded' || typeof await1.conversationId !== 'string')
+    return checks
+
+  const conversationId = await1.conversationId
+
+  // 3. Authenticated continue on same conversation id.
+  const probe2 = `Long-running serve REST probe for ${pairId} turn 2: confirm you remember the previous turn within this conversation.`
+  const continueResp = await fetchPostJson(`${baseUrl}/conversations/${conversationId}/messages`, { prompt: probe2 }, {
+    headers: { Authorization: `Bearer ${token}` },
+    timeoutMs: 15_000,
+  })
+  const continueLog = path.join(debugRoot, 'logs', `${pairId}-rest-multi-continue.log`)
+  writeFileSync(continueLog, redact(`POST ${baseUrl}/conversations/${conversationId}/messages\nstatus=${continueResp.status}\nbody=${continueResp.body}\n`), 'utf8')
+  const continueJson = safeJson(continueResp.body)
+  const continueTask = typeof continueJson?.task === 'object' && continueJson.task !== null
+    ? continueJson.task as { id?: unknown }
+    : undefined
+  const taskId2 = typeof continueTask?.id === 'string' ? continueTask.id : undefined
+  if (continueResp.status !== 201 || taskId2 === undefined) {
+    checks.push({
+      detail: `continue status=${continueResp.status}, task id=${String(taskId2 ?? 'missing')}`,
+      evidence: continueLog,
+      name: `${pairId} REST orchestrator continue`,
+      status: 'fail',
+    })
+    return checks
+  }
+  const await2 = await waitForAgentTask(debugRoot, pairId, dbPath, taskId2, 'turn-2', 90_000)
+  checks.push({
+    detail: `continue status=${continueResp.status}, task id=${taskId2}, terminal status=${await2.status}, same conversationId=${await2.conversationId === conversationId}`,
+    evidence: `${continueLog}; ${await2.logPath}`,
+    name: `${pairId} REST orchestrator continue`,
+    status: await2.status === 'succeeded' && await2.conversationId === conversationId ? 'pass' : 'fail',
+  })
+  if (await2.status !== 'succeeded' || await2.conversationId !== conversationId)
+    return checks
+
+  // 4. Read messages back via REST and verify both user prompts plus assistant
+  // replies are persisted under the same conversation row.
+  const messagesResp = await fetchText(`http://127.0.0.1:${port}/api/worker/orchestrator/conversations/${conversationId}/messages`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const messagesLog = path.join(debugRoot, 'logs', `${pairId}-rest-multi-messages.log`)
+  writeFileSync(messagesLog, redact(`GET .../conversations/${conversationId}/messages\nstatus=${messagesResp.status}\nbody=${messagesResp.body}\n`), 'utf8')
+  const messagesJson = safeJson(messagesResp.body)
+  const messageRows = Array.isArray(messagesJson?.messages) ? messagesJson.messages as unknown[] : []
+  checks.push({
+    detail: `GET messages status=${messagesResp.status}, message count=${messageRows.length} (≥4 expected: 2 user + 2 assistant)`,
+    evidence: messagesLog,
+    name: `${pairId} REST orchestrator messages`,
+    status: messagesResp.status === 200 && messageRows.length >= 4 ? 'pass' : 'fail',
+  })
+
+  return checks
+}
+
+interface AgentTaskAwaitResult {
+  conversationId?: string
+  logPath: string
+  status: string
+}
+
+async function waitForAgentTask(
+  debugRoot: string,
+  pairId: string,
+  dbPath: string,
+  taskId: string,
+  label: string,
+  timeoutMs: number,
+): Promise<AgentTaskAwaitResult> {
+  const start = Date.now()
+  const finalLog = path.join(debugRoot, 'logs', `${pairId}-rest-multi-${label}-await.log`)
+  let lastStatus = ''
+  let lastConversation: string | undefined
+  while (Date.now() - start < timeoutMs) {
+    const result = sqlite(
+      debugRoot,
+      dbPath,
+      `${pairId}-rest-multi-${label}-poll`,
+      `SELECT status || "|" || COALESCE(conversation_id, '') FROM agent_tasks WHERE id = ${sqlString(taskId)};`,
+    )
+    const stdout = result.stdout.trim().split('\n')[0] ?? ''
+    if (stdout.length > 0) {
+      const [status, conv] = stdout.split('|')
+      lastStatus = status ?? ''
+      lastConversation = conv === undefined || conv === '' ? undefined : conv
+      if (lastStatus === 'succeeded' || lastStatus === 'failed' || lastStatus === 'cancelled') {
+        writeFileSync(finalLog, `task=${taskId} terminal status=${lastStatus} conversation=${lastConversation ?? 'unknown'} elapsed_ms=${Date.now() - start}\n`, 'utf8')
+        return {
+          status: lastStatus,
+          ...(lastConversation === undefined ? {} : { conversationId: lastConversation }),
+          logPath: finalLog,
+        }
+      }
+    }
+    await Bun.sleep(2_000)
+  }
+  writeFileSync(finalLog, `task=${taskId} timeout after ${timeoutMs}ms last status=${lastStatus} conversation=${lastConversation ?? 'unknown'}\n`, 'utf8')
+  return {
+    status: lastStatus.length === 0 ? 'timeout' : `${lastStatus}-timeout`,
+    ...(lastConversation === undefined ? {} : { conversationId: lastConversation }),
+    logPath: finalLog,
   }
 }
 

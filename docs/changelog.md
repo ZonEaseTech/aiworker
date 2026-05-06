@@ -1,5 +1,24 @@
 # AIWorker Changelog
 
+## 2026-05-06 10:08 [completed] TODO-035 / PLAN-133 / QA-015 — Long-running serve multi-turn REST regression
+
+扩展 `scripts/governance-kernel-harness.ts` 的 `restSmoke` 块，按对在
+长驻 `aiworker serve` 进程内增加 4 项 multi-turn REST 检查：
+
+- **unauth boundary**：不带 bearer 的 `POST /api/worker/orchestrator/tasks`
+  必须返回 401。
+- **submit**：带 bearer 的 `POST /tasks` 返回 201；orchestrator 异步把
+  `agent_tasks.status` 推到 `'succeeded'`，conversation 行落 worker.db。
+- **continue**：`POST /conversations/:id/messages` 在同一 conversation id
+  上继续，第二个 task 也走到 `'succeeded'`，conversation id 保持一致。
+- **messages**：`GET /conversations/:id/messages` 返回 ≥4 条（两 user +
+  两 assistant）。
+
+这把 admission / conversation / chat-id 连续性的回归覆盖从 per-turn
+`aiworker run` CLI 扩展到生产面 long-running `serve` REST，封堵
+BUG-035 / BUG-043 / BUG-044 同类回归路径。source-local compact 两对全部
+通过；证据落 QA-015。
+
 ## 2026-05-06 09:54 [completed] REL-018 / PLAN-132 — 发布 aiworker CLI 0.9.2
 
 发布 `@zonease/aiworker-cli@0.9.2`，作为 0.9.1 之后的 patch release，

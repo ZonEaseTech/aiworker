@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-06 (REL-018 CLI 0.9.2 已发版)
+> Updated: 2026-05-06 (QA-015 long-running serve REST multi-turn evidence completed)
 
 ## Usage
 
@@ -239,3 +239,5 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**TODO-034 Run Governance Kernel harness against the full 5×2 matrix on `cli-release-local`**](TODO-034.md) `P2`
 - [x] [**QA-014 Governance Kernel harness — full 5×2 matrix on cli-release-local**](QA-014.md) `P1`
 - [x] [**REL-018 发布 aiworker CLI 0.9.2**](REL-018.md) `P1`
+- [x] [**TODO-035 Harness — long-running serve multi-turn REST regression**](TODO-035.md) `P2`
+- [x] [**QA-015 Governance Kernel harness — long-running serve REST multi-turn evidence**](QA-015.md) `P1`

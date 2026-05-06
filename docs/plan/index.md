@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-06 (PLAN-132 CLI 0.9.2 已发版)
+> Updated: 2026-05-06 (PLAN-133 long-running serve REST multi-turn completed)
 
 ## Usage
 
@@ -161,3 +161,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-130 Governance Kernel harness — full 5×2 matrix run**](PLAN-130.md) `2026-05-06`
 - [x] [**PLAN-131 Governance Kernel harness — full 5×2 matrix on cli-release-local**](PLAN-131.md) `2026-05-06`
 - [x] [**PLAN-132 发布 aiworker CLI 0.9.2**](PLAN-132.md) `2026-05-06`
+- [x] [**PLAN-133 Harness — long-running serve multi-turn REST regression**](PLAN-133.md) `2026-05-06`

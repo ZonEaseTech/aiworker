@@ -31,6 +31,7 @@ inline.
 | Onboarding polish (CLI command groups, executor recommendation, MCP arg passthrough) | conforming | PLAN-120 implementation; TODO-026 contract; BUG-051 / BUG-073 fixes. |
 | Regression validation (repeatable harness covering above invariants) | conforming | `scripts/governance-kernel-harness.ts` with 30 source-backed checks per pair; PLAN-127 (initial harness), PLAN-128 (positive roundtrip), PLAN-129 (reject + secret-scan-block), PLAN-130 (full 5×2 matrix evidence). |
 | Soul-agnostic kernel (every Soul × executor satisfies same invariants) | conforming on source + published | QA-013 — full 5×2 matrix on source-local: 300 PASS / 0 FAIL / 0 SKIPPED; QA-014 — same matrix on `cli-release-local` 0.9.1: 300 PASS / 0 FAIL / 0 SKIPPED. |
+| Long-running `aiworker serve` REST multi-turn (orchestrator persistence + bearer auth) | conforming | QA-015 — POST /tasks unauth → 401, authenticated submit → 201 + agent_tasks.status=succeeded, POST /conversations/:id/messages → second task succeeded on same conversation, GET /conversations/:id/messages → ≥4 messages. Both pairs PASS. |
 
 ## Boundary and residual risk
 
@@ -68,9 +69,10 @@ read as a stronger statement than the evidence supports.
   worker**: implicitly relied on by the prompts file but not asserted by a
   dedicated check.
 - **Worker process restart between turns**: each `aiworker run` invocation is
-  a fresh process; this is implicitly cross-process. The harness does not
-  yet cover a long-lived `aiworker serve` process as the conversation
-  driver.
+  a fresh process; the long-lived `aiworker serve` orchestrator is now
+  exercised via the multi-turn REST block (QA-015). Cross-restart of the
+  serve process itself (kill + relaunch + same conversation continues) is
+  not yet covered by harness assertions.
 
 ## Evidence catalog
 
@@ -90,6 +92,9 @@ read as a stronger statement than the evidence supports.
 - `docs/task/QA-014.md` — Full 5×2 matrix evidence on `cli-release-local`
   0.9.1: 300 PASS / 0 FAIL / 0 SKIPPED, extending the Soul-agnostic kernel
   claim to the published CLI.
+- `docs/task/QA-015.md` — Long-running `serve` multi-turn REST regression
+  evidence: 4 new orchestrator REST checks per pair (unauth boundary,
+  submit, continue, read), all PASS on both compact pairs.
 - `docs/architecture.md` — canonical Brain Governance Kernel decision and
   ownership table.
 - `scripts/governance-kernel-harness.ts` — repeatable harness; the canonical
