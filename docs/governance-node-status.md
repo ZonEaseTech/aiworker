@@ -34,7 +34,7 @@ inline.
 | Regression validation (repeatable harness covering above invariants) | conforming | `scripts/governance-kernel-harness.ts` with 36 source-backed compact checks per pair; PLAN-127 (initial harness), PLAN-128 (positive roundtrip), PLAN-129 (reject + secret-scan-block), PLAN-130 (full 5×2 matrix evidence), PLAN-144 (cross `chat-id` isolation), PLAN-147 (serve process restart continuity). |
 | Soul-agnostic kernel (every Soul × executor satisfies same invariants) | conforming on source + published | QA-013 — full 5×2 matrix on source-local: 300 PASS / 0 FAIL / 0 SKIPPED; QA-014 — same matrix on `cli-release-local` 0.9.1: 300 PASS / 0 FAIL / 0 SKIPPED. |
 | Long-running `aiworker serve` REST multi-turn (orchestrator persistence + bearer auth) | conforming | QA-015 — POST /tasks unauth → 401, authenticated submit → 201 + agent_tasks.status=succeeded, POST /conversations/:id/messages → second task succeeded on same conversation, GET /conversations/:id/messages → ≥4 messages. Both pairs PASS. |
-| Serve process restart between REST turns | conforming in source | QA-016 / PLAN-147 — source compact harness stops `aiworker serve` after REST turn 1, verifies `/health` goes down, relaunches on the same project/port, then continues the same conversation id; both compact pairs PASS. |
+| Serve process restart between REST turns | conforming on source + published | QA-016 / PLAN-147 — source compact harness stops `aiworker serve` after REST turn 1, verifies `/health` goes down, relaunches on the same project/port, then continues the same conversation id; QA-017 / REL-023 repeats the same compact check against published CLI 0.9.7. Both compact pairs PASS in both modes. |
 
 ## Boundary and residual risk
 
@@ -96,6 +96,9 @@ read as a stronger statement than the evidence supports.
   turn 1 succeeds, the harness stops `serve`, waits for `/health` to go down,
   relaunches `serve`, and continues the same conversation id; compact
   source-local run passed 72 / 72 checks.
+- `docs/task/QA-017.md` — `cli-release-local` 0.9.7 compact evidence:
+  published CLI run passed 72 / 72 checks, including both `REST serve restart
+  continuity setup` checks.
 - `docs/task/BUG-085.md` / `docs/plan/PLAN-143.md` — pre-compaction generated
   memory no-direct-write fix; focused source tests assert pending admission
   proposal creation and no canonical memory write.

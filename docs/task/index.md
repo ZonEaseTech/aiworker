@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-07 (REL-023 in progress)
+> Updated: 2026-05-07 (REL-023 / QA-017 completed)
 
 ## Usage
 
@@ -257,4 +257,5 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REL-022 发布 aiworker CLI 0.9.6**](REL-022.md) `P1`
 - [x] [**TODO-037 Harness — serve process restart continuity regression**](TODO-037.md) `P2`
 - [x] [**QA-016 Governance Kernel harness — serve process restart continuity evidence**](QA-016.md) `P1`
-- [-] [**REL-023 发布 aiworker CLI 0.9.7**](REL-023.md) `P1`
+- [x] [**REL-023 发布 aiworker CLI 0.9.7**](REL-023.md) `P1`
+- [x] [**QA-017 Governance Kernel harness — 0.9.7 cli-release-local compact evidence**](QA-017.md) `P1`

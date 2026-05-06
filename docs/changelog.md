@@ -1,15 +1,23 @@
 # AIWorker Changelog
 
-## 2026-05-07 01:17 [release] REL-023 / PLAN-148 — 发布 aiworker CLI 0.9.7
+## 2026-05-07 01:17 [completed] REL-023 / PLAN-148 — 发布 aiworker CLI 0.9.7
 
-准备发布 `@zonease/aiworker-cli@0.9.7`，作为 0.9.6 之后的 patch release，
+发布 `@zonease/aiworker-cli@0.9.7`，作为 0.9.6 之后的 patch release，
 交付 worker-only Governance Kernel harness 收敛：
 
 - `TODO-037 / PLAN-147`：Governance Kernel harness 新增 `aiworker serve`
   进程重启连续性断言；REST turn 1 成功后停止 serve，等待 `/health`
   下线，重启同一 project/port，再继续同一 conversation id。
-- Release gates 正在执行中；发布成功后继续跑 `cli-release-local` compact
-  harness 验证发布包。
+- 本地 release gates 通过：install、typecheck、lint、test、build、CLI run/fleet
+  smoke、dist version、built CLI `--version`、`git diff --check`、publish dry-run
+  pack 阶段。
+- `chore(release): 发布 CLI 0.9.7` 已推送到 `main`，annotated tag `v0.9.7`
+  已推送；GitHub Actions release workflow `25450306828` 成功。
+- 外部验证通过：npm latest 为 `0.9.7`，指定版本 `bunx` 返回
+  `aiworker/0.9.7 ...`，GitHub Release `v0.9.7` 非 draft / 非 prerelease
+  且上传 4 个平台 binary。
+- 发布包 `cli-release-local` compact harness 验证通过：
+  `tmp/governance-kernel-0.9.7-cli`，72 PASS / 0 FAIL / 0 SKIPPED。
 
 ## 2026-05-07 01:12 [completed] TODO-037 / PLAN-147 — Serve process restart continuity harness
 

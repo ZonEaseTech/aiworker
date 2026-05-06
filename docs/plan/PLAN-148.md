@@ -1,8 +1,9 @@
 # PLAN-148 发布 aiworker CLI 0.9.7
 
-- **status**: implementing
+- **status**: completed
 - **createdAt**: 2026-05-07 01:17
 - **approvedAt**: 2026-05-07 01:17
+- **completedAt**: 2026-05-07 01:31
 - **relatedTask**: REL-023
 
 ## 现状
@@ -63,3 +64,8 @@
 ## 进度
 
 - 2026-05-07 01:17：PLAN-148 / REL-023 创建，开始 0.9.7 release gates。
+- 2026-05-07 01:31：`chore(release): 发布 CLI 0.9.7` 已推送到 `main`，
+  annotated tag `v0.9.7` 已推送；release workflow `25450306828` 成功；
+  `npm view @zonease/aiworker-cli version` 返回 `0.9.7`；指定版本 `bunx`
+  返回 `aiworker/0.9.7 ...`；GitHub Release `v0.9.7` 已上传 4 个平台
+  binary；`cli-release-local` compact harness 72 PASS / 0 FAIL / 0 SKIPPED。
