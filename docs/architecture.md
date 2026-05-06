@@ -199,7 +199,7 @@ fleet.db + node routing        worker.db + local runtime
 
 ## Filesystem source of truth (PLAN-012)
 
-每个 worker 持有一颗独立子树（根为 `AIWORKER_HOME`，默认 `~/.aiworker`）：
+每个 worker 持有一颗独立状态子树（根为 `AIWORKER_HOME`，默认 `~/.aiworker`；project scope 会自动解析为 `<project>/.aiworker/local`）：
 
 ```text
 ~/.aiworker/
@@ -238,7 +238,7 @@ project scope 下，团队共享上下文落在 `<project>/.aiworker/`：
   local/                       # gitignored: worker.db / .env / workspaces
 ```
 
-- **Project scope 语义**：`<project>/.aiworker/` 是当前目录命名沿用的 filesystem layout；产品语义是 worker-bound business scope，不限定为 git repo、代码仓库或软件项目。Soul 负责解释该 scope 的领域对象和工作流，例如 developer 的架构/测试/发布，HR 的简历筛选/归档/备份/审核，legal 的合同/案件审查，ops 的队列/交接/升级。
+- **Project scope 语义**：`<project>/.aiworker/` 是当前目录命名沿用的 filesystem layout；产品语义是 worker-bound business scope，不限定为 git repo、代码仓库或软件项目。Soul 负责解释该 scope 的领域对象和工作流，例如 developer 的架构/测试/发布，HR 的简历筛选/归档/备份/审核，legal 的合同/案件审查，ops 的队列/交接/升级。`AIWORKER_HOME` 在这里指向 `<project>/.aiworker/local/`，也就是本机私有 runtime state 根，而不是 cwd 别名；cwd 只负责自动发现这个 project scope。显式设置 `AIWORKER_HOME` 则表示 operator 固定一个独立 home，适用于 systemd / docker / 同机多 worker。
 - **Skills / memories** 读写统一过 `FilesystemBrainProvider`（PLAN-012 将旧 `HermesProvider` 改名并把 HTTP 依赖全部拆掉）；filesystem 是权威，SQLite 只负责 identity 与可索引状态。新 worker 默认挂载 writable `local-filesystem` brain source，路径由 `resolveBrainHome(workerId)` 决定：project scope 指向 `<project>/.aiworker/`，user / explicit scope 指向 worker home 下的 `brain/`。operator 可用 `aiworker brain status` / `aiworker brain skills` / `aiworker brain memories` 做只读检查；这些命令不写入 brain artifact。
 - **Capability 边界**：`.aiworker/mcp.json`、`skills/`、`toolsets.json`、`capability-packs.json` 属于 brain/runtime project capability 或 observe-only descriptor；`.aiworker/executor-capabilities.json` 只是 executor overlay / bootstrap hint。Codex / Claude Code / Hermes / OpenClaw 等外部 executor 可能加载 user/host-level MCP、skills、plugins、auth 和 native sessions；AIWorker 不把 project overlay 当成完整 effective capability source of truth。
 - **Brain admission 边界**：generated memory / brain skill / policy proposal 进入 filesystem 前必须保留 evidence、scope、confidence 与 rollback 信息，并经过显式 operator approval。当前已允许的 runtime 写入只有配置启用后的 pre-compaction memory flush；新 CLI/API mutating brain command 必须另开 PMA 任务并显式命名为 brain memory / brain skill，不得复用 executor MCP / engine plugin 语义。
@@ -671,8 +671,9 @@ operator 控制面：
 Worker 侧（`aiworker serve` / worker 容器）：
 
 - `AIWORKER_MASTER_KEY` — worker 自己的 secrets vault 主密钥（64 hex）。
-- `AIWORKER_HOME` — 默认 `~/.aiworker`。
+- `AIWORKER_HOME` — worker 本地状态根。默认 `~/.aiworker`；project scope 自动落到 `<project>/.aiworker/local`。
 - `WORKER_DB_PATH` / `WORKER_MIGRATIONS_FOLDER`。
+- `AIWORKER_GATEWAY_URL` / `AIWORKER_JOIN_TOKEN` / `AIWORKER_DISPLAY_NAME` / `AIWORKER_ENROLL_MODE` — worker 入网启动项；project worker 推荐写入 `.aiworker/local/.env`，systemd / docker 可继续放进进程 env。
 - `AIWORKER_FORCE_ID` / `AIWORKER_FORCE_TOKEN` — 测试/备份恢复用的一次性覆盖。
 
 Gateway 侧（`apps/gateway/src/index.ts` / gateway 容器）：

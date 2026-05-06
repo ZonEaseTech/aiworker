@@ -56,6 +56,8 @@ worker 容器内或 ssh 进 worker 主机直接操作 `worker.db` 的子命令�
 - `AIWORKER_GATEWAY_URL` / `AIWORKER_JOIN_TOKEN` / `AIWORKER_DISPLAY_NAME`（PLAN-018 / FEAT-024）— self-enroll 三件套：URL + token 同时设 → `aiworker serve` 跳过 operator 手动 `aiworker fleet pair`，bootstrap 完成后用 outbound WS 主动拨 gateway 把自身写入 fleet。`DISPLAY_NAME` 可选，缺省回落 workerId（最长 80 字符）。详见下文 §`aiworker serve` 与 [`docs/deployment.md` § Worker self-enroll quick start](./deployment.md#worker-self-enroll-quick-start-plan-018--feat-024)。
 - `AIWORKER_ENROLL_MODE`（PLAN-019 / FEAT-026）— `'auto' | 'otp'`，缺省 `'auto'`。`'auto'` 下走 self-enroll 还是 OTP 由 `JOIN_TOKEN` 是否设来判定（设 → self-enroll；未设 → OTP）；显式 `'otp'` 强制 attended 路径，即使 `JOIN_TOKEN` 同时存在也忽略它（用于 deployer 拿不到 fleet 凭证的 attended 场景）。详见下文 §`aiworker serve` 与 [`docs/deployment.md` § Worker OTP-attended enroll quick start](./deployment.md#worker-otp-attended-enroll-quick-startplan-019--feat-026)。
 
+Worker-local `.env`：`aiworker init` / `aiworker up` 会创建当前 scope 的私有 `.env`。project scope 下是 `<project>/.aiworker/local/.env`，user/explicit scope 下是对应 `AIWORKER_HOME/.env`。该文件 chmod 0600，并用于保存本 worker 的 master key、internal secret，以及 `AIWORKER_GATEWAY_URL` / `AIWORKER_JOIN_TOKEN` / `AIWORKER_DISPLAY_NAME` / `AIWORKER_ENROLL_MODE` 这类 worker 入网启动项。显式 shell env 仍然优先；当显式设置这些入网启动项再运行会触发 worker bootstrap 的命令时，CLI 会把值合并回当前 scope 的 `.env`，让后续启动不依赖 shell 会话。
+
 ### `aiworker up [--soul <preset>] [--dry-run] [serve options]`
 
 本地 worker 快速启动入口。`aiworker up` 等价于 `aiworker worker up`，只表达“把当前本地 worker 拉起来”；不新增 `fleet up` / `gateway up` 语义。
@@ -97,7 +99,7 @@ PLAN-023 起 `aiworker init` 默认走 **project scope**：
 | **project**（默认） | 当前 cwd（未显式 `AIWORKER_HOME`） | `<cwd>/.aiworker/{AGENT.md,SOUL.md,USER.md,MEMORY.md,ROLLUP.md,policy.json,toolsets.json,capability-packs.json,executor-capabilities.json,skills/,memories/,mcp.json}` + `<cwd>/.aiworker/local/{worker.db,identity.json,.env,workspaces/}` |
 | **user**（legacy） | `--global` flag，或显式 `AIWORKER_HOME=...` | `~/.aiworker/{worker.db,.env,workers/<workerId>/{AGENT.md,SOUL.md,USER.md,brain/skills,brain/memories,workspaces/}}` |
 
-`local/` 目录强制 `.gitignore = "*\n!.gitignore\n"`（worker.db / .env / workspaces 等敏感产物绝不入 git）；`.aiworker/.gitignore = "local/\n"`（其余 persona / policy / toolsets / brain skills / memories 默认入 git，团队共享 Project Brain）。每个 project worker 独立 mint master key（写入 `.aiworker/local/.env`，chmod 0600），与 user 级 `~/.aiworker/.env` 物理隔离——这是 AIWorker brain/worker 数据安全边界，不代表外部 executor 的 user/host 配置被隔离。
+`local/` 目录强制 `.gitignore = "*\n!.gitignore\n"`（worker.db / .env / workspaces 等敏感产物绝不入 git）；`.aiworker/.gitignore = "local/\n"`（其余 persona / policy / toolsets / brain skills / memories 默认入 git，团队共享 Project Brain）。每个 project worker 独立 mint master key，并把 worker 入网启动项保存到 `.aiworker/local/.env`（chmod 0600），与 user 级 `~/.aiworker/.env` 物理隔离——这是 AIWorker brain/worker 数据安全边界，不代表外部 executor 的 user/host 配置被隔离。
 
 首次 init 的 bootstrap token 默认不再以完整值打印到 stdout。CLI 会把完整值写入 chmod 0600 token file（project 默认 `.aiworker/local/bootstrap-token.txt`，user/explicit scope 默认对应 home 下 `bootstrap-token.txt`），stdout 只显示 masked token 与文件路径。需要迁移旧脚本时，把原先 grep stdout 的逻辑改为读取 token file：
 
@@ -216,6 +218,8 @@ aiworker scope
 2. `AIWORKER_HOME` env（systemd / docker 通常显式设）
 3. `<cwd>/.aiworker/`（向上搜，遇 git boundary 即停止——不跨 monorepo / repo 边界）
 4. `~/.aiworker/`（user 级 fallback）
+
+`AIWORKER_HOME` 的意义是“这个 worker 的本地状态根”，不是 cwd 的别名。cwd 只用于 project scope 自动发现：当当前目录或上级目录存在 `.aiworker/` 时，AIWorker 把可共享的 Project Brain 放在 `<project>/.aiworker/`，把本机私有 state 放在 `<project>/.aiworker/local/`，并把这个 `local/` 作为 runtime home。显式设置 `AIWORKER_HOME` 则表示 operator 要固定到某个独立 home，通常用于 systemd / docker / 多 worker 同机部署；此时不会再按 cwd 自动切 project。
 
 ### `aiworker doctor`
 
@@ -488,6 +492,8 @@ OTP 模式 stdout 格式（`apps/cli/src/commands/worker/serve.ts::formatOtpBox`
 ```
 
 适用场景与运维 / 排错见 [`docs/deployment.md` § Worker self-enroll quick start](./deployment.md#worker-self-enroll-quick-start-plan-018--feat-024) 与 [§ Worker OTP-attended enroll quick start](./deployment.md#worker-otp-attended-enroll-quick-startplan-019--feat-026)。
+
+project worker 推荐把入网启动项写入 `.aiworker/local/.env`，避免同一主机多个 worker 共用 shell 级 env。也可以先用一次显式 env 启动；bootstrap 会把下列 key 合并回当前 scope 的 `.env`，后续直接 `aiworker serve` / `aiworker up` 即可。
 
 ```sh
 # self-enroll（NAT 后批量部署）：

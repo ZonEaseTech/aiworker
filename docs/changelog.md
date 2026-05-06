@@ -1,5 +1,19 @@
 # AIWorker Changelog
 
+## 2026-05-06 12:38 [in_progress] REL-019 / PLAN-135 — 发布 aiworker CLI 0.9.3
+
+发布 `@zonease/aiworker-cli@0.9.3`，作为 0.9.2 之后的 patch release，
+交付 worker-local gateway enrollment env 持久化：
+
+- `AIWORKER_GATEWAY_URL` / `AIWORKER_JOIN_TOKEN` / `AIWORKER_DISPLAY_NAME` /
+  `AIWORKER_ENROLL_MODE` 可从当前 scope 的 `.env` 加载。
+- 显式进程 env 中的上述 worker 入网启动项会合并回 worker-local `.env`，
+  让一次性 export 可以固化到对应 worker，避免同一主机多 worker 串配置。
+- project scope 明确以 `<project>/.aiworker/local` 作为 worker runtime state
+  root；共享 Project Brain 仍在 `<project>/.aiworker/`。
+- `config.yaml` 仍是 redacted worker config advisory mirror，不承载 gateway
+  enrollment token / startup secret。
+
 ## 2026-05-06 10:08 [completed] TODO-035 / PLAN-133 / QA-015 — Long-running serve multi-turn REST regression
 
 扩展 `scripts/governance-kernel-harness.ts` 的 `restSmoke` 块，按对在

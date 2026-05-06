@@ -129,8 +129,11 @@ export INTERNAL_SHARED_SECRET='<≥16 字符>'   # 远程 operator 的 bearer
 
 ```sh
 # Worker 端：
-export AIWORKER_GATEWAY_URL='wss://your-gateway.example/'
-export AIWORKER_DISPLAY_NAME='my-laptop'    # 可选，默认 hostname
+aiworker init --soul developer
+printf '%s\n' \
+  "AIWORKER_GATEWAY_URL=wss://your-gateway.example/" \
+  "AIWORKER_DISPLAY_NAME=my-laptop" \
+  >> .aiworker/local/.env
 aiworker serve
 # stdout 打印 OTP，例如  YDCR-ZD8M
 ```
@@ -227,9 +230,9 @@ aiworker fleet config set <workerId> "$NEW" --if-match <version>
 |---|---|
 | `AIWORKER_MASTER_KEY` | 64 hex；worker / gateway 数据库 AES 主密钥；**必须离线备份** |
 | `INTERNAL_SHARED_SECRET` | gateway 公网或非 loopback 时远程 operator 的 bearer（≥16 字符） |
-| `AIWORKER_GATEWAY_URL` | worker 端连入 gateway（含 path 与 basicauth）|
-| `AIWORKER_DISPLAY_NAME` | worker 在 fleet 列表里的展示名（默认 hostname）|
-| `AIWORKER_HOME` | 默认 `~/.aiworker`；project scope 下走 `<scope>/.aiworker/` |
+| `AIWORKER_GATEWAY_URL` | worker 端连入 gateway（含 path 与 basicauth）；project worker 优先写 `.aiworker/local/.env` |
+| `AIWORKER_DISPLAY_NAME` | worker 在 fleet 列表里的展示名（默认 hostname）；按 worker 持久化到 `.aiworker/local/.env` |
+| `AIWORKER_HOME` | 显式 worker 状态根；project scope 自动解析到 `<project>/.aiworker/local` |
 | `AIWORKER_ADMIN_EXTERNAL_AUTH` | `1` = 已由 Caddy / Cloudflare Access / Logto 守 `/admin/*` |
 
 完整列表：`apps/api/.env.example` + `ops/compose/.env.example`，或 [`docs/architecture.md` § Environment](docs/architecture.md)。
@@ -266,7 +269,7 @@ bun run typecheck && bun run lint && bun run test
 
 > 投产前请阅 [`docs/governance-node-status.md`](docs/governance-node-status.md) 的 conformance 表 + 残留边界。1.0.0 以前 CLI / API / config 不保证向后兼容（AGENTS.md 显式承诺）。
 
-CLI npm latest：**0.9.2**。
+CLI npm latest：**0.9.3**。
 
 | Module | Status |
 |---|---|

@@ -3,11 +3,12 @@
  *
  * 在 CLI 入口被业务模块（含 packages/core 的 zod schema）import 之前调用一次。
  * 责任：
- *   1. 解析 `~/.aiworker/.env`（若存在）注入 `process.env`，仅填补缺失的 key（显式 export 优先）。
+ *   1. 解析 worker-local `.env`（若存在）注入 `process.env`，仅填补缺失的 key（显式 export 优先）。
  *   2. 检测是否缺关键 secret（`AIWORKER_MASTER_KEY` 优先，`INTERNAL_SHARED_SECRET` 顺手 mint）。
- *      若缺：自动 mint 64-hex master key + 48-hex shared secret，写入 `~/.aiworker/.env`（chmod 0600），
+ *      若缺：自动 mint 64-hex master key + 48-hex shared secret，写入 `.env`（chmod 0600），
  *      并把刚 mint 的值塞进 `process.env`。
- *   3. 第一次 mint 时把 master key **明文打到 stderr 一次** + 备份警告，让用户能 tee/抓取。
+ *   3. 将显式进程 env 中的 worker 入网启动项合并回 `.env`，让下一次启动仍命中同一 worker 配置。
+ *   4. 第一次 mint 时把 master key **明文打到 stderr 一次** + 备份警告，让用户能 tee/抓取。
  *
  * 故意写得 zero-dependency（只用 `node:fs` / `node:os` / `node:path` / `node:crypto`），
  * 这样在 cli 入口顶部 import 不会拖慢 bundle 启动。
@@ -25,6 +26,12 @@ import path from 'node:path'
 import process from 'node:process'
 
 const DEFAULT_HOME = path.join(homedir(), '.aiworker')
+const PERSISTED_WORKER_STARTUP_ENV_KEYS = [
+  'AIWORKER_GATEWAY_URL',
+  'AIWORKER_JOIN_TOKEN',
+  'AIWORKER_DISPLAY_NAME',
+  'AIWORKER_ENROLL_MODE',
+] as const
 
 export interface DotenvBootstrapResult {
   /** 是否 mint 了新 secret（首次启动） */
@@ -48,7 +55,14 @@ export function bootstrapDotenv(options: BootstrapOptions = {}): DotenvBootstrap
 
   // 1) 已存在 → load + return
   if (existsSync(envFile)) {
-    const parsed = parseDotenv(readFileSync(envFile, 'utf8'))
+    const currentText = readFileSync(envFile, 'utf8')
+    const merged = mergeProcessStartupEnv(currentText)
+    if (merged.changed) {
+      writeFileSync(envFile, merged.text, { mode: 0o600 })
+      chmodSync(envFile, 0o600)
+    }
+
+    const parsed = parseDotenv(merged.text)
     for (const [key, value] of Object.entries(parsed)) {
       if (process.env[key] === undefined)
         process.env[key] = value
@@ -65,12 +79,13 @@ export function bootstrapDotenv(options: BootstrapOptions = {}): DotenvBootstrap
 
   const lines = [
     '# FEAT-030 first-run minted env. chmod 0600.',
-    '# Persisted to disk so subsequent `aiworker` calls don\'t need to re-mint.',
-    '# 显式 `export AIWORKER_MASTER_KEY=...` 仍然优先（覆盖本文件）。',
+    '# Persisted to disk so subsequent `aiworker` calls keep the same worker-local startup env.',
+    '# 显式 `export KEY=...` 仍然优先（并会回写本文件中的 worker 入网启动项）。',
     `AIWORKER_MASTER_KEY=${masterKey}`,
     `INTERNAL_SHARED_SECRET=${sharedSecret}`,
-    '',
   ]
+  appendProcessStartupEnv(lines)
+  lines.push('')
   writeFileSync(envFile, lines.join('\n'), { mode: 0o600 })
   // chmod 防御写入路径上 umask 把 mode 收紧没生效的情况
   chmodSync(envFile, 0o600)
@@ -92,19 +107,95 @@ export function bootstrapDotenv(options: BootstrapOptions = {}): DotenvBootstrap
 function parseDotenv(text: string): Record<string, string> {
   const out: Record<string, string> = {}
   for (const rawLine of text.split('\n')) {
-    const line = rawLine.trim()
-    if (!line || line.startsWith('#'))
+    const assignment = parseDotenvAssignment(rawLine)
+    if (!assignment)
       continue
-    const eq = line.indexOf('=')
-    if (eq <= 0)
-      continue
-    const key = line.slice(0, eq).trim()
-    let value = line.slice(eq + 1).trim()
-    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith('\'') && value.endsWith('\'')))
-      value = value.slice(1, -1)
-    out[key] = value
+    out[assignment.key] = assignment.value
   }
   return out
+}
+
+function parseDotenvAssignment(rawLine: string): { key: string, value: string } | null {
+  const line = rawLine.trim()
+  if (!line || line.startsWith('#'))
+    return null
+  const eq = line.indexOf('=')
+  if (eq <= 0)
+    return null
+  const key = line.slice(0, eq).trim()
+  let value = line.slice(eq + 1).trim()
+  if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith('\'') && value.endsWith('\'')))
+    value = value.slice(1, -1)
+  return { key, value }
+}
+
+function collectProcessStartupEnv(): Partial<Record<typeof PERSISTED_WORKER_STARTUP_ENV_KEYS[number], string>> {
+  const out: Partial<Record<typeof PERSISTED_WORKER_STARTUP_ENV_KEYS[number], string>> = {}
+  for (const key of PERSISTED_WORKER_STARTUP_ENV_KEYS) {
+    const value = process.env[key]
+    if (value !== undefined)
+      out[key] = value
+  }
+  return out
+}
+
+function appendProcessStartupEnv(lines: string[]): void {
+  const updates = collectProcessStartupEnv()
+  const keys = PERSISTED_WORKER_STARTUP_ENV_KEYS.filter(key => updates[key] !== undefined)
+  if (keys.length === 0)
+    return
+
+  lines.push('')
+  lines.push('# Worker-local gateway enrollment startup env.')
+  for (const key of keys)
+    lines.push(formatDotenvAssignment(key, updates[key]!))
+}
+
+function mergeProcessStartupEnv(text: string): { changed: boolean, text: string } {
+  const updates = collectProcessStartupEnv()
+  const keys = PERSISTED_WORKER_STARTUP_ENV_KEYS.filter(key => updates[key] !== undefined)
+  if (keys.length === 0)
+    return { changed: false, text }
+
+  const remaining = new Set<string>(keys)
+  const lines = text.split('\n')
+  let changed = false
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const assignment = parseDotenvAssignment(lines[index]!)
+    if (!assignment || updates[assignment.key as typeof PERSISTED_WORKER_STARTUP_ENV_KEYS[number]] === undefined)
+      continue
+
+    remaining.delete(assignment.key)
+    const nextValue = updates[assignment.key as typeof PERSISTED_WORKER_STARTUP_ENV_KEYS[number]]!
+    if (assignment.value === nextValue)
+      continue
+
+    lines[index] = formatDotenvAssignment(assignment.key, nextValue)
+    changed = true
+  }
+
+  if (remaining.size > 0) {
+    if (lines.length > 0 && lines[lines.length - 1] !== '')
+      lines.push('')
+    lines.push('# Worker-local gateway enrollment startup env.')
+    for (const key of PERSISTED_WORKER_STARTUP_ENV_KEYS) {
+      if (remaining.has(key))
+        lines.push(formatDotenvAssignment(key, updates[key]!))
+    }
+    lines.push('')
+    changed = true
+  }
+
+  const mergedText = lines.join('\n')
+  return {
+    changed,
+    text: changed && !mergedText.endsWith('\n') ? `${mergedText}\n` : mergedText,
+  }
+}
+
+function formatDotenvAssignment(key: string, value: string): string {
+  return `${key}=${value}`
 }
 
 function printMintBanner(masterKey: string, envFile: string): void {

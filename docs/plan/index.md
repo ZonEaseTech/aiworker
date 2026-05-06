@@ -162,3 +162,5 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-131 Governance Kernel harness — full 5×2 matrix on cli-release-local**](PLAN-131.md) `2026-05-06`
 - [x] [**PLAN-132 发布 aiworker CLI 0.9.2**](PLAN-132.md) `2026-05-06`
 - [x] [**PLAN-133 Harness — long-running serve multi-turn REST regression**](PLAN-133.md) `2026-05-06`
+- [x] [**PLAN-134 Worker-local dotenv enrollment env persistence**](PLAN-134.md) `2026-05-06`
+- [-] [**PLAN-135 发布 aiworker CLI 0.9.3**](PLAN-135.md) `2026-05-06`

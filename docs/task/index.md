@@ -240,4 +240,6 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**QA-014 Governance Kernel harness — full 5×2 matrix on cli-release-local**](QA-014.md) `P1`
 - [x] [**REL-018 发布 aiworker CLI 0.9.2**](REL-018.md) `P1`
 - [x] [**TODO-035 Harness — long-running serve multi-turn REST regression**](TODO-035.md) `P2`
+- [x] [**FEAT-055 Worker-local dotenv enrollment env persistence**](FEAT-055.md) `P2`
 - [x] [**QA-015 Governance Kernel harness — long-running serve REST multi-turn evidence**](QA-015.md) `P1`
+- [-] [**REL-019 发布 aiworker CLI 0.9.3**](REL-019.md) `P1`

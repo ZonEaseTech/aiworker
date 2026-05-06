@@ -320,13 +320,18 @@ export AIWORKER_JOIN_TOKEN=<上面那串>
 
 未设 → self-enroll 完全禁用，所有带 `connect.enroll` 的 node 帧 close `4401 auth:join_token_disabled`，`gateway.connect.rejected` audit 留底。
 
-### 2. Worker 侧三件套 env
+### 2. Worker 侧入网启动项
 
 ```sh
-AIWORKER_GATEWAY_URL=ws://gateway-host:9218/ws        # 或 wss://...
+aiworker init --soul developer
+cat >> .aiworker/local/.env <<'EOF'
+AIWORKER_GATEWAY_URL=ws://gateway-host:9218/ws
 AIWORKER_JOIN_TOKEN=<同上 gateway 侧>
-AIWORKER_DISPLAY_NAME=prod-1                          # 可选；缺省回落 workerId
+AIWORKER_DISPLAY_NAME=prod-1
+EOF
 ```
+
+project worker 推荐写 `<project>/.aiworker/local/.env`（chmod 0600，gitignored），这样同一主机多个 worker 不会共享 shell 级 `AIWORKER_GATEWAY_URL` / `AIWORKER_DISPLAY_NAME`。systemd / docker 仍可使用各自 unit / compose 的 `Environment=` 或 env file。若先用 shell `export` 启动一次，CLI bootstrap 会把上述 worker 入网启动项合并回当前 scope 的 `.env`。
 
 只设 `AIWORKER_JOIN_TOKEN` 而无 `AIWORKER_GATEWAY_URL` → `aiworker serve` 启动时 `consola.warn` 跳过 self-enroll，**不**自动起 gateway-client。`--gateway` flag 与 env 三件套同时存在时，`--gateway` 显式覆盖（走原 operator-pull 路径）。
 
@@ -383,15 +388,20 @@ export AIWORKER_ENROLL_OTP_TTL_SEC=300
 
 未配 `AIWORKER_MASTER_KEY` → operator approve 时 `master_key_missing`，submit 阶段不会拒（OTP 已派给 worker）；运维必须确保启动时已配齐。
 
-### 2. Worker 侧 env
+### 2. Worker 侧入网启动项
 
 ```sh
-AIWORKER_GATEWAY_URL=ws://gateway-host:9218/ws        # 或 wss://...
-AIWORKER_DISPLAY_NAME=ben-laptop                       # 可选；缺省回落 workerId
+aiworker init --soul developer
+cat >> .aiworker/local/.env <<'EOF'
+AIWORKER_GATEWAY_URL=ws://gateway-host:9218/ws
+AIWORKER_DISPLAY_NAME=ben-laptop
 # AIWORKER_JOIN_TOKEN 不设 → 自动落 OTP 模式；
 # 若同时设了 JOIN_TOKEN 又想强制 OTP（attended）：
-AIWORKER_ENROLL_MODE=otp                               # 显式 'otp'，忽略 JOIN_TOKEN
+AIWORKER_ENROLL_MODE=otp
+EOF
 ```
+
+systemd / docker 形态继续把这些变量放在对应进程环境或 env file；裸跑 / project worker 优先放 `.aiworker/local/.env`，避免多 worker 场景串配置。
 
 > `aiworker serve` 内部会把 `AIWORKER_GATEWAY_URL` 的 path 段强制改写为 `/enroll-ws`，无需 deployer 自己改。Path-split 由 Caddy 端完成（见下文 § Caddy `/enroll-ws` path split）。
 

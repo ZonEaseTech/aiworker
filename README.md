@@ -129,8 +129,11 @@ The most common path — the worker side carries no fleet credentials, the opera
 
 ```sh
 # Worker side:
-export AIWORKER_GATEWAY_URL='wss://your-gateway.example/'
-export AIWORKER_DISPLAY_NAME='my-laptop'    # optional, defaults to hostname
+aiworker init --soul developer
+printf '%s\n' \
+  "AIWORKER_GATEWAY_URL=wss://your-gateway.example/" \
+  "AIWORKER_DISPLAY_NAME=my-laptop" \
+  >> .aiworker/local/.env
 aiworker serve
 # stdout prints an OTP, e.g.  YDCR-ZD8M
 ```
@@ -227,9 +230,9 @@ See [`docs/deployment.md`](docs/deployment.md).
 |---|---|
 | `AIWORKER_MASTER_KEY` | 64 hex; AES master key for worker / gateway databases; **must be backed up offline** |
 | `INTERNAL_SHARED_SECRET` | Remote-operator bearer when the gateway is exposed publicly or off loopback (≥16 chars) |
-| `AIWORKER_GATEWAY_URL` | Worker-side gateway URL (path + basicauth) |
-| `AIWORKER_DISPLAY_NAME` | Worker label in the fleet list (defaults to hostname) |
-| `AIWORKER_HOME` | Defaults to `~/.aiworker`; project scope uses `<scope>/.aiworker/` |
+| `AIWORKER_GATEWAY_URL` | Worker-side gateway URL (path + basicauth); for project workers prefer `.aiworker/local/.env` |
+| `AIWORKER_DISPLAY_NAME` | Worker label in the fleet list (defaults to hostname); persisted per worker in `.aiworker/local/.env` |
+| `AIWORKER_HOME` | Explicit worker state root; project scope auto-resolves to `<project>/.aiworker/local` |
 | `AIWORKER_ADMIN_EXTERNAL_AUTH` | Set to `1` if `/admin/*` is fronted by Caddy / Cloudflare Access / Logto / etc. |
 
 Full list: `apps/api/.env.example` + `ops/compose/.env.example`, or [`docs/architecture.md` § Environment](docs/architecture.md).
@@ -266,7 +269,7 @@ New features go through the `/pma` skill in three stages: investigate → propos
 
 > Before going to production, read the conformance table and residual-boundary section in [`docs/governance-node-status.md`](docs/governance-node-status.md). Pre-1.0 the CLI / API / config does not guarantee backwards compatibility (an explicit AGENTS.md commitment).
 
-CLI npm latest: **0.9.2**.
+CLI npm latest: **0.9.3**.
 
 | Module | Status |
 |---|---|
