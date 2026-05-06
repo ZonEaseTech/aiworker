@@ -1,9 +1,11 @@
 # AIWorker
 
-轻量自托管 **Project Brain + Worker/Fleet aggregation runtime**。
+**English** · [简体中文](./README.zh-CN.md)
 
-- **Worker** 持 Project Brain（filesystem 权威）、worker.db 和 conversations；外部 executor（Codex / Claude Code / Hermes / OpenClaw / Cursor 等）只通过薄 adapter 调用。
-- **Gateway 是可选的 control plane**：单 worker 不需要 gateway 就能用；多 worker 时 gateway 聚合 presence、routing、audit，不持有任何 brain / 对话数据。
+Self-hosted, lightweight **Project Brain + Worker/Fleet aggregation runtime**.
+
+- **Worker** owns the Project Brain (filesystem is the source of truth), worker.db, and conversations. External executors (Codex / Claude Code / Hermes / OpenClaw / Cursor, etc.) are invoked through a thin adapter only.
+- **Gateway is an optional control plane**: a single worker runs without one. With multiple workers, the gateway aggregates presence, routing, and audit — it never holds brain or conversation data.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
@@ -15,29 +17,30 @@
 ┌──────────────────────────────────────────────────────────────────────┐
 │ AIWorker Gateway                                                     │
 │   fleet.db : registered_workers + audit_events                       │
-│   只持指针 / presence / routing / audit ── 不持 brain / 对话         │
+│   pointers / presence / routing / audit only — no brain / chat data  │
 └──┬─────────────────┬─────────────────┬───────────────────────────────┘
    │ WS frame relay  │                 │
    ▼                 ▼                 ▼
 ┌─────────┐     ┌─────────┐       ┌─────────┐
-│ Worker A│     │ Worker B│  ...  │ Worker N│   ← 单 worker 可直接跑，不连 gateway
-└────┬────┘     └─────────┘       └─────────┘
+│ Worker A│     │ Worker B│  ...  │ Worker N│   ← a single worker can run
+└────┬────┘     └─────────┘       └─────────┘     standalone, no gateway
      │
-     ▼     (data plane, per worker — gateway 不参与)
+     ▼     (data plane, per worker — gateway never participates)
 ┌──────────────────────────────────────────────────────────────────────┐
 │ worker.db   identity / config / conversations  (AES-256-GCM)         │
-│ Project Brain   filesystem 权威：AGENT / SOUL / USER + memories +    │
-│                 brain skills + policy + admission state              │
+│ Project Brain   filesystem authoritative: AGENT / SOUL / USER +      │
+│                 memories + brain skills + policy + admission state   │
 │ Thin Executor Adapter   →   External Engine                          │
 │   health / run / stream /       Codex / Claude Code / Hermes /       │
 │   cancel / resume               OpenClaw / Cursor / ACP / MCP / HTTP │
 │                                   └─→ user/host MCP / skills /       │
 │                                       plugins / auth / native        │
-│                                       sessions（AIWorker 不接管）     │
+│                                       sessions (not owned by         │
+│                                       AIWorker)                      │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
-控制面与数据面物理隔离：fleet.db 永不存 brain / conversations / secrets；worker.db 永不被 gateway 反向 fetch。完整架构与 mermaid 双视角：[`docs/architecture.md`](docs/architecture.md)。当前是否符合 Project Brain governance node 目标：[`docs/governance-node-status.md`](docs/governance-node-status.md)。
+The control plane and the data plane are physically isolated: fleet.db never stores brain / conversations / secrets, and worker.db is never reverse-fetched by the gateway. Full architecture and dual-view mermaid diagrams: [`docs/architecture.md`](docs/architecture.md). Whether this build meets the Project Brain governance node target: [`docs/governance-node-status.md`](docs/governance-node-status.md).
 
 ---
 
@@ -45,97 +48,97 @@
 
 ```sh
 bun install -g @zonease/aiworker-cli
-# 或 bunx @zonease/aiworker-cli --help（已装 Bun 时）
-# 或 npx / npm install -g（运行时仍需 Bun）
+# or `bunx @zonease/aiworker-cli --help` (when Bun is already installed)
+# or `npx` / `npm install -g` (Bun is still required at runtime)
 ```
 
-CLI 是 Bun-native。第一次跑任意命令时自动 mint master key 写到 `~/.aiworker/.env`（chmod 0600）。**该 master key 必须组织级离线备份**——丢失 = worker.db / fleet.db 解不开，所有 worker 必须重 enroll。
+The CLI is Bun-native. The first run mints a master key and writes it to `~/.aiworker/.env` (chmod 0600). **The master key must be backed up offline at the org level** — if it is lost, worker.db / fleet.db cannot be decrypted and every worker must re-enroll.
 
-完整安装与平台 binary：[`docs/deployment.md`](docs/deployment.md)。
+Full install and per-platform binaries: [`docs/deployment.md`](docs/deployment.md).
 
 ---
 
-## 启动 worker（单机最简，不要 gateway）
+## Start a worker (single host, no gateway)
 
-最常见：把当前业务目录变成一个 worker 作用域，本地起 server + admin UI，用 CLI 跑对话。**不需要任何 fleet 凭证。**
+The most common path: turn the current business directory into a worker scope, start a local server + admin UI, and chat through the CLI. **No fleet credentials required.**
 
 ```sh
 cd ~/code/my-project
-aiworker up --soul developer            # 一键完成 init + executor select + doctor + serve
+aiworker up --soul developer            # one shot: init + executor select + doctor + serve
 ```
 
-`aiworker up` 在 `<cwd>/.aiworker/` 落 Project Brain layout（worker.db、master key、persona、brain skills），跑预检，并启动 worker HTTP/admin（默认 `:9217`）。Soul 选 `developer` / `hr-recruiting` / `finance-ops` / `qa-reviewer` / `general-assistant` 之一——它们决定 persona / 风险偏好 / 默认 brief 段；governance kernel 行为对所有 Soul 一致。
+`aiworker up` lays down the Project Brain layout under `<cwd>/.aiworker/` (worker.db, master key, persona, brain skills), runs the preflight checks, and starts the worker HTTP/admin server (default `:9217`). Pick a Soul from `developer` / `hr-recruiting` / `finance-ops` / `qa-reviewer` / `general-assistant` — Souls shape persona / risk preferences / default brief sections; governance kernel behavior is the same across all Souls.
 
-需要分步控制时：
+Step-by-step alternative:
 
 ```sh
-aiworker init --soul developer                            # 仅落 layout
-aiworker executor select --engine claude-code --apply     # 选 executor（见下文"配 LLM executor"）
-aiworker executor doctor --engine claude-code             # 检查 engine CLI + project overlay
-aiworker doctor                                            # 整体诊断（PASS / WARN / INFO）
-aiworker brain status                                      # 看 brain 资产
-aiworker serve --port 9217 --host 127.0.0.1               # 启动 server
-aiworker run --message 'hello' --chat-id demo             # CLI 直发一轮（不开 server）
+aiworker init --soul developer                            # only lay out files
+aiworker executor select --engine claude-code --apply     # pick executor (see "Configure the LLM" below)
+aiworker executor doctor --engine claude-code             # check engine CLI + project overlay
+aiworker doctor                                            # overall diagnostics (PASS / WARN / INFO)
+aiworker brain status                                      # inspect brain assets
+aiworker serve --port 9217 --host 127.0.0.1               # start the server
+aiworker run --message 'hello' --chat-id demo             # one-shot CLI turn (no server)
 ```
 
-启动后：
+After it is running:
 
-- Admin UI：`http://127.0.0.1:9217/admin/`（默认 loopback；公网必须外部鉴权，下文）
-- Bearer token：`<scope>/.aiworker/local/bootstrap-token.txt`，REST 调用必须带 `Authorization: Bearer <token>`
-- Brain 与 conversations 都在本地，没有任何外发流量（除外 executor 自己调 LLM）
+- Admin UI: `http://127.0.0.1:9217/admin/` (loopback by default; public hosts must front it with external auth — see below)
+- Bearer token: `<scope>/.aiworker/local/bootstrap-token.txt`. REST calls must include `Authorization: Bearer <token>`.
+- Brain and conversations stay local. The only outbound traffic is whatever the external executor itself talks to (its own LLM provider).
 
-完整 CLI 参考：[`docs/cli.md`](docs/cli.md)。
+Full CLI reference: [`docs/cli.md`](docs/cli.md).
 
 ---
 
-## 启动 fleet（多 worker + gateway）
+## Start a fleet (multiple workers + gateway)
 
-Gateway 把多个 worker 聚合成 fleet：operator 一个 CLI 控制全部 worker；worker 自己仍持 brain/对话/secrets。
+The gateway aggregates multiple workers into a fleet: one operator CLI controls all of them, while each worker keeps owning its own brain, conversations, and secrets.
 
-### 1) 起 gateway
+### 1) Start the gateway
 
 ```sh
-# 开发 / 单机：前台跑
+# Dev / single host: foreground
 aiworker gateway start --host 127.0.0.1 --port 9218
 
-# 服务器长跑：systemd
+# Server long-run: systemd
 aiworker gateway install systemd --user
 systemctl --user start aiworker-gateway
 ```
 
-绑非 loopback host 必须设：
+When binding to a non-loopback host you must set:
 
 ```sh
-export INTERNAL_SHARED_SECRET='<≥16 字符>'   # 远程 operator 的 bearer
-# Caddy / Cloudflare Access / Logto 等外部鉴权层守 /ws 与 /admin/*（fail-closed）
+export INTERNAL_SHARED_SECRET='<≥16 chars>'   # bearer for remote operators
+# Front /ws and /admin/* with Caddy / Cloudflare Access / Logto / etc. (fail-closed)
 ```
 
-公网部署 + Caddy basicauth 模板：[`docs/deployment-public-https.md`](docs/deployment-public-https.md)。
+Public deployment + Caddy basicauth template: [`docs/deployment-public-https.md`](docs/deployment-public-https.md).
 
-### 2) Worker 入网（推荐 OTP）
+### 2) Enroll a worker (OTP recommended)
 
-最常用——worker 端零 fleet 凭证，operator 看 8 字符 OTP 后批准：
+The most common path — the worker side carries no fleet credentials, the operator approves an 8-character OTP:
 
 ```sh
-# Worker 端：
+# Worker side:
 export AIWORKER_GATEWAY_URL='wss://your-gateway.example/'
-export AIWORKER_DISPLAY_NAME='my-laptop'    # 可选，默认 hostname
+export AIWORKER_DISPLAY_NAME='my-laptop'    # optional, defaults to hostname
 aiworker serve
-# stdout 打印 OTP，例如  YDCR-ZD8M
+# stdout prints an OTP, e.g.  YDCR-ZD8M
 ```
 
 ```sh
-# Operator 端：
-aiworker fleet enroll list                  # 看 pending OTP
-aiworker fleet enroll approve YDCR-ZD8M     # 批准
-aiworker fleet list                         # 现在能看到这个 worker
+# Operator side:
+aiworker fleet enroll list                  # see pending OTPs
+aiworker fleet enroll approve YDCR-ZD8M     # approve
+aiworker fleet list                         # the worker is now visible
 ```
 
-其它 3 种入网路径（self-enroll 批量 / 手动 pair 高安全 / docker auto-launch）：[`docs/gateway.md`](docs/gateway.md)。
+The other three enrollment paths (self-enroll for unattended batch setups / manual pair for high-security single-worker / docker auto-launch): [`docs/gateway.md`](docs/gateway.md).
 
-### 3) Operator 配 gateway 入口
+### 3) Operator gateway config
 
-operator 第一次需要写 `~/.aiworker/aiworker.json`：
+The operator side needs `~/.aiworker/aiworker.json` on first use:
 
 ```sh
 mkdir -p ~/.aiworker && chmod 700 ~/.aiworker
@@ -149,28 +152,28 @@ EOF
 chmod 600 ~/.aiworker/aiworker.json
 ```
 
-> Gateway 同机 loopback 可省 basicauth/token：用 `ws://127.0.0.1:9218/ws` 即可。
+> Same-host loopback skips basicauth and the token: just use `ws://127.0.0.1:9218/ws`.
 
-### 4) Operator 常用命令
+### 4) Common operator commands
 
 ```sh
-# 状态
+# State
 aiworker fleet list
 aiworker fleet remove <workerId>
 
-# 对话（流式 NDJSON）
+# Chat (streaming NDJSON)
 aiworker fleet chat <workerId> 'hello'
-aiworker fleet chat <workerId> '继续' --conversation-id <prev-id>
+aiworker fleet chat <workerId> 'continue' --conversation-id <prev-id>
 
-# Worker config（乐观锁）
-aiworker fleet config get <workerId>                          # 读出 version + config
+# Worker config (optimistic-locked)
+aiworker fleet config get <workerId>                          # returns version + config
 aiworker fleet config set <workerId> "$NEW_CFG" --if-match <version>
 
-# Token 轮换 / 日志 / cron / per-tool approvals
+# Token rotation / logs / cron / per-tool approvals
 aiworker fleet token rotate <workerId>
 aiworker fleet logs <workerId> --follow --tail 200
 aiworker fleet schedule list <workerId>
-aiworker fleet schedule add <workerId> --expression '0 9 * * *' --prompt '早报' --channel web --chat-id daily
+aiworker fleet schedule add <workerId> --expression '0 9 * * *' --prompt 'morning brief' --channel web --chat-id daily
 aiworker fleet approvals list
 aiworker fleet approvals grant <workerId> <taskId> <toolCallId>          # allow
 aiworker fleet approvals grant <workerId> <taskId> <toolCallId> --deny
@@ -178,64 +181,64 @@ aiworker fleet approvals grant <workerId> <taskId> <toolCallId> --deny
 
 ---
 
-## 配 LLM executor
+## Configure the LLM executor
 
-新 worker 默认 `executor: { engine: 'http', variant: 'default' }`，需要切到真实 LLM 才能工作。
+A new worker defaults to `executor: { engine: 'http', variant: 'default' }` and must be switched to a real LLM before it can do anything.
 
 ```sh
-# 本机：
+# Local:
 aiworker executor select --engine claude-code --variant default --apply
 aiworker executor doctor --engine claude-code
 
-# Fleet 内远程改 worker config：
-aiworker fleet config get <workerId>          # 拿 version + 当前 config
+# Remote, for a worker in the fleet:
+aiworker fleet config get <workerId>          # grab version + current config
 aiworker fleet config set <workerId> "$NEW" --if-match <version>
 ```
 
-支持的 engine：`http`（OpenAI / DeepSeek / SiliconFlow / 任何 chat-completions）、`claude-code`、`codex`、`acp`（gemini / qwen）、`cursor`、`mcp`。
+Supported engines: `http` (OpenAI / DeepSeek / SiliconFlow / any chat-completions-compatible API), `claude-code`, `codex`, `acp` (gemini / qwen), `cursor`, `mcp`.
 
-每个 engine 的 install / auth recipe（含 `claude login`、`codex auth`、apiKey vault 写入、ACP CLI 安装）：[`docs/executor-engines.md`](docs/executor-engines.md)。
+Per-engine install / auth recipes (including `claude login`, `codex auth`, secret vault writes, ACP CLI installs): [`docs/executor-engines.md`](docs/executor-engines.md).
 
 ---
 
-## 部署形态
+## Deployment shapes
 
-| 形态 | 适用 | 入口 |
+| Shape | When | Entry |
 |---|---|---|
-| 裸跑 | 开发 / CI | `aiworker gateway start` / `aiworker serve` 前台 |
-| systemd（Linux 推荐） | 服务器长跑 | `aiworker {gateway,worker} install systemd [--user\|--system]` |
-| docker compose | 不愿装 bun / per-worker 隔离 | `ops/compose/docker-compose.yml`（GHCR 镜像） |
+| Bare-process | dev / CI | `aiworker gateway start` / `aiworker serve` in the foreground |
+| systemd (Linux preferred) | server long-run | `aiworker {gateway,worker} install systemd [--user\|--system]` |
+| docker compose | no Bun on host / per-worker isolation | `ops/compose/docker-compose.yml` (GHCR images) |
 
-详见 [`docs/deployment.md`](docs/deployment.md)。
+See [`docs/deployment.md`](docs/deployment.md).
 
 ---
 
-## 关键 env
+## Key environment variables
 
-| 变量 | 用途 |
+| Variable | Purpose |
 |---|---|
-| `AIWORKER_MASTER_KEY` | 64 hex；worker / gateway 数据库 AES 主密钥；**必须离线备份** |
-| `INTERNAL_SHARED_SECRET` | gateway 公网或非 loopback 时远程 operator 的 bearer（≥16 字符） |
-| `AIWORKER_GATEWAY_URL` | worker 端连入 gateway（含 path 与 basicauth）|
-| `AIWORKER_DISPLAY_NAME` | worker 在 fleet 列表里的展示名（默认 hostname）|
-| `AIWORKER_HOME` | 默认 `~/.aiworker`；project scope 下走 `<scope>/.aiworker/` |
-| `AIWORKER_ADMIN_EXTERNAL_AUTH` | `1` = 已由 Caddy / Cloudflare Access / Logto 守 `/admin/*` |
+| `AIWORKER_MASTER_KEY` | 64 hex; AES master key for worker / gateway databases; **must be backed up offline** |
+| `INTERNAL_SHARED_SECRET` | Remote-operator bearer when the gateway is exposed publicly or off loopback (≥16 chars) |
+| `AIWORKER_GATEWAY_URL` | Worker-side gateway URL (path + basicauth) |
+| `AIWORKER_DISPLAY_NAME` | Worker label in the fleet list (defaults to hostname) |
+| `AIWORKER_HOME` | Defaults to `~/.aiworker`; project scope uses `<scope>/.aiworker/` |
+| `AIWORKER_ADMIN_EXTERNAL_AUTH` | Set to `1` if `/admin/*` is fronted by Caddy / Cloudflare Access / Logto / etc. |
 
-完整列表：`apps/api/.env.example` + `ops/compose/.env.example`，或 [`docs/architecture.md` § Environment](docs/architecture.md)。
+Full list: `apps/api/.env.example` + `ops/compose/.env.example`, or [`docs/architecture.md` § Environment](docs/architecture.md).
 
 ---
 
 ## More
 
-- [`docs/architecture.md`](docs/architecture.md) — monorepo 布局、数据流、安全模型、Brain Governance Kernel 决策、env 全表
-- [`docs/governance-node-status.md`](docs/governance-node-status.md) — 当前是否符合 Project Brain governance node 目标的 source-backed 评估
-- [`docs/gateway.md`](docs/gateway.md) — WS 协议（METHODS / EVENTS）+ 4 enroll path
-- [`docs/deployment.md`](docs/deployment.md) — 三档部署 run book + 故障排查 + 备份清单
-- [`docs/deployment-public-https.md`](docs/deployment-public-https.md) — 公网 Cloudflare + Caddy 叠加层（含 BUG-007 fail-closed）
-- [`docs/executor-engines.md`](docs/executor-engines.md) — 每 LLM engine 的 auth/install
-- [`docs/cli.md`](docs/cli.md) — 完整 CLI 命令参考
-- [`scripts/governance-kernel-harness.ts`](scripts/governance-kernel-harness.ts) — Brain Governance Kernel 回归 harness（compact / full × source-local / cli-release-local）
-- [`docs/changelog.md`](docs/changelog.md) — release 历史与端到端实测记录
+- [`docs/architecture.md`](docs/architecture.md) — monorepo layout, data flow, security model, Brain Governance Kernel decision, full env table
+- [`docs/governance-node-status.md`](docs/governance-node-status.md) — source-backed assessment of whether this build meets the Project Brain governance node target
+- [`docs/gateway.md`](docs/gateway.md) — WS protocol (METHODS / EVENTS) and the four enrollment paths
+- [`docs/deployment.md`](docs/deployment.md) — three deployment shapes runbook + troubleshooting + backup checklist
+- [`docs/deployment-public-https.md`](docs/deployment-public-https.md) — public-internet Cloudflare + Caddy overlay (including the BUG-007 fail-closed fix)
+- [`docs/executor-engines.md`](docs/executor-engines.md) — per-engine auth/install
+- [`docs/cli.md`](docs/cli.md) — full CLI reference
+- [`scripts/governance-kernel-harness.ts`](scripts/governance-kernel-harness.ts) — Brain Governance Kernel regression harness (compact / full × source-local / cli-release-local)
+- [`docs/changelog.md`](docs/changelog.md) — release history and end-to-end test notes
 
 ---
 
@@ -247,24 +250,24 @@ cd aiworker && bun install
 bun run typecheck && bun run lint && bun run test
 ```
 
-新功能按 `/pma` skill 走 investigate → proposal → implement 三阶段；后端用 `/pma-bun`，前端用 `/pma-web`，代码评审用 `/pma-cr`。文档：[`docs/plan/`](docs/plan/) / [`docs/task/`](docs/task/) / [`docs/changelog.md`](docs/changelog.md)。
+New features go through the `/pma` skill in three stages: investigate → proposal → implement. Backend uses `/pma-bun`, frontend uses `/pma-web`, code review uses `/pma-cr`. Docs: [`docs/plan/`](docs/plan/) / [`docs/task/`](docs/task/) / [`docs/changelog.md`](docs/changelog.md).
 
 ---
 
 ## Status
 
-> 投产前请阅 [`docs/governance-node-status.md`](docs/governance-node-status.md) 的 conformance 表 + 残留边界。1.0.0 以前 CLI / API / config 不保证向后兼容（AGENTS.md 显式承诺）。
+> Before going to production, read the conformance table and residual-boundary section in [`docs/governance-node-status.md`](docs/governance-node-status.md). Pre-1.0 the CLI / API / config does not guarantee backwards compatibility (an explicit AGENTS.md commitment).
 
-CLI npm latest：**0.9.2**。
+CLI npm latest: **0.9.2**.
 
 | Module | Status |
 |---|---|
-| Worker / Fleet 控制面 / 4 enrollment paths / 6 LLM engines / 5 channel webhooks / cron / per-tool approvals / hot-reload | ✅ Production |
-| Brain Governance Kernel（admission 三态 + secret-scan + canonical memory 边界 + truthful decision events + bypass detection） | ✅ GA |
-| Governance Kernel regression harness（5×2 source + cli-release-local 双侧 600+ checks）+ long-running serve 多轮 REST 回归 | ✅ GA |
-| Brain admission `memory-add` materializer | ✅ MVP（其它 kind 走 `unsupported`；apply 后 rollback 仍待实现）|
-| Heavy LLM-backed Brain decider | 🔜 opt-in；默认 `evaluator=heuristic` `mode=observe_only` |
-| Cross-scope hard isolation（runtime 强制） | 🔜 当前由文件系统约定守，不是 runtime 隔离 |
+| Worker / Fleet control plane / 4 enrollment paths / 6 LLM engines / 5 channel webhooks / cron / per-tool approvals / hot reload | ✅ Production |
+| Brain Governance Kernel (admission state machine + secret-scan defense + canonical memory boundary + truthful decision events + bypass detection) | ✅ GA |
+| Governance Kernel regression harness (5×2 matrix on source + cli-release-local with 600+ checks) + long-running serve multi-turn REST regression | ✅ GA |
+| Brain admission `memory-add` materializer | ✅ MVP (other kinds return `unsupported`; post-apply rollback not yet implemented) |
+| Heavy LLM-backed Brain decider | 🔜 opt-in; defaults to `evaluator=heuristic` `mode=observe_only` |
+| Cross-scope hard isolation (runtime-enforced) | 🔜 currently filesystem-conventional, not runtime-isolated |
 | Web SPA pending UI / Multi-host HA | 🔜 Stage-2 |
 
 ---
