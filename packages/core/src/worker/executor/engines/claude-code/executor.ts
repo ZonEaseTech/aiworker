@@ -26,6 +26,14 @@ export const DEFAULT_CLAUDE_CLI_VERSION = '2.1.112'
 /** Hard cap on one turn; exceeding it emits an error + kills the child. */
 const DEFAULT_TIMEOUT_MS = 120_000
 const CLAUDE_CODE_ENGINE = 'claude-code'
+const CONTROL_NO_TOOLS_REASON = 'AIWorker control-plane evaluator calls run without tools'
+
+const denyAllToolsPolicy: ApprovalPolicy = {
+  decide: async () => ({
+    decision: 'deny',
+    reason: CONTROL_NO_TOOLS_REASON,
+  }),
+}
 
 export interface ClaudeCodeExecutorOptions {
   /** Optional model id forwarded as `--model <value>`. */
@@ -94,6 +102,7 @@ export class ClaudeCodeExecutor implements ExecutorProvider {
 
   private async* runIterable(input: AgentRunInput): AsyncGenerator<AgentEvent> {
     const { systemText, history, latestUser } = extractRunMessages(input.messages)
+    const disableTools = isNoToolsRun(input)
     if (latestUser === null) {
       yield { type: 'error', error: 'Claude Code executor requires a user message' }
       yield { type: 'finish', reason: 'error' }
@@ -117,7 +126,7 @@ export class ClaudeCodeExecutor implements ExecutorProvider {
     let resolvedCmd: string
     let resolvedArgs: string[]
     try {
-      ({ cmd: resolvedCmd, args: resolvedArgs } = await this.resolveCommand(input.model, systemText))
+      ({ cmd: resolvedCmd, args: resolvedArgs } = await this.resolveCommand(input.model, systemText, disableTools))
     }
     catch (err) {
       yield { type: 'error', error: err instanceof Error ? err.message : String(err) }
@@ -131,7 +140,7 @@ export class ClaudeCodeExecutor implements ExecutorProvider {
     })
 
     const peer = new ControlProtocolPeer({
-      policy: this.options.policy ?? autoApprovePolicy,
+      policy: disableTools ? denyAllToolsPolicy : (this.options.policy ?? autoApprovePolicy),
       writeLine: (line) => {
         try {
           child.stdin.write(line)
@@ -227,8 +236,8 @@ export class ClaudeCodeExecutor implements ExecutorProvider {
     }
   }
 
-  private async resolveCommand(runModel: string | undefined, systemPromptText: string): Promise<{ cmd: string, args: string[] }> {
-    const baseArgs = buildBaseArgs(runModel ?? this.options.model, this.options.extraArgs, systemPromptText)
+  private async resolveCommand(runModel: string | undefined, systemPromptText: string, disableTools: boolean): Promise<{ cmd: string, args: string[] }> {
+    const baseArgs = buildBaseArgs(runModel ?? this.options.model, this.options.extraArgs, systemPromptText, { disableTools })
 
     const resolver = this.options.resolveClaudeBinary ?? resolveClaudeOnPath
     const direct = await resolver()
@@ -252,7 +261,12 @@ export class ClaudeCodeExecutor implements ExecutorProvider {
  * conversation history through `AgentRunInput.messages` and re-renders it
  * each call.
  */
-export function buildBaseArgs(model: string | undefined, extra: string[] | undefined, systemPromptText: string): string[] {
+export function buildBaseArgs(
+  model: string | undefined,
+  extra: string[] | undefined,
+  systemPromptText: string,
+  options: { disableTools?: boolean } = {},
+): string[] {
   const args = [
     '-p',
     '--verbose',
@@ -262,6 +276,12 @@ export function buildBaseArgs(model: string | undefined, extra: string[] | undef
     '--replay-user-messages',
     '--dangerously-skip-permissions',
   ]
+  if (options.disableTools === true) {
+    args.push('--tools', '')
+    args.push('--disable-slash-commands')
+    args.push('--strict-mcp-config')
+    args.push('--no-session-persistence')
+  }
   if (systemPromptText.length > 0)
     args.push('--append-system-prompt', systemPromptText)
   if (model && model.length > 0)
@@ -269,6 +289,11 @@ export function buildBaseArgs(model: string | undefined, extra: string[] | undef
   if (extra && extra.length > 0)
     args.push(...extra)
   return args
+}
+
+function isNoToolsRun(input: AgentRunInput): boolean {
+  return Array.isArray(input.tools) && input.tools.length === 0
+    && (input.toolDefinitions === undefined || input.toolDefinitions.length === 0)
 }
 
 /**

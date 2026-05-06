@@ -41,6 +41,22 @@ function sequencedExecutor(responses: string[]): { provider: ExecutorProvider, c
   return { provider, callCount: () => calls }
 }
 
+function capturingExecutor(response: string): { provider: ExecutorProvider, inputs: AgentRunInput[] } {
+  const inputs: AgentRunInput[] = []
+  const provider: ExecutorProvider = {
+    name: 'capturing-quality',
+    health: async () => ({ name: 'capturing-quality', status: 'healthy', lastChecked: 'x' }),
+    listTools: async () => [],
+    run: (input: AgentRunInput) => {
+      inputs.push(input)
+      return (async function* () {
+        yield { type: 'assistant_message_delta' as const, delta: response }
+      })()
+    },
+  }
+  return { provider, inputs }
+}
+
 const intentDecision = buildIntentDecision(context(), {
   confidence: 0.8,
   evaluator: 'heuristic',
@@ -193,6 +209,41 @@ describe('quality gate', () => {
     expect(gate.evaluator).toBe('llm')
     expect(gate.action).toBe('block')
     expect(gate.missing).toEqual(['detail'])
+  })
+
+  it('sends request and assistant answer in a non-empty no-tools control prompt', async () => {
+    const { provider, inputs } = capturingExecutor(JSON.stringify({
+      score: 8,
+      threshold: 5,
+      dimensions: { completeness: 8 },
+      missing: [],
+      suggestions: [],
+      action: 'pass',
+      reason: 'ok',
+    }))
+    await evaluateQualityGate({
+      assistantText: 'The reviewed answer body.',
+      capabilityDecision,
+      context: context(),
+      evaluator: 'llm',
+      executor: provider,
+      intentDecision,
+      mode: 'observe',
+      model: undefined,
+      notifyActivity: () => {},
+      requestText: 'Please review this.',
+      signal: new AbortController().signal,
+      threshold: undefined,
+      workspacePath: '/tmp/workspace',
+    })
+    expect(inputs).toHaveLength(1)
+    expect(inputs[0]?.tools).toEqual([])
+    const userContent = inputs[0]?.messages.find(msg => msg.role === 'user')?.content ?? ''
+    expect(userContent.length).toBeGreaterThan(0)
+    expect(userContent).toContain('User request:')
+    expect(userContent).toContain('Please review this.')
+    expect(userContent).toContain('Assistant answer:')
+    expect(userContent).toContain('The reviewed answer body.')
   })
 
   it('TODO-013: falls back to heuristic with llm-budget-exhausted when LLM exceeds budgetMs', async () => {

@@ -18,7 +18,7 @@ import type { ApprovalDecision, ApprovalStore } from './approvals'
 import type { DecisionContext } from './decisions'
 import type { ProcessManager } from './process-manager'
 
-import { AppError, DEFAULT_MAX_HISTORY_MESSAGES } from '@zonease/aiworker-shared'
+import { AppError, DEFAULT_MAX_HISTORY_MESSAGES, redactBodySecrets } from '@zonease/aiworker-shared'
 import { agentTasks, conversations, getSessionEntry, getWorkerDb, messages, recordSessionCompaction, rotateSessionConversation, sessionEntries, touchSessionEntry, updateSessionEngineBinding, upsertSessionEntry } from '@zonease/aiworker-storage-sqlite/worker'
 
 import consola from 'consola'
@@ -482,7 +482,10 @@ export class Orchestrator {
             ...(taskId === undefined ? {} : { taskId }),
             call: { id: event.id, name: event.name, arguments: event.arguments },
           })
-          if (deadLoop.recordToolCall()) {
+          if (isTerminalToolStatus(event.status)) {
+            deadLoop.recordToolProgress()
+          }
+          else if (deadLoop.recordToolCall()) {
             const reason = `dead-loop-suspected:tool_call=${deadLoop.count()},no_text_delta`
             this.deps.bus.emit('orchestrator.aborted', {
               conversationId,
@@ -493,6 +496,19 @@ export class Orchestrator {
             consola.warn(`[orchestrator] aborted run: ${reason}`)
             return { ok: false, text: assistantText, error: reason, staleBindingCleared }
           }
+        }
+        else if (event.type === 'tool_result') {
+          deadLoop.recordToolProgress()
+          this.deps.bus.emit('orchestrator.tool_result', {
+            conversationId,
+            ...(gatewayConversationId === undefined ? {} : { gatewayConversationId }),
+            ...(taskId === undefined ? {} : { taskId }),
+            result: {
+              id: event.id,
+              name: event.name,
+              isError: event.isError === true,
+            },
+          })
         }
         else if (event.type === 'engine_binding') {
           if (event.engine === this.deps.config.executor.engine) {
@@ -536,15 +552,16 @@ export class Orchestrator {
     const admissionCountAfter = this.countAdmissionProposals()
     if (admissionCountAfter > input.admissionCountBefore)
       return
-    const reason = detectAdmissionSuccessClaim(input.assistantText)
-    if (reason === null)
+    const claim = detectAdmissionSuccessClaimDetails(input.assistantText)
+    if (claim === null)
       return
     const at = new Date().toISOString()
     recordBrainGovernanceBypassWarning({
       at,
       conversationId: input.conversationId,
       engine: input.engine,
-      reason,
+      claimExcerpt: claim.claimExcerpt,
+      reason: claim.reason,
       sessionKey: input.sessionKey,
     })
     this.deps.bus.emit('brain.governance.bypass_suspected', {
@@ -552,9 +569,10 @@ export class Orchestrator {
       conversationId: input.conversationId,
       engine: input.engine,
       ...(input.gatewayConversationId === undefined ? {} : { gatewayConversationId: input.gatewayConversationId }),
+      claimExcerpt: claim.claimExcerpt,
       heuristic: true,
       ...(input.taskId === undefined ? {} : { taskId: input.taskId }),
-      reason,
+      reason: claim.reason,
     })
   }
 
@@ -1042,6 +1060,7 @@ export class Orchestrator {
       ...(workspacePath ? { workspacePath } : {}),
       signal: input.signal,
       temperature: 0,
+      tools: [],
     })) {
       input.notifyActivity()
       if (event.type === 'assistant_message_delta')
@@ -1301,23 +1320,53 @@ export class Orchestrator {
 }
 
 export function detectAdmissionSuccessClaim(text: string): string | null {
-  const normalized = text.toLowerCase()
-  const hasAdmissionClaim = /\b(?:admission|proposal)\b/.test(normalized)
-    && /\b(?:submitted|created|queued|pending|approved|accepted|applied|persisted|saved|recorded)\b/.test(normalized)
-  if (hasAdmissionClaim)
-    return 'assistant-claimed-admission-without-db-delta'
+  return detectAdmissionSuccessClaimDetails(text)?.reason ?? null
+}
 
-  const chineseAdmissionClaim = /admission|proposal|提案|申请|审批/i.test(text)
-    && /已提交|已创建|已加入|待审批|已落盘|已持久化|已记录|已采纳|已批准/.test(text)
-  if (chineseAdmissionClaim)
-    return 'assistant-claimed-admission-without-db-delta'
+export function detectAdmissionSuccessClaimDetails(text: string): { reason: string, claimExcerpt: string } | null {
+  const admissionClaim = firstMatchingExcerpt(text, [
+    /(?:admission\s+proposal|proposal)[\s\S]{0,120}(?:submitted|created|queued|filed|opened|approved|accepted|applied|persisted|saved|recorded)/i,
+    /(?:submitted|created|queued|filed|opened|approved|accepted|applied|persisted|saved|recorded)[\s\S]{0,120}(?:admission\s+proposal|proposal)/i,
+    /(?:admission|proposal|提案|申请|审批)[\s\S]{0,120}(?:已提交|已创建|已加入|已落盘|已持久化|已记录|已采纳|已批准|已应用)/i,
+    /(?:已提交|已创建|已加入|已落盘|已持久化|已记录|已采纳|已批准|已应用)[\s\S]{0,120}(?:admission|proposal|提案|申请|审批)/i,
+  ])
+  if (admissionClaim !== null) {
+    return {
+      claimExcerpt: admissionClaim,
+      reason: 'assistant-claimed-admission-without-db-delta',
+    }
+  }
 
-  const memoryClaim = /长期记忆|brain memory|project brain|canonical brain|记忆/i.test(text)
-    && /已写入|已保存|已落盘|已持久化|已记录|remembered|saved|persisted/i.test(text)
-  if (memoryClaim)
-    return 'assistant-claimed-memory-without-admission-delta'
+  const memoryClaim = firstMatchingExcerpt(text, [
+    /(?:长期记忆|brain memory|project brain|canonical brain|记忆)[\s\S]{0,120}(?:已写入|已保存|已落盘|已持久化|已记录|remembered|saved|persisted)/i,
+    /(?:已写入|已保存|已落盘|已持久化|已记录|remembered|saved|persisted)[\s\S]{0,120}(?:长期记忆|brain memory|project brain|canonical brain|记忆)/i,
+  ])
+  if (memoryClaim !== null) {
+    return {
+      claimExcerpt: memoryClaim,
+      reason: 'assistant-claimed-memory-without-admission-delta',
+    }
+  }
 
   return null
+}
+
+function firstMatchingExcerpt(text: string, patterns: readonly RegExp[]): string | null {
+  for (const pattern of patterns) {
+    const match = pattern.exec(text)
+    if (!match)
+      continue
+    const raw = match[0]?.replace(/\s+/g, ' ').trim() ?? ''
+    if (raw.length === 0)
+      continue
+    const redacted = redactBodySecrets(raw).body
+    return redacted.length <= 180 ? redacted : `${redacted.slice(0, 180)}...`
+  }
+  return null
+}
+
+function isTerminalToolStatus(status: string | undefined): boolean {
+  return status === 'success' || status === 'failed' || status === 'denied'
 }
 
 function taskIdFromEnvelope(envelope: Envelope): string | undefined {

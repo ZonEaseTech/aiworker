@@ -77,6 +77,7 @@ export interface WorkerInfoBrainSummary {
     bypassRisk: {
       status: 'none' | 'suspected'
       recentCount: number
+      claimExcerpt?: string
       lastDetectedAt?: string
       reason?: string
     }
@@ -84,8 +85,9 @@ export interface WorkerInfoBrainSummary {
   /**
    * Decision pipeline truthfulness snapshot (PLAN-116 / BUG-066 / BUG-067).
    * Reports the configured evaluator + top-level mode for each decision step,
-   * plus an in-memory ring-buffer summary of recent classifier outcomes.
-   * Counts reset on worker restart; this is observability, not audit.
+   * plus a worker.db-backed recent-window summary of classifier outcomes.
+   * This is observability, not audit; older unmigrated workers may fall back to
+   * process-local memory until migrations run.
    */
   decisionPipeline: WorkerInfoDecisionPipelineSummary
 }

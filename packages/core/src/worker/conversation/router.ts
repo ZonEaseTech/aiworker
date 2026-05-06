@@ -94,6 +94,7 @@ export async function classifyContinuation(
     ...(model ? { model } : {}),
     ...(workspacePath ? { workspacePath } : {}),
     temperature: 0,
+    tools: [],
   }
   const provenance = {
     ...(engine === undefined ? {} : { engine }),

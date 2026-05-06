@@ -23,6 +23,17 @@ describe('dead-loop detector (BUG-063)', () => {
     expect(detector.recordToolCall()).toBe(true)
   })
 
+  it('resets the counter on tool progress', () => {
+    const detector = createDeadLoopDetector({ threshold: 3 })
+    detector.recordToolCall()
+    detector.recordToolCall()
+    detector.recordToolProgress()
+    expect(detector.count()).toBe(0)
+    expect(detector.recordToolCall()).toBe(false)
+    expect(detector.recordToolCall()).toBe(false)
+    expect(detector.recordToolCall()).toBe(true)
+  })
+
   it('respects enabled=false', () => {
     const detector = createDeadLoopDetector({ enabled: false, threshold: 1 })
     expect(detector.recordToolCall()).toBe(false)

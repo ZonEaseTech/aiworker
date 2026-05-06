@@ -2,6 +2,7 @@ import type { WorkerInfoBrainSummary } from '@zonease/aiworker-shared'
 
 export interface BrainGovernanceBypassWarning {
   at: string
+  claimExcerpt?: string
   conversationId: string
   engine: string
   reason: string
@@ -31,6 +32,7 @@ export function getBrainGovernanceBypassSnapshot(): WorkerInfoBrainSummary['admi
   }
   return {
     lastDetectedAt: last.at,
+    ...(last.claimExcerpt === undefined ? {} : { claimExcerpt: last.claimExcerpt }),
     reason: last.reason,
     recentCount: warnings.length,
     status: 'suspected',

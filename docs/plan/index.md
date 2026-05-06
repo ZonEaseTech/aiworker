@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-05
+> Updated: 2026-05-06
 
 ## Usage
 
@@ -150,3 +150,5 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-119 Init secret handling and executor doctor status truthfulness**](PLAN-119.md) `2026-05-06`
 - [x] [**PLAN-120 CLI onboarding polish for command groups and executor hints**](PLAN-120.md) `2026-05-06`
 - [x] [**PLAN-121 发布 aiworker CLI 0.9.0**](PLAN-121.md) `2026-05-06`
+- [x] [**PLAN-122 0.9.0 local worker Brain Governance Kernel debug campaign**](PLAN-122.md) `2026-05-05`
+- [x] [**PLAN-123 BUG-075..078 and TODO-028..029 governance follow-up fixes**](PLAN-123.md) `2026-05-06`

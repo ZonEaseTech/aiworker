@@ -130,6 +130,7 @@ async function runIntentLlm(
       ...(input.workspacePath ? { workspacePath: input.workspacePath } : {}),
       signal: input.signal,
       temperature: 0,
+      tools: [],
     })) {
       input.notifyActivity()
       if (event.type === 'assistant_message_delta')

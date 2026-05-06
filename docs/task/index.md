@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-05 (PLAN-109..112 claimed)
+> Updated: 2026-05-06 (PLAN-123 completed BUG-075..078 and TODO-028..029)
 
 ## Usage
 
@@ -218,3 +218,10 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**DOC-005 Brain Governance Kernel 架构决策落盘**](DOC-005.md) `P1`
 - [x] [**DOC-006 Brain Governance Kernel 决策后的 backlog 断代收口**](DOC-006.md) `P1`
 - [x] [**REL-016 发布 aiworker CLI 0.9.0**](REL-016.md) `P1`
+- [x] [**QA-007 0.9.0 published local worker Brain Governance Kernel debug campaign**](QA-007.md) `P1`
+- [x] [**BUG-075 quality_gate evaluator=llm receives empty stdin and retries exhaust to heuristic fallback**](BUG-075.md) `P2`
+- [x] [**TODO-028 brain status `recent.samples` ring buffer is not populated by CLI `aiworker run` invocations**](TODO-028.md) `P3`
+- [x] [**BUG-076 Claude Code conversation classifier can execute tools and mutate Brain state before orchestrator turn handling**](BUG-076.md) `P1`
+- [x] [**BUG-077 Codex multi-tool turns abort with dead-loop-suspected after legitimate tool activity**](BUG-077.md) `P2`
+- [x] [**BUG-078 Worker OpenAPI advertises stale orchestrator chat route and omits working task/conversation routes**](BUG-078.md) `P3`
+- [x] [**TODO-029 Tune brain.governance.bypass_suspected heuristic to avoid noisy false positives**](TODO-029.md) `P3`

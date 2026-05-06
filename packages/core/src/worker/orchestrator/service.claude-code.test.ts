@@ -227,10 +227,69 @@ describe('Orchestrator + ClaudeCodeExecutor (stub CLI)', () => {
     expect((bypass?.payload as { taskId?: string }).taskId).toBe('task-bypass')
   })
 
+  it('does not abort when repeated tool calls are paired with tool results', async () => {
+    const config = {
+      ...validConfig(),
+      orchestrator: { deadLoop: { enabled: true, threshold: 2 } },
+    } satisfies WorkerConfig
+    const bus = stubBus() as WorkerEventBus & { recorded: Array<{ kind: string, payload: unknown }> }
+    const executor: ExecutorProvider = {
+      name: 'tool-progress-executor',
+      health: async () => ({ name: 'tool-progress-executor', status: 'healthy' as const, lastChecked: 'x' }),
+      listTools: async () => [],
+      async* run(): AsyncGenerator<AgentEvent> {
+        for (let i = 0; i < 4; i += 1) {
+          yield {
+            type: 'tool_use',
+            id: `tool-${i}`,
+            name: 'Read',
+            arguments: { path: `note-${i}.md` },
+            action: { kind: 'file_read', path: `note-${i}.md` },
+          }
+          yield {
+            type: 'tool_result',
+            id: `tool-${i}`,
+            name: 'Read',
+            content: 'ok',
+          }
+        }
+        yield { type: 'assistant_message_delta', delta: 'Done.' }
+        yield { type: 'finish', reason: 'stop' }
+      },
+    }
+
+    const orchestrator = new Orchestrator({
+      config,
+      brain: stubBrain(),
+      executor,
+      bus,
+      workerId: 'w_testtesttest',
+      workspaces,
+      processes,
+      approvals: new ApprovalStore(),
+    })
+
+    await orchestrator.ingest({
+      workerId: 'w_testtesttest',
+      channel: 'web',
+      accountId: 'test',
+      chatId: 'chat-tool-progress',
+      text: 'read several files',
+      receivedAt: new Date().toISOString(),
+      raw: { taskId: 'task-tool-progress' },
+    })
+
+    expect(bus.recorded.some(r => r.kind === 'orchestrator.aborted')).toBe(false)
+    expect(bus.recorded.some(r => r.kind === 'orchestrator.finished')).toBe(true)
+    expect(bus.recorded.filter(r => r.kind === 'orchestrator.tool_result')).toHaveLength(4)
+  })
+
   it('classifies multilingual admission and long-term memory success claims', () => {
     expect(detectAdmissionSuccessClaim('Admission proposal submitted for approval.')).toBe('assistant-claimed-admission-without-db-delta')
     expect(detectAdmissionSuccessClaim('该长期记忆已落盘。')).toBe('assistant-claimed-memory-without-admission-delta')
     expect(detectAdmissionSuccessClaim('I can draft a proposal if you want.')).toBeNull()
+    expect(detectAdmissionSuccessClaim('There are two pending proposals awaiting operator review.')).toBeNull()
+    expect(detectAdmissionSuccessClaim('治理边界要求长期记忆必须通过 admission proposal 审批。')).toBeNull()
   })
 
   it('passes the shared project root cwd to Claude Code in project-scope workspace mode', async () => {

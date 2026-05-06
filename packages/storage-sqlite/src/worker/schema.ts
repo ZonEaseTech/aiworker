@@ -169,6 +169,28 @@ export const evolutionObservations = sqliteTable(
   }),
 )
 
+/**
+ * Decision pipeline recent samples (TODO-028). Unlike the process-local ring
+ * buffer, this table lets one-shot CLI runs contribute to a later
+ * `aiworker brain status` invocation in a new process. It is observability
+ * data, not audit; bounded reads keep only the latest window per stage.
+ */
+export const decisionPipelineSamples = sqliteTable(
+  'decision_pipeline_samples',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    stage: text('stage', { enum: ['intent_classifier', 'quality_gate', 'conversation_classifier'] }).notNull(),
+    source: text('source').notNull(),
+    evaluator: text('evaluator').notNull(),
+    reason: text('reason').notNull(),
+    fallback: integer('fallback', { mode: 'boolean' }).notNull().default(false),
+    createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  },
+  table => ({
+    stageCreatedAtIdx: index('decision_pipeline_samples_stage_created_at_idx').on(table.stage, table.createdAt),
+  }),
+)
+
 // Singleton table: `pk` is always the literal 'default'. Enforced at app layer.
 export const workerIdentity = sqliteTable('worker_identity', {
   pk: text('pk').primaryKey().default('default'),

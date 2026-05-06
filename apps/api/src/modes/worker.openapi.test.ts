@@ -68,6 +68,10 @@ describe('worker /openapi.json registration (BUG-065)', () => {
       expect(paths).toContain('/api/worker/brain/summary')
       expect(paths).toContain('/api/worker/brain/admission')
       expect(paths).toContain('/api/worker/brain/admission/{id}')
+      expect(paths).toContain('/api/worker/orchestrator/tasks')
+      expect(paths).toContain('/api/worker/orchestrator/conversations')
+      expect(paths).toContain('/api/worker/orchestrator/conversations/{id}/messages')
+      expect(paths).not.toContain('/api/worker/orchestrator/chat')
 
       // Health stays public; brain admission requires bearer auth.
       const healthEntry = doc.paths['/health']?.get

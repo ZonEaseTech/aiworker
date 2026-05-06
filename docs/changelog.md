@@ -1,5 +1,16 @@
 # AIWorker Changelog
 
+## 2026-05-06 03:19 [completed] PLAN-123 — BUG-075..078 / TODO-028..029 governance follow-up fixes
+
+- `packages/core/src/worker/executor/engines/claude-code/executor.ts`：suppressed control calls 通过 `AgentRunInput.tools=[]` 投影到 Claude Code no-tool 模式（`--tools ""`、禁 slash commands、strict MCP config、no session persistence），并对 control request 使用 deny policy，避免 conversation classifier / quality gate 继承任务执行面的工具副作用。
+- `packages/core/src/worker/orchestrator/{intent-classifier,quality-gate,service}.ts` 与 `packages/core/src/worker/conversation/router.ts`：LLM intent classifier、quality gate、conversation classifier、repair/compaction 等 control calls 显式传空 tool list；quality gate 新增回归覆盖，确认 LLM evaluator 的 user prompt 非空且包含 request + assistant answer。
+- `packages/storage-sqlite`：新增 worker migration `0007_solid_bromley.sql` 和 `decision_pipeline_samples` 表；`decision-pipeline-stats.ts` 记录 intent / quality / conversation classifier recent samples 到 worker.db，并让 `brain status` / REST summary 在新进程中读回最近窗口，修复 CLI `run` 后 `recent.samples=0` 的观测缺口。
+- `packages/core/src/worker/orchestrator/dead-loop.ts` / `service.ts`：tool result 与 terminal tool lifecycle status 现在重置 dead-loop counter；重复 tool_call 仍会触发 guard，但合法多工具 Codex workflow 不再因已产生 tool progress 而被固定阈值误杀。
+- `apps/api/src/modes/worker.ts`：Worker OpenAPI 移除 stale `/api/worker/orchestrator/chat`，补齐实际工作的 `/api/worker/orchestrator/tasks` 与 `/api/worker/orchestrator/conversations{/:id/messages}` 路由。
+- `detectAdmissionSuccessClaim()`：bypass heuristic 收窄到高置信 admission / memory mutation success claim，普通 pending proposal 说明不再触发；event payload 增加短脱敏 `claimExcerpt` 便于 operator 诊断。
+- Focused verification：`bun test packages/core/src/worker/orchestrator/quality-gate.test.ts packages/core/src/worker/conversation/router.test.ts packages/core/src/worker/orchestrator/dead-loop.test.ts packages/core/src/worker/orchestrator/decision-pipeline-stats.test.ts packages/core/src/worker/orchestrator/service.claude-code.test.ts packages/core/src/worker/executor/engines/claude-code/executor.test.ts packages/storage-sqlite/src/worker/index.test.ts apps/api/src/modes/worker.openapi.test.ts` -> 58 pass / 0 fail。
+- Full gates：`bun run typecheck`、`bun run lint`、`bun run test` 全部 0 退出。
+
 ## 2026-05-06 03:55 [completed] REL-016 / PLAN-121 — CLI 0.9.0 released
 
 `@zonease/aiworker-cli@0.9.0` minor release 完成。

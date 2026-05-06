@@ -7,8 +7,8 @@ import type { OrchestratorDeadLoopConfig } from '@zonease/aiworker-shared'
  * the *frequency* of brute-force tool sequences but cannot guarantee the LLM
  * never enters one — defensive runtime detection still catches the long
  * tail. Every `tool_call` event arriving without an intervening
- * `assistant_message_delta` increments a counter; once the counter exceeds
- * `threshold`, callers `signal()` to abort the run.
+ * `assistant_message_delta` or tool progress increments a counter; once the
+ * counter exceeds `threshold`, callers `signal()` to abort the run.
  *
  * Defaults: enabled, threshold = 8. Operators can disable via worker config
  * `orchestrator.deadLoop.enabled = false` when the workflow legitimately
@@ -29,6 +29,8 @@ export interface DeadLoopDetector {
   recordToolCall: () => boolean
   /** Reset the counter (called on every assistant_message_delta). */
   recordTextDelta: () => void
+  /** Reset the counter when a tool result or terminal lifecycle event proves progress. */
+  recordToolProgress: () => void
   /** Last counter snapshot, useful for emitting reason payloads. */
   count: () => number
   /** True after `recordToolCall` returns `true` once. */
@@ -54,6 +56,9 @@ export function createDeadLoopDetector(options: DeadLoopDetectorOptions = {}): D
       return false
     },
     recordTextDelta() {
+      count = 0
+    },
+    recordToolProgress() {
       count = 0
     },
     count() {

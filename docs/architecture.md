@@ -342,7 +342,8 @@ emit `WorkerEventBus` 事件）。真正的 tool loop 可以由外部 executor r
 
 - Gateway 只负责帧转发与 fleet 级控制方法（`workers.*`、`token.rotate`、`system.presence`）。
 - Worker 持有 orchestrator；node 模式通过 `@zonease/aiworker-core` 的 `startGatewayNode` 主动拨一条 WS 连接上报 `WorkerEventBus` 事件、处理 gateway 转发过来的 `chat.send` / `config.get` / `config.put` / `token.rotate` / `logs.tail` 请求。
-- Orchestrator control-plane calls（continuation classifier、LLM intent classifier、quality gate、repair、compaction summary、pre-compaction memory flush）统一通过 control executor resolver。未配置 `orchestrator.decisionPipeline.executor` 时复用主 task executor；显式配置时单独构造 control executor，并使用自己的 model / timeout / fallback / secret hydration。显式 control calls 不传 task workspace、tool list 或 native session binding，避免默认继承任务执行面的文件/命令副作用。
+- Orchestrator control-plane calls（continuation classifier、LLM intent classifier、quality gate、repair、compaction summary、pre-compaction memory flush）统一通过 control executor resolver。未配置 `orchestrator.decisionPipeline.executor` 时复用主 task executor；显式配置时单独构造 control executor，并使用自己的 model / timeout / fallback / secret hydration。control calls 一律不传 native session binding，并显式传空 tool list；Claude Code adapter 会 best-effort 投影为 no-tool CLI flags 并拒绝工具控制请求，避免 evaluator 继承任务执行面的文件/命令副作用。AIWorker 仍不把自己声明成 executor sandbox，最终 effective capability 由外部 executor runtime 自己负责。
+- Decision pipeline `recent.*` 是 operator-facing observability 窗口，不是审计日志。每个 intent classifier、quality gate、conversation classifier 样本会 best-effort 写入 worker-owned `decision_pipeline_samples`，`aiworker brain status`、`/api/worker/info` 和 `/api/worker/brain/summary` 从 `worker.db` 读取最近 50 条；当 DB 未初始化或旧库未迁移时才回退到进程内 ring buffer。
 
 ## System Architecture
 

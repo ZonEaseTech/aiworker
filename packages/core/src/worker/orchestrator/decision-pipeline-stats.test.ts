@@ -1,3 +1,8 @@
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+import { closeWorkerDb, initWorkerDb, runWorkerMigrations } from '@zonease/aiworker-storage-sqlite/worker'
 import { beforeEach, describe, expect, it } from 'bun:test'
 
 import {
@@ -155,5 +160,33 @@ describe('decision pipeline ring buffer (PLAN-116)', () => {
     }
     const snap = getDecisionPipelineSnapshot()
     expect(snap.intentClassifier.recent.samples).toBe(50)
+  })
+
+  it('loads persisted CLI-run samples after the process-local buffer resets', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'aiworker-decision-stats-'))
+    closeWorkerDb()
+    initWorkerDb(join(dir, 'worker.db'))
+    runWorkerMigrations()
+    try {
+      recordIntentDecision(buildIntentDecision(context(), {
+        confidence: 0.5,
+        evaluator: 'heuristic',
+        intent: 'answer',
+        qualityProfile: 'default',
+        reason: 'heuristic persisted',
+        requiredContext: ['recent_history'],
+        risk: 'low',
+        sessionAction: 'continue',
+        source: 'intent-heuristic',
+        templateId: 'intent-classifier-v1',
+      }))
+      resetDecisionPipelineStats()
+      const snap = getDecisionPipelineSnapshot()
+      expect(snap.intentClassifier.recent.samples).toBe(1)
+      expect(snap.intentClassifier.recent.fallbackRate).toBe(0)
+    }
+    finally {
+      closeWorkerDb()
+    }
   })
 })

@@ -195,4 +195,13 @@ describe('buildBaseArgs', () => {
     const args = buildBaseArgs('sonnet', undefined, 'sys')
     expect(args).not.toContain('--resume')
   })
+
+  it('projects explicit no-tools runs into Claude Code CLI flags', () => {
+    const args = buildBaseArgs('sonnet', undefined, 'sys', { disableTools: true })
+    expect(args).toContain('--tools')
+    expect(args[args.indexOf('--tools') + 1]).toBe('')
+    expect(args).toContain('--disable-slash-commands')
+    expect(args).toContain('--strict-mcp-config')
+    expect(args).toContain('--no-session-persistence')
+  })
 })

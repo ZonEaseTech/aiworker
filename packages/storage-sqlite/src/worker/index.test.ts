@@ -95,6 +95,11 @@ describe('worker schema indexes (REFACTOR-005)', () => {
     expect(byDecidedAt).toContain('brain_admission_decisions_decided_at_idx')
   })
 
+  it('decision_pipeline_samples index supports recent stage windows (TODO-028)', () => {
+    const plan = explain(`SELECT * FROM decision_pipeline_samples WHERE stage = 'intent_classifier' ORDER BY created_at DESC LIMIT 50`)
+    expect(plan).toContain('decision_pipeline_samples_stage_created_at_idx')
+  })
+
   it('brain_artifacts indexes服务 scope+type 与 status+type 列表查询 (PLAN-099)', () => {
     const byScopeType = explain(`SELECT * FROM brain_artifacts WHERE scope_id = 'backend-hire-q3' AND type = 'candidate-resume'`)
     expect(byScopeType).toContain('brain_artifacts_scope_type_idx')

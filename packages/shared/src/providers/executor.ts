@@ -50,7 +50,13 @@ export interface AgentRunInput {
   messages: ChatMessage[]
   /** Model identifier, provider-specific. */
   model?: string
-  /** Names of tools (from `listTools()`) to expose for this run. */
+  /**
+   * Names of tools (from `listTools()`) to expose for this run.
+   *
+   * An explicit empty array means "no tools" for suppressed control-plane
+   * evaluator calls. Engine-native adapters should project that as a
+   * best-effort no-tool mode when the underlying runtime supports it.
+   */
   tools?: string[]
   /**
    * Full tool definitions to expose inline for this run. Executors that accept

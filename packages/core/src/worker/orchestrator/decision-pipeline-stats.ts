@@ -7,18 +7,20 @@ import type {
 
 import type { IntentDecisionPayload, QualityGatePayload } from './decisions'
 
+import { decisionPipelineSamples, getWorkerDb } from '@zonease/aiworker-storage-sqlite/worker'
+import { desc, eq } from 'drizzle-orm'
+
 /**
  * PLAN-116 in-memory decision pipeline observability.
  *
  * Worker runtime keeps the most recent N (default 50) intent / quality /
- * conversation classifier outcomes per process. Snapshots are surfaced
- * through `aiworker brain status`, `/api/worker/info`, and
- * `/api/worker/brain/summary` so operators can see at a glance whether the
- * decision layer is on heuristic vs LLM, observe-only vs enforced, and what
- * the recent fallback breakdown looks like — without scraping event logs.
+ * conversation classifier outcomes. Samples are written to worker.db on a
+ * best-effort basis so one-shot `aiworker run` invocations are visible to a
+ * later `aiworker brain status` process. The process-local ring buffers remain
+ * as fallback when the database is not initialized or an older unmigrated
+ * worker.db lacks the metrics table.
  *
- * This is **observability**, not audit. Buffers reset on worker restart and
- * are intentionally not persisted to `worker.db`.
+ * This is **observability**, not audit.
  */
 
 const WINDOW_SIZE = 50
@@ -38,6 +40,16 @@ interface QualitySample {
 
 interface ConversationSample {
   source: ConversationDecision['source']
+  reason: string
+  at: string
+  fallback: boolean
+}
+
+type DecisionStage = 'intent_classifier' | 'quality_gate' | 'conversation_classifier'
+
+interface PersistedSample {
+  source: string
+  evaluator: string
   reason: string
   at: string
   fallback: boolean
@@ -78,10 +90,17 @@ export function resetDecisionPipelineStats(): void {
 
 /** Record a single `orchestrator.intent_decision` outcome. */
 export function recordIntentDecision(payload: IntentDecisionPayload): void {
-  intentBuffer.push({
+  const sample = {
     source: payload.source,
     reason: payload.reason,
     at: new Date().toISOString(),
+  }
+  intentBuffer.push(sample)
+  persistDecisionSample({
+    ...sample,
+    evaluator: payload.evaluator ?? 'heuristic',
+    fallback: payload.source === 'intent-fallback',
+    stage: 'intent_classifier',
   })
 }
 
@@ -92,21 +111,33 @@ export function recordQualityGate(payload: QualityGatePayload): void {
   // budget exhausted).
   const fallback = payload.reason.startsWith('llm-retry-exhausted')
     || payload.reason.startsWith('llm-budget-exhausted')
-  qualityBuffer.push({
+  const sample = {
     evaluator: payload.evaluator,
     reason: payload.reason,
     at: new Date().toISOString(),
     fallback,
+  }
+  qualityBuffer.push(sample)
+  persistDecisionSample({
+    ...sample,
+    source: payload.evaluator,
+    stage: 'quality_gate',
   })
 }
 
 /** Record a single `conversation.classifier` outcome. */
 export function recordConversationClassifier(decision: ConversationDecision): void {
-  conversationBuffer.push({
+  const sample = {
     source: decision.source,
     reason: decision.reason,
     at: new Date().toISOString(),
     fallback: decision.source === 'classifier-fallback',
+  }
+  conversationBuffer.push(sample)
+  persistDecisionSample({
+    ...sample,
+    evaluator: decision.evaluator,
+    stage: 'conversation_classifier',
   })
 }
 
@@ -130,11 +161,12 @@ export function getDecisionPipelineSnapshot(
   const qualityMode = config.qualityMode ?? 'observe'
   const enabled = config.conversationClassifierEnabled ?? true
 
-  const intentSamples = intentBuffer.toArray()
+  const persisted = loadPersistedSamples()
+  const intentSamples = persisted?.intent ?? intentBuffer.toArray()
   const intentFallback = intentSamples.filter(s => s.source === 'intent-fallback')
-  const qualitySamples = qualityBuffer.toArray()
+  const qualitySamples = persisted?.quality ?? qualityBuffer.toArray()
   const qualityFallback = qualitySamples.filter(s => s.fallback)
-  const conversationSamples = conversationBuffer.toArray()
+  const conversationSamples = persisted?.conversation ?? conversationBuffer.toArray()
   const conversationFallback = conversationSamples.filter(s => s.fallback)
 
   return {
@@ -179,6 +211,53 @@ function buildConversationRecent(samples: number, fallbacks: Array<{ at: string,
   for (const fb of fallbacks)
     fallbackByReason[fb.reason] = (fallbackByReason[fb.reason] ?? 0) + 1
   return { ...base, fallbackByReason }
+}
+
+function persistDecisionSample(sample: PersistedSample & { evaluator: string, stage: DecisionStage }): void {
+  try {
+    getWorkerDb().insert(decisionPipelineSamples).values({
+      stage: sample.stage,
+      source: sample.source.slice(0, 120),
+      evaluator: sample.evaluator.slice(0, 120),
+      reason: sample.reason.slice(0, 1000),
+      fallback: sample.fallback,
+      createdAt: sample.at,
+    }).run()
+  }
+  catch {
+    // Older worker.db files or unit tests may not have storage initialized.
+    // The in-memory buffer above still keeps the current process observable.
+  }
+}
+
+function loadPersistedSamples(): { intent: PersistedSample[], quality: PersistedSample[], conversation: PersistedSample[] } | null {
+  try {
+    return {
+      intent: selectPersistedStage('intent_classifier'),
+      quality: selectPersistedStage('quality_gate'),
+      conversation: selectPersistedStage('conversation_classifier'),
+    }
+  }
+  catch {
+    return null
+  }
+}
+
+function selectPersistedStage(stage: DecisionStage): PersistedSample[] {
+  return getWorkerDb()
+    .select({
+      source: decisionPipelineSamples.source,
+      evaluator: decisionPipelineSamples.evaluator,
+      reason: decisionPipelineSamples.reason,
+      at: decisionPipelineSamples.createdAt,
+      fallback: decisionPipelineSamples.fallback,
+    })
+    .from(decisionPipelineSamples)
+    .where(eq(decisionPipelineSamples.stage, stage))
+    .orderBy(desc(decisionPipelineSamples.createdAt))
+    .limit(WINDOW_SIZE)
+    .all()
+    .reverse()
 }
 
 /** Test helper. */

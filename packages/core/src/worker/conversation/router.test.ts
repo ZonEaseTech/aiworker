@@ -15,6 +15,22 @@ function executor(response: string): ExecutorProvider {
   }
 }
 
+function capturingExecutor(response: string): { provider: ExecutorProvider, inputs: AgentRunInput[] } {
+  const inputs: AgentRunInput[] = []
+  const provider: ExecutorProvider = {
+    name: 'router-capture',
+    health: async () => ({ name: 'router-capture', status: 'healthy', lastChecked: 'x' }),
+    listTools: async () => [],
+    run: (input: AgentRunInput) => {
+      inputs.push(input)
+      return (async function* () {
+        yield { type: 'assistant_message_delta' as const, delta: response }
+      })()
+    },
+  }
+  return { provider, inputs }
+}
+
 function failingExecutor(): ExecutorProvider {
   return {
     name: 'router-fail',
@@ -48,6 +64,22 @@ describe('classifyContinuation truthfulness (PLAN-116)', () => {
     // Diagnostic fields stay absent on the happy path to keep events small.
     expect(decision.rawOutput).toBeUndefined()
     expect(decision.parseError).toBeUndefined()
+  })
+
+  it('runs the classifier as a no-tools control call', async () => {
+    const { provider, inputs } = capturingExecutor(JSON.stringify({ continue: true, reason: 'topic-continues' }))
+    await classifyContinuation(
+      provider,
+      'gpt-test',
+      null,
+      [],
+      'hi again',
+      '/tmp/workspace',
+      'claude-code',
+    )
+    expect(inputs).toHaveLength(1)
+    expect(inputs[0]?.tools).toEqual([])
+    expect(inputs[0]?.workspacePath).toBe('/tmp/workspace')
   })
 
   it('reports non-json-classifier-output with raw output and parse error', async () => {
