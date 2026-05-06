@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-06 (PLAN-128 admission roundtrip evidence completed)
+> Updated: 2026-05-06 (PLAN-129 reject + secret-scan-block coverage completed)
 
 ## Usage
 
@@ -157,3 +157,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-126 Record 0.9.1 `cli-release-local` validation**](PLAN-126.md) `2026-05-06`
 - [x] [**PLAN-127 Governance Kernel regression harness**](PLAN-127.md) `2026-05-06`
 - [x] [**PLAN-128 Governance Kernel harness — admission roundtrip evidence**](PLAN-128.md) `2026-05-06`
+- [x] [**PLAN-129 Governance Kernel harness — reject and secret-scan-block coverage**](PLAN-129.md) `2026-05-06`

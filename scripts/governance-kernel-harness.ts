@@ -752,19 +752,26 @@ interface HarnessFixture {
   topic: string
 }
 
-function writeFixtureFiles(projectDir: string, pairId: string, soul: string): HarnessFixture {
+function writeAdmissionFixture(
+  projectDir: string,
+  pairId: string,
+  soul: string,
+  suffix: string,
+  body: string,
+  topic: string,
+  indexEntry: string,
+  summary: string,
+): HarnessFixture {
   const fixtureDir = path.join(projectDir, '.aiworker/local/harness-fixtures')
   ensureDir(fixtureDir)
-  const proposalId = `harness-${pairId}`
-  const topic = `harness-${pairId}`
-  const indexEntry = `- [${pairId} harness](memories/${topic}.md) — Governance Kernel roundtrip evidence.`
-  const body = `${pairId} prefers source-backed validation evidence (governance-kernel-harness).`
+  const proposalId = suffix === '' ? `harness-${pairId}` : `harness-${pairId}-${suffix}`
   const payload = path.join(fixtureDir, `${proposalId}.payload.json`)
   const evidence = path.join(fixtureDir, `${proposalId}.evidence.json`)
   // memory-add payload schema accepts `body`, optional `topic`, optional
   // `indexEntry`. Extra keys are dropped by the non-strict zod object, but we
   // intentionally keep the payload minimal so the apply materializer writes a
-  // single deterministic memory file under `memories/<topic>.md`.
+  // single deterministic memory file under `memories/<topic>.md` (or rejects /
+  // blocks before that, depending on the slice).
   writeFileSync(payload, `${JSON.stringify({
     body,
     indexEntry,
@@ -774,12 +781,58 @@ function writeFixtureFiles(projectDir: string, pairId: string, soul: string): Ha
     {
       at: new Date().toISOString(),
       kind: 'observation',
-      ref: `harness:${pairId}`,
+      ref: `harness:${proposalId}`,
       source: 'scripts/governance-kernel-harness.ts',
-      summary: `Direct formal admission path check for ${soul}.`,
+      summary: `${summary} (soul=${soul}).`,
     },
   ], null, 2)}\n`, 'utf8')
   return { body, evidence, indexEntry, payload, proposalId, topic }
+}
+
+function writeFixtureFiles(projectDir: string, pairId: string, soul: string): HarnessFixture {
+  const topic = `harness-${pairId}`
+  return writeAdmissionFixture(
+    projectDir,
+    pairId,
+    soul,
+    '',
+    `${pairId} prefers source-backed validation evidence (governance-kernel-harness).`,
+    topic,
+    `- [${pairId} harness](memories/${topic}.md) — Governance Kernel roundtrip evidence.`,
+    `Direct formal admission path check for ${pairId}`,
+  )
+}
+
+function writeRejectFixture(projectDir: string, pairId: string, soul: string): HarnessFixture {
+  const topic = `harness-${pairId}-reject`
+  return writeAdmissionFixture(
+    projectDir,
+    pairId,
+    soul,
+    'reject',
+    `${pairId} reject path fixture; this body must never appear under canonical memory.`,
+    topic,
+    `- [${pairId} reject](memories/${topic}.md) — Negative-path fixture; should never apply.`,
+    `Reject path fixture for ${pairId}`,
+  )
+}
+
+function writeSecretFixture(projectDir: string, pairId: string, soul: string): HarnessFixture {
+  const topic = `harness-${pairId}-secret`
+  // BUG-055 regression bait: synthetic API key that matches
+  // scanBodyForSecrets (`sk-LIVE-...`) and is also caught by the harness
+  // redactor (`/sk-\\S{8,}/g`). Must never reach a canonical memory file.
+  const body = `${pairId} secret-bait fixture: apiKey=sk-LIVE-fake1234567890abcdefghij; do not commit.`
+  return writeAdmissionFixture(
+    projectDir,
+    pairId,
+    soul,
+    'secret',
+    body,
+    topic,
+    `- [${pairId} secret](memories/${topic}.md) — BUG-055 secret-scan-block fixture.`,
+    `Secret-scan-block fixture for ${pairId}`,
+  )
 }
 
 async function runPair(
@@ -1141,6 +1194,187 @@ async function runPair(
     evidence: brief.logPath,
     name: `${pairId} brain brief reflects applied memory`,
     status: brief.code === 0 && (briefHasTopic || briefHasBody) ? 'pass' : 'fail',
+  })
+
+  // PLAN-129: reject path coverage. Propose a sibling fixture, reject it, and
+  // verify the negative state transition is source-backed in the DB and that
+  // no canonical memory file leaks for the reject topic.
+  const rejectFixture = writeRejectFixture(projectDir, pairId, pair.soul)
+  const rejectPropose = runAiworker(options.debugRoot, product, `${pairId}-reject-propose`, [
+    'brain',
+    'admission',
+    'propose',
+    '--id',
+    rejectFixture.proposalId,
+    '--kind',
+    'memory-add',
+    '--target',
+    `memories/${rejectFixture.topic}`,
+    '--summary',
+    `Reject-path fixture for ${pairId}.`,
+    '--rollback',
+    `Reject ${rejectFixture.proposalId} before apply.`,
+    '--soul',
+    pair.soul,
+    '--risk',
+    'low',
+    '--confidence',
+    '0.9',
+    '--payload',
+    rejectFixture.payload,
+    '--evidence',
+    rejectFixture.evidence,
+  ], {
+    cwd: projectDir,
+    env,
+    timeoutMs: 30_000,
+  })
+  const reject = runAiworker(options.debugRoot, product, `${pairId}-reject-reject`, [
+    'brain',
+    'admission',
+    'reject',
+    rejectFixture.proposalId,
+    '--decided-by',
+    'governance-kernel-harness',
+    '--reason',
+    'harness-reject-path',
+  ], {
+    cwd: projectDir,
+    env,
+    timeoutMs: 30_000,
+  })
+  const rejectStatusSnap = sqlite(
+    options.debugRoot,
+    dbPath,
+    `${pairId}-db-reject-status`,
+    `SELECT status FROM brain_admission_proposals WHERE id = ${sqlString(rejectFixture.proposalId)};`,
+  )
+  const rejectDecisionsSnap = sqlite(
+    options.debugRoot,
+    dbPath,
+    `${pairId}-db-reject-decisions`,
+    `SELECT decision FROM brain_admission_decisions WHERE proposal_id = ${sqlString(rejectFixture.proposalId)} ORDER BY decided_at;`,
+  )
+  const rejectStatus = rejectStatusSnap.stdout.trim().split('\n')[0] ?? ''
+  const rejectDecisions = rejectDecisionsSnap.stdout.trim().split('\n').filter(Boolean)
+  const rejectMemoryFile = path.join(projectDir, '.aiworker/memories', `${rejectFixture.topic}.md`)
+  const rejectMemoryFileExists = existsSync(rejectMemoryFile)
+  checks.push({
+    detail: `propose exit=${rejectPropose.code}, reject exit=${reject.code}, status=${rejectStatus}, decisions=${rejectDecisions.join(',')}, memory file exists=${rejectMemoryFileExists}`,
+    evidence: `${rejectPropose.logPath}; ${reject.logPath}; ${rejectStatusSnap.logPath}; ${rejectDecisionsSnap.logPath}`,
+    name: `${pairId} admission reject path`,
+    status: rejectPropose.code === 0
+      && reject.code === 0
+      && rejectStatus === 'rejected'
+      && rejectDecisions.includes('rejected')
+      && !rejectMemoryFileExists
+      ? 'pass'
+      : 'fail',
+  })
+
+  // PLAN-129: secret-scan-block path coverage (BUG-055 regression). Propose a
+  // sibling fixture whose body matches scanBodyForSecrets, approve it, and
+  // verify that apply --commit refuses to materialize, leaves the proposal in
+  // `approved`, writes no `applied` decision row, and never produces a
+  // canonical memory file for the secret topic.
+  const secretFixture = writeSecretFixture(projectDir, pairId, pair.soul)
+  const secretPropose = runAiworker(options.debugRoot, product, `${pairId}-secret-propose`, [
+    'brain',
+    'admission',
+    'propose',
+    '--id',
+    secretFixture.proposalId,
+    '--kind',
+    'memory-add',
+    '--target',
+    `memories/${secretFixture.topic}`,
+    '--summary',
+    `Secret-bait fixture for ${pairId} (BUG-055 regression).`,
+    '--rollback',
+    `Reject ${secretFixture.proposalId}; never apply with default block policy.`,
+    '--soul',
+    pair.soul,
+    '--risk',
+    'medium',
+    '--confidence',
+    '0.5',
+    '--payload',
+    secretFixture.payload,
+    '--evidence',
+    secretFixture.evidence,
+  ], {
+    cwd: projectDir,
+    env,
+    timeoutMs: 30_000,
+  })
+  const secretApprove = runAiworker(options.debugRoot, product, `${pairId}-secret-approve`, [
+    'brain',
+    'admission',
+    'approve',
+    secretFixture.proposalId,
+    '--decided-by',
+    'governance-kernel-harness',
+    '--reason',
+    'harness-secret-block-path',
+  ], {
+    cwd: projectDir,
+    env,
+    timeoutMs: 30_000,
+  })
+  const secretApply = runAiworker(options.debugRoot, product, `${pairId}-secret-apply`, [
+    'brain',
+    'admission',
+    'apply',
+    secretFixture.proposalId,
+    '--commit',
+    '--decided-by',
+    'governance-kernel-harness',
+  ], {
+    cwd: projectDir,
+    env,
+    timeoutMs: 30_000,
+  })
+  const secretApplyOutcome = parseFirstJsonObject(secretApply.stdout)
+  const secretOutcomeBlock = secretApplyOutcome?.outcome
+  const secretOutcomeKind = typeof secretOutcomeBlock === 'object' && secretOutcomeBlock !== null && 'kind' in secretOutcomeBlock
+    ? (secretOutcomeBlock as { kind?: unknown }).kind
+    : undefined
+  const secretStatusSnap = sqlite(
+    options.debugRoot,
+    dbPath,
+    `${pairId}-db-secret-status`,
+    `SELECT status FROM brain_admission_proposals WHERE id = ${sqlString(secretFixture.proposalId)};`,
+  )
+  const secretDecisionsSnap = sqlite(
+    options.debugRoot,
+    dbPath,
+    `${pairId}-db-secret-decisions`,
+    `SELECT decision FROM brain_admission_decisions WHERE proposal_id = ${sqlString(secretFixture.proposalId)} ORDER BY decided_at;`,
+  )
+  const secretStatus = secretStatusSnap.stdout.trim().split('\n')[0] ?? ''
+  const secretDecisions = secretDecisionsSnap.stdout.trim().split('\n').filter(Boolean)
+  const secretMemoryFile = path.join(projectDir, '.aiworker/memories', `${secretFixture.topic}.md`)
+  const secretMemoryFileExists = existsSync(secretMemoryFile)
+  // BUG-055: when the apply outcome is `blocked-by-secret-scan`, the CLI
+  // returns exit code 1 alongside the diagnostic JSON. The pass condition
+  // therefore relies on the parsed outcome JSON instead of the exit code,
+  // mirroring `BrainAdmissionService.apply`'s contract. We still require the
+  // exit to be exactly 1 so a future regression that silently swallows the
+  // block (returning 0) would surface here.
+  checks.push({
+    detail: `propose=${secretPropose.code}, approve=${secretApprove.code}, apply=${secretApply.code}, outcome.kind=${String(secretOutcomeKind ?? 'unknown')}, status=${secretStatus}, decisions=${secretDecisions.join(',')}, memory file exists=${secretMemoryFileExists}`,
+    evidence: `${secretApply.logPath}; ${secretStatusSnap.logPath}; ${secretDecisionsSnap.logPath}`,
+    name: `${pairId} admission secret-scan-block path`,
+    status: secretPropose.code === 0
+      && secretApprove.code === 0
+      && secretApply.code === 1
+      && secretOutcomeKind === 'blocked-by-secret-scan'
+      && secretStatus === 'approved'
+      && secretDecisions.includes('approved')
+      && !secretDecisions.includes('applied')
+      && !secretMemoryFileExists
+      ? 'pass'
+      : 'fail',
   })
 
   const decisionEvents = allEvents.filter(event =>

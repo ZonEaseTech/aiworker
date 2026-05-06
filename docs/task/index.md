@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-06 (QA-011 admission roundtrip evidence completed)
+> Updated: 2026-05-06 (QA-012 reject + secret-scan-block evidence completed)
 
 ## Usage
 
@@ -232,3 +232,5 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**QA-010 Run Governance Kernel regression harness against source worker**](QA-010.md) `P1`
 - [x] [**TODO-031 Extend Governance Kernel harness with admission roundtrip evidence**](TODO-031.md) `P2`
 - [x] [**QA-011 Governance Kernel harness — admission roundtrip evidence**](QA-011.md) `P1`
+- [x] [**TODO-032 Harness — admission reject and secret-scan-block coverage**](TODO-032.md) `P2`
+- [x] [**QA-012 Governance Kernel harness — reject and secret-scan-block evidence**](QA-012.md) `P1`
