@@ -1,5 +1,52 @@
 # AIWorker Changelog
 
+## 2026-05-06 09:01 [completed] TODO-033 / PLAN-130 / QA-013 — Soul-agnostic Governance Kernel full 5×2 matrix evidence
+
+`worker-source-local --matrix full` 一次性跑完 5 Soul × 2 executor 共 10 对，
+每对 30 项 source-backed 检查，总计 300 PASS / 0 FAIL / 0 SKIPPED。覆盖
+chat-id 连续性、admission 三态（pending → approved → applied、
+pending → rejected、approved → blocked-by-secret-scan）、canonical memory
+边界、decision truthfulness、risk-policy、tool-call observability、
+REST/SSE 鉴权与 Worker Admin mount。
+
+- 证据根目录：`/home/ben/projects/debug-aiworker/qa-2026-05-06-governance-full`。
+- 这是 Soul-agnostic Brain Governance Kernel 最强的源码端证据：每个 Soul
+  在每个支持的 executor 上都通过相同的 governance 不变量。
+- `docs/governance-node-status.md` 同步登记 Soul-agnostic conformance 行
+  与 QA-013 证据指针。
+
+## 2026-05-06 08:14 [completed] TODO-032 / PLAN-129 / QA-012 — Admission negative paths and secret-scan-block coverage
+
+扩展 `scripts/governance-kernel-harness.ts`，按对追加 reject 与 secret-scan-
+block 两条 sibling 路径：
+
+- **Reject path**：propose → reject 后验证 `brain_admission_proposals.status='rejected'`、
+  `brain_admission_decisions` 写 `'rejected'`、canonical memory 文件不出现。
+- **Secret-scan-block path**（BUG-055 回归线）：合成 `apiKey=sk-LIVE-fake...`
+  body，propose → approve → apply --commit 在默认 block 策略下退出 1 并返回
+  `outcome.kind='blocked-by-secret-scan'`，proposal 维持 `'approved'`，不写
+  `'applied'` 决策行，也不写 canonical memory 文件。
+
+source-local 与 cli-release-local 0.9.1 双模式 compact 都通过；证据落
+QA-012。
+
+## 2026-05-06 07:45 [completed] TODO-031 / PLAN-128 / QA-011 — Admission positive roundtrip evidence
+
+扩展 `scripts/governance-kernel-harness.ts`，按对运行
+`pending → approved → applied` 闭环并校验：
+
+- proposal status 在 DB 中流转为 `approved` 与 `applied`；
+- `brain_admission_decisions` 写入 `approved` 与 `applied` 行；
+- `apply --commit` 把 canonical memory 写到
+  `<projectScope>/.aiworker/memories/<topic>.md` 并向 `MEMORY.md` 追加
+  index entry；
+- `aiworker brain brief` 的 projection 能读到刚 applied 的 memory；
+- pre-apply canonical memory boundary 仍保持空。
+
+source-local 与 cli-release-local 0.9.1 双模式 compact 都通过；证据落
+QA-011。本 slice 把"durable Brain mutation 必须走 admission"的正向不变量
+从单元测试拓宽到 CLI 端到端回归。
+
 ## 2026-05-06 06:58 [completed] QA-010 — Source worker Governance Kernel harness validation
 
 使用新增 `scripts/governance-kernel-harness.ts` 的 `worker-source-local` mode
