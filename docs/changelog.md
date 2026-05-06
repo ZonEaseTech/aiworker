@@ -1,5 +1,11 @@
 # AIWorker Changelog
 
+## 2026-05-06 04:16 [progress] REL-017 / PLAN-124 — CLI 0.9.1 release
+
+开始发布 `@zonease/aiworker-cli@0.9.1` patch release，承载 QA-007 / PLAN-123 的 Brain Governance Kernel 后续修复：quality gate control prompt、decision pipeline recent samples 持久化、Claude Code no-tools control calls、Codex tool progress dead-loop、Worker OpenAPI route truthfulness、bypass heuristic 降噪。
+
+本地 release gates 已通过：`bun install --frozen-lockfile`、`bun run typecheck`、`bun run lint`、`bun run test`、`bun run build`、CLI run / fleet smoke、dist version checks、`git diff --check`；`bun publish --dry-run --access public` 完成 pack 阶段（32 files / 2.73 MB），随后停在本机 npm authentication boundary。
+
 ## 2026-05-06 03:19 [completed] PLAN-123 — BUG-075..078 / TODO-028..029 governance follow-up fixes
 
 - `packages/core/src/worker/executor/engines/claude-code/executor.ts`：suppressed control calls 通过 `AgentRunInput.tools=[]` 投影到 Claude Code no-tool 模式（`--tools ""`、禁 slash commands、strict MCP config、no session persistence），并对 control request 使用 deny policy，避免 conversation classifier / quality gate 继承任务执行面的工具副作用。
