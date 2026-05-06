@@ -1,8 +1,9 @@
 # PLAN-135 发布 aiworker CLI 0.9.3
 
-- **status**: in_progress
+- **status**: completed
 - **createdAt**: 2026-05-06 12:38
 - **approvedAt**: 2026-05-06 12:38
+- **completedAt**: 2026-05-06 12:47
 - **relatedTask**: REL-019
 
 ## 现状
@@ -76,3 +77,8 @@
   --dry-run --access public` 已输出 pack 清单并在认证阶段停于
   `missing authentication`；实际 npm publish 由 tag-triggered GitHub
   workflow 使用仓库 `NPM_TOKEN`。
+- 2026-05-06 12:47：发布完成。Release commit `93692ea` + annotated tag
+  `v0.9.3` 已 push；GitHub Actions release workflow `25436040503` 全绿；
+  npm `latest=0.9.3`；GitHub Release `v0.9.3` 非 draft / 非 prerelease；
+  4 平台 binary 全 uploaded。`bunx @zonease/aiworker-cli@0.9.3 --version`
+  返回 `aiworker/0.9.3 linux-x64 node-v24.3.0`。

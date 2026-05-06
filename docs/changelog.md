@@ -1,6 +1,6 @@
 # AIWorker Changelog
 
-## 2026-05-06 12:38 [in_progress] REL-019 / PLAN-135 — 发布 aiworker CLI 0.9.3
+## 2026-05-06 12:47 [completed] REL-019 / PLAN-135 — 发布 aiworker CLI 0.9.3
 
 发布 `@zonease/aiworker-cli@0.9.3`，作为 0.9.2 之后的 patch release，
 交付 worker-local gateway enrollment env 持久化：
@@ -13,6 +13,9 @@
   root；共享 Project Brain 仍在 `<project>/.aiworker/`。
 - `config.yaml` 仍是 redacted worker config advisory mirror，不承载 gateway
   enrollment token / startup secret。
+- Release commit `93692ea` + annotated tag `v0.9.3` 已 push；GitHub Actions
+  release workflow `25436040503` 全绿；npm latest 已是 `0.9.3`；GitHub
+  Release `v0.9.3` 非 draft / 非 prerelease，4 个平台 binary 全 uploaded。
 
 ## 2026-05-06 10:08 [completed] TODO-035 / PLAN-133 / QA-015 — Long-running serve multi-turn REST regression
 
