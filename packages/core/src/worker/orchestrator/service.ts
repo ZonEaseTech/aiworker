@@ -1,5 +1,6 @@
 import type {
   AgentRunInput,
+  BrainAdmissionProposal,
   BrainProvider,
   ChannelType,
   ChatMessage,
@@ -18,7 +19,9 @@ import type { ApprovalDecision, ApprovalStore } from './approvals'
 import type { DecisionContext } from './decisions'
 import type { ProcessManager } from './process-manager'
 
-import { AppError, DEFAULT_MAX_HISTORY_MESSAGES, redactBodySecrets } from '@zonease/aiworker-shared'
+import { createHash } from 'node:crypto'
+
+import { AppError, brainAdmissionMemoryAddPayloadSchema, DEFAULT_MAX_HISTORY_MESSAGES, redactBodySecrets } from '@zonease/aiworker-shared'
 import { agentTasks, conversations, getSessionEntry, getWorkerDb, messages, recordSessionCompaction, rotateSessionConversation, sessionEntries, touchSessionEntry, updateSessionEngineBinding, upsertSessionEntry } from '@zonease/aiworker-storage-sqlite/worker'
 
 import consola from 'consola'
@@ -94,8 +97,8 @@ interface CompactionCheckpoint {
 interface MemoryFlushResult {
   attempted: boolean
   at?: string
-  status?: 'succeeded' | 'failed' | 'empty'
-  content?: string
+  status?: 'proposed' | 'already-proposed' | 'failed' | 'empty'
+  proposalId?: string
   error?: string
 }
 
@@ -934,6 +937,7 @@ export class Orchestrator {
           ? {
               status: memoryFlush.status,
               at: memoryFlush.at,
+              ...(memoryFlush.proposalId === undefined ? {} : { proposalId: memoryFlush.proposalId }),
               ...(memoryFlush.error === undefined ? {} : { error: memoryFlush.error }),
             }
           : { status: 'disabled' },
@@ -994,25 +998,30 @@ export class Orchestrator {
         return { attempted: true, at, status: 'empty' }
       }
 
-      await this.deps.brain.writeMemory({
+      const proposal = this.proposePreCompactionMemory({
+        at,
         content: trimmed,
-        metadata: {
-          name: `pre-compaction-${input.conversationId}-${input.throughId}`,
-          description: 'Pre-compaction memory flush',
-          type: 'memory',
-          conversationId: input.conversationId,
-          compactedFromMessageId: input.fromId,
-          compactedThroughMessageId: input.throughId,
-        },
-        tags: ['aiworker', 'session-compaction'],
+        conversationId: input.conversationId,
+        fromId: input.fromId,
+        throughId: input.throughId,
       })
-      this.persistAuditMessage(input.conversationId, trimmed, {
+      this.persistAuditMessage(input.conversationId, `Pending Brain admission proposal created: ${proposal.id}`, {
         ...baseMetadata,
-        status: 'succeeded',
+        proposalId: proposal.id,
+        status: 'proposed',
       }, at)
-      return { attempted: true, at, status: 'succeeded', content: trimmed }
+      return { attempted: true, at, proposalId: proposal.id, status: 'proposed' }
     }
     catch (err) {
+      if ((err as { code?: string }).code === 'duplicate-id') {
+        const proposalId = preCompactionAdmissionId(input.conversationId, input.throughId)
+        this.persistAuditMessage(input.conversationId, `Pending Brain admission proposal already exists: ${proposalId}`, {
+          ...baseMetadata,
+          proposalId,
+          status: 'already-proposed',
+        }, at)
+        return { attempted: true, at, proposalId, status: 'already-proposed' }
+      }
       const error = String(err)
       consola.warn(`[orchestrator] pre-compaction memory flush failed: ${error}`)
       this.persistAuditMessage(input.conversationId, error, {
@@ -1022,6 +1031,47 @@ export class Orchestrator {
       }, at)
       return { attempted: true, at, status: 'failed', error }
     }
+  }
+
+  private proposePreCompactionMemory(input: {
+    at: string
+    content: string
+    conversationId: string
+    fromId: number
+    throughId: number
+  }): BrainAdmissionProposal {
+    const proposalId = preCompactionAdmissionId(input.conversationId, input.throughId)
+    const topic = proposalId
+    const payload = brainAdmissionMemoryAddPayloadSchema.parse({
+      body: input.content,
+      indexEntry: `- [Pre-compaction memory ${input.throughId}](${topic}.md) - Proposed by AIWorker compaction admission.`,
+      topic,
+    })
+    return new BrainAdmissionService().propose({
+      confidence: 0.6,
+      evidence: [
+        {
+          at: input.at,
+          kind: 'conversation',
+          ref: input.conversationId,
+          summary: 'Pre-compaction memory flush source conversation.',
+        },
+        {
+          at: input.at,
+          kind: 'message',
+          ref: `${input.conversationId}:${input.fromId}-${input.throughId}`,
+          summary: 'Transcript range compacted before this memory proposal.',
+        },
+      ],
+      id: proposalId,
+      kind: 'memory-add',
+      payload,
+      risk: 'medium',
+      rollback: `Reject ${proposalId} before apply, or remove memories/${topic}.md and its MEMORY.md index entry after apply.`,
+      soulId: 'general-assistant',
+      summary: `Pre-compaction memory proposal for conversation ${input.conversationId}.`,
+      target: `memories/${topic}`,
+    }, input.at)
   }
 
   private async generateCompactionSummary(input: {
@@ -1499,9 +1549,9 @@ function buildMemoryFlushPrompt(previousSummary: string | null, rows: Transcript
     {
       role: 'system',
       content: [
-        'You are running a pre-compaction memory flush for AIWorker.',
+        'You are drafting a pre-compaction long-term memory proposal for AIWorker.',
         'This turn is not delivered to the user.',
-        'Return only durable facts, preferences, decisions, or todos that should be written to long-term memory.',
+        'Return only durable facts, preferences, decisions, or todos that should be proposed through Brain admission.',
         'If there is nothing durable to write, return NONE.',
       ].join('\n'),
     },
@@ -1516,6 +1566,14 @@ function buildMemoryFlushPrompt(previousSummary: string | null, rows: Transcript
       ].join('\n'),
     },
   ]
+}
+
+function preCompactionAdmissionId(conversationId: string, throughId: number): string {
+  const hash = createHash('sha256')
+    .update(`${conversationId}:${throughId}`)
+    .digest('hex')
+    .slice(0, 12)
+  return `pre-compaction-${throughId}-${hash}`
 }
 
 function formatTranscriptExcerpt(rows: TranscriptRow[], limit: number): string {

@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-06 (PLAN-142 completed)
+> Updated: 2026-05-06 (PLAN-143 completed)
 
 ## Usage
 
@@ -171,3 +171,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-140 Fleet-hosted Worker Admin brain bridge routes**](PLAN-140.md) `2026-05-06`
 - [x] [**PLAN-141 发布 aiworker CLI 0.9.5**](PLAN-141.md) `2026-05-06`
 - [x] [**PLAN-142 Docker image gateway path correction**](PLAN-142.md) `2026-05-06`
+- [x] [**PLAN-143 Route pre-compaction memory flush through Brain admission**](PLAN-143.md) `2026-05-06`

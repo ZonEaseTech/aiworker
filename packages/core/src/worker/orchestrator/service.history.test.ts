@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 
-import { agentTasks, closeWorkerDb, conversations, getSessionEntry, getWorkerDb, initWorkerDb, messages, runWorkerMigrations, upsertSessionEntry } from '@zonease/aiworker-storage-sqlite/worker'
+import { agentTasks, brainAdmissionProposals, closeWorkerDb, conversations, getSessionEntry, getWorkerDb, initWorkerDb, messages, runWorkerMigrations, upsertSessionEntry } from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { resolveSessionKey } from '../conversation/router'
@@ -674,7 +674,7 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
     expect(entry?.contextTokens).toBe(estimateChatMessagesTokens(latestRunMessages))
   })
 
-  it('runs a suppressed pre-compaction memory flush before writing the compaction checkpoint', async () => {
+  it('routes pre-compaction memory flush through pending Brain admission', async () => {
     await seedConversation('conv-history', 'web', 'chat-history')
     await seedMessages('conv-history', 30)
 
@@ -711,9 +711,18 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
 
     await orch.ingest(envelope('incoming with flush'))
 
-    expect(brain.writes.map(write => write.content)).toEqual(['remember this durable preference'])
+    expect(brain.writes).toHaveLength(0)
     const textEvents = bus.events.filter(event => event.type === 'orchestrator.text').map(event => (event.payload as { delta: string }).delta)
     expect(textEvents).toEqual(['visible final answer'])
+
+    const proposals = getWorkerDb().select().from(brainAdmissionProposals).all()
+    expect(proposals).toHaveLength(1)
+    expect(proposals[0]?.kind).toBe('memory-add')
+    expect(proposals[0]?.status).toBe('pending')
+    expect(proposals[0]?.target?.startsWith('memories/pre-compaction-')).toBe(true)
+    expect(proposals[0]?.payload).toMatchObject({
+      body: 'remember this durable preference',
+    })
 
     const rows = getWorkerDb().select().from(messages).where(eq(messages.conversationId, 'conv-history')).all()
     const memoryFlushRow = rows.find(row => parseAuditMetadata(row)?.kind === 'memory-flush')
@@ -721,8 +730,11 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
     expect(memoryFlushRow).toBeDefined()
     expect(compactionRow).toBeDefined()
     expect(memoryFlushRow!.id).toBeLessThan(compactionRow!.id)
-    expect(parseAuditMetadata(memoryFlushRow!)?.status).toBe('succeeded')
-    expect((parseAuditMetadata(compactionRow!)?.memoryFlush as { status?: string }).status).toBe('succeeded')
+    expect(parseAuditMetadata(memoryFlushRow!)?.status).toBe('proposed')
+    expect(parseAuditMetadata(memoryFlushRow!)?.proposalId).toBe(proposals[0]?.id)
+    expect(memoryFlushRow?.content).toBe(`Pending Brain admission proposal created: ${proposals[0]?.id}`)
+    expect((parseAuditMetadata(compactionRow!)?.memoryFlush as { proposalId?: string, status?: string }).status).toBe('proposed')
+    expect((parseAuditMetadata(compactionRow!)?.memoryFlush as { proposalId?: string, status?: string }).proposalId).toBe(proposals[0]?.id)
 
     const entry = getSessionEntry(resolveSessionKey(envelope()))
     expect(entry?.compactionCount).toBe(1)
@@ -730,14 +742,15 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
     expect(entry?.memoryFlushCompactionCount).toBe(1)
   })
 
-  it('keeps compaction safe when pre-compaction memory flush persistence fails', async () => {
+  it('keeps compaction safe when pre-compaction admission proposal fails', async () => {
     await seedConversation('conv-history', 'web', 'chat-history')
     await seedMessages('conv-history', 30)
 
+    const oversizedMemory = 'x'.repeat(20_001)
     const executor = capturingExecutor([
       '{"continue":true,"reason":"same topic"}',
-      'memory that cannot be persisted',
-      'summary despite flush failure',
+      oversizedMemory,
+      'summary despite proposal failure',
       'final after failure',
     ])
     const orch = new Orchestrator({
@@ -754,7 +767,7 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
           },
         },
       }),
-      brain: recordingBrain({ failWrites: true }),
+      brain: stubBrain(),
       executor,
       bus: silentBus(),
       workerId: 'w_history_test',
@@ -767,7 +780,8 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
 
     const db = getWorkerDb()
     const conversation = db.select().from(conversations).where(eq(conversations.id, 'conv-history')).get()
-    expect(conversation?.summary).toBe('summary despite flush failure')
+    expect(conversation?.summary).toBe('summary despite proposal failure')
+    expect(db.select().from(brainAdmissionProposals).all()).toHaveLength(0)
 
     const rows = db.select().from(messages).where(eq(messages.conversationId, 'conv-history')).all()
     const memoryFlushRow = rows.find(row => parseAuditMetadata(row)?.kind === 'memory-flush')

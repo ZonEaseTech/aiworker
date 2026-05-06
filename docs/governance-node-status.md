@@ -20,6 +20,7 @@ inline.
 |---|---|---|
 | Admission positive invariant (durable Brain mutation flows through admission) | conforming | QA-011 — `pending → approved → applied` writes canonical memory + MEMORY.md index; brief projection picks it up. Source + published 0.9.1 both pass. |
 | Admission negative invariant (rejected proposals never write canonical memory) | conforming | QA-012 — `pending → rejected` records audit decision, no memory file; source + published 0.9.1 both pass. |
+| Pre-compaction generated memory boundary | conforming in source | BUG-085 / PLAN-143 — suppressed executor output creates a pending `memory-add` proposal in `brain_admission_proposals`, never a direct `BrainProvider.writeMemory()` call; compaction audit metadata records `status='proposed'`. |
 | Secret defense at materialization (BUG-055 regression line) | conforming | QA-012 — `apply --commit` with default `block` policy refuses bodies matching `scanBodyForSecrets`, returns `outcome.kind='blocked-by-secret-scan'` with exit 1, leaves proposal `approved`, no `applied` decision row, no canonical memory file. Source + published 0.9.1. |
 | Truthfulness contract (decision events expose `source` / `mode` / `evaluator` / `fallback`) | conforming | QA-009 / QA-010 / QA-011 — every `orchestrator.intent_decision`, `orchestrator.capability_decision`, `orchestrator.quality_gate` carries source-tagged truthfulness fields, persisted to `decision_pipeline_samples`. |
 | LLM bypass detection | conforming | QA-009 / QA-010 / QA-011 — assistants that claim admission was submitted while `brain_admission_proposals` shows no row trigger `brain.governance.bypass_suspected` events, asserted via the `admission claim vs DB` harness check. |
@@ -95,6 +96,9 @@ read as a stronger statement than the evidence supports.
 - `docs/task/QA-015.md` — Long-running `serve` multi-turn REST regression
   evidence: 4 new orchestrator REST checks per pair (unauth boundary,
   submit, continue, read), all PASS on both compact pairs.
+- `docs/task/BUG-085.md` / `docs/plan/PLAN-143.md` — pre-compaction generated
+  memory no-direct-write fix; focused source tests assert pending admission
+  proposal creation and no canonical memory write.
 - `docs/architecture.md` — canonical Brain Governance Kernel decision and
   ownership table.
 - `scripts/governance-kernel-harness.ts` — repeatable harness; the canonical

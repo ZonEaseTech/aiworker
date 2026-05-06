@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-06 (BUG-084 completed)
+> Updated: 2026-05-06 (BUG-085 completed)
 
 ## Usage
 
@@ -251,3 +251,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [ ] [**BUG-083 Fleet-hosted Worker Admin cannot continue selected chat conversations**](BUG-083.md) `P1`
 - [x] [**REL-021 发布 aiworker CLI 0.9.5**](REL-021.md) `P1`
 - [x] [**BUG-084 Docker image build still assumes removed apps/gateway package**](BUG-084.md) `P1`
+- [x] [**BUG-085 Pre-compaction memory flush bypasses Brain admission**](BUG-085.md) `P1`

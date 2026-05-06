@@ -241,7 +241,7 @@ project scope 下，团队共享上下文落在 `<project>/.aiworker/`：
 - **Project scope 语义**：`<project>/.aiworker/` 是当前目录命名沿用的 filesystem layout；产品语义是 worker-bound business scope，不限定为 git repo、代码仓库或软件项目。Soul 负责解释该 scope 的领域对象和工作流，例如 developer 的架构/测试/发布，HR 的简历筛选/归档/备份/审核，legal 的合同/案件审查，ops 的队列/交接/升级。`AIWORKER_HOME` 在这里指向 `<project>/.aiworker/local/`，也就是本机私有 runtime state 根，而不是 cwd 别名；cwd 只负责自动发现这个 project scope。显式设置 `AIWORKER_HOME` 则表示 operator 固定一个独立 home，适用于 systemd / docker / 同机多 worker。
 - **Skills / memories** 读写统一过 `FilesystemBrainProvider`（PLAN-012 将旧 `HermesProvider` 改名并把 HTTP 依赖全部拆掉）；filesystem 是权威，SQLite 只负责 identity 与可索引状态。新 worker 默认挂载 writable `local-filesystem` brain source，路径由 `resolveBrainHome(workerId)` 决定：project scope 指向 `<project>/.aiworker/`，user / explicit scope 指向 worker home 下的 `brain/`。operator 可用 `aiworker brain status` / `aiworker brain skills` / `aiworker brain memories` 做只读检查；这些命令不写入 brain artifact。
 - **Capability 边界**：`.aiworker/mcp.json`、`skills/`、`toolsets.json`、`capability-packs.json` 属于 brain/runtime project capability 或 observe-only descriptor；`.aiworker/executor-capabilities.json` 只是 executor overlay / bootstrap hint。Codex / Claude Code / Hermes / OpenClaw 等外部 executor 可能加载 user/host-level MCP、skills、plugins、auth 和 native sessions；AIWorker 不把 project overlay 当成完整 effective capability source of truth。
-- **Brain admission 边界**：generated memory / brain skill / policy proposal 进入 filesystem 前必须保留 evidence、scope、confidence 与 rollback 信息，并经过显式 operator approval。当前已允许的 runtime 写入只有配置启用后的 pre-compaction memory flush；新 CLI/API mutating brain command 必须另开 PMA 任务并显式命名为 brain memory / brain skill，不得复用 executor MCP / engine plugin 语义。
+- **Brain admission 边界**：generated memory / brain skill / policy proposal 进入 filesystem 前必须保留 evidence、scope、confidence 与 rollback 信息，并经过显式 operator approval。pre-compaction memory flush 只能生成 pending `memory-add` admission proposal，不能直接写 canonical memory；新 CLI/API mutating brain command 必须另开 PMA 任务并显式命名为 brain memory / brain skill，不得复用 executor MCP / engine plugin 语义。
 
 ### Project Brain asset model
 
@@ -250,10 +250,10 @@ Project Brain 由五类资产组成。命名上 *brain memory / brain skill / pr
 | 资产 | 文件 / 目录 | 所有者 | 读写规则 | 当前 CLI |
 |------|------------|--------|---------|----------|
 | **Identity** | `AGENT.md`、`SOUL.md`、`USER.md` | operator + Soul preset | `aiworker init` 按 Soul 一次性种出，after that 视为 git-tracked persona doc，AIWorker runtime 不主动改写。 | `aiworker init`、`aiworker soul list/show` |
-| **Memory** | `MEMORY.md`、`memories/*.md` | operator + brain runtime（仅 pre-compaction flush） | filesystem 为权威；runtime 只允许配置启用后的 pre-compaction memory flush，其它写入必须走 admission（见下条）。 | `aiworker brain memories`（只读检索） |
+| **Memory** | `MEMORY.md`、`memories/*.md` | operator + admission materializer | filesystem 为权威；generated runtime memory 只能先进入 admission proposal，operator approve/apply 后由 materializer 写入。 | `aiworker brain memories`（只读检索） |
 | **Brain skills** | `.aiworker/skills/<name>/SKILL.md`（+ asset files） | operator | 仅人写；CLI 不提供 mutating skill commands。`brain skills` 只读列出 live `BrainProvider` 中已挂载的 skill。 | `aiworker brain skills` |
 | **Policy & drafts** | `policy.json`、`toolsets.json`、`capability-packs.json`、`.aiworker/mcp.json` | operator + Soul preset | brain/runtime 草案；`aiworker doctor` 静态校验，不接入 runtime enforcement。`mcp.json` 是 brain/runtime descriptor，不是 engine MCP config。 | `aiworker doctor`、`aiworker brain status` |
-| **Admission state** | worker.db `brain_admission_proposals` / `brain_admission_decisions` | brain runtime（proposal）+ operator（approval） | 任何 generated memory / skill / policy proposal 必须保留 evidence、scope、confidence、rollback；当前只允许 pre-compaction memory flush 的 runtime 写入路径，其它 mutating 必须显式 operator approval。CLI/API/UI approval surface 已由 PLAN-101 / PLAN-103 落地 MVP。 | `aiworker brain admission *`、Worker Admin `/brain` |
+| **Admission state** | worker.db `brain_admission_proposals` / `brain_admission_decisions` | brain runtime（proposal）+ operator（approval） | 任何 generated memory / skill / policy proposal 必须保留 evidence、scope、confidence、rollback；pre-compaction memory flush 也只创建 pending proposal，不直接写 filesystem。CLI/API/UI approval surface 已由 PLAN-101 / PLAN-103 落地 MVP。 | `aiworker brain admission *`、Worker Admin `/brain` |
 
 `<project>/.aiworker/executor-capabilities.json` **不是** brain 资产；它是外部 executor 的 project overlay / hint，与上面五类完全独立。fleet.db 不持久化 brain 内容；worker.db 只持有 artifact/admission/conversation 等可索引状态，不是 canonical brain filesystem 内容。`AGENT.md` / `SOUL.md` / `MEMORY.md` / `memories/` / `skills/` 等仍以 filesystem 为权威，便于 git review 与跨机迁移。
 
@@ -274,7 +274,7 @@ Project Brain 由五类资产组成。命名上 *brain memory / brain skill / pr
    - CLI: `aiworker brain admission propose/list/show/approve/reject/apply`（root + worker namespace 双注册）。`propose` 是正式 LLM/operator-facing pending proposal 入口；`apply` 默认 dry-run；`--decided-by` 必填用于 audit；`--show-sensitive` 才显示 evidence / payload 中 secret-like 字段。
    - API: `/api/worker/brain/{summary,admission*,artifacts*}` REST endpoints，bearer-auth；`POST /admission/:id/{approve,reject,apply}` 写端点，`apply` 默认 `commit:false`。
    - UI: Worker Admin `/brain` 视图列出 scope manifest 摘要、pending admissions（带 approve/reject/apply 按钮）、redacted artifact 列表。Fleet UI 不持有 admission / artifact state，仅在 worker detail 上挂 “Open worker Brain admin” 深链。
-4. **唯一允许的免审写入**：pre-compaction memory flush（runtime 把易失 memory rollup 到 `MEMORY.md` 的批量收口）继续作为已批准的 runtime 写入路径；任何其它 mutating brain CLI/API/UI 命令必须先经过 admission flow 接入。
+4. **无免审 generated 写入**：pre-compaction memory flush（runtime 把易失 memory rollup 成长期记忆候选）只能创建 pending `memory-add` admission proposal；任何 mutating brain CLI/API/UI 命令都必须先经过 admission flow 接入。
 
 **MVP materializer 范围（PLAN-101）**：`apply` 仅对 `kind === 'memory-add'` 自动写 `<brainHome>/MEMORY.md` 或 `<brainHome>/memories/<topic>.md`；其它 proposal kind（`brain-skill-add`、`policy-update` 等）进表后可 approve，但 `apply` 返回 `unsupported`，留待人工或后续 plan 拓展。
 
@@ -346,7 +346,7 @@ emit `WorkerEventBus` 事件）。真正的 tool loop 可以由外部 executor r
 
 - Gateway 只负责帧转发与 fleet 级控制方法（`workers.*`、`token.rotate`、`system.presence`）。
 - Worker 持有 orchestrator；node 模式通过 `@zonease/aiworker-core` 的 `startGatewayNode` 主动拨一条 WS 连接上报 `WorkerEventBus` 事件、处理 gateway 转发过来的 `chat.send` / `config.get` / `config.put` / `token.rotate` / `logs.tail` 请求。
-- Orchestrator control-plane calls（continuation classifier、LLM intent classifier、quality gate、repair、compaction summary、pre-compaction memory flush）统一通过 control executor resolver。未配置 `orchestrator.decisionPipeline.executor` 时复用主 task executor；显式配置时单独构造 control executor，并使用自己的 model / timeout / fallback / secret hydration。control calls 一律不传 native session binding，并显式传空 tool list；Claude Code adapter 会 best-effort 投影为 no-tool CLI flags 并拒绝工具控制请求，避免 evaluator 继承任务执行面的文件/命令副作用。AIWorker 仍不把自己声明成 executor sandbox，最终 effective capability 由外部 executor runtime 自己负责。
+- Orchestrator control-plane calls（continuation classifier、LLM intent classifier、quality gate、repair、compaction summary、pre-compaction memory proposal）统一通过 control executor resolver。未配置 `orchestrator.decisionPipeline.executor` 时复用主 task executor；显式配置时单独构造 control executor，并使用自己的 model / timeout / fallback / secret hydration。control calls 一律不传 native session binding，并显式传空 tool list；Claude Code adapter 会 best-effort 投影为 no-tool CLI flags 并拒绝工具控制请求，避免 evaluator 继承任务执行面的文件/命令副作用。AIWorker 仍不把自己声明成 executor sandbox，最终 effective capability 由外部 executor runtime 自己负责。
 - Decision pipeline `recent.*` 是 operator-facing observability 窗口，不是审计日志。每个 intent classifier、quality gate、conversation classifier 样本会 best-effort 写入 worker-owned `decision_pipeline_samples`，`aiworker brain status`、`/api/worker/info` 和 `/api/worker/brain/summary` 从 `worker.db` 读取最近 50 条；当 DB 未初始化或旧库未迁移时才回退到进程内 ring buffer。
 
 ## System Architecture

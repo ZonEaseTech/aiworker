@@ -1,5 +1,22 @@
 # AIWorker Changelog
 
+## 2026-05-06 23:55 [completed] BUG-085 / PLAN-143 — Pre-compaction memory through admission
+
+Closed the last known generated durable Brain memory bypass in session
+compaction:
+
+- `runPreCompactionMemoryFlush()` now creates a deterministic pending
+  `memory-add` admission proposal instead of calling
+  `BrainProvider.writeMemory()` directly.
+- Compaction audit/session metadata records `status='proposed'` and the
+  proposal id; duplicate proposal ids become `already-proposed` without
+  blocking compaction.
+- Architecture, CLI, and governance status docs now state the same boundary:
+  generated runtime memory is proposed first and only becomes canonical memory
+  through Brain admission.
+- Verification passed: focused orchestrator history test, admission service
+  test, core package test/typecheck, repository lint, and `git diff --check`.
+
 ## 2026-05-06 14:59 [completed] BUG-084 / PLAN-142 — Docker image gateway path correction
 
 Fixed the stale Docker image gateway path after the gateway package move from

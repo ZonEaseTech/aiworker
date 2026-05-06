@@ -378,10 +378,10 @@ Project Brain 当前由五类资产组成：
 | 类别 | 文件 | 写入路径 |
 |------|------|---------|
 | Identity | `AGENT.md` / `SOUL.md` / `USER.md` | `aiworker init`，之后视为 git-tracked persona doc |
-| Memory | `MEMORY.md` / `memories/*.md` | filesystem 直接编辑；runtime 仅允许配置启用的 pre-compaction flush |
+| Memory | `MEMORY.md` / `memories/*.md` | filesystem 直接编辑；generated runtime memory 先进入 admission proposal |
 | Brain skills | `.aiworker/skills/<name>/SKILL.md` | filesystem 直接编辑；CLI 不提供 mutating skill 命令 |
 | Policy & drafts | `policy.json` / `toolsets.json` / `capability-packs.json` / `.aiworker/mcp.json` | filesystem 直接编辑；`aiworker doctor` 做静态 validation |
-| Admission state | （roadmap，未落 DB） | brain runtime 提议 + operator approval（见 PLAN-090） |
+| Admission state | worker.db `brain_admission_proposals` / `brain_admission_decisions` | brain runtime 提议 + operator approval/apply |
 
 下方三条 brain 命令都只读，不写任何资产。`.aiworker/executor-capabilities.json` 不属于 brain 资产，归 `aiworker executor capability ...` 管。
 
