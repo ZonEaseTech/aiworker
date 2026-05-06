@@ -1,8 +1,9 @@
 # PLAN-142 Docker image gateway path correction
 
-- **status**: implementing
+- **status**: completed
 - **createdAt**: 2026-05-06 14:54
 - **approvedAt**: 2026-05-06 14:54
+- **completedAt**: 2026-05-06 14:59
 - **relatedTask**: BUG-084
 
 ## 现状
@@ -47,3 +48,6 @@
 ## 进度
 
 - 2026-05-06 14:54：记录 BUG-084 / PLAN-142，开始修复 Docker image gateway path。
+- 2026-05-06 14:59：修复已 push 为 `7c6f0ca`；GitHub Actions
+  `build-image` run `25443020176` 全绿，slim/full image 均成功 build/push；
+  `lint` run `25443020173` 全绿。

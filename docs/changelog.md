@@ -1,5 +1,19 @@
 # AIWorker Changelog
 
+## 2026-05-06 14:59 [completed] BUG-084 / PLAN-142 — Docker image gateway path correction
+
+Fixed the stale Docker image gateway path after the gateway package move from
+`apps/gateway` to `packages/gateway`:
+
+- Dockerfile now copies `packages/gateway/package.json` in the dependency layer
+  and `/app/packages/gateway` into the runtime image.
+- Compose now starts gateway with `bun packages/gateway/src/index.ts`.
+- Current gateway/deployment/architecture docs now reference
+  `packages/gateway`; historical plan/changelog facts were left unchanged.
+- Fix commit `7c6f0ca` pushed to `main`; GitHub Actions `build-image`
+  workflow `25443020176` succeeded, including both slim and full image
+  build/push; `lint` workflow `25443020173` succeeded.
+
 ## 2026-05-06 14:46 [completed] REL-021 / PLAN-141 — 发布 aiworker CLI 0.9.5
 
 发布 `@zonease/aiworker-cli@0.9.5`，作为 0.9.4 之后的 patch release，
