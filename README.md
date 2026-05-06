@@ -269,7 +269,7 @@ New features go through the `/pma` skill in three stages: investigate → propos
 
 > Before going to production, read the conformance table and residual-boundary section in [`docs/governance-node-status.md`](docs/governance-node-status.md). Pre-1.0 the CLI / API / config does not guarantee backwards compatibility (an explicit AGENTS.md commitment).
 
-CLI npm latest: **0.9.6**.
+CLI npm latest: **0.9.7**.
 
 | Module | Status |
 |---|---|

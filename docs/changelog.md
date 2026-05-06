@@ -1,5 +1,16 @@
 # AIWorker Changelog
 
+## 2026-05-07 01:17 [release] REL-023 / PLAN-148 — 发布 aiworker CLI 0.9.7
+
+准备发布 `@zonease/aiworker-cli@0.9.7`，作为 0.9.6 之后的 patch release，
+交付 worker-only Governance Kernel harness 收敛：
+
+- `TODO-037 / PLAN-147`：Governance Kernel harness 新增 `aiworker serve`
+  进程重启连续性断言；REST turn 1 成功后停止 serve，等待 `/health`
+  下线，重启同一 project/port，再继续同一 conversation id。
+- Release gates 正在执行中；发布成功后继续跑 `cli-release-local` compact
+  harness 验证发布包。
+
 ## 2026-05-07 01:12 [completed] TODO-037 / PLAN-147 — Serve process restart continuity harness
 
 Closed the remaining worker-only Governance Kernel harness gap around

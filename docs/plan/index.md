@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-07 (PLAN-147 completed)
+> Updated: 2026-05-07 (PLAN-148 implementing)
 
 ## Usage
 
@@ -176,3 +176,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-145 Claude Code default model belongs to the external CLI**](PLAN-145.md) `2026-05-07`
 - [x] [**PLAN-146 发布 aiworker CLI 0.9.6**](PLAN-146.md) `2026-05-07`
 - [x] [**PLAN-147 Harness — serve process restart continuity regression**](PLAN-147.md) `2026-05-07`
+- [-] [**PLAN-148 发布 aiworker CLI 0.9.7**](PLAN-148.md) `2026-05-07`
