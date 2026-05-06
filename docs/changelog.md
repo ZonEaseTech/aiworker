@@ -1,5 +1,17 @@
 # AIWorker Changelog
 
+## 2026-05-07 00:49 [release] REL-022 / PLAN-146 — 发布 aiworker CLI 0.9.6
+
+准备发布 `@zonease/aiworker-cli@0.9.6`，作为 0.9.5 之后的 patch release，
+交付 worker-only Brain Governance Kernel 收敛：
+
+- `TODO-036 / PLAN-144`：Governance Kernel harness 新增同一 worker 内跨
+  `chat-id` conversation isolation DB check。
+- `BUG-086 / PLAN-145`：`claude-code/default` 不再强制 `--model sonnet`，
+  默认模型/provider routing 回到外部 Claude Code CLI；显式 `model` /
+  `modelId` 仍作为 best-effort hint 转发。
+- Release gates 正在执行中。
+
 ## 2026-05-07 00:30 [completed] TODO-036 / PLAN-144 + BUG-086 / PLAN-145 — Worker governance harness isolation and executor-owned Claude model
 
 Continued the lightweight Brain direction by improving verification rather
