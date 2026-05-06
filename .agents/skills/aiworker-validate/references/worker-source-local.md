@@ -55,6 +55,21 @@ PATH="$HOME/.bun/bin:$PATH" bun run lint
 PATH="$HOME/.bun/bin:$PATH" bun run test
 ```
 
+## Repeatable Governance Kernel Harness
+
+For the same compact Governance Kernel checks against the current source tree,
+run the repository harness in source mode:
+
+```bash
+PATH="$HOME/.bun/bin:$PATH" bun scripts/governance-kernel-harness.ts \
+  --mode worker-source-local \
+  --matrix compact \
+  --debug-root /home/ben/projects/debug-aiworker/qa-<date>-governance-source
+```
+
+The harness builds the source CLI bundle, then records DB/filesystem/event/REST
+and SSE evidence in the debug root report files.
+
 ## Evidence
 
 Capture command names, exit status, logs with secrets redacted, worker.db

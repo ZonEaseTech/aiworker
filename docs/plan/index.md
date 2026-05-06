@@ -155,3 +155,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-124 发布 aiworker CLI 0.9.1**](PLAN-124.md) `2026-05-06`
 - [x] [**PLAN-125 Consolidate AIWorker validation skills**](PLAN-125.md) `2026-05-06`
 - [x] [**PLAN-126 Record 0.9.1 `cli-release-local` validation**](PLAN-126.md) `2026-05-06`
+- [x] [**PLAN-127 Governance Kernel regression harness**](PLAN-127.md) `2026-05-06`

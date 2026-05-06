@@ -1,10 +1,13 @@
 # TODO-027 Create Governance Kernel regression harness
 
-- **status**: pending
+- **status**: completed
 - **priority**: P2
-- **owner**:
+- **owner**: local
 - **createdAt**: 2026-05-06 03:15
+- **claimedAt**: 2026-05-06 06:25
+- **completedAt**: 2026-05-06 06:47
 - **sourcePlan**: PLAN-115
+- **plan**: PLAN-127
 
 ## Context
 
@@ -54,3 +57,11 @@ The harness should verify at least:
   implementation closeout.
 - Do not resurrect the rejected TODO-008 wording without aligning it to
   DOC-005 / Brain Governance Kernel.
+- 2026-05-06 06:25: Claimed under PLAN-127. This slice will add a repeatable
+  local harness, run it once against the current published CLI, and record the
+  resulting evidence in one QA task.
+- 2026-05-06 06:47: Completed under PLAN-127. Added
+  `scripts/governance-kernel-harness.ts`, documented it in `aiworker-validate`,
+  and recorded the passing CLI 0.9.1 compact run in QA-009. The passing report
+  is
+  `/home/ben/projects/debug-aiworker/qa-2026-05-06-governance-harness-0.9.1-r2/reports/governance-kernel-report.md`.

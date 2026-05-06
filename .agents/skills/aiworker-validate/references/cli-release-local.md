@@ -61,6 +61,28 @@ Use `cli-release-local` for local black-box validation of an already-published
 9. Keep raw logs under the debug root. Publish only sanitized reports and PMA
    entries with evidence paths.
 
+## Repeatable Governance Kernel Harness
+
+For a compact repeatable regression run against a published CLI version, use
+the repository harness:
+
+```bash
+PATH="$HOME/.bun/bin:$PATH" bun scripts/governance-kernel-harness.ts \
+  --mode cli-release-local \
+  --version <version> \
+  --matrix compact \
+  --debug-root /home/ben/projects/debug-aiworker/qa-<date>-governance-harness-<version>
+```
+
+The harness installs the published package into the debug root, runs
+developer/codex and general-assistant/claude-code when available, records
+worker.db/filesystem/event/REST/SSE evidence, and writes:
+
+- `reports/governance-kernel-report.md`;
+- `reports/governance-kernel-summary.json`.
+
+Use `--matrix full` only for a deeper campaign.
+
 ## Historical Deep-Campaign Resources
 
 Load these only when needed:

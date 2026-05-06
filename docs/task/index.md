@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-06 (QA-008 recorded CLI 0.9.1 cli-release-local validation)
+> Updated: 2026-05-06 (QA-010 source Governance Kernel harness completed)
 
 ## Usage
 
@@ -214,7 +214,7 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-073 Unknown subcommand silently falls back to top-level help — `aiworker soul --help` etc. show no error**](BUG-073.md) `P3`
 - [x] [**BUG-074 LLM hallucinates "admission proposal submitted" while AIWorker brain admission DB stays empty (claude-code engine)**](BUG-074.md) `P2`
 - [x] [**TODO-026 `aiworker init` "alternates" recommendation list is advisory but not enforced — define the contract**](TODO-026.md) `P3`
-- [ ] [**TODO-027 Create Governance Kernel regression harness**](TODO-027.md) `P2`
+- [x] [**TODO-027 Create Governance Kernel regression harness**](TODO-027.md) `P2`
 - [x] [**DOC-005 Brain Governance Kernel 架构决策落盘**](DOC-005.md) `P1`
 - [x] [**DOC-006 Brain Governance Kernel 决策后的 backlog 断代收口**](DOC-006.md) `P1`
 - [x] [**REL-016 发布 aiworker CLI 0.9.0**](REL-016.md) `P1`
@@ -228,3 +228,5 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REL-017 发布 aiworker CLI 0.9.1**](REL-017.md) `P1`
 - [x] [**TODO-030 Consolidate AIWorker validation skills into one entrypoint**](TODO-030.md) `P2`
 - [x] [**QA-008 0.9.1 published CLI `cli-release-local` validation**](QA-008.md) `P1`
+- [x] [**QA-009 Run Governance Kernel regression harness against CLI 0.9.1**](QA-009.md) `P1`
+- [x] [**QA-010 Run Governance Kernel regression harness against source worker**](QA-010.md) `P1`

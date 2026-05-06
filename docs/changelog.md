@@ -1,5 +1,41 @@
 # AIWorker Changelog
 
+## 2026-05-06 06:58 [completed] QA-010 — Source worker Governance Kernel harness validation
+
+使用新增 `scripts/governance-kernel-harness.ts` 的 `worker-source-local` mode
+验证当前源码 worker bundle，证据根目录
+`/home/ben/projects/debug-aiworker/qa-2026-05-06-governance-source`。
+
+- Harness 自动执行 source CLI bundle build，被测对象：
+  `bun /home/ben/projects/aiworker/apps/cli/dist/aiworker-bun.js`。
+- Codex / Claude Code 均可用：`codex-cli 0.128.0`、`claude 2.1.129`。
+- Compact matrix 两组均 PASS：developer/codex 与
+  general-assistant/claude-code。
+- 覆盖 same chat-id continuity、formal admission path、admission claim vs DB、
+  canonical memory boundary、decision truthfulness、decision samples 持久化、
+  tool-call observability、risk-policy signal、REST auth boundary、OpenAPI、SSE
+  与 Worker Admin mount。
+- 无 skipped / failed checks；结果已落 `QA-010`。
+
+## 2026-05-06 06:47 [completed] TODO-027 / PLAN-127 / QA-009 — Governance Kernel regression harness
+
+新增 `scripts/governance-kernel-harness.ts`，把 Brain Governance Kernel 的 compact
+本地回归验证做成可复跑脚本。默认 `cli-release-local` mode 会隔离安装
+`@zonease/aiworker-cli@<version>`，检查 Codex / Claude Code 可用性，跑
+developer/codex 与 general-assistant/claude-code 两组真实 same chat-id 多轮
+worker 验证，并采集 worker.db、Project Brain filesystem、runtime events、REST、
+OpenAPI、SSE 和 Worker Admin mount 证据。
+
+- `aiworker-validate` 的 `cli-release-local` / `worker-source-local` references
+  已指向该 harness。
+- 发布包验证：`@zonease/aiworker-cli@0.9.1` compact harness run 通过，证据根目录
+  `/home/ben/projects/debug-aiworker/qa-2026-05-06-governance-harness-0.9.1-r2`。
+- 覆盖项：decision source/mode/evaluator truthfulness、formal admission path、
+  admission claim vs DB、canonical memory boundary、same chat-id continuity、
+  Codex / Claude Code tool-call observability、risk=high policy signal、REST
+  auth boundary、OpenAPI/SSE/Admin smoke。
+- 结果已落 `QA-009`；`TODO-027` completed。
+
 ## 2026-05-06 05:58 [completed] QA-008 / PLAN-126 — CLI 0.9.1 `cli-release-local` validation recorded
 
 按 canonical `aiworker-validate` 的 `cli-release-local` mode 完成并落盘一次
