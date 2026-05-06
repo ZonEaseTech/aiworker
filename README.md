@@ -57,7 +57,8 @@ scope 绑定到岗位、候选人池或简历库；legal、finance、ops 等 Sou
 
 ## Features
 
-- **Project Brain**：每个业务作用域一份 5 类 brain 资产 — identity（`AGENT/SOUL/USER`）、memory（`MEMORY.md` + `memories/`）、brain skills（`.aiworker/skills/**`）、policy & drafts（`policy.json` / `toolsets.json` / `capability-packs.json` / `.aiworker/mcp.json`）、admission state（roadmap）；filesystem 为权威，便于迁移和审计
+- **Project Brain**：每个业务作用域一份 5 类 brain 资产 — identity（`AGENT/SOUL/USER`）、memory（`MEMORY.md` + `memories/`）、brain skills（`.aiworker/skills/**`）、policy & drafts（`policy.json` / `toolsets.json` / `capability-packs.json` / `.aiworker/mcp.json`）、admission state（`brain_admission_proposals` + `brain_admission_decisions`，MVP 已支持 `memory-add` 物化）；filesystem 为权威，便于迁移和审计
+- **Brain Governance Kernel**：admission 三态状态机（`pending → approved → applied` / `pending → rejected` / `approved → blocked-by-secret-scan`）+ secret-scan 防御（BUG-055 回归线）+ canonical memory 边界 + decision events 真实标 source/mode/evaluator + bypass detection；600+ 项 source-backed checks 在源码与已发布 CLI 双侧覆盖（详见 [`docs/governance-node-status.md`](docs/governance-node-status.md)）
 - **Worker/Fleet 聚合**：gateway 管 workers、presence、audit、routing；worker 自持 worker.db、Project Brain 和外部 executor adapter
 - **4 种入网路径**：OTP-attended（worker deployer 零凭证）/ self-enroll（unattended 批量）/ 手动 pair / docker auto-launch
 - **WS 控制面**：operator + worker 共享同一 gateway 入口，按 path 分流（`/ws` basicauth + `/enroll-ws` OTP 专用）
@@ -139,7 +140,7 @@ aiworker fleet list                        # online: true
 aiworker fleet chat w_ntssfzwwzzq0 'hello'       # NDJSON 流式输出
 ```
 
-完整端到端实测见 [docs/changelog.md](docs/changelog.md) 11:50 条目。
+每个 release 的端到端实测细节见 [`docs/changelog.md`](docs/changelog.md)；governance 层的 source-backed 回归证据见 [`docs/governance-node-status.md`](docs/governance-node-status.md) 与 [`docs/task/QA-009..QA-015`](docs/task/)。
 
 ---
 
@@ -381,11 +382,13 @@ aiworker fleet chat <workerId> '请用中文回我一句话'
 ## Architecture & deployment
 
 详见：
-- [`docs/architecture.md`](docs/architecture.md) — monorepo 布局、数据流、安全模型、env 全表
+- [`docs/architecture.md`](docs/architecture.md) — monorepo 布局、数据流、安全模型、Brain Governance Kernel 决策、env 全表
+- [`docs/governance-node-status.md`](docs/governance-node-status.md) — Project Brain governance node 评估：12 行 conformance 表、显式残留边界、QA 证据目录与复验步骤
 - [`docs/gateway.md`](docs/gateway.md) — WS 协议（METHODS / EVENTS）+ 4 enroll path 实现
 - [`docs/deployment.md`](docs/deployment.md) — 三档部署 run book
 - [`docs/deployment-public-https.md`](docs/deployment-public-https.md) — 可选 Cloudflare + Caddy 公网叠加层（含 BUG-007 fail-closed basicauth）
 - [`docs/executor-engines.md`](docs/executor-engines.md) — 每 LLM engine 的 auth/install recipe
+- [`scripts/governance-kernel-harness.ts`](scripts/governance-kernel-harness.ts) — 可重跑的 Brain Governance Kernel 回归 harness（compact / full 矩阵；source-local / cli-release-local 双模式）
 
 ```
 apps/{api, cli, web} + packages/{core, gateway, gateway-proto, shared, storage-sqlite, fs-layout}
@@ -431,7 +434,7 @@ apps/{api, cli, web} + packages/{core, gateway, gateway-proto, shared, storage-s
 | `aiworker fleet list` → `WebSocket Expected 101 status code` | aiworker.json `gatewayUrl` 缺 `/ws` 或 basicauth | 重写 `~/.aiworker/aiworker.json`（见上） |
 | 公网 `/health` 返回 401 | Caddy basicauth | `curl -u operator:<pwd> https://your-gateway/health` |
 | OTP enroll 后 `aiworker fleet chat` `executor error: OpenAI API key is not configured` | worker 没配 LLM | 走"Worker 配 LLM executor"段，切 claude-code / 配 OpenAI key |
-| systemd `aiworker-gateway` exit 1 `gateway 入口未找到` | 用了 0.2.0 旧 cli | `bun install -g @zonease/aiworker-cli@latest`（≥0.2.1）+ restart |
+| systemd `aiworker-gateway` exit 1 `gateway 入口未找到` | 用了已经被淘汰的旧 cli | `bun install -g @zonease/aiworker-cli@latest` + restart |
 
 ---
 
@@ -478,6 +481,10 @@ bun run lint
 
 ## Status
 
+> 投产前请阅 [`docs/governance-node-status.md`](docs/governance-node-status.md)
+> 的"conformance 表 + 残留边界"一节。1.0.0 以前 CLI/API/config 不保证向后兼容
+> （AGENTS.md 显式承诺）；不要在 0.x 上做"零配置升级"的跨 minor 假设。
+
 | Module | Status |
 |---|---|
 | Gateway WS 控制面 | ✅ Production |
@@ -485,8 +492,14 @@ bun run lint
 | 6 LLM engines（http / claude-code / acp / codex / cursor / mcp） | ✅ Production |
 | 5 channel webhooks（Telegram / WhatsApp / Lark / LINE / Web） | ✅ Production |
 | Cron / per-tool approvals / hot-reload | ✅ Production |
-| 单 `aiworker` CLI（PLAN-020 / FEAT-028） | ✅ GA |
-| npm 发布（`@zonease/aiworker-cli`） | ✅ Latest 0.2.1 |
+| 单 `aiworker` CLI | ✅ GA |
+| npm 发布（`@zonease/aiworker-cli`） | ✅ Latest **0.9.2** |
 | In-process gateway（npm install 场景，REFACTOR-004） | ✅ GA |
+| Brain Governance Kernel（admission 三态 + secret-scan + canonical memory 边界 + truthful decision events） | ✅ GA |
+| Governance Kernel regression harness（5×2 source + cli-release-local 双侧 600+ checks） | ✅ GA |
+| Long-running `serve` REST 多轮回归（PLAN-133 / QA-015） | ✅ GA |
+| Brain admission `memory-add` materializer | ✅ MVP（其它 kind 走 `unsupported`；apply 后 rollback 仍待实现） |
+| Heavy LLM-backed Brain decider | 🔜 opt-in，默认 `evaluator=heuristic` `mode=observe_only` |
+| Cross-scope hard isolation（runtime 强制） | 🔜 当前由文件系统约定守，不是 runtime 隔离 |
 | Web SPA pending UI | 🔜 Stage-2 |
 | Multi-host HA | 🔜 Stage-2 |
