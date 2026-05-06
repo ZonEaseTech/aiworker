@@ -19,16 +19,18 @@
 # fail-closed by design. This is preferred over a default-allow config
 # because the previous (now fixed) deployment shipped without authN.
 #
-# PATH SPLIT (PLAN-019): `/enroll-ws` 是 OTP-attended enrollment 专用入口，
+# PATH SPLIT (PLAN-019 / BUG-080): `/enroll-ws` 是 OTP-attended enrollment
+# 与 approved OTP worker reconnect 专用入口，
 # 故意**不**挂 basic-auth——worker 部署方（customer / friend / CI runner）
-# 不该被强制持有 operator 凭证。trust boundary 由 path 而非 token 隔离：
-#   /ws         → operator + 已配对 worker（reconnect 用 deviceToken）
-#   /enroll-ws  → 仅 OTP submit；gateway 路径感知拒绝任何非 OTP connect 帧
-#                 （`wrong_path:expected_enroll_otp` → close 4400）；
-#                 operator 走 /ws 用 `aim enroll approve <otp>` 才放行入网。
+# 不该被强制持有 operator 凭证。trust boundary 由 path + gateway token 校验隔离：
+#   /ws         → operator + shared-secret/self-enroll worker
+#   /enroll-ws  → OTP submit，或已 approved OTP worker 使用 registered worker token
+#                 重连；其他 node connect 帧必须被 gateway 拒绝。
+#   /w/*        → Worker Admin shell + gateway bridge；Caddy 不做 basic-auth，
+#                 gateway bridge 校验 Authorization: Bearer <worker token>。
 # 无凭证只能用 OTP，gateway 无 token submit 不会写 fleet.db；详见
 # `docs/architecture.md` § 身份与配置自举 / `docs/deployment.md` § Caddy
-# `/enroll-ws` path split (PLAN-019)。
+# `/enroll-ws` path split (PLAN-019 / BUG-080)。
 #
 # gateway.example.test sits behind Cloudflare orange-cloud (TLS termination
 # only — Cloudflare is NOT an authN layer). Caddy serves :80; cloudflare
@@ -40,6 +42,24 @@
 		output file /var/log/caddy/aiw.access.log {
 			roll_size 10mb
 			roll_keep 5
+		}
+	}
+
+	handle /admin* {
+		import /etc/caddy/auth.snippet
+
+		reverse_proxy 127.0.0.1:9218
+	}
+
+	handle /w* {
+		# BUG-081: Worker Admin is authenticated by the worker bearer token at
+		# the gateway bridge. Do not import basic-auth here; a browser fetch can
+		# only send one Authorization header, and Bearer must reach gateway.
+		reverse_proxy 127.0.0.1:9218 {
+			flush_interval -1
+			transport http {
+				read_timeout 0
+			}
 		}
 	}
 
@@ -55,9 +75,8 @@
 	}
 
 	handle /enroll-ws {
-		# PLAN-019 OTP-attended enrollment 通道。
-		# 无 basicauth；gateway 路径感知 authN（apps/gateway/src/auth/token.ts::authorizeConnection）
-		# 强制 connect 帧必须带 enroll.mode='otp'，否则立即 close 4400 wrong_path。
+		# PLAN-019 / BUG-080 OTP enrollment and registered OTP reconnect channel.
+		# 无 basicauth；gateway 必须校验 OTP submit 或 registered worker token。
 		# operator approve 之前不会写 fleet.db，更不会 broadcast worker.online。
 		reverse_proxy 127.0.0.1:9218 {
 			flush_interval -1

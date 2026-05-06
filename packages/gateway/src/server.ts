@@ -1,3 +1,4 @@
+import type { ConnectFrame } from '@zonease/aiworker-gateway-proto'
 import type { ServerWebSocket } from 'bun'
 import type { GatewayConfig } from './config'
 import type { ConnectionData, ConnectionPath } from './registry/types'
@@ -10,6 +11,7 @@ import { serveAdminStatic } from './admin/serve-static'
 import { assertGatewayBindIsSafe, isLoopbackAddress } from './auth/loopback'
 import { authorizeConnection } from './auth/token'
 import { broadcastEventToOperators } from './events/broadcast'
+import { decryptToken, timingSafeEqualStrings } from './registry/crypto'
 import { handleWorkerApiBridge, isWorkerApiBridgePath } from './router/bridge'
 import { dispatchNodeEvent, dispatchNodeResponse, dispatchOperatorRequest } from './router/dispatch'
 import { handleWorkerUi, isWorkerUiPath } from './router/worker-ui'
@@ -30,6 +32,9 @@ export interface StartGatewayOptions {
   config: GatewayConfig
   context: GatewayContext
 }
+
+type ConnectionAuthResult = ReturnType<typeof authorizeConnection>
+  | { ok: true, via: 'registered-worker-token' }
 
 /**
  * 启动一个 gateway WS 服务。`fetch` handler 负责升级；`websocket` handler
@@ -197,7 +202,7 @@ function assertWorkerBridgeServingIsSafe(args: {
     + '\n'
     + 'Fix one of these ways:\n'
     + '  1. Bind the gateway to 127.0.0.1 and put Caddy/Cloudflare Access/IP allowlist/basic-auth in front;\n'
-    + '  2. Confirm an external auth layer protects /w/*, /admin/*, and /ws, then set AIWORKER_ADMIN_EXTERNAL_AUTH=1.',
+    + '  2. Confirm external auth protects /admin/* and /ws, and that /w/* reaches gateway bearer-token auth, then set AIWORKER_ADMIN_EXTERNAL_AUTH=1.',
   )
 }
 
@@ -232,15 +237,20 @@ function handleMessage(
     const isSelfEnroll = frame.role === 'node'
       && frame.enroll !== undefined
       && enrollMode === 'join-token'
-    const authResult = authorizeConnection({
-      loopback: ws.data.loopback,
-      sharedSecret: config.internalSharedSecret,
-      presentedToken: frame.auth.token,
-      enrollToken: isSelfEnroll ? frame.enroll!.joinToken : undefined,
-      gatewayJoinToken: config.joinToken,
-      path: ws.data.path,
-      isOtpEnrollSubmit,
-    })
+    const isRegisteredOtpReconnect = ws.data.path === '/enroll-ws'
+      && frame.role === 'node'
+      && frame.enroll === undefined
+    const authResult: ConnectionAuthResult = isRegisteredOtpReconnect
+      ? authorizeRegisteredOtpReconnect(ctx, frame)
+      : authorizeConnection({
+          loopback: ws.data.loopback,
+          sharedSecret: config.internalSharedSecret,
+          presentedToken: frame.auth.token,
+          enrollToken: isSelfEnroll ? frame.enroll!.joinToken : undefined,
+          gatewayJoinToken: config.joinToken,
+          path: ws.data.path,
+          isOtpEnrollSubmit,
+        })
     if (!authResult.ok) {
       // wrong_path:* 是协议层失败（4400），不是 token 失败（4401）。
       const isWrongPath = authResult.reason.startsWith('wrong_path:')
@@ -511,6 +521,35 @@ function handleMessage(
     ctx.logger.warn(`[gateway] node 端发送了非 response/event 帧: ${frame.type}`)
     ws.close(4400, 'node_expects_response_or_event_only')
   }
+}
+
+function authorizeRegisteredOtpReconnect(
+  ctx: GatewayContext,
+  frame: ConnectFrame,
+): ConnectionAuthResult {
+  if (!ctx.masterKeyHex)
+    return { ok: false, reason: 'registered_reconnect_master_key_missing' }
+  if (frame.auth.token.length === 0)
+    return { ok: false, reason: 'registered_reconnect_missing_token' }
+
+  const row = ctx.persistence.getRegisteredWorkerRaw(frame.agentId)
+  if (!row)
+    return { ok: false, reason: 'registered_reconnect_not_found' }
+  if (row.addedBy !== 'otp')
+    return { ok: false, reason: 'registered_reconnect_not_otp_worker' }
+
+  let expectedToken: string
+  try {
+    expectedToken = decryptToken(row.apiTokenEnc, row.nonce, row.authTag, ctx.masterKeyHex)
+  }
+  catch {
+    return { ok: false, reason: 'registered_reconnect_token_unavailable' }
+  }
+
+  if (!timingSafeEqualStrings(frame.auth.token, expectedToken))
+    return { ok: false, reason: 'registered_reconnect_invalid_token' }
+
+  return { ok: true, via: 'registered-worker-token' }
 }
 
 function handleClose(

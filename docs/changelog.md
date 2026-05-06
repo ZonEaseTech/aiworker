@@ -1,5 +1,69 @@
 # AIWorker Changelog
 
+## 2026-05-06 14:07 [in_progress] REL-020 / PLAN-139 — 发布 aiworker CLI 0.9.4
+
+发布 `@zonease/aiworker-cli@0.9.4`，作为 0.9.3 之后的 patch release，
+交付远端 fleet Worker Admin hotfix：
+
+- `BUG-079 / PLAN-136`：恢复 public Caddy `/w*` route。
+- `BUG-080 / PLAN-137`：允许 approved OTP worker 在 `/enroll-ws` 使用
+  registered worker token 重连。
+- `BUG-081 / PLAN-138`：`/w/:workerId/api/worker/*` 由 gateway worker bearer
+  token 校验，Caddy 不再对 `/w*` 做 Basic Auth。
+
+## 2026-05-06 13:58 [completed] BUG-081 / PLAN-138 — `/w/*` uses worker bearer auth, not Caddy Basic Auth
+
+Fixed fleet-hosted Worker Admin authentication:
+
+- Caddy no longer applies Basic Auth to `/w*`; `/admin*` and `/ws` remain
+  protected by Caddy Basic Auth.
+- Gateway now validates `Authorization: Bearer <worker token>` before
+  forwarding any `/w/:workerId/api/worker/*` bridge request.
+- Gateway decrypts the registered worker token from `registered_workers` and
+  compares it in constant time; missing or wrong bearer returns `401` before
+  any node RPC is sent.
+- Production `https://aiw.jbcnet.co.jp/w/w_8jbcm249cxn4/` now returns the
+  Worker Admin shell without a Caddy login prompt; the API bridge without
+  bearer returns gateway `401` with `WWW-Authenticate: Bearer`; the stored
+  worker token returns `200`.
+
+## 2026-05-06 13:46 [completed] BUG-080 / PLAN-137 — OTP worker reconnect on `/enroll-ws`
+
+Fixed the approved OTP worker reconnect path without reopening public `/ws`:
+
+- Gateway now accepts a plain node reconnect on `/enroll-ws` only for workers
+  already stored in `registered_workers` with `added_by='otp'` and a matching
+  encrypted worker token.
+- OTP submit behavior is unchanged; unknown, missing-token, or wrong-token
+  node reconnects on `/enroll-ws` remain rejected.
+- Remote `aiwork` gateway bundle was backed up, replaced with the fixed
+  `aiworker-bun.js`, and restarted.
+- Production audit now records `gateway.connect.accepted` for
+  `w_8jbcm249cxn4` via `registered-worker-token`; direct gateway bridge
+  `/w/w_8jbcm249cxn4/api/worker/info` returns `200`.
+- At completion time, public `/w/w_8jbcm249cxn4/api/worker/info` returned
+  Caddy Basic Auth `401`, confirming the restored `/w*` route no longer fell
+  through to `404`; `BUG-081` later moved `/w*` auth to gateway worker bearer
+  validation.
+
+## 2026-05-06 13:32 [completed] BUG-079 / PLAN-136 — Public Caddy `/w/*` ingress restored
+
+Restored the public Caddy route for fleet-hosted Worker UI:
+
+- `ops/caddy/Caddyfile.tmpl` gained `/admin*` and `/w*` handlers before `/ws`,
+  while keeping `/enroll-ws` unauthenticated for OTP enrollment. `BUG-081`
+  later removed Caddy Basic Auth from `/w*` and moved that boundary to gateway
+  worker bearer validation.
+- Production `/etc/caddy/Caddyfile` on `aiwork` was backed up, patched, passed
+  `caddy validate`, and reloaded with Caddy still active.
+- At completion time, public unauthenticated `/w/w_8jbcm249cxn4/` and
+  `/w/w_8jbcm249cxn4/api/worker/info` returned Caddy Basic Auth `401`
+  instead of the previous fallback `404`; direct gateway `/w/...` still served
+  the Worker UI shell. `BUG-081` superseded this external auth decision.
+- Follow-up `BUG-080 / PLAN-137` records the independent OTP reconnect issue:
+  the approved worker reconnects to `/enroll-ws` as a plain node and gateway
+  rejects it with `wrong_path:expected_enroll_otp`.
+
 ## 2026-05-06 12:47 [completed] REL-019 / PLAN-135 — 发布 aiworker CLI 0.9.3
 
 发布 `@zonease/aiworker-cli@0.9.3`，作为 0.9.2 之后的 patch release，

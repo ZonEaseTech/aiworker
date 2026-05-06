@@ -7,14 +7,18 @@
  *    admin URL；手动打开 `/admin/` 且没有 session token 时，UI 进入锁定态。
  *    `/api/worker/*` 始终需要 bearer token，loopback 只影响静态 admin 能否访问。
  *
- * 2. **公网叠 Caddy basic-auth**：浏览器先过 basic-auth 才能进 `/admin/`。
+ * 2. **worker-local 公网叠 Caddy basic-auth**：浏览器先过 basic-auth 才能进 `/admin/`。
  *    UI 启动时从 `location.hash` 读 `#token=<bearer>`：
  *      - 提取后立即写 sessionStorage 并把 hash 用 `history.replaceState` 清掉，
  *      - 后续所有 fetch 在 `Authorization: Bearer <token>` 里带它，
  *      - 绝不写 localStorage（跨 tab/重启泄漏面），也绝不出现在 query string
  *        （Caddy access log 会留痕）。
  *
- * 3. **测试场景**：测试可直接用 `setBearerToken` 注入；`__resetBearerForTests`
+ * 3. **fleet-hosted `/w/:workerId/*`**：同样使用 worker bearer token；gateway
+ *    bridge 会在转发 `/api/worker/*` 前校验该 token。Caddy 不应在 `/w*`
+ *    再叠 Basic Auth，否则会先拦住页面或与 bearer header 冲突。
+ *
+ * 4. **测试场景**：测试可直接用 `setBearerToken` 注入；`__resetBearerForTests`
  *    清状态，避免跨用例污染。
  */
 

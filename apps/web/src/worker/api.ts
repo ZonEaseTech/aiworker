@@ -18,8 +18,10 @@ import { getBearerToken } from './lib/auth'
 /**
  * worker 视角 API 客户端（FEAT-035 §验收 8）。
  *
- * - 所有请求走宿主 worker 自己的 HTTP `/api/worker/*`。
- * - 公网部署：浏览器先过 Caddy basic-auth（BUG-007 fail-closed），随后 `lib/auth.ts`
+ * - 本地 worker admin 请求走宿主 worker 自己的 HTTP `/api/worker/*`。
+ * - Fleet-hosted `/w/:workerId/*` 请求走 gateway bridge，由 worker bearer token
+ *   保护；Caddy 不应在 `/w*` 再加 Basic Auth。
+ * - 本地公网 worker admin：浏览器先过 Caddy basic-auth（BUG-007 fail-closed），随后 `lib/auth.ts`
  *   从 URL hash 一次性塞 sessionStorage 的 bearer token，这里读取并加进 Authorization。
  * - loopback 部署：静态 `/admin/*` 可直接打开，但受保护的 `/api/worker/*`
  *   仍需要 bearer；缺 token 时 root layout 渲染锁定态，不主动发 API 请求。

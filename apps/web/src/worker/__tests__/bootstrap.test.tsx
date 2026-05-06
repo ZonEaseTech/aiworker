@@ -11,9 +11,10 @@ import { __resetBearerForTests, setBearerToken } from '@/worker/lib/auth'
 import { routeTree } from '@/worker/routeTree.gen'
 
 async function renderWorkerRoute(initialEntry = '/admin/') {
+  window.history.pushState(null, '', initialEntry)
   const router = createRouter({
     routeTree,
-    basepath: resolveWebRouterBasepath('worker', '/admin/'),
+    basepath: resolveWebRouterBasepath('worker', initialEntry),
     history: createMemoryHistory({ initialEntries: [initialEntry] }),
     defaultPreload: false,
   })
@@ -68,6 +69,7 @@ describe('worker bundle bootstrap', () => {
   afterEach(() => {
     vi.restoreAllMocks()
     __resetBearerForTests()
+    window.history.pushState(null, '', '/')
   })
 
   it('imports the worker routeTree without throwing', () => {
@@ -81,6 +83,16 @@ describe('worker bundle bootstrap', () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
 
     await renderWorkerRoute()
+
+    expect(await screen.findByRole('heading', { name: '需要 bearer token' })).toBeTruthy()
+    expect(screen.queryByText(/AIWorker · Worker/)).toBeNull()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps fleet-hosted worker shell locked without a bearer token', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+
+    await renderWorkerRoute('/w/w_bootstrap_test/')
 
     expect(await screen.findByRole('heading', { name: '需要 bearer token' })).toBeTruthy()
     expect(screen.queryByText(/AIWorker · Worker/)).toBeNull()

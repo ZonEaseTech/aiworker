@@ -492,14 +492,25 @@ approve 后 worker 端会打 `[aiworker serve] approved as w_xxx; deviceToken=wt
   encode zstd gzip
   log { ... }
 
+  handle /admin* {
+    import /etc/caddy/auth.snippet
+    reverse_proxy 127.0.0.1:9218
+  }
+
+  handle /w* {
+    # Worker Admin shell is public-loadable; API bridge requires
+    # Authorization: Bearer <worker token> at gateway.
+    reverse_proxy 127.0.0.1:9218 { ... }
+  }
+
   handle /ws {
-    import /etc/caddy/auth.snippet           # operator + 已配对 worker reconnect
+    import /etc/caddy/auth.snippet           # operator + self-enroll/shared-secret path
     reverse_proxy 127.0.0.1:9218 { ... }
   }
 
   handle /enroll-ws {
-    # PLAN-019 OTP-attended enrollment 通道，无 basicauth。
-    # gateway 路径感知 authN 拒绝任何非 OTP connect 帧（4400 wrong_path）。
+    # PLAN-019 / BUG-080 OTP enrollment and registered OTP reconnect channel.
+    # 无 basicauth；gateway 校验 OTP submit 或 registered worker token。
     reverse_proxy 127.0.0.1:9218 { ... }
   }
 
@@ -508,7 +519,7 @@ approve 后 worker 端会打 `[aiworker serve] approved as w_xxx; deviceToken=wt
 }
 ```
 
-`auth.snippet` 仍由宿主提供（不入 git，缺失 → fail-closed，BUG-007 不变），只挂在 `/ws` 与 `/health` 上；`/enroll-ws` 在 trust boundary 上专门做 path-aware authN——攻击者即使能 hit 该路径，gateway 的 `authorizeConnection` 仍要求 connect 帧带 `enroll.mode='otp'`，不带就 close 4400 不留下 fleet 行，更不会 broadcast worker.online。
+`auth.snippet` 仍由宿主提供（不入 git，缺失 → fail-closed，BUG-007 不变），只挂在 `/admin*`、`/ws` 与 `/health` 上；`/w*` 不挂 Caddy Basic Auth，因为 Worker Admin API fetch 需要把 `Authorization: Bearer <worker token>` 原样送到 gateway bridge。`/w/:workerId/api/worker/*` 在 gateway 内解密并校验 `registered_workers` 里的 worker token，缺失或错误 token 会在转发前返回 401。`/enroll-ws` 在 trust boundary 上专门做 path-aware authN——攻击者即使能 hit 该路径，gateway 也只接受 OTP submit 或已注册 OTP worker token reconnect，不会无凭证写 fleet 行，更不会 broadcast worker.online。
 
 部署变更：宿主 `:80` 站点的 Caddyfile 替换为新模板后 `caddy reload` 即可；旧版本不存在该 path 段，所以**不能**直接 ssh 上去叠 patch——必须整体替换为新 template，由 `scripts/deploy.ts upload` + `reload-caddy` 完成。
 

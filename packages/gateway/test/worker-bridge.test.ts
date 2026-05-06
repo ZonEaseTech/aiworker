@@ -20,6 +20,8 @@ import { dispatchNodeEvent, dispatchNodeResponse } from '../src/router/dispatch'
 import { startGatewayServer } from '../src/server'
 
 const WORKER_ID = 'w_aaaabbbbcccd'
+const WORKER_TOKEN = 'wtk_bridge_worker_token'
+const TEST_MASTER = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
 
 function testConfig(overrides: Partial<GatewayConfig> = {}): GatewayConfig {
   return {
@@ -49,6 +51,7 @@ function makeCtx(): { ctx: GatewayContext, cleanup: () => void } {
     operators: new OperatorRegistry(),
     forwards: new ForwardTable({ timeoutMs: 0 }),
     logger: consola.withTag('gw-bridge-test'),
+    masterKeyHex: TEST_MASTER,
   }
   return {
     ctx,
@@ -58,6 +61,26 @@ function makeCtx(): { ctx: GatewayContext, cleanup: () => void } {
       rmSync(dir, { recursive: true, force: true })
     },
   }
+}
+
+function registerBridgeWorker(ctx: GatewayContext): void {
+  ctx.persistence.upsertEnrolledWorker(
+    {
+      workerId: WORKER_ID,
+      baseUrl: '',
+      apiToken: WORKER_TOKEN,
+      displayName: 'bridge-worker',
+      addedBy: 'otp',
+    },
+    TEST_MASTER,
+  )
+}
+
+function withBridgeAuth(init: RequestInit = {}): RequestInit {
+  const headers = new Headers(init.headers)
+  if (!headers.has('Authorization'))
+    headers.set('Authorization', `Bearer ${WORKER_TOKEN}`)
+  return { ...init, headers }
 }
 
 function readBridgeAudits(): Array<{
@@ -162,13 +185,14 @@ async function readUntil(reader: ReadableStreamDefaultReader<Uint8Array>, needle
 describe('gateway worker HTTP bridge', () => {
   test('GET /w/:workerId/api/worker/info forwards to workers.info and returns node JSON', async () => {
     const { ctx, cleanup } = makeCtx()
+    registerBridgeWorker(ctx)
     const node = makeSendTap()
     ctx.nodes.register({ workerId: WORKER_ID, deviceId: 'dev-1', ws: node.ws, pairedAt: 1, meta: {} })
     const started = startGatewayServer({ config: testConfig(), context: ctx })
     try {
       const pendingFetch = fetch(`http://127.0.0.1:${started.port}/w/${WORKER_ID}/api/worker/info`, {
         headers: {
-          Authorization: 'Bearer browser-token',
+          Authorization: `Bearer ${WORKER_TOKEN}`,
           Cookie: 'sid=browser-cookie',
         },
       })
@@ -197,7 +221,7 @@ describe('gateway worker HTTP bridge', () => {
       expect(await res.json()).toMatchObject({ workerId: WORKER_ID, configVersion: 3 })
       const detail = expectBridgeAudit({ method: 'workers.info', result: 'success', status: 200 })
       const serialized = JSON.stringify(detail)
-      expect(serialized).not.toContain('browser-token')
+      expect(serialized).not.toContain(WORKER_TOKEN)
       expect(serialized).not.toContain('browser-cookie')
     }
     finally {
@@ -208,13 +232,14 @@ describe('gateway worker HTTP bridge', () => {
 
   test('GET /w/:workerId/api/worker/config forwards only allowlisted proto params', async () => {
     const { ctx, cleanup } = makeCtx()
+    registerBridgeWorker(ctx)
     const node = makeSendTap()
     ctx.nodes.register({ workerId: WORKER_ID, deviceId: 'dev-1', ws: node.ws, pairedAt: 1, meta: {} })
     const started = startGatewayServer({ config: testConfig(), context: ctx })
     try {
       const pendingFetch = fetch(`http://127.0.0.1:${started.port}/w/${WORKER_ID}/api/worker/config`, {
         headers: {
-          Authorization: 'Bearer should-not-forward',
+          Authorization: `Bearer ${WORKER_TOKEN}`,
           Cookie: 'secret=should-not-forward',
         },
       })
@@ -234,7 +259,7 @@ describe('gateway worker HTTP bridge', () => {
       expect(await res.json()).toEqual({ version: 2, config: { executor: { engine: 'http' } } })
       const detail = expectBridgeAudit({ method: 'config.get', result: 'success', status: 200 })
       const serialized = JSON.stringify(detail)
-      expect(serialized).not.toContain('should-not-forward')
+      expect(serialized).not.toContain(WORKER_TOKEN)
     }
     finally {
       await started.stop()
@@ -244,6 +269,7 @@ describe('gateway worker HTTP bridge', () => {
 
   test('PUT /w/:workerId/api/worker/config maps If-Match and body to config.put', async () => {
     const { ctx, cleanup } = makeCtx()
+    registerBridgeWorker(ctx)
     const node = makeSendTap()
     ctx.nodes.register({ workerId: WORKER_ID, deviceId: 'dev-1', ws: node.ws, pairedAt: 1, meta: {} })
     const started = startGatewayServer({ config: testConfig(), context: ctx })
@@ -258,7 +284,7 @@ describe('gateway worker HTTP bridge', () => {
         headers: {
           'Content-Type': 'application/json',
           'If-Match': '7',
-          'Authorization': 'Bearer browser-token',
+          'Authorization': `Bearer ${WORKER_TOKEN}`,
           'Cookie': 'sid=browser-cookie',
         },
         body: JSON.stringify(nextConfig),
@@ -283,7 +309,7 @@ describe('gateway worker HTTP bridge', () => {
       expect(await res.json()).toEqual({ version: 8, appliedAt: 123, runtimeReload: 'ok' })
       const detail = expectBridgeAudit({ method: 'config.put', result: 'success', status: 200 })
       const serialized = JSON.stringify(detail)
-      expect(serialized).not.toContain('browser-token')
+      expect(serialized).not.toContain(WORKER_TOKEN)
       expect(serialized).not.toContain('browser-cookie')
       expect(serialized).not.toContain('raw-config-secret')
       expect(serialized).not.toContain('worker-bearer-token')
@@ -308,13 +334,57 @@ describe('gateway worker HTTP bridge', () => {
     }
   })
 
-  test('unknown worker API paths are not bridged', async () => {
+  test('rejects worker bridge API requests without bearer token', async () => {
     const { ctx, cleanup } = makeCtx()
+    registerBridgeWorker(ctx)
     const node = makeSendTap()
     ctx.nodes.register({ workerId: WORKER_ID, deviceId: 'dev-1', ws: node.ws, pairedAt: 1, meta: {} })
     const started = startGatewayServer({ config: testConfig(), context: ctx })
     try {
-      const res = await fetch(`http://127.0.0.1:${started.port}/w/${WORKER_ID}/api/worker/runtime/processes/capacity`)
+      const res = await fetch(`http://127.0.0.1:${started.port}/w/${WORKER_ID}/api/worker/info`)
+      expect(res.status).toBe(401)
+      expect(res.headers.get('www-authenticate')).toBe('Bearer')
+      expect(await res.json()).toMatchObject({ error: { code: 'auth-required' } })
+      expect(node.sent).toHaveLength(0)
+    }
+    finally {
+      await started.stop()
+      cleanup()
+    }
+  })
+
+  test('rejects worker bridge API requests with the wrong bearer token', async () => {
+    const { ctx, cleanup } = makeCtx()
+    registerBridgeWorker(ctx)
+    const node = makeSendTap()
+    ctx.nodes.register({ workerId: WORKER_ID, deviceId: 'dev-1', ws: node.ws, pairedAt: 1, meta: {} })
+    const started = startGatewayServer({ config: testConfig(), context: ctx })
+    try {
+      const res = await fetch(`http://127.0.0.1:${started.port}/w/${WORKER_ID}/api/worker/info`, {
+        headers: { Authorization: 'Bearer wtk_wrong_token' },
+      })
+      expect(res.status).toBe(401)
+      expect(res.headers.get('www-authenticate')).toBe('Bearer')
+      expect(await res.json()).toMatchObject({ error: { code: 'auth-failed' } })
+      expect(node.sent).toHaveLength(0)
+    }
+    finally {
+      await started.stop()
+      cleanup()
+    }
+  })
+
+  test('unknown worker API paths are not bridged', async () => {
+    const { ctx, cleanup } = makeCtx()
+    registerBridgeWorker(ctx)
+    const node = makeSendTap()
+    ctx.nodes.register({ workerId: WORKER_ID, deviceId: 'dev-1', ws: node.ws, pairedAt: 1, meta: {} })
+    const started = startGatewayServer({ config: testConfig(), context: ctx })
+    try {
+      const res = await fetch(
+        `http://127.0.0.1:${started.port}/w/${WORKER_ID}/api/worker/runtime/processes/capacity`,
+        withBridgeAuth(),
+      )
       expect(res.status).toBe(404)
       expect(await res.json()).toMatchObject({ error: { code: 'not-found' } })
       expect(node.sent).toHaveLength(0)
@@ -327,6 +397,7 @@ describe('gateway worker HTTP bridge', () => {
 
   test('bridges worker UI REST routes through allowlisted proto methods', async () => {
     const { ctx, cleanup } = makeCtx()
+    registerBridgeWorker(ctx)
     const node = makeSendTap()
     ctx.nodes.register({ workerId: WORKER_ID, deviceId: 'dev-1', ws: node.ws, pairedAt: 1, meta: {} })
     const started = startGatewayServer({ config: testConfig(), context: ctx })
@@ -340,7 +411,7 @@ describe('gateway worker HTTP bridge', () => {
       body?: unknown
     }) {
       node.sent.length = 0
-      const pendingFetch = fetch(`http://127.0.0.1:${started.port}${args.path}`, args.init)
+      const pendingFetch = fetch(`http://127.0.0.1:${started.port}${args.path}`, withBridgeAuth(args.init))
       const forwarded = await waitForForward(node.sent)
       expect(forwarded.method).toBe(args.method)
       expect(forwarded.params).toEqual(args.params)
@@ -535,12 +606,14 @@ describe('gateway worker HTTP bridge', () => {
 
   test('bridges worker events as worker-scoped SSE', async () => {
     const { ctx, cleanup } = makeCtx()
+    registerBridgeWorker(ctx)
     const node = makeSendTap()
     ctx.nodes.register({ workerId: WORKER_ID, deviceId: 'dev-1', ws: node.ws, pairedAt: 1, meta: {} })
     const started = startGatewayServer({ config: testConfig(), context: ctx })
     const ctrl = new AbortController()
     try {
       const res = await fetch(`http://127.0.0.1:${started.port}/w/${WORKER_ID}/api/worker/events/stream`, {
+        headers: { Authorization: `Bearer ${WORKER_TOKEN}` },
         signal: ctrl.signal,
       })
       expect(res.status).toBe(200)
@@ -573,13 +646,14 @@ describe('gateway worker HTTP bridge', () => {
 
   test('missing If-Match on config PUT returns a bridge-local JSON error', async () => {
     const { ctx, cleanup } = makeCtx()
+    registerBridgeWorker(ctx)
     const node = makeSendTap()
     ctx.nodes.register({ workerId: WORKER_ID, deviceId: 'dev-1', ws: node.ws, pairedAt: 1, meta: {} })
     const started = startGatewayServer({ config: testConfig(), context: ctx })
     try {
       const res = await fetch(`http://127.0.0.1:${started.port}/w/${WORKER_ID}/api/worker/config`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${WORKER_TOKEN}` },
         body: JSON.stringify({ secrets: { apiKey: 'raw-config-secret' } }),
       })
       expect(res.status).toBe(400)
@@ -616,11 +690,12 @@ describe('gateway worker HTTP bridge', () => {
 
   test('records audit for a bridged node error without storing response details', async () => {
     const { ctx, cleanup } = makeCtx()
+    registerBridgeWorker(ctx)
     const node = makeSendTap()
     ctx.nodes.register({ workerId: WORKER_ID, deviceId: 'dev-1', ws: node.ws, pairedAt: 1, meta: {} })
     const started = startGatewayServer({ config: testConfig(), context: ctx })
     try {
-      const pendingFetch = fetch(`http://127.0.0.1:${started.port}/w/${WORKER_ID}/api/worker/config`)
+      const pendingFetch = fetch(`http://127.0.0.1:${started.port}/w/${WORKER_ID}/api/worker/config`, withBridgeAuth())
       const forwarded = await waitForForward(node.sent)
       dispatchNodeResponse(ctx, node.ws, {
         type: 'response',
@@ -652,9 +727,10 @@ describe('gateway worker HTTP bridge', () => {
 
   test('records audit for a bridge error before returning JSON', async () => {
     const { ctx, cleanup } = makeCtx()
+    registerBridgeWorker(ctx)
     const started = startGatewayServer({ config: testConfig(), context: ctx })
     try {
-      const res = await fetch(`http://127.0.0.1:${started.port}/w/${WORKER_ID}/api/worker/info`)
+      const res = await fetch(`http://127.0.0.1:${started.port}/w/${WORKER_ID}/api/worker/info`, withBridgeAuth())
       expect(res.status).toBe(503)
       expect(await res.json()).toMatchObject({ error: { code: 'node_offline' } })
       expectBridgeAudit({

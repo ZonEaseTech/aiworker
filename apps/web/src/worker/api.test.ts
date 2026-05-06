@@ -21,6 +21,7 @@ describe('worker api subscribeEvents', () => {
   afterEach(() => {
     vi.restoreAllMocks()
     __resetBearerForTests()
+    window.history.pushState(null, '', '/')
   })
 
   it('ignores SSE keepalive comments and delivers a later event', async () => {
@@ -72,6 +73,54 @@ describe('worker api subscribeEvents', () => {
     })
     const headers = fetchMock.mock.calls[0]?.[1]?.headers as Headers
     expect(headers.get('Content-Type')).toBe('application/json')
+  })
+
+  it('attaches bearer Authorization on fleet-hosted worker bridge requests', async () => {
+    const originalUrl = window.location.href
+    window.history.pushState(null, '', '/w/w_aaaabbbbcccd/config')
+    setBearerToken('wtk_test_token')
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      brains: [],
+      channels: [],
+      configVersion: 1,
+      executor: { type: 'codex', status: 'healthy' },
+      startedAt: '2026-05-06T00:00:00.000Z',
+      workerId: 'w_aaaabbbbcccd',
+    }), {
+      headers: { 'Content-Type': 'application/json' },
+      status: 200,
+    }))
+
+    await getInfo()
+
+    expect(fetchMock).toHaveBeenCalledWith('/w/w_aaaabbbbcccd/api/worker/info', {
+      headers: expect.any(Headers),
+    })
+    const headers = fetchMock.mock.calls[0]?.[1]?.headers as Headers
+    expect(headers.get('Authorization')).toBe('Bearer wtk_test_token')
+
+    window.history.pushState(null, '', originalUrl)
+  })
+
+  it('attaches bearer Authorization on fleet-hosted worker SSE bridge requests', async () => {
+    const originalUrl = window.location.href
+    window.history.pushState(null, '', '/w/w_aaaabbbbcccd/')
+    setBearerToken('wtk_test_token')
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(sseResponse([
+      ': connected\n\n',
+    ]))
+
+    await subscribeEvents(new AbortController().signal, () => {})
+
+    expect(fetchMock).toHaveBeenCalledWith('/w/w_aaaabbbbcccd/api/worker/events/stream', {
+      headers: expect.any(Headers),
+      signal: expect.any(AbortSignal),
+    })
+    const headers = fetchMock.mock.calls[0]?.[1]?.headers as Headers
+    expect(headers.get('Accept')).toBe('text/event-stream')
+    expect(headers.get('Authorization')).toBe('Bearer wtk_test_token')
+
+    window.history.pushState(null, '', originalUrl)
   })
 
   it('normalizes top-level bearer auth failures without exposing raw JSON', async () => {

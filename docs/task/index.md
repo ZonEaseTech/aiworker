@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-06 (QA-015 long-running serve REST multi-turn evidence completed)
+> Updated: 2026-05-06 (REL-020 in progress)
 
 ## Usage
 
@@ -243,3 +243,7 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-055 Worker-local dotenv enrollment env persistence**](FEAT-055.md) `P2`
 - [x] [**QA-015 Governance Kernel harness — long-running serve REST multi-turn evidence**](QA-015.md) `P1`
 - [x] [**REL-019 发布 aiworker CLI 0.9.3**](REL-019.md) `P1`
+- [x] [**BUG-079 Public Caddy ingress does not route fleet-hosted worker UI**](BUG-079.md) `P1`
+- [x] [**BUG-080 OTP-approved worker reconnects to /enroll-ws as a plain node and is rejected**](BUG-080.md) `P1`
+- [x] [**BUG-081 Fleet-hosted Worker Admin is blocked by Caddy Basic Auth before worker bearer auth**](BUG-081.md) `P1`
+- [-] [**REL-020 发布 aiworker CLI 0.9.4**](REL-020.md) `P1`

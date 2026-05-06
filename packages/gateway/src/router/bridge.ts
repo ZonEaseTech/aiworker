@@ -3,6 +3,7 @@ import type { AnyWs } from '../registry/types'
 import type { GatewayContext } from './context'
 import { encodeFrame, parseFrame } from '@zonease/aiworker-gateway-proto'
 import { WORKER_ID_PATTERN } from '@zonease/aiworker-shared'
+import { decryptToken, timingSafeEqualStrings } from '../registry/crypto'
 
 const BRIDGE_PREFIX = '/w/'
 const WORKER_API_PREFIX = '/api/worker'
@@ -55,6 +56,10 @@ export async function handleWorkerApiBridge(
   if (!parsed.ok)
     return jsonError(400, 'invalid-worker-id', parsed.message)
 
+  const auth = authorizeWorkerBridgeRequest(req, ctx, parsed.value.workerId)
+  if (!auth.ok)
+    return auth.response
+
   if (parsed.value.workerApiPath === `${WORKER_API_PREFIX}/events/stream`)
     return handleWorkerEventsStream(req, url, ctx, parsed.value, startedAt)
 
@@ -102,6 +107,57 @@ export function isWorkerApiBridgePath(pathname: string): boolean {
   if (firstSlash === -1)
     return false
   return suffix.slice(firstSlash).startsWith(WORKER_API_PREFIX)
+}
+
+function authorizeWorkerBridgeRequest(
+  req: Request,
+  ctx: GatewayContext,
+  workerId: string,
+): { ok: true } | { ok: false, response: Response } {
+  const presentedToken = bearerToken(req.headers.get('Authorization'))
+  if (presentedToken === null) {
+    return {
+      ok: false,
+      response: jsonError(401, 'auth-required', 'missing worker bearer token', {
+        'WWW-Authenticate': 'Bearer',
+      }),
+    }
+  }
+  if (!ctx.masterKeyHex)
+    return { ok: false, response: jsonError(503, 'auth-unavailable', 'gateway master key is not configured') }
+
+  const row = ctx.persistence.getRegisteredWorkerRaw(workerId)
+  if (!row)
+    return { ok: false, response: jsonError(404, 'not-found', `worker ${workerId} is not registered`) }
+
+  let expectedToken: string
+  try {
+    expectedToken = decryptToken(row.apiTokenEnc, row.nonce, row.authTag, ctx.masterKeyHex)
+  }
+  catch {
+    return { ok: false, response: jsonError(503, 'auth-unavailable', 'worker token is not available') }
+  }
+
+  if (!timingSafeEqualStrings(presentedToken, expectedToken)) {
+    return {
+      ok: false,
+      response: jsonError(401, 'auth-failed', 'invalid worker bearer token', {
+        'WWW-Authenticate': 'Bearer',
+      }),
+    }
+  }
+
+  return { ok: true }
+}
+
+function bearerToken(value: string | null): string | null {
+  if (value === null)
+    return null
+  const trimmed = value.trim()
+  if (!trimmed.toLowerCase().startsWith('bearer '))
+    return null
+  const token = trimmed.slice('bearer '.length).trim()
+  return token.length === 0 ? null : token
 }
 
 function parseBridgePath(pathname: string):
@@ -883,8 +939,8 @@ function methodNotAllowed(allow: string): Response {
   return json({ error: { code: 'method-not-allowed', message: 'method not allowed' } }, 405, { Allow: allow })
 }
 
-function jsonError(status: number, code: string, message: string): Response {
-  return json({ error: { code, message } }, status)
+function jsonError(status: number, code: string, message: string, headers: Record<string, string> = {}): Response {
+  return json({ error: { code, message } }, status, headers)
 }
 
 function json(body: unknown, status: number, headers: Record<string, string> = {}): Response {

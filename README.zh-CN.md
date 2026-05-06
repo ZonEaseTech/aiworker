@@ -269,7 +269,7 @@ bun run typecheck && bun run lint && bun run test
 
 > 投产前请阅 [`docs/governance-node-status.md`](docs/governance-node-status.md) 的 conformance 表 + 残留边界。1.0.0 以前 CLI / API / config 不保证向后兼容（AGENTS.md 显式承诺）。
 
-CLI npm latest：**0.9.3**。
+CLI npm latest：**0.9.4**。
 
 | Module | Status |
 |---|---|

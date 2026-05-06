@@ -26,8 +26,10 @@ import { __handleCloseForTest as handleClose, __handleMessageForTest as handleMe
  * 覆盖范围（S3 owns）：
  * - `/enroll-ws` + `enroll.mode='otp'` happy path → 推 enrollment.otp event +
  *   audit gateway.enrollment.requested + ws.data.role === 'node-pending'。
- * - `/enroll-ws` + 非 OTP（缺 enroll、enroll.mode='join-token'）→ close 4400
- *   wrong_path:expected_enroll_otp + audit gateway.connect.rejected。
+ * - `/enroll-ws` + 已注册 OTP worker plain node reconnect → 显式校验
+ *   registered worker token 后接受。
+ * - `/enroll-ws` + 非 OTP（enroll.mode='join-token'）→ close 4400 wrong_path；
+ *   plain node reconnect 但 token 缺失 / 不匹配 / 未注册 → close 4401 auth:*。
  * - `/ws` + `enroll.mode='otp'` → close 4400 wrong_path:otp_must_use_enroll_ws。
  * - pending 状态下 ws 主动关闭 → handleClose 调 ctx.pendingEnrollments.removeByWs，pending
  *   表清干净 + audit gateway.enrollment.abandoned。
@@ -38,6 +40,7 @@ import { __handleCloseForTest as handleClose, __handleMessageForTest as handleMe
 
 const TEST_MASTER = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
 const VALID_TOKEN = 'wtk_abcdefghijklmnopqrstuvwxyz0123456789'
+const SECOND_TOKEN = 'wtk_zyxwvutsrqponmlkjihgfedcba9876543210'
 const JOIN_TOKEN = 'join-secret-abcdef0123456789'
 const WORKER_ID = 'w_aaaabbbbcccd'
 
@@ -204,20 +207,97 @@ describe('PLAN-019 S3 — /enroll-ws OTP submit', () => {
     expect(JSON.stringify(requested.detail)).not.toContain(sent.payload.otp)
   })
 
-  test('2. /enroll-ws 缺 enroll → close 4400 wrong_path + audit rejected', () => {
+  test('2. /enroll-ws 已注册 OTP worker plain reconnect + token 匹配 → 接受为 node', () => {
+    ctx.persistence.upsertEnrolledWorker(
+      {
+        workerId: WORKER_ID,
+        baseUrl: '',
+        apiToken: VALID_TOKEN,
+        displayName: 'alpha',
+        addedBy: 'otp',
+      },
+      TEST_MASTER,
+    )
+    const ws = makeWs({ path: '/enroll-ws' })
+    handleMessage(
+      ws as never,
+      connectFrame({ enroll: null, authToken: VALID_TOKEN }),
+      ctx,
+      makeConfig(),
+    )
+
+    expect(ws.__closes).toHaveLength(0)
+    expect(ws.data.role).toBe('node')
+    expect(ctx.nodes.has(WORKER_ID)).toBe(true)
+    expect(pendingEnrollments.size()).toBe(0)
+    expect(listAuditActions()).not.toContain('gateway.enrollment.requested')
+
+    const accepted = lastAudit('gateway.connect.accepted')!
+    expect(accepted.detail.via).toBe('registered-worker-token')
+    expect(accepted.detail.role).toBe('node')
+  })
+
+  test('3. /enroll-ws 已注册 OTP worker plain reconnect + token 不匹配 → auth rejected', () => {
+    ctx.persistence.upsertEnrolledWorker(
+      {
+        workerId: WORKER_ID,
+        baseUrl: '',
+        apiToken: VALID_TOKEN,
+        displayName: 'alpha',
+        addedBy: 'otp',
+      },
+      TEST_MASTER,
+    )
+    const ws = makeWs({ path: '/enroll-ws' })
+    handleMessage(
+      ws as never,
+      connectFrame({ enroll: null, authToken: SECOND_TOKEN }),
+      ctx,
+      makeConfig(),
+    )
+
+    expect(ws.__closes).toEqual([{ code: 4401, reason: 'auth:registered_reconnect_invalid_token' }])
+    expect(ws.data.role).toBeUndefined()
+    expect(ctx.nodes.has(WORKER_ID)).toBe(false)
+    expect(pendingEnrollments.size()).toBe(0)
+
+    const rejected = lastAudit('gateway.connect.rejected')!
+    expect(rejected.detail.reason).toBe('registered_reconnect_invalid_token')
+    expect(rejected.detail.path).toBe('/enroll-ws')
+  })
+
+  test('4. /enroll-ws plain node reconnect + token 缺失 → auth rejected', () => {
     const ws = makeWs({ path: '/enroll-ws' })
     handleMessage(ws as never, connectFrame({ enroll: null }), ctx, makeConfig())
 
-    expect(ws.__closes).toEqual([{ code: 4400, reason: 'wrong_path:expected_enroll_otp' }])
+    expect(ws.__closes).toEqual([{ code: 4401, reason: 'auth:registered_reconnect_missing_token' }])
     expect(ws.data.role).toBeUndefined()
     expect(pendingEnrollments.size()).toBe(0)
 
     const rejected = lastAudit('gateway.connect.rejected')!
-    expect(rejected.detail.reason).toBe('wrong_path:expected_enroll_otp')
+    expect(rejected.detail.reason).toBe('registered_reconnect_missing_token')
     expect(rejected.detail.path).toBe('/enroll-ws')
   })
 
-  test('3. /enroll-ws + enroll.mode=join-token → close 4400 wrong_path', () => {
+  test('5. /enroll-ws plain node reconnect + worker 未注册 → auth rejected', () => {
+    const ws = makeWs({ path: '/enroll-ws' })
+    handleMessage(
+      ws as never,
+      connectFrame({ enroll: null, authToken: VALID_TOKEN }),
+      ctx,
+      makeConfig(),
+    )
+
+    expect(ws.__closes).toEqual([{ code: 4401, reason: 'auth:registered_reconnect_not_found' }])
+    expect(ws.data.role).toBeUndefined()
+    expect(pendingEnrollments.size()).toBe(0)
+
+    const rejected = lastAudit('gateway.connect.rejected')!
+    expect(rejected.detail.reason).toBe('registered_reconnect_not_found')
+    expect(rejected.detail.path).toBe('/enroll-ws')
+  })
+
+  test('6. /enroll-ws + enroll.mode=join-token → close 4400 wrong_path', () => {
     const ws = makeWs({ path: '/enroll-ws' })
     handleMessage(
       ws as never,
@@ -234,7 +314,7 @@ describe('PLAN-019 S3 — /enroll-ws OTP submit', () => {
     expect(rejected.detail.reason).toBe('wrong_path:expected_enroll_otp')
   })
 
-  test('4. /ws + enroll.mode=otp → close 4400 wrong_path:otp_must_use_enroll_ws', () => {
+  test('7. /ws + enroll.mode=otp → close 4400 wrong_path:otp_must_use_enroll_ws', () => {
     const ws = makeWs({ path: '/ws' })
     handleMessage(ws as never, connectFrame(), ctx, makeConfig())
 
@@ -248,7 +328,7 @@ describe('PLAN-019 S3 — /enroll-ws OTP submit', () => {
     expect(listAuditActions()).not.toContain('gateway.enrollment.requested')
   })
 
-  test('5. node-pending 期间 ws.close → removeByWs 清表 + abandoned audit', () => {
+  test('8. node-pending 期间 ws.close → removeByWs 清表 + abandoned audit', () => {
     const ws = makeWs({ path: '/enroll-ws' })
     handleMessage(ws as never, connectFrame(), ctx, makeConfig())
     expect(ws.data.role).toBe('node-pending')
@@ -262,7 +342,7 @@ describe('PLAN-019 S3 — /enroll-ws OTP submit', () => {
     expect(abandoned.detail.code).toBe(1000)
   })
 
-  test('6. node-pending 期间 ws.close 但 entry 已被 approve/reject → 幂等不写 abandoned audit', () => {
+  test('9. node-pending 期间 ws.close 但 entry 已被 approve/reject → 幂等不写 abandoned audit', () => {
     const ws = makeWs({ path: '/enroll-ws' })
     handleMessage(ws as never, connectFrame(), ctx, makeConfig())
     // 模拟 operator 先 approve
@@ -284,7 +364,7 @@ describe('PLAN-019 S3 — /enroll-ws OTP submit', () => {
     expect(abandonedRows).toHaveLength(0)
   })
 
-  test('7. node-pending 状态收到 request 帧 → 忽略，不 close，pending 表保留', () => {
+  test('10. node-pending 状态收到 request 帧 → 忽略，不 close，pending 表保留', () => {
     const ws = makeWs({ path: '/enroll-ws' })
     handleMessage(ws as never, connectFrame(), ctx, makeConfig())
     expect(ws.data.role).toBe('node-pending')
@@ -303,7 +383,7 @@ describe('PLAN-019 S3 — /enroll-ws OTP submit', () => {
     expect(pendingEnrollments.size()).toBe(1)
   })
 
-  test('8. /ws + enroll.mode=join-token（PLAN-018 既有路径）不受 path-aware 改动影响', () => {
+  test('11. /ws + enroll.mode=join-token（PLAN-018 既有路径）不受 path-aware 改动影响', () => {
     const ws = makeWs({ path: '/ws' })
     handleMessage(
       ws as never,
@@ -321,7 +401,7 @@ describe('PLAN-019 S3 — /enroll-ws OTP submit', () => {
     expect(rows[0]!.addedBy).toBe('self-enroll')
   })
 
-  test('9. ctx.pendingEnrollments 缺失 → close 4500 enroll_unavailable（运维兜底）', () => {
+  test('12. ctx.pendingEnrollments 缺失 → close 4500 enroll_unavailable（运维兜底）', () => {
     const localCtx: GatewayContext = { ...ctx, pendingEnrollments: undefined }
     const ws = makeWs({ path: '/enroll-ws' })
     handleMessage(ws as never, connectFrame(), ctx === localCtx ? ctx : localCtx, makeConfig())
