@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-06 (REL-017 claimed for CLI 0.9.1 release)
+> Updated: 2026-05-06 (REL-017 completed CLI 0.9.1 release)
 
 ## Usage
 
@@ -225,4 +225,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-077 Codex multi-tool turns abort with dead-loop-suspected after legitimate tool activity**](BUG-077.md) `P2`
 - [x] [**BUG-078 Worker OpenAPI advertises stale orchestrator chat route and omits working task/conversation routes**](BUG-078.md) `P3`
 - [x] [**TODO-029 Tune brain.governance.bypass_suspected heuristic to avoid noisy false positives**](TODO-029.md) `P3`
-- [-] [**REL-017 发布 aiworker CLI 0.9.1**](REL-017.md) `P1`
+- [x] [**REL-017 发布 aiworker CLI 0.9.1**](REL-017.md) `P1`

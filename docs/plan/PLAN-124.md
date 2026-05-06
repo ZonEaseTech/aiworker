@@ -1,8 +1,9 @@
 # PLAN-124 发布 aiworker CLI 0.9.1
 
-- **status**: implementing
+- **status**: completed
 - **createdAt**: 2026-05-06 04:16
 - **approvedAt**: 2026-05-06 04:16
+- **completedAt**: 2026-05-06 04:24
 - **relatedTask**: REL-017
 
 ## 现状
@@ -79,3 +80,9 @@
 
 - 2026-05-06 04:16：PLAN-124 / REL-017 创建，进入 implementing。npm latest 确认为 `0.9.0`；GitHub Release `v0.9.0` 正常；远端不存在 `v0.9.1` tag。本次按 `0.9.1` patch release 执行。
 - 2026-05-06 04:25：本地 release gates 全通过：`bun install --frozen-lockfile`、`bun run typecheck`、`bun run lint`、`bun run test`、`bun run build`、CLI run / fleet smoke、dist manifest version check、built CLI `--version`、`git diff --check`。`bun publish --dry-run --access public` 在 `apps/cli/dist` 完成 pack 阶段（32 files / 2.73 MB），随后停在本机 npm authentication boundary；正式发布仍走 tag-triggered GitHub Actions workflow 的 `NPM_TOKEN`。
+- 2026-05-06 04:24：发布完成。
+  - Release commit `a2a86e5 chore(release): 发布 CLI 0.9.1` + annotated tag `v0.9.1` 已 push 到 origin。
+  - GitHub Actions release workflow run id `25416301967`（job `74548401046`）1m56s 全绿；`Publish to npm`、single-file binaries、GitHub Release upload 全部成功。
+  - npm `@zonease/aiworker-cli` `latest=0.9.1` 已上线；`bunx @zonease/aiworker-cli@0.9.1 --version` 返回 `aiworker/0.9.1 linux-x64 node-v24.3.0`。
+  - GitHub Release `v0.9.1` 非 draft / 非 prerelease；4 个平台 binary 全部 uploaded（darwin-arm64 23.96 MB / darwin-x64 26.38 MB / linux-arm64 39.66 MB / linux-x64 39.99 MB）。
+  - Workflow 仍有 `softprops/action-gh-release@v2` Node.js 20 deprecation annotation，不影响本次发布结果。

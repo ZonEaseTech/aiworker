@@ -1,10 +1,14 @@
 # AIWorker Changelog
 
-## 2026-05-06 04:16 [progress] REL-017 / PLAN-124 — CLI 0.9.1 release
+## 2026-05-06 04:24 [completed] REL-017 / PLAN-124 — CLI 0.9.1 released
 
-开始发布 `@zonease/aiworker-cli@0.9.1` patch release，承载 QA-007 / PLAN-123 的 Brain Governance Kernel 后续修复：quality gate control prompt、decision pipeline recent samples 持久化、Claude Code no-tools control calls、Codex tool progress dead-loop、Worker OpenAPI route truthfulness、bypass heuristic 降噪。
+`@zonease/aiworker-cli@0.9.1` patch release 完成，承载 QA-007 / PLAN-123 的 Brain Governance Kernel 后续修复：quality gate control prompt、decision pipeline recent samples 持久化、Claude Code no-tools control calls、Codex tool progress dead-loop、Worker OpenAPI route truthfulness、bypass heuristic 降噪。
 
-本地 release gates 已通过：`bun install --frozen-lockfile`、`bun run typecheck`、`bun run lint`、`bun run test`、`bun run build`、CLI run / fleet smoke、dist version checks、`git diff --check`；`bun publish --dry-run --access public` 完成 pack 阶段（32 files / 2.73 MB），随后停在本机 npm authentication boundary。
+- 本地 release gates 全通过：`bun install --frozen-lockfile`、`bun run typecheck`、`bun run lint`、`bun run test`、`bun run build`、CLI run / fleet smoke、dist version checks、`git diff --check`。
+- `bun publish --dry-run --access public` 完成 pack 阶段（32 files / 2.73 MB），随后停在本机 npm authentication boundary；正式发布走 tag-triggered GitHub Actions workflow。
+- Release commit `a2a86e5 chore(release): 发布 CLI 0.9.1` + annotated tag `v0.9.1` 已 push 到 origin。
+- GitHub Actions release workflow run id `25416301967`（job `74548401046`）1m56s 全绿；npm `@zonease/aiworker-cli` `latest=0.9.1` 已上线；GitHub Release `v0.9.1` 已发布（非 draft / 非 prerelease），4 个平台 binary 全部 uploaded（darwin-arm64 23.96 MB / darwin-x64 26.38 MB / linux-arm64 39.66 MB / linux-x64 39.99 MB）。
+- `bunx @zonease/aiworker-cli@0.9.1 --version` → `aiworker/0.9.1 linux-x64 node-v24.3.0`。
 
 ## 2026-05-06 03:19 [completed] PLAN-123 — BUG-075..078 / TODO-028..029 governance follow-up fixes
 
