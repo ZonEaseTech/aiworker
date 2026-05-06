@@ -1,5 +1,19 @@
 # AIWorker Changelog
 
+## 2026-05-06 [pending] REL-018 / PLAN-132 — 发布 aiworker CLI 0.9.2
+
+发布 `@zonease/aiworker-cli@0.9.2`，作为 0.9.1 之后的 patch release，
+标记 Brain Governance Kernel 回归 harness 在源码与已发布 CLI 双侧的
+full 5×2 matrix 证据完成节点。
+
+- 包含 PLAN-128 / PLAN-129 / PLAN-130 / PLAN-131 与对应 QA-011 / QA-012 /
+  QA-013 / QA-014 的 harness 扩展和评估证据。
+- 发布 `docs/governance-node-status.md` 作为 Project Brain governance node
+  的最终评估报告（conformance 表 + 残留边界 + 证据目录）。
+- **不修改产品代码**：`apps/`、`packages/`、`drizzle/` 都未变更，0.9.2 与
+  0.9.1 在产品行为上等价。本次 release 是 "regression-coverage milestone"，
+  不是产品行为升级。
+
 ## 2026-05-06 09:46 [completed] TODO-034 / PLAN-131 / QA-014 — Soul-agnostic Governance Kernel full 5×2 matrix on cli-release-local
 
 `cli-release-local --version 0.9.1 --matrix full` 跑完 5 Soul × 2 executor
