@@ -1,8 +1,8 @@
 # AIWorker Changelog
 
-## 2026-05-07 17:49 [progress] REL-026 / PLAN-162 — publish CLI 0.10.2
+## 2026-05-07 23:28 [completed] REL-026 / PLAN-162 — publish CLI 0.10.2
 
-Started `@zonease/aiworker-cli@0.10.2` as a patch release for Worker Admin Web
+Published `@zonease/aiworker-cli@0.10.2` as a patch release for Worker Admin Web
 polish after the 0.10.1 production baseline.
 
 - Release scope contains BUG-088 (Worker Admin Chat no longer renders the final
@@ -16,6 +16,14 @@ polish after the 0.10.1 production baseline.
   build, CLI run/fleet smoke, dist version checks, `git diff --check`, and
   publish dry-run pack stage. Publish dry-run packed 32 files / 3.1 MB and
   stopped at the expected local npm authentication boundary.
+- Release commit `268c87f` and annotated tag `v0.10.2` were pushed. GitHub
+  Actions release run `25505262025` passed in 2m11s, publishing npm and four
+  GitHub Release binary assets.
+- npm latest resolves to `0.10.2`; explicit
+  `bunx @zonease/aiworker-cli@0.10.2 --version` reports `aiworker/0.10.2`.
+- Non-blocking release workflow annotation: `softprops/action-gh-release@v2`
+  still runs on Node.js 20 and should be updated before GitHub Actions forces
+  Node.js 24 by default.
 
 ## 2026-05-07 17:10 [completed] BUG-088 / PLAN-161 — Worker Admin Chat final reply de-duplication
 

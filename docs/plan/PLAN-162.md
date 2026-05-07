@@ -1,8 +1,9 @@
 # PLAN-162 发布 aiworker CLI 0.10.2
 
-- **status**: in_progress
+- **status**: completed
 - **createdAt**: 2026-05-07 17:49
 - **approvedAt**: 2026-05-07 17:49
+- **completedAt**: 2026-05-07 23:28
 - **relatedTask**: REL-026
 
 ## 当前状态
@@ -61,3 +62,8 @@ verification。
 - 2026-05-07 23:13：本地 release gate passed：frozen install、typecheck、
   lint、test、build、CLI run/fleet smoke、dist version checks、
   `git diff --check`、publish dry-run pack stage。
+- 2026-05-07 23:27：release commit `268c87f`、`main`、annotated tag
+  `v0.10.2` 已推送；GitHub Actions release run `25505262025` 成功发布 npm
+  与四个平台 binary assets。
+- 2026-05-07 23:28：npm latest、显式 `bunx` 版本 smoke、GitHub Release asset
+  verification 全部通过。
