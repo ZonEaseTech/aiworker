@@ -56,9 +56,10 @@ executors customers already use.
    |                  AES-256-GCM                   |
    |                                                |
    |  Project Brain   filesystem authoritative      |
-   |                  AGENT / SOUL / USER           |
+   |                  SOUL / USER / MEMORY          |
    |                  memories / brain skills       |
-   |                  policy / admission state      |
+   |                  policy / capabilities         |
+   |                  admission state               |
    |                                                |
    |  Thin Adapter    health / run / stream         |
    |                  cancel / resume               |

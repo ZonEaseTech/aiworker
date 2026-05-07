@@ -2,9 +2,8 @@ import type { BrainSkill } from '@zonease/aiworker-shared'
 import type { CapabilitySkillDescriptor, RequiredContext, WorkerIntent } from './decisions'
 
 import { readFile } from 'node:fs/promises'
-import path from 'node:path'
 
-import { resolveMcpJsonPath, resolveWorkerHome } from '@zonease/aiworker-fs-layout'
+import { resolveBrainCapabilitiesPath } from '@zonease/aiworker-fs-layout'
 
 export interface BuiltinCapabilityDescriptor {
   description: string
@@ -55,13 +54,10 @@ export class CapabilityRegistry {
   async snapshot(input: {
     skills: BrainSkill[]
   }): Promise<CapabilityRegistrySnapshot> {
-    const [mcpTools, toolsets] = await Promise.all([
-      readMcpTools(this.deps.workerId),
-      readToolsets(this.deps.workerId),
-    ])
+    const brainCapabilities = await readBrainCapabilities(this.deps.workerId)
     return {
       builtins: DEFAULT_BUILTINS,
-      mcpTools,
+      mcpTools: readMcpTools(brainCapabilities),
       skills: input.skills.map(skill => ({
         description: skill.description,
         id: skill.id,
@@ -69,7 +65,7 @@ export class CapabilityRegistry {
         ...(skill.tags === undefined ? {} : { tags: skill.tags }),
         version: skill.version,
       })),
-      toolsets,
+      toolsets: readToolsets(brainCapabilities),
     }
   }
 }
@@ -134,11 +130,13 @@ function skillScore(skill: CapabilitySkillDescriptor, lowerIntent: string): numb
   return intentTokens.reduce((score, token) => score + (haystack.includes(token) ? 1 : 0), 0)
 }
 
-async function readMcpTools(workerId: string): Promise<McpToolDescriptor[]> {
-  const parsed = await readJsonObject(resolveMcpJsonPath(workerId))
-  if (!parsed)
-    return []
-  const servers = recordValue(parsed.servers)
+async function readBrainCapabilities(workerId: string): Promise<Record<string, unknown> | null> {
+  return readJsonObject(resolveBrainCapabilitiesPath(workerId))
+}
+
+function readMcpTools(brainCapabilities: Record<string, unknown> | null): McpToolDescriptor[] {
+  const mcp = recordValue(brainCapabilities?.mcp)
+  const servers = recordValue(mcp?.servers)
   if (!servers)
     return []
 
@@ -173,11 +171,10 @@ async function readMcpTools(workerId: string): Promise<McpToolDescriptor[]> {
   return tools
 }
 
-async function readToolsets(workerId: string): Promise<string[]> {
-  const parsed = await readJsonObject(path.join(resolveWorkerHome(workerId), 'toolsets.json'))
-  if (!parsed)
+function readToolsets(brainCapabilities: Record<string, unknown> | null): string[] {
+  if (!brainCapabilities)
     return []
-  const defaults = Array.isArray(parsed.defaultToolsets) ? parsed.defaultToolsets : []
+  const defaults = Array.isArray(brainCapabilities.defaultToolsets) ? brainCapabilities.defaultToolsets : []
   return defaults.filter((value): value is string => typeof value === 'string' && value.length > 0)
 }
 

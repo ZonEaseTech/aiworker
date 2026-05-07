@@ -3,9 +3,9 @@ import { z } from 'zod'
 /**
  * Scope manifest = explicit declaration of a worker-bound business scope.
  *
- * Lives at `<project>/.aiworker/scope.json`. Sister file to `policy.json` /
- * `toolsets.json` / `capability-packs.json`; same JSON shape so existing
- * tooling (`aiworker doctor`) reads it with no new dependency.
+ * Lives at `<project>/.aiworker/scope.json`. Sister file to `policy.json` and
+ * `brain-capabilities.json`; same JSON shape so existing tooling
+ * (`aiworker doctor`) reads it with no new dependency.
  *
  * First-version minimum (PLAN-098): only `kind` + `primarySoul` are required.
  * `id`, `subject`, `artifactRoots`, `privacy`, `retention`, `approval`,

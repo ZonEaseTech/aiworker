@@ -48,9 +48,9 @@ async function initProject(): Promise<{ home: string, project: string, root: str
 }
 
 describe('aiworker executor capability commands', () => {
-  it('adds executor MCP declarations without touching the brain/runtime mcp descriptor', async () => {
+  it('adds executor MCP declarations without touching the Brain capability manifest', async () => {
     const { home, project } = await initProject()
-    const beforeMcp = await readFile(path.join(project, '.aiworker', 'mcp.json'), 'utf8')
+    const beforeBrainCapabilities = await readFile(path.join(project, '.aiworker', 'brain-capabilities.json'), 'utf8')
 
     const add = await runCli([
       'executor',
@@ -74,7 +74,7 @@ describe('aiworker executor capability commands', () => {
       transport: 'streamable-http',
       url: 'https://mcp.example.com/mcp',
     })
-    expect(await readFile(path.join(project, '.aiworker', 'mcp.json'), 'utf8')).toBe(beforeMcp)
+    expect(await readFile(path.join(project, '.aiworker', 'brain-capabilities.json'), 'utf8')).toBe(beforeBrainCapabilities)
   })
 
   it('dry-runs executor MCP sync as engine CLI projection commands', async () => {

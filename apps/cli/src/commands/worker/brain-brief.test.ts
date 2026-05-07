@@ -88,7 +88,6 @@ describe('aiworker brain brief command (PLAN-102)', () => {
   })
 
   it('compiles a developer brief from canonical brain files and synthesises risk-policy', async () => {
-    await writeFile(join(brainHome, 'AGENT.md'), '# dev worker\n', 'utf8')
     await writeFile(join(brainHome, 'SOUL.md'), '# voice\n', 'utf8')
     await writeFile(join(brainHome, 'MEMORY.md'), '# memory\n- prefer dry-run\n', 'utf8')
 
@@ -100,7 +99,7 @@ describe('aiworker brain brief command (PLAN-102)', () => {
     expect(parsed.note).toContain('projection')
     expect(parsed.brief.soulId).toBe('developer')
     const sectionIds = parsed.brief.sections.map(s => s.id)
-    expect(sectionIds).toContain('agent')
+    expect(sectionIds).toContain('soul')
     expect(sectionIds).toContain('memory')
     expect(sectionIds).toContain('risk-policy')
     const riskPolicy = parsed.brief.sections.find(s => s.id === 'risk-policy')
@@ -174,7 +173,7 @@ describe('aiworker brain brief command (PLAN-102)', () => {
 
   it('drops non-protected sections when --token-budget is tight; keeps risk-policy', async () => {
     const longLine = 'x'.repeat(2000)
-    await writeFile(join(brainHome, 'AGENT.md'), longLine, 'utf8')
+    await writeFile(join(brainHome, 'SOUL.md'), longLine, 'utf8')
     await writeFile(join(brainHome, 'MEMORY.md'), longLine, 'utf8')
 
     const { output } = await captureConsole(() =>

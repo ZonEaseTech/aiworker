@@ -23,7 +23,7 @@ packages/
 - **`packages/gateway-proto`** 是协议的纯类型 + 运行时校验层。不依赖任何网络框架，所有 METHODS / EVENTS / Frame schema 都在这里定义，CLI / web / gateway / worker 四侧共用。
 - **`packages/core`** 是 transport-agnostic 的 worker runtime（PLAN-015 §S1 物理抽离）。封装 brain provider、executor provider、channel adapter、orchestrator、cron、approvals、gateway-client、secrets、bootstrap、management 业务态等所有运行时业务；公共面 `packages/core/src/index.ts` 同时被 `apps/api` 路由、`apps/cli` 与 gateway node 接入复用。**不**依赖 `hono` / `@hono/*` / `@scalar/*`——边界由 ESLint `no-restricted-imports` 守，CI 拦下任何回退到 transport 层耦合的尝试。
 - **`packages/storage-sqlite`** 是 fleet.db 与 worker.db 的唯一 schema 源。通过 subpath `./fleet` 与 `./worker` 保持数据域边界；`defaultFleetMigrationsFolder` / `defaultWorkerMigrationsFolder` 通过 `import.meta.url` 解析，避免调用方硬编码 `./drizzle/...`。
-- **`packages/fs-layout`** 管理 user scope 的 `~/.aiworker/workers/<id>/` 与 project scope 的 `<project>/.aiworker/` 目录布局。gateway 与 worker 都复用它解析 `AGENT.md` / `SOUL.md` / `USER.md` / `config.yaml` / `brain/` 等路径。
+- **`packages/fs-layout`** 管理 user scope 的 `~/.aiworker/workers/<id>/` 与 project scope 的 `<project>/.aiworker/` 目录布局。gateway 与 worker 都复用它解析 `SOUL.md` / `USER.md` / `MEMORY.md` / `config.yaml` / `brain/` 等路径。
 
 ## Product Positioning
 
@@ -60,7 +60,7 @@ flowchart TD
   Resolve -->|"existing project scope"| InitExisting["idempotent aiworker init"]
   Resolve -->|"explicit/user scope"| UserScope["user/explicit worker home"]
 
-  InitNew --> BrainFiles["Project Brain files<br/>AGENT / SOUL / USER / MEMORY / ROLLUP<br/>scope / policy / toolsets / brain skills"]
+  InitNew --> BrainFiles["Project Brain files<br/>SOUL / USER / MEMORY / ROLLUP<br/>scope / policy / brain capabilities / brain skills"]
   InitExisting --> BrainFiles
   InitNew --> LocalState[".aiworker/local<br/>worker.db / .env / workspaces / token file"]
   InitExisting --> LocalState
@@ -78,9 +78,9 @@ flowchart TD
 `aiworker init` 的职责：
 
 - 在 project scope 下创建 `<project>/.aiworker/` 这颗 git-reviewable Project
-  Brain：`AGENT.md`、`SOUL.md`、`USER.md`、`MEMORY.md`、`ROLLUP.md`、
-  `scope.json`、`policy.json`、`toolsets.json`、`capability-packs.json`、
-  `.aiworker/skills/<id>/SKILL.md`、`.aiworker/memories/`、`.aiworker/mcp.json`
+  Brain：`SOUL.md`、`USER.md`、`MEMORY.md`、`ROLLUP.md`、`scope.json`、
+  `policy.json`、`brain-capabilities.json`、
+  `.aiworker/skills/<id>/SKILL.md`、`.aiworker/memories/`
   和 `.aiworker/executor-capabilities.json`。
 - 在 `.aiworker/local/` 创建本机私有 worker state：`worker.db`、`.env`、
   `workspaces/`、bootstrap token file。这里是 runtime state，不是团队共享
@@ -136,7 +136,7 @@ sequenceDiagram
 
 运行时分工：
 
-- **Project Brain filesystem**：`AGENT.md` / `SOUL.md` / `USER.md` /
+- **Project Brain filesystem**：`SOUL.md` / `USER.md` /
   `MEMORY.md` / `ROLLUP.md` / `skills/<id>/SKILL.md` 是 canonical context
   surface。`FilesystemBrainProvider` 负责扫描、检索和 watch；SQLite 不替代这些
   Markdown 文件成为 Brain source of truth。
@@ -146,9 +146,9 @@ sequenceDiagram
   bounded body 追加为本轮 Project Brain context；当要求 `memory_search` 时，用
   inbound turn text 查询 `BrainProvider.searchMemories()`，把 bounded memory
   snippets 追加为本轮 Project Brain context。
-- **Capability registry**：记录本轮可见 brain skill / mcp descriptor / toolset
+- **Capability registry**：记录本轮可见 brain skill / Brain MCP descriptor / toolset
   选择。`load_skill` 与 `memory_search` 已由 orchestrator 实现为内部 context
-  loader，并在 capability decision 中报告 loaded ids/count/errors；`.aiworker/mcp.json`
+  loader，并在 capability decision 中报告 loaded ids/count/errors；`brain-capabilities.json`
   descriptor 仍是 observe-only context signal，不等于 executor-native tools。
 - **Executor adapter**：`ExecutorProvider.run(input)` 是唯一 task 执行入口。
   Orchestrator 只传 messages、model hint、workspacePath、abort signal 与可选
@@ -172,14 +172,14 @@ runtime 能力”的假设：AIWorker 的 brain skill 是 Project Brain 资产�
 
 | Claim | Current code evidence | Status |
 |------|-----------------------|--------|
-| `init` 先建立 Project Brain，再建立本地 worker state。 | `apps/cli/src/commands/worker/init.ts` 通过 `buildProjectAiworkerSeed()` 生成 persona、scope、policy、toolsets、capability packs 和 brain skill seed；`packages/fs-layout/src/index.ts::ensureProjectAiworker()` no-overwrite 写 `.aiworker/` 与 `local/`。 | conforming |
+| `init` 先建立 Project Brain，再建立本地 worker state。 | `apps/cli/src/commands/worker/init.ts` 通过 `buildProjectAiworkerSeed()` 生成 Soul、scope、policy、`brain-capabilities.json` 和 brain skill seed；`packages/fs-layout/src/index.ts::ensureProjectAiworker()` no-overwrite 写 `.aiworker/` 与 `local/`。 | conforming |
 | Project scope 下 shared Brain 与 local runtime state 分离。 | `resolveAiworkerScope()` 把 active home 指到 `.aiworker/local/`，`resolveBrainHome()` / `resolveWorkerHome()` 在 project scope 返回 `.aiworker/` 作为 Brain root。 | conforming |
 | `up` 是 init/validate/readiness/serve 的组合命令。 | `apps/cli/src/commands/worker/up.ts::runUp()` 明确打印并执行 5 stages；executor readiness 失败只给 WARN/Next，不阻塞 serve。 | conforming |
 | `serve` 是 worker HTTP/admin/runtime 生命周期入口。 | `apps/cli/src/commands/worker/serve.ts::runServe()` 调 `bootstrapWorkerApp()`，挂 `Bun.serve`、Worker Admin、pidfile、optional gateway node 和 shutdown；`apps/api/src/modes/worker.ts` 执行 DB/config/secrets/runtime bootstrap。 | conforming |
 | Brain provider 以 filesystem 为权威。 | `packages/core/src/worker/brain/factory.ts` 默认经 `resolveBrainHome(workerId)` 构造 `FilesystemBrainProvider`；scanner 只识别 `skills/**/SKILL.md` 和 `memories/**/*.md`。 | conforming |
 | Soul/Brain skill authoring 已转为 file-first pack。 | `packages/shared/src/soul/packs/*` 和 `packages/shared/src/brain/skills/*` 是 Markdown source；`brainSkillPackSeedFiles()` 在 init 时 materialize 到 project `.aiworker/skills/`。 | conforming in current source |
-| Runtime 会把 Project Brain 投影给 executor。 | `ContextManager.buildSystemPrompt()` 读取 `AGENT.md` / `SOUL.md` / `USER.md` / `MEMORY.md` / `ROLLUP.md`，列出可用 brain skill 摘要；当 `skill_load` 被选中时，`ContextManager.loadSkillBodies()` 读取 selected `SKILL.md` body；当 `memory_search` 被选中时，`ContextManager.searchMemories()` 查询 provider 并注入 matched snippets。 | conforming for persona + skill + memory context |
-| Capability decision 是可执行能力选择。 | `CapabilityRegistry.snapshot()` 产出 `load_skill` / `memory_search` / mcp descriptor / skill summaries；service 对 `load_skill` / `memory_search` 调用对应 context loader，并在 event 中报告 loaded ids/count/errors。`.aiworker/mcp.json` descriptor 仍未执行为 executor tools。 | partial: brain context loaders enforced, mcp descriptor observe-only |
+| Runtime 会把 Project Brain 投影给 executor。 | `ContextManager.buildSystemPrompt()` 读取 `SOUL.md` / `USER.md` / `MEMORY.md` / `ROLLUP.md`，列出可用 brain skill 摘要；当 `skill_load` 被选中时，`ContextManager.loadSkillBodies()` 读取 selected `SKILL.md` body；当 `memory_search` 被选中时，`ContextManager.searchMemories()` 查询 provider 并注入 matched snippets。 | conforming for soul + skill + memory context |
+| Capability decision 是可执行能力选择。 | `CapabilityRegistry.snapshot()` 产出 `load_skill` / `memory_search` / Brain MCP descriptor / skill summaries；service 对 `load_skill` / `memory_search` 调用对应 context loader，并在 event 中报告 loaded ids/count/errors。`brain-capabilities.json` 中的 MCP descriptor 仍未执行为 executor tools。 | partial: brain context loaders enforced, mcp descriptor observe-only |
 | Executor 是 thin adapter，不是 AIWorker 内建 agent runtime。 | `packages/shared/src/providers/executor.ts` 的 contract 和 `packages/core/src/worker/executor/factory.ts` 的 switch 只构造 adapter；`Orchestrator.buildAgentRunInput()` 只传 messages/model/workspace/signal/binding。 | conforming |
 | Quality gate 是治理层，不是默认 hard rewrite。 | `quality-gate.ts` 用 `resolveQualityGateMode()` 如实标 observe/enforced；`service.ts` 只有在 config mode 为 `retry` / `block` / `warn` 时才修改输出。 | conforming |
 | Durable Brain mutation 走 admission。 | `BrainAdmissionService` 持有 proposal/decision 状态机，CLI/API/gateway handlers 都转进该 service；pre-compaction memory flush 只 `propose(memory-add)`。 | conforming for memory-add and brain-skill-add |
@@ -220,7 +220,7 @@ compiler 与 Worker/Fleet Brain surface，并作为后续 Brain 开发的默认�
 
 | 组件 | 正确定位 | 允许的 hard logic | 明确禁止 |
 |------|----------|-------------------|----------|
-| **Soul Pack** | LLM-readable file package：`SOUL.md` / `AGENT.md` + YAML frontmatter，承载 persona、语气、风险偏好、领域词汇、默认 brief sections。`SoulModule` 只是 loader 输出。 | frontmatter schema validation、pack discovery、版本/owner 元数据、风险提示模板。 | 把 Soul 写成 HR/finance/legal/dev 的 deterministic planner；把 Soul 语义继续维护在 TS/JSON registry；或让 preset 自动执行领域 workflow。 |
+| **Soul Pack** | LLM-readable file package：`SOUL.md` + YAML frontmatter，承载 persona、语气、风险偏好、领域词汇、默认 brief sections。`SoulModule` 只是 loader 输出。 | frontmatter schema validation、pack discovery、版本/owner 元数据、风险提示模板。 | 把 Soul 写成 HR/finance/legal/dev 的 deterministic planner；把 Soul 语义继续维护在 TS/JSON registry；或让 preset 自动执行领域 workflow。 |
 | **Scope manifest** | worker-bound business scope 的身份与证据目录，不限定为 git repo。 | scope id/path 解析、owner/status、source refs、manifest schema、跨 worker/fleet 边界。 | 假定所有 Project 都是软件项目，或在 manifest 里内建 PMA/代码仓库专用状态机。 |
 | **Artifact registry** | evidence index：记录 ref、hash、来源、敏感级别、摘要与读取状态。 | 去重、redaction、missing/unreadable 标记、source tagging、worker.db 数据面隔离。 | 当成 ATS/CRM/ticket/contract/finance database；用 hard logic 解释 artifact 的业务含义并自动推进流程。 |
 | **Schema pack** | Soul-specific vocabulary / lightweight validation hints。 | 字段名、枚举、样例、presentation hint、静态校验。 | 把 `workflowStates` 变成可执行 workflow engine，或把领域政策做成不可见 hard gate。 |
@@ -267,7 +267,7 @@ flowchart TB
   Gateway --> WorkerN["Worker N"]
 
   subgraph Worker["Worker data plane"]
-    Brain["Project Brain<br/>AGENT / SOUL / USER / MEMORY<br/>brain skills / scope policy"]
+    Brain["Project Brain<br/>SOUL / USER / MEMORY<br/>brain skills / scope policy"]
     State["worker.db<br/>identity / config / conversations"]
     Adapter["Thin Executor Adapter<br/>health / run / stream / cancel / resume"]
     Brain --> Adapter
@@ -346,8 +346,7 @@ fleet.db + node routing        worker.db + local runtime
   aiworker-gateway.pid         # 本机 aiworker gateway daemon pid（若启动）
   aiworker-gateway.log         # 本机 aiworker gateway daemon 日志
   workers/<workerId>/
-    AGENT.md                   # persona / role doc
-    SOUL.md                    # voice + style guide
+    SOUL.md                    # persona + voice + role guide
     USER.md                    # user profile the agent maintains
     config.yaml                # redacted worker config 镜像（advisory，DB 仍为权威）
     brain/
@@ -362,24 +361,21 @@ project scope 下，团队共享上下文落在 `<project>/.aiworker/`：
 
 ```text
 <project>/.aiworker/
-  AGENT.md
   SOUL.md
   USER.md
   MEMORY.md
   ROLLUP.md
   policy.json
-  toolsets.json
-  capability-packs.json
+  brain-capabilities.json      # default toolsets / Brain packs / Brain MCP descriptors
   skills/
   memories/
-  mcp.json                     # brain/runtime MCP descriptor, not engine config
   executor-capabilities.json   # optional executor overlay / bootstrap hints
   local/                       # gitignored: worker.db / .env / workspaces
 ```
 
 - **Project scope 语义**：`<project>/.aiworker/` 是当前目录命名沿用的 filesystem layout；产品语义是 worker-bound business scope，不限定为 git repo、代码仓库或软件项目。Soul 负责解释该 scope 的领域对象和工作流，例如 developer 的架构/测试/发布，HR 的简历筛选/归档/备份/审核，legal 的合同/案件审查，ops 的队列/交接/升级。`AIWORKER_HOME` 在这里指向 `<project>/.aiworker/local/`，也就是本机私有 runtime state 根，而不是 cwd 别名；cwd 只负责自动发现这个 project scope。显式设置 `AIWORKER_HOME` 则表示 operator 固定一个独立 home，适用于 systemd / docker / 同机多 worker。
 - **Skills / memories** 读写统一过 `FilesystemBrainProvider`（PLAN-012 将旧 `HermesProvider` 改名并把 HTTP 依赖全部拆掉）；filesystem 是权威，SQLite 只负责 identity 与可索引状态。新 worker 默认挂载 writable `local-filesystem` brain source，路径由 `resolveBrainHome(workerId)` 决定：project scope 指向 `<project>/.aiworker/`，user / explicit scope 指向 worker home 下的 `brain/`。operator 可用 `aiworker brain status` / `aiworker brain skills` / `aiworker brain memories` 做只读检查；这些命令不写入 brain artifact。
-- **Capability 边界**：`.aiworker/mcp.json`、`skills/`、`toolsets.json`、`capability-packs.json` 属于 brain/runtime project capability 或 observe-only descriptor；`.aiworker/executor-capabilities.json` 只是 executor overlay / bootstrap hint。Codex / Claude Code / Hermes / OpenClaw 等外部 executor 可能加载 user/host-level MCP、skills、plugins、auth 和 native sessions；AIWorker 不把 project overlay 当成完整 effective capability source of truth。
+- **Capability 边界**：`brain-capabilities.json` 与 `skills/` 属于 Brain project capability 或 observe-only descriptor；`.aiworker/executor-capabilities.json` 只是 executor overlay / bootstrap hint。Codex / Claude Code / Hermes / OpenClaw 等外部 executor 可能加载 user/host-level MCP、skills、plugins、auth 和 native sessions；AIWorker 不把 project overlay 当成完整 effective capability source of truth。
 - **Brain admission 边界**：generated memory / brain skill / policy proposal 进入 filesystem 前必须保留 evidence、scope、confidence 与 rollback 信息，并经过显式 operator approval。pre-compaction memory flush 只能生成 pending `memory-add` admission proposal，不能直接写 canonical memory；新 CLI/API mutating brain command 必须另开 PMA 任务并显式命名为 brain memory / brain skill，不得复用 executor MCP / engine plugin 语义。
 
 ### Project Brain asset model
@@ -388,19 +384,19 @@ Project Brain 由五类资产组成。命名上 *brain memory / brain skill / pr
 
 | 资产 | 文件 / 目录 | 所有者 | 读写规则 | 当前 CLI |
 |------|------------|--------|---------|----------|
-| **Identity** | `AGENT.md`、`SOUL.md`、`USER.md` | operator + Soul Pack | `aiworker init` 从 file-first Soul Pack 一次性种出，after that 视为 git-tracked persona doc，AIWorker runtime 不主动改写。新增或修改 Soul 语义应优先编辑 Markdown pack；结构化 `SoulModule` 只作为 loader 输出供 Kernel 消费。 | `aiworker init`、`aiworker soul list/show` |
+| **Identity** | `SOUL.md`、`USER.md` | operator + Soul Pack | `aiworker init` 从 file-first Soul Pack 一次性种出，after that 视为 git-tracked persona doc，AIWorker runtime 不主动改写。新增或修改 Soul 语义应优先编辑 Markdown pack；结构化 `SoulModule` 只作为 loader 输出供 Kernel 消费。 | `aiworker init`、`aiworker soul list/show` |
 | **Memory** | `MEMORY.md`、`memories/*.md` | operator + admission materializer | filesystem 为权威；generated runtime memory 只能先进入 admission proposal，operator approve/apply 后由 materializer 写入。 | `aiworker brain memories`（只读检索） |
 | **Brain skills** | `.aiworker/skills/<id>/SKILL.md`（+ references/assets sidecars） | operator + Soul Pack | `aiworker init` 从 kernel + selected Soul Pack 一次性种出默认 brain skill；after that 视为 git-tracked Project Brain 文件。runtime 只识别 `SKILL.md` entrypoint，sidecar Markdown 不单独注册为 skill。generated brain skill 仍必须走 admission。 | `aiworker brain skills` |
-| **Policy & drafts** | `policy.json`、`toolsets.json`、`capability-packs.json`、`.aiworker/mcp.json` | operator + Soul preset | brain/runtime 草案；`aiworker doctor` 静态校验，不接入 runtime enforcement。`mcp.json` 是 brain/runtime descriptor，不是 engine MCP config。 | `aiworker doctor`、`aiworker brain status` |
+| **Policy & drafts** | `policy.json`、`brain-capabilities.json` | operator + Soul preset | Brain capability 草案；`aiworker doctor` 静态校验，不接入 runtime enforcement。`brain-capabilities.json` 内的 MCP descriptor 不是 engine MCP config。 | `aiworker doctor`、`aiworker brain status` |
 | **Admission state** | worker.db `brain_admission_proposals` / `brain_admission_decisions` | brain runtime（proposal）+ operator（approval） | 任何 generated memory / skill / policy proposal 必须保留 evidence、scope、confidence、rollback；pre-compaction memory flush 也只创建 pending proposal，不直接写 filesystem。CLI/API/UI approval surface 已由 PLAN-101 / PLAN-103 落地 MVP。 | `aiworker brain admission *`、Worker Admin `/brain` |
 
-`<project>/.aiworker/executor-capabilities.json` **不是** brain 资产；它是外部 executor 的 project overlay / hint，与上面五类完全独立。fleet.db 不持久化 brain 内容；worker.db 只持有 artifact/admission/conversation 等可索引状态，不是 canonical brain filesystem 内容。`AGENT.md` / `SOUL.md` / `MEMORY.md` / `memories/` / `skills/` 等仍以 filesystem 为权威，便于 git review 与跨机迁移。
+`<project>/.aiworker/executor-capabilities.json` **不是** brain 资产；它是外部 executor 的 project overlay / hint，与上面五类完全独立。fleet.db 不持久化 brain 内容；worker.db 只持有 artifact/admission/conversation 等可索引状态，不是 canonical brain filesystem 内容。`SOUL.md` / `MEMORY.md` / `memories/` / `skills/` 等仍以 filesystem 为权威，便于 git review 与跨机迁移。
 
 ### Brain admission roadmap
 
 > FEAT-054 / PLAN-097..103 已落地：Soul module + scope manifest（`scope.json`）+ artifact registry（`brain_artifacts`）+ admission MVP（`brain_admission_proposals` + `brain_admission_decisions`）+ brain brief preview。本节继续作为产品边界与红线说明。
 
-任何 brain runtime 自动生成的 memory / brain skill / policy proposal 在落到 filesystem（即 `MEMORY.md`、`memories/`、`.aiworker/skills/`、`policy.json`、`toolsets.json`、`capability-packs.json`、`.aiworker/mcp.json`）之前都要走 admission flow。PLAN-101 / PLAN-103 已落地 worker.db admission MVP；后续新增 proposal kind、LLM-facing entry point 或 guardrail 仍必须按独立 PMA 扩展，不得绕过当前状态机。admission 模型分四段：
+任何 brain runtime 自动生成的 memory / brain skill / policy / capability proposal 在落到 filesystem（即 `MEMORY.md`、`memories/`、`.aiworker/skills/`、`policy.json`、`brain-capabilities.json`）之前都要走 admission flow。PLAN-101 / PLAN-103 已落地 worker.db admission MVP；后续新增 proposal kind、LLM-facing entry point 或 guardrail 仍必须按独立 PMA 扩展，不得绕过当前状态机。admission 模型分四段：
 
 1. **Proposal 模型**（已实现 MVP）：每条 admission proposal 必须携带：
    - `evidence`：触发该 proposal 的 conversation id / span / 时间窗。
@@ -468,7 +464,7 @@ External executor 永远只在 worker 进程内被薄 adapter 调用；gateway �
 
 新加 engine adapter（例如 Hermes、OpenClaw）只需在自己的 engine module 内实现 `ExecutorProvider`，并把任何 engine-specific extension 留在该 module；不能在 `packages/core/src/worker/orchestrator` 等通用层加 engine-specific 分支。
 - **`config.yaml`** 是 `worker_config.configJson` 的 advisory 镜像——`PUT /api/worker/config` 与 `aiworker config set`（worker-local）/ `aiworker fleet config set`（远端 worker）落库成功后都会调 `mirrorConfigToYaml`，DB 仍为 source-of-truth（乐观锁 `If-Match` 依赖 DB version）。
-- **`AGENT.md` / `SOUL.md` / `USER.md`** user scope 首次启动由 `ensureWorkerHome(workerId)` 幂等种出；project scope 由 `aiworker init` 根据 Soul preset 种出非 stub 模板，并保持 no-overwrite。
+- **`SOUL.md` / `USER.md`** project scope 由 `aiworker init` 根据 Soul preset 种出非 stub 模板，并保持 no-overwrite；user scope legacy 仍由 `ensureWorkerHome(workerId)` 幂等种出 `AGENT.md` / `SOUL.md` / `USER.md`。
 
 ## Overview
 

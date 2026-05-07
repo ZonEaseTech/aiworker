@@ -42,9 +42,10 @@ AIWorker 不是要做一个更聪明的 coding assistant，也不是另一个 ex
    |                  AES-256-GCM                   |
    |                                                |
    |  Project Brain   filesystem 权威               |
-   |                  AGENT / SOUL / USER           |
+   |                  SOUL / USER / MEMORY          |
    |                  memories / brain skills       |
-   |                  policy / admission state      |
+   |                  policy / capabilities         |
+   |                  admission state               |
    |                                                |
    |  Thin Adapter    health / run / stream         |
    |                  cancel / resume               |

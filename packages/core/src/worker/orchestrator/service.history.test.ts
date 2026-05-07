@@ -431,14 +431,13 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
     expect(runMessages[runMessages.length - 1]!.content).toBe('incoming new turn')
   })
 
-  it('injects project-scope persona and memory docs into the system prompt', async () => {
+  it('injects project-scope Soul and memory docs into the system prompt', async () => {
     const projectRoot = path.join(tmpRoot, 'project')
     const aiworkerRoot = path.join(projectRoot, '.aiworker')
     const originalCwd = process.cwd()
     const originalHome = process.env.AIWORKER_HOME
     try {
       await fs.mkdir(aiworkerRoot, { recursive: true })
-      await fs.writeFile(path.join(aiworkerRoot, 'AGENT.md'), '# Agent\n\nFollow project agent rules.\n')
       await fs.writeFile(path.join(aiworkerRoot, 'SOUL.md'), '---\nmanifest:\n  id: developer\n---\n# Soul\n\nUse project voice.\n')
       await fs.writeFile(path.join(aiworkerRoot, 'USER.md'), '# User\n\nPrimary user prefers concise answers.\n')
       await fs.writeFile(path.join(aiworkerRoot, 'MEMORY.md'), '# Memory\n\nRemember project decisions.\n')
@@ -452,8 +451,6 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
       })
 
       const systemPrompt = executor.captured[executor.captured.length - 1]![0]!.content
-      expect(systemPrompt).toContain('Project agent instructions:')
-      expect(systemPrompt).toContain('Follow project agent rules.')
       expect(systemPrompt).toContain('Project soul / voice:')
       expect(systemPrompt).toContain('Use project voice.')
       expect(systemPrompt).not.toContain('manifest:')

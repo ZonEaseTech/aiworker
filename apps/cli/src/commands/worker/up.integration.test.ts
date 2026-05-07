@@ -192,7 +192,8 @@ describe('aiworker up quick start', () => {
       }))
 
       await waitForHealth(port, proc)
-      expect(await exists(path.join(project, '.aiworker', 'AGENT.md'))).toBe(true)
+      expect(await exists(path.join(project, '.aiworker', 'SOUL.md'))).toBe(true)
+      expect(await exists(path.join(project, '.aiworker', 'brain-capabilities.json'))).toBe(true)
       expect(await exists(path.join(project, '.aiworker', 'local', 'worker.db'))).toBe(true)
       expect(await exists(path.join(home, '.aiworker', '.env'))).toBe(false)
 

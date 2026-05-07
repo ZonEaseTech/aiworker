@@ -38,15 +38,15 @@ const passCapabilityReport: CapabilityDoctorReport = {
 const failCapabilityReport: CapabilityDoctorReport = {
   checks: [
     {
-      id: 'mcp',
+      id: 'brain-capabilities',
       issues: [{
         code: 'mcp.plaintext_secret',
         message: 'plaintext secret',
         path: 'servers.private.headers.Authorization',
         severity: 'error',
       }],
-      label: 'mcp.json',
-      path: '/repo/.aiworker/mcp.json',
+      label: 'brain-capabilities.json',
+      path: '/repo/.aiworker/brain-capabilities.json',
       status: 'fail',
     },
   ],

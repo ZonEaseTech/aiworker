@@ -1,5 +1,30 @@
 # AIWorker Changelog
 
+## 2026-05-08 00:16 [completed] REFACTOR-023 / PLAN-164 — Simplify Project Brain filesystem layout
+
+Collapsed the project-scope Brain authoring surface so a new worker no longer
+teaches stale split concepts.
+
+- Project init now seeds `SOUL.md`, `USER.md`, `MEMORY.md`, `ROLLUP.md`,
+  `policy.json`, `brain-capabilities.json`, `executor-capabilities.json`,
+  `skills/`, `memories/`, and `local/`; it no longer seeds project `AGENT.md`,
+  `toolsets.json`, `capability-packs.json`, or Brain `mcp.json`.
+- `brain-capabilities.json` is the single Brain-side capability draft manifest
+  for default toolsets, Brain capability packs, and Brain MCP descriptors.
+- The shared schema surface no longer exports standalone toolset or capability
+  pack manifest schemas, and pack validation now uses the current structured
+  validation result instead of legacy string statuses.
+- Runtime capability discovery, Brain brief/system prompt composition, doctor
+  validation, up validation, scope/status output, Soul preset materialization,
+  architecture docs, CLI docs, and focused tests were updated together.
+- Executor overlay remains separate in `executor-capabilities.json`; this
+  change does not make AIWorker own executor-native MCP/skill/plugin effective
+  state.
+
+Verification passed: focused shared/fs-layout/core/CLI tests, `bun run
+typecheck`, `bun run lint`, `bun run test`, `bun run build`, and `git diff
+--check`.
+
 ## 2026-05-07 23:36 [completed] TODO-039 / PLAN-163 — README product positioning clarity
 
 Moved AIWorker's customer-facing reason to the top of the README in both

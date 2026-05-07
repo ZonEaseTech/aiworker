@@ -134,8 +134,8 @@ describe('aiworker init / scope project placement', () => {
       expect(init.output).toContain('Soul         : developer (Developer, flag)')
       expect(await readFile(path.join(aiworker, '.env'), 'utf8')).toBe(legacyEnv)
       expect(await readFile(path.join(aiworker, 'worker.db'), 'utf8')).toBe('legacy db marker')
-      expect(await exists(path.join(aiworker, 'AGENT.md'))).toBe(true)
       expect(await exists(path.join(aiworker, 'SOUL.md'))).toBe(true)
+      expect(await exists(path.join(aiworker, 'brain-capabilities.json'))).toBe(true)
       expect(await exists(path.join(aiworker, 'local', 'worker.db'))).toBe(true)
 
       const scope = await runCli(cleanup, ['scope'], home, home)
@@ -218,11 +218,12 @@ describe('aiworker init / scope project placement', () => {
       expect(result.output).toContain('Candidates: claude-code | codex | acp | cursor | mcp | http')
       expect(result.output).toContain('aiworker run --message "hello" --dry-run')
       expect(result.output).toContain('aiworker up --port 9217')
-      expect(await exists(path.join(project, '.aiworker', 'AGENT.md'))).toBe(true)
+      expect(await exists(path.join(project, '.aiworker', 'AGENT.md'))).toBe(false)
       expect(await exists(path.join(project, '.aiworker', 'SOUL.md'))).toBe(true)
       expect(await exists(path.join(project, '.aiworker', 'policy.json'))).toBe(true)
-      expect(await exists(path.join(project, '.aiworker', 'toolsets.json'))).toBe(true)
-      expect(await exists(path.join(project, '.aiworker', 'capability-packs.json'))).toBe(true)
+      expect(await exists(path.join(project, '.aiworker', 'brain-capabilities.json'))).toBe(true)
+      expect(await exists(path.join(project, '.aiworker', 'toolsets.json'))).toBe(false)
+      expect(await exists(path.join(project, '.aiworker', 'capability-packs.json'))).toBe(false)
       expect(await exists(path.join(project, '.aiworker', 'executor-capabilities.json'))).toBe(true)
       expect(await exists(path.join(project, '.aiworker', 'scope.json'))).toBe(true)
       expect(await exists(path.join(project, '.aiworker', 'local', '.env'))).toBe(true)
@@ -430,15 +431,12 @@ describe('aiworker init / scope project placement', () => {
 
         const aiworker = path.join(project, '.aiworker')
         const soul = await readFile(path.join(aiworker, 'SOUL.md'), 'utf8')
-        const agent = await readFile(path.join(aiworker, 'AGENT.md'), 'utf8')
         const policy = JSON.parse(await readFile(path.join(aiworker, 'policy.json'), 'utf8')) as {
           soul: { preset: string }
         }
-        const toolsets = JSON.parse(await readFile(path.join(aiworker, 'toolsets.json'), 'utf8')) as {
+        const brainCapabilities = JSON.parse(await readFile(path.join(aiworker, 'brain-capabilities.json'), 'utf8')) as {
           defaultToolsets: string[]
-          soul: string
-        }
-        const packs = JSON.parse(await readFile(path.join(aiworker, 'capability-packs.json'), 'utf8')) as {
+          mcp: { servers: Record<string, unknown> }
           packs: Array<{ id: string, status: string, validation: { status: string } }>
           soul: string
         }
@@ -451,16 +449,15 @@ describe('aiworker init / scope project placement', () => {
         }
 
         expect(soul).toContain(`# ${preset.label} Soul`)
-        expect(agent).toContain(`# ${preset.label} Worker`)
+        expect(soul).toContain('## 主要职责')
         expect(soul).toContain('## Brain admission governance')
-        expect(agent).toContain('aiworker brain admission propose')
-        expect(agent).toContain('Executor native memory is not canonical AIWorker Brain')
+        expect(soul).toContain('canonical AIWorker Brain')
         expect(policy.soul.preset).toBe(preset.id)
-        expect(toolsets.soul).toBe(preset.id)
-        expect(toolsets.defaultToolsets).toEqual([...preset.toolsets])
-        expect(packs.soul).toBe(preset.id)
-        expect(packs.packs.map(pack => pack.id)).toEqual([...preset.packs])
-        expect(packs.packs.every(pack => pack.status === 'draft' && pack.validation.status === 'pending')).toBe(true)
+        expect(brainCapabilities.soul).toBe(preset.id)
+        expect(brainCapabilities.defaultToolsets).toEqual([...preset.toolsets])
+        expect(brainCapabilities.mcp.servers).toEqual({})
+        expect(brainCapabilities.packs.map(pack => pack.id)).toEqual([...preset.packs])
+        expect(brainCapabilities.packs.every(pack => pack.status === 'draft' && pack.validation.status === 'pending')).toBe(true)
         expect(scopeManifest.schemaVersion).toBe(1)
         expect(scopeManifest.primarySoul).toBe(preset.id)
         expect(scopeManifest.privacy).toBe('private')
@@ -486,10 +483,8 @@ describe('aiworker init / scope project placement', () => {
       expect(result.output).toContain('[aiworker init] preflight (project-scope)')
       expect(result.output).toContain('Mode         : dry-run (no files will be written)')
       expect(result.output).toContain('Soul         : developer (Developer, flag)')
-      expect(result.output).toContain('.aiworker/AGENT.md')
       expect(result.output).toContain('.aiworker/policy.json')
-      expect(result.output).toContain('.aiworker/toolsets.json')
-      expect(result.output).toContain('.aiworker/capability-packs.json')
+      expect(result.output).toContain('.aiworker/brain-capabilities.json')
       expect(result.output).toContain('.aiworker/executor-capabilities.json')
       expect(result.output).toContain('.aiworker/scope.json')
       expect(result.output).toContain('.aiworker/local/worker.db (worker bootstrap)')
@@ -515,7 +510,7 @@ describe('aiworker init / scope project placement', () => {
       expect(result.output).toContain('Scope')
       expect(result.output).toContain('project')
       expect(result.output).toContain('project-detect')
-      expect(result.output).toContain(path.join(project, '.aiworker', 'AGENT.md'))
+      expect(result.output).toContain(path.join(project, '.aiworker', 'brain-capabilities.json'))
       expect(result.output).not.toContain(path.join('.aiworker', 'local', 'workers'))
     })
   })
@@ -546,25 +541,22 @@ describe('aiworker init / scope project placement', () => {
     })
   })
 
-  it('re-init preserves existing project persona files', async () => {
+  it('re-init preserves existing project soul files', async () => {
     await withCliIntegrationCleanup(async (cleanup) => {
       const root = await cleanup.makeTempDir('aiworker-cli-init-preserve-persona-')
       const home = await cleanup.makeTempDir('aiworker-cli-init-preserve-persona-home-')
       const project = path.join(root, 'repo')
       const aiworker = path.join(project, '.aiworker')
-      const customAgent = '# Custom agent\n\nKeep this role.\n'
       const customSoul = '# Custom soul\n\nKeep this voice.\n'
       await mkdir(path.join(project, '.git'), { recursive: true })
       await mkdir(aiworker, { recursive: true })
-      await writeFile(path.join(aiworker, 'AGENT.md'), customAgent, 'utf8')
       await writeFile(path.join(aiworker, 'SOUL.md'), customSoul, 'utf8')
 
       const result = await runCli(cleanup, ['init'], project, home)
 
       expect(result.exitCode).toBe(0)
-      expect(result.output).toContain('.aiworker/AGENT.md (existing aiworker layout)')
       expect(result.output).toContain('.aiworker/SOUL.md (existing aiworker layout)')
-      expect(await readFile(path.join(aiworker, 'AGENT.md'), 'utf8')).toBe(customAgent)
+      expect(await exists(path.join(aiworker, 'AGENT.md'))).toBe(false)
       expect(await readFile(path.join(aiworker, 'SOUL.md'), 'utf8')).toBe(customSoul)
       expect(await exists(path.join(project, '.aiworker', 'local', 'worker.db'))).toBe(true)
     })

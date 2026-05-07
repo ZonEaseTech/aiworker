@@ -7,27 +7,17 @@ import { findBuiltinSoulBrainSkillPacks } from '../../brain'
 import { createSoulPack } from '../pack'
 import { createSoulRegistry } from '../registry'
 
-import developerAgentMd from './developer/AGENT.md' with { type: 'text' }
 import developerSoulMd from './developer/SOUL.md' with { type: 'text' }
-import devopsSreAgentMd from './devops-sre/AGENT.md' with { type: 'text' }
 import devopsSreSoulMd from './devops-sre/SOUL.md' with { type: 'text' }
-import financeOpsAgentMd from './finance-ops/AGENT.md' with { type: 'text' }
 import financeOpsSoulMd from './finance-ops/SOUL.md' with { type: 'text' }
-import generalAssistantAgentMd from './general-assistant/AGENT.md' with { type: 'text' }
 import generalAssistantSoulMd from './general-assistant/SOUL.md' with { type: 'text' }
-import hrRecruitingAgentMd from './hr-recruiting/AGENT.md' with { type: 'text' }
 import hrRecruitingSoulMd from './hr-recruiting/SOUL.md' with { type: 'text' }
-import productDesignerAgentMd from './product-designer/AGENT.md' with { type: 'text' }
 import productDesignerSoulMd from './product-designer/SOUL.md' with { type: 'text' }
-import projectManagerAgentMd from './project-manager/AGENT.md' with { type: 'text' }
 import projectManagerSoulMd from './project-manager/SOUL.md' with { type: 'text' }
-import qaReviewerAgentMd from './qa-reviewer/AGENT.md' with { type: 'text' }
 import qaReviewerSoulMd from './qa-reviewer/SOUL.md' with { type: 'text' }
-import supportOperatorAgentMd from './support-operator/AGENT.md' with { type: 'text' }
 import supportOperatorSoulMd from './support-operator/SOUL.md' with { type: 'text' }
 
 export const developerSoulPack = createSoulPack({
-  agentMd: developerAgentMd,
   brainSkillPacks: findBuiltinSoulBrainSkillPacks('developer'),
   expectedId: 'developer',
   soulMd: developerSoulMd,
@@ -35,7 +25,6 @@ export const developerSoulPack = createSoulPack({
 })
 
 export const projectManagerSoulPack = createSoulPack({
-  agentMd: projectManagerAgentMd,
   brainSkillPacks: findBuiltinSoulBrainSkillPacks('project-manager'),
   expectedId: 'project-manager',
   soulMd: projectManagerSoulMd,
@@ -43,7 +32,6 @@ export const projectManagerSoulPack = createSoulPack({
 })
 
 export const devopsSreSoulPack = createSoulPack({
-  agentMd: devopsSreAgentMd,
   brainSkillPacks: findBuiltinSoulBrainSkillPacks('devops-sre'),
   expectedId: 'devops-sre',
   soulMd: devopsSreSoulMd,
@@ -51,7 +39,6 @@ export const devopsSreSoulPack = createSoulPack({
 })
 
 export const productDesignerSoulPack = createSoulPack({
-  agentMd: productDesignerAgentMd,
   brainSkillPacks: findBuiltinSoulBrainSkillPacks('product-designer'),
   expectedId: 'product-designer',
   soulMd: productDesignerSoulMd,
@@ -59,7 +46,6 @@ export const productDesignerSoulPack = createSoulPack({
 })
 
 export const qaReviewerSoulPack = createSoulPack({
-  agentMd: qaReviewerAgentMd,
   brainSkillPacks: findBuiltinSoulBrainSkillPacks('qa-reviewer'),
   expectedId: 'qa-reviewer',
   soulMd: qaReviewerSoulMd,
@@ -67,7 +53,6 @@ export const qaReviewerSoulPack = createSoulPack({
 })
 
 export const supportOperatorSoulPack = createSoulPack({
-  agentMd: supportOperatorAgentMd,
   brainSkillPacks: findBuiltinSoulBrainSkillPacks('support-operator'),
   expectedId: 'support-operator',
   soulMd: supportOperatorSoulMd,
@@ -75,7 +60,6 @@ export const supportOperatorSoulPack = createSoulPack({
 })
 
 export const financeOpsSoulPack = createSoulPack({
-  agentMd: financeOpsAgentMd,
   brainSkillPacks: findBuiltinSoulBrainSkillPacks('finance-ops'),
   expectedId: 'finance-ops',
   soulMd: financeOpsSoulMd,
@@ -83,7 +67,6 @@ export const financeOpsSoulPack = createSoulPack({
 })
 
 export const hrRecruitingSoulPack = createSoulPack({
-  agentMd: hrRecruitingAgentMd,
   brainSkillPacks: findBuiltinSoulBrainSkillPacks('hr-recruiting'),
   expectedId: 'hr-recruiting',
   soulMd: hrRecruitingSoulMd,
@@ -91,7 +74,6 @@ export const hrRecruitingSoulPack = createSoulPack({
 })
 
 export const generalAssistantSoulPack = createSoulPack({
-  agentMd: generalAssistantAgentMd,
   brainSkillPacks: findBuiltinSoulBrainSkillPacks('general-assistant'),
   expectedId: 'general-assistant',
   soulMd: generalAssistantSoulMd,

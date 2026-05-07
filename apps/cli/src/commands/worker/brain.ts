@@ -190,7 +190,6 @@ function inspectScopeSummary(): ScopeSummary {
 }
 
 interface BrainIdentitySummary {
-  agent: boolean
   soul: boolean
   user: boolean
   root?: string
@@ -199,11 +198,10 @@ interface BrainIdentitySummary {
 function inspectBrainIdentity(): BrainIdentitySummary {
   const scope = resolveAiworkerScope()
   if (scope.scope !== 'project' || !scope.projectRoot)
-    return { agent: false, soul: false, user: false }
+    return { soul: false, user: false }
   const root = path.join(scope.projectRoot, '.aiworker')
   return {
     root,
-    agent: existsSync(path.join(root, 'AGENT.md')),
     soul: existsSync(path.join(root, 'SOUL.md')),
     user: existsSync(path.join(root, 'USER.md')),
   }

@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-07 (PLAN-161 completed)
+> Updated: 2026-05-08 (PLAN-164 completed)
 
 ## Usage
 
@@ -192,3 +192,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-161 Worker Admin Chat duplicate final reply and background polish**](PLAN-161.md) `2026-05-07`
 - [x] [**PLAN-162 发布 aiworker CLI 0.10.2**](PLAN-162.md) `2026-05-07`
 - [x] [**PLAN-163 README product positioning clarity**](PLAN-163.md) `2026-05-07`
+- [x] [**PLAN-164 Simplify Project Brain filesystem layout**](PLAN-164.md) `2026-05-07`

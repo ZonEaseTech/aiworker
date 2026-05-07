@@ -66,9 +66,9 @@ describe('BrainBrief schema', () => {
       droppedSections: [{ estimatedTokens: 200, id: 'rollup', reason: 'token budget exceeded' }],
       sections: [{
         body: 'Worker dev persona',
-        id: 'agent',
+        id: 'soul',
         protected: false,
-        source: 'agent-doc',
+        source: 'soul-doc',
         tokens: 200,
       }, {
         body: 'High-risk approval required',
@@ -94,7 +94,7 @@ describe('BrainBrief schema', () => {
         body: 'b',
         id: 'AGENT_DOC',
         protected: false,
-        source: 'agent-doc',
+        source: 'soul-doc',
         tokens: 1,
       }],
       soulId: 'developer',

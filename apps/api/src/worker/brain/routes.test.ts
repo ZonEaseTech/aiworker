@@ -341,7 +341,6 @@ describe('buildBrainRoutes (PLAN-103)', () => {
     // simulate a project scope by initializing a scope.json in a project root
     const projectRoot = join(dir, 'project-root')
     await mkdir(join(projectRoot, '.aiworker', 'local'), { recursive: true })
-    await writeFile(join(projectRoot, '.aiworker', 'AGENT.md'), '# agent', 'utf8')
     await writeFile(join(projectRoot, '.aiworker', 'SOUL.md'), '# soul', 'utf8')
     await writeFile(join(projectRoot, '.aiworker', 'scope.json'), JSON.stringify({
       kind: 'developer-repo',

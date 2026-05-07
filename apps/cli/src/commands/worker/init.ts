@@ -59,15 +59,12 @@ interface PreflightReport {
 
 const PROJECT_TEMPLATE_PATHS = [
   '.aiworker/',
-  '.aiworker/AGENT.md',
   '.aiworker/SOUL.md',
   '.aiworker/USER.md',
   '.aiworker/MEMORY.md',
   '.aiworker/ROLLUP.md',
-  '.aiworker/mcp.json',
   '.aiworker/policy.json',
-  '.aiworker/toolsets.json',
-  '.aiworker/capability-packs.json',
+  '.aiworker/brain-capabilities.json',
   '.aiworker/executor-capabilities.json',
   '.aiworker/scope.json',
   '.aiworker/.gitignore',
@@ -319,20 +316,11 @@ function buildProjectAiworkerSeed(soul: SelectedSoul): ProjectAiworkerSeed {
       ],
     },
   }
-  const toolsets = {
+  const brainCapabilities = {
     schemaVersion: 1,
     status: 'draft',
     soul: soul.id,
     defaultToolsets: soul.toolsets,
-    validation: {
-      status: 'pending',
-      issues: [],
-    },
-  }
-  const capabilityPacks = {
-    schemaVersion: 1,
-    status: 'draft',
-    soul: soul.id,
     packs: soul.packs.map(pack => ({
       id: pack,
       status: 'draft',
@@ -341,18 +329,22 @@ function buildProjectAiworkerSeed(soul: SelectedSoul): ProjectAiworkerSeed {
         issues: [],
       },
     })),
+    mcp: {
+      servers: {},
+    },
+    validation: {
+      status: 'pending',
+      issues: [],
+    },
   }
-  const generatedAgentMd = `# ${soul.label} Worker\n\n## 主要职责\n${markdownList(soul.responsibilities)}\n\n## 明确边界\n${markdownList(soul.boundaries)}\n\n## 职责外响应\n${soul.outOfScope}\n\n${BRAIN_ADMISSION_GUIDANCE}\n\n## 默认 capability packs\n${markdownList(soul.packs)}\n`
-  const generatedSoulMd = `# ${soul.label} Soul\n\n## 预设\n- id: ${soul.id}\n- source: ${soul.source}\n\n## 沟通风格\n${soul.communicationStyle}\n\n## 高风险操作策略\n${soul.riskPolicy}\n\n## 职责边界\n${markdownList(soul.boundaries)}\n\n${BRAIN_ADMISSION_GUIDANCE}\n\n## 模糊或缺失上下文\n收到不完整 prompt（< 20 字 / 无可定位 artifact / 仅 "挂了 / 失败 / 不行" 等）时：先用一句话反问关键缺失信息，不要直接调 tool 探索，让用户先补齐上下文；不要为了避免反问而扩大搜索范围越过当前 scope。\n\n${soul.vagueContextStrategy}\n`
+  const generatedSoulMd = `# ${soul.label} Soul\n\n## 预设\n- id: ${soul.id}\n- source: ${soul.source}\n\n## 主要职责\n${markdownList(soul.responsibilities)}\n\n## 沟通风格\n${soul.communicationStyle}\n\n## 高风险操作策略\n${soul.riskPolicy}\n\n## 职责边界\n${markdownList(soul.boundaries)}\n\n## 职责外响应\n${soul.outOfScope}\n\n${BRAIN_ADMISSION_GUIDANCE}\n\n## 默认 Brain capability packs\n${markdownList(soul.packs)}\n\n## 默认 toolsets\n${markdownList(soul.toolsets)}\n\n## 模糊或缺失上下文\n收到不完整 prompt（< 20 字 / 无可定位 artifact / 仅 "挂了 / 失败 / 不行" 等）时：先用一句话反问关键缺失信息，不要直接调 tool 探索，让用户先补齐上下文；不要为了避免反问而扩大搜索范围越过当前 scope。\n\n${soul.vagueContextStrategy}\n`
 
   return {
-    agentMd: ensureTrailingNewline(soul.agentMd ?? generatedAgentMd),
+    brainCapabilitiesJson: `${JSON.stringify(brainCapabilities, null, 2)}\n`,
     brainSkillFiles: buildBrainSkillFilesSeed(soul),
-    capabilityPacksJson: `${JSON.stringify(capabilityPacks, null, 2)}\n`,
     policyJson: `${JSON.stringify(policy, null, 2)}\n`,
     scopeJson: buildScopeManifestSeed(soul),
     soulMd: ensureTrailingNewline(soul.soulMd ?? generatedSoulMd),
-    toolsetsJson: `${JSON.stringify(toolsets, null, 2)}\n`,
   }
 }
 
@@ -566,8 +558,8 @@ function executorChoicePreface(soul?: SelectedSoul): string[] {
 
 function printProjectNextSteps(projectRoot: string, soul?: SelectedSoul): void {
   const soulLine = soul
-    ? `  2. Review brain identity: .aiworker/SOUL.md / AGENT.md / USER.md (preset \`${soul.id}\`); inspect capabilities with \`aiworker soul show ${soul.id}\`.`
-    : '  2. Review brain identity: .aiworker/SOUL.md / AGENT.md / USER.md; list presets with `aiworker soul list`.'
+    ? `  2. Review brain identity: .aiworker/SOUL.md / USER.md (preset \`${soul.id}\`); inspect capabilities with \`aiworker soul show ${soul.id}\`.`
+    : '  2. Review brain identity: .aiworker/SOUL.md / USER.md; list presets with `aiworker soul list`.'
   const recommendation = recommendedEnginesForSoul(soul?.id)
   process.stdout.write([
     '[aiworker init] next steps — Project Brain comes first; executor is bring-your-own',
@@ -618,8 +610,7 @@ function isGitRepo(cwd: string): boolean {
 
 function hasProjectSoulMaterial(projectRoot: string): boolean {
   const aiworker = path.join(projectRoot, '.aiworker')
-  return existsSync(path.join(aiworker, 'AGENT.md'))
-    && existsSync(path.join(aiworker, 'SOUL.md'))
+  return existsSync(path.join(aiworker, 'SOUL.md'))
 }
 
 function buildProjectPreflight(

@@ -25,7 +25,7 @@ function printList(): void {
   process.stdout.write(
     `  ${CUSTOMIZE_SOUL_ID.padEnd(width)}  Custom — 通过 \`aiworker init --soul customize\` 交互生成职责、边界和能力草案。\n`,
   )
-  process.stdout.write('\nCapability packs and toolsets are initialized as draft. Run `aiworker doctor` inside a project for static validation status.\n')
+  process.stdout.write('\nCapability packs and toolsets are initialized in brain-capabilities.json as draft. Run `aiworker doctor` inside a project for static validation status.\n')
 }
 
 export async function runSoulList(): Promise<number> {
@@ -40,7 +40,7 @@ export async function runSoulShow(id: string): Promise<number> {
       '  type: interactive template',
       '  usage: aiworker init --soul customize',
       '  asks: responsibilities, boundaries, out-of-scope behavior, communication style, risk approval, packs, toolsets',
-      '  output: project-local SOUL.md, AGENT.md, policy.json, toolsets.json, capability-packs.json drafts',
+      '  output: project-local SOUL.md, policy.json, brain-capabilities.json drafts',
     ].join('\n'))
     process.stdout.write('\n')
     return 0

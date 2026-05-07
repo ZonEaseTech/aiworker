@@ -84,15 +84,14 @@ export type {
 } from './brain'
 
 export {
+  brainCapabilitiesManifestSchema,
   capabilityIdSchema,
   capabilityManifestStatusSchema,
   capabilityPackEntrySchema,
-  capabilityPacksManifestSchema,
   capabilityValidationIssueSchema,
   capabilityValidationResultSchema,
   capabilityValidationSeveritySchema,
   capabilityValidationStatusSchema,
-  legacyCapabilityValidationSchema,
   mcpDescriptorSchema,
   mcpServerDescriptorSchema,
   mcpToolDescriptorSchema,
@@ -103,18 +102,16 @@ export {
   skillPermissionSchema,
   toolPolicyActionSchema,
   toolsetDefinitionSchema,
-  toolsetsManifestSchema,
 } from './capabilities'
 export type {
+  BrainCapabilitiesManifest,
   CapabilityManifestStatus,
   CapabilityPackEntry,
-  CapabilityPacksManifest,
   CapabilityToolPolicyAction,
   CapabilityValidationIssue,
   CapabilityValidationResult,
   CapabilityValidationSeverity,
   CapabilityValidationStatus,
-  LegacyCapabilityValidation,
   McpDescriptorManifest,
   McpServerDescriptorManifest,
   McpToolDescriptorManifest,
@@ -124,7 +121,6 @@ export type {
   SkillMetadata,
   SkillPermission,
   ToolsetDefinition,
-  ToolsetsManifest,
 } from './capabilities'
 export { AppError } from './errors'
 export {

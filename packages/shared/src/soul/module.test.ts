@@ -42,7 +42,7 @@ describe('Soul module contract', () => {
     const result = soulModuleSchema.safeParse({
       ...developerSoulModule,
       briefHooks: {
-        defaultSections: ['agent', 'soul'],
+        defaultSections: ['soul', 'memory'],
         protectedSections: ['risk-policy'],
       },
     })

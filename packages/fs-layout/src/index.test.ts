@@ -82,6 +82,7 @@ describe('resolveAiworkerScope priority', () => {
     const tmp = await makeTmpDir()
     try {
       await mkdir(path.join(tmp, '.aiworker'), { recursive: true })
+      await writeFile(path.join(tmp, '.aiworker', 'SOUL.md'), '# Soul\n', 'utf8')
       const result = resolveAiworkerScope({ cwd: tmp })
       expect(result.scope).toBe('project')
       expect(result.projectRoot).toBe(tmp)
@@ -122,7 +123,6 @@ describe('resolveAiworkerScope priority', () => {
       process.env.HOME = tmp
       const aiworker = path.join(tmp, '.aiworker')
       await mkdir(aiworker, { recursive: true })
-      await writeFile(path.join(aiworker, 'AGENT.md'), '# Agent\n', 'utf8')
       await writeFile(path.join(aiworker, 'SOUL.md'), '# Soul\n', 'utf8')
 
       expect(resolveProjectRoot(tmp)).toBe(tmp)
@@ -287,22 +287,18 @@ describe('ensureProjectAiworker', () => {
         expect(s.isDirectory()).toBe(true)
       }
 
-      // persona docs
-      for (const f of ['AGENT.md', 'SOUL.md', 'USER.md', 'MEMORY.md', 'ROLLUP.md', 'policy.json', 'toolsets.json', 'capability-packs.json', 'executor-capabilities.json']) {
+      // Project Brain docs and manifests
+      for (const f of ['SOUL.md', 'USER.md', 'MEMORY.md', 'ROLLUP.md', 'policy.json', 'brain-capabilities.json', 'executor-capabilities.json']) {
         const s = await stat(path.join(aiworker, f))
         expect(s.isFile()).toBe(true)
       }
 
-      // mcp.json with empty servers map
-      const mcp = JSON.parse(await readFile(path.join(aiworker, 'mcp.json'), 'utf8'))
-      expect(mcp).toEqual({ servers: {} })
-
       const policy = JSON.parse(await readFile(path.join(aiworker, 'policy.json'), 'utf8'))
       expect(policy.status).toBe('draft')
-      const toolsets = JSON.parse(await readFile(path.join(aiworker, 'toolsets.json'), 'utf8'))
-      expect(toolsets.defaultToolsets).toEqual([])
-      const packs = JSON.parse(await readFile(path.join(aiworker, 'capability-packs.json'), 'utf8'))
-      expect(packs.packs).toEqual([])
+      const brainCapabilities = JSON.parse(await readFile(path.join(aiworker, 'brain-capabilities.json'), 'utf8'))
+      expect(brainCapabilities.defaultToolsets).toEqual([])
+      expect(brainCapabilities.packs).toEqual([])
+      expect(brainCapabilities.mcp).toEqual({ servers: {} })
       const executorCapabilities = JSON.parse(await readFile(path.join(aiworker, 'executor-capabilities.json'), 'utf8'))
       expect(executorCapabilities).toEqual({ schemaVersion: 1, engines: {} })
 
@@ -324,11 +320,11 @@ describe('ensureProjectAiworker', () => {
     try {
       const aiworker = path.join(tmp, '.aiworker')
       await mkdir(aiworker, { recursive: true })
-      await writeFile(path.join(aiworker, 'AGENT.md'), '# Custom persona\n')
+      await writeFile(path.join(aiworker, 'SOUL.md'), '# Custom soul\n')
 
       await ensureProjectAiworker(tmp)
-      const persisted = await readFile(path.join(aiworker, 'AGENT.md'), 'utf8')
-      expect(persisted).toBe('# Custom persona\n')
+      const persisted = await readFile(path.join(aiworker, 'SOUL.md'), 'utf8')
+      expect(persisted).toBe('# Custom soul\n')
     }
     finally {
       await cleanup(tmp)
@@ -456,7 +452,7 @@ describe('ensureWorkerHome in project scope is template-no-op', () => {
     try {
       await ensureProjectAiworker(tmp)
       // Wipe persona docs to prove ensureWorkerHome doesn't re-seed them.
-      await rm(path.join(tmp, '.aiworker', 'AGENT.md'))
+      await rm(path.join(tmp, '.aiworker', 'SOUL.md'))
 
       const cwdSave = process.cwd()
       process.chdir(tmp)
@@ -465,15 +461,15 @@ describe('ensureWorkerHome in project scope is template-no-op', () => {
         // workspaces ensured
         const ws = await stat(path.join(tmp, '.aiworker', 'local', 'workspaces'))
         expect(ws.isDirectory()).toBe(true)
-        // AGENT.md NOT re-seeded
-        let agentMissing = false
+        // SOUL.md NOT re-seeded
+        let soulMissing = false
         try {
-          await stat(path.join(tmp, '.aiworker', 'AGENT.md'))
+          await stat(path.join(tmp, '.aiworker', 'SOUL.md'))
         }
         catch {
-          agentMissing = true
+          soulMissing = true
         }
-        expect(agentMissing).toBe(true)
+        expect(soulMissing).toBe(true)
       }
       finally {
         process.chdir(cwdSave)

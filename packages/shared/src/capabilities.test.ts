@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'bun:test'
 import {
-  capabilityPacksManifestSchema,
+  brainCapabilitiesManifestSchema,
   mcpDescriptorSchema,
   policyManifestSchema,
   skillMetadataSchema,
-  toolsetsManifestSchema,
 } from './capabilities'
 
 describe('capability manifest schemas', () => {
@@ -24,14 +23,9 @@ describe('capability manifest schemas', () => {
       },
     }).success).toBe(true)
 
-    expect(toolsetsManifestSchema.safeParse({
+    expect(brainCapabilitiesManifestSchema.safeParse({
       defaultToolsets: ['filesystem-read', 'test'],
-      schemaVersion: 1,
-      soul: 'developer',
-      status: 'draft',
-    }).success).toBe(true)
-
-    expect(capabilityPacksManifestSchema.safeParse({
+      mcp: { servers: {} },
       packs: [
         {
           id: 'code',
@@ -43,19 +37,17 @@ describe('capability manifest schemas', () => {
       soul: 'developer',
       status: 'draft',
     }).success).toBe(true)
-  })
 
-  it('keeps legacy pack validation strings readable during migration', () => {
-    const parsed = capabilityPacksManifestSchema.safeParse({
+    expect(brainCapabilitiesManifestSchema.safeParse({
+      defaultToolsets: ['filesystem-read', 'test'],
+      mcp: { servers: {} },
       packs: [
         { id: 'code', status: 'draft', validation: 'pending' },
       ],
       schemaVersion: 1,
       soul: 'developer',
       status: 'draft',
-    })
-
-    expect(parsed.success).toBe(true)
+    }).success).toBe(false)
   })
 
   it('accepts declared-only and launchable MCP descriptors', () => {
@@ -77,8 +69,10 @@ describe('capability manifest schemas', () => {
   })
 
   it('rejects invalid ids and incomplete skill metadata', () => {
-    expect(toolsetsManifestSchema.safeParse({
+    expect(brainCapabilitiesManifestSchema.safeParse({
       defaultToolsets: ['Filesystem Read'],
+      mcp: { servers: {} },
+      packs: [],
       schemaVersion: 1,
       status: 'draft',
     }).success).toBe(false)

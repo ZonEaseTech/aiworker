@@ -1,23 +1,20 @@
 import type {
-  CapabilityPacksManifest,
+  BrainCapabilitiesManifest,
   CapabilityValidationIssue,
   CapabilityValidationStatus,
   McpDescriptorManifest,
   PolicyManifest,
   SkillMetadata,
-  ToolsetsManifest,
 } from '@zonease/aiworker-shared'
 
 import { access, readFile } from 'node:fs/promises'
 import path from 'node:path'
 
 import {
-  capabilityPacksManifestSchema,
-  mcpDescriptorSchema,
+  brainCapabilitiesManifestSchema,
   policyManifestSchema,
   secretRefSchema,
   skillMetadataSchema,
-  toolsetsManifestSchema,
 } from '@zonease/aiworker-shared'
 import { parse as parseYaml } from 'yaml'
 
@@ -28,7 +25,7 @@ import {
 } from './catalog'
 
 export interface CapabilityDoctorCheck {
-  id: 'policy' | 'toolsets' | 'capability-packs' | 'mcp' | 'skills'
+  id: 'brain-capabilities' | 'policy' | 'skills'
   issues: CapabilityValidationIssue[]
   label: string
   path: string
@@ -66,16 +63,12 @@ const HIGH_RISK_PATTERN = /(?:^|[.*-])(?:write|delete|remove|deploy|publish|shel
 
 export async function validateCapabilityProject(root: string): Promise<CapabilityDoctorReport> {
   const policy = await validatePolicy(path.join(root, 'policy.json'))
-  const toolsets = await validateToolsets(path.join(root, 'toolsets.json'), policy.data)
-  const packs = await validateCapabilityPacks(path.join(root, 'capability-packs.json'), policy.data)
-  const mcp = await validateMcp(path.join(root, 'mcp.json'))
+  const brainCapabilities = await validateBrainCapabilities(path.join(root, 'brain-capabilities.json'), policy.data)
   const skills = await validateSkills(path.join(root, 'skills'))
 
   const checks: CapabilityDoctorCheck[] = [
     toCheck('policy', 'policy.json', path.join(root, 'policy.json'), policy.issues),
-    toCheck('toolsets', 'toolsets.json', path.join(root, 'toolsets.json'), toolsets.issues),
-    toCheck('capability-packs', 'capability-packs.json', path.join(root, 'capability-packs.json'), packs.issues),
-    toCheck('mcp', 'mcp.json', path.join(root, 'mcp.json'), mcp.issues),
+    toCheck('brain-capabilities', 'brain-capabilities.json', path.join(root, 'brain-capabilities.json'), brainCapabilities.issues),
     toCheck('skills', 'skills/', path.join(root, 'skills'), skills.issues),
   ]
 
@@ -84,6 +77,18 @@ export async function validateCapabilityProject(root: string): Promise<Capabilit
     root,
     status: rollupStatus(checks.map(check => check.status)),
   }
+}
+
+async function validateBrainCapabilities(filePath: string, policy?: PolicyManifest): Promise<ParsedJson<BrainCapabilitiesManifest>> {
+  const parsed = await readJsonFile(filePath, brainCapabilitiesManifestSchema, 'brain-capabilities.json')
+  if (!parsed.data)
+    return parsed
+
+  const issues = [...parsed.issues]
+  collectToolsetIssues(parsed.data, policy, issues)
+  collectCapabilityPackIssues(parsed.data, policy, issues)
+  collectMcpIssues(parsed.data.mcp, issues)
+  return { data: parsed.data, issues }
 }
 
 async function validatePolicy(filePath: string): Promise<ParsedJson<PolicyManifest>> {
@@ -111,22 +116,21 @@ async function validatePolicy(filePath: string): Promise<ParsedJson<PolicyManife
   return { data: parsed.data, issues }
 }
 
-async function validateToolsets(filePath: string, policy?: PolicyManifest): Promise<ParsedJson<ToolsetsManifest>> {
-  const parsed = await readJsonFile(filePath, toolsetsManifestSchema, 'toolsets.json')
-  if (!parsed.data)
-    return parsed
-
-  const issues = [...parsed.issues]
+function collectToolsetIssues(
+  manifest: Pick<BrainCapabilitiesManifest, 'defaultToolsets'>,
+  policy: PolicyManifest | undefined,
+  issues: CapabilityValidationIssue[],
+): void {
   const seen = new Set<string>()
-  for (const [index, id] of parsed.data.defaultToolsets.entries()) {
+  for (const [index, id] of manifest.defaultToolsets.entries()) {
     if (seen.has(id)) {
-      issues.push(issue('error', 'toolsets.duplicate_default', `defaultToolsets contains duplicate toolset "${id}".`, `defaultToolsets.${index}`))
+      issues.push(issue('error', 'brain-capabilities.toolsets.duplicate_default', `defaultToolsets contains duplicate toolset "${id}".`, `defaultToolsets.${index}`))
       continue
     }
     seen.add(id)
 
     if (!isBuiltinToolset(id)) {
-      issues.push(issue('error', 'toolsets.unknown_default', `defaultToolsets references unknown toolset "${id}".`, `defaultToolsets.${index}`))
+      issues.push(issue('error', 'brain-capabilities.toolsets.unknown_default', `defaultToolsets references unknown toolset "${id}".`, `defaultToolsets.${index}`))
       continue
     }
 
@@ -134,70 +138,54 @@ async function validateToolsets(filePath: string, policy?: PolicyManifest): Prom
     if (risk === 'high' && policy?.risk.highRiskRequiresApproval !== true) {
       issues.push(issue(
         'error',
-        'toolsets.high_risk_without_approval',
+        'brain-capabilities.toolsets.high_risk_without_approval',
         `High-risk toolset "${id}" requires policy.risk.highRiskRequiresApproval=true.`,
         `defaultToolsets.${index}`,
       ))
     }
   }
 
-  if (parsed.data.defaultToolsets.length === 0)
-    issues.push(issue('warning', 'toolsets.empty_defaults', 'No default toolsets are enabled.', 'defaultToolsets'))
-
-  return { data: parsed.data, issues }
+  if (manifest.defaultToolsets.length === 0)
+    issues.push(issue('warning', 'brain-capabilities.toolsets.empty_defaults', 'No default toolsets are enabled.', 'defaultToolsets'))
 }
 
-async function validateCapabilityPacks(filePath: string, policy?: PolicyManifest): Promise<ParsedJson<CapabilityPacksManifest>> {
-  const parsed = await readJsonFile(filePath, capabilityPacksManifestSchema, 'capability-packs.json')
-  if (!parsed.data)
-    return parsed
-
-  const issues = [...parsed.issues]
+function collectCapabilityPackIssues(
+  manifest: Pick<BrainCapabilitiesManifest, 'packs' | 'soul'>,
+  policy: PolicyManifest | undefined,
+  issues: CapabilityValidationIssue[],
+): void {
   const seen = new Set<string>()
   const policySoul = policy?.soul?.preset
-  if (policySoul && parsed.data.soul && parsed.data.soul !== policySoul) {
+  if (policySoul && manifest.soul && manifest.soul !== policySoul) {
     issues.push(issue(
       'error',
-      'packs.soul_mismatch',
-      `capability-packs.json soul "${parsed.data.soul}" does not match policy soul "${policySoul}".`,
+      'brain-capabilities.packs.soul_mismatch',
+      `brain-capabilities.json soul "${manifest.soul}" does not match policy soul "${policySoul}".`,
       'soul',
     ))
   }
 
-  for (const [index, pack] of parsed.data.packs.entries()) {
+  for (const [index, pack] of manifest.packs.entries()) {
     if (seen.has(pack.id)) {
-      issues.push(issue('error', 'packs.duplicate', `Capability pack "${pack.id}" is listed more than once.`, `packs.${index}`))
+      issues.push(issue('error', 'brain-capabilities.packs.duplicate', `Capability pack "${pack.id}" is listed more than once.`, `packs.${index}`))
       continue
     }
     seen.add(pack.id)
 
     if (!isBuiltinCapabilityPack(pack.id)) {
-      issues.push(issue('error', 'packs.unknown', `Unknown capability pack "${pack.id}".`, `packs.${index}.id`))
-    }
-
-    if (typeof pack.validation === 'string') {
-      issues.push(issue(
-        'warning',
-        'packs.legacy_validation',
-        `Capability pack "${pack.id}" still uses legacy validation string "${pack.validation}".`,
-        `packs.${index}.validation`,
-      ))
+      issues.push(issue('error', 'brain-capabilities.packs.unknown', `Unknown capability pack "${pack.id}".`, `packs.${index}.id`))
     }
   }
 
-  if (parsed.data.packs.length === 0)
-    issues.push(issue('warning', 'packs.empty', 'No capability packs are declared.', 'packs'))
-
-  return { data: parsed.data, issues }
+  if (manifest.packs.length === 0)
+    issues.push(issue('warning', 'brain-capabilities.packs.empty', 'No capability packs are declared.', 'packs'))
 }
 
-async function validateMcp(filePath: string): Promise<ParsedJson<McpDescriptorManifest>> {
-  const parsed = await readJsonFile(filePath, mcpDescriptorSchema, 'mcp.json')
-  if (!parsed.data)
-    return parsed
-
-  const issues = [...parsed.issues]
-  for (const [serverName, server] of Object.entries(parsed.data.servers)) {
+function collectMcpIssues(
+  manifest: McpDescriptorManifest,
+  issues: CapabilityValidationIssue[],
+): void {
+  for (const [serverName, server] of Object.entries(manifest.servers)) {
     const basePath = `servers.${serverName}`
     collectSecretIssues(server, basePath, issues)
 
@@ -219,8 +207,6 @@ async function validateMcp(filePath: string): Promise<ParsedJson<McpDescriptorMa
       ))
     }
   }
-
-  return { data: parsed.data, issues }
 }
 
 async function validateSkills(dirPath: string): Promise<ParsedJson<SkillMetadata[]>> {

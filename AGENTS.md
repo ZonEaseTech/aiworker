@@ -76,6 +76,7 @@ adapter 调用和观察它们，不把自己做成 executor 平台。完整架�
 - Brain 硬逻辑只允许守治理不变量：scope identity、数据面隔离、evidence/provenance、admission 状态机、secret redaction、rollback/audit、token budget、source tagging。领域语义、下一步规划、候选人/代码/合同/财务含义判断交给 LLM / executor；不要把 Brain Kernel 做成硬编码领域 workflow engine。
 - Executor capability 指外部 engine 自身运行时可用的能力，例如 user-level 或 engine-native MCP server、skill/plugin、sandbox、approval、native session、profile/config。AIWorker 默认只做薄 adapter、readiness、事件归一化和可选 project overlay hint，不承诺拥有或隔离这些能力。
 - `.aiworker/executor-capabilities.json` 只表达 project executor overlay / bootstrap hint；它不是 executor effective capability 的完整来源，也不应被当成安全隔离边界。
+- `.aiworker/brain-capabilities.json` 是 Brain 侧唯一能力草案入口，承载 default toolsets、Brain capability packs 和 Brain MCP descriptors；不要再新增或依赖 project-scope `.aiworker/toolsets.json`、`.aiworker/capability-packs.json`、`.aiworker/mcp.json`。
 - CLI、API、DB schema、文档里出现 `mcp`、`skill`、`plugin` 等重名概念时必须显式加限定词，例如 `executor mcp overlay`、`engine plugin`、`brain skill`，避免跨层复用语义。
 - Executor overlay 涉及 secret 时只能存 ref；不要把明文 secret 写入 engine project config、`.aiworker/*.json` 或 worker configJson。外部 executor 的 user/host auth 由 operator 自己管理。
 

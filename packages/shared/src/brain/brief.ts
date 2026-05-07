@@ -7,8 +7,8 @@ import { brainAdmissionRiskSchema } from './admission'
  *
  * A brief is the **projection** of canonical brain state into a task-specific
  * context window. Canonical brain artifacts live under `<brainHome>/`
- * (`AGENT.md`, `SOUL.md`, `MEMORY.md`, `memories/`, `skills/`, scope manifest,
- * `policy.json`, `toolsets.json`, `capability-packs.json`) and are git-tracked
+ * (`SOUL.md`, `MEMORY.md`, `memories/`, `skills/`, scope manifest,
+ * `policy.json`, `brain-capabilities.json`) and are git-tracked
  * for review; `AGENTS.md`, `CLAUDE.md`, Copilot instructions, executor-engine
  * hints are downstream projections, not source of truth.
  *
@@ -24,7 +24,6 @@ const SECTION_ID_RE = /^[a-z][a-z0-9-]*$/
 export const brainBriefSectionIdSchema = z.string().min(1).regex(SECTION_ID_RE, 'brief section id must be kebab-case')
 
 export const brainBriefSectionSourceSchema = z.enum([
-  'agent-doc',
   'soul-doc',
   'memory-doc',
   'rollup-doc',

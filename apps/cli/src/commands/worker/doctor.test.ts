@@ -53,7 +53,6 @@ describe('aiworker doctor', () => {
     expect(doctor.output).toContain('[aiworker doctor] Project Brain capability validation')
     expect(doctor.output).toContain('Status: PASS')
     expect(doctor.output).toContain('Brain identity:')
-    expect(doctor.output).toContain('PASS    AGENT.md')
     expect(doctor.output).toContain('PASS    SOUL.md')
     expect(doctor.output).toContain('Scope manifest:')
     expect(doctor.output).toContain('PASS    scope.json')
@@ -62,7 +61,7 @@ describe('aiworker doctor', () => {
     expect(doctor.output).toContain('privacy      : private')
     expect(doctor.output).toContain('Brain runtime: run `aiworker brain status`')
     expect(doctor.output).toContain('PASS    policy.json')
-    expect(doctor.output).toContain('PASS    capability-packs.json')
+    expect(doctor.output).toContain('PASS    brain-capabilities.json')
   })
 
   it('reports WARN when scope.json is missing in an otherwise valid project', async () => {
@@ -141,13 +140,22 @@ describe('aiworker doctor', () => {
 
     const init = await runCli(['init', '--soul', 'developer'], project, home)
     expect(init.exitCode).toBe(0)
-    await writeFile(path.join(project, '.aiworker', 'mcp.json'), `${JSON.stringify({
-      servers: {
-        docs: {
-          token: 'plain-secret',
-          transport: 'streamable-http',
+    await writeFile(path.join(project, '.aiworker', 'brain-capabilities.json'), `${JSON.stringify({
+      defaultToolsets: ['filesystem-read'],
+      mcp: {
+        servers: {
+          docs: {
+            token: 'plain-secret',
+            transport: 'streamable-http',
+          },
         },
       },
+      packs: [
+        { id: 'code', status: 'draft', validation: { issues: [], status: 'pending' } },
+      ],
+      schemaVersion: 1,
+      soul: 'developer',
+      status: 'draft',
     }, null, 2)}\n`, 'utf8')
 
     const doctor = await runCli(['doctor'], project, home)

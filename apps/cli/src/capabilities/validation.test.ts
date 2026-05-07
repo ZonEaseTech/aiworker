@@ -33,33 +33,28 @@ describe('capability static validation', () => {
         ],
       },
     })
-    await writeJson(path.join(root, 'toolsets.json'), {
+    await writeJson(path.join(root, 'brain-capabilities.json'), {
       defaultToolsets: ['filesystem-read', 'test'],
-      schemaVersion: 1,
-      soul: 'developer',
-      status: 'draft',
-      validation: { issues: [], status: 'pending' },
-    })
-    await writeJson(path.join(root, 'capability-packs.json'), {
       packs: [
         { id: 'code', status: 'draft', validation: { issues: [], status: 'pending' } },
         { id: 'review', status: 'draft', validation: { issues: [], status: 'pending' } },
       ],
+      mcp: {
+        servers: {
+          docs: {
+            description: 'Documentation MCP',
+            tools: [
+              { description: 'Search docs', name: 'docs.search' },
+            ],
+            transport: 'streamable-http',
+            url: 'http://127.0.0.1:3000/mcp',
+          },
+        },
+      },
       schemaVersion: 1,
       soul: 'developer',
       status: 'draft',
-    })
-    await writeJson(path.join(root, 'mcp.json'), {
-      servers: {
-        docs: {
-          description: 'Documentation MCP',
-          tools: [
-            { description: 'Search docs', name: 'docs.search' },
-          ],
-          transport: 'streamable-http',
-          url: 'http://127.0.0.1:3000/mcp',
-        },
-      },
+      validation: { issues: [], status: 'pending' },
     })
     await writeFile(
       path.join(root, 'skills', 'release-check', 'SKILL.md'),
@@ -93,19 +88,15 @@ describe('capability static validation', () => {
       schemaVersion: 1,
       status: 'draft',
     })
-    await writeJson(path.join(root, 'toolsets.json'), {
+    await writeJson(path.join(root, 'brain-capabilities.json'), {
       defaultToolsets: ['filesystem-read'],
-      schemaVersion: 1,
-      status: 'draft',
-    })
-    await writeJson(path.join(root, 'capability-packs.json'), {
       packs: [
         { id: 'general', status: 'draft', validation: { issues: [], status: 'pending' } },
       ],
+      mcp: { servers: {} },
       schemaVersion: 1,
       status: 'draft',
     })
-    await writeJson(path.join(root, 'mcp.json'), { servers: {} })
     await writeFile(
       path.join(root, 'skills', 'release-check', 'SKILL.md'),
       [
@@ -146,25 +137,21 @@ describe('capability static validation', () => {
         ],
       },
     })
-    await writeJson(path.join(root, 'toolsets.json'), {
+    await writeJson(path.join(root, 'brain-capabilities.json'), {
       defaultToolsets: ['shell', 'unknown-toolset'],
-      schemaVersion: 1,
-      status: 'draft',
-    })
-    await writeJson(path.join(root, 'capability-packs.json'), {
       packs: [
-        { id: 'unknown-pack', status: 'draft', validation: 'pending' },
+        { id: 'unknown-pack', status: 'draft', validation: { issues: [], status: 'pending' } },
       ],
-      schemaVersion: 1,
-      status: 'draft',
-    })
-    await writeJson(path.join(root, 'mcp.json'), {
-      servers: {
-        unsafe: {
-          token: 'plain-secret',
-          transport: 'streamable-http',
+      mcp: {
+        servers: {
+          unsafe: {
+            token: 'plain-secret',
+            transport: 'streamable-http',
+          },
         },
       },
+      schemaVersion: 1,
+      status: 'draft',
     })
     await writeFile(path.join(root, 'skills', 'release-check', 'SKILL.md'), '# Missing frontmatter\n', 'utf8')
 
@@ -173,10 +160,9 @@ describe('capability static validation', () => {
 
     expect(report.status).toBe('fail')
     expect(codes).toContain('policy.high_risk_auto_rule')
-    expect(codes).toContain('toolsets.high_risk_without_approval')
-    expect(codes).toContain('toolsets.unknown_default')
-    expect(codes).toContain('packs.unknown')
-    expect(codes).toContain('packs.legacy_validation')
+    expect(codes).toContain('brain-capabilities.toolsets.high_risk_without_approval')
+    expect(codes).toContain('brain-capabilities.toolsets.unknown_default')
+    expect(codes).toContain('brain-capabilities.packs.unknown')
     expect(codes).toContain('mcp.http_missing_url')
     expect(codes).toContain('mcp.plaintext_secret')
     expect(codes).toContain('skills.frontmatter_missing')

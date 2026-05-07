@@ -66,7 +66,7 @@ Worker-local `.env`：`aiworker init` / `aiworker up` 会创建当前 scope 的�
 
 1. resolve scope：识别当前是 project / explicit scope，或 brand-new cwd。
 2. init if needed：brand-new cwd 走 project-scope 初始化；非交互必须传 `--soul <preset>`。已初始化 project / explicit scope 只补齐缺失的本地 state，不刷新 Soul 模板。
-3. worker validation：静态验证 Project Brain 与 brain/runtime capability 草案（`.aiworker/policy.json`、`toolsets.json`、`capability-packs.json`、`mcp.json`、`skills/`）；error 阻断启动，warning/info 只展示。
+3. worker validation：静态验证 Project Brain 与 Brain capability 草案（`.aiworker/policy.json`、`brain-capabilities.json`、`skills/`）；error 阻断启动，warning/info 只展示。
 4. executor readiness：检查已选择的外部 executor 是否基本可调用，并读取可选 `.aiworker/executor-capabilities.json` project overlay；本阶段不自动写 engine config，也不会因缺某个 engine CLI 阻断 worker 启动。外部 executor 可能加载 user/host 级 MCP、skills、plugins、auth 和 native sessions，AIWorker 不默认隔离这些 ambient capabilities。
 5. serve：复用 `aiworker serve` 的 foreground 生命周期。
 
@@ -96,10 +96,10 @@ PLAN-023 起 `aiworker init` 默认走 **project scope**：
 
 | 模式 | 触发条件 | 落位 |
 |------|----------|------|
-| **project**（默认） | 当前 cwd（未显式 `AIWORKER_HOME`） | `<cwd>/.aiworker/{AGENT.md,SOUL.md,USER.md,MEMORY.md,ROLLUP.md,policy.json,toolsets.json,capability-packs.json,executor-capabilities.json,skills/,memories/,mcp.json}` + `<cwd>/.aiworker/local/{worker.db,identity.json,.env,workspaces/}` |
+| **project**（默认） | 当前 cwd（未显式 `AIWORKER_HOME`） | `<cwd>/.aiworker/{SOUL.md,USER.md,MEMORY.md,ROLLUP.md,policy.json,brain-capabilities.json,executor-capabilities.json,skills/,memories/}` + `<cwd>/.aiworker/local/{worker.db,identity.json,.env,workspaces/}` |
 | **user**（legacy） | `--global` flag，或显式 `AIWORKER_HOME=...` | `~/.aiworker/{worker.db,.env,workers/<workerId>/{AGENT.md,SOUL.md,USER.md,brain/skills,brain/memories,workspaces/}}` |
 
-`local/` 目录强制 `.gitignore = "*\n!.gitignore\n"`（worker.db / .env / workspaces 等敏感产物绝不入 git）；`.aiworker/.gitignore = "local/\n"`（其余 persona / policy / toolsets / brain skills / memories 默认入 git，团队共享 Project Brain）。每个 project worker 独立 mint master key，并把 worker 入网启动项保存到 `.aiworker/local/.env`（chmod 0600），与 user 级 `~/.aiworker/.env` 物理隔离——这是 AIWorker brain/worker 数据安全边界，不代表外部 executor 的 user/host 配置被隔离。
+`local/` 目录强制 `.gitignore = "*\n!.gitignore\n"`（worker.db / .env / workspaces 等敏感产物绝不入 git）；`.aiworker/.gitignore = "local/\n"`（其余 Soul / policy / brain-capabilities / brain skills / memories 默认入 git，团队共享 Project Brain）。每个 project worker 独立 mint master key，并把 worker 入网启动项保存到 `.aiworker/local/.env`（chmod 0600），与 user 级 `~/.aiworker/.env` 物理隔离——这是 AIWorker brain/worker 数据安全边界，不代表外部 executor 的 user/host 配置被隔离。
 
 首次 init 的 bootstrap token 默认不再以完整值打印到 stdout。CLI 会把完整值写入 chmod 0600 token file（project 默认 `.aiworker/local/bootstrap-token.txt`，user/explicit scope 默认对应 home 下 `bootstrap-token.txt`），stdout 只显示 masked token 与文件路径。需要迁移旧脚本时，把原先 grep stdout 的逻辑改为读取 token file：
 
@@ -196,7 +196,7 @@ aiworker up --port 9217
 aiworker serve --port 9217
 ```
 
-注意：`policy.json`、`toolsets.json`、`capability-packs.json` 和 `.aiworker/mcp.json` 是 brain/runtime capability 草案；`aiworker doctor` 只做静态 validation，不会启动 MCP server，也不会把 pack/toolset 强制接入 runtime enforcement。`.aiworker/executor-capabilities.json` 只是 project executor overlay / bootstrap hint，可辅助 Codex / Claude 等支持 project config 的 engine 做 best-effort projection；它不是外部 executor 的完整 effective capability source of truth，也不是 executor isolation 边界。
+注意：`policy.json` 与 `brain-capabilities.json` 是 Brain capability 草案；`aiworker doctor` 只做静态 validation，不会启动 MCP server，也不会把 pack/toolset 强制接入 runtime enforcement。`.aiworker/executor-capabilities.json` 只是 project executor overlay / bootstrap hint，可辅助支持 project config 的 engine 做 best-effort projection；它不是外部 executor 的完整 effective capability source of truth，也不是 executor isolation 边界。
 
 ### `aiworker scope`
 
@@ -208,8 +208,8 @@ aiworker scope
 # Home         : ~/code/my-project/.aiworker/local
 # Source       : project-detect
 # Project root : ~/code/my-project
-#   ✓ AGENT.md       ~/code/my-project/.aiworker/AGENT.md
-#   ✓ SOUL.md        ~/code/my-project/.aiworker/SOUL.md
+#   ✓ SOUL.md                    ~/code/my-project/.aiworker/SOUL.md
+#   ✓ brain-capabilities.json    ~/code/my-project/.aiworker/brain-capabilities.json
 #   ...
 ```
 
@@ -226,9 +226,7 @@ aiworker scope
 零副作用诊断命令。当前切片会静态验证：
 
 - `.aiworker/policy.json`
-- `.aiworker/toolsets.json`
-- `.aiworker/capability-packs.json`
-- `.aiworker/mcp.json`
+- `.aiworker/brain-capabilities.json`
 - `.aiworker/skills/**/SKILL.md` 或 YAML skill metadata
 
 ```sh
@@ -238,15 +236,13 @@ aiworker doctor
 # Root  : ~/code/my-project/.aiworker
 # Status: PASS
 #   PASS    policy.json
-#   PASS    toolsets.json
-#   PASS    capability-packs.json
-#   PASS    mcp.json
+#   PASS    brain-capabilities.json
 #   PASS    skills/
 ```
 
 ### `aiworker executor mcp add`
 
-声明 project executor MCP overlay，写入 `.aiworker/executor-capabilities.json`。这个文件只表达项目希望外部 executor 具备的 bootstrap hint / best-effort projection 输入，不是 brain skill、Soul capability pack、`.aiworker/mcp.json` 的替代品，也不是 executor effective capability 的完整来源。
+声明 project executor MCP overlay，写入 `.aiworker/executor-capabilities.json`。这个文件只表达项目希望外部 executor 具备的 bootstrap hint / best-effort projection 输入，不是 brain skill、Brain capability pack 或 `brain-capabilities.json` 的替代品，也不是 executor effective capability 的完整来源。
 
 ```sh
 aiworker executor mcp add context7 \
@@ -330,7 +326,7 @@ doctor 不会启动 MCP server 或 `listTools`，也不会探测 engine 的 logi
 
 只读查看 `.aiworker/executor-capabilities.json` 中的 project executor overlay
 descriptor，覆盖 MCP、engine plugin、engine skill 和 engine policy 的 hint。
-它不会读取 `.aiworker/mcp.json`、brain skill、Soul capability pack 或 runtime
+它不会读取 `brain-capabilities.json`、brain skill、Soul capability pack 或 runtime
 toolset，也不会枚举外部 executor 的 user/host ambient capabilities。
 
 ```sh
@@ -341,7 +337,7 @@ aiworker executor capability show codex.mcp.context7
 ### `aiworker soul list` / `aiworker soul show <preset>`
 
 查看内置 Soul preset 的声明能力。它们是 `aiworker init --soul <preset>` 生成
-`SOUL.md`、`AGENT.md`、`policy.json`、`toolsets.json`、`capability-packs.json`
+`SOUL.md`、`policy.json`、`brain-capabilities.json`
 的同一份数据源。
 
 ```sh
@@ -377,10 +373,10 @@ Project Brain 当前由五类资产组成：
 
 | 类别 | 文件 | 写入路径 |
 |------|------|---------|
-| Identity | `AGENT.md` / `SOUL.md` / `USER.md` | `aiworker init`，之后视为 git-tracked persona doc |
+| Identity | `SOUL.md` / `USER.md` | `aiworker init`，之后视为 git-tracked Project Brain doc |
 | Memory | `MEMORY.md` / `memories/*.md` | filesystem 直接编辑；generated runtime memory 先进入 admission proposal |
 | Brain skills | `.aiworker/skills/<name>/SKILL.md` | filesystem 直接编辑；CLI 不提供 mutating skill 命令 |
-| Policy & drafts | `policy.json` / `toolsets.json` / `capability-packs.json` / `.aiworker/mcp.json` | filesystem 直接编辑；`aiworker doctor` 做静态 validation |
+| Policy & drafts | `policy.json` / `brain-capabilities.json` | filesystem 直接编辑；`aiworker doctor` 做静态 validation |
 | Admission state | worker.db `brain_admission_proposals` / `brain_admission_decisions` | brain runtime 提议 + operator approval/apply |
 
 下方三条 brain 命令都只读，不写任何资产。`.aiworker/executor-capabilities.json` 不属于 brain 资产，归 `aiworker executor capability ...` 管。

@@ -3,7 +3,6 @@ import type { BrainMemory, BrainProvider, BrainSkill, BrainSkillBody, ChatMessag
 import { readFile } from 'node:fs/promises'
 
 import {
-  resolveAgentMdPath,
   resolveMemoryIndexPath,
   resolveRollupMdPath,
   resolveSoulMdPath,
@@ -23,7 +22,6 @@ const SYSTEM_PROMPT_MEMORY_MAX_CHARS = 3_000
 const SYSTEM_PROMPT_SKILL_BODY_MAX_CHARS = 6_000
 
 export interface ProjectPersonaDocs {
-  agent: string | null
   memory: string | null
   rollup: string | null
   soul: string | null
@@ -96,7 +94,6 @@ export class ContextManager {
       `You are worker ${this.deps.workerId}.`,
       'Respond concisely and helpfully.',
     ]
-    appendSystemPromptSection(lines, 'Project agent instructions', persona.agent)
     appendSystemPromptSection(lines, 'Project soul / voice', persona.soul)
     appendSystemPromptSection(lines, 'Project user profile', persona.user)
     appendSystemPromptSection(lines, 'Project memory index', persona.memory)
@@ -176,14 +173,13 @@ export class ContextManager {
 
   private async loadProjectPersonaDocs(): Promise<ProjectPersonaDocs> {
     const workerId = this.deps.workerId
-    const [agent, soul, user, memory, rollup] = await Promise.all([
-      readPromptFile(resolveAgentMdPath(workerId)),
+    const [soul, user, memory, rollup] = await Promise.all([
       readPromptFile(resolveSoulMdPath(workerId)),
       readPromptFile(resolveUserMdPath(workerId)),
       readPromptFile(resolveMemoryIndexPath(workerId)),
       readPromptFile(resolveRollupMdPath(workerId)),
     ])
-    return { agent, memory, rollup, soul, user }
+    return { memory, rollup, soul, user }
   }
 }
 

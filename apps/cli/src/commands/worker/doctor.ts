@@ -163,7 +163,7 @@ export async function runDoctor(): Promise<number> {
 
   if (scope.scope === 'project' && scope.projectRoot) {
     process.stdout.write('  Brain identity:\n')
-    for (const file of ['AGENT.md', 'SOUL.md', 'USER.md', 'MEMORY.md'] as const) {
+    for (const file of ['SOUL.md', 'USER.md', 'MEMORY.md'] as const) {
       const exists = existsSync(path.join(root, file))
       process.stdout.write(`    ${(exists ? 'PASS' : 'WARN').padEnd(7)} ${file}\n`)
     }

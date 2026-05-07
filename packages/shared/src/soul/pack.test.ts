@@ -15,7 +15,6 @@ describe('Soul Pack loader', () => {
     for (const pack of BUILTIN_SOUL_PACKS) {
       expect(pack.soulMd).toContain('---')
       expect(pack.soulBody).toContain(`# ${pack.module.manifest.label} Soul`)
-      expect(pack.agentMd).toContain(`# ${pack.module.manifest.label} Worker`)
       expect(pack.brainSkillPacks.length).toBeGreaterThan(0)
       expect(pack.brainSkillPacks.every(skill => skill.id.startsWith(`${pack.module.manifest.id}.`))).toBe(true)
       expect(pack.module.manifest.id.length).toBeGreaterThan(0)
@@ -38,7 +37,6 @@ describe('Soul Pack loader', () => {
 
   it('rejects a pack whose declared id does not match its location', () => {
     expect(() => createSoulPack({
-      agentMd: '# Agent',
       expectedId: 'other',
       soulMd: developerSoulPack.soulMd,
       sourcePath: 'test/SOUL.md',

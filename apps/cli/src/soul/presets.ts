@@ -30,7 +30,6 @@ export const CUSTOMIZE_SOUL_ID = 'customize' as const
 export type InitSoulId = BuiltinSoulPresetId | typeof CUSTOMIZE_SOUL_ID
 
 export interface SoulPresetDefinition {
-  agentMd: string
   brainSkillPacks: readonly BrainSkillPack[]
   boundaries: readonly string[]
   communicationStyle: string
@@ -48,7 +47,6 @@ export interface SoulPresetDefinition {
 }
 
 export interface SelectedSoul {
-  agentMd?: string
   brainSkillPacks?: readonly BrainSkillPack[]
   boundaries: readonly string[]
   communicationStyle: string
@@ -99,7 +97,6 @@ function projectModuleToPreset(module: SoulModule): SoulPresetDefinition {
   if (!pack)
     throw new Error(`missing file-first Soul pack for built-in id "${id}"`)
   return {
-    agentMd: pack.agentMd,
     brainSkillPacks: pack.brainSkillPacks,
     boundaries: module.initProjection.boundaries,
     communicationStyle: module.riskPolicy.communicationStyle,

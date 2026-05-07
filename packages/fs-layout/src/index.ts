@@ -21,10 +21,10 @@ import process from 'node:process'
  * Project-scope layout (PLAN-023, one worker per project):
  *
  *   <project>/.aiworker/
- *     AGENT.md / SOUL.md / USER.md / MEMORY.md / ROLLUP.md   # team-shared persona
- *     policy.json / toolsets.json / capability-packs.json     # brain/runtime drafts
+ *     SOUL.md / USER.md / MEMORY.md / ROLLUP.md               # team-shared Project Brain
+ *     policy.json / brain-capabilities.json                   # governance + Brain capability drafts
  *     executor-capabilities.json                              # project executor overlay / bootstrap hint
- *     skills/  memories/  mcp.json                            # brain/runtime descriptors
+ *     skills/  memories/                                      # file-first brain assets
  *     local/                                                  # gitignored
  *       worker.db / identity.json / .env / workspaces/
  */
@@ -104,8 +104,7 @@ function isSamePath(left: string, right: string): boolean {
 
 function hasProjectScopeMarkers(projectRoot: string): boolean {
   const aiworkerDir = path.join(projectRoot, DEFAULT_HOME_DIR)
-  return isFileSync(path.join(aiworkerDir, 'AGENT.md'))
-    && isFileSync(path.join(aiworkerDir, 'SOUL.md'))
+  return isFileSync(path.join(aiworkerDir, 'SOUL.md'))
 }
 
 function isUnmarkedHomeAiworkerDir(projectRoot: string): boolean {
@@ -214,9 +213,9 @@ export function resolveAiworkerHome(): string {
 export function resolveWorkerHome(workerId: string): string {
   const result = resolveAiworkerScope()
   if (result.scope === 'project' && result.projectRoot) {
-    // Project scope: persona docs (AGENT.md etc.) live in the .aiworker/
-    // directory itself, NOT inside local/. The `home` field points at
-    // local/ so worker.db et al are gitignored, but persona docs need the
+    // Project scope: Project Brain docs live in the .aiworker/ directory
+    // itself, NOT inside local/. The `home` field points at local/ so
+    // worker.db et al are gitignored, but Brain files need the
     // git-tracked parent.
     return path.join(result.projectRoot, DEFAULT_HOME_DIR)
   }
@@ -275,7 +274,12 @@ export function resolveRollupMdPath(workerId: string): string {
   return path.join(resolveWorkerHome(workerId), 'ROLLUP.md')
 }
 
-/** Per-worker MCP server registry (PLAN-021 Phase D). Project scope only. */
+/** Project Brain capability manifest. Project scope only. */
+export function resolveBrainCapabilitiesPath(workerId: string): string {
+  return path.join(resolveWorkerHome(workerId), 'brain-capabilities.json')
+}
+
+/** Per-worker MCP server registry (legacy user scope; project scope uses brain-capabilities.json). */
 export function resolveMcpJsonPath(workerId: string): string {
   return path.join(resolveWorkerHome(workerId), 'mcp.json')
 }
@@ -308,11 +312,9 @@ async function seedIfAbsent(filePath: string, content: string): Promise<void> {
 }
 
 export interface ProjectAiworkerSeed {
-  agentMd?: string
+  brainCapabilitiesJson?: string
   brainSkillFiles?: Record<string, string>
-  capabilityPacksJson?: string
   executorCapabilitiesJson?: string
-  mcpJson?: string
   memoryMd?: string
   policyJson?: string
   rollupMd?: string
@@ -323,20 +325,30 @@ export interface ProjectAiworkerSeed {
    */
   scopeJson?: string
   soulMd?: string
-  toolsetsJson?: string
   userMd?: string
 }
 
 type RequiredDefaultSeed = Required<Omit<ProjectAiworkerSeed, 'scopeJson'>>
 
 const DEFAULT_PROJECT_AIWORKER_SEED: RequiredDefaultSeed = {
-  agentMd: `# Agent\n\n> Persona / role document for the agent that lives in this project. The orchestrator injects this file into the system prompt.\n`,
+  brainCapabilitiesJson: `${JSON.stringify({
+    schemaVersion: 1,
+    status: 'draft',
+    defaultToolsets: [],
+    packs: [],
+    mcp: {
+      servers: {},
+    },
+    validation: {
+      status: 'pending',
+      issues: [],
+    },
+  }, null, 2)}\n`,
   brainSkillFiles: {},
   soulMd: `# Voice & style\n\n> Voice / style guide. Influences how the agent phrases responses across channels.\n`,
   userMd: `# User profile\n\n> The agent writes learned facts about the primary user here over time. Edit by hand to bootstrap.\n`,
   memoryMd: `# Long-term memory\n\n> Durable facts, decisions, preferences. Loaded into every session.\n`,
   rollupMd: `# Continuity rollup\n\n> Auto-distilled by the evolution cron job. Recent decisions / todos / context that survive session compaction.\n`,
-  mcpJson: `${JSON.stringify({ servers: {} }, null, 2)}\n`,
   policyJson: `${JSON.stringify({
     schemaVersion: 1,
     status: 'draft',
@@ -346,20 +358,6 @@ const DEFAULT_PROJECT_AIWORKER_SEED: RequiredDefaultSeed = {
     outOfScope: {
       default: 'ask-for-operator-direction',
     },
-  }, null, 2)}\n`,
-  toolsetsJson: `${JSON.stringify({
-    schemaVersion: 1,
-    status: 'draft',
-    defaultToolsets: [],
-    validation: {
-      status: 'pending',
-      issues: [],
-    },
-  }, null, 2)}\n`,
-  capabilityPacksJson: `${JSON.stringify({
-    schemaVersion: 1,
-    status: 'draft',
-    packs: [],
   }, null, 2)}\n`,
   executorCapabilitiesJson: `${JSON.stringify({
     schemaVersion: 1,
@@ -413,11 +411,10 @@ export async function ensureWorkerHome(workerId: string): Promise<void> {
 
 /**
  * Materialise `<projectRoot>/.aiworker/` with the project-scope template:
- *   - persona docs (AGENT.md / SOUL.md / USER.md / MEMORY.md / ROLLUP.md)
- *   - governance drafts (policy.json / toolsets.json / capability-packs.json)
+ *   - Project Brain docs (SOUL.md / USER.md / MEMORY.md / ROLLUP.md)
+ *   - governance/capability drafts (policy.json / brain-capabilities.json)
  *   - executor-capabilities.json placeholder for project executor overlay / hint
  *   - empty skills/ memories/ dirs
- *   - mcp.json placeholder
  *   - local/ (chmod 0700) with `* + !.gitignore` to silently ignore everything
  *   - .aiworker/.gitignore that ignores `local/`
  *
@@ -436,10 +433,6 @@ export async function ensureProjectAiworker(projectRoot: string, seed: ProjectAi
   await ensureDir(path.join(localDir, 'workspaces'))
 
   await seedIfAbsent(
-    path.join(aiworker, 'AGENT.md'),
-    mergedSeed.agentMd,
-  )
-  await seedIfAbsent(
     path.join(aiworker, 'SOUL.md'),
     mergedSeed.soulMd,
   )
@@ -456,20 +449,12 @@ export async function ensureProjectAiworker(projectRoot: string, seed: ProjectAi
     mergedSeed.rollupMd,
   )
   await seedIfAbsent(
-    path.join(aiworker, 'mcp.json'),
-    mergedSeed.mcpJson,
-  )
-  await seedIfAbsent(
     path.join(aiworker, 'policy.json'),
     mergedSeed.policyJson,
   )
   await seedIfAbsent(
-    path.join(aiworker, 'toolsets.json'),
-    mergedSeed.toolsetsJson,
-  )
-  await seedIfAbsent(
-    path.join(aiworker, 'capability-packs.json'),
-    mergedSeed.capabilityPacksJson,
+    path.join(aiworker, 'brain-capabilities.json'),
+    mergedSeed.brainCapabilitiesJson,
   )
   await seedIfAbsent(
     path.join(aiworker, 'executor-capabilities.json'),

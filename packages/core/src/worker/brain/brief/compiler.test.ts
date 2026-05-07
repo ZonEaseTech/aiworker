@@ -43,7 +43,6 @@ describe('BrainBriefCompiler (PLAN-102)', () => {
   })
 
   it('compiles a developer brief from canonical brain files + risk-policy synth', async () => {
-    await writeFile(join(ctx.brainHome, 'AGENT.md'), '# Developer worker\nResponsible for code review\n', 'utf8')
     await writeFile(join(ctx.brainHome, 'SOUL.md'), '---\nmanifest:\n  id: developer\n---\n# Voice\n直接、证据优先\n', 'utf8')
     await writeFile(join(ctx.brainHome, 'MEMORY.md'), '# memory\nprefer dry-run for shell\n', 'utf8')
     await writeFile(join(ctx.brainHome, 'ROLLUP.md'), '# rollup\nRecent decisions: PLAN-099 shipped\n', 'utf8')
@@ -59,7 +58,6 @@ describe('BrainBriefCompiler (PLAN-102)', () => {
     })
 
     const sectionIds = brief.sections.map(section => section.id)
-    expect(sectionIds).toContain('agent')
     expect(sectionIds).toContain('soul')
     expect(sectionIds).toContain('memory')
     expect(sectionIds).toContain('rollup')
@@ -79,7 +77,6 @@ describe('BrainBriefCompiler (PLAN-102)', () => {
   })
 
   it('falls back to scope manifest primarySoul when request omits soulId', async () => {
-    await writeFile(join(ctx.brainHome, 'AGENT.md'), 'agent\n', 'utf8')
     const manifest: ScopeManifest = {
       id: 'backend-hire-q3',
       kind: 'hiring-pool',
@@ -104,7 +101,6 @@ describe('BrainBriefCompiler (PLAN-102)', () => {
 
   it('drops non-protected sections when budget is tight but always retains protected sections', async () => {
     const longLine = 'x'.repeat(2000)
-    await writeFile(join(ctx.brainHome, 'AGENT.md'), longLine, 'utf8')
     await writeFile(join(ctx.brainHome, 'SOUL.md'), longLine, 'utf8')
     await writeFile(join(ctx.brainHome, 'MEMORY.md'), longLine, 'utf8')
     await writeFile(join(ctx.brainHome, 'ROLLUP.md'), longLine, 'utf8')

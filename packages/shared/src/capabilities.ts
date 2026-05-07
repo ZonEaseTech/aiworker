@@ -29,26 +29,12 @@ export const capabilityValidationResultSchema = z.object({
 })
 export type CapabilityValidationResult = z.infer<typeof capabilityValidationResultSchema>
 
-export const legacyCapabilityValidationSchema = z.union([
-  capabilityValidationStatusSchema,
-  capabilityValidationResultSchema,
-])
-export type LegacyCapabilityValidation = z.infer<typeof legacyCapabilityValidationSchema>
-
 export const capabilityPackEntrySchema = z.object({
   id: capabilityIdSchema,
   status: capabilityManifestStatusSchema,
-  validation: legacyCapabilityValidationSchema,
+  validation: capabilityValidationResultSchema,
 })
 export type CapabilityPackEntry = z.infer<typeof capabilityPackEntrySchema>
-
-export const capabilityPacksManifestSchema = z.object({
-  packs: z.array(capabilityPackEntrySchema),
-  schemaVersion: z.literal(1),
-  soul: capabilityIdSchema.optional(),
-  status: capabilityManifestStatusSchema,
-})
-export type CapabilityPacksManifest = z.infer<typeof capabilityPacksManifestSchema>
 
 export const toolPolicyActionSchema = z.enum(['auto', 'ask', 'deny'])
 export type CapabilityToolPolicyAction = z.infer<typeof toolPolicyActionSchema>
@@ -93,16 +79,6 @@ export const toolsetDefinitionSchema = z.object({
 }).passthrough()
 export type ToolsetDefinition = z.infer<typeof toolsetDefinitionSchema>
 
-export const toolsetsManifestSchema = z.object({
-  defaultToolsets: z.array(capabilityIdSchema),
-  schemaVersion: z.literal(1),
-  soul: capabilityIdSchema.optional(),
-  status: capabilityManifestStatusSchema,
-  toolsets: z.record(toolsetDefinitionSchema).optional(),
-  validation: legacyCapabilityValidationSchema.optional(),
-})
-export type ToolsetsManifest = z.infer<typeof toolsetsManifestSchema>
-
 export const secretRefSchema = z.object({
   secretRef: z.string().min(1),
 })
@@ -133,6 +109,18 @@ export const mcpDescriptorSchema = z.object({
   servers: z.record(mcpServerDescriptorSchema),
 })
 export type McpDescriptorManifest = z.infer<typeof mcpDescriptorSchema>
+
+export const brainCapabilitiesManifestSchema = z.object({
+  defaultToolsets: z.array(capabilityIdSchema),
+  mcp: mcpDescriptorSchema,
+  packs: z.array(capabilityPackEntrySchema),
+  schemaVersion: z.literal(1),
+  soul: capabilityIdSchema.optional(),
+  status: capabilityManifestStatusSchema,
+  toolsets: z.record(toolsetDefinitionSchema).optional(),
+  validation: capabilityValidationResultSchema.optional(),
+})
+export type BrainCapabilitiesManifest = z.infer<typeof brainCapabilitiesManifestSchema>
 
 export const skillPermissionSchema = z.enum([
   'filesystem-read',

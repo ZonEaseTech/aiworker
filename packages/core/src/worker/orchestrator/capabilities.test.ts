@@ -24,18 +24,22 @@ describe('CapabilityRegistry', () => {
     const projectRoot = mkdtempSync(path.join(tmpdir(), 'aiworker-capabilities-'))
     const aiworkerRoot = path.join(projectRoot, '.aiworker')
     await fs.mkdir(aiworkerRoot, { recursive: true })
-    await fs.writeFile(path.join(aiworkerRoot, 'toolsets.json'), `${JSON.stringify({
+    await fs.writeFile(path.join(aiworkerRoot, 'SOUL.md'), '# Soul\n')
+    await fs.writeFile(path.join(aiworkerRoot, 'brain-capabilities.json'), `${JSON.stringify({
       defaultToolsets: ['memory', 'web'],
-    })}\n`)
-    await fs.writeFile(path.join(aiworkerRoot, 'mcp.json'), `${JSON.stringify({
-      servers: {
-        docs: {
-          description: 'Documentation MCP',
-          tools: [
-            { name: 'docs.search', description: 'Search docs' },
-          ],
+      mcp: {
+        servers: {
+          docs: {
+            description: 'Documentation MCP',
+            tools: [
+              { name: 'docs.search', description: 'Search docs' },
+            ],
+          },
         },
       },
+      packs: [],
+      schemaVersion: 1,
+      status: 'draft',
     })}\n`)
     delete process.env.AIWORKER_HOME
     process.chdir(projectRoot)

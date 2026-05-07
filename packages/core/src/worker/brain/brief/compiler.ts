@@ -24,7 +24,7 @@ import {
 /**
  * Brain brief compiler (PLAN-102).
  *
- * Projects canonical brain state (`<brainHome>/AGENT.md`, `SOUL.md`,
+ * Projects canonical brain state (`<brainHome>/SOUL.md`,
  * `MEMORY.md`, `ROLLUP.md`, scope manifest, Soul module, optionally artifact
  * registry + admission service) into a task-specific brief. The brief is a
  * **projection** — orchestrator stays on the existing coarse persona prompt;
@@ -207,8 +207,6 @@ export class BrainBriefCompiler {
     },
   ): Promise<Omit<BrainBriefSection, 'protected' | 'tokens'> | null> {
     switch (id) {
-      case 'agent':
-        return this.tryReadFile('AGENT.md', 'agent-doc', id, SOUL_DOC_LIMIT)
       case 'soul':
         return this.tryReadFile('SOUL.md', 'soul-doc', id, SOUL_DOC_LIMIT)
       case 'memory':

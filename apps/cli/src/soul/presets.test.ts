@@ -33,7 +33,6 @@ describe('Soul preset registry', () => {
       expect(preset.riskPolicy.length).toBeGreaterThan(0)
       expect(preset.outOfScope.length).toBeGreaterThan(0)
       expect(preset.soulMd).toContain(`# ${preset.label} Soul`)
-      expect(preset.agentMd).toContain(`# ${preset.label} Worker`)
       expect(preset.brainSkillPacks.length).toBeGreaterThan(0)
       expect(preset.brainSkillPacks.every(skill => skill.id.startsWith(`${preset.id}.`))).toBe(true)
       // BUG-063: every shipped Soul preset must declare its own
@@ -60,7 +59,6 @@ describe('Soul preset registry', () => {
     expect(selected.packs).toEqual(preset.packs)
     expect(selected.toolsets).toEqual(preset.toolsets)
     expect(selected.soulMd).toBe(preset.soulMd)
-    expect(selected.agentMd).toBe(preset.agentMd)
     expect(selected.brainSkillPacks).toBe(preset.brainSkillPacks)
   })
 

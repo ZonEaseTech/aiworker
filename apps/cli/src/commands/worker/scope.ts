@@ -3,9 +3,8 @@ import path from 'node:path'
 import process from 'node:process'
 
 import {
-  resolveAgentMdPath,
   resolveAiworkerScope,
-  resolveMcpJsonPath,
+  resolveBrainCapabilitiesPath,
   resolveMemoryIndexPath,
   resolveRollupMdPath,
   resolveSoulMdPath,
@@ -44,12 +43,11 @@ export async function runScope(): Promise<number> {
   const workerDb = path.join(result.home, 'worker.db')
 
   const items: Array<[string, string]> = [
-    ['AGENT.md', resolveAgentMdPath(workerId)],
     ['SOUL.md', resolveSoulMdPath(workerId)],
     ['USER.md', resolveUserMdPath(workerId)],
     ['MEMORY.md', resolveMemoryIndexPath(workerId)],
     ['ROLLUP.md', resolveRollupMdPath(workerId)],
-    ['mcp.json', resolveMcpJsonPath(workerId)],
+    ['brain-capabilities.json', resolveBrainCapabilitiesPath(workerId)],
     ['worker.db', workerDb],
     ['local/.env', localEnv],
     ['workspaces/', workspacesRoot],
