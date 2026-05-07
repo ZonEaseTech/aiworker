@@ -1,5 +1,26 @@
 # AIWorker Changelog
 
+## 2026-05-08 02:17 [completed] TODO-042 / PLAN-167 — README refresh from current CLI onboarding behavior
+
+Fed the latest CLI onboarding behavior back into the public README files.
+
+- README quickstart now says `aiworker up` initializes, validates, checks
+  executor readiness, and serves; it no longer claims to select an executor.
+- Added compact CLI discovery guidance for short root help, full command index,
+  and scoped worker/fleet/gateway help.
+- Clarified first initialization writes the master key to worker-local `.env`
+  rather than implying every first run writes `~/.aiworker/.env`.
+- Documented that new `.env` files reserve commented gateway enrollment examples
+  and that `aiworker doctor` reports standalone/configured enrollment.
+- Synced Chinese README status facts with the current 0.10.2 baseline and
+  800+ Governance Kernel harness checks.
+- Added target-audience sections for who should use AIWorker, replaced the
+  compact topology diagram with a wider two-view layout, and removed README
+  wording that exposed internal workflow names instead of user-facing guidance.
+- Removed the regression harness script from the public "More" entry points,
+  rewrote status rows around capability readiness, and localized the Chinese
+  topology/status wording.
+
 ## 2026-05-08 01:46 [completed] TODO-041 / PLAN-166 — Gateway enrollment hints in init dotenv and doctor
 
 Made optional gateway enrollment discoverable without adding interactive init

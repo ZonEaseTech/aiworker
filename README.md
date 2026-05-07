@@ -34,49 +34,74 @@ auditable business workers. The competitive edge is not "better model output";
 it is durable Project Brain plus governance and fleet operations around the
 executors customers already use.
 
+## Who needs AIWorker
+
+AIWorker is a good fit when you want AI agents to behave less like disposable
+chat windows and more like managed workers tied to real work.
+
+- **Teams that already use AI executors** and want durable scope memory,
+  policy, persona, and reviewable brain files around them.
+- **Operators running agents for business scopes**, such as a code repository,
+  hiring pipeline, finance period, support queue, compliance folder, or
+  operational runbook.
+- **Organizations that need governance before self-learning**, where memory or
+  brain-skill changes can be proposed by an agent but must be reviewed,
+  approved, and audited.
+- **People running more than one worker**, where presence, routing, logs,
+  approvals, schedules, and enrollment need one control plane without moving
+  private brain or conversation data into that control plane.
+- **Customers who need to keep their own data local**, while still using the
+  executor, model, auth, and tool ecosystem they already trust.
+
+If you only need a one-off coding session, a single chat, or a better model
+answer, AIWorker is probably more infrastructure than you need.
+
+## Topology
+
 ```text
-                Operator / Admin
-                      |  aiworker fleet ...
-                      |  WS  basicauth + token
-                      v
-   +------------------------------------------------+
-   |  AIWorker Gateway   (optional control plane)   |
-   |  fleet.db : pointers + audit only              |
-   |  no brain  no chat data  no secrets            |
-   +------+-------------+-------------+-------------+
-          v             v             v   WS relay
-      Worker A      Worker B  ...  Worker N
-          |
-          |   a single worker also runs without a gateway
-          v
-   +------------------------------------------------+
-   |  Per-worker data plane                         |
-   |                                                |
-   |  worker.db       identity / config / chat      |
-   |                  AES-256-GCM                   |
-   |                                                |
-   |  Project Brain   filesystem authoritative      |
-   |                  SOUL / USER / MEMORY          |
-   |                  memories / brain skills       |
-   |                  policy / capabilities         |
-   |                  admission state               |
-   |                                                |
-   |  Thin Adapter    health / run / stream         |
-   |                  cancel / resume               |
-   |       |                                        |
-   |       v   invoke                               |
-   |  External Engine                               |
-   |       Codex / Claude Code / Hermes             |
-   |       OpenClaw / Cursor / ACP / MCP / HTTP     |
-   |       |                                        |
-   |       v   loads ambient                        |
-   |  user/host MCP / skills / plugins              |
-   |  auth / native sessions                        |
-   |  (not owned by AIWorker)                       |
-   +------------------------------------------------+
+Operator / Admin
+  runs `aiworker fleet ...`
+        |
+        | WebSocket control traffic
+        | basicauth + device token
+        v
++--------------------------------------------------------------------------------+
+| AIWorker Gateway (optional control plane)                                      |
+|                                                                                |
+| fleet.db stores: worker pointers, presence, enrollment state, audit events     |
+| fleet.db does not store: Project Brain, conversations, worker secrets          |
++---------------------------+----------------------------+-----------------------+
+                            |                            |
+                            | WS relay / routing         | WS relay / routing
+                            v                            v
+                 +----------------------+      +----------------------+
+                 | Worker A             |      | Worker B ... N       |
+                 | owns its own data    |      | owns its own data    |
+                 +----------------------+      +----------------------+
+
+A single worker can also run without the gateway:
+
++--------------------------------------------------------------------------------+
+| One worker data plane                                                          |
+|                                                                                |
+|  Project Brain (filesystem)        worker.db                                   |
+|  - SOUL / USER / MEMORY            - identity and config                       |
+|  - memories and brain skills       - conversations and messages                |
+|  - policy and capabilities         - encrypted local state                     |
+|  - admission proposals                                                         |
+|                                                                                |
+|  AIWorker thin adapter                                                         |
+|  - adds scope context and governance                                           |
+|  - observes run / stream / cancel / resume                                     |
+|  - does not replace the executor tool loop                                     |
+|                                                                                |
+|  External executor                                                             |
+|  - Codex / Claude Code / Hermes / OpenClaw / Cursor / ACP / MCP / HTTP         |
+|  - keeps its own MCP, skills, plugins, auth, sandbox, and native sessions      |
++--------------------------------------------------------------------------------+
 ```
 
-A single worker can run standalone — the gateway is needed only when you want to aggregate multiple workers. The control plane and the data plane are physically isolated: fleet.db never stores brain / conversations / secrets, and worker.db is never reverse-fetched by the gateway. Full architecture and dual-view mermaid diagrams: [`docs/architecture.md`](docs/architecture.md). Whether this build meets the Project Brain governance node target: [`docs/governance-node-status.md`](docs/governance-node-status.md).
+A single worker can run standalone — the gateway is needed only when you want to aggregate multiple workers. The control plane and the data plane are physically isolated: fleet.db never stores brain / conversations / secrets, and worker.db is never reverse-fetched by the gateway. Full architecture and dual-view diagrams: [`docs/architecture.md`](docs/architecture.md). Production-readiness notes and remaining boundaries: [`docs/governance-node-status.md`](docs/governance-node-status.md).
 
 ---
 
@@ -88,9 +113,24 @@ bun install -g @zonease/aiworker-cli
 # or `npx` / `npm install -g` (Bun is still required at runtime)
 ```
 
-The CLI is Bun-native. The first run mints a master key and writes it to `~/.aiworker/.env` (chmod 0600). **The master key must be backed up offline at the org level** — if it is lost, worker.db / fleet.db cannot be decrypted and every worker must re-enroll.
+The CLI is Bun-native. The first worker initialization mints a master key and writes it to the worker-local `.env` (project workers use `<project>/.aiworker/local/.env`; explicit/user homes use `<AIWORKER_HOME>/.env`). **The master key must be backed up offline at the org level** — if it is lost, worker.db / fleet.db cannot be decrypted and every worker must re-enroll.
 
 Full install and per-platform binaries: [`docs/deployment.md`](docs/deployment.md).
+
+---
+
+## CLI discovery
+
+`aiworker --help` is intentionally short and shows the first-run path. Use
+`aiworker commands` for the complete command index, or scoped help for a role:
+
+```sh
+aiworker --help
+aiworker commands
+aiworker worker --help
+aiworker fleet --help
+aiworker gateway --help
+```
 
 ---
 
@@ -100,10 +140,10 @@ The most common path: turn the current business directory into a worker scope, s
 
 ```sh
 cd ~/code/my-project
-aiworker up --soul developer            # one shot: init + executor select + doctor + serve
+aiworker up --soul developer            # one shot: init + doctor + executor readiness + serve
 ```
 
-`aiworker up` lays down the Project Brain layout under `<cwd>/.aiworker/` (worker.db, master key, persona, brain skills), runs the preflight checks, and starts the worker HTTP/admin server (default `:9217`). Pick a Soul from `developer` / `hr-recruiting` / `finance-ops` / `qa-reviewer` / `general-assistant` — Souls shape persona / risk preferences / default brief sections; governance kernel behavior is the same across all Souls.
+`aiworker up` lays down the Project Brain layout under `<cwd>/.aiworker/` (worker.db, master key, persona, brain skills), runs the preflight checks, reports executor readiness, and starts the worker HTTP/admin server (default `:9217`). It does not choose an executor for you; use `aiworker executor select --engine <id> --apply` for that. Pick a Soul from `developer` / `hr-recruiting` / `finance-ops` / `qa-reviewer` / `general-assistant` — Souls shape persona / risk preferences / default brief sections; governance kernel behavior is the same across all Souls.
 
 Step-by-step alternative:
 
@@ -122,6 +162,11 @@ After it is running:
 - Admin UI: `http://127.0.0.1:9217/admin/` (loopback by default; public hosts must front it with external auth — see below)
 - Bearer token: `<scope>/.aiworker/local/bootstrap-token.txt`. REST calls must include `Authorization: Bearer <token>`.
 - Brain and conversations stay local. The only outbound traffic is whatever the external executor itself talks to (its own LLM provider).
+
+New worker-local `.env` files reserve commented gateway enrollment examples.
+`aiworker doctor` also reports gateway enrollment as standalone/configured and
+prints the exact `aiworker env ...` commands when enrollment is optional but not
+yet configured.
 
 Full CLI reference: [`docs/cli.md`](docs/cli.md).
 
@@ -163,6 +208,10 @@ aiworker env display-name my-laptop
 aiworker serve
 # stdout prints an OTP, e.g.  YDCR-ZD8M
 ```
+
+`aiworker init` also leaves commented `AIWORKER_GATEWAY_URL` /
+`AIWORKER_DISPLAY_NAME` examples in the worker-local `.env`; keep them
+commented unless you intentionally configure gateway enrollment.
 
 ```sh
 # Operator side:
@@ -260,8 +309,8 @@ See [`docs/deployment.md`](docs/deployment.md).
 |---|---|
 | `AIWORKER_MASTER_KEY` | 64 hex; AES master key for worker / gateway databases; **must be backed up offline** |
 | `INTERNAL_SHARED_SECRET` | Remote-operator bearer when the gateway is exposed publicly or off loopback (≥16 chars) |
-| `AIWORKER_GATEWAY_URL` | Worker-side gateway URL (path + basicauth); set with `aiworker env gateway-url <url>` |
-| `AIWORKER_DISPLAY_NAME` | Worker label in the fleet list (defaults to hostname); set with `aiworker env display-name <name>` |
+| `AIWORKER_GATEWAY_URL` | Optional worker-side gateway URL (path + basicauth); set with `aiworker env gateway-url <url>` |
+| `AIWORKER_DISPLAY_NAME` | Optional worker label in the fleet list (defaults to hostname / worker id); set with `aiworker env display-name <name>` |
 | `AIWORKER_HOME` | Explicit worker state root; project scope auto-resolves to `<project>/.aiworker/local` |
 | `AIWORKER_ADMIN_EXTERNAL_AUTH` | Set to `1` if `/admin/*` is fronted by Caddy / Cloudflare Access / Logto / etc. |
 
@@ -271,14 +320,13 @@ Full list: `apps/api/.env.example` + `ops/compose/.env.example`, or [`docs/archi
 
 ## More
 
-- [`docs/architecture.md`](docs/architecture.md) — monorepo layout, data flow, security model, Brain Governance Kernel decision, full env table
-- [`docs/governance-node-status.md`](docs/governance-node-status.md) — source-backed assessment of whether this build meets the Project Brain governance node target
+- [`docs/architecture.md`](docs/architecture.md) — system layout, data flow, security model, Brain governance boundary, full env table
+- [`docs/governance-node-status.md`](docs/governance-node-status.md) — production-readiness checklist and remaining boundaries
 - [`docs/gateway.md`](docs/gateway.md) — WS protocol (METHODS / EVENTS) and the four enrollment paths
 - [`docs/deployment.md`](docs/deployment.md) — three deployment shapes runbook + troubleshooting + backup checklist
 - [`docs/deployment-public-https.md`](docs/deployment-public-https.md) — public-internet Cloudflare + Caddy overlay (including the BUG-007 fail-closed fix)
 - [`docs/executor-engines.md`](docs/executor-engines.md) — per-engine auth/install
 - [`docs/cli.md`](docs/cli.md) — full CLI reference
-- [`scripts/governance-kernel-harness.ts`](scripts/governance-kernel-harness.ts) — Brain Governance Kernel regression harness (compact / full × source-local / cli-release-local)
 - [`docs/changelog.md`](docs/changelog.md) — release history and end-to-end test notes
 
 ---
@@ -291,24 +339,29 @@ cd aiworker && bun install
 bun run typecheck && bun run lint && bun run test
 ```
 
-New features go through the `/pma` skill in three stages: investigate → proposal → implement. Backend uses `/pma-bun`, frontend uses `/pma-web`, code review uses `/pma-cr`. Docs: [`docs/plan/`](docs/plan/) / [`docs/task/`](docs/task/) / [`docs/changelog.md`](docs/changelog.md).
+For local development, run focused package checks while iterating and the full
+gate before publishing or merging. Planning notes, implementation history, and
+release records live in [`docs/plan/`](docs/plan/), [`docs/task/`](docs/task/),
+and [`docs/changelog.md`](docs/changelog.md).
 
 ---
 
 ## Status
 
-> Before going to production, read the conformance table and residual-boundary section in [`docs/governance-node-status.md`](docs/governance-node-status.md). Pre-1.0 the CLI / API / config does not guarantee backwards compatibility (an explicit AGENTS.md commitment).
+> Before going to production, read the readiness table and remaining-boundary
+> section in [`docs/governance-node-status.md`](docs/governance-node-status.md).
+> Before 1.0.0, CLI / API / config shapes may still change.
 
 CLI npm latest: **0.10.2**.
 
 | Module | Status |
 |---|---|
-| Worker / Fleet control plane / 4 enrollment paths / 6 LLM engines / 5 channel webhooks / cron / per-tool approvals / hot reload | ✅ Production |
-| Brain Governance Kernel (admission state machine + secret-scan defense + canonical memory boundary + truthful decision events + bypass detection) | ✅ GA |
-| Governance Kernel regression harness (5×2 matrix on source + cli-release-local with 800+ checks) + long-running serve multi-turn REST regression | ✅ GA |
-| Brain admission `memory-add` materializer | ✅ MVP (other kinds return `unsupported`; post-apply rollback not yet implemented) |
-| Heavy LLM-backed Brain decider | 🔜 opt-in; defaults to `evaluator=heuristic` `mode=observe_only` |
-| Cross-scope hard isolation (runtime-enforced) | 🔜 currently filesystem-conventional, not runtime-isolated |
+| Worker and Fleet operations: control plane, enrollment, executor adapters, webhooks, schedules, per-tool approvals, hot reload | ✅ Production |
+| Project Brain governance: reviewed memory changes, secret scanning, provenance events, canonical memory boundary, bypass checks | ✅ GA |
+| Governance regression coverage: 800+ checks across source and packaged CLI, plus long-running worker REST regression | ✅ GA |
+| Memory-write automation | ✅ MVP (`memory-add` is available; other proposal types are rejected until implemented) |
+| Optional LLM-backed Brain reviewer | 🔜 opt-in; default is observe-only heuristic review |
+| Cross-scope runtime isolation | 🔜 currently convention / filesystem only |
 | Web SPA pending UI / Multi-host HA | 🔜 Stage-2 |
 
 ---
