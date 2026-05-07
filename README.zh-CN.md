@@ -7,6 +7,19 @@
 - **Worker** 持 Project Brain（filesystem 权威）、worker.db 和 conversations；外部 executor（Codex / Claude Code / Hermes / OpenClaw / Cursor 等）只通过薄 adapter 调用。
 - **Gateway 是可选的 control plane**：单 worker 不需要 gateway 就能用；多 worker 时 gateway 聚合 presence、routing、audit，不持有任何 brain / 对话数据。
 
+## 为什么需要 AIWorker
+
+AIWorker 不是要做一个更聪明的 coding assistant，也不是另一个 executor 平台。如果你只需要一次性的更强聊天或代码 agent，直接使用 Codex、Claude Code、Cursor、Hermes、OpenClaw 或其他 executor 更合适。
+
+当你已经认可外部 executor 的能力，但需要把它们变成绑定真实业务 scope 的、可持久运行、可治理的 worker 时，才需要 AIWorker：
+
+- **Project Brain 是客户自己的资产**：每个 worker 都有 filesystem-first、可 review、可迁移的 brain，用来承载 scope identity、persona、policy、memories、rollups 和 brain skills。
+- **自我迭代必须受治理**：executor 可以提出持久 brain 变更，但 memory 与 brain skill 写入必须经过 admission、approval、secret-scan、provenance 和 audit。
+- **Bring your own executor**：AIWorker 不替代 executor 的 tool loop、MCP、plugins、sandbox、native sessions、auth 或 model routing；它只在外层提供 scope context、持久化、观测和治理。
+- **Worker/Fleet 运维形态**：单 worker 可以独立运行；多 worker 可以通过 gateway 聚合 presence、routing、logs、approvals、cron 和 audit，同时不把 brain、conversations 或 secrets 复制进 fleet.db。
+
+一句话：AIWorker 把现有 AI agent 变成自托管、绑定业务 scope、可审计的业务 worker。它的竞争力不是“模型输出更强”，而是围绕客户已经在用的 executor，提供持久 Project Brain、治理边界和 fleet 运维能力。
+
 ```text
                 Operator / Admin
                       |  aiworker fleet ...

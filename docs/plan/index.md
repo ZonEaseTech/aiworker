@@ -191,3 +191,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-160 发布 aiworker CLI 0.10.1**](PLAN-160.md) `2026-05-07`
 - [x] [**PLAN-161 Worker Admin Chat duplicate final reply and background polish**](PLAN-161.md) `2026-05-07`
 - [x] [**PLAN-162 发布 aiworker CLI 0.10.2**](PLAN-162.md) `2026-05-07`
+- [x] [**PLAN-163 README product positioning clarity**](PLAN-163.md) `2026-05-07`

@@ -1,5 +1,18 @@
 # AIWorker Changelog
 
+## 2026-05-07 23:36 [completed] TODO-039 / PLAN-163 — README product positioning clarity
+
+Moved AIWorker's customer-facing reason to the top of the README in both
+English and Chinese.
+
+- The README now says AIWorker is not a smarter coding assistant or a new
+  executor platform.
+- It frames the product as a way to turn existing external executors into
+  durable, scope-bound, governed business workers.
+- The stated competitive surface is Project Brain ownership, governed
+  self-iteration, bring-your-own executor integration, and Worker/Fleet
+  operations.
+
 ## 2026-05-07 23:28 [completed] REL-026 / PLAN-162 — publish CLI 0.10.2
 
 Published `@zonease/aiworker-cli@0.10.2` as a patch release for Worker Admin Web

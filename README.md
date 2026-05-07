@@ -7,6 +7,33 @@ Self-hosted, lightweight **Project Brain + Worker/Fleet aggregation runtime**.
 - **Worker** owns the Project Brain (filesystem is the source of truth), worker.db, and conversations. External executors (Codex / Claude Code / Hermes / OpenClaw / Cursor, etc.) are invoked through a thin adapter only.
 - **Gateway is an optional control plane**: a single worker runs without one. With multiple workers, the gateway aggregates presence, routing, and audit — it never holds brain or conversation data.
 
+## Why AIWorker exists
+
+AIWorker is not trying to be a smarter coding assistant or a new executor
+platform. If all you need is a better one-off chat or coding agent, use Codex,
+Claude Code, Cursor, Hermes, OpenClaw, or another executor directly.
+
+Use AIWorker when you already trust external executors, but need to run them as
+durable, governed workers bound to a real business scope:
+
+- **Project Brain as an owned asset**: each worker has a filesystem-first,
+  reviewable, portable brain for scope identity, persona, policy, memories,
+  rollups, and brain skills.
+- **Governed self-iteration**: an executor can propose durable brain changes,
+  but memory and brain-skill writes must pass admission, approval,
+  secret-scan, provenance, and audit.
+- **Bring your own executor**: AIWorker does not replace the executor's tool
+  loop, MCP, plugins, sandbox, native sessions, auth, or model routing. It
+  wraps them with scope context, persistence, observation, and governance.
+- **Worker/Fleet operations**: one worker can run alone; many workers can be
+  aggregated by a gateway for presence, routing, logs, approvals, cron, and
+  audit without copying brain, conversations, or secrets into fleet.db.
+
+In short: AIWorker turns existing AI agents into self-hosted, scope-bound,
+auditable business workers. The competitive edge is not "better model output";
+it is durable Project Brain plus governance and fleet operations around the
+executors customers already use.
+
 ```text
                 Operator / Admin
                       |  aiworker fleet ...
