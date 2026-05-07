@@ -1,7 +1,7 @@
 {
   "name": "@zonease/aiworker-cli",
   "type": "module",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "description": "AIWorker CLI — self-hosted Project Brain and Worker/Fleet aggregation runtime",
   "license": "MIT",
   "homepage": "https://github.com/ZonEaseTech/aiworker#readme",

@@ -1,5 +1,22 @@
 # AIWorker Changelog
 
+## 2026-05-07 15:26 [progress] REL-025 / PLAN-160 — publish CLI 0.10.1
+
+Started `@zonease/aiworker-cli@0.10.1` as the patch release that ships
+BUG-087's executor timeout budget fix.
+
+- Release scope is intentionally narrow: version metadata, README latest,
+  release docs, tag-triggered publish, and published-package validation.
+- The code fix is already on `main`: `executor select --timeout-ms` persists
+  `executor.overrides.timeoutMs`, and the Governance Kernel harness aligns the
+  selected executor hard timeout with its per-turn budget.
+- The missing production evidence is the published package path. After release,
+  validation should run `cli-release-local --matrix full`, not only compact.
+- Local release gates passed through frozen install, typecheck, lint, test,
+  build, CLI run/fleet smoke, dist version checks, `git diff --check`, and
+  publish dry-run pack stage. Publish dry-run packed 32 files / 3.1 MB and
+  stopped at the expected local npm authentication boundary.
+
 ## 2026-05-07 14:11 [completed] QA-020 / BUG-087 / PLAN-158 / PLAN-159 — source full matrix after CLI 0.10.0
 
 Closed the source-local production validation gap after publishing 0.10.0.
