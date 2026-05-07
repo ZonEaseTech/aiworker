@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-07 (QA-018 completed)
+> Updated: 2026-05-07 (REL-024 in progress)
 
 ## Usage
 
@@ -268,3 +268,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REFACTOR-022 Brain Skill admission materializer**](REFACTOR-022.md) `P1`
 - [x] [**TODO-038 Harness — brain-skill-add admission roundtrip evidence**](TODO-038.md) `P2`
 - [x] [**QA-018 Governance Kernel harness — brain-skill-add roundtrip evidence**](QA-018.md) `P1`
+- [-] [**REL-024 发布 aiworker CLI 0.10.0**](REL-024.md) `P1`

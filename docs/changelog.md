@@ -1,5 +1,21 @@
 # AIWorker Changelog
 
+## 2026-05-07 12:37 [progress] REL-024 / PLAN-157 — prepare CLI 0.10.0 release
+
+Started the `@zonease/aiworker-cli@0.10.0` release candidate for the
+lightweight Project Brain production path.
+
+- Release scope includes file-first Soul/Brain Skill packs, runtime
+  `SKILL.md` body loading, runtime memory search context loading,
+  `brain-skill-add` admission materialization, Cohere Web UI redesign, and
+  Brain Skill admission harness evidence.
+- Version metadata updated from `0.9.7` to `0.10.0`; README latest updated.
+- Local release gates passed: frozen install, typecheck, lint, test, build,
+  CLI run/fleet smoke, dist version checks, built CLI `--version`,
+  `git diff --check`, and publish dry-run pack stage. Publish dry-run stopped
+  at the expected local npm authentication boundary; formal publish proceeds
+  through the tag-triggered GitHub Actions release workflow.
+
 ## 2026-05-07 11:34 [completed] TODO-038 / PLAN-156 — Harness brain-skill-add admission roundtrip evidence
 
 Raised the new Brain Skill materializer from focused-test confidence to

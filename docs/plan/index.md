@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-07 (PLAN-156 completed)
+> Updated: 2026-05-07 (PLAN-157 in progress)
 
 ## Usage
 
@@ -185,3 +185,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-154 Runtime Brain Memory search context**](PLAN-154.md) `2026-05-07`
 - [x] [**PLAN-155 Brain Skill admission materializer**](PLAN-155.md) `2026-05-07`
 - [x] [**PLAN-156 Harness brain-skill-add admission roundtrip evidence**](PLAN-156.md) `2026-05-07`
+- [-] [**PLAN-157 发布 aiworker CLI 0.10.0**](PLAN-157.md) `2026-05-07`
