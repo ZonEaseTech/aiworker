@@ -10,6 +10,13 @@ const mocks = vi.hoisted(() => ({
   invalidateMessages: vi.fn(),
   invalidateTasks: vi.fn(),
   messageConversationIds: [] as Array<string | undefined>,
+  messagesByConversation: {} as Record<string, Array<{
+    id: string
+    conversationId: string
+    role: string
+    content: string
+    createdAt: string
+  }>>,
   submitTask: vi.fn(),
   subscribeEvents: vi.fn(),
   sseHandler: null as ((event: WorkerSSEEvent) => void) | null,
@@ -41,7 +48,7 @@ vi.mock('@/worker/lib/hooks', () => ({
     return {
       isLoading: false,
       isError: false,
-      data: { messages: [] },
+      data: { messages: conversationId ? (mocks.messagesByConversation[conversationId] ?? []) : [] },
     }
   },
   useSubmitTask: () => ({
@@ -58,6 +65,7 @@ describe('worker chat panel', () => {
     mocks.invalidateMessages.mockReset()
     mocks.invalidateTasks.mockReset()
     mocks.messageConversationIds = []
+    mocks.messagesByConversation = {}
     mocks.submitTask.mockReset()
     mocks.submitTask.mockResolvedValue({ id: 'task-1' })
     mocks.sseHandler = null
@@ -197,5 +205,54 @@ describe('worker chat panel', () => {
 
     await waitFor(() => expect(mocks.submitTask).toHaveBeenCalledWith('fresh turn'))
     expect(mocks.continueConversation).not.toHaveBeenCalled()
+  })
+
+  it('hides the finished stream preview after the persisted assistant message refreshes', async () => {
+    const view = render(<ChatPanel />)
+
+    fireEvent.change(screen.getByLabelText('Prompt'), { target: { value: 'hello worker' } })
+    fireEvent.click(screen.getByRole('button', { name: /发送/ }))
+
+    await waitFor(() => expect(mocks.submitTask).toHaveBeenCalledWith('hello worker'))
+    await waitFor(() => expect(mocks.subscribeEvents).toHaveBeenCalled())
+
+    await act(async () => {
+      mocks.sseHandler?.({
+        type: 'conversation.created',
+        data: { conversationId: 'conv-1', channel: 'web', chatId: 'task:task-1', taskId: 'task-1' },
+      })
+      mocks.sseHandler?.({
+        type: 'orchestrator.text',
+        data: { conversationId: 'conv-1', taskId: 'task-1', delta: 'final reply' },
+      })
+      mocks.sseHandler?.({
+        type: 'orchestrator.finished',
+        data: { conversationId: 'conv-1', taskId: 'task-1' },
+      })
+    })
+
+    expect(await screen.findByText('final reply', {}, asyncRenderWait)).toBeTruthy()
+    expect(screen.getAllByText('final reply')).toHaveLength(1)
+
+    mocks.messagesByConversation['conv-1'] = [
+      {
+        id: 'msg-user-1',
+        conversationId: 'conv-1',
+        role: 'user',
+        content: 'hello worker',
+        createdAt: '2026-05-07T09:33:01.000Z',
+      },
+      {
+        id: 'msg-assistant-1',
+        conversationId: 'conv-1',
+        role: 'assistant',
+        content: 'final reply',
+        createdAt: '2026-05-07T09:33:02.000Z',
+      },
+    ]
+    view.rerender(<ChatPanel />)
+
+    expect(screen.getAllByText('final reply')).toHaveLength(1)
+    expect(screen.getByText(/assistant ·/)).toBeTruthy()
   })
 })

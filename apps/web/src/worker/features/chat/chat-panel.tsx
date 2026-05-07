@@ -17,6 +17,7 @@ interface StreamChunk {
   conversationId: string | null
   text: string
   done: boolean
+  initialMessageIds: string[]
 }
 
 /**
@@ -46,6 +47,11 @@ export function ChatPanel() {
   const [prompt, setPrompt] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [streaming, setStreaming] = useState<StreamChunk | null>(null)
+  const messages = messagesQ.data?.messages ?? []
+  const shouldShowStreaming = streaming !== null
+    && streaming.text.length > 0
+    && !hasPersistedStreamingMessage(streaming, messages)
+  const visibleStreaming = shouldShowStreaming ? streaming : null
 
   const promptId = useId()
   const subRef = useRef<AbortController | null>(null)
@@ -59,6 +65,7 @@ export function ChatPanel() {
   async function send() {
     const text = prompt.trim()
     const selectedConversationId = pickedId
+    const initialMessageIds = messages.map(message => message.id)
     const isPending = submit.isPending || continueSelected.isPending
     if (text.length === 0 || isPending)
       return
@@ -72,7 +79,7 @@ export function ChatPanel() {
       subRef.current?.abort()
       const ctrl = new AbortController()
       subRef.current = ctrl
-      setStreaming({ taskId: task.id, conversationId: selectedConversationId, text: '', done: false })
+      setStreaming({ taskId: task.id, conversationId: selectedConversationId, text: '', done: false, initialMessageIds })
       void runSSE(ctrl, task.id, {
         onConversation: (conversationId) => {
           setPickedId(conversationId)
@@ -159,11 +166,11 @@ export function ChatPanel() {
                 )}
       </aside>
 
-      <section className="flex min-h-[420px] min-w-0 flex-col gap-3 rounded-lg border border-ink bg-ink p-3 text-on-dark sm:p-4 lg:min-h-0">
+      <section className="flex min-h-[420px] min-w-0 flex-col gap-3 rounded-lg border border-hairline bg-soft-stone p-3 text-foreground sm:p-4 lg:min-h-0">
         <div className="flex min-w-0 flex-1 flex-col gap-2 overflow-y-auto">
           {!activeId
             ? (
-                <p className="rounded-sm border border-dashed border-on-dark/25 p-4 text-center text-sm text-on-dark/70 sm:p-6">
+                <p className="rounded-sm border border-dashed border-hairline bg-background p-4 text-center text-sm text-muted-foreground sm:p-6">
                   新会话
                 </p>
               )
@@ -181,7 +188,7 @@ export function ChatPanel() {
                       key={m.id}
                       className={`max-w-[90%] rounded-sm p-3 text-sm sm:max-w-[80%] ${
                         m.role === 'user'
-                          ? 'self-end border border-on-dark/35 bg-background text-foreground'
+                          ? 'self-end border border-hairline bg-background text-foreground'
                           : 'self-start bg-deep-green text-on-dark'
                       }`}
                     >
@@ -194,11 +201,11 @@ export function ChatPanel() {
                     </div>
                   ))}
 
-          {streaming && streaming.text.length > 0 && (
+          {visibleStreaming && (
             <div className="max-w-[90%] self-start rounded-sm bg-deep-green p-3 text-sm text-on-dark sm:max-w-[80%]">
-              <p className="whitespace-pre-wrap break-words">{streaming.text}</p>
-              {!streaming.done && (
-                <p className="mt-1 text-micro-label text-muted-foreground">
+              <p className="whitespace-pre-wrap break-words">{visibleStreaming.text}</p>
+              {!visibleStreaming.done && (
+                <p className="mt-1 text-micro-label text-on-dark/70">
                   <Loader2 className="inline size-3 animate-spin" />
                   {' streaming…'}
                 </p>
@@ -223,7 +230,7 @@ export function ChatPanel() {
           <label htmlFor={promptId} className="sr-only">Prompt</label>
           <textarea
             id={promptId}
-            className="min-h-[60px] min-w-0 flex-1 resize-none rounded-sm border border-on-dark/25 bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="min-h-[60px] min-w-0 flex-1 resize-none rounded-sm border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             placeholder="给 worker 发一条消息（Cmd/Ctrl + Enter 发送）"
             value={prompt}
             onChange={e => setPrompt(e.target.value)}
@@ -236,7 +243,7 @@ export function ChatPanel() {
           />
           <Button
             type="submit"
-            className="w-full bg-on-dark text-ink hover:bg-soft-stone sm:w-auto"
+            className="w-full sm:w-auto"
             disabled={submit.isPending || continueSelected.isPending || prompt.trim().length === 0}
           >
             {submit.isPending || continueSelected.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
@@ -319,4 +326,20 @@ async function runSSE(ctrl: AbortController, taskId: string, handlers: SSEHandle
       return
     handlers.onError(err instanceof Error ? err.message : '事件流中断。')
   }
+}
+
+function hasPersistedStreamingMessage(
+  streaming: StreamChunk,
+  messages: Array<{ id: string, conversationId: string, role: string, content: string }>,
+): boolean {
+  if (!streaming.done || streaming.text.length === 0)
+    return false
+
+  const initialIds = new Set(streaming.initialMessageIds)
+  return messages.some(message =>
+    message.role === 'assistant'
+    && message.content === streaming.text
+    && !initialIds.has(message.id)
+    && (!streaming.conversationId || message.conversationId === streaming.conversationId),
+  )
 }

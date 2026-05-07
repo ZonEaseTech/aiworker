@@ -1,5 +1,23 @@
 # AIWorker Changelog
 
+## 2026-05-07 17:10 [completed] BUG-088 / PLAN-161 — Worker Admin Chat final reply de-duplication
+
+Fixed Worker Admin Chat's duplicate final assistant rendering and softened the
+chat background:
+
+- The Chat panel now records the message ids present when a send starts and
+  hides the local streaming preview only after a matching new persisted
+  assistant message appears.
+- Live streaming remains visible while the transcript query is stale, and older
+  same-content assistant messages do not suppress the current stream.
+- The message area now uses a soft-stone bordered admin canvas; assistant
+  bubbles stay deep green and user/composer surfaces stay white.
+- Added a focused regression test for the persisted-message-plus-streaming
+  preview case.
+
+Verification passed: focused Worker Chat test, Web typecheck, Web lint, Web
+build, and `git diff --check`.
+
 ## 2026-05-07 16:09 [completed] REL-025 / PLAN-160 / QA-021 — publish CLI 0.10.1
 
 Published `@zonease/aiworker-cli@0.10.1` as the patch release that ships

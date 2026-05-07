@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-07 (REL-024 in progress)
+> Updated: 2026-05-07 (BUG-088 completed)
 
 ## Usage
 
@@ -274,3 +274,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-087 Codex executor hard cap ignores longer validation turn budget**](BUG-087.md) `P1`
 - [x] [**REL-025 发布 aiworker CLI 0.10.1**](REL-025.md) `P1`
 - [x] [**QA-021 Governance Kernel harness — 0.10.1 cli-release-local full 5×2 matrix**](QA-021.md) `P1`
+- [x] [**BUG-088 Worker Admin Chat renders the final assistant message twice**](BUG-088.md) `P2`
