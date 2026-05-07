@@ -97,6 +97,21 @@ engine 不在建议列表中而 warn 或 block；只要 engine 在 AIWorker 支�
 可以选择它。实际可用能力仍以外部 executor 自身登录态、host/user 配置和 `executor
 doctor` 输出为准。
 
+## Executor turn timeout
+
+`aiworker executor select --timeout-ms <n> --apply` 会把 per-turn hard timeout
+持久化到当前 worker 的 executor profile（`executor.overrides.timeoutMs`）。这会被
+Codex / Claude Code 等 adapter 用来限制外部 CLI 单轮执行时间。
+
+`aiworker run --timeout-ms <n>` 只控制 CLI 等待终态事件的最长时间；它不会临时改写
+worker 配置里的 executor hard timeout。需要长任务时，先调整 executor profile，再
+运行任务：
+
+```bash
+aiworker executor select --engine codex --timeout-ms 240000 --apply
+aiworker run --message "..." --timeout-ms 240000
+```
+
 ## claude-code <a id="claude-code"></a>
 
 - **npm 包**：`@anthropic-ai/claude-code`

@@ -1,5 +1,25 @@
 # AIWorker Changelog
 
+## 2026-05-07 14:11 [completed] QA-020 / BUG-087 / PLAN-158 / PLAN-159 — source full matrix after CLI 0.10.0
+
+Closed the source-local production validation gap after publishing 0.10.0.
+
+- Ran the full 5 Soul × 2 executor Governance Kernel matrix after the
+  file-first Brain Skill admission work. The first run found a real timeout
+  mismatch: two Codex turns hit the executor adapter's 120s hard cap even
+  though the harness outer turn budget was 240s.
+- Added `aiworker executor select --timeout-ms` and the matching
+  `worker executor select` alias. The option persists
+  `executor.overrides.timeoutMs`, which the Codex / Claude Code adapters
+  already consume.
+- Updated the harness to set executor timeout to its per-turn budget when
+  selecting Codex / Claude Code for each pair.
+- Final full source matrix passed: 400 PASS / 0 FAIL / 0 SKIPPED.
+
+Verification passed: focused executor select test, CLI full test, CLI
+typecheck, full typecheck, harness help, final full source matrix, and
+`git diff --check`.
+
 ## 2026-05-07 12:52 [completed] REL-024 / PLAN-157 / QA-019 — publish CLI 0.10.0
 
 Published `@zonease/aiworker-cli@0.10.0` for the lightweight Project Brain

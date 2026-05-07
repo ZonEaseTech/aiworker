@@ -198,7 +198,7 @@ A new worker defaults to `executor: { engine: 'http', variant: 'default' }` and 
 
 ```sh
 # Local:
-aiworker executor select --engine claude-code --variant default --apply
+aiworker executor select --engine claude-code --variant default --timeout-ms 240000 --apply
 aiworker executor doctor --engine claude-code
 
 # Remote, for a worker in the fleet:
@@ -209,6 +209,10 @@ aiworker fleet config set <workerId> "$NEW" --if-match <version>
 Supported engines: `http` (OpenAI / DeepSeek / SiliconFlow / any chat-completions-compatible API), `claude-code`, `codex`, `acp` (gemini / qwen), `cursor`, `mcp`.
 
 Per-engine install / auth recipes (including `claude login`, `codex auth`, secret vault writes, ACP CLI installs): [`docs/executor-engines.md`](docs/executor-engines.md).
+
+`--timeout-ms` on `executor select` sets the executor adapter's per-turn hard
+timeout. `aiworker run --timeout-ms` only controls how long the CLI waits for
+the worker turn to finish.
 
 ---
 

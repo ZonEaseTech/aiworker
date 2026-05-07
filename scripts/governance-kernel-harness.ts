@@ -1249,15 +1249,18 @@ async function runPair(
   if (init.code !== 0)
     return { chatId, checks, engine: pair.engine, marker, pairId, projectDir, soul: pair.soul }
 
-  const select = runAiworker(options.debugRoot, product, `${pairId}-02-executor-select`, [
+  const selectArgs = [
     'executor',
     'select',
     '--engine',
     pair.engine,
     '--variant',
     'default',
+    '--timeout-ms',
+    String(options.timeoutMs),
     '--apply',
-  ], {
+  ]
+  const select = runAiworker(options.debugRoot, product, `${pairId}-02-executor-select`, selectArgs, {
     cwd: projectDir,
     env,
     timeoutMs: 30_000,

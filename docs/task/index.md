@@ -270,3 +270,5 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**QA-018 Governance Kernel harness — brain-skill-add roundtrip evidence**](QA-018.md) `P1`
 - [x] [**REL-024 发布 aiworker CLI 0.10.0**](REL-024.md) `P1`
 - [x] [**QA-019 Governance Kernel harness — 0.10.0 cli-release-local compact evidence**](QA-019.md) `P1`
+- [x] [**QA-020 Governance Kernel harness — source-local full 5×2 matrix after 0.10.0**](QA-020.md) `P1`
+- [x] [**BUG-087 Codex executor hard cap ignores longer validation turn budget**](BUG-087.md) `P1`

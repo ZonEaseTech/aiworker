@@ -376,20 +376,22 @@ describe('aiworker executor capability commands', () => {
   it('selects a task executor with dry-run by default and apply guarded by config version', async () => {
     const { home, project } = await initProject()
 
-    const dryRun = await runCli(['executor', 'select', '--engine', 'codex'], project, home)
+    const dryRun = await runCli(['executor', 'select', '--engine', 'codex', '--timeout-ms', '240000'], project, home)
     expect(dryRun.exitCode).toBe(0)
     expect(dryRun.output).toContain('[aiworker executor select] dry-run')
+    expect(dryRun.output).toContain('Target  : codex/default (timeout=240000ms)')
     expect(dryRun.output).toContain('Write   : skipped')
 
     const before = JSON.parse((await runCli(['config', 'show'], project, home)).output) as { config: { executor: { engine: string } }, version: number }
     expect(before.config.executor.engine).toBe('http')
 
-    const apply = await runCli(['executor', 'select', '--engine', 'codex', '--apply', '--if-match', String(before.version)], project, home)
+    const apply = await runCli(['executor', 'select', '--engine', 'codex', '--timeout-ms', '240000', '--apply', '--if-match', String(before.version)], project, home)
     expect(apply.exitCode).toBe(0)
     expect(apply.output).toContain('[aiworker executor select] apply')
 
-    const after = JSON.parse((await runCli(['config', 'show'], project, home)).output) as { config: { executor: { engine: string, variant: string } }, version: number }
+    const after = JSON.parse((await runCli(['config', 'show'], project, home)).output) as { config: { executor: { engine: string, overrides?: { timeoutMs?: number }, variant: string } }, version: number }
     expect(after.config.executor).toMatchObject({ engine: 'codex', variant: 'default' })
+    expect(after.config.executor.overrides?.timeoutMs).toBe(240_000)
     expect(after.version).toBe(before.version + 1)
   })
 

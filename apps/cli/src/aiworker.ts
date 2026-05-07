@@ -218,10 +218,11 @@ cli
   .option('--model-id <model>', '可选 per-request model override')
   .option('--reasoning-id <id>', '可选 reasoning preset')
   .option('--permission-policy <policy>', '可选权限策略：auto / supervised / plan')
+  .option('--timeout-ms <n>', '可选 executor 单 turn hard timeout，单位毫秒', { type: [Number] })
   .option('--if-match <version>', 'apply 时使用的乐观锁；当前 config version 不等于此值则拒绝', { type: [Number] })
   .option('--apply', '持久化 executor 选择；默认只 dry-run')
   .option('--dry-run', '只打印将更新的 executor 选择')
-  .action(async (opts: { apply?: boolean, dryRun?: boolean, engine?: string, ifMatch?: number[], modelId?: string, permissionPolicy?: string, reasoningId?: string, variant?: string }) => {
+  .action(async (opts: { apply?: boolean, dryRun?: boolean, engine?: string, ifMatch?: number[], modelId?: string, permissionPolicy?: string, reasoningId?: string, timeoutMs?: number[], variant?: string }) => {
     process.exit(await runExecutorSelect({
       ...(opts.apply === true ? { apply: true } : {}),
       ...(opts.dryRun === true ? { dryRun: true } : {}),
@@ -230,6 +231,7 @@ cli
       ...(opts.modelId === undefined ? {} : { modelId: opts.modelId }),
       ...(opts.reasoningId === undefined ? {} : { reasoningId: opts.reasoningId }),
       ...(opts.permissionPolicy === undefined ? {} : { permissionPolicy: opts.permissionPolicy }),
+      timeoutMs: optionalNumber(opts.timeoutMs),
       ifMatch: optionalNumber(opts.ifMatch),
     }))
   })
@@ -735,10 +737,11 @@ cli
   .option('--model-id <model>', '可选 per-request model override')
   .option('--reasoning-id <id>', '可选 reasoning preset')
   .option('--permission-policy <policy>', '可选权限策略：auto / supervised / plan')
+  .option('--timeout-ms <n>', '可选 executor 单 turn hard timeout，单位毫秒', { type: [Number] })
   .option('--if-match <version>', 'apply 时使用的乐观锁；当前 config version 不等于此值则拒绝', { type: [Number] })
   .option('--apply', '持久化 executor 选择；默认只 dry-run')
   .option('--dry-run', '只打印将更新的 executor 选择')
-  .action(async (opts: { apply?: boolean, dryRun?: boolean, engine?: string, ifMatch?: number[], modelId?: string, permissionPolicy?: string, reasoningId?: string, variant?: string }) => {
+  .action(async (opts: { apply?: boolean, dryRun?: boolean, engine?: string, ifMatch?: number[], modelId?: string, permissionPolicy?: string, reasoningId?: string, timeoutMs?: number[], variant?: string }) => {
     process.exit(await runExecutorSelect({
       ...(opts.apply === true ? { apply: true } : {}),
       ...(opts.dryRun === true ? { dryRun: true } : {}),
@@ -747,6 +750,7 @@ cli
       ...(opts.modelId === undefined ? {} : { modelId: opts.modelId }),
       ...(opts.reasoningId === undefined ? {} : { reasoningId: opts.reasoningId }),
       ...(opts.permissionPolicy === undefined ? {} : { permissionPolicy: opts.permissionPolicy }),
+      timeoutMs: optionalNumber(opts.timeoutMs),
       ifMatch: optionalNumber(opts.ifMatch),
     }))
   })
@@ -1490,7 +1494,7 @@ interface CliCommandShape {
 
 const NUMERIC_RULES: Record<string, Record<string, NumericRule>> = {
   'config set': { ifMatch: { integer: true, min: 1 } },
-  'executor select': { ifMatch: { integer: true, min: 1 } },
+  'executor select': { ifMatch: { integer: true, min: 1 }, timeoutMs: { integer: true, min: 1 } },
   'fleet chat': { timeoutMs: { integer: true, min: 1 } },
   'fleet config set': { ifMatch: { integer: true, min: 1 } },
   'fleet logs': {
@@ -1511,7 +1515,7 @@ const NUMERIC_RULES: Record<string, Record<string, NumericRule>> = {
     olderThanDays: { integer: true, min: 0, max: 3650 },
   },
   'worker config set': { ifMatch: { integer: true, min: 1 } },
-  'worker executor select': { ifMatch: { integer: true, min: 1 } },
+  'worker executor select': { ifMatch: { integer: true, min: 1 }, timeoutMs: { integer: true, min: 1 } },
   'worker run': { timeoutMs: { integer: true, min: 1 } },
   'worker serve': { port: { integer: true, min: 1, max: 65_535 } },
   'worker up': { port: { integer: true, min: 1, max: 65_535 } },

@@ -74,6 +74,7 @@ export interface ExecutorSelectOptions {
   modelId?: string
   permissionPolicy?: string
   reasoningId?: string
+  timeoutMs?: number
   variant?: string
 }
 
@@ -362,6 +363,7 @@ export async function runExecutorSelect(options: ExecutorSelectOptions): Promise
     ...(options.modelId === undefined ? {} : { modelId: options.modelId }),
     ...(options.reasoningId === undefined ? {} : { reasoningId: options.reasoningId }),
     ...(options.permissionPolicy === undefined ? {} : { permissionPolicy: options.permissionPolicy }),
+    ...(options.timeoutMs === undefined ? {} : { overrides: { timeoutMs: options.timeoutMs } }),
   }
   try {
     resolveVariant(target)
@@ -1105,6 +1107,7 @@ function formatExecutorProfile(executor: ExecutorConfig): string {
     executor.modelId === undefined ? undefined : `model=${executor.modelId}`,
     executor.permissionPolicy === undefined ? undefined : `permission=${executor.permissionPolicy}`,
     executor.reasoningId === undefined ? undefined : `reasoning=${executor.reasoningId}`,
+    typeof executor.overrides?.timeoutMs === 'number' ? `timeout=${executor.overrides.timeoutMs}ms` : undefined,
   ].filter((item): item is string => item !== undefined)
   return `${executor.engine}/${executor.variant}${extras.length === 0 ? '' : ` (${extras.join(', ')})`}`
 }
