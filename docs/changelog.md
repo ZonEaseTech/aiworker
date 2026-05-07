@@ -1,9 +1,10 @@
 # AIWorker Changelog
 
-## 2026-05-07 15:26 [progress] REL-025 / PLAN-160 — publish CLI 0.10.1
+## 2026-05-07 16:09 [completed] REL-025 / PLAN-160 / QA-021 — publish CLI 0.10.1
 
-Started `@zonease/aiworker-cli@0.10.1` as the patch release that ships
-BUG-087's executor timeout budget fix.
+Published `@zonease/aiworker-cli@0.10.1` as the patch release that ships
+BUG-087's executor timeout budget fix and closes the published-package full
+matrix gap.
 
 - Release scope is intentionally narrow: version metadata, README latest,
   release docs, tag-triggered publish, and published-package validation.
@@ -16,6 +17,15 @@ BUG-087's executor timeout budget fix.
   build, CLI run/fleet smoke, dist version checks, `git diff --check`, and
   publish dry-run pack stage. Publish dry-run packed 32 files / 3.1 MB and
   stopped at the expected local npm authentication boundary.
+- Release commit `c82dc45` and annotated tag `v0.10.1` were pushed. GitHub
+  Actions release run `25482320641` passed in 2m13s, publishing npm and four
+  GitHub Release binary assets.
+- npm latest resolves to `0.10.1`; explicit
+  `bunx @zonease/aiworker-cli@0.10.1 --version` reports `aiworker/0.10.1`.
+- Published-package full Governance Kernel matrix passed against 0.10.1:
+  400 PASS / 0 FAIL / 0 SKIPPED. The two BUG-087 risk pairs
+  (`hr-recruiting-codex`, `finance-ops-codex`) both passed on the published
+  package path.
 
 ## 2026-05-07 14:11 [completed] QA-020 / BUG-087 / PLAN-158 / PLAN-159 — source full matrix after CLI 0.10.0
 

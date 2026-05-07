@@ -18,7 +18,7 @@ inline.
 
 | Dimension | Status | Source-backed evidence |
 |---|---|---|
-| Admission positive invariant (durable Brain mutation flows through admission) | conforming | QA-011 — `memory-add` `pending → approved → applied` writes canonical memory + MEMORY.md index; brief projection picks it up. QA-018 / QA-019 / QA-020 — `brain-skill-add` writes canonical `skills/<id>/SKILL.md`, DB decisions include `approved,applied`, and `doctor` accepts the resulting Project Brain on source compact, published 0.10.0 compact, and source full 5×2. |
+| Admission positive invariant (durable Brain mutation flows through admission) | conforming | QA-011 — `memory-add` `pending → approved → applied` writes canonical memory + MEMORY.md index; brief projection picks it up. QA-018 / QA-019 / QA-020 / QA-021 — `brain-skill-add` writes canonical `skills/<id>/SKILL.md`, DB decisions include `approved,applied`, and `doctor` accepts the resulting Project Brain on source compact, published 0.10.0 compact, source full 5×2, and published 0.10.1 full 5×2. |
 | Admission negative invariant (rejected proposals never write canonical memory) | conforming | QA-012 — `pending → rejected` records audit decision, no memory file; source + published 0.9.1 both pass. |
 | Pre-compaction generated memory boundary | conforming in source | BUG-085 / PLAN-143 — suppressed executor output creates a pending `memory-add` proposal in `brain_admission_proposals`, never a direct `BrainProvider.writeMemory()` call; compaction audit metadata records `status='proposed'`. |
 | Secret defense at materialization (BUG-055 regression line) | conforming | QA-012 — `apply --commit` with default `block` policy refuses bodies matching `scanBodyForSecrets`, returns `outcome.kind='blocked-by-secret-scan'` with exit 1, leaves proposal `approved`, no `applied` decision row, no canonical memory file. Source + published 0.9.1. |
@@ -34,10 +34,10 @@ inline.
 | Worker product lifecycle (`init → up → serve`) | conforming in current source | REFACTOR-019 / PLAN-152 code audit: `runInit()` seeds Project Brain + local worker state, `runUp()` composes 5 explicit stages, `runServe()` delegates to `bootstrapWorkerApp()` and optional gateway node startup. |
 | File-first Project Brain skill surface | conforming in current source | REFACTOR-016 / PLAN-149 and REFACTOR-018 / PLAN-151: Soul and Brain Skill Packs are Markdown source; init seeds `.aiworker/skills/<id>/SKILL.md`; filesystem scanner registers only `SKILL.md` entrypoints and ignores sidecars. |
 | Brain-to-executor runtime handoff | conforming with explicit limits | REFACTOR-019 / PLAN-152, REFACTOR-020 / PLAN-153, and REFACTOR-021 / PLAN-154 code audits: `ContextManager` projects persona/memory/rollup + skill summaries into the system prompt, loads selected `SKILL.md` bodies when `skill_load` is required, and loads matched memory snippets when `memory_search` is required; `Orchestrator` calls external `ExecutorProvider.run()` with messages/model/workspace/signal/native binding only. |
-| Regression validation (repeatable harness covering above invariants) | conforming | `scripts/governance-kernel-harness.ts` with 40 checks per pair; PLAN-127 (initial harness), PLAN-128 (memory positive roundtrip), PLAN-129 (reject + secret-scan-block), PLAN-130 (full 5×2 matrix evidence), PLAN-144 (cross `chat-id` isolation), PLAN-147 (serve process restart continuity), PLAN-156 (Brain Skill positive roundtrip), QA-019 (published 0.10.0 compact), QA-020 (source 5×2 full after timeout override). |
-| Soul-agnostic kernel (every Soul × executor satisfies same invariants) | conforming on source + published | QA-020 — full 5×2 matrix on current source after Brain Skill admission coverage: 400 PASS / 0 FAIL / 0 SKIPPED. QA-014 — full 5×2 matrix on `cli-release-local` 0.9.1: 300 PASS / 0 FAIL / 0 SKIPPED. QA-019 — published 0.10.0 compact: 80 PASS / 0 FAIL / 0 SKIPPED. |
+| Regression validation (repeatable harness covering above invariants) | conforming | `scripts/governance-kernel-harness.ts` with 40 checks per pair; PLAN-127 (initial harness), PLAN-128 (memory positive roundtrip), PLAN-129 (reject + secret-scan-block), PLAN-130 (full 5×2 matrix evidence), PLAN-144 (cross `chat-id` isolation), PLAN-147 (serve process restart continuity), PLAN-156 (Brain Skill positive roundtrip), QA-019 (published 0.10.0 compact), QA-020 (source 5×2 full after timeout override), QA-021 (published 0.10.1 full 5×2). |
+| Soul-agnostic kernel (every Soul × executor satisfies same invariants) | conforming on source + published | QA-020 — full 5×2 matrix on current source after Brain Skill admission coverage: 400 PASS / 0 FAIL / 0 SKIPPED. QA-021 — full 5×2 matrix on `cli-release-local` 0.10.1: 400 PASS / 0 FAIL / 0 SKIPPED. QA-014 — full 5×2 matrix on `cli-release-local` 0.9.1: 300 PASS / 0 FAIL / 0 SKIPPED. |
 | Long-running `aiworker serve` REST multi-turn (orchestrator persistence + bearer auth) | conforming | QA-015 — POST /tasks unauth → 401, authenticated submit → 201 + agent_tasks.status=succeeded, POST /conversations/:id/messages → second task succeeded on same conversation, GET /conversations/:id/messages → ≥4 messages. Both pairs PASS. |
-| Serve process restart between REST turns | conforming on source + published | QA-016 / PLAN-147 — source compact harness stops `aiworker serve` after REST turn 1, verifies `/health` goes down, relaunches on the same project/port, then continues the same conversation id; QA-017 / REL-023 repeats the same compact check against published CLI 0.9.7; QA-019 repeats it against published CLI 0.10.0. Both compact pairs PASS. |
+| Serve process restart between REST turns | conforming on source + published | QA-016 / PLAN-147 — source compact harness stops `aiworker serve` after REST turn 1, verifies `/health` goes down, relaunches on the same project/port, then continues the same conversation id; QA-017 / REL-023 repeats the same compact check against published CLI 0.9.7; QA-019 repeats it against published CLI 0.10.0; QA-021 repeats it across published CLI 0.10.1 full 5×2. |
 
 ## Boundary and residual risk
 
@@ -80,9 +80,10 @@ read as a stronger statement than the evidence supports.
   routine repeatable runs because the full matrix is heavier. QA-018 source
   compact passed 80 / 80 checks after adding Brain Skill admission roundtrip
   coverage, QA-019 published 0.10.0 compact also passed 80 / 80 checks, and
-  QA-020 source-local full passed 400 / 400 checks. Published 0.10.0 has not
-  had a full 5 × 2 run; compact + occasional source full remains the
-  recommended cadence.
+  QA-020 source-local full passed 400 / 400 checks. QA-021 published 0.10.1
+  full passed 400 / 400 checks after BUG-087 aligned executor hard timeout
+  with the harness per-turn budget. Compact remains the routine cadence; full
+  source + full published runs are release or production-readiness gates.
 - **Secret-body redact / raw paths**: `--allow-secret-body redact` and
   `--allow-secret-body raw` are unit-tested in
   `packages/core/src/worker/brain/admission/service.test.ts` but are not in
@@ -128,6 +129,10 @@ read as a stronger statement than the evidence supports.
 - `docs/task/QA-020.md` — source-local full 5×2 matrix after 0.10.0:
   final run passed 400 PASS / 0 FAIL / 0 SKIPPED; first run exposed BUG-087's
   Codex timeout mismatch and final run verified the fix.
+- `docs/task/QA-021.md` — `cli-release-local` 0.10.1 full 5×2 matrix:
+  published CLI run passed 400 PASS / 0 FAIL / 0 SKIPPED, including the two
+  BUG-087 risk pairs (`hr-recruiting-codex`, `finance-ops-codex`) and serve
+  restart continuity across every pair.
 - `docs/task/BUG-087.md` / `docs/plan/PLAN-159.md` — executor selection
   timeout override; harness now aligns executor adapter hard timeout with its
   per-turn budget.

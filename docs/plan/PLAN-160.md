@@ -1,8 +1,9 @@
 # PLAN-160 发布 aiworker CLI 0.10.1
 
-- **status**: in_progress
+- **status**: completed
 - **createdAt**: 2026-05-07 15:26
 - **approvedAt**: 2026-05-07 15:26
+- **completedAt**: 2026-05-07 16:09
 - **relatedTask**: REL-025
 
 ## 当前状态
@@ -71,3 +72,9 @@ full 5 Soul × 2 executor matrix，验证 0.10.1 在真实包路径下也能跑�
 - 2026-05-07 15:28：本地 release gate passed：frozen install、typecheck、
   lint、test、build、CLI run/fleet smoke、dist version checks、
   `git diff --check`、publish dry-run pack stage。
+- 2026-05-07 15:32：release commit `c82dc45`、`main`、annotated tag
+  `v0.10.1` 已推送；GitHub Actions release run `25482320641` 成功发布 npm
+  与四个平台 binary assets。
+- 2026-05-07 16:09：npm latest、显式 `bunx` 版本 smoke、GitHub Release asset
+  verification、发布包 full Governance Kernel matrix 全部通过。QA-021 记录
+  400 PASS / 0 FAIL / 0 SKIPPED。

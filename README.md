@@ -279,7 +279,7 @@ CLI npm latest: **0.10.1**.
 |---|---|
 | Worker / Fleet control plane / 4 enrollment paths / 6 LLM engines / 5 channel webhooks / cron / per-tool approvals / hot reload | ✅ Production |
 | Brain Governance Kernel (admission state machine + secret-scan defense + canonical memory boundary + truthful decision events + bypass detection) | ✅ GA |
-| Governance Kernel regression harness (5×2 matrix on source + cli-release-local with 600+ checks) + long-running serve multi-turn REST regression | ✅ GA |
+| Governance Kernel regression harness (5×2 matrix on source + cli-release-local with 800+ checks) + long-running serve multi-turn REST regression | ✅ GA |
 | Brain admission `memory-add` materializer | ✅ MVP (other kinds return `unsupported`; post-apply rollback not yet implemented) |
 | Heavy LLM-backed Brain decider | 🔜 opt-in; defaults to `evaluator=heuristic` `mode=observe_only` |
 | Cross-scope hard isolation (runtime-enforced) | 🔜 currently filesystem-conventional, not runtime-isolated |
