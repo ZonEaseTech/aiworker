@@ -1,10 +1,21 @@
 # AIWorker Changelog
 
-## 2026-05-08 02:08 [in_progress] REL-027 / PLAN-168 — 发布 aiworker CLI 0.10.3
+## 2026-05-08 02:08 [completed] REL-027 / PLAN-168 — 发布 aiworker CLI 0.10.3
 
-开始发布 `@zonease/aiworker-cli@0.10.3`，包含 0.10.2 之后的 Project Brain
-布局收敛、worker 入网配置引导和 README 用户定位更新。发布后将按
-`aiworker-validate cli-release-local` compact harness 验证已发布 package。
+发布 `@zonease/aiworker-cli@0.10.3`，包含 0.10.2 之后的 Project Brain
+布局收敛、worker 入网配置引导和 README 用户定位更新。
+
+- 本地 release gate 通过：frozen install、typecheck、lint、test、build、
+  CLI run/fleet smoke、dist version、`git diff --check` 和 publish dry-run pack
+  stage。
+- `main` 与 annotated tag `v0.10.3` 已推送；GitHub Actions release run
+  `25513697854` 成功，npm latest 已更新到 `0.10.3`，GitHub Release 上传四个
+  binary assets。
+- 发布包 `cli-release-local` compact harness 最终通过：developer/codex 与
+  general-assistant/claude-code 共 80 PASS / 0 FAIL / 0 SKIPPED。
+- 验证中发现两个测试流程注意点：debug root 不应放在已有 `.aiworker` 的父目录下；
+  macOS 上应使用 `/private/tmp` 真实路径，避免 `/tmp` symlink 造成 evidence path
+  字符串比较假失败。
 
 ## 2026-05-08 02:17 [completed] TODO-042 / PLAN-167 — README refresh from current CLI onboarding behavior
 

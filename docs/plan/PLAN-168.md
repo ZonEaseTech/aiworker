@@ -1,8 +1,9 @@
 # PLAN-168 发布 aiworker CLI 0.10.3
 
-- **status**: in_progress
+- **status**: completed
 - **createdAt**: 2026-05-08 02:08
 - **approvedAt**: 2026-05-08 02:08
+- **completedAt**: 2026-05-08 02:34
 - **relatedTask**: REL-027
 
 ## 当前状态
@@ -63,3 +64,20 @@ compact governance harness 验证。
 - 2026-05-08 02:10：本地 release gate passed：frozen install、typecheck、
   lint、test、build、CLI run/fleet smoke、dist version checks、`git diff
   --check`、publish dry-run pack stage。
+- 2026-05-08 02:13：release commit `7c8bba3`、`main`、annotated tag
+  `v0.10.3` 已推送；GitHub Actions release run `25513697854` 成功发布 npm
+  与四个平台 binary assets。
+- 2026-05-08 02:14：npm latest、显式 `bunx` 版本 smoke、GitHub Release asset
+  verification 全部通过。
+- 2026-05-08 02:34：发布包 `cli-release-local` compact harness 最终通过：
+  `/private/tmp/aiworker-qa-20260508-0.10.3-cli-compact-realpath`，2 pairs ×
+  40 checks = 80 PASS / 0 FAIL / 0 SKIPPED。
+
+## 结果
+
+- `@zonease/aiworker-cli@0.10.3` 已发布到 npm latest。
+- GitHub Release `v0.10.3` 已发布，四个平台 binary assets 已上传。
+- 发布包黑盒验证通过，覆盖 developer/codex 与 general-assistant/claude-code
+  compact matrix、Brain admission memory/skill materialization、REST/SSE、
+  auth boundary、serve restart continuity 和 conversation continuity。
+- Release workflow 仍有 Node.js 20 action deprecation annotation，非本次发布阻塞。
