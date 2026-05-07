@@ -1,9 +1,9 @@
 # AIWorker Changelog
 
-## 2026-05-07 12:37 [progress] REL-024 / PLAN-157 — prepare CLI 0.10.0 release
+## 2026-05-07 12:52 [completed] REL-024 / PLAN-157 / QA-019 — publish CLI 0.10.0
 
-Started the `@zonease/aiworker-cli@0.10.0` release candidate for the
-lightweight Project Brain production path.
+Published `@zonease/aiworker-cli@0.10.0` for the lightweight Project Brain
+production path.
 
 - Release scope includes file-first Soul/Brain Skill packs, runtime
   `SKILL.md` body loading, runtime memory search context loading,
@@ -13,8 +13,15 @@ lightweight Project Brain production path.
 - Local release gates passed: frozen install, typecheck, lint, test, build,
   CLI run/fleet smoke, dist version checks, built CLI `--version`,
   `git diff --check`, and publish dry-run pack stage. Publish dry-run stopped
-  at the expected local npm authentication boundary; formal publish proceeds
+  at the expected local npm authentication boundary; formal publish completed
   through the tag-triggered GitHub Actions release workflow.
+- GitHub Actions release run `25476431319` completed successfully; npm latest
+  resolves to `0.10.0`; GitHub Release `v0.10.0` is live with four binary
+  assets.
+- Published-package compact Governance Kernel harness passed against
+  `@zonease/aiworker-cli@0.10.0`: 80 PASS / 0 FAIL / 0 SKIPPED, including
+  Brain Skill admission materialization, serve restart continuity, REST auth
+  boundary, and both compact executor pairs.
 
 ## 2026-05-07 11:34 [completed] TODO-038 / PLAN-156 — Harness brain-skill-add admission roundtrip evidence
 

@@ -1,18 +1,21 @@
 # PLAN-157 发布 aiworker CLI 0.10.0
 
-- **status**: in_progress
+- **status**: completed
 - **createdAt**: 2026-05-07 12:37
 - **approvedAt**: 2026-05-07 12:37
+- **completedAt**: 2026-05-07 12:52
 - **relatedTask**: REL-024
 
 ## Current State
 
-1. `main` is clean and synchronized with `origin/main`.
-2. Latest published CLI is `@zonease/aiworker-cli@0.9.7`.
-3. Current source has passed `bun run check`, `bun run test`, `bun run build`,
-   `git diff --check`, and source-local compact governance harness
+1. `main` contains release commit `f2aa5ee`; annotated tag `v0.10.0` is
+   pushed.
+2. Latest published CLI is `@zonease/aiworker-cli@0.10.0`.
+3. Local release gates passed before tagging, including full typecheck, lint,
+   test, build, CLI smoke, fleet smoke, dist version checks, and publish
+   dry-run pack stage.
+4. Published package validation passed through QA-019:
    `80 PASS / 0 FAIL / 0 SKIPPED`.
-4. Latest source has not yet been validated from a published package.
 
 ## Proposal
 
@@ -76,3 +79,9 @@
   begins under the user-approved production-readiness release direction.
 - 2026-05-07 12:39: Local release gates passed. Ready for release bump commit,
   annotated tag, push, and workflow verification.
+- 2026-05-07 12:43: Release commit `f2aa5ee`, `main`, and annotated tag
+  `v0.10.0` pushed. GitHub Actions release run `25476431319` completed
+  successfully.
+- 2026-05-07 12:52: npm latest, explicit `bunx` package version smoke,
+  GitHub Release asset verification, and published-package compact governance
+  harness all passed. QA-019 records the 80 PASS / 0 FAIL / 0 SKIPPED evidence.
