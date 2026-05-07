@@ -1,5 +1,22 @@
 # AIWorker Changelog
 
+## 2026-05-07 17:49 [progress] REL-026 / PLAN-162 — publish CLI 0.10.2
+
+Started `@zonease/aiworker-cli@0.10.2` as a patch release for Worker Admin Web
+polish after the 0.10.1 production baseline.
+
+- Release scope contains BUG-088 (Worker Admin Chat no longer renders the final
+  assistant reply twice after persisted messages refresh) and BUG-089 (Worker
+  Config save controls no longer float outside the content width).
+- No Brain / executor runtime code is changed in this release.
+- Validation target is standard release gate plus published-package metadata
+  and package smoke, with 0.10.1's full Governance Kernel matrix remaining the
+  runtime baseline.
+- Local release gates passed through frozen install, typecheck, lint, test,
+  build, CLI run/fleet smoke, dist version checks, `git diff --check`, and
+  publish dry-run pack stage. Publish dry-run packed 32 files / 3.1 MB and
+  stopped at the expected local npm authentication boundary.
+
 ## 2026-05-07 17:10 [completed] BUG-088 / PLAN-161 — Worker Admin Chat final reply de-duplication
 
 Fixed Worker Admin Chat's duplicate final assistant rendering and softened the
