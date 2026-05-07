@@ -1,5 +1,11 @@
 # AIWorker Changelog
 
+## 2026-05-08 02:08 [in_progress] REL-027 / PLAN-168 — 发布 aiworker CLI 0.10.3
+
+开始发布 `@zonease/aiworker-cli@0.10.3`，包含 0.10.2 之后的 Project Brain
+布局收敛、worker 入网配置引导和 README 用户定位更新。发布后将按
+`aiworker-validate cli-release-local` compact harness 验证已发布 package。
+
 ## 2026-05-08 02:17 [completed] TODO-042 / PLAN-167 — README refresh from current CLI onboarding behavior
 
 Fed the latest CLI onboarding behavior back into the public README files.
