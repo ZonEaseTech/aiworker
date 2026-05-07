@@ -6,6 +6,7 @@ import {
   brainAdmissionMemoryAddPayloadSchema,
   brainAdmissionProposalInputSchema,
   brainAdmissionProposalSchema,
+  brainAdmissionSkillAddPayloadSchema,
   isMaterializedProposalKind,
   redactBrainAdmissionProposal,
   redactSecretLikeValues,
@@ -120,10 +121,38 @@ describe('brainAdmissionMemoryAddPayloadSchema', () => {
   })
 })
 
+describe('brainAdmissionSkillAddPayloadSchema', () => {
+  it('accepts a skill id and SKILL.md body', () => {
+    expect(brainAdmissionSkillAddPayloadSchema.safeParse({
+      body: [
+        '---',
+        'id: developer.review-checklist',
+        'name: Review checklist',
+        'description: Review code changes with project context.',
+        'version: 0.1.0',
+        '---',
+        '# Review checklist',
+      ].join('\n'),
+      skillId: 'developer.review-checklist',
+    }).success).toBe(true)
+  })
+
+  it('rejects malformed skill ids and oversize bodies', () => {
+    expect(brainAdmissionSkillAddPayloadSchema.safeParse({
+      body: 'x',
+      skillId: '../escape',
+    }).success).toBe(false)
+    expect(brainAdmissionSkillAddPayloadSchema.safeParse({
+      body: 'x'.repeat(20_001),
+      skillId: 'developer.review-checklist',
+    }).success).toBe(false)
+  })
+})
+
 describe('isMaterializedProposalKind', () => {
   it.each([
     ['memory-add', true],
-    ['brain-skill-add', false],
+    ['brain-skill-add', true],
     ['policy-update', false],
     ['unknown', false],
   ] as const)('reports %s as materialized=%s', (kind, expected) => {

@@ -39,7 +39,7 @@ import {
   resolveContextBudget,
   resolveExecutorModel,
 } from './context'
-import { ContextManager, RunContextComposer } from './context-manager'
+import { appendLoadedBrainMemories, appendLoadedBrainSkillBodies, ContextManager, RunContextComposer } from './context-manager'
 import { deadLoopDetectorFromConfig } from './dead-loop'
 import { recordConversationClassifier, recordIntentDecision, recordQualityGate } from './decision-pipeline-stats'
 import { buildPromptCapabilityDecision } from './decisions'
@@ -283,12 +283,30 @@ export class Orchestrator {
       registry,
       requiredContext: intentDecision.requiredContext,
     })
+    const loadedSkillContext = capabilityPlan.selectedBuiltins.includes('load_skill')
+      ? await this.contextManager.loadSkillBodies({
+          skillIds: capabilityPlan.selectedSkills.map(skill => skill.id),
+        })
+      : { errors: [], loaded: [] }
+    const loadedMemoryContext = capabilityPlan.selectedBuiltins.includes('memory_search')
+      ? await this.contextManager.searchMemories({ query: envelope.text })
+      : { errors: [], loaded: [] }
     const capabilityDecision = buildPromptCapabilityDecision({
       ...decisionContext,
       ...capabilityPlan,
+      loadedMemoryCount: loadedMemoryContext.loaded.length,
+      loadedMemoryIds: loadedMemoryContext.loaded.map(memory => memory.id),
+      loadedSkillCount: loadedSkillContext.loaded.length,
+      loadedSkillIds: loadedSkillContext.loaded.map(skill => skill.id),
+      memorySearchErrors: loadedMemoryContext.errors,
+      mode: loadedSkillContext.loaded.length > 0 || loadedMemoryContext.loaded.length > 0 ? 'enforced' : 'observe_only',
+      skillLoadErrors: loadedSkillContext.errors,
     })
     this.deps.bus.emit('orchestrator.capability_decision', capabilityDecision)
-    let systemPrompt = systemContext.systemPrompt
+    let systemPrompt = appendLoadedBrainMemories(
+      appendLoadedBrainSkillBodies(systemContext.systemPrompt, loadedSkillContext.loaded),
+      loadedMemoryContext.loaded,
+    )
     let chatMessages = await this.buildRunContext(activeConversation.id, systemPrompt)
     touchSessionEntry(sessionKey, { contextTokens: estimateChatMessagesTokens(chatMessages) })
     const admissionCountBefore = this.countAdmissionProposals()
@@ -324,7 +342,11 @@ export class Orchestrator {
       })
       if (retryCompaction.compacted) {
         activeConversation = retryCompaction.conversation
-        systemPrompt = (await this.contextManager.buildSystemPrompt({ priorSummary: activeConversation.summary ?? null })).systemPrompt
+        systemPrompt = appendLoadedBrainSkillBodies(
+          (await this.contextManager.buildSystemPrompt({ priorSummary: activeConversation.summary ?? null })).systemPrompt,
+          loadedSkillContext.loaded,
+        )
+        systemPrompt = appendLoadedBrainMemories(systemPrompt, loadedMemoryContext.loaded)
         chatMessages = await this.buildRunContext(activeConversation.id, systemPrompt)
         touchSessionEntry(sessionKey, { contextTokens: estimateChatMessagesTokens(chatMessages) })
         runInput = this.buildAgentRunInput({

@@ -1,6 +1,6 @@
 import type { FilesystemMemory, FilesystemSkill } from './types'
 
-import { join } from 'node:path'
+import { basename, join, posix as pathPosix } from 'node:path'
 
 import { parse as parseYaml } from 'yaml'
 
@@ -24,42 +24,29 @@ function parseFrontmatter(raw: string): { metadata: Record<string, unknown>, con
   }
 }
 
-function parseSkillMetadata(raw: string, filePath: string): Omit<FilesystemSkill, 'hash'> | null {
-  const ext = filePath.split('.').pop()?.toLowerCase()
+function inferSkillId(relativePath: string): string {
+  const dir = pathPosix.dirname(relativePath)
+  return dir === '.' ? basename(relativePath, '.md') : dir
+}
 
-  if (ext === 'yaml' || ext === 'yml') {
-    try {
-      const data = parseYaml(raw) as Record<string, unknown>
-      return {
-        name: String(data.name ?? ''),
-        description: String(data.description ?? ''),
-        version: String(data.version ?? '0.0.0'),
-        capabilities: Array.isArray(data.capabilities) ? data.capabilities.map(String) : [],
-        filePath,
-      }
-    }
-    catch {
-      return null
-    }
+function parseSkillMetadata(raw: string, filePath: string, relativePath: string): Omit<FilesystemSkill, 'hash'> | null {
+  const { metadata, content } = parseFrontmatter(raw)
+  const id = String(metadata.id ?? inferSkillId(relativePath))
+  return {
+    body: content.trim(),
+    id,
+    name: String(metadata.name ?? id),
+    description: String(metadata.description ?? content.split('\n')[0] ?? ''),
+    version: String(metadata.version ?? '0.0.0'),
+    capabilities: Array.isArray(metadata.capabilities) ? metadata.capabilities.map(String) : [],
+    filePath,
   }
-
-  if (ext === 'md') {
-    const { metadata, content } = parseFrontmatter(raw)
-    return {
-      name: String(metadata.name ?? filePath.split('/').pop()?.replace(/\.md$/, '') ?? ''),
-      description: String(metadata.description ?? content.split('\n')[0] ?? ''),
-      version: String(metadata.version ?? '0.0.0'),
-      capabilities: Array.isArray(metadata.capabilities) ? metadata.capabilities.map(String) : [],
-      filePath,
-    }
-  }
-
-  return null
 }
 
 /**
- * Scans `<home>/skills/**` for `.md` or `.yaml` files, parses
- * agentskills.io-style frontmatter, and returns structured skill records.
+ * Scans `SKILL.md` entrypoints under `<home>/skills/`, parses agentskills.io-style frontmatter,
+ * and returns structured skill records. Sidecar Markdown files under
+ * `references/` or `assets/` are intentionally ignored.
  * Returns `[]` when the directory does not exist — callers rely on this
  * as a "no skills configured" signal.
  */
@@ -70,15 +57,20 @@ export async function scanSkills(home: string): Promise<FilesystemSkill[]> {
     const fs = await import('node:fs/promises')
     await fs.access(skillsDir)
 
-    const glob = new Bun.Glob('**/*.{yaml,yml,md}')
+    const glob = new Bun.Glob('**/SKILL.md')
     const skills: FilesystemSkill[] = []
+    const paths: string[] = []
 
     for await (const path of glob.scan({ cwd: skillsDir })) {
+      paths.push(path)
+    }
+
+    for (const path of paths.sort()) {
       const fullPath = join(skillsDir, path)
       try {
         const file = Bun.file(fullPath)
         const raw = await file.text()
-        const parsed = parseSkillMetadata(raw, fullPath)
+        const parsed = parseSkillMetadata(raw, fullPath, path)
         if (parsed) {
           const hash = await computeHash(raw)
           skills.push({ ...parsed, hash })
@@ -94,6 +86,11 @@ export async function scanSkills(home: string): Promise<FilesystemSkill[]> {
   catch {
     return []
   }
+}
+
+export async function loadSkill(home: string, id: string): Promise<FilesystemSkill | null> {
+  const skills = await scanSkills(home)
+  return skills.find(skill => skill.id === id) ?? null
 }
 
 /**

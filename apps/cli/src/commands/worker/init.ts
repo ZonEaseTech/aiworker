@@ -9,7 +9,12 @@ import { createInterface } from 'node:readline/promises'
 
 import { markBootstrapShown } from '@zonease/aiworker-core'
 import { ensureProjectAiworker, resolveAiworkerScope, resolveProjectRoot } from '@zonease/aiworker-fs-layout'
-import { buildScopeManifest, createBuiltinSoulRegistry } from '@zonease/aiworker-shared'
+import {
+  brainSkillPackSeedFiles,
+  buildScopeManifest,
+  BUILTIN_KERNEL_BRAIN_SKILL_PACKS,
+  createBuiltinSoulRegistry,
+} from '@zonease/aiworker-shared'
 import consola from 'consola'
 
 import { loadWorkerContext } from '../../context'
@@ -281,6 +286,13 @@ function buildScopeManifestSeed(soul: SelectedSoul): string {
   return `${JSON.stringify(manifest, null, 2)}\n`
 }
 
+function buildBrainSkillFilesSeed(soul: SelectedSoul): Record<string, string> {
+  return brainSkillPackSeedFiles([
+    ...BUILTIN_KERNEL_BRAIN_SKILL_PACKS,
+    ...(soul.brainSkillPacks ?? []),
+  ])
+}
+
 function buildProjectAiworkerSeed(soul: SelectedSoul): ProjectAiworkerSeed {
   const policy = {
     schemaVersion: 1,
@@ -335,6 +347,7 @@ function buildProjectAiworkerSeed(soul: SelectedSoul): ProjectAiworkerSeed {
 
   return {
     agentMd: ensureTrailingNewline(soul.agentMd ?? generatedAgentMd),
+    brainSkillFiles: buildBrainSkillFilesSeed(soul),
     capabilityPacksJson: `${JSON.stringify(capabilityPacks, null, 2)}\n`,
     policyJson: `${JSON.stringify(policy, null, 2)}\n`,
     scopeJson: buildScopeManifestSeed(soul),
@@ -626,6 +639,16 @@ function buildProjectPreflight(
       preserve.push(display)
     else
       create.push(relative)
+  }
+
+  if (soul) {
+    for (const relative of Object.keys(buildBrainSkillFilesSeed(soul))) {
+      const displayPath = `.aiworker/skills/${relative}`
+      if (existsSync(path.join(root, displayPath)))
+        preserve.push(`${displayPath} (existing brain skill)`)
+      else
+        create.push(displayPath)
+    }
   }
 
   for (const relative of PROJECT_BOOTSTRAP_STATE_PATHS) {

@@ -2,6 +2,7 @@ import type {
   BrainMemory,
   BrainProvider,
   BrainSkill,
+  BrainSkillBody,
   BrainWatchEvent,
   MemoryFilter,
   ServiceStatus,
@@ -44,6 +45,17 @@ export class MultiBrainProvider implements BrainProvider {
   async listSkills(): Promise<BrainSkill[]> {
     const all = await Promise.all(this.sources.map(s => s.listSkills().catch(() => [])))
     return all.flat()
+  }
+
+  async loadSkill(id: string): Promise<BrainSkillBody | null> {
+    for (const src of this.sources) {
+      if (!src.loadSkill)
+        continue
+      const found = await src.loadSkill(id).catch(() => null)
+      if (found !== null)
+        return found
+    }
+    return null
   }
 
   async listMemories(filter?: MemoryFilter): Promise<BrainMemory[]> {

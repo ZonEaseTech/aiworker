@@ -2,6 +2,7 @@ import type {
   BrainMemory,
   BrainProvider,
   BrainSkill,
+  BrainSkillBody,
   BrainWatchEvent,
   MemoryFilter,
   ServiceStatus,
@@ -14,7 +15,7 @@ import { existsSync, mkdirSync } from 'node:fs'
 import { access, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 
-import { scanMemories, scanSkills } from './scanner'
+import { loadSkill, scanMemories, scanSkills } from './scanner'
 import { FilesystemWatcher } from './watcher'
 
 interface FilesystemBrainProviderOptions {
@@ -24,11 +25,18 @@ interface FilesystemBrainProviderOptions {
 
 function mapSkill(skill: FilesystemSkill): BrainSkill {
   return {
-    id: skill.filePath,
+    id: skill.id,
     name: skill.name,
     description: skill.description,
     version: skill.version,
     tags: skill.capabilities,
+  }
+}
+
+function mapSkillBody(skill: FilesystemSkill): BrainSkillBody {
+  return {
+    ...mapSkill(skill),
+    body: skill.body,
   }
 }
 
@@ -185,6 +193,11 @@ export class FilesystemBrainProvider implements BrainProvider {
   async listSkills(): Promise<BrainSkill[]> {
     const raw = await scanSkills(this.home)
     return raw.map(mapSkill)
+  }
+
+  async loadSkill(id: string): Promise<BrainSkillBody | null> {
+    const raw = await loadSkill(this.home, id)
+    return raw === null ? null : mapSkillBody(raw)
   }
 
   async listMemories(filter?: MemoryFilter): Promise<BrainMemory[]> {

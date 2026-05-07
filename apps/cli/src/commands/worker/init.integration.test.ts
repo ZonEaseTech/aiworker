@@ -322,7 +322,14 @@ describe('aiworker init / scope project placement', () => {
 
       const brainSkills = await runCli(cleanup, ['worker', 'brain', 'skills'], project, home)
       expect(brainSkills.exitCode).toBe(0)
-      expect(JSON.parse(brainSkills.output)).toMatchObject({ count: 0, skills: [] })
+      expect(JSON.parse(brainSkills.output)).toMatchObject({
+        count: 3,
+        skills: [
+          { id: 'developer.codebase-orientation', name: 'Codebase Orientation' },
+          { id: 'kernel.brain-admission', name: 'Brain Admission' },
+          { id: 'kernel.executor-quality-review', name: 'Executor Quality Review' },
+        ],
+      })
 
       const brainMemories = await runCli(cleanup, ['brain', 'memories', '--limit', '5'], project, home)
       expect(brainMemories.exitCode).toBe(0)
@@ -361,10 +368,13 @@ describe('aiworker init / scope project placement', () => {
 
       const populatedSkills = await runCli(cleanup, ['brain', 'skills'], project, home)
       expect(populatedSkills.exitCode).toBe(0)
-      expect(JSON.parse(populatedSkills.output)).toMatchObject({
-        count: 1,
-        skills: [{ name: 'Smoke Skill', version: '1.0.0', tags: ['smoke'] }],
+      const populatedSkillsBody = JSON.parse(populatedSkills.output)
+      expect(populatedSkillsBody).toMatchObject({
+        count: 4,
       })
+      expect(populatedSkillsBody.skills).toContainEqual(
+        expect.objectContaining({ id: 'smoke', name: 'Smoke Skill', version: '1.0.0', tags: ['smoke'] }),
+      )
 
       const populatedMemories = await runCli(cleanup, ['brain', 'memories', '--query', 'runtime-brain-smoke'], project, home)
       expect(populatedMemories.exitCode).toBe(0)

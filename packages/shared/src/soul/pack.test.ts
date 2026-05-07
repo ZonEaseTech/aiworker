@@ -16,6 +16,8 @@ describe('Soul Pack loader', () => {
       expect(pack.soulMd).toContain('---')
       expect(pack.soulBody).toContain(`# ${pack.module.manifest.label} Soul`)
       expect(pack.agentMd).toContain(`# ${pack.module.manifest.label} Worker`)
+      expect(pack.brainSkillPacks.length).toBeGreaterThan(0)
+      expect(pack.brainSkillPacks.every(skill => skill.id.startsWith(`${pack.module.manifest.id}.`))).toBe(true)
       expect(pack.module.manifest.id.length).toBeGreaterThan(0)
       expect(pack.module.initProjection.responsibilities.length).toBeGreaterThan(0)
     }
@@ -25,6 +27,7 @@ describe('Soul Pack loader', () => {
     expect(developerSoulPack.sourcePath).toContain('packs/developer/SOUL.md')
     expect(developerSoulPack.soulMd).toContain('manifest:')
     expect(developerSoulPack.soulBody).toContain('Brain admission governance')
+    expect(developerSoulPack.brainSkillPacks.map(skill => skill.id)).toContain('developer.codebase-orientation')
     expect(developerSoulPack.module.schemaPack.proposalTypes).toContain('brain-skill-add')
   })
 

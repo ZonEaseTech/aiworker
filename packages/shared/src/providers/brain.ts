@@ -10,6 +10,12 @@ export interface BrainSkill {
   tags?: string[]
 }
 
+/** Full body for a brain skill selected into a turn context. */
+export interface BrainSkillBody extends BrainSkill {
+  /** Markdown body with frontmatter removed. */
+  body: string
+}
+
 /** A single memory record retrieved from a brain provider. */
 export interface BrainMemory {
   id: string
@@ -59,6 +65,8 @@ export interface BrainProvider {
   readonly name: string
   health: () => Promise<ServiceStatus>
   listSkills: () => Promise<BrainSkill[]>
+  /** Optional on-demand body loader for file-first Project Brain skills. */
+  loadSkill?: (id: string) => Promise<BrainSkillBody | null>
   listMemories: (filter?: MemoryFilter) => Promise<BrainMemory[]>
   searchMemories: (query: string) => Promise<BrainMemory[]>
   writeMemory: (input: WriteMemoryInput) => Promise<BrainMemory>

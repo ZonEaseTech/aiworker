@@ -9,20 +9,24 @@ import type {
   SecretHit,
 } from '@zonease/aiworker-shared'
 
-import { mkdir, writeFile } from 'node:fs/promises'
+import { access, mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
 import {
   brainAdmissionMemoryAddPayloadSchema,
   brainAdmissionProposalInputSchema,
   brainAdmissionProposalSchema,
+  brainAdmissionSkillAddPayloadSchema,
   isMaterializedProposalKind,
   redactBodySecrets,
   redactBrainAdmissionProposal,
   scanBodyForSecrets,
+  skillMetadataSchema,
 } from '@zonease/aiworker-shared'
 import { brainAdmissionDecisions, brainAdmissionProposals, getWorkerDb } from '@zonease/aiworker-storage-sqlite/worker'
 import { and, desc, eq } from 'drizzle-orm'
+import { parse as parseYaml } from 'yaml'
+import { z } from 'zod'
 
 /**
  * Brain admission service (PLAN-101).
@@ -98,6 +102,10 @@ function buildStateError(code: BrainAdmissionStateError['code'], message: string
 
 const DEFAULT_LIMIT = 50
 const MAX_LIMIT = 500
+const SKILL_FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/
+const skillAddMetadataSchema = skillMetadataSchema.extend({
+  id: z.string().min(1),
+})
 
 export interface BrainAdmissionListResult {
   proposals: BrainAdmissionProposal[]
@@ -405,6 +413,8 @@ export class BrainAdmissionService {
     }
     if (!isMaterializedProposalKind(proposal.kind))
       return this.handleUnsupportedKind(id, proposal.kind, options)
+    if (proposal.kind === 'brain-skill-add')
+      return this.applyBrainSkillAdd(id, proposal, options)
 
     const payloadResult = brainAdmissionMemoryAddPayloadSchema.safeParse(proposal.payload)
     if (!payloadResult.success) {
@@ -493,6 +503,96 @@ export class BrainAdmissionService {
     return { kind: 'applied', target: targetPath, secretScan: scanReport }
   }
 
+  private async applyBrainSkillAdd(id: string, proposal: BrainAdmissionProposal, options: ApplyOptions): Promise<ApplyOutcome> {
+    const payloadResult = brainAdmissionSkillAddPayloadSchema.safeParse(proposal.payload)
+    if (!payloadResult.success) {
+      return {
+        kind: 'failed',
+        reason: `payload does not match brain-skill-add schema: ${payloadResult.error.issues
+          .map(issue => `${issue.path.join('.') || '<root>'}: ${issue.message}`)
+          .join('; ')}`,
+      }
+    }
+
+    const payload = payloadResult.data
+    const bodyValidation = validateBrainSkillAddBody(payload.body, payload.skillId)
+    if (bodyValidation !== null)
+      return { kind: 'failed', reason: bodyValidation }
+
+    const policy: SecretBodyPolicy = options.allowSecretBody ?? 'block'
+    const scan = scanBodyForSecrets(payload.body)
+    const hasHits = scan.hits.length > 0
+    let bodyToWrite = payload.body
+    let scanReport: SecretScanReport
+    if (!hasHits) {
+      scanReport = { hits: [], action: 'allow-clean', policy }
+    }
+    else if (policy === 'block') {
+      scanReport = { hits: scan.hits, action: 'block', policy }
+      return { kind: 'blocked-by-secret-scan', secretScan: scanReport }
+    }
+    else if (policy === 'redact') {
+      const redacted = redactBodySecrets(payload.body)
+      bodyToWrite = redacted.body
+      scanReport = { hits: scan.hits, action: 'redact', policy }
+    }
+    else {
+      scanReport = { hits: scan.hits, action: 'allow-raw', policy }
+    }
+
+    const targetPath = path.join(options.brainHome, 'skills', payload.skillId, 'SKILL.md')
+    if (payload.overwrite !== true && await fileExists(targetPath)) {
+      return {
+        kind: 'failed',
+        reason: `target skill already exists: ${targetPath}; set payload.overwrite=true to replace it`,
+      }
+    }
+
+    const diff = formatBrainSkillAddDiff(targetPath, bodyToWrite, payload.overwrite === true, scanReport)
+    if (options.commit !== true)
+      return { diff, kind: 'dry-run', target: targetPath, secretScan: scanReport }
+
+    const at = options.at ?? new Date().toISOString()
+    try {
+      await mkdir(path.dirname(targetPath), { recursive: true })
+      await writeFile(targetPath, ensureSingleTrailingNewline(bodyToWrite), {
+        encoding: 'utf8',
+        flag: payload.overwrite === true ? 'w' : 'wx',
+      })
+    }
+    catch (err) {
+      const reason = err instanceof Error ? err.message : String(err)
+      const db = getWorkerDb()
+      db.update(brainAdmissionProposals)
+        .set({ status: 'failed', updatedAt: at })
+        .where(eq(brainAdmissionProposals.id, id))
+        .run()
+      db.insert(brainAdmissionDecisions).values({
+        decidedAt: at,
+        decidedBy: options.decidedBy,
+        decision: 'failed',
+        failureReason: reason,
+        proposalId: id,
+      }).run()
+      return { kind: 'failed', reason }
+    }
+
+    const db = getWorkerDb()
+    db.update(brainAdmissionProposals)
+      .set({ status: 'applied', updatedAt: at })
+      .where(eq(brainAdmissionProposals.id, id))
+      .run()
+    db.insert(brainAdmissionDecisions).values({
+      appliedAt: at,
+      decidedAt: at,
+      decidedBy: options.decidedBy,
+      decision: 'applied',
+      proposalId: id,
+      reason: secretScanReason(scanReport),
+    }).run()
+    return { kind: 'applied', target: targetPath, secretScan: scanReport }
+  }
+
   /**
    * BUG-059: unsupported `kind` no longer leaves the proposal stuck in
    * `approved`. We emit a `failed` decision row carrying
@@ -501,7 +601,7 @@ export class BrainAdmissionService {
    * orphaned proposals.
    */
   private handleUnsupportedKind(id: string, proposalKind: string, options: ApplyOptions): ApplyOutcome {
-    const reason = `MVP materializer only supports memory-add; kind "${proposalKind}" requires manual follow-up`
+    const reason = `Materializer supports memory-add and brain-skill-add; kind "${proposalKind}" requires manual follow-up`
     if (options.commit !== true)
       return { kind: 'unsupported', proposalKind, reason }
     const at = options.at ?? new Date().toISOString()
@@ -545,6 +645,10 @@ function ensureTrailingNewline(body: string): string {
   return `${body}\n\n`
 }
 
+function ensureSingleTrailingNewline(body: string): string {
+  return `${body.replace(/\n+$/u, '')}\n`
+}
+
 function formatMemoryAddDiff(targetPath: string, body: string, indexEntry: string | undefined, scan: SecretScanReport): string {
   const lines = body.split('\n')
   const preview = lines.slice(0, 12).join('\n')
@@ -561,6 +665,54 @@ function formatMemoryAddDiff(targetPath: string, body: string, indexEntry: strin
     indexHint,
     scanLine,
   ].filter(line => line !== '').join('\n')
+}
+
+function formatBrainSkillAddDiff(targetPath: string, body: string, overwrite: boolean, scan: SecretScanReport): string {
+  const lines = body.split('\n')
+  const preview = lines.slice(0, 16).join('\n')
+  const truncated = lines.length > 16 ? `\n  ... (+${lines.length - 16} more lines)` : ''
+  const scanLine = scan.hits.length === 0
+    ? '  secret scan: clean'
+    : `  secret scan: ${scan.action} (${scan.hits.length} hit${scan.hits.length === 1 ? '' : 's'} — ${scan.hits.map(h => `${h.rule}:${h.preview}`).join(', ')})`
+  return [
+    `dry-run: would ${overwrite ? 'overwrite' : 'write'} brain skill to ${targetPath}`,
+    `  body preview:\n    ${preview.split('\n').join('\n    ')}${truncated}`,
+    scanLine,
+  ].join('\n')
+}
+
+function validateBrainSkillAddBody(body: string, skillId: string): string | null {
+  const match = SKILL_FRONTMATTER_RE.exec(body)
+  if (!match)
+    return 'brain-skill-add body must include YAML frontmatter'
+
+  let metadata: unknown
+  try {
+    metadata = parseYaml(match[1] ?? '')
+  }
+  catch (err) {
+    return `brain-skill-add frontmatter is invalid YAML: ${err instanceof Error ? err.message : String(err)}`
+  }
+
+  const result = skillAddMetadataSchema.safeParse(metadata)
+  if (!result.success) {
+    return `brain-skill-add frontmatter does not satisfy SkillMetadata: ${result.error.issues
+      .map(issue => `${issue.path.join('.') || '<root>'}: ${issue.message}`)
+      .join('; ')}`
+  }
+  if (result.data.id !== skillId)
+    return `brain-skill-add frontmatter id "${result.data.id}" does not match payload.skillId "${skillId}"`
+  return null
+}
+
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await access(filePath)
+    return true
+  }
+  catch {
+    return false
+  }
 }
 
 function secretScanReason(scan: SecretScanReport): string | null {

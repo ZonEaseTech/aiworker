@@ -25,6 +25,7 @@ export type {
   BrainMemory,
   BrainProvider,
   BrainSkill,
+  BrainSkillBody,
   BrainWatchEvent,
   MemoryFilter,
   WriteMemoryInput,

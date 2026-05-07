@@ -3,6 +3,7 @@
 import type { SoulModule } from '../module'
 import type { SoulRegistry } from '../registry'
 
+import { findBuiltinSoulBrainSkillPacks } from '../../brain'
 import { createSoulPack } from '../pack'
 import { createSoulRegistry } from '../registry'
 
@@ -27,6 +28,7 @@ import supportOperatorSoulMd from './support-operator/SOUL.md' with { type: 'tex
 
 export const developerSoulPack = createSoulPack({
   agentMd: developerAgentMd,
+  brainSkillPacks: findBuiltinSoulBrainSkillPacks('developer'),
   expectedId: 'developer',
   soulMd: developerSoulMd,
   sourcePath: 'packages/shared/src/soul/packs/developer/SOUL.md',
@@ -34,6 +36,7 @@ export const developerSoulPack = createSoulPack({
 
 export const projectManagerSoulPack = createSoulPack({
   agentMd: projectManagerAgentMd,
+  brainSkillPacks: findBuiltinSoulBrainSkillPacks('project-manager'),
   expectedId: 'project-manager',
   soulMd: projectManagerSoulMd,
   sourcePath: 'packages/shared/src/soul/packs/project-manager/SOUL.md',
@@ -41,6 +44,7 @@ export const projectManagerSoulPack = createSoulPack({
 
 export const devopsSreSoulPack = createSoulPack({
   agentMd: devopsSreAgentMd,
+  brainSkillPacks: findBuiltinSoulBrainSkillPacks('devops-sre'),
   expectedId: 'devops-sre',
   soulMd: devopsSreSoulMd,
   sourcePath: 'packages/shared/src/soul/packs/devops-sre/SOUL.md',
@@ -48,6 +52,7 @@ export const devopsSreSoulPack = createSoulPack({
 
 export const productDesignerSoulPack = createSoulPack({
   agentMd: productDesignerAgentMd,
+  brainSkillPacks: findBuiltinSoulBrainSkillPacks('product-designer'),
   expectedId: 'product-designer',
   soulMd: productDesignerSoulMd,
   sourcePath: 'packages/shared/src/soul/packs/product-designer/SOUL.md',
@@ -55,6 +60,7 @@ export const productDesignerSoulPack = createSoulPack({
 
 export const qaReviewerSoulPack = createSoulPack({
   agentMd: qaReviewerAgentMd,
+  brainSkillPacks: findBuiltinSoulBrainSkillPacks('qa-reviewer'),
   expectedId: 'qa-reviewer',
   soulMd: qaReviewerSoulMd,
   sourcePath: 'packages/shared/src/soul/packs/qa-reviewer/SOUL.md',
@@ -62,6 +68,7 @@ export const qaReviewerSoulPack = createSoulPack({
 
 export const supportOperatorSoulPack = createSoulPack({
   agentMd: supportOperatorAgentMd,
+  brainSkillPacks: findBuiltinSoulBrainSkillPacks('support-operator'),
   expectedId: 'support-operator',
   soulMd: supportOperatorSoulMd,
   sourcePath: 'packages/shared/src/soul/packs/support-operator/SOUL.md',
@@ -69,6 +76,7 @@ export const supportOperatorSoulPack = createSoulPack({
 
 export const financeOpsSoulPack = createSoulPack({
   agentMd: financeOpsAgentMd,
+  brainSkillPacks: findBuiltinSoulBrainSkillPacks('finance-ops'),
   expectedId: 'finance-ops',
   soulMd: financeOpsSoulMd,
   sourcePath: 'packages/shared/src/soul/packs/finance-ops/SOUL.md',
@@ -76,6 +84,7 @@ export const financeOpsSoulPack = createSoulPack({
 
 export const hrRecruitingSoulPack = createSoulPack({
   agentMd: hrRecruitingAgentMd,
+  brainSkillPacks: findBuiltinSoulBrainSkillPacks('hr-recruiting'),
   expectedId: 'hr-recruiting',
   soulMd: hrRecruitingSoulMd,
   sourcePath: 'packages/shared/src/soul/packs/hr-recruiting/SOUL.md',
@@ -83,6 +92,7 @@ export const hrRecruitingSoulPack = createSoulPack({
 
 export const generalAssistantSoulPack = createSoulPack({
   agentMd: generalAssistantAgentMd,
+  brainSkillPacks: findBuiltinSoulBrainSkillPacks('general-assistant'),
   expectedId: 'general-assistant',
   soulMd: generalAssistantSoulMd,
   sourcePath: 'packages/shared/src/soul/packs/general-assistant/SOUL.md',

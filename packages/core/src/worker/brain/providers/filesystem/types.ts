@@ -1,8 +1,10 @@
 export interface FilesystemSkill {
+  id: string
   name: string
   description: string
   version: string
   capabilities: string[]
+  body: string
   filePath: string
   hash: string
 }

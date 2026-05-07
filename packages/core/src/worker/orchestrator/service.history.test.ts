@@ -1,5 +1,6 @@
 import type {
   AgentRunInput,
+  BrainMemory,
   BrainProvider,
   BrainSkill,
   ChatMessage,
@@ -43,10 +44,27 @@ function stubBrain(): BrainProvider {
   }
 }
 
-function skillsBrain(skills: BrainSkill[]): BrainProvider {
+function skillsBrain(skills: BrainSkill[], bodies: Record<string, string> = {}): BrainProvider {
   return {
     ...stubBrain(),
+    loadSkill: async (id) => {
+      const skill = skills.find(item => item.id === id)
+      if (!skill)
+        return null
+      return { ...skill, body: bodies[id] ?? '' }
+    },
     listSkills: async () => skills,
+  }
+}
+
+function memoryBrain(memories: BrainMemory[], options: { failSearch?: boolean } = {}): BrainProvider {
+  return {
+    ...stubBrain(),
+    searchMemories: async () => {
+      if (options.failSearch)
+        throw new Error('memory search failed')
+      return memories
+    },
   }
 }
 
@@ -498,6 +516,127 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
     expect(gate.status).toBe('passed')
     expect(gate.action).toBe('pass')
     expect(gate.finalAnswerLength).toBe('decision response'.length)
+  })
+
+  it('loads selected brain skill bodies into code-work turn context', async () => {
+    const bus = recordingBus()
+    const executor = capturingExecutor(['skill-loaded response'])
+    const orch = new Orchestrator({
+      config: buildConfig(),
+      brain: skillsBrain([
+        {
+          id: 'developer.codebase-orientation',
+          name: 'Codebase Orientation',
+          description: 'Build repo context before editing.',
+          version: '0.1.0',
+        },
+      ], {
+        'developer.codebase-orientation': [
+          '# Codebase Orientation',
+          '',
+          '- Inspect repository structure before making edits.',
+          '- Keep edits scoped to the requested files.',
+        ].join('\n'),
+      }),
+      executor,
+      bus,
+      workerId: 'w_history_test',
+      workspaces,
+      processes,
+      approvals: new ApprovalStore(),
+    })
+
+    await orch.ingest(envelope('fix the failing code test'))
+
+    expect(executor.captured).toHaveLength(1)
+    const systemPrompt = executor.captured[0]![0]!.content
+    expect(systemPrompt).toContain('Available brain skills:')
+    expect(systemPrompt).toContain('- Codebase Orientation: Build repo context before editing.')
+    expect(systemPrompt).toContain('Loaded brain skill bodies:')
+    expect(systemPrompt).toContain('These are Project Brain instructions loaded for this turn.')
+    expect(systemPrompt).toContain('# Codebase Orientation')
+    expect(systemPrompt).toContain('Inspect repository structure before making edits.')
+
+    const capability = bus.events.find(event => event.type === 'orchestrator.capability_decision')!.payload
+    expect(capability.mode).toBe('enforced')
+    expect(capability.selectedBuiltins).toContain('load_skill')
+    expect(capability.loadedSkillCount).toBe(1)
+    expect(capability.loadedSkillIds).toEqual(['developer.codebase-orientation'])
+    expect(capability.skillLoadErrors).toEqual([])
+  })
+
+  it('loads searched brain memories into memory-search turn context', async () => {
+    const bus = recordingBus()
+    const executor = capturingExecutor(['memory-loaded response'])
+    const orch = new Orchestrator({
+      config: buildConfig(),
+      brain: memoryBrain([
+        {
+          id: 'dry-run-policy',
+          content: [
+            '# Dry-run policy',
+            '',
+            'Always run executor projection in dry-run mode before applying project overlays.',
+          ].join('\n'),
+          metadata: { title: 'Dry-run policy' },
+          createdAt: '2026-05-07T00:00:00.000Z',
+          updatedAt: '2026-05-07T01:00:00.000Z',
+          score: 1,
+        },
+      ]),
+      executor,
+      bus,
+      workerId: 'w_history_test',
+      workspaces,
+      processes,
+      approvals: new ApprovalStore(),
+    })
+
+    await orch.ingest(envelope('what do you remember about memory dry-run policy?'))
+
+    expect(executor.captured).toHaveLength(1)
+    const systemPrompt = executor.captured[0]![0]!.content
+    expect(systemPrompt).toContain('Loaded brain memories:')
+    expect(systemPrompt).toContain('These are Project Brain memory snippets loaded for this turn.')
+    expect(systemPrompt).toContain('### Dry-run policy (dry-run-policy, score=1, updated=2026-05-07T01:00:00.000Z)')
+    expect(systemPrompt).toContain('Always run executor projection in dry-run mode')
+
+    const capability = bus.events.find(event => event.type === 'orchestrator.capability_decision')!.payload
+    expect(capability.mode).toBe('enforced')
+    expect(capability.selectedBuiltins).toContain('memory_search')
+    expect(capability.loadedMemoryCount).toBe(1)
+    expect(capability.loadedMemoryIds).toEqual(['dry-run-policy'])
+    expect(capability.memorySearchErrors).toEqual([])
+  })
+
+  it('reports brain memory search errors without blocking executor dispatch', async () => {
+    const bus = recordingBus()
+    const executor = capturingExecutor(['memory-search-error response'])
+    const orch = new Orchestrator({
+      config: buildConfig(),
+      brain: memoryBrain([], { failSearch: true }),
+      executor,
+      bus,
+      workerId: 'w_history_test',
+      workspaces,
+      processes,
+      approvals: new ApprovalStore(),
+    })
+
+    await orch.ingest(envelope('remember the memory policy even if search fails'))
+
+    expect(executor.captured).toHaveLength(1)
+    const systemPrompt = executor.captured[0]![0]!.content
+    expect(systemPrompt).not.toContain('Loaded brain memories:')
+
+    const capability = bus.events.find(event => event.type === 'orchestrator.capability_decision')!.payload
+    expect(capability.mode).toBe('observe_only')
+    expect(capability.selectedBuiltins).toContain('memory_search')
+    expect(capability.loadedMemoryCount).toBe(0)
+    expect(capability.loadedMemoryIds).toEqual([])
+    expect(capability.memorySearchErrors).toEqual([
+      { query: 'remember the memory policy even if search fails', reason: 'memory search failed' },
+    ])
   })
 
   it('repairs a low-scoring answer once when quality gate retry mode is enabled', async () => {

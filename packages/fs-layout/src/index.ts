@@ -309,6 +309,7 @@ async function seedIfAbsent(filePath: string, content: string): Promise<void> {
 
 export interface ProjectAiworkerSeed {
   agentMd?: string
+  brainSkillFiles?: Record<string, string>
   capabilityPacksJson?: string
   executorCapabilitiesJson?: string
   mcpJson?: string
@@ -330,6 +331,7 @@ type RequiredDefaultSeed = Required<Omit<ProjectAiworkerSeed, 'scopeJson'>>
 
 const DEFAULT_PROJECT_AIWORKER_SEED: RequiredDefaultSeed = {
   agentMd: `# Agent\n\n> Persona / role document for the agent that lives in this project. The orchestrator injects this file into the system prompt.\n`,
+  brainSkillFiles: {},
   soulMd: `# Voice & style\n\n> Voice / style guide. Influences how the agent phrases responses across channels.\n`,
   userMd: `# User profile\n\n> The agent writes learned facts about the primary user here over time. Edit by hand to bootstrap.\n`,
   memoryMd: `# Long-term memory\n\n> Durable facts, decisions, preferences. Loaded into every session.\n`,
@@ -479,6 +481,11 @@ export async function ensureProjectAiworker(projectRoot: string, seed: ProjectAi
       mergedSeed.scopeJson,
     )
   }
+  for (const [relativePath, content] of Object.entries(mergedSeed.brainSkillFiles ?? {})) {
+    const target = resolveProjectBrainSkillSeedPath(aiworker, relativePath)
+    await ensureDir(path.dirname(target))
+    await seedIfAbsent(target, content)
+  }
   await seedIfAbsent(
     path.join(aiworker, '.gitignore'),
     `${PROJECT_LOCAL_DIR}/\n`,
@@ -487,6 +494,20 @@ export async function ensureProjectAiworker(projectRoot: string, seed: ProjectAi
     path.join(localDir, '.gitignore'),
     `*\n!.gitignore\n`,
   )
+}
+
+function resolveProjectBrainSkillSeedPath(aiworkerRoot: string, relativePath: string): string {
+  const normalized = path.posix.normalize(relativePath)
+  if (
+    normalized.startsWith('../')
+    || normalized === '..'
+    || normalized.startsWith('/')
+    || normalized.includes('\0')
+    || !normalized.endsWith('/SKILL.md')
+  ) {
+    throw new Error(`Invalid Project Brain skill seed path: ${relativePath}`)
+  }
+  return path.join(aiworkerRoot, 'skills', ...normalized.split('/'))
 }
 
 /** Test-only helper. */

@@ -10,6 +10,22 @@ import { BrainAdmissionService } from './service'
 
 const NOW = '2026-05-04T16:15:00.000Z'
 
+function skillMd(id = 'developer.review-checklist'): string {
+  return [
+    '---',
+    `id: ${id}`,
+    'name: Review checklist',
+    'description: Review code changes with project context.',
+    'version: 0.1.0',
+    'capabilities:',
+    '  - code-review',
+    '---',
+    '# Review checklist',
+    '',
+    '- Inspect project context before editing.',
+  ].join('\n')
+}
+
 interface FreshDb {
   service: BrainAdmissionService
   brainHome: string
@@ -333,36 +349,133 @@ describe('BrainAdmissionService.apply (PLAN-101 MVP materializer)', () => {
     expect(indexFile).toContain('- [Dry-run policy](dry-run-policy.md)')
   })
 
-  it('non-memory-add proposal commit flips status to failed and writes a decision (BUG-059)', async () => {
+  it('brain-skill-add dry-run returns a target path and does not write filesystem state', async () => {
     await mkdir(ctx.brainHome, { recursive: true })
     ctx.service.propose({
       confidence: 0.5,
-      id: 'p-unsupported',
+      id: 'p-skill-dry',
       kind: 'brain-skill-add',
-      payload: { body: 'should not apply' },
-      rollback: 'manual',
+      payload: { body: skillMd(), skillId: 'developer.review-checklist' },
+      rollback: 'remove skills/developer.review-checklist/SKILL.md',
       soulId: 'developer',
-      summary: 'brain-skill MVP not materialized',
-      target: '.aiworker/skills/x',
+      summary: 'add review checklist skill',
+      target: '.aiworker/skills/developer.review-checklist/SKILL.md',
     })
-    ctx.service.approve('p-unsupported', { decidedBy: 'op-1' })
-    const result = await ctx.service.apply('p-unsupported', {
+    ctx.service.approve('p-skill-dry', { decidedBy: 'op-1' })
+    const result = await ctx.service.apply('p-skill-dry', {
+      brainHome: ctx.brainHome,
+      decidedBy: 'op-1',
+    })
+    expect(result.kind).toBe('dry-run')
+    if (result.kind === 'dry-run') {
+      expect(result.target.endsWith('skills/developer.review-checklist/SKILL.md')).toBe(true)
+      expect(result.diff).toContain('would write brain skill')
+    }
+    await expect(readFile(join(ctx.brainHome, 'skills', 'developer.review-checklist', 'SKILL.md'), 'utf8')).rejects.toThrow()
+    expect(ctx.service.requireById('p-skill-dry').status).toBe('approved')
+  })
+
+  it('brain-skill-add commit writes SKILL.md and flips status to applied', async () => {
+    await mkdir(ctx.brainHome, { recursive: true })
+    ctx.service.propose({
+      confidence: 0.5,
+      id: 'p-skill-commit',
+      kind: 'brain-skill-add',
+      payload: { body: skillMd(), skillId: 'developer.review-checklist' },
+      rollback: 'remove skills/developer.review-checklist/SKILL.md',
+      soulId: 'developer',
+      summary: 'add review checklist skill',
+      target: '.aiworker/skills/developer.review-checklist/SKILL.md',
+    })
+    ctx.service.approve('p-skill-commit', { decidedBy: 'op-1' })
+    const result = await ctx.service.apply('p-skill-commit', {
+      at: NOW,
       brainHome: ctx.brainHome,
       commit: true,
       decidedBy: 'op-1',
     })
-    expect(result.kind).toBe('unsupported')
-    if (result.kind === 'unsupported')
-      expect(result.proposalKind).toBe('brain-skill-add')
-    const after = ctx.service.requireById('p-unsupported')
-    expect(after.status).toBe('failed')
-    const decisions = ctx.service.listDecisions('p-unsupported')
-    const failure = decisions.find(d => d.decision === 'failed')
-    expect(failure?.failureReason).toBe('unsupported-kind:brain-skill-add')
-    expect(ctx.service.list({ status: 'approved' }).proposals.find(p => p.id === 'p-unsupported')).toBeUndefined()
+    expect(result.kind).toBe('applied')
+    const body = await readFile(join(ctx.brainHome, 'skills', 'developer.review-checklist', 'SKILL.md'), 'utf8')
+    expect(body).toContain('id: developer.review-checklist')
+    expect(body).toContain('# Review checklist')
+    const after = ctx.service.requireById('p-skill-commit')
+    expect(after.status).toBe('applied')
+    const decisions = ctx.service.listDecisions('p-skill-commit')
+    expect(decisions.find(d => d.decision === 'applied')?.appliedAt).toBe(NOW)
   })
 
-  it('non-memory-add proposal dry-run returns unsupported without changing status', async () => {
+  it('brain-skill-add rejects invalid body, id mismatch, existing target, and secret-bearing body', async () => {
+    await mkdir(join(ctx.brainHome, 'skills', 'developer.review-checklist'), { recursive: true })
+    await writeFile(join(ctx.brainHome, 'skills', 'developer.review-checklist', 'SKILL.md'), skillMd(), 'utf8')
+
+    ctx.service.propose({
+      confidence: 0.5,
+      id: 'p-skill-invalid',
+      kind: 'brain-skill-add',
+      payload: { body: '# Missing frontmatter', skillId: 'developer.missing-frontmatter' },
+      rollback: 'manual',
+      soulId: 'developer',
+      summary: 'invalid skill',
+      target: '.aiworker/skills/developer.missing-frontmatter/SKILL.md',
+    })
+    ctx.service.approve('p-skill-invalid', { decidedBy: 'op-1' })
+    const invalid = await ctx.service.apply('p-skill-invalid', { brainHome: ctx.brainHome, commit: true, decidedBy: 'op-1' })
+    expect(invalid.kind).toBe('failed')
+    if (invalid.kind === 'failed')
+      expect(invalid.reason).toContain('frontmatter')
+
+    ctx.service.propose({
+      confidence: 0.5,
+      id: 'p-skill-mismatch',
+      kind: 'brain-skill-add',
+      payload: { body: skillMd('developer.other'), skillId: 'developer.review-checklist' },
+      rollback: 'manual',
+      soulId: 'developer',
+      summary: 'mismatch skill',
+      target: '.aiworker/skills/developer.review-checklist/SKILL.md',
+    })
+    ctx.service.approve('p-skill-mismatch', { decidedBy: 'op-1' })
+    const mismatch = await ctx.service.apply('p-skill-mismatch', { brainHome: ctx.brainHome, commit: true, decidedBy: 'op-1' })
+    expect(mismatch.kind).toBe('failed')
+    if (mismatch.kind === 'failed')
+      expect(mismatch.reason).toContain('does not match payload.skillId')
+
+    ctx.service.propose({
+      confidence: 0.5,
+      id: 'p-skill-exists',
+      kind: 'brain-skill-add',
+      payload: { body: skillMd(), skillId: 'developer.review-checklist' },
+      rollback: 'manual',
+      soulId: 'developer',
+      summary: 'existing skill',
+      target: '.aiworker/skills/developer.review-checklist/SKILL.md',
+    })
+    ctx.service.approve('p-skill-exists', { decidedBy: 'op-1' })
+    const exists = await ctx.service.apply('p-skill-exists', { brainHome: ctx.brainHome, commit: true, decidedBy: 'op-1' })
+    expect(exists.kind).toBe('failed')
+    if (exists.kind === 'failed')
+      expect(exists.reason).toContain('already exists')
+
+    ctx.service.propose({
+      confidence: 0.5,
+      id: 'p-skill-secret',
+      kind: 'brain-skill-add',
+      payload: {
+        body: `${skillMd('developer.secret-review')}\napiKey=sk-LIVE-abcdefghijklmnopqrstuv`,
+        skillId: 'developer.secret-review',
+      },
+      rollback: 'manual',
+      soulId: 'developer',
+      summary: 'secret skill',
+      target: '.aiworker/skills/developer.secret-review/SKILL.md',
+    })
+    ctx.service.approve('p-skill-secret', { decidedBy: 'op-1' })
+    const secret = await ctx.service.apply('p-skill-secret', { brainHome: ctx.brainHome, commit: true, decidedBy: 'op-1' })
+    expect(secret.kind).toBe('blocked-by-secret-scan')
+    await expect(readFile(join(ctx.brainHome, 'skills', 'developer.secret-review', 'SKILL.md'), 'utf8')).rejects.toThrow()
+  })
+
+  it('policy-update dry-run returns unsupported without changing status', async () => {
     await mkdir(ctx.brainHome, { recursive: true })
     ctx.service.propose({
       confidence: 0.5,

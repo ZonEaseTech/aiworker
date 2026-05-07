@@ -85,6 +85,53 @@ describe('capability static validation', () => {
     expect(report.checks.every(check => check.status === 'pass')).toBe(true)
   })
 
+  it('ignores Markdown sidecars inside brain skill packages', async () => {
+    const root = await makeAiworkerRoot('aiworker-capability-sidecar-')
+    await writeJson(path.join(root, 'policy.json'), {
+      outOfScope: { strategy: 'handoff' },
+      risk: { highRiskRequiresApproval: true },
+      schemaVersion: 1,
+      status: 'draft',
+    })
+    await writeJson(path.join(root, 'toolsets.json'), {
+      defaultToolsets: ['filesystem-read'],
+      schemaVersion: 1,
+      status: 'draft',
+    })
+    await writeJson(path.join(root, 'capability-packs.json'), {
+      packs: [
+        { id: 'general', status: 'draft', validation: { issues: [], status: 'pending' } },
+      ],
+      schemaVersion: 1,
+      status: 'draft',
+    })
+    await writeJson(path.join(root, 'mcp.json'), { servers: {} })
+    await writeFile(
+      path.join(root, 'skills', 'release-check', 'SKILL.md'),
+      [
+        '---',
+        'name: release-check',
+        'description: Verify a release candidate.',
+        '---',
+        'Run focused release checks.',
+        '',
+      ].join('\n'),
+      'utf8',
+    )
+    await mkdir(path.join(root, 'skills', 'release-check', 'references'), { recursive: true })
+    await writeFile(
+      path.join(root, 'skills', 'release-check', 'references', 'notes.md'),
+      '# Missing frontmatter but not a skill entrypoint\n',
+      'utf8',
+    )
+
+    const report = await validateCapabilityProject(root)
+    const skills = report.checks.find(check => check.id === 'skills')
+
+    expect(skills?.status).toBe('pass')
+    expect(skills?.issues).toEqual([])
+  })
+
   it('fails unsafe and unknown capability descriptors', async () => {
     const root = await makeAiworkerRoot('aiworker-capability-invalid-')
     await writeJson(path.join(root, 'policy.json'), {

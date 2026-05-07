@@ -64,10 +64,16 @@ export type CapabilityDecisionPayload = DecisionBasePayload & {
   availableSkillCount: number
   availableToolsets?: string[]
   deniedCapabilities: string[]
+  loadedMemoryCount?: number
+  loadedMemoryIds?: string[]
+  loadedSkillCount?: number
+  loadedSkillIds?: string[]
+  memorySearchErrors?: Array<{ query: string, reason: string }>
   reason: string
   selectedBuiltins: string[]
   selectedMcpTools: string[]
   selectedSkills: CapabilitySkillDescriptor[]
+  skillLoadErrors?: Array<{ id: string, reason: string }>
 }
 
 export interface QualityGateFields {
@@ -138,23 +144,36 @@ export function buildPromptCapabilityDecision(input: DecisionContext & {
   availableSkillCount: number
   availableToolsets?: string[]
   deniedCapabilities: string[]
+  loadedMemoryCount?: number
+  loadedMemoryIds?: string[]
+  loadedSkillCount?: number
+  loadedSkillIds?: string[]
+  memorySearchErrors?: Array<{ query: string, reason: string }>
+  mode?: DecisionMode
   reason: string
   selectedBuiltins: string[]
   selectedMcpTools: string[]
   selectedSkills: CapabilitySkillDescriptor[]
+  skillLoadErrors?: Array<{ id: string, reason: string }>
   source?: DecisionSource
 }): CapabilityDecisionPayload {
   return {
-    ...decisionBase(input, input.source ?? 'capability-registry', 'observe_only'),
+    ...decisionBase(input, input.source ?? 'capability-registry', input.mode ?? 'observe_only'),
     ...(input.availableBuiltinCount === undefined ? {} : { availableBuiltinCount: input.availableBuiltinCount }),
     ...(input.availableMcpToolCount === undefined ? {} : { availableMcpToolCount: input.availableMcpToolCount }),
     availableSkillCount: input.availableSkillCount,
     ...(input.availableToolsets === undefined ? {} : { availableToolsets: input.availableToolsets }),
     deniedCapabilities: input.deniedCapabilities,
+    ...(input.loadedMemoryCount === undefined ? {} : { loadedMemoryCount: input.loadedMemoryCount }),
+    ...(input.loadedMemoryIds === undefined ? {} : { loadedMemoryIds: input.loadedMemoryIds }),
+    ...(input.loadedSkillCount === undefined ? {} : { loadedSkillCount: input.loadedSkillCount }),
+    ...(input.loadedSkillIds === undefined ? {} : { loadedSkillIds: input.loadedSkillIds }),
+    ...(input.memorySearchErrors === undefined ? {} : { memorySearchErrors: input.memorySearchErrors }),
     reason: input.reason,
     selectedBuiltins: input.selectedBuiltins,
     selectedMcpTools: input.selectedMcpTools,
     selectedSkills: input.selectedSkills,
+    ...(input.skillLoadErrors === undefined ? {} : { skillLoadErrors: input.skillLoadErrors }),
   }
 }
 

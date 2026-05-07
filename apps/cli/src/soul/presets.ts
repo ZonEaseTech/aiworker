@@ -1,4 +1,4 @@
-import type { SoulModule } from '@zonease/aiworker-shared'
+import type { BrainSkillPack, SoulModule } from '@zonease/aiworker-shared'
 
 import {
   BUILTIN_SOUL_MODULES,
@@ -31,6 +31,7 @@ export type InitSoulId = BuiltinSoulPresetId | typeof CUSTOMIZE_SOUL_ID
 
 export interface SoulPresetDefinition {
   agentMd: string
+  brainSkillPacks: readonly BrainSkillPack[]
   boundaries: readonly string[]
   communicationStyle: string
   description: string
@@ -48,6 +49,7 @@ export interface SoulPresetDefinition {
 
 export interface SelectedSoul {
   agentMd?: string
+  brainSkillPacks?: readonly BrainSkillPack[]
   boundaries: readonly string[]
   communicationStyle: string
   description: string
@@ -98,6 +100,7 @@ function projectModuleToPreset(module: SoulModule): SoulPresetDefinition {
     throw new Error(`missing file-first Soul pack for built-in id "${id}"`)
   return {
     agentMd: pack.agentMd,
+    brainSkillPacks: pack.brainSkillPacks,
     boundaries: module.initProjection.boundaries,
     communicationStyle: module.riskPolicy.communicationStyle,
     description: module.manifest.description,

@@ -70,6 +70,18 @@ interface AdmissionApplyOutput {
     | { kind: 'unsupported', proposalKind: string, reason: string }
 }
 
+function skillMd(id = 'developer.review-checklist'): string {
+  return [
+    '---',
+    `id: ${id}`,
+    'name: Review checklist',
+    'description: Review code changes with project context.',
+    'version: 0.1.0',
+    '---',
+    '# Review checklist',
+  ].join('\n')
+}
+
 describe('aiworker brain admission commands (PLAN-101)', () => {
   let dir: string
   let workerHome: string
@@ -329,24 +341,47 @@ describe('aiworker brain admission commands (PLAN-101)', () => {
     expect(after.status).toBe('applied')
   })
 
-  it('apply on non-memory-add returns unsupported and does not change status', async () => {
+  it('apply --commit brain-skill-add writes SKILL.md', async () => {
+    await mkdir(workerHome, { recursive: true })
+    service.propose({
+      confidence: 0.5,
+      id: 'p-skill',
+      kind: 'brain-skill-add',
+      payload: { body: skillMd(), skillId: 'developer.review-checklist' },
+      rollback: 'rm skills/developer.review-checklist/SKILL.md',
+      soulId: 'developer',
+      summary: 'add review checklist',
+      target: '.aiworker/skills/developer.review-checklist/SKILL.md',
+    })
+    service.approve('p-skill', { decidedBy: 'op-1' })
+    const { output } = await captureConsole(() =>
+      runBrainAdmissionApply('p-skill', { decidedBy: 'op-1', commit: true }),
+    )
+    const parsed = JSON.parse(output) as AdmissionApplyOutput
+    expect(parsed.outcome.kind).toBe('applied')
+    const skillBody = await readFile(join(workerHome, 'skills', 'developer.review-checklist', 'SKILL.md'), 'utf8')
+    expect(skillBody).toContain('id: developer.review-checklist')
+    expect(skillBody).toContain('# Review checklist')
+  })
+
+  it('apply on policy-update returns unsupported and does not change status', async () => {
     await mkdir(workerHome, { recursive: true })
     service.propose({
       confidence: 0.5,
       id: 'p-unsupported',
-      kind: 'brain-skill-add',
-      payload: { body: 'should not apply' },
+      kind: 'policy-update',
       rollback: 'm',
       soulId: 'developer',
       summary: 's',
-      target: '.aiworker/skills/x',
+      target: '.aiworker/policy.json',
     })
     service.approve('p-unsupported', { decidedBy: 'op-1' })
     const { output } = await captureConsole(() =>
-      runBrainAdmissionApply('p-unsupported', { decidedBy: 'op-1', commit: true }),
+      runBrainAdmissionApply('p-unsupported', { decidedBy: 'op-1' }),
     )
     const parsed = JSON.parse(output) as AdmissionApplyOutput
     expect(parsed.outcome.kind).toBe('unsupported')
+    expect(service.requireById('p-unsupported').status).toBe('approved')
   })
 
   it('apply on a proposal not in approved state returns 1', async () => {

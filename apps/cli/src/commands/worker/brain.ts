@@ -130,7 +130,7 @@ export async function runBrainStatus(): Promise<number> {
           skillCount: skills.length,
           memoryCount,
           hint: skills.length === 0 && memoryCount === 0
-            ? 'No brain skills or memories yet. Add `.aiworker/skills/<name>/SKILL.md` or `.aiworker/memories/<topic>.md` directly; brain runtime does not write them automatically.'
+            ? 'No brain skills or memories yet. Add `.aiworker/skills/<id>/SKILL.md` or `.aiworker/memories/<topic>.md` directly; brain runtime does not write them automatically.'
             : undefined,
         },
       }, null, 2))

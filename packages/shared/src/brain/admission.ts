@@ -121,12 +121,14 @@ export const brainAdmissionDecisionSchema = z.object({
 export type BrainAdmissionDecision = z.infer<typeof brainAdmissionDecisionSchema>
 
 /**
- * Materialize types currently supported by the MVP `apply` step. Other
- * proposalTypes from `Soul.schemaPack.proposalTypes` may be approved but the
- * service refuses to write filesystem state for them — operators handle the
- * follow-up out-of-band until PLAN-103 expands the materializer.
+ * Materialize types currently supported by the governed `apply` step. Other
+ * proposalTypes from `Soul.schemaPack.proposalTypes` may be approved, but the
+ * service refuses to write filesystem state for them. Dry-run apply returns an
+ * unsupported outcome; commit apply records an unsupported-kind failure so
+ * operators can handle follow-up out-of-band until a later materializer slice
+ * explicitly expands this list.
  */
-export const MATERIALIZED_PROPOSAL_KINDS = ['memory-add'] as const
+export const MATERIALIZED_PROPOSAL_KINDS = ['memory-add', 'brain-skill-add'] as const
 export type MaterializedProposalKind = (typeof MATERIALIZED_PROPOSAL_KINDS)[number]
 
 export function isMaterializedProposalKind(kind: string): kind is MaterializedProposalKind {
@@ -144,6 +146,18 @@ export const brainAdmissionMemoryAddPayloadSchema = z.object({
   indexEntry: z.string().min(1).max(280).optional(),
 })
 export type BrainAdmissionMemoryAddPayload = z.infer<typeof brainAdmissionMemoryAddPayloadSchema>
+
+const BRAIN_SKILL_ID_RE = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/
+
+export const brainAdmissionSkillAddPayloadSchema = z.object({
+  /** Full SKILL.md source, including valid YAML frontmatter. */
+  body: z.string().min(1).max(20_000),
+  /** Project Brain skill id; materializes to `<brainHome>/skills/<skillId>/SKILL.md`. */
+  skillId: z.string().min(1).regex(BRAIN_SKILL_ID_RE),
+  /** Defaults false to protect operator-edited skill files. */
+  overwrite: z.boolean().optional(),
+})
+export type BrainAdmissionSkillAddPayload = z.infer<typeof brainAdmissionSkillAddPayloadSchema>
 
 const SECRET_KEY_RE = /token|api[-_ ]?key|password|secret|bearer|auth(?:orization)?|credential/i
 const REDACTED = '<redacted>' as const

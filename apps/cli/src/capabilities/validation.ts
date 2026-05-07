@@ -236,7 +236,7 @@ async function validateSkills(dirPath: string): Promise<ParsedJson<SkillMetadata
     }
   }
 
-  const glob = new Bun.Glob('**/*.{md,yaml,yml}')
+  const glob = new Bun.Glob('**/SKILL.md')
   const parsedSkills: SkillMetadata[] = []
   const seenNames = new Map<string, string>()
   let count = 0
@@ -289,7 +289,7 @@ async function validateSkills(dirPath: string): Promise<ParsedJson<SkillMetadata
     issues.push(issue(
       'info',
       'brain-skills.empty',
-      'No brain skill files configured yet (.aiworker/skills/ is empty). Optional — see `aiworker brain skills add --help`.',
+      'No brain skill files configured yet (.aiworker/skills/ is empty). Optional — add `.aiworker/skills/<name>/SKILL.md` directly.',
       '.aiworker/skills/',
     ))
   }

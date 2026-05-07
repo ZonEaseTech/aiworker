@@ -170,7 +170,7 @@ describe('aiworker doctor', () => {
     expect(existsSync(path.join(home, '.aiworker', 'worker.db'))).toBe(false)
   })
 
-  it('TODO-015: emits a leading OK summary line on fresh-init defaults and suppresses brain-skills.empty noise', async () => {
+  it('emits a leading OK summary line for a freshly initialized project with seeded brain skills', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'aiworker-doctor-summary-'))
     const home = await mkdtemp(path.join(tmpdir(), 'aiworker-doctor-summary-home-'))
     const project = path.join(root, 'repo')
@@ -182,9 +182,11 @@ describe('aiworker doctor', () => {
     const doctor = await runCli(['doctor'], project, home)
 
     expect(doctor.exitCode).toBe(0)
-    // Leading summary line that calls out fresh-init mode
-    expect(doctor.output).toMatch(/\[aiworker doctor\] OK — \d+ checks; \d+ PASS · \d+ info · \d+ WARN · \d+ FAIL \(fresh-init defaults; expected to be sparse\)/)
-    // Old code dropped, new namespaced one suppressed on fresh-init
+    // Default Soul packs now seed real brain skills, so a freshly initialized
+    // project is no longer considered sparse by doctor.
+    expect(doctor.output).toMatch(/\[aiworker doctor\] OK — \d+ checks; \d+ PASS · \d+ info · \d+ WARN · \d+ FAIL/)
+    expect(doctor.output).not.toContain('fresh-init defaults')
+    // Old empty-skill codes must not surface for seeded defaults.
     expect(doctor.output).not.toContain('skills.empty')
     expect(doctor.output).not.toContain('brain-skills.empty')
     // Original Status: PASS line still printed for compatibility

@@ -34,6 +34,8 @@ describe('Soul preset registry', () => {
       expect(preset.outOfScope.length).toBeGreaterThan(0)
       expect(preset.soulMd).toContain(`# ${preset.label} Soul`)
       expect(preset.agentMd).toContain(`# ${preset.label} Worker`)
+      expect(preset.brainSkillPacks.length).toBeGreaterThan(0)
+      expect(preset.brainSkillPacks.every(skill => skill.id.startsWith(`${preset.id}.`))).toBe(true)
       // BUG-063: every shipped Soul preset must declare its own
       // vague-context strategy so SOUL.md guides the LLM to ask for missing
       // information instead of brute-forcing tool exploration.
@@ -59,6 +61,7 @@ describe('Soul preset registry', () => {
     expect(selected.toolsets).toEqual(preset.toolsets)
     expect(selected.soulMd).toBe(preset.soulMd)
     expect(selected.agentMd).toBe(preset.agentMd)
+    expect(selected.brainSkillPacks).toBe(preset.brainSkillPacks)
   })
 
   it('projects every shared Soul module into a CLI preset', () => {

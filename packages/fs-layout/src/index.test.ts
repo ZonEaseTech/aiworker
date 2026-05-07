@@ -382,6 +382,43 @@ describe('ensureProjectAiworker', () => {
     }
   })
 
+  it('writes Project Brain skill seed files and preserves existing skills', async () => {
+    const tmp = await makeTmpDir()
+    try {
+      await ensureProjectAiworker(tmp, {
+        brainSkillFiles: {
+          'kernel.brain-admission/SKILL.md': '# Brain Admission\n',
+        },
+      })
+      const skillPath = path.join(tmp, '.aiworker', 'skills', 'kernel.brain-admission', 'SKILL.md')
+      expect(await readFile(skillPath, 'utf8')).toBe('# Brain Admission\n')
+
+      await ensureProjectAiworker(tmp, {
+        brainSkillFiles: {
+          'kernel.brain-admission/SKILL.md': '# Overwrite Attempt\n',
+        },
+      })
+      expect(await readFile(skillPath, 'utf8')).toBe('# Brain Admission\n')
+    }
+    finally {
+      await cleanup(tmp)
+    }
+  })
+
+  it('rejects Project Brain skill seed path escapes', async () => {
+    const tmp = await makeTmpDir()
+    try {
+      await expect(ensureProjectAiworker(tmp, {
+        brainSkillFiles: {
+          '../escape/SKILL.md': '# Escape\n',
+        },
+      })).rejects.toThrow('Invalid Project Brain skill seed path')
+    }
+    finally {
+      await cleanup(tmp)
+    }
+  })
+
   it('projectAiworkerExists reflects state', async () => {
     const tmp = await makeTmpDir()
     try {

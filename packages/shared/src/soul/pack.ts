@@ -1,3 +1,4 @@
+import type { BrainSkillPack } from '../brain/skill-pack'
 import type { SoulModule } from './module'
 
 import { parse as parseYaml } from 'yaml'
@@ -9,6 +10,7 @@ const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/
 
 export interface SoulPack {
   agentMd: string
+  brainSkillPacks: readonly BrainSkillPack[]
   module: SoulModule
   soulBody: string
   soulMd: string
@@ -17,12 +19,19 @@ export interface SoulPack {
 
 const soulPackSourceSchema = z.object({
   agentMd: z.string().min(1),
+  brainSkillPacks: z.custom<readonly BrainSkillPack[]>().optional(),
   expectedId: z.string().min(1),
   soulMd: z.string().min(1),
   sourcePath: z.string().min(1),
 })
 
-export type SoulPackSource = z.infer<typeof soulPackSourceSchema>
+export interface SoulPackSource {
+  agentMd: string
+  brainSkillPacks?: readonly BrainSkillPack[]
+  expectedId: string
+  soulMd: string
+  sourcePath: string
+}
 
 export function stripMarkdownFrontmatter(raw: string): string {
   const match = FRONTMATTER_RE.exec(raw)
@@ -61,6 +70,7 @@ export function createSoulPack(input: SoulPackSource): SoulPack {
     throw new Error(`Soul pack ${source.sourcePath} declares id "${module.manifest.id}" but expected "${source.expectedId}"`)
   return {
     agentMd: source.agentMd.trimEnd(),
+    brainSkillPacks: source.brainSkillPacks ?? [],
     module,
     soulBody: stripMarkdownFrontmatter(source.soulMd),
     soulMd: source.soulMd.trimEnd(),

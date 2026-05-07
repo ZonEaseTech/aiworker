@@ -96,11 +96,22 @@ export function planCapabilities(input: {
     availableSkillCount: input.registry.skills.length,
     availableToolsets: input.registry.toolsets,
     deniedCapabilities: [],
-    reason: 'S2 observe-only capability registry; selections are recorded but not enforced.',
+    reason: capabilityPlanReason(selectedBuiltins),
     selectedBuiltins,
     selectedMcpTools,
     selectedSkills,
   }
+}
+
+function capabilityPlanReason(selectedBuiltins: string[]): string {
+  const loaders: string[] = []
+  if (selectedBuiltins.includes('load_skill'))
+    loaders.push('brain skill bodies')
+  if (selectedBuiltins.includes('memory_search'))
+    loaders.push('brain memory snippets')
+  if (loaders.length === 0)
+    return 'Capability registry selection recorded; no implemented context loader was required for this turn.'
+  return `Capability registry selected ${loaders.join(' and ')}; orchestrator loads implemented Project Brain context before executor dispatch.`
 }
 
 function selectSkills(skills: CapabilitySkillDescriptor[], intent: WorkerIntent, limit: number): CapabilitySkillDescriptor[] {
