@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-07 (PLAN-149 completed)
+> Updated: 2026-05-07 (PLAN-156 completed)
 
 ## Usage
 
@@ -178,3 +178,10 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-147 Harness — serve process restart continuity regression**](PLAN-147.md) `2026-05-07`
 - [x] [**PLAN-148 发布 aiworker CLI 0.9.7**](PLAN-148.md) `2026-05-07`
 - [x] [**PLAN-149 File-first Soul and Brain Pack authoring**](PLAN-149.md) `2026-05-07`
+- [x] [**PLAN-150 Cohere 设计语言 Web UI 全面切换**](PLAN-150.md) `2026-05-07`
+- [x] [**PLAN-151 Soul-initialized Brain Skill Packs**](PLAN-151.md) `2026-05-07`
+- [x] [**PLAN-152 Worker product lifecycle and Brain-Executor conformance audit**](PLAN-152.md) `2026-05-07`
+- [x] [**PLAN-153 Runtime Brain Skill body loading**](PLAN-153.md) `2026-05-07`
+- [x] [**PLAN-154 Runtime Brain Memory search context**](PLAN-154.md) `2026-05-07`
+- [x] [**PLAN-155 Brain Skill admission materializer**](PLAN-155.md) `2026-05-07`
+- [x] [**PLAN-156 Harness brain-skill-add admission roundtrip evidence**](PLAN-156.md) `2026-05-07`

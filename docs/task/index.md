@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-07 (REFACTOR-016 completed)
+> Updated: 2026-05-07 (QA-018 completed)
 
 ## Usage
 
@@ -260,3 +260,11 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REL-023 发布 aiworker CLI 0.9.7**](REL-023.md) `P1`
 - [x] [**QA-017 Governance Kernel harness — 0.9.7 cli-release-local compact evidence**](QA-017.md) `P1`
 - [x] [**REFACTOR-016 File-first Soul and Brain Pack authoring**](REFACTOR-016.md) `P1`
+- [x] [**REFACTOR-017 按新版 Cohere 设计语言全面重构 Web UI**](REFACTOR-017.md) `P1`
+- [x] [**REFACTOR-018 Soul-initialized Brain Skill Packs**](REFACTOR-018.md) `P1`
+- [x] [**REFACTOR-019 Worker product lifecycle and Brain-Executor conformance audit**](REFACTOR-019.md) `P1`
+- [x] [**REFACTOR-020 Runtime Brain Skill body loading**](REFACTOR-020.md) `P1`
+- [x] [**REFACTOR-021 Runtime Brain Memory search context**](REFACTOR-021.md) `P1`
+- [x] [**REFACTOR-022 Brain Skill admission materializer**](REFACTOR-022.md) `P1`
+- [x] [**TODO-038 Harness — brain-skill-add admission roundtrip evidence**](TODO-038.md) `P2`
+- [x] [**QA-018 Governance Kernel harness — brain-skill-add roundtrip evidence**](QA-018.md) `P1`

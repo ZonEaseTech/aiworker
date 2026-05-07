@@ -48,6 +48,144 @@ retention、backup 和 context compilation，而不是内建 PMA/代码项目假
   project 希望外部 executor 具备的 overlay / bootstrap hint；它不是 effective
   executor capability source of truth，也不是安全隔离边界。
 
+### Worker product lifecycle: init → up → serve
+
+Worker 的产品形态不是“先选 executor 再跑任务”，而是 **先建立 Project Brain，再
+把外部 executor 接进这个 scope**。本地 operator 从一个 host/workspace 目录进入：
+
+```mermaid
+flowchart TD
+  Start["cwd or explicit AIWORKER_HOME"] --> Resolve["resolve aiworker scope"]
+  Resolve -->|"no project .aiworker"| InitNew["aiworker init --soul <id>"]
+  Resolve -->|"existing project scope"| InitExisting["idempotent aiworker init"]
+  Resolve -->|"explicit/user scope"| UserScope["user/explicit worker home"]
+
+  InitNew --> BrainFiles["Project Brain files<br/>AGENT / SOUL / USER / MEMORY / ROLLUP<br/>scope / policy / toolsets / brain skills"]
+  InitExisting --> BrainFiles
+  InitNew --> LocalState[".aiworker/local<br/>worker.db / .env / workspaces / token file"]
+  InitExisting --> LocalState
+  UserScope --> LocalState
+
+  BrainFiles --> Up["aiworker up"]
+  LocalState --> Up
+  Up --> Validate["worker validation<br/>doctor-compatible project drafts"]
+  Validate --> Readiness["executor readiness<br/>non-blocking overlay/binary hints"]
+  Readiness --> Serve["aiworker serve"]
+  Serve --> Runtime["bootstrapWorkerApp<br/>DB + secrets + runtime + HTTP/admin"]
+  Runtime --> Gateway["optional gateway node<br/>fleet routing / audit / presence"]
+```
+
+`aiworker init` 的职责：
+
+- 在 project scope 下创建 `<project>/.aiworker/` 这颗 git-reviewable Project
+  Brain：`AGENT.md`、`SOUL.md`、`USER.md`、`MEMORY.md`、`ROLLUP.md`、
+  `scope.json`、`policy.json`、`toolsets.json`、`capability-packs.json`、
+  `.aiworker/skills/<id>/SKILL.md`、`.aiworker/memories/`、`.aiworker/mcp.json`
+  和 `.aiworker/executor-capabilities.json`。
+- 在 `.aiworker/local/` 创建本机私有 worker state：`worker.db`、`.env`、
+  `workspaces/`、bootstrap token file。这里是 runtime state，不是团队共享
+  Brain。
+- 从选定 Soul Pack 一次性 materialize persona 与默认 brain skill；已存在文件
+  no-overwrite，后续编辑以文件为权威。
+
+`aiworker up` 是本地 worker 的组合启动命令，语义固定为五段：resolve scope →
+init if needed → worker validation → executor readiness → serve。它不把 executor
+readiness 作为硬阻塞安全边界：engine 登录态、user-level MCP、engine-native skill /
+plugin / session 仍归 executor 自己管理；AIWorker 只给 operator 一个非阻塞诊断。
+
+`aiworker serve` 是数据面进程：初始化/迁移 `worker.db`，加载或创建 worker
+identity/config，注回 secret refs，构建 `WorkerRuntime`，挂载 worker REST/SSE、
+Worker Admin 静态资源与可选 gateway node。hot reload 只通过 `reloadRuntime`
+串行替换 runtime；旧 runtime 必须 dispose 长连接/observer，但 ProcessManager 这类
+跨 reload 的进程管控状态保持。
+
+因此，从产品角度看，`init` 交付的是“可编辑、可审计的 Project Brain + 本地 worker
+身份”；`up/serve` 交付的是“把这个 Brain 挂到一个外部 executor 上，并通过
+worker/fleet 控制面观察和治理它”。
+
+### Brain / Executor runtime loop
+
+Brain runtime 的正确心智模型是 **context + governance wrapper**，不是另一个
+executor。它把 Project Brain 投影给外部 executor，并围绕 executor 输出做
+quality/admission/audit，而不接管 executor 的 tool loop。
+
+```mermaid
+sequenceDiagram
+  participant U as User / Channel / Admin
+  participant O as Worker Orchestrator
+  participant B as Project Brain filesystem
+  participant D as worker.db
+  participant E as External Executor
+
+  U->>O: envelope or task prompt
+  O->>D: resolve session, create/continue conversation, persist user message
+  par context build
+    O->>B: read AGENT/SOUL/USER/MEMORY/ROLLUP and list SKILL.md entries
+  and intent classification
+    O->>E: optional control-executor classifier (tools disabled)
+  end
+  O->>B: load selected SKILL.md bodies and search memories when capability plan requires them
+  O->>D: record intent/capability decision samples
+  O->>E: run(messages, model, workspacePath, signal, engineBinding)
+  E-->>O: normalized AgentEvent stream
+  O->>D: persist engine binding, transcript, task state
+  O->>E: optional quality gate / repair through control executor (tools disabled)
+  O->>D: detect admission bypass claims and record governance warnings
+  O-->>U: deliver final assistant text
+```
+
+运行时分工：
+
+- **Project Brain filesystem**：`AGENT.md` / `SOUL.md` / `USER.md` /
+  `MEMORY.md` / `ROLLUP.md` / `skills/<id>/SKILL.md` 是 canonical context
+  surface。`FilesystemBrainProvider` 负责扫描、检索和 watch；SQLite 不替代这些
+  Markdown 文件成为 Brain source of truth。
+- **ContextManager**：把 persona、user profile、memory index、continuity rollup
+  和 brain skill 摘要拼进 system prompt；当 intent / capability plan 要求
+  `skill_load` 时，按选中 skill id 读取 `SKILL.md` body、剥离 frontmatter，并把
+  bounded body 追加为本轮 Project Brain context；当要求 `memory_search` 时，用
+  inbound turn text 查询 `BrainProvider.searchMemories()`，把 bounded memory
+  snippets 追加为本轮 Project Brain context。
+- **Capability registry**：记录本轮可见 brain skill / mcp descriptor / toolset
+  选择。`load_skill` 与 `memory_search` 已由 orchestrator 实现为内部 context
+  loader，并在 capability decision 中报告 loaded ids/count/errors；`.aiworker/mcp.json`
+  descriptor 仍是 observe-only context signal，不等于 executor-native tools。
+- **Executor adapter**：`ExecutorProvider.run(input)` 是唯一 task 执行入口。
+  Orchestrator 只传 messages、model hint、workspacePath、abort signal 与可选
+  engine native binding；外部 executor 自己决定 tool loop、MCP、engine skill、
+  plugin、approval、sandbox、auth、native session。
+- **Quality gate**：默认 observe；只有配置为 `warn` / `retry` / `block` 时才改变
+  assistant 输出。LLM evaluator 与 repair 也通过 control executor，显式禁用工具。
+- **Brain admission**：generated durable Brain mutation 必须进入
+  `brain_admission_proposals`，再由 operator approve/apply。当前自动 materializer
+  支持 `memory-add` 与 `brain-skill-add`；`policy-update` 仍是 proposal + 人工
+  后续，不是 runtime 自动改写。
+
+这个循环保留了 OD-style file-first 可编辑性，但没有盲目复制“skill loader 就是
+runtime 能力”的假设：AIWorker 的 brain skill 是 Project Brain 资产与 prompt/context
+素材；executor-native skill/plugin/MCP 仍属于 executor。
+
+### Implementation conformance audit (2026-05-07)
+
+本表是对当前源码的反查结论。新增开发如果改变其中任一行，必须同步本节与
+`docs/governance-node-status.md`，避免架构文档继续描述旧现实。
+
+| Claim | Current code evidence | Status |
+|------|-----------------------|--------|
+| `init` 先建立 Project Brain，再建立本地 worker state。 | `apps/cli/src/commands/worker/init.ts` 通过 `buildProjectAiworkerSeed()` 生成 persona、scope、policy、toolsets、capability packs 和 brain skill seed；`packages/fs-layout/src/index.ts::ensureProjectAiworker()` no-overwrite 写 `.aiworker/` 与 `local/`。 | conforming |
+| Project scope 下 shared Brain 与 local runtime state 分离。 | `resolveAiworkerScope()` 把 active home 指到 `.aiworker/local/`，`resolveBrainHome()` / `resolveWorkerHome()` 在 project scope 返回 `.aiworker/` 作为 Brain root。 | conforming |
+| `up` 是 init/validate/readiness/serve 的组合命令。 | `apps/cli/src/commands/worker/up.ts::runUp()` 明确打印并执行 5 stages；executor readiness 失败只给 WARN/Next，不阻塞 serve。 | conforming |
+| `serve` 是 worker HTTP/admin/runtime 生命周期入口。 | `apps/cli/src/commands/worker/serve.ts::runServe()` 调 `bootstrapWorkerApp()`，挂 `Bun.serve`、Worker Admin、pidfile、optional gateway node 和 shutdown；`apps/api/src/modes/worker.ts` 执行 DB/config/secrets/runtime bootstrap。 | conforming |
+| Brain provider 以 filesystem 为权威。 | `packages/core/src/worker/brain/factory.ts` 默认经 `resolveBrainHome(workerId)` 构造 `FilesystemBrainProvider`；scanner 只识别 `skills/**/SKILL.md` 和 `memories/**/*.md`。 | conforming |
+| Soul/Brain skill authoring 已转为 file-first pack。 | `packages/shared/src/soul/packs/*` 和 `packages/shared/src/brain/skills/*` 是 Markdown source；`brainSkillPackSeedFiles()` 在 init 时 materialize 到 project `.aiworker/skills/`。 | conforming in current source |
+| Runtime 会把 Project Brain 投影给 executor。 | `ContextManager.buildSystemPrompt()` 读取 `AGENT.md` / `SOUL.md` / `USER.md` / `MEMORY.md` / `ROLLUP.md`，列出可用 brain skill 摘要；当 `skill_load` 被选中时，`ContextManager.loadSkillBodies()` 读取 selected `SKILL.md` body；当 `memory_search` 被选中时，`ContextManager.searchMemories()` 查询 provider 并注入 matched snippets。 | conforming for persona + skill + memory context |
+| Capability decision 是可执行能力选择。 | `CapabilityRegistry.snapshot()` 产出 `load_skill` / `memory_search` / mcp descriptor / skill summaries；service 对 `load_skill` / `memory_search` 调用对应 context loader，并在 event 中报告 loaded ids/count/errors。`.aiworker/mcp.json` descriptor 仍未执行为 executor tools。 | partial: brain context loaders enforced, mcp descriptor observe-only |
+| Executor 是 thin adapter，不是 AIWorker 内建 agent runtime。 | `packages/shared/src/providers/executor.ts` 的 contract 和 `packages/core/src/worker/executor/factory.ts` 的 switch 只构造 adapter；`Orchestrator.buildAgentRunInput()` 只传 messages/model/workspace/signal/binding。 | conforming |
+| Quality gate 是治理层，不是默认 hard rewrite。 | `quality-gate.ts` 用 `resolveQualityGateMode()` 如实标 observe/enforced；`service.ts` 只有在 config mode 为 `retry` / `block` / `warn` 时才修改输出。 | conforming |
+| Durable Brain mutation 走 admission。 | `BrainAdmissionService` 持有 proposal/decision 状态机，CLI/API/gateway handlers 都转进该 service；pre-compaction memory flush 只 `propose(memory-add)`。 | conforming for memory-add and brain-skill-add |
+| Brain 自我迭代已经能自动落 skill/policy。 | `MATERIALIZED_PROPOSAL_KINDS = ['memory-add', 'brain-skill-add']`；`brain-skill-add` commit 写 `skills/<id>/SKILL.md`，校验 frontmatter/id/no-overwrite/secret scan；`policy-update` 仍 unsupported。 | partial: skill yes, policy no |
+| Gateway/fleet 不复制 worker Brain。 | architecture 与 `WorkerInfo` summary surface 只暴露计数/summary；admission/artifact 全文通过 worker data plane REST/WS bridge 读取。 | conforming by design; keep testing through harness |
+
 > Conformance snapshot — see `docs/governance-node-status.md` for the
 > evidence-backed summary of where the worker meets the Project Brain
 > governance node target and where residual boundary / risk remains.
@@ -105,11 +243,12 @@ compiler 与 Worker/Fleet Brain surface，并作为后续 Brain 开发的默认�
    `heuristic`、`llm`、`observe_only` 还是 `enforced`？如果实际只是 observe-only，就
    必须把 observe-only 作为产品现实写出来。
 
-当前 0.8.x 现实尤其需要诚实标注：QA-006 已证明 `orchestrator.intent_decision`、
-`orchestrator.capability_decision` 与 `orchestrator.quality_gate` 在验证矩阵中都是
-heuristic / observe-only，没有真实 LLM-backed Brain decider 事件。后续可以新增
-LLM-backed decider，但必须显式 opt-in、清楚标 source/mode，并继续保留 heuristic
-fallback。不能把“Project Brain 注入 LLM prompt”误写成“Brain decision LLM 已经接管”。
+当前 0.9.x 现实仍需要诚实标注：intent classifier 与 quality gate 默认仍是
+heuristic / observe-only；capability decision 只有在 `skill_load` 选中且 skill body
+实际加载成功时才标 `mode=enforced`，并暴露 `loadedSkillIds` / `skillLoadErrors`。
+后续可以新增 LLM-backed decider 或 memory retrieval loader，但必须显式 opt-in、
+清楚标 source/mode，并继续保留 heuristic fallback。不能把“Project Brain 注入 LLM
+prompt”误写成“Brain decision LLM 已经接管”。
 
 同理，Brain admission 的目标是把 durable mutation 收口到 operator approval，而不是让
 LLM 自行决定长期记忆是否已经成功落盘。外部 executor 的 native memory（例如 user/host
@@ -251,7 +390,7 @@ Project Brain 由五类资产组成。命名上 *brain memory / brain skill / pr
 |------|------------|--------|---------|----------|
 | **Identity** | `AGENT.md`、`SOUL.md`、`USER.md` | operator + Soul Pack | `aiworker init` 从 file-first Soul Pack 一次性种出，after that 视为 git-tracked persona doc，AIWorker runtime 不主动改写。新增或修改 Soul 语义应优先编辑 Markdown pack；结构化 `SoulModule` 只作为 loader 输出供 Kernel 消费。 | `aiworker init`、`aiworker soul list/show` |
 | **Memory** | `MEMORY.md`、`memories/*.md` | operator + admission materializer | filesystem 为权威；generated runtime memory 只能先进入 admission proposal，operator approve/apply 后由 materializer 写入。 | `aiworker brain memories`（只读检索） |
-| **Brain skills** | `.aiworker/skills/<name>/SKILL.md`（+ asset files） | operator | 仅人写；CLI 不提供 mutating skill commands。`brain skills` 只读列出 live `BrainProvider` 中已挂载的 skill。 | `aiworker brain skills` |
+| **Brain skills** | `.aiworker/skills/<id>/SKILL.md`（+ references/assets sidecars） | operator + Soul Pack | `aiworker init` 从 kernel + selected Soul Pack 一次性种出默认 brain skill；after that 视为 git-tracked Project Brain 文件。runtime 只识别 `SKILL.md` entrypoint，sidecar Markdown 不单独注册为 skill。generated brain skill 仍必须走 admission。 | `aiworker brain skills` |
 | **Policy & drafts** | `policy.json`、`toolsets.json`、`capability-packs.json`、`.aiworker/mcp.json` | operator + Soul preset | brain/runtime 草案；`aiworker doctor` 静态校验，不接入 runtime enforcement。`mcp.json` 是 brain/runtime descriptor，不是 engine MCP config。 | `aiworker doctor`、`aiworker brain status` |
 | **Admission state** | worker.db `brain_admission_proposals` / `brain_admission_decisions` | brain runtime（proposal）+ operator（approval） | 任何 generated memory / skill / policy proposal 必须保留 evidence、scope、confidence、rollback；pre-compaction memory flush 也只创建 pending proposal，不直接写 filesystem。CLI/API/UI approval surface 已由 PLAN-101 / PLAN-103 落地 MVP。 | `aiworker brain admission *`、Worker Admin `/brain` |
 
@@ -276,7 +415,7 @@ Project Brain 由五类资产组成。命名上 *brain memory / brain skill / pr
    - UI: Worker Admin `/brain` 视图列出 scope manifest 摘要、pending admissions（带 approve/reject/apply 按钮）、redacted artifact 列表。Fleet UI 不持有 admission / artifact state，仅在 worker detail 上挂 “Open worker Brain admin” 深链。
 4. **无免审 generated 写入**：pre-compaction memory flush（runtime 把易失 memory rollup 成长期记忆候选）只能创建 pending `memory-add` admission proposal；任何 mutating brain CLI/API/UI 命令都必须先经过 admission flow 接入。
 
-**MVP materializer 范围（PLAN-101）**：`apply` 仅对 `kind === 'memory-add'` 自动写 `<brainHome>/MEMORY.md` 或 `<brainHome>/memories/<topic>.md`；其它 proposal kind（`brain-skill-add`、`policy-update` 等）进表后可 approve，但 `apply` 返回 `unsupported`，留待人工或后续 plan 拓展。
+**Materializer 范围**：`apply` 对 `kind === 'memory-add'` 自动写 `<brainHome>/MEMORY.md` 或 `<brainHome>/memories/<topic>.md`；对 `kind === 'brain-skill-add'` 自动写 `<brainHome>/skills/<skillId>/SKILL.md`，要求 payload body 是有效 `SKILL.md`、frontmatter `id` 与 payload `skillId` 匹配、默认不覆盖已有文件，并沿用 secret scan policy。`policy-update` 等其它 proposal kind 可以进表并 approve，但 dry-run `apply` 返回 `unsupported`，commit `apply` 会记录 `unsupported-kind:<kind>` 失败决策，留待人工或后续 plan 拓展。
 
 红线：admission flow 不复用 executor MCP / engine plugin / engine skill / project executor overlay 通路；命名上严格使用 `brain admission` / `brain memory` / `brain skill` / `project policy`，避免与 `executor capability` / `executor mcp` 重名。Worker 会 observe-only 检测“assistant 声称已提交 admission / 已写入长期记忆但本轮 worker.db admission row 未增加”的风险，并通过 `brain.governance.bypass_suspected` 事件与 `brainSummary.admissions.bypassRisk` 暴露；这不是成功写入，也不会把 engine-native memory 采信为 canonical Brain。
 

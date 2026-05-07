@@ -1,5 +1,134 @@
 # AIWorker Changelog
 
+## 2026-05-07 11:34 [completed] TODO-038 / PLAN-156 — Harness brain-skill-add admission roundtrip evidence
+
+Raised the new Brain Skill materializer from focused-test confidence to
+repeatable black-box governance evidence.
+
+- Extended `scripts/governance-kernel-harness.ts` with a deterministic
+  `brain-skill-add` fixture per compact pair.
+- The harness now verifies propose / approve / apply, canonical
+  `.aiworker/skills/<skillId>/SKILL.md` materialization, DB transitions, and
+  post-apply `aiworker doctor` acceptance.
+- Recorded QA-018 source-local compact evidence: 80 PASS / 0 FAIL / 0 SKIPPED.
+- Updated governance status so the positive admission invariant covers both
+  `memory-add` and `brain-skill-add`.
+
+Verification passed: `bun scripts/governance-kernel-harness.ts --help`, full
+check, compact source-local governance harness, full test, build, and
+`git diff --check`.
+
+## 2026-05-07 11:19 [completed] REFACTOR-022 / PLAN-155 — Brain Skill admission materializer
+
+Closed the next self-iteration gap in the file-first Project Brain direction:
+approved Brain Skill proposals can now become governed `SKILL.md` files.
+
+- Added `brainAdmissionSkillAddPayloadSchema` and expanded materialized
+  proposal kinds to include `brain-skill-add`.
+- Brain admission apply now supports dry-run and commit for
+  `.aiworker/skills/<skillId>/SKILL.md`, validating SKILL.md frontmatter and
+  requiring frontmatter id to match the payload skill id.
+- Commit keeps no-overwrite as the default, allows explicit overwrite via
+  payload, and reuses the existing secret body policy before writing.
+- `policy-update` remains explicitly unsupported so policy mutation can be
+  handled by a separate materializer with JSON merge/validation semantics.
+
+Verification passed: focused shared/core/CLI admission tests, full check, full
+test, build, and `git diff --check`.
+
+## 2026-05-07 11:10 [completed] REFACTOR-021 / PLAN-154 — Runtime Brain Memory search context
+
+Closed the next observe-only Project Brain runtime gap: selected memory search
+is now executed and projected into the executor turn context.
+
+- Added bounded `ContextManager.searchMemories()` and a `Loaded brain memories`
+  prompt section for matched Project Brain memory snippets.
+- Orchestrator now executes `memory_search` before executor dispatch, reuses
+  loaded memory context on context-overflow retry, and keeps executor dispatch
+  non-blocking if memory search fails.
+- Capability decisions now report loaded memory ids/count and search errors;
+  mode is enforced when any skill body or memory snippet is actually injected.
+- Architecture and governance status now state the current boundary: memory
+  search is executed, but ranking quality remains provider-specific and not a
+  hard-coded Brain workflow.
+
+Verification passed: focused core orchestrator tests, core typecheck, full
+check, full test, build.
+
+## 2026-05-07 11:04 [completed] REFACTOR-020 / PLAN-153 — Runtime Brain Skill body loading
+
+Closed the most important Project Brain runtime gap from the lightweight
+Brain direction: selected Brain Skills are now real turn context, not only
+metadata hints.
+
+- Added optional `BrainProvider.loadSkill(id)` and `BrainSkillBody`, implemented
+  by filesystem and multi-source Brain providers.
+- Filesystem Brain skills now retain frontmatter-stripped `SKILL.md` bodies
+  behind stable scan-derived ids, avoiding path-derived access.
+- Orchestrator context assembly loads selected skill bodies when `load_skill`
+  is chosen, appends bounded skill bodies to the executor system prompt, and
+  preserves the loaded context across context-overflow retry.
+- Capability decisions now report loaded skill ids/count and load errors; the
+  decision is marked enforced only when bodies were actually loaded.
+- Updated architecture/status docs and CLI doctor tests to reflect seeded
+  Soul brain skills and the implemented `load_skill` path.
+
+Verification passed: focused core/shared tests, focused CLI doctor test, full
+typecheck, lint, full test, build, check.
+
+## 2026-05-07 10:47 [completed] REFACTOR-019 / PLAN-152 — Worker 生命周期与 Brain-Executor 实现反查
+
+将当前 worker 产品形态和 Brain-Executor 边界落到架构文档，并反查源码是否一致：
+
+- `docs/architecture.md` 新增 `init → up → serve` 生命周期、Brain/Executor
+  runtime loop sequence，以及逐项代码符合度表。
+- `docs/governance-node-status.md` 新增 worker lifecycle、file-first Brain skill
+  surface、Brain-to-executor handoff 的 current-source 结论。
+- 明确剩余偏差：runtime 目前只注入 brain skill 名称/描述，没有实际 `load_skill`
+  body 装载路径；admission materializer 只支持 `memory-add`。
+- 修正 admission schema 注释，使非 `memory-add` proposal 的 unsupported/failed
+  行为与当前 service 实现一致。
+
+Verification passed: `git diff --check` and focused shared admission schema
+test.
+
+## 2026-05-07 10:04 [completed] REFACTOR-017 / PLAN-150 — Cohere 设计语言 Web UI 全面切换
+
+将 Fleet 与 Worker Web UI 从旧高对比控制台视觉切换到新版 `DESIGN.md` 的
+Cohere 风格运营界面：
+
+- 重写 Web token 与 shared primitives：near-black pill actions、薄规则、
+  soft stone surfaces、深绿状态 band、8px 卡片半径、无默认重阴影和统一 focus。
+- 重构 Fleet / Worker app shell 为顶栏导航 + 白色 canvas，Worker 保留深绿状态
+  band；锁定态改为表单卡片。
+- Sweep Fleet workers/enroll/audit/presence/worker detail 与 Worker
+  overview/brain/config/secrets/test/cron/approvals/chat 主要页面、表单、表格、
+  empty/loading/error/dialog 状态。
+- 更新 responsive tests，并修正 Vite Markdown text import 以兼容 Brain Skill
+  Pack 的 `.md?import` 引入。
+
+Verification passed: web typecheck, lint, test, build, `git diff --check`, and
+desktop/mobile screenshot audit under `tmp/webui-cohere-screenshots/`.
+
+## 2026-05-07 09:45 [completed] REFACTOR-018 / PLAN-151 — Soul-initialized Brain Skill Packs
+
+Continued the OD-style lightweight Brain direction by making brain skills a
+file-first pack surface initialized from kernel + Soul source:
+
+- Added `BrainSkillPack` loader and built-in `SKILL.md` packs for kernel
+  governance (`brain-admission`, `executor-quality-review`) plus one default
+  pack per built-in Soul.
+- `aiworker init --soul <id>` now seeds `.aiworker/skills/<id>/SKILL.md`
+  without overwriting existing operator-edited skill files.
+- Filesystem runtime and doctor validation now treat `SKILL.md` as the skill
+  entrypoint and ignore Markdown sidecars under `references/` or `assets/`.
+- Runtime `BrainSkill.id` is now a stable project-relative skill id instead
+  of an absolute filesystem path.
+
+Verification passed: shared tests, fs-layout tests, core filesystem scanner
+tests, focused CLI tests, full typecheck, lint, CLI bundle, and
+`git diff --check`.
+
 ## 2026-05-07 02:04 [completed] REFACTOR-016 / PLAN-149 — File-first Soul and Brain Pack authoring
 
 Continued the lightweight Brain direction by moving built-in Soul authoring
