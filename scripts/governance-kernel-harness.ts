@@ -1066,6 +1066,14 @@ interface HarnessFixture {
   topic: string
 }
 
+interface SkillHarnessFixture {
+  body: string
+  evidence: string
+  payload: string
+  proposalId: string
+  skillId: string
+}
+
 function writeAdmissionFixture(
   projectDir: string,
   pairId: string,
@@ -1101,6 +1109,50 @@ function writeAdmissionFixture(
     },
   ], null, 2)}\n`, 'utf8')
   return { body, evidence, indexEntry, payload, proposalId, topic }
+}
+
+function buildHarnessSkillMd(skillId: string, pairId: string): string {
+  return [
+    '---',
+    `id: ${skillId}`,
+    'name: Harness Skill Roundtrip',
+    `description: Verify governed Project Brain Skill materialization for ${pairId}.`,
+    'version: 0.1.0',
+    'capabilities:',
+    '  - harness-validation',
+    'permissions:',
+    '  - filesystem-read',
+    '---',
+    '# Harness Skill Roundtrip',
+    '',
+    `This Project Brain Skill was materialized by governance-kernel-harness for ${pairId}.`,
+    '',
+    'Use it only as black-box admission evidence.',
+  ].join('\n')
+}
+
+function writeSkillFixture(projectDir: string, pairId: string, soul: string): SkillHarnessFixture {
+  const fixtureDir = path.join(projectDir, '.aiworker/local/harness-fixtures')
+  ensureDir(fixtureDir)
+  const proposalId = `harness-${pairId}-skill`
+  const skillId = `harness.${pairId}.roundtrip`
+  const body = buildHarnessSkillMd(skillId, pairId)
+  const payload = path.join(fixtureDir, `${proposalId}.payload.json`)
+  const evidence = path.join(fixtureDir, `${proposalId}.evidence.json`)
+  writeFileSync(payload, `${JSON.stringify({
+    body,
+    skillId,
+  }, null, 2)}\n`, 'utf8')
+  writeFileSync(evidence, `${JSON.stringify([
+    {
+      at: new Date().toISOString(),
+      kind: 'observation',
+      ref: `harness:${proposalId}`,
+      source: 'scripts/governance-kernel-harness.ts',
+      summary: `Brain Skill admission roundtrip fixture for ${pairId} (soul=${soul}).`,
+    },
+  ], null, 2)}\n`, 'utf8')
+  return { body, evidence, payload, proposalId, skillId }
 }
 
 function writeFixtureFiles(projectDir: string, pairId: string, soul: string): HarnessFixture {
@@ -1562,6 +1614,138 @@ async function runPair(
     evidence: brief.logPath,
     name: `${pairId} brain brief reflects applied memory`,
     status: brief.code === 0 && (briefHasTopic || briefHasBody) ? 'pass' : 'fail',
+  })
+
+  // TODO-038 / PLAN-156: Brain Skill materializer black-box evidence. This
+  // uses the same admission CLI boundary as memory-add but writes a valid
+  // file-first Project Brain Skill under `.aiworker/skills/<skillId>/SKILL.md`.
+  // It intentionally does not install or configure any executor-native skill /
+  // plugin capability.
+  const skillFixture = writeSkillFixture(projectDir, pairId, pair.soul)
+  const expectedSkillFile = path.join(projectDir, '.aiworker/skills', skillFixture.skillId, 'SKILL.md')
+  const skillPreExists = existsSync(expectedSkillFile)
+  const skillPropose = runAiworker(options.debugRoot, product, `${pairId}-skill-propose`, [
+    'brain',
+    'admission',
+    'propose',
+    '--id',
+    skillFixture.proposalId,
+    '--kind',
+    'brain-skill-add',
+    '--target',
+    `skills/${skillFixture.skillId}/SKILL.md`,
+    '--summary',
+    `Materialize harness Brain Skill ${skillFixture.skillId}.`,
+    '--rollback',
+    `Remove skills/${skillFixture.skillId}/SKILL.md before apply or delete it manually after apply.`,
+    '--soul',
+    pair.soul,
+    '--risk',
+    'low',
+    '--confidence',
+    '0.9',
+    '--payload',
+    skillFixture.payload,
+    '--evidence',
+    skillFixture.evidence,
+  ], {
+    cwd: projectDir,
+    env,
+    timeoutMs: 30_000,
+  })
+  const skillApprove = runAiworker(options.debugRoot, product, `${pairId}-skill-approve`, [
+    'brain',
+    'admission',
+    'approve',
+    skillFixture.proposalId,
+    '--decided-by',
+    'governance-kernel-harness',
+    '--reason',
+    'harness-brain-skill-roundtrip',
+  ], {
+    cwd: projectDir,
+    env,
+    timeoutMs: 30_000,
+  })
+  const skillApply = runAiworker(options.debugRoot, product, `${pairId}-skill-apply`, [
+    'brain',
+    'admission',
+    'apply',
+    skillFixture.proposalId,
+    '--commit',
+    '--decided-by',
+    'governance-kernel-harness',
+  ], {
+    cwd: projectDir,
+    env,
+    timeoutMs: 30_000,
+  })
+  const skillApplyOutcome = parseFirstJsonObject(skillApply.stdout)
+  const skillOutcomeBlock = skillApplyOutcome?.outcome
+  const skillOutcomeKind = typeof skillOutcomeBlock === 'object' && skillOutcomeBlock !== null && 'kind' in skillOutcomeBlock
+    ? (skillOutcomeBlock as { kind?: unknown }).kind
+    : undefined
+  const skillOutcomeTarget = typeof skillOutcomeBlock === 'object' && skillOutcomeBlock !== null && 'target' in skillOutcomeBlock
+    ? (skillOutcomeBlock as { target?: unknown }).target
+    : undefined
+  const skillStatusSnap = sqlite(
+    options.debugRoot,
+    dbPath,
+    `${pairId}-db-skill-status`,
+    `SELECT status FROM brain_admission_proposals WHERE id = ${sqlString(skillFixture.proposalId)};`,
+  )
+  const skillDecisionsSnap = sqlite(
+    options.debugRoot,
+    dbPath,
+    `${pairId}-db-skill-decisions`,
+    `SELECT decision FROM brain_admission_decisions WHERE proposal_id = ${sqlString(skillFixture.proposalId)} ORDER BY decided_at;`,
+  )
+  const skillStatus = skillStatusSnap.stdout.trim().split('\n')[0] ?? ''
+  const skillDecisions = skillDecisionsSnap.stdout.trim().split('\n').filter(Boolean)
+  const skillFileExists = existsSync(expectedSkillFile)
+  const skillBody = skillFileExists ? readFileSync(expectedSkillFile, 'utf8') : ''
+  const skillBodyMatches = skillBody.includes(`id: ${skillFixture.skillId}`)
+    && skillBody.includes('# Harness Skill Roundtrip')
+    && skillBody.includes(`materialized by governance-kernel-harness for ${pairId}`)
+  checks.push({
+    detail: `propose=${skillPropose.code}, approve=${skillApprove.code}, apply=${skillApply.code}, outcome.kind=${String(skillOutcomeKind ?? 'unknown')}, target=${String(skillOutcomeTarget ?? 'unknown')}, pre-exists=${skillPreExists}`,
+    evidence: `${skillPropose.logPath}; ${skillApprove.logPath}; ${skillApply.logPath}`,
+    name: `${pairId} brain-skill-add admission apply commit`,
+    status: !skillPreExists
+      && skillPropose.code === 0
+      && skillApprove.code === 0
+      && skillApply.code === 0
+      && skillOutcomeKind === 'applied'
+      && skillOutcomeTarget === expectedSkillFile
+      ? 'pass'
+      : 'fail',
+  })
+  checks.push({
+    detail: `skill file exists=${skillFileExists}, body matches=${skillBodyMatches}`,
+    evidence: expectedSkillFile,
+    name: `${pairId} post-apply canonical Brain Skill file`,
+    status: skillFileExists && skillBodyMatches ? 'pass' : 'fail',
+  })
+  checks.push({
+    detail: `proposal status=${skillStatus}, decisions=${skillDecisions.join(',')}`,
+    evidence: `${skillStatusSnap.logPath}; ${skillDecisionsSnap.logPath}`,
+    name: `${pairId} brain-skill-add DB transitions`,
+    status: skillStatus === 'applied'
+      && skillDecisions.includes('approved')
+      && skillDecisions.includes('applied')
+      ? 'pass'
+      : 'fail',
+  })
+  const doctorAfterSkill = runAiworker(options.debugRoot, product, `${pairId}-doctor-after-skill-apply`, ['doctor'], {
+    cwd: projectDir,
+    env,
+    timeoutMs: 30_000,
+  })
+  checks.push({
+    detail: `exit=${doctorAfterSkill.code}`,
+    evidence: doctorAfterSkill.logPath,
+    name: `${pairId} doctor accepts applied Brain Skill`,
+    status: doctorAfterSkill.code === 0 ? 'pass' : 'fail',
   })
 
   // PLAN-129: reject path coverage. Propose a sibling fixture, reject it, and
