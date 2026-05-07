@@ -275,3 +275,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REL-025 发布 aiworker CLI 0.10.1**](REL-025.md) `P1`
 - [x] [**QA-021 Governance Kernel harness — 0.10.1 cli-release-local full 5×2 matrix**](QA-021.md) `P1`
 - [x] [**BUG-088 Worker Admin Chat renders the final assistant message twice**](BUG-088.md) `P2`
+- [x] [**BUG-089 Worker Config save bar floats and exceeds content width**](BUG-089.md) `P2`

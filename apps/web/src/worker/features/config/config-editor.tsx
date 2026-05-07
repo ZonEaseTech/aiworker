@@ -141,7 +141,7 @@ function ConfigForm({
 
   return (
     <form
-      className="app-page pb-24"
+      className="app-page"
       onSubmit={(e) => {
         e.preventDefault()
         void onSave()
@@ -230,21 +230,19 @@ function ConfigForm({
         </div>
       </section>
 
-      <div className="sticky bottom-0 -mx-4 border-t border-hairline bg-background/95 px-4 py-3 sm:-mx-6 sm:px-6">
-        <div className="flex items-center justify-between gap-4">
-          <p className="text-xs text-muted-foreground">
-            保存使用
-            {' '}
-            <code className="font-mono">{`If-Match: ${version}`}</code>
-            ——若 stored version 已前移则返 409。
-          </p>
-          <Button type="submit" disabled={put.isPending}>
-            {put.isPending
-              ? <Loader2 className="size-4 animate-spin" />
-              : <Save className="size-4" />}
-            {put.isPending ? '保存中…' : '保存配置'}
-          </Button>
-        </div>
+      <div className="app-panel flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="min-w-0 text-xs text-muted-foreground">
+          保存使用
+          {' '}
+          <code className="font-mono">{`If-Match: ${version}`}</code>
+          ——若 stored version 已前移则返 409。
+        </p>
+        <Button type="submit" className="w-full sm:w-auto" disabled={put.isPending}>
+          {put.isPending
+            ? <Loader2 className="size-4 animate-spin" />
+            : <Save className="size-4" />}
+          {put.isPending ? '保存中…' : '保存配置'}
+        </Button>
       </div>
     </form>
   )
