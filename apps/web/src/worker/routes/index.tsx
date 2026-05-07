@@ -12,13 +12,13 @@ function WorkerOverview() {
   const approvals = useApprovals()
 
   return (
-    <section className="flex w-full max-w-5xl min-w-0 flex-col gap-6">
-      <header className="min-w-0">
-        <h1 className="text-2xl font-bold">概览</h1>
-        <p className="break-words text-sm text-muted-foreground">
+    <section className="app-page-narrow">
+      <header className="app-page-header min-w-0">
+        <h1 className="app-page-title">概览</h1>
+        <p className="app-page-copy break-words">
           单 worker 自管面板。所有数据通道走当前入口的
           {' '}
-          <code className="font-mono text-xs">/api/worker/*</code>
+          <code className="app-code">/api/worker/*</code>
           兼容管理 API。
         </p>
       </header>
@@ -101,11 +101,11 @@ function WorkerOverview() {
             <p className="text-sm text-muted-foreground">
               共
               {' '}
-              <span className="font-bold text-foreground">{cron.data.jobs.length}</span>
+              <span className="font-medium text-foreground">{cron.data.jobs.length}</span>
               {' '}
               个；
               {' '}
-              <span className="font-bold text-foreground">
+              <span className="font-medium text-foreground">
                 {cron.data.jobs.filter(j => j.enabled).length}
               </span>
               {' '}
@@ -127,7 +127,7 @@ function WorkerOverview() {
               <span
                 className={
                   approvals.data.approvals.length > 0
-                    ? 'font-bold text-warning'
+                    ? 'font-medium text-warning'
                     : 'text-muted-foreground'
                 }
               >
@@ -173,11 +173,11 @@ function SummaryCard({
   children?: React.ReactNode
 }) {
   return (
-    <article className="flex min-w-0 flex-col gap-2 rounded-md border bg-card p-4">
+    <article className="app-panel flex min-w-0 flex-col gap-3">
       <header className="flex min-w-0 items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <Icon className="size-4 shrink-0 text-muted-foreground" />
-          <h3 className="truncate text-sm font-bold">{title}</h3>
+          <h3 className="truncate text-feature font-normal">{title}</h3>
         </div>
         {actionTo && (
           <WorkerLink

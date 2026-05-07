@@ -56,11 +56,11 @@ export function CronPanel() {
   const jobs = q.data?.jobs ?? []
 
   return (
-    <div className="flex max-w-4xl flex-col gap-6">
-      <header className="flex items-start justify-between gap-4">
+    <div className="app-page-narrow max-w-5xl">
+      <header className="app-page-header sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Cron</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <h1 className="app-page-title">Cron</h1>
+          <p className="app-page-copy">
             按 cron 表达式定期触发的 prompt 任务。结果通过指定 channel 发出。
           </p>
         </div>
@@ -71,7 +71,7 @@ export function CronPanel() {
       </header>
 
       {error && (
-        <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+        <p role="alert" className="app-alert-error">
           {error}
         </p>
       )}
@@ -80,30 +80,30 @@ export function CronPanel() {
         ? <Skeleton className="h-40" />
         : q.isError
           ? (
-              <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+              <p role="alert" className="app-alert-error">
                 加载 cron 列表失败：
                 {q.error instanceof Error ? q.error.message : '未知错误'}
               </p>
             )
           : jobs.length === 0
             ? (
-                <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                <p className="app-empty">
                   尚无 cron。
                 </p>
               )
             : (
                 <ul className="flex flex-col gap-3">
                   {jobs.map(job => (
-                    <li key={job.id} className="flex flex-col gap-2 rounded-md border bg-card p-4">
+                    <li key={job.id} className="flex flex-col gap-3 rounded-sm border border-hairline bg-card p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
                             <code className="font-mono text-sm">{job.expression}</code>
-                            <span className="rounded bg-muted px-1.5 py-0.5 text-micro uppercase text-muted-foreground">
+                            <span className="rounded-full bg-soft-stone px-2 py-1 text-micro uppercase text-muted-foreground">
                               {job.channel}
                             </span>
                             {!job.enabled && (
-                              <span className="rounded bg-warning-soft px-1.5 py-0.5 text-micro font-bold text-warning">
+                              <span className="rounded-full bg-warning-soft px-2 py-1 text-micro font-medium text-warning">
                                 disabled
                               </span>
                             )}
@@ -192,7 +192,7 @@ export function CronPanel() {
             <DialogDescription>
               将立即停止
               {' '}
-              <code className="rounded bg-muted px-1 font-mono text-xs">{confirmDelete?.id}</code>
+              <code className="app-code">{confirmDelete?.id}</code>
               {' '}
               的调度。
             </DialogDescription>
@@ -305,7 +305,7 @@ function CronFormDialog({
               <Label htmlFor={promptId}>Prompt</Label>
               <textarea
                 id={promptId}
-                className="min-h-[80px] rounded-md border bg-background px-3 py-2 text-sm"
+                className="app-field min-h-[80px]"
                 value={form.prompt}
                 onChange={e => patch('prompt', e.target.value)}
               />
@@ -314,7 +314,7 @@ function CronFormDialog({
               <div className="grid gap-1.5">
                 <Label>Channel</Label>
                 <select
-                  className="h-9 rounded-md border bg-background px-3 text-sm"
+                  className="app-field h-10"
                   value={form.channel}
                   onChange={e => patch('channel', e.target.value as ChannelType)}
                 >

@@ -111,9 +111,9 @@ export function ChatPanel() {
       data-testid="worker-chat-panel"
       className="grid min-w-0 grid-cols-1 gap-4 lg:h-[calc(100vh-200px)] lg:min-h-[420px] lg:grid-cols-[280px_1fr]"
     >
-      <aside className="flex max-h-56 min-h-0 min-w-0 flex-col gap-2 overflow-y-auto rounded-md border bg-card p-3 lg:max-h-none">
+      <aside className="flex max-h-56 min-h-0 min-w-0 flex-col gap-3 overflow-y-auto rounded-sm border border-hairline bg-card p-3 lg:max-h-none">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="px-1 text-sm font-bold">Conversations</h2>
+          <h2 className="px-1 text-feature font-normal">Conversations</h2>
           <Button
             type="button"
             variant={pickedId === null ? 'secondary' : 'outline'}
@@ -138,10 +138,10 @@ export function ChatPanel() {
                         <button
                           type="button"
                           onClick={() => setPickedId(c.id)}
-                          className={`flex w-full flex-col rounded-md px-2 py-1.5 text-left text-xs transition-colors ${
+                          className={`flex w-full flex-col rounded-sm px-2 py-2 text-left text-xs transition-colors ${
                             activeId === c.id
-                              ? 'bg-accent text-accent-foreground'
-                              : 'hover:bg-accent/50'
+                              ? 'bg-primary text-primary-foreground'
+                              : 'hover:bg-soft-stone'
                           }`}
                         >
                           <span className="min-w-0 truncate font-mono text-micro">
@@ -149,7 +149,7 @@ export function ChatPanel() {
                             :
                             {c.chatId}
                           </span>
-                          <span className="truncate text-micro-label text-muted-foreground">
+                          <span className={`truncate text-micro-label ${activeId === c.id ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
                             {new Date(c.lastActiveAt).toLocaleString()}
                           </span>
                         </button>
@@ -159,11 +159,11 @@ export function ChatPanel() {
                 )}
       </aside>
 
-      <section className="flex min-h-[420px] min-w-0 flex-col gap-3 rounded-md border bg-card p-3 sm:p-4 lg:min-h-0">
+      <section className="flex min-h-[420px] min-w-0 flex-col gap-3 rounded-lg border border-ink bg-ink p-3 text-on-dark sm:p-4 lg:min-h-0">
         <div className="flex min-w-0 flex-1 flex-col gap-2 overflow-y-auto">
           {!activeId
             ? (
-                <p className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground sm:p-6">
+                <p className="rounded-sm border border-dashed border-on-dark/25 p-4 text-center text-sm text-on-dark/70 sm:p-6">
                   新会话
                 </p>
               )
@@ -171,7 +171,7 @@ export function ChatPanel() {
               ? <Skeleton className="h-40" />
               : messagesQ.isError
                 ? (
-                    <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+                    <p role="alert" className="rounded-sm border border-coral-soft bg-coral/10 p-3 text-sm text-coral-soft">
                       加载消息失败：
                       {messagesQ.error instanceof Error ? messagesQ.error.message : '未知错误'}
                     </p>
@@ -179,10 +179,10 @@ export function ChatPanel() {
                 : (messagesQ.data?.messages ?? []).map(m => (
                     <div
                       key={m.id}
-                      className={`max-w-[90%] rounded-md p-3 text-sm sm:max-w-[80%] ${
+                      className={`max-w-[90%] rounded-sm p-3 text-sm sm:max-w-[80%] ${
                         m.role === 'user'
-                          ? 'self-end border-2 border-primary bg-background text-foreground'
-                          : 'self-start bg-muted'
+                          ? 'self-end border border-on-dark/35 bg-background text-foreground'
+                          : 'self-start bg-deep-green text-on-dark'
                       }`}
                     >
                       <p className="whitespace-pre-wrap break-words">{m.content}</p>
@@ -195,7 +195,7 @@ export function ChatPanel() {
                   ))}
 
           {streaming && streaming.text.length > 0 && (
-            <div className="max-w-[90%] self-start rounded-md bg-muted p-3 text-sm sm:max-w-[80%]">
+            <div className="max-w-[90%] self-start rounded-sm bg-deep-green p-3 text-sm text-on-dark sm:max-w-[80%]">
               <p className="whitespace-pre-wrap break-words">{streaming.text}</p>
               {!streaming.done && (
                 <p className="mt-1 text-micro-label text-muted-foreground">
@@ -208,7 +208,7 @@ export function ChatPanel() {
         </div>
 
         {error && (
-          <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
+          <p role="alert" className="rounded-sm border border-coral-soft bg-coral/10 p-2 text-xs text-coral-soft">
             {error}
           </p>
         )}
@@ -223,7 +223,7 @@ export function ChatPanel() {
           <label htmlFor={promptId} className="sr-only">Prompt</label>
           <textarea
             id={promptId}
-            className="min-h-[60px] min-w-0 flex-1 resize-none rounded-md border bg-background px-3 py-2 text-sm"
+            className="min-h-[60px] min-w-0 flex-1 resize-none rounded-sm border border-on-dark/25 bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             placeholder="给 worker 发一条消息（Cmd/Ctrl + Enter 发送）"
             value={prompt}
             onChange={e => setPrompt(e.target.value)}
@@ -236,7 +236,7 @@ export function ChatPanel() {
           />
           <Button
             type="submit"
-            className="w-full sm:w-auto"
+            className="w-full bg-on-dark text-ink hover:bg-soft-stone sm:w-auto"
             disabled={submit.isPending || continueSelected.isPending || prompt.trim().length === 0}
           >
             {submit.isPending || continueSelected.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}

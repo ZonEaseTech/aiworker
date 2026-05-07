@@ -43,11 +43,11 @@ export function SecretsPanel() {
   }
 
   return (
-    <div className="flex max-w-3xl flex-col gap-6">
-      <header className="flex items-start justify-between gap-4">
+    <div className="app-page-narrow max-w-4xl">
+      <header className="app-page-header sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Secrets</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <h1 className="app-page-title">Secrets</h1>
+          <p className="app-page-copy">
             常规 secret 通过配置编辑器管理；这里用于 out-of-band 轮换 / 应急处置。
           </p>
         </div>
@@ -61,14 +61,14 @@ export function SecretsPanel() {
         ? <Skeleton className="h-40" />
         : q.isError
           ? (
-              <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+              <p role="alert" className="app-alert-error">
                 加载 secrets 失败：
                 {q.error instanceof Error ? q.error.message : '未知错误'}
               </p>
             )
           : (q.data?.keys.length === 0
               ? (
-                  <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                  <p className="app-empty">
                     尚无 secret。
                   </p>
                 )
@@ -77,7 +77,7 @@ export function SecretsPanel() {
                     {q.data?.keys.map(key => (
                       <li
                         key={key}
-                        className="flex items-center justify-between gap-2 rounded-md border bg-card px-4 py-2"
+                        className="flex items-center justify-between gap-2 rounded-sm border border-hairline bg-card px-4 py-3"
                       >
                         <div className="flex items-center gap-2">
                           <KeyRound className="size-4 text-muted-foreground" />
@@ -108,7 +108,7 @@ export function SecretsPanel() {
                 ))}
 
       {error && (
-        <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+        <p role="alert" className="app-alert-error">
           {error}
         </p>
       )}
@@ -140,7 +140,7 @@ export function SecretsPanel() {
             <DialogDescription>
               将从 worker vault 移除
               {' '}
-              <code className="rounded bg-muted px-1 font-mono text-xs">{confirmDelete}</code>
+              <code className="app-code">{confirmDelete}</code>
               ；config 里引用它的字段在替换前会加载失败。
             </DialogDescription>
           </DialogHeader>

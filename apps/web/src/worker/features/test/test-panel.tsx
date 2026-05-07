@@ -18,10 +18,10 @@ import {
 export function TestPanel() {
   const info = useWorkerInfo()
   return (
-    <div className="flex max-w-3xl flex-col gap-6">
-      <header>
-        <h1 className="text-2xl font-bold">Test</h1>
-        <p className="text-sm text-muted-foreground">
+    <div className="app-page-narrow max-w-4xl">
+      <header className="app-page-header">
+        <h1 className="app-page-title">Test</h1>
+        <p className="app-page-copy">
           先确认 Project Brain 可用，再验证 bring-your-own executor，最后跑各 channel 的活体探测。Brain 卡片先出，executor 与 channel 紧随其后。
         </p>
       </header>
@@ -36,10 +36,10 @@ export function TestPanel() {
 function BrainTestCard() {
   const mut = useTestWorkerBrain()
   return (
-    <section className="flex flex-col gap-3 rounded-md border bg-card p-6">
+    <section className="app-panel flex flex-col gap-4">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-lg font-bold">Brain</h2>
+          <h2 className="text-feature font-normal">Brain</h2>
           <p className="text-sm text-muted-foreground">
             调
             {' '}
@@ -58,7 +58,7 @@ function BrainTestCard() {
       {mut.data && (
         <ul className="flex flex-col gap-2 text-sm">
           {mut.data.brains.map(row => (
-            <li key={row.id} className="flex items-start justify-between gap-2 rounded-md border bg-background p-3">
+            <li key={row.id} className="flex items-start justify-between gap-2 rounded-sm border border-hairline bg-background p-3">
               <div className="flex min-w-0 flex-col gap-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <code className="font-mono text-xs">{row.id}</code>
@@ -79,7 +79,7 @@ function BrainTestCard() {
                 {row.errorMessage && (
                   <details className="text-xs text-muted-foreground">
                     <summary className="cursor-pointer">错误详情</summary>
-                    <pre className="mt-1 max-w-xs whitespace-pre-wrap break-words rounded bg-muted p-2">
+                    <pre className="mt-1 max-w-xs whitespace-pre-wrap break-words rounded-sm bg-soft-stone p-2">
                       {row.errorMessage}
                     </pre>
                   </details>
@@ -122,10 +122,10 @@ function ExecutorTestCard() {
     ? executorTimeoutHint
     : undefined
   return (
-    <section className="flex flex-col gap-3 rounded-md border bg-card p-6">
+    <section className="app-panel flex flex-col gap-4">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-lg font-bold">Executor</h2>
+          <h2 className="text-feature font-normal">Executor</h2>
           <p className="text-sm text-muted-foreground">
             调
             {' '}
@@ -154,7 +154,7 @@ function ExecutorTestCard() {
       </div>
       {mut.isError && <ErrorRow err={mut.error} hint={executorErrorHint} />}
       {mut.data && (
-        <div className="flex flex-col gap-2 rounded-md border bg-background p-3 text-sm">
+        <div className="flex flex-col gap-2 rounded-sm border border-hairline bg-background p-3 text-sm">
           <div className="flex items-center justify-between">
             <span>
               Type:
@@ -186,7 +186,7 @@ function ExecutorTestCard() {
             <div className="flex flex-col gap-1">
               <details className="text-xs text-destructive">
                 <summary className="cursor-pointer">probe 错误</summary>
-                <pre className="mt-1 whitespace-pre-wrap break-words rounded bg-muted p-2 text-foreground">
+                <pre className="mt-1 whitespace-pre-wrap break-words rounded-sm bg-soft-stone p-2 text-foreground">
                   {mut.data.executor.probeError}
                 </pre>
               </details>
@@ -226,9 +226,9 @@ function ChannelTestCard({
   }
 
   return (
-    <section className="flex flex-col gap-3 rounded-md border bg-card p-6">
+    <section className="app-panel flex flex-col gap-4">
       <div>
-        <h2 className="text-lg font-bold">Channel</h2>
+        <h2 className="text-feature font-normal">Channel</h2>
         <p className="text-sm text-muted-foreground">
           调
           {' '}
@@ -240,7 +240,7 @@ function ChannelTestCard({
         <div className="flex flex-col gap-1.5">
           <Label>Channel</Label>
           <select
-            className="h-9 rounded-md border bg-background px-3 text-sm"
+            className="app-field h-10"
             value={effectiveChannel}
             onChange={e => setChannel(e.target.value as ChannelType | '')}
             aria-label="Channel to test"
@@ -271,7 +271,7 @@ function ChannelTestCard({
       </div>
       {mut.isError && <ErrorRow err={mut.error} />}
       {mut.data && (
-        <div className="rounded-md border bg-background p-3 text-sm">
+        <div className="rounded-sm border border-hairline bg-background p-3 text-sm">
           <p>
             Sent:
             {' '}
@@ -281,7 +281,7 @@ function ChannelTestCard({
           </p>
           {mut.data.error && <p className="mt-1 text-xs text-destructive">{mut.data.error}</p>}
           {mut.data.platformResponse !== undefined && (
-            <pre className="mt-2 overflow-x-auto rounded bg-muted p-2 text-micro">
+            <pre className="mt-2 overflow-x-auto rounded-sm bg-soft-stone p-2 text-micro">
               {JSON.stringify(mut.data.platformResponse, null, 2)}
             </pre>
           )}
@@ -326,7 +326,7 @@ function ErrorRow({ err, hint }: { err: unknown, hint?: string }) {
           {msg.slice(0, 80)}
           {msg.length > 80 ? '…' : ''}
         </summary>
-        <pre className="mt-1 whitespace-pre-wrap break-words rounded border bg-muted p-2 text-xs text-foreground">
+        <pre className="mt-1 whitespace-pre-wrap break-words rounded-sm border border-hairline bg-soft-stone p-2 text-xs text-foreground">
           {msg}
         </pre>
       </details>

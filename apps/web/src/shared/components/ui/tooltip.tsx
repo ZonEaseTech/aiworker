@@ -12,7 +12,7 @@ export function TooltipContent({ className, children, ...props }: ComponentProps
       <BaseTooltip.Positioner sideOffset={6}>
         <BaseTooltip.Popup
           className={cn(
-            'z-50 overflow-hidden rounded-md border bg-popover px-3 py-1.5 text-xs font-bold text-popover-foreground shadow-card',
+            'z-50 overflow-hidden rounded-sm border border-hairline bg-popover px-3 py-1.5 text-xs font-normal text-popover-foreground shadow-popover',
             className,
           )}
           {...props}

@@ -30,7 +30,7 @@ export function StopWorkerDialog({
           <DialogDescription>
             Sends
             {' '}
-            <code className="rounded bg-muted px-1 py-0.5 font-mono">workers.stop</code>
+            <code className="app-code">workers.stop</code>
             {' '}
             to
             {' '}
@@ -44,7 +44,7 @@ export function StopWorkerDialog({
         </DialogHeader>
 
         {error && (
-          <p role="alert" className="my-2 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
+          <p role="alert" className="app-alert-error my-2 text-xs">
             {error}
           </p>
         )}

@@ -25,13 +25,13 @@ import {
 
 export function BrainPanel() {
   return (
-    <section className="flex w-full max-w-5xl min-w-0 flex-col gap-6">
-      <header className="min-w-0">
-        <h1 className="text-2xl font-bold">Brain</h1>
-        <p className="break-words text-sm text-muted-foreground">
+    <section className="app-page-narrow">
+      <header className="app-page-header min-w-0">
+        <h1 className="app-page-title">Brain</h1>
+        <p className="app-page-copy break-words">
           Project Brain 摘要 + admission 审批 + brain artifact 注册表。
           Brief 是 canonical brain（
-          <code className="font-mono text-xs">.aiworker/</code>
+          <code className="app-code">.aiworker/</code>
           ）的投影；这里展示的内容默认 redact secret-like 字段。
         </p>
       </header>
@@ -48,14 +48,14 @@ function ScopeAndSummaryCard() {
 
   if (summary.isLoading) {
     return (
-      <section className="rounded-lg border p-4">
+      <section className="app-panel">
         <Skeleton className="h-24 w-full" />
       </section>
     )
   }
   if (summary.error || summary.data === undefined) {
     return (
-      <section className="rounded-lg border p-4 text-sm text-destructive">
+      <section className="app-alert-error">
         无法加载 brain summary：
         {summary.error?.message ?? 'unknown error'}
       </section>
@@ -64,9 +64,9 @@ function ScopeAndSummaryCard() {
 
   const { brainSummary, checkedAt } = summary.data
   return (
-    <section className="grid gap-4 rounded-lg border p-4 sm:grid-cols-2">
+    <section className="grid gap-6 rounded-lg border border-hairline bg-soft-stone p-5 sm:grid-cols-2 sm:p-6">
       <div>
-        <h2 className="mb-2 text-sm font-semibold uppercase text-muted-foreground">Scope manifest</h2>
+        <h2 className="mb-2 text-micro uppercase text-muted-foreground">Scope manifest</h2>
         {brainSummary.scopeManifest.status === 'ok'
           ? (
               <ul className="space-y-1 text-sm">
@@ -106,7 +106,7 @@ function ScopeAndSummaryCard() {
             )}
       </div>
       <div>
-        <h2 className="mb-2 text-sm font-semibold uppercase text-muted-foreground">Aggregates</h2>
+        <h2 className="mb-2 text-micro uppercase text-muted-foreground">Aggregates</h2>
         <ul className="space-y-1 text-sm">
           <li>
             <span>{`artifacts: `}</span>
@@ -158,9 +158,9 @@ function AdmissionsCard() {
   const proposals = admissions.data?.proposals ?? []
 
   return (
-    <section className="rounded-lg border p-4">
+    <section className="app-panel">
       <header className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="text-sm font-semibold uppercase text-muted-foreground">Admission proposals (pending)</h2>
+        <h2 className="text-micro uppercase text-muted-foreground">Admission proposals (pending)</h2>
         <div className="flex items-center gap-2">
           <Input
             className="h-8 w-48"
@@ -190,7 +190,7 @@ function AdmissionsCard() {
       )}
       <ul className="space-y-3">
         {proposals.map(p => (
-          <li key={p.id} className="rounded border p-3">
+          <li key={p.id} className="rounded-sm border border-hairline bg-background p-3">
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <span className="font-mono">{p.id}</span>
               <Badge variant={statusBadgeVariant(p.status)}>{p.status}</Badge>
@@ -240,9 +240,9 @@ function AdmissionsCard() {
 function ArtifactsCard() {
   const artifacts = useArtifacts({ limit: 50 })
   return (
-    <section className="rounded-lg border p-4">
+    <section className="app-panel">
       <header className="mb-4">
-        <h2 className="text-sm font-semibold uppercase text-muted-foreground">Brain artifacts (read-only, redacted)</h2>
+        <h2 className="text-micro uppercase text-muted-foreground">Brain artifacts (read-only, redacted)</h2>
         <p className="mt-1 text-xs text-muted-foreground">
           Confidential / secret artifact 的 ref 与 hash 默认替换为
           <code className="font-mono">&lt;redacted&gt;</code>
@@ -261,7 +261,7 @@ function ArtifactsCard() {
       )}
       <ul className="space-y-2">
         {(artifacts.data?.artifacts ?? []).map(a => (
-          <li key={a.id} className="rounded border p-2 text-sm">
+          <li key={a.id} className="rounded-sm border border-hairline bg-background p-3 text-sm">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-mono">{a.id}</span>
               <Badge variant="outline">{a.type}</Badge>

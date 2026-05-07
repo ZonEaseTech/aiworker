@@ -1,4 +1,5 @@
 /// <reference types="vitest/config" />
+import { readFile } from 'node:fs/promises'
 import process from 'node:process'
 import { fileURLToPath, URL } from 'node:url'
 import tailwindcss from '@tailwindcss/vite'
@@ -41,11 +42,32 @@ const buildOutDir = bundle
   ? fileURLToPath(new URL(`./dist/${bundle}`, import.meta.url))
   : fileURLToPath(new URL('./dist', import.meta.url))
 
+function markdownTextImports() {
+  return {
+    name: 'aiworker-markdown-text-imports',
+    enforce: 'pre' as const,
+    async load(id: string) {
+      const [rawFilename] = id.split('?', 1)
+      if (!rawFilename?.endsWith('.md'))
+        return null
+      const filename = rawFilename.startsWith('/@fs/')
+        ? rawFilename.slice('/@fs'.length)
+        : rawFilename
+      const source = await readFile(filename, 'utf8')
+      return {
+        code: `export default ${JSON.stringify(source)};`,
+        map: null,
+      }
+    },
+  }
+}
+
 export default defineConfig({
   root: buildRoot,
   base: bundle === 'worker' ? './' : bundle ? '/admin/' : '/',
   publicDir: fileURLToPath(new URL('./public', import.meta.url)),
   plugins: [
+    markdownTextImports(),
     tanstackRouterGenerator({
       target: 'react',
       routesDirectory: fleetRoutes,

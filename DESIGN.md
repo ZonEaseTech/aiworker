@@ -1,293 +1,451 @@
-# Design System Inspired by NVIDIA
+---
+version: alpha
+name: Cohere
+description: Cohere's 2026 web system is a controlled enterprise AI interface built from stark white editorial space, deep green-black product bands, soft mineral surfaces, rounded media cards, and a distinctive type split between monospaced-feeling display headlines and precise Unica77 UI text.
 
-## 1. Visual Theme & Atmosphere
+colors:
+  primary: "#17171c"
+  cohere-black: "#000000"
+  ink: "#212121"
+  deep-green: "#003c33"
+  dark-navy: "#071829"
+  canvas: "#ffffff"
+  soft-stone: "#eeece7"
+  pale-green: "#edfce9"
+  pale-blue: "#f1f5ff"
+  hairline: "#d9d9dd"
+  border-light: "#e5e7eb"
+  card-border: "#f2f2f2"
+  muted: "#93939f"
+  slate: "#75758a"
+  body-muted: "#616161"
+  action-blue: "#1863dc"
+  focus-blue: "#4c6ee6"
+  coral: "#ff7759"
+  coral-soft: "#ffad9b"
+  form-focus: "#9b60aa"
+  on-primary: "#ffffff"
+  on-dark: "#ffffff"
+  error: "#b30000"
 
-NVIDIA's website is a high-contrast, technology-forward experience that communicates raw computational power through design restraint. The page is built on a stark black (`#000000`) and white (`#ffffff`) foundation, punctuated by NVIDIA's signature green (`#76b900`) -- a color so specific it functions as a brand fingerprint. This is not the lush green of nature; it's the electric, lime-shifted green of GPU-rendered light, a color that sits between chartreuse and kelly green and immediately signals "NVIDIA" to anyone in technology.
+typography:
+  hero-display:
+    fontFamily: CohereText
+    fontSize: 96px
+    fontWeight: 400
+    lineHeight: 1
+    letterSpacing: -1.92px
+  product-display:
+    fontFamily: CohereText
+    fontSize: 72px
+    fontWeight: 400
+    lineHeight: 1
+    letterSpacing: -1.44px
+  section-display:
+    fontFamily: Unica77 Cohere Web
+    fontSize: 60px
+    fontWeight: 400
+    lineHeight: 1
+    letterSpacing: -1.2px
+  section-heading:
+    fontFamily: Unica77 Cohere Web
+    fontSize: 48px
+    fontWeight: 400
+    lineHeight: 1.2
+    letterSpacing: -0.48px
+  card-heading:
+    fontFamily: Unica77 Cohere Web
+    fontSize: 32px
+    fontWeight: 400
+    lineHeight: 1.2
+    letterSpacing: -0.32px
+  feature-heading:
+    fontFamily: Unica77 Cohere Web
+    fontSize: 24px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0
+  body-large:
+    fontFamily: Unica77 Cohere Web
+    fontSize: 18px
+    fontWeight: 400
+    lineHeight: 1.4
+    letterSpacing: 0
+  body:
+    fontFamily: Unica77 Cohere Web
+    fontSize: 16px
+    fontWeight: 400
+    lineHeight: 1.5
+    letterSpacing: 0
+  button:
+    fontFamily: Unica77 Cohere Web
+    fontSize: 14px
+    fontWeight: 500
+    lineHeight: 1.71
+    letterSpacing: 0
+  caption:
+    fontFamily: Unica77 Cohere Web
+    fontSize: 14px
+    fontWeight: 400
+    lineHeight: 1.4
+    letterSpacing: 0
+  mono-label:
+    fontFamily: CohereMono
+    fontSize: 14px
+    fontWeight: 400
+    lineHeight: 1.4
+    letterSpacing: 0.28px
+  micro:
+    fontFamily: Unica77 Cohere Web
+    fontSize: 12px
+    fontWeight: 400
+    lineHeight: 1.4
+    letterSpacing: 0
 
-The custom NVIDIA-EMEA font family (with Arial and Helvetica fallbacks) creates a clean, industrial typographic voice. Headings at 36px bold with tight 1.25 line-height create dense, authoritative blocks of text. The font lacks the geometric playfulness of Silicon Valley sans-serifs -- it's European, pragmatic, and engineering-focused. Body text runs at 15-16px, comfortable for reading but not generous, maintaining the sense that screen real estate is optimized like GPU memory.
+rounded:
+  xs: 4px
+  sm: 8px
+  md: 16px
+  lg: 22px
+  xl: 30px
+  pill: 32px
+  full: 9999px
 
-What distinguishes NVIDIA's design from other dark-background tech sites is the disciplined use of the green accent. The `#76b900` appears in borders (`2px solid #76b900`), link underlines (`underline 2px rgb(118, 185, 0)`), and CTAs -- but never as backgrounds or large surface areas on the main content. The green is a signal, not a surface. Combined with a deep shadow system (`rgba(0, 0, 0, 0.3) 0px 0px 5px`) and minimal border radius (1-2px), the overall effect is of precision engineering hardware rendered in pixels.
+spacing:
+  xxs: 2px
+  xs: 6px
+  sm: 8px
+  md: 12px
+  lg: 16px
+  xl: 24px
+  xxl: 32px
+  section: 80px
+
+components:
+  button-primary:
+    backgroundColor: "{colors.primary}"
+    textColor: "{colors.on-primary}"
+    typography: "{typography.button}"
+    rounded: "{rounded.pill}"
+    padding: 12px 24px
+  button-secondary:
+    backgroundColor: transparent
+    textColor: "{colors.ink}"
+    typography: "{typography.body}"
+    rounded: "{rounded.xs}"
+    padding: 8px 0
+  button-pill-outline:
+    backgroundColor: transparent
+    textColor: "{colors.primary}"
+    typography: "{typography.button}"
+    rounded: "{rounded.xl}"
+    padding: 6px 12px
+  announcement-bar:
+    backgroundColor: "{colors.cohere-black}"
+    textColor: "{colors.on-dark}"
+    typography: "{typography.micro}"
+    height: 36px
+  hero-photo-card:
+    backgroundColor: "{colors.canvas}"
+    rounded: "{rounded.lg}"
+  agent-console-card:
+    backgroundColor: "{colors.primary}"
+    textColor: "{colors.on-dark}"
+    rounded: "{rounded.sm}"
+    padding: 24px
+  trust-logo-strip:
+    backgroundColor: "{colors.canvas}"
+    textColor: "{colors.ink}"
+    typography: "{typography.caption}"
+  capability-card:
+    backgroundColor: "{colors.canvas}"
+    textColor: "{colors.ink}"
+    typography: "{typography.body}"
+    rounded: "{rounded.xs}"
+    padding: 24px
+  dark-feature-band:
+    backgroundColor: "{colors.deep-green}"
+    textColor: "{colors.on-dark}"
+    rounded: "{rounded.lg}"
+    padding: 80px
+  product-card:
+    backgroundColor: "{colors.soft-stone}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.sm}"
+    padding: 32px
+  blog-filter-chip:
+    backgroundColor: transparent
+    textColor: "{colors.coral}"
+    typography: "{typography.card-heading}"
+    rounded: "{rounded.sm}"
+    padding: 8px 14px
+  research-table:
+    backgroundColor: "{colors.canvas}"
+    textColor: "{colors.ink}"
+    typography: "{typography.body-large}"
+  contact-form-card:
+    backgroundColor: "{colors.canvas}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.lg}"
+    padding: 32px
+  footer-newsletter:
+    backgroundColor: "{colors.primary}"
+    textColor: "{colors.on-dark}"
+    typography: "{typography.micro}"
+---
+
+## Overview
+
+Cohere's current web presence feels like a sober enterprise AI command center with editorial restraint. The home page opens on a huge typographic declaration over a white canvas, then uses photography, dark product mockups, trust logos, and generous empty space to make AI infrastructure feel controlled rather than speculative. Product pages invert the tone into deep green-black or dark navy bands, while blog and research pages move toward publishing-system clarity: large filters, thin rules, dense lists, and pale technical backgrounds.
+
+What makes the system distinctive is the mix of austere black-and-white UI with bursts of tactile brand imagery. The site avoids decorative chrome in the normal interface; color arrives through photography, abstract 3D media, coral blog taxonomy chips, blue research links, and dark product environments. Cards are rounded but not cute. Type is large, tight, and almost monospaced in spirit, creating a research-lab cadence across marketing, product, and editorial surfaces.
 
 **Key Characteristics:**
-- NVIDIA Green (`#76b900`) as pure accent -- borders, underlines, and interactive highlights only
-- Black (`#000000`) dominant background with white (`#ffffff`) text on dark sections
-- NVIDIA-EMEA custom font with Arial/Helvetica fallback -- industrial, European, clean
-- Tight line-heights (1.25 for headings) creating dense, authoritative text blocks
-- Minimal border radius (1-2px) -- sharp, engineered corners throughout
-- Green-bordered buttons (`2px solid #76b900`) as primary interactive pattern
-- Font Awesome 6 Pro/Sharp icon system at weight 900 for sharp iconography
-- Multi-framework architecture (PrimeReact, Fluent UI, Element Plus) enabling rich interactive components
+- Monumental display headlines with very tight line height and negative tracking.
+- White editorial canvases interrupted by deep green, dark navy, and image-led CTA bands.
+- Rounded media cards and product cards, usually 8px to 22px.
+- Pill CTAs in near-black or white, with most secondary actions rendered as underlined text links.
+- Trust-logo strips with monochrome partner marks and very wide vertical spacing.
+- Agent-console mockups using dark panels, small status chips, and product integration badges.
+- Blog and research surfaces with prominent taxonomy chips, long rule-separated lists, and search fields.
 
-## 2. Color Palette & Roles
+## Colors
 
-### Primary Brand
-- **NVIDIA Green** (`#76b900`): The signature -- borders, link underlines, CTA outlines, active indicators. Never used as large surface fills.
-- **True Black** (`#000000`): Primary page background, text on light surfaces, dominant tone.
-- **Pure White** (`#ffffff`): Text on dark backgrounds, light section backgrounds, card surfaces.
+### Brand & Accent
 
-### Extended Brand Palette
-- **NVIDIA Green Light** (`#bff230`): Bright lime accent for highlights and hover states.
-- **Orange 400** (`#df6500`): Warm accent for alerts, featured badges, or energy-related contexts.
-- **Yellow 300** (`#ef9100`): Secondary warm accent, product category highlights.
-- **Yellow 050** (`#feeeb2`): Light warm surface for callout backgrounds.
+- **Cohere Black** (`#000000`): Announcement bar, highest-contrast text, and the global brand anchor.
+- **Near-Black Primary** (`#17171c`): Primary CTA buttons, dark footer, and deep UI cards.
+- **Deep Enterprise Green** (`#003c33`): Product hero bands for North and Command-style dark sections.
+- **Dark Navy** (`#071829`): Financial-services and security-oriented solution bands.
+- **Action Blue** (`#1863dc`): Editorial links, pagination, and secondary action emphasis.
+- **Coral** (`#ff7759`): Blog category chips, taxonomy outlines, and warm product markers.
+- **Soft Coral** (`#ffad9b`): Pale chip borders and segmented article-label details.
 
-### Status & Semantic
-- **Red 500** (`#e52020`): Error states, destructive actions, critical alerts.
-- **Red 800** (`#650b0b`): Deep red for severe warning backgrounds.
-- **Green 500** (`#3f8500`): Success states, positive indicators (darker than brand green).
-- **Blue 700** (`#0046a4`): Informational accents, link hover alternative.
+### Surface & Background
 
-### Decorative
-- **Purple 800** (`#4d1368`): Deep purple for gradient ends, premium/AI contexts.
-- **Purple 100** (`#f9d4ff`): Light purple surface tint.
-- **Fuchsia 700** (`#8c1c55`): Rich accent for special promotions or featured content.
+- **Canvas White** (`#ffffff`): Dominant page background and form/card surface.
+- **Soft Stone** (`#eeece7`): Product cards, testimonial placeholders, and warm neutral surface blocks.
+- **Pale Green Wash** (`#edfce9`): North page section backdrop behind stacked dark capability panels.
+- **Pale Blue Wash** (`#f1f5ff`): Blog CTA surface behind abstract 3D imagery.
+- **Card Border** (`#f2f2f2`): Softest card containment line.
 
-### Neutral Scale
-- **Gray 300** (`#a7a7a7`): Muted text, disabled labels.
-- **Gray 400** (`#898989`): Secondary text, metadata.
-- **Gray 500** (`#757575`): Tertiary text, placeholders, footers.
-- **Gray Border** (`#5e5e5e`): Subtle borders, divider lines.
-- **Near Black** (`#1a1a1a`): Dark surfaces, card backgrounds on black pages.
+### Text & Rules
 
-### Interactive States
-- **Link Default (dark bg)** (`#ffffff`): White links on dark backgrounds.
-- **Link Default (light bg)** (`#000000`): Black links with green underline on light backgrounds.
-- **Link Hover** (`#3860be`): Blue shift on hover across all link variants.
-- **Button Hover** (`#1eaedb`): Teal highlight for button hover states.
-- **Button Active** (`#007fff`): Bright blue for active/pressed button states.
-- **Focus Ring** (`#000000 solid 2px`): Black outline for keyboard focus.
+- **Ink** (`#212121`): Default body text and most link text on light backgrounds.
+- **Muted Slate** (`#93939f`): Footer links, dates, metadata, and de-emphasized labels.
+- **Slate** (`#75758a`): Research separators and tertiary text.
+- **Hairline** (`#d9d9dd`): Standard list rules and section dividers.
+- **Border Light** (`#e5e7eb`): Secondary divider and utility rule.
 
-### Shadows & Depth
-- **Card Shadow** (`rgba(0, 0, 0, 0.3) 0px 0px 5px 0px`): Subtle ambient shadow for elevated cards.
+### Semantic
 
-## 3. Typography Rules
+- **Focus Blue** (`#4c6ee6`): Keyboard focus and ring color.
+- **Form Focus Violet** (`#9b60aa`): Focus border for text inputs.
+- **Error Red** (`#b30000`): Extracted ring/shadow color associated with validation-like states.
+
+### Gradient System
+
+Cohere does not use gradients as a generic UI fill. Gradients and color fields are media-led: abstract 3D hero imagery, deep blue open-science particle fields, red-orange product video posters, and dark green-to-black product environments. Keep UI surfaces flat; reserve gradient richness for large media panels and CTA image bands.
+
+## Typography
 
 ### Font Family
-- **Primary**: `NVIDIA-EMEA`, with fallbacks: `Arial, Helvetica, sans-serif`
-- **Icon Font**: `Font Awesome 6 Pro` (weight 900 for solid icons, 700 for regular)
-- **Icon Sharp**: `Font Awesome 6 Sharp` (weight 300 for light icons, 400 for regular)
+
+- **Display**: `CohereText`, falling back to `Space Grotesk`, `Inter`, `ui-sans-serif`, and `system-ui`.
+- **Body/UI**: `Unica77 Cohere Web`, falling back to `Inter`, `Arial`, `ui-sans-serif`, and `system-ui`.
+- **Technical labels**: `CohereMono`, falling back to `Arial`, `ui-sans-serif`, and `system-ui`.
+- **Icons**: Cohere uses custom icon fonts and thin-line geometric illustrations.
 
 ### Hierarchy
 
 | Role | Font | Size | Weight | Line Height | Letter Spacing | Notes |
-|------|------|------|--------|-------------|----------------|-------|
-| Display Hero | NVIDIA-EMEA | 36px (2.25rem) | 700 | 1.25 (tight) | normal | Maximum impact headlines |
-| Section Heading | NVIDIA-EMEA | 24px (1.50rem) | 700 | 1.25 (tight) | normal | Section titles, card headings |
-| Sub-heading | NVIDIA-EMEA | 22px (1.38rem) | 400 | 1.75 (relaxed) | normal | Feature descriptions, subtitles |
-| Card Title | NVIDIA-EMEA | 20px (1.25rem) | 700 | 1.25 (tight) | normal | Card and module headings |
-| Body Large | NVIDIA-EMEA | 18px (1.13rem) | 700 | 1.67 (relaxed) | normal | Emphasized body, lead paragraphs |
-| Body | NVIDIA-EMEA | 16px (1.00rem) | 400 | 1.50 | normal | Standard reading text |
-| Body Bold | NVIDIA-EMEA | 16px (1.00rem) | 700 | 1.50 | normal | Strong labels, nav items |
-| Body Small | NVIDIA-EMEA | 15px (0.94rem) | 400 | 1.67 (relaxed) | normal | Secondary content, descriptions |
-| Body Small Bold | NVIDIA-EMEA | 15px (0.94rem) | 700 | 1.50 | normal | Emphasized secondary content |
-| Button Large | NVIDIA-EMEA | 18px (1.13rem) | 700 | 1.25 (tight) | normal | Primary CTA buttons |
-| Button | NVIDIA-EMEA | 16px (1.00rem) | 700 | 1.25 (tight) | normal | Standard buttons |
-| Button Compact | NVIDIA-EMEA | 14.4px (0.90rem) | 700 | 1.00 (tight) | 0.144px | Small/compact buttons |
-| Link | NVIDIA-EMEA | 14px (0.88rem) | 700 | 1.43 | normal | Navigation links |
-| Link Uppercase | NVIDIA-EMEA | 14px (0.88rem) | 700 | 1.43 | normal | `text-transform: uppercase`, nav labels |
-| Caption | NVIDIA-EMEA | 14px (0.88rem) | 600 | 1.50 | normal | Metadata, timestamps |
-| Caption Small | NVIDIA-EMEA | 12px (0.75rem) | 400 | 1.25 (tight) | normal | Fine print, legal |
-| Micro Label | NVIDIA-EMEA | 10px (0.63rem) | 700 | 1.50 | normal | `text-transform: uppercase`, tiny badges |
-| Micro | NVIDIA-EMEA | 11px (0.69rem) | 700 | 1.00 (tight) | normal | Smallest UI text |
+|---|---|---:|---:|---:|---:|---|
+| Hero Display | CohereText | 96px | 400 | 1.00 | -1.92px | Home page declaration scale. |
+| Product Display | CohereText | 72px | 400 | 1.00 | -1.44px | Product and research hero headlines. |
+| Section Display | Unica77 | 60px | 400 | 1.00 | -1.2px | Large product-page headings. |
+| Section Heading | Unica77 | 48px | 400 | 1.20 | -0.48px | Split hero and CTA headings. |
+| Card Heading | Unica77 | 32px | 400 | 1.20 | -0.32px | Feature card and list section titles. |
+| Feature Heading | Unica77 | 24px | 400 | 1.30 | 0 | Cards, filters, and article titles. |
+| Body Large | Unica77 | 18px | 400 | 1.40 | 0 | Lead text and larger paragraphs. |
+| Body | Unica77 | 16px | 400 | 1.50 | 0 | Default copy and link text. |
+| Button | Unica77 | 14px | 500 | 1.71 | 0 | Compact CTA labels. |
+| Caption | Unica77 | 14px | 400 | 1.40 | 0 | Metadata and small explanatory text. |
+| Mono Label | CohereMono | 14px | 400 | 1.40 | 0.28px | Uppercase technical labels. |
+| Micro | Unica77 | 12px | 400 | 1.40 | 0 | Footer, nav microcopy, and small links. |
 
 ### Principles
-- **Bold as the default voice**: NVIDIA leans heavily on weight 700 for headings, buttons, links, and labels. The 400 weight is reserved for body text and descriptions -- everything else is bold, projecting confidence and authority.
-- **Tight headings, relaxed body**: Heading line-height is consistently 1.25 (tight), while body text relaxes to 1.50-1.67. This contrast creates visual density at the top of content blocks and comfortable readability in paragraphs.
-- **Uppercase for navigation**: Link labels use `text-transform: uppercase` with weight 700, creating a navigation voice that reads like hardware specification labels.
-- **No decorative tracking**: Letter-spacing is normal throughout, except for compact buttons (0.144px). The font itself carries the industrial character without manipulation.
 
-## 4. Component Stylings
+- Use massive type sparingly; Cohere pages often have one oversized headline and then settle into restrained 16px-24px UI copy.
+- Keep display type tight. Hero copy should feel compact and carved, not airy.
+- Avoid heavy bold weights. Size, spacing, and surface contrast do most of the hierarchy work.
+- Use uppercase mono labels for category and system markers, especially on product and research pages.
+- Editorial pages can use coral chips and blue links, but the base typography remains black and measured.
 
-### Buttons
-
-**Primary (Green Border)**
-- Background: `transparent`
-- Text: `#000000`
-- Padding: 11px 13px
-- Border: `2px solid #76b900`
-- Radius: 2px
-- Font: 16px weight 700
-- Hover: background `#1eaedb`, text `#ffffff`
-- Active: background `#007fff`, text `#ffffff`, border `1px solid #003eff`, scale(1)
-- Focus: background `#1eaedb`, text `#ffffff`, outline `#000000 solid 2px`, opacity 0.9
-- Use: Primary CTA ("Learn More", "Explore Solutions")
-
-**Secondary (Green Border Thin)**
-- Background: transparent
-- Border: `1px solid #76b900`
-- Radius: 2px
-- Use: Secondary actions, alternative CTAs
-
-**Compact / Inline**
-- Font: 14.4px weight 700
-- Letter-spacing: 0.144px
-- Line-height: 1.00
-- Use: Inline CTAs, compact navigation
-
-### Cards & Containers
-- Background: `#ffffff` (light) or `#1a1a1a` (dark sections)
-- Border: none (clean edges) or `1px solid #5e5e5e`
-- Radius: 2px
-- Shadow: `rgba(0, 0, 0, 0.3) 0px 0px 5px 0px` for elevated cards
-- Hover: shadow intensification
-- Padding: 16-24px internal
-
-### Links
-- **On Dark Background**: `#ffffff`, no underline, hover shifts to `#3860be`
-- **On Light Background**: `#000000` or `#1a1a1a`, underline `2px solid #76b900`, hover shifts to `#3860be`, underline removed
-- **Green Links**: `#76b900`, hover shifts to `#3860be`
-- **Muted Links**: `#666666`, hover shifts to `#3860be`
-
-### Navigation
-- Dark black background (`#000000`)
-- Logo left-aligned, prominent NVIDIA wordmark
-- Links: NVIDIA-EMEA 14px weight 700 uppercase, `#ffffff`
-- Hover: color shift, no underline change
-- Mega-menu dropdowns for product categories
-- Sticky on scroll with backdrop
-
-### Image Treatment
-- Product/GPU renders as hero images, often full-width
-- Screenshot images with subtle shadow for depth
-- Green gradient overlays on dark hero sections
-- Circular avatar containers with 50% radius
-
-### Distinctive Components
-
-**Product Cards**
-- Clean white or dark card with minimal radius (2px)
-- Green accent border or underline on title
-- Bold heading + lighter description pattern
-- CTA with green border at bottom
-
-**Tech Spec Tables**
-- Industrial grid layouts
-- Alternating row backgrounds (subtle gray shift)
-- Bold labels, regular values
-- Green highlights for key metrics
-
-**Cookie/Consent Banner**
-- Fixed bottom positioning
-- Rounded buttons (2px radius)
-- Gray border treatments
-
-## 5. Layout Principles
+## Layout
 
 ### Spacing System
-- Base unit: 8px
-- Scale: 1px, 2px, 3px, 4px, 5px, 6px, 7px, 8px, 9px, 10px, 11px, 12px, 13px, 15px
-- Primary padding values: 8px, 11px, 13px, 16px, 24px, 32px
-- Section spacing: 48-80px vertical padding
+
+The system uses an 8px base with many one-off alignment values: `2px`, `6px`, `8px`, `10px`, `12px`, `16px`, `20px`, `22px`, `24px`, `28px`, `32px`, `36px`, `40px`, `56px`, `60px`, `64px`, and `80px`.
+
+Large sections rely on dramatic vertical breathing room. The home page places a trust-logo strip far below the hero media. Product pages often hold dark panels inside fields of empty white space, then transition to dense forms or footers only near the end.
 
 ### Grid & Container
-- Max content width: approximately 1200px (contained)
-- Full-width hero sections with contained text
-- Feature sections: 2-3 column grids for product cards
-- Single-column for article/blog content
-- Sidebar layouts for documentation
+
+- Global nav uses a three-zone layout: logo left, menu centered, sign-in/CTA right.
+- Home hero is centered text above a two-card media composition: a wide product mockup card beside a narrower photography card.
+- Feature sections commonly use 3-column cards on desktop.
+- Product pages alternate centered hero blocks, trust-logo strips, large single-feature bands, and 2- or 3-column card grids.
+- Research pages use full-width lists with date and chip columns instead of decorative cards.
+- Forms use two-column input rows inside a rounded white card on dark or stone section backgrounds.
 
 ### Whitespace Philosophy
-- **Purposeful density**: NVIDIA uses tighter spacing than typical SaaS sites, reflecting the density of technical content. White space exists to separate concepts, not to create luxury emptiness.
-- **Section rhythm**: Dark sections alternate with white sections, using background color (not just spacing) to separate content blocks.
-- **Card density**: Product cards sit close together with 16-20px gaps, creating a catalog feel rather than a gallery feel.
 
-### Border Radius Scale
-- Micro (1px): Inline spans, tiny elements
-- Standard (2px): Buttons, cards, containers, inputs -- the default for nearly everything
-- Circle (50%): Avatar images, circular tab indicators
+Cohere uses whitespace as a trust signal. Large empty intervals separate the brand claim, customer proof, product proof, and CTA. Dense content appears only where it serves the information architecture: research paper rows, blog card grids, and contact form fields.
 
-## 6. Depth & Elevation
+## Elevation & Depth
+
+Cohere is mostly flat. Depth comes from surface alternation, media contrast, rounded corners, and thin borders rather than drop shadows.
 
 | Level | Treatment | Use |
-|-------|-----------|-----|
-| Flat (Level 0) | No shadow | Page backgrounds, inline text |
-| Subtle (Level 1) | `rgba(0,0,0,0.3) 0px 0px 5px 0px` | Standard cards, modals |
-| Border (Level 1b) | `1px solid #5e5e5e` | Content dividers, section borders |
-| Green accent (Level 2) | `2px solid #76b900` | Active elements, CTAs, selected items |
-| Focus (Accessibility) | `2px solid #000000` outline | Keyboard focus ring |
+|---|---|---|
+| Flat | No shadow, white or dark field | Hero copy, research lists, editorial surfaces |
+| Bordered | 1px `#d9d9dd`, `#e5e7eb`, or dark translucent rules | Research rows, forms, pale cards, footer inputs |
+| Media Lift | Rounded image or video over contrasting section color | Hero photo cards, product videos, CTA imagery |
+| Dark Product Field | Deep green or navy full-width band | Command, North, financial services, security sections |
 
-**Shadow Philosophy**: NVIDIA's depth system is minimal and utilitarian. There is essentially one shadow value -- a 5px ambient blur at 30% opacity -- used sparingly for cards and modals. The primary depth signal is not shadow but _color contrast_: black backgrounds next to white sections, green borders on black surfaces. This creates hardware-like visual layering where depth comes from material difference, not simulated light.
+## Shapes
 
-### Decorative Depth
-- Green gradient washes behind hero content
-- Dark-to-darker gradients (black to near-black) for section transitions
-- No glassmorphism or blur effects -- clarity over atmosphere
+### Radius Scale
 
-## 7. Responsive Behavior
+| Token | Value | Role |
+|---|---:|---|
+| `xs` | 4px | Small images, search fields, article thumbnails, utility elements |
+| `sm` | 8px | Blog chips, cards, small media, dialogs |
+| `md` | 16px | Medium product cards and grouped blocks |
+| `lg` | 22px | Signature media-card and soft placeholder radius |
+| `xl` | 30px | Research/topic filter pills |
+| `pill` | 32px | Primary CTA buttons |
+| `full` | 9999px | Round status elements and fully pill-shaped controls |
+
+### Image Treatment
+
+Images are not decorative backdrops for text except in CTA bands. Most imagery sits as rounded cards with visible corners: product videos, enterprise photography, article thumbnails, and abstract 3D renders. The dominant radii are 8px and 22px.
+
+## Components
+
+### **`button-primary`**
+
+Near-black or white pill CTA, depending on surface contrast. Uses 14px-16px Unica77, 12px 24px padding, and a 32px pill radius. This is the primary action style for "Request a demo", "Submit", and hero CTAs.
+
+### **`button-secondary`**
+
+Text-only action link, usually underlined or rule-aligned, with no filled background. Used for "Explore products", "Try the Playground", newsletter signup, and secondary hero actions.
+
+### **`button-pill-outline`**
+
+Outlined pill control with transparent fill, 1px dark border, and 30px radius. Used for research filters, topic tags, and lightweight taxonomy controls.
+
+### **`announcement-bar`**
+
+Full-width black strip above the nav, 36px tall, centered microcopy with an underlined "Learn more" link and a close control at the far right.
+
+### **`hero-photo-card`**
+
+Rounded media card used in the home hero and solution pages. It combines photography or abstract imagery with an overlaid dark agent-console module. Radius is usually 22px on large cards and 8px on smaller thumbnails.
+
+### **`agent-console-card`**
+
+Dark product mockup panel showing agent names, status chips, integration badges, prompt fields, and generated response cards. Background is near-black, text is white or muted, and small accent chips use product colors.
+
+### **`trust-logo-strip`**
+
+Centered copy above a row of monochrome customer logos. It is intentionally quiet: no cards, no borders, just large horizontal spacing and black or white logos depending on the background.
+
+### **`capability-card`**
+
+Content block with thin-line geometric illustration, 24px heading, body copy, and a text link. On light backgrounds, cards often have only a top rule or a subtle image/card relationship rather than full boxing.
+
+### **`dark-feature-band`**
+
+Deep green or navy full-width section used for product capabilities, security claims, and feature breakdowns. Text turns white; cards use darker translucent surfaces, pale borders, and abstract line illustrations.
+
+### **`product-card`**
+
+Warm stone card used for product/model summaries. Typically 3-column on desktop, with 8px radius, generous padding, a small pill button, a divider line, and checkmark bullet rows.
+
+### **`blog-filter-chip`**
+
+Large coral taxonomy chip used on the blog index. Active chips invert to coral fill with dark text; inactive chips use coral outline and pale fill. Typography is oversized relative to typical filters, making the taxonomy a hero-level control.
+
+### **`research-table`**
+
+Rule-separated publication list with title left, topic pills centered, and date right. Rows are tall, white, and border-driven; filters above use many compact outlined pills.
+
+### **`contact-form-card`**
+
+Rounded white form panel set against dark green or warm stone sections. Inputs are rectangular with thin gray borders, 12px-16px padding, and compact labels/placeholders. Submit uses the same near-black pill style as primary CTAs.
+
+### **`footer-newsletter`**
+
+Dark footer subscription block with coral "AI moves fast" label, white headline, muted legal microcopy, a single-line email field, and arrow submit marker. Footer columns use white section labels and muted links.
+
+## Do's and Don'ts
+
+### Do
+
+- Use white canvas as the default surface; introduce dark green or navy as full-width product bands.
+- Keep primary CTAs pill-shaped and near-black on light surfaces.
+- Use 22px radius on major media cards and placeholders.
+- Use coral for editorial taxonomy and small warm accents, not as the main CTA system.
+- Use monochrome trust logos with wide spacing.
+- Use thin-line geometric illustrations for research and capability icons.
+- Let photography and product mockups carry color, while the UI shell stays restrained.
+
+### Don't
+
+- Do not turn coral or blue into broad decorative surface colors.
+- Do not add heavy drop shadows to cards.
+- Do not make every section card-based; Cohere often uses unframed rows, rules, and open space.
+- Do not use rounded cards below 8px for major media.
+- Do not replace the display/body type split with one generic sans-serif voice.
+- Do not render undocumented interaction variants in documentation or previews.
+- Do not use saturated gradients as normal UI backgrounds; keep gradients media-led.
+
+## Responsive Behavior
 
 ### Breakpoints
+
 | Name | Width | Key Changes |
-|------|-------|-------------|
-| Mobile Small | <375px | Compact single column, reduced padding |
-| Mobile | 375-425px | Standard mobile layout |
-| Mobile Large | 425-600px | Wider mobile, some 2-col hints |
-| Tablet Small | 600-768px | 2-column grids begin |
-| Tablet | 768-1024px | Full card grids, expanded nav |
-| Desktop | 1024-1350px | Standard desktop layout |
-| Large Desktop | >1350px | Maximum content width, generous margins |
+|---|---:|---|
+| Small Mobile | <425px | Single-column cards, compact nav, reduced hero headline scale |
+| Mobile | 425-640px | Hero media stacks, card grids become one column, form rows stack |
+| Large Mobile | 640-768px | Wider one-column layouts with larger media cards |
+| Tablet | 768-1024px | Two-column cards begin, nav spacing tightens |
+| Desktop | 1024-1440px | Full nav, 3-column card grids, split hero compositions |
+| Large Desktop | 1440-2560px | Wide containers and large empty vertical intervals |
 
 ### Touch Targets
-- Buttons use 11px 13px padding for comfortable tap targets
-- Navigation links at 14px uppercase with adequate spacing
-- Green-bordered buttons provide high-contrast touch targets on dark backgrounds
-- Mobile: hamburger menu collapse with full-screen overlay
+
+Primary CTAs and pills meet comfortable touch sizing through 12px-24px padding and pill radii. Research filter chips and blog category chips are larger than standard tags, making dense taxonomy surfaces usable on touch devices.
 
 ### Collapsing Strategy
-- Hero: 36px heading scales down proportionally
-- Navigation: full horizontal nav collapses to hamburger menu at ~1024px
-- Product cards: 3-column to 2-column to single column stacked
-- Footer: multi-column grid collapses to single stacked column
-- Section spacing: 64-80px reduces to 32-48px on mobile
-- Images: maintain aspect ratio, scale to container width
 
-### Image Behavior
-- GPU/product renders maintain high resolution at all sizes
-- Hero images scale proportionally with viewport
-- Card images use consistent aspect ratios
-- Full-bleed dark sections maintain edge-to-edge treatment
+- Nav collapses from full horizontal links to a compact mobile menu.
+- Hero media moves from split cards to stacked cards.
+- Product and capability grids collapse from 3 columns to 2 and then 1.
+- Form fields collapse from paired rows to a single column.
+- Research rows preserve their rule-separated structure but stack metadata below titles on smaller widths.
 
-## 8. Responsive Behavior (Extended)
+## Iteration Guide
 
-### Typography Scaling
-- Display 36px scales to ~24px on mobile
-- Section headings 24px scale to ~20px on mobile
-- Body text maintains 15-16px across all breakpoints
-- Button text maintains 16px for consistent tap targets
+1. Start from a white canvas or a full-width dark green/navy band; avoid mid-tone page backgrounds unless the screenshot shows a specific CTA/form section.
+2. Use `button-primary` for the single highest-priority action and `button-secondary` for the companion action.
+3. Use `hero-photo-card` or `agent-console-card` when a page needs visual energy; avoid invented dashboard data.
+4. For editorial pages, combine `blog-filter-chip`, `button-pill-outline`, and `research-table` instead of generic marketing cards.
+5. Keep component examples structurally honest: placeholder product frames are better than invented product content.
 
-### Dark/Light Section Strategy
-- Dark sections (black bg, white text) alternate with light sections (white bg, black text)
-- The green accent remains consistent across both surface types
-- On dark: links are white, underlines are green
-- On light: links are black, underlines are green
-- This alternation creates natural scroll rhythm and content grouping
+## Known Gaps
 
-## 9. Agent Prompt Guide
-
-### Quick Color Reference
-- Primary accent: NVIDIA Green (`#76b900`)
-- Background dark: True Black (`#000000`)
-- Background light: Pure White (`#ffffff`)
-- Heading text (dark bg): White (`#ffffff`)
-- Heading text (light bg): Black (`#000000`)
-- Body text (light bg): Black (`#000000`) or Near Black (`#1a1a1a`)
-- Body text (dark bg): White (`#ffffff`) or Gray 300 (`#a7a7a7`)
-- Link hover: Blue (`#3860be`)
-- Border accent: `2px solid #76b900`
-- Button hover: Teal (`#1eaedb`)
-
-### Example Component Prompts
-- "Create a hero section on black background. Headline at 36px NVIDIA-EMEA weight 700, line-height 1.25, color #ffffff. Subtitle at 18px weight 400, line-height 1.67, color #a7a7a7. CTA button with transparent background, 2px solid #76b900 border, 2px radius, 11px 13px padding, text #ffffff. Hover: background #1eaedb, text white."
-- "Design a product card: white background, 2px border-radius, box-shadow rgba(0,0,0,0.3) 0px 0px 5px. Title at 20px NVIDIA-EMEA weight 700, line-height 1.25, color #000000. Body at 15px weight 400, line-height 1.67, color #757575. Green underline accent on title: border-bottom 2px solid #76b900."
-- "Build a navigation bar: #000000 background, sticky top. NVIDIA logo left-aligned. Links at 14px NVIDIA-EMEA weight 700 uppercase, color #ffffff. Hover: color #3860be. Green-bordered CTA button right-aligned."
-- "Create a dark feature section: #000000 background. Section label at 14px weight 700 uppercase, color #76b900. Heading at 24px weight 700, color #ffffff. Description at 16px weight 400, color #a7a7a7. Three product cards in a row with 20px gap."
-- "Design a footer: #000000 background. Multi-column layout with link groups. Links at 14px weight 400, color #a7a7a7. Hover: color #76b900. Bottom bar with legal text at 12px, color #757575."
-
-### Iteration Guide
-1. Always use `#76b900` as accent, never as a background fill -- it's a signal color for borders, underlines, and highlights
-2. Buttons are transparent with green borders by default -- filled backgrounds appear only on hover/active states
-3. Weight 700 is the dominant voice for all interactive and heading elements; 400 is only for body paragraphs
-4. Border radius is 2px for everything -- this sharp, minimal rounding is core to the industrial aesthetic
-5. Dark sections use white text; light sections use black text -- green accent works identically on both
-6. Link hover is always `#3860be` (blue) regardless of the link's default color
-7. Line-height 1.25 for headings, 1.50-1.67 for body text -- maintain this contrast for visual hierarchy
-8. Navigation uses uppercase 14px bold -- this hardware-label typography is part of the brand voice
+- Exact proprietary font files are not bundled; use the documented fallbacks when implementing externally.
+- Mobile screenshots were not regenerated in this public update, so mobile behavior is documented from the desktop system and existing responsive patterns.
+- Some live pages lazy-load content blocks late; blank testimonial placeholders are documented as placeholder skeleton surfaces rather than filled testimonial cards.

@@ -62,10 +62,10 @@ export function BrainSection({
   }
 
   return (
-    <section className="flex flex-col gap-4 rounded-md border bg-card p-6">
+    <section className="app-panel flex flex-col gap-5">
       <header className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-lg font-bold">Brain sources</h2>
+          <h2 className="text-feature font-normal">Brain sources</h2>
           <p className="text-sm text-muted-foreground">
             知识与记忆后端。Secret 字段留空表示沿用旧值。
           </p>
@@ -83,7 +83,7 @@ export function BrainSection({
       </header>
 
       {brains.length === 0 && (
-        <p className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">
+        <p className="app-empty p-5 sm:p-5">
           尚未配置 brain source。至少加一个才能启用 retrieval。
         </p>
       )}
@@ -104,7 +104,7 @@ export function BrainSection({
           <div className="flex flex-col gap-1.5">
             <Label>Write target</Label>
             <select
-              className="h-9 rounded-md border bg-background px-3 text-sm"
+              className="app-field h-10"
               value={brainWriteTarget}
               onChange={e => onChange({ brainWriteTarget: e.target.value })}
             >
@@ -124,7 +124,7 @@ export function BrainSection({
           <div className="flex flex-col gap-1.5">
             <Label>Retrieval mode</Label>
             <select
-              className="h-9 rounded-md border bg-background px-3 text-sm"
+              className="app-field h-10"
               value={brainRetrieval}
               onChange={e => onChange({ brainRetrieval: e.target.value as WorkerConfig['brainRetrieval'] })}
             >
@@ -175,7 +175,7 @@ function BrainSourceRow({
   }
 
   return (
-    <li className="flex flex-col gap-3 rounded-md border bg-background p-4">
+    <li className="flex flex-col gap-4 rounded-sm border border-hairline bg-background p-4">
       <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,160px)_minmax(0,120px)_auto]">
         <div className="flex flex-col gap-1.5">
           <Label>Id</Label>
@@ -188,7 +188,7 @@ function BrainSourceRow({
         <div className="flex flex-col gap-1.5">
           <Label>Type</Label>
           <select
-            className="h-9 rounded-md border bg-background px-3 text-sm"
+            className="app-field h-10"
             value={source.type}
             onChange={e => switchType(e.target.value as BrainSourceConfig['type'])}
             aria-label="Brain source type"

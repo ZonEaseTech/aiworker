@@ -174,7 +174,7 @@ function RegisterForm({ onCancel, onSuccess }: RegisterFormProps) {
         <DialogDescription>
           The manager calls
           {' '}
-          <code className="rounded bg-muted px-1 py-0.5 font-mono">/api/worker/info</code>
+          <code className="app-code">/api/worker/info</code>
           {' '}
           on the worker to verify the bearer token before storing it.
         </DialogDescription>
@@ -198,11 +198,11 @@ function RegisterForm({ onCancel, onSuccess }: RegisterFormProps) {
             <Info className="mt-0.5 size-3.5 shrink-0" />
             <span>
               Worker's HTTP root — scheme + host/port, no trailing path. Typical shapes:
-              <code className="mx-1 rounded bg-muted px-1 py-0.5 font-mono">http://aiworker-worker:9217</code>
+              <code className="app-code mx-1">http://aiworker-worker:9217</code>
               (same compose),
-              <code className="mx-1 rounded bg-muted px-1 py-0.5 font-mono">https://worker-1.example.com</code>
+              <code className="app-code mx-1">https://worker-1.example.com</code>
               (reverse proxy),
-              <code className="mx-1 rounded bg-muted px-1 py-0.5 font-mono">http://203.0.113.10:9217</code>
+              <code className="app-code mx-1">http://203.0.113.10:9217</code>
               (direct port).
             </span>
           </p>
@@ -249,19 +249,19 @@ function RegisterForm({ onCancel, onSuccess }: RegisterFormProps) {
           </div>
           <FieldError message={errors.apiToken} />
           {generatedToken && (
-            <div className="rounded-md border border-primary bg-card p-3 text-xs">
-              <p className="mb-2 font-bold text-foreground">
+            <div className="app-panel text-xs">
+              <p className="mb-2 font-medium text-foreground">
                 Token minted in this browser.
               </p>
               <p className="mb-2 text-muted-foreground">
                 Set it as an env var on the worker container before first
                 boot — only honoured on a fresh worker (no
                 {' '}
-                <code className="rounded bg-muted px-1 py-0.5 font-mono">worker_identity</code>
+                <code className="app-code">worker_identity</code>
                 {' '}
                 row yet):
               </p>
-              <div className="flex items-center gap-2 rounded bg-muted px-2 py-1.5 font-mono text-micro">
+              <div className="flex items-center gap-2 rounded-sm bg-soft-stone px-2 py-1.5 font-mono text-micro">
                 <code className="flex-1 break-all">
                   AIWORKER_FORCE_TOKEN=
                   {generatedToken}
@@ -306,7 +306,7 @@ function RegisterForm({ onCancel, onSuccess }: RegisterFormProps) {
         </div>
 
         {errors.form && (
-          <p className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
+          <p className="app-alert-error text-xs">
             {errors.form}
           </p>
         )}
@@ -334,8 +334,8 @@ function RegisterForm({ onCancel, onSuccess }: RegisterFormProps) {
  */
 function AuthMountHint() {
   return (
-    <details className="rounded-md border border-dashed border-border bg-card px-3 py-2 text-xs">
-      <summary className="cursor-pointer select-none font-bold text-muted-foreground">
+    <details className="rounded-sm border border-dashed border-hairline bg-card px-3 py-2 text-xs">
+      <summary className="cursor-pointer select-none font-medium text-muted-foreground">
         Using an agentic engine? You'll also need to seed CLI auth on the worker.
       </summary>
       <p className="mt-2 text-muted-foreground">
@@ -373,7 +373,7 @@ function AuthMountHint() {
         {' '}
         · starter compose:
         {' '}
-        <code className="rounded bg-muted px-1 py-0.5 font-mono">
+        <code className="app-code">
           ops/compose/docker-compose.worker.example.yml
         </code>
       </p>
@@ -446,7 +446,7 @@ function SuccessStep({
         <DialogDescription>
           The fleet has issued a fresh
           {' '}
-          <code className="rounded bg-muted px-1 py-0.5 font-mono">deviceToken</code>
+          <code className="app-code">deviceToken</code>
           {' '}
           for this worker. It is shown
           {' '}
@@ -471,12 +471,12 @@ function SuccessStep({
         </dd>
       </dl>
 
-      <div className="rounded-md border border-primary bg-card p-3 text-xs">
-        <p className="mb-2 flex items-center gap-1.5 font-bold text-foreground">
+      <div className="app-panel text-xs">
+        <p className="mb-2 flex items-center gap-1.5 font-medium text-foreground">
           <Lock className="size-3.5" />
           One-time deviceToken
         </p>
-        <div className="flex items-center gap-2 rounded bg-muted px-2 py-1.5 font-mono text-micro">
+        <div className="flex items-center gap-2 rounded-sm bg-soft-stone px-2 py-1.5 font-mono text-micro">
           <code className="flex-1 break-all">
             {showToken ? deviceToken : deviceToken.replace(/./g, '•')}
           </code>

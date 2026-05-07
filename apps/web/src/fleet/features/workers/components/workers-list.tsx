@@ -61,11 +61,11 @@ export function WorkersList({ workers: workersProp }: WorkersListProps = {}) {
   const isLoading = workersProp === undefined && query.isLoading
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="app-page">
+      <div className="app-page-header sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold">Workers</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="app-page-title">Workers</h1>
+          <p className="app-page-copy">
             Registered AIWorker runtimes the fleet can drive.
           </p>
         </div>
@@ -89,7 +89,7 @@ export function WorkersList({ workers: workersProp }: WorkersListProps = {}) {
         ? <WorkersListSkeleton />
         : workers && workers.length > 0
           ? (
-              <div className="overflow-hidden rounded-md border bg-card">
+              <div className="overflow-hidden rounded-sm border border-hairline bg-card">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -109,10 +109,10 @@ export function WorkersList({ workers: workersProp }: WorkersListProps = {}) {
                         onClick={() =>
                           void navigate({ to: '/workers/$workerId', params: { workerId: worker.id } })}
                       >
-                        <TableCell className="font-bold">{worker.displayName}</TableCell>
+                        <TableCell className="font-medium">{worker.displayName}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
-                            <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
+                            <code className="app-code">
                               {truncateWorkerId(worker.id)}
                             </code>
                             <CopyButton value={worker.id} label="worker id" />
@@ -126,7 +126,7 @@ export function WorkersList({ workers: workersProp }: WorkersListProps = {}) {
                                     href={worker.baseUrl}
                                     target="_blank"
                                     rel="noreferrer"
-                                    className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                                    className="inline-flex items-center gap-1 text-xs text-action-blue underline decoration-hairline underline-offset-2 hover:decoration-action-blue"
                                     onClick={e => e.stopPropagation()}
                                   >
                                     {worker.baseUrl}
@@ -220,7 +220,7 @@ function RowActionsMenu({ worker, onRotate, onRemove, onStop }: RowActionsMenuPr
       {open && (
         <div
           role="menu"
-          className="absolute right-0 z-20 mt-1 w-44 rounded-md border bg-popover p-1 text-sm shadow-card"
+          className="absolute right-0 z-20 mt-1 w-48 rounded-sm border border-hairline bg-popover p-1 text-sm shadow-popover"
           onMouseLeave={() => setOpen(false)}
         >
           <a
@@ -228,7 +228,7 @@ function RowActionsMenu({ worker, onRotate, onRemove, onStop }: RowActionsMenuPr
             href={workerUiPath(worker.id)}
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-2 rounded px-2 py-1.5 hover:bg-accent"
+            className="flex items-center gap-2 rounded-xs px-2 py-1.5 hover:bg-soft-stone"
             onClick={() => setOpen(false)}
           >
             <ExternalLink className="size-3.5" />
@@ -237,7 +237,7 @@ function RowActionsMenu({ worker, onRotate, onRemove, onStop }: RowActionsMenuPr
           <button
             role="menuitem"
             type="button"
-            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-accent"
+            className="flex w-full items-center gap-2 rounded-xs px-2 py-1.5 text-left hover:bg-soft-stone"
             onClick={() => {
               setOpen(false)
               onRotate()
@@ -250,7 +250,7 @@ function RowActionsMenu({ worker, onRotate, onRemove, onStop }: RowActionsMenuPr
             type="button"
             disabled={!isOnline}
             title={!isOnline ? 'Stop is only available while the worker is online.' : undefined}
-            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+            className="flex w-full items-center gap-2 rounded-xs px-2 py-1.5 text-left hover:bg-soft-stone disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
             onClick={() => {
               setOpen(false)
               onStop()
@@ -261,7 +261,7 @@ function RowActionsMenu({ worker, onRotate, onRemove, onStop }: RowActionsMenuPr
           <button
             role="menuitem"
             type="button"
-            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-destructive hover:bg-destructive/10"
+            className="flex w-full items-center gap-2 rounded-xs px-2 py-1.5 text-left text-destructive hover:bg-destructive/10"
             onClick={() => {
               setOpen(false)
               onRemove()
@@ -281,7 +281,7 @@ function workerUiPath(workerId: string): string {
 
 function WorkersListSkeleton() {
   return (
-    <div className="overflow-hidden rounded-md border bg-card">
+    <div className="overflow-hidden rounded-sm border border-hairline bg-card">
       <div className="space-y-3 p-4 sm:p-6">
         {[0, 1, 2].map(i => (
           <Skeleton key={i} className="h-10 w-full" />
@@ -293,10 +293,10 @@ function WorkersListSkeleton() {
 
 function EmptyState({ onRegister }: { onRegister: () => void }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-md border border-dashed bg-card p-6 text-center sm:p-12">
+    <div className="app-empty flex flex-col items-center justify-center gap-3">
       <ServerOff className="size-10 text-muted-foreground" />
       <div className="space-y-1">
-        <h2 className="text-lg font-bold">No workers registered yet</h2>
+        <h2 className="text-feature font-normal text-foreground">No workers registered yet</h2>
         <p className="text-sm text-muted-foreground">
           Click Pair to attach a worker that has already started — it just
           needs the worker&apos;s base URL and bootstrap API token.

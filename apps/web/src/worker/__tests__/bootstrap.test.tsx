@@ -117,9 +117,11 @@ describe('worker bundle bootstrap', () => {
 
     await renderWorkerRoute()
 
-    // 侧边栏与 top-bar 都标注 worker 视角；"概览" 为 index 路由的 h1 文案，
+    // 顶栏标注 worker 视角；"概览" 为 index 路由的 h1 文案，
     // 命中即说明 root layout + outlet 子节点都成功 mount。
-    expect(await screen.findByText(/AIWorker · Worker/)).toBeTruthy()
+    const header = await screen.findByTestId('worker-shell-header')
+    expect(header.textContent).toContain('AIWorker')
+    expect(header.textContent).toContain('Worker')
     expect(await screen.findByRole('heading', { name: '概览' })).toBeTruthy()
   })
 

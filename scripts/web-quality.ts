@@ -19,11 +19,13 @@ interface SizeBaseline {
 const webBundles = ['fleet', 'worker'] as const
 const criticalCssSelectors = [
   '.flex',
-  '.min-h-screen',
-  '.rounded-md',
+  '.h-dvh',
+  '.rounded-sm',
   '.p-6',
-  '.md\\:border-r',
+  '.md\\:flex',
   '.bg-background',
+  '.bg-soft-stone',
+  '.border-hairline',
   '.text-foreground',
 ] as const
 

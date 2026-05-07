@@ -144,7 +144,7 @@ function FieldRenderer({ name, schema, value, isSecret, hintValues, onChange }: 
       <div className="flex flex-col gap-1.5">
         <Label>{`${name}${labelSuffix}`}</Label>
         <select
-          className="h-9 rounded-md border bg-background px-3 text-sm"
+          className="app-field h-10"
           value={current}
           onChange={e => onChange(e.target.value || (optional ? undefined : options[0]))}
         >
@@ -186,7 +186,7 @@ function FieldRenderer({ name, schema, value, isSecret, hintValues, onChange }: 
       <div className="sm:col-span-2 flex flex-col gap-1.5">
         <Label>{`${name}${labelSuffix} (KEY=value 每行一条)`}</Label>
         <textarea
-          className="min-h-[80px] rounded-md border bg-background px-3 py-2 text-sm font-mono"
+          className="app-field min-h-[80px] font-mono"
           value={text}
           onChange={(e) => {
             const entries: [string, string][] = []
@@ -240,7 +240,7 @@ function JsonTextarea({
 
   return (
     <textarea
-      className="min-h-[80px] rounded-md border bg-background px-3 py-2 text-sm font-mono"
+      className="app-field min-h-[80px] font-mono"
       defaultValue={initial}
       onBlur={(e) => {
         const text = e.target.value.trim()
@@ -347,7 +347,7 @@ function HintedStringField({
       <select
         id={`field-${fieldName}-select`}
         data-testid={`field-${fieldName}-select`}
-        className="h-9 rounded-md border bg-background px-3 text-sm"
+        className="app-field h-10"
         value={selectValue}
         onChange={e => onSelect(e.target.value)}
       >

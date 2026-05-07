@@ -163,10 +163,10 @@ export function ExecutorSection({ executor, onChange }: ExecutorSectionProps) {
     : availability.get(executor.engine)
 
   return (
-    <section className="flex flex-col gap-4 rounded-md border bg-card p-6">
+    <section className="app-panel flex flex-col gap-5">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold">Executor</h2>
+          <h2 className="text-feature font-normal">Executor</h2>
           <p className="text-sm text-muted-foreground">
             选 engine + variant，仅 override 想改的字段。
           </p>
@@ -177,7 +177,7 @@ export function ExecutorSection({ executor, onChange }: ExecutorSectionProps) {
           disabled={refreshing || enginesQuery.isFetching}
           aria-label="Refresh engine availability"
           data-testid="refresh-engines-btn"
-          className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs text-muted-foreground hover:bg-muted disabled:opacity-60"
+          className="inline-flex items-center gap-1 rounded-sm border border-hairline px-2 py-1 text-xs text-muted-foreground hover:bg-soft-stone disabled:opacity-60"
         >
           <RefreshCw className={`size-3.5 ${refreshing ? 'animate-spin' : ''}`} />
           Refresh
@@ -185,16 +185,16 @@ export function ExecutorSection({ executor, onChange }: ExecutorSectionProps) {
       </header>
 
       {availability.size > 0 && (
-        <div className="flex flex-wrap gap-2 rounded-md border bg-muted/30 p-2 text-xs">
+        <div className="flex flex-wrap gap-2 rounded-sm border border-hairline bg-soft-stone p-2 text-xs">
           {listEngines().map((eng) => {
             const status = resolveEngineStatus(availability, eng)
             return (
               <span
                 key={eng}
-                className="inline-flex items-center gap-2 rounded border bg-background px-2 py-0.5"
+                className="inline-flex items-center gap-2 rounded-full border border-hairline bg-background px-2.5 py-1"
                 data-testid={`engine-availability-${eng}`}
               >
-                <span className="font-bold">{ENGINE_CATALOG[eng].label}</span>
+                <span className="font-medium">{ENGINE_CATALOG[eng].label}</span>
                 <AvailabilityBadge status={status} testId={`engine-availability-badge-${eng}`} />
               </span>
             )
@@ -213,7 +213,7 @@ export function ExecutorSection({ executor, onChange }: ExecutorSectionProps) {
           </div>
           <select
             id="executor-engine"
-            className="h-9 rounded-md border bg-background px-3 text-sm"
+            className="app-field h-10"
             value={executor.engine}
             onChange={e => switchEngine(e.target.value as EngineKind)}
           >
@@ -243,7 +243,7 @@ export function ExecutorSection({ executor, onChange }: ExecutorSectionProps) {
           </div>
           <select
             id="executor-variant"
-            className="h-9 rounded-md border bg-background px-3 text-sm"
+            className="app-field h-10"
             value={executor.variant}
             onChange={e => switchVariant(e.target.value)}
           >
@@ -286,7 +286,7 @@ export function ExecutorSection({ executor, onChange }: ExecutorSectionProps) {
       <div className="border-t pt-4">
         <button
           type="button"
-          className="text-sm font-bold text-muted-foreground hover:text-foreground"
+          className="text-sm font-medium text-muted-foreground hover:text-foreground"
           onClick={() => setAdvancedOpen(open => !open)}
           aria-expanded={advancedOpen}
         >
@@ -316,9 +316,9 @@ function InstallCallout({ engine }: { engine: EngineKind }) {
     <div
       role="alert"
       data-testid="engine-install-callout"
-      className="rounded-md border border-warning bg-warning-soft p-3 text-sm"
+      className="app-alert-warning"
     >
-      <p className="font-bold">本 worker 没有该 engine 对应的 CLI。</p>
+      <p className="font-medium">本 worker 没有该 engine 对应的 CLI。</p>
       <p className="mt-1 text-muted-foreground">
         进 worker 容器装 / 登录后点 Refresh。具体步骤见
         {' '}
@@ -343,9 +343,9 @@ function LoginCallout({ engine }: { engine: EngineKind }) {
     <div
       role="status"
       data-testid="engine-login-callout"
-      className="rounded-md border border-warning bg-warning-soft p-3 text-sm"
+      className="app-alert-warning"
     >
-      <p className="font-bold">CLI 已装但缺登录态。</p>
+      <p className="font-medium">CLI 已装但缺登录态。</p>
       <p className="mt-1 text-muted-foreground">
         在 worker 容器跑对应 CLI 的 login 命令（见
         {' '}
@@ -409,7 +409,7 @@ function ProfileLevelOverrides({
       <div className="flex flex-col gap-1.5">
         <Label>permissionPolicy</Label>
         <select
-          className="h-9 rounded-md border bg-background px-3 text-sm"
+          className="app-field h-10"
           value={permissionPolicy ?? ''}
           onChange={(e) => {
             const v = e.target.value as PermissionPolicy | ''
@@ -450,7 +450,7 @@ function CmdOverridesSection({
   const envStr = Object.entries(cmd?.env ?? {}).map(([k, v]) => `${k}=${v}`).join('\n')
 
   return (
-    <div className="flex flex-col gap-3 rounded-md border bg-muted/30 p-3">
+    <div className="flex flex-col gap-3 rounded-sm border border-hairline bg-soft-stone p-3">
       <p className="text-xs text-muted-foreground">
         cmd overrides 仅对 spawn 二进制的 engine（cli / claude-code / acp）生效。
       </p>
@@ -482,7 +482,7 @@ function CmdOverridesSection({
         <div className="flex flex-col gap-1.5 sm:col-span-2">
           <Label>cmd.env (KEY=value 每行)</Label>
           <textarea
-            className="min-h-[80px] rounded-md border bg-background px-3 py-2 text-sm font-mono"
+            className="app-field min-h-[80px] font-mono"
             value={envStr}
             onChange={(e) => {
               const entries: [string, string][] = []

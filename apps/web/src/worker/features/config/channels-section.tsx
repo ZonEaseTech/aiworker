@@ -72,10 +72,10 @@ export function ChannelsSection({ channels, info, onChange }: ChannelsSectionPro
   }
 
   return (
-    <section className="flex flex-col gap-4 rounded-md border bg-card p-6">
+    <section className="app-panel flex flex-col gap-5">
       <header className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-lg font-bold">Channels</h2>
+          <h2 className="text-feature font-normal">Channels</h2>
           <p className="text-sm text-muted-foreground">
             入站消息源。把卡片里的 webhook URL 粘到对应平台后台。
           </p>
@@ -91,7 +91,7 @@ export function ChannelsSection({ channels, info, onChange }: ChannelsSectionPro
       </header>
 
       {channels.length === 0 && (
-        <p className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">
+        <p className="app-empty p-5 sm:p-5">
           尚未绑定 channel。
         </p>
       )}
@@ -133,11 +133,11 @@ function ChannelRow({
   }
 
   return (
-    <li className="flex flex-col gap-3 rounded-md border bg-background p-4">
+    <li className="flex flex-col gap-4 rounded-sm border border-hairline bg-background p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <select
-            className="h-9 rounded-md border bg-background px-3 text-sm"
+            className="app-field h-10"
             value={binding.channel}
             onChange={e => switchChannel(e.target.value as ChannelType)}
             aria-label="Channel type"

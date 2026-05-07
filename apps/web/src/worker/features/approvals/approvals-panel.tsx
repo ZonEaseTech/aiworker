@@ -30,10 +30,10 @@ export function ApprovalsPanel() {
   }
 
   return (
-    <div className="flex max-w-4xl flex-col gap-6">
-      <header>
-        <h1 className="text-2xl font-bold">Approvals</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+    <div className="app-page-narrow max-w-5xl">
+      <header className="app-page-header">
+        <h1 className="app-page-title">Approvals</h1>
+        <p className="app-page-copy">
           orchestrator 命中 toolPolicy `ask` 规则时挂起的工具调用。批准前 60s 内未处理视同 deny。
         </p>
       </header>
@@ -41,11 +41,11 @@ export function ApprovalsPanel() {
       {approvals.length > 0 && (
         <div
           role="alert"
-          className="flex items-start gap-3 rounded-md border border-warning bg-warning-soft p-3 text-sm"
+          className="app-alert-warning flex items-start gap-3"
         >
           <ShieldAlert className="mt-0.5 size-4 text-warning" />
           <div className="flex-1">
-            <p className="font-bold">
+            <p className="font-medium">
               {approvals.length}
               {' '}
               个 pending approval
@@ -56,7 +56,7 @@ export function ApprovalsPanel() {
       )}
 
       {error && (
-        <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+        <p role="alert" className="app-alert-error">
           {error}
         </p>
       )}
@@ -65,14 +65,14 @@ export function ApprovalsPanel() {
         ? <Skeleton className="h-40" />
         : q.isError
           ? (
-              <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+              <p role="alert" className="app-alert-error">
                 加载失败：
                 {q.error instanceof Error ? q.error.message : '未知错误'}
               </p>
             )
           : approvals.length === 0
             ? (
-                <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                <p className="app-empty">
                   当前没有 pending approval。
                 </p>
               )
@@ -81,7 +81,7 @@ export function ApprovalsPanel() {
                   {approvals.map(row => (
                     <li
                       key={`${row.taskId}:${row.toolCallId}`}
-                      className="flex flex-col gap-3 rounded-md border bg-card p-4"
+                      className="flex flex-col gap-3 rounded-sm border border-hairline bg-card p-4"
                     >
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
@@ -123,7 +123,7 @@ export function ApprovalsPanel() {
                       </div>
                       <details className="text-xs">
                         <summary className="cursor-pointer text-muted-foreground">查看 params</summary>
-                        <pre className="mt-1 overflow-x-auto rounded bg-muted p-2 text-foreground">
+                        <pre className="mt-1 overflow-x-auto rounded-sm bg-soft-stone p-2 text-foreground">
                           {JSON.stringify(row.params, null, 2)}
                         </pre>
                       </details>

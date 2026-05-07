@@ -17,50 +17,50 @@ function RootLayout() {
     <TooltipProvider delay={300}>
       <div
         data-testid="fleet-shell"
-        className="flex h-dvh w-full flex-col overflow-hidden bg-background text-foreground md:flex-row"
+        className="flex h-dvh w-full flex-col overflow-hidden bg-background text-foreground"
       >
-        <aside
-          data-testid="fleet-shell-sidebar"
-          className="flex min-w-0 w-full shrink-0 flex-col border-b border-border bg-surface-ink text-primary-foreground md:min-h-screen md:w-60 md:border-b-0 md:border-r"
+        <header
+          data-testid="fleet-shell-header"
+          className="grid shrink-0 gap-3 border-b border-hairline bg-background px-4 py-3 md:grid-cols-[minmax(12rem,1fr)_auto_minmax(12rem,1fr)] md:items-center md:px-8"
         >
-          <div className="flex items-center gap-2 px-5 py-4">
-            <FileStack className="size-5 text-primary" />
-            <span className="text-sm font-bold">
-              AIWorker · Fleet
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-sm border border-hairline bg-primary text-primary-foreground">
+              <FileStack className="size-4" />
             </span>
+            <div className="min-w-0">
+              <p className="font-display text-lg leading-none text-foreground">AIWorker</p>
+              <p className="text-micro text-muted-foreground">Fleet</p>
+            </div>
           </div>
-          <Separator />
           <nav
             data-testid="fleet-shell-nav"
-            className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-1 p-2 sm:grid-cols-4 md:flex md:flex-1 md:flex-col md:p-3"
+            className="grid min-w-0 grid-cols-2 gap-1 sm:grid-cols-4 md:flex md:items-center md:justify-center"
           >
             {NAV_ITEMS.map(item => (
               <Link
                 key={item.to}
                 to={item.to}
                 className={cn(
-                  'flex min-w-0 items-center gap-2 rounded-md border-b-2 border-l-0 border-transparent px-3 py-2 text-sm font-bold text-primary-foreground/70 transition-colors hover:border-primary hover:bg-surface-dark hover:text-primary-foreground md:border-b-0 md:border-l-2',
+                  'flex min-w-0 items-center justify-center gap-2 rounded-xl border border-transparent px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:border-hairline hover:bg-soft-stone hover:text-foreground',
                 )}
-                activeProps={{ className: 'border-primary bg-surface-dark text-primary-foreground' }}
+                activeProps={{ className: '!border-primary !bg-primary !text-primary-foreground hover:!border-primary hover:!bg-primary hover:!text-primary-foreground' }}
                 activeOptions={{ exact: item.exact }}
               >
                 <item.icon className="size-4" />
-                {item.label}
+                <span className="truncate">{item.label}</span>
               </Link>
             ))}
           </nav>
-        </aside>
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <header className="flex h-12 items-center justify-between gap-3 border-b bg-background px-4 md:h-14 md:px-6">
-            <span className="min-w-0 truncate text-sm font-bold text-muted-foreground">
-              Self-hosted Agent Runtime · fleet view
-            </span>
+          <div className="flex items-center justify-end">
             <ThemeToggle />
-          </header>
-          <main className="min-h-0 min-w-0 flex-1 overflow-auto p-4 sm:p-6">
+          </div>
+        </header>
+        <Separator />
+        <main className="min-h-0 min-w-0 flex-1 overflow-auto px-4 py-6 sm:px-6 lg:px-8">
+          <div className="mx-auto w-full max-w-7xl">
             <Outlet />
-          </main>
-        </div>
+          </div>
+        </main>
       </div>
     </TooltipProvider>
   )

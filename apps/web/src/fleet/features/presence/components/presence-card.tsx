@@ -23,26 +23,26 @@ export function PresenceCard() {
   const offlineCount = Math.max(0, totalCount - onlineCount)
 
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-bold">Presence</h1>
-        <p className="break-words text-sm text-muted-foreground">
+    <div className="app-page">
+      <div className="app-page-header">
+        <h1 className="app-page-title">Presence</h1>
+        <p className="app-page-copy break-words">
           Live snapshot driven by
           {' '}
-          <code className="rounded bg-muted px-1 py-0.5 font-mono">system.presence</code>
+          <code className="app-code">system.presence</code>
           {' '}
           (30s) and
           {' '}
-          <code className="rounded bg-muted px-1 py-0.5 font-mono">workers.list</code>
+          <code className="app-code">workers.list</code>
           {' '}
           (10s).
         </p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <Card>
+        <Card className="border-hairline">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-sm font-bold text-muted-foreground">
+            <CardTitle className="flex items-center gap-2 text-sm font-normal text-muted-foreground">
               <Activity className="size-4" />
               Online workers
             </CardTitle>
@@ -51,7 +51,7 @@ export function PresenceCard() {
             {presence.isLoading
               ? <Skeleton className="h-8 w-16" />
               : (
-                  <div className="text-3xl font-bold">
+                  <div className="font-display text-card-heading font-normal">
                     {onlineCount}
                     <span className="text-sm font-normal text-muted-foreground">
                       {' '}
@@ -69,9 +69,9 @@ export function PresenceCard() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-hairline">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-sm font-bold text-muted-foreground">
+            <CardTitle className="flex items-center gap-2 text-sm font-normal text-muted-foreground">
               <Clock className="size-4" />
               Heartbeat distribution
             </CardTitle>
@@ -83,9 +83,9 @@ export function PresenceCard() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-hairline">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-sm font-bold text-muted-foreground">
+            <CardTitle className="flex items-center gap-2 text-sm font-normal text-muted-foreground">
               <UserPlus className="size-4" />
               Enrollments today
             </CardTitle>
@@ -94,7 +94,7 @@ export function PresenceCard() {
             {todaysEnrollments.isLoading
               ? <Skeleton className="h-8 w-16" />
               : (
-                  <div className="text-3xl font-bold">
+                  <div className="font-display text-card-heading font-normal">
                     {todaysEnrollments.data ?? 0}
                   </div>
                 )}
@@ -146,9 +146,9 @@ function HeartbeatBuckets({ lastSeen }: { lastSeen: Array<string | undefined> })
           <span className="text-muted-foreground">{row.label}</span>
           <div className="flex items-center gap-2">
             <span className="font-mono">{row.count}</span>
-            <div className="h-1.5 w-24 overflow-hidden rounded-full bg-muted">
+            <div className="h-1.5 w-24 overflow-hidden rounded-full bg-soft-stone">
               <div
-                className="h-full bg-primary"
+                className="h-full bg-deep-green"
                 style={{ width: total === 0 ? '0' : `${(row.count / total) * 100}%` }}
               />
             </div>

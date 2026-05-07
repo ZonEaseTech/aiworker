@@ -55,15 +55,12 @@ function TopBar() {
   const brainsCount = info.data?.brains?.length ?? 0
 
   return (
-    <header className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-2 border-b border-border bg-surface-ink px-4 py-3 text-primary-foreground sm:px-6 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center">
+    <section className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-3 bg-deep-green px-4 py-4 text-on-dark sm:px-6 md:grid-cols-[minmax(0,1fr)_auto] md:items-center lg:px-8">
       <div className="flex min-w-0 flex-1 flex-col">
-        <span className="text-xs font-bold uppercase text-primary-foreground/70">Worker</span>
-        <code className="truncate font-mono text-sm font-bold">{workerId}</code>
+        <span className="text-micro uppercase text-on-dark/70">Worker</span>
+        <code className="truncate font-mono text-sm font-medium">{workerId}</code>
       </div>
-      <div className="col-start-2 row-start-1 shrink-0 md:col-start-3">
-        <ThemeToggle className="text-primary-foreground hover:text-primary-foreground" />
-      </div>
-      <dl className="col-span-2 flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 text-xs md:col-span-1 md:col-start-2 md:row-start-1">
+      <dl className="col-span-2 flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2 text-xs md:col-span-1 md:col-start-2 md:row-start-1 md:justify-end">
         <Stat label="config v" value={String(configVersion)} />
         <Stat
           label="executor"
@@ -73,7 +70,7 @@ function TopBar() {
         <Stat label="brains" value={String(brainsCount)} />
         <Stat label="启动" value={info.data?.startedAt ? new Date(info.data.startedAt).toLocaleString() : '—'} />
       </dl>
-    </header>
+    </section>
   )
 }
 
@@ -88,16 +85,16 @@ function Stat({
 }) {
   const statusClass
     = status === 'healthy'
-      ? 'text-success'
+      ? 'text-pale-green'
       : status === 'down'
-        ? 'text-destructive'
+        ? 'text-coral-soft'
         : status === 'degraded'
-          ? 'text-warning'
-          : 'text-primary-foreground/70'
+          ? 'text-warning-soft'
+          : 'text-on-dark/70'
   return (
-    <div className="flex min-w-0 flex-col">
-      <dt className="text-xs font-bold uppercase text-primary-foreground/70">{label}</dt>
-      <dd className={`max-w-[11rem] truncate font-mono ${status ? statusClass : 'text-primary-foreground'}`}>{value}</dd>
+    <div className="flex min-w-0 flex-col border-l border-on-dark/20 pl-3">
+      <dt className="text-micro uppercase text-on-dark/70">{label}</dt>
+      <dd className={`max-w-[11rem] truncate font-mono text-xs ${status ? statusClass : 'text-on-dark'}`}>{value}</dd>
     </div>
   )
 }
@@ -118,46 +115,54 @@ function RootLayout() {
 
   return (
     <TooltipProvider delay={300}>
-      <div className="flex min-h-screen w-full flex-col bg-background text-foreground">
-        <TopBar />
-        <div
-          data-testid="worker-shell"
-          className="flex min-w-0 flex-1 flex-col md:flex-row"
+      <div
+        data-testid="worker-shell"
+        className="flex h-dvh w-full flex-col overflow-hidden bg-background text-foreground"
+      >
+        <header
+          data-testid="worker-shell-header"
+          className="grid shrink-0 gap-3 border-b border-hairline bg-background px-4 py-3 md:grid-cols-[minmax(12rem,1fr)_auto_minmax(12rem,1fr)] md:items-center md:px-8"
         >
-          <aside
-            data-testid="worker-shell-sidebar"
-            className="flex min-w-0 w-full shrink-0 flex-col border-b border-border bg-surface-ink text-primary-foreground md:w-60 md:border-b-0 md:border-r"
-          >
-            <div className="flex items-center gap-2 px-5 py-4">
-              <Cpu className="size-5 text-primary" />
-              <span className="text-sm font-bold">AIWorker · Worker</span>
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-sm border border-hairline bg-primary text-primary-foreground">
+              <Cpu className="size-4" />
+            </span>
+            <div className="min-w-0">
+              <p className="font-display text-lg leading-none text-foreground">AIWorker</p>
+              <p className="text-micro text-muted-foreground">Worker</p>
             </div>
-            <Separator />
-            <nav
-              data-testid="worker-shell-nav"
-              className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-1 p-2 sm:grid-cols-4 md:flex md:flex-1 md:flex-col md:p-3"
-            >
-              {NAV_ITEMS.map((item) => {
-                const Icon = item.icon
-                return (
-                  <WorkerLink
-                    key={item.to}
-                    to={item.to}
-                    className="flex min-w-0 items-center gap-2 rounded-md border-b-2 border-l-0 border-transparent px-3 py-2 text-sm font-bold text-primary-foreground/70 transition-colors hover:border-primary hover:bg-surface-dark hover:text-primary-foreground md:border-b-0 md:border-l-2"
-                    activeProps={{ className: 'border-primary bg-surface-dark text-primary-foreground' }}
-                    activeOptions={item.exact ? { exact: true } : undefined}
-                  >
-                    <Icon className="size-4 shrink-0" />
-                    <span className="truncate">{item.label}</span>
-                  </WorkerLink>
-                )
-              })}
-            </nav>
-          </aside>
-          <main className="min-w-0 flex-1 overflow-auto p-4 sm:p-6">
+          </div>
+          <nav
+            data-testid="worker-shell-nav"
+            className="grid min-w-0 grid-cols-2 gap-1 sm:grid-cols-4 md:flex md:flex-wrap md:items-center md:justify-center"
+          >
+            {NAV_ITEMS.map((item) => {
+              const Icon = item.icon
+              return (
+                <WorkerLink
+                  key={item.to}
+                  to={item.to}
+                  className="flex min-w-0 items-center justify-center gap-2 rounded-xl border border-transparent px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:border-hairline hover:bg-soft-stone hover:text-foreground"
+                  activeProps={{ className: '!border-primary !bg-primary !text-primary-foreground hover:!border-primary hover:!bg-primary hover:!text-primary-foreground' }}
+                  activeOptions={item.exact ? { exact: true } : undefined}
+                >
+                  <Icon className="size-4 shrink-0" />
+                  <span className="truncate">{item.label}</span>
+                </WorkerLink>
+              )
+            })}
+          </nav>
+          <div className="flex items-center justify-end">
+            <ThemeToggle />
+          </div>
+        </header>
+        <TopBar />
+        <Separator />
+        <main className="min-h-0 min-w-0 flex-1 overflow-auto px-4 py-6 sm:px-6 lg:px-8">
+          <div className="mx-auto w-full max-w-7xl">
             <Outlet />
-          </main>
-        </div>
+          </div>
+        </main>
       </div>
     </TooltipProvider>
   )
@@ -179,27 +184,23 @@ function WorkerAdminLocked({ onUnlock }: { onUnlock: (token: string) => void }) 
   }
 
   return (
-    <main className="flex min-h-screen w-full items-center justify-center bg-background px-4 py-8 text-foreground">
-      <section className="flex w-full max-w-md flex-col gap-5 rounded-md border bg-card p-5 shadow-sm">
-        <header className="flex min-w-0 items-start gap-3">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-md border border-border bg-muted">
+    <main className="flex min-h-screen w-full items-center justify-center bg-soft-stone px-4 py-8 text-foreground">
+      <section className="flex w-full max-w-md flex-col gap-6 rounded-lg border border-card-border bg-card p-6 shadow-popover sm:p-8">
+        <header className="flex min-w-0 items-start gap-4">
+          <span className="flex size-11 shrink-0 items-center justify-center rounded-sm border border-hairline bg-soft-stone">
             <LockKeyhole className="size-5 text-muted-foreground" aria-hidden="true" />
           </span>
           <div className="min-w-0">
-            <p className="text-xs font-bold uppercase text-muted-foreground">Worker Admin</p>
-            <h1 className="text-xl font-bold">需要 bearer token</h1>
+            <p className="text-micro uppercase text-muted-foreground">Worker Admin</p>
+            <h1 className="text-feature font-normal">需要 bearer token</h1>
           </div>
         </header>
 
         <p className="text-sm text-muted-foreground">
-          请使用
-          {' '}
-          <code className="font-mono text-xs">aiworker serve --open</code>
-          {' '}
-          打开的页面进入，或粘贴当前 worker token 解锁本 tab。
+          使用当前 worker token 解锁本 tab。
         </p>
 
-        <form className="flex flex-col gap-3" onSubmit={submit}>
+        <form className="flex flex-col gap-4" onSubmit={submit}>
           <div className="flex flex-col gap-2">
             <Label htmlFor="worker-admin-token">Bearer token</Label>
             <Input
@@ -210,7 +211,7 @@ function WorkerAdminLocked({ onUnlock }: { onUnlock: (token: string) => void }) 
               type="password"
             />
           </div>
-          {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+          {error && <p role="alert" className="app-alert-error">{error}</p>}
           <Button type="submit">
             <KeyRound aria-hidden="true" />
             解锁

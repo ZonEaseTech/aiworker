@@ -55,7 +55,7 @@ function RotateFlow({ worker, onClose }: { worker: SafeRegisteredWorker, onClose
         <DialogDescription>
           Issuing a new
           {' '}
-          <code className="rounded bg-muted px-1 py-0.5 font-mono">deviceToken</code>
+          <code className="app-code">deviceToken</code>
           {' '}
           immediately invalidates the previous one. The worker must re-pair
           (or auto-reconnect with the new token) before it can talk to the
@@ -64,12 +64,12 @@ function RotateFlow({ worker, onClose }: { worker: SafeRegisteredWorker, onClose
       </DialogHeader>
       <dl className="grid grid-cols-[100px_1fr] gap-x-4 gap-y-2 py-4 text-sm">
         <dt className="text-muted-foreground">Worker</dt>
-        <dd className="font-bold">{worker.displayName}</dd>
+        <dd className="font-medium">{worker.displayName}</dd>
         <dt className="text-muted-foreground">Worker id</dt>
         <dd className="font-mono text-xs">{worker.id}</dd>
       </dl>
       {error && (
-        <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
+        <p role="alert" className="app-alert-error text-xs">
           {error}
         </p>
       )}
@@ -138,12 +138,12 @@ function SuccessStep({
         </DialogDescription>
       </DialogHeader>
 
-      <div className="rounded-md border border-primary bg-card p-3 text-xs">
-        <p className="mb-2 flex items-center gap-1.5 font-bold text-foreground">
+      <div className="app-panel text-xs">
+        <p className="mb-2 flex items-center gap-1.5 font-medium text-foreground">
           <Lock className="size-3.5" />
           One-time deviceToken
         </p>
-        <div className="flex items-center gap-2 rounded bg-muted px-2 py-1.5 font-mono text-micro">
+        <div className="flex items-center gap-2 rounded-sm bg-soft-stone px-2 py-1.5 font-mono text-micro">
           <code className="flex-1 break-all">
             {showToken ? deviceToken : deviceToken.replace(/./g, '•')}
           </code>

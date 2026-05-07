@@ -32,7 +32,7 @@ export function ConfigEditor() {
   if (cfg.isError || !cfg.data) {
     const msg = cfg.error instanceof Error ? cfg.error.message : '未知错误'
     return (
-      <div className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
+      <div className="app-alert-error">
         加载 worker config 失败：
         {' '}
         {msg}
@@ -141,15 +141,15 @@ function ConfigForm({
 
   return (
     <form
-      className="flex flex-col gap-6 pb-24"
+      className="app-page pb-24"
       onSubmit={(e) => {
         e.preventDefault()
         void onSave()
       }}
     >
-      <div>
-        <h1 className="text-2xl font-bold">Configuration</h1>
-        <p className="text-sm text-muted-foreground">
+      <div className="app-page-header">
+        <h1 className="app-page-title">Configuration</h1>
+        <p className="app-page-copy">
           Version
           {' '}
           <span className="font-mono">{version}</span>
@@ -160,11 +160,11 @@ function ConfigForm({
       {conflict && (
         <div
           role="alert"
-          className="flex items-start gap-3 rounded-md border border-warning bg-warning-soft p-4 text-sm"
+          className="app-alert-warning flex items-start gap-3"
         >
           <AlertTriangle className="mt-0.5 size-4 text-warning" />
           <div className="flex-1">
-            <p className="font-bold">Version 冲突</p>
+            <p className="font-medium">Version 冲突</p>
             <p className="text-muted-foreground">
               你基于 version
               {' '}
@@ -183,13 +183,13 @@ function ConfigForm({
       )}
 
       {error && (
-        <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+        <p role="alert" className="app-alert-error">
           {error}
         </p>
       )}
 
       {flash && (
-        <p role="status" className="rounded-md border border-success bg-success-soft p-3 text-sm">
+        <p role="status" className="app-alert-success">
           {flash}
         </p>
       )}
@@ -205,8 +205,8 @@ function ConfigForm({
 
       <ChannelsSection channels={draft.channels} info={info} onChange={setChannels} />
 
-      <section className="flex flex-col gap-3 rounded-md border bg-card p-6">
-        <h2 className="text-lg font-bold">Evolution (L3)</h2>
+      <section className="app-panel flex flex-col gap-4">
+        <h2 className="text-feature font-normal">Evolution (L3)</h2>
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"
@@ -216,11 +216,11 @@ function ConfigForm({
           启用 evolution observer
         </label>
         <div className="flex flex-col gap-1.5 max-w-[240px]">
-          <label className="text-sm font-bold">Observation 保留天数</label>
+          <label className="text-sm font-medium">Observation 保留天数</label>
           <input
             type="number"
             min={0}
-            className="h-9 rounded-md border bg-background px-3 text-sm"
+            className="app-field h-10"
             value={draft.evolution.observationRetentionDays}
             onChange={e => setEvolution({
               ...draft.evolution,
@@ -230,7 +230,7 @@ function ConfigForm({
         </div>
       </section>
 
-      <div className="sticky bottom-0 -mx-6 border-t bg-background/95 px-6 py-3 backdrop-blur">
+      <div className="sticky bottom-0 -mx-4 border-t border-hairline bg-background/95 px-4 py-3 sm:-mx-6 sm:px-6">
         <div className="flex items-center justify-between gap-4">
           <p className="text-xs text-muted-foreground">
             保存使用

@@ -100,15 +100,15 @@ describe('worker responsive shell', () => {
     await renderWorkerRoute('/admin/', 390, 844)
 
     const shell = await screen.findByTestId('worker-shell')
-    const sidebar = screen.getByTestId('worker-shell-sidebar')
+    const header = screen.getByTestId('worker-shell-header')
     const nav = screen.getByTestId('worker-shell-nav')
 
-    expect(classListOf(shell)).toEqual(expect.arrayContaining(['flex-col', 'md:flex-row']))
-    expect(classListOf(sidebar)).toEqual(expect.arrayContaining(['w-full', 'md:w-60']))
-    expect(classListOf(sidebar)).not.toContain('w-60')
+    expect(classListOf(shell)).toEqual(expect.arrayContaining(['h-dvh', 'overflow-hidden', 'flex-col']))
+    expect(classListOf(header)).toEqual(expect.arrayContaining(['grid', 'shrink-0']))
     expect(classListOf(nav)).toEqual(expect.arrayContaining([
-      'grid-cols-[minmax(0,1fr)_minmax(0,1fr)]',
-      'md:flex-col',
+      'grid-cols-2',
+      'sm:grid-cols-4',
+      'md:flex',
     ]))
   })
 

@@ -29,13 +29,13 @@ export function AuditList() {
   })
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-bold">Audit log</h1>
-        <p className="break-words text-sm text-muted-foreground">
+    <div className="app-page h-full min-h-0">
+      <div className="app-page-header">
+        <h1 className="app-page-title">Audit log</h1>
+        <p className="app-page-copy break-words">
           fleet.db
           {' '}
-          <code className="rounded bg-muted px-1 py-0.5 font-mono">audit_events</code>
+          <code className="app-code">audit_events</code>
           {' '}
           — gateway-side activity. Worker-side audit lives in each worker&apos;s
           own database.
@@ -59,7 +59,7 @@ export function AuditList() {
         ? <Skeleton className="h-64 w-full" />
         : query.isError
           ? (
-              <p className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+              <p className="app-alert-error">
                 Failed to load audit events:
                 {' '}
                 {(query.error as Error | null)?.message ?? 'unknown error'}
@@ -150,7 +150,7 @@ function FilterBar({
         <span className="min-w-0 break-words">
           Filters apply on debounce. Action prefix is a SQL
           {' '}
-          <code className="rounded bg-muted px-1 py-0.5 font-mono">LIKE</code>
+          <code className="app-code">LIKE</code>
           ;
           {' '}
           non-alphanumeric characters fall back to exact match.
@@ -172,7 +172,7 @@ function AuditRow({ event }: { event: AuditEventRecord }) {
       </TableCell>
       <TableCell className="text-xs">{event.actor}</TableCell>
       <TableCell>
-        <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{event.action}</code>
+        <code className="app-code">{event.action}</code>
       </TableCell>
       <TableCell className="font-mono text-xs">{event.workerId ?? '—'}</TableCell>
       <TableCell className="text-xs">
@@ -182,14 +182,14 @@ function AuditRow({ event }: { event: AuditEventRecord }) {
               <div className="flex flex-col gap-1">
                 <button
                   type="button"
-                  className="text-left text-xs text-primary hover:underline"
+                  className="text-left text-xs text-action-blue underline decoration-hairline underline-offset-2 hover:decoration-action-blue"
                   onClick={() => setExpanded(v => !v)}
                 >
                   {expanded ? 'Hide JSON' : 'Show JSON'}
                 </button>
                 {expanded
                   ? (
-                      <pre className="max-h-64 overflow-auto rounded bg-muted/50 p-2 font-mono text-micro">
+                      <pre className="max-h-64 overflow-auto rounded-sm bg-soft-stone p-2 font-mono text-micro">
                         {detailJson}
                       </pre>
                     )
@@ -205,7 +205,7 @@ function AuditRow({ event }: { event: AuditEventRecord }) {
 
 function EmptyState() {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-md border border-dashed bg-card p-6 text-center sm:p-12">
+    <div className="app-empty flex flex-col items-center justify-center gap-3">
       <FileText className="size-10 text-muted-foreground" />
       <p className="text-sm text-muted-foreground">
         No audit events match the current filters.

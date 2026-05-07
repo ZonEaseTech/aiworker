@@ -44,7 +44,7 @@ function WorkerDetailPage() {
 
   if (!query.data) {
     return (
-      <div className="p-6 text-sm text-destructive">
+      <div className="app-alert-error">
         Failed to load worker
         {' '}
         {workerId}
@@ -60,21 +60,21 @@ function WorkerDetailPage() {
   const isOnline = worker.lastSeenState === 'online'
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between gap-4">
+    <div className="app-page">
+      <div className="app-page-header lg:flex-row lg:items-end lg:justify-between">
         <div>
           <Link
             to="/workers"
-            className="mb-2 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+            className="mb-2 inline-flex items-center gap-1 text-xs text-muted-foreground underline decoration-hairline underline-offset-2 hover:text-foreground"
           >
             <ArrowLeft className="size-3.5" />
             Back to workers
           </Link>
-          <h1 className="text-2xl font-bold">
+          <h1 className="app-page-title">
             {worker.displayName}
           </h1>
           <p className="text-sm text-muted-foreground">
-            <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
+            <code className="app-code">
               {truncateWorkerId(worker.id)}
             </code>
             {' · '}
@@ -243,12 +243,12 @@ function BrainSurfaceHint({ worker }: { worker: SafeRegisteredWorker }) {
 
 function WorkerNotFound({ id }: { id: string }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 p-12 text-center">
-      <h1 className="text-2xl font-bold">Worker not found</h1>
+    <div className="app-empty flex flex-col items-center justify-center gap-3">
+      <h1 className="text-feature font-normal text-foreground">Worker not found</h1>
       <p className="text-sm text-muted-foreground">
         No registered worker with id
         {' '}
-        <code className="rounded bg-muted px-1 font-mono">{id}</code>
+        <code className="app-code">{id}</code>
         .
       </p>
       <Link to="/workers" className={buttonVariants({ variant: 'default' })}>

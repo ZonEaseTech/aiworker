@@ -51,7 +51,7 @@ export function RemoveWorkerDialog({
             {' '}
             invalidates its
             {' '}
-            <code className="rounded bg-muted px-1 py-0.5 font-mono">deviceToken</code>
+            <code className="app-code">deviceToken</code>
             {' '}
             and deletes its fleet.db row. The worker container itself is not
             stopped — use the
@@ -66,7 +66,7 @@ export function RemoveWorkerDialog({
           <Label htmlFor="remove-confirm">
             Type
             {' '}
-            <code className="rounded bg-muted px-1 py-0.5 font-mono">{expected}</code>
+            <code className="app-code">{expected}</code>
             {' '}
             to confirm
           </Label>
@@ -81,7 +81,7 @@ export function RemoveWorkerDialog({
         </div>
 
         {error && (
-          <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
+          <p role="alert" className="app-alert-error text-xs">
             {error}
           </p>
         )}

@@ -22,10 +22,10 @@ export function EnrollList() {
   const [actionError, setActionError] = useState<string | null>(null)
 
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-bold">Pending enrollments</h1>
-        <p className="text-sm text-muted-foreground">
+    <div className="app-page">
+      <div className="app-page-header">
+        <h1 className="app-page-title">Pending enrollments</h1>
+        <p className="app-page-copy">
           Workers awaiting OTP approval. Issued OTPs are
           {' '}
           <strong>not displayed</strong>
@@ -36,7 +36,7 @@ export function EnrollList() {
       </div>
 
       {actionError && (
-        <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
+        <p role="alert" className="app-alert-error">
           {actionError}
         </p>
       )}
@@ -48,7 +48,7 @@ export function EnrollList() {
                 <EmptyState />
               )
             : (
-                <div className="overflow-hidden rounded-md border bg-card">
+                <div className="overflow-hidden rounded-sm border border-hairline bg-card">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -120,7 +120,7 @@ function PendingRow({
   return (
     <TableRow>
       <TableCell>
-        <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{entry.workerId}</code>
+        <code className="app-code">{entry.workerId}</code>
       </TableCell>
       <TableCell>{entry.displayName ?? '—'}</TableCell>
       <TableCell className="text-xs text-muted-foreground">
@@ -156,26 +156,26 @@ function PendingRow({
 
 function EmptyState() {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-md border border-dashed bg-card p-6 text-center sm:p-12">
+    <div className="app-empty flex flex-col items-center justify-center gap-3">
       <Inbox className="size-10 text-muted-foreground" />
       <div className="space-y-1">
-        <h2 className="text-lg font-bold">No pending enrollments</h2>
+        <h2 className="text-feature font-normal text-foreground">No pending enrollments</h2>
         <p className="text-sm text-muted-foreground">
           Workers started with
           {' '}
-          <code className="rounded bg-muted px-1 py-0.5 font-mono">aiworker serve</code>
+          <code className="app-code">aiworker serve</code>
           {' '}
           and
           {' '}
-          <code className="rounded bg-muted px-1 py-0.5 font-mono">AIWORKER_GATEWAY_URL</code>
+          <code className="app-code">AIWORKER_GATEWAY_URL</code>
           {' '}
           set will request an OTP here. Use
           {' '}
-          <code className="rounded bg-muted px-1 py-0.5 font-mono">aiworker enroll list</code>
+          <code className="app-code">aiworker enroll list</code>
           {' '}
           and
           {' '}
-          <code className="rounded bg-muted px-1 py-0.5 font-mono">aiworker enroll approve &lt;otp&gt;</code>
+          <code className="app-code">aiworker enroll approve &lt;otp&gt;</code>
           {' '}
           to review and approve them.
         </p>
@@ -211,23 +211,23 @@ function ApprovedTokenDialog({
           <DialogDescription>
             Fleet has issued a fresh
             {' '}
-            <code className="rounded bg-muted px-1 py-0.5 font-mono">deviceToken</code>
+            <code className="app-code">deviceToken</code>
             {' '}
             for
             {' '}
-            <code className="rounded bg-muted px-1 py-0.5 font-mono">{payload.workerId}</code>
+            <code className="app-code">{payload.workerId}</code>
             . Shown
             {' '}
             <strong>once</strong>
             ; copy it before closing.
           </DialogDescription>
         </DialogHeader>
-        <div className="rounded-md border border-primary bg-card p-3 text-xs">
-          <p className="mb-2 flex items-center gap-1.5 font-bold text-foreground">
+        <div className="app-panel text-xs">
+          <p className="mb-2 flex items-center gap-1.5 font-medium text-foreground">
             <Lock className="size-3.5" />
             One-time deviceToken
           </p>
-          <div className="flex items-center gap-2 rounded bg-muted px-2 py-1.5 font-mono text-micro">
+          <div className="flex items-center gap-2 rounded-sm bg-soft-stone px-2 py-1.5 font-mono text-micro">
             <code className="flex-1 break-all">
               {showToken ? payload.deviceToken : payload.deviceToken.replace(/./g, '•')}
             </code>

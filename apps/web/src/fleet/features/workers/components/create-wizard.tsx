@@ -177,7 +177,7 @@ function CreateForm({ onCancel, onSuccess }: CreateFormProps) {
         </div>
 
         {advancedOpen && (
-          <div className="grid gap-1.5 rounded-md border border-dashed border-border bg-card p-3">
+          <div className="grid gap-1.5 rounded-sm border border-dashed border-hairline bg-card p-3">
             <Label htmlFor={forceIdId}>Force workerId (optional)</Label>
             <Input
               id={forceIdId}
@@ -201,7 +201,7 @@ function CreateForm({ onCancel, onSuccess }: CreateFormProps) {
         )}
 
         {errors.form && (
-          <p className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
+          <p className="app-alert-error text-xs">
             {errors.form}
           </p>
         )}
@@ -318,12 +318,12 @@ function SuccessStep({
         )}
       </dl>
 
-      <div className="rounded-md border border-primary bg-card p-3 text-xs">
-        <p className="mb-2 flex items-center gap-1.5 font-bold text-foreground">
+      <div className="app-panel text-xs">
+        <p className="mb-2 flex items-center gap-1.5 font-medium text-foreground">
           <Lock className="size-3.5" />
           One-time bearer token
         </p>
-        <div className="flex items-center gap-2 rounded bg-muted px-2 py-1.5 font-mono text-micro">
+        <div className="flex items-center gap-2 rounded-sm bg-soft-stone px-2 py-1.5 font-mono text-micro">
           <code className="flex-1 break-all">
             {showToken ? payload.deviceToken : payload.deviceToken.replace(/./g, '•')}
           </code>
