@@ -33,6 +33,25 @@ aiworker <subcommand> [options]
 
 ---
 
+## 命令发现
+
+`aiworker --help` 有意保持短小：第一屏只展示首次上手路径和最常用的查看命令，
+不再一次性展开全部 worker / fleet / gateway 子命令。
+
+```sh
+aiworker --help
+aiworker worker --help       # 本地 worker 命令组
+aiworker fleet --help        # fleet 控制面命令组
+aiworker gateway --help      # gateway 生命周期命令组
+aiworker commands            # 完整命令索引
+aiworker <command> --help    # 单个命令的参数和选项
+```
+
+root worker 命令与 `aiworker worker ...` canonical 命令等价。日常本地 worker
+操作优先用 root 形态；脚本或文档需要强调 worker 角色边界时，再使用 canonical 形态。
+
+---
+
 ## Worker-local 命令（root shortcut / worker canonical）
 
 worker 容器内或 ssh 进 worker 主机直接操作 `worker.db` 的子命令。**不**经 gateway，不需要 operator basicauth；运维 fallback / 备份恢复 / dev 自检常用。下文用 root shortcut 展示；所有本地命令都有等价的 `aiworker worker ...` canonical 形态。
@@ -198,6 +217,33 @@ aiworker serve --port 9217
 
 注意：`policy.json` 与 `brain-capabilities.json` 是 Brain capability 草案；`aiworker doctor` 只做静态 validation，不会启动 MCP server，也不会把 pack/toolset 强制接入 runtime enforcement。`.aiworker/executor-capabilities.json` 只是 project executor overlay / bootstrap hint，可辅助支持 project config 的 engine 做 best-effort projection；它不是外部 executor 的完整 effective capability source of truth，也不是 executor isolation 边界。
 
+### `aiworker env gateway-url <url>`
+
+把当前 worker-local `.env` 里的 `AIWORKER_GATEWAY_URL` 设为给定 URL。用于让
+worker 在 `aiworker serve` / `aiworker up` 启动时走 gateway OTP/self-enroll
+入网路径，而不需要手工编辑 `.aiworker/local/.env`。
+
+```sh
+aiworker init --soul developer
+aiworker env gateway-url wss://your-gateway.example/
+aiworker serve
+```
+
+该命令要求当前 scope 已经初始化并存在 worker-local `.env`；缺失时会提示先运行
+`aiworker init --soul developer`。允许 `http(s)` / `ws(s)` URL。
+
+### `aiworker env display-name <name>`
+
+把当前 worker-local `.env` 里的 `AIWORKER_DISPLAY_NAME` 设为给定展示名。该值会在
+fleet 列表和 enrollment 审批里显示，最长 80 字符。
+
+```sh
+aiworker env display-name my-laptop
+```
+
+这两个命令都有等价 canonical 形态：`aiworker worker env gateway-url <url>` 与
+`aiworker worker env display-name <name>`。
+
 ### `aiworker scope`
 
 诊断命令（零副作用）。打印当前 cwd 命中的 aiworker scope（user / project / explicit）+ home 路径 + layout 各文件存在性。等同 `git config --list --show-origin` 的角色，运维在跑数据修改命令前先查清楚自己在哪个 scope。
@@ -228,6 +274,7 @@ aiworker scope
 - `.aiworker/policy.json`
 - `.aiworker/brain-capabilities.json`
 - `.aiworker/skills/**/SKILL.md` 或 YAML skill metadata
+- worker-local gateway enrollment startup env（只读 INFO/PASS；不把 standalone 当 warning）
 
 ```sh
 aiworker doctor
@@ -235,6 +282,11 @@ aiworker doctor
 # Scope : project
 # Root  : ~/code/my-project/.aiworker
 # Status: PASS
+#   Gateway enrollment:
+#     INFO    standalone mode (AIWORKER_GATEWAY_URL is not set)
+#       Optional gateway enrollment:
+#         aiworker env gateway-url wss://your-gateway.example/
+#         aiworker env display-name my-laptop
 #   PASS    policy.json
 #   PASS    brain-capabilities.json
 #   PASS    skills/
@@ -489,18 +541,17 @@ OTP 模式 stdout 格式（`apps/cli/src/commands/worker/serve.ts::formatOtpBox`
 
 适用场景与运维 / 排错见 [`docs/deployment.md` § Worker self-enroll quick start](./deployment.md#worker-self-enroll-quick-start-plan-018--feat-024) 与 [§ Worker OTP-attended enroll quick start](./deployment.md#worker-otp-attended-enroll-quick-startplan-019--feat-026)。
 
-project worker 推荐把入网启动项写入 `.aiworker/local/.env`，避免同一主机多个 worker 共用 shell 级 env。也可以先用一次显式 env 启动；bootstrap 会把下列 key 合并回当前 scope 的 `.env`，后续直接 `aiworker serve` / `aiworker up` 即可。
+project worker 推荐把入网启动项写入 `.aiworker/local/.env`，避免同一主机多个 worker 共用 shell 级 env。`AIWORKER_GATEWAY_URL` 和 `AIWORKER_DISPLAY_NAME` 可直接用 worker-local shortcut 写入；需要携带 `AIWORKER_JOIN_TOKEN` 或 `AIWORKER_ENROLL_MODE` 时，也可以先用一次显式 env 启动，bootstrap 会把这些 key 合并回当前 scope 的 `.env`，后续直接 `aiworker serve` / `aiworker up` 即可。
 
 ```sh
 # self-enroll（NAT 后批量部署）：
-AIWORKER_GATEWAY_URL=wss://gateway.example.com/ws \
-AIWORKER_JOIN_TOKEN=<shared> \
-AIWORKER_DISPLAY_NAME=prod-1 \
-aiworker serve --port 9217
+aiworker env gateway-url wss://gateway.example.com/ws
+aiworker env display-name prod-1
+AIWORKER_JOIN_TOKEN='<shared>' aiworker serve --port 9217
 
 # OTP enroll（attended，deployer 无 fleet 凭证）：
-AIWORKER_GATEWAY_URL=wss://gateway.example.com/ws \
-AIWORKER_DISPLAY_NAME=ben-laptop \
+aiworker env gateway-url wss://gateway.example.com/ws
+aiworker env display-name ben-laptop
 aiworker serve --port 9217
 # stdout 打 OTP 后 deployer 把它带外发给 operator
 ```

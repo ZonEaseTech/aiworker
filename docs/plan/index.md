@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-08 (PLAN-164 completed)
+> Updated: 2026-05-08 (PLAN-166 completed)
 
 ## Usage
 
@@ -193,3 +193,5 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-162 发布 aiworker CLI 0.10.2**](PLAN-162.md) `2026-05-07`
 - [x] [**PLAN-163 README product positioning clarity**](PLAN-163.md) `2026-05-07`
 - [x] [**PLAN-164 Simplify Project Brain filesystem layout**](PLAN-164.md) `2026-05-07`
+- [x] [**PLAN-165 Progressive CLI help and worker startup env shortcuts**](PLAN-165.md) `2026-05-08`
+- [x] [**PLAN-166 Gateway enrollment hints in init dotenv and doctor**](PLAN-166.md) `2026-05-08`

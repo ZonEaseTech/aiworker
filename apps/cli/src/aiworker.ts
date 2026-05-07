@@ -59,6 +59,7 @@ import {
   runConfigShow,
 } from './commands/worker/config'
 import { runDoctor } from './commands/worker/doctor'
+import { runEnvDisplayName, runEnvGatewayUrl } from './commands/worker/env'
 import {
   runExecutorCapabilityList,
   runExecutorCapabilityShow,
@@ -84,7 +85,7 @@ import {
 import { runSoulList, runSoulShow } from './commands/worker/soul'
 import { runTokenRotate as runTokenRotateLocal } from './commands/worker/token'
 import { runUp } from './commands/worker/up'
-import { configureCliHelp, findCommandGroupHelpArg, localizeGlobalOptions, renderCommandGroupHelp } from './help'
+import { configureCliHelp, findCommandGroupHelpArg, localizeGlobalOptions, renderCommandGroupHelp, renderFullCommandIndex } from './help'
 import { bootstrapCliDotenv } from './lib/bootstrap'
 
 /**
@@ -185,6 +186,18 @@ cli
 cli.command('doctor', '静态验证当前 `.aiworker/` capability manifests、Skill metadata 和 MCP descriptors').action(async () => {
   process.exit(await runDoctor())
 })
+
+cli
+  .command('env gateway-url <url>', '写入 worker-local AIWORKER_GATEWAY_URL，用于 worker OTP/self-enroll 到 gateway')
+  .action(async (url: string) => {
+    process.exit(await runEnvGatewayUrl(url))
+  })
+
+cli
+  .command('env display-name <name>', '写入 worker-local AIWORKER_DISPLAY_NAME，用于 fleet 列表展示')
+  .action(async (name: string) => {
+    process.exit(await runEnvDisplayName(name))
+  })
 
 cli
   .command('executor mcp add <name>', '在 project executor overlay 中声明一个 MCP server hint，写入 `.aiworker/executor-capabilities.json`')
@@ -634,6 +647,10 @@ cli
     }))
   })
 
+cli.command('commands', '显示完整命令索引').action(() => {
+  process.stdout.write(`${renderFullCommandIndex(cli)}\n`)
+})
+
 // ============================================================
 // worker canonical tree（与 root worker shortcuts 等价）
 // ============================================================
@@ -704,6 +721,18 @@ cli
 cli.command('worker doctor', '静态验证当前 `.aiworker/` capability manifests、Skill metadata 和 MCP descriptors').action(async () => {
   process.exit(await runDoctor())
 })
+
+cli
+  .command('worker env gateway-url <url>', '写入 worker-local AIWORKER_GATEWAY_URL，用于 worker OTP/self-enroll 到 gateway')
+  .action(async (url: string) => {
+    process.exit(await runEnvGatewayUrl(url))
+  })
+
+cli
+  .command('worker env display-name <name>', '写入 worker-local AIWORKER_DISPLAY_NAME，用于 fleet 列表展示')
+  .action(async (name: string) => {
+    process.exit(await runEnvDisplayName(name))
+  })
 
 cli
   .command('worker executor mcp add <name>', '在 project executor overlay 中声明一个 MCP server hint，写入 `.aiworker/executor-capabilities.json`')

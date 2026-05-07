@@ -23,6 +23,8 @@ const ROOT_WORKER_COMMANDS = [
   'up',
   'scope',
   'doctor',
+  'env gateway-url',
+  'env display-name',
   'executor doctor',
   'executor select',
   'executor capability list',
@@ -61,6 +63,7 @@ const ROOT_WORKER_COMMANDS = [
 const EXPECTED_COMMANDS = [
   // root worker shortcuts
   ...ROOT_WORKER_COMMANDS,
+  'commands',
   // worker canonical
   ...ROOT_WORKER_COMMANDS.map(command => `worker ${command}`),
   // fleet / gateway
@@ -168,32 +171,27 @@ describe('aiworker cli registration', () => {
     }
     const help = captured.join('\n')
     for (const keyword of [
-      '使用引导',
-      '本地 worker 快捷入口',
-      'Worker canonical 入口',
-      'Fleet 控制面',
-      'Gateway 生命周期',
+      '开始',
+      '常用查看',
+      '更多',
       'aiworker up --soul developer',
-      'aiworker worker up --soul developer',
-      'aiworker soul list -> aiworker soul show developer',
-      'aiworker brain status -> aiworker brain skills',
+      'aiworker env gateway-url <url>',
+      'aiworker env display-name <name>',
+      'aiworker worker --help',
+      'aiworker fleet --help',
+      'aiworker gateway --help',
+      'aiworker commands',
       'brain status',
-      'brain memories',
-      'executor select',
-      'executor capability list',
-      'executor mcp add',
+      'executor doctor',
       'doctor',
       'up',
       'serve',
       'soul list',
-      'sessions list',
-      'fleet list',
-      'gateway start',
-      'fleet enroll approve',
-      'fleet config get',
-      'gateway install systemd',
     ])
       expect(help).toContain(keyword)
+    expect(help).not.toContain('sessions maintenance')
+    expect(help).not.toContain('fleet config set')
+    expect(help).not.toContain('Worker canonical 入口')
     expect(help).not.toContain('For more info, run any command')
   })
 
@@ -225,6 +223,7 @@ describe('aiworker cli registration', () => {
       expect(result.output).toContain('--no-open')
       expect(result.output).toContain('brand-new project 初始化')
       expect(result.output).toContain('不初始化、不启动 HTTP server')
+      expect(result.output).not.toContain('默认：true')
     }
     finally {
       cleanup(result)
@@ -282,6 +281,15 @@ describe('preprocessArgv', () => {
       '{"a":1}',
       '--if-match',
       '3',
+    ])
+  })
+
+  it('env gateway-url 被折叠为本地 worker startup env 快捷入口', () => {
+    expect(run('env', 'gateway-url', 'wss://gw.example.test/ws')).toEqual([
+      '/usr/bin/bun',
+      '/path/to/aiworker.ts',
+      'env gateway-url',
+      'wss://gw.example.test/ws',
     ])
   })
 
@@ -360,6 +368,15 @@ describe('preprocessArgv', () => {
       'worker executor select',
       '--engine',
       'codex',
+    ])
+  })
+
+  it('worker env display-name 被折叠', () => {
+    expect(run('worker', 'env', 'display-name', 'edge-1')).toEqual([
+      '/usr/bin/bun',
+      '/path/to/aiworker.ts',
+      'worker env display-name',
+      'edge-1',
     ])
   })
 
@@ -527,11 +544,13 @@ describe('aiworker malformed argv handling', () => {
     }
   })
 
-  it('documents config show bootstrap behavior in command help', async () => {
+  it('root help keeps bootstrap-heavy commands out of the first screen', async () => {
     const result = await runCli(['--help'])
     try {
       expect(result.exitCode).toBe(0)
-      expect(result.output).toContain('缺失时会初始化本地状态')
+      expect(result.output).toContain('aiworker commands')
+      expect(result.output).not.toContain('缺失时会初始化本地状态')
+      expect(result.output).not.toContain('sessions maintenance')
       expect(existsSync(path.join(result.aiworkerHome, '.env'))).toBe(false)
     }
     finally {
@@ -551,12 +570,28 @@ describe('aiworker malformed argv handling', () => {
     }
   })
 
-  it('clarifies gateway status is detached-daemon only in command help', async () => {
+  it('commands prints the full command index', async () => {
+    const result = await runCli(['commands'])
+    try {
+      expect(result.exitCode).toBe(0)
+      expect(result.output).toContain('aiworker command index')
+      expect(result.output).toContain('Worker canonical 入口')
+      expect(result.output).toContain('sessions maintenance')
+      expect(result.output).toContain('fleet config set')
+      expect(result.output).toContain('gateway install systemd')
+      expect(existsSync(path.join(result.aiworkerHome, '.env'))).toBe(false)
+    }
+    finally {
+      cleanup(result)
+    }
+  })
+
+  it('clarifies gateway status is detached-daemon only in full command index', async () => {
     const result = await runCli(['--help'])
     try {
       expect(result.exitCode).toBe(0)
-      expect(result.output).toContain('后台 gateway 守护进程')
-      expect(result.output).toContain('foreground/systemd')
+      expect(result.output).not.toContain('后台 gateway 守护进程')
+      expect(result.output).not.toContain('foreground/systemd')
       expect(existsSync(path.join(result.aiworkerHome, '.env'))).toBe(false)
     }
     finally {

@@ -78,6 +78,24 @@ describe('bootstrapDotenv worker-local startup env', () => {
     expect(fileMode).toBe(0o600)
   })
 
+  it('reserves commented gateway enrollment examples when minting without startup env', async () => {
+    const home = await makeHome(tmpRoots)
+
+    const result = bootstrapDotenv({ home, printOnMint: false })
+    const text = await readFile(result.envFile, 'utf8')
+
+    expect(result.minted).toBe(true)
+    expect(text).toContain('# Optional gateway enrollment startup env.')
+    expect(text).toContain('#   aiworker env gateway-url wss://your-gateway.example/')
+    expect(text).toContain('#   aiworker env display-name my-laptop')
+    expect(text).toContain('# AIWORKER_GATEWAY_URL=wss://your-gateway.example/')
+    expect(text).toContain('# AIWORKER_DISPLAY_NAME=my-laptop')
+    expect(text).not.toContain('\nAIWORKER_GATEWAY_URL=')
+    expect(text).not.toContain('\nAIWORKER_DISPLAY_NAME=')
+    expect(process.env.AIWORKER_GATEWAY_URL).toBeUndefined()
+    expect(process.env.AIWORKER_DISPLAY_NAME).toBeUndefined()
+  })
+
   it('updates existing .env startup entries from explicit process env without overriding unset keys', async () => {
     const home = await makeHome(tmpRoots)
     const envFile = path.join(home, '.env')

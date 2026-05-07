@@ -84,7 +84,7 @@ export function bootstrapDotenv(options: BootstrapOptions = {}): DotenvBootstrap
     `AIWORKER_MASTER_KEY=${masterKey}`,
     `INTERNAL_SHARED_SECRET=${sharedSecret}`,
   ]
-  appendProcessStartupEnv(lines)
+  appendInitialStartupEnvSection(lines)
   lines.push('')
   writeFileSync(envFile, lines.join('\n'), { mode: 0o600 })
   // chmod 防御写入路径上 umask 把 mode 收紧没生效的情况
@@ -139,16 +139,22 @@ function collectProcessStartupEnv(): Partial<Record<typeof PERSISTED_WORKER_STAR
   return out
 }
 
-function appendProcessStartupEnv(lines: string[]): void {
+function appendInitialStartupEnvSection(lines: string[]): void {
   const updates = collectProcessStartupEnv()
-  const keys = PERSISTED_WORKER_STARTUP_ENV_KEYS.filter(key => updates[key] !== undefined)
-  if (keys.length === 0)
-    return
 
   lines.push('')
-  lines.push('# Worker-local gateway enrollment startup env.')
-  for (const key of keys)
-    lines.push(formatDotenvAssignment(key, updates[key]!))
+  lines.push('# Optional gateway enrollment startup env.')
+  lines.push('# Configure later with:')
+  lines.push('#   aiworker env gateway-url wss://your-gateway.example/')
+  lines.push('#   aiworker env display-name my-laptop')
+  for (const key of PERSISTED_WORKER_STARTUP_ENV_KEYS) {
+    if (updates[key] !== undefined)
+      lines.push(formatDotenvAssignment(key, updates[key]!))
+  }
+  if (updates.AIWORKER_GATEWAY_URL === undefined)
+    lines.push('# AIWORKER_GATEWAY_URL=wss://your-gateway.example/')
+  if (updates.AIWORKER_DISPLAY_NAME === undefined)
+    lines.push('# AIWORKER_DISPLAY_NAME=my-laptop')
 }
 
 function mergeProcessStartupEnv(text: string): { changed: boolean, text: string } {

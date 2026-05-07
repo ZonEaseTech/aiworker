@@ -16,6 +16,8 @@ const ROOT_WORKER_COMMANDS = [
   'up',
   'scope',
   'doctor',
+  'env gateway-url',
+  'env display-name',
   'executor doctor',
   'executor select',
   'executor capability list',
@@ -53,6 +55,10 @@ const ROOT_WORKER_COMMANDS = [
 
 const WORKER_COMMANDS = ROOT_WORKER_COMMANDS.map(command => `worker ${command}`)
 
+const UTILITY_COMMANDS = [
+  'commands',
+] as const
+
 const FLEET_COMMANDS = [
   'fleet list',
   'fleet info',
@@ -88,6 +94,8 @@ const ROOT_WORKER_SUMMARIES: Record<(typeof ROOT_WORKER_COMMANDS)[number], strin
   'config set': '替换本地 worker 配置，需要时可带版本乐观锁',
   'config show': '打印本地 worker 配置，缺失时会初始化本地状态',
   'doctor': '静态验证当前 `.aiworker/` 能力配置',
+  'env display-name': '写入 worker-local AIWORKER_DISPLAY_NAME',
+  'env gateway-url': '写入 worker-local AIWORKER_GATEWAY_URL',
   'executor capability list': '只读列出 .aiworker/executor-capabilities.json 中的 project executor overlay 条目',
   'executor capability show': '只读查看单条 project executor overlay descriptor',
   'executor doctor': '校验 project executor overlay 与 engine CLI readiness（不探测 user/host ambient capabilities）',
@@ -129,6 +137,7 @@ const WORKER_SUMMARIES = Object.fromEntries(
 const COMMAND_SUMMARIES: Record<string, string> = {
   ...ROOT_WORKER_SUMMARIES,
   ...WORKER_SUMMARIES,
+  'commands': '显示完整命令索引',
   'fleet approvals grant': '解锁远端 worker 上某条挂起的工具审批',
   'fleet approvals list': '查看远端 worker 挂起的工具审批',
   'fleet chat': '向已接入 fleet 的 worker 发送一条消息',
@@ -155,6 +164,11 @@ const COMMAND_SUMMARIES: Record<string, string> = {
 }
 
 const HELP_GROUPS: readonly HelpGroup[] = [
+  {
+    title: 'Utility commands',
+    hint: '用于发现完整命令表，不属于日常 worker 路径。',
+    commands: UTILITY_COMMANDS,
+  },
   {
     title: '本地 worker 快捷入口',
     hint: '`aiworker ...` 默认就是操作本地 worker，适合日常初始化、运行和维护。',
@@ -197,6 +211,19 @@ export function getUngroupedHelpCommands(cli: Pick<CAC, 'commands'>): string[] {
     .filter(command => command.name !== '')
     .map(command => command.name)
     .filter(name => !grouped.has(name))
+}
+
+export function renderFullCommandIndex(cli: Pick<CAC, 'commands'>): string {
+  return [
+    'aiworker command index',
+    ...HELP_GROUPS
+      .filter(group => group.title !== 'Utility commands')
+      .map(group => [
+        `${group.title}:`,
+        renderGroup(cli, group),
+      ].join('\n')),
+    'Run `aiworker <group> --help` for scoped command help.',
+  ].join('\n\n')
 }
 
 export function renderCommandGroupHelp(cli: Pick<CAC, 'commands'>, groupName: string): string | null {
@@ -244,36 +271,43 @@ function buildHelpSections(cli: CAC, sections: HelpSection[]): HelpSection[] {
 
   const header = sections[0] ?? { body: 'aiworker' }
   const options = sections.find(section => section.title === 'Options')
-  const groupedSections = HELP_GROUPS.map(group => ({
-    title: group.title,
-    body: renderGroup(cli, group),
-  }))
 
   return [
     header,
     {
       title: '用法',
-      body: '  $ aiworker <command> [options]',
+      body: '  $ aiworker up --soul developer',
     },
     {
-      title: '使用引导',
+      title: '开始',
       body: [
-        '  新建本地 worker：aiworker up --soul developer',
-        '  显式角色入口：aiworker worker up --soul developer',
-        '  查看 Soul 能力：aiworker soul list -> aiworker soul show developer',
-        '  查看 Brain 状态：aiworker brain status -> aiworker brain skills',
-        '  只试一次消息：aiworker run --message "..."',
-        '  管理 fleet：aiworker gateway start -> aiworker fleet pair 或 aiworker fleet enroll list',
-        '  已接入 fleet 后对话：aiworker fleet chat <workerId> "..."',
-        '  部署、清理、工具审批不是首次使用必需路径；需要时再看高级维护命令。',
+        '  aiworker up --soul developer             初始化、验证并启动本地 worker',
+        '  aiworker init --soul developer           只初始化 Project Brain 和本地状态',
+        '  aiworker executor select --engine <id> --apply  选择外部 executor',
+        '  aiworker env gateway-url <url>           写入 worker-local gateway URL',
+        '  aiworker env display-name <name>         写入 fleet 展示名',
+        '  aiworker serve                          启动 worker HTTP/Admin',
+        '  aiworker run --message "..."             直接跑一次消息',
       ].join('\n'),
     },
-    ...groupedSections,
+    {
+      title: '常用查看',
+      body: [
+        '  aiworker scope                           查看当前 Project Brain 落位',
+        '  aiworker doctor                          验证 Brain 配置',
+        '  aiworker soul list                       查看可用 Soul',
+        '  aiworker brain status                    查看 Brain runtime 状态',
+        '  aiworker executor doctor                 查看外部 executor readiness',
+      ].join('\n'),
+    },
     {
       title: '更多',
       body: [
-        '  aiworker <command> --help  查看某个命令的参数和选项',
-        '  aiworker scope             确认当前命令会落到哪个 AIWORKER_HOME',
+        '  aiworker worker --help                   本地 worker 完整命令',
+        '  aiworker fleet --help                    Fleet 控制面',
+        '  aiworker gateway --help                  Gateway 生命周期',
+        '  aiworker commands                        完整命令索引',
+        '  aiworker <command> --help                查看单个命令参数',
       ].join('\n'),
     },
     ...(options ? [{ ...localizeStandardSection(options), title: '选项' }] : []),
@@ -293,11 +327,21 @@ function localizeStandardSection(section: HelpSection): HelpSection {
   return {
     ...section,
     ...(section.title ? { title: titles[section.title] ?? section.title } : {}),
-    body: section.body.replaceAll(/ \(default: ([^)]+)\)/g, '（默认：$1）'),
+    body: section.body
+      .replaceAll(/ \(default: (true|false)\)/g, '')
+      .replaceAll(/ \(default: ([^)]+)\)/g, '（默认：$1）'),
   }
 }
 
 function renderGroup(cli: Pick<CAC, 'commands'>, group: HelpGroup): string {
+  return [
+    `  ${group.hint}`,
+    '',
+    renderGroupRows(cli, group),
+  ].join('\n')
+}
+
+function renderGroupRows(cli: Pick<CAC, 'commands'>, group: HelpGroup): string {
   const rows = group.commands.map((name) => {
     const command = cli.commands.find(item => item.name === name)
     return {
@@ -306,9 +350,5 @@ function renderGroup(cli: Pick<CAC, 'commands'>, group: HelpGroup): string {
     }
   })
   const width = Math.max(...rows.map(row => row.name.length))
-  return [
-    `  ${group.hint}`,
-    '',
-    ...rows.map(row => `  ${row.name.padEnd(width)}  ${row.summary}`),
-  ].join('\n')
+  return rows.map(row => `  ${row.name.padEnd(width)}  ${row.summary}`).join('\n')
 }

@@ -1,5 +1,39 @@
 # AIWorker Changelog
 
+## 2026-05-08 01:46 [completed] TODO-041 / PLAN-166 — Gateway enrollment hints in init dotenv and doctor
+
+Made optional gateway enrollment discoverable without adding interactive init
+questions.
+
+- Newly minted worker-local `.env` files now reserve commented examples for
+  `AIWORKER_GATEWAY_URL` and `AIWORKER_DISPLAY_NAME`, plus the recommended
+  `aiworker env ...` shortcuts.
+- The examples stay commented when unset, so they do not populate `process.env`
+  or trigger runtime validation as empty configured values.
+- `aiworker doctor` now reports gateway enrollment as standalone/configured with
+  INFO/PASS guidance, while keeping standalone mode valid.
+- Doctor does not print the configured gateway URL value, avoiding accidental
+  basicauth leakage.
+
+## 2026-05-08 01:06 [completed] TODO-040 / PLAN-165 — Progressive CLI help and worker env shortcuts
+
+Simplified the first CLI screen and removed manual `.env` editing from worker
+gateway enrollment onboarding.
+
+- `aiworker --help` now shows a short first-run path, common inspection
+  commands, and discovery pointers instead of expanding the full command tree.
+- `aiworker commands` now prints the complete worker/fleet/gateway command
+  index, while `aiworker worker --help`, `aiworker fleet --help`, and
+  `aiworker gateway --help` keep scoped discovery available.
+- Added worker-local startup env shortcuts:
+  `aiworker env gateway-url <url>` and `aiworker env display-name <name>`,
+  plus the equivalent `aiworker worker env ...` forms.
+- The new env shortcuts require an initialized worker-local `.env`, validate
+  gateway URL / display name input, and update only allowlisted startup env
+  keys.
+- README and CLI docs now use the shortcuts for OTP enrollment instead of
+  asking users to append env lines by hand.
+
 ## 2026-05-08 00:16 [completed] REFACTOR-023 / PLAN-164 — Simplify Project Brain filesystem layout
 
 Collapsed the project-scope Brain authoring surface so a new worker no longer

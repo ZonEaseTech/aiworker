@@ -144,10 +144,8 @@ export INTERNAL_SHARED_SECRET='<≥16 字符>'   # 远程 operator 的 bearer
 ```sh
 # Worker 端：
 aiworker init --soul developer
-printf '%s\n' \
-  "AIWORKER_GATEWAY_URL=wss://your-gateway.example/" \
-  "AIWORKER_DISPLAY_NAME=my-laptop" \
-  >> .aiworker/local/.env
+aiworker env gateway-url wss://your-gateway.example/
+aiworker env display-name my-laptop
 aiworker serve
 # stdout 打印 OTP，例如  YDCR-ZD8M
 ```
@@ -244,8 +242,8 @@ aiworker fleet config set <workerId> "$NEW" --if-match <version>
 |---|---|
 | `AIWORKER_MASTER_KEY` | 64 hex；worker / gateway 数据库 AES 主密钥；**必须离线备份** |
 | `INTERNAL_SHARED_SECRET` | gateway 公网或非 loopback 时远程 operator 的 bearer（≥16 字符） |
-| `AIWORKER_GATEWAY_URL` | worker 端连入 gateway（含 path 与 basicauth）；project worker 优先写 `.aiworker/local/.env` |
-| `AIWORKER_DISPLAY_NAME` | worker 在 fleet 列表里的展示名（默认 hostname）；按 worker 持久化到 `.aiworker/local/.env` |
+| `AIWORKER_GATEWAY_URL` | worker 端连入 gateway（含 path 与 basicauth）；用 `aiworker env gateway-url <url>` 写入当前 worker |
+| `AIWORKER_DISPLAY_NAME` | worker 在 fleet 列表里的展示名（默认 hostname）；用 `aiworker env display-name <name>` 写入当前 worker |
 | `AIWORKER_HOME` | 显式 worker 状态根；project scope 自动解析到 `<project>/.aiworker/local` |
 | `AIWORKER_ADMIN_EXTERNAL_AUTH` | `1` = 已由 Caddy / Cloudflare Access / Logto 守 `/admin/*` |
 

@@ -18,6 +18,55 @@ interface ScopeManifestStatus {
   issues: string[]
 }
 
+interface GatewayEnrollmentStatus {
+  displayName?: string
+  envFile: string
+  gatewayUrl?: string
+  hasEnvFile: boolean
+}
+
+function parseDotenvAssignment(rawLine: string): { key: string, value: string } | null {
+  const line = rawLine.trim()
+  if (!line || line.startsWith('#'))
+    return null
+  const eq = line.indexOf('=')
+  if (eq <= 0)
+    return null
+  const key = line.slice(0, eq).trim()
+  let value = line.slice(eq + 1).trim()
+  if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith('\'') && value.endsWith('\'')))
+    value = value.slice(1, -1)
+  return { key, value }
+}
+
+function inspectGatewayEnrollment(home: string): GatewayEnrollmentStatus {
+  const envFile = path.join(home, '.env')
+  if (!existsSync(envFile))
+    return { envFile, hasEnvFile: false }
+
+  const values: Record<string, string> = {}
+  try {
+    const text = readFileSync(envFile, 'utf8')
+    for (const line of text.split('\n')) {
+      const assignment = parseDotenvAssignment(line)
+      if (assignment)
+        values[assignment.key] = assignment.value
+    }
+  }
+  catch {
+    return { envFile, hasEnvFile: false }
+  }
+
+  const gatewayUrl = values.AIWORKER_GATEWAY_URL?.trim()
+  const displayName = values.AIWORKER_DISPLAY_NAME?.trim()
+  return {
+    ...(displayName ? { displayName } : {}),
+    envFile,
+    ...(gatewayUrl ? { gatewayUrl } : {}),
+    hasEnvFile: true,
+  }
+}
+
 function inspectScopeManifest(root: string): ScopeManifestStatus {
   const scopePath = path.join(root, 'scope.json')
   if (!existsSync(scopePath))
@@ -125,6 +174,36 @@ function tallyRollup(rollup: DoctorRollup, severity: string): void {
     rollup.info += 1
 }
 
+function tallyGatewayEnrollment(rollup: DoctorRollup, status: GatewayEnrollmentStatus): void {
+  if (!status.hasEnvFile || status.gatewayUrl === undefined || status.displayName === undefined)
+    rollup.info += 1
+}
+
+function printGatewayEnrollment(status: GatewayEnrollmentStatus): void {
+  process.stdout.write('  Gateway enrollment:\n')
+  if (!status.hasEnvFile) {
+    process.stdout.write(`    INFO    worker-local .env not found at ${status.envFile}\n`)
+    process.stdout.write('      Run `aiworker init --soul <preset>` first; gateway enrollment is optional.\n')
+    return
+  }
+  if (status.gatewayUrl === undefined) {
+    process.stdout.write('    INFO    standalone mode (AIWORKER_GATEWAY_URL is not set)\n')
+    process.stdout.write('      Optional gateway enrollment:\n')
+    process.stdout.write('        aiworker env gateway-url wss://your-gateway.example/\n')
+    process.stdout.write('        aiworker env display-name my-laptop\n')
+    return
+  }
+
+  process.stdout.write('    PASS    AIWORKER_GATEWAY_URL is set\n')
+  if (status.displayName === undefined) {
+    process.stdout.write('    INFO    AIWORKER_DISPLAY_NAME is not set; fleet will fall back to hostname / worker id.\n')
+    process.stdout.write('      Set it with: aiworker env display-name <name>\n')
+  }
+  else {
+    process.stdout.write('    PASS    AIWORKER_DISPLAY_NAME is set\n')
+  }
+}
+
 export async function runDoctor(): Promise<number> {
   const scope = resolveAiworkerScope()
   const root = scope.scope === 'project' && scope.projectRoot
@@ -133,6 +212,7 @@ export async function runDoctor(): Promise<number> {
 
   const report = await validateCapabilityProject(root)
   const scopeManifest = inspectScopeManifest(root)
+  const gatewayEnrollment = inspectGatewayEnrollment(scope.home)
   const freshInit = detectFreshInitDefaults(root)
 
   // TODO-015: build rollup before printing so the summary line can lead.
@@ -152,6 +232,7 @@ export async function runDoctor(): Promise<number> {
       tallyRollup(rollup, item.severity)
     }
   }
+  tallyGatewayEnrollment(rollup, gatewayEnrollment)
 
   const summaryStatus = rollup.fail > 0 ? 'FAIL' : rollup.warn > 0 ? 'WARN' : 'OK'
   const freshSuffix = freshInit ? ' (fresh-init defaults; expected to be sparse)' : ''
@@ -160,6 +241,7 @@ export async function runDoctor(): Promise<number> {
   process.stdout.write(`Scope : ${scope.scope}\n`)
   process.stdout.write(`Root  : ${report.root}\n`)
   process.stdout.write(`Status: ${formatStatus(report.status)}\n`)
+  printGatewayEnrollment(gatewayEnrollment)
 
   if (scope.scope === 'project' && scope.projectRoot) {
     process.stdout.write('  Brain identity:\n')

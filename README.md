@@ -158,10 +158,8 @@ The most common path — the worker side carries no fleet credentials, the opera
 ```sh
 # Worker side:
 aiworker init --soul developer
-printf '%s\n' \
-  "AIWORKER_GATEWAY_URL=wss://your-gateway.example/" \
-  "AIWORKER_DISPLAY_NAME=my-laptop" \
-  >> .aiworker/local/.env
+aiworker env gateway-url wss://your-gateway.example/
+aiworker env display-name my-laptop
 aiworker serve
 # stdout prints an OTP, e.g.  YDCR-ZD8M
 ```
@@ -262,8 +260,8 @@ See [`docs/deployment.md`](docs/deployment.md).
 |---|---|
 | `AIWORKER_MASTER_KEY` | 64 hex; AES master key for worker / gateway databases; **must be backed up offline** |
 | `INTERNAL_SHARED_SECRET` | Remote-operator bearer when the gateway is exposed publicly or off loopback (≥16 chars) |
-| `AIWORKER_GATEWAY_URL` | Worker-side gateway URL (path + basicauth); for project workers prefer `.aiworker/local/.env` |
-| `AIWORKER_DISPLAY_NAME` | Worker label in the fleet list (defaults to hostname); persisted per worker in `.aiworker/local/.env` |
+| `AIWORKER_GATEWAY_URL` | Worker-side gateway URL (path + basicauth); set with `aiworker env gateway-url <url>` |
+| `AIWORKER_DISPLAY_NAME` | Worker label in the fleet list (defaults to hostname); set with `aiworker env display-name <name>` |
 | `AIWORKER_HOME` | Explicit worker state root; project scope auto-resolves to `<project>/.aiworker/local` |
 | `AIWORKER_ADMIN_EXTERNAL_AUTH` | Set to `1` if `/admin/*` is fronted by Caddy / Cloudflare Access / Logto / etc. |
 

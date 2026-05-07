@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-08 (REFACTOR-023 completed)
+> Updated: 2026-05-08 (TODO-041 completed)
 
 ## Usage
 
@@ -279,3 +279,5 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REL-026 发布 aiworker CLI 0.10.2**](REL-026.md) `P1`
 - [x] [**TODO-039 README product positioning clarity**](TODO-039.md) `P2`
 - [x] [**REFACTOR-023 Simplify Project Brain filesystem layout**](REFACTOR-023.md) `P1`
+- [x] [**TODO-040 Progressive CLI help and worker startup env shortcuts**](TODO-040.md) `P2`
+- [x] [**TODO-041 Gateway enrollment hints in init dotenv and doctor**](TODO-041.md) `P2`
