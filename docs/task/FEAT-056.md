@@ -94,3 +94,7 @@ executor 平台、通用 memory layer、通用 sandbox 或泛化 workflow builde
 - 2026-05-09 04:05：PLAN-178 完成。新增 Brain Inbox：从 task Journal 的
   Brain Engine `lessonCandidates` 生成 pending admission proposals；CLI 和 Worker REST
   可触发，approve/reject/apply 仍复用 admission state machine，不自动写长期 Brain。
+- 2026-05-09 04:12：PLAN-179 完成。新增 authority preflight：ambient native
+  executor 高风险任务会在 Journal/Gate/CLI 中显示 observe-only warning 与
+  `enforceable=false`，明确 AIWorker 只治理 Brain 和 AIWorker-brokered 能力，不承诺
+  拦截 user/host-level executor 行为。

@@ -109,6 +109,16 @@ export {
   type ProposeBrainInboxFromTaskOptions,
 } from './worker/brain/inbox'
 
+// Authority preflight (PLAN-179)：truthful high-risk warning for ambient
+// executor authority. It does not claim sandbox or permission-broker control.
+export {
+  type AuthorityPreflightResult,
+  type AuthorityPreflightSignal,
+  detectAuthorityPreflight,
+  operatorAuthorityMode,
+  type OperatorAuthorityMode,
+} from './worker/brain/authority'
+
 // Brain summary 聚合（PLAN-103）：从 worker.db 读 admission / artifact 计数 +
 // scope manifest 状态，喂给 buildInfo 与 fleet UI；不复制 payload / artifact
 // ref / canonical brain 文本。

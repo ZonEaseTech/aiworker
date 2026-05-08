@@ -28,6 +28,7 @@ import { agentTasks, conversations, getSessionEntry, getWorkerDb, messages, reco
 import consola from 'consola'
 import { and, asc, desc, eq, gt } from 'drizzle-orm'
 import { BrainAdmissionService } from '../brain/admission'
+import { detectAuthorityPreflight } from '../brain/authority'
 import { recordBrainGovernanceBypassWarning } from '../brain/governance-bypass'
 import { BrainJournalService, describeExecutorAuthority, recordBrainJournalEvent } from '../brain/journal'
 import { reviewTaskWithBrainEngine } from '../brain/reviewer'
@@ -274,6 +275,16 @@ export class Orchestrator {
     const taskId = taskIdFromEnvelope(envelope)
     const gatewayConversationId = gatewayConversationIdFromEnvelope(envelope)
     const engine = this.deps.config.executor.engine
+    const authorityPreflight = detectAuthorityPreflight({
+      config: this.deps.config,
+      text: envelope.text,
+    })
+    this.recordJournal({
+      conversationId: activeConversation.id,
+      kind: 'authority.preflight',
+      ...(taskId === undefined ? {} : { taskId }),
+      payload: authorityPreflight as unknown as Record<string, unknown>,
+    })
     const includeFallbackBrainSkills = !usesNativeProjectSkills(engine)
     const decisionContext = {
       channel: envelope.channel,

@@ -4,7 +4,7 @@ import type { WorkerContext } from '../../context'
 
 import { randomUUID } from 'node:crypto'
 
-import { recordBrainJournalEvent } from '@zonease/aiworker-core'
+import { detectAuthorityPreflight, recordBrainJournalEvent } from '@zonease/aiworker-core'
 import { agentTasks, getWorkerDb } from '@zonease/aiworker-storage-sqlite/worker'
 import consola from 'consola'
 
@@ -67,6 +67,11 @@ export async function runRun(options: RunOptions = {}, deps: RunDeps = {}): Prom
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
 
   consola.info(`[aiworker run] worker ${ctx.workerId} (config v${ctx.configVersion}) — engine=${ctx.hydrated.executor.engine}/${ctx.hydrated.executor.variant}`)
+  const authority = detectAuthorityPreflight({
+    authorityMode: ctx.hydrated.executor.engine === 'http' || ctx.hydrated.executor.engine === 'mcp' ? 'provider_managed' : 'unmanaged_ambient',
+    text: message,
+  })
+  consola.info(`[aiworker run] authority=${authority.operatorMode} risk=${authority.risk}${authority.warning === undefined ? '' : ` — ${authority.warning}`}`)
 
   if (options.dryRun) {
     consola.success('[aiworker run] --dry-run: runtime constructed, no envelope ingested')

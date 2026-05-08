@@ -14,6 +14,7 @@ import { asc, desc, eq, or } from 'drizzle-orm'
 export type BrainJournalEventKind
   = | 'admission.bypass_suspected'
     | 'assistant.message'
+    | 'authority.preflight'
     | 'brain_engine.review'
     | 'conversation.created'
     | 'decision.capability'
@@ -46,7 +47,7 @@ export interface RecordBrainJournalEventInput {
 
 export type BrainJournalAuthorityMode = 'aiworker_brokered' | 'provider_managed' | 'unmanaged_ambient' | 'unknown'
 export type BrainGateVerdictAction = 'pass' | 'warn' | 'repair' | 'rerun' | 'switch-executor' | 'hold' | 'block'
-export type BrainGateVerdictReasonSource = 'kernel-invariant' | 'brain-engine-review' | 'executor-claim' | 'heuristic' | 'human-approval' | 'observe-only'
+export type BrainGateVerdictReasonSource = 'kernel-invariant' | 'brain-engine-review' | 'executor-claim' | 'heuristic' | 'human-approval' | 'observe-only' | 'authority-preflight'
 export type BrainGateVerdictReasonMode = 'observe-only' | 'enforced'
 
 export interface BrainGateVerdictReason {
@@ -93,6 +94,15 @@ export interface BrainJournalTrace {
     variant?: string
     authorityMode: BrainJournalAuthorityMode
     note: string
+  }
+  authorityPreflight?: {
+    authorityMode: string
+    operatorMode: string
+    risk: string
+    enforceable: boolean
+    signals: Array<{ type: string, reason: string }>
+    warning?: string
+    recommendation?: string
   }
   proofLoop: {
     status: AgentTaskStatus
@@ -179,6 +189,7 @@ export class BrainJournalService {
     const messageRefs = conversation ? this.listMessageRefs(conversation.id, redactSensitive) : []
     const capability = latestPayload(events, 'decision.capability')
     const qualityGate = latestPayload(events, 'gate.quality')
+    const authorityPreflight = latestPayload(events, 'authority.preflight')
     const gateVerdict = buildGateVerdict(events)
     const admissionEvents = events.filter(event => event.kind.startsWith('admission.'))
     const { loadedMemoryIds, loadedSkillIds } = extractBrainContext(capability)
@@ -211,6 +222,7 @@ export class BrainJournalService {
             },
           }),
       executor: describeExecutorAuthority(this.deps.config),
+      ...(authorityPreflight === undefined ? {} : { authorityPreflight: authorityPreflight as BrainJournalTrace['authorityPreflight'] }),
       proofLoop: {
         status: task.status,
         journal: events.length > 0 ? 'recorded' : 'empty',
@@ -317,6 +329,8 @@ export function describeExecutorAuthority(config: WorkerConfig | undefined): Bra
 
 export function buildGateVerdict(events: BrainJournalEventDto[]): BrainGateVerdict {
   const admissionBypass = latestEvent(events, 'admission.bypass_suspected')
+  const authorityPreflight = latestEvent(events, 'authority.preflight')
+  const authorityReason = authorityPreflight === undefined ? undefined : reasonFromAuthorityPreflight(authorityPreflight)
   const brainEngineReview = latestEvent(events, 'brain_engine.review')
   const brainEngineReason = brainEngineReview === undefined ? undefined : reasonFromBrainEngineReview(brainEngineReview)
   const qualityGate = latestEvent(events, 'gate.quality')
@@ -334,6 +348,7 @@ export function buildGateVerdict(events: BrainJournalEventDto[]): BrainGateVerdi
           reason: stringValue(admissionBypass.payload.reason) ?? 'brain admission bypass suspected',
           source: 'kernel-invariant',
         }),
+        ...optionalReason(authorityReason),
         ...optionalReason(brainEngineReason),
         ...optionalReason(qualityGateReason),
       ],
@@ -350,6 +365,7 @@ export function buildGateVerdict(events: BrainJournalEventDto[]): BrainGateVerdi
         mode: brainEngineReason.mode,
         reasons: [
           brainEngineReason,
+          ...optionalReason(authorityReason),
           ...optionalReason(qualityGateReason),
         ],
       })
@@ -358,6 +374,19 @@ export function buildGateVerdict(events: BrainJournalEventDto[]): BrainGateVerdi
 
   if (qualityGate !== undefined) {
     const action = gateAction(qualityGate.payload.action)
+    if (action === 'pass' && authorityPreflight !== undefined && authorityReason !== undefined && authorityPreflight.payload.risk === 'high') {
+      return verdictFromReasons({
+        action: 'warn',
+        at: authorityPreflight.at,
+        eventId: authorityPreflight.id,
+        mode: 'observe-only',
+        reasons: [
+          authorityReason,
+          ...optionalReason(qualityGateReason),
+          ...optionalReason(brainEngineReason),
+        ],
+      })
+    }
     return verdictFromReasons({
       action,
       at: qualityGate.at,
@@ -365,6 +394,20 @@ export function buildGateVerdict(events: BrainJournalEventDto[]): BrainGateVerdi
       mode: qualityGateReason?.mode ?? 'observe-only',
       reasons: [
         ...optionalReason(qualityGateReason),
+        ...optionalReason(authorityReason),
+        ...optionalReason(brainEngineReason),
+      ],
+    })
+  }
+
+  if (authorityPreflight !== undefined && authorityReason !== undefined && authorityPreflight.payload.risk === 'high') {
+    return verdictFromReasons({
+      action: 'warn',
+      at: authorityPreflight.at,
+      eventId: authorityPreflight.id,
+      mode: 'observe-only',
+      reasons: [
+        authorityReason,
         ...optionalReason(brainEngineReason),
       ],
     })
@@ -383,6 +426,7 @@ export function buildGateVerdict(events: BrainJournalEventDto[]): BrainGateVerdi
           reason: stringValue(executorError.payload.error) ?? 'executor failed before a quality gate verdict was recorded',
           source: 'executor-claim',
         }),
+        ...optionalReason(authorityReason),
         ...optionalReason(brainEngineReason),
       ],
     })
@@ -400,6 +444,16 @@ export function buildGateVerdict(events: BrainJournalEventDto[]): BrainGateVerdi
       },
     ],
   }
+}
+
+function reasonFromAuthorityPreflight(event: BrainJournalEventDto): BrainGateVerdictReason | undefined {
+  if (event.payload.risk !== 'high')
+    return undefined
+  return reasonFromEvent(event, {
+    mode: 'observe-only',
+    reason: stringValue(event.payload.warning) ?? 'high-risk task detected for current authority mode',
+    source: 'authority-preflight',
+  })
 }
 
 function reasonFromBrainEngineReview(event: BrainJournalEventDto): BrainGateVerdictReason {

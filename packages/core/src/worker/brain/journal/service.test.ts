@@ -147,6 +147,25 @@ describe('buildGateVerdict (PLAN-175)', () => {
     expect(verdict.mode).toBe('enforced')
     expect(verdict.reasons.map(reason => reason.source)).toEqual(['kernel-invariant', 'brain-engine-review'])
   })
+
+  it('warns on high-risk ambient authority without claiming enforcement', () => {
+    const verdict = buildGateVerdict([
+      event(1, 'authority.preflight', {
+        authorityMode: 'unmanaged_ambient',
+        enforceable: false,
+        operatorMode: 'ambient',
+        recommendation: 'prefer-plan-only',
+        risk: 'high',
+        signals: [{ type: 'database', reason: 'task mentions database' }],
+        warning: 'High-risk task under unmanaged ambient executor authority.',
+      }),
+      event(2, 'gate.quality', { action: 'pass', evaluator: 'heuristic', mode: 'observe_only', reason: 'quality passed' }),
+    ])
+
+    expect(verdict.action).toBe('warn')
+    expect(verdict.mode).toBe('observe-only')
+    expect(verdict.reasons.map(reason => reason.source)).toEqual(['authority-preflight', 'heuristic'])
+  })
 })
 
 function event(id: number, kind: string, payload: Record<string, unknown>) {

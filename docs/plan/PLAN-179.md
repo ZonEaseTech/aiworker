@@ -1,6 +1,6 @@
 # PLAN-179 Authority mode and high-risk preflight
 
-- **status**: draft
+- **status**: completed
 - **createdAt**: 2026-05-09 03:12
 - **relatedTask**: FEAT-056
 
@@ -10,6 +10,19 @@ AIWorker documentation is clear that executor-native capabilities and ambient
 host authority are not AIWorker-owned. The product surface still needs a direct
 operator-visible authority mode so users do not mistake Brain governance for a
 permission boundary.
+
+Implemented 2026-05-09:
+
+- Added authority preflight classification for ambient / provider-managed /
+  AIWorker-brokered / unknown modes.
+- Added high-risk signals for production, database, destructive mutation,
+  payment, PII, secrets, and cross-scope tasks.
+- Orchestrator writes `authority.preflight` Journal events before executor
+  dispatch; Journal trace and Gate verdict can cite those warnings.
+- `aiworker run` prints current authority/risk so CLI users see the boundary
+  before the task starts.
+- Ambient high-risk tasks stay observe-only with `enforceable=false`; no false
+  sandbox or broker promise is made.
 
 ## Goal
 
@@ -47,8 +60,12 @@ and AIWorker-brokered capabilities, but not unmanaged ambient executor authority
 
 ## Verification
 
-- Focused tests for authority-mode classification and warnings.
-- CLI/API snapshot tests if surfaces change.
+- `bun test packages/core/src/worker/brain/authority/service.test.ts`
+- `bun test packages/core/src/worker/brain/journal/service.test.ts`
+- `bun test packages/core/src/worker/orchestrator/service.history.test.ts`
+- `bun test apps/cli/src/commands/worker/run.test.ts`
+- `bun run --filter '@zonease/aiworker-core' typecheck`
+- `bun run --filter '@zonease/aiworker-cli' typecheck`
 - `git diff --check`
 
 ## Dependencies

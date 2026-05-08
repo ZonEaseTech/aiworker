@@ -734,6 +734,29 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
     expect(trace?.events.some(event => event.kind === 'task.held')).toBe(true)
   })
 
+  it('records high-risk ambient authority preflight without enforcing a false boundary', async () => {
+    const executor = capturingExecutor(['safe summary with enough detail'])
+    const orch = new Orchestrator({
+      config: buildConfig({ executor: { engine: 'codex', variant: 'default' } }),
+      brain: stubBrain(),
+      executor,
+      bus: silentBus(),
+      workerId: 'w_history_test',
+      workspaces,
+      processes,
+      approvals: new ApprovalStore(),
+    })
+
+    const task = await orch.submitTask('delete rows from the production database after backup')
+    await waitUntil(() => loadTask(task.id)?.status === 'succeeded', 'authority preflight task completed')
+
+    const trace = new BrainJournalService().getTaskTrace(task.id)
+    expect(trace?.authorityPreflight?.risk).toBe('high')
+    expect(trace?.authorityPreflight?.operatorMode).toBe('ambient')
+    expect(trace?.authorityPreflight?.enforceable).toBe(false)
+    expect(trace?.gateVerdict.reasons.some(reason => reason.source === 'authority-preflight')).toBe(true)
+  })
+
   it('routes suppressed control calls through an explicit control executor', async () => {
     const bus = recordingBus()
     const executor = capturingExecutor(['task executor answer'])

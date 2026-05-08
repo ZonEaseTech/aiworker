@@ -1,5 +1,18 @@
 # AIWorker Changelog
 
+## 2026-05-09 04:12 [completed] PLAN-179 — Authority mode and high-risk preflight
+
+完成 authority mode / high-risk preflight：把“AIWorker 能治理 Brain，但不能隔离
+ambient executor”的边界变成 operator-visible runtime 信号。
+
+- 新增 authority preflight classifier，识别 production、database、destructive、
+  payment、PII、secret、cross-scope 等高风险信号。
+- Orchestrator 在 executor dispatch 前写 `authority.preflight` Journal event。
+- Journal trace 暴露 `authorityPreflight`；Gate verdict 可引用
+  `authority-preflight` reason。
+- `aiworker run` 启动时打印 authority/risk，高风险 ambient 任务显示
+  `enforceable=false` 语义的 warning，不承诺 sandbox / MCP firewall / permission broker。
+
 ## 2026-05-09 04:05 [completed] PLAN-178 — Brain Inbox lesson admission flow
 
 完成 Brain Inbox MVP：把 Brain Engine review 里的 lesson candidates 转换成 pending
