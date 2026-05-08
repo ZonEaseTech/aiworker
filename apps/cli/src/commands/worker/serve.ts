@@ -18,6 +18,7 @@ import {
   applyConfigUpdate,
   BrainAdmissionService,
   BrainArtifactRegistry,
+  BrainJournalService,
   buildBrainSummary,
   buildCronHandlers,
   buildInfo,
@@ -509,6 +510,15 @@ export async function runServe(options: ServeOptions = {}): Promise<void> {
         tasksCreate: async ({ prompt }) => {
           const task = await state.runtime.orchestrator.submitTask(prompt)
           return { task }
+        },
+        taskJournal: async ({ taskId }) => {
+          const journal = new BrainJournalService({
+            config: state.runtime.config,
+            workerId: state.workerId,
+          }).getTaskTrace(taskId)
+          if (journal === null)
+            throw stateError('not-found', `task "${taskId}" not found`)
+          return { journal }
         },
         conversationsList: async () => {
           return { conversations: listConversations(200) }

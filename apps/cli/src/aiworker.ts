@@ -50,6 +50,7 @@ import {
   runBrainArtifactsList,
   runBrainArtifactsShow,
   runBrainBrief,
+  runBrainJournalShow,
   runBrainMemories,
   runBrainSkills,
   runBrainSkillsSyncNative,
@@ -281,6 +282,15 @@ cli.command('soul show <preset>', '查看某个 Soul 预设的职责、边界、
 cli.command('brain status', '只读诊断本地 worker runtime brain source、写入目标、decision pipeline（heuristic/LLM、observe_only/enforced、recent fallback）和健康状态').action(async () => {
   process.exit(await runBrainStatus())
 })
+
+cli
+  .command('brain journal show <taskId>', '只读查看一个 worker task 的 Brain Journal trace')
+  .option('--show-sensitive', '不再对 payload / message preview 做 secret-like redaction')
+  .action(async (taskId: string, opts: { showSensitive?: boolean }) => {
+    process.exit(await runBrainJournalShow(taskId, {
+      ...(opts.showSensitive === undefined ? {} : { showSensitive: opts.showSensitive }),
+    }))
+  })
 
 cli.command('brain skills', '只读列出 fallback brain skill 与 native executor skill 目标').action(async () => {
   process.exit(await runBrainSkills())
@@ -827,6 +837,15 @@ cli.command('worker soul show <preset>', '查看某个 Soul 预设的职责、�
 cli.command('worker brain status', '只读诊断本地 worker runtime brain source、写入目标和健康状态').action(async () => {
   process.exit(await runBrainStatus())
 })
+
+cli
+  .command('worker brain journal show <taskId>', '只读查看一个 worker task 的 Brain Journal trace')
+  .option('--show-sensitive', '不再对 payload / message preview 做 secret-like redaction')
+  .action(async (taskId: string, opts: { showSensitive?: boolean }) => {
+    process.exit(await runBrainJournalShow(taskId, {
+      ...(opts.showSensitive === undefined ? {} : { showSensitive: opts.showSensitive }),
+    }))
+  })
 
 cli.command('worker brain skills', '只读列出 fallback brain skill 与 native executor skill 目标').action(async () => {
   process.exit(await runBrainSkills())

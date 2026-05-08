@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-08 (PLAN-171 completed)
+> Updated: 2026-05-09 (PLAN-174/175 completed)
 
 ## Usage
 
@@ -200,3 +200,13 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-169 Native executor skill placement for Project Brain skills**](PLAN-169.md) `2026-05-08`
 - [x] [**PLAN-170 Native executor skill projection lifecycle**](PLAN-170.md) `2026-05-08`
 - [x] [**PLAN-171 发布 aiworker CLI 0.10.4**](PLAN-171.md) `2026-05-08`
+- [x] [**PLAN-172 AIWorker product north star guardrail**](PLAN-172.md) `2026-05-09`
+- [x] [**PLAN-173 Developer repo worker proof-loop contract and audit**](PLAN-173.md) `2026-05-09`
+- [x] [**PLAN-174 Brain Journal task trace surface**](PLAN-174.md) `2026-05-09`
+- [x] [**PLAN-175 Gate verdict result surface**](PLAN-175.md) `2026-05-09`
+- [ ] [**PLAN-176 Brain Engine reviewer contract**](PLAN-176.md) `2026-05-09`
+- [ ] [**PLAN-177 Repair and rerun orchestration**](PLAN-177.md) `2026-05-09`
+- [ ] [**PLAN-178 Brain Inbox lesson admission flow**](PLAN-178.md) `2026-05-09`
+- [ ] [**PLAN-179 Authority mode and high-risk preflight**](PLAN-179.md) `2026-05-09`
+- [ ] [**PLAN-180 Developer repo worker dogfood campaign**](PLAN-180.md) `2026-05-09`
+- [ ] [**PLAN-181 AIWorker 1.0 proof-loop readiness**](PLAN-181.md) `2026-05-09`

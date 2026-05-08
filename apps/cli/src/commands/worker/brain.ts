@@ -7,7 +7,7 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 
-import { BrainAdmissionService, BrainArtifactRegistry, BrainBriefCompiler, describeBrainSource, getDecisionPipelineSnapshot } from '@zonease/aiworker-core'
+import { BrainAdmissionService, BrainArtifactRegistry, BrainBriefCompiler, BrainJournalService, describeBrainSource, getDecisionPipelineSnapshot } from '@zonease/aiworker-core'
 import { NATIVE_PROJECT_SKILL_TARGETS, projectScopeManifestPath, resolveAiworkerScope, resolveBrainHome } from '@zonease/aiworker-fs-layout'
 import { createBuiltinSoulRegistry, parseScopeManifestJson } from '@zonease/aiworker-shared'
 import consola from 'consola'
@@ -149,6 +149,31 @@ export async function runBrainStatus(): Promise<number> {
   }
   catch (err) {
     consola.error(`[aiworker brain status] failed: ${err instanceof Error ? err.message : String(err)}`)
+    return 1
+  }
+}
+
+export interface BrainJournalShowOptions {
+  showSensitive?: boolean
+}
+
+export async function runBrainJournalShow(taskId: string, options: BrainJournalShowOptions = {}): Promise<number> {
+  try {
+    return await withWorkerContext(async (ctx) => {
+      const journal = new BrainJournalService({
+        config: ctx.hydrated,
+        workerId: ctx.workerId,
+      }).getTaskTrace(taskId, { redactSensitive: options.showSensitive !== true })
+      if (journal === null) {
+        consola.error(`[aiworker brain journal show] task not found: ${taskId}`)
+        return 1
+      }
+      console.log(JSON.stringify({ journal }, null, 2))
+      return 0
+    })
+  }
+  catch (err) {
+    consola.error(`[aiworker brain journal show] failed: ${err instanceof Error ? err.message : String(err)}`)
     return 1
   }
 }

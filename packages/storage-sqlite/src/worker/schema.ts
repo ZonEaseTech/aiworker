@@ -125,6 +125,23 @@ export const executionLogs = sqliteTable(
   }),
 )
 
+export const brainJournalEvents = sqliteTable(
+  'brain_journal_events',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    taskId: text('task_id').references(() => agentTasks.id),
+    conversationId: text('conversation_id').references(() => conversations.id, { onDelete: 'set null' }),
+    kind: text('kind').notNull(),
+    payload: text('payload', { mode: 'json' }).$type<Record<string, unknown>>().notNull(),
+    createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  },
+  table => ({
+    conversationCreatedAtIdx: index('brain_journal_events_conversation_created_at_idx').on(table.conversationId, table.createdAt),
+    kindCreatedAtIdx: index('brain_journal_events_kind_created_at_idx').on(table.kind, table.createdAt),
+    taskCreatedAtIdx: index('brain_journal_events_task_created_at_idx').on(table.taskId, table.createdAt),
+  }),
+)
+
 export const skillBindings = sqliteTable(
   'skill_bindings',
   {

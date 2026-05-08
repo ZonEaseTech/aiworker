@@ -7,6 +7,16 @@ Gateway 是 WebSocket 控制面，持有 `fleet.db`；worker 是数据面，持�
 adapter 调用和观察它们，不把自己做成 executor 平台。完整架构以
 [`docs/architecture.md`](docs/architecture.md) 为准。
 
+## 产品北极星
+
+- 后续涉及 Brain、Executor、Soul、Fleet、scope、memory、skill、MCP、plugin、
+  capability、approval、audit 或 runtime 边界的开发，先读
+  [`GOALS.md`](GOALS.md)。
+- `GOALS.md` 是产品取舍与防跑偏的北极星；`docs/architecture.md` 是实现边界；
+  `docs/governance-node-status.md` 是当前状态审计。
+- 如果一个改动会把 AIWorker 推向 executor 平台、通用 memory layer、coding-only
+  项目管理器、或高频确认弹窗，默认先停下来重新评估。
+
 ## 工作规则
 
 - 默认用中文与用户交流；文档、代码注释、commit message、PR title/description 也默认中文。

@@ -313,6 +313,7 @@ function registerWorkerOpenApiPaths(app: OpenAPIHono): void {
     { method: 'post', path: '/api/worker/brain/admission/{id}/approve', summary: 'Approve a pending admission proposal', tags: ['brain'], requireAuth: true },
     { method: 'post', path: '/api/worker/brain/admission/{id}/apply', summary: 'Materialize an approved admission proposal (dry-run unless commit=true)', tags: ['brain'], requireAuth: true },
     { method: 'get', path: '/api/worker/orchestrator/tasks', summary: 'List recent worker orchestrator tasks', tags: ['orchestrator'], requireAuth: true },
+    { method: 'get', path: '/api/worker/orchestrator/tasks/{id}/journal', summary: 'Show Brain Journal trace for one worker task', tags: ['orchestrator'], requireAuth: true },
     { method: 'post', path: '/api/worker/orchestrator/tasks', summary: 'Submit a worker orchestrator task', tags: ['orchestrator'], requireAuth: true },
     { method: 'get', path: '/api/worker/orchestrator/conversations', summary: 'List recent worker orchestrator conversations', tags: ['orchestrator'], requireAuth: true },
     { method: 'get', path: '/api/worker/orchestrator/conversations/{id}/messages', summary: 'List messages for a worker orchestrator conversation', tags: ['orchestrator'], requireAuth: true },

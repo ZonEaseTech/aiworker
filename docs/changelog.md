@@ -1,5 +1,60 @@
 # AIWorker Changelog
 
+## 2026-05-09 03:45 [completed] PLAN-174 / PLAN-175 — Brain Journal trace and Gate verdict surface
+
+完成 AIWorker 1.0 proof loop 的首个 runtime 切片，让一个 worker task 可以被
+operator 从输入、执行、决策、工具事件、Gate verdict 到结果进行追踪。
+
+- `worker.db` 新增 append-only `brain_journal_events` 表与 task/conversation/kind
+  索引，迁移文件为 `0008_peaceful_titanium_man.sql`。
+- Orchestrator 记录 task lifecycle、conversation/user/assistant message refs、
+  intent/capability decision、quality gate、repair attempt、tool use/result、
+  executor finish/error/binding/token usage、permission request 和
+  admission-bypass signal。
+- 新增 `BrainJournalService.getTaskTrace(taskId)`，默认 redaction，保留 worker-owned
+  trace，不把私有 Brain / transcript payload 复制到 `fleet.db`。
+- Worker REST 新增
+  `GET /api/worker/orchestrator/tasks/:id/journal`，gateway bridge 新增
+  `orchestrator.tasks.journal`，CLI 新增
+  `aiworker brain journal show <taskId>` / `aiworker worker brain journal show <taskId>`。
+- Journal trace 新增 `gateVerdict`：区分 heuristic、brain-engine-review、
+  kernel-invariant、executor-claim 以及 observe-only / enforced；admission bypass
+  会形成 enforced hold，executor failure 会形成 observe-only rerun suggestion。
+- 验证已通过 focused Journal/API/storage/gateway dispatcher tests、core/API/CLI/
+  gateway-proto/storage typecheck，以及 workspace `bun run check`、`bun run test`、
+  `bun run build`、`git diff --check`。
+
+## 2026-05-09 03:12 [planned] FEAT-056 / PLAN-173..181 — AIWorker 1.0 developer repo worker proof loop
+
+把 `GOALS.md` 的 1.0 产品判断拆成 PMA 全量计划，聚焦 developer repo worker 的可验证闭环。
+
+- 新增 `FEAT-056` 作为 1.0 proof-loop epic：init scope、executor run、Journal、Gate、
+  repair/rerun、Brain Inbox、admission、authority mode 与 dogfood evidence。
+- 新增 `PLAN-173..181`，依次覆盖 proof-loop contract、Brain Journal、Gate verdict、
+  Brain Engine reviewer、repair/rerun orchestration、Brain Inbox、authority mode、
+  developer repo dogfood 和 1.0 readiness closeout。
+- 明确 1.0 前不进入通用 sandbox、MCP firewall、cloud permission broker、多垂直业务
+  workflow 或自研 executor tool loop。
+- 本轮只落盘计划，不实施 runtime 改动。
+
+## 2026-05-09 02:07 [completed] DOC-007 / PLAN-172 — AIWorker product north star guardrail
+
+新增根目录 `GOALS.md`，把 AIWorker 的产品北极星落成后续开发 session 的防跑偏契约。
+
+- 明确 AIWorker 是 self-hosted Project Brain governance runtime for bring-your-own
+  agents，不是 executor 平台、通用 memory layer 或 coding-only 项目管理器。
+- 固化 Project Brain ownership、governed self-iteration、executor neutrality、
+  Worker/Fleet operations 四个核心竞争面。
+- 补充未来功能 decision tests：必须解释守住的治理不变量、executor 边界、业务 scope
+  语义、admission/audit/rollback 路径与对用户确认负担的影响。
+- 补充 Brain Kernel / Brain Engine / Executor 三分法，以及 Journal / Gate / Admission
+  三层运行模型，避免把 Brain 误解成纯硬逻辑或另一个 executor。
+- 补充 1.0 产品判断：第一目标用户、developer repo worker 第一垂直场景、最小不可替代
+  价值、Brain 学习边界、权限边界承诺、1.0 前非目标和 proof loop。
+- `AGENTS.md` 新增产品北极星入口，要求 Brain / Executor / Soul / Fleet / scope /
+  memory / capability 等边界改动先读 `GOALS.md`。
+- `docs/architecture.md` 头部引用 `GOALS.md`，区分产品取舍来源与架构实现契约。
+
 ## 2026-05-08 22:56 [completed] REL-028 / PLAN-171 — 发布 aiworker CLI 0.10.4
 
 发布 `@zonease/aiworker-cli@0.10.4`，承载 0.10.3 之后的 native executor

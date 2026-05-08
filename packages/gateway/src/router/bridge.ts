@@ -607,6 +607,22 @@ async function buildBridgeRequest(
     return { ok: false, response: methodNotAllowed('GET, POST') }
   }
 
+  const taskJournalMatch = path.workerApiPath.match(/^\/api\/worker\/orchestrator\/tasks\/([^/]+)\/journal$/)
+  if (taskJournalMatch) {
+    if (req.method !== 'GET')
+      return { ok: false, response: methodNotAllowed('GET') }
+    return {
+      ok: true,
+      value: {
+        method: 'orchestrator.tasks.journal',
+        params: {
+          workerId: path.workerId,
+          taskId: decodeURIComponent(taskJournalMatch[1]!),
+        },
+      },
+    }
+  }
+
   if (path.workerApiPath === `${WORKER_API_PREFIX}/orchestrator/conversations`) {
     if (req.method !== 'GET')
       return { ok: false, response: methodNotAllowed('GET') }

@@ -109,6 +109,7 @@ export interface NodeHandlers {
   channelTest?: (input: { channel: ChannelType, body?: { chatId?: string, text?: string } }) => Promise<unknown>
   tasksList?: () => Promise<{ tasks: unknown[] }>
   tasksCreate?: (input: { prompt: string }) => Promise<{ task: unknown }>
+  taskJournal?: (input: { taskId: string }) => Promise<{ journal: unknown }>
   conversationsList?: () => Promise<{ conversations: unknown[] }>
   messagesList?: (input: { conversationId: string }) => Promise<{ messages: unknown[] }>
 }
@@ -240,6 +241,9 @@ export class GatewayDispatcher {
           break
         case METHODS['orchestrator.tasks.create'].method:
           await this.handleTasksCreate(id, p)
+          break
+        case METHODS['orchestrator.tasks.journal'].method:
+          await this.handleTaskJournal(id, p)
           break
         case METHODS['orchestrator.conversations.list'].method:
           await this.handleConversationsList(id, p)
@@ -762,6 +766,18 @@ export class GatewayDispatcher {
     if (!this.ensureWorkerMatch(id, params))
       return
     this.replyOk(id, await this.deps.handlers.tasksCreate({ prompt: String(params.prompt) }))
+  }
+
+  private async handleTaskJournal(id: string, params: Record<string, unknown>): Promise<void> {
+    if (!this.deps.handlers?.taskJournal) {
+      this.replyError(id, 'method_not_implemented', 'orchestrator.tasks.journal handler not wired')
+      return
+    }
+    if (!this.ensureWorkerMatch(id, params))
+      return
+    this.replyOk(id, await this.deps.handlers.taskJournal({
+      taskId: String(params.taskId),
+    }))
   }
 
   private async handleConversationsList(id: string, params: Record<string, unknown>): Promise<void> {

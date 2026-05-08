@@ -5,7 +5,7 @@ import fs from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AppError } from '@zonease/aiworker-shared'
-import { closeWorkerDb, initWorkerDb, runWorkerMigrations } from '@zonease/aiworker-storage-sqlite/worker'
+import { agentTasks, closeWorkerDb, conversations, getWorkerDb, initWorkerDb, runWorkerMigrations } from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 import { buildOrchestratorRoutes } from './routes'
@@ -22,7 +22,14 @@ function stubRuntime(
 ): WorkerRuntime {
   return {
     workerId: 'w_routes_test',
-    config: {} as WorkerRuntime['config'],
+    config: {
+      brainRetrieval: 'first-match',
+      brainWriteTarget: '',
+      brains: [],
+      channels: [],
+      evolution: { enabled: false, observationRetentionDays: 7 },
+      executor: { engine: 'http', variant: 'default' },
+    } as WorkerRuntime['config'],
     brain: {} as WorkerRuntime['brain'],
     executor: {} as WorkerRuntime['executor'],
     channels: {} as WorkerRuntime['channels'],
@@ -118,6 +125,41 @@ describe('buildOrchestratorRoutes — POST /tasks zod validation', () => {
     const body = await res.json() as { task: { id: string } }
     expect(body.task.id).toBe('task-42')
     expect(received).toBe('hello world')
+  })
+
+  it('GET /tasks/:id/journal returns a Brain Journal trace', async () => {
+    getWorkerDb().insert(agentTasks).values({
+      id: 'task-journal',
+      prompt: 'summarize',
+      status: 'succeeded',
+      conversationId: 'conv-journal',
+      createdAt: '2026-05-09T03:40:00.000Z',
+      finishedAt: '2026-05-09T03:41:00.000Z',
+      result: { ok: true },
+    }).run()
+    getWorkerDb().insert(conversations).values({
+      id: 'conv-journal',
+      taskId: 'task-journal',
+      channel: 'web',
+      chatId: 'task:task-journal',
+      status: 'open',
+      startedAt: '2026-05-09T03:40:00.000Z',
+      lastActiveAt: '2026-05-09T03:41:00.000Z',
+    }).run()
+    const routes = buildOrchestratorRoutes(() => stubRuntime(async () => ({ id: 'unused' })))
+    const res = await routes.fetch(new Request('http://w/tasks/task-journal/journal'))
+    expect(res.status).toBe(200)
+    const body = await res.json() as { journal: { task: { id: string }, executor: { authorityMode: string } } }
+    expect(body.journal.task.id).toBe('task-journal')
+    expect(body.journal.executor.authorityMode).toBe('provider_managed')
+  })
+
+  it('GET /tasks/:id/journal returns 404 for missing tasks', async () => {
+    const routes = buildOrchestratorRoutes(() => stubRuntime(async () => ({ id: 'unused' })))
+    const res = await routes.fetch(new Request('http://w/tasks/missing/journal'))
+    expect(res.status).toBe(404)
+    const body = await res.json() as { error: { code: string } }
+    expect(body.error.code).toBe('not-found')
   })
 
   it('accepts prompt at exactly 8000 chars boundary', async () => {

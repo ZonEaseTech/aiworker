@@ -1,6 +1,7 @@
 import type { WorkerRuntime } from '@zonease/aiworker-core'
 import { OpenAPIHono } from '@hono/zod-openapi'
 
+import { BrainJournalService } from '@zonease/aiworker-core'
 import { AppError } from '@zonease/aiworker-shared'
 import { agentTasks, conversations, getWorkerDb, messages } from '@zonease/aiworker-storage-sqlite/worker'
 import { desc, eq } from 'drizzle-orm'
@@ -23,6 +24,23 @@ export function buildOrchestratorRoutes(getRuntime: () => WorkerRuntime) {
   routes.get('/tasks', (c) => {
     const rows = getWorkerDb().select().from(agentTasks).orderBy(desc(agentTasks.createdAt)).limit(200).all()
     return c.json({ tasks: rows })
+  })
+
+  routes.get('/tasks/:id/journal', (c) => {
+    const runtime = getRuntime()
+    const trace = new BrainJournalService({
+      config: runtime.config,
+      workerId: runtime.workerId,
+    }).getTaskTrace(c.req.param('id'))
+    if (trace === null) {
+      return c.json({
+        error: {
+          code: 'not-found',
+          message: 'task not found',
+        },
+      }, 404)
+    }
+    return c.json({ journal: trace })
   })
 
   routes.post('/tasks', async (c) => {

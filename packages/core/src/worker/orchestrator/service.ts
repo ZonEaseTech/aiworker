@@ -13,21 +13,23 @@ import type {
   ToolCall,
   WorkerConfig,
 } from '@zonease/aiworker-shared'
+import type { BrainJournalEventKind } from '../brain/journal'
 import type { WorkerEventBus } from '../events/bus'
 import type { WorkspaceHandle, WorkspaceManager } from '../executor/workspace'
 import type { ApprovalDecision, ApprovalStore } from './approvals'
 import type { DecisionContext, RequiredContext } from './decisions'
+
 import type { ProcessManager } from './process-manager'
 
 import { createHash } from 'node:crypto'
-
 import { AppError, brainAdmissionMemoryAddPayloadSchema, DEFAULT_MAX_HISTORY_MESSAGES, redactBodySecrets } from '@zonease/aiworker-shared'
-import { agentTasks, conversations, getSessionEntry, getWorkerDb, messages, recordSessionCompaction, rotateSessionConversation, sessionEntries, touchSessionEntry, updateSessionEngineBinding, upsertSessionEntry } from '@zonease/aiworker-storage-sqlite/worker'
 
+import { agentTasks, conversations, getSessionEntry, getWorkerDb, messages, recordSessionCompaction, rotateSessionConversation, sessionEntries, touchSessionEntry, updateSessionEngineBinding, upsertSessionEntry } from '@zonease/aiworker-storage-sqlite/worker'
 import consola from 'consola'
 import { and, asc, desc, eq, gt } from 'drizzle-orm'
 import { BrainAdmissionService } from '../brain/admission'
 import { recordBrainGovernanceBypassWarning } from '../brain/governance-bypass'
+import { recordBrainJournalEvent } from '../brain/journal'
 import { getChannelAdapter } from '../channels/registry'
 import { classifyContinuation, findOpenConversation, findSessionConversation, hasSessionEntryForRoute, loadRecentMessages, resolveSessionKey } from '../conversation/router'
 import { DEFAULT_APPROVAL_TIMEOUT_MS } from './approvals'
@@ -166,6 +168,20 @@ export class Orchestrator {
     })
   }
 
+  private recordJournal(input: {
+    kind: BrainJournalEventKind
+    taskId?: string
+    conversationId?: string
+    payload?: Record<string, unknown>
+  }): void {
+    try {
+      recordBrainJournalEvent(input)
+    }
+    catch (err) {
+      consola.warn(`[orchestrator] brain journal record failed: ${String(err)}`)
+    }
+  }
+
   private controlExecutor(): ExecutorProvider {
     return this.deps.controlExecutor ?? this.deps.executor
   }
@@ -291,6 +307,12 @@ export class Orchestrator {
     ])
     this.deps.bus.emit('orchestrator.intent_decision', intentDecision)
     recordIntentDecision(intentDecision)
+    this.recordJournal({
+      conversationId: activeConversation.id,
+      kind: 'decision.intent',
+      ...(taskId === undefined ? {} : { taskId }),
+      payload: intentDecision as unknown as Record<string, unknown>,
+    })
     const registry = await this.capabilityRegistry.snapshot({ skills: systemContext.availableSkills })
     const capabilityPlan = planCapabilities({
       intent: intentDecision.intent,
@@ -318,6 +340,12 @@ export class Orchestrator {
       skillLoadErrors: loadedSkillContext.errors,
     })
     this.deps.bus.emit('orchestrator.capability_decision', capabilityDecision)
+    this.recordJournal({
+      conversationId: activeConversation.id,
+      kind: 'decision.capability',
+      ...(taskId === undefined ? {} : { taskId }),
+      payload: capabilityDecision as unknown as Record<string, unknown>,
+    })
     let systemPrompt = appendLoadedBrainMemories(
       appendLoadedBrainSkillBodies(systemContext.systemPrompt, loadedSkillContext.loaded),
       loadedMemoryContext.loaded,
@@ -434,6 +462,12 @@ export class Orchestrator {
     })
     this.deps.bus.emit('orchestrator.quality_gate', qualityGate)
     recordQualityGate(qualityGate)
+    this.recordJournal({
+      conversationId: activeConversation.id,
+      kind: 'gate.quality',
+      ...(taskId === undefined ? {} : { taskId }),
+      payload: qualityGate as unknown as Record<string, unknown>,
+    })
     if (qualityGate.action === 'repair' && gateConfig?.mode === 'retry') {
       const repaired = await this.runSuppressedExecutor({
         messages: buildRepairPrompt({ assistantText, gate: qualityGate, requestText: envelope.text }),
@@ -448,6 +482,16 @@ export class Orchestrator {
         originalLength: assistantText.length,
         repairedLength: repaired.length,
         status: repaired.startsWith('Quality repair failed:') ? 'failed' : 'succeeded',
+      })
+      this.recordJournal({
+        conversationId: activeConversation.id,
+        kind: 'repair.attempted',
+        ...(taskId === undefined ? {} : { taskId }),
+        payload: {
+          originalLength: assistantText.length,
+          repairedLength: repaired.length,
+          status: repaired.startsWith('Quality repair failed:') ? 'failed' : 'succeeded',
+        },
       })
       if (!repaired.startsWith('Quality repair failed:') && repaired.trim().length > 0)
         assistantText = repaired.trim()
@@ -472,6 +516,15 @@ export class Orchestrator {
     db.update(conversations).set({ lastActiveAt: now }).where(eq(conversations.id, activeConversation.id)).run()
     touchSessionEntry(sessionKey, { at: now })
     const assistantMessageId = inserted[0]?.id
+    this.recordJournal({
+      conversationId: activeConversation.id,
+      kind: 'assistant.message',
+      ...(taskId === undefined ? {} : { taskId }),
+      payload: {
+        assistantTextLength: assistantText.length,
+        ...(assistantMessageId === undefined ? {} : { assistantMessageId }),
+      },
+    })
     this.markTaskSucceeded(taskId, activeConversation.id, {
       conversationId: activeConversation.id,
       assistantTextLength: assistantText.length,
@@ -525,6 +578,18 @@ export class Orchestrator {
             ...(taskId === undefined ? {} : { taskId }),
             call: { id: event.id, name: event.name, arguments: event.arguments },
           })
+          this.recordJournal({
+            conversationId,
+            kind: 'tool.use',
+            ...(taskId === undefined ? {} : { taskId }),
+            payload: {
+              action: event.action,
+              arguments: event.arguments,
+              id: event.id,
+              name: event.name,
+              ...(event.status === undefined ? {} : { status: event.status }),
+            },
+          })
           if (isTerminalToolStatus(event.status)) {
             deadLoop.recordToolProgress()
           }
@@ -552,6 +617,17 @@ export class Orchestrator {
               isError: event.isError === true,
             },
           })
+          this.recordJournal({
+            conversationId,
+            kind: 'tool.result',
+            ...(taskId === undefined ? {} : { taskId }),
+            payload: {
+              contentLength: event.content.length,
+              id: event.id,
+              isError: event.isError === true,
+              name: event.name,
+            },
+          })
         }
         else if (event.type === 'engine_binding') {
           if (event.engine === this.deps.config.executor.engine) {
@@ -559,8 +635,54 @@ export class Orchestrator {
             if (event.binding === null)
               staleBindingCleared = true
           }
+          this.recordJournal({
+            conversationId,
+            kind: 'executor.binding',
+            ...(taskId === undefined ? {} : { taskId }),
+            payload: {
+              bindingPresent: event.binding !== null,
+              engine: event.engine,
+            },
+          })
+        }
+        else if (event.type === 'permission_request') {
+          this.recordJournal({
+            conversationId,
+            kind: 'executor.permission_request',
+            ...(taskId === undefined ? {} : { taskId }),
+            payload: {
+              id: event.id,
+              reason: event.reason,
+              ...(event.toolUseId === undefined ? {} : { toolUseId: event.toolUseId }),
+            },
+          })
+        }
+        else if (event.type === 'token_usage') {
+          this.recordJournal({
+            conversationId,
+            kind: 'executor.token_usage',
+            ...(taskId === undefined ? {} : { taskId }),
+            payload: { usage: event.usage },
+          })
+        }
+        else if (event.type === 'finish') {
+          this.recordJournal({
+            conversationId,
+            kind: 'executor.finish',
+            ...(taskId === undefined ? {} : { taskId }),
+            payload: {
+              reason: event.reason,
+              ...(event.usage === undefined ? {} : { usage: event.usage }),
+            },
+          })
         }
         else if (event.type === 'error') {
+          this.recordJournal({
+            conversationId,
+            kind: 'executor.error',
+            ...(taskId === undefined ? {} : { taskId }),
+            payload: { error: event.error },
+          })
           return { ok: false, text: assistantText, error: event.error, staleBindingCleared }
         }
       }
@@ -616,6 +738,18 @@ export class Orchestrator {
       heuristic: true,
       ...(input.taskId === undefined ? {} : { taskId: input.taskId }),
       reason: claim.reason,
+    })
+    this.recordJournal({
+      conversationId: input.conversationId,
+      kind: 'admission.bypass_suspected',
+      ...(input.taskId === undefined ? {} : { taskId: input.taskId }),
+      payload: {
+        at,
+        claimExcerpt: claim.claimExcerpt,
+        engine: input.engine,
+        heuristic: true,
+        reason: claim.reason,
+      },
     })
   }
 
@@ -812,6 +946,16 @@ export class Orchestrator {
       chatId: envelope.chatId,
       ...(taskId === undefined ? {} : { taskId }),
     })
+    this.recordJournal({
+      conversationId: id,
+      kind: 'conversation.created',
+      ...(taskId === undefined ? {} : { taskId }),
+      payload: {
+        channel: envelope.channel,
+        chatId: envelope.chatId,
+        ...(envelope.threadId === undefined ? {} : { threadId: envelope.threadId }),
+      },
+    })
     return rowToState(rowRaw)
   }
 
@@ -832,6 +976,15 @@ export class Orchestrator {
       result: null,
       error: null,
     }).where(eq(agentTasks.id, taskId)).run()
+    this.recordJournal({
+      conversationId,
+      kind: 'task.running',
+      taskId,
+      payload: {
+        executorEngine: this.deps.config.executor.engine,
+        executorVariant: this.deps.config.executor.variant,
+      },
+    })
   }
 
   private markTaskSucceeded(taskId: string | undefined, conversationId: string, result: Record<string, unknown>): void {
@@ -844,6 +997,12 @@ export class Orchestrator {
       result,
       error: null,
     }).where(eq(agentTasks.id, taskId)).run()
+    this.recordJournal({
+      conversationId,
+      kind: 'task.succeeded',
+      taskId,
+      payload: result,
+    })
   }
 
   private markTaskFailed(taskId: string | undefined, conversationId: string | undefined, error: string, cancelled = false): void {
@@ -857,6 +1016,16 @@ export class Orchestrator {
       result: null,
       error: redactTaskError(error),
     }).where(eq(agentTasks.id, taskId)).run()
+    this.recordJournal({
+      ...(conversationId === undefined ? {} : { conversationId }),
+      kind: 'task.failed',
+      taskId,
+      payload: {
+        cancelled,
+        error: redactTaskError(error),
+        status,
+      },
+    })
   }
 
   private upsertSession(sessionKey: string, envelope: Envelope, conversationId: string): void {
@@ -893,6 +1062,16 @@ export class Orchestrator {
     }).returning({ id: messages.id }).all()
     db.update(conversations).set({ lastActiveAt: now }).where(eq(conversations.id, conversationId)).run()
     touchSessionEntry(sessionKey, { at: now })
+    this.recordJournal({
+      conversationId,
+      kind: 'user.message',
+      ...(taskIdFromEnvelope(envelope) === undefined ? {} : { taskId: taskIdFromEnvelope(envelope) }),
+      payload: {
+        channel: envelope.channel,
+        contentLength: envelope.text.length,
+        messageId: res[0]?.id ?? -1,
+      },
+    })
     return { id: res[0]?.id ?? -1 }
   }
 
@@ -1347,6 +1526,17 @@ export class Orchestrator {
       status: 'queued',
       createdAt: now,
     }).run()
+    this.recordJournal({
+      kind: 'task.queued',
+      taskId: id,
+      payload: {
+        channel: 'web',
+        executorEngine: this.deps.config.executor.engine,
+        executorVariant: this.deps.config.executor.variant,
+        promptLength: prompt.length,
+        source: 'worker-admin-task',
+      },
+    })
 
     const envelope: Envelope = {
       workerId: this.deps.workerId,
@@ -1389,6 +1579,18 @@ export class Orchestrator {
       status: 'queued',
       createdAt: now,
     }).run()
+    this.recordJournal({
+      conversationId: conversation.id,
+      kind: 'task.queued',
+      taskId: id,
+      payload: {
+        channel: entry.channel,
+        executorEngine: this.deps.config.executor.engine,
+        executorVariant: this.deps.config.executor.variant,
+        promptLength: prompt.length,
+        source: 'worker-admin-continuation',
+      },
+    })
 
     const raw = {
       taskId: id,

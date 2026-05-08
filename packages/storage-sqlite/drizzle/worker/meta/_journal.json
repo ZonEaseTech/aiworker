@@ -57,6 +57,13 @@
       "when": 1778037473321,
       "tag": "0007_solid_bromley",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1778268756475,
+      "tag": "0008_peaceful_titanium_man",
+      "breakpoints": true
     }
   ]
 }

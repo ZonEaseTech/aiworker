@@ -568,6 +568,31 @@ describe('GatewayDispatcher — brain bridge methods', () => {
   })
 })
 
+describe('GatewayDispatcher — orchestrator task journal', () => {
+  it('orchestrator.tasks.journal forwards task id to the injected handler', async () => {
+    const seen: unknown[] = []
+    const { dispatcher, approvals, responses } = makeDispatcher({
+      taskJournal: async (input) => {
+        seen.push(input)
+        return { journal: { task: { id: input.taskId } } }
+      },
+    })
+
+    await dispatcher.handleRequest({
+      type: 'request',
+      id: 'req-task-journal',
+      method: 'orchestrator.tasks.journal',
+      params: { workerId: 'w_test', taskId: 'task-1' },
+    })
+
+    expect(seen).toEqual([{ taskId: 'task-1' }])
+    expect(responses[0]?.ok).toBe(true)
+    if (responses[0]?.ok)
+      expect(responses[0].result).toEqual({ journal: { task: { id: 'task-1' } } })
+    approvals.dispose()
+  })
+})
+
 /**
  * BUG-003 — config.put dispatcher 桥接：保证 handler 注入后不再 method_not_implemented，
  * 且 putConfig 抛的两个边界错（InvalidConfig / VersionConflict）映射到对应 wire code，

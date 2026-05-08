@@ -100,6 +100,14 @@ describe('worker schema indexes (REFACTOR-005)', () => {
     expect(plan).toContain('decision_pipeline_samples_stage_created_at_idx')
   })
 
+  it('brain_journal_events indexes support task and conversation traces (PLAN-174)', () => {
+    const byTask = explain(`SELECT * FROM brain_journal_events WHERE task_id = 't1' ORDER BY created_at ASC LIMIT 200`)
+    expect(byTask).toContain('brain_journal_events_task_created_at_idx')
+
+    const byConversation = explain(`SELECT * FROM brain_journal_events WHERE conversation_id = 'c1' ORDER BY created_at ASC LIMIT 200`)
+    expect(byConversation).toContain('brain_journal_events_conversation_created_at_idx')
+  })
+
   it('brain_artifacts indexes服务 scope+type 与 status+type 列表查询 (PLAN-099)', () => {
     const byScopeType = explain(`SELECT * FROM brain_artifacts WHERE scope_id = 'backend-hire-q3' AND type = 'candidate-resume'`)
     expect(byScopeType).toContain('brain_artifacts_scope_type_idx')

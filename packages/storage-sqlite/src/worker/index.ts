@@ -57,6 +57,7 @@ export function runWorkerMigrations(migrationsFolder: string = defaultWorkerMigr
 export type WorkerDatabase = ReturnType<typeof createDb>
 export type SessionEntryRow = typeof schema.sessionEntries.$inferSelect
 export type AgentTaskRow = typeof schema.agentTasks.$inferSelect
+export type BrainJournalEventRow = typeof schema.brainJournalEvents.$inferSelect
 export type ConversationRow = typeof schema.conversations.$inferSelect
 export type MessageRow = typeof schema.messages.$inferSelect
 

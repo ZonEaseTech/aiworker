@@ -1,5 +1,9 @@
 # AIWorker Architecture
 
+> Product north star: [`GOALS.md`](../GOALS.md). This architecture document
+> defines implementation boundaries; `GOALS.md` defines the product thesis,
+> non-goals, and decision tests that future development must preserve.
+
 ## Monorepo Layout
 
 ```text

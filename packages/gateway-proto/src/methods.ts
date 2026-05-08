@@ -512,6 +512,17 @@ const orchestratorTasksCreateMethod = defineMethod({
   routing: 'operator-to-node',
 })
 
+const orchestratorTaskJournalMethod = defineMethod({
+  method: 'orchestrator.tasks.journal',
+  description: '查看目标 worker 上某个 task 的 Brain Journal trace。',
+  params: z.object({
+    workerId: z.string().min(1),
+    taskId: z.string().min(1),
+  }),
+  result: z.object({ journal: z.unknown() }),
+  routing: 'operator-to-node',
+})
+
 const orchestratorConversationsListMethod = defineMethod({
   method: 'orchestrator.conversations.list',
   description: '列出目标 worker 的最近 conversations。',
@@ -663,6 +674,7 @@ export const METHODS = {
   'channel.test': channelTestMethod,
   'orchestrator.tasks.list': orchestratorTasksListMethod,
   'orchestrator.tasks.create': orchestratorTasksCreateMethod,
+  'orchestrator.tasks.journal': orchestratorTaskJournalMethod,
   'orchestrator.conversations.list': orchestratorConversationsListMethod,
   'orchestrator.messages.list': orchestratorMessagesListMethod,
   'cron.list': cronListMethod,

@@ -2,6 +2,10 @@ import type { WorkerRuntime } from '@zonease/aiworker-core'
 import type { Envelope } from '@zonease/aiworker-shared'
 import type { WorkerContext } from '../../context'
 
+import { randomUUID } from 'node:crypto'
+
+import { recordBrainJournalEvent } from '@zonease/aiworker-core'
+import { agentTasks, getWorkerDb } from '@zonease/aiworker-storage-sqlite/worker'
 import consola from 'consola'
 
 import { buildRuntime, loadWorkerContext } from '../../context'
@@ -71,6 +75,8 @@ export async function runRun(options: RunOptions = {}, deps: RunDeps = {}): Prom
   }
 
   const chatId = options.chatId ?? 'cli:stdin'
+  const now = new Date().toISOString()
+  const taskId = createCliTask(message, ctx.hydrated.executor, now)
   const envelope: Envelope = {
     workerId: ctx.workerId,
     channel: 'web',
@@ -78,8 +84,11 @@ export async function runRun(options: RunOptions = {}, deps: RunDeps = {}): Prom
     accountId: 'sys:cli',
     chatId,
     text: message,
-    receivedAt: new Date().toISOString(),
-    raw: { source: 'aiworker-cli' },
+    receivedAt: now,
+    raw: {
+      source: 'aiworker-cli',
+      ...(taskId === undefined ? {} : { taskId }),
+    },
   }
 
   const terminalPromise = new Promise<number>((resolve) => {
@@ -117,4 +126,33 @@ export async function runRun(options: RunOptions = {}, deps: RunDeps = {}): Prom
   const code = await terminalPromise
   runtime.dispose()
   return code
+}
+
+function createCliTask(message: string, executor: RunContext['hydrated']['executor'], now: string): string | undefined {
+  try {
+    const id = randomUUID()
+    getWorkerDb().insert(agentTasks).values({
+      id,
+      prompt: message,
+      status: 'queued',
+      createdAt: now,
+    }).run()
+    recordBrainJournalEvent({
+      at: now,
+      kind: 'task.queued',
+      taskId: id,
+      payload: {
+        channel: 'web',
+        executorEngine: executor.engine,
+        executorVariant: executor.variant,
+        promptLength: message.length,
+        source: 'aiworker-cli',
+      },
+    })
+    consola.info(`[aiworker run] task ${id}`)
+    return id
+  }
+  catch {
+    return undefined
+  }
 }
