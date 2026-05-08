@@ -1,5 +1,27 @@
 # AIWorker Changelog
 
+## 2026-05-09 [completed] PLAN-180 / PLAN-181 — proof-loop dogfood and readiness closeout
+
+完成 FEAT-056 的 dogfood 与 readiness 收口：developer repo worker proof loop
+已达到 source MVP 投产门槛，但不宣称 1.0 GA 发布完成。
+
+- 新增 `QA-022`，记录 Brain Journal / Gate verdict、Brain Engine review、
+  repair/rerun/hold、Brain Inbox admission、authority preflight、Worker REST 与
+  CLI surfaces 的 source-backed dogfood 证据。
+- README / CLI docs 增加 developer repo proof-loop 使用入口：
+  `aiworker brain journal show <taskId>`、`aiworker brain inbox propose <taskId>`
+  与 worker REST rerun endpoint。
+- `docs/architecture.md` 固化 `execute → journal → gate → hold/rerun or pass →
+  inbox/admission` 边界，并明确 authority preflight 不是 sandbox / MCP firewall /
+  permission broker。
+- `docs/governance-node-status.md` 更新到 2026-05-09，新增 FEAT-056 conformance
+  rows 与 residual-risk：source MVP 不等于 published package / 1.0 GA release
+  evidence。
+- FEAT-056 与 PLAN-181 已按 source MVP ready 关闭；正式发布仍应另走 REL task、
+  package build / install verification / release harness。
+- 最终 source gate：`bun run check`、`bun run test`、`bun run build`、
+  `git diff --check` 均通过。
+
 ## 2026-05-09 04:12 [completed] PLAN-179 — Authority mode and high-risk preflight
 
 完成 authority mode / high-risk preflight：把“AIWorker 能治理 Brain，但不能隔离

@@ -1,10 +1,11 @@
 # FEAT-056 AIWorker 1.0 developer repo worker proof loop
 
-- **status**: in-progress
+- **status**: completed
 - **priority**: P1
 - **owner**: local
 - **createdAt**: 2026-05-09 03:12
 - **claimedAt**: 2026-05-09 03:43
+- **completedAt**: 2026-05-09
 - **plans**: PLAN-173, PLAN-174, PLAN-175, PLAN-176, PLAN-177, PLAN-178, PLAN-179, PLAN-180, PLAN-181
 - **relatesTo**: GOALS.md, DOC-007, FEAT-054, REFACTOR-019, REFACTOR-021, REFACTOR-022, REFACTOR-024, REFACTOR-025
 
@@ -102,3 +103,8 @@ executor 平台、通用 memory layer、通用 sandbox 或泛化 workflow builde
   pass、Brain Engine review、repair/rerun/hold、Brain Inbox admission 和 authority
   preflight 均已覆盖；结论支持 source MVP readiness closeout，但不单独支撑 1.0 GA
   发布。
+- 2026-05-09：PLAN-181 完成。README、CLI docs、architecture 与 governance status
+  均已同步 proof-loop runtime surface 和 no-false-security authority 边界；FEAT-056
+  关闭为 source MVP ready。正式 1.0 GA / published package release 仍需单独 REL
+  任务、发布包安装验证与 release harness 证据。最终 source gate 已通过：
+  `bun run check`、`bun run test`、`bun run build`、`git diff --check`。

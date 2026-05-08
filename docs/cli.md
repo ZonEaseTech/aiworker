@@ -195,6 +195,10 @@ aiworker brain admission apply prop-2026-05-04-001 --decided-by op-1 --commit   
 aiworker brain brief --task "review the new orchestrator service"
 aiworker brain brief --task "screen candidate c-001" --soul hr-recruiting --artifact candidate-c-001 --token-budget 6000
 
+# 3.4 查看 proof-loop Journal，并把 lesson candidate 转成 pending admission
+aiworker brain journal show <taskId>
+aiworker brain inbox propose <taskId>
+
 # 4. 静态验证 brain/runtime capability 草案
 aiworker doctor
 

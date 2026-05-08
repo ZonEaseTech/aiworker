@@ -1,7 +1,7 @@
 export {
-  BrainInboxService,
-  createBrainInboxService,
   type BrainInboxCandidate,
   type BrainInboxProposalResult,
+  BrainInboxService,
+  createBrainInboxService,
   type ProposeBrainInboxFromTaskOptions,
 } from './service'

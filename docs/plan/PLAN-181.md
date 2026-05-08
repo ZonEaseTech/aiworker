@@ -1,6 +1,6 @@
 # PLAN-181 AIWorker 1.0 proof-loop readiness
 
-- **status**: draft
+- **status**: completed
 - **createdAt**: 2026-05-09 03:12
 - **relatedTask**: FEAT-056
 
@@ -9,6 +9,18 @@
 The 1.0 proof-loop needs a final readiness slice after implementation and dogfood
 evidence. Without closeout, docs can overclaim or under-explain what AIWorker
 actually governs.
+
+Completed 2026-05-09:
+
+- README, CLI docs, architecture, and governance status now describe the
+  developer repo proof loop as `execute → journal → gate → hold/rerun or pass
+  → inbox/admission`.
+- `docs/governance-node-status.md` now separates source MVP conformance from
+  release evidence and keeps the no-false-security authority boundary explicit.
+- FEAT-056 is closed as source MVP ready. A published 1.0 GA release is
+  intentionally not claimed in this plan.
+- Final source gates passed: `bun run check`, `bun run test`, `bun run build`,
+  and `git diff --check`.
 
 ## Goal
 
@@ -47,8 +59,10 @@ behavior.
 
 ## Verification
 
-- `bun run check` if implementation changes landed in prior plans.
-- Focused harness / dogfood evidence from PLAN-180.
+- `docs/task/QA-022.md`
+- `bun run check`
+- `bun run test`
+- `bun run build`
 - `git diff --check`
 
 ## Dependencies

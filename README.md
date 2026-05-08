@@ -176,6 +176,42 @@ Full CLI reference: [`docs/cli.md`](docs/cli.md).
 
 ---
 
+## Developer repo proof loop
+
+For a repo-scoped developer worker, AIWorker adds a reviewable proof loop around
+the executor:
+
+1. The external executor still performs the work.
+2. Brain Journal records task intent, selected context, executor events, tool
+   signals, authority preflight, Gate verdict, and outcome.
+3. Brain Gate separates hard invariants from Brain Engine review and heuristic
+   quality signals.
+4. Failed or incomplete work can be held or rerun with parent/child lineage.
+5. Useful lessons become Brain Inbox candidates first; canonical memory writes
+   still go through admission approval and apply.
+
+Useful local commands:
+
+```sh
+aiworker run --message "review this change"
+aiworker brain journal show <taskId>
+aiworker brain inbox propose <taskId>
+```
+
+When running the worker HTTP API, operator-triggered reruns are available at:
+
+```sh
+curl -X POST \
+  -H "Authorization: Bearer $(cat .aiworker/local/bootstrap-token.txt)" \
+  http://127.0.0.1:9217/api/worker/orchestrator/tasks/<taskId>/rerun
+```
+
+Authority preflight is a truthfulness surface, not a sandbox claim. High-risk
+ambient executor work is marked as observe-only unless the capability is
+explicitly brokered by AIWorker.
+
+---
+
 ## Start a fleet (multiple workers + gateway)
 
 The gateway aggregates multiple workers into a fleet: one operator CLI controls all of them, while each worker keeps owning its own brain, conversations, and secrets.

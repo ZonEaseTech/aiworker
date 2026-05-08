@@ -1,4 +1,4 @@
-# Project Brain Governance Node — Status (2026-05-08)
+# Project Brain Governance Node — Status (2026-05-09)
 
 > Sanitized status snapshot. Companion artifact to `docs/architecture.md`'s
 > "Brain Governance Kernel 决策" section. Anchored to evidence in
@@ -28,6 +28,12 @@ inline.
 | Multi-conversation isolation across `chat-id` boundaries inside one worker | conforming in source | TODO-036 / PLAN-144 — source compact harness creates a distinct alternate `chat-id` per pair and asserts primary/alternate conversation ids are separate in `worker.db`; both compact pairs PASS. |
 | Executor tool-call observability | conforming for both engines | QA-009 / QA-010 / QA-011 — `orchestrator.tool_call` events emitted by Codex (28 typical) and Claude Code (7 typical); harness asserts non-zero on Codex and accepts emitted-or-not on Claude Code per executor contract. |
 | Risk-policy signal (high-risk verbs surface `risk=high`) | conforming | QA-009 / QA-010 / QA-011 — turn 4 high-risk prompt produces `orchestrator.intent_decision` with `risk=high` for both pairs. |
+| Developer repo proof loop source MVP | conforming in source | FEAT-056 / PLAN-174..180 / QA-022 — aiworker repo source dogfood now covers pass, Brain Engine review, repair/rerun/hold, Brain Inbox admission, and authority preflight. |
+| Brain Journal and Gate verdict trace | conforming in source | PLAN-174 / PLAN-175 / QA-022 — append-only `brain_journal_events` trace records task lifecycle, decisions, executor/tool signals, rerun lineage, and Gate verdict with source/mode/enforced distinctions. |
+| Brain Engine reviewer boundary | conforming with explicit limits | PLAN-176 / QA-022 — reviewer runs through a no-tools control executor path, writes `brain_engine.review` into Journal, extracts evidence gaps and lesson candidates, and does not write canonical Brain. |
+| Repair / rerun / hold orchestration | conforming in source | PLAN-177 / QA-022 — operator-triggered rerun creates child task lineage in Journal, quality-gate block writes `task.held`, and each parent task is capped at three child reruns. |
+| Brain Inbox lesson admission | conforming in source | PLAN-178 / QA-022 — `BrainInboxService.proposeFromTask()` converts Brain Engine lesson candidates into pending `memory-add` admission proposals; approve/reject/apply remains the existing admission state machine. |
+| Authority preflight truthfulness | conforming with explicit limits | PLAN-179 / QA-022 — high-risk ambient executor prompts are labeled before dispatch and surfaced in Journal/Gate/CLI, but `enforceable=false` is preserved for unmanaged user/host-level executor authority. |
 | Worker REST surface auth boundary | conforming | QA-009 / QA-010 / QA-011 — `/health=200`, authenticated `/api/worker/info=200`, unauthenticated and bad-bearer `/api/worker/info=401`, `/api/worker/brain/summary=200`, OpenAPI path count > 0, SSE connects, `/admin/=200`. |
 | Operator-trust surfaces (init secret handling, doctor PASS/WARN/INFO consistency) | conforming | PLAN-119 implementation; QA-006 / QA-007 evidence; PLAN-112 doctor noise closeout. |
 | Onboarding polish (CLI command groups, executor recommendation, MCP arg passthrough) | conforming | PLAN-120 implementation; TODO-026 contract; BUG-051 / BUG-073 fixes. |
@@ -48,6 +54,27 @@ read as a stronger statement than the evidence supports.
   default. Decision events are `evaluator=heuristic` and `mode=observe_only`
   unless the operator explicitly opts in. Truthfulness is enforced; behavior
   is not.
+- **Proof-loop source MVP is not a 1.0 GA release by itself**: QA-022 is
+  source-backed dogfood evidence for the developer repo proof loop. A published
+  package / 1.0 GA claim still requires a dedicated REL task, package build,
+  release dry-run, published-package install verification, and the chosen
+  release harness.
+- **Authority preflight is warning and provenance, not executor isolation**:
+  ambient native executor authority can still load user/host-level MCP,
+  plugins, skills, auth, and native sessions outside AIWorker. PLAN-179 exposes
+  this boundary with `enforceable=false`; it does not provide a sandbox,
+  permission broker, or cloud resource firewall.
+- **Brain Engine reviewer is bounded review, not a second executor**: the
+  reviewer runs with tools disabled and only contributes Journal evidence,
+  repair/rerun/hold suggestions, and lesson candidates. It must not mutate
+  canonical Brain or take over executor planning.
+- **Rerun remains operator-bounded**: PLAN-177 supports explicit rerun with
+  lineage and a cap. It is not an autonomous infinite self-improvement loop and
+  should not be presented as one.
+- **Inbox candidate quality depends on review quality**: Brain Inbox improves
+  admission provenance, but it does not guarantee that every candidate is useful
+  long-term memory. Operator review and admission apply remain the durability
+  boundary.
 - **Executor capability ownership**: tool loop, MCP server selection, engine
   plugins, sandbox, approval, native session, auth, model/provider routing
   remain owned by the external executor. AIWorker's `executor-capabilities.json`
@@ -133,6 +160,11 @@ read as a stronger statement than the evidence supports.
   published CLI run passed 400 PASS / 0 FAIL / 0 SKIPPED, including the two
   BUG-087 risk pairs (`hr-recruiting-codex`, `finance-ops-codex`) and serve
   restart continuity across every pair.
+- `docs/task/QA-022.md` — Developer repo worker proof-loop source dogfood:
+  focused source tests cover Brain Journal, Gate verdict, Brain Engine review,
+  repair/rerun/hold, Brain Inbox admission proposal generation, authority
+  preflight, Worker REST, and CLI surfaces. Supports source MVP readiness
+  closeout; does not by itself claim 1.0 GA release readiness.
 - `docs/task/BUG-087.md` / `docs/plan/PLAN-159.md` — executor selection
   timeout override; harness now aligns executor adapter hard timeout with its
   per-turn budget.
@@ -170,16 +202,17 @@ read as a stronger statement than the evidence supports.
 
 ## How to re-verify
 
-1. `bun run lint && bun run typecheck && bun run test` for the code-side
-   gate; nothing in this status document is product behavior, so the
-   commands above remain unchanged.
-2. `PATH="$HOME/.bun/bin:$PATH" bun scripts/governance-kernel-harness.ts \
+1. `bun run check && bun run test && bun run build` for the workspace
+   production gate.
+2. For the FEAT-056 proof loop specifically, rerun the focused source tests
+   listed in `docs/task/QA-022.md`.
+3. `PATH="$HOME/.bun/bin:$PATH" bun scripts/governance-kernel-harness.ts \
    --mode worker-source-local --matrix compact --debug-root <fresh path>`
    for the source-backed regression run.
-3. `PATH="$HOME/.bun/bin:$PATH" bun scripts/governance-kernel-harness.ts \
+4. `PATH="$HOME/.bun/bin:$PATH" bun scripts/governance-kernel-harness.ts \
    --mode cli-release-local --version <published version> --matrix compact \
    --debug-root <fresh path>` for the published-CLI black-box run.
-4. Inspect each pair's `governance-kernel-summary.json` for any non-`pass`
+5. Inspect each pair's `governance-kernel-summary.json` for any non-`pass`
    row; non-`pass` rows must either be classified as environment-limited
    (`skipped`, with explicit operator-side reason) or filed as a BUG / TODO
    under `docs/task/`.

@@ -1,7 +1,7 @@
 export {
   type AuthorityPreflightResult,
   type AuthorityPreflightSignal,
-  type OperatorAuthorityMode,
   detectAuthorityPreflight,
+  type OperatorAuthorityMode,
   operatorAuthorityMode,
 } from './service'

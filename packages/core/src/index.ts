@@ -51,6 +51,16 @@ export {
   type ReadBrainArtifactsOptions,
 } from './worker/brain/artifacts'
 
+// Authority preflight (PLAN-179)：truthful high-risk warning for ambient
+// executor authority. It does not claim sandbox or permission-broker control.
+export {
+  type AuthorityPreflightResult,
+  type AuthorityPreflightSignal,
+  detectAuthorityPreflight,
+  operatorAuthorityMode,
+  type OperatorAuthorityMode,
+} from './worker/brain/authority'
+
 // Brain brief compiler (PLAN-102)：把 canonical brain（AGENT/SOUL/USER/MEMORY
 // /ROLLUP、scope manifest、Soul module、artifact registry、admission service）
 // 投影成 task-specific brief。preview-only：orchestrator 不默认替换粗粒度
@@ -63,6 +73,16 @@ export {
 
 // Brain diagnostics：CLI / 管理 API 共用的只读 source 摘要。
 export { type BrainSourceDiagnostic, describeBrainSource } from './worker/brain/diagnostics'
+
+// Brain Inbox (PLAN-178)：turn Brain Engine lesson candidates into pending
+// Brain admission proposals without writing canonical memory automatically.
+export {
+  type BrainInboxCandidate,
+  type BrainInboxProposalResult,
+  BrainInboxService,
+  createBrainInboxService,
+  type ProposeBrainInboxFromTaskOptions,
+} from './worker/brain/inbox'
 
 // Brain Journal trace (PLAN-174)：worker-local append-only proof-loop trace.
 // It records task / decision / gate / executor observations without admitting
@@ -98,26 +118,6 @@ export {
   DEFAULT_BRAIN_ENGINE_REVIEW_BUDGET_MS,
   reviewTaskWithBrainEngine,
 } from './worker/brain/reviewer'
-
-// Brain Inbox (PLAN-178)：turn Brain Engine lesson candidates into pending
-// Brain admission proposals without writing canonical memory automatically.
-export {
-  BrainInboxService,
-  type BrainInboxCandidate,
-  type BrainInboxProposalResult,
-  createBrainInboxService,
-  type ProposeBrainInboxFromTaskOptions,
-} from './worker/brain/inbox'
-
-// Authority preflight (PLAN-179)：truthful high-risk warning for ambient
-// executor authority. It does not claim sandbox or permission-broker control.
-export {
-  type AuthorityPreflightResult,
-  type AuthorityPreflightSignal,
-  detectAuthorityPreflight,
-  operatorAuthorityMode,
-  type OperatorAuthorityMode,
-} from './worker/brain/authority'
 
 // Brain summary 聚合（PLAN-103）：从 worker.db 读 admission / artifact 计数 +
 // scope manifest 状态，喂给 buildInfo 与 fleet UI；不复制 payload / artifact

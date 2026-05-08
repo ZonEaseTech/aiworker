@@ -185,7 +185,36 @@ sequenceDiagram
 runtime 能力”的假设：AIWorker 的 brain skill 是 Project Brain 资产与 prompt/context
 素材；executor-native skill/plugin/MCP 仍属于 executor。
 
-### Implementation conformance audit (2026-05-07)
+### Developer repo proof loop
+
+FEAT-056 把 developer repo worker 的最小闭环固定为 **execute → journal →
+gate → hold/rerun or pass → inbox/admission**。这不是新的 executor loop；它是包在
+外部 executor 外侧的 governance proof loop。
+
+- **Authority preflight** 在 executor dispatch 前识别 production、database、
+  destructive、payment、PII、secret、cross-scope 等高风险信号，并写入
+  `authority.preflight` Journal event。ambient native executor authority 默认只做
+  warning / observe-only，不宣称 sandbox、MCP firewall 或 permission broker。
+- **Brain Journal** 是 append-only task trace，记录 task lifecycle、conversation
+  refs、intent/capability decisions、quality gate、Brain Engine review、executor
+  finish/error、tool signals、rerun lineage 与 admission-bypass risk。它属于 worker
+  data plane，不复制到 fleet.db。
+- **Gate verdict** 汇总 hard invariant、Brain Engine review、heuristic quality gate
+  与 executor claim，并显式标注 source / mode / enforced。Gate 可以建议 rerun 或
+  hold，但不会把 observe-only warning 包装成强制拦截。
+- **Brain Engine reviewer** 通过 control executor 运行，tools disabled，负责结果评审、
+  evidence gap、unsupported claim、repair/rerun/hold 建议和 lesson candidates。它不
+  直接写 canonical Brain。
+- **Repair / rerun / hold** 只提供 bounded operator-triggered rerun；parent/child
+  lineage 写入 Journal，单 parent 最多 3 个 child rerun，避免隐式无限循环。
+- **Brain Inbox** 只把 lesson candidates 转成 pending `memory-add` admission
+  proposals。operator 仍需 approve / reject / apply；拒绝或未应用的 candidate 不会进入
+  `MEMORY.md` 或 `memories/`。
+
+截至 PLAN-180 / QA-022，这个闭环已有 source-backed dogfood 证据；它支持 source MVP
+readiness closeout，但不等同于 published package 或 1.0 GA release 证据。
+
+### Implementation conformance audit (2026-05-09)
 
 本表是对当前源码的反查结论。新增开发如果改变其中任一行，必须同步本节与
 `docs/governance-node-status.md`，避免架构文档继续描述旧现实。
@@ -202,7 +231,12 @@ runtime 能力”的假设：AIWorker 的 brain skill 是 Project Brain 资产�
 | Capability decision 是可执行能力选择。 | `CapabilityRegistry.snapshot()` 产出 `load_skill` / `memory_search` / Brain MCP descriptor / skill summaries；service 对 `load_skill` / `memory_search` 调用对应 context loader，并在 event 中报告 loaded ids/count/errors。`brain-capabilities.json` 中的 MCP descriptor 仍未执行为 executor tools。 | partial: brain context loaders enforced, mcp descriptor observe-only |
 | Executor 是 thin adapter，不是 AIWorker 内建 agent runtime。 | `packages/shared/src/providers/executor.ts` 的 contract 和 `packages/core/src/worker/executor/factory.ts` 的 switch 只构造 adapter；`Orchestrator.buildAgentRunInput()` 只传 messages/model/workspace/signal/binding。 | conforming |
 | Quality gate 是治理层，不是默认 hard rewrite。 | `quality-gate.ts` 用 `resolveQualityGateMode()` 如实标 observe/enforced；`service.ts` 只有在 config mode 为 `retry` / `block` / `warn` 时才修改输出。 | conforming |
+| Brain Journal / Gate verdict 是 proof-loop trace。 | `BrainJournalService.getTaskTrace()` 从 worker-owned append-only Journal 汇总 task lifecycle、decision events、executor/tool signals、authority preflight、Brain Engine review、rerun lineage 与 Gate verdict；Worker REST/gateway/CLI 只读暴露 trace。 | conforming in source |
+| Brain Engine reviewer 是 no-tools 评审，不是 executor。 | `reviewTaskWithBrainEngine()` 通过 control executor 运行，schema-validated 输出 review/evidence gaps/lesson candidates；orchestrator 只把结果写入 `brain_engine.review` Journal event。 | conforming with explicit limits |
+| Rerun 是 bounded operator action。 | `Orchestrator.rerunTask()` 创建 child task、写 parent/child Journal lineage，并限制每个 parent 最多 3 次 rerun；quality-gate block 记录 `task.held`。 | conforming in source |
+| Authority preflight 不承诺 ambient executor isolation。 | `detectAuthorityPreflight()` 在 dispatch 前标注 high-risk ambient authority；Journal/Gate/CLI 暴露 `enforceable=false`，不声称 sandbox / permission broker / MCP firewall。 | conforming with explicit limits |
 | Durable Brain mutation 走 admission。 | `BrainAdmissionService` 持有 proposal/decision 状态机，CLI/API/gateway handlers 都转进该 service；pre-compaction memory flush 只 `propose(memory-add)`。 | conforming for memory-add and brain-skill-add |
+| Brain Inbox lesson candidate 仍走 admission。 | `BrainInboxService.proposeFromTask()` 从 task Journal 的 Brain Engine review 提取 lesson candidates 并生成 pending `memory-add` proposals；approve/reject/apply 复用 admission state machine。 | conforming in source |
 | Brain 自我迭代已经能自动落 skill/policy。 | `MATERIALIZED_PROPOSAL_KINDS = ['memory-add', 'brain-skill-add']`；project-scope `brain-skill-add` commit 写 `.agents/skills/aiworker-<slug>/SKILL.md` 与 `.claude/skills/aiworker-<slug>/SKILL.md`，并更新 `.aiworker/native-skill-projections.json`；fallback scope 写 `<brainHome>/skills/<id>/SKILL.md`，校验 frontmatter/id/no-overwrite/secret scan；`policy-update` 仍 unsupported。 | partial: skill yes, policy no |
 | Gateway/fleet 不复制 worker Brain。 | architecture 与 `WorkerInfo` summary surface 只暴露计数/summary；admission/artifact 全文通过 worker data plane REST/WS bridge 读取。 | conforming by design; keep testing through harness |
 
@@ -263,12 +297,13 @@ compiler 与 Worker/Fleet Brain surface，并作为后续 Brain 开发的默认�
    `heuristic`、`llm`、`observe_only` 还是 `enforced`？如果实际只是 observe-only，就
    必须把 observe-only 作为产品现实写出来。
 
-当前 0.9.x 现实仍需要诚实标注：intent classifier 与 quality gate 默认仍是
-heuristic / observe-only；capability decision 只有在 `skill_load` 选中且 skill body
-实际加载成功时才标 `mode=enforced`，并暴露 `loadedSkillIds` / `skillLoadErrors`。
-后续可以新增 LLM-backed decider 或 memory retrieval loader，但必须显式 opt-in、
-清楚标 source/mode，并继续保留 heuristic fallback。不能把“Project Brain 注入 LLM
-prompt”误写成“Brain decision LLM 已经接管”。
+当前 proof-loop 现实仍需要诚实标注：intent classifier 与默认 quality gate 仍以
+heuristic / observe-only 为主；Brain Engine reviewer 只在 LLM quality gate 路径启用，
+且作为 no-tools control-executor review 写入 Journal。capability decision 只有在
+`skill_load` 选中且 skill body 实际加载成功时才标 `mode=enforced`，并暴露
+`loadedSkillIds` / `skillLoadErrors`。后续可以新增更强的 LLM-backed decider 或 memory
+retrieval loader，但必须显式 opt-in、清楚标 source/mode，并继续保留 heuristic
+fallback。不能把“Project Brain 注入 LLM prompt”误写成“Brain decision LLM 已经接管”。
 
 同理，Brain admission 的目标是把 durable mutation 收口到 operator approval，而不是让
 LLM 自行决定长期记忆是否已经成功落盘。外部 executor 的 native memory（例如 user/host
