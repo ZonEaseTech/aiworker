@@ -1,5 +1,21 @@
 # AIWorker Changelog
 
+## 2026-05-08 22:13 [progress] REL-028 / PLAN-171 — 发布 aiworker CLI 0.10.4
+
+准备发布 `@zonease/aiworker-cli@0.10.4`，承载 0.10.3 之后的 native executor
+skill placement 与 managed native skill projection lifecycle：
+
+- 默认 Project Brain skills 投影到 executor 原生 project skill 目录，不再把
+  `.aiworker/skills/` 当主路径。
+- AIWorker-managed native skill 使用 `aiworker-*` slug，并通过
+  `.aiworker/native-skill-projections.json` 记录 source hash/version、target、
+  last applied hash、status 与 tombstone。
+- 新增 `aiworker brain skills sync-native`，支持 dry-run/apply reconciliation，
+  并通过 doctor / brain status / brain skills 报告 drift/deprecate/orphan 等状态。
+- 本地 release gate 已通过：frozen install、typecheck、lint、test、build、
+  CLI run/fleet smoke、dist version、`git diff --check` 和 publish dry-run pack
+  stage。
+
 ## 2026-05-08 18:27 [completed] REFACTOR-025 / PLAN-170 — Native executor skill projection lifecycle
 
 把 native executor skill placement 从“一次性 copy”升级为可诊断、可同步、

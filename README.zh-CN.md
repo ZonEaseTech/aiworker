@@ -321,7 +321,7 @@ bun run typecheck && bun run lint && bun run test
 
 > 投产前请阅 [`docs/governance-node-status.md`](docs/governance-node-status.md) 的 readiness 表和剩余边界。1.0.0 以前 CLI / API / config 形态仍可能变化。
 
-CLI npm latest：**0.10.3**。
+CLI npm latest：**0.10.4**。
 
 | 模块 | 状态 |
 |---|---|

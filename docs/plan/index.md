@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-08 (PLAN-169 completed)
+> Updated: 2026-05-08 (PLAN-171 implementing)
 
 ## Usage
 
@@ -199,3 +199,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-168 发布 aiworker CLI 0.10.3**](PLAN-168.md) `2026-05-08`
 - [x] [**PLAN-169 Native executor skill placement for Project Brain skills**](PLAN-169.md) `2026-05-08`
 - [x] [**PLAN-170 Native executor skill projection lifecycle**](PLAN-170.md) `2026-05-08`
+- [-] [**PLAN-171 发布 aiworker CLI 0.10.4**](PLAN-171.md) `2026-05-08`
