@@ -562,6 +562,45 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
     expect(capability.skillLoadErrors).toEqual([])
   })
 
+  it('does not inject fallback brain skills for native project-skill engines', async () => {
+    const bus = recordingBus()
+    const executor = capturingExecutor(['native-skill response'])
+    const orch = new Orchestrator({
+      config: buildConfig({ executor: { engine: 'codex', variant: 'default' } }),
+      brain: skillsBrain([
+        {
+          id: 'developer.codebase-orientation',
+          name: 'Codebase Orientation',
+          description: 'Build repo context before editing.',
+          version: '0.1.0',
+        },
+      ], {
+        'developer.codebase-orientation': '# Codebase Orientation\n',
+      }),
+      executor,
+      bus,
+      workerId: 'w_history_test',
+      workspaces,
+      processes,
+      approvals: new ApprovalStore(),
+    })
+
+    await orch.ingest(envelope('fix the failing code test'))
+
+    expect(executor.captured).toHaveLength(1)
+    const systemPrompt = executor.captured[0]![0]!.content
+    expect(systemPrompt).not.toContain('Available brain skills:')
+    expect(systemPrompt).not.toContain('Loaded brain skill bodies:')
+    expect(systemPrompt).not.toContain('# Codebase Orientation')
+
+    const capability = bus.events.find(event => event.type === 'orchestrator.capability_decision')!.payload
+    expect(capability.mode).toBe('observe_only')
+    expect(capability.availableSkillCount).toBe(0)
+    expect(capability.selectedBuiltins).not.toContain('load_skill')
+    expect(capability.loadedSkillCount).toBe(0)
+    expect(capability.loadedSkillIds).toEqual([])
+  })
+
   it('loads searched brain memories into memory-search turn context', async () => {
     const bus = recordingBus()
     const executor = capturingExecutor(['memory-loaded response'])

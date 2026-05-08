@@ -85,7 +85,7 @@ Worker-local `.env`：`aiworker init` / `aiworker up` 会创建当前 scope 的�
 
 1. resolve scope：识别当前是 project / explicit scope，或 brand-new cwd。
 2. init if needed：brand-new cwd 走 project-scope 初始化；非交互必须传 `--soul <preset>`。已初始化 project / explicit scope 只补齐缺失的本地 state，不刷新 Soul 模板。
-3. worker validation：静态验证 Project Brain 与 Brain capability 草案（`.aiworker/policy.json`、`brain-capabilities.json`、`skills/`）；error 阻断启动，warning/info 只展示。
+3. worker validation：静态验证 Project Brain 与 Brain capability 草案（`.aiworker/policy.json`、`brain-capabilities.json`、executor-native project skills）；error 阻断启动，warning/info 只展示。
 4. executor readiness：检查已选择的外部 executor 是否基本可调用，并读取可选 `.aiworker/executor-capabilities.json` project overlay；本阶段不自动写 engine config，也不会因缺某个 engine CLI 阻断 worker 启动。外部 executor 可能加载 user/host 级 MCP、skills、plugins、auth 和 native sessions，AIWorker 不默认隔离这些 ambient capabilities。
 5. serve：复用 `aiworker serve` 的 foreground 生命周期。
 
@@ -115,10 +115,10 @@ PLAN-023 起 `aiworker init` 默认走 **project scope**：
 
 | 模式 | 触发条件 | 落位 |
 |------|----------|------|
-| **project**（默认） | 当前 cwd（未显式 `AIWORKER_HOME`） | `<cwd>/.aiworker/{SOUL.md,USER.md,MEMORY.md,ROLLUP.md,policy.json,brain-capabilities.json,executor-capabilities.json,skills/,memories/}` + `<cwd>/.aiworker/local/{worker.db,identity.json,.env,workspaces/}` |
+| **project**（默认） | 当前 cwd（未显式 `AIWORKER_HOME`） | `<cwd>/.aiworker/{SOUL.md,USER.md,MEMORY.md,ROLLUP.md,policy.json,brain-capabilities.json,executor-capabilities.json,native-skill-projections.json,memories/}` + `<cwd>/.agents/skills/aiworker-*/SKILL.md` + `<cwd>/.claude/skills/aiworker-*/SKILL.md` + `<cwd>/.aiworker/local/{worker.db,identity.json,.env,workspaces/}` |
 | **user**（legacy） | `--global` flag，或显式 `AIWORKER_HOME=...` | `~/.aiworker/{worker.db,.env,workers/<workerId>/{AGENT.md,SOUL.md,USER.md,brain/skills,brain/memories,workspaces/}}` |
 
-`local/` 目录强制 `.gitignore = "*\n!.gitignore\n"`（worker.db / .env / workspaces 等敏感产物绝不入 git）；`.aiworker/.gitignore = "local/\n"`（其余 Soul / policy / brain-capabilities / brain skills / memories 默认入 git，团队共享 Project Brain）。每个 project worker 独立 mint master key，并把 worker 入网启动项保存到 `.aiworker/local/.env`（chmod 0600），与 user 级 `~/.aiworker/.env` 物理隔离——这是 AIWorker brain/worker 数据安全边界，不代表外部 executor 的 user/host 配置被隔离。
+`local/` 目录强制 `.gitignore = "*\n!.gitignore\n"`（worker.db / .env / workspaces 等敏感产物绝不入 git）；`.aiworker/.gitignore = "local/\n"`（Soul / policy / brain-capabilities / memories / native skill projection manifest 默认入 git，团队共享 Project Brain）。默认 Soul skills 会以 `aiworker-*` managed namespace 写入 executor 原生 project skill 目录：Codex 使用 `.agents/skills/`，Claude Code 使用 `.claude/skills/`，让 engine 在启动时按自己的机制加载；`.aiworker/native-skill-projections.json` 记录 source hash/version、target、last applied hash 与 tombstone；`.aiworker/skills/` 只保留给不支持 native project skill 的 fallback。每个 project worker 独立 mint master key，并把 worker 入网启动项保存到 `.aiworker/local/.env`（chmod 0600），与 user 级 `~/.aiworker/.env` 物理隔离——这是 AIWorker brain/worker 数据安全边界，不代表外部 executor 的 user/host 配置被隔离。
 
 首次 init 的 bootstrap token 默认不再以完整值打印到 stdout。CLI 会把完整值写入 chmod 0600 token file（project 默认 `.aiworker/local/bootstrap-token.txt`，user/explicit scope 默认对应 home 下 `bootstrap-token.txt`），stdout 只显示 masked token 与文件路径。需要迁移旧脚本时，把原先 grep stdout 的逻辑改为读取 token file：
 
@@ -168,6 +168,7 @@ aiworker soul show developer
 # 3. 看 runtime 实际挂载的 brain source、skills 和 memories
 aiworker brain status
 aiworker brain skills
+aiworker brain skills sync-native --dry-run
 aiworker brain memories --limit 20
 
 # 3.1 看 brain artifact 注册表（PLAN-099；confidential / secret 默认 redact）
@@ -273,7 +274,9 @@ aiworker scope
 
 - `.aiworker/policy.json`
 - `.aiworker/brain-capabilities.json`
-- `.aiworker/skills/**/SKILL.md` 或 YAML skill metadata
+- `.aiworker/native-skill-projections.json`
+- executor-native project skills：`.agents/skills/aiworker-*/SKILL.md` 与 `.claude/skills/aiworker-*/SKILL.md`
+- fallback prompt skills：`.aiworker/skills/**/SKILL.md`（存在时提示 warning）
 - worker-local gateway enrollment startup env（只读 INFO/PASS；不把 standalone 当 warning）
 
 ```sh
@@ -289,7 +292,7 @@ aiworker doctor
 #         aiworker env display-name my-laptop
 #   PASS    policy.json
 #   PASS    brain-capabilities.json
-#   PASS    skills/
+#   PASS    native executor project skills
 ```
 
 ### `aiworker executor mcp add`
@@ -418,7 +421,7 @@ aiworker init --soul customize
 ### `aiworker brain status` / `aiworker brain skills` / `aiworker brain memories`
 
 只读检查 runtime brain，不启动 HTTP server 或 worker admin，也不会写入
-`skills/`、`memories/` 或 capability manifest。显式 canonical 写法为
+executor-native skills、fallback skills、`memories/` 或 capability manifest。显式 canonical 写法为
 `aiworker worker brain ...`。
 
 Project Brain 当前由五类资产组成：
@@ -427,7 +430,8 @@ Project Brain 当前由五类资产组成：
 |------|------|---------|
 | Identity | `SOUL.md` / `USER.md` | `aiworker init`，之后视为 git-tracked Project Brain doc |
 | Memory | `MEMORY.md` / `memories/*.md` | filesystem 直接编辑；generated runtime memory 先进入 admission proposal |
-| Brain skills | `.aiworker/skills/<name>/SKILL.md` | filesystem 直接编辑；CLI 不提供 mutating skill 命令 |
+| Executor-native brain skills | `.agents/skills/aiworker-<slug>/SKILL.md` / `.claude/skills/aiworker-<slug>/SKILL.md` + `.aiworker/native-skill-projections.json` | `aiworker init` 从 Soul Pack 生成 managed projection；Codex / Claude Code 由 engine 原生加载；generated skill 变更走 admission apply；`aiworker brain skills sync-native` 负责 dry-run/apply reconcile |
+| Fallback Brain prompt skills | `.aiworker/skills/<name>/SKILL.md` | 仅用于没有 native project skill 机制的 executor；runtime 可按需注入 prompt context |
 | Policy & drafts | `policy.json` / `brain-capabilities.json` | filesystem 直接编辑；`aiworker doctor` 做静态 validation |
 | Admission state | worker.db `brain_admission_proposals` / `brain_admission_decisions` | brain runtime 提议 + operator approval/apply |
 
@@ -454,7 +458,10 @@ aiworker brain status
 # }
 
 aiworker brain skills
-# { "workerId": "w_...", "count": 0, "skills": [] }
+# { "workerId": "w_...", "nativeSkillProjection": { "summary": { "active": 6 } }, "skills": [] }
+
+aiworker brain skills sync-native --dry-run
+# { "mode": "dry-run", "summary": { "active": 6, "missing": 0, "drifted": 0 } }
 
 aiworker brain memories --query "deployment" --limit 20
 # { "workerId": "w_...", "query": "deployment", "count": 0, "memories": [] }

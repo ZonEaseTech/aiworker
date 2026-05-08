@@ -8,11 +8,16 @@ import path from 'node:path'
 import process from 'node:process'
 
 import { BrainAdmissionService, BrainArtifactRegistry, BrainBriefCompiler, describeBrainSource, getDecisionPipelineSnapshot } from '@zonease/aiworker-core'
-import { projectScopeManifestPath, resolveAiworkerScope, resolveBrainHome } from '@zonease/aiworker-fs-layout'
+import { NATIVE_PROJECT_SKILL_TARGETS, projectScopeManifestPath, resolveAiworkerScope, resolveBrainHome } from '@zonease/aiworker-fs-layout'
 import { createBuiltinSoulRegistry, parseScopeManifestJson } from '@zonease/aiworker-shared'
 import consola from 'consola'
 
 import { buildRuntime, loadWorkerContext } from '../../context'
+import {
+  applyNativeSkillProjectionSync,
+  planNativeSkillProjectionSync,
+  publicNativeSkillProjectionPlan,
+} from './native-skill-projections'
 
 const SOUL_REGISTRY = createBuiltinSoulRegistry()
 
@@ -100,6 +105,8 @@ export async function runBrainStatus(): Promise<number> {
       const health = await runtime.brain.health()
       const skills = await runtime.brain.listSkills().catch(() => [])
       const memories = await runtime.brain.listMemories({ limit: 200 }).catch(() => [])
+      const nativeExecutorSkills = await inspectNativeProjectSkillTargets()
+      const nativeSkillProjection = await inspectNativeSkillProjectionLifecycle()
       const memoryCount = memories.length
       const identity = inspectBrainIdentity()
       const decisionPipeline = ctx.hydrated.orchestrator?.decisionPipeline
@@ -127,10 +134,13 @@ export async function runBrainStatus(): Promise<number> {
         decisionPipeline: getDecisionPipelineSnapshot(decisionPipelineConfig),
         assets: {
           identity,
+          fallbackBrainSkillCount: skills.length,
           skillCount: skills.length,
           memoryCount,
-          hint: skills.length === 0 && memoryCount === 0
-            ? 'No brain skills or memories yet. Add `.aiworker/skills/<id>/SKILL.md` or `.aiworker/memories/<topic>.md` directly; brain runtime does not write them automatically.'
+          nativeExecutorSkills,
+          nativeSkillProjection,
+          hint: skills.length === 0 && memoryCount === 0 && nativeExecutorSkills.every(target => target.count === 0)
+            ? 'No native executor skills, fallback brain skills, or memories yet. Project init normally writes Codex/Claude Code skills to native project skill directories; Brain memories live under `.aiworker/memories/`.'
             : undefined,
         },
       }, null, 2))
@@ -211,9 +221,14 @@ export async function runBrainSkills(): Promise<number> {
   try {
     return await withBrainRuntime(async (ctx, runtime) => {
       const skills = await runtime.brain.listSkills()
+      const nativeExecutorSkills = await inspectNativeProjectSkillTargets()
+      const nativeSkillProjection = await inspectNativeSkillProjectionLifecycle()
       console.log(JSON.stringify({
         workerId: ctx.workerId,
+        fallbackBrainSkillCount: skills.length,
         count: skills.length,
+        nativeExecutorSkills,
+        nativeSkillProjection,
         skills: skills.map(skillSummary),
       }, null, 2))
       return 0
@@ -221,6 +236,33 @@ export async function runBrainSkills(): Promise<number> {
   }
   catch (err) {
     consola.error(`[aiworker brain skills] failed: ${err instanceof Error ? err.message : String(err)}`)
+    return 1
+  }
+}
+
+export interface BrainSkillsSyncNativeOptions {
+  apply?: boolean
+  dryRun?: boolean
+}
+
+export async function runBrainSkillsSyncNative(options: BrainSkillsSyncNativeOptions = {}): Promise<number> {
+  const scope = resolveAiworkerScope()
+  if (scope.scope !== 'project' || !scope.projectRoot) {
+    consola.error('[aiworker brain skills sync-native] native skill projection is only available in project scope')
+    return 2
+  }
+
+  try {
+    const shouldApply = options.apply === true
+    const plan = shouldApply
+      ? await applyNativeSkillProjectionSync(scope.projectRoot)
+      : await planNativeSkillProjectionSync({ mode: 'dry-run', projectRoot: scope.projectRoot })
+
+    console.log(JSON.stringify(publicNativeSkillProjectionPlan(plan), null, 2))
+    return 0
+  }
+  catch (err) {
+    consola.error(`[aiworker brain skills sync-native] failed: ${err instanceof Error ? err.message : String(err)}`)
     return 1
   }
 }
@@ -249,6 +291,58 @@ export async function runBrainMemories(options: BrainMemoriesOptions = {}): Prom
 }
 
 class InvalidBrainLimitError extends Error {}
+
+interface NativeProjectSkillTargetSummary {
+  count: number
+  directory: string
+  engine: string
+  exists: boolean
+  path: string
+}
+
+async function inspectNativeSkillProjectionLifecycle(): Promise<Record<string, unknown> | null> {
+  const scope = resolveAiworkerScope()
+  if (scope.scope !== 'project' || !scope.projectRoot)
+    return null
+  const plan = await planNativeSkillProjectionSync({ mode: 'dry-run', projectRoot: scope.projectRoot })
+  return {
+    desiredCount: plan.desiredCount,
+    manifestExists: plan.manifestExists,
+    manifestPath: plan.manifestPath,
+    summary: plan.summary,
+    attention: plan.operations
+      .filter(operation => operation.status !== 'active')
+      .map(({ writeContent: _writeContent, ...operation }) => operation),
+  }
+}
+
+async function inspectNativeProjectSkillTargets(): Promise<NativeProjectSkillTargetSummary[]> {
+  const scope = resolveAiworkerScope()
+  if (scope.scope !== 'project' || !scope.projectRoot)
+    return []
+
+  const summaries: NativeProjectSkillTargetSummary[] = []
+  for (const target of NATIVE_PROJECT_SKILL_TARGETS) {
+    const dir = path.join(scope.projectRoot, ...target.directory.split('/'))
+    const exists = existsSync(dir)
+    summaries.push({
+      count: exists ? await countSkillEntrypoints(dir) : 0,
+      directory: target.directory,
+      engine: target.engine,
+      exists,
+      path: dir,
+    })
+  }
+  return summaries
+}
+
+async function countSkillEntrypoints(dir: string): Promise<number> {
+  const glob = new Bun.Glob('**/SKILL.md')
+  let count = 0
+  for await (const _relative of glob.scan({ cwd: dir }))
+    count += 1
+  return count
+}
 
 export interface BrainArtifactsListOptions {
   scopeId?: string

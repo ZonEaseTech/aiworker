@@ -152,7 +152,7 @@ const BRAIN_SKILL_ID_RE = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/
 export const brainAdmissionSkillAddPayloadSchema = z.object({
   /** Full SKILL.md source, including valid YAML frontmatter. */
   body: z.string().min(1).max(20_000),
-  /** Project Brain skill id; materializes to `<brainHome>/skills/<skillId>/SKILL.md`. */
+  /** Project Brain skill id; project scope materializes to executor-native skill dirs, fallback scope to `<brainHome>/skills/<skillId>/SKILL.md`. */
   skillId: z.string().min(1).regex(BRAIN_SKILL_ID_RE),
   /** Defaults false to protect operator-edited skill files. */
   overwrite: z.boolean().optional(),

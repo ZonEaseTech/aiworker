@@ -52,6 +52,7 @@ import {
   runBrainBrief,
   runBrainMemories,
   runBrainSkills,
+  runBrainSkillsSyncNative,
   runBrainStatus,
 } from './commands/worker/brain'
 import {
@@ -281,9 +282,20 @@ cli.command('brain status', '只读诊断本地 worker runtime brain source、�
   process.exit(await runBrainStatus())
 })
 
-cli.command('brain skills', '只读列出本地 runtime brain 暴露的 brain skill').action(async () => {
+cli.command('brain skills', '只读列出 fallback brain skill 与 native executor skill 目标').action(async () => {
   process.exit(await runBrainSkills())
 })
+
+cli
+  .command('brain skills sync-native', '同步 AIWorker 管理的 native executor skill projection（默认 dry-run）')
+  .option('--apply', '应用 create/update/deprecate，并写入 projection manifest')
+  .option('--dry-run', '只打印同步计划，不写文件')
+  .action(async (opts: { apply?: boolean, dryRun?: boolean }) => {
+    process.exit(await runBrainSkillsSyncNative({
+      ...(opts.apply === true ? { apply: true } : {}),
+      ...(opts.dryRun === true ? { dryRun: true } : {}),
+    }))
+  })
 
 cli
   .command('brain memories', '只读列出或搜索本地 runtime brain memory')
@@ -816,9 +828,20 @@ cli.command('worker brain status', '只读诊断本地 worker runtime brain sour
   process.exit(await runBrainStatus())
 })
 
-cli.command('worker brain skills', '只读列出本地 runtime brain 暴露的 brain skill').action(async () => {
+cli.command('worker brain skills', '只读列出 fallback brain skill 与 native executor skill 目标').action(async () => {
   process.exit(await runBrainSkills())
 })
+
+cli
+  .command('worker brain skills sync-native', '同步 AIWorker 管理的 native executor skill projection（默认 dry-run）')
+  .option('--apply', '应用 create/update/deprecate，并写入 projection manifest')
+  .option('--dry-run', '只打印同步计划，不写文件')
+  .action(async (opts: { apply?: boolean, dryRun?: boolean }) => {
+    process.exit(await runBrainSkillsSyncNative({
+      ...(opts.apply === true ? { apply: true } : {}),
+      ...(opts.dryRun === true ? { dryRun: true } : {}),
+    }))
+  })
 
 cli
   .command('worker brain memories', '只读列出或搜索本地 runtime brain memory')

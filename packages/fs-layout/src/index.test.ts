@@ -6,12 +6,17 @@ import process from 'node:process'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 import {
+  buildNativeProjectSkillSeedFiles,
   ensureProjectAiworker,
   ensureWorkerHome,
+  nativeProjectSkillSlug,
   projectAiworkerExists,
+  readNativeSkillProjectionManifest,
   resolveAiworkerHome,
   resolveAiworkerScope,
+  resolveAllProjectNativeSkillPaths,
   resolveBrainHome,
+  resolveNativeSkillProjectionManifestPath,
   resolveProjectRoot,
   resolveWorkerHome,
   resolveWorkspacesRoot,
@@ -282,10 +287,11 @@ describe('ensureProjectAiworker', () => {
       const aiworker = path.join(tmp, '.aiworker')
 
       // dirs
-      for (const d of ['skills', 'memories', 'local', 'local/workspaces']) {
+      for (const d of ['memories', 'local', 'local/workspaces']) {
         const s = await stat(path.join(aiworker, d))
         expect(s.isDirectory()).toBe(true)
       }
+      await expect(stat(path.join(aiworker, 'skills'))).rejects.toThrow()
 
       // Project Brain docs and manifests
       for (const f of ['SOUL.md', 'USER.md', 'MEMORY.md', 'ROLLUP.md', 'policy.json', 'brain-capabilities.json', 'executor-capabilities.json']) {
@@ -378,37 +384,90 @@ describe('ensureProjectAiworker', () => {
     }
   })
 
-  it('writes Project Brain skill seed files and preserves existing skills', async () => {
+  it('writes native project skill seed files and preserves existing skills', async () => {
     const tmp = await makeTmpDir()
     try {
       await ensureProjectAiworker(tmp, {
-        brainSkillFiles: {
+        nativeSkillFiles: buildNativeProjectSkillSeedFiles({
           'kernel.brain-admission/SKILL.md': '# Brain Admission\n',
-        },
+        }),
       })
-      const skillPath = path.join(tmp, '.aiworker', 'skills', 'kernel.brain-admission', 'SKILL.md')
-      expect(await readFile(skillPath, 'utf8')).toBe('# Brain Admission\n')
+      const targetPaths = resolveAllProjectNativeSkillPaths(tmp, 'kernel.brain-admission')
+      expect(targetPaths.map(target => path.relative(tmp, target.path).replace(/\\/g, '/'))).toEqual([
+        '.agents/skills/aiworker-kernel-brain-admission/SKILL.md',
+        '.claude/skills/aiworker-kernel-brain-admission/SKILL.md',
+      ])
+      for (const target of targetPaths)
+        expect(await readFile(target.path, 'utf8')).toBe('# Brain Admission\n')
 
       await ensureProjectAiworker(tmp, {
-        brainSkillFiles: {
+        nativeSkillFiles: buildNativeProjectSkillSeedFiles({
           'kernel.brain-admission/SKILL.md': '# Overwrite Attempt\n',
-        },
+        }),
       })
-      expect(await readFile(skillPath, 'utf8')).toBe('# Brain Admission\n')
+      for (const target of targetPaths)
+        expect(await readFile(target.path, 'utf8')).toBe('# Brain Admission\n')
     }
     finally {
       await cleanup(tmp)
     }
   })
 
-  it('rejects Project Brain skill seed path escapes', async () => {
+  it('writes managed native projection files with manifest evidence', async () => {
+    const tmp = await makeTmpDir()
+    try {
+      await ensureProjectAiworker(tmp, {
+        nativeSkillProjections: [{
+          content: '# Brain Admission\n',
+          logicalId: 'kernel.brain-admission',
+          sourceKind: 'builtin',
+          sourcePath: 'packages/shared/src/brain/skills/kernel/brain-admission/SKILL.md',
+          sourceVersion: '1.0.0',
+        }],
+      })
+
+      expect(nativeProjectSkillSlug('kernel.brain-admission')).toBe('aiworker-kernel-brain-admission')
+      expect(await readFile(resolveAllProjectNativeSkillPaths(tmp, 'kernel.brain-admission')[0]!.path, 'utf8')).toBe('# Brain Admission\n')
+
+      const manifest = await readNativeSkillProjectionManifest(tmp)
+      expect(manifest?.schemaVersion).toBe(1)
+      expect(manifest?.projections).toHaveLength(2)
+      expect(manifest?.projections.map(record => record.slug)).toEqual([
+        'aiworker-kernel-brain-admission',
+        'aiworker-kernel-brain-admission',
+      ])
+      expect(manifest?.projections.map(record => record.status)).toEqual(['active', 'active'])
+      expect(manifest?.projections[0]?.targetPath).toMatch(/\/aiworker-kernel-brain-admission\/SKILL\.md$/)
+      expect(await readFile(resolveNativeSkillProjectionManifestPath(tmp), 'utf8')).toContain('"sourceVersion": "1.0.0"')
+    }
+    finally {
+      await cleanup(tmp)
+    }
+  })
+
+  it('rejects native project skill seed path escapes', async () => {
     const tmp = await makeTmpDir()
     try {
       await expect(ensureProjectAiworker(tmp, {
-        brainSkillFiles: {
+        nativeSkillFiles: {
           '../escape/SKILL.md': '# Escape\n',
         },
-      })).rejects.toThrow('Invalid Project Brain skill seed path')
+      })).rejects.toThrow('Invalid native project skill seed path')
+    }
+    finally {
+      await cleanup(tmp)
+    }
+  })
+
+  it('keeps explicit fallback brain skill seed support secondary', async () => {
+    const tmp = await makeTmpDir()
+    try {
+      await ensureProjectAiworker(tmp, {
+        brainSkillFiles: {
+          'fallback.manual/SKILL.md': '# Manual fallback\n',
+        },
+      })
+      expect(await readFile(path.join(tmp, '.aiworker', 'skills', 'fallback.manual', 'SKILL.md'), 'utf8')).toBe('# Manual fallback\n')
     }
     finally {
       await cleanup(tmp)

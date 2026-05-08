@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-08 (REL-027 completed)
+> Updated: 2026-05-08 (REFACTOR-024 completed)
 
 ## Usage
 
@@ -283,3 +283,5 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**TODO-041 Gateway enrollment hints in init dotenv and doctor**](TODO-041.md) `P2`
 - [x] [**TODO-042 Refresh README from current CLI onboarding behavior**](TODO-042.md) `P2`
 - [x] [**REL-027 发布 aiworker CLI 0.10.3**](REL-027.md) `P1`
+- [x] [**REFACTOR-024 Native executor skill placement for Project Brain skills**](REFACTOR-024.md) `P1`
+- [x] [**REFACTOR-025 Native executor skill projection lifecycle**](REFACTOR-025.md) `P1`

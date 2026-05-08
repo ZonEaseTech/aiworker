@@ -1,4 +1,4 @@
-# Project Brain Governance Node — Status (2026-05-07)
+# Project Brain Governance Node — Status (2026-05-08)
 
 > Sanitized status snapshot. Companion artifact to `docs/architecture.md`'s
 > "Brain Governance Kernel 决策" section. Anchored to evidence in
@@ -18,7 +18,7 @@ inline.
 
 | Dimension | Status | Source-backed evidence |
 |---|---|---|
-| Admission positive invariant (durable Brain mutation flows through admission) | conforming | QA-011 — `memory-add` `pending → approved → applied` writes canonical memory + MEMORY.md index; brief projection picks it up. QA-018 / QA-019 / QA-020 / QA-021 — `brain-skill-add` writes canonical `skills/<id>/SKILL.md`, DB decisions include `approved,applied`, and `doctor` accepts the resulting Project Brain on source compact, published 0.10.0 compact, source full 5×2, and published 0.10.1 full 5×2. |
+| Admission positive invariant (durable Brain mutation flows through admission) | conforming | QA-011 — `memory-add` `pending → approved → applied` writes canonical memory + MEMORY.md index; brief projection picks it up. QA-018 / QA-019 / QA-020 / QA-021 validated the pre-REFACTOR-024 `skills/<id>/SKILL.md` materializer. REFACTOR-024 / PLAN-169 and REFACTOR-025 / PLAN-170 source tests now validate project-scope `brain-skill-add` writes `.agents/skills/aiworker-<slug>/SKILL.md` and `.claude/skills/aiworker-<slug>/SKILL.md`, then updates `.aiworker/native-skill-projections.json` through the same approved/apply state machine. |
 | Admission negative invariant (rejected proposals never write canonical memory) | conforming | QA-012 — `pending → rejected` records audit decision, no memory file; source + published 0.9.1 both pass. |
 | Pre-compaction generated memory boundary | conforming in source | BUG-085 / PLAN-143 — suppressed executor output creates a pending `memory-add` proposal in `brain_admission_proposals`, never a direct `BrainProvider.writeMemory()` call; compaction audit metadata records `status='proposed'`. |
 | Secret defense at materialization (BUG-055 regression line) | conforming | QA-012 — `apply --commit` with default `block` policy refuses bodies matching `scanBodyForSecrets`, returns `outcome.kind='blocked-by-secret-scan'` with exit 1, leaves proposal `approved`, no `applied` decision row, no canonical memory file. Source + published 0.9.1. |
@@ -32,8 +32,8 @@ inline.
 | Operator-trust surfaces (init secret handling, doctor PASS/WARN/INFO consistency) | conforming | PLAN-119 implementation; QA-006 / QA-007 evidence; PLAN-112 doctor noise closeout. |
 | Onboarding polish (CLI command groups, executor recommendation, MCP arg passthrough) | conforming | PLAN-120 implementation; TODO-026 contract; BUG-051 / BUG-073 fixes. |
 | Worker product lifecycle (`init → up → serve`) | conforming in current source | REFACTOR-019 / PLAN-152 code audit: `runInit()` seeds Project Brain + local worker state, `runUp()` composes 5 explicit stages, `runServe()` delegates to `bootstrapWorkerApp()` and optional gateway node startup. |
-| File-first Project Brain skill surface | conforming in current source | REFACTOR-016 / PLAN-149 and REFACTOR-018 / PLAN-151: Soul and Brain Skill Packs are Markdown source; init seeds `.aiworker/skills/<id>/SKILL.md`; filesystem scanner registers only `SKILL.md` entrypoints and ignores sidecars. |
-| Brain-to-executor runtime handoff | conforming with explicit limits | REFACTOR-019 / PLAN-152, REFACTOR-020 / PLAN-153, and REFACTOR-021 / PLAN-154 code audits: `ContextManager` projects persona/memory/rollup + skill summaries into the system prompt, loads selected `SKILL.md` bodies when `skill_load` is required, and loads matched memory snippets when `memory_search` is required; `Orchestrator` calls external `ExecutorProvider.run()` with messages/model/workspace/signal/native binding only. |
+| File-first skill authoring with executor-native placement | conforming in current source | REFACTOR-016 / PLAN-149 and REFACTOR-018 / PLAN-151: Soul and Brain Skill Packs are Markdown source. REFACTOR-024 / PLAN-169 moved defaults to executor-native project skills. REFACTOR-025 / PLAN-170 makes that placement managed: init materializes default skills to `.agents/skills/aiworker-*/SKILL.md` and `.claude/skills/aiworker-*/SKILL.md`, records `.aiworker/native-skill-projections.json`, and sync reports missing/outdated/drifted/deprecated/removed/orphaned; `.aiworker/skills/` is fallback-only for non-native engines. |
+| Brain-to-executor runtime handoff | conforming with explicit limits | REFACTOR-019 / PLAN-152, REFACTOR-020 / PLAN-153, REFACTOR-021 / PLAN-154, and REFACTOR-024 / PLAN-169 code audits: `ContextManager` projects persona/memory/rollup into the system prompt, loads matched memory snippets when `memory_search` is required, and only loads fallback `SKILL.md` bodies for engines without native project skills; Codex / Claude Code receive no duplicate AIWorker prompt-skill injection. `Orchestrator` calls external `ExecutorProvider.run()` with messages/model/workspace/signal/native binding only. |
 | Regression validation (repeatable harness covering above invariants) | conforming | `scripts/governance-kernel-harness.ts` with 40 checks per pair; PLAN-127 (initial harness), PLAN-128 (memory positive roundtrip), PLAN-129 (reject + secret-scan-block), PLAN-130 (full 5×2 matrix evidence), PLAN-144 (cross `chat-id` isolation), PLAN-147 (serve process restart continuity), PLAN-156 (Brain Skill positive roundtrip), QA-019 (published 0.10.0 compact), QA-020 (source 5×2 full after timeout override), QA-021 (published 0.10.1 full 5×2). |
 | Soul-agnostic kernel (every Soul × executor satisfies same invariants) | conforming on source + published | QA-020 — full 5×2 matrix on current source after Brain Skill admission coverage: 400 PASS / 0 FAIL / 0 SKIPPED. QA-021 — full 5×2 matrix on `cli-release-local` 0.10.1: 400 PASS / 0 FAIL / 0 SKIPPED. QA-014 — full 5×2 matrix on `cli-release-local` 0.9.1: 300 PASS / 0 FAIL / 0 SKIPPED. |
 | Long-running `aiworker serve` REST multi-turn (orchestrator persistence + bearer auth) | conforming | QA-015 — POST /tasks unauth → 401, authenticated submit → 201 + agent_tasks.status=succeeded, POST /conversations/:id/messages → second task succeeded on same conversation, GET /conversations/:id/messages → ≥4 messages. Both pairs PASS. |
@@ -144,9 +144,16 @@ read as a stronger statement than the evidence supports.
 - `docs/task/REFACTOR-021.md` / `docs/plan/PLAN-154.md` — runtime Brain Memory
   search context; selected `memory_search` turns load bounded memory snippets
   into executor context and report loaded ids/count/errors.
+- `docs/task/REFACTOR-024.md` / `docs/plan/PLAN-169.md` — native executor
+  skill placement; default project skills live in `.agents/skills/` and
+  `.claude/skills/`, while `.aiworker/skills/` is fallback-only.
+- `docs/task/REFACTOR-025.md` / `docs/plan/PLAN-170.md` — native executor
+  skill projection lifecycle; AIWorker-managed skills use `aiworker-*`
+  native slugs, `.aiworker/native-skill-projections.json`, and
+  dry-run/apply reconciliation.
 - `docs/task/REFACTOR-022.md` / `docs/plan/PLAN-155.md` — Brain Skill
-  admission materializer; approved `brain-skill-add` proposals can write
-  validated `skills/<id>/SKILL.md` files through the governed apply path.
+  admission materializer; approved `brain-skill-add` proposals write validated
+  skill files through the governed apply path.
 - `docs/task/BUG-085.md` / `docs/plan/PLAN-143.md` — pre-compaction generated
   memory no-direct-write fix; focused source tests assert pending admission
   proposal creation and no canonical memory write.

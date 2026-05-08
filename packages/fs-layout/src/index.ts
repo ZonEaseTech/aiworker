@@ -1,14 +1,15 @@
+import { createHash } from 'node:crypto'
 import { realpathSync, statSync } from 'node:fs'
-import { access, mkdir, stat, writeFile } from 'node:fs/promises'
+import { access, mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 
 /**
  * `~/.aiworker/` (user scope) or `<project>/.aiworker/` (project scope) layout
- * owned by aiworker. Mirrors the Hermes / OpenClaw convention (per-agent home
- * directory with brain/memory/skills + persona documents) but under an
- * aiworker-owned root so we don't fight a neighbour project's conventions.
+ * owned by aiworker. Project scope keeps Project Brain governance/memory/state
+ * under `.aiworker/`; executor-native project skills live in the executor's own
+ * project directory.
  *
  * User-scope layout (legacy, multi-worker per host):
  *
@@ -24,7 +25,7 @@ import process from 'node:process'
  *     SOUL.md / USER.md / MEMORY.md / ROLLUP.md               # team-shared Project Brain
  *     policy.json / brain-capabilities.json                   # governance + Brain capability drafts
  *     executor-capabilities.json                              # project executor overlay / bootstrap hint
- *     skills/  memories/                                      # file-first brain assets
+ *     memories/                                               # file-first Brain memory assets
  *     local/                                                  # gitignored
  *       worker.db / identity.json / .env / workspaces/
  */
@@ -32,6 +33,67 @@ import process from 'node:process'
 const DEFAULT_HOME_ENV = 'AIWORKER_HOME'
 const DEFAULT_HOME_DIR = '.aiworker'
 const PROJECT_LOCAL_DIR = 'local'
+export const MANAGED_NATIVE_SKILL_PREFIX = 'aiworker-'
+export const NATIVE_SKILL_PROJECTION_MANIFEST = 'native-skill-projections.json'
+
+export const NATIVE_PROJECT_SKILL_TARGETS = [
+  {
+    directory: '.agents/skills',
+    engine: 'codex',
+    label: 'Codex project skills',
+  },
+  {
+    directory: '.claude/skills',
+    engine: 'claude-code',
+    label: 'Claude Code project skills',
+  },
+] as const
+
+export type NativeProjectSkillEngine = (typeof NATIVE_PROJECT_SKILL_TARGETS)[number]['engine']
+
+export type NativeSkillProjectionSourceKind = 'builtin' | 'admission'
+
+export type NativeSkillProjectionStatus
+  = | 'active'
+    | 'deprecated'
+    | 'drifted'
+    | 'missing'
+    | 'orphaned'
+    | 'outdated'
+    | 'removed'
+
+export interface NativeSkillProjectionSeed {
+  content: string
+  logicalId: string
+  sourceKind?: NativeSkillProjectionSourceKind
+  sourcePath?: string
+  sourceVersion?: string
+}
+
+export interface NativeSkillProjectionRecord {
+  actualHash?: string
+  deprecatedAt?: string
+  directory: string
+  engine: NativeProjectSkillEngine
+  lastAppliedHash?: string
+  logicalId: string
+  removedAt?: string
+  slug: string
+  sourceHash: string
+  sourceKind: NativeSkillProjectionSourceKind
+  sourcePath?: string
+  sourceVersion?: string
+  status: NativeSkillProjectionStatus
+  targetPath: string
+  updatedAt: string
+}
+
+export interface NativeSkillProjectionManifest {
+  projections: NativeSkillProjectionRecord[]
+  schemaVersion: 1
+  tombstones?: NativeSkillProjectionRecord[]
+  updatedAt: string
+}
 
 export type AiworkerScope = 'explicit' | 'project' | 'user'
 
@@ -225,8 +287,8 @@ export function resolveWorkerHome(workerId: string): string {
 export function resolveBrainHome(workerId: string): string {
   const result = resolveAiworkerScope()
   if (result.scope === 'project' && result.projectRoot) {
-    // Project scope: brain artifacts share the project .aiworker/ root
-    // (skills/ and memories/ live at .aiworker/skills, .aiworker/memories).
+    // Project scope: Brain governance and memories share the project
+    // .aiworker/ root. Executor-native project skills are outside .aiworker/.
     return path.join(result.projectRoot, DEFAULT_HOME_DIR)
   }
   return path.join(resolveWorkerHome(workerId), 'brain')
@@ -313,9 +375,17 @@ async function seedIfAbsent(filePath: string, content: string): Promise<void> {
 
 export interface ProjectAiworkerSeed {
   brainCapabilitiesJson?: string
+  /**
+   * Explicit fallback prompt-skill files under `.aiworker/skills/`. Project
+   * init should not use this by default for native-skill executors.
+   */
   brainSkillFiles?: Record<string, string>
   executorCapabilitiesJson?: string
   memoryMd?: string
+  /** Executor-native project skill seed files, relative to the project root. */
+  nativeSkillFiles?: Record<string, string>
+  /** AIWorker-managed native skill projections with manifest evidence. */
+  nativeSkillProjections?: NativeSkillProjectionSeed[]
   policyJson?: string
   rollupMd?: string
   /**
@@ -345,6 +415,8 @@ const DEFAULT_PROJECT_AIWORKER_SEED: RequiredDefaultSeed = {
     },
   }, null, 2)}\n`,
   brainSkillFiles: {},
+  nativeSkillFiles: {},
+  nativeSkillProjections: [],
   soulMd: `# Voice & style\n\n> Voice / style guide. Influences how the agent phrases responses across channels.\n`,
   userMd: `# User profile\n\n> The agent writes learned facts about the primary user here over time. Edit by hand to bootstrap.\n`,
   memoryMd: `# Long-term memory\n\n> Durable facts, decisions, preferences. Loaded into every session.\n`,
@@ -377,7 +449,8 @@ const DEFAULT_PROJECT_AIWORKER_SEED: RequiredDefaultSeed = {
 export async function ensureWorkerHome(workerId: string): Promise<void> {
   const result = resolveAiworkerScope()
   if (result.scope === 'project') {
-    // Persona docs + skills/memories already seeded by ensureProjectAiworker.
+    // Persona docs + memories already seeded by ensureProjectAiworker.
+    // Executor-native project skills are owned by their native directories.
     // Only ensure ephemeral dirs that the runtime writes to.
     await ensureDir(result.home, 0o700)
     await ensureDir(resolveWorkspacesRoot(workerId))
@@ -414,7 +487,8 @@ export async function ensureWorkerHome(workerId: string): Promise<void> {
  *   - Project Brain docs (SOUL.md / USER.md / MEMORY.md / ROLLUP.md)
  *   - governance/capability drafts (policy.json / brain-capabilities.json)
  *   - executor-capabilities.json placeholder for project executor overlay / hint
- *   - empty skills/ memories/ dirs
+ *   - memories/ dir
+ *   - executor-native project skill files when seed.nativeSkillFiles is set
  *   - local/ (chmod 0700) with `* + !.gitignore` to silently ignore everything
  *   - .aiworker/.gitignore that ignores `local/`
  *
@@ -427,7 +501,6 @@ export async function ensureProjectAiworker(projectRoot: string, seed: ProjectAi
   const mergedSeed = { ...DEFAULT_PROJECT_AIWORKER_SEED, ...seed }
 
   await ensureDir(aiworker)
-  await ensureDir(path.join(aiworker, 'skills'))
   await ensureDir(path.join(aiworker, 'memories'))
   await ensureDir(localDir, 0o700)
   await ensureDir(path.join(localDir, 'workspaces'))
@@ -466,6 +539,13 @@ export async function ensureProjectAiworker(projectRoot: string, seed: ProjectAi
       mergedSeed.scopeJson,
     )
   }
+  for (const [relativePath, content] of Object.entries(mergedSeed.nativeSkillFiles ?? {})) {
+    const target = resolveProjectNativeSkillSeedPath(root, relativePath)
+    await ensureDir(path.dirname(target))
+    await seedIfAbsent(target, content)
+  }
+  if ((mergedSeed.nativeSkillProjections ?? []).length > 0)
+    await materializeNativeSkillProjectionSeeds(root, mergedSeed.nativeSkillProjections ?? [])
   for (const [relativePath, content] of Object.entries(mergedSeed.brainSkillFiles ?? {})) {
     const target = resolveProjectBrainSkillSeedPath(aiworker, relativePath)
     await ensureDir(path.dirname(target))
@@ -482,17 +562,218 @@ export async function ensureProjectAiworker(projectRoot: string, seed: ProjectAi
 }
 
 function resolveProjectBrainSkillSeedPath(aiworkerRoot: string, relativePath: string): string {
-  const normalized = path.posix.normalize(relativePath)
-  if (
-    normalized.startsWith('../')
-    || normalized === '..'
-    || normalized.startsWith('/')
-    || normalized.includes('\0')
-    || !normalized.endsWith('/SKILL.md')
-  ) {
+  const normalized = normalizeSkillSeedRelativePath(relativePath)
+  if (!isSafeSkillSeedRelativePath(normalized))
     throw new Error(`Invalid Project Brain skill seed path: ${relativePath}`)
-  }
+
   return path.join(aiworkerRoot, 'skills', ...normalized.split('/'))
+}
+
+export function resolveProjectNativeSkillsDir(projectRoot: string, engine: NativeProjectSkillEngine): string {
+  const target = NATIVE_PROJECT_SKILL_TARGETS.find(item => item.engine === engine)
+  if (!target)
+    throw new Error(`Unsupported native project skill engine: ${engine}`)
+  return path.join(path.resolve(projectRoot), ...target.directory.split('/'))
+}
+
+export function resolveProjectNativeSkillPath(projectRoot: string, engine: NativeProjectSkillEngine, skillId: string): string {
+  const slug = nativeProjectSkillSlug(skillId)
+  if (!isManagedNativeSkillSlug(slug))
+    throw new Error(`Invalid native project skill id: ${skillId}`)
+  return path.join(resolveProjectNativeSkillsDir(projectRoot, engine), slug, 'SKILL.md')
+}
+
+export function resolveAllProjectNativeSkillPaths(projectRoot: string, skillId: string): Array<{ engine: NativeProjectSkillEngine, path: string }> {
+  return NATIVE_PROJECT_SKILL_TARGETS.map(target => ({
+    engine: target.engine,
+    path: resolveProjectNativeSkillPath(projectRoot, target.engine, skillId),
+  }))
+}
+
+export function buildNativeProjectSkillSeedFiles(skillFiles: Record<string, string>): Record<string, string> {
+  const nativeFiles: Record<string, string> = {}
+  for (const [relativePath, content] of Object.entries(skillFiles)) {
+    const normalized = normalizeSkillSeedRelativePath(relativePath)
+    if (!isSafeSkillSeedRelativePath(normalized))
+      throw new Error(`Invalid native project skill seed path: ${relativePath}`)
+    const logicalId = nativeSkillLogicalIdFromSeedPath(normalized)
+    const slug = nativeProjectSkillSlug(logicalId)
+    for (const target of NATIVE_PROJECT_SKILL_TARGETS)
+      nativeFiles[`${target.directory}/${slug}/SKILL.md`] = content
+  }
+  return nativeFiles
+}
+
+export function resolveProjectNativeSkillSeedPath(projectRoot: string, relativePath: string): string {
+  const normalized = normalizeSkillSeedRelativePath(relativePath)
+  if (
+    !isSafeProjectRelativePath(normalized)
+    || !normalized.endsWith('/SKILL.md')
+    || !NATIVE_PROJECT_SKILL_TARGETS.some(target => normalized.startsWith(`${target.directory}/`))
+    || !isManagedNativeSkillSlug(path.posix.basename(path.posix.dirname(normalized)))
+  ) {
+    throw new Error(`Invalid native project skill seed path: ${relativePath}`)
+  }
+  return path.join(path.resolve(projectRoot), ...normalized.split('/'))
+}
+
+export function nativeProjectSkillSlug(logicalId: string): string {
+  const body = logicalId
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  if (body.length === 0)
+    throw new Error(`Invalid native project skill id: ${logicalId}`)
+  return `${MANAGED_NATIVE_SKILL_PREFIX}${body}`
+}
+
+export function isManagedNativeSkillSlug(slug: string): boolean {
+  return slug.startsWith(MANAGED_NATIVE_SKILL_PREFIX) && slug.length > MANAGED_NATIVE_SKILL_PREFIX.length
+}
+
+export function resolveNativeSkillProjectionManifestPath(projectRoot: string): string {
+  return path.join(path.resolve(projectRoot), DEFAULT_HOME_DIR, NATIVE_SKILL_PROJECTION_MANIFEST)
+}
+
+export function hashNativeSkillContent(content: string): string {
+  return `sha256:${createHash('sha256').update(content).digest('hex')}`
+}
+
+export async function readNativeSkillProjectionManifest(projectRoot: string): Promise<NativeSkillProjectionManifest | null> {
+  const manifestPath = resolveNativeSkillProjectionManifestPath(projectRoot)
+  let raw: string
+  try {
+    raw = await readFile(manifestPath, 'utf8')
+  }
+  catch (error) {
+    if (isNotFoundError(error))
+      return null
+    throw error
+  }
+
+  const parsed = JSON.parse(raw) as Partial<NativeSkillProjectionManifest>
+  if (parsed.schemaVersion !== 1 || !Array.isArray(parsed.projections))
+    throw new Error(`Invalid native skill projection manifest: ${manifestPath}`)
+
+  return {
+    projections: parsed.projections,
+    schemaVersion: 1,
+    tombstones: Array.isArray(parsed.tombstones) ? parsed.tombstones : [],
+    updatedAt: typeof parsed.updatedAt === 'string' ? parsed.updatedAt : new Date(0).toISOString(),
+  }
+}
+
+export async function writeNativeSkillProjectionManifest(projectRoot: string, manifest: NativeSkillProjectionManifest): Promise<void> {
+  const manifestPath = resolveNativeSkillProjectionManifestPath(projectRoot)
+  await ensureDir(path.dirname(manifestPath))
+  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
+}
+
+export function relativeNativeSkillProjectionTargetPath(projectRoot: string, targetPath: string): string {
+  return path.relative(path.resolve(projectRoot), targetPath).replace(/\\/g, '/')
+}
+
+export function buildNativeSkillProjectionRecord(
+  projectRoot: string,
+  engine: NativeProjectSkillEngine,
+  seed: NativeSkillProjectionSeed,
+  status: NativeSkillProjectionStatus,
+  updatedAt: string,
+  actualHash?: string,
+): NativeSkillProjectionRecord {
+  const target = NATIVE_PROJECT_SKILL_TARGETS.find(item => item.engine === engine)
+  if (!target)
+    throw new Error(`Unsupported native project skill engine: ${engine}`)
+
+  const sourceHash = hashNativeSkillContent(seed.content)
+  return {
+    actualHash,
+    directory: target.directory,
+    engine,
+    lastAppliedHash: actualHash === sourceHash ? sourceHash : undefined,
+    logicalId: seed.logicalId,
+    slug: nativeProjectSkillSlug(seed.logicalId),
+    sourceHash,
+    sourceKind: seed.sourceKind ?? 'builtin',
+    ...(seed.sourcePath ? { sourcePath: seed.sourcePath } : {}),
+    ...(seed.sourceVersion ? { sourceVersion: seed.sourceVersion } : {}),
+    status,
+    targetPath: relativeNativeSkillProjectionTargetPath(projectRoot, resolveProjectNativeSkillPath(projectRoot, engine, seed.logicalId)),
+    updatedAt,
+  }
+}
+
+async function materializeNativeSkillProjectionSeeds(projectRoot: string, seeds: NativeSkillProjectionSeed[]): Promise<void> {
+  const existingManifest = await readNativeSkillProjectionManifest(projectRoot)
+  const updatedAt = new Date().toISOString()
+  const nextRecords = new Map<string, NativeSkillProjectionRecord>()
+
+  for (const record of existingManifest?.projections ?? [])
+    nextRecords.set(nativeSkillProjectionRecordKey(record), record)
+
+  for (const seed of seeds) {
+    for (const target of NATIVE_PROJECT_SKILL_TARGETS) {
+      const targetPath = resolveProjectNativeSkillPath(projectRoot, target.engine, seed.logicalId)
+      await ensureDir(path.dirname(targetPath))
+      await seedIfAbsent(targetPath, seed.content)
+      const actual = await readFile(targetPath, 'utf8')
+      const actualHash = hashNativeSkillContent(actual)
+      const sourceHash = hashNativeSkillContent(seed.content)
+      const previous = nextRecords.get(nativeSkillProjectionRecordKey({ engine: target.engine, logicalId: seed.logicalId }))
+      const status: NativeSkillProjectionStatus = actualHash === sourceHash ? 'active' : 'drifted'
+      nextRecords.set(
+        nativeSkillProjectionRecordKey({ engine: target.engine, logicalId: seed.logicalId }),
+        {
+          ...buildNativeSkillProjectionRecord(projectRoot, target.engine, seed, status, updatedAt, actualHash),
+          lastAppliedHash: actualHash === sourceHash ? sourceHash : previous?.lastAppliedHash,
+        },
+      )
+    }
+  }
+
+  await writeNativeSkillProjectionManifest(projectRoot, {
+    projections: [...nextRecords.values()].sort(compareNativeSkillProjectionRecords),
+    schemaVersion: 1,
+    tombstones: existingManifest?.tombstones ?? [],
+    updatedAt,
+  })
+}
+
+function nativeSkillLogicalIdFromSeedPath(relativePath: string): string {
+  const parts = normalizeSkillSeedRelativePath(relativePath).split('/')
+  if (parts.length < 2 || parts.at(-1) !== 'SKILL.md')
+    throw new Error(`Invalid native project skill seed path: ${relativePath}`)
+  return parts.slice(0, -1).join('/')
+}
+
+export function nativeSkillProjectionRecordKey(record: Pick<NativeSkillProjectionRecord, 'engine' | 'logicalId'>): string {
+  return `${record.engine}:${record.logicalId}`
+}
+
+function compareNativeSkillProjectionRecords(left: NativeSkillProjectionRecord, right: NativeSkillProjectionRecord): number {
+  return nativeSkillProjectionRecordKey(left).localeCompare(nativeSkillProjectionRecordKey(right))
+}
+
+function isNotFoundError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && (error as { code?: string }).code === 'ENOENT'
+}
+
+function normalizeSkillSeedRelativePath(relativePath: string): string {
+  return path.posix.normalize(relativePath.replace(/\\/g, '/'))
+}
+
+function isSafeSkillSeedRelativePath(relativePath: string): boolean {
+  return isSafeProjectRelativePath(relativePath) && relativePath.endsWith('/SKILL.md')
+}
+
+function isSafeProjectRelativePath(relativePath: string): boolean {
+  return !(
+    relativePath.startsWith('../')
+    || relativePath === '..'
+    || relativePath.startsWith('/')
+    || relativePath.includes('\0')
+  )
 }
 
 /** Test-only helper. */

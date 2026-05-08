@@ -225,7 +225,11 @@ describe('aiworker init / scope project placement', () => {
       expect(await exists(path.join(project, '.aiworker', 'toolsets.json'))).toBe(false)
       expect(await exists(path.join(project, '.aiworker', 'capability-packs.json'))).toBe(false)
       expect(await exists(path.join(project, '.aiworker', 'executor-capabilities.json'))).toBe(true)
+      expect(await exists(path.join(project, '.aiworker', 'native-skill-projections.json'))).toBe(true)
       expect(await exists(path.join(project, '.aiworker', 'scope.json'))).toBe(true)
+      expect(await exists(path.join(project, '.aiworker', 'skills'))).toBe(false)
+      expect(await exists(path.join(project, '.agents', 'skills', 'aiworker-kernel-brain-admission', 'SKILL.md'))).toBe(true)
+      expect(await exists(path.join(project, '.claude', 'skills', 'aiworker-kernel-brain-admission', 'SKILL.md'))).toBe(true)
       expect(await exists(path.join(project, '.aiworker', 'local', '.env'))).toBe(true)
       expect(await exists(path.join(project, '.aiworker', 'local', 'worker.db'))).toBe(true)
       const tokenFile = path.join(project, '.aiworker', 'local', 'bootstrap-token.txt')
@@ -299,8 +303,21 @@ describe('aiworker init / scope project placement', () => {
           }
         }
         status: string
+        assets: {
+          fallbackBrainSkillCount: number
+          nativeExecutorSkills: Array<{ count: number, directory: string, engine: string, exists: boolean, path: string }>
+          nativeSkillProjection: { desiredCount: number, summary: { active: number } }
+          skillCount: number
+        }
       }
       expect(statusBody.status).toBe('healthy')
+      expect(statusBody.assets.fallbackBrainSkillCount).toBe(0)
+      expect(statusBody.assets.skillCount).toBe(0)
+      expect(statusBody.assets.nativeExecutorSkills).toEqual([
+        { count: 3, directory: '.agents/skills', engine: 'codex', exists: true, path: path.join(canonicalProject, '.agents', 'skills') },
+        { count: 3, directory: '.claude/skills', engine: 'claude-code', exists: true, path: path.join(canonicalProject, '.claude', 'skills') },
+      ])
+      expect(statusBody.assets.nativeSkillProjection.summary.active).toBe(6)
       expect(statusBody.brainWriteTarget).toBe('local-filesystem')
       expect(statusBody.brains).toEqual([
         {
@@ -324,12 +341,31 @@ describe('aiworker init / scope project placement', () => {
       const brainSkills = await runCli(cleanup, ['worker', 'brain', 'skills'], project, home)
       expect(brainSkills.exitCode).toBe(0)
       expect(JSON.parse(brainSkills.output)).toMatchObject({
-        count: 3,
-        skills: [
-          { id: 'developer.codebase-orientation', name: 'Codebase Orientation' },
-          { id: 'kernel.brain-admission', name: 'Brain Admission' },
-          { id: 'kernel.executor-quality-review', name: 'Executor Quality Review' },
+        count: 0,
+        fallbackBrainSkillCount: 0,
+        nativeExecutorSkills: [
+          { count: 3, directory: '.agents/skills', engine: 'codex' },
+          { count: 3, directory: '.claude/skills', engine: 'claude-code' },
         ],
+        nativeSkillProjection: {
+          desiredCount: 6,
+          summary: { active: 6 },
+        },
+        skills: [],
+      })
+
+      const nativeSkillSync = await runCli(cleanup, ['brain', 'skills', 'sync-native', '--dry-run'], project, home)
+      expect(nativeSkillSync.exitCode).toBe(0)
+      expect(JSON.parse(nativeSkillSync.output)).toMatchObject({
+        desiredCount: 6,
+        mode: 'dry-run',
+        summary: {
+          active: 6,
+          drifted: 0,
+          missing: 0,
+          orphaned: 0,
+          outdated: 0,
+        },
       })
 
       const brainMemories = await runCli(cleanup, ['brain', 'memories', '--limit', '5'], project, home)
@@ -371,7 +407,7 @@ describe('aiworker init / scope project placement', () => {
       expect(populatedSkills.exitCode).toBe(0)
       const populatedSkillsBody = JSON.parse(populatedSkills.output)
       expect(populatedSkillsBody).toMatchObject({
-        count: 4,
+        count: 1,
       })
       expect(populatedSkillsBody.skills).toContainEqual(
         expect.objectContaining({ id: 'smoke', name: 'Smoke Skill', version: '1.0.0', tags: ['smoke'] }),
@@ -428,6 +464,9 @@ describe('aiworker init / scope project placement', () => {
         expect(init.output).toContain(`Soul         : ${preset.id} (${preset.label}, flag)`)
         expect(init.output).toContain(`aiworker soul show ${preset.id}`)
         expect(init.output).toContain('aiworker up --port 9217')
+        expect(await exists(path.join(project, '.aiworker', 'skills'))).toBe(false)
+        expect(await exists(path.join(project, '.agents', 'skills', 'aiworker-kernel-brain-admission', 'SKILL.md'))).toBe(true)
+        expect(await exists(path.join(project, '.claude', 'skills', 'aiworker-kernel-brain-admission', 'SKILL.md'))).toBe(true)
 
         const aiworker = path.join(project, '.aiworker')
         const soul = await readFile(path.join(aiworker, 'SOUL.md'), 'utf8')
@@ -486,7 +525,10 @@ describe('aiworker init / scope project placement', () => {
       expect(result.output).toContain('.aiworker/policy.json')
       expect(result.output).toContain('.aiworker/brain-capabilities.json')
       expect(result.output).toContain('.aiworker/executor-capabilities.json')
+      expect(result.output).toContain('.aiworker/native-skill-projections.json')
       expect(result.output).toContain('.aiworker/scope.json')
+      expect(result.output).toContain('.agents/skills/aiworker-kernel-brain-admission/SKILL.md')
+      expect(result.output).toContain('.claude/skills/aiworker-kernel-brain-admission/SKILL.md')
       expect(result.output).toContain('.aiworker/local/worker.db (worker bootstrap)')
       expect(after).toEqual(before)
       expect(await exists(path.join(project, '.aiworker'))).toBe(false)
@@ -584,12 +626,14 @@ describe('aiworker init / scope project placement', () => {
       expect(result.exitCode).toBe(0)
       expect(result.output).toContain('AGENTS.md (external agent file; not modified, future adopt/merge candidate)')
       expect(result.output).toContain('CLAUDE.md (external agent file; not modified, future adopt/merge candidate)')
-      expect(result.output).toContain('.agents/ (external agent directory; not modified, future adopt/merge candidate)')
-      expect(result.output).toContain('.claude/ (external agent directory; not modified, future adopt/merge candidate)')
+      expect(result.output).not.toContain('.agents/ (external agent directory')
+      expect(result.output).not.toContain('.claude/ (external agent directory')
       expect(await readFile(path.join(project, 'AGENTS.md'), 'utf8')).toBe(agentsMd)
       expect(await readFile(path.join(project, 'CLAUDE.md'), 'utf8')).toBe(claudeMd)
       expect(await readFile(path.join(project, '.agents', 'marker.txt'), 'utf8')).toBe(agentsSkill)
       expect(await readFile(path.join(project, '.claude', 'config.json'), 'utf8')).toBe(claudeConfig)
+      expect(await exists(path.join(project, '.agents', 'skills', 'aiworker-kernel-brain-admission', 'SKILL.md'))).toBe(true)
+      expect(await exists(path.join(project, '.claude', 'skills', 'aiworker-kernel-brain-admission', 'SKILL.md'))).toBe(true)
     })
   })
 

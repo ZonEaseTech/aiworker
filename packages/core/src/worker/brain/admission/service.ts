@@ -13,6 +13,15 @@ import { access, mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
 import {
+  hashNativeSkillContent,
+  NATIVE_PROJECT_SKILL_TARGETS,
+  nativeProjectSkillSlug,
+  readNativeSkillProjectionManifest,
+  relativeNativeSkillProjectionTargetPath,
+  resolveAllProjectNativeSkillPaths,
+  writeNativeSkillProjectionManifest,
+} from '@zonease/aiworker-fs-layout'
+import {
   brainAdmissionMemoryAddPayloadSchema,
   brainAdmissionProposalInputSchema,
   brainAdmissionProposalSchema,
@@ -540,25 +549,36 @@ export class BrainAdmissionService {
       scanReport = { hits: scan.hits, action: 'allow-raw', policy }
     }
 
-    const targetPath = path.join(options.brainHome, 'skills', payload.skillId, 'SKILL.md')
-    if (payload.overwrite !== true && await fileExists(targetPath)) {
+    const targetPaths = resolveBrainSkillAddTargetPaths(options.brainHome, payload.skillId)
+    const existingTargets: string[] = []
+    if (payload.overwrite !== true) {
+      for (const targetPath of targetPaths) {
+        if (await fileExists(targetPath))
+          existingTargets.push(targetPath)
+      }
+    }
+    if (existingTargets.length > 0) {
       return {
         kind: 'failed',
-        reason: `target skill already exists: ${targetPath}; set payload.overwrite=true to replace it`,
+        reason: `target skill already exists: ${existingTargets.join(', ')}; set payload.overwrite=true to replace it`,
       }
     }
 
-    const diff = formatBrainSkillAddDiff(targetPath, bodyToWrite, payload.overwrite === true, scanReport)
+    const diff = formatBrainSkillAddDiff(targetPaths, bodyToWrite, payload.overwrite === true, scanReport)
     if (options.commit !== true)
-      return { diff, kind: 'dry-run', target: targetPath, secretScan: scanReport }
+      return { diff, kind: 'dry-run', target: formatTargetPaths(targetPaths), secretScan: scanReport }
 
     const at = options.at ?? new Date().toISOString()
     try {
-      await mkdir(path.dirname(targetPath), { recursive: true })
-      await writeFile(targetPath, ensureSingleTrailingNewline(bodyToWrite), {
-        encoding: 'utf8',
-        flag: payload.overwrite === true ? 'w' : 'wx',
-      })
+      const body = ensureSingleTrailingNewline(bodyToWrite)
+      for (const targetPath of targetPaths) {
+        await mkdir(path.dirname(targetPath), { recursive: true })
+        await writeFile(targetPath, body, {
+          encoding: 'utf8',
+          flag: payload.overwrite === true ? 'w' : 'wx',
+        })
+      }
+      await recordBrainSkillAddNativeProjection(options.brainHome, payload.skillId, body, at)
     }
     catch (err) {
       const reason = err instanceof Error ? err.message : String(err)
@@ -590,7 +610,7 @@ export class BrainAdmissionService {
       proposalId: id,
       reason: secretScanReason(scanReport),
     }).run()
-    return { kind: 'applied', target: targetPath, secretScan: scanReport }
+    return { kind: 'applied', target: formatTargetPaths(targetPaths), secretScan: scanReport }
   }
 
   /**
@@ -667,15 +687,64 @@ function formatMemoryAddDiff(targetPath: string, body: string, indexEntry: strin
   ].filter(line => line !== '').join('\n')
 }
 
-function formatBrainSkillAddDiff(targetPath: string, body: string, overwrite: boolean, scan: SecretScanReport): string {
+function resolveBrainSkillAddTargetPaths(brainHome: string, skillId: string): string[] {
+  const normalizedBrainHome = path.resolve(brainHome)
+  if (path.basename(normalizedBrainHome) === '.aiworker')
+    return resolveAllProjectNativeSkillPaths(path.dirname(normalizedBrainHome), skillId).map(target => target.path)
+  return [path.join(normalizedBrainHome, 'skills', skillId, 'SKILL.md')]
+}
+
+async function recordBrainSkillAddNativeProjection(brainHome: string, skillId: string, body: string, updatedAt: string): Promise<void> {
+  const normalizedBrainHome = path.resolve(brainHome)
+  if (path.basename(normalizedBrainHome) !== '.aiworker')
+    return
+
+  const projectRoot = path.dirname(normalizedBrainHome)
+  const existing = await readNativeSkillProjectionManifest(projectRoot)
+  const sourceHash = hashNativeSkillContent(body)
+  const next = new Map((existing?.projections ?? []).map(record => [`${record.engine}:${record.logicalId}`, record]))
+  for (const target of resolveAllProjectNativeSkillPaths(projectRoot, skillId)) {
+    const targetMeta = NATIVE_PROJECT_SKILL_TARGETS.find(item => item.engine === target.engine)
+    if (!targetMeta)
+      continue
+    next.set(`${target.engine}:${skillId}`, {
+      actualHash: sourceHash,
+      directory: targetMeta.directory,
+      engine: target.engine,
+      lastAppliedHash: sourceHash,
+      logicalId: skillId,
+      slug: nativeProjectSkillSlug(skillId),
+      sourceHash,
+      sourceKind: 'admission',
+      status: 'active',
+      targetPath: relativeNativeSkillProjectionTargetPath(projectRoot, target.path),
+      updatedAt,
+    })
+  }
+  await writeNativeSkillProjectionManifest(projectRoot, {
+    projections: [...next.values()].sort((left, right) => `${left.engine}:${left.logicalId}`.localeCompare(`${right.engine}:${right.logicalId}`)),
+    schemaVersion: 1,
+    tombstones: existing?.tombstones ?? [],
+    updatedAt,
+  })
+}
+
+function formatTargetPaths(targetPaths: string[]): string {
+  return targetPaths.join(', ')
+}
+
+function formatBrainSkillAddDiff(targetPaths: string[], body: string, overwrite: boolean, scan: SecretScanReport): string {
   const lines = body.split('\n')
   const preview = lines.slice(0, 16).join('\n')
   const truncated = lines.length > 16 ? `\n  ... (+${lines.length - 16} more lines)` : ''
   const scanLine = scan.hits.length === 0
     ? '  secret scan: clean'
     : `  secret scan: ${scan.action} (${scan.hits.length} hit${scan.hits.length === 1 ? '' : 's'} — ${scan.hits.map(h => `${h.rule}:${h.preview}`).join(', ')})`
+  const targetBlock = targetPaths.length === 1
+    ? targetPaths[0]!
+    : `\n  - ${targetPaths.join('\n  - ')}`
   return [
-    `dry-run: would ${overwrite ? 'overwrite' : 'write'} brain skill to ${targetPath}`,
+    `dry-run: would ${overwrite ? 'overwrite' : 'write'} brain skill to ${targetBlock}`,
     `  body preview:\n    ${preview.split('\n').join('\n    ')}${truncated}`,
     scanLine,
   ].join('\n')

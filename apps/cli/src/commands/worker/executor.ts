@@ -1182,7 +1182,7 @@ function collectDoctorWarnings(
     if (!declared || countEnabled(declared.mcp) === 0) {
       warnings.push({
         code: 'executor-overlay.mcp.empty',
-        message: `No executor MCP overlay entries declared for engine "${engine}" (optional unless this project must pin engine-specific MCP servers; distinct from brain skills under .aiworker/skills/).`,
+        message: `No executor MCP overlay entries declared for engine "${engine}" (optional unless this project must pin engine-specific MCP servers; distinct from executor-native project skills under .agents/skills or .claude/skills).`,
         path: `engines.${engine}.mcp`,
       })
     }

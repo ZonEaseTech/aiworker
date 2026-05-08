@@ -1,5 +1,43 @@
 # AIWorker Changelog
 
+## 2026-05-08 18:27 [completed] REFACTOR-025 / PLAN-170 — Native executor skill projection lifecycle
+
+把 native executor skill placement 从“一次性 copy”升级为可诊断、可同步、
+可退役的 managed projection 生命周期。
+
+- 默认投影目录名改为 `aiworker-*` managed namespace，例如
+  `.agents/skills/aiworker-kernel-brain-admission/SKILL.md`。
+- `aiworker init --soul <id>` 现在写
+  `.aiworker/native-skill-projections.json`，记录 logical id、engine、target、
+  source hash/version、last applied hash 与 projection status。
+- 新增 `aiworker brain skills sync-native`（root / worker namespace 双入口），
+  默认 dry-run；`--apply` 可安全 create/update/deprecate，并拒绝静默覆盖 drifted
+  operator edits。
+- `doctor`、`brain status`、`brain skills` 现在报告 managed projection lifecycle：
+  missing、outdated、drifted、deprecated、removed、orphaned。
+- project-scope `brain-skill-add` admission apply 继续写 executor-native
+  `SKILL.md`，同时更新 projection manifest，保留来源与 hash 证据。
+- 验证通过：focused fs-layout / CLI planner / admission / init / doctor /
+  validation / CLI registration tests，`bun run typecheck`，`bun run lint`，
+  `bun run test`，`bun run build`，`git diff --check`。
+
+## 2026-05-08 17:53 [completed] REFACTOR-024 / PLAN-169 — Native executor skill placement
+
+将 Project Brain 默认 skill 物化从 `.aiworker/skills/` 收敛到 executor 原生
+project skill 目录，避免 AIWorker 在 Codex / Claude Code 前面再实现一层 prompt
+skill runtime。
+
+- `aiworker init --soul <id>` 现在默认写 `.agents/skills/aiworker-*/SKILL.md`
+  与 `.claude/skills/aiworker-*/SKILL.md`，不再创建 project `.aiworker/skills/`
+  作为主路径。
+- `ContextManager` / orchestrator 对 `codex`、`claude-code` 禁用 fallback brain
+  skill 摘要和 `skill_load` prompt 注入；unsupported engine 仍可使用显式
+  `.aiworker/skills/` fallback。
+- `brain-skill-add` admission 在 project scope 下 apply 到 native executor skill
+  targets；fallback scope 仍写 `<brainHome>/skills/<id>/SKILL.md`。
+- `doctor` / `brain status` / `brain skills` 现在显式区分 native executor project
+  skills 与 fallback Brain prompt skills。
+
 ## 2026-05-08 02:08 [completed] REL-027 / PLAN-168 — 发布 aiworker CLI 0.10.3
 
 发布 `@zonease/aiworker-cli@0.10.3`，包含 0.10.2 之后的 Project Brain

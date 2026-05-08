@@ -62,8 +62,9 @@ Operator / Admin
 |                                                                                |
 |  Project Brain（filesystem）       worker.db                                    |
 |  - SOUL / USER / MEMORY            - identity 和 config                         |
-|  - memories 和 brain skills        - conversations 和 messages                  |
-|  - policy 和 capabilities          - 加密本地状态                                 |
+|  - memories 和治理状态              - conversations 和 messages                  |
+|  - .agents / .claude 原生 skills    - 加密本地状态                                 |
+|  - policy 和 capabilities                                                     |
 |  - admission proposals                                                         |
 |                                                                                |
 |  AIWorker thin adapter                                                         |
@@ -119,7 +120,7 @@ cd ~/code/my-project
 aiworker up --soul developer            # 一键完成 init + doctor + executor readiness + serve
 ```
 
-`aiworker up` 在 `<cwd>/.aiworker/` 落 Project Brain layout（worker.db、master key、persona、brain skills），跑预检，报告 executor readiness，并启动 worker HTTP/admin（默认 `:9217`）。它不会替你选择 executor；需要用 `aiworker executor select --engine <id> --apply` 显式选择。Soul 选 `developer` / `hr-recruiting` / `finance-ops` / `qa-reviewer` / `general-assistant` 之一——它们决定 persona / 风险偏好 / 默认 brief 段；governance kernel 行为对所有 Soul 一致。
+`aiworker up` 在 `<cwd>/.aiworker/` 落 Project Brain layout（worker.db、master key、persona、policy、memories、native skill projection manifest），并把默认 skill 以 `aiworker-*` managed namespace 投影到 `.agents/skills` 与 `.claude/skills` 这类 executor 原生 project skill 目录；随后跑预检，报告 executor readiness，并启动 worker HTTP/admin（默认 `:9217`）。它不会替你选择 executor；需要用 `aiworker executor select --engine <id> --apply` 显式选择。Soul 选 `developer` / `hr-recruiting` / `finance-ops` / `qa-reviewer` / `general-assistant` 之一——它们决定 persona / 风险偏好 / 默认 brief 段；governance kernel 行为对所有 Soul 一致。
 
 需要分步控制时：
 

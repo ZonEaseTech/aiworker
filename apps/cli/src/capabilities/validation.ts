@@ -10,6 +10,7 @@ import type {
 import { access, readFile } from 'node:fs/promises'
 import path from 'node:path'
 
+import { NATIVE_PROJECT_SKILL_TARGETS } from '@zonease/aiworker-fs-layout'
 import {
   brainCapabilitiesManifestSchema,
   policyManifestSchema,
@@ -25,7 +26,7 @@ import {
 } from './catalog'
 
 export interface CapabilityDoctorCheck {
-  id: 'brain-capabilities' | 'policy' | 'skills'
+  id: 'brain-capabilities' | 'fallback-brain-skills' | 'native-skills' | 'policy'
   issues: CapabilityValidationIssue[]
   label: string
   path: string
@@ -64,13 +65,19 @@ const HIGH_RISK_PATTERN = /(?:^|[.*-])(?:write|delete|remove|deploy|publish|shel
 export async function validateCapabilityProject(root: string): Promise<CapabilityDoctorReport> {
   const policy = await validatePolicy(path.join(root, 'policy.json'))
   const brainCapabilities = await validateBrainCapabilities(path.join(root, 'brain-capabilities.json'), policy.data)
-  const skills = await validateSkills(path.join(root, 'skills'))
+  const projectRoot = path.basename(path.resolve(root)) === '.aiworker'
+    ? path.dirname(path.resolve(root))
+    : path.resolve(root)
+  const nativeSkills = await validateNativeSkills(projectRoot)
+  const fallbackBrainSkills = await validateFallbackBrainSkills(root)
 
   const checks: CapabilityDoctorCheck[] = [
     toCheck('policy', 'policy.json', path.join(root, 'policy.json'), policy.issues),
     toCheck('brain-capabilities', 'brain-capabilities.json', path.join(root, 'brain-capabilities.json'), brainCapabilities.issues),
-    toCheck('skills', 'skills/', path.join(root, 'skills'), skills.issues),
+    toCheck('native-skills', 'native executor project skills', projectRoot, nativeSkills.issues),
   ]
+  if (fallbackBrainSkills.issues.length > 0)
+    checks.push(toCheck('fallback-brain-skills', '.aiworker/skills fallback', path.join(root, 'skills'), fallbackBrainSkills.issues))
 
   return {
     checks,
@@ -209,15 +216,80 @@ function collectMcpIssues(
   }
 }
 
-async function validateSkills(dirPath: string): Promise<ParsedJson<SkillMetadata[]>> {
+async function validateNativeSkills(projectRoot: string): Promise<ParsedJson<SkillMetadata[]>> {
+  const issues: CapabilityValidationIssue[] = []
+  const data: SkillMetadata[] = []
+  let count = 0
+
+  for (const target of NATIVE_PROJECT_SKILL_TARGETS) {
+    const dirPath = path.join(projectRoot, ...target.directory.split('/'))
+    const parsed = await validateSkillDirectory(dirPath, {
+      displayRoot: target.directory,
+      empty: 'ignore',
+      missing: 'ignore',
+    })
+    issues.push(...parsed.issues)
+    data.push(...parsed.data ?? [])
+    count += parsed.count
+  }
+
+  if (count === 0) {
+    issues.push(issue(
+      'info',
+      'native-skills.empty',
+      `No native executor project skill files found. Default init writes skills to ${NATIVE_PROJECT_SKILL_TARGETS.map(target => `${target.directory}/<name>/SKILL.md`).join(' and ')}.`,
+      'executor-native-skills',
+    ))
+  }
+
+  return { data, issues }
+}
+
+async function validateFallbackBrainSkills(root: string): Promise<ParsedJson<SkillMetadata[]>> {
+  const parsed = await validateSkillDirectory(path.join(root, 'skills'), {
+    displayRoot: '.aiworker/skills',
+    empty: 'ignore',
+    missing: 'ignore',
+  })
+  if (parsed.count === 0)
+    return parsed
+
+  return {
+    data: parsed.data,
+    issues: [
+      issue(
+        'warning',
+        'brain-skills.fallback_present',
+        '.aiworker/skills contains fallback prompt-skill files. Native executor project skills are the default for Codex and Claude Code.',
+        '.aiworker/skills/',
+      ),
+      ...parsed.issues,
+    ],
+  }
+}
+
+interface SkillDirectoryValidationOptions {
+  displayRoot: string
+  empty: 'ignore' | 'info'
+  missing: 'error' | 'ignore'
+}
+
+interface ParsedSkills extends ParsedJson<SkillMetadata[]> {
+  count: number
+}
+
+async function validateSkillDirectory(dirPath: string, options: SkillDirectoryValidationOptions): Promise<ParsedSkills> {
   const issues: CapabilityValidationIssue[] = []
   try {
     await access(dirPath)
   }
   catch {
+    if (options.missing === 'ignore')
+      return { count: 0, data: [], issues: [] }
     return {
+      count: 0,
       issues: [
-        issue('error', 'skills.dir_missing', 'skills/ directory is missing.', 'skills'),
+        issue('error', 'skills.dir_missing', `${options.displayRoot}/ directory is missing.`, options.displayRoot),
       ],
     }
   }
@@ -231,7 +303,7 @@ async function validateSkills(dirPath: string): Promise<ParsedJson<SkillMetadata
     count += 1
     const filePath = path.join(dirPath, relative)
     const raw = await readFile(filePath, 'utf8')
-    const parsed = parseSkillFile(raw, relative)
+    const parsed = parseSkillFile(raw, `${options.displayRoot}/${relative}`)
     if (parsed.rawIssue) {
       issues.push(parsed.rawIssue)
       continue
@@ -239,7 +311,7 @@ async function validateSkills(dirPath: string): Promise<ParsedJson<SkillMetadata
 
     const result = skillMetadataSchema.safeParse(parsed.metadata)
     if (!result.success) {
-      issues.push(...zodIssues(result.error.issues, `skills/${relative}`))
+      issues.push(...zodIssues(result.error.issues, `${options.displayRoot}/${relative}`))
       continue
     }
 
@@ -248,7 +320,7 @@ async function validateSkills(dirPath: string): Promise<ParsedJson<SkillMetadata
         'warning',
         'skills.version_format',
         `Skill "${result.data.name}" version "${result.data.version}" is not semver-like.`,
-        `skills/${relative}.version`,
+        `${options.displayRoot}/${relative}.version`,
       ))
     }
 
@@ -258,29 +330,23 @@ async function validateSkills(dirPath: string): Promise<ParsedJson<SkillMetadata
         'error',
         'skills.duplicate_name',
         `Skill name "${result.data.name}" is duplicated by ${existing} and ${relative}.`,
-        `skills/${relative}.name`,
+        `${options.displayRoot}/${relative}.name`,
       ))
     }
     seenNames.set(result.data.name, relative)
     parsedSkills.push(result.data)
   }
 
-  if (count === 0) {
-    // TODO-015: disambiguate "skill" naming. AIWorker has three "skill"-
-    // like layers (brain skills under `.aiworker/skills/`, executor MCP
-    // overlays, engine plugins) — doctor must qualify which layer is
-    // affected so operators don't conflate them. The new code is
-    // `brain-skills.empty`; the human message states the layer + the
-    // exact directory + the next-step CLI hint.
+  if (count === 0 && options.empty === 'info') {
     issues.push(issue(
       'info',
-      'brain-skills.empty',
-      'No brain skill files configured yet (.aiworker/skills/ is empty). Optional — add `.aiworker/skills/<name>/SKILL.md` directly.',
-      '.aiworker/skills/',
+      'skills.empty',
+      `No skill files configured yet (${options.displayRoot}/ is empty).`,
+      `${options.displayRoot}/`,
     ))
   }
 
-  return { data: parsedSkills, issues }
+  return { count, data: parsedSkills, issues }
 }
 
 async function readJsonFile<T>(
@@ -323,38 +389,38 @@ async function readJsonFile<T>(
   return { data: parsed.data, issues: [] }
 }
 
-function parseSkillFile(raw: string, relative: string): ParsedSkill {
-  const ext = relative.split('.').pop()?.toLowerCase()
+function parseSkillFile(raw: string, displayPath: string): ParsedSkill {
+  const ext = displayPath.split('.').pop()?.toLowerCase()
   if (ext === 'yaml' || ext === 'yml') {
     try {
       const parsed = parseYaml(raw) as unknown
       if (!isRecord(parsed)) {
-        return { rawIssue: issue('error', 'skills.yaml_not_object', 'Skill YAML metadata must be an object.', `skills/${relative}`) }
+        return { rawIssue: issue('error', 'skills.yaml_not_object', 'Skill YAML metadata must be an object.', displayPath) }
       }
       return { metadata: parsed }
     }
     catch (error) {
       const message = error instanceof Error ? error.message : 'invalid YAML'
-      return { rawIssue: issue('error', 'skills.invalid_yaml', `Skill YAML metadata is invalid: ${message}`, `skills/${relative}`) }
+      return { rawIssue: issue('error', 'skills.invalid_yaml', `Skill YAML metadata is invalid: ${message}`, displayPath) }
     }
   }
 
   const match = raw.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/)
   if (!match) {
     return {
-      rawIssue: issue('error', 'skills.frontmatter_missing', 'Skill markdown requires YAML frontmatter with name and description.', `skills/${relative}`),
+      rawIssue: issue('error', 'skills.frontmatter_missing', 'Skill markdown requires YAML frontmatter with name and description.', displayPath),
     }
   }
   try {
     const parsed = parseYaml(match[1] ?? '') as unknown
     if (!isRecord(parsed)) {
-      return { rawIssue: issue('error', 'skills.frontmatter_not_object', 'Skill frontmatter must be an object.', `skills/${relative}`) }
+      return { rawIssue: issue('error', 'skills.frontmatter_not_object', 'Skill frontmatter must be an object.', displayPath) }
     }
     return { metadata: parsed }
   }
   catch (error) {
     const message = error instanceof Error ? error.message : 'invalid YAML frontmatter'
-    return { rawIssue: issue('error', 'skills.invalid_frontmatter', `Skill frontmatter is invalid: ${message}`, `skills/${relative}`) }
+    return { rawIssue: issue('error', 'skills.invalid_frontmatter', `Skill frontmatter is invalid: ${message}`, displayPath) }
   }
 }
 

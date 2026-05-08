@@ -16,7 +16,7 @@ import type {
 import type { WorkerEventBus } from '../events/bus'
 import type { WorkspaceHandle, WorkspaceManager } from '../executor/workspace'
 import type { ApprovalDecision, ApprovalStore } from './approvals'
-import type { DecisionContext } from './decisions'
+import type { DecisionContext, RequiredContext } from './decisions'
 import type { ProcessManager } from './process-manager'
 
 import { createHash } from 'node:crypto'
@@ -118,6 +118,17 @@ const DEFAULT_COMPACTION_MAX_SUMMARY_MESSAGES = 120
 const TRANSCRIPT_METADATA_VERSION = 1
 const TASK_ERROR_MAX_LENGTH = 1000
 const WORKER_ADMIN_CONTINUATION = Symbol('worker-admin-continuation')
+const NATIVE_PROJECT_SKILL_ENGINES = new Set(['claude-code', 'codex'])
+
+function usesNativeProjectSkills(engine: string): boolean {
+  return NATIVE_PROJECT_SKILL_ENGINES.has(engine)
+}
+
+function filterRequiredContextForEngine(requiredContext: RequiredContext[], engine: string): RequiredContext[] {
+  if (!usesNativeProjectSkills(engine))
+    return requiredContext
+  return requiredContext.filter(item => item !== 'skill_load')
+}
 
 /** `runTool` 输入。`taskId` / `toolCallId` 用作 ApprovalStore 的 key。 */
 export interface RunToolInput {
@@ -245,6 +256,7 @@ export class Orchestrator {
     const taskId = taskIdFromEnvelope(envelope)
     const gatewayConversationId = gatewayConversationIdFromEnvelope(envelope)
     const engine = this.deps.config.executor.engine
+    const includeFallbackBrainSkills = !usesNativeProjectSkills(engine)
     const decisionContext = {
       channel: envelope.channel,
       conversationId: activeConversation.id,
@@ -272,7 +284,10 @@ export class Orchestrator {
         signal,
         workspace,
       }),
-      this.contextManager.buildSystemPrompt({ priorSummary: activeConversation.summary ?? null }),
+      this.contextManager.buildSystemPrompt({
+        includeBrainSkills: includeFallbackBrainSkills,
+        priorSummary: activeConversation.summary ?? null,
+      }),
     ])
     this.deps.bus.emit('orchestrator.intent_decision', intentDecision)
     recordIntentDecision(intentDecision)
@@ -281,7 +296,7 @@ export class Orchestrator {
       intent: intentDecision.intent,
       promptSkillLimit: systemContext.promptSkillLimit,
       registry,
-      requiredContext: intentDecision.requiredContext,
+      requiredContext: filterRequiredContextForEngine(intentDecision.requiredContext, engine),
     })
     const loadedSkillContext = capabilityPlan.selectedBuiltins.includes('load_skill')
       ? await this.contextManager.loadSkillBodies({
@@ -343,7 +358,10 @@ export class Orchestrator {
       if (retryCompaction.compacted) {
         activeConversation = retryCompaction.conversation
         systemPrompt = appendLoadedBrainSkillBodies(
-          (await this.contextManager.buildSystemPrompt({ priorSummary: activeConversation.summary ?? null })).systemPrompt,
+          (await this.contextManager.buildSystemPrompt({
+            includeBrainSkills: includeFallbackBrainSkills,
+            priorSummary: activeConversation.summary ?? null,
+          })).systemPrompt,
           loadedSkillContext.loaded,
         )
         systemPrompt = appendLoadedBrainMemories(systemPrompt, loadedMemoryContext.loaded)
@@ -899,7 +917,10 @@ export class Orchestrator {
     if (rows.length <= 1)
       return { conversation: input.conversation, compacted: false }
 
-    const systemPrompt = (await this.contextManager.buildSystemPrompt({ priorSummary: input.conversation.summary ?? null })).systemPrompt
+    const systemPrompt = (await this.contextManager.buildSystemPrompt({
+      includeBrainSkills: !usesNativeProjectSkills(this.deps.config.executor.engine),
+      priorSummary: input.conversation.summary ?? null,
+    })).systemPrompt
     const systemTokens = estimateChatMessageTokens({ role: 'system', content: systemPrompt })
     const currentTokens = systemTokens
       + rows.reduce((sum, row) => sum + estimateChatMessageTokens(rowToChatMessage(row)), 0)

@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { readNativeSkillProjectionManifest } from '@zonease/aiworker-fs-layout'
 import { brainAdmissionProposals, closeWorkerDb, getWorkerDb, initWorkerDb, runWorkerMigrations } from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
@@ -402,6 +403,44 @@ describe('BrainAdmissionService.apply (PLAN-101 MVP materializer)', () => {
     expect(after.status).toBe('applied')
     const decisions = ctx.service.listDecisions('p-skill-commit')
     expect(decisions.find(d => d.decision === 'applied')?.appliedAt).toBe(NOW)
+  })
+
+  it('brain-skill-add project scope writes native executor skill targets', async () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'aiworker-admission-project-'))
+    const brainHome = join(projectRoot, '.aiworker')
+    await mkdir(brainHome, { recursive: true })
+    ctx.service.propose({
+      confidence: 0.5,
+      id: 'p-skill-native',
+      kind: 'brain-skill-add',
+      payload: { body: skillMd(), skillId: 'developer.review-checklist' },
+      rollback: 'remove native executor skill files',
+      soulId: 'developer',
+      summary: 'add native review checklist skill',
+      target: '.agents/skills/aiworker-developer-review-checklist/SKILL.md',
+    })
+    ctx.service.approve('p-skill-native', { decidedBy: 'op-1' })
+    const result = await ctx.service.apply('p-skill-native', {
+      at: NOW,
+      brainHome,
+      commit: true,
+      decidedBy: 'op-1',
+    })
+
+    expect(result.kind).toBe('applied')
+    if (result.kind === 'applied') {
+      expect(result.target).toContain(join(projectRoot, '.agents', 'skills', 'aiworker-developer-review-checklist', 'SKILL.md'))
+      expect(result.target).toContain(join(projectRoot, '.claude', 'skills', 'aiworker-developer-review-checklist', 'SKILL.md'))
+    }
+    const codexBody = await readFile(join(projectRoot, '.agents', 'skills', 'aiworker-developer-review-checklist', 'SKILL.md'), 'utf8')
+    const claudeBody = await readFile(join(projectRoot, '.claude', 'skills', 'aiworker-developer-review-checklist', 'SKILL.md'), 'utf8')
+    expect(codexBody).toContain('id: developer.review-checklist')
+    expect(claudeBody).toContain('id: developer.review-checklist')
+    const manifest = await readNativeSkillProjectionManifest(projectRoot)
+    expect(manifest?.projections).toHaveLength(2)
+    expect(manifest?.projections[0]?.slug).toBe('aiworker-developer-review-checklist')
+    expect(manifest?.projections[0]?.sourceKind).toBe('admission')
+    await expect(readFile(join(brainHome, 'skills', 'developer.review-checklist', 'SKILL.md'), 'utf8')).rejects.toThrow()
   })
 
   it('brain-skill-add rejects invalid body, id mismatch, existing target, and secret-bearing body', async () => {

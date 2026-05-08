@@ -8,11 +8,9 @@ import process from 'node:process'
 import { createInterface } from 'node:readline/promises'
 
 import { markBootstrapShown } from '@zonease/aiworker-core'
-import { ensureProjectAiworker, resolveAiworkerScope, resolveProjectRoot } from '@zonease/aiworker-fs-layout'
+import { ensureProjectAiworker, NATIVE_PROJECT_SKILL_TARGETS, resolveAiworkerScope, resolveProjectNativeSkillPath, resolveProjectRoot } from '@zonease/aiworker-fs-layout'
 import {
-  brainSkillPackSeedFiles,
   buildScopeManifest,
-  BUILTIN_KERNEL_BRAIN_SKILL_PACKS,
   createBuiltinSoulRegistry,
 } from '@zonease/aiworker-shared'
 import consola from 'consola'
@@ -27,6 +25,7 @@ import {
   supportedSoulIds,
   toSelectedSoul,
 } from '../../soul/presets'
+import { buildNativeSkillProjectionSeedsForSoul } from './native-skill-projections'
 
 const BUILTIN_SOUL_REGISTRY = createBuiltinSoulRegistry()
 
@@ -66,9 +65,9 @@ const PROJECT_TEMPLATE_PATHS = [
   '.aiworker/policy.json',
   '.aiworker/brain-capabilities.json',
   '.aiworker/executor-capabilities.json',
+  '.aiworker/native-skill-projections.json',
   '.aiworker/scope.json',
   '.aiworker/.gitignore',
-  '.aiworker/skills/',
   '.aiworker/memories/',
   '.aiworker/local/',
   '.aiworker/local/.gitignore',
@@ -87,8 +86,6 @@ const PROJECT_EXISTING_LOCAL_STATE_PATHS = [
 const EXTERNAL_AGENT_PATHS: Array<{ path: string, type: 'directory' | 'file' }> = [
   { path: 'AGENTS.md', type: 'file' },
   { path: 'CLAUDE.md', type: 'file' },
-  { path: '.agents/', type: 'directory' },
-  { path: '.claude/', type: 'directory' },
 ]
 
 function isInteractiveTerminal(): boolean {
@@ -283,13 +280,6 @@ function buildScopeManifestSeed(soul: SelectedSoul): string {
   return `${JSON.stringify(manifest, null, 2)}\n`
 }
 
-function buildBrainSkillFilesSeed(soul: SelectedSoul): Record<string, string> {
-  return brainSkillPackSeedFiles([
-    ...BUILTIN_KERNEL_BRAIN_SKILL_PACKS,
-    ...(soul.brainSkillPacks ?? []),
-  ])
-}
-
 function buildProjectAiworkerSeed(soul: SelectedSoul): ProjectAiworkerSeed {
   const policy = {
     schemaVersion: 1,
@@ -341,7 +331,7 @@ function buildProjectAiworkerSeed(soul: SelectedSoul): ProjectAiworkerSeed {
 
   return {
     brainCapabilitiesJson: `${JSON.stringify(brainCapabilities, null, 2)}\n`,
-    brainSkillFiles: buildBrainSkillFilesSeed(soul),
+    nativeSkillProjections: buildNativeSkillProjectionSeedsForSoul(soul),
     policyJson: `${JSON.stringify(policy, null, 2)}\n`,
     scopeJson: buildScopeManifestSeed(soul),
     soulMd: ensureTrailingNewline(soul.soulMd ?? generatedSoulMd),
@@ -565,7 +555,7 @@ function printProjectNextSteps(projectRoot: string, soul?: SelectedSoul): void {
     '[aiworker init] next steps — Project Brain comes first; executor is bring-your-own',
     `  1. Confirm scope: \`aiworker scope\` (project root: ${projectRoot}).`,
     soulLine,
-    '  3. Inspect brain runtime: `aiworker brain status` (then `aiworker brain skills` / `aiworker brain memories`).',
+    '  3. Inspect Project Brain and native skill targets: `aiworker brain status` (then `aiworker brain skills` / `aiworker brain memories`).',
     '  4. Validate brain capability drafts: `aiworker doctor`.',
     '  5. (Optional) declare project executor overlay hints: `aiworker executor mcp add ... --engine <engine>` then `aiworker executor mcp sync --engine <engine> --dry-run`.',
     `  6. Select task executor when ready: \`aiworker executor select --engine <YOUR_ENGINE> --apply\`.`,
@@ -584,7 +574,7 @@ function printUserScopeNextSteps(): void {
   process.stdout.write([
     '[aiworker init] next steps — Project Brain comes first; executor is bring-your-own',
     '  1. Confirm scope: `aiworker scope`.',
-    '  2. Inspect brain runtime: `aiworker brain status` (then `aiworker brain skills` / `aiworker brain memories`).',
+    '  2. Inspect Project Brain runtime: `aiworker brain status` (then `aiworker brain skills` / `aiworker brain memories`).',
     '  3. Inspect config: `aiworker config show`.',
     `  4. Select task executor when ready: \`aiworker executor select --engine <YOUR_ENGINE> --apply\`.`,
     ...executorChoicePreface(undefined),
@@ -633,13 +623,14 @@ function buildProjectPreflight(
   }
 
   if (soul) {
-    for (const relative of Object.keys(buildBrainSkillFilesSeed(soul))) {
-      const displayPath = `.aiworker/skills/${relative}`
+    for (const relative of buildNativeSkillPreflightPaths(root, soul)) {
+      const displayPath = relative
       if (existsSync(path.join(root, displayPath)))
-        preserve.push(`${displayPath} (existing brain skill)`)
+        preserve.push(`${displayPath} (existing executor-native skill)`)
       else
         create.push(displayPath)
     }
+    notes.push(`Default Soul skills will be projected with aiworker-* managed names into native executor project skill directories: ${NATIVE_PROJECT_SKILL_TARGETS.map(target => target.directory).join(', ')}.`)
   }
 
   for (const relative of PROJECT_BOOTSTRAP_STATE_PATHS) {
@@ -683,6 +674,17 @@ function buildProjectPreflight(
     targetHome: path.join(root, '.aiworker', 'local'),
     targetProject: root,
   }
+}
+
+function buildNativeSkillPreflightPaths(projectRoot: string, soul: SelectedSoul): string[] {
+  const paths: string[] = []
+  for (const seed of buildNativeSkillProjectionSeedsForSoul(soul)) {
+    for (const target of NATIVE_PROJECT_SKILL_TARGETS) {
+      const absolute = resolveProjectNativeSkillPath(projectRoot, target.engine, seed.logicalId)
+      paths.push(path.relative(projectRoot, absolute).replace(/\\/g, '/'))
+    }
+  }
+  return paths.sort()
 }
 
 function buildUserScopePreflight(

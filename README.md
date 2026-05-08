@@ -86,8 +86,12 @@ A single worker can also run without the gateway:
 |                                                                                |
 |  Project Brain (filesystem)        worker.db                                   |
 |  - SOUL / USER / MEMORY            - identity and config                       |
-|  - memories and brain skills       - conversations and messages                |
-|  - policy and capabilities         - encrypted local state                     |
+|  - memories and governance         - conversations and messages                |
+|  - managed native skill            - encrypted local state                     |
+|    projection manifest                                                         |
+|  - native skill files in                                                       |
+|    .agents / .claude                                                           |
+|  - policy and capabilities                                                     |
 |  - admission proposals                                                         |
 |                                                                                |
 |  AIWorker thin adapter                                                         |
@@ -143,7 +147,7 @@ cd ~/code/my-project
 aiworker up --soul developer            # one shot: init + doctor + executor readiness + serve
 ```
 
-`aiworker up` lays down the Project Brain layout under `<cwd>/.aiworker/` (worker.db, master key, persona, brain skills), runs the preflight checks, reports executor readiness, and starts the worker HTTP/admin server (default `:9217`). It does not choose an executor for you; use `aiworker executor select --engine <id> --apply` for that. Pick a Soul from `developer` / `hr-recruiting` / `finance-ops` / `qa-reviewer` / `general-assistant` — Souls shape persona / risk preferences / default brief sections; governance kernel behavior is the same across all Souls.
+`aiworker up` lays down the Project Brain layout under `<cwd>/.aiworker/` (worker.db, master key, persona, policy, memories, native skill projection manifest) and projects managed `aiworker-*` executor-native skills under `.agents/skills` and `.claude/skills`. It then runs preflight checks, reports executor readiness, and starts the worker HTTP/admin server (default `:9217`). It does not choose an executor for you; use `aiworker executor select --engine <id> --apply` for that. Pick a Soul from `developer` / `hr-recruiting` / `finance-ops` / `qa-reviewer` / `general-assistant` — Souls shape persona / risk preferences / default brief sections; governance kernel behavior is the same across all Souls.
 
 Step-by-step alternative:
 

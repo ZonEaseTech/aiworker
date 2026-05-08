@@ -12,7 +12,7 @@ async function writeJson(filePath: string, value: unknown): Promise<void> {
 
 async function makeAiworkerRoot(prefix: string): Promise<string> {
   const root = await mkdtemp(path.join(tmpdir(), prefix))
-  await mkdir(path.join(root, 'skills', 'release-check'), { recursive: true })
+  await mkdir(path.join(root, '.agents', 'skills', 'release-check'), { recursive: true })
   return root
 }
 
@@ -57,7 +57,7 @@ describe('capability static validation', () => {
       validation: { issues: [], status: 'pending' },
     })
     await writeFile(
-      path.join(root, 'skills', 'release-check', 'SKILL.md'),
+      path.join(root, '.agents', 'skills', 'release-check', 'SKILL.md'),
       [
         '---',
         'name: release-check',
@@ -98,7 +98,7 @@ describe('capability static validation', () => {
       status: 'draft',
     })
     await writeFile(
-      path.join(root, 'skills', 'release-check', 'SKILL.md'),
+      path.join(root, '.agents', 'skills', 'release-check', 'SKILL.md'),
       [
         '---',
         'name: release-check',
@@ -109,15 +109,15 @@ describe('capability static validation', () => {
       ].join('\n'),
       'utf8',
     )
-    await mkdir(path.join(root, 'skills', 'release-check', 'references'), { recursive: true })
+    await mkdir(path.join(root, '.agents', 'skills', 'release-check', 'references'), { recursive: true })
     await writeFile(
-      path.join(root, 'skills', 'release-check', 'references', 'notes.md'),
+      path.join(root, '.agents', 'skills', 'release-check', 'references', 'notes.md'),
       '# Missing frontmatter but not a skill entrypoint\n',
       'utf8',
     )
 
     const report = await validateCapabilityProject(root)
-    const skills = report.checks.find(check => check.id === 'skills')
+    const skills = report.checks.find(check => check.id === 'native-skills')
 
     expect(skills?.status).toBe('pass')
     expect(skills?.issues).toEqual([])
@@ -153,7 +153,7 @@ describe('capability static validation', () => {
       schemaVersion: 1,
       status: 'draft',
     })
-    await writeFile(path.join(root, 'skills', 'release-check', 'SKILL.md'), '# Missing frontmatter\n', 'utf8')
+    await writeFile(path.join(root, '.agents', 'skills', 'release-check', 'SKILL.md'), '# Missing frontmatter\n', 'utf8')
 
     const report = await validateCapabilityProject(root)
     const codes = report.checks.flatMap(check => check.issues.map(item => item.code))

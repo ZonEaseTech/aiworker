@@ -245,7 +245,7 @@ describe('aiworker doctor', () => {
     expect(existsSync(path.join(home, '.aiworker', 'worker.db'))).toBe(false)
   })
 
-  it('emits a leading OK summary line for a freshly initialized project with seeded brain skills', async () => {
+  it('emits a leading OK summary line for a freshly initialized project with seeded native executor skills', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'aiworker-doctor-summary-'))
     const home = await mkdtemp(path.join(tmpdir(), 'aiworker-doctor-summary-home-'))
     const project = path.join(root, 'repo')
@@ -257,18 +257,19 @@ describe('aiworker doctor', () => {
     const doctor = await runCli(['doctor'], project, home)
 
     expect(doctor.exitCode).toBe(0)
-    // Default Soul packs now seed real brain skills, so a freshly initialized
+    // Default Soul packs now seed real native executor skills, so a freshly initialized
     // project is no longer considered sparse by doctor.
     expect(doctor.output).toMatch(/\[aiworker doctor\] OK — \d+ checks; \d+ PASS · \d+ info · \d+ WARN · \d+ FAIL/)
     expect(doctor.output).not.toContain('fresh-init defaults')
     // Old empty-skill codes must not surface for seeded defaults.
     expect(doctor.output).not.toContain('skills.empty')
     expect(doctor.output).not.toContain('brain-skills.empty')
+    expect(doctor.output).not.toContain('native-skills.empty')
     // Original Status: PASS line still printed for compatibility
     expect(doctor.output).toContain('Status: PASS')
   })
 
-  it('TODO-015: drops the legacy `skills.empty` info code in favour of namespaced `brain-skills.empty`', async () => {
+  it('does not surface legacy fallback skill empty codes for native defaults', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'aiworker-doctor-skills-'))
     const home = await mkdtemp(path.join(tmpdir(), 'aiworker-doctor-skills-home-'))
     const project = path.join(root, 'repo')
@@ -279,11 +280,8 @@ describe('aiworker doctor', () => {
 
     const doctor = await runCli(['doctor'], project, home)
     expect(doctor.exitCode).toBe(0)
-    // The legacy `skills.empty` code must not surface in any path — it has
-    // been renamed to `brain-skills.empty`. (Whether fresh-init suppresses
-    // the line or not is asserted by the previous test; here we just guard
-    // the rename so old downstream parsers don't silently keep the old code
-    // and miss the disambiguation.)
     expect(doctor.output).not.toContain('[info] skills.empty')
+    expect(doctor.output).not.toContain('brain-skills.empty')
+    expect(doctor.output).not.toContain('native-skills.empty')
   })
 })

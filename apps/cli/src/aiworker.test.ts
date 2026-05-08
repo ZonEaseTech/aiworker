@@ -35,6 +35,7 @@ const ROOT_WORKER_COMMANDS = [
   'soul show',
   'brain status',
   'brain skills',
+  'brain skills sync-native',
   'brain memories',
   'brain artifacts list',
   'brain artifacts show',
@@ -269,6 +270,15 @@ describe('preprocessArgv', () => {
       '/path/to/aiworker.ts',
       'fleet config get',
       'wkr-001',
+    ])
+  })
+
+  it('brain skills sync-native 折叠为三词命令', () => {
+    expect(run('brain', 'skills', 'sync-native', '--dry-run')).toEqual([
+      '/usr/bin/bun',
+      '/path/to/aiworker.ts',
+      'brain skills sync-native',
+      '--dry-run',
     ])
   })
 

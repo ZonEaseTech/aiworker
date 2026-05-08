@@ -81,12 +81,14 @@ export class ContextManager {
   }) {}
 
   async buildSystemPrompt(input: {
+    includeBrainSkills?: boolean
     priorSummary: string | null
     skillLimit?: number
   }): Promise<SystemPromptResult> {
+    const includeBrainSkills = input.includeBrainSkills ?? true
     const skillLimit = input.skillLimit ?? DEFAULT_SYSTEM_PROMPT_SKILL_LIMIT
     const [skills, persona] = await Promise.all([
-      this.deps.brain.listSkills().catch(() => []),
+      includeBrainSkills ? this.deps.brain.listSkills().catch(() => []) : Promise.resolve([]),
       this.loadProjectPersonaDocs(),
     ])
     const promptSkills = skills.slice(0, skillLimit)
