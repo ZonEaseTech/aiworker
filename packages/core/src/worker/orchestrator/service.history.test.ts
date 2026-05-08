@@ -23,6 +23,7 @@ import { eq } from 'drizzle-orm'
 import { resolveSessionKey } from '../conversation/router'
 import { WorkerEventBus } from '../events/bus'
 import { WorkspaceManager as RealWorkspaceManager } from '../executor/workspace'
+import { BrainJournalService, recordBrainJournalEvent } from '../brain/journal'
 import { ApprovalStore } from './approvals'
 import { estimateChatMessagesTokens } from './context'
 import { ProcessManager } from './process-manager'
@@ -705,6 +706,34 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
     expect(assistantRows.at(-1)?.content).toBe('repaired response with enough detail')
   })
 
+  it('records a held task event when quality gate block mode stops output', async () => {
+    const executor = capturingExecutor(['ok'])
+    const orch = new Orchestrator({
+      config: buildConfig({
+        orchestrator: {
+          decisionPipeline: {
+            qualityGate: { mode: 'block', threshold: 7 },
+          },
+        },
+      }),
+      brain: stubBrain(),
+      executor,
+      bus: silentBus(),
+      workerId: 'w_history_test',
+      workspaces,
+      processes,
+      approvals: new ApprovalStore(),
+    })
+
+    const task = await orch.submitTask('block low quality output')
+    await waitUntil(() => loadTask(task.id)?.status === 'succeeded', 'blocked task completed')
+
+    const trace = new BrainJournalService().getTaskTrace(task.id)
+    expect(trace?.gateVerdict.action).toBe('block')
+    expect(trace?.gateVerdict.mode).toBe('enforced')
+    expect(trace?.events.some(event => event.kind === 'task.held')).toBe(true)
+  })
+
   it('routes suppressed control calls through an explicit control executor', async () => {
     const bus = recordingBus()
     const executor = capturingExecutor(['task executor answer'])
@@ -1371,6 +1400,79 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
     expect(failed.error).not.toContain('raw-token')
     const conversation = getWorkerDb().select().from(conversations).where(eq(conversations.id, failed.conversationId!)).get()
     expect(conversation?.taskId).toBe(task.id)
+  })
+
+  it('creates a proof-loop rerun task with parent/child Journal lineage', async () => {
+    const executor = scriptedExecutor(['rerun answer with enough evidence'])
+    const orch = new Orchestrator({
+      config: buildConfig(),
+      brain: stubBrain(),
+      executor,
+      bus: silentBus(),
+      workerId: 'w_history_test',
+      workspaces,
+      processes,
+      approvals: new ApprovalStore(),
+    })
+    getWorkerDb().insert(agentTasks).values({
+      id: 'task-parent',
+      prompt: 'fix failing test',
+      status: 'failed',
+      createdAt: '2026-05-09T04:00:00.000Z',
+      finishedAt: '2026-05-09T04:01:00.000Z',
+      error: 'missing verification',
+    }).run()
+    recordBrainJournalEvent({
+      at: '2026-05-09T04:01:00.000Z',
+      kind: 'gate.quality',
+      taskId: 'task-parent',
+      payload: {
+        action: 'repair',
+        evaluator: 'heuristic',
+        mode: 'observe_only',
+        reason: 'missing test evidence',
+      },
+    })
+
+    const rerun = await orch.rerunTask('task-parent')
+
+    const child = loadTask(rerun.id)!
+    expect(child.prompt).toContain('missing test evidence')
+    const parentTrace = new BrainJournalService().getTaskTrace('task-parent')
+    expect(parentTrace?.lineage.childTaskIds).toContain(rerun.id)
+    const childTrace = new BrainJournalService().getTaskTrace(rerun.id)
+    expect(childTrace?.lineage.parentTaskIds).toEqual(['task-parent'])
+    await waitUntil(() => loadTask(rerun.id)?.status === 'succeeded', 'rerun task succeeded')
+  })
+
+  it('refuses proof-loop reruns after the retry cap is reached', async () => {
+    const orch = new Orchestrator({
+      config: buildConfig(),
+      brain: stubBrain(),
+      executor: scriptedExecutor(['unused']),
+      bus: silentBus(),
+      workerId: 'w_history_test',
+      workspaces,
+      processes,
+      approvals: new ApprovalStore(),
+    })
+    getWorkerDb().insert(agentTasks).values({
+      id: 'task-capped',
+      prompt: 'fix repeatedly failing test',
+      status: 'failed',
+      createdAt: '2026-05-09T04:00:00.000Z',
+      finishedAt: '2026-05-09T04:01:00.000Z',
+      error: 'still failing',
+    }).run()
+    for (const childTaskId of ['child-1', 'child-2', 'child-3']) {
+      recordBrainJournalEvent({
+        kind: 'rerun.requested',
+        taskId: 'task-capped',
+        payload: { childTaskId },
+      })
+    }
+
+    await expect(orch.rerunTask('task-capped')).rejects.toThrow('task rerun cap exceeded')
   })
 
   it('continues a selected Worker Admin conversation on the same session entry', async () => {

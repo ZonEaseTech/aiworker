@@ -623,6 +623,47 @@ async function buildBridgeRequest(
     }
   }
 
+  const taskRerunMatch = path.workerApiPath.match(/^\/api\/worker\/orchestrator\/tasks\/([^/]+)\/rerun$/)
+  if (taskRerunMatch) {
+    if (req.method !== 'POST')
+      return { ok: false, response: methodNotAllowed('POST') }
+    const body = await readOptionalJsonBody(req)
+    if (!body.ok) {
+      return {
+        ok: false,
+        response: jsonError(body.status, body.code, body.message),
+        audit: { method: 'orchestrator.tasks.rerun', errorCode: body.code },
+      }
+    }
+    if (body.value !== undefined && (body.value === null || typeof body.value !== 'object' || Array.isArray(body.value))) {
+      return {
+        ok: false,
+        response: jsonError(400, 'invalid-body', 'request body must be a JSON object'),
+        audit: { method: 'orchestrator.tasks.rerun', errorCode: 'invalid-body' },
+      }
+    }
+    const rawPrompt = body.value === undefined ? undefined : (body.value as Record<string, unknown>).prompt
+    if (rawPrompt !== undefined && (typeof rawPrompt !== 'string' || rawPrompt.trim().length === 0 || rawPrompt.trim().length > 8000)) {
+      return {
+        ok: false,
+        response: jsonError(400, 'invalid-body', 'prompt must be at most 8000 chars when provided'),
+        audit: { method: 'orchestrator.tasks.rerun', errorCode: 'invalid-body' },
+      }
+    }
+    return {
+      ok: true,
+      value: {
+        method: 'orchestrator.tasks.rerun',
+        params: {
+          workerId: path.workerId,
+          taskId: decodeURIComponent(taskRerunMatch[1]!),
+          ...(typeof rawPrompt === 'string' ? { prompt: rawPrompt.trim() } : {}),
+        },
+        transformResult: passThroughCreated,
+      },
+    }
+  }
+
   if (path.workerApiPath === `${WORKER_API_PREFIX}/orchestrator/conversations`) {
     if (req.method !== 'GET')
       return { ok: false, response: methodNotAllowed('GET') }

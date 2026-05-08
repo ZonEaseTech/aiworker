@@ -523,6 +523,18 @@ const orchestratorTaskJournalMethod = defineMethod({
   routing: 'operator-to-node',
 })
 
+const orchestratorTaskRerunMethod = defineMethod({
+  method: 'orchestrator.tasks.rerun',
+  description: '为目标 worker 上某个 task 创建 bounded proof-loop rerun。',
+  params: z.object({
+    workerId: z.string().min(1),
+    taskId: z.string().min(1),
+    prompt: z.string().min(1).optional(),
+  }),
+  result: z.object({ task: z.unknown() }),
+  routing: 'operator-to-node',
+})
+
 const orchestratorConversationsListMethod = defineMethod({
   method: 'orchestrator.conversations.list',
   description: '列出目标 worker 的最近 conversations。',
@@ -675,6 +687,7 @@ export const METHODS = {
   'orchestrator.tasks.list': orchestratorTasksListMethod,
   'orchestrator.tasks.create': orchestratorTasksCreateMethod,
   'orchestrator.tasks.journal': orchestratorTaskJournalMethod,
+  'orchestrator.tasks.rerun': orchestratorTaskRerunMethod,
   'orchestrator.conversations.list': orchestratorConversationsListMethod,
   'orchestrator.messages.list': orchestratorMessagesListMethod,
   'cron.list': cronListMethod,

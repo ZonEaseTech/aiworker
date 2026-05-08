@@ -110,6 +110,7 @@ export interface NodeHandlers {
   tasksList?: () => Promise<{ tasks: unknown[] }>
   tasksCreate?: (input: { prompt: string }) => Promise<{ task: unknown }>
   taskJournal?: (input: { taskId: string }) => Promise<{ journal: unknown }>
+  taskRerun?: (input: { taskId: string, prompt?: string }) => Promise<{ task: unknown }>
   conversationsList?: () => Promise<{ conversations: unknown[] }>
   messagesList?: (input: { conversationId: string }) => Promise<{ messages: unknown[] }>
 }
@@ -244,6 +245,9 @@ export class GatewayDispatcher {
           break
         case METHODS['orchestrator.tasks.journal'].method:
           await this.handleTaskJournal(id, p)
+          break
+        case METHODS['orchestrator.tasks.rerun'].method:
+          await this.handleTaskRerun(id, p)
           break
         case METHODS['orchestrator.conversations.list'].method:
           await this.handleConversationsList(id, p)
@@ -777,6 +781,19 @@ export class GatewayDispatcher {
       return
     this.replyOk(id, await this.deps.handlers.taskJournal({
       taskId: String(params.taskId),
+    }))
+  }
+
+  private async handleTaskRerun(id: string, params: Record<string, unknown>): Promise<void> {
+    if (!this.deps.handlers?.taskRerun) {
+      this.replyError(id, 'method_not_implemented', 'orchestrator.tasks.rerun handler not wired')
+      return
+    }
+    if (!this.ensureWorkerMatch(id, params))
+      return
+    this.replyOk(id, await this.deps.handlers.taskRerun({
+      taskId: String(params.taskId),
+      ...(typeof params.prompt === 'string' ? { prompt: params.prompt } : {}),
     }))
   }
 

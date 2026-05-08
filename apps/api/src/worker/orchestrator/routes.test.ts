@@ -19,6 +19,7 @@ import { buildOrchestratorRoutes } from './routes'
 function stubRuntime(
   submit: (prompt: string) => Promise<{ id: string }>,
   continueConversation: (conversationId: string, prompt: string) => Promise<{ id: string }> = async () => ({ id: 'task-continue' }),
+  rerunTask: (taskId: string, options?: { prompt?: string }) => Promise<{ id: string }> = async () => ({ id: 'task-rerun' }),
 ): WorkerRuntime {
   return {
     workerId: 'w_routes_test',
@@ -34,7 +35,7 @@ function stubRuntime(
     executor: {} as WorkerRuntime['executor'],
     channels: {} as WorkerRuntime['channels'],
     bus: {} as WorkerRuntime['bus'],
-    orchestrator: { continueConversation, submitTask: submit } as unknown as WorkerRuntime['orchestrator'],
+    orchestrator: { continueConversation, rerunTask, submitTask: submit } as unknown as WorkerRuntime['orchestrator'],
     cron: {} as WorkerRuntime['cron'],
     workspaces: {} as WorkerRuntime['workspaces'],
     processes: {} as WorkerRuntime['processes'],
@@ -160,6 +161,28 @@ describe('buildOrchestratorRoutes — POST /tasks zod validation', () => {
     expect(res.status).toBe(404)
     const body = await res.json() as { error: { code: string } }
     expect(body.error.code).toBe('not-found')
+  })
+
+  it('POST /tasks/:id/rerun creates a bounded proof-loop rerun task', async () => {
+    let received: { taskId: string, prompt?: string } | undefined
+    const routes = buildOrchestratorRoutes(() => stubRuntime(
+      async () => ({ id: 'unused' }),
+      async () => ({ id: 'unused' }),
+      async (taskId, options) => {
+        received = { taskId, ...(options?.prompt === undefined ? {} : { prompt: options.prompt }) }
+        return { id: 'task-rerun' }
+      },
+    ))
+    const res = await routes.fetch(new Request('http://w/tasks/task-parent/rerun', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: '  retry with tests  ' }),
+    }))
+
+    expect(res.status).toBe(201)
+    expect(received).toEqual({ taskId: 'task-parent', prompt: 'retry with tests' })
+    const body = await res.json() as { task: { id: string } }
+    expect(body.task.id).toBe('task-rerun')
   })
 
   it('accepts prompt at exactly 8000 chars boundary', async () => {

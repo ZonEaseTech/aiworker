@@ -1,5 +1,21 @@
 # AIWorker Changelog
 
+## 2026-05-09 03:52 [progress] PLAN-177 — Repair and rerun orchestration
+
+开始实现 bounded proof-loop rerun：沿用现有单次 repair，不新增无限自动规划；
+新增 operator-triggered rerun、parent/child lineage Journal 和 retry cap，让失败原因能
+回灌 executor，同时保留 hold/需要人工处理的边界。
+
+完成 PLAN-177 runtime 切片：
+
+- `Orchestrator.rerunTask()` 可基于 parent Gate verdict 生成 rerun prompt，创建 child
+  task，并把 `rerun.requested` / child `task.queued` lineage 写入 Journal。
+- Worker REST 新增 `POST /api/worker/orchestrator/tasks/{id}/rerun`，gateway proto /
+  dispatcher / bridge 新增 `orchestrator.tasks.rerun`。
+- Quality-gate block mode 会写 `task.held` Journal event，operator 可区分 Gate hold
+  与 executor failure。
+- Parent task rerun cap 固定为 3，超出后返回 `rerun-cap-exceeded`，不做无限循环。
+
 ## 2026-05-09 03:46 [progress] PLAN-176 — Brain Engine reviewer contract
 
 开始实现 bounded Brain Engine reviewer：它只做结果评审、证据缺口和 lesson

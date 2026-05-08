@@ -87,3 +87,7 @@ executor 平台、通用 memory layer、通用 sandbox 或泛化 workflow builde
   LLM quality gate 开启时，orchestrator 通过 control executor 以 no-tools 模式写入
   `brain_engine.review` Journal event；Gate verdict 可同时引用 Kernel invariant、
   Brain Engine review 和 heuristic gate 理由。
+- 2026-05-09 03:58：PLAN-177 完成。新增 operator-triggered `rerunTask` 与 REST /
+  gateway `orchestrator.tasks.rerun`，rerun 会写 parent/child Journal lineage；
+  quality-gate block 会写 `task.held`，每个 parent task 最多 3 个 child rerun，避免
+  隐式无限循环。

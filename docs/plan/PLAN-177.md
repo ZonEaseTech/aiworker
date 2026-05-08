@@ -1,6 +1,6 @@
 # PLAN-177 Repair and rerun orchestration
 
-- **status**: draft
+- **status**: completed
 - **createdAt**: 2026-05-09 03:12
 - **relatedTask**: FEAT-056
 
@@ -9,6 +9,24 @@
 AIWorker can run executor turns and persist conversations/tasks, but repair and
 rerun are not yet a first-class proof-loop concept tied to Gate verdicts and
 Journal lineage.
+
+Implementation started 2026-05-09:
+
+- Keep automatic behavior bounded to the existing single repair attempt.
+- Add explicit operator-triggered rerun with parent/child task lineage.
+- Refuse hidden autonomous loops through a small rerun cap and operator-visible
+  AppError outcomes.
+
+Implemented 2026-05-09:
+
+- Added `orchestrator.rerunTask(taskId, { prompt? })` to create a bounded
+  proof-loop child task from the parent Gate verdict.
+- Recorded `rerun.requested`, child `task.queued` lineage payloads, and
+  `task.held` Journal events for quality-gate block mode.
+- Exposed rerun through Worker REST, gateway method `orchestrator.tasks.rerun`,
+  gateway bridge, and worker node handlers.
+- Added a retry cap of 3 child reruns per parent task; exceeding it returns a
+  typed AppError instead of looping.
 
 ## Goal
 
@@ -42,8 +60,14 @@ forever.
 
 ## Verification
 
-- Focused orchestrator tests for repair/rerun/hold.
-- Harness extension for one compact repair/rerun path if feasible.
+- `bun test packages/core/src/worker/orchestrator/service.history.test.ts`
+- `bun test apps/api/src/worker/orchestrator/routes.test.ts`
+- `bun test packages/core/src/worker/gateway-client/dispatcher.test.ts`
+- `bun run --filter '@zonease/aiworker-core' typecheck`
+- `bun run --filter '@zonease/aiworker-api' typecheck`
+- `bun run --filter '@zonease/aiworker-cli' typecheck`
+- `bun run --filter '@zonease/aiworker-gateway' typecheck`
+- `bun run --filter '@zonease/aiworker-gateway-proto' typecheck`
 - `git diff --check`
 
 ## Dependencies

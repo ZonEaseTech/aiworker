@@ -520,6 +520,12 @@ export async function runServe(options: ServeOptions = {}): Promise<void> {
             throw stateError('not-found', `task "${taskId}" not found`)
           return { journal }
         },
+        taskRerun: async ({ taskId, prompt }) => {
+          const task = await state.runtime.orchestrator.rerunTask(taskId, {
+            ...(prompt === undefined ? {} : { prompt }),
+          })
+          return { task }
+        },
         conversationsList: async () => {
           return { conversations: listConversations(200) }
         },

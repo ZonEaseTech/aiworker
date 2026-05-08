@@ -14,6 +14,10 @@ const submitTaskBody = z.object({
   prompt: z.string().trim().min(1, 'prompt is required').max(8000, 'prompt exceeds 8000 characters'),
 })
 
+const rerunTaskBody = z.object({
+  prompt: z.string().trim().min(1, 'prompt is required').max(8000, 'prompt exceeds 8000 characters').optional(),
+})
+
 /**
  * Orchestrator router. The `getRuntime` thunk is re-evaluated at every request
  *  so PLAN-004 2.2 hot-reloads pick up a fresh orchestrator without remounts.
@@ -41,6 +45,29 @@ export function buildOrchestratorRoutes(getRuntime: () => WorkerRuntime) {
       }, 404)
     }
     return c.json({ journal: trace })
+  })
+
+  routes.post('/tasks/:id/rerun', async (c) => {
+    const raw = await c.req.json().catch(() => ({}))
+    const parsed = rerunTaskBody.safeParse(raw ?? {})
+    if (!parsed.success) {
+      return c.json({
+        error: {
+          code: 'invalid-body',
+          message: 'invalid task rerun body',
+          details: parsed.error.flatten().fieldErrors,
+        },
+      }, 400)
+    }
+    try {
+      const task = await getRuntime().orchestrator.rerunTask(c.req.param('id'), parsed.data)
+      return c.json({ task }, 201)
+    }
+    catch (err) {
+      if (err instanceof AppError)
+        return c.json(err.toJSON(), err.status as 400)
+      throw err
+    }
   })
 
   routes.post('/tasks', async (c) => {

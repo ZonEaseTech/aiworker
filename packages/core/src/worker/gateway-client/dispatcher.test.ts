@@ -591,6 +591,29 @@ describe('GatewayDispatcher — orchestrator task journal', () => {
       expect(responses[0].result).toEqual({ journal: { task: { id: 'task-1' } } })
     approvals.dispose()
   })
+
+  it('orchestrator.tasks.rerun forwards task id and optional prompt to the injected handler', async () => {
+    const seen: unknown[] = []
+    const { dispatcher, approvals, responses } = makeDispatcher({
+      taskRerun: async (input) => {
+        seen.push(input)
+        return { task: { id: 'task-child' } }
+      },
+    })
+
+    await dispatcher.handleRequest({
+      type: 'request',
+      id: 'req-task-rerun',
+      method: 'orchestrator.tasks.rerun',
+      params: { workerId: 'w_test', taskId: 'task-1', prompt: 'try again' },
+    })
+
+    expect(seen).toEqual([{ taskId: 'task-1', prompt: 'try again' }])
+    expect(responses[0]?.ok).toBe(true)
+    if (responses[0]?.ok)
+      expect(responses[0].result).toEqual({ task: { id: 'task-child' } })
+    approvals.dispose()
+  })
 })
 
 /**

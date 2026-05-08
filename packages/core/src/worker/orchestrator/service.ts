@@ -29,7 +29,7 @@ import consola from 'consola'
 import { and, asc, desc, eq, gt } from 'drizzle-orm'
 import { BrainAdmissionService } from '../brain/admission'
 import { recordBrainGovernanceBypassWarning } from '../brain/governance-bypass'
-import { describeExecutorAuthority, recordBrainJournalEvent } from '../brain/journal'
+import { BrainJournalService, describeExecutorAuthority, recordBrainJournalEvent } from '../brain/journal'
 import { reviewTaskWithBrainEngine } from '../brain/reviewer'
 import { getChannelAdapter } from '../channels/registry'
 import { classifyContinuation, findOpenConversation, findSessionConversation, hasSessionEntryForRoute, loadRecentMessages, resolveSessionKey } from '../conversation/router'
@@ -118,6 +118,7 @@ interface ExecutorTextResult {
 }
 
 const DEFAULT_COMPACTION_MAX_SUMMARY_MESSAGES = 120
+const MAX_PROOF_LOOP_RERUNS = 3
 const TRANSCRIPT_METADATA_VERSION = 1
 const TASK_ERROR_MAX_LENGTH = 1000
 const WORKER_ADMIN_CONTINUATION = Symbol('worker-admin-continuation')
@@ -530,6 +531,16 @@ export class Orchestrator {
         assistantText = repaired.trim()
     }
     else if (qualityGate.action === 'block' && gateConfig?.mode === 'block') {
+      this.recordJournal({
+        conversationId: activeConversation.id,
+        kind: 'task.held',
+        ...(taskId === undefined ? {} : { taskId }),
+        payload: {
+          action: 'hold',
+          reason: qualityGate.reason,
+          source: 'quality-gate',
+        },
+      })
       assistantText = 'The response was blocked by the worker quality gate.'
     }
     else if (qualityGate.action === 'warn' && gateConfig?.mode === 'warn') {
@@ -1645,6 +1656,111 @@ export class Orchestrator {
 
     return { id }
   }
+
+  async rerunTask(taskId: string, options: { prompt?: string } = {}): Promise<{ id: string }> {
+    const journal = new BrainJournalService({
+      config: this.deps.config,
+      workerId: this.deps.workerId,
+    }).getTaskTrace(taskId)
+    if (journal === null)
+      throw AppError.notFound('task not found', 'not-found')
+
+    const existingReruns = journal.lineage.childTaskIds.length
+    if (existingReruns >= MAX_PROOF_LOOP_RERUNS) {
+      throw AppError.badRequest(
+        `task rerun cap exceeded (${MAX_PROOF_LOOP_RERUNS})`,
+        'rerun-cap-exceeded',
+      )
+    }
+
+    const db = getWorkerDb()
+    const id = crypto.randomUUID()
+    const now = new Date().toISOString()
+    const prompt = options.prompt?.trim() || buildProofLoopRerunPrompt({
+      gateAction: journal.gateVerdict.action,
+      gateReasons: journal.gateVerdict.reasons.map(reason => reason.reason),
+      originalPrompt: journal.task.prompt,
+      parentTaskId: taskId,
+    })
+    db.insert(agentTasks).values({
+      id,
+      prompt,
+      status: 'queued',
+      createdAt: now,
+    }).run()
+
+    this.recordJournal({
+      ...(journal.task.conversationId === undefined ? {} : { conversationId: journal.task.conversationId }),
+      kind: 'rerun.requested',
+      taskId,
+      payload: {
+        action: 'rerun',
+        attempt: existingReruns + 1,
+        childTaskId: id,
+        evidenceRefs: journal.gateVerdict.evidenceRefs,
+        gateAction: journal.gateVerdict.action,
+        maxAttempts: MAX_PROOF_LOOP_RERUNS,
+        promptOverride: options.prompt !== undefined,
+        reasons: journal.gateVerdict.reasons.map(reason => ({
+          mode: reason.mode,
+          reason: reason.reason,
+          source: reason.source,
+          ...(reason.evidenceRef === undefined ? {} : { evidenceRef: reason.evidenceRef }),
+        })),
+      },
+    })
+    this.recordJournal({
+      kind: 'task.queued',
+      taskId: id,
+      payload: {
+        channel: 'web',
+        executorEngine: this.deps.config.executor.engine,
+        executorVariant: this.deps.config.executor.variant,
+        gateAction: journal.gateVerdict.action,
+        parentTaskId: taskId,
+        promptLength: prompt.length,
+        rerunOfTaskId: taskId,
+        source: 'proof-loop-rerun',
+      },
+    })
+
+    const envelope: Envelope = {
+      workerId: this.deps.workerId,
+      channel: 'web',
+      accountId: 'sys:task',
+      chatId: `task:${id}`,
+      text: prompt,
+      receivedAt: now,
+      raw: {
+        parentTaskId: taskId,
+        rerunOfTaskId: taskId,
+        source: 'proof-loop-rerun',
+        taskId: id,
+      },
+    }
+    void this.ingest(envelope).catch(err => consola.error(`[orchestrator] rerunTask ingest failed: ${String(err)}`))
+
+    return { id }
+  }
+}
+
+function buildProofLoopRerunPrompt(input: {
+  gateAction: string
+  gateReasons: string[]
+  originalPrompt: string
+  parentTaskId: string
+}): string {
+  return [
+    `Rerun AIWorker task ${input.parentTaskId} after Gate action: ${input.gateAction}.`,
+    '',
+    'Original task goal:',
+    input.originalPrompt,
+    '',
+    'Gate reasons to address:',
+    input.gateReasons.length > 0 ? input.gateReasons.map(reason => `- ${reason}`).join('\n') : '- no gate reason recorded',
+    '',
+    'Return a corrected result with concrete evidence. Do not claim durable Brain memory changes unless they are submitted through Brain admission.',
+  ].join('\n')
 }
 
 export function detectAdmissionSuccessClaim(text: string): string | null {
