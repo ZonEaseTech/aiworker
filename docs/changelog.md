@@ -1,9 +1,9 @@
 # AIWorker Changelog
 
-## 2026-05-08 22:13 [progress] REL-028 / PLAN-171 — 发布 aiworker CLI 0.10.4
+## 2026-05-08 22:56 [completed] REL-028 / PLAN-171 — 发布 aiworker CLI 0.10.4
 
-准备发布 `@zonease/aiworker-cli@0.10.4`，承载 0.10.3 之后的 native executor
-skill placement 与 managed native skill projection lifecycle：
+发布 `@zonease/aiworker-cli@0.10.4`，承载 0.10.3 之后的 native executor
+skill placement 与 managed native skill projection lifecycle。
 
 - 默认 Project Brain skills 投影到 executor 原生 project skill 目录，不再把
   `.aiworker/skills/` 当主路径。
@@ -15,6 +15,15 @@ skill placement 与 managed native skill projection lifecycle：
 - 本地 release gate 已通过：frozen install、typecheck、lint、test、build、
   CLI run/fleet smoke、dist version、`git diff --check` 和 publish dry-run pack
   stage。
+- `main` 与 annotated tag `v0.10.4` 已推送；GitHub Actions release run
+  `25560613180` 成功，npm latest 已更新到 `0.10.4`，GitHub Release 上传四个
+  binary assets。
+- 修正 release harness 的 `brain-skill-add` 断言，使其验证 executor-native
+  `.agents/skills/aiworker-*` / `.claude/skills/aiworker-*` 与
+  `.aiworker/native-skill-projections.json`，不再要求旧 `.aiworker/skills`
+  canonical file。
+- 发布包 `cli-release-local` compact harness 已重跑通过：developer/codex 与
+  general-assistant/claude-code 共 80 PASS / 0 FAIL / 0 SKIPPED。
 
 ## 2026-05-08 18:27 [completed] REFACTOR-025 / PLAN-170 — Native executor skill projection lifecycle
 

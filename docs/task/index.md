@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-08 (REL-028 implementing)
+> Updated: 2026-05-08 (REL-028 completed)
 
 ## Usage
 
@@ -285,4 +285,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REL-027 发布 aiworker CLI 0.10.3**](REL-027.md) `P1`
 - [x] [**REFACTOR-024 Native executor skill placement for Project Brain skills**](REFACTOR-024.md) `P1`
 - [x] [**REFACTOR-025 Native executor skill projection lifecycle**](REFACTOR-025.md) `P1`
-- [-] [**REL-028 发布 aiworker CLI 0.10.4**](REL-028.md) `P1`
+- [x] [**REL-028 发布 aiworker CLI 0.10.4**](REL-028.md) `P1`

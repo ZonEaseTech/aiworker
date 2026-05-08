@@ -1,6 +1,6 @@
 # PLAN-171 发布 aiworker CLI 0.10.4
 
-- **status**: implementing
+- **status**: completed
 - **createdAt**: 2026-05-08 22:13
 - **approvedAt**: 2026-05-08 22:13
 - **relatedTask**: REL-028
@@ -38,6 +38,7 @@ harness 验证。
 - `docs/task/index.md`
 - `docs/plan/index.md`
 - `docs/changelog.md`
+- `scripts/governance-kernel-harness.ts`
 - release commit、tag、push、workflow verification、published package smoke、
   `cli-release-local` compact harness。
 
@@ -64,3 +65,12 @@ harness 验证。
 - 2026-05-08 22:16：本地 release gate 通过；dist package version 与
   built CLI 均为 `0.10.4`；publish dry-run 完成 pack stage 后在本机 npm auth
   boundary 停止，进入 release bump commit 与 tag 推送。
+- 2026-05-08 22:19：release bump commit `fef85c6` 推送，annotated tag
+  `v0.10.4` 推送；GitHub Actions release run `25560613180` 成功；npm latest、
+  `bunx @zonease/aiworker-cli@0.10.4 --version` 与 GitHub Release assets 均验证通过。
+- 2026-05-08 22:26：发布包 compact harness 首次失败，根因是 harness 仍断言
+  `brain-skill-add` 应写 `.aiworker/skills/.../SKILL.md`；实际 0.10.4 已按最新
+  设计写入 executor-native `.agents/skills/aiworker-*` / `.claude/skills/aiworker-*`
+  并记录 projection manifest。
+- 2026-05-08 22:56：harness 断言已改为 native skill projection + manifest；
+  重跑 published-package compact harness 通过，80 PASS / 0 FAIL / 0 SKIPPED。

@@ -1039,6 +1039,44 @@ function parseFirstJsonObject(text: string): Record<string, unknown> | undefined
   return undefined
 }
 
+function managedNativeSkillSlug(skillId: string): string {
+  const suffix = skillId
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9]+/g, '-')
+    .replaceAll(/^-+|-+$/g, '')
+  return `aiworker-${suffix.length === 0 ? 'skill' : suffix}`
+}
+
+function expectedNativeSkillRelativePaths(skillId: string): string[] {
+  const slug = managedNativeSkillSlug(skillId)
+  return [
+    `.agents/skills/${slug}/SKILL.md`,
+    `.claude/skills/${slug}/SKILL.md`,
+  ]
+}
+
+function nativeSkillProjectionTargets(projectDir: string, skillId: string): string[] {
+  const manifestPath = path.join(projectDir, '.aiworker/native-skill-projections.json')
+  if (!existsSync(manifestPath))
+    return []
+
+  const manifest = safeJson(readFileSync(manifestPath, 'utf8'))
+  const projections = manifest?.projections
+  if (!Array.isArray(projections))
+    return []
+
+  return projections
+    .filter((entry): entry is Record<string, unknown> =>
+      typeof entry === 'object'
+      && entry !== null
+      && entry.logicalId === skillId
+      && entry.sourceKind === 'admission'
+      && entry.status === 'active'
+      && typeof entry.targetPath === 'string',
+    )
+    .map(entry => entry.targetPath as string)
+}
+
 function countOpenApiPaths(value: Record<string, unknown> | undefined): number {
   const paths = value?.paths
   if (typeof paths !== 'object' || paths === null || Array.isArray(paths))
@@ -1619,14 +1657,14 @@ async function runPair(
     status: brief.code === 0 && (briefHasTopic || briefHasBody) ? 'pass' : 'fail',
   })
 
-  // TODO-038 / PLAN-156: Brain Skill materializer black-box evidence. This
-  // uses the same admission CLI boundary as memory-add but writes a valid
-  // file-first Project Brain Skill under `.aiworker/skills/<skillId>/SKILL.md`.
-  // It intentionally does not install or configure any executor-native skill /
-  // plugin capability.
+  // Brain Skill materializer black-box evidence. This uses the same admission
+  // CLI boundary as memory-add, but current Project Brain semantics materialize
+  // governed skills into executor-native project skill directories and record
+  // the projection manifest instead of treating `.aiworker/skills` as canonical.
   const skillFixture = writeSkillFixture(projectDir, pairId, pair.soul)
-  const expectedSkillFile = path.join(projectDir, '.aiworker/skills', skillFixture.skillId, 'SKILL.md')
-  const skillPreExists = existsSync(expectedSkillFile)
+  const expectedSkillRelativePaths = expectedNativeSkillRelativePaths(skillFixture.skillId)
+  const expectedSkillFiles = expectedSkillRelativePaths.map(relativePath => path.join(projectDir, relativePath))
+  const skillPreExists = expectedSkillFiles.some(file => existsSync(file))
   const skillPropose = runAiworker(options.debugRoot, product, `${pairId}-skill-propose`, [
     'brain',
     'admission',
@@ -1640,7 +1678,7 @@ async function runPair(
     '--summary',
     `Materialize harness Brain Skill ${skillFixture.skillId}.`,
     '--rollback',
-    `Remove skills/${skillFixture.skillId}/SKILL.md before apply or delete it manually after apply.`,
+    `Remove managed native skill projections for ${skillFixture.skillId}.`,
     '--soul',
     pair.soul,
     '--risk',
@@ -1705,11 +1743,19 @@ async function runPair(
   )
   const skillStatus = skillStatusSnap.stdout.trim().split('\n')[0] ?? ''
   const skillDecisions = skillDecisionsSnap.stdout.trim().split('\n').filter(Boolean)
-  const skillFileExists = existsSync(expectedSkillFile)
-  const skillBody = skillFileExists ? readFileSync(expectedSkillFile, 'utf8') : ''
-  const skillBodyMatches = skillBody.includes(`id: ${skillFixture.skillId}`)
-    && skillBody.includes('# Harness Skill Roundtrip')
-    && skillBody.includes(`materialized by governance-kernel-harness for ${pairId}`)
+  const skillOutcomeTargetText = typeof skillOutcomeTarget === 'string' ? skillOutcomeTarget : ''
+  const skillTargetMatches = expectedSkillFiles.every(file => skillOutcomeTargetText.includes(file))
+  const skillFilesExist = expectedSkillFiles.every(file => existsSync(file))
+  const skillBodiesMatch = expectedSkillFiles.every((file) => {
+    if (!existsSync(file))
+      return false
+    const body = readFileSync(file, 'utf8')
+    return body.includes(`id: ${skillFixture.skillId}`)
+      && body.includes('# Harness Skill Roundtrip')
+      && body.includes(`materialized by governance-kernel-harness for ${pairId}`)
+  })
+  const projectionTargets = nativeSkillProjectionTargets(projectDir, skillFixture.skillId)
+  const projectionTargetsMatch = expectedSkillRelativePaths.every(relativePath => projectionTargets.includes(relativePath))
   checks.push({
     detail: `propose=${skillPropose.code}, approve=${skillApprove.code}, apply=${skillApply.code}, outcome.kind=${String(skillOutcomeKind ?? 'unknown')}, target=${String(skillOutcomeTarget ?? 'unknown')}, pre-exists=${skillPreExists}`,
     evidence: `${skillPropose.logPath}; ${skillApprove.logPath}; ${skillApply.logPath}`,
@@ -1719,15 +1765,15 @@ async function runPair(
       && skillApprove.code === 0
       && skillApply.code === 0
       && skillOutcomeKind === 'applied'
-      && skillOutcomeTarget === expectedSkillFile
+      && skillTargetMatches
       ? 'pass'
       : 'fail',
   })
   checks.push({
-    detail: `skill file exists=${skillFileExists}, body matches=${skillBodyMatches}`,
-    evidence: expectedSkillFile,
-    name: `${pairId} post-apply canonical Brain Skill file`,
-    status: skillFileExists && skillBodyMatches ? 'pass' : 'fail',
+    detail: `native files exist=${skillFilesExist}, bodies match=${skillBodiesMatch}, projections match=${projectionTargetsMatch}`,
+    evidence: `${expectedSkillFiles.join('; ')}; ${path.join(projectDir, '.aiworker/native-skill-projections.json')}`,
+    name: `${pairId} post-apply native Brain Skill projection`,
+    status: skillFilesExist && skillBodiesMatch && projectionTargetsMatch ? 'pass' : 'fail',
   })
   checks.push({
     detail: `proposal status=${skillStatus}, decisions=${skillDecisions.join(',')}`,
