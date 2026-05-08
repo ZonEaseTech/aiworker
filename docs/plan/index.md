@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-09 (PLAN-179 completed)
+> Updated: 2026-05-09 (PLAN-180 completed)
 
 ## Usage
 
@@ -208,5 +208,5 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-177 Repair and rerun orchestration**](PLAN-177.md) `2026-05-09`
 - [x] [**PLAN-178 Brain Inbox lesson admission flow**](PLAN-178.md) `2026-05-09`
 - [x] [**PLAN-179 Authority mode and high-risk preflight**](PLAN-179.md) `2026-05-09`
-- [ ] [**PLAN-180 Developer repo worker dogfood campaign**](PLAN-180.md) `2026-05-09`
+- [x] [**PLAN-180 Developer repo worker dogfood campaign**](PLAN-180.md) `2026-05-09`
 - [ ] [**PLAN-181 AIWorker 1.0 proof-loop readiness**](PLAN-181.md) `2026-05-09`

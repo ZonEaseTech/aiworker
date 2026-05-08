@@ -1,6 +1,6 @@
 # PLAN-180 Developer repo worker dogfood campaign
 
-- **status**: draft
+- **status**: completed
 - **createdAt**: 2026-05-09 03:12
 - **relatedTask**: FEAT-056
 
@@ -9,6 +9,14 @@
 AIWorker already has strong governance-kernel harness coverage. What remains is
 product proof: can a real developer repo worker reduce repeated context work,
 make outputs more reviewable, and learn safely across executor runs?
+
+Completed 2026-05-09:
+
+- Dogfood evidence is recorded in `docs/task/QA-022.md`.
+- The campaign covered pass, Brain Engine review, repair/rerun/hold, Brain Inbox
+  admission, and authority preflight on the aiworker source workspace.
+- The result supports readiness closeout for the source MVP, but not a 1.0 GA
+  release claim by itself.
 
 ## Goal
 
@@ -46,8 +54,17 @@ surfaces from PLAN-174..179.
 
 ## Verification
 
-- Dogfood report with source-backed evidence.
-- Relevant focused tests/harness commands from implementation plans.
+- `docs/task/QA-022.md`
+- `bun test packages/core/src/worker/brain/journal/service.test.ts`
+- `bun test packages/core/src/worker/brain/reviewer/service.test.ts`
+- `bun test packages/core/src/worker/orchestrator/service.history.test.ts`
+- `bun test packages/core/src/worker/brain/inbox/service.test.ts`
+- `bun test packages/core/src/worker/brain/authority/service.test.ts`
+- `bun test apps/api/src/worker/brain/routes.test.ts`
+- `bun test apps/api/src/worker/orchestrator/routes.test.ts`
+- `bun test apps/cli/src/commands/worker/brain-admission.test.ts`
+- `bun test apps/cli/src/commands/worker/run.test.ts`
+- `bun test apps/cli/src/aiworker.test.ts`
 - `git diff --check`
 
 ## Dependencies

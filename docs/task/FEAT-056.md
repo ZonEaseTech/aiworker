@@ -98,3 +98,7 @@ executor 平台、通用 memory layer、通用 sandbox 或泛化 workflow builde
   executor 高风险任务会在 Journal/Gate/CLI 中显示 observe-only warning 与
   `enforceable=false`，明确 AIWorker 只治理 Brain 和 AIWorker-brokered 能力，不承诺
   拦截 user/host-level executor 行为。
+- 2026-05-09 04:18：PLAN-180 完成。`QA-022` 记录 source-backed dogfood：
+  pass、Brain Engine review、repair/rerun/hold、Brain Inbox admission 和 authority
+  preflight 均已覆盖；结论支持 source MVP readiness closeout，但不单独支撑 1.0 GA
+  发布。
