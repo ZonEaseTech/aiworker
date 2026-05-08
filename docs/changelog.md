@@ -1,5 +1,21 @@
 # AIWorker Changelog
 
+## 2026-05-09 03:46 [progress] PLAN-176 — Brain Engine reviewer contract
+
+开始实现 bounded Brain Engine reviewer：它只做结果评审、证据缺口和 lesson
+candidate 提取，运行时禁用工具，失败时回退为 truthful fallback，并由 Journal/Gate
+引用其结论；不让 Brain Engine 成为 executor 或直接写 canonical Brain。
+
+完成 PLAN-176 runtime 切片：
+
+- 新增 `reviewTaskWithBrainEngine()`，输出 schema-validated review、evidence gaps、
+  unsupported claims、repair/rerun/hold 建议和 lesson candidates。
+- Reviewer 通过 control executor 运行，`tools: []`、`temperature: 0`、bounded budget；
+  invalid JSON/schema drift/timeout 均转成 observe-only fallback review。
+- Orchestrator 在 LLM quality gate 模式下记录 `brain_engine.review` Journal event。
+- Journal Gate verdict 保持 Kernel invariant 优先，同时可引用 Brain Engine review 与
+  heuristic quality gate 理由。
+
 ## 2026-05-09 03:45 [completed] PLAN-174 / PLAN-175 — Brain Journal trace and Gate verdict surface
 
 完成 AIWorker 1.0 proof loop 的首个 runtime 切片，让一个 worker task 可以被

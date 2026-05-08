@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-09 (PLAN-174/175 completed)
+> Updated: 2026-05-09 (PLAN-176 completed)
 
 ## Usage
 
@@ -204,7 +204,7 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-173 Developer repo worker proof-loop contract and audit**](PLAN-173.md) `2026-05-09`
 - [x] [**PLAN-174 Brain Journal task trace surface**](PLAN-174.md) `2026-05-09`
 - [x] [**PLAN-175 Gate verdict result surface**](PLAN-175.md) `2026-05-09`
-- [ ] [**PLAN-176 Brain Engine reviewer contract**](PLAN-176.md) `2026-05-09`
+- [x] [**PLAN-176 Brain Engine reviewer contract**](PLAN-176.md) `2026-05-09`
 - [ ] [**PLAN-177 Repair and rerun orchestration**](PLAN-177.md) `2026-05-09`
 - [ ] [**PLAN-178 Brain Inbox lesson admission flow**](PLAN-178.md) `2026-05-09`
 - [ ] [**PLAN-179 Authority mode and high-risk preflight**](PLAN-179.md) `2026-05-09`

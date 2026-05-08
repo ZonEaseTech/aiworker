@@ -1,6 +1,6 @@
 # PLAN-176 Brain Engine reviewer contract
 
-- **status**: draft
+- **status**: completed
 - **createdAt**: 2026-05-09 03:12
 - **relatedTask**: FEAT-056
 
@@ -9,6 +9,24 @@
 AIWorker has control executor paths and quality-gate evaluator support, but the
 product contract for Brain Engine as reviewer / evaluator / lesson extractor is
 not yet explicit enough for 1.0.
+
+Implementation started 2026-05-09:
+
+- Add a bounded Brain Engine review service separate from executor task running.
+- Reviewer calls must use `tools: []`, strict JSON, a wall-clock budget, and
+  truthful fallback output.
+- Journal/Gate integration should cite Brain Engine review separately from
+  Kernel invariant and heuristic quality-gate reasons.
+
+Implemented 2026-05-09:
+
+- Added `reviewTaskWithBrainEngine()` as a bounded no-tools reviewer contract
+  with strict zod validation, fallback output for invalid/timeout results, and
+  structured lesson candidates.
+- Orchestrator records `brain_engine.review` Journal events when LLM quality
+  gate evaluation is enabled, using the control executor and bounded context.
+- Journal Gate verdicts now preserve Kernel invariant priority while citing
+  Brain Engine review reasons separately from heuristic quality-gate reasons.
 
 ## Goal
 
@@ -52,8 +70,13 @@ results without becoming another executor or bypassing Kernel authority.
 
 ## Verification
 
-- Focused core tests for reviewer contract.
-- Existing quality-gate / decision-pipeline tests remain passing.
+- `bun test packages/core/src/worker/brain/reviewer/service.test.ts`
+- `bun test packages/core/src/worker/brain/journal/service.test.ts`
+- `bun test packages/core/src/worker/orchestrator/quality-gate.test.ts`
+- `bun test packages/core/src/worker/orchestrator/service.history.test.ts`
+- `bun test packages/core/src/worker/orchestrator/decision-pipeline-stats.test.ts`
+- `bun run --filter '@zonease/aiworker-core' typecheck`
+- `bun run --filter '@zonease/aiworker-core' test`
 - `git diff --check`
 
 ## Dependencies

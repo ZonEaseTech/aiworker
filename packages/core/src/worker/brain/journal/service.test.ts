@@ -124,6 +124,29 @@ describe('buildGateVerdict (PLAN-175)', () => {
     })
     expect(buildGateVerdict([event(5, 'gate.quality', { action: 'block', evaluator: 'heuristic', mode: 'enforced', reason: 'unsafe' })]).action).toBe('block')
   })
+
+  it('cites Brain Engine review reasons separately from hard invariants and heuristic gates', () => {
+    const verdict = buildGateVerdict([
+      event(1, 'gate.quality', { action: 'pass', evaluator: 'heuristic', mode: 'observe_only', reason: 'heuristic passed' }),
+      event(2, 'brain_engine.review', { action: 'repair', mode: 'observe-only', reason: 'missing evidence', status: 'reviewed' }),
+    ])
+
+    expect(verdict.action).toBe('repair')
+    expect(verdict.mode).toBe('observe-only')
+    expect(verdict.reasons.map(reason => reason.source)).toEqual(['brain-engine-review', 'heuristic'])
+    expect(verdict.evidenceRefs).toEqual(['brain_journal_events:2', 'brain_journal_events:1'])
+  })
+
+  it('keeps kernel invariant holds authoritative while preserving review context', () => {
+    const verdict = buildGateVerdict([
+      event(1, 'brain_engine.review', { action: 'pass', mode: 'observe-only', reason: 'review passed', status: 'reviewed' }),
+      event(2, 'admission.bypass_suspected', { reason: 'assistant claimed memory write' }),
+    ])
+
+    expect(verdict.action).toBe('hold')
+    expect(verdict.mode).toBe('enforced')
+    expect(verdict.reasons.map(reason => reason.source)).toEqual(['kernel-invariant', 'brain-engine-review'])
+  })
 })
 
 function event(id: number, kind: string, payload: Record<string, unknown>) {

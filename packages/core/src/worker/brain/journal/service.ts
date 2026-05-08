@@ -14,6 +14,7 @@ import { asc, desc, eq, or } from 'drizzle-orm'
 export type BrainJournalEventKind
   = | 'admission.bypass_suspected'
     | 'assistant.message'
+    | 'brain_engine.review'
     | 'conversation.created'
     | 'decision.capability'
     | 'decision.intent'
@@ -313,41 +314,74 @@ export function describeExecutorAuthority(config: WorkerConfig | undefined): Bra
 
 export function buildGateVerdict(events: BrainJournalEventDto[]): BrainGateVerdict {
   const admissionBypass = latestEvent(events, 'admission.bypass_suspected')
+  const brainEngineReview = latestEvent(events, 'brain_engine.review')
+  const brainEngineReason = brainEngineReview === undefined ? undefined : reasonFromBrainEngineReview(brainEngineReview)
+  const qualityGate = latestEvent(events, 'gate.quality')
+  const qualityGateReason = qualityGate === undefined ? undefined : reasonFromQualityGate(qualityGate)
+
   if (admissionBypass !== undefined) {
-    return verdict({
+    return verdictFromReasons({
       action: 'hold',
       at: admissionBypass.at,
       eventId: admissionBypass.id,
       mode: 'enforced',
-      reason: stringValue(admissionBypass.payload.reason) ?? 'brain admission bypass suspected',
-      source: 'kernel-invariant',
+      reasons: [
+        reasonFromEvent(admissionBypass, {
+          mode: 'enforced',
+          reason: stringValue(admissionBypass.payload.reason) ?? 'brain admission bypass suspected',
+          source: 'kernel-invariant',
+        }),
+        ...optionalReason(brainEngineReason),
+        ...optionalReason(qualityGateReason),
+      ],
     })
   }
 
-  const qualityGate = latestEvent(events, 'gate.quality')
+  if (brainEngineReview !== undefined && brainEngineReason !== undefined && brainEngineReview.payload.status === 'reviewed') {
+    const action = gateAction(brainEngineReview.payload.action)
+    if (action !== 'pass') {
+      return verdictFromReasons({
+        action,
+        at: brainEngineReview.at,
+        eventId: brainEngineReview.id,
+        mode: brainEngineReason.mode,
+        reasons: [
+          brainEngineReason,
+          ...optionalReason(qualityGateReason),
+        ],
+      })
+    }
+  }
+
   if (qualityGate !== undefined) {
     const action = gateAction(qualityGate.payload.action)
-    const mode = qualityGate.payload.mode === 'enforced' ? 'enforced' : 'observe-only'
-    const evaluator = stringValue(qualityGate.payload.evaluator)
-    return verdict({
+    return verdictFromReasons({
       action,
       at: qualityGate.at,
       eventId: qualityGate.id,
-      mode,
-      reason: stringValue(qualityGate.payload.reason) ?? `quality gate ${action}`,
-      source: evaluator === 'llm' ? 'brain-engine-review' : 'heuristic',
+      mode: qualityGateReason?.mode ?? 'observe-only',
+      reasons: [
+        ...optionalReason(qualityGateReason),
+        ...optionalReason(brainEngineReason),
+      ],
     })
   }
 
   const executorError = latestEvent(events, 'executor.error') ?? latestEvent(events, 'task.failed')
   if (executorError !== undefined) {
-    return verdict({
+    return verdictFromReasons({
       action: 'rerun',
       at: executorError.at,
       eventId: executorError.id,
       mode: 'observe-only',
-      reason: stringValue(executorError.payload.error) ?? 'executor failed before a quality gate verdict was recorded',
-      source: 'executor-claim',
+      reasons: [
+        reasonFromEvent(executorError, {
+          mode: 'observe-only',
+          reason: stringValue(executorError.payload.error) ?? 'executor failed before a quality gate verdict was recorded',
+          source: 'executor-claim',
+        }),
+        ...optionalReason(brainEngineReason),
+      ],
     })
   }
 
@@ -363,6 +397,37 @@ export function buildGateVerdict(events: BrainJournalEventDto[]): BrainGateVerdi
       },
     ],
   }
+}
+
+function reasonFromBrainEngineReview(event: BrainJournalEventDto): BrainGateVerdictReason {
+  return reasonFromEvent(event, {
+    mode: event.payload.mode === 'enforced' ? 'enforced' : 'observe-only',
+    reason: stringValue(event.payload.reason) ?? 'Brain Engine review result',
+    source: 'brain-engine-review',
+  })
+}
+
+function reasonFromQualityGate(event: BrainJournalEventDto): BrainGateVerdictReason {
+  const evaluator = stringValue(event.payload.evaluator)
+  return reasonFromEvent(event, {
+    mode: event.payload.mode === 'enforced' ? 'enforced' : 'observe-only',
+    reason: stringValue(event.payload.reason) ?? `quality gate ${gateAction(event.payload.action)}`,
+    source: evaluator === 'llm' ? 'brain-engine-review' : 'heuristic',
+  })
+}
+
+function reasonFromEvent(
+  event: BrainJournalEventDto,
+  input: Omit<BrainGateVerdictReason, 'evidenceRef'>,
+): BrainGateVerdictReason {
+  return {
+    ...input,
+    evidenceRef: `brain_journal_events:${event.id}`,
+  }
+}
+
+function optionalReason(reason: BrainGateVerdictReason | undefined): BrainGateVerdictReason[] {
+  return reason === undefined ? [] : [reason]
 }
 
 function toEventDto(row: BrainJournalEventRow, redactSensitive: boolean): BrainJournalEventDto {
@@ -464,28 +529,22 @@ function stringValue(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined
 }
 
-function verdict(input: {
+function verdictFromReasons(input: {
   action: BrainGateVerdictAction
   at: string
   eventId: number
   mode: BrainGateVerdictReasonMode
-  reason: string
-  source: BrainGateVerdictReasonSource
+  reasons: BrainGateVerdictReason[]
 }): BrainGateVerdict {
-  const evidenceRef = `brain_journal_events:${input.eventId}`
+  const evidenceRefs = input.reasons
+    .map(reason => reason.evidenceRef)
+    .filter((ref): ref is string => ref !== undefined)
   return {
     action: input.action,
-    evidenceRefs: [evidenceRef],
+    evidenceRefs,
     latestEventId: input.eventId,
     mode: input.mode,
-    reasons: [
-      {
-        evidenceRef,
-        mode: input.mode,
-        reason: input.reason,
-        source: input.source,
-      },
-    ],
+    reasons: input.reasons,
     recordedAt: input.at,
   }
 }

@@ -29,7 +29,8 @@ import consola from 'consola'
 import { and, asc, desc, eq, gt } from 'drizzle-orm'
 import { BrainAdmissionService } from '../brain/admission'
 import { recordBrainGovernanceBypassWarning } from '../brain/governance-bypass'
-import { recordBrainJournalEvent } from '../brain/journal'
+import { describeExecutorAuthority, recordBrainJournalEvent } from '../brain/journal'
+import { reviewTaskWithBrainEngine } from '../brain/reviewer'
 import { getChannelAdapter } from '../channels/registry'
 import { classifyContinuation, findOpenConversation, findSessionConversation, hasSessionEntryForRoute, loadRecentMessages, resolveSessionKey } from '../conversation/router'
 import { DEFAULT_APPROVAL_TIMEOUT_MS } from './approvals'
@@ -468,6 +469,38 @@ export class Orchestrator {
       ...(taskId === undefined ? {} : { taskId }),
       payload: qualityGate as unknown as Record<string, unknown>,
     })
+    if (gateConfig?.evaluator === 'llm') {
+      const review = await reviewTaskWithBrainEngine({
+        authorityMode: describeExecutorAuthority(this.deps.config).authorityMode,
+        evidenceRefs: [
+          `conversations:${activeConversation.id}`,
+          ...(taskId === undefined ? [] : [`agent_tasks:${taskId}`]),
+        ],
+        executor: this.controlExecutor(),
+        finalOutput: assistantText,
+        hardInvariantSignals: describeExecutorAuthority(this.deps.config).authorityMode === 'unmanaged_ambient'
+          ? ['executor authority is unmanaged ambient']
+          : [],
+        journalSummary: [
+          `intent=${intentDecision.intent}; risk=${intentDecision.risk}; profile=${intentDecision.qualityProfile}`,
+          `qualityGate action=${qualityGate.action}; score=${qualityGate.score ?? 'n/a'}; mode=${qualityGate.mode}; reason=${qualityGate.reason}`,
+          `capability selectedSkills=${capabilityDecision.selectedSkills.length}; selectedMcpTools=${capabilityDecision.selectedMcpTools.length}`,
+        ],
+        model: resolveExecutorModel(this.controlExecutorConfig()),
+        notifyActivity,
+        scopeRubric: `${intentDecision.qualityProfile} / ${intentDecision.risk}`,
+        signal,
+        taskGoal: envelope.text,
+        workspacePath: this.controlWorkspacePath(workspace),
+        ...(gateConfig.budgetMs === undefined ? {} : { budgetMs: gateConfig.budgetMs }),
+      })
+      this.recordJournal({
+        conversationId: activeConversation.id,
+        kind: 'brain_engine.review',
+        ...(taskId === undefined ? {} : { taskId }),
+        payload: review as unknown as Record<string, unknown>,
+      })
+    }
     if (qualityGate.action === 'repair' && gateConfig?.mode === 'retry') {
       const repaired = await this.runSuppressedExecutor({
         messages: buildRepairPrompt({ assistantText, gate: qualityGate, requestText: envelope.text }),

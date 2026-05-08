@@ -726,6 +726,16 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
         action: 'repair',
         reason: 'control gate',
       }),
+      JSON.stringify({
+        action: 'repair',
+        score: 4,
+        confidence: 0.8,
+        reason: 'Brain Engine reviewer also found missing detail',
+        evidenceGaps: ['answer too short'],
+        unsupportedClaims: [],
+        suggestions: ['expand the answer'],
+        lessonCandidates: [],
+      }),
       'repaired by control executor',
     ])
     const controlExecutorConfig: WorkerConfig['executor'] = {
@@ -763,10 +773,12 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
 
     expect(executor.inputs).toHaveLength(1)
     expect(executor.inputs[0]?.workspacePath).toContain(tmpRoot)
-    expect(controlExecutor.inputs).toHaveLength(3)
+    expect(controlExecutor.inputs).toHaveLength(4)
     expect(controlExecutor.inputs.every(input => input.model === 'gpt-control')).toBe(true)
     expect(controlExecutor.inputs.every(input => input.temperature === 0)).toBe(true)
     expect(controlExecutor.inputs.every(input => input.workspacePath === undefined)).toBe(true)
+    expect(controlExecutor.inputs.every(input => input.tools?.length === 0)).toBe(true)
+    expect(controlExecutor.inputs[2]?.messages[0]?.content).toContain('Brain Engine reviewer')
 
     const repair = bus.events.find(event => event.type === 'orchestrator.repair_attempted')
     expect(repair?.payload.status).toBe('succeeded')

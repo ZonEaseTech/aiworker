@@ -83,3 +83,7 @@ executor 平台、通用 memory layer、通用 sandbox 或泛化 workflow builde
   当前不满足发版条件，因为 PLAN-176..181 尚未实现，1.0 proof loop 还没有
   Brain Engine reviewer、repair/rerun、Brain Inbox、authority mode dogfood 与
   release readiness 证据闭环。
+- 2026-05-09 03:50：PLAN-176 完成。新增 bounded Brain Engine reviewer contract；
+  LLM quality gate 开启时，orchestrator 通过 control executor 以 no-tools 模式写入
+  `brain_engine.review` Journal event；Gate verdict 可同时引用 Kernel invariant、
+  Brain Engine review 和 heuristic gate 理由。

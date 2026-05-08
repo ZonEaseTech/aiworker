@@ -88,6 +88,17 @@ export {
   type RecordBrainJournalEventInput,
 } from './worker/brain/journal'
 
+// Brain Engine reviewer (PLAN-176)：bounded no-tools evaluator for result
+// review, evidence gaps, unsupported claims, and lesson candidates.
+export {
+  type BrainEngineLessonCandidate,
+  type BrainEngineReviewAction,
+  type BrainEngineReviewInput,
+  type BrainEngineReviewResult,
+  DEFAULT_BRAIN_ENGINE_REVIEW_BUDGET_MS,
+  reviewTaskWithBrainEngine,
+} from './worker/brain/reviewer'
+
 // Brain summary 聚合（PLAN-103）：从 worker.db 读 admission / artifact 计数 +
 // scope manifest 状态，喂给 buildInfo 与 fleet UI；不复制 payload / artifact
 // ref / canonical brain 文本。
