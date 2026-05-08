@@ -50,6 +50,7 @@ import {
   runBrainArtifactsList,
   runBrainArtifactsShow,
   runBrainBrief,
+  runBrainInboxPropose,
   runBrainJournalShow,
   runBrainMemories,
   runBrainSkills,
@@ -289,6 +290,17 @@ cli
   .action(async (taskId: string, opts: { showSensitive?: boolean }) => {
     process.exit(await runBrainJournalShow(taskId, {
       ...(opts.showSensitive === undefined ? {} : { showSensitive: opts.showSensitive }),
+    }))
+  })
+
+cli
+  .command('brain inbox propose <taskId>', '从 task 的 Brain Engine lesson candidates 创建 pending admission proposals')
+  .option('--soul <id>', '写入 proposal 的 Soul id（默认 developer）')
+  .option('--scope <id>', '写入 proposal 的 scope id（可选）')
+  .action(async (taskId: string, opts: { soul?: string, scope?: string }) => {
+    process.exit(await runBrainInboxPropose(taskId, {
+      ...(opts.soul === undefined ? {} : { soulId: opts.soul }),
+      ...(opts.scope === undefined ? {} : { scopeId: opts.scope }),
     }))
   })
 
@@ -844,6 +856,17 @@ cli
   .action(async (taskId: string, opts: { showSensitive?: boolean }) => {
     process.exit(await runBrainJournalShow(taskId, {
       ...(opts.showSensitive === undefined ? {} : { showSensitive: opts.showSensitive }),
+    }))
+  })
+
+cli
+  .command('worker brain inbox propose <taskId>', '从 task 的 Brain Engine lesson candidates 创建 pending admission proposals')
+  .option('--soul <id>', '写入 proposal 的 Soul id（默认 developer）')
+  .option('--scope <id>', '写入 proposal 的 scope id（可选）')
+  .action(async (taskId: string, opts: { soul?: string, scope?: string }) => {
+    process.exit(await runBrainInboxPropose(taskId, {
+      ...(opts.soul === undefined ? {} : { soulId: opts.soul }),
+      ...(opts.scope === undefined ? {} : { scopeId: opts.scope }),
     }))
   })
 

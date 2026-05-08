@@ -19,6 +19,7 @@ export type BrainJournalEventKind
     | 'decision.capability'
     | 'decision.intent'
     | 'gate.quality'
+    | 'inbox.candidates_proposed'
     | 'repair.attempted'
     | 'rerun.requested'
     | 'task.failed'

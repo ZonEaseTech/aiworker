@@ -1,6 +1,6 @@
 # PLAN-178 Brain Inbox lesson admission flow
 
-- **status**: draft
+- **status**: completed
 - **createdAt**: 2026-05-09 03:12
 - **relatedTask**: FEAT-056
 
@@ -9,6 +9,19 @@
 AIWorker supports Brain admission materialization for memory and Brain skills,
 but lesson candidates from task outcomes are not yet presented as a deliberate
 Brain Inbox product surface.
+
+Implemented 2026-05-09:
+
+- Added `BrainInboxService.proposeFromTask(taskId)` to read Brain Engine
+  `lessonCandidates` from Journal and create pending `memory-add` admission
+  proposals.
+- Candidate proposals include source event evidence, candidate evidence refs,
+  scope/soul, risk, confidence, target, payload body, and rollback.
+- Exposed the flow through Worker REST
+  `POST /api/worker/brain/inbox/from-task/{taskId}` and CLI
+  `aiworker brain inbox propose <taskId>`.
+- Rejected candidates remain rejected admission rows and never mutate canonical
+  Brain memory.
 
 ## Goal
 
@@ -45,8 +58,13 @@ admission proposals without silently writing long-term memory.
 
 ## Verification
 
-- Focused admission/inbox tests.
-- One dogfood sample generating a developer repo lesson candidate.
+- `bun test packages/core/src/worker/brain/inbox/service.test.ts`
+- `bun test apps/api/src/worker/brain/routes.test.ts`
+- `bun test apps/cli/src/commands/worker/brain-admission.test.ts`
+- `bun test apps/cli/src/aiworker.test.ts`
+- `bun run --filter '@zonease/aiworker-core' typecheck`
+- `bun run --filter '@zonease/aiworker-api' typecheck`
+- `bun run --filter '@zonease/aiworker-cli' typecheck`
 - `git diff --check`
 
 ## Dependencies

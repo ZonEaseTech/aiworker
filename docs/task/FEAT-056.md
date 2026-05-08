@@ -91,3 +91,6 @@ executor 平台、通用 memory layer、通用 sandbox 或泛化 workflow builde
   gateway `orchestrator.tasks.rerun`，rerun 会写 parent/child Journal lineage；
   quality-gate block 会写 `task.held`，每个 parent task 最多 3 个 child rerun，避免
   隐式无限循环。
+- 2026-05-09 04:05：PLAN-178 完成。新增 Brain Inbox：从 task Journal 的
+  Brain Engine `lessonCandidates` 生成 pending admission proposals；CLI 和 Worker REST
+  可触发，approve/reject/apply 仍复用 admission state machine，不自动写长期 Brain。

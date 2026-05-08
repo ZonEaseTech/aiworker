@@ -4,7 +4,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import {
+  agentTasks,
   closeWorkerDb,
+  getWorkerDb,
   initWorkerDb,
   runWorkerMigrations,
 } from '@zonease/aiworker-storage-sqlite/worker'
@@ -29,7 +31,7 @@ mock.module('../../context', () => ({
   }),
 }))
 
-const { BrainAdmissionService } = await import('@zonease/aiworker-core')
+const { BrainAdmissionService, recordBrainJournalEvent } = await import('@zonease/aiworker-core')
 const { resolveBrainHome } = await import('@zonease/aiworker-fs-layout')
 const {
   runBrainAdmissionApply,
@@ -38,6 +40,7 @@ const {
   runBrainAdmissionPropose,
   runBrainAdmissionReject,
   runBrainAdmissionShow,
+  runBrainInboxPropose,
 } = await import('./brain')
 
 interface AdmissionListOutput {
@@ -55,6 +58,11 @@ interface AdmissionShowOutput {
     payload?: Record<string, unknown>
   }
   decisions: Array<{ decision: string }>
+}
+
+interface InboxProposeOutput {
+  proposals: Array<{ id: string, status: string, summary: string }>
+  candidates: unknown[]
 }
 
 interface AdmissionApprovalOutput {
@@ -120,6 +128,46 @@ describe('aiworker brain admission commands (PLAN-101)', () => {
         console.log = original
       })
   }
+
+  it('PLAN-178: brain inbox propose creates pending admissions from task lesson candidates', async () => {
+    getWorkerDb().insert(agentTasks).values({
+      id: 'task-cli-inbox',
+      prompt: 'capture lesson',
+      status: 'succeeded',
+      createdAt: '2026-05-09T04:30:00.000Z',
+      finishedAt: '2026-05-09T04:31:00.000Z',
+      result: { ok: true },
+    }).run()
+    recordBrainJournalEvent({
+      kind: 'brain_engine.review',
+      taskId: 'task-cli-inbox',
+      payload: {
+        lessonCandidates: [
+          {
+            kind: 'repo-fact',
+            summary: 'Brain Inbox keeps lessons pending until admission approval.',
+            evidenceRefs: ['agent_tasks:task-cli-inbox'],
+            confidence: 0.7,
+            risk: 'medium',
+          },
+        ],
+      },
+    })
+
+    const { result, output } = await captureConsole(() => runBrainInboxPropose('task-cli-inbox', {
+      scopeId: 'repo:aiworker',
+      soulId: 'developer',
+    }))
+
+    expect(result).toBe(0)
+    const parsed = JSON.parse(output) as InboxProposeOutput
+    expect(parsed.candidates).toHaveLength(1)
+    expect(parsed.proposals).toHaveLength(1)
+    expect(parsed.proposals[0]).toMatchObject({
+      status: 'pending',
+      summary: 'Brain Inbox keeps lessons pending until admission approval.',
+    })
+  })
 
   it('list defaults to redacting payload secret-like fields', async () => {
     service.propose({

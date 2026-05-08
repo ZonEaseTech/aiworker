@@ -35,6 +35,7 @@ const ROOT_WORKER_COMMANDS = [
   'soul show',
   'brain status',
   'brain journal show',
+  'brain inbox propose',
   'brain skills',
   'brain skills sync-native',
   'brain memories',

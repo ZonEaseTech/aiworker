@@ -99,6 +99,16 @@ export {
   reviewTaskWithBrainEngine,
 } from './worker/brain/reviewer'
 
+// Brain Inbox (PLAN-178)：turn Brain Engine lesson candidates into pending
+// Brain admission proposals without writing canonical memory automatically.
+export {
+  BrainInboxService,
+  type BrainInboxCandidate,
+  type BrainInboxProposalResult,
+  createBrainInboxService,
+  type ProposeBrainInboxFromTaskOptions,
+} from './worker/brain/inbox'
+
 // Brain summary 聚合（PLAN-103）：从 worker.db 读 admission / artifact 计数 +
 // scope manifest 状态，喂给 buildInfo 与 fleet UI；不复制 payload / artifact
 // ref / canonical brain 文本。

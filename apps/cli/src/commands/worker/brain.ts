@@ -7,7 +7,7 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 
-import { BrainAdmissionService, BrainArtifactRegistry, BrainBriefCompiler, BrainJournalService, describeBrainSource, getDecisionPipelineSnapshot } from '@zonease/aiworker-core'
+import { BrainAdmissionService, BrainArtifactRegistry, BrainBriefCompiler, BrainInboxService, BrainJournalService, describeBrainSource, getDecisionPipelineSnapshot } from '@zonease/aiworker-core'
 import { NATIVE_PROJECT_SKILL_TARGETS, projectScopeManifestPath, resolveAiworkerScope, resolveBrainHome } from '@zonease/aiworker-fs-layout'
 import { createBuiltinSoulRegistry, parseScopeManifestJson } from '@zonease/aiworker-shared'
 import consola from 'consola'
@@ -174,6 +174,35 @@ export async function runBrainJournalShow(taskId: string, options: BrainJournalS
   }
   catch (err) {
     consola.error(`[aiworker brain journal show] failed: ${err instanceof Error ? err.message : String(err)}`)
+    return 1
+  }
+}
+
+export interface BrainInboxProposeOptions {
+  scopeId?: string
+  soulId?: string
+}
+
+export async function runBrainInboxPropose(taskId: string, options: BrainInboxProposeOptions = {}): Promise<number> {
+  if (taskId === undefined || taskId === '') {
+    consola.error('[aiworker brain inbox propose] task id is required')
+    return 2
+  }
+  try {
+    return await withWorkerContext(async (ctx) => {
+      const result = new BrainInboxService().proposeFromTask(taskId, {
+        ...(options.scopeId === undefined ? {} : { scopeId: options.scopeId }),
+        ...(options.soulId === undefined ? {} : { soulId: options.soulId }),
+      })
+      console.log(JSON.stringify({
+        workerId: ctx.workerId,
+        ...result,
+      }, null, 2))
+      return 0
+    })
+  }
+  catch (err) {
+    consola.error(`[aiworker brain inbox propose] failed: ${err instanceof Error ? err.message : String(err)}`)
     return 1
   }
 }

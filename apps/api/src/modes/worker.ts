@@ -308,6 +308,7 @@ function registerWorkerOpenApiPaths(app: OpenAPIHono): void {
     { method: 'get', path: '/api/worker/schedule', summary: 'Worker cron schedule snapshot', tags: ['management'], requireAuth: true },
     { method: 'get', path: '/api/worker/approvals', summary: 'Pending tool approval requests', tags: ['management'], requireAuth: true },
     { method: 'get', path: '/api/worker/brain/summary', summary: 'Brain summary aggregate (memories / skills / artifacts / admission)', tags: ['brain'], requireAuth: true },
+    { method: 'post', path: '/api/worker/brain/inbox/from-task/{taskId}', summary: 'Create Brain Inbox admission proposals from task lessons', tags: ['brain'], requireAuth: true },
     { method: 'get', path: '/api/worker/brain/admission', summary: 'List admission proposals', tags: ['brain'], requireAuth: true },
     { method: 'get', path: '/api/worker/brain/admission/{id}', summary: 'Show admission proposal + decisions', tags: ['brain'], requireAuth: true },
     { method: 'post', path: '/api/worker/brain/admission/{id}/approve', summary: 'Approve a pending admission proposal', tags: ['brain'], requireAuth: true },

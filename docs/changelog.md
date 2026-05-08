@@ -1,5 +1,18 @@
 # AIWorker Changelog
 
+## 2026-05-09 04:05 [completed] PLAN-178 — Brain Inbox lesson admission flow
+
+完成 Brain Inbox MVP：把 Brain Engine review 里的 lesson candidates 转换成 pending
+Brain admission proposals，而不是自动写长期 memory。
+
+- 新增 `BrainInboxService.proposeFromTask()`，从 Journal 中读取最新
+  `brain_engine.review` 事件并提取 `lessonCandidates`。
+- 每个 candidate 生成 `memory-add` admission proposal，带 evidence refs、scope、
+  risk、confidence、target、payload body 和 rollback。
+- Worker REST 新增 `POST /api/worker/brain/inbox/from-task/{taskId}`；CLI 新增
+  `aiworker brain inbox propose <taskId>` / `aiworker worker brain inbox propose <taskId>`。
+- Rejected candidate 只停留在 admission row，不改变 canonical Brain。
+
 ## 2026-05-09 03:52 [progress] PLAN-177 — Repair and rerun orchestration
 
 开始实现 bounded proof-loop rerun：沿用现有单次 repair，不新增无限自动规划；
