@@ -16,14 +16,16 @@ interface SizeBaseline {
 }
 
 const criticalStudioSelectors = [
-  '.worker-studio',
-  '.studio-grid',
-  '.brief-shelf',
-  '.run-stage',
-  '.run-lane',
-  '.artifact-canvas',
-  '.review-rail',
-  '.lesson-ledger',
+  '.entry',
+  '.entry-side',
+  '.newproj',
+  '.entry-main',
+  '.tab-panel-toolbar',
+  '.design-card',
+  '.pet-rail',
+  '.modal-settings',
+  '.settings-autosave',
+  '.agent-card',
 ] as const
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url))

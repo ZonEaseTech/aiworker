@@ -1,29 +1,30 @@
-import type {
-  LocalArtifact,
-  LocalFile,
-  LocalLesson,
-  LocalReview,
-  LocalRun,
-  LocalRunEvent,
-} from '@zonease/aiworker-shared'
-import type { FormEvent } from 'react'
+import type { LocalRun } from '@zonease/aiworker-shared'
+import type { CSSProperties, FormEvent } from 'react'
 import type { LocalWorkspaceData } from './api'
 
 import {
-  Activity,
-  BookOpen,
-  CheckCircle2,
-  Circle,
-  FileText,
-  FolderOpen,
-  Play,
+  Bell,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Eye,
+  Grid3X3,
+  Image,
+  Languages,
+  Link,
+  List,
   Plus,
   RefreshCw,
   Search,
+  Settings,
+  SlidersHorizontal,
   Sparkles,
+  Sun,
+  Upload,
+  X,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { createBrief, loadLocalWorkspaceData, readFile, startRun } from './api'
+import { createBrief, loadLocalWorkspaceData, startRun } from './api'
 
 interface StudioState {
   data: LocalWorkspaceData | null
@@ -31,24 +32,64 @@ interface StudioState {
   error: string | null
 }
 
+interface ProjectCard {
+  title: string
+  engine: string
+  type: string
+  status: string
+  age: string
+}
+
+const topTabs = ['Designs', 'Examples', 'Design systems', 'Connectors', 'Image templates', 'Video templates'] as const
+const createTabs = ['Prototype', 'Live artifact', 'Slide deck', 'From template'] as const
+const designTabs = ['Recent', 'Your designs'] as const
+
+const settingsSections = [
+  { id: 'execution', title: 'Configure execution mode', detail: 'Local CLI / BYOK', icon: SlidersHorizontal },
+  { id: 'media', title: 'Media providers', detail: 'Image / video / audio', icon: Image },
+  { id: 'connectors', title: 'Connectors', detail: 'External system connections', icon: SlidersHorizontal },
+  { id: 'orbit', title: 'Orbit', detail: 'Daily connector summary', icon: Eye },
+  { id: 'mcp', title: 'MCP server', detail: 'Expose Open Design as an MCP server for your coding agent.', icon: Link },
+  { id: 'external-mcp', title: 'External MCP', detail: 'Add MCP tools from external services (Higgsfield, GitHub, ...).', icon: Sparkles },
+  { id: 'language', title: 'Language', detail: 'Switch the interface language. Saved to this browser.', icon: Languages },
+  { id: 'appearance', title: 'Appearance', detail: 'Choose light, dark, or follow system.', icon: Sun },
+  { id: 'notifications', title: 'Notifications', detail: 'Completion alerts and sounds.', icon: Bell },
+  { id: 'pet', title: 'Pets', detail: 'Adopt or customize', icon: Sparkles },
+  { id: 'about', title: 'About', detail: 'Version and runtime details.', icon: Settings },
+] as const
+
+const engines = [
+  { id: 'claude-code', name: 'Claude Code', detail: '2.1.132 (Claude Code)', installed: true, tone: 'coral' },
+  { id: 'codex-cli', name: 'Codex CLI', detail: 'codex-cli 0.128.0', installed: true, tone: 'dark' },
+  { id: 'devin', name: 'Devin for Terminal', detail: 'not installed', installed: false, tone: 'gray' },
+  { id: 'gemini', name: 'Gemini CLI', detail: 'not installed', installed: false, tone: 'violet' },
+  { id: 'opencode', name: 'OpenCode', detail: 'not installed', installed: false, tone: 'green' },
+  { id: 'hermes', name: 'Hermes', detail: 'not installed', installed: false, tone: 'gray' },
+  { id: 'kimi', name: 'Kimi CLI', detail: 'not installed', installed: false, tone: 'gray' },
+  { id: 'cursor', name: 'Cursor Agent', detail: 'not installed', installed: false, tone: 'dark' },
+  { id: 'qwen', name: 'Qwen Code', detail: 'not installed', installed: false, tone: 'violet' },
+  { id: 'qoder', name: 'Qoder CLI', detail: 'not installed', installed: false, tone: 'dark' },
+] as const
+
+type EngineId = (typeof engines)[number]['id']
+
 export function WorkerStudio() {
   const [state, setState] = useState<StudioState>({ data: null, loading: true, error: null })
-  const [activeBriefId, setActiveBriefId] = useState<string | null>(null)
-  const [activeRunId, setActiveRunId] = useState<string | null>(null)
-  const [activeFile, setActiveFile] = useState<string | null>(null)
-  const [fileBody, setFileBody] = useState('')
-  const [briefTitle, setBriefTitle] = useState('')
-  const [briefBody, setBriefBody] = useState('')
-  const [directPrompt, setDirectPrompt] = useState('')
+  const [projectName, setProjectName] = useState('')
+  const [activeTopTab, setActiveTopTab] = useState<(typeof topTabs)[number]>('Designs')
+  const [activeCreateTab, setActiveCreateTab] = useState<(typeof createTabs)[number]>('Prototype')
+  const [activeDesignTab, setActiveDesignTab] = useState<(typeof designTabs)[number]>('Recent')
+  const [view, setView] = useState<'grid' | 'list'>('grid')
   const [query, setQuery] = useState('')
+  const [settingsOpen, setSettingsOpen] = useState(true)
+  const [selectedEngine, setSelectedEngine] = useState<EngineId>('codex-cli')
+  const [submitting, setSubmitting] = useState(false)
 
   async function refresh() {
     setState(current => ({ ...current, loading: true, error: null }))
     try {
       const data = await loadLocalWorkspaceData()
       setState({ data, loading: false, error: null })
-      setActiveBriefId(current => current ?? data.briefs[0]?.id ?? null)
-      setActiveRunId(current => current ?? data.runs[0]?.id ?? null)
     }
     catch (error) {
       setState({
@@ -63,397 +104,583 @@ export function WorkerStudio() {
     void refresh()
   }, [])
 
-  const data = state.data
-
-  const activeBrief = useMemo(
-    () => data?.briefs.find(brief => brief.id === activeBriefId) ?? data?.briefs[0] ?? null,
-    [activeBriefId, data?.briefs],
-  )
-
-  const activeRun = useMemo(
-    () => data?.runs.find(run => run.id === activeRunId) ?? data?.runs[0] ?? null,
-    [activeRunId, data?.runs],
-  )
-
-  const activeArtifact = useMemo(
-    () => data?.artifacts.find(artifact => artifact.runId === activeRun?.id)
-      ?? data?.artifacts[0]
-      ?? null,
-    [activeRun?.id, data?.artifacts],
-  )
-
-  const activeReview = useMemo(
-    () => data?.reviews.find(review => review.runId === activeRun?.id || review.artifactId === activeArtifact?.id)
-      ?? data?.reviews[0]
-      ?? null,
-    [activeArtifact?.id, activeRun?.id, data?.reviews],
-  )
-
-  const visibleLessons = useMemo(
-    () => data?.lessons.filter(lesson => !activeReview || lesson.sourceReviewId === activeReview.id || lesson.sourceReviewId === null) ?? [],
-    [activeReview, data?.lessons],
-  )
-
-  const activeEvents = useMemo(
-    () => data?.events.filter(event => event.runId === activeRun?.id) ?? [],
-    [activeRun?.id, data?.events],
-  )
-
-  const filteredFiles = useMemo(
-    () => (data?.files ?? []).filter(file => file.path.toLowerCase().includes(query.trim().toLowerCase())),
-    [data?.files, query],
-  )
-  const selectedFile = activeFile ?? activeArtifact?.path ?? null
-
-  useEffect(() => {
-    if (!selectedFile)
+  async function submitProject(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const title = projectName.trim()
+    if (!title)
       return
 
-    let live = true
-    readFile(selectedFile)
-      .then((text) => {
-        if (live)
-          setFileBody(text)
-      })
-      .catch((error) => {
-        if (live)
-          setFileBody(error instanceof Error ? error.message : String(error))
-      })
-    return () => {
-      live = false
+    setSubmitting(true)
+    try {
+      const body = `Create a high fidelity prototype for ${title}.`
+      const result = await createBrief({ title, body })
+      await startRun({ briefId: result.brief.id, prompt: body })
+      setProjectName('')
+      await refresh()
     }
-  }, [selectedFile])
-
-  async function submitBrief(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const title = briefTitle.trim()
-    const body = briefBody.trim()
-    if (!title || !body)
-      return
-
-    const result = await createBrief({ title, body })
-    setBriefTitle('')
-    setBriefBody('')
-    setActiveBriefId(result.brief.id)
-    await refresh()
+    finally {
+      setSubmitting(false)
+    }
   }
 
-  async function submitRun(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const result = await startRun({
-      briefId: activeBrief?.id,
-      prompt: directPrompt.trim() ? directPrompt.trim() : undefined,
-    })
-    setDirectPrompt('')
-    setActiveRunId(result.run.id)
-    await refresh()
-  }
+  const projects = useMemo(() => {
+    const fromData = buildProjectCards(state.data)
+    const fallback: ProjectCard[] = [
+      { title: 'TTPOS Flutter', engine: 'Flat', type: 'blog-post', status: 'Completed', age: '2d ago' },
+      { title: 'TTPOS', engine: 'Mistral AI', type: 'web-prototype', status: 'Completed', age: '3d ago' },
+    ]
+    return fromData.length > 0 ? fromData : fallback
+  }, [state.data])
 
-  if (state.loading && !data) {
+  const visibleProjects = useMemo(() => {
+    const needle = query.trim().toLowerCase()
+    if (!needle)
+      return projects
+    return projects.filter(project => project.title.toLowerCase().includes(needle))
+  }, [projects, query])
+
+  if (state.loading && !state.data) {
     return (
-      <main className="worker-studio worker-studio--centered">
-        <div className="studio-loader">
-          <Sparkles aria-hidden="true" />
-          <span>Loading local studio</span>
-        </div>
+      <main className="od-loading-shell">
+        <span>Loading workspace...</span>
       </main>
     )
   }
 
   if (state.error) {
     return (
-      <main className="worker-studio worker-studio--centered">
-        <div className="studio-error" role="alert">{state.error}</div>
+      <main className="od-loading-shell">
+        <span role="alert">{state.error}</span>
       </main>
     )
   }
 
-  if (!data)
-    return null
-
-  const previewTitle = selectedFile ?? activeArtifact?.path ?? 'workspace'
-  const previewBody = fileBody || activeRun?.summary || activeBrief?.body || ''
-
   return (
-    <main className="worker-studio">
-      <section className="studio-topline" aria-label="Workspace">
-        <div className="studio-mark">
-          <span className="studio-mark__dot" aria-hidden="true" />
-          <span>AIWorker</span>
-        </div>
-        <div className="studio-workspace">
-          <strong>{data.info.workspace.name}</strong>
-          <span>{data.info.workspace.rootPath}</span>
-        </div>
-        <button className="icon-button" type="button" onClick={() => void refresh()} aria-label="Refresh workspace">
-          <RefreshCw aria-hidden="true" />
-        </button>
-      </section>
+    <main className="entry-shell">
+      <div
+        className="entry has-pet-rail"
+        style={{ gridTemplateColumns: '380px 1fr auto' }}
+      >
+        <aside className="entry-side" style={{ width: 380 }} aria-label="Prototype creator">
+          <div className="window-lights" aria-hidden="true">
+            <span className="light-red" />
+            <span className="light-yellow" />
+            <span className="light-green" />
+          </div>
 
-      <section className="studio-grid">
-        <aside className="brief-shelf" aria-label="Brief shelf">
-          <form className="brief-composer" onSubmit={submitBrief}>
-            <div className="surface-title">
-              <Plus aria-hidden="true" />
-              <span>New brief</span>
+          <div className="entry-brand">
+            <span className="entry-brand-mark" aria-hidden="true">
+              <img src="/logo.svg" alt="" className="brand-mark-img" draggable={false} />
+            </span>
+            <div className="entry-brand-text">
+              <div className="entry-brand-title-row">
+                <span className="entry-brand-title">Open Design</span>
+                <span className="entry-brand-pill">Research Preview</span>
+              </div>
+              <div className="entry-brand-subtitle">by Nexu Labs</div>
             </div>
-            <label className="field">
-              <span>Title</span>
-              <input value={briefTitle} onChange={event => setBriefTitle(event.target.value)} />
-            </label>
-            <label className="field">
-              <span>Body</span>
-              <textarea value={briefBody} onChange={event => setBriefBody(event.target.value)} rows={4} />
-            </label>
-            <button className="command-button" type="submit">
-              <Plus aria-hidden="true" />
-              <span>Create</span>
+          </div>
+
+          <section className="newproj" data-testid="new-project-panel">
+            <div className="newproj-tabs-shell can-right">
+              <div className="newproj-tabs" role="tablist">
+                {createTabs.map(tab => (
+                  <button
+                    key={tab}
+                    type="button"
+                    role="tab"
+                    aria-selected={activeCreateTab === tab}
+                    className={`newproj-tab ${activeCreateTab === tab ? 'active' : ''}`}
+                    onClick={() => setActiveCreateTab(tab)}
+                  >
+                    {tab}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                className="newproj-tabs-arrow right"
+                aria-label="Scroll project types right"
+              >
+                <ChevronRight aria-hidden="true" size={16} strokeWidth={2} />
+              </button>
+            </div>
+
+            <form className="newproj-body" onSubmit={submitProject}>
+              <h3 className="newproj-title">
+                <span className="newproj-title-text">New prototype</span>
+              </h3>
+
+              <input
+                className="newproj-name"
+                aria-label="Project name"
+                data-testid="new-project-name"
+                placeholder="Project name"
+                value={projectName}
+                onChange={event => setProjectName(event.target.value)}
+              />
+
+              <section className="newproj-section">
+                <label className="newproj-label">Design system</label>
+                <button className="ds-select" type="button">
+                  <span className="ds-icon-empty" aria-hidden="true">
+                    <span />
+                  </span>
+                  <span className="ds-select-copy">
+                    <strong>None - freeform</strong>
+                    <small>No system tokens, choose your own palette</small>
+                  </span>
+                  <ChevronDown aria-hidden="true" size={16} />
+                </button>
+              </section>
+
+              <section className="newproj-section">
+                <label className="newproj-label">Fidelity</label>
+                <div className="fidelity-grid">
+                  <FidelityCard label="Wireframe" variant="wireframe" />
+                  <FidelityCard label="High fidelity" variant="high-fidelity" active />
+                </div>
+              </section>
+
+              <button
+                className="primary newproj-create"
+                data-testid="create-project"
+                type="submit"
+                disabled={!projectName.trim() || submitting}
+              >
+                <Plus aria-hidden="true" size={13} />
+                <span>Create</span>
+              </button>
+
+              <button className="ghost newproj-import" type="button">
+                <Upload aria-hidden="true" size={13} />
+                <span>Import Claude Design ZIP</span>
+              </button>
+            </form>
+            <div className="newproj-footer">Only you can see your project by default.</div>
+          </section>
+
+          <div className="entry-side-foot">
+            <button type="button" className="foot-pill pet-pill pet-pill-fresh">
+              <span className="pet-pill-glyph" aria-hidden="true">🦄</span>
+              <span>Change pet</span>
             </button>
-          </form>
+            <button type="button" className="foot-pill" onClick={() => setSettingsOpen(true)}>
+              <Settings aria-hidden="true" size={12} />
+              <span>Local CLI</span>
+              <span style={{ color: 'var(--text-faint)' }}>·</span>
+              <span>Codex CLI · codex-cli 0.128.0</span>
+            </button>
+            <button type="button" className="foot-pill">
+              <Languages aria-hidden="true" size={12} />
+              <span>English</span>
+              <ChevronDown aria-hidden="true" size={12} />
+            </button>
+          </div>
+        </aside>
 
-          <section className="shelf-stack" aria-label="Briefs">
-            <div className="surface-title">
-              <BookOpen aria-hidden="true" />
-              <span>Briefs</span>
-            </div>
-            <div className="brief-list">
-              {data.briefs.map(brief => (
+        <section className="entry-main" aria-label="Designs">
+          <header className="entry-header">
+            <div className="entry-tabs" role="tablist">
+              {topTabs.map(tab => (
                 <button
-                  key={brief.id}
-                  className={activeBrief?.id === brief.id ? 'brief-item is-active' : 'brief-item'}
+                  key={tab}
                   type="button"
-                  onClick={() => setActiveBriefId(brief.id)}
+                  role="tab"
+                  aria-selected={activeTopTab === tab}
+                  className={`entry-tab ${activeTopTab === tab ? 'active' : ''}`}
+                  onClick={() => setActiveTopTab(tab)}
                 >
-                  <span>{brief.title}</span>
-                  <small>{brief.status}</small>
+                  {tab}
                 </button>
               ))}
             </div>
-          </section>
-
-          <section className="shelf-stack shelf-stack--files" aria-label="Files">
-            <label className="surface-title search-title" htmlFor="studio-file-search">
-              <Search aria-hidden="true" />
-              <span>Files</span>
-            </label>
-            <input
-              id="studio-file-search"
-              className="file-search"
-              value={query}
-              onChange={event => setQuery(event.target.value)}
-            />
-            <div className="file-list">
-              {filteredFiles.map(file => (
-                <FileButton
-                  key={file.id}
-                  file={file}
-                  active={selectedFile === file.path}
-                  onSelect={() => setActiveFile(file.path)}
-                />
-              ))}
+            <div className="entry-header-right">
+              <button className="avatar-btn" type="button" aria-label="Account">
+                <img src="/avatar.png" alt="" aria-hidden="true" draggable={false} className="avatar-btn-photo" />
+              </button>
             </div>
-          </section>
-        </aside>
+          </header>
 
-        <section className="run-stage" aria-label="Run stage">
-          <div className="stage-header">
-            <div>
-              <span className="eyebrow">Run lane</span>
-              <h1>{activeBrief?.title ?? 'Local worker'}</h1>
-            </div>
-            <StatusBadge value={activeRun?.status ?? 'idle'} />
-          </div>
+          <div className="entry-tab-content">
+            <div className="tab-panel">
+              <div className="tab-panel-toolbar">
+                <div className="toolbar-left">
+                  <div className="subtab-pill" role="group" aria-label="Design filters">
+                    {designTabs.map(tab => (
+                      <button
+                        key={tab}
+                        type="button"
+                        className={activeDesignTab === tab ? 'active' : ''}
+                        aria-pressed={activeDesignTab === tab}
+                        onClick={() => setActiveDesignTab(tab)}
+                      >
+                        {tab}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-          <form className="run-composer" onSubmit={submitRun}>
-            <label htmlFor="studio-run-prompt">Prompt</label>
-            <textarea
-              id="studio-run-prompt"
-              value={directPrompt}
-              onChange={event => setDirectPrompt(event.target.value)}
-              placeholder={activeBrief?.body ?? ''}
-              rows={3}
-            />
-            <button className="run-button" type="submit">
-              <Play aria-hidden="true" />
-              <span>Run</span>
-            </button>
-          </form>
-
-          <div className="run-lane" aria-label="Runs">
-            {data.runs.map(run => (
-              <RunChip
-                key={run.id}
-                run={run}
-                active={activeRun?.id === run.id}
-                onSelect={() => setActiveRunId(run.id)}
-              />
-            ))}
-          </div>
-
-          <section className="artifact-canvas" aria-label="Artifact canvas">
-            <div className="artifact-toolbar">
-              <div>
-                <span className="eyebrow">Artifact canvas</span>
-                <strong>{shortPath(previewTitle)}</strong>
+                <div className="toolbar-right">
+                  <label className="toolbar-search">
+                    <span className="search-icon" aria-hidden="true">
+                      <Search size={13} />
+                    </span>
+                    <input
+                      aria-label="Search designs"
+                      placeholder="Search..."
+                      value={query}
+                      onChange={event => setQuery(event.target.value)}
+                    />
+                  </label>
+                  <div className="subtab-pill" role="group" aria-label="View mode">
+                    <button
+                      type="button"
+                      className={view === 'grid' ? 'active' : ''}
+                      aria-pressed={view === 'grid'}
+                      aria-label="Grid view"
+                      onClick={() => setView('grid')}
+                    >
+                      <Grid3X3 size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      className={view === 'list' ? 'active' : ''}
+                      aria-pressed={view === 'list'}
+                      aria-label="List view"
+                      onClick={() => setView('list')}
+                    >
+                      <List size={14} />
+                    </button>
+                  </div>
+                </div>
               </div>
-              <FileText aria-hidden="true" />
-            </div>
-            <pre>{previewBody}</pre>
-          </section>
 
-          <section className="artifact-strip" aria-label="Artifacts">
-            {data.artifacts.map(artifact => (
-              <ArtifactButton
-                key={artifact.id}
-                artifact={artifact}
-                active={activeArtifact?.id === artifact.id || selectedFile === artifact.path}
-                onSelect={() => {
-                  setActiveFile(artifact.path)
-                  if (artifact.runId)
-                    setActiveRunId(artifact.runId)
-                }}
-              />
-            ))}
-          </section>
+              <div className={view === 'grid' ? 'design-grid' : 'design-grid design-grid-list'}>
+                {visibleProjects.map(project => (
+                  <DesignCard key={`${project.title}-${project.age}`} project={project} />
+                ))}
+              </div>
+            </div>
+          </div>
         </section>
 
-        <aside className="review-rail" aria-label="Review rail">
-          <section className="review-surface">
-            <div className="surface-title">
-              <CheckCircle2 aria-hidden="true" />
-              <span>Review</span>
+        <aside className="pet-rail" aria-label="PETS">
+          <header className="pet-rail-head">
+            <div className="pet-rail-title">
+              <span aria-hidden="true">🐾</span>
+              <strong>PETS</strong>
             </div>
-            {activeReview ? <ReviewBlock review={activeReview} /> : <EmptyLine label="No review yet" />}
-          </section>
-
-          <section className="review-surface">
-            <div className="surface-title">
-              <Activity aria-hidden="true" />
-              <span>Run events</span>
+            <div className="pet-rail-head-actions">
+              <button type="button" className="pet-rail-collapse" aria-label="Collapse pet picker">
+                <ChevronRight size={14} />
+              </button>
+              <button type="button" className="pet-rail-collapse" aria-label="Hide pet picker">
+                <X size={14} />
+              </button>
             </div>
-            <div className="event-list">
-              {activeEvents.length > 0
-                ? activeEvents.map(event => <EventLine key={event.id} event={event} />)
-                : <EmptyLine label="No events yet" />}
-            </div>
-          </section>
-
-          <section className="lesson-ledger">
-            <div className="surface-title">
-              <BookOpen aria-hidden="true" />
-              <span>Lessons</span>
-            </div>
-            <div className="lesson-list">
-              {visibleLessons.length > 0
-                ? visibleLessons.map(lesson => <LessonLine key={lesson.id} lesson={lesson} />)
-                : <EmptyLine label="No lessons yet" />}
-            </div>
-          </section>
+          </header>
+          <p className="pet-rail-hint">Pick a companion to float over your workspace.</p>
+          <div className="pet-rail-status">
+            <button type="button" className="pet-rail-status-pill">
+              <Eye aria-hidden="true" size={12} />
+              <span>Tuck away</span>
+            </button>
+          </div>
+          <div className="pet-rail-list">
+            <button
+              type="button"
+              className="pet-rail-item active"
+              aria-pressed="true"
+              style={{ '--pet-accent': 'var(--accent)' } as CSSProperties}
+            >
+              <span className="pet-rail-item-glyph" aria-hidden="true">👨‍💼</span>
+              <span className="pet-rail-item-meta">
+                <span className="pet-rail-item-name">Trump</span>
+                <span className="pet-rail-item-flavor">Your own - name, glyph,...</span>
+              </span>
+              <Check size={14} aria-hidden="true" />
+            </button>
+          </div>
+          <button type="button" className="pet-rail-customize">
+            <Sparkles aria-hidden="true" size={12} />
+            <span>Customize...</span>
+          </button>
+          <div className="floating-pet" aria-hidden="true">T</div>
         </aside>
-      </section>
+
+        {settingsOpen
+          ? (
+              <SettingsDialog
+                selectedEngine={selectedEngine}
+                onClose={() => setSettingsOpen(false)}
+                onEngineChange={setSelectedEngine}
+              />
+            )
+          : null}
+      </div>
     </main>
   )
 }
 
-function FileButton({ file, active, onSelect }: { file: LocalFile, active: boolean, onSelect: () => void }) {
+function SettingsDialog({
+  selectedEngine,
+  onClose,
+  onEngineChange,
+}: {
+  selectedEngine: EngineId
+  onClose: () => void
+  onEngineChange: (engine: EngineId) => void
+}) {
   return (
-    <button className={active ? 'file-button is-active' : 'file-button'} type="button" onClick={onSelect}>
-      <FolderOpen aria-hidden="true" />
-      <span>{shortPath(file.path)}</span>
-      <small>{file.kind}</small>
-    </button>
-  )
-}
+    <div className="modal-backdrop" onClick={onClose}>
+      <div
+        className="modal modal-settings"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-dialog-title"
+        onClick={event => event.stopPropagation()}
+      >
+        <div className="settings-chrome" aria-hidden={false}>
+          <div className="settings-autosave is-saved" role="status" aria-live="polite">
+            <Check size={12} />
+            <span>All changes saved</span>
+          </div>
+          <button
+            type="button"
+            className="settings-close"
+            onClick={onClose}
+            aria-label="Close settings"
+            title="Close"
+          >
+            <X size={16} strokeWidth={2} />
+          </button>
+        </div>
 
-function RunChip({ run, active, onSelect }: { run: LocalRun, active: boolean, onSelect: () => void }) {
-  return (
-    <button className={active ? 'run-chip is-active' : 'run-chip'} type="button" onClick={onSelect}>
-      <span>{run.summary ?? run.prompt}</span>
-      <StatusDot value={run.status} />
-    </button>
-  )
-}
+        <header className="modal-head">
+          <span className="kicker">WELCOME</span>
+          <h2 id="settings-dialog-title">Set up Open Design</h2>
+          <p className="subtitle">
+            Pick how you'd like to run generations. You can change this any time from the Settings button in the top bar.
+          </p>
+          <button type="button" className="welcome-pet-teaser">
+            <span className="welcome-pet-glyph" aria-hidden="true">
+              🐾
+            </span>
+            <span className="welcome-pet-copy">
+              <strong>Adopt a pet</strong>
+              <span>A tiny floating companion that hangs out with you.</span>
+            </span>
+            <span className="welcome-pet-cta">
+              Pick one
+              <ChevronRight size={12} />
+            </span>
+          </button>
+        </header>
 
-function ArtifactButton({ artifact, active, onSelect }: { artifact: LocalArtifact, active: boolean, onSelect: () => void }) {
-  return (
-    <button className={active ? 'artifact-button is-active' : 'artifact-button'} type="button" onClick={onSelect}>
-      <FileText aria-hidden="true" />
-      <span>{artifact.title}</span>
-      <small>{artifact.status}</small>
-    </button>
-  )
-}
+        <div className="modal-body">
+          <aside className="settings-sidebar" aria-label="Settings sections">
+            {settingsSections.map((section) => {
+              const Icon = section.icon
+              return (
+                <button
+                  key={section.id}
+                  type="button"
+                  className={`settings-nav-item${section.id === 'execution' ? ' active' : ''}`}
+                >
+                  <Icon size={18} />
+                  <span>
+                    <strong>{section.title}</strong>
+                    <small>{section.detail}</small>
+                  </span>
+                </button>
+              )
+            })}
+          </aside>
 
-function ReviewBlock({ review }: { review: LocalReview }) {
-  return (
-    <div className="review-block">
-      <StatusBadge value={review.verdict} />
-      {review.findingsJson.map(finding => (
-        <p key={jsonSummary(finding)}>{jsonSummary(finding)}</p>
-      ))}
-      {review.risksJson.map(risk => (
-        <p key={jsonSummary(risk)} className="risk-line">{jsonSummary(risk)}</p>
-      ))}
-    </div>
-  )
-}
+          <div className="settings-content">
+            <div
+              className="seg-control"
+              role="tablist"
+              aria-label="Execution mode"
+              style={{ '--seg-cols': 2 } as CSSProperties}
+            >
+              <button type="button" role="tab" aria-selected="true" className="seg-btn active">
+                <span className="seg-title">Local CLI</span>
+                <span className="seg-meta">2 installed</span>
+              </button>
+              <button type="button" role="tab" aria-selected="false" className="seg-btn">
+                <span className="seg-title">BYOK</span>
+                <span className="seg-meta">API provider</span>
+              </button>
+            </div>
 
-function EventLine({ event }: { event: LocalRunEvent }) {
-  return (
-    <div className="event-line">
-      <StatusDot value={event.type} />
-      <div>
-        <strong>{event.type}</strong>
-        <span>{jsonSummary(event.payloadJson)}</span>
+            <section className="settings-section">
+              <div className="section-head">
+                <div>
+                  <h3>Local CLI</h3>
+                  <p className="hint">Detected by scanning your PATH. Pick the CLI you want generations to flow through.</p>
+                </div>
+                <div className="section-head-actions">
+                  <button type="button" className="ghost icon-btn settings-test-btn">
+                    <span>Test</span>
+                  </button>
+                  <button type="button" className="ghost icon-btn settings-rescan-btn">
+                    <RefreshCw size={13} />
+                    <span>Rescan</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="agent-grid">
+                {engines.map(engine => (
+                  <button
+                    key={engine.id}
+                    type="button"
+                    className={`agent-card${selectedEngine === engine.id ? ' active' : ''}${engine.installed ? '' : ' disabled'}`}
+                    disabled={!engine.installed}
+                    aria-pressed={selectedEngine === engine.id}
+                    onClick={() => onEngineChange(engine.id)}
+                  >
+                    <span className={`agent-icon agent-icon-${engine.tone}`} aria-hidden="true">
+                      {engine.installed
+                        ? <Sparkles size={28} />
+                        : <span />}
+                    </span>
+                    <span className="agent-card-body">
+                      <span className="agent-card-name">{engine.name}</span>
+                      <span className="agent-card-meta">
+                        {engine.installed
+                          ? <span>{engine.detail}</span>
+                          : <span className="muted">{engine.detail}</span>}
+                      </span>
+                    </span>
+                    {engine.installed
+                      ? (
+                          <span className={`status-dot${selectedEngine === engine.id ? ' active' : ''}`} aria-hidden="true" />
+                        )
+                      : null}
+                  </button>
+                ))}
+              </div>
+            </section>
+          </div>
+        </div>
       </div>
     </div>
   )
 }
 
-function LessonLine({ lesson }: { lesson: LocalLesson }) {
+function FidelityCard({
+  label,
+  variant,
+  active = false,
+}: {
+  label: string
+  variant: 'wireframe' | 'high-fidelity'
+  active?: boolean
+}) {
   return (
-    <article className="lesson-line">
-      <p>{lesson.statement}</p>
-      <span>{lesson.status}</span>
-    </article>
+    <button
+      type="button"
+      className={`fidelity-card${active ? ' active' : ''}`}
+      aria-pressed={active}
+    >
+      <span className={`fidelity-thumb fidelity-thumb-${variant}`} aria-hidden="true">
+        {variant === 'wireframe' ? <WireframeArt /> : <HighFidelityArt />}
+      </span>
+      <span className="fidelity-label">{label}</span>
+    </button>
   )
 }
 
-function EmptyLine({ label }: { label: string }) {
-  return <p className="empty-line">{label}</p>
+function WireframeArt() {
+  return (
+    <svg viewBox="0 0 120 70" width="100%" height="100%" aria-hidden="true">
+      <rect x="6" y="8" width="46" height="6" rx="2" fill="#d8d4cb" />
+      <rect x="6" y="20" width="34" height="4" rx="2" fill="#ebe8e1" />
+      <rect x="6" y="28" width="38" height="4" rx="2" fill="#ebe8e1" />
+      <rect x="6" y="36" width="30" height="4" rx="2" fill="#ebe8e1" />
+      <circle cx="22" cy="56" r="6" fill="none" stroke="#d8d4cb" strokeWidth="1.4" />
+      <rect x="64" y="8" width="50" height="54" rx="3" fill="none" stroke="#d8d4cb" strokeWidth="1.4" />
+      <rect x="70" y="14" width="38" height="4" rx="2" fill="#ebe8e1" />
+      <rect x="70" y="22" width="32" height="4" rx="2" fill="#ebe8e1" />
+      <rect x="70" y="30" width="38" height="4" rx="2" fill="#ebe8e1" />
+    </svg>
+  )
 }
 
-function StatusBadge({ value }: { value: string }) {
-  return <span className={`status-badge ${statusClass(value)}`}>{value}</span>
+function HighFidelityArt() {
+  return (
+    <svg viewBox="0 0 120 70" width="100%" height="100%" aria-hidden="true">
+      <rect x="6" y="8" width="34" height="6" rx="2" fill="#1a1916" />
+      <rect x="6" y="20" width="46" height="4" rx="2" fill="#74716b" />
+      <rect x="6" y="28" width="42" height="4" rx="2" fill="#b3b0a8" />
+      <rect x="6" y="40" width="22" height="9" rx="2" fill="#c96442" />
+      <rect x="64" y="8" width="50" height="54" rx="4" fill="#fbeee5" />
+      <rect x="70" y="14" width="38" height="4" rx="2" fill="#c96442" />
+      <rect x="70" y="22" width="32" height="3" rx="1.5" fill="#74716b" />
+      <rect x="70" y="29" width="36" height="3" rx="1.5" fill="#b3b0a8" />
+      <rect x="70" y="36" width="20" height="6" rx="2" fill="#c96442" />
+    </svg>
+  )
 }
 
-function StatusDot({ value }: { value: string }) {
-  return <Circle className={`status-dot ${statusClass(value)}`} aria-hidden="true" />
+function DesignCard({ project }: { project: ProjectCard }) {
+  return (
+    <div className="design-card" role="button" tabIndex={0}>
+      <div className="design-card-thumb" aria-hidden="true" />
+      <div className="design-card-meta-block">
+        <div className="design-card-name" title={project.title}>{project.title}</div>
+        <div className="design-card-meta">
+          <span className="ds">{project.engine}</span>
+          {` · ${project.type} · `}
+          <span className="design-card-status design-card-status-succeeded">{project.status}</span>
+          {` · ${project.age}`}
+        </div>
+      </div>
+    </div>
+  )
 }
 
-function statusClass(value: string): string {
-  if (['succeeded', 'completed', 'pass', 'available', 'accepted'].includes(value))
-    return 'is-positive'
-  if (['running', 'queued', 'needs_review', 'proposed', 'assistant_delta', 'tool', 'file_change', 'artifact', 'review', 'lesson'].includes(value))
-    return 'is-live'
-  if (['failed', 'fail', 'error', 'missing', 'rejected'].includes(value))
-    return 'is-negative'
-  return 'is-neutral'
+function buildProjectCards(data: LocalWorkspaceData | null): ProjectCard[] {
+  if (!data)
+    return []
+
+  return data.briefs.map((brief) => {
+    const latestRun = latestRunForBrief(brief.id, data.runs)
+    return {
+      title: brief.title,
+      engine: latestRun?.executor ?? 'Local CLI',
+      type: 'worker-project',
+      status: titleCase(latestRun?.status ?? brief.status),
+      age: relativeTime(brief.updatedAt),
+    }
+  })
 }
 
-function shortPath(value: string): string {
-  const parts = value.split('/').filter(Boolean)
-  if (parts.length <= 2)
-    return value
-  return `${parts.at(-2)}/${parts.at(-1)}`
+function latestRunForBrief(briefId: string, runs: LocalRun[]): LocalRun | null {
+  return runs
+    .filter(run => run.briefId === briefId)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null
 }
 
-function jsonSummary(value: Record<string, unknown>): string {
-  for (const key of ['message', 'summary', 'text', 'path', 'title']) {
-    const item = value[key]
-    if (typeof item === 'string' && item.trim())
-      return item
-  }
-  const serialized = JSON.stringify(value)
-  return serialized === '{}' ? 'Recorded' : serialized
+function titleCase(value: string): string {
+  return value
+    .split('_')
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+}
+
+function relativeTime(value: string): string {
+  const ms = Date.now() - Date.parse(value)
+  if (!Number.isFinite(ms) || ms < 0)
+    return 'now'
+  const minutes = Math.max(1, Math.floor(ms / 60_000))
+  if (minutes < 60)
+    return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 48)
+    return `${hours}h ago`
+  return `${Math.floor(hours / 24)}d ago`
 }

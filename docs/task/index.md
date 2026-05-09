@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-10 (REFACTOR-038 completed)
+> Updated: 2026-05-10 (REFACTOR-039 completed)
 
 ## Usage
 
@@ -310,3 +310,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REFACTOR-036 Hard reset OD-style worker product surface**](REFACTOR-036.md) `P1`
 - [x] [**REFACTOR-037 Greenfield local worker rebuild**](REFACTOR-037.md) `P0`
 - [x] [**REFACTOR-038 Worker Web greenfield studio rebuild**](REFACTOR-038.md) `P0`
+- [x] [**REFACTOR-039 Worker Web Open Design source parity**](REFACTOR-039.md) `P0`

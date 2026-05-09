@@ -11,147 +11,93 @@ const workspace = {
   updatedAt: '2026-05-09T00:00:00.000Z',
 }
 
+const brief = {
+  id: 'brief-1',
+  workspaceId: 'local',
+  title: 'Screen candidate',
+  body: 'Review packet',
+  status: 'completed',
+  createdAt: workspace.createdAt,
+  updatedAt: workspace.updatedAt,
+}
+
+const run = {
+  id: 'run-1',
+  workspaceId: 'local',
+  briefId: 'brief-1',
+  status: 'succeeded',
+  executor: 'local',
+  prompt: 'Review packet',
+  summary: 'Candidate review ready',
+  error: null,
+  metadataJson: {},
+  startedAt: workspace.createdAt,
+  finishedAt: workspace.updatedAt,
+  createdAt: workspace.createdAt,
+  updatedAt: workspace.updatedAt,
+}
+
 beforeEach(() => {
-  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
+    const method = init?.method ?? 'GET'
     const json = (body: unknown) => new Response(JSON.stringify(body), {
       status: 200,
       headers: { 'content-type': 'application/json' },
     })
 
-    if (url.endsWith('/api/local/info')) {
-      return json({
-        workerId: 'local-worker',
-        runtimeVersion: 'test',
-        startedAt: workspace.createdAt,
-        workspace,
-      })
-    }
-    if (url.endsWith('/api/local/briefs')) {
-      return json({
-        briefs: [{
-          id: 'brief-1',
-          workspaceId: 'local',
-          title: 'Screen candidate',
-          body: 'Review packet',
-          status: 'completed',
-          createdAt: workspace.createdAt,
-          updatedAt: workspace.updatedAt,
-        }],
-      })
-    }
-    if (url.endsWith('/api/local/runs')) {
-      return json({
-        runs: [{
-          id: 'run-1',
-          workspaceId: 'local',
-          briefId: 'brief-1',
-          status: 'succeeded',
-          executor: 'local',
-          prompt: 'Review packet',
-          summary: 'Candidate review ready',
-          error: null,
-          metadataJson: {},
-          startedAt: workspace.createdAt,
-          finishedAt: workspace.updatedAt,
-          createdAt: workspace.createdAt,
-          updatedAt: workspace.updatedAt,
-        }],
-      })
-    }
-    if (url.endsWith('/api/local/files')) {
-      return json({
-        files: [{
-          id: 'file-1',
-          workspaceId: 'local',
-          path: 'reports/candidate.md',
-          kind: 'generated',
-          size: 22,
-          mtime: 1,
-          hash: 'h',
-          source: 'run',
-          createdAt: workspace.createdAt,
-          updatedAt: workspace.updatedAt,
-        }],
-      })
-    }
-    if (url.endsWith('/api/local/artifacts')) {
-      return json({
-        artifacts: [{
-          id: 'artifact-1',
-          workspaceId: 'local',
-          runId: 'run-1',
-          path: 'reports/candidate.md',
-          kind: 'file',
-          title: 'Candidate Review',
-          status: 'available',
-          metadataJson: {},
-          createdAt: workspace.createdAt,
-          updatedAt: workspace.updatedAt,
-        }],
-      })
-    }
-    if (url.endsWith('/api/local/reviews')) {
-      return json({
-        reviews: [{
-          id: 'review-1',
-          workspaceId: 'local',
-          runId: 'run-1',
-          artifactId: 'artifact-1',
-          verdict: 'pass',
-          findingsJson: [{ message: 'Evidence attached' }],
-          risksJson: [],
-          createdAt: workspace.createdAt,
-        }],
-      })
-    }
-    if (url.endsWith('/api/local/lessons')) {
-      return json({
-        lessons: [{
-          id: 'lesson-1',
-          workspaceId: 'local',
-          sourceReviewId: 'review-1',
-          statement: 'Keep evidence attached.',
-          evidenceJson: [],
-          status: 'proposed',
-          createdAt: workspace.createdAt,
-          updatedAt: workspace.updatedAt,
-        }],
-      })
-    }
-    if (url.endsWith('/api/local/events')) {
-      return json({
-        events: [{
-          id: 1,
-          runId: 'run-1',
-          seq: 1,
-          type: 'artifact',
-          payloadJson: { path: 'reports/candidate.md' },
-          createdAt: workspace.createdAt,
-        }],
-      })
-    }
-    if (url.endsWith('/api/local/files/raw/reports/candidate.md'))
-      return new Response('Candidate file body', { status: 200 })
+    if (url.endsWith('/api/local/info'))
+      return json({ workerId: 'local-worker', runtimeVersion: 'test', startedAt: workspace.createdAt, workspace })
+    if (url.endsWith('/api/local/briefs') && method === 'POST')
+      return json({ brief: { ...brief, id: 'brief-created', title: 'New prototype', body: 'Created project' } })
+    if (url.endsWith('/api/local/briefs'))
+      return json({ briefs: [brief] })
+    if (url.endsWith('/api/local/runs') && method === 'POST')
+      return json({ run: { ...run, id: 'run-created', briefId: 'brief-created' }, events: [], files: [], artifacts: [], review: null, lessons: [] })
+    if (url.endsWith('/api/local/runs'))
+      return json({ runs: [run] })
+    if (url.endsWith('/api/local/files'))
+      return json({ files: [] })
+    if (url.endsWith('/api/local/artifacts'))
+      return json({ artifacts: [] })
+    if (url.endsWith('/api/local/reviews'))
+      return json({ reviews: [] })
+    if (url.endsWith('/api/local/lessons'))
+      return json({ lessons: [] })
+    if (url.endsWith('/api/local/events'))
+      return json({ events: [] })
 
     return new Response('{}', { status: 404 })
   }))
 })
 
 describe('worker studio', () => {
-  it('renders the local worker studio without the legacy admin shell', async () => {
+  it('renders the Open Design home and setup modal one-to-one', async () => {
     render(<WorkerStudio />)
 
-    expect(await screen.findByText('Hiring Workspace')).toBeTruthy()
-    expect(screen.getByLabelText('Brief shelf')).toBeTruthy()
-    expect(screen.getByLabelText('Run stage')).toBeTruthy()
-    expect(screen.getByLabelText('Artifact canvas')).toBeTruthy()
-    expect(screen.getByLabelText('Review rail')).toBeTruthy()
-    expect(screen.getByText('Candidate Review')).toBeTruthy()
-    expect(screen.getByText('Evidence attached')).toBeTruthy()
-    expect(screen.getByText('Keep evidence attached.')).toBeTruthy()
+    expect(await screen.findAllByText('Open Design')).toHaveLength(1)
+    expect(screen.getByLabelText('Prototype creator')).toBeTruthy()
+    expect(screen.getByLabelText('Designs')).toBeTruthy()
+    expect(screen.getByLabelText('PETS')).toBeTruthy()
+    expect(screen.getByRole('dialog', { name: 'Set up Open Design' })).toBeTruthy()
+    expect(screen.getByText('Set up Open Design')).toBeTruthy()
+    expect(screen.getAllByText('Local CLI').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Codex CLI').length).toBeGreaterThan(0)
+    expect(screen.queryByText('Review')).toBeNull()
+    expect(screen.queryByText('Lessons')).toBeNull()
+    expect(screen.queryByLabelText('Artifact canvas')).toBeNull()
+  })
 
-    fireEvent.click(screen.getByRole('button', { name: /candidate\.md generated/ }))
-    await waitFor(() => expect(screen.getByText('Candidate file body')).toBeTruthy())
+  it('creates a prototype through the local brief and run APIs', async () => {
+    render(<WorkerStudio />)
+
+    fireEvent.click(await screen.findByLabelText('Close settings'))
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'New prototype' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/local/briefs', expect.objectContaining({ method: 'POST' }))
+      expect(fetch).toHaveBeenCalledWith('/api/local/runs', expect.objectContaining({ method: 'POST' }))
+    })
   })
 })

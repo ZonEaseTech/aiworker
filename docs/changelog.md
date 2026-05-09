@@ -1,5 +1,33 @@
 # AIWorker Changelog
 
+## 2026-05-10 01:43 [completed] REFACTOR-039 / PLAN-205 — Worker Web Open Design source parity
+
+Replaced the rejected Worker Web studio with a direct Open Design source-parity
+baseline:
+
+- Rebuilt `WorkerStudio` around Open Design's entry shell structure: left
+  `newproj` creation panel, center designs toolbar/grid, right `pet-rail`, and
+  first-run `modal-settings`.
+- Removed the home-screen review, lessons, run events, and artifact canvas
+  concepts from the visible first screen.
+- Copied Open Design public `logo.svg` and `avatar.png` assets into the Worker
+  Web bundle.
+- Updated Web tests and studio CSS quality selectors to guard the OD source
+  structure.
+
+Verification: `bun run --filter '@zonease/aiworker-web' test`,
+`bun run --filter '@zonease/aiworker-web' typecheck`,
+`bun run --filter '@zonease/aiworker-web' lint`,
+`bun run --filter '@zonease/aiworker-web' build`, `bun run check`,
+`bun run test`, `bun run --filter '@zonease/aiworker-api' build`,
+`bun run --filter '@zonease/aiworker-cli' build:bundle`, and
+`git diff --check` pass. Browser review of
+`http://127.0.0.1:5173/worker/` passed for settings/home views at default and
+2048px widths with 0 console errors. CRG reported 0 affected flows, 18 test
+gaps, and risk score 0.55. Aggregate `bun run build` was terminated after the
+Web Vite subprocess stalled despite the package-level API/Web/CLI builds
+passing.
+
 ## 2026-05-10 00:23 [completed] REFACTOR-038 / PLAN-204 — Worker Web greenfield studio rebuild
 
 Completed the destructive Worker Web reset after user review found the previous
