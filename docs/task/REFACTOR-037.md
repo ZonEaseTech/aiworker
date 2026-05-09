@@ -108,3 +108,6 @@ and review proof.
 - 2026-05-09 23:10: Added the PLAN-203 implementation status board. All B1-B6
   batches are explicitly `blocked_pending_approval` with entry files, blocking
   conditions, and evidence slots.
+- 2026-05-09 23:12: Added a greenfield contract draft to PLAN-203 covering the
+  minimal domain entities, `/api/local/*` route groups, CLI command contract,
+  and Worker Web information architecture.

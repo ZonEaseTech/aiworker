@@ -218,6 +218,65 @@ disconnected from local daemon, CLI, Web, OpenAPI, and smoke paths.
 | Shared contracts | shared Brain/Fleet/Soul schemas leak old product nouns into worker info and API types | Keep only contracts required by the new local workspace path; quarantine Fleet/Gateway contracts outside local worker imports | local workspace DTOs and executor adapter DTOs | B1 |
 | Docs/smoke | README, GOALS, architecture, CLI docs, and smoke names still describe Project Brain + Worker/Fleet aggregation as the shipped worker product | Rewrite local worker docs around the greenfield workspace loop; leave Fleet/Gateway as parked future scope | source-local proof from fresh state and manual browser review | B6 |
 
+## Greenfield Contract Draft
+
+This is the minimal product contract for implementation. It is intentionally
+new and does not map old session/conversation/task/Brain-admin records into the
+new model.
+
+Domain entities:
+
+| Entity | Purpose | Required fields |
+| --- | --- | --- |
+| `workspace` | Local project scope and file root | `id`, `name`, `rootPath`, `createdAt`, `updatedAt` |
+| `brief` | User intent to run work in a workspace | `id`, `workspaceId`, `title`, `body`, `status`, `createdAt`, `updatedAt` |
+| `run` | One executor attempt for a brief or direct prompt | `id`, `workspaceId`, `briefId`, `status`, `executor`, `summary`, `startedAt`, `finishedAt` |
+| `run_event` | Ordered stream event for one run | `id`, `runId`, `seq`, `type`, `payloadJson`, `createdAt` |
+| `file` | Indexed file under the workspace root | `id`, `workspaceId`, `path`, `kind`, `size`, `mtime`, `source`, `updatedAt` |
+| `artifact` | User-visible output promoted from files/run events | `id`, `workspaceId`, `runId`, `path`, `kind`, `title`, `status`, `metadataJson`, `updatedAt` |
+| `review` | Evaluation attached to a run/artifact | `id`, `workspaceId`, `runId`, `artifactId`, `verdict`, `findingsJson`, `createdAt` |
+| `lesson` | Proposed durable learning from a review | `id`, `workspaceId`, `sourceReviewId`, `statement`, `evidenceJson`, `status`, `createdAt` |
+| `setting` | Local daemon/workspace setting | `key`, `valueJson`, `updatedAt` |
+
+API contract:
+
+| Group | Routes |
+| --- | --- |
+| info | `GET /api/local/info` |
+| workspace | `GET /api/local/workspace`, `PATCH /api/local/workspace` |
+| briefs | `GET /api/local/briefs`, `POST /api/local/briefs`, `GET /api/local/briefs/:id`, `PATCH /api/local/briefs/:id` |
+| runs | `GET /api/local/runs`, `POST /api/local/runs`, `GET /api/local/runs/:id`, `POST /api/local/runs/:id/cancel`, `GET /api/local/runs/:id/events` |
+| files | `GET /api/local/files`, `GET /api/local/files/raw/*`, `PUT /api/local/files/raw/*`, `DELETE /api/local/files/raw/*`, `GET /api/local/files/search` |
+| artifacts | `GET /api/local/artifacts`, `GET /api/local/artifacts/:id` |
+| reviews | `GET /api/local/reviews`, `POST /api/local/reviews`, `GET /api/local/reviews/:id` |
+| lessons | `GET /api/local/lessons`, `POST /api/local/lessons`, `PATCH /api/local/lessons/:id` |
+| settings | `GET /api/local/settings`, `PATCH /api/local/settings` |
+| events | `GET /api/local/events` |
+
+CLI contract:
+
+| Command | Purpose |
+| --- | --- |
+| `aiworker init` | create the local workspace and metadata store |
+| `aiworker daemon start/status/stop/logs/foreground` | run and inspect the local daemon |
+| `aiworker brief create/list/show` | manage workspace briefs |
+| `aiworker run start/list/show/cancel` | operate executor runs |
+| `aiworker files list/show/write/delete/search` | inspect and edit workspace files |
+| `aiworker artifacts list/show/open` | inspect user-visible run outputs |
+| `aiworker review list/show/create` | inspect or create reviews |
+| `aiworker lessons list/propose/accept/reject` | manage lesson proposals |
+| `aiworker open` | open Worker Web for the local daemon |
+| `aiworker doctor` | verify local daemon, workspace, storage, and executor readiness |
+| `aiworker executor select/doctor` | configure and verify the thin BYO executor adapter |
+
+Web information architecture:
+
+- Left rail: workspace identity, briefs, file tree, artifact list.
+- Center surface: active brief, run stream, file/artifact preview.
+- Right rail: review findings, lesson proposals, run metadata.
+- Settings view: daemon health, executor adapter settings, local bearer state,
+  and workspace metadata only.
+
 ## Prompt-to-Artifact Checklist
 
 | Requirement from user objective | Required artifact/evidence before completion |
