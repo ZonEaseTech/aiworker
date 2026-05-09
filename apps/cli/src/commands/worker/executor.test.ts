@@ -5,6 +5,7 @@ import path from 'node:path'
 import process from 'node:process'
 
 import { describe, expect, it } from 'bun:test'
+import { Database } from 'bun:sqlite'
 
 const cliEntry = path.resolve(import.meta.dir, '..', '..', 'aiworker.ts')
 
@@ -45,6 +46,28 @@ async function initProject(): Promise<{ home: string, project: string, root: str
   const init = await runCli(['init', '--soul', 'developer'], project, home)
   expect(init.exitCode).toBe(0)
   return { home, project, root }
+}
+
+function readStoredWorkerConfig(project: string): {
+  config: { executor: { engine: string, overrides?: { timeoutMs?: number }, variant: string } }
+  version: number
+} {
+  const db = new Database(path.join(project, '.aiworker', 'local', 'worker.db'), { readonly: true })
+  try {
+    const row = db.query('select config_json as configJson, version from worker_config where pk = ?').get('default') as {
+      configJson: string
+      version: number
+    } | null
+    if (!row)
+      throw new Error('worker_config row missing')
+    return {
+      config: JSON.parse(row.configJson) as { executor: { engine: string, overrides?: { timeoutMs?: number }, variant: string } },
+      version: row.version,
+    }
+  }
+  finally {
+    db.close()
+  }
 }
 
 describe('aiworker executor capability commands', () => {
@@ -313,7 +336,7 @@ describe('aiworker executor capability commands', () => {
     const fakeClaude = path.join(bin, 'claude')
     await writeFile(fakeClaude, '#!/usr/bin/env sh\nexit 0\n', 'utf8')
     await chmod(fakeClaude, 0o755)
-    const before = JSON.parse((await runCli(['config', 'show'], project, home)).output) as { version: number }
+    const before = readStoredWorkerConfig(project)
     const select = await runCli(['executor', 'select', '--engine', 'claude-code', '--apply', '--if-match', String(before.version)], project, home)
     expect(select.exitCode).toBe(0)
 
@@ -382,14 +405,14 @@ describe('aiworker executor capability commands', () => {
     expect(dryRun.output).toContain('Target  : codex/default (timeout=240000ms)')
     expect(dryRun.output).toContain('Write   : skipped')
 
-    const before = JSON.parse((await runCli(['config', 'show'], project, home)).output) as { config: { executor: { engine: string } }, version: number }
+    const before = readStoredWorkerConfig(project)
     expect(before.config.executor.engine).toBe('http')
 
     const apply = await runCli(['executor', 'select', '--engine', 'codex', '--timeout-ms', '240000', '--apply', '--if-match', String(before.version)], project, home)
     expect(apply.exitCode).toBe(0)
     expect(apply.output).toContain('[aiworker executor select] apply')
 
-    const after = JSON.parse((await runCli(['config', 'show'], project, home)).output) as { config: { executor: { engine: string, overrides?: { timeoutMs?: number }, variant: string } }, version: number }
+    const after = readStoredWorkerConfig(project)
     expect(after.config.executor).toMatchObject({ engine: 'codex', variant: 'default' })
     expect(after.config.executor.overrides?.timeoutMs).toBe(240_000)
     expect(after.version).toBe(before.version + 1)

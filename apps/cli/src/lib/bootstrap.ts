@@ -8,9 +8,8 @@ import { bootstrapDotenv } from './dotenv-bootstrap'
 // `AIWORKER_HOME`. That env var means an operator explicitly pinned a home.
 // Project scope remains cwd-detected by fs-layout for later calls.
 //
-// Diagnostic/setup commands opt out. `scope` / `doctor` / help / version must be
-// non-mutating, `init` chooses home after applying its own mode flags, and
-// `gateway install systemd` only renders installer artifacts.
+// Diagnostic/setup commands opt out. `doctor` / help / version must be
+// non-mutating, and `init` chooses home before applying its own writes.
 export function shouldBootstrapDotenv(argv: string[]): boolean {
   const args = argv.slice(2)
   if (args.length === 0)
@@ -25,38 +24,20 @@ export function shouldBootstrapDotenv(argv: string[]): boolean {
     return commandLine === prefix || commandLine.startsWith(`${prefix} `)
   }
   if (
-    startsWithCommand('scope')
-    || startsWithCommand('worker', 'scope')
-    || startsWithCommand('doctor')
-    || startsWithCommand('worker', 'doctor')
+    startsWithCommand('doctor')
     || startsWithCommand('commands')
-    || startsWithCommand('env', 'gateway-url')
-    || startsWithCommand('env', 'display-name')
-    || startsWithCommand('worker', 'env', 'gateway-url')
-    || startsWithCommand('worker', 'env', 'display-name')
     || startsWithCommand('init')
-    || startsWithCommand('worker', 'init')
-    || startsWithCommand('up')
-    || startsWithCommand('worker', 'up')
     || startsWithCommand('daemon')
-    || startsWithCommand('worker', 'daemon')
-    || startsWithCommand('gateway', 'install', 'systemd')
   ) {
     return false
   }
 
-  if (startsWithCommand('executor') || startsWithCommand('worker', 'executor'))
+  if (startsWithCommand('executor'))
     return false
 
   if (
-    startsWithCommand('soul', 'list')
-    || startsWithCommand('soul', 'show')
-    || startsWithCommand('worker', 'soul', 'list')
-    || startsWithCommand('worker', 'soul', 'show')
-    || startsWithCommand('pack', 'list')
+    startsWithCommand('pack', 'list')
     || startsWithCommand('pack', 'show')
-    || startsWithCommand('worker', 'pack', 'list')
-    || startsWithCommand('worker', 'pack', 'show')
   ) {
     return false
   }

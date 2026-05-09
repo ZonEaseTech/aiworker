@@ -9,38 +9,24 @@ import { describe, expect, it } from 'bun:test'
 import { cli, preprocessArgv } from './aiworker'
 import { getUngroupedHelpCommands } from './help'
 
-/**
- * 入口构造与命令注册的快照测试。aiworker 是单 binary entry，所有子命令都注册在
- * 这一个 cac 实例上；这里只验证「形」（命令名/argv 折叠），不触发 handler。
- *
- * 业务 handler 的行为由各自 *.test.ts 守护，本文件不重复覆盖。
- */
-
-// cac 在 `Command#name` 上保存的是去掉 `<arg>` / `[arg]` 后的命令名（参数信息存在
-// `Command#args` 上），这里就用 cac 实际归一化后的形态做断言。
-const ROOT_WORKER_COMMANDS = [
+const EXPECTED_COMMANDS = [
   'init',
-  'up',
-  'scope',
-  'doctor',
-  'env gateway-url',
-  'env display-name',
-  'executor doctor',
-  'executor select',
-  'executor capability list',
-  'executor capability show',
-  'executor mcp add',
-  'executor mcp sync',
-  'soul list',
-  'soul show',
-  'pack list',
-  'pack show',
   'daemon start',
   'daemon status',
   'daemon stop',
   'daemon logs',
   'daemon check',
   'daemon inspect',
+  'daemon foreground',
+  'doctor',
+  'executor mcp add',
+  'executor mcp sync',
+  'executor select',
+  'executor doctor',
+  'executor capability list',
+  'executor capability show',
+  'pack list',
+  'pack show',
   'run',
   'runs list',
   'runs show',
@@ -51,69 +37,26 @@ const ROOT_WORKER_COMMANDS = [
   'review show',
   'review rerun',
   'review promote',
-  'brain status',
-  'brain journal show',
-  'brain inbox propose',
-  'brain skills',
-  'brain skills sync-native',
-  'brain memories',
-  'brain artifacts list',
-  'brain artifacts show',
-  'brain admission list',
-  'brain admission show',
-  'brain admission approve',
-  'brain admission reject',
-  'brain admission apply',
-  'brain admission propose',
-  'brain brief',
-  'case list',
-  'case show',
-  'case rerun',
-  'lessons propose',
-  'serve',
-  'config show',
-  'config set',
-  'token rotate',
-  'approvals list',
-  'approvals grant',
-  'schedule list',
-  'schedule add',
-  'schedule remove',
-  'sessions list',
-  'sessions show',
-  'sessions maintenance',
+  'lessons promote',
+  'commands',
 ] as const
 
-const EXPECTED_COMMANDS = [
-  // root worker shortcuts
-  ...ROOT_WORKER_COMMANDS,
-  'commands',
-  // worker canonical
-  ...ROOT_WORKER_COMMANDS.map(command => `worker ${command}`),
-  // fleet / gateway
-  'fleet list',
-  'fleet info',
-  'fleet launch',
-  'fleet stop',
-  'fleet remove',
-  'fleet pair',
-  'fleet chat',
-  'fleet config get',
-  'fleet config set',
-  'fleet token rotate',
-  'fleet approvals list',
-  'fleet approvals grant',
-  'fleet schedule list',
-  'fleet schedule add',
-  'fleet schedule remove',
-  'fleet enroll list',
-  'fleet enroll approve',
-  'fleet enroll reject',
-  'fleet logs',
-  'gateway start',
-  'gateway status',
-  'gateway stop',
-  'gateway install systemd',
+const REMOVED_COMMAND_PREFIXES = [
+  'approvals',
+  'brain',
+  'case',
+  'config',
+  'env',
+  'fleet',
+  'gateway',
+  'schedule',
+  'scope',
+  'serve',
+  'sessions',
+  'soul',
+  'token',
+  'up',
+  'worker',
 ] as const
 
 const cliEntry = path.resolve(import.meta.dir, 'aiworker.ts')
@@ -146,10 +89,9 @@ async function runCli(args: string[]): Promise<{
   const root = await mkdtemp(path.join(tmpdir(), 'aiworker-cli-args-'))
   const home = path.join(root, 'home')
   const aiworkerHome = path.join(home, '.aiworker')
-  const env = isolatedEnv(home)
   const proc = Bun.spawnSync([process.execPath, cliEntry, ...args], {
     cwd: root,
-    env,
+    env: isolatedEnv(home),
     stderr: 'pipe',
     stdout: 'pipe',
   })
@@ -157,7 +99,7 @@ async function runCli(args: string[]): Promise<{
   const stderr = new TextDecoder().decode(proc.stderr)
   return {
     aiworkerHome,
-    exitCode: proc.exitCode,
+    exitCode: proc.exitCode ?? 0,
     output: `${stdout}\n${stderr}`,
     root,
   }
@@ -167,115 +109,131 @@ function cleanup(result: { root: string }): void {
   rmSync(result.root, { recursive: true, force: true })
 }
 
-describe('aiworker cli registration', () => {
-  it('注册了预期数量的命令（漏注册即 fail）', () => {
-    // cac 会内置一个 name='' 的 globalCommand；这里只数显式 .command 注册的。
-    const explicit = cli.commands.filter(c => c.name !== '')
-    expect(explicit.length).toBe(EXPECTED_COMMANDS.length)
+function captureRootHelp(): string {
+  const captured: string[] = []
+  const orig = console.log
+  console.log = ((...args: unknown[]) => {
+    captured.push(args.map(a => String(a)).join(' '))
+  }) as typeof console.log
+  try {
+    cli.outputHelp()
+  }
+  finally {
+    console.log = orig
+  }
+  return captured.join('\n')
+}
+
+describe('aiworker hard-reset CLI registration', () => {
+  it('只注册 local worker 产品闭环命令', () => {
+    const explicit = cli.commands
+      .filter(command => command.name !== '')
+      .map(command => command.name)
+
+    expect(explicit).toEqual([...EXPECTED_COMMANDS])
   })
 
-  it('每个预期命令都被注册', () => {
-    const registered = new Set(cli.commands.map(c => c.name))
-    for (const name of EXPECTED_COMMANDS)
-      expect(registered.has(name)).toBe(true)
+  it('不再注册 pre-1.0 Brain/Case/Fleet/Gateway/worker 兼容入口', () => {
+    const registered = cli.commands
+      .filter(command => command.name !== '')
+      .map(command => command.name)
+
+    for (const prefix of REMOVED_COMMAND_PREFIXES) {
+      expect(registered.some(name => name === prefix || name.startsWith(`${prefix} `))).toBe(false)
+    }
   })
 
-  it('--help 文本包含主要顶层命令组关键字', () => {
-    // cac 的 outputHelp 默认 console.log；hook 一次拿字符串来断言。
-    const captured: string[] = []
-    const orig = console.log
-    console.log = ((...args: unknown[]) => {
-      captured.push(args.map(a => String(a)).join(' '))
-    }) as typeof console.log
-    try {
-      cli.outputHelp()
-    }
-    finally {
-      console.log = orig
-    }
-    const help = captured.join('\n')
+  it('root help 只呈现 work order -> run -> artifact -> review -> lesson 路径', () => {
+    const help = captureRootHelp()
+
     for (const keyword of [
-      '开始',
-      '常用查看',
-      '更多',
       'aiworker daemon start --soul developer --pack developer',
       'aiworker run --message "..."',
       'aiworker runs list',
       'aiworker artifacts list --run <runId>',
-      'aiworker review promote <runId>',
-      'aiworker worker --help',
-      'aiworker brain --help',
-      'aiworker fleet --help',
-      'aiworker gateway --help',
+      'aiworker review list',
+      'aiworker lessons promote <runId>',
       'aiworker commands',
-      'daemon start',
-      'daemon check',
       'executor doctor',
     ])
       expect(help).toContain(keyword)
-    expect(help).not.toContain('sessions maintenance')
-    expect(help).not.toContain('fleet config set')
-    expect(help).not.toContain('Worker canonical 入口')
-    expect(help).not.toContain('For more info, run any command')
+
+    for (const removed of [
+      'aiworker brain --help',
+      'aiworker case',
+      'aiworker fleet --help',
+      'aiworker gateway --help',
+      'aiworker worker --help',
+      'sessions maintenance',
+      'fleet config set',
+      'Worker canonical 入口',
+      'aiworker up',
+      'aiworker serve',
+    ])
+      expect(help).not.toContain(removed)
   })
 
   it('help 分组覆盖所有显式注册命令', () => {
     expect(getUngroupedHelpCommands(cli)).toEqual([])
   })
 
-  it('serve help 暴露浏览器打开控制参数', async () => {
-    const result = await runCli(['serve', '--help'])
-    try {
-      expect(result.exitCode).toBe(0)
-      expect(result.output).toContain('--open')
-      expect(result.output).toContain('--no-open')
-      expect(result.output).toContain('打开 worker admin')
-    }
-    finally {
-      cleanup(result)
-    }
-  })
-
-  it('up help 暴露快速启动和 serve 透传参数', async () => {
-    const result = await runCli(['up', '--help'])
-    try {
-      expect(result.exitCode).toBe(0)
-      expect(result.output).toContain('--soul <preset>')
-      expect(result.output).toContain('--pack <id>')
-      expect(result.output).toContain('--dry-run')
-      expect(result.output).toContain('--port <n>')
-      expect(result.output).toContain('--gateway <url>')
-      expect(result.output).toContain('--no-open')
-      expect(result.output).toContain('brand-new project 初始化')
-      expect(result.output).toContain('不初始化、不启动 HTTP server')
-      expect(result.output).not.toContain('默认：true')
-    }
-    finally {
-      cleanup(result)
-    }
-  })
-
-  it('init help 暴露 worker pack 选择参数', async () => {
+  it('init help 只保留 workspace/pack 初始化参数', async () => {
     const result = await runCli(['init', '--help'])
     try {
       expect(result.exitCode).toBe(0)
       expect(result.output).toContain('--soul <preset>')
       expect(result.output).toContain('--pack <id>')
       expect(result.output).toContain('worker pack')
+      expect(result.output).not.toContain('--global')
+      expect(result.output).not.toContain('--force')
     }
     finally {
       cleanup(result)
     }
   })
 
-  it('daemon start help 暴露后台 worker 生命周期参数', async () => {
+  it('daemon start help 不再暴露 gateway 或旧 serve 开关', async () => {
     const result = await runCli(['daemon', 'start', '--help'])
     try {
       expect(result.exitCode).toBe(0)
       expect(result.output).toContain('--soul <preset>')
       expect(result.output).toContain('--pack <id>')
       expect(result.output).toContain('--port <n>')
-      expect(result.output).toContain('--no-serve-web')
+      expect(result.output).not.toContain('--gateway')
+      expect(result.output).not.toContain('--gateway-token')
+      expect(result.output).not.toContain('--no-serve-web')
+    }
+    finally {
+      cleanup(result)
+    }
+  })
+
+  it('run help 只呈现 daemon work order 投递参数', async () => {
+    const result = await runCli(['run', '--help'])
+    try {
+      expect(result.exitCode).toBe(0)
+      expect(result.output).toContain('--message <text>')
+      expect(result.output).toContain('--dry-run')
+      expect(result.output).not.toContain('--local')
+      expect(result.output).not.toContain('--chat-id')
+    }
+    finally {
+      cleanup(result)
+    }
+  })
+
+  it('commands 输出 hard-reset 命令索引', async () => {
+    const result = await runCli(['commands'])
+    try {
+      expect(result.exitCode).toBe(0)
+      expect(result.output).toContain('aiworker command index')
+      expect(result.output).toContain('Worker loop')
+      expect(result.output).toContain('pack -> work order -> run -> artifact -> review -> lesson')
+      expect(result.output).toContain('lessons promote')
+      expect(result.output).not.toContain('Worker canonical 入口')
+      expect(result.output).not.toContain('sessions maintenance')
+      expect(result.output).not.toContain('fleet config set')
+      expect(result.output).not.toContain('gateway install systemd')
     }
     finally {
       cleanup(result)
@@ -288,81 +246,35 @@ describe('preprocessArgv', () => {
     return preprocessArgv(['/usr/bin/bun', '/path/to/aiworker.ts', ...rest])
   }
 
-  it('两词命令 fleet list 被折叠为单 token', () => {
-    expect(run('fleet', 'list')).toEqual([
+  it('daemon foreground 被折叠为当前 daemon 前台命令', () => {
+    expect(run('daemon', 'foreground', '--port', '9217')).toEqual([
       '/usr/bin/bun',
       '/path/to/aiworker.ts',
-      'fleet list',
+      'daemon foreground',
+      '--port',
+      '9217',
     ])
   })
 
-  it('两词命令 fleet launch 折叠后保留 --image 选项', () => {
-    expect(run('fleet', 'launch', '--image', 'foo')).toEqual([
+  it('executor mcp add 折叠后保留以短横线开头的 --arg 值', () => {
+    expect(run('executor', 'mcp', 'add', 'context7', '--engine', 'codex', '--arg', '-y')).toEqual([
       '/usr/bin/bun',
       '/path/to/aiworker.ts',
-      'fleet launch',
-      '--image',
-      'foo',
+      'executor mcp add',
+      'context7',
+      '--engine',
+      'codex',
+      '--arg=-y',
     ])
   })
 
-  it('fleet enroll approve <otp> 折叠后位置参完整保留', () => {
-    expect(run('fleet', 'enroll', 'approve', 'XXXX-YYYY')).toEqual([
-      '/usr/bin/bun',
-      '/path/to/aiworker.ts',
-      'fleet enroll approve',
-      'XXXX-YYYY',
-    ])
-  })
-
-  it('fleet config get <workerId> 折叠（前缀长度优先于 fleet config 单 token）', () => {
-    expect(run('fleet', 'config', 'get', 'wkr-001')).toEqual([
-      '/usr/bin/bun',
-      '/path/to/aiworker.ts',
-      'fleet config get',
-      'wkr-001',
-    ])
-  })
-
-  it('brain skills sync-native 折叠为三词命令', () => {
-    expect(run('brain', 'skills', 'sync-native', '--dry-run')).toEqual([
-      '/usr/bin/bun',
-      '/path/to/aiworker.ts',
-      'brain skills sync-native',
-      '--dry-run',
-    ])
-  })
-
-  it('case show 被折叠为本地 worker case 快捷入口', () => {
-    expect(run('case', 'show', 'task-001')).toEqual([
-      '/usr/bin/bun',
-      '/path/to/aiworker.ts',
-      'case show',
-      'task-001',
-    ])
-  })
-
-  it('review promote 被折叠为本地 worker review promotion 入口', () => {
-    expect(run('review', 'promote', 'task-001', '--scope', 'repo:aiworker')).toEqual([
-      '/usr/bin/bun',
-      '/path/to/aiworker.ts',
-      'review promote',
-      'task-001',
-      '--scope',
-      'repo:aiworker',
-    ])
-  })
-
-  it('runs show 被折叠为本地 worker run inspection 入口', () => {
+  it('runs/artifacts/review/lessons 当前命令会被折叠', () => {
     expect(run('runs', 'show', 'run-001')).toEqual([
       '/usr/bin/bun',
       '/path/to/aiworker.ts',
       'runs show',
       'run-001',
     ])
-  })
-
-  it('artifacts list 被折叠为本地 worker artifact inspection 入口', () => {
     expect(run('artifacts', 'list', '--run', 'run-001')).toEqual([
       '/usr/bin/bun',
       '/path/to/aiworker.ts',
@@ -370,414 +282,101 @@ describe('preprocessArgv', () => {
       '--run',
       'run-001',
     ])
-  })
-
-  it('lessons propose 被折叠为本地 worker lesson 提案入口', () => {
-    expect(run('lessons', 'propose', 'task-001', '--apply')).toEqual([
+    expect(run('review', 'promote', 'run-001', '--scope', 'repo:aiworker')).toEqual([
       '/usr/bin/bun',
       '/path/to/aiworker.ts',
-      'lessons propose',
-      'task-001',
-      '--apply',
+      'review promote',
+      'run-001',
+      '--scope',
+      'repo:aiworker',
+    ])
+    expect(run('lessons', 'promote', 'run-001')).toEqual([
+      '/usr/bin/bun',
+      '/path/to/aiworker.ts',
+      'lessons promote',
+      'run-001',
     ])
   })
 
-  it('config set <json> 折叠为本地 worker 快捷入口', () => {
-    const argv = run('config', 'set', '{"a":1}', '--if-match', '3')
-    expect(argv).toEqual([
+  it('旧 worker/brain/case/fleet/gateway 命令不再被折叠', () => {
+    expect(run('worker', 'run')).toEqual([
       '/usr/bin/bun',
       '/path/to/aiworker.ts',
-      'config set',
-      '{"a":1}',
-      '--if-match',
-      '3',
+      'worker',
+      'run',
     ])
-  })
-
-  it('env gateway-url 被折叠为本地 worker startup env 快捷入口', () => {
-    expect(run('env', 'gateway-url', 'wss://gw.example.test/ws')).toEqual([
+    expect(run('brain', 'status')).toEqual([
       '/usr/bin/bun',
       '/path/to/aiworker.ts',
-      'env gateway-url',
-      'wss://gw.example.test/ws',
+      'brain',
+      'status',
     ])
-  })
-
-  it('gateway install systemd 被折叠', () => {
-    expect(run('gateway', 'install', 'systemd', '--dry-run')).toEqual([
+    expect(run('case', 'show', 'run-001')).toEqual([
       '/usr/bin/bun',
       '/path/to/aiworker.ts',
-      'gateway install systemd',
-      '--dry-run',
+      'case',
+      'show',
+      'run-001',
     ])
-  })
-
-  it('sessions list 被折叠', () => {
-    expect(run('sessions', 'list', '--limit', '2')).toEqual([
+    expect(run('fleet', 'list')).toEqual([
       '/usr/bin/bun',
       '/path/to/aiworker.ts',
-      'sessions list',
-      '--limit',
-      '2',
+      'fleet',
+      'list',
     ])
-  })
-
-  it('soul show 被折叠', () => {
-    expect(run('soul', 'show', 'developer')).toEqual([
+    expect(run('gateway', 'start')).toEqual([
       '/usr/bin/bun',
       '/path/to/aiworker.ts',
-      'soul show',
-      'developer',
-    ])
-  })
-
-  it('pack show 被折叠', () => {
-    expect(run('pack', 'show', 'developer')).toEqual([
-      '/usr/bin/bun',
-      '/path/to/aiworker.ts',
-      'pack show',
-      'developer',
-    ])
-  })
-
-  it('daemon start 被折叠为本地 worker daemon 快捷入口', () => {
-    expect(run('daemon', 'start', '--port', '9217')).toEqual([
-      '/usr/bin/bun',
-      '/path/to/aiworker.ts',
-      'daemon start',
-      '--port',
-      '9217',
-    ])
-  })
-
-  it('executor mcp add 被折叠', () => {
-    expect(run('executor', 'mcp', 'add', 'context7', '--engine', 'codex')).toEqual([
-      '/usr/bin/bun',
-      '/path/to/aiworker.ts',
-      'executor mcp add',
-      'context7',
-      '--engine',
-      'codex',
-    ])
-  })
-
-  it('executor capability show 被折叠', () => {
-    expect(run('executor', 'capability', 'show', 'codex.mcp.context7')).toEqual([
-      '/usr/bin/bun',
-      '/path/to/aiworker.ts',
-      'executor capability show',
-      'codex.mcp.context7',
-    ])
-  })
-
-  it('worker up 被折叠为 canonical command', () => {
-    expect(run('worker', 'up', '--dry-run')).toEqual([
-      '/usr/bin/bun',
-      '/path/to/aiworker.ts',
-      'worker up',
-      '--dry-run',
-    ])
-  })
-
-  it('worker daemon check 被折叠为 canonical daemon command', () => {
-    expect(run('worker', 'daemon', 'check')).toEqual([
-      '/usr/bin/bun',
-      '/path/to/aiworker.ts',
-      'worker daemon check',
-    ])
-  })
-
-  it('worker executor mcp add 被折叠', () => {
-    expect(run('worker', 'executor', 'mcp', 'add', 'context7', '--engine', 'codex')).toEqual([
-      '/usr/bin/bun',
-      '/path/to/aiworker.ts',
-      'worker executor mcp add',
-      'context7',
-      '--engine',
-      'codex',
-    ])
-  })
-
-  it('worker executor select 被折叠', () => {
-    expect(run('worker', 'executor', 'select', '--engine', 'codex')).toEqual([
-      '/usr/bin/bun',
-      '/path/to/aiworker.ts',
-      'worker executor select',
-      '--engine',
-      'codex',
-    ])
-  })
-
-  it('worker case rerun 被折叠', () => {
-    expect(run('worker', 'case', 'rerun', 'task-001', '--message', 'retry')).toEqual([
-      '/usr/bin/bun',
-      '/path/to/aiworker.ts',
-      'worker case rerun',
-      'task-001',
-      '--message',
-      'retry',
-    ])
-  })
-
-  it('worker artifacts show 被折叠', () => {
-    expect(run('worker', 'artifacts', 'show', 'artifact-001')).toEqual([
-      '/usr/bin/bun',
-      '/path/to/aiworker.ts',
-      'worker artifacts show',
-      'artifact-001',
-    ])
-  })
-
-  it('worker env display-name 被折叠', () => {
-    expect(run('worker', 'env', 'display-name', 'edge-1')).toEqual([
-      '/usr/bin/bun',
-      '/path/to/aiworker.ts',
-      'worker env display-name',
-      'edge-1',
-    ])
-  })
-
-  it('不命中任何多词命令时原样返回', () => {
-    expect(run('init')).toEqual([
-      '/usr/bin/bun',
-      '/path/to/aiworker.ts',
-      'init',
+      'gateway',
+      'start',
     ])
   })
 })
 
-describe('aiworker malformed argv handling', () => {
-  it('soul list shows declared capabilities without bootstrapping state', async () => {
-    const result = await runCli(['soul', 'list'])
-    try {
-      expect(result.exitCode).toBe(0)
-      expect(result.output).toContain('[aiworker soul] built-in presets')
-      expect(result.output).toContain('developer')
-      expect(result.output).toContain('packs=code, repo-maintenance, review')
-      expect(result.output).toContain('aiworker doctor')
-      expect(existsSync(result.aiworkerHome)).toBe(false)
-    }
-    finally {
-      cleanup(result)
-    }
-  })
-
-  it('soul show renders one preset capability profile', async () => {
-    const result = await runCli(['soul', 'show', 'developer'])
-    try {
-      expect(result.exitCode).toBe(0)
-      expect(result.output).toContain('[aiworker soul] developer (Developer)')
-      expect(result.output).toContain('Responsibilities:')
-      expect(result.output).toContain('Capability packs: code, repo-maintenance, review')
-      expect(result.output).toContain('Toolsets: filesystem-read, filesystem-write, shell, git, test')
-      expect(result.output).toContain('project validation via aiworker doctor')
-      expect(existsSync(result.aiworkerHome)).toBe(false)
-    }
-    finally {
-      cleanup(result)
+describe('aiworker hard-reset argv handling', () => {
+  it('旧顶层命令明确失败且不创建状态', async () => {
+    for (const args of [
+      ['fleet', 'list'],
+      ['brain', 'status'],
+      ['case', 'show', 'run-001'],
+      ['worker', 'run'],
+    ]) {
+      const result = await runCli(args)
+      try {
+        expect(result.exitCode).toBe(2)
+        expect(result.output).toContain(`Unknown command: ${args[0]}`)
+        expect(existsSync(result.aiworkerHome)).toBe(false)
+      }
+      finally {
+        cleanup(result)
+      }
     }
   })
 
-  it('soul show rejects unknown presets', async () => {
-    const result = await runCli(['soul', 'show', 'nope'])
-    try {
-      expect(result.exitCode).toBe(2)
-      expect(result.output).toContain('unknown Soul preset "nope"')
-      expect(result.output).toContain('developer')
-      expect(existsSync(result.aiworkerHome)).toBe(false)
-    }
-    finally {
-      cleanup(result)
-    }
-  })
-
-  it('pack list shows workbench assets without bootstrapping state', async () => {
-    const result = await runCli(['pack', 'list'])
-    try {
-      expect(result.exitCode).toBe(0)
-      expect(result.output).toContain('[aiworker pack] built-in worker packs')
-      expect(result.output).toContain('developer')
-      expect(result.output).toContain('SKILL.md + DOMAIN.md')
-      expect(existsSync(result.aiworkerHome)).toBe(false)
-    }
-    finally {
-      cleanup(result)
-    }
-  })
-
-  it('missing command args fail without a raw CAC stack trace or bootstrap side effects', async () => {
-    const result = await runCli(['fleet', 'info'])
-    try {
-      expect(result.exitCode).toBe(2)
-      expect(result.output).toContain('missing required args for command')
-      expect(result.output).not.toContain('node_modules/.bun/cac')
-      expect(result.output).not.toContain('at checkRequiredArgs')
-      expect(existsSync(path.join(result.aiworkerHome, '.env'))).toBe(false)
-    }
-    finally {
-      cleanup(result)
-    }
-  })
-
-  it('unknown options fail without a raw CAC stack trace or bootstrap side effects', async () => {
-    const result = await runCli(['fleet', 'list', '--bad'])
-    try {
-      expect(result.exitCode).toBe(2)
-      expect(result.output).toContain('Unknown option')
-      expect(result.output).not.toContain('node_modules/.bun/cac')
-      expect(result.output).not.toContain('at checkUnknownOptions')
-      expect(existsSync(path.join(result.aiworkerHome, '.env'))).toBe(false)
-    }
-    finally {
-      cleanup(result)
-    }
-  })
-
-  it('unknown commands fail explicitly', async () => {
-    const result = await runCli(['__nope'])
-    try {
-      expect(result.exitCode).toBe(2)
-      expect(result.output).toContain('Unknown command: __nope')
-      expect(existsSync(path.join(result.aiworkerHome, '.env'))).toBe(false)
-    }
-    finally {
-      cleanup(result)
-    }
-  })
-
-  it('BUG-073: group-level help shows scoped subcommands instead of top-level help', async () => {
-    const result = await runCli(['soul', '--help'])
-    try {
-      expect(result.exitCode).toBe(0)
-      expect(result.output).toContain('[aiworker soul] command group')
-      expect(result.output).toContain('这是命令组')
-      expect(result.output).toContain('soul list')
-      expect(result.output).toContain('soul show')
-      expect(result.output).not.toContain('使用引导')
-    }
-    finally {
-      cleanup(result)
-    }
-  })
-
-  it('rejects malformed numeric options before remote gateway calls', async () => {
-    const result = await runCli(['fleet', 'chat', 'w_test', 'hello', '--timeout-ms', 'nope'])
-    try {
-      expect(result.exitCode).toBe(2)
-      expect(result.output).toContain('--timeout-ms must be a finite number')
-      expect(result.output).not.toContain('WS 连接错误')
-      expect(result.output).not.toContain('Failed to connect')
-      expect(existsSync(path.join(result.aiworkerHome, '.env'))).toBe(false)
-    }
-    finally {
-      cleanup(result)
-    }
-  })
-
-  it('rejects malformed port options before worker server bootstrap', async () => {
-    const result = await runCli(['serve', '--port', 'nope'])
-    try {
-      expect(result.exitCode).toBe(2)
-      expect(result.output).toContain('--port must be a finite number')
-      expect(result.output).not.toContain('worker.db ready')
-      expect(result.output).not.toContain('listening on :NaN')
-      expect(existsSync(path.join(result.aiworkerHome, '.env'))).toBe(false)
-    }
-    finally {
-      cleanup(result)
-    }
-  })
-
-  it('rejects malformed up port options before init or serve side effects', async () => {
-    const result = await runCli(['up', '--soul', 'developer', '--port', 'nope'])
-    try {
-      expect(result.exitCode).toBe(2)
-      expect(result.output).toContain('--port must be a finite number')
-      expect(result.output).not.toContain('[aiworker up] stage')
-      expect(existsSync(path.join(result.root, '.aiworker'))).toBe(false)
-      expect(existsSync(path.join(result.aiworkerHome, '.env'))).toBe(false)
-    }
-    finally {
-      cleanup(result)
-    }
-  })
-
-  it('rejects malformed daemon numeric options before init side effects', async () => {
+  it('格式错误的 daemon port 在初始化前失败', async () => {
     const result = await runCli(['daemon', 'start', '--soul', 'developer', '--port', 'nope'])
     try {
       expect(result.exitCode).toBe(2)
       expect(result.output).toContain('--port must be a finite number')
       expect(result.output).not.toContain('[aiworker init] preflight')
       expect(existsSync(path.join(result.root, '.aiworker'))).toBe(false)
-      expect(existsSync(path.join(result.aiworkerHome, '.env'))).toBe(false)
+      expect(existsSync(result.aiworkerHome)).toBe(false)
     }
     finally {
       cleanup(result)
     }
   })
 
-  it('documents serve host override in command help', async () => {
-    const result = await runCli(['serve', '--help'])
+  it('daemon group help 只列出 daemon 子命令', async () => {
+    const result = await runCli(['daemon', '--help'])
     try {
       expect(result.exitCode).toBe(0)
-      expect(result.output).toContain('--host <host>')
-      expect(result.output).toContain('AIWORKER_WORKER_HOST')
-      expect(existsSync(path.join(result.aiworkerHome, '.env'))).toBe(false)
-    }
-    finally {
-      cleanup(result)
-    }
-  })
-
-  it('root help keeps bootstrap-heavy commands out of the first screen', async () => {
-    const result = await runCli(['--help'])
-    try {
-      expect(result.exitCode).toBe(0)
-      expect(result.output).toContain('aiworker commands')
-      expect(result.output).not.toContain('缺失时会初始化本地状态')
-      expect(result.output).not.toContain('sessions maintenance')
-      expect(existsSync(path.join(result.aiworkerHome, '.env'))).toBe(false)
-    }
-    finally {
-      cleanup(result)
-    }
-  })
-
-  it('rejects removed pre-1.0 legacy command spellings', async () => {
-    const result = await runCli(['config-show'])
-    try {
-      expect(result.exitCode).toBe(2)
-      expect(result.output).toContain('Unknown command: config-show')
-      expect(existsSync(path.join(result.aiworkerHome, '.env'))).toBe(false)
-    }
-    finally {
-      cleanup(result)
-    }
-  })
-
-  it('commands prints the full command index', async () => {
-    const result = await runCli(['commands'])
-    try {
-      expect(result.exitCode).toBe(0)
-      expect(result.output).toContain('aiworker command index')
-      expect(result.output).toContain('Worker canonical 入口')
-      expect(result.output).toContain('sessions maintenance')
-      expect(result.output).toContain('fleet config set')
-      expect(result.output).toContain('gateway install systemd')
-      expect(existsSync(path.join(result.aiworkerHome, '.env'))).toBe(false)
-    }
-    finally {
-      cleanup(result)
-    }
-  })
-
-  it('clarifies gateway status is detached-daemon only in full command index', async () => {
-    const result = await runCli(['--help'])
-    try {
-      expect(result.exitCode).toBe(0)
-      expect(result.output).not.toContain('后台 gateway 守护进程')
-      expect(result.output).not.toContain('foreground/systemd')
-      expect(existsSync(path.join(result.aiworkerHome, '.env'))).toBe(false)
+      expect(result.output).toContain('[aiworker daemon] command group')
+      expect(result.output).toContain('daemon start')
+      expect(result.output).toContain('daemon foreground')
+      expect(result.output).not.toContain('gateway start')
+      expect(result.output).not.toContain('worker daemon check')
+      expect(existsSync(result.aiworkerHome)).toBe(false)
     }
     finally {
       cleanup(result)

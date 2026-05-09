@@ -164,7 +164,6 @@ describe('aiworker daemon command lifecycle', () => {
         String(port),
         '--host',
         '127.0.0.1',
-        '--no-serve-web',
       ], project, home)
       expect(start.exitCode).toBe(0)
       expect(start.output).toContain('[aiworker init] preflight')
@@ -181,13 +180,13 @@ describe('aiworker daemon command lifecycle', () => {
 
       const logs = runCli(['daemon', 'logs', '--tail', '20'], project, home)
       expect(logs.exitCode).toBe(0)
-      expect(logs.output).toContain('[aiworker up] stage 5/5 serve')
 
       const inspect = runCli(['daemon', 'inspect'], project, home)
       expect(inspect.exitCode).toBe(0)
-      const inspected = JSON.parse(inspect.output) as { meta: { port: number }, running: boolean }
+      const inspected = JSON.parse(inspect.output) as { meta: { args: string[], port: number }, running: boolean }
       expect(inspected.running).toBe(true)
       expect(inspected.meta.port).toBe(port)
+      expect(inspected.meta.args.slice(0, 2)).toEqual(['daemon', 'foreground'])
 
       const stop = runCli(['daemon', 'stop', '--timeout-ms', '3000'], project, home)
       expect(stop.exitCode).toBe(0)

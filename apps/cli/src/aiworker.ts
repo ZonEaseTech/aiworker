@@ -4,73 +4,14 @@ import process from 'node:process'
 import cac from 'cac'
 import consola from 'consola'
 
-// FEAT-030: cli.version 动态读 package.json，与发布版本始终一致。
-// Bun 支持 JSON imports 直接拿 package.json。
 import packageJson from '../package.json' with { type: 'json' }
 
 import {
-  runApprovalsGrant as runApprovalsGrantRemote,
-  runApprovalsList as runApprovalsListRemote,
-} from './commands/fleet/approvals'
-
-import { runChat } from './commands/fleet/chat'
-import {
-  runConfigGet,
-  runConfigSet as runConfigSetRemote,
-} from './commands/fleet/config'
-import { runEnrollApprove, runEnrollList, runEnrollReject } from './commands/fleet/enroll'
-import { runLogs } from './commands/fleet/logs'
-import { runPair } from './commands/fleet/pair'
-import {
-  runScheduleAdd as runScheduleAddRemote,
-  runScheduleList as runScheduleListRemote,
-  runScheduleRemove as runScheduleRemoveRemote,
-} from './commands/fleet/schedule'
-import { runTokenRotate as runTokenRotateRemote } from './commands/fleet/token'
-import {
-  runWorkersInfo,
-  runWorkersLaunch,
-  runWorkersList,
-  runWorkersRemove,
-  runWorkersStop,
-} from './commands/fleet/workers'
-import { runGatewayStart, runGatewayStatus, runGatewayStop } from './commands/gateway/gateway'
-import { runInstallSystemd } from './commands/gateway/install'
-import {
-  runApprovalsGrant as runApprovalsGrantLocal,
-  runApprovalsList as runApprovalsListLocal,
-} from './commands/worker/approvals'
-import {
-  runBrainAdmissionApply,
-  runBrainAdmissionApprove,
-  runBrainAdmissionList,
-  runBrainAdmissionPropose,
-  runBrainAdmissionReject,
-  runBrainAdmissionShow,
-  runBrainArtifactsList,
-  runBrainArtifactsShow,
-  runBrainBrief,
-  runBrainInboxPropose,
-  runBrainJournalShow,
-  runBrainMemories,
-  runBrainSkills,
-  runBrainSkillsSyncNative,
-  runBrainStatus,
-} from './commands/worker/brain'
-import {
-  runCaseList,
-  runCaseRerun,
-  runCaseShow,
-  runLessonsPropose,
   runReviewList,
   runReviewPromoteLessons,
   runReviewRerun,
   runReviewShow,
 } from './commands/worker/case'
-import {
-  runConfigSet as runConfigSetLocal,
-  runConfigShow,
-} from './commands/worker/config'
 import {
   runWorkerDaemonCheck,
   runWorkerDaemonInspect,
@@ -80,7 +21,6 @@ import {
   stopWorkerDaemon,
 } from './commands/worker/daemon'
 import { runDoctor } from './commands/worker/doctor'
-import { runEnvDisplayName, runEnvGatewayUrl } from './commands/worker/env'
 import {
   runExecutorCapabilityList,
   runExecutorCapabilityShow,
@@ -92,21 +32,7 @@ import {
 import { runInit } from './commands/worker/init'
 import { runPackList, runPackShow } from './commands/worker/pack'
 import { runRun } from './commands/worker/run'
-import {
-  runScheduleAdd as runScheduleAddLocal,
-  runScheduleList as runScheduleListLocal,
-  runScheduleRemove as runScheduleRemoveLocal,
-} from './commands/worker/schedule'
-import { runScope } from './commands/worker/scope'
 import { runServe } from './commands/worker/serve'
-import {
-  runSessionsList,
-  runSessionsMaintenance,
-  runSessionsShow,
-} from './commands/worker/sessions'
-import { runSoulList, runSoulShow } from './commands/worker/soul'
-import { runTokenRotate as runTokenRotateLocal } from './commands/worker/token'
-import { runUp } from './commands/worker/up'
 import {
   runArtifactsList,
   runArtifactsShow,
@@ -114,20 +40,25 @@ import {
   runRunsList,
   runRunsShow,
 } from './commands/worker/workbench'
-import { configureCliHelp, findCommandGroupHelpArg, localizeGlobalOptions, renderCommandGroupHelp, renderFullCommandIndex } from './help'
+import {
+  configureCliHelp,
+  findCommandGroupHelpArg,
+  localizeGlobalOptions,
+  renderCommandGroupHelp,
+  renderFullCommandIndex,
+} from './help'
 import { bootstrapCliDotenv } from './lib/bootstrap'
 
 /**
- * aiworker —— 单二进制 CLI（PLAN-020 / FEAT-028）。
+ * AIWorker hard-reset CLI.
  *
- * 命名约定：
- *   - `aiworker ...` 等价于 `aiworker worker ...`，直接读写本地 worker.db。
- *   - `aiworker worker ...` 是本地 worker 的 canonical tree。
- *   - `aiworker fleet ...` 通过 gateway WS 操作 fleet 和远端 worker。
- *   - `aiworker gateway ...` 管理 gateway 生命周期和安装。
+ * The visible surface is intentionally local-worker only:
  *
- * 退出码（详见 operator commands/common.ts errorToExitCode）：
- *   0 成功；1 泛型错误；2 参数非法 / 未知方法；3 超时；4 连接断开。
+ *   worker pack -> work order -> run -> artifact -> review -> lesson
+ *
+ * Pre-1.0 Brain/Case/Fleet/Gateway compatibility command trees are not
+ * re-registered here. Internal services may still exist while later slices
+ * rename or delete them, but the CLI no longer teaches that old product model.
  */
 const cli = cac('aiworker')
 
@@ -145,87 +76,84 @@ function optionalNumber(values: number[] | undefined): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
-function registerWorkerDaemonCommands(prefix = ''): void {
+function registerDaemonCommands(): void {
   cli
-    .command(`${prefix}daemon start`, '后台启动本地 worker daemon（复用 up/init/serve 路径）')
-    .option('--soul <preset>', 'brand-new project 初始化使用的 Soul 预设')
-    .option('--pack <id>', 'brand-new project 初始化使用的 worker pack')
+    .command('daemon start', '后台启动本地 worker daemon')
+    .option('--soul <preset>', 'brand-new workspace 初始化使用的 worker preset')
+    .option('--pack <id>', 'brand-new workspace 初始化使用的 worker pack')
     .option('--port <n>', '覆盖 PORT 环境变量', { type: [Number] })
     .option('--host <host>', '覆盖 AIWORKER_WORKER_HOST（默认 127.0.0.1）')
-    .option('--gateway <url>', '随 HTTP server 一起连接指定 gateway WebSocket URL')
-    .option('--gateway-token <token>', '连接 gateway 时使用的 bearer token（loopback 可省略）')
-    .option('--no-reconnect', '关闭 gateway-client 自动重连（smoke / 测试时使用）')
-    .option('--no-serve-web', '不挂载 worker bundle 到 /admin/*（默认挂载）')
     .action(async (opts: {
-      gateway?: string
-      gatewayToken?: string
       host?: string
       pack?: string
       port?: number[]
-      reconnect?: boolean
-      serveWeb?: boolean
       soul?: string
     }) => {
-      const port = optionalNumber(opts.port)
       process.exit(await startWorkerDaemon({
-        ...(opts.gateway === undefined ? {} : { gateway: opts.gateway }),
-        ...(opts.gatewayToken === undefined ? {} : { gatewayToken: opts.gatewayToken }),
         ...(opts.host === undefined ? {} : { host: opts.host }),
         ...(opts.pack === undefined ? {} : { pack: opts.pack }),
-        ...(port === undefined ? {} : { port }),
-        ...(opts.reconnect === false ? { gatewayReconnect: false } : {}),
-        ...(opts.serveWeb === false ? { serveWeb: false } : {}),
+        ...(optionalNumber(opts.port) === undefined ? {} : { port: optionalNumber(opts.port) }),
         ...(opts.soul === undefined ? {} : { soul: opts.soul }),
       }))
     })
 
-  cli.command(`${prefix}daemon status`, '查看本地 worker daemon PID/log 状态').action(() => {
+  cli.command('daemon status', '查看本地 worker daemon PID/log 状态').action(() => {
     process.exit(runWorkerDaemonStatus())
   })
 
   cli
-    .command(`${prefix}daemon stop`, '停止后台本地 worker daemon')
+    .command('daemon stop', '停止后台本地 worker daemon')
     .option('--timeout-ms <n>', 'SIGTERM 后等待毫秒数，超时则 SIGKILL（默认 5000）', { type: [Number] })
     .action(async (opts: { timeoutMs?: number[] }) => {
       process.exit(await stopWorkerDaemon({ timeoutMs: optionalNumber(opts.timeoutMs) }))
     })
 
   cli
-    .command(`${prefix}daemon logs`, '打印本地 worker daemon 最近日志')
+    .command('daemon logs', '打印本地 worker daemon 最近日志')
     .option('--tail <n>', '打印最近 N 行（默认 80）', { type: [Number] })
     .action((opts: { tail?: number[] }) => {
       process.exit(runWorkerDaemonLogs({ tail: optionalNumber(opts.tail) }))
     })
 
   cli
-    .command(`${prefix}daemon check`, '检查本地 worker daemon /health')
+    .command('daemon check', '检查本地 worker daemon /health')
     .option('--timeout-ms <n>', 'HTTP health check 超时毫秒数（默认 2000）', { type: [Number] })
     .action(async (opts: { timeoutMs?: number[] }) => {
       process.exit(await runWorkerDaemonCheck({ timeoutMs: optionalNumber(opts.timeoutMs) }))
     })
 
-  cli.command(`${prefix}daemon inspect`, '以 JSON 输出本地 worker daemon 状态与 metadata').action(() => {
+  cli.command('daemon inspect', '以 JSON 输出本地 worker daemon 状态与 metadata').action(() => {
     process.exit(runWorkerDaemonInspect())
   })
+
+  cli
+    .command('daemon foreground', '前台运行本地 worker daemon HTTP/Web 服务')
+    .option('--port <n>', '覆盖 PORT 环境变量', { type: [Number] })
+    .option('--host <host>', '覆盖 AIWORKER_WORKER_HOST（默认 127.0.0.1）')
+    .option('--open', '启动后打开 worker web workbench')
+    .option('--no-open', '启动后不自动打开 worker web workbench')
+    .option('--pid-file <path>', 'daemon pid 写入指定路径（关闭时清理）')
+    .action(async (opts: { host?: string, pidFile?: string, port?: number[] }) => {
+      const open = readServeOpenOption()
+      await runServe({
+        ...(opts.host === undefined ? {} : { host: opts.host }),
+        ...(opts.pidFile === undefined ? {} : { pidFile: opts.pidFile }),
+        ...(optionalNumber(opts.port) === undefined ? {} : { port: optionalNumber(opts.port) }),
+        ...(open === undefined ? {} : { open }),
+        runtimeVersion: packageJson.version,
+      })
+    })
 }
 
-// ============================================================
-// worker-local（root shortcuts）
-// ============================================================
-
 cli
-  .command('init', '初始化 worker.db、身份、token 和默认配置（默认当前项目 `<cwd>/.aiworker/`；--global 使用旧版 ~/.aiworker）')
-  .option('--global', '初始化旧版用户级 `~/.aiworker/`（单主机全局 worker）')
-  .option('--force', '兼容旧脚本；项目初始化允许在非 git 目录运行，且仍不会覆盖现有文件')
+  .command('init', '初始化当前 workspace 的 local worker state 和 worker pack')
   .option('--dry-run', '只打印初始化预检和计划写入，不创建或修改文件')
-  .option('--soul <preset>', '项目级初始化使用的 Soul 预设；非交互 brand-new init 必填，可选 developer/project-manager/devops-sre/product-designer/qa-reviewer/support-operator/finance-ops/hr-recruiting/general-assistant/customize')
-  .option('--pack <id>', '项目级初始化使用的 worker pack；默认选择与 Soul 同名的内置 pack（如存在）')
-  .option('--token-file <path>', '首次初始化时把完整 bootstrap token 写入 chmod 600 文件；默认写入 worker local bootstrap-token.txt')
+  .option('--soul <preset>', '初始化使用的 worker preset，例如 developer / hr-recruiting / project-manager')
+  .option('--pack <id>', '初始化使用的 worker pack；默认选择与 preset 同名的内置 pack')
+  .option('--token-file <path>', '首次初始化时把完整 bootstrap token 写入 chmod 600 文件')
   .option('--show-token', '首次初始化时在 stdout 高可见 warning block 中显示完整 bootstrap token')
-  .action(async (opts: { dryRun?: boolean, global?: boolean, force?: boolean, pack?: string, showToken?: boolean, soul?: string, tokenFile?: string }) => {
+  .action(async (opts: { dryRun?: boolean, pack?: string, showToken?: boolean, soul?: string, tokenFile?: string }) => {
     process.exit(await runInit({
-      ...(opts.global === true ? { global: true } : {}),
-      ...(opts.force === true ? { force: true } : {}),
       ...(opts.dryRun === true ? { dryRun: true } : {}),
       ...(opts.soul === undefined ? {} : { soul: opts.soul }),
       ...(opts.pack === undefined ? {} : { pack: opts.pack }),
@@ -234,73 +162,14 @@ cli
     }))
   })
 
-cli
-  .command('up', '一条命令初始化、验证并启动本地 worker HTTP/admin')
-  .option('--soul <preset>', 'brand-new project 初始化使用的 Soul 预设；已初始化项目不会消费此参数')
-  .option('--pack <id>', 'brand-new project 初始化使用的 worker pack；透传给 init')
-  .option('--dry-run', '只打印 up 阶段和预检结果，不初始化、不启动 HTTP server、不打开浏览器')
-  .option('--port <n>', '覆盖 PORT 环境变量', { type: [Number] })
-  .option('--host <host>', '覆盖 AIWORKER_WORKER_HOST（默认 127.0.0.1）')
-  .option('--gateway <url>', '随 HTTP server 一起连接指定 gateway WebSocket URL')
-  .option('--gateway-token <token>', '连接 gateway 时使用的 bearer token（loopback 可省略）')
-  .option('--no-reconnect', '关闭 gateway-client 自动重连（smoke / 测试时使用）')
-  .option('--no-serve-web', '不挂载 worker bundle 到 /admin/*（默认挂载）')
-  .option('--open', '启动后打开 worker admin')
-  .option('--no-open', '启动后不自动打开 worker admin')
-  .action(async (opts: {
-    dryRun?: boolean
-    gateway?: string
-    gatewayToken?: string
-    host?: string
-    pack?: string
-    port?: number[]
-    reconnect?: boolean
-    serveWeb?: boolean
-    soul?: string
-  }) => {
-    const open = readServeOpenOption()
-    const port = optionalNumber(opts.port)
-    process.exit(await runUp({
-      ...(opts.soul === undefined ? {} : { soul: opts.soul }),
-      ...(opts.pack === undefined ? {} : { pack: opts.pack }),
-      ...(opts.dryRun === true ? { dryRun: true } : {}),
-      ...(port === undefined ? {} : { port }),
-      ...(opts.host === undefined ? {} : { host: opts.host }),
-      ...(opts.gateway === undefined ? {} : { gateway: opts.gateway }),
-      ...(opts.gatewayToken === undefined ? {} : { gatewayToken: opts.gatewayToken }),
-      ...(opts.reconnect === false ? { gatewayReconnect: false } : {}),
-      ...(opts.serveWeb === false ? { serveWeb: false } : {}),
-      ...(open === undefined ? {} : { open }),
-      runtimeVersion: packageJson.version,
-    }))
-  })
+registerDaemonCommands()
 
-registerWorkerDaemonCommands()
-
-cli
-  .command('scope', '打印当前 aiworker scope（user/project/explicit）和关键布局文件状态')
-  .action(async () => {
-    process.exitCode = await runScope()
-  })
-
-cli.command('doctor', '静态验证当前 `.aiworker/` capability manifests、Skill metadata 和 MCP descriptors').action(async () => {
+cli.command('doctor', '验证当前 workspace 的 local worker state、pack 和 executor readiness').action(async () => {
   process.exit(await runDoctor())
 })
 
 cli
-  .command('env gateway-url <url>', '写入 worker-local AIWORKER_GATEWAY_URL，用于 worker OTP/self-enroll 到 gateway')
-  .action(async (url: string) => {
-    process.exit(await runEnvGatewayUrl(url))
-  })
-
-cli
-  .command('env display-name <name>', '写入 worker-local AIWORKER_DISPLAY_NAME，用于 fleet 列表展示')
-  .action(async (name: string) => {
-    process.exit(await runEnvDisplayName(name))
-  })
-
-cli
-  .command('executor mcp add <name>', '在 project executor overlay 中声明一个 MCP server hint，写入 `.aiworker/executor-capabilities.json`')
+  .command('executor mcp add <name>', '声明一个 project executor MCP overlay hint')
   .option('--engine <engine>', '目标 engine：codex 或 claude-code')
   .option('--scope <scope>', 'MCP 配置 scope；当前仅支持 project')
   .option('--transport <transport>', 'MCP transport：stdio / streamable-http / sse；未指定时按 --url 推断')
@@ -317,7 +186,7 @@ cli
   })
 
 cli
-  .command('executor mcp sync', '把 project executor overlay best-effort 投影到 engine 官方 project-scope MCP 配置（非 effective capability source of truth）')
+  .command('executor mcp sync', '把 project executor overlay best-effort 投影到 engine 官方 project 配置')
   .option('--engine <engine>', '目标 engine：codex 或 claude-code')
   .option('--dry-run', '只打印将执行的 engine CLI 命令')
   .action(async (opts: Parameters<typeof runExecutorMcpSync>[0]) => {
@@ -325,7 +194,7 @@ cli
   })
 
 cli
-  .command('executor select', '显式选择本地 worker 的 task executor，不写 engine project config')
+  .command('executor select', '选择本地 worker 的 task executor')
   .option('--engine <engine>', '目标 task executor engine，例如 codex / claude-code / http')
   .option('--variant <variant>', 'executor variant（默认 default）')
   .option('--model-id <model>', '可选 per-request model override')
@@ -350,40 +219,45 @@ cli
   })
 
 cli
-  .command('executor doctor', '校验 project executor overlay 与 engine CLI readiness（不探测 user/host ambient capabilities）')
+  .command('executor doctor', '校验 project executor overlay 与 engine CLI readiness')
   .option('--engine <engine>', '只检查一个 engine：codex 或 claude-code')
   .action(async (opts: Parameters<typeof runExecutorDoctor>[0]) => {
     process.exit(await runExecutorDoctor(opts))
   })
 
 cli
-  .command('executor capability list', '只读列出 .aiworker/executor-capabilities.json 中的 project executor overlay 条目')
+  .command('executor capability list', '只读列出 project executor overlay 条目')
   .option('--engine <engine>', '只列出一个 engine：codex 或 claude-code')
   .action(async (opts: Parameters<typeof runExecutorCapabilityList>[0]) => {
     process.exit(await runExecutorCapabilityList(opts))
   })
 
 cli
-  .command('executor capability show <ref>', '只读查看单条 project executor overlay descriptor，ref 形如 codex.mcp.context7')
+  .command('executor capability show <ref>', '只读查看单条 project executor overlay descriptor')
   .action(async (ref: string) => {
     process.exit(await runExecutorCapabilityShow(ref))
   })
 
-cli.command('soul list', '列出内置 Soul 预设及其声明能力').action(async () => {
-  process.exit(await runSoulList())
-})
-
-cli.command('soul show <preset>', '查看某个 Soul 预设的职责、边界、能力草案和风险策略').action(async (preset: string) => {
-  process.exit(await runSoulShow(preset))
-})
-
-cli.command('pack list', '列出 OD-style worker pack（SKILL.md + DOMAIN.md + work-order templates）').action(async () => {
+cli.command('pack list', '列出 OD-style worker packs').action(async () => {
   process.exit(await runPackList())
 })
 
-cli.command('pack show <pack>', '查看某个 worker pack 的 skill/domain/work-order/artifact 信息').action(async (pack: string) => {
+cli.command('pack show <pack>', '查看 worker pack 的 skill/domain/work-order/artifact 信息').action(async (pack: string) => {
   process.exit(await runPackShow(pack))
 })
+
+cli
+  .command('run', '向本地 daemon 提交一条 work order')
+  .option('--message <text>', '要投递的用户消息（必填）')
+  .option('--dry-run', '完成本地状态/bootstrap 检查，但不真正提交 run')
+  .option('--timeout-ms <n>', '等待终态事件的最长时间，单位毫秒（默认 120000）', { type: [Number] })
+  .action(async (opts: { dryRun?: boolean, message?: string, timeoutMs?: number[] }) => {
+    process.exit(await runRun({
+      message: opts.message,
+      dryRun: opts.dryRun,
+      timeoutMs: optionalNumber(opts.timeoutMs),
+    }))
+  })
 
 cli
   .command('runs list', '列出本地 daemon work orders')
@@ -392,17 +266,13 @@ cli
     process.exit(await runRunsList({ limit: optionalNumber(opts.limit) }))
   })
 
-cli
-  .command('runs show <runId>', '查看一个 work order run')
-  .action(async (runId: string) => {
-    process.exit(await runRunsShow(runId))
-  })
+cli.command('runs show <runId>', '查看一个 work order run').action(async (runId: string) => {
+  process.exit(await runRunsShow(runId))
+})
 
-cli
-  .command('runs cancel <runId>', '取消一个仍在运行的 work order')
-  .action(async (runId: string) => {
-    process.exit(await runRunsCancel(runId))
-  })
+cli.command('runs cancel <runId>', '取消一个仍在运行的 work order').action(async (runId: string) => {
+  process.exit(await runRunsCancel(runId))
+})
 
 cli
   .command('artifacts list', '列出本地 daemon artifact metadata')
@@ -410,7 +280,7 @@ cli
   .option('--conversation <id>', '按 conversation id 过滤')
   .option('--status <status>', '按 artifact 状态过滤：available | missing | archived')
   .option('--limit <n>', '最多返回 artifact 数量（1-500，默认由 daemon 决定）', { type: [Number] })
-  .action(async (opts: { run?: string, conversation?: string, status?: string, limit?: number[] }) => {
+  .action(async (opts: { conversation?: string, limit?: number[], run?: string, status?: string }) => {
     process.exit(await runArtifactsList({
       ...(opts.run === undefined ? {} : { runId: opts.run }),
       ...(opts.conversation === undefined ? {} : { conversationId: opts.conversation }),
@@ -419,1447 +289,65 @@ cli
     }))
   })
 
-cli
-  .command('artifacts show <id>', '查看一个 artifact metadata')
-  .action(async (id: string) => {
-    process.exit(await runArtifactsShow(id))
-  })
+cli.command('artifacts show <id>', '查看一个 artifact metadata').action(async (id: string) => {
+  process.exit(await runArtifactsShow(id))
+})
 
 cli
-  .command('review list', '列出本地 worker run reviews（workbench 默认复盘入口）')
+  .command('review list', '列出本地 worker run reviews')
   .option('--limit <n>', '最多返回 review 数量（1-200，默认 50）', { type: [Number] })
   .action(async (opts: { limit?: number[] }) => {
     process.exit(await runReviewList({ limit: optionalNumber(opts.limit) }))
   })
 
 cli
-  .command('review show <taskId>', '查看一个 run review、evidence、risk 和 lesson candidates')
+  .command('review show <runId>', '查看 run review、evidence、risk 和 lesson candidates')
   .option('--show-sensitive', '不再对 payload / message preview 做 secret-like redaction')
-  .action(async (taskId: string, opts: { showSensitive?: boolean }) => {
-    process.exit(await runReviewShow(taskId, {
+  .action(async (runId: string, opts: { showSensitive?: boolean }) => {
+    process.exit(await runReviewShow(runId, {
       ...(opts.showSensitive === undefined ? {} : { showSensitive: opts.showSensitive }),
     }))
   })
 
 cli
-  .command('review rerun <taskId>', '基于 review evidence 显式重跑一个 work order')
-  .option('--prompt <text>', '覆盖 rerun prompt；默认由 orchestrator 构造 repair context')
-  .action(async (taskId: string, opts: { prompt?: string }) => {
-    process.exit(await runReviewRerun(taskId, {
+  .command('review rerun <runId>', '基于 review evidence 显式重跑一个 work order')
+  .option('--prompt <text>', '覆盖 rerun prompt；默认由 daemon 构造 repair context')
+  .action(async (runId: string, opts: { prompt?: string }) => {
+    process.exit(await runReviewRerun(runId, {
       ...(opts.prompt === undefined ? {} : { prompt: opts.prompt }),
     }))
   })
 
 cli
-  .command('review promote <taskId>', '把 review lesson candidates 提升为 pending durable-context proposals')
-  .option('--soul <id>', '写入 proposal 的 Soul id（默认 developer）')
+  .command('review promote <runId>', '把 review lesson candidates 晋升为 durable lesson proposals')
+  .option('--soul <id>', '写入 proposal 的 worker identity id（默认 developer）')
   .option('--scope <id>', '写入 proposal 的 scope id（可选）')
-  .action(async (taskId: string, opts: { soul?: string, scope?: string }) => {
-    process.exit(await runReviewPromoteLessons(taskId, {
+  .action(async (runId: string, opts: { scope?: string, soul?: string }) => {
+    process.exit(await runReviewPromoteLessons(runId, {
       ...(opts.soul === undefined ? {} : { soulId: opts.soul }),
       ...(opts.scope === undefined ? {} : { scopeId: opts.scope }),
     }))
   })
 
 cli
-  .command('case list', '列出本地 worker 的 Worker Case File 投影（operator 默认审查入口）')
-  .option('--limit <n>', '最多返回 case 数量（1-200，默认 50）', { type: [Number] })
-  .action(async (opts: { limit?: number[] }) => {
-    process.exit(await runCaseList({ limit: optionalNumber(opts.limit) }))
-  })
-
-cli
-  .command('case show <taskId>', '查看一个 task 的 Case File、Review Decision、Evidence、Risk 和 Lessons')
-  .option('--show-sensitive', '不再对 payload / message preview 做 secret-like redaction')
-  .action(async (taskId: string, opts: { showSensitive?: boolean }) => {
-    process.exit(await runCaseShow(taskId, {
-      ...(opts.showSensitive === undefined ? {} : { showSensitive: opts.showSensitive }),
-    }))
-  })
-
-cli
-  .command('case rerun <taskId>', '基于现有 proof-loop 规则显式重跑一个 case')
-  .option('--prompt <text>', '覆盖 rerun prompt；默认由 orchestrator 构造 repair context')
-  .action(async (taskId: string, opts: { prompt?: string }) => {
-    process.exit(await runCaseRerun(taskId, {
-      ...(opts.prompt === undefined ? {} : { prompt: opts.prompt }),
-    }))
-  })
-
-cli
-  .command('lessons propose <taskId>', '从 Case lesson candidates 创建 pending Brain admission proposals')
-  .option('--soul <id>', '写入 proposal 的 Soul id（默认 developer）')
+  .command('lessons promote <runId>', '把某次 run review 的 lesson candidates 晋升为 durable context')
+  .option('--soul <id>', '写入 proposal 的 worker identity id（默认 developer）')
   .option('--scope <id>', '写入 proposal 的 scope id（可选）')
-  .action(async (taskId: string, opts: { soul?: string, scope?: string }) => {
-    process.exit(await runLessonsPropose(taskId, {
+  .action(async (runId: string, opts: { scope?: string, soul?: string }) => {
+    process.exit(await runReviewPromoteLessons(runId, {
       ...(opts.soul === undefined ? {} : { soulId: opts.soul }),
       ...(opts.scope === undefined ? {} : { scopeId: opts.scope }),
     }))
   })
 
-cli.command('brain status', '只读诊断本地 worker runtime brain source、写入目标、decision pipeline（heuristic/LLM、observe_only/enforced、recent fallback）和健康状态').action(async () => {
-  process.exit(await runBrainStatus())
-})
-
-cli
-  .command('brain journal show <taskId>', '只读查看一个 worker task 的 Brain Journal trace')
-  .option('--show-sensitive', '不再对 payload / message preview 做 secret-like redaction')
-  .action(async (taskId: string, opts: { showSensitive?: boolean }) => {
-    process.exit(await runBrainJournalShow(taskId, {
-      ...(opts.showSensitive === undefined ? {} : { showSensitive: opts.showSensitive }),
-    }))
-  })
-
-cli
-  .command('brain inbox propose <taskId>', '从 task 的 Brain Engine lesson candidates 创建 pending admission proposals')
-  .option('--soul <id>', '写入 proposal 的 Soul id（默认 developer）')
-  .option('--scope <id>', '写入 proposal 的 scope id（可选）')
-  .action(async (taskId: string, opts: { soul?: string, scope?: string }) => {
-    process.exit(await runBrainInboxPropose(taskId, {
-      ...(opts.soul === undefined ? {} : { soulId: opts.soul }),
-      ...(opts.scope === undefined ? {} : { scopeId: opts.scope }),
-    }))
-  })
-
-cli.command('brain skills', '只读列出 fallback brain skill 与 native executor skill 目标').action(async () => {
-  process.exit(await runBrainSkills())
-})
-
-cli
-  .command('brain skills sync-native', '同步 AIWorker 管理的 native executor skill projection（默认 dry-run）')
-  .option('--apply', '应用 create/update/deprecate，并写入 projection manifest')
-  .option('--dry-run', '只打印同步计划，不写文件')
-  .action(async (opts: { apply?: boolean, dryRun?: boolean }) => {
-    process.exit(await runBrainSkillsSyncNative({
-      ...(opts.apply === true ? { apply: true } : {}),
-      ...(opts.dryRun === true ? { dryRun: true } : {}),
-    }))
-  })
-
-cli
-  .command('brain memories', '只读列出或搜索本地 runtime brain memory')
-  .option('--query <text>', '搜索 memory 内容、标题或 metadata')
-  .option('--limit <n>', '最多返回 memory 数量（1-200，默认 50）', { type: [Number] })
-  .action(async (opts: { limit?: number[], query?: string }) => {
-    process.exit(await runBrainMemories({
-      limit: optionalNumber(opts.limit),
-      ...(opts.query === undefined ? {} : { query: opts.query }),
-    }))
-  })
-
-cli
-  .command('brain artifacts list', '只读列出本地 worker scope 注册的 brain artifact')
-  .option('--scope <id>', '按 scope id 过滤')
-  .option('--type <id>', '按 artifact type 过滤')
-  .option('--status <s>', 'active / archived / removed')
-  .option('--min-sensitivity <s>', 'public / internal / confidential / secret')
-  .option('--limit <n>', '最多返回 artifact 数量（1-200，默认 50）', { type: [Number] })
-  .option('--show-sensitive', '不再 redact confidential / secret artifact 的 ref / hash')
-  .action(async (opts: {
-    scope?: string
-    type?: string
-    status?: string
-    minSensitivity?: string
-    limit?: number[]
-    showSensitive?: boolean
-  }) => {
-    process.exit(await runBrainArtifactsList({
-      ...(opts.scope === undefined ? {} : { scopeId: opts.scope }),
-      ...(opts.type === undefined ? {} : { type: opts.type }),
-      ...(opts.status === undefined ? {} : { status: opts.status as 'active' | 'archived' | 'removed' }),
-      ...(opts.minSensitivity === undefined
-        ? {}
-        : { minSensitivity: opts.minSensitivity as 'public' | 'internal' | 'confidential' | 'secret' }),
-      limit: optionalNumber(opts.limit),
-      ...(opts.showSensitive === undefined ? {} : { showSensitive: opts.showSensitive }),
-    }))
-  })
-
-cli
-  .command('brain artifacts show <id>', '只读查看单个 brain artifact')
-  .option('--show-sensitive', '不再 redact confidential / secret artifact 的 ref / hash')
-  .action(async (id: string, opts: { showSensitive?: boolean }) => {
-    process.exit(await runBrainArtifactsShow(id, {
-      ...(opts.showSensitive === undefined ? {} : { showSensitive: opts.showSensitive }),
-    }))
-  })
-
-cli
-  .command('brain admission list', '列出本地 worker 的 brain admission proposal')
-  .option('--status <s>', 'pending / approved / rejected / applied / failed')
-  .option('--kind <k>', '按 proposal kind 过滤（来自 Soul.schemaPack.proposalTypes）')
-  .option('--scope <id>', '按 scope id 过滤')
-  .option('--soul <id>', '按 Soul id 过滤')
-  .option('--limit <n>', '最多返回 proposal 数量（1-200，默认 50）', { type: [Number] })
-  .option('--show-sensitive', '不再 redact evidence / payload 中 secret-like 字段')
-  .action(async (opts: {
-    status?: string
-    kind?: string
-    scope?: string
-    soul?: string
-    limit?: number[]
-    showSensitive?: boolean
-  }) => {
-    process.exit(await runBrainAdmissionList({
-      ...(opts.status === undefined ? {} : { status: opts.status as 'pending' | 'approved' | 'rejected' | 'applied' | 'failed' }),
-      ...(opts.kind === undefined ? {} : { kind: opts.kind }),
-      ...(opts.scope === undefined ? {} : { scopeId: opts.scope }),
-      ...(opts.soul === undefined ? {} : { soulId: opts.soul }),
-      limit: optionalNumber(opts.limit),
-      ...(opts.showSensitive === undefined ? {} : { showSensitive: opts.showSensitive }),
-    }))
-  })
-
-cli
-  .command('brain admission show <id>', '只读查看单个 admission proposal 与 decision 历史')
-  .option('--show-sensitive', '不再 redact evidence / payload 中 secret-like 字段')
-  .action(async (id: string, opts: { showSensitive?: boolean }) => {
-    process.exit(await runBrainAdmissionShow(id, {
-      ...(opts.showSensitive === undefined ? {} : { showSensitive: opts.showSensitive }),
-    }))
-  })
-
-cli
-  .command('brain admission approve <id>', '把 pending proposal 标记为 approved（不会自动 apply）')
-  .option('--decided-by <name>', '记录决策操作者（必填）')
-  .option('--reason <text>', '审批理由')
-  .action(async (id: string, opts: { decidedBy?: string, reason?: string }) => {
-    if (opts.decidedBy === undefined || opts.decidedBy === '') {
-      consola.error('[aiworker brain admission approve] --decided-by is required')
-      process.exit(2)
-    }
-    process.exit(await runBrainAdmissionApprove(id, {
-      decidedBy: opts.decidedBy,
-      ...(opts.reason === undefined ? {} : { reason: opts.reason }),
-    }))
-  })
-
-cli
-  .command('brain admission reject <id>', '把 pending proposal 标记为 rejected')
-  .option('--decided-by <name>', '记录决策操作者（必填）')
-  .option('--reason <text>', '拒绝理由')
-  .action(async (id: string, opts: { decidedBy?: string, reason?: string }) => {
-    if (opts.decidedBy === undefined || opts.decidedBy === '') {
-      consola.error('[aiworker brain admission reject] --decided-by is required')
-      process.exit(2)
-    }
-    process.exit(await runBrainAdmissionReject(id, {
-      decidedBy: opts.decidedBy,
-      ...(opts.reason === undefined ? {} : { reason: opts.reason }),
-    }))
-  })
-
-cli
-  .command('brain admission apply <id>', '执行 approved proposal（默认 dry-run；MVP 仅支持 memory-add）')
-  .option('--decided-by <name>', '记录决策操作者（必填）')
-  .option('--commit', '真正写 filesystem；默认 dry-run 仅打印 diff')
-  .option('--allow-secret-body <mode>', 'BUG-055 secret-body 处理策略：block | redact | raw（默认 block）')
-  .action(async (id: string, opts: { decidedBy?: string, commit?: boolean, allowSecretBody?: string }) => {
-    if (opts.decidedBy === undefined || opts.decidedBy === '') {
-      consola.error('[aiworker brain admission apply] --decided-by is required')
-      process.exit(2)
-    }
-    if (opts.allowSecretBody !== undefined
-      && opts.allowSecretBody !== 'block'
-      && opts.allowSecretBody !== 'redact'
-      && opts.allowSecretBody !== 'raw') {
-      consola.error(`[aiworker brain admission apply] --allow-secret-body must be one of block | redact | raw, got "${opts.allowSecretBody}"`)
-      process.exit(2)
-    }
-    process.exit(await runBrainAdmissionApply(id, {
-      decidedBy: opts.decidedBy,
-      ...(opts.commit === undefined ? {} : { commit: opts.commit }),
-      ...(opts.allowSecretBody === undefined ? {} : { allowSecretBody: opts.allowSecretBody as 'block' | 'redact' | 'raw' }),
-    }))
-  })
-
-cli
-  .command('brain admission propose', '提交一条 pending brain admission proposal（需 operator 后续 approve/apply）')
-  .option('--id <id>', 'proposal id（必填，kebab-case）')
-  .option('--kind <kind>', 'proposal kind（默认 memory-add）')
-  .option('--target <text>', 'target 路径或 artifact id（必填）')
-  .option('--summary <text>', 'proposal 摘要（必填）')
-  .option('--rollback <text>', 'rollback 描述（必填）')
-  .option('--soul <id>', 'soul id（必填）')
-  .option('--scope <id>', 'scope id（可选）')
-  .option('--risk <level>', 'low | medium | high（默认 high）')
-  .option('--confidence <n>', '0..1 之间的小数（默认 0.5）', { type: [Number] })
-  .option('--evidence <path>', '从 JSON 文件读取 evidence 数组（可选）')
-  .option('--payload <path>', '从 JSON 文件读取 payload 对象（可选）')
-  .action(async (opts: {
-    id?: string
-    kind?: string
-    target?: string
-    summary?: string
-    rollback?: string
-    soul?: string
-    scope?: string
-    risk?: string
-    confidence?: number[]
-    evidence?: string
-    payload?: string
-  }) => {
-    process.exit(await runBrainAdmissionPropose({
-      ...(opts.id === undefined ? {} : { id: opts.id }),
-      ...(opts.kind === undefined ? {} : { kind: opts.kind }),
-      ...(opts.target === undefined ? {} : { target: opts.target }),
-      ...(opts.summary === undefined ? {} : { summary: opts.summary }),
-      ...(opts.rollback === undefined ? {} : { rollback: opts.rollback }),
-      ...(opts.soul === undefined ? {} : { soulId: opts.soul }),
-      ...(opts.scope === undefined ? {} : { scopeId: opts.scope }),
-      ...(opts.risk === undefined ? {} : { risk: opts.risk }),
-      confidence: optionalNumber(opts.confidence),
-      ...(opts.evidence === undefined ? {} : { evidencePath: opts.evidence }),
-      ...(opts.payload === undefined ? {} : { payloadPath: opts.payload }),
-    }))
-  })
-
-cli
-  .command('brain brief', '把 canonical brain（AGENT/SOUL/USER/MEMORY/ROLLUP + scope manifest + Soul + artifacts）投影成 task-specific brief；preview-only')
-  .option('--task <text>', '任务描述（必填）')
-  .option('--scope <id>', '指定 scope id（默认从 .aiworker/scope.json 读取）')
-  .option('--soul <id>', '指定 Soul id（默认 scope manifest 的 primarySoul）')
-  .option('--artifact <id>', '关联的 brain artifact id；可重复出现', { type: [String] })
-  .option('--executor <engine>', '记录目标 executor engine 提示，不实际启动 executor')
-  .option('--token-budget <n>', '默认 4000；范围 200..50000', { type: [Number] })
-  .action(async (opts: {
-    task?: string
-    scope?: string
-    soul?: string
-    artifact?: string[]
-    executor?: string
-    tokenBudget?: number[]
-  }) => {
-    if (opts.task === undefined || opts.task.trim() === '') {
-      consola.error('[aiworker brain brief] --task is required')
-      process.exit(2)
-    }
-    process.exit(await runBrainBrief({
-      task: opts.task,
-      ...(opts.scope === undefined ? {} : { scopeId: opts.scope }),
-      ...(opts.soul === undefined ? {} : { soulId: opts.soul }),
-      ...(opts.artifact === undefined ? {} : { artifactRefs: opts.artifact }),
-      ...(opts.executor === undefined ? {} : { executor: opts.executor }),
-      tokenBudget: optionalNumber(opts.tokenBudget),
-    }))
-  })
-
-cli
-  .command('run', '通过本地 daemon run contract 提交一条 work order')
-  .option('--message <text>', '要投递的用户消息（必填）')
-  .option('--chat-id <id>', '仅 --local 生效：合成 chat id（默认 "cli:stdin"）')
-  .option('--dry-run', '完成本地状态/bootstrap 检查，但不真正提交 run')
-  .option('--local', '显式使用旧 in-process 直跑路径，不经过 daemon HTTP')
-  .option('--timeout-ms <n>', '等待终态事件的最长时间，单位毫秒（默认 120000）', { type: [Number] })
-  .action(async (opts: { chatId?: string, dryRun?: boolean, local?: boolean, message?: string, timeoutMs?: number[] }) => {
-    const code = await runRun({
-      message: opts.message,
-      chatId: opts.chatId,
-      dryRun: opts.dryRun,
-      local: opts.local,
-      timeoutMs: optionalNumber(opts.timeoutMs),
-    })
-    process.exit(code)
-  })
-
-cli
-  .command('serve', '启动 worker HTTP server（等价于 AIWORKER_MODE=worker）')
-  .option('--port <n>', '覆盖 PORT 环境变量', { type: [Number] })
-  .option('--host <host>', '覆盖 AIWORKER_WORKER_HOST（默认 127.0.0.1）')
-  .option('--gateway <url>', '随 HTTP server 一起连接指定 gateway WebSocket URL')
-  .option('--gateway-token <token>', '连接 gateway 时使用的 bearer token（loopback 可省略）')
-  .option('--no-reconnect', '关闭 gateway-client 自动重连（smoke / 测试时使用）')
-  .option('--no-serve-web', '不挂载 worker bundle 到 /admin/*（默认挂载）')
-  .option('--open', '启动后打开 worker admin')
-  .option('--no-open', '启动后不自动打开 worker admin')
-  .option('--pid-file <path>', 'TODO-016：daemon pid 写入指定路径（关闭时清理）；适合 setsid 包装下的进程跟踪')
-  .action(async (opts: { port?: number[], host?: string, gateway?: string, gatewayToken?: string, reconnect?: boolean, serveWeb?: boolean, pidFile?: string }) => {
-    const serveOptions: Parameters<typeof runServe>[0] = {}
-    const port = optionalNumber(opts.port)
-    if (port !== undefined)
-      serveOptions.port = port
-    if (opts.host !== undefined)
-      serveOptions.host = opts.host
-    if (opts.gateway !== undefined)
-      serveOptions.gateway = opts.gateway
-    if (opts.gatewayToken !== undefined)
-      serveOptions.gatewayToken = opts.gatewayToken
-    if (opts.reconnect === false)
-      serveOptions.gatewayReconnect = false
-    if (opts.serveWeb === false)
-      serveOptions.serveWeb = false
-    if (opts.pidFile !== undefined && opts.pidFile.trim().length > 0)
-      serveOptions.pidFile = opts.pidFile.trim()
-    const open = readServeOpenOption()
-    if (open !== undefined)
-      serveOptions.open = open
-    serveOptions.runtimeVersion = packageJson.version
-    await runServe(serveOptions)
-  })
-
-cli.command('config show', '以 JSON 打印本地 worker 配置（缺失时会初始化本地 worker 状态）').action(async () => {
-  process.exit(await runConfigShow())
-})
-
-cli
-  .command('config set <json>', '替换本地 worker 配置')
-  .option('--if-match <version>', '乐观锁；当前存储 version 不等于此值则拒绝', { type: [Number] })
-  .action(async (json: string, opts: { ifMatch?: number[] }) => {
-    process.exit(await runConfigSetLocal({ json, ifMatch: optionalNumber(opts.ifMatch) }))
-  })
-
-cli.command('token rotate', '生成新的 bearer token；明文只打印一次').action(async () => {
-  process.exit(await runTokenRotateLocal())
-})
-
-cli.command('approvals list', '列出当前 worker 进程内挂起的工具审批').action(async () => {
-  process.exit(await runApprovalsListLocal())
-})
-
-cli
-  .command('approvals grant <taskId> <toolCallId>', '解锁某条挂起的工具审批')
-  .option('--deny', '下发拒绝决策；默认允许')
-  .action(async (taskId: string, toolCallId: string, opts: { deny?: boolean }) => {
-    process.exit(await runApprovalsGrantLocal({
-      taskId,
-      toolCallId,
-      ...(opts.deny === undefined ? {} : { deny: opts.deny }),
-    }))
-  })
-
-cli.command('schedule list', '列出本地 worker.db 中持久化的所有 cron 任务').action(async () => {
-  process.exit(await runScheduleListLocal())
-})
-
-cli
-  .command('schedule add', '向本地 worker.db 新增 cron 任务（会先校验表达式）')
-  .option('--expression <expr>', '五段 cron 表达式（必填）')
-  .option('--prompt <text>', '任务触发时合成的 envelope.text（必填）')
-  .option('--channel <channel>', 'channel 类型：web/line/telegram/lark/whatsapp（必填）')
-  .option('--chat-id <id>', '任务触发时使用的 chatId（必填）')
-  .option('--account-id <id>', '覆盖 accountId（默认 sys:cron）')
-  .option('--disabled', '以 enabled=false 保存（默认 enabled=true）')
-  .action(async (opts: {
-    expression?: string
-    prompt?: string
-    channel?: string
-    chatId?: string
-    accountId?: string
-    disabled?: boolean
-  }) => {
-    if (!opts.expression || !opts.prompt || !opts.channel || !opts.chatId) {
-      consola.error('[aiworker schedule add] requires --expression, --prompt, --channel, --chat-id')
-      process.exit(2)
-    }
-    const code = await runScheduleAddLocal({
-      expression: opts.expression,
-      prompt: opts.prompt,
-      channel: opts.channel,
-      chatId: opts.chatId,
-      ...(opts.accountId === undefined ? {} : { accountId: opts.accountId }),
-      ...(opts.disabled === true ? { enabled: false } : {}),
-    })
-    process.exit(code)
-  })
-
-cli
-  .command('schedule remove <jobId>', '从本地 worker.db 删除一条 cron 任务')
-  .action(async (jobId: string) => {
-    process.exit(await runScheduleRemoveLocal(jobId))
-  })
-
-cli
-  .command('sessions list', '从 worker.db 列出本地 worker 会话状态')
-  .option('--limit <n>', '最多返回会话数（1-200，默认 50）', { type: [Number] })
-  .option('--offset <n>', '分页偏移量（默认 0）', { type: [Number] })
-  .option('--status <status>', '按状态过滤：active 或 closed')
-  .action(async (opts: { limit?: number[], offset?: number[], status?: string }) => {
-    process.exit(await runSessionsList({
-      limit: optionalNumber(opts.limit),
-      offset: optionalNumber(opts.offset),
-      ...(opts.status === undefined ? {} : { status: opts.status }),
-    }))
-  })
-
-cli
-  .command('sessions show <sessionKey>', '按 session key 查看一个本地 worker 会话状态')
-  .action(async (sessionKey: string) => {
-    process.exit(await runSessionsShow(sessionKey))
-  })
-
-cli
-  .command('sessions maintenance', '试算已关闭 transcript 清理；带 --apply 才会实际删除')
-  .option('--older-than-days <n>', '已关闭 transcript 保留天数（默认 30）', { type: [Number] })
-  .option('--limit <n>', '最多试算/清理 transcript 数量（1-200，默认 50）', { type: [Number] })
-  .option('--apply', '实际删除计划内的已关闭 transcript，而不是 dry-run')
-  .action(async (opts: { olderThanDays?: number[], limit?: number[], apply?: boolean }) => {
-    process.exit(await runSessionsMaintenance({
-      olderThanDays: optionalNumber(opts.olderThanDays),
-      limit: optionalNumber(opts.limit),
-      ...(opts.apply === undefined ? {} : { apply: opts.apply }),
-    }))
-  })
-
-cli.command('commands', '显示完整命令索引').action(() => {
+cli.command('commands', '显示当前 hard-reset CLI 命令索引').action(() => {
   process.stdout.write(`${renderFullCommandIndex(cli)}\n`)
 })
-
-// ============================================================
-// worker canonical tree（与 root worker shortcuts 等价）
-// ============================================================
-
-cli
-  .command('worker init', '初始化 worker.db、身份、token 和默认配置（默认当前项目 `<cwd>/.aiworker/`；--global 使用旧版 ~/.aiworker）')
-  .option('--global', '初始化旧版用户级 `~/.aiworker/`（单主机全局 worker）')
-  .option('--force', '项目初始化允许在非 git 目录运行，且仍不会覆盖现有文件')
-  .option('--dry-run', '只打印初始化预检和计划写入，不创建或修改文件')
-  .option('--soul <preset>', '项目级初始化使用的 Soul 预设；非交互 brand-new init 必填，可选 developer/project-manager/devops-sre/product-designer/qa-reviewer/support-operator/finance-ops/hr-recruiting/general-assistant/customize')
-  .option('--pack <id>', '项目级初始化使用的 worker pack；默认选择与 Soul 同名的内置 pack（如存在）')
-  .option('--token-file <path>', '首次初始化时把完整 bootstrap token 写入 chmod 600 文件；默认写入 worker local bootstrap-token.txt')
-  .option('--show-token', '首次初始化时在 stdout 高可见 warning block 中显示完整 bootstrap token')
-  .action(async (opts: { dryRun?: boolean, global?: boolean, force?: boolean, pack?: string, showToken?: boolean, soul?: string, tokenFile?: string }) => {
-    process.exit(await runInit({
-      ...(opts.global === true ? { global: true } : {}),
-      ...(opts.force === true ? { force: true } : {}),
-      ...(opts.dryRun === true ? { dryRun: true } : {}),
-      ...(opts.soul === undefined ? {} : { soul: opts.soul }),
-      ...(opts.pack === undefined ? {} : { pack: opts.pack }),
-      ...(opts.tokenFile === undefined ? {} : { tokenFile: opts.tokenFile }),
-      ...(opts.showToken === true ? { showToken: true } : {}),
-    }))
-  })
-
-cli
-  .command('worker up', '一条命令初始化、验证并启动本地 worker HTTP/admin')
-  .option('--soul <preset>', 'brand-new project 初始化使用的 Soul 预设；已初始化项目不会消费此参数')
-  .option('--pack <id>', 'brand-new project 初始化使用的 worker pack；透传给 init')
-  .option('--dry-run', '只打印 up 阶段和预检结果，不初始化、不启动 HTTP server、不打开浏览器')
-  .option('--port <n>', '覆盖 PORT 环境变量', { type: [Number] })
-  .option('--host <host>', '覆盖 AIWORKER_WORKER_HOST（默认 127.0.0.1）')
-  .option('--gateway <url>', '随 HTTP server 一起连接指定 gateway WebSocket URL')
-  .option('--gateway-token <token>', '连接 gateway 时使用的 bearer token（loopback 可省略）')
-  .option('--no-reconnect', '关闭 gateway-client 自动重连（smoke / 测试时使用）')
-  .option('--no-serve-web', '不挂载 worker bundle 到 /admin/*（默认挂载）')
-  .option('--open', '启动后打开 worker admin')
-  .option('--no-open', '启动后不自动打开 worker admin')
-  .action(async (opts: {
-    dryRun?: boolean
-    gateway?: string
-    gatewayToken?: string
-    host?: string
-    pack?: string
-    port?: number[]
-    reconnect?: boolean
-    serveWeb?: boolean
-    soul?: string
-  }) => {
-    const open = readServeOpenOption()
-    const port = optionalNumber(opts.port)
-    process.exit(await runUp({
-      ...(opts.soul === undefined ? {} : { soul: opts.soul }),
-      ...(opts.pack === undefined ? {} : { pack: opts.pack }),
-      ...(opts.dryRun === true ? { dryRun: true } : {}),
-      ...(port === undefined ? {} : { port }),
-      ...(opts.host === undefined ? {} : { host: opts.host }),
-      ...(opts.gateway === undefined ? {} : { gateway: opts.gateway }),
-      ...(opts.gatewayToken === undefined ? {} : { gatewayToken: opts.gatewayToken }),
-      ...(opts.reconnect === false ? { gatewayReconnect: false } : {}),
-      ...(opts.serveWeb === false ? { serveWeb: false } : {}),
-      ...(open === undefined ? {} : { open }),
-      runtimeVersion: packageJson.version,
-    }))
-  })
-
-registerWorkerDaemonCommands('worker ')
-
-cli
-  .command('worker scope', '打印当前 aiworker scope（user/project/explicit）和关键布局文件状态')
-  .action(async () => {
-    process.exitCode = await runScope()
-  })
-
-cli.command('worker doctor', '静态验证当前 `.aiworker/` capability manifests、Skill metadata 和 MCP descriptors').action(async () => {
-  process.exit(await runDoctor())
-})
-
-cli
-  .command('worker env gateway-url <url>', '写入 worker-local AIWORKER_GATEWAY_URL，用于 worker OTP/self-enroll 到 gateway')
-  .action(async (url: string) => {
-    process.exit(await runEnvGatewayUrl(url))
-  })
-
-cli
-  .command('worker env display-name <name>', '写入 worker-local AIWORKER_DISPLAY_NAME，用于 fleet 列表展示')
-  .action(async (name: string) => {
-    process.exit(await runEnvDisplayName(name))
-  })
-
-cli
-  .command('worker executor mcp add <name>', '在 project executor overlay 中声明一个 MCP server hint，写入 `.aiworker/executor-capabilities.json`')
-  .option('--engine <engine>', '目标 engine：codex 或 claude-code')
-  .option('--scope <scope>', 'MCP 配置 scope；当前仅支持 project')
-  .option('--transport <transport>', 'MCP transport：stdio / streamable-http / sse；未指定时按 --url 推断')
-  .option('--url <url>', 'HTTP/SSE MCP server URL')
-  .option('--command <command>', 'stdio MCP server command')
-  .option('--arg <value>', 'stdio command 参数；可重复')
-  .option('--env <key=value>', '投影到 engine CLI 的 env；secret 用 key=secretRef:<ref>；可重复')
-  .option('--header <key=value>', '投影到 engine CLI 的 header；secret 用 key=secretRef:<ref>；可重复')
-  .option('--bearer-token-env-var <env>', 'Codex streamable HTTP MCP bearer token 环境变量名')
-  .option('--description <text>', 'MCP server 描述')
-  .option('--dry-run', '只预览 manifest 变更，不写文件')
-  .action(async (name: string, opts: Parameters<typeof runExecutorMcpAdd>[1]) => {
-    process.exit(await runExecutorMcpAdd(name, opts))
-  })
-
-cli
-  .command('worker executor mcp sync', '把 project executor overlay best-effort 投影到 engine 官方 project-scope MCP 配置（非 effective capability source of truth）')
-  .option('--engine <engine>', '目标 engine：codex 或 claude-code')
-  .option('--dry-run', '只打印将执行的 engine CLI 命令')
-  .action(async (opts: Parameters<typeof runExecutorMcpSync>[0]) => {
-    process.exit(await runExecutorMcpSync(opts))
-  })
-
-cli
-  .command('worker executor select', '显式选择本地 worker 的 task executor，不写 engine project config')
-  .option('--engine <engine>', '目标 task executor engine，例如 codex / claude-code / http')
-  .option('--variant <variant>', 'executor variant（默认 default）')
-  .option('--model-id <model>', '可选 per-request model override')
-  .option('--reasoning-id <id>', '可选 reasoning preset')
-  .option('--permission-policy <policy>', '可选权限策略：auto / supervised / plan')
-  .option('--timeout-ms <n>', '可选 executor 单 turn hard timeout，单位毫秒', { type: [Number] })
-  .option('--if-match <version>', 'apply 时使用的乐观锁；当前 config version 不等于此值则拒绝', { type: [Number] })
-  .option('--apply', '持久化 executor 选择；默认只 dry-run')
-  .option('--dry-run', '只打印将更新的 executor 选择')
-  .action(async (opts: { apply?: boolean, dryRun?: boolean, engine?: string, ifMatch?: number[], modelId?: string, permissionPolicy?: string, reasoningId?: string, timeoutMs?: number[], variant?: string }) => {
-    process.exit(await runExecutorSelect({
-      ...(opts.apply === true ? { apply: true } : {}),
-      ...(opts.dryRun === true ? { dryRun: true } : {}),
-      ...(opts.engine === undefined ? {} : { engine: opts.engine }),
-      ...(opts.variant === undefined ? {} : { variant: opts.variant }),
-      ...(opts.modelId === undefined ? {} : { modelId: opts.modelId }),
-      ...(opts.reasoningId === undefined ? {} : { reasoningId: opts.reasoningId }),
-      ...(opts.permissionPolicy === undefined ? {} : { permissionPolicy: opts.permissionPolicy }),
-      timeoutMs: optionalNumber(opts.timeoutMs),
-      ifMatch: optionalNumber(opts.ifMatch),
-    }))
-  })
-
-cli
-  .command('worker executor doctor', '校验 project executor overlay 与 engine CLI readiness（不探测 user/host ambient capabilities）')
-  .option('--engine <engine>', '只检查一个 engine：codex 或 claude-code')
-  .action(async (opts: Parameters<typeof runExecutorDoctor>[0]) => {
-    process.exit(await runExecutorDoctor(opts))
-  })
-
-cli
-  .command('worker executor capability list', '只读列出 .aiworker/executor-capabilities.json 中的 project executor overlay 条目')
-  .option('--engine <engine>', '只列出一个 engine：codex 或 claude-code')
-  .action(async (opts: Parameters<typeof runExecutorCapabilityList>[0]) => {
-    process.exit(await runExecutorCapabilityList(opts))
-  })
-
-cli
-  .command('worker executor capability show <ref>', '只读查看单条 project executor overlay descriptor，ref 形如 codex.mcp.context7')
-  .action(async (ref: string) => {
-    process.exit(await runExecutorCapabilityShow(ref))
-  })
-
-cli.command('worker soul list', '列出内置 Soul 预设及其声明能力').action(async () => {
-  process.exit(await runSoulList())
-})
-
-cli.command('worker soul show <preset>', '查看某个 Soul 预设的职责、边界、能力草案和风险策略').action(async (preset: string) => {
-  process.exit(await runSoulShow(preset))
-})
-
-cli.command('worker pack list', '列出 OD-style worker pack（SKILL.md + DOMAIN.md + work-order templates）').action(async () => {
-  process.exit(await runPackList())
-})
-
-cli.command('worker pack show <pack>', '查看某个 worker pack 的 skill/domain/work-order/artifact 信息').action(async (pack: string) => {
-  process.exit(await runPackShow(pack))
-})
-
-cli
-  .command('worker runs list', '列出本地 daemon work orders')
-  .option('--limit <n>', '最多返回 run 数量（默认由 daemon 决定）', { type: [Number] })
-  .action(async (opts: { limit?: number[] }) => {
-    process.exit(await runRunsList({ limit: optionalNumber(opts.limit) }))
-  })
-
-cli
-  .command('worker runs show <runId>', '查看一个 work order run')
-  .action(async (runId: string) => {
-    process.exit(await runRunsShow(runId))
-  })
-
-cli
-  .command('worker runs cancel <runId>', '取消一个仍在运行的 work order')
-  .action(async (runId: string) => {
-    process.exit(await runRunsCancel(runId))
-  })
-
-cli
-  .command('worker artifacts list', '列出本地 daemon artifact metadata')
-  .option('--run <id>', '按 run id 过滤')
-  .option('--conversation <id>', '按 conversation id 过滤')
-  .option('--status <status>', '按 artifact 状态过滤：available | missing | archived')
-  .option('--limit <n>', '最多返回 artifact 数量（1-500，默认由 daemon 决定）', { type: [Number] })
-  .action(async (opts: { run?: string, conversation?: string, status?: string, limit?: number[] }) => {
-    process.exit(await runArtifactsList({
-      ...(opts.run === undefined ? {} : { runId: opts.run }),
-      ...(opts.conversation === undefined ? {} : { conversationId: opts.conversation }),
-      ...(opts.status === undefined ? {} : { status: opts.status }),
-      ...(opts.limit === undefined ? {} : { limit: optionalNumber(opts.limit) }),
-    }))
-  })
-
-cli
-  .command('worker artifacts show <id>', '查看一个 artifact metadata')
-  .action(async (id: string) => {
-    process.exit(await runArtifactsShow(id))
-  })
-
-cli
-  .command('worker review list', '列出本地 worker run reviews（workbench 默认复盘入口）')
-  .option('--limit <n>', '最多返回 review 数量（1-200，默认 50）', { type: [Number] })
-  .action(async (opts: { limit?: number[] }) => {
-    process.exit(await runReviewList({ limit: optionalNumber(opts.limit) }))
-  })
-
-cli
-  .command('worker review show <taskId>', '查看一个 run review、evidence、risk 和 lesson candidates')
-  .option('--show-sensitive', '不再对 payload / message preview 做 secret-like redaction')
-  .action(async (taskId: string, opts: { showSensitive?: boolean }) => {
-    process.exit(await runReviewShow(taskId, {
-      ...(opts.showSensitive === undefined ? {} : { showSensitive: opts.showSensitive }),
-    }))
-  })
-
-cli
-  .command('worker review rerun <taskId>', '基于 review evidence 显式重跑一个 work order')
-  .option('--prompt <text>', '覆盖 rerun prompt；默认由 orchestrator 构造 repair context')
-  .action(async (taskId: string, opts: { prompt?: string }) => {
-    process.exit(await runReviewRerun(taskId, {
-      ...(opts.prompt === undefined ? {} : { prompt: opts.prompt }),
-    }))
-  })
-
-cli
-  .command('worker review promote <taskId>', '把 review lesson candidates 提升为 pending durable-context proposals')
-  .option('--soul <id>', '写入 proposal 的 Soul id（默认 developer）')
-  .option('--scope <id>', '写入 proposal 的 scope id（可选）')
-  .action(async (taskId: string, opts: { soul?: string, scope?: string }) => {
-    process.exit(await runReviewPromoteLessons(taskId, {
-      ...(opts.soul === undefined ? {} : { soulId: opts.soul }),
-      ...(opts.scope === undefined ? {} : { scopeId: opts.scope }),
-    }))
-  })
-
-cli
-  .command('worker case list', '列出本地 worker 的 Worker Case File 投影（operator 默认审查入口）')
-  .option('--limit <n>', '最多返回 case 数量（1-200，默认 50）', { type: [Number] })
-  .action(async (opts: { limit?: number[] }) => {
-    process.exit(await runCaseList({ limit: optionalNumber(opts.limit) }))
-  })
-
-cli
-  .command('worker case show <taskId>', '查看一个 task 的 Case File、Review Decision、Evidence、Risk 和 Lessons')
-  .option('--show-sensitive', '不再对 payload / message preview 做 secret-like redaction')
-  .action(async (taskId: string, opts: { showSensitive?: boolean }) => {
-    process.exit(await runCaseShow(taskId, {
-      ...(opts.showSensitive === undefined ? {} : { showSensitive: opts.showSensitive }),
-    }))
-  })
-
-cli
-  .command('worker case rerun <taskId>', '基于现有 proof-loop 规则显式重跑一个 case')
-  .option('--prompt <text>', '覆盖 rerun prompt；默认由 orchestrator 构造 repair context')
-  .action(async (taskId: string, opts: { prompt?: string }) => {
-    process.exit(await runCaseRerun(taskId, {
-      ...(opts.prompt === undefined ? {} : { prompt: opts.prompt }),
-    }))
-  })
-
-cli
-  .command('worker lessons propose <taskId>', '从 Case lesson candidates 创建 pending Brain admission proposals')
-  .option('--soul <id>', '写入 proposal 的 Soul id（默认 developer）')
-  .option('--scope <id>', '写入 proposal 的 scope id（可选）')
-  .action(async (taskId: string, opts: { soul?: string, scope?: string }) => {
-    process.exit(await runLessonsPropose(taskId, {
-      ...(opts.soul === undefined ? {} : { soulId: opts.soul }),
-      ...(opts.scope === undefined ? {} : { scopeId: opts.scope }),
-    }))
-  })
-
-cli.command('worker brain status', '只读诊断本地 worker runtime brain source、写入目标和健康状态').action(async () => {
-  process.exit(await runBrainStatus())
-})
-
-cli
-  .command('worker brain journal show <taskId>', '只读查看一个 worker task 的 Brain Journal trace')
-  .option('--show-sensitive', '不再对 payload / message preview 做 secret-like redaction')
-  .action(async (taskId: string, opts: { showSensitive?: boolean }) => {
-    process.exit(await runBrainJournalShow(taskId, {
-      ...(opts.showSensitive === undefined ? {} : { showSensitive: opts.showSensitive }),
-    }))
-  })
-
-cli
-  .command('worker brain inbox propose <taskId>', '从 task 的 Brain Engine lesson candidates 创建 pending admission proposals')
-  .option('--soul <id>', '写入 proposal 的 Soul id（默认 developer）')
-  .option('--scope <id>', '写入 proposal 的 scope id（可选）')
-  .action(async (taskId: string, opts: { soul?: string, scope?: string }) => {
-    process.exit(await runBrainInboxPropose(taskId, {
-      ...(opts.soul === undefined ? {} : { soulId: opts.soul }),
-      ...(opts.scope === undefined ? {} : { scopeId: opts.scope }),
-    }))
-  })
-
-cli.command('worker brain skills', '只读列出 fallback brain skill 与 native executor skill 目标').action(async () => {
-  process.exit(await runBrainSkills())
-})
-
-cli
-  .command('worker brain skills sync-native', '同步 AIWorker 管理的 native executor skill projection（默认 dry-run）')
-  .option('--apply', '应用 create/update/deprecate，并写入 projection manifest')
-  .option('--dry-run', '只打印同步计划，不写文件')
-  .action(async (opts: { apply?: boolean, dryRun?: boolean }) => {
-    process.exit(await runBrainSkillsSyncNative({
-      ...(opts.apply === true ? { apply: true } : {}),
-      ...(opts.dryRun === true ? { dryRun: true } : {}),
-    }))
-  })
-
-cli
-  .command('worker brain memories', '只读列出或搜索本地 runtime brain memory')
-  .option('--query <text>', '搜索 memory 内容、标题或 metadata')
-  .option('--limit <n>', '最多返回 memory 数量（1-200，默认 50）', { type: [Number] })
-  .action(async (opts: { limit?: number[], query?: string }) => {
-    process.exit(await runBrainMemories({
-      limit: optionalNumber(opts.limit),
-      ...(opts.query === undefined ? {} : { query: opts.query }),
-    }))
-  })
-
-cli
-  .command('worker brain artifacts list', '只读列出本地 worker scope 注册的 brain artifact')
-  .option('--scope <id>', '按 scope id 过滤')
-  .option('--type <id>', '按 artifact type 过滤')
-  .option('--status <s>', 'active / archived / removed')
-  .option('--min-sensitivity <s>', 'public / internal / confidential / secret')
-  .option('--limit <n>', '最多返回 artifact 数量（1-200，默认 50）', { type: [Number] })
-  .option('--show-sensitive', '不再 redact confidential / secret artifact 的 ref / hash')
-  .action(async (opts: {
-    scope?: string
-    type?: string
-    status?: string
-    minSensitivity?: string
-    limit?: number[]
-    showSensitive?: boolean
-  }) => {
-    process.exit(await runBrainArtifactsList({
-      ...(opts.scope === undefined ? {} : { scopeId: opts.scope }),
-      ...(opts.type === undefined ? {} : { type: opts.type }),
-      ...(opts.status === undefined ? {} : { status: opts.status as 'active' | 'archived' | 'removed' }),
-      ...(opts.minSensitivity === undefined
-        ? {}
-        : { minSensitivity: opts.minSensitivity as 'public' | 'internal' | 'confidential' | 'secret' }),
-      limit: optionalNumber(opts.limit),
-      ...(opts.showSensitive === undefined ? {} : { showSensitive: opts.showSensitive }),
-    }))
-  })
-
-cli
-  .command('worker brain artifacts show <id>', '只读查看单个 brain artifact')
-  .option('--show-sensitive', '不再 redact confidential / secret artifact 的 ref / hash')
-  .action(async (id: string, opts: { showSensitive?: boolean }) => {
-    process.exit(await runBrainArtifactsShow(id, {
-      ...(opts.showSensitive === undefined ? {} : { showSensitive: opts.showSensitive }),
-    }))
-  })
-
-cli
-  .command('worker brain admission list', '列出本地 worker 的 brain admission proposal')
-  .option('--status <s>', 'pending / approved / rejected / applied / failed')
-  .option('--kind <k>', '按 proposal kind 过滤')
-  .option('--scope <id>', '按 scope id 过滤')
-  .option('--soul <id>', '按 Soul id 过滤')
-  .option('--limit <n>', '最多返回 proposal 数量（1-200，默认 50）', { type: [Number] })
-  .option('--show-sensitive', '不再 redact evidence / payload 中 secret-like 字段')
-  .action(async (opts: {
-    status?: string
-    kind?: string
-    scope?: string
-    soul?: string
-    limit?: number[]
-    showSensitive?: boolean
-  }) => {
-    process.exit(await runBrainAdmissionList({
-      ...(opts.status === undefined ? {} : { status: opts.status as 'pending' | 'approved' | 'rejected' | 'applied' | 'failed' }),
-      ...(opts.kind === undefined ? {} : { kind: opts.kind }),
-      ...(opts.scope === undefined ? {} : { scopeId: opts.scope }),
-      ...(opts.soul === undefined ? {} : { soulId: opts.soul }),
-      limit: optionalNumber(opts.limit),
-      ...(opts.showSensitive === undefined ? {} : { showSensitive: opts.showSensitive }),
-    }))
-  })
-
-cli
-  .command('worker brain admission show <id>', '只读查看单个 admission proposal 与 decision 历史')
-  .option('--show-sensitive', '不再 redact evidence / payload 中 secret-like 字段')
-  .action(async (id: string, opts: { showSensitive?: boolean }) => {
-    process.exit(await runBrainAdmissionShow(id, {
-      ...(opts.showSensitive === undefined ? {} : { showSensitive: opts.showSensitive }),
-    }))
-  })
-
-cli
-  .command('worker brain admission approve <id>', '把 pending proposal 标记为 approved（不会自动 apply）')
-  .option('--decided-by <name>', '记录决策操作者（必填）')
-  .option('--reason <text>', '审批理由')
-  .action(async (id: string, opts: { decidedBy?: string, reason?: string }) => {
-    if (opts.decidedBy === undefined || opts.decidedBy === '') {
-      consola.error('[aiworker worker brain admission approve] --decided-by is required')
-      process.exit(2)
-    }
-    process.exit(await runBrainAdmissionApprove(id, {
-      decidedBy: opts.decidedBy,
-      ...(opts.reason === undefined ? {} : { reason: opts.reason }),
-    }))
-  })
-
-cli
-  .command('worker brain admission reject <id>', '把 pending proposal 标记为 rejected')
-  .option('--decided-by <name>', '记录决策操作者（必填）')
-  .option('--reason <text>', '拒绝理由')
-  .action(async (id: string, opts: { decidedBy?: string, reason?: string }) => {
-    if (opts.decidedBy === undefined || opts.decidedBy === '') {
-      consola.error('[aiworker worker brain admission reject] --decided-by is required')
-      process.exit(2)
-    }
-    process.exit(await runBrainAdmissionReject(id, {
-      decidedBy: opts.decidedBy,
-      ...(opts.reason === undefined ? {} : { reason: opts.reason }),
-    }))
-  })
-
-cli
-  .command('worker brain admission apply <id>', '执行 approved proposal（默认 dry-run；MVP 仅支持 memory-add）')
-  .option('--decided-by <name>', '记录决策操作者（必填）')
-  .option('--commit', '真正写 filesystem；默认 dry-run 仅打印 diff')
-  .option('--allow-secret-body <mode>', 'BUG-055 secret-body 处理策略：block | redact | raw（默认 block）')
-  .action(async (id: string, opts: { decidedBy?: string, commit?: boolean, allowSecretBody?: string }) => {
-    if (opts.decidedBy === undefined || opts.decidedBy === '') {
-      consola.error('[aiworker worker brain admission apply] --decided-by is required')
-      process.exit(2)
-    }
-    if (opts.allowSecretBody !== undefined
-      && opts.allowSecretBody !== 'block'
-      && opts.allowSecretBody !== 'redact'
-      && opts.allowSecretBody !== 'raw') {
-      consola.error(`[aiworker worker brain admission apply] --allow-secret-body must be one of block | redact | raw, got "${opts.allowSecretBody}"`)
-      process.exit(2)
-    }
-    process.exit(await runBrainAdmissionApply(id, {
-      decidedBy: opts.decidedBy,
-      ...(opts.commit === undefined ? {} : { commit: opts.commit }),
-      ...(opts.allowSecretBody === undefined ? {} : { allowSecretBody: opts.allowSecretBody as 'block' | 'redact' | 'raw' }),
-    }))
-  })
-
-cli
-  .command('worker brain admission propose', '提交一条 pending brain admission proposal（需 operator 后续 approve/apply）')
-  .option('--id <id>', 'proposal id（必填，kebab-case）')
-  .option('--kind <kind>', 'proposal kind（默认 memory-add）')
-  .option('--target <text>', 'target 路径或 artifact id（必填）')
-  .option('--summary <text>', 'proposal 摘要（必填）')
-  .option('--rollback <text>', 'rollback 描述（必填）')
-  .option('--soul <id>', 'soul id（必填）')
-  .option('--scope <id>', 'scope id（可选）')
-  .option('--risk <level>', 'low | medium | high（默认 high）')
-  .option('--confidence <n>', '0..1 之间的小数（默认 0.5）', { type: [Number] })
-  .option('--evidence <path>', '从 JSON 文件读取 evidence 数组（可选）')
-  .option('--payload <path>', '从 JSON 文件读取 payload 对象（可选）')
-  .action(async (opts: {
-    id?: string
-    kind?: string
-    target?: string
-    summary?: string
-    rollback?: string
-    soul?: string
-    scope?: string
-    risk?: string
-    confidence?: number[]
-    evidence?: string
-    payload?: string
-  }) => {
-    process.exit(await runBrainAdmissionPropose({
-      ...(opts.id === undefined ? {} : { id: opts.id }),
-      ...(opts.kind === undefined ? {} : { kind: opts.kind }),
-      ...(opts.target === undefined ? {} : { target: opts.target }),
-      ...(opts.summary === undefined ? {} : { summary: opts.summary }),
-      ...(opts.rollback === undefined ? {} : { rollback: opts.rollback }),
-      ...(opts.soul === undefined ? {} : { soulId: opts.soul }),
-      ...(opts.scope === undefined ? {} : { scopeId: opts.scope }),
-      ...(opts.risk === undefined ? {} : { risk: opts.risk }),
-      confidence: optionalNumber(opts.confidence),
-      ...(opts.evidence === undefined ? {} : { evidencePath: opts.evidence }),
-      ...(opts.payload === undefined ? {} : { payloadPath: opts.payload }),
-    }))
-  })
-
-cli
-  .command('worker brain brief', '把 canonical brain 投影成 task-specific brief；preview-only')
-  .option('--task <text>', '任务描述（必填）')
-  .option('--scope <id>', '指定 scope id（默认从 .aiworker/scope.json 读取）')
-  .option('--soul <id>', '指定 Soul id（默认 scope manifest 的 primarySoul）')
-  .option('--artifact <id>', '关联的 brain artifact id；可重复出现', { type: [String] })
-  .option('--executor <engine>', '记录目标 executor engine 提示')
-  .option('--token-budget <n>', '默认 4000；范围 200..50000', { type: [Number] })
-  .action(async (opts: {
-    task?: string
-    scope?: string
-    soul?: string
-    artifact?: string[]
-    executor?: string
-    tokenBudget?: number[]
-  }) => {
-    if (opts.task === undefined || opts.task.trim() === '') {
-      consola.error('[aiworker worker brain brief] --task is required')
-      process.exit(2)
-    }
-    process.exit(await runBrainBrief({
-      task: opts.task,
-      ...(opts.scope === undefined ? {} : { scopeId: opts.scope }),
-      ...(opts.soul === undefined ? {} : { soulId: opts.soul }),
-      ...(opts.artifact === undefined ? {} : { artifactRefs: opts.artifact }),
-      ...(opts.executor === undefined ? {} : { executor: opts.executor }),
-      tokenBudget: optionalNumber(opts.tokenBudget),
-    }))
-  })
-
-cli
-  .command('worker run', '通过本地 daemon run contract 提交一条 work order')
-  .option('--message <text>', '要投递的用户消息（必填）')
-  .option('--chat-id <id>', '仅 --local 生效：合成 chat id（默认 "cli:stdin"）')
-  .option('--dry-run', '完成本地状态/bootstrap 检查，但不真正提交 run')
-  .option('--local', '显式使用旧 in-process 直跑路径，不经过 daemon HTTP')
-  .option('--timeout-ms <n>', '等待终态事件的最长时间，单位毫秒（默认 120000）', { type: [Number] })
-  .action(async (opts: { chatId?: string, dryRun?: boolean, local?: boolean, message?: string, timeoutMs?: number[] }) => {
-    const code = await runRun({
-      message: opts.message,
-      chatId: opts.chatId,
-      dryRun: opts.dryRun,
-      local: opts.local,
-      timeoutMs: optionalNumber(opts.timeoutMs),
-    })
-    process.exit(code)
-  })
-
-cli
-  .command('worker serve', '启动 worker HTTP server（等价于 AIWORKER_MODE=worker）')
-  .option('--port <n>', '覆盖 PORT 环境变量', { type: [Number] })
-  .option('--host <host>', '覆盖 AIWORKER_WORKER_HOST（默认 127.0.0.1）')
-  .option('--gateway <url>', '随 HTTP server 一起连接指定 gateway WebSocket URL')
-  .option('--gateway-token <token>', '连接 gateway 时使用的 bearer token（loopback 可省略）')
-  .option('--no-reconnect', '关闭 gateway-client 自动重连（smoke / 测试时使用）')
-  .option('--no-serve-web', '不挂载 worker bundle 到 /admin/*（默认挂载）')
-  .option('--open', '启动后打开 worker admin')
-  .option('--no-open', '启动后不自动打开 worker admin')
-  .option('--pid-file <path>', 'TODO-016：daemon pid 写入指定路径（关闭时清理）；适合 setsid 包装下的进程跟踪')
-  .action(async (opts: { port?: number[], host?: string, gateway?: string, gatewayToken?: string, reconnect?: boolean, serveWeb?: boolean, pidFile?: string }) => {
-    const serveOptions: Parameters<typeof runServe>[0] = {}
-    const port = optionalNumber(opts.port)
-    if (port !== undefined)
-      serveOptions.port = port
-    if (opts.host !== undefined)
-      serveOptions.host = opts.host
-    if (opts.gateway !== undefined)
-      serveOptions.gateway = opts.gateway
-    if (opts.gatewayToken !== undefined)
-      serveOptions.gatewayToken = opts.gatewayToken
-    if (opts.reconnect === false)
-      serveOptions.gatewayReconnect = false
-    if (opts.serveWeb === false)
-      serveOptions.serveWeb = false
-    if (opts.pidFile !== undefined && opts.pidFile.trim().length > 0)
-      serveOptions.pidFile = opts.pidFile.trim()
-    const open = readServeOpenOption()
-    if (open !== undefined)
-      serveOptions.open = open
-    serveOptions.runtimeVersion = packageJson.version
-    await runServe(serveOptions)
-  })
-
-cli.command('worker config show', '以 JSON 打印本地 worker 配置（缺失时会初始化本地 worker 状态）').action(async () => {
-  process.exit(await runConfigShow())
-})
-
-cli
-  .command('worker config set <json>', '替换本地 worker 配置')
-  .option('--if-match <version>', '乐观锁；当前存储 version 不等于此值则拒绝', { type: [Number] })
-  .action(async (json: string, opts: { ifMatch?: number[] }) => {
-    process.exit(await runConfigSetLocal({ json, ifMatch: optionalNumber(opts.ifMatch) }))
-  })
-
-cli.command('worker token rotate', '生成新的 bearer token；明文只打印一次').action(async () => {
-  process.exit(await runTokenRotateLocal())
-})
-
-cli.command('worker approvals list', '列出当前 worker 进程内挂起的工具审批').action(async () => {
-  process.exit(await runApprovalsListLocal())
-})
-
-cli
-  .command('worker approvals grant <taskId> <toolCallId>', '解锁某条挂起的工具审批')
-  .option('--deny', '下发拒绝决策；默认允许')
-  .action(async (taskId: string, toolCallId: string, opts: { deny?: boolean }) => {
-    process.exit(await runApprovalsGrantLocal({
-      taskId,
-      toolCallId,
-      ...(opts.deny === undefined ? {} : { deny: opts.deny }),
-    }))
-  })
-
-cli.command('worker schedule list', '列出本地 worker.db 中持久化的所有 cron 任务').action(async () => {
-  process.exit(await runScheduleListLocal())
-})
-
-cli
-  .command('worker schedule add', '向本地 worker.db 新增 cron 任务（会先校验表达式）')
-  .option('--expression <expr>', '五段 cron 表达式（必填）')
-  .option('--prompt <text>', '任务触发时合成的 envelope.text（必填）')
-  .option('--channel <channel>', 'channel 类型：web/line/telegram/lark/whatsapp（必填）')
-  .option('--chat-id <id>', '任务触发时使用的 chatId（必填）')
-  .option('--account-id <id>', '覆盖 accountId（默认 sys:cron）')
-  .option('--disabled', '以 enabled=false 保存（默认 enabled=true）')
-  .action(async (opts: {
-    expression?: string
-    prompt?: string
-    channel?: string
-    chatId?: string
-    accountId?: string
-    disabled?: boolean
-  }) => {
-    if (!opts.expression || !opts.prompt || !opts.channel || !opts.chatId) {
-      consola.error('[aiworker worker schedule add] requires --expression, --prompt, --channel, --chat-id')
-      process.exit(2)
-    }
-    const code = await runScheduleAddLocal({
-      expression: opts.expression,
-      prompt: opts.prompt,
-      channel: opts.channel,
-      chatId: opts.chatId,
-      ...(opts.accountId === undefined ? {} : { accountId: opts.accountId }),
-      ...(opts.disabled === true ? { enabled: false } : {}),
-    })
-    process.exit(code)
-  })
-
-cli
-  .command('worker schedule remove <jobId>', '从本地 worker.db 删除一条 cron 任务')
-  .action(async (jobId: string) => {
-    process.exit(await runScheduleRemoveLocal(jobId))
-  })
-
-cli
-  .command('worker sessions list', '从 worker.db 列出本地 worker 会话状态')
-  .option('--limit <n>', '最多返回会话数（1-200，默认 50）', { type: [Number] })
-  .option('--offset <n>', '分页偏移量（默认 0）', { type: [Number] })
-  .option('--status <status>', '按状态过滤：active 或 closed')
-  .action(async (opts: { limit?: number[], offset?: number[], status?: string }) => {
-    process.exit(await runSessionsList({
-      limit: optionalNumber(opts.limit),
-      offset: optionalNumber(opts.offset),
-      ...(opts.status === undefined ? {} : { status: opts.status }),
-    }))
-  })
-
-cli
-  .command('worker sessions show <sessionKey>', '按 session key 查看一个本地 worker 会话状态')
-  .action(async (sessionKey: string) => {
-    process.exit(await runSessionsShow(sessionKey))
-  })
-
-cli
-  .command('worker sessions maintenance', '试算已关闭 transcript 清理；带 --apply 才会实际删除')
-  .option('--older-than-days <n>', '已关闭 transcript 保留天数（默认 30）', { type: [Number] })
-  .option('--limit <n>', '最多试算/清理 transcript 数量（1-200，默认 50）', { type: [Number] })
-  .option('--apply', '实际删除计划内的已关闭 transcript，而不是 dry-run')
-  .action(async (opts: { olderThanDays?: number[], limit?: number[], apply?: boolean }) => {
-    process.exit(await runSessionsMaintenance({
-      olderThanDays: optionalNumber(opts.olderThanDays),
-      limit: optionalNumber(opts.limit),
-      ...(opts.apply === undefined ? {} : { apply: opts.apply }),
-    }))
-  })
-
-// ============================================================
-// canonical worker/fleet/gateway tree
-// ============================================================
-
-// --- fleet 子命令组（原 operator workers ...）---
-cli.command('fleet list', '列出 fleet 内所有 worker').action(async () => {
-  process.exit(await runWorkersList())
-})
-
-cli
-  .command('fleet info <workerId>', '查看某个 worker 的运行时信息')
-  .action(async (workerId: string) => {
-    process.exit(await runWorkersInfo(workerId))
-  })
-
-cli
-  .command('fleet launch', '让 gateway 在本机拉起一个新的 worker 容器并完成配对')
-  .option('--display-name <name>', 'worker 展示名')
-  .option('--image <image>', '容器镜像（默认由 gateway 决定）')
-  .option('--force-id <id>', '强制使用给定 workerId（用于备份恢复）')
-  .action(async (opts: { displayName?: string, image?: string, forceId?: string }) => {
-    process.exit(await runWorkersLaunch({
-      ...(opts.displayName === undefined ? {} : { displayName: opts.displayName }),
-      ...(opts.image === undefined ? {} : { image: opts.image }),
-      ...(opts.forceId === undefined ? {} : { forceId: opts.forceId }),
-    }))
-  })
-
-cli
-  .command('fleet stop <workerId>', '向目标 worker 下发停止指令（不摘除注册）')
-  .action(async (workerId: string) => {
-    process.exit(await runWorkersStop(workerId))
-  })
-
-cli
-  .command('fleet remove <workerId>', '把 worker 从 fleet 中摘除（deviceToken 作废）')
-  .action(async (workerId: string) => {
-    process.exit(await runWorkersRemove(workerId))
-  })
-
-// --- gateway 子命令组（本地 daemon）---
-cli
-  .command('gateway start', '启动 gateway server（默认前台运行，适合 systemd；--detach 使用后台守护进程）')
-  .option('--port <n>', '监听端口（默认 9218）', { type: [Number] })
-  .option('--detach', '后台守护进程模式：spawn 自身，并把 PID/log 写入 ~/.aiworker/')
-  .option('--no-serve-web', '不挂载 fleet bundle 到 /admin/*（默认挂载）')
-  .action(async (opts: { port?: number[], detach?: boolean, serveWeb?: boolean }) => {
-    // env AIWORKER_GATEWAY_INTERNAL_FOREGROUND=1 是 daemon 子进程标记；强制 foreground，
-    // 即便误带 --detach（无害）。
-    const internal = process.env.AIWORKER_GATEWAY_INTERNAL_FOREGROUND === '1'
-    const detach = internal ? false : opts.detach === true
-    const port = optionalNumber(opts.port)
-    process.exit(await runGatewayStart({
-      ...(port === undefined ? {} : { port }),
-      detach,
-      ...(opts.serveWeb === false ? { serveWeb: false } : {}),
-    }))
-  })
-
-cli.command('gateway status', '显示后台 gateway 守护进程是否运行（foreground/systemd 实例不由此命令跟踪）').action(() => {
-  process.exit(runGatewayStatus())
-})
-
-cli
-  .command('gateway stop', '停止后台 gateway 守护进程（foreground/systemd 实例请由其 supervisor 停止）')
-  .option('--timeout-ms <n>', 'SIGTERM 超时时间（默认 5000ms）', { type: [Number] })
-  .action(async (opts: { timeoutMs?: number[] }) => {
-    const timeoutMs = optionalNumber(opts.timeoutMs)
-    process.exit(await runGatewayStop(timeoutMs === undefined ? {} : { timeoutMs }))
-  })
-
-// --- fleet pair ---
-cli
-  .command('fleet pair', '通过 bootstrap token 把一个已启动的 worker 注册到 gateway')
-  .option('--url <wsUrl>', 'gateway WebSocket URL（默认使用 aiworker.json 里的 gatewayUrl）')
-  .option('--worker-url <httpUrl>', 'worker HTTP base URL（必填）')
-  .option('--bootstrap-token <token>', 'worker 打印的一次性 bootstrap token（必填）')
-  .option('--display-name <name>', '可选 worker 展示名')
-  .action(async (opts: { url?: string, workerUrl?: string, bootstrapToken?: string, displayName?: string }) => {
-    if (!opts.workerUrl || !opts.bootstrapToken) {
-      consola.error('fleet pair 必须同时提供 --worker-url 和 --bootstrap-token')
-      process.exit(2)
-    }
-    process.exit(await runPair({
-      ...(opts.url === undefined ? {} : { url: opts.url }),
-      workerUrl: opts.workerUrl,
-      bootstrapToken: opts.bootstrapToken,
-      ...(opts.displayName === undefined ? {} : { displayName: opts.displayName }),
-    }))
-  })
-
-// --- fleet chat ---
-cli
-  .command('fleet chat <workerId> <text>', '向某个 worker 发送一条消息，并阻塞到 agent.done（NDJSON 输出）')
-  .option('--conversation-id <id>', '显式指定会话 id；不传则由 worker 新建')
-  .option('--timeout-ms <n>', '等待 agent.done 的总超时时间（默认 120000）', { type: [Number] })
-  .action(async (workerId: string, text: string, opts: { conversationId?: string, timeoutMs?: number[] }) => {
-    const timeoutMs = optionalNumber(opts.timeoutMs)
-    process.exit(await runChat({
-      workerId,
-      content: text,
-      ...(opts.conversationId === undefined ? {} : { conversationId: opts.conversationId }),
-      ...(timeoutMs === undefined ? {} : { timeoutMs }),
-    }))
-  })
-
-// --- fleet config get/set（远端 worker）---
-cli
-  .command('fleet config get <workerId>', '读取目标 worker 的当前配置')
-  .action(async (workerId: string) => {
-    process.exit(await runConfigGet(workerId))
-  })
-
-cli
-  .command('fleet config set <workerId> <json>', '更新 worker 配置（需要 --if-match 提供当前版本）')
-  .option('--if-match <version>', '乐观锁；当前存储的 version 不等于此值则拒绝', { type: [Number] })
-  .action(async (workerId: string, json: string, opts: { ifMatch?: number[] }) => {
-    const ifMatch = optionalNumber(opts.ifMatch)
-    if (ifMatch === undefined) {
-      consola.error('fleet config set 必须显式提供 --if-match <version> 以防止误覆盖')
-      process.exit(2)
-    }
-    process.exit(await runConfigSetRemote({ workerId, configJson: json, ifMatch }))
-  })
-
-// --- fleet token rotate（远端 worker）---
-cli
-  .command('fleet token rotate <workerId>', '为目标 worker 轮换 deviceToken（旧 token 立即失效）')
-  .action(async (workerId: string) => {
-    process.exit(await runTokenRotateRemote(workerId))
-  })
-
-// --- fleet approvals list/grant（远端）---
-cli
-  .command('fleet approvals list', '列出挂起的工具审批；默认覆盖所有在线 worker')
-  .option('--worker <id>', '只查指定 workerId（不传则聚合所有在线 worker）')
-  .action(async (opts: { worker?: string }) => {
-    process.exit(await runApprovalsListRemote({ ...(opts.worker === undefined ? {} : { workerId: opts.worker }) }))
-  })
-
-cli
-  .command('fleet approvals grant <workerId> <taskId> <toolCallId>', '解锁某条 worker 上挂起的工具审批')
-  .option('--deny', '下发拒绝决策；不带此 flag 默认允许')
-  .action(async (workerId: string, taskId: string, toolCallId: string, opts: { deny?: boolean }) => {
-    process.exit(await runApprovalsGrantRemote({
-      workerId,
-      taskId,
-      toolCallId,
-      ...(opts.deny === undefined ? {} : { deny: opts.deny }),
-    }))
-  })
-
-// --- fleet schedule list/add/remove（远端）---
-cli
-  .command('fleet schedule list <workerId>', '列出某 worker 上所有 cron 任务')
-  .action(async (workerId: string) => {
-    process.exit(await runScheduleListRemote(workerId))
-  })
-
-cli
-  .command('fleet schedule add <workerId>', '在某 worker 上新增一条 cron 任务')
-  .option('--expression <expr>', '五段 cron 表达式（必填）')
-  .option('--prompt <text>', 'cron 触发时合成的 envelope.text（必填）')
-  .option('--channel <channel>', 'channel 类型：web/line/telegram/lark/whatsapp（必填）')
-  .option('--chat-id <id>', '触发时使用的 chatId（必填）')
-  .option('--account-id <id>', 'accountId，默认 sys:cron')
-  .option('--disabled', '默认 enabled=true；带此选项改为 false')
-  .action(async (workerId: string, opts: {
-    expression?: string
-    prompt?: string
-    channel?: string
-    chatId?: string
-    accountId?: string
-    disabled?: boolean
-  }) => {
-    if (!opts.expression || !opts.prompt || !opts.channel || !opts.chatId) {
-      consola.error('fleet schedule add 必须提供 --expression / --prompt / --channel / --chat-id')
-      process.exit(2)
-    }
-    process.exit(await runScheduleAddRemote({
-      workerId,
-      expression: opts.expression,
-      prompt: opts.prompt,
-      channel: opts.channel,
-      chatId: opts.chatId,
-      ...(opts.accountId === undefined ? {} : { accountId: opts.accountId }),
-      ...(opts.disabled === true ? { enabled: false } : {}),
-    }))
-  })
-
-cli
-  .command('fleet schedule remove <workerId> <jobId>', '删除某 worker 上的某条 cron 任务')
-  .action(async (workerId: string, jobId: string) => {
-    process.exit(await runScheduleRemoveRemote(workerId, jobId))
-  })
-
-// --- fleet enroll list/approve/reject（OTP-attended enrollment）---
-cli.command('fleet enroll list', '列出 gateway 当前所有待处理的 OTP enrollment').action(async () => {
-  process.exit(await runEnrollList())
-})
-
-cli
-  .command('fleet enroll approve <otp>', '批准某条待处理的 OTP enrollment（worker 立即加入 fleet）')
-  .action(async (otp: string) => {
-    process.exit(await runEnrollApprove(otp))
-  })
-
-cli
-  .command('fleet enroll reject <otp>', '拒绝某条待处理的 OTP enrollment（worker 收到 close 4403）')
-  .action(async (otp: string) => {
-    process.exit(await runEnrollReject(otp))
-  })
-
-// --- fleet logs ---
-cli
-  .command('fleet logs <workerId>', '订阅某个 worker 的日志尾部（NDJSON 输出）')
-  .option('--follow', '持续订阅直到超时或 Ctrl-C')
-  .option('--tail <n>', '请求历史行数，上限 1000', { type: [Number] })
-  .option('--timeout-ms <n>', '订阅总超时', { type: [Number] })
-  .action(async (workerId: string, opts: { follow?: boolean, tail?: number[], timeoutMs?: number[] }) => {
-    const tail = optionalNumber(opts.tail)
-    const timeoutMs = optionalNumber(opts.timeoutMs)
-    process.exit(await runLogs({
-      workerId,
-      ...(opts.follow === undefined ? {} : { follow: opts.follow }),
-      ...(tail === undefined ? {} : { tail }),
-      ...(timeoutMs === undefined ? {} : { timeoutMs }),
-    }))
-  })
-
-// --- gateway install systemd ---
-cli
-  .command('gateway install systemd', '渲染 aiworker-gateway.service 并（可选）注册到 systemd')
-  .option('--user', 'systemd 用户实例（默认）；写到 ~/.config/systemd/user/')
-  .option('--system', 'systemd 系统实例（需 root）；写到 /etc/systemd/system/')
-  .option('--dry-run', '只往 stdout 打 unit 内容，不写盘也不 systemctl')
-  .option('--out <path>', '覆盖目标路径（异常布局/测试用）；自动跳过 systemctl')
-  .option('--no-enable', '写盘后跳过 systemctl daemon-reload 和 enable --now')
-  .option('--exec-start <command>', '高级覆盖：手动指定完整 systemd ExecStart 命令')
-  .action(async (opts: { user?: boolean, system?: boolean, dryRun?: boolean, out?: string, enable?: boolean, execStart?: string }) => {
-    if (opts.user === true && opts.system === true) {
-      consola.error('gateway install systemd: 不能同时指定 --user 和 --system')
-      process.exit(2)
-    }
-    process.exit(await runInstallSystemd({
-      scope: opts.system === true ? 'system' : 'user',
-      ...(opts.dryRun === true ? { dryRun: true } : {}),
-      ...(opts.out === undefined ? {} : { out: opts.out }),
-      ...(opts.enable === false ? { noEnable: true } : {}),
-      ...(opts.execStart === undefined ? {} : { execStart: opts.execStart }),
-    }))
-  })
 
 configureCliHelp(cli)
 cli.version(packageJson.version)
 localizeGlobalOptions(cli)
 
-/**
- * cac 6 原生不支持多词子命令（`isMatched` 只比对 argv[0]），因此这里做一次 argv
- * 预处理：从已注册命令里动态收集所有含空格的 name；若 argv 中接连若干 token 拼起来
- * 命中其中一个，就把它们 collapse 成一个带空格的 token 再喂给 cac。
- *
- * 当前命令树包含 3-4 词命令（`worker executor mcp add` /
- * `gateway install systemd` 等）；这里按 N 词支持，避免后续扩展时再回头改预处理。
- */
 export function preprocessArgv(argv: string[], cliInstance: { commands: Array<{ name: string }> } = cli): string[] {
   const multiWordNames = new Set<string>()
   let maxDepth = 1
@@ -1874,14 +362,11 @@ export function preprocessArgv(argv: string[], cliInstance: { commands: Array<{ 
   }
   if (multiWordNames.size === 0 || argv.length < 4)
     return argv
-  // 按最长前缀优先匹配（`config get` 不会被错误折叠成 `config`）。
+
   for (let depth = maxDepth; depth >= 2; depth--) {
     if (argv.length < 2 + depth)
       continue
-    const slice = argv.slice(2, 2 + depth)
-    if (slice.some(t => typeof t !== 'string'))
-      continue
-    const combined = slice.join(' ')
+    const combined = argv.slice(2, 2 + depth).join(' ')
     if (multiWordNames.has(combined)) {
       const out = argv.slice()
       out.splice(2, depth, combined)
@@ -1892,8 +377,7 @@ export function preprocessArgv(argv: string[], cliInstance: { commands: Array<{ 
 }
 
 function preprocessExecutorMcpArgValues(argv: string[]): string[] {
-  const command = argv[2]
-  if (command !== 'executor mcp add' && command !== 'worker executor mcp add')
+  if (argv[2] !== 'executor mcp add')
     return argv
   const out = argv.slice()
   for (let i = 3; i < out.length - 1; i++) {
@@ -1935,48 +419,16 @@ interface CliCommandShape {
 }
 
 const NUMERIC_RULES: Record<string, Record<string, NumericRule>> = {
-  'config set': { ifMatch: { integer: true, min: 1 } },
+  'artifacts list': { limit: { integer: true, min: 1, max: 500 } },
   'daemon check': { timeoutMs: { integer: true, min: 1 } },
+  'daemon foreground': { port: { integer: true, min: 1, max: 65_535 } },
   'daemon logs': { tail: { integer: true, min: 0, max: 1_000 } },
   'daemon start': { port: { integer: true, min: 1, max: 65_535 } },
   'daemon stop': { timeoutMs: { integer: true, min: 0 } },
   'executor select': { ifMatch: { integer: true, min: 1 }, timeoutMs: { integer: true, min: 1 } },
-  'fleet chat': { timeoutMs: { integer: true, min: 1 } },
-  'fleet config set': { ifMatch: { integer: true, min: 1 } },
-  'fleet logs': {
-    tail: { integer: true, min: 0, max: 1_000 },
-    timeoutMs: { integer: true, min: 1 },
-  },
-  'gateway start': { port: { integer: true, min: 0, max: 65_535 } },
-  'gateway stop': { timeoutMs: { integer: true, min: 0 } },
+  'review list': { limit: { integer: true, min: 1, max: 200 } },
   'run': { timeoutMs: { integer: true, min: 1 } },
-  'serve': { port: { integer: true, min: 1, max: 65_535 } },
-  'up': { port: { integer: true, min: 1, max: 65_535 } },
-  'sessions list': {
-    limit: { integer: true, min: 1, max: 200 },
-    offset: { integer: true, min: 0 },
-  },
-  'sessions maintenance': {
-    limit: { integer: true, min: 1, max: 200 },
-    olderThanDays: { integer: true, min: 0, max: 3650 },
-  },
-  'worker config set': { ifMatch: { integer: true, min: 1 } },
-  'worker daemon check': { timeoutMs: { integer: true, min: 1 } },
-  'worker daemon logs': { tail: { integer: true, min: 0, max: 1_000 } },
-  'worker daemon start': { port: { integer: true, min: 1, max: 65_535 } },
-  'worker daemon stop': { timeoutMs: { integer: true, min: 0 } },
-  'worker executor select': { ifMatch: { integer: true, min: 1 }, timeoutMs: { integer: true, min: 1 } },
-  'worker run': { timeoutMs: { integer: true, min: 1 } },
-  'worker serve': { port: { integer: true, min: 1, max: 65_535 } },
-  'worker up': { port: { integer: true, min: 1, max: 65_535 } },
-  'worker sessions list': {
-    limit: { integer: true, min: 1, max: 200 },
-    offset: { integer: true, min: 0 },
-  },
-  'worker sessions maintenance': {
-    limit: { integer: true, min: 1, max: 200 },
-    olderThanDays: { integer: true, min: 0, max: 3650 },
-  },
+  'runs list': { limit: { integer: true, min: 1, max: 200 } },
 }
 
 function isCacError(err: unknown): err is Error {

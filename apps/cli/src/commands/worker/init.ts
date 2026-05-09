@@ -3,7 +3,6 @@ import type { WorkerPack } from '@zonease/aiworker-shared'
 import type { InitSoulId, SelectedSoul } from '../../soul/presets'
 
 import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { createInterface } from 'node:readline/promises'
@@ -33,10 +32,6 @@ import { buildNativeSkillProjectionSeedsForSoul } from './native-skill-projectio
 const BUILTIN_SOUL_REGISTRY = createBuiltinSoulRegistry()
 
 export interface InitOptions {
-  /** Force user-scope at `~/.aiworker/`. Skips cwd project detection. */
-  global?: boolean
-  /** Backward-compatible flag. Project init is allowed outside git by default. */
-  force?: boolean
   /** Preview planned writes without creating or modifying any file. */
   dryRun?: boolean
   /** Project Soul preset id. Required for non-interactive brand-new project init. */
@@ -411,35 +406,14 @@ function buildProjectWorkerPackSeed(selection?: SelectedWorkerPack): ProjectAiwo
  * The bootstrap runs idempotently — re-running on an already-initialised vault
  * keeps the same identity and prints no extra token.
  *
- * `--global` falls back to the user-scope `~/.aiworker/` layout (legacy
- * single-host single-worker form). `--force` is retained for older scripts but
- * does not overwrite existing files.
+ * Pre-1.0 user-scope/global init and force compatibility flags are intentionally
+ * gone from the CLI. A worker is bound to the current workspace by default.
  */
 export async function runInit(options: InitOptions = {}): Promise<number> {
-  if (options.global === true) {
-    if (options.soul !== undefined)
-      return printInitUsageError('--soul is only supported for project-scope init; remove --global or omit --soul')
-    if (options.pack !== undefined)
-      return printInitUsageError('--pack is only supported for project-scope init; remove --global or omit --pack')
-
-    const home = path.join(homedir(), '.aiworker')
-    const report = buildUserScopePreflight(home, options)
-    printPreflightReport(report)
-    if (options.dryRun === true)
-      return 0
-
-    process.env.AIWORKER_HOME = home
-    const dotenv = bootstrapDotenv({ home, printOnMint: false })
-    const ctx = await loadWorkerContext({ silent: true })
-    printInitSecrets({ ctx, dotenv, options, tokenHome: home })
-    consola.success(`[aiworker init] user-scope worker ${ctx.workerId} ready (config v${ctx.configVersion})`)
-    printUserScopeNextSteps()
-    return 0
-  }
-
   // Honour an explicit operator override (CLI flag / env). When the operator
-  // has pinned AIWORKER_HOME we don't second-guess them — drop straight into
-  // the legacy bootstrap.
+  // has pinned AIWORKER_HOME we don't second-guess them, but the printed
+  // product path is still the local worker loop instead of the retired gateway
+  // and scope command tree.
   const scope = resolveAiworkerScope()
   if (scope.scope === 'explicit') {
     if (options.soul !== undefined)
@@ -534,14 +508,13 @@ function printInitSecrets({ ctx, dotenv, options, tokenHome }: InitSecretsInput)
   process.stdout.write(`  Worker id       : ${ctx.workerId}\n`)
   process.stdout.write(`  Master key file : ${dotenv.envFile} (chmod 600; back this file up offline)\n`)
   if (!ctx.tokenJustMinted) {
-    process.stdout.write('  Bootstrap token : already delivered on first init; rotate with `aiworker token rotate` if it may be exposed.\n')
+    process.stdout.write('  Bootstrap token : already delivered on first init; re-run init will not reveal the raw token.\n')
     return
   }
 
   const tokenFile = resolveTokenFile(options.tokenFile, tokenHome)
   writeTokenFile(tokenFile, ctx.token)
   process.stdout.write(`  Bootstrap token : ${maskToken(ctx.token)} (full value written to ${tokenFile}, chmod 600)\n`)
-  process.stdout.write('  Fleet pairing   : `aiworker fleet pair --bootstrap-token "$(cut -d= -f2 < TOKEN_FILE)" ...`\n')
   if (options.showToken === true)
     printFullTokenWarning(ctx.token)
   else
@@ -624,25 +597,21 @@ function printProjectNextSteps(projectRoot: string, soul?: SelectedSoul, workerP
   const packLine = workerPack
     ? `  2. Review worker pack assets: .aiworker/worker-packs/${workerPack.pack.id}/SKILL.md / .aiworker/domain-systems/${workerPack.pack.id}/DOMAIN.md; inspect with \`aiworker pack show ${workerPack.pack.id}\`.`
     : '  2. Pick a worker pack when you are ready to shape the workbench: `aiworker pack list`.'
-  const soulLine = soul
-    ? `  3. Review brain identity: .aiworker/SOUL.md / USER.md (preset \`${soul.id}\`); inspect capabilities with \`aiworker soul show ${soul.id}\`.`
-    : '  3. Review brain identity: .aiworker/SOUL.md / USER.md; list presets with `aiworker soul list`.'
   const recommendation = recommendedEnginesForSoul(soul?.id)
   process.stdout.write([
-    '[aiworker init] next steps — Worker pack and local workspace come first; executor is bring-your-own',
-    `  1. Confirm scope: \`aiworker scope\` (project root: ${projectRoot}).`,
+    '[aiworker init] next steps — local worker loop',
+    `  1. Workspace root: ${projectRoot}.`,
     packLine,
-    soulLine,
-    '  4. Inspect Project Brain and native skill targets: `aiworker brain status` (then `aiworker brain skills` / `aiworker brain memories`).',
-    '  5. Validate brain capability drafts: `aiworker doctor`.',
-    '  6. (Optional) declare project executor overlay hints: `aiworker executor mcp add ... --engine <engine>` then `aiworker executor mcp sync --engine <engine> --dry-run`.',
-    `  7. Select task executor when ready: \`aiworker executor select --engine <YOUR_ENGINE> --apply\`.`,
+    '  3. Validate worker state and pack assets: `aiworker doctor`.',
+    '  4. (Optional) declare project executor overlay hints: `aiworker executor mcp add ... --engine <engine>` then `aiworker executor mcp sync --engine <engine> --dry-run`.',
+    `  5. Select task executor when ready: \`aiworker executor select --engine <YOUR_ENGINE> --apply\`.`,
     ...executorChoicePreface(soul),
-    `  8. Check executor readiness: \`aiworker executor doctor --engine <YOUR_ENGINE>\` (engine login/auth lives outside AIWorker; suggested: \`${recommendation.primary}\`).`,
-    '  9. Smoke bootstrap: `aiworker run --message "hello" --dry-run`.',
-    ' 10. After configuring executor secrets/model: `aiworker run --message "hello"`.',
-    ' 11. Need HTTP/admin UI: `aiworker up --port 9217` (or explicit `aiworker serve --port 9217`).',
-    ' 12. Need fleet control: start/connect a gateway, then use self-enroll or OTP from `aiworker serve`.',
+    `  6. Check executor readiness: \`aiworker executor doctor --engine <YOUR_ENGINE>\` (engine login/auth lives outside AIWorker; suggested: \`${recommendation.primary}\`).`,
+    '  7. Start the local daemon and web workbench: `aiworker daemon start`.',
+    '  8. Verify daemon readiness: `aiworker daemon check`.',
+    '  9. Submit a work order: `aiworker run --message "hello"`.',
+    ' 10. Inspect output: `aiworker runs list`, `aiworker artifacts list --run <runId>`, `aiworker review show <runId>`.',
+    ' 11. Promote reusable learning when review evidence is good: `aiworker lessons promote <runId>`.',
   ].join('\n'))
   process.stdout.write('\n')
 }
@@ -650,16 +619,13 @@ function printProjectNextSteps(projectRoot: string, soul?: SelectedSoul, workerP
 function printUserScopeNextSteps(): void {
   const recommendation = recommendedEnginesForSoul(undefined)
   process.stdout.write([
-    '[aiworker init] next steps — Project Brain comes first; executor is bring-your-own',
-    '  1. Confirm scope: `aiworker scope`.',
-    '  2. Inspect Project Brain runtime: `aiworker brain status` (then `aiworker brain skills` / `aiworker brain memories`).',
-    '  3. Inspect config: `aiworker config show`.',
-    `  4. Select task executor when ready: \`aiworker executor select --engine <YOUR_ENGINE> --apply\`.`,
+    '[aiworker init] next steps — local worker loop',
+    '  1. Validate worker state and pack assets: `aiworker doctor`.',
+    `  2. Select task executor when ready: \`aiworker executor select --engine <YOUR_ENGINE> --apply\`.`,
     ...executorChoicePreface(undefined),
-    `     Tip: \`aiworker executor doctor --engine ${recommendation.primary}\` checks readiness without running a turn.`,
-    '  5. Smoke bootstrap: `aiworker run --message "hello" --dry-run`.',
-    '  6. After configuring executor secrets/model: `aiworker run --message "hello"`.',
-    '  7. Need HTTP/admin UI: `aiworker up --port 9217` (or explicit `aiworker serve --port 9217`).',
+    `  3. Check executor readiness: \`aiworker executor doctor --engine ${recommendation.primary}\`.`,
+    '  4. Start the local daemon and web workbench: `aiworker daemon start`.',
+    '  5. Submit a work order: `aiworker run --message "hello"`.',
   ].join('\n'))
   process.stdout.write('\n')
 }
@@ -749,11 +715,8 @@ function buildProjectPreflight(
 
   if (options.gitRepoDetected === false) {
     notes.push('No git repository detected; aiworker will still create project-local state in the current directory.')
-    notes.push('Run from the directory that should own this worker, or use --global for a host-wide worker.')
+    notes.push('Run from the directory that should own this worker.')
   }
-
-  if (options.force === true)
-    notes.push('--force is accepted for compatibility; init remains idempotent and does not overwrite existing files.')
 
   return {
     applyLabel: options.dryRun === true ? 'dry-run (no files will be written)' : 'apply',

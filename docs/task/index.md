@@ -307,3 +307,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REFACTOR-033 Worker web workbench first screen**](REFACTOR-033.md) `P1`
 - [x] [**REFACTOR-034 Add worker review promotion surface**](REFACTOR-034.md) `P1`
 - [x] [**REFACTOR-035 Complete OD-style worker default loop**](REFACTOR-035.md) `P1`
+- [-] [**REFACTOR-036 Hard reset OD-style worker product surface**](REFACTOR-036.md) `P1`

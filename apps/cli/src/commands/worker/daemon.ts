@@ -51,13 +51,9 @@ export interface WorkerDaemonStatus {
 }
 
 export interface WorkerDaemonStartOptions {
-  gateway?: string
-  gatewayReconnect?: boolean
-  gatewayToken?: string
   host?: string
   pack?: string
   port?: number
-  serveWeb?: boolean
   soul?: string
 }
 
@@ -169,7 +165,7 @@ async function ensureProjectScopeForDaemon(options: WorkerDaemonStartOptions): P
     return initial
 
   if (options.soul === undefined && options.pack === undefined)
-    return { code: usageError('daemon start in a brand-new project requires --soul <preset>; use init --global first for user-scope daemon state') }
+    return { code: usageError('daemon start in a brand-new workspace requires --soul <preset> or --pack <id>; run aiworker init --soul <preset> first if you want to prepare state separately') }
 
   const initCode = await runInit({
     ...(options.soul === undefined ? {} : { soul: options.soul }),
@@ -185,24 +181,16 @@ function usageError(message: string): number {
   return 2
 }
 
-function buildChildArgs(options: WorkerDaemonStartOptions, port: number, host: string): string[] {
-  const args = [
-    'up',
+function buildChildArgs(port: number, host: string): string[] {
+  return [
+    'daemon',
+    'foreground',
     '--port',
     String(port),
     '--host',
     host,
     '--no-open',
   ]
-  if (options.gateway !== undefined)
-    args.push('--gateway', options.gateway)
-  if (options.gatewayToken !== undefined)
-    args.push('--gateway-token', options.gatewayToken)
-  if (options.gatewayReconnect === false)
-    args.push('--no-reconnect')
-  if (options.serveWeb === false)
-    args.push('--no-serve-web')
-  return args
 }
 
 export async function startWorkerDaemon(options: WorkerDaemonStartOptions = {}): Promise<number> {
@@ -233,7 +221,7 @@ export async function startWorkerDaemon(options: WorkerDaemonStartOptions = {}):
 
   const out = openSync(paths.logFile, 'a')
   const err = openSync(paths.logFile, 'a')
-  const args = buildChildArgs(options, port, host)
+  const args = buildChildArgs(port, host)
   const child: ChildProcess = spawn(process.execPath, [selfScript, ...args], {
     cwd: process.cwd(),
     detached: true,

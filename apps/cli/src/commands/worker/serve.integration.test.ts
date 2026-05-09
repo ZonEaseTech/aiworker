@@ -57,13 +57,13 @@ function isolatedEnv(home: string): Record<string, string> {
   env.HOME = path.join(home, 'os-home')
   env.NODE_ENV = 'test'
   env.NO_COLOR = '1'
+  env.AIWORKER_MASTER_KEY = MASTER_KEY
+  env.INTERNAL_SHARED_SECRET = 'shared-secret-for-test'
   delete env.AIWORKER_ADMIN_EXTERNAL_AUTH
   delete env.AIWORKER_ENROLL_MODE
   delete env.AIWORKER_GATEWAY_URL
   delete env.AIWORKER_JOIN_TOKEN
-  delete env.AIWORKER_MASTER_KEY
   delete env.AIWORKER_WORKER_HOST
-  delete env.INTERNAL_SHARED_SECRET
   delete env.PORT
   delete env.WORKER_DATA_ROOT
   delete env.WORKER_DB_PATH
@@ -109,14 +109,14 @@ async function waitForHealth(port: number, proc: ServeProcess): Promise<void> {
       }
       await delay(100)
     }
-    throw new Error(`serve /health did not return 200 on port ${port}`)
+    throw new Error(`daemon foreground /health did not return 200 on port ${port}`)
   })()
 
   const exited = proc.exited.then(code => ({ code }))
   const result = await Promise.race([health, exited])
   if (result !== 'healthy') {
     const output = await readOutput(proc)
-    throw new Error(`serve process exited before /health was ready (code=${result.code})\n${output}`)
+    throw new Error(`daemon foreground exited before /health was ready (code=${result.code})\n${output}`)
   }
 }
 
@@ -152,7 +152,7 @@ function signalProcess(proc: ServeProcess, signal: NodeJS.Signals): void {
   }
 }
 
-describe('aiworker serve foreground lifecycle', () => {
+describe('aiworker daemon foreground lifecycle', () => {
   it('stays alive after startup and exits cleanly on SIGTERM', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'aiworker-serve-lifecycle-'))
     const cwd = path.join(root, 'cwd')
@@ -164,7 +164,7 @@ describe('aiworker serve foreground lifecycle', () => {
       await mkdir(cwd, { recursive: true })
       await seedEnv(home)
 
-      proc = Bun.spawn([process.execPath, cliEntry, 'serve', '--port', String(port), '--host', '127.0.0.1', '--no-serve-web'], {
+      proc = Bun.spawn([process.execPath, cliEntry, 'daemon', 'foreground', '--port', String(port), '--host', '127.0.0.1', '--no-open'], {
         cwd,
         env: isolatedEnv(home),
         stderr: 'pipe',

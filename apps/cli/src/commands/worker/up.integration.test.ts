@@ -1,6 +1,6 @@
 import type { IntegrationCleanup } from '../../test-utils/integration-cleanup'
-import { mkdir, stat } from 'node:fs/promises'
-import { createServer } from 'node:net'
+
+import { stat } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 
@@ -12,13 +12,6 @@ const cliEntry = path.resolve(import.meta.dir, '..', '..', 'aiworker.ts')
 const HELPER_TIMEOUT_MS = 30_000
 
 setDefaultTimeout(30_000)
-
-interface CliProcess {
-  exited: Promise<number>
-  pid: number
-  stderr: ReadableStream<Uint8Array>
-  stdout: ReadableStream<Uint8Array>
-}
 
 async function exists(p: string): Promise<boolean> {
   try {
@@ -74,133 +67,25 @@ function withCliIntegrationCleanup<T>(run: (cleanup: IntegrationCleanup) => Prom
   return withIntegrationCleanup({ timeoutMs: HELPER_TIMEOUT_MS }, run)
 }
 
-async function pickFreePort(): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const server = createServer()
-    server.unref()
-    server.on('error', reject)
-    server.listen(0, '127.0.0.1', () => {
-      const address = server.address()
-      if (typeof address !== 'object' || address === null) {
-        server.close()
-        reject(new Error('failed to acquire an ephemeral port'))
-        return
+describe('retired worker quick-start commands', () => {
+  it('rejects pre-reset public worker entrypoints without bootstrapping state', async () => {
+    await withCliIntegrationCleanup(async (cleanup) => {
+      const project = await cleanup.makeTempDir('aiworker-retired-commands-')
+      const home = await cleanup.makeTempDir('aiworker-retired-commands-home-')
+
+      for (const args of [
+        ['up'],
+        ['serve'],
+        ['scope'],
+        ['config', 'show'],
+      ]) {
+        const result = await runCli(cleanup, args, project, home)
+        expect(result.exitCode).toBe(2)
+        expect(result.output).toContain(`Unknown command: ${args[0]}`)
       }
-      server.close(() => resolve(address.port))
-    })
-  })
-}
 
-async function waitForHealth(port: number, proc: CliProcess): Promise<void> {
-  const health = (async (): Promise<'healthy'> => {
-    const deadline = Date.now() + 8_000
-    while (Date.now() < deadline) {
-      try {
-        const res = await fetch(`http://127.0.0.1:${port}/health`)
-        if (res.ok)
-          return 'healthy'
-      }
-      catch {
-        // Server is still binding.
-      }
-      await new Promise(resolve => setTimeout(resolve, 100))
-    }
-    throw new Error(`up /health did not return 200 on port ${port}`)
-  })()
-
-  const exited = proc.exited.then(code => ({ code }))
-  const result = await Promise.race([health, exited])
-  if (result !== 'healthy')
-    throw new Error(`up process exited before /health was ready (code=${result.code})`)
-}
-
-describe('aiworker up quick start', () => {
-  it('requires --soul for a brand-new non-interactive project', async () => {
-    await withCliIntegrationCleanup(async (cleanup) => {
-      const project = await cleanup.makeTempDir('aiworker-up-no-soul-')
-      const home = await cleanup.makeTempDir('aiworker-up-no-soul-home-')
-
-      const result = await runCli(cleanup, ['up'], project, home)
-
-      expect(result.exitCode).toBe(2)
-      expect(result.output).toContain('[aiworker up] stage 1/5 resolve scope')
-      expect(result.output).toContain('brand-new project init requires a Soul preset in non-interactive mode')
       expect(await exists(path.join(project, '.aiworker'))).toBe(false)
-      expect(await exists(path.join(home, '.aiworker', '.env'))).toBe(false)
-    })
-  })
-
-  it('dry-runs a brand-new project without writing files or bootstrapping user scope', async () => {
-    await withCliIntegrationCleanup(async (cleanup) => {
-      const project = await cleanup.makeTempDir('aiworker-up-dry-run-')
-      const home = await cleanup.makeTempDir('aiworker-up-dry-run-home-')
-
-      const result = await runCli(cleanup, ['up', '--dry-run', '--soul', 'developer', '--port', '9217', '--no-open'], project, home)
-
-      expect(result.exitCode).toBe(0)
-      expect(result.output).toContain('[aiworker up] stage 1/5 resolve scope')
-      expect(result.output).toContain('Scope        : brand-new-project')
-      expect(result.output).toContain('[aiworker init] preflight (project-scope)')
-      expect(result.output).toContain('stage 5/5 serve')
-      expect(result.output).toContain('dry-run: server not started and browser not opened')
-      expect(await exists(path.join(project, '.aiworker'))).toBe(false)
-      expect(await exists(path.join(home, '.aiworker', '.env'))).toBe(false)
-    })
-  })
-
-  it('dry-runs with omitted port as env/default instead of NaN', async () => {
-    await withCliIntegrationCleanup(async (cleanup) => {
-      const project = await cleanup.makeTempDir('aiworker-up-dry-run-default-port-')
-      const home = await cleanup.makeTempDir('aiworker-up-dry-run-default-port-home-')
-
-      const result = await runCli(cleanup, ['up', '--dry-run', '--soul', 'developer', '--no-open', '--no-serve-web'], project, home)
-
-      expect(result.exitCode).toBe(0)
-      expect(result.output).toContain('stage 5/5 serve')
-      expect(result.output).toContain('port         : (env/default)')
-      expect(result.output).not.toContain('NaN')
-      expect(await exists(path.join(project, '.aiworker'))).toBe(false)
-      expect(await exists(path.join(home, '.aiworker', '.env'))).toBe(false)
-    })
-  })
-
-  it('initializes a brand-new project and starts the worker server', async () => {
-    await withCliIntegrationCleanup(async (cleanup) => {
-      const project = await cleanup.makeTempDir('aiworker-up-serve-')
-      const home = await cleanup.makeTempDir('aiworker-up-serve-home-')
-      const port = await pickFreePort()
-      await mkdir(project, { recursive: true })
-
-      const proc = cleanup.trackProcess(Bun.spawn([
-        process.execPath,
-        cliEntry,
-        'up',
-        '--soul',
-        'developer',
-        '--port',
-        String(port),
-        '--host',
-        '127.0.0.1',
-        '--no-serve-web',
-        '--no-open',
-      ], {
-        cwd: project,
-        env: isolatedEnv(home),
-        stderr: 'pipe',
-        stdin: 'ignore',
-        stdout: 'pipe',
-      }))
-
-      await waitForHealth(port, proc)
-      expect(await exists(path.join(project, '.aiworker', 'SOUL.md'))).toBe(true)
-      expect(await exists(path.join(project, '.aiworker', 'brain-capabilities.json'))).toBe(true)
-      expect(await exists(path.join(project, '.aiworker', 'local', 'worker.db'))).toBe(true)
-      expect(await exists(path.join(home, '.aiworker', '.env'))).toBe(false)
-
-      process.kill(proc.pid, 'SIGTERM')
-      expect(await proc.exited).toBe(0)
-      const output = `${await new Response(proc.stdout).text()}\n${await new Response(proc.stderr).text()}`
-      expect(output).toContain('[aiworker up] stage 5/5 serve')
+      expect(await exists(path.join(home, '.aiworker'))).toBe(false)
     })
   })
 })
