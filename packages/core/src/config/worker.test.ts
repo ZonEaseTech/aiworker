@@ -1,4 +1,5 @@
-import { homedir } from 'node:os'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { homedir, tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 
@@ -16,8 +17,12 @@ const MASTER_KEY = '00112233445566778899aabbccddeeff00112233445566778899aabbccdd
  */
 describe('getWorkerEnv 默认 fallback', () => {
   const originalEnv = { ...process.env }
+  const originalCwd = process.cwd()
+  let tmpCwd: string
 
   beforeEach(() => {
+    tmpCwd = mkdtempSync(path.join(tmpdir(), 'aiworker-worker-env-'))
+    process.chdir(tmpCwd)
     __resetWorkerEnvCacheForTest()
     for (const k of [
       'WORKER_DATA_ROOT',
@@ -40,10 +45,12 @@ describe('getWorkerEnv 默认 fallback', () => {
   })
 
   afterEach(() => {
+    process.chdir(originalCwd)
     __resetWorkerEnvCacheForTest()
     for (const k of Object.keys(process.env))
       delete process.env[k]
     Object.assign(process.env, originalEnv)
+    rmSync(tmpCwd, { recursive: true, force: true })
   })
 
   it('WORKER_MIGRATIONS_FOLDER 未设 → 回退到 storage-sqlite 内嵌路径', () => {

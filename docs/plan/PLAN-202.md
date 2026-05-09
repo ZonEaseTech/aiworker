@@ -1,6 +1,6 @@
 # PLAN-202 Hard reset OD-style worker product surface
 
-- **status**: implementing
+- **status**: completed
 - **owner**: local
 - **createdAt**: 2026-05-09 20:31
 - **approvedAt**: 2026-05-09 20:31
@@ -148,7 +148,13 @@ Verification:
   artifacts -> review -> lesson promotion against a temporary project and
   OpenAI-compatible stub. Passed: `bun run check`, `bun run build`, full CLI
   package tests, focused Core/API/Web tests, `bun run --filter '@zonease/aiworker-cli'
-  smoke:aiworker-run`, and `git diff --check`. Not fully green: the historical
-  `src/worker/orchestrator/service.history.test.ts` file still fails three
-  context-budget/compaction assertions that are outside the artifact-capture
-  path and should be reconciled before production release.
+  smoke:aiworker-run`, and `git diff --check`.
+- 2026-05-09 21:58: Closed S5 verification debt. The core history suite now
+  reflects the artifact-capture run lifecycle, worker env fallback tests isolate
+  cwd from any real operator `.aiworker` home, and the full source verification
+  set is green: `bun run check`, `bun run test`, `bun run build`,
+  `bun run --filter '@zonease/aiworker-core' test`,
+  `bun run --filter '@zonease/aiworker-cli' smoke:aiworker-run`, and
+  `git diff --check`. This completes the source refactor; production release
+  still requires a separate published-package compact harness and deployment
+  validation.

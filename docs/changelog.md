@@ -1,5 +1,28 @@
 # AIWorker Changelog
 
+## 2026-05-09 21:58 [completed] REFACTOR-036 / PLAN-202 — Hard reset OD-style worker product surface
+
+Completed the destructive OD-style worker hard reset:
+
+- Root CLI now exposes only the local worker loop: init, daemon, run, runs,
+  artifacts, pack, review, lessons, doctor, and executor.
+- Worker Web now routes only Workbench, Runs, Artifacts, Reviews, Lessons, and
+  Settings; old Chat/Cases/Brain/Cron/Approvals/Test/Secrets pages were removed
+  from the worker shell.
+- The local worker API removed `/api/worker/cases`; review and lesson promotion
+  are the product-facing surfaces.
+- Core product naming now uses Worker Review and Lesson Promotion services
+  instead of Brain Case / Inbox terminology.
+- Successful daemon runs now capture final assistant output as an
+  `assistant-output` artifact and the source-local smoke covers init -> daemon
+  -> run -> artifacts -> review -> lesson promotion.
+
+Verification: `bun run check`, `bun run test`, `bun run build`,
+`bun run --filter '@zonease/aiworker-core' test`,
+`bun run --filter '@zonease/aiworker-cli' smoke:aiworker-run`, and
+`git diff --check` pass. Production release remains a separate step requiring a
+published-package compact harness and deployment validation.
+
 ## 2026-05-09 19:08 [completed] REFACTOR-035 / PLAN-201 — Complete OD-style worker default loop
 
 Completed S7 of the OD-style worker reboot:

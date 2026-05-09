@@ -230,4 +230,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-199 Worker web workbench first screen**](PLAN-199.md) `2026-05-09`
 - [x] [**PLAN-200 Worker review promotion surface**](PLAN-200.md) `2026-05-09`
 - [x] [**PLAN-201 Complete OD-style worker default loop**](PLAN-201.md) `2026-05-09`
-- [-] [**PLAN-202 Hard reset OD-style worker product surface**](PLAN-202.md) `2026-05-09`
+- [x] [**PLAN-202 Hard reset OD-style worker product surface**](PLAN-202.md) `2026-05-09`

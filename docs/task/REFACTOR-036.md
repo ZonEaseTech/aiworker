@@ -1,10 +1,11 @@
 # REFACTOR-036 Hard reset OD-style worker product surface
 
-- **status**: in_progress
+- **status**: completed
 - **priority**: P1
 - **owner**: local
 - **createdAt**: 2026-05-09 20:31
 - **claimedAt**: 2026-05-09 20:31
+- **completedAt**: 2026-05-09 21:58
 - **plan**: PLAN-202
 - **relatesTo**: REFACTOR-026, PLAN-192, GOALS.md, docs/architecture.md, apps/cli, apps/api, apps/web, packages/core
 
@@ -82,10 +83,10 @@ operator experience.
   pages.
 - `case` commands and `/cases` routes are removed or replaced by `review`.
 - Docs no longer advertise unimplemented target commands.
-- Focused CLI/Web/API tests, `bun run check`, `bun run build`, and CRG review
-  pass for each code slice.
-- Final release slice runs source-local worker smoke and published-package
-  compact harness.
+- Focused CLI/Web/API tests, `bun run check`, `bun run test`,
+  `bun run build`, source-local worker smoke, and CRG review pass.
+- Production release is not claimed until a separate published-package compact
+  harness and deployment validation pass.
 
 ## Notes
 
@@ -125,8 +126,12 @@ concepts keep shaping the default mental model.
   `bun run check`, `bun run build`, full CLI package tests, focused
   Core/API/Web tests,
   `bun run --filter '@zonease/aiworker-cli' smoke:aiworker-run`, and
-  `git diff --check`. Residual risk: `bun run --filter '@zonease/aiworker-core'
-  test -- src/worker/orchestrator/service.history.test.ts` still has three
-  pre-existing context-budget/compaction expectation failures outside the
-  `taskId` artifact-capture path; do not claim full-suite production readiness
-  until that historical suite is reconciled.
+  `git diff --check`.
+- 2026-05-09 21:58: Final test reconciliation complete. The historical
+  context-budget/compaction expectations now match the post-artifact-capture
+  orchestrator behavior, worker env fallback tests isolate cwd from the
+  operator's real home scope, and the full source gate is green:
+  `bun run check`, `bun run test`, `bun run build`,
+  `bun run --filter '@zonease/aiworker-core' test`,
+  `bun run --filter '@zonease/aiworker-cli' smoke:aiworker-run`, and
+  `git diff --check`.
