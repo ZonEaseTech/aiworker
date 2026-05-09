@@ -159,11 +159,25 @@ export const brainAdmissionSkillAddPayloadSchema = z.object({
 })
 export type BrainAdmissionSkillAddPayload = z.infer<typeof brainAdmissionSkillAddPayloadSchema>
 
-const SECRET_KEY_RE = /token|api[-_ ]?key|password|secret|bearer|auth(?:orization)?|credential/i
 const REDACTED = '<redacted>' as const
 
 function isSecretKey(key: string): boolean {
-  return SECRET_KEY_RE.test(key)
+  const parts = key
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+  const compact = parts.join('')
+
+  if (parts.some(part => part === 'token' || part === 'password' || part === 'secret' || part === 'bearer' || part === 'credential' || part === 'credentials'))
+    return true
+  if (compact.includes('apikey'))
+    return true
+  if (parts.includes('authorization'))
+    return true
+  if (parts[0] === 'auth' && (parts.length === 1 || parts.some(part => part === 'header' || part === 'token' || part === 'secret' || part === 'password' || part === 'bearer' || part === 'credential' || part === 'credentials')))
+    return true
+  return false
 }
 
 export function redactSecretLikeValues<T>(value: T): T {

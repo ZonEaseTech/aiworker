@@ -192,6 +192,23 @@ describe('redactSecretLikeValues', () => {
     const value = redactSecretLikeValues([{ token: 'a' }, { name: 'ok' }])
     expect(value).toEqual([{ token: '<redacted>' }, { name: 'ok' }])
   })
+
+  it('keeps governance and authorship fields visible while redacting real auth material', () => {
+    const value = redactSecretLikeValues({
+      auth: 'Basic abc',
+      authHeader: 'Bearer abc',
+      authorityMode: 'unmanaged_ambient',
+      authorId: 'operator-1',
+      authHint: 'auth-file-present',
+    })
+    expect(value).toEqual({
+      auth: '<redacted>',
+      authHeader: '<redacted>',
+      authorityMode: 'unmanaged_ambient',
+      authorId: 'operator-1',
+      authHint: 'auth-file-present',
+    })
+  })
 })
 
 describe('redactBrainAdmissionProposal', () => {
