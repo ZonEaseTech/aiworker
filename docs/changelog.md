@@ -1,8 +1,8 @@
 # AIWorker Changelog
 
-## 2026-05-09 15:54 [progress] REL-031 / QA-025 — CLI 0.12.1 release readiness
+## 2026-05-09 15:29 [completed] REL-031 / QA-025 — CLI 0.12.1 release
 
-Prepared `@zonease/aiworker-cli@0.12.1` for release after FEAT-058:
+Released `@zonease/aiworker-cli@0.12.1` after FEAT-058:
 
 - Fixed default Brain/Case redaction so governance and authorship fields such
   as `authorityMode`, `authorId`, and `authHint` remain visible while real auth
@@ -15,8 +15,17 @@ Prepared `@zonease/aiworker-cli@0.12.1` for release after FEAT-058:
 - Dist CLI dogfood used a real project-scope worker DB and verified
   task-scoped Case status, high-risk ambient authority visibility, final
   assistant message selection, and pending lesson proposal creation.
-- Remote workflow, npm smoke, GitHub Release asset verification, and published
-  compact governance harness remain pending before REL-031 can close.
+- GitHub release workflow `25595158313` passed and published npm plus 4 GitHub
+  Release binary assets.
+- npm latest is `0.12.1`; `bunx @zonease/aiworker-cli@0.12.1 --version`
+  returns `aiworker/0.12.1 darwin-arm64 node-v24.3.0`.
+- main `lint` workflow `25595157442` and `build-image` workflow `25595157441`
+  passed.
+- Published-package compact governance harness passed with 80 PASS / 0 FAIL
+  across `developer-codex` and `general-assistant-claude-code`.
+- GitHub Actions emitted Node.js 20 deprecation warnings for release/docker
+  actions; schedule CI runtime updates before GitHub's 2026-06-02 Node 24
+  default switch.
 
 ## 2026-05-09 15:52 [completed] FEAT-058 / QA-024 — Case-driven Project Brain loop source validation
 

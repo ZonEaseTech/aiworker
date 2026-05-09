@@ -1,9 +1,10 @@
 # PLAN-191 Case-driven Brain loop 0.12.1 release readiness
 
-- **status**: implementing
+- **status**: completed
 - **owner**: local
 - **createdAt**: 2026-05-09 15:08
 - **approvedAt**: 2026-05-09 15:08
+- **completedAt**: 2026-05-09 15:29
 - **task**: REL-031
 
 ## Context
@@ -70,3 +71,12 @@ the next shippable target is `0.12.1`.
   `/private/tmp/aiworker-release-0.12.1-dogfood-BO6vss/project`，覆盖
   heuristic-only review、Brain-reviewed ready-to-ship、high-risk ambient
   authority review、task-scoped assistant selection、pending lesson proposal。
+- 2026-05-09 15:21：pushed `main` and tag `v0.12.1`；release workflow
+  `25595158313` passed and published npm + GitHub Release assets。
+- 2026-05-09 15:22：`npm view @zonease/aiworker-cli version` returned
+  `0.12.1`；`bunx @zonease/aiworker-cli@0.12.1 --version` returned
+  `aiworker/0.12.1 darwin-arm64 node-v24.3.0`。
+- 2026-05-09 15:23：main `lint` workflow `25595157442` and `build-image`
+  workflow `25595157441` passed。
+- 2026-05-09 15:29：published-package compact governance harness passed
+  80/80 checks across `developer-codex` and `general-assistant-claude-code`。
