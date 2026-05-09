@@ -210,6 +210,16 @@ function buildConfig(overrides: Partial<WorkerConfig> = {}): WorkerConfig {
   }
 }
 
+const CONTROL_EXECUTOR_CONFIG: WorkerConfig['executor'] = {
+  engine: 'http',
+  variant: 'default',
+  overrides: {
+    baseUrl: 'https://control.example.com',
+    apiKey: '',
+    model: 'gpt-control',
+  },
+}
+
 async function seedConversation(id: string, channel = 'web', chatId = 'chat-history', threadId?: string, summary?: string) {
   const db = getWorkerDb()
   const now = new Date().toISOString()
@@ -328,10 +338,7 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
       seedCount: 50,
     })
 
-    // 第一次 capture 来自分类器（resolveConversation 走 classifyContinuation
-    // 而我们的 capturingExecutor 不返回 JSON，分类器走 fallback 视作 continue
-    // → 进 run()，第二次 capture 才是 run()。
-    expect(executor.captured.length).toBeGreaterThanOrEqual(2)
+    expect(executor.captured.length).toBeGreaterThanOrEqual(1)
     const runMessages = executor.captured[executor.captured.length - 1]!
     // run() 拼了 1 条 system + 最近 20 条 history
     expect(runMessages.length).toBe(21)
@@ -676,9 +683,9 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
     ])
   })
 
-  it('repairs a low-scoring answer once when quality gate retry mode is enabled', async () => {
+  it('does not run quality repair without an explicit control executor', async () => {
     const bus = recordingBus()
-    const executor = capturingExecutor(['ok', 'repaired response with enough detail'])
+    const executor = capturingExecutor(['ok'])
     const orch = new Orchestrator({
       config: buildConfig({
         orchestrator: {
@@ -698,12 +705,12 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
 
     await orch.ingest(envelope('repair this answer'))
 
-    expect(executor.captured).toHaveLength(2)
-    const repair = bus.events.find(event => event.type === 'orchestrator.repair_attempted')
-    expect(repair?.payload.status).toBe('succeeded')
+    expect(executor.captured).toHaveLength(1)
+    expect(bus.events.find(event => event.type === 'orchestrator.repair_attempted')).toBeUndefined()
+    expect(bus.events.find(event => event.type === 'orchestrator.control_skipped')?.payload.reason).toBe('quality-repair-no-control-executor')
     const db = getWorkerDb()
     const assistantRows = db.select().from(messages).where(eq(messages.role, 'assistant')).all()
-    expect(assistantRows.at(-1)?.content).toBe('repaired response with enough detail')
+    expect(assistantRows.at(-1)?.content).toBe('ok')
   })
 
   it('records a held task event when quality gate block mode stops output', async () => {
@@ -859,12 +866,11 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
     await seedConversation('conv-history', 'web', 'chat-history')
     await seedMessages('conv-history', 30)
 
-    const executor = capturingExecutor([
+    const executor = capturingExecutor(['first final', 'second final'])
+    const controlExecutor = capturingExecutor([
       '{"continue":true,"reason":"same topic"}',
       'durable compacted summary',
-      'first final',
       '{"continue":true,"reason":"same topic"}',
-      'second final',
     ])
     const orch = new Orchestrator({
       config: buildConfig({
@@ -877,10 +883,16 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
             enabled: true,
             triggerTokens: 130,
           },
+          decisionPipeline: {
+            executor: CONTROL_EXECUTOR_CONFIG,
+          },
         },
       }),
       brain: stubBrain(),
       executor,
+      controlExecutor,
+      controlExecutorConfig: CONTROL_EXECUTOR_CONFIG,
+      controlExecutorReusesTaskExecutor: false,
       bus: silentBus(),
       workerId: 'w_history_test',
       workspaces,
@@ -920,11 +932,11 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
 
     const brain = recordingBrain()
     const bus = recordingBus()
-    const executor = capturingExecutor([
+    const executor = capturingExecutor(['visible final answer'])
+    const controlExecutor = capturingExecutor([
       '{"continue":true,"reason":"same topic"}',
       'remember this durable preference',
       'summary after memory flush',
-      'visible final answer',
     ])
     const orch = new Orchestrator({
       config: buildConfig({
@@ -938,10 +950,16 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
             triggerTokens: 130,
             memoryFlush: { enabled: true },
           },
+          decisionPipeline: {
+            executor: CONTROL_EXECUTOR_CONFIG,
+          },
         },
       }),
       brain,
       executor,
+      controlExecutor,
+      controlExecutorConfig: CONTROL_EXECUTOR_CONFIG,
+      controlExecutorReusesTaskExecutor: false,
       bus,
       workerId: 'w_history_test',
       workspaces,
@@ -987,11 +1005,11 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
     await seedMessages('conv-history', 30)
 
     const oversizedMemory = 'x'.repeat(20_001)
-    const executor = capturingExecutor([
+    const executor = capturingExecutor(['final after failure'])
+    const controlExecutor = capturingExecutor([
       '{"continue":true,"reason":"same topic"}',
       oversizedMemory,
       'summary despite proposal failure',
-      'final after failure',
     ])
     const orch = new Orchestrator({
       config: buildConfig({
@@ -1005,10 +1023,16 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
             triggerTokens: 130,
             memoryFlush: { enabled: true },
           },
+          decisionPipeline: {
+            executor: CONTROL_EXECUTOR_CONFIG,
+          },
         },
       }),
       brain: stubBrain(),
       executor,
+      controlExecutor,
+      controlExecutorConfig: CONTROL_EXECUTOR_CONFIG,
+      controlExecutorReusesTaskExecutor: false,
       bus: silentBus(),
       workerId: 'w_history_test',
       workspaces,
@@ -1042,9 +1066,7 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
 
     const bus = recordingBus()
     const executor = scriptedExecutor([
-      '{"continue":true,"reason":"same topic"}',
       { error: 'context length exceeded' },
-      'summary after overflow',
       'retried final answer',
     ])
     const orch = new Orchestrator({
@@ -1073,7 +1095,7 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
 
     const db = getWorkerDb()
     const conversation = db.select().from(conversations).where(eq(conversations.id, 'conv-history')).get()
-    expect(conversation?.summary).toBe('summary after overflow')
+    expect(conversation?.summary).toContain('Compacted rows')
     const assistantRows = db.select().from(messages).where(eq(messages.conversationId, 'conv-history')).all().filter(row => row.role === 'assistant')
     expect(assistantRows[assistantRows.length - 1]?.content).toBe('retried final answer')
     expect(bus.events.some(event => event.type === 'orchestrator.error')).toBe(false)
@@ -1777,15 +1799,21 @@ describe('Orchestrator.run() — history window (REFACTOR-006 P2)', () => {
   })
 
   it('classifier new-topic decisions rotate the active session entry', async () => {
-    const executor = capturingExecutor([
-      'first response',
-      '{"continue":false,"reason":"new topic"}',
-      'second response',
-    ])
+    const executor = capturingExecutor(['first response', 'second response'])
+    const controlExecutor = capturingExecutor(['{"continue":false,"reason":"new topic"}'])
     const orch = new Orchestrator({
-      config: buildConfig(),
+      config: buildConfig({
+        orchestrator: {
+          decisionPipeline: {
+            executor: CONTROL_EXECUTOR_CONFIG,
+          },
+        },
+      }),
       brain: stubBrain(),
       executor,
+      controlExecutor,
+      controlExecutorConfig: CONTROL_EXECUTOR_CONFIG,
+      controlExecutorReusesTaskExecutor: false,
       bus: silentBus(),
       workerId: 'w_history_test',
       workspaces,

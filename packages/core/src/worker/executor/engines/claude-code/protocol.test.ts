@@ -3,7 +3,7 @@ import type { ClaudeControlRequest } from './types'
 
 import { describe, expect, it } from 'bun:test'
 
-import { autoApprovePolicy, ControlProtocolPeer } from './protocol'
+import { autoApprovePolicy, ControlProtocolPeer, denyByDefaultPolicy } from './protocol'
 
 function captureWriter(): { writeLine: (s: string) => void, lines: string[] } {
   const lines: string[] = []
@@ -21,7 +21,7 @@ describe('ControlProtocolPeer', () => {
     },
   }
 
-  it('auto-approves PreToolUse under the default policy', async () => {
+  it('denies PreToolUse under the default policy', async () => {
     const writer = captureWriter()
     const peer = new ControlProtocolPeer({ writeLine: writer.writeLine })
 
@@ -31,8 +31,8 @@ describe('ControlProtocolPeer', () => {
     const payload = JSON.parse(writer.lines[0]!)
     expect(payload.type).toBe('control_response')
     expect(payload.response.request_id).toBe('req_1')
-    expect(payload.response.subtype).toBe('success')
-    expect(payload.response.response.hookSpecificOutput.permissionDecision).toBe('allow')
+    expect(payload.response.subtype).toBe('error')
+    expect(payload.response.error).toContain('does not approve')
   })
 
   it('returns error subtype when policy denies', async () => {
@@ -86,8 +86,13 @@ describe('ControlProtocolPeer', () => {
     })
   })
 
-  it('autoApprovePolicy is the shipped default', async () => {
+  it('autoApprovePolicy remains available for explicit opt-in', async () => {
     const decision = await autoApprovePolicy.decide(preToolUseRequest)
     expect(decision.decision).toBe('allow')
+  })
+
+  it('denyByDefaultPolicy is the shipped default behavior', async () => {
+    const decision = await denyByDefaultPolicy.decide(preToolUseRequest)
+    expect(decision.decision).toBe('deny')
   })
 })

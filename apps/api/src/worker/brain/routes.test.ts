@@ -91,7 +91,7 @@ describe('buildBrainRoutes (PLAN-103)', () => {
     expect(json.brainSummary.decisionPipeline.capabilityRouter.mode).toBe('observe_only')
     expect(json.brainSummary.decisionPipeline.qualityGate.evaluator).toBe('heuristic')
     expect(json.brainSummary.decisionPipeline.qualityGate.configuredMode).toBe('observe')
-    expect(json.brainSummary.decisionPipeline.conversationClassifier.enabled).toBe(true)
+    expect(json.brainSummary.decisionPipeline.conversationClassifier.enabled).toBe(false)
   })
 
   it('GET /admission lists pending proposals and redacts payload secret-like values by default', async () => {

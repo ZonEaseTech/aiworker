@@ -101,7 +101,7 @@ interface CompactionCheckpoint {
 interface MemoryFlushResult {
   attempted: boolean
   at?: string
-  status?: 'proposed' | 'already-proposed' | 'failed' | 'empty'
+  status?: 'proposed' | 'already-proposed' | 'failed' | 'empty' | 'skipped'
   proposalId?: string
   error?: string
 }
@@ -185,22 +185,44 @@ export class Orchestrator {
     }
   }
 
-  private controlExecutor(): ExecutorProvider {
-    return this.deps.controlExecutor ?? this.deps.executor
-  }
-
-  private controlExecutorConfig(): ExecutorConfig {
-    return this.deps.controlExecutorConfig ?? this.deps.config.executor
-  }
-
   private controlExecutorReusesTaskExecutor(): boolean {
-    return this.deps.controlExecutorReusesTaskExecutor ?? true
+    return this.deps.controlExecutorReusesTaskExecutor ?? false
   }
 
   private controlWorkspacePath(workspace: WorkspaceHandle | null): string | undefined {
     if (!this.controlExecutorReusesTaskExecutor())
       return undefined
     return workspace?.path
+  }
+
+  private controlPlane(): { executor: ExecutorProvider, config: ExecutorConfig } | null {
+    if (!this.deps.controlExecutor || !this.deps.controlExecutorConfig)
+      return null
+    return { executor: this.deps.controlExecutor, config: this.deps.controlExecutorConfig }
+  }
+
+  private emitControlPlaneSkipped(
+    conversationId: string,
+    taskId: string | undefined,
+    gatewayConversationId: string | undefined,
+    reason: string,
+  ): void {
+    consola.warn(`[orchestrator] control-plane step skipped: ${reason}`)
+    this.deps.bus.emit('orchestrator.control_skipped', {
+      conversationId,
+      ...(gatewayConversationId === undefined ? {} : { gatewayConversationId }),
+      ...(taskId === undefined ? {} : { taskId }),
+      reason,
+    })
+    this.recordJournal({
+      conversationId,
+      kind: 'executor.warning',
+      ...(taskId === undefined ? {} : { taskId }),
+      payload: {
+        reason,
+        source: 'control-plane',
+      },
+    })
   }
 
   /** Entry point for inbound envelopes from any channel. */
@@ -433,7 +455,14 @@ export class Orchestrator {
     if (!result.ok) {
       const error = result.error ?? 'executor error'
       consola.warn(`[orchestrator] executor error: ${error}`)
+      const failureMessage = this.persistAssistantFailureMessage(activeConversation.id, error, sessionKey, signal.aborted)
       this.markTaskFailed(taskId, activeConversation.id, error, signal.aborted)
+      this.deps.bus.emit('conversation.message', {
+        conversationId: activeConversation.id,
+        ...(gatewayConversationId === undefined ? {} : { gatewayConversationId }),
+        messageId: failureMessage.id,
+        role: 'assistant',
+      })
       this.deps.bus.emit('orchestrator.error', {
         conversationId: activeConversation.id,
         ...(gatewayConversationId === undefined ? {} : { gatewayConversationId }),
@@ -454,6 +483,19 @@ export class Orchestrator {
       taskId,
     })
     const gateConfig = this.deps.config.orchestrator?.decisionPipeline?.qualityGate
+    const controlPlane = this.controlPlane()
+    const effectiveQualityEvaluator = gateConfig?.evaluator === 'llm' && controlPlane !== null
+      ? 'llm'
+      : 'heuristic'
+    const effectiveQualityMode = gateConfig?.mode === 'retry' && controlPlane === null
+      ? 'observe'
+      : gateConfig?.mode ?? 'observe'
+    if (gateConfig?.evaluator === 'llm' && controlPlane === null) {
+      this.emitControlPlaneSkipped(activeConversation.id, taskId, gatewayConversationId, 'quality-gate-llm-no-control-executor')
+    }
+    if (gateConfig?.mode === 'retry' && controlPlane === null) {
+      this.emitControlPlaneSkipped(activeConversation.id, taskId, gatewayConversationId, 'quality-repair-no-control-executor')
+    }
     const qualityGate = await evaluateQualityGate({
       assistantText,
       capabilityDecision,
@@ -461,11 +503,11 @@ export class Orchestrator {
         ...decisionContext,
         conversationId: activeConversation.id,
       },
-      evaluator: gateConfig?.evaluator ?? 'heuristic',
-      executor: this.controlExecutor(),
+      evaluator: effectiveQualityEvaluator,
+      executor: controlPlane?.executor ?? this.deps.executor,
       intentDecision,
-      mode: gateConfig?.mode ?? 'observe',
-      model: resolveExecutorModel(this.controlExecutorConfig()),
+      mode: effectiveQualityMode,
+      model: controlPlane === null ? undefined : resolveExecutorModel(controlPlane.config),
       notifyActivity,
       requestText: envelope.text,
       signal,
@@ -481,14 +523,14 @@ export class Orchestrator {
       ...(taskId === undefined ? {} : { taskId }),
       payload: qualityGate as unknown as Record<string, unknown>,
     })
-    if (gateConfig?.evaluator === 'llm') {
+    if (gateConfig?.evaluator === 'llm' && controlPlane !== null) {
       const review = await reviewTaskWithBrainEngine({
         authorityMode: describeExecutorAuthority(this.deps.config).authorityMode,
         evidenceRefs: [
           `conversations:${activeConversation.id}`,
           ...(taskId === undefined ? [] : [`agent_tasks:${taskId}`]),
         ],
-        executor: this.controlExecutor(),
+        executor: controlPlane.executor,
         finalOutput: assistantText,
         hardInvariantSignals: describeExecutorAuthority(this.deps.config).authorityMode === 'unmanaged_ambient'
           ? ['executor authority is unmanaged ambient']
@@ -498,7 +540,7 @@ export class Orchestrator {
           `qualityGate action=${qualityGate.action}; score=${qualityGate.score ?? 'n/a'}; mode=${qualityGate.mode}; reason=${qualityGate.reason}`,
           `capability selectedSkills=${capabilityDecision.selectedSkills.length}; selectedMcpTools=${capabilityDecision.selectedMcpTools.length}`,
         ],
-        model: resolveExecutorModel(this.controlExecutorConfig()),
+        model: resolveExecutorModel(controlPlane.config),
         notifyActivity,
         scopeRubric: `${intentDecision.qualityProfile} / ${intentDecision.risk}`,
         signal,
@@ -513,7 +555,7 @@ export class Orchestrator {
         payload: review as unknown as Record<string, unknown>,
       })
     }
-    if (qualityGate.action === 'repair' && gateConfig?.mode === 'retry') {
+    if (qualityGate.action === 'repair' && gateConfig?.mode === 'retry' && controlPlane !== null) {
       const repaired = await this.runSuppressedExecutor({
         messages: buildRepairPrompt({ assistantText, gate: qualityGate, requestText: envelope.text }),
         workspace,
@@ -604,11 +646,10 @@ export class Orchestrator {
   ): Promise<ExecutorTextResult> {
     let assistantText = ''
     let staleBindingCleared = false
-    // BUG-063: dead-loop detector. Reads `orchestrator.deadLoop` worker
-    // config; defaults enabled with threshold 8. Aborts the iteration when
-    // the LLM emits >threshold sequential tool_calls without any text
-    // delta — the brute-force-explore signature observed in the
-    // qa-2026-05-04-v0.7.0 dev-Soul finding.
+    // BUG-063 / REFACTOR-026: dead-loop detector. Reads
+    // `orchestrator.deadLoop`; emits observe-only warning telemetry when the
+    // executor streams many tool calls without text. It must not kill the
+    // native executor by default.
     const deadLoop = deadLoopDetectorFromConfig(this.deps.config.orchestrator?.deadLoop)
     try {
       for await (const event of this.deps.executor.run(runInput)) {
@@ -650,14 +691,22 @@ export class Orchestrator {
           }
           else if (deadLoop.recordToolCall()) {
             const reason = `dead-loop-suspected:tool_call=${deadLoop.count()},no_text_delta`
-            this.deps.bus.emit('orchestrator.aborted', {
+            this.deps.bus.emit('orchestrator.warning', {
               conversationId,
               ...(gatewayConversationId === undefined ? {} : { gatewayConversationId }),
               ...(taskId === undefined ? {} : { taskId }),
               reason,
             })
-            consola.warn(`[orchestrator] aborted run: ${reason}`)
-            return { ok: false, text: assistantText, error: reason, staleBindingCleared }
+            this.recordJournal({
+              conversationId,
+              kind: 'executor.warning',
+              ...(taskId === undefined ? {} : { taskId }),
+              payload: {
+                reason,
+                source: 'dead-loop-detector',
+              },
+            })
+            consola.warn(`[orchestrator] warning: ${reason}`)
           }
         }
         else if (event.type === 'tool_result') {
@@ -827,11 +876,21 @@ export class Orchestrator {
     }
     const evaluator = this.deps.config.orchestrator?.decisionPipeline?.intentClassifier?.evaluator ?? 'heuristic'
     if (evaluator === 'llm') {
+      const controlPlane = this.controlPlane()
+      if (controlPlane === null) {
+        this.emitControlPlaneSkipped(
+          input.resolved.conversation.id,
+          input.decisionContext.taskId,
+          input.decisionContext.gatewayConversationId,
+          'intent-classifier-llm-no-control-executor',
+        )
+        return classifyIntentHeuristic(input.decisionContext, classification)
+      }
       return classifyIntentWithExecutor({
         classification,
         context: input.decisionContext,
-        executor: this.controlExecutor(),
-        model: resolveExecutorModel(this.controlExecutorConfig()),
+        executor: controlPlane.executor,
+        model: resolveExecutorModel(controlPlane.config),
         notifyActivity: input.notifyActivity,
         signal: input.signal,
         workspacePath: this.controlWorkspacePath(input.workspace),
@@ -909,18 +968,23 @@ export class Orchestrator {
     if (sessionConversation && this.deps.config.executor.engine === 'codex')
       return { conversation: rowToState(existing), sessionAction: 'continue', sessionReason: 'codex-chat-id-continuity', sessionKey }
 
-    const existingWorkspace = await this.provisionWorkspace(existing.id)
-    const recent = await loadRecentMessages(existing.id)
-    const model = resolveExecutorModel(this.controlExecutorConfig())
-    const decision = await classifyContinuation(
-      this.controlExecutor(),
-      model,
-      existing.summary ?? null,
-      recent,
-      envelope.text,
-      this.controlWorkspacePath(existingWorkspace),
-      this.deps.config.executor.engine,
-    )
+    const controlPlane = this.controlPlane()
+    const decision = controlPlane === null
+      ? {
+          continue: true,
+          evaluator: 'none' as const,
+          reason: 'control-executor-not-configured',
+          source: 'classifier-disabled' as const,
+        }
+      : await classifyContinuation(
+          controlPlane.executor,
+          resolveExecutorModel(controlPlane.config),
+          existing.summary ?? null,
+          await loadRecentMessages(existing.id),
+          envelope.text,
+          this.controlWorkspacePath(await this.provisionWorkspace(existing.id)),
+          this.deps.config.executor.engine,
+        )
     this.deps.bus.emit('conversation.classifier', { conversationId: existing.id, decision })
     recordConversationClassifier(decision)
     if (decision.continue)
@@ -1130,6 +1194,44 @@ export class Orchestrator {
     return { id: res[0]?.id ?? -1 }
   }
 
+  private persistAssistantFailureMessage(conversationId: string, error: string, sessionKey: string, cancelled: boolean): { id: number } {
+    const db = getWorkerDb()
+    const now = new Date().toISOString()
+    const redacted = redactTaskError(error)
+    const content = [
+      cancelled
+        ? 'The run was cancelled before the executor returned a final answer.'
+        : 'The executor failed before returning a final answer.',
+      '',
+      `Reason: ${redacted || 'unknown executor error'}`,
+    ].join('\n')
+    const res = db.insert(messages).values({
+      conversationId,
+      role: 'assistant',
+      content,
+      richMetadata: JSON.stringify({
+        kind: 'executor-error',
+        cancelled,
+        error: redacted,
+        version: TRANSCRIPT_METADATA_VERSION,
+      }),
+      createdAt: now,
+    }).returning({ id: messages.id }).all()
+    db.update(conversations).set({ lastActiveAt: now }).where(eq(conversations.id, conversationId)).run()
+    touchSessionEntry(sessionKey, { at: now })
+    const id = res[0]?.id ?? -1
+    this.recordJournal({
+      conversationId,
+      kind: 'assistant.message',
+      payload: {
+        assistantTextLength: content.length,
+        error: true,
+        messageId: id,
+      },
+    })
+    return { id }
+  }
+
   private async maybeCompactConversation(input: {
     conversation: ConversationState
     sessionKey: string
@@ -1258,6 +1360,15 @@ export class Orchestrator {
       compactedFromMessageId: input.fromId,
       compactedThroughMessageId: input.throughId,
     }
+    if (this.controlPlane() === null) {
+      const error = 'control-executor-not-configured'
+      this.persistAuditMessage(input.conversationId, 'Pre-compaction memory flush skipped: no control executor configured.', {
+        ...baseMetadata,
+        status: 'skipped',
+        error,
+      }, at)
+      return { attempted: true, at, status: 'skipped', error }
+    }
 
     try {
       const content = await this.runSuppressedExecutor({
@@ -1359,6 +1470,9 @@ export class Orchestrator {
     signal: AbortSignal
     notifyActivity: () => void
   }): Promise<string> {
+    if (this.controlPlane() === null)
+      return fallbackCompactionSummary(input.previousSummary, input.rows)
+
     const generated = await this.runSuppressedExecutor({
       messages: buildCompactionPrompt(input.previousSummary, input.rows, input.compaction),
       workspace: input.workspace,
@@ -1378,10 +1492,13 @@ export class Orchestrator {
     signal: AbortSignal
     notifyActivity: () => void
   }): Promise<string> {
-    const model = resolveExecutorModel(this.controlExecutorConfig())
+    const controlPlane = this.controlPlane()
+    if (controlPlane === null)
+      throw new Error('control executor not configured')
+    const model = resolveExecutorModel(controlPlane.config)
     const workspacePath = this.controlWorkspacePath(input.workspace)
     let text = ''
-    for await (const event of this.controlExecutor().run({
+    for await (const event of controlPlane.executor.run({
       messages: input.messages,
       ...(model ? { model } : {}),
       ...(workspacePath ? { workspacePath } : {}),

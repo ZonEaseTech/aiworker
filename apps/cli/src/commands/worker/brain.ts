@@ -117,7 +117,7 @@ export async function runBrainStatus(): Promise<number> {
         ...(decisionPipeline?.qualityGate?.threshold === undefined
           ? {}
           : { qualityThreshold: decisionPipeline.qualityGate.threshold }),
-        conversationClassifierEnabled: true,
+        conversationClassifierEnabled: decisionPipeline?.executor !== undefined,
       }
       console.log(JSON.stringify({
         workerId: ctx.workerId,

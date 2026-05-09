@@ -43,7 +43,7 @@ describe('decision pipeline ring buffer (PLAN-116)', () => {
     expect(snap.capabilityRouter.mode).toBe('observe_only')
     expect(snap.qualityGate.evaluator).toBe('heuristic')
     expect(snap.qualityGate.configuredMode).toBe('observe')
-    expect(snap.conversationClassifier.enabled).toBe(true)
+    expect(snap.conversationClassifier.enabled).toBe(false)
     expect(snap.conversationClassifier.recent.fallbackByReason).toEqual({})
   })
 

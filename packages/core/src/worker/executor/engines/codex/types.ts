@@ -23,7 +23,7 @@ export type CodexEventMethod
     | 'codex/event/stop'
     | 'codex/event/error'
 
-/** Codex "approval policy" — FEAT-016 hard-codes `'never'` for auto-approve. */
+/** Codex approval policy passthrough when operators explicitly set one via native args/profile support. */
 export type CodexApprovalPolicy = 'never' | 'on-request' | 'on-failure' | 'untrusted'
 
 /** Params sent with `thread_start`. Only `model` is populated by FEAT-016. */

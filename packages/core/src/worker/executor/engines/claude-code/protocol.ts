@@ -13,9 +13,9 @@ import type {
  * (PreToolUse / Stop / tool_approval); the host replies with a matching
  * `control_response` carrying `subtype: 'success' | 'error'`.
  *
- * FEAT-012 ships auto-approve only — every PreToolUse control_request is
- * answered with `{ allow: true }`. Interactive approval UI is out of scope
- * and the `permission_request` AgentEvent is reserved for future use.
+ * By default the peer denies tool-control requests. Operators that want
+ * executor-native auto approval must pass an explicit policy; AIWorker should
+ * not silently approve tools on behalf of the external runtime.
  */
 
 /** Policy a peer consults when Claude Code asks to run a tool. */
@@ -35,13 +35,21 @@ export interface ApprovalDecision {
   updatedInput?: Record<string, unknown>
 }
 
-/** Always-allow policy used by FEAT-012. */
+/** Always-allow policy for explicit operator opt-in / tests. */
 export const autoApprovePolicy: ApprovalPolicy = {
   decide: async (_request: ClaudeControlRequest) => ({ decision: 'allow' }),
 }
 
+/** Deny-by-default policy used when no explicit approval policy is supplied. */
+export const denyByDefaultPolicy: ApprovalPolicy = {
+  decide: async (_request: ClaudeControlRequest) => ({
+    decision: 'deny',
+    reason: 'AIWorker does not approve executor-native tool requests by default',
+  }),
+}
+
 export interface ControlPeerOptions {
-  /** Called for every inbound control_request; defaults to auto-approve. */
+  /** Called for every inbound control_request; defaults to deny. */
   policy?: ApprovalPolicy
   /**
    * Called by the peer to push one line to the CLI's stdin. Implementations
@@ -61,7 +69,7 @@ export class ControlProtocolPeer {
   private readonly writeLine: (line: string) => void
 
   constructor(options: ControlPeerOptions) {
-    this.policy = options.policy ?? autoApprovePolicy
+    this.policy = options.policy ?? denyByDefaultPolicy
     this.writeLine = options.writeLine
   }
 

@@ -6,7 +6,8 @@ import { probeAcpQwenAuth } from '../../../availability'
  *
  * CLI repo: https://github.com/QwenLM/qwen-code — forked from Gemini CLI with
  * Qwen-specific defaults. Same ACP framing as Gemini: `--acp` puts the CLI
- * into JSON-RPC-over-stdio mode; `--yolo` auto-approves tool calls.
+ * into JSON-RPC-over-stdio mode; `--yolo` is only appended when the operator
+ * explicitly enables `autoApprove`.
  *
  * FEAT-018 起 auth 探测逻辑统一由 `worker/executor/availability.ts` 托管。
  */

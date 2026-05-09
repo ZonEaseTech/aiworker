@@ -159,7 +159,7 @@ export function getDecisionPipelineSnapshot(
   const intentEvaluator = config.intentEvaluator ?? 'heuristic'
   const qualityEvaluator = config.qualityEvaluator ?? 'heuristic'
   const qualityMode = config.qualityMode ?? 'observe'
-  const enabled = config.conversationClassifierEnabled ?? true
+  const enabled = config.conversationClassifierEnabled ?? false
 
   const persisted = loadPersistedSamples()
   const intentSamples = persisted?.intent ?? intentBuffer.toArray()

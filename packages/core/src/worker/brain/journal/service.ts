@@ -36,6 +36,7 @@ export type BrainJournalEventKind
     | 'executor.finish'
     | 'executor.permission_request'
     | 'executor.token_usage'
+    | 'executor.warning'
 
 export interface RecordBrainJournalEventInput {
   kind: BrainJournalEventKind

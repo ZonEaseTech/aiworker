@@ -148,6 +148,11 @@ const orchestratorCompactionSchema = z.object({
   }).optional(),
 })
 
+const deadLoopSchema = z.object({
+  enabled: z.boolean().optional(),
+  threshold: z.number().int().min(1).optional(),
+})
+
 const decisionPipelineSchema = z.object({
   executor: executorSchema.optional(),
   intentClassifier: z.object({
@@ -157,6 +162,7 @@ const decisionPipelineSchema = z.object({
     evaluator: z.enum(['heuristic', 'llm']).optional(),
     mode: z.enum(['observe', 'warn', 'retry', 'block']).optional(),
     threshold: z.number().min(0).max(10).optional(),
+    budgetMs: z.number().int().min(1).optional(),
   }).optional(),
 }).strict()
 
@@ -170,6 +176,7 @@ const orchestratorConfigSchema = z.object({
   maxHistoryMessages: z.number().int().min(1).max(200).optional(),
   compaction: orchestratorCompactionSchema.optional(),
   decisionPipeline: decisionPipelineSchema.optional(),
+  deadLoop: deadLoopSchema.optional(),
 }).superRefine((value, ctx) => {
   if (value.contextWindowTokens !== undefined && value.reserveTokens !== undefined && value.reserveTokens >= value.contextWindowTokens) {
     ctx.addIssue({

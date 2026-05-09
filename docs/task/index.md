@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-09 (REL-031 / QA-025 completed)
+> Updated: 2026-05-09 (REFACTOR-026 completed)
 
 ## Usage
 
@@ -297,3 +297,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**QA-024 Case-driven Brain loop validation evidence**](QA-024.md) `P1`
 - [x] [**REL-031 发布 aiworker CLI 0.12.1**](REL-031.md) `P1`
 - [x] [**QA-025 Case-driven Brain loop release validation**](QA-025.md) `P1`
+- [x] [**REFACTOR-026 Executor non-interference boundary**](REFACTOR-026.md) `P0`

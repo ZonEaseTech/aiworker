@@ -7,7 +7,11 @@ import type {
 import type { WorkerRuntime } from '../runtime'
 import type { WorkerModeState } from './state'
 
-import { describe, expect, it } from 'bun:test'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { closeWorkerDb, initWorkerDb, runWorkerMigrations } from '@zonease/aiworker-storage-sqlite/worker'
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 import { buildInfo } from './info'
 
@@ -84,6 +88,20 @@ const CONFIG: WorkerConfig = {
 }
 
 describe('buildInfo', () => {
+  let dbDir: string
+
+  beforeEach(() => {
+    closeWorkerDb()
+    dbDir = mkdtempSync(join(tmpdir(), 'aiworker-info-test-'))
+    initWorkerDb(join(dbDir, 'worker.db'))
+    runWorkerMigrations()
+  })
+
+  afterEach(() => {
+    closeWorkerDb()
+    rmSync(dbDir, { recursive: true, force: true })
+  })
+
   it('maps healthy runtime probes into the shared WorkerInfo shape', async () => {
     const runtime = stubRuntime(
       async () => ({ name: 'multi', status: 'healthy', lastChecked: 'x' }),
@@ -121,12 +139,8 @@ describe('buildInfo', () => {
     ])
 
     expect(info.executor).toEqual({ type: 'http', model: 'gpt-4o-mini', status: 'healthy' })
-    expect(info.controlExecutor).toEqual({
-      type: 'http',
-      model: 'gpt-4o-mini',
-      status: 'healthy',
-      reusesTaskExecutor: true,
-    })
+    expect(info.controlExecutor).toBeUndefined()
+    expect(info.brainSummary.decisionPipeline.conversationClassifier.enabled).toBe(false)
     expect(info.evolutionEnabled).toBe(true)
 
     expect(info.channels).toEqual([

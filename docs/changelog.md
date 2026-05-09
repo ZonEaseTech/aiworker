@@ -1,5 +1,27 @@
 # AIWorker Changelog
 
+## 2026-05-09 17:05 [completed] REFACTOR-026 / PLAN-192 — Executor non-interference boundary
+
+Completed the default runtime boundary correction after dogfood showed AIWorker
+was killing Codex-backed tasks around 120 seconds and surfacing the result as a
+child-process failure.
+
+- Native Codex / Claude Code / ACP / Cursor profiles no longer carry default
+  per-turn kill timers; adapter watchdogs are installed only when
+  `timeoutMs` is explicitly configured.
+- Codex no longer forces approval policy or auto-allows permission requests;
+  Claude Code no longer adds `--dangerously-skip-permissions` or defaults to
+  auto-approve; ACP no longer defaults to yolo / auto-approve.
+- ProcessManager stall cancellation defaults to disabled
+  (`PROCESS_STALL_TIMEOUT_MS=0`), while explicit operator watchdogs still work.
+- Dead-loop detection is warning-only telemetry and Journal evidence; it no
+  longer aborts the executor stream.
+- Control-plane LLM calls require an explicit
+  `orchestrator.decisionPipeline.executor`; without one, AIWorker falls back
+  to heuristic / observe-only behavior instead of reusing the task executor.
+- Executor errors now persist a concise assistant failure message so Worker
+  Admin Chat can show the failure after refresh or missed SSE.
+
 ## 2026-05-09 15:29 [completed] REL-031 / QA-025 — CLI 0.12.1 release
 
 Released `@zonease/aiworker-cli@0.12.1` after FEAT-058:

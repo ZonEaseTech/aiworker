@@ -27,8 +27,6 @@ import { extractRunMessages, renderHistoryAsUserPreamble } from '../common/run-i
 import { mapStopReason, normalizeSessionUpdate } from './normalize'
 import { JsonRpcPeer, splitNdjson } from './protocol'
 
-/** Hard cap for one ACP turn. Overridable by executor options. */
-const DEFAULT_TIMEOUT_MS = 120_000
 const DEFAULT_PROTOCOL_VERSION = 1
 /** Auth-probe cache lifetime (10 min). Keyed by agent id. */
 const AVAILABILITY_CACHE_TTL_MS = 10 * 60 * 1000
@@ -51,9 +49,9 @@ export interface AcpExecutorOptions {
   extraArgs?: string[]
   /** Env vars merged into the spawned process env. */
   env?: Record<string, string>
-  /** Per-turn hard timeout in ms (default 120_000). */
+  /** Optional per-turn watchdog in ms. Omitted means AIWorker will not kill ACP for duration. */
   timeoutMs?: number
-  /** Auto-approve mode — FEAT-013 default is `true`. */
+  /** Auto-approve mode. Omitted means false. */
   autoApprove?: boolean
   /**
    * Fallback workspace used when `AgentRunInput.workspacePath` is absent
@@ -170,7 +168,7 @@ export class AcpExecutor implements ExecutorProvider {
       onError: (err) => {
         queue.push({ type: 'error', error: err.message })
       },
-      requestTimeoutMs: this.options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+      requestTimeoutMs: explicitTimeoutMs(this.options.timeoutMs),
     })
 
     let stdoutBuffer = ''
@@ -203,7 +201,10 @@ export class AcpExecutor implements ExecutorProvider {
       peer.dispose(msg)
     })
 
-    const timeoutHandle = setTimeout(() => safeKill(child, 'SIGKILL'), this.options.timeoutMs ?? DEFAULT_TIMEOUT_MS)
+    const timeoutMs = explicitTimeoutMs(this.options.timeoutMs)
+    const timeoutHandle = timeoutMs === undefined
+      ? null
+      : setTimeout(() => safeKill(child, 'SIGKILL'), timeoutMs)
 
     let sessionId = ''
     let cancelled = false
@@ -280,7 +281,8 @@ export class AcpExecutor implements ExecutorProvider {
       yield { type: 'finish', reason: cancelled ? 'cancelled' : 'error' }
     }
     finally {
-      clearTimeout(timeoutHandle)
+      if (timeoutHandle)
+        clearTimeout(timeoutHandle)
       input.signal?.removeEventListener('abort', abortHandler)
       peer.dispose('run ended')
       ;(child.stdout as NodeJS.ReadableStream).off('data', stdoutHandler)
@@ -302,12 +304,10 @@ export class AcpExecutor implements ExecutorProvider {
   }
 
   private async handleInboundRequest(req: JsonRpcRequest): Promise<unknown> {
-    // FEAT-013 runs agents in yolo mode so the CLI shouldn't dispatch
-    // permission requests. We still handle them defensively so a stray
-    // request doesn't deadlock the turn: auto-approve in autoApprove mode,
-    // deny otherwise.
+    // Permission prompts belong to the ACP agent/operator profile. AIWorker
+    // only auto-approves when the operator opts in explicitly.
     if (req.method === 'session/request_permission') {
-      const autoApprove = this.options.autoApprove ?? true
+      const autoApprove = this.options.autoApprove === true
       if (!autoApprove)
         return { outcome: { outcome: 'cancelled' } }
       const params = (req.params ?? {}) as {
@@ -332,7 +332,7 @@ export class AcpExecutor implements ExecutorProvider {
 
   private async resolveCommand(runModel: string | undefined): Promise<{ cmd: string, args: string[] }> {
     const agent = this.options.agent
-    const yolo = this.options.autoApprove ?? true
+    const yolo = this.options.autoApprove === true
     const argv = agent.buildArgs({
       yolo,
       ...(runModel ?? this.options.model ? { model: runModel ?? this.options.model } : {}),
@@ -350,6 +350,12 @@ export class AcpExecutor implements ExecutorProvider {
       args: ['-y', `${agent.npxPackage}@${version}`, ...argv],
     }
   }
+}
+
+function explicitTimeoutMs(value: number | undefined): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+    ? value
+    : undefined
 }
 
 /**

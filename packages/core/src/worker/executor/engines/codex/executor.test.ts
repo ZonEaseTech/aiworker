@@ -125,6 +125,8 @@ describe('CodexExecutor — smoke over stub app-server', () => {
     const trace = await readTrace(traceFile)
     const initialize = trace.find(msg => msg.method === 'initialize')
     expect((initialize?.params as { capabilities?: { experimentalApi?: boolean } } | undefined)?.capabilities?.experimentalApi).toBe(true)
+    const threadStart = trace.find(msg => msg.method === 'thread/start')
+    expect((threadStart?.params as { approvalPolicy?: string } | undefined)?.approvalPolicy).toBeUndefined()
     expect(events).toContainEqual({
       type: 'engine_binding',
       engine: 'codex',
@@ -168,6 +170,8 @@ describe('CodexExecutor — smoke over stub app-server', () => {
     const trace = await readTrace(traceFile)
     expect(trace.some(msg => msg.method === 'thread/resume')).toBe(true)
     expect(trace.some(msg => msg.method === 'thread/start')).toBe(false)
+    const resume = trace.find(msg => msg.method === 'thread/resume')
+    expect((resume?.params as { approvalPolicy?: string } | undefined)?.approvalPolicy).toBeUndefined()
     const turnStart = trace.find(msg => msg.method === 'turn/start')
     expect((turnStart?.params as { threadId?: string } | undefined)?.threadId).toBe('thr_existing')
     const prompt = (turnStart?.params as { input?: Array<{ text?: string }> } | undefined)?.input?.[0]?.text
@@ -252,6 +256,8 @@ describe('CodexExecutor — smoke over stub app-server', () => {
     }))
 
     const trace = await readTrace(traceFile)
+    const threadStart = trace.find(msg => msg.method === 'thread_start')
+    expect((threadStart?.params as { approval_policy?: string } | undefined)?.approval_policy).toBeUndefined()
     const newTurn = trace.find(msg => msg.method === 'newTurn')
     const params = newTurn?.params as { prompt?: string } | undefined
     expect(params?.prompt).toContain('<System>\nsystem rules\n</System>')

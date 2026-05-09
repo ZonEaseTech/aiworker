@@ -68,6 +68,13 @@ describe('resolveVariant', () => {
     expect((r.body as { model?: string }).model).toBeUndefined()
   })
 
+  it('does not set default watchdog timeouts for native executor variants', () => {
+    for (const engine of ['claude-code', 'acp', 'codex', 'cursor'] as const) {
+      for (const body of Object.values(DEFAULT_PROFILES[engine].variants))
+        expect((body as { timeoutMs?: number }).timeoutMs).toBeUndefined()
+    }
+  })
+
   it('throws on unknown engine', () => {
     expect(() => resolveVariant({ engine: 'nope' as never, variant: 'default' })).toThrow(/unknown executor engine/)
   })

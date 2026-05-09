@@ -5,9 +5,8 @@ import { probeAcpGeminiAuth } from '../../../availability'
  * Gemini CLI ACP adapter. Data-only — harness logic lives in `harness.ts`.
  *
  * CLI docs: https://github.com/google-gemini/gemini-cli — the `--experimental-acp`
- * flag puts the CLI into ACP mode (JSON-RPC over stdio). We pair it with
- * `--yolo` + an allowed-tools list so the FEAT-013 auto-approve path never
- * hits interactive prompts.
+ * flag puts the CLI into ACP mode (JSON-RPC over stdio). `--yolo` is only
+ * appended when the operator explicitly enables `autoApprove`.
  *
  * FEAT-018 起 auth 探测逻辑统一由 `worker/executor/availability.ts` 托管，本
  * 文件仅保留声明性绑定以消除重复。

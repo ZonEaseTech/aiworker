@@ -773,7 +773,7 @@ aiworker fleet list
 
 ### `aiworker fleet info <workerId>`
 
-经 gateway routing 转发到目标 worker 的 `/api/worker/info`，返回 `WorkerInfo` 快照：runtime version、brain sources（id / type / status / writeTarget / readOnly）、executor 与 controlExecutor（type / model / status）、channels（含 webhookUrl）。该数据不被缓存到 fleet.db；每次调用都是从目标 worker 本机现取。
+经 gateway routing 转发到目标 worker 的 `/api/worker/info`，返回 `WorkerInfo` 快照：runtime version、brain sources（id / type / status / writeTarget / readOnly）、executor，以及显式配置时的 controlExecutor（type / model / status）、channels（含 webhookUrl）。该数据不被缓存到 fleet.db；每次调用都是从目标 worker 本机现取。
 
 ### `aiworker fleet launch [--display-name <name>] [--image <image>] [--force-id <workerId>]`
 

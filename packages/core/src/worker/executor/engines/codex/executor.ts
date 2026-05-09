@@ -30,8 +30,6 @@ import { JsonRpcPeer, splitNdjson } from './protocol'
 
 /** Pinned Codex CLI version for the `npx` fallback. */
 export const DEFAULT_CODEX_CLI_VERSION = '0.121.0'
-/** Hard cap for one Codex turn. Overridable via options. */
-const DEFAULT_TIMEOUT_MS = 120_000
 /** Protocol version advertised on `initialize`. */
 const DEFAULT_PROTOCOL_VERSION = 1
 const CODEX_ENGINE = 'codex'
@@ -51,7 +49,7 @@ export interface CodexExecutorOptions {
   extraArgs?: string[]
   /** Env vars merged into the spawned process env. */
   env?: Record<string, string>
-  /** Per-turn hard timeout in ms (default 120_000). */
+  /** Optional per-turn watchdog in ms. Omitted means AIWorker will not kill Codex for duration. */
   timeoutMs?: number
   /**
    * Fallback workspace used when `AgentRunInput.workspacePath` is absent
@@ -137,7 +135,7 @@ export class CodexExecutor implements ExecutorProvider {
       onNotification: n => this.handleNotification(n, queue),
       onRequest: req => this.handleInboundRequest(req),
       onError: err => queue.push({ type: 'error', error: err.message }),
-      requestTimeoutMs: this.options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+      requestTimeoutMs: explicitTimeoutMs(this.options.timeoutMs),
     })
 
     let stdoutBuffer = ''
@@ -167,8 +165,10 @@ export class CodexExecutor implements ExecutorProvider {
       peer.dispose(msg)
     })
 
-    const timeoutMs = this.options.timeoutMs ?? DEFAULT_TIMEOUT_MS
-    const timeoutHandle = setTimeout(() => safeKill(child, 'SIGKILL'), timeoutMs)
+    const timeoutMs = explicitTimeoutMs(this.options.timeoutMs)
+    const timeoutHandle = timeoutMs === undefined
+      ? null
+      : setTimeout(() => safeKill(child, 'SIGKILL'), timeoutMs)
 
     let cancelled = false
     const abortHandler = () => {
@@ -261,7 +261,8 @@ export class CodexExecutor implements ExecutorProvider {
       yield { type: 'finish', reason: cancelled ? 'cancelled' : 'error' }
     }
     finally {
-      clearTimeout(timeoutHandle)
+      if (timeoutHandle)
+        clearTimeout(timeoutHandle)
       input.signal?.removeEventListener('abort', abortHandler)
       peer.dispose('run ended')
       ;(child.stdout as NodeJS.ReadableStream).off('data', stdoutHandler)
@@ -278,11 +279,10 @@ export class CodexExecutor implements ExecutorProvider {
   }
 
   private async handleInboundRequest(req: JsonRpcRequest): Promise<unknown> {
-    // FEAT-016 runs with `approval_policy: 'never'`, so the CLI shouldn't
-    // dispatch approval requests. Defensive fallback keeps the turn moving
-    // if the CLI asks anyway.
+    // Permission prompts are owned by the Codex runtime/profile. AIWorker
+    // does not broker executor-native approval by default.
     if (req.method === 'codex/request_permission' || req.method === 'session/request_permission')
-      return { outcome: { outcome: 'selected', optionId: 'allow' } }
+      return { outcome: { outcome: 'cancelled' } }
     throw new Error(`unsupported codex client method: ${req.method}`)
   }
 
@@ -291,9 +291,7 @@ export class CodexExecutor implements ExecutorProvider {
     model: string | undefined,
     workspacePath: string,
   ): Promise<CodexThreadHandle> {
-    const threadStartParams: CodexThreadStartParams = {
-      approval_policy: 'never',
-    }
+    const threadStartParams: CodexThreadStartParams = {}
     if (model && model.length > 0)
       threadStartParams.model = model
 
@@ -307,7 +305,6 @@ export class CodexExecutor implements ExecutorProvider {
     }
 
     const currentParams: CodexCurrentThreadStartParams = {
-      approvalPolicy: 'never',
       cwd: workspacePath,
       experimentalRawEvents: false,
       persistExtendedHistory: true,
@@ -331,7 +328,6 @@ export class CodexExecutor implements ExecutorProvider {
   ): Promise<CodexThreadHandle> {
     const params: CodexCurrentThreadResumeParams = {
       threadId: binding.threadId,
-      approvalPolicy: 'never',
       cwd: workspacePath,
       persistExtendedHistory: true,
     }
@@ -368,6 +364,12 @@ export class CodexExecutor implements ExecutorProvider {
       args: ['-y', `@openai/codex@${version}`, ...argv],
     }
   }
+}
+
+function explicitTimeoutMs(value: number | undefined): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+    ? value
+    : undefined
 }
 
 function isUnknownLegacyThreadStart(err: unknown): boolean {

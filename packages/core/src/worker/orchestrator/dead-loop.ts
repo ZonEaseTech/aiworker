@@ -8,11 +8,12 @@ import type { OrchestratorDeadLoopConfig } from '@zonease/aiworker-shared'
  * never enters one — defensive runtime detection still catches the long
  * tail. Every `tool_call` event arriving without an intervening
  * `assistant_message_delta` or tool progress increments a counter; once the
- * counter exceeds `threshold`, callers `signal()` to abort the run.
+ * counter exceeds `threshold`, callers emit observe-only warning telemetry.
+ * AIWorker does not abort the executor by default.
  *
- * Defaults: enabled, threshold = 8. Operators can disable via worker config
- * `orchestrator.deadLoop.enabled = false` when the workflow legitimately
- * involves long pure-tool sequences.
+ * Defaults: enabled, threshold = 8. Operators can disable warning telemetry
+ * via worker config `orchestrator.deadLoop.enabled = false` when the workflow
+ * legitimately involves long pure-tool sequences.
  */
 
 export const DEFAULT_DEAD_LOOP_THRESHOLD = 8

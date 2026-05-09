@@ -147,14 +147,14 @@ describe('PLAN-015 hot-reload 不变量', () => {
     })
   })
 
-  it('默认复用 task executor 作为 control executor', () => {
+  it('默认不配置 control executor，避免复用 task executor 做控制面调用', () => {
     const processes = makeProcessManager()
     try {
       const runtime = buildWorkerRuntime('w_control_default', buildBareConfig(), { processes })
       try {
-        expect(runtime.controlExecutor).toBe(runtime.executor)
-        expect(runtime.controlExecutorConfig).toEqual(runtime.config.executor)
-        expect(runtime.controlExecutorReusesTaskExecutor).toBe(true)
+        expect(runtime.controlExecutor).toBeUndefined()
+        expect(runtime.controlExecutorConfig).toBeUndefined()
+        expect(runtime.controlExecutorReusesTaskExecutor).toBe(false)
       }
       finally {
         runtime.dispose()

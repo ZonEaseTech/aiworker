@@ -17,8 +17,6 @@ import { buildSafeChildEnv } from '../../safe-env'
 import { extractRunMessages, renderHistoryAsUserPreamble } from '../common/run-input'
 import { extractSessionId, normalizeCursorLine, parseCursorLine, splitNdjson } from './normalize'
 
-/** Hard cap on one Cursor turn. Overridable via options. */
-const DEFAULT_TIMEOUT_MS = 120_000
 const CURSOR_ENGINE = 'cursor'
 
 export type CursorSpawnLike = (
@@ -34,7 +32,7 @@ export interface CursorExecutorOptions {
   extraArgs?: string[]
   /** Env vars merged into the spawned process env. */
   env?: Record<string, string>
-  /** Per-turn hard timeout in ms (default 120_000). */
+  /** Optional per-turn watchdog in ms. Omitted means AIWorker will not kill Cursor for duration. */
   timeoutMs?: number
   /**
    * Resume an earlier Cursor session. FEAT-016 wires the option but doesn't
@@ -131,8 +129,10 @@ export class CursorExecutor implements ExecutorProvider {
       // below will surface the real cause.
     }
 
-    const timeoutMs = this.options.timeoutMs ?? DEFAULT_TIMEOUT_MS
-    const timeoutHandle = setTimeout(() => safeKill(child, 'SIGKILL'), timeoutMs)
+    const timeoutMs = explicitTimeoutMs(this.options.timeoutMs)
+    const timeoutHandle = timeoutMs === undefined
+      ? null
+      : setTimeout(() => safeKill(child, 'SIGKILL'), timeoutMs)
 
     let stdoutBuffer = ''
     let childError: string | null = null
@@ -189,7 +189,8 @@ export class CursorExecutor implements ExecutorProvider {
       yield { type: 'error', error: err instanceof Error ? err.message : String(err) }
     }
     finally {
-      clearTimeout(timeoutHandle)
+      if (timeoutHandle)
+        clearTimeout(timeoutHandle)
       input.signal?.removeEventListener('abort', abortHandler)
       safeEndStdin(child)
     }
@@ -226,6 +227,12 @@ export class CursorExecutor implements ExecutorProvider {
     })
     return { cmd: direct, args }
   }
+}
+
+function explicitTimeoutMs(value: number | undefined): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+    ? value
+    : undefined
 }
 
 export function buildArgs(opts: { model?: string, resumeSessionId?: string, extraArgs?: string[] }): string[] {

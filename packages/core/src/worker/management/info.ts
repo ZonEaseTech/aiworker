@@ -103,19 +103,21 @@ export async function buildInfo(
     status: executorStatus,
   }
 
-  const controlExecutorConfig = storedConfig.orchestrator?.decisionPipeline?.executor ?? storedConfig.executor
-  const controlExecutorReusesTaskExecutor = runtime.controlExecutorReusesTaskExecutor
-    ?? (storedConfig.orchestrator?.decisionPipeline?.executor === undefined)
-  const controlExecutorStatus = controlExecutorReusesTaskExecutor
-    ? executorStatus
-    : await probe(() => (runtime.controlExecutor ?? runtime.executor).health())
-  const resolvedControlExecutorModel = executorInfoModel(controlExecutorConfig)
-  const controlExecutor: WorkerInfoControlExecutor = {
-    type: controlExecutorConfig.engine,
-    ...(resolvedControlExecutorModel === undefined ? {} : { model: resolvedControlExecutorModel }),
-    status: controlExecutorStatus,
-    reusesTaskExecutor: controlExecutorReusesTaskExecutor,
-  }
+  const controlExecutorConfig = storedConfig.orchestrator?.decisionPipeline?.executor
+  const resolvedControlExecutorModel = controlExecutorConfig === undefined
+    ? undefined
+    : executorInfoModel(controlExecutorConfig)
+  const runtimeControlExecutor = runtime.controlExecutor
+  const controlExecutor: WorkerInfoControlExecutor | undefined = controlExecutorConfig === undefined
+    ? undefined
+    : {
+        type: controlExecutorConfig.engine,
+        ...(resolvedControlExecutorModel === undefined ? {} : { model: resolvedControlExecutorModel }),
+        status: runtimeControlExecutor === undefined
+          ? 'unknown'
+          : await probe(() => runtimeControlExecutor.health()),
+        reusesTaskExecutor: runtime.controlExecutorReusesTaskExecutor ?? false,
+      }
 
   const channels: WorkerInfoChannel[] = storedConfig.channels.map((c) => {
     const url = webhookUrl(env.advertisedBaseUrl, c.channel)
@@ -138,10 +140,10 @@ export async function buildInfo(
       ...(storedConfig.orchestrator?.decisionPipeline?.qualityGate?.threshold === undefined
         ? {}
         : { qualityThreshold: storedConfig.orchestrator.decisionPipeline.qualityGate.threshold }),
-      conversationClassifierEnabled: true,
+      conversationClassifierEnabled: controlExecutorConfig !== undefined,
     }),
     executor,
-    controlExecutor,
+    ...(controlExecutor === undefined ? {} : { controlExecutor }),
     channels,
     evolutionEnabled: storedConfig.evolution.enabled,
     startedAt: state.startedAt,

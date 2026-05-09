@@ -100,17 +100,25 @@ doctor` 输出为准。
 ## Executor turn timeout
 
 `aiworker executor select --timeout-ms <n> --apply` 会把 per-turn hard timeout
-持久化到当前 worker 的 executor profile（`executor.overrides.timeoutMs`）。这会被
-Codex / Claude Code 等 adapter 用来限制外部 CLI 单轮执行时间。
+持久化到当前 worker 的 executor profile（`executor.overrides.timeoutMs`）。
+对 Codex / Claude Code / ACP / Cursor 这类 native executor，未显式设置
+`timeoutMs` 时 AIWorker **不会**安装单轮 kill timer；外部 runtime 可以按自己的
+原生 session、approval、sandbox 与工具循环继续执行。设置 `timeoutMs` 才表示
+operator 明确要求 AIWorker 在该时长后中断子进程。
 
 `aiworker run --timeout-ms <n>` 只控制 CLI 等待终态事件的最长时间；它不会临时改写
-worker 配置里的 executor hard timeout。需要长任务时，先调整 executor profile，再
-运行任务：
+worker 配置里的 executor hard timeout，也不会改变正在运行的 native executor。
+需要 AIWorker 管理 watchdog 时，先调整 executor profile，再运行任务：
 
 ```bash
 aiworker executor select --engine codex --timeout-ms 240000 --apply
 aiworker run --message "..." --timeout-ms 240000
 ```
+
+默认发行配置保持 observation-first：native adapter 不强制 Codex approval
+policy，不给 Claude Code 添加 `--dangerously-skip-permissions`，ACP 不默认 yolo /
+auto-approve。executor 的有效权限、MCP、skill、plugin、sandbox、approval 和登录态
+仍由外部 runtime / operator profile 自己管理。
 
 ## claude-code <a id="claude-code"></a>
 

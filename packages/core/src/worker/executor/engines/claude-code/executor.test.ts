@@ -196,6 +196,11 @@ describe('buildBaseArgs', () => {
     expect(args).not.toContain('--resume')
   })
 
+  it('does not bypass executor-native permissions by default', () => {
+    const args = buildBaseArgs('sonnet', undefined, 'sys')
+    expect(args).not.toContain('--dangerously-skip-permissions')
+  })
+
   it('projects explicit no-tools runs into Claude Code CLI flags', () => {
     const args = buildBaseArgs('sonnet', undefined, 'sys', { disableTools: true })
     expect(args).toContain('--tools')

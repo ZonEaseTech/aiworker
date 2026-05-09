@@ -18,13 +18,11 @@ import process from 'node:process'
 import { buildSafeChildEnv } from '../../safe-env'
 import { extractRunMessages, renderHistoryAsUserPreamble } from '../common/run-input'
 import { normalizeLine, parseLine, splitNdjson } from './normalize'
-import { autoApprovePolicy, ControlProtocolPeer } from './protocol'
+import { ControlProtocolPeer } from './protocol'
 
 /** Default CLI version used when neither env nor config pins one. */
 export const DEFAULT_CLAUDE_CLI_VERSION = '2.1.112'
 
-/** Hard cap on one turn; exceeding it emits an error + kills the child. */
-const DEFAULT_TIMEOUT_MS = 120_000
 const CLAUDE_CODE_ENGINE = 'claude-code'
 const CONTROL_NO_TOOLS_REASON = 'AIWorker control-plane evaluator calls run without tools'
 
@@ -44,9 +42,9 @@ export interface ClaudeCodeExecutorOptions {
   extraArgs?: string[]
   /** Env merged into the spawned process env. */
   env?: Record<string, string>
-  /** Per-turn hard timeout in ms; defaults to 120_000. */
+  /** Optional per-turn watchdog in ms. Omitted means AIWorker will not kill Claude Code for duration. */
   timeoutMs?: number
-  /** Approval policy; defaults to auto-approve. */
+  /** Approval policy. Omitted means deny-by-default. */
   policy?: ApprovalPolicy
   /**
    * Fallback workspace used when `AgentRunInput.workspacePath` is absent
@@ -140,7 +138,7 @@ export class ClaudeCodeExecutor implements ExecutorProvider {
     })
 
     const peer = new ControlProtocolPeer({
-      policy: disableTools ? denyAllToolsPolicy : (this.options.policy ?? autoApprovePolicy),
+      policy: disableTools ? denyAllToolsPolicy : this.options.policy,
       writeLine: (line) => {
         try {
           child.stdin.write(line)
@@ -158,8 +156,10 @@ export class ClaudeCodeExecutor implements ExecutorProvider {
       : latestUser
     peer.sendUserMessage(userText)
 
-    const timeoutMs = this.options.timeoutMs ?? DEFAULT_TIMEOUT_MS
-    const timeoutHandle = setTimeout(() => safeKill(child, 'SIGKILL'), timeoutMs)
+    const timeoutMs = explicitTimeoutMs(this.options.timeoutMs)
+    const timeoutHandle = timeoutMs === undefined
+      ? null
+      : setTimeout(() => safeKill(child, 'SIGKILL'), timeoutMs)
 
     let stdoutBuffer = ''
     let childError: string | null = null
@@ -218,7 +218,8 @@ export class ClaudeCodeExecutor implements ExecutorProvider {
       yield { type: 'error', error: err instanceof Error ? err.message : String(err) }
     }
     finally {
-      clearTimeout(timeoutHandle)
+      if (timeoutHandle)
+        clearTimeout(timeoutHandle)
       input.signal?.removeEventListener('abort', abortHandler)
       safeEndStdin(child)
     }
@@ -274,7 +275,6 @@ export function buildBaseArgs(
     '--input-format=stream-json',
     '--include-partial-messages',
     '--replay-user-messages',
-    '--dangerously-skip-permissions',
   ]
   if (options.disableTools === true) {
     args.push('--tools', '')
@@ -289,6 +289,12 @@ export function buildBaseArgs(
   if (extra && extra.length > 0)
     args.push(...extra)
   return args
+}
+
+function explicitTimeoutMs(value: number | undefined): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+    ? value
+    : undefined
 }
 
 function isNoToolsRun(input: AgentRunInput): boolean {

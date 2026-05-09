@@ -86,13 +86,11 @@ export const DEFAULT_PROFILES: {
     variants: {
       'default': {
         contextWindowTokens: 200_000,
-        timeoutMs: 120_000,
       } satisfies ClaudeCodeVariantBody,
       'opus-plan': {
         model: 'opus',
         contextWindowTokens: 200_000,
         permissionPolicy: 'plan',
-        timeoutMs: 180_000,
       } satisfies ClaudeCodeVariantBody,
     },
   },
@@ -101,12 +99,10 @@ export const DEFAULT_PROFILES: {
       gemini: {
         agent: 'gemini',
         contextWindowTokens: 1_000_000,
-        timeoutMs: 120_000,
       } satisfies AcpVariantBody,
       qwen: {
         agent: 'qwen',
         contextWindowTokens: 32_000,
-        timeoutMs: 120_000,
       } satisfies AcpVariantBody,
     },
   },
@@ -115,7 +111,6 @@ export const DEFAULT_PROFILES: {
       default: {
         model: 'gpt-5.5',
         contextWindowTokens: 128_000,
-        timeoutMs: 120_000,
       } satisfies CodexVariantBody,
     },
   },
@@ -123,7 +118,6 @@ export const DEFAULT_PROFILES: {
     variants: {
       default: {
         model: 'auto',
-        timeoutMs: 120_000,
       } satisfies CursorVariantBody,
     },
   },

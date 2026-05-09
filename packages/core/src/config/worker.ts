@@ -104,9 +104,11 @@ const schema = z.object({
    */
   CLAUDE_CLI_VERSION: z.string().optional(),
 
-  // ProcessManager（FEAT-015）—— slot 上限与 stall / GC 时延
+  // ProcessManager（FEAT-015）—— slot 上限与可选 stall / GC 时延。
+  // stall watchdog 默认为 0（关闭）：外部 executor 可能长时间思考或等待其原生
+  // permission/sandbox/session 机制，AIWorker 默认只排队和观察，不主动中断。
   MAX_CONCURRENT_TOTAL: z.coerce.number().int().min(1).default(4),
-  PROCESS_STALL_TIMEOUT_MS: z.coerce.number().int().min(1).default(120_000),
+  PROCESS_STALL_TIMEOUT_MS: z.coerce.number().int().min(0).default(0),
   PROCESS_KILL_TIMEOUT_MS: z.coerce.number().int().min(0).default(10_000),
   PROCESS_AUTO_CLEANUP_DELAY_MS: z.coerce.number().int().min(0).default(60_000),
   PROCESS_GC_INTERVAL_MS: z.coerce.number().int().min(0).default(30_000),

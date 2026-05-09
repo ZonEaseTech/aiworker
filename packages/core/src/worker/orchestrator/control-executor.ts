@@ -3,17 +3,18 @@ import type { ExecutorConfig, ExecutorProvider, WorkerConfig } from '@zonease/ai
 import { buildExecutor } from '../executor/factory'
 
 export interface ResolvedControlExecutor {
-  executor: ExecutorProvider
-  config: ExecutorConfig
+  executor?: ExecutorProvider
+  config?: ExecutorConfig
   reusesTaskExecutor: boolean
 }
 
 /**
  * Resolve the executor used by suppressed orchestrator control calls.
  *
- * Omitted `orchestrator.decisionPipeline.executor` keeps the FEAT-038 MVP
- * behavior by reusing the task executor instance. An explicit control executor
- * is built independently so model, timeout, and fallback settings can diverge.
+ * Omitted `orchestrator.decisionPipeline.executor` means there is no LLM
+ * control-plane executor. Control steps then use deterministic/fallback paths
+ * instead of borrowing the task executor and accidentally interfering with its
+ * native session, permission, sandbox, or tool loop.
  */
 export function resolveControlExecutor(input: {
   config: WorkerConfig
@@ -22,9 +23,7 @@ export function resolveControlExecutor(input: {
   const controlConfig = input.config.orchestrator?.decisionPipeline?.executor
   if (!controlConfig) {
     return {
-      executor: input.taskExecutor,
-      config: input.config.executor,
-      reusesTaskExecutor: true,
+      reusesTaskExecutor: false,
     }
   }
 

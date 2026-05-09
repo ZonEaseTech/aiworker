@@ -113,7 +113,8 @@ export interface OrchestratorQualityGateConfig {
 export interface OrchestratorDecisionPipelineConfig {
   /**
    * Optional control-plane executor for suppressed decision calls. When omitted,
-   * the orchestrator reuses `WorkerConfig.executor` for backward compatibility.
+   * LLM-mode control steps degrade to deterministic/fallback paths instead of
+   * reusing the task executor.
    */
   executor?: ExecutorConfig
   intentClassifier?: {
@@ -135,10 +136,10 @@ export interface OrchestratorDecisionPipelineConfig {
  * selected newest-backward until the configured token budget is filled.
  */
 /**
- * BUG-063: dead-loop detector. When the executor stream emits >`threshold`
- * `tool_call` events without any intervening `assistant_message_delta`,
- * abort the run and emit `orchestrator.aborted` with reason
- * `dead-loop-suspected:tool_call=N,no_text_delta`.
+ * BUG-063 / REFACTOR-026: dead-loop detector. When the executor stream emits
+ * >`threshold` `tool_call` events without any intervening
+ * `assistant_message_delta`, the orchestrator emits observe-only warning
+ * telemetry. It does not abort the external executor by default.
  *
  * Defaults: `{ enabled: true, threshold: 8 }`. Operators can disable in
  * worker config when the workflow legitimately involves long pure-tool

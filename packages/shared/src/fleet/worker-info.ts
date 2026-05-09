@@ -111,7 +111,7 @@ export interface WorkerInfoDecisionPipelineSummary {
     recent: DecisionPipelineRecent
   }
   conversationClassifier: {
-    /** True whenever an executor is wired up; false only if explicitly disabled. */
+    /** True when an explicit control-plane executor is configured. */
     enabled: boolean
     recent: ConversationClassifierRecent
   }

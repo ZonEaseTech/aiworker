@@ -171,6 +171,51 @@ describe('AcpExecutor — smoke over stub CLI', () => {
     }))
     expect(events.some(e => e.type === 'assistant_message_delta')).toBe(true)
   }, 15_000)
+
+  it('does not enable yolo / auto-approve flags by default', async () => {
+    let capturedArgs: string[] = []
+    const executor = new AcpExecutor({
+      agent: geminiAgent,
+      resolveBinary: async () => STUB_PATH,
+      spawn: (_cmd, args, opts) => {
+        capturedArgs = args
+        return spawn('node', [STUB_PATH, ...args], {
+          cwd: opts.cwd,
+          env: opts.env,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        })
+      },
+    })
+    await collect(executor.run({
+      messages: [{ role: 'user', content: 'hello' }],
+      workspacePath: tmpWorkspace,
+    }))
+    expect(capturedArgs).toContain('--experimental-acp')
+    expect(capturedArgs).not.toContain('--yolo')
+    expect(capturedArgs).not.toContain('--allowed-tools')
+  }, 15_000)
+
+  it('passes yolo flags only when autoApprove is explicitly enabled', async () => {
+    let capturedArgs: string[] = []
+    const executor = new AcpExecutor({
+      agent: geminiAgent,
+      autoApprove: true,
+      resolveBinary: async () => STUB_PATH,
+      spawn: (_cmd, args, opts) => {
+        capturedArgs = args
+        return spawn('node', [STUB_PATH, ...args], {
+          cwd: opts.cwd,
+          env: opts.env,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        })
+      },
+    })
+    await collect(executor.run({
+      messages: [{ role: 'user', content: 'hello' }],
+      workspacePath: tmpWorkspace,
+    }))
+    expect(capturedArgs).toContain('--yolo')
+  }, 15_000)
 })
 
 describe('resolveCliVersion', () => {

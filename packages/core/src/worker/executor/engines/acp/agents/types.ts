@@ -14,7 +14,7 @@ export interface AvailabilityInfo {
 export interface BuildArgsContext {
   /** Model id override from config, if any. */
   model?: string
-  /** Auto-approve mode — FEAT-013 runs agents in yolo mode. */
+  /** Auto-approve mode; false keeps executor-native permission behavior intact. */
   yolo: boolean
   /** Caller-supplied extra args, appended last. */
   extraArgs?: string[]

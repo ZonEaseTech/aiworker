@@ -406,7 +406,7 @@ export async function runServe(options: ServeOptions = {}): Promise<void> {
             intentEvaluator: decisionPipeline?.intentClassifier?.evaluator ?? 'heuristic',
             qualityEvaluator: decisionPipeline?.qualityGate?.evaluator ?? 'heuristic',
             qualityMode: decisionPipeline?.qualityGate?.mode ?? 'observe',
-            conversationClassifierEnabled: true,
+            conversationClassifierEnabled: decisionPipeline?.executor !== undefined,
           }
           if (decisionPipeline?.qualityGate?.threshold !== undefined)
             decisionPipelineConfig.qualityThreshold = decisionPipeline.qualityGate.threshold
