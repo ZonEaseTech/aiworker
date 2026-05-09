@@ -15,8 +15,8 @@ describe('scanBodyForSecrets', () => {
     expect(hits[0]?.preview).toContain('…')
   })
 
-  it('does not treat task-case style ids as sk- tokens', () => {
-    const id = 'inbox-task-case-dogfood-1-ad682bfd879d'
+  it('does not treat lesson promotion ids as sk- tokens', () => {
+    const id = 'lesson-task-review-dogfood-1-ad682bfd879d'
     expect(scanBodyForSecrets(id).hits).toEqual([])
     expect(redactBodySecrets(id).body).toBe(id)
   })

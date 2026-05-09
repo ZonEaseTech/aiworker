@@ -33,6 +33,8 @@ import {
   putSecret,
   readConfig,
   startGatewayNode,
+  LessonPromotionService,
+  WorkerReviewService,
   workerEnv,
 } from '@zonease/aiworker-core'
 import { resolveBrainHome } from '@zonease/aiworker-fs-layout'
@@ -496,6 +498,34 @@ export async function runServe(options: ServeOptions = {}): Promise<void> {
           if (artifact === null)
             throw stateError('not-found', `brain artifact "${id}" not found`)
           return { redacted: redact, artifact }
+        },
+        reviewsList: async ({ limit }) => {
+          const reviews = new WorkerReviewService({
+            config: state.runtime.config,
+            workerId: state.workerId,
+          }).listReviews({ limit })
+          return { reviews }
+        },
+        reviewsShow: async ({ taskId }) => {
+          const review = new WorkerReviewService({
+            config: state.runtime.config,
+            workerId: state.workerId,
+          }).getReview(taskId)
+          if (review === null)
+            throw stateError('not-found', `review "${taskId}" not found`)
+          return { review }
+        },
+        reviewsRerun: async ({ taskId, prompt }) => {
+          const run = await state.runtime.orchestrator.rerunTask(taskId, {
+            ...(prompt === undefined ? {} : { prompt }),
+          })
+          return { run }
+        },
+        reviewsLessonsPromote: async ({ taskId, scopeId, soulId }) => {
+          return new LessonPromotionService().promoteFromRun(taskId, {
+            ...(scopeId === undefined ? {} : { scopeId }),
+            ...(soulId === undefined ? {} : { soulId }),
+          })
         },
         executorTest: async ({ probe }) => {
           const stored = await readConfig(getWorkerDb())

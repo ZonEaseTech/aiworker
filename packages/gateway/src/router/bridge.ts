@@ -525,23 +525,23 @@ async function buildBridgeRequest(
     }
   }
 
-  if (path.workerApiPath === `${WORKER_API_PREFIX}/cases`) {
+  if (path.workerApiPath === `${WORKER_API_PREFIX}/reviews`) {
     if (req.method !== 'GET')
       return { ok: false, response: methodNotAllowed('GET') }
-    const query = caseListParams(url)
+    const query = reviewListParams(url)
     if (!query.ok)
       return { ok: false, response: jsonError(400, 'invalid-query', query.message) }
     return {
       ok: true,
       value: {
-        method: 'cases.list',
+        method: 'reviews.list',
         params: { workerId: path.workerId, ...query.value },
       },
     }
   }
 
-  const caseRerunMatch = path.workerApiPath.match(/^\/api\/worker\/cases\/([^/]+)\/rerun$/)
-  if (caseRerunMatch) {
+  const reviewRerunMatch = path.workerApiPath.match(/^\/api\/worker\/reviews\/([^/]+)\/rerun$/)
+  if (reviewRerunMatch) {
     if (req.method !== 'POST')
       return { ok: false, response: methodNotAllowed('POST') }
     const body = await readOptionalJsonBody(req)
@@ -549,24 +549,24 @@ async function buildBridgeRequest(
       return {
         ok: false,
         response: jsonError(body.status, body.code, body.message),
-        audit: { method: 'cases.rerun', errorCode: body.code },
+        audit: { method: 'reviews.rerun', errorCode: body.code },
       }
     }
-    const parsed = caseRerunBody(body.value)
+    const parsed = reviewRerunBody(body.value)
     if (!parsed.ok) {
       return {
         ok: false,
         response: jsonError(400, 'invalid-body', parsed.message),
-        audit: { method: 'cases.rerun', errorCode: 'invalid-body' },
+        audit: { method: 'reviews.rerun', errorCode: 'invalid-body' },
       }
     }
     return {
       ok: true,
       value: {
-        method: 'cases.rerun',
+        method: 'reviews.rerun',
         params: {
           workerId: path.workerId,
-          taskId: decodeURIComponent(caseRerunMatch[1]!),
+          taskId: decodeURIComponent(reviewRerunMatch[1]!),
           ...parsed.value,
         },
         transformResult: passThroughCreated,
@@ -574,8 +574,8 @@ async function buildBridgeRequest(
     }
   }
 
-  const caseLessonsProposeMatch = path.workerApiPath.match(/^\/api\/worker\/cases\/([^/]+)\/lessons\/propose$/)
-  if (caseLessonsProposeMatch) {
+  const reviewLessonsPromoteMatch = path.workerApiPath.match(/^\/api\/worker\/reviews\/([^/]+)\/lessons\/promote$/)
+  if (reviewLessonsPromoteMatch) {
     if (req.method !== 'POST')
       return { ok: false, response: methodNotAllowed('POST') }
     const body = await readOptionalJsonBody(req)
@@ -583,24 +583,24 @@ async function buildBridgeRequest(
       return {
         ok: false,
         response: jsonError(body.status, body.code, body.message),
-        audit: { method: 'cases.lessons.propose', errorCode: body.code },
+        audit: { method: 'reviews.lessons.promote', errorCode: body.code },
       }
     }
-    const parsed = caseLessonsProposeBody(body.value)
+    const parsed = reviewLessonsPromoteBody(body.value)
     if (!parsed.ok) {
       return {
         ok: false,
         response: jsonError(400, 'invalid-body', parsed.message),
-        audit: { method: 'cases.lessons.propose', errorCode: 'invalid-body' },
+        audit: { method: 'reviews.lessons.promote', errorCode: 'invalid-body' },
       }
     }
     return {
       ok: true,
       value: {
-        method: 'cases.lessons.propose',
+        method: 'reviews.lessons.promote',
         params: {
           workerId: path.workerId,
-          taskId: decodeURIComponent(caseLessonsProposeMatch[1]!),
+          taskId: decodeURIComponent(reviewLessonsPromoteMatch[1]!),
           ...parsed.value,
         },
         transformResult: passThroughCreated,
@@ -608,17 +608,17 @@ async function buildBridgeRequest(
     }
   }
 
-  const caseShowMatch = path.workerApiPath.match(/^\/api\/worker\/cases\/([^/]+)$/)
-  if (caseShowMatch) {
+  const reviewShowMatch = path.workerApiPath.match(/^\/api\/worker\/reviews\/([^/]+)$/)
+  if (reviewShowMatch) {
     if (req.method !== 'GET')
       return { ok: false, response: methodNotAllowed('GET') }
     return {
       ok: true,
       value: {
-        method: 'cases.show',
+        method: 'reviews.show',
         params: {
           workerId: path.workerId,
-          taskId: decodeURIComponent(caseShowMatch[1]!),
+          taskId: decodeURIComponent(reviewShowMatch[1]!),
         },
       },
     }
@@ -827,8 +827,8 @@ function brainArtifactsListParams(url: URL): QueryParseResult {
   }
 }
 
-function caseListParams(url: URL): QueryParseResult {
-  const limit = optionalCaseLimit(url)
+function reviewListParams(url: URL): QueryParseResult {
+  const limit = optionalReviewLimit(url)
   if (!limit.ok)
     return limit
   return {
@@ -865,7 +865,7 @@ function optionalPositiveInt(url: URL, key: string): { ok: true, value?: number 
   return { ok: true, value: parsed }
 }
 
-function optionalCaseLimit(url: URL): { ok: true, value?: number } | { ok: false, message: string } {
+function optionalReviewLimit(url: URL): { ok: true, value?: number } | { ok: false, message: string } {
   const value = url.searchParams.get('limit')
   if (value === null)
     return { ok: true }
@@ -911,7 +911,7 @@ function brainAdmissionDecisionBody(
   return { ok: true, value: out }
 }
 
-function caseRerunBody(value: unknown): { ok: true, value: Record<string, string> } | { ok: false, message: string } {
+function reviewRerunBody(value: unknown): { ok: true, value: Record<string, string> } | { ok: false, message: string } {
   if (value === undefined)
     return { ok: true, value: {} }
   if (value === null || typeof value !== 'object' || Array.isArray(value))
@@ -925,7 +925,7 @@ function caseRerunBody(value: unknown): { ok: true, value: Record<string, string
   }
 }
 
-function caseLessonsProposeBody(value: unknown): { ok: true, value: Record<string, string> } | { ok: false, message: string } {
+function reviewLessonsPromoteBody(value: unknown): { ok: true, value: Record<string, string> } | { ok: false, message: string } {
   if (value === undefined)
     return { ok: true, value: {} }
   if (value === null || typeof value !== 'object' || Array.isArray(value))

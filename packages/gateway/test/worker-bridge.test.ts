@@ -591,39 +591,39 @@ describe('gateway worker HTTP bridge', () => {
         body: { redacted: false, artifact: { id: 'a-1' } },
       })
       await expectForward({
-        path: `/w/${WORKER_ID}/api/worker/cases?limit=12`,
-        method: 'cases.list',
+        path: `/w/${WORKER_ID}/api/worker/reviews?limit=12`,
+        method: 'reviews.list',
         params: { workerId: WORKER_ID, limit: 12 },
-        result: { cases: [{ taskId: 'task-1' }] },
-        body: { cases: [{ taskId: 'task-1' }] },
+        result: { reviews: [{ taskId: 'task-1' }] },
+        body: { reviews: [{ taskId: 'task-1' }] },
       })
       await expectForward({
-        path: `/w/${WORKER_ID}/api/worker/cases/task%2F1`,
-        method: 'cases.show',
+        path: `/w/${WORKER_ID}/api/worker/reviews/task%2F1`,
+        method: 'reviews.show',
         params: { workerId: WORKER_ID, taskId: 'task/1' },
-        result: { case: { taskId: 'task/1' } },
-        body: { case: { taskId: 'task/1' } },
+        result: { review: { taskId: 'task/1' } },
+        body: { review: { taskId: 'task/1' } },
       })
       await expectForward({
-        path: `/w/${WORKER_ID}/api/worker/cases/task%2F1/rerun`,
+        path: `/w/${WORKER_ID}/api/worker/reviews/task%2F1/rerun`,
         init: {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ prompt: 'repair' }),
         },
-        method: 'cases.rerun',
+        method: 'reviews.rerun',
         params: { workerId: WORKER_ID, taskId: 'task/1', prompt: 'repair' },
-        result: { task: { id: 'task-child' } },
-        body: { task: { id: 'task-child' } },
+        result: { run: { id: 'task-child' } },
+        body: { run: { id: 'task-child' } },
       })
       await expectForward({
-        path: `/w/${WORKER_ID}/api/worker/cases/task%2F1/lessons/propose`,
+        path: `/w/${WORKER_ID}/api/worker/reviews/task%2F1/lessons/promote`,
         init: {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ scopeId: 'scope-1', soulId: 'developer' }),
         },
-        method: 'cases.lessons.propose',
+        method: 'reviews.lessons.promote',
         params: { workerId: WORKER_ID, taskId: 'task/1', scopeId: 'scope-1', soulId: 'developer' },
         result: { proposals: [{ id: 'p-1' }] },
         body: { proposals: [{ id: 'p-1' }] },

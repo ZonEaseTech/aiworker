@@ -1,15 +1,15 @@
 import type { AgentTaskStatus, WorkerConfig } from '@zonease/aiworker-shared'
-import type { BrainGateVerdict, BrainGateVerdictAction, BrainGateVerdictReason, BrainJournalTrace, ReadBrainJournalOptions } from '../journal'
+import type { BrainGateVerdict, BrainGateVerdictAction, BrainGateVerdictReason, BrainJournalTrace, ReadBrainJournalOptions } from '../brain/journal'
 
 import { agentTasks, getWorkerDb } from '@zonease/aiworker-storage-sqlite/worker'
 import { desc } from 'drizzle-orm'
 
-import { BrainJournalService } from '../journal'
+import { BrainJournalService } from '../brain/journal'
 
-export type BrainCaseDecisionStatus = 'ready_to_ship' | 'needs_review' | 'needs_rerun' | 'blocked'
+export type WorkerReviewDecisionStatus = 'ready_to_ship' | 'needs_review' | 'needs_rerun' | 'blocked'
 
-export interface BrainCaseReviewDecision {
-  status: BrainCaseDecisionStatus
+export interface WorkerReviewDecision {
+  status: WorkerReviewDecisionStatus
   action: BrainGateVerdictAction
   mode: BrainGateVerdict['mode']
   summary: string
@@ -18,7 +18,7 @@ export interface BrainCaseReviewDecision {
   nextActions: string[]
 }
 
-export interface BrainCaseOutcome {
+export interface WorkerReviewOutcome {
   taskStatus: AgentTaskStatus
   promptPreview: string
   assistantPreview?: string
@@ -27,7 +27,7 @@ export interface BrainCaseOutcome {
   error?: string
 }
 
-export interface BrainCaseEvidenceSummary {
+export interface WorkerReviewEvidenceSummary {
   messageCount: number
   toolEventCount: number
   journalEventCount: number
@@ -36,7 +36,7 @@ export interface BrainCaseEvidenceSummary {
   keyEvidenceRefs: string[]
 }
 
-export interface BrainCaseRiskSummary {
+export interface WorkerReviewRiskSummary {
   authorityMode: string
   executorNote: string
   risk: 'low' | 'medium' | 'high' | 'unknown'
@@ -47,7 +47,7 @@ export interface BrainCaseRiskSummary {
   observeOnlyReasonCount: number
 }
 
-export interface BrainCaseLessonCandidate {
+export interface WorkerReviewLessonCandidate {
   index: number
   kind: string
   summary: string
@@ -58,14 +58,14 @@ export interface BrainCaseLessonCandidate {
   sourceEventRef?: string
 }
 
-export interface BrainCaseLessonsSummary {
+export interface WorkerReviewLessonsSummary {
   candidateCount: number
-  candidates: BrainCaseLessonCandidate[]
+  candidates: WorkerReviewLessonCandidate[]
   proposalIds: string[]
   sourceEventRef?: string
 }
 
-export interface BrainCaseFile {
+export interface WorkerReview {
   version: 1
   workerId?: string
   taskId: string
@@ -77,36 +77,36 @@ export interface BrainCaseFile {
     createdAt: string
     finishedAt?: string
   }
-  reviewDecision: BrainCaseReviewDecision
-  outcome: BrainCaseOutcome
-  evidence: BrainCaseEvidenceSummary
-  risk: BrainCaseRiskSummary
-  lessons: BrainCaseLessonsSummary
+  reviewDecision: WorkerReviewDecision
+  outcome: WorkerReviewOutcome
+  evidence: WorkerReviewEvidenceSummary
+  risk: WorkerReviewRiskSummary
+  lessons: WorkerReviewLessonsSummary
   lineage: BrainJournalTrace['lineage']
   rawJournalRef: string
 }
 
-export interface BrainCaseListOptions extends ReadBrainJournalOptions {
+export interface WorkerReviewListOptions extends ReadBrainJournalOptions {
   limit?: number
 }
 
-export interface BrainCaseServiceDeps {
+export interface WorkerReviewServiceDeps {
   workerId?: string
   config?: WorkerConfig
 }
 
-export function createBrainCaseService(deps: BrainCaseServiceDeps = {}): BrainCaseService {
-  return new BrainCaseService(deps)
+export function createWorkerReviewService(deps: WorkerReviewServiceDeps = {}): WorkerReviewService {
+  return new WorkerReviewService(deps)
 }
 
-export class BrainCaseService {
+export class WorkerReviewService {
   private readonly journal: BrainJournalService
 
-  constructor(private readonly deps: BrainCaseServiceDeps = {}) {
+  constructor(private readonly deps: WorkerReviewServiceDeps = {}) {
     this.journal = new BrainJournalService(deps)
   }
 
-  listCases(options: BrainCaseListOptions = {}): BrainCaseFile[] {
+  listReviews(options: WorkerReviewListOptions = {}): WorkerReview[] {
     const limit = normalizeLimit(options.limit)
     const rows = getWorkerDb()
       .select({ id: agentTasks.id })
@@ -116,12 +116,12 @@ export class BrainCaseService {
       .all()
 
     return rows.flatMap((row) => {
-      const file = this.getCaseFile(row.id, options)
+      const file = this.getReview(row.id, options)
       return file === null ? [] : [file]
     })
   }
 
-  getCaseFile(taskId: string, options: ReadBrainJournalOptions = {}): BrainCaseFile | null {
+  getReview(taskId: string, options: ReadBrainJournalOptions = {}): WorkerReview | null {
     const trace = this.journal.getTaskTrace(taskId, options)
     if (trace === null) {
       return null
@@ -129,10 +129,10 @@ export class BrainCaseService {
     return this.fromTrace(trace)
   }
 
-  private fromTrace(trace: BrainJournalTrace): BrainCaseFile {
+  private fromTrace(trace: BrainJournalTrace): WorkerReview {
     const finalAssistant = selectFinalAssistant(trace)
     const brainReview = latestEvent(trace, 'brain_engine.review')
-    const lessonProposalEvent = latestEvent(trace, 'inbox.candidates_proposed')
+    const lessonProposalEvent = latestEvent(trace, 'lessons.promoted')
     const lessons = buildLessonsSummary(brainReview, lessonProposalEvent)
 
     return {
@@ -171,7 +171,7 @@ export class BrainCaseService {
   }
 }
 
-function buildReviewDecision(taskStatus: AgentTaskStatus, verdict: BrainGateVerdict): BrainCaseReviewDecision {
+function buildReviewDecision(taskStatus: AgentTaskStatus, verdict: BrainGateVerdict): WorkerReviewDecision {
   const status = canMarkReadyToShip(taskStatus, verdict)
     ? 'ready_to_ship'
     : decisionStatus(taskStatus, verdict.action)
@@ -186,7 +186,7 @@ function buildReviewDecision(taskStatus: AgentTaskStatus, verdict: BrainGateVerd
   }
 }
 
-function decisionStatus(taskStatus: AgentTaskStatus, action: BrainGateVerdictAction): BrainCaseDecisionStatus {
+function decisionStatus(taskStatus: AgentTaskStatus, action: BrainGateVerdictAction): WorkerReviewDecisionStatus {
   if (action === 'block') {
     return 'blocked'
   }
@@ -222,37 +222,37 @@ function numberValue(value: unknown): number | undefined {
   return Number.isInteger(value) && typeof value === 'number' ? value : undefined
 }
 
-function summarizeDecision(status: BrainCaseDecisionStatus, verdict: BrainGateVerdict): string {
+function summarizeDecision(status: WorkerReviewDecisionStatus, verdict: BrainGateVerdict): string {
   const firstReason = verdict.reasons[0]?.reason
   const suffix = firstReason === undefined ? '' : `: ${firstReason}`
   switch (status) {
     case 'ready_to_ship':
-      return `Case is ready to ship${suffix}`
+      return `Review is ready to ship${suffix}`
     case 'needs_review':
-      return `Case needs operator review${suffix}`
+      return `Review needs operator review${suffix}`
     case 'needs_rerun':
-      return `Case needs rerun or executor change${suffix}`
+      return `Review needs rerun or executor change${suffix}`
     case 'blocked':
-      return `Case is blocked${suffix}`
+      return `Review is blocked${suffix}`
   }
 }
 
-function nextActions(status: BrainCaseDecisionStatus, action: BrainGateVerdictAction): string[] {
+function nextActions(status: WorkerReviewDecisionStatus, action: BrainGateVerdictAction): string[] {
   if (status === 'ready_to_ship') {
     return ['deliver outcome', 'review lessons queue if candidates exist']
   }
   if (status === 'needs_rerun') {
     return action === 'switch-executor'
-      ? ['rerun with a different executor', 'compare child case evidence']
-      : ['rerun case with repair context', 'compare child case evidence']
+      ? ['rerun with a different executor', 'compare child run evidence']
+      : ['rerun with repair context', 'compare child run evidence']
   }
   if (status === 'blocked') {
     return ['resolve enforced blocker before delivery', 'keep canonical Brain unchanged']
   }
-  return ['inspect evidence and risk sections', 'approve, rerun, or hold case explicitly']
+  return ['inspect evidence and risk sections', 'approve, rerun, or hold review explicitly']
 }
 
-function buildRiskSummary(trace: BrainJournalTrace): BrainCaseRiskSummary {
+function buildRiskSummary(trace: BrainJournalTrace): WorkerReviewRiskSummary {
   const preflight = trace.authorityPreflight
   return {
     authorityMode: preflight?.authorityMode ?? trace.executor.authorityMode,
@@ -271,7 +271,7 @@ function buildRiskSummary(trace: BrainJournalTrace): BrainCaseRiskSummary {
 function buildLessonsSummary(
   brainReview: BrainJournalTrace['events'][number] | undefined,
   lessonProposalEvent: BrainJournalTrace['events'][number] | undefined,
-): BrainCaseLessonsSummary {
+): WorkerReviewLessonsSummary {
   const sourceEventRef = brainReview === undefined ? undefined : `brain_journal_events:${brainReview.id}`
   const candidates = normalizeLessonCandidates(brainReview?.payload.lessonCandidates, sourceEventRef)
   const proposalIds = stringArray(lessonProposalEvent?.payload.proposalIds)
@@ -283,11 +283,11 @@ function buildLessonsSummary(
   }
 }
 
-function normalizeLessonCandidates(value: unknown, sourceEventRef: string | undefined): BrainCaseLessonCandidate[] {
+function normalizeLessonCandidates(value: unknown, sourceEventRef: string | undefined): WorkerReviewLessonCandidate[] {
   if (!Array.isArray(value)) {
     return []
   }
-  return value.flatMap((raw, index): BrainCaseLessonCandidate[] => {
+  return value.flatMap((raw, index): WorkerReviewLessonCandidate[] => {
     if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
       return []
     }

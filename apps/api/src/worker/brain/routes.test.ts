@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { OpenAPIHono } from '@hono/zod-openapi'
-import { BrainAdmissionService, BrainArtifactRegistry, recordBrainJournalEvent } from '@zonease/aiworker-core'
-import { agentTasks, closeWorkerDb, getWorkerDb, initWorkerDb, runWorkerMigrations } from '@zonease/aiworker-storage-sqlite/worker'
+import { BrainAdmissionService, BrainArtifactRegistry } from '@zonease/aiworker-core'
+import { closeWorkerDb, initWorkerDb, runWorkerMigrations } from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 import { buildBrainRoutes } from './routes'
@@ -117,47 +117,6 @@ describe('buildBrainRoutes (PLAN-103)', () => {
     expect(json.redacted).toBe(true)
     const auth = json.proposals[0]?.payload?.auth as { token?: string } | undefined
     expect(auth?.token).toBe('<redacted>')
-  })
-
-  it('POST /inbox/from-task creates pending admission proposals from Brain Engine lessons', async () => {
-    getWorkerDb().insert(agentTasks).values({
-      id: 'task-inbox-api',
-      prompt: 'capture release lesson',
-      status: 'succeeded',
-      createdAt: '2026-05-09T04:20:00.000Z',
-      finishedAt: '2026-05-09T04:21:00.000Z',
-      result: { ok: true },
-    }).run()
-    recordBrainJournalEvent({
-      kind: 'brain_engine.review',
-      taskId: 'task-inbox-api',
-      payload: {
-        lessonCandidates: [
-          {
-            kind: 'build-release-procedure',
-            summary: 'Release readiness requires check/test/build gates.',
-            evidenceRefs: ['agent_tasks:task-inbox-api'],
-            confidence: 0.76,
-            risk: 'medium',
-          },
-        ],
-      },
-    })
-    const app = buildApp()
-    const res = await app.fetch(new Request('http://w/api/worker/brain/inbox/from-task/task-inbox-api', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scopeId: 'repo:aiworker', soulId: 'developer' }),
-    }))
-
-    expect(res.status).toBe(201)
-    const json = await res.json() as { proposals: Array<{ status: string, scopeId?: string, summary: string }> }
-    expect(json.proposals).toHaveLength(1)
-    expect(json.proposals[0]).toMatchObject({
-      scopeId: 'repo:aiworker',
-      status: 'pending',
-      summary: 'Release readiness requires check/test/build gates.',
-    })
   })
 
   it('GET /admission?showSensitive=true + AIWORKER_ADMIN_REVEAL=1 exposes raw payload secret-like values (BUG-061 gate)', async () => {

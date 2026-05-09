@@ -1,19 +1,19 @@
 /* eslint-disable react-hooks-extra/no-unnecessary-use-prefix */
-import type { WorkerArtifact, WorkerCaseFile, WorkerRun } from '@/worker/api'
+import type { WorkerArtifact, WorkerReview, WorkerRun } from '@/worker/api'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { WorkbenchPanel } from './workbench-panel'
 
 const mocks = vi.hoisted(() => ({
   artifacts: [] as WorkerArtifact[],
-  cases: [] as WorkerCaseFile[],
+  reviews: [] as WorkerReview[],
   runs: [] as WorkerRun[],
   submitTask: vi.fn(),
 }))
 
 vi.mock('@/worker/lib/hooks', () => ({
   useReviews: () => ({
-    data: { reviews: mocks.cases },
+    data: { reviews: mocks.reviews },
     error: null,
     isLoading: false,
   }),
@@ -63,12 +63,12 @@ describe('worker workbench panel', () => {
   beforeEach(() => {
     mocks.runs = [makeRun()]
     mocks.artifacts = [makeArtifact()]
-    mocks.cases = [makeCaseFile()]
+    mocks.reviews = [makeReview()]
     mocks.submitTask.mockReset()
     mocks.submitTask.mockResolvedValue(makeRun({ id: 'run-created', prompt: 'created prompt' }))
   })
 
-  it('renders packs, run timeline, artifact metadata, and case review', () => {
+  it('renders packs, run timeline, artifact metadata, and review', () => {
     render(<WorkbenchPanel />)
 
     expect(screen.getByTestId('worker-workbench-panel')).toBeTruthy()
@@ -77,7 +77,7 @@ describe('worker workbench panel', () => {
     expect(screen.getByRole('button', { name: /Review current change/ })).toBeTruthy()
     expect(screen.getAllByText('run-1').length).toBeGreaterThan(0)
     expect(screen.getByText('reports/summary.md')).toBeTruthy()
-    expect(screen.getByText('Case is ready to ship')).toBeTruthy()
+    expect(screen.getByText('Review is ready to ship')).toBeTruthy()
   })
 
   it('updates the composer from template selection and submits through the run contract', async () => {
@@ -127,7 +127,7 @@ function makeArtifact(): WorkerArtifact {
   }
 }
 
-function makeCaseFile(): WorkerCaseFile {
+function makeReview(): WorkerReview {
   return {
     evidence: {
       journalEventCount: 2,
@@ -169,10 +169,10 @@ function makeCaseFile(): WorkerCaseFile {
         evidenceRefs: ['brain_journal_events:1'],
         mode: 'observe-only',
         reason: 'evidence is sufficient',
-        source: 'case-review',
+        source: 'worker-review',
       }],
       status: 'ready_to_ship',
-      summary: 'Case is ready to ship',
+      summary: 'Review is ready to ship',
     },
     risk: {
       authorityMode: 'unmanaged_ambient',

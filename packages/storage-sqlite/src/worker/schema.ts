@@ -220,8 +220,8 @@ export const evolutionObservations = sqliteTable(
 
 /**
  * Decision pipeline recent samples (TODO-028). Unlike the process-local ring
- * buffer, this table lets one-shot CLI runs contribute to a later
- * `aiworker brain status` invocation in a new process. It is observability
+ * buffer, this table lets one-shot CLI runs contribute to later
+ * worker diagnostics in a new process. It is observability
  * data, not audit; bounded reads keep only the latest window per stage.
  */
 export const decisionPipelineSamples = sqliteTable(

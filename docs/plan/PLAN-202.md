@@ -132,3 +132,12 @@ Verification:
   CLI review tests no longer carry public case wrappers. Focused API/web/CLI
   tests, API/Web/CLI typecheck, `git diff --check`, and CRG review pass. Gateway
   protocol and core service naming remain for S4 removal/renaming.
+- 2026-05-09 21:19: Completed S4 runtime naming cleanup. Core review projection
+  now exports `WorkerReviewService`; lesson promotion now exports
+  `LessonPromotionService`; gateway worker bridge uses `reviews.list/show/rerun`
+  and `reviews.lessons.promote`; orphan CLI `brain` command modules/tests were
+  deleted; Soul pack durable-governance wording now points at reviewed lesson
+  promotion instead of hidden Brain CLI commands. Focused tests and typechecks
+  passed across core, gateway, API, CLI, Web, shared, and storage; CRG reported
+  medium risk due breadth, with the bridge/review paths covered by focused
+  tests.

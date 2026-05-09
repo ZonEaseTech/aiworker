@@ -465,45 +465,45 @@ const brainArtifactsShowMethod = defineMethod({
   routing: 'operator-to-node',
 })
 
-// ---- cases.* ----
+// ---- reviews.* ----
 
-const casesListMethod = defineMethod({
-  method: 'cases.list',
-  description: '列出目标 worker 的 Worker Case File 投影。',
+const reviewsListMethod = defineMethod({
+  method: 'reviews.list',
+  description: '列出目标 worker 的 Worker Review 投影。',
   params: z.object({
     workerId: z.string().min(1),
     limit: z.number().int().min(1).max(200).optional(),
   }),
-  result: z.object({ cases: z.array(z.unknown()) }),
+  result: z.object({ reviews: z.array(z.unknown()) }),
   routing: 'operator-to-node',
 })
 
-const casesShowMethod = defineMethod({
-  method: 'cases.show',
-  description: '读取目标 worker 的单条 Worker Case File。',
+const reviewsShowMethod = defineMethod({
+  method: 'reviews.show',
+  description: '读取目标 worker 的单条 Worker Review。',
   params: z.object({
     workerId: z.string().min(1),
     taskId: z.string().min(1),
   }),
-  result: z.object({ case: z.unknown() }),
+  result: z.object({ review: z.unknown() }),
   routing: 'operator-to-node',
 })
 
-const casesRerunMethod = defineMethod({
-  method: 'cases.rerun',
-  description: '基于目标 worker 的 Worker Case 创建 bounded rerun。',
+const reviewsRerunMethod = defineMethod({
+  method: 'reviews.rerun',
+  description: '基于目标 worker 的 Worker Review 创建 bounded rerun。',
   params: z.object({
     workerId: z.string().min(1),
     taskId: z.string().min(1),
     prompt: z.string().min(1).max(8000).optional(),
   }),
-  result: z.object({ task: z.unknown() }),
+  result: z.object({ run: z.unknown() }),
   routing: 'operator-to-node',
 })
 
-const casesLessonsProposeMethod = defineMethod({
-  method: 'cases.lessons.propose',
-  description: '从目标 worker 的 Worker Case Lessons Queue 创建 Brain admission proposals。',
+const reviewsLessonsPromoteMethod = defineMethod({
+  method: 'reviews.lessons.promote',
+  description: '从目标 worker 的 review lesson queue 创建 pending durable-context proposals。',
   params: z.object({
     workerId: z.string().min(1),
     taskId: z.string().min(1),
@@ -731,10 +731,10 @@ export const METHODS = {
   'brain.admission.apply': brainAdmissionApplyMethod,
   'brain.artifacts.list': brainArtifactsListMethod,
   'brain.artifacts.show': brainArtifactsShowMethod,
-  'cases.list': casesListMethod,
-  'cases.show': casesShowMethod,
-  'cases.rerun': casesRerunMethod,
-  'cases.lessons.propose': casesLessonsProposeMethod,
+  'reviews.list': reviewsListMethod,
+  'reviews.show': reviewsShowMethod,
+  'reviews.rerun': reviewsRerunMethod,
+  'reviews.lessons.promote': reviewsLessonsPromoteMethod,
   'executor.test': executorTestMethod,
   'channel.test': channelTestMethod,
   'orchestrator.tasks.list': orchestratorTasksListMethod,

@@ -105,10 +105,10 @@ export interface NodeHandlers {
     showSensitive?: boolean
   }) => Promise<unknown>
   brainArtifactsShow?: (input: { id: string, showSensitive?: boolean }) => Promise<unknown>
-  casesList?: (input: { limit?: number }) => Promise<{ cases: unknown[] }>
-  casesShow?: (input: { taskId: string }) => Promise<{ case: unknown }>
-  casesRerun?: (input: { taskId: string, prompt?: string }) => Promise<{ task: unknown }>
-  casesLessonsPropose?: (input: { taskId: string, scopeId?: string, soulId?: string }) => Promise<unknown>
+  reviewsList?: (input: { limit?: number }) => Promise<{ reviews: unknown[] }>
+  reviewsShow?: (input: { taskId: string }) => Promise<{ review: unknown }>
+  reviewsRerun?: (input: { taskId: string, prompt?: string }) => Promise<{ run: unknown }>
+  reviewsLessonsPromote?: (input: { taskId: string, scopeId?: string, soulId?: string }) => Promise<unknown>
   executorTest?: (input: { probe?: boolean }) => Promise<unknown>
   channelTest?: (input: { channel: ChannelType, body?: { chatId?: string, text?: string } }) => Promise<unknown>
   tasksList?: () => Promise<{ tasks: unknown[] }>
@@ -235,17 +235,17 @@ export class GatewayDispatcher {
         case METHODS['brain.artifacts.show'].method:
           await this.handleBrainArtifactsShow(id, p)
           break
-        case METHODS['cases.list'].method:
-          await this.handleCasesList(id, p)
+        case METHODS['reviews.list'].method:
+          await this.handleReviewsList(id, p)
           break
-        case METHODS['cases.show'].method:
-          await this.handleCasesShow(id, p)
+        case METHODS['reviews.show'].method:
+          await this.handleReviewsShow(id, p)
           break
-        case METHODS['cases.rerun'].method:
-          await this.handleCasesRerun(id, p)
+        case METHODS['reviews.rerun'].method:
+          await this.handleReviewsRerun(id, p)
           break
-        case METHODS['cases.lessons.propose'].method:
-          await this.handleCasesLessonsPropose(id, p)
+        case METHODS['reviews.lessons.promote'].method:
+          await this.handleReviewsLessonsPromote(id, p)
           break
         case METHODS['executor.test'].method:
           await this.handleExecutorTest(id, p)
@@ -733,42 +733,42 @@ export class GatewayDispatcher {
     }
   }
 
-  private async handleCasesList(id: string, params: Record<string, unknown>): Promise<void> {
-    if (!this.deps.handlers?.casesList) {
-      this.replyError(id, 'method_not_implemented', 'cases.list handler not wired')
+  private async handleReviewsList(id: string, params: Record<string, unknown>): Promise<void> {
+    if (!this.deps.handlers?.reviewsList) {
+      this.replyError(id, 'method_not_implemented', 'reviews.list handler not wired')
       return
     }
     if (!this.ensureWorkerMatch(id, params))
       return
-    this.replyOk(id, await this.deps.handlers.casesList({
+    this.replyOk(id, await this.deps.handlers.reviewsList({
       ...(typeof params.limit === 'number' ? { limit: params.limit } : {}),
     }))
   }
 
-  private async handleCasesShow(id: string, params: Record<string, unknown>): Promise<void> {
-    if (!this.deps.handlers?.casesShow) {
-      this.replyError(id, 'method_not_implemented', 'cases.show handler not wired')
+  private async handleReviewsShow(id: string, params: Record<string, unknown>): Promise<void> {
+    if (!this.deps.handlers?.reviewsShow) {
+      this.replyError(id, 'method_not_implemented', 'reviews.show handler not wired')
       return
     }
     if (!this.ensureWorkerMatch(id, params))
       return
     try {
-      this.replyOk(id, await this.deps.handlers.casesShow({ taskId: String(params.taskId) }))
+      this.replyOk(id, await this.deps.handlers.reviewsShow({ taskId: String(params.taskId) }))
     }
     catch (err) {
       this.replyBrainError(id, err)
     }
   }
 
-  private async handleCasesRerun(id: string, params: Record<string, unknown>): Promise<void> {
-    if (!this.deps.handlers?.casesRerun) {
-      this.replyError(id, 'method_not_implemented', 'cases.rerun handler not wired')
+  private async handleReviewsRerun(id: string, params: Record<string, unknown>): Promise<void> {
+    if (!this.deps.handlers?.reviewsRerun) {
+      this.replyError(id, 'method_not_implemented', 'reviews.rerun handler not wired')
       return
     }
     if (!this.ensureWorkerMatch(id, params))
       return
     try {
-      this.replyOk(id, await this.deps.handlers.casesRerun({
+      this.replyOk(id, await this.deps.handlers.reviewsRerun({
         taskId: String(params.taskId),
         ...(typeof params.prompt === 'string' ? { prompt: params.prompt } : {}),
       }))
@@ -778,15 +778,15 @@ export class GatewayDispatcher {
     }
   }
 
-  private async handleCasesLessonsPropose(id: string, params: Record<string, unknown>): Promise<void> {
-    if (!this.deps.handlers?.casesLessonsPropose) {
-      this.replyError(id, 'method_not_implemented', 'cases.lessons.propose handler not wired')
+  private async handleReviewsLessonsPromote(id: string, params: Record<string, unknown>): Promise<void> {
+    if (!this.deps.handlers?.reviewsLessonsPromote) {
+      this.replyError(id, 'method_not_implemented', 'reviews.lessons.promote handler not wired')
       return
     }
     if (!this.ensureWorkerMatch(id, params))
       return
     try {
-      this.replyOk(id, await this.deps.handlers.casesLessonsPropose({
+      this.replyOk(id, await this.deps.handlers.reviewsLessonsPromote({
         taskId: String(params.taskId),
         ...(params.scopeId === undefined ? {} : { scopeId: String(params.scopeId) }),
         ...(params.soulId === undefined ? {} : { soulId: String(params.soulId) }),

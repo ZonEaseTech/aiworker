@@ -5,7 +5,6 @@ import { OpenAPIHono } from '@hono/zod-openapi'
 import {
   BrainAdmissionService,
   BrainArtifactRegistry,
-  BrainInboxService,
   buildBrainSummary,
 } from '@zonease/aiworker-core'
 import { resolveBrainHome } from '@zonease/aiworker-fs-layout'
@@ -74,11 +73,6 @@ const applyBody = z.object({
   allowSecretBody: z.enum(['block', 'redact', 'raw']).optional(),
 })
 
-const inboxFromTaskBody = z.object({
-  scopeId: z.string().min(1).max(200).optional(),
-  soulId: z.string().min(1).max(200).optional(),
-})
-
 /**
  * TODO-009: debug-only inbound `propose` body. The route is gated by the
  * `WORKER_DEV_TOOLS=true` env so production deployments cannot accept these
@@ -119,9 +113,6 @@ function admissionService() {
 }
 function artifactRegistry() {
   return new BrainArtifactRegistry()
-}
-function inboxService() {
-  return new BrainInboxService()
 }
 
 export function buildBrainRoutes(deps: BrainRoutesDeps) {
@@ -165,31 +156,6 @@ export function buildBrainRoutes(deps: BrainRoutesDeps) {
       proposals: result.proposals,
       skipped: result.skipped,
     })
-  })
-
-  routes.post('/inbox/from-task/:taskId', async (c) => {
-    const raw = await c.req.json().catch(() => ({}))
-    const parsed = inboxFromTaskBody.safeParse(raw ?? {})
-    if (!parsed.success) {
-      return c.json({
-        error: { code: 'invalid-body', message: parsed.error.message },
-      }, 400)
-    }
-    try {
-      const result = inboxService().proposeFromTask(c.req.param('taskId'), parsed.data)
-      return c.json(result, 201)
-    }
-    catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      if (message.includes('not found')) {
-        return c.json({
-          error: { code: 'not-found', message },
-        }, 404)
-      }
-      return c.json({
-        error: { code: 'inbox-propose-failed', message },
-      }, 400)
-    }
   })
 
   routes.get('/admission/:id', (c) => {

@@ -1,4 +1,4 @@
-import type { WorkerArtifact, WorkerCaseFile, WorkerCaseLessonCandidate, WorkerRun } from '@/worker/api'
+import type { WorkerArtifact, WorkerReview, WorkerReviewLessonCandidate, WorkerRun } from '@/worker/api'
 import {
   Archive,
   FileSearch,
@@ -172,7 +172,7 @@ function ReviewList({
   activeRunId,
   onSelect,
 }: {
-  reviews: WorkerCaseFile[]
+  reviews: WorkerReview[]
   isLoading: boolean
   error: unknown
   activeRunId?: string
@@ -386,8 +386,8 @@ function LessonCard({
   disabled,
   onPromote,
 }: {
-  candidate: WorkerCaseLessonCandidate
-  review: WorkerCaseFile
+  candidate: WorkerReviewLessonCandidate
+  review: WorkerReview
   disabled: boolean
   onPromote: () => void
 }) {
@@ -464,7 +464,7 @@ function ReviewBlock({
   )
 }
 
-function LessonItem({ candidate }: { candidate: WorkerCaseLessonCandidate }) {
+function LessonItem({ candidate }: { candidate: WorkerReviewLessonCandidate }) {
   return (
     <li className="rounded-sm border border-hairline bg-background p-3 text-sm">
       <div className="mb-2 flex flex-wrap items-center gap-2">

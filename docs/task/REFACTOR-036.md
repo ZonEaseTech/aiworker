@@ -109,3 +109,10 @@ concepts keep shaping the default mental model.
   client/hooks, removed daemon dispatcher case handlers, and retired CLI case
   wrapper tests/functions. Verification: focused API/web/CLI tests,
   API/Web/CLI typecheck, `git diff --check`, and CRG review.
+- 2026-05-09 21:19: S4 runtime naming cleanup complete. Renamed core
+  Case/Inbox services to `WorkerReviewService` and `LessonPromotionService`,
+  moved them out of `worker/brain/*`, switched gateway bridge protocol to
+  `reviews.*`, removed orphan CLI brain command modules/tests, and refreshed
+  Soul pack durable-governance wording around lesson promotion. Verification:
+  focused core/gateway/API/CLI/Web/shared tests, package typechecks, storage
+  typecheck, `git diff --check`, and CRG review.

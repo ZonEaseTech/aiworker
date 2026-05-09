@@ -75,42 +75,42 @@ export {
 // Brain brief compiler (PLAN-102)：把 canonical brain（AGENT/SOUL/USER/MEMORY
 // /ROLLUP、scope manifest、Soul module、artifact registry、admission service）
 // 投影成 task-specific brief。preview-only：orchestrator 不默认替换粗粒度
-// persona 拼接，CLI `aiworker brain brief` 给 operator 预览用。
+// persona 拼接；worker review surfaces may reuse it for inspected run context.
 export {
   BrainBriefCompiler,
   type BrainBriefCompilerDeps,
   createBrainBriefCompiler,
 } from './worker/brain/brief'
 
-// Worker Case surface (FEAT-057)：operator-facing projection over Brain
+// Worker Review surface (FEAT-057)：operator-facing projection over Brain
 // Journal / Gate / Brain Engine review / lessons. It is derived evidence, not
 // another mutable task log or executor harness.
 export {
-  type BrainCaseDecisionStatus,
-  type BrainCaseEvidenceSummary,
-  type BrainCaseFile,
-  type BrainCaseLessonCandidate,
-  type BrainCaseLessonsSummary,
-  type BrainCaseListOptions,
-  type BrainCaseOutcome,
-  type BrainCaseReviewDecision,
-  type BrainCaseRiskSummary,
-  BrainCaseService,
-  createBrainCaseService,
-} from './worker/brain/cases'
+  type WorkerReviewDecisionStatus,
+  type WorkerReviewEvidenceSummary,
+  type WorkerReview,
+  type WorkerReviewLessonCandidate,
+  type WorkerReviewLessonsSummary,
+  type WorkerReviewListOptions,
+  type WorkerReviewOutcome,
+  type WorkerReviewDecision,
+  type WorkerReviewRiskSummary,
+  WorkerReviewService,
+  createWorkerReviewService,
+} from './worker/reviews'
 
 // Brain diagnostics：CLI / 管理 API 共用的只读 source 摘要。
 export { type BrainSourceDiagnostic, describeBrainSource } from './worker/brain/diagnostics'
 
-// Brain Inbox (PLAN-178)：turn Brain Engine lesson candidates into pending
+// Lesson Promotion (PLAN-178)：turn Worker review lesson candidates into pending
 // Brain admission proposals without writing canonical memory automatically.
 export {
-  type BrainInboxCandidate,
-  type BrainInboxProposalResult,
-  BrainInboxService,
-  createBrainInboxService,
-  type ProposeBrainInboxFromTaskOptions,
-} from './worker/brain/inbox'
+  type LessonPromotionCandidate,
+  type LessonPromotionProposalResult,
+  LessonPromotionService,
+  createLessonPromotionService,
+  type PromoteLessonsFromRunOptions,
+} from './worker/lessons'
 
 // Brain Journal trace (PLAN-174)：worker-local append-only proof-loop trace.
 // It records task / decision / gate / executor observations without admitting

@@ -1,7 +1,7 @@
 import type { WorkerRuntime } from '@zonease/aiworker-core'
 import type { WorkerContext } from '../../context'
 
-import { BrainCaseService, BrainInboxService } from '@zonease/aiworker-core'
+import { WorkerReviewService, LessonPromotionService } from '@zonease/aiworker-core'
 import consola from 'consola'
 
 import { buildRuntime, loadWorkerContext } from '../../context'
@@ -42,10 +42,10 @@ async function withRuntime<T>(fn: (ctx: WorkerContext, runtime: WorkerRuntime) =
 export async function runReviewList(options: ReviewListOptions = {}): Promise<number> {
   try {
     return await withWorkerContext(async (ctx) => {
-      const reviews = new BrainCaseService({
+      const reviews = new WorkerReviewService({
         config: ctx.hydrated,
         workerId: ctx.workerId,
-      }).listCases({ limit: options.limit })
+      }).listReviews({ limit: options.limit })
       console.log(JSON.stringify({ workerId: ctx.workerId, reviews }, null, 2))
       return 0
     })
@@ -63,10 +63,10 @@ export async function runReviewShow(taskId: string, options: ReviewShowOptions =
   }
   try {
     return await withWorkerContext(async (ctx) => {
-      const review = new BrainCaseService({
+      const review = new WorkerReviewService({
         config: ctx.hydrated,
         workerId: ctx.workerId,
-      }).getCaseFile(taskId, { redactSensitive: options.showSensitive !== true })
+      }).getReview(taskId, { redactSensitive: options.showSensitive !== true })
       if (review === null) {
         consola.error(`[aiworker review show] review not found: ${taskId}`)
         return 1
@@ -91,10 +91,10 @@ export async function runReviewRerun(taskId: string, options: ReviewRerunOptions
       const run = await runtime.orchestrator.rerunTask(taskId, {
         ...(options.prompt === undefined ? {} : { prompt: options.prompt }),
       })
-      const review = new BrainCaseService({
+      const review = new WorkerReviewService({
         config: ctx.hydrated,
         workerId: ctx.workerId,
-      }).getCaseFile(run.id)
+      }).getReview(run.id)
       console.log(JSON.stringify({
         workerId: ctx.workerId,
         run,
@@ -116,14 +116,14 @@ export async function runReviewPromoteLessons(taskId: string, options: ReviewPro
   }
   try {
     return await withWorkerContext(async (ctx) => {
-      const promotion = new BrainInboxService().proposeFromTask(taskId, {
+      const promotion = new LessonPromotionService().promoteFromRun(taskId, {
         ...(options.scopeId === undefined ? {} : { scopeId: options.scopeId }),
         ...(options.soulId === undefined ? {} : { soulId: options.soulId }),
       })
-      const review = new BrainCaseService({
+      const review = new WorkerReviewService({
         config: ctx.hydrated,
         workerId: ctx.workerId,
-      }).getCaseFile(taskId)
+      }).getReview(taskId)
       console.log(JSON.stringify({
         workerId: ctx.workerId,
         promotion,

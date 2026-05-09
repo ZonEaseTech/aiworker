@@ -493,26 +493,26 @@ export interface MessageRow {
   createdAt: string
 }
 
-export type WorkerCaseDecisionStatus = 'ready_to_ship' | 'needs_review' | 'needs_rerun' | 'blocked'
+export type WorkerReviewDecisionStatus = 'ready_to_ship' | 'needs_review' | 'needs_rerun' | 'blocked'
 
-export interface WorkerCaseReason {
+export interface WorkerReviewReason {
   source: string
   mode: string
   reason: string
   evidenceRefs?: string[]
 }
 
-export interface WorkerCaseReviewDecision {
-  status: WorkerCaseDecisionStatus
+export interface WorkerReviewDecision {
+  status: WorkerReviewDecisionStatus
   action: string
   mode: string
   summary: string
-  reasons: WorkerCaseReason[]
+  reasons: WorkerReviewReason[]
   evidenceRefs: string[]
   nextActions: string[]
 }
 
-export interface WorkerCaseLessonCandidate {
+export interface WorkerReviewLessonCandidate {
   index: number
   kind: string
   summary: string
@@ -523,7 +523,7 @@ export interface WorkerCaseLessonCandidate {
   sourceEventRef?: string
 }
 
-export interface WorkerCaseFile {
+export interface WorkerReview {
   version: 1
   workerId?: string
   taskId: string
@@ -535,7 +535,7 @@ export interface WorkerCaseFile {
     createdAt: string
     finishedAt?: string
   }
-  reviewDecision: WorkerCaseReviewDecision
+  reviewDecision: WorkerReviewDecision
   outcome: {
     taskStatus: string
     promptPreview: string
@@ -564,7 +564,7 @@ export interface WorkerCaseFile {
   }
   lessons: {
     candidateCount: number
-    candidates: WorkerCaseLessonCandidate[]
+    candidates: WorkerReviewLessonCandidate[]
     proposalIds: string[]
     sourceEventRef?: string
   }
@@ -603,16 +603,16 @@ export function getWorkerArtifact(id: string): Promise<{ artifact: WorkerArtifac
   return workerFetch<{ artifact: WorkerArtifact }>(`/api/worker/artifacts/${encodeURIComponent(id)}`)
 }
 
-export function listReviews(limit = 50): Promise<{ reviews: WorkerCaseFile[] }> {
-  return workerFetch<{ reviews: WorkerCaseFile[] }>(`/api/worker/reviews?limit=${encodeURIComponent(String(limit))}`)
+export function listReviews(limit = 50): Promise<{ reviews: WorkerReview[] }> {
+  return workerFetch<{ reviews: WorkerReview[] }>(`/api/worker/reviews?limit=${encodeURIComponent(String(limit))}`)
 }
 
-export function getReviewFile(taskId: string): Promise<{ review: WorkerCaseFile }> {
-  return workerFetch<{ review: WorkerCaseFile }>(`/api/worker/reviews/${encodeURIComponent(taskId)}`)
+export function getReviewFile(taskId: string): Promise<{ review: WorkerReview }> {
+  return workerFetch<{ review: WorkerReview }>(`/api/worker/reviews/${encodeURIComponent(taskId)}`)
 }
 
 export async function rerunReview(taskId: string, prompt?: string): Promise<WorkerRun> {
-  const res = await workerFetch<{ run: WorkerRun, review?: WorkerCaseFile }>(`/api/worker/reviews/${encodeURIComponent(taskId)}/rerun`, {
+  const res = await workerFetch<{ run: WorkerRun, review?: WorkerReview }>(`/api/worker/reviews/${encodeURIComponent(taskId)}/rerun`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(prompt === undefined ? {} : { prompt }),
@@ -623,13 +623,13 @@ export async function rerunReview(taskId: string, prompt?: string): Promise<Work
 export interface ReviewLessonPromotion {
   taskId: string
   sourceEventId?: number
-  candidates: WorkerCaseLessonCandidate[]
+  candidates: WorkerReviewLessonCandidate[]
   proposals: BrainAdmissionProposal[]
   skipped: Array<{ candidateIndex: number, reason: string }>
 }
 
-export function promoteReviewLessons(taskId: string): Promise<{ promotion: ReviewLessonPromotion, review?: WorkerCaseFile }> {
-  return workerFetch<{ promotion: ReviewLessonPromotion, review?: WorkerCaseFile }>(`/api/worker/reviews/${encodeURIComponent(taskId)}/lessons/promote`, {
+export function promoteReviewLessons(taskId: string): Promise<{ promotion: ReviewLessonPromotion, review?: WorkerReview }> {
+  return workerFetch<{ promotion: ReviewLessonPromotion, review?: WorkerReview }>(`/api/worker/reviews/${encodeURIComponent(taskId)}/lessons/promote`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({}),

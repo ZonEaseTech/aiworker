@@ -11,7 +11,7 @@ import {
   runReviewPromoteLessons,
   runReviewRerun,
   runReviewShow,
-} from './commands/worker/case'
+} from './commands/worker/review'
 import {
   runWorkerDaemonCheck,
   runWorkerDaemonInspect,
@@ -56,7 +56,7 @@ import { bootstrapCliDotenv } from './lib/bootstrap'
  *
  *   worker pack -> work order -> run -> artifact -> review -> lesson
  *
- * Pre-1.0 Brain/Case/Fleet/Gateway compatibility command trees are not
+ * Pre-1.0 admin/control-plane compatibility command trees are not
  * re-registered here. Internal services may still exist while later slices
  * rename or delete them, but the CLI no longer teaches that old product model.
  */

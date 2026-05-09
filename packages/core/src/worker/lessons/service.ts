@@ -2,10 +2,10 @@ import type { BrainAdmissionProposal } from '@zonease/aiworker-shared'
 
 import { createHash } from 'node:crypto'
 
-import { BrainAdmissionService } from '../admission'
-import { BrainJournalService, recordBrainJournalEvent } from '../journal'
+import { BrainAdmissionService } from '../brain/admission'
+import { BrainJournalService, recordBrainJournalEvent } from '../brain/journal'
 
-export interface BrainInboxCandidate {
+export interface LessonPromotionCandidate {
   kind: string
   summary: string
   rationale?: string
@@ -17,31 +17,31 @@ export interface BrainInboxCandidate {
   rollback?: string
 }
 
-export interface ProposeBrainInboxFromTaskOptions {
+export interface PromoteLessonsFromRunOptions {
   soulId?: string
   scopeId?: string
   at?: string
 }
 
-export interface BrainInboxProposalResult {
+export interface LessonPromotionProposalResult {
   taskId: string
   sourceEventId?: number
-  candidates: BrainInboxCandidate[]
+  candidates: LessonPromotionCandidate[]
   proposals: BrainAdmissionProposal[]
   skipped: Array<{ candidateIndex: number, reason: string }>
 }
 
-export function createBrainInboxService(): BrainInboxService {
-  return new BrainInboxService()
+export function createLessonPromotionService(): LessonPromotionService {
+  return new LessonPromotionService()
 }
 
-export class BrainInboxService {
+export class LessonPromotionService {
   constructor(
     private readonly journal = new BrainJournalService(),
     private readonly admission = new BrainAdmissionService(),
   ) {}
 
-  proposeFromTask(taskId: string, options: ProposeBrainInboxFromTaskOptions = {}): BrainInboxProposalResult {
+  promoteFromRun(taskId: string, options: PromoteLessonsFromRunOptions = {}): LessonPromotionProposalResult {
     const trace = this.journal.getTaskTrace(taskId, { redactSensitive: false })
     if (trace === null)
       throw new Error(`task "${taskId}" not found`)
@@ -54,7 +54,7 @@ export class BrainInboxService {
     const soulId = options.soulId ?? 'developer'
 
     candidates.forEach((candidate, index) => {
-      const id = buildInboxProposalId(taskId, index, candidate)
+      const id = buildLessonPromotionProposalId(taskId, index, candidate)
       try {
         const proposal = this.admission.propose({
           confidence: candidate.confidence,
@@ -63,7 +63,7 @@ export class BrainInboxService {
               at,
               kind: 'observation',
               ref: sourceEvent === undefined ? `agent_tasks:${taskId}` : `brain_journal_events:${sourceEvent.id}`,
-              summary: 'Brain Engine lesson candidate',
+              summary: 'Worker review lesson candidate',
             },
             ...candidate.evidenceRefs.map(ref => ({
               at,
@@ -77,13 +77,13 @@ export class BrainInboxService {
           payload: {
             body: renderCandidateMemory(taskId, candidate),
             indexEntry: truncate(candidate.summary, 280),
-            topic: inboxTopic(candidate.kind),
+            topic: lessonTopic(candidate.kind),
           },
           risk: candidate.risk,
           rollback: candidate.rollback ?? `Remove the memory entry generated from task ${taskId} if the lesson is rejected or expires.`,
           soulId,
           summary: candidate.summary,
-          target: candidate.target ?? `memories/${inboxTopic(candidate.kind)}.md`,
+          target: candidate.target ?? `memories/${lessonTopic(candidate.kind)}.md`,
           ...(options.scopeId === undefined ? {} : { scopeId: options.scopeId }),
         }, at)
         proposals.push(proposal)
@@ -98,7 +98,7 @@ export class BrainInboxService {
 
     if (sourceEvent !== undefined || proposals.length > 0 || skipped.length > 0) {
       recordBrainJournalEvent({
-        kind: 'inbox.candidates_proposed',
+        kind: 'lessons.promoted',
         taskId,
         payload: {
           candidateCount: candidates.length,
@@ -119,10 +119,10 @@ export class BrainInboxService {
   }
 }
 
-function normalizeCandidates(value: unknown): BrainInboxCandidate[] {
+function normalizeCandidates(value: unknown): LessonPromotionCandidate[] {
   if (!Array.isArray(value))
     return []
-  return value.flatMap((raw): BrainInboxCandidate[] => {
+  return value.flatMap((raw): LessonPromotionCandidate[] => {
     if (raw === null || typeof raw !== 'object' || Array.isArray(raw))
       return []
     const item = raw as Record<string, unknown>
@@ -146,7 +146,7 @@ function normalizeCandidates(value: unknown): BrainInboxCandidate[] {
   })
 }
 
-function buildInboxProposalId(taskId: string, index: number, candidate: BrainInboxCandidate): string {
+function buildLessonPromotionProposalId(taskId: string, index: number, candidate: LessonPromotionCandidate): string {
   const hash = createHash('sha256')
     .update(taskId)
     .update(String(index))
@@ -154,10 +154,10 @@ function buildInboxProposalId(taskId: string, index: number, candidate: BrainInb
     .update(candidate.summary)
     .digest('hex')
     .slice(0, 12)
-  return `inbox-${safeIdPart(taskId).slice(0, 24)}-${index + 1}-${hash}`
+  return `lesson-${safeIdPart(taskId).slice(0, 24)}-${index + 1}-${hash}`
 }
 
-function renderCandidateMemory(taskId: string, candidate: BrainInboxCandidate): string {
+function renderCandidateMemory(taskId: string, candidate: LessonPromotionCandidate): string {
   return [
     `# ${candidate.summary}`,
     '',
@@ -176,8 +176,8 @@ function renderCandidateMemory(taskId: string, candidate: BrainInboxCandidate): 
   ].join('\n')
 }
 
-function inboxTopic(kind: string): string {
-  return `inbox-${safeIdPart(kind)}`
+function lessonTopic(kind: string): string {
+  return `lesson-${safeIdPart(kind)}`
 }
 
 function safeIdPart(value: string): string {

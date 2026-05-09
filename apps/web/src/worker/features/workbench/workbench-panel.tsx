@@ -1,5 +1,5 @@
 import type { WorkerPack, WorkerPackTemplate } from '@zonease/aiworker-shared'
-import type { WorkerArtifact, WorkerCaseFile, WorkerRun } from '@/worker/api'
+import type { WorkerArtifact, WorkerReview, WorkerRun } from '@/worker/api'
 import { BUILTIN_WORKER_PACKS } from '@zonease/aiworker-shared'
 import { Activity, FileSearch, Loader2, MessageSquare, RefreshCcw, Send, ShieldCheck } from 'lucide-react'
 import { useMemo, useState } from 'react'
@@ -44,7 +44,7 @@ export function WorkbenchPanel() {
     limit: 8,
   }), [activeRunId]))
   const reviews = reviewsQ.data?.reviews ?? []
-  const activeCase = activeRun
+  const activeReview = activeRun
     ? (reviews.find(file => file.taskId === activeRun.id) ?? null)
     : (reviews[0] ?? null)
 
@@ -200,7 +200,7 @@ export function WorkbenchPanel() {
         />
 
         <ReviewPanel
-          caseFile={activeCase}
+          review={activeReview}
           isLoading={reviewsQ.isLoading}
           error={reviewsQ.error}
         />
@@ -383,35 +383,35 @@ function ArtifactPanel({
 }
 
 function ReviewPanel({
-  caseFile,
+  review,
   isLoading,
   error,
 }: {
-  caseFile: WorkerCaseFile | null
+  review: WorkerReview | null
   isLoading: boolean
   error: unknown
 }) {
   return (
     <section className="app-panel flex min-w-0 flex-col gap-4 xl:col-span-3">
-      <PanelHeader icon={ShieldCheck} title="Run review" badge={caseFile?.reviewDecision.status ?? 'none'} />
+      <PanelHeader icon={ShieldCheck} title="Run review" badge={review?.reviewDecision.status ?? 'none'} />
       {isLoading
         ? <Skeleton className="h-32" />
         : error
           ? <p role="alert" className="app-alert-error">{errorMessage(error)}</p>
-          : !caseFile
+          : !review
               ? <div className="app-empty p-6">暂无 run review。</div>
               : (
                   <div className="grid min-w-0 gap-4 lg:grid-cols-3">
                     <div className="min-w-0 lg:col-span-2">
                       <p className="text-micro uppercase text-muted-foreground">Decision</p>
-                      <h2 className="mt-1 break-words text-feature font-normal">{caseFile.reviewDecision.summary}</h2>
-                      <p className="mt-2 line-clamp-3 text-sm text-muted-foreground">{caseFile.reviewDecision.action}</p>
+                      <h2 className="mt-1 break-words text-feature font-normal">{review.reviewDecision.summary}</h2>
+                      <p className="mt-2 line-clamp-3 text-sm text-muted-foreground">{review.reviewDecision.action}</p>
                     </div>
                     <dl className="grid gap-3 text-sm">
-                      <Detail label="task" value={caseFile.taskId} code />
-                      <Detail label="risk" value={caseFile.risk.risk} />
-                      <Detail label="lessons" value={String(caseFile.lessons.candidateCount)} />
-                      <Detail label="messages" value={String(caseFile.evidence.messageCount)} />
+                      <Detail label="task" value={review.taskId} code />
+                      <Detail label="risk" value={review.risk.risk} />
+                      <Detail label="lessons" value={String(review.lessons.candidateCount)} />
+                      <Detail label="messages" value={String(review.evidence.messageCount)} />
                     </dl>
                   </div>
                 )}

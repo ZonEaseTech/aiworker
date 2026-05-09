@@ -1,7 +1,7 @@
 import type { WorkerRuntime } from '@zonease/aiworker-core'
 
 import { OpenAPIHono } from '@hono/zod-openapi'
-import { BrainCaseService, BrainInboxService } from '@zonease/aiworker-core'
+import { WorkerReviewService, LessonPromotionService } from '@zonease/aiworker-core'
 import { AppError } from '@zonease/aiworker-shared'
 import { z } from 'zod'
 
@@ -33,19 +33,19 @@ export function buildReviewRoutes(getRuntime: () => WorkerRuntime) {
       }, 400)
     }
     const runtime = getRuntime()
-    const reviews = new BrainCaseService({
+    const reviews = new WorkerReviewService({
       config: runtime.config,
       workerId: runtime.workerId,
-    }).listCases(parsed.data)
+    }).listReviews(parsed.data)
     return c.json({ reviews })
   })
 
   routes.get('/:taskId', (c) => {
     const runtime = getRuntime()
-    const review = new BrainCaseService({
+    const review = new WorkerReviewService({
       config: runtime.config,
       workerId: runtime.workerId,
-    }).getCaseFile(c.req.param('taskId'))
+    }).getReview(c.req.param('taskId'))
     if (review === null) {
       return c.json({
         error: {
@@ -72,10 +72,10 @@ export function buildReviewRoutes(getRuntime: () => WorkerRuntime) {
     try {
       const runtime = getRuntime()
       const run = await runtime.orchestrator.rerunTask(c.req.param('taskId'), parsed.data)
-      const review = new BrainCaseService({
+      const review = new WorkerReviewService({
         config: runtime.config,
         workerId: runtime.workerId,
-      }).getCaseFile(run.id)
+      }).getReview(run.id)
       return c.json({
         run,
         ...(review === null ? {} : { review }),
@@ -102,11 +102,11 @@ export function buildReviewRoutes(getRuntime: () => WorkerRuntime) {
     }
     try {
       const runtime = getRuntime()
-      const promotion = new BrainInboxService().proposeFromTask(c.req.param('taskId'), parsed.data)
-      const review = new BrainCaseService({
+      const promotion = new LessonPromotionService().promoteFromRun(c.req.param('taskId'), parsed.data)
+      const review = new WorkerReviewService({
         config: runtime.config,
         workerId: runtime.workerId,
-      }).getCaseFile(c.req.param('taskId'))
+      }).getReview(c.req.param('taskId'))
       return c.json({
         promotion,
         ...(review === null ? {} : { review }),

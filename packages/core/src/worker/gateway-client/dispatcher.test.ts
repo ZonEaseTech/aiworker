@@ -569,29 +569,29 @@ describe('GatewayDispatcher — brain bridge methods', () => {
 })
 
 describe('GatewayDispatcher — orchestrator task journal', () => {
-  it('cases.list and cases.show forward Case File requests to injected handlers', async () => {
+  it('reviews.list and reviews.show forward review requests to injected handlers', async () => {
     const seen: unknown[] = []
     const { dispatcher, approvals, responses } = makeDispatcher({
-      casesList: async (input) => {
+      reviewsList: async (input) => {
         seen.push(['list', input])
-        return { cases: [{ taskId: 'task-1' }] }
+        return { reviews: [{ taskId: 'task-1' }] }
       },
-      casesShow: async (input) => {
+      reviewsShow: async (input) => {
         seen.push(['show', input])
-        return { case: { taskId: input.taskId } }
+        return { review: { taskId: input.taskId } }
       },
     })
 
     await dispatcher.handleRequest({
       type: 'request',
-      id: 'req-cases-list',
-      method: 'cases.list',
+      id: 'req-reviews-list',
+      method: 'reviews.list',
       params: { workerId: 'w_test', limit: 12 },
     })
     await dispatcher.handleRequest({
       type: 'request',
-      id: 'req-cases-show',
-      method: 'cases.show',
+      id: 'req-reviews-show',
+      method: 'reviews.show',
       params: { workerId: 'w_test', taskId: 'task-1' },
     })
 
@@ -604,29 +604,29 @@ describe('GatewayDispatcher — orchestrator task journal', () => {
     approvals.dispose()
   })
 
-  it('cases.rerun and cases.lessons.propose forward operator actions', async () => {
+  it('reviews.rerun and reviews.lessons.promote forward operator actions', async () => {
     const seen: unknown[] = []
     const { dispatcher, approvals, responses } = makeDispatcher({
-      casesLessonsPropose: async (input) => {
+      reviewsLessonsPromote: async (input) => {
         seen.push(['lessons', input])
         return { proposals: [{ id: 'p-1' }] }
       },
-      casesRerun: async (input) => {
+      reviewsRerun: async (input) => {
         seen.push(['rerun', input])
-        return { task: { id: 'task-child' } }
+        return { run: { id: 'task-child' } }
       },
     })
 
     await dispatcher.handleRequest({
       type: 'request',
-      id: 'req-cases-rerun',
-      method: 'cases.rerun',
+      id: 'req-reviews-rerun',
+      method: 'reviews.rerun',
       params: { workerId: 'w_test', taskId: 'task-1', prompt: 'repair' },
     })
     await dispatcher.handleRequest({
       type: 'request',
-      id: 'req-cases-lessons',
-      method: 'cases.lessons.propose',
+      id: 'req-reviews-lessons',
+      method: 'reviews.lessons.promote',
       params: { workerId: 'w_test', taskId: 'task-1', scopeId: 'scope-1', soulId: 'developer' },
     })
 
@@ -644,7 +644,7 @@ describe('GatewayDispatcher — orchestrator task journal', () => {
     const { dispatcher, approvals, responses } = makeDispatcher({
       taskJournal: async (input) => {
         seen.push(input)
-        return { journal: { task: { id: input.taskId } } }
+        return { journal: { run: { id: input.taskId } } }
       },
     })
 
@@ -658,7 +658,7 @@ describe('GatewayDispatcher — orchestrator task journal', () => {
     expect(seen).toEqual([{ taskId: 'task-1' }])
     expect(responses[0]?.ok).toBe(true)
     if (responses[0]?.ok)
-      expect(responses[0].result).toEqual({ journal: { task: { id: 'task-1' } } })
+      expect(responses[0].result).toEqual({ journal: { run: { id: 'task-1' } } })
     approvals.dispose()
   })
 

@@ -23,7 +23,7 @@ mock.module('../../context', () => ({
       evolution: { enabled: false, observationRetentionDays: 7 },
       executor: { engine: 'codex', variant: 'default' },
     },
-    workerId: 'w_case_cli',
+    workerId: 'w_review_cli',
   }),
 }))
 
@@ -33,14 +33,14 @@ const {
   runReviewPromoteLessons,
   runReviewRerun,
   runReviewShow,
-} = await import('./case')
+} = await import('./review')
 
 describe('aiworker review commands', () => {
   let dir: string
 
   beforeEach(() => {
     closeWorkerDb()
-    dir = mkdtempSync(join(tmpdir(), 'aiworker-cli-case-'))
+    dir = mkdtempSync(join(tmpdir(), 'aiworker-cli-review-'))
     initWorkerDb(join(dir, 'worker.db'))
     runWorkerMigrations()
     rerunImpl = async () => ({ id: 'task-child' })

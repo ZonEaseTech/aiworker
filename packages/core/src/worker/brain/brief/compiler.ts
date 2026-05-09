@@ -28,7 +28,7 @@ import {
  * `MEMORY.md`, `ROLLUP.md`, scope manifest, Soul module, optionally artifact
  * registry + admission service) into a task-specific brief. The brief is a
  * **projection** — orchestrator stays on the existing coarse persona prompt;
- * `aiworker brain brief` is preview-only.
+ * Preview-only compiler for inspected run context.
  *
  * Section ids come from `Soul.briefHooks.defaultSections`. Token budget
  * truncation favours `Soul.briefHooks.protectedSections` (e.g. `risk-policy`,

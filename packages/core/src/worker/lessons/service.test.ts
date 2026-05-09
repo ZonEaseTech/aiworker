@@ -5,14 +5,14 @@ import { join } from 'node:path'
 import { agentTasks, brainAdmissionProposals, closeWorkerDb, getWorkerDb, initWorkerDb, runWorkerMigrations } from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { BrainAdmissionService } from '../admission'
-import { recordBrainJournalEvent } from '../journal'
-import { BrainInboxService } from './service'
+import { BrainAdmissionService } from '../brain/admission'
+import { recordBrainJournalEvent } from '../brain/journal'
+import { LessonPromotionService } from './service'
 
-describe('BrainInboxService (PLAN-178)', () => {
+describe('LessonPromotionService (PLAN-178)', () => {
   beforeEach(() => {
     closeWorkerDb()
-    const dir = mkdtempSync(join(tmpdir(), 'aiworker-brain-inbox-'))
+    const dir = mkdtempSync(join(tmpdir(), 'aiworker-lessons-'))
     initWorkerDb(join(dir, 'worker.db'))
     runWorkerMigrations()
   })
@@ -21,7 +21,7 @@ describe('BrainInboxService (PLAN-178)', () => {
     closeWorkerDb()
   })
 
-  it('turns Brain Engine lesson candidates into pending admission proposals', () => {
+  it('turns Worker review lesson candidates into pending admission proposals', () => {
     seedTask('task-inbox')
     recordBrainJournalEvent({
       at: '2026-05-09T04:10:00.000Z',
@@ -43,7 +43,7 @@ describe('BrainInboxService (PLAN-178)', () => {
       },
     })
 
-    const result = new BrainInboxService().proposeFromTask('task-inbox', {
+    const result = new LessonPromotionService().promoteFromRun('task-inbox', {
       scopeId: 'repo:aiworker',
       soulId: 'developer',
       at: '2026-05-09T04:11:00.000Z',
@@ -77,8 +77,8 @@ describe('BrainInboxService (PLAN-178)', () => {
         ],
       },
     })
-    const service = new BrainInboxService()
-    const result = service.proposeFromTask('task-reject')
+    const service = new LessonPromotionService()
+    const result = service.promoteFromRun('task-reject')
     const id = result.proposals[0]!.id
 
     new BrainAdmissionService().reject(id, { decidedBy: 'tester', reason: 'not durable enough' })
@@ -88,10 +88,10 @@ describe('BrainInboxService (PLAN-178)', () => {
     expect(row?.payload).not.toBeNull()
   })
 
-  it('returns zero proposals when no Brain Engine lesson candidates exist', () => {
+  it('returns zero proposals when no Worker review lesson candidates exist', () => {
     seedTask('task-empty')
 
-    const result = new BrainInboxService().proposeFromTask('task-empty')
+    const result = new LessonPromotionService().promoteFromRun('task-empty')
 
     expect(result.candidates).toEqual([])
     expect(result.proposals).toEqual([])

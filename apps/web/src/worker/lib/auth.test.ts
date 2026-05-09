@@ -6,7 +6,7 @@ import { __resetBearerForTests, bootstrapBearerFromLocation, getBearerToken, set
  *
  * - URL hash `#token=...` → sessionStorage，且立即清掉 hash（不留浏览历史）；
  * - getBearerToken 永远不读 query string / localStorage；
- * - reset 后状态完全归零，避免跨 tab/case 污染。
+ * - reset 后状态完全归零，避免跨 tab/test 污染。
  */
 describe('worker bearer-auth bootstrap', () => {
   beforeEach(() => {

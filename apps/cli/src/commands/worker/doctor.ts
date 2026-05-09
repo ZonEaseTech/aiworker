@@ -313,7 +313,7 @@ export async function runDoctor(): Promise<number> {
 
     printNativeSkillProjection(nativeSkillProjection)
 
-    process.stdout.write('  Brain runtime: run `aiworker brain status` for Project Brain memory/fallback skill counts and native executor skill targets.\n')
+    process.stdout.write('  Brain runtime: Project Brain files and native executor projections are checked here; durable lessons are promoted through `aiworker lessons promote <runId>`.\n')
   }
 
   for (const check of report.checks) {
@@ -364,5 +364,5 @@ function printNativeSkillProjection(summary: NativeSkillProjectionDoctorSummary 
   process.stdout.write(`      manifest : ${summary.manifestExists ? summary.manifestPath : `${summary.manifestPath} (missing)`}\n`)
   process.stdout.write(`      summary  : active=${summary.summary.active}, missing=${summary.summary.missing}, outdated=${summary.summary.outdated}, drifted=${summary.summary.drifted}, deprecated=${summary.summary.deprecated}, removed=${summary.summary.removed}, orphaned=${summary.summary.orphaned}\n`)
   if (!summary.manifestExists || summary.attention > 0)
-    process.stdout.write('      run      : aiworker brain skills sync-native --dry-run\n')
+    process.stdout.write('      run      : aiworker doctor --json\n')
 }

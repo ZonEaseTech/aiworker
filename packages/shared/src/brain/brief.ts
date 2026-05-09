@@ -13,10 +13,9 @@ import { brainAdmissionRiskSchema } from './admission'
  * hints are downstream projections, not source of truth.
  *
  * PLAN-102 keeps the brief preview-only — orchestrator stays on the existing
- * coarse persona prompt; CLI / API operators inspect briefs via
- * `aiworker brain brief --task ...`. PLAN-103 may surface this in Worker
- * Admin; future plans may opt into using briefs as the orchestrator system
- * prompt.
+ * coarse persona prompt. Worker review surfaces may inspect briefs when a run
+ * needs deeper context; future plans may opt into using briefs as the
+ * orchestrator system prompt.
  */
 
 const SECTION_ID_RE = /^[a-z][a-z0-9-]*$/

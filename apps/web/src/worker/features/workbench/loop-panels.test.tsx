@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks-extra/no-unnecessary-use-prefix */
-import type { WorkerCaseFile } from '@/worker/api'
+import type { WorkerReview } from '@/worker/api'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { LessonsPanel, ReviewsPanel } from './loop-panels'
@@ -7,7 +7,7 @@ import { LessonsPanel, ReviewsPanel } from './loop-panels'
 const mocks = vi.hoisted(() => ({
   promoteLessons: vi.fn(),
   rerunReview: vi.fn(),
-  review: null as WorkerCaseFile | null,
+  review: null as WorkerReview | null,
 }))
 
 vi.mock('@/worker/lib/hooks', () => ({
@@ -63,7 +63,7 @@ describe('worker loop review and lesson panels', () => {
     expect(mocks.promoteLessons).toHaveBeenCalledWith('run-review-web')
   })
 
-  it('lists lesson candidates without exposing the old cases route', () => {
+  it('lists lesson candidates through the review route', () => {
     render(<LessonsPanel />)
 
     expect(screen.getByTestId('worker-lessons-panel')).toBeTruthy()
@@ -73,7 +73,7 @@ describe('worker loop review and lesson panels', () => {
   })
 })
 
-function makeReview(): WorkerCaseFile {
+function makeReview(): WorkerReview {
   return {
     evidence: {
       journalEventCount: 3,

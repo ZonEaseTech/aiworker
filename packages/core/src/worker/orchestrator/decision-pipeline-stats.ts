@@ -16,7 +16,7 @@ import { desc, eq } from 'drizzle-orm'
  * Worker runtime keeps the most recent N (default 50) intent / quality /
  * conversation classifier outcomes. Samples are written to worker.db on a
  * best-effort basis so one-shot `aiworker run` invocations are visible to a
- * later `aiworker brain status` process. The process-local ring buffers remain
+ * later worker diagnostics process. The process-local ring buffers remain
  * as fallback when the database is not initialized or an older unmigrated
  * worker.db lacks the metrics table.
  *

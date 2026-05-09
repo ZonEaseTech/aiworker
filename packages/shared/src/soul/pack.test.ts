@@ -25,7 +25,7 @@ describe('Soul Pack loader', () => {
   it('keeps the developer pack as editable Markdown plus structured loader output', () => {
     expect(developerSoulPack.sourcePath).toContain('packs/developer/SOUL.md')
     expect(developerSoulPack.soulMd).toContain('manifest:')
-    expect(developerSoulPack.soulBody).toContain('Brain admission governance')
+    expect(developerSoulPack.soulBody).toContain('Durable lesson governance')
     expect(developerSoulPack.brainSkillPacks.map(skill => skill.id)).toContain('developer.codebase-orientation')
     expect(developerSoulPack.module.schemaPack.proposalTypes).toContain('brain-skill-add')
   })
