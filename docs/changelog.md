@@ -1,5 +1,20 @@
 # AIWorker Changelog
 
+## 2026-05-09 16:50 [progress] REL-032 / QA-026 — CLI 0.12.2 release
+
+Prepared `@zonease/aiworker-cli@0.12.2` as the executor non-interference patch
+release after REFACTOR-026.
+
+- Source real-worker regression passed against `/Users/ben/projects/my-aiworker`
+  before the version bump: no default control executor, successful Codex Chat,
+  durable assistant failure message on controlled executor error, restored Codex
+  config, and a 125079 ms native adapter slow-turn check.
+- Release records opened in REL-032, QA-026, and PLAN-193.
+- Local release gates passed after the version bump: `bun run typecheck`,
+  `bun run lint`, `bun run test`, `bun run build`, and `git diff --check`.
+- Dist reports `0.12.2`; publish dry-run packed 34 files / 3.21MB before the
+  expected local npm auth boundary.
+
 ## 2026-05-09 17:05 [completed] REFACTOR-026 / PLAN-192 — Executor non-interference boundary
 
 Completed the default runtime boundary correction after dogfood showed AIWorker
