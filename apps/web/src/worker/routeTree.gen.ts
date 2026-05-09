@@ -9,54 +9,36 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as TestRouteImport } from './routes/test'
-import { Route as SecretsRouteImport } from './routes/secrets'
-import { Route as CronRouteImport } from './routes/cron'
-import { Route as ConfigRouteImport } from './routes/config'
-import { Route as ChatRouteImport } from './routes/chat'
-import { Route as CasesRouteImport } from './routes/cases'
-import { Route as BrainRouteImport } from './routes/brain'
-import { Route as ApprovalsRouteImport } from './routes/approvals'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as RunsRouteImport } from './routes/runs'
+import { Route as ReviewsRouteImport } from './routes/reviews'
+import { Route as LessonsRouteImport } from './routes/lessons'
+import { Route as ArtifactsRouteImport } from './routes/artifacts'
 import { Route as IndexRouteImport } from './routes/index'
 
-const TestRoute = TestRouteImport.update({
-  id: '/test',
-  path: '/test',
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SecretsRoute = SecretsRouteImport.update({
-  id: '/secrets',
-  path: '/secrets',
+const RunsRoute = RunsRouteImport.update({
+  id: '/runs',
+  path: '/runs',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CronRoute = CronRouteImport.update({
-  id: '/cron',
-  path: '/cron',
+const ReviewsRoute = ReviewsRouteImport.update({
+  id: '/reviews',
+  path: '/reviews',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ConfigRoute = ConfigRouteImport.update({
-  id: '/config',
-  path: '/config',
+const LessonsRoute = LessonsRouteImport.update({
+  id: '/lessons',
+  path: '/lessons',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ChatRoute = ChatRouteImport.update({
-  id: '/chat',
-  path: '/chat',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CasesRoute = CasesRouteImport.update({
-  id: '/cases',
-  path: '/cases',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const BrainRoute = BrainRouteImport.update({
-  id: '/brain',
-  path: '/brain',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApprovalsRoute = ApprovalsRouteImport.update({
-  id: '/approvals',
-  path: '/approvals',
+const ArtifactsRoute = ArtifactsRouteImport.update({
+  id: '/artifacts',
+  path: '/artifacts',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -67,142 +49,94 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/approvals': typeof ApprovalsRoute
-  '/brain': typeof BrainRoute
-  '/cases': typeof CasesRoute
-  '/chat': typeof ChatRoute
-  '/config': typeof ConfigRoute
-  '/cron': typeof CronRoute
-  '/secrets': typeof SecretsRoute
-  '/test': typeof TestRoute
+  '/artifacts': typeof ArtifactsRoute
+  '/lessons': typeof LessonsRoute
+  '/reviews': typeof ReviewsRoute
+  '/runs': typeof RunsRoute
+  '/settings': typeof SettingsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/approvals': typeof ApprovalsRoute
-  '/brain': typeof BrainRoute
-  '/cases': typeof CasesRoute
-  '/chat': typeof ChatRoute
-  '/config': typeof ConfigRoute
-  '/cron': typeof CronRoute
-  '/secrets': typeof SecretsRoute
-  '/test': typeof TestRoute
+  '/artifacts': typeof ArtifactsRoute
+  '/lessons': typeof LessonsRoute
+  '/reviews': typeof ReviewsRoute
+  '/runs': typeof RunsRoute
+  '/settings': typeof SettingsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/approvals': typeof ApprovalsRoute
-  '/brain': typeof BrainRoute
-  '/cases': typeof CasesRoute
-  '/chat': typeof ChatRoute
-  '/config': typeof ConfigRoute
-  '/cron': typeof CronRoute
-  '/secrets': typeof SecretsRoute
-  '/test': typeof TestRoute
+  '/artifacts': typeof ArtifactsRoute
+  '/lessons': typeof LessonsRoute
+  '/reviews': typeof ReviewsRoute
+  '/runs': typeof RunsRoute
+  '/settings': typeof SettingsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/approvals'
-    | '/brain'
-    | '/cases'
-    | '/chat'
-    | '/config'
-    | '/cron'
-    | '/secrets'
-    | '/test'
+    | '/artifacts'
+    | '/lessons'
+    | '/reviews'
+    | '/runs'
+    | '/settings'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/approvals'
-    | '/brain'
-    | '/cases'
-    | '/chat'
-    | '/config'
-    | '/cron'
-    | '/secrets'
-    | '/test'
+  to: '/' | '/artifacts' | '/lessons' | '/reviews' | '/runs' | '/settings'
   id:
     | '__root__'
     | '/'
-    | '/approvals'
-    | '/brain'
-    | '/cases'
-    | '/chat'
-    | '/config'
-    | '/cron'
-    | '/secrets'
-    | '/test'
+    | '/artifacts'
+    | '/lessons'
+    | '/reviews'
+    | '/runs'
+    | '/settings'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  ApprovalsRoute: typeof ApprovalsRoute
-  BrainRoute: typeof BrainRoute
-  CasesRoute: typeof CasesRoute
-  ChatRoute: typeof ChatRoute
-  ConfigRoute: typeof ConfigRoute
-  CronRoute: typeof CronRoute
-  SecretsRoute: typeof SecretsRoute
-  TestRoute: typeof TestRoute
+  ArtifactsRoute: typeof ArtifactsRoute
+  LessonsRoute: typeof LessonsRoute
+  ReviewsRoute: typeof ReviewsRoute
+  RunsRoute: typeof RunsRoute
+  SettingsRoute: typeof SettingsRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/test': {
-      id: '/test'
-      path: '/test'
-      fullPath: '/test'
-      preLoaderRoute: typeof TestRouteImport
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/secrets': {
-      id: '/secrets'
-      path: '/secrets'
-      fullPath: '/secrets'
-      preLoaderRoute: typeof SecretsRouteImport
+    '/runs': {
+      id: '/runs'
+      path: '/runs'
+      fullPath: '/runs'
+      preLoaderRoute: typeof RunsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/cron': {
-      id: '/cron'
-      path: '/cron'
-      fullPath: '/cron'
-      preLoaderRoute: typeof CronRouteImport
+    '/reviews': {
+      id: '/reviews'
+      path: '/reviews'
+      fullPath: '/reviews'
+      preLoaderRoute: typeof ReviewsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/config': {
-      id: '/config'
-      path: '/config'
-      fullPath: '/config'
-      preLoaderRoute: typeof ConfigRouteImport
+    '/lessons': {
+      id: '/lessons'
+      path: '/lessons'
+      fullPath: '/lessons'
+      preLoaderRoute: typeof LessonsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/chat': {
-      id: '/chat'
-      path: '/chat'
-      fullPath: '/chat'
-      preLoaderRoute: typeof ChatRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/cases': {
-      id: '/cases'
-      path: '/cases'
-      fullPath: '/cases'
-      preLoaderRoute: typeof CasesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/brain': {
-      id: '/brain'
-      path: '/brain'
-      fullPath: '/brain'
-      preLoaderRoute: typeof BrainRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/approvals': {
-      id: '/approvals'
-      path: '/approvals'
-      fullPath: '/approvals'
-      preLoaderRoute: typeof ApprovalsRouteImport
+    '/artifacts': {
+      id: '/artifacts'
+      path: '/artifacts'
+      fullPath: '/artifacts'
+      preLoaderRoute: typeof ArtifactsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -217,14 +151,11 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  ApprovalsRoute: ApprovalsRoute,
-  BrainRoute: BrainRoute,
-  CasesRoute: CasesRoute,
-  ChatRoute: ChatRoute,
-  ConfigRoute: ConfigRoute,
-  CronRoute: CronRoute,
-  SecretsRoute: SecretsRoute,
-  TestRoute: TestRoute,
+  ArtifactsRoute: ArtifactsRoute,
+  LessonsRoute: LessonsRoute,
+  ReviewsRoute: ReviewsRoute,
+  RunsRoute: RunsRoute,
+  SettingsRoute: SettingsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

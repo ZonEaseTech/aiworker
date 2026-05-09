@@ -16,14 +16,11 @@ import { Link as TSLink } from '@tanstack/react-router'
  */
 export type WorkerPath
   = | '/'
-    | '/config'
-    | '/secrets'
-    | '/test'
-    | '/cron'
-    | '/approvals'
-    | '/chat'
-    | '/cases'
-    | '/brain'
+    | '/runs'
+    | '/artifacts'
+    | '/reviews'
+    | '/lessons'
+    | '/settings'
 
 export function WorkerLink(props: { to: WorkerPath } & Omit<LinkComponentProps, 'to'>) {
   const { to, ...rest } = props

@@ -20,7 +20,7 @@ vi.mock('@/worker/api', () => {
     deleteSecret: vi.fn(),
     getConfig: vi.fn(),
     getEngines: vi.fn(async () => ({ engines: [] })),
-    getCaseFile: vi.fn(async () => ({ case: null })),
+    getReviewFile: vi.fn(async () => ({ review: makeReview() })),
     getInfo: vi.fn(async () => ({
       brains: [],
       channels: [],
@@ -41,20 +41,19 @@ vi.mock('@/worker/api', () => {
     })),
     grantApproval: vi.fn(),
     listApprovals: vi.fn(async () => ({ approvals: [] })),
-    listCases: vi.fn(async () => ({ cases: [] })),
     listConversations: vi.fn(async () => ({ conversations: [] })),
     listCron: vi.fn(async () => ({ jobs: [] })),
     listMessages: vi.fn(async () => ({ messages: [] })),
+    listReviews: vi.fn(async () => ({ reviews: [makeReview()] })),
     listRuns: vi.fn(async () => ({ runs: [] })),
     listSecrets: vi.fn(async () => ({ keys: [] })),
     listTasks: vi.fn(async () => ({ tasks: [] })),
     listWorkerArtifacts: vi.fn(async () => ({ artifacts: [] })),
     patchCron: vi.fn(),
     promoteReviewLessons: vi.fn(async () => ({ promotion: { proposals: [] } })),
-    proposeCaseLessons: vi.fn(async () => ({ proposals: [] })),
     putConfig: vi.fn(),
     putSecret: vi.fn(),
-    rerunCase: vi.fn(async () => ({
+    rerunReview: vi.fn(async () => ({
       createdAt: '2026-05-09T06:40:00.000Z',
       id: 'task-rerun',
       prompt: 'rerun',
@@ -119,22 +118,79 @@ describe('worker responsive shell', () => {
     expect(classListOf(header)).toEqual(expect.arrayContaining(['grid', 'shrink-0']))
     expect(classListOf(nav)).toEqual(expect.arrayContaining([
       'grid-cols-2',
-      'sm:grid-cols-4',
-      'md:flex',
+      'sm:grid-cols-3',
+      'lg:flex',
     ]))
   })
 
-  it('keeps worker chat single-column at 430 px with desktop columns gated to lg', async () => {
-    await renderWorkerRoute('/admin/chat', 430, 932)
+  it('keeps worker reviews single-column at 430 px with desktop columns gated to lg', async () => {
+    await renderWorkerRoute('/admin/reviews', 430, 932)
 
-    const chatPanel = await screen.findByTestId('worker-chat-panel')
-    const sendButton = screen.getByRole('button', { name: /发送/ })
+    const reviewsPanel = await screen.findByTestId('worker-reviews-panel')
 
-    expect(classListOf(chatPanel)).toEqual(expect.arrayContaining([
+    expect(classListOf(reviewsPanel.querySelector('div.grid') as HTMLElement)).toEqual(expect.arrayContaining([
       'grid-cols-1',
-      'lg:grid-cols-[280px_1fr]',
+      'lg:grid-cols-3',
     ]))
-    expect(classListOf(chatPanel)).not.toContain('grid-cols-[280px_1fr]')
-    expect(classListOf(sendButton)).toEqual(expect.arrayContaining(['w-full', 'sm:w-auto']))
   })
 })
+
+function makeReview() {
+  return {
+    evidence: {
+      journalEventCount: 1,
+      keyEvidenceRefs: ['journal:1'],
+      loadedMemoryIds: [],
+      loadedSkillIds: [],
+      messageCount: 1,
+      toolEventCount: 0,
+    },
+    lessons: {
+      candidateCount: 1,
+      candidates: [{
+        confidence: 0.8,
+        evidenceRefs: ['journal:1'],
+        index: 0,
+        kind: 'pattern',
+        risk: 'low',
+        summary: 'Keep review evidence visible.',
+      }],
+      proposalIds: [],
+    },
+    lineage: {
+      childTaskIds: [],
+      rerunCount: 0,
+      rootTaskId: 'run-1',
+    },
+    outcome: {
+      taskStatus: 'succeeded',
+      promptPreview: 'review',
+    },
+    rawJournalRef: 'journal:1',
+    reviewDecision: {
+      action: 'ship',
+      evidenceRefs: ['journal:1'],
+      mode: 'observe-only',
+      nextActions: [],
+      reasons: [{ mode: 'observe-only', reason: 'ok', source: 'review' }],
+      status: 'ready_to_ship',
+      summary: 'Ready',
+    },
+    risk: {
+      authorityMode: 'ambient',
+      enforceable: false,
+      executorNote: 'External executor',
+      observeOnlyReasonCount: 0,
+      risk: 'low',
+      signals: [],
+    },
+    taskId: 'run-1',
+    version: 1,
+    workOrder: {
+      createdAt: '2026-05-09T06:40:00.000Z',
+      prompt: 'review',
+      status: 'succeeded',
+      taskId: 'run-1',
+    },
+  }
+}

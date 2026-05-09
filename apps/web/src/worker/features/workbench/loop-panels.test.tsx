@@ -2,30 +2,30 @@
 import type { WorkerCaseFile } from '@/worker/api'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { CasesPanel } from './cases-panel'
+import { LessonsPanel, ReviewsPanel } from './loop-panels'
 
 const mocks = vi.hoisted(() => ({
-  caseFile: null as WorkerCaseFile | null,
   promoteLessons: vi.fn(),
   rerunReview: vi.fn(),
+  review: null as WorkerCaseFile | null,
 }))
 
 vi.mock('@/worker/lib/hooks', () => ({
-  useReview: () => ({
-    data: mocks.caseFile === null ? undefined : { review: mocks.caseFile },
-    error: null,
-    isLoading: false,
-  }),
-  useReviews: () => ({
-    data: { reviews: mocks.caseFile === null ? [] : [mocks.caseFile] },
-    error: null,
-    isLoading: false,
-  }),
   usePromoteReviewLessons: () => ({
     data: undefined,
     error: null,
     isPending: false,
     mutate: mocks.promoteLessons,
+  }),
+  useReview: () => ({
+    data: mocks.review === null ? undefined : { review: mocks.review },
+    error: null,
+    isLoading: false,
+  }),
+  useReviews: () => ({
+    data: { reviews: mocks.review === null ? [] : [mocks.review] },
+    error: null,
+    isLoading: false,
   }),
   useRerunReview: () => ({
     data: undefined,
@@ -35,36 +35,45 @@ vi.mock('@/worker/lib/hooks', () => ({
   }),
 }))
 
-describe('worker cases panel', () => {
+describe('worker loop review and lesson panels', () => {
   beforeEach(() => {
-    mocks.caseFile = makeCaseFile()
+    mocks.review = makeReview()
     mocks.promoteLessons.mockReset()
     mocks.rerunReview.mockReset()
   })
 
-  it('renders Case File review decision, risk, evidence, and lessons queue', () => {
-    render(<CasesPanel />)
+  it('renders review decision, risk, evidence, and actions', () => {
+    render(<ReviewsPanel />)
 
-    expect(screen.getByTestId('worker-cases-panel')).toBeTruthy()
+    expect(screen.getByTestId('worker-reviews-panel')).toBeTruthy()
     expect(screen.getAllByText('ready_to_ship').length).toBeGreaterThan(0)
-    expect(screen.getByText('Case is ready to ship: evidence is sufficient')).toBeTruthy()
-    expect(screen.getByText('Case File should remain a projection over Brain Journal.')).toBeTruthy()
+    expect(screen.getByText('Review is ready to ship: evidence is sufficient')).toBeTruthy()
+    expect(screen.getByText('Review evidence should stay tied to run metadata.')).toBeTruthy()
     expect(screen.getAllByText('brain_journal_events:2').length).toBeGreaterThan(0)
     expect(screen.getByText('unmanaged_ambient')).toBeTruthy()
   })
 
-  it('exposes operator actions for rerun and lesson promotion', () => {
-    render(<CasesPanel />)
+  it('exposes rerun and lesson promotion from the review page', () => {
+    render(<ReviewsPanel />)
 
     fireEvent.click(screen.getByRole('button', { name: /Rerun/ }))
     fireEvent.click(screen.getByRole('button', { name: /Promote lessons/ }))
 
-    expect(mocks.rerunReview).toHaveBeenCalledWith({ taskId: 'task-case-web' })
-    expect(mocks.promoteLessons).toHaveBeenCalledWith('task-case-web')
+    expect(mocks.rerunReview).toHaveBeenCalledWith({ taskId: 'run-review-web' })
+    expect(mocks.promoteLessons).toHaveBeenCalledWith('run-review-web')
+  })
+
+  it('lists lesson candidates without exposing the old cases route', () => {
+    render(<LessonsPanel />)
+
+    expect(screen.getByTestId('worker-lessons-panel')).toBeTruthy()
+    expect(screen.getByText('Review evidence should stay tied to run metadata.')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /Promote/ }))
+    expect(mocks.promoteLessons).toHaveBeenCalledWith('run-review-web')
   })
 })
 
-function makeCaseFile(): WorkerCaseFile {
+function makeReview(): WorkerCaseFile {
   return {
     evidence: {
       journalEventCount: 3,
@@ -82,7 +91,7 @@ function makeCaseFile(): WorkerCaseFile {
         index: 0,
         kind: 'architecture-decision',
         risk: 'low',
-        summary: 'Case File should remain a projection over Brain Journal.',
+        summary: 'Review evidence should stay tied to run metadata.',
       }],
       proposalIds: [],
       sourceEventRef: 'brain_journal_events:2',
@@ -90,14 +99,14 @@ function makeCaseFile(): WorkerCaseFile {
     lineage: {
       childTaskIds: [],
       rerunCount: 0,
-      rootTaskId: 'task-case-web',
+      rootTaskId: 'run-review-web',
     },
     outcome: {
-      assistantPreview: 'Implemented and verified the case surface.',
-      promptPreview: 'ship the worker case surface',
+      assistantPreview: 'Implemented and verified the review surface.',
+      promptPreview: 'ship the worker review surface',
       taskStatus: 'succeeded',
     },
-    rawJournalRef: 'brain_journal:task-case-web',
+    rawJournalRef: 'brain_journal:run-review-web',
     reviewDecision: {
       action: 'pass',
       evidenceRefs: ['brain_journal_events:2'],
@@ -107,10 +116,10 @@ function makeCaseFile(): WorkerCaseFile {
         evidenceRefs: ['brain_journal_events:2'],
         mode: 'observe-only',
         reason: 'evidence is sufficient',
-        source: 'brain-engine-review',
+        source: 'review-engine',
       }],
       status: 'ready_to_ship',
-      summary: 'Case is ready to ship: evidence is sufficient',
+      summary: 'Review is ready to ship: evidence is sufficient',
     },
     risk: {
       authorityMode: 'unmanaged_ambient',
@@ -120,15 +129,15 @@ function makeCaseFile(): WorkerCaseFile {
       risk: 'low',
       signals: [],
     },
-    taskId: 'task-case-web',
+    taskId: 'run-review-web',
     version: 1,
     workOrder: {
       createdAt: '2026-05-09T06:40:00.000Z',
       finishedAt: '2026-05-09T06:41:00.000Z',
-      prompt: 'ship the worker case surface',
+      prompt: 'ship the worker review surface',
       status: 'succeeded',
-      taskId: 'task-case-web',
+      taskId: 'run-review-web',
     },
-    workerId: 'w_case_web',
+    workerId: 'w_review_web',
   }
 }

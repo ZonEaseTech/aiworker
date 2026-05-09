@@ -2,17 +2,15 @@ import type { FormEvent } from 'react'
 import type { WorkerPath } from '@/worker/lib/link'
 import { createRootRoute, Outlet } from '@tanstack/react-router'
 import {
-  Brain as BrainIcon,
+  Archive,
   ClipboardList,
   Cpu,
   FileSearch,
   KeyRound,
   LockKeyhole,
-  MessageSquare,
-  ShieldCheck,
-  SlidersHorizontal,
-  Timer,
-  Wrench,
+  Lightbulb,
+  ListChecks,
+  Settings,
 } from 'lucide-react'
 import { useState } from 'react'
 import { ThemeToggle } from '@/shared/components/theme-toggle'
@@ -34,14 +32,11 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'Workbench', exact: true, icon: ClipboardList },
-  { to: '/chat', label: 'Chat', icon: MessageSquare },
-  { to: '/cases', label: 'Reviews', icon: FileSearch },
-  { to: '/config', label: '配置', icon: SlidersHorizontal },
-  { to: '/test', label: '探测', icon: Wrench },
-  { to: '/secrets', label: 'Secrets', icon: KeyRound },
-  { to: '/brain', label: 'Brain', icon: BrainIcon },
-  { to: '/cron', label: 'Cron', icon: Timer },
-  { to: '/approvals', label: 'Approvals', icon: ShieldCheck },
+  { to: '/runs', label: 'Runs', icon: ListChecks },
+  { to: '/artifacts', label: 'Artifacts', icon: Archive },
+  { to: '/reviews', label: 'Reviews', icon: FileSearch },
+  { to: '/lessons', label: 'Lessons', icon: Lightbulb },
+  { to: '/settings', label: 'Settings', icon: Settings },
 ]
 
 function TopBar() {
@@ -54,7 +49,6 @@ function TopBar() {
   const workerId = health.data?.workerId ?? info.data?.workerId ?? '—'
   const configVersion = info.data?.configVersion ?? health.data?.configVersion ?? '—'
   const executor = info.data?.executor
-  const brainsCount = info.data?.brains?.length ?? 0
 
   return (
     <section className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-3 bg-deep-green px-4 py-4 text-on-dark sm:px-6 md:grid-cols-[minmax(0,1fr)_auto] md:items-center lg:px-8">
@@ -69,7 +63,7 @@ function TopBar() {
           value={executor ? `${executor.type}` : '—'}
           status={executor?.status}
         />
-        <Stat label="brains" value={String(brainsCount)} />
+        <Stat label="status" value={health.data?.status ?? '—'} status={health.data?.status} />
         <Stat label="启动" value={info.data?.startedAt ? new Date(info.data.startedAt).toLocaleString() : '—'} />
       </dl>
     </section>
@@ -136,7 +130,7 @@ function RootLayout() {
           </div>
           <nav
             data-testid="worker-shell-nav"
-            className="grid min-w-0 grid-cols-2 gap-1 sm:grid-cols-4 md:flex md:flex-wrap md:items-center md:justify-center"
+            className="grid min-w-0 grid-cols-2 gap-1 sm:grid-cols-3 lg:flex lg:flex-wrap lg:items-center lg:justify-center"
           >
             {NAV_ITEMS.map((item) => {
               const Icon = item.icon
@@ -144,7 +138,7 @@ function RootLayout() {
                 <WorkerLink
                   key={item.to}
                   to={item.to}
-                  className="flex min-w-0 items-center justify-center gap-2 rounded-xl border border-transparent px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:border-hairline hover:bg-soft-stone hover:text-foreground"
+                  className="flex min-w-0 items-center justify-center gap-2 rounded-sm border border-transparent px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:border-hairline hover:bg-soft-stone hover:text-foreground"
                   activeProps={{ className: '!border-primary !bg-primary !text-primary-foreground hover:!border-primary hover:!bg-primary hover:!text-primary-foreground' }}
                   activeOptions={item.exact ? { exact: true } : undefined}
                 >

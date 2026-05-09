@@ -130,12 +130,12 @@ describe('worker bundle bootstrap', () => {
     const router = createRouter({
       routeTree,
       basepath: resolveWebRouterBasepath('worker', '/worker/'),
-      history: createMemoryHistory({ initialEntries: ['/worker/config'] }),
+      history: createMemoryHistory({ initialEntries: ['/worker/settings'] }),
       defaultPreload: false,
     })
 
     await router.load()
 
-    expect(router.state.matches.map(m => m.routeId)).toContain('/config')
+    expect(router.state.matches.map(m => m.routeId)).toContain('/settings')
   })
 })

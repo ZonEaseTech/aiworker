@@ -120,3 +120,9 @@ Verification:
   `artifacts`, `pack`, `review`, `lessons`, `doctor`, `executor`), rejects old
   Brain/Case/Fleet/Gateway/worker aliases, and updates init onboarding to
   daemon/run/review/lesson flow only. Full CLI package tests and typecheck pass.
+- 2026-05-09 20:59: Completed S2 Worker Web shell hard reset. Worker route tree
+  now contains only Workbench, Runs, Artifacts, Reviews, Lessons, and Settings;
+  old Chat/Cases/Brain/Cron/Approvals/Test/Secrets pages were removed from the
+  worker bundle. Worker web tests, typecheck, worker build, and full web build
+  pass. Full web test command was interrupted after hanging without output; the
+  worker-specific test suite is green.

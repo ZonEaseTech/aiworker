@@ -100,3 +100,7 @@ concepts keep shaping the default mental model.
   hard-reset local worker loop. Removed public gateway lifecycle integration
   tests from the CLI package and converted old quick-start assertions into
   retired-command guards.
+- 2026-05-09 20:59: S2 complete. Worker Web now routes only Workbench, Runs,
+  Artifacts, Reviews, Lessons, and Settings. Removed old page components and
+  routes for Chat, Cases, Brain, Cron, Approvals, Test, and Secrets. Verification:
+  worker web tests, typecheck, worker build, full web build, and CRG review.
