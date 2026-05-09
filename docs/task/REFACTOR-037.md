@@ -95,3 +95,7 @@ and review proof.
 - 2026-05-09 23:04: Added a removal/replacement inventory and prompt-to-artifact
   checklist to PLAN-203 after auditing current API, CLI, Web, storage, core,
   and shared old surfaces.
+- 2026-05-09 23:06: Re-read Open Design daemon, project file, and SQLite
+  metadata anchors, then added an explicit reference mapping to PLAN-203 so the
+  rebuild copies the local workspace product intention without importing
+  image/video-domain concepts.

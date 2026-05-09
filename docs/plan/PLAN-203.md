@@ -31,6 +31,37 @@ project/workspace files as the product center, conversations/messages tied to a
 project, generated files and preview/review state as first-class artifacts, and
 simple local persistence under a project-owned folder.
 
+## Open Design Reference Mapping
+
+The rebuild should copy Open Design's product intention, not its image/video
+domain. Current reference anchors:
+
+- `apps/daemon/src/server.ts`: one local daemon owns projects, files,
+  conversations, comments, tabs, deployments, and run streams under a compact
+  HTTP API.
+- `apps/daemon/src/projects.ts`: the project directory is the source of truth
+  for real user files, with strict path validation and archive/search/read/write
+  helpers.
+- `apps/daemon/src/db.ts`: SQLite tracks project metadata, conversations,
+  messages, comments, tabs, deployments, and run status while files remain on
+  disk.
+
+Mapping for AIWorker:
+
+| Open Design intention | AIWorker greenfield equivalent | Explicit non-copy |
+| --- | --- | --- |
+| local daemon as the product backend | local worker daemon with `/api/local/*` only | no Fleet/Gateway control plane in the local deliverable |
+| project folder as the work surface | workspace folder with files, artifacts, and run outputs | no old Project Brain admin layout |
+| conversations/messages organize creative runs | briefs/runs organize HR/developer/PM work loops | no generic chat/session management surface |
+| generated files are first-class visible artifacts | run output files and artifacts drive Web center panel | no hidden execution-log-only result model |
+| preview comments and tabs keep review context attached to files | reviews and lessons attach to artifacts/runs with provenance | no Brain admission UI as the primary review model |
+| SQLite stores compact local metadata | worker.db stores workspace/run/review/lesson metadata only | no accumulated cron/channel/approval/evolution schema |
+| skills/design systems/prompt templates shape generation intent | domain templates and executor hints shape worker intent | no image/video-specific concepts in product nouns |
+
+This means the greenfield product surface should feel like a local workspace
+tool that happens to execute work through BYO agents. It should not feel like a
+runtime admin console that happens to show run history.
+
 ## Proposal
 
 Implement this as a destructive multi-commit rebuild. The implementation should
