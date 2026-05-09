@@ -1,5 +1,23 @@
 # AIWorker Changelog
 
+## 2026-05-09 15:54 [progress] REL-031 / QA-025 — CLI 0.12.1 release readiness
+
+Prepared `@zonease/aiworker-cli@0.12.1` for release after FEAT-058:
+
+- Fixed default Brain/Case redaction so governance and authorship fields such
+  as `authorityMode`, `authorId`, and `authHint` remain visible while real auth
+  material is still redacted.
+- Source gates pass after the fix: `bun run check`, `bun run test`,
+  `bun run build`, and `git diff --check`.
+- Bundle CLI and dist manifest report `0.12.1`; publish dry-run from
+  `apps/cli/dist` packs 34 files / 3.20MB before the expected local npm auth
+  boundary.
+- Dist CLI dogfood used a real project-scope worker DB and verified
+  task-scoped Case status, high-risk ambient authority visibility, final
+  assistant message selection, and pending lesson proposal creation.
+- Remote workflow, npm smoke, GitHub Release asset verification, and published
+  compact governance harness remain pending before REL-031 can close.
+
 ## 2026-05-09 15:52 [completed] FEAT-058 / QA-024 — Case-driven Project Brain loop source validation
 
 Completed the source-level validation for the Case-driven Project Brain learning
