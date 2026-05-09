@@ -104,3 +104,8 @@ concepts keep shaping the default mental model.
   Artifacts, Reviews, Lessons, and Settings. Removed old page components and
   routes for Chat, Cases, Brain, Cron, Approvals, Test, and Secrets. Verification:
   worker web tests, typecheck, worker build, full web build, and CRG review.
+- 2026-05-09 21:05: S3 local worker API cleanup complete. Removed
+  `/api/worker/cases`, deleted the case route module/tests, removed web case
+  client/hooks, removed daemon dispatcher case handlers, and retired CLI case
+  wrapper tests/functions. Verification: focused API/web/CLI tests,
+  API/Web/CLI typecheck, `git diff --check`, and CRG review.

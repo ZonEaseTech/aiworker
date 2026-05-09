@@ -68,10 +68,6 @@ describe('worker /openapi.json registration (BUG-065)', () => {
       expect(paths).toContain('/api/worker/brain/summary')
       expect(paths).toContain('/api/worker/brain/admission')
       expect(paths).toContain('/api/worker/brain/admission/{id}')
-      expect(paths).toContain('/api/worker/cases')
-      expect(paths).toContain('/api/worker/cases/{taskId}')
-      expect(paths).toContain('/api/worker/cases/{taskId}/rerun')
-      expect(paths).toContain('/api/worker/cases/{taskId}/lessons/propose')
       expect(paths).toContain('/api/worker/reviews')
       expect(paths).toContain('/api/worker/reviews/{taskId}')
       expect(paths).toContain('/api/worker/reviews/{taskId}/rerun')
@@ -85,6 +81,10 @@ describe('worker /openapi.json registration (BUG-065)', () => {
       expect(paths).toContain('/api/worker/orchestrator/tasks')
       expect(paths).toContain('/api/worker/orchestrator/conversations')
       expect(paths).toContain('/api/worker/orchestrator/conversations/{id}/messages')
+      expect(paths).not.toContain('/api/worker/cases')
+      expect(paths).not.toContain('/api/worker/cases/{taskId}')
+      expect(paths).not.toContain('/api/worker/cases/{taskId}/rerun')
+      expect(paths).not.toContain('/api/worker/cases/{taskId}/lessons/propose')
       expect(paths).not.toContain('/api/worker/orchestrator/chat')
 
       // Health stays public; brain admission requires bearer auth.
@@ -92,9 +92,6 @@ describe('worker /openapi.json registration (BUG-065)', () => {
       expect(healthEntry?.tags).toContain('health')
       const brainEntry = doc.paths['/api/worker/brain/admission']?.get as { security?: unknown[] } | undefined
       expect(Array.isArray(brainEntry?.security)).toBe(true)
-      const caseEntry = doc.paths['/api/worker/cases']?.get as { tags?: string[], security?: unknown[] } | undefined
-      expect(caseEntry?.tags).toContain('cases')
-      expect(Array.isArray(caseEntry?.security)).toBe(true)
       const reviewEntry = doc.paths['/api/worker/reviews']?.get as { tags?: string[], security?: unknown[] } | undefined
       expect(reviewEntry?.tags).toContain('reviews')
       expect(Array.isArray(reviewEntry?.security)).toBe(true)

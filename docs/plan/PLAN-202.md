@@ -126,3 +126,9 @@ Verification:
   worker bundle. Worker web tests, typecheck, worker build, and full web build
   pass. Full web test command was interrupted after hanging without output; the
   worker-specific test suite is green.
+- 2026-05-09 21:05: Completed S3 local worker API cleanup. `/api/worker/cases`
+  is no longer mounted or documented, the web client/hooks no longer expose
+  case endpoints, daemon gateway handlers no longer implement case actions, and
+  CLI review tests no longer carry public case wrappers. Focused API/web/CLI
+  tests, API/Web/CLI typecheck, `git diff --check`, and CRG review pass. Gateway
+  protocol and core service naming remain for S4 removal/renaming.

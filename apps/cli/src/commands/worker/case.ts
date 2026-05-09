@@ -6,24 +6,22 @@ import consola from 'consola'
 
 import { buildRuntime, loadWorkerContext } from '../../context'
 
-export interface CaseListOptions {
+export interface ReviewListOptions {
   limit?: number
 }
 
-export interface CaseShowOptions {
+export interface ReviewShowOptions {
   showSensitive?: boolean
 }
 
-export interface CaseRerunOptions {
+export interface ReviewRerunOptions {
   prompt?: string
 }
 
-export interface LessonsProposeOptions {
+export interface ReviewPromoteOptions {
   scopeId?: string
   soulId?: string
 }
-
-export type ReviewPromoteOptions = LessonsProposeOptions
 
 async function withWorkerContext<T>(fn: (ctx: WorkerContext) => Promise<T>): Promise<T> {
   const ctx = await loadWorkerContext({ silent: true })
@@ -41,24 +39,7 @@ async function withRuntime<T>(fn: (ctx: WorkerContext, runtime: WorkerRuntime) =
   }
 }
 
-export async function runCaseList(options: CaseListOptions = {}): Promise<number> {
-  try {
-    return await withWorkerContext(async (ctx) => {
-      const cases = new BrainCaseService({
-        config: ctx.hydrated,
-        workerId: ctx.workerId,
-      }).listCases({ limit: options.limit })
-      console.log(JSON.stringify({ workerId: ctx.workerId, cases }, null, 2))
-      return 0
-    })
-  }
-  catch (err) {
-    consola.error(`[aiworker case list] failed: ${err instanceof Error ? err.message : String(err)}`)
-    return 1
-  }
-}
-
-export async function runReviewList(options: CaseListOptions = {}): Promise<number> {
+export async function runReviewList(options: ReviewListOptions = {}): Promise<number> {
   try {
     return await withWorkerContext(async (ctx) => {
       const reviews = new BrainCaseService({
@@ -75,32 +56,7 @@ export async function runReviewList(options: CaseListOptions = {}): Promise<numb
   }
 }
 
-export async function runCaseShow(taskId: string, options: CaseShowOptions = {}): Promise<number> {
-  if (taskId === undefined || taskId.trim().length === 0) {
-    consola.error('[aiworker case show] task id is required')
-    return 2
-  }
-  try {
-    return await withWorkerContext(async (ctx) => {
-      const file = new BrainCaseService({
-        config: ctx.hydrated,
-        workerId: ctx.workerId,
-      }).getCaseFile(taskId, { redactSensitive: options.showSensitive !== true })
-      if (file === null) {
-        consola.error(`[aiworker case show] case not found: ${taskId}`)
-        return 1
-      }
-      console.log(JSON.stringify({ workerId: ctx.workerId, case: file }, null, 2))
-      return 0
-    })
-  }
-  catch (err) {
-    consola.error(`[aiworker case show] failed: ${err instanceof Error ? err.message : String(err)}`)
-    return 1
-  }
-}
-
-export async function runReviewShow(taskId: string, options: CaseShowOptions = {}): Promise<number> {
+export async function runReviewShow(taskId: string, options: ReviewShowOptions = {}): Promise<number> {
   if (taskId === undefined || taskId.trim().length === 0) {
     consola.error('[aiworker review show] task id is required')
     return 2
@@ -125,35 +81,7 @@ export async function runReviewShow(taskId: string, options: CaseShowOptions = {
   }
 }
 
-export async function runCaseRerun(taskId: string, options: CaseRerunOptions = {}): Promise<number> {
-  if (taskId === undefined || taskId.trim().length === 0) {
-    consola.error('[aiworker case rerun] task id is required')
-    return 2
-  }
-  try {
-    return await withRuntime(async (ctx, runtime) => {
-      const task = await runtime.orchestrator.rerunTask(taskId, {
-        ...(options.prompt === undefined ? {} : { prompt: options.prompt }),
-      })
-      const file = new BrainCaseService({
-        config: ctx.hydrated,
-        workerId: ctx.workerId,
-      }).getCaseFile(task.id)
-      console.log(JSON.stringify({
-        workerId: ctx.workerId,
-        task,
-        ...(file === null ? {} : { case: file }),
-      }, null, 2))
-      return 0
-    })
-  }
-  catch (err) {
-    consola.error(`[aiworker case rerun] failed: ${err instanceof Error ? err.message : String(err)}`)
-    return 1
-  }
-}
-
-export async function runReviewRerun(taskId: string, options: CaseRerunOptions = {}): Promise<number> {
+export async function runReviewRerun(taskId: string, options: ReviewRerunOptions = {}): Promise<number> {
   if (taskId === undefined || taskId.trim().length === 0) {
     consola.error('[aiworker review rerun] task id is required')
     return 2
@@ -177,35 +105,6 @@ export async function runReviewRerun(taskId: string, options: CaseRerunOptions =
   }
   catch (err) {
     consola.error(`[aiworker review rerun] failed: ${err instanceof Error ? err.message : String(err)}`)
-    return 1
-  }
-}
-
-export async function runLessonsPropose(taskId: string, options: LessonsProposeOptions = {}): Promise<number> {
-  if (taskId === undefined || taskId.trim().length === 0) {
-    consola.error('[aiworker lessons propose] task id is required')
-    return 2
-  }
-  try {
-    return await withWorkerContext(async (ctx) => {
-      const result = new BrainInboxService().proposeFromTask(taskId, {
-        ...(options.scopeId === undefined ? {} : { scopeId: options.scopeId }),
-        ...(options.soulId === undefined ? {} : { soulId: options.soulId }),
-      })
-      const file = new BrainCaseService({
-        config: ctx.hydrated,
-        workerId: ctx.workerId,
-      }).getCaseFile(taskId)
-      console.log(JSON.stringify({
-        workerId: ctx.workerId,
-        ...result,
-        ...(file === null ? {} : { case: file }),
-      }, null, 2))
-      return 0
-    })
-  }
-  catch (err) {
-    consola.error(`[aiworker lessons propose] failed: ${err instanceof Error ? err.message : String(err)}`)
     return 1
   }
 }

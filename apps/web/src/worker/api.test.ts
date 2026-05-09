@@ -1,6 +1,6 @@
 import type { WorkerSSEEvent } from './api'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { continueConversation, getCaseFile, getInfo, getReviewFile, getWorkerArtifact, listCases, listReviews, listRuns, listWorkerArtifacts, promoteReviewLessons, proposeCaseLessons, rerunCase, rerunReview, submitTask, subscribeEvents, testExecutor } from './api'
+import { continueConversation, getInfo, getReviewFile, getWorkerArtifact, listReviews, listRuns, listWorkerArtifacts, promoteReviewLessons, rerunReview, submitTask, subscribeEvents, testExecutor } from './api'
 import { __resetBearerForTests, setBearerToken } from './lib/auth'
 
 function sseResponse(chunks: string[]): Response {
@@ -160,52 +160,6 @@ describe('worker api subscribeEvents', () => {
     })
     const headers = fetchMock.mock.calls[0]?.[1]?.headers as Headers
     expect(headers.get('Content-Type')).toBe('application/json')
-  })
-
-  it('uses Worker Case REST paths for list/show/rerun/lesson proposal', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch')
-      .mockResolvedValueOnce(new Response(JSON.stringify({ cases: [] }), {
-        headers: { 'Content-Type': 'application/json' },
-        status: 200,
-      }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ case: { taskId: 'task/with/slash' } }), {
-        headers: { 'Content-Type': 'application/json' },
-        status: 200,
-      }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        task: {
-          createdAt: '2026-05-09T06:40:00.000Z',
-          id: 'task-child',
-          prompt: 'repair',
-          status: 'queued',
-        },
-      }), {
-        headers: { 'Content-Type': 'application/json' },
-        status: 201,
-      }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ proposals: [] }), {
-        headers: { 'Content-Type': 'application/json' },
-        status: 201,
-      }))
-
-    await listCases(12)
-    await getCaseFile('task/with/slash')
-    const task = await rerunCase('task/with/slash', 'repair')
-    await proposeCaseLessons('task/with/slash')
-
-    expect(task.id).toBe('task-child')
-    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/worker/cases?limit=12')
-    expect(fetchMock.mock.calls[1]?.[0]).toBe('/api/worker/cases/task%2Fwith%2Fslash')
-    expect(fetchMock.mock.calls[2]?.[0]).toBe('/api/worker/cases/task%2Fwith%2Fslash/rerun')
-    expect(fetchMock.mock.calls[2]?.[1]).toMatchObject({
-      body: JSON.stringify({ prompt: 'repair' }),
-      method: 'POST',
-    })
-    expect(fetchMock.mock.calls[3]?.[0]).toBe('/api/worker/cases/task%2Fwith%2Fslash/lessons/propose')
-    expect(fetchMock.mock.calls[3]?.[1]).toMatchObject({
-      body: JSON.stringify({}),
-      method: 'POST',
-    })
   })
 
   it('uses Worker Review REST paths for list/show/rerun/lesson promotion', async () => {

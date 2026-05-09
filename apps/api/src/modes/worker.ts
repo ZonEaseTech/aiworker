@@ -23,7 +23,6 @@ import { requestLogger } from '../shared/middleware/logger'
 import { adminStaticMiddleware } from '../worker/admin/serve-static'
 import { buildArtifactRoutes } from '../worker/artifacts/routes'
 import { buildBrainRoutes } from '../worker/brain/routes'
-import { buildCaseRoutes } from '../worker/cases/routes'
 import { buildChannelRoutes } from '../worker/channels/routes'
 import { buildEventRoutes } from '../worker/events/routes'
 import { evolutionRoutes } from '../worker/evolution/routes'
@@ -226,7 +225,6 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   app.route('/api/worker/orchestrator', buildOrchestratorRoutes(() => state.runtime))
   app.route('/api/worker/runs', buildRunRoutes(() => state.runtime))
   app.route('/api/worker/artifacts', buildArtifactRoutes())
-  app.route('/api/worker/cases', buildCaseRoutes(() => state.runtime))
   app.route('/api/worker/reviews', buildReviewRoutes(() => state.runtime))
   app.route('/api/worker/evolution', evolutionRoutes)
   app.route('/api/worker/events', buildEventRoutes(() => state.runtime))
@@ -260,7 +258,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     info: {
       title: 'AIWorker Worker API',
       version: runtimeVersion,
-      description: `Per-worker surface: channels, orchestrator, memory, skills, execution, evolution. Worker id: ${state.workerId}`,
+      description: `Per-worker surface: channels, runs, artifacts, reviews, lessons, management, and evolution. Worker id: ${state.workerId}`,
     },
   })
 
@@ -269,7 +267,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   return { app, port: workerEnv.PORT, state, reloadRuntime }
 }
 
-/** Back-compat wrapper — used by `src/index.ts`. */
+/** Entry wrapper used by `src/index.ts`. */
 export async function createWorkerApp(): Promise<{ app: OpenAPIHono, port: number }> {
   const { app, port } = await bootstrapWorkerApp()
   return { app, port }
@@ -321,10 +319,6 @@ function registerWorkerOpenApiPaths(app: OpenAPIHono): void {
     { method: 'get', path: '/api/worker/brain/admission/{id}', summary: 'Show admission proposal + decisions', tags: ['brain'], requireAuth: true },
     { method: 'post', path: '/api/worker/brain/admission/{id}/approve', summary: 'Approve a pending admission proposal', tags: ['brain'], requireAuth: true },
     { method: 'post', path: '/api/worker/brain/admission/{id}/apply', summary: 'Materialize an approved admission proposal (dry-run unless commit=true)', tags: ['brain'], requireAuth: true },
-    { method: 'get', path: '/api/worker/cases', summary: 'List operator-facing Worker Case Files', tags: ['cases'], requireAuth: true },
-    { method: 'get', path: '/api/worker/cases/{taskId}', summary: 'Show one Worker Case File with review decision and evidence', tags: ['cases'], requireAuth: true },
-    { method: 'post', path: '/api/worker/cases/{taskId}/rerun', summary: 'Create a bounded rerun from one Worker Case', tags: ['cases'], requireAuth: true },
-    { method: 'post', path: '/api/worker/cases/{taskId}/lessons/propose', summary: 'Create Brain admission proposals from one Worker Case lessons queue', tags: ['cases'], requireAuth: true },
     { method: 'get', path: '/api/worker/reviews', summary: 'List worker run reviews', tags: ['reviews'], requireAuth: true },
     { method: 'get', path: '/api/worker/reviews/{taskId}', summary: 'Show one worker run review', tags: ['reviews'], requireAuth: true },
     { method: 'post', path: '/api/worker/reviews/{taskId}/rerun', summary: 'Create a bounded rerun from one review', tags: ['reviews'], requireAuth: true },
