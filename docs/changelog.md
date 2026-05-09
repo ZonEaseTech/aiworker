@@ -1,5 +1,30 @@
 # AIWorker Changelog
 
+## 2026-05-10 00:23 [completed] REFACTOR-038 / PLAN-204 — Worker Web greenfield studio rebuild
+
+Completed the destructive Worker Web reset after user review found the previous
+screen still looked like legacy admin UI:
+
+- Removed the parked fleet Web bundle/source, old `apps/web/fleet` and
+  `apps/web/worker` HTML entries, TanStack route trees, shared admin UI
+  primitives, shared theme store, and gateway smoke from `apps/web`.
+- Replaced the Web package with a single worker studio build that outputs
+  `dist/worker`.
+- Added `WorkerStudio` and purpose-built studio CSS around brief shelf, run
+  lane, artifact canvas, review rail, run events, and lesson ledger.
+- Rewrote Web tests and quality checks around the worker-only studio surface.
+- Updated bundle size baseline to the new single-worker bundle.
+
+Verification: `bun run --filter '@zonease/aiworker-web' test`,
+`bun run --filter '@zonease/aiworker-web' typecheck`,
+`bun run --filter '@zonease/aiworker-web' lint`,
+`bun run --filter '@zonease/aiworker-web' build`,
+`bun run --filter '@zonease/aiworker-web' size:baseline`,
+`bun run check`, `bun run test`, `bun run build`, and `git diff --check` pass.
+Browser review of `http://127.0.0.1:5173/worker/` passed on desktop and mobile
+with 0 console errors / 0 warnings. CRG reported 0 affected flows, 33 test
+gaps, and risk score 0.45.
+
 ## 2026-05-10 00:26 [completed] REFACTOR-037 / PLAN-203 — Greenfield local worker rebuild
 
 Completed the destructive greenfield local worker rebuild:

@@ -10,9 +10,7 @@
   },
   "include": [
     "src/**/*.ts",
-    "src/**/*.tsx",
-    "src/fleet/routeTree.gen.ts",
-    "src/worker/routeTree.gen.ts"
+    "src/**/*.tsx"
   ],
   "exclude": ["node_modules", "dist"]
 }
