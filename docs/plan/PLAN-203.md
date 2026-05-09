@@ -182,8 +182,8 @@ approval gate is cleared, every batch remains `blocked_pending_approval`.
 | B2 core local run engine | done | `packages/core/src/worker/*` | committed as the new local run engine | `bun run --filter '@zonease/aiworker-core' test` pass; `bun run --filter '@zonease/aiworker-core' typecheck` pass; `bun run --filter '@zonease/aiworker-storage-sqlite' test` pass; removed runtime import scan under `packages/core/src/worker` pass |
 | B3 local daemon/API | done | `apps/api/src/modes/worker.ts`, `apps/api/src/worker/*` | committed as the `/api/local/*` daemon surface | `bun run --filter '@zonease/aiworker-api' test` pass; `bun run --filter '@zonease/aiworker-api' typecheck` pass; `bun run --filter '@zonease/aiworker-api' build` pass; local route positive scan pass; old worker route scan pass |
 | B4 CLI reset | done | `apps/cli/src/aiworker.ts`, `apps/cli/src/commands/*` | committed as the local workspace CLI | `bun run --filter '@zonease/aiworker-cli' test` pass; `bun run --filter '@zonease/aiworker-cli' typecheck` pass; `bun run --filter '@zonease/aiworker-cli' build:bundle` pass; CLI removed-command scan pass; local smoke test pass |
-| B5 Worker Web rebuild | blocked | `apps/web/src/worker/*` | waiting for B4 commit to land before Web rewrite starts | pending |
-| B6 docs/smoke/review | blocked_pending_approval | `README.md`, `GOALS.md`, `docs/architecture.md`, `tmp/*` | B1-B5 implementation evidence missing and PLAN-203 approval not received | pending |
+| B5 Worker Web rebuild | done | `apps/web/src/worker/*` | committed as the local workspace Web app | `bun run --filter '@zonease/aiworker-web' test` pass; `bun run --filter '@zonease/aiworker-web' typecheck` pass; `bun run --filter '@zonease/aiworker-web' build` pass; Worker Web legacy scan pass |
+| B6 docs/smoke/review | blocked | `README.md`, `GOALS.md`, `docs/architecture.md`, `tmp/*` | waiting for B5 commit to land before final docs and smoke | pending |
 
 Status values:
 

@@ -129,3 +129,6 @@ and review proof.
 - 2026-05-10 00:09: Completed B4 CLI reset: deleted old command trees and
   replaced the CLI with local workspace commands for init, daemon, briefs, runs,
   files, artifacts, reviews, lessons, settings, executor hints, and open.
+- 2026-05-10 00:18: Completed B5 Worker Web rebuild: deleted the old worker
+  admin UI and replaced first paint with a local workspace shell centered on
+  briefs, runs, files, artifacts, reviews, and lessons.
