@@ -33,6 +33,8 @@ const ROOT_WORKER_COMMANDS = [
   'executor mcp sync',
   'soul list',
   'soul show',
+  'pack list',
+  'pack show',
   'brain status',
   'brain journal show',
   'brain inbox propose',
@@ -356,6 +358,15 @@ describe('preprocessArgv', () => {
     ])
   })
 
+  it('pack show 被折叠', () => {
+    expect(run('pack', 'show', 'developer')).toEqual([
+      '/usr/bin/bun',
+      '/path/to/aiworker.ts',
+      'pack show',
+      'developer',
+    ])
+  })
+
   it('executor mcp add 被折叠', () => {
     expect(run('executor', 'mcp', 'add', 'context7', '--engine', 'codex')).toEqual([
       '/usr/bin/bun',
@@ -473,6 +484,20 @@ describe('aiworker malformed argv handling', () => {
       expect(result.exitCode).toBe(2)
       expect(result.output).toContain('unknown Soul preset "nope"')
       expect(result.output).toContain('developer')
+      expect(existsSync(result.aiworkerHome)).toBe(false)
+    }
+    finally {
+      cleanup(result)
+    }
+  })
+
+  it('pack list shows workbench assets without bootstrapping state', async () => {
+    const result = await runCli(['pack', 'list'])
+    try {
+      expect(result.exitCode).toBe(0)
+      expect(result.output).toContain('[aiworker pack] built-in worker packs')
+      expect(result.output).toContain('developer')
+      expect(result.output).toContain('SKILL.md + DOMAIN.md')
       expect(existsSync(result.aiworkerHome)).toBe(false)
     }
     finally {

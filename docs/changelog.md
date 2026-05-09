@@ -1,5 +1,17 @@
 # AIWorker Changelog
 
+## 2026-05-09 17:20 [completed] REFACTOR-030 / PLAN-196 — OD-style worker pack registry
+
+Completed S3A of the OD-style worker reboot:
+
+- Added a shared worker pack registry with developer, HR recruiting, project
+  manager, and QA reviewer packs.
+- Each pack now exposes OD-style `SKILL.md` and `DOMAIN.md` markdown, work-order
+  templates, artifact kinds, and a default review checklist.
+- Added `aiworker pack list/show` and `aiworker worker pack list/show`.
+- Fixed CLI dotenv bootstrap command detection for multi-token diagnostic
+  commands so pack/soul read-only commands do not require worker state.
+
 ## 2026-05-09 17:12 [completed] REFACTOR-029 / PLAN-195 — Worker artifact metadata index
 
 Completed S2A of the OD-style worker reboot:

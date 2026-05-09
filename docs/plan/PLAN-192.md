@@ -166,3 +166,5 @@ Open Design 当前参照形态：
   run contract 路径，并保留 `--local` in-process fallback。
 - 2026-05-09 17:12：S2A 通过 REFACTOR-029 / PLAN-195 完成 worker artifact metadata
   index、read-only REST surface 与 Web API client，保持真实文件仍由 workspace folder 拥有。
+- 2026-05-09 17:20：S3A 通过 REFACTOR-030 / PLAN-196 完成 OD-style worker pack
+  registry 与 CLI list/show；`init` materialization 留给后续 slice。

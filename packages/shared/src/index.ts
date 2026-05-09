@@ -345,4 +345,21 @@ export type {
   SoulSchemaPack,
 } from './soul'
 
+export {
+  BUILTIN_WORKER_PACK_REGISTRY,
+  BUILTIN_WORKER_PACKS,
+  createBuiltinWorkerPackRegistry,
+  createWorkerPackRegistry,
+  findBuiltinWorkerPack,
+  supportedWorkerPackIds,
+  WorkerPackRegistry,
+  workerPackIdSchema,
+  workerPackSchema,
+  workerPackTemplateSchema,
+} from './worker-pack'
+export type {
+  WorkerPack,
+  WorkerPackTemplate,
+} from './worker-pack'
+
 export type { ExecutionEvent, MemoryEntry, ServiceStatus, SkillMeta } from './types'

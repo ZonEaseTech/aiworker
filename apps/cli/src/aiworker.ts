@@ -78,6 +78,7 @@ import {
   runExecutorSelect,
 } from './commands/worker/executor'
 import { runInit } from './commands/worker/init'
+import { runPackList, runPackShow } from './commands/worker/pack'
 import { runRun } from './commands/worker/run'
 import {
   runScheduleAdd as runScheduleAddLocal,
@@ -284,6 +285,14 @@ cli.command('soul list', '列出内置 Soul 预设及其声明能力').action(as
 
 cli.command('soul show <preset>', '查看某个 Soul 预设的职责、边界、能力草案和风险策略').action(async (preset: string) => {
   process.exit(await runSoulShow(preset))
+})
+
+cli.command('pack list', '列出 OD-style worker pack（SKILL.md + DOMAIN.md + work-order templates）').action(async () => {
+  process.exit(await runPackList())
+})
+
+cli.command('pack show <pack>', '查看某个 worker pack 的 skill/domain/work-order/artifact 信息').action(async (pack: string) => {
+  process.exit(await runPackShow(pack))
 })
 
 cli
@@ -888,6 +897,14 @@ cli.command('worker soul list', '列出内置 Soul 预设及其声明能力').ac
 
 cli.command('worker soul show <preset>', '查看某个 Soul 预设的职责、边界、能力草案和风险策略').action(async (preset: string) => {
   process.exit(await runSoulShow(preset))
+})
+
+cli.command('worker pack list', '列出 OD-style worker pack（SKILL.md + DOMAIN.md + work-order templates）').action(async () => {
+  process.exit(await runPackList())
+})
+
+cli.command('worker pack show <pack>', '查看某个 worker pack 的 skill/domain/work-order/artifact 信息').action(async (pack: string) => {
+  process.exit(await runPackShow(pack))
 })
 
 cli

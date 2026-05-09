@@ -10,23 +10,25 @@ describe('shouldBootstrapDotenv', () => {
   it('does not bootstrap setup or diagnostic commands', () => {
     for (const args of [
       ['init'],
-      ['worker init'],
+      ['worker', 'init'],
       ['up'],
-      ['worker up'],
+      ['worker', 'up'],
       ['doctor'],
-      ['worker doctor'],
+      ['worker', 'doctor'],
       ['commands'],
       ['scope'],
-      ['worker scope'],
-      ['env gateway-url'],
-      ['env display-name'],
-      ['worker env gateway-url'],
-      ['worker env display-name'],
-      ['executor mcp sync'],
-      ['worker executor doctor'],
-      ['soul list'],
-      ['worker soul show'],
-      ['gateway install systemd'],
+      ['worker', 'scope'],
+      ['env', 'gateway-url'],
+      ['env', 'display-name'],
+      ['worker', 'env', 'gateway-url'],
+      ['worker', 'env', 'display-name'],
+      ['executor', 'mcp', 'sync'],
+      ['worker', 'executor', 'doctor'],
+      ['soul', 'list'],
+      ['worker', 'soul', 'show'],
+      ['pack', 'list'],
+      ['worker', 'pack', 'show'],
+      ['gateway', 'install', 'systemd'],
     ])
       expect(shouldBootstrapDotenv(argv(...args))).toBe(false)
   })
@@ -35,9 +37,9 @@ describe('shouldBootstrapDotenv', () => {
     for (const args of [
       ['run'],
       ['serve'],
-      ['worker serve'],
-      ['config show'],
-      ['fleet list'],
+      ['worker', 'serve'],
+      ['config', 'show'],
+      ['fleet', 'list'],
     ])
       expect(shouldBootstrapDotenv(argv(...args))).toBe(true)
   })

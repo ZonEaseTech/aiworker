@@ -19,34 +19,42 @@ export function shouldBootstrapDotenv(argv: string[]): boolean {
   if (args.some(arg => arg === '--help' || arg === '-h' || arg === '--version' || arg === '-v'))
     return false
 
-  const command = args[0] ?? ''
+  const commandLine = args.join(' ')
+  const startsWithCommand = (...parts: string[]) => {
+    const prefix = parts.join(' ')
+    return commandLine === prefix || commandLine.startsWith(`${prefix} `)
+  }
   if (
-    command === 'scope'
-    || command === 'worker scope'
-    || command === 'doctor'
-    || command === 'worker doctor'
-    || command === 'commands'
-    || command === 'env gateway-url'
-    || command === 'env display-name'
-    || command === 'worker env gateway-url'
-    || command === 'worker env display-name'
-    || command === 'init'
-    || command === 'worker init'
-    || command === 'up'
-    || command === 'worker up'
-    || command === 'gateway install systemd'
+    startsWithCommand('scope')
+    || startsWithCommand('worker', 'scope')
+    || startsWithCommand('doctor')
+    || startsWithCommand('worker', 'doctor')
+    || startsWithCommand('commands')
+    || startsWithCommand('env', 'gateway-url')
+    || startsWithCommand('env', 'display-name')
+    || startsWithCommand('worker', 'env', 'gateway-url')
+    || startsWithCommand('worker', 'env', 'display-name')
+    || startsWithCommand('init')
+    || startsWithCommand('worker', 'init')
+    || startsWithCommand('up')
+    || startsWithCommand('worker', 'up')
+    || startsWithCommand('gateway', 'install', 'systemd')
   ) {
     return false
   }
 
-  if (command.startsWith('executor ') || command.startsWith('worker executor '))
+  if (startsWithCommand('executor') || startsWithCommand('worker', 'executor'))
     return false
 
   if (
-    command === 'soul list'
-    || command === 'soul show'
-    || command === 'worker soul list'
-    || command === 'worker soul show'
+    startsWithCommand('soul', 'list')
+    || startsWithCommand('soul', 'show')
+    || startsWithCommand('worker', 'soul', 'list')
+    || startsWithCommand('worker', 'soul', 'show')
+    || startsWithCommand('pack', 'list')
+    || startsWithCommand('pack', 'show')
+    || startsWithCommand('worker', 'pack', 'list')
+    || startsWithCommand('worker', 'pack', 'show')
   ) {
     return false
   }
