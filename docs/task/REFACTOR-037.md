@@ -123,3 +123,6 @@ and review proof.
 - 2026-05-09 23:43: Completed B2 core runtime replacement: deleted the old
   worker runtime subsystems and introduced a minimal local run engine that
   persists briefs, run events, generated files, artifacts, reviews, and lessons.
+- 2026-05-09 23:55: Completed B3 local daemon/API replacement: deleted the old
+  worker route tree and replaced it with `/api/local/*` routes plus local API
+  tests and OpenAPI absence coverage.

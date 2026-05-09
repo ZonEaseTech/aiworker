@@ -461,6 +461,10 @@ export function getSetting(key: string): SettingRow | null {
   return getWorkerDb().select().from(schema.settings).where(eq(schema.settings.key, key)).get() ?? null
 }
 
+export function listSettings(): SettingRow[] {
+  return getWorkerDb().select().from(schema.settings).orderBy(schema.settings.key).all()
+}
+
 export function setSetting(key: string, valueJson: Record<string, unknown>, at = new Date().toISOString()): SettingRow {
   const existing = getSetting(key)
   if (!existing) {

@@ -1,363 +1,395 @@
-import type { WorkerModeState } from '@zonease/aiworker-core'
-import type { WorkerConfig } from '@zonease/aiworker-shared'
+import type { LocalExecutor, LocalWorkerRuntime } from '@zonease/aiworker-core'
+import type { BriefRow, LessonRow, ReviewRow, RunEventRow } from '@zonease/aiworker-storage-sqlite/worker'
+import type { Context } from 'hono'
+
+import { randomUUID, timingSafeEqual } from 'node:crypto'
+import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 
 import { OpenAPIHono, z } from '@hono/zod-openapi'
 import { apiReference } from '@scalar/hono-api-reference'
+import { createLocalWorkerRuntime, workerEnv } from '@zonease/aiworker-core'
 import {
-  buildWorkerRuntime,
-  enumerateSecretPaths,
-  getSecretsVault,
-  hydrateSecrets,
-  loadOrMintIdentity,
-  loadOrSeedConfig,
-  printBootstrapIfJustMinted,
-  ProcessManager,
-  workerEnv,
-} from '@zonease/aiworker-core'
-import { getWorkerDb, initWorkerDb, runWorkerMigrations } from '@zonease/aiworker-storage-sqlite/worker'
+  appendRunEvent,
+  closeWorkerDb,
+  createLesson,
+  createReview,
+  getArtifact,
+  getBrief,
+  getLesson,
+  getReview,
+  getRun,
+  initWorkerDb,
+  listArtifacts,
+  listBriefs,
+  listFiles,
+  listLessons,
+  listReviews,
+  listRunEvents,
+  listRuns,
+  listSettings,
+  nextRunEventSeq,
+  runWorkerMigrations,
+  setSetting,
+  updateBrief,
+  updateLesson,
+  updateRun,
+  upsertFile,
+  upsertWorkspace,
+} from '@zonease/aiworker-storage-sqlite/worker'
 
-import consola from 'consola'
 import { errorHandler } from '../shared/middleware/error-handler'
 import { requestLogger } from '../shared/middleware/logger'
-import { adminStaticMiddleware } from '../worker/admin/serve-static'
-import { buildArtifactRoutes } from '../worker/artifacts/routes'
-import { buildBrainRoutes } from '../worker/brain/routes'
-import { buildChannelRoutes } from '../worker/channels/routes'
-import { buildEventRoutes } from '../worker/events/routes'
-import { evolutionRoutes } from '../worker/evolution/routes'
-import { buildBearerAuth } from '../worker/management/bearer-auth'
-import { buildManagementRoutes } from '../worker/management/routes'
-import { buildOrchestratorRoutes } from '../worker/orchestrator/routes'
-import { buildReviewRoutes } from '../worker/reviews/routes'
-import { buildRunRoutes } from '../worker/runs/routes'
 
-const DEFAULT_WORKER_RUNTIME_VERSION = 'dev'
-
-async function hydrateStoredConfig(stored: WorkerConfig): Promise<WorkerConfig> {
-  const vault = getSecretsVault()
-  const expectedPaths = new Set(enumerateSecretPaths(stored).map(p => p.path))
-  const map = new Map<string, string>()
-  for (const path of expectedPaths) {
-    const value = await vault.get(path)
-    if (value !== null)
-      map.set(path, value)
-  }
-  return hydrateSecrets(stored, map)
-}
+const DEFAULT_RUNTIME_VERSION = 'dev'
 
 export interface BootstrapWorkerAppOptions {
-  /**
-   * 调用方（如 `aiworker serve`）注册的 hook，在 `state.runtime` 已经原子换成
-   * `nextRuntime` 之后、`previous.dispose()` 解绑老 bus 之前同步触发。
-   * 顺序很关键：必须晚于 swap（hook 里 `state.runtime` 已是新 runtime），
-   * 必须早于 dispose（subscriber 重新订阅完成后老 bus 才能被解掉）。
-   *
-   * gateway-client 用它把 subscriber 重新挂到新 bus 上——老 bus 被 dispose
-   * 之后就不会再发事件，subscriber 的旧 unsubscribe 闭包是死的。
-   */
-  onRuntimeReloaded?: () => void
-  /**
-   * PLAN-022 / FEAT-033：worker bundle 静态根目录绝对路径。CLI 在启动时决议
-   * （npm install 后是 `<cli-bin>/web/worker`，源码 dev 时是
-   * `<repo>/apps/web/dist/worker`）。未传 → `/admin/*` 不挂载，访问 404；不
-   * 阻塞 bootstrap。
-   */
-  webStaticDir?: string
-  /** Runtime/package version surfaced by `/api/worker/info` and OpenAPI docs. */
+  dbPath?: string
+  migrationsFolder?: string
+  workspace?: {
+    id: string
+    name: string
+    rootPath: string
+  }
+  workerId?: string
+  token?: string
   runtimeVersion?: string
+  executor?: LocalExecutor
+  now?: () => string
 }
 
-/**
- * Self-sufficient worker bootstrap: init worker.db, mint identity on first
- * boot, load (or seed) config, hydrate secrets from the vault, and build the
- * runtime. Returns the assembled Hono app plus a mutable `state` object whose
- * `runtime` ref is atomically replaced by `reloadRuntime` when PLAN-004 2.2
- * management API pushes a new config.
- */
+export interface LocalDaemonState {
+  workerId: string
+  runtime: LocalWorkerRuntime
+  startedAt: string
+  token?: string
+  runtimeVersion: string
+}
+
 export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}): Promise<{
   app: OpenAPIHono
   port: number
-  state: WorkerModeState
-  /**
-   * Hot-reload entry point shared by HTTP `PUT /config` and gateway-client
-   * `config.put` — atomically swaps `state.runtime` to a runtime built around
-   * the new stored config. Throwing here does NOT roll back the persisted
-   * config; callers downgrade their `runtimeReload` field instead.
-   */
-  reloadRuntime: (nextStoredConfig: WorkerConfig, newVersion: number) => Promise<void>
+  state: LocalDaemonState
 }> {
-  const runtimeVersion = options.runtimeVersion ?? DEFAULT_WORKER_RUNTIME_VERSION
+  const dbPath = options.dbPath ?? workerEnv.WORKER_DB_PATH
+  await mkdir(path.dirname(dbPath), { recursive: true })
+  closeWorkerDb()
+  initWorkerDb(dbPath)
+  runWorkerMigrations(options.migrationsFolder ?? workerEnv.WORKER_MIGRATIONS_FOLDER)
 
-  initWorkerDb(workerEnv.WORKER_DB_PATH)
-  runWorkerMigrations(workerEnv.WORKER_MIGRATIONS_FOLDER)
-
-  const vault = getSecretsVault()
-  const db = getWorkerDb()
-
-  const identity = await loadOrMintIdentity(db, vault, {
-    ...(workerEnv.AIWORKER_FORCE_ID === undefined ? {} : { forceId: workerEnv.AIWORKER_FORCE_ID }),
-    ...(workerEnv.AIWORKER_FORCE_TOKEN === undefined ? {} : { forceToken: workerEnv.AIWORKER_FORCE_TOKEN }),
+  const runtimeVersion = options.runtimeVersion ?? DEFAULT_RUNTIME_VERSION
+  const workspace = options.workspace ?? {
+    id: 'local',
+    name: 'Local Workspace',
+    rootPath: workerEnv.WORKER_WORKSPACE_ROOT,
+  }
+  const runtime = createLocalWorkerRuntime({
+    workerId: options.workerId ?? 'local-worker',
+    workspace,
+    executor: options.executor,
+    now: options.now,
   })
-  printBootstrapIfJustMinted(identity.workerId, identity.token, db, identity.justMinted)
+  await runtime.init()
 
-  consola.info(`[worker ${identity.workerId}] worker.db ready at ${workerEnv.WORKER_DB_PATH}`)
-
-  const stored = await loadOrSeedConfig(db)
-  const hydrated = await hydrateStoredConfig(stored.config)
-
-  // ProcessManager 跨 hot-reload 持久化（FEAT-015 / PLAN-007 §架构承诺 5）：
-  // bootstrap 时 new 一次，之后每次 reloadRuntime 只调 setLimits。
-  const processes = new ProcessManager({
-    maxConcurrentTotal: workerEnv.MAX_CONCURRENT_TOTAL,
-    perEngineLimits: { ...workerEnv.perEngineLimits },
-    stallTimeoutMs: workerEnv.PROCESS_STALL_TIMEOUT_MS,
-    killTimeoutMs: workerEnv.PROCESS_KILL_TIMEOUT_MS,
-    autoCleanupDelayMs: workerEnv.PROCESS_AUTO_CLEANUP_DELAY_MS,
-    gcIntervalMs: workerEnv.PROCESS_GC_INTERVAL_MS,
-  })
-
-  const runtime = buildWorkerRuntime(identity.workerId, hydrated, { processes })
-  consola.info(`[worker ${identity.workerId}] runtime built — brains=${hydrated.brains.length} executor=${hydrated.executor.engine}/${hydrated.executor.variant} channels=${runtime.channels.list().length}`)
-
-  const state: WorkerModeState = {
-    workerId: identity.workerId,
+  const state: LocalDaemonState = {
+    workerId: runtime.workerId,
     runtime,
-    configVersion: stored.version,
     startedAt: new Date().toISOString(),
-    tokenPlaintext: identity.token,
-  }
-
-  let lastReload: Promise<void> = Promise.resolve()
-
-  async function doReloadRuntime(nextStoredConfig: WorkerConfig, newVersion: number): Promise<void> {
-    const nextHydrated = await hydrateStoredConfig(nextStoredConfig)
-    // ProcessManager 跨 reload 复用——只刷新容量，不重建实例（活跃进程 +
-    // 队列保留）。env 现在是 process-level，setLimits 会取最新 env 值。
-    processes.setLimits({
-      maxConcurrentTotal: workerEnv.MAX_CONCURRENT_TOTAL,
-      perEngineLimits: { ...workerEnv.perEngineLimits },
-    })
-    const nextRuntime = buildWorkerRuntime(state.workerId, nextHydrated, { processes })
-    const previous = state.runtime
-    state.runtime = nextRuntime
-    state.configVersion = newVersion
-    // hook 必须在 swap 之后、dispose 之前调——subscriber 此时才能从新 bus
-    // 拿到 listener；一旦 previous.dispose() 跑完，老 bus 上即使有事件也
-    // 不会再到达 subscriber（且新事件本来也是从新 bus 出的）。
-    if (options.onRuntimeReloaded) {
-      try {
-        options.onRuntimeReloaded()
-      }
-      catch (err) {
-        consola.warn(`[worker ${state.workerId}] onRuntimeReloaded hook failed: ${String(err)}`)
-      }
-    }
-    try {
-      previous.dispose()
-    }
-    catch (err) {
-      consola.warn(`[worker ${state.workerId}] previous runtime dispose failed: ${String(err)}`)
-    }
-    consola.info(`[worker ${state.workerId}] runtime reloaded to config version ${newVersion}`)
-  }
-
-  function reloadRuntime(nextStoredConfig: WorkerConfig, newVersion: number): Promise<void> {
-    const run = lastReload
-      .catch(() => undefined)
-      .then(() => doReloadRuntime(nextStoredConfig, newVersion))
-    lastReload = run
-    return run
+    token: options.token ?? workerEnv.AIWORKER_LOCAL_TOKEN,
+    runtimeVersion,
   }
 
   const app = new OpenAPIHono()
   app.use(requestLogger)
   app.onError(errorHandler)
-
-  // PLAN-022 / FEAT-033：worker bundle 静态托管。挂在 bearer-auth 之前——
-  // `/admin/*` 是公开面（与 `/health`、channel webhook 同等级），不携带
-  // 业务数据；`/api/worker/*` 仍走 bearer-auth。fail-closed 公开模式下要靠
-  // 反代 basic-auth 把陌生人挡在 `/admin/` 之外（见 BUG-007 / BUG-019）。
-  if (options.webStaticDir) {
-    const dir = options.webStaticDir
-    app.get('/admin', c => c.redirect('/admin/', 308))
-    app.use('/admin/*', adminStaticMiddleware(dir))
-  }
-
-  app.get('/health', async (c) => {
-    const [brainHealth, executorHealth] = await Promise.all([
-      state.runtime.brain.health().catch(() => null),
-      state.runtime.executor.health().catch(() => null),
-    ])
-    return c.json({
-      mode: 'worker',
-      workerId: state.workerId,
-      status: 'ok',
-      brain: brainHealth,
-      executor: executorHealth,
-      configVersion: state.configVersion,
-      startedAt: state.startedAt,
-      checkedAt: new Date().toISOString(),
-      // TODO-016: self-identification fields so callers using a stale
-      // bearer can diagnose "I'm talking to the wrong worker" without auth.
-      // Paths are non-sensitive (no token, no secret); they let curl-based
-      // smoke scripts confirm they hit the expected worker.db / project.
-      workerHome: path.dirname(workerEnv.WORKER_DB_PATH),
-      runtimeVersion,
-    })
+  app.use('/api/local/*', async (c, next) => {
+    if (!state.token)
+      return next()
+    const header = c.req.header('authorization') ?? ''
+    const expected = `Bearer ${state.token}`
+    if (!timingSafeEqualText(header, expected))
+      return c.json({ error: { code: 'UNAUTHORIZED', message: 'Missing or invalid local bearer token.' } }, 401)
+    return next()
   })
 
-  // Public surface: `/{channel}/webhook` at the root so that external platforms
-  // can register simple URLs. The `{workerId}` segment is stripped by Caddy —
-  // the worker container only ever sees its own suffix.
-  app.route(
-    '/',
-    buildChannelRoutes(() => state.runtime, state.workerId),
-  )
-
-  // BUG-015: bearer-auth 必须挂在 `/api/worker/*` 顶层而非各 sub-router 内部，
-  // 否则 orchestrator / evolution / events 会落在防护外。`/health` 与 channels
-  // webhook 不在该前缀下，仍按原计划公开。
-  app.use('/api/worker/*', buildBearerAuth({
-    getIdentity: () => ({ tokenPlaintext: state.tokenPlaintext }),
+  app.get('/health', c => c.json({
+    mode: 'local',
+    status: 'ok',
+    workerId: state.workerId,
+    runtimeVersion: state.runtimeVersion,
+    startedAt: state.startedAt,
+    checkedAt: new Date().toISOString(),
   }))
 
-  app.route('/api/worker/orchestrator', buildOrchestratorRoutes(() => state.runtime))
-  app.route('/api/worker/runs', buildRunRoutes(() => state.runtime))
-  app.route('/api/worker/artifacts', buildArtifactRoutes())
-  app.route('/api/worker/reviews', buildReviewRoutes(() => state.runtime))
-  app.route('/api/worker/evolution', evolutionRoutes)
-  app.route('/api/worker/events', buildEventRoutes(() => state.runtime))
-  app.route('/api/worker/brain', buildBrainRoutes({
-    getWorkerId: () => state.workerId,
-    getDecisionPipelineConfig: () => {
-      const decisionPipeline = state.runtime.config.orchestrator?.decisionPipeline
-      const result: { intentEvaluator?: 'heuristic' | 'llm', qualityEvaluator?: 'heuristic' | 'llm', qualityMode?: 'observe' | 'warn' | 'retry' | 'block', qualityThreshold?: number, conversationClassifierEnabled?: boolean } = {
-        intentEvaluator: decisionPipeline?.intentClassifier?.evaluator ?? 'heuristic',
-        qualityEvaluator: decisionPipeline?.qualityGate?.evaluator ?? 'heuristic',
-        qualityMode: decisionPipeline?.qualityGate?.mode ?? 'observe',
-        conversationClassifierEnabled: true,
-      }
-      if (decisionPipeline?.qualityGate?.threshold !== undefined)
-        result.qualityThreshold = decisionPipeline.qualityGate.threshold
-      return result
-    },
+  app.get('/api/local/info', c => c.json({
+    workerId: state.workerId,
+    runtimeVersion: state.runtimeVersion,
+    startedAt: state.startedAt,
+    workspace: state.runtime.snapshot().workspace,
   }))
-  app.route('/api/worker', buildManagementRoutes({ getState: () => state, reloadRuntime, runtimeVersion }))
 
-  // BUG-065: sub-router endpoints register paths via plain `app.get(...)` so
-  // `OpenAPIHono.doc()` can't reflect them. Re-register the operator-facing
-  // surface here as typed routes pointing at the existing handlers — keeps
-  // diff small while populating `/openapi.json` paths and unblocking the
-  // `/docs` Scalar UI. Coverage is intentionally partial; full conversion
-  // tracked separately.
-  registerWorkerOpenApiPaths(app)
+  app.get('/api/local/workspace', c => c.json({ workspace: state.runtime.snapshot().workspace }))
+  app.patch('/api/local/workspace', async (c) => {
+    const body = await readJson<{ name?: string }>(c.req)
+    const current = state.runtime.snapshot().workspace
+    const workspace = upsertWorkspace({
+      id: current.id,
+      name: typeof body.name === 'string' && body.name.trim().length > 0 ? body.name : current.name,
+      rootPath: current.rootPath,
+    })
+    return c.json({ workspace })
+  })
 
+  app.get('/api/local/briefs', c => c.json({ briefs: listBriefs(workspace.id) }))
+  app.post('/api/local/briefs', async (c) => {
+    const body = await readJson<{ title?: string, body?: string }>(c.req)
+    const brief = state.runtime.createBrief({
+      title: requireString(body.title, 'title'),
+      body: requireString(body.body, 'body'),
+    })
+    return c.json({ brief }, 201)
+  })
+  app.get('/api/local/briefs/:id', (c) => {
+    const brief = getBrief(c.req.param('id'))
+    if (!brief)
+      return notFound(c, 'brief')
+    return c.json({ brief })
+  })
+  app.patch('/api/local/briefs/:id', async (c) => {
+    const body = await readJson<Partial<Pick<BriefRow, 'body' | 'status' | 'title'>>>(c.req)
+    return c.json({ brief: updateBrief({ id: c.req.param('id'), ...body }) })
+  })
+
+  app.get('/api/local/runs', c => c.json({ runs: listRuns(workspace.id) }))
+  app.post('/api/local/runs', async (c) => {
+    const body = await readJson<{ briefId?: string, prompt?: string, executor?: string, metadata?: Record<string, unknown> }>(c.req)
+    const result = await state.runtime.startRun({
+      briefId: body.briefId,
+      prompt: body.prompt,
+      executor: body.executor,
+      metadata: body.metadata,
+    })
+    return c.json(result, 201)
+  })
+  app.get('/api/local/runs/:id', (c) => {
+    const run = getRun(c.req.param('id'))
+    if (!run)
+      return notFound(c, 'run')
+    return c.json({ run, events: listRunEvents(run.id) })
+  })
+  app.post('/api/local/runs/:id/cancel', (c) => {
+    const id = c.req.param('id')
+    const run = getRun(id)
+    if (!run)
+      return notFound(c, 'run')
+    const cancelled = updateRun({ id, status: 'cancelled', finishedAt: new Date().toISOString() })
+    appendEvent(id, 'status', { status: 'cancelled' })
+    return c.json({ run: cancelled })
+  })
+  app.get('/api/local/runs/:id/events', (c) => {
+    const run = getRun(c.req.param('id'))
+    if (!run)
+      return notFound(c, 'run')
+    return c.json({ events: listRunEvents(run.id) })
+  })
+
+  app.get('/api/local/files', c => c.json({ files: listFiles(workspace.id) }))
+  app.get('/api/local/files/search', (c) => {
+    const query = c.req.query('q')?.toLowerCase() ?? ''
+    const files = listFiles(workspace.id).filter(file => file.path.toLowerCase().includes(query))
+    return c.json({ files })
+  })
+  app.get('/api/local/files/raw/:path{.+}', async (c) => {
+    const filePath = c.req.param('path')
+    return c.text(await state.runtime.files.read(filePath))
+  })
+  app.put('/api/local/files/raw/:path{.+}', async (c) => {
+    const filePath = c.req.param('path')
+    const content = await c.req.text()
+    const entry = await state.runtime.files.write({ path: filePath, content })
+    const file = upsertFile({
+      id: randomUUID(),
+      workspaceId: workspace.id,
+      path: filePath,
+      kind: entry.kind,
+      size: entry.size,
+      mtime: entry.mtime,
+      hash: entry.hash,
+      source: 'user',
+    })
+    return c.json({ file })
+  })
+  app.delete('/api/local/files/raw/:path{.+}', async (c) => {
+    await state.runtime.files.delete(c.req.param('path'))
+    return c.json({ ok: true })
+  })
+
+  app.get('/api/local/artifacts', c => c.json({ artifacts: listArtifacts(workspace.id) }))
+  app.get('/api/local/artifacts/:id', (c) => {
+    const artifact = getArtifact(c.req.param('id'))
+    if (!artifact)
+      return notFound(c, 'artifact')
+    return c.json({ artifact })
+  })
+
+  app.get('/api/local/reviews', c => c.json({ reviews: listReviews(workspace.id) }))
+  app.post('/api/local/reviews', async (c) => {
+    const body = await readJson<Partial<ReviewRow> & { findingsJson?: Record<string, unknown>[], risksJson?: Record<string, unknown>[] }>(c.req)
+    const review = createReview({
+      id: randomUUID(),
+      workspaceId: workspace.id,
+      runId: body.runId ?? null,
+      artifactId: body.artifactId ?? null,
+      verdict: body.verdict ?? 'needs_review',
+      findingsJson: body.findingsJson ?? [],
+      risksJson: body.risksJson ?? [],
+    })
+    return c.json({ review }, 201)
+  })
+  app.get('/api/local/reviews/:id', (c) => {
+    const review = getReview(c.req.param('id'))
+    if (!review)
+      return notFound(c, 'review')
+    return c.json({ review })
+  })
+
+  app.get('/api/local/lessons', c => c.json({ lessons: listLessons(workspace.id) }))
+  app.post('/api/local/lessons', async (c) => {
+    const body = await readJson<Partial<LessonRow>>(c.req)
+    const lesson = createLesson({
+      id: randomUUID(),
+      workspaceId: workspace.id,
+      sourceReviewId: body.sourceReviewId ?? null,
+      statement: requireString(body.statement, 'statement'),
+      evidenceJson: Array.isArray(body.evidenceJson) ? body.evidenceJson : [],
+    })
+    return c.json({ lesson }, 201)
+  })
+  app.patch('/api/local/lessons/:id', async (c) => {
+    const body = await readJson<Pick<LessonRow, 'status'>>(c.req)
+    return c.json({ lesson: updateLesson(c.req.param('id'), body.status) })
+  })
+
+  app.get('/api/local/settings', c => c.json({ settings: listSettings() }))
+  app.patch('/api/local/settings', async (c) => {
+    const body = await readJson<Record<string, Record<string, unknown>>>(c.req)
+    const settings = Object.entries(body).map(([key, value]) => setSetting(key, value))
+    return c.json({ settings })
+  })
+
+  app.get('/api/local/events', (c) => {
+    const events = listRuns(workspace.id).flatMap(run => listRunEvents(run.id))
+    return c.json({ events })
+  })
+
+  registerLocalOpenApiPaths(app)
   app.doc('/openapi.json', {
     openapi: '3.1.0',
     info: {
-      title: 'AIWorker Worker API',
+      title: 'AIWorker Local Daemon API',
       version: runtimeVersion,
-      description: `Per-worker surface: channels, runs, artifacts, reviews, lessons, management, and evolution. Worker id: ${state.workerId}`,
+      description: 'Local workspace API for briefs, runs, files, artifacts, reviews, and lessons.',
     },
   })
-
   app.get('/docs', apiReference({ spec: { url: '/openapi.json' } }))
 
-  return { app, port: workerEnv.PORT, state, reloadRuntime }
+  return { app, port: workerEnv.PORT, state }
 }
 
-/** Entry wrapper used by `src/index.ts`. */
 export async function createWorkerApp(): Promise<{ app: OpenAPIHono, port: number }> {
   const { app, port } = await bootstrapWorkerApp()
   return { app, port }
 }
 
-/**
- * BUG-065 minimal-diff fix. Re-declares the operator-facing endpoints at the
- * doc level so `app.doc('/openapi.json')` returns a non-empty `paths`
- * object. Each entry mirrors the canonical handler URL; the response schema
- * is intentionally lightweight (`z.object({}).passthrough()`) — the goal is
- * to populate the doc surface and unblock typed clients, not to fully
- * express every shape. Sub-routers continue serving the actual handlers.
- */
-function registerWorkerOpenApiPaths(app: OpenAPIHono): void {
-  const lightObject = z.object({}).passthrough().openapi('WorkerEndpointResponse')
-  const errorObject = z.object({
-    error: z.object({
-      code: z.string(),
-      message: z.string(),
-    }),
-  }).openapi('WorkerErrorResponse')
+async function readJson<T>(request: { json: () => Promise<unknown> }): Promise<T> {
+  return await request.json().catch(() => ({})) as T
+}
 
+function requireString(value: unknown, field: string): string {
+  if (typeof value !== 'string' || value.trim().length === 0)
+    throw new Error(`Missing required field: ${field}`)
+  return value
+}
+
+function notFound(c: Context, resource: string) {
+  return c.json({ error: { code: 'NOT_FOUND', message: `${resource} not found.` } }, 404)
+}
+
+function appendEvent(runId: string, type: RunEventRow['type'], payloadJson: Record<string, unknown>): RunEventRow {
+  return appendRunEvent({
+    runId,
+    seq: nextRunEventSeq(runId),
+    type,
+    payloadJson,
+    at: new Date().toISOString(),
+  })
+}
+
+function timingSafeEqualText(actual: string, expected: string): boolean {
+  const a = Buffer.from(actual)
+  const b = Buffer.from(expected)
+  return a.length === b.length && timingSafeEqual(a, b)
+}
+
+function registerLocalOpenApiPaths(app: OpenAPIHono): void {
+  const responseSchema = z.object({}).passthrough().openapi('LocalResponse')
   const okJson = {
     200: {
       description: 'OK',
-      content: { 'application/json': { schema: lightObject } },
+      content: { 'application/json': { schema: responseSchema } },
     },
   } as const
-  const errJson = {
-    description: 'Error',
-    content: { 'application/json': { schema: errorObject } },
+  const createdJson = {
+    201: {
+      description: 'Created',
+      content: { 'application/json': { schema: responseSchema } },
+    },
   } as const
 
-  const docs: Array<{
-    method: 'get' | 'post' | 'put' | 'delete'
+  const paths: Array<{
+    method: 'get' | 'post' | 'patch' | 'put' | 'delete'
     path: string
     summary: string
     tags: string[]
-    requireAuth?: boolean
+    created?: boolean
   }> = [
-    { method: 'get', path: '/health', summary: 'Worker health snapshot (public)', tags: ['health'] },
-    { method: 'get', path: '/api/worker/info', summary: 'Worker identity, brainSummary, scope manifest, runtime version', tags: ['management'], requireAuth: true },
-    { method: 'get', path: '/api/worker/sessions', summary: 'Active orchestrator sessions', tags: ['management'], requireAuth: true },
-    { method: 'get', path: '/api/worker/schedule', summary: 'Worker cron schedule snapshot', tags: ['management'], requireAuth: true },
-    { method: 'get', path: '/api/worker/approvals', summary: 'Pending tool approval requests', tags: ['management'], requireAuth: true },
-    { method: 'get', path: '/api/worker/brain/summary', summary: 'Brain summary aggregate (memories / skills / artifacts / admission)', tags: ['brain'], requireAuth: true },
-    { method: 'get', path: '/api/worker/brain/admission', summary: 'List admission proposals', tags: ['brain'], requireAuth: true },
-    { method: 'get', path: '/api/worker/brain/admission/{id}', summary: 'Show admission proposal + decisions', tags: ['brain'], requireAuth: true },
-    { method: 'post', path: '/api/worker/brain/admission/{id}/approve', summary: 'Approve a pending admission proposal', tags: ['brain'], requireAuth: true },
-    { method: 'post', path: '/api/worker/brain/admission/{id}/apply', summary: 'Materialize an approved admission proposal (dry-run unless commit=true)', tags: ['brain'], requireAuth: true },
-    { method: 'get', path: '/api/worker/reviews', summary: 'List worker run reviews', tags: ['reviews'], requireAuth: true },
-    { method: 'get', path: '/api/worker/reviews/{taskId}', summary: 'Show one worker run review', tags: ['reviews'], requireAuth: true },
-    { method: 'post', path: '/api/worker/reviews/{taskId}/rerun', summary: 'Create a bounded rerun from one review', tags: ['reviews'], requireAuth: true },
-    { method: 'post', path: '/api/worker/reviews/{taskId}/lessons/promote', summary: 'Promote review lesson candidates into pending durable-context proposals', tags: ['reviews'], requireAuth: true },
-    { method: 'get', path: '/api/worker/runs', summary: 'List local worker runs', tags: ['runs'], requireAuth: true },
-    { method: 'post', path: '/api/worker/runs', summary: 'Create a local worker run', tags: ['runs'], requireAuth: true },
-    { method: 'get', path: '/api/worker/runs/{id}', summary: 'Show one local worker run', tags: ['runs'], requireAuth: true },
-    { method: 'get', path: '/api/worker/runs/{id}/events', summary: 'SSE stream filtered to one local worker run', tags: ['runs'], requireAuth: true },
-    { method: 'post', path: '/api/worker/runs/{id}/cancel', summary: 'Cancel one local worker run when it is bound to a conversation', tags: ['runs'], requireAuth: true },
-    { method: 'get', path: '/api/worker/artifacts', summary: 'List worker workbench artifact metadata', tags: ['artifacts'], requireAuth: true },
-    { method: 'get', path: '/api/worker/artifacts/{id}', summary: 'Show one worker workbench artifact metadata record', tags: ['artifacts'], requireAuth: true },
-    { method: 'get', path: '/api/worker/orchestrator/tasks', summary: 'List recent worker orchestrator tasks', tags: ['orchestrator'], requireAuth: true },
-    { method: 'get', path: '/api/worker/orchestrator/tasks/{id}/journal', summary: 'Show Brain Journal trace for one worker task', tags: ['orchestrator'], requireAuth: true },
-    { method: 'post', path: '/api/worker/orchestrator/tasks/{id}/rerun', summary: 'Create a bounded proof-loop rerun for one worker task', tags: ['orchestrator'], requireAuth: true },
-    { method: 'post', path: '/api/worker/orchestrator/tasks', summary: 'Submit a worker orchestrator task', tags: ['orchestrator'], requireAuth: true },
-    { method: 'get', path: '/api/worker/orchestrator/conversations', summary: 'List recent worker orchestrator conversations', tags: ['orchestrator'], requireAuth: true },
-    { method: 'get', path: '/api/worker/orchestrator/conversations/{id}/messages', summary: 'List messages for a worker orchestrator conversation', tags: ['orchestrator'], requireAuth: true },
-    { method: 'post', path: '/api/worker/orchestrator/conversations/{id}/messages', summary: 'Continue an existing worker orchestrator conversation', tags: ['orchestrator'], requireAuth: true },
-    { method: 'get', path: '/api/worker/events/stream', summary: 'SSE stream of orchestrator events', tags: ['events'], requireAuth: true },
+    { method: 'get', path: '/api/local/info', summary: 'Local daemon info', tags: ['info'] },
+    { method: 'get', path: '/api/local/workspace', summary: 'Show local workspace', tags: ['workspace'] },
+    { method: 'patch', path: '/api/local/workspace', summary: 'Update local workspace metadata', tags: ['workspace'] },
+    { method: 'get', path: '/api/local/briefs', summary: 'List briefs', tags: ['briefs'] },
+    { method: 'post', path: '/api/local/briefs', summary: 'Create brief', tags: ['briefs'], created: true },
+    { method: 'get', path: '/api/local/briefs/{id}', summary: 'Show brief', tags: ['briefs'] },
+    { method: 'patch', path: '/api/local/briefs/{id}', summary: 'Update brief', tags: ['briefs'] },
+    { method: 'get', path: '/api/local/runs', summary: 'List runs', tags: ['runs'] },
+    { method: 'post', path: '/api/local/runs', summary: 'Start run', tags: ['runs'], created: true },
+    { method: 'get', path: '/api/local/runs/{id}', summary: 'Show run', tags: ['runs'] },
+    { method: 'post', path: '/api/local/runs/{id}/cancel', summary: 'Cancel run', tags: ['runs'] },
+    { method: 'get', path: '/api/local/runs/{id}/events', summary: 'List run events', tags: ['runs'] },
+    { method: 'get', path: '/api/local/files', summary: 'List workspace files', tags: ['files'] },
+    { method: 'get', path: '/api/local/files/raw/{path}', summary: 'Read workspace file', tags: ['files'] },
+    { method: 'put', path: '/api/local/files/raw/{path}', summary: 'Write workspace file', tags: ['files'] },
+    { method: 'delete', path: '/api/local/files/raw/{path}', summary: 'Delete workspace file', tags: ['files'] },
+    { method: 'get', path: '/api/local/files/search', summary: 'Search workspace files', tags: ['files'] },
+    { method: 'get', path: '/api/local/artifacts', summary: 'List artifacts', tags: ['artifacts'] },
+    { method: 'get', path: '/api/local/artifacts/{id}', summary: 'Show artifact', tags: ['artifacts'] },
+    { method: 'get', path: '/api/local/reviews', summary: 'List reviews', tags: ['reviews'] },
+    { method: 'post', path: '/api/local/reviews', summary: 'Create review', tags: ['reviews'], created: true },
+    { method: 'get', path: '/api/local/reviews/{id}', summary: 'Show review', tags: ['reviews'] },
+    { method: 'get', path: '/api/local/lessons', summary: 'List lessons', tags: ['lessons'] },
+    { method: 'post', path: '/api/local/lessons', summary: 'Create lesson', tags: ['lessons'], created: true },
+    { method: 'patch', path: '/api/local/lessons/{id}', summary: 'Update lesson', tags: ['lessons'] },
+    { method: 'get', path: '/api/local/settings', summary: 'List settings', tags: ['settings'] },
+    { method: 'patch', path: '/api/local/settings', summary: 'Update settings', tags: ['settings'] },
+    { method: 'get', path: '/api/local/events', summary: 'List local run events', tags: ['events'] },
   ]
 
-  for (const doc of docs) {
-    const responses: Record<string, unknown> = { ...okJson }
-    if (doc.requireAuth) {
-      responses[401] = errJson
-      responses[403] = errJson
-    }
+  for (const path of paths) {
     app.openAPIRegistry.registerPath({
-      method: doc.method,
-      path: doc.path,
-      summary: doc.summary,
-      tags: doc.tags,
-      ...(doc.requireAuth ? { security: [{ bearerAuth: [] }] } : {}),
-      responses: responses as never,
+      method: path.method,
+      path: path.path,
+      summary: path.summary,
+      tags: path.tags,
+      responses: path.created ? createdJson : okJson,
     })
   }
-
-  app.openAPIRegistry.registerComponent('securitySchemes', 'bearerAuth', {
-    type: 'http',
-    scheme: 'bearer',
-    description: 'Worker bearer token. Obtain via `aiworker token rotate` or first-run mint.',
-  })
 }
