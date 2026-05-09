@@ -1,18 +1,24 @@
 # AIWorker Changelog
 
-## 2026-05-09 [release] REL-029 / PLAN-182 — 发布 aiworker CLI 0.11.0
+## 2026-05-09 [completed] REL-029 / PLAN-182 — 发布 aiworker CLI 0.11.0
 
-启动 `@zonease/aiworker-cli@0.11.0` minor release，承载 0.10.4 之后的
+发布 `@zonease/aiworker-cli@0.11.0` minor release，承载 0.10.4 之后的
 FEAT-056 developer repo worker proof loop。
 
 - 本次不是 1.0 GA；目标是把 Brain Journal、Gate verdict、Brain Engine reviewer、
   bounded rerun、Brain Inbox admission、authority preflight 和 QA-022 readiness
   evidence 作为 0.x minor 版本交付。
-- 发布前必须通过本地 release gate、CLI smoke、dist version 与 publish dry-run。
-- 发布后必须验证 GitHub Actions release workflow、npm latest、显式 `bunx`
-  package smoke、GitHub Release assets 和 `cli-release-local` compact harness。
 - 本地 release gate 已通过：frozen install、typecheck、lint、test、build、
   CLI run/fleet smoke、dist version、`git diff --check` 和 publish dry-run pack stage。
+- `main` 与 annotated tag `v0.11.0` 已推送；GitHub Actions release run
+  `25586331820` 成功，npm latest 已更新到 `0.11.0`，GitHub Release 上传四个
+  binary assets。
+- `bunx @zonease/aiworker-cli@0.11.0 --version` 报告
+  `aiworker/0.11.0 darwin-arm64 node-v24.3.0`。
+- 发布包 `cli-release-local` compact harness 已重跑通过：developer/codex 与
+  general-assistant/claude-code 共 80 PASS / 0 FAIL / 0 SKIPPED。
+- main push 的 Web bundle-size baseline 过期问题已用 commit `61b9729` 修正；
+  重跑后的 main lint 与 build-image workflow 均成功。
 
 ## 2026-05-09 [completed] PLAN-180 / PLAN-181 — proof-loop dogfood and readiness closeout
 

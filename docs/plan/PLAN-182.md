@@ -1,6 +1,6 @@
 # PLAN-182 发布 aiworker CLI 0.11.0
 
-- **status**: implementing
+- **status**: completed
 - **createdAt**: 2026-05-09 08:28
 - **approvedAt**: 2026-05-09 08:28
 - **relatedTask**: REL-029
@@ -61,3 +61,10 @@
 - 2026-05-09 08:31：本地 release gate 通过；dist package version 与 built CLI
   均为 `0.11.0`；publish dry-run 完成 pack stage 后在本机 npm auth boundary
   停止，进入 release bump commit 与 tag 推送。
+- 2026-05-09 08:34：release bump commit `c67c66c` 与 annotated tag `v0.11.0`
+  推送成功；GitHub Actions release run `25586331820` 成功；npm latest、
+  `bunx @zonease/aiworker-cli@0.11.0 --version` 与 GitHub Release assets 均验证通过。
+- 2026-05-09 08:36：main lint 的 Web bundle-size baseline failure 已用
+  commit `61b9729` 收口；重跑后的 main lint `25586451966` 与 build-image
+  `25586451942` 均成功。
+- 2026-05-09 08:43：发布包 compact harness 通过，80 PASS / 0 FAIL / 0 SKIPPED。

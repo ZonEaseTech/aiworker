@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-09 (PLAN-182 implementing)
+> Updated: 2026-05-09 (PLAN-182 completed)
 
 ## Usage
 
@@ -210,4 +210,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-179 Authority mode and high-risk preflight**](PLAN-179.md) `2026-05-09`
 - [x] [**PLAN-180 Developer repo worker dogfood campaign**](PLAN-180.md) `2026-05-09`
 - [x] [**PLAN-181 AIWorker 1.0 proof-loop readiness**](PLAN-181.md) `2026-05-09`
-- [-] [**PLAN-182 发布 aiworker CLI 0.11.0**](PLAN-182.md) `2026-05-09`
+- [x] [**PLAN-182 发布 aiworker CLI 0.11.0**](PLAN-182.md) `2026-05-09`
