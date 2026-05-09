@@ -244,6 +244,28 @@ AIWorker 1.0 的最小不可替代价值是：
 > 让一个真实业务 scope 的 AI worker 在不同 executor 之间持续保留项目事实，按证据放行结果，
 > 并把可复用经验纳入受治理的 Project Brain。
 
+AIWorker 不应成为用户日常工作的主界面。用户应优先在 Codex、Claude Code、Cursor 等
+原生 executor 里工作；AIWorker 的角色是 Project Brain sidecar：让 native-agent work
+能被汇报、复盘、admission、投影，并在下一次 run 里验证是否真的改善。Worker Admin Chat
+只能是调试/管理入口，不是产品闭环本身。
+
+这个闭环的最小形态是：
+
+```text
+native executor run
+→ task-scoped Case evidence
+→ Brain review decision
+→ rerun / hold / pass
+→ lesson candidate
+→ admission
+→ canonical Project Brain
+→ native skill / context projection
+→ later run verifies whether the lesson changed behavior
+```
+
+如果一个实现只做到 prompt 注入、聊天转发、raw log 展示或 heuristic `ready_to_ship`，
+它还没有证明 AIWorker 的存在价值。
+
 Brain 学习边界采用四级：
 
 1. **Journal**：默认记录，低摩擦，不影响未来行为。

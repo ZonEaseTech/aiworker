@@ -106,6 +106,67 @@ describe('BrainJournalService task trace (PLAN-174)', () => {
     expect(trace?.lineage.parentTaskIds).toEqual([])
     expect(trace?.proofLoop.status).toBe('failed')
   })
+
+  it('keeps task traces scoped inside a shared conversation', () => {
+    getWorkerDb().insert(agentTasks).values([
+      {
+        id: 'task-one',
+        prompt: 'first task',
+        status: 'succeeded',
+        conversationId: 'conv-shared',
+        createdAt: '2026-05-09T03:30:00.000Z',
+        finishedAt: '2026-05-09T03:30:10.000Z',
+        result: { assistantMessageId: 2 },
+      },
+      {
+        id: 'task-two',
+        prompt: 'second task',
+        status: 'succeeded',
+        conversationId: 'conv-shared',
+        createdAt: '2026-05-09T03:31:00.000Z',
+        finishedAt: '2026-05-09T03:31:10.000Z',
+        result: { assistantMessageId: 4 },
+      },
+    ]).run()
+    getWorkerDb().insert(conversations).values({
+      id: 'conv-shared',
+      channel: 'web',
+      chatId: 'chat-shared',
+      status: 'open',
+      startedAt: NOW,
+      lastActiveAt: NOW,
+    }).run()
+    getWorkerDb().insert(messages).values([
+      { conversationId: 'conv-shared', role: 'user', content: 'first task', createdAt: '2026-05-09T03:30:01.000Z' },
+      { conversationId: 'conv-shared', role: 'assistant', content: 'first answer', createdAt: '2026-05-09T03:30:09.000Z' },
+      { conversationId: 'conv-shared', role: 'user', content: 'second task', createdAt: '2026-05-09T03:31:01.000Z' },
+      { conversationId: 'conv-shared', role: 'assistant', content: 'second answer', createdAt: '2026-05-09T03:31:09.000Z' },
+    ]).run()
+    recordBrainJournalEvent({
+      at: '2026-05-09T03:30:09.000Z',
+      conversationId: 'conv-shared',
+      kind: 'gate.quality',
+      taskId: 'task-one',
+      payload: { action: 'warn', evaluator: 'heuristic', reason: 'first gate' },
+    })
+    recordBrainJournalEvent({
+      at: '2026-05-09T03:31:09.000Z',
+      conversationId: 'conv-shared',
+      kind: 'gate.quality',
+      taskId: 'task-two',
+      payload: { action: 'pass', evaluator: 'heuristic', reason: 'second gate' },
+    })
+
+    const first = new BrainJournalService().getTaskTrace('task-one')
+    const second = new BrainJournalService().getTaskTrace('task-two')
+
+    expect(first?.events.map(event => event.payload.reason)).toEqual(['first gate'])
+    expect(first?.messages.map(message => message.contentPreview)).toEqual(['first task', 'first answer'])
+    expect(first?.gateVerdict.action).toBe('warn')
+    expect(second?.events.map(event => event.payload.reason)).toEqual(['second gate'])
+    expect(second?.messages.map(message => message.contentPreview)).toEqual(['second task', 'second answer'])
+    expect(second?.gateVerdict.action).toBe('pass')
+  })
 })
 
 describe('buildGateVerdict (PLAN-175)', () => {
@@ -148,6 +209,17 @@ describe('buildGateVerdict (PLAN-175)', () => {
     expect(verdict.reasons.map(reason => reason.source)).toEqual(['kernel-invariant', 'brain-engine-review'])
   })
 
+  it('uses reviewed Brain Engine pass when no heuristic gate exists', () => {
+    const verdict = buildGateVerdict([
+      event(1, 'brain_engine.review', { action: 'pass', mode: 'observe-only', reason: 'review passed', status: 'reviewed' }),
+    ])
+
+    expect(verdict.action).toBe('pass')
+    expect(verdict.mode).toBe('observe-only')
+    expect(verdict.reasons.map(reason => reason.source)).toEqual(['brain-engine-review'])
+    expect(verdict.evidenceRefs).toEqual(['brain_journal_events:1'])
+  })
+
   it('warns on high-risk ambient authority without claiming enforcement', () => {
     const verdict = buildGateVerdict([
       event(1, 'authority.preflight', {
@@ -165,6 +237,25 @@ describe('buildGateVerdict (PLAN-175)', () => {
     expect(verdict.action).toBe('warn')
     expect(verdict.mode).toBe('observe-only')
     expect(verdict.reasons.map(reason => reason.source)).toEqual(['authority-preflight', 'heuristic'])
+  })
+
+  it('keeps high-risk ambient authority visible even when Brain Engine passes without a quality gate', () => {
+    const verdict = buildGateVerdict([
+      event(1, 'authority.preflight', {
+        authorityMode: 'unmanaged_ambient',
+        enforceable: false,
+        operatorMode: 'ambient',
+        recommendation: 'prefer-plan-only',
+        risk: 'high',
+        signals: [{ type: 'database', reason: 'task mentions database' }],
+        warning: 'High-risk task under unmanaged ambient executor authority.',
+      }),
+      event(2, 'brain_engine.review', { action: 'pass', mode: 'observe-only', reason: 'review passed', status: 'reviewed' }),
+    ])
+
+    expect(verdict.action).toBe('warn')
+    expect(verdict.mode).toBe('observe-only')
+    expect(verdict.reasons.map(reason => reason.source)).toEqual(['authority-preflight', 'brain-engine-review'])
   })
 })
 

@@ -170,9 +170,6 @@ describe('CodexExecutor — smoke over stub app-server', () => {
     expect(trace.some(msg => msg.method === 'thread/start')).toBe(false)
     const turnStart = trace.find(msg => msg.method === 'turn/start')
     expect((turnStart?.params as { threadId?: string } | undefined)?.threadId).toBe('thr_existing')
-    // FEAT-054 / BUG-056: resumed turns still receive the freshly composed
-    // Project Brain transcript so SOUL.md / MEMORY.md updates between turns
-    // reach the LLM instead of being shadowed by the thread's stale system.
     const prompt = (turnStart?.params as { input?: Array<{ text?: string }> } | undefined)?.input?.[0]?.text
     expect(prompt).toBe('<User>\ncontinue native thread\n</User>')
     expect(events).toContainEqual({
@@ -184,6 +181,33 @@ describe('CodexExecutor — smoke over stub app-server', () => {
         path: '/tmp/codex-thread.jsonl',
       },
     })
+  }, 15_000)
+
+  it('does not replay old conversation turns when resuming a current native thread', async () => {
+    const traceFile = path.join(workspace, 'codex-resume-compact-trace.jsonl')
+    const executor = makeExecutor('current', traceFile)
+    await collect(executor.run({
+      messages: [
+        { role: 'system', content: 'Project Brain capsule' },
+        { role: 'user', content: 'old user turn' },
+        { role: 'assistant', content: 'old assistant turn' },
+        { role: 'user', content: 'latest user turn' },
+      ],
+      workspacePath: workspace,
+      engineBinding: {
+        protocol: 'current',
+        threadId: 'thr_existing',
+        path: '/tmp/codex-thread.jsonl',
+      },
+    }))
+
+    const trace = await readTrace(traceFile)
+    const turnStart = trace.find(msg => msg.method === 'turn/start')
+    const prompt = (turnStart?.params as { input?: Array<{ text?: string }> } | undefined)?.input?.[0]?.text
+    expect(prompt).toContain('<System>\nProject Brain capsule\n</System>')
+    expect(prompt).toContain('<User>\nlatest user turn\n</User>')
+    expect(prompt).not.toContain('old user turn')
+    expect(prompt).not.toContain('old assistant turn')
   }, 15_000)
 
   it('clears a stale current-protocol binding and starts a fresh thread', async () => {

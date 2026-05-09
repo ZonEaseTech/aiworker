@@ -9,7 +9,7 @@ import {
   getWorkerDb,
   messages,
 } from '@zonease/aiworker-storage-sqlite/worker'
-import { asc, desc, eq, or } from 'drizzle-orm'
+import { asc, desc, eq } from 'drizzle-orm'
 
 export type BrainJournalEventKind
   = | 'admission.bypass_suspected'
@@ -183,10 +183,16 @@ export class BrainJournalService {
       return null
 
     const conversation = this.findConversation(taskId, task.conversationId ?? undefined)
-    const eventRows = this.listEvents(taskId, conversation?.id)
+    const eventRows = this.listEvents(taskId)
     const redactSensitive = options.redactSensitive !== false
     const events = eventRows.map(row => toEventDto(row, redactSensitive))
-    const messageRefs = conversation ? this.listMessageRefs(conversation.id, redactSensitive) : []
+    const messageRefs = conversation
+      ? this.listMessageRefs(conversation.id, redactSensitive, {
+          assistantMessageId: numberValue(task.result?.assistantMessageId),
+          createdAt: task.createdAt,
+          finishedAt: task.finishedAt ?? undefined,
+        })
+      : []
     const capability = latestPayload(events, 'decision.capability')
     const qualityGate = latestPayload(events, 'gate.quality')
     const authorityPreflight = latestPayload(events, 'authority.preflight')
@@ -258,36 +264,68 @@ export class BrainJournalService {
     return getWorkerDb().select().from(conversations).where(eq(conversations.taskId, taskId)).orderBy(desc(conversations.startedAt)).get()
   }
 
-  private listEvents(taskId: string, conversationId: string | undefined): BrainJournalEventRow[] {
-    const predicate = conversationId === undefined
-      ? eq(brainJournalEvents.taskId, taskId)
-      : or(eq(brainJournalEvents.taskId, taskId), eq(brainJournalEvents.conversationId, conversationId))
+  private listEvents(taskId: string): BrainJournalEventRow[] {
     return getWorkerDb()
       .select()
       .from(brainJournalEvents)
-      .where(predicate)
+      .where(eq(brainJournalEvents.taskId, taskId))
       .orderBy(asc(brainJournalEvents.createdAt), asc(brainJournalEvents.id))
       .all()
   }
 
-  private listMessageRefs(conversationId: string, redactSensitive: boolean): BrainJournalMessageRef[] {
-    return getWorkerDb()
-      .select()
-      .from(messages)
-      .where(eq(messages.conversationId, conversationId))
-      .orderBy(asc(messages.id))
-      .all()
-      .map(row => ({
-        id: row.id,
-        role: row.role,
-        ref: `${conversationId}:${row.id}`,
-        contentLength: row.content.length,
-        contentPreview: excerpt(safeText(row.content, redactSensitive), 600),
-        createdAt: row.createdAt,
-        toolCallIds: row.toolCalls?.map(call => call.id) ?? [],
-        ...(row.toolCallId === null ? {} : { toolCallId: row.toolCallId }),
-        ...(auditKind(row.richMetadata) === undefined ? {} : { auditKind: auditKind(row.richMetadata) }),
-      }))
+  private listMessageRefs(
+    conversationId: string,
+    redactSensitive: boolean,
+    taskWindow: { assistantMessageId?: number, createdAt: string, finishedAt?: string },
+  ): BrainJournalMessageRef[] {
+    const rows = this.scopeMessageRows(
+      getWorkerDb()
+        .select()
+        .from(messages)
+        .where(eq(messages.conversationId, conversationId))
+        .orderBy(asc(messages.id))
+        .all(),
+      taskWindow,
+    )
+    return rows.map(row => ({
+      id: row.id,
+      role: row.role,
+      ref: `${conversationId}:${row.id}`,
+      contentLength: row.content.length,
+      contentPreview: excerpt(safeText(row.content, redactSensitive), 600),
+      createdAt: row.createdAt,
+      toolCallIds: row.toolCalls?.map(call => call.id) ?? [],
+      ...(row.toolCallId === null ? {} : { toolCallId: row.toolCallId }),
+      ...(auditKind(row.richMetadata) === undefined ? {} : { auditKind: auditKind(row.richMetadata) }),
+    }))
+  }
+
+  private scopeMessageRows(
+    rows: Array<typeof messages.$inferSelect>,
+    taskWindow: { assistantMessageId?: number, createdAt: string, finishedAt?: string },
+  ): Array<typeof messages.$inferSelect> {
+    if (taskWindow.assistantMessageId !== undefined) {
+      const finalIndex = rows.findIndex(row => row.id === taskWindow.assistantMessageId)
+      if (finalIndex >= 0) {
+        let previousAssistantId = 0
+        for (let index = finalIndex - 1; index >= 0; index -= 1) {
+          const row = rows[index]!
+          if (row.role === 'assistant') {
+            previousAssistantId = row.id
+            break
+          }
+        }
+        return rows.filter(row => row.id > previousAssistantId && row.id <= taskWindow.assistantMessageId!)
+      }
+    }
+
+    return rows.filter((row) => {
+      if (row.createdAt < taskWindow.createdAt)
+        return false
+      if (taskWindow.finishedAt !== undefined && row.createdAt > taskWindow.finishedAt)
+        return false
+      return true
+    })
   }
 }
 
@@ -357,7 +395,7 @@ export function buildGateVerdict(events: BrainJournalEventDto[]): BrainGateVerdi
 
   if (brainEngineReview !== undefined && brainEngineReason !== undefined && brainEngineReview.payload.status === 'reviewed') {
     const action = gateAction(brainEngineReview.payload.action)
-    if (action !== 'pass') {
+    if (action !== 'pass' || (qualityGate === undefined && authorityReason === undefined)) {
       return verdictFromReasons({
         action,
         at: brainEngineReview.at,
@@ -584,6 +622,10 @@ function gateAction(value: unknown): BrainGateVerdictAction {
 
 function stringValue(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined
+}
+
+function numberValue(value: unknown): number | undefined {
+  return Number.isInteger(value) && typeof value === 'number' ? value : undefined
 }
 
 function verdictFromReasons(input: {

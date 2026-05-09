@@ -72,10 +72,11 @@ export interface CodexExecutorOptions {
  * legacy `thread_start/newTurn` and current `thread/start/turn/start`
  * protocol variants.
  *
- * Worker-owned conversation continuity still comes from `AgentRunInput.messages`.
- * When the current app-server protocol supports `thread/resume`, the executor
- * treats `input.engineBinding` as a disposable native-thread optimization and
- * reports the active binding back through `engine_binding` events.
+ * Fresh and stale-binding recovery turns use `AgentRunInput.messages` as the
+ * worker-rendered bootstrap context. When the current app-server protocol
+ * supports `thread/resume`, native threads own conversation continuity and the
+ * adapter only sends fresh Project Brain/system context plus the latest user
+ * request.
  */
 export class CodexExecutor implements ExecutorProvider {
   readonly name = 'codex'
@@ -208,12 +209,11 @@ export class CodexExecutor implements ExecutorProvider {
         return
       }
 
-      // FEAT-054 / BUG-056: every turn re-renders system + history + latest
-      // user via `renderCodexPrompt`. Resumed Codex threads still receive the
-      // freshly-composed Project Brain so SOUL.md / MEMORY.md edits between
-      // turns are honoured instead of being shadowed by the thread's stale
-      // system state.
-      const prompt = fullPrompt
+      // Native current-protocol threads already own conversation continuity.
+      // On resumed turns, replay only the fresh system/Project Brain capsule
+      // and latest user request; a stale-thread fallback still starts a fresh
+      // thread with the full DB-rendered context below.
+      const prompt = renderPromptForThread(input.messages, thread, fullPrompt)
       if (thread.protocol === 'legacy') {
         const turnPromise = peer.request<CodexNewTurnResult>('newTurn', {
           threadId: thread.threadId,
@@ -233,7 +233,7 @@ export class CodexExecutor implements ExecutorProvider {
             throw err
           yield { type: 'engine_binding', engine: CODEX_ENGINE, binding: null }
           thread = await this.startThread(peer, model, workspacePath)
-          await this.startCurrentTurn(peer, thread.threadId, prompt)
+          await this.startCurrentTurn(peer, thread.threadId, renderPromptForThread(input.messages, thread, fullPrompt))
         }
         yield { type: 'engine_binding', engine: CODEX_ENGINE, binding: { ...codexBindingFromThread(thread) } }
       }
@@ -530,4 +530,20 @@ function renderCodexPrompt(messages: AgentRunInput['messages']): string {
       return `<${role}>\n${m.content}\n</${role}>`
     })
     .join('\n\n')
+}
+
+function renderPromptForThread(
+  messages: AgentRunInput['messages'],
+  thread: CodexThreadHandle,
+  fullPrompt: string,
+): string {
+  if (thread.protocol !== 'current' || thread.resumed !== true)
+    return fullPrompt
+  return renderCodexPrompt(compactNativeResumeMessages(messages))
+}
+
+function compactNativeResumeMessages(messages: AgentRunInput['messages']): AgentRunInput['messages'] {
+  const systemMessages = messages.filter(message => message.role === 'system' && message.content.trim().length > 0)
+  const latestUser = [...messages].reverse().find(message => message.role === 'user' && message.content.trim().length > 0)
+  return latestUser === undefined ? systemMessages : [...systemMessages, latestUser]
 }

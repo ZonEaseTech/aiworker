@@ -130,7 +130,7 @@ export class BrainCaseService {
   }
 
   private fromTrace(trace: BrainJournalTrace): BrainCaseFile {
-    const finalAssistant = [...trace.messages].reverse().find(message => message.role === 'assistant')
+    const finalAssistant = selectFinalAssistant(trace)
     const brainReview = latestEvent(trace, 'brain_engine.review')
     const lessonProposalEvent = latestEvent(trace, 'inbox.candidates_proposed')
     const lessons = buildLessonsSummary(brainReview, lessonProposalEvent)
@@ -172,7 +172,9 @@ export class BrainCaseService {
 }
 
 function buildReviewDecision(taskStatus: AgentTaskStatus, verdict: BrainGateVerdict): BrainCaseReviewDecision {
-  const status = decisionStatus(taskStatus, verdict.action)
+  const status = canMarkReadyToShip(taskStatus, verdict)
+    ? 'ready_to_ship'
+    : decisionStatus(taskStatus, verdict.action)
   return {
     status,
     action: verdict.action,
@@ -195,9 +197,29 @@ function decisionStatus(taskStatus: AgentTaskStatus, action: BrainGateVerdictAct
     return 'needs_rerun'
   }
   if (action === 'pass' && taskStatus === 'succeeded') {
-    return 'ready_to_ship'
+    return 'needs_review'
   }
   return 'needs_review'
+}
+
+function canMarkReadyToShip(taskStatus: AgentTaskStatus, verdict: BrainGateVerdict): boolean {
+  return taskStatus === 'succeeded'
+    && verdict.action === 'pass'
+    && verdict.reasons.some(reason => reason.source === 'brain-engine-review')
+}
+
+function selectFinalAssistant(trace: BrainJournalTrace): BrainJournalTrace['messages'][number] | undefined {
+  const assistantMessageId = numberValue(trace.task.result?.assistantMessageId)
+  if (assistantMessageId !== undefined) {
+    const exact = trace.messages.find(message => message.id === assistantMessageId && message.role === 'assistant')
+    if (exact !== undefined)
+      return exact
+  }
+  return [...trace.messages].reverse().find(message => message.role === 'assistant')
+}
+
+function numberValue(value: unknown): number | undefined {
+  return Number.isInteger(value) && typeof value === 'number' ? value : undefined
 }
 
 function summarizeDecision(status: BrainCaseDecisionStatus, verdict: BrainGateVerdict): string {

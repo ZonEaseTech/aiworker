@@ -122,6 +122,13 @@ Brain runtime 的正确心智模型是 **context + governance wrapper**，不是
 executor。它把 Project Brain 投影给外部 executor，并围绕 executor 输出做
 quality/admission/audit，而不接管 executor 的 tool loop。
 
+从 PLAN-190 起，默认产品路径进一步收敛为 **native-engine-first**：Codex /
+Claude Code 这类支持 native project skill / native session 的 executor，应保持
+原生工作入口。AIWorker Admin Chat 只是 worker-local 调试和管理入口，不是主工作面。
+AIWorker 负责产出小的 Run Contract / Project Brain capsule、记录 task-scoped Case、
+做 Brain review / admission / projection；executor 仍负责真实执行和 native session
+continuity。
+
 ```mermaid
 sequenceDiagram
   participant U as User / Channel / Admin

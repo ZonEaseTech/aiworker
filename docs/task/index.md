@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-09 (REL-030 completed)
+> Updated: 2026-05-09 (FEAT-058 / QA-024 completed)
 
 ## Usage
 
@@ -293,3 +293,5 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-057 Worker Case operating surface**](FEAT-057.md) `P1`
 - [x] [**QA-023 Worker Case source dogfood and packaged validation**](QA-023.md) `P1`
 - [x] [**REL-030 发布 aiworker CLI 0.12.0**](REL-030.md) `P1`
+- [x] [**FEAT-058 Case-driven Project Brain learning loop validation**](FEAT-058.md) `P1`
+- [x] [**QA-024 Case-driven Brain loop validation evidence**](QA-024.md) `P1`

@@ -67,7 +67,7 @@ describe('buildCaseRoutes (FEAT-057)', () => {
     expect(body.cases).toHaveLength(1)
     expect(body.cases[0]).toMatchObject({
       taskId: 'task-case-api',
-      reviewDecision: { status: 'ready_to_ship' },
+      reviewDecision: { status: 'needs_review' },
     })
   })
 

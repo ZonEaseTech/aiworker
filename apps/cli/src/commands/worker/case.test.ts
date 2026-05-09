@@ -78,7 +78,7 @@ describe('aiworker case commands (FEAT-057)', () => {
     const parsed = JSON.parse(output) as { cases: Array<{ taskId: string, reviewDecision: { status: string } }> }
     expect(parsed.cases[0]).toMatchObject({
       taskId: 'task-case-cli',
-      reviewDecision: { status: 'ready_to_ship' },
+      reviewDecision: { status: 'needs_review' },
     })
   })
 

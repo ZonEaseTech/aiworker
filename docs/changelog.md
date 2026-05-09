@@ -1,5 +1,29 @@
 # AIWorker Changelog
 
+## 2026-05-09 15:52 [completed] FEAT-058 / QA-024 — Case-driven Project Brain loop source validation
+
+Completed the source-level validation for the Case-driven Project Brain learning
+loop after the 0.12.0 dogfood exposed that Worker Admin Chat still felt like an
+executor harness.
+
+- GOALS / architecture now state the native-engine-first boundary: users work
+  in native executors; AIWorker is the Project Brain sidecar for task-scoped
+  Case evidence, Brain review, admission, projection, and later verification.
+- Brain Journal and Case projection are now task-scoped in shared
+  conversations: Case Files bind to the task's own events and assistant message
+  window instead of the latest conversation assistant.
+- Review Decision is more truthful: pure heuristic observe-only pass becomes
+  `needs_review`; `ready_to_ship` requires `brain-engine-review` evidence.
+- Codex current native thread resume no longer replays old conversation turns
+  into the executor; stale binding fallback still restores DB-rendered context
+  on a fresh thread.
+- Validation passed: focused Journal / Case / Codex / REST / CLI tests,
+  `@zonease/aiworker-core` package tests (674 pass / 0 fail), full `bun run typecheck`,
+  `bun run lint`, and full `bun run test`.
+- No release was performed in this record; QA-024 concludes source MVP can
+  continue, but release readiness still requires package / install / harness
+  validation.
+
 ## 2026-05-09 12:11 [completed] FEAT-057 / QA-023 / REL-030 — Worker Case operating surface and 0.12.0 release
 
 Completed the Worker Case source MVP and released it as

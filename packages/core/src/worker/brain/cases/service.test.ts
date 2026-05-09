@@ -131,6 +131,85 @@ describe('BrainCaseService (FEAT-057)', () => {
     expect(file?.risk.signals).toEqual([{ type: 'database', reason: 'task mentions database' }])
   })
 
+  it('does not mark pure heuristic observe-only pass as ready to ship', () => {
+    seedTask('task-case-heuristic', 'simple response', 'succeeded')
+    seedConversation('conv-case-heuristic', 'task-case-heuristic')
+    seedAssistantMessage('conv-case-heuristic', 'Heuristic-only answer.')
+    recordBrainJournalEvent({
+      kind: 'gate.quality',
+      taskId: 'task-case-heuristic',
+      payload: { action: 'pass', evaluator: 'heuristic', mode: 'observe_only', reason: 'heuristic quality gate passed' },
+    })
+
+    const file = new BrainCaseService({ config: workerConfig('codex') }).getCaseFile('task-case-heuristic')
+
+    expect(file?.reviewDecision.status).toBe('needs_review')
+    expect(file?.reviewDecision.summary).toContain('heuristic quality gate passed')
+  })
+
+  it('keeps Case outcome and evidence scoped to its task in a shared conversation', () => {
+    getWorkerDb().insert(agentTasks).values([
+      {
+        id: 'task-case-first',
+        prompt: 'first task',
+        status: 'failed',
+        conversationId: 'conv-case-shared',
+        createdAt: '2026-05-09T06:00:00.000Z',
+        finishedAt: '2026-05-09T06:00:10.000Z',
+        error: 'executor failed',
+      },
+      {
+        id: 'task-case-second',
+        prompt: 'second task',
+        status: 'succeeded',
+        conversationId: 'conv-case-shared',
+        createdAt: '2026-05-09T06:01:00.000Z',
+        finishedAt: '2026-05-09T06:01:10.000Z',
+        result: { assistantMessageId: 4 },
+      },
+    ]).run()
+    getWorkerDb().insert(conversations).values({
+      id: 'conv-case-shared',
+      channel: 'web',
+      chatId: 'task:shared',
+      status: 'open',
+      startedAt: NOW,
+      lastActiveAt: NOW,
+    }).run()
+    getWorkerDb().insert(messages).values([
+      { conversationId: 'conv-case-shared', role: 'user', content: 'first task', createdAt: '2026-05-09T06:00:01.000Z' },
+      { conversationId: 'conv-case-shared', role: 'assistant', content: 'first failed partial', createdAt: '2026-05-09T06:00:09.000Z' },
+      { conversationId: 'conv-case-shared', role: 'user', content: 'second task', createdAt: '2026-05-09T06:01:01.000Z' },
+      { conversationId: 'conv-case-shared', role: 'assistant', content: 'second final answer', createdAt: '2026-05-09T06:01:09.000Z' },
+    ]).run()
+    recordBrainJournalEvent({
+      at: '2026-05-09T06:00:09.000Z',
+      conversationId: 'conv-case-shared',
+      kind: 'task.failed',
+      taskId: 'task-case-first',
+      payload: { error: 'executor failed' },
+    })
+    recordBrainJournalEvent({
+      at: '2026-05-09T06:01:09.000Z',
+      conversationId: 'conv-case-shared',
+      kind: 'brain_engine.review',
+      taskId: 'task-case-second',
+      payload: { action: 'pass', mode: 'observe-only', reason: 'second reviewed', status: 'reviewed' },
+    })
+
+    const first = new BrainCaseService({ config: workerConfig('codex') }).getCaseFile('task-case-first')
+    const second = new BrainCaseService({ config: workerConfig('codex') }).getCaseFile('task-case-second')
+
+    expect(first?.reviewDecision.status).toBe('needs_rerun')
+    expect(first?.outcome.assistantPreview).toBe('first failed partial')
+    expect(first?.evidence.journalEventCount).toBe(1)
+    expect(first?.reviewDecision.reasons.map(reason => reason.reason)).toEqual(['executor failed'])
+    expect(second?.reviewDecision.status).toBe('ready_to_ship')
+    expect(second?.outcome.assistantPreview).toBe('second final answer')
+    expect(second?.evidence.journalEventCount).toBe(1)
+    expect(second?.reviewDecision.reasons.map(reason => reason.reason)).toEqual(['second reviewed'])
+  })
+
   it('lists recent cases in descending task order', () => {
     seedTask('task-old', 'old case', 'succeeded', '2026-05-09T06:00:00.000Z')
     seedTask('task-new', 'new case', 'failed', '2026-05-09T06:20:00.000Z', 'executor failed')

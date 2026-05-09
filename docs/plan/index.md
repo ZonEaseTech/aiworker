@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-09 (PLAN-189 completed)
+> Updated: 2026-05-09 (PLAN-190 completed)
 
 ## Usage
 
@@ -218,3 +218,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [ ] [**PLAN-187 Lessons Queue batch review**](PLAN-187.md) `2026-05-09`
 - [x] [**PLAN-188 Fleet case summary projection**](PLAN-188.md) `2026-05-09`
 - [x] [**PLAN-189 Dogfood falsification and release readiness**](PLAN-189.md) `2026-05-09`
+- [x] [**PLAN-190 Case-driven Project Brain learning loop validation**](PLAN-190.md) `2026-05-09`
