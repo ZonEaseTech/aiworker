@@ -1,12 +1,12 @@
 {
   "bundles": {
     "fleet": {
-      "bytes": 581846,
-      "gzipBytes": 172218
+      "bytes": 821720,
+      "gzipBytes": 241528
     },
     "worker": {
-      "bytes": 590609,
-      "gzipBytes": 176303
+      "bytes": 846064,
+      "gzipBytes": 248362
     }
   }
 }
