@@ -42,7 +42,7 @@ interface SecretRule {
 }
 
 const RULES: readonly SecretRule[] = [
-  { id: 'sk-token', label: 'OpenAI/Anthropic-style sk- token', regex: /sk-[\w-]{20,}/g },
+  { id: 'sk-token', label: 'OpenAI/Anthropic-style sk- token', regex: /\bsk-[\w-]{20,}/g },
   { id: 'jwt', label: 'JWT-like token', regex: /eyJ[\w=.-]{20,}/g },
   { id: 'bearer-token', label: 'Bearer authorization token', regex: /\b[Bb]earer\s+[\w.-]{20,}/g },
   { id: 'aws-access-key', label: 'AWS access key id', regex: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/g },
@@ -53,7 +53,7 @@ const RULES: readonly SecretRule[] = [
   { id: 'pem-private-key', label: 'PEM-formatted private key block', regex: /-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----[\s\S]+?-----END (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----/g },
 ]
 
-const HIGH_ENTROPY_CANDIDATE_RE = /[\w+/=-]{32,}/g
+const HIGH_ENTROPY_CANDIDATE_RE = /[\w+/=]{32,}/g
 /** Shannon entropy threshold (bits per char). 4.0 is high enough to flag random bytes-base64. */
 const HIGH_ENTROPY_BITS = 4.0
 

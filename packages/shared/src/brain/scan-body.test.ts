@@ -15,6 +15,12 @@ describe('scanBodyForSecrets', () => {
     expect(hits[0]?.preview).toContain('…')
   })
 
+  it('does not treat task-case style ids as sk- tokens', () => {
+    const id = 'inbox-task-case-dogfood-1-ad682bfd879d'
+    expect(scanBodyForSecrets(id).hits).toEqual([])
+    expect(redactBodySecrets(id).body).toBe(id)
+  })
+
   it('catches JWT-like tokens', () => {
     const { hits } = scanBodyForSecrets('Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvZSIsImlhdCI6MTUxNjIzOTAyMn0.x')
     const ruleIds = hits.map(h => h.rule)
