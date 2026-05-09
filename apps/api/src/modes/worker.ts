@@ -29,6 +29,7 @@ import { evolutionRoutes } from '../worker/evolution/routes'
 import { buildBearerAuth } from '../worker/management/bearer-auth'
 import { buildManagementRoutes } from '../worker/management/routes'
 import { buildOrchestratorRoutes } from '../worker/orchestrator/routes'
+import { buildRunRoutes } from '../worker/runs/routes'
 
 const DEFAULT_WORKER_RUNTIME_VERSION = 'dev'
 
@@ -221,6 +222,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   }))
 
   app.route('/api/worker/orchestrator', buildOrchestratorRoutes(() => state.runtime))
+  app.route('/api/worker/runs', buildRunRoutes(() => state.runtime))
   app.route('/api/worker/cases', buildCaseRoutes(() => state.runtime))
   app.route('/api/worker/evolution', evolutionRoutes)
   app.route('/api/worker/events', buildEventRoutes(() => state.runtime))
@@ -319,6 +321,11 @@ function registerWorkerOpenApiPaths(app: OpenAPIHono): void {
     { method: 'get', path: '/api/worker/cases/{taskId}', summary: 'Show one Worker Case File with review decision and evidence', tags: ['cases'], requireAuth: true },
     { method: 'post', path: '/api/worker/cases/{taskId}/rerun', summary: 'Create a bounded rerun from one Worker Case', tags: ['cases'], requireAuth: true },
     { method: 'post', path: '/api/worker/cases/{taskId}/lessons/propose', summary: 'Create Brain admission proposals from one Worker Case lessons queue', tags: ['cases'], requireAuth: true },
+    { method: 'get', path: '/api/worker/runs', summary: 'List local worker runs', tags: ['runs'], requireAuth: true },
+    { method: 'post', path: '/api/worker/runs', summary: 'Create a local worker run', tags: ['runs'], requireAuth: true },
+    { method: 'get', path: '/api/worker/runs/{id}', summary: 'Show one local worker run', tags: ['runs'], requireAuth: true },
+    { method: 'get', path: '/api/worker/runs/{id}/events', summary: 'SSE stream filtered to one local worker run', tags: ['runs'], requireAuth: true },
+    { method: 'post', path: '/api/worker/runs/{id}/cancel', summary: 'Cancel one local worker run when it is bound to a conversation', tags: ['runs'], requireAuth: true },
     { method: 'get', path: '/api/worker/orchestrator/tasks', summary: 'List recent worker orchestrator tasks', tags: ['orchestrator'], requireAuth: true },
     { method: 'get', path: '/api/worker/orchestrator/tasks/{id}/journal', summary: 'Show Brain Journal trace for one worker task', tags: ['orchestrator'], requireAuth: true },
     { method: 'post', path: '/api/worker/orchestrator/tasks/{id}/rerun', summary: 'Create a bounded proof-loop rerun for one worker task', tags: ['orchestrator'], requireAuth: true },

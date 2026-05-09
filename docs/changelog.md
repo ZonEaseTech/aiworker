@@ -12,6 +12,18 @@ Accepted the Open Design-style reboot direction for AIWorker worker:
 - S0 updated GOALS, target architecture, README, CLI docs, governance-node
   status, and PMA tracking only; runtime code remains unchanged in this slice.
 
+## 2026-05-09 16:55 [completed] REFACTOR-027 / PLAN-193 — Worker run contract compatibility layer
+
+Landed the first runtime slice for the OD-style local worker loop:
+
+- Added core `WorkerRunService` over the transitional `agent_tasks` store.
+- Added worker `/api/worker/runs` list/create/show/cancel and per-run SSE
+  filtering.
+- Registered run endpoints in Worker OpenAPI metadata.
+- Moved Worker Web submit/continue calls to `/api/worker/runs` while keeping
+  current UI function names.
+- Kept old orchestrator task routes as compatibility paths for later cleanup.
+
 ## 2026-05-09 15:29 [completed] REL-031 / QA-025 — CLI 0.12.1 release
 
 Released `@zonease/aiworker-cli@0.12.1` after FEAT-058:

@@ -215,6 +215,18 @@ export {
 
 export { ProcessManager } from './worker/orchestrator/process-manager'
 
+// Worker run contract（REFACTOR-027）：在过渡期 agent_tasks/orchestrator 实现之上
+// 提供 OD-style local run surface。
+export {
+  type CreateWorkerRunInput,
+  type ListWorkerRunsOptions,
+  rowToRun,
+  type WorkerRun,
+  WorkerRunService,
+  type WorkerRunServiceDeps,
+  type WorkerRunStatus,
+} from './worker/runs/service'
+
 // Runtime builder + 类型。
 export { type BuildRuntimeDeps, buildWorkerRuntime, type WorkerRuntime } from './worker/runtime'
 

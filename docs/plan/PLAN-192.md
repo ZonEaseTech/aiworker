@@ -161,3 +161,4 @@ Open Design 当前参照形态：
 
 - 2026-05-09 16:31：调查 Open Design 当前 `main` (`4c15ea4`) 与本仓库 worker/CLI/web 结构，创建 draft proposal。
 - 2026-05-09 16:36：按用户授权进入实施；S0 聚焦产品北极星与目标架构文档重置，不改 runtime code。
+- 2026-05-09 16:55：S1A 通过 REFACTOR-027 / PLAN-193 完成 `/api/worker/runs` 兼容层，web submit/continue 已改走 run contract。

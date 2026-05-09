@@ -1,6 +1,6 @@
 import type { WorkerSSEEvent } from './api'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { continueConversation, getCaseFile, getInfo, listCases, proposeCaseLessons, rerunCase, subscribeEvents, testExecutor } from './api'
+import { continueConversation, getCaseFile, getInfo, listCases, listRuns, proposeCaseLessons, rerunCase, submitTask, subscribeEvents, testExecutor } from './api'
 import { __resetBearerForTests, setBearerToken } from './lib/auth'
 
 function sseResponse(chunks: string[]): Response {
@@ -50,9 +50,55 @@ describe('worker api subscribeEvents', () => {
     ])
   })
 
-  it('posts continuation prompts to the selected conversation messages path', async () => {
+  it('posts prompts to the worker runs path', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
-      task: {
+      run: {
+        id: 'run-new',
+        status: 'queued',
+        prompt: 'hello',
+        createdAt: '2026-05-02T21:00:00.000Z',
+      },
+    }), {
+      headers: { 'Content-Type': 'application/json' },
+      status: 201,
+    }))
+
+    const task = await submitTask('hello')
+
+    expect(task.id).toBe('run-new')
+    expect(fetchMock).toHaveBeenCalledWith('/api/worker/runs', {
+      method: 'POST',
+      headers: expect.any(Headers),
+      body: JSON.stringify({ prompt: 'hello' }),
+    })
+  })
+
+  it('lists worker runs from the worker runs path', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      runs: [
+        {
+          id: 'run-1',
+          status: 'succeeded',
+          prompt: 'done',
+          createdAt: '2026-05-09T08:00:00.000Z',
+        },
+      ],
+    }), {
+      headers: { 'Content-Type': 'application/json' },
+      status: 200,
+    }))
+
+    const result = await listRuns()
+
+    expect(result.runs[0]?.id).toBe('run-1')
+    expect(fetchMock).toHaveBeenCalledWith('/api/worker/runs', {
+      headers: expect.any(Headers),
+    })
+  })
+
+  it('posts continuation prompts to the worker runs path with conversationId', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      run: {
         id: 'task-continue',
         status: 'queued',
         prompt: 'hello',
@@ -66,10 +112,10 @@ describe('worker api subscribeEvents', () => {
     const task = await continueConversation('conv/with/slash', 'hello')
 
     expect(task.id).toBe('task-continue')
-    expect(fetchMock).toHaveBeenCalledWith('/api/worker/orchestrator/conversations/conv%2Fwith%2Fslash/messages', {
+    expect(fetchMock).toHaveBeenCalledWith('/api/worker/runs', {
       method: 'POST',
       headers: expect.any(Headers),
-      body: JSON.stringify({ prompt: 'hello' }),
+      body: JSON.stringify({ conversationId: 'conv/with/slash', prompt: 'hello' }),
     })
     const headers = fetchMock.mock.calls[0]?.[1]?.headers as Headers
     expect(headers.get('Content-Type')).toBe('application/json')

@@ -448,6 +448,8 @@ export interface AgentTaskRow {
   error?: string | null
 }
 
+export type WorkerRun = AgentTaskRow
+
 export interface ConversationRow {
   id: string
   channel: string
@@ -552,6 +554,10 @@ export function listTasks(): Promise<{ tasks: AgentTaskRow[] }> {
   return workerFetch<{ tasks: AgentTaskRow[] }>('/api/worker/orchestrator/tasks')
 }
 
+export function listRuns(): Promise<{ runs: WorkerRun[] }> {
+  return workerFetch<{ runs: WorkerRun[] }>('/api/worker/runs')
+}
+
 export function listCases(limit = 50): Promise<{ cases: WorkerCaseFile[] }> {
   return workerFetch<{ cases: WorkerCaseFile[] }>(`/api/worker/cases?limit=${encodeURIComponent(String(limit))}`)
 }
@@ -578,24 +584,21 @@ export function proposeCaseLessons(taskId: string): Promise<{ proposals: BrainAd
 }
 
 export async function submitTask(prompt: string): Promise<AgentTaskRow> {
-  const res = await workerFetch<{ task: AgentTaskRow }>('/api/worker/orchestrator/tasks', {
+  const res = await workerFetch<{ run: WorkerRun }>('/api/worker/runs', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ prompt }),
   })
-  return res.task
+  return res.run
 }
 
 export async function continueConversation(conversationId: string, prompt: string): Promise<AgentTaskRow> {
-  const res = await workerFetch<{ task: AgentTaskRow }>(
-    `/api/worker/orchestrator/conversations/${encodeURIComponent(conversationId)}/messages`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt }),
-    },
-  )
-  return res.task
+  const res = await workerFetch<{ run: WorkerRun }>('/api/worker/runs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ conversationId, prompt }),
+  })
+  return res.run
 }
 
 export function listConversations(): Promise<{ conversations: ConversationRow[] }> {
