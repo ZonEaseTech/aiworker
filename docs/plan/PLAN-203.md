@@ -134,6 +134,154 @@ Verification:
 - source-local smoke
 - CRG update/review
 
+## Long-Task Execution Plan
+
+After approval, implement in these checkpoints. Each checkpoint should be a
+separate conventional commit unless a later gate forces a small corrective
+commit.
+
+### B1 - Storage and shared contracts
+
+Write scope:
+
+- `packages/storage-sqlite/src/worker/*`
+- `packages/shared/src/*` local workspace contracts
+- storage/shared tests that describe the new local model
+
+Delete or rewrite:
+
+- default local usage of session, conversation, message, cron, approval,
+  evolution, brain journal, brain artifact, and brain admission tables
+- shared schemas that only exist to expose the removed worker admin model
+
+Evidence before commit:
+
+- storage tests for new tables and indexes
+- `bun run --filter '@zonease/aiworker-storage-sqlite' test`
+- `bun run --filter '@zonease/aiworker-storage-sqlite' typecheck`
+- `bun run --filter '@zonease/aiworker-shared' typecheck`
+
+Expected commit: `refactor: 重建 local worker 存储模型`
+
+### B2 - Core local run engine
+
+Write scope:
+
+- `packages/core/src/worker/*`
+- focused core tests for brief/run/artifact/review/lesson lifecycle
+
+Delete or rewrite:
+
+- default local imports of channel registry, cron service, approval store,
+  evolution observer/proposer, conversation router, Brain management, and
+  gateway-client paths
+- orchestration branches that only preserve the removed admin/runtime model
+
+Evidence before commit:
+
+- run lifecycle tests
+- import absence scan for removed subsystems in the new local engine
+- `bun run --filter '@zonease/aiworker-core' test`
+
+Expected commit: `refactor: 重写 local worker run engine`
+
+### B3 - Local daemon and API surface
+
+Write scope:
+
+- `apps/api/src/*`
+- API schemas, OpenAPI registration, route tests, daemon bootstrap tests
+
+Delete or rewrite:
+
+- default `/api/worker/*` route registration
+- Brain/Admin/Channel/Cron/Approval/Orchestrator route modules from the default
+  local daemon
+- generated OpenAPI exposure of removed route families
+
+Evidence before commit:
+
+- route tests for each `/api/local/*` group
+- OpenAPI absence test for old route families
+- `bun run --filter '@zonease/aiworker-api' test`
+- `bun run --filter '@zonease/aiworker-api' build`
+
+Expected commit: `refactor: 替换 local daemon api`
+
+### B4 - CLI command reset
+
+Write scope:
+
+- `apps/cli/src/*`
+- CLI command registration/help tests
+- source-local smoke harness entrypoints
+
+Delete or rewrite:
+
+- local deliverable commands for worker schedule/session/scope/soul/token/up/
+  env/config/approval and fleet/gateway command trees
+- init paths that create an old Project Brain/admin layout
+
+Evidence before commit:
+
+- CLI help snapshot or equivalent registration test
+- daemon lifecycle test
+- source-local init -> daemon -> brief/run smoke starts successfully
+- `bun run --filter '@zonease/aiworker-cli' test`
+- `bun run --filter '@zonease/aiworker-cli' build:bundle`
+
+Expected commit: `refactor: 收敛 local workspace cli`
+
+### B5 - Worker Web rebuild
+
+Write scope:
+
+- `apps/web/src/worker/*`
+- shared UI primitives only when directly needed by the new shell
+- Web route/render/responsive tests
+
+Delete or rewrite:
+
+- old worker admin pages
+- hooks and clients for Brain admission, cron, secrets, approvals, tests,
+  conversations, tasks, and old Brain artifacts
+
+Evidence before commit:
+
+- worker web render tests
+- responsive layout checks
+- `bun run --filter '@zonease/aiworker-web' test`
+- `bun run --filter '@zonease/aiworker-web' build`
+
+Expected commit: `refactor: 重建 worker workspace web`
+
+### B6 - Docs, smoke, and full review
+
+Write scope:
+
+- `README.md`
+- `GOALS.md`
+- `docs/architecture.md`
+- CLI/API/Web task docs and changelog entries required by PMA
+- smoke evidence under `tmp/`
+
+Delete or rewrite:
+
+- documentation that still presents the local worker as an admin dashboard,
+  Brain admin, Fleet/Gateway surface, or compatibility runtime
+
+Evidence before commit:
+
+- `bun run check`
+- `bun run test`
+- `bun run build`
+- `git diff --check`
+- source-local smoke over a fresh home
+- CRG update/review
+- manual browser review of the running Web app
+
+Expected commit: `docs: 对齐 greenfield worker 产品文档`
+
 ## Completion Audit Checklist
 
 The task is not complete until every item below has current evidence in the

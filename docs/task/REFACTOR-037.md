@@ -88,3 +88,7 @@ and review proof.
 - 2026-05-09 22:47: Created after user review found REFACTOR-036 still far from
   the expected greenfield rebuild. Investigation confirmed that the old data
   model, API, runtime, and Web data layer remain the main blocker.
+- 2026-05-09 23:02: Added an execution checkpoint plan to PLAN-203 so the
+  approved implementation can proceed as destructive, separately verifiable
+  conventional commits across storage/contracts, core engine, daemon/API, CLI,
+  Web, docs, smoke, and review.
