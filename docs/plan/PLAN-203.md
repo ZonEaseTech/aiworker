@@ -570,6 +570,30 @@ final implementation notes:
 - Executor-native skill/plugin/MCP lifecycle redesign beyond the minimal
   adapter settings needed for runs.
 
+## Ready-to-Implement Handoff
+
+When approval arrives, start from B1 and update this plan before and after each
+batch:
+
+1. Change PLAN-203 status from `pending_review` to `in_progress`.
+2. Change the relevant status-board row from `blocked_pending_approval` to
+   `in_progress`.
+3. Implement the batch with no compatibility aliases, shims, hidden routes, or
+   migration reads for removed pre-1.0 local worker state.
+4. Run the batch-specific evidence commands listed in B1-B6.
+5. Update the status-board evidence slot with concrete command output or
+   artifact references.
+6. Commit the batch with the expected conventional commit message unless the
+   actual diff justifies a narrower message.
+7. Move to the next batch only after the current batch's local gates pass.
+
+The first implementation action after approval is B1 storage/shared contracts:
+rewrite the local worker schema and shared DTOs around `workspace`, `brief`,
+`run`, `run_event`, `file`, `artifact`, `review`, `lesson`, and `setting`.
+
+Do not start with Web styling or CLI help polish; those depend on the storage,
+runtime, and API contracts being reset first.
+
 ## Approval Gate
 
 Do not implement until the user explicitly approves this plan. Recommended
