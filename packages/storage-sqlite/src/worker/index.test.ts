@@ -19,18 +19,18 @@ import {
   getWorkerDb,
   initWorkerDb,
   lessons,
+  listArtifacts,
   listBriefs,
   listFiles,
-  listArtifacts,
   listLessons,
   listReviews,
-  listRuns,
   listRunEvents,
+  listRuns,
   registerArtifact,
   reviews,
   runEvents,
-  runWorkerMigrations,
   runs,
+  runWorkerMigrations,
   setSetting,
   settings,
   upsertFile,
@@ -60,7 +60,7 @@ describe('greenfield local worker schema', () => {
 
   it('creates only the greenfield local workspace tables plus security primitives', () => {
     const rows = getWorkerDb().all<{ name: string }>(
-      sql.raw("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"),
+      sql.raw('SELECT name FROM sqlite_master WHERE type=\'table\' ORDER BY name'),
     ).map(row => row.name)
 
     expect(rows).toEqual([

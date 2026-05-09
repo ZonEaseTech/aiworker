@@ -1,12 +1,13 @@
-import type { FormEvent, ReactNode } from 'react'
 import type { LocalLesson, LocalReview } from '@zonease/aiworker-shared'
 import type { LucideIcon } from 'lucide-react'
+import type { FormEvent, ReactNode } from 'react'
 
+import type { LocalWorkspaceData } from './api'
 import { Activity, BookOpen, FileText, FolderOpen, Play, Plus, RefreshCw, Search } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/shared/components/ui/button'
 import { Input } from '@/shared/components/ui/input'
-import { createBrief, loadLocalWorkspaceData, readFile, startRun, type LocalWorkspaceData } from './api'
+import { createBrief, loadLocalWorkspaceData, readFile, startRun } from './api'
 
 interface WorkspaceState {
   data: LocalWorkspaceData | null
@@ -43,10 +44,9 @@ export function WorkspaceApp() {
   }, [])
 
   useEffect(() => {
-    if (!activeFile) {
-      setFileBody('')
+    if (!activeFile)
       return
-    }
+
     let live = true
     readFile(activeFile)
       .then((text) => {
@@ -71,6 +71,7 @@ export function WorkspaceApp() {
     () => data?.runs.find(run => run.id === activeRunId) ?? data?.runs[0] ?? null,
     [activeRunId, data?.runs],
   )
+  const previewBody = activeFile ? fileBody : activeRun?.summary ?? activeBrief?.body ?? ''
   const filteredFiles = useMemo(
     () => (data?.files ?? []).filter(file => file.path.toLowerCase().includes(query.toLowerCase())),
     [data?.files, query],
@@ -126,10 +127,18 @@ export function WorkspaceApp() {
         <aside className="min-h-0 border-b border-hairline bg-soft-stone/60 lg:border-b-0 lg:border-r">
           <div className="flex h-full min-h-0 flex-col gap-4 overflow-auto p-4">
             <form className="flex flex-col gap-2" onSubmit={submitBrief}>
-              <div className="flex items-center gap-2 text-sm font-medium"><Plus className="size-4" /> Brief</div>
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Plus className="size-4" />
+                {' '}
+                Brief
+              </div>
               <Input value={briefTitle} onChange={event => setBriefTitle(event.target.value)} placeholder="Title" />
               <textarea className="app-field min-h-20 resize-none" value={briefBody} onChange={event => setBriefBody(event.target.value)} placeholder="Body" />
-              <Button type="submit" size="sm"><Plus className="size-4" /> Create</Button>
+              <Button type="submit" size="sm">
+                <Plus className="size-4" />
+                {' '}
+                Create
+              </Button>
             </form>
 
             <List title="Briefs" icon={BookOpen}>
@@ -142,7 +151,11 @@ export function WorkspaceApp() {
             </List>
 
             <div className="flex flex-col gap-2">
-              <label className="flex items-center gap-2 text-sm font-medium" htmlFor="file-search"><Search className="size-4" /> Files</label>
+              <label className="flex items-center gap-2 text-sm font-medium" htmlFor="file-search">
+                <Search className="size-4" />
+                {' '}
+                Files
+              </label>
               <Input id="file-search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search" />
               <div className="flex flex-col gap-1">
                 {filteredFiles.map(file => (
@@ -168,7 +181,11 @@ export function WorkspaceApp() {
 
             <form className="mb-4 grid gap-2 sm:grid-cols-[1fr_auto]" onSubmit={submitRun}>
               <Input value={directPrompt} onChange={event => setDirectPrompt(event.target.value)} placeholder={activeBrief?.body ?? 'Prompt'} />
-              <Button type="submit"><Play className="size-4" /> Run</Button>
+              <Button type="submit">
+                <Play className="size-4" />
+                {' '}
+                Run
+              </Button>
             </form>
 
             <div className="grid gap-4 xl:grid-cols-2">
@@ -196,7 +213,7 @@ export function WorkspaceApp() {
                 <span className="truncate">{activeFile ?? activeArtifact?.path ?? 'Preview'}</span>
               </div>
               <pre className="min-h-72 overflow-auto whitespace-pre-wrap p-4 font-mono text-sm leading-relaxed text-foreground">
-                {fileBody || activeRun?.summary || activeBrief?.body}
+                {previewBody}
               </pre>
             </section>
           </div>
@@ -231,7 +248,11 @@ function StatusPill({ value }: { value: string }) {
 function List({ title, icon: Icon, children }: { title: string, icon: LucideIcon, children: ReactNode }) {
   return (
     <section className="flex flex-col gap-2">
-      <div className="flex items-center gap-2 text-sm font-medium"><Icon className="size-4" /> {title}</div>
+      <div className="flex items-center gap-2 text-sm font-medium">
+        <Icon className="size-4" />
+        {' '}
+        {title}
+      </div>
       <div className="flex flex-col gap-1">{children}</div>
     </section>
   )
@@ -253,9 +274,10 @@ function ReviewBlock({ review }: { review: LocalReview }) {
   return (
     <div className="flex flex-col gap-3 text-sm">
       <StatusPill value={review.verdict} />
-      {review.findingsJson.map((finding, index) => (
-        <p key={index} className="rounded-sm bg-soft-stone p-3">{String(finding.message ?? JSON.stringify(finding))}</p>
-      ))}
+      {review.findingsJson.map((finding) => {
+        const findingText = String(finding.message ?? JSON.stringify(finding))
+        return <p key={findingText} className="rounded-sm bg-soft-stone p-3">{findingText}</p>
+      })}
     </div>
   )
 }

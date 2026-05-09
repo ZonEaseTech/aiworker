@@ -37,7 +37,7 @@ beforeEach(() => {
   }))
 })
 
-describe('WorkspaceApp', () => {
+describe('workspaceApp', () => {
   it('renders the local workspace surface', async () => {
     render(<WorkspaceApp />)
 

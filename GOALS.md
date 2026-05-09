@@ -41,7 +41,7 @@ AIWorker 负责本地 worker 产品面：
 - web workbench：展示 worker pack、work order、run event、files、artifact preview、
   review 和 lesson candidate；
 - prompt composition：组合 worker skill、domain system、workspace state、
-  conversation context 与 operator input；
+  recent run context 与 operator input；
 - CLI、HTTP API、web 共享的 run/event 模型；
 - artifact index 与 review/lesson promotion；
 - worker pack、domain system、work-order template、durable lesson 的文件格式。
@@ -54,7 +54,7 @@ AIWorker 不能变成另一个 executor platform。
   生态、sandbox、approval UX 或用户级 auth；
 - 不声称自己是 executor effective capability source of truth；
 - 不把明文 executor secret 写入 worker config、project file 或 SQLite metadata；
-- 不在 orchestrator 里硬编码 HR、developer、PM、finance、legal 等领域 workflow；
+- 不在 runtime 里硬编码 HR、developer、PM、finance、legal 等领域 workflow；
 - 不把 fleet/gateway 作为这次重构的默认第一体验。
 
 外部 executor 是 bring-your-own local runtime。AIWorker 只设置 cwd、组合 work
@@ -72,11 +72,11 @@ order、通过薄 adapter 调用或启动 executor、观察事件流并记录本
 
 这是默认产品闭环。不能直接改善这条闭环的能力，在本轮重构中都应保持 secondary。
 
-## Brain 边界
+## Durable Context 边界
 
-Brain 是本地 worker context，不是产品可见中心。
+Durable context 是本地 worker 的复用知识层，不是产品可见中心。
 
-Brain 可以承载：
+Durable context 可以承载：
 
 - worker identity 与 domain posture；
 - 可复用 lesson 和 example；
@@ -84,7 +84,7 @@ Brain 可以承载：
 - run 后晋升 lesson 时需要的 review/admission state；
 - 维护本地 context 可信度所需的 redaction、provenance、rollback、audit metadata。
 
-Brain 不应成为：
+Durable context 不应成为：
 
 - 外部 executor 的通用 memory layer；
 - 硬编码领域 workflow engine；
@@ -107,7 +107,7 @@ Worker pack 是主扩展面。
 - example artifacts 与 review rubrics；
 - 可选 executor readiness check 或 bootstrap hint。
 
-Pack 以文件为先。daemon 负责加载和组合它们，orchestrator 不因新增领域继续长分支。
+Pack 以文件为先。daemon 负责加载和组合它们，runtime 不因新增领域继续长分支。
 
 ## Fleet And Gateway
 
@@ -129,7 +129,7 @@ loop 已经被证明可用。当前阶段它们不应牵引 API shape、CLI 默�
 4. 它是否避免把 executor-native capability 说成 AIWorker-owned capability？
 5. 同一机制是否能支持 developer、HR、PM、QA 等 pack，而不需要硬编码领域分支？
 6. fleet/gateway 是否对这条路径保持 optional？
-7. Brain 是否只在 durable local context 真正有价值的位置出现？
+7. durable context 是否只在 review/lesson 真正有价值的位置出现？
 
 任一答案是否定，都应先停下来简化方案。
 

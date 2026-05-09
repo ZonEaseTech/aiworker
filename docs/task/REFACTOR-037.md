@@ -1,6 +1,6 @@
 # REFACTOR-037 Greenfield local worker rebuild
 
-- **status**: in_progress
+- **status**: completed
 - **priority**: P0
 - **owner**: local
 - **createdAt**: 2026-05-09 22:47
@@ -132,3 +132,8 @@ and review proof.
 - 2026-05-10 00:18: Completed B5 Worker Web rebuild: deleted the old worker
   admin UI and replaced first paint with a local workspace shell centered on
   briefs, runs, files, artifacts, reviews, and lessons.
+- 2026-05-10 00:26: Completed B6 docs, gates, smoke, browser, and CRG review:
+  README, GOALS, architecture, CLI docs, PLAN-203, task/index, plan/index, and
+  changelog now describe the greenfield local workspace product. Fresh smoke
+  completed init -> daemon -> brief/run -> artifact -> review -> lesson, and
+  the running preview is available at `http://127.0.0.1:5173/worker/`.

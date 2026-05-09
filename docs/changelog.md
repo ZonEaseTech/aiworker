@@ -1,5 +1,24 @@
 # AIWorker Changelog
 
+## 2026-05-10 00:26 [completed] REFACTOR-037 / PLAN-203 — Greenfield local worker rebuild
+
+Completed the destructive greenfield local worker rebuild:
+
+- Replaced the default worker schema with workspace, briefs, runs, run events,
+  files, artifacts, reviews, lessons, and settings.
+- Deleted the old default worker runtime subsystems and rebuilt the local run
+  engine around brief -> run -> artifact -> review -> lesson.
+- Replaced the worker API with `/api/local/*` only.
+- Rebuilt the CLI around local workspace commands.
+- Rebuilt Worker Web as a workspace app instead of an admin dashboard.
+- Rewrote README, GOALS, architecture, and CLI docs around the shipped product
+  loop, with remote aggregation deferred.
+
+Verification: `bun run check`, `bun run test`, `bun run build`,
+`git diff --check`, focused package gates, source-local smoke, and browser
+review pass. CRG completed with no affected flows and static test-gap warnings
+recorded for the broad rewrite surface.
+
 ## 2026-05-09 21:58 [completed] REFACTOR-036 / PLAN-202 — Hard reset OD-style worker product surface
 
 Completed the destructive OD-style worker hard reset:

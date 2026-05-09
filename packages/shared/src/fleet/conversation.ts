@@ -1,6 +1,6 @@
 import type { ChannelType } from './channel'
 
-/** Open = still accepting new messages; closed = sealed, next inbound starts a new conversation. */
+/** Open = still accepting new entries; closed = sealed, next inbound starts a new thread. */
 export type ConversationStatus = 'open' | 'closed'
 
 /** Persisted state of a conversation on a worker. */

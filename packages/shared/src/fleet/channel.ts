@@ -1,7 +1,7 @@
-/** Channels that can deliver messages to a worker. */
+/** Channels that can deliver inbound entries to a worker. */
 export type ChannelType = 'web' | 'line' | 'telegram' | 'lark' | 'whatsapp'
 
-/** Per-platform credentials required to verify inbound and send outbound messages. */
+/** Per-platform credentials required to verify inbound and send outbound entries. */
 export type ChannelCredentials
   = | {
     channel: 'web'

@@ -2,6 +2,7 @@ import type { LocalExecutor, LocalWorkerRuntime } from '@zonease/aiworker-core'
 import type { BriefRow, LessonRow, ReviewRow, RunEventRow } from '@zonease/aiworker-storage-sqlite/worker'
 import type { Context } from 'hono'
 
+import { Buffer } from 'node:buffer'
 import { randomUUID, timingSafeEqual } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
@@ -16,7 +17,6 @@ import {
   createReview,
   getArtifact,
   getBrief,
-  getLesson,
   getReview,
   getRun,
   initWorkerDb,

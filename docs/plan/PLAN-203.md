@@ -1,6 +1,6 @@
 # PLAN-203 Greenfield local worker rebuild
 
-- **status**: in_progress
+- **status**: completed
 - **owner**: local
 - **createdAt**: 2026-05-09 22:47
 - **relatedTask**: REFACTOR-037
@@ -183,7 +183,7 @@ approval gate is cleared, every batch remains `blocked_pending_approval`.
 | B3 local daemon/API | done | `apps/api/src/modes/worker.ts`, `apps/api/src/worker/*` | committed as the `/api/local/*` daemon surface | `bun run --filter '@zonease/aiworker-api' test` pass; `bun run --filter '@zonease/aiworker-api' typecheck` pass; `bun run --filter '@zonease/aiworker-api' build` pass; local route positive scan pass; old worker route scan pass |
 | B4 CLI reset | done | `apps/cli/src/aiworker.ts`, `apps/cli/src/commands/*` | committed as the local workspace CLI | `bun run --filter '@zonease/aiworker-cli' test` pass; `bun run --filter '@zonease/aiworker-cli' typecheck` pass; `bun run --filter '@zonease/aiworker-cli' build:bundle` pass; CLI removed-command scan pass; local smoke test pass |
 | B5 Worker Web rebuild | done | `apps/web/src/worker/*` | committed as the local workspace Web app | `bun run --filter '@zonease/aiworker-web' test` pass; `bun run --filter '@zonease/aiworker-web' typecheck` pass; `bun run --filter '@zonease/aiworker-web' build` pass; Worker Web legacy scan pass |
-| B6 docs/smoke/review | blocked | `README.md`, `GOALS.md`, `docs/architecture.md`, `tmp/*` | waiting for B5 commit to land before final docs and smoke | pending |
+| B6 docs/smoke/review | done | `README.md`, `GOALS.md`, `docs/architecture.md`, `docs/cli.md`, `tmp/greenfield-smoke`, running preview | completed after full gates, smoke, browser, and CRG review | `bun run check` pass; `bun run test` pass; `bun run build` pass; `git diff --check` pass; source-local smoke pass with `run=cd5f6d2c-9f9b-4709-a86b-ff8d536c02a4`, `artifact=59f5b064-1496-4049-8759-c5fec0794529`, `lesson=d4988a3c-d706-444d-9309-db150e70345e`; browser preview pass at `http://127.0.0.1:5173/worker/`; CRG review completed with no affected flows and static test-gap warnings recorded |
 
 Status values:
 
@@ -549,6 +549,22 @@ final implementation notes:
 - **Review proof**: full gates, focused package gates, `git diff --check`, CRG
   review, and a manual browser review are recorded before marking the task
   complete.
+
+## Completion Audit Results
+
+Captured on 2026-05-10 after B1-B6 implementation.
+
+| Audit item | Result | Evidence |
+| --- | --- | --- |
+| Product reset | pass | README, GOALS, architecture, CLI docs, Worker Web, and `aiworker commands` present workspace -> brief -> run -> files/artifacts -> review -> lessons. |
+| No compatibility surface | pass | negative route/API, persistence, runtime import, CLI, and Worker Web scans returned no matches for the default local deliverable. |
+| Persistence reset | pass | `worker.db` greenfield schema test creates only `workspaces`, `briefs`, `runs`, `run_events`, `files`, `artifacts`, `reviews`, `lessons`, `settings`, plus Drizzle metadata. |
+| Runtime reset | pass | `packages/core/src/worker` contains local event, executor, file, and runtime services only; old subsystem import scan returned empty. |
+| API reset | pass | `/api/local/*` route tests pass; OpenAPI absence test confirms old local worker route families are not documented. |
+| Web reset | pass | Worker Web first paint shows workspace, briefs, files, run surface, artifact preview, review, and lessons; browser console has zero warnings/errors. |
+| CLI reset | pass | `aiworker commands` exposes only init, daemon, brief, run, files, artifacts, review, lessons, settings, executor, open, commands. |
+| Smoke proof | pass | `tmp/greenfield-smoke` fresh home completed init -> daemon -> brief/run -> artifact -> review -> lesson. |
+| Review proof | pass | `bun run check`, `bun run test`, `bun run build`, `git diff --check`, and browser review passed. CRG completed with no affected flows; it reported static test-gap warnings on the broad rewrite surface. |
 
 ## Risks
 

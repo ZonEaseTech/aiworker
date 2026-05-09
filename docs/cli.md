@@ -1,84 +1,57 @@
 # AIWorker CLI
 
-AIWorker CLI 现在只服务本地 worker loop：
+AIWorker CLI 现在只服务 greenfield local workspace loop：
 
 ```text
-pack -> work order -> run -> artifact -> review -> lesson
+workspace -> brief -> run -> files/artifacts -> review -> lessons
 ```
 
-Fleet、gateway、case、brain、session、approval、schedule 命令树不再属于默认
-CLI surface。
+默认命令不再承载旧本地 worker 管理面。远程聚合、gateway、历史会话、定时、审批、
+可见治理后台都不属于当前 local deliverable。
 
 ## 快速开始
 
 ```bash
-aiworker init --soul developer
-aiworker daemon start --open
-aiworker run --message "Review this repository and produce a release-readiness brief"
-aiworker runs list
-aiworker artifacts list --run <runId>
-aiworker review show <runId>
-aiworker lessons promote <runId>
+aiworker init --name "Developer Workspace" --root .
+aiworker daemon start --port 8787
+aiworker brief create --title "Release readiness" --body "Review this repository and produce a release-readiness brief"
+aiworker run start --brief <briefId>
+aiworker artifacts list
+aiworker review create --run <runId> --artifact <artifactId> --verdict pass
+aiworker lessons propose --review <reviewId> --statement "Keep release evidence attached to workspace files"
+aiworker lessons accept <lessonId>
 ```
 
-使用 `aiworker daemon status`、`aiworker daemon logs` 和
-`aiworker daemon stop` 管理本地进程。
+使用 `aiworker daemon status`、`aiworker daemon logs`、`aiworker daemon check`
+和 `aiworker daemon stop` 管理本地进程。
 
 ## 命令索引
 
 ```text
-aiworker
-  init
-  daemon
-    start
-    status
-    stop
-    logs
-    check
-    inspect
-    foreground
-  run
-  runs
-    list
-    show
-    cancel
-  artifacts
-    list
-    show
-  review
-    list
-    show
-    rerun
-    promote
-  lessons
-    promote
-  pack
-    list
-    show
-  doctor
-  executor
-    doctor
-    select
-    capability list
-    capability show
-    mcp add
-    mcp sync
-  commands
+aiworker init
+aiworker daemon start|foreground|status|stop|logs|check
+aiworker brief create|list|show
+aiworker run start|list|show|cancel
+aiworker files list|show|write|delete|search
+aiworker artifacts list|show|open
+aiworker review list|show|create
+aiworker lessons list|propose|accept|reject
+aiworker settings list
+aiworker executor select|doctor
+aiworker open
+aiworker commands
 ```
 
 ## 说明
 
-- `init` 写入 project-local worker state 和 pack material。
-- `daemon start` 后台启动 worker HTTP/API/Web 进程。
-- `run` 向 daemon 提交 work order；它不是第二条 executor 直连路径。
-- 成功的 daemon run 会把最终 assistant 输出捕获为 `assistant-output` artifact，
-  路径为 `.aiworker/local/artifacts/runs/<runId>/`。
-- `artifacts` 展示 worker loop 产出或索引的文件 metadata。
-- `review` 是 run 后的 evidence/risk/lesson surface。
-- `lessons promote` 从已 review 的 lesson candidates 创建 durable-context
-  proposals。它不把 executor-native memory 声称为 canonical AIWorker context。
-- `executor *` 命令只描述 project overlay hints 与 readiness；executor-native
-  MCP、skill、plugin、auth、sandbox、session 仍由外部 executor 自己拥有。
+- `init` 创建 local workspace metadata 和 `worker.db`。
+- `daemon start` 后台启动 local HTTP API；`daemon foreground` 用于调试。
+- `brief create` 记录 operator intent；`run start` 从 brief 或 direct prompt 创建一次 executor run。
+- 成功 run 会把输出写成 workspace 文件，并登记 artifact metadata。
+- `files` 读写 workspace 内文件；路径必须留在 workspace root 下。
+- `review` 是产物之后的复盘面。
+- `lessons` 处理可复用经验，accepted lesson 进入 durable local context。
+- `executor select/doctor` 只保存和检查薄 adapter hint，不拥有 executor 原生能力。
 
 ## 验证
 
@@ -88,7 +61,7 @@ CLI 改动通常需要运行：
 bun run --filter '@zonease/aiworker-cli' test
 bun run --filter '@zonease/aiworker-cli' typecheck
 bun run --filter '@zonease/aiworker-cli' build:bundle
-bun run --filter '@zonease/aiworker-cli' smoke:aiworker-run
 ```
 
-跨 package runtime 改动还应运行匹配的 API/Web/Core focused tests 和 `bun run check`。
+跨 package runtime 改动还应运行匹配的 API/Web/Core focused tests、source-local smoke
+和 `bun run check`。

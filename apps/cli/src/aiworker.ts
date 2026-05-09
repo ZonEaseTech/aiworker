@@ -1,12 +1,13 @@
 #!/usr/bin/env bun
+import type { LocalWorkerRuntime } from '@zonease/aiworker-core'
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { mkdir, readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
-import process from 'node:process'
 
-import { createLocalWorkerRuntime, getWorkerEnv, type LocalWorkerRuntime } from '@zonease/aiworker-core'
+import process from 'node:process'
+import { createLocalWorkerRuntime, getWorkerEnv } from '@zonease/aiworker-core'
 import {
   appendRunEvent,
   closeWorkerDb,

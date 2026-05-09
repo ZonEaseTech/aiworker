@@ -145,4 +145,3 @@ export const localSettingSchema = z.object({
   updatedAt: timestampSchema,
 })
 export type LocalSetting = z.infer<typeof localSettingSchema>
-

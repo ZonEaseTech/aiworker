@@ -33,8 +33,8 @@ import {
   upsertFile,
   upsertWorkspace,
 } from '@zonease/aiworker-storage-sqlite/worker'
-import { createNoopExecutor } from './executor'
 import { LocalWorkerEventBus } from './events'
+import { createNoopExecutor } from './executor'
 import { LocalWorkspaceFiles } from './files'
 
 export interface LocalWorkerRuntimeOptions {

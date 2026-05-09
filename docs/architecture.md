@@ -1,285 +1,219 @@
 # AIWorker Architecture
 
-> 状态：这是当前 local worker 架构。默认 CLI/Web/daemon surface 已收敛到
-> work order -> run -> artifact -> review -> lesson；fleet/gateway 仍是后续可选层。
+> 状态：这是当前 greenfield local worker 架构。默认产品面只有 local
+> workspace loop；远程聚合控制面被放到后续阶段，不牵引本轮 CLI、daemon、API、Web。
 
-AIWorker 的目标主路径是一条本地 worker loop：
+AIWorker 现在按一条本地业务工作流组织：
 
 ```text
-workspace + worker pack
-  -> local daemon
-  -> work order
-  -> external executor in the workspace cwd
-  -> streamed run events
-  -> files and artifacts
+workspace + worker intent
+  -> brief
+  -> run
+  -> workspace files and artifacts
   -> review
-  -> reusable lesson
+  -> durable lessons
 ```
 
-这借鉴的是 Open Design 的产品拓扑，而不是它的图片/视频领域。Open Design 用 skills
-和 design systems 产出视觉 artifact；AIWorker 用 worker skills 和 domain systems
-产出 developer、HR、PM、QA、finance、legal 等业务 artifact。
+Open Design 的参考价值在于它的项目意图：本地 daemon 管真实项目、真实文件、运行流、
+预览和复盘。AIWorker 不复制图片/视频领域，而是把同一套产品语言用于 developer、HR、
+PM、QA、finance、legal 等 worker。
 
 ## 架构原则
 
-- Local worker first。daemon 和 web workbench 是默认产品面。
-- Files first。业务 artifact 以 workspace 文件为准，SQLite 只存 metadata、关系和
-  run state。
-- Worker packs are composable。领域行为放在 `SKILL.md`、domain-system files、
-  templates、examples 里，不放进 orchestrator 分支。
-- External executors own execution。AIWorker 通过薄 adapter 调用和观察它们。
-- Review and lesson promotion after run。复盘和经验晋升发生在 run 后，不是每个有用动作
-  前的强制门。
-- Fleet/gateway deferred。它们是后续可选层，不牵引当前 local worker API。
+- Local workspace first：`aiworker init`、local daemon、Worker Web 是默认入口。
+- Files first：业务文件留在 workspace；SQLite 只存 metadata、状态、索引和复盘结果。
+- Brief before run：operator 的意图先成为 brief，run 是一次 executor 尝试。
+- Artifacts are visible：成功 run 必须产生可定位的 artifact，而不是只留下日志。
+- Review after run：复盘和 lesson 晋升发生在产物之后，不是首屏治理概念。
+- External executor owned：tool loop、approval UX、sandbox、profile、auth、native session
+  都属于外部 executor；AIWorker 只做薄 adapter 和事件归一化。
+- No compatibility surface：1.0 前不保留旧本地 worker API、CLI alias、DB 迁移读取或隐藏旧页面。
 
-## 目标组件
+## 运行时组件
 
 ### CLI
 
-`apps/cli` 是 operator 入口。
+`apps/cli` 是本地 workspace 自动化入口。
 
-目标职责：
+当前命令面：
 
-- 初始化 local worker state；
-- 列出和检查 worker packs；
-- 管理 local daemon 的 start/stop/status/logs/open；
-- 提交 work orders；
-- 检查 runs、artifacts、reviews、lessons；
-- 执行 readiness checks。
+```text
+aiworker init
+aiworker daemon start|foreground|status|stop|logs|check
+aiworker brief create|list|show
+aiworker run start|list|show|cancel
+aiworker files list|show|write|delete|search
+aiworker artifacts list|show|open
+aiworker review list|show|create
+aiworker lessons list|propose|accept|reject
+aiworker settings list
+aiworker executor select|doctor
+aiworker open
+aiworker commands
+```
 
-CLI 的 `init` 结束后必须告诉用户下一步做什么。first-time operator 不应该先学习 fleet、
-gateway、enrollment 或 Brain governance 术语。
+CLI 不再把本地 worker 包装成管理后台。它只负责初始化、启动 daemon、提交 brief/run、
+查看文件和 artifact、写入 review、处理 lesson。
 
 ### Local Daemon
 
-`apps/api` 收敛为 local worker daemon surface。
+`apps/api` 是 local daemon。
 
-目标职责：
+默认 HTTP surface 是 `/api/local/*`：
 
-- 提供 CLI 和 web 共享的 HTTP/SSE API；
-- 托管 worker web bundle；
-- create/cancel/resume/inspect runs；
-- 从 worker pack、domain system、workspace state、conversation history 和 work-order
-  input 组合 prompt stack；
-- 在正确的 workspace cwd 下调用外部 executor；
-- 捕获成功 run 的最终输出 artifact；
-- 索引 run 中写入或变更的 files/artifacts metadata；
-- 将本地 metadata 写入 `worker.db`；
-- 暴露 review 与 lesson-promotion API。
+```text
+GET    /api/local/info
+GET    /api/local/workspace
+PATCH  /api/local/workspace
+GET    /api/local/briefs
+POST   /api/local/briefs
+GET    /api/local/briefs/:id
+PATCH  /api/local/briefs/:id
+GET    /api/local/runs
+POST   /api/local/runs
+GET    /api/local/runs/:id
+POST   /api/local/runs/:id/cancel
+GET    /api/local/runs/:id/events
+GET    /api/local/files
+GET    /api/local/files/raw/*
+PUT    /api/local/files/raw/*
+DELETE /api/local/files/raw/*
+GET    /api/local/files/search
+GET    /api/local/artifacts
+GET    /api/local/artifacts/:id
+GET    /api/local/reviews
+POST   /api/local/reviews
+GET    /api/local/reviews/:id
+GET    /api/local/lessons
+POST   /api/local/lessons
+PATCH  /api/local/lessons/:id
+GET    /api/local/settings
+PATCH  /api/local/settings
+GET    /api/local/events
+```
 
-daemon 是本地 privileged process。它可以按本地配置读取 workspace 文件、写入 AIWorker
-metadata，并启动 executor adapter。
+daemon 负责：
 
-### Web Workbench
-
-`apps/web` 是主要 worker workbench。
-
-目标首屏：
-
-- 当前 workspace 与 worker pack；
-- work-order composer；
-- run timeline 与 live events；
-- conversation/messages；
-- files/artifacts panel；
-- review state 与 lesson candidates；
-- secondary admin/config areas。
-
-Worker Web 不应默认呈现 Brain governance dashboard。Brain 细节仍可检查，但主问题应是：
-“当前跑了什么、产出了什么、哪些内容应该复用？”
+- 解析 local workspace 与 `worker.db`；
+- 提供 CLI/Web 共用 API；
+- 用 brief 或 direct prompt 创建 run；
+- 在 workspace cwd 下调用外部 executor adapter；
+- 写入 run event；
+- 将成功输出写成 workspace 文件；
+- 登记 artifact metadata；
+- 创建 review 和 lesson proposal；
+- 托管 Worker Web 静态资源。
 
 ### Core Runtime
 
-`packages/core` 提供 transport-agnostic worker services。
+`packages/core/src/worker` 是新的 local run engine。
 
-目标服务：
+核心类型和服务围绕这些对象：
 
-- `WorkerRunService`：create/list/show/cancel runs，并发布 events；
-- `WorkerPackService`：discover、parse、validate、compose worker packs；
-- `WorkspaceService`：解析 workspace root 与 AIWorker local state；
-- `ArtifactService`：索引 files 与 generated deliverables；
-- `ReviewService`：记录 run review、acceptance、follow-up、lesson candidate；
-- `LessonService`：把 reviewed lessons 晋升为 durable local context；
-- executor adapters：外部 runtimes 的薄集成点。
+- workspace
+- brief
+- run
+- run event
+- file
+- artifact
+- review
+- lesson
+- setting
 
-旧 orchestrator logic 应被拆解到这些服务里。Journal、Gate、Admission、Brain Engine
-等概念只能在支持 post-run review 和 durable lesson promotion 时作为内部机制复用。
+`LocalWorkerRuntime` 只处理 brief intake、executor dispatch、event stream、
+assistant-output 文件落盘、artifact index、review、lesson proposal。旧的通道、定时、
+审批、演化、会话路由、远程 gateway client、可见 Brain 管理面不再属于默认本地 runtime。
 
 ### Storage
 
-`packages/storage-sqlite` 负责 `worker.db`。
-
-目标表面：
-
-- workspaces；
-- worker packs 与 selected domain systems；
-- conversations 与 messages；
-- runs 与 run events；
-- artifact index entries；
-- reviews 与 lesson candidates；
-- durable lessons，带 source/provenance metadata；
-- daemon/executor config，secret 只能存 ref。
-
-业务 artifact 留在 workspace filesystem。当前成功 run 会把最终 assistant 输出写入
-workspace-relative `.aiworker/local/artifacts/runs/<runId>/response.md`，并在
-`worker.db` 中登记 `assistant-output` metadata。数据库只保存指针、metadata、小型
-review/lesson 对象，不成为隐藏的业务内容仓库。
-
-### Worker Packs
-
-Worker pack 是领域扩展机制。
-
-建议布局：
+`packages/storage-sqlite` 只为 local worker 创建 greenfield 表：
 
 ```text
-.aiworker/
-  packs/
-    developer/
-      SKILL.md
-      SYSTEM.md
-      templates/
-      examples/
-      review.md
-    hr-recruiting/
-      SKILL.md
-      SYSTEM.md
-      templates/
-      examples/
-      review.md
-  lessons/
-  runs/
-  artifacts/
+workspaces
+briefs
+runs
+run_events
+files
+artifacts
+reviews
+lessons
+settings
 ```
 
-具体 layout 可以在实现中调整，但不变量是：领域知识以文件承载，加载 pack 不需要新增
-orchestrator 分支。
-
-## Run Model
-
-重构应收敛到 CLI、HTTP、web 共享的一套 run protocol。
-
-目标 API 形态：
+业务内容不被塞进数据库。当前 run 输出写入 workspace 下：
 
 ```text
-POST   /api/worker/runs
-GET    /api/worker/runs
-GET    /api/worker/runs/:id
-GET    /api/worker/runs/:id/events
-POST   /api/worker/runs/:id/cancel
-GET    /api/worker/artifacts?runId=:id
-GET    /api/worker/reviews/:id
-POST   /api/worker/reviews/:id/rerun
-POST   /api/worker/reviews/:id/lessons/promote
+.aiworker/local/artifacts/runs/<runId>/response.md
 ```
 
-当前 run event stream 转发 runtime bus 事件；CLI 以 `orchestrator.finished` /
-`orchestrator.error` 作为终态：
+SQLite 记录文件指针、大小、状态、metadata、review verdict、lesson provenance。
 
-```text
-channel.inbound
-conversation.created
-conversation.message
-orchestrator.intent_decision
-orchestrator.capability_decision
-orchestrator.text
-orchestrator.quality_gate
-orchestrator.finished
-orchestrator.error
-```
+### Worker Web
 
-Event model 应 append-only，并支持 daemon 存活期间 replay。需要历史可见的 durable events
-写入 `worker.db`。
+`apps/web/src/worker` 是 local workspace app。
 
-## Prompt Composition
+首屏布局：
 
-Prompt composition 替代硬编码领域逻辑。
+- 左侧：workspace、briefs、files；
+- 中央：active run、event stream、artifact preview；
+- 右侧：review、lesson、artifact metadata。
 
-输入：
+Worker Web 不再是 admin dashboard，也不展示旧本地 worker 管理页面。它的第一任务是回答：
+当前 workspace 要做什么、跑到了哪里、产物在哪、是否值得沉淀为 lesson。
 
-- worker identity 与 selected pack；
-- domain system text；
-- work-order template；
-- operator message；
-- selected workspace files 或 summaries；
-- recent conversation context；
-- relevant durable lessons；
-- executor/runtime constraints。
+## Executor Boundary
 
-输出：
+AIWorker 不拥有外部 executor 的有效能力集。
 
-- 发给外部 executor 的 composed work order；
-- 描述 pack、system、template、lessons 使用情况的 structured metadata；
-- 供 review 使用的 redacted provenance。
+AIWorker 可以保存本地 executor hint，例如 engine 名称、endpoint、secret ref。它不能把
+这些 hint 伪装成安全隔离边界，也不能把 executor 原生 MCP、plugin、skill、approval、
+sandbox、profile 迁移进 AIWorker 的产品模型。
 
-Composer 可以守 secret redaction、source tagging 等治理不变量，但不通过硬编码分支裁决领域
-语义。
+run engine 给 executor 的输入是组合后的 work order 和 workspace cwd；executor 返回事件
+和最终文本。更复杂的工具循环留在 executor runtime 内。
 
 ## Review And Lessons
 
-Review 是 run 后的产品面。
+Review 是产物之后的操作。
 
-Review state 可以记录：
+review 可以记录：
 
-- accepted artifact；
-- needs follow-up；
-- failed 或 inconclusive run；
-- lesson candidate；
-- promoted durable lesson；
-- rejected lesson with reason。
+- artifact 是否 accepted；
+- 需要 follow-up 的问题；
+- run 失败或证据不足；
+- 可沉淀的 lesson candidate。
 
-Lesson promotion 必须有 provenance。lesson 要指回 run、artifact、message 或 operator
-显式输入。这保留了旧 Brain admission 中有价值的部分，但不让它成为 first-time operator
-第一眼看到的概念。
+lesson 必须带 provenance，指向 review、run、artifact 或 operator 显式输入。accepted
+lesson 进入 durable local context；rejected lesson 保留 rejection reason。
 
-## Fleet And Gateway
+## Deferred Control Plane
 
-`apps/gateway`、gateway protocol packages、fleet database schema、enrollment、
-remote worker control 在 `REFACTOR-026` 中退出默认路径。
+远程 worker 聚合、fleet presence、gateway routing、enrollment、remote audit 是后续阶段。
+本轮 local worker deliverable 不依赖这些路径，也不通过它们解释产品价值。
 
-它们可以暂时留在仓库里，但新的 local worker surface 不依赖它们。未来 fleet 可以在本地
-worker loop 被证明后，聚合已验证的 local worker state。
+未来如果恢复聚合层，它只能聚合已经可用的 local workspace state，不能重新把 local worker
+拉回管理后台模型。
 
-## 仓库映射
+## Repository Map
 
-| Area | Target role |
+| Area | Current role |
 | --- | --- |
-| `apps/cli` | Local worker CLI and daemon lifecycle |
-| `apps/api` | Local daemon HTTP/SSE API and web static host |
-| `apps/web/src/worker` | Worker workbench |
-| `apps/web/src/fleet` | Deferred/secondary fleet UI |
-| `packages/core/src/worker` | Run、pack、workspace、artifact、review、lesson、executor services |
-| `packages/storage-sqlite` | Local worker metadata schema and migrations |
-| `packages/fs-layout` | Workspace and `.aiworker/` layout resolution |
-| `packages/shared` | Shared schemas and event types |
-| `apps/gateway` | Deferred fleet/gateway control plane |
+| `apps/cli` | Local workspace CLI and daemon lifecycle |
+| `apps/api` | Local daemon API and Web host |
+| `apps/web/src/worker` | Worker workspace app |
+| `packages/core/src/worker` | Local run engine |
+| `packages/storage-sqlite/src/worker` | `worker.db` schema and accessors |
+| `packages/shared/src/local-workspace.ts` | Shared local workspace DTOs |
+| `packages/fs-layout` | Local path and home helpers |
 
-## 迁移计划
+## Acceptance Contract
 
-`REFACTOR-026` 在 1.0 前允许破坏性收敛：
+本架构完成的判定不是“旧概念换名”，而是：
 
-1. 重置产品文档与目标架构；
-2. 引入统一 run service 和 API；
-3. 重塑 worker metadata 与 artifact index；
-4. 增加 worker pack parsing 和内置 packs；
-5. 简化 CLI daemon lifecycle 与 root help；
-6. 重建 Worker Web 首屏；
-7. 将旧 Brain/Gate/Admission 概念移入 review 与 lesson promotion；
-8. 删除或隐藏与新 local loop 冲突的旧默认 routes、docs、command paths。
-
-不需要为了未发布的旧 CLI/API/config 形态保留 compatibility shim。优先清晰语义和可验证的
-本地行为。
-
-## 验证标准
-
-每个 slice 都必须有聚焦验证。
-
-最终最少证据：
-
-- 变更服务的 focused unit/API tests；
-- CLI 变更要有 help/bundle smoke；
-- UI 变更要有 worker web build 和 browser smoke；
-- 一个 source-local worker smoke：init、启动 daemon、创建 run、stream 终态事件、
-  捕获 artifact、读取 review、晋升 lesson proposal；
-- 大型过渡 slice 至少跑 `bun run check` 或说明更窄 gate 的理由。
-
-文档-only slice 可以只跑 `git diff --check`，但最终回复必须说明 code-review-graph 因未修改
-代码而跳过。
+- 新开 workspace 后可以从 CLI 完成 init -> daemon -> brief -> run -> artifact -> review -> lesson；
+- Worker Web 首屏就是 workspace product surface；
+- OpenAPI 只暴露 `/api/local/*`；
+- 默认本地 DB 只包含 greenfield 表；
+- local runtime 没有旧本地 worker subsystem import；
+- README、GOALS、PLAN、task 与实际命令一致；
+- source-local smoke、浏览器检查、CRG、focused gates、root gates 都有证据。

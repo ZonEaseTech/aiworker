@@ -6,7 +6,7 @@ import { redactBodySecrets } from './scan-body'
  * Brain admission MVP (PLAN-101).
  *
  * Generated brain change (memory / brain-skill / policy / artifact-status)
- * must enter `brain_admission_proposals` first; operator approval +
+ * must enter the durable proposal table first; operator approval +
  * materialization happen via the core service. Brain Kernel guarantees:
  *
  *  - status machine: pending → approved | rejected

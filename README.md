@@ -9,8 +9,8 @@ workspace 里工作，通过 web 实时观察 run，然后把结果沉淀为文�
 worker pack + workspace -> work order -> run -> artifact -> review -> lesson
 ```
 
-当前默认实现已经收敛到 local worker loop；Project Brain 留在 durable context
-内部，fleet/gateway 先作为后续可选控制面暂缓。
+当前默认实现已经收敛到 local worker loop；durable context 只在 review/lesson
+之后出现，fleet/gateway 先作为后续可选控制面暂缓。
 
 ## 为什么改成这个形态
 
@@ -27,7 +27,7 @@ worker pack + workspace -> work order -> run -> artifact -> review -> lesson
 | Critique | Review / lesson candidate |
 
 AIWorker 的领域是 developer、HR、PM、QA、finance、legal 等业务 worker。领域差异通过
-pack、domain system、template、review rubric 表达，不通过 orchestrator 硬编码分支表达。
+pack、domain system、template、review rubric 表达，不通过 runtime 硬编码分支表达。
 
 ## 产品边界
 
@@ -57,18 +57,19 @@ AIWorker 只通过薄 adapter 调用和观察 executor，不把自己做成 exec
 ## Quickstart
 
 ```bash
-aiworker init --soul developer
-aiworker daemon start --open
-aiworker run --message "Review this repository and produce a release-readiness brief"
+aiworker init --name "Developer Workspace" --root .
+aiworker daemon start --port 8787
+aiworker brief create --title "Release readiness" --body "Review this repository and produce a release-readiness brief"
+aiworker run start --brief <briefId>
 ```
 
 继续查看结果：
 
 ```bash
-aiworker runs list
-aiworker artifacts list --run <runId>
-aiworker review show <runId>
-aiworker lessons promote <runId>
+aiworker run list
+aiworker artifacts list
+aiworker review create --run <runId> --verdict pass
+aiworker lessons list
 ```
 
 ## 仓库结构
