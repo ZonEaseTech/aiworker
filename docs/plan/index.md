@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-09 (PLAN-201 completed)
+> Updated: 2026-05-09 (PLAN-203 pending review)
 
 ## Usage
 
@@ -231,3 +231,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-200 Worker review promotion surface**](PLAN-200.md) `2026-05-09`
 - [x] [**PLAN-201 Complete OD-style worker default loop**](PLAN-201.md) `2026-05-09`
 - [x] [**PLAN-202 Hard reset OD-style worker product surface**](PLAN-202.md) `2026-05-09`
+- [ ] [**PLAN-203 Greenfield local worker rebuild**](PLAN-203.md) `2026-05-09`

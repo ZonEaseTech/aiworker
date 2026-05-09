@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-09 (REFACTOR-035 completed)
+> Updated: 2026-05-09 (REFACTOR-037 proposal)
 
 ## Usage
 
@@ -308,3 +308,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REFACTOR-034 Add worker review promotion surface**](REFACTOR-034.md) `P1`
 - [x] [**REFACTOR-035 Complete OD-style worker default loop**](REFACTOR-035.md) `P1`
 - [x] [**REFACTOR-036 Hard reset OD-style worker product surface**](REFACTOR-036.md) `P1`
+- [-] [**REFACTOR-037 Greenfield local worker rebuild**](REFACTOR-037.md) `P0`
