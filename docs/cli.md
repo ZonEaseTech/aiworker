@@ -1,9 +1,9 @@
 # AIWorker CLI
 
-> 状态：这是 `REFACTOR-026` 的目标 CLI 信息架构。当前实现仍暴露旧的 worker、
-> Brain、case、fleet、gateway 命令；它们在 local worker loop 落地前属于过渡表面。
+> 状态：`REFACTOR-026` 的 OD-style local worker loop 已进入默认路径；Brain、
+> case、fleet、gateway 仍保留为 secondary/admin surface，不再是首屏 onboarding。
 
-CLI 应让本地 worker loop 一眼可见：
+CLI 默认让本地 worker loop 一眼可见：
 
 ```text
 init -> daemon start -> run -> inspect artifacts -> review -> promote lesson
@@ -24,7 +24,7 @@ Root help 必须回答两个问题：
 - Executor-native capability 属于外部 executor；CLI 可以做 readiness check 和 bootstrap
   hint，但不是 executor capability source of truth。
 
-## 目标命令树
+## 默认命令树
 
 ```text
 aiworker
@@ -35,38 +35,32 @@ aiworker
     restart
     status
     logs
-    open
+    check
+    inspect
   run
   runs
     list
     show
-    events
     cancel
   artifacts
     list
     show
-    open
-  packs
+  pack
     list
     show
-    install
-    validate
   review
-    show
-    accept
-    follow-up
-    lesson
-  lessons
     list
     show
     promote
-    reject
-  check
-  config
+    rerun
   doctor
+  executor
+    doctor
+    select
 ```
 
-这是目标形态，不是兼容承诺。重构期间旧命令可能继续存在，直到对应替代 slice 落地。
+这是当前默认 operator path。`aiworker worker ...` 提供等价 canonical 入口，适合脚本
+或文档强调角色边界。
 
 ## `aiworker init`
 
@@ -233,16 +227,15 @@ Executor-native auth 和 capability 仍由 executor runtime 拥有。
 
 ## Legacy Surfaces
 
-`REFACTOR-026` 期间，这些旧表面可能仍存在：
+这些表面仍存在，但属于 secondary/admin：
 
 - Brain governance commands；
 - case-first commands；
-- bypass unified run service 的 worker orchestration commands；
 - fleet/gateway commands；
 - enrollment 与 remote worker commands。
 
-它们不应出现在 primary onboarding path。随着 slice 落地，旧表面要么移到明确的
-secondary/admin namespace，要么在与新 local worker model 冲突时删除。
+它们不应出现在 primary onboarding path。后续如与 local worker model 冲突，应移动到
+明确的 secondary/admin namespace，或在 1.0 前破坏性删除。
 
 ## CLI Slice 验证
 

@@ -41,6 +41,16 @@ const ROOT_WORKER_COMMANDS = [
   'daemon logs',
   'daemon check',
   'daemon inspect',
+  'run',
+  'runs list',
+  'runs show',
+  'runs cancel',
+  'artifacts list',
+  'artifacts show',
+  'review list',
+  'review show',
+  'review rerun',
+  'review promote',
   'brain status',
   'brain journal show',
   'brain inbox propose',
@@ -56,15 +66,10 @@ const ROOT_WORKER_COMMANDS = [
   'brain admission apply',
   'brain admission propose',
   'brain brief',
-  'review list',
-  'review show',
-  'review rerun',
-  'review promote',
   'case list',
   'case show',
   'case rerun',
   'lessons propose',
-  'run',
   'serve',
   'config show',
   'config set',
@@ -193,21 +198,19 @@ describe('aiworker cli registration', () => {
       '开始',
       '常用查看',
       '更多',
-      'aiworker up --soul developer',
-      'aiworker env gateway-url <url>',
-      'aiworker env display-name <name>',
+      'aiworker daemon start --soul developer --pack developer',
+      'aiworker run --message "..."',
+      'aiworker runs list',
+      'aiworker artifacts list --run <runId>',
+      'aiworker review promote <runId>',
       'aiworker worker --help',
+      'aiworker brain --help',
       'aiworker fleet --help',
       'aiworker gateway --help',
       'aiworker commands',
       'daemon start',
       'daemon check',
-      'brain status',
       'executor doctor',
-      'doctor',
-      'up',
-      'serve',
-      'soul list',
     ])
       expect(help).toContain(keyword)
     expect(help).not.toContain('sessions maintenance')
@@ -347,6 +350,25 @@ describe('preprocessArgv', () => {
       'task-001',
       '--scope',
       'repo:aiworker',
+    ])
+  })
+
+  it('runs show 被折叠为本地 worker run inspection 入口', () => {
+    expect(run('runs', 'show', 'run-001')).toEqual([
+      '/usr/bin/bun',
+      '/path/to/aiworker.ts',
+      'runs show',
+      'run-001',
+    ])
+  })
+
+  it('artifacts list 被折叠为本地 worker artifact inspection 入口', () => {
+    expect(run('artifacts', 'list', '--run', 'run-001')).toEqual([
+      '/usr/bin/bun',
+      '/path/to/aiworker.ts',
+      'artifacts list',
+      '--run',
+      'run-001',
     ])
   })
 
@@ -494,6 +516,15 @@ describe('preprocessArgv', () => {
       'task-001',
       '--message',
       'retry',
+    ])
+  })
+
+  it('worker artifacts show 被折叠', () => {
+    expect(run('worker', 'artifacts', 'show', 'artifact-001')).toEqual([
+      '/usr/bin/bun',
+      '/path/to/aiworker.ts',
+      'worker artifacts show',
+      'artifact-001',
     ])
   })
 

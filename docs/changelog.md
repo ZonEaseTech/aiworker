@@ -1,5 +1,16 @@
 # AIWorker Changelog
 
+## 2026-05-09 19:08 [completed] REFACTOR-035 / PLAN-201 — Complete OD-style worker default loop
+
+Completed S7 of the OD-style worker reboot:
+
+- Added daemon-backed `runs list/show/cancel` CLI commands.
+- Added daemon-backed `artifacts list/show` CLI commands.
+- Refreshed root help so onboarding reads init -> daemon -> run -> inspect artifacts
+  -> review/promote.
+- Updated `docs/cli.md` to describe the current local worker loop and mark
+  Brain/Fleet/Gateway as secondary/admin surfaces.
+
 ## 2026-05-09 18:58 [completed] REFACTOR-034 / PLAN-200 — Worker review promotion surface
 
 Completed S6 of the OD-style worker reboot:

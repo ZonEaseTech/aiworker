@@ -183,3 +183,7 @@ Open Design 当前参照形态：
 - 2026-05-09 18:58：S6 完成；新增 `/api/worker/reviews`、root/canonical
   `review` CLI commands，并把 Worker Web 默认复盘入口收敛到 Reviews / Promote
   lessons。
+- 2026-05-09 19:00：启动 S7（REFACTOR-035 / PLAN-201）；聚焦补齐 CLI
+  runs/artifacts inspection 和默认 onboarding cleanup，不进入 npm release。
+- 2026-05-09 19:08：S7 完成；local worker 默认 CLI loop 已补齐
+  runs/artifacts inspection，root help 与 CLI docs 已同步到 OD-style workbench path。

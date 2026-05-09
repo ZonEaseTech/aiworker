@@ -201,7 +201,7 @@ async function createDaemonRun(input: CreateDaemonRunInput): Promise<CreateDaemo
   }
   catch (err) {
     consola.error(`[aiworker run] daemon unreachable at ${input.base}: ${err instanceof Error ? err.message : String(err)}`)
-    consola.error('[aiworker run] start the daemon first: aiworker serve --open')
+    consola.error('[aiworker run] start the daemon first: aiworker daemon start')
     return { ok: false, code: 1 }
   }
 

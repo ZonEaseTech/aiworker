@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-09 (REFACTOR-034 completed)
+> Updated: 2026-05-09 (REFACTOR-035 completed)
 
 ## Usage
 
@@ -306,3 +306,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REFACTOR-032 Add local worker daemon lifecycle commands**](REFACTOR-032.md) `P1`
 - [x] [**REFACTOR-033 Worker web workbench first screen**](REFACTOR-033.md) `P1`
 - [x] [**REFACTOR-034 Add worker review promotion surface**](REFACTOR-034.md) `P1`
+- [x] [**REFACTOR-035 Complete OD-style worker default loop**](REFACTOR-035.md) `P1`

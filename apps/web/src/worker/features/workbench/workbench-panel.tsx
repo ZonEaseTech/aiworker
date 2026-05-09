@@ -399,7 +399,7 @@ function ReviewPanel({
         : error
           ? <p role="alert" className="app-alert-error">{errorMessage(error)}</p>
           : !caseFile
-              ? <div className="app-empty p-6">暂无 case review。</div>
+              ? <div className="app-empty p-6">暂无 run review。</div>
               : (
                   <div className="grid min-w-0 gap-4 lg:grid-cols-3">
                     <div className="min-w-0 lg:col-span-2">

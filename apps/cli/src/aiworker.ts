@@ -107,6 +107,13 @@ import {
 import { runSoulList, runSoulShow } from './commands/worker/soul'
 import { runTokenRotate as runTokenRotateLocal } from './commands/worker/token'
 import { runUp } from './commands/worker/up'
+import {
+  runArtifactsList,
+  runArtifactsShow,
+  runRunsCancel,
+  runRunsList,
+  runRunsShow,
+} from './commands/worker/workbench'
 import { configureCliHelp, findCommandGroupHelpArg, localizeGlobalOptions, renderCommandGroupHelp, renderFullCommandIndex } from './help'
 import { bootstrapCliDotenv } from './lib/bootstrap'
 
@@ -377,6 +384,46 @@ cli.command('pack list', '列出 OD-style worker pack（SKILL.md + DOMAIN.md + w
 cli.command('pack show <pack>', '查看某个 worker pack 的 skill/domain/work-order/artifact 信息').action(async (pack: string) => {
   process.exit(await runPackShow(pack))
 })
+
+cli
+  .command('runs list', '列出本地 daemon work orders')
+  .option('--limit <n>', '最多返回 run 数量（默认由 daemon 决定）', { type: [Number] })
+  .action(async (opts: { limit?: number[] }) => {
+    process.exit(await runRunsList({ limit: optionalNumber(opts.limit) }))
+  })
+
+cli
+  .command('runs show <runId>', '查看一个 work order run')
+  .action(async (runId: string) => {
+    process.exit(await runRunsShow(runId))
+  })
+
+cli
+  .command('runs cancel <runId>', '取消一个仍在运行的 work order')
+  .action(async (runId: string) => {
+    process.exit(await runRunsCancel(runId))
+  })
+
+cli
+  .command('artifacts list', '列出本地 daemon artifact metadata')
+  .option('--run <id>', '按 run id 过滤')
+  .option('--conversation <id>', '按 conversation id 过滤')
+  .option('--status <status>', '按 artifact 状态过滤：available | missing | archived')
+  .option('--limit <n>', '最多返回 artifact 数量（1-500，默认由 daemon 决定）', { type: [Number] })
+  .action(async (opts: { run?: string, conversation?: string, status?: string, limit?: number[] }) => {
+    process.exit(await runArtifactsList({
+      ...(opts.run === undefined ? {} : { runId: opts.run }),
+      ...(opts.conversation === undefined ? {} : { conversationId: opts.conversation }),
+      ...(opts.status === undefined ? {} : { status: opts.status }),
+      ...(opts.limit === undefined ? {} : { limit: optionalNumber(opts.limit) }),
+    }))
+  })
+
+cli
+  .command('artifacts show <id>', '查看一个 artifact metadata')
+  .action(async (id: string) => {
+    process.exit(await runArtifactsShow(id))
+  })
 
 cli
   .command('review list', '列出本地 worker run reviews（workbench 默认复盘入口）')
@@ -1032,6 +1079,46 @@ cli.command('worker pack list', '列出 OD-style worker pack（SKILL.md + DOMAIN
 cli.command('worker pack show <pack>', '查看某个 worker pack 的 skill/domain/work-order/artifact 信息').action(async (pack: string) => {
   process.exit(await runPackShow(pack))
 })
+
+cli
+  .command('worker runs list', '列出本地 daemon work orders')
+  .option('--limit <n>', '最多返回 run 数量（默认由 daemon 决定）', { type: [Number] })
+  .action(async (opts: { limit?: number[] }) => {
+    process.exit(await runRunsList({ limit: optionalNumber(opts.limit) }))
+  })
+
+cli
+  .command('worker runs show <runId>', '查看一个 work order run')
+  .action(async (runId: string) => {
+    process.exit(await runRunsShow(runId))
+  })
+
+cli
+  .command('worker runs cancel <runId>', '取消一个仍在运行的 work order')
+  .action(async (runId: string) => {
+    process.exit(await runRunsCancel(runId))
+  })
+
+cli
+  .command('worker artifacts list', '列出本地 daemon artifact metadata')
+  .option('--run <id>', '按 run id 过滤')
+  .option('--conversation <id>', '按 conversation id 过滤')
+  .option('--status <status>', '按 artifact 状态过滤：available | missing | archived')
+  .option('--limit <n>', '最多返回 artifact 数量（1-500，默认由 daemon 决定）', { type: [Number] })
+  .action(async (opts: { run?: string, conversation?: string, status?: string, limit?: number[] }) => {
+    process.exit(await runArtifactsList({
+      ...(opts.run === undefined ? {} : { runId: opts.run }),
+      ...(opts.conversation === undefined ? {} : { conversationId: opts.conversation }),
+      ...(opts.status === undefined ? {} : { status: opts.status }),
+      ...(opts.limit === undefined ? {} : { limit: optionalNumber(opts.limit) }),
+    }))
+  })
+
+cli
+  .command('worker artifacts show <id>', '查看一个 artifact metadata')
+  .action(async (id: string) => {
+    process.exit(await runArtifactsShow(id))
+  })
 
 cli
   .command('worker review list', '列出本地 worker run reviews（workbench 默认复盘入口）')

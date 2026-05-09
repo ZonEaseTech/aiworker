@@ -61,7 +61,7 @@ function CaseList({
   return (
     <aside className="app-panel flex min-w-0 flex-col gap-3 lg:col-span-1">
       <div className="flex min-w-0 items-center justify-between gap-3">
-        <h2 className="text-feature font-normal">Case list</h2>
+        <h2 className="text-feature font-normal">Review list</h2>
         <Badge variant="outline">{cases.length}</Badge>
       </div>
       {isLoading && <Skeleton className="h-32 w-full" />}
