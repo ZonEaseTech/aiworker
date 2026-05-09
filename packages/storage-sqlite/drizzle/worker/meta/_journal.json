@@ -5,71 +5,8 @@
     {
       "idx": 0,
       "version": "6",
-      "when": 1776763610379,
-      "tag": "0000_spooky_kat_farrell",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "6",
-      "when": 1777092169262,
-      "tag": "0001_secret_dagger",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "6",
-      "when": 1777094345846,
-      "tag": "0002_jazzy_moondragon",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "6",
-      "when": 1777306304275,
-      "tag": "0003_rare_cloak",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "6",
-      "when": 1777380396323,
-      "tag": "0004_daffy_thing",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "6",
-      "when": 1777885737420,
-      "tag": "0005_worthless_whiplash",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "6",
-      "when": 1777888861849,
-      "tag": "0006_fair_jetstream",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "6",
-      "when": 1778037473321,
-      "tag": "0007_solid_bromley",
-      "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "6",
-      "when": 1778268756475,
-      "tag": "0008_peaceful_titanium_man",
-      "breakpoints": true
-    },
-    {
-      "idx": 9,
-      "version": "6",
-      "when": 1778317896439,
-      "tag": "0009_striped_exiles",
+      "when": 1778340561994,
+      "tag": "0000_skinny_revanche",
       "breakpoints": true
     }
   ]

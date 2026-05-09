@@ -114,3 +114,9 @@ and review proof.
 - 2026-05-09 23:13: Added a ready-to-implement handoff to PLAN-203 that starts
   from B1 storage/shared contracts after approval and requires per-batch status
   and evidence updates before moving forward.
+- 2026-05-09 23:20: Began B1 storage/shared contracts implementation from the
+  approved greenfield scope.
+- 2026-05-09 23:31: Completed B1 storage/shared contract implementation:
+  replaced the worker schema with greenfield workspace/brief/run/file/artifact/
+  review/lesson/settings tables, regenerated worker migrations from scratch, and
+  verified focused storage/shared gates.

@@ -1,4 +1,5 @@
 import { mkdtempSync } from 'node:fs'
+import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -6,28 +7,50 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { sql } from 'drizzle-orm'
 
 import {
+  appendRunEvent,
+  artifacts,
+  briefs,
   closeWorkerDb,
-  conversations,
+  createBrief,
+  createLesson,
+  createReview,
+  createRun,
+  files,
   getWorkerDb,
   initWorkerDb,
-  messages,
+  lessons,
+  listBriefs,
+  listFiles,
+  listArtifacts,
+  listLessons,
+  listReviews,
+  listRuns,
+  listRunEvents,
+  registerArtifact,
+  reviews,
+  runEvents,
   runWorkerMigrations,
+  runs,
+  setSetting,
+  settings,
+  upsertFile,
+  upsertWorkspace,
+  workspaces,
 } from './index'
 
-/**
- * REFACTOR-005 perf smoke：用 EXPLAIN QUERY PLAN 验证新索引被 planner 选中。
- * 同时跑一个 100k messages 单 conversation 的 wallclock 检查，全表扫不可能在
- * 200ms 内回点查（即使有 page cache）。
- */
-describe('worker schema indexes (REFACTOR-005)', () => {
+describe('greenfield local worker schema', () => {
+  let dir: string
+
   beforeEach(() => {
     closeWorkerDb()
-    const dir = mkdtempSync(join(tmpdir(), 'aiworker-perf-'))
+    dir = mkdtempSync(join(tmpdir(), 'aiworker-worker-db-'))
     initWorkerDb(join(dir, 'worker.db'))
     runWorkerMigrations()
   })
-  afterEach(() => {
+
+  afterEach(async () => {
     closeWorkerDb()
+    await rm(dir, { recursive: true, force: true })
   })
 
   function explain(query: string): string {
@@ -35,151 +58,135 @@ describe('worker schema indexes (REFACTOR-005)', () => {
     return rows.map(r => r.detail).join('\n')
   }
 
-  it('messages_conversation_id_idx 命中 conversationId 点查', () => {
-    const plan = explain(`SELECT * FROM messages WHERE conversation_id = 'x'`)
-    expect(plan).toContain('messages_conversation_id_idx')
+  it('creates only the greenfield local workspace tables plus security primitives', () => {
+    const rows = getWorkerDb().all<{ name: string }>(
+      sql.raw("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"),
+    ).map(row => row.name)
+
+    expect(rows).toEqual([
+      '__drizzle_migrations',
+      'artifacts',
+      'briefs',
+      'files',
+      'lessons',
+      'reviews',
+      'run_events',
+      'runs',
+      'settings',
+      'sqlite_sequence',
+      'worker_config',
+      'worker_identity',
+      'worker_secrets',
+      'workspaces',
+    ])
   })
 
-  it('conversations_lookup_idx 命中 channel+chatId+threadId+status 复合 where', () => {
-    const plan = explain(`SELECT * FROM conversations WHERE channel='telegram' AND chat_id='c1' AND thread_id='t1' AND status='open'`)
-    expect(plan).toContain('conversations_lookup_idx')
+  it('persists the workspace -> brief -> run -> artifact -> review -> lesson loop', () => {
+    const workspace = upsertWorkspace({
+      id: 'ws-1',
+      name: 'Hiring workspace',
+      rootPath: '/tmp/hiring',
+      at: '2026-05-09T01:00:00.000Z',
+    })
+    expect(workspace.rootPath).toBe('/tmp/hiring')
+
+    const brief = createBrief({
+      id: 'brief-1',
+      workspaceId: workspace.id,
+      title: 'Screen candidate',
+      body: 'Review the candidate packet.',
+      status: 'queued',
+      at: '2026-05-09T01:01:00.000Z',
+    })
+    expect(listBriefs(workspace.id)).toEqual([brief])
+
+    const run = createRun({
+      id: 'run-1',
+      workspaceId: workspace.id,
+      briefId: brief.id,
+      executor: 'codex',
+      prompt: brief.body,
+      status: 'running',
+      metadataJson: { domain: 'hr' },
+      at: '2026-05-09T01:02:00.000Z',
+    })
+    expect(listRuns(workspace.id)).toEqual([run])
+    appendRunEvent({
+      runId: run.id,
+      seq: 1,
+      type: 'status',
+      payloadJson: { status: 'running' },
+      at: '2026-05-09T01:02:01.000Z',
+    })
+    expect(listRunEvents(run.id)).toHaveLength(1)
+
+    const file = upsertFile({
+      id: 'file-1',
+      workspaceId: workspace.id,
+      path: 'reports/candidate.md',
+      source: 'run',
+      size: 128,
+      at: '2026-05-09T01:03:00.000Z',
+    })
+    expect(file.path).toBe('reports/candidate.md')
+    expect(file.kind).toBe('file')
+    expect(listFiles(workspace.id)).toEqual([file])
+
+    const artifact = registerArtifact({
+      id: 'artifact-1',
+      workspaceId: workspace.id,
+      runId: run.id,
+      path: file.path,
+      title: 'Candidate review',
+      metadataJson: { fileId: file.id },
+      at: '2026-05-09T01:04:00.000Z',
+    })
+    expect(listArtifacts(workspace.id)).toEqual([artifact])
+    const review = createReview({
+      id: 'review-1',
+      workspaceId: workspace.id,
+      runId: run.id,
+      artifactId: artifact.id,
+      verdict: 'warn',
+      findingsJson: [{ message: 'Needs source evidence' }],
+      at: '2026-05-09T01:05:00.000Z',
+    })
+    expect(listReviews(workspace.id)).toEqual([review])
+    const lesson = createLesson({
+      id: 'lesson-1',
+      workspaceId: workspace.id,
+      sourceReviewId: review.id,
+      statement: 'Always cite the candidate packet source.',
+      evidenceJson: [{ reviewId: review.id }],
+      at: '2026-05-09T01:06:00.000Z',
+    })
+
+    expect(lesson.status).toBe('proposed')
+    expect(listLessons(workspace.id)).toEqual([lesson])
+    expect(setSetting('executor.default', { engine: 'codex' }).valueJson).toEqual({ engine: 'codex' })
   })
 
-  it('conversations_lookup_idx 也能服务 channel+chatId+status 前缀查询（threadId 为 null）', () => {
-    const plan = explain(`SELECT * FROM conversations WHERE channel='telegram' AND chat_id='c1' AND status='open'`)
-    // 复合索引前两列前缀匹配应仍走索引
-    expect(plan).toContain('conversations_lookup_idx')
+  it('keeps indexes aligned with the new local workspace query paths', () => {
+    expect(explain(`SELECT * FROM workspaces ORDER BY updated_at DESC LIMIT 20`)).toContain('workspaces_updated_at_idx')
+    expect(explain(`SELECT * FROM briefs WHERE workspace_id = 'ws-1' ORDER BY updated_at DESC LIMIT 20`)).toContain('briefs_workspace_updated_at_idx')
+    expect(explain(`SELECT * FROM runs WHERE status = 'running' ORDER BY updated_at DESC LIMIT 20`)).toContain('runs_status_updated_at_idx')
+    expect(explain(`SELECT * FROM run_events WHERE run_id = 'run-1' ORDER BY seq ASC LIMIT 200`)).toContain('run_events_run_seq')
+    expect(explain(`SELECT * FROM files WHERE workspace_id = 'ws-1' ORDER BY updated_at DESC LIMIT 50`)).toContain('files_workspace_updated_at_idx')
+    expect(explain(`SELECT * FROM files WHERE kind = 'generated' LIMIT 50`)).toContain('files_kind_idx')
+    expect(explain(`SELECT * FROM artifacts WHERE status = 'available' ORDER BY updated_at DESC LIMIT 50`)).toContain('artifacts_status_updated_at_idx')
+    expect(explain(`SELECT * FROM reviews WHERE workspace_id = 'ws-1' ORDER BY created_at DESC LIMIT 50`)).toContain('reviews_workspace_created_at_idx')
+    expect(explain(`SELECT * FROM lessons WHERE status = 'proposed' ORDER BY updated_at DESC LIMIT 50`)).toContain('lessons_status_updated_at_idx')
   })
 
-  it('conversations_last_active_at_idx 服务 ORDER BY last_active_at DESC LIMIT', () => {
-    const plan = explain(`SELECT * FROM conversations ORDER BY last_active_at DESC LIMIT 200`)
-    expect(plan).toContain('conversations_last_active_at_idx')
-  })
-
-  it('cron_jobs_due_idx 服务 enabled=1 AND next_run_at<=? 的 tick 扫描', () => {
-    const plan = explain(`SELECT * FROM cron_jobs WHERE enabled=1 AND next_run_at <= '2026-01-01T00:00:00.000Z'`)
-    expect(plan).toContain('cron_jobs_due_idx')
-  })
-
-  it('evolution_observations_noticed_at_idx 服务 ORDER BY noticed_at DESC LIMIT', () => {
-    const plan = explain(`SELECT * FROM evolution_observations ORDER BY noticed_at DESC LIMIT 200`)
-    expect(plan).toContain('evolution_observations_noticed_at_idx')
-  })
-
-  it('execution_logs_conversation_id_idx 服务 IN (?) 关联拉取', () => {
-    const plan = explain(`SELECT * FROM execution_logs WHERE conversation_id IN ('a','b','c')`)
-    expect(plan).toContain('execution_logs_conversation_id_idx')
-  })
-
-  it('agent_tasks_created_at_idx 服务 ORDER BY created_at DESC LIMIT', () => {
-    const plan = explain(`SELECT * FROM agent_tasks ORDER BY created_at DESC LIMIT 200`)
-    expect(plan).toContain('agent_tasks_created_at_idx')
-  })
-
-  it('brain_admission_proposals indexes 服务 status+kind 与 scope 过滤 (PLAN-101)', () => {
-    const byStatusKind = explain(`SELECT * FROM brain_admission_proposals WHERE status = 'pending' AND kind = 'memory-add'`)
-    expect(byStatusKind).toContain('brain_admission_proposals_status_kind_idx')
-
-    const byScope = explain(`SELECT * FROM brain_admission_proposals WHERE scope_id = 'backend-hire-q3'`)
-    expect(byScope).toContain('brain_admission_proposals_scope_id_idx')
-
-    const byCreatedAt = explain(`SELECT * FROM brain_admission_proposals ORDER BY created_at DESC LIMIT 50`)
-    expect(byCreatedAt).toContain('brain_admission_proposals_created_at_idx')
-  })
-
-  it('brain_admission_decisions indexes 服务 proposalId join 与按时间扫描 (PLAN-101)', () => {
-    const byProposal = explain(`SELECT * FROM brain_admission_decisions WHERE proposal_id = 'p-1'`)
-    expect(byProposal).toContain('brain_admission_decisions_proposal_id_idx')
-
-    const byDecidedAt = explain(`SELECT * FROM brain_admission_decisions ORDER BY decided_at DESC LIMIT 50`)
-    expect(byDecidedAt).toContain('brain_admission_decisions_decided_at_idx')
-  })
-
-  it('decision_pipeline_samples index supports recent stage windows (TODO-028)', () => {
-    const plan = explain(`SELECT * FROM decision_pipeline_samples WHERE stage = 'intent_classifier' ORDER BY created_at DESC LIMIT 50`)
-    expect(plan).toContain('decision_pipeline_samples_stage_created_at_idx')
-  })
-
-  it('brain_journal_events indexes support task and conversation traces (PLAN-174)', () => {
-    const byTask = explain(`SELECT * FROM brain_journal_events WHERE task_id = 't1' ORDER BY created_at ASC LIMIT 200`)
-    expect(byTask).toContain('brain_journal_events_task_created_at_idx')
-
-    const byConversation = explain(`SELECT * FROM brain_journal_events WHERE conversation_id = 'c1' ORDER BY created_at ASC LIMIT 200`)
-    expect(byConversation).toContain('brain_journal_events_conversation_created_at_idx')
-  })
-
-  it('brain_artifacts indexes服务 scope+type 与 status+type 列表查询 (PLAN-099)', () => {
-    const byScopeType = explain(`SELECT * FROM brain_artifacts WHERE scope_id = 'backend-hire-q3' AND type = 'candidate-resume'`)
-    expect(byScopeType).toContain('brain_artifacts_scope_type_idx')
-
-    const byStatusType = explain(`SELECT * FROM brain_artifacts WHERE status = 'active' AND type = 'code-module'`)
-    expect(byStatusType).toContain('brain_artifacts_status_type_idx')
-
-    const byUpdated = explain(`SELECT * FROM brain_artifacts ORDER BY updated_at DESC LIMIT 50`)
-    expect(byUpdated).toContain('brain_artifacts_updated_at_idx')
-  })
-
-  it('worker_artifacts indexes support run/conversation/status workbench queries (REFACTOR-029)', () => {
-    const byRun = explain(`SELECT * FROM worker_artifacts WHERE run_id = 'run-1' ORDER BY updated_at DESC LIMIT 50`)
-    expect(byRun).toContain('worker_artifacts_run_updated_at_idx')
-
-    const byConversation = explain(`SELECT * FROM worker_artifacts WHERE conversation_id = 'conv-1' ORDER BY updated_at DESC LIMIT 50`)
-    expect(byConversation).toContain('worker_artifacts_conversation_updated_at_idx')
-
-    const byStatus = explain(`SELECT * FROM worker_artifacts WHERE status = 'available' ORDER BY updated_at DESC LIMIT 50`)
-    expect(byStatus).toContain('worker_artifacts_status_updated_at_idx')
-
-    const byUpdated = explain(`SELECT * FROM worker_artifacts ORDER BY updated_at DESC LIMIT 50`)
-    expect(byUpdated).toContain('worker_artifacts_updated_at_idx')
-  })
-
-  it('session_entries indexes support active-session lookup and maintenance scans', () => {
-    const byConversation = explain(`SELECT * FROM session_entries WHERE current_conversation_id = 'c1'`)
-    expect(byConversation).toContain('session_entries_current_conversation_id_idx')
-
-    const byActivity = explain(`SELECT * FROM session_entries ORDER BY last_interaction_at DESC LIMIT 200`)
-    expect(byActivity).toContain('session_entries_last_interaction_at_idx')
-  })
-
-  it('100k messages 单 conversation 点查在毫秒级别', () => {
-    const db = getWorkerDb()
-    db.insert(conversations).values({
-      id: 'c-target',
-      channel: 'web',
-      chatId: 'chat-target',
-    }).run()
-    db.insert(conversations).values({
-      id: 'c-noise',
-      channel: 'web',
-      chatId: 'chat-noise',
-    }).run()
-
-    // 100k rows：99k 噪声 + 1k 目标 conversation。批量插入跑一次 transaction。
-    const total = 100_000
-    const targetCount = 1000
-    const stmt = `INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, 'user', 'x', '2026-01-01T00:00:00.000Z')`
-    db.run(sql.raw('BEGIN'))
-    try {
-      const insert = (db as unknown as { $client: { prepare: (q: string) => { run: (...args: unknown[]) => void } } }).$client.prepare(stmt)
-      for (let i = 0; i < total - targetCount; i++)
-        insert.run('c-noise')
-      for (let i = 0; i < targetCount; i++)
-        insert.run('c-target')
-      db.run(sql.raw('COMMIT'))
-    }
-    catch (err) {
-      db.run(sql.raw('ROLLBACK'))
-      throw err
-    }
-
-    const start = performance.now()
-    const rows = db.all<{ id: number }>(
-      sql`SELECT id FROM ${messages} WHERE ${messages.conversationId} = ${'c-target'}`,
-    )
-    const elapsed = performance.now() - start
-    expect(rows).toHaveLength(targetCount)
-    // 全表扫 100k 行通常会到 50-200ms 区间；点查应该 << 50ms。
-    // 留 100ms buffer 兼容慢一点的 CI runner。
-    expect(elapsed).toBeLessThan(100)
+  it('exports the schema objects used by downstream packages', () => {
+    expect(workspaces).toBeDefined()
+    expect(briefs).toBeDefined()
+    expect(runs).toBeDefined()
+    expect(runEvents).toBeDefined()
+    expect(files).toBeDefined()
+    expect(artifacts).toBeDefined()
+    expect(reviews).toBeDefined()
+    expect(lessons).toBeDefined()
+    expect(settings).toBeDefined()
   })
 })

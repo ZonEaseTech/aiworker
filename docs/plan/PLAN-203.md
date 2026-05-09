@@ -1,6 +1,6 @@
 # PLAN-203 Greenfield local worker rebuild
 
-- **status**: pending_review
+- **status**: in_progress
 - **owner**: local
 - **createdAt**: 2026-05-09 22:47
 - **relatedTask**: REFACTOR-037
@@ -178,8 +178,8 @@ approval gate is cleared, every batch remains `blocked_pending_approval`.
 
 | Batch | Status | Primary entry files | Blocking condition | Evidence slot |
 | --- | --- | --- | --- | --- |
-| B1 storage/shared contracts | blocked_pending_approval | `packages/storage-sqlite/src/worker/*`, `packages/shared/src/*` | PLAN-203 approval not received | pending |
-| B2 core local run engine | blocked_pending_approval | `packages/core/src/worker/*` | B1 contracts not merged and PLAN-203 approval not received | pending |
+| B1 storage/shared contracts | done | `packages/storage-sqlite/src/worker/*`, `packages/shared/src/*` | committed as the new local metadata contract | `bun run --filter '@zonease/aiworker-storage-sqlite' test` pass; `bun run --filter '@zonease/aiworker-storage-sqlite' typecheck` pass; `bun run --filter '@zonease/aiworker-shared' typecheck` pass; `git diff --check` pass; focused removed-persistence scan pass |
+| B2 core local run engine | blocked | `packages/core/src/worker/*` | waiting for B1 commit to land before rewrite starts | pending |
 | B3 local daemon/API | blocked_pending_approval | `apps/api/src/modes/worker.ts`, `apps/api/src/worker/*` | B1/B2 contracts not available and PLAN-203 approval not received | pending |
 | B4 CLI reset | blocked_pending_approval | `apps/cli/src/aiworker.ts`, `apps/cli/src/commands/*` | local API contract not stable and PLAN-203 approval not received | pending |
 | B5 Worker Web rebuild | blocked_pending_approval | `apps/web/src/worker/*` | local API contract not stable and PLAN-203 approval not received | pending |

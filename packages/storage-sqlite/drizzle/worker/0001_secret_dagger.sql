@@ -1,1 +1,0 @@
-ALTER TABLE `messages` ADD `rich_metadata` text;
