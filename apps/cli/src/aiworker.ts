@@ -570,16 +570,18 @@ cli
   })
 
 cli
-  .command('run', '不启动 HTTP server，直接给 orchestrator 投递一条消息')
+  .command('run', '通过本地 daemon run contract 提交一条 work order')
   .option('--message <text>', '要投递的用户消息（必填）')
-  .option('--chat-id <id>', '合成 chat id（默认 "cli:stdin"）')
-  .option('--dry-run', '完成 bootstrap，但不真正投递 envelope')
+  .option('--chat-id <id>', '仅 --local 生效：合成 chat id（默认 "cli:stdin"）')
+  .option('--dry-run', '完成本地状态/bootstrap 检查，但不真正提交 run')
+  .option('--local', '显式使用旧 in-process 直跑路径，不经过 daemon HTTP')
   .option('--timeout-ms <n>', '等待终态事件的最长时间，单位毫秒（默认 120000）', { type: [Number] })
-  .action(async (opts: { message?: string, chatId?: string, dryRun?: boolean, timeoutMs?: number[] }) => {
+  .action(async (opts: { chatId?: string, dryRun?: boolean, local?: boolean, message?: string, timeoutMs?: number[] }) => {
     const code = await runRun({
       message: opts.message,
       chatId: opts.chatId,
       dryRun: opts.dryRun,
+      local: opts.local,
       timeoutMs: optionalNumber(opts.timeoutMs),
     })
     process.exit(code)
@@ -1172,16 +1174,18 @@ cli
   })
 
 cli
-  .command('worker run', '不启动 HTTP server，直接给 orchestrator 投递一条消息')
+  .command('worker run', '通过本地 daemon run contract 提交一条 work order')
   .option('--message <text>', '要投递的用户消息（必填）')
-  .option('--chat-id <id>', '合成 chat id（默认 "cli:stdin"）')
-  .option('--dry-run', '完成 bootstrap，但不真正投递 envelope')
+  .option('--chat-id <id>', '仅 --local 生效：合成 chat id（默认 "cli:stdin"）')
+  .option('--dry-run', '完成本地状态/bootstrap 检查，但不真正提交 run')
+  .option('--local', '显式使用旧 in-process 直跑路径，不经过 daemon HTTP')
   .option('--timeout-ms <n>', '等待终态事件的最长时间，单位毫秒（默认 120000）', { type: [Number] })
-  .action(async (opts: { message?: string, chatId?: string, dryRun?: boolean, timeoutMs?: number[] }) => {
+  .action(async (opts: { chatId?: string, dryRun?: boolean, local?: boolean, message?: string, timeoutMs?: number[] }) => {
     const code = await runRun({
       message: opts.message,
       chatId: opts.chatId,
       dryRun: opts.dryRun,
+      local: opts.local,
       timeoutMs: optionalNumber(opts.timeoutMs),
     })
     process.exit(code)

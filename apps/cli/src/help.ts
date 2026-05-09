@@ -130,7 +130,7 @@ const ROOT_WORKER_SUMMARIES: Record<(typeof ROOT_WORKER_COMMANDS)[number], strin
   'init': '初始化 worker.db、身份、token 和默认配置；首次 token 默认写入 chmod 600 文件',
   'lessons propose': '从 Case lesson candidates 创建 pending Brain admission proposals',
   'up': '一条命令初始化、验证并启动本地 worker',
-  'run': '不启动 HTTP server，直接给 orchestrator 投递一条消息',
+  'run': '通过本地 daemon run contract 提交 work order',
   'schedule add': '在本地 worker.db 中新增一条 cron 任务',
   'schedule list': '列出本地 worker.db 中的 cron 任务',
   'schedule remove': '删除本地 worker.db 中的一条 cron 任务',
@@ -301,7 +301,7 @@ function buildHelpSections(cli: CAC, sections: HelpSection[]): HelpSection[] {
         '  aiworker env gateway-url <url>           写入 worker-local gateway URL',
         '  aiworker env display-name <name>         写入 fleet 展示名',
         '  aiworker serve                          启动 worker HTTP/Admin',
-        '  aiworker run --message "..."             直接跑一次消息',
+        '  aiworker run --message "..."             向本地 daemon 提交一次 run',
       ].join('\n'),
     },
     {

@@ -173,7 +173,7 @@ function stateError(code: 'not-found', message: string): Error & { code: 'not-fo
  * `aiworker serve` — boot the existing worker HTTP surface. Behaviour is
  * bit-for-bit compatible with `AIWORKER_MODE=worker bun src/index.ts`:
  * same bootstrap, same routes, same hot-reload contract. Intended for
- * production parity; use `aiworker run` for CLI-only (no HTTP) workflows.
+ * production parity; `aiworker run` now targets this local daemon by default.
  *
  * PLAN-013 S4：当 `--gateway` 传入时，在 HTTP server 之外再起一条 gateway
  * WS 连接，把 node 模式能力（chat.send / config.get / token.rotate）接入。

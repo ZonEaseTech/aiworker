@@ -1,5 +1,17 @@
 # AIWorker Changelog
 
+## 2026-05-09 17:02 [completed] REFACTOR-028 / PLAN-194 — CLI run daemon contract default
+
+Completed the second runtime slice for the OD-style local worker loop:
+
+- `aiworker run` now submits work orders to the local daemon
+  `/api/worker/runs` by default.
+- CLI output now follows run-scoped SSE from `/api/worker/runs/:id/events` and
+  keeps terminal exit-code mapping for finished, error, and timeout states.
+- Added explicit `--local` fallback for the old in-process runtime path.
+- Refreshed root and `worker run` help text so the default behavior no longer
+  claims to avoid the HTTP daemon.
+
 ## 2026-05-09 16:36 [decision] REFACTOR-026 / PLAN-192 — OD-style local worker reboot
 
 Accepted the Open Design-style reboot direction for AIWorker worker:

@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-09 (REFACTOR-027 completed)
+> Updated: 2026-05-09 (REFACTOR-028 completed)
 
 ## Usage
 
@@ -299,3 +299,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**QA-025 Case-driven Brain loop release validation**](QA-025.md) `P1`
 - [-] [**REFACTOR-026 OD-style local worker reboot**](REFACTOR-026.md) `P1`
 - [x] [**REFACTOR-027 Worker run contract compatibility layer**](REFACTOR-027.md) `P1`
+- [x] [**REFACTOR-028 Route CLI run through daemon run contract**](REFACTOR-028.md) `P1`

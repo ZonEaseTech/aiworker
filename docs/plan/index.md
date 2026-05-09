@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-09 (PLAN-193 completed)
+> Updated: 2026-05-09 (PLAN-194 completed)
 
 ## Usage
 
@@ -222,3 +222,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-191 Case-driven Brain loop 0.12.1 release readiness**](PLAN-191.md) `2026-05-09`
 - [-] [**PLAN-192 OD-style local worker reboot**](PLAN-192.md) `2026-05-09`
 - [x] [**PLAN-193 Worker run contract compatibility layer**](PLAN-193.md) `2026-05-09`
+- [x] [**PLAN-194 Route CLI run through daemon run contract**](PLAN-194.md) `2026-05-09`
