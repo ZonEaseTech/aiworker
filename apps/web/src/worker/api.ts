@@ -464,8 +464,117 @@ export interface MessageRow {
   createdAt: string
 }
 
+export type WorkerCaseDecisionStatus = 'ready_to_ship' | 'needs_review' | 'needs_rerun' | 'blocked'
+
+export interface WorkerCaseReason {
+  source: string
+  mode: string
+  reason: string
+  evidenceRefs?: string[]
+}
+
+export interface WorkerCaseReviewDecision {
+  status: WorkerCaseDecisionStatus
+  action: string
+  mode: string
+  summary: string
+  reasons: WorkerCaseReason[]
+  evidenceRefs: string[]
+  nextActions: string[]
+}
+
+export interface WorkerCaseLessonCandidate {
+  index: number
+  kind: string
+  summary: string
+  confidence: number
+  risk: 'low' | 'medium' | 'high'
+  evidenceRefs: string[]
+  target?: string
+  sourceEventRef?: string
+}
+
+export interface WorkerCaseFile {
+  version: 1
+  workerId?: string
+  taskId: string
+  workOrder: {
+    taskId: string
+    prompt: string
+    status: string
+    conversationId?: string
+    createdAt: string
+    finishedAt?: string
+  }
+  reviewDecision: WorkerCaseReviewDecision
+  outcome: {
+    taskStatus: string
+    promptPreview: string
+    assistantPreview?: string
+    finalMessageRef?: string
+    result?: Record<string, unknown>
+    error?: string
+  }
+  evidence: {
+    messageCount: number
+    toolEventCount: number
+    journalEventCount: number
+    loadedMemoryIds: string[]
+    loadedSkillIds: string[]
+    keyEvidenceRefs: string[]
+  }
+  risk: {
+    authorityMode: string
+    executorNote: string
+    risk: 'low' | 'medium' | 'high' | 'unknown'
+    enforceable: boolean
+    warning?: string
+    recommendation?: string
+    signals: Array<{ type: string, reason: string }>
+    observeOnlyReasonCount: number
+  }
+  lessons: {
+    candidateCount: number
+    candidates: WorkerCaseLessonCandidate[]
+    proposalIds: string[]
+    sourceEventRef?: string
+  }
+  lineage: {
+    parentTaskId?: string
+    rootTaskId: string
+    childTaskIds: string[]
+    rerunCount: number
+  }
+  rawJournalRef: string
+}
+
 export function listTasks(): Promise<{ tasks: AgentTaskRow[] }> {
   return workerFetch<{ tasks: AgentTaskRow[] }>('/api/worker/orchestrator/tasks')
+}
+
+export function listCases(limit = 50): Promise<{ cases: WorkerCaseFile[] }> {
+  return workerFetch<{ cases: WorkerCaseFile[] }>(`/api/worker/cases?limit=${encodeURIComponent(String(limit))}`)
+}
+
+export function getCaseFile(taskId: string): Promise<{ case: WorkerCaseFile }> {
+  return workerFetch<{ case: WorkerCaseFile }>(`/api/worker/cases/${encodeURIComponent(taskId)}`)
+}
+
+export async function rerunCase(taskId: string, prompt?: string): Promise<AgentTaskRow> {
+  const res = await workerFetch<{ task: AgentTaskRow }>(`/api/worker/cases/${encodeURIComponent(taskId)}/rerun`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(prompt === undefined ? {} : { prompt }),
+  })
+  return res.task
+}
+
+export function proposeCaseLessons(taskId: string): Promise<{ proposals: BrainAdmissionProposal[] }> {
+  return workerFetch<{ proposals: BrainAdmissionProposal[] }>(`/api/worker/cases/${encodeURIComponent(taskId)}/lessons/propose`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  })
 }
 
 export async function submitTask(prompt: string): Promise<AgentTaskRow> {

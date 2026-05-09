@@ -78,3 +78,7 @@ AIWorker 可以包住外部 executor 的一次任务结果。
 
 - 2026-05-09 05:55：根据产品转型结论创建 FEAT-057。首批实现先做只读 Case File
   projection + REST/CLI，避免把产品一次性拖进通用 observability/eval 平台。
+- 2026-05-09 06:45：完成 source MVP 的 Case contract、REST/CLI、Worker Admin UI
+  与 Fleet-hosted worker bridge。PLAN-187 的批量 Lessons Queue 审核仍保持 pending；
+  先通过 per-case propose + 既有 Brain admission 状态机 dogfood，避免过早批量写入
+  canonical Brain。

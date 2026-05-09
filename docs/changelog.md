@@ -33,6 +33,23 @@ Completed the first Worker Case operating slice:
 - Focused core/API/CLI/OpenAPI tests, `bun run typecheck`, and `bun run lint`
   pass for this slice.
 
+## 2026-05-09 06:45 [completed] PLAN-186 / PLAN-188 — Worker Admin Cases UI and bridge
+
+Completed the operator-facing Worker Case source MVP:
+
+- Added Worker Admin `/cases` route with Case list, Review Decision detail,
+  Work Order, Risk, Evidence, Lessons Queue, rerun, and per-case lesson proposal
+  actions.
+- Added worker web API client and React Query hooks for `/api/worker/cases*`;
+  the route is available in local worker admin and fleet-hosted worker admin.
+- Added gateway proto `cases.*` methods, gateway-client dispatcher handlers,
+  `aiworker serve` node handlers, and HTTP bridge allowlist mapping for
+  `/w/:workerId/api/worker/cases*`.
+- Fleet bridge remains transit-only: it does not persist full Case File payload
+  or Brain data into `fleet.db`.
+- PLAN-187 batch lesson approve/apply is intentionally still pending until
+  dogfood proves the per-case flow is too slow.
+
 ## 2026-05-09 [completed] REL-029 / PLAN-182 — 发布 aiworker CLI 0.11.0
 
 发布 `@zonease/aiworker-cli@0.11.0` minor release，承载 0.10.4 之后的

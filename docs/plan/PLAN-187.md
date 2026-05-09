@@ -31,3 +31,9 @@ created from case lesson candidates.
 
 - Admission state machine tests remain authoritative.
 - Focused Lessons Queue tests for batch reject/apply constraints.
+
+## Notes
+
+- 2026-05-09 06:45：本轮未实现批量 approve/apply。当前 Case 面板只提供 per-case
+  `lessons propose`，后续仍走既有 Brain admission 状态机逐条 approve/reject/apply。
+  这避免在 dogfood 之前把高风险 lesson 批量写入做得过早。

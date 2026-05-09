@@ -569,6 +569,76 @@ describe('GatewayDispatcher — brain bridge methods', () => {
 })
 
 describe('GatewayDispatcher — orchestrator task journal', () => {
+  it('cases.list and cases.show forward Case File requests to injected handlers', async () => {
+    const seen: unknown[] = []
+    const { dispatcher, approvals, responses } = makeDispatcher({
+      casesList: async (input) => {
+        seen.push(['list', input])
+        return { cases: [{ taskId: 'task-1' }] }
+      },
+      casesShow: async (input) => {
+        seen.push(['show', input])
+        return { case: { taskId: input.taskId } }
+      },
+    })
+
+    await dispatcher.handleRequest({
+      type: 'request',
+      id: 'req-cases-list',
+      method: 'cases.list',
+      params: { workerId: 'w_test', limit: 12 },
+    })
+    await dispatcher.handleRequest({
+      type: 'request',
+      id: 'req-cases-show',
+      method: 'cases.show',
+      params: { workerId: 'w_test', taskId: 'task-1' },
+    })
+
+    expect(seen).toEqual([
+      ['list', { limit: 12 }],
+      ['show', { taskId: 'task-1' }],
+    ])
+    expect(responses[0]?.ok).toBe(true)
+    expect(responses[1]?.ok).toBe(true)
+    approvals.dispose()
+  })
+
+  it('cases.rerun and cases.lessons.propose forward operator actions', async () => {
+    const seen: unknown[] = []
+    const { dispatcher, approvals, responses } = makeDispatcher({
+      casesLessonsPropose: async (input) => {
+        seen.push(['lessons', input])
+        return { proposals: [{ id: 'p-1' }] }
+      },
+      casesRerun: async (input) => {
+        seen.push(['rerun', input])
+        return { task: { id: 'task-child' } }
+      },
+    })
+
+    await dispatcher.handleRequest({
+      type: 'request',
+      id: 'req-cases-rerun',
+      method: 'cases.rerun',
+      params: { workerId: 'w_test', taskId: 'task-1', prompt: 'repair' },
+    })
+    await dispatcher.handleRequest({
+      type: 'request',
+      id: 'req-cases-lessons',
+      method: 'cases.lessons.propose',
+      params: { workerId: 'w_test', taskId: 'task-1', scopeId: 'scope-1', soulId: 'developer' },
+    })
+
+    expect(seen).toEqual([
+      ['rerun', { taskId: 'task-1', prompt: 'repair' }],
+      ['lessons', { taskId: 'task-1', scopeId: 'scope-1', soulId: 'developer' }],
+    ])
+    expect(responses[0]?.ok).toBe(true)
+    expect(responses[1]?.ok).toBe(true)
+    approvals.dispose()
+  })
+
   it('orchestrator.tasks.journal forwards task id to the injected handler', async () => {
     const seen: unknown[] = []
     const { dispatcher, approvals, responses } = makeDispatcher({

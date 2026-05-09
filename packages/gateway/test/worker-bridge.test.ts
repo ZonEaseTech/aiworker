@@ -591,6 +591,44 @@ describe('gateway worker HTTP bridge', () => {
         body: { redacted: false, artifact: { id: 'a-1' } },
       })
       await expectForward({
+        path: `/w/${WORKER_ID}/api/worker/cases?limit=12`,
+        method: 'cases.list',
+        params: { workerId: WORKER_ID, limit: 12 },
+        result: { cases: [{ taskId: 'task-1' }] },
+        body: { cases: [{ taskId: 'task-1' }] },
+      })
+      await expectForward({
+        path: `/w/${WORKER_ID}/api/worker/cases/task%2F1`,
+        method: 'cases.show',
+        params: { workerId: WORKER_ID, taskId: 'task/1' },
+        result: { case: { taskId: 'task/1' } },
+        body: { case: { taskId: 'task/1' } },
+      })
+      await expectForward({
+        path: `/w/${WORKER_ID}/api/worker/cases/task%2F1/rerun`,
+        init: {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt: 'repair' }),
+        },
+        method: 'cases.rerun',
+        params: { workerId: WORKER_ID, taskId: 'task/1', prompt: 'repair' },
+        result: { task: { id: 'task-child' } },
+        body: { task: { id: 'task-child' } },
+      })
+      await expectForward({
+        path: `/w/${WORKER_ID}/api/worker/cases/task%2F1/lessons/propose`,
+        init: {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scopeId: 'scope-1', soulId: 'developer' }),
+        },
+        method: 'cases.lessons.propose',
+        params: { workerId: WORKER_ID, taskId: 'task/1', scopeId: 'scope-1', soulId: 'developer' },
+        result: { proposals: [{ id: 'p-1' }] },
+        body: { proposals: [{ id: 'p-1' }] },
+      })
+      await expectForward({
         path: `/w/${WORKER_ID}/api/worker/executor/test`,
         init: {
           method: 'POST',

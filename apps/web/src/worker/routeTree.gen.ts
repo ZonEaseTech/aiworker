@@ -14,6 +14,7 @@ import { Route as SecretsRouteImport } from './routes/secrets'
 import { Route as CronRouteImport } from './routes/cron'
 import { Route as ConfigRouteImport } from './routes/config'
 import { Route as ChatRouteImport } from './routes/chat'
+import { Route as CasesRouteImport } from './routes/cases'
 import { Route as BrainRouteImport } from './routes/brain'
 import { Route as ApprovalsRouteImport } from './routes/approvals'
 import { Route as IndexRouteImport } from './routes/index'
@@ -43,6 +44,11 @@ const ChatRoute = ChatRouteImport.update({
   path: '/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CasesRoute = CasesRouteImport.update({
+  id: '/cases',
+  path: '/cases',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BrainRoute = BrainRouteImport.update({
   id: '/brain',
   path: '/brain',
@@ -63,6 +69,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/approvals': typeof ApprovalsRoute
   '/brain': typeof BrainRoute
+  '/cases': typeof CasesRoute
   '/chat': typeof ChatRoute
   '/config': typeof ConfigRoute
   '/cron': typeof CronRoute
@@ -73,6 +80,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/approvals': typeof ApprovalsRoute
   '/brain': typeof BrainRoute
+  '/cases': typeof CasesRoute
   '/chat': typeof ChatRoute
   '/config': typeof ConfigRoute
   '/cron': typeof CronRoute
@@ -84,6 +92,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/approvals': typeof ApprovalsRoute
   '/brain': typeof BrainRoute
+  '/cases': typeof CasesRoute
   '/chat': typeof ChatRoute
   '/config': typeof ConfigRoute
   '/cron': typeof CronRoute
@@ -96,6 +105,7 @@ export interface FileRouteTypes {
     | '/'
     | '/approvals'
     | '/brain'
+    | '/cases'
     | '/chat'
     | '/config'
     | '/cron'
@@ -106,6 +116,7 @@ export interface FileRouteTypes {
     | '/'
     | '/approvals'
     | '/brain'
+    | '/cases'
     | '/chat'
     | '/config'
     | '/cron'
@@ -116,6 +127,7 @@ export interface FileRouteTypes {
     | '/'
     | '/approvals'
     | '/brain'
+    | '/cases'
     | '/chat'
     | '/config'
     | '/cron'
@@ -127,6 +139,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApprovalsRoute: typeof ApprovalsRoute
   BrainRoute: typeof BrainRoute
+  CasesRoute: typeof CasesRoute
   ChatRoute: typeof ChatRoute
   ConfigRoute: typeof ConfigRoute
   CronRoute: typeof CronRoute
@@ -171,6 +184,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/cases': {
+      id: '/cases'
+      path: '/cases'
+      fullPath: '/cases'
+      preLoaderRoute: typeof CasesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/brain': {
       id: '/brain'
       path: '/brain'
@@ -199,6 +219,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApprovalsRoute: ApprovalsRoute,
   BrainRoute: BrainRoute,
+  CasesRoute: CasesRoute,
   ChatRoute: ChatRoute,
   ConfigRoute: ConfigRoute,
   CronRoute: CronRoute,

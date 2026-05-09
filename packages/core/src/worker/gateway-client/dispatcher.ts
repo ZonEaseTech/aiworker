@@ -105,6 +105,10 @@ export interface NodeHandlers {
     showSensitive?: boolean
   }) => Promise<unknown>
   brainArtifactsShow?: (input: { id: string, showSensitive?: boolean }) => Promise<unknown>
+  casesList?: (input: { limit?: number }) => Promise<{ cases: unknown[] }>
+  casesShow?: (input: { taskId: string }) => Promise<{ case: unknown }>
+  casesRerun?: (input: { taskId: string, prompt?: string }) => Promise<{ task: unknown }>
+  casesLessonsPropose?: (input: { taskId: string, scopeId?: string, soulId?: string }) => Promise<unknown>
   executorTest?: (input: { probe?: boolean }) => Promise<unknown>
   channelTest?: (input: { channel: ChannelType, body?: { chatId?: string, text?: string } }) => Promise<unknown>
   tasksList?: () => Promise<{ tasks: unknown[] }>
@@ -230,6 +234,18 @@ export class GatewayDispatcher {
           break
         case METHODS['brain.artifacts.show'].method:
           await this.handleBrainArtifactsShow(id, p)
+          break
+        case METHODS['cases.list'].method:
+          await this.handleCasesList(id, p)
+          break
+        case METHODS['cases.show'].method:
+          await this.handleCasesShow(id, p)
+          break
+        case METHODS['cases.rerun'].method:
+          await this.handleCasesRerun(id, p)
+          break
+        case METHODS['cases.lessons.propose'].method:
+          await this.handleCasesLessonsPropose(id, p)
           break
         case METHODS['executor.test'].method:
           await this.handleExecutorTest(id, p)
@@ -710,6 +726,70 @@ export class GatewayDispatcher {
       this.replyOk(id, await this.deps.handlers.brainArtifactsShow({
         id: String(params.id),
         ...(typeof params.showSensitive === 'boolean' ? { showSensitive: params.showSensitive } : {}),
+      }))
+    }
+    catch (err) {
+      this.replyBrainError(id, err)
+    }
+  }
+
+  private async handleCasesList(id: string, params: Record<string, unknown>): Promise<void> {
+    if (!this.deps.handlers?.casesList) {
+      this.replyError(id, 'method_not_implemented', 'cases.list handler not wired')
+      return
+    }
+    if (!this.ensureWorkerMatch(id, params))
+      return
+    this.replyOk(id, await this.deps.handlers.casesList({
+      ...(typeof params.limit === 'number' ? { limit: params.limit } : {}),
+    }))
+  }
+
+  private async handleCasesShow(id: string, params: Record<string, unknown>): Promise<void> {
+    if (!this.deps.handlers?.casesShow) {
+      this.replyError(id, 'method_not_implemented', 'cases.show handler not wired')
+      return
+    }
+    if (!this.ensureWorkerMatch(id, params))
+      return
+    try {
+      this.replyOk(id, await this.deps.handlers.casesShow({ taskId: String(params.taskId) }))
+    }
+    catch (err) {
+      this.replyBrainError(id, err)
+    }
+  }
+
+  private async handleCasesRerun(id: string, params: Record<string, unknown>): Promise<void> {
+    if (!this.deps.handlers?.casesRerun) {
+      this.replyError(id, 'method_not_implemented', 'cases.rerun handler not wired')
+      return
+    }
+    if (!this.ensureWorkerMatch(id, params))
+      return
+    try {
+      this.replyOk(id, await this.deps.handlers.casesRerun({
+        taskId: String(params.taskId),
+        ...(typeof params.prompt === 'string' ? { prompt: params.prompt } : {}),
+      }))
+    }
+    catch (err) {
+      this.replyAppError(id, err)
+    }
+  }
+
+  private async handleCasesLessonsPropose(id: string, params: Record<string, unknown>): Promise<void> {
+    if (!this.deps.handlers?.casesLessonsPropose) {
+      this.replyError(id, 'method_not_implemented', 'cases.lessons.propose handler not wired')
+      return
+    }
+    if (!this.ensureWorkerMatch(id, params))
+      return
+    try {
+      this.replyOk(id, await this.deps.handlers.casesLessonsPropose({
+        taskId: String(params.taskId),
+        ...(params.scopeId === undefined ? {} : { scopeId: String(params.scopeId) }),
+        ...(params.soulId === undefined ? {} : { soulId: String(params.soulId) }),
       }))
     }
     catch (err) {

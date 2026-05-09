@@ -18,6 +18,8 @@ import {
   applyConfigUpdate,
   BrainAdmissionService,
   BrainArtifactRegistry,
+  BrainCaseService,
+  BrainInboxService,
   BrainJournalService,
   buildBrainSummary,
   buildCronHandlers,
@@ -496,6 +498,34 @@ export async function runServe(options: ServeOptions = {}): Promise<void> {
           if (artifact === null)
             throw stateError('not-found', `brain artifact "${id}" not found`)
           return { redacted: redact, artifact }
+        },
+        casesList: async ({ limit }) => {
+          const cases = new BrainCaseService({
+            config: state.runtime.config,
+            workerId: state.workerId,
+          }).listCases({ limit })
+          return { cases }
+        },
+        casesShow: async ({ taskId }) => {
+          const file = new BrainCaseService({
+            config: state.runtime.config,
+            workerId: state.workerId,
+          }).getCaseFile(taskId)
+          if (file === null)
+            throw stateError('not-found', `case "${taskId}" not found`)
+          return { case: file }
+        },
+        casesRerun: async ({ taskId, prompt }) => {
+          const task = await state.runtime.orchestrator.rerunTask(taskId, {
+            ...(prompt === undefined ? {} : { prompt }),
+          })
+          return { task }
+        },
+        casesLessonsPropose: async ({ taskId, scopeId, soulId }) => {
+          return new BrainInboxService().proposeFromTask(taskId, {
+            ...(scopeId === undefined ? {} : { scopeId }),
+            ...(soulId === undefined ? {} : { soulId }),
+          })
         },
         executorTest: async ({ probe }) => {
           const stored = await readConfig(getWorkerDb())

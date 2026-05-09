@@ -214,7 +214,7 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-183 Case File contract and product boundary**](PLAN-183.md) `2026-05-09`
 - [x] [**PLAN-184 BrainCaseService projection**](PLAN-184.md) `2026-05-09`
 - [x] [**PLAN-185 Worker Case REST and CLI surface**](PLAN-185.md) `2026-05-09`
-- [ ] [**PLAN-186 Worker Admin Cases UI**](PLAN-186.md) `2026-05-09`
+- [x] [**PLAN-186 Worker Admin Cases UI**](PLAN-186.md) `2026-05-09`
 - [ ] [**PLAN-187 Lessons Queue batch review**](PLAN-187.md) `2026-05-09`
-- [ ] [**PLAN-188 Fleet case summary projection**](PLAN-188.md) `2026-05-09`
+- [x] [**PLAN-188 Fleet case summary projection**](PLAN-188.md) `2026-05-09`
 - [ ] [**PLAN-189 Dogfood falsification and release readiness**](PLAN-189.md) `2026-05-09`

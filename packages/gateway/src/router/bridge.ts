@@ -525,6 +525,105 @@ async function buildBridgeRequest(
     }
   }
 
+  if (path.workerApiPath === `${WORKER_API_PREFIX}/cases`) {
+    if (req.method !== 'GET')
+      return { ok: false, response: methodNotAllowed('GET') }
+    const query = caseListParams(url)
+    if (!query.ok)
+      return { ok: false, response: jsonError(400, 'invalid-query', query.message) }
+    return {
+      ok: true,
+      value: {
+        method: 'cases.list',
+        params: { workerId: path.workerId, ...query.value },
+      },
+    }
+  }
+
+  const caseRerunMatch = path.workerApiPath.match(/^\/api\/worker\/cases\/([^/]+)\/rerun$/)
+  if (caseRerunMatch) {
+    if (req.method !== 'POST')
+      return { ok: false, response: methodNotAllowed('POST') }
+    const body = await readOptionalJsonBody(req)
+    if (!body.ok) {
+      return {
+        ok: false,
+        response: jsonError(body.status, body.code, body.message),
+        audit: { method: 'cases.rerun', errorCode: body.code },
+      }
+    }
+    const parsed = caseRerunBody(body.value)
+    if (!parsed.ok) {
+      return {
+        ok: false,
+        response: jsonError(400, 'invalid-body', parsed.message),
+        audit: { method: 'cases.rerun', errorCode: 'invalid-body' },
+      }
+    }
+    return {
+      ok: true,
+      value: {
+        method: 'cases.rerun',
+        params: {
+          workerId: path.workerId,
+          taskId: decodeURIComponent(caseRerunMatch[1]!),
+          ...parsed.value,
+        },
+        transformResult: passThroughCreated,
+      },
+    }
+  }
+
+  const caseLessonsProposeMatch = path.workerApiPath.match(/^\/api\/worker\/cases\/([^/]+)\/lessons\/propose$/)
+  if (caseLessonsProposeMatch) {
+    if (req.method !== 'POST')
+      return { ok: false, response: methodNotAllowed('POST') }
+    const body = await readOptionalJsonBody(req)
+    if (!body.ok) {
+      return {
+        ok: false,
+        response: jsonError(body.status, body.code, body.message),
+        audit: { method: 'cases.lessons.propose', errorCode: body.code },
+      }
+    }
+    const parsed = caseLessonsProposeBody(body.value)
+    if (!parsed.ok) {
+      return {
+        ok: false,
+        response: jsonError(400, 'invalid-body', parsed.message),
+        audit: { method: 'cases.lessons.propose', errorCode: 'invalid-body' },
+      }
+    }
+    return {
+      ok: true,
+      value: {
+        method: 'cases.lessons.propose',
+        params: {
+          workerId: path.workerId,
+          taskId: decodeURIComponent(caseLessonsProposeMatch[1]!),
+          ...parsed.value,
+        },
+        transformResult: passThroughCreated,
+      },
+    }
+  }
+
+  const caseShowMatch = path.workerApiPath.match(/^\/api\/worker\/cases\/([^/]+)$/)
+  if (caseShowMatch) {
+    if (req.method !== 'GET')
+      return { ok: false, response: methodNotAllowed('GET') }
+    return {
+      ok: true,
+      value: {
+        method: 'cases.show',
+        params: {
+          workerId: path.workerId,
+          taskId: decodeURIComponent(caseShowMatch[1]!),
+        },
+      },
+    }
+  }
+
   if (path.workerApiPath === `${WORKER_API_PREFIX}/executor/test`) {
     if (req.method !== 'POST')
       return { ok: false, response: methodNotAllowed('POST') }
@@ -728,6 +827,18 @@ function brainArtifactsListParams(url: URL): QueryParseResult {
   }
 }
 
+function caseListParams(url: URL): QueryParseResult {
+  const limit = optionalCaseLimit(url)
+  if (!limit.ok)
+    return limit
+  return {
+    ok: true,
+    value: {
+      ...(limit.value === undefined ? {} : { limit: limit.value }),
+    },
+  }
+}
+
 function optionalStringParam(url: URL, key: string): Record<string, string> {
   const value = url.searchParams.get(key)
   if (value === null)
@@ -751,6 +862,18 @@ function optionalPositiveInt(url: URL, key: string): { ok: true, value?: number 
   const parsed = Number.parseInt(value, 10)
   if (!Number.isInteger(parsed) || parsed < 1 || parsed > 500)
     return { ok: false, message: `${key} must be between 1 and 500` }
+  return { ok: true, value: parsed }
+}
+
+function optionalCaseLimit(url: URL): { ok: true, value?: number } | { ok: false, message: string } {
+  const value = url.searchParams.get('limit')
+  if (value === null)
+    return { ok: true }
+  if (!/^\d+$/.test(value))
+    return { ok: false, message: 'limit must be a positive integer' }
+  const parsed = Number.parseInt(value, 10)
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 200)
+    return { ok: false, message: 'limit must be between 1 and 200' }
   return { ok: true, value: parsed }
 }
 
@@ -785,6 +908,38 @@ function brainAdmissionDecisionBody(
     if (body.allowSecretBody === 'block' || body.allowSecretBody === 'redact' || body.allowSecretBody === 'raw')
       out.allowSecretBody = body.allowSecretBody
   }
+  return { ok: true, value: out }
+}
+
+function caseRerunBody(value: unknown): { ok: true, value: Record<string, string> } | { ok: false, message: string } {
+  if (value === undefined)
+    return { ok: true, value: {} }
+  if (value === null || typeof value !== 'object' || Array.isArray(value))
+    return { ok: false, message: 'request body must be a JSON object' }
+  const body = value as Record<string, unknown>
+  if (body.prompt !== undefined && (typeof body.prompt !== 'string' || body.prompt.trim().length === 0 || body.prompt.length > 8000))
+    return { ok: false, message: 'prompt must be a non-empty string up to 8000 chars when provided' }
+  return {
+    ok: true,
+    value: typeof body.prompt === 'string' ? { prompt: body.prompt.trim() } : {},
+  }
+}
+
+function caseLessonsProposeBody(value: unknown): { ok: true, value: Record<string, string> } | { ok: false, message: string } {
+  if (value === undefined)
+    return { ok: true, value: {} }
+  if (value === null || typeof value !== 'object' || Array.isArray(value))
+    return { ok: false, message: 'request body must be a JSON object' }
+  const body = value as Record<string, unknown>
+  const out: Record<string, string> = {}
+  if (body.scopeId !== undefined && (typeof body.scopeId !== 'string' || body.scopeId.trim().length === 0))
+    return { ok: false, message: 'scopeId must be a non-empty string when provided' }
+  if (body.soulId !== undefined && (typeof body.soulId !== 'string' || body.soulId.trim().length === 0))
+    return { ok: false, message: 'soulId must be a non-empty string when provided' }
+  if (typeof body.scopeId === 'string')
+    out.scopeId = body.scopeId.trim()
+  if (typeof body.soulId === 'string')
+    out.soulId = body.soulId.trim()
   return { ok: true, value: out }
 }
 

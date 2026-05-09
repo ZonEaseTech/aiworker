@@ -5,6 +5,7 @@ import {
   Brain as BrainIcon,
   ClipboardList,
   Cpu,
+  FileSearch,
   KeyRound,
   LockKeyhole,
   MessageSquare,
@@ -33,6 +34,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { to: '/', label: '概览', exact: true, icon: ClipboardList },
+  { to: '/cases', label: 'Cases', icon: FileSearch },
   { to: '/brain', label: 'Brain', icon: BrainIcon },
   { to: '/config', label: '配置', icon: SlidersHorizontal },
   { to: '/secrets', label: 'Secrets', icon: KeyRound },

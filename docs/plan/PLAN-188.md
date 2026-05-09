@@ -1,7 +1,7 @@
 # PLAN-188 Fleet case summary projection
 
-- **status**: pending
-- **owner**: unassigned
+- **status**: completed
+- **owner**: local
 - **createdAt**: 2026-05-09 05:55
 - **task**: FEAT-057
 
@@ -30,3 +30,10 @@ Fleet state limited to worker pointers, presence, audit, and summary metadata.
 
 - Gateway bridge tests.
 - Fleet does not persist full Case File payload.
+
+## Notes
+
+- 2026-05-09 06:45：完成 worker HTTP bridge 的 Case allowlist：Fleet-hosted Worker
+  Admin 可通过 `/w/:workerId/api/worker/cases*` 调用 `cases.list/show/rerun` 与
+  `cases.lessons.propose`。实现只做 transit bridge，不写 `fleet.db`，也不把 full
+  Case File 复制成 Fleet 控制面状态。

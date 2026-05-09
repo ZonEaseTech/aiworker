@@ -22,6 +22,7 @@ export type WorkerPath
     | '/cron'
     | '/approvals'
     | '/chat'
+    | '/cases'
     | '/brain'
 
 export function WorkerLink(props: { to: WorkerPath } & Omit<LinkComponentProps, 'to'>) {

@@ -23,6 +23,7 @@ import {
   deleteSecret,
   getAdmission,
   getBrainSummary,
+  getCaseFile,
   getConfig,
   getEngines,
   getInfo,
@@ -31,15 +32,18 @@ import {
   listAdmissions,
   listApprovals,
   listArtifacts,
+  listCases,
   listConversations,
   listCron,
   listMessages,
   listSecrets,
   listTasks,
   patchCron,
+  proposeCaseLessons,
   putConfig,
   putSecret,
   rejectAdmission,
+  rerunCase,
   submitTask,
   testBrain,
   testChannel,
@@ -60,10 +64,14 @@ const SECRETS_KEY = ['worker', 'secrets'] as const
 const APPROVALS_KEY = ['worker', 'approvals'] as const
 const CRON_KEY = ['worker', 'cron'] as const
 const TASKS_KEY = ['worker', 'tasks'] as const
+const CASES_KEY = ['worker', 'cases'] as const
 const CONVERSATIONS_KEY = ['worker', 'conversations'] as const
 const BRAIN_SUMMARY_KEY = ['worker', 'brain', 'summary'] as const
 function messagesKey(conversationId: string) {
   return ['worker', 'conversations', conversationId, 'messages'] as const
+}
+function caseKey(taskId: string) {
+  return ['worker', 'cases', taskId] as const
 }
 function admissionsKey(opts: BrainAdmissionListOptions) {
   return ['worker', 'brain', 'admissions', opts] as const
@@ -290,6 +298,48 @@ export function useTasks() {
     queryFn: listTasks,
     staleTime: 5_000,
     refetchInterval: 15_000,
+  })
+}
+
+export function useCases(limit = 50) {
+  return useQuery({
+    queryKey: [...CASES_KEY, limit] as const,
+    queryFn: () => listCases(limit),
+    staleTime: 5_000,
+    refetchInterval: 15_000,
+  })
+}
+
+export function useCase(taskId: string | undefined) {
+  return useQuery({
+    queryKey: taskId === undefined ? ['worker', 'cases', '__missing__'] : caseKey(taskId),
+    queryFn: () => getCaseFile(taskId as string),
+    enabled: Boolean(taskId),
+    staleTime: 5_000,
+  })
+}
+
+export function useRerunCase() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ taskId, prompt }: { taskId: string, prompt?: string }) => rerunCase(taskId, prompt),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: CASES_KEY })
+      qc.invalidateQueries({ queryKey: TASKS_KEY })
+      qc.invalidateQueries({ queryKey: CONVERSATIONS_KEY })
+    },
+  })
+}
+
+export function useProposeCaseLessons() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (taskId: string) => proposeCaseLessons(taskId),
+    onSuccess: (_res, taskId) => {
+      qc.invalidateQueries({ queryKey: CASES_KEY })
+      qc.invalidateQueries({ queryKey: caseKey(taskId) })
+      qc.invalidateQueries({ queryKey: ['worker', 'brain'] })
+    },
   })
 }
 
