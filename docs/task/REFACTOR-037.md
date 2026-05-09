@@ -92,3 +92,6 @@ and review proof.
   approved implementation can proceed as destructive, separately verifiable
   conventional commits across storage/contracts, core engine, daemon/API, CLI,
   Web, docs, smoke, and review.
+- 2026-05-09 23:04: Added a removal/replacement inventory and prompt-to-artifact
+  checklist to PLAN-203 after auditing current API, CLI, Web, storage, core,
+  and shared old surfaces.

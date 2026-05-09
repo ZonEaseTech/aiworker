@@ -140,6 +140,42 @@ After approval, implement in these checkpoints. Each checkpoint should be a
 separate conventional commit unless a later gate forces a small corrective
 commit.
 
+## Removal and Replacement Inventory
+
+This inventory is the implementation guardrail: items in the "remove/isolate"
+column must not remain reachable from the default local worker deliverable. If a
+file must be kept temporarily for later Fleet/Gateway work, it must be
+disconnected from local daemon, CLI, Web, OpenAPI, and smoke paths.
+
+| Area | Current old surface | Remove/isolate | Replace with | Batch |
+| --- | --- | --- | --- | --- |
+| API bootstrap | `apps/api/src/modes/worker.ts` mounts `/api/worker/*`, root channel webhooks, and manual OpenAPI registrations | Remove default `/api/worker/*` product surface and old OpenAPI registrations | local daemon app mounting `/api/local/*` only | B3 |
+| API routers | `apps/api/src/worker/brain`, `channels`, `evolution`, `management`, `orchestrator` | Delete from default local daemon or quarantine for later non-local work | local `info`, `workspace`, `briefs`, `runs`, `files`, `artifacts`, `reviews`, `lessons`, `settings`, `events` routers | B3 |
+| API tests | route tests and OpenAPI tests assert old `/api/worker/brain`, `/orchestrator`, `/sessions`, `/approvals`, `/cron` behavior | Rewrite as absence tests for old routes and positive tests for `/api/local/*` | route coverage for every retained local group | B3 |
+| Storage | `packages/storage-sqlite/src/worker/schema.ts` defines `agent_tasks`, `conversations`, `session_entries`, `messages`, `execution_logs`, `brain_journal_events`, `cron_jobs`, `brain_artifacts`, `brain_admission_*` | Remove from default local worker schema and application reads | `workspaces`, `briefs`, `runs`, `run_events`, `files`, `artifacts`, `reviews`, `lessons`, `settings` | B1 |
+| Core runtime | `packages/core/src/worker/{channels,conversation,cron,evolution,management,orchestrator,gateway-client}` | Disconnect from local worker engine; delete or quarantine old product runtime | minimal local run engine around brief -> run -> artifact -> review -> lesson | B2 |
+| Core Brain surface | `packages/core/src/worker/brain/*` drives admission, artifacts, journal, reviewer, summary as visible product model | Remove as default local product surface; lessons may use a future internal durable-context adapter only if hidden from UI/API/CLI | lesson proposal records with provenance, not Brain admin workflows | B2 |
+| CLI registration | `apps/cli/src/aiworker.ts` still registers old run/review terms plus `pack`, compatibility command index, executor overlay commands, and daemon wording tied to worker admin | Re-register from a greenfield command map; no hidden aliases for removed commands | `init`, `daemon`, `brief`, `run`, `files`, `artifacts`, `review`, `lessons`, `open`, `doctor`, `executor` | B4 |
+| CLI command trees | `apps/cli/src/commands/fleet`, `commands/gateway`, and old `commands/worker/*` modules for schedule/session/scope/soul/token/up/env/config/approvals | Remove from local deliverable or quarantine outside `aiworker` command registration | local workspace command modules and source-local smoke harness | B4 |
+| Web data layer | `apps/web/src/worker/api.ts`, `lib/hooks.ts`, tests, and bootstrap mocks still call `/api/worker/*`, conversations, approvals, cron, Brain, channels, and fleet-hosted bridge paths | Delete old client/hook/query-key model | typed local workspace client for `/api/local/*` | B5 |
+| Web UI | `apps/web/src/worker/features/config/*`, old routes, and workbench panels still reflect admin/config/work order history | Replace first paint and navigation with workspace product shell | file rail, run/preview surface, review/lesson rail, settings as secondary | B5 |
+| Shared contracts | shared Brain/Fleet/Soul schemas leak old product nouns into worker info and API types | Keep only contracts required by the new local workspace path; quarantine Fleet/Gateway contracts outside local worker imports | local workspace DTOs and executor adapter DTOs | B1 |
+| Docs/smoke | README, GOALS, architecture, CLI docs, and smoke names still describe Project Brain + Worker/Fleet aggregation as the shipped worker product | Rewrite local worker docs around the greenfield workspace loop; leave Fleet/Gateway as parked future scope | source-local proof from fresh state and manual browser review | B6 |
+
+## Prompt-to-Artifact Checklist
+
+| Requirement from user objective | Required artifact/evidence before completion |
+| --- | --- |
+| "像全新项目一样" / "毫无保留" | removal inventory above is satisfied; old local worker routes, commands, schema reads, Web hooks, and visible nouns are absent |
+| "以 Open Design 为参照，1:1 去还原设计语言和项目意图" | Web first paint and docs show a local workspace loop centered on files/artifacts/runs/reviews/lessons rather than admin status cards |
+| "只从适用领域区分，OD 做图片/视频设计，我们做 HR/developer/pm 等" | domain stays general-purpose workspace/brief/run/artifact/review/lesson without coding-only PMA or design-only nouns |
+| "fleet 和 gateway 可以先晾在一旁" | Fleet/Gateway are not reachable from local worker CLI/Web/API smoke paths; any retained code is quarantined and not part of the deliverable |
+| "desktop 可以先不做" | no desktop/Electron deliverable is introduced |
+| "daemon(也就是 cli)/web 是需要的" | CLI daemon workflow, local HTTP API, and Worker Web are implemented and manually reviewed |
+| "从零开始的重构，不要被原始设计干扰" | old tests are rewritten/deleted when they encode removed semantics; no migration, aliases, or hidden compatibility endpoints |
+| "配合 PMA 规范，拆分长任务" | REFACTOR-037 and PLAN-203 stay current; B1-B6 commits are recorded with evidence |
+| "goal 模式最终实现" | active goal is only marked complete after this checklist and completion audit have real evidence |
+
 ### B1 - Storage and shared contracts
 
 Write scope:
