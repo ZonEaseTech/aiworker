@@ -1,5 +1,14 @@
 # AIWorker Changelog
 
+## 2026-05-09 05:55 [progress]
+
+Opened FEAT-057 to shift the post-FEAT-056 product surface from raw proof-loop
+mechanics to Worker Case operations. The new epic keeps Brain Journal, Gate,
+Brain Engine review, rerun, and Brain Inbox as the evidence layer, then exposes
+Case File, Review Decision, and Lessons Queue as the operator-facing workflow.
+The first implementation slice is PLAN-183 / PLAN-184 / PLAN-185: contract,
+core projection, and REST/CLI surface before Web/Fleet expansion.
+
 ## 2026-05-09 [completed] REL-029 / PLAN-182 — 发布 aiworker CLI 0.11.0
 
 发布 `@zonease/aiworker-cli@0.11.0` minor release，承载 0.10.4 之后的

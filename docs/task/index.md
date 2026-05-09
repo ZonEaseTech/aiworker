@@ -290,3 +290,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-056 AIWorker 1.0 developer repo worker proof loop**](FEAT-056.md) `P1`
 - [x] [**QA-022 Developer repo worker proof-loop dogfood evidence**](QA-022.md) `P1`
 - [x] [**REL-029 发布 aiworker CLI 0.11.0**](REL-029.md) `P1`
+- [-] [**FEAT-057 Worker Case operating surface**](FEAT-057.md) `P1`
