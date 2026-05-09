@@ -1,8 +1,9 @@
 # PLAN-189 Dogfood falsification and release readiness
 
-- **status**: pending
-- **owner**: unassigned
+- **status**: in_progress
+- **owner**: local
 - **createdAt**: 2026-05-09 05:55
+- **approvedAt**: 2026-05-09 06:55
 - **task**: FEAT-057
 
 ## Context
@@ -43,3 +44,16 @@ Run a dogfood campaign against aiworker itself:
 - `bun publish --dry-run --access public`
 - published package smoke
 - compact governance harness
+
+## Progress
+
+- 2026-05-09 11:57：source gate 已重跑通过：`bun run check`、`bun run test`、
+  `bun run build`、`git diff --check`。
+- 2026-05-09 11:57：dist bundle 与 publish manifest 均报告 `0.12.0`；
+  `bun publish --dry-run --access public` 在 `apps/cli/dist` 完成 34 files /
+  3.20MB pack stage，随后停在本机 npm auth boundary。
+- 2026-05-09 11:57：source dogfood 使用
+  `/tmp/aiworker-case-dogfood-39ezZQ/project` 初始化真实 project-scope worker，
+  种入 worker-owned task / conversation / Brain Journal 后通过 bundle CLI 验证
+  `case list`、`case show`、`lessons propose`。dogfood 发现 secret redactor 会误截
+  `task-case` proposal id，已通过 commit `2a8d194` 修复并重跑验证。

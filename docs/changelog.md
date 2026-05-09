@@ -50,6 +50,31 @@ Completed the operator-facing Worker Case source MVP:
 - PLAN-187 batch lesson approve/apply is intentionally still pending until
   dogfood proves the per-case flow is too slow.
 
+## 2026-05-09 06:55 [progress] QA-023 / REL-030 — Worker Case validation and 0.12.0 release
+
+Opened the validation/release track for the Worker Case source MVP. The release
+target is `@zonease/aiworker-cli@0.12.0`, not 1.0 GA. Gates must include source
+checks, build, publish dry-run, CLI/package smoke, Case flow evidence, and a
+clear statement on PLAN-187 remaining pending.
+
+## 2026-05-09 11:57 [progress] QA-023 / REL-030 — Worker Case release gate and dogfood
+
+Prepared `@zonease/aiworker-cli@0.12.0` for release after the Worker Case source
+MVP:
+
+- Source gates pass after the dogfood fix: `bun run check`, `bun run test`,
+  `bun run build`, and `git diff --check`.
+- Bundle CLI and dist manifest report `0.12.0`; publish dry-run from
+  `apps/cli/dist` packs 34 files / 3.20MB before the expected local npm auth
+  boundary.
+- Source dogfood used a real project-scope worker DB at
+  `/tmp/aiworker-case-dogfood-39ezZQ/project` and verified `case list`,
+  `case show`, and `lessons propose`.
+- Dogfood caught a product-facing redaction bug where `task-case` proposal ids
+  were mistaken for `sk-` secrets. Commit `2a8d194` narrows the scanner and
+  keeps operator proposal ids usable while still redacting actual token-shaped
+  content.
+
 ## 2026-05-09 [completed] REL-029 / PLAN-182 — 发布 aiworker CLI 0.11.0
 
 发布 `@zonease/aiworker-cli@0.11.0` minor release，承载 0.10.4 之后的

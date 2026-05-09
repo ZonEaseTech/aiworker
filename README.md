@@ -392,7 +392,7 @@ and [`docs/changelog.md`](docs/changelog.md).
 > section in [`docs/governance-node-status.md`](docs/governance-node-status.md).
 > Before 1.0.0, CLI / API / config shapes may still change.
 
-CLI npm latest: **0.11.0**.
+CLI npm latest: **0.12.0**.
 
 | Module | Status |
 |---|---|
