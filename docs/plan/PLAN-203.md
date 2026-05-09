@@ -274,6 +274,23 @@ Source-local smoke must use a fresh `AIWORKER_HOME` and fresh workspace path.
 It must demonstrate: init -> daemon -> brief/run -> artifact -> review ->
 lesson, then open Worker Web in a browser for manual inspection.
 
+## Current Baseline Failure Snapshot
+
+Captured before implementation on 2026-05-09 23:09. This snapshot is not a
+completion signal; it documents the current failure state that B1-B6 must erase.
+
+| Audit check | Current result | Representative evidence |
+| --- | --- | --- |
+| positive `/api/local/*` surface scan | 0 matching files | local workspace API is not implemented yet |
+| negative old route/API scan | 8 matching files | `apps/api/src/modes/worker.ts`, `apps/api/src/modes/worker.openapi.test.ts`, `apps/api/src/worker/brain/routes.ts`, `apps/web/src/worker/api.ts` |
+| negative persistence scan | 78 matching files | `packages/storage-sqlite/src/worker/schema.ts`, `packages/core/src/worker/conversation/router.ts`, `packages/core/src/worker/brain/journal/service.ts`, `apps/web/src/worker/lib/hooks.ts` |
+| negative runtime import scan | 53 matching files | `packages/core/src/worker/runtime.ts`, `packages/core/src/worker/orchestrator/service.ts`, `packages/core/src/worker/gateway-client/client.ts`, `apps/api/src/modes/worker.ts` |
+| negative CLI command scan | matching files remain | `apps/cli/src/commands/worker/approvals.ts`, `apps/cli/src/commands/worker/config.ts`, `apps/cli/src/commands/worker/serve.ts`, `apps/cli/src/operator/daemon.ts` |
+| negative Web legacy scan | matching files remain | `apps/web/src/worker/api.ts`, `apps/web/src/worker/lib/hooks.ts`, `apps/web/src/worker/__tests__/bootstrap.test.tsx`, `apps/web/src/worker/features/workbench/loop-panels.tsx` |
+
+The final implementation notes must show the positive scan becoming non-empty
+and every negative scan becoming empty for the default local worker deliverable.
+
 ### B1 - Storage and shared contracts
 
 Write scope:

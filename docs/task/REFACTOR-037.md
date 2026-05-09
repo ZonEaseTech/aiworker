@@ -102,3 +102,6 @@ and review proof.
 - 2026-05-09 23:07: Added a completion audit command matrix to PLAN-203 with
   positive surface scans, negative removal scans, focused package gates, full
   gates, CRG, and fresh source-local smoke requirements.
+- 2026-05-09 23:09: Ran the audit matrix as a pre-implementation baseline and
+  recorded the failure snapshot in PLAN-203: no `/api/local/*` surface yet, and
+  old route/API, persistence, runtime, CLI, and Web legacy matches remain.
