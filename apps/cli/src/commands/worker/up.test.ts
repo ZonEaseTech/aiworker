@@ -88,7 +88,7 @@ describe('runUp', () => {
     let initOptions: InitOptions | undefined
     let served = false
 
-    const code = await runUp({ dryRun: true, soul: 'developer' }, {
+    const code = await runUp({ dryRun: true, pack: 'developer', soul: 'developer' }, {
       cwd: () => '/tmp/new-project',
       resolveScope: () => userScope,
       runInit: async (options) => {
@@ -102,7 +102,7 @@ describe('runUp', () => {
     })
 
     expect(code).toBe(0)
-    expect(initOptions).toEqual({ dryRun: true, soul: 'developer' })
+    expect(initOptions).toEqual({ dryRun: true, pack: 'developer', soul: 'developer' })
     expect(served).toBe(false)
     expect(output.lines.join('')).toContain('brand-new-project')
     expect(output.lines.join('')).toContain('dry-run: server not started')

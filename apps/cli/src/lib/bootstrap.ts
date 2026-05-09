@@ -38,6 +38,8 @@ export function shouldBootstrapDotenv(argv: string[]): boolean {
     || startsWithCommand('worker', 'init')
     || startsWithCommand('up')
     || startsWithCommand('worker', 'up')
+    || startsWithCommand('daemon')
+    || startsWithCommand('worker', 'daemon')
     || startsWithCommand('gateway', 'install', 'systemd')
   ) {
     return false

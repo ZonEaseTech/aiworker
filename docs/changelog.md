@@ -1,5 +1,19 @@
 # AIWorker Changelog
 
+## 2026-05-09 18:23 [completed] REFACTOR-032 / PLAN-198 — Local worker daemon lifecycle commands
+
+Completed S4 of the OD-style worker reboot:
+
+- Added local worker daemon lifecycle commands:
+  - `aiworker daemon start/status/stop/logs/check/inspect`
+  - `aiworker worker daemon start/status/stop/logs/check/inspect`
+- `daemon start` reuses the existing `up` / `init` / `serve` path and launches a
+  detached worker child process.
+- The active scope home now stores worker daemon pid, log, and metadata files.
+- `daemon check` verifies `/health`; `daemon logs --tail <n>` reads recent log
+  lines; `daemon inspect` prints JSON status.
+- `up --pack` now passes worker pack selection through to `init`.
+
 ## 2026-05-09 18:10 [completed] REFACTOR-031 / PLAN-197 — Project init worker pack materialization
 
 Completed S3B of the OD-style worker reboot:

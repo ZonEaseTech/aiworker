@@ -67,6 +67,14 @@ import {
   runConfigSet as runConfigSetLocal,
   runConfigShow,
 } from './commands/worker/config'
+import {
+  runWorkerDaemonCheck,
+  runWorkerDaemonInspect,
+  runWorkerDaemonLogs,
+  runWorkerDaemonStatus,
+  startWorkerDaemon,
+  stopWorkerDaemon,
+} from './commands/worker/daemon'
 import { runDoctor } from './commands/worker/doctor'
 import { runEnvDisplayName, runEnvGatewayUrl } from './commands/worker/env'
 import {
@@ -126,6 +134,70 @@ function optionalNumber(values: number[] | undefined): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
+function registerWorkerDaemonCommands(prefix = ''): void {
+  cli
+    .command(`${prefix}daemon start`, '后台启动本地 worker daemon（复用 up/init/serve 路径）')
+    .option('--soul <preset>', 'brand-new project 初始化使用的 Soul 预设')
+    .option('--pack <id>', 'brand-new project 初始化使用的 worker pack')
+    .option('--port <n>', '覆盖 PORT 环境变量', { type: [Number] })
+    .option('--host <host>', '覆盖 AIWORKER_WORKER_HOST（默认 127.0.0.1）')
+    .option('--gateway <url>', '随 HTTP server 一起连接指定 gateway WebSocket URL')
+    .option('--gateway-token <token>', '连接 gateway 时使用的 bearer token（loopback 可省略）')
+    .option('--no-reconnect', '关闭 gateway-client 自动重连（smoke / 测试时使用）')
+    .option('--no-serve-web', '不挂载 worker bundle 到 /admin/*（默认挂载）')
+    .action(async (opts: {
+      gateway?: string
+      gatewayToken?: string
+      host?: string
+      pack?: string
+      port?: number[]
+      reconnect?: boolean
+      serveWeb?: boolean
+      soul?: string
+    }) => {
+      const port = optionalNumber(opts.port)
+      process.exit(await startWorkerDaemon({
+        ...(opts.gateway === undefined ? {} : { gateway: opts.gateway }),
+        ...(opts.gatewayToken === undefined ? {} : { gatewayToken: opts.gatewayToken }),
+        ...(opts.host === undefined ? {} : { host: opts.host }),
+        ...(opts.pack === undefined ? {} : { pack: opts.pack }),
+        ...(port === undefined ? {} : { port }),
+        ...(opts.reconnect === false ? { gatewayReconnect: false } : {}),
+        ...(opts.serveWeb === false ? { serveWeb: false } : {}),
+        ...(opts.soul === undefined ? {} : { soul: opts.soul }),
+      }))
+    })
+
+  cli.command(`${prefix}daemon status`, '查看本地 worker daemon PID/log 状态').action(() => {
+    process.exit(runWorkerDaemonStatus())
+  })
+
+  cli
+    .command(`${prefix}daemon stop`, '停止后台本地 worker daemon')
+    .option('--timeout-ms <n>', 'SIGTERM 后等待毫秒数，超时则 SIGKILL（默认 5000）', { type: [Number] })
+    .action(async (opts: { timeoutMs?: number[] }) => {
+      process.exit(await stopWorkerDaemon({ timeoutMs: optionalNumber(opts.timeoutMs) }))
+    })
+
+  cli
+    .command(`${prefix}daemon logs`, '打印本地 worker daemon 最近日志')
+    .option('--tail <n>', '打印最近 N 行（默认 80）', { type: [Number] })
+    .action((opts: { tail?: number[] }) => {
+      process.exit(runWorkerDaemonLogs({ tail: optionalNumber(opts.tail) }))
+    })
+
+  cli
+    .command(`${prefix}daemon check`, '检查本地 worker daemon /health')
+    .option('--timeout-ms <n>', 'HTTP health check 超时毫秒数（默认 2000）', { type: [Number] })
+    .action(async (opts: { timeoutMs?: number[] }) => {
+      process.exit(await runWorkerDaemonCheck({ timeoutMs: optionalNumber(opts.timeoutMs) }))
+    })
+
+  cli.command(`${prefix}daemon inspect`, '以 JSON 输出本地 worker daemon 状态与 metadata').action(() => {
+    process.exit(runWorkerDaemonInspect())
+  })
+}
+
 // ============================================================
 // worker-local（root shortcuts）
 // ============================================================
@@ -154,6 +226,7 @@ cli
 cli
   .command('up', '一条命令初始化、验证并启动本地 worker HTTP/admin')
   .option('--soul <preset>', 'brand-new project 初始化使用的 Soul 预设；已初始化项目不会消费此参数')
+  .option('--pack <id>', 'brand-new project 初始化使用的 worker pack；透传给 init')
   .option('--dry-run', '只打印 up 阶段和预检结果，不初始化、不启动 HTTP server、不打开浏览器')
   .option('--port <n>', '覆盖 PORT 环境变量', { type: [Number] })
   .option('--host <host>', '覆盖 AIWORKER_WORKER_HOST（默认 127.0.0.1）')
@@ -168,6 +241,7 @@ cli
     gateway?: string
     gatewayToken?: string
     host?: string
+    pack?: string
     port?: number[]
     reconnect?: boolean
     serveWeb?: boolean
@@ -177,6 +251,7 @@ cli
     const port = optionalNumber(opts.port)
     process.exit(await runUp({
       ...(opts.soul === undefined ? {} : { soul: opts.soul }),
+      ...(opts.pack === undefined ? {} : { pack: opts.pack }),
       ...(opts.dryRun === true ? { dryRun: true } : {}),
       ...(port === undefined ? {} : { port }),
       ...(opts.host === undefined ? {} : { host: opts.host }),
@@ -188,6 +263,8 @@ cli
       runtimeVersion: packageJson.version,
     }))
   })
+
+registerWorkerDaemonCommands()
 
 cli
   .command('scope', '打印当前 aiworker scope（user/project/explicit）和关键布局文件状态')
@@ -768,6 +845,7 @@ cli
 cli
   .command('worker up', '一条命令初始化、验证并启动本地 worker HTTP/admin')
   .option('--soul <preset>', 'brand-new project 初始化使用的 Soul 预设；已初始化项目不会消费此参数')
+  .option('--pack <id>', 'brand-new project 初始化使用的 worker pack；透传给 init')
   .option('--dry-run', '只打印 up 阶段和预检结果，不初始化、不启动 HTTP server、不打开浏览器')
   .option('--port <n>', '覆盖 PORT 环境变量', { type: [Number] })
   .option('--host <host>', '覆盖 AIWORKER_WORKER_HOST（默认 127.0.0.1）')
@@ -782,6 +860,7 @@ cli
     gateway?: string
     gatewayToken?: string
     host?: string
+    pack?: string
     port?: number[]
     reconnect?: boolean
     serveWeb?: boolean
@@ -791,6 +870,7 @@ cli
     const port = optionalNumber(opts.port)
     process.exit(await runUp({
       ...(opts.soul === undefined ? {} : { soul: opts.soul }),
+      ...(opts.pack === undefined ? {} : { pack: opts.pack }),
       ...(opts.dryRun === true ? { dryRun: true } : {}),
       ...(port === undefined ? {} : { port }),
       ...(opts.host === undefined ? {} : { host: opts.host }),
@@ -802,6 +882,8 @@ cli
       runtimeVersion: packageJson.version,
     }))
   })
+
+registerWorkerDaemonCommands('worker ')
 
 cli
   .command('worker scope', '打印当前 aiworker scope（user/project/explicit）和关键布局文件状态')
@@ -1691,6 +1773,10 @@ interface CliCommandShape {
 
 const NUMERIC_RULES: Record<string, Record<string, NumericRule>> = {
   'config set': { ifMatch: { integer: true, min: 1 } },
+  'daemon check': { timeoutMs: { integer: true, min: 1 } },
+  'daemon logs': { tail: { integer: true, min: 0, max: 1_000 } },
+  'daemon start': { port: { integer: true, min: 1, max: 65_535 } },
+  'daemon stop': { timeoutMs: { integer: true, min: 0 } },
   'executor select': { ifMatch: { integer: true, min: 1 }, timeoutMs: { integer: true, min: 1 } },
   'fleet chat': { timeoutMs: { integer: true, min: 1 } },
   'fleet config set': { ifMatch: { integer: true, min: 1 } },
@@ -1712,6 +1798,10 @@ const NUMERIC_RULES: Record<string, Record<string, NumericRule>> = {
     olderThanDays: { integer: true, min: 0, max: 3650 },
   },
   'worker config set': { ifMatch: { integer: true, min: 1 } },
+  'worker daemon check': { timeoutMs: { integer: true, min: 1 } },
+  'worker daemon logs': { tail: { integer: true, min: 0, max: 1_000 } },
+  'worker daemon start': { port: { integer: true, min: 1, max: 65_535 } },
+  'worker daemon stop': { timeoutMs: { integer: true, min: 0 } },
   'worker executor select': { ifMatch: { integer: true, min: 1 }, timeoutMs: { integer: true, min: 1 } },
   'worker run': { timeoutMs: { integer: true, min: 1 } },
   'worker serve': { port: { integer: true, min: 1, max: 65_535 } },

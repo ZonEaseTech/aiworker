@@ -35,6 +35,12 @@ const ROOT_WORKER_COMMANDS = [
   'soul show',
   'pack list',
   'pack show',
+  'daemon start',
+  'daemon status',
+  'daemon stop',
+  'daemon logs',
+  'daemon check',
+  'daemon inspect',
   'brain status',
   'brain journal show',
   'brain inbox propose',
@@ -190,6 +196,8 @@ describe('aiworker cli registration', () => {
       'aiworker fleet --help',
       'aiworker gateway --help',
       'aiworker commands',
+      'daemon start',
+      'daemon check',
       'brain status',
       'executor doctor',
       'doctor',
@@ -226,6 +234,7 @@ describe('aiworker cli registration', () => {
     try {
       expect(result.exitCode).toBe(0)
       expect(result.output).toContain('--soul <preset>')
+      expect(result.output).toContain('--pack <id>')
       expect(result.output).toContain('--dry-run')
       expect(result.output).toContain('--port <n>')
       expect(result.output).toContain('--gateway <url>')
@@ -246,6 +255,20 @@ describe('aiworker cli registration', () => {
       expect(result.output).toContain('--soul <preset>')
       expect(result.output).toContain('--pack <id>')
       expect(result.output).toContain('worker pack')
+    }
+    finally {
+      cleanup(result)
+    }
+  })
+
+  it('daemon start help 暴露后台 worker 生命周期参数', async () => {
+    const result = await runCli(['daemon', 'start', '--help'])
+    try {
+      expect(result.exitCode).toBe(0)
+      expect(result.output).toContain('--soul <preset>')
+      expect(result.output).toContain('--pack <id>')
+      expect(result.output).toContain('--port <n>')
+      expect(result.output).toContain('--no-serve-web')
     }
     finally {
       cleanup(result)
@@ -380,6 +403,16 @@ describe('preprocessArgv', () => {
     ])
   })
 
+  it('daemon start 被折叠为本地 worker daemon 快捷入口', () => {
+    expect(run('daemon', 'start', '--port', '9217')).toEqual([
+      '/usr/bin/bun',
+      '/path/to/aiworker.ts',
+      'daemon start',
+      '--port',
+      '9217',
+    ])
+  })
+
   it('executor mcp add 被折叠', () => {
     expect(run('executor', 'mcp', 'add', 'context7', '--engine', 'codex')).toEqual([
       '/usr/bin/bun',
@@ -406,6 +439,14 @@ describe('preprocessArgv', () => {
       '/path/to/aiworker.ts',
       'worker up',
       '--dry-run',
+    ])
+  })
+
+  it('worker daemon check 被折叠为 canonical daemon command', () => {
+    expect(run('worker', 'daemon', 'check')).toEqual([
+      '/usr/bin/bun',
+      '/path/to/aiworker.ts',
+      'worker daemon check',
     ])
   })
 
@@ -607,6 +648,20 @@ describe('aiworker malformed argv handling', () => {
       expect(result.exitCode).toBe(2)
       expect(result.output).toContain('--port must be a finite number')
       expect(result.output).not.toContain('[aiworker up] stage')
+      expect(existsSync(path.join(result.root, '.aiworker'))).toBe(false)
+      expect(existsSync(path.join(result.aiworkerHome, '.env'))).toBe(false)
+    }
+    finally {
+      cleanup(result)
+    }
+  })
+
+  it('rejects malformed daemon numeric options before init side effects', async () => {
+    const result = await runCli(['daemon', 'start', '--soul', 'developer', '--port', 'nope'])
+    try {
+      expect(result.exitCode).toBe(2)
+      expect(result.output).toContain('--port must be a finite number')
+      expect(result.output).not.toContain('[aiworker init] preflight')
       expect(existsSync(path.join(result.root, '.aiworker'))).toBe(false)
       expect(existsSync(path.join(result.aiworkerHome, '.env'))).toBe(false)
     }

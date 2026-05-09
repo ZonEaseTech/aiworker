@@ -22,6 +22,7 @@ export interface UpOptions {
   gatewayToken?: string
   host?: string
   open?: boolean
+  pack?: string
   port?: number
   runtimeVersion?: string
   serveWeb?: boolean
@@ -151,6 +152,8 @@ async function runInitStage(
     initOptions.dryRun = true
   if (options.soul !== undefined)
     initOptions.soul = options.soul
+  if (options.pack !== undefined)
+    initOptions.pack = options.pack
   return runInitStep(initOptions)
 }
 
