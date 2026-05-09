@@ -207,6 +207,73 @@ disconnected from local daemon, CLI, Web, OpenAPI, and smoke paths.
 | "配合 PMA 规范，拆分长任务" | REFACTOR-037 and PLAN-203 stay current; B1-B6 commits are recorded with evidence |
 | "goal 模式最终实现" | active goal is only marked complete after this checklist and completion audit have real evidence |
 
+## Completion Audit Command Matrix
+
+These commands must be run after implementation, from the repository root, and
+their outputs must be recorded in the final implementation notes. A passing
+package test suite is not enough unless these checks also show that removed
+surfaces are absent from the local deliverable.
+
+Positive surface checks:
+
+```sh
+rg -n "/api/local/(info|workspace|briefs|runs|files|artifacts|reviews|lessons|settings|events)" apps/api/src apps/web/src apps/cli/src packages
+rg -n "workspaces|briefs|run_events|artifacts|reviews|lessons|settings" packages/storage-sqlite/src/worker packages/shared/src packages/core/src/worker
+rg -n "brief|artifact|lesson|workspace" apps/cli/src apps/web/src/worker
+```
+
+Negative route/API checks:
+
+```sh
+! rg -n "/api/worker/(brain|orchestrator|sessions|schedule|approvals|cron|channels|evolution)" apps/api/src apps/web/src/worker apps/cli/src
+! rg -n "registerWorkerOpenApiPaths|buildBrainRoutes|buildOrchestratorRoutes|buildChannelRoutes|evolutionRoutes|buildManagementRoutes" apps/api/src/modes apps/api/src/worker
+```
+
+Negative persistence checks:
+
+```sh
+! rg -n "agent_tasks|conversations|session_entries|messages|execution_logs|brain_journal_events|cron_jobs|brain_artifacts|brain_admission" packages/storage-sqlite/src/worker packages/core/src/worker packages/shared/src apps/api/src apps/cli/src apps/web/src/worker
+```
+
+Negative runtime import checks:
+
+```sh
+! rg -n "worker/(channels|conversation|cron|evolution|management|orchestrator|gateway-client|brain)" packages/core/src/worker apps/api/src apps/cli/src apps/web/src/worker
+! rg -n "ChannelRegistry|CronService|ApprovalStore|Evolution|ConversationRouter|BrainAdmission|GatewayClient" packages/core/src/worker apps/api/src apps/cli/src apps/web/src/worker
+```
+
+Negative CLI/Web checks:
+
+```sh
+! rg -n "commands/(fleet|gateway)|worker/(approvals|config|env|schedule|scope|sessions|soul|token|up)" apps/cli/src
+! rg -n "brain admission|cron|approvals|conversation|fleet-hosted|channel test|worker admin" apps/web/src/worker
+```
+
+Required gate commands:
+
+```sh
+bun run --filter '@zonease/aiworker-storage-sqlite' test
+bun run --filter '@zonease/aiworker-storage-sqlite' typecheck
+bun run --filter '@zonease/aiworker-shared' typecheck
+bun run --filter '@zonease/aiworker-core' test
+bun run --filter '@zonease/aiworker-api' test
+bun run --filter '@zonease/aiworker-api' build
+bun run --filter '@zonease/aiworker-cli' test
+bun run --filter '@zonease/aiworker-cli' build:bundle
+bun run --filter '@zonease/aiworker-web' test
+bun run --filter '@zonease/aiworker-web' build
+bun run check
+bun run test
+bun run build
+git diff --check
+bun run crg:update
+bun run crg:review
+```
+
+Source-local smoke must use a fresh `AIWORKER_HOME` and fresh workspace path.
+It must demonstrate: init -> daemon -> brief/run -> artifact -> review ->
+lesson, then open Worker Web in a browser for manual inspection.
+
 ### B1 - Storage and shared contracts
 
 Write scope:

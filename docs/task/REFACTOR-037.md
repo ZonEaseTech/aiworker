@@ -99,3 +99,6 @@ and review proof.
   metadata anchors, then added an explicit reference mapping to PLAN-203 so the
   rebuild copies the local workspace product intention without importing
   image/video-domain concepts.
+- 2026-05-09 23:07: Added a completion audit command matrix to PLAN-203 with
+  positive surface scans, negative removal scans, focused package gates, full
+  gates, CRG, and fresh source-local smoke requirements.
