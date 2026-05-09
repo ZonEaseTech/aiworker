@@ -1,5 +1,28 @@
 # AIWorker Changelog
 
+## 2026-05-09 12:11 [completed] FEAT-057 / QA-023 / REL-030 — Worker Case operating surface and 0.12.0 release
+
+Completed the Worker Case source MVP and released it as
+`@zonease/aiworker-cli@0.12.0`.
+
+- Case File, Review Decision, per-case Lessons Queue, Worker REST/CLI, Worker
+  Admin `/cases`, and fleet-hosted worker bridge are now available from the
+  published CLI package.
+- Source validation passed: `bun run check`, `bun run test`, `bun run build`,
+  `git diff --check`, bundle version smoke, and publish dry-run pack stage.
+- Source dogfood used a real project-scope worker DB and verified `case list`,
+  `case show`, and `lessons propose`; it caught and fixed a redactor false
+  positive on `task-case` proposal ids in commit `2a8d194`.
+- Release validation passed: `v0.12.0` release workflow `25591091932`, npm
+  latest `0.12.0`, `bunx @zonease/aiworker-cli@0.12.0 --version`, GitHub
+  Release binary assets, and main lint/build-image workflows.
+- Published-package compact governance harness passed with 80 PASS / 0 FAIL
+  across `developer-codex` and `general-assistant-claude-code`.
+- PLAN-187 batch Lessons Queue review remains pending by design. The validated
+  path is per-case lesson proposal plus the existing Brain admission state
+  machine; batch approve/apply should only be added if dogfood proves the
+  operator cost justifies it.
+
 ## 2026-05-09 05:55 [progress]
 
 Opened FEAT-057 to shift the post-FEAT-056 product surface from raw proof-loop

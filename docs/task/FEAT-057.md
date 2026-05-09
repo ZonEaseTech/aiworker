@@ -1,10 +1,11 @@
 # FEAT-057 Worker Case operating surface
 
-- **status**: in_progress
+- **status**: completed
 - **priority**: P1
 - **owner**: local
 - **createdAt**: 2026-05-09 05:55
 - **claimedAt**: 2026-05-09 05:55
+- **completedAt**: 2026-05-09 12:11
 - **plans**: PLAN-183, PLAN-184, PLAN-185, PLAN-186, PLAN-187, PLAN-188, PLAN-189
 - **relatesTo**: GOALS.md, FEAT-056, QA-022, REL-029
 
@@ -82,3 +83,9 @@ AIWorker 可以包住外部 executor 的一次任务结果。
   与 Fleet-hosted worker bridge。PLAN-187 的批量 Lessons Queue 审核仍保持 pending；
   先通过 per-case propose + 既有 Brain admission 状态机 dogfood，避免过早批量写入
   canonical Brain。
+- 2026-05-09 12:11：FEAT-057 按 source MVP + 发布包验证关闭。Case File、
+  Review Decision、per-case Lessons Queue、Worker REST/CLI、Worker Admin UI 与
+  fleet-hosted worker bridge 已随 `@zonease/aiworker-cli@0.12.0` 发布并通过 source
+  gates、published package smoke、GitHub Release、main workflows 和 compact
+  governance harness。PLAN-187 批量 Lessons Queue review 不纳入本轮完成标准，作为
+  后续是否需要降低 operator 审核成本的独立产品判断保留。

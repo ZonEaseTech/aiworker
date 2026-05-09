@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-09 (REL-030 in progress)
+> Updated: 2026-05-09 (REL-030 completed)
 
 ## Usage
 
@@ -290,6 +290,6 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-056 AIWorker 1.0 developer repo worker proof loop**](FEAT-056.md) `P1`
 - [x] [**QA-022 Developer repo worker proof-loop dogfood evidence**](QA-022.md) `P1`
 - [x] [**REL-029 发布 aiworker CLI 0.11.0**](REL-029.md) `P1`
-- [-] [**FEAT-057 Worker Case operating surface**](FEAT-057.md) `P1`
-- [-] [**QA-023 Worker Case source dogfood and packaged validation**](QA-023.md) `P1`
-- [-] [**REL-030 发布 aiworker CLI 0.12.0**](REL-030.md) `P1`
+- [x] [**FEAT-057 Worker Case operating surface**](FEAT-057.md) `P1`
+- [x] [**QA-023 Worker Case source dogfood and packaged validation**](QA-023.md) `P1`
+- [x] [**REL-030 发布 aiworker CLI 0.12.0**](REL-030.md) `P1`

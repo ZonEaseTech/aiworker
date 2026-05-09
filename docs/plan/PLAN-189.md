@@ -1,9 +1,10 @@
 # PLAN-189 Dogfood falsification and release readiness
 
-- **status**: in_progress
+- **status**: completed
 - **owner**: local
 - **createdAt**: 2026-05-09 05:55
 - **approvedAt**: 2026-05-09 06:55
+- **completedAt**: 2026-05-09 12:11
 - **task**: FEAT-057
 
 ## Context
@@ -57,3 +58,11 @@ Run a dogfood campaign against aiworker itself:
   种入 worker-owned task / conversation / Brain Journal 后通过 bundle CLI 验证
   `case list`、`case show`、`lessons propose`。dogfood 发现 secret redactor 会误截
   `task-case` proposal id，已通过 commit `2a8d194` 修复并重跑验证。
+- 2026-05-09 12:11：release validation 闭环完成：tag `v0.12.0` 与 `main` 已推送，
+  release workflow `25591091932` 成功，npm latest 为 `0.12.0`，GitHub Release
+  四个 binary assets 完整，`bunx @zonease/aiworker-cli@0.12.0 --version`
+  返回 `aiworker/0.12.0 darwin-arm64 node-v24.3.0`。
+- 2026-05-09 12:11：发布包 compact governance harness 通过：
+  `developer-codex` 与 `general-assistant-claude-code` 共 80 PASS / 0 FAIL。
+  PLAN-187 仍保持 pending；本轮确认 per-case `lessons propose` + Brain admission
+  是足够安全的 source MVP，不提前引入批量 approve/apply。
