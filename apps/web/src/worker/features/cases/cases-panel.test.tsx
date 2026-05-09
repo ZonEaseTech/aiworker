@@ -6,40 +6,40 @@ import { CasesPanel } from './cases-panel'
 
 const mocks = vi.hoisted(() => ({
   caseFile: null as WorkerCaseFile | null,
-  proposeLessons: vi.fn(),
-  rerunCase: vi.fn(),
+  promoteLessons: vi.fn(),
+  rerunReview: vi.fn(),
 }))
 
 vi.mock('@/worker/lib/hooks', () => ({
-  useCase: () => ({
-    data: mocks.caseFile === null ? undefined : { case: mocks.caseFile },
+  useReview: () => ({
+    data: mocks.caseFile === null ? undefined : { review: mocks.caseFile },
     error: null,
     isLoading: false,
   }),
-  useCases: () => ({
-    data: { cases: mocks.caseFile === null ? [] : [mocks.caseFile] },
+  useReviews: () => ({
+    data: { reviews: mocks.caseFile === null ? [] : [mocks.caseFile] },
     error: null,
     isLoading: false,
   }),
-  useProposeCaseLessons: () => ({
+  usePromoteReviewLessons: () => ({
     data: undefined,
     error: null,
     isPending: false,
-    mutate: mocks.proposeLessons,
+    mutate: mocks.promoteLessons,
   }),
-  useRerunCase: () => ({
+  useRerunReview: () => ({
     data: undefined,
     error: null,
     isPending: false,
-    mutate: mocks.rerunCase,
+    mutate: mocks.rerunReview,
   }),
 }))
 
 describe('worker cases panel', () => {
   beforeEach(() => {
     mocks.caseFile = makeCaseFile()
-    mocks.proposeLessons.mockReset()
-    mocks.rerunCase.mockReset()
+    mocks.promoteLessons.mockReset()
+    mocks.rerunReview.mockReset()
   })
 
   it('renders Case File review decision, risk, evidence, and lessons queue', () => {
@@ -53,14 +53,14 @@ describe('worker cases panel', () => {
     expect(screen.getByText('unmanaged_ambient')).toBeTruthy()
   })
 
-  it('exposes operator actions for rerun and lesson proposal', () => {
+  it('exposes operator actions for rerun and lesson promotion', () => {
     render(<CasesPanel />)
 
     fireEvent.click(screen.getByRole('button', { name: /Rerun/ }))
-    fireEvent.click(screen.getByRole('button', { name: /Propose lessons/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Promote lessons/ }))
 
-    expect(mocks.rerunCase).toHaveBeenCalledWith({ taskId: 'task-case-web' })
-    expect(mocks.proposeLessons).toHaveBeenCalledWith('task-case-web')
+    expect(mocks.rerunReview).toHaveBeenCalledWith({ taskId: 'task-case-web' })
+    expect(mocks.promoteLessons).toHaveBeenCalledWith('task-case-web')
   })
 })
 

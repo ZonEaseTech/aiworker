@@ -1,5 +1,5 @@
-import type { Orchestrator } from '../orchestrator/service'
 import type { ProcessManager } from '../orchestrator/process-manager'
+import type { Orchestrator } from '../orchestrator/service'
 
 import { AppError } from '@zonease/aiworker-shared'
 import { agentTasks, getWorkerDb } from '@zonease/aiworker-storage-sqlite/worker'

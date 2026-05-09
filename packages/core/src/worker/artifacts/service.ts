@@ -167,7 +167,7 @@ function normalizeArtifactPath(input: string): string {
 
 function normalizeKind(kind: string | undefined): string {
   const normalized = kind?.trim()
-  return normalized ? normalized : 'file'
+  return normalized || 'file'
 }
 
 function normalizeOptionalString(value: string | null | undefined): string | null {

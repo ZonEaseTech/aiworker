@@ -12,8 +12,8 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@/worker/lib/hooks', () => ({
-  useCases: () => ({
-    data: { cases: mocks.cases },
+  useReviews: () => ({
+    data: { reviews: mocks.cases },
     error: null,
     isLoading: false,
   }),

@@ -50,6 +50,7 @@ vi.mock('@/worker/api', () => {
     listTasks: vi.fn(async () => ({ tasks: [] })),
     listWorkerArtifacts: vi.fn(async () => ({ artifacts: [] })),
     patchCron: vi.fn(),
+    promoteReviewLessons: vi.fn(async () => ({ promotion: { proposals: [] } })),
     proposeCaseLessons: vi.fn(async () => ({ proposals: [] })),
     putConfig: vi.fn(),
     putSecret: vi.fn(),

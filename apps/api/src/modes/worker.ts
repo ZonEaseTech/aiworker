@@ -30,6 +30,7 @@ import { evolutionRoutes } from '../worker/evolution/routes'
 import { buildBearerAuth } from '../worker/management/bearer-auth'
 import { buildManagementRoutes } from '../worker/management/routes'
 import { buildOrchestratorRoutes } from '../worker/orchestrator/routes'
+import { buildReviewRoutes } from '../worker/reviews/routes'
 import { buildRunRoutes } from '../worker/runs/routes'
 
 const DEFAULT_WORKER_RUNTIME_VERSION = 'dev'
@@ -226,6 +227,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   app.route('/api/worker/runs', buildRunRoutes(() => state.runtime))
   app.route('/api/worker/artifacts', buildArtifactRoutes())
   app.route('/api/worker/cases', buildCaseRoutes(() => state.runtime))
+  app.route('/api/worker/reviews', buildReviewRoutes(() => state.runtime))
   app.route('/api/worker/evolution', evolutionRoutes)
   app.route('/api/worker/events', buildEventRoutes(() => state.runtime))
   app.route('/api/worker/brain', buildBrainRoutes({
@@ -323,6 +325,10 @@ function registerWorkerOpenApiPaths(app: OpenAPIHono): void {
     { method: 'get', path: '/api/worker/cases/{taskId}', summary: 'Show one Worker Case File with review decision and evidence', tags: ['cases'], requireAuth: true },
     { method: 'post', path: '/api/worker/cases/{taskId}/rerun', summary: 'Create a bounded rerun from one Worker Case', tags: ['cases'], requireAuth: true },
     { method: 'post', path: '/api/worker/cases/{taskId}/lessons/propose', summary: 'Create Brain admission proposals from one Worker Case lessons queue', tags: ['cases'], requireAuth: true },
+    { method: 'get', path: '/api/worker/reviews', summary: 'List worker run reviews', tags: ['reviews'], requireAuth: true },
+    { method: 'get', path: '/api/worker/reviews/{taskId}', summary: 'Show one worker run review', tags: ['reviews'], requireAuth: true },
+    { method: 'post', path: '/api/worker/reviews/{taskId}/rerun', summary: 'Create a bounded rerun from one review', tags: ['reviews'], requireAuth: true },
+    { method: 'post', path: '/api/worker/reviews/{taskId}/lessons/promote', summary: 'Promote review lesson candidates into pending durable-context proposals', tags: ['reviews'], requireAuth: true },
     { method: 'get', path: '/api/worker/runs', summary: 'List local worker runs', tags: ['runs'], requireAuth: true },
     { method: 'post', path: '/api/worker/runs', summary: 'Create a local worker run', tags: ['runs'], requireAuth: true },
     { method: 'get', path: '/api/worker/runs/{id}', summary: 'Show one local worker run', tags: ['runs'], requireAuth: true },

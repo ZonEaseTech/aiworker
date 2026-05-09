@@ -1,6 +1,6 @@
 import type { WorkerSSEEvent } from './api'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { continueConversation, getCaseFile, getInfo, getWorkerArtifact, listCases, listRuns, listWorkerArtifacts, proposeCaseLessons, rerunCase, submitTask, subscribeEvents, testExecutor } from './api'
+import { continueConversation, getCaseFile, getInfo, getReviewFile, getWorkerArtifact, listCases, listReviews, listRuns, listWorkerArtifacts, promoteReviewLessons, proposeCaseLessons, rerunCase, rerunReview, submitTask, subscribeEvents, testExecutor } from './api'
 import { __resetBearerForTests, setBearerToken } from './lib/auth'
 
 function sseResponse(chunks: string[]): Response {
@@ -202,6 +202,44 @@ describe('worker api subscribeEvents', () => {
       method: 'POST',
     })
     expect(fetchMock.mock.calls[3]?.[0]).toBe('/api/worker/cases/task%2Fwith%2Fslash/lessons/propose')
+    expect(fetchMock.mock.calls[3]?.[1]).toMatchObject({
+      body: JSON.stringify({}),
+      method: 'POST',
+    })
+  })
+
+  it('uses Worker Review REST paths for list/show/rerun/lesson promotion', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify({ reviews: [] }), {
+        headers: { 'Content-Type': 'application/json' },
+        status: 200,
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ review: { taskId: 'task/with/slash' } }), {
+        headers: { 'Content-Type': 'application/json' },
+        status: 200,
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ run: { id: 'rerun-1' } }), {
+        headers: { 'Content-Type': 'application/json' },
+        status: 201,
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ promotion: { proposals: [] } }), {
+        headers: { 'Content-Type': 'application/json' },
+        status: 201,
+      }))
+
+    await listReviews(12)
+    await getReviewFile('task/with/slash')
+    await rerunReview('task/with/slash', 'repair')
+    await promoteReviewLessons('task/with/slash')
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/worker/reviews?limit=12')
+    expect(fetchMock.mock.calls[1]?.[0]).toBe('/api/worker/reviews/task%2Fwith%2Fslash')
+    expect(fetchMock.mock.calls[2]?.[0]).toBe('/api/worker/reviews/task%2Fwith%2Fslash/rerun')
+    expect(fetchMock.mock.calls[2]?.[1]).toMatchObject({
+      body: JSON.stringify({ prompt: 'repair' }),
+      method: 'POST',
+    })
+    expect(fetchMock.mock.calls[3]?.[0]).toBe('/api/worker/reviews/task%2Fwith%2Fslash/lessons/promote')
     expect(fetchMock.mock.calls[3]?.[1]).toMatchObject({
       body: JSON.stringify({}),
       method: 'POST',

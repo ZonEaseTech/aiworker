@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-09 (PLAN-199 completed)
+> Updated: 2026-05-09 (PLAN-200 completed)
 
 ## Usage
 
@@ -228,3 +228,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-197 Project init worker pack materialization**](PLAN-197.md) `2026-05-09`
 - [x] [**PLAN-198 Local worker daemon lifecycle commands**](PLAN-198.md) `2026-05-09`
 - [x] [**PLAN-199 Worker web workbench first screen**](PLAN-199.md) `2026-05-09`
+- [x] [**PLAN-200 Worker review promotion surface**](PLAN-200.md) `2026-05-09`

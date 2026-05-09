@@ -35,7 +35,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'Workbench', exact: true, icon: ClipboardList },
   { to: '/chat', label: 'Chat', icon: MessageSquare },
-  { to: '/cases', label: 'Cases', icon: FileSearch },
+  { to: '/cases', label: 'Reviews', icon: FileSearch },
   { to: '/config', label: '配置', icon: SlidersHorizontal },
   { to: '/test', label: '探测', icon: Wrench },
   { to: '/secrets', label: 'Secrets', icon: KeyRound },

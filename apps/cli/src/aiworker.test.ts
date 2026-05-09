@@ -56,6 +56,10 @@ const ROOT_WORKER_COMMANDS = [
   'brain admission apply',
   'brain admission propose',
   'brain brief',
+  'review list',
+  'review show',
+  'review rerun',
+  'review promote',
   'case list',
   'case show',
   'case rerun',
@@ -332,6 +336,17 @@ describe('preprocessArgv', () => {
       '/path/to/aiworker.ts',
       'case show',
       'task-001',
+    ])
+  })
+
+  it('review promote 被折叠为本地 worker review promotion 入口', () => {
+    expect(run('review', 'promote', 'task-001', '--scope', 'repo:aiworker')).toEqual([
+      '/usr/bin/bun',
+      '/path/to/aiworker.ts',
+      'review promote',
+      'task-001',
+      '--scope',
+      'repo:aiworker',
     ])
   })
 

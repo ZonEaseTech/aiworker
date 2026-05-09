@@ -1,5 +1,5 @@
-import type { ChildProcess } from 'node:child_process'
 import type { AiworkerScopeResult } from '@zonease/aiworker-fs-layout'
+import type { ChildProcess } from 'node:child_process'
 
 import { spawn } from 'node:child_process'
 import { closeSync, existsSync, openSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'

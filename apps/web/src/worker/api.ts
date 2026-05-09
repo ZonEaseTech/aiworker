@@ -607,8 +607,16 @@ export function listCases(limit = 50): Promise<{ cases: WorkerCaseFile[] }> {
   return workerFetch<{ cases: WorkerCaseFile[] }>(`/api/worker/cases?limit=${encodeURIComponent(String(limit))}`)
 }
 
+export function listReviews(limit = 50): Promise<{ reviews: WorkerCaseFile[] }> {
+  return workerFetch<{ reviews: WorkerCaseFile[] }>(`/api/worker/reviews?limit=${encodeURIComponent(String(limit))}`)
+}
+
 export function getCaseFile(taskId: string): Promise<{ case: WorkerCaseFile }> {
   return workerFetch<{ case: WorkerCaseFile }>(`/api/worker/cases/${encodeURIComponent(taskId)}`)
+}
+
+export function getReviewFile(taskId: string): Promise<{ review: WorkerCaseFile }> {
+  return workerFetch<{ review: WorkerCaseFile }>(`/api/worker/reviews/${encodeURIComponent(taskId)}`)
 }
 
 export async function rerunCase(taskId: string, prompt?: string): Promise<AgentTaskRow> {
@@ -620,8 +628,33 @@ export async function rerunCase(taskId: string, prompt?: string): Promise<AgentT
   return res.task
 }
 
+export async function rerunReview(taskId: string, prompt?: string): Promise<WorkerRun> {
+  const res = await workerFetch<{ run: WorkerRun, review?: WorkerCaseFile }>(`/api/worker/reviews/${encodeURIComponent(taskId)}/rerun`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(prompt === undefined ? {} : { prompt }),
+  })
+  return res.run
+}
+
 export function proposeCaseLessons(taskId: string): Promise<{ proposals: BrainAdmissionProposal[] }> {
   return workerFetch<{ proposals: BrainAdmissionProposal[] }>(`/api/worker/cases/${encodeURIComponent(taskId)}/lessons/propose`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  })
+}
+
+export interface ReviewLessonPromotion {
+  taskId: string
+  sourceEventId?: number
+  candidates: WorkerCaseLessonCandidate[]
+  proposals: BrainAdmissionProposal[]
+  skipped: Array<{ candidateIndex: number, reason: string }>
+}
+
+export function promoteReviewLessons(taskId: string): Promise<{ promotion: ReviewLessonPromotion, review?: WorkerCaseFile }> {
+  return workerFetch<{ promotion: ReviewLessonPromotion, review?: WorkerCaseFile }>(`/api/worker/reviews/${encodeURIComponent(taskId)}/lessons/promote`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({}),

@@ -345,6 +345,7 @@ export type {
   SoulSchemaPack,
 } from './soul'
 
+export type { ExecutionEvent, MemoryEntry, ServiceStatus, SkillMeta } from './types'
 export {
   BUILTIN_WORKER_PACK_REGISTRY,
   BUILTIN_WORKER_PACKS,
@@ -352,14 +353,13 @@ export {
   createWorkerPackRegistry,
   findBuiltinWorkerPack,
   supportedWorkerPackIds,
-  WorkerPackRegistry,
   workerPackIdSchema,
+  WorkerPackRegistry,
   workerPackSchema,
   workerPackTemplateSchema,
 } from './worker-pack'
+
 export type {
   WorkerPack,
   WorkerPackTemplate,
 } from './worker-pack'
-
-export type { ExecutionEvent, MemoryEntry, ServiceStatus, SkillMeta } from './types'

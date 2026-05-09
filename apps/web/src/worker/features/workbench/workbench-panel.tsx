@@ -8,7 +8,7 @@ import { Button } from '@/shared/components/ui/button'
 import { Skeleton } from '@/shared/components/ui/skeleton'
 import { cn } from '@/shared/lib/utils'
 import {
-  useCases,
+  useReviews,
   useRuns,
   useSubmitTask,
   useWorkerArtifacts,
@@ -23,7 +23,7 @@ export function WorkbenchPanel() {
   const healthQ = useWorkerHealth()
   const infoQ = useWorkerInfo()
   const runsQ = useRuns()
-  const casesQ = useCases(8)
+  const reviewsQ = useReviews(8)
   const submit = useSubmitTask()
 
   const [selectedPackId, setSelectedPackId] = useState(DEFAULT_PACK.id)
@@ -43,10 +43,10 @@ export function WorkbenchPanel() {
     ...(activeRunId ? { runId: activeRunId } : {}),
     limit: 8,
   }), [activeRunId]))
-  const cases = casesQ.data?.cases ?? []
+  const reviews = reviewsQ.data?.reviews ?? []
   const activeCase = activeRun
-    ? (cases.find(file => file.taskId === activeRun.id) ?? null)
-    : (cases[0] ?? null)
+    ? (reviews.find(file => file.taskId === activeRun.id) ?? null)
+    : (reviews[0] ?? null)
 
   function selectPack(pack: WorkerPack) {
     const firstTemplate = requireFirstTemplate(pack)
@@ -201,8 +201,8 @@ export function WorkbenchPanel() {
 
         <ReviewPanel
           caseFile={activeCase}
-          isLoading={casesQ.isLoading}
-          error={casesQ.error}
+          isLoading={reviewsQ.isLoading}
+          error={reviewsQ.error}
         />
       </div>
     </section>
@@ -393,7 +393,7 @@ function ReviewPanel({
 }) {
   return (
     <section className="app-panel flex min-w-0 flex-col gap-4 xl:col-span-3">
-      <PanelHeader icon={ShieldCheck} title="Case review" badge={caseFile?.reviewDecision.status ?? 'none'} />
+      <PanelHeader icon={ShieldCheck} title="Run review" badge={caseFile?.reviewDecision.status ?? 'none'} />
       {isLoading
         ? <Skeleton className="h-32" />
         : error

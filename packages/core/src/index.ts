@@ -13,6 +13,17 @@
 // Worker mode env access。CLI / 路由层都从这里取 workerEnv。
 export { getWorkerEnv, type WorkerEnv, workerEnv } from './config/worker'
 
+// Worker artifact metadata index（REFACTOR-029）：OD-style workbench 产物索引。
+export {
+  type ListWorkerArtifactsOptions,
+  type RegisterWorkerArtifactInput,
+  rowToArtifact,
+  type WorkerArtifact,
+  WorkerArtifactService,
+  type WorkerArtifactSource,
+  type WorkerArtifactStatus,
+} from './worker/artifacts/service'
+
 // Worker bootstrap：mint identity、seed config、首次启动打印 bootstrap 行。
 export {
   type BootstrapOptions,
@@ -26,17 +37,6 @@ export {
   printBootstrapIfJustMinted,
   type StoredConfig,
 } from './worker/bootstrap'
-
-// Worker artifact metadata index（REFACTOR-029）：OD-style workbench 产物索引。
-export {
-  type ListWorkerArtifactsOptions,
-  type RegisterWorkerArtifactInput,
-  rowToArtifact,
-  type WorkerArtifact,
-  WorkerArtifactService,
-  type WorkerArtifactSource,
-  type WorkerArtifactStatus,
-} from './worker/artifacts/service'
 
 // Brain admission service (PLAN-101)：generated brain change 必须先进 admission
 // proposal，state machine pending → approved | rejected → applied | failed；

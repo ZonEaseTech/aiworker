@@ -185,9 +185,9 @@ interface CreateDaemonRunInput {
   token: string
 }
 
-type CreateDaemonRunResult =
-  | { ok: true, runId: string }
-  | { ok: false, code: number }
+type CreateDaemonRunResult
+  = | { ok: true, runId: string }
+    | { ok: false, code: number }
 
 async function createDaemonRun(input: CreateDaemonRunInput): Promise<CreateDaemonRunResult> {
   const url = `${input.base}/api/worker/runs`

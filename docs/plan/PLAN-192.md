@@ -178,3 +178,8 @@ Open Design 当前参照形态：
   workbench，不改 fleet/gateway，不新增后端 API。
 - 2026-05-09 18:42：S5 完成；Worker Admin `/` 已变为 local worker workbench，
   组合 pack/template picker、composer、run timeline、artifact metadata 和 case review。
+- 2026-05-09 18:44：启动 S6（REFACTOR-034 / PLAN-200）；复用现有 Case/Inbox/Admission
+  底层能力，新增 product-facing review/promote surface。
+- 2026-05-09 18:58：S6 完成；新增 `/api/worker/reviews`、root/canonical
+  `review` CLI commands，并把 Worker Web 默认复盘入口收敛到 Reviews / Promote
+  lessons。

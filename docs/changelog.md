@@ -1,5 +1,17 @@
 # AIWorker Changelog
 
+## 2026-05-09 18:58 [completed] REFACTOR-034 / PLAN-200 — Worker review promotion surface
+
+Completed S6 of the OD-style worker reboot:
+
+- Added product-facing `/api/worker/reviews` list/show/rerun/promote routes over the
+  existing Case / Inbox / Admission backend.
+- Added root/canonical `review list/show/rerun/promote` CLI commands.
+- Updated Worker Web review copy to Reviews / Promote lessons and wired promotion to
+  the new review API.
+- Kept promotion safe: it only creates pending proposals and does not auto-approve or
+  apply durable memory.
+
 ## 2026-05-09 18:42 [completed] REFACTOR-033 / PLAN-199 — Worker web workbench first screen
 
 Completed S5 of the OD-style worker reboot:

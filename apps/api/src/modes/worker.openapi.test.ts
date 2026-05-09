@@ -72,6 +72,10 @@ describe('worker /openapi.json registration (BUG-065)', () => {
       expect(paths).toContain('/api/worker/cases/{taskId}')
       expect(paths).toContain('/api/worker/cases/{taskId}/rerun')
       expect(paths).toContain('/api/worker/cases/{taskId}/lessons/propose')
+      expect(paths).toContain('/api/worker/reviews')
+      expect(paths).toContain('/api/worker/reviews/{taskId}')
+      expect(paths).toContain('/api/worker/reviews/{taskId}/rerun')
+      expect(paths).toContain('/api/worker/reviews/{taskId}/lessons/promote')
       expect(paths).toContain('/api/worker/runs')
       expect(paths).toContain('/api/worker/runs/{id}')
       expect(paths).toContain('/api/worker/runs/{id}/events')
@@ -91,6 +95,9 @@ describe('worker /openapi.json registration (BUG-065)', () => {
       const caseEntry = doc.paths['/api/worker/cases']?.get as { tags?: string[], security?: unknown[] } | undefined
       expect(caseEntry?.tags).toContain('cases')
       expect(Array.isArray(caseEntry?.security)).toBe(true)
+      const reviewEntry = doc.paths['/api/worker/reviews']?.get as { tags?: string[], security?: unknown[] } | undefined
+      expect(reviewEntry?.tags).toContain('reviews')
+      expect(Array.isArray(reviewEntry?.security)).toBe(true)
       const runsEntry = doc.paths['/api/worker/runs']?.post as { tags?: string[], security?: unknown[] } | undefined
       expect(runsEntry?.tags).toContain('runs')
       expect(Array.isArray(runsEntry?.security)).toBe(true)

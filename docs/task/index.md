@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-09 (REFACTOR-033 completed)
+> Updated: 2026-05-09 (REFACTOR-034 completed)
 
 ## Usage
 
@@ -305,3 +305,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REFACTOR-031 Materialize worker packs during project init**](REFACTOR-031.md) `P1`
 - [x] [**REFACTOR-032 Add local worker daemon lifecycle commands**](REFACTOR-032.md) `P1`
 - [x] [**REFACTOR-033 Worker web workbench first screen**](REFACTOR-033.md) `P1`
+- [x] [**REFACTOR-034 Add worker review promotion surface**](REFACTOR-034.md) `P1`

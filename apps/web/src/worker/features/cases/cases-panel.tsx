@@ -5,26 +5,26 @@ import { Badge } from '@/shared/components/ui/badge'
 import { Button } from '@/shared/components/ui/button'
 import { Skeleton } from '@/shared/components/ui/skeleton'
 import {
-  useCase,
-  useCases,
-  useProposeCaseLessons,
-  useRerunCase,
+  usePromoteReviewLessons,
+  useRerunReview,
+  useReview,
+  useReviews,
 } from '@/worker/lib/hooks'
 
 export function CasesPanel() {
-  const casesQ = useCases(50)
-  const cases = casesQ.data?.cases ?? []
+  const reviewsQ = useReviews(50)
+  const reviews = reviewsQ.data?.reviews ?? []
   const [selectedTaskId, setSelectedTaskId] = useState<string | undefined>(undefined)
-  const activeTaskId = selectedTaskId !== undefined && cases.some(item => item.taskId === selectedTaskId)
+  const activeTaskId = selectedTaskId !== undefined && reviews.some(item => item.taskId === selectedTaskId)
     ? selectedTaskId
-    : cases[0]?.taskId
+    : reviews[0]?.taskId
 
   return (
     <section className="app-page">
       <header className="app-page-header min-w-0">
-        <h1 className="app-page-title">Cases</h1>
+        <h1 className="app-page-title">Reviews</h1>
         <p className="app-page-copy break-words">
-          Worker Case File、Review Decision、evidence、risk 和 Lessons Queue。
+          Run review、evidence、risk 和 lesson promotion。
         </p>
       </header>
 
@@ -33,9 +33,9 @@ export function CasesPanel() {
         className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-3"
       >
         <CaseList
-          cases={cases}
-          isLoading={casesQ.isLoading}
-          error={casesQ.error instanceof Error ? casesQ.error.message : null}
+          cases={reviews}
+          isLoading={reviewsQ.isLoading}
+          error={reviewsQ.error instanceof Error ? reviewsQ.error.message : null}
           activeTaskId={activeTaskId}
           onSelect={setSelectedTaskId}
         />
@@ -73,7 +73,7 @@ function CaseList({
       )}
       {!isLoading && cases.length === 0 && !error && (
         <div className="app-empty p-6">
-          暂无 Case File。
+          暂无 review。
         </div>
       )}
       <ul className="flex max-h-96 min-w-0 flex-col gap-2 overflow-y-auto">
@@ -107,21 +107,21 @@ function CaseList({
 }
 
 function CaseDetail({ taskId }: { taskId?: string }) {
-  const caseQ = useCase(taskId)
-  const rerun = useRerunCase()
-  const proposeLessons = useProposeCaseLessons()
-  const file = caseQ.data?.case
-  const pendingAction = rerun.isPending || proposeLessons.isPending
+  const reviewQ = useReview(taskId)
+  const rerun = useRerunReview()
+  const promoteLessons = usePromoteReviewLessons()
+  const file = reviewQ.data?.review
+  const pendingAction = rerun.isPending || promoteLessons.isPending
 
   if (taskId === undefined) {
     return (
       <section className="app-panel lg:col-span-2">
-        <div className="app-empty">选择一个 Case 查看详情。</div>
+        <div className="app-empty">选择一个 review 查看详情。</div>
       </section>
     )
   }
 
-  if (caseQ.isLoading || file === undefined) {
+  if (reviewQ.isLoading || file === undefined) {
     return (
       <section className="app-panel lg:col-span-2">
         <Skeleton className="h-96 w-full" />
@@ -129,12 +129,12 @@ function CaseDetail({ taskId }: { taskId?: string }) {
     )
   }
 
-  if (caseQ.error) {
+  if (reviewQ.error) {
     return (
       <section className="app-panel lg:col-span-2">
         <p role="alert" className="app-alert-error">
           加载失败：
-          {caseQ.error instanceof Error ? caseQ.error.message : 'unknown error'}
+          {reviewQ.error instanceof Error ? reviewQ.error.message : 'unknown error'}
         </p>
       </section>
     )
@@ -182,17 +182,17 @@ function CaseDetail({ taskId }: { taskId?: string }) {
             type="button"
             variant="outline"
             disabled={pendingAction || file.lessons.candidateCount === 0}
-            onClick={() => proposeLessons.mutate(file.taskId)}
+            onClick={() => promoteLessons.mutate(file.taskId)}
           >
             <Lightbulb className="size-4" />
-            Propose lessons
+            Promote lessons
           </Button>
         </div>
 
-        {(rerun.error || proposeLessons.error) && (
+        {(rerun.error || promoteLessons.error) && (
           <p role="alert" className="app-alert-error">
             操作失败：
-            {(rerun.error ?? proposeLessons.error)?.message}
+            {(rerun.error ?? promoteLessons.error)?.message}
           </p>
         )}
         {rerun.data && (
@@ -201,13 +201,13 @@ function CaseDetail({ taskId }: { taskId?: string }) {
             <code className="app-code">{rerun.data.id}</code>
           </p>
         )}
-        {proposeLessons.data && (
+        {promoteLessons.data && (
           <p className="app-alert-success">
             已创建
             {' '}
-            {proposeLessons.data.proposals.length}
+            {promoteLessons.data.promotion.proposals.length}
             {' '}
-            条 pending proposal。
+            条 pending promotion proposal。
           </p>
         )}
       </div>

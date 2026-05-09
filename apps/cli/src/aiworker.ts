@@ -62,6 +62,10 @@ import {
   runCaseRerun,
   runCaseShow,
   runLessonsPropose,
+  runReviewList,
+  runReviewPromoteLessons,
+  runReviewRerun,
+  runReviewShow,
 } from './commands/worker/case'
 import {
   runConfigSet as runConfigSetLocal,
@@ -373,6 +377,42 @@ cli.command('pack list', '列出 OD-style worker pack（SKILL.md + DOMAIN.md + w
 cli.command('pack show <pack>', '查看某个 worker pack 的 skill/domain/work-order/artifact 信息').action(async (pack: string) => {
   process.exit(await runPackShow(pack))
 })
+
+cli
+  .command('review list', '列出本地 worker run reviews（workbench 默认复盘入口）')
+  .option('--limit <n>', '最多返回 review 数量（1-200，默认 50）', { type: [Number] })
+  .action(async (opts: { limit?: number[] }) => {
+    process.exit(await runReviewList({ limit: optionalNumber(opts.limit) }))
+  })
+
+cli
+  .command('review show <taskId>', '查看一个 run review、evidence、risk 和 lesson candidates')
+  .option('--show-sensitive', '不再对 payload / message preview 做 secret-like redaction')
+  .action(async (taskId: string, opts: { showSensitive?: boolean }) => {
+    process.exit(await runReviewShow(taskId, {
+      ...(opts.showSensitive === undefined ? {} : { showSensitive: opts.showSensitive }),
+    }))
+  })
+
+cli
+  .command('review rerun <taskId>', '基于 review evidence 显式重跑一个 work order')
+  .option('--prompt <text>', '覆盖 rerun prompt；默认由 orchestrator 构造 repair context')
+  .action(async (taskId: string, opts: { prompt?: string }) => {
+    process.exit(await runReviewRerun(taskId, {
+      ...(opts.prompt === undefined ? {} : { prompt: opts.prompt }),
+    }))
+  })
+
+cli
+  .command('review promote <taskId>', '把 review lesson candidates 提升为 pending durable-context proposals')
+  .option('--soul <id>', '写入 proposal 的 Soul id（默认 developer）')
+  .option('--scope <id>', '写入 proposal 的 scope id（可选）')
+  .action(async (taskId: string, opts: { soul?: string, scope?: string }) => {
+    process.exit(await runReviewPromoteLessons(taskId, {
+      ...(opts.soul === undefined ? {} : { soulId: opts.soul }),
+      ...(opts.scope === undefined ? {} : { scopeId: opts.scope }),
+    }))
+  })
 
 cli
   .command('case list', '列出本地 worker 的 Worker Case File 投影（operator 默认审查入口）')
@@ -992,6 +1032,42 @@ cli.command('worker pack list', '列出 OD-style worker pack（SKILL.md + DOMAIN
 cli.command('worker pack show <pack>', '查看某个 worker pack 的 skill/domain/work-order/artifact 信息').action(async (pack: string) => {
   process.exit(await runPackShow(pack))
 })
+
+cli
+  .command('worker review list', '列出本地 worker run reviews（workbench 默认复盘入口）')
+  .option('--limit <n>', '最多返回 review 数量（1-200，默认 50）', { type: [Number] })
+  .action(async (opts: { limit?: number[] }) => {
+    process.exit(await runReviewList({ limit: optionalNumber(opts.limit) }))
+  })
+
+cli
+  .command('worker review show <taskId>', '查看一个 run review、evidence、risk 和 lesson candidates')
+  .option('--show-sensitive', '不再对 payload / message preview 做 secret-like redaction')
+  .action(async (taskId: string, opts: { showSensitive?: boolean }) => {
+    process.exit(await runReviewShow(taskId, {
+      ...(opts.showSensitive === undefined ? {} : { showSensitive: opts.showSensitive }),
+    }))
+  })
+
+cli
+  .command('worker review rerun <taskId>', '基于 review evidence 显式重跑一个 work order')
+  .option('--prompt <text>', '覆盖 rerun prompt；默认由 orchestrator 构造 repair context')
+  .action(async (taskId: string, opts: { prompt?: string }) => {
+    process.exit(await runReviewRerun(taskId, {
+      ...(opts.prompt === undefined ? {} : { prompt: opts.prompt }),
+    }))
+  })
+
+cli
+  .command('worker review promote <taskId>', '把 review lesson candidates 提升为 pending durable-context proposals')
+  .option('--soul <id>', '写入 proposal 的 Soul id（默认 developer）')
+  .option('--scope <id>', '写入 proposal 的 scope id（可选）')
+  .action(async (taskId: string, opts: { soul?: string, scope?: string }) => {
+    process.exit(await runReviewPromoteLessons(taskId, {
+      ...(opts.soul === undefined ? {} : { soulId: opts.soul }),
+      ...(opts.scope === undefined ? {} : { scopeId: opts.scope }),
+    }))
+  })
 
 cli
   .command('worker case list', '列出本地 worker 的 Worker Case File 投影（operator 默认审查入口）')

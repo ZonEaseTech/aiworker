@@ -33,6 +33,10 @@ const {
   runCaseRerun,
   runCaseShow,
   runLessonsPropose,
+  runReviewList,
+  runReviewPromoteLessons,
+  runReviewRerun,
+  runReviewShow,
 } = await import('./case')
 
 describe('aiworker case commands (FEAT-057)', () => {
@@ -82,6 +86,24 @@ describe('aiworker case commands (FEAT-057)', () => {
     })
   })
 
+  it('review list returns product-facing review projections', async () => {
+    seedTask('task-review-cli', 'show review list')
+    recordBrainJournalEvent({
+      kind: 'brain_engine.review',
+      taskId: 'task-review-cli',
+      payload: { action: 'pass', mode: 'observe-only', reason: 'reviewed', status: 'reviewed' },
+    })
+
+    const { result, output } = await captureConsole(() => runReviewList({ limit: 5 }))
+
+    expect(result).toBe(0)
+    const parsed = JSON.parse(output) as { reviews: Array<{ taskId: string, reviewDecision: { status: string } }> }
+    expect(parsed.reviews[0]).toMatchObject({
+      reviewDecision: { status: 'ready_to_ship' },
+      taskId: 'task-review-cli',
+    })
+  })
+
   it('case show returns one redacted Case File', async () => {
     seedTask('task-case-show', 'show token sk-test-abcdefghijklmnopqrstuvwxyz')
     recordBrainJournalEvent({
@@ -96,6 +118,22 @@ describe('aiworker case commands (FEAT-057)', () => {
     const parsed = JSON.parse(output) as { case: { workOrder: { prompt: string }, reviewDecision: { status: string } } }
     expect(parsed.case.reviewDecision.status).toBe('needs_review')
     expect(parsed.case.workOrder.prompt).toContain('[REDACTED:')
+  })
+
+  it('review show returns one redacted review', async () => {
+    seedTask('task-review-show', 'show token sk-test-abcdefghijklmnopqrstuvwxyz')
+    recordBrainJournalEvent({
+      kind: 'gate.quality',
+      taskId: 'task-review-show',
+      payload: { action: 'warn', evaluator: 'heuristic', mode: 'observe_only', reason: 'needs review' },
+    })
+
+    const { result, output } = await captureConsole(() => runReviewShow('task-review-show'))
+
+    expect(result).toBe(0)
+    const parsed = JSON.parse(output) as { review: { workOrder: { prompt: string }, reviewDecision: { status: string } } }
+    expect(parsed.review.reviewDecision.status).toBe('needs_review')
+    expect(parsed.review.workOrder.prompt).toContain('[REDACTED:')
   })
 
   it('lessons propose creates pending proposals from case lesson candidates', async () => {
@@ -131,6 +169,38 @@ describe('aiworker case commands (FEAT-057)', () => {
     expect(parsed.case.lessons.proposalIds).toHaveLength(1)
   })
 
+  it('review promote creates pending proposals from review lesson candidates', async () => {
+    seedTask('task-review-promotion', 'promote review lesson')
+    recordBrainJournalEvent({
+      kind: 'brain_engine.review',
+      taskId: 'task-review-promotion',
+      payload: {
+        lessonCandidates: [
+          {
+            confidence: 0.7,
+            evidenceRefs: ['agent_tasks:task-review-promotion'],
+            kind: 'repo-fact',
+            risk: 'medium',
+            summary: 'Review promotion stays pending until operator approval.',
+          },
+        ],
+      },
+    })
+
+    const { result, output } = await captureConsole(() => runReviewPromoteLessons('task-review-promotion', {
+      scopeId: 'repo:aiworker',
+      soulId: 'developer',
+    }))
+
+    expect(result).toBe(0)
+    const parsed = JSON.parse(output) as { promotion: { proposals: Array<{ status: string, summary: string }> }, review: { lessons: { proposalIds: string[] } } }
+    expect(parsed.promotion.proposals[0]).toMatchObject({
+      status: 'pending',
+      summary: 'Review promotion stays pending until operator approval.',
+    })
+    expect(parsed.review.lessons.proposalIds).toHaveLength(1)
+  })
+
   it('case rerun delegates to bounded orchestrator rerun', async () => {
     let received: { taskId: string, prompt?: string } | undefined
     rerunImpl = async (taskId, options) => {
@@ -146,6 +216,23 @@ describe('aiworker case commands (FEAT-057)', () => {
     const parsed = JSON.parse(output) as { task: { id: string }, case: { taskId: string } }
     expect(parsed.task.id).toBe('task-child')
     expect(parsed.case.taskId).toBe('task-child')
+  })
+
+  it('review rerun delegates to bounded orchestrator rerun with product-facing output', async () => {
+    let received: { taskId: string, prompt?: string } | undefined
+    rerunImpl = async (taskId, options) => {
+      received = { taskId, ...(options?.prompt === undefined ? {} : { prompt: options.prompt }) }
+      seedTask('task-review-child', 'child review rerun')
+      return { id: 'task-review-child' }
+    }
+
+    const { result, output } = await captureConsole(() => runReviewRerun('task-review-parent', { prompt: 'repair' }))
+
+    expect(result).toBe(0)
+    expect(received).toEqual({ taskId: 'task-review-parent', prompt: 'repair' })
+    const parsed = JSON.parse(output) as { run: { id: string }, review: { taskId: string } }
+    expect(parsed.run.id).toBe('task-review-child')
+    expect(parsed.review.taskId).toBe('task-review-child')
   })
 })
 
