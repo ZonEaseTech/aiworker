@@ -174,3 +174,7 @@ Open Design 当前参照形态：
 - 2026-05-09 18:23：S4 通过 REFACTOR-032 / PLAN-198 完成本地 worker daemon
   lifecycle；`aiworker daemon start/status/stop/logs/check/inspect` 复用现有
   `up` / `serve`，并以 active scope home 中的 pid/log/metadata 跟踪 detached worker。
+- 2026-05-09 18:27：启动 S5（REFACTOR-033 / PLAN-199）；聚焦 Worker Admin 第一屏
+  workbench，不改 fleet/gateway，不新增后端 API。
+- 2026-05-09 18:42：S5 完成；Worker Admin `/` 已变为 local worker workbench，
+  组合 pack/template picker、composer、run timeline、artifact metadata 和 case review。

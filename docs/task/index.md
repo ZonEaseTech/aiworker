@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-09 (REFACTOR-032 completed)
+> Updated: 2026-05-09 (REFACTOR-033 completed)
 
 ## Usage
 
@@ -304,3 +304,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REFACTOR-030 Add OD-style worker pack registry**](REFACTOR-030.md) `P1`
 - [x] [**REFACTOR-031 Materialize worker packs during project init**](REFACTOR-031.md) `P1`
 - [x] [**REFACTOR-032 Add local worker daemon lifecycle commands**](REFACTOR-032.md) `P1`
+- [x] [**REFACTOR-033 Worker web workbench first screen**](REFACTOR-033.md) `P1`

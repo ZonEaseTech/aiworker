@@ -9,6 +9,7 @@ import type {
   CronAddInput,
   CronJobRow,
   CronPatchInput,
+  ListArtifactsOptions,
   PutConfigResult,
   WorkerConfigEnvelope,
 } from '@/worker/api'
@@ -36,8 +37,10 @@ import {
   listConversations,
   listCron,
   listMessages,
+  listRuns,
   listSecrets,
   listTasks,
+  listWorkerArtifacts,
   patchCron,
   proposeCaseLessons,
   putConfig,
@@ -63,6 +66,7 @@ const ENGINES_KEY = ['worker', 'engines'] as const
 const SECRETS_KEY = ['worker', 'secrets'] as const
 const APPROVALS_KEY = ['worker', 'approvals'] as const
 const CRON_KEY = ['worker', 'cron'] as const
+const RUNS_KEY = ['worker', 'runs'] as const
 const TASKS_KEY = ['worker', 'tasks'] as const
 const CASES_KEY = ['worker', 'cases'] as const
 const CONVERSATIONS_KEY = ['worker', 'conversations'] as const
@@ -81,6 +85,9 @@ function admissionKey(id: string) {
 }
 function artifactsKey(opts: BrainArtifactsListOptions) {
   return ['worker', 'brain', 'artifacts', opts] as const
+}
+function workerArtifactsKey(opts: ListArtifactsOptions) {
+  return ['worker', 'artifacts', opts] as const
 }
 
 // ---------------------------------------------------------------------------
@@ -301,6 +308,24 @@ export function useTasks() {
   })
 }
 
+export function useRuns() {
+  return useQuery({
+    queryKey: RUNS_KEY,
+    queryFn: listRuns,
+    staleTime: 5_000,
+    refetchInterval: 15_000,
+  })
+}
+
+export function useWorkerArtifacts(opts: ListArtifactsOptions = {}) {
+  return useQuery({
+    queryKey: workerArtifactsKey(opts),
+    queryFn: () => listWorkerArtifacts(opts),
+    staleTime: 5_000,
+    refetchInterval: 15_000,
+  })
+}
+
 export function useCases(limit = 50) {
   return useQuery({
     queryKey: [...CASES_KEY, limit] as const,
@@ -348,6 +373,7 @@ export function useSubmitTask() {
   return useMutation({
     mutationFn: (prompt: string) => submitTask(prompt),
     onSuccess: () => {
+      qc.invalidateQueries({ queryKey: RUNS_KEY })
       qc.invalidateQueries({ queryKey: TASKS_KEY })
       qc.invalidateQueries({ queryKey: CONVERSATIONS_KEY })
     },

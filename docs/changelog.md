@@ -1,5 +1,17 @@
 # AIWorker Changelog
 
+## 2026-05-09 18:42 [completed] REFACTOR-033 / PLAN-199 — Worker web workbench first screen
+
+Completed S5 of the OD-style worker reboot:
+
+- Replaced the Worker Admin `/` overview with a local worker workbench.
+- Added built-in worker pack and work-order template pickers backed by shared worker pack
+  metadata.
+- Added a first-screen composer that submits through the existing run contract.
+- Added run timeline, artifact metadata, and case review panels.
+- Added runs / worker artifact query hooks and invalidated runs after work-order submit.
+- Kept old Brain / Config / Cron / Approvals / Chat pages as secondary/admin routes.
+
 ## 2026-05-09 18:23 [completed] REFACTOR-032 / PLAN-198 — Local worker daemon lifecycle commands
 
 Completed S4 of the OD-style worker reboot:

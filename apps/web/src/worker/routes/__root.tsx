@@ -33,15 +33,15 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { to: '/', label: '概览', exact: true, icon: ClipboardList },
+  { to: '/', label: 'Workbench', exact: true, icon: ClipboardList },
+  { to: '/chat', label: 'Chat', icon: MessageSquare },
   { to: '/cases', label: 'Cases', icon: FileSearch },
-  { to: '/brain', label: 'Brain', icon: BrainIcon },
   { to: '/config', label: '配置', icon: SlidersHorizontal },
-  { to: '/secrets', label: 'Secrets', icon: KeyRound },
   { to: '/test', label: '探测', icon: Wrench },
+  { to: '/secrets', label: 'Secrets', icon: KeyRound },
+  { to: '/brain', label: 'Brain', icon: BrainIcon },
   { to: '/cron', label: 'Cron', icon: Timer },
   { to: '/approvals', label: 'Approvals', icon: ShieldCheck },
-  { to: '/chat', label: 'Chat', icon: MessageSquare },
 ]
 
 function TopBar() {
