@@ -134,6 +134,39 @@ Verification:
 - source-local smoke
 - CRG update/review
 
+## Completion Audit Checklist
+
+The task is not complete until every item below has current evidence in the
+final implementation notes:
+
+- **Product reset**: Worker Web, CLI help, OpenAPI docs, and README present the
+  product as a local workspace loop: workspace -> brief -> run ->
+  files/artifacts -> review -> lessons.
+- **No compatibility surface**: old worker nouns and route families are absent
+  from shipped source paths, generated OpenAPI, CLI command registration, and
+  visible Web navigation: sessions, conversations, schedule, approvals,
+  channel, evolution, Brain admin, Fleet, and Gateway.
+- **Persistence reset**: the default local worker database is created from the
+  greenfield tables only. No application path depends on old local worker
+  tables or migration-era compatibility reads.
+- **Runtime reset**: the local worker engine has no imports from the deleted
+  channel, cron, approval, evolution, conversation-router, Brain-management, or
+  gateway-client subsystems.
+- **API reset**: only the approved `/api/local/*` groups are mounted for the
+  default local worker app, with route tests and an OpenAPI absence test for
+  removed paths.
+- **Web reset**: Worker Web is a workspace application on first paint, with
+  file/project rail, run/preview surface, and review/lesson rail. Old admin
+  dashboard hooks and clients are deleted rather than hidden.
+- **CLI reset**: `aiworker --help` and command tests expose only the new local
+  daemon/workspace automation commands for this deliverable.
+- **Smoke proof**: a fresh source-local run demonstrates init -> daemon ->
+  brief/run -> artifact -> review -> lesson without using pre-existing local
+  worker state.
+- **Review proof**: full gates, focused package gates, `git diff --check`, CRG
+  review, and a manual browser review are recorded before marking the task
+  complete.
+
 ## Risks
 
 - **Very large deletion surface**: existing tests encode old product decisions.

@@ -68,6 +68,13 @@ admin, and compatibility routes are out of the default local worker product.
 - Verification includes focused tests, full source gates, source-local smoke,
   and CRG review before completion.
 
+## Completion Audit
+
+Before this task can be marked complete, PLAN-203's completion audit must be
+filled with current evidence for product reset, removed compatibility surface,
+persistence reset, runtime reset, API reset, Web reset, CLI reset, smoke proof,
+and review proof.
+
 ## Non-goals
 
 - No desktop/Electron scope in this task.
