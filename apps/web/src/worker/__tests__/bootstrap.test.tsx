@@ -111,18 +111,18 @@ describe('worker bundle bootstrap', () => {
     expect(window.sessionStorage.getItem('aiworker.worker.bearer')).toBe('wtk_manual_token')
   })
 
-  it('mounts the worker RouterProvider with the overview shell', async () => {
+  it('mounts the worker RouterProvider with the workbench shell', async () => {
     setBearerToken('wtk_test_token')
     mockWorkerApiFetch()
 
     await renderWorkerRoute()
 
-    // 顶栏标注 worker 视角；"概览" 为 index 路由的 h1 文案，
+    // 顶栏标注 worker 视角；"Worker Workbench" 为 index 路由的 h1 文案，
     // 命中即说明 root layout + outlet 子节点都成功 mount。
     const header = await screen.findByTestId('worker-shell-header')
     expect(header.textContent).toContain('AIWorker')
     expect(header.textContent).toContain('Worker')
-    expect(await screen.findByRole('heading', { name: '概览' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: 'Worker Workbench' })).toBeTruthy()
   })
 
   it('matches the dev chooser mount path', async () => {
