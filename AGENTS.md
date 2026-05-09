@@ -22,6 +22,7 @@ adapter 调用和观察它们，不把自己做成 executor 平台。完整架�
 - 默认用中文与用户交流；文档、代码注释、commit message、PR title/description 也默认中文。
 - 对外可见内容避免提及具体协作工具、模型名称或内部执行过程，除非用户明确要求。
 - 开发任务使用 `/pma`：先调查，再 proposal，获批后实现，并同步 `docs/task/*.md`。后端用 `/pma-bun`，前端用 `/pma-web`，代码评审用 `/pma-cr`，复杂编排按需用 `/bkd`。
+- 凡是修改代码文件，完成实现后、最终回复前必须介入 code-review-graph 做变更审查；仅修改文档、注释、纯格式或用户明确要求跳过时，可以跳过，但最终回复要说明原因。
 - 不创建非必要说明文件。临时产物放 `tmp/`。
 - 1.0.0 正式发布以前不考虑 legacy 兼容；不为未发布的旧 CLI/API/config 形态保留 alias、shim 或迁移层，破坏性收敛时优先架构语义、代码归属和当前文档一致性。
 
@@ -137,5 +138,6 @@ adapter 调用和观察它们，不把自己做成 executor 平台。完整架�
 
 - 简单文件查找优先 `rg` / `rg --files`。
 - 跨调用链影响分析可用 code-review-graph；大型符号定位可用 Serena；第三方库文档按需用 context7。
+- 修改代码文件后的 code-review-graph gate：先用 `git diff --name-only` 确认变更文件，再增量更新 graph，然后调用 `get_minimal_context` 与 `detect_changes`；如结果提示跨调用链、公共 API、DB schema、runtime、Brain/Executor/Fleet 边界或安全影响，继续调用 `get_affected_flows` 或 `get_impact_radius`。最终回复必须包含 CRG 结论，或说明本次为什么跳过。
 - 使用 code-review-graph 时优先从 `get_minimal_context` 起步；审查变更用 `detect_changes`、`get_affected_flows`、`get_impact_radius`，定位关系用 `query_graph`、`list_communities`、`list_flows`。CLI 统一走 `bun run crg:*`，避免本机 PATH 版本漂移。当前规避 `get_docs_section`、hub/bridge/gaps/surprising 相关端点，它们在本仓库环境下会返回工具错误。
 - 单文件文档/配置改动直接读写即可，不需要强行使用 MCP。
