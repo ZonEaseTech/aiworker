@@ -171,6 +171,31 @@ After approval, implement in these checkpoints. Each checkpoint should be a
 separate conventional commit unless a later gate forces a small corrective
 commit.
 
+## Implementation Status Board
+
+This board is the single execution ledger for the approved rebuild. Before the
+approval gate is cleared, every batch remains `blocked_pending_approval`.
+
+| Batch | Status | Primary entry files | Blocking condition | Evidence slot |
+| --- | --- | --- | --- | --- |
+| B1 storage/shared contracts | blocked_pending_approval | `packages/storage-sqlite/src/worker/*`, `packages/shared/src/*` | PLAN-203 approval not received | pending |
+| B2 core local run engine | blocked_pending_approval | `packages/core/src/worker/*` | B1 contracts not merged and PLAN-203 approval not received | pending |
+| B3 local daemon/API | blocked_pending_approval | `apps/api/src/modes/worker.ts`, `apps/api/src/worker/*` | B1/B2 contracts not available and PLAN-203 approval not received | pending |
+| B4 CLI reset | blocked_pending_approval | `apps/cli/src/aiworker.ts`, `apps/cli/src/commands/*` | local API contract not stable and PLAN-203 approval not received | pending |
+| B5 Worker Web rebuild | blocked_pending_approval | `apps/web/src/worker/*` | local API contract not stable and PLAN-203 approval not received | pending |
+| B6 docs/smoke/review | blocked_pending_approval | `README.md`, `GOALS.md`, `docs/architecture.md`, `tmp/*` | B1-B5 implementation evidence missing and PLAN-203 approval not received | pending |
+
+Status values:
+
+- `blocked_pending_approval`: PMA proposal is ready but implementation is not
+  authorized.
+- `in_progress`: implementation is actively being edited for that batch.
+- `verification`: code is written and batch-specific gates are running.
+- `done`: batch commit exists and its evidence slot contains current command
+  output or artifact references.
+- `blocked`: implementation found a concrete technical blocker that requires
+  re-planning.
+
 ## Removal and Replacement Inventory
 
 This inventory is the implementation guardrail: items in the "remove/isolate"

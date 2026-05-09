@@ -105,3 +105,6 @@ and review proof.
 - 2026-05-09 23:09: Ran the audit matrix as a pre-implementation baseline and
   recorded the failure snapshot in PLAN-203: no `/api/local/*` surface yet, and
   old route/API, persistence, runtime, CLI, and Web legacy matches remain.
+- 2026-05-09 23:10: Added the PLAN-203 implementation status board. All B1-B6
+  batches are explicitly `blocked_pending_approval` with entry files, blocking
+  conditions, and evidence slots.
