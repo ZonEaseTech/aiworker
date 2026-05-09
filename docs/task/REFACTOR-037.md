@@ -120,3 +120,6 @@ and review proof.
   replaced the worker schema with greenfield workspace/brief/run/file/artifact/
   review/lesson/settings tables, regenerated worker migrations from scratch, and
   verified focused storage/shared gates.
+- 2026-05-09 23:43: Completed B2 core runtime replacement: deleted the old
+  worker runtime subsystems and introduced a minimal local run engine that
+  persists briefs, run events, generated files, artifacts, reviews, and lessons.

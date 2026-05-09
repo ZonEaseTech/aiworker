@@ -78,12 +78,31 @@ export interface CreateBriefInput {
   at?: string
 }
 
+export interface UpdateBriefInput {
+  id: string
+  status?: BriefRow['status']
+  title?: string
+  body?: string
+  at?: string
+}
+
 export interface CreateRunInput {
   id: string
   workspaceId: string
   briefId?: string | null
   executor: string
   prompt: string
+  status?: RunRow['status']
+  summary?: string | null
+  error?: string | null
+  metadataJson?: Record<string, unknown>
+  startedAt?: string | null
+  finishedAt?: string | null
+  at?: string
+}
+
+export interface UpdateRunInput {
+  id: string
   status?: RunRow['status']
   summary?: string | null
   error?: string | null
@@ -190,6 +209,23 @@ export function createBrief(input: CreateBriefInput): BriefRow {
   return getWorkerDb().select().from(schema.briefs).where(eq(schema.briefs.id, input.id)).get()!
 }
 
+export function getBrief(id: string): BriefRow | null {
+  return getWorkerDb().select().from(schema.briefs).where(eq(schema.briefs.id, id)).get() ?? null
+}
+
+export function updateBrief(input: UpdateBriefInput): BriefRow {
+  const existing = getBrief(input.id)
+  if (!existing)
+    throw new Error(`Brief not found: ${input.id}`)
+  getWorkerDb().update(schema.briefs).set({
+    body: input.body ?? existing.body,
+    status: input.status ?? existing.status,
+    title: input.title ?? existing.title,
+    updatedAt: input.at ?? new Date().toISOString(),
+  }).where(eq(schema.briefs.id, input.id)).run()
+  return getBrief(input.id)!
+}
+
 export function listBriefs(workspaceId: string, limit = 200): BriefRow[] {
   return getWorkerDb()
     .select()
@@ -220,6 +256,27 @@ export function createRun(input: CreateRunInput): RunRow {
   return getWorkerDb().select().from(schema.runs).where(eq(schema.runs.id, input.id)).get()!
 }
 
+export function getRun(id: string): RunRow | null {
+  return getWorkerDb().select().from(schema.runs).where(eq(schema.runs.id, id)).get() ?? null
+}
+
+export function updateRun(input: UpdateRunInput): RunRow {
+  const existing = getRun(input.id)
+  if (!existing)
+    throw new Error(`Run not found: ${input.id}`)
+  const has = (key: keyof UpdateRunInput) => Object.hasOwn(input, key)
+  getWorkerDb().update(schema.runs).set({
+    error: has('error') ? input.error ?? null : existing.error,
+    finishedAt: has('finishedAt') ? input.finishedAt ?? null : existing.finishedAt,
+    metadataJson: input.metadataJson ?? existing.metadataJson,
+    startedAt: has('startedAt') ? input.startedAt ?? null : existing.startedAt,
+    status: input.status ?? existing.status,
+    summary: has('summary') ? input.summary ?? null : existing.summary,
+    updatedAt: input.at ?? new Date().toISOString(),
+  }).where(eq(schema.runs.id, input.id)).run()
+  return getRun(input.id)!
+}
+
 export function listRuns(workspaceId: string, limit = 200): RunRow[] {
   return getWorkerDb()
     .select()
@@ -243,6 +300,17 @@ export function appendRunEvent(input: AppendRunEventInput): RunEventRow {
     .from(schema.runEvents)
     .where(and(eq(schema.runEvents.runId, input.runId), eq(schema.runEvents.seq, input.seq)))
     .get()!
+}
+
+export function nextRunEventSeq(runId: string): number {
+  const latest = getWorkerDb()
+    .select({ seq: schema.runEvents.seq })
+    .from(schema.runEvents)
+    .where(eq(schema.runEvents.runId, runId))
+    .orderBy(desc(schema.runEvents.seq))
+    .limit(1)
+    .get()
+  return (latest?.seq ?? 0) + 1
 }
 
 export function listRunEvents(runId: string): RunEventRow[] {
@@ -310,6 +378,10 @@ export function registerArtifact(input: RegisterArtifactInput): ArtifactRow {
   return getWorkerDb().select().from(schema.artifacts).where(eq(schema.artifacts.id, input.id)).get()!
 }
 
+export function getArtifact(id: string): ArtifactRow | null {
+  return getWorkerDb().select().from(schema.artifacts).where(eq(schema.artifacts.id, id)).get() ?? null
+}
+
 export function listArtifacts(workspaceId: string, limit = 200): ArtifactRow[] {
   return getWorkerDb()
     .select()
@@ -332,6 +404,10 @@ export function createReview(input: CreateReviewInput): ReviewRow {
     createdAt: input.at ?? new Date().toISOString(),
   }).run()
   return getWorkerDb().select().from(schema.reviews).where(eq(schema.reviews.id, input.id)).get()!
+}
+
+export function getReview(id: string): ReviewRow | null {
+  return getWorkerDb().select().from(schema.reviews).where(eq(schema.reviews.id, id)).get() ?? null
 }
 
 export function listReviews(workspaceId: string, limit = 200): ReviewRow[] {
@@ -357,6 +433,18 @@ export function createLesson(input: CreateLessonInput): LessonRow {
     updatedAt: now,
   }).run()
   return getWorkerDb().select().from(schema.lessons).where(eq(schema.lessons.id, input.id)).get()!
+}
+
+export function getLesson(id: string): LessonRow | null {
+  return getWorkerDb().select().from(schema.lessons).where(eq(schema.lessons.id, id)).get() ?? null
+}
+
+export function updateLesson(id: string, status: LessonRow['status'], at = new Date().toISOString()): LessonRow {
+  const existing = getLesson(id)
+  if (!existing)
+    throw new Error(`Lesson not found: ${id}`)
+  getWorkerDb().update(schema.lessons).set({ status, updatedAt: at }).where(eq(schema.lessons.id, id)).run()
+  return getLesson(id)!
 }
 
 export function listLessons(workspaceId: string, limit = 200): LessonRow[] {

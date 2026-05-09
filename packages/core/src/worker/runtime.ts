@@ -1,151 +1,306 @@
-import type { BrainProvider, ExecutorProvider, WorkerConfig } from '@zonease/aiworker-shared'
-import type { ProcessManager } from './orchestrator/process-manager'
+import type {
+  ArtifactRow,
+  BriefRow,
+  FileRow,
+  LessonRow,
+  ReviewRow,
+  RunEventRow,
+  RunRow,
+  WorkspaceRow,
+} from '@zonease/aiworker-storage-sqlite/worker'
+import type { LocalExecutor, LocalExecutorResult } from './executor'
 
-import { resolveAiworkerScope } from '@zonease/aiworker-fs-layout'
-import { workerEnv } from '../config/worker'
-import { buildBrain } from './brain/factory'
-import { resetLarkTokenCache } from './channels/adapters/lark'
-import { ChannelRegistry } from './channels/registry'
-import { CronService } from './cron/service'
-import { WorkerEventBus } from './events/bus'
-import { attachEvolutionObserver } from './evolution/observer'
-import { startProposerLoop } from './evolution/proposer'
-import { resolveVariant } from './executor/default-profiles'
-import { buildExecutor } from './executor/factory'
-import { WorkspaceManager } from './executor/workspace'
-import { ApprovalStore } from './orchestrator/approvals'
-import { resolveControlExecutor } from './orchestrator/control-executor'
-import { Orchestrator } from './orchestrator/service'
+import { randomUUID } from 'node:crypto'
+import {
+  appendRunEvent,
+  createBrief,
+  createLesson,
+  createReview,
+  createRun,
+  getBrief,
+  getWorkspace,
+  listArtifacts,
+  listBriefs,
+  listFiles,
+  listLessons,
+  listReviews,
+  listRunEvents,
+  listRuns,
+  nextRunEventSeq,
+  registerArtifact,
+  updateBrief,
+  updateRun,
+  upsertFile,
+  upsertWorkspace,
+} from '@zonease/aiworker-storage-sqlite/worker'
+import { createNoopExecutor } from './executor'
+import { LocalWorkerEventBus } from './events'
+import { LocalWorkspaceFiles } from './files'
 
-export interface WorkerRuntime {
+export interface LocalWorkerRuntimeOptions {
   workerId: string
-  config: WorkerConfig
-  brain: BrainProvider
-  executor: ExecutorProvider
-  controlExecutor?: ExecutorProvider
-  controlExecutorConfig?: WorkerConfig['executor']
-  controlExecutorReusesTaskExecutor?: boolean
-  channels: ChannelRegistry
-  bus: WorkerEventBus
-  orchestrator: Orchestrator
-  /**
-   * Cron 调度服务。tick loop 在 build 时启动，dispose 时停止；持有自己的
-   * `setInterval` handle，绝不进 orchestrator hot path（fire 时只合成 envelope
-   * 喂 `orchestrator.ingest`）。
-   */
-  cron: CronService
-  workspaces: WorkspaceManager
-  /**
-   * 进程级集中管控（FEAT-015 / PLAN-007 §架构承诺 5）。**跨 hot-reload
-   * 持久化**：reload 时不重建，仅通过 `processes.setLimits()` 调容量。
-   * `dispose()` 不会清空它（由 bootstrap 退出阶段统一 cancelAll + dispose）。
-   */
-  processes: ProcessManager
-  /** PLAN-014 F2：per-tool 审批挂起 store。reload 时一并重建 + 旧 store dispose。 */
-  approvals: ApprovalStore
-  dispose: () => void
+  workspace: {
+    id: string
+    name: string
+    rootPath: string
+  }
+  executor?: LocalExecutor
+  now?: () => string
 }
 
-export interface BuildRuntimeDeps {
-  /**
-   * 跨 reload 持有的 ProcessManager 实例。`bootstrapWorkerApp` 在 init 时
-   * new 一次，之后每次 `reloadRuntime` 都把同一个实例传进来，确保活跃进程
-   * + 队列不被 reload 清空。
-   */
-  processes: ProcessManager
+export interface CreateLocalBriefInput {
+  title: string
+  body: string
 }
 
-export function buildWorkerRuntime(workerId: string, config: WorkerConfig, deps: BuildRuntimeDeps): WorkerRuntime {
-  const brain = buildBrain(workerId, config)
-  const executor = buildExecutor(config.executor)
-  const controlExecutor = resolveControlExecutor({ config, taskExecutor: executor })
-  const channels = new ChannelRegistry(config.channels)
-  const bus = new WorkerEventBus()
-  const workspaces = buildWorkspaceManager(config)
-  const approvals = new ApprovalStore()
-  const orchestrator = new Orchestrator({
-    config,
-    brain,
-    executor,
-    controlExecutor: controlExecutor.executor,
-    controlExecutorConfig: controlExecutor.config,
-    controlExecutorReusesTaskExecutor: controlExecutor.reusesTaskExecutor,
-    bus,
-    workerId,
-    workspaces,
-    processes: deps.processes,
-    approvals,
-  })
+export interface LocalRunStartInput {
+  briefId?: string
+  prompt?: string
+  executor?: string
+  metadata?: Record<string, unknown>
+}
 
-  const unsubObserver = attachEvolutionObserver(bus)
-  const stopProposer = config.evolution.enabled ? startProposerLoop() : () => undefined
+export interface LocalRunStartResult {
+  run: RunRow
+  events: RunEventRow[]
+  files: FileRow[]
+  artifacts: ArtifactRow[]
+  review: ReviewRow | null
+  lessons: LessonRow[]
+}
 
-  const cron = new CronService({
-    workerId,
-    // 懒取 orchestrator 引用——hot-reload 时 cron 已在 dispose 阶段被 stop，
-    // 这里取的就是 build 时 new 出来的同一个 orchestrator，保持稳定。
-    getOrchestrator: () => orchestrator,
-  })
-  cron.start()
+export interface LocalWorkspaceSnapshot {
+  workspace: WorkspaceRow
+  briefs: BriefRow[]
+  runs: RunRow[]
+  files: FileRow[]
+  artifacts: ArtifactRow[]
+  reviews: ReviewRow[]
+  lessons: LessonRow[]
+}
 
-  return {
-    workerId,
-    config,
-    brain,
-    executor,
-    controlExecutor: controlExecutor.executor,
-    controlExecutorConfig: controlExecutor.config,
-    controlExecutorReusesTaskExecutor: controlExecutor.reusesTaskExecutor,
-    channels,
-    bus,
-    orchestrator,
-    cron,
-    workspaces,
-    processes: deps.processes,
-    approvals,
-    dispose() {
-      unsubObserver()
-      stopProposer()
-      // PLAN-014 F2 hot-reload 不变量：旧 runtime 的挂起审批必须立刻 reject，
-      // 否则 operator grant 永远不会送到新 runtime 上，promise 泄漏。
-      approvals.dispose()
-      cron.stop()
-      // lark adapter 的 tenant_access_token 缓存是模块级 Map（adapter 是单例
-      // 对象不是工厂）。reload 时若 appId/appSecret 换掉，旧 token 可能在
-      // expiresAt 之前继续被复用。dispose 阶段强清一次，下一次 send 重新拉。
-      resetLarkTokenCache()
-      // 注意：不 dispose processes —— ProcessManager 跨 reload 持久化，
-      // 由 bootstrap 退出阶段统一 cancelAll + dispose。
-    },
+export class LocalWorkerRuntime {
+  readonly #workerId: string
+  readonly #workspaceInput: LocalWorkerRuntimeOptions['workspace']
+  readonly #executor: LocalExecutor
+  readonly #now: () => string
+  readonly files: LocalWorkspaceFiles
+  readonly bus = new LocalWorkerEventBus()
+
+  constructor(options: LocalWorkerRuntimeOptions) {
+    this.#workerId = options.workerId
+    this.#workspaceInput = options.workspace
+    this.#executor = options.executor ?? createNoopExecutor()
+    this.#now = options.now ?? (() => new Date().toISOString())
+    this.files = new LocalWorkspaceFiles(options.workspace.rootPath)
+  }
+
+  get workerId(): string {
+    return this.#workerId
+  }
+
+  async init(): Promise<WorkspaceRow> {
+    await this.files.ensureRoot()
+    return upsertWorkspace({
+      id: this.#workspaceInput.id,
+      name: this.#workspaceInput.name,
+      rootPath: this.files.root,
+      at: this.#now(),
+    })
+  }
+
+  createBrief(input: CreateLocalBriefInput): BriefRow {
+    const workspace = this.requireWorkspace()
+    return createBrief({
+      id: randomUUID(),
+      workspaceId: workspace.id,
+      title: input.title,
+      body: input.body,
+      status: 'queued',
+      at: this.#now(),
+    })
+  }
+
+  async startRun(input: LocalRunStartInput = {}): Promise<LocalRunStartResult> {
+    const workspace = this.requireWorkspace()
+    const brief = input.briefId ? this.requireBrief(input.briefId) : null
+    const prompt = input.prompt ?? brief?.body
+    if (!prompt)
+      throw new Error('Run requires a prompt or a brief id.')
+
+    const run = createRun({
+      id: randomUUID(),
+      workspaceId: workspace.id,
+      briefId: brief?.id ?? null,
+      executor: input.executor ?? 'local',
+      prompt,
+      status: 'running',
+      metadataJson: input.metadata ?? {},
+      startedAt: this.#now(),
+      at: this.#now(),
+    })
+    if (brief)
+      updateBrief({ id: brief.id, status: 'running', at: this.#now() })
+    this.appendEvent(run.id, 'status', { status: 'running' })
+
+    try {
+      const result = await this.#executor.run({
+        workspaceId: workspace.id,
+        workspaceRoot: this.files.root,
+        runId: run.id,
+        prompt,
+        metadata: input.metadata,
+      })
+      const output = await this.captureResult(workspace.id, run.id, result)
+      const finished = updateRun({
+        id: run.id,
+        status: 'succeeded',
+        summary: result.summary,
+        metadataJson: result.metadata ?? run.metadataJson,
+        finishedAt: this.#now(),
+        at: this.#now(),
+      })
+      if (brief)
+        updateBrief({ id: brief.id, status: 'completed', at: this.#now() })
+      this.appendEvent(run.id, 'status', { status: 'succeeded' })
+      this.bus.emit({ kind: 'run', workspaceId: workspace.id, runId: run.id, payload: { status: 'succeeded' }, at: this.#now() })
+      return {
+        run: finished,
+        events: listRunEvents(run.id),
+        ...output,
+      }
+    }
+    catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      const failed = updateRun({
+        id: run.id,
+        status: 'failed',
+        error: message,
+        finishedAt: this.#now(),
+        at: this.#now(),
+      })
+      if (brief)
+        updateBrief({ id: brief.id, status: 'failed', at: this.#now() })
+      this.appendEvent(run.id, 'error', { message })
+      this.bus.emit({ kind: 'run', workspaceId: workspace.id, runId: run.id, payload: { status: 'failed' }, at: this.#now() })
+      return {
+        run: failed,
+        events: listRunEvents(run.id),
+        files: [],
+        artifacts: [],
+        review: null,
+        lessons: [],
+      }
+    }
+  }
+
+  snapshot(): LocalWorkspaceSnapshot {
+    const workspace = this.requireWorkspace()
+    return {
+      workspace,
+      briefs: listBriefs(workspace.id),
+      runs: listRuns(workspace.id),
+      files: listFiles(workspace.id),
+      artifacts: listArtifacts(workspace.id),
+      reviews: listReviews(workspace.id),
+      lessons: listLessons(workspace.id),
+    }
+  }
+
+  dispose(): void {
+    return undefined
+  }
+
+  private async captureResult(workspaceId: string, runId: string, result: LocalExecutorResult): Promise<Omit<LocalRunStartResult, 'run' | 'events'>> {
+    const files: FileRow[] = []
+    const artifacts: ArtifactRow[] = []
+    for (const artifact of result.artifacts ?? []) {
+      const entry = await this.files.write({ path: artifact.path, content: artifact.content })
+      const file = upsertFile({
+        id: randomUUID(),
+        workspaceId,
+        path: entry.path,
+        kind: 'generated',
+        size: entry.size,
+        mtime: entry.mtime,
+        hash: entry.hash,
+        source: 'run',
+        at: this.#now(),
+      })
+      files.push(file)
+      const row = registerArtifact({
+        id: randomUUID(),
+        workspaceId,
+        runId,
+        path: artifact.path,
+        kind: artifact.kind ?? 'file',
+        title: artifact.title ?? artifact.path,
+        metadataJson: { fileId: file.id },
+        at: this.#now(),
+      })
+      artifacts.push(row)
+      this.appendEvent(runId, 'artifact', { artifactId: row.id, path: row.path })
+      this.bus.emit({ kind: 'artifact', workspaceId, runId, payload: { artifactId: row.id }, at: this.#now() })
+    }
+
+    const review = result.review
+      ? createReview({
+          id: randomUUID(),
+          workspaceId,
+          runId,
+          artifactId: artifacts[0]?.id ?? null,
+          verdict: result.review.verdict ?? 'needs_review',
+          findingsJson: result.review.findings ?? [],
+          risksJson: result.review.risks ?? [],
+          at: this.#now(),
+        })
+      : null
+    if (review) {
+      this.appendEvent(runId, 'review', { reviewId: review.id, verdict: review.verdict })
+      this.bus.emit({ kind: 'review', workspaceId, runId, payload: { reviewId: review.id }, at: this.#now() })
+    }
+
+    const lessons = (result.lessons ?? []).map(lesson => createLesson({
+      id: randomUUID(),
+      workspaceId,
+      sourceReviewId: review?.id ?? null,
+      statement: lesson.statement,
+      evidenceJson: lesson.evidence ?? [],
+      at: this.#now(),
+    }))
+    for (const lesson of lessons) {
+      this.appendEvent(runId, 'lesson', { lessonId: lesson.id })
+      this.bus.emit({ kind: 'lesson', workspaceId, runId, payload: { lessonId: lesson.id }, at: this.#now() })
+    }
+
+    return { files, artifacts, review, lessons }
+  }
+
+  private appendEvent(runId: string, type: RunEventRow['type'], payloadJson: Record<string, unknown>): RunEventRow {
+    return appendRunEvent({
+      runId,
+      seq: nextRunEventSeq(runId),
+      type,
+      payloadJson,
+      at: this.#now(),
+    })
+  }
+
+  private requireWorkspace(): WorkspaceRow {
+    const workspace = getWorkspace(this.#workspaceInput.id)
+    if (!workspace)
+      throw new Error('Local workspace is not initialized.')
+    return workspace
+  }
+
+  private requireBrief(id: string): BriefRow {
+    const brief = getBrief(id)
+    if (!brief)
+      throw new Error(`Brief not found: ${id}`)
+    return brief
   }
 }
 
-function buildWorkspaceManager(config: WorkerConfig): WorkspaceManager {
-  // Only the claude-code engine reads `workspaceRoot`; other engines ignore
-  // it. Resolve through the variant catalogue so a future variant body that
-  // bakes in a workspaceRoot is honoured even without explicit overrides.
-  const configuredRoot = (() => {
-    if (config.executor.engine !== 'claude-code')
-      return undefined
-    try {
-      const body = resolveVariant(config.executor).body as Record<string, unknown>
-      const root = body.workspaceRoot
-      return typeof root === 'string' && root.length > 0 ? root : undefined
-    }
-    catch {
-      return undefined
-    }
-  })()
-  const gitOrigin = workerEnv.WORKER_WORKSPACE_GIT_ORIGIN
-  const scope = resolveAiworkerScope()
-  const projectRoot = scope.scope === 'project' && scope.projectRoot && !gitOrigin && !configuredRoot
-    ? scope.projectRoot
-    : undefined
-
-  return new WorkspaceManager({
-    root: workerEnv.WORKER_DATA_ROOT,
-    ...(configuredRoot ? { subdir: configuredRoot } : {}),
-    ...(gitOrigin ? { gitOrigin } : {}),
-    ...(projectRoot ? { projectRoot } : {}),
-  })
+export function createLocalWorkerRuntime(options: LocalWorkerRuntimeOptions): LocalWorkerRuntime {
+  return new LocalWorkerRuntime(options)
 }

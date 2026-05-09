@@ -179,8 +179,8 @@ approval gate is cleared, every batch remains `blocked_pending_approval`.
 | Batch | Status | Primary entry files | Blocking condition | Evidence slot |
 | --- | --- | --- | --- | --- |
 | B1 storage/shared contracts | done | `packages/storage-sqlite/src/worker/*`, `packages/shared/src/*` | committed as the new local metadata contract | `bun run --filter '@zonease/aiworker-storage-sqlite' test` pass; `bun run --filter '@zonease/aiworker-storage-sqlite' typecheck` pass; `bun run --filter '@zonease/aiworker-shared' typecheck` pass; `git diff --check` pass; focused removed-persistence scan pass |
-| B2 core local run engine | blocked | `packages/core/src/worker/*` | waiting for B1 commit to land before rewrite starts | pending |
-| B3 local daemon/API | blocked_pending_approval | `apps/api/src/modes/worker.ts`, `apps/api/src/worker/*` | B1/B2 contracts not available and PLAN-203 approval not received | pending |
+| B2 core local run engine | done | `packages/core/src/worker/*` | committed as the new local run engine | `bun run --filter '@zonease/aiworker-core' test` pass; `bun run --filter '@zonease/aiworker-core' typecheck` pass; `bun run --filter '@zonease/aiworker-storage-sqlite' test` pass; removed runtime import scan under `packages/core/src/worker` pass |
+| B3 local daemon/API | blocked | `apps/api/src/modes/worker.ts`, `apps/api/src/worker/*` | waiting for B2 commit to land before local API rewrite starts | pending |
 | B4 CLI reset | blocked_pending_approval | `apps/cli/src/aiworker.ts`, `apps/cli/src/commands/*` | local API contract not stable and PLAN-203 approval not received | pending |
 | B5 Worker Web rebuild | blocked_pending_approval | `apps/web/src/worker/*` | local API contract not stable and PLAN-203 approval not received | pending |
 | B6 docs/smoke/review | blocked_pending_approval | `README.md`, `GOALS.md`, `docs/architecture.md`, `tmp/*` | B1-B5 implementation evidence missing and PLAN-203 approval not received | pending |
