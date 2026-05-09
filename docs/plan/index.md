@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-09 (PLAN-194 completed)
+> Updated: 2026-05-09 (PLAN-195 completed)
 
 ## Usage
 
@@ -223,3 +223,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [-] [**PLAN-192 OD-style local worker reboot**](PLAN-192.md) `2026-05-09`
 - [x] [**PLAN-193 Worker run contract compatibility layer**](PLAN-193.md) `2026-05-09`
 - [x] [**PLAN-194 Route CLI run through daemon run contract**](PLAN-194.md) `2026-05-09`
+- [x] [**PLAN-195 Worker artifact metadata index**](PLAN-195.md) `2026-05-09`

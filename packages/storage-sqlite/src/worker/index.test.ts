@@ -119,6 +119,20 @@ describe('worker schema indexes (REFACTOR-005)', () => {
     expect(byUpdated).toContain('brain_artifacts_updated_at_idx')
   })
 
+  it('worker_artifacts indexes support run/conversation/status workbench queries (REFACTOR-029)', () => {
+    const byRun = explain(`SELECT * FROM worker_artifacts WHERE run_id = 'run-1' ORDER BY updated_at DESC LIMIT 50`)
+    expect(byRun).toContain('worker_artifacts_run_updated_at_idx')
+
+    const byConversation = explain(`SELECT * FROM worker_artifacts WHERE conversation_id = 'conv-1' ORDER BY updated_at DESC LIMIT 50`)
+    expect(byConversation).toContain('worker_artifacts_conversation_updated_at_idx')
+
+    const byStatus = explain(`SELECT * FROM worker_artifacts WHERE status = 'available' ORDER BY updated_at DESC LIMIT 50`)
+    expect(byStatus).toContain('worker_artifacts_status_updated_at_idx')
+
+    const byUpdated = explain(`SELECT * FROM worker_artifacts ORDER BY updated_at DESC LIMIT 50`)
+    expect(byUpdated).toContain('worker_artifacts_updated_at_idx')
+  })
+
   it('session_entries indexes support active-session lookup and maintenance scans', () => {
     const byConversation = explain(`SELECT * FROM session_entries WHERE current_conversation_id = 'c1'`)
     expect(byConversation).toContain('session_entries_current_conversation_id_idx')

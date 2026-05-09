@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-09 (REFACTOR-028 completed)
+> Updated: 2026-05-09 (REFACTOR-029 completed)
 
 ## Usage
 
@@ -300,3 +300,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [-] [**REFACTOR-026 OD-style local worker reboot**](REFACTOR-026.md) `P1`
 - [x] [**REFACTOR-027 Worker run contract compatibility layer**](REFACTOR-027.md) `P1`
 - [x] [**REFACTOR-028 Route CLI run through daemon run contract**](REFACTOR-028.md) `P1`
+- [x] [**REFACTOR-029 Add worker artifact metadata index**](REFACTOR-029.md) `P1`

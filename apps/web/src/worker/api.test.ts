@@ -1,6 +1,6 @@
 import type { WorkerSSEEvent } from './api'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { continueConversation, getCaseFile, getInfo, listCases, listRuns, proposeCaseLessons, rerunCase, submitTask, subscribeEvents, testExecutor } from './api'
+import { continueConversation, getCaseFile, getInfo, getWorkerArtifact, listCases, listRuns, listWorkerArtifacts, proposeCaseLessons, rerunCase, submitTask, subscribeEvents, testExecutor } from './api'
 import { __resetBearerForTests, setBearerToken } from './lib/auth'
 
 function sseResponse(chunks: string[]): Response {
@@ -94,6 +94,47 @@ describe('worker api subscribeEvents', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/worker/runs', {
       headers: expect.any(Headers),
     })
+  })
+
+  it('uses worker artifact metadata REST paths for list/show', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        artifacts: [
+          {
+            conversationId: 'conv-1',
+            createdAt: '2026-05-09T09:00:00.000Z',
+            hash: null,
+            id: 'artifact-1',
+            kind: 'markdown',
+            metadata: {},
+            mimeType: 'text/markdown',
+            relativePath: 'reports/summary.md',
+            runId: 'run-1',
+            sizeBytes: 42,
+            source: 'executor',
+            status: 'available',
+            title: 'Summary',
+            updatedAt: '2026-05-09T09:00:00.000Z',
+          },
+        ],
+      }), {
+        headers: { 'Content-Type': 'application/json' },
+        status: 200,
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        artifact: { id: 'artifact/with/slash', relativePath: 'reports/detail.md' },
+      }), {
+        headers: { 'Content-Type': 'application/json' },
+        status: 200,
+      }))
+
+    const listed = await listWorkerArtifacts({ runId: 'run-1', status: 'available', limit: 12 })
+    const shown = await getWorkerArtifact('artifact/with/slash')
+
+    expect(listed.artifacts[0]?.relativePath).toBe('reports/summary.md')
+    expect(shown.artifact.id).toBe('artifact/with/slash')
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/worker/artifacts?runId=run-1&status=available&limit=12')
+    expect(fetchMock.mock.calls[1]?.[0]).toBe('/api/worker/artifacts/artifact%2Fwith%2Fslash')
   })
 
   it('posts continuation prompts to the worker runs path with conversationId', async () => {

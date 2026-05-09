@@ -76,6 +76,8 @@ describe('worker /openapi.json registration (BUG-065)', () => {
       expect(paths).toContain('/api/worker/runs/{id}')
       expect(paths).toContain('/api/worker/runs/{id}/events')
       expect(paths).toContain('/api/worker/runs/{id}/cancel')
+      expect(paths).toContain('/api/worker/artifacts')
+      expect(paths).toContain('/api/worker/artifacts/{id}')
       expect(paths).toContain('/api/worker/orchestrator/tasks')
       expect(paths).toContain('/api/worker/orchestrator/conversations')
       expect(paths).toContain('/api/worker/orchestrator/conversations/{id}/messages')
@@ -92,6 +94,9 @@ describe('worker /openapi.json registration (BUG-065)', () => {
       const runsEntry = doc.paths['/api/worker/runs']?.post as { tags?: string[], security?: unknown[] } | undefined
       expect(runsEntry?.tags).toContain('runs')
       expect(Array.isArray(runsEntry?.security)).toBe(true)
+      const artifactsEntry = doc.paths['/api/worker/artifacts']?.get as { tags?: string[], security?: unknown[] } | undefined
+      expect(artifactsEntry?.tags).toContain('artifacts')
+      expect(Array.isArray(artifactsEntry?.security)).toBe(true)
 
       const securitySchemes = doc.components?.securitySchemes ?? {}
       expect(securitySchemes.bearerAuth).toBeDefined()

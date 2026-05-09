@@ -164,3 +164,5 @@ Open Design 当前参照形态：
 - 2026-05-09 16:55：S1A 通过 REFACTOR-027 / PLAN-193 完成 `/api/worker/runs` 兼容层，web submit/continue 已改走 run contract。
 - 2026-05-09 17:02：S1B 通过 REFACTOR-028 / PLAN-194 完成 `aiworker run` 默认 daemon
   run contract 路径，并保留 `--local` in-process fallback。
+- 2026-05-09 17:12：S2A 通过 REFACTOR-029 / PLAN-195 完成 worker artifact metadata
+  index、read-only REST surface 与 Web API client，保持真实文件仍由 workspace folder 拥有。

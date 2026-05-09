@@ -450,6 +450,33 @@ export interface AgentTaskRow {
 
 export type WorkerRun = AgentTaskRow
 
+export type WorkerArtifactStatus = 'available' | 'missing' | 'archived'
+export type WorkerArtifactSource = 'executor' | 'operator' | 'system'
+
+export interface WorkerArtifact {
+  id: string
+  runId: string | null
+  conversationId: string | null
+  relativePath: string
+  kind: string
+  title: string
+  mimeType: string | null
+  sizeBytes: number | null
+  hash: string | null
+  source: WorkerArtifactSource
+  status: WorkerArtifactStatus
+  metadata: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ListArtifactsOptions {
+  runId?: string
+  conversationId?: string
+  status?: WorkerArtifactStatus
+  limit?: number
+}
+
 export interface ConversationRow {
   id: string
   channel: string
@@ -556,6 +583,24 @@ export function listTasks(): Promise<{ tasks: AgentTaskRow[] }> {
 
 export function listRuns(): Promise<{ runs: WorkerRun[] }> {
   return workerFetch<{ runs: WorkerRun[] }>('/api/worker/runs')
+}
+
+export function listWorkerArtifacts(options: ListArtifactsOptions = {}): Promise<{ artifacts: WorkerArtifact[] }> {
+  const qs = new URLSearchParams()
+  if (options.runId !== undefined)
+    qs.set('runId', options.runId)
+  if (options.conversationId !== undefined)
+    qs.set('conversationId', options.conversationId)
+  if (options.status !== undefined)
+    qs.set('status', options.status)
+  if (options.limit !== undefined)
+    qs.set('limit', String(options.limit))
+  const suffix = qs.size === 0 ? '' : `?${qs.toString()}`
+  return workerFetch<{ artifacts: WorkerArtifact[] }>(`/api/worker/artifacts${suffix}`)
+}
+
+export function getWorkerArtifact(id: string): Promise<{ artifact: WorkerArtifact }> {
+  return workerFetch<{ artifact: WorkerArtifact }>(`/api/worker/artifacts/${encodeURIComponent(id)}`)
 }
 
 export function listCases(limit = 50): Promise<{ cases: WorkerCaseFile[] }> {

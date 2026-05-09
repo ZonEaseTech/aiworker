@@ -27,6 +27,17 @@ export {
   type StoredConfig,
 } from './worker/bootstrap'
 
+// Worker artifact metadata index（REFACTOR-029）：OD-style workbench 产物索引。
+export {
+  type ListWorkerArtifactsOptions,
+  type RegisterWorkerArtifactInput,
+  rowToArtifact,
+  type WorkerArtifact,
+  WorkerArtifactService,
+  type WorkerArtifactSource,
+  type WorkerArtifactStatus,
+} from './worker/artifacts/service'
+
 // Brain admission service (PLAN-101)：generated brain change 必须先进 admission
 // proposal，state machine pending → approved | rejected → applied | failed；
 // MVP 只对 `memory-add` 自动 materialize，其他 kind 进表但不自动落 filesystem。

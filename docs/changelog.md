@@ -1,5 +1,18 @@
 # AIWorker Changelog
 
+## 2026-05-09 17:12 [completed] REFACTOR-029 / PLAN-195 — Worker artifact metadata index
+
+Completed S2A of the OD-style worker reboot:
+
+- Added `worker_artifacts` to worker.db as the workbench artifact metadata
+  index.
+- Added `WorkerArtifactService` with workspace-relative path normalization,
+  upsert-by-path registration, and list/get filters.
+- Added read-only worker REST routes for artifact list/show and registered
+  them in the Worker OpenAPI path registry.
+- Added Web API client methods with explicit `WorkerArtifact` naming so this
+  surface does not collide with Brain artifact registry APIs.
+
 ## 2026-05-09 17:02 [completed] REFACTOR-028 / PLAN-194 — CLI run daemon contract default
 
 Completed the second runtime slice for the OD-style local worker loop:

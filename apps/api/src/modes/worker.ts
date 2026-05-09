@@ -21,6 +21,7 @@ import consola from 'consola'
 import { errorHandler } from '../shared/middleware/error-handler'
 import { requestLogger } from '../shared/middleware/logger'
 import { adminStaticMiddleware } from '../worker/admin/serve-static'
+import { buildArtifactRoutes } from '../worker/artifacts/routes'
 import { buildBrainRoutes } from '../worker/brain/routes'
 import { buildCaseRoutes } from '../worker/cases/routes'
 import { buildChannelRoutes } from '../worker/channels/routes'
@@ -223,6 +224,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
 
   app.route('/api/worker/orchestrator', buildOrchestratorRoutes(() => state.runtime))
   app.route('/api/worker/runs', buildRunRoutes(() => state.runtime))
+  app.route('/api/worker/artifacts', buildArtifactRoutes())
   app.route('/api/worker/cases', buildCaseRoutes(() => state.runtime))
   app.route('/api/worker/evolution', evolutionRoutes)
   app.route('/api/worker/events', buildEventRoutes(() => state.runtime))
@@ -326,6 +328,8 @@ function registerWorkerOpenApiPaths(app: OpenAPIHono): void {
     { method: 'get', path: '/api/worker/runs/{id}', summary: 'Show one local worker run', tags: ['runs'], requireAuth: true },
     { method: 'get', path: '/api/worker/runs/{id}/events', summary: 'SSE stream filtered to one local worker run', tags: ['runs'], requireAuth: true },
     { method: 'post', path: '/api/worker/runs/{id}/cancel', summary: 'Cancel one local worker run when it is bound to a conversation', tags: ['runs'], requireAuth: true },
+    { method: 'get', path: '/api/worker/artifacts', summary: 'List worker workbench artifact metadata', tags: ['artifacts'], requireAuth: true },
+    { method: 'get', path: '/api/worker/artifacts/{id}', summary: 'Show one worker workbench artifact metadata record', tags: ['artifacts'], requireAuth: true },
     { method: 'get', path: '/api/worker/orchestrator/tasks', summary: 'List recent worker orchestrator tasks', tags: ['orchestrator'], requireAuth: true },
     { method: 'get', path: '/api/worker/orchestrator/tasks/{id}/journal', summary: 'Show Brain Journal trace for one worker task', tags: ['orchestrator'], requireAuth: true },
     { method: 'post', path: '/api/worker/orchestrator/tasks/{id}/rerun', summary: 'Create a bounded proof-loop rerun for one worker task', tags: ['orchestrator'], requireAuth: true },

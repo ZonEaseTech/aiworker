@@ -60,6 +60,7 @@ export type AgentTaskRow = typeof schema.agentTasks.$inferSelect
 export type BrainJournalEventRow = typeof schema.brainJournalEvents.$inferSelect
 export type ConversationRow = typeof schema.conversations.$inferSelect
 export type MessageRow = typeof schema.messages.$inferSelect
+export type WorkerArtifactRow = typeof schema.workerArtifacts.$inferSelect
 
 export interface UpsertSessionEntryInput {
   sessionKey: string

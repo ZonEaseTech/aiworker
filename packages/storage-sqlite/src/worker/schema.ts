@@ -109,6 +109,38 @@ export const messages = sqliteTable(
   }),
 )
 
+/**
+ * OD-style worker artifact metadata index (REFACTOR-029). Real files remain
+ * owned by the workspace folder; this table records only normalized relative
+ * paths and run/conversation metadata for the worker workbench.
+ */
+export const workerArtifacts = sqliteTable(
+  'worker_artifacts',
+  {
+    id: text('id').primaryKey(),
+    runId: text('run_id').references(() => agentTasks.id, { onDelete: 'set null' }),
+    conversationId: text('conversation_id').references(() => conversations.id, { onDelete: 'set null' }),
+    relativePath: text('relative_path').notNull(),
+    kind: text('kind').notNull().default('file'),
+    title: text('title').notNull(),
+    mimeType: text('mime_type'),
+    sizeBytes: integer('size_bytes'),
+    hash: text('hash'),
+    source: text('source', { enum: ['executor', 'operator', 'system'] }).notNull().default('executor'),
+    status: text('status', { enum: ['available', 'missing', 'archived'] }).notNull().default('available'),
+    metadata: text('metadata', { mode: 'json' }).$type<Record<string, unknown>>().notNull().$defaultFn(() => ({})),
+    createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+    updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()),
+  },
+  table => ({
+    conversationUpdatedAtIdx: index('worker_artifacts_conversation_updated_at_idx').on(table.conversationId, table.updatedAt),
+    pathIdx: uniqueIndex('worker_artifacts_relative_path_idx').on(table.relativePath),
+    runUpdatedAtIdx: index('worker_artifacts_run_updated_at_idx').on(table.runId, table.updatedAt),
+    statusUpdatedAtIdx: index('worker_artifacts_status_updated_at_idx').on(table.status, table.updatedAt),
+    updatedAtIdx: index('worker_artifacts_updated_at_idx').on(table.updatedAt),
+  }),
+)
+
 export const executionLogs = sqliteTable(
   'execution_logs',
   {
