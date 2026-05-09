@@ -126,3 +126,6 @@ and review proof.
 - 2026-05-09 23:55: Completed B3 local daemon/API replacement: deleted the old
   worker route tree and replaced it with `/api/local/*` routes plus local API
   tests and OpenAPI absence coverage.
+- 2026-05-10 00:09: Completed B4 CLI reset: deleted old command trees and
+  replaced the CLI with local workspace commands for init, daemon, briefs, runs,
+  files, artifacts, reviews, lessons, settings, executor hints, and open.
