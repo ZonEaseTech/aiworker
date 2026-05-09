@@ -1,222 +1,52 @@
-# Project Brain Governance Node — Status (2026-05-09)
+# Governance Node Status
 
-> Sanitized status snapshot. Companion artifact to `docs/architecture.md`'s
-> "Brain Governance Kernel 决策" section. Anchored to evidence in
-> `docs/task/QA-*.md`. Not a marketing document; read it as an audit.
+> 状态：归档过渡说明。本文过去用于跟踪 governance-first Project Brain node posture。
+> `REFACTOR-026` 已经取代这个默认 worker 产品方向。
 
-## What this document answers
+## 当前解释
 
-The active worker objective is "make AIWorker worker a stable, verifiable,
-shippable Project Brain governance node". This file records, with concrete
-evidence pointers, where the worker conforms to that target and where the
-boundary or risk remains.
+旧 governance-node 工作还没有从代码中删除。它仍然可以作为历史证据，支撑这些边界：
 
-It is rewritten when the underlying claim changes; do not append history
-inline.
+- secret redaction；
+- source/provenance；
+- admission/review state machine；
+- audit 与 rollback；
+- high-risk action boundary。
 
-## Conformance summary
+但它不再是 first worker surface 的北极星。
 
-| Dimension | Status | Source-backed evidence |
-|---|---|---|
-| Admission positive invariant (durable Brain mutation flows through admission) | conforming | QA-011 — `memory-add` `pending → approved → applied` writes canonical memory + MEMORY.md index; brief projection picks it up. QA-018 / QA-019 / QA-020 / QA-021 validated the pre-REFACTOR-024 `skills/<id>/SKILL.md` materializer. REFACTOR-024 / PLAN-169 and REFACTOR-025 / PLAN-170 source tests now validate project-scope `brain-skill-add` writes `.agents/skills/aiworker-<slug>/SKILL.md` and `.claude/skills/aiworker-<slug>/SKILL.md`, then updates `.aiworker/native-skill-projections.json` through the same approved/apply state machine. |
-| Admission negative invariant (rejected proposals never write canonical memory) | conforming | QA-012 — `pending → rejected` records audit decision, no memory file; source + published 0.9.1 both pass. |
-| Pre-compaction generated memory boundary | conforming in source | BUG-085 / PLAN-143 — suppressed executor output creates a pending `memory-add` proposal in `brain_admission_proposals`, never a direct `BrainProvider.writeMemory()` call; compaction audit metadata records `status='proposed'`. |
-| Secret defense at materialization (BUG-055 regression line) | conforming | QA-012 — `apply --commit` with default `block` policy refuses bodies matching `scanBodyForSecrets`, returns `outcome.kind='blocked-by-secret-scan'` with exit 1, leaves proposal `approved`, no `applied` decision row, no canonical memory file. Source + published 0.9.1. |
-| Truthfulness contract (decision events expose `source` / `mode` / `evaluator` / `fallback`) | conforming | QA-009 / QA-010 / QA-011 — every `orchestrator.intent_decision`, `orchestrator.capability_decision`, `orchestrator.quality_gate` carries source-tagged truthfulness fields, persisted to `decision_pipeline_samples`. |
-| LLM bypass detection | conforming | QA-009 / QA-010 / QA-011 — assistants that claim admission was submitted while `brain_admission_proposals` shows no row trigger `brain.governance.bypass_suspected` events, asserted via the `admission claim vs DB` harness check. |
-| Executor session continuity (same `chat-id` continuation across both supported executors) | conforming | QA-009 / QA-010 / QA-011 — six same-`chat-id` turns produce one conversation row and 12 messages per pair; both Codex and Claude Code. |
-| Multi-conversation isolation across `chat-id` boundaries inside one worker | conforming in source | TODO-036 / PLAN-144 — source compact harness creates a distinct alternate `chat-id` per pair and asserts primary/alternate conversation ids are separate in `worker.db`; both compact pairs PASS. |
-| Executor tool-call observability | conforming for both engines | QA-009 / QA-010 / QA-011 — `orchestrator.tool_call` events emitted by Codex (28 typical) and Claude Code (7 typical); harness asserts non-zero on Codex and accepts emitted-or-not on Claude Code per executor contract. |
-| Risk-policy signal (high-risk verbs surface `risk=high`) | conforming | QA-009 / QA-010 / QA-011 — turn 4 high-risk prompt produces `orchestrator.intent_decision` with `risk=high` for both pairs. |
-| Developer repo proof loop source MVP | conforming in source | FEAT-056 / PLAN-174..180 / QA-022 — aiworker repo source dogfood now covers pass, Brain Engine review, repair/rerun/hold, Brain Inbox admission, and authority preflight. |
-| Brain Journal and Gate verdict trace | conforming in source | PLAN-174 / PLAN-175 / QA-022 — append-only `brain_journal_events` trace records task lifecycle, decisions, executor/tool signals, rerun lineage, and Gate verdict with source/mode/enforced distinctions. |
-| Brain Engine reviewer boundary | conforming with explicit limits | PLAN-176 / QA-022 — reviewer runs through a no-tools control executor path, writes `brain_engine.review` into Journal, extracts evidence gaps and lesson candidates, and does not write canonical Brain. |
-| Repair / rerun / hold orchestration | conforming in source | PLAN-177 / QA-022 — operator-triggered rerun creates child task lineage in Journal, quality-gate block writes `task.held`, and each parent task is capped at three child reruns. |
-| Brain Inbox lesson admission | conforming in source | PLAN-178 / QA-022 — `BrainInboxService.proposeFromTask()` converts Brain Engine lesson candidates into pending `memory-add` admission proposals; approve/reject/apply remains the existing admission state machine. |
-| Authority preflight truthfulness | conforming with explicit limits | PLAN-179 / QA-022 — high-risk ambient executor prompts are labeled before dispatch and surfaced in Journal/Gate/CLI, but `enforceable=false` is preserved for unmanaged user/host-level executor authority. |
-| Worker REST surface auth boundary | conforming | QA-009 / QA-010 / QA-011 — `/health=200`, authenticated `/api/worker/info=200`, unauthenticated and bad-bearer `/api/worker/info=401`, `/api/worker/brain/summary=200`, OpenAPI path count > 0, SSE connects, `/admin/=200`. |
-| Operator-trust surfaces (init secret handling, doctor PASS/WARN/INFO consistency) | conforming | PLAN-119 implementation; QA-006 / QA-007 evidence; PLAN-112 doctor noise closeout. |
-| Onboarding polish (CLI command groups, executor recommendation, MCP arg passthrough) | conforming | PLAN-120 implementation; TODO-026 contract; BUG-051 / BUG-073 fixes. |
-| Worker product lifecycle (`init → up → serve`) | conforming in current source | REFACTOR-019 / PLAN-152 code audit: `runInit()` seeds Project Brain + local worker state, `runUp()` composes 5 explicit stages, `runServe()` delegates to `bootstrapWorkerApp()` and optional gateway node startup. |
-| File-first skill authoring with executor-native placement | conforming in current source | REFACTOR-016 / PLAN-149 and REFACTOR-018 / PLAN-151: Soul and Brain Skill Packs are Markdown source. REFACTOR-024 / PLAN-169 moved defaults to executor-native project skills. REFACTOR-025 / PLAN-170 makes that placement managed: init materializes default skills to `.agents/skills/aiworker-*/SKILL.md` and `.claude/skills/aiworker-*/SKILL.md`, records `.aiworker/native-skill-projections.json`, and sync reports missing/outdated/drifted/deprecated/removed/orphaned; `.aiworker/skills/` is fallback-only for non-native engines. |
-| Brain-to-executor runtime handoff | conforming with explicit limits | REFACTOR-019 / PLAN-152, REFACTOR-020 / PLAN-153, REFACTOR-021 / PLAN-154, and REFACTOR-024 / PLAN-169 code audits: `ContextManager` projects persona/memory/rollup into the system prompt, loads matched memory snippets when `memory_search` is required, and only loads fallback `SKILL.md` bodies for engines without native project skills; Codex / Claude Code receive no duplicate AIWorker prompt-skill injection. `Orchestrator` calls external `ExecutorProvider.run()` with messages/model/workspace/signal/native binding only. |
-| Regression validation (repeatable harness covering above invariants) | conforming | `scripts/governance-kernel-harness.ts` with 40 checks per pair; PLAN-127 (initial harness), PLAN-128 (memory positive roundtrip), PLAN-129 (reject + secret-scan-block), PLAN-130 (full 5×2 matrix evidence), PLAN-144 (cross `chat-id` isolation), PLAN-147 (serve process restart continuity), PLAN-156 (Brain Skill positive roundtrip), QA-019 (published 0.10.0 compact), QA-020 (source 5×2 full after timeout override), QA-021 (published 0.10.1 full 5×2). |
-| Soul-agnostic kernel (every Soul × executor satisfies same invariants) | conforming on source + published | QA-020 — full 5×2 matrix on current source after Brain Skill admission coverage: 400 PASS / 0 FAIL / 0 SKIPPED. QA-021 — full 5×2 matrix on `cli-release-local` 0.10.1: 400 PASS / 0 FAIL / 0 SKIPPED. QA-014 — full 5×2 matrix on `cli-release-local` 0.9.1: 300 PASS / 0 FAIL / 0 SKIPPED. |
-| Long-running `aiworker serve` REST multi-turn (orchestrator persistence + bearer auth) | conforming | QA-015 — POST /tasks unauth → 401, authenticated submit → 201 + agent_tasks.status=succeeded, POST /conversations/:id/messages → second task succeeded on same conversation, GET /conversations/:id/messages → ≥4 messages. Both pairs PASS. |
-| Serve process restart between REST turns | conforming on source + published | QA-016 / PLAN-147 — source compact harness stops `aiworker serve` after REST turn 1, verifies `/health` goes down, relaunches on the same project/port, then continues the same conversation id; QA-017 / REL-023 repeats the same compact check against published CLI 0.9.7; QA-019 repeats it against published CLI 0.10.0; QA-021 repeats it across published CLI 0.10.1 full 5×2. |
+新的默认产品闭环见：
 
-## Boundary and residual risk
+- [GOALS.md](../GOALS.md)
+- [docs/architecture.md](architecture.md)
+- [docs/task/REFACTOR-026.md](task/REFACTOR-026.md)
+- [docs/plan/PLAN-192.md](plan/PLAN-192.md)
 
-These are explicit non-claims, written so the conformance table above is not
-read as a stronger statement than the evidence supports.
+## 重新归位
 
-- **Single-LLM-decider opt-in**: heavy Brain LLM decider is not enabled by
-  default. Decision events are `evaluator=heuristic` and `mode=observe_only`
-  unless the operator explicitly opts in. Truthfulness is enforced; behavior
-  is not.
-- **Proof-loop source MVP is not a 1.0 GA release by itself**: QA-022 is
-  source-backed dogfood evidence for the developer repo proof loop. A published
-  package / 1.0 GA claim still requires a dedicated REL task, package build,
-  release dry-run, published-package install verification, and the chosen
-  release harness.
-- **Authority preflight is warning and provenance, not executor isolation**:
-  ambient native executor authority can still load user/host-level MCP,
-  plugins, skills, auth, and native sessions outside AIWorker. PLAN-179 exposes
-  this boundary with `enforceable=false`; it does not provide a sandbox,
-  permission broker, or cloud resource firewall.
-- **Brain Engine reviewer is bounded review, not a second executor**: the
-  reviewer runs with tools disabled and only contributes Journal evidence,
-  repair/rerun/hold suggestions, and lesson candidates. It must not mutate
-  canonical Brain or take over executor planning.
-- **Rerun remains operator-bounded**: PLAN-177 supports explicit rerun with
-  lineage and a cap. It is not an autonomous infinite self-improvement loop and
-  should not be presented as one.
-- **Inbox candidate quality depends on review quality**: Brain Inbox improves
-  admission provenance, but it does not guarantee that every candidate is useful
-  long-term memory. Operator review and admission apply remain the durability
-  boundary.
-- **Executor capability ownership**: tool loop, MCP server selection, engine
-  plugins, sandbox, approval, native session, auth, model/provider routing
-  remain owned by the external executor. AIWorker's `executor-capabilities.json`
-  is overlay/hint only. We do not claim isolation or canonical capability
-  source-of-truth. BUG-086 / PLAN-145 removed the Claude Code default model pin
-  so `claude-code/default` now uses the external CLI default unless the operator
-  explicitly configures a model hint.
-- **Memory search ranking is provider-quality, not semantic memory yet**:
-  `memory_search` now loads bounded snippets into the turn context when the
-  capability plan requires it, but current filesystem matching is simple
-  text/title/metadata search. Vector ranking, semantic recall quality, and
-  domain-specific retrieval strategy remain provider improvements, not kernel
-  hard logic.
-- **Materializer scope**: `kind=memory-add` and `kind=brain-skill-add` are
-  materialized. `policy-update` and other proposal kinds still emit
-  `unsupported` outcomes and write a `failed` decision row on commit. Rollback
-  after `apply --commit` is not implemented in the materializer — the rollback
-  CLI rejects pre-apply only.
-- **Brain self-iteration is skill-capable, policy-manual**: generated long-term
-  memory and generated Brain Skill files can be proposed and, after operator
-  approval, materialized into filesystem Brain. Generated `policy-update`
-  proposals are not automatically written yet; operators must handle them
-  manually or wait for a policy-specific materializer slice.
-- **Soul / scope cross-contamination**: Project Brain memory is per-scope on
-  the filesystem, not enforced by hard logic at runtime. The harness uses
-  one scope per pair; it does not test cross-scope isolation.
-- **Compact harness matrix as the recurring default**: PLAN-127's compact
-  matrix uses `developer + codex/default` and
-  `general-assistant + claude-code/default`. Compact remains the default for
-  routine repeatable runs because the full matrix is heavier. QA-018 source
-  compact passed 80 / 80 checks after adding Brain Skill admission roundtrip
-  coverage, QA-019 published 0.10.0 compact also passed 80 / 80 checks, and
-  QA-020 source-local full passed 400 / 400 checks. QA-021 published 0.10.1
-  full passed 400 / 400 checks after BUG-087 aligned executor hard timeout
-  with the harness per-turn budget. Compact remains the routine cadence; full
-  source + full published runs are release or production-readiness gates.
-- **Secret-body redact / raw paths**: `--allow-secret-body redact` and
-  `--allow-secret-body raw` are unit-tested in
-  `packages/core/src/worker/brain/admission/service.test.ts` but are not in
-  the harness, since the regression risk is at the CLI surface for the
-  default `block` policy.
+旧治理概念只有在能改善新 local worker loop 时才应继续使用：
 
-## Evidence catalog
+| Previous concept | New position |
+| --- | --- |
+| Brain Kernel | Local context quality and provenance guardrails |
+| Gate | Optional post-run review signal |
+| Admission | Lesson promotion state, after run evidence exists |
+| Journal | Run/review provenance where useful |
+| Case | Artifact/review bundle, not the default first screen |
+| Fleet summary | Deferred aggregation after local worker proof |
 
-- `docs/task/QA-009.md` — Governance Kernel harness, `cli-release-local`
-  0.9.1 compact, all source-backed checks PASS.
-- `docs/task/QA-010.md` — Governance Kernel harness, `worker-source-local`
-  compact, all source-backed checks PASS.
-- `docs/task/QA-011.md` — Admission positive roundtrip evidence, source +
-  `cli-release-local` 0.9.1, all 14 new roundtrip checks PASS.
-- `docs/task/QA-012.md` — Admission negative paths (reject +
-  secret-scan-block) evidence, source + `cli-release-local` 0.9.1, all 8 new
-  negative-path checks PASS.
-- `docs/task/QA-013.md` — Full 5×2 matrix evidence on source-local: 10
-  pairs × 30 checks = 300 PASS / 0 FAIL / 0 SKIPPED, proving the
-  Soul-agnostic kernel claim for every Soul on every supported executor on
-  the source build.
-- `docs/task/QA-014.md` — Full 5×2 matrix evidence on `cli-release-local`
-  0.9.1: 300 PASS / 0 FAIL / 0 SKIPPED, extending the Soul-agnostic kernel
-  claim to the published CLI.
-- `docs/task/QA-015.md` — Long-running `serve` multi-turn REST regression
-  evidence: 4 new orchestrator REST checks per pair (unauth boundary,
-  submit, continue, read), all PASS on both compact pairs.
-- `docs/task/QA-016.md` — `serve` process restart continuity evidence: after
-  turn 1 succeeds, the harness stops `serve`, waits for `/health` to go down,
-  relaunches `serve`, and continues the same conversation id; compact
-  source-local run passed 72 / 72 checks.
-- `docs/task/QA-017.md` — `cli-release-local` 0.9.7 compact evidence:
-  published CLI run passed 72 / 72 checks, including both `REST serve restart
-  continuity setup` checks.
-- `docs/task/QA-018.md` — `worker-source-local` compact evidence after
-  adding `brain-skill-add` admission roundtrip checks: 80 PASS / 0 FAIL /
-  0 SKIPPED; both compact pairs materialize canonical Brain Skill files and
-  retain `doctor` PASS.
-- `docs/task/QA-019.md` — `cli-release-local` 0.10.0 compact evidence:
-  published CLI run passed 80 PASS / 0 FAIL / 0 SKIPPED, including
-  `brain-skill-add` materialization, REST runtime version `0.10.0`, and serve
-  process restart continuity on both compact pairs.
-- `docs/task/QA-020.md` — source-local full 5×2 matrix after 0.10.0:
-  final run passed 400 PASS / 0 FAIL / 0 SKIPPED; first run exposed BUG-087's
-  Codex timeout mismatch and final run verified the fix.
-- `docs/task/QA-021.md` — `cli-release-local` 0.10.1 full 5×2 matrix:
-  published CLI run passed 400 PASS / 0 FAIL / 0 SKIPPED, including the two
-  BUG-087 risk pairs (`hr-recruiting-codex`, `finance-ops-codex`) and serve
-  restart continuity across every pair.
-- `docs/task/QA-022.md` — Developer repo worker proof-loop source dogfood:
-  focused source tests cover Brain Journal, Gate verdict, Brain Engine review,
-  repair/rerun/hold, Brain Inbox admission proposal generation, authority
-  preflight, Worker REST, and CLI surfaces. Supports source MVP readiness
-  closeout; does not by itself claim 1.0 GA release readiness.
-- `docs/task/BUG-087.md` / `docs/plan/PLAN-159.md` — executor selection
-  timeout override; harness now aligns executor adapter hard timeout with its
-  per-turn budget.
-- `docs/task/REFACTOR-019.md` / `docs/plan/PLAN-152.md` — code conformance
-  audit for worker lifecycle and Brain-to-executor runtime handoff.
-- `docs/task/REFACTOR-020.md` / `docs/plan/PLAN-153.md` — runtime Brain Skill
-  body loading; selected `SKILL.md` bodies are loaded into turn context when
-  `skill_load` is required.
-- `docs/task/REFACTOR-021.md` / `docs/plan/PLAN-154.md` — runtime Brain Memory
-  search context; selected `memory_search` turns load bounded memory snippets
-  into executor context and report loaded ids/count/errors.
-- `docs/task/REFACTOR-024.md` / `docs/plan/PLAN-169.md` — native executor
-  skill placement; default project skills live in `.agents/skills/` and
-  `.claude/skills/`, while `.aiworker/skills/` is fallback-only.
-- `docs/task/REFACTOR-025.md` / `docs/plan/PLAN-170.md` — native executor
-  skill projection lifecycle; AIWorker-managed skills use `aiworker-*`
-  native slugs, `.aiworker/native-skill-projections.json`, and
-  dry-run/apply reconciliation.
-- `docs/task/REFACTOR-022.md` / `docs/plan/PLAN-155.md` — Brain Skill
-  admission materializer; approved `brain-skill-add` proposals write validated
-  skill files through the governed apply path.
-- `docs/task/BUG-085.md` / `docs/plan/PLAN-143.md` — pre-compaction generated
-  memory no-direct-write fix; focused source tests assert pending admission
-  proposal creation and no canonical memory write.
-- `docs/task/TODO-036.md` / `docs/plan/PLAN-144.md` — cross `chat-id`
-  isolation check added to the Governance Kernel harness; final source compact
-  run passed 70 / 70 checks.
-- `docs/task/BUG-086.md` / `docs/plan/PLAN-145.md` — Claude Code default
-  profile no longer forces a volatile model alias; model/provider routing
-  remains executor-owned by default.
-- `docs/architecture.md` — canonical Brain Governance Kernel decision and
-  ownership table.
-- `scripts/governance-kernel-harness.ts` — repeatable harness; the canonical
-  way to re-verify the claims in this document.
+如果某个治理概念要求 operator 在提交有用 work order 之前先理解它，它在本轮重构中就处在错误位置。
 
-## How to re-verify
+## 替代证据
 
-1. `bun run check && bun run test && bun run build` for the workspace
-   production gate.
-2. For the FEAT-056 proof loop specifically, rerun the focused source tests
-   listed in `docs/task/QA-022.md`.
-3. `PATH="$HOME/.bun/bin:$PATH" bun scripts/governance-kernel-harness.ts \
-   --mode worker-source-local --matrix compact --debug-root <fresh path>`
-   for the source-backed regression run.
-4. `PATH="$HOME/.bun/bin:$PATH" bun scripts/governance-kernel-harness.ts \
-   --mode cli-release-local --version <published version> --matrix compact \
-   --debug-root <fresh path>` for the published-CLI black-box run.
-5. Inspect each pair's `governance-kernel-summary.json` for any non-`pass`
-   row; non-`pass` rows must either be classified as environment-limited
-   (`skipped`, with explicit operator-side reason) or filed as a BUG / TODO
-   under `docs/task/`.
+未来状态证据应在 `REFACTOR-026` slices 中产生：
 
-If any conformance row above moves to `not conforming`, the residual-risk
-section must be updated and a new PMA slice filed before this document is
-re-marked.
+1. unified run service evidence；
+2. workspace metadata 与 artifact index evidence；
+3. worker pack parser 与 built-in pack evidence；
+4. CLI daemon lifecycle smoke；
+5. worker web browser smoke；
+6. review 与 lesson promotion smoke；
+7. final release/readiness validation。
+
+在这些 slice 落地前，本文不能用来声称 rebooted worker loop 已完成。

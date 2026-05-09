@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-09 (PLAN-191 completed)
+> Updated: 2026-05-09 (PLAN-192 implementing)
 
 ## Usage
 
@@ -220,3 +220,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-189 Dogfood falsification and release readiness**](PLAN-189.md) `2026-05-09`
 - [x] [**PLAN-190 Case-driven Project Brain learning loop validation**](PLAN-190.md) `2026-05-09`
 - [x] [**PLAN-191 Case-driven Brain loop 0.12.1 release readiness**](PLAN-191.md) `2026-05-09`
+- [-] [**PLAN-192 OD-style local worker reboot**](PLAN-192.md) `2026-05-09`

@@ -1,5 +1,17 @@
 # AIWorker Changelog
 
+## 2026-05-09 16:36 [decision] REFACTOR-026 / PLAN-192 — OD-style local worker reboot
+
+Accepted the Open Design-style reboot direction for AIWorker worker:
+
+- Product north star moves from governance-first Project Brain runtime to
+  local-first worker workbench.
+- Default loop becomes work order -> run -> artifact -> review -> lesson.
+- Fleet/gateway and desktop are deferred until the local worker loop is useful
+  and verifiable.
+- S0 updated GOALS, target architecture, README, CLI docs, governance-node
+  status, and PMA tracking only; runtime code remains unchanged in this slice.
+
 ## 2026-05-09 15:29 [completed] REL-031 / QA-025 — CLI 0.12.1 release
 
 Released `@zonease/aiworker-cli@0.12.1` after FEAT-058:
