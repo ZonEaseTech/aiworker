@@ -1,5 +1,19 @@
 # AIWorker Changelog
 
+## 2026-05-09 [release] REL-029 / PLAN-182 — 发布 aiworker CLI 0.11.0
+
+启动 `@zonease/aiworker-cli@0.11.0` minor release，承载 0.10.4 之后的
+FEAT-056 developer repo worker proof loop。
+
+- 本次不是 1.0 GA；目标是把 Brain Journal、Gate verdict、Brain Engine reviewer、
+  bounded rerun、Brain Inbox admission、authority preflight 和 QA-022 readiness
+  evidence 作为 0.x minor 版本交付。
+- 发布前必须通过本地 release gate、CLI smoke、dist version 与 publish dry-run。
+- 发布后必须验证 GitHub Actions release workflow、npm latest、显式 `bunx`
+  package smoke、GitHub Release assets 和 `cli-release-local` compact harness。
+- 本地 release gate 已通过：frozen install、typecheck、lint、test、build、
+  CLI run/fleet smoke、dist version、`git diff --check` 和 publish dry-run pack stage。
+
 ## 2026-05-09 [completed] PLAN-180 / PLAN-181 — proof-loop dogfood and readiness closeout
 
 完成 FEAT-056 的 dogfood 与 readiness 收口：developer repo worker proof loop

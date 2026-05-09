@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-09 (FEAT-056 completed)
+> Updated: 2026-05-09 (REL-029 in progress)
 
 ## Usage
 
@@ -289,3 +289,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**DOC-007 Anchor AIWorker product north star for future sessions**](DOC-007.md) `P1`
 - [x] [**FEAT-056 AIWorker 1.0 developer repo worker proof loop**](FEAT-056.md) `P1`
 - [x] [**QA-022 Developer repo worker proof-loop dogfood evidence**](QA-022.md) `P1`
+- [-] [**REL-029 发布 aiworker CLI 0.11.0**](REL-029.md) `P1`
