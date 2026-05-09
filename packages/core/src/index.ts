@@ -82,35 +82,8 @@ export {
   createBrainBriefCompiler,
 } from './worker/brain/brief'
 
-// Worker Review surface (FEAT-057)：operator-facing projection over Brain
-// Journal / Gate / Brain Engine review / lessons. It is derived evidence, not
-// another mutable task log or executor harness.
-export {
-  type WorkerReviewDecisionStatus,
-  type WorkerReviewEvidenceSummary,
-  type WorkerReview,
-  type WorkerReviewLessonCandidate,
-  type WorkerReviewLessonsSummary,
-  type WorkerReviewListOptions,
-  type WorkerReviewOutcome,
-  type WorkerReviewDecision,
-  type WorkerReviewRiskSummary,
-  WorkerReviewService,
-  createWorkerReviewService,
-} from './worker/reviews'
-
 // Brain diagnostics：CLI / 管理 API 共用的只读 source 摘要。
 export { type BrainSourceDiagnostic, describeBrainSource } from './worker/brain/diagnostics'
-
-// Lesson Promotion (PLAN-178)：turn Worker review lesson candidates into pending
-// Brain admission proposals without writing canonical memory automatically.
-export {
-  type LessonPromotionCandidate,
-  type LessonPromotionProposalResult,
-  LessonPromotionService,
-  createLessonPromotionService,
-  type PromoteLessonsFromRunOptions,
-} from './worker/lessons'
 
 // Brain Journal trace (PLAN-174)：worker-local append-only proof-loop trace.
 // It records task / decision / gate / executor observations without admitting
@@ -160,11 +133,11 @@ export { enumerateSecretPaths, hydrateSecrets, redactSecrets } from './worker/co
 
 // Cron service（PLAN-014 §F4）：runtime 启动 / dispose 时挂载。
 export { type CronOrchestratorLike, CronService, type CronServiceDeps } from './worker/cron/service'
+
 export type { CronJobInput, CronJobPatch, CronJobRecord } from './worker/cron/types'
 
 // Event bus type：调用方可以订阅 runtime.bus。
 export { WorkerEventBus } from './worker/events/bus'
-
 // Engine availability probe：CLI / 管理 API 共用。
 export {
   getAvailabilityProbe,
@@ -190,10 +163,21 @@ export {
   type WebSocketCtor,
   type WebSocketLike,
 } from './worker/gateway-client'
+
 export { buildCronHandlers, type CronServiceLike } from './worker/gateway-client/methods/cron'
 
+// Lesson Promotion (PLAN-178)：turn Worker review lesson candidates into pending
+// Brain admission proposals without writing canonical memory automatically.
+export {
+  createLessonPromotionService,
+  type LessonPromotionCandidate,
+  type LessonPromotionProposalResult,
+  LessonPromotionService,
+  type PromoteLessonsFromRunOptions,
+} from './worker/lessons'
 // Worker management：config 读写、token rotate、各类 *_test 探针、buildInfo。
 export { handleBrainTest } from './worker/management/brain-test'
+
 export { handleChannelTest } from './worker/management/channel-test'
 export {
   applyConfigUpdate,
@@ -212,9 +196,9 @@ export { buildInfo } from './worker/management/info'
 export { handleTokenRotate, type RotateTokenCurrentState, type RotateTokenResponse } from './worker/management/rotate'
 export { deleteSecret, listSecrets, putSecret } from './worker/management/secrets'
 export type { WorkerModeState } from './worker/management/state'
-
 // Orchestrator 内部 store + ProcessManager（hot-reload 跨实例持久化）。
 export { ApprovalStore } from './worker/orchestrator/approvals'
+
 // PLAN-116 decision pipeline truthfulness ring buffer.
 export {
   getDecisionPipelineSnapshot,
@@ -223,8 +207,24 @@ export {
   recordQualityGate,
   resetDecisionPipelineStats,
 } from './worker/orchestrator/decision-pipeline-stats'
-
 export { ProcessManager } from './worker/orchestrator/process-manager'
+
+// Worker Review surface (FEAT-057)：operator-facing projection over Brain
+// Journal / Gate / Brain Engine review / lessons. It is derived evidence, not
+// another mutable task log or executor harness.
+export {
+  createWorkerReviewService,
+  type WorkerReview,
+  type WorkerReviewDecision,
+  type WorkerReviewDecisionStatus,
+  type WorkerReviewEvidenceSummary,
+  type WorkerReviewLessonCandidate,
+  type WorkerReviewLessonsSummary,
+  type WorkerReviewListOptions,
+  type WorkerReviewOutcome,
+  type WorkerReviewRiskSummary,
+  WorkerReviewService,
+} from './worker/reviews'
 
 // Worker run contract（REFACTOR-027）：在过渡期 agent_tasks/orchestrator 实现之上
 // 提供 OD-style local run surface。

@@ -7,12 +7,6 @@ import consola from 'consola'
 import packageJson from '../package.json' with { type: 'json' }
 
 import {
-  runReviewList,
-  runReviewPromoteLessons,
-  runReviewRerun,
-  runReviewShow,
-} from './commands/worker/review'
-import {
   runWorkerDaemonCheck,
   runWorkerDaemonInspect,
   runWorkerDaemonLogs,
@@ -31,6 +25,12 @@ import {
 } from './commands/worker/executor'
 import { runInit } from './commands/worker/init'
 import { runPackList, runPackShow } from './commands/worker/pack'
+import {
+  runReviewList,
+  runReviewPromoteLessons,
+  runReviewRerun,
+  runReviewShow,
+} from './commands/worker/review'
 import { runRun } from './commands/worker/run'
 import { runServe } from './commands/worker/serve'
 import {

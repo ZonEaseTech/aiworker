@@ -7,9 +7,9 @@ import {
   Cpu,
   FileSearch,
   KeyRound,
-  LockKeyhole,
   Lightbulb,
   ListChecks,
+  LockKeyhole,
   Settings,
 } from 'lucide-react'
 import { useState } from 'react'

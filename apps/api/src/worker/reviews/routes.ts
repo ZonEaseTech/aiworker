@@ -1,7 +1,7 @@
 import type { WorkerRuntime } from '@zonease/aiworker-core'
 
 import { OpenAPIHono } from '@hono/zod-openapi'
-import { WorkerReviewService, LessonPromotionService } from '@zonease/aiworker-core'
+import { LessonPromotionService, WorkerReviewService } from '@zonease/aiworker-core'
 import { AppError } from '@zonease/aiworker-shared'
 import { z } from 'zod'
 

@@ -141,3 +141,14 @@ Verification:
   passed across core, gateway, API, CLI, Web, shared, and storage; CRG reported
   medium risk due breadth, with the bridge/review paths covered by focused
   tests.
+- 2026-05-09 21:38: Completed S5 docs, artifact capture, and source-local
+  worker smoke. Runtime now registers a successful run's final assistant output
+  as a workspace-relative `assistant-output` artifact before emitting the
+  terminal event, and the smoke script verifies init -> daemon -> run ->
+  artifacts -> review -> lesson promotion against a temporary project and
+  OpenAI-compatible stub. Passed: `bun run check`, `bun run build`, full CLI
+  package tests, focused Core/API/Web tests, `bun run --filter '@zonease/aiworker-cli'
+  smoke:aiworker-run`, and `git diff --check`. Not fully green: the historical
+  `src/worker/orchestrator/service.history.test.ts` file still fails three
+  context-budget/compaction assertions that are outside the artifact-capture
+  path and should be reconciled before production release.

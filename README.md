@@ -9,8 +9,8 @@ workspace 里工作，通过 web 实时观察 run，然后把结果沉淀为文�
 worker pack + workspace -> work order -> run -> artifact -> review -> lesson
 ```
 
-当前仓库仍保留旧的 Project Brain、case、fleet、gateway 实现，但新的产品判断和实现应以
-[GOALS.md](GOALS.md) 与 [docs/architecture.md](docs/architecture.md) 为准。
+当前默认实现已经收敛到 local worker loop；Project Brain 留在 durable context
+内部，fleet/gateway 先作为后续可选控制面暂缓。
 
 ## 为什么改成这个形态
 
@@ -23,7 +23,7 @@ worker pack + workspace -> work order -> run -> artifact -> review -> lesson
 | Project folder | Worker workspace |
 | Prompt template | Work-order template |
 | Run stream | Worker run stream |
-| Artifact preview | Business artifact / case preview |
+| Artifact preview | Business artifact / review preview |
 | Critique | Review / lesson candidate |
 
 AIWorker 的领域是 developer、HR、PM、QA、finance、legal 等业务 worker。领域差异通过
@@ -40,7 +40,8 @@ AIWorker 负责：
 - 读取 worker packs 与 domain systems；
 - 组合 prompt / work order；
 - 记录 run event；
-- 索引产物文件；
+- 捕获成功 run 的最终输出 artifact；
+- 索引产物文件 metadata；
 - 管理 review 与 lesson promotion。
 
 外部 executor 负责：
@@ -53,18 +54,22 @@ AIWorker 负责：
 
 AIWorker 只通过薄 adapter 调用和观察 executor，不把自己做成 executor 平台。
 
-## 目标 Quickstart
-
-命令树会在 `REFACTOR-026` 中收敛。目标操作流是：
+## Quickstart
 
 ```bash
-aiworker init --worker developer
+aiworker init --soul developer
 aiworker daemon start --open
-aiworker run "Review this repository and produce a release-readiness brief"
+aiworker run --message "Review this repository and produce a release-readiness brief"
 ```
 
-在重构完成前，过渡版本仍可能暴露旧的 `serve`、worker、case、brain、fleet、gateway
-命令。它们是待收敛的兼容/遗留表面，不是新的长期产品模型。
+继续查看结果：
+
+```bash
+aiworker runs list
+aiworker artifacts list --run <runId>
+aiworker review show <runId>
+aiworker lessons promote <runId>
+```
 
 ## 仓库结构
 
@@ -110,7 +115,7 @@ bun run --filter '@zonease/aiworker-cli' build:bundle
 
 ## 当前路线
 
-`REFACTOR-026` 分阶段落地：
+当前重构阶段：
 
 1. 产品北极星与目标架构重置；
 2. 统一 local run service；

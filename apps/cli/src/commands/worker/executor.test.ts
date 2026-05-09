@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 
-import { describe, expect, it } from 'bun:test'
 import { Database } from 'bun:sqlite'
+import { describe, expect, it } from 'bun:test'
 
 const cliEntry = path.resolve(import.meta.dir, '..', '..', 'aiworker.ts')
 

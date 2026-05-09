@@ -116,3 +116,17 @@ concepts keep shaping the default mental model.
   Soul pack durable-governance wording around lesson promotion. Verification:
   focused core/gateway/API/CLI/Web/shared tests, package typechecks, storage
   typecheck, `git diff --check`, and CRG review.
+- 2026-05-09 21:38: S5 docs and source smoke complete. Current docs now describe
+  only the implemented local worker CLI/Web/daemon loop; successful daemon runs
+  capture the final assistant output as an `assistant-output` artifact under
+  `.aiworker/local/artifacts/runs/<runId>/`; `smoke:aiworker-run` now starts a
+  temporary project, stub OpenAI-compatible executor, local daemon, real run,
+  artifact list, review show, and lesson promotion. Verification passed:
+  `bun run check`, `bun run build`, full CLI package tests, focused
+  Core/API/Web tests,
+  `bun run --filter '@zonease/aiworker-cli' smoke:aiworker-run`, and
+  `git diff --check`. Residual risk: `bun run --filter '@zonease/aiworker-core'
+  test -- src/worker/orchestrator/service.history.test.ts` still has three
+  pre-existing context-budget/compaction expectation failures outside the
+  `taskId` artifact-capture path; do not claim full-suite production readiness
+  until that historical suite is reconciled.

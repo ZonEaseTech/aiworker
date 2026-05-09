@@ -1,12 +1,12 @@
 # AIWorker Goals
 
-> 状态：这是 `REFACTOR-026` 的目标北极星。当前仓库仍保留旧的 worker、
-> Brain、fleet、gateway 代码；新产品判断应先遵守本文，再处理旧的
-> governance-first 形态。
+> 状态：这是当前 local worker 重构的产品北极星。默认 CLI/Web/daemon surface
+> 必须服务 work order -> run -> artifact -> review -> lesson 主路径。
 
 AIWorker 要重构为 local-first worker workbench：operator 在真实 workspace 中选择
 业务 worker pack，提交 work order，由外部 executor 执行，AIWorker 负责流式展示、
-索引产物、复盘结果，并把有价值的经验晋升为可复用的本地 worker context。
+捕获成功 run 的输出 artifact、索引产物 metadata、复盘结果，并把有价值的经验晋升为
+可复用的本地 worker context。
 
 参照的是 Open Design 的产品语法：
 
@@ -66,7 +66,7 @@ order、通过薄 adapter 调用或启动 executor、观察事件流并记录本
 2. operator 选择 worker pack 与 domain system。
 3. operator 从 CLI 或 web 提交 work order。
 4. daemon 创建 run，组合 prompt stack，在 workspace cwd 下调用外部 executor。
-5. daemon 把 event、message、file/artifact change 流式推给 web。
+5. daemon 把 event、message 与 run output artifact metadata 推给 CLI/web。
 6. operator review 产物，标记 accepted、needs follow-up 或 lesson candidate。
 7. approved lesson 写回 durable local worker context。
 

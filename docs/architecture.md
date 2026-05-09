@@ -1,8 +1,7 @@
 # AIWorker Architecture
 
-> 状态：这是 `REFACTOR-026` 的目标架构。当前代码仍包含旧的 Project Brain、case、
-> fleet、gateway 实现。重构期间，新实现应向本文收敛；旧表面在被删除或移到
-> secondary/admin 路径前，都应标记为过渡状态。
+> 状态：这是当前 local worker 架构。默认 CLI/Web/daemon surface 已收敛到
+> work order -> run -> artifact -> review -> lesson；fleet/gateway 仍是后续可选层。
 
 AIWorker 的目标主路径是一条本地 worker loop：
 
@@ -63,7 +62,8 @@ gateway、enrollment 或 Brain governance 术语。
 - 从 worker pack、domain system、workspace state、conversation history 和 work-order
   input 组合 prompt stack；
 - 在正确的 workspace cwd 下调用外部 executor；
-- 索引 run 中写入或变更的 files/artifacts；
+- 捕获成功 run 的最终输出 artifact；
+- 索引 run 中写入或变更的 files/artifacts metadata；
 - 将本地 metadata 写入 `worker.db`；
 - 暴露 review 与 lesson-promotion API。
 
@@ -101,8 +101,8 @@ Worker Web 不应默认呈现 Brain governance dashboard。Brain 细节仍可检
 - `LessonService`：把 reviewed lessons 晋升为 durable local context；
 - executor adapters：外部 runtimes 的薄集成点。
 
-旧 orchestrator logic 应被拆解到这些服务里。Journal、Gate、Admission、Case、Brain
-Engine 等概念只能在支持 post-run review 和 durable lesson promotion 时复用。
+旧 orchestrator logic 应被拆解到这些服务里。Journal、Gate、Admission、Brain Engine
+等概念只能在支持 post-run review 和 durable lesson promotion 时作为内部机制复用。
 
 ### Storage
 
@@ -119,8 +119,10 @@ Engine 等概念只能在支持 post-run review 和 durable lesson promotion 时
 - durable lessons，带 source/provenance metadata；
 - daemon/executor config，secret 只能存 ref。
 
-业务 artifact 留在 workspace filesystem。数据库只保存指针、metadata、小型 review/lesson
-对象，不成为隐藏的业务内容仓库。
+业务 artifact 留在 workspace filesystem。当前成功 run 会把最终 assistant 输出写入
+workspace-relative `.aiworker/local/artifacts/runs/<runId>/response.md`，并在
+`worker.db` 中登记 `assistant-output` metadata。数据库只保存指针、metadata、小型
+review/lesson 对象，不成为隐藏的业务内容仓库。
 
 ### Worker Packs
 
@@ -158,29 +160,30 @@ orchestrator 分支。
 目标 API 形态：
 
 ```text
-POST   /api/runs
-GET    /api/runs
-GET    /api/runs/:id
-GET    /api/runs/:id/events
-POST   /api/runs/:id/cancel
-GET    /api/runs/:id/artifacts
-POST   /api/runs/:id/review
-POST   /api/runs/:id/lessons
+POST   /api/worker/runs
+GET    /api/worker/runs
+GET    /api/worker/runs/:id
+GET    /api/worker/runs/:id/events
+POST   /api/worker/runs/:id/cancel
+GET    /api/worker/artifacts?runId=:id
+GET    /api/worker/reviews/:id
+POST   /api/worker/reviews/:id/rerun
+POST   /api/worker/reviews/:id/lessons/promote
 ```
 
-Run event stream：
+当前 run event stream 转发 runtime bus 事件；CLI 以 `orchestrator.finished` /
+`orchestrator.error` 作为终态：
 
 ```text
-run.created
-prompt.composed
-executor.started
-executor.message
-file.changed
-artifact.indexed
-review.requested
-run.completed
-run.failed
-run.cancelled
+channel.inbound
+conversation.created
+conversation.message
+orchestrator.intent_decision
+orchestrator.capability_decision
+orchestrator.text
+orchestrator.quality_gate
+orchestrator.finished
+orchestrator.error
 ```
 
 Event model 应 append-only，并支持 daemon 存活期间 replay。需要历史可见的 durable events
@@ -274,8 +277,8 @@ worker loop 被证明后，聚合已验证的 local worker state。
 - 变更服务的 focused unit/API tests；
 - CLI 变更要有 help/bundle smoke；
 - UI 变更要有 worker web build 和 browser smoke；
-- 一个 source-local worker smoke：创建 run、stream events、index artifact、record review、
-  promote/reject lesson；
+- 一个 source-local worker smoke：init、启动 daemon、创建 run、stream 终态事件、
+  捕获 artifact、读取 review、晋升 lesson proposal；
 - 大型过渡 slice 至少跑 `bun run check` 或说明更窄 gate 的理由。
 
 文档-only slice 可以只跑 `git diff --check`，但最终回复必须说明 code-review-graph 因未修改

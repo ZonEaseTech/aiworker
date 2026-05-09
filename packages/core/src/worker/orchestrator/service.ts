@@ -22,11 +22,14 @@ import type { DecisionContext, RequiredContext } from './decisions'
 import type { ProcessManager } from './process-manager'
 
 import { createHash } from 'node:crypto'
+import { mkdir, writeFile } from 'node:fs/promises'
+import path from 'node:path'
 import { AppError, brainAdmissionMemoryAddPayloadSchema, DEFAULT_MAX_HISTORY_MESSAGES, redactBodySecrets } from '@zonease/aiworker-shared'
 
 import { agentTasks, conversations, getSessionEntry, getWorkerDb, messages, recordSessionCompaction, rotateSessionConversation, sessionEntries, touchSessionEntry, updateSessionEngineBinding, upsertSessionEntry } from '@zonease/aiworker-storage-sqlite/worker'
 import consola from 'consola'
 import { and, asc, desc, eq, gt } from 'drizzle-orm'
+import { WorkerArtifactService } from '../artifacts/service'
 import { BrainAdmissionService } from '../brain/admission'
 import { detectAuthorityPreflight } from '../brain/authority'
 import { recordBrainGovernanceBypassWarning } from '../brain/governance-bypass'
@@ -580,10 +583,24 @@ export class Orchestrator {
         ...(assistantMessageId === undefined ? {} : { assistantMessageId }),
       },
     })
+    const outputArtifact = await this.captureRunOutputArtifact({
+      assistantMessageId,
+      assistantText,
+      at: now,
+      conversationId: activeConversation.id,
+      taskId,
+      workspacePath: workspace?.path,
+    })
     this.markTaskSucceeded(taskId, activeConversation.id, {
       conversationId: activeConversation.id,
       assistantTextLength: assistantText.length,
       ...(assistantMessageId === undefined ? {} : { assistantMessageId }),
+      ...(outputArtifact === null
+        ? {}
+        : {
+            artifactId: outputArtifact.id,
+            artifactPath: outputArtifact.relativePath,
+          }),
     })
     this.deps.bus.emit('orchestrator.finished', {
       conversationId: activeConversation.id,
@@ -592,6 +609,56 @@ export class Orchestrator {
     })
 
     await this.deliver(envelope.channel, activeConversation, assistantText)
+  }
+
+  private async captureRunOutputArtifact(input: {
+    assistantMessageId?: number
+    assistantText: string
+    at: string
+    conversationId: string
+    taskId?: string
+    workspacePath?: string
+  }): Promise<{ id: string, relativePath: string } | null> {
+    if (input.taskId === undefined || input.workspacePath === undefined)
+      return null
+
+    const relativePath = path.posix.join(
+      '.aiworker',
+      'local',
+      'artifacts',
+      'runs',
+      safeArtifactSegment(input.taskId),
+      'response.md',
+    )
+    const filePath = path.join(input.workspacePath, ...relativePath.split('/'))
+    const bytes = new TextEncoder().encode(input.assistantText)
+
+    try {
+      await mkdir(path.dirname(filePath), { recursive: true })
+      await writeFile(filePath, input.assistantText, 'utf8')
+      const artifact = new WorkerArtifactService().registerArtifact({
+        conversationId: input.conversationId,
+        hash: `sha256:${createHash('sha256').update(bytes).digest('hex')}`,
+        kind: 'assistant-output',
+        metadata: {
+          capturedAt: input.at,
+          ...(input.assistantMessageId === undefined ? {} : { assistantMessageId: input.assistantMessageId }),
+          storage: 'workspace-relative',
+        },
+        mimeType: 'text/markdown; charset=utf-8',
+        relativePath,
+        runId: input.taskId,
+        sizeBytes: bytes.byteLength,
+        source: 'system',
+        status: 'available',
+        title: 'Run response',
+      })
+      return { id: artifact.id, relativePath: artifact.relativePath }
+    }
+    catch (err) {
+      consola.warn(`[orchestrator] output artifact capture failed for ${input.taskId}: ${String(err)}`)
+      return null
+    }
   }
 
   private async collectAssistantText(
@@ -2036,6 +2103,11 @@ function parseTranscriptMetadata(row: { role: string, richMetadata: string | nul
 
 function positiveNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : null
+}
+
+function safeArtifactSegment(value: string): string {
+  const normalized = value.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '')
+  return normalized.length > 0 ? normalized.slice(0, 96) : 'run'
 }
 
 function isEngineSessionBinding(value: unknown): value is EngineSessionBinding {

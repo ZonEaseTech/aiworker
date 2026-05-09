@@ -1,7 +1,7 @@
 import type { WorkerRuntime } from '@zonease/aiworker-core'
 import type { WorkerContext } from '../../context'
 
-import { WorkerReviewService, LessonPromotionService } from '@zonease/aiworker-core'
+import { LessonPromotionService, WorkerReviewService } from '@zonease/aiworker-core'
 import consola from 'consola'
 
 import { buildRuntime, loadWorkerContext } from '../../context'
