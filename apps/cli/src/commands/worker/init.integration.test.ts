@@ -207,8 +207,12 @@ describe('aiworker init / scope project placement', () => {
 
       expect(result.exitCode).toBe(0)
       expect(result.output).toContain('Soul         : developer (Developer, flag)')
+      expect(result.output).toContain('Worker pack  : developer (Developer, soul-default)')
       expect(result.output).toContain('[aiworker init] next steps')
       expect(result.output).toContain('aiworker scope')
+      expect(result.output).toContain('.aiworker/worker-packs/developer/SKILL.md')
+      expect(result.output).toContain('.aiworker/domain-systems/developer/DOMAIN.md')
+      expect(result.output).toContain('aiworker pack show developer')
       expect(result.output).toContain('.aiworker/SOUL.md')
       expect(result.output).toContain('aiworker soul show developer')
       expect(result.output).toContain('aiworker doctor')
@@ -228,6 +232,8 @@ describe('aiworker init / scope project placement', () => {
       expect(await exists(path.join(project, '.aiworker', 'native-skill-projections.json'))).toBe(true)
       expect(await exists(path.join(project, '.aiworker', 'scope.json'))).toBe(true)
       expect(await exists(path.join(project, '.aiworker', 'skills'))).toBe(false)
+      expect(await exists(path.join(project, '.aiworker', 'worker-packs', 'developer', 'SKILL.md'))).toBe(true)
+      expect(await exists(path.join(project, '.aiworker', 'domain-systems', 'developer', 'DOMAIN.md'))).toBe(true)
       expect(await exists(path.join(project, '.agents', 'skills', 'aiworker-kernel-brain-admission', 'SKILL.md'))).toBe(true)
       expect(await exists(path.join(project, '.claude', 'skills', 'aiworker-kernel-brain-admission', 'SKILL.md'))).toBe(true)
       expect(await exists(path.join(project, '.aiworker', 'local', '.env'))).toBe(true)
@@ -255,6 +261,11 @@ describe('aiworker init / scope project placement', () => {
       expect(soul).not.toContain('Voice / style guide')
       const policy = JSON.parse(await readFile(path.join(project, '.aiworker', 'policy.json'), 'utf8'))
       expect(policy.soul.preset).toBe('developer')
+      expect(policy.workerPack).toEqual({
+        id: 'developer',
+        label: 'Developer',
+        source: 'soul-default',
+      })
       const scopeManifest = JSON.parse(await readFile(path.join(project, '.aiworker', 'scope.json'), 'utf8'))
       expect(scopeManifest).toEqual({
         approval: 'manual-approval',
@@ -422,6 +433,52 @@ describe('aiworker init / scope project placement', () => {
     })
   })
 
+  it('init --pack overrides the same-id Soul default worker pack', async () => {
+    await withCliIntegrationCleanup(async (cleanup) => {
+      const root = await cleanup.makeTempDir('aiworker-cli-init-pack-')
+      const home = await cleanup.makeTempDir('aiworker-cli-init-pack-home-')
+      const project = path.join(root, 'repo')
+      await mkdir(path.join(project, '.git'), { recursive: true })
+
+      const result = await runCli(cleanup, ['init', '--soul', 'developer', '--pack', 'hr-recruiting'], project, home)
+
+      expect(result.exitCode).toBe(0)
+      expect(result.output).toContain('Soul         : developer (Developer, flag)')
+      expect(result.output).toContain('Worker pack  : hr-recruiting (HR Recruiting, flag)')
+      expect(result.output).toContain('aiworker pack show hr-recruiting')
+      expect(await exists(path.join(project, '.aiworker', 'worker-packs', 'hr-recruiting', 'SKILL.md'))).toBe(true)
+      expect(await exists(path.join(project, '.aiworker', 'domain-systems', 'hr-recruiting', 'DOMAIN.md'))).toBe(true)
+      expect(await exists(path.join(project, '.aiworker', 'worker-packs', 'developer', 'SKILL.md'))).toBe(false)
+
+      const skill = await readFile(path.join(project, '.aiworker', 'worker-packs', 'hr-recruiting', 'SKILL.md'), 'utf8')
+      expect(skill).toContain('# HR Recruiting Worker Skill')
+      const policy = JSON.parse(await readFile(path.join(project, '.aiworker', 'policy.json'), 'utf8'))
+      expect(policy.soul.preset).toBe('developer')
+      expect(policy.workerPack).toEqual({
+        id: 'hr-recruiting',
+        label: 'HR Recruiting',
+        source: 'flag',
+      })
+    })
+  })
+
+  it('init rejects an unknown worker pack before writing project files', async () => {
+    await withCliIntegrationCleanup(async (cleanup) => {
+      const root = await cleanup.makeTempDir('aiworker-cli-init-pack-invalid-')
+      const home = await cleanup.makeTempDir('aiworker-cli-init-pack-invalid-home-')
+      const project = path.join(root, 'repo')
+      await mkdir(path.join(project, '.git'), { recursive: true })
+
+      const result = await runCli(cleanup, ['init', '--soul', 'developer', '--pack', 'missing-pack'], project, home)
+
+      expect(result.exitCode).toBe(2)
+      expect(result.output).toContain('unknown worker pack "missing-pack"')
+      expect(result.output).toContain('Available packs: developer, hr-recruiting, project-manager, qa-reviewer')
+      expect(await exists(path.join(project, '.aiworker'))).toBe(false)
+      expect(await exists(path.join(home, '.aiworker', '.env'))).toBe(false)
+    })
+  })
+
   it('init --token-file writes the token to the requested file and --show-token gates raw stdout', async () => {
     await withCliIntegrationCleanup(async (cleanup) => {
       const root = await cleanup.makeTempDir('aiworker-cli-init-token-file-')
@@ -522,11 +579,14 @@ describe('aiworker init / scope project placement', () => {
       expect(result.output).toContain('[aiworker init] preflight (project-scope)')
       expect(result.output).toContain('Mode         : dry-run (no files will be written)')
       expect(result.output).toContain('Soul         : developer (Developer, flag)')
+      expect(result.output).toContain('Worker pack  : developer (Developer, soul-default)')
       expect(result.output).toContain('.aiworker/policy.json')
       expect(result.output).toContain('.aiworker/brain-capabilities.json')
       expect(result.output).toContain('.aiworker/executor-capabilities.json')
       expect(result.output).toContain('.aiworker/native-skill-projections.json')
       expect(result.output).toContain('.aiworker/scope.json')
+      expect(result.output).toContain('.aiworker/worker-packs/developer/SKILL.md')
+      expect(result.output).toContain('.aiworker/domain-systems/developer/DOMAIN.md')
       expect(result.output).toContain('.agents/skills/aiworker-kernel-brain-admission/SKILL.md')
       expect(result.output).toContain('.claude/skills/aiworker-kernel-brain-admission/SKILL.md')
       expect(result.output).toContain('.aiworker/local/worker.db (worker bootstrap)')

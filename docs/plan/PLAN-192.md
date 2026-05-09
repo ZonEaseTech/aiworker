@@ -168,3 +168,6 @@ Open Design 当前参照形态：
   index、read-only REST surface 与 Web API client，保持真实文件仍由 workspace folder 拥有。
 - 2026-05-09 17:20：S3A 通过 REFACTOR-030 / PLAN-196 完成 OD-style worker pack
   registry 与 CLI list/show；`init` materialization 留给后续 slice。
+- 2026-05-09 18:10：S3B 通过 REFACTOR-031 / PLAN-197 完成 `aiworker init`
+  worker pack materialization；brand-new project 会写入 OD-style `SKILL.md` /
+  `DOMAIN.md` pack assets，并在 policy 中记录 worker pack 来源。

@@ -300,7 +300,8 @@ function buildHelpSections(cli: CAC, sections: HelpSection[]): HelpSection[] {
       title: '开始',
       body: [
         '  aiworker up --soul developer             初始化、验证并启动本地 worker',
-        '  aiworker init --soul developer           只初始化 Project Brain 和本地状态',
+        '  aiworker init --soul developer --pack developer  初始化 worker pack、Project Brain 和本地状态',
+        '  aiworker pack list                       查看可用 worker pack',
         '  aiworker executor select --engine <id> --apply  选择外部 executor',
         '  aiworker env gateway-url <url>           写入 worker-local gateway URL',
         '  aiworker env display-name <name>         写入 fleet 展示名',
@@ -314,6 +315,7 @@ function buildHelpSections(cli: CAC, sections: HelpSection[]): HelpSection[] {
         '  aiworker scope                           查看当前 Project Brain 落位',
         '  aiworker doctor                          验证 Brain 配置',
         '  aiworker soul list                       查看可用 Soul',
+        '  aiworker pack show developer             查看 worker pack 资产',
         '  aiworker brain status                    查看 Brain runtime 状态',
         '  aiworker executor doctor                 查看外部 executor readiness',
       ].join('\n'),

@@ -1,5 +1,19 @@
 # AIWorker Changelog
 
+## 2026-05-09 18:10 [completed] REFACTOR-031 / PLAN-197 — Project init worker pack materialization
+
+Completed S3B of the OD-style worker reboot:
+
+- Added `.aiworker`-local worker pack seed support in fs-layout with path guards.
+- Added `aiworker init --pack <id>` and `aiworker worker init --pack <id>`.
+- `init --soul <id>` now materializes a same-id built-in worker pack when one
+  exists, writing:
+  - `.aiworker/worker-packs/<pack>/SKILL.md`
+  - `.aiworker/domain-systems/<pack>/DOMAIN.md`
+- `policy.json` records selected worker pack metadata for brand-new projects.
+- Init preflight, next steps, and root help now expose the worker pack assets
+  and `aiworker pack show` inspection path.
+
 ## 2026-05-09 17:20 [completed] REFACTOR-030 / PLAN-196 — OD-style worker pack registry
 
 Completed S3A of the OD-style worker reboot:

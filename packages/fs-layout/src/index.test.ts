@@ -459,6 +459,50 @@ describe('ensureProjectAiworker', () => {
     }
   })
 
+  it('writes worker pack seed files under .aiworker and preserves existing content', async () => {
+    const tmp = await makeTmpDir()
+    try {
+      await ensureProjectAiworker(tmp, {
+        workerPackFiles: {
+          'domain-systems/developer/DOMAIN.md': '# Developer Domain\n',
+          'worker-packs/developer/SKILL.md': '# Developer Skill\n',
+        },
+      })
+
+      expect(await readFile(path.join(tmp, '.aiworker', 'domain-systems', 'developer', 'DOMAIN.md'), 'utf8')).toBe('# Developer Domain\n')
+      expect(await readFile(path.join(tmp, '.aiworker', 'worker-packs', 'developer', 'SKILL.md'), 'utf8')).toBe('# Developer Skill\n')
+
+      await ensureProjectAiworker(tmp, {
+        workerPackFiles: {
+          'worker-packs/developer/SKILL.md': '# Overwrite Attempt\n',
+        },
+      })
+      expect(await readFile(path.join(tmp, '.aiworker', 'worker-packs', 'developer', 'SKILL.md'), 'utf8')).toBe('# Developer Skill\n')
+    }
+    finally {
+      await cleanup(tmp)
+    }
+  })
+
+  it('rejects worker pack seed path escapes and unsupported asset names', async () => {
+    const tmp = await makeTmpDir()
+    try {
+      await expect(ensureProjectAiworker(tmp, {
+        workerPackFiles: {
+          '../worker-packs/developer/SKILL.md': '# Escape\n',
+        },
+      })).rejects.toThrow('Invalid worker pack seed path')
+      await expect(ensureProjectAiworker(tmp, {
+        workerPackFiles: {
+          'worker-packs/developer/README.md': '# Wrong asset\n',
+        },
+      })).rejects.toThrow('Invalid worker pack seed path')
+    }
+    finally {
+      await cleanup(tmp)
+    }
+  })
+
   it('keeps explicit fallback brain skill seed support secondary', async () => {
     const tmp = await makeTmpDir()
     try {

@@ -136,14 +136,16 @@ cli
   .option('--force', '兼容旧脚本；项目初始化允许在非 git 目录运行，且仍不会覆盖现有文件')
   .option('--dry-run', '只打印初始化预检和计划写入，不创建或修改文件')
   .option('--soul <preset>', '项目级初始化使用的 Soul 预设；非交互 brand-new init 必填，可选 developer/project-manager/devops-sre/product-designer/qa-reviewer/support-operator/finance-ops/hr-recruiting/general-assistant/customize')
+  .option('--pack <id>', '项目级初始化使用的 worker pack；默认选择与 Soul 同名的内置 pack（如存在）')
   .option('--token-file <path>', '首次初始化时把完整 bootstrap token 写入 chmod 600 文件；默认写入 worker local bootstrap-token.txt')
   .option('--show-token', '首次初始化时在 stdout 高可见 warning block 中显示完整 bootstrap token')
-  .action(async (opts: { dryRun?: boolean, global?: boolean, force?: boolean, showToken?: boolean, soul?: string, tokenFile?: string }) => {
+  .action(async (opts: { dryRun?: boolean, global?: boolean, force?: boolean, pack?: string, showToken?: boolean, soul?: string, tokenFile?: string }) => {
     process.exit(await runInit({
       ...(opts.global === true ? { global: true } : {}),
       ...(opts.force === true ? { force: true } : {}),
       ...(opts.dryRun === true ? { dryRun: true } : {}),
       ...(opts.soul === undefined ? {} : { soul: opts.soul }),
+      ...(opts.pack === undefined ? {} : { pack: opts.pack }),
       ...(opts.tokenFile === undefined ? {} : { tokenFile: opts.tokenFile }),
       ...(opts.showToken === true ? { showToken: true } : {}),
     }))
@@ -748,14 +750,16 @@ cli
   .option('--force', '项目初始化允许在非 git 目录运行，且仍不会覆盖现有文件')
   .option('--dry-run', '只打印初始化预检和计划写入，不创建或修改文件')
   .option('--soul <preset>', '项目级初始化使用的 Soul 预设；非交互 brand-new init 必填，可选 developer/project-manager/devops-sre/product-designer/qa-reviewer/support-operator/finance-ops/hr-recruiting/general-assistant/customize')
+  .option('--pack <id>', '项目级初始化使用的 worker pack；默认选择与 Soul 同名的内置 pack（如存在）')
   .option('--token-file <path>', '首次初始化时把完整 bootstrap token 写入 chmod 600 文件；默认写入 worker local bootstrap-token.txt')
   .option('--show-token', '首次初始化时在 stdout 高可见 warning block 中显示完整 bootstrap token')
-  .action(async (opts: { dryRun?: boolean, global?: boolean, force?: boolean, showToken?: boolean, soul?: string, tokenFile?: string }) => {
+  .action(async (opts: { dryRun?: boolean, global?: boolean, force?: boolean, pack?: string, showToken?: boolean, soul?: string, tokenFile?: string }) => {
     process.exit(await runInit({
       ...(opts.global === true ? { global: true } : {}),
       ...(opts.force === true ? { force: true } : {}),
       ...(opts.dryRun === true ? { dryRun: true } : {}),
       ...(opts.soul === undefined ? {} : { soul: opts.soul }),
+      ...(opts.pack === undefined ? {} : { pack: opts.pack }),
       ...(opts.tokenFile === undefined ? {} : { tokenFile: opts.tokenFile }),
       ...(opts.showToken === true ? { showToken: true } : {}),
     }))

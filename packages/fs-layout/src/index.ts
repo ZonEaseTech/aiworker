@@ -396,6 +396,8 @@ export interface ProjectAiworkerSeed {
   scopeJson?: string
   soulMd?: string
   userMd?: string
+  /** OD-style worker workbench pack assets, relative to `.aiworker/`. */
+  workerPackFiles?: Record<string, string>
 }
 
 type RequiredDefaultSeed = Required<Omit<ProjectAiworkerSeed, 'scopeJson'>>
@@ -417,6 +419,7 @@ const DEFAULT_PROJECT_AIWORKER_SEED: RequiredDefaultSeed = {
   brainSkillFiles: {},
   nativeSkillFiles: {},
   nativeSkillProjections: [],
+  workerPackFiles: {},
   soulMd: `# Voice & style\n\n> Voice / style guide. Influences how the agent phrases responses across channels.\n`,
   userMd: `# User profile\n\n> The agent writes learned facts about the primary user here over time. Edit by hand to bootstrap.\n`,
   memoryMd: `# Long-term memory\n\n> Durable facts, decisions, preferences. Loaded into every session.\n`,
@@ -546,6 +549,11 @@ export async function ensureProjectAiworker(projectRoot: string, seed: ProjectAi
   }
   if ((mergedSeed.nativeSkillProjections ?? []).length > 0)
     await materializeNativeSkillProjectionSeeds(root, mergedSeed.nativeSkillProjections ?? [])
+  for (const [relativePath, content] of Object.entries(mergedSeed.workerPackFiles ?? {})) {
+    const target = resolveProjectWorkerPackSeedPath(aiworker, relativePath)
+    await ensureDir(path.dirname(target))
+    await seedIfAbsent(target, content)
+  }
   for (const [relativePath, content] of Object.entries(mergedSeed.brainSkillFiles ?? {})) {
     const target = resolveProjectBrainSkillSeedPath(aiworker, relativePath)
     await ensureDir(path.dirname(target))
@@ -567,6 +575,18 @@ function resolveProjectBrainSkillSeedPath(aiworkerRoot: string, relativePath: st
     throw new Error(`Invalid Project Brain skill seed path: ${relativePath}`)
 
   return path.join(aiworkerRoot, 'skills', ...normalized.split('/'))
+}
+
+function resolveProjectWorkerPackSeedPath(aiworkerRoot: string, relativePath: string): string {
+  const normalized = normalizeSkillSeedRelativePath(relativePath)
+  const parts = normalized.split('/')
+  const packId = parts[1]
+  const validSkill = parts.length === 3 && parts[0] === 'worker-packs' && parts[2] === 'SKILL.md'
+  const validDomain = parts.length === 3 && parts[0] === 'domain-systems' && parts[2] === 'DOMAIN.md'
+  if (!isSafeProjectRelativePath(normalized) || !(validSkill || validDomain) || !isSafeWorkerPackId(packId))
+    throw new Error(`Invalid worker pack seed path: ${relativePath}`)
+
+  return path.join(aiworkerRoot, ...parts)
 }
 
 export function resolveProjectNativeSkillsDir(projectRoot: string, engine: NativeProjectSkillEngine): string {
@@ -774,6 +794,10 @@ function isSafeProjectRelativePath(relativePath: string): boolean {
     || relativePath.startsWith('/')
     || relativePath.includes('\0')
   )
+}
+
+function isSafeWorkerPackId(id: string | undefined): boolean {
+  return typeof id === 'string' && /^[a-z][a-z0-9-]*$/.test(id)
 }
 
 /** Test-only helper. */

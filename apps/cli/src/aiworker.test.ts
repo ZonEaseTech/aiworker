@@ -238,6 +238,19 @@ describe('aiworker cli registration', () => {
       cleanup(result)
     }
   })
+
+  it('init help 暴露 worker pack 选择参数', async () => {
+    const result = await runCli(['init', '--help'])
+    try {
+      expect(result.exitCode).toBe(0)
+      expect(result.output).toContain('--soul <preset>')
+      expect(result.output).toContain('--pack <id>')
+      expect(result.output).toContain('worker pack')
+    }
+    finally {
+      cleanup(result)
+    }
+  })
 })
 
 describe('preprocessArgv', () => {

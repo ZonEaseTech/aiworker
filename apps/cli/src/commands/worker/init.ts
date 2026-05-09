@@ -1,4 +1,5 @@
 import type { ProjectAiworkerSeed } from '@zonease/aiworker-fs-layout'
+import type { WorkerPack } from '@zonease/aiworker-shared'
 import type { InitSoulId, SelectedSoul } from '../../soul/presets'
 
 import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
@@ -12,6 +13,8 @@ import { ensureProjectAiworker, NATIVE_PROJECT_SKILL_TARGETS, resolveAiworkerSco
 import {
   buildScopeManifest,
   createBuiltinSoulRegistry,
+  findBuiltinWorkerPack,
+  supportedWorkerPackIds,
 } from '@zonease/aiworker-shared'
 import consola from 'consola'
 
@@ -38,6 +41,8 @@ export interface InitOptions {
   dryRun?: boolean
   /** Project Soul preset id. Required for non-interactive brand-new project init. */
   soul?: string
+  /** OD-style worker pack id. Defaults to a same-id pack when the selected Soul has one. */
+  pack?: string
   /** Write the first-run bootstrap token to this chmod 0600 file. */
   tokenFile?: string
   /** Explicitly print the full bootstrap token in a warning block. */
@@ -54,6 +59,7 @@ interface PreflightReport {
   soul?: SelectedSoul
   targetHome: string
   targetProject?: string
+  workerPack?: SelectedWorkerPack
 }
 
 const PROJECT_TEMPLATE_PATHS = [
@@ -102,6 +108,18 @@ interface ResolveSoulResult {
   soul?: SelectedSoul
 }
 
+type WorkerPackSource = 'flag' | 'soul-default'
+
+interface SelectedWorkerPack {
+  pack: WorkerPack
+  source: WorkerPackSource
+}
+
+interface ResolveWorkerPackResult {
+  code?: number
+  selection?: SelectedWorkerPack
+}
+
 async function resolveOptionalProjectSoul(options: InitOptions): Promise<ResolveSoulResult> {
   if (options.soul === undefined)
     return {}
@@ -148,6 +166,25 @@ async function resolveProjectSoulFromValue(value: string, source: SelectedSoul['
     }
   }
   return { soul: toSelectedSoul(preset, source) }
+}
+
+function resolveProjectWorkerPack(options: InitOptions, soul?: SelectedSoul): ResolveWorkerPackResult {
+  if (options.pack !== undefined) {
+    const id = options.pack.trim()
+    const pack = findBuiltinWorkerPack(id)
+    if (!pack) {
+      return {
+        code: printInitUsageError(`unknown worker pack "${options.pack}". Available packs: ${supportedWorkerPackIds()}`),
+      }
+    }
+    return { selection: { pack, source: 'flag' } }
+  }
+
+  if (soul === undefined)
+    return {}
+
+  const pack = findBuiltinWorkerPack(soul.id)
+  return pack === undefined ? {} : { selection: { pack, source: 'soul-default' } }
 }
 
 function parseSoulAnswer(answer: string): InitSoulId | null {
@@ -280,7 +317,11 @@ function buildScopeManifestSeed(soul: SelectedSoul): string {
   return `${JSON.stringify(manifest, null, 2)}\n`
 }
 
-function buildProjectAiworkerSeed(soul: SelectedSoul): ProjectAiworkerSeed {
+function buildProjectAiworkerSeed(soul?: SelectedSoul, workerPack?: SelectedWorkerPack): ProjectAiworkerSeed {
+  const packSeed = buildProjectWorkerPackSeed(workerPack)
+  if (soul === undefined)
+    return packSeed
+
   const policy = {
     schemaVersion: 1,
     status: 'draft',
@@ -305,6 +346,15 @@ function buildProjectAiworkerSeed(soul: SelectedSoul): ProjectAiworkerSeed {
         { pattern: 'deploy.*', action: 'ask' },
       ],
     },
+    ...(workerPack === undefined
+      ? {}
+      : {
+          workerPack: {
+            id: workerPack.pack.id,
+            label: workerPack.pack.label,
+            source: workerPack.source,
+          },
+        }),
   }
   const brainCapabilities = {
     schemaVersion: 1,
@@ -335,6 +385,20 @@ function buildProjectAiworkerSeed(soul: SelectedSoul): ProjectAiworkerSeed {
     policyJson: `${JSON.stringify(policy, null, 2)}\n`,
     scopeJson: buildScopeManifestSeed(soul),
     soulMd: ensureTrailingNewline(soul.soulMd ?? generatedSoulMd),
+    ...packSeed,
+  }
+}
+
+function buildProjectWorkerPackSeed(selection?: SelectedWorkerPack): ProjectAiworkerSeed {
+  if (selection === undefined)
+    return {}
+
+  const { pack } = selection
+  return {
+    workerPackFiles: {
+      [`domain-systems/${pack.id}/DOMAIN.md`]: ensureTrailingNewline(pack.domainMd),
+      [`worker-packs/${pack.id}/SKILL.md`]: ensureTrailingNewline(pack.skillMd),
+    },
   }
 }
 
@@ -352,10 +416,12 @@ function buildProjectAiworkerSeed(soul: SelectedSoul): ProjectAiworkerSeed {
  * does not overwrite existing files.
  */
 export async function runInit(options: InitOptions = {}): Promise<number> {
-  if (options.global === true && options.soul !== undefined)
-    return printInitUsageError('--soul is only supported for project-scope init; remove --global or omit --soul')
-
   if (options.global === true) {
+    if (options.soul !== undefined)
+      return printInitUsageError('--soul is only supported for project-scope init; remove --global or omit --soul')
+    if (options.pack !== undefined)
+      return printInitUsageError('--pack is only supported for project-scope init; remove --global or omit --pack')
+
     const home = path.join(homedir(), '.aiworker')
     const report = buildUserScopePreflight(home, options)
     printPreflightReport(report)
@@ -378,6 +444,8 @@ export async function runInit(options: InitOptions = {}): Promise<number> {
   if (scope.scope === 'explicit') {
     if (options.soul !== undefined)
       return printInitUsageError('--soul is only supported for project-scope init; unset AIWORKER_HOME or omit --soul')
+    if (options.pack !== undefined)
+      return printInitUsageError('--pack is only supported for project-scope init; unset AIWORKER_HOME or omit --pack')
 
     const report = buildUserScopePreflight(scope.home, { ...options, scope: 'explicit' })
     printPreflightReport(report)
@@ -403,22 +471,25 @@ export async function runInit(options: InitOptions = {}): Promise<number> {
       : await resolveRequiredProjectSoul(options, 'project init with missing Soul material')
     if (soulResult.code !== undefined)
       return soulResult.code
+    const packResult = resolveProjectWorkerPack(options, soulResult.soul)
+    if (packResult.code !== undefined)
+      return packResult.code
 
-    const report = buildProjectPreflight(existingRoot, options, soulResult.soul)
+    const report = buildProjectPreflight(existingRoot, options, soulResult.soul, packResult.selection)
     printPreflightReport(report)
     if (options.dryRun === true)
       return 0
 
     await ensureProjectAiworker(
       existingRoot,
-      soulResult.soul === undefined ? {} : buildProjectAiworkerSeed(soulResult.soul),
+      buildProjectAiworkerSeed(soulResult.soul, packResult.selection),
     )
     const projectLocal = path.join(existingRoot, '.aiworker', 'local')
     const dotenv = bootstrapDotenv({ home: projectLocal, printOnMint: false })
     const ctx = await loadWorkerContext({ silent: true })
     printInitSecrets({ ctx, dotenv, options, tokenHome: projectLocal })
     consola.success(`[aiworker init] project-scope worker ${ctx.workerId} ready (${existingRoot})`)
-    printProjectNextSteps(existingRoot, soulResult.soul)
+    printProjectNextSteps(existingRoot, soulResult.soul, packResult.selection)
     return 0
   }
 
@@ -426,13 +497,16 @@ export async function runInit(options: InitOptions = {}): Promise<number> {
   if (soulResult.code !== undefined)
     return soulResult.code
   const soul = soulResult.soul!
+  const packResult = resolveProjectWorkerPack(options, soul)
+  if (packResult.code !== undefined)
+    return packResult.code
 
-  const report = buildProjectPreflight(cwd, { ...options, gitRepoDetected: isGitRepo(cwd) }, soul)
+  const report = buildProjectPreflight(cwd, { ...options, gitRepoDetected: isGitRepo(cwd) }, soul, packResult.selection)
   printPreflightReport(report)
   if (options.dryRun === true)
     return 0
 
-  await ensureProjectAiworker(cwd, buildProjectAiworkerSeed(soul))
+  await ensureProjectAiworker(cwd, buildProjectAiworkerSeed(soul, packResult.selection))
   // `init` owns dotenv bootstrap, so a brand-new project mints or persists
   // exactly one project-local secret set and never creates a user-scope
   // fallback first. Preserve operator-provided master/shared secrets: later
@@ -444,7 +518,7 @@ export async function runInit(options: InitOptions = {}): Promise<number> {
   const ctx = await loadWorkerContext({ silent: true })
   printInitSecrets({ ctx, dotenv, options, tokenHome: projectLocal })
   consola.success(`[aiworker init] project-scope worker ${ctx.workerId} ready (${cwd})`)
-  printProjectNextSteps(cwd, soul)
+  printProjectNextSteps(cwd, soul, packResult.selection)
   return 0
 }
 
@@ -546,25 +620,29 @@ function executorChoicePreface(soul?: SelectedSoul): string[] {
   ]
 }
 
-function printProjectNextSteps(projectRoot: string, soul?: SelectedSoul): void {
+function printProjectNextSteps(projectRoot: string, soul?: SelectedSoul, workerPack?: SelectedWorkerPack): void {
+  const packLine = workerPack
+    ? `  2. Review worker pack assets: .aiworker/worker-packs/${workerPack.pack.id}/SKILL.md / .aiworker/domain-systems/${workerPack.pack.id}/DOMAIN.md; inspect with \`aiworker pack show ${workerPack.pack.id}\`.`
+    : '  2. Pick a worker pack when you are ready to shape the workbench: `aiworker pack list`.'
   const soulLine = soul
-    ? `  2. Review brain identity: .aiworker/SOUL.md / USER.md (preset \`${soul.id}\`); inspect capabilities with \`aiworker soul show ${soul.id}\`.`
-    : '  2. Review brain identity: .aiworker/SOUL.md / USER.md; list presets with `aiworker soul list`.'
+    ? `  3. Review brain identity: .aiworker/SOUL.md / USER.md (preset \`${soul.id}\`); inspect capabilities with \`aiworker soul show ${soul.id}\`.`
+    : '  3. Review brain identity: .aiworker/SOUL.md / USER.md; list presets with `aiworker soul list`.'
   const recommendation = recommendedEnginesForSoul(soul?.id)
   process.stdout.write([
-    '[aiworker init] next steps — Project Brain comes first; executor is bring-your-own',
+    '[aiworker init] next steps — Worker pack and local workspace come first; executor is bring-your-own',
     `  1. Confirm scope: \`aiworker scope\` (project root: ${projectRoot}).`,
+    packLine,
     soulLine,
-    '  3. Inspect Project Brain and native skill targets: `aiworker brain status` (then `aiworker brain skills` / `aiworker brain memories`).',
-    '  4. Validate brain capability drafts: `aiworker doctor`.',
-    '  5. (Optional) declare project executor overlay hints: `aiworker executor mcp add ... --engine <engine>` then `aiworker executor mcp sync --engine <engine> --dry-run`.',
-    `  6. Select task executor when ready: \`aiworker executor select --engine <YOUR_ENGINE> --apply\`.`,
+    '  4. Inspect Project Brain and native skill targets: `aiworker brain status` (then `aiworker brain skills` / `aiworker brain memories`).',
+    '  5. Validate brain capability drafts: `aiworker doctor`.',
+    '  6. (Optional) declare project executor overlay hints: `aiworker executor mcp add ... --engine <engine>` then `aiworker executor mcp sync --engine <engine> --dry-run`.',
+    `  7. Select task executor when ready: \`aiworker executor select --engine <YOUR_ENGINE> --apply\`.`,
     ...executorChoicePreface(soul),
-    `  7. Check executor readiness: \`aiworker executor doctor --engine <YOUR_ENGINE>\` (engine login/auth lives outside AIWorker; suggested: \`${recommendation.primary}\`).`,
-    '  8. Smoke bootstrap: `aiworker run --message "hello" --dry-run`.',
-    '  9. After configuring executor secrets/model: `aiworker run --message "hello"`.',
-    ' 10. Need HTTP/admin UI: `aiworker up --port 9217` (or explicit `aiworker serve --port 9217`).',
-    ' 11. Need fleet control: start/connect a gateway, then use self-enroll or OTP from `aiworker serve`.',
+    `  8. Check executor readiness: \`aiworker executor doctor --engine <YOUR_ENGINE>\` (engine login/auth lives outside AIWorker; suggested: \`${recommendation.primary}\`).`,
+    '  9. Smoke bootstrap: `aiworker run --message "hello" --dry-run`.',
+    ' 10. After configuring executor secrets/model: `aiworker run --message "hello"`.',
+    ' 11. Need HTTP/admin UI: `aiworker up --port 9217` (or explicit `aiworker serve --port 9217`).',
+    ' 12. Need fleet control: start/connect a gateway, then use self-enroll or OTP from `aiworker serve`.',
   ].join('\n'))
   process.stdout.write('\n')
 }
@@ -607,6 +685,7 @@ function buildProjectPreflight(
   projectRoot: string,
   options: InitOptions & { gitRepoDetected?: boolean },
   soul?: SelectedSoul,
+  workerPack?: SelectedWorkerPack,
 ): PreflightReport {
   const root = path.resolve(projectRoot)
   const create: string[] = []
@@ -631,6 +710,19 @@ function buildProjectPreflight(
         create.push(displayPath)
     }
     notes.push(`Default Soul skills will be projected with aiworker-* managed names into native executor project skill directories: ${NATIVE_PROJECT_SKILL_TARGETS.map(target => target.directory).join(', ')}.`)
+  }
+
+  if (workerPack) {
+    for (const relative of buildWorkerPackPreflightPaths(workerPack.pack)) {
+      if (existsSync(path.join(root, '.aiworker', relative)))
+        preserve.push(`.aiworker/${relative} (existing worker pack asset)`)
+      else
+        create.push(`.aiworker/${relative}`)
+    }
+    notes.push(`Worker pack ${workerPack.pack.id} will be materialized as OD-style workbench assets: SKILL.md + DOMAIN.md.`)
+  }
+  else if (soul && options.pack === undefined) {
+    notes.push(`No same-id worker pack is available for Soul ${soul.id}; use --pack <id> to materialize a workbench pack explicitly.`)
   }
 
   for (const relative of PROJECT_BOOTSTRAP_STATE_PATHS) {
@@ -673,6 +765,7 @@ function buildProjectPreflight(
     ...(soul === undefined ? {} : { soul }),
     targetHome: path.join(root, '.aiworker', 'local'),
     targetProject: root,
+    ...(workerPack === undefined ? {} : { workerPack }),
   }
 }
 
@@ -685,6 +778,13 @@ function buildNativeSkillPreflightPaths(projectRoot: string, soul: SelectedSoul)
     }
   }
   return paths.sort()
+}
+
+function buildWorkerPackPreflightPaths(pack: WorkerPack): string[] {
+  return [
+    `domain-systems/${pack.id}/DOMAIN.md`,
+    `worker-packs/${pack.id}/SKILL.md`,
+  ]
 }
 
 function buildUserScopePreflight(
@@ -725,6 +825,7 @@ function printPreflightReport(report: PreflightReport): void {
     `Home         : ${report.targetHome}`,
     `Mode         : ${report.applyLabel}`,
     report.soul ? `Soul         : ${report.soul.id} (${report.soul.label}, ${report.soul.source})` : null,
+    report.workerPack ? `Worker pack  : ${report.workerPack.pack.id} (${report.workerPack.pack.label}, ${report.workerPack.source})` : null,
   ].filter((line): line is string => line !== null)
 
   process.stdout.write(`${header.join('\n')}\n`)
