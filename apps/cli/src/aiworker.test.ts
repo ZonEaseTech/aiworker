@@ -48,6 +48,10 @@ const ROOT_WORKER_COMMANDS = [
   'brain admission apply',
   'brain admission propose',
   'brain brief',
+  'case list',
+  'case show',
+  'case rerun',
+  'lessons propose',
   'run',
   'serve',
   'config show',
@@ -284,6 +288,25 @@ describe('preprocessArgv', () => {
     ])
   })
 
+  it('case show 被折叠为本地 worker case 快捷入口', () => {
+    expect(run('case', 'show', 'task-001')).toEqual([
+      '/usr/bin/bun',
+      '/path/to/aiworker.ts',
+      'case show',
+      'task-001',
+    ])
+  })
+
+  it('lessons propose 被折叠为本地 worker lesson 提案入口', () => {
+    expect(run('lessons', 'propose', 'task-001', '--apply')).toEqual([
+      '/usr/bin/bun',
+      '/path/to/aiworker.ts',
+      'lessons propose',
+      'task-001',
+      '--apply',
+    ])
+  })
+
   it('config set <json> 折叠为本地 worker 快捷入口', () => {
     const argv = run('config', 'set', '{"a":1}', '--if-match', '3')
     expect(argv).toEqual([
@@ -380,6 +403,17 @@ describe('preprocessArgv', () => {
       'worker executor select',
       '--engine',
       'codex',
+    ])
+  })
+
+  it('worker case rerun 被折叠', () => {
+    expect(run('worker', 'case', 'rerun', 'task-001', '--message', 'retry')).toEqual([
+      '/usr/bin/bun',
+      '/path/to/aiworker.ts',
+      'worker case rerun',
+      'task-001',
+      '--message',
+      'retry',
     ])
   })
 
