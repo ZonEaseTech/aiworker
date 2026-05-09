@@ -22,6 +22,7 @@ import { errorHandler } from '../shared/middleware/error-handler'
 import { requestLogger } from '../shared/middleware/logger'
 import { adminStaticMiddleware } from '../worker/admin/serve-static'
 import { buildBrainRoutes } from '../worker/brain/routes'
+import { buildCaseRoutes } from '../worker/cases/routes'
 import { buildChannelRoutes } from '../worker/channels/routes'
 import { buildEventRoutes } from '../worker/events/routes'
 import { evolutionRoutes } from '../worker/evolution/routes'
@@ -220,6 +221,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   }))
 
   app.route('/api/worker/orchestrator', buildOrchestratorRoutes(() => state.runtime))
+  app.route('/api/worker/cases', buildCaseRoutes(() => state.runtime))
   app.route('/api/worker/evolution', evolutionRoutes)
   app.route('/api/worker/events', buildEventRoutes(() => state.runtime))
   app.route('/api/worker/brain', buildBrainRoutes({
@@ -313,6 +315,10 @@ function registerWorkerOpenApiPaths(app: OpenAPIHono): void {
     { method: 'get', path: '/api/worker/brain/admission/{id}', summary: 'Show admission proposal + decisions', tags: ['brain'], requireAuth: true },
     { method: 'post', path: '/api/worker/brain/admission/{id}/approve', summary: 'Approve a pending admission proposal', tags: ['brain'], requireAuth: true },
     { method: 'post', path: '/api/worker/brain/admission/{id}/apply', summary: 'Materialize an approved admission proposal (dry-run unless commit=true)', tags: ['brain'], requireAuth: true },
+    { method: 'get', path: '/api/worker/cases', summary: 'List operator-facing Worker Case Files', tags: ['cases'], requireAuth: true },
+    { method: 'get', path: '/api/worker/cases/{taskId}', summary: 'Show one Worker Case File with review decision and evidence', tags: ['cases'], requireAuth: true },
+    { method: 'post', path: '/api/worker/cases/{taskId}/rerun', summary: 'Create a bounded rerun from one Worker Case', tags: ['cases'], requireAuth: true },
+    { method: 'post', path: '/api/worker/cases/{taskId}/lessons/propose', summary: 'Create Brain admission proposals from one Worker Case lessons queue', tags: ['cases'], requireAuth: true },
     { method: 'get', path: '/api/worker/orchestrator/tasks', summary: 'List recent worker orchestrator tasks', tags: ['orchestrator'], requireAuth: true },
     { method: 'get', path: '/api/worker/orchestrator/tasks/{id}/journal', summary: 'Show Brain Journal trace for one worker task', tags: ['orchestrator'], requireAuth: true },
     { method: 'post', path: '/api/worker/orchestrator/tasks/{id}/rerun', summary: 'Create a bounded proof-loop rerun for one worker task', tags: ['orchestrator'], requireAuth: true },

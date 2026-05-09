@@ -1,6 +1,6 @@
 # PLAN-183 Case File contract and product boundary
 
-- **status**: implementing
+- **status**: completed
 - **owner**: local
 - **createdAt**: 2026-05-09 05:55
 - **task**: FEAT-057
@@ -54,3 +54,6 @@ projections, while remaining derived from the existing worker-owned DB state.
 ## Notes
 
 - 2026-05-09 05:55：Plan opened as the first implementation slice for FEAT-057.
+- 2026-05-09 06:32：完成首版 Case File public contract。类型已从 core 导出，
+  REST/CLI/Web/Fleet 可复用同一投影对象；Case File 明确保持为 Brain Journal 派生
+  evidence，不成为第二套 task log 或 executor harness。

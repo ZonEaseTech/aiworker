@@ -71,6 +71,23 @@ export {
   createBrainBriefCompiler,
 } from './worker/brain/brief'
 
+// Worker Case surface (FEAT-057)：operator-facing projection over Brain
+// Journal / Gate / Brain Engine review / lessons. It is derived evidence, not
+// another mutable task log or executor harness.
+export {
+  type BrainCaseDecisionStatus,
+  type BrainCaseEvidenceSummary,
+  type BrainCaseFile,
+  type BrainCaseLessonCandidate,
+  type BrainCaseLessonsSummary,
+  type BrainCaseListOptions,
+  type BrainCaseOutcome,
+  type BrainCaseReviewDecision,
+  type BrainCaseRiskSummary,
+  BrainCaseService,
+  createBrainCaseService,
+} from './worker/brain/cases'
+
 // Brain diagnostics：CLI / 管理 API 共用的只读 source 摘要。
 export { type BrainSourceDiagnostic, describeBrainSource } from './worker/brain/diagnostics'
 

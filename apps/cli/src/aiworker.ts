@@ -58,6 +58,12 @@ import {
   runBrainStatus,
 } from './commands/worker/brain'
 import {
+  runCaseList,
+  runCaseRerun,
+  runCaseShow,
+  runLessonsPropose,
+} from './commands/worker/case'
+import {
   runConfigSet as runConfigSetLocal,
   runConfigShow,
 } from './commands/worker/config'
@@ -279,6 +285,42 @@ cli.command('soul list', '列出内置 Soul 预设及其声明能力').action(as
 cli.command('soul show <preset>', '查看某个 Soul 预设的职责、边界、能力草案和风险策略').action(async (preset: string) => {
   process.exit(await runSoulShow(preset))
 })
+
+cli
+  .command('case list', '列出本地 worker 的 Worker Case File 投影（operator 默认审查入口）')
+  .option('--limit <n>', '最多返回 case 数量（1-200，默认 50）', { type: [Number] })
+  .action(async (opts: { limit?: number[] }) => {
+    process.exit(await runCaseList({ limit: optionalNumber(opts.limit) }))
+  })
+
+cli
+  .command('case show <taskId>', '查看一个 task 的 Case File、Review Decision、Evidence、Risk 和 Lessons')
+  .option('--show-sensitive', '不再对 payload / message preview 做 secret-like redaction')
+  .action(async (taskId: string, opts: { showSensitive?: boolean }) => {
+    process.exit(await runCaseShow(taskId, {
+      ...(opts.showSensitive === undefined ? {} : { showSensitive: opts.showSensitive }),
+    }))
+  })
+
+cli
+  .command('case rerun <taskId>', '基于现有 proof-loop 规则显式重跑一个 case')
+  .option('--prompt <text>', '覆盖 rerun prompt；默认由 orchestrator 构造 repair context')
+  .action(async (taskId: string, opts: { prompt?: string }) => {
+    process.exit(await runCaseRerun(taskId, {
+      ...(opts.prompt === undefined ? {} : { prompt: opts.prompt }),
+    }))
+  })
+
+cli
+  .command('lessons propose <taskId>', '从 Case lesson candidates 创建 pending Brain admission proposals')
+  .option('--soul <id>', '写入 proposal 的 Soul id（默认 developer）')
+  .option('--scope <id>', '写入 proposal 的 scope id（可选）')
+  .action(async (taskId: string, opts: { soul?: string, scope?: string }) => {
+    process.exit(await runLessonsPropose(taskId, {
+      ...(opts.soul === undefined ? {} : { soulId: opts.soul }),
+      ...(opts.scope === undefined ? {} : { scopeId: opts.scope }),
+    }))
+  })
 
 cli.command('brain status', '只读诊断本地 worker runtime brain source、写入目标、decision pipeline（heuristic/LLM、observe_only/enforced、recent fallback）和健康状态').action(async () => {
   process.exit(await runBrainStatus())
@@ -845,6 +887,42 @@ cli.command('worker soul list', '列出内置 Soul 预设及其声明能力').ac
 cli.command('worker soul show <preset>', '查看某个 Soul 预设的职责、边界、能力草案和风险策略').action(async (preset: string) => {
   process.exit(await runSoulShow(preset))
 })
+
+cli
+  .command('worker case list', '列出本地 worker 的 Worker Case File 投影（operator 默认审查入口）')
+  .option('--limit <n>', '最多返回 case 数量（1-200，默认 50）', { type: [Number] })
+  .action(async (opts: { limit?: number[] }) => {
+    process.exit(await runCaseList({ limit: optionalNumber(opts.limit) }))
+  })
+
+cli
+  .command('worker case show <taskId>', '查看一个 task 的 Case File、Review Decision、Evidence、Risk 和 Lessons')
+  .option('--show-sensitive', '不再对 payload / message preview 做 secret-like redaction')
+  .action(async (taskId: string, opts: { showSensitive?: boolean }) => {
+    process.exit(await runCaseShow(taskId, {
+      ...(opts.showSensitive === undefined ? {} : { showSensitive: opts.showSensitive }),
+    }))
+  })
+
+cli
+  .command('worker case rerun <taskId>', '基于现有 proof-loop 规则显式重跑一个 case')
+  .option('--prompt <text>', '覆盖 rerun prompt；默认由 orchestrator 构造 repair context')
+  .action(async (taskId: string, opts: { prompt?: string }) => {
+    process.exit(await runCaseRerun(taskId, {
+      ...(opts.prompt === undefined ? {} : { prompt: opts.prompt }),
+    }))
+  })
+
+cli
+  .command('worker lessons propose <taskId>', '从 Case lesson candidates 创建 pending Brain admission proposals')
+  .option('--soul <id>', '写入 proposal 的 Soul id（默认 developer）')
+  .option('--scope <id>', '写入 proposal 的 scope id（可选）')
+  .action(async (taskId: string, opts: { soul?: string, scope?: string }) => {
+    process.exit(await runLessonsPropose(taskId, {
+      ...(opts.soul === undefined ? {} : { soulId: opts.soul }),
+      ...(opts.scope === undefined ? {} : { scopeId: opts.scope }),
+    }))
+  })
 
 cli.command('worker brain status', '只读诊断本地 worker runtime brain source、写入目标和健康状态').action(async () => {
   process.exit(await runBrainStatus())

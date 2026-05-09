@@ -9,6 +9,30 @@ Case File, Review Decision, and Lessons Queue as the operator-facing workflow.
 The first implementation slice is PLAN-183 / PLAN-184 / PLAN-185: contract,
 core projection, and REST/CLI surface before Web/Fleet expansion.
 
+## 2026-05-09 06:05 [progress]
+
+Started PLAN-184 / PLAN-185 implementation. The first code slice intentionally
+avoids DB schema changes: `BrainCaseService` will derive Case File and Review
+Decision from existing worker-owned task rows and Brain Journal events, then
+REST/CLI will expose the Case surface while keeping raw Journal commands as
+debug-level tools.
+
+## 2026-05-09 06:32 [completed] PLAN-183 / PLAN-184 / PLAN-185 — Worker Case REST/CLI surface
+
+Completed the first Worker Case operating slice:
+
+- Added `BrainCaseService` as the shared projection over Brain Journal,
+  Gate verdict, Brain Engine review, task rows, risk preflight and lesson
+  candidates. No DB schema change was introduced.
+- Added Worker REST `GET /api/worker/cases`, `GET /api/worker/cases/:taskId`,
+  `POST /api/worker/cases/:taskId/rerun` and
+  `POST /api/worker/cases/:taskId/lessons/propose`, including OpenAPI registry
+  entries.
+- Added CLI `aiworker case list/show/rerun`, `aiworker lessons propose`, and
+  worker-prefixed equivalents.
+- Focused core/API/CLI/OpenAPI tests, `bun run typecheck`, and `bun run lint`
+  pass for this slice.
+
 ## 2026-05-09 [completed] REL-029 / PLAN-182 — 发布 aiworker CLI 0.11.0
 
 发布 `@zonease/aiworker-cli@0.11.0` minor release，承载 0.10.4 之后的

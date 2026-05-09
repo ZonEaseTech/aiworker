@@ -1,7 +1,7 @@
 # PLAN-184 BrainCaseService projection
 
-- **status**: pending
-- **owner**: unassigned
+- **status**: completed
+- **owner**: local
 - **createdAt**: 2026-05-09 05:55
 - **task**: FEAT-057
 
@@ -37,3 +37,10 @@ Add `BrainCaseService` under core. It should:
 
 - Core tests for list + show.
 - Existing Journal tests still pass.
+
+## Notes
+
+- 2026-05-09 06:05：进入 implementing。实现约束是不改 DB schema，仅从
+  `BrainJournalService` 和 worker-owned task rows 派生 Case File。
+- 2026-05-09 06:32：`BrainCaseService` 已实现 list/show 投影，覆盖 Review Decision、
+  outcome、evidence、risk、lineage 和 lesson candidates。聚焦 core 测试通过。

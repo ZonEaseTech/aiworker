@@ -68,6 +68,10 @@ describe('worker /openapi.json registration (BUG-065)', () => {
       expect(paths).toContain('/api/worker/brain/summary')
       expect(paths).toContain('/api/worker/brain/admission')
       expect(paths).toContain('/api/worker/brain/admission/{id}')
+      expect(paths).toContain('/api/worker/cases')
+      expect(paths).toContain('/api/worker/cases/{taskId}')
+      expect(paths).toContain('/api/worker/cases/{taskId}/rerun')
+      expect(paths).toContain('/api/worker/cases/{taskId}/lessons/propose')
       expect(paths).toContain('/api/worker/orchestrator/tasks')
       expect(paths).toContain('/api/worker/orchestrator/conversations')
       expect(paths).toContain('/api/worker/orchestrator/conversations/{id}/messages')
@@ -78,6 +82,9 @@ describe('worker /openapi.json registration (BUG-065)', () => {
       expect(healthEntry?.tags).toContain('health')
       const brainEntry = doc.paths['/api/worker/brain/admission']?.get as { security?: unknown[] } | undefined
       expect(Array.isArray(brainEntry?.security)).toBe(true)
+      const caseEntry = doc.paths['/api/worker/cases']?.get as { tags?: string[], security?: unknown[] } | undefined
+      expect(caseEntry?.tags).toContain('cases')
+      expect(Array.isArray(caseEntry?.security)).toBe(true)
 
       const securitySchemes = doc.components?.securitySchemes ?? {}
       expect(securitySchemes.bearerAuth).toBeDefined()
