@@ -298,5 +298,5 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REL-031 发布 aiworker CLI 0.12.1**](REL-031.md) `P1`
 - [x] [**QA-025 Case-driven Brain loop release validation**](QA-025.md) `P1`
 - [x] [**REFACTOR-026 Executor non-interference boundary**](REFACTOR-026.md) `P0`
-- [-] [**REL-032 Publish aiworker CLI 0.12.2**](REL-032.md) `P1`
-- [-] [**QA-026 Executor non-interference release validation**](QA-026.md) `P1`
+- [x] [**REL-032 Publish aiworker CLI 0.12.2**](REL-032.md) `P1`
+- [x] [**QA-026 Executor non-interference release validation**](QA-026.md) `P1`

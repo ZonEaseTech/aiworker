@@ -1,9 +1,9 @@
 # AIWorker Changelog
 
-## 2026-05-09 16:50 [progress] REL-032 / QA-026 — CLI 0.12.2 release
+## 2026-05-09 17:04 [completed] REL-032 / QA-026 — CLI 0.12.2 release
 
-Prepared `@zonease/aiworker-cli@0.12.2` as the executor non-interference patch
-release after REFACTOR-026.
+Released `@zonease/aiworker-cli@0.12.2` as the executor non-interference patch
+release after REFACTOR-026:
 
 - Source real-worker regression passed against `/Users/ben/projects/my-aiworker`
   before the version bump: no default control executor, successful Codex Chat,
@@ -14,6 +14,15 @@ release after REFACTOR-026.
   `bun run lint`, `bun run test`, `bun run build`, and `git diff --check`.
 - Dist reports `0.12.2`; publish dry-run packed 34 files / 3.21MB before the
   expected local npm auth boundary.
+- GitHub release workflow `25597026067` passed and published npm plus 4 GitHub
+  Release binary assets.
+- npm latest is `0.12.2`; `bunx @zonease/aiworker-cli@0.12.2 --version`
+  returns `aiworker/0.12.2 darwin-arm64 node-v24.3.0`.
+- main `lint` workflow `25597024994` and `build-image` workflow `25597024993`
+  passed.
+- Published-package compact governance harness passed with 80 PASS / 0 FAIL /
+  0 SKIPPED. Report:
+  `tmp/governance-kernel-0.12.2-cli-compact-20260509-1700/reports/governance-kernel-report.md`.
 
 ## 2026-05-09 17:05 [completed] REFACTOR-026 / PLAN-192 — Executor non-interference boundary
 

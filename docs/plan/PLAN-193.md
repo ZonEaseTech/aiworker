@@ -1,9 +1,10 @@
 # PLAN-193 Executor non-interference 0.12.2 release readiness
 
-- **status**: implementing
+- **status**: completed
 - **owner**: local
 - **createdAt**: 2026-05-09 16:50
 - **approvedAt**: 2026-05-09 16:50
+- **completedAt**: 2026-05-09 17:04
 - **task**: REL-032
 
 ## Context
@@ -68,3 +69,10 @@ npm latest is still `0.12.1`, so the next publish target is the patch release
   typecheck, lint, full test suite, production build, and diff check.
 - 2026-05-09 16:53: dist reports `0.12.2`; publish dry-run packed
   34 files / 3.21MB and stopped at the expected local npm auth boundary.
+- 2026-05-09 16:56: pushed `main` and tag `v0.12.2`; release workflow
+  `25597026067` passed and published npm + GitHub Release assets.
+- 2026-05-09 17:00: `npm view @zonease/aiworker-cli version` returned
+  `0.12.2`; `bunx @zonease/aiworker-cli@0.12.2 --version` returned
+  `aiworker/0.12.2 darwin-arm64 node-v24.3.0`.
+- 2026-05-09 17:03: published-package compact governance harness passed
+  80/80 checks across `developer-codex` and `general-assistant-claude-code`.
