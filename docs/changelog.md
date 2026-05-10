@@ -1,5 +1,72 @@
 # AIWorker Changelog
 
+## 2026-05-10 22:31 [completed] REFACTOR-054 / PLAN-228..231 / QA-030 — Structured engine session parity
+
+- Investigated the reported stderr-only session behavior.
+- Confirmed the root cause is the local executor contract, not only Worker Web:
+  AIWorker wraps Codex as one synthetic Bash command without `--json`, emits
+  stdout/stderr as coarse logs, and fails turns that do not write a mandatory
+  artifact file.
+- Compared the current implementation with Open Design's daemon run service,
+  engine argument registry, structured JSON event parsers, and Web event
+  translation.
+- Opened REFACTOR-054 plus PLAN-228..231 to port the OD session/engine contract
+  into AIWorker's `session` / `engine_invocation` model without making run a
+  user-facing product object.
+- Implemented OD-style local engine adapters for the surfaced engines:
+  Codex CLI, Claude Code, Cursor Agent, Gemini CLI, OpenCode, and Qwen Code.
+  Unsupported ACP engines are not exposed in Local CLI settings until AIWorker
+  has a correct ACP adapter.
+- Codex now runs through `codex exec --json` with stdin prompt delivery,
+  workspace cwd, and workspace-write network config. Claude, Cursor, Gemini,
+  and OpenCode use their structured stream modes; Qwen uses a plain stdout
+  fallback.
+- Local CLI execution now uses the resolved engine path from Settings instead
+  of assuming the daemon PATH can find the same binary; Codex also honors
+  `AIWORKER_CODEX_DISABLE_PLUGINS=1` / `OD_CODEX_DISABLE_PLUGINS=1` for the
+  OD-style plugin-warning workaround.
+- Added structured stream parsing for status, assistant text, thinking,
+  tool-use/tool-result, Codex file-change, usage, and raw fallback events.
+- Successful turns store stdout/stderr logs under the invocation root, surface
+  stderr only on failure, allow text-only success, and index artifacts only
+  when files are actually produced under `artifacts/<sessionId>/`.
+- Added `GET /api/local/sessions/:sessionId/events` for replay and
+  `POST /api/local/workspaces/:workspaceId/sessions/stream` so the first
+  workspace session streams like follow-up turns.
+- Worker Web now uses the streamed initial-session endpoint, merges adjacent
+  assistant/thinking deltas, handles engine-native `toolUseId`, and renders
+  file changes as structured timeline status instead of raw JSON.
+- Fixed daemon foreground lifetime so `daemon start` keeps the local server
+  alive when it spawns the foreground child.
+- Browser validation on `http://127.0.0.1:9327/` with clean
+  `AIWORKER_HOME=/tmp/aiworker-stream-validation-home` created an HR /
+  Candidate Screen session through real Codex. The route entered
+  `/workspaces/:workspaceId/sessions/:sessionId` immediately, then streamed
+  running status, Bash tool events, file-change status, assistant text,
+  artifact, and review. Persisted DB evidence: one succeeded turn, one
+  artifact, ten tool events, ten status events, four assistant deltas, and zero
+  raw JSON events.
+- Desktop (`1440x1000`) and narrow (`390x844`) browser checks showed no
+  horizontal overflow and reachable session controls.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-core' typecheck`
+  - `bun run --filter '@zonease/aiworker-core' test`
+  - `bun run --filter '@zonease/aiworker-api' typecheck`
+  - `bun run --filter '@zonease/aiworker-api' test`
+  - `bun run --filter '@zonease/aiworker-api' build`
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `bun run --filter '@zonease/aiworker-cli' build:bundle`
+  - `bun run typecheck`
+  - `bun run lint`
+  - `bun run test`
+  - `bun run build`
+  - `git diff --check`
+  - `bun run crg:update`
+  - `bun run crg:review`
+
 ## 2026-05-10 21:35 [completed] REFACTOR-053 / PLAN-227 — Worker Web workspace route contextual navigation
 
 - Investigated the reported route-context mismatch.
