@@ -1,5 +1,30 @@
 # AIWorker Changelog
 
+## 2026-05-10 18:38 [completed] REFACTOR-050 / PLAN-222 — Host home lifecycle and project-scope removal
+
+- Removed active project-scope fs-layout initialization and cwd-based scope
+  detection. `AIWORKER_HOME` / `~/.aiworker` is now the local daemon source of
+  truth.
+- Worker initialization creates only the engine-usable workspace root
+  `workers/<workerId>/workspaces`; worker identity, Soul binding, capabilities,
+  settings, reviews, and memory metadata stay in `aiworker.db`.
+- Default daemon paths now resolve to `~/.aiworker/aiworker.db` and
+  `~/.aiworker/workers`.
+- CLI command surface now exposes `dev`, `daemon`, `worker`, `workspace`,
+  `session`, `turn`, `artifacts`, `review`, `lessons`, `settings`, and `engine`
+  commands without public `run` commands.
+- Local daemon serves the built Worker Web at `/`, so a source checkout can be
+  debugged with one daemon process after the Web build.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-fs-layout' typecheck`
+  - `bun run --filter '@zonease/aiworker-fs-layout' test`
+  - `bun run --filter '@zonease/aiworker-core' typecheck`
+  - `bun run --filter '@zonease/aiworker-core' test`
+  - `bun run --filter '@zonease/aiworker-api' typecheck`
+  - `bun run --filter '@zonease/aiworker-api' test`
+  - `bun run --filter '@zonease/aiworker-cli' typecheck`
+  - `bun run --filter '@zonease/aiworker-cli' test`
+
 ## 2026-05-10 18:01 [progress] Session workspace implementation slices
 
 - Opened implementation PMA slices for the approved session-handoff

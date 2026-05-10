@@ -1,6 +1,6 @@
 # PLAN-222 Host home lifecycle and project-scope removal
 
-- **status**: implementing
+- **status**: completed
 - **owner**: local
 - **createdAt**: 2026-05-10 18:01
 - **relatedTask**: REFACTOR-050
@@ -36,4 +36,22 @@ unless they block current verification.
 
 ## Status
 
-Implementing.
+Completed on 2026-05-10 18:38 CST.
+
+- Host home is the only default runtime source of truth.
+- Project-scope auto-detection and project initializer exports were removed
+  from active fs-layout code.
+- Explicit `AIWORKER_HOME` remains available for test/deploy isolation.
+- CLI command names now use workspace/session/turn terminology.
+- Worker Web is served by the local daemon at `/` after Web build.
+
+Verification passed:
+
+- `bun run --filter '@zonease/aiworker-fs-layout' typecheck`
+- `bun run --filter '@zonease/aiworker-fs-layout' test`
+- `bun run --filter '@zonease/aiworker-core' typecheck`
+- `bun run --filter '@zonease/aiworker-core' test`
+- `bun run --filter '@zonease/aiworker-api' typecheck`
+- `bun run --filter '@zonease/aiworker-api' test`
+- `bun run --filter '@zonease/aiworker-cli' typecheck`
+- `bun run --filter '@zonease/aiworker-cli' test`

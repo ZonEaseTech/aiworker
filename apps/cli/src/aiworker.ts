@@ -1,39 +1,35 @@
 #!/usr/bin/env bun
 import type { LocalWorkerRuntime } from '@zonease/aiworker-core'
+import type { WorkerRow } from '@zonease/aiworker-storage-sqlite/worker'
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { mkdir, readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
-
 import process from 'node:process'
 import { createLocalWorkerRuntime, getWorkerEnv } from '@zonease/aiworker-core'
-import { ensureProjectAiworker } from '@zonease/aiworker-fs-layout'
-import { BUILTIN_CAPABILITY_TEMPLATES, BUILTIN_VERTICAL_SOULS } from '@zonease/aiworker-shared'
+import { BUILTIN_CAPABILITY_TEMPLATES, BUILTIN_VERTICAL_SOULS, findCapabilityTemplate, findVerticalSoul } from '@zonease/aiworker-shared'
 import {
-  appendRunEvent,
   closeWorkerDb,
   createLesson,
-  createReview,
   getArtifact,
-  getProject,
   getReview,
-  getRun,
+  getSession,
+  getWorker,
+  getWorkspace,
   initWorkerDb,
   listArtifacts,
   listFiles,
   listLessons,
-  listProjects,
   listReviews,
-  listRunEvents,
-  listRuns,
+  listSessions,
   listSettings,
-  nextRunEventSeq,
+  listTurns,
+  listWorkers,
+  listWorkspaces,
   runWorkerMigrations,
   setSetting,
   updateLesson,
-  updateRun,
-  upsertFile,
 } from '@zonease/aiworker-storage-sqlite/worker'
 import cac from 'cac'
 import consola from 'consola'
@@ -43,14 +39,13 @@ import packageJson from '../package.json' with { type: 'json' }
 interface LocalPaths {
   home: string
   dbPath: string
-  workspaceRoot: string
+  workersRoot: string
   pidFile: string
   logFile: string
 }
 
 interface RuntimeOptions {
-  name?: string
-  root?: string
+  soul?: string
 }
 
 const cli = cac('aiworker')
@@ -59,8 +54,8 @@ function localPaths(): LocalPaths {
   const home = process.env.AIWORKER_HOME ?? path.join(homedir(), '.aiworker')
   return {
     home,
-    dbPath: process.env.WORKER_DB_PATH ?? path.join(home, 'worker.db'),
-    workspaceRoot: process.env.WORKER_WORKSPACE_ROOT ?? path.join(home, 'workspace'),
+    dbPath: process.env.WORKER_DB_PATH ?? path.join(home, 'aiworker.db'),
+    workersRoot: path.join(home, 'workers'),
     pidFile: path.join(home, 'aiworker-daemon.pid'),
     logFile: path.join(home, 'aiworker-daemon.log'),
   }
@@ -68,20 +63,37 @@ function localPaths(): LocalPaths {
 
 async function ensureRuntime(options: RuntimeOptions = {}): Promise<LocalWorkerRuntime> {
   const paths = localPaths()
+  await mkdir(paths.home, { recursive: true })
   await mkdir(path.dirname(paths.dbPath), { recursive: true })
-  await mkdir(options.root ?? paths.workspaceRoot, { recursive: true })
   initWorkerDb(paths.dbPath)
   runWorkerMigrations(getWorkerEnv().WORKER_MIGRATIONS_FOLDER)
+  const soul = requireAvailableSoul(options.soul ?? 'hr')
+  const workerId = `${soul.id}-worker`
   const runtime = createLocalWorkerRuntime({
-    workerId: 'soul-worker',
-    workspace: {
-      id: 'soul-workspace',
-      name: options.name ?? 'Soul Workspace',
-      rootPath: options.root ?? paths.workspaceRoot,
+    worker: {
+      id: workerId,
+      soulId: soul.id,
+      name: soul.name,
+      defaultEngineId: 'codex',
+      metadata: {
+        defaultTemplates: [...soul.defaultTemplates],
+        description: soul.description,
+        domain: soul.domain,
+      },
     },
+    workspacesRoot: path.join(paths.workersRoot, workerId, 'workspaces'),
   })
   await runtime.init()
   return runtime
+}
+
+async function ensureAllWorkers(): Promise<WorkerRow[]> {
+  const created: WorkerRow[] = []
+  for (const soul of BUILTIN_VERTICAL_SOULS.filter(soul => soul.status === 'available')) {
+    const runtime = await ensureRuntime({ soul: soul.id })
+    created.push(runtime.snapshot().worker)
+  }
+  return created
 }
 
 function printJson(value: unknown): void {
@@ -91,7 +103,7 @@ function printJson(value: unknown): void {
 function requireText(value: unknown, label: string): string {
   if (typeof value !== 'string' || value.trim().length === 0)
     throw new Error(`${label} is required`)
-  return value
+  return value.trim()
 }
 
 function optionalNumber(value: number[] | undefined): number | undefined {
@@ -109,21 +121,27 @@ function isProcessAlive(pid: number): boolean {
   }
 }
 
-async function runInit(opts: { name?: string, root?: string } = {}): Promise<void> {
-  const root = path.resolve(opts.root ?? process.cwd())
-  await ensureProjectAiworker(root)
-  const runtime = await ensureRuntime({ ...opts, root })
-  printJson({ workspace: runtime.snapshot().workspace, dbPath: localPaths().dbPath, soulWorkspacePath: path.join(root, '.aiworker') })
+async function runInit(): Promise<void> {
+  const paths = localPaths()
+  await mkdir(paths.home, { recursive: true })
+  const workers = await ensureAllWorkers()
+  printJson({
+    home: paths.home,
+    dbPath: paths.dbPath,
+    workersRoot: paths.workersRoot,
+    workers,
+  })
 }
 
 async function runDoctor(): Promise<void> {
-  const runtime = await ensureRuntime()
+  await ensureAllWorkers()
   const paths = localPaths()
   printJson({
     ok: true,
+    home: paths.home,
     dbPath: paths.dbPath,
-    workspaceRoot: runtime.files.root,
-    workspace: runtime.snapshot().workspace,
+    workers: listWorkers(),
+    workspaces: listWorkspaces(),
     daemon: daemonStatus(),
     settings: listSettings(),
   })
@@ -157,7 +175,6 @@ async function startDaemon(opts: { host?: string, port?: number } = {}): Promise
       ...process.env,
       AIWORKER_HOME: paths.home,
       WORKER_DB_PATH: paths.dbPath,
-      WORKER_WORKSPACE_ROOT: paths.workspaceRoot,
     },
     stdout: 'ignore',
     stderr: 'ignore',
@@ -165,7 +182,7 @@ async function startDaemon(opts: { host?: string, port?: number } = {}): Promise
   if (!child.pid)
     throw new Error('daemon did not return a pid')
   writeFileSync(paths.pidFile, String(child.pid))
-  printJson({ started: true, pid: child.pid, logFile: paths.logFile })
+  printJson({ started: true, pid: child.pid, logFile: paths.logFile, url: `http://127.0.0.1:${opts.port ?? getWorkerEnv().PORT}` })
 }
 
 async function stopDaemon(): Promise<void> {
@@ -190,7 +207,7 @@ async function daemonForeground(opts: { host?: string, port?: number } = {}): Pr
     hostname: opts.host ?? env.AIWORKER_WORKER_HOST,
     port: opts.port ?? port,
   })
-  consola.success(`[workspace-daemon] listening on http://${server.hostname}:${server.port}`)
+  consola.success(`[aiworker-daemon] listening on http://${server.hostname}:${server.port}`)
   await new Promise<void>(() => undefined)
 }
 
@@ -210,110 +227,115 @@ async function showLogs(opts: { tail?: number } = {}): Promise<void> {
   process.stdout.write(`${lines.slice(-(opts.tail ?? 80)).join('\n')}\n`)
 }
 
-async function createProject(opts: { body?: string, skill?: string, soul?: string, title?: string }): Promise<void> {
-  const runtime = await ensureRuntime()
-  printJson({
-    project: runtime.createProject({
-      title: requireText(opts.title, 'title'),
-      body: requireText(opts.body, 'body'),
-      selectedSoulId: opts.soul ?? 'hr',
-      selectedSkillId: opts.skill ?? 'candidate-screen',
-    }),
+async function createWorkspaceCommand(opts: { name?: string, soul?: string }): Promise<void> {
+  const runtime = await ensureRuntime({ soul: opts.soul })
+  printJson({ workspace: await runtime.createWorkspace({ name: requireText(opts.name, 'name') }) })
+}
+
+async function listWorkspaceCommand(opts: { soul?: string }): Promise<void> {
+  const runtime = await ensureRuntime({ soul: opts.soul })
+  printJson({ workspaces: listWorkspaces(runtime.workerId) })
+}
+
+async function startSessionCommand(opts: { context?: string, input?: string, skill?: string, soul?: string, title?: string, workspace?: string }): Promise<void> {
+  const runtime = await ensureRuntime({ soul: opts.soul })
+  const workspaceId = requireText(opts.workspace, 'workspace')
+  const workspace = getWorkspace(workspaceId)
+  if (!workspace || workspace.workerId !== runtime.workerId)
+    throw new Error(`workspace not found for ${runtime.workerId}: ${workspaceId}`)
+  const skillId = requireText(opts.skill, 'skill')
+  const template = findCapabilityTemplate(skillId)
+  if (!template)
+    throw new Error(`template not found: ${skillId}`)
+  const session = await runtime.createSession({
+    workspaceId,
+    capabilityTemplateId: template.id,
+    title: requireText(opts.title, 'title'),
+    context: opts.context ?? '',
+    metadata: {
+      inputHints: template.inputHints,
+      outputKind: template.outputKind,
+      reviewRubric: template.reviewRubric,
+      skillName: template.name,
+    },
   })
+  const input = requireText(opts.input, 'input')
+  printJson(await runtime.startTurn({
+    sessionId: session.id,
+    input,
+    engineId: 'codex',
+    engineCommand: 'codex',
+    metadata: {
+      inputHints: template.inputHints,
+      outputKind: template.outputKind,
+      reviewRubric: template.reviewRubric,
+      skillName: template.name,
+      executionMode: 'local-cli',
+    },
+  }))
 }
 
-async function showProject(id: string): Promise<void> {
-  await ensureRuntime()
-  printJson({ project: getProject(id) })
+async function sendTurnCommand(opts: { input?: string, session?: string, soul?: string }): Promise<void> {
+  const runtime = await ensureRuntime({ soul: opts.soul })
+  printJson(await runtime.startTurn({
+    sessionId: requireText(opts.session, 'session'),
+    input: requireText(opts.input, 'input'),
+    engineId: 'codex',
+    engineCommand: 'codex',
+    metadata: { executionMode: 'local-cli' },
+  }))
 }
 
-async function startRun(opts: { project?: string, prompt?: string }): Promise<void> {
-  const runtime = await ensureRuntime()
-  printJson(await runtime.startRun({ projectId: opts.project, prompt: opts.prompt }))
+async function listSessionCommand(opts: { workspace?: string }): Promise<void> {
+  await ensureAllWorkers()
+  printJson({ sessions: listSessions(opts.workspace) })
 }
 
-async function showRun(id: string): Promise<void> {
-  await ensureRuntime()
-  printJson({ run: getRun(id), events: listRunEvents(id) })
+async function showSession(id: string): Promise<void> {
+  await ensureAllWorkers()
+  printJson({ session: getSession(id), turns: listTurns(id) })
 }
 
-async function cancelRun(id: string): Promise<void> {
-  await ensureRuntime()
-  const run = updateRun({ id, status: 'cancelled', finishedAt: new Date().toISOString() })
-  appendRunEvent({ runId: id, seq: nextRunEventSeq(id), type: 'status', payloadJson: { status: 'cancelled' } })
-  printJson({ run })
+async function listWorkspaceFiles(opts: { workspace?: string }): Promise<void> {
+  await ensureAllWorkers()
+  printJson({ files: listFiles(opts.workspace) })
 }
 
-async function listWorkspaceFiles(): Promise<void> {
-  const runtime = await ensureRuntime()
-  printJson({ files: listFiles(runtime.snapshot().workspace.id) })
+async function showFile(filePath: string, opts: { workspace?: string, soul?: string }): Promise<void> {
+  const runtime = await ensureRuntime({ soul: opts.soul })
+  const workspaceId = requireText(opts.workspace, 'workspace')
+  process.stdout.write(await runtime.files(workspaceId).read(filePath))
 }
 
-async function showFile(filePath: string): Promise<void> {
-  const runtime = await ensureRuntime()
-  process.stdout.write(await runtime.files.read(filePath))
-}
-
-async function writeWorkspaceFile(filePath: string, content: string): Promise<void> {
-  const runtime = await ensureRuntime()
-  const entry = await runtime.files.write({ path: filePath, content })
-  const file = upsertFile({
-    id: randomUUID(),
-    workspaceId: runtime.snapshot().workspace.id,
-    path: filePath,
-    kind: entry.kind,
-    size: entry.size,
-    mtime: entry.mtime,
-    hash: entry.hash,
-    source: 'user',
-  })
-  printJson({ file })
-}
-
-async function deleteWorkspaceFile(filePath: string): Promise<void> {
-  const runtime = await ensureRuntime()
-  await runtime.files.delete(filePath)
-  printJson({ ok: true })
-}
-
-async function searchWorkspaceFiles(query: string): Promise<void> {
-  const runtime = await ensureRuntime()
-  const files = listFiles(runtime.snapshot().workspace.id).filter(file => file.path.includes(query))
-  printJson({ files })
-}
-
-async function openArtifact(id: string): Promise<void> {
-  const runtime = await ensureRuntime()
+async function openArtifact(id: string, opts: { soul?: string }): Promise<void> {
   const artifact = getArtifact(id)
   if (!artifact)
     throw new Error(`artifact not found: ${id}`)
-  const fullPath = runtime.files.resolve(artifact.path)
+  const workspace = getWorkspace(artifact.workspaceId)
+  if (!workspace)
+    throw new Error(`workspace not found for artifact: ${id}`)
+  const runtime = await ensureRuntime({ soul: opts.soul ?? getWorker(workspace.workerId)?.soulId })
+  const fullPath = runtime.files(workspace.id).resolve(artifact.path)
   Bun.spawn(['open', fullPath])
   printJson({ opened: fullPath })
 }
 
-async function createReviewCommand(opts: { artifact?: string, run?: string, verdict?: ReviewVerdict }): Promise<void> {
-  const runtime = await ensureRuntime()
-  const workspace = runtime.snapshot().workspace
-  const review = createReview({
-    id: randomUUID(),
-    workspaceId: workspace.id,
-    runId: opts.run ?? null,
-    artifactId: opts.artifact ?? null,
-    verdict: opts.verdict ?? 'needs_review',
-    findingsJson: [],
-    risksJson: [],
-  })
-  printJson({ review })
+async function listArtifactsCommand(opts: { workspace?: string }): Promise<void> {
+  await ensureAllWorkers()
+  printJson({ artifacts: listArtifacts(opts.workspace) })
 }
 
-type ReviewVerdict = 'pass' | 'warn' | 'fail' | 'needs_review'
+async function listReviewsCommand(opts: { workspace?: string }): Promise<void> {
+  await ensureAllWorkers()
+  printJson({ reviews: listReviews(opts.workspace) })
+}
 
-async function proposeLesson(opts: { review?: string, statement?: string }): Promise<void> {
-  const runtime = await ensureRuntime()
+async function proposeLesson(opts: { review?: string, statement?: string, workspace?: string }): Promise<void> {
+  await ensureAllWorkers()
+  const workspaceId = requireText(opts.workspace, 'workspace')
   const lesson = createLesson({
     id: randomUUID(),
-    workspaceId: runtime.snapshot().workspace.id,
+    workspaceId,
     sourceReviewId: opts.review ?? null,
     statement: requireText(opts.statement, 'statement'),
     evidenceJson: opts.review ? [{ reviewId: opts.review }] : [],
@@ -322,96 +344,87 @@ async function proposeLesson(opts: { review?: string, statement?: string }): Pro
 }
 
 function registerCommands(): void {
-  cli.command('init', 'create Soul workspace metadata').option('--name <name>', 'workspace name').option('--root <path>', 'workspace root').action(runInit)
-  cli.command('doctor', 'inspect Soul workspace readiness').action(runDoctor)
+  cli.command('init', 'initialize host-local AIWorker home and Soul workers').action(runInit)
+  cli.command('dev', 'run local daemon and hosted Worker Web in foreground').option('--host <host>', 'bind host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => daemonForeground({ host: opts.host, port: optionalNumber(opts.port) }))
+  cli.command('doctor', 'inspect host-local daemon readiness').action(runDoctor)
 
-  cli.command('daemon start', 'start workspace daemon in background').option('--host <host>', 'bind host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => startDaemon({ host: opts.host, port: optionalNumber(opts.port) }))
-  cli.command('daemon foreground', 'run workspace daemon in foreground').option('--host <host>', 'bind host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => daemonForeground({ host: opts.host, port: optionalNumber(opts.port) }))
+  cli.command('daemon start', 'start local daemon in background').option('--host <host>', 'bind host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => startDaemon({ host: opts.host, port: optionalNumber(opts.port) }))
+  cli.command('daemon foreground', 'run local daemon in foreground').option('--host <host>', 'bind host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => daemonForeground({ host: opts.host, port: optionalNumber(opts.port) }))
   cli.command('daemon status', 'show local daemon status').action(() => printJson(daemonStatus()))
   cli.command('daemon stop', 'stop local daemon').action(stopDaemon)
   cli.command('daemon logs', 'show local daemon logs').option('--tail <n>', 'line count', { type: [Number] }).action((opts: { tail?: number[] }) => showLogs({ tail: optionalNumber(opts.tail) }))
   cli.command('daemon check', 'check local daemon health').option('--host <host>', 'host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => daemonCheck({ host: opts.host, port: optionalNumber(opts.port) }))
 
   cli.command('soul list', 'list built-in vertical Souls').action(() => printJson({ souls: BUILTIN_VERTICAL_SOULS }))
+  cli.command('worker list', 'list local Soul workers').action(async () => {
+    await ensureAllWorkers()
+    printJson({ workers: listWorkers() })
+  })
   cli.command('template list', 'list capability templates').option('--soul <id>', 'Soul id').action((opts: { soul?: string }) => {
     const templates = opts.soul ? BUILTIN_CAPABILITY_TEMPLATES.filter(template => template.soulId === opts.soul) : BUILTIN_CAPABILITY_TEMPLATES
     printJson({ templates })
   })
-  cli.command('project create', 'create a workspace project')
-    .option('--title <text>', 'project title')
-    .option('--body <text>', 'project body')
-    .option('--soul <id>', 'Soul id')
+
+  cli.command('workspace create', 'create a worker workspace').option('--name <text>', 'workspace name').option('--soul <id>', 'Soul id').action(createWorkspaceCommand)
+  cli.command('workspace list', 'list worker workspaces').option('--soul <id>', 'Soul id').action(listWorkspaceCommand)
+  cli.command('workspace show <id>', 'show one workspace').action(async (id: string) => {
+    await ensureAllWorkers()
+    printJson({ workspace: getWorkspace(id) })
+  })
+
+  cli.command('session start', 'create a workspace session and first turn')
+    .option('--workspace <id>', 'workspace id')
     .option('--skill <id>', 'capability template id')
-    .action(createProject)
-  cli.command('project list', 'list workspace projects').action(async () => {
-    const runtime = await ensureRuntime()
-    printJson({ projects: listProjects(runtime.snapshot().workspace.id) })
-  })
-  cli.command('project show <id>', 'show one project').action(showProject)
+    .option('--title <text>', 'session title')
+    .option('--context <text>', 'session context')
+    .option('--input <text>', 'turn input')
+    .option('--soul <id>', 'Soul id')
+    .action(startSessionCommand)
+  cli.command('session list', 'list sessions').option('--workspace <id>', 'workspace id').action(listSessionCommand)
+  cli.command('session show <id>', 'show one session').action(showSession)
+  cli.command('turn send', 'send a turn to an existing session').option('--session <id>', 'session id').option('--input <text>', 'turn input').option('--soul <id>', 'Soul id').action(sendTurnCommand)
 
-  cli.command('run start', 'start a workspace run').option('--project <id>', 'project id').option('--prompt <text>', 'direct prompt').action(startRun)
-  cli.command('run list', 'list workspace runs').action(async () => {
-    const runtime = await ensureRuntime()
-    printJson({ runs: listRuns(runtime.snapshot().workspace.id) })
-  })
-  cli.command('run show <id>', 'show one run').action(showRun)
-  cli.command('run cancel <id>', 'cancel one run').action(cancelRun)
+  cli.command('files list', 'list workspace files').option('--workspace <id>', 'workspace id').action(listWorkspaceFiles)
+  cli.command('files show <path>', 'print workspace file').option('--workspace <id>', 'workspace id').option('--soul <id>', 'Soul id').action(showFile)
 
-  cli.command('files list', 'list workspace files').action(listWorkspaceFiles)
-  cli.command('files show <path>', 'print workspace file').action(showFile)
-  cli.command('files write <path>', 'write workspace file').option('--content <text>', 'file content').action((filePath: string, opts: { content?: string }) => writeWorkspaceFile(filePath, requireText(opts.content, 'content')))
-  cli.command('files delete <path>', 'delete workspace file').action(deleteWorkspaceFile)
-  cli.command('files search <query>', 'search indexed files').action(searchWorkspaceFiles)
-
-  cli.command('artifacts list', 'list artifacts').action(async () => {
-    const runtime = await ensureRuntime()
-    printJson({ artifacts: listArtifacts(runtime.snapshot().workspace.id) })
-  })
+  cli.command('artifacts list', 'list artifacts').option('--workspace <id>', 'workspace id').action(listArtifactsCommand)
   cli.command('artifacts show <id>', 'show one artifact').action(async (id: string) => {
-    await ensureRuntime()
+    await ensureAllWorkers()
     printJson({ artifact: getArtifact(id) })
   })
-  cli.command('artifacts open <id>', 'open one artifact').action(openArtifact)
+  cli.command('artifacts open <id>', 'open one artifact').option('--soul <id>', 'Soul id').action(openArtifact)
 
-  cli.command('review list', 'list reviews').action(async () => {
-    const runtime = await ensureRuntime()
-    printJson({ reviews: listReviews(runtime.snapshot().workspace.id) })
-  })
+  cli.command('review list', 'list reviews').option('--workspace <id>', 'workspace id').action(listReviewsCommand)
   cli.command('review show <id>', 'show one review').action(async (id: string) => {
-    await ensureRuntime()
+    await ensureAllWorkers()
     printJson({ review: getReview(id) })
   })
-  cli.command('review create', 'create a review').option('--run <id>', 'run id').option('--artifact <id>', 'artifact id').option('--verdict <verdict>', 'pass|warn|fail|needs_review').action(createReviewCommand)
 
-  cli.command('lessons list', 'list lessons').action(async () => {
-    const runtime = await ensureRuntime()
-    printJson({ lessons: listLessons(runtime.snapshot().workspace.id) })
+  cli.command('lessons list', 'list lessons').option('--workspace <id>', 'workspace id').action(async (opts: { workspace?: string }) => {
+    await ensureAllWorkers()
+    printJson({ lessons: listLessons(opts.workspace) })
   })
-  cli.command('lessons propose', 'propose a lesson').option('--statement <text>', 'lesson statement').option('--review <id>', 'source review id').action(proposeLesson)
+  cli.command('lessons propose', 'propose a lesson').option('--statement <text>', 'lesson statement').option('--review <id>', 'source review id').option('--workspace <id>', 'workspace id').action(proposeLesson)
   cli.command('lessons accept <id>', 'accept a lesson').action(async (id: string) => {
-    await ensureRuntime()
+    await ensureAllWorkers()
     printJson({ lesson: updateLesson(id, 'accepted') })
   })
   cli.command('lessons reject <id>', 'reject a lesson').action(async (id: string) => {
-    await ensureRuntime()
+    await ensureAllWorkers()
     printJson({ lesson: updateLesson(id, 'rejected') })
   })
 
-  cli.command('settings list', 'list settings').action(async () => {
-    await ensureRuntime()
+  cli.command('settings list', 'list host daemon settings').action(async () => {
+    await ensureAllWorkers()
     printJson({ settings: listSettings() })
   })
-  cli.command('executor select <engine>', 'set executor hint').action(async (engine: string) => {
-    await ensureRuntime()
-    printJson({ setting: setSetting('executor.default', { engine }) })
-  })
-  cli.command('executor doctor', 'show executor hint').action(async () => {
-    await ensureRuntime()
-    printJson({ settings: listSettings().filter(setting => setting.key.startsWith('executor.')) })
+  cli.command('engine select <engine>', 'set engine hint').action(async (engine: string) => {
+    await ensureAllWorkers()
+    printJson({ setting: setSetting('engine.default', { engine }) })
   })
 
-  cli.command('open', 'open workspace web app').option('--port <n>', 'web port', { type: [Number] }).action((opts: { port?: number[] }) => {
-    const port = optionalNumber(opts.port) ?? 9219
+  cli.command('open', 'open local daemon Web app').option('--port <n>', 'web port', { type: [Number] }).action((opts: { port?: number[] }) => {
+    const port = optionalNumber(opts.port) ?? getWorkerEnv().PORT
     const url = `http://127.0.0.1:${port}`
     Bun.spawn(['open', url])
     printJson({ opened: url })
@@ -421,21 +434,31 @@ function registerCommands(): void {
   })
 }
 
+function requireAvailableSoul(id: string) {
+  const soul = findVerticalSoul(id)
+  if (!soul || soul.status !== 'available')
+    throw new Error(`available Soul not found: ${id}`)
+  return soul
+}
+
 function commandIndex(): string {
   return [
     'aiworker command index',
     'init',
+    'dev',
     'daemon start|foreground|status|stop|logs|check',
     'soul list',
+    'worker list',
     'template list',
-    'project create|list|show',
-    'run start|list|show|cancel',
-    'files list|show|write|delete|search',
+    'workspace create|list|show',
+    'session start|list|show',
+    'turn send',
+    'files list|show',
     'artifacts list|show|open',
-    'review list|show|create',
+    'review list|show',
     'lessons list|propose|accept|reject',
     'settings list',
-    'executor select|doctor',
+    'engine select',
     'open',
   ].join('\n')
 }

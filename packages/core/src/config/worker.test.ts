@@ -44,8 +44,8 @@ describe('getWorkerEnv', () => {
 
     expect(env.PORT).toBe(9217)
     expect(env.AIWORKER_WORKER_HOST).toBe('127.0.0.1')
-    expect(env.WORKER_DB_PATH).toBe(path.resolve(homedir(), '.aiworker', 'worker.db'))
-    expect(env.WORKER_WORKSPACE_ROOT).toBe(path.resolve(homedir(), '.aiworker', 'workspace'))
+    expect(env.WORKER_DB_PATH).toBe(path.resolve(homedir(), '.aiworker', 'aiworker.db'))
+    expect(env.WORKER_WORKSPACE_ROOT).toBe(path.resolve(homedir(), '.aiworker', 'workers'))
     expect(env.WORKER_MIGRATIONS_FOLDER).toBe(defaultWorkerMigrationsFolder)
   })
 

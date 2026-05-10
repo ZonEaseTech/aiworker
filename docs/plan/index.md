@@ -250,5 +250,5 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-219 Worker session data contract**](PLAN-219.md) `2026-05-10`
 - [x] [**PLAN-220 Local daemon worker/session API**](PLAN-220.md) `2026-05-10`
 - [x] [**PLAN-221 Worker Web session workspace surface**](PLAN-221.md) `2026-05-10`
-- [-] [**PLAN-222 Host home lifecycle and project-scope removal**](PLAN-222.md) `2026-05-10`
+- [x] [**PLAN-222 Host home lifecycle and project-scope removal**](PLAN-222.md) `2026-05-10`
 - [-] [**PLAN-223 Session workspace MVP validation**](PLAN-223.md) `2026-05-10`

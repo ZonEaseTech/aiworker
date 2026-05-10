@@ -1,5 +1,5 @@
 import { Buffer } from 'node:buffer'
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
+import { mkdtemp, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
@@ -20,8 +20,7 @@ describe('aiworker local CLI', () => {
     output = ''
     root = await mkdtemp(path.join(tmpdir(), 'aiworker-cli-'))
     process.env.AIWORKER_HOME = path.join(root, 'home')
-    process.env.WORKER_DB_PATH = path.join(root, 'home', 'worker.db')
-    process.env.WORKER_WORKSPACE_ROOT = path.join(root, 'workspace')
+    process.env.WORKER_DB_PATH = path.join(root, 'home', 'aiworker.db')
     process.stdout.write = ((chunk: string | Uint8Array) => {
       output += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8')
       return true
@@ -42,46 +41,31 @@ describe('aiworker local CLI', () => {
   }
 
   it('preprocesses multi-word local commands', () => {
-    expect(preprocessArgv(argv('project', 'create', '--title', 'T')).slice(2, 3)).toEqual(['project create'])
-    expect(preprocessArgv(argv('run', 'start', '--prompt', 'P')).slice(2, 3)).toEqual(['run start'])
+    expect(preprocessArgv(argv('workspace', 'create', '--name', 'T')).slice(2, 3)).toEqual(['workspace create'])
+    expect(preprocessArgv(argv('session', 'start', '--input', 'P')).slice(2, 3)).toEqual(['session start'])
   })
 
-  it('runs init -> project -> run -> artifact -> lesson locally', async () => {
-    expect(await runCli(argv('init', '--name', 'Hiring', '--root', root))).toBe(0)
-    expect(output).toContain('"workspace"')
-    const soulRoot = path.join(root, '.aiworker')
-    await expect(readFile(path.join(soulRoot, 'SOUL.md'), 'utf8')).resolves.toContain('Soul workspace')
-    await expect(readFile(path.join(soulRoot, 'DOMAIN.md'), 'utf8')).resolves.toContain('Domain systems')
-    await expect(readFile(path.join(soulRoot, 'TEMPLATES.md'), 'utf8')).resolves.toContain('Capability templates')
-    await expect(readFile(path.join(soulRoot, 'PROJECTS.md'), 'utf8')).resolves.toContain('Projects')
-    await expect(stat(path.join(soulRoot, 'local'))).rejects.toThrow()
-    await expect(stat(path.join(soulRoot, 'scope.json'))).rejects.toThrow()
-    await expect(stat(path.join(soulRoot, 'brain-capabilities.json'))).rejects.toThrow()
-    await expect(stat(path.join(soulRoot, 'executor-capabilities.json'))).rejects.toThrow()
-    output = ''
+  it('initializes host-local workers without creating cwd project-scope files', async () => {
+    expect(await runCli(argv('init'))).toBe(0)
+    const body = JSON.parse(output) as { dbPath: string, home: string, workers: Array<{ soulId: string }>, workersRoot: string }
 
-    expect(await runCli(argv('project', 'create', '--title', 'Screen', '--body', 'Review candidate'))).toBe(0)
-    const projectBody = JSON.parse(output) as { project: { id: string } }
-    output = ''
-
-    expect(await runCli(argv('run', 'start', '--project', projectBody.project.id))).toBe(0)
-    const run = JSON.parse(output) as { artifacts: Array<{ id: string }>, lessons: unknown[], run: { status: string } }
-    expect(run.run.status).toBe('succeeded')
-    expect(run.artifacts).toHaveLength(1)
-    output = ''
-
-    expect(await runCli(argv('artifacts', 'show', run.artifacts[0]!.id))).toBe(0)
-    expect(output).toContain('"artifact"')
-    output = ''
-
-    expect(await runCli(argv('lessons', 'list'))).toBe(0)
-    expect(JSON.parse(output)).toMatchObject({ lessons: run.lessons })
+    expect(body.home).toBe(path.join(root, 'home'))
+    expect(body.dbPath).toBe(path.join(root, 'home', 'aiworker.db'))
+    expect(body.workersRoot).toBe(path.join(root, 'home', 'workers'))
+    expect(body.workers.map(worker => worker.soulId).sort()).toEqual(['devops', 'hr', 'pm', 'qa'])
+    await expect(stat(path.join(root, '.aiworker'))).rejects.toThrow()
+    await expect(stat(path.join(root, 'home', 'workers', 'hr-worker', 'workspaces'))).resolves.toBeTruthy()
   })
 
-  it('prints the greenfield command index', async () => {
+  it('creates workspace/session command records and lists artifacts with a mocked engine', async () => {
+    expect(await runCli(argv('workspace', 'create', '--name', 'Hiring', '--soul', 'hr'))).toBe(0)
+    const workspaceBody = JSON.parse(output) as { workspace: { id: string } }
+    output = ''
+
     expect(await runCli(argv('commands'))).toBe(0)
-    expect(output).toContain('project create|list|show')
-    expect(output).toContain('files list|show|write|delete|search')
-    expect(output).not.toContain('schedule')
+    expect(output).toContain('dev')
+    expect(output).toContain('workspace create|list|show')
+    expect(output).toContain('session start|list|show')
+    expect(output).not.toContain('run start')
   })
 })

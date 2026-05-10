@@ -8,9 +8,9 @@ import { z } from 'zod'
 const schema = z.object({
   PORT: z.coerce.number().int().min(1).default(9217),
   AIWORKER_WORKER_HOST: z.string().min(1).default('127.0.0.1'),
-  WORKER_DB_PATH: z.string().default(() => path.join(resolveAiworkerHome(), 'worker.db')),
+  WORKER_DB_PATH: z.string().default(() => path.join(resolveAiworkerHome(), 'aiworker.db')),
   WORKER_MIGRATIONS_FOLDER: z.string().default(() => defaultWorkerMigrationsFolder),
-  WORKER_WORKSPACE_ROOT: z.string().default(() => path.join(resolveAiworkerHome(), 'workspace')),
+  WORKER_WORKSPACE_ROOT: z.string().default(() => path.join(resolveAiworkerHome(), 'workers')),
   AIWORKER_LOCAL_TOKEN: z.string().min(16).optional(),
 })
 

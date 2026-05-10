@@ -127,13 +127,12 @@ aiworker dev
 aiworker daemon foreground --port 9217
 ```
 
-在 `aiworker dev` 落地前，source checkout 里的 API/Web 双进程命令只属于 contributor
-escape hatch，不是最终产品路径：
+Source checkout 调试也走同一个 daemon；先构建一次 Web 静态资源，然后以前台 daemon
+托管 Web/API：
 
 ```bash
-PORT=9217 bun run --filter '@zonease/aiworker-api' dev
-AIWORKER_API_URL=http://127.0.0.1:9217 \
-bun run --filter '@zonease/aiworker-web' dev
+bun run --filter '@zonease/aiworker-web' build
+bun apps/cli/src/aiworker.ts dev --port 9217
 ```
 
 打开 Web 后，首屏应是 Soul worker catalog。用户选择或创建 HR / PM / QA / DevOps

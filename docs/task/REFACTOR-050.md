@@ -1,6 +1,6 @@
 # REFACTOR-050 Host home lifecycle and project-scope removal
 
-- **status**: in_progress
+- **status**: completed
 - **priority**: P0
 - **owner**: local
 - **createdAt**: 2026-05-10 18:01
@@ -32,4 +32,30 @@ host-home daemon state.
 
 ## Evidence
 
-Pending.
+Completed on 2026-05-10 18:38 CST.
+
+- `aiworker init` now initializes host-local Soul workers under
+  `AIWORKER_HOME` / `~/.aiworker`; it no longer creates `<cwd>/.aiworker`.
+- `packages/fs-layout` no longer exports or tests project-scope initializer
+  APIs. Scope resolution ignores cwd markers and returns only explicit/env/user
+  host homes.
+- Worker init creates only `workers/<workerId>/workspaces`; worker identity,
+  Soul binding, enabled capabilities, settings, reviews, and memory metadata
+  live in `aiworker.db`.
+- Default local daemon paths are now `~/.aiworker/aiworker.db` and
+  `~/.aiworker/workers`.
+- CLI command surface is workspace/session/turn/artifact oriented and includes
+  `aiworker dev` for single-daemon Web/API foreground debugging.
+- Local daemon serves the built Worker Web at `/`, so source debugging no
+  longer needs separate API and Vite processes.
+
+Verification passed:
+
+- `bun run --filter '@zonease/aiworker-fs-layout' typecheck`
+- `bun run --filter '@zonease/aiworker-fs-layout' test`
+- `bun run --filter '@zonease/aiworker-core' typecheck`
+- `bun run --filter '@zonease/aiworker-core' test`
+- `bun run --filter '@zonease/aiworker-api' typecheck`
+- `bun run --filter '@zonease/aiworker-api' test`
+- `bun run --filter '@zonease/aiworker-cli' typecheck`
+- `bun run --filter '@zonease/aiworker-cli' test`
