@@ -131,6 +131,8 @@ describe('local daemon API', () => {
     expect(streamRes.status).toBe(200)
     expect(streamRes.headers.get('content-type')).toContain('text/event-stream')
     const body = await streamRes.text()
+    expect(body).toContain('event: turn')
+    expect(body).toContain('"status":"running"')
     expect(body).toContain('event: session_event')
     expect(body).toContain('"kind":"tool_use"')
     expect(body).toContain('event: result')

@@ -557,11 +557,16 @@ function streamSessionTurn(
         controller.enqueue(encoder.encode(`${lines}\n`))
       }
       const unsubscribe = runtime.bus.subscribe((event) => {
-        if (event.sessionId !== session.id || event.kind !== 'event')
+        if (event.sessionId !== session.id)
           return
-        const row = event.payload.event
-        if (isRecord(row))
-          send('session_event', row, typeof row.id === 'number' ? row.id : undefined)
+        if (event.kind === 'event') {
+          const row = event.payload.event
+          if (isRecord(row))
+            send('session_event', row, typeof row.id === 'number' ? row.id : undefined)
+          return
+        }
+        if (event.kind === 'turn' && isRecord(event.payload.turn))
+          send('turn', event.payload.turn, event.turnId)
       })
       send('status', { sessionId: session.id, status: 'started' })
       heartbeat = setInterval(heartbeatFrame, 5_000)

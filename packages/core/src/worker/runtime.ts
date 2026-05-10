@@ -212,7 +212,7 @@ export class LocalWorkerRuntime {
       at: this.#now(),
     })
     this.appendEvent(session.id, 'status', { status: 'running', turnId: turn.id }, turn.id, invocation.id)
-    this.bus.emit({ kind: 'turn', workspaceId: workspace.id, sessionId: session.id, turnId: turn.id, invocationId: invocation.id, payload: { status: 'running' }, at: this.#now() })
+    this.bus.emit({ kind: 'turn', workspaceId: workspace.id, sessionId: session.id, turnId: turn.id, invocationId: invocation.id, payload: { status: 'running', turn }, at: this.#now() })
 
     try {
       const invocationRoot = await this.ensureInvocationRoot(workspace, session, invocation)
@@ -254,7 +254,7 @@ export class LocalWorkerRuntime {
       })
       const currentSession = updateSession({ id: session.id, status: 'active', at: this.#now() })
       this.appendEvent(session.id, 'status', { status: 'succeeded', turnId: turn.id }, turn.id, invocation.id)
-      this.bus.emit({ kind: 'turn', workspaceId: workspace.id, sessionId: session.id, turnId: turn.id, invocationId: invocation.id, payload: { status: 'succeeded' }, at: this.#now() })
+      this.bus.emit({ kind: 'turn', workspaceId: workspace.id, sessionId: session.id, turnId: turn.id, invocationId: invocation.id, payload: { status: 'succeeded', turn: finishedTurn }, at: this.#now() })
       return {
         session: currentSession,
         turn: finishedTurn,
@@ -285,7 +285,7 @@ export class LocalWorkerRuntime {
         at: this.#now(),
       })
       this.appendEvent(session.id, 'error', { message, turnId: turn.id }, turn.id, invocation.id)
-      this.bus.emit({ kind: 'turn', workspaceId: workspace.id, sessionId: session.id, turnId: turn.id, invocationId: invocation.id, payload: { status: 'failed' }, at: this.#now() })
+      this.bus.emit({ kind: 'turn', workspaceId: workspace.id, sessionId: session.id, turnId: turn.id, invocationId: invocation.id, payload: { status: 'failed', turn: failedTurn }, at: this.#now() })
       return {
         session: failedSession,
         turn: failedTurn,

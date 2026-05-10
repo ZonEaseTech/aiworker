@@ -118,6 +118,8 @@ export function WorkerStudio() {
   const [reviewSubmitting, setReviewSubmitting] = useState(false)
   const [lessonBusyId, setLessonBusyId] = useState<string | null>(null)
   const [streamEvents, setStreamEvents] = useState<LocalSessionEvent[]>([])
+  const [streamTurns, setStreamTurns] = useState<LocalTurn[]>([])
+  const [pendingTurn, setPendingTurn] = useState<LocalTurn | null>(null)
   const [artifactPreview, dispatchArtifactPreview] = useReducer(artifactPreviewReducer, initialArtifactPreviewState)
 
   const refresh = useCallback(async () => {
@@ -193,6 +195,18 @@ export function WorkerStudio() {
     () => selectedSession ? turnsForSession(selectedSession, data?.turns ?? []) : [],
     [data?.turns, selectedSession],
   )
+  const displayedSessionTurns = useMemo(() => {
+    if (!selectedSession)
+      return []
+    const byId = new Map<string, LocalTurn>()
+    for (const turn of selectedSessionTurns)
+      byId.set(turn.id, turn)
+    for (const turn of streamTurns.filter(turn => turn.sessionId === selectedSession.id))
+      byId.set(turn.id, turn)
+    if (pendingTurn?.sessionId === selectedSession.id)
+      byId.set(pendingTurn.id, pendingTurn)
+    return [...byId.values()].sort((a, b) => a.seq - b.seq)
+  }, [pendingTurn, selectedSession, selectedSessionTurns, streamTurns])
   const selectedSessionEvents = useMemo(
     () => selectedSession ? eventsForSession(selectedSession, data?.events ?? []) : [],
     [data?.events, selectedSession],
@@ -298,21 +312,40 @@ export function WorkerStudio() {
     setTurnSubmitting(true)
     try {
       const prompt = turnInput.trim()
+      const now = new Date().toISOString()
+      setPendingTurn({
+        createdAt: now,
+        error: null,
+        id: `pending-${now}`,
+        input: prompt,
+        metadataJson: { optimistic: true },
+        response: null,
+        seq: (selectedSessionTurns.at(-1)?.seq ?? selectedSessionTurns.length) + 1,
+        sessionId: selectedSession.id,
+        status: 'running',
+        updatedAt: now,
+      })
       setTurnInput('')
-      await continueSessionTurnStream(selectedSession.id, {
+      const result = await continueSessionTurnStream(selectedSession.id, {
         input: prompt,
         metadata: {
           requestedFrom: 'worker-web-follow-up',
         },
       }, {
         onEvent: event => setStreamEvents(current => [...current, event]),
+        onTurn: (turn) => {
+          setStreamTurns(current => upsertTurn(current, turn))
+          setPendingTurn(current => current?.sessionId === turn.sessionId ? null : current)
+        },
       })
+      setStreamTurns(current => upsertTurn(current, result.turn))
       await refresh()
     }
     catch {
       await refresh()
     }
     finally {
+      setPendingTurn(null)
       setTurnSubmitting(false)
     }
   }
@@ -500,7 +533,7 @@ export function WorkerStudio() {
                   template={selectedSessionTemplate}
                   turnInput={turnInput}
                   turnSubmitting={turnSubmitting}
-                  turns={selectedSessionTurns}
+                  turns={displayedSessionTurns}
                   workspace={selectedWorkspace}
                   onOpenSettings={() => openSettings('execution')}
                   onRefresh={() => void refresh()}
@@ -650,7 +683,7 @@ export function WorkerStudio() {
                 template={selectedSessionTemplate}
                 turnInput={turnInput}
                 turnSubmitting={turnSubmitting}
-                turns={selectedSessionTurns}
+                turns={displayedSessionTurns}
                 workspace={selectedWorkspace}
                 onLessonStatus={(lesson, status) => void changeLessonStatus(lesson, status)}
                 onOpenSettings={openSettings}
@@ -1198,6 +1231,12 @@ function resolveEngineReadiness(settings: LocalSettingsConfig | null, copy: Work
 
 function turnsForSession(session: LocalSession, turns: LocalTurn[]): LocalTurn[] {
   return turns.filter(turn => turn.sessionId === session.id).sort((a, b) => a.seq - b.seq)
+}
+
+function upsertTurn(turns: LocalTurn[], nextTurn: LocalTurn): LocalTurn[] {
+  const byId = new Map(turns.map(turn => [turn.id, turn]))
+  byId.set(nextTurn.id, nextTurn)
+  return [...byId.values()].sort((a, b) => a.seq - b.seq)
 }
 
 function eventsForSession(session: LocalSession, events: LocalSessionEvent[]): LocalSessionEvent[] {

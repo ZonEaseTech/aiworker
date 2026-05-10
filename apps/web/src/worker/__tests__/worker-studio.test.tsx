@@ -275,7 +275,9 @@ beforeEach(() => {
       const encoder = new TextEncoder()
       return new Response(new ReadableStream({
         start(controller) {
+          controller.enqueue(encoder.encode(`event: turn\ndata: ${JSON.stringify({ ...nextTurn, status: 'running', response: null })}\n\n`))
           controller.enqueue(encoder.encode(`event: session_event\ndata: ${JSON.stringify(nextEvent)}\n\n`))
+          controller.enqueue(encoder.encode(`event: turn\ndata: ${JSON.stringify(nextTurn)}\n\n`))
           controller.enqueue(encoder.encode(`event: result\ndata: ${JSON.stringify({ artifacts: [], events: currentEvents, files: [], lessons: [], review: null, session: sessionRecord, turn: nextTurn })}\n\n`))
           controller.close()
         },
@@ -407,6 +409,7 @@ describe('worker studio', () => {
 
     fireEvent.change(screen.getByLabelText('Follow-up turn'), { target: { value: 'Add interview risks.' } })
     fireEvent.click(screen.getByRole('button', { name: 'Send turn' }))
+    expect(screen.getByText('Add interview risks.')).toBeTruthy()
 
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith('/api/local/sessions/session-1/turns/stream', expect.objectContaining({

@@ -114,14 +114,18 @@ async function runLocalCliExecutor(input: LocalExecutorInput): Promise<LocalExec
     lastMessagePath,
     '-',
   ], enginePrompt, 300_000, {
-    onStderr: chunk => emit(input, { chunk: truncate(chunk, 4_000), kind: 'log', stream: 'stderr' }),
+    onStderr: (chunk) => {
+      const visible = filterVisibleEngineLog(chunk)
+      if (visible.trim())
+        emit(input, { chunk: truncate(visible, 4_000), kind: 'log', stream: 'stderr' })
+    },
     onStdout: chunk => emit(input, { chunk: truncate(chunk, 4_000), kind: 'log', stream: 'stdout' }),
   })
 
   await writeFile(path.join(input.invocationRoot, 'stdout.log'), execution.stdout, 'utf8')
   await writeFile(path.join(input.invocationRoot, 'stderr.log'), execution.stderr, 'utf8')
   emit(input, {
-    content: truncate([execution.stdout, execution.stderr].filter(Boolean).join('\n\n'), 12_000) || `Process exited with code ${execution.code ?? 'unknown'}.`,
+    content: truncate([execution.stdout, filterVisibleEngineLog(execution.stderr)].filter(Boolean).join('\n\n'), 12_000) || `Process exited with code ${execution.code ?? 'unknown'}.`,
     id: toolId,
     isError: execution.code !== 0,
     kind: 'tool_result',
@@ -297,6 +301,14 @@ function truncate(value: string, max: number): string {
   if (value.length <= max)
     return value
   return `${value.slice(0, max)}\n...[truncated]`
+}
+
+function filterVisibleEngineLog(value: string): string {
+  if (value.includes('failed to warm featured plugin ids cache') && value.includes('/backend-api/plugins/featured')) {
+    const transcriptStart = value.indexOf('OpenAI Codex v')
+    return transcriptStart === -1 ? '' : value.slice(transcriptStart)
+  }
+  return value
 }
 
 async function readTextIfExists(filePath: string): Promise<string> {

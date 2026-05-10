@@ -1,5 +1,43 @@
 # AIWorker Changelog
 
+## 2026-05-10 20:50 [completed] BUG-088 / PLAN-226 — Worker Web streamed turn visibility and Codex warning cleanup
+
+- Investigated the reported session UX defects.
+- Found that Web clears the composer before the stream exposes the newly
+  created turn row, so streamed events cannot attach to a visible turn until
+  the final refresh.
+- Confirmed that the observed Codex `403 Forbidden` is a non-fatal featured
+  plugin cache warm warning from `chatgpt.com/backend-api/plugins/featured`,
+  while the actual Codex invocation succeeded and produced an artifact.
+- Opened BUG-088 / PLAN-226 to stream real turn rows immediately, add an
+  optimistic pending turn in Web, and filter known non-fatal Codex plugin cache
+  warning noise from visible session logs.
+- Completed BUG-088 / PLAN-226.
+- Runtime now includes the persisted turn row in turn bus payloads; the API
+  streams them as `turn` SSE frames; Worker Web merges persisted, streamed, and
+  optimistic turns so the submitted operator message is visible immediately.
+- Filtered Codex's known featured plugin cache 403 warning from visible session
+  logs and final tool output while preserving raw `stderr.log` on disk.
+- Browser validation confirmed a real Codex-backed follow-up turn appeared
+  within 300ms, completed successfully, produced an artifact, and exposed no
+  `backend-api/plugins/featured` / Cloudflare / `403 Forbidden` text in the Web
+  session timeline.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-core' test`
+  - `bun run --filter '@zonease/aiworker-core' typecheck`
+  - `bun run --filter '@zonease/aiworker-api' test`
+  - `bun run --filter '@zonease/aiworker-api' typecheck`
+  - `bun run --filter '@zonease/aiworker-api' build`
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `git diff --check`
+  - `bun run crg:update`
+  - `bun run crg:review`
+- code-review-graph result: 17 changed functions/classes, 0 affected flows,
+  risk score `0.55`; MCP `get_affected_flows` also returned 0 affected flows.
+
 ## 2026-05-10 19:59 [completed] REFACTOR-052 / PLAN-225 — Worker Web session-first interaction model
 
 - Investigated the UX critique after PLAN-224 and confirmed the core issue:

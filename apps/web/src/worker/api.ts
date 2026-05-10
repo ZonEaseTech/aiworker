@@ -133,6 +133,7 @@ export async function continueSessionTurnStream(
   },
   handlers: {
     onEvent?: (event: LocalSessionEvent) => void
+    onTurn?: (turn: LocalTurn) => void
   } = {},
 ): Promise<{
   session: LocalSession
@@ -168,7 +169,10 @@ export async function continueSessionTurnStream(
       const frame = buffer.slice(0, index)
       buffer = buffer.slice(index + 2)
       const parsed = parseSseFrame(frame)
-      if (parsed?.event === 'session_event') {
+      if (parsed?.event === 'turn') {
+        handlers.onTurn?.(parsed.data as LocalTurn)
+      }
+      else if (parsed?.event === 'session_event') {
         handlers.onEvent?.(parsed.data as LocalSessionEvent)
       }
       else if (parsed?.event === 'result') {
