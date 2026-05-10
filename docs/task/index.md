@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-11 (REFACTOR-055 completed)
+> Updated: 2026-05-11 (QA-031 completed)
 
 ## Usage
 
@@ -336,3 +336,8 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REFACTOR-054 Structured engine session parity**](REFACTOR-054.md) `P0`
 - [x] [**QA-030 Structured engine session validation**](QA-030.md) `P0`
 - [x] [**REFACTOR-055 Worker Web Soul rail and worker identity**](REFACTOR-055.md) `P0`
+- [x] [**REFACTOR-056 Worker-first registry and storage contract**](REFACTOR-056.md) `P0`
+- [x] [**REFACTOR-057 Worker-scoped API and CLI surface**](REFACTOR-057.md) `P0`
+- [x] [**REFACTOR-058 Worker-first Web information architecture**](REFACTOR-058.md) `P0`
+- [x] [**REFACTOR-059 Worker capability and session selection alignment**](REFACTOR-059.md) `P0`
+- [x] [**QA-031 Worker-first workflow validation**](QA-031.md) `P0`

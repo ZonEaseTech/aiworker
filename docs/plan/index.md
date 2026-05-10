@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-11 (PLAN-232 completed)
+> Updated: 2026-05-11 (PLAN-237 completed)
 
 ## Usage
 
@@ -261,3 +261,8 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-230 Worker Web structured session timeline**](PLAN-230.md) `2026-05-10`
 - [x] [**PLAN-231 Structured session end-to-end validation**](PLAN-231.md) `2026-05-10`
 - [x] [**PLAN-232 Worker Web Soul rail and worker identity**](PLAN-232.md) `2026-05-10`
+- [x] [**PLAN-233 Worker-first registry and storage contract**](PLAN-233.md) `2026-05-11`
+- [x] [**PLAN-234 Worker-scoped API and CLI surface**](PLAN-234.md) `2026-05-11`
+- [x] [**PLAN-235 Worker-first Web information architecture**](PLAN-235.md) `2026-05-11`
+- [x] [**PLAN-236 Worker capability and session selection alignment**](PLAN-236.md) `2026-05-11`
+- [x] [**PLAN-237 Worker-first workflow validation**](PLAN-237.md) `2026-05-11`

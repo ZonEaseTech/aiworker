@@ -1,5 +1,65 @@
 # AIWorker Changelog
 
+## 2026-05-11 01:37 [completed] REFACTOR-056..059 / PLAN-233..236 / QA-031 — Worker-first product entry
+
+- Investigated the current Soul-first Web shape against the intended
+  worker-first IA and split the work into registry/storage, API/CLI, Web IA,
+  capability/session alignment, and validation tracks.
+- Relaxed the worker storage contract so multiple workers can bind the same
+  Soul while keeping workspaces isolated by worker id.
+- Stopped daemon/CLI bootstrap from auto-creating one worker per available
+  Soul; workers are now explicitly created and selected.
+- Added worker-scoped local daemon routes for templates, workspaces, sessions,
+  session messages, files, and artifacts while preserving transitional flat
+  routes for the current Web client surface.
+- Reworked CLI commands around explicit or selected worker ids:
+  `worker create`, `worker select`, worker-scoped workspace/session/file/artifact
+  commands, and host init without implicit Soul workers.
+- Reworked Worker Web routes to canonical
+  `/workers/:workerId`,
+  `/workers/:workerId/workspaces/:workspaceId`, and
+  `/workers/:workerId/workspaces/:workspaceId/sessions/:sessionId`.
+- Worker Web now uses workers as the top-level entry, creates workspaces under
+  the selected worker, and moves capability selection into workspace-scoped
+  session creation.
+- Follow-up regression fix: existing local `worker.db` files created before the
+  worker-first refactor may still have a unique `workers_soul_idx`. Worker
+  migrations now repair that legacy unique index into a normal non-unique index
+  so multiple workers can bind the same Soul in real upgraded environments.
+- Playwright MCP validation on `http://127.0.0.1:9217/` clicked through the real
+  Web flow after the repair: created worker `hr-playwright-worker-1740-31ce9d16`,
+  created workspace `3f240c55-a457-4c5b-be43-f0d5dd66628d`, created session
+  `f3e44590-08ec-4093-a066-e8bff979f443`, reached the canonical session route,
+  and observed a succeeded engine run with 1 artifact and pending review state.
+- Browser validation on `http://127.0.0.1:9328/` with clean
+  `AIWORKER_HOME=/tmp/aiworker-worker-first-validation` created an HR worker,
+  workspace, Candidate Screen session, follow-up turn, artifacts, and review
+  state through the canonical worker route. A 390px viewport reported no
+  horizontal overflow.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-storage-sqlite' test`
+  - `bun run --filter '@zonease/aiworker-storage-sqlite' typecheck`
+  - `bun run --filter '@zonease/aiworker-core' test`
+  - `bun run --filter '@zonease/aiworker-api' typecheck`
+  - `bun run --filter '@zonease/aiworker-api' test`
+  - `bun run --filter '@zonease/aiworker-cli' typecheck`
+  - `bun run --filter '@zonease/aiworker-cli' test`
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `bun run typecheck`
+  - `bun run lint`
+  - `bun run test`
+  - `bun run build`
+  - `git diff --check`
+  - `bun run crg:update`
+  - `bun run crg:review`
+- code-review-graph result: 83 changed functions/classes, 0 affected flows,
+  61 reported test gaps, risk score `0.60`; the remaining gaps are tied to
+  broader worker-first entrypoints such as `createHrWorker`,
+  `bootstrapWorkerApp`, `template`, `workspace`, and `artifact`.
+
 ## 2026-05-11 00:35 [completed] REFACTOR-055 / PLAN-232 — Worker Web Soul rail and worker identity
 
 - Reworked the Worker Web home sidebar from a vertical Soul grid into an
