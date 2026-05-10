@@ -124,6 +124,13 @@ interface StaticMessages {
     reviewWaiting: string
     sendTurn: string
     sendingTurn: string
+    backToSoulHome: string
+    currentSession: string
+    currentWorkspace: string
+    newWorkspace: string
+    noWorkspaceSessions: string
+    otherWorkspaces: string
+    selectedCapability: string
     selectedWorkspace: string
     sessionDetail: string
     latest: string
@@ -131,6 +138,8 @@ interface StaticMessages {
     turnCount: (count: number) => string
     turnHistory: string
     updated: (when: string) => string
+    workspaceNavigation: string
+    workspaceSessions: string
     workspaceKicker: string
     workspaceList: string
     workspaceTitle: (soulName: string) => string
@@ -373,6 +382,13 @@ const en = {
     reviewWaiting: 'Generate an artifact before requesting review.',
     sendTurn: 'Send turn',
     sendingTurn: 'Sending turn...',
+    backToSoulHome: 'Back to Soul home',
+    currentSession: 'Current session',
+    currentWorkspace: 'Current workspace',
+    newWorkspace: 'New workspace',
+    noWorkspaceSessions: 'No sessions in this workspace yet.',
+    otherWorkspaces: 'Other workspaces',
+    selectedCapability: 'Selected capability',
     selectedWorkspace: 'Selected workspace',
     sessionDetail: 'Session',
     latest: 'Latest',
@@ -380,6 +396,8 @@ const en = {
     turnCount: count => `${count} turns`,
     turnHistory: 'Turn history',
     updated: when => `Updated ${when}`,
+    workspaceNavigation: 'Workspace navigation',
+    workspaceSessions: 'Workspace sessions',
     workspaceKicker: 'SOUL WORKSPACE',
     workspaceList: 'Workspaces',
     workspaceTitle: soulName => `${soulName} workspaces`,
@@ -616,6 +634,13 @@ const zhCN = {
     reviewWaiting: '先生成产物，然后再请求评审。',
     sendTurn: '发送 turn',
     sendingTurn: '正在发送 turn...',
+    backToSoulHome: '返回 Soul 首页',
+    currentSession: '当前会话',
+    currentWorkspace: '当前工作区',
+    newWorkspace: '新建工作区',
+    noWorkspaceSessions: '此工作区还没有会话。',
+    otherWorkspaces: '其他工作区',
+    selectedCapability: '已选能力',
     selectedWorkspace: '已选工作区',
     sessionDetail: '会话',
     latest: '最新',
@@ -623,6 +648,8 @@ const zhCN = {
     turnCount: count => `${count} 轮 turn`,
     turnHistory: 'Turn 历史',
     updated: when => `更新于 ${when}`,
+    workspaceNavigation: '工作区导航',
+    workspaceSessions: '工作区会话',
     workspaceKicker: 'SOUL 工作区',
     workspaceList: '工作区',
     workspaceTitle: soulName => `${soulName} 工作区`,
@@ -859,6 +886,13 @@ const ja = {
     reviewWaiting: 'レビュー依頼の前に成果物を生成してください。',
     sendTurn: 'ターン送信',
     sendingTurn: '送信中...',
+    backToSoulHome: 'Soul ホームに戻る',
+    currentSession: '現在のセッション',
+    currentWorkspace: '現在のワークスペース',
+    newWorkspace: '新規ワークスペース',
+    noWorkspaceSessions: 'このワークスペースにはまだセッションがありません。',
+    otherWorkspaces: '他のワークスペース',
+    selectedCapability: '選択中の能力',
     selectedWorkspace: '選択中のワークスペース',
     sessionDetail: 'セッション',
     latest: '最新',
@@ -866,6 +900,8 @@ const ja = {
     turnCount: count => `ターン ${count} 件`,
     turnHistory: 'ターン履歴',
     updated: when => `更新 ${when}`,
+    workspaceNavigation: 'ワークスペースナビゲーション',
+    workspaceSessions: 'ワークスペースセッション',
     workspaceKicker: 'SOUL ワークスペース',
     workspaceList: 'ワークスペース',
     workspaceTitle: soulName => `${soulName} ワークスペース`,
@@ -1102,6 +1138,13 @@ const de = {
     reviewWaiting: 'Erzeuge zuerst ein Artefakt, bevor du Review anforderst.',
     sendTurn: 'Turn senden',
     sendingTurn: 'Turn wird gesendet...',
+    backToSoulHome: 'Zur Soul-Startseite',
+    currentSession: 'Aktuelle Session',
+    currentWorkspace: 'Aktueller Workspace',
+    newWorkspace: 'Neuer Workspace',
+    noWorkspaceSessions: 'In diesem Workspace gibt es noch keine Sessions.',
+    otherWorkspaces: 'Andere Workspaces',
+    selectedCapability: 'Ausgewählte Capability',
     selectedWorkspace: 'Ausgewählter Workspace',
     sessionDetail: 'Session',
     latest: 'Neueste',
@@ -1109,6 +1152,8 @@ const de = {
     turnCount: count => `${count} Turns`,
     turnHistory: 'Turn-Verlauf',
     updated: when => `Aktualisiert ${when}`,
+    workspaceNavigation: 'Workspace-Navigation',
+    workspaceSessions: 'Workspace-Sessions',
     workspaceKicker: 'SOUL WORKSPACE',
     workspaceList: 'Workspaces',
     workspaceTitle: soulName => `${soulName}-Workspaces`,

@@ -255,3 +255,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-224 Worker Web production UX integration**](PLAN-224.md) `2026-05-10`
 - [x] [**PLAN-225 Worker Web session-first interaction model**](PLAN-225.md) `2026-05-10`
 - [x] [**PLAN-226 Worker Web streamed turn visibility and Codex warning cleanup**](PLAN-226.md) `2026-05-10`
+- [x] [**PLAN-227 Worker Web workspace route contextual navigation**](PLAN-227.md) `2026-05-10`

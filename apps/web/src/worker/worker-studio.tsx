@@ -17,6 +17,7 @@ import type { LocalWorkspaceData } from './api'
 import type { ArtifactPreviewState, EngineReadiness } from './session-detail'
 
 import {
+  ArrowLeft,
   Check,
   ChevronDown,
   FileText,
@@ -184,6 +185,10 @@ export function WorkerStudio() {
     ?? (selectedWorkspaceId && soulWorkspaces.some(item => item.id === selectedWorkspaceId)
       ? soulWorkspaces.find(item => item.id === selectedWorkspaceId) ?? null
       : latest(soulWorkspaces))
+  const workspaceSessions = useMemo(
+    () => selectedWorkspace ? data?.sessions.filter(session => session.workspaceId === selectedWorkspace.id).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)) ?? [] : [],
+    [data?.sessions, selectedWorkspace],
+  )
   const routeSession = route.kind === 'session'
     ? data?.sessions.find(session => session.id === route.sessionId && session.workspaceId === route.workspaceId) ?? null
     : null
@@ -401,12 +406,17 @@ export function WorkerStudio() {
   if (!data || !selectedSoul || !selectedWorker || !selectedTemplate || !selectedSoulCopy || !selectedTemplateCopy)
     return null
 
-  const isSessionRoute = route.kind === 'session' && Boolean(selectedWorkspace && selectedSession)
+  const isWorkspaceContextRoute = route.kind !== 'home' && Boolean(selectedWorkspace)
+  const showWorkspaceContextSurface = isWorkspaceContextRoute && Boolean(selectedWorkspace)
+  const showSessionSurface = isWorkspaceContextRoute && Boolean(selectedWorkspace && selectedSession)
 
   return (
     <main className="entry-shell" data-appearance={appearance} data-theme={resolvedTheme} data-testid="worker-studio-shell">
-      <div className={`entry workspace-entry ${isSessionRoute ? 'workspace-session-route has-artifact-rail' : 'workspace-home-route'}`}>
-        <aside className="entry-side soul-sidebar" aria-label={copy.accessibility.soulProjectCreator}>
+      <div className={`entry workspace-entry ${showWorkspaceContextSurface ? `${showSessionSurface ? 'workspace-session-route has-artifact-rail' : 'workspace-context-route'}` : 'workspace-home-route'}`}>
+        <aside
+          className="entry-side soul-sidebar"
+          aria-label={isWorkspaceContextRoute ? copy.workspace.workspaceNavigation : copy.accessibility.soulProjectCreator}
+        >
           <div className="entry-brand">
             <span className="entry-brand-mark" aria-hidden="true">AI</span>
             <div className="entry-brand-text">
@@ -429,82 +439,169 @@ export function WorkerStudio() {
             </button>
           </section>
 
-          <section className="newproj soul-catalog-panel">
-            <div className="newproj-body">
-              <div className="section-head compact">
-                <div>
-                  <h3>{copy.workspace.soulCatalog}</h3>
-                  <p className="hint">{selectedSoulCopy.description}</p>
-                </div>
-              </div>
-              <button className="ds-select" type="button" aria-label={copy.accessibility.selectedSoul}>
-                <span className="ds-icon-empty" aria-hidden="true">
-                  <span />
-                </span>
-                <span className="ds-select-copy">
-                  <strong>
-                    {selectedSoulCopy.name}
-                    {' '}
-                    {copy.create.soul}
-                  </strong>
-                  <small>{selectedSoulCopy.domain}</small>
-                </span>
-                <ChevronDown aria-hidden="true" size={16} />
-              </button>
-              <div className="soul-picker-list" role="listbox" aria-label={copy.accessibility.soulCatalog}>
-                {data.souls.map(soul => (
-                  <button
-                    key={soul.id}
-                    type="button"
-                    className={`soul-option ${selectedSoul.id === soul.id ? 'active' : ''}`}
-                    disabled={soul.status !== 'available'}
-                    aria-selected={selectedSoul.id === soul.id}
-                    role="option"
-                    onClick={() => {
-                      setSelectedSoulId(soul.id)
-                      setSelectedWorkspaceId(null)
-                      const next = data.templates.find(template => template.soulId === soul.id)
-                      if (next)
-                        setSelectedTemplateId(next.id)
-                      navigateWorkerRoute({ kind: 'home' })
-                    }}
-                  >
-                    <strong>{displaySoul(soul, activeLocale).name}</strong>
-                    <small>{soul.status === 'available' ? displaySoul(soul, activeLocale).domain : copy.common.comingSoon}</small>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </section>
+          {isWorkspaceContextRoute && selectedWorkspace
+            ? (
+                <>
+                  <section className="workspace-rail-card workspace-context-card">
+                    <button
+                      type="button"
+                      className="rail-back-button"
+                      onClick={() => navigateWorkerRoute({ kind: 'home' })}
+                    >
+                      <ArrowLeft aria-hidden="true" size={13} />
+                      <span>{copy.workspace.backToSoulHome}</span>
+                    </button>
+                    <div className="rail-context-main">
+                      <span className="kicker">{copy.workspace.workspaceNavigation}</span>
+                      <h3>{selectedWorkspace.name}</h3>
+                      <p>{`${selectedSoulCopy.name} / ${selectedSoulCopy.domain}`}</p>
+                    </div>
+                    <div className="rail-meta-grid">
+                      <span>{copy.workspace.currentWorkspace}</span>
+                      <strong>{selectedWorkspace.name}</strong>
+                      <span>{copy.workspace.selectedCapability}</span>
+                      <strong>{selectedArtifactCopy?.name ?? selectedTemplateCopy.name}</strong>
+                      <span>{copy.workspace.currentSession}</span>
+                      <strong>{selectedSession ? formatStatus(selectedSession.status, activeLocale) : copy.artifact.noSession}</strong>
+                    </div>
+                  </section>
 
-          <section className="newproj capability-panel">
-            <div className="newproj-body">
-              <div className="section-head compact">
-                <div>
-                  <h3>{copy.create.capabilityTemplate}</h3>
-                  <p className="hint">{selectedTemplateCopy.description}</p>
-                </div>
-              </div>
-              <div className="template-picker-list" role="listbox" aria-label={copy.create.capabilityTemplate}>
-                {templates.map(template => (
-                  <button
-                    key={template.id}
-                    type="button"
-                    className={`template-option ${selectedTemplate.id === template.id ? 'active' : ''}`}
-                    aria-selected={selectedTemplate.id === template.id}
-                    role="option"
-                    onClick={() => setSelectedTemplateId(template.id)}
-                  >
-                    <strong>{displayTemplate(template, activeLocale).name}</strong>
-                    <small>{displayTemplate(template, activeLocale).description}</small>
-                  </button>
-                ))}
-              </div>
-              <div className="rubric-list" aria-label={copy.workspace.reviewRubric}>
-                {selectedTemplateCopy.reviewRubric.map(item => <span key={item}>{item}</span>)}
-              </div>
-            </div>
-          </section>
+                  <section className="workspace-rail-card">
+                    <div className="rail-section-head">
+                      <strong>{copy.workspace.workspaceSessions}</strong>
+                      <span className="count-pill">{workspaceSessions.length}</span>
+                    </div>
+                    <div className="rail-session-list">
+                      {workspaceSessions.length > 0
+                        ? workspaceSessions.map(session => (
+                            <button
+                              key={session.id}
+                              type="button"
+                              className={`rail-session-item ${selectedSession?.id === session.id ? 'active' : ''}`}
+                              onClick={() => navigateWorkerRoute({ kind: 'session', sessionId: session.id, workspaceId: session.workspaceId })}
+                            >
+                              <strong>{session.title}</strong>
+                              <span>
+                                {displayTemplate(data.templates.find(template => template.id === session.capabilityTemplateId) ?? selectedTemplate, activeLocale).name}
+                                {' · '}
+                                {formatStatus(session.status, activeLocale)}
+                              </span>
+                              <small>{copy.workspace.updated(formatRelativeTime(session.updatedAt, activeLocale))}</small>
+                            </button>
+                          ))
+                        : <div className="rail-empty">{copy.workspace.noWorkspaceSessions}</div>}
+                    </div>
+                  </section>
+
+                  <section className="workspace-rail-card">
+                    <div className="rail-section-head">
+                      <strong>{copy.workspace.otherWorkspaces}</strong>
+                      <button type="button" className="rail-mini-action" onClick={() => navigateWorkerRoute({ kind: 'home' })}>
+                        <Plus aria-hidden="true" size={12} />
+                        <span>{copy.workspace.newWorkspace}</span>
+                      </button>
+                    </div>
+                    <div className="rail-workspace-list">
+                      {soulWorkspaces.map(workspace => (
+                        <button
+                          key={workspace.id}
+                          type="button"
+                          className={`rail-workspace-item ${selectedWorkspace.id === workspace.id ? 'active' : ''}`}
+                          onClick={() => {
+                            const nextSession = sessionForWorkspace(workspace, data.sessions)
+                            navigateWorkerRoute(nextSession
+                              ? { kind: 'session', sessionId: nextSession.id, workspaceId: workspace.id }
+                              : { kind: 'workspace', workspaceId: workspace.id })
+                          }}
+                        >
+                          <strong>{workspace.name}</strong>
+                          <small>{formatStatus(workspace.status, activeLocale)}</small>
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                </>
+              )
+            : (
+                <>
+                  <section className="newproj soul-catalog-panel">
+                    <div className="newproj-body">
+                      <div className="section-head compact">
+                        <div>
+                          <h3>{copy.workspace.soulCatalog}</h3>
+                          <p className="hint">{selectedSoulCopy.description}</p>
+                        </div>
+                      </div>
+                      <button className="ds-select" type="button" aria-label={copy.accessibility.selectedSoul}>
+                        <span className="ds-icon-empty" aria-hidden="true">
+                          <span />
+                        </span>
+                        <span className="ds-select-copy">
+                          <strong>
+                            {selectedSoulCopy.name}
+                            {' '}
+                            {copy.create.soul}
+                          </strong>
+                          <small>{selectedSoulCopy.domain}</small>
+                        </span>
+                        <ChevronDown aria-hidden="true" size={16} />
+                      </button>
+                      <div className="soul-picker-list" role="listbox" aria-label={copy.accessibility.soulCatalog}>
+                        {data.souls.map(soul => (
+                          <button
+                            key={soul.id}
+                            type="button"
+                            className={`soul-option ${selectedSoul.id === soul.id ? 'active' : ''}`}
+                            disabled={soul.status !== 'available'}
+                            aria-selected={selectedSoul.id === soul.id}
+                            role="option"
+                            onClick={() => {
+                              setSelectedSoulId(soul.id)
+                              setSelectedWorkspaceId(null)
+                              const next = data.templates.find(template => template.soulId === soul.id)
+                              if (next)
+                                setSelectedTemplateId(next.id)
+                              navigateWorkerRoute({ kind: 'home' })
+                            }}
+                          >
+                            <strong>{displaySoul(soul, activeLocale).name}</strong>
+                            <small>{soul.status === 'available' ? displaySoul(soul, activeLocale).domain : copy.common.comingSoon}</small>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="newproj capability-panel">
+                    <div className="newproj-body">
+                      <div className="section-head compact">
+                        <div>
+                          <h3>{copy.create.capabilityTemplate}</h3>
+                          <p className="hint">{selectedTemplateCopy.description}</p>
+                        </div>
+                      </div>
+                      <div className="template-picker-list" role="listbox" aria-label={copy.create.capabilityTemplate}>
+                        {templates.map(template => (
+                          <button
+                            key={template.id}
+                            type="button"
+                            className={`template-option ${selectedTemplate.id === template.id ? 'active' : ''}`}
+                            aria-selected={selectedTemplate.id === template.id}
+                            role="option"
+                            onClick={() => setSelectedTemplateId(template.id)}
+                          >
+                            <strong>{displayTemplate(template, activeLocale).name}</strong>
+                            <small>{displayTemplate(template, activeLocale).description}</small>
+                          </button>
+                        ))}
+                      </div>
+                      <div className="rubric-list" aria-label={copy.workspace.reviewRubric}>
+                        {selectedTemplateCopy.reviewRubric.map(item => <span key={item}>{item}</span>)}
+                      </div>
+                    </div>
+                  </section>
+                </>
+              )}
 
           <div className="entry-side-foot">
             <button type="button" className="foot-pill" onClick={() => openSettings('execution')}>
@@ -522,7 +619,7 @@ export function WorkerStudio() {
         </aside>
 
         <section className="entry-main workspace-column" aria-label={copy.accessibility.soulProjectsAndArtifacts}>
-          {isSessionRoute && selectedWorkspace && selectedSession
+          {showSessionSurface && selectedWorkspace && selectedSession
             ? (
                 <WorkerSessionChat
                   copy={copy}
@@ -541,7 +638,40 @@ export function WorkerStudio() {
                   onTurnInputChange={setTurnInput}
                 />
               )
-            : (
+            : null}
+
+          {!showSessionSurface && isWorkspaceContextRoute && selectedWorkspace
+            ? (
+                <>
+                  <header className="entry-header workspace-header">
+                    <div>
+                      <span className="kicker">{copy.workspace.currentWorkspace}</span>
+                      <h1>{selectedWorkspace.name}</h1>
+                    </div>
+                    <div className="entry-header-right">
+                      <button className="settings-trigger" type="button" aria-label={copy.accessibility.refreshWorkspace} onClick={() => void refresh()}>
+                        <RefreshCw aria-hidden="true" size={16} />
+                      </button>
+                      <button className="settings-trigger" type="button" aria-label={copy.accessibility.openSettings} onClick={() => openSettings()}>
+                        <Settings aria-hidden="true" size={16} />
+                      </button>
+                    </div>
+                  </header>
+
+                  <div className="entry-tab-content workspace-content">
+                    <section className="empty-design-state workspace-route-empty" aria-live="polite">
+                      <FileText aria-hidden="true" size={20} />
+                      <strong>{copy.workspace.noWorkspaceSessions}</strong>
+                      <span>{copy.workspace.selectedCapability}</span>
+                      <span>{selectedTemplateCopy.name}</span>
+                    </section>
+                  </div>
+                </>
+              )
+            : null}
+
+          {!showSessionSurface && !(isWorkspaceContextRoute && selectedWorkspace)
+            ? (
                 <>
                   <header className="entry-header workspace-header">
                     <div>
@@ -659,10 +789,11 @@ export function WorkerStudio() {
                     </section>
                   </div>
                 </>
-              )}
+              )
+            : null}
         </section>
 
-        {isSessionRoute
+        {showSessionSurface
           ? (
               <SessionDetail
                 artifact={selectedArtifact}

@@ -1,5 +1,37 @@
 # AIWorker Changelog
 
+## 2026-05-10 21:35 [completed] REFACTOR-053 / PLAN-227 — Worker Web workspace route contextual navigation
+
+- Investigated the reported route-context mismatch.
+- Found that `WorkerStudio` always renders the global Soul catalog and
+  workspace creation sidebar; session routes only swap the center column.
+- Opened REFACTOR-053 / PLAN-227 to keep the creation sidebar on the home
+  route and render a workspace-context navigation rail after entering a
+  workspace/session route.
+- Completed REFACTOR-053 / PLAN-227.
+- Worker Web now keeps Soul catalog/capability/create controls on `/`, and
+  switches `/workspaces/:workspaceId` plus
+  `/workspaces/:workspaceId/sessions/:sessionId` to contextual workspace
+  navigation.
+- Workspace/session routes show current Soul, current workspace, selected
+  capability/session metadata, workspace sessions, same-Soul workspace
+  switching, Settings, and engine status instead of the creation rail.
+- Empty workspace routes no longer show the create panel.
+- Browser validation confirmed no Import text, no creation panel on session
+  routes, and no horizontal overflow across 1440x947, 1024x640, 980x720, and
+  390x844 viewports.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `git diff --check`
+  - `bun run crg:update`
+  - `bun run crg:review`
+- code-review-graph result: 6 changed functions/classes, 0 affected flows,
+  risk score `0.45`; MCP impact radius found only adjacent Worker Web API
+  client symbols within one hop.
+
 ## 2026-05-10 20:50 [completed] BUG-088 / PLAN-226 — Worker Web streamed turn visibility and Codex warning cleanup
 
 - Investigated the reported session UX defects.

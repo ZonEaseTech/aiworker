@@ -239,7 +239,11 @@ textarea::placeholder {
 }
 
 .workspace-session-route {
-  grid-template-columns: 292px minmax(420px, 1fr) minmax(320px, 360px);
+  grid-template-columns: 292px minmax(0, 1fr) minmax(280px, 340px);
+}
+
+.workspace-context-route {
+  grid-template-columns: 292px minmax(0, 1fr);
 }
 
 .entry-side {
@@ -262,6 +266,10 @@ textarea::placeholder {
 
 .soul-sidebar {
   width: 340px;
+}
+
+.workspace-session-route .soul-sidebar {
+  width: auto;
 }
 
 .entry-brand {
@@ -740,6 +748,163 @@ textarea::placeholder {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.workspace-rail-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.workspace-context-card {
+  gap: 14px;
+}
+
+.rail-back-button,
+.rail-mini-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.rail-back-button {
+  padding: 5px 9px;
+}
+
+.rail-mini-action {
+  padding: 4px 8px;
+}
+
+.rail-context-main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rail-context-main h3 {
+  margin: 0;
+  overflow: hidden;
+  color: var(--text-strong);
+  font-size: 15px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rail-context-main p {
+  margin: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rail-meta-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.rail-meta-grid span,
+.rail-session-item small,
+.rail-workspace-item small {
+  color: var(--text-faint);
+  font-size: 10.5px;
+}
+
+.rail-meta-grid strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rail-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.rail-section-head > strong {
+  overflow: hidden;
+  color: var(--text-strong);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rail-session-list,
+.rail-workspace-list {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rail-session-item,
+.rail-workspace-item {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  color: var(--text);
+  text-align: left;
+}
+
+.rail-session-item.active,
+.rail-workspace-item.active {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+}
+
+.rail-session-item strong,
+.rail-workspace-item strong {
+  overflow: hidden;
+  color: var(--text-strong);
+  font-size: 12px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rail-session-item span {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rail-empty {
+  padding: 10px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 11.5px;
 }
 
 .entry-main {
@@ -1448,6 +1613,10 @@ textarea::placeholder {
   font-size: 13px;
 }
 
+.workspace-route-empty {
+  min-height: 240px;
+}
+
 .artifact-rail {
   position: relative;
   width: 232px;
@@ -1464,6 +1633,10 @@ textarea::placeholder {
 
 .artifact-rail {
   width: 340px;
+}
+
+.workspace-session-route .artifact-rail {
+  width: auto;
 }
 
 .session-panel {

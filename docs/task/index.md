@@ -332,3 +332,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REFACTOR-051 Worker Web production UX integration**](REFACTOR-051.md) `P0`
 - [x] [**REFACTOR-052 Worker Web session-first interaction model**](REFACTOR-052.md) `P0`
 - [x] [**BUG-088 Worker Web session turn disappears until refresh and Codex plugin warning noise**](BUG-088.md) `P0`
+- [x] [**REFACTOR-053 Worker Web workspace route contextual navigation**](REFACTOR-053.md) `P0`

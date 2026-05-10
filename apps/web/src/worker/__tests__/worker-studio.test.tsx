@@ -404,6 +404,11 @@ describe('worker studio', () => {
       expect(window.location.pathname).toBe('/workspaces/workspace-1/sessions/session-1')
     })
     expect(await screen.findByText('AIWorker Engine')).toBeTruthy()
+    expect(screen.getByText('Workspace navigation')).toBeTruthy()
+    expect(screen.getByText('Current workspace')).toBeTruthy()
+    expect(screen.getByText('Workspace sessions')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Back to Soul home/ })).toBeTruthy()
+    expect(screen.queryByTestId('new-project-panel')).toBeNull()
     expect(screen.getByText('Session events')).toBeTruthy()
     expect(screen.getByText('Memory candidates')).toBeTruthy()
 
@@ -433,6 +438,22 @@ describe('worker studio', () => {
       expect(fetch).toHaveBeenCalledWith('/api/local/lessons/lesson-1', expect.objectContaining({ method: 'PATCH' }))
       expect(screen.getByText('Accepted')).toBeTruthy()
     })
+  })
+
+  it('keeps an empty workspace route in workspace navigation instead of the creation surface', async () => {
+    currentSessions = []
+    currentTurns = []
+    currentArtifacts = []
+    currentEvents = []
+    currentLessons = []
+    window.history.replaceState(null, '', '/workspaces/workspace-1')
+
+    render(<WorkerStudio />)
+
+    expect(await screen.findByText('Workspace navigation')).toBeTruthy()
+    expect(screen.getAllByText('No sessions in this workspace yet.').length).toBeGreaterThan(0)
+    expect(screen.queryByTestId('new-project-panel')).toBeNull()
+    expect(screen.queryByLabelText('Soul catalog')).toBeNull()
   })
 
   it('opens settings, rescans/tests engines, and autosaves settings changes', async () => {
