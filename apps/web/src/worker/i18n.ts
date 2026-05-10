@@ -101,6 +101,8 @@ interface StaticMessages {
     engineMissing: (engineId: string) => string
     engineNotInstalled: (engineName: string) => string
     engineReadyDetail: (engineName: string) => string
+    engineRole: string
+    engineStarting: string
     eventCount: (count: number) => string
     eventStream: string
     executionReady: string
@@ -112,6 +114,7 @@ interface StaticMessages {
     noSelectionDetail: string
     noSelectionTitle: string
     noTurns: string
+    operatorRole: string
     proposed: string
     reject: string
     rejected: string
@@ -123,6 +126,7 @@ interface StaticMessages {
     sendingTurn: string
     selectedWorkspace: string
     sessionDetail: string
+    latest: string
     soulCatalog: string
     turnCount: (count: number) => string
     turnHistory: string
@@ -346,6 +350,8 @@ const en = {
     engineMissing: engineId => `${engineId} is not known in local settings.`,
     engineNotInstalled: engineName => `${engineName} is selected but not installed on PATH.`,
     engineReadyDetail: engineName => `${engineName} is ready for session turns.`,
+    engineRole: 'AIWorker Engine',
+    engineStarting: 'Engine is starting the session turn.',
     eventCount: count => `${count} events`,
     eventStream: 'Session events',
     executionReady: 'Execution',
@@ -357,6 +363,7 @@ const en = {
     noSelectionDetail: 'Create or select a workspace to inspect the session, artifact, review, and memory candidates.',
     noSelectionTitle: 'No workspace selected',
     noTurns: 'No turns recorded for this session.',
+    operatorRole: 'Operator',
     proposed: 'Proposed',
     reject: 'Reject',
     rejected: 'Rejected',
@@ -368,6 +375,7 @@ const en = {
     sendingTurn: 'Sending turn...',
     selectedWorkspace: 'Selected workspace',
     sessionDetail: 'Session',
+    latest: 'Latest',
     soulCatalog: 'Soul catalog',
     turnCount: count => `${count} turns`,
     turnHistory: 'Turn history',
@@ -585,6 +593,8 @@ const zhCN = {
     engineMissing: engineId => `本地设置中没有 ${engineId}。`,
     engineNotInstalled: engineName => `已选择 ${engineName}，但 PATH 中未安装。`,
     engineReadyDetail: engineName => `${engineName} 可用于 session turn。`,
+    engineRole: 'AIWorker 引擎',
+    engineStarting: '引擎正在启动本轮会话。',
     eventCount: count => `${count} 条事件`,
     eventStream: '会话事件',
     executionReady: '执行',
@@ -596,6 +606,7 @@ const zhCN = {
     noSelectionDetail: '创建或选择一个工作区，查看会话、产物、评审和记忆候选。',
     noSelectionTitle: '未选择工作区',
     noTurns: '此会话还没有 turn 记录。',
+    operatorRole: '操作者',
     proposed: '待定',
     reject: '拒绝',
     rejected: '已拒绝',
@@ -607,6 +618,7 @@ const zhCN = {
     sendingTurn: '正在发送 turn...',
     selectedWorkspace: '已选工作区',
     sessionDetail: '会话',
+    latest: '最新',
     soulCatalog: 'Soul 目录',
     turnCount: count => `${count} 轮 turn`,
     turnHistory: 'Turn 历史',
@@ -824,6 +836,8 @@ const ja = {
     engineMissing: engineId => `${engineId} はローカル設定にありません。`,
     engineNotInstalled: engineName => `${engineName} が選択されていますが PATH にありません。`,
     engineReadyDetail: engineName => `${engineName} はセッションターンで利用できます。`,
+    engineRole: 'AIWorker エンジン',
+    engineStarting: 'エンジンがセッションターンを開始しています。',
     eventCount: count => `イベント ${count} 件`,
     eventStream: 'セッションイベント',
     executionReady: '実行',
@@ -835,6 +849,7 @@ const ja = {
     noSelectionDetail: 'ワークスペースを作成または選択して、セッション、成果物、レビュー、メモリー候補を確認します。',
     noSelectionTitle: 'ワークスペース未選択',
     noTurns: 'このセッションにはターンがありません。',
+    operatorRole: 'オペレーター',
     proposed: '提案中',
     reject: '却下',
     rejected: '却下済み',
@@ -846,6 +861,7 @@ const ja = {
     sendingTurn: '送信中...',
     selectedWorkspace: '選択中のワークスペース',
     sessionDetail: 'セッション',
+    latest: '最新',
     soulCatalog: 'Soul カタログ',
     turnCount: count => `ターン ${count} 件`,
     turnHistory: 'ターン履歴',
@@ -1063,6 +1079,8 @@ const de = {
     engineMissing: engineId => `${engineId} ist in den lokalen Einstellungen unbekannt.`,
     engineNotInstalled: engineName => `${engineName} ist ausgewählt, aber nicht im PATH installiert.`,
     engineReadyDetail: engineName => `${engineName} ist für Session-Turns bereit.`,
+    engineRole: 'AIWorker Engine',
+    engineStarting: 'Engine startet den Session-Turn.',
     eventCount: count => `${count} Events`,
     eventStream: 'Session-Events',
     executionReady: 'Ausführung',
@@ -1074,6 +1092,7 @@ const de = {
     noSelectionDetail: 'Erstelle oder wähle einen Workspace, um Session, Artefakt, Review und Memory-Kandidaten zu prüfen.',
     noSelectionTitle: 'Kein Workspace ausgewählt',
     noTurns: 'Für diese Session sind keine Turns erfasst.',
+    operatorRole: 'Operator',
     proposed: 'Vorgeschlagen',
     reject: 'Ablehnen',
     rejected: 'Abgelehnt',
@@ -1085,6 +1104,7 @@ const de = {
     sendingTurn: 'Turn wird gesendet...',
     selectedWorkspace: 'Ausgewählter Workspace',
     sessionDetail: 'Session',
+    latest: 'Neueste',
     soulCatalog: 'Soul-Katalog',
     turnCount: count => `${count} Turns`,
     turnHistory: 'Turn-Verlauf',

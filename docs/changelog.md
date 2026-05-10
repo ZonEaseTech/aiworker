@@ -1,5 +1,61 @@
 # AIWorker Changelog
 
+## 2026-05-10 19:59 [completed] REFACTOR-052 / PLAN-225 — Worker Web session-first interaction model
+
+- Investigated the UX critique after PLAN-224 and confirmed the core issue:
+  the Web is technically connected but still not session-first.
+- Compared current Worker Web against Open Design's entry/project route,
+  conversation/message/run surface, streamed assistant events, and bounded
+  scroll layout.
+- Found that AIWorker currently compresses engine execution into blocking
+  `LocalExecutor.invoke(...)` plus coarse session events, so the UI cannot show
+  the full engine process the way Open Design shows run/message progress.
+- Updated the plan direction: do not reinvent session rendering, message type
+  grouping, stream buffering, run reattachment, tool cards, composer ergonomics,
+  or scroll behavior. Port Open Design's mature session primitives where
+  practical and adapt them to AIWorker workspace/session/turn APIs.
+- Opened REFACTOR-052 and draft PLAN-225 to rebuild the Web interaction model
+  around routed workspace/session screens, streamed engine event timelines,
+  contextual artifact/review/memory surfaces, and explicit scroll validation.
+- Approved by operator with `proceed` and completed the Web session-first
+  rebuild.
+- Added Worker Web routing for `/` and
+  `/workspaces/:workspaceId/sessions/:sessionId`, with SPA fallback and
+  production asset base fixes for direct session-route reloads.
+- Reworked the home route into a Soul catalog/workspace launcher and moved the
+  active session into its own conversation-style route.
+- Added streamed local executor events across core/runtime/API/Web so a session
+  turn shows engine status, Bash tool use/result, compact stdout/stderr,
+  assistant text, artifact/review chips, and completion state inside the
+  assistant flow.
+- Added SSE heartbeat and daemon idle-timeout tuning for long local engine
+  turns.
+- Moved artifact/review/memory/event inspection into the session route
+  secondary pane so the main viewport stays focused on the conversation.
+- Browser validation at `http://127.0.0.1:9217/` confirmed Soul home, session
+  deep link, real Codex CLI continuation, explicit Settings open/close,
+  independent chat/artifact scrolling, no console errors, and no mobile
+  horizontal overflow at 390px width.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `bun run --filter '@zonease/aiworker-api' build`
+  - `bun run check`
+  - `bun run test`
+  - `bun run build`
+- code-review-graph passed:
+  - `bun run crg:status`
+  - `bun run crg:update`
+  - `bun run crg:review`
+  - MCP `get_minimal_context`
+  - MCP `get_affected_flows`
+  - Result: 16 changed files, 38 changed functions/classes, 0 affected flows,
+    risk score `0.55`; `streamSessionTurn`/bootstrap test-gap warnings are
+    covered by API SSE tests, Web stream tests, root gates, and local browser
+    validation.
+
 ## 2026-05-10 19:39 [completed] REFACTOR-051 / PLAN-224 — Worker Web production UX integration
 
 - Investigated the current Worker Web production-readiness gap after the

@@ -29,6 +29,10 @@ describe('local daemon API', () => {
       runtimeVersion: 'test',
       executor: {
         async invoke(input) {
+          input.onEvent?.({ kind: 'status', label: 'test-started', detail: input.engineId })
+          input.onEvent?.({ id: 'tool-1', input: { command: 'test engine' }, kind: 'tool_use', name: 'Bash' })
+          input.onEvent?.({ id: 'tool-1', content: 'ok', kind: 'tool_result', name: 'Bash' })
+          input.onEvent?.({ kind: 'text', text: 'done' })
           return {
             summary: 'done',
             artifacts: [{ path: `artifacts/${input.sessionId}/result.md`, title: 'Result', content: `# ${input.prompt}\n` }],
@@ -98,6 +102,39 @@ describe('local daemon API', () => {
     expect((await target.request('/api/local/info', {
       headers: { authorization: 'Bearer local-token-123456' },
     })).status).toBe(200)
+  })
+
+  it('streams session turn engine events before returning the final result', async () => {
+    const target = await app()
+    const workersBody = await (await target.request('/api/local/workers')).json() as { workers: Array<{ id: string, soulId: string }> }
+    const hrWorker = workersBody.workers.find(worker => worker.soulId === 'hr')!
+    const workspaceBody = await (await target.request(`/api/local/workers/${hrWorker.id}/workspaces`, {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Hiring stream workspace' }),
+      headers: { 'content-type': 'application/json' },
+    })).json() as { workspace: { id: string } }
+    const sessionBody = await (await target.request(`/api/local/workspaces/${workspaceBody.workspace.id}/sessions`, {
+      method: 'POST',
+      body: JSON.stringify({
+        capabilityTemplateId: 'candidate-screen',
+        context: 'Review packet',
+        title: 'Screen candidate',
+      }),
+      headers: { 'content-type': 'application/json' },
+    })).json() as { session: { id: string } }
+
+    const streamRes = await target.request(`/api/local/sessions/${sessionBody.session.id}/turns/stream`, {
+      method: 'POST',
+      body: JSON.stringify({ input: 'Prepare a streamed candidate screen.' }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(streamRes.status).toBe(200)
+    expect(streamRes.headers.get('content-type')).toContain('text/event-stream')
+    const body = await streamRes.text()
+    expect(body).toContain('event: session_event')
+    expect(body).toContain('"kind":"tool_use"')
+    expect(body).toContain('event: result')
+    expect(body).toContain('"turn"')
   })
 
   it('documents only the workspace/session API surface', async () => {

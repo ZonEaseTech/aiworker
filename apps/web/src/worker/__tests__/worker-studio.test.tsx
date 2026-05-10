@@ -218,6 +218,7 @@ function installMatchMedia(initialMatches: boolean) {
 
 beforeEach(() => {
   resetSettings()
+  window.history.replaceState(null, '', '/')
   document.documentElement.lang = ''
   installMatchMedia(false)
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -252,6 +253,33 @@ beforeEach(() => {
       currentTurns = [createdTurn, ...currentTurns]
       currentArtifacts = [createdArtifact, ...currentArtifacts]
       return json({ artifacts: [createdArtifact], events: [], files: [], lessons: [], review: null, session: createdSession, turn: createdTurn }, 201)
+    }
+    if (url.endsWith('/api/local/sessions/session-1/turns/stream') && method === 'POST') {
+      const nextTurn = {
+        ...turnRecord,
+        id: 'turn-2',
+        input: 'Add interview risks.',
+        response: 'Updated Candidate Screen.',
+        seq: 2,
+      }
+      const nextEvent = {
+        ...eventRecord,
+        id: 2,
+        payloadJson: { agentEvent: { kind: 'text', text: 'Added interview risks.' }, status: 'succeeded' },
+        seq: 1,
+        turnId: 'turn-2',
+        type: 'assistant_delta',
+      }
+      currentTurns = [...currentTurns, nextTurn]
+      currentEvents = [...currentEvents, nextEvent]
+      const encoder = new TextEncoder()
+      return new Response(new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode(`event: session_event\ndata: ${JSON.stringify(nextEvent)}\n\n`))
+          controller.enqueue(encoder.encode(`event: result\ndata: ${JSON.stringify({ artifacts: [], events: currentEvents, files: [], lessons: [], review: null, session: sessionRecord, turn: nextTurn })}\n\n`))
+          controller.close()
+        },
+      }), { headers: { 'content-type': 'text/event-stream' }, status: 200 })
     }
     if (url.endsWith('/api/local/sessions/session-1/turns') && method === 'POST') {
       const nextTurn = {
@@ -342,7 +370,7 @@ describe('worker studio', () => {
     expect(screen.queryByText(/work order/i)).toBeNull()
     expect(screen.queryByText(/Open Design/i)).toBeNull()
     expect(screen.queryByText(/Nexu/i)).toBeNull()
-    expect(await screen.findByText(/Evidence summary/i)).toBeTruthy()
+    expect(screen.queryByText(/Evidence summary/i)).toBeNull()
   })
 
   it('creates a workspace session turn with selected Soul worker and skill metadata', async () => {
@@ -368,19 +396,25 @@ describe('worker studio', () => {
   it('continues an existing session and wires review and memory actions', async () => {
     render(<WorkerStudio />)
 
-    expect(await screen.findByText('Session')).toBeTruthy()
-    expect(screen.getByText('Turn history')).toBeTruthy()
+    fireEvent.click(await screen.findByRole('button', { name: /Hiring Workspace/ }))
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/workspaces/workspace-1/sessions/session-1')
+    })
+    expect(await screen.findByText('AIWorker Engine')).toBeTruthy()
+    expect(screen.getByText('Session events')).toBeTruthy()
     expect(screen.getByText('Memory candidates')).toBeTruthy()
 
     fireEvent.change(screen.getByLabelText('Follow-up turn'), { target: { value: 'Add interview risks.' } })
     fireEvent.click(screen.getByRole('button', { name: 'Send turn' }))
 
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('/api/local/sessions/session-1/turns', expect.objectContaining({
+      expect(fetch).toHaveBeenCalledWith('/api/local/sessions/session-1/turns/stream', expect.objectContaining({
         body: expect.stringContaining('Add interview risks.'),
         method: 'POST',
       }))
       expect(screen.getByText('Add interview risks.')).toBeTruthy()
+      expect(screen.getByText('Added interview risks.')).toBeTruthy()
     })
 
     fireEvent.click(screen.getByRole('button', { name: 'Request review' }))

@@ -58,6 +58,7 @@ export function SessionDetail({
   reviewSubmitting,
   reviews,
   session,
+  mode = 'full',
   template,
   turnInput,
   turnSubmitting,
@@ -84,6 +85,7 @@ export function SessionDetail({
   reviewSubmitting: boolean
   reviews: LocalReview[]
   session: LocalSession | null
+  mode?: 'artifact' | 'full'
   template: CapabilityTemplate | null
   turnInput: string
   turnSubmitting: boolean
@@ -130,26 +132,30 @@ export function SessionDetail({
                 <small>{copy.workspace.updated(formatRelativeTime(session.updatedAt, locale))}</small>
               </section>
 
-              <section className="turn-composer">
-                <div className="section-head compact">
-                  <div>
-                    <h3>{copy.workspace.continueSession}</h3>
-                    <p className="hint">{engineReadiness.detail}</p>
-                  </div>
-                </div>
-                <form onSubmit={onSubmitTurn}>
-                  <textarea
-                    aria-label={copy.workspace.followUpInput}
-                    placeholder={copy.workspace.followUpPlaceholder}
-                    value={turnInput}
-                    onChange={event => onTurnInputChange(event.target.value)}
-                  />
-                  <button className="primary" type="submit" disabled={!turnInput.trim() || turnSubmitting || !engineReadiness.ready}>
-                    <Send aria-hidden="true" size={13} />
-                    <span>{turnSubmitting ? copy.workspace.sendingTurn : copy.workspace.sendTurn}</span>
-                  </button>
-                </form>
-              </section>
+              {mode === 'full'
+                ? (
+                    <section className="turn-composer">
+                      <div className="section-head compact">
+                        <div>
+                          <h3>{copy.workspace.continueSession}</h3>
+                          <p className="hint">{engineReadiness.detail}</p>
+                        </div>
+                      </div>
+                      <form onSubmit={onSubmitTurn}>
+                        <textarea
+                          aria-label={copy.workspace.followUpInput}
+                          placeholder={copy.workspace.followUpPlaceholder}
+                          value={turnInput}
+                          onChange={event => onTurnInputChange(event.target.value)}
+                        />
+                        <button className="primary" type="submit" disabled={!turnInput.trim() || turnSubmitting || !engineReadiness.ready}>
+                          <Send aria-hidden="true" size={13} />
+                          <span>{turnSubmitting ? copy.workspace.sendingTurn : copy.workspace.sendTurn}</span>
+                        </button>
+                      </form>
+                    </section>
+                  )
+                : null}
 
               <section className="artifact-panel">
                 <div className="artifact-section-head">
@@ -179,31 +185,35 @@ export function SessionDetail({
                     )}
               </section>
 
-              <section className="session-subpanel">
-                <div className="artifact-section-head">
-                  <div>
-                    <strong>{copy.workspace.turnHistory}</strong>
-                    <small>{copy.workspace.turnCount(turns.length)}</small>
-                  </div>
-                  <MessageSquare aria-hidden="true" size={14} />
-                </div>
-                {turns.length > 0
-                  ? (
-                      <div className="turn-list">
-                        {turns.map(turn => (
-                          <article key={turn.id} className="turn-row">
-                            <span>{turn.seq}</span>
-                            <div>
-                              <strong>{formatStatus(turn.status, locale)}</strong>
-                              <small>{turn.input}</small>
-                              {turn.error ? <small className="danger-text">{turn.error}</small> : null}
-                            </div>
-                          </article>
-                        ))}
+              {mode === 'full'
+                ? (
+                    <section className="session-subpanel">
+                      <div className="artifact-section-head">
+                        <div>
+                          <strong>{copy.workspace.turnHistory}</strong>
+                          <small>{copy.workspace.turnCount(turns.length)}</small>
+                        </div>
+                        <MessageSquare aria-hidden="true" size={14} />
                       </div>
-                    )
-                  : <div className="artifact-preview-state">{copy.workspace.noTurns}</div>}
-              </section>
+                      {turns.length > 0
+                        ? (
+                            <div className="turn-list">
+                              {turns.map(turn => (
+                                <article key={turn.id} className="turn-row">
+                                  <span>{turn.seq}</span>
+                                  <div>
+                                    <strong>{formatStatus(turn.status, locale)}</strong>
+                                    <small>{turn.input}</small>
+                                    {turn.error ? <small className="danger-text">{turn.error}</small> : null}
+                                  </div>
+                                </article>
+                              ))}
+                            </div>
+                          )
+                        : <div className="artifact-preview-state">{copy.workspace.noTurns}</div>}
+                    </section>
+                  )
+                : null}
 
               <section className="session-subpanel">
                 <div className="artifact-section-head">

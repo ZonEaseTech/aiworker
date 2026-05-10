@@ -34,7 +34,7 @@ function markdownTextImports() {
 
 export default defineConfig({
   root: repoWebRoot,
-  base: './',
+  base: '/',
   publicDir: fileURLToPath(new URL('./public', import.meta.url)),
   plugins: [
     markdownTextImports(),

@@ -35,7 +35,7 @@ import {
   X,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useReducer, useState, useSyncExternalStore } from 'react'
-import { continueSessionTurn, createReview, createSessionTurn, createWorkspace, loadLocalWorkspaceData, readFile, rescanEngines, saveSettings, testEngine, updateLesson } from './api'
+import { continueSessionTurnStream, createReview, createSessionTurn, createWorkspace, loadLocalWorkspaceData, readFile, rescanEngines, saveSettings, testEngine, updateLesson } from './api'
 import {
   displaySoul,
   displayTemplate,
@@ -46,6 +46,8 @@ import {
   normalizeLocale,
   supportedLocales,
 } from './i18n'
+import { navigateWorkerRoute, useWorkerRoute } from './router'
+import { WorkerSessionChat } from './session-chat'
 import { SessionDetail } from './session-detail'
 
 interface StudioState {
@@ -100,6 +102,7 @@ function artifactPreviewReducer(_state: ArtifactPreviewState, action: ArtifactPr
 }
 
 export function WorkerStudio() {
+  const route = useWorkerRoute()
   const [state, setState] = useState<StudioState>({ data: null, error: null, loading: true })
   const [selectedSoulId, setSelectedSoulId] = useState('hr')
   const [selectedTemplateId, setSelectedTemplateId] = useState('candidate-screen')
@@ -114,6 +117,7 @@ export function WorkerStudio() {
   const [turnSubmitting, setTurnSubmitting] = useState(false)
   const [reviewSubmitting, setReviewSubmitting] = useState(false)
   const [lessonBusyId, setLessonBusyId] = useState<string | null>(null)
+  const [streamEvents, setStreamEvents] = useState<LocalSessionEvent[]>([])
   const [artifactPreview, dispatchArtifactPreview] = useReducer(artifactPreviewReducer, initialArtifactPreviewState)
 
   const refresh = useCallback(async () => {
@@ -134,7 +138,12 @@ export function WorkerStudio() {
   const data = state.data
   const activeLocale = normalizeLocale(data?.settings.language)
   const copy = messagesFor(activeLocale)
-  const selectedSoul = data?.souls.find(soul => soul.id === selectedSoulId && soul.status === 'available') ?? data?.souls.find(soul => soul.status === 'available') ?? null
+  const routedWorkspace = route.kind === 'workspace' || route.kind === 'session'
+    ? data?.workspaces.find(workspace => workspace.id === route.workspaceId) ?? null
+    : null
+  const routedWorker = routedWorkspace ? data?.workers.find(worker => worker.id === routedWorkspace.workerId) ?? null : null
+  const effectiveSoulId = routedWorker?.soulId ?? selectedSoulId
+  const selectedSoul = data?.souls.find(soul => soul.id === effectiveSoulId && soul.status === 'available') ?? data?.souls.find(soul => soul.status === 'available') ?? null
   const selectedWorker = data?.workers.find(worker => worker.soulId === selectedSoul?.id) ?? null
   const templates = useMemo(
     () => data?.templates.filter(template => template.soulId === selectedSoul?.id) ?? [],
@@ -167,15 +176,37 @@ export function WorkerStudio() {
     })
   }, [activeLocale, data?.sessions, data?.templates, query, soulWorkspaces])
 
-  const selectedWorkspace = selectedWorkspaceId && soulWorkspaces.some(item => item.id === selectedWorkspaceId)
-    ? soulWorkspaces.find(item => item.id === selectedWorkspaceId) ?? null
-    : latest(soulWorkspaces)
-  const selectedSession = selectedWorkspace ? sessionForWorkspace(selectedWorkspace, data?.sessions ?? []) : latest(soulSessions)
+  const routeWorkspaceId = route.kind === 'workspace' || route.kind === 'session' ? route.workspaceId : null
+  const routeWorkspace = routeWorkspaceId ? soulWorkspaces.find(item => item.id === routeWorkspaceId) ?? null : null
+  const selectedWorkspace = routeWorkspace
+    ?? (selectedWorkspaceId && soulWorkspaces.some(item => item.id === selectedWorkspaceId)
+      ? soulWorkspaces.find(item => item.id === selectedWorkspaceId) ?? null
+      : latest(soulWorkspaces))
+  const routeSession = route.kind === 'session'
+    ? data?.sessions.find(session => session.id === route.sessionId && session.workspaceId === route.workspaceId) ?? null
+    : null
+  const selectedSession = routeSession ?? (selectedWorkspace ? sessionForWorkspace(selectedWorkspace, data?.sessions ?? []) : latest(soulSessions))
   const selectedTurn = selectedSession ? turnForSession(selectedSession, data?.turns ?? []) : null
   const selectedArtifact = selectedSession ? artifactForSession(selectedSession, data?.artifacts ?? []) : latest(soulArtifacts)
   const selectedReview = selectedSession ? reviewForSession(selectedSession, data?.reviews ?? []) : null
-  const selectedSessionTurns = selectedSession ? turnsForSession(selectedSession, data?.turns ?? []) : []
-  const selectedSessionEvents = selectedSession ? eventsForSession(selectedSession, data?.events ?? []) : []
+  const selectedSessionTurns = useMemo(
+    () => selectedSession ? turnsForSession(selectedSession, data?.turns ?? []) : [],
+    [data?.turns, selectedSession],
+  )
+  const selectedSessionEvents = useMemo(
+    () => selectedSession ? eventsForSession(selectedSession, data?.events ?? []) : [],
+    [data?.events, selectedSession],
+  )
+  const displayedSessionEvents = useMemo(() => {
+    if (!selectedSession)
+      return []
+    const byKey = new Map<string, LocalSessionEvent>()
+    for (const event of selectedSessionEvents)
+      byKey.set(String(event.id), event)
+    for (const event of streamEvents.filter(event => event.sessionId === selectedSession.id))
+      byKey.set(String(event.id), event)
+    return [...byKey.values()].sort((a, b) => a.seq - b.seq)
+  }, [selectedSession, selectedSessionEvents, streamEvents])
   const selectedWorkspaceArtifacts = selectedWorkspace ? artifactsForWorkspace(selectedWorkspace, data?.artifacts ?? []) : []
   const selectedWorkspaceLessons = selectedWorkspace ? lessonsForWorkspace(selectedWorkspace, data?.lessons ?? []) : []
   const selectedWorkspaceReviews = selectedWorkspace ? reviewsForWorkspace(selectedWorkspace, data?.reviews ?? []) : []
@@ -237,7 +268,7 @@ export function WorkerStudio() {
         },
         name: workspaceTitle.trim(),
       })
-      await createSessionTurn(workspaceResult.workspace.id, {
+      const sessionResult = await createSessionTurn(workspaceResult.workspace.id, {
         capabilityTemplateId: selectedTemplate.id,
         context: workspaceContext,
         input: body,
@@ -253,6 +284,7 @@ export function WorkerStudio() {
       setWorkspaceTitle('')
       setWorkspaceContext('')
       await refresh()
+      navigateWorkerRoute({ kind: 'session', sessionId: sessionResult.session.id, workspaceId: workspaceResult.workspace.id })
     }
     finally {
       setSubmitting(false)
@@ -265,13 +297,19 @@ export function WorkerStudio() {
       return
     setTurnSubmitting(true)
     try {
-      await continueSessionTurn(selectedSession.id, {
-        input: turnInput.trim(),
+      const prompt = turnInput.trim()
+      setTurnInput('')
+      await continueSessionTurnStream(selectedSession.id, {
+        input: prompt,
         metadata: {
           requestedFrom: 'worker-web-follow-up',
         },
+      }, {
+        onEvent: event => setStreamEvents(current => [...current, event]),
       })
-      setTurnInput('')
+      await refresh()
+    }
+    catch {
       await refresh()
     }
     finally {
@@ -330,9 +368,11 @@ export function WorkerStudio() {
   if (!data || !selectedSoul || !selectedWorker || !selectedTemplate || !selectedSoulCopy || !selectedTemplateCopy)
     return null
 
+  const isSessionRoute = route.kind === 'session' && Boolean(selectedWorkspace && selectedSession)
+
   return (
     <main className="entry-shell" data-appearance={appearance} data-theme={resolvedTheme} data-testid="worker-studio-shell">
-      <div className="entry has-artifact-rail workspace-entry">
+      <div className={`entry workspace-entry ${isSessionRoute ? 'workspace-session-route has-artifact-rail' : 'workspace-home-route'}`}>
         <aside className="entry-side soul-sidebar" aria-label={copy.accessibility.soulProjectCreator}>
           <div className="entry-brand">
             <span className="entry-brand-mark" aria-hidden="true">AI</span>
@@ -389,9 +429,11 @@ export function WorkerStudio() {
                     role="option"
                     onClick={() => {
                       setSelectedSoulId(soul.id)
+                      setSelectedWorkspaceId(null)
                       const next = data.templates.find(template => template.soulId === soul.id)
                       if (next)
                         setSelectedTemplateId(next.id)
+                      navigateWorkerRoute({ kind: 'home' })
                     }}
                   >
                     <strong>{displaySoul(soul, activeLocale).name}</strong>
@@ -447,144 +489,178 @@ export function WorkerStudio() {
         </aside>
 
         <section className="entry-main workspace-column" aria-label={copy.accessibility.soulProjectsAndArtifacts}>
-          <header className="entry-header workspace-header">
-            <div>
-              <span className="kicker">{copy.workspace.workspaceKicker}</span>
-              <h1>{copy.workspace.workspaceTitle(selectedSoulCopy.name)}</h1>
-            </div>
-            <div className="entry-header-right">
-              <button className="settings-trigger" type="button" aria-label={copy.accessibility.refreshWorkspace} onClick={() => void refresh()}>
-                <RefreshCw aria-hidden="true" size={16} />
-              </button>
-              <button className="settings-trigger" type="button" aria-label={copy.accessibility.openSettings} onClick={() => openSettings()}>
-                <Settings aria-hidden="true" size={16} />
-              </button>
-              <button className="avatar-btn" type="button" aria-label={copy.accessibility.workspace}>
-                <span aria-hidden="true" className="avatar-btn-initials">{selectedSoulCopy.name}</span>
-              </button>
-            </div>
-          </header>
+          {isSessionRoute && selectedWorkspace && selectedSession
+            ? (
+                <WorkerSessionChat
+                  copy={copy}
+                  engineReadiness={engineReadiness}
+                  events={displayedSessionEvents}
+                  locale={activeLocale}
+                  session={selectedSession}
+                  template={selectedSessionTemplate}
+                  turnInput={turnInput}
+                  turnSubmitting={turnSubmitting}
+                  turns={selectedSessionTurns}
+                  workspace={selectedWorkspace}
+                  onOpenSettings={() => openSettings('execution')}
+                  onRefresh={() => void refresh()}
+                  onSubmitTurn={submitTurn}
+                  onTurnInputChange={setTurnInput}
+                />
+              )
+            : (
+                <>
+                  <header className="entry-header workspace-header">
+                    <div>
+                      <span className="kicker">{copy.workspace.workspaceKicker}</span>
+                      <h1>{copy.workspace.workspaceTitle(selectedSoulCopy.name)}</h1>
+                    </div>
+                    <div className="entry-header-right">
+                      <button className="settings-trigger" type="button" aria-label={copy.accessibility.refreshWorkspace} onClick={() => void refresh()}>
+                        <RefreshCw aria-hidden="true" size={16} />
+                      </button>
+                      <button className="settings-trigger" type="button" aria-label={copy.accessibility.openSettings} onClick={() => openSettings()}>
+                        <Settings aria-hidden="true" size={16} />
+                      </button>
+                      <button className="avatar-btn" type="button" aria-label={copy.accessibility.workspace}>
+                        <span aria-hidden="true" className="avatar-btn-initials">{selectedSoulCopy.name}</span>
+                      </button>
+                    </div>
+                  </header>
 
-          <div className="entry-tab-content workspace-content">
-            <section className="newproj workspace-create-card" data-testid="new-project-panel">
-              <form className="newproj-body" onSubmit={submitProject}>
-                <div className="section-head compact">
-                  <div>
-                    <h3>{copy.workspace.createWorkspace}</h3>
-                    <p className="hint">{copy.workspace.createWorkspaceHint(selectedTemplateCopy.name)}</p>
+                  <div className="entry-tab-content workspace-content">
+                    <section className="newproj workspace-create-card" data-testid="new-project-panel">
+                      <form className="newproj-body" onSubmit={submitProject}>
+                        <div className="section-head compact">
+                          <div>
+                            <h3>{copy.workspace.createWorkspace}</h3>
+                            <p className="hint">{copy.workspace.createWorkspaceHint(selectedTemplateCopy.name)}</p>
+                          </div>
+                        </div>
+
+                        <input
+                          className="newproj-name"
+                          aria-label={copy.create.projectName}
+                          data-testid="new-project-name"
+                          placeholder={projectNamePlaceholder(selectedSoul.id, copy)}
+                          value={workspaceTitle}
+                          onChange={event => setWorkspaceTitle(event.target.value)}
+                        />
+
+                        <textarea
+                          id="project-context"
+                          className="newproj-context"
+                          aria-label={copy.create.businessContext}
+                          placeholder={selectedTemplateCopy.inputHints.join(' · ')}
+                          value={workspaceContext}
+                          onChange={event => setWorkspaceContext(event.target.value)}
+                        />
+
+                        {!engineReadiness.ready
+                          ? (
+                              <div className="inline-warning" role="status">
+                                <ShieldCheck aria-hidden="true" size={14} />
+                                <span>{engineReadiness.detail}</span>
+                              </div>
+                            )
+                          : null}
+
+                        <button className="primary newproj-create" data-testid="create-project" type="submit" disabled={!workspaceTitle.trim() || !workspaceContext.trim() || submitting || !engineReadiness.ready}>
+                          <Plus aria-hidden="true" size={13} />
+                          <span>{submitting ? copy.create.creatingSession : copy.create.submit}</span>
+                        </button>
+                      </form>
+                    </section>
+
+                    <section className="workspace-list-section">
+                      <div className="tab-panel-toolbar">
+                        <div className="toolbar-left">
+                          <strong>{copy.workspace.workspaceList}</strong>
+                          <span className="count-pill">{filteredProjects.length}</span>
+                        </div>
+
+                        <div className="toolbar-right">
+                          <label className="toolbar-search">
+                            <span className="search-icon" aria-hidden="true">
+                              <Search size={13} />
+                            </span>
+                            <input
+                              aria-label={copy.accessibility.searchProjects}
+                              placeholder={copy.projects.searchPlaceholder}
+                              value={query}
+                              onChange={event => setQuery(event.target.value)}
+                            />
+                          </label>
+                        </div>
+                      </div>
+
+                      <div className="design-grid design-grid-list workspace-list">
+                        {filteredProjects.length > 0
+                          ? filteredProjects.map(item => (
+                              <ProjectCard
+                                key={item.id}
+                                active={selectedWorkspace?.id === item.id}
+                                artifact={artifactForWorkspace(item, data.artifacts, data.sessions)}
+                                item={item}
+                                locale={activeLocale}
+                                session={sessionForWorkspace(item, data.sessions)}
+                                template={data.templates.find(template => template.id === sessionForWorkspace(item, data.sessions)?.capabilityTemplateId)}
+                                turn={turnForSession(sessionForWorkspace(item, data.sessions), data.turns)}
+                                onSelect={() => {
+                                  const nextSession = sessionForWorkspace(item, data.sessions)
+                                  setSelectedWorkspaceId(item.id)
+                                  navigateWorkerRoute(nextSession
+                                    ? { kind: 'session', sessionId: nextSession.id, workspaceId: item.id }
+                                    : { kind: 'workspace', workspaceId: item.id })
+                                }}
+                              />
+                            ))
+                          : (
+                              <div className="empty-design-state">
+                                <FileText aria-hidden="true" size={20} />
+                                <strong>{copy.projects.empty.title}</strong>
+                                <span>{copy.projects.empty.detail(selectedSoulCopy.name)}</span>
+                              </div>
+                            )}
+                      </div>
+                    </section>
                   </div>
-                </div>
-
-                <input
-                  className="newproj-name"
-                  aria-label={copy.create.projectName}
-                  data-testid="new-project-name"
-                  placeholder={projectNamePlaceholder(selectedSoul.id, copy)}
-                  value={workspaceTitle}
-                  onChange={event => setWorkspaceTitle(event.target.value)}
-                />
-
-                <textarea
-                  id="project-context"
-                  className="newproj-context"
-                  aria-label={copy.create.businessContext}
-                  placeholder={selectedTemplateCopy.inputHints.join(' · ')}
-                  value={workspaceContext}
-                  onChange={event => setWorkspaceContext(event.target.value)}
-                />
-
-                {!engineReadiness.ready
-                  ? (
-                      <div className="inline-warning" role="status">
-                        <ShieldCheck aria-hidden="true" size={14} />
-                        <span>{engineReadiness.detail}</span>
-                      </div>
-                    )
-                  : null}
-
-                <button className="primary newproj-create" data-testid="create-project" type="submit" disabled={!workspaceTitle.trim() || !workspaceContext.trim() || submitting || !engineReadiness.ready}>
-                  <Plus aria-hidden="true" size={13} />
-                  <span>{submitting ? copy.create.creatingSession : copy.create.submit}</span>
-                </button>
-              </form>
-            </section>
-
-            <section className="workspace-list-section">
-              <div className="tab-panel-toolbar">
-                <div className="toolbar-left">
-                  <strong>{copy.workspace.workspaceList}</strong>
-                  <span className="count-pill">{filteredProjects.length}</span>
-                </div>
-
-                <div className="toolbar-right">
-                  <label className="toolbar-search">
-                    <span className="search-icon" aria-hidden="true">
-                      <Search size={13} />
-                    </span>
-                    <input
-                      aria-label={copy.accessibility.searchProjects}
-                      placeholder={copy.projects.searchPlaceholder}
-                      value={query}
-                      onChange={event => setQuery(event.target.value)}
-                    />
-                  </label>
-                </div>
-              </div>
-
-              <div className="design-grid design-grid-list workspace-list">
-                {filteredProjects.length > 0
-                  ? filteredProjects.map(item => (
-                      <ProjectCard
-                        key={item.id}
-                        active={selectedWorkspace?.id === item.id}
-                        artifact={artifactForWorkspace(item, data.artifacts, data.sessions)}
-                        item={item}
-                        locale={activeLocale}
-                        session={sessionForWorkspace(item, data.sessions)}
-                        template={data.templates.find(template => template.id === sessionForWorkspace(item, data.sessions)?.capabilityTemplateId)}
-                        turn={turnForSession(sessionForWorkspace(item, data.sessions), data.turns)}
-                        onSelect={() => setSelectedWorkspaceId(item.id)}
-                      />
-                    ))
-                  : (
-                      <div className="empty-design-state">
-                        <FileText aria-hidden="true" size={20} />
-                        <strong>{copy.projects.empty.title}</strong>
-                        <span>{copy.projects.empty.detail(selectedSoulCopy.name)}</span>
-                      </div>
-                    )}
-              </div>
-            </section>
-          </div>
+                </>
+              )}
         </section>
 
-        <SessionDetail
-          artifact={selectedArtifact}
-          artifactCopy={selectedArtifactCopy}
-          artifactPreview={artifactPreview}
-          artifacts={selectedWorkspaceArtifacts}
-          copy={copy}
-          engineReadiness={engineReadiness}
-          events={selectedSessionEvents}
-          lessonBusyId={lessonBusyId}
-          lessons={selectedWorkspaceLessons}
-          locale={activeLocale}
-          review={selectedReview}
-          reviewSubmitting={reviewSubmitting}
-          reviews={selectedWorkspaceReviews}
-          session={selectedSession}
-          template={selectedSessionTemplate}
-          turnInput={turnInput}
-          turnSubmitting={turnSubmitting}
-          turns={selectedSessionTurns}
-          workspace={selectedWorkspace}
-          onLessonStatus={(lesson, status) => void changeLessonStatus(lesson, status)}
-          onOpenSettings={openSettings}
-          onRefresh={() => void refresh()}
-          onReview={() => void submitReview()}
-          onSubmitTurn={submitTurn}
-          onTurnInputChange={setTurnInput}
-        />
+        {isSessionRoute
+          ? (
+              <SessionDetail
+                artifact={selectedArtifact}
+                artifactCopy={selectedArtifactCopy}
+                artifactPreview={artifactPreview}
+                artifacts={selectedWorkspaceArtifacts}
+                copy={copy}
+                engineReadiness={engineReadiness}
+                events={displayedSessionEvents}
+                lessonBusyId={lessonBusyId}
+                lessons={selectedWorkspaceLessons}
+                locale={activeLocale}
+                mode="artifact"
+                review={selectedReview}
+                reviewSubmitting={reviewSubmitting}
+                reviews={selectedWorkspaceReviews}
+                session={selectedSession}
+                template={selectedSessionTemplate}
+                turnInput={turnInput}
+                turnSubmitting={turnSubmitting}
+                turns={selectedSessionTurns}
+                workspace={selectedWorkspace}
+                onLessonStatus={(lesson, status) => void changeLessonStatus(lesson, status)}
+                onOpenSettings={openSettings}
+                onRefresh={() => void refresh()}
+                onReview={() => void submitReview()}
+                onSubmitTurn={submitTurn}
+                onTurnInputChange={setTurnInput}
+              />
+            )
+          : null}
 
         {settingsOpen
           ? (

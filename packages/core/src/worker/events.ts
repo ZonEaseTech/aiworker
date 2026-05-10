@@ -1,4 +1,4 @@
-export type LocalWorkerEventKind = 'session' | 'turn' | 'artifact' | 'review' | 'lesson'
+export type LocalWorkerEventKind = 'session' | 'turn' | 'event' | 'artifact' | 'review' | 'lesson'
 
 export interface LocalWorkerEvent {
   kind: LocalWorkerEventKind

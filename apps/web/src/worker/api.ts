@@ -125,6 +125,68 @@ export function continueSessionTurn(sessionId: string, input: {
   return localFetch(`/api/local/sessions/${sessionId}/turns`, { method: 'POST', body: JSON.stringify(input) })
 }
 
+export async function continueSessionTurnStream(
+  sessionId: string,
+  input: {
+    input: string
+    metadata?: Record<string, unknown>
+  },
+  handlers: {
+    onEvent?: (event: LocalSessionEvent) => void
+  } = {},
+): Promise<{
+  session: LocalSession
+  turn: LocalTurn
+  files: LocalFile[]
+  artifacts: LocalArtifact[]
+  review: LocalReview | null
+  lessons: LocalLesson[]
+  events: LocalSessionEvent[]
+}> {
+  const res = await fetch(`/api/local/sessions/${sessionId}/turns/stream`, {
+    body: JSON.stringify(input),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  })
+  if (!res.ok)
+    throw new Error(`Local API ${res.status}: /api/local/sessions/${sessionId}/turns/stream`)
+  if (!res.body)
+    return continueSessionTurn(sessionId, input)
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let result: Awaited<ReturnType<typeof continueSessionTurn>> | null = null
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done)
+      break
+    buffer += decoder.decode(value, { stream: true })
+    let index = buffer.indexOf('\n\n')
+    while (index !== -1) {
+      const frame = buffer.slice(0, index)
+      buffer = buffer.slice(index + 2)
+      const parsed = parseSseFrame(frame)
+      if (parsed?.event === 'session_event') {
+        handlers.onEvent?.(parsed.data as LocalSessionEvent)
+      }
+      else if (parsed?.event === 'result') {
+        result = parsed.data as Awaited<ReturnType<typeof continueSessionTurn>>
+      }
+      else if (parsed?.event === 'error') {
+        const data = parsed.data as { message?: string }
+        throw new Error(data.message ?? 'Session stream failed.')
+      }
+      index = buffer.indexOf('\n\n')
+    }
+  }
+
+  if (!result)
+    throw new Error('Session stream completed without a result.')
+  return result
+}
+
 export function createReview(input: {
   artifactId?: string | null
   findingsJson?: Record<string, unknown>[]
@@ -158,4 +220,23 @@ export async function readFile(workspaceId: string, path: string): Promise<strin
   if (!res.ok)
     throw new Error(`Local file ${res.status}: ${path}`)
   return await res.text()
+}
+
+function parseSseFrame(frame: string): { data: unknown, event: string } | null {
+  let event = 'message'
+  const dataLines: string[] = []
+  for (const rawLine of frame.split('\n')) {
+    const line = rawLine.trimEnd()
+    if (!line || line.startsWith(':'))
+      continue
+    if (line.startsWith('event:')) {
+      event = line.slice(6).trim()
+    }
+    else if (line.startsWith('data:')) {
+      dataLines.push(line.slice(5).trimStart())
+    }
+  }
+  if (dataLines.length === 0)
+    return null
+  return { data: JSON.parse(dataLines.join('\n')), event }
 }

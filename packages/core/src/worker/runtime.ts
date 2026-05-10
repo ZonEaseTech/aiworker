@@ -10,7 +10,7 @@ import type {
   WorkerRow,
   WorkspaceRow,
 } from '@zonease/aiworker-storage-sqlite/worker'
-import type { LocalExecutor, LocalExecutorResult } from './executor'
+import type { LocalExecutor, LocalExecutorEvent, LocalExecutorResult } from './executor'
 
 import { randomUUID } from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
@@ -221,6 +221,7 @@ export class LocalWorkerRuntime {
         engineId: input.engineId,
         invocationId: invocation.id,
         invocationRoot,
+        onEvent: event => this.appendAgentEvent(session.id, event, turn.id, invocation.id),
         prompt,
         sessionId: session.id,
         turnId: turn.id,
@@ -409,8 +410,21 @@ export class LocalWorkerRuntime {
     return { files, artifacts, review, lessons }
   }
 
+  private appendAgentEvent(sessionId: string, event: LocalExecutorEvent, turnId?: string | null, invocationId?: string | null): SessionEventRow {
+    if (event.kind === 'text') {
+      return this.appendEvent(sessionId, 'assistant_delta', { agentEvent: event, delta: event.text, text: event.text }, turnId, invocationId)
+    }
+    if (event.kind === 'thinking' || event.kind === 'log') {
+      return this.appendEvent(sessionId, 'log', { agentEvent: event }, turnId, invocationId)
+    }
+    if (event.kind === 'tool_use' || event.kind === 'tool_result') {
+      return this.appendEvent(sessionId, 'tool', { agentEvent: event }, turnId, invocationId)
+    }
+    return this.appendEvent(sessionId, event.kind === 'status' || event.kind === 'usage' ? 'status' : 'log', { agentEvent: event }, turnId, invocationId)
+  }
+
   private appendEvent(sessionId: string, type: SessionEventRow['type'], payloadJson: Record<string, unknown>, turnId?: string | null, invocationId?: string | null): SessionEventRow {
-    return appendSessionEvent({
+    const row = appendSessionEvent({
       sessionId,
       turnId: turnId ?? null,
       invocationId: invocationId ?? null,
@@ -419,6 +433,19 @@ export class LocalWorkerRuntime {
       payloadJson,
       at: this.#now(),
     })
+    const session = getSession(sessionId)
+    if (session) {
+      this.bus.emit({
+        at: row.createdAt,
+        invocationId: invocationId ?? undefined,
+        kind: 'event',
+        payload: { event: row },
+        sessionId,
+        turnId: turnId ?? undefined,
+        workspaceId: session.workspaceId,
+      })
+    }
+    return row
   }
 
   private buildInvocationPrompt(session: SessionRow, turn: TurnRow, metadata: Record<string, unknown>): string {

@@ -258,6 +258,24 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     const session = requireSession(c.req.param('sessionId'))
     return c.json({ turns: listTurns(session.id) })
   })
+  app.post('/api/local/sessions/:sessionId/turns/stream', async (c) => {
+    const session = requireSession(c.req.param('sessionId'))
+    const runtime = requireRuntime(state, session.workerId)
+    const body = await readJson<{ input?: string, metadata?: Record<string, unknown> }>(c.req)
+    const input = requireString(body.input, 'input')
+    const settings = loadLocalSettings()
+    const engine = selectedEngine(settings)
+    return streamSessionTurn(runtime, session, {
+      engineCommand: settings.executionMode === 'local-cli' ? engine?.command ?? settings.engineId : null,
+      engineId: settings.executionMode === 'local-cli' ? settings.engineId : settings.byok.provider,
+      input,
+      metadata: {
+        ...enrichTemplateMetadata(session.workerId, session.capabilityTemplateId, session.metadataJson ?? {}),
+        ...(body.metadata ?? {}),
+        ...executionMetadata(settings, engine),
+      },
+    })
+  })
   app.post('/api/local/sessions/:sessionId/turns', async (c) => {
     const session = requireSession(c.req.param('sessionId'))
     const runtime = requireRuntime(state, session.workerId)
@@ -411,6 +429,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   })
   app.get('/docs', apiReference({ spec: { url: '/openapi.json' } }))
   app.get('/', async c => serveWorkerWeb(c, options.webStaticDir))
+  app.get('/workspaces/:path{.+}', async c => serveWorkerWeb(c, options.webStaticDir))
   app.get('/favicon.svg', async c => serveWorkerWebAsset(c, options.webStaticDir, 'favicon.svg'))
   app.get('/logo.svg', async c => serveWorkerWebAsset(c, options.webStaticDir, 'logo.svg'))
   app.get('/assets/:path{.+}', async c => serveWorkerWebAsset(c, options.webStaticDir, `assets/${c.req.param('path')}`))
@@ -507,6 +526,84 @@ function executionMetadata(settings: LocalSettingsConfig, engine: LocalSettingsC
   }
 }
 
+function streamSessionTurn(
+  runtime: LocalWorkerRuntime,
+  session: SessionRow,
+  input: {
+    engineCommand?: string | null
+    engineId: string
+    input: string
+    metadata: Record<string, unknown>
+  },
+): Response {
+  const encoder = new TextEncoder()
+  let closed = false
+  let heartbeat: ReturnType<typeof setInterval> | null = null
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      const heartbeatFrame = () => {
+        if (!closed)
+          controller.enqueue(encoder.encode(': heartbeat\n\n'))
+      }
+      const send = (event: string, data: unknown, id?: string | number) => {
+        if (closed)
+          return
+        const lines = [
+          id !== undefined ? `id: ${id}` : null,
+          `event: ${event}`,
+          `data: ${JSON.stringify(data)}`,
+          '',
+        ].filter(line => line !== null).join('\n')
+        controller.enqueue(encoder.encode(`${lines}\n`))
+      }
+      const unsubscribe = runtime.bus.subscribe((event) => {
+        if (event.sessionId !== session.id || event.kind !== 'event')
+          return
+        const row = event.payload.event
+        if (isRecord(row))
+          send('session_event', row, typeof row.id === 'number' ? row.id : undefined)
+      })
+      send('status', { sessionId: session.id, status: 'started' })
+      heartbeat = setInterval(heartbeatFrame, 5_000)
+      void runtime.startTurn({
+        engineCommand: input.engineCommand ?? null,
+        engineId: input.engineId,
+        input: input.input,
+        metadata: input.metadata,
+        sessionId: session.id,
+      }).then((result) => {
+        send('result', result)
+      }).catch((error) => {
+        send('error', { message: error instanceof Error ? error.message : String(error) })
+      }).finally(() => {
+        unsubscribe()
+        if (heartbeat) {
+          clearInterval(heartbeat)
+          heartbeat = null
+        }
+        if (!closed) {
+          closed = true
+          controller.close()
+        }
+      })
+    },
+    cancel() {
+      closed = true
+      if (heartbeat) {
+        clearInterval(heartbeat)
+        heartbeat = null
+      }
+    },
+  })
+  return new Response(stream, {
+    headers: {
+      'cache-control': 'no-cache',
+      'connection': 'keep-alive',
+      'content-type': 'text/event-stream; charset=utf-8',
+    },
+  })
+}
+
 function loadLocalSettings(): LocalSettingsConfig {
   const row = listSettings().find(setting => setting.key === LOCAL_SETTINGS_KEY)
   const parsed = row ? localSettingsConfigSchema.safeParse(row.valueJson) : null
@@ -586,6 +683,10 @@ function commandOutput(command: string, args: string[]): string {
   if (result.status !== 0)
     return ''
   return result.stdout.toString()
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 async function serveWorkerWeb(c: Context, webStaticDir?: string): Promise<Response> {

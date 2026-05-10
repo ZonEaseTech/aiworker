@@ -208,6 +208,7 @@ async function daemonForeground(opts: { host?: string, port?: number } = {}): Pr
   const server = Bun.serve({
     fetch: app.fetch,
     hostname: opts.host ?? env.AIWORKER_WORKER_HOST,
+    idleTimeout: 255,
     port: opts.port ?? port,
   })
   consola.success(`[aiworker-daemon] listening on http://${server.hostname}:${server.port}`)

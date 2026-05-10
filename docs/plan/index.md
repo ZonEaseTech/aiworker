@@ -253,3 +253,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-222 Host home lifecycle and project-scope removal**](PLAN-222.md) `2026-05-10`
 - [x] [**PLAN-223 Session workspace MVP validation**](PLAN-223.md) `2026-05-10`
 - [x] [**PLAN-224 Worker Web production UX integration**](PLAN-224.md) `2026-05-10`
+- [x] [**PLAN-225 Worker Web session-first interaction model**](PLAN-225.md) `2026-05-10`

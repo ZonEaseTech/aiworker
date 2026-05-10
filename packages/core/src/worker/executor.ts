@@ -27,6 +27,7 @@ export interface LocalExecutorInput {
   engineId: string
   invocationId: string
   invocationRoot: string
+  onEvent?: (event: LocalExecutorEvent) => void
   prompt: string
   sessionId: string
   turnId: string
@@ -42,6 +43,15 @@ export interface LocalExecutorResult {
   lessons?: LocalExecutorLesson[]
   metadata?: Record<string, unknown>
 }
+
+export type LocalExecutorEvent
+  = | { kind: 'status', label: string, detail?: string }
+    | { kind: 'text', text: string }
+    | { kind: 'thinking', text: string }
+    | { kind: 'tool_use', id: string, input: Record<string, unknown>, name: string }
+    | { kind: 'tool_result', id: string, content: string, isError?: boolean, name?: string }
+    | { kind: 'usage', costUsd?: number, inputTokens?: number, outputTokens?: number }
+    | { kind: 'log', chunk: string, stream: 'stderr' | 'stdout' }
 
 export interface LocalExecutor {
   invoke: (input: LocalExecutorInput) => Promise<LocalExecutorResult>
@@ -82,6 +92,17 @@ async function runLocalCliExecutor(input: LocalExecutorInput): Promise<LocalExec
   ].join('\n')
 
   await writeFile(path.join(input.invocationRoot, 'prompt.md'), enginePrompt, 'utf8')
+  emit(input, { kind: 'status', label: 'initializing', detail: `${command} CLI` })
+  const toolId = randomUUID()
+  emit(input, {
+    id: toolId,
+    input: {
+      command: `${command} exec --skip-git-repo-check --sandbox workspace-write --cd ${input.workspaceRoot} --output-last-message ${lastMessagePath} -`,
+      description: 'Run the selected external engine inside this AIWorker workspace session.',
+    },
+    kind: 'tool_use',
+    name: 'Bash',
+  })
   const execution = await execCommand(command, [
     'exec',
     '--skip-git-repo-check',
@@ -92,10 +113,20 @@ async function runLocalCliExecutor(input: LocalExecutorInput): Promise<LocalExec
     '--output-last-message',
     lastMessagePath,
     '-',
-  ], enginePrompt, 300_000)
+  ], enginePrompt, 300_000, {
+    onStderr: chunk => emit(input, { chunk: truncate(chunk, 4_000), kind: 'log', stream: 'stderr' }),
+    onStdout: chunk => emit(input, { chunk: truncate(chunk, 4_000), kind: 'log', stream: 'stdout' }),
+  })
 
   await writeFile(path.join(input.invocationRoot, 'stdout.log'), execution.stdout, 'utf8')
   await writeFile(path.join(input.invocationRoot, 'stderr.log'), execution.stderr, 'utf8')
+  emit(input, {
+    content: truncate([execution.stdout, execution.stderr].filter(Boolean).join('\n\n'), 12_000) || `Process exited with code ${execution.code ?? 'unknown'}.`,
+    id: toolId,
+    isError: execution.code !== 0,
+    kind: 'tool_result',
+    name: 'Bash',
+  })
   if (execution.code !== 0)
     throw new Error(`${command} exited with code ${execution.code}: ${execution.stderr || execution.stdout}`)
 
@@ -109,6 +140,10 @@ async function runLocalCliExecutor(input: LocalExecutorInput): Promise<LocalExec
   }
   if (!artifact)
     throw new Error(`${command} completed without producing an artifact at ${artifactPath}.`)
+
+  if (finalMessage)
+    emit(input, { kind: 'text', text: finalMessage })
+  emit(input, { kind: 'status', label: 'completed', detail: artifactPath })
 
   return {
     artifacts: [
@@ -140,9 +175,12 @@ async function runByokExecutor(input: LocalExecutorInput): Promise<LocalExecutor
   const apiKey = resolveApiKey(apiKeyRef)
   const baseUrl = readString(byok.baseUrl, 'https://api.openai.com/v1').replace(/\/+$/, '')
   const model = readString(byok.model, 'gpt-4o')
+  emit(input, { kind: 'status', label: 'requesting', detail: model })
   const artifact = await requestOpenAICompatibleArtifact({ apiKey, baseUrl, input, model })
   const outputKind = readString(input.metadata?.outputKind, 'business-artifact')
   const skillName = readString(input.metadata?.skillName, 'Soul artifact')
+  emit(input, { kind: 'text', text: `Generated ${skillName} with BYOK provider ${model}.` })
+  emit(input, { kind: 'status', label: 'completed', detail: outputKind })
   return {
     artifacts: [
       {
@@ -207,7 +245,13 @@ async function requestOpenAICompatibleArtifact({
   return content
 }
 
-function execCommand(command: string, args: string[], stdin: string, timeoutMs: number): Promise<{ code: number | null, stderr: string, stdout: string }> {
+function execCommand(
+  command: string,
+  args: string[],
+  stdin: string,
+  timeoutMs: number,
+  handlers: { onStderr?: (chunk: string) => void, onStdout?: (chunk: string) => void } = {},
+): Promise<{ code: number | null, stderr: string, stdout: string }> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd: process.cwd(),
@@ -216,23 +260,43 @@ function execCommand(command: string, args: string[], stdin: string, timeoutMs: 
     })
     let stdout = ''
     let stderr = ''
+    let killed = false
     const timer = setTimeout(() => {
+      killed = true
       child.kill('SIGTERM')
     }, timeoutMs)
     child.stdout.setEncoding('utf8')
     child.stderr.setEncoding('utf8')
-    child.stdout.on('data', chunk => stdout += chunk)
-    child.stderr.on('data', chunk => stderr += chunk)
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk
+      handlers.onStdout?.(chunk)
+    })
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk
+      handlers.onStderr?.(chunk)
+    })
     child.on('error', (error) => {
       clearTimeout(timer)
       reject(error)
     })
     child.on('close', (code) => {
       clearTimeout(timer)
+      if (killed)
+        stderr += `\nProcess exceeded ${timeoutMs}ms and was terminated.`
       resolve({ code, stdout, stderr })
     })
     child.stdin.end(stdin)
   })
+}
+
+function emit(input: LocalExecutorInput, event: LocalExecutorEvent): void {
+  input.onEvent?.(event)
+}
+
+function truncate(value: string, max: number): string {
+  if (value.length <= max)
+    return value
+  return `${value.slice(0, max)}\n...[truncated]`
 }
 
 async function readTextIfExists(filePath: string): Promise<string> {
