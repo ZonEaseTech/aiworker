@@ -24,21 +24,16 @@ describe('local daemon API', () => {
   async function app(token?: string) {
     const boot = await bootstrapWorkerApp({
       dbPath: join(dir, 'worker.db'),
-      workspace: {
-        id: 'workspace-1',
-        name: 'Hiring Workspace',
-        rootPath: join(dir, 'workspace'),
-      },
-      workerId: 'soul-worker',
+      workersRoot: join(dir, 'workers'),
       token,
       runtimeVersion: 'test',
       executor: {
-        async run(input) {
+        async invoke(input) {
           return {
             summary: 'done',
-            artifacts: [{ path: 'reports/result.md', title: 'Result', content: `# ${input.prompt}\n` }],
+            artifacts: [{ path: `artifacts/${input.sessionId}/result.md`, title: 'Result', content: `# ${input.prompt}\n` }],
             review: { verdict: 'pass', findings: [] },
-            lessons: [{ statement: 'Keep evidence attached.', evidence: [{ runId: input.runId }] }],
+            lessons: [{ statement: 'Keep evidence attached.', evidence: [{ turnId: input.turnId }] }],
           }
         },
       },
@@ -46,36 +41,50 @@ describe('local daemon API', () => {
     return boot.app
   }
 
-  it('serves the workspace loop through /api/local routes', async () => {
+  it('serves the session workspace loop through /api/local routes', async () => {
     const target = await app()
 
-    const projectRes = await target.request('/api/local/projects', {
+    const workersRes = await target.request('/api/local/workers')
+    expect(workersRes.status).toBe(200)
+    const workersBody = await workersRes.json() as { workers: Array<{ id: string, soulId: string }> }
+    const hrWorker = workersBody.workers.find(worker => worker.soulId === 'hr')
+    expect(hrWorker?.id).toBe('hr-worker')
+
+    const workspaceRes = await target.request(`/api/local/workers/${hrWorker!.id}/workspaces`, {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Hiring workspace' }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(workspaceRes.status).toBe(201)
+    const workspaceBody = await workspaceRes.json() as { workspace: { id: string } }
+
+    const sessionRes = await target.request(`/api/local/workspaces/${workspaceBody.workspace.id}/sessions`, {
       method: 'POST',
       body: JSON.stringify({
-        body: 'Review packet',
-        selectedSkillId: 'candidate-screen',
-        selectedSoulId: 'hr',
+        capabilityTemplateId: 'candidate-screen',
+        context: 'Review packet',
+        input: 'Prepare a candidate screen.',
         title: 'Screen candidate',
       }),
       headers: { 'content-type': 'application/json' },
     })
-    expect(projectRes.status).toBe(201)
-    const projectBody = await projectRes.json() as { project: { id: string } }
+    expect(sessionRes.status).toBe(201)
+    const sessionBody = await sessionRes.json() as {
+      artifacts: unknown[]
+      lessons: unknown[]
+      session: { capabilityTemplateId: string, status: string }
+      turn: { status: string }
+    }
+    expect(sessionBody.session.capabilityTemplateId).toBe('candidate-screen')
+    expect(sessionBody.turn.status).toBe('succeeded')
+    expect(sessionBody.artifacts).toHaveLength(1)
+    expect(sessionBody.lessons).toHaveLength(1)
 
-    const runRes = await target.request('/api/local/runs', {
-      method: 'POST',
-      body: JSON.stringify({ projectId: projectBody.project.id }),
-      headers: { 'content-type': 'application/json' },
-    })
-    expect(runRes.status).toBe(201)
-    const runBody = await runRes.json() as { artifacts: unknown[], lessons: unknown[], run: { metadataJson: Record<string, unknown>, status: string } }
-    expect(runBody.run.status).toBe('succeeded')
-    expect(runBody.run.metadataJson).toMatchObject({ selectedSkillId: 'candidate-screen', selectedSoulId: 'hr' })
-    expect(runBody.artifacts).toHaveLength(1)
-    expect(runBody.lessons).toHaveLength(1)
-
-    const fileRes = await target.request('/api/local/files/raw/reports/result.md')
-    expect(await fileRes.text()).toContain('Review packet')
+    const filesRes = await target.request(`/api/local/workspaces/${workspaceBody.workspace.id}/files`)
+    const filesBody = await filesRes.json() as { files: Array<{ path: string }> }
+    const filePath = filesBody.files[0]!.path
+    const rawRes = await target.request(`/api/local/workspaces/${workspaceBody.workspace.id}/files/raw/${filePath}`)
+    expect(await rawRes.text()).toContain('Prepare a candidate screen.')
 
     const eventsRes = await target.request('/api/local/events')
     const eventsBody = await eventsRes.json() as { events: unknown[] }
@@ -91,17 +100,20 @@ describe('local daemon API', () => {
     })).status).toBe(200)
   })
 
-  it('documents only the workspace API surface', async () => {
+  it('documents only the workspace/session API surface', async () => {
     const target = await app()
     const doc = await (await target.request('/openapi.json')).json() as { paths: Record<string, unknown> }
     const paths = Object.keys(doc.paths)
 
     expect(paths).toContain('/api/local/info')
+    expect(paths).toContain('/api/local/workers')
     expect(paths).toContain('/api/local/souls')
     expect(paths).toContain('/api/local/templates')
-    expect(paths).toContain('/api/local/workspace')
-    expect(paths).toContain('/api/local/runs')
+    expect(paths).toContain('/api/local/workers/{workerId}/workspaces')
+    expect(paths).toContain('/api/local/workspaces/{workspaceId}/sessions')
+    expect(paths).toContain('/api/local/sessions/{sessionId}/turns')
     expect(paths).toContain('/api/local/settings/engines/rescan')
+    expect(paths.some(path => path.includes('/runs'))).toBe(false)
     expect(paths.some(path => path.startsWith('/api/worker'))).toBe(false)
   })
 
@@ -110,9 +122,9 @@ describe('local daemon API', () => {
 
     const settingsRes = await target.request('/api/local/settings')
     expect(settingsRes.status).toBe(200)
-    const initial = await settingsRes.json() as { settings: { engineId: string, executionMode: string } }
+    const initial = await settingsRes.json() as { settings: { engineId: string, engines: Array<{ id: string }>, executionMode: string } }
     expect(['local-cli', 'byok']).toContain(initial.settings.executionMode)
-    expect(initial.settings.engineId).toBe('workspace-template')
+    expect(initial.settings.engines.some(engine => engine.id === 'workspace-template')).toBe(false)
 
     const patchRes = await target.request('/api/local/settings', {
       method: 'PATCH',
@@ -125,10 +137,9 @@ describe('local daemon API', () => {
     expect((await target.request('/api/local/settings/engines/rescan', { method: 'POST' })).status).toBe(200)
     const testRes = await target.request('/api/local/settings/engines/test', {
       method: 'POST',
-      body: JSON.stringify({ engineId: 'workspace-template' }),
+      body: JSON.stringify({ engineId: initial.settings.engines[0]?.id ?? 'codex' }),
       headers: { 'content-type': 'application/json' },
     })
-    expect(testRes.status).toBe(200)
-    expect(await testRes.json()).toMatchObject({ result: { status: 'pass' } })
+    expect([200, 404]).toContain(testRes.status)
   })
 })

@@ -1,9 +1,11 @@
-export type LocalWorkerEventKind = 'run' | 'artifact' | 'review' | 'lesson'
+export type LocalWorkerEventKind = 'session' | 'turn' | 'artifact' | 'review' | 'lesson'
 
 export interface LocalWorkerEvent {
   kind: LocalWorkerEventKind
   workspaceId: string
-  runId?: string
+  sessionId?: string
+  turnId?: string
+  invocationId?: string
   payload: Record<string, unknown>
   at: string
 }

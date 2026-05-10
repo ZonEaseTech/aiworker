@@ -1,3 +1,7 @@
+import { spawn } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import path from 'node:path'
 import process from 'node:process'
 
 export interface LocalExecutorArtifact {
@@ -19,11 +23,15 @@ export interface LocalExecutorLesson {
 }
 
 export interface LocalExecutorInput {
-  executor?: string
+  engineCommand?: string | null
+  engineId: string
+  invocationId: string
+  invocationRoot: string
+  prompt: string
+  sessionId: string
+  turnId: string
   workspaceId: string
   workspaceRoot: string
-  runId: string
-  prompt: string
   metadata?: Record<string, unknown>
 }
 
@@ -36,17 +44,93 @@ export interface LocalExecutorResult {
 }
 
 export interface LocalExecutor {
-  run: (input: LocalExecutorInput) => Promise<LocalExecutorResult>
+  invoke: (input: LocalExecutorInput) => Promise<LocalExecutorResult>
 }
 
-export function createLocalTemplateExecutor(): LocalExecutor {
+export function createExternalEngineExecutor(): LocalExecutor {
   return {
-    async run(input) {
+    async invoke(input) {
       const executionMode = readString(input.metadata?.executionMode, 'local-cli')
       if (executionMode === 'byok')
         return runByokExecutor(input)
-      return renderStructuredArtifact(input)
+      return runLocalCliExecutor(input)
     },
+  }
+}
+
+async function runLocalCliExecutor(input: LocalExecutorInput): Promise<LocalExecutorResult> {
+  const command = input.engineCommand || input.engineId
+  if (!command || command === 'internal')
+    throw new Error('Local CLI execution requires an external engine command.')
+  if (input.engineId !== 'codex')
+    throw new Error(`Local CLI engine is not wired yet: ${input.engineId}. Select Codex CLI or BYOK in Settings.`)
+
+  await mkdir(input.invocationRoot, { recursive: true })
+  const outputKind = readString(input.metadata?.outputKind, 'business-artifact')
+  const skillName = readString(input.metadata?.skillName, 'Soul artifact')
+  const artifactPath = path.posix.join('artifacts', input.sessionId, `${input.turnId}-${sanitizePathPart(outputKind)}.md`)
+  const lastMessagePath = path.join(input.invocationRoot, 'last-message.md')
+  const enginePrompt = [
+    input.prompt,
+    '',
+    'AIWorker engine contract:',
+    `- Current working directory is the AIWorker workspace/project root.`,
+    `- Create or update exactly one markdown business artifact at ${artifactPath}.`,
+    `- Do not mention internal execution plumbing in the artifact.`,
+    `- Keep evidence, assumptions, risks, review notes, and next actions separated.`,
+    `- Return a concise final summary after writing the artifact.`,
+  ].join('\n')
+
+  await writeFile(path.join(input.invocationRoot, 'prompt.md'), enginePrompt, 'utf8')
+  const execution = await execCommand(command, [
+    'exec',
+    '--skip-git-repo-check',
+    '--sandbox',
+    'workspace-write',
+    '--cd',
+    input.workspaceRoot,
+    '--output-last-message',
+    lastMessagePath,
+    '-',
+  ], enginePrompt, 300_000)
+
+  await writeFile(path.join(input.invocationRoot, 'stdout.log'), execution.stdout, 'utf8')
+  await writeFile(path.join(input.invocationRoot, 'stderr.log'), execution.stderr, 'utf8')
+  if (execution.code !== 0)
+    throw new Error(`${command} exited with code ${execution.code}: ${execution.stderr || execution.stdout}`)
+
+  const finalMessage = await readTextIfExists(lastMessagePath) || execution.stdout.trim()
+  const artifactAbsolute = path.join(input.workspaceRoot, artifactPath)
+  let artifact = await readTextIfExists(artifactAbsolute)
+  if (!artifact && finalMessage) {
+    artifact = finalMessage
+    await mkdir(path.dirname(artifactAbsolute), { recursive: true })
+    await writeFile(artifactAbsolute, artifact, 'utf8')
+  }
+  if (!artifact)
+    throw new Error(`${command} completed without producing an artifact at ${artifactPath}.`)
+
+  return {
+    artifacts: [
+      {
+        content: artifact,
+        kind: outputKind,
+        path: artifactPath,
+        title: skillName,
+      },
+    ],
+    lessons: [],
+    metadata: {
+      executionSource: 'local-cli',
+      finalMessage,
+      processId: randomUUID(),
+    },
+    review: {
+      findings: [{ message: 'External engine artifact generated; human review is required before memory admission.' }],
+      risks: [],
+      verdict: 'needs_review',
+    },
+    summary: finalMessage || `Generated ${skillName} with ${command}.`,
   }
 }
 
@@ -58,106 +142,24 @@ async function runByokExecutor(input: LocalExecutorInput): Promise<LocalExecutor
   const model = readString(byok.model, 'gpt-4o')
   const artifact = await requestOpenAICompatibleArtifact({ apiKey, baseUrl, input, model })
   const outputKind = readString(input.metadata?.outputKind, 'business-artifact')
-  const skillName = readString(input.metadata?.skillName, 'Local Soul artifact')
+  const skillName = readString(input.metadata?.skillName, 'Soul artifact')
   return {
     artifacts: [
       {
         content: artifact,
         kind: outputKind,
-        path: `runs/${input.runId}/${sanitizePathPart(outputKind)}.md`,
+        path: path.posix.join('artifacts', input.sessionId, `${input.turnId}-${sanitizePathPart(outputKind)}.md`),
         title: skillName,
       },
     ],
     lessons: [],
     metadata: { executionSource: 'byok', model },
     review: {
-      findings: [{ message: 'BYOK artifact generated; human review is still required before memory admission.' }],
+      findings: [{ message: 'BYOK artifact generated; human review is required before memory admission.' }],
       risks: [],
       verdict: 'needs_review',
     },
     summary: `Generated ${skillName} with BYOK provider ${model}.`,
-  }
-}
-
-function renderStructuredArtifact(input: LocalExecutorInput): LocalExecutorResult {
-  const outputKind = readString(input.metadata?.outputKind, 'business-artifact')
-  const skillName = readString(input.metadata?.skillName, 'Local Soul artifact')
-  const soulName = readString(input.metadata?.soulName, 'Vertical')
-  const selectedSoulId = readString(input.metadata?.selectedSoulId, 'soul')
-  const selectedSkillId = readString(input.metadata?.selectedSkillId, 'skill')
-  const context = extractSection(input.prompt, 'Business context') || input.prompt
-  const inputHints = extractBullets(input.prompt, 'Input hints')
-  const rubric = extractBullets(input.prompt, 'Review rubric')
-  const contextLines = context.split('\n').map(line => line.trim()).filter(Boolean)
-  const evidenceSummary = contextLines.slice(0, 5)
-  const contextIsThin = context.trim().length < 80
-
-  return {
-    summary: `Generated ${skillName} with AIWorker workspace template runner.`,
-    artifacts: [
-      {
-        kind: outputKind,
-        path: `runs/${input.runId}/${sanitizePathPart(outputKind)}.md`,
-        title: skillName,
-        content: [
-          `# ${skillName}`,
-          '',
-          `- Soul: ${soulName}`,
-          `- Soul id: ${selectedSoulId}`,
-          `- Capability template: ${selectedSkillId}`,
-          `- Output kind: ${outputKind}`,
-          `- Run id: ${input.runId}`,
-          '',
-          '## Project Context',
-          context.trim(),
-          '',
-          '## Evidence Summary',
-          ...asBullets(evidenceSummary.length > 0 ? evidenceSummary : ['No detailed evidence was supplied.']),
-          '',
-          '## Draft Business Artifact',
-          ...asBullets([
-            `Produce a ${outputKind} from the supplied project context.`,
-            'Separate confirmed facts from assumptions before human review.',
-            'Use the next-action section below to decide whether more evidence is needed.',
-          ]),
-          '',
-          '## Next Actions',
-          ...asBullets([
-            contextIsThin ? 'Add more source evidence before accepting this artifact.' : 'Review the artifact against the rubric and mark follow-up gaps.',
-            `Route follow-up to the owner of the ${soulName} project.`,
-          ]),
-          '',
-          '## Input Hints Covered',
-          ...asBullets(inputHints.length > 0 ? inputHints : ['No input hints were available.']),
-          '',
-          '## Review Rubric',
-          ...asBullets(rubric.length > 0 ? rubric : ['Human reviewer should check evidence, risks, and next action.']),
-          '',
-          '## Risks And Assumptions',
-          ...asBullets([
-            contextIsThin ? 'Input context is short, so confidence should remain low.' : 'Confidence depends on the quality and completeness of supplied evidence.',
-            'This workspace template runner does not claim external system evidence unless connectors provide it.',
-          ]),
-        ].join('\n'),
-      },
-    ],
-    review: {
-      verdict: 'needs_review',
-      findings: [
-        { message: 'Structured artifact generated from the selected Soul, template, and project context.' },
-        { message: contextIsThin ? 'Project context is thin; request additional evidence before acceptance.' : 'Project context has enough substance for a first human review.' },
-      ],
-      risks: contextIsThin ? [{ message: 'Low-context run may miss important business evidence.' }] : [],
-    },
-    lessons: [
-      {
-        statement: `${soulName} ${skillName} artifacts should keep evidence, assumptions, risks, and next actions separated.`,
-        evidence: [{ kind: 'run', runId: input.runId }],
-      },
-    ],
-    metadata: {
-      executionSource: 'workspace-template',
-    },
   }
 }
 
@@ -172,12 +174,12 @@ async function requestOpenAICompatibleArtifact({
   input: LocalExecutorInput
   model: string
 }): Promise<string> {
-  const skillName = readString(input.metadata?.skillName, 'Local Soul artifact')
+  const skillName = readString(input.metadata?.skillName, 'Soul artifact')
   const response = await fetch(`${baseUrl}/chat/completions`, {
     body: JSON.stringify({
       messages: [
         {
-          content: 'You are AIWorker generating a concise business artifact. Return markdown only. Keep evidence, assumptions, risks, and next actions clearly separated.',
+          content: 'You are AIWorker external engine mode. Return one concise markdown business artifact. Keep evidence, assumptions, risks, review notes, and next actions separated.',
           role: 'system',
         },
         {
@@ -205,6 +207,43 @@ async function requestOpenAICompatibleArtifact({
   return content
 }
 
+function execCommand(command: string, args: string[], stdin: string, timeoutMs: number): Promise<{ code: number | null, stderr: string, stdout: string }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd: process.cwd(),
+      env: process.env,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    })
+    let stdout = ''
+    let stderr = ''
+    const timer = setTimeout(() => {
+      child.kill('SIGTERM')
+    }, timeoutMs)
+    child.stdout.setEncoding('utf8')
+    child.stderr.setEncoding('utf8')
+    child.stdout.on('data', chunk => stdout += chunk)
+    child.stderr.on('data', chunk => stderr += chunk)
+    child.on('error', (error) => {
+      clearTimeout(timer)
+      reject(error)
+    })
+    child.on('close', (code) => {
+      clearTimeout(timer)
+      resolve({ code, stdout, stderr })
+    })
+    child.stdin.end(stdin)
+  })
+}
+
+async function readTextIfExists(filePath: string): Promise<string> {
+  try {
+    return (await readFile(filePath, 'utf8')).trim()
+  }
+  catch {
+    return ''
+  }
+}
+
 function resolveApiKey(ref: string): string {
   const normalized = ref.trim()
   if (!normalized)
@@ -216,31 +255,6 @@ function resolveApiKey(ref: string): string {
   if (!value)
     throw new Error(`BYOK API key environment variable is not set: ${envName}.`)
   return value
-}
-
-function extractSection(text: string, heading: string): string {
-  const lines = text.split('\n')
-  const start = lines.findIndex(line => line.trim().toLowerCase() === `${heading.toLowerCase()}:`)
-  if (start < 0)
-    return ''
-  const collected: string[] = []
-  for (const line of lines.slice(start + 1)) {
-    if (/^[A-Z][A-Za-z ]+:$/.test(line.trim()))
-      break
-    collected.push(line)
-  }
-  return collected.join('\n').trim()
-}
-
-function extractBullets(text: string, heading: string): string[] {
-  return extractSection(text, heading)
-    .split('\n')
-    .map(line => line.trim().replace(/^- /, ''))
-    .filter(Boolean)
-}
-
-function asBullets(values: string[]): string[] {
-  return values.map(value => `- ${value}`)
 }
 
 function sanitizePathPart(value: string): string {

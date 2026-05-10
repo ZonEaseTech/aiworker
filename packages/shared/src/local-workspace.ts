@@ -1,12 +1,21 @@
 import { z } from 'zod'
 
-export const localProjectStatusSchema = z.enum(['draft', 'queued', 'running', 'completed', 'failed', 'cancelled'])
-export type LocalProjectStatus = z.infer<typeof localProjectStatusSchema>
+export const localWorkerStatusSchema = z.enum(['active', 'paused', 'disabled'])
+export type LocalWorkerStatus = z.infer<typeof localWorkerStatusSchema>
 
-export const localRunStatusSchema = z.enum(['queued', 'running', 'succeeded', 'failed', 'cancelled'])
-export type LocalRunStatus = z.infer<typeof localRunStatusSchema>
+export const localWorkspaceStatusSchema = z.enum(['active', 'archived'])
+export type LocalWorkspaceStatus = z.infer<typeof localWorkspaceStatusSchema>
 
-export const localRunEventTypeSchema = z.enum([
+export const localSessionStatusSchema = z.enum(['active', 'completed', 'failed', 'cancelled'])
+export type LocalSessionStatus = z.infer<typeof localSessionStatusSchema>
+
+export const localTurnStatusSchema = z.enum(['queued', 'running', 'succeeded', 'failed', 'cancelled'])
+export type LocalTurnStatus = z.infer<typeof localTurnStatusSchema>
+
+export const localEngineInvocationStatusSchema = z.enum(['queued', 'running', 'succeeded', 'failed', 'cancelled'])
+export type LocalEngineInvocationStatus = z.infer<typeof localEngineInvocationStatusSchema>
+
+export const localSessionEventTypeSchema = z.enum([
   'status',
   'assistant_delta',
   'tool',
@@ -17,12 +26,12 @@ export const localRunEventTypeSchema = z.enum([
   'error',
   'log',
 ])
-export type LocalRunEventType = z.infer<typeof localRunEventTypeSchema>
+export type LocalSessionEventType = z.infer<typeof localSessionEventTypeSchema>
 
 export const localFileKindSchema = z.enum(['file', 'directory', 'generated', 'uploaded'])
 export type LocalFileKind = z.infer<typeof localFileKindSchema>
 
-export const localFileSourceSchema = z.enum(['user', 'run', 'system'])
+export const localFileSourceSchema = z.enum(['user', 'session', 'system'])
 export type LocalFileSource = z.infer<typeof localFileSourceSchema>
 
 export const localArtifactStatusSchema = z.enum(['available', 'missing', 'archived'])
@@ -40,35 +49,70 @@ export type LocalJsonObject = z.infer<typeof localJsonObjectSchema>
 const timestampSchema = z.string().min(1)
 const idSchema = z.string().min(1)
 
+export const localWorkerSchema = z.object({
+  id: idSchema,
+  soulId: idSchema,
+  name: z.string().min(1),
+  status: localWorkerStatusSchema,
+  defaultEngineId: z.string().nullable(),
+  metadataJson: localJsonObjectSchema,
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema,
+})
+export type LocalWorker = z.infer<typeof localWorkerSchema>
+
 export const localWorkspaceSchema = z.object({
   id: idSchema,
+  workerId: idSchema,
   name: z.string().min(1),
   rootPath: z.string().min(1),
+  type: z.string().min(1),
+  status: localWorkspaceStatusSchema,
+  sourcePointersJson: z.array(localJsonObjectSchema),
+  metadataJson: localJsonObjectSchema,
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
 })
 export type LocalWorkspace = z.infer<typeof localWorkspaceSchema>
 
-export const localProjectSchema = z.object({
+export const localSessionSchema = z.object({
   id: idSchema,
+  workerId: idSchema,
   workspaceId: idSchema,
+  capabilityTemplateId: idSchema,
   title: z.string().min(1),
-  body: z.string().min(1),
-  selectedSoulId: idSchema,
-  selectedSkillId: idSchema,
-  status: localProjectStatusSchema,
+  context: z.string(),
+  status: localSessionStatusSchema,
+  metadataJson: localJsonObjectSchema,
+  startedAt: timestampSchema.nullable(),
+  endedAt: timestampSchema.nullable(),
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema,
+})
+export type LocalSession = z.infer<typeof localSessionSchema>
+
+export const localTurnSchema = z.object({
+  id: idSchema,
+  sessionId: idSchema,
+  seq: z.number().int().positive(),
+  input: z.string().min(1),
+  response: z.string().nullable(),
+  status: localTurnStatusSchema,
+  error: z.string().nullable(),
   metadataJson: localJsonObjectSchema,
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
 })
-export type LocalProject = z.infer<typeof localProjectSchema>
+export type LocalTurn = z.infer<typeof localTurnSchema>
 
-export const localRunSchema = z.object({
+export const localEngineInvocationSchema = z.object({
   id: idSchema,
-  workspaceId: idSchema,
-  projectId: idSchema.nullable(),
-  status: localRunStatusSchema,
-  executor: z.string().min(1),
+  sessionId: idSchema,
+  turnId: idSchema,
+  seq: z.number().int().positive(),
+  engineId: z.string().min(1),
+  engineCommand: z.string().nullable(),
+  status: localEngineInvocationStatusSchema,
   prompt: z.string().min(1),
   summary: z.string().nullable(),
   error: z.string().nullable(),
@@ -78,17 +122,19 @@ export const localRunSchema = z.object({
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
 })
-export type LocalRun = z.infer<typeof localRunSchema>
+export type LocalEngineInvocation = z.infer<typeof localEngineInvocationSchema>
 
-export const localRunEventSchema = z.object({
+export const localSessionEventSchema = z.object({
   id: z.number().int().positive(),
-  runId: idSchema,
+  sessionId: idSchema,
+  turnId: idSchema.nullable(),
+  invocationId: idSchema.nullable(),
   seq: z.number().int().nonnegative(),
-  type: localRunEventTypeSchema,
+  type: localSessionEventTypeSchema,
   payloadJson: localJsonObjectSchema,
   createdAt: timestampSchema,
 })
-export type LocalRunEvent = z.infer<typeof localRunEventSchema>
+export type LocalSessionEvent = z.infer<typeof localSessionEventSchema>
 
 export const localFileSchema = z.object({
   id: idSchema,
@@ -107,7 +153,9 @@ export type LocalFile = z.infer<typeof localFileSchema>
 export const localArtifactSchema = z.object({
   id: idSchema,
   workspaceId: idSchema,
-  runId: idSchema.nullable(),
+  sessionId: idSchema.nullable(),
+  turnId: idSchema.nullable(),
+  invocationId: idSchema.nullable(),
   path: z.string().min(1),
   kind: z.string().min(1),
   title: z.string().min(1),
@@ -121,7 +169,8 @@ export type LocalArtifact = z.infer<typeof localArtifactSchema>
 export const localReviewSchema = z.object({
   id: idSchema,
   workspaceId: idSchema,
-  runId: idSchema.nullable(),
+  sessionId: idSchema.nullable(),
+  turnId: idSchema.nullable(),
   artifactId: idSchema.nullable(),
   verdict: localReviewVerdictSchema,
   findingsJson: z.array(localJsonObjectSchema),

@@ -10,7 +10,7 @@ export {
   type LocalWorkerEventKind,
 } from './worker/events'
 export {
-  createLocalTemplateExecutor,
+  createExternalEngineExecutor,
   type LocalExecutor,
   type LocalExecutorArtifact,
   type LocalExecutorInput,
@@ -24,11 +24,12 @@ export {
   LocalWorkspaceFiles,
 } from './worker/files'
 export {
-  type CreateLocalProjectInput,
+  type CreateLocalSessionInput,
+  type CreateLocalWorkspaceInput,
   createLocalWorkerRuntime,
-  type LocalRunStartInput,
-  type LocalRunStartResult,
+  type LocalTurnStartResult,
   LocalWorkerRuntime,
   type LocalWorkerRuntimeOptions,
-  type LocalWorkspaceSnapshot,
+  type LocalWorkerSnapshot,
+  type StartLocalTurnInput,
 } from './worker/runtime'

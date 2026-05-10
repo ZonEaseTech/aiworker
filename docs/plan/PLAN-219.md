@@ -1,6 +1,6 @@
 # PLAN-219 Worker session data contract
 
-- **status**: implementing
+- **status**: completed
 - **owner**: local
 - **createdAt**: 2026-05-10 18:01
 - **relatedTask**: REFACTOR-047
@@ -54,4 +54,21 @@ verification.
 
 ## Status
 
-Implementing.
+Completed on 2026-05-10.
+
+Delivered:
+
+- `worker.db` greenfield schema now uses workers, workspaces, sessions, turns,
+  engine invocations, and session events.
+- Artifacts and reviews now link to session/turn/invocation, not run.
+- Core runtime creates workspace folders, materializes session context, invokes
+  an external engine adapter, and records turn artifacts/reviews/lessons.
+- The internal template runner is removed from the default execution path.
+
+Verification:
+
+- `bun run --filter '@zonease/aiworker-shared' typecheck`
+- `bun run --filter '@zonease/aiworker-storage-sqlite' typecheck`
+- `bun run --filter '@zonease/aiworker-storage-sqlite' test`
+- `bun run --filter '@zonease/aiworker-core' typecheck`
+- `bun run --filter '@zonease/aiworker-core' test`

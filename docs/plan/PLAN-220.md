@@ -1,6 +1,6 @@
 # PLAN-220 Local daemon worker/session API
 
-- **status**: implementing
+- **status**: completed
 - **owner**: local
 - **createdAt**: 2026-05-10 18:01
 - **relatedTask**: REFACTOR-048
@@ -35,4 +35,18 @@ Out of scope: Web presentation changes and CLI command UX.
 
 ## Status
 
-Implementing.
+Completed on 2026-05-10.
+
+Delivered:
+
+- `apps/api/src/modes/worker.ts` now owns a local daemon runtime registry keyed
+  by Soul worker id.
+- `/api/local/workers`, worker workspaces, workspace sessions, and session turns
+  are the new local API path.
+- `/api/local/runs` and run OpenAPI paths are gone.
+- Settings engine scan/test targets real external CLI engines only.
+
+Verification:
+
+- `bun run --filter '@zonease/aiworker-api' typecheck`
+- `bun run --filter '@zonease/aiworker-api' test`

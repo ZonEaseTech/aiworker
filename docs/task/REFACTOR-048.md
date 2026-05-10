@@ -1,10 +1,11 @@
 # REFACTOR-048 Local daemon worker/session API
 
-- **status**: in_progress
+- **status**: completed
 - **priority**: P0
 - **owner**: local
 - **createdAt**: 2026-05-10 18:01
 - **claimedAt**: 2026-05-10 18:01
+- **completedAt**: 2026-05-10 18:11
 - **plan**: PLAN-220
 - **relatesTo**: apps/api, packages/core, packages/storage-sqlite
 
@@ -30,4 +31,14 @@ workspace/session/turn endpoints. Remove public run endpoints.
 
 ## Evidence
 
-Pending.
+Implemented:
+
+- Local daemon now seeds HR/PM/QA/DevOps Soul workers.
+- API exposes worker/workspace/session/turn routes.
+- Public run routes and OpenAPI run paths are removed.
+- Engine inventory no longer includes `workspace-template`.
+
+Verification:
+
+- `bun run --filter '@zonease/aiworker-api' typecheck`
+- `bun run --filter '@zonease/aiworker-api' test`

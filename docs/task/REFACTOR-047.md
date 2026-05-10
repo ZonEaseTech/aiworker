@@ -1,10 +1,11 @@
 # REFACTOR-047 Worker session data contract
 
-- **status**: in_progress
+- **status**: completed
 - **priority**: P0
 - **owner**: local
 - **createdAt**: 2026-05-10 18:01
 - **claimedAt**: 2026-05-10 18:01
+- **completedAt**: 2026-05-10 18:11
 - **plan**: PLAN-219
 - **relatesTo**: GOALS.md, docs/architecture.md, packages/shared, packages/storage-sqlite, packages/core
 
@@ -38,4 +39,19 @@ schema, shared types, and core runtime naming.
 
 ## Evidence
 
-Pending.
+Implemented:
+
+- Replaced shared local workspace schemas with worker/workspace/session/turn
+  and engine invocation types.
+- Replaced worker SQLite schema/repository with session-handoff tables.
+- Regenerated the worker Drizzle migration from schema.
+- Replaced core runtime `project/run` API with workspace/session/turn runtime.
+- Removed the internal template runner from core default execution.
+
+Verification:
+
+- `bun run --filter '@zonease/aiworker-shared' typecheck`
+- `bun run --filter '@zonease/aiworker-storage-sqlite' typecheck`
+- `bun run --filter '@zonease/aiworker-storage-sqlite' test`
+- `bun run --filter '@zonease/aiworker-core' typecheck`
+- `bun run --filter '@zonease/aiworker-core' test`

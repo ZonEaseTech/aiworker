@@ -14,6 +14,28 @@
   `run` commands, `ensureProjectAiworker()` init, and the internal
   `workspace-template` engine.
 
+## 2026-05-10 18:11 [completed] REFACTOR-047 / REFACTOR-048 — Worker session data and daemon API
+
+- Replaced the local worker contract with workers, workspaces, sessions, turns,
+  internal engine invocations, and session events.
+- Regenerated the worker SQLite migration; the greenfield schema no longer has
+  `runs` or `run_events`.
+- Core runtime now materializes session context under the workspace, invokes an
+  external engine adapter, and registers artifacts/reviews/lessons against
+  session/turn/invocation metadata.
+- Local daemon boot now seeds HR/PM/QA/DevOps Soul workers and exposes
+  worker/workspace/session/turn routes.
+- Removed public run API paths and removed the internal `workspace-template`
+  engine from Settings scan/test.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-shared' typecheck`
+  - `bun run --filter '@zonease/aiworker-storage-sqlite' typecheck`
+  - `bun run --filter '@zonease/aiworker-storage-sqlite' test`
+  - `bun run --filter '@zonease/aiworker-core' typecheck`
+  - `bun run --filter '@zonease/aiworker-core' test`
+  - `bun run --filter '@zonease/aiworker-api' typecheck`
+  - `bun run --filter '@zonease/aiworker-api' test`
+
 ## 2026-05-10 17:44 [completed] DOC-009 / PLAN-218 — Session handoff and file consumer contract correction
 
 Follow-up architecture discussion clarified that AIWorker must not ask users to

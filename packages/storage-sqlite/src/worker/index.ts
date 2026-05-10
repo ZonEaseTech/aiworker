@@ -52,76 +52,129 @@ export function runWorkerMigrations(migrationsFolder: string = defaultWorkerMigr
 }
 
 export type WorkerDatabase = ReturnType<typeof createDb>
+export type WorkerRow = typeof schema.workers.$inferSelect
 export type WorkspaceRow = typeof schema.workspaces.$inferSelect
-export type ProjectRow = typeof schema.projects.$inferSelect
-export type RunRow = typeof schema.runs.$inferSelect
-export type RunEventRow = typeof schema.runEvents.$inferSelect
+export type SessionRow = typeof schema.sessions.$inferSelect
+export type TurnRow = typeof schema.turns.$inferSelect
+export type EngineInvocationRow = typeof schema.engineInvocations.$inferSelect
+export type SessionEventRow = typeof schema.sessionEvents.$inferSelect
 export type FileRow = typeof schema.files.$inferSelect
 export type ArtifactRow = typeof schema.artifacts.$inferSelect
 export type ReviewRow = typeof schema.reviews.$inferSelect
 export type LessonRow = typeof schema.lessons.$inferSelect
 export type SettingRow = typeof schema.settings.$inferSelect
 
-export interface UpsertWorkspaceInput {
+export interface UpsertWorkerInput {
   id: string
+  soulId: string
+  name: string
+  status?: WorkerRow['status']
+  defaultEngineId?: string | null
+  metadataJson?: Record<string, unknown>
+  at?: string
+}
+
+export interface CreateWorkspaceInput {
+  id: string
+  workerId: string
   name: string
   rootPath: string
+  type?: string
+  status?: WorkspaceRow['status']
+  sourcePointersJson?: Record<string, unknown>[]
+  metadataJson?: Record<string, unknown>
   at?: string
 }
 
-export interface CreateProjectInput {
+export interface UpdateWorkspaceInput {
   id: string
+  name?: string
+  status?: WorkspaceRow['status']
+  sourcePointersJson?: Record<string, unknown>[]
+  metadataJson?: Record<string, unknown>
+  at?: string
+}
+
+export interface CreateSessionInput {
+  id: string
+  workerId: string
   workspaceId: string
+  capabilityTemplateId: string
   title: string
-  body: string
-  selectedSoulId: string
-  selectedSkillId: string
-  status?: ProjectRow['status']
+  context?: string
+  status?: SessionRow['status']
   metadataJson?: Record<string, unknown>
+  startedAt?: string | null
+  endedAt?: string | null
   at?: string
 }
 
-export interface UpdateProjectInput {
+export interface UpdateSessionInput {
   id: string
-  status?: ProjectRow['status']
+  context?: string
+  status?: SessionRow['status']
+  metadataJson?: Record<string, unknown>
+  startedAt?: string | null
+  endedAt?: string | null
   title?: string
-  body?: string
-  selectedSoulId?: string
-  selectedSkillId?: string
-  metadataJson?: Record<string, unknown>
   at?: string
 }
 
-export interface CreateRunInput {
+export interface CreateTurnInput {
   id: string
-  workspaceId: string
-  projectId?: string | null
-  executor: string
-  prompt: string
-  status?: RunRow['status']
-  summary?: string | null
-  error?: string | null
-  metadataJson?: Record<string, unknown>
-  startedAt?: string | null
-  finishedAt?: string | null
-  at?: string
-}
-
-export interface UpdateRunInput {
-  id: string
-  status?: RunRow['status']
-  summary?: string | null
-  error?: string | null
-  metadataJson?: Record<string, unknown>
-  startedAt?: string | null
-  finishedAt?: string | null
-  at?: string
-}
-
-export interface AppendRunEventInput {
-  runId: string
+  sessionId: string
   seq: number
-  type: RunEventRow['type']
+  input: string
+  response?: string | null
+  status?: TurnRow['status']
+  error?: string | null
+  metadataJson?: Record<string, unknown>
+  at?: string
+}
+
+export interface UpdateTurnInput {
+  id: string
+  response?: string | null
+  status?: TurnRow['status']
+  error?: string | null
+  metadataJson?: Record<string, unknown>
+  at?: string
+}
+
+export interface CreateEngineInvocationInput {
+  id: string
+  sessionId: string
+  turnId: string
+  seq: number
+  engineId: string
+  engineCommand?: string | null
+  status?: EngineInvocationRow['status']
+  prompt: string
+  summary?: string | null
+  error?: string | null
+  metadataJson?: Record<string, unknown>
+  startedAt?: string | null
+  finishedAt?: string | null
+  at?: string
+}
+
+export interface UpdateEngineInvocationInput {
+  id: string
+  status?: EngineInvocationRow['status']
+  summary?: string | null
+  error?: string | null
+  metadataJson?: Record<string, unknown>
+  startedAt?: string | null
+  finishedAt?: string | null
+  at?: string
+}
+
+export interface AppendSessionEventInput {
+  sessionId: string
+  turnId?: string | null
+  invocationId?: string | null
+  seq: number
+  type: SessionEventRow['type']
   payloadJson?: Record<string, unknown>
   at?: string
 }
@@ -141,7 +194,9 @@ export interface UpsertFileInput {
 export interface RegisterArtifactInput {
   id: string
   workspaceId: string
-  runId?: string | null
+  sessionId?: string | null
+  turnId?: string | null
+  invocationId?: string | null
   path: string
   kind?: string
   title: string
@@ -153,7 +208,8 @@ export interface RegisterArtifactInput {
 export interface CreateReviewInput {
   id: string
   workspaceId: string
-  runId?: string | null
+  sessionId?: string | null
+  turnId?: string | null
   artifactId?: string | null
   verdict?: ReviewRow['verdict']
   findingsJson?: Record<string, unknown>[]
@@ -171,91 +227,210 @@ export interface CreateLessonInput {
   at?: string
 }
 
-export function listWorkspaces(limit = 200): WorkspaceRow[] {
-  return getWorkerDb().select().from(schema.workspaces).orderBy(desc(schema.workspaces.updatedAt)).limit(limit).all()
+export function upsertWorker(input: UpsertWorkerInput): WorkerRow {
+  const now = input.at ?? new Date().toISOString()
+  const existing = getWorker(input.id)
+  if (!existing) {
+    getWorkerDb().insert(schema.workers).values({
+      id: input.id,
+      soulId: input.soulId,
+      name: input.name,
+      status: input.status ?? 'active',
+      defaultEngineId: input.defaultEngineId ?? null,
+      metadataJson: input.metadataJson ?? {},
+      createdAt: now,
+      updatedAt: now,
+    }).run()
+  }
+  else {
+    getWorkerDb().update(schema.workers).set({
+      defaultEngineId: input.defaultEngineId ?? existing.defaultEngineId,
+      metadataJson: input.metadataJson ?? existing.metadataJson,
+      name: input.name,
+      soulId: input.soulId,
+      status: input.status ?? existing.status,
+      updatedAt: now,
+    }).where(eq(schema.workers.id, input.id)).run()
+  }
+  return getWorker(input.id)!
+}
+
+export function getWorker(id: string): WorkerRow | null {
+  return getWorkerDb().select().from(schema.workers).where(eq(schema.workers.id, id)).get() ?? null
+}
+
+export function listWorkers(limit = 100): WorkerRow[] {
+  return getWorkerDb().select().from(schema.workers).orderBy(schema.workers.id).limit(limit).all()
+}
+
+export function createWorkspace(input: CreateWorkspaceInput): WorkspaceRow {
+  const now = input.at ?? new Date().toISOString()
+  getWorkerDb().insert(schema.workspaces).values({
+    id: input.id,
+    workerId: input.workerId,
+    name: input.name,
+    rootPath: input.rootPath,
+    type: input.type ?? 'workspace',
+    status: input.status ?? 'active',
+    sourcePointersJson: input.sourcePointersJson ?? [],
+    metadataJson: input.metadataJson ?? {},
+    createdAt: now,
+    updatedAt: now,
+  }).run()
+  return getWorkspace(input.id)!
 }
 
 export function getWorkspace(id: string): WorkspaceRow | null {
   return getWorkerDb().select().from(schema.workspaces).where(eq(schema.workspaces.id, id)).get() ?? null
 }
 
-export function upsertWorkspace(input: UpsertWorkspaceInput): WorkspaceRow {
-  const now = input.at ?? new Date().toISOString()
+export function updateWorkspace(input: UpdateWorkspaceInput): WorkspaceRow {
   const existing = getWorkspace(input.id)
-  if (!existing) {
-    getWorkerDb().insert(schema.workspaces).values({
-      id: input.id,
-      name: input.name,
-      rootPath: input.rootPath,
-      createdAt: now,
-      updatedAt: now,
-    }).run()
-  }
-  else {
-    getWorkerDb().update(schema.workspaces).set({
-      name: input.name,
-      rootPath: input.rootPath,
-      updatedAt: now,
-    }).where(eq(schema.workspaces.id, input.id)).run()
-  }
+  if (!existing)
+    throw new Error(`Workspace not found: ${input.id}`)
+  getWorkerDb().update(schema.workspaces).set({
+    metadataJson: input.metadataJson ?? existing.metadataJson,
+    name: input.name ?? existing.name,
+    sourcePointersJson: input.sourcePointersJson ?? existing.sourcePointersJson,
+    status: input.status ?? existing.status,
+    updatedAt: input.at ?? new Date().toISOString(),
+  }).where(eq(schema.workspaces.id, input.id)).run()
   return getWorkspace(input.id)!
 }
 
-export function createProject(input: CreateProjectInput): ProjectRow {
+export function listWorkspaces(workerId?: string, limit = 200): WorkspaceRow[] {
+  const query = getWorkerDb().select().from(schema.workspaces)
+  if (workerId) {
+    return query
+      .where(eq(schema.workspaces.workerId, workerId))
+      .orderBy(desc(schema.workspaces.updatedAt))
+      .limit(limit)
+      .all()
+  }
+  return query.orderBy(desc(schema.workspaces.updatedAt)).limit(limit).all()
+}
+
+export function createSession(input: CreateSessionInput): SessionRow {
   const now = input.at ?? new Date().toISOString()
-  getWorkerDb().insert(schema.projects).values({
+  getWorkerDb().insert(schema.sessions).values({
     id: input.id,
+    workerId: input.workerId,
     workspaceId: input.workspaceId,
+    capabilityTemplateId: input.capabilityTemplateId,
     title: input.title,
-    body: input.body,
-    selectedSoulId: input.selectedSoulId,
-    selectedSkillId: input.selectedSkillId,
-    status: input.status ?? 'draft',
+    context: input.context ?? '',
+    status: input.status ?? 'active',
+    metadataJson: input.metadataJson ?? {},
+    startedAt: input.startedAt ?? now,
+    endedAt: input.endedAt ?? null,
+    createdAt: now,
+    updatedAt: now,
+  }).run()
+  return getSession(input.id)!
+}
+
+export function getSession(id: string): SessionRow | null {
+  return getWorkerDb().select().from(schema.sessions).where(eq(schema.sessions.id, id)).get() ?? null
+}
+
+export function updateSession(input: UpdateSessionInput): SessionRow {
+  const existing = getSession(input.id)
+  if (!existing)
+    throw new Error(`Session not found: ${input.id}`)
+  const has = (key: keyof UpdateSessionInput) => Object.hasOwn(input, key)
+  getWorkerDb().update(schema.sessions).set({
+    context: input.context ?? existing.context,
+    endedAt: has('endedAt') ? input.endedAt ?? null : existing.endedAt,
+    metadataJson: input.metadataJson ?? existing.metadataJson,
+    startedAt: has('startedAt') ? input.startedAt ?? null : existing.startedAt,
+    status: input.status ?? existing.status,
+    title: input.title ?? existing.title,
+    updatedAt: input.at ?? new Date().toISOString(),
+  }).where(eq(schema.sessions.id, input.id)).run()
+  return getSession(input.id)!
+}
+
+export function listSessions(workspaceId?: string, limit = 200): SessionRow[] {
+  const query = getWorkerDb().select().from(schema.sessions)
+  if (workspaceId) {
+    return query
+      .where(eq(schema.sessions.workspaceId, workspaceId))
+      .orderBy(desc(schema.sessions.updatedAt))
+      .limit(limit)
+      .all()
+  }
+  return query.orderBy(desc(schema.sessions.updatedAt)).limit(limit).all()
+}
+
+export function createTurn(input: CreateTurnInput): TurnRow {
+  const now = input.at ?? new Date().toISOString()
+  getWorkerDb().insert(schema.turns).values({
+    id: input.id,
+    sessionId: input.sessionId,
+    seq: input.seq,
+    input: input.input,
+    response: input.response ?? null,
+    status: input.status ?? 'queued',
+    error: input.error ?? null,
     metadataJson: input.metadataJson ?? {},
     createdAt: now,
     updatedAt: now,
   }).run()
-  return getWorkerDb().select().from(schema.projects).where(eq(schema.projects.id, input.id)).get()!
+  return getTurn(input.id)!
 }
 
-export function getProject(id: string): ProjectRow | null {
-  return getWorkerDb().select().from(schema.projects).where(eq(schema.projects.id, id)).get() ?? null
+export function getTurn(id: string): TurnRow | null {
+  return getWorkerDb().select().from(schema.turns).where(eq(schema.turns.id, id)).get() ?? null
 }
 
-export function updateProject(input: UpdateProjectInput): ProjectRow {
-  const existing = getProject(input.id)
+export function updateTurn(input: UpdateTurnInput): TurnRow {
+  const existing = getTurn(input.id)
   if (!existing)
-    throw new Error(`Project not found: ${input.id}`)
-  getWorkerDb().update(schema.projects).set({
-    body: input.body ?? existing.body,
+    throw new Error(`Turn not found: ${input.id}`)
+  const has = (key: keyof UpdateTurnInput) => Object.hasOwn(input, key)
+  getWorkerDb().update(schema.turns).set({
+    error: has('error') ? input.error ?? null : existing.error,
     metadataJson: input.metadataJson ?? existing.metadataJson,
-    selectedSkillId: input.selectedSkillId ?? existing.selectedSkillId,
-    selectedSoulId: input.selectedSoulId ?? existing.selectedSoulId,
+    response: has('response') ? input.response ?? null : existing.response,
     status: input.status ?? existing.status,
-    title: input.title ?? existing.title,
     updatedAt: input.at ?? new Date().toISOString(),
-  }).where(eq(schema.projects.id, input.id)).run()
-  return getProject(input.id)!
+  }).where(eq(schema.turns.id, input.id)).run()
+  return getTurn(input.id)!
 }
 
-export function listProjects(workspaceId: string, limit = 200): ProjectRow[] {
-  return getWorkerDb()
-    .select()
-    .from(schema.projects)
-    .where(eq(schema.projects.workspaceId, workspaceId))
-    .orderBy(desc(schema.projects.updatedAt))
-    .limit(limit)
-    .all()
+export function listTurns(sessionId?: string, limit = 200): TurnRow[] {
+  const query = getWorkerDb().select().from(schema.turns)
+  if (sessionId) {
+    return query
+      .where(eq(schema.turns.sessionId, sessionId))
+      .orderBy(schema.turns.seq)
+      .limit(limit)
+      .all()
+  }
+  return query.orderBy(desc(schema.turns.updatedAt)).limit(limit).all()
 }
 
-export function createRun(input: CreateRunInput): RunRow {
+export function nextTurnSeq(sessionId: string): number {
+  const latest = getWorkerDb()
+    .select({ seq: schema.turns.seq })
+    .from(schema.turns)
+    .where(eq(schema.turns.sessionId, sessionId))
+    .orderBy(desc(schema.turns.seq))
+    .limit(1)
+    .get()
+  return (latest?.seq ?? 0) + 1
+}
+
+export function createEngineInvocation(input: CreateEngineInvocationInput): EngineInvocationRow {
   const now = input.at ?? new Date().toISOString()
-  getWorkerDb().insert(schema.runs).values({
+  getWorkerDb().insert(schema.engineInvocations).values({
     id: input.id,
-    workspaceId: input.workspaceId,
-    projectId: input.projectId ?? null,
+    sessionId: input.sessionId,
+    turnId: input.turnId,
+    seq: input.seq,
+    engineId: input.engineId,
+    engineCommand: input.engineCommand ?? null,
     status: input.status ?? 'queued',
-    executor: input.executor,
     prompt: input.prompt,
     summary: input.summary ?? null,
     error: input.error ?? null,
@@ -265,19 +440,19 @@ export function createRun(input: CreateRunInput): RunRow {
     createdAt: now,
     updatedAt: now,
   }).run()
-  return getWorkerDb().select().from(schema.runs).where(eq(schema.runs.id, input.id)).get()!
+  return getEngineInvocation(input.id)!
 }
 
-export function getRun(id: string): RunRow | null {
-  return getWorkerDb().select().from(schema.runs).where(eq(schema.runs.id, id)).get() ?? null
+export function getEngineInvocation(id: string): EngineInvocationRow | null {
+  return getWorkerDb().select().from(schema.engineInvocations).where(eq(schema.engineInvocations.id, id)).get() ?? null
 }
 
-export function updateRun(input: UpdateRunInput): RunRow {
-  const existing = getRun(input.id)
+export function updateEngineInvocation(input: UpdateEngineInvocationInput): EngineInvocationRow {
+  const existing = getEngineInvocation(input.id)
   if (!existing)
-    throw new Error(`Run not found: ${input.id}`)
-  const has = (key: keyof UpdateRunInput) => Object.hasOwn(input, key)
-  getWorkerDb().update(schema.runs).set({
+    throw new Error(`Engine invocation not found: ${input.id}`)
+  const has = (key: keyof UpdateEngineInvocationInput) => Object.hasOwn(input, key)
+  getWorkerDb().update(schema.engineInvocations).set({
     error: has('error') ? input.error ?? null : existing.error,
     finishedAt: has('finishedAt') ? input.finishedAt ?? null : existing.finishedAt,
     metadataJson: input.metadataJson ?? existing.metadataJson,
@@ -285,23 +460,38 @@ export function updateRun(input: UpdateRunInput): RunRow {
     status: input.status ?? existing.status,
     summary: has('summary') ? input.summary ?? null : existing.summary,
     updatedAt: input.at ?? new Date().toISOString(),
-  }).where(eq(schema.runs.id, input.id)).run()
-  return getRun(input.id)!
+  }).where(eq(schema.engineInvocations.id, input.id)).run()
+  return getEngineInvocation(input.id)!
 }
 
-export function listRuns(workspaceId: string, limit = 200): RunRow[] {
-  return getWorkerDb()
-    .select()
-    .from(schema.runs)
-    .where(eq(schema.runs.workspaceId, workspaceId))
-    .orderBy(desc(schema.runs.updatedAt))
-    .limit(limit)
-    .all()
+export function listEngineInvocations(sessionId?: string, limit = 200): EngineInvocationRow[] {
+  const query = getWorkerDb().select().from(schema.engineInvocations)
+  if (sessionId) {
+    return query
+      .where(eq(schema.engineInvocations.sessionId, sessionId))
+      .orderBy(desc(schema.engineInvocations.updatedAt))
+      .limit(limit)
+      .all()
+  }
+  return query.orderBy(desc(schema.engineInvocations.updatedAt)).limit(limit).all()
 }
 
-export function appendRunEvent(input: AppendRunEventInput): RunEventRow {
-  getWorkerDb().insert(schema.runEvents).values({
-    runId: input.runId,
+export function nextEngineInvocationSeq(sessionId: string): number {
+  const latest = getWorkerDb()
+    .select({ seq: schema.engineInvocations.seq })
+    .from(schema.engineInvocations)
+    .where(eq(schema.engineInvocations.sessionId, sessionId))
+    .orderBy(desc(schema.engineInvocations.seq))
+    .limit(1)
+    .get()
+  return (latest?.seq ?? 0) + 1
+}
+
+export function appendSessionEvent(input: AppendSessionEventInput): SessionEventRow {
+  getWorkerDb().insert(schema.sessionEvents).values({
+    sessionId: input.sessionId,
+    turnId: input.turnId ?? null,
+    invocationId: input.invocationId ?? null,
     seq: input.seq,
     type: input.type,
     payloadJson: input.payloadJson ?? {},
@@ -309,24 +499,27 @@ export function appendRunEvent(input: AppendRunEventInput): RunEventRow {
   }).run()
   return getWorkerDb()
     .select()
-    .from(schema.runEvents)
-    .where(and(eq(schema.runEvents.runId, input.runId), eq(schema.runEvents.seq, input.seq)))
+    .from(schema.sessionEvents)
+    .where(and(eq(schema.sessionEvents.sessionId, input.sessionId), eq(schema.sessionEvents.seq, input.seq)))
     .get()!
 }
 
-export function nextRunEventSeq(runId: string): number {
+export function nextSessionEventSeq(sessionId: string): number {
   const latest = getWorkerDb()
-    .select({ seq: schema.runEvents.seq })
-    .from(schema.runEvents)
-    .where(eq(schema.runEvents.runId, runId))
-    .orderBy(desc(schema.runEvents.seq))
+    .select({ seq: schema.sessionEvents.seq })
+    .from(schema.sessionEvents)
+    .where(eq(schema.sessionEvents.sessionId, sessionId))
+    .orderBy(desc(schema.sessionEvents.seq))
     .limit(1)
     .get()
   return (latest?.seq ?? 0) + 1
 }
 
-export function listRunEvents(runId: string): RunEventRow[] {
-  return getWorkerDb().select().from(schema.runEvents).where(eq(schema.runEvents.runId, runId)).orderBy(schema.runEvents.seq).all()
+export function listSessionEvents(sessionId?: string, limit = 500): SessionEventRow[] {
+  const query = getWorkerDb().select().from(schema.sessionEvents)
+  if (sessionId)
+    return query.where(eq(schema.sessionEvents.sessionId, sessionId)).orderBy(schema.sessionEvents.seq).limit(limit).all()
+  return query.orderBy(desc(schema.sessionEvents.createdAt)).limit(limit).all()
 }
 
 export function upsertFile(input: UpsertFileInput): FileRow {
@@ -363,14 +556,11 @@ export function upsertFile(input: UpsertFileInput): FileRow {
   return getWorkerDb().select().from(schema.files).where(eq(schema.files.id, existing?.id ?? input.id)).get()!
 }
 
-export function listFiles(workspaceId: string, limit = 500): FileRow[] {
-  return getWorkerDb()
-    .select()
-    .from(schema.files)
-    .where(eq(schema.files.workspaceId, workspaceId))
-    .orderBy(desc(schema.files.updatedAt))
-    .limit(limit)
-    .all()
+export function listFiles(workspaceId?: string, limit = 500): FileRow[] {
+  const query = getWorkerDb().select().from(schema.files)
+  if (workspaceId)
+    return query.where(eq(schema.files.workspaceId, workspaceId)).orderBy(desc(schema.files.updatedAt)).limit(limit).all()
+  return query.orderBy(desc(schema.files.updatedAt)).limit(limit).all()
 }
 
 export function registerArtifact(input: RegisterArtifactInput): ArtifactRow {
@@ -378,7 +568,9 @@ export function registerArtifact(input: RegisterArtifactInput): ArtifactRow {
   getWorkerDb().insert(schema.artifacts).values({
     id: input.id,
     workspaceId: input.workspaceId,
-    runId: input.runId ?? null,
+    sessionId: input.sessionId ?? null,
+    turnId: input.turnId ?? null,
+    invocationId: input.invocationId ?? null,
     path: input.path,
     kind: input.kind ?? 'file',
     title: input.title,
@@ -387,49 +579,44 @@ export function registerArtifact(input: RegisterArtifactInput): ArtifactRow {
     createdAt: now,
     updatedAt: now,
   }).run()
-  return getWorkerDb().select().from(schema.artifacts).where(eq(schema.artifacts.id, input.id)).get()!
+  return getArtifact(input.id)!
 }
 
 export function getArtifact(id: string): ArtifactRow | null {
   return getWorkerDb().select().from(schema.artifacts).where(eq(schema.artifacts.id, id)).get() ?? null
 }
 
-export function listArtifacts(workspaceId: string, limit = 200): ArtifactRow[] {
-  return getWorkerDb()
-    .select()
-    .from(schema.artifacts)
-    .where(eq(schema.artifacts.workspaceId, workspaceId))
-    .orderBy(desc(schema.artifacts.updatedAt))
-    .limit(limit)
-    .all()
+export function listArtifacts(workspaceId?: string, limit = 200): ArtifactRow[] {
+  const query = getWorkerDb().select().from(schema.artifacts)
+  if (workspaceId)
+    return query.where(eq(schema.artifacts.workspaceId, workspaceId)).orderBy(desc(schema.artifacts.updatedAt)).limit(limit).all()
+  return query.orderBy(desc(schema.artifacts.updatedAt)).limit(limit).all()
 }
 
 export function createReview(input: CreateReviewInput): ReviewRow {
   getWorkerDb().insert(schema.reviews).values({
     id: input.id,
     workspaceId: input.workspaceId,
-    runId: input.runId ?? null,
+    sessionId: input.sessionId ?? null,
+    turnId: input.turnId ?? null,
     artifactId: input.artifactId ?? null,
     verdict: input.verdict ?? 'needs_review',
     findingsJson: input.findingsJson ?? [],
     risksJson: input.risksJson ?? [],
     createdAt: input.at ?? new Date().toISOString(),
   }).run()
-  return getWorkerDb().select().from(schema.reviews).where(eq(schema.reviews.id, input.id)).get()!
+  return getReview(input.id)!
 }
 
 export function getReview(id: string): ReviewRow | null {
   return getWorkerDb().select().from(schema.reviews).where(eq(schema.reviews.id, id)).get() ?? null
 }
 
-export function listReviews(workspaceId: string, limit = 200): ReviewRow[] {
-  return getWorkerDb()
-    .select()
-    .from(schema.reviews)
-    .where(eq(schema.reviews.workspaceId, workspaceId))
-    .orderBy(desc(schema.reviews.createdAt))
-    .limit(limit)
-    .all()
+export function listReviews(workspaceId?: string, limit = 200): ReviewRow[] {
+  const query = getWorkerDb().select().from(schema.reviews)
+  if (workspaceId)
+    return query.where(eq(schema.reviews.workspaceId, workspaceId)).orderBy(desc(schema.reviews.createdAt)).limit(limit).all()
+  return query.orderBy(desc(schema.reviews.createdAt)).limit(limit).all()
 }
 
 export function createLesson(input: CreateLessonInput): LessonRow {
@@ -444,7 +631,7 @@ export function createLesson(input: CreateLessonInput): LessonRow {
     createdAt: now,
     updatedAt: now,
   }).run()
-  return getWorkerDb().select().from(schema.lessons).where(eq(schema.lessons.id, input.id)).get()!
+  return getLesson(input.id)!
 }
 
 export function getLesson(id: string): LessonRow | null {
@@ -459,14 +646,11 @@ export function updateLesson(id: string, status: LessonRow['status'], at = new D
   return getLesson(id)!
 }
 
-export function listLessons(workspaceId: string, limit = 200): LessonRow[] {
-  return getWorkerDb()
-    .select()
-    .from(schema.lessons)
-    .where(eq(schema.lessons.workspaceId, workspaceId))
-    .orderBy(desc(schema.lessons.updatedAt))
-    .limit(limit)
-    .all()
+export function listLessons(workspaceId?: string, limit = 200): LessonRow[] {
+  const query = getWorkerDb().select().from(schema.lessons)
+  if (workspaceId)
+    return query.where(eq(schema.lessons.workspaceId, workspaceId)).orderBy(desc(schema.lessons.updatedAt)).limit(limit).all()
+  return query.orderBy(desc(schema.lessons.updatedAt)).limit(limit).all()
 }
 
 export function getSetting(key: string): SettingRow | null {
