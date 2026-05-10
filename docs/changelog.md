@@ -5504,6 +5504,20 @@ Verification:
 
 Pointer: `docs/plan/PLAN-006.md` for the design matrix and per-subtask spec, and `docs/task/FEAT-00{3,4,5,6}.md` for the individual deliverables.
 
+# 2026-05-11 03:05 [progress]
+
+Planned the Worker Web visual polish campaign after reviewing `DESIGN.md`,
+GOALS, the current Worker Web source, and recent PMA status. New draft tracking:
+REFACTOR-060 / PLAN-238 for design tokens and unified controls, REFACTOR-061 /
+PLAN-239 for compact worker list and icon-button creation dialogs,
+REFACTOR-062 / PLAN-240 for session composer and collapsible right drawer, and
+QA-032 / PLAN-241 for visual, responsive, and code-review-graph validation.
+After a follow-up scroll investigation, PLAN-240 was expanded with Open
+Design's chat scroll-island pattern: key chat state by conversation/session,
+wrap the log in a dedicated relative scroll container, auto-follow only when
+near bottom, and expose jump-to-latest without letting streaming output steal
+scrollback.
+
 ## 2026-04-21 18:30 [release]
 
 FEAT-009 / PLAN-005 landed: **aissh-driven fleet deployment automation**. AIWorker now ships with a one-command deploy to `gateway.example.test` via the `aissh` CLI.
