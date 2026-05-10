@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-10 (FEAT-059 and REFACTOR-046 completed)
+> Updated: 2026-05-10 (DOC-009 corrected)
 
 ## Usage
 
@@ -323,3 +323,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**QA-028 Soul project MVP validation**](QA-028.md) `P0`
 - [x] [**FEAT-059 Production-grade Worker Web localization**](FEAT-059.md) `P0`
 - [x] [**REFACTOR-046 Worker Web theme switching and dark mode readiness**](REFACTOR-046.md) `P1`
+- [x] [**DOC-009 Host daemon and Soul worker architecture contract**](DOC-009.md) `P0`

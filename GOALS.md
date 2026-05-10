@@ -13,8 +13,8 @@ legal、ops 等团队职能，提供可复用的 Soul、能力模板、领域系
 Open Design 的参考价值在于产品意图和信息架构，而不是图片/视频领域本身：
 
 ```text
-Open Design: design skill -> design system -> template -> project/run -> artifact
-AIWorker:    Soul -> domain system -> capability template -> project/run -> business artifact
+Open Design: design skill -> design system -> template -> project/session -> artifact
+AIWorker:    host daemon -> Soul worker -> workspace/project -> session/turn -> business artifact
 ```
 
 AIWorker 不做图片/视频设计，不做 coding engine，不做 executor 平台。它把 Open
@@ -40,8 +40,8 @@ AIWorker 的第一性价值应落在 team/org 更需要垂直沉淀的角色：
 这些 Soul 的共同点不是同一个任务名，而是同一种产品结构：
 
 ```text
-Soul catalog -> capability template -> domain system -> project -> engine run
--> business artifact -> human review -> reusable org memory
+host -> local daemon -> Soul worker -> workspace/project -> session
+-> turn -> business artifact -> human review -> reusable org memory
 ```
 
 ## Open Design 映射
@@ -51,17 +51,72 @@ AIWorker 应借鉴 Open Design 的产品语法，而不是盲目复制 UI。
 | Open Design | AIWorker |
 | --- | --- |
 | Designs home | Soul workspace home |
-| Design skill | Soul capability |
-| Design system | Domain system / rubric / policy |
-| Image/video template | Capability template / project template |
-| Project | Domain project / team workspace |
+| Local daemon | Host-local AIWorker daemon |
+| Project | Workspace/project under one Soul worker |
+| Conversation | Session under one workspace |
+| Chat turn | Turn under one session |
+| Run / chat run | Engine invocation / internal audit attempt |
+| Design skill | Capability template owned by a Soul worker |
+| Design system | Domain system / rubric / policy owned by a Soul worker |
+| Image/video template | Capability template / workspace template |
 | Examples | Example artifacts / playbooks |
 | Connectors | ATS / docs / issue tracker / CI / cloud / CRM connectors |
 | Settings | Execution mode, engine scan/test, connector, MCP, language, and appearance configuration |
 | Pet / companion | Optional ambient helper, never core workflow |
 
+OD 没有 `worker` 这一层，因为它的领域是单一 design generation。AIWorker 必须新增
+`worker = one Soul runtime` 作为隔离层；不能把 OD 的 `Project` 直接映射成 worker，
+也不能把 Soul 塞进 project metadata 作为长期模型。
+
 判断一个界面或 API 是否正确，不看它是否像 Open Design 截图，而看它是否让一个 HR、
 PM、QA 或 DevOps 用户能马上选 Soul、选模板、接入上下文并产出业务 artifact。
+
+## Host / Daemon / Worker Contract
+
+AIWorker 的本地基础设施目标是：
+
+```text
+1 host
+  -> 1 local daemon
+    -> N Soul workers
+      -> 1 Soul per worker
+        -> N workspaces/projects
+          -> N sessions
+            -> N turns / artifacts
+```
+
+定义如下：
+
+- **Host** 是承载环境：一台 laptop、workstation、VM 或 server。host 负责提供外部
+  executor、文件系统、网络和 operator auth 环境，但不是产品对象。
+- **Local daemon** 是 host 上唯一的 AIWorker 本地控制面。它负责端口、Web/API、
+  SQLite、migration、engine scan/test、BYOK、connector inventory、MCP 配置、token、
+  secret refs 和 worker registry。daemon 不代表任何一个 Soul。
+- **Worker** 是 Soul 绑定的业务 runtime。一个 worker 只能绑定一个 Soul；一个 daemon
+  可以管理多个 worker，例如 HR worker、PM worker、QA worker、DevOps worker。
+- **Soul** 是 worker 的领域身份、边界、能力目录、review/admission 标准和 durable
+  memory namespace。Soul 不是 project 上的一个下拉字段。
+- **Workspace / project** 是某个 worker 下的业务作用域。HR 可以是岗位、候选人池或
+  候选人；QA 可以是 release、test suite 或 defect queue；DevOps 可以是 service、
+  environment、incident 或 runbook。
+- **Session** 是 workspace 内的持续工作线程，也是 engine native session 的绑定点和
+  接管点。开了一个 workspace/project 后，可以创建多个 session；每个 session 内多轮
+  turn 逐步沟通并产出或修改 artifact。
+- **Turn** 是 session 内的一次用户输入、engine 回复、tool/event 更新或 artifact 修改。
+- **Engine invocation** 是内部审计对象，表示一次向 engine 发送消息、resume native
+  session 或 provider request 的技术尝试。它不是产品对象，不要求用户创建或维护。
+
+能力归属规则：
+
+- Soul 声明 capability catalog；
+- worker 实例化 Soul 后拥有 enabled capabilities；
+- workspace 默认继承 worker 的 capabilities，可按 workspace type 推荐、隐藏或限制；
+- session 可以有 active capability，也可以由 intent router 建议 capability；
+- turn、engine invocation 和 artifact 必须记录 `capabilityTemplateId` 或
+  `workflowTemplateId`，review/memory 必须能追溯到 capability version。
+
+这意味着默认产品路径不是“一个 worker 内切换多个 Soul”，而是“选择 Soul 时进入或创建
+该 Soul worker”。project/workspace 不再长期持有 `selectedSoulId` 作为核心隔离字段。
 
 ## AIWorker 负责什么
 
@@ -70,7 +125,8 @@ AIWorker 负责垂直 Soul 产品面：
 - Soul catalog：内置和自定义 Soul 的浏览、选择、版本和能力说明；
 - domain systems：岗位、产品线、发布线、事故域、财务/legal policy 等领域系统；
 - capability templates：面试筛选、PRD、release gate、incident review 等模板；
-- local daemon：提供本地 API、Web、run service、metadata store 和静态资源；
+- local daemon：提供本地 API、Web、worker registry、session service、metadata store
+  和静态资源；
 - prompt composition：组合 Soul、domain system、template、workspace/project context、
   connector evidence 与 operator input；
 - business artifacts：把 engine 输出变成可定位、可审查、可复用的业务产物；
@@ -90,20 +146,26 @@ AIWorker 不能变成另一个 executor platform，也不能变成 coding-only �
 - 不把 Open Design 的 desktop chrome、品牌、宠物、图片/视频文案照搬进 Web；
 - 不把 fleet/gateway 作为这次重构的默认第一体验。
 
-外部 engine 是 bring-your-own runtime。AIWorker 只设置 cwd/context、组合 Soul prompt
-stack、通过薄 adapter 调用或启动 engine、观察事件流并记录本地证据。
+外部 engine 是 bring-your-own runtime。AIWorker 只在 session 层设置 cwd/context、组合
+Soul prompt stack、通过薄 adapter 调用或启动 engine native session、观察事件流并记录
+本地证据。
 
 ## 核心产品闭环
 
-1. operator 打开 Web 或 CLI，选择一个 Soul，例如 HR、PM、QA 或 DevOps。
-2. operator 选择 domain system：岗位、产品线、发布线、事故域或团队规范。
-3. operator 选择 capability template：candidate screen、PRD、release gate、
-   incident review、runbook update 等。
-4. daemon 组合 Soul、template、domain context、connector evidence 和用户输入。
-5. 外部 engine 执行，AIWorker 记录 run、事件、来源和输出文件。
-6. AIWorker 展示业务 artifact，而不是只展示日志或聊天。
-7. operator review artifact，决定 accepted、needs follow-up 或 memory candidate。
-8. approved memory 带 provenance 写回 Soul / domain 的 durable context。
+1. operator 打开 Web 或 CLI，local daemon 已经是同源入口，不要求手动分开启动 API 和
+   Web 作为产品路径。
+2. operator 选择或创建一个 Soul worker，例如 HR、PM、QA 或 DevOps。
+3. operator 在该 worker 下选择 workspace/project：岗位、产品线、发布线、事故域或团队
+   业务作用域。
+4. operator 打开或创建 session；session 选择 capability template，或由 intent router
+   推荐并显示可改的 capability。
+5. daemon 在 session 层组合 worker Soul、template、domain context、workspace/session
+   context、connector evidence 和用户输入，并绑定 engine native session。
+6. operator 在 session 中多轮 turn 沟通；外部 engine 逐步执行，AIWorker 记录 turn、
+   session event、invocation 审计、来源和输出文件。
+7. AIWorker 展示业务 artifact，而不是只展示日志或聊天。
+8. operator review artifact，决定 accepted、needs follow-up 或 memory candidate。
+9. approved memory 带 provenance 写回该 Soul worker 的 durable context。
 
 这是默认产品闭环。不能直接改善这条闭环的能力，在本轮重构中都应保持 secondary。
 
@@ -170,21 +232,34 @@ navigation 或 README onboarding。
 
 任一答案是否定，都应先停下来简化方案。
 
+## 架构遵循规则
+
+本轮确认的合同是：`host -> daemon -> worker -> workspace/project -> session -> turn ->
+artifact/review/memory`，engine 从 session 层开始接管，run 只允许作为内部
+`engine_invocation` 审计概念存在。后续实现必须严格遵循这个模型。
+
+只有当真实实现证据证明该模型无法落地，或产品体验明显不如期望时，才考虑架构调整。
+调整前必须重新 proposal，说明触发原因、证据、替代方案、影响面和迁移成本；不得在实现
+中静默回退到旧 project-scope、case/run 主对象、template runner local engine 或文件自嗨
+模型。
+
 ## 实施优先级
 
 当前重构应重新排优先级：
 
 1. 产品北极星与目标架构重置为 vertical Soul workspace；
 2. Soul catalog 与内置 HR/PM/QA/DevOps 优先级；
-3. capability template / domain system 文件模型；
-4. local daemon 的 Soul/template/project API；
-5. Web 首屏：Soul catalog + capability templates + project/run/artifact；
-6. Settings：Local CLI / BYOK、engine scan/test、connectors、MCP、language、
+3. host daemon / Soul worker / workspace / session / turn / invocation 对象模型；
+4. capability template / domain system 文件模型；
+5. local daemon 的 worker registry、Soul/template/workspace/session/turn/artifact API；
+6. Web 首屏：Soul worker catalog + capability templates + workspace/session/artifact；
+7. CLI/Web 调试入口收敛为单 daemon lifecycle，不把两步 API+Web 启动当成产品路径；
+8. Settings：Local CLI / BYOK、engine scan/test、connectors、MCP、language、
    appearance、autosave；
-7. business artifact preview；
-8. review/admission -> reusable org memory；
-9. developer Soul 降级为 supporting role；
-10. cleanup、验证与发布证据。
+9. business artifact preview；
+10. review/admission -> reusable org memory；
+11. developer Soul 降级为 supporting role；
+12. cleanup、验证与发布证据。
 
 验收终点不是把旧概念换名，也不是把 Open Design 外壳搬过来，而是得到一条垂直团队
 能理解、能使用、能验证、能沉淀的 Soul 工作流。

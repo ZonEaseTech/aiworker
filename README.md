@@ -8,9 +8,11 @@ artifact。AIWorker 把这套结构迁移到 HR、PM、QA、DevOps、finance、l
 组织职能。
 
 ```text
-Soul + domain system + capability template
-  -> project
-  -> engine run
+host -> local daemon
+  -> Soul worker
+  -> workspace/project
+  -> session
+  -> turn
   -> business artifact
   -> review
   -> durable org memory
@@ -34,17 +36,52 @@ AIWorker 的主要价值在更需要组织沉淀的垂直职能：
 
 | Open Design | AIWorker |
 | --- | --- |
-| Design skill | Soul capability |
+| Local daemon | Host-local AIWorker daemon |
+| Project | Workspace/project under one Soul worker |
+| Conversation | Session under one workspace |
+| Chat turn | Turn under one session |
+| Run / chat run | Engine invocation / internal audit attempt |
+| Design skill | Capability template owned by a Soul worker |
 | Design system | Domain system / rubric / policy |
-| Image/video template | Capability template / project template |
-| Project | Domain project / team workspace |
+| Image/video template | Capability template / workspace template |
 | Examples | Example artifacts / playbooks |
 | Connectors | ATS / docs / issue tracker / CI / cloud / CRM connectors |
-| Run stream | Engine run stream |
+| Run stream | Session event stream |
 | Artifact preview | Business artifact preview |
 | Critique | Review / memory candidate |
 
 截图只能校准感受，不能成为复制桌面壳、品牌、宠物或设计工具术语的理由。
+
+OD 没有 `worker` 这一层；AIWorker 必须有。AIWorker 的 worker 是一个 Soul-bound
+runtime，例如 HR worker、PM worker、QA worker 或 DevOps worker。OD 的 project 对应
+AIWorker worker 下的 workspace/project，而不是 worker 本身。
+
+## 基础设施模型
+
+AIWorker 的本地目标架构是：
+
+```text
+1 host
+  -> 1 local daemon
+    -> N Soul workers
+      -> 1 Soul per worker
+        -> N workspaces/projects
+          -> N sessions
+            -> N turns / artifacts
+```
+
+- Host 是承载环境，不是产品对象。
+- Local daemon 是唯一的本地控制面，负责 Web/API、SQLite、engine inventory、BYOK、
+  connectors、MCP、settings 和 worker registry。
+- Worker 绑定一个 Soul，并拥有该 Soul 的 capabilities、domain system、review policy
+  和 durable memory namespace。
+- Workspace/project 是某个 worker 下的业务作用域，例如候选人、需求、release、
+  incident 或 runbook。
+- Session 是 workspace 内持续上下文，也是 engine native session 的绑定点和接管点。
+- Turn 是 session 内一次用户输入、engine 回复、tool/event 更新或 artifact 修改。
+- Engine invocation 只是内部审计对象；用户不创建、不维护 run。
+- Capability template 属于 Soul worker；workspace 默认继承 worker capabilities；
+  session/turn/artifact 必须记录实际使用的 capability 或 workflow。
 
 ## 产品边界
 
@@ -55,7 +92,7 @@ AIWorker 负责：
 - local daemon API 和 Web；
 - prompt composition；
 - connector evidence 的边界与来源；
-- engine run 的事件和 artifact 索引；
+- session event、engine invocation 审计和 artifact 索引；
 - review/admission；
 - durable org memory。
 
@@ -69,30 +106,41 @@ AIWorker 负责：
 
 AIWorker 只通过薄 adapter 调用和观察 engine，不把自己做成 executor 平台。
 
+本阶段实现严格遵循 `docs/architecture.md` 中的 session 接管合同：engine 从 workspace 下
+的 session 层开始接管，run 不作为产品对象。除非真实实现证明该合同无法落地或产品体验
+不如预期，否则不再调整架构；任何调整都必须先走新的 proposal。
+
 ## Quickstart
 
-当前 local MVP 已经围绕 vertical Soul loop 收敛。CLI 最小路径：
+目标 operator 路径应是一个本地 daemon 生命周期和一个 Web URL，而不是要求用户分别理解
+API dev server 与 Web dev server。
+
+目标 source-checkout 调试入口：
 
 ```bash
-aiworker init --name "Team Workspace" --root .
-aiworker soul list
-aiworker template list --soul hr
-aiworker project create --soul hr --skill candidate-screen --title "Screen candidate" --body "Role and candidate evidence"
-aiworker run start --project <projectId>
-aiworker artifacts list
+aiworker dev
 ```
 
-Web 最小路径：
+目标 packaged/local runtime 入口：
 
 ```bash
 aiworker daemon foreground --port 9217
+```
+
+在 `aiworker dev` 落地前，source checkout 里的 API/Web 双进程命令只属于 contributor
+escape hatch，不是最终产品路径：
+
+```bash
+PORT=9217 bun run --filter '@zonease/aiworker-api' dev
+AIWORKER_API_URL=http://127.0.0.1:9217 \
 bun run --filter '@zonease/aiworker-web' dev
 ```
 
-打开 Web 后，首屏就是 Soul catalog。用户选择 HR / PM / QA / DevOps Soul，选择该 Soul
-下的 capability template，创建 project/run，并在右侧看到对应业务 artifact。Settings 由右上
-settings button 打开，支持 Local CLI / BYOK、engine scan/test、connectors、MCP、
-language、appearance 和 autosave。
+打开 Web 后，首屏应是 Soul worker catalog。用户选择或创建 HR / PM / QA / DevOps
+worker，进入该 worker 下的 workspace/session，选择或接受推荐的 capability template，
+在 session 中多轮 turn 沟通并看到对应业务 artifact。Settings 由明确 settings button
+打开，支持 Local CLI / BYOK、engine scan/test、connectors、MCP、language、appearance
+和 autosave。
 
 ## 仓库结构
 
@@ -103,7 +151,7 @@ apps/
   web/       Worker Soul workspace web
   gateway/   deferred fleet/gateway control plane
 packages/
-  core/             local Soul run engine and executor adapters
+  core/             local Soul session runtime and executor adapters
   storage-sqlite/   local SQLite metadata
   fs-layout/        workspace and .aiworker layout helpers
   shared/           shared schemas and utilities
@@ -142,14 +190,16 @@ bun run --filter '@zonease/aiworker-cli' build:bundle
 
 1. 产品北极星与目标架构重置为 vertical Soul workspace；
 2. Soul catalog 与内置 HR/PM/QA/DevOps 优先级；
-3. capability template / domain system 文件模型；
-4. local daemon 的 Soul/template/project API；
-5. Web 首屏：Soul catalog + capability templates + project/run/artifact；
-6. Settings：Local CLI / BYOK、engine scan/test、connectors、MCP、language、
+3. host daemon / Soul worker / workspace / session / turn / invocation 对象模型；
+4. capability template / domain system 文件模型；
+5. local daemon 的 worker registry、Soul/template/workspace/session/turn/artifact API；
+6. Web 首屏：Soul worker catalog + capability templates + workspace/session/artifact；
+7. CLI/Web 调试入口收敛为单 daemon lifecycle；
+8. Settings：Local CLI / BYOK、engine scan/test、connectors、MCP、language、
    appearance、autosave；
-7. business artifact preview；
-8. review/admission -> durable org memory；
-9. developer Soul 降级为 supporting role；
-10. cleanup、验证与发布证据。
+9. business artifact preview；
+10. review/admission -> durable org memory；
+11. developer Soul 降级为 supporting role；
+12. cleanup、验证与发布证据。
 
 fleet/gateway 和 desktop 暂缓，等单个 vertical Soul workspace 自身可用、可解释、可验证后再回到可选扩展层。

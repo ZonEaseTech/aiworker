@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-10 (PLAN-216 and PLAN-217 completed)
+> Updated: 2026-05-10 (PLAN-218 corrected)
 
 ## Usage
 
@@ -246,3 +246,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-215 Soul project MVP validation**](PLAN-215.md) `2026-05-10`
 - [x] [**PLAN-216 Production-grade Worker Web localization**](PLAN-216.md) `2026-05-10`
 - [x] [**PLAN-217 Worker Web theme switching and dark mode readiness**](PLAN-217.md) `2026-05-10`
+- [x] [**PLAN-218 Host daemon and Soul worker architecture contract**](PLAN-218.md) `2026-05-10`

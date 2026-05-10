@@ -1,5 +1,51 @@
 # AIWorker Changelog
 
+## 2026-05-10 17:44 [completed] DOC-009 / PLAN-218 — Session handoff and file consumer contract correction
+
+Follow-up architecture discussion clarified that AIWorker must not ask users to
+maintain runs. Engine handoff begins at the workspace session layer, aligned
+with Claude Code / Codex / Cursor native sessions:
+
+- Updated `GOALS.md`, `docs/architecture.md`, and `README.md` so the product
+  chain is `worker -> workspace/project -> session -> turn -> artifact`, not
+  `session -> run`.
+- Reframed `run` as internal `engine_invocation` audit/retry/debug metadata,
+  not a product object or default UI/API path.
+- Added the file consumer contract to `docs/architecture.md`: files must serve
+  daemon prompt/catalog composition, engine-visible session cwd, audit/replay,
+  or human/export use. Files outside those consumers should not be created.
+- Documented that this architecture must be strictly followed unless
+  implementation evidence proves it impossible or inferior, in which case a new
+  proposal is required before adjustment.
+- Synced `docs/task/DOC-009.md` and `docs/plan/PLAN-218.md` with the corrected
+  session/turn/invocation model.
+
+Verification: `git diff --check` passed. code-review-graph was skipped because
+this was documentation-only architecture work.
+
+## 2026-05-10 16:59 [completed] DOC-009 / PLAN-218 — Host daemon and Soul worker architecture contract
+
+Initial architecture pass treated the local product as `1 host -> 1 local
+daemon -> N Soul workers -> N workspaces -> N sessions -> N capability runs`.
+The 17:44 follow-up entry above supersedes that run wording with the final
+session/turn/invocation contract:
+
+- Updated `GOALS.md` so Soul selection means selecting or creating a Soul-bound
+  worker, not storing Soul as long-term project metadata.
+- Expanded `docs/architecture.md` with definitions for host, local daemon,
+  worker, workspace/project, session, turn/invocation, capability template,
+  host settings, and worker settings.
+- Added an Open Design mapping that keeps OD's project/conversation/run/artifact
+  grammar while making AIWorker's extra Soul worker layer explicit.
+- Defined the target local daemon API/storage/debug contracts, including
+  worker registry routes, host-vs-worker settings, session ownership, and a
+  single lifecycle debug path.
+- Updated `README.md` to explain the model and mark split API/Web startup as a
+  transitional contributor escape hatch rather than the intended operator path.
+
+Verification: `git diff --check` passed. code-review-graph was skipped because
+this was documentation-only architecture work.
+
 ## 2026-05-10 12:25 [completed] REFACTOR-046 / PLAN-217 — Worker Web theme switching and dark mode readiness
 
 Worker Web appearance settings now drive the rendered shell instead of only
