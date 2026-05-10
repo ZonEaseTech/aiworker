@@ -110,6 +110,46 @@ export function createSessionTurn(workspaceId: string, input: {
   return localFetch(`/api/local/workspaces/${workspaceId}/sessions`, { method: 'POST', body: JSON.stringify(input) })
 }
 
+export async function createSessionTurnStream(
+  workspaceId: string,
+  input: {
+    capabilityTemplateId: string
+    context?: string
+    input: string
+    metadata?: Record<string, unknown>
+    title: string
+  },
+  handlers: {
+    onEvent?: (event: LocalSessionEvent) => void
+    onSession?: (session: LocalSession) => void
+    onTurn?: (turn: LocalTurn) => void
+  } = {},
+): Promise<{
+  session: LocalSession
+  turn: LocalTurn
+  files: LocalFile[]
+  artifacts: LocalArtifact[]
+  review: LocalReview | null
+  lessons: LocalLesson[]
+  events: LocalSessionEvent[]
+}> {
+  const res = await fetch(`/api/local/workspaces/${workspaceId}/sessions/stream`, {
+    body: JSON.stringify(input),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  })
+  if (!res.ok)
+    throw new Error(`Local API ${res.status}: /api/local/workspaces/${workspaceId}/sessions/stream`)
+  if (!res.body)
+    return createSessionTurn(workspaceId, input)
+
+  return await readSessionTurnStream(res.body, {
+    onEvent: handlers.onEvent,
+    onSession: handlers.onSession,
+    onTurn: handlers.onTurn,
+  })
+}
+
 export function continueSessionTurn(sessionId: string, input: {
   input: string
   metadata?: Record<string, unknown>
@@ -154,7 +194,26 @@ export async function continueSessionTurnStream(
   if (!res.body)
     return continueSessionTurn(sessionId, input)
 
-  const reader = res.body.getReader()
+  return await readSessionTurnStream(res.body, handlers)
+}
+
+async function readSessionTurnStream(
+  body: ReadableStream<Uint8Array>,
+  handlers: {
+    onEvent?: (event: LocalSessionEvent) => void
+    onSession?: (session: LocalSession) => void
+    onTurn?: (turn: LocalTurn) => void
+  } = {},
+): Promise<{
+  session: LocalSession
+  turn: LocalTurn
+  files: LocalFile[]
+  artifacts: LocalArtifact[]
+  review: LocalReview | null
+  lessons: LocalLesson[]
+  events: LocalSessionEvent[]
+}> {
+  const reader = body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
   let result: Awaited<ReturnType<typeof continueSessionTurn>> | null = null
@@ -171,6 +230,9 @@ export async function continueSessionTurnStream(
       const parsed = parseSseFrame(frame)
       if (parsed?.event === 'turn') {
         handlers.onTurn?.(parsed.data as LocalTurn)
+      }
+      else if (parsed?.event === 'session') {
+        handlers.onSession?.(parsed.data as LocalSession)
       }
       else if (parsed?.event === 'session_event') {
         handlers.onEvent?.(parsed.data as LocalSessionEvent)

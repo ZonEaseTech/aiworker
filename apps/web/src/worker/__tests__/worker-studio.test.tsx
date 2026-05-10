@@ -245,6 +245,23 @@ beforeEach(() => {
     }
     if (url.endsWith('/api/local/workspaces'))
       return json({ workspaces: currentWorkspaces })
+    if (url.endsWith('/api/local/workspaces/workspace-created/sessions/stream') && method === 'POST') {
+      const createdSession = { ...sessionRecord, workspaceId: 'workspace-created', id: 'session-created', title: 'New candidate workspace' }
+      const createdTurn = { ...turnRecord, id: 'turn-created', sessionId: 'session-created' }
+      const createdArtifact = { ...artifactRecord, id: 'artifact-created', sessionId: 'session-created', turnId: 'turn-created', workspaceId: 'workspace-created' }
+      currentSessions = [createdSession, ...currentSessions]
+      currentTurns = [createdTurn, ...currentTurns]
+      currentArtifacts = [createdArtifact, ...currentArtifacts]
+      const encoder = new TextEncoder()
+      return new Response(new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode(`event: session\ndata: ${JSON.stringify(createdSession)}\n\n`))
+          controller.enqueue(encoder.encode(`event: turn\ndata: ${JSON.stringify({ ...createdTurn, status: 'running', response: null })}\n\n`))
+          controller.enqueue(encoder.encode(`event: result\ndata: ${JSON.stringify({ artifacts: [createdArtifact], events: [], files: [], lessons: [], review: null, session: createdSession, turn: createdTurn })}\n\n`))
+          controller.close()
+        },
+      }), { headers: { 'content-type': 'text/event-stream' }, status: 201 })
+    }
     if (url.endsWith('/api/local/workspaces/workspace-created/sessions') && method === 'POST') {
       const createdSession = { ...sessionRecord, workspaceId: 'workspace-created', id: 'session-created', title: 'New candidate workspace' }
       const createdTurn = { ...turnRecord, id: 'turn-created', sessionId: 'session-created' }
@@ -388,7 +405,7 @@ describe('worker studio', () => {
         body: expect.stringContaining('"soulId":"hr"'),
         method: 'POST',
       }))
-      expect(fetch).toHaveBeenCalledWith('/api/local/workspaces/workspace-created/sessions', expect.objectContaining({
+      expect(fetch).toHaveBeenCalledWith('/api/local/workspaces/workspace-created/sessions/stream', expect.objectContaining({
         body: expect.stringContaining('"capabilityTemplateId":"candidate-screen"'),
         method: 'POST',
       }))

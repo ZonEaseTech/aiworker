@@ -36,7 +36,7 @@ import {
   X,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useReducer, useState, useSyncExternalStore } from 'react'
-import { continueSessionTurnStream, createReview, createSessionTurn, createWorkspace, loadLocalWorkspaceData, readFile, rescanEngines, saveSettings, testEngine, updateLesson } from './api'
+import { continueSessionTurnStream, createReview, createSessionTurnStream, createWorkspace, loadLocalWorkspaceData, readFile, rescanEngines, saveSettings, testEngine, updateLesson } from './api'
 import {
   displaySoul,
   displayTemplate,
@@ -119,6 +119,7 @@ export function WorkerStudio() {
   const [reviewSubmitting, setReviewSubmitting] = useState(false)
   const [lessonBusyId, setLessonBusyId] = useState<string | null>(null)
   const [streamEvents, setStreamEvents] = useState<LocalSessionEvent[]>([])
+  const [streamSessions, setStreamSessions] = useState<LocalSession[]>([])
   const [streamTurns, setStreamTurns] = useState<LocalTurn[]>([])
   const [pendingTurn, setPendingTurn] = useState<LocalTurn | null>(null)
   const [artifactPreview, dispatchArtifactPreview] = useReducer(artifactPreviewReducer, initialArtifactPreviewState)
@@ -141,6 +142,14 @@ export function WorkerStudio() {
   const data = state.data
   const activeLocale = normalizeLocale(data?.settings.language)
   const copy = messagesFor(activeLocale)
+  const allSessions = useMemo(() => {
+    const byId = new Map<string, LocalSession>()
+    for (const session of data?.sessions ?? [])
+      byId.set(session.id, session)
+    for (const session of streamSessions)
+      byId.set(session.id, session)
+    return [...byId.values()]
+  }, [data?.sessions, streamSessions])
   const routedWorkspace = route.kind === 'workspace' || route.kind === 'session'
     ? data?.workspaces.find(workspace => workspace.id === route.workspaceId) ?? null
     : null
@@ -159,8 +168,8 @@ export function WorkerStudio() {
   )
   const soulSessions = useMemo(() => {
     const workspaceIds = new Set(soulWorkspaces.map(item => item.id))
-    return data?.sessions.filter(session => workspaceIds.has(session.workspaceId)) ?? []
-  }, [data?.sessions, soulWorkspaces])
+    return allSessions.filter(session => workspaceIds.has(session.workspaceId))
+  }, [allSessions, soulWorkspaces])
   const soulSessionIds = useMemo(() => new Set(soulSessions.map(session => session.id)), [soulSessions])
   const soulArtifacts = useMemo(
     () => data?.artifacts.filter(artifact => artifact.sessionId !== null && soulSessionIds.has(artifact.sessionId)) ?? [],
@@ -169,7 +178,7 @@ export function WorkerStudio() {
   const filteredProjects = useMemo(() => {
     const needle = query.trim().toLowerCase()
     return soulWorkspaces.filter((item) => {
-      const latestSession = sessionForWorkspace(item, data?.sessions ?? [])
+      const latestSession = sessionForWorkspace(item, allSessions)
       const template = data?.templates.find(candidate => candidate.id === latestSession?.capabilityTemplateId)
       const templateCopy = template ? displayTemplate(template, activeLocale) : null
       return !needle
@@ -177,7 +186,7 @@ export function WorkerStudio() {
         || template?.name.toLowerCase().includes(needle)
         || templateCopy?.name.toLowerCase().includes(needle)
     })
-  }, [activeLocale, data?.sessions, data?.templates, query, soulWorkspaces])
+  }, [activeLocale, allSessions, data?.templates, query, soulWorkspaces])
 
   const routeWorkspaceId = route.kind === 'workspace' || route.kind === 'session' ? route.workspaceId : null
   const routeWorkspace = routeWorkspaceId ? soulWorkspaces.find(item => item.id === routeWorkspaceId) ?? null : null
@@ -186,13 +195,13 @@ export function WorkerStudio() {
       ? soulWorkspaces.find(item => item.id === selectedWorkspaceId) ?? null
       : latest(soulWorkspaces))
   const workspaceSessions = useMemo(
-    () => selectedWorkspace ? data?.sessions.filter(session => session.workspaceId === selectedWorkspace.id).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)) ?? [] : [],
-    [data?.sessions, selectedWorkspace],
+    () => selectedWorkspace ? allSessions.filter(session => session.workspaceId === selectedWorkspace.id).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)) : [],
+    [allSessions, selectedWorkspace],
   )
   const routeSession = route.kind === 'session'
-    ? data?.sessions.find(session => session.id === route.sessionId && session.workspaceId === route.workspaceId) ?? null
+    ? allSessions.find(session => session.id === route.sessionId && session.workspaceId === route.workspaceId) ?? null
     : null
-  const selectedSession = routeSession ?? (selectedWorkspace ? sessionForWorkspace(selectedWorkspace, data?.sessions ?? []) : latest(soulSessions))
+  const selectedSession = routeSession ?? (selectedWorkspace ? sessionForWorkspace(selectedWorkspace, allSessions) : latest(soulSessions))
   const selectedTurn = selectedSession ? turnForSession(selectedSession, data?.turns ?? []) : null
   const selectedArtifact = selectedSession ? artifactForSession(selectedSession, data?.artifacts ?? []) : latest(soulArtifacts)
   const selectedReview = selectedSession ? reviewForSession(selectedSession, data?.reviews ?? []) : null
@@ -287,7 +296,9 @@ export function WorkerStudio() {
         },
         name: workspaceTitle.trim(),
       })
-      const sessionResult = await createSessionTurn(workspaceResult.workspace.id, {
+      setSelectedWorkspaceId(workspaceResult.workspace.id)
+      await refresh()
+      const sessionResult = await createSessionTurnStream(workspaceResult.workspace.id, {
         capabilityTemplateId: selectedTemplate.id,
         context: workspaceContext,
         input: body,
@@ -298,8 +309,16 @@ export function WorkerStudio() {
           reviewRubric: selectedTemplate.reviewRubric,
         },
         title: workspaceTitle.trim(),
+      }, {
+        onEvent: event => setStreamEvents(current => [...current, event]),
+        onSession: (session) => {
+          setStreamSessions(current => upsertSession(current, session))
+          navigateWorkerRoute({ kind: 'session', sessionId: session.id, workspaceId: workspaceResult.workspace.id })
+        },
+        onTurn: turn => setStreamTurns(current => upsertTurn(current, turn)),
       })
-      setSelectedWorkspaceId(workspaceResult.workspace.id)
+      setStreamSessions(current => upsertSession(current, sessionResult.session))
+      setStreamTurns(current => upsertTurn(current, sessionResult.turn))
       setWorkspaceTitle('')
       setWorkspaceContext('')
       await refresh()
@@ -508,7 +527,7 @@ export function WorkerStudio() {
                           type="button"
                           className={`rail-workspace-item ${selectedWorkspace.id === workspace.id ? 'active' : ''}`}
                           onClick={() => {
-                            const nextSession = sessionForWorkspace(workspace, data.sessions)
+                            const nextSession = sessionForWorkspace(workspace, allSessions)
                             navigateWorkerRoute(nextSession
                               ? { kind: 'session', sessionId: nextSession.id, workspaceId: workspace.id }
                               : { kind: 'workspace', workspaceId: workspace.id })
@@ -763,14 +782,14 @@ export function WorkerStudio() {
                               <ProjectCard
                                 key={item.id}
                                 active={selectedWorkspace?.id === item.id}
-                                artifact={artifactForWorkspace(item, data.artifacts, data.sessions)}
+                                artifact={artifactForWorkspace(item, data.artifacts, allSessions)}
                                 item={item}
                                 locale={activeLocale}
-                                session={sessionForWorkspace(item, data.sessions)}
-                                template={data.templates.find(template => template.id === sessionForWorkspace(item, data.sessions)?.capabilityTemplateId)}
-                                turn={turnForSession(sessionForWorkspace(item, data.sessions), data.turns)}
+                                session={sessionForWorkspace(item, allSessions)}
+                                template={data.templates.find(template => template.id === sessionForWorkspace(item, allSessions)?.capabilityTemplateId)}
+                                turn={turnForSession(sessionForWorkspace(item, allSessions), data.turns)}
                                 onSelect={() => {
-                                  const nextSession = sessionForWorkspace(item, data.sessions)
+                                  const nextSession = sessionForWorkspace(item, allSessions)
                                   setSelectedWorkspaceId(item.id)
                                   navigateWorkerRoute(nextSession
                                     ? { kind: 'session', sessionId: nextSession.id, workspaceId: item.id }
@@ -1368,6 +1387,12 @@ function upsertTurn(turns: LocalTurn[], nextTurn: LocalTurn): LocalTurn[] {
   const byId = new Map(turns.map(turn => [turn.id, turn]))
   byId.set(nextTurn.id, nextTurn)
   return [...byId.values()].sort((a, b) => a.seq - b.seq)
+}
+
+function upsertSession(sessions: LocalSession[], nextSession: LocalSession): LocalSession[] {
+  const byId = new Map(sessions.map(session => [session.id, session]))
+  byId.set(nextSession.id, nextSession)
+  return [...byId.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
 }
 
 function eventsForSession(session: LocalSession, events: LocalSessionEvent[]): LocalSessionEvent[] {

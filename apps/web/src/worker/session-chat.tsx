@@ -34,6 +34,7 @@ type WorkerAgentEvent
     | { kind: 'tool_result', id: string, content: string, isError?: boolean, name?: string }
     | { kind: 'usage', costUsd?: number, inputTokens?: number, outputTokens?: number }
     | { kind: 'log', chunk: string, stream: 'stderr' | 'stdout' }
+    | { kind: 'raw', line: string }
     | { kind: 'artifact', detail: string }
     | { kind: 'review', detail: string }
     | { kind: 'lesson', detail: string }
@@ -296,6 +297,17 @@ function AgentEventBlock({ event }: { event: WorkerAgentEvent }) {
       </details>
     )
   }
+  if (event.kind === 'raw') {
+    return (
+      <details className="worker-log-card">
+        <summary>
+          <Terminal aria-hidden="true" size={14} />
+          <span>raw</span>
+        </summary>
+        <pre>{event.line}</pre>
+      </details>
+    )
+  }
   if (event.kind === 'status') {
     return (
       <div className="worker-status-pill">
@@ -376,9 +388,11 @@ function coerceAgentEvent(event: LocalSessionEvent): WorkerAgentEvent {
     if (kind === 'tool_use')
       return { id: readString(agentEvent.id, String(event.id)), input: agentEvent.input, kind, name: readString(agentEvent.name, 'Tool') }
     if (kind === 'tool_result')
-      return { content: readString(agentEvent.content), id: readString(agentEvent.id, String(event.id)), isError: agentEvent.isError === true, kind, name: readString(agentEvent.name) }
+      return { content: readString(agentEvent.content), id: readString(agentEvent.id ?? agentEvent.toolUseId, String(event.id)), isError: agentEvent.isError === true, kind, name: readString(agentEvent.name) }
     if (kind === 'usage')
       return { costUsd: readNumber(agentEvent.costUsd), inputTokens: readNumber(agentEvent.inputTokens), kind, outputTokens: readNumber(agentEvent.outputTokens) }
+    if (kind === 'raw')
+      return { kind, line: readString(agentEvent.line) }
   }
 
   if (event.type === 'assistant_delta')
@@ -400,6 +414,20 @@ function compactAgentEvents(items: Array<{ event: WorkerAgentEvent, key: string 
   const compacted: Array<{ event: WorkerAgentEvent, key: string }> = []
   for (const item of items) {
     const last = compacted.at(-1)
+    if (item.event.kind === 'text' && last?.event.kind === 'text') {
+      last.event = {
+        ...last.event,
+        text: `${last.event.text}${item.event.text}`,
+      }
+      continue
+    }
+    if (item.event.kind === 'thinking' && last?.event.kind === 'thinking') {
+      last.event = {
+        ...last.event,
+        text: truncateLog(`${last.event.text}${item.event.text}`),
+      }
+      continue
+    }
     if (item.event.kind === 'log' && last?.event.kind === 'log' && last.event.stream === item.event.stream) {
       last.event = {
         ...last.event,
