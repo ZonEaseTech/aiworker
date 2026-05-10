@@ -126,8 +126,10 @@ interface StaticMessages {
     sendingTurn: string
     backToSoulHome: string
     currentSession: string
+    currentWorker: string
     currentWorkspace: string
     newWorkspace: string
+    noWorker: string
     noWorkspaceSessions: string
     otherWorkspaces: string
     selectedCapability: string
@@ -143,6 +145,10 @@ interface StaticMessages {
     workspaceKicker: string
     workspaceList: string
     workspaceTitle: (soulName: string) => string
+    workerEngine: string
+    workerId: string
+    workerSoul: string
+    workerStatus: string
   }
   relativeTime: {
     daysAgo: (days: number) => string
@@ -384,8 +390,10 @@ const en = {
     sendingTurn: 'Sending turn...',
     backToSoulHome: 'Back to Soul home',
     currentSession: 'Current session',
+    currentWorker: 'Current worker',
     currentWorkspace: 'Current workspace',
     newWorkspace: 'New workspace',
+    noWorker: 'No worker',
     noWorkspaceSessions: 'No sessions in this workspace yet.',
     otherWorkspaces: 'Other workspaces',
     selectedCapability: 'Selected capability',
@@ -401,6 +409,10 @@ const en = {
     workspaceKicker: 'SOUL WORKSPACE',
     workspaceList: 'Workspaces',
     workspaceTitle: soulName => `${soulName} workspaces`,
+    workerEngine: 'Default engine',
+    workerId: 'Worker ID',
+    workerSoul: 'Soul binding',
+    workerStatus: 'Worker status',
   },
   relativeTime: {
     daysAgo: days => `${days}d ago`,
@@ -636,8 +648,10 @@ const zhCN = {
     sendingTurn: '正在发送 turn...',
     backToSoulHome: '返回 Soul 首页',
     currentSession: '当前会话',
+    currentWorker: '当前 worker',
     currentWorkspace: '当前工作区',
     newWorkspace: '新建工作区',
+    noWorker: '暂无 worker',
     noWorkspaceSessions: '此工作区还没有会话。',
     otherWorkspaces: '其他工作区',
     selectedCapability: '已选能力',
@@ -653,6 +667,10 @@ const zhCN = {
     workspaceKicker: 'SOUL 工作区',
     workspaceList: '工作区',
     workspaceTitle: soulName => `${soulName} 工作区`,
+    workerEngine: '默认引擎',
+    workerId: 'Worker ID',
+    workerSoul: 'Soul 绑定',
+    workerStatus: 'Worker 状态',
   },
   relativeTime: {
     daysAgo: days => `${days} 天前`,
@@ -888,8 +906,10 @@ const ja = {
     sendingTurn: '送信中...',
     backToSoulHome: 'Soul ホームに戻る',
     currentSession: '現在のセッション',
+    currentWorker: '現在の worker',
     currentWorkspace: '現在のワークスペース',
     newWorkspace: '新規ワークスペース',
+    noWorker: 'worker なし',
     noWorkspaceSessions: 'このワークスペースにはまだセッションがありません。',
     otherWorkspaces: '他のワークスペース',
     selectedCapability: '選択中の能力',
@@ -905,6 +925,10 @@ const ja = {
     workspaceKicker: 'SOUL ワークスペース',
     workspaceList: 'ワークスペース',
     workspaceTitle: soulName => `${soulName} ワークスペース`,
+    workerEngine: '既定エンジン',
+    workerId: 'Worker ID',
+    workerSoul: 'Soul バインド',
+    workerStatus: 'Worker ステータス',
   },
   relativeTime: {
     daysAgo: days => `${days}日前`,
@@ -1140,8 +1164,10 @@ const de = {
     sendingTurn: 'Turn wird gesendet...',
     backToSoulHome: 'Zur Soul-Startseite',
     currentSession: 'Aktuelle Session',
+    currentWorker: 'Aktueller Worker',
     currentWorkspace: 'Aktueller Workspace',
     newWorkspace: 'Neuer Workspace',
+    noWorker: 'Kein Worker',
     noWorkspaceSessions: 'In diesem Workspace gibt es noch keine Sessions.',
     otherWorkspaces: 'Andere Workspaces',
     selectedCapability: 'Ausgewählte Capability',
@@ -1157,6 +1183,10 @@ const de = {
     workspaceKicker: 'SOUL WORKSPACE',
     workspaceList: 'Workspaces',
     workspaceTitle: soulName => `${soulName}-Workspaces`,
+    workerEngine: 'Standard-Engine',
+    workerId: 'Worker ID',
+    workerSoul: 'Soul-Bindung',
+    workerStatus: 'Worker-Status',
   },
   relativeTime: {
     daysAgo: days => `vor ${days} T.`,

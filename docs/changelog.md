@@ -1,5 +1,19 @@
 # AIWorker Changelog
 
+## 2026-05-11 00:35 [completed] REFACTOR-055 / PLAN-232 — Worker Web Soul rail and worker identity
+
+- Reworked the Worker Web home sidebar from a vertical Soul grid into an
+  OD-style horizontal Soul rail.
+- Added visible local worker identity on both home and workspace/session route
+  sidebars: worker name, `workerId`, status, default engine, and Soul binding.
+- Kept capability templates as the existing list surface under the selected
+  Soul worker context.
+- Added localized worker identity copy and Worker Web tests for Soul switching,
+  template scope, and session-route worker context.
+- Verification passed: focused Web typecheck, lint, test, build, browser
+  validation, 390px viewport overflow check, `git diff --check`, and
+  code-review-graph review.
+
 ## 2026-05-10 22:31 [completed] REFACTOR-054 / PLAN-228..231 / QA-030 — Structured engine session parity
 
 - Investigated the reported stderr-only session behavior.

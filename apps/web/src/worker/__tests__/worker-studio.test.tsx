@@ -382,6 +382,9 @@ describe('worker studio', () => {
     expect(screen.getAllByText('QA').length).toBeGreaterThan(0)
     expect(screen.getAllByText('DevOps').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Candidate Screen').length).toBeGreaterThan(0)
+    expect(screen.getByText('Current worker')).toBeTruthy()
+    expect(screen.getByText('hr-worker')).toBeTruthy()
+    expect(screen.getByText('Worker ID')).toBeTruthy()
     expect(screen.getAllByText('Create workspace session').length).toBeGreaterThan(0)
     expect(screen.queryByText('Examples')).toBeNull()
     expect(screen.queryByText('Domain systems')).toBeNull()
@@ -390,6 +393,19 @@ describe('worker studio', () => {
     expect(screen.queryByText(/Open Design/i)).toBeNull()
     expect(screen.queryByText(/Nexu/i)).toBeNull()
     expect(screen.queryByText(/Evidence summary/i)).toBeNull()
+  })
+
+  it('switches the Soul rail and updates capability templates with worker identity', async () => {
+    render(<WorkerStudio />)
+
+    await screen.findByText('hr-worker')
+    fireEvent.click(screen.getByRole('option', { name: /PM/ }))
+
+    await waitFor(() => {
+      expect(screen.getByText('pm-worker')).toBeTruthy()
+      expect(screen.getAllByText('PRD Draft').length).toBeGreaterThan(0)
+      expect(screen.queryByText('candidate-screen')).toBeNull()
+    })
   })
 
   it('creates a workspace session turn with selected Soul worker and skill metadata', async () => {
@@ -422,6 +438,8 @@ describe('worker studio', () => {
     })
     expect(await screen.findByText('AIWorker Engine')).toBeTruthy()
     expect(screen.getByText('Workspace navigation')).toBeTruthy()
+    expect(screen.getByText('Current worker')).toBeTruthy()
+    expect(screen.getByText('hr-worker')).toBeTruthy()
     expect(screen.getByText('Current workspace')).toBeTruthy()
     expect(screen.getByText('Workspace sessions')).toBeTruthy()
     expect(screen.getByRole('button', { name: /Back to Soul home/ })).toBeTruthy()

@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-10 (PLAN-228 added)
+> Updated: 2026-05-11 (PLAN-232 completed)
 
 ## Usage
 
@@ -260,3 +260,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-229 Session invocation result semantics**](PLAN-229.md) `2026-05-10`
 - [x] [**PLAN-230 Worker Web structured session timeline**](PLAN-230.md) `2026-05-10`
 - [x] [**PLAN-231 Structured session end-to-end validation**](PLAN-231.md) `2026-05-10`
+- [x] [**PLAN-232 Worker Web Soul rail and worker identity**](PLAN-232.md) `2026-05-10`

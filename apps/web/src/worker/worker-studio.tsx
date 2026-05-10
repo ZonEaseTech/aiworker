@@ -9,6 +9,7 @@ import type {
   LocalSessionEvent,
   LocalSettingsConfig,
   LocalTurn,
+  LocalWorker,
   LocalWorkspace,
   VerticalSoul,
 } from '@zonease/aiworker-shared'
@@ -475,6 +476,14 @@ export function WorkerStudio() {
                       <h3>{selectedWorkspace.name}</h3>
                       <p>{`${selectedSoulCopy.name} / ${selectedSoulCopy.domain}`}</p>
                     </div>
+                    <WorkerIdentityBlock
+                      compact
+                      copy={copy}
+                      locale={activeLocale}
+                      soul={selectedSoul}
+                      soulCopy={selectedSoulCopy}
+                      worker={selectedWorker}
+                    />
                     <div className="rail-meta-grid">
                       <span>{copy.workspace.currentWorkspace}</span>
                       <strong>{selectedWorkspace.name}</strong>
@@ -543,7 +552,7 @@ export function WorkerStudio() {
               )
             : (
                 <>
-                  <section className="newproj soul-catalog-panel">
+                  <section className="newproj soul-catalog-panel soul-rail-panel">
                     <div className="newproj-body">
                       <div className="section-head compact">
                         <div>
@@ -551,43 +560,45 @@ export function WorkerStudio() {
                           <p className="hint">{selectedSoulCopy.description}</p>
                         </div>
                       </div>
-                      <button className="ds-select" type="button" aria-label={copy.accessibility.selectedSoul}>
-                        <span className="ds-icon-empty" aria-hidden="true">
-                          <span />
-                        </span>
-                        <span className="ds-select-copy">
-                          <strong>
-                            {selectedSoulCopy.name}
-                            {' '}
-                            {copy.create.soul}
-                          </strong>
-                          <small>{selectedSoulCopy.domain}</small>
-                        </span>
-                        <ChevronDown aria-hidden="true" size={16} />
-                      </button>
-                      <div className="soul-picker-list" role="listbox" aria-label={copy.accessibility.soulCatalog}>
-                        {data.souls.map(soul => (
-                          <button
-                            key={soul.id}
-                            type="button"
-                            className={`soul-option ${selectedSoul.id === soul.id ? 'active' : ''}`}
-                            disabled={soul.status !== 'available'}
-                            aria-selected={selectedSoul.id === soul.id}
-                            role="option"
-                            onClick={() => {
-                              setSelectedSoulId(soul.id)
-                              setSelectedWorkspaceId(null)
-                              const next = data.templates.find(template => template.soulId === soul.id)
-                              if (next)
-                                setSelectedTemplateId(next.id)
-                              navigateWorkerRoute({ kind: 'home' })
-                            }}
-                          >
-                            <strong>{displaySoul(soul, activeLocale).name}</strong>
-                            <small>{soul.status === 'available' ? displaySoul(soul, activeLocale).domain : copy.common.comingSoon}</small>
-                          </button>
-                        ))}
+                      <div className="soul-rail" role="listbox" aria-label={copy.accessibility.soulCatalog}>
+                        {data.souls.map((soul) => {
+                          const soulCopy = displaySoul(soul, activeLocale)
+                          const soulWorker = data.workers.find(worker => worker.soulId === soul.id) ?? null
+                          const active = selectedSoul.id === soul.id
+                          return (
+                            <button
+                              key={soul.id}
+                              type="button"
+                              className={`soul-rail-item ${active ? 'active' : ''} ${soul.status !== 'available' ? 'disabled' : ''}`}
+                              disabled={soul.status !== 'available'}
+                              aria-selected={active}
+                              role="option"
+                              onClick={() => {
+                                setSelectedSoulId(soul.id)
+                                setSelectedWorkspaceId(null)
+                                const next = data.templates.find(template => template.soulId === soul.id)
+                                if (next)
+                                  setSelectedTemplateId(next.id)
+                                navigateWorkerRoute({ kind: 'home' })
+                              }}
+                            >
+                              <span className="soul-rail-title">
+                                <strong>{soulCopy.name}</strong>
+                                <span className={`status-dot ${soulWorker?.status === 'active' ? 'active' : ''}`} aria-hidden="true" />
+                              </span>
+                              <small>{soul.status === 'available' ? soulCopy.domain : copy.common.comingSoon}</small>
+                              <span>{soulWorker ? formatStatus(soulWorker.status, activeLocale) : copy.workspace.noWorker}</span>
+                            </button>
+                          )
+                        })}
                       </div>
+                      <WorkerIdentityBlock
+                        copy={copy}
+                        locale={activeLocale}
+                        soul={selectedSoul}
+                        soulCopy={selectedSoulCopy}
+                        worker={selectedWorker}
+                      />
                     </div>
                   </section>
 
@@ -864,6 +875,41 @@ export function WorkerStudio() {
           : null}
       </div>
     </main>
+  )
+}
+
+function WorkerIdentityBlock({
+  compact = false,
+  copy,
+  locale,
+  soul,
+  soulCopy,
+  worker,
+}: {
+  compact?: boolean
+  copy: WorkerMessages
+  locale: ReturnType<typeof normalizeLocale>
+  soul: VerticalSoul
+  soulCopy: ReturnType<typeof displaySoul>
+  worker: LocalWorker | null
+}) {
+  return (
+    <div className={`worker-identity ${compact ? 'compact' : ''}`}>
+      <div className="worker-identity-head">
+        <span className="kicker">{copy.workspace.currentWorker}</span>
+        <strong>{worker?.name ?? copy.workspace.noWorker}</strong>
+      </div>
+      <div className="worker-identity-grid">
+        <span>{copy.workspace.workerId}</span>
+        <strong>{worker?.id ?? '-'}</strong>
+        <span>{copy.workspace.workerStatus}</span>
+        <strong>{worker ? formatStatus(worker.status, locale) : copy.workspace.noWorker}</strong>
+        <span>{copy.workspace.workerEngine}</span>
+        <strong>{worker?.defaultEngineId ?? '-'}</strong>
+        <span>{copy.workspace.workerSoul}</span>
+        <strong>{`${soulCopy.name} / ${soul.id}`}</strong>
+      </div>
+    </div>
   )
 }
 
