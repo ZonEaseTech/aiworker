@@ -1,50 +1,65 @@
 # AIWorker
 
-AIWorker 正在按 `REFACTOR-026` 重构为一个 local-first worker workbench。
+AIWorker 正在重构为面向 team/org 的 vertical Soul workspace。
 
-默认体验应该很直接：选择业务 worker pack，提交 work order，让外部 executor 在真实
-workspace 里工作，通过 web 实时观察 run，然后把结果沉淀为文件、review 和可复用 lesson。
+它不做另一个 developer engine，也不复制 Open Design 的图片/视频领域。它借鉴 Open
+Design 的产品语法：先选能力和系统，再基于模板进入项目上下文，最后产出可审查的
+artifact。AIWorker 把这套结构迁移到 HR、PM、QA、DevOps、finance、legal、ops 等
+组织职能。
 
 ```text
-worker pack + workspace -> work order -> run -> artifact -> review -> lesson
+Soul + domain system + capability template
+  -> case
+  -> engine run
+  -> business artifact
+  -> review
+  -> durable org memory
 ```
-
-当前默认实现已经收敛到 local worker loop；durable context 只在 review/lesson
-之后出现，fleet/gateway 先作为后续可选控制面暂缓。
 
 ## 为什么改成这个形态
 
-这次重构参考的是 Open Design 的产品语法，而不是它的图片/视频设计领域：
+开发领域已经有成熟的一线 engine。AIWorker 不应该默认以 developer 为中心，更不应该
+把自己做成完整开发平台。developer Soul 可以存在，但它应服务 code review、release
+evidence、repo report、handoff、risk audit 等 supporting workflows。
+
+AIWorker 的主要价值在更需要组织沉淀的垂直职能：
+
+- HR：candidate screen、interview brief、role rubric、hiring risk；
+- PM：PRD、decision record、roadmap slice、status report；
+- QA：test plan、regression matrix、defect evidence、release gate；
+- DevOps：deployment checklist、incident review、runbook update、capacity summary；
+- finance/legal/ops：各自领域的审查、模板化输出、证据链和复用经验。
+
+## Open Design 映射
 
 | Open Design | AIWorker |
 | --- | --- |
-| Design skill | Worker skill |
-| Design system | Domain system |
-| Project folder | Worker workspace |
-| Prompt template | Work-order template |
-| Run stream | Worker run stream |
-| Artifact preview | Business artifact / review preview |
-| Critique | Review / lesson candidate |
+| Design skill | Soul capability |
+| Design system | Domain system / rubric / policy |
+| Image/video template | Capability template / case template |
+| Project | Domain case / team workspace |
+| Examples | Example artifacts / playbooks |
+| Connectors | ATS / docs / issue tracker / CI / cloud / CRM connectors |
+| Run stream | Engine run stream |
+| Artifact preview | Business artifact preview |
+| Critique | Review / memory candidate |
 
-AIWorker 的领域是 developer、HR、PM、QA、finance、legal 等业务 worker。领域差异通过
-pack、domain system、template、review rubric 表达，不通过 runtime 硬编码分支表达。
+截图只能校准感受，不能成为复制桌面壳、品牌、宠物或设计工具术语的理由。
 
 ## 产品边界
 
 AIWorker 负责：
 
-- 初始化本地 workspace；
-- 启动本地 daemon；
-- 提供 HTTP/SSE run API；
-- 托管 worker web workbench；
-- 读取 worker packs 与 domain systems；
-- 组合 prompt / work order；
-- 记录 run event；
-- 捕获成功 run 的最终输出 artifact；
-- 索引产物文件 metadata；
-- 管理 review 与 lesson promotion。
+- Soul catalog 与 Soul pack；
+- domain system 与 capability template；
+- local daemon API 和 Web；
+- prompt composition；
+- connector evidence 的边界与来源；
+- engine run 的事件和 artifact 索引；
+- review/admission；
+- durable org memory。
 
-外部 executor 负责：
+外部 engine 负责：
 
 - 原生执行循环；
 - tool / plugin / MCP 生态；
@@ -52,36 +67,35 @@ AIWorker 负责：
 - 用户级认证和 profile；
 - runtime 自己的模型与会话行为。
 
-AIWorker 只通过薄 adapter 调用和观察 executor，不把自己做成 executor 平台。
+AIWorker 只通过薄 adapter 调用和观察 engine，不把自己做成 executor 平台。
 
 ## Quickstart
 
-```bash
-aiworker init --name "Developer Workspace" --root .
-aiworker daemon start --port 8787
-aiworker brief create --title "Release readiness" --body "Review this repository and produce a release-readiness brief"
-aiworker run start --brief <briefId>
-```
-
-继续查看结果：
+当前 CLI 仍处在从 local worker loop 向 vertical Soul loop 迁移的中间态。目标 onboarding
+会收敛到：
 
 ```bash
-aiworker run list
-aiworker artifacts list
-aiworker review create --run <runId> --verdict pass
-aiworker lessons list
+aiworker init --name "Team Workspace" --root .
+aiworker soul list
+aiworker soul select hr-recruiting
+aiworker template list
+aiworker case create --template candidate-screen
+aiworker run start --case <caseId>
 ```
+
+短期内，已有 `brief` / `lessons` 命令可能仍作为底层实现存在；1.0 前不为旧命令形态保留
+长期兼容。
 
 ## 仓库结构
 
 ```text
 apps/
-  cli/       local worker CLI
+  cli/       local Soul workspace CLI
   api/       local daemon API and web host
-  web/       worker workbench and deferred fleet UI
+  web/       Worker Soul workspace web
   gateway/   deferred fleet/gateway control plane
 packages/
-  core/             worker runtime services and executor adapters
+  core/             local Soul run engine and executor adapters
   storage-sqlite/   local SQLite metadata
   fs-layout/        workspace and .aiworker layout helpers
   shared/           shared schemas and utilities
@@ -116,15 +130,16 @@ bun run --filter '@zonease/aiworker-cli' build:bundle
 
 ## 当前路线
 
-当前重构阶段：
+当前重构阶段重新排优先级：
 
-1. 产品北极星与目标架构重置；
-2. 统一 local run service；
-3. workspace metadata 与 artifact index；
-4. worker pack loader 和内置 packs；
-5. CLI daemon lifecycle 与 root help；
-6. worker web workbench 首屏；
-7. review 和 lesson promotion；
-8. cleanup、验证与发布证据。
+1. 产品北极星与目标架构重置为 vertical Soul workspace；
+2. Soul catalog 与内置 HR/PM/QA/DevOps 优先级；
+3. capability template / domain system 文件模型；
+4. local daemon 的 Soul/template/case API；
+5. Web 首屏：Soul catalog + capability templates + simple settings；
+6. business artifact preview；
+7. review/admission -> durable org memory；
+8. developer Soul 降级为 supporting role；
+9. cleanup、验证与发布证据。
 
-fleet/gateway 和 desktop 暂缓，等本地 worker loop 自身可用、可解释、可验证后再回到可选扩展层。
+fleet/gateway 和 desktop 暂缓，等单个 vertical Soul workspace 自身可用、可解释、可验证后再回到可选扩展层。

@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-10 (PLAN-206 completed)
+> Updated: 2026-05-10 (PLAN-207 completed)
 
 ## Usage
 
@@ -235,3 +235,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-204 Worker Web greenfield studio rebuild**](PLAN-204.md) `2026-05-10`
 - [x] [**PLAN-205 Worker Web Open Design source parity**](PLAN-205.md) `2026-05-10`
 - [x] [**PLAN-206 Worker Web product-detail correction**](PLAN-206.md) `2026-05-10`
+- [x] [**PLAN-207 Vertical Soul product north star reset**](PLAN-207.md) `2026-05-10`

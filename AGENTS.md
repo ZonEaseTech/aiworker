@@ -1,10 +1,11 @@
 # AIWorker
 
-AIWorker 是轻量自托管 **Project Brain + Worker/Fleet aggregation runtime**。
-Gateway 是 WebSocket 控制面，持有 `fleet.db`；worker 是数据面，持有各自的
-`worker.db` 与 Project Brain。Executor 是 bring-your-own 外部 agent runtime
-（Codex / Claude Code / Hermes / OpenClaw / Cursor 等），AIWorker 只通过薄
-adapter 调用和观察它们，不把自己做成 executor 平台。完整架构以
+AIWorker 是面向 team/org 的 **vertical Soul workspace**。它不再把 developer repo、
+admin dashboard、fleet control plane 或通用 Brain kernel 当成默认产品中心，而是借助
+外部成熟 engine，为 HR、PM、QA、DevOps、finance、legal、ops 等垂直职能提供 Soul、
+domain system、capability template、case、artifact、review 和 durable org memory。
+Executor 是 bring-your-own 外部 agent runtime；AIWorker 只通过薄 adapter 调用和观察
+它们，不把自己做成 executor 平台。完整架构以
 [`docs/architecture.md`](docs/architecture.md) 为准。
 
 ## 产品北极星
@@ -15,7 +16,9 @@ adapter 调用和观察它们，不把自己做成 executor 平台。完整架�
 - `GOALS.md` 是产品取舍与防跑偏的北极星；`docs/architecture.md` 是实现边界；
   `docs/governance-node-status.md` 是当前状态审计。
 - 如果一个改动会把 AIWorker 推向 executor 平台、通用 memory layer、coding-only
-  项目管理器、或高频确认弹窗，默认先停下来重新评估。
+  项目管理器、Open Design 外壳复制、或高频确认弹窗，默认先停下来重新评估。
+- Open Design 只作为产品语法参考：skill/system/template/project/artifact 的清晰路径
+  可借鉴；图片/视频领域、桌面 chrome、品牌文案、宠物视觉和设计工具术语不要照搬。
 
 ## 工作规则
 
@@ -28,13 +31,16 @@ adapter 调用和观察它们，不把自己做成 executor 平台。完整架�
 
 ## 产品定位
 
-- AIWorker 的核心卖点是 **Project Brain** 与 **Worker/Fleet 聚合控制面**：
-  Soul/persona、scope memory、brain skill、worker identity/state、gateway
-  routing、fleet presence、audit、admin UI 和远程 worker 管理。
-- 这里的 Project 是 worker 在 host/workspace 维度绑定的业务作用域，不等同于
-  software project。developer Soul 的 scope 可以是代码仓库；HR Soul 的 scope
-  可以是岗位、候选人池或简历库；legal/finance/ops 等 Soul 也应按各自业务对象
-  建模。不要把 Project Brain 设计收窄成代码项目管理或 PMA 专用能力。
+- AIWorker 的核心卖点是 **vertical Soul + capability template + durable org memory**：
+  team/org 可以选择 HR、PM、QA、DevOps、finance、legal、ops 等 Soul，基于领域系统和
+  能力模板产出业务 artifact，再经 review/admission 沉淀为可复用组织记忆。
+- developer Soul 不是默认中心，也不是完整开发平台。它只应承担 supporting role：
+  code review、release evidence、repo report、handoff、risk audit、knowledge
+  extraction 等。不要让 repo/PMA/coding loop 牵引默认产品面。
+- Project / workspace 是 Soul 绑定的业务作用域，不等同于 software project。HR Soul
+  的 scope 可以是岗位、候选人池或简历库；PM Soul 可以是产品线、需求池或 roadmap；
+  QA Soul 可以是 release、test suite 或 defect queue；DevOps Soul 可以是服务、环境、
+  incident 或 runbook。
 - AIWorker 不与成熟 executor runtime 竞争 MCP、skill、plugin、sandbox、
   approval、native session、subagent 或模型生态；这些能力由 Codex、Claude
   Code、Hermes、OpenClaw、Cursor 等外部 executor 自己负责。
@@ -64,13 +70,13 @@ adapter 调用和观察它们，不把自己做成 executor 平台。完整架�
 
 ## 仓库结构
 
-- `apps/api`：worker HTTP API、OpenAPIHono 文档、worker admin 静态托管。
-- `apps/gateway`：fleet WebSocket gateway、worker registry、enrollment、audit。
+- `apps/api`：local daemon API、OpenAPIHono 文档、Worker Web 静态托管。
+- `apps/gateway`：deferred fleet WebSocket gateway、worker registry、enrollment、audit。
 - `apps/cli`：单一 `aiworker` CLI。
-- `apps/web`：fleet 与 worker 两套 admin bundle。
-- `packages/core`：transport-agnostic worker runtime。
-- `packages/gateway-proto`：gateway WS 协议类型和 zod 校验。
-- `packages/storage-sqlite`：`fleet.db` / `worker.db` schema、Drizzle 配置和迁移。
+- `apps/web`：local Soul workspace Web；fleet/admin UI 暂缓。
+- `packages/core`：local Soul run engine 与 executor adapters。
+- `packages/gateway-proto`：deferred gateway WS 协议类型和 zod 校验。
+- `packages/storage-sqlite`：`worker.db` 以及 deferred `fleet.db` schema、Drizzle 配置和迁移。
 - `packages/fs-layout`：`AIWORKER_HOME`、project scope、worker home 与模板解析。
 - `packages/shared`：共享类型与工具。
 
@@ -117,10 +123,13 @@ adapter 调用和观察它们，不把自己做成 executor 平台。完整架�
 
 ## UI
 
+- Worker Web 首屏必须优先解释 Soul catalog、domain system、capability template、
+  case、artifact、review/memory，而不是 developer work order、admin dashboard 或
+  Open Design 视觉复制。
 - 新组件优先复用 `apps/web/src/shared/components/ui/` 和已有 shared primitives。
 - 交互组件使用成熟 headless UI；不要手写 focus trap、scroll lock、ARIA、键盘导航。
 - 所有颜色、字号、间距、圆角、阴影等视觉值来自根目录 [`DESIGN.md`](DESIGN.md)，通过 Tailwind CSS v4 `@theme` 接入；禁止新增 hex 字面量和 arbitrary value。
-- Fleet UI 只走 gateway WS；Worker UI 只走 worker REST/SSE + bearer-auth，两边源码边界不能交叉。
+- Fleet UI 只走 gateway WS；Worker UI 只走 local daemon REST/SSE + bearer-auth，两边源码边界不能交叉。
 
 ## Shell 与进程
 

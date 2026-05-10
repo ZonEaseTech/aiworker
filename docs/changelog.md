@@ -1,5 +1,23 @@
 # AIWorker Changelog
 
+## 2026-05-10 10:03 [completed] DOC-008 / PLAN-207 — Vertical Soul product north star reset
+
+Reset the product guidance away from Open Design visual copying and
+developer-first worker loops:
+
+- Rewrote `GOALS.md` around vertical Soul workspace, HR/PM/QA/DevOps priority,
+  capability templates, domain systems, cases, business artifacts, review, and
+  durable org memory.
+- Rewrote `docs/architecture.md` to define the target Soul/domain/template/case
+  architecture and to demote `work order` to a low-level/internal concept.
+- Updated `AGENTS.md` with anti-drift rules against executor-platform,
+  developer-first, coding-only, and Open Design shell-copy directions.
+- Rewrote `README.md` to present Open Design as product grammar, not a
+  visual/brand/domain copy target.
+
+Verification: `git diff --check` passed. CRG was skipped because this slice
+only changes documentation and instruction files.
+
 ## 2026-05-10 09:11 [completed] REFACTOR-040 / PLAN-206 — Worker Web product detail correction
 
 Corrected the too-literal Open Design Web copy:
