@@ -1,9 +1,9 @@
-import type { CapabilityTemplate, LocalReviewVerdict, LocalRunStatus, VerticalSoul } from '@zonease/aiworker-shared'
+import type { CapabilityTemplate, LocalReviewVerdict, LocalSessionStatus, LocalTurnStatus, VerticalSoul } from '@zonease/aiworker-shared'
 
 export const supportedLocales = ['en', 'zh-CN', 'ja', 'de'] as const
 export type SupportedLocale = typeof supportedLocales[number]
 
-type StatusKey = LocalRunStatus | LocalReviewVerdict | 'completed' | 'draft'
+type StatusKey = LocalSessionStatus | LocalTurnStatus | LocalReviewVerdict | 'draft'
 
 interface StaticMessages {
   accessibility: {
@@ -37,7 +37,7 @@ interface StaticMessages {
     label: string
     loading: string
     memoryCandidates: (count: number) => string
-    noRun: string
+    noSession: string
     pending: string
     review: string
     reviewCount: (count: number) => string
@@ -53,7 +53,7 @@ interface StaticMessages {
   create: {
     businessContext: string
     capabilityTemplate: string
-    creatingRun: string
+    creatingSession: string
     footer: string
     newProject: string
     projectName: string
@@ -223,11 +223,11 @@ const en = {
   },
   artifact: {
     defaultHint: 'Select or create a project to inspect its artifact.',
-    empty: 'Artifacts appear here after a project run.',
+    empty: 'Artifacts appear here after a session turn.',
     label: 'Artifact',
     loading: 'Loading artifact...',
     memoryCandidates: count => `${count} memory candidates`,
-    noRun: 'No run',
+    noSession: 'No session',
     pending: 'artifact pending',
     review: 'Review',
     reviewCount: count => `${count} reviews in this Soul`,
@@ -243,8 +243,8 @@ const en = {
   create: {
     businessContext: 'Business context',
     capabilityTemplate: 'Capability template',
-    creatingRun: 'Creating run...',
-    footer: 'Runs stay in this Soul workspace by default.',
+    creatingSession: 'Creating session...',
+    footer: 'Sessions stay in this Soul workspace by default.',
     newProject: 'New Soul project',
     projectName: 'Project name',
     projectPlaceholders: {
@@ -255,7 +255,7 @@ const en = {
       qa: 'Release 1.2 regression gate',
     },
     soul: 'Soul',
-    submit: 'Create project and run',
+    submit: 'Create workspace session',
   },
   languageOptions: {
     'de': 'Deutsch',
@@ -331,12 +331,12 @@ const en = {
     },
     dialog: {
       kicker: 'AIWORKER SETTINGS',
-      subtitle: 'Choose how project runs execute, which team systems are available, and how the workspace presents language and appearance.',
+      subtitle: 'Choose how session turns execute, which team systems are available, and how the workspace presents language and appearance.',
       title: 'Configure Soul workspace',
     },
     engine: {
       availableCount: count => `${count} available`,
-      hint: 'Installed state comes from the workspace daemon PATH scan. The built-in template runner keeps the workspace usable before an external engine is configured.',
+      hint: 'Installed state comes from the workspace daemon PATH scan. Session turns require a configured external engine or BYOK provider.',
       testing: 'Testing engine...',
       test: 'Test',
       rescan: 'Rescan',
@@ -380,6 +380,7 @@ const en = {
     },
   },
   statuses: {
+    active: 'Active',
     cancelled: 'Cancelled',
     completed: 'Completed',
     draft: 'Draft',
@@ -426,7 +427,7 @@ const zhCN = {
     label: '产物',
     loading: '正在加载产物...',
     memoryCandidates: count => `${count} 条记忆候选`,
-    noRun: '暂无运行',
+    noSession: '暂无会话',
     pending: '产物待生成',
     review: '评审',
     reviewCount: count => `此 Soul 中有 ${count} 条评审`,
@@ -442,8 +443,8 @@ const zhCN = {
   create: {
     businessContext: '业务上下文',
     capabilityTemplate: '能力模板',
-    creatingRun: '正在创建运行...',
-    footer: '运行默认保留在当前 Soul 工作区内。',
+    creatingSession: '正在创建会话...',
+    footer: '会话默认保留在当前 Soul 工作区内。',
     newProject: '新建 Soul 项目',
     projectName: '项目名称',
     projectPlaceholders: {
@@ -454,7 +455,7 @@ const zhCN = {
       qa: '1.2 版本回归门禁',
     },
     soul: 'Soul',
-    submit: '创建项目并运行',
+    submit: '创建工作区会话',
   },
   languageOptions: en.languageOptions,
   navigation: {
@@ -525,12 +526,12 @@ const zhCN = {
     },
     dialog: {
       kicker: 'AIWORKER 设置',
-      subtitle: '选择项目运行方式、可用团队系统，以及工作区语言和外观。',
+      subtitle: '选择会话 turn 执行方式、可用团队系统，以及工作区语言和外观。',
       title: '配置 Soul 工作区',
     },
     engine: {
       availableCount: count => `${count} 个可用`,
-      hint: '安装状态来自工作区 daemon 的 PATH 扫描。外部引擎配置前，内置模板运行器会保持工作区可用。',
+      hint: '安装状态来自工作区 daemon 的 PATH 扫描。会话 turn 需要配置外部引擎或 BYOK 提供方。',
       testing: '正在测试引擎...',
       test: '测试',
       rescan: '重新扫描',
@@ -574,6 +575,7 @@ const zhCN = {
     },
   },
   statuses: {
+    active: '活跃',
     cancelled: '已取消',
     completed: '已完成',
     draft: '草稿',
@@ -620,7 +622,7 @@ const ja = {
     label: '成果物',
     loading: '成果物を読み込み中...',
     memoryCandidates: count => `メモリー候補 ${count} 件`,
-    noRun: '実行なし',
+    noSession: 'セッションなし',
     pending: '成果物待ち',
     review: 'レビュー',
     reviewCount: count => `この Soul のレビュー ${count} 件`,
@@ -636,8 +638,8 @@ const ja = {
   create: {
     businessContext: '業務コンテキスト',
     capabilityTemplate: '能力テンプレート',
-    creatingRun: '実行を作成中...',
-    footer: '実行は既定でこの Soul ワークスペース内に保持されます。',
+    creatingSession: 'セッションを作成中...',
+    footer: 'セッションは既定でこの Soul ワークスペース内に保持されます。',
     newProject: '新しい Soul プロジェクト',
     projectName: 'プロジェクト名',
     projectPlaceholders: {
@@ -648,7 +650,7 @@ const ja = {
       qa: 'リリース 1.2 回帰ゲート',
     },
     soul: 'Soul',
-    submit: 'プロジェクトを作成して実行',
+    submit: 'ワークスペースセッションを作成',
   },
   languageOptions: en.languageOptions,
   navigation: {
@@ -719,12 +721,12 @@ const ja = {
     },
     dialog: {
       kicker: 'AIWORKER 設定',
-      subtitle: 'プロジェクト実行方法、利用可能なチームシステム、ワークスペースの言語と外観を選択します。',
+      subtitle: 'セッションターンの実行方法、利用可能なチームシステム、ワークスペースの言語と外観を選択します。',
       title: 'Soul ワークスペースを設定',
     },
     engine: {
       availableCount: count => `${count} 件利用可能`,
-      hint: 'インストール状態はワークスペース daemon の PATH スキャンから取得します。外部エンジン設定前も、内蔵テンプレートランナーでワークスペースを利用できます。',
+      hint: 'インストール状態はワークスペース daemon の PATH スキャンから取得します。セッションターンには外部エンジンまたは BYOK プロバイダーが必要です。',
       testing: 'エンジンをテスト中...',
       test: 'テスト',
       rescan: '再スキャン',
@@ -768,6 +770,7 @@ const ja = {
     },
   },
   statuses: {
+    active: 'アクティブ',
     cancelled: 'キャンセル済み',
     completed: '完了',
     draft: '下書き',
@@ -810,11 +813,11 @@ const de = {
   },
   artifact: {
     defaultHint: 'Wähle oder erstelle ein Projekt, um das Artefakt zu prüfen.',
-    empty: 'Artefakte erscheinen hier nach einem Projektlauf.',
+    empty: 'Artefakte erscheinen hier nach einem Session-Turn.',
     label: 'Artefakt',
     loading: 'Artefakt wird geladen...',
     memoryCandidates: count => `${count} Memory-Kandidaten`,
-    noRun: 'Kein Lauf',
+    noSession: 'Keine Session',
     pending: 'Artefakt ausstehend',
     review: 'Review',
     reviewCount: count => `${count} Reviews in dieser Soul`,
@@ -830,8 +833,8 @@ const de = {
   create: {
     businessContext: 'Geschäftskontext',
     capabilityTemplate: 'Fähigkeitentemplate',
-    creatingRun: 'Lauf wird erstellt...',
-    footer: 'Läufe bleiben standardmäßig in diesem Soul-Workspace.',
+    creatingSession: 'Session wird erstellt...',
+    footer: 'Sessions bleiben standardmäßig in diesem Soul-Workspace.',
     newProject: 'Neues Soul-Projekt',
     projectName: 'Projektname',
     projectPlaceholders: {
@@ -842,7 +845,7 @@ const de = {
       qa: 'Release-1.2-Regressionsgate',
     },
     soul: 'Soul',
-    submit: 'Projekt erstellen und ausführen',
+    submit: 'Workspace-Session erstellen',
   },
   languageOptions: en.languageOptions,
   navigation: {
@@ -913,12 +916,12 @@ const de = {
     },
     dialog: {
       kicker: 'AIWORKER EINSTELLUNGEN',
-      subtitle: 'Wähle, wie Projektläufe ausgeführt werden, welche Teamsysteme verfügbar sind und welche Sprache und Darstellung der Workspace nutzt.',
+      subtitle: 'Wähle, wie Session-Turns ausgeführt werden, welche Teamsysteme verfügbar sind und welche Sprache und Darstellung der Workspace nutzt.',
       title: 'Soul-Workspace konfigurieren',
     },
     engine: {
       availableCount: count => `${count} verfügbar`,
-      hint: 'Der Installationsstatus kommt aus dem PATH-Scan des Workspace-daemon. Der integrierte Template-Runner hält den Workspace nutzbar, bevor eine externe Engine konfiguriert ist.',
+      hint: 'Der Installationsstatus kommt aus dem PATH-Scan des Workspace-daemon. Session-Turns benötigen eine konfigurierte externe Engine oder einen BYOK-Provider.',
       testing: 'Engine wird getestet...',
       test: 'Test',
       rescan: 'Neu scannen',
@@ -962,6 +965,7 @@ const de = {
     },
   },
   statuses: {
+    active: 'Aktiv',
     cancelled: 'Abgebrochen',
     completed: 'Abgeschlossen',
     draft: 'Entwurf',

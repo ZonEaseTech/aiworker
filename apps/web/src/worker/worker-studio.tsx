@@ -2,9 +2,11 @@ import type {
   CapabilityTemplate,
   LocalArtifact,
   LocalEngineStatus,
-  LocalProject,
   LocalReview,
-  LocalRun,
+  LocalSession,
+  LocalTurn,
+  LocalWorker,
+  LocalWorkspace,
   LocalSettingsConfig,
   VerticalSoul,
 } from '@zonease/aiworker-shared'
@@ -35,7 +37,7 @@ import {
   X,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
-import { createProject, loadLocalWorkspaceData, readFile, rescanEngines, saveSettings, startRun, testEngine } from './api'
+import { createSessionTurn, createWorkspace, loadLocalWorkspaceData, readFile, rescanEngines, saveSettings, testEngine } from './api'
 import {
   displaySoul,
   displayTemplate,
@@ -88,9 +90,9 @@ export function WorkerStudio() {
   const [state, setState] = useState<StudioState>({ data: null, error: null, loading: true })
   const [selectedSoulId, setSelectedSoulId] = useState('hr')
   const [selectedTemplateId, setSelectedTemplateId] = useState('candidate-screen')
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
-  const [projectTitle, setProjectTitle] = useState('')
-  const [projectContext, setProjectContext] = useState('')
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null)
+  const [workspaceTitle, setWorkspaceTitle] = useState('')
+  const [workspaceContext, setWorkspaceContext] = useState('')
   const [activeTopTab, setActiveTopTab] = useState<(typeof topTabs)[number]>('projects')
   const [activeCreateTab, setActiveCreateTab] = useState<(typeof createTabs)[number]>('project')
   const [activeProjectTab, setActiveProjectTab] = useState<(typeof projectTabs)[number]>('recent')
@@ -125,40 +127,41 @@ export function WorkerStudio() {
   const activeLocale = normalizeLocale(data?.settings.language)
   const copy = messagesFor(activeLocale)
   const selectedSoul = data?.souls.find(soul => soul.id === selectedSoulId && soul.status === 'available') ?? data?.souls.find(soul => soul.status === 'available') ?? null
+  const selectedWorker = data?.workers.find(worker => worker.soulId === selectedSoul?.id) ?? null
   const templates = useMemo(
     () => data?.templates.filter(template => template.soulId === selectedSoul?.id) ?? [],
     [data?.templates, selectedSoul?.id],
   )
   const selectedTemplate = templates.find(template => template.id === selectedTemplateId) ?? templates[0] ?? null
-  const soulProjects = useMemo(
-    () => data?.projects.filter(item => item.selectedSoulId === selectedSoul?.id) ?? [],
-    [data?.projects, selectedSoul?.id],
+  const soulWorkspaces = useMemo(
+    () => data?.workspaces.filter(item => item.workerId === selectedWorker?.id) ?? [],
+    [data?.workspaces, selectedWorker?.id],
   )
-  const soulRuns = useMemo(() => {
-    const projectIds = new Set(soulProjects.map(item => item.id))
-    return data?.runs.filter(run => run.projectId !== null && projectIds.has(run.projectId)) ?? []
-  }, [data?.runs, soulProjects])
-  const soulRunIds = useMemo(() => new Set(soulRuns.map(run => run.id)), [soulRuns])
+  const soulSessions = useMemo(() => {
+    const workspaceIds = new Set(soulWorkspaces.map(item => item.id))
+    return data?.sessions.filter(session => workspaceIds.has(session.workspaceId)) ?? []
+  }, [data?.sessions, soulWorkspaces])
+  const soulSessionIds = useMemo(() => new Set(soulSessions.map(session => session.id)), [soulSessions])
   const soulArtifacts = useMemo(
-    () => data?.artifacts.filter(artifact => artifact.runId !== null && soulRunIds.has(artifact.runId)) ?? [],
-    [data?.artifacts, soulRunIds],
+    () => data?.artifacts.filter(artifact => artifact.sessionId !== null && soulSessionIds.has(artifact.sessionId)) ?? [],
+    [data?.artifacts, soulSessionIds],
   )
   const soulReviews = useMemo(
-    () => data?.reviews.filter(review => review.runId !== null && soulRunIds.has(review.runId)) ?? [],
-    [data?.reviews, soulRunIds],
+    () => data?.reviews.filter(review => review.sessionId !== null && soulSessionIds.has(review.sessionId)) ?? [],
+    [data?.reviews, soulSessionIds],
   )
   const filteredProjects = useMemo(() => {
     const needle = query.trim().toLowerCase()
-    return soulProjects.filter((item) => {
-      const template = data?.templates.find(candidate => candidate.id === item.selectedSkillId)
+    return soulWorkspaces.filter((item) => {
+      const latestSession = sessionForWorkspace(item, data?.sessions ?? [])
+      const template = data?.templates.find(candidate => candidate.id === latestSession?.capabilityTemplateId)
       const templateCopy = template ? displayTemplate(template, activeLocale) : null
       return !needle
-        || item.title.toLowerCase().includes(needle)
-        || item.body.toLowerCase().includes(needle)
+        || item.name.toLowerCase().includes(needle)
         || template?.name.toLowerCase().includes(needle)
         || templateCopy?.name.toLowerCase().includes(needle)
     })
-  }, [activeLocale, data?.templates, query, soulProjects])
+  }, [activeLocale, data?.sessions, data?.templates, query, soulWorkspaces])
 
   useEffect(() => {
     if (!data)
@@ -174,20 +177,21 @@ export function WorkerStudio() {
   }, [selectedTemplateId, templates])
 
   useEffect(() => {
-    if (selectedProjectId && soulProjects.some(item => item.id === selectedProjectId))
+    if (selectedWorkspaceId && soulWorkspaces.some(item => item.id === selectedWorkspaceId))
       return
-    setSelectedProjectId(latest(soulProjects)?.id ?? null)
-  }, [selectedProjectId, soulProjects])
+    setSelectedWorkspaceId(latest(soulWorkspaces)?.id ?? null)
+  }, [selectedWorkspaceId, soulWorkspaces])
 
-  const selectedProject = selectedProjectId ? soulProjects.find(item => item.id === selectedProjectId) ?? null : null
-  const selectedRun = selectedProject ? runForProject(selectedProject, data?.runs ?? []) : latest(soulRuns)
-  const selectedArtifact = selectedRun ? artifactForRun(selectedRun, data?.artifacts ?? []) : latest(soulArtifacts)
-  const selectedReview = selectedRun ? reviewForRun(selectedRun, data?.reviews ?? []) : null
-  const latestRun = latest(soulRuns)
+  const selectedWorkspace = selectedWorkspaceId ? soulWorkspaces.find(item => item.id === selectedWorkspaceId) ?? null : null
+  const selectedSession = selectedWorkspace ? sessionForWorkspace(selectedWorkspace, data?.sessions ?? []) : latest(soulSessions)
+  const selectedTurn = selectedSession ? turnForSession(selectedSession, data?.turns ?? []) : null
+  const selectedArtifact = selectedSession ? artifactForSession(selectedSession, data?.artifacts ?? []) : latest(soulArtifacts)
+  const selectedReview = selectedSession ? reviewForSession(selectedSession, data?.reviews ?? []) : null
+  const latestSession = latest(soulSessions)
   const selectedSoulCopy = selectedSoul ? displaySoul(selectedSoul, activeLocale) : null
   const selectedTemplateCopy = selectedTemplate ? displayTemplate(selectedTemplate, activeLocale) : null
-  const selectedProjectTemplate = selectedProject ? data?.templates.find(template => template.id === selectedProject.selectedSkillId) ?? null : null
-  const selectedArtifactCopy = selectedProjectTemplate ? displayTemplate(selectedProjectTemplate, activeLocale) : null
+  const selectedSessionTemplate = selectedSession ? data?.templates.find(template => template.id === selectedSession.capabilityTemplateId) ?? null : null
+  const selectedArtifactCopy = selectedSessionTemplate ? displayTemplate(selectedSessionTemplate, activeLocale) : null
   const systemTheme = useSystemTheme()
   const appearance = data?.settings.appearance ?? 'system'
   const resolvedTheme = resolveTheme(appearance, systemTheme)
@@ -208,7 +212,7 @@ export function WorkerStudio() {
     }
     let cancelled = false
     setArtifactPreview({ artifactId: selectedArtifact.id, content: '', error: null, loading: true })
-    readFile(selectedArtifact.path)
+    readFile(selectedArtifact.workspaceId, selectedArtifact.path)
       .then((content) => {
         if (!cancelled)
           setArtifactPreview({ artifactId: selectedArtifact.id, content, error: null, loading: false })
@@ -230,33 +234,33 @@ export function WorkerStudio() {
 
   async function submitProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!data || !selectedSoul || !selectedTemplate || !projectTitle.trim() || !projectContext.trim())
+    if (!data || !selectedSoul || !selectedWorker || !selectedTemplate || !workspaceTitle.trim() || !workspaceContext.trim())
       return
     setSubmitting(true)
     try {
-      const body = buildProjectPrompt(selectedSoul, selectedTemplate, projectContext)
-      const result = await createProject({
-        body,
+      const body = buildProjectPrompt(selectedSoul, selectedTemplate, workspaceContext)
+      const workspaceResult = await createWorkspace(selectedWorker.id, {
+        metadata: {
+          capabilityTemplateId: selectedTemplate.id,
+          soulId: selectedSoul.id,
+        },
+        name: workspaceTitle.trim(),
+      })
+      await createSessionTurn(workspaceResult.workspace.id, {
+        capabilityTemplateId: selectedTemplate.id,
+        context: workspaceContext,
+        input: body,
         metadata: {
           inputHints: selectedTemplate.inputHints,
           outputKind: selectedTemplate.outputKind,
+          requestedFrom: 'worker-web',
           reviewRubric: selectedTemplate.reviewRubric,
         },
-        selectedSkillId: selectedTemplate.id,
-        selectedSoulId: selectedSoul.id,
-        title: projectTitle.trim(),
+        title: workspaceTitle.trim(),
       })
-      await startRun({
-        projectId: result.project.id,
-        executor: data.settings.executionMode === 'local-cli' ? data.settings.engineId : data.settings.byok.provider,
-        metadata: {
-          requestedFrom: 'worker-web',
-        },
-        prompt: body,
-      })
-      setSelectedProjectId(result.project.id)
-      setProjectTitle('')
-      setProjectContext('')
+      setSelectedWorkspaceId(workspaceResult.workspace.id)
+      setWorkspaceTitle('')
+      setWorkspaceContext('')
       await refresh()
     }
     finally {
@@ -280,7 +284,7 @@ export function WorkerStudio() {
     )
   }
 
-  if (!data || !selectedSoul || !selectedTemplate || !selectedSoulCopy || !selectedTemplateCopy)
+  if (!data || !selectedSoul || !selectedWorker || !selectedTemplate || !selectedSoulCopy || !selectedTemplateCopy)
     return null
 
   return (
@@ -329,8 +333,8 @@ export function WorkerStudio() {
                 aria-label={copy.create.projectName}
                 data-testid="new-project-name"
                 placeholder={projectNamePlaceholder(selectedSoul.id, copy)}
-                value={projectTitle}
-                onChange={event => setProjectTitle(event.target.value)}
+                value={workspaceTitle}
+                onChange={event => setWorkspaceTitle(event.target.value)}
               />
 
               <section className="newproj-section">
@@ -398,14 +402,14 @@ export function WorkerStudio() {
                   className="newproj-context"
                   aria-label={copy.create.businessContext}
                   placeholder={selectedTemplateCopy.inputHints.join(' · ')}
-                  value={projectContext}
-                  onChange={event => setProjectContext(event.target.value)}
+                  value={workspaceContext}
+                  onChange={event => setWorkspaceContext(event.target.value)}
                 />
               </section>
 
-              <button className="primary newproj-create" data-testid="create-project" type="submit" disabled={!projectTitle.trim() || !projectContext.trim() || submitting}>
+              <button className="primary newproj-create" data-testid="create-project" type="submit" disabled={!workspaceTitle.trim() || !workspaceContext.trim() || submitting}>
                 <Plus aria-hidden="true" size={13} />
-                <span>{submitting ? copy.create.creatingRun : copy.create.submit}</span>
+                <span>{submitting ? copy.create.creatingSession : copy.create.submit}</span>
               </button>
             </form>
             <div className="newproj-footer">{copy.create.footer}</div>
@@ -499,13 +503,14 @@ export function WorkerStudio() {
                   ? filteredProjects.map(item => (
                       <ProjectCard
                         key={item.id}
-                        active={selectedProjectId === item.id}
-                        artifact={artifactForProject(item, data.artifacts, data.runs)}
+                        active={selectedWorkspaceId === item.id}
+                        artifact={artifactForWorkspace(item, data.artifacts, data.sessions)}
                         item={item}
                         locale={activeLocale}
-                        run={runForProject(item, data.runs)}
-                        template={data.templates.find(template => template.id === item.selectedSkillId)}
-                        onSelect={() => setSelectedProjectId(item.id)}
+                        session={sessionForWorkspace(item, data.sessions)}
+                        template={data.templates.find(template => template.id === sessionForWorkspace(item, data.sessions)?.capabilityTemplateId)}
+                        turn={turnForSession(sessionForWorkspace(item, data.sessions), data.turns)}
+                        onSelect={() => setSelectedWorkspaceId(item.id)}
                       />
                     ))
                   : (
@@ -536,12 +541,12 @@ export function WorkerStudio() {
             </div>
           </header>
           <p className="artifact-rail-hint">
-            {selectedProject ? selectedProject.title : copy.artifact.defaultHint}
+            {selectedWorkspace ? selectedWorkspace.name : copy.artifact.defaultHint}
           </p>
           <div className="artifact-rail-status">
             <span className="artifact-rail-status-pill">
               <Circle aria-hidden="true" size={10} />
-              <span>{latestRun ? formatStatus(latestRun.status, activeLocale) : copy.artifact.noRun}</span>
+              <span>{selectedTurn ? formatStatus(selectedTurn.status, activeLocale) : latestSession ? formatStatus(latestSession.status, activeLocale) : copy.artifact.noSession}</span>
             </span>
           </div>
           <section className="artifact-panel">
@@ -1045,16 +1050,18 @@ function ProjectCard({
   item,
   locale,
   onSelect,
-  run,
+  session,
   template,
+  turn,
 }: {
   active: boolean
   artifact: LocalArtifact | null
-  item: LocalProject
+  item: LocalWorkspace
   locale: ReturnType<typeof normalizeLocale>
   onSelect: () => void
-  run: LocalRun | null
+  session: LocalSession | null
   template?: CapabilityTemplate
+  turn: LocalTurn | null
 }) {
   const copy = messagesFor(locale)
   const templateCopy = template ? displayTemplate(template, locale) : null
@@ -1065,11 +1072,11 @@ function ProjectCard({
         <FileText size={22} />
       </div>
       <div className="design-card-meta-block">
-        <div className="design-card-name" title={item.title}>{item.title}</div>
+        <div className="design-card-name" title={item.name}>{item.name}</div>
         <div className="design-card-meta">
-          <span className="ds">{templateCopy?.name ?? item.selectedSkillId}</span>
+          <span className="ds">{templateCopy?.name ?? session?.capabilityTemplateId ?? copy.common.workspace}</span>
           {` · ${artifactLabel} · `}
-          <span className="design-card-status design-card-status-succeeded">{formatStatus(run?.status ?? item.status, locale)}</span>
+          <span className="design-card-status design-card-status-succeeded">{formatStatus(turn?.status ?? session?.status ?? item.status, locale)}</span>
           {` · ${formatRelativeTime(item.updatedAt, locale)}`}
         </div>
       </div>
@@ -1095,21 +1102,29 @@ function buildProjectPrompt(soul: VerticalSoul, template: CapabilityTemplate, co
   ].join('\n')
 }
 
-function artifactForProject(item: LocalProject, artifacts: LocalArtifact[], runs: LocalRun[]): LocalArtifact | null {
-  const run = runForProject(item, runs)
-  return run ? artifactForRun(run, artifacts) : null
+function artifactForWorkspace(item: LocalWorkspace, artifacts: LocalArtifact[], sessions: LocalSession[]): LocalArtifact | null {
+  const session = sessionForWorkspace(item, sessions)
+  return session ? artifactForSession(session, artifacts) : null
 }
 
-function artifactForRun(run: LocalRun, artifacts: LocalArtifact[]): LocalArtifact | null {
-  return artifacts.find(artifact => artifact.runId === run.id) ?? null
+function artifactForSession(session: LocalSession, artifacts: LocalArtifact[]): LocalArtifact | null {
+  return artifacts.find(artifact => artifact.sessionId === session.id) ?? null
 }
 
-function reviewForRun(run: LocalRun, reviews: LocalReview[]): LocalReview | null {
-  return reviews.find(review => review.runId === run.id) ?? null
+function reviewForSession(session: LocalSession, reviews: LocalReview[]): LocalReview | null {
+  return reviews.find(review => review.sessionId === session.id) ?? null
 }
 
-function runForProject(item: LocalProject, runs: LocalRun[]): LocalRun | null {
-  return runs.filter(run => run.projectId === item.id).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0] ?? null
+function sessionForWorkspace(item: LocalWorkspace | null, sessions: LocalSession[]): LocalSession | null {
+  if (!item)
+    return null
+  return sessions.filter(session => session.workspaceId === item.id).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0] ?? null
+}
+
+function turnForSession(item: LocalSession | null, turns: LocalTurn[]): LocalTurn | null {
+  if (!item)
+    return null
+  return turns.filter(turn => turn.sessionId === item.id).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0] ?? null
 }
 
 function latest<T extends { updatedAt: string }>(items: T[]): T | null {

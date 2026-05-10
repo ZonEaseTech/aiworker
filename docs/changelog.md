@@ -36,6 +36,24 @@
   - `bun run --filter '@zonease/aiworker-api' typecheck`
   - `bun run --filter '@zonease/aiworker-api' test`
 
+## 2026-05-10 18:31 [completed] REFACTOR-049 / PLAN-221 — Worker Web session workspace surface
+
+- Worker Web now consumes local daemon workers, workspaces, sessions, turns,
+  artifacts, reviews, lessons, and session events.
+- The create path selects a Soul worker, creates a workspace/project under that
+  worker, starts a workspace session turn with the selected capability template,
+  and shows the resulting artifact.
+- Web calls to `/api/local/runs` are removed; artifact preview reads
+  workspace-scoped file paths.
+- Settings language now states that session turns require an external engine or
+  BYOK provider; no built-in template runner fallback is advertised.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `bun run --filter '@zonease/aiworker-api' typecheck`
+  - `bun run --filter '@zonease/aiworker-api' test`
+
 ## 2026-05-10 17:44 [completed] DOC-009 / PLAN-218 — Session handoff and file consumer contract correction
 
 Follow-up architecture discussion clarified that AIWorker must not ask users to

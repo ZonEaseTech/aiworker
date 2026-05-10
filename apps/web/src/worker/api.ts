@@ -3,33 +3,35 @@ import type {
   LocalArtifact,
   LocalFile,
   LocalLesson,
-  LocalProject,
   LocalReview,
-  LocalRun,
-  LocalRunEvent,
+  LocalSession,
+  LocalSessionEvent,
   LocalSettingsConfig,
+  LocalTurn,
+  LocalWorker,
   LocalWorkspace,
   VerticalSoul,
 } from '@zonease/aiworker-shared'
 
 export interface LocalInfoResponse {
-  workerId: string
   runtimeVersion: string
   startedAt: string
-  workspace: LocalWorkspace
+  workers: LocalWorker[]
 }
 
 export interface LocalWorkspaceData {
   info: LocalInfoResponse
+  workers: LocalWorker[]
   souls: VerticalSoul[]
   templates: CapabilityTemplate[]
-  projects: LocalProject[]
-  runs: LocalRun[]
+  workspaces: LocalWorkspace[]
+  sessions: LocalSession[]
+  turns: LocalTurn[]
   files: LocalFile[]
   artifacts: LocalArtifact[]
   reviews: LocalReview[]
   lessons: LocalLesson[]
-  events: LocalRunEvent[]
+  events: LocalSessionEvent[]
   settings: LocalSettingsConfig
 }
 
@@ -47,25 +49,29 @@ async function localFetch<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export async function loadLocalWorkspaceData(): Promise<LocalWorkspaceData> {
-  const [info, souls, templates, projects, runs, files, artifacts, reviews, lessons, events, settings] = await Promise.all([
+  const [info, workers, souls, templates, workspaces, sessions, turns, files, artifacts, reviews, lessons, events, settings] = await Promise.all([
     localFetch<LocalInfoResponse>('/api/local/info'),
+    localFetch<{ workers: LocalWorker[] }>('/api/local/workers'),
     localFetch<{ souls: VerticalSoul[] }>('/api/local/souls'),
     localFetch<{ templates: CapabilityTemplate[] }>('/api/local/templates'),
-    localFetch<{ projects: LocalProject[] }>('/api/local/projects'),
-    localFetch<{ runs: LocalRun[] }>('/api/local/runs'),
+    localFetch<{ workspaces: LocalWorkspace[] }>('/api/local/workspaces'),
+    localFetch<{ sessions: LocalSession[] }>('/api/local/sessions'),
+    localFetch<{ turns: LocalTurn[] }>('/api/local/turns'),
     localFetch<{ files: LocalFile[] }>('/api/local/files'),
     localFetch<{ artifacts: LocalArtifact[] }>('/api/local/artifacts'),
     localFetch<{ reviews: LocalReview[] }>('/api/local/reviews'),
     localFetch<{ lessons: LocalLesson[] }>('/api/local/lessons'),
-    localFetch<{ events: LocalRunEvent[] }>('/api/local/events'),
+    localFetch<{ events: LocalSessionEvent[] }>('/api/local/events'),
     localFetch<{ settings: LocalSettingsConfig }>('/api/local/settings'),
   ])
   return {
     info,
+    workers: workers.workers,
     souls: souls.souls,
     templates: templates.templates,
-    projects: projects.projects,
-    runs: runs.runs,
+    workspaces: workspaces.workspaces,
+    sessions: sessions.sessions,
+    turns: turns.turns,
     files: files.files,
     artifacts: artifacts.artifacts,
     reviews: reviews.reviews,
@@ -75,25 +81,31 @@ export async function loadLocalWorkspaceData(): Promise<LocalWorkspaceData> {
   }
 }
 
-export function createProject(input: {
-  body: string
+export function createWorkspace(workerId: string, input: {
   metadata?: Record<string, unknown>
-  selectedSkillId: string
-  selectedSoulId: string
-  title: string
-}): Promise<{ project: LocalProject }> {
-  return localFetch('/api/local/projects', { method: 'POST', body: JSON.stringify(input) })
+  name: string
+  sourcePointers?: Record<string, unknown>[]
+  type?: string
+}): Promise<{ workspace: LocalWorkspace }> {
+  return localFetch(`/api/local/workers/${workerId}/workspaces`, { method: 'POST', body: JSON.stringify(input) })
 }
 
-export function startRun(input: { projectId?: string, executor?: string, metadata?: Record<string, unknown>, prompt?: string }): Promise<{
-  run: LocalRun
-  events: LocalRunEvent[]
+export function createSessionTurn(workspaceId: string, input: {
+  capabilityTemplateId: string
+  context?: string
+  input: string
+  metadata?: Record<string, unknown>
+  title: string
+}): Promise<{
+  session: LocalSession
+  turn: LocalTurn
   files: LocalFile[]
   artifacts: LocalArtifact[]
   review: LocalReview | null
   lessons: LocalLesson[]
+  events: LocalSessionEvent[]
 }> {
-  return localFetch('/api/local/runs', { method: 'POST', body: JSON.stringify(input) })
+  return localFetch(`/api/local/workspaces/${workspaceId}/sessions`, { method: 'POST', body: JSON.stringify(input) })
 }
 
 export function saveSettings(input: Partial<LocalSettingsConfig>): Promise<{ settings: LocalSettingsConfig }> {
@@ -108,8 +120,8 @@ export function testEngine(engineId: string): Promise<{ result: { engineId: stri
   return localFetch('/api/local/settings/engines/test', { method: 'POST', body: JSON.stringify({ engineId }) })
 }
 
-export async function readFile(path: string): Promise<string> {
-  const res = await fetch(`/api/local/files/raw/${path}`)
+export async function readFile(workspaceId: string, path: string): Promise<string> {
+  const res = await fetch(`/api/local/workspaces/${workspaceId}/files/raw/${path}`)
   if (!res.ok)
     throw new Error(`Local file ${res.status}: ${path}`)
   return await res.text()

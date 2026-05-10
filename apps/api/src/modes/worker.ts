@@ -206,6 +206,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   })
 
   app.get('/api/local/sessions', c => c.json({ sessions: listSessions() }))
+  app.get('/api/local/turns', c => c.json({ turns: listTurns() }))
   app.get('/api/local/workspaces/:workspaceId/sessions', (c) => {
     const workspace = requireWorkspace(c.req.param('workspaceId'))
     return c.json({ sessions: listSessions(workspace.id) })
@@ -616,6 +617,7 @@ function registerLocalOpenApiPaths(app: OpenAPIHono): void {
     { method: 'get', path: '/api/local/workspaces/{workspaceId}', summary: 'Show workspace', tags: ['workspaces'] },
     { method: 'patch', path: '/api/local/workspaces/{workspaceId}', summary: 'Update workspace', tags: ['workspaces'] },
     { method: 'get', path: '/api/local/sessions', summary: 'List sessions', tags: ['sessions'] },
+    { method: 'get', path: '/api/local/turns', summary: 'List turns', tags: ['turns'] },
     { method: 'get', path: '/api/local/workspaces/{workspaceId}/sessions', summary: 'List workspace sessions', tags: ['sessions'] },
     { method: 'post', path: '/api/local/workspaces/{workspaceId}/sessions', summary: 'Create workspace session', tags: ['sessions'], created: true },
     { method: 'get', path: '/api/local/sessions/{sessionId}', summary: 'Show session', tags: ['sessions'] },

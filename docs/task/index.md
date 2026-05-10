@@ -326,6 +326,6 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**DOC-009 Host daemon and Soul worker architecture contract**](DOC-009.md) `P0`
 - [x] [**REFACTOR-047 Worker session data contract**](REFACTOR-047.md) `P0`
 - [x] [**REFACTOR-048 Local daemon worker/session API**](REFACTOR-048.md) `P0`
-- [-] [**REFACTOR-049 Worker Web session workspace surface**](REFACTOR-049.md) `P0`
+- [x] [**REFACTOR-049 Worker Web session workspace surface**](REFACTOR-049.md) `P0`
 - [-] [**REFACTOR-050 Host home lifecycle and project-scope removal**](REFACTOR-050.md) `P0`
 - [-] [**QA-029 Session workspace MVP validation**](QA-029.md) `P0`

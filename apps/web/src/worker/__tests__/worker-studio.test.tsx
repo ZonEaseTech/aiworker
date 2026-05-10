@@ -6,11 +6,23 @@ import { WorkerStudio } from '../worker-studio'
 const now = '2026-05-10T00:00:00.000Z'
 const workspace = {
   createdAt: now,
-  id: 'soul-workspace',
+  id: 'workspace-1',
+  workerId: 'hr-worker',
   name: 'Hiring Workspace',
   rootPath: '/tmp/hiring',
+  type: 'workspace',
+  status: 'active',
+  sourcePointersJson: [],
+  metadataJson: {},
   updatedAt: now,
 }
+
+const workers = [
+  { createdAt: now, defaultEngineId: 'codex', id: 'hr-worker', metadataJson: {}, name: 'HR', soulId: 'hr', status: 'active', updatedAt: now },
+  { createdAt: now, defaultEngineId: 'codex', id: 'pm-worker', metadataJson: {}, name: 'PM', soulId: 'pm', status: 'active', updatedAt: now },
+  { createdAt: now, defaultEngineId: 'codex', id: 'qa-worker', metadataJson: {}, name: 'QA', soulId: 'qa', status: 'active', updatedAt: now },
+  { createdAt: now, defaultEngineId: 'codex', id: 'devops-worker', metadataJson: {}, name: 'DevOps', soulId: 'devops', status: 'active', updatedAt: now },
+]
 
 const souls = [
   { defaultTemplates: ['candidate-screen'], description: 'Recruiting workspace', domain: 'hr-recruiting', id: 'hr', name: 'HR', status: 'available' },
@@ -60,33 +72,32 @@ const baseSettings = {
 
 let currentSettings: typeof baseSettings
 
-const projectRecord = {
-  body: 'Candidate context',
+const sessionRecord = {
+  capabilityTemplateId: 'candidate-screen',
+  context: 'Candidate context',
   createdAt: now,
-  id: 'project-1',
+  endedAt: null,
+  id: 'session-1',
   metadataJson: {},
-  selectedSkillId: 'candidate-screen',
-  selectedSoulId: 'hr',
-  status: 'completed',
+  startedAt: now,
+  status: 'active',
   title: 'Screen candidate',
   updatedAt: now,
-  workspaceId: 'soul-workspace',
+  workerId: 'hr-worker',
+  workspaceId: 'workspace-1',
 }
 
-const runRecord = {
-  projectId: 'project-1',
+const turnRecord = {
   createdAt: now,
   error: null,
-  executor: 'workspace-template',
-  finishedAt: now,
-  id: 'run-1',
+  id: 'turn-1',
+  input: 'Prepare a candidate screen.',
   metadataJson: {},
-  prompt: 'Run',
-  startedAt: now,
+  response: 'Generated Candidate Screen.',
+  seq: 1,
+  sessionId: 'session-1',
   status: 'succeeded',
-  summary: 'Generated Candidate Screen.',
   updatedAt: now,
-  workspaceId: 'soul-workspace',
 }
 
 const artifactRecord = {
@@ -94,12 +105,14 @@ const artifactRecord = {
   id: 'artifact-1',
   kind: 'candidate-screen',
   metadataJson: {},
-  path: 'runs/run-1/candidate-screen.md',
-  runId: 'run-1',
+  path: 'artifacts/session-1/candidate-screen.md',
+  invocationId: 'invocation-1',
+  sessionId: 'session-1',
   status: 'available',
   title: 'Candidate Screen',
+  turnId: 'turn-1',
   updatedAt: now,
-  workspaceId: 'soul-workspace',
+  workspaceId: 'workspace-1',
 }
 
 function resetSettings() {
@@ -170,22 +183,26 @@ beforeEach(() => {
     })
 
     if (url.endsWith('/api/local/info'))
-      return json({ runtimeVersion: 'test', startedAt: now, workerId: 'soul-worker', workspace })
+      return json({ runtimeVersion: 'test', startedAt: now, workers })
+    if (url.endsWith('/api/local/workers'))
+      return json({ workers })
     if (url.endsWith('/api/local/souls'))
       return json({ souls })
     if (url.endsWith('/api/local/templates'))
       return json({ templates })
-    if (url.endsWith('/api/local/projects') && method === 'POST')
-      return json({ project: { ...projectRecord, id: 'project-created', title: 'New candidate project' } }, 201)
-    if (url.endsWith('/api/local/projects'))
-      return json({ projects: [projectRecord] })
-    if (url.endsWith('/api/local/runs') && method === 'POST')
-      return json({ artifacts: [artifactRecord], events: [], files: [], lessons: [], review: null, run: { ...runRecord, projectId: 'project-created', id: 'run-created' } }, 201)
-    if (url.endsWith('/api/local/runs'))
-      return json({ runs: [runRecord] })
+    if (url.endsWith('/api/local/workers/hr-worker/workspaces') && method === 'POST')
+      return json({ workspace: { ...workspace, id: 'workspace-created', name: 'New candidate workspace' } }, 201)
+    if (url.endsWith('/api/local/workspaces'))
+      return json({ workspaces: [workspace] })
+    if (url.endsWith('/api/local/workspaces/workspace-created/sessions') && method === 'POST')
+      return json({ artifacts: [artifactRecord], events: [], files: [], lessons: [], review: null, session: { ...sessionRecord, workspaceId: 'workspace-created', id: 'session-created' }, turn: { ...turnRecord, id: 'turn-created', sessionId: 'session-created' } }, 201)
+    if (url.endsWith('/api/local/sessions'))
+      return json({ sessions: [sessionRecord] })
+    if (url.endsWith('/api/local/turns'))
+      return json({ turns: [turnRecord] })
     if (url.endsWith('/api/local/files'))
       return json({ files: [] })
-    if (url.includes('/api/local/files/raw/'))
+    if (url.includes('/api/local/workspaces/') && url.includes('/files/raw/'))
       return new Response('# Candidate Screen\n\nEvidence summary.\n', { headers: { 'content-type': 'text/plain' } })
     if (url.endsWith('/api/local/artifacts'))
       return json({ artifacts: [artifactRecord] })
@@ -228,7 +245,7 @@ describe('worker studio', () => {
     expect(screen.getAllByText('QA').length).toBeGreaterThan(0)
     expect(screen.getAllByText('DevOps').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Candidate Screen').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('Create project and run').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Create workspace session').length).toBeGreaterThan(0)
     expect(screen.queryByText(/Import/i)).toBeNull()
     expect(screen.queryByText(/work order/i)).toBeNull()
     expect(screen.queryByText(/Open Design/i)).toBeNull()
@@ -236,20 +253,23 @@ describe('worker studio', () => {
     expect(await screen.findByText(/Evidence summary/i)).toBeTruthy()
   })
 
-  it('creates a project and run with selected Soul and skill metadata', async () => {
+  it('creates a workspace session turn with selected Soul worker and skill metadata', async () => {
     render(<WorkerStudio />)
 
     await screen.findAllByText('Candidate Screen')
-    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'New candidate project' } })
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'New candidate workspace' } })
     fireEvent.change(screen.getByLabelText('Business context'), { target: { value: 'Role and candidate packet.' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Create project and run' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Create workspace session' }))
 
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('/api/local/projects', expect.objectContaining({
-        body: expect.stringContaining('"selectedSoulId":"hr"'),
+      expect(fetch).toHaveBeenCalledWith('/api/local/workers/hr-worker/workspaces', expect.objectContaining({
+        body: expect.stringContaining('"soulId":"hr"'),
         method: 'POST',
       }))
-      expect(fetch).toHaveBeenCalledWith('/api/local/runs', expect.objectContaining({ method: 'POST' }))
+      expect(fetch).toHaveBeenCalledWith('/api/local/workspaces/workspace-created/sessions', expect.objectContaining({
+        body: expect.stringContaining('"capabilityTemplateId":"candidate-screen"'),
+        method: 'POST',
+      }))
     })
   })
 
@@ -275,8 +295,8 @@ describe('worker studio', () => {
       expect(document.documentElement.lang).toBe('zh-CN')
     })
     expect(screen.getByRole('dialog', { name: '配置 Soul 工作区' })).toBeTruthy()
-    expect(screen.getAllByText('创建项目并运行').length).toBeGreaterThan(0)
-    expect(screen.queryByText('Create project and run')).toBeNull()
+    expect(screen.getAllByText('创建工作区会话').length).toBeGreaterThan(0)
+    expect(screen.queryByText('Create workspace session')).toBeNull()
   })
 
   it('falls back to English for unknown persisted language values', async () => {

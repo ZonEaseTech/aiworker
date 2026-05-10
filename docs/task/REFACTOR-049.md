@@ -1,10 +1,11 @@
 # REFACTOR-049 Worker Web session workspace surface
 
-- **status**: in_progress
+- **status**: completed
 - **priority**: P0
 - **owner**: local
 - **createdAt**: 2026-05-10 18:01
 - **claimedAt**: 2026-05-10 18:01
+- **completedAt**: 2026-05-10 18:31
 - **plan**: PLAN-221
 - **relatesTo**: apps/web
 
@@ -34,4 +35,20 @@ framework.
 
 ## Evidence
 
-Pending.
+Implemented:
+
+- Web API client now loads workers, workspaces, sessions, turns, artifacts, and
+  session events.
+- Soul selection is backed by Soul worker selection.
+- Creation flow now creates a worker workspace and a workspace session turn.
+- Artifact preview reads workspace-scoped file paths.
+- Product-facing run language was replaced with session/turn language.
+- Settings scan/test remains wired to real engine endpoints.
+
+Verification:
+
+- `bun run --filter '@zonease/aiworker-web' typecheck`
+- `bun run --filter '@zonease/aiworker-web' test`
+- `bun run --filter '@zonease/aiworker-web' build`
+- `bun run --filter '@zonease/aiworker-api' typecheck`
+- `bun run --filter '@zonease/aiworker-api' test`

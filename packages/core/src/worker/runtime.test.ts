@@ -131,7 +131,7 @@ describe('LocalWorkerRuntime', () => {
 
     const result = await workerRuntime.startTurn({
       sessionId: session.id,
-      input: 'Run direct session turn.',
+      input: 'Start direct session turn.',
       engineId: 'codex',
       engineCommand: 'codex',
     })

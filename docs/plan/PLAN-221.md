@@ -1,6 +1,6 @@
 # PLAN-221 Worker Web session workspace surface
 
-- **status**: implementing
+- **status**: completed
 - **owner**: local
 - **createdAt**: 2026-05-10 18:01
 - **relatedTask**: REFACTOR-049
@@ -37,4 +37,21 @@ Out of scope: CSS redesign beyond terminology/fit fixes and new routing.
 
 ## Status
 
-Implementing.
+Completed on 2026-05-10.
+
+Delivered:
+
+- Worker Web no longer calls `/api/local/runs`.
+- The first screen uses Soul worker, workspace, session, turn, and artifact
+  data from the new API contract.
+- The create path creates a workspace and starts a session turn with the selected
+  capability template.
+- Settings copy no longer promises a built-in template runner fallback.
+
+Verification:
+
+- `bun run --filter '@zonease/aiworker-web' typecheck`
+- `bun run --filter '@zonease/aiworker-web' test`
+- `bun run --filter '@zonease/aiworker-web' build`
+- `bun run --filter '@zonease/aiworker-api' typecheck`
+- `bun run --filter '@zonease/aiworker-api' test`
