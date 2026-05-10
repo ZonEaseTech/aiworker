@@ -139,6 +139,37 @@ describe('local daemon API', () => {
     expect(body).toContain('"turn"')
   })
 
+  it('streams initial workspace session creation before the engine finishes', async () => {
+    const target = await app()
+    const workersBody = await (await target.request('/api/local/workers')).json() as { workers: Array<{ id: string, soulId: string }> }
+    const hrWorker = workersBody.workers.find(worker => worker.soulId === 'hr')!
+    const workspaceBody = await (await target.request(`/api/local/workers/${hrWorker.id}/workspaces`, {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Hiring initial stream workspace' }),
+      headers: { 'content-type': 'application/json' },
+    })).json() as { workspace: { id: string } }
+
+    const streamRes = await target.request(`/api/local/workspaces/${workspaceBody.workspace.id}/sessions/stream`, {
+      method: 'POST',
+      body: JSON.stringify({
+        capabilityTemplateId: 'candidate-screen',
+        context: 'Review packet',
+        input: 'Prepare the first streamed candidate screen.',
+        title: 'Screen candidate',
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(streamRes.status).toBe(200)
+    expect(streamRes.headers.get('content-type')).toContain('text/event-stream')
+    const body = await streamRes.text()
+    expect(body).toContain('event: session')
+    expect(body).toContain('"capabilityTemplateId":"candidate-screen"')
+    expect(body.indexOf('event: session')).toBeLessThan(body.indexOf('event: turn'))
+    expect(body).toContain('event: session_event')
+    expect(body).toContain('event: result')
+  })
+
   it('documents only the workspace/session API surface', async () => {
     const target = await app()
     const doc = await (await target.request('/openapi.json')).json() as { paths: Record<string, unknown> }
@@ -150,6 +181,7 @@ describe('local daemon API', () => {
     expect(paths).toContain('/api/local/templates')
     expect(paths).toContain('/api/local/workers/{workerId}/workspaces')
     expect(paths).toContain('/api/local/workspaces/{workspaceId}/sessions')
+    expect(paths).toContain('/api/local/workspaces/{workspaceId}/sessions/stream')
     expect(paths).toContain('/api/local/sessions/{sessionId}/turns')
     expect(paths).toContain('/api/local/settings/engines/rescan')
     expect(paths.some(path => path.includes('/runs'))).toBe(false)

@@ -212,7 +212,16 @@ async function daemonForeground(opts: { host?: string, port?: number } = {}): Pr
     port: opts.port ?? port,
   })
   consola.success(`[aiworker-daemon] listening on http://${server.hostname}:${server.port}`)
-  await new Promise<void>(() => undefined)
+  await new Promise<void>((resolve) => {
+    const keepAlive = setInterval(() => undefined, 60_000)
+    const shutdown = () => {
+      clearInterval(keepAlive)
+      server.stop()
+      resolve()
+    }
+    process.once('SIGINT', shutdown)
+    process.once('SIGTERM', shutdown)
+  })
 }
 
 async function daemonCheck(opts: { host?: string, port?: number } = {}): Promise<void> {

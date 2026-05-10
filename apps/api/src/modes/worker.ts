@@ -58,7 +58,6 @@ const ENGINE_COMMANDS = [
   { id: 'gemini', name: 'Gemini CLI', command: 'gemini' },
   { id: 'opencode', name: 'OpenCode', command: 'opencode' },
   { id: 'qwen', name: 'Qwen Code', command: 'qwen' },
-  { id: 'hermes', name: 'Hermes', command: 'hermes' },
 ] as const
 
 export interface BootstrapWorkerAppOptions {
@@ -240,7 +239,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
       sessionId: session.id,
       input: body.input,
       engineId: settings.executionMode === 'local-cli' ? settings.engineId : settings.byok.provider,
-      engineCommand: settings.executionMode === 'local-cli' ? engine?.command ?? settings.engineId : null,
+      engineCommand: selectedEngineCommand(settings, engine),
       metadata: {
         ...metadata,
         ...executionMetadata(settings, engine),
@@ -248,11 +247,50 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     })
     return c.json(result, 201)
   })
+  app.post('/api/local/workspaces/:workspaceId/sessions/stream', async (c) => {
+    const workspace = requireWorkspace(c.req.param('workspaceId'))
+    const runtime = requireRuntime(state, workspace.workerId)
+    const body = await readJson<{
+      capabilityTemplateId?: string
+      context?: string
+      input?: string
+      metadata?: Record<string, unknown>
+      title?: string
+    }>(c.req)
+    const template = requireTemplateForWorker(workspace.workerId, body.capabilityTemplateId)
+    const metadata = enrichTemplateMetadata(workspace.workerId, template.id, body.metadata ?? {})
+    const session = await runtime.createSession({
+      workspaceId: workspace.id,
+      capabilityTemplateId: template.id,
+      title: requireString(body.title, 'title'),
+      context: body.context ?? '',
+      metadata,
+    })
+    if (typeof body.input !== 'string' || body.input.trim().length === 0)
+      return c.json({ session }, 201)
+    const settings = loadLocalSettings()
+    const engine = selectedEngine(settings)
+    return streamSessionTurn(runtime, session, {
+      engineCommand: selectedEngineCommand(settings, engine),
+      engineId: settings.executionMode === 'local-cli' ? settings.engineId : settings.byok.provider,
+      input: body.input,
+      metadata: {
+        ...metadata,
+        ...executionMetadata(settings, engine),
+      },
+    }, [{ event: 'session', data: session, id: session.id }])
+  })
   app.get('/api/local/sessions/:sessionId', (c) => {
     const session = getSession(c.req.param('sessionId'))
     if (!session)
       return notFound(c, 'session')
     return c.json({ session, turns: listTurns(session.id), events: listSessionEvents(session.id) })
+  })
+  app.get('/api/local/sessions/:sessionId/events', (c) => {
+    const session = requireSession(c.req.param('sessionId'))
+    const after = Number(c.req.query('after') ?? c.req.header('last-event-id') ?? 0)
+    const events = listSessionEvents(session.id).filter(event => !Number.isFinite(after) || event.id > after)
+    return c.json({ events })
   })
   app.get('/api/local/sessions/:sessionId/turns', (c) => {
     const session = requireSession(c.req.param('sessionId'))
@@ -266,7 +304,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     const settings = loadLocalSettings()
     const engine = selectedEngine(settings)
     return streamSessionTurn(runtime, session, {
-      engineCommand: settings.executionMode === 'local-cli' ? engine?.command ?? settings.engineId : null,
+      engineCommand: selectedEngineCommand(settings, engine),
       engineId: settings.executionMode === 'local-cli' ? settings.engineId : settings.byok.provider,
       input,
       metadata: {
@@ -286,7 +324,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
       sessionId: session.id,
       input: requireString(body.input, 'input'),
       engineId: settings.executionMode === 'local-cli' ? settings.engineId : settings.byok.provider,
-      engineCommand: settings.executionMode === 'local-cli' ? engine?.command ?? settings.engineId : null,
+      engineCommand: selectedEngineCommand(settings, engine),
       metadata: {
         ...enrichTemplateMetadata(session.workerId, session.capabilityTemplateId, session.metadataJson ?? {}),
         ...(body.metadata ?? {}),
@@ -516,6 +554,12 @@ function selectedEngine(settings: LocalSettingsConfig) {
   return settings.engines.find(engine => engine.id === settings.engineId)
 }
 
+function selectedEngineCommand(settings: LocalSettingsConfig, engine: LocalSettingsConfig['engines'][number] | undefined): string | null {
+  if (settings.executionMode !== 'local-cli')
+    return null
+  return engine?.path ?? engine?.command ?? settings.engineId
+}
+
 function executionMetadata(settings: LocalSettingsConfig, engine: LocalSettingsConfig['engines'][number] | undefined): Record<string, unknown> {
   return {
     byok: settings.byok,
@@ -535,6 +579,7 @@ function streamSessionTurn(
     input: string
     metadata: Record<string, unknown>
   },
+  initialFrames: Array<{ data: unknown, event: string, id?: string | number }> = [],
 ): Response {
   const encoder = new TextEncoder()
   let closed = false
@@ -568,6 +613,8 @@ function streamSessionTurn(
         if (event.kind === 'turn' && isRecord(event.payload.turn))
           send('turn', event.payload.turn, event.turnId)
       })
+      for (const frame of initialFrames)
+        send(frame.event, frame.data, frame.id)
       send('status', { sessionId: session.id, status: 'started' })
       heartbeat = setInterval(heartbeatFrame, 5_000)
       void runtime.startTurn({
@@ -671,7 +718,7 @@ function scanLocalEngines(): LocalSettingsConfig['engines'] {
         version: null,
       }
     }
-    const version = commandOutput(engine.command, ['--version']).split('\n')[0]?.trim() || 'installed'
+    const version = commandOutput(found, ['--version']).split('\n')[0]?.trim() || 'installed'
     return {
       command: engine.command,
       id: engine.id,
@@ -795,7 +842,9 @@ function registerLocalOpenApiPaths(app: OpenAPIHono): void {
     { method: 'get', path: '/api/local/turns', summary: 'List turns', tags: ['turns'] },
     { method: 'get', path: '/api/local/workspaces/{workspaceId}/sessions', summary: 'List workspace sessions', tags: ['sessions'] },
     { method: 'post', path: '/api/local/workspaces/{workspaceId}/sessions', summary: 'Create workspace session', tags: ['sessions'], created: true },
+    { method: 'post', path: '/api/local/workspaces/{workspaceId}/sessions/stream', summary: 'Create workspace session with event stream', tags: ['sessions'], created: true },
     { method: 'get', path: '/api/local/sessions/{sessionId}', summary: 'Show session', tags: ['sessions'] },
+    { method: 'get', path: '/api/local/sessions/{sessionId}/events', summary: 'Replay session events', tags: ['events'] },
     { method: 'get', path: '/api/local/sessions/{sessionId}/turns', summary: 'List session turns', tags: ['turns'] },
     { method: 'post', path: '/api/local/sessions/{sessionId}/turns', summary: 'Create session turn', tags: ['turns'], created: true },
     { method: 'get', path: '/api/local/files', summary: 'List files', tags: ['files'] },
