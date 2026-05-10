@@ -414,7 +414,7 @@ export class LocalWorkerRuntime {
     if (event.kind === 'text') {
       return this.appendEvent(sessionId, 'assistant_delta', { agentEvent: event, delta: event.text, text: event.text }, turnId, invocationId)
     }
-    if (event.kind === 'thinking' || event.kind === 'log') {
+    if (event.kind === 'thinking' || event.kind === 'log' || event.kind === 'raw') {
       return this.appendEvent(sessionId, 'log', { agentEvent: event }, turnId, invocationId)
     }
     if (event.kind === 'tool_use' || event.kind === 'tool_result') {
