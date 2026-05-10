@@ -59,7 +59,7 @@ describe('aiworker local CLI', () => {
 
   it('creates workspace/session command records and lists artifacts with a mocked engine', async () => {
     expect(await runCli(argv('workspace', 'create', '--name', 'Hiring', '--soul', 'hr'))).toBe(0)
-    const workspaceBody = JSON.parse(output) as { workspace: { id: string } }
+    expect((JSON.parse(output) as { workspace: { id: string } }).workspace.id).toBeTruthy()
     output = ''
 
     expect(await runCli(argv('commands'))).toBe(0)

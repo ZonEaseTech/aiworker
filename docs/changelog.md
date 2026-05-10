@@ -1,5 +1,36 @@
 # AIWorker Changelog
 
+## 2026-05-10 18:50 [completed] QA-029 / PLAN-223 — Session workspace MVP validation
+
+- From an empty `/Users/ben/.aiworker`, started the local daemon with
+  `bun apps/cli/src/aiworker.ts daemon start --host 127.0.0.1 --port 9217`.
+- Verified `GET /health` returns Soul workspace mode and active HR/PM/QA/DevOps
+  Soul workers.
+- Browser verification at `http://127.0.0.1:9217/` confirmed the Soul catalog
+  first screen, capability template selection, HR Candidate Screen workspace
+  session creation, real Codex CLI turn execution, and visible business
+  artifact rail.
+- Settings verification confirmed explicit open/close behavior, Local CLI
+  engine Test, installed/uninstalled engine states, and language persistence
+  across refresh.
+- Fixed two QA findings:
+  - `daemon start` now detaches correctly and writes foreground logs to
+    `~/.aiworker/aiworker-daemon.log`.
+  - Artifact preview rail remains visible at normal desktop widths.
+- Root gates passed:
+  - `bun run typecheck`
+  - `bun run lint` (passes with existing React hook warnings)
+  - `bun run test`
+  - `bun run build`
+  - `git diff --check`
+- code-review-graph passed:
+  - `bun run crg:status`
+  - `bun run crg:update`
+  - `bun run crg:review`
+  - Result: 7 changed files, 4 changed functions/classes, 0 affected flows,
+    risk score `0.40`; CRG noted unit-test gaps for `bootstrapWorkerApp` and
+    `startDaemon`, covered here by local daemon/browser validation.
+
 ## 2026-05-10 18:38 [completed] REFACTOR-050 / PLAN-222 — Host home lifecycle and project-scope removal
 
 - Removed active project-scope fs-layout initialization and cwd-based scope

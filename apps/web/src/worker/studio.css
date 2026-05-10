@@ -1717,7 +1717,7 @@ textarea::placeholder {
   box-shadow: 0 0 0 4px var(--accent-soft);
 }
 
-@media (max-width: 1280px) {
+@media (max-width: 980px) {
   .entry {
     grid-template-columns: 380px minmax(0, 1fr) !important;
   }

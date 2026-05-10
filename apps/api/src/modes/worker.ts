@@ -411,6 +411,8 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   })
   app.get('/docs', apiReference({ spec: { url: '/openapi.json' } }))
   app.get('/', async c => serveWorkerWeb(c, options.webStaticDir))
+  app.get('/favicon.svg', async c => serveWorkerWebAsset(c, options.webStaticDir, 'favicon.svg'))
+  app.get('/logo.svg', async c => serveWorkerWebAsset(c, options.webStaticDir, 'logo.svg'))
   app.get('/assets/:path{.+}', async c => serveWorkerWebAsset(c, options.webStaticDir, `assets/${c.req.param('path')}`))
 
   return { app, port: workerEnv.PORT, state }

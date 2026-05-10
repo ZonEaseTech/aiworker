@@ -1,8 +1,9 @@
 #!/usr/bin/env bun
 import type { LocalWorkerRuntime } from '@zonease/aiworker-core'
 import type { WorkerRow } from '@zonease/aiworker-storage-sqlite/worker'
+import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { mkdir, readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
@@ -162,23 +163,25 @@ async function startDaemon(opts: { host?: string, port?: number } = {}): Promise
   if (current.running)
     throw new Error(`daemon already running: pid=${current.pid}`)
   writeFileSync(paths.logFile, '')
-  const child = Bun.spawn([
-    process.execPath,
-    process.argv[1] ?? 'aiworker',
+  const logFd = openSync(paths.logFile, 'a')
+  const child = spawn(process.execPath, [
+    path.resolve(process.argv[1] ?? 'aiworker'),
     'daemon',
     'foreground',
     ...(opts.host ? ['--host', opts.host] : []),
     ...(opts.port ? ['--port', String(opts.port)] : []),
   ], {
     cwd: process.cwd(),
+    detached: true,
     env: {
       ...process.env,
       AIWORKER_HOME: paths.home,
       WORKER_DB_PATH: paths.dbPath,
     },
-    stdout: 'ignore',
-    stderr: 'ignore',
+    stdio: ['ignore', logFd, logFd],
   })
+  child.unref()
+  closeSync(logFd)
   if (!child.pid)
     throw new Error('daemon did not return a pid')
   writeFileSync(paths.pidFile, String(child.pid))
