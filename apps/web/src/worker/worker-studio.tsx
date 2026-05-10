@@ -40,21 +40,21 @@ interface ProjectCard {
   age: string
 }
 
-const topTabs = ['Designs', 'Examples', 'Design systems', 'Connectors', 'Image templates', 'Video templates'] as const
-const createTabs = ['Prototype', 'Live artifact', 'Slide deck', 'From template'] as const
-const designTabs = ['Recent', 'Your designs'] as const
+const topTabs = ['Work orders', 'Examples', 'Worker packs', 'Connectors', 'Templates', 'Artifacts'] as const
+const createTabs = ['Work order', 'From template', 'From artifact', 'Saved template'] as const
+const designTabs = ['Recent', 'This workspace'] as const
 
 const settingsSections = [
-  { id: 'execution', title: 'Configure execution mode', detail: 'Local CLI / BYOK', icon: SlidersHorizontal },
-  { id: 'media', title: 'Media providers', detail: 'Image / video / audio', icon: Image },
+  { id: 'execution', title: 'Configure executor', detail: 'Local CLI / BYOK', icon: SlidersHorizontal },
+  { id: 'packs', title: 'Worker packs', detail: 'Developer / HR / PM / QA', icon: Image },
   { id: 'connectors', title: 'Connectors', detail: 'External system connections', icon: SlidersHorizontal },
-  { id: 'orbit', title: 'Orbit', detail: 'Daily connector summary', icon: Eye },
-  { id: 'mcp', title: 'MCP server', detail: 'Expose Open Design as an MCP server for your coding agent.', icon: Link },
-  { id: 'external-mcp', title: 'External MCP', detail: 'Add MCP tools from external services (Higgsfield, GitHub, ...).', icon: Sparkles },
+  { id: 'orbit', title: 'Daily summary', detail: 'Workspace changes and connector signals', icon: Eye },
+  { id: 'mcp', title: 'MCP server', detail: 'Expose workspace context to your coding agent.', icon: Link },
+  { id: 'external-mcp', title: 'External MCP', detail: 'Add MCP tools from external services.', icon: Sparkles },
   { id: 'language', title: 'Language', detail: 'Switch the interface language. Saved to this browser.', icon: Languages },
   { id: 'appearance', title: 'Appearance', detail: 'Choose light, dark, or follow system.', icon: Sun },
   { id: 'notifications', title: 'Notifications', detail: 'Completion alerts and sounds.', icon: Bell },
-  { id: 'pet', title: 'Pets', detail: 'Adopt or customize', icon: Sparkles },
+  { id: 'companion', title: 'Companion', detail: 'Adopt or customize', icon: Sparkles },
   { id: 'about', title: 'About', detail: 'Version and runtime details.', icon: Settings },
 ] as const
 
@@ -76,12 +76,12 @@ type EngineId = (typeof engines)[number]['id']
 export function WorkerStudio() {
   const [state, setState] = useState<StudioState>({ data: null, loading: true, error: null })
   const [projectName, setProjectName] = useState('')
-  const [activeTopTab, setActiveTopTab] = useState<(typeof topTabs)[number]>('Designs')
-  const [activeCreateTab, setActiveCreateTab] = useState<(typeof createTabs)[number]>('Prototype')
+  const [activeTopTab, setActiveTopTab] = useState<(typeof topTabs)[number]>('Work orders')
+  const [activeCreateTab, setActiveCreateTab] = useState<(typeof createTabs)[number]>('Work order')
   const [activeDesignTab, setActiveDesignTab] = useState<(typeof designTabs)[number]>('Recent')
   const [view, setView] = useState<'grid' | 'list'>('grid')
   const [query, setQuery] = useState('')
-  const [settingsOpen, setSettingsOpen] = useState(true)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [selectedEngine, setSelectedEngine] = useState<EngineId>('codex-cli')
   const [submitting, setSubmitting] = useState(false)
 
@@ -112,7 +112,7 @@ export function WorkerStudio() {
 
     setSubmitting(true)
     try {
-      const body = `Create a high fidelity prototype for ${title}.`
+      const body = `Run this work order for ${title}. Produce a visible artifact and capture review notes.`
       const result = await createBrief({ title, body })
       await startRun({ briefId: result.brief.id, prompt: body })
       setProjectName('')
@@ -126,8 +126,8 @@ export function WorkerStudio() {
   const projects = useMemo(() => {
     const fromData = buildProjectCards(state.data)
     const fallback: ProjectCard[] = [
-      { title: 'TTPOS Flutter', engine: 'Flat', type: 'blog-post', status: 'Completed', age: '2d ago' },
-      { title: 'TTPOS', engine: 'Mistral AI', type: 'web-prototype', status: 'Completed', age: '3d ago' },
+      { title: 'Developer repo review', engine: 'developer', type: 'verification-report', status: 'Completed', age: '2d ago' },
+      { title: 'Candidate screen', engine: 'hr-recruiting', type: 'candidate-screen', status: 'Completed', age: '3d ago' },
     ]
     return fromData.length > 0 ? fromData : fallback
   }, [state.data])
@@ -161,23 +161,17 @@ export function WorkerStudio() {
         className="entry has-pet-rail"
         style={{ gridTemplateColumns: '380px 1fr auto' }}
       >
-        <aside className="entry-side" style={{ width: 380 }} aria-label="Prototype creator">
-          <div className="window-lights" aria-hidden="true">
-            <span className="light-red" />
-            <span className="light-yellow" />
-            <span className="light-green" />
-          </div>
-
+        <aside className="entry-side" style={{ width: 380 }} aria-label="Work order creator">
           <div className="entry-brand">
             <span className="entry-brand-mark" aria-hidden="true">
               <img src="/logo.svg" alt="" className="brand-mark-img" draggable={false} />
             </span>
             <div className="entry-brand-text">
               <div className="entry-brand-title-row">
-                <span className="entry-brand-title">Open Design</span>
-                <span className="entry-brand-pill">Research Preview</span>
+                <span className="entry-brand-title">AIWorker</span>
+                <span className="entry-brand-pill">Local Worker</span>
               </div>
-              <div className="entry-brand-subtitle">by Nexu Labs</div>
+              <div className="entry-brand-subtitle">work order studio</div>
             </div>
           </div>
 
@@ -208,37 +202,37 @@ export function WorkerStudio() {
 
             <form className="newproj-body" onSubmit={submitProject}>
               <h3 className="newproj-title">
-                <span className="newproj-title-text">New prototype</span>
+                <span className="newproj-title-text">New work order</span>
               </h3>
 
               <input
                 className="newproj-name"
-                aria-label="Project name"
+                aria-label="Work order name"
                 data-testid="new-project-name"
-                placeholder="Project name"
+                placeholder="What should this worker do?"
                 value={projectName}
                 onChange={event => setProjectName(event.target.value)}
               />
 
               <section className="newproj-section">
-                <label className="newproj-label">Design system</label>
+                <label className="newproj-label">Worker pack</label>
                 <button className="ds-select" type="button">
                   <span className="ds-icon-empty" aria-hidden="true">
                     <span />
                   </span>
                   <span className="ds-select-copy">
-                    <strong>None - freeform</strong>
-                    <small>No system tokens, choose your own palette</small>
+                    <strong>Developer - code workspace</strong>
+                    <small>Switch to HR, PM, QA, finance, or legal later</small>
                   </span>
                   <ChevronDown aria-hidden="true" size={16} />
                 </button>
               </section>
 
               <section className="newproj-section">
-                <label className="newproj-label">Fidelity</label>
+                <label className="newproj-label">Run depth</label>
                 <div className="fidelity-grid">
-                  <FidelityCard label="Wireframe" variant="wireframe" />
-                  <FidelityCard label="High fidelity" variant="high-fidelity" active />
+                  <FidelityCard label="Quick pass" variant="wireframe" />
+                  <FidelityCard label="Full artifact" variant="high-fidelity" active />
                 </div>
               </section>
 
@@ -254,16 +248,16 @@ export function WorkerStudio() {
 
               <button className="ghost newproj-import" type="button">
                 <Upload aria-hidden="true" size={13} />
-                <span>Import Claude Design ZIP</span>
+                <span>Import work order file</span>
               </button>
             </form>
-            <div className="newproj-footer">Only you can see your project by default.</div>
+            <div className="newproj-footer">Runs stay local to this workspace by default.</div>
           </section>
 
           <div className="entry-side-foot">
             <button type="button" className="foot-pill pet-pill pet-pill-fresh">
-              <span className="pet-pill-glyph" aria-hidden="true">🦄</span>
-              <span>Change pet</span>
+              <span className="pet-pill-glyph" aria-hidden="true">✦</span>
+              <span>Change companion</span>
             </button>
             <button type="button" className="foot-pill" onClick={() => setSettingsOpen(true)}>
               <Settings aria-hidden="true" size={12} />
@@ -279,7 +273,7 @@ export function WorkerStudio() {
           </div>
         </aside>
 
-        <section className="entry-main" aria-label="Designs">
+        <section className="entry-main" aria-label="Work orders">
           <header className="entry-header">
             <div className="entry-tabs" role="tablist">
               {topTabs.map(tab => (
@@ -296,8 +290,16 @@ export function WorkerStudio() {
               ))}
             </div>
             <div className="entry-header-right">
+              <button
+                className="settings-trigger"
+                type="button"
+                aria-label="Open settings"
+                onClick={() => setSettingsOpen(true)}
+              >
+                <Settings aria-hidden="true" size={16} />
+              </button>
               <button className="avatar-btn" type="button" aria-label="Account">
-                <img src="/avatar.png" alt="" aria-hidden="true" draggable={false} className="avatar-btn-photo" />
+                <span aria-hidden="true" className="avatar-btn-initials">AI</span>
               </button>
             </div>
           </header>
@@ -306,7 +308,7 @@ export function WorkerStudio() {
             <div className="tab-panel">
               <div className="tab-panel-toolbar">
                 <div className="toolbar-left">
-                  <div className="subtab-pill" role="group" aria-label="Design filters">
+                  <div className="subtab-pill" role="group" aria-label="Work order filters">
                     {designTabs.map(tab => (
                       <button
                         key={tab}
@@ -327,8 +329,8 @@ export function WorkerStudio() {
                       <Search size={13} />
                     </span>
                     <input
-                      aria-label="Search designs"
-                      placeholder="Search..."
+                      aria-label="Search work orders"
+                      placeholder="Search work orders..."
                       value={query}
                       onChange={event => setQuery(event.target.value)}
                     />
@@ -365,11 +367,11 @@ export function WorkerStudio() {
           </div>
         </section>
 
-        <aside className="pet-rail" aria-label="PETS">
+        <aside className="pet-rail" aria-label="Companion">
           <header className="pet-rail-head">
             <div className="pet-rail-title">
-              <span aria-hidden="true">🐾</span>
-              <strong>PETS</strong>
+              <span aria-hidden="true">✦</span>
+              <strong>COMPANION</strong>
             </div>
             <div className="pet-rail-head-actions">
               <button type="button" className="pet-rail-collapse" aria-label="Collapse pet picker">
@@ -380,7 +382,7 @@ export function WorkerStudio() {
               </button>
             </div>
           </header>
-          <p className="pet-rail-hint">Pick a companion to float over your workspace.</p>
+          <p className="pet-rail-hint">Pick a small status helper for this workspace.</p>
           <div className="pet-rail-status">
             <button type="button" className="pet-rail-status-pill">
               <Eye aria-hidden="true" size={12} />
@@ -396,8 +398,8 @@ export function WorkerStudio() {
             >
               <span className="pet-rail-item-glyph" aria-hidden="true">👨‍💼</span>
               <span className="pet-rail-item-meta">
-                <span className="pet-rail-item-name">Trump</span>
-                <span className="pet-rail-item-flavor">Your own - name, glyph,...</span>
+                <span className="pet-rail-item-name">Buddy</span>
+                <span className="pet-rail-item-flavor">Local status, run hints, and quick actions</span>
               </span>
               <Check size={14} aria-hidden="true" />
             </button>
@@ -459,17 +461,17 @@ function SettingsDialog({
 
         <header className="modal-head">
           <span className="kicker">WELCOME</span>
-          <h2 id="settings-dialog-title">Set up Open Design</h2>
+          <h2 id="settings-dialog-title">Set up AIWorker</h2>
           <p className="subtitle">
-            Pick how you'd like to run generations. You can change this any time from the Settings button in the top bar.
+            Pick how local runs execute. You can change this any time from the Settings button.
           </p>
           <button type="button" className="welcome-pet-teaser">
             <span className="welcome-pet-glyph" aria-hidden="true">
-              🐾
+              ✦
             </span>
             <span className="welcome-pet-copy">
-              <strong>Adopt a pet</strong>
-              <span>A tiny floating companion that hangs out with you.</span>
+              <strong>Choose a companion</strong>
+              <span>A small workspace helper for run status and quick actions.</span>
             </span>
             <span className="welcome-pet-cta">
               Pick one
@@ -519,7 +521,7 @@ function SettingsDialog({
               <div className="section-head">
                 <div>
                   <h3>Local CLI</h3>
-                  <p className="hint">Detected by scanning your PATH. Pick the CLI you want generations to flow through.</p>
+                  <p className="hint">Detected by scanning your PATH. Pick the CLI you want work orders to flow through.</p>
                 </div>
                 <div className="section-head-actions">
                   <button type="button" className="ghost icon-btn settings-test-btn">

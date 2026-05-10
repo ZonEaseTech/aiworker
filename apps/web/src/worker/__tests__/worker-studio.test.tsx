@@ -49,7 +49,7 @@ beforeEach(() => {
     if (url.endsWith('/api/local/info'))
       return json({ workerId: 'local-worker', runtimeVersion: 'test', startedAt: workspace.createdAt, workspace })
     if (url.endsWith('/api/local/briefs') && method === 'POST')
-      return json({ brief: { ...brief, id: 'brief-created', title: 'New prototype', body: 'Created project' } })
+      return json({ brief: { ...brief, id: 'brief-created', title: 'New work order', body: 'Created work order' } })
     if (url.endsWith('/api/local/briefs'))
       return json({ briefs: [brief] })
     if (url.endsWith('/api/local/runs') && method === 'POST')
@@ -72,27 +72,45 @@ beforeEach(() => {
 })
 
 describe('worker studio', () => {
-  it('renders the Open Design home and setup modal one-to-one', async () => {
-    render(<WorkerStudio />)
+  it('renders the AIWorker work order home without desktop chrome or default settings', async () => {
+    const { container } = render(<WorkerStudio />)
 
-    expect(await screen.findAllByText('Open Design')).toHaveLength(1)
-    expect(screen.getByLabelText('Prototype creator')).toBeTruthy()
-    expect(screen.getByLabelText('Designs')).toBeTruthy()
-    expect(screen.getByLabelText('PETS')).toBeTruthy()
-    expect(screen.getByRole('dialog', { name: 'Set up Open Design' })).toBeTruthy()
-    expect(screen.getByText('Set up Open Design')).toBeTruthy()
-    expect(screen.getAllByText('Local CLI').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('Codex CLI').length).toBeGreaterThan(0)
+    expect(await screen.findAllByText('AIWorker')).toHaveLength(1)
+    expect(screen.getByLabelText('Work order creator')).toBeTruthy()
+    expect(screen.getByLabelText('Work orders')).toBeTruthy()
+    expect(screen.getByLabelText('Companion')).toBeTruthy()
+    expect(screen.getByText('New work order')).toBeTruthy()
+    expect(screen.getByText('Worker pack')).toBeTruthy()
+    expect(screen.queryByRole('dialog', { name: 'Set up AIWorker' })).toBeNull()
+    expect(container.querySelector('.window-lights')).toBeNull()
+    expect(screen.queryByText('Open Design')).toBeNull()
+    expect(screen.queryByText('Nexu Labs')).toBeNull()
+    expect(screen.queryByText('Import Claude Design ZIP')).toBeNull()
+    expect(screen.queryByText('Trump')).toBeNull()
     expect(screen.queryByText('Review')).toBeNull()
     expect(screen.queryByText('Lessons')).toBeNull()
     expect(screen.queryByLabelText('Artifact canvas')).toBeNull()
   })
 
-  it('creates a prototype through the local brief and run APIs', async () => {
+  it('opens settings only from the explicit settings trigger', async () => {
     render(<WorkerStudio />)
 
-    fireEvent.click(await screen.findByLabelText('Close settings'))
-    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'New prototype' } })
+    await screen.findByText('AIWorker')
+    expect(screen.queryByRole('dialog', { name: 'Set up AIWorker' })).toBeNull()
+
+    fireEvent.click(screen.getByLabelText('Open settings'))
+
+    expect(screen.getByRole('dialog', { name: 'Set up AIWorker' })).toBeTruthy()
+    expect(screen.getByText('Set up AIWorker')).toBeTruthy()
+    expect(screen.getAllByText('Local CLI').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Codex CLI').length).toBeGreaterThan(0)
+  })
+
+  it('creates a work order through the local brief and run APIs', async () => {
+    render(<WorkerStudio />)
+
+    await screen.findByText('AIWorker')
+    fireEvent.change(screen.getByLabelText('Work order name'), { target: { value: 'New work order' } })
     fireEvent.click(screen.getByRole('button', { name: 'Create' }))
 
     await waitFor(() => {

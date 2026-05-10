@@ -1,5 +1,28 @@
 # AIWorker Changelog
 
+## 2026-05-10 09:11 [completed] REFACTOR-040 / PLAN-206 — Worker Web product detail correction
+
+Corrected the too-literal Open Design Web copy:
+
+- Removed the macOS traffic-light window controls from the browser page.
+- Made settings closed by default and opened only through the explicit settings
+  button.
+- Replaced copied Open Design/Nexu/design-prototype copy with AIWorker work
+  order, worker pack, workspace, run, and executor vocabulary.
+- Replaced the copied avatar image and Open Design logo geometry with AIWorker
+  UI assets.
+- Updated Worker Studio tests to reject the stale copied text and desktop
+  chrome.
+
+Verification: `bun run --filter '@zonease/aiworker-web' test`,
+`bun run --filter '@zonease/aiworker-web' typecheck`,
+`bun run --filter '@zonease/aiworker-web' lint`,
+`bun run --filter '@zonease/aiworker-web' build`, and `git diff --check` pass.
+Browser review of `http://127.0.0.1:5173/worker/` confirmed the default home
+has no settings dialog, macOS traffic lights, or copied avatar image, and
+settings opens through the explicit settings button. CRG reported 0 affected
+flows, 3 test gaps, and risk score 0.40.
+
 ## 2026-05-10 01:43 [completed] REFACTOR-039 / PLAN-205 — Worker Web Open Design source parity
 
 Replaced the rejected Worker Web studio with a direct Open Design source-parity
