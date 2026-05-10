@@ -16,23 +16,6 @@ CREATE TABLE `artifacts` (
 CREATE INDEX `artifacts_run_updated_at_idx` ON `artifacts` (`run_id`,`updated_at`);--> statement-breakpoint
 CREATE INDEX `artifacts_status_updated_at_idx` ON `artifacts` (`status`,`updated_at`);--> statement-breakpoint
 CREATE INDEX `artifacts_workspace_updated_at_idx` ON `artifacts` (`workspace_id`,`updated_at`);--> statement-breakpoint
-CREATE TABLE `cases` (
-	`id` text PRIMARY KEY NOT NULL,
-	`workspace_id` text NOT NULL,
-	`title` text NOT NULL,
-	`body` text NOT NULL,
-	`selected_soul_id` text DEFAULT 'hr' NOT NULL,
-	`selected_skill_id` text DEFAULT 'candidate-screen' NOT NULL,
-	`status` text DEFAULT 'draft' NOT NULL,
-	`metadata_json` text NOT NULL,
-	`created_at` text NOT NULL,
-	`updated_at` text NOT NULL,
-	FOREIGN KEY (`workspace_id`) REFERENCES `workspaces`(`id`) ON UPDATE no action ON DELETE cascade
-);
---> statement-breakpoint
-CREATE INDEX `cases_soul_updated_at_idx` ON `cases` (`selected_soul_id`,`updated_at`);--> statement-breakpoint
-CREATE INDEX `cases_status_updated_at_idx` ON `cases` (`status`,`updated_at`);--> statement-breakpoint
-CREATE INDEX `cases_workspace_updated_at_idx` ON `cases` (`workspace_id`,`updated_at`);--> statement-breakpoint
 CREATE TABLE `files` (
 	`id` text PRIMARY KEY NOT NULL,
 	`workspace_id` text NOT NULL,
@@ -65,6 +48,23 @@ CREATE TABLE `lessons` (
 --> statement-breakpoint
 CREATE INDEX `lessons_status_updated_at_idx` ON `lessons` (`status`,`updated_at`);--> statement-breakpoint
 CREATE INDEX `lessons_workspace_updated_at_idx` ON `lessons` (`workspace_id`,`updated_at`);--> statement-breakpoint
+CREATE TABLE `projects` (
+	`id` text PRIMARY KEY NOT NULL,
+	`workspace_id` text NOT NULL,
+	`title` text NOT NULL,
+	`body` text NOT NULL,
+	`selected_soul_id` text DEFAULT 'hr' NOT NULL,
+	`selected_skill_id` text DEFAULT 'candidate-screen' NOT NULL,
+	`status` text DEFAULT 'draft' NOT NULL,
+	`metadata_json` text NOT NULL,
+	`created_at` text NOT NULL,
+	`updated_at` text NOT NULL,
+	FOREIGN KEY (`workspace_id`) REFERENCES `workspaces`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX `projects_soul_updated_at_idx` ON `projects` (`selected_soul_id`,`updated_at`);--> statement-breakpoint
+CREATE INDEX `projects_status_updated_at_idx` ON `projects` (`status`,`updated_at`);--> statement-breakpoint
+CREATE INDEX `projects_workspace_updated_at_idx` ON `projects` (`workspace_id`,`updated_at`);--> statement-breakpoint
 CREATE TABLE `reviews` (
 	`id` text PRIMARY KEY NOT NULL,
 	`workspace_id` text NOT NULL,
@@ -98,7 +98,7 @@ CREATE INDEX `run_events_run_created_at_idx` ON `run_events` (`run_id`,`created_
 CREATE TABLE `runs` (
 	`id` text PRIMARY KEY NOT NULL,
 	`workspace_id` text NOT NULL,
-	`case_id` text,
+	`project_id` text,
 	`status` text DEFAULT 'queued' NOT NULL,
 	`executor` text NOT NULL,
 	`prompt` text NOT NULL,
@@ -110,10 +110,10 @@ CREATE TABLE `runs` (
 	`created_at` text NOT NULL,
 	`updated_at` text NOT NULL,
 	FOREIGN KEY (`workspace_id`) REFERENCES `workspaces`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`case_id`) REFERENCES `cases`(`id`) ON UPDATE no action ON DELETE set null
+	FOREIGN KEY (`project_id`) REFERENCES `projects`(`id`) ON UPDATE no action ON DELETE set null
 );
 --> statement-breakpoint
-CREATE INDEX `runs_case_updated_at_idx` ON `runs` (`case_id`,`updated_at`);--> statement-breakpoint
+CREATE INDEX `runs_project_updated_at_idx` ON `runs` (`project_id`,`updated_at`);--> statement-breakpoint
 CREATE INDEX `runs_status_updated_at_idx` ON `runs` (`status`,`updated_at`);--> statement-breakpoint
 CREATE INDEX `runs_workspace_updated_at_idx` ON `runs` (`workspace_id`,`updated_at`);--> statement-breakpoint
 CREATE TABLE `settings` (

@@ -9,10 +9,9 @@ import { sql } from 'drizzle-orm'
 import {
   appendRunEvent,
   artifacts,
-  cases,
   closeWorkerDb,
-  createCase,
   createLesson,
+  createProject,
   createReview,
   createRun,
   files,
@@ -20,12 +19,13 @@ import {
   initWorkerDb,
   lessons,
   listArtifacts,
-  listCases,
   listFiles,
   listLessons,
+  listProjects,
   listReviews,
   listRunEvents,
   listRuns,
+  projects,
   registerArtifact,
   reviews,
   runEvents,
@@ -66,9 +66,9 @@ describe('greenfield local worker schema', () => {
     expect(rows).toEqual([
       '__drizzle_migrations',
       'artifacts',
-      'cases',
       'files',
       'lessons',
+      'projects',
       'reviews',
       'run_events',
       'runs',
@@ -81,7 +81,7 @@ describe('greenfield local worker schema', () => {
     ])
   })
 
-  it('persists the workspace -> case -> run -> artifact -> review -> lesson loop', () => {
+  it('persists the workspace -> project -> run -> artifact -> review -> lesson loop', () => {
     const workspace = upsertWorkspace({
       id: 'ws-1',
       name: 'Hiring workspace',
@@ -90,8 +90,8 @@ describe('greenfield local worker schema', () => {
     })
     expect(workspace.rootPath).toBe('/tmp/hiring')
 
-    const caseRecord = createCase({
-      id: 'case-1',
+    const projectRecord = createProject({
+      id: 'project-1',
       workspaceId: workspace.id,
       title: 'Screen candidate',
       body: 'Review the candidate packet.',
@@ -100,14 +100,14 @@ describe('greenfield local worker schema', () => {
       status: 'queued',
       at: '2026-05-09T01:01:00.000Z',
     })
-    expect(listCases(workspace.id)).toEqual([caseRecord])
+    expect(listProjects(workspace.id)).toEqual([projectRecord])
 
     const run = createRun({
       id: 'run-1',
       workspaceId: workspace.id,
-      caseId: caseRecord.id,
+      projectId: projectRecord.id,
       executor: 'codex',
-      prompt: caseRecord.body,
+      prompt: projectRecord.body,
       status: 'running',
       metadataJson: { domain: 'hr' },
       at: '2026-05-09T01:02:00.000Z',
@@ -170,7 +170,7 @@ describe('greenfield local worker schema', () => {
 
   it('keeps indexes aligned with the new local workspace query paths', () => {
     expect(explain(`SELECT * FROM workspaces ORDER BY updated_at DESC LIMIT 20`)).toContain('workspaces_updated_at_idx')
-    expect(explain(`SELECT * FROM cases WHERE workspace_id = 'ws-1' ORDER BY updated_at DESC LIMIT 20`)).toContain('cases_workspace_updated_at_idx')
+    expect(explain(`SELECT * FROM projects WHERE workspace_id = 'ws-1' ORDER BY updated_at DESC LIMIT 20`)).toContain('projects_workspace_updated_at_idx')
     expect(explain(`SELECT * FROM runs WHERE status = 'running' ORDER BY updated_at DESC LIMIT 20`)).toContain('runs_status_updated_at_idx')
     expect(explain(`SELECT * FROM run_events WHERE run_id = 'run-1' ORDER BY seq ASC LIMIT 200`)).toContain('run_events_run_seq')
     expect(explain(`SELECT * FROM files WHERE workspace_id = 'ws-1' ORDER BY updated_at DESC LIMIT 50`)).toContain('files_workspace_updated_at_idx')
@@ -182,7 +182,7 @@ describe('greenfield local worker schema', () => {
 
   it('exports the schema objects used by downstream packages', () => {
     expect(workspaces).toBeDefined()
-    expect(cases).toBeDefined()
+    expect(projects).toBeDefined()
     expect(runs).toBeDefined()
     expect(runEvents).toBeDefined()
     expect(files).toBeDefined()

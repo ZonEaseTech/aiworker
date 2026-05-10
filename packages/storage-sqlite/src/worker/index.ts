@@ -53,7 +53,7 @@ export function runWorkerMigrations(migrationsFolder: string = defaultWorkerMigr
 
 export type WorkerDatabase = ReturnType<typeof createDb>
 export type WorkspaceRow = typeof schema.workspaces.$inferSelect
-export type CaseRow = typeof schema.cases.$inferSelect
+export type ProjectRow = typeof schema.projects.$inferSelect
 export type RunRow = typeof schema.runs.$inferSelect
 export type RunEventRow = typeof schema.runEvents.$inferSelect
 export type FileRow = typeof schema.files.$inferSelect
@@ -69,21 +69,21 @@ export interface UpsertWorkspaceInput {
   at?: string
 }
 
-export interface CreateCaseInput {
+export interface CreateProjectInput {
   id: string
   workspaceId: string
   title: string
   body: string
   selectedSoulId: string
   selectedSkillId: string
-  status?: CaseRow['status']
+  status?: ProjectRow['status']
   metadataJson?: Record<string, unknown>
   at?: string
 }
 
-export interface UpdateCaseInput {
+export interface UpdateProjectInput {
   id: string
-  status?: CaseRow['status']
+  status?: ProjectRow['status']
   title?: string
   body?: string
   selectedSoulId?: string
@@ -95,7 +95,7 @@ export interface UpdateCaseInput {
 export interface CreateRunInput {
   id: string
   workspaceId: string
-  caseId?: string | null
+  projectId?: string | null
   executor: string
   prompt: string
   status?: RunRow['status']
@@ -201,9 +201,9 @@ export function upsertWorkspace(input: UpsertWorkspaceInput): WorkspaceRow {
   return getWorkspace(input.id)!
 }
 
-export function createCase(input: CreateCaseInput): CaseRow {
+export function createProject(input: CreateProjectInput): ProjectRow {
   const now = input.at ?? new Date().toISOString()
-  getWorkerDb().insert(schema.cases).values({
+  getWorkerDb().insert(schema.projects).values({
     id: input.id,
     workspaceId: input.workspaceId,
     title: input.title,
@@ -215,18 +215,18 @@ export function createCase(input: CreateCaseInput): CaseRow {
     createdAt: now,
     updatedAt: now,
   }).run()
-  return getWorkerDb().select().from(schema.cases).where(eq(schema.cases.id, input.id)).get()!
+  return getWorkerDb().select().from(schema.projects).where(eq(schema.projects.id, input.id)).get()!
 }
 
-export function getCase(id: string): CaseRow | null {
-  return getWorkerDb().select().from(schema.cases).where(eq(schema.cases.id, id)).get() ?? null
+export function getProject(id: string): ProjectRow | null {
+  return getWorkerDb().select().from(schema.projects).where(eq(schema.projects.id, id)).get() ?? null
 }
 
-export function updateCase(input: UpdateCaseInput): CaseRow {
-  const existing = getCase(input.id)
+export function updateProject(input: UpdateProjectInput): ProjectRow {
+  const existing = getProject(input.id)
   if (!existing)
-    throw new Error(`Case not found: ${input.id}`)
-  getWorkerDb().update(schema.cases).set({
+    throw new Error(`Project not found: ${input.id}`)
+  getWorkerDb().update(schema.projects).set({
     body: input.body ?? existing.body,
     metadataJson: input.metadataJson ?? existing.metadataJson,
     selectedSkillId: input.selectedSkillId ?? existing.selectedSkillId,
@@ -234,16 +234,16 @@ export function updateCase(input: UpdateCaseInput): CaseRow {
     status: input.status ?? existing.status,
     title: input.title ?? existing.title,
     updatedAt: input.at ?? new Date().toISOString(),
-  }).where(eq(schema.cases.id, input.id)).run()
-  return getCase(input.id)!
+  }).where(eq(schema.projects.id, input.id)).run()
+  return getProject(input.id)!
 }
 
-export function listCases(workspaceId: string, limit = 200): CaseRow[] {
+export function listProjects(workspaceId: string, limit = 200): ProjectRow[] {
   return getWorkerDb()
     .select()
-    .from(schema.cases)
-    .where(eq(schema.cases.workspaceId, workspaceId))
-    .orderBy(desc(schema.cases.updatedAt))
+    .from(schema.projects)
+    .where(eq(schema.projects.workspaceId, workspaceId))
+    .orderBy(desc(schema.projects.updatedAt))
     .limit(limit)
     .all()
 }
@@ -253,7 +253,7 @@ export function createRun(input: CreateRunInput): RunRow {
   getWorkerDb().insert(schema.runs).values({
     id: input.id,
     workspaceId: input.workspaceId,
-    caseId: input.caseId ?? null,
+    projectId: input.projectId ?? null,
     status: input.status ?? 'queued',
     executor: input.executor,
     prompt: input.prompt,

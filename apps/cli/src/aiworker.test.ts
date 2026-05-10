@@ -1,5 +1,5 @@
 import { Buffer } from 'node:buffer'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
@@ -42,20 +42,29 @@ describe('aiworker local CLI', () => {
   }
 
   it('preprocesses multi-word local commands', () => {
-    expect(preprocessArgv(argv('case', 'create', '--title', 'T')).slice(2, 3)).toEqual(['case create'])
+    expect(preprocessArgv(argv('project', 'create', '--title', 'T')).slice(2, 3)).toEqual(['project create'])
     expect(preprocessArgv(argv('run', 'start', '--prompt', 'P')).slice(2, 3)).toEqual(['run start'])
   })
 
-  it('runs init -> case -> run -> artifact -> lesson locally', async () => {
-    expect(await runCli(argv('init', '--name', 'Hiring'))).toBe(0)
+  it('runs init -> project -> run -> artifact -> lesson locally', async () => {
+    expect(await runCli(argv('init', '--name', 'Hiring', '--root', root))).toBe(0)
     expect(output).toContain('"workspace"')
+    const soulRoot = path.join(root, '.aiworker')
+    await expect(readFile(path.join(soulRoot, 'SOUL.md'), 'utf8')).resolves.toContain('Soul workspace')
+    await expect(readFile(path.join(soulRoot, 'DOMAIN.md'), 'utf8')).resolves.toContain('Domain systems')
+    await expect(readFile(path.join(soulRoot, 'TEMPLATES.md'), 'utf8')).resolves.toContain('Capability templates')
+    await expect(readFile(path.join(soulRoot, 'PROJECTS.md'), 'utf8')).resolves.toContain('Projects')
+    await expect(stat(path.join(soulRoot, 'local'))).rejects.toThrow()
+    await expect(stat(path.join(soulRoot, 'scope.json'))).rejects.toThrow()
+    await expect(stat(path.join(soulRoot, 'brain-capabilities.json'))).rejects.toThrow()
+    await expect(stat(path.join(soulRoot, 'executor-capabilities.json'))).rejects.toThrow()
     output = ''
 
-    expect(await runCli(argv('case', 'create', '--title', 'Screen', '--body', 'Review candidate'))).toBe(0)
-    const caseBody = JSON.parse(output) as { case: { id: string } }
+    expect(await runCli(argv('project', 'create', '--title', 'Screen', '--body', 'Review candidate'))).toBe(0)
+    const projectBody = JSON.parse(output) as { project: { id: string } }
     output = ''
 
-    expect(await runCli(argv('run', 'start', '--case', caseBody.case.id))).toBe(0)
+    expect(await runCli(argv('run', 'start', '--project', projectBody.project.id))).toBe(0)
     const run = JSON.parse(output) as { artifacts: Array<{ id: string }>, lessons: unknown[], run: { status: string } }
     expect(run.run.status).toBe('succeeded')
     expect(run.artifacts).toHaveLength(1)
@@ -71,7 +80,7 @@ describe('aiworker local CLI', () => {
 
   it('prints the greenfield command index', async () => {
     expect(await runCli(argv('commands'))).toBe(0)
-    expect(output).toContain('case create|list|show')
+    expect(output).toContain('project create|list|show')
     expect(output).toContain('files list|show|write|delete|search')
     expect(output).not.toContain('schedule')
   })

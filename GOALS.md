@@ -7,14 +7,14 @@
 AIWorker 的重构目的不是把旧 worker/admin/dashboard 换皮，也不是与一线 coding
 engine、agent runtime 或创意生成工具竞争。AIWorker 要成为 **team/org 的垂直
 Soul 工作台**：借助已经成熟的外部 engine，面向 HR、PM、QA、DevOps、finance、
-legal、ops 等团队职能，提供可复用的 Soul、能力模板、领域系统、连接器、案例流和
+legal、ops 等团队职能，提供可复用的 Soul、能力模板、领域系统、连接器、项目流和
 组织记忆。
 
 Open Design 的参考价值在于产品意图和信息架构，而不是图片/视频领域本身：
 
 ```text
 Open Design: design skill -> design system -> template -> project/run -> artifact
-AIWorker:    Soul -> domain system -> capability template -> case/run -> business artifact
+AIWorker:    Soul -> domain system -> capability template -> project/run -> business artifact
 ```
 
 AIWorker 不做图片/视频设计，不做 coding engine，不做 executor 平台。它把 Open
@@ -40,7 +40,7 @@ AIWorker 的第一性价值应落在 team/org 更需要垂直沉淀的角色：
 这些 Soul 的共同点不是同一个任务名，而是同一种产品结构：
 
 ```text
-Soul catalog -> capability template -> domain system -> case -> engine run
+Soul catalog -> capability template -> domain system -> project -> engine run
 -> business artifact -> human review -> reusable org memory
 ```
 
@@ -53,8 +53,8 @@ AIWorker 应借鉴 Open Design 的产品语法，而不是盲目复制 UI。
 | Designs home | Soul workspace home |
 | Design skill | Soul capability |
 | Design system | Domain system / rubric / policy |
-| Image/video template | Capability template / case template |
-| Project | Domain case / team workspace |
+| Image/video template | Capability template / project template |
+| Project | Domain project / team workspace |
 | Examples | Example artifacts / playbooks |
 | Connectors | ATS / docs / issue tracker / CI / cloud / CRM connectors |
 | Settings | Execution mode, engine scan/test, connector, MCP, language, and appearance configuration |
@@ -71,7 +71,7 @@ AIWorker 负责垂直 Soul 产品面：
 - domain systems：岗位、产品线、发布线、事故域、财务/legal policy 等领域系统；
 - capability templates：面试筛选、PRD、release gate、incident review 等模板；
 - local daemon：提供本地 API、Web、run service、metadata store 和静态资源；
-- prompt composition：组合 Soul、domain system、template、workspace/case context、
+- prompt composition：组合 Soul、domain system、template、workspace/project context、
   connector evidence 与 operator input；
 - business artifacts：把 engine 输出变成可定位、可审查、可复用的业务产物；
 - review/admission：由人确认 artifact 质量，再把有价值经验晋升为组织记忆；
@@ -138,7 +138,7 @@ Soul 是用户理解的产品单位；pack 是文件和运行时投影。
 - `SKILL.md`：Soul 擅长什么、边界、输出标准、工作姿态；
 - `SYSTEM.md` 或等价 domain-system 文件：业务约定、rubric、policy、artifact 预期；
 - capability templates；
-- example artifacts、case templates 和 review rubrics；
+- example artifacts、project templates 和 review rubrics；
 - connector descriptors 和 readiness checks；
 - 可选 executor bootstrap hint。
 
@@ -177,8 +177,8 @@ navigation 或 README onboarding。
 1. 产品北极星与目标架构重置为 vertical Soul workspace；
 2. Soul catalog 与内置 HR/PM/QA/DevOps 优先级；
 3. capability template / domain system 文件模型；
-4. local daemon 的 Soul/template/case API；
-5. Web 首屏：Soul catalog + capability templates + case/run/artifact；
+4. local daemon 的 Soul/template/project API；
+5. Web 首屏：Soul catalog + capability templates + project/run/artifact；
 6. Settings：Local CLI / BYOK、engine scan/test、connectors、MCP、language、
    appearance、autosave；
 7. business artifact preview；

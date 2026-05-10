@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-10 (QA-026 completed)
+> Updated: 2026-05-10 (REFACTOR-044 in progress)
 
 ## Usage
 
@@ -317,3 +317,7 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REFACTOR-042 Soul and Skill data model**](REFACTOR-042.md) `P0`
 - [x] [**REFACTOR-043 Settings full implementation**](REFACTOR-043.md) `P0`
 - [x] [**QA-026 End-to-end vertical Soul MVP validation**](QA-026.md) `P0`
+- [-] [**REFACTOR-044 OD-style vertical Soul workspace correction**](REFACTOR-044.md) `P0`
+- [-] [**QA-027 OD-style vertical Soul MVP correction validation**](QA-027.md) `P0`
+- [x] [**REFACTOR-045 Soul project semantics and init artifact purge**](REFACTOR-045.md) `P0`
+- [x] [**QA-028 Soul project MVP validation**](QA-028.md) `P0`

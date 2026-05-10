@@ -1,8 +1,8 @@
 import type {
   ArtifactRow,
-  CaseRow,
   FileRow,
   LessonRow,
+  ProjectRow,
   ReviewRow,
   RunEventRow,
   RunRow,
@@ -13,28 +13,28 @@ import type { LocalExecutor, LocalExecutorResult } from './executor'
 import { randomUUID } from 'node:crypto'
 import {
   appendRunEvent,
-  createCase,
   createLesson,
+  createProject,
   createReview,
   createRun,
-  getCase,
+  getProject,
   getWorkspace,
   listArtifacts,
-  listCases,
   listFiles,
   listLessons,
+  listProjects,
   listReviews,
   listRunEvents,
   listRuns,
   nextRunEventSeq,
   registerArtifact,
-  updateCase,
+  updateProject,
   updateRun,
   upsertFile,
   upsertWorkspace,
 } from '@zonease/aiworker-storage-sqlite/worker'
 import { LocalWorkerEventBus } from './events'
-import { createNoopExecutor } from './executor'
+import { createLocalTemplateExecutor } from './executor'
 import { LocalWorkspaceFiles } from './files'
 
 export interface LocalWorkerRuntimeOptions {
@@ -48,7 +48,7 @@ export interface LocalWorkerRuntimeOptions {
   now?: () => string
 }
 
-export interface CreateLocalCaseInput {
+export interface CreateLocalProjectInput {
   title: string
   body: string
   selectedSoulId: string
@@ -57,7 +57,7 @@ export interface CreateLocalCaseInput {
 }
 
 export interface LocalRunStartInput {
-  caseId?: string
+  projectId?: string
   prompt?: string
   executor?: string
   metadata?: Record<string, unknown>
@@ -74,7 +74,7 @@ export interface LocalRunStartResult {
 
 export interface LocalWorkspaceSnapshot {
   workspace: WorkspaceRow
-  cases: CaseRow[]
+  projects: ProjectRow[]
   runs: RunRow[]
   files: FileRow[]
   artifacts: ArtifactRow[]
@@ -93,7 +93,7 @@ export class LocalWorkerRuntime {
   constructor(options: LocalWorkerRuntimeOptions) {
     this.#workerId = options.workerId
     this.#workspaceInput = options.workspace
-    this.#executor = options.executor ?? createNoopExecutor()
+    this.#executor = options.executor ?? createLocalTemplateExecutor()
     this.#now = options.now ?? (() => new Date().toISOString())
     this.files = new LocalWorkspaceFiles(options.workspace.rootPath)
   }
@@ -112,9 +112,9 @@ export class LocalWorkerRuntime {
     })
   }
 
-  createCase(input: CreateLocalCaseInput): CaseRow {
+  createProject(input: CreateLocalProjectInput): ProjectRow {
     const workspace = this.requireWorkspace()
-    return createCase({
+    return createProject({
       id: randomUUID(),
       workspaceId: workspace.id,
       title: input.title,
@@ -129,23 +129,23 @@ export class LocalWorkerRuntime {
 
   async startRun(input: LocalRunStartInput = {}): Promise<LocalRunStartResult> {
     const workspace = this.requireWorkspace()
-    const caseRecord = input.caseId ? this.requireCase(input.caseId) : null
-    const prompt = input.prompt ?? caseRecord?.body
+    const projectRecord = input.projectId ? this.requireProject(input.projectId) : null
+    const prompt = input.prompt ?? projectRecord?.body
     if (!prompt)
-      throw new Error('Run requires a prompt or a case id.')
+      throw new Error('Run requires a prompt or a project id.')
 
     const metadata = {
-      ...(caseRecord?.metadataJson ?? {}),
+      ...(projectRecord?.metadataJson ?? {}),
       ...(input.metadata ?? {}),
-      selectedSoulId: caseRecord?.selectedSoulId ?? input.metadata?.selectedSoulId,
-      selectedSkillId: caseRecord?.selectedSkillId ?? input.metadata?.selectedSkillId,
-      caseId: caseRecord?.id ?? input.caseId ?? null,
+      selectedSoulId: projectRecord?.selectedSoulId ?? input.metadata?.selectedSoulId,
+      selectedSkillId: projectRecord?.selectedSkillId ?? input.metadata?.selectedSkillId,
+      projectId: projectRecord?.id ?? input.projectId ?? null,
     }
 
     const run = createRun({
       id: randomUUID(),
       workspaceId: workspace.id,
-      caseId: caseRecord?.id ?? null,
+      projectId: projectRecord?.id ?? null,
       executor: input.executor ?? 'local',
       prompt,
       status: 'running',
@@ -153,12 +153,13 @@ export class LocalWorkerRuntime {
       startedAt: this.#now(),
       at: this.#now(),
     })
-    if (caseRecord)
-      updateCase({ id: caseRecord.id, status: 'running', at: this.#now() })
+    if (projectRecord)
+      updateProject({ id: projectRecord.id, status: 'running', at: this.#now() })
     this.appendEvent(run.id, 'status', { status: 'running' })
 
     try {
       const result = await this.#executor.run({
+        executor: input.executor,
         workspaceId: workspace.id,
         workspaceRoot: this.files.root,
         runId: run.id,
@@ -174,8 +175,8 @@ export class LocalWorkerRuntime {
         finishedAt: this.#now(),
         at: this.#now(),
       })
-      if (caseRecord)
-        updateCase({ id: caseRecord.id, status: 'completed', at: this.#now() })
+      if (projectRecord)
+        updateProject({ id: projectRecord.id, status: 'completed', at: this.#now() })
       this.appendEvent(run.id, 'status', { status: 'succeeded' })
       this.bus.emit({ kind: 'run', workspaceId: workspace.id, runId: run.id, payload: { status: 'succeeded' }, at: this.#now() })
       return {
@@ -193,8 +194,8 @@ export class LocalWorkerRuntime {
         finishedAt: this.#now(),
         at: this.#now(),
       })
-      if (caseRecord)
-        updateCase({ id: caseRecord.id, status: 'failed', at: this.#now() })
+      if (projectRecord)
+        updateProject({ id: projectRecord.id, status: 'failed', at: this.#now() })
       this.appendEvent(run.id, 'error', { message })
       this.bus.emit({ kind: 'run', workspaceId: workspace.id, runId: run.id, payload: { status: 'failed' }, at: this.#now() })
       return {
@@ -212,7 +213,7 @@ export class LocalWorkerRuntime {
     const workspace = this.requireWorkspace()
     return {
       workspace,
-      cases: listCases(workspace.id),
+      projects: listProjects(workspace.id),
       runs: listRuns(workspace.id),
       files: listFiles(workspace.id),
       artifacts: listArtifacts(workspace.id),
@@ -312,11 +313,11 @@ export class LocalWorkerRuntime {
     return workspace
   }
 
-  private requireCase(id: string): CaseRow {
-    const caseRecord = getCase(id)
-    if (!caseRecord)
-      throw new Error(`Case not found: ${id}`)
-    return caseRecord
+  private requireProject(id: string): ProjectRow {
+    const projectRecord = getProject(id)
+    if (!projectRecord)
+      throw new Error(`Project not found: ${id}`)
+    return projectRecord
   }
 }
 

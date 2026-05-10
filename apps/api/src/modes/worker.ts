@@ -1,6 +1,6 @@
 import type { LocalExecutor, LocalWorkerRuntime } from '@zonease/aiworker-core'
 import type { LocalEngineStatus, LocalSettingsConfig } from '@zonease/aiworker-shared'
-import type { CaseRow, LessonRow, ReviewRow, RunEventRow } from '@zonease/aiworker-storage-sqlite/worker'
+import type { LessonRow, ProjectRow, ReviewRow, RunEventRow } from '@zonease/aiworker-storage-sqlite/worker'
 
 import type { Context } from 'hono'
 import { Buffer } from 'node:buffer'
@@ -26,14 +26,14 @@ import {
   createLesson,
   createReview,
   getArtifact,
-  getCase,
+  getProject,
   getReview,
   getRun,
   initWorkerDb,
   listArtifacts,
-  listCases,
   listFiles,
   listLessons,
+  listProjects,
   listReviews,
   listRunEvents,
   listRuns,
@@ -41,8 +41,8 @@ import {
   nextRunEventSeq,
   runWorkerMigrations,
   setSetting,
-  updateCase,
   updateLesson,
+  updateProject,
   updateRun,
   upsertFile,
   upsertWorkspace,
@@ -54,6 +54,7 @@ import { requestLogger } from '../shared/middleware/logger'
 const DEFAULT_RUNTIME_VERSION = 'dev'
 const LOCAL_SETTINGS_KEY = 'local-settings'
 const ENGINE_COMMANDS = [
+  { id: 'workspace-template', name: 'AIWorker Template Runner', command: 'internal' },
   { id: 'claude-code', name: 'Claude Code', command: 'claude' },
   { id: 'codex', name: 'Codex CLI', command: 'codex' },
   { id: 'cursor', name: 'Cursor Agent', command: 'cursor-agent' },
@@ -99,12 +100,12 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
 
   const runtimeVersion = options.runtimeVersion ?? DEFAULT_RUNTIME_VERSION
   const workspace = options.workspace ?? {
-    id: 'local',
-    name: 'Local Workspace',
+    id: 'soul-workspace',
+    name: 'Soul Workspace',
     rootPath: workerEnv.WORKER_WORKSPACE_ROOT,
   }
   const runtime = createLocalWorkerRuntime({
-    workerId: options.workerId ?? 'local-worker',
+    workerId: options.workerId ?? 'soul-worker',
     workspace,
     executor: options.executor,
     now: options.now,
@@ -133,7 +134,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   })
 
   app.get('/health', c => c.json({
-    mode: 'local',
+    mode: 'soul-workspace',
     status: 'ok',
     workerId: state.workerId,
     runtimeVersion: state.runtimeVersion,
@@ -181,8 +182,8 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     return c.json({ template })
   })
 
-  app.get('/api/local/cases', c => c.json({ cases: listCases(workspace.id) }))
-  app.post('/api/local/cases', async (c) => {
+  app.get('/api/local/projects', c => c.json({ projects: listProjects(workspace.id) }))
+  app.post('/api/local/projects', async (c) => {
     const body = await readJson<{
       body?: string
       metadata?: Record<string, unknown>
@@ -198,7 +199,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
       throw new Error(`Unknown or unavailable Soul: ${selectedSoulId}`)
     if (!template || template.soulId !== soul.id)
       throw new Error(`Template ${selectedSkillId} does not belong to Soul ${selectedSoulId}.`)
-    const caseRecord = state.runtime.createCase({
+    const projectRecord = state.runtime.createProject({
       title: requireString(body.title, 'title'),
       body: requireString(body.body, 'body'),
       selectedSoulId,
@@ -211,27 +212,36 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
         skillName: template.name,
       },
     })
-    return c.json({ case: caseRecord }, 201)
+    return c.json({ project: projectRecord }, 201)
   })
-  app.get('/api/local/cases/:id', (c) => {
-    const caseRecord = getCase(c.req.param('id'))
-    if (!caseRecord)
-      return notFound(c, 'case')
-    return c.json({ case: caseRecord })
+  app.get('/api/local/projects/:id', (c) => {
+    const projectRecord = getProject(c.req.param('id'))
+    if (!projectRecord)
+      return notFound(c, 'project')
+    return c.json({ project: projectRecord })
   })
-  app.patch('/api/local/cases/:id', async (c) => {
-    const body = await readJson<Partial<Pick<CaseRow, 'body' | 'metadataJson' | 'selectedSkillId' | 'selectedSoulId' | 'status' | 'title'>>>(c.req)
-    return c.json({ case: updateCase({ id: c.req.param('id'), ...body }) })
+  app.patch('/api/local/projects/:id', async (c) => {
+    const body = await readJson<Partial<Pick<ProjectRow, 'body' | 'metadataJson' | 'selectedSkillId' | 'selectedSoulId' | 'status' | 'title'>>>(c.req)
+    return c.json({ project: updateProject({ id: c.req.param('id'), ...body }) })
   })
 
   app.get('/api/local/runs', c => c.json({ runs: listRuns(workspace.id) }))
   app.post('/api/local/runs', async (c) => {
-    const body = await readJson<{ caseId?: string, prompt?: string, executor?: string, metadata?: Record<string, unknown> }>(c.req)
+    const body = await readJson<{ projectId?: string, prompt?: string, executor?: string, metadata?: Record<string, unknown> }>(c.req)
+    const settings = loadLocalSettings()
+    const selectedEngine = settings.engines.find(engine => engine.id === settings.engineId)
     const result = await state.runtime.startRun({
-      caseId: body.caseId,
+      projectId: body.projectId,
       prompt: body.prompt,
-      executor: body.executor,
-      metadata: body.metadata,
+      executor: body.executor ?? (settings.executionMode === 'local-cli' ? settings.engineId : settings.byok.provider),
+      metadata: {
+        ...(body.metadata ?? {}),
+        byok: settings.byok,
+        engineCommand: selectedEngine?.command ?? null,
+        engineId: settings.engineId,
+        engineName: selectedEngine?.name ?? null,
+        executionMode: settings.executionMode,
+      },
     })
     return c.json(result, 201)
   })
@@ -365,6 +375,8 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     const engine = settings.engines.find(engine => engine.id === engineId)
     if (!engine)
       return c.json({ result: { engineId, message: 'Engine is not known in local settings.', status: 'fail' } }, 404)
+    if (engine.command === 'internal')
+      return c.json({ result: { engineId, message: `${engine.name} is available as a built-in local runner.`, status: 'pass' } })
     if (!engine.installed)
       return c.json({ result: { engineId, message: `${engine.name} is not installed on PATH.`, status: 'fail' } })
     return c.json({ result: { engineId, message: `${engine.name} responded as ${engine.version ?? engine.path}.`, status: 'pass' } })
@@ -381,7 +393,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     info: {
       title: 'AIWorker Local Daemon API',
       version: runtimeVersion,
-      description: 'Local vertical Soul workspace API for Souls, templates, cases, runs, artifacts, reviews, memory candidates, and settings.',
+      description: 'Vertical Soul workspace API for Souls, templates, projects, runs, artifacts, reviews, memory candidates, and settings.',
     },
   })
   app.get('/docs', apiReference({ spec: { url: '/openapi.json' } }))
@@ -475,6 +487,16 @@ function defaultLocalSettings(): LocalSettingsConfig {
 
 function scanLocalEngines(): LocalEngineStatus[] {
   return ENGINE_COMMANDS.map((engine) => {
+    if (engine.command === 'internal') {
+      return {
+        command: engine.command,
+        id: engine.id,
+        installed: true,
+        name: engine.name,
+        path: 'internal',
+        version: 'built-in structured artifact renderer',
+      }
+    }
     const found = commandOutput('bash', ['-lc', `command -v ${engine.command}`]).trim()
     if (!found) {
       return {
@@ -527,17 +549,17 @@ function registerLocalOpenApiPaths(app: OpenAPIHono): void {
     tags: string[]
     created?: boolean
   }> = [
-    { method: 'get', path: '/api/local/info', summary: 'Local daemon info', tags: ['info'] },
-    { method: 'get', path: '/api/local/workspace', summary: 'Show local workspace', tags: ['workspace'] },
-    { method: 'patch', path: '/api/local/workspace', summary: 'Update local workspace metadata', tags: ['workspace'] },
+    { method: 'get', path: '/api/local/info', summary: 'Workspace daemon info', tags: ['info'] },
+    { method: 'get', path: '/api/local/workspace', summary: 'Show Soul workspace', tags: ['workspace'] },
+    { method: 'patch', path: '/api/local/workspace', summary: 'Update Soul workspace metadata', tags: ['workspace'] },
     { method: 'get', path: '/api/local/souls', summary: 'List vertical Souls', tags: ['souls'] },
     { method: 'get', path: '/api/local/souls/{id}', summary: 'Show vertical Soul', tags: ['souls'] },
     { method: 'get', path: '/api/local/templates', summary: 'List capability templates', tags: ['templates'] },
     { method: 'get', path: '/api/local/templates/{id}', summary: 'Show capability template', tags: ['templates'] },
-    { method: 'get', path: '/api/local/cases', summary: 'List cases', tags: ['cases'] },
-    { method: 'post', path: '/api/local/cases', summary: 'Create case', tags: ['cases'], created: true },
-    { method: 'get', path: '/api/local/cases/{id}', summary: 'Show case', tags: ['cases'] },
-    { method: 'patch', path: '/api/local/cases/{id}', summary: 'Update case', tags: ['cases'] },
+    { method: 'get', path: '/api/local/projects', summary: 'List projects', tags: ['projects'] },
+    { method: 'post', path: '/api/local/projects', summary: 'Create project', tags: ['projects'], created: true },
+    { method: 'get', path: '/api/local/projects/{id}', summary: 'Show project', tags: ['projects'] },
+    { method: 'patch', path: '/api/local/projects/{id}', summary: 'Update project', tags: ['projects'] },
     { method: 'get', path: '/api/local/runs', summary: 'List runs', tags: ['runs'] },
     { method: 'post', path: '/api/local/runs', summary: 'Start run', tags: ['runs'], created: true },
     { method: 'get', path: '/api/local/runs/{id}', summary: 'Show run', tags: ['runs'] },
@@ -556,11 +578,11 @@ function registerLocalOpenApiPaths(app: OpenAPIHono): void {
     { method: 'get', path: '/api/local/lessons', summary: 'List lessons', tags: ['lessons'] },
     { method: 'post', path: '/api/local/lessons', summary: 'Create lesson', tags: ['lessons'], created: true },
     { method: 'patch', path: '/api/local/lessons/{id}', summary: 'Update lesson', tags: ['lessons'] },
-    { method: 'get', path: '/api/local/settings', summary: 'Show local settings', tags: ['settings'] },
+    { method: 'get', path: '/api/local/settings', summary: 'Show settings', tags: ['settings'] },
     { method: 'patch', path: '/api/local/settings', summary: 'Update settings', tags: ['settings'] },
-    { method: 'post', path: '/api/local/settings/engines/rescan', summary: 'Rescan local engines', tags: ['settings'], created: true },
-    { method: 'post', path: '/api/local/settings/engines/test', summary: 'Test local engine', tags: ['settings'], created: true },
-    { method: 'get', path: '/api/local/events', summary: 'List local run events', tags: ['events'] },
+    { method: 'post', path: '/api/local/settings/engines/rescan', summary: 'Rescan engines', tags: ['settings'], created: true },
+    { method: 'post', path: '/api/local/settings/engines/test', summary: 'Test engine', tags: ['settings'], created: true },
+    { method: 'get', path: '/api/local/events', summary: 'List run events', tags: ['events'] },
   ]
 
   for (const path of paths) {

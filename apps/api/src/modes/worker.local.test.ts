@@ -13,7 +13,7 @@ describe('local daemon API', () => {
 
   beforeEach(() => {
     closeWorkerDb()
-    dir = mkdtempSync(join(tmpdir(), 'aiworker-local-api-'))
+    dir = mkdtempSync(join(tmpdir(), 'aiworker-workspace-api-'))
   })
 
   afterEach(async () => {
@@ -29,7 +29,7 @@ describe('local daemon API', () => {
         name: 'Hiring Workspace',
         rootPath: join(dir, 'workspace'),
       },
-      workerId: 'worker-local',
+      workerId: 'soul-worker',
       token,
       runtimeVersion: 'test',
       executor: {
@@ -49,7 +49,7 @@ describe('local daemon API', () => {
   it('serves the workspace loop through /api/local routes', async () => {
     const target = await app()
 
-    const caseRes = await target.request('/api/local/cases', {
+    const projectRes = await target.request('/api/local/projects', {
       method: 'POST',
       body: JSON.stringify({
         body: 'Review packet',
@@ -59,12 +59,12 @@ describe('local daemon API', () => {
       }),
       headers: { 'content-type': 'application/json' },
     })
-    expect(caseRes.status).toBe(201)
-    const caseBody = await caseRes.json() as { case: { id: string } }
+    expect(projectRes.status).toBe(201)
+    const projectBody = await projectRes.json() as { project: { id: string } }
 
     const runRes = await target.request('/api/local/runs', {
       method: 'POST',
-      body: JSON.stringify({ caseId: caseBody.case.id }),
+      body: JSON.stringify({ projectId: projectBody.project.id }),
       headers: { 'content-type': 'application/json' },
     })
     expect(runRes.status).toBe(201)
@@ -82,7 +82,7 @@ describe('local daemon API', () => {
     expect(eventsBody.events.length).toBeGreaterThan(0)
   })
 
-  it('requires bearer auth only when a local token is configured', async () => {
+  it('requires bearer auth only when a workspace token is configured', async () => {
     const target = await app('local-token-123456')
 
     expect((await target.request('/api/local/info')).status).toBe(401)
@@ -91,7 +91,7 @@ describe('local daemon API', () => {
     })).status).toBe(200)
   })
 
-  it('documents only the local API surface', async () => {
+  it('documents only the workspace API surface', async () => {
     const target = await app()
     const doc = await (await target.request('/openapi.json')).json() as { paths: Record<string, unknown> }
     const paths = Object.keys(doc.paths)
@@ -105,13 +105,14 @@ describe('local daemon API', () => {
     expect(paths.some(path => path.startsWith('/api/worker'))).toBe(false)
   })
 
-  it('persists local settings and supports engine rescan/test actions', async () => {
+  it('persists settings and supports engine rescan/test actions', async () => {
     const target = await app()
 
     const settingsRes = await target.request('/api/local/settings')
     expect(settingsRes.status).toBe(200)
-    const initial = await settingsRes.json() as { settings: { executionMode: string } }
+    const initial = await settingsRes.json() as { settings: { engineId: string, executionMode: string } }
     expect(['local-cli', 'byok']).toContain(initial.settings.executionMode)
+    expect(initial.settings.engineId).toBe('workspace-template')
 
     const patchRes = await target.request('/api/local/settings', {
       method: 'PATCH',
@@ -122,10 +123,12 @@ describe('local daemon API', () => {
     expect((await patchRes.json() as { settings: { language: string } }).settings.language).toBe('zh-CN')
 
     expect((await target.request('/api/local/settings/engines/rescan', { method: 'POST' })).status).toBe(200)
-    expect((await target.request('/api/local/settings/engines/test', {
+    const testRes = await target.request('/api/local/settings/engines/test', {
       method: 'POST',
-      body: JSON.stringify({ engineId: 'codex' }),
+      body: JSON.stringify({ engineId: 'workspace-template' }),
       headers: { 'content-type': 'application/json' },
-    })).status).toBe(200)
+    })
+    expect(testRes.status).toBe(200)
+    expect(await testRes.json()).toMatchObject({ result: { status: 'pass' } })
   })
 })

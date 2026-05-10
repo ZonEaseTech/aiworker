@@ -9,7 +9,7 @@ artifact。AIWorker 把这套结构迁移到 HR、PM、QA、DevOps、finance、l
 
 ```text
 Soul + domain system + capability template
-  -> case
+  -> project
   -> engine run
   -> business artifact
   -> review
@@ -36,8 +36,8 @@ AIWorker 的主要价值在更需要组织沉淀的垂直职能：
 | --- | --- |
 | Design skill | Soul capability |
 | Design system | Domain system / rubric / policy |
-| Image/video template | Capability template / case template |
-| Project | Domain case / team workspace |
+| Image/video template | Capability template / project template |
+| Project | Domain project / team workspace |
 | Examples | Example artifacts / playbooks |
 | Connectors | ATS / docs / issue tracker / CI / cloud / CRM connectors |
 | Run stream | Engine run stream |
@@ -77,8 +77,8 @@ AIWorker 只通过薄 adapter 调用和观察 engine，不把自己做成 execut
 aiworker init --name "Team Workspace" --root .
 aiworker soul list
 aiworker template list --soul hr
-aiworker case create --soul hr --skill candidate-screen --title "Screen candidate" --body "Role and candidate evidence"
-aiworker run start --case <caseId>
+aiworker project create --soul hr --skill candidate-screen --title "Screen candidate" --body "Role and candidate evidence"
+aiworker run start --project <projectId>
 aiworker artifacts list
 ```
 
@@ -90,7 +90,7 @@ bun run --filter '@zonease/aiworker-web' dev
 ```
 
 打开 Web 后，首屏就是 Soul catalog。用户选择 HR / PM / QA / DevOps Soul，选择该 Soul
-下的 capability template，创建 case/run，并在右侧看到对应业务 artifact。Settings 由右上
+下的 capability template，创建 project/run，并在右侧看到对应业务 artifact。Settings 由右上
 settings button 打开，支持 Local CLI / BYOK、engine scan/test、connectors、MCP、
 language、appearance 和 autosave。
 
@@ -143,8 +143,8 @@ bun run --filter '@zonease/aiworker-cli' build:bundle
 1. 产品北极星与目标架构重置为 vertical Soul workspace；
 2. Soul catalog 与内置 HR/PM/QA/DevOps 优先级；
 3. capability template / domain system 文件模型；
-4. local daemon 的 Soul/template/case API；
-5. Web 首屏：Soul catalog + capability templates + case/run/artifact；
+4. local daemon 的 Soul/template/project API；
+5. Web 首屏：Soul catalog + capability templates + project/run/artifact；
 6. Settings：Local CLI / BYOK、engine scan/test、connectors、MCP、language、
    appearance、autosave；
 7. business artifact preview；

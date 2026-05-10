@@ -91,7 +91,7 @@ describe('resolveAiworkerScope priority', () => {
       const result = resolveAiworkerScope({ cwd: tmp })
       expect(result.scope).toBe('project')
       expect(result.projectRoot).toBe(tmp)
-      expect(result.home).toBe(path.join(tmp, '.aiworker', 'local'))
+      expect(result.home).toBe(path.join(tmp, '.aiworker', 'runtime'))
       expect(result.source).toBe('project-detect')
     }
     finally {
@@ -134,7 +134,7 @@ describe('resolveAiworkerScope priority', () => {
       const result = resolveAiworkerScope({ cwd: tmp })
       expect(result.scope).toBe('project')
       expect(result.projectRoot).toBe(tmp)
-      expect(result.home).toBe(path.join(tmp, '.aiworker', 'local'))
+      expect(result.home).toBe(path.join(tmp, '.aiworker', 'runtime'))
     }
     finally {
       if (savedHome === undefined)
@@ -259,8 +259,8 @@ describe('worker / brain / workspaces paths in project scope', () => {
         const canonicalTmp = await realpath(tmp)
         expect(resolveWorkerHome('wkr_xyz')).toBe(path.join(canonicalTmp, '.aiworker'))
         expect(resolveBrainHome('wkr_xyz')).toBe(path.join(canonicalTmp, '.aiworker'))
-        expect(resolveWorkspacesRoot('wkr_xyz')).toBe(path.join(canonicalTmp, '.aiworker', 'local', 'workspaces'))
-        expect(resolveAiworkerHome()).toBe(path.join(canonicalTmp, '.aiworker', 'local'))
+        expect(resolveWorkspacesRoot('wkr_xyz')).toBe(path.join(canonicalTmp, '.aiworker', 'runtime', 'workspaces'))
+        expect(resolveAiworkerHome()).toBe(path.join(canonicalTmp, '.aiworker', 'runtime'))
       }
       finally {
         process.chdir(cwdSave)
@@ -271,7 +271,7 @@ describe('worker / brain / workspaces paths in project scope', () => {
     }
   })
 
-  it('resolveWorkerHome → <home>/workers/<id>/ in user / explicit scope (back-compat)', () => {
+  it('resolveWorkerHome → <home>/workers/<id>/ in user / explicit scope', () => {
     process.env.AIWORKER_HOME = '/tmp/explicit-home'
     expect(resolveWorkerHome('wkr_abc')).toBe('/tmp/explicit-home/workers/wkr_abc')
     expect(resolveBrainHome('wkr_abc')).toBe('/tmp/explicit-home/workers/wkr_abc/brain')
@@ -280,41 +280,33 @@ describe('worker / brain / workspaces paths in project scope', () => {
 })
 
 describe('ensureProjectAiworker', () => {
-  it('seeds full project layout idempotently', async () => {
+  it('seeds product-facing Soul workspace layout idempotently', async () => {
     const tmp = await makeTmpDir()
     try {
       await ensureProjectAiworker(tmp)
       const aiworker = path.join(tmp, '.aiworker')
 
       // dirs
-      for (const d of ['memories', 'local', 'local/workspaces']) {
+      for (const d of ['memories', 'projects', 'artifacts']) {
         const s = await stat(path.join(aiworker, d))
         expect(s.isDirectory()).toBe(true)
       }
       await expect(stat(path.join(aiworker, 'skills'))).rejects.toThrow()
+      await expect(stat(path.join(aiworker, 'runtime'))).rejects.toThrow()
+      await expect(stat(path.join(aiworker, 'local'))).rejects.toThrow()
 
-      // Project Brain docs and manifests
-      for (const f of ['SOUL.md', 'USER.md', 'MEMORY.md', 'ROLLUP.md', 'policy.json', 'brain-capabilities.json', 'executor-capabilities.json']) {
+      // Soul workspace docs
+      for (const f of ['SOUL.md', 'DOMAIN.md', 'TEMPLATES.md', 'PROJECTS.md', 'MEMORY.md']) {
         const s = await stat(path.join(aiworker, f))
         expect(s.isFile()).toBe(true)
       }
+      for (const f of ['USER.md', 'ROLLUP.md', 'policy.json', 'scope.json', 'brain-capabilities.json', 'executor-capabilities.json']) {
+        await expect(stat(path.join(aiworker, f))).rejects.toThrow()
+      }
 
-      const policy = JSON.parse(await readFile(path.join(aiworker, 'policy.json'), 'utf8'))
-      expect(policy.status).toBe('draft')
-      const brainCapabilities = JSON.parse(await readFile(path.join(aiworker, 'brain-capabilities.json'), 'utf8'))
-      expect(brainCapabilities.defaultToolsets).toEqual([])
-      expect(brainCapabilities.packs).toEqual([])
-      expect(brainCapabilities.mcp).toEqual({ servers: {} })
-      const executorCapabilities = JSON.parse(await readFile(path.join(aiworker, 'executor-capabilities.json'), 'utf8'))
-      expect(executorCapabilities).toEqual({ schemaVersion: 1, engines: {} })
-
-      // .gitignore in .aiworker/ ignores local/
+      // .gitignore in .aiworker/ ignores runtime state only.
       const topGitignore = await readFile(path.join(aiworker, '.gitignore'), 'utf8')
-      expect(topGitignore).toContain('local/')
-
-      // local/.gitignore is the catch-all
-      const localGitignore = await readFile(path.join(aiworker, 'local', '.gitignore'), 'utf8')
-      expect(localGitignore).toBe('*\n!.gitignore\n')
+      expect(topGitignore).toBe('runtime/\n')
     }
     finally {
       await cleanup(tmp)
@@ -331,53 +323,6 @@ describe('ensureProjectAiworker', () => {
       await ensureProjectAiworker(tmp)
       const persisted = await readFile(path.join(aiworker, 'SOUL.md'), 'utf8')
       expect(persisted).toBe('# Custom soul\n')
-    }
-    finally {
-      await cleanup(tmp)
-    }
-  })
-
-  it('does not write scope.json when seed.scopeJson is omitted', async () => {
-    const tmp = await makeTmpDir()
-    try {
-      await ensureProjectAiworker(tmp)
-      const scopePath = path.join(tmp, '.aiworker', 'scope.json')
-      let exists = true
-      try {
-        await stat(scopePath)
-      }
-      catch {
-        exists = false
-      }
-      expect(exists).toBe(false)
-    }
-    finally {
-      await cleanup(tmp)
-    }
-  })
-
-  it('writes scope.json when seed.scopeJson is provided and preserves existing content on re-run', async () => {
-    const tmp = await makeTmpDir()
-    try {
-      const initial = `${JSON.stringify({
-        kind: 'developer-repo',
-        primarySoul: 'developer',
-        schemaVersion: 1,
-      }, null, 2)}\n`
-
-      await ensureProjectAiworker(tmp, { scopeJson: initial })
-      const scopePath = path.join(tmp, '.aiworker', 'scope.json')
-      const written = await readFile(scopePath, 'utf8')
-      expect(written).toBe(initial)
-
-      const overwriteAttempt = `${JSON.stringify({
-        kind: 'hiring-pool',
-        primarySoul: 'hr-recruiting',
-        schemaVersion: 1,
-      }, null, 2)}\n`
-      await ensureProjectAiworker(tmp, { scopeJson: overwriteAttempt })
-      const persisted = await readFile(scopePath, 'utf8')
-      expect(persisted).toBe(initial)
     }
     finally {
       await cleanup(tmp)
@@ -561,8 +506,8 @@ describe('ensureWorkerHome in project scope is template-no-op', () => {
       process.chdir(tmp)
       try {
         await ensureWorkerHome('wkr_xyz')
-        // workspaces ensured
-        const ws = await stat(path.join(tmp, '.aiworker', 'local', 'workspaces'))
+        // runtime workspaces ensured separately from project initialization.
+        const ws = await stat(path.join(tmp, '.aiworker', 'runtime', 'workspaces'))
         expect(ws.isDirectory()).toBe(true)
         // SOUL.md NOT re-seeded
         let soulMissing = false

@@ -17,8 +17,8 @@ export const workspaces = sqliteTable(
   }),
 )
 
-export const cases = sqliteTable(
-  'cases',
+export const projects = sqliteTable(
+  'projects',
   {
     id: text('id').primaryKey(),
     workspaceId: text('workspace_id').notNull().references(() => workspaces.id, { onDelete: 'cascade' }),
@@ -32,9 +32,9 @@ export const cases = sqliteTable(
     updatedAt: text('updated_at').notNull().$defaultFn(nowIso),
   },
   table => ({
-    soulUpdatedAtIdx: index('cases_soul_updated_at_idx').on(table.selectedSoulId, table.updatedAt),
-    statusUpdatedAtIdx: index('cases_status_updated_at_idx').on(table.status, table.updatedAt),
-    workspaceUpdatedAtIdx: index('cases_workspace_updated_at_idx').on(table.workspaceId, table.updatedAt),
+    soulUpdatedAtIdx: index('projects_soul_updated_at_idx').on(table.selectedSoulId, table.updatedAt),
+    statusUpdatedAtIdx: index('projects_status_updated_at_idx').on(table.status, table.updatedAt),
+    workspaceUpdatedAtIdx: index('projects_workspace_updated_at_idx').on(table.workspaceId, table.updatedAt),
   }),
 )
 
@@ -43,7 +43,7 @@ export const runs = sqliteTable(
   {
     id: text('id').primaryKey(),
     workspaceId: text('workspace_id').notNull().references(() => workspaces.id, { onDelete: 'cascade' }),
-    caseId: text('case_id').references(() => cases.id, { onDelete: 'set null' }),
+    projectId: text('project_id').references(() => projects.id, { onDelete: 'set null' }),
     status: text('status', { enum: ['queued', 'running', 'succeeded', 'failed', 'cancelled'] }).notNull().default('queued'),
     executor: text('executor').notNull(),
     prompt: text('prompt').notNull(),
@@ -56,7 +56,7 @@ export const runs = sqliteTable(
     updatedAt: text('updated_at').notNull().$defaultFn(nowIso),
   },
   table => ({
-    caseUpdatedAtIdx: index('runs_case_updated_at_idx').on(table.caseId, table.updatedAt),
+    projectUpdatedAtIdx: index('runs_project_updated_at_idx').on(table.projectId, table.updatedAt),
     statusUpdatedAtIdx: index('runs_status_updated_at_idx').on(table.status, table.updatedAt),
     workspaceUpdatedAtIdx: index('runs_workspace_updated_at_idx').on(table.workspaceId, table.updatedAt),
   }),

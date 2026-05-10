@@ -1,5 +1,41 @@
 # AIWorker Changelog
 
+## 2026-05-10 11:26 [completed] REFACTOR-045 / PLAN-214 + QA-028 / PLAN-215 — Soul project semantics and init artifact purge
+
+User review clarified that the remaining `case` language is not the intended
+default product object and that old Project Brain initialization artifacts
+should not leak into the vertical Soul workspace. Scope:
+
+- Replace the local work object with Soul `project` across Web, API, CLI,
+  storage, shared schemas, runtime metadata, tests, and docs.
+- Remove default initialization of `.aiworker/local`, `scope.json`,
+  `brain-capabilities.json`, and `executor-capabilities.json`.
+- Keep the OD-style IA skeleton while making the visible product path
+  Soul / capability template / project / run / artifact.
+- Revalidate with focused gates, browser preview, and code-review-graph.
+
+Completed:
+
+- Replaced local `case` semantics with Soul `project` across Web, API, CLI,
+  core runtime, shared DTOs, storage schema/migration metadata, tests, and docs.
+- `aiworker init` now writes product-facing `.aiworker` Soul workspace
+  scaffolding and no longer writes `.aiworker/local`, `scope.json`,
+  `brain-capabilities.json`, or `executor-capabilities.json` by default.
+- Browser validation at `http://127.0.0.1:5178/worker/` created HR, PM, QA, and
+  DevOps projects/runs/artifacts, verified Settings Test/Rescan and `zh-CN`
+  persistence, and confirmed no visible `case` or import entry.
+- Verification passed: focused package gates, root `bun run typecheck`,
+  `bun run test`, `bun run build`, `bun run lint`, `git diff --check`, and
+  code-review-graph. Lint exits 0 with the existing five Web effect-setState
+  warnings.
+
+## 2026-05-10 11:28 [superseded] REFACTOR-044 / PLAN-212 + QA-027 / PLAN-213 — OD-style vertical Soul workspace correction
+
+This correction track was superseded before completion. User review clarified
+that the work object itself must converge from `case` to `project`, and that
+default initialization must stop carrying `.aiworker/local`, scope manifest,
+Brain capability, and executor overlay JSON artifacts.
+
 ## 2026-05-10 10:46 [completed] REFACTOR-041..043 / PLAN-208..210 + QA-026 / PLAN-211 — Vertical Soul workspace MVP
 
 Landed the out-of-box vertical Soul workspace MVP:

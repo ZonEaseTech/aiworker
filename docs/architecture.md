@@ -7,7 +7,7 @@ AIWorker 现在按一条垂直业务工作流组织：
 
 ```text
 Soul + domain system + capability template
-  -> case
+  -> project
   -> engine run
   -> business files and artifacts
   -> human review
@@ -43,13 +43,13 @@ Open Design 的参考价值在于它的项目意图：用清晰的 skill/system/
 | Soul pack | Soul 的文件化定义和运行时投影 |
 | Domain system | 领域规范、rubric、policy、style、artifact expectation |
 | Capability template | 可启动的模板，如 candidate screen、PRD、release gate、incident review |
-| Case | 一次业务工作上下文，例如候选人、需求、发布、事故、合同审查 |
-| Engine run | 外部 executor 对一个 case/template 的执行尝试 |
+| Project | 一次业务工作上下文，例如候选人、需求、发布、事故、合同审查 |
+| Engine run | 外部 executor 对一个 project/template 的执行尝试 |
 | Business artifact | 可定位的输出文件、报告、矩阵、brief、decision record、runbook |
 | Review | 人对 artifact 的质量、风险和后续动作判断 |
 | Durable org memory | 带 provenance 的可复用经验、rubric refinement、example 或 source-tagged fact |
 
-Web、README、GOALS 和 onboarding 应使用 Soul / template / case / artifact 语言；
+Web、README、GOALS 和 onboarding 应使用 Soul / template / project / artifact 语言；
 `work order` 不再是默认产品入口。
 
 ## Runtime Components
@@ -58,13 +58,13 @@ Web、README、GOALS 和 onboarding 应使用 Soul / template / case / artifact 
 
 `apps/cli` 是本地 Soul workspace 自动化入口。
 
-目标命令面应围绕 Soul 和 case 收敛：
+目标命令面应围绕 Soul 和 project 收敛：
 
 ```text
 aiworker init
 aiworker soul list
 aiworker template list
-aiworker case create|list|show
+aiworker project create|list|show
 aiworker run start|list|show|cancel
 aiworker files list|show|write|delete|search
 aiworker artifacts list|show|open
@@ -76,7 +76,7 @@ aiworker daemon start|foreground|status|stop|logs|check
 aiworker open
 ```
 
-当前 CLI 已使用 `case` 作为业务入口；`lessons` 是 memory candidate 的最小命令面，
+当前 CLI 已使用 `project` 作为业务入口；`lessons` 是 memory candidate 的最小命令面，
 后续可继续收敛命名，但不保留 `brief` 旧入口。
 
 ### Local Daemon
@@ -91,10 +91,10 @@ GET    /api/local/souls
 GET    /api/local/souls/:id
 GET    /api/local/templates
 GET    /api/local/templates/:id
-GET    /api/local/cases
-POST   /api/local/cases
-GET    /api/local/cases/:id
-PATCH  /api/local/cases/:id
+GET    /api/local/projects
+POST   /api/local/projects
+GET    /api/local/projects/:id
+PATCH  /api/local/projects/:id
 GET    /api/local/runs
 POST   /api/local/runs
 GET    /api/local/runs/:id
@@ -125,7 +125,7 @@ daemon 负责：
 - 解析 local workspace 与 `worker.db`；
 - 加载内置 vertical Souls、capability templates 和后续 Soul pack/domain system；
 - 提供 CLI/Web 共用 API；
-- 用 case/template 创建 run；
+- 用 project/template 创建 run；
 - 在 workspace cwd 下调用外部 engine adapter；
 - 写入 run event；
 - 将成功输出写成 workspace 文件；
@@ -143,7 +143,7 @@ daemon 负责：
 - soul
 - domain system
 - capability template
-- case
+- project
 - run
 - run event
 - file
@@ -152,7 +152,7 @@ daemon 负责：
 - memory proposal
 - setting
 
-Runtime 只处理 case intake、prompt composition、executor dispatch、event stream、
+Runtime 只处理 project intake、prompt composition、executor dispatch、event stream、
 assistant-output 文件落盘、artifact index、review、memory proposal。旧的通道、定时、
 审批、演化、会话路由、远程 gateway client、可见 Brain 管理面不再属于默认本地 runtime。
 
@@ -162,7 +162,7 @@ assistant-output 文件落盘、artifact index、review、memory proposal。旧�
 
 ```text
 workspaces
-cases
+projects
 runs
 run_events
 files
@@ -173,7 +173,7 @@ settings
 ```
 
 当前 HR/PM/QA/DevOps Soul 与 capability templates 由 `packages/shared` 内置目录提供，
-不是 SQLite 表；case/run/artifact/review/settings 是本地 DB 的落地面。
+不是 SQLite 表；project/run/artifact/review/settings 是本地 DB 的落地面。
 
 业务内容不被塞进数据库。HR 简历、PM 文档、QA 缺陷证据、DevOps runbook、artifact
 文件应留在 workspace 或连接器系统中；SQLite 记录指针、状态、索引、provenance、
@@ -186,7 +186,7 @@ review verdict 和 memory admission 状态。
 首屏目标：
 
 - 左侧：Soul catalog、domain system、capability templates；
-- 中央：case list / selected case / active run / artifact preview；
+- 中央：project list / selected project / active run / artifact preview；
 - 右侧：review、memory candidate、connector evidence、artifact metadata；
 - settings：Local CLI / BYOK、engine scan/test、connector、MCP、language、
   appearance、autosave 配置。
@@ -203,7 +203,7 @@ AIWorker 可以保存本地 executor hint，例如 engine 名称、endpoint、se
 这些 hint 伪装成安全隔离边界，也不能把 executor 原生 MCP、plugin、skill、approval、
 sandbox、profile 迁移进 AIWorker 的产品模型。
 
-run engine 给 executor 的输入是组合后的 Soul prompt stack、case context、workspace cwd
+run engine 给 executor 的输入是组合后的 Soul prompt stack、project context、workspace cwd
 和 connector evidence；executor 返回事件和最终文本。更复杂的工具循环留在 executor
 runtime 内。
 
@@ -248,13 +248,13 @@ worker 拉回管理后台模型。
 本架构完成的判定不是“旧概念换名”，而是：
 
 - 新开 workspace 后可以从 CLI/Web 选择 HR/PM/QA/DevOps 等 Soul；
-- first screen 能直接选择 capability template 并创建 case；
-- daemon 能把 case/template/Soul context 组合成 engine run；
+- first screen 能直接选择 capability template 并创建 project；
+- daemon 能把 project/template/Soul context 组合成 engine run；
 - artifact 能被定位、预览、review；
 - accepted memory 能带 provenance 写回 Soul/domain context；
 - developer Soul 不再牵引默认产品面；
 - OpenAPI 只暴露 local Soul workspace 所需 API；
 - 默认本地 DB 只包含 greenfield vertical Soul 表；
-- local runtime 没有旧本地 worker subsystem import；
+- workspace runtime 没有旧本地 worker subsystem import；
 - README、GOALS、PLAN、task 与实际命令一致；
 - source-local smoke、浏览器检查、focused gates、root gates 都有证据。

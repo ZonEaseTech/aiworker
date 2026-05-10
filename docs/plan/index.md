@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-10 (PLAN-211 completed)
+> Updated: 2026-05-10 (PLAN-212 implementing)
 
 ## Usage
 
@@ -240,3 +240,7 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-209 Soul and Skill data model**](PLAN-209.md) `2026-05-10`
 - [x] [**PLAN-210 Settings full implementation**](PLAN-210.md) `2026-05-10`
 - [x] [**PLAN-211 End-to-end vertical Soul MVP validation**](PLAN-211.md) `2026-05-10`
+- [-] [**PLAN-212 OD-style vertical Soul workspace correction**](PLAN-212.md) `2026-05-10`
+- [-] [**PLAN-213 OD-style vertical Soul MVP correction validation**](PLAN-213.md) `2026-05-10`
+- [x] [**PLAN-214 Soul project semantics and init artifact purge**](PLAN-214.md) `2026-05-10`
+- [x] [**PLAN-215 Soul project MVP validation**](PLAN-215.md) `2026-05-10`

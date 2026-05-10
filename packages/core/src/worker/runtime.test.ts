@@ -15,7 +15,7 @@ describe('LocalWorkerRuntime', () => {
   beforeEach(() => {
     closeWorkerDb()
     tick = 0
-    dir = mkdtempSync(join(tmpdir(), 'aiworker-local-runtime-'))
+    dir = mkdtempSync(join(tmpdir(), 'aiworker-workspace-runtime-'))
     initWorkerDb(join(dir, 'worker.db'))
     runWorkerMigrations()
   })
@@ -30,9 +30,9 @@ describe('LocalWorkerRuntime', () => {
     return `2026-05-09T00:00:${String(tick).padStart(2, '0')}.000Z`
   }
 
-  it('runs the workspace loop from case to artifacts, review, and lessons', async () => {
+  it('runs the workspace loop from project to artifacts, review, and lessons', async () => {
     const runtime = new LocalWorkerRuntime({
-      workerId: 'worker-local',
+      workerId: 'soul-worker',
       workspace: {
         id: 'workspace-1',
         name: 'Hiring Workspace',
@@ -65,14 +65,14 @@ describe('LocalWorkerRuntime', () => {
       },
     })
     await runtime.init()
-    const caseRecord = runtime.createCase({
+    const projectRecord = runtime.createProject({
       body: 'Review the packet.',
       selectedSkillId: 'candidate-screen',
       selectedSoulId: 'hr',
       title: 'Screen candidate',
     })
 
-    const result = await runtime.startRun({ caseId: caseRecord.id, executor: 'codex' })
+    const result = await runtime.startRun({ projectId: projectRecord.id, executor: 'codex' })
 
     expect(result.run.status).toBe('succeeded')
     expect(result.files).toHaveLength(1)
@@ -83,8 +83,8 @@ describe('LocalWorkerRuntime', () => {
     await expect(runtime.files.read('reports/candidate.md')).resolves.toContain('Evidence attached')
 
     const snapshot = runtime.snapshot()
-    expect(snapshot.cases[0]?.status).toBe('completed')
-    expect(snapshot.cases[0]?.selectedSoulId).toBe('hr')
+    expect(snapshot.projects[0]?.status).toBe('completed')
+    expect(snapshot.projects[0]?.selectedSoulId).toBe('hr')
     expect(snapshot.runs[0]?.metadataJson).toMatchObject({ selectedSkillId: 'candidate-screen', selectedSoulId: 'hr' })
     expect(snapshot.runs).toHaveLength(1)
     expect(snapshot.artifacts).toHaveLength(1)
@@ -94,7 +94,7 @@ describe('LocalWorkerRuntime', () => {
 
   it('records failed runs without throwing away the event trail', async () => {
     const runtime = new LocalWorkerRuntime({
-      workerId: 'worker-local',
+      workerId: 'soul-worker',
       workspace: {
         id: 'workspace-1',
         name: 'Hiring Workspace',
@@ -109,10 +109,55 @@ describe('LocalWorkerRuntime', () => {
     })
     await runtime.init()
 
-    const result = await runtime.startRun({ prompt: 'Run direct case.' })
+    const result = await runtime.startRun({ prompt: 'Run direct project.' })
 
     expect(result.run.status).toBe('failed')
     expect(result.run.error).toBe('executor failed')
     expect(result.events.map(event => event.type)).toEqual(['status', 'error'])
+  })
+
+  it('uses the built-in workspace template runner to create a structured artifact', async () => {
+    const runtime = new LocalWorkerRuntime({
+      workerId: 'soul-worker',
+      workspace: {
+        id: 'workspace-1',
+        name: 'Hiring Workspace',
+        rootPath: join(dir, 'workspace'),
+      },
+      now,
+    })
+    await runtime.init()
+    const projectRecord = runtime.createProject({
+      body: [
+        'Soul: HR',
+        'Domain system: hr-recruiting',
+        'Capability template: Candidate Screen',
+        'Output kind: candidate-screen',
+        '',
+        'Business context:',
+        'Role requires backend API ownership. Candidate has led payments API migration and incident response.',
+        '',
+        'Review rubric:',
+        '- Evidence is grounded.',
+      ].join('\n'),
+      metadata: {
+        outputKind: 'candidate-screen',
+        reviewRubric: ['Evidence is grounded.'],
+        skillName: 'Candidate Screen',
+        soulName: 'HR',
+      },
+      selectedSkillId: 'candidate-screen',
+      selectedSoulId: 'hr',
+      title: 'Screen candidate',
+    })
+
+    const result = await runtime.startRun({ projectId: projectRecord.id })
+
+    expect(result.run.status).toBe('succeeded')
+    expect(result.run.summary).toContain('Candidate Screen')
+    expect(result.artifacts[0]?.kind).toBe('candidate-screen')
+    await expect(runtime.files.read(result.artifacts[0]!.path)).resolves.toContain('## Draft Business Artifact')
+    expect(result.review?.verdict).toBe('needs_review')
+    expect(result.lessons[0]?.statement).toContain('evidence')
   })
 })

@@ -1,9 +1,9 @@
 import type {
   CapabilityTemplate,
   LocalArtifact,
-  LocalCase,
   LocalFile,
   LocalLesson,
+  LocalProject,
   LocalReview,
   LocalRun,
   LocalRunEvent,
@@ -23,7 +23,7 @@ export interface LocalWorkspaceData {
   info: LocalInfoResponse
   souls: VerticalSoul[]
   templates: CapabilityTemplate[]
-  cases: LocalCase[]
+  projects: LocalProject[]
   runs: LocalRun[]
   files: LocalFile[]
   artifacts: LocalArtifact[]
@@ -47,11 +47,11 @@ async function localFetch<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export async function loadLocalWorkspaceData(): Promise<LocalWorkspaceData> {
-  const [info, souls, templates, cases, runs, files, artifacts, reviews, lessons, events, settings] = await Promise.all([
+  const [info, souls, templates, projects, runs, files, artifacts, reviews, lessons, events, settings] = await Promise.all([
     localFetch<LocalInfoResponse>('/api/local/info'),
     localFetch<{ souls: VerticalSoul[] }>('/api/local/souls'),
     localFetch<{ templates: CapabilityTemplate[] }>('/api/local/templates'),
-    localFetch<{ cases: LocalCase[] }>('/api/local/cases'),
+    localFetch<{ projects: LocalProject[] }>('/api/local/projects'),
     localFetch<{ runs: LocalRun[] }>('/api/local/runs'),
     localFetch<{ files: LocalFile[] }>('/api/local/files'),
     localFetch<{ artifacts: LocalArtifact[] }>('/api/local/artifacts'),
@@ -64,7 +64,7 @@ export async function loadLocalWorkspaceData(): Promise<LocalWorkspaceData> {
     info,
     souls: souls.souls,
     templates: templates.templates,
-    cases: cases.cases,
+    projects: projects.projects,
     runs: runs.runs,
     files: files.files,
     artifacts: artifacts.artifacts,
@@ -75,17 +75,17 @@ export async function loadLocalWorkspaceData(): Promise<LocalWorkspaceData> {
   }
 }
 
-export function createCase(input: {
+export function createProject(input: {
   body: string
   metadata?: Record<string, unknown>
   selectedSkillId: string
   selectedSoulId: string
   title: string
-}): Promise<{ case: LocalCase }> {
-  return localFetch('/api/local/cases', { method: 'POST', body: JSON.stringify(input) })
+}): Promise<{ project: LocalProject }> {
+  return localFetch('/api/local/projects', { method: 'POST', body: JSON.stringify(input) })
 }
 
-export function startRun(input: { caseId?: string, prompt?: string }): Promise<{
+export function startRun(input: { projectId?: string, executor?: string, metadata?: Record<string, unknown>, prompt?: string }): Promise<{
   run: LocalRun
   events: LocalRunEvent[]
   files: LocalFile[]

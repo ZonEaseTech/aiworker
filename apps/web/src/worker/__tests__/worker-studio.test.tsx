@@ -6,7 +6,7 @@ import { WorkerStudio } from '../worker-studio'
 const now = '2026-05-10T00:00:00.000Z'
 const workspace = {
   createdAt: now,
-  id: 'local',
+  id: 'soul-workspace',
   name: 'Hiring Workspace',
   rootPath: '/tmp/hiring',
   updatedAt: now,
@@ -56,17 +56,46 @@ const settings = {
   updatedAt: now,
 }
 
-const caseRecord = {
+const projectRecord = {
   body: 'Candidate context',
   createdAt: now,
-  id: 'case-1',
+  id: 'project-1',
   metadataJson: {},
   selectedSkillId: 'candidate-screen',
   selectedSoulId: 'hr',
   status: 'completed',
   title: 'Screen candidate',
   updatedAt: now,
-  workspaceId: 'local',
+  workspaceId: 'soul-workspace',
+}
+
+const runRecord = {
+  projectId: 'project-1',
+  createdAt: now,
+  error: null,
+  executor: 'workspace-template',
+  finishedAt: now,
+  id: 'run-1',
+  metadataJson: {},
+  prompt: 'Run',
+  startedAt: now,
+  status: 'succeeded',
+  summary: 'Generated Candidate Screen.',
+  updatedAt: now,
+  workspaceId: 'soul-workspace',
+}
+
+const artifactRecord = {
+  createdAt: now,
+  id: 'artifact-1',
+  kind: 'candidate-screen',
+  metadataJson: {},
+  path: 'runs/run-1/candidate-screen.md',
+  runId: 'run-1',
+  status: 'available',
+  title: 'Candidate Screen',
+  updatedAt: now,
+  workspaceId: 'soul-workspace',
 }
 
 beforeEach(() => {
@@ -79,23 +108,25 @@ beforeEach(() => {
     })
 
     if (url.endsWith('/api/local/info'))
-      return json({ runtimeVersion: 'test', startedAt: now, workerId: 'local-worker', workspace })
+      return json({ runtimeVersion: 'test', startedAt: now, workerId: 'soul-worker', workspace })
     if (url.endsWith('/api/local/souls'))
       return json({ souls })
     if (url.endsWith('/api/local/templates'))
       return json({ templates })
-    if (url.endsWith('/api/local/cases') && method === 'POST')
-      return json({ case: { ...caseRecord, id: 'case-created', title: 'New candidate case' } }, 201)
-    if (url.endsWith('/api/local/cases'))
-      return json({ cases: [caseRecord] })
+    if (url.endsWith('/api/local/projects') && method === 'POST')
+      return json({ project: { ...projectRecord, id: 'project-created', title: 'New candidate project' } }, 201)
+    if (url.endsWith('/api/local/projects'))
+      return json({ projects: [projectRecord] })
     if (url.endsWith('/api/local/runs') && method === 'POST')
-      return json({ artifacts: [], events: [], files: [], lessons: [], review: null, run: { caseId: 'case-created', createdAt: now, error: null, executor: 'local', finishedAt: now, id: 'run-created', metadataJson: {}, prompt: 'Run', startedAt: now, status: 'succeeded', summary: 'Done', updatedAt: now, workspaceId: 'local' } }, 201)
+      return json({ artifacts: [artifactRecord], events: [], files: [], lessons: [], review: null, run: { ...runRecord, projectId: 'project-created', id: 'run-created' } }, 201)
     if (url.endsWith('/api/local/runs'))
-      return json({ runs: [] })
+      return json({ runs: [runRecord] })
     if (url.endsWith('/api/local/files'))
       return json({ files: [] })
+    if (url.includes('/api/local/files/raw/'))
+      return new Response('# Candidate Screen\n\nEvidence summary.\n', { headers: { 'content-type': 'text/plain' } })
     if (url.endsWith('/api/local/artifacts'))
-      return json({ artifacts: [] })
+      return json({ artifacts: [artifactRecord] })
     if (url.endsWith('/api/local/reviews'))
       return json({ reviews: [] })
     if (url.endsWith('/api/local/lessons'))
@@ -119,30 +150,31 @@ describe('worker studio', () => {
   it('renders Soul catalog as the first screen without import or work-order entrypoints', async () => {
     render(<WorkerStudio />)
 
-    expect(await screen.findByText('Vertical Soul workspace')).toBeTruthy()
+    expect(await screen.findByText('Soul Workspace')).toBeTruthy()
     expect(screen.getByLabelText('Soul catalog')).toBeTruthy()
-    expect(screen.getByText('HR')).toBeTruthy()
-    expect(screen.getByText('PM')).toBeTruthy()
-    expect(screen.getByText('QA')).toBeTruthy()
-    expect(screen.getByText('DevOps')).toBeTruthy()
+    expect(screen.getAllByText('HR').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('PM').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('QA').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('DevOps').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Candidate Screen').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('Create case and run').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Create project and run').length).toBeGreaterThan(0)
     expect(screen.queryByText(/Import/i)).toBeNull()
     expect(screen.queryByText(/work order/i)).toBeNull()
     expect(screen.queryByText(/Open Design/i)).toBeNull()
     expect(screen.queryByText(/Nexu/i)).toBeNull()
+    expect(await screen.findByText(/Evidence summary/i)).toBeTruthy()
   })
 
-  it('creates a case and run with selected Soul and skill metadata', async () => {
+  it('creates a project and run with selected Soul and skill metadata', async () => {
     render(<WorkerStudio />)
 
     await screen.findAllByText('Candidate Screen')
-    fireEvent.change(screen.getByLabelText('Case name'), { target: { value: 'New candidate case' } })
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'New candidate project' } })
     fireEvent.change(screen.getByLabelText('Business context'), { target: { value: 'Role and candidate packet.' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Create case and run' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Create project and run' }))
 
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('/api/local/cases', expect.objectContaining({
+      expect(fetch).toHaveBeenCalledWith('/api/local/projects', expect.objectContaining({
         body: expect.stringContaining('"selectedSoulId":"hr"'),
         method: 'POST',
       }))
@@ -154,16 +186,16 @@ describe('worker studio', () => {
     render(<WorkerStudio />)
 
     await screen.findByText('AIWorker')
-    expect(screen.queryByRole('dialog', { name: 'AIWorker configuration' })).toBeNull()
+    expect(screen.queryByRole('dialog', { name: 'Configure Soul workspace' })).toBeNull()
 
     fireEvent.click(screen.getByLabelText('Open settings'))
 
-    expect(screen.getByRole('dialog', { name: 'AIWorker configuration' })).toBeTruthy()
+    expect(screen.getByRole('dialog', { name: 'Configure Soul workspace' })).toBeTruthy()
     expect(screen.getByText('Local CLI / BYOK')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Test' }))
     fireEvent.click(screen.getByRole('button', { name: 'Rescan' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Language' }))
-    fireEvent.click(screen.getByRole('button', { name: 'zh-CN' }))
+    fireEvent.click(screen.getByRole('button', { name: /Language/ }))
+    fireEvent.click(screen.getByRole('button', { name: /zh-CN/ }))
 
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith('/api/local/settings/engines/test', expect.objectContaining({ method: 'POST' }))

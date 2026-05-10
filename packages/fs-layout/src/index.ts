@@ -7,32 +7,15 @@ import process from 'node:process'
 
 /**
  * `~/.aiworker/` (user scope) or `<project>/.aiworker/` (project scope) layout
- * owned by aiworker. Project scope keeps Project Brain governance/memory/state
- * under `.aiworker/`; executor-native project skills live in the executor's own
- * project directory.
- *
- * User-scope layout (legacy, multi-worker per host):
- *
- *   <home>/
- *     workers/
- *       <workerId>/
- *         AGENT.md / SOUL.md / USER.md / brain/{MEMORY.md, memories/, skills/}
- *         workspaces/
- *
- * Project-scope layout (PLAN-023, one worker per project):
- *
- *   <project>/.aiworker/
- *     SOUL.md / USER.md / MEMORY.md / ROLLUP.md               # team-shared Project Brain
- *     policy.json / brain-capabilities.json                   # governance + Brain capability drafts
- *     executor-capabilities.json                              # project executor overlay / bootstrap hint
- *     memories/                                               # file-first Brain memory assets
- *     local/                                                  # gitignored
- *       worker.db / identity.json / .env / workspaces/
+ * owned by AIWorker. Project scope now exposes Soul workspace material:
+ * Soul notes, domain system notes, capability templates, projects, artifacts,
+ * and durable memory. Runtime state is isolated under `.aiworker/runtime/` and
+ * is not created by the project initializer.
  */
 
 const DEFAULT_HOME_ENV = 'AIWORKER_HOME'
 const DEFAULT_HOME_DIR = '.aiworker'
-const PROJECT_LOCAL_DIR = 'local'
+const PROJECT_RUNTIME_DIR = 'runtime'
 export const MANAGED_NATIVE_SKILL_PREFIX = 'aiworker-'
 export const NATIVE_SKILL_PROJECTION_MANIFEST = 'native-skill-projections.json'
 
@@ -240,10 +223,10 @@ export function resolveAiworkerScope(opts: ResolveScopeOptions = {}): AiworkerSc
   if (!opts.disableProjectDetect) {
     const projectRoot = resolveProjectRoot(opts.cwd)
     if (projectRoot) {
-      const localHome = path.join(projectRoot, DEFAULT_HOME_DIR, PROJECT_LOCAL_DIR)
+      const runtimeHome = path.join(projectRoot, DEFAULT_HOME_DIR, PROJECT_RUNTIME_DIR)
       return {
         scope: 'project',
-        home: localHome,
+        home: runtimeHome,
         projectRoot,
         source: 'project-detect',
       }
@@ -275,10 +258,6 @@ export function resolveAiworkerHome(): string {
 export function resolveWorkerHome(workerId: string): string {
   const result = resolveAiworkerScope()
   if (result.scope === 'project' && result.projectRoot) {
-    // Project scope: Project Brain docs live in the .aiworker/ directory
-    // itself, NOT inside local/. The `home` field points at local/ so
-    // worker.db et al are gitignored, but Brain files need the
-    // git-tracked parent.
     return path.join(result.projectRoot, DEFAULT_HOME_DIR)
   }
   return path.join(result.home, 'workers', workerId)
@@ -287,8 +266,6 @@ export function resolveWorkerHome(workerId: string): string {
 export function resolveBrainHome(workerId: string): string {
   const result = resolveAiworkerScope()
   if (result.scope === 'project' && result.projectRoot) {
-    // Project scope: Brain governance and memories share the project
-    // .aiworker/ root. Executor-native project skills are outside .aiworker/.
     return path.join(result.projectRoot, DEFAULT_HOME_DIR)
   }
   return path.join(resolveWorkerHome(workerId), 'brain')
@@ -309,7 +286,6 @@ export function resolveMemoryIndexPath(workerId: string): string {
 export function resolveWorkspacesRoot(workerId: string): string {
   const result = resolveAiworkerScope()
   if (result.scope === 'project' && result.projectRoot) {
-    // Workspaces are ephemeral worker state → keep them gitignored under local/.
     return path.join(result.home, 'workspaces')
   }
   return path.join(resolveWorkerHome(workerId), 'workspaces')
@@ -331,35 +307,6 @@ export function resolveUserMdPath(workerId: string): string {
   return path.join(resolveWorkerHome(workerId), 'USER.md')
 }
 
-/** Long-running rollup distilled by the evolution cron job (PLAN-021 Phase E). */
-export function resolveRollupMdPath(workerId: string): string {
-  return path.join(resolveWorkerHome(workerId), 'ROLLUP.md')
-}
-
-/** Project Brain capability manifest. Project scope only. */
-export function resolveBrainCapabilitiesPath(workerId: string): string {
-  return path.join(resolveWorkerHome(workerId), 'brain-capabilities.json')
-}
-
-/** Per-worker MCP server registry (legacy user scope; project scope uses brain-capabilities.json). */
-export function resolveMcpJsonPath(workerId: string): string {
-  return path.join(resolveWorkerHome(workerId), 'mcp.json')
-}
-
-/**
- * Scope manifest path (PLAN-098). Lives at `<project>/.aiworker/scope.json`
- * for project scope; for user / explicit scope returns the resolved location
- * even though the bootstrap may not seed it (doctor reports `missing`).
- */
-export function resolveScopeManifestPath(workerId: string): string {
-  return path.join(resolveWorkerHome(workerId), 'scope.json')
-}
-
-/** Resolve `<project>/.aiworker/scope.json` directly from a project root. */
-export function projectScopeManifestPath(projectRoot: string): string {
-  return path.join(projectRoot, DEFAULT_HOME_DIR, 'scope.json')
-}
-
 async function ensureDir(dir: string, mode?: number): Promise<void> {
   await mkdir(dir, { recursive: true, ...(mode === undefined ? {} : { mode }) })
 }
@@ -374,70 +321,34 @@ async function seedIfAbsent(filePath: string, content: string): Promise<void> {
 }
 
 export interface ProjectAiworkerSeed {
-  brainCapabilitiesJson?: string
+  domainMd?: string
   /**
    * Explicit fallback prompt-skill files under `.aiworker/skills/`. Project
    * init should not use this by default for native-skill executors.
    */
   brainSkillFiles?: Record<string, string>
-  executorCapabilitiesJson?: string
   memoryMd?: string
   /** Executor-native project skill seed files, relative to the project root. */
   nativeSkillFiles?: Record<string, string>
   /** AIWorker-managed native skill projections with manifest evidence. */
   nativeSkillProjections?: NativeSkillProjectionSeed[]
-  policyJson?: string
-  rollupMd?: string
-  /**
-   * PLAN-098 scope manifest content. Only written when explicitly provided
-   * (project init with a Soul selection); user/explicit scope or re-init
-   * without --soul leaves this absent.
-   */
-  scopeJson?: string
+  projectsMd?: string
   soulMd?: string
-  userMd?: string
+  templatesMd?: string
   /** OD-style worker workbench pack assets, relative to `.aiworker/`. */
   workerPackFiles?: Record<string, string>
 }
 
-type RequiredDefaultSeed = Required<Omit<ProjectAiworkerSeed, 'scopeJson'>>
-
-const DEFAULT_PROJECT_AIWORKER_SEED: RequiredDefaultSeed = {
-  brainCapabilitiesJson: `${JSON.stringify({
-    schemaVersion: 1,
-    status: 'draft',
-    defaultToolsets: [],
-    packs: [],
-    mcp: {
-      servers: {},
-    },
-    validation: {
-      status: 'pending',
-      issues: [],
-    },
-  }, null, 2)}\n`,
+const DEFAULT_PROJECT_AIWORKER_SEED: Required<Pick<ProjectAiworkerSeed, 'domainMd' | 'memoryMd' | 'projectsMd' | 'soulMd' | 'templatesMd'>> & Pick<ProjectAiworkerSeed, 'brainSkillFiles' | 'nativeSkillFiles' | 'nativeSkillProjections' | 'workerPackFiles'> = {
   brainSkillFiles: {},
   nativeSkillFiles: {},
   nativeSkillProjections: [],
   workerPackFiles: {},
-  soulMd: `# Voice & style\n\n> Voice / style guide. Influences how the agent phrases responses across channels.\n`,
-  userMd: `# User profile\n\n> The agent writes learned facts about the primary user here over time. Edit by hand to bootstrap.\n`,
-  memoryMd: `# Long-term memory\n\n> Durable facts, decisions, preferences. Loaded into every session.\n`,
-  rollupMd: `# Continuity rollup\n\n> Auto-distilled by the evolution cron job. Recent decisions / todos / context that survive session compaction.\n`,
-  policyJson: `${JSON.stringify({
-    schemaVersion: 1,
-    status: 'draft',
-    risk: {
-      highRiskRequiresApproval: true,
-    },
-    outOfScope: {
-      default: 'ask-for-operator-direction',
-    },
-  }, null, 2)}\n`,
-  executorCapabilitiesJson: `${JSON.stringify({
-    schemaVersion: 1,
-    engines: {},
-  }, null, 2)}\n`,
+  soulMd: `# Soul workspace\n\nRecord the selected vertical Souls, team ownership, and operating preferences for this workspace.\n`,
+  domainMd: `# Domain systems\n\nCapture business systems, evidence sources, and review constraints that apply across Soul projects.\n`,
+  templatesMd: `# Capability templates\n\nTrack workspace-specific template notes, examples, and review rubrics.\n`,
+  projectsMd: `# Projects\n\nIndex active Soul projects and the artifacts they produce.\n`,
+  memoryMd: `# Durable memory\n\nApproved organization facts and reusable decisions belong here after review.\n`,
 }
 
 /**
@@ -452,9 +363,6 @@ const DEFAULT_PROJECT_AIWORKER_SEED: RequiredDefaultSeed = {
 export async function ensureWorkerHome(workerId: string): Promise<void> {
   const result = resolveAiworkerScope()
   if (result.scope === 'project') {
-    // Persona docs + memories already seeded by ensureProjectAiworker.
-    // Executor-native project skills are owned by their native directories.
-    // Only ensure ephemeral dirs that the runtime writes to.
     await ensureDir(result.home, 0o700)
     await ensureDir(resolveWorkspacesRoot(workerId))
     return
@@ -486,62 +394,44 @@ export async function ensureWorkerHome(workerId: string): Promise<void> {
 }
 
 /**
- * Materialise `<projectRoot>/.aiworker/` with the project-scope template:
- *   - Project Brain docs (SOUL.md / USER.md / MEMORY.md / ROLLUP.md)
- *   - governance/capability drafts (policy.json / brain-capabilities.json)
- *   - executor-capabilities.json placeholder for project executor overlay / hint
- *   - memories/ dir
+ * Materialise `<projectRoot>/.aiworker/` with the Soul workspace template:
+ *   - product-facing docs (SOUL.md / DOMAIN.md / TEMPLATES.md / PROJECTS.md / MEMORY.md)
+ *   - projects/ and artifacts/ directories
  *   - executor-native project skill files when seed.nativeSkillFiles is set
- *   - local/ (chmod 0700) with `* + !.gitignore` to silently ignore everything
- *   - .aiworker/.gitignore that ignores `local/`
+ *   - optional worker pack assets
  *
  * Idempotent: existing files are not overwritten.
  */
 export async function ensureProjectAiworker(projectRoot: string, seed: ProjectAiworkerSeed = {}): Promise<void> {
   const root = path.resolve(projectRoot)
   const aiworker = path.join(root, DEFAULT_HOME_DIR)
-  const localDir = path.join(aiworker, PROJECT_LOCAL_DIR)
   const mergedSeed = { ...DEFAULT_PROJECT_AIWORKER_SEED, ...seed }
 
   await ensureDir(aiworker)
   await ensureDir(path.join(aiworker, 'memories'))
-  await ensureDir(localDir, 0o700)
-  await ensureDir(path.join(localDir, 'workspaces'))
+  await ensureDir(path.join(aiworker, 'projects'))
+  await ensureDir(path.join(aiworker, 'artifacts'))
 
   await seedIfAbsent(
     path.join(aiworker, 'SOUL.md'),
     mergedSeed.soulMd,
   )
   await seedIfAbsent(
-    path.join(aiworker, 'USER.md'),
-    mergedSeed.userMd,
+    path.join(aiworker, 'DOMAIN.md'),
+    mergedSeed.domainMd,
+  )
+  await seedIfAbsent(
+    path.join(aiworker, 'TEMPLATES.md'),
+    mergedSeed.templatesMd,
+  )
+  await seedIfAbsent(
+    path.join(aiworker, 'PROJECTS.md'),
+    mergedSeed.projectsMd,
   )
   await seedIfAbsent(
     path.join(aiworker, 'MEMORY.md'),
     mergedSeed.memoryMd,
   )
-  await seedIfAbsent(
-    path.join(aiworker, 'ROLLUP.md'),
-    mergedSeed.rollupMd,
-  )
-  await seedIfAbsent(
-    path.join(aiworker, 'policy.json'),
-    mergedSeed.policyJson,
-  )
-  await seedIfAbsent(
-    path.join(aiworker, 'brain-capabilities.json'),
-    mergedSeed.brainCapabilitiesJson,
-  )
-  await seedIfAbsent(
-    path.join(aiworker, 'executor-capabilities.json'),
-    mergedSeed.executorCapabilitiesJson,
-  )
-  if (mergedSeed.scopeJson !== undefined) {
-    await seedIfAbsent(
-      path.join(aiworker, 'scope.json'),
-      mergedSeed.scopeJson,
-    )
-  }
   for (const [relativePath, content] of Object.entries(mergedSeed.nativeSkillFiles ?? {})) {
     const target = resolveProjectNativeSkillSeedPath(root, relativePath)
     await ensureDir(path.dirname(target))
@@ -561,11 +451,7 @@ export async function ensureProjectAiworker(projectRoot: string, seed: ProjectAi
   }
   await seedIfAbsent(
     path.join(aiworker, '.gitignore'),
-    `${PROJECT_LOCAL_DIR}/\n`,
-  )
-  await seedIfAbsent(
-    path.join(localDir, '.gitignore'),
-    `*\n!.gitignore\n`,
+    `${PROJECT_RUNTIME_DIR}/\n`,
   )
 }
 

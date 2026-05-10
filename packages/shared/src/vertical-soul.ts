@@ -127,7 +127,7 @@ function template(
     inputHints,
     name,
     outputKind,
-    prompt: `Use the ${name} capability template. Produce a ${outputKind} business artifact for the selected ${soulId.toUpperCase()} Soul case.`,
+    prompt: `Use the ${name} capability template. Produce a ${outputKind} business artifact for the selected ${soulId.toUpperCase()} Soul project.`,
     reviewRubric,
     soulId,
   }

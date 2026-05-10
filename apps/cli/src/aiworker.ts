@@ -8,6 +8,7 @@ import path from 'node:path'
 
 import process from 'node:process'
 import { createLocalWorkerRuntime, getWorkerEnv } from '@zonease/aiworker-core'
+import { ensureProjectAiworker } from '@zonease/aiworker-fs-layout'
 import { BUILTIN_CAPABILITY_TEMPLATES, BUILTIN_VERTICAL_SOULS } from '@zonease/aiworker-shared'
 import {
   appendRunEvent,
@@ -15,14 +16,14 @@ import {
   createLesson,
   createReview,
   getArtifact,
-  getCase,
+  getProject,
   getReview,
   getRun,
   initWorkerDb,
   listArtifacts,
-  listCases,
   listFiles,
   listLessons,
+  listProjects,
   listReviews,
   listRunEvents,
   listRuns,
@@ -60,8 +61,8 @@ function localPaths(): LocalPaths {
     home,
     dbPath: process.env.WORKER_DB_PATH ?? path.join(home, 'worker.db'),
     workspaceRoot: process.env.WORKER_WORKSPACE_ROOT ?? path.join(home, 'workspace'),
-    pidFile: path.join(home, 'aiworker-local.pid'),
-    logFile: path.join(home, 'aiworker-local.log'),
+    pidFile: path.join(home, 'aiworker-daemon.pid'),
+    logFile: path.join(home, 'aiworker-daemon.log'),
   }
 }
 
@@ -72,10 +73,10 @@ async function ensureRuntime(options: RuntimeOptions = {}): Promise<LocalWorkerR
   initWorkerDb(paths.dbPath)
   runWorkerMigrations(getWorkerEnv().WORKER_MIGRATIONS_FOLDER)
   const runtime = createLocalWorkerRuntime({
-    workerId: 'local-worker',
+    workerId: 'soul-worker',
     workspace: {
-      id: 'local',
-      name: options.name ?? 'Local Workspace',
+      id: 'soul-workspace',
+      name: options.name ?? 'Soul Workspace',
       rootPath: options.root ?? paths.workspaceRoot,
     },
   })
@@ -109,8 +110,10 @@ function isProcessAlive(pid: number): boolean {
 }
 
 async function runInit(opts: { name?: string, root?: string } = {}): Promise<void> {
-  const runtime = await ensureRuntime(opts)
-  printJson({ workspace: runtime.snapshot().workspace, dbPath: localPaths().dbPath })
+  const root = path.resolve(opts.root ?? process.cwd())
+  await ensureProjectAiworker(root)
+  const runtime = await ensureRuntime({ ...opts, root })
+  printJson({ workspace: runtime.snapshot().workspace, dbPath: localPaths().dbPath, soulWorkspacePath: path.join(root, '.aiworker') })
 }
 
 async function runDoctor(): Promise<void> {
@@ -187,7 +190,7 @@ async function daemonForeground(opts: { host?: string, port?: number } = {}): Pr
     hostname: opts.host ?? env.AIWORKER_WORKER_HOST,
     port: opts.port ?? port,
   })
-  consola.success(`[local-daemon] listening on http://${server.hostname}:${server.port}`)
+  consola.success(`[workspace-daemon] listening on http://${server.hostname}:${server.port}`)
   await new Promise<void>(() => undefined)
 }
 
@@ -207,10 +210,10 @@ async function showLogs(opts: { tail?: number } = {}): Promise<void> {
   process.stdout.write(`${lines.slice(-(opts.tail ?? 80)).join('\n')}\n`)
 }
 
-async function createCase(opts: { body?: string, skill?: string, soul?: string, title?: string }): Promise<void> {
+async function createProject(opts: { body?: string, skill?: string, soul?: string, title?: string }): Promise<void> {
   const runtime = await ensureRuntime()
   printJson({
-    case: runtime.createCase({
+    project: runtime.createProject({
       title: requireText(opts.title, 'title'),
       body: requireText(opts.body, 'body'),
       selectedSoulId: opts.soul ?? 'hr',
@@ -219,14 +222,14 @@ async function createCase(opts: { body?: string, skill?: string, soul?: string, 
   })
 }
 
-async function showCase(id: string): Promise<void> {
+async function showProject(id: string): Promise<void> {
   await ensureRuntime()
-  printJson({ case: getCase(id) })
+  printJson({ project: getProject(id) })
 }
 
-async function startRun(opts: { case?: string, prompt?: string }): Promise<void> {
+async function startRun(opts: { project?: string, prompt?: string }): Promise<void> {
   const runtime = await ensureRuntime()
-  printJson(await runtime.startRun({ caseId: opts.case, prompt: opts.prompt }))
+  printJson(await runtime.startRun({ projectId: opts.project, prompt: opts.prompt }))
 }
 
 async function showRun(id: string): Promise<void> {
@@ -319,11 +322,11 @@ async function proposeLesson(opts: { review?: string, statement?: string }): Pro
 }
 
 function registerCommands(): void {
-  cli.command('init', 'create local workspace metadata').option('--name <name>', 'workspace name').option('--root <path>', 'workspace root').action(runInit)
-  cli.command('doctor', 'inspect local workspace readiness').action(runDoctor)
+  cli.command('init', 'create Soul workspace metadata').option('--name <name>', 'workspace name').option('--root <path>', 'workspace root').action(runInit)
+  cli.command('doctor', 'inspect Soul workspace readiness').action(runDoctor)
 
-  cli.command('daemon start', 'start local daemon in background').option('--host <host>', 'bind host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => startDaemon({ host: opts.host, port: optionalNumber(opts.port) }))
-  cli.command('daemon foreground', 'run local daemon in foreground').option('--host <host>', 'bind host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => daemonForeground({ host: opts.host, port: optionalNumber(opts.port) }))
+  cli.command('daemon start', 'start workspace daemon in background').option('--host <host>', 'bind host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => startDaemon({ host: opts.host, port: optionalNumber(opts.port) }))
+  cli.command('daemon foreground', 'run workspace daemon in foreground').option('--host <host>', 'bind host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => daemonForeground({ host: opts.host, port: optionalNumber(opts.port) }))
   cli.command('daemon status', 'show local daemon status').action(() => printJson(daemonStatus()))
   cli.command('daemon stop', 'stop local daemon').action(stopDaemon)
   cli.command('daemon logs', 'show local daemon logs').option('--tail <n>', 'line count', { type: [Number] }).action((opts: { tail?: number[] }) => showLogs({ tail: optionalNumber(opts.tail) }))
@@ -334,20 +337,20 @@ function registerCommands(): void {
     const templates = opts.soul ? BUILTIN_CAPABILITY_TEMPLATES.filter(template => template.soulId === opts.soul) : BUILTIN_CAPABILITY_TEMPLATES
     printJson({ templates })
   })
-  cli.command('case create', 'create a workspace case')
-    .option('--title <text>', 'case title')
-    .option('--body <text>', 'case body')
+  cli.command('project create', 'create a workspace project')
+    .option('--title <text>', 'project title')
+    .option('--body <text>', 'project body')
     .option('--soul <id>', 'Soul id')
     .option('--skill <id>', 'capability template id')
-    .action(createCase)
-  cli.command('case list', 'list workspace cases').action(async () => {
+    .action(createProject)
+  cli.command('project list', 'list workspace projects').action(async () => {
     const runtime = await ensureRuntime()
-    printJson({ cases: listCases(runtime.snapshot().workspace.id) })
+    printJson({ projects: listProjects(runtime.snapshot().workspace.id) })
   })
-  cli.command('case show <id>', 'show one case').action(showCase)
+  cli.command('project show <id>', 'show one project').action(showProject)
 
-  cli.command('run start', 'start a local run').option('--case <id>', 'case id').option('--prompt <text>', 'direct prompt').action(startRun)
-  cli.command('run list', 'list local runs').action(async () => {
+  cli.command('run start', 'start a workspace run').option('--project <id>', 'project id').option('--prompt <text>', 'direct prompt').action(startRun)
+  cli.command('run list', 'list workspace runs').action(async () => {
     const runtime = await ensureRuntime()
     printJson({ runs: listRuns(runtime.snapshot().workspace.id) })
   })
@@ -407,7 +410,7 @@ function registerCommands(): void {
     printJson({ settings: listSettings().filter(setting => setting.key.startsWith('executor.')) })
   })
 
-  cli.command('open', 'open local web app').option('--port <n>', 'web port', { type: [Number] }).action((opts: { port?: number[] }) => {
+  cli.command('open', 'open workspace web app').option('--port <n>', 'web port', { type: [Number] }).action((opts: { port?: number[] }) => {
     const port = optionalNumber(opts.port) ?? 9219
     const url = `http://127.0.0.1:${port}`
     Bun.spawn(['open', url])
@@ -425,7 +428,7 @@ function commandIndex(): string {
     'daemon start|foreground|status|stop|logs|check',
     'soul list',
     'template list',
-    'case create|list|show',
+    'project create|list|show',
     'run start|list|show|cancel',
     'files list|show|write|delete|search',
     'artifacts list|show|open',

@@ -10,7 +10,7 @@ export {
   type LocalWorkerEventKind,
 } from './worker/events'
 export {
-  createNoopExecutor,
+  createLocalTemplateExecutor,
   type LocalExecutor,
   type LocalExecutorArtifact,
   type LocalExecutorInput,
@@ -24,7 +24,7 @@ export {
   LocalWorkspaceFiles,
 } from './worker/files'
 export {
-  type CreateLocalCaseInput,
+  type CreateLocalProjectInput,
   createLocalWorkerRuntime,
   type LocalRunStartInput,
   type LocalRunStartResult,

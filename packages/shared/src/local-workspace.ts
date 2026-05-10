@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
-export const localCaseStatusSchema = z.enum(['draft', 'queued', 'running', 'completed', 'failed', 'cancelled'])
-export type LocalCaseStatus = z.infer<typeof localCaseStatusSchema>
+export const localProjectStatusSchema = z.enum(['draft', 'queued', 'running', 'completed', 'failed', 'cancelled'])
+export type LocalProjectStatus = z.infer<typeof localProjectStatusSchema>
 
 export const localRunStatusSchema = z.enum(['queued', 'running', 'succeeded', 'failed', 'cancelled'])
 export type LocalRunStatus = z.infer<typeof localRunStatusSchema>
@@ -49,24 +49,24 @@ export const localWorkspaceSchema = z.object({
 })
 export type LocalWorkspace = z.infer<typeof localWorkspaceSchema>
 
-export const localCaseSchema = z.object({
+export const localProjectSchema = z.object({
   id: idSchema,
   workspaceId: idSchema,
   title: z.string().min(1),
   body: z.string().min(1),
   selectedSoulId: idSchema,
   selectedSkillId: idSchema,
-  status: localCaseStatusSchema,
+  status: localProjectStatusSchema,
   metadataJson: localJsonObjectSchema,
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
 })
-export type LocalCase = z.infer<typeof localCaseSchema>
+export type LocalProject = z.infer<typeof localProjectSchema>
 
 export const localRunSchema = z.object({
   id: idSchema,
   workspaceId: idSchema,
-  caseId: idSchema.nullable(),
+  projectId: idSchema.nullable(),
   status: localRunStatusSchema,
   executor: z.string().min(1),
   prompt: z.string().min(1),

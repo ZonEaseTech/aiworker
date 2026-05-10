@@ -3,7 +3,7 @@ import consola from 'consola'
 export async function boot() {
   const { createWorkerApp } = await import('./modes/worker')
   const { app, port } = await createWorkerApp()
-  consola.success(`[local-daemon] listening on :${port}`)
+  consola.success(`[workspace-daemon] listening on :${port}`)
   return { app, port }
 }
 
