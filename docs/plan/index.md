@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-10 (PLAN-212 implementing)
+> Updated: 2026-05-10 (PLAN-216 and PLAN-217 completed)
 
 ## Usage
 
@@ -244,3 +244,5 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [-] [**PLAN-213 OD-style vertical Soul MVP correction validation**](PLAN-213.md) `2026-05-10`
 - [x] [**PLAN-214 Soul project semantics and init artifact purge**](PLAN-214.md) `2026-05-10`
 - [x] [**PLAN-215 Soul project MVP validation**](PLAN-215.md) `2026-05-10`
+- [x] [**PLAN-216 Production-grade Worker Web localization**](PLAN-216.md) `2026-05-10`
+- [x] [**PLAN-217 Worker Web theme switching and dark mode readiness**](PLAN-217.md) `2026-05-10`

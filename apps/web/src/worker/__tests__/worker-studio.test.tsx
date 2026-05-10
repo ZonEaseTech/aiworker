@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { WorkerStudio } from '../worker-studio'
@@ -43,7 +43,9 @@ const templates = [
   },
 ]
 
-const settings = {
+const themeMediaQuery = '(prefers-color-scheme: dark)'
+
+const baseSettings = {
   appearance: 'system',
   byok: { apiKeyRef: '', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o', provider: 'openai-compatible' },
   connectors: [{ enabled: false, id: 'ats', name: 'ATS / HRIS', status: 'not_configured' }],
@@ -55,6 +57,8 @@ const settings = {
   localMcpServer: { enabled: true, url: 'http://127.0.0.1:4319/mcp' },
   updatedAt: now,
 }
+
+let currentSettings: typeof baseSettings
 
 const projectRecord = {
   body: 'Candidate context',
@@ -98,7 +102,65 @@ const artifactRecord = {
   workspaceId: 'soul-workspace',
 }
 
+function resetSettings() {
+  currentSettings = {
+    ...baseSettings,
+    byok: { ...baseSettings.byok },
+    connectors: baseSettings.connectors.map(item => ({ ...item })),
+    engines: baseSettings.engines.map(item => ({ ...item })),
+    externalMcpServers: baseSettings.externalMcpServers.map(item => ({ ...item })),
+    localMcpServer: { ...baseSettings.localMcpServer },
+  }
+}
+
+function installMatchMedia(initialMatches: boolean) {
+  let matches = initialMatches
+  const listeners = new Set<EventListenerOrEventListenerObject>()
+  const queryList = {
+    get matches() {
+      return matches
+    },
+    media: themeMediaQuery,
+    onchange: null as MediaQueryList['onchange'],
+    addEventListener: vi.fn((event: string, listener: EventListenerOrEventListenerObject) => {
+      if (event === 'change')
+        listeners.add(listener)
+    }),
+    removeEventListener: vi.fn((event: string, listener: EventListenerOrEventListenerObject) => {
+      if (event === 'change')
+        listeners.delete(listener)
+    }),
+    addListener: vi.fn((listener: EventListenerOrEventListenerObject) => {
+      listeners.add(listener)
+    }),
+    removeListener: vi.fn((listener: EventListenerOrEventListenerObject) => {
+      listeners.delete(listener)
+    }),
+    dispatchEvent: vi.fn(() => true),
+  } as unknown as MediaQueryList
+
+  const controller = {
+    matchMedia: vi.fn(() => queryList),
+    setMatches(next: boolean) {
+      matches = next
+      const event = { matches, media: themeMediaQuery } as MediaQueryListEvent
+      for (const listener of listeners) {
+        if (typeof listener === 'function')
+          listener(event)
+        else
+          listener.handleEvent(event)
+      }
+      queryList.onchange?.(event)
+    },
+  }
+  vi.stubGlobal('matchMedia', controller.matchMedia)
+  return controller
+}
+
 beforeEach(() => {
+  resetSettings()
+  document.documentElement.lang = ''
+  installMatchMedia(false)
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
     const method = init?.method ?? 'GET'
@@ -133,12 +195,20 @@ beforeEach(() => {
       return json({ lessons: [] })
     if (url.endsWith('/api/local/events'))
       return json({ events: [] })
-    if (url.endsWith('/api/local/settings') && method === 'PATCH')
-      return json({ settings: { ...settings, language: 'zh-CN' } })
+    if (url.endsWith('/api/local/settings') && method === 'PATCH') {
+      const patch = init?.body ? JSON.parse(String(init.body)) as Partial<typeof baseSettings> : {}
+      currentSettings = {
+        ...currentSettings,
+        ...patch,
+        byok: { ...currentSettings.byok, ...(patch.byok ?? {}) },
+        updatedAt: now,
+      }
+      return json({ settings: currentSettings })
+    }
     if (url.endsWith('/api/local/settings'))
-      return json({ settings })
+      return json({ settings: currentSettings })
     if (url.endsWith('/api/local/settings/engines/rescan'))
-      return json({ engines: settings.engines, settings })
+      return json({ engines: currentSettings.engines, settings: currentSettings })
     if (url.endsWith('/api/local/settings/engines/test'))
       return json({ result: { engineId: 'codex', message: 'Codex CLI responded.', status: 'pass' } })
 
@@ -151,6 +221,7 @@ describe('worker studio', () => {
     render(<WorkerStudio />)
 
     expect(await screen.findByText('Soul Workspace')).toBeTruthy()
+    expect(document.documentElement.lang).toBe('en')
     expect(screen.getByLabelText('Soul catalog')).toBeTruthy()
     expect(screen.getAllByText('HR').length).toBeGreaterThan(0)
     expect(screen.getAllByText('PM').length).toBeGreaterThan(0)
@@ -195,12 +266,60 @@ describe('worker studio', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Test' }))
     fireEvent.click(screen.getByRole('button', { name: 'Rescan' }))
     fireEvent.click(screen.getByRole('button', { name: /Language/ }))
-    fireEvent.click(screen.getByRole('button', { name: /zh-CN/ }))
+    fireEvent.click(screen.getByRole('button', { name: /简体中文/ }))
 
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith('/api/local/settings/engines/test', expect.objectContaining({ method: 'POST' }))
       expect(fetch).toHaveBeenCalledWith('/api/local/settings/engines/rescan', expect.objectContaining({ method: 'POST' }))
       expect(fetch).toHaveBeenCalledWith('/api/local/settings', expect.objectContaining({ method: 'PATCH' }))
+      expect(document.documentElement.lang).toBe('zh-CN')
+    })
+    expect(screen.getByRole('dialog', { name: '配置 Soul 工作区' })).toBeTruthy()
+    expect(screen.getAllByText('创建项目并运行').length).toBeGreaterThan(0)
+    expect(screen.queryByText('Create project and run')).toBeNull()
+  })
+
+  it('falls back to English for unknown persisted language values', async () => {
+    currentSettings = { ...currentSettings, language: 'pirate' }
+
+    render(<WorkerStudio />)
+
+    expect(await screen.findByText('Soul Workspace')).toBeTruthy()
+    expect(document.documentElement.lang).toBe('en')
+    expect(screen.getByLabelText('Workspace language')).toBeTruthy()
+  })
+
+  it('applies system appearance from the operating-system color scheme and updates on changes', async () => {
+    const media = installMatchMedia(false)
+
+    render(<WorkerStudio />)
+
+    const shell = await screen.findByTestId('worker-studio-shell')
+    expect(shell.getAttribute('data-appearance')).toBe('system')
+    expect(shell.getAttribute('data-theme')).toBe('light')
+
+    act(() => media.setMatches(true))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('worker-studio-shell').getAttribute('data-theme')).toBe('dark')
+    })
+  })
+
+  it('persists dark appearance and applies the dark theme without reloading', async () => {
+    render(<WorkerStudio />)
+
+    await screen.findByTestId('worker-studio-shell')
+    fireEvent.click(screen.getByLabelText('Open settings'))
+    fireEvent.click(screen.getByText('System / light / dark'))
+    fireEvent.click(screen.getByRole('button', { name: /Dark Workspace/ }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('worker-studio-shell').getAttribute('data-appearance')).toBe('dark')
+      expect(screen.getByTestId('worker-studio-shell').getAttribute('data-theme')).toBe('dark')
+      expect(fetch).toHaveBeenCalledWith('/api/local/settings', expect.objectContaining({
+        body: JSON.stringify({ appearance: 'dark' }),
+        method: 'PATCH',
+      }))
     })
   })
 })

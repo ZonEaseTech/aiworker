@@ -1,5 +1,51 @@
 # AIWorker Changelog
 
+## 2026-05-10 12:25 [completed] REFACTOR-046 / PLAN-217 — Worker Web theme switching and dark mode readiness
+
+Worker Web appearance settings now drive the rendered shell instead of only
+persisting a preference:
+
+- Added theme resolution for `system | light | dark`, with live
+  `prefers-color-scheme` updates and stable `data-appearance` / `data-theme`
+  shell attributes.
+- Added dark-mode token coverage for the Worker Studio shell, settings modal,
+  controls, overlays, icon surfaces, artifact preview elements, status states,
+  shadows, and primary actions.
+- Decoupled primary action colors from warm accent tokens so light and dark
+  themes both meet production contrast expectations.
+- Added focused tests for system theme resolution, system preference changes,
+  and persisted dark-theme application.
+
+Verification passed: `git diff --check`,
+`bun run --filter '@zonease/aiworker-web' typecheck`, `test`, `lint` (0 errors,
+existing five effect-setState warnings), and `build` including Worker Studio CSS
+quality, plus root `bun run check` and `bun run build`. Browser validation at
+`http://127.0.0.1:5179/worker/` verified Light/Dark/System switching,
+`/api/local/settings` persistence, OS preference response, 0 browser
+warnings/errors, and passing sampled contrast ratios. code-review-graph
+update/review completed with 0 affected flows and risk score 0.55.
+
+## 2026-05-10 12:12 [completed] FEAT-059 / PLAN-216 — Production-grade Worker Web localization
+
+Worker Web language switching now localizes the product shell instead of only
+persisting a language code:
+
+- Added a typed Worker Web localization catalog for English, Simplified Chinese,
+  Japanese, and German.
+- Routed Worker Studio navigation, creation form, Settings dialog, status labels,
+  accessibility labels, language names, and built-in Soul/template display copy
+  through the catalog.
+- Saved `settings.language` now controls the active locale, updates
+  `document.documentElement.lang`, and falls back to English for unknown values.
+- Settings language switching updates the UI after the existing
+  `/api/local/settings` save path returns.
+
+Verification passed: `bun run --filter '@zonease/aiworker-web' test`,
+`typecheck`, `lint` (0 errors, existing five effect-setState warnings), `build`
+including CSS quality, root `bun run check`, root `bun run build`,
+`git diff --check`, browser validation for `en`, `zh-CN`, `ja`, and `de`, and
+code-review-graph update/review.
+
 ## 2026-05-10 11:26 [completed] REFACTOR-045 / PLAN-214 + QA-028 / PLAN-215 — Soul project semantics and init artifact purge
 
 User review clarified that the remaining `case` language is not the intended
