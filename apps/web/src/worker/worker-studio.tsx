@@ -37,7 +37,7 @@ import {
   X,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useReducer, useState, useSyncExternalStore } from 'react'
-import { continueSessionTurnStream, createReview, createSessionTurnStream, createWorkspace, loadLocalWorkspaceData, readFile, rescanEngines, saveSettings, testEngine, updateLesson } from './api'
+import { continueSessionTurnStream, createReview, createSessionTurnStream, createWorker, createWorkspace, loadLocalWorkspaceData, readFile, rescanEngines, saveSettings, testEngine, updateLesson } from './api'
 import {
   displaySoul,
   displayTemplate,
@@ -106,7 +106,9 @@ function artifactPreviewReducer(_state: ArtifactPreviewState, action: ArtifactPr
 export function WorkerStudio() {
   const route = useWorkerRoute()
   const [state, setState] = useState<StudioState>({ data: null, error: null, loading: true })
-  const [selectedSoulId, setSelectedSoulId] = useState('hr')
+  const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null)
+  const [newWorkerName, setNewWorkerName] = useState('')
+  const [newWorkerSoulId, setNewWorkerSoulId] = useState('hr')
   const [selectedTemplateId, setSelectedTemplateId] = useState('candidate-screen')
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null)
   const [workspaceTitle, setWorkspaceTitle] = useState('')
@@ -154,13 +156,16 @@ export function WorkerStudio() {
   const routedWorkspace = route.kind === 'workspace' || route.kind === 'session'
     ? data?.workspaces.find(workspace => workspace.id === route.workspaceId) ?? null
     : null
-  const routedWorker = routedWorkspace ? data?.workers.find(worker => worker.id === routedWorkspace.workerId) ?? null : null
-  const effectiveSoulId = routedWorker?.soulId ?? selectedSoulId
-  const selectedSoul = data?.souls.find(soul => soul.id === effectiveSoulId && soul.status === 'available') ?? data?.souls.find(soul => soul.status === 'available') ?? null
-  const selectedWorker = data?.workers.find(worker => worker.soulId === selectedSoul?.id) ?? null
+  const routedWorker = route.kind === 'worker'
+    ? data?.workers.find(worker => worker.id === route.workerId) ?? null
+    : routedWorkspace ? data?.workers.find(worker => worker.id === routedWorkspace.workerId) ?? null : null
+  const selectedWorker = routedWorker ?? (selectedWorkerId ? data?.workers.find(worker => worker.id === selectedWorkerId) ?? null : null) ?? data?.workers[0] ?? null
+  const selectedSoul = selectedWorker
+    ? data?.souls.find(soul => soul.id === selectedWorker.soulId && soul.status === 'available') ?? null
+    : data?.souls.find(soul => soul.id === newWorkerSoulId && soul.status === 'available') ?? data?.souls.find(soul => soul.status === 'available') ?? null
   const templates = useMemo(
-    () => data?.templates.filter(template => template.soulId === selectedSoul?.id) ?? [],
-    [data?.templates, selectedSoul?.id],
+    () => data?.templates.filter(template => template.soulId === selectedWorker?.soulId) ?? [],
+    [data?.templates, selectedWorker?.soulId],
   )
   const selectedTemplate = templates.find(template => template.id === selectedTemplateId) ?? templates[0] ?? null
   const soulWorkspaces = useMemo(
@@ -202,7 +207,7 @@ export function WorkerStudio() {
   const routeSession = route.kind === 'session'
     ? allSessions.find(session => session.id === route.sessionId && session.workspaceId === route.workspaceId) ?? null
     : null
-  const selectedSession = routeSession ?? (selectedWorkspace ? sessionForWorkspace(selectedWorkspace, allSessions) : latest(soulSessions))
+  const selectedSession = routeSession ?? (route.kind === 'workspace' ? null : selectedWorkspace ? sessionForWorkspace(selectedWorkspace, allSessions) : latest(soulSessions))
   const selectedTurn = selectedSession ? turnForSession(selectedSession, data?.turns ?? []) : null
   const selectedArtifact = selectedSession ? artifactForSession(selectedSession, data?.artifacts ?? []) : latest(soulArtifacts)
   const selectedReview = selectedSession ? reviewForSession(selectedSession, data?.reviews ?? []) : null
@@ -257,6 +262,20 @@ export function WorkerStudio() {
     setSettingsOpen(true)
   }
 
+  async function submitWorker(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!newWorkerName.trim() || !newWorkerSoulId)
+      return
+    const result = await createWorker({
+      name: newWorkerName.trim(),
+      soulId: newWorkerSoulId,
+    })
+    setSelectedWorkerId(result.worker.id)
+    setNewWorkerName('')
+    await refresh()
+    navigateWorkerRoute({ kind: 'worker', workerId: result.worker.id })
+  }
+
   useEffect(() => {
     if (!selectedArtifact) {
       dispatchArtifactPreview({ type: 'idle' })
@@ -285,21 +304,34 @@ export function WorkerStudio() {
 
   async function submitProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!data || !selectedSoul || !selectedWorker || !selectedTemplate || !workspaceTitle.trim() || !workspaceContext.trim() || !engineReadiness.ready)
+    if (!data || !selectedSoul || !selectedWorker || !workspaceTitle.trim())
       return
     setSubmitting(true)
     try {
-      const body = buildProjectPrompt(selectedSoul, selectedTemplate, workspaceContext)
       const workspaceResult = await createWorkspace(selectedWorker.id, {
         metadata: {
-          capabilityTemplateId: selectedTemplate.id,
           soulId: selectedSoul.id,
         },
         name: workspaceTitle.trim(),
       })
       setSelectedWorkspaceId(workspaceResult.workspace.id)
+      setWorkspaceTitle('')
       await refresh()
-      const sessionResult = await createSessionTurnStream(workspaceResult.workspace.id, {
+      navigateWorkerRoute({ kind: 'workspace', workerId: selectedWorker.id, workspaceId: workspaceResult.workspace.id })
+    }
+    finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function submitSession(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!selectedSoul || !selectedWorker || !selectedWorkspace || !selectedTemplate || !workspaceContext.trim() || !engineReadiness.ready)
+      return
+    setSubmitting(true)
+    try {
+      const body = buildProjectPrompt(selectedSoul, selectedTemplate, workspaceContext)
+      const sessionResult = await createSessionTurnStream(selectedWorkspace.id, {
         capabilityTemplateId: selectedTemplate.id,
         context: workspaceContext,
         input: body,
@@ -309,21 +341,20 @@ export function WorkerStudio() {
           requestedFrom: 'worker-web',
           reviewRubric: selectedTemplate.reviewRubric,
         },
-        title: workspaceTitle.trim(),
-      }, {
+        title: selectedWorkspace.name,
+      }, selectedWorker.id, {
         onEvent: event => setStreamEvents(current => [...current, event]),
         onSession: (session) => {
           setStreamSessions(current => upsertSession(current, session))
-          navigateWorkerRoute({ kind: 'session', sessionId: session.id, workspaceId: workspaceResult.workspace.id })
+          navigateWorkerRoute({ kind: 'session', sessionId: session.id, workerId: selectedWorker.id, workspaceId: selectedWorkspace.id })
         },
         onTurn: turn => setStreamTurns(current => upsertTurn(current, turn)),
       })
       setStreamSessions(current => upsertSession(current, sessionResult.session))
       setStreamTurns(current => upsertTurn(current, sessionResult.turn))
-      setWorkspaceTitle('')
       setWorkspaceContext('')
       await refresh()
-      navigateWorkerRoute({ kind: 'session', sessionId: sessionResult.session.id, workspaceId: workspaceResult.workspace.id })
+      navigateWorkerRoute({ kind: 'session', sessionId: sessionResult.session.id, workerId: selectedWorker.id, workspaceId: selectedWorkspace.id })
     }
     finally {
       setSubmitting(false)
@@ -356,7 +387,7 @@ export function WorkerStudio() {
         metadata: {
           requestedFrom: 'worker-web-follow-up',
         },
-      }, {
+      }, selectedSession.workerId, {
         onEvent: event => setStreamEvents(current => [...current, event]),
         onTurn: (turn) => {
           setStreamTurns(current => upsertTurn(current, turn))
@@ -423,12 +454,95 @@ export function WorkerStudio() {
     )
   }
 
-  if (!data || !selectedSoul || !selectedWorker || !selectedTemplate || !selectedSoulCopy || !selectedTemplateCopy)
+  if (!data)
     return null
 
-  const isWorkspaceContextRoute = route.kind !== 'home' && Boolean(selectedWorkspace)
+  if (!selectedWorker) {
+    const availableSouls = data.souls.filter(soul => soul.status === 'available')
+    const createSoulCopy = selectedSoul ? displaySoul(selectedSoul, activeLocale) : null
+    return (
+      <main className="entry-shell" data-appearance={appearance} data-theme={resolvedTheme} data-testid="worker-studio-shell">
+        <div className="entry workspace-entry workspace-home-route">
+          <aside className="entry-side soul-sidebar" aria-label={copy.workspace.currentWorker}>
+            <div className="entry-brand">
+              <span className="entry-brand-mark" aria-hidden="true">AI</span>
+              <div className="entry-brand-text">
+                <div className="entry-brand-title-row">
+                  <span className="entry-brand-title">{copy.app.brand}</span>
+                  <span className="entry-brand-pill">{copy.app.workspacePill}</span>
+                </div>
+                <div className="entry-brand-subtitle">{copy.app.subtitle}</div>
+              </div>
+            </div>
+            <section className="newproj soul-catalog-panel soul-rail-panel">
+              <form className="newproj-body" onSubmit={submitWorker}>
+                <div className="section-head compact">
+                  <div>
+                    <h3>{copy.workspace.createWorker}</h3>
+                    <p className="hint">{createSoulCopy?.description ?? copy.workspace.createWorkerHint}</p>
+                  </div>
+                </div>
+                <div className="soul-rail" role="listbox" aria-label={copy.accessibility.soulCatalog}>
+                  {availableSouls.map((soul) => {
+                    const soulCopy = displaySoul(soul, activeLocale)
+                    return (
+                      <button
+                        key={soul.id}
+                        type="button"
+                        className={`soul-rail-item ${newWorkerSoulId === soul.id ? 'active' : ''}`}
+                        aria-selected={newWorkerSoulId === soul.id}
+                        role="option"
+                        onClick={() => setNewWorkerSoulId(soul.id)}
+                      >
+                        <span className="soul-rail-title">
+                          <strong>{soulCopy.name}</strong>
+                        </span>
+                        <small>{soulCopy.domain}</small>
+                        <span>{copy.common.available}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+                <input
+                  className="newproj-name"
+                  aria-label={copy.workspace.workerName}
+                  placeholder={copy.workspace.workerName}
+                  value={newWorkerName}
+                  onChange={event => setNewWorkerName(event.target.value)}
+                />
+                <button className="primary newproj-create" type="submit" disabled={!newWorkerName.trim()}>
+                  <Plus aria-hidden="true" size={13} />
+                  <span>{copy.workspace.createWorker}</span>
+                </button>
+              </form>
+            </section>
+          </aside>
+          <section className="entry-main workspace-column" aria-label={copy.accessibility.soulProjectsAndArtifacts}>
+            <header className="entry-header workspace-header">
+              <div>
+                <span className="kicker">{copy.workspace.currentWorker}</span>
+                <h1>{copy.workspace.noWorker}</h1>
+              </div>
+            </header>
+            <div className="entry-tab-content workspace-content">
+              <section className="empty-design-state">
+                <FileText aria-hidden="true" size={20} />
+                <strong>{copy.workspace.noWorker}</strong>
+                <span>{copy.workspace.createWorkerHint}</span>
+              </section>
+            </div>
+          </section>
+        </div>
+      </main>
+    )
+  }
+
+  if (!selectedSoul || !selectedTemplate || !selectedSoulCopy || !selectedTemplateCopy)
+    return null
+
+  const isWorkspaceContextRoute = (route.kind === 'workspace' || route.kind === 'session') && Boolean(selectedWorkspace)
   const showWorkspaceContextSurface = isWorkspaceContextRoute && Boolean(selectedWorkspace)
-  const showSessionSurface = isWorkspaceContextRoute && Boolean(selectedWorkspace && selectedSession)
+  const showSessionSurface = route.kind === 'session' && Boolean(selectedWorkspace && selectedSession)
 
   return (
     <main className="entry-shell" data-appearance={appearance} data-theme={resolvedTheme} data-testid="worker-studio-shell">
@@ -466,10 +580,10 @@ export function WorkerStudio() {
                     <button
                       type="button"
                       className="rail-back-button"
-                      onClick={() => navigateWorkerRoute({ kind: 'home' })}
+                      onClick={() => navigateWorkerRoute({ kind: 'worker', workerId: selectedWorker.id })}
                     >
                       <ArrowLeft aria-hidden="true" size={13} />
-                      <span>{copy.workspace.backToSoulHome}</span>
+                      <span>{copy.workspace.backToWorkerHome}</span>
                     </button>
                     <div className="rail-context-main">
                       <span className="kicker">{copy.workspace.workspaceNavigation}</span>
@@ -506,7 +620,7 @@ export function WorkerStudio() {
                               key={session.id}
                               type="button"
                               className={`rail-session-item ${selectedSession?.id === session.id ? 'active' : ''}`}
-                              onClick={() => navigateWorkerRoute({ kind: 'session', sessionId: session.id, workspaceId: session.workspaceId })}
+                              onClick={() => navigateWorkerRoute({ kind: 'session', sessionId: session.id, workerId: session.workerId, workspaceId: session.workspaceId })}
                             >
                               <strong>{session.title}</strong>
                               <span>
@@ -524,7 +638,7 @@ export function WorkerStudio() {
                   <section className="workspace-rail-card">
                     <div className="rail-section-head">
                       <strong>{copy.workspace.otherWorkspaces}</strong>
-                      <button type="button" className="rail-mini-action" onClick={() => navigateWorkerRoute({ kind: 'home' })}>
+                      <button type="button" className="rail-mini-action" onClick={() => navigateWorkerRoute({ kind: 'worker', workerId: selectedWorker.id })}>
                         <Plus aria-hidden="true" size={12} />
                         <span>{copy.workspace.newWorkspace}</span>
                       </button>
@@ -535,12 +649,7 @@ export function WorkerStudio() {
                           key={workspace.id}
                           type="button"
                           className={`rail-workspace-item ${selectedWorkspace.id === workspace.id ? 'active' : ''}`}
-                          onClick={() => {
-                            const nextSession = sessionForWorkspace(workspace, allSessions)
-                            navigateWorkerRoute(nextSession
-                              ? { kind: 'session', sessionId: nextSession.id, workspaceId: workspace.id }
-                              : { kind: 'workspace', workspaceId: workspace.id })
-                          }}
+                          onClick={() => navigateWorkerRoute({ kind: 'workspace', workerId: workspace.workerId, workspaceId: workspace.id })}
                         >
                           <strong>{workspace.name}</strong>
                           <small>{formatStatus(workspace.status, activeLocale)}</small>
@@ -552,83 +661,74 @@ export function WorkerStudio() {
               )
             : (
                 <>
-                  <section className="newproj soul-catalog-panel soul-rail-panel">
+                  <section className="newproj worker-list-panel soul-catalog-panel soul-rail-panel">
                     <div className="newproj-body">
                       <div className="section-head compact">
                         <div>
-                          <h3>{copy.workspace.soulCatalog}</h3>
-                          <p className="hint">{selectedSoulCopy.description}</p>
+                          <h3>{copy.workspace.workerList}</h3>
+                          <p className="hint">{copy.workspace.workerListHint}</p>
                         </div>
                       </div>
-                      <div className="soul-rail" role="listbox" aria-label={copy.accessibility.soulCatalog}>
-                        {data.souls.map((soul) => {
-                          const soulCopy = displaySoul(soul, activeLocale)
-                          const soulWorker = data.workers.find(worker => worker.soulId === soul.id) ?? null
-                          const active = selectedSoul.id === soul.id
+                      <div className="worker-list-rail soul-rail" role="listbox" aria-label={copy.workspace.currentWorker}>
+                        {data.workers.map((worker) => {
+                          const soul = data.souls.find(item => item.id === worker.soulId)
+                          const soulCopy = soul ? displaySoul(soul, activeLocale) : null
+                          const active = selectedWorker.id === worker.id
                           return (
                             <button
-                              key={soul.id}
+                              key={worker.id}
                               type="button"
-                              className={`soul-rail-item ${active ? 'active' : ''} ${soul.status !== 'available' ? 'disabled' : ''}`}
-                              disabled={soul.status !== 'available'}
+                              className={`soul-rail-item ${active ? 'active' : ''}`}
                               aria-selected={active}
                               role="option"
                               onClick={() => {
-                                setSelectedSoulId(soul.id)
+                                setSelectedWorkerId(worker.id)
                                 setSelectedWorkspaceId(null)
-                                const next = data.templates.find(template => template.soulId === soul.id)
+                                const next = data.templates.find(template => template.soulId === worker.soulId)
                                 if (next)
                                   setSelectedTemplateId(next.id)
-                                navigateWorkerRoute({ kind: 'home' })
+                                navigateWorkerRoute({ kind: 'worker', workerId: worker.id })
                               }}
                             >
                               <span className="soul-rail-title">
-                                <strong>{soulCopy.name}</strong>
-                                <span className={`status-dot ${soulWorker?.status === 'active' ? 'active' : ''}`} aria-hidden="true" />
+                                <strong>{worker.name}</strong>
+                                <span className={`status-dot ${worker.status === 'active' ? 'active' : ''}`} aria-hidden="true" />
                               </span>
-                              <small>{soul.status === 'available' ? soulCopy.domain : copy.common.comingSoon}</small>
-                              <span>{soulWorker ? formatStatus(soulWorker.status, activeLocale) : copy.workspace.noWorker}</span>
+                              <small>{soulCopy?.name ?? worker.soulId}</small>
+                              <span>{formatStatus(worker.status, activeLocale)}</span>
                             </button>
                           )
                         })}
                       </div>
-                      <WorkerIdentityBlock
-                        copy={copy}
-                        locale={activeLocale}
-                        soul={selectedSoul}
-                        soulCopy={selectedSoulCopy}
-                        worker={selectedWorker}
-                      />
                     </div>
                   </section>
 
-                  <section className="newproj capability-panel">
-                    <div className="newproj-body">
+                  <section className="newproj create-worker-panel soul-catalog-panel">
+                    <form className="newproj-body" onSubmit={submitWorker}>
                       <div className="section-head compact">
                         <div>
-                          <h3>{copy.create.capabilityTemplate}</h3>
-                          <p className="hint">{selectedTemplateCopy.description}</p>
+                          <h3>{copy.workspace.createWorker}</h3>
+                          <p className="hint">{copy.workspace.createWorkerHint}</p>
                         </div>
                       </div>
-                      <div className="template-picker-list" role="listbox" aria-label={copy.create.capabilityTemplate}>
-                        {templates.map(template => (
-                          <button
-                            key={template.id}
-                            type="button"
-                            className={`template-option ${selectedTemplate.id === template.id ? 'active' : ''}`}
-                            aria-selected={selectedTemplate.id === template.id}
-                            role="option"
-                            onClick={() => setSelectedTemplateId(template.id)}
-                          >
-                            <strong>{displayTemplate(template, activeLocale).name}</strong>
-                            <small>{displayTemplate(template, activeLocale).description}</small>
-                          </button>
-                        ))}
-                      </div>
-                      <div className="rubric-list" aria-label={copy.workspace.reviewRubric}>
-                        {selectedTemplateCopy.reviewRubric.map(item => <span key={item}>{item}</span>)}
-                      </div>
-                    </div>
+                      <select className="ds-select" aria-label={copy.create.soul} value={newWorkerSoulId} onChange={event => setNewWorkerSoulId(event.target.value)}>
+                        {data.souls.filter(soul => soul.status === 'available').map((soul) => {
+                          const soulCopy = displaySoul(soul, activeLocale)
+                          return <option key={soul.id} value={soul.id}>{soulCopy.name}</option>
+                        })}
+                      </select>
+                      <input
+                        className="newproj-name"
+                        aria-label={copy.workspace.workerName}
+                        placeholder={copy.workspace.workerName}
+                        value={newWorkerName}
+                        onChange={event => setNewWorkerName(event.target.value)}
+                      />
+                      <button className="primary newproj-create" type="submit" disabled={!newWorkerName.trim()}>
+                        <Plus aria-hidden="true" size={13} />
+                        <span>{copy.workspace.createWorker}</span>
+                      </button>
+                    </form>
                   </section>
                 </>
               )}
@@ -689,56 +789,27 @@ export function WorkerStudio() {
                   </header>
 
                   <div className="entry-tab-content workspace-content">
-                    <section className="empty-design-state workspace-route-empty" aria-live="polite">
-                      <FileText aria-hidden="true" size={20} />
-                      <strong>{copy.workspace.noWorkspaceSessions}</strong>
-                      <span>{copy.workspace.selectedCapability}</span>
-                      <span>{selectedTemplateCopy.name}</span>
-                    </section>
-                  </div>
-                </>
-              )
-            : null}
-
-          {!showSessionSurface && !(isWorkspaceContextRoute && selectedWorkspace)
-            ? (
-                <>
-                  <header className="entry-header workspace-header">
-                    <div>
-                      <span className="kicker">{copy.workspace.workspaceKicker}</span>
-                      <h1>{copy.workspace.workspaceTitle(selectedSoulCopy.name)}</h1>
-                    </div>
-                    <div className="entry-header-right">
-                      <button className="settings-trigger" type="button" aria-label={copy.accessibility.refreshWorkspace} onClick={() => void refresh()}>
-                        <RefreshCw aria-hidden="true" size={16} />
-                      </button>
-                      <button className="settings-trigger" type="button" aria-label={copy.accessibility.openSettings} onClick={() => openSettings()}>
-                        <Settings aria-hidden="true" size={16} />
-                      </button>
-                      <button className="avatar-btn" type="button" aria-label={copy.accessibility.workspace}>
-                        <span aria-hidden="true" className="avatar-btn-initials">{selectedSoulCopy.name}</span>
-                      </button>
-                    </div>
-                  </header>
-
-                  <div className="entry-tab-content workspace-content">
-                    <section className="newproj workspace-create-card" data-testid="new-project-panel">
-                      <form className="newproj-body" onSubmit={submitProject}>
+                    <section className="newproj workspace-create-card" data-testid="new-session-panel">
+                      <form className="newproj-body" onSubmit={submitSession}>
                         <div className="section-head compact">
                           <div>
-                            <h3>{copy.workspace.createWorkspace}</h3>
-                            <p className="hint">{copy.workspace.createWorkspaceHint(selectedTemplateCopy.name)}</p>
+                            <h3>{copy.workspace.createSession}</h3>
+                            <p className="hint">{copy.workspace.createSessionHint(selectedTemplateCopy.name)}</p>
                           </div>
                         </div>
 
-                        <input
-                          className="newproj-name"
-                          aria-label={copy.create.projectName}
-                          data-testid="new-project-name"
-                          placeholder={projectNamePlaceholder(selectedSoul.id, copy)}
-                          value={workspaceTitle}
-                          onChange={event => setWorkspaceTitle(event.target.value)}
-                        />
+                        <select
+                          className="ds-select"
+                          aria-label={copy.create.capabilityTemplate}
+                          value={selectedTemplate.id}
+                          onChange={event => setSelectedTemplateId(event.target.value)}
+                        >
+                          {templates.map(template => (
+                            <option key={template.id} value={template.id}>
+                              {displayTemplate(template, activeLocale).name}
+                            </option>
+                          ))}
+                        </select>
 
                         <textarea
                           id="project-context"
@@ -758,9 +829,89 @@ export function WorkerStudio() {
                             )
                           : null}
 
-                        <button className="primary newproj-create" data-testid="create-project" type="submit" disabled={!workspaceTitle.trim() || !workspaceContext.trim() || submitting || !engineReadiness.ready}>
+                        <button className="primary newproj-create" data-testid="create-session" type="submit" disabled={!workspaceContext.trim() || submitting || !engineReadiness.ready}>
                           <Plus aria-hidden="true" size={13} />
-                          <span>{submitting ? copy.create.creatingSession : copy.create.submit}</span>
+                          <span>{submitting ? copy.create.creatingSession : copy.workspace.createSession}</span>
+                        </button>
+                      </form>
+                    </section>
+
+                    <section className="empty-design-state workspace-route-empty" aria-live="polite">
+                      <FileText aria-hidden="true" size={20} />
+                      <strong>{workspaceSessions.length > 0 ? copy.workspace.workspaceSessions : copy.workspace.noWorkspaceSessions}</strong>
+                      <span>{copy.workspace.selectedCapability}</span>
+                      <span>{selectedTemplateCopy.name}</span>
+                    </section>
+                  </div>
+                </>
+              )
+            : null}
+
+          {!showSessionSurface && !(isWorkspaceContextRoute && selectedWorkspace)
+            ? (
+                <>
+                  <header className="entry-header workspace-header">
+                    <div>
+                      <span className="kicker">{copy.workspace.currentWorker}</span>
+                      <h1>{copy.workspace.workspaceTitle(selectedWorker.name)}</h1>
+                    </div>
+                    <div className="entry-header-right">
+                      <button className="settings-trigger" type="button" aria-label={copy.accessibility.refreshWorkspace} onClick={() => void refresh()}>
+                        <RefreshCw aria-hidden="true" size={16} />
+                      </button>
+                      <button className="settings-trigger" type="button" aria-label={copy.accessibility.openSettings} onClick={() => openSettings()}>
+                        <Settings aria-hidden="true" size={16} />
+                      </button>
+                      <button className="avatar-btn" type="button" aria-label={copy.accessibility.workspace}>
+                        <span aria-hidden="true" className="avatar-btn-initials">{selectedWorker.name}</span>
+                      </button>
+                    </div>
+                  </header>
+
+                  <div className="entry-tab-content workspace-content">
+                    <section className="worker-overview-panel">
+                      <WorkerIdentityBlock
+                        compact
+                        copy={copy}
+                        locale={activeLocale}
+                        soul={selectedSoul}
+                        soulCopy={selectedSoulCopy}
+                        worker={selectedWorker}
+                      />
+                      <div className="worker-capability-summary">
+                        <div className="rail-section-head">
+                          <strong>{copy.create.capabilityTemplate}</strong>
+                          <span className="count-pill">{templates.length}</span>
+                        </div>
+                        <div className="worker-capability-chips">
+                          {templates.map(template => (
+                            <span key={template.id}>{displayTemplate(template, activeLocale).name}</span>
+                          ))}
+                        </div>
+                      </div>
+                    </section>
+
+                    <section className="newproj workspace-create-card" data-testid="new-project-panel">
+                      <form className="newproj-body" onSubmit={submitProject}>
+                        <div className="section-head compact">
+                          <div>
+                            <h3>{copy.workspace.createWorkspace}</h3>
+                            <p className="hint">{copy.workspace.createWorkspaceHint}</p>
+                          </div>
+                        </div>
+
+                        <input
+                          className="newproj-name"
+                          aria-label={copy.create.projectName}
+                          data-testid="new-project-name"
+                          placeholder={projectNamePlaceholder(selectedSoul.id, copy)}
+                          value={workspaceTitle}
+                          onChange={event => setWorkspaceTitle(event.target.value)}
+                        />
+
+                        <button className="primary newproj-create" data-testid="create-project" type="submit" disabled={!workspaceTitle.trim() || submitting}>
+                          <Plus aria-hidden="true" size={13} />
+                          <span>{copy.workspace.createWorkspace}</span>
                         </button>
                       </form>
                     </section>
@@ -800,11 +951,8 @@ export function WorkerStudio() {
                                 template={data.templates.find(template => template.id === sessionForWorkspace(item, allSessions)?.capabilityTemplateId)}
                                 turn={turnForSession(sessionForWorkspace(item, allSessions), data.turns)}
                                 onSelect={() => {
-                                  const nextSession = sessionForWorkspace(item, allSessions)
                                   setSelectedWorkspaceId(item.id)
-                                  navigateWorkerRoute(nextSession
-                                    ? { kind: 'session', sessionId: nextSession.id, workspaceId: item.id }
-                                    : { kind: 'workspace', workspaceId: item.id })
+                                  navigateWorkerRoute({ kind: 'workspace', workerId: item.workerId, workspaceId: item.id })
                                 }}
                               />
                             ))

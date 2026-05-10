@@ -95,8 +95,12 @@ interface StaticMessages {
     byokReady: (provider: string, model: string) => string
     configure: string
     continueSession: string
+    createSession: string
+    createSessionHint: (templateName: string) => string
+    createWorker: string
+    createWorkerHint: string
     createWorkspace: string
-    createWorkspaceHint: (templateName: string) => string
+    createWorkspaceHint: string
     engineLoading: string
     engineMissing: (engineId: string) => string
     engineNotInstalled: (engineName: string) => string
@@ -125,6 +129,7 @@ interface StaticMessages {
     sendTurn: string
     sendingTurn: string
     backToSoulHome: string
+    backToWorkerHome: string
     currentSession: string
     currentWorker: string
     currentWorkspace: string
@@ -147,6 +152,9 @@ interface StaticMessages {
     workspaceTitle: (soulName: string) => string
     workerEngine: string
     workerId: string
+    workerList: string
+    workerListHint: string
+    workerName: string
     workerSoul: string
     workerStatus: string
   }
@@ -359,8 +367,12 @@ const en = {
     byokReady: (provider, model) => `${provider} ${model} is configured for session turns.`,
     configure: 'Configure',
     continueSession: 'Continue session',
-    createWorkspace: 'Create workspace session',
-    createWorkspaceHint: templateName => `Starts a workspace and first ${templateName} turn.`,
+    createSession: 'Create session',
+    createSessionHint: templateName => `Start a ${templateName} session in this workspace.`,
+    createWorker: 'Create worker',
+    createWorkerHint: 'Bind a Soul to a worker before creating workspaces.',
+    createWorkspace: 'Create workspace',
+    createWorkspaceHint: 'Create a worker-scoped workspace. Sessions are created inside a workspace.',
     engineLoading: 'Checking execution settings...',
     engineMissing: engineId => `${engineId} is not known in local settings.`,
     engineNotInstalled: engineName => `${engineName} is selected but not installed on PATH.`,
@@ -389,6 +401,7 @@ const en = {
     sendTurn: 'Send turn',
     sendingTurn: 'Sending turn...',
     backToSoulHome: 'Back to Soul home',
+    backToWorkerHome: 'Back to worker',
     currentSession: 'Current session',
     currentWorker: 'Current worker',
     currentWorkspace: 'Current workspace',
@@ -406,11 +419,14 @@ const en = {
     updated: when => `Updated ${when}`,
     workspaceNavigation: 'Workspace navigation',
     workspaceSessions: 'Workspace sessions',
-    workspaceKicker: 'SOUL WORKSPACE',
+    workspaceKicker: 'WORKER WORKSPACE',
     workspaceList: 'Workspaces',
     workspaceTitle: soulName => `${soulName} workspaces`,
     workerEngine: 'Default engine',
     workerId: 'Worker ID',
+    workerList: 'Workers',
+    workerListHint: 'Select a worker first, then manage its workspaces.',
+    workerName: 'Worker name',
     workerSoul: 'Soul binding',
     workerStatus: 'Worker status',
   },
@@ -617,8 +633,12 @@ const zhCN = {
     byokReady: (provider, model) => `${provider} ${model} 已可用于 session turn。`,
     configure: '配置',
     continueSession: '继续会话',
-    createWorkspace: '创建工作区会话',
-    createWorkspaceHint: templateName => `创建工作区并启动第一轮 ${templateName} turn。`,
+    createSession: '创建会话',
+    createSessionHint: templateName => `在此工作区中启动一个 ${templateName} 会话。`,
+    createWorker: '创建 worker',
+    createWorkerHint: '先将 Soul 绑定到 worker，再创建工作区。',
+    createWorkspace: '创建工作区',
+    createWorkspaceHint: '创建归属当前 worker 的工作区；会话在工作区内创建。',
     engineLoading: '正在检查执行设置...',
     engineMissing: engineId => `本地设置中没有 ${engineId}。`,
     engineNotInstalled: engineName => `已选择 ${engineName}，但 PATH 中未安装。`,
@@ -647,6 +667,7 @@ const zhCN = {
     sendTurn: '发送 turn',
     sendingTurn: '正在发送 turn...',
     backToSoulHome: '返回 Soul 首页',
+    backToWorkerHome: '返回 worker',
     currentSession: '当前会话',
     currentWorker: '当前 worker',
     currentWorkspace: '当前工作区',
@@ -664,11 +685,14 @@ const zhCN = {
     updated: when => `更新于 ${when}`,
     workspaceNavigation: '工作区导航',
     workspaceSessions: '工作区会话',
-    workspaceKicker: 'SOUL 工作区',
+    workspaceKicker: 'WORKER 工作区',
     workspaceList: '工作区',
     workspaceTitle: soulName => `${soulName} 工作区`,
     workerEngine: '默认引擎',
     workerId: 'Worker ID',
+    workerList: 'Worker 列表',
+    workerListHint: '先选择 worker，再管理它的工作区。',
+    workerName: 'Worker 名称',
     workerSoul: 'Soul 绑定',
     workerStatus: 'Worker 状态',
   },
@@ -875,8 +899,12 @@ const ja = {
     byokReady: (provider, model) => `${provider} ${model} はセッションターンで利用できます。`,
     configure: '設定',
     continueSession: 'セッションを続ける',
-    createWorkspace: 'ワークスペースセッションを作成',
-    createWorkspaceHint: templateName => `ワークスペースと最初の ${templateName} ターンを開始します。`,
+    createSession: 'セッションを作成',
+    createSessionHint: templateName => `このワークスペースで ${templateName} セッションを開始します。`,
+    createWorker: 'worker を作成',
+    createWorkerHint: 'ワークスペース作成前に Soul を worker にバインドします。',
+    createWorkspace: 'ワークスペースを作成',
+    createWorkspaceHint: '現在の worker に属するワークスペースを作成します。セッションはワークスペース内で作成します。',
     engineLoading: '実行設定を確認中...',
     engineMissing: engineId => `${engineId} はローカル設定にありません。`,
     engineNotInstalled: engineName => `${engineName} が選択されていますが PATH にありません。`,
@@ -905,6 +933,7 @@ const ja = {
     sendTurn: 'ターン送信',
     sendingTurn: '送信中...',
     backToSoulHome: 'Soul ホームに戻る',
+    backToWorkerHome: 'worker に戻る',
     currentSession: '現在のセッション',
     currentWorker: '現在の worker',
     currentWorkspace: '現在のワークスペース',
@@ -922,11 +951,14 @@ const ja = {
     updated: when => `更新 ${when}`,
     workspaceNavigation: 'ワークスペースナビゲーション',
     workspaceSessions: 'ワークスペースセッション',
-    workspaceKicker: 'SOUL ワークスペース',
+    workspaceKicker: 'WORKER ワークスペース',
     workspaceList: 'ワークスペース',
     workspaceTitle: soulName => `${soulName} ワークスペース`,
     workerEngine: '既定エンジン',
     workerId: 'Worker ID',
+    workerList: 'Worker 一覧',
+    workerListHint: '先に worker を選択してからワークスペースを管理します。',
+    workerName: 'Worker 名',
     workerSoul: 'Soul バインド',
     workerStatus: 'Worker ステータス',
   },
@@ -1133,8 +1165,12 @@ const de = {
     byokReady: (provider, model) => `${provider} ${model} ist für Session-Turns konfiguriert.`,
     configure: 'Konfigurieren',
     continueSession: 'Session fortsetzen',
-    createWorkspace: 'Workspace-Session erstellen',
-    createWorkspaceHint: templateName => `Startet einen Workspace und den ersten ${templateName}-Turn.`,
+    createSession: 'Session erstellen',
+    createSessionHint: templateName => `Startet eine ${templateName}-Session in diesem Workspace.`,
+    createWorker: 'Worker erstellen',
+    createWorkerHint: 'Binde zuerst eine Soul an einen Worker, bevor du Workspaces erstellst.',
+    createWorkspace: 'Workspace erstellen',
+    createWorkspaceHint: 'Erstellt einen Workspace für den aktuellen Worker. Sessions werden im Workspace erstellt.',
     engineLoading: 'Ausführungseinstellungen werden geprüft...',
     engineMissing: engineId => `${engineId} ist in den lokalen Einstellungen unbekannt.`,
     engineNotInstalled: engineName => `${engineName} ist ausgewählt, aber nicht im PATH installiert.`,
@@ -1163,6 +1199,7 @@ const de = {
     sendTurn: 'Turn senden',
     sendingTurn: 'Turn wird gesendet...',
     backToSoulHome: 'Zur Soul-Startseite',
+    backToWorkerHome: 'Zurück zum Worker',
     currentSession: 'Aktuelle Session',
     currentWorker: 'Aktueller Worker',
     currentWorkspace: 'Aktueller Workspace',
@@ -1180,11 +1217,14 @@ const de = {
     updated: when => `Aktualisiert ${when}`,
     workspaceNavigation: 'Workspace-Navigation',
     workspaceSessions: 'Workspace-Sessions',
-    workspaceKicker: 'SOUL WORKSPACE',
+    workspaceKicker: 'WORKER WORKSPACE',
     workspaceList: 'Workspaces',
     workspaceTitle: soulName => `${soulName}-Workspaces`,
     workerEngine: 'Standard-Engine',
     workerId: 'Worker ID',
+    workerList: 'Worker',
+    workerListHint: 'Wähle zuerst einen Worker und verwalte dann seine Workspaces.',
+    workerName: 'Worker-Name',
     workerSoul: 'Soul-Bindung',
     workerStatus: 'Worker-Status',
   },

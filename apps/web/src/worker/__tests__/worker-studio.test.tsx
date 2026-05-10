@@ -245,7 +245,7 @@ beforeEach(() => {
     }
     if (url.endsWith('/api/local/workspaces'))
       return json({ workspaces: currentWorkspaces })
-    if (url.endsWith('/api/local/workspaces/workspace-created/sessions/stream') && method === 'POST') {
+    if ((url.endsWith('/api/local/workers/hr-worker/workspaces/workspace-created/sessions/stream') || url.endsWith('/api/local/workspaces/workspace-created/sessions/stream')) && method === 'POST') {
       const createdSession = { ...sessionRecord, workspaceId: 'workspace-created', id: 'session-created', title: 'New candidate workspace' }
       const createdTurn = { ...turnRecord, id: 'turn-created', sessionId: 'session-created' }
       const createdArtifact = { ...artifactRecord, id: 'artifact-created', sessionId: 'session-created', turnId: 'turn-created', workspaceId: 'workspace-created' }
@@ -262,7 +262,7 @@ beforeEach(() => {
         },
       }), { headers: { 'content-type': 'text/event-stream' }, status: 201 })
     }
-    if (url.endsWith('/api/local/workspaces/workspace-created/sessions') && method === 'POST') {
+    if ((url.endsWith('/api/local/workers/hr-worker/workspaces/workspace-created/sessions') || url.endsWith('/api/local/workspaces/workspace-created/sessions')) && method === 'POST') {
       const createdSession = { ...sessionRecord, workspaceId: 'workspace-created', id: 'session-created', title: 'New candidate workspace' }
       const createdTurn = { ...turnRecord, id: 'turn-created', sessionId: 'session-created' }
       const createdArtifact = { ...artifactRecord, id: 'artifact-created', sessionId: 'session-created', turnId: 'turn-created', workspaceId: 'workspace-created' }
@@ -271,7 +271,7 @@ beforeEach(() => {
       currentArtifacts = [createdArtifact, ...currentArtifacts]
       return json({ artifacts: [createdArtifact], events: [], files: [], lessons: [], review: null, session: createdSession, turn: createdTurn }, 201)
     }
-    if (url.endsWith('/api/local/sessions/session-1/turns/stream') && method === 'POST') {
+    if ((url.endsWith('/api/local/workers/hr-worker/sessions/session-1/messages/stream') || url.endsWith('/api/local/sessions/session-1/turns/stream')) && method === 'POST') {
       const nextTurn = {
         ...turnRecord,
         id: 'turn-2',
@@ -300,7 +300,7 @@ beforeEach(() => {
         },
       }), { headers: { 'content-type': 'text/event-stream' }, status: 200 })
     }
-    if (url.endsWith('/api/local/sessions/session-1/turns') && method === 'POST') {
+    if ((url.endsWith('/api/local/workers/hr-worker/sessions/session-1/messages') || url.endsWith('/api/local/sessions/session-1/turns')) && method === 'POST') {
       const nextTurn = {
         ...turnRecord,
         id: 'turn-2',
@@ -371,21 +371,21 @@ beforeEach(() => {
 })
 
 describe('worker studio', () => {
-  it('renders Soul catalog as the first screen without import or work-order entrypoints', async () => {
+  it('renders the worker-first workspace home without import or work-order entrypoints', async () => {
     render(<WorkerStudio />)
 
     expect(await screen.findByText('Soul Workspace')).toBeTruthy()
     expect(document.documentElement.lang).toBe('en')
-    expect(screen.getByLabelText('Soul catalog')).toBeTruthy()
+    expect(screen.getByLabelText('Current worker')).toBeTruthy()
     expect(screen.getAllByText('HR').length).toBeGreaterThan(0)
     expect(screen.getAllByText('PM').length).toBeGreaterThan(0)
     expect(screen.getAllByText('QA').length).toBeGreaterThan(0)
     expect(screen.getAllByText('DevOps').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Candidate Screen').length).toBeGreaterThan(0)
-    expect(screen.getByText('Current worker')).toBeTruthy()
+    expect(screen.getAllByText('Current worker').length).toBeGreaterThan(0)
     expect(screen.getByText('hr-worker')).toBeTruthy()
     expect(screen.getByText('Worker ID')).toBeTruthy()
-    expect(screen.getAllByText('Create workspace session').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Create workspace').length).toBeGreaterThan(0)
     expect(screen.queryByText('Examples')).toBeNull()
     expect(screen.queryByText('Domain systems')).toBeNull()
     expect(screen.queryByText(/Import/i)).toBeNull()
@@ -399,7 +399,10 @@ describe('worker studio', () => {
     render(<WorkerStudio />)
 
     await screen.findByText('hr-worker')
-    fireEvent.click(screen.getByRole('option', { name: /PM/ }))
+    const pmWorkerOption = screen.getAllByRole('option', { name: /PM/ })
+      .find(option => option.textContent?.includes('Active'))
+    expect(pmWorkerOption).toBeTruthy()
+    fireEvent.click(pmWorkerOption!)
 
     await waitFor(() => {
       expect(screen.getByText('pm-worker')).toBeTruthy()
@@ -413,15 +416,21 @@ describe('worker studio', () => {
 
     await screen.findAllByText('Candidate Screen')
     fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'New candidate workspace' } })
-    fireEvent.change(screen.getByLabelText('Business context'), { target: { value: 'Role and candidate packet.' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Create workspace session' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }))
 
     await waitFor(() => {
+      expect(window.location.pathname).toBe('/workers/hr-worker/workspaces/workspace-created')
       expect(fetch).toHaveBeenCalledWith('/api/local/workers/hr-worker/workspaces', expect.objectContaining({
         body: expect.stringContaining('"soulId":"hr"'),
         method: 'POST',
       }))
-      expect(fetch).toHaveBeenCalledWith('/api/local/workspaces/workspace-created/sessions/stream', expect.objectContaining({
+    })
+
+    fireEvent.change(screen.getByLabelText('Business context'), { target: { value: 'Role and candidate packet.' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create session' }))
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/local/workers/hr-worker/workspaces/workspace-created/sessions/stream', expect.objectContaining({
         body: expect.stringContaining('"capabilityTemplateId":"candidate-screen"'),
         method: 'POST',
       }))
@@ -434,7 +443,13 @@ describe('worker studio', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Hiring Workspace/ }))
 
     await waitFor(() => {
-      expect(window.location.pathname).toBe('/workspaces/workspace-1/sessions/session-1')
+      expect(window.location.pathname).toBe('/workers/hr-worker/workspaces/workspace-1')
+    })
+    expect(screen.getByTestId('new-session-panel')).toBeTruthy()
+    fireEvent.click(await screen.findByRole('button', { name: /Screen candidate/ }))
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/workers/hr-worker/workspaces/workspace-1/sessions/session-1')
     })
     expect(await screen.findByText('AIWorker Engine')).toBeTruthy()
     expect(screen.getByText('Workspace navigation')).toBeTruthy()
@@ -442,7 +457,7 @@ describe('worker studio', () => {
     expect(screen.getByText('hr-worker')).toBeTruthy()
     expect(screen.getByText('Current workspace')).toBeTruthy()
     expect(screen.getByText('Workspace sessions')).toBeTruthy()
-    expect(screen.getByRole('button', { name: /Back to Soul home/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Back to worker/ })).toBeTruthy()
     expect(screen.queryByTestId('new-project-panel')).toBeNull()
     expect(screen.getByText('Session events')).toBeTruthy()
     expect(screen.getByText('Memory candidates')).toBeTruthy()
@@ -452,7 +467,7 @@ describe('worker studio', () => {
     expect(screen.getByText('Add interview risks.')).toBeTruthy()
 
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('/api/local/sessions/session-1/turns/stream', expect.objectContaining({
+      expect(fetch).toHaveBeenCalledWith('/api/local/workers/hr-worker/sessions/session-1/messages/stream', expect.objectContaining({
         body: expect.stringContaining('Add interview risks.'),
         method: 'POST',
       }))
@@ -481,7 +496,7 @@ describe('worker studio', () => {
     currentArtifacts = []
     currentEvents = []
     currentLessons = []
-    window.history.replaceState(null, '', '/workspaces/workspace-1')
+    window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
 
     render(<WorkerStudio />)
 
@@ -513,7 +528,7 @@ describe('worker studio', () => {
       expect(document.documentElement.lang).toBe('zh-CN')
     })
     expect(screen.getByRole('dialog', { name: '配置 Soul 工作区' })).toBeTruthy()
-    expect(screen.getAllByText('创建工作区会话').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('创建工作区').length).toBeGreaterThan(0)
     expect(screen.queryByText('Create workspace session')).toBeNull()
   })
 

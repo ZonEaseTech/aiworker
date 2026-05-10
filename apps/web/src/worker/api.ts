@@ -92,13 +92,22 @@ export function createWorkspace(workerId: string, input: {
   return localFetch(`/api/local/workers/${workerId}/workspaces`, { method: 'POST', body: JSON.stringify(input) })
 }
 
+export function createWorker(input: {
+  id?: string
+  metadata?: Record<string, unknown>
+  name: string
+  soulId: string
+}): Promise<{ worker: LocalWorker }> {
+  return localFetch('/api/local/workers', { method: 'POST', body: JSON.stringify(input) })
+}
+
 export function createSessionTurn(workspaceId: string, input: {
   capabilityTemplateId: string
   context?: string
   input: string
   metadata?: Record<string, unknown>
   title: string
-}): Promise<{
+}, workerId?: string): Promise<{
   session: LocalSession
   turn: LocalTurn
   files: LocalFile[]
@@ -107,7 +116,10 @@ export function createSessionTurn(workspaceId: string, input: {
   lessons: LocalLesson[]
   events: LocalSessionEvent[]
 }> {
-  return localFetch(`/api/local/workspaces/${workspaceId}/sessions`, { method: 'POST', body: JSON.stringify(input) })
+  const path = workerId
+    ? `/api/local/workers/${workerId}/workspaces/${workspaceId}/sessions`
+    : `/api/local/workspaces/${workspaceId}/sessions`
+  return localFetch(path, { method: 'POST', body: JSON.stringify(input) })
 }
 
 export async function createSessionTurnStream(
@@ -119,6 +131,7 @@ export async function createSessionTurnStream(
     metadata?: Record<string, unknown>
     title: string
   },
+  workerId?: string,
   handlers: {
     onEvent?: (event: LocalSessionEvent) => void
     onSession?: (session: LocalSession) => void
@@ -133,15 +146,18 @@ export async function createSessionTurnStream(
   lessons: LocalLesson[]
   events: LocalSessionEvent[]
 }> {
-  const res = await fetch(`/api/local/workspaces/${workspaceId}/sessions/stream`, {
+  const path = workerId
+    ? `/api/local/workers/${workerId}/workspaces/${workspaceId}/sessions/stream`
+    : `/api/local/workspaces/${workspaceId}/sessions/stream`
+  const res = await fetch(path, {
     body: JSON.stringify(input),
     headers: { 'content-type': 'application/json' },
     method: 'POST',
   })
   if (!res.ok)
-    throw new Error(`Local API ${res.status}: /api/local/workspaces/${workspaceId}/sessions/stream`)
+    throw new Error(`Local API ${res.status}: ${path}`)
   if (!res.body)
-    return createSessionTurn(workspaceId, input)
+    return createSessionTurn(workspaceId, input, workerId)
 
   return await readSessionTurnStream(res.body, {
     onEvent: handlers.onEvent,
@@ -153,7 +169,7 @@ export async function createSessionTurnStream(
 export function continueSessionTurn(sessionId: string, input: {
   input: string
   metadata?: Record<string, unknown>
-}): Promise<{
+}, workerId?: string): Promise<{
   session: LocalSession
   turn: LocalTurn
   files: LocalFile[]
@@ -162,7 +178,10 @@ export function continueSessionTurn(sessionId: string, input: {
   lessons: LocalLesson[]
   events: LocalSessionEvent[]
 }> {
-  return localFetch(`/api/local/sessions/${sessionId}/turns`, { method: 'POST', body: JSON.stringify(input) })
+  const path = workerId
+    ? `/api/local/workers/${workerId}/sessions/${sessionId}/messages`
+    : `/api/local/sessions/${sessionId}/turns`
+  return localFetch(path, { method: 'POST', body: JSON.stringify(input) })
 }
 
 export async function continueSessionTurnStream(
@@ -171,6 +190,7 @@ export async function continueSessionTurnStream(
     input: string
     metadata?: Record<string, unknown>
   },
+  workerId?: string,
   handlers: {
     onEvent?: (event: LocalSessionEvent) => void
     onTurn?: (turn: LocalTurn) => void
@@ -184,15 +204,18 @@ export async function continueSessionTurnStream(
   lessons: LocalLesson[]
   events: LocalSessionEvent[]
 }> {
-  const res = await fetch(`/api/local/sessions/${sessionId}/turns/stream`, {
+  const path = workerId
+    ? `/api/local/workers/${workerId}/sessions/${sessionId}/messages/stream`
+    : `/api/local/sessions/${sessionId}/turns/stream`
+  const res = await fetch(path, {
     body: JSON.stringify(input),
     headers: { 'content-type': 'application/json' },
     method: 'POST',
   })
   if (!res.ok)
-    throw new Error(`Local API ${res.status}: /api/local/sessions/${sessionId}/turns/stream`)
+    throw new Error(`Local API ${res.status}: ${path}`)
   if (!res.body)
-    return continueSessionTurn(sessionId, input)
+    return continueSessionTurn(sessionId, input, workerId)
 
   return await readSessionTurnStream(res.body, handlers)
 }
