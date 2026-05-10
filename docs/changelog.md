@@ -1,5 +1,19 @@
 # AIWorker Changelog
 
+## 2026-05-10 18:01 [progress] Session workspace implementation slices
+
+- Opened implementation PMA slices for the approved session-handoff
+  architecture:
+  - REFACTOR-047 / PLAN-219 — worker/session/turn/invocation data contract.
+  - REFACTOR-048 / PLAN-220 — local daemon worker/session API.
+  - REFACTOR-049 / PLAN-221 — Worker Web session workspace surface.
+  - REFACTOR-050 / PLAN-222 — host-home lifecycle and project-scope removal.
+  - QA-029 / PLAN-223 — focused/root gates, CRG review, and browser validation.
+- Investigation found the concrete old-contract anchors to remove:
+  `projects/runs/run_events` storage, `/api/local/runs`, Web `startRun()`, CLI
+  `run` commands, `ensureProjectAiworker()` init, and the internal
+  `workspace-template` engine.
+
 ## 2026-05-10 17:44 [completed] DOC-009 / PLAN-218 — Session handoff and file consumer contract correction
 
 Follow-up architecture discussion clarified that AIWorker must not ask users to
