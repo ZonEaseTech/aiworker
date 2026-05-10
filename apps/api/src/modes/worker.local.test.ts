@@ -45,14 +45,26 @@ describe('local daemon API', () => {
     return boot.app
   }
 
+  async function createHrWorker(target: Awaited<ReturnType<typeof app>>) {
+    const res = await target.request('/api/local/workers', {
+      method: 'POST',
+      body: JSON.stringify({ id: 'hr-worker', soulId: 'hr', name: 'HR Recruiting' }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(res.status).toBe(201)
+    return (await res.json() as { worker: { id: string, soulId: string } }).worker
+  }
+
   it('serves the session workspace loop through /api/local routes', async () => {
     const target = await app()
+    const createdWorker = await createHrWorker(target)
 
     const workersRes = await target.request('/api/local/workers')
     expect(workersRes.status).toBe(200)
     const workersBody = await workersRes.json() as { workers: Array<{ id: string, soulId: string }> }
     const hrWorker = workersBody.workers.find(worker => worker.soulId === 'hr')
     expect(hrWorker?.id).toBe('hr-worker')
+    expect(createdWorker.id).toBe(hrWorker!.id)
 
     const workspaceRes = await target.request(`/api/local/workers/${hrWorker!.id}/workspaces`, {
       method: 'POST',
@@ -62,7 +74,7 @@ describe('local daemon API', () => {
     expect(workspaceRes.status).toBe(201)
     const workspaceBody = await workspaceRes.json() as { workspace: { id: string } }
 
-    const sessionRes = await target.request(`/api/local/workspaces/${workspaceBody.workspace.id}/sessions`, {
+    const sessionRes = await target.request(`/api/local/workers/${hrWorker!.id}/workspaces/${workspaceBody.workspace.id}/sessions`, {
       method: 'POST',
       body: JSON.stringify({
         capabilityTemplateId: 'candidate-screen',
@@ -106,14 +118,13 @@ describe('local daemon API', () => {
 
   it('streams session turn engine events before returning the final result', async () => {
     const target = await app()
-    const workersBody = await (await target.request('/api/local/workers')).json() as { workers: Array<{ id: string, soulId: string }> }
-    const hrWorker = workersBody.workers.find(worker => worker.soulId === 'hr')!
+    const hrWorker = await createHrWorker(target)
     const workspaceBody = await (await target.request(`/api/local/workers/${hrWorker.id}/workspaces`, {
       method: 'POST',
       body: JSON.stringify({ name: 'Hiring stream workspace' }),
       headers: { 'content-type': 'application/json' },
     })).json() as { workspace: { id: string } }
-    const sessionBody = await (await target.request(`/api/local/workspaces/${workspaceBody.workspace.id}/sessions`, {
+    const sessionBody = await (await target.request(`/api/local/workers/${hrWorker.id}/workspaces/${workspaceBody.workspace.id}/sessions`, {
       method: 'POST',
       body: JSON.stringify({
         capabilityTemplateId: 'candidate-screen',
@@ -123,7 +134,7 @@ describe('local daemon API', () => {
       headers: { 'content-type': 'application/json' },
     })).json() as { session: { id: string } }
 
-    const streamRes = await target.request(`/api/local/sessions/${sessionBody.session.id}/turns/stream`, {
+    const streamRes = await target.request(`/api/local/workers/${hrWorker.id}/sessions/${sessionBody.session.id}/messages/stream`, {
       method: 'POST',
       body: JSON.stringify({ input: 'Prepare a streamed candidate screen.' }),
       headers: { 'content-type': 'application/json' },
@@ -141,15 +152,14 @@ describe('local daemon API', () => {
 
   it('streams initial workspace session creation before the engine finishes', async () => {
     const target = await app()
-    const workersBody = await (await target.request('/api/local/workers')).json() as { workers: Array<{ id: string, soulId: string }> }
-    const hrWorker = workersBody.workers.find(worker => worker.soulId === 'hr')!
+    const hrWorker = await createHrWorker(target)
     const workspaceBody = await (await target.request(`/api/local/workers/${hrWorker.id}/workspaces`, {
       method: 'POST',
       body: JSON.stringify({ name: 'Hiring initial stream workspace' }),
       headers: { 'content-type': 'application/json' },
     })).json() as { workspace: { id: string } }
 
-    const streamRes = await target.request(`/api/local/workspaces/${workspaceBody.workspace.id}/sessions/stream`, {
+    const streamRes = await target.request(`/api/local/workers/${hrWorker.id}/workspaces/${workspaceBody.workspace.id}/sessions/stream`, {
       method: 'POST',
       body: JSON.stringify({
         capabilityTemplateId: 'candidate-screen',
@@ -177,12 +187,14 @@ describe('local daemon API', () => {
 
     expect(paths).toContain('/api/local/info')
     expect(paths).toContain('/api/local/workers')
+    expect(paths).toContain('/api/local/workers/{workerId}')
+    expect(paths).toContain('/api/local/workers/{workerId}/templates')
     expect(paths).toContain('/api/local/souls')
     expect(paths).toContain('/api/local/templates')
     expect(paths).toContain('/api/local/workers/{workerId}/workspaces')
-    expect(paths).toContain('/api/local/workspaces/{workspaceId}/sessions')
-    expect(paths).toContain('/api/local/workspaces/{workspaceId}/sessions/stream')
-    expect(paths).toContain('/api/local/sessions/{sessionId}/turns')
+    expect(paths).toContain('/api/local/workers/{workerId}/workspaces/{workspaceId}/sessions')
+    expect(paths).toContain('/api/local/workers/{workerId}/workspaces/{workspaceId}/sessions/stream')
+    expect(paths).toContain('/api/local/workers/{workerId}/sessions/{sessionId}/messages')
     expect(paths).toContain('/api/local/settings/engines/rescan')
     expect(paths.some(path => path.includes('/runs'))).toBe(false)
     expect(paths.some(path => path.startsWith('/api/worker'))).toBe(false)

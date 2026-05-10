@@ -29,6 +29,7 @@ import {
   listSessionEvents,
   listSessions,
   listTurns,
+  listWorkers,
   listWorkspaces,
   registerArtifact,
   reviews,
@@ -197,6 +198,70 @@ describe('greenfield local worker session schema', () => {
     expect(lesson.status).toBe('proposed')
     expect(listLessons(workspace.id)).toEqual([lesson])
     expect(setSetting('engine.default', { engine: 'codex' }).valueJson).toEqual({ engine: 'codex' })
+  })
+
+  it('allows multiple workers to bind the same Soul while isolating workspaces by worker', () => {
+    const recruiting = upsertWorker({
+      id: 'worker-hr-recruiting',
+      soulId: 'hr',
+      name: 'HR Recruiting',
+      defaultEngineId: 'codex',
+      at: '2026-05-09T02:00:00.000Z',
+    })
+    const talentPool = upsertWorker({
+      id: 'worker-hr-talent-pool',
+      soulId: 'hr',
+      name: 'HR Talent Pool',
+      defaultEngineId: 'codex',
+      at: '2026-05-09T02:01:00.000Z',
+    })
+
+    const recruitingWorkspace = createWorkspace({
+      id: 'workspace-recruiting',
+      workerId: recruiting.id,
+      name: 'Open roles',
+      rootPath: '/tmp/hr-recruiting',
+      at: '2026-05-09T02:02:00.000Z',
+    })
+    const talentWorkspace = createWorkspace({
+      id: 'workspace-talent-pool',
+      workerId: talentPool.id,
+      name: 'Talent pool',
+      rootPath: '/tmp/hr-talent-pool',
+      at: '2026-05-09T02:03:00.000Z',
+    })
+
+    expect(recruiting.soulId).toBe(talentPool.soulId)
+    expect(recruiting.id).not.toBe(talentPool.id)
+    expect(listWorkspaces(recruiting.id)).toEqual([recruitingWorkspace])
+    expect(listWorkspaces(talentPool.id)).toEqual([talentWorkspace])
+  })
+
+  it('repairs legacy unique worker Soul index during migration', () => {
+    getWorkerDb().run(sql.raw('DROP INDEX IF EXISTS workers_soul_idx'))
+    getWorkerDb().run(sql.raw('CREATE UNIQUE INDEX workers_soul_idx ON workers (soul_id)'))
+
+    runWorkerMigrations()
+
+    const indexes = getWorkerDb().all<{ name: string, unique: number }>(sql.raw('PRAGMA index_list("workers")'))
+    expect(indexes.find(index => index.name === 'workers_soul_idx')?.unique).toBe(0)
+
+    upsertWorker({
+      id: 'worker-hr-legacy-a',
+      soulId: 'hr',
+      name: 'HR Legacy A',
+      defaultEngineId: 'codex',
+      at: '2026-05-09T02:10:00.000Z',
+    })
+    upsertWorker({
+      id: 'worker-hr-legacy-b',
+      soulId: 'hr',
+      name: 'HR Legacy B',
+      defaultEngineId: 'codex',
+      at: '2026-05-09T02:11:00.000Z',
+    })
+
+    expect(listWorkers().filter(worker => worker.soulId === 'hr').map(worker => worker.id)).toContain('worker-hr-legacy-b')
   })
 
   it('keeps indexes aligned with the session workspace query paths', () => {

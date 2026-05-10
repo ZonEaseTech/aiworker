@@ -31,6 +31,7 @@ import {
   runWorkerMigrations,
   setSetting,
   updateLesson,
+  upsertWorker,
 } from '@zonease/aiworker-storage-sqlite/worker'
 import cac from 'cac'
 import consola from 'consola'
@@ -46,7 +47,7 @@ interface LocalPaths {
 }
 
 interface RuntimeOptions {
-  soul?: string
+  worker?: string
 }
 
 const cli = cac('aiworker')
@@ -62,39 +63,56 @@ function localPaths(): LocalPaths {
   }
 }
 
-async function ensureRuntime(options: RuntimeOptions = {}): Promise<LocalWorkerRuntime> {
+async function ensureDb(): Promise<LocalPaths> {
   const paths = localPaths()
   await mkdir(paths.home, { recursive: true })
   await mkdir(path.dirname(paths.dbPath), { recursive: true })
   initWorkerDb(paths.dbPath)
   runWorkerMigrations(getWorkerEnv().WORKER_MIGRATIONS_FOLDER)
-  const soul = requireAvailableSoul(options.soul ?? 'hr')
-  const workerId = `${soul.id}-worker`
+  return paths
+}
+
+function createWorkerId(soulId: string, name: string): string {
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 32)
+  return `${soulId}-${slug || 'worker'}-${randomUUID().slice(0, 8)}`
+}
+
+function selectedWorkerId(): string | null {
+  const setting = listSettings().find(setting => setting.key === 'selected-worker')
+  const value = setting?.valueJson
+  return value && typeof value.workerId === 'string' ? value.workerId : null
+}
+
+function createRuntimeForWorker(paths: LocalPaths, worker: WorkerRow): LocalWorkerRuntime {
   const runtime = createLocalWorkerRuntime({
     worker: {
-      id: workerId,
-      soulId: soul.id,
-      name: soul.name,
-      defaultEngineId: 'codex',
-      metadata: {
-        defaultTemplates: [...soul.defaultTemplates],
-        description: soul.description,
-        domain: soul.domain,
-      },
+      id: worker.id,
+      soulId: worker.soulId,
+      name: worker.name,
+      defaultEngineId: worker.defaultEngineId,
+      metadata: worker.metadataJson,
     },
-    workspacesRoot: path.join(paths.workersRoot, workerId, 'workspaces'),
+    workspacesRoot: path.join(paths.workersRoot, worker.id, 'workspaces'),
   })
+  return runtime
+}
+
+async function ensureRuntime(options: RuntimeOptions = {}): Promise<LocalWorkerRuntime> {
+  const paths = await ensureDb()
+  const workerId = options.worker ?? selectedWorkerId()
+  if (!workerId)
+    throw new Error('worker is required; pass --worker or run `aiworker worker select <id>`')
+  const worker = getWorker(workerId)
+  if (!worker)
+    throw new Error(`worker not found: ${workerId}`)
+  const runtime = createRuntimeForWorker(paths, worker)
   await runtime.init()
   return runtime
 }
 
 async function ensureAllWorkers(): Promise<WorkerRow[]> {
-  const created: WorkerRow[] = []
-  for (const soul of BUILTIN_VERTICAL_SOULS.filter(soul => soul.status === 'available')) {
-    const runtime = await ensureRuntime({ soul: soul.id })
-    created.push(runtime.snapshot().worker)
-  }
-  return created
+  await ensureDb()
+  return listWorkers()
 }
 
 function printJson(value: unknown): void {
@@ -123,20 +141,17 @@ function isProcessAlive(pid: number): boolean {
 }
 
 async function runInit(): Promise<void> {
-  const paths = localPaths()
-  await mkdir(paths.home, { recursive: true })
-  const workers = await ensureAllWorkers()
+  const paths = await ensureDb()
   printJson({
     home: paths.home,
     dbPath: paths.dbPath,
     workersRoot: paths.workersRoot,
-    workers,
+    workers: listWorkers(),
   })
 }
 
 async function runDoctor(): Promise<void> {
-  await ensureAllWorkers()
-  const paths = localPaths()
+  const paths = await ensureDb()
   printJson({
     ok: true,
     home: paths.home,
@@ -240,18 +255,53 @@ async function showLogs(opts: { tail?: number } = {}): Promise<void> {
   process.stdout.write(`${lines.slice(-(opts.tail ?? 80)).join('\n')}\n`)
 }
 
-async function createWorkspaceCommand(opts: { name?: string, soul?: string }): Promise<void> {
-  const runtime = await ensureRuntime({ soul: opts.soul })
+async function createWorkerCommand(opts: { id?: string, name?: string, soul?: string }): Promise<void> {
+  const paths = await ensureDb()
+  const soul = requireAvailableSoul(requireText(opts.soul, 'soul'))
+  const name = requireText(opts.name, 'name')
+  const id = opts.id ? requireText(opts.id, 'id') : createWorkerId(soul.id, name)
+  if (getWorker(id))
+    throw new Error(`worker already exists: ${id}`)
+  const runtime = createRuntimeForWorker(paths, upsertWorker({
+    id,
+    soulId: soul.id,
+    name,
+    defaultEngineId: 'codex',
+    metadataJson: {
+      defaultTemplates: [...soul.defaultTemplates],
+      description: soul.description,
+      domain: soul.domain,
+    },
+  }))
+  await runtime.init()
+  printJson({ worker: runtime.snapshot().worker })
+}
+
+async function selectWorkerCommand(id: string): Promise<void> {
+  await ensureDb()
+  const worker = getWorker(id)
+  if (!worker)
+    throw new Error(`worker not found: ${id}`)
+  printJson({ setting: setSetting('selected-worker', { workerId: worker.id }) })
+}
+
+async function createWorkspaceCommand(opts: { name?: string, worker?: string }): Promise<void> {
+  const runtime = await ensureRuntime({ worker: opts.worker })
   printJson({ workspace: await runtime.createWorkspace({ name: requireText(opts.name, 'name') }) })
 }
 
-async function listWorkspaceCommand(opts: { soul?: string }): Promise<void> {
-  const runtime = await ensureRuntime({ soul: opts.soul })
+async function listWorkspaceCommand(opts: { worker?: string }): Promise<void> {
+  if (!opts.worker) {
+    await ensureDb()
+    printJson({ workspaces: listWorkspaces() })
+    return
+  }
+  const runtime = await ensureRuntime({ worker: opts.worker })
   printJson({ workspaces: listWorkspaces(runtime.workerId) })
 }
 
-async function startSessionCommand(opts: { context?: string, input?: string, skill?: string, soul?: string, title?: string, workspace?: string }): Promise<void> {
-  const runtime = await ensureRuntime({ soul: opts.soul })
+async function startSessionCommand(opts: { context?: string, input?: string, skill?: string, title?: string, worker?: string, workspace?: string }): Promise<void> {
+  const runtime = await ensureRuntime({ worker: opts.worker })
   const workspaceId = requireText(opts.workspace, 'workspace')
   const workspace = getWorkspace(workspaceId)
   if (!workspace || workspace.workerId !== runtime.workerId)
@@ -288,10 +338,15 @@ async function startSessionCommand(opts: { context?: string, input?: string, ski
   }))
 }
 
-async function sendTurnCommand(opts: { input?: string, session?: string, soul?: string }): Promise<void> {
-  const runtime = await ensureRuntime({ soul: opts.soul })
+async function sendTurnCommand(opts: { input?: string, session?: string, worker?: string }): Promise<void> {
+  await ensureDb()
+  const sessionId = requireText(opts.session, 'session')
+  const session = getSession(sessionId)
+  if (!session)
+    throw new Error(`session not found: ${sessionId}`)
+  const runtime = await ensureRuntime({ worker: opts.worker ?? session.workerId })
   printJson(await runtime.startTurn({
-    sessionId: requireText(opts.session, 'session'),
+    sessionId,
     input: requireText(opts.input, 'input'),
     engineId: 'codex',
     engineCommand: 'codex',
@@ -314,20 +369,25 @@ async function listWorkspaceFiles(opts: { workspace?: string }): Promise<void> {
   printJson({ files: listFiles(opts.workspace) })
 }
 
-async function showFile(filePath: string, opts: { workspace?: string, soul?: string }): Promise<void> {
-  const runtime = await ensureRuntime({ soul: opts.soul })
+async function showFile(filePath: string, opts: { workspace?: string, worker?: string }): Promise<void> {
+  await ensureDb()
   const workspaceId = requireText(opts.workspace, 'workspace')
+  const workspace = getWorkspace(workspaceId)
+  if (!workspace)
+    throw new Error(`workspace not found: ${workspaceId}`)
+  const runtime = await ensureRuntime({ worker: opts.worker ?? workspace.workerId })
   process.stdout.write(await runtime.files(workspaceId).read(filePath))
 }
 
-async function openArtifact(id: string, opts: { soul?: string }): Promise<void> {
+async function openArtifact(id: string, opts: { worker?: string }): Promise<void> {
+  await ensureDb()
   const artifact = getArtifact(id)
   if (!artifact)
     throw new Error(`artifact not found: ${id}`)
   const workspace = getWorkspace(artifact.workspaceId)
   if (!workspace)
     throw new Error(`workspace not found for artifact: ${id}`)
-  const runtime = await ensureRuntime({ soul: opts.soul ?? getWorker(workspace.workerId)?.soulId })
+  const runtime = await ensureRuntime({ worker: opts.worker ?? workspace.workerId })
   const fullPath = runtime.files(workspace.id).resolve(artifact.path)
   Bun.spawn(['open', fullPath])
   printJson({ opened: fullPath })
@@ -369,19 +429,25 @@ function registerCommands(): void {
   cli.command('daemon check', 'check local daemon health').option('--host <host>', 'host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => daemonCheck({ host: opts.host, port: optionalNumber(opts.port) }))
 
   cli.command('soul list', 'list built-in vertical Souls').action(() => printJson({ souls: BUILTIN_VERTICAL_SOULS }))
+  cli.command('worker create', 'create a local Soul worker').option('--id <id>', 'worker id').option('--name <text>', 'worker name').option('--soul <id>', 'Soul id').action(createWorkerCommand)
   cli.command('worker list', 'list local Soul workers').action(async () => {
     await ensureAllWorkers()
     printJson({ workers: listWorkers() })
   })
+  cli.command('worker show <id>', 'show one local Soul worker').action(async (id: string) => {
+    await ensureDb()
+    printJson({ worker: getWorker(id) })
+  })
+  cli.command('worker select <id>', 'select default local Soul worker').action(selectWorkerCommand)
   cli.command('template list', 'list capability templates').option('--soul <id>', 'Soul id').action((opts: { soul?: string }) => {
     const templates = opts.soul ? BUILTIN_CAPABILITY_TEMPLATES.filter(template => template.soulId === opts.soul) : BUILTIN_CAPABILITY_TEMPLATES
     printJson({ templates })
   })
 
-  cli.command('workspace create', 'create a worker workspace').option('--name <text>', 'workspace name').option('--soul <id>', 'Soul id').action(createWorkspaceCommand)
-  cli.command('workspace list', 'list worker workspaces').option('--soul <id>', 'Soul id').action(listWorkspaceCommand)
+  cli.command('workspace create', 'create a worker workspace').option('--name <text>', 'workspace name').option('--worker <id>', 'worker id').action(createWorkspaceCommand)
+  cli.command('workspace list', 'list worker workspaces').option('--worker <id>', 'worker id').action(listWorkspaceCommand)
   cli.command('workspace show <id>', 'show one workspace').action(async (id: string) => {
-    await ensureAllWorkers()
+    await ensureDb()
     printJson({ workspace: getWorkspace(id) })
   })
 
@@ -391,21 +457,21 @@ function registerCommands(): void {
     .option('--title <text>', 'session title')
     .option('--context <text>', 'session context')
     .option('--input <text>', 'turn input')
-    .option('--soul <id>', 'Soul id')
+    .option('--worker <id>', 'worker id')
     .action(startSessionCommand)
   cli.command('session list', 'list sessions').option('--workspace <id>', 'workspace id').action(listSessionCommand)
   cli.command('session show <id>', 'show one session').action(showSession)
-  cli.command('turn send', 'send a turn to an existing session').option('--session <id>', 'session id').option('--input <text>', 'turn input').option('--soul <id>', 'Soul id').action(sendTurnCommand)
+  cli.command('turn send', 'send a turn to an existing session').option('--session <id>', 'session id').option('--input <text>', 'turn input').option('--worker <id>', 'worker id').action(sendTurnCommand)
 
   cli.command('files list', 'list workspace files').option('--workspace <id>', 'workspace id').action(listWorkspaceFiles)
-  cli.command('files show <path>', 'print workspace file').option('--workspace <id>', 'workspace id').option('--soul <id>', 'Soul id').action(showFile)
+  cli.command('files show <path>', 'print workspace file').option('--workspace <id>', 'workspace id').option('--worker <id>', 'worker id').action(showFile)
 
   cli.command('artifacts list', 'list artifacts').option('--workspace <id>', 'workspace id').action(listArtifactsCommand)
   cli.command('artifacts show <id>', 'show one artifact').action(async (id: string) => {
     await ensureAllWorkers()
     printJson({ artifact: getArtifact(id) })
   })
-  cli.command('artifacts open <id>', 'open one artifact').option('--soul <id>', 'Soul id').action(openArtifact)
+  cli.command('artifacts open <id>', 'open one artifact').option('--worker <id>', 'worker id').action(openArtifact)
 
   cli.command('review list', 'list reviews').option('--workspace <id>', 'workspace id').action(listReviewsCommand)
   cli.command('review show <id>', 'show one review').action(async (id: string) => {
@@ -428,11 +494,11 @@ function registerCommands(): void {
   })
 
   cli.command('settings list', 'list host daemon settings').action(async () => {
-    await ensureAllWorkers()
+    await ensureDb()
     printJson({ settings: listSettings() })
   })
   cli.command('engine select <engine>', 'set engine hint').action(async (engine: string) => {
-    await ensureAllWorkers()
+    await ensureDb()
     printJson({ setting: setSetting('engine.default', { engine }) })
   })
 
@@ -461,7 +527,7 @@ function commandIndex(): string {
     'dev',
     'daemon start|foreground|status|stop|logs|check',
     'soul list',
-    'worker list',
+    'worker create|list|show|select',
     'template list',
     'workspace create|list|show',
     'session start|list|show',

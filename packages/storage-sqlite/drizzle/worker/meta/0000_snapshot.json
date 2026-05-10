@@ -443,7 +443,7 @@
             "workspace_id",
             "path"
           ],
-          "isUnique": true
+          "isUnique": false
         },
         "files_workspace_updated_at_idx": {
           "name": "files_workspace_updated_at_idx",

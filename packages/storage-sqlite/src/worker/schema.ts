@@ -15,7 +15,7 @@ export const workers = sqliteTable(
     updatedAt: text('updated_at').notNull().$defaultFn(nowIso),
   },
   table => ({
-    soulIdx: uniqueIndex('workers_soul_idx').on(table.soulId),
+    soulIdx: index('workers_soul_idx').on(table.soulId),
     statusUpdatedAtIdx: index('workers_status_updated_at_idx').on(table.status, table.updatedAt),
   }),
 )

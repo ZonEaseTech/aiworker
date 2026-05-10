@@ -43,27 +43,36 @@ describe('aiworker local CLI', () => {
   it('preprocesses multi-word local commands', () => {
     expect(preprocessArgv(argv('workspace', 'create', '--name', 'T')).slice(2, 3)).toEqual(['workspace create'])
     expect(preprocessArgv(argv('session', 'start', '--input', 'P')).slice(2, 3)).toEqual(['session start'])
+    expect(preprocessArgv(argv('worker', 'create', '--name', 'HR')).slice(2, 3)).toEqual(['worker create'])
   })
 
-  it('initializes host-local workers without creating cwd project-scope files', async () => {
+  it('initializes host-local daemon state without auto-creating Soul workers', async () => {
     expect(await runCli(argv('init'))).toBe(0)
     const body = JSON.parse(output) as { dbPath: string, home: string, workers: Array<{ soulId: string }>, workersRoot: string }
 
     expect(body.home).toBe(path.join(root, 'home'))
     expect(body.dbPath).toBe(path.join(root, 'home', 'aiworker.db'))
     expect(body.workersRoot).toBe(path.join(root, 'home', 'workers'))
-    expect(body.workers.map(worker => worker.soulId).sort()).toEqual(['devops', 'hr', 'pm', 'qa'])
+    expect(body.workers).toEqual([])
     await expect(stat(path.join(root, '.aiworker'))).rejects.toThrow()
-    await expect(stat(path.join(root, 'home', 'workers', 'hr-worker', 'workspaces'))).resolves.toBeTruthy()
   })
 
   it('creates workspace/session command records and lists artifacts with a mocked engine', async () => {
-    expect(await runCli(argv('workspace', 'create', '--name', 'Hiring', '--soul', 'hr'))).toBe(0)
+    expect(await runCli(argv('worker', 'create', '--id', 'hr-recruiting', '--name', 'HR Recruiting', '--soul', 'hr'))).toBe(0)
+    expect((JSON.parse(output) as { worker: { id: string, soulId: string } }).worker).toMatchObject({ id: 'hr-recruiting', soulId: 'hr' })
+    output = ''
+
+    expect(await runCli(argv('worker', 'select', 'hr-recruiting'))).toBe(0)
+    expect(output).toContain('selected-worker')
+    output = ''
+
+    expect(await runCli(argv('workspace', 'create', '--name', 'Hiring', '--worker', 'hr-recruiting'))).toBe(0)
     expect((JSON.parse(output) as { workspace: { id: string } }).workspace.id).toBeTruthy()
     output = ''
 
     expect(await runCli(argv('commands'))).toBe(0)
     expect(output).toContain('dev')
+    expect(output).toContain('worker create|list|show|select')
     expect(output).toContain('workspace create|list|show')
     expect(output).toContain('session start|list|show')
     expect(output).not.toContain('run start')

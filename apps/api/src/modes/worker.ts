@@ -1,6 +1,6 @@
 import type { LocalExecutor, LocalWorkerRuntime } from '@zonease/aiworker-core'
 import type { LocalSettingsConfig } from '@zonease/aiworker-shared'
-import type { ReviewRow, SessionRow, WorkspaceRow } from '@zonease/aiworker-storage-sqlite/worker'
+import type { ReviewRow, SessionRow, WorkerRow, WorkspaceRow } from '@zonease/aiworker-storage-sqlite/worker'
 
 import type { Context } from 'hono'
 import { Buffer } from 'node:buffer'
@@ -44,6 +44,7 @@ import {
   updateLesson,
   updateWorkspace,
   upsertFile,
+  upsertWorker,
 } from '@zonease/aiworker-storage-sqlite/worker'
 
 import { errorHandler } from '../shared/middleware/error-handler'
@@ -76,6 +77,9 @@ export interface LocalDaemonState {
   token?: string
   runtimeVersion: string
   runtimes: Map<string, LocalWorkerRuntime>
+  workersRoot: string
+  executor?: LocalExecutor
+  now?: () => string
 }
 
 export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}): Promise<{
@@ -92,33 +96,19 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   const runtimeVersion = options.runtimeVersion ?? DEFAULT_RUNTIME_VERSION
   const workersRoot = options.workersRoot ?? path.join(path.dirname(dbPath), 'workers')
   const runtimes = new Map<string, LocalWorkerRuntime>()
-  for (const soul of BUILTIN_VERTICAL_SOULS.filter(soul => soul.status === 'available')) {
-    const workerId = `${soul.id}-worker`
-    const runtime = createLocalWorkerRuntime({
-      worker: {
-        id: workerId,
-        soulId: soul.id,
-        name: soul.name,
-        defaultEngineId: 'codex',
-        metadata: {
-          defaultTemplates: [...soul.defaultTemplates],
-          description: soul.description,
-          domain: soul.domain,
-        },
-      },
-      workspacesRoot: path.join(workersRoot, workerId, 'workspaces'),
-      executor: options.executor,
-      now: options.now,
-    })
-    await runtime.init()
-    runtimes.set(workerId, runtime)
-  }
-
   const state: LocalDaemonState = {
     runtimes,
     startedAt: new Date().toISOString(),
     token: options.token ?? workerEnv.AIWORKER_LOCAL_TOKEN,
     runtimeVersion,
+    workersRoot,
+    executor: options.executor,
+    now: options.now,
+  }
+  for (const worker of listWorkers()) {
+    const runtime = createRuntimeForWorker(state, worker)
+    await runtime.init()
+    runtimes.set(worker.id, runtime)
   }
 
   const app = new OpenAPIHono()
@@ -150,11 +140,64 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   }))
 
   app.get('/api/local/workers', c => c.json({ workers: listWorkers() }))
+  app.post('/api/local/workers', async (c) => {
+    const body = await readJson<{
+      defaultEngineId?: string | null
+      id?: string
+      metadata?: Record<string, unknown>
+      name?: string
+      soulId?: string
+    }>(c.req)
+    const soul = requireAvailableSoul(body.soulId)
+    const name = requireString(body.name, 'name')
+    const workerId = body.id ? requireString(body.id, 'id') : createWorkerId(soul.id, name)
+    if (getWorker(workerId))
+      return c.json({ error: { code: 'CONFLICT', message: `Worker already exists: ${workerId}` } }, 409)
+    const worker = upsertWorker({
+      id: workerId,
+      soulId: soul.id,
+      name,
+      defaultEngineId: body.defaultEngineId ?? 'codex',
+      metadataJson: {
+        defaultTemplates: [...soul.defaultTemplates],
+        description: soul.description,
+        domain: soul.domain,
+        ...(body.metadata ?? {}),
+      },
+    })
+    const runtime = createRuntimeForWorker(state, worker)
+    await runtime.init()
+    state.runtimes.set(worker.id, runtime)
+    return c.json({ worker, snapshot: runtime.snapshot() }, 201)
+  })
   app.get('/api/local/workers/:workerId', (c) => {
     const worker = getWorker(c.req.param('workerId'))
     if (!worker)
       return notFound(c, 'worker')
     return c.json({ worker, snapshot: requireRuntime(state, worker.id).snapshot() })
+  })
+  app.patch('/api/local/workers/:workerId', async (c) => {
+    const existing = getWorker(c.req.param('workerId'))
+    if (!existing)
+      return notFound(c, 'worker')
+    const body = await readJson<{
+      defaultEngineId?: string | null
+      metadata?: Record<string, unknown>
+      name?: string
+      status?: WorkerRow['status']
+    }>(c.req)
+    const worker = upsertWorker({
+      id: existing.id,
+      soulId: existing.soulId,
+      name: body.name ?? existing.name,
+      status: body.status ?? existing.status,
+      defaultEngineId: body.defaultEngineId ?? existing.defaultEngineId,
+      metadataJson: body.metadata ?? existing.metadataJson,
+    })
+    const runtime = createRuntimeForWorker(state, worker)
+    await runtime.init()
+    state.runtimes.set(worker.id, runtime)
+    return c.json({ worker, snapshot: runtime.snapshot() })
   })
 
   app.get('/api/local/souls', c => c.json({ souls: BUILTIN_VERTICAL_SOULS }))
@@ -177,6 +220,14 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
       return notFound(c, 'template')
     return c.json({ template })
   })
+  app.get('/api/local/workers/:workerId/templates', (c) => {
+    const worker = requireWorker(c.req.param('workerId'))
+    return c.json({ templates: templatesForWorker(worker) })
+  })
+  app.get('/api/local/workers/:workerId/templates/:templateId', (c) => {
+    const template = requireTemplateForWorker(c.req.param('workerId'), c.req.param('templateId'))
+    return c.json({ template })
+  })
 
   app.get('/api/local/workspaces', c => c.json({ workspaces: listWorkspaces() }))
   app.get('/api/local/workers/:workerId/workspaces', (c) => {
@@ -195,6 +246,15 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     })
     return c.json({ workspace }, 201)
   })
+  app.get('/api/local/workers/:workerId/workspaces/:workspaceId', (c) => {
+    const workspace = requireWorkerWorkspace(c.req.param('workerId'), c.req.param('workspaceId'))
+    return c.json({ workspace })
+  })
+  app.patch('/api/local/workers/:workerId/workspaces/:workspaceId', async (c) => {
+    const workspace = requireWorkerWorkspace(c.req.param('workerId'), c.req.param('workspaceId'))
+    const body = await readJson<Partial<Pick<WorkspaceRow, 'metadataJson' | 'name' | 'sourcePointersJson' | 'status'>>>(c.req)
+    return c.json({ workspace: updateWorkspace({ id: workspace.id, ...body }) })
+  })
   app.get('/api/local/workspaces/:workspaceId', (c) => {
     const workspace = getWorkspace(c.req.param('workspaceId'))
     if (!workspace)
@@ -208,83 +268,57 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
 
   app.get('/api/local/sessions', c => c.json({ sessions: listSessions() }))
   app.get('/api/local/turns', c => c.json({ turns: listTurns() }))
+  app.get('/api/local/workers/:workerId/workspaces/:workspaceId/sessions', (c) => {
+    const workspace = requireWorkerWorkspace(c.req.param('workerId'), c.req.param('workspaceId'))
+    return c.json({ sessions: listSessions(workspace.id) })
+  })
+  app.post('/api/local/workers/:workerId/workspaces/:workspaceId/sessions', async (c) => {
+    const workspace = requireWorkerWorkspace(c.req.param('workerId'), c.req.param('workspaceId'))
+    return createWorkspaceSessionResponse(c, state, workspace, false)
+  })
+  app.post('/api/local/workers/:workerId/workspaces/:workspaceId/sessions/stream', async (c) => {
+    const workspace = requireWorkerWorkspace(c.req.param('workerId'), c.req.param('workspaceId'))
+    return createWorkspaceSessionResponse(c, state, workspace, true)
+  })
   app.get('/api/local/workspaces/:workspaceId/sessions', (c) => {
     const workspace = requireWorkspace(c.req.param('workspaceId'))
     return c.json({ sessions: listSessions(workspace.id) })
   })
   app.post('/api/local/workspaces/:workspaceId/sessions', async (c) => {
     const workspace = requireWorkspace(c.req.param('workspaceId'))
-    const runtime = requireRuntime(state, workspace.workerId)
-    const body = await readJson<{
-      capabilityTemplateId?: string
-      context?: string
-      input?: string
-      metadata?: Record<string, unknown>
-      title?: string
-    }>(c.req)
-    const template = requireTemplateForWorker(workspace.workerId, body.capabilityTemplateId)
-    const metadata = enrichTemplateMetadata(workspace.workerId, template.id, body.metadata ?? {})
-    const session = await runtime.createSession({
-      workspaceId: workspace.id,
-      capabilityTemplateId: template.id,
-      title: requireString(body.title, 'title'),
-      context: body.context ?? '',
-      metadata,
-    })
-    if (typeof body.input !== 'string' || body.input.trim().length === 0)
-      return c.json({ session }, 201)
-    const settings = loadLocalSettings()
-    const engine = selectedEngine(settings)
-    const result = await runtime.startTurn({
-      sessionId: session.id,
-      input: body.input,
-      engineId: settings.executionMode === 'local-cli' ? settings.engineId : settings.byok.provider,
-      engineCommand: selectedEngineCommand(settings, engine),
-      metadata: {
-        ...metadata,
-        ...executionMetadata(settings, engine),
-      },
-    })
-    return c.json(result, 201)
+    return createWorkspaceSessionResponse(c, state, workspace, false)
   })
   app.post('/api/local/workspaces/:workspaceId/sessions/stream', async (c) => {
     const workspace = requireWorkspace(c.req.param('workspaceId'))
-    const runtime = requireRuntime(state, workspace.workerId)
-    const body = await readJson<{
-      capabilityTemplateId?: string
-      context?: string
-      input?: string
-      metadata?: Record<string, unknown>
-      title?: string
-    }>(c.req)
-    const template = requireTemplateForWorker(workspace.workerId, body.capabilityTemplateId)
-    const metadata = enrichTemplateMetadata(workspace.workerId, template.id, body.metadata ?? {})
-    const session = await runtime.createSession({
-      workspaceId: workspace.id,
-      capabilityTemplateId: template.id,
-      title: requireString(body.title, 'title'),
-      context: body.context ?? '',
-      metadata,
-    })
-    if (typeof body.input !== 'string' || body.input.trim().length === 0)
-      return c.json({ session }, 201)
-    const settings = loadLocalSettings()
-    const engine = selectedEngine(settings)
-    return streamSessionTurn(runtime, session, {
-      engineCommand: selectedEngineCommand(settings, engine),
-      engineId: settings.executionMode === 'local-cli' ? settings.engineId : settings.byok.provider,
-      input: body.input,
-      metadata: {
-        ...metadata,
-        ...executionMetadata(settings, engine),
-      },
-    }, [{ event: 'session', data: session, id: session.id }])
+    return createWorkspaceSessionResponse(c, state, workspace, true)
   })
   app.get('/api/local/sessions/:sessionId', (c) => {
     const session = getSession(c.req.param('sessionId'))
     if (!session)
       return notFound(c, 'session')
     return c.json({ session, turns: listTurns(session.id), events: listSessionEvents(session.id) })
+  })
+  app.get('/api/local/workers/:workerId/sessions/:sessionId', (c) => {
+    const session = requireWorkerSession(c.req.param('workerId'), c.req.param('sessionId'))
+    return c.json({ session, turns: listTurns(session.id), events: listSessionEvents(session.id) })
+  })
+  app.get('/api/local/workers/:workerId/sessions/:sessionId/events', (c) => {
+    const session = requireWorkerSession(c.req.param('workerId'), c.req.param('sessionId'))
+    const after = Number(c.req.query('after') ?? c.req.header('last-event-id') ?? 0)
+    const events = listSessionEvents(session.id).filter(event => !Number.isFinite(after) || event.id > after)
+    return c.json({ events })
+  })
+  app.get('/api/local/workers/:workerId/sessions/:sessionId/turns', (c) => {
+    const session = requireWorkerSession(c.req.param('workerId'), c.req.param('sessionId'))
+    return c.json({ turns: listTurns(session.id) })
+  })
+  app.post('/api/local/workers/:workerId/sessions/:sessionId/messages', async (c) => {
+    const session = requireWorkerSession(c.req.param('workerId'), c.req.param('sessionId'))
+    return createSessionMessageResponse(c, state, session, false)
+  })
+  app.post('/api/local/workers/:workerId/sessions/:sessionId/messages/stream', async (c) => {
+    const session = requireWorkerSession(c.req.param('workerId'), c.req.param('sessionId'))
+    return createSessionMessageResponse(c, state, session, true)
   })
   app.get('/api/local/sessions/:sessionId/events', (c) => {
     const session = requireSession(c.req.param('sessionId'))
@@ -298,43 +332,49 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   })
   app.post('/api/local/sessions/:sessionId/turns/stream', async (c) => {
     const session = requireSession(c.req.param('sessionId'))
-    const runtime = requireRuntime(state, session.workerId)
-    const body = await readJson<{ input?: string, metadata?: Record<string, unknown> }>(c.req)
-    const input = requireString(body.input, 'input')
-    const settings = loadLocalSettings()
-    const engine = selectedEngine(settings)
-    return streamSessionTurn(runtime, session, {
-      engineCommand: selectedEngineCommand(settings, engine),
-      engineId: settings.executionMode === 'local-cli' ? settings.engineId : settings.byok.provider,
-      input,
-      metadata: {
-        ...enrichTemplateMetadata(session.workerId, session.capabilityTemplateId, session.metadataJson ?? {}),
-        ...(body.metadata ?? {}),
-        ...executionMetadata(settings, engine),
-      },
-    })
+    return createSessionMessageResponse(c, state, session, true)
   })
   app.post('/api/local/sessions/:sessionId/turns', async (c) => {
     const session = requireSession(c.req.param('sessionId'))
-    const runtime = requireRuntime(state, session.workerId)
-    const body = await readJson<{ input?: string, metadata?: Record<string, unknown> }>(c.req)
-    const settings = loadLocalSettings()
-    const engine = selectedEngine(settings)
-    const result = await runtime.startTurn({
-      sessionId: session.id,
-      input: requireString(body.input, 'input'),
-      engineId: settings.executionMode === 'local-cli' ? settings.engineId : settings.byok.provider,
-      engineCommand: selectedEngineCommand(settings, engine),
-      metadata: {
-        ...enrichTemplateMetadata(session.workerId, session.capabilityTemplateId, session.metadataJson ?? {}),
-        ...(body.metadata ?? {}),
-        ...executionMetadata(settings, engine),
-      },
-    })
-    return c.json(result, 201)
+    return createSessionMessageResponse(c, state, session, false)
   })
 
   app.get('/api/local/files', c => c.json({ files: listFiles() }))
+  app.get('/api/local/workers/:workerId/files', (c) => {
+    const worker = requireWorker(c.req.param('workerId'))
+    const workspaceIds = new Set(listWorkspaces(worker.id).map(workspace => workspace.id))
+    return c.json({ files: listFiles().filter(file => workspaceIds.has(file.workspaceId)) })
+  })
+  app.get('/api/local/workers/:workerId/workspaces/:workspaceId/files', (c) => {
+    const workspace = requireWorkerWorkspace(c.req.param('workerId'), c.req.param('workspaceId'))
+    return c.json({ files: listFiles(workspace.id) })
+  })
+  app.get('/api/local/workers/:workerId/workspaces/:workspaceId/files/search', (c) => {
+    const workspace = requireWorkerWorkspace(c.req.param('workerId'), c.req.param('workspaceId'))
+    const query = c.req.query('q')?.toLowerCase() ?? ''
+    const files = listFiles(workspace.id).filter(file => file.path.toLowerCase().includes(query))
+    return c.json({ files })
+  })
+  app.get('/api/local/workers/:workerId/workspaces/:workspaceId/files/raw/:path{.+}', async (c) => {
+    const workspace = requireWorkerWorkspace(c.req.param('workerId'), c.req.param('workspaceId'))
+    return c.text(await requireRuntime(state, workspace.workerId).files(workspace.id).read(c.req.param('path')))
+  })
+  app.put('/api/local/workers/:workerId/workspaces/:workspaceId/files/raw/:path{.+}', async (c) => {
+    const workspace = requireWorkerWorkspace(c.req.param('workerId'), c.req.param('workspaceId'))
+    const filePath = c.req.param('path')
+    const entry = await requireRuntime(state, workspace.workerId).files(workspace.id).write({ path: filePath, content: await c.req.text() })
+    const file = upsertFile({
+      id: randomUUID(),
+      workspaceId: workspace.id,
+      path: filePath,
+      kind: entry.kind,
+      size: entry.size,
+      mtime: entry.mtime,
+      hash: entry.hash,
+      source: 'user',
+    })
+    return c.json({ file })
+  })
   app.get('/api/local/workspaces/:workspaceId/files', (c) => {
     const workspace = requireWorkspace(c.req.param('workspaceId'))
     return c.json({ files: listFiles(workspace.id) })
@@ -367,6 +407,11 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   })
 
   app.get('/api/local/artifacts', c => c.json({ artifacts: listArtifacts() }))
+  app.get('/api/local/workers/:workerId/artifacts', (c) => {
+    const worker = requireWorker(c.req.param('workerId'))
+    const workspaceIds = new Set(listWorkspaces(worker.id).map(workspace => workspace.id))
+    return c.json({ artifacts: listArtifacts().filter(artifact => workspaceIds.has(artifact.workspaceId)) })
+  })
   app.get('/api/local/workspaces/:workspaceId/artifacts', (c) => {
     const workspace = requireWorkspace(c.req.param('workspaceId'))
     return c.json({ artifacts: listArtifacts(workspace.id) })
@@ -467,6 +512,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   })
   app.get('/docs', apiReference({ spec: { url: '/openapi.json' } }))
   app.get('/', async c => serveWorkerWeb(c, options.webStaticDir))
+  app.get('/workers/:path{.+}', async c => serveWorkerWeb(c, options.webStaticDir))
   app.get('/workspaces/:path{.+}', async c => serveWorkerWeb(c, options.webStaticDir))
   app.get('/favicon.svg', async c => serveWorkerWebAsset(c, options.webStaticDir, 'favicon.svg'))
   app.get('/logo.svg', async c => serveWorkerWebAsset(c, options.webStaticDir, 'logo.svg'))
@@ -490,6 +536,14 @@ function requireString(value: unknown, field: string): string {
   return value.trim()
 }
 
+function requireAvailableSoul(soulId: unknown) {
+  const id = requireString(soulId, 'soulId')
+  const soul = findVerticalSoul(id)
+  if (!soul || soul.status !== 'available')
+    throw new Error(`Available Soul not found: ${id}`)
+  return soul
+}
+
 function notFound(c: Context, resource: string) {
   return c.json({ error: { code: 'NOT_FOUND', message: `${resource} not found.` } }, 404)
 }
@@ -500,17 +554,57 @@ function timingSafeEqualText(actual: string, expected: string): boolean {
   return a.length === b.length && timingSafeEqual(a, b)
 }
 
+function createWorkerId(soulId: string, name: string): string {
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 32)
+  return `${soulId}-${slug || 'worker'}-${randomUUID().slice(0, 8)}`
+}
+
+function createRuntimeForWorker(state: LocalDaemonState, worker: WorkerRow): LocalWorkerRuntime {
+  return createLocalWorkerRuntime({
+    worker: {
+      id: worker.id,
+      soulId: worker.soulId,
+      name: worker.name,
+      defaultEngineId: worker.defaultEngineId,
+      metadata: worker.metadataJson,
+    },
+    workspacesRoot: path.join(state.workersRoot, worker.id, 'workspaces'),
+    executor: state.executor,
+    now: state.now,
+  })
+}
+
 function requireRuntime(state: LocalDaemonState, workerId: string): LocalWorkerRuntime {
-  const runtime = state.runtimes.get(workerId)
-  if (!runtime)
+  const existing = state.runtimes.get(workerId)
+  if (existing)
+    return existing
+  const worker = getWorker(workerId)
+  if (!worker)
     throw new Error(`Worker not found: ${workerId}`)
+  const runtime = createRuntimeForWorker(state, worker)
+  state.runtimes.set(workerId, runtime)
   return runtime
+}
+
+function requireWorker(workerId: string): WorkerRow {
+  const worker = getWorker(workerId)
+  if (!worker)
+    throw new Error(`Worker not found: ${workerId}`)
+  return worker
 }
 
 function requireWorkspace(workspaceId: string): WorkspaceRow {
   const workspace = getWorkspace(workspaceId)
   if (!workspace)
     throw new Error(`Workspace not found: ${workspaceId}`)
+  return workspace
+}
+
+function requireWorkerWorkspace(workerId: string, workspaceId: string): WorkspaceRow {
+  requireWorker(workerId)
+  const workspace = requireWorkspace(workspaceId)
+  if (workspace.workerId !== workerId)
+    throw new Error(`Workspace ${workspaceId} does not belong to worker ${workerId}`)
   return workspace
 }
 
@@ -521,10 +615,20 @@ function requireSession(sessionId: string): SessionRow {
   return session
 }
 
+function requireWorkerSession(workerId: string, sessionId: string): SessionRow {
+  requireWorker(workerId)
+  const session = requireSession(sessionId)
+  if (session.workerId !== workerId)
+    throw new Error(`Session ${sessionId} does not belong to worker ${workerId}`)
+  return session
+}
+
+function templatesForWorker(worker: WorkerRow) {
+  return BUILTIN_CAPABILITY_TEMPLATES.filter(template => template.soulId === worker.soulId)
+}
+
 function requireTemplateForWorker(workerId: string, templateId: unknown) {
-  const worker = getWorker(workerId)
-  if (!worker)
-    throw new Error(`Worker not found: ${workerId}`)
+  const worker = requireWorker(workerId)
   const id = requireString(templateId, 'capabilityTemplateId')
   const template = findCapabilityTemplate(id)
   if (!template || template.soulId !== worker.soulId)
@@ -568,6 +672,63 @@ function executionMetadata(settings: LocalSettingsConfig, engine: LocalSettingsC
     engineName: engine?.name ?? null,
     executionMode: settings.executionMode,
   }
+}
+
+async function createWorkspaceSessionResponse(c: Context, state: LocalDaemonState, workspace: WorkspaceRow, stream: boolean): Promise<Response> {
+  const runtime = requireRuntime(state, workspace.workerId)
+  const body = await readJson<{
+    capabilityTemplateId?: string
+    context?: string
+    input?: string
+    metadata?: Record<string, unknown>
+    title?: string
+  }>(c.req)
+  const template = requireTemplateForWorker(workspace.workerId, body.capabilityTemplateId)
+  const metadata = enrichTemplateMetadata(workspace.workerId, template.id, body.metadata ?? {})
+  const session = await runtime.createSession({
+    workspaceId: workspace.id,
+    capabilityTemplateId: template.id,
+    title: requireString(body.title, 'title'),
+    context: body.context ?? '',
+    metadata,
+  })
+  if (typeof body.input !== 'string' || body.input.trim().length === 0)
+    return c.json({ session }, 201)
+  const settings = loadLocalSettings()
+  const engine = selectedEngine(settings)
+  const turnInput = {
+    engineCommand: selectedEngineCommand(settings, engine),
+    engineId: settings.executionMode === 'local-cli' ? settings.engineId : settings.byok.provider,
+    input: body.input,
+    metadata: {
+      ...metadata,
+      ...executionMetadata(settings, engine),
+    },
+  }
+  if (stream)
+    return streamSessionTurn(runtime, session, turnInput, [{ event: 'session', data: session, id: session.id }])
+  return c.json(await runtime.startTurn({ ...turnInput, sessionId: session.id }), 201)
+}
+
+async function createSessionMessageResponse(c: Context, state: LocalDaemonState, session: SessionRow, stream: boolean): Promise<Response> {
+  const runtime = requireRuntime(state, session.workerId)
+  const body = await readJson<{ input?: string, metadata?: Record<string, unknown> }>(c.req)
+  const input = requireString(body.input, 'input')
+  const settings = loadLocalSettings()
+  const engine = selectedEngine(settings)
+  const turnInput = {
+    engineCommand: selectedEngineCommand(settings, engine),
+    engineId: settings.executionMode === 'local-cli' ? settings.engineId : settings.byok.provider,
+    input,
+    metadata: {
+      ...enrichTemplateMetadata(session.workerId, session.capabilityTemplateId, session.metadataJson ?? {}),
+      ...(body.metadata ?? {}),
+      ...executionMetadata(settings, engine),
+    },
+  }
+  if (stream)
+    return streamSessionTurn(runtime, session, turnInput)
+  return c.json(await runtime.startTurn({ ...turnInput, sessionId: session.id }), 201)
 }
 
 function streamSessionTurn(
@@ -828,31 +989,51 @@ function registerLocalOpenApiPaths(app: OpenAPIHono): void {
   }> = [
     { method: 'get', path: '/api/local/info', summary: 'Local daemon info', tags: ['info'] },
     { method: 'get', path: '/api/local/workers', summary: 'List Soul workers', tags: ['workers'] },
+    { method: 'post', path: '/api/local/workers', summary: 'Create Soul worker', tags: ['workers'], created: true },
     { method: 'get', path: '/api/local/workers/{workerId}', summary: 'Show Soul worker', tags: ['workers'] },
+    { method: 'patch', path: '/api/local/workers/{workerId}', summary: 'Update Soul worker', tags: ['workers'] },
     { method: 'get', path: '/api/local/souls', summary: 'List vertical Souls', tags: ['souls'] },
     { method: 'get', path: '/api/local/souls/{id}', summary: 'Show vertical Soul', tags: ['souls'] },
     { method: 'get', path: '/api/local/templates', summary: 'List capability templates', tags: ['templates'] },
     { method: 'get', path: '/api/local/templates/{id}', summary: 'Show capability template', tags: ['templates'] },
+    { method: 'get', path: '/api/local/workers/{workerId}/templates', summary: 'List worker capability templates', tags: ['templates'] },
+    { method: 'get', path: '/api/local/workers/{workerId}/templates/{templateId}', summary: 'Show worker capability template', tags: ['templates'] },
     { method: 'get', path: '/api/local/workspaces', summary: 'List workspaces', tags: ['workspaces'] },
     { method: 'get', path: '/api/local/workers/{workerId}/workspaces', summary: 'List worker workspaces', tags: ['workspaces'] },
     { method: 'post', path: '/api/local/workers/{workerId}/workspaces', summary: 'Create worker workspace', tags: ['workspaces'], created: true },
+    { method: 'get', path: '/api/local/workers/{workerId}/workspaces/{workspaceId}', summary: 'Show worker workspace', tags: ['workspaces'] },
+    { method: 'patch', path: '/api/local/workers/{workerId}/workspaces/{workspaceId}', summary: 'Update worker workspace', tags: ['workspaces'] },
     { method: 'get', path: '/api/local/workspaces/{workspaceId}', summary: 'Show workspace', tags: ['workspaces'] },
     { method: 'patch', path: '/api/local/workspaces/{workspaceId}', summary: 'Update workspace', tags: ['workspaces'] },
     { method: 'get', path: '/api/local/sessions', summary: 'List sessions', tags: ['sessions'] },
     { method: 'get', path: '/api/local/turns', summary: 'List turns', tags: ['turns'] },
+    { method: 'get', path: '/api/local/workers/{workerId}/workspaces/{workspaceId}/sessions', summary: 'List worker workspace sessions', tags: ['sessions'] },
+    { method: 'post', path: '/api/local/workers/{workerId}/workspaces/{workspaceId}/sessions', summary: 'Create worker workspace session', tags: ['sessions'], created: true },
+    { method: 'post', path: '/api/local/workers/{workerId}/workspaces/{workspaceId}/sessions/stream', summary: 'Create worker workspace session with event stream', tags: ['sessions'], created: true },
     { method: 'get', path: '/api/local/workspaces/{workspaceId}/sessions', summary: 'List workspace sessions', tags: ['sessions'] },
     { method: 'post', path: '/api/local/workspaces/{workspaceId}/sessions', summary: 'Create workspace session', tags: ['sessions'], created: true },
     { method: 'post', path: '/api/local/workspaces/{workspaceId}/sessions/stream', summary: 'Create workspace session with event stream', tags: ['sessions'], created: true },
     { method: 'get', path: '/api/local/sessions/{sessionId}', summary: 'Show session', tags: ['sessions'] },
+    { method: 'get', path: '/api/local/workers/{workerId}/sessions/{sessionId}', summary: 'Show worker session', tags: ['sessions'] },
+    { method: 'get', path: '/api/local/workers/{workerId}/sessions/{sessionId}/events', summary: 'Replay worker session events', tags: ['events'] },
+    { method: 'get', path: '/api/local/workers/{workerId}/sessions/{sessionId}/turns', summary: 'List worker session turns', tags: ['turns'] },
+    { method: 'post', path: '/api/local/workers/{workerId}/sessions/{sessionId}/messages', summary: 'Create worker session message', tags: ['turns'], created: true },
+    { method: 'post', path: '/api/local/workers/{workerId}/sessions/{sessionId}/messages/stream', summary: 'Create worker session message with event stream', tags: ['turns'], created: true },
     { method: 'get', path: '/api/local/sessions/{sessionId}/events', summary: 'Replay session events', tags: ['events'] },
     { method: 'get', path: '/api/local/sessions/{sessionId}/turns', summary: 'List session turns', tags: ['turns'] },
     { method: 'post', path: '/api/local/sessions/{sessionId}/turns', summary: 'Create session turn', tags: ['turns'], created: true },
     { method: 'get', path: '/api/local/files', summary: 'List files', tags: ['files'] },
+    { method: 'get', path: '/api/local/workers/{workerId}/files', summary: 'List worker files', tags: ['files'] },
+    { method: 'get', path: '/api/local/workers/{workerId}/workspaces/{workspaceId}/files', summary: 'List worker workspace files', tags: ['files'] },
+    { method: 'get', path: '/api/local/workers/{workerId}/workspaces/{workspaceId}/files/raw/{path}', summary: 'Read worker workspace file', tags: ['files'] },
+    { method: 'put', path: '/api/local/workers/{workerId}/workspaces/{workspaceId}/files/raw/{path}', summary: 'Write worker workspace file', tags: ['files'] },
+    { method: 'get', path: '/api/local/workers/{workerId}/workspaces/{workspaceId}/files/search', summary: 'Search worker workspace files', tags: ['files'] },
     { method: 'get', path: '/api/local/workspaces/{workspaceId}/files', summary: 'List workspace files', tags: ['files'] },
     { method: 'get', path: '/api/local/workspaces/{workspaceId}/files/raw/{path}', summary: 'Read workspace file', tags: ['files'] },
     { method: 'put', path: '/api/local/workspaces/{workspaceId}/files/raw/{path}', summary: 'Write workspace file', tags: ['files'] },
     { method: 'get', path: '/api/local/workspaces/{workspaceId}/files/search', summary: 'Search workspace files', tags: ['files'] },
     { method: 'get', path: '/api/local/artifacts', summary: 'List artifacts', tags: ['artifacts'] },
+    { method: 'get', path: '/api/local/workers/{workerId}/artifacts', summary: 'List worker artifacts', tags: ['artifacts'] },
     { method: 'get', path: '/api/local/workspaces/{workspaceId}/artifacts', summary: 'List workspace artifacts', tags: ['artifacts'] },
     { method: 'get', path: '/api/local/artifacts/{id}', summary: 'Show artifact', tags: ['artifacts'] },
     { method: 'get', path: '/api/local/reviews', summary: 'List reviews', tags: ['reviews'] },

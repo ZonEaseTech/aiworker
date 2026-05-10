@@ -44,6 +44,20 @@ describe('LocalWorkerRuntime', () => {
     })
   }
 
+  function runtimeFor(worker: { id: string, name: string, soulId: string }, executor: ConstructorParameters<typeof LocalWorkerRuntime>[0]['executor']) {
+    return new LocalWorkerRuntime({
+      worker: {
+        id: worker.id,
+        soulId: worker.soulId,
+        name: worker.name,
+        defaultEngineId: 'codex',
+      },
+      workspacesRoot: join(dir, 'workers', worker.id, 'workspaces'),
+      now,
+      executor,
+    })
+  }
+
   it('runs the workspace session loop from turn to artifacts, review, and lessons', async () => {
     const workerRuntime = runtime({
       async invoke(input) {
@@ -140,5 +154,25 @@ describe('LocalWorkerRuntime', () => {
     expect(result.turn.error).toBe('executor failed')
     expect(result.invocation.status).toBe('failed')
     expect(result.events.map(event => event.type)).toEqual(['status', 'status', 'error'])
+  })
+
+  it('keeps runtime workspaces isolated when two workers share one Soul', async () => {
+    const executor = {
+      async invoke() {
+        return { summary: 'ok' }
+      },
+    }
+    const recruitingRuntime = runtimeFor({ id: 'worker-hr-recruiting', soulId: 'hr', name: 'HR Recruiting' }, executor)
+    const talentRuntime = runtimeFor({ id: 'worker-hr-talent-pool', soulId: 'hr', name: 'HR Talent Pool' }, executor)
+
+    await recruitingRuntime.init()
+    await talentRuntime.init()
+    const recruitingWorkspace = await recruitingRuntime.createWorkspace({ name: 'Open roles' })
+    const talentWorkspace = await talentRuntime.createWorkspace({ name: 'Talent pool' })
+
+    expect(recruitingRuntime.snapshot().worker.soulId).toBe('hr')
+    expect(talentRuntime.snapshot().worker.soulId).toBe('hr')
+    expect(recruitingRuntime.snapshot().workspaces.map(workspace => workspace.id)).toEqual([recruitingWorkspace.id])
+    expect(talentRuntime.snapshot().workspaces.map(workspace => workspace.id)).toEqual([talentWorkspace.id])
   })
 })

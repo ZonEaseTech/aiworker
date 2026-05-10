@@ -198,7 +198,7 @@ CREATE TABLE `workers` (
 	`updated_at` text NOT NULL
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `workers_soul_idx` ON `workers` (`soul_id`);--> statement-breakpoint
+CREATE INDEX `workers_soul_idx` ON `workers` (`soul_id`);--> statement-breakpoint
 CREATE INDEX `workers_status_updated_at_idx` ON `workers` (`status`,`updated_at`);--> statement-breakpoint
 CREATE TABLE `workspaces` (
 	`id` text PRIMARY KEY NOT NULL,

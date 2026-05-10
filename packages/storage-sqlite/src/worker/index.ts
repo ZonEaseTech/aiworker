@@ -3,7 +3,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { Database } from 'bun:sqlite'
-import { and, desc, eq } from 'drizzle-orm'
+import { and, desc, eq, sql } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
 
@@ -49,6 +49,16 @@ export function closeWorkerDb() {
 
 export function runWorkerMigrations(migrationsFolder: string = defaultWorkerMigrationsFolder) {
   migrate(getWorkerDb(), { migrationsFolder })
+  repairWorkerIndexes()
+}
+
+function repairWorkerIndexes() {
+  const rows = getWorkerDb().all<{ name: string, unique: number }>(sql.raw('PRAGMA index_list("workers")'))
+  const soulIndex = rows.find(row => row.name === 'workers_soul_idx')
+  if (soulIndex?.unique === 1)
+    getWorkerDb().run(sql.raw('DROP INDEX IF EXISTS workers_soul_idx'))
+  if (!soulIndex || soulIndex.unique === 1)
+    getWorkerDb().run(sql.raw('CREATE INDEX IF NOT EXISTS workers_soul_idx ON workers (soul_id)'))
 }
 
 export type WorkerDatabase = ReturnType<typeof createDb>
