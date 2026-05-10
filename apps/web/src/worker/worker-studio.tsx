@@ -2,8 +2,11 @@ import type {
   CapabilityTemplate,
   LocalArtifact,
   LocalEngineStatus,
+  LocalLesson,
+  LocalLessonStatus,
   LocalReview,
   LocalSession,
+  LocalSessionEvent,
   LocalSettingsConfig,
   LocalTurn,
   LocalWorkspace,
@@ -11,18 +14,14 @@ import type {
 } from '@zonease/aiworker-shared'
 import type { CSSProperties, FormEvent, ReactNode } from 'react'
 import type { LocalWorkspaceData } from './api'
+import type { ArtifactPreviewState, EngineReadiness } from './session-detail'
 
 import {
   Check,
   ChevronDown,
-  ChevronRight,
-  Circle,
-  Eye,
   FileText,
-  Grid3X3,
   Languages,
   Link,
-  List,
   Moon,
   Plus,
   RefreshCw,
@@ -35,19 +34,19 @@ import {
   Terminal,
   X,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
-import { createSessionTurn, createWorkspace, loadLocalWorkspaceData, readFile, rescanEngines, saveSettings, testEngine } from './api'
+import { useCallback, useEffect, useMemo, useReducer, useState, useSyncExternalStore } from 'react'
+import { continueSessionTurn, createReview, createSessionTurn, createWorkspace, loadLocalWorkspaceData, readFile, rescanEngines, saveSettings, testEngine, updateLesson } from './api'
 import {
   displaySoul,
   displayTemplate,
   formatRelativeTime,
-  formatReviewVerdict,
   formatStatus,
   languageLabel,
   messagesFor,
   normalizeLocale,
   supportedLocales,
 } from './i18n'
+import { SessionDetail } from './session-detail'
 
 interface StudioState {
   data: LocalWorkspaceData | null
@@ -59,17 +58,19 @@ type AutosaveState = 'idle' | 'saving' | 'saved' | 'failed'
 type SettingsSection = 'execution' | 'soul-packs' | 'connectors' | 'mcp' | 'external-mcp' | 'language' | 'appearance' | 'about'
 type ResolvedTheme = 'light' | 'dark'
 type WorkerMessages = ReturnType<typeof messagesFor>
-interface ArtifactPreviewState {
-  artifactId: string | null
-  content: string
-  error: string | null
-  loading: boolean
+const themeMediaQuery = '(prefers-color-scheme: dark)'
+const initialArtifactPreviewState: ArtifactPreviewState = {
+  artifactId: null,
+  content: '',
+  error: null,
+  loading: false,
 }
 
-const topTabs = ['projects', 'examples', 'domainSystems', 'connectors', 'templates', 'artifacts'] as const
-const createTabs = ['project', 'template'] as const
-const projectTabs = ['recent', 'thisSoul'] as const
-const themeMediaQuery = '(prefers-color-scheme: dark)'
+type ArtifactPreviewAction
+  = | { type: 'idle' }
+    | { artifactId: string, type: 'loading' }
+    | { artifactId: string, content: string, type: 'loaded' }
+    | { artifactId: string, error: string, type: 'failed' }
 
 const settingsSections: Array<{
   icon: typeof SlidersHorizontal
@@ -85,6 +86,19 @@ const settingsSections: Array<{
   { id: 'about', icon: Settings },
 ]
 
+function artifactPreviewReducer(_state: ArtifactPreviewState, action: ArtifactPreviewAction): ArtifactPreviewState {
+  switch (action.type) {
+    case 'idle':
+      return initialArtifactPreviewState
+    case 'loading':
+      return { artifactId: action.artifactId, content: '', error: null, loading: true }
+    case 'loaded':
+      return { artifactId: action.artifactId, content: action.content, error: null, loading: false }
+    case 'failed':
+      return { artifactId: action.artifactId, content: '', error: action.error, loading: false }
+  }
+}
+
 export function WorkerStudio() {
   const [state, setState] = useState<StudioState>({ data: null, error: null, loading: true })
   const [selectedSoulId, setSelectedSoulId] = useState('hr')
@@ -92,20 +106,15 @@ export function WorkerStudio() {
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null)
   const [workspaceTitle, setWorkspaceTitle] = useState('')
   const [workspaceContext, setWorkspaceContext] = useState('')
-  const [activeTopTab, setActiveTopTab] = useState<(typeof topTabs)[number]>('projects')
-  const [activeCreateTab, setActiveCreateTab] = useState<(typeof createTabs)[number]>('project')
-  const [activeProjectTab, setActiveProjectTab] = useState<(typeof projectTabs)[number]>('recent')
-  const [view, setView] = useState<'grid' | 'list'>('grid')
   const [query, setQuery] = useState('')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsInitialSection, setSettingsInitialSection] = useState<SettingsSection>('execution')
   const [submitting, setSubmitting] = useState(false)
-  const [artifactPreview, setArtifactPreview] = useState<ArtifactPreviewState>({
-    artifactId: null,
-    content: '',
-    error: null,
-    loading: false,
-  })
+  const [turnInput, setTurnInput] = useState('')
+  const [turnSubmitting, setTurnSubmitting] = useState(false)
+  const [reviewSubmitting, setReviewSubmitting] = useState(false)
+  const [lessonBusyId, setLessonBusyId] = useState<string | null>(null)
+  const [artifactPreview, dispatchArtifactPreview] = useReducer(artifactPreviewReducer, initialArtifactPreviewState)
 
   const refresh = useCallback(async () => {
     setState(current => ({ ...current, loading: true, error: null }))
@@ -145,10 +154,6 @@ export function WorkerStudio() {
     () => data?.artifacts.filter(artifact => artifact.sessionId !== null && soulSessionIds.has(artifact.sessionId)) ?? [],
     [data?.artifacts, soulSessionIds],
   )
-  const soulReviews = useMemo(
-    () => data?.reviews.filter(review => review.sessionId !== null && soulSessionIds.has(review.sessionId)) ?? [],
-    [data?.reviews, soulSessionIds],
-  )
   const filteredProjects = useMemo(() => {
     const needle = query.trim().toLowerCase()
     return soulWorkspaces.filter((item) => {
@@ -162,35 +167,23 @@ export function WorkerStudio() {
     })
   }, [activeLocale, data?.sessions, data?.templates, query, soulWorkspaces])
 
-  useEffect(() => {
-    if (!data)
-      return
-    const firstAvailableSoul = data.souls.find(soul => soul.status === 'available')
-    if (!data.souls.some(soul => soul.id === selectedSoulId && soul.status === 'available') && firstAvailableSoul)
-      setSelectedSoulId(firstAvailableSoul.id)
-  }, [data, selectedSoulId])
-
-  useEffect(() => {
-    if (templates.length > 0 && !templates.some(template => template.id === selectedTemplateId))
-      setSelectedTemplateId(templates[0]!.id)
-  }, [selectedTemplateId, templates])
-
-  useEffect(() => {
-    if (selectedWorkspaceId && soulWorkspaces.some(item => item.id === selectedWorkspaceId))
-      return
-    setSelectedWorkspaceId(latest(soulWorkspaces)?.id ?? null)
-  }, [selectedWorkspaceId, soulWorkspaces])
-
-  const selectedWorkspace = selectedWorkspaceId ? soulWorkspaces.find(item => item.id === selectedWorkspaceId) ?? null : null
+  const selectedWorkspace = selectedWorkspaceId && soulWorkspaces.some(item => item.id === selectedWorkspaceId)
+    ? soulWorkspaces.find(item => item.id === selectedWorkspaceId) ?? null
+    : latest(soulWorkspaces)
   const selectedSession = selectedWorkspace ? sessionForWorkspace(selectedWorkspace, data?.sessions ?? []) : latest(soulSessions)
   const selectedTurn = selectedSession ? turnForSession(selectedSession, data?.turns ?? []) : null
   const selectedArtifact = selectedSession ? artifactForSession(selectedSession, data?.artifacts ?? []) : latest(soulArtifacts)
   const selectedReview = selectedSession ? reviewForSession(selectedSession, data?.reviews ?? []) : null
-  const latestSession = latest(soulSessions)
+  const selectedSessionTurns = selectedSession ? turnsForSession(selectedSession, data?.turns ?? []) : []
+  const selectedSessionEvents = selectedSession ? eventsForSession(selectedSession, data?.events ?? []) : []
+  const selectedWorkspaceArtifacts = selectedWorkspace ? artifactsForWorkspace(selectedWorkspace, data?.artifacts ?? []) : []
+  const selectedWorkspaceLessons = selectedWorkspace ? lessonsForWorkspace(selectedWorkspace, data?.lessons ?? []) : []
+  const selectedWorkspaceReviews = selectedWorkspace ? reviewsForWorkspace(selectedWorkspace, data?.reviews ?? []) : []
   const selectedSoulCopy = selectedSoul ? displaySoul(selectedSoul, activeLocale) : null
   const selectedTemplateCopy = selectedTemplate ? displayTemplate(selectedTemplate, activeLocale) : null
   const selectedSessionTemplate = selectedSession ? data?.templates.find(template => template.id === selectedSession.capabilityTemplateId) ?? null : null
   const selectedArtifactCopy = selectedSessionTemplate ? displayTemplate(selectedSessionTemplate, activeLocale) : null
+  const engineReadiness = resolveEngineReadiness(data?.settings ?? null, copy)
   const systemTheme = useSystemTheme()
   const appearance = data?.settings.appearance ?? 'system'
   const resolvedTheme = resolveTheme(appearance, systemTheme)
@@ -206,23 +199,22 @@ export function WorkerStudio() {
 
   useEffect(() => {
     if (!selectedArtifact) {
-      setArtifactPreview({ artifactId: null, content: '', error: null, loading: false })
+      dispatchArtifactPreview({ type: 'idle' })
       return
     }
     let cancelled = false
-    setArtifactPreview({ artifactId: selectedArtifact.id, content: '', error: null, loading: true })
+    dispatchArtifactPreview({ artifactId: selectedArtifact.id, type: 'loading' })
     readFile(selectedArtifact.workspaceId, selectedArtifact.path)
       .then((content) => {
         if (!cancelled)
-          setArtifactPreview({ artifactId: selectedArtifact.id, content, error: null, loading: false })
+          dispatchArtifactPreview({ artifactId: selectedArtifact.id, content, type: 'loaded' })
       })
       .catch((error) => {
         if (!cancelled) {
-          setArtifactPreview({
+          dispatchArtifactPreview({
             artifactId: selectedArtifact.id,
-            content: '',
             error: error instanceof Error ? error.message : String(error),
-            loading: false,
+            type: 'failed',
           })
         }
       })
@@ -233,7 +225,7 @@ export function WorkerStudio() {
 
   async function submitProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!data || !selectedSoul || !selectedWorker || !selectedTemplate || !workspaceTitle.trim() || !workspaceContext.trim())
+    if (!data || !selectedSoul || !selectedWorker || !selectedTemplate || !workspaceTitle.trim() || !workspaceContext.trim() || !engineReadiness.ready)
       return
     setSubmitting(true)
     try {
@@ -267,6 +259,58 @@ export function WorkerStudio() {
     }
   }
 
+  async function submitTurn(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!selectedSession || !turnInput.trim() || !engineReadiness.ready)
+      return
+    setTurnSubmitting(true)
+    try {
+      await continueSessionTurn(selectedSession.id, {
+        input: turnInput.trim(),
+        metadata: {
+          requestedFrom: 'worker-web-follow-up',
+        },
+      })
+      setTurnInput('')
+      await refresh()
+    }
+    finally {
+      setTurnSubmitting(false)
+    }
+  }
+
+  async function submitReview() {
+    if (!selectedWorkspace || !selectedSession || !selectedArtifact)
+      return
+    setReviewSubmitting(true)
+    try {
+      await createReview({
+        artifactId: selectedArtifact.id,
+        findingsJson: [{ message: 'Human review requested from Worker Web.' }],
+        risksJson: [],
+        sessionId: selectedSession.id,
+        turnId: selectedTurn?.id ?? null,
+        verdict: 'needs_review',
+        workspaceId: selectedWorkspace.id,
+      })
+      await refresh()
+    }
+    finally {
+      setReviewSubmitting(false)
+    }
+  }
+
+  async function changeLessonStatus(lesson: LocalLesson, status: LocalLessonStatus) {
+    setLessonBusyId(lesson.id)
+    try {
+      await updateLesson(lesson.id, status)
+      await refresh()
+    }
+    finally {
+      setLessonBusyId(null)
+    }
+  }
+
   if (state.loading && !data) {
     return (
       <main className="od-loading-shell" data-appearance={appearance} data-theme={resolvedTheme}>
@@ -288,8 +332,8 @@ export function WorkerStudio() {
 
   return (
     <main className="entry-shell" data-appearance={appearance} data-theme={resolvedTheme} data-testid="worker-studio-shell">
-      <div className="entry has-artifact-rail" style={{ gridTemplateColumns: '380px 1fr auto' }}>
-        <aside className="entry-side" style={{ width: 380 }} aria-label={copy.accessibility.soulProjectCreator}>
+      <div className="entry has-artifact-rail workspace-entry">
+        <aside className="entry-side soul-sidebar" aria-label={copy.accessibility.soulProjectCreator}>
           <div className="entry-brand">
             <span className="entry-brand-mark" aria-hidden="true">AI</span>
             <div className="entry-brand-text">
@@ -301,117 +345,90 @@ export function WorkerStudio() {
             </div>
           </div>
 
-          <section className="newproj" data-testid="new-project-panel">
-            <div className="newproj-tabs-shell can-right">
-              <div className="newproj-tabs" role="tablist">
-                {createTabs.map(tab => (
+          <section className={`readiness-card ${engineReadiness.ready ? 'ready' : 'blocked'}`}>
+            <div>
+              <strong>{copy.workspace.executionReady}</strong>
+              <span>{engineReadiness.label}</span>
+            </div>
+            <button type="button" className="ghost icon-btn" onClick={() => openSettings('execution')}>
+              <Settings aria-hidden="true" size={13} />
+              <span>{copy.workspace.configure}</span>
+            </button>
+          </section>
+
+          <section className="newproj soul-catalog-panel">
+            <div className="newproj-body">
+              <div className="section-head compact">
+                <div>
+                  <h3>{copy.workspace.soulCatalog}</h3>
+                  <p className="hint">{selectedSoulCopy.description}</p>
+                </div>
+              </div>
+              <button className="ds-select" type="button" aria-label={copy.accessibility.selectedSoul}>
+                <span className="ds-icon-empty" aria-hidden="true">
+                  <span />
+                </span>
+                <span className="ds-select-copy">
+                  <strong>
+                    {selectedSoulCopy.name}
+                    {' '}
+                    {copy.create.soul}
+                  </strong>
+                  <small>{selectedSoulCopy.domain}</small>
+                </span>
+                <ChevronDown aria-hidden="true" size={16} />
+              </button>
+              <div className="soul-picker-list" role="listbox" aria-label={copy.accessibility.soulCatalog}>
+                {data.souls.map(soul => (
                   <button
-                    key={tab}
+                    key={soul.id}
                     type="button"
-                    role="tab"
-                    aria-selected={activeCreateTab === tab}
-                    className={`newproj-tab ${activeCreateTab === tab ? 'active' : ''}`}
-                    onClick={() => setActiveCreateTab(tab)}
+                    className={`soul-option ${selectedSoul.id === soul.id ? 'active' : ''}`}
+                    disabled={soul.status !== 'available'}
+                    aria-selected={selectedSoul.id === soul.id}
+                    role="option"
+                    onClick={() => {
+                      setSelectedSoulId(soul.id)
+                      const next = data.templates.find(template => template.soulId === soul.id)
+                      if (next)
+                        setSelectedTemplateId(next.id)
+                    }}
                   >
-                    {copy.navigation.createTabs[tab]}
+                    <strong>{displaySoul(soul, activeLocale).name}</strong>
+                    <small>{soul.status === 'available' ? displaySoul(soul, activeLocale).domain : copy.common.comingSoon}</small>
                   </button>
                 ))}
               </div>
-              <button type="button" className="newproj-tabs-arrow right" aria-label={copy.accessibility.moreCreationOptions}>
-                <ChevronRight aria-hidden="true" size={16} strokeWidth={2} />
-              </button>
             </div>
+          </section>
 
-            <form className="newproj-body" onSubmit={submitProject}>
-              <h3 className="newproj-title">
-                <span className="newproj-title-text">{copy.create.newProject}</span>
-              </h3>
-
-              <input
-                className="newproj-name"
-                aria-label={copy.create.projectName}
-                data-testid="new-project-name"
-                placeholder={projectNamePlaceholder(selectedSoul.id, copy)}
-                value={workspaceTitle}
-                onChange={event => setWorkspaceTitle(event.target.value)}
-              />
-
-              <section className="newproj-section">
-                <label className="newproj-label">{copy.create.soul}</label>
-                <button className="ds-select" type="button" aria-label={copy.accessibility.selectedSoul}>
-                  <span className="ds-icon-empty" aria-hidden="true">
-                    <span />
-                  </span>
-                  <span className="ds-select-copy">
-                    <strong>
-                      {selectedSoulCopy.name}
-                      {' '}
-                      {copy.create.soul}
-                    </strong>
-                    <small>{selectedSoulCopy.domain}</small>
-                  </span>
-                  <ChevronDown aria-hidden="true" size={16} />
-                </button>
-                <div className="soul-picker-list" role="listbox" aria-label={copy.accessibility.soulCatalog}>
-                  {data.souls.map(soul => (
-                    <button
-                      key={soul.id}
-                      type="button"
-                      className={`soul-option ${selectedSoul.id === soul.id ? 'active' : ''}`}
-                      disabled={soul.status !== 'available'}
-                      aria-selected={selectedSoul.id === soul.id}
-                      role="option"
-                      onClick={() => {
-                        setSelectedSoulId(soul.id)
-                        const next = data.templates.find(template => template.soulId === soul.id)
-                        if (next)
-                          setSelectedTemplateId(next.id)
-                      }}
-                    >
-                      <strong>{displaySoul(soul, activeLocale).name}</strong>
-                      <small>{soul.status === 'available' ? displaySoul(soul, activeLocale).domain : copy.common.comingSoon}</small>
-                    </button>
-                  ))}
+          <section className="newproj capability-panel">
+            <div className="newproj-body">
+              <div className="section-head compact">
+                <div>
+                  <h3>{copy.create.capabilityTemplate}</h3>
+                  <p className="hint">{selectedTemplateCopy.description}</p>
                 </div>
-              </section>
-
-              <section className="newproj-section">
-                <label className="newproj-label">{copy.create.capabilityTemplate}</label>
-                <div className="template-picker-list" role="listbox" aria-label={copy.create.capabilityTemplate}>
-                  {templates.map(template => (
-                    <button
-                      key={template.id}
-                      type="button"
-                      className={`template-option ${selectedTemplate.id === template.id ? 'active' : ''}`}
-                      aria-selected={selectedTemplate.id === template.id}
-                      role="option"
-                      onClick={() => setSelectedTemplateId(template.id)}
-                    >
-                      <strong>{displayTemplate(template, activeLocale).name}</strong>
-                      <small>{displayTemplate(template, activeLocale).outputKind}</small>
-                    </button>
-                  ))}
-                </div>
-              </section>
-
-              <section className="newproj-section">
-                <label className="newproj-label" htmlFor="project-context">{copy.create.businessContext}</label>
-                <textarea
-                  id="project-context"
-                  className="newproj-context"
-                  aria-label={copy.create.businessContext}
-                  placeholder={selectedTemplateCopy.inputHints.join(' · ')}
-                  value={workspaceContext}
-                  onChange={event => setWorkspaceContext(event.target.value)}
-                />
-              </section>
-
-              <button className="primary newproj-create" data-testid="create-project" type="submit" disabled={!workspaceTitle.trim() || !workspaceContext.trim() || submitting}>
-                <Plus aria-hidden="true" size={13} />
-                <span>{submitting ? copy.create.creatingSession : copy.create.submit}</span>
-              </button>
-            </form>
-            <div className="newproj-footer">{copy.create.footer}</div>
+              </div>
+              <div className="template-picker-list" role="listbox" aria-label={copy.create.capabilityTemplate}>
+                {templates.map(template => (
+                  <button
+                    key={template.id}
+                    type="button"
+                    className={`template-option ${selectedTemplate.id === template.id ? 'active' : ''}`}
+                    aria-selected={selectedTemplate.id === template.id}
+                    role="option"
+                    onClick={() => setSelectedTemplateId(template.id)}
+                  >
+                    <strong>{displayTemplate(template, activeLocale).name}</strong>
+                    <small>{displayTemplate(template, activeLocale).description}</small>
+                  </button>
+                ))}
+              </div>
+              <div className="rubric-list" aria-label={copy.workspace.reviewRubric}>
+                {selectedTemplateCopy.reviewRubric.map(item => <span key={item}>{item}</span>)}
+              </div>
+            </div>
           </section>
 
           <div className="entry-side-foot">
@@ -429,23 +446,16 @@ export function WorkerStudio() {
           </div>
         </aside>
 
-        <section className="entry-main" aria-label={copy.accessibility.soulProjectsAndArtifacts}>
-          <header className="entry-header">
-            <div className="entry-tabs" role="tablist">
-              {topTabs.map(tab => (
-                <button
-                  key={tab}
-                  type="button"
-                  role="tab"
-                  aria-selected={activeTopTab === tab}
-                  className={`entry-tab ${activeTopTab === tab ? 'active' : ''}`}
-                  onClick={() => setActiveTopTab(tab)}
-                >
-                  {copy.navigation.topTabs[tab]}
-                </button>
-              ))}
+        <section className="entry-main workspace-column" aria-label={copy.accessibility.soulProjectsAndArtifacts}>
+          <header className="entry-header workspace-header">
+            <div>
+              <span className="kicker">{copy.workspace.workspaceKicker}</span>
+              <h1>{copy.workspace.workspaceTitle(selectedSoulCopy.name)}</h1>
             </div>
             <div className="entry-header-right">
+              <button className="settings-trigger" type="button" aria-label={copy.accessibility.refreshWorkspace} onClick={() => void refresh()}>
+                <RefreshCw aria-hidden="true" size={16} />
+              </button>
               <button className="settings-trigger" type="button" aria-label={copy.accessibility.openSettings} onClick={() => openSettings()}>
                 <Settings aria-hidden="true" size={16} />
               </button>
@@ -455,23 +465,55 @@ export function WorkerStudio() {
             </div>
           </header>
 
-          <div className="entry-tab-content">
-            <div className="tab-panel">
+          <div className="entry-tab-content workspace-content">
+            <section className="newproj workspace-create-card" data-testid="new-project-panel">
+              <form className="newproj-body" onSubmit={submitProject}>
+                <div className="section-head compact">
+                  <div>
+                    <h3>{copy.workspace.createWorkspace}</h3>
+                    <p className="hint">{copy.workspace.createWorkspaceHint(selectedTemplateCopy.name)}</p>
+                  </div>
+                </div>
+
+                <input
+                  className="newproj-name"
+                  aria-label={copy.create.projectName}
+                  data-testid="new-project-name"
+                  placeholder={projectNamePlaceholder(selectedSoul.id, copy)}
+                  value={workspaceTitle}
+                  onChange={event => setWorkspaceTitle(event.target.value)}
+                />
+
+                <textarea
+                  id="project-context"
+                  className="newproj-context"
+                  aria-label={copy.create.businessContext}
+                  placeholder={selectedTemplateCopy.inputHints.join(' · ')}
+                  value={workspaceContext}
+                  onChange={event => setWorkspaceContext(event.target.value)}
+                />
+
+                {!engineReadiness.ready
+                  ? (
+                      <div className="inline-warning" role="status">
+                        <ShieldCheck aria-hidden="true" size={14} />
+                        <span>{engineReadiness.detail}</span>
+                      </div>
+                    )
+                  : null}
+
+                <button className="primary newproj-create" data-testid="create-project" type="submit" disabled={!workspaceTitle.trim() || !workspaceContext.trim() || submitting || !engineReadiness.ready}>
+                  <Plus aria-hidden="true" size={13} />
+                  <span>{submitting ? copy.create.creatingSession : copy.create.submit}</span>
+                </button>
+              </form>
+            </section>
+
+            <section className="workspace-list-section">
               <div className="tab-panel-toolbar">
                 <div className="toolbar-left">
-                  <div className="subtab-pill" role="group" aria-label={copy.accessibility.projectFilters}>
-                    {projectTabs.map(tab => (
-                      <button
-                        key={tab}
-                        type="button"
-                        className={activeProjectTab === tab ? 'active' : ''}
-                        aria-pressed={activeProjectTab === tab}
-                        onClick={() => setActiveProjectTab(tab)}
-                      >
-                        {copy.navigation.projectTabs[tab]}
-                      </button>
-                    ))}
-                  </div>
+                  <strong>{copy.workspace.workspaceList}</strong>
+                  <span className="count-pill">{filteredProjects.length}</span>
                 </div>
 
                 <div className="toolbar-right">
@@ -486,23 +528,15 @@ export function WorkerStudio() {
                       onChange={event => setQuery(event.target.value)}
                     />
                   </label>
-                  <div className="subtab-pill" role="group" aria-label={copy.accessibility.viewMode}>
-                    <button type="button" className={view === 'grid' ? 'active' : ''} aria-pressed={view === 'grid'} aria-label={copy.accessibility.gridView} onClick={() => setView('grid')}>
-                      <Grid3X3 size={14} />
-                    </button>
-                    <button type="button" className={view === 'list' ? 'active' : ''} aria-pressed={view === 'list'} aria-label={copy.accessibility.listView} onClick={() => setView('list')}>
-                      <List size={14} />
-                    </button>
-                  </div>
                 </div>
               </div>
 
-              <div className={view === 'grid' ? 'design-grid' : 'design-grid design-grid-list'}>
+              <div className="design-grid design-grid-list workspace-list">
                 {filteredProjects.length > 0
                   ? filteredProjects.map(item => (
                       <ProjectCard
                         key={item.id}
-                        active={selectedWorkspaceId === item.id}
+                        active={selectedWorkspace?.id === item.id}
                         artifact={artifactForWorkspace(item, data.artifacts, data.sessions)}
                         item={item}
                         locale={activeLocale}
@@ -520,60 +554,37 @@ export function WorkerStudio() {
                       </div>
                     )}
               </div>
-            </div>
+            </section>
           </div>
         </section>
 
-        <aside className="artifact-rail artifact-rail" aria-label={copy.accessibility.businessArtifactPreview}>
-          <header className="artifact-rail-head">
-            <div className="artifact-rail-title">
-              <Eye aria-hidden="true" size={14} />
-              <strong>{copy.artifact.label}</strong>
-            </div>
-            <div className="artifact-rail-head-actions">
-              <button type="button" className="artifact-rail-collapse" aria-label={copy.accessibility.refreshWorkspace} onClick={() => void refresh()}>
-                <RefreshCw size={14} />
-              </button>
-              <button type="button" className="artifact-rail-collapse" aria-label={copy.accessibility.artifactSettings} onClick={() => openSettings('appearance')}>
-                <Settings size={14} />
-              </button>
-            </div>
-          </header>
-          <p className="artifact-rail-hint">
-            {selectedWorkspace ? selectedWorkspace.name : copy.artifact.defaultHint}
-          </p>
-          <div className="artifact-rail-status">
-            <span className="artifact-rail-status-pill">
-              <Circle aria-hidden="true" size={10} />
-              <span>{selectedTurn ? formatStatus(selectedTurn.status, activeLocale) : latestSession ? formatStatus(latestSession.status, activeLocale) : copy.artifact.noSession}</span>
-            </span>
-          </div>
-          <section className="artifact-panel">
-            {selectedArtifact
-              ? (
-                  <>
-                    <div className="rail-metadata">
-                      <strong>{selectedArtifactCopy?.name ?? selectedArtifact.title}</strong>
-                      <small>{selectedArtifactCopy?.outputKind ?? selectedArtifact.kind}</small>
-                      <small>{selectedArtifact.path}</small>
-                    </div>
-                    {artifactPreview.loading ? <div className="artifact-preview-state">{copy.artifact.loading}</div> : null}
-                    {artifactPreview.error ? <div className="artifact-preview-state" role="alert">{artifactPreview.error}</div> : null}
-                    {!artifactPreview.loading && !artifactPreview.error
-                      ? <pre className="artifact-preview">{artifactPreview.content}</pre>
-                      : null}
-                  </>
-                )
-              : (
-                  <div className="artifact-preview-state">{copy.artifact.empty}</div>
-                )}
-          </section>
-          <section className="rail-metadata">
-            <strong>{copy.artifact.review}</strong>
-            <small>{selectedReview ? formatReviewVerdict(selectedReview.verdict, activeLocale) : copy.artifact.reviewCount(soulReviews.length)}</small>
-            <small>{copy.artifact.memoryCandidates(data.lessons.length)}</small>
-          </section>
-        </aside>
+        <SessionDetail
+          artifact={selectedArtifact}
+          artifactCopy={selectedArtifactCopy}
+          artifactPreview={artifactPreview}
+          artifacts={selectedWorkspaceArtifacts}
+          copy={copy}
+          engineReadiness={engineReadiness}
+          events={selectedSessionEvents}
+          lessonBusyId={lessonBusyId}
+          lessons={selectedWorkspaceLessons}
+          locale={activeLocale}
+          review={selectedReview}
+          reviewSubmitting={reviewSubmitting}
+          reviews={selectedWorkspaceReviews}
+          session={selectedSession}
+          template={selectedSessionTemplate}
+          turnInput={turnInput}
+          turnSubmitting={turnSubmitting}
+          turns={selectedSessionTurns}
+          workspace={selectedWorkspace}
+          onLessonStatus={(lesson, status) => void changeLessonStatus(lesson, status)}
+          onOpenSettings={openSettings}
+          onRefresh={() => void refresh()}
+          onReview={() => void submitReview()}
+          onSubmitTurn={submitTurn}
+          onTurnInputChange={setTurnInput}
+        />
 
         {settingsOpen
           ? (
@@ -1081,6 +1092,52 @@ function ProjectCard({
       </div>
     </button>
   )
+}
+
+function resolveEngineReadiness(settings: LocalSettingsConfig | null, copy: WorkerMessages): EngineReadiness {
+  if (!settings)
+    return { detail: copy.workspace.engineLoading, label: copy.workspace.engineLoading, ready: false }
+  if (settings.executionMode === 'byok') {
+    const configured = settings.byok.provider.trim().length > 0 && settings.byok.model.trim().length > 0 && settings.byok.apiKeyRef.trim().length > 0
+    return {
+      detail: configured ? copy.workspace.byokReady(settings.byok.provider, settings.byok.model) : copy.workspace.byokNeedsKey,
+      label: `${settings.byok.provider} · ${settings.byok.model}`,
+      ready: configured,
+    }
+  }
+  const engine = settings.engines.find(item => item.id === settings.engineId)
+  if (!engine) {
+    return {
+      detail: copy.workspace.engineMissing(settings.engineId),
+      label: settings.engineId,
+      ready: false,
+    }
+  }
+  return {
+    detail: engine.installed ? copy.workspace.engineReadyDetail(engine.name) : copy.workspace.engineNotInstalled(engine.name),
+    label: `${engine.name}${engine.installed ? '' : ` · ${copy.common.notInstalled}`}`,
+    ready: engine.installed,
+  }
+}
+
+function turnsForSession(session: LocalSession, turns: LocalTurn[]): LocalTurn[] {
+  return turns.filter(turn => turn.sessionId === session.id).sort((a, b) => a.seq - b.seq)
+}
+
+function eventsForSession(session: LocalSession, events: LocalSessionEvent[]): LocalSessionEvent[] {
+  return events.filter(event => event.sessionId === session.id).sort((a, b) => a.seq - b.seq)
+}
+
+function artifactsForWorkspace(workspace: LocalWorkspace, artifacts: LocalArtifact[]): LocalArtifact[] {
+  return artifacts.filter(artifact => artifact.workspaceId === workspace.id).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+}
+
+function reviewsForWorkspace(workspace: LocalWorkspace, reviews: LocalReview[]): LocalReview[] {
+  return reviews.filter(review => review.workspaceId === workspace.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+}
+
+function lessonsForWorkspace(workspace: LocalWorkspace, lessons: LocalLesson[]): LocalLesson[] {
+  return lessons.filter(lesson => lesson.workspaceId === workspace.id).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
 }
 
 function buildProjectPrompt(soul: VerticalSoul, template: CapabilityTemplate, context: string): string {

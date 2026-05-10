@@ -87,6 +87,50 @@ interface StaticMessages {
     }
     searchPlaceholder: string
   }
+  workspace: {
+    accept: string
+    accepted: string
+    artifactCount: (count: number) => string
+    byokNeedsKey: string
+    byokReady: (provider: string, model: string) => string
+    configure: string
+    continueSession: string
+    createWorkspace: string
+    createWorkspaceHint: (templateName: string) => string
+    engineLoading: string
+    engineMissing: (engineId: string) => string
+    engineNotInstalled: (engineName: string) => string
+    engineReadyDetail: (engineName: string) => string
+    eventCount: (count: number) => string
+    eventStream: string
+    executionReady: string
+    followUpInput: string
+    followUpPlaceholder: string
+    memoryCandidates: string
+    noEvents: string
+    noMemoryCandidates: string
+    noSelectionDetail: string
+    noSelectionTitle: string
+    noTurns: string
+    proposed: string
+    reject: string
+    rejected: string
+    requestReview: string
+    requestingReview: string
+    reviewRubric: string
+    reviewWaiting: string
+    sendTurn: string
+    sendingTurn: string
+    selectedWorkspace: string
+    sessionDetail: string
+    soulCatalog: string
+    turnCount: (count: number) => string
+    turnHistory: string
+    updated: (when: string) => string
+    workspaceKicker: string
+    workspaceList: string
+    workspaceTitle: (soulName: string) => string
+  }
   relativeTime: {
     daysAgo: (days: number) => string
     hoursAgo: (hours: number) => string
@@ -288,6 +332,50 @@ const en = {
     },
     searchPlaceholder: 'Search projects...',
   },
+  workspace: {
+    accept: 'Accept',
+    accepted: 'Accepted',
+    artifactCount: count => `${count} artifacts`,
+    byokNeedsKey: 'BYOK needs a provider, model, and API key reference before session turns can run.',
+    byokReady: (provider, model) => `${provider} ${model} is configured for session turns.`,
+    configure: 'Configure',
+    continueSession: 'Continue session',
+    createWorkspace: 'Create workspace session',
+    createWorkspaceHint: templateName => `Starts a workspace and first ${templateName} turn.`,
+    engineLoading: 'Checking execution settings...',
+    engineMissing: engineId => `${engineId} is not known in local settings.`,
+    engineNotInstalled: engineName => `${engineName} is selected but not installed on PATH.`,
+    engineReadyDetail: engineName => `${engineName} is ready for session turns.`,
+    eventCount: count => `${count} events`,
+    eventStream: 'Session events',
+    executionReady: 'Execution',
+    followUpInput: 'Follow-up turn',
+    followUpPlaceholder: 'Ask the selected Soul to refine the artifact, add evidence, or address review gaps...',
+    memoryCandidates: 'Memory candidates',
+    noEvents: 'Events appear after a session turn starts.',
+    noMemoryCandidates: 'No memory candidates for this workspace yet.',
+    noSelectionDetail: 'Create or select a workspace to inspect the session, artifact, review, and memory candidates.',
+    noSelectionTitle: 'No workspace selected',
+    noTurns: 'No turns recorded for this session.',
+    proposed: 'Proposed',
+    reject: 'Reject',
+    rejected: 'Rejected',
+    requestReview: 'Request review',
+    requestingReview: 'Requesting review...',
+    reviewRubric: 'Review rubric',
+    reviewWaiting: 'Generate an artifact before requesting review.',
+    sendTurn: 'Send turn',
+    sendingTurn: 'Sending turn...',
+    selectedWorkspace: 'Selected workspace',
+    sessionDetail: 'Session',
+    soulCatalog: 'Soul catalog',
+    turnCount: count => `${count} turns`,
+    turnHistory: 'Turn history',
+    updated: when => `Updated ${when}`,
+    workspaceKicker: 'SOUL WORKSPACE',
+    workspaceList: 'Workspaces',
+    workspaceTitle: soulName => `${soulName} workspaces`,
+  },
   relativeTime: {
     daysAgo: days => `${days}d ago`,
     hoursAgo: hours => `${hours}h ago`,
@@ -482,6 +570,50 @@ const zhCN = {
       title: '还没有项目',
     },
     searchPlaceholder: '搜索项目...',
+  },
+  workspace: {
+    accept: '采纳',
+    accepted: '已采纳',
+    artifactCount: count => `${count} 个产物`,
+    byokNeedsKey: 'BYOK 需要提供方、模型和 API key 引用后才能运行 session turn。',
+    byokReady: (provider, model) => `${provider} ${model} 已可用于 session turn。`,
+    configure: '配置',
+    continueSession: '继续会话',
+    createWorkspace: '创建工作区会话',
+    createWorkspaceHint: templateName => `创建工作区并启动第一轮 ${templateName} turn。`,
+    engineLoading: '正在检查执行设置...',
+    engineMissing: engineId => `本地设置中没有 ${engineId}。`,
+    engineNotInstalled: engineName => `已选择 ${engineName}，但 PATH 中未安装。`,
+    engineReadyDetail: engineName => `${engineName} 可用于 session turn。`,
+    eventCount: count => `${count} 条事件`,
+    eventStream: '会话事件',
+    executionReady: '执行',
+    followUpInput: '后续 turn',
+    followUpPlaceholder: '让当前 Soul 细化产物、补充证据或处理评审缺口...',
+    memoryCandidates: '记忆候选',
+    noEvents: 'session turn 启动后会显示事件。',
+    noMemoryCandidates: '此工作区还没有记忆候选。',
+    noSelectionDetail: '创建或选择一个工作区，查看会话、产物、评审和记忆候选。',
+    noSelectionTitle: '未选择工作区',
+    noTurns: '此会话还没有 turn 记录。',
+    proposed: '待定',
+    reject: '拒绝',
+    rejected: '已拒绝',
+    requestReview: '请求评审',
+    requestingReview: '正在请求评审...',
+    reviewRubric: '评审准则',
+    reviewWaiting: '先生成产物，然后再请求评审。',
+    sendTurn: '发送 turn',
+    sendingTurn: '正在发送 turn...',
+    selectedWorkspace: '已选工作区',
+    sessionDetail: '会话',
+    soulCatalog: 'Soul 目录',
+    turnCount: count => `${count} 轮 turn`,
+    turnHistory: 'Turn 历史',
+    updated: when => `更新于 ${when}`,
+    workspaceKicker: 'SOUL 工作区',
+    workspaceList: '工作区',
+    workspaceTitle: soulName => `${soulName} 工作区`,
   },
   relativeTime: {
     daysAgo: days => `${days} 天前`,
@@ -678,6 +810,50 @@ const ja = {
     },
     searchPlaceholder: 'プロジェクトを検索...',
   },
+  workspace: {
+    accept: '承認',
+    accepted: '承認済み',
+    artifactCount: count => `成果物 ${count} 件`,
+    byokNeedsKey: 'BYOK にはプロバイダー、モデル、API キー参照が必要です。',
+    byokReady: (provider, model) => `${provider} ${model} はセッションターンで利用できます。`,
+    configure: '設定',
+    continueSession: 'セッションを続ける',
+    createWorkspace: 'ワークスペースセッションを作成',
+    createWorkspaceHint: templateName => `ワークスペースと最初の ${templateName} ターンを開始します。`,
+    engineLoading: '実行設定を確認中...',
+    engineMissing: engineId => `${engineId} はローカル設定にありません。`,
+    engineNotInstalled: engineName => `${engineName} が選択されていますが PATH にありません。`,
+    engineReadyDetail: engineName => `${engineName} はセッションターンで利用できます。`,
+    eventCount: count => `イベント ${count} 件`,
+    eventStream: 'セッションイベント',
+    executionReady: '実行',
+    followUpInput: 'フォローアップターン',
+    followUpPlaceholder: '成果物の改善、証拠追加、レビューギャップ対応を依頼...',
+    memoryCandidates: 'メモリー候補',
+    noEvents: 'セッションターン開始後にイベントが表示されます。',
+    noMemoryCandidates: 'このワークスペースにはまだメモリー候補がありません。',
+    noSelectionDetail: 'ワークスペースを作成または選択して、セッション、成果物、レビュー、メモリー候補を確認します。',
+    noSelectionTitle: 'ワークスペース未選択',
+    noTurns: 'このセッションにはターンがありません。',
+    proposed: '提案中',
+    reject: '却下',
+    rejected: '却下済み',
+    requestReview: 'レビューを依頼',
+    requestingReview: 'レビュー依頼中...',
+    reviewRubric: 'レビュー基準',
+    reviewWaiting: 'レビュー依頼の前に成果物を生成してください。',
+    sendTurn: 'ターン送信',
+    sendingTurn: '送信中...',
+    selectedWorkspace: '選択中のワークスペース',
+    sessionDetail: 'セッション',
+    soulCatalog: 'Soul カタログ',
+    turnCount: count => `ターン ${count} 件`,
+    turnHistory: 'ターン履歴',
+    updated: when => `更新 ${when}`,
+    workspaceKicker: 'SOUL ワークスペース',
+    workspaceList: 'ワークスペース',
+    workspaceTitle: soulName => `${soulName} ワークスペース`,
+  },
   relativeTime: {
     daysAgo: days => `${days}日前`,
     hoursAgo: hours => `${hours}時間前`,
@@ -872,6 +1048,50 @@ const de = {
       title: 'Noch keine Projekte',
     },
     searchPlaceholder: 'Projekte suchen...',
+  },
+  workspace: {
+    accept: 'Annehmen',
+    accepted: 'Angenommen',
+    artifactCount: count => `${count} Artefakte`,
+    byokNeedsKey: 'BYOK benötigt Provider, Modell und API-Key-Referenz, bevor Session-Turns laufen können.',
+    byokReady: (provider, model) => `${provider} ${model} ist für Session-Turns konfiguriert.`,
+    configure: 'Konfigurieren',
+    continueSession: 'Session fortsetzen',
+    createWorkspace: 'Workspace-Session erstellen',
+    createWorkspaceHint: templateName => `Startet einen Workspace und den ersten ${templateName}-Turn.`,
+    engineLoading: 'Ausführungseinstellungen werden geprüft...',
+    engineMissing: engineId => `${engineId} ist in den lokalen Einstellungen unbekannt.`,
+    engineNotInstalled: engineName => `${engineName} ist ausgewählt, aber nicht im PATH installiert.`,
+    engineReadyDetail: engineName => `${engineName} ist für Session-Turns bereit.`,
+    eventCount: count => `${count} Events`,
+    eventStream: 'Session-Events',
+    executionReady: 'Ausführung',
+    followUpInput: 'Follow-up-Turn',
+    followUpPlaceholder: 'Artefakt verfeinern, Evidenz ergänzen oder Review-Lücken bearbeiten...',
+    memoryCandidates: 'Memory-Kandidaten',
+    noEvents: 'Events erscheinen nach dem Start eines Session-Turns.',
+    noMemoryCandidates: 'Noch keine Memory-Kandidaten für diesen Workspace.',
+    noSelectionDetail: 'Erstelle oder wähle einen Workspace, um Session, Artefakt, Review und Memory-Kandidaten zu prüfen.',
+    noSelectionTitle: 'Kein Workspace ausgewählt',
+    noTurns: 'Für diese Session sind keine Turns erfasst.',
+    proposed: 'Vorgeschlagen',
+    reject: 'Ablehnen',
+    rejected: 'Abgelehnt',
+    requestReview: 'Review anfordern',
+    requestingReview: 'Review wird angefordert...',
+    reviewRubric: 'Review-Rubrik',
+    reviewWaiting: 'Erzeuge zuerst ein Artefakt, bevor du Review anforderst.',
+    sendTurn: 'Turn senden',
+    sendingTurn: 'Turn wird gesendet...',
+    selectedWorkspace: 'Ausgewählter Workspace',
+    sessionDetail: 'Session',
+    soulCatalog: 'Soul-Katalog',
+    turnCount: count => `${count} Turns`,
+    turnHistory: 'Turn-Verlauf',
+    updated: when => `Aktualisiert ${when}`,
+    workspaceKicker: 'SOUL WORKSPACE',
+    workspaceList: 'Workspaces',
+    workspaceTitle: soulName => `${soulName}-Workspaces`,
   },
   relativeTime: {
     daysAgo: days => `vor ${days} T.`,

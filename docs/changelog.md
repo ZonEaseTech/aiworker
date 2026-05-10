@@ -1,5 +1,49 @@
 # AIWorker Changelog
 
+## 2026-05-10 19:39 [completed] REFACTOR-051 / PLAN-224 — Worker Web production UX integration
+
+- Investigated the current Worker Web production-readiness gap after the
+  session/workspace MVP landed.
+- Found that Web currently has working API contracts but disconnected UX:
+  inert top tabs, create-only session flow, no follow-up turn composer, passive
+  review/memory counts, Settings readiness not surfaced in the turn path, and
+  hidden artifact access below tablet width.
+- Opened REFACTOR-051 and draft PLAN-224 for a focused Web refactor that
+  connects Soul selection, capability selection, workspace/session browsing,
+  turn continuation, artifact preview, review/memory actions, and Settings
+  readiness into one operator flow.
+- Approved by operator with `proceed` and implemented the connected Worker Web
+  flow.
+- Replaced inert top tabs with a three-column Soul workspace: Soul/capability
+  selector, workspace/session list, and selected session detail.
+- Added follow-up session turns, review creation, and lesson status actions to
+  the Web client and UI.
+- Split the active session surface into `SessionDetail`, covering turn composer,
+  artifact preview, turn history, review, memory candidates, and session events.
+- Browser verification at `http://127.0.0.1:9217/` confirmed the current Web
+  opens directly into the Soul workspace, shows HR/PM/QA/DevOps Souls, keeps
+  Settings explicit, displays a real follow-up Codex artifact, and preserves
+  session/artifact detail at narrow width.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test -- --reporter=verbose`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `bun run typecheck`
+  - `bun run lint`
+  - `bun run test`
+  - `bun run build`
+  - `git diff --check`
+- code-review-graph passed:
+  - `bun run crg:status`
+  - `bun run crg:update`
+  - `bun run crg:review`
+  - MCP `get_review_context`, `detect_changes`, `get_impact_radius`, and
+    `get_affected_flows`
+  - Result: 11 changed files, 36 changed functions/classes, 0 affected flows,
+    overall risk score `0.55`; API client/session detail test gaps are covered
+    by the expanded Worker Web RTL flow and local browser verification.
+
 ## 2026-05-10 18:50 [completed] QA-029 / PLAN-223 — Session workspace MVP validation
 
 - From an empty `/Users/ben/.aiworker`, started the local daemon with

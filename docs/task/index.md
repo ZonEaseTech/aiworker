@@ -329,3 +329,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REFACTOR-049 Worker Web session workspace surface**](REFACTOR-049.md) `P0`
 - [x] [**REFACTOR-050 Host home lifecycle and project-scope removal**](REFACTOR-050.md) `P0`
 - [x] [**QA-029 Session workspace MVP validation**](QA-029.md) `P0`
+- [x] [**REFACTOR-051 Worker Web production UX integration**](REFACTOR-051.md) `P0`

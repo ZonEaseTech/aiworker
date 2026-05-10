@@ -70,8 +70,6 @@ const baseSettings = {
   updatedAt: now,
 }
 
-let currentSettings: typeof baseSettings
-
 const sessionRecord = {
   capabilityTemplateId: 'candidate-screen',
   context: 'Candidate context',
@@ -115,6 +113,47 @@ const artifactRecord = {
   workspaceId: 'workspace-1',
 }
 
+const lessonRecord = {
+  createdAt: now,
+  evidenceJson: [{ turnId: 'turn-1' }],
+  id: 'lesson-1',
+  sourceReviewId: null,
+  statement: 'Keep hiring evidence attached to the candidate screen.',
+  status: 'proposed',
+  updatedAt: now,
+  workspaceId: 'workspace-1',
+}
+
+const eventRecord = {
+  createdAt: now,
+  id: 1,
+  invocationId: 'invocation-1',
+  payloadJson: { status: 'succeeded' },
+  seq: 0,
+  sessionId: 'session-1',
+  turnId: 'turn-1',
+  type: 'status',
+}
+
+let currentArtifacts: typeof artifactRecord[]
+let currentEvents: typeof eventRecord[]
+let currentLessons: typeof lessonRecord[]
+let currentReviews: Array<{
+  artifactId: string | null
+  createdAt: string
+  findingsJson: Array<Record<string, unknown>>
+  id: string
+  risksJson: Array<Record<string, unknown>>
+  sessionId: string | null
+  turnId: string | null
+  verdict: 'needs_review' | 'pass' | 'warn' | 'fail'
+  workspaceId: string
+}>
+let currentSettings: typeof baseSettings
+let currentSessions: typeof sessionRecord[]
+let currentTurns: typeof turnRecord[]
+let currentWorkspaces: typeof workspace[]
+
 function resetSettings() {
   currentSettings = {
     ...baseSettings,
@@ -124,6 +163,13 @@ function resetSettings() {
     externalMcpServers: baseSettings.externalMcpServers.map(item => ({ ...item })),
     localMcpServer: { ...baseSettings.localMcpServer },
   }
+  currentWorkspaces = [{ ...workspace }]
+  currentSessions = [{ ...sessionRecord }]
+  currentTurns = [{ ...turnRecord }]
+  currentArtifacts = [{ ...artifactRecord }]
+  currentReviews = []
+  currentLessons = [{ ...lessonRecord }]
+  currentEvents = [{ ...eventRecord }]
 }
 
 function installMatchMedia(initialMatches: boolean) {
@@ -190,28 +236,72 @@ beforeEach(() => {
       return json({ souls })
     if (url.endsWith('/api/local/templates'))
       return json({ templates })
-    if (url.endsWith('/api/local/workers/hr-worker/workspaces') && method === 'POST')
-      return json({ workspace: { ...workspace, id: 'workspace-created', name: 'New candidate workspace' } }, 201)
+    if (url.endsWith('/api/local/workers/hr-worker/workspaces') && method === 'POST') {
+      const body = init?.body ? JSON.parse(String(init.body)) as { name: string } : { name: 'New candidate workspace' }
+      const created = { ...workspace, id: 'workspace-created', name: body.name }
+      currentWorkspaces = [created, ...currentWorkspaces]
+      return json({ workspace: created }, 201)
+    }
     if (url.endsWith('/api/local/workspaces'))
-      return json({ workspaces: [workspace] })
-    if (url.endsWith('/api/local/workspaces/workspace-created/sessions') && method === 'POST')
-      return json({ artifacts: [artifactRecord], events: [], files: [], lessons: [], review: null, session: { ...sessionRecord, workspaceId: 'workspace-created', id: 'session-created' }, turn: { ...turnRecord, id: 'turn-created', sessionId: 'session-created' } }, 201)
+      return json({ workspaces: currentWorkspaces })
+    if (url.endsWith('/api/local/workspaces/workspace-created/sessions') && method === 'POST') {
+      const createdSession = { ...sessionRecord, workspaceId: 'workspace-created', id: 'session-created', title: 'New candidate workspace' }
+      const createdTurn = { ...turnRecord, id: 'turn-created', sessionId: 'session-created' }
+      const createdArtifact = { ...artifactRecord, id: 'artifact-created', sessionId: 'session-created', turnId: 'turn-created', workspaceId: 'workspace-created' }
+      currentSessions = [createdSession, ...currentSessions]
+      currentTurns = [createdTurn, ...currentTurns]
+      currentArtifacts = [createdArtifact, ...currentArtifacts]
+      return json({ artifacts: [createdArtifact], events: [], files: [], lessons: [], review: null, session: createdSession, turn: createdTurn }, 201)
+    }
+    if (url.endsWith('/api/local/sessions/session-1/turns') && method === 'POST') {
+      const nextTurn = {
+        ...turnRecord,
+        id: 'turn-2',
+        input: 'Add interview risks.',
+        response: 'Updated Candidate Screen.',
+        seq: 2,
+      }
+      currentTurns = [...currentTurns, nextTurn]
+      currentEvents = [...currentEvents, { ...eventRecord, id: 2, seq: 1, turnId: 'turn-2' }]
+      return json({ artifacts: [], events: currentEvents, files: [], lessons: [], review: null, session: sessionRecord, turn: nextTurn }, 201)
+    }
     if (url.endsWith('/api/local/sessions'))
-      return json({ sessions: [sessionRecord] })
+      return json({ sessions: currentSessions })
     if (url.endsWith('/api/local/turns'))
-      return json({ turns: [turnRecord] })
+      return json({ turns: currentTurns })
     if (url.endsWith('/api/local/files'))
       return json({ files: [] })
     if (url.includes('/api/local/workspaces/') && url.includes('/files/raw/'))
       return new Response('# Candidate Screen\n\nEvidence summary.\n', { headers: { 'content-type': 'text/plain' } })
     if (url.endsWith('/api/local/artifacts'))
-      return json({ artifacts: [artifactRecord] })
+      return json({ artifacts: currentArtifacts })
+    if (url.endsWith('/api/local/reviews') && method === 'POST') {
+      const body = init?.body ? JSON.parse(String(init.body)) as Partial<(typeof currentReviews)[number]> : {}
+      const review = {
+        artifactId: body.artifactId ?? 'artifact-1',
+        createdAt: now,
+        findingsJson: body.findingsJson ?? [{ message: 'Human review requested from Worker Web.' }],
+        id: 'review-1',
+        risksJson: body.risksJson ?? [],
+        sessionId: body.sessionId ?? 'session-1',
+        turnId: body.turnId ?? 'turn-1',
+        verdict: body.verdict ?? 'needs_review',
+        workspaceId: body.workspaceId ?? 'workspace-1',
+      }
+      currentReviews = [review]
+      return json({ review }, 201)
+    }
     if (url.endsWith('/api/local/reviews'))
-      return json({ reviews: [] })
+      return json({ reviews: currentReviews })
+    if (url.endsWith('/api/local/lessons/lesson-1') && method === 'PATCH') {
+      const body = init?.body ? JSON.parse(String(init.body)) as { status: typeof lessonRecord.status } : { status: 'accepted' }
+      currentLessons = currentLessons.map(lesson => lesson.id === 'lesson-1' ? { ...lesson, status: body.status } : lesson)
+      return json({ lesson: currentLessons[0] })
+    }
     if (url.endsWith('/api/local/lessons'))
-      return json({ lessons: [] })
+      return json({ lessons: currentLessons })
     if (url.endsWith('/api/local/events'))
-      return json({ events: [] })
+      return json({ events: currentEvents })
     if (url.endsWith('/api/local/settings') && method === 'PATCH') {
       const patch = init?.body ? JSON.parse(String(init.body)) as Partial<typeof baseSettings> : {}
       currentSettings = {
@@ -246,6 +336,8 @@ describe('worker studio', () => {
     expect(screen.getAllByText('DevOps').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Candidate Screen').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Create workspace session').length).toBeGreaterThan(0)
+    expect(screen.queryByText('Examples')).toBeNull()
+    expect(screen.queryByText('Domain systems')).toBeNull()
     expect(screen.queryByText(/Import/i)).toBeNull()
     expect(screen.queryByText(/work order/i)).toBeNull()
     expect(screen.queryByText(/Open Design/i)).toBeNull()
@@ -270,6 +362,39 @@ describe('worker studio', () => {
         body: expect.stringContaining('"capabilityTemplateId":"candidate-screen"'),
         method: 'POST',
       }))
+    })
+  })
+
+  it('continues an existing session and wires review and memory actions', async () => {
+    render(<WorkerStudio />)
+
+    expect(await screen.findByText('Session')).toBeTruthy()
+    expect(screen.getByText('Turn history')).toBeTruthy()
+    expect(screen.getByText('Memory candidates')).toBeTruthy()
+
+    fireEvent.change(screen.getByLabelText('Follow-up turn'), { target: { value: 'Add interview risks.' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send turn' }))
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/local/sessions/session-1/turns', expect.objectContaining({
+        body: expect.stringContaining('Add interview risks.'),
+        method: 'POST',
+      }))
+      expect(screen.getByText('Add interview risks.')).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Request review' }))
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/local/reviews', expect.objectContaining({ method: 'POST' }))
+      expect(screen.getByText('Needs review')).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }))
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/local/lessons/lesson-1', expect.objectContaining({ method: 'PATCH' }))
+      expect(screen.getByText('Accepted')).toBeTruthy()
     })
   })
 

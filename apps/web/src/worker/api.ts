@@ -3,7 +3,9 @@ import type {
   LocalArtifact,
   LocalFile,
   LocalLesson,
+  LocalLessonStatus,
   LocalReview,
+  LocalReviewVerdict,
   LocalSession,
   LocalSessionEvent,
   LocalSettingsConfig,
@@ -106,6 +108,37 @@ export function createSessionTurn(workspaceId: string, input: {
   events: LocalSessionEvent[]
 }> {
   return localFetch(`/api/local/workspaces/${workspaceId}/sessions`, { method: 'POST', body: JSON.stringify(input) })
+}
+
+export function continueSessionTurn(sessionId: string, input: {
+  input: string
+  metadata?: Record<string, unknown>
+}): Promise<{
+  session: LocalSession
+  turn: LocalTurn
+  files: LocalFile[]
+  artifacts: LocalArtifact[]
+  review: LocalReview | null
+  lessons: LocalLesson[]
+  events: LocalSessionEvent[]
+}> {
+  return localFetch(`/api/local/sessions/${sessionId}/turns`, { method: 'POST', body: JSON.stringify(input) })
+}
+
+export function createReview(input: {
+  artifactId?: string | null
+  findingsJson?: Record<string, unknown>[]
+  risksJson?: Record<string, unknown>[]
+  sessionId?: string | null
+  turnId?: string | null
+  verdict?: LocalReviewVerdict
+  workspaceId: string
+}): Promise<{ review: LocalReview }> {
+  return localFetch('/api/local/reviews', { method: 'POST', body: JSON.stringify(input) })
+}
+
+export function updateLesson(lessonId: string, status: LocalLessonStatus): Promise<{ lesson: LocalLesson }> {
+  return localFetch(`/api/local/lessons/${lessonId}`, { method: 'PATCH', body: JSON.stringify({ status }) })
 }
 
 export function saveSettings(input: Partial<LocalSettingsConfig>): Promise<{ settings: LocalSettingsConfig }> {
