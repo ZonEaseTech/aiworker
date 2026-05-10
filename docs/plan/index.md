@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-10 (PLAN-207 completed)
+> Updated: 2026-05-10 (PLAN-211 completed)
 
 ## Usage
 
@@ -236,3 +236,7 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-205 Worker Web Open Design source parity**](PLAN-205.md) `2026-05-10`
 - [x] [**PLAN-206 Worker Web product-detail correction**](PLAN-206.md) `2026-05-10`
 - [x] [**PLAN-207 Vertical Soul product north star reset**](PLAN-207.md) `2026-05-10`
+- [x] [**PLAN-208 Vertical Soul Web IA**](PLAN-208.md) `2026-05-10`
+- [x] [**PLAN-209 Soul and Skill data model**](PLAN-209.md) `2026-05-10`
+- [x] [**PLAN-210 Settings full implementation**](PLAN-210.md) `2026-05-10`
+- [x] [**PLAN-211 End-to-end vertical Soul MVP validation**](PLAN-211.md) `2026-05-10`

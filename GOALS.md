@@ -57,7 +57,7 @@ AIWorker 应借鉴 Open Design 的产品语法，而不是盲目复制 UI。
 | Project | Domain case / team workspace |
 | Examples | Example artifacts / playbooks |
 | Connectors | ATS / docs / issue tracker / CI / cloud / CRM connectors |
-| Settings | Simple engine and connector configuration |
+| Settings | Execution mode, engine scan/test, connector, MCP, language, and appearance configuration |
 | Pet / companion | Optional ambient helper, never core workflow |
 
 判断一个界面或 API 是否正确，不看它是否像 Open Design 截图，而看它是否让一个 HR、
@@ -178,11 +178,13 @@ navigation 或 README onboarding。
 2. Soul catalog 与内置 HR/PM/QA/DevOps 优先级；
 3. capability template / domain system 文件模型；
 4. local daemon 的 Soul/template/case API；
-5. Web 首屏：Soul catalog + capability templates + simple settings；
-6. business artifact preview；
-7. review/admission -> reusable org memory；
-8. developer Soul 降级为 supporting role；
-9. cleanup、验证与发布证据。
+5. Web 首屏：Soul catalog + capability templates + case/run/artifact；
+6. Settings：Local CLI / BYOK、engine scan/test、connectors、MCP、language、
+   appearance、autosave；
+7. business artifact preview；
+8. review/admission -> reusable org memory；
+9. developer Soul 降级为 supporting role；
+10. cleanup、验证与发布证据。
 
 验收终点不是把旧概念换名，也不是把 Open Design 外壳搬过来，而是得到一条垂直团队
 能理解、能使用、能验证、能沉淀的 Soul 工作流。

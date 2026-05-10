@@ -236,10 +236,13 @@ export type { AdminServingSafetyInput, AdminServingSurface } from './lib/admin-e
 export { mintWorkerId, slugify } from './lib/ids'
 
 export {
+  localAppearanceSchema,
   localArtifactSchema,
   localArtifactStatusSchema,
-  localBriefSchema,
-  localBriefStatusSchema,
+  localCaseSchema,
+  localCaseStatusSchema,
+  localEngineStatusSchema,
+  localExecutionModeSchema,
   localFileKindSchema,
   localFileSchema,
   localFileSourceSchema,
@@ -253,14 +256,18 @@ export {
   localRunSchema,
   localRunStatusSchema,
   localSettingSchema,
+  localSettingsConfigSchema,
   localWorkspaceSchema,
 } from './local-workspace'
 
 export type {
+  LocalAppearance,
   LocalArtifact,
   LocalArtifactStatus,
-  LocalBrief,
-  LocalBriefStatus,
+  LocalCase,
+  LocalCaseStatus,
+  LocalEngineStatus,
+  LocalExecutionMode,
   LocalFile,
   LocalFileKind,
   LocalFileSource,
@@ -274,6 +281,7 @@ export type {
   LocalRunEventType,
   LocalRunStatus,
   LocalSetting,
+  LocalSettingsConfig,
   LocalWorkspace,
 } from './local-workspace'
 
@@ -386,6 +394,21 @@ export type {
   SoulSchemaPack,
 } from './soul'
 export type { ExecutionEvent, MemoryEntry, ServiceStatus, SkillMeta } from './types'
+export {
+  BUILTIN_CAPABILITY_TEMPLATES,
+  BUILTIN_VERTICAL_SOULS,
+  capabilityTemplateSchema,
+  findCapabilityTemplate,
+  findVerticalSoul,
+  listCapabilityTemplatesForSoul,
+  verticalSoulSchema,
+  verticalSoulStatusSchema,
+} from './vertical-soul'
+export type {
+  CapabilityTemplate,
+  VerticalSoul,
+  VerticalSoulStatus,
+} from './vertical-soul'
 export {
   BUILTIN_WORKER_PACK_REGISTRY,
   BUILTIN_WORKER_PACKS,

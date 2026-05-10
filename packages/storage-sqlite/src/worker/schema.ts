@@ -17,20 +17,24 @@ export const workspaces = sqliteTable(
   }),
 )
 
-export const briefs = sqliteTable(
-  'briefs',
+export const cases = sqliteTable(
+  'cases',
   {
     id: text('id').primaryKey(),
     workspaceId: text('workspace_id').notNull().references(() => workspaces.id, { onDelete: 'cascade' }),
     title: text('title').notNull(),
     body: text('body').notNull(),
+    selectedSoulId: text('selected_soul_id').notNull().default('hr'),
+    selectedSkillId: text('selected_skill_id').notNull().default('candidate-screen'),
     status: text('status', { enum: ['draft', 'queued', 'running', 'completed', 'failed', 'cancelled'] }).notNull().default('draft'),
+    metadataJson: text('metadata_json', { mode: 'json' }).$type<Record<string, unknown>>().notNull().$defaultFn(() => ({})),
     createdAt: text('created_at').notNull().$defaultFn(nowIso),
     updatedAt: text('updated_at').notNull().$defaultFn(nowIso),
   },
   table => ({
-    statusUpdatedAtIdx: index('briefs_status_updated_at_idx').on(table.status, table.updatedAt),
-    workspaceUpdatedAtIdx: index('briefs_workspace_updated_at_idx').on(table.workspaceId, table.updatedAt),
+    soulUpdatedAtIdx: index('cases_soul_updated_at_idx').on(table.selectedSoulId, table.updatedAt),
+    statusUpdatedAtIdx: index('cases_status_updated_at_idx').on(table.status, table.updatedAt),
+    workspaceUpdatedAtIdx: index('cases_workspace_updated_at_idx').on(table.workspaceId, table.updatedAt),
   }),
 )
 
@@ -39,7 +43,7 @@ export const runs = sqliteTable(
   {
     id: text('id').primaryKey(),
     workspaceId: text('workspace_id').notNull().references(() => workspaces.id, { onDelete: 'cascade' }),
-    briefId: text('brief_id').references(() => briefs.id, { onDelete: 'set null' }),
+    caseId: text('case_id').references(() => cases.id, { onDelete: 'set null' }),
     status: text('status', { enum: ['queued', 'running', 'succeeded', 'failed', 'cancelled'] }).notNull().default('queued'),
     executor: text('executor').notNull(),
     prompt: text('prompt').notNull(),
@@ -52,7 +56,7 @@ export const runs = sqliteTable(
     updatedAt: text('updated_at').notNull().$defaultFn(nowIso),
   },
   table => ({
-    briefUpdatedAtIdx: index('runs_brief_updated_at_idx').on(table.briefId, table.updatedAt),
+    caseUpdatedAtIdx: index('runs_case_updated_at_idx').on(table.caseId, table.updatedAt),
     statusUpdatedAtIdx: index('runs_status_updated_at_idx').on(table.status, table.updatedAt),
     workspaceUpdatedAtIdx: index('runs_workspace_updated_at_idx').on(table.workspaceId, table.updatedAt),
   }),

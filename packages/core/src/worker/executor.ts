@@ -39,13 +39,16 @@ export interface LocalExecutor {
 export function createNoopExecutor(): LocalExecutor {
   return {
     async run(input) {
+      const outputKind = typeof input.metadata?.outputKind === 'string' ? input.metadata.outputKind : 'business-artifact'
+      const skillName = typeof input.metadata?.skillName === 'string' ? input.metadata.skillName : 'Local Soul artifact'
       return {
         summary: `Recorded local run ${input.runId}.`,
         artifacts: [
           {
-            path: `runs/${input.runId}/summary.md`,
-            title: 'Run summary',
-            content: `# Run summary\n\n${input.prompt}\n`,
+            kind: outputKind,
+            path: `runs/${input.runId}/${outputKind}.md`,
+            title: skillName,
+            content: `# ${skillName}\n\n${input.prompt}\n`,
           },
         ],
         review: {

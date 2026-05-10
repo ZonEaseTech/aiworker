@@ -1,6 +1,6 @@
 import type {
   ArtifactRow,
-  BriefRow,
+  CaseRow,
   FileRow,
   LessonRow,
   ReviewRow,
@@ -13,14 +13,14 @@ import type { LocalExecutor, LocalExecutorResult } from './executor'
 import { randomUUID } from 'node:crypto'
 import {
   appendRunEvent,
-  createBrief,
+  createCase,
   createLesson,
   createReview,
   createRun,
-  getBrief,
+  getCase,
   getWorkspace,
   listArtifacts,
-  listBriefs,
+  listCases,
   listFiles,
   listLessons,
   listReviews,
@@ -28,7 +28,7 @@ import {
   listRuns,
   nextRunEventSeq,
   registerArtifact,
-  updateBrief,
+  updateCase,
   updateRun,
   upsertFile,
   upsertWorkspace,
@@ -48,13 +48,16 @@ export interface LocalWorkerRuntimeOptions {
   now?: () => string
 }
 
-export interface CreateLocalBriefInput {
+export interface CreateLocalCaseInput {
   title: string
   body: string
+  selectedSoulId: string
+  selectedSkillId: string
+  metadata?: Record<string, unknown>
 }
 
 export interface LocalRunStartInput {
-  briefId?: string
+  caseId?: string
   prompt?: string
   executor?: string
   metadata?: Record<string, unknown>
@@ -71,7 +74,7 @@ export interface LocalRunStartResult {
 
 export interface LocalWorkspaceSnapshot {
   workspace: WorkspaceRow
-  briefs: BriefRow[]
+  cases: CaseRow[]
   runs: RunRow[]
   files: FileRow[]
   artifacts: ArtifactRow[]
@@ -109,38 +112,49 @@ export class LocalWorkerRuntime {
     })
   }
 
-  createBrief(input: CreateLocalBriefInput): BriefRow {
+  createCase(input: CreateLocalCaseInput): CaseRow {
     const workspace = this.requireWorkspace()
-    return createBrief({
+    return createCase({
       id: randomUUID(),
       workspaceId: workspace.id,
       title: input.title,
       body: input.body,
+      selectedSoulId: input.selectedSoulId,
+      selectedSkillId: input.selectedSkillId,
       status: 'queued',
+      metadataJson: input.metadata ?? {},
       at: this.#now(),
     })
   }
 
   async startRun(input: LocalRunStartInput = {}): Promise<LocalRunStartResult> {
     const workspace = this.requireWorkspace()
-    const brief = input.briefId ? this.requireBrief(input.briefId) : null
-    const prompt = input.prompt ?? brief?.body
+    const caseRecord = input.caseId ? this.requireCase(input.caseId) : null
+    const prompt = input.prompt ?? caseRecord?.body
     if (!prompt)
-      throw new Error('Run requires a prompt or a brief id.')
+      throw new Error('Run requires a prompt or a case id.')
+
+    const metadata = {
+      ...(caseRecord?.metadataJson ?? {}),
+      ...(input.metadata ?? {}),
+      selectedSoulId: caseRecord?.selectedSoulId ?? input.metadata?.selectedSoulId,
+      selectedSkillId: caseRecord?.selectedSkillId ?? input.metadata?.selectedSkillId,
+      caseId: caseRecord?.id ?? input.caseId ?? null,
+    }
 
     const run = createRun({
       id: randomUUID(),
       workspaceId: workspace.id,
-      briefId: brief?.id ?? null,
+      caseId: caseRecord?.id ?? null,
       executor: input.executor ?? 'local',
       prompt,
       status: 'running',
-      metadataJson: input.metadata ?? {},
+      metadataJson: metadata,
       startedAt: this.#now(),
       at: this.#now(),
     })
-    if (brief)
-      updateBrief({ id: brief.id, status: 'running', at: this.#now() })
+    if (caseRecord)
+      updateCase({ id: caseRecord.id, status: 'running', at: this.#now() })
     this.appendEvent(run.id, 'status', { status: 'running' })
 
     try {
@@ -149,19 +163,19 @@ export class LocalWorkerRuntime {
         workspaceRoot: this.files.root,
         runId: run.id,
         prompt,
-        metadata: input.metadata,
+        metadata,
       })
-      const output = await this.captureResult(workspace.id, run.id, result)
+      const output = await this.captureResult(workspace.id, run.id, result, metadata)
       const finished = updateRun({
         id: run.id,
         status: 'succeeded',
         summary: result.summary,
-        metadataJson: result.metadata ?? run.metadataJson,
+        metadataJson: { ...metadata, ...(result.metadata ?? {}) },
         finishedAt: this.#now(),
         at: this.#now(),
       })
-      if (brief)
-        updateBrief({ id: brief.id, status: 'completed', at: this.#now() })
+      if (caseRecord)
+        updateCase({ id: caseRecord.id, status: 'completed', at: this.#now() })
       this.appendEvent(run.id, 'status', { status: 'succeeded' })
       this.bus.emit({ kind: 'run', workspaceId: workspace.id, runId: run.id, payload: { status: 'succeeded' }, at: this.#now() })
       return {
@@ -179,8 +193,8 @@ export class LocalWorkerRuntime {
         finishedAt: this.#now(),
         at: this.#now(),
       })
-      if (brief)
-        updateBrief({ id: brief.id, status: 'failed', at: this.#now() })
+      if (caseRecord)
+        updateCase({ id: caseRecord.id, status: 'failed', at: this.#now() })
       this.appendEvent(run.id, 'error', { message })
       this.bus.emit({ kind: 'run', workspaceId: workspace.id, runId: run.id, payload: { status: 'failed' }, at: this.#now() })
       return {
@@ -198,7 +212,7 @@ export class LocalWorkerRuntime {
     const workspace = this.requireWorkspace()
     return {
       workspace,
-      briefs: listBriefs(workspace.id),
+      cases: listCases(workspace.id),
       runs: listRuns(workspace.id),
       files: listFiles(workspace.id),
       artifacts: listArtifacts(workspace.id),
@@ -211,7 +225,7 @@ export class LocalWorkerRuntime {
     return undefined
   }
 
-  private async captureResult(workspaceId: string, runId: string, result: LocalExecutorResult): Promise<Omit<LocalRunStartResult, 'run' | 'events'>> {
+  private async captureResult(workspaceId: string, runId: string, result: LocalExecutorResult, runMetadata: Record<string, unknown>): Promise<Omit<LocalRunStartResult, 'run' | 'events'>> {
     const files: FileRow[] = []
     const artifacts: ArtifactRow[] = []
     for (const artifact of result.artifacts ?? []) {
@@ -235,7 +249,12 @@ export class LocalWorkerRuntime {
         path: artifact.path,
         kind: artifact.kind ?? 'file',
         title: artifact.title ?? artifact.path,
-        metadataJson: { fileId: file.id },
+        metadataJson: {
+          fileId: file.id,
+          outputKind: artifact.kind ?? runMetadata.outputKind,
+          selectedSkillId: runMetadata.selectedSkillId,
+          selectedSoulId: runMetadata.selectedSoulId,
+        },
         at: this.#now(),
       })
       artifacts.push(row)
@@ -293,11 +312,11 @@ export class LocalWorkerRuntime {
     return workspace
   }
 
-  private requireBrief(id: string): BriefRow {
-    const brief = getBrief(id)
-    if (!brief)
-      throw new Error(`Brief not found: ${id}`)
-    return brief
+  private requireCase(id: string): CaseRow {
+    const caseRecord = getCase(id)
+    if (!caseRecord)
+      throw new Error(`Case not found: ${id}`)
+    return caseRecord
   }
 }
 

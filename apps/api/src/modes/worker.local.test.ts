@@ -49,22 +49,28 @@ describe('local daemon API', () => {
   it('serves the workspace loop through /api/local routes', async () => {
     const target = await app()
 
-    const briefRes = await target.request('/api/local/briefs', {
+    const caseRes = await target.request('/api/local/cases', {
       method: 'POST',
-      body: JSON.stringify({ title: 'Screen candidate', body: 'Review packet' }),
+      body: JSON.stringify({
+        body: 'Review packet',
+        selectedSkillId: 'candidate-screen',
+        selectedSoulId: 'hr',
+        title: 'Screen candidate',
+      }),
       headers: { 'content-type': 'application/json' },
     })
-    expect(briefRes.status).toBe(201)
-    const briefBody = await briefRes.json() as { brief: { id: string } }
+    expect(caseRes.status).toBe(201)
+    const caseBody = await caseRes.json() as { case: { id: string } }
 
     const runRes = await target.request('/api/local/runs', {
       method: 'POST',
-      body: JSON.stringify({ briefId: briefBody.brief.id }),
+      body: JSON.stringify({ caseId: caseBody.case.id }),
       headers: { 'content-type': 'application/json' },
     })
     expect(runRes.status).toBe(201)
-    const runBody = await runRes.json() as { artifacts: unknown[], lessons: unknown[], run: { status: string } }
+    const runBody = await runRes.json() as { artifacts: unknown[], lessons: unknown[], run: { metadataJson: Record<string, unknown>, status: string } }
     expect(runBody.run.status).toBe('succeeded')
+    expect(runBody.run.metadataJson).toMatchObject({ selectedSkillId: 'candidate-screen', selectedSoulId: 'hr' })
     expect(runBody.artifacts).toHaveLength(1)
     expect(runBody.lessons).toHaveLength(1)
 
@@ -91,8 +97,35 @@ describe('local daemon API', () => {
     const paths = Object.keys(doc.paths)
 
     expect(paths).toContain('/api/local/info')
+    expect(paths).toContain('/api/local/souls')
+    expect(paths).toContain('/api/local/templates')
     expect(paths).toContain('/api/local/workspace')
     expect(paths).toContain('/api/local/runs')
+    expect(paths).toContain('/api/local/settings/engines/rescan')
     expect(paths.some(path => path.startsWith('/api/worker'))).toBe(false)
+  })
+
+  it('persists local settings and supports engine rescan/test actions', async () => {
+    const target = await app()
+
+    const settingsRes = await target.request('/api/local/settings')
+    expect(settingsRes.status).toBe(200)
+    const initial = await settingsRes.json() as { settings: { executionMode: string } }
+    expect(['local-cli', 'byok']).toContain(initial.settings.executionMode)
+
+    const patchRes = await target.request('/api/local/settings', {
+      method: 'PATCH',
+      body: JSON.stringify({ language: 'zh-CN' }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(patchRes.status).toBe(200)
+    expect((await patchRes.json() as { settings: { language: string } }).settings.language).toBe('zh-CN')
+
+    expect((await target.request('/api/local/settings/engines/rescan', { method: 'POST' })).status).toBe(200)
+    expect((await target.request('/api/local/settings/engines/test', {
+      method: 'POST',
+      body: JSON.stringify({ engineId: 'codex' }),
+      headers: { 'content-type': 'application/json' },
+    })).status).toBe(200)
   })
 })

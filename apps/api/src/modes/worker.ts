@@ -1,27 +1,37 @@
 import type { LocalExecutor, LocalWorkerRuntime } from '@zonease/aiworker-core'
-import type { BriefRow, LessonRow, ReviewRow, RunEventRow } from '@zonease/aiworker-storage-sqlite/worker'
-import type { Context } from 'hono'
+import type { LocalEngineStatus, LocalSettingsConfig } from '@zonease/aiworker-shared'
+import type { CaseRow, LessonRow, ReviewRow, RunEventRow } from '@zonease/aiworker-storage-sqlite/worker'
 
+import type { Context } from 'hono'
 import { Buffer } from 'node:buffer'
+import { spawnSync } from 'node:child_process'
 import { randomUUID, timingSafeEqual } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
-import path from 'node:path'
 
+import path from 'node:path'
 import { OpenAPIHono, z } from '@hono/zod-openapi'
 import { apiReference } from '@scalar/hono-api-reference'
 import { createLocalWorkerRuntime, workerEnv } from '@zonease/aiworker-core'
+import {
+  BUILTIN_CAPABILITY_TEMPLATES,
+  BUILTIN_VERTICAL_SOULS,
+  findCapabilityTemplate,
+  findVerticalSoul,
+
+  localSettingsConfigSchema,
+} from '@zonease/aiworker-shared'
 import {
   appendRunEvent,
   closeWorkerDb,
   createLesson,
   createReview,
   getArtifact,
-  getBrief,
+  getCase,
   getReview,
   getRun,
   initWorkerDb,
   listArtifacts,
-  listBriefs,
+  listCases,
   listFiles,
   listLessons,
   listReviews,
@@ -31,7 +41,7 @@ import {
   nextRunEventSeq,
   runWorkerMigrations,
   setSetting,
-  updateBrief,
+  updateCase,
   updateLesson,
   updateRun,
   upsertFile,
@@ -42,6 +52,16 @@ import { errorHandler } from '../shared/middleware/error-handler'
 import { requestLogger } from '../shared/middleware/logger'
 
 const DEFAULT_RUNTIME_VERSION = 'dev'
+const LOCAL_SETTINGS_KEY = 'local-settings'
+const ENGINE_COMMANDS = [
+  { id: 'claude-code', name: 'Claude Code', command: 'claude' },
+  { id: 'codex', name: 'Codex CLI', command: 'codex' },
+  { id: 'cursor', name: 'Cursor Agent', command: 'cursor-agent' },
+  { id: 'gemini', name: 'Gemini CLI', command: 'gemini' },
+  { id: 'opencode', name: 'OpenCode', command: 'opencode' },
+  { id: 'qwen', name: 'Qwen Code', command: 'qwen' },
+  { id: 'hermes', name: 'Hermes', command: 'hermes' },
+] as const
 
 export interface BootstrapWorkerAppOptions {
   dbPath?: string
@@ -140,31 +160,75 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     return c.json({ workspace })
   })
 
-  app.get('/api/local/briefs', c => c.json({ briefs: listBriefs(workspace.id) }))
-  app.post('/api/local/briefs', async (c) => {
-    const body = await readJson<{ title?: string, body?: string }>(c.req)
-    const brief = state.runtime.createBrief({
+  app.get('/api/local/souls', c => c.json({ souls: BUILTIN_VERTICAL_SOULS }))
+  app.get('/api/local/souls/:id', (c) => {
+    const soul = findVerticalSoul(c.req.param('id'))
+    if (!soul)
+      return notFound(c, 'soul')
+    return c.json({ soul })
+  })
+  app.get('/api/local/templates', (c) => {
+    const soulId = c.req.query('soulId')
+    const templates = soulId
+      ? BUILTIN_CAPABILITY_TEMPLATES.filter(template => template.soulId === soulId)
+      : BUILTIN_CAPABILITY_TEMPLATES
+    return c.json({ templates })
+  })
+  app.get('/api/local/templates/:id', (c) => {
+    const template = findCapabilityTemplate(c.req.param('id'))
+    if (!template)
+      return notFound(c, 'template')
+    return c.json({ template })
+  })
+
+  app.get('/api/local/cases', c => c.json({ cases: listCases(workspace.id) }))
+  app.post('/api/local/cases', async (c) => {
+    const body = await readJson<{
+      body?: string
+      metadata?: Record<string, unknown>
+      selectedSkillId?: string
+      selectedSoulId?: string
+      title?: string
+    }>(c.req)
+    const selectedSoulId = requireString(body.selectedSoulId, 'selectedSoulId')
+    const selectedSkillId = requireString(body.selectedSkillId, 'selectedSkillId')
+    const soul = findVerticalSoul(selectedSoulId)
+    const template = findCapabilityTemplate(selectedSkillId)
+    if (!soul || soul.status !== 'available')
+      throw new Error(`Unknown or unavailable Soul: ${selectedSoulId}`)
+    if (!template || template.soulId !== soul.id)
+      throw new Error(`Template ${selectedSkillId} does not belong to Soul ${selectedSoulId}.`)
+    const caseRecord = state.runtime.createCase({
       title: requireString(body.title, 'title'),
       body: requireString(body.body, 'body'),
+      selectedSoulId,
+      selectedSkillId,
+      metadata: {
+        ...(body.metadata ?? {}),
+        outputKind: template.outputKind,
+        reviewRubric: template.reviewRubric,
+        soulName: soul.name,
+        skillName: template.name,
+      },
     })
-    return c.json({ brief }, 201)
+    return c.json({ case: caseRecord }, 201)
   })
-  app.get('/api/local/briefs/:id', (c) => {
-    const brief = getBrief(c.req.param('id'))
-    if (!brief)
-      return notFound(c, 'brief')
-    return c.json({ brief })
+  app.get('/api/local/cases/:id', (c) => {
+    const caseRecord = getCase(c.req.param('id'))
+    if (!caseRecord)
+      return notFound(c, 'case')
+    return c.json({ case: caseRecord })
   })
-  app.patch('/api/local/briefs/:id', async (c) => {
-    const body = await readJson<Partial<Pick<BriefRow, 'body' | 'status' | 'title'>>>(c.req)
-    return c.json({ brief: updateBrief({ id: c.req.param('id'), ...body }) })
+  app.patch('/api/local/cases/:id', async (c) => {
+    const body = await readJson<Partial<Pick<CaseRow, 'body' | 'metadataJson' | 'selectedSkillId' | 'selectedSoulId' | 'status' | 'title'>>>(c.req)
+    return c.json({ case: updateCase({ id: c.req.param('id'), ...body }) })
   })
 
   app.get('/api/local/runs', c => c.json({ runs: listRuns(workspace.id) }))
   app.post('/api/local/runs', async (c) => {
-    const body = await readJson<{ briefId?: string, prompt?: string, executor?: string, metadata?: Record<string, unknown> }>(c.req)
+    const body = await readJson<{ caseId?: string, prompt?: string, executor?: string, metadata?: Record<string, unknown> }>(c.req)
     const result = await state.runtime.startRun({
-      briefId: body.briefId,
+      caseId: body.caseId,
       prompt: body.prompt,
       executor: body.executor,
       metadata: body.metadata,
@@ -270,11 +334,40 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     return c.json({ lesson: updateLesson(c.req.param('id'), body.status) })
   })
 
-  app.get('/api/local/settings', c => c.json({ settings: listSettings() }))
-  app.patch('/api/local/settings', async (c) => {
-    const body = await readJson<Record<string, Record<string, unknown>>>(c.req)
-    const settings = Object.entries(body).map(([key, value]) => setSetting(key, value))
+  app.get('/api/local/settings', (c) => {
+    const settings = loadLocalSettings()
     return c.json({ settings })
+  })
+  app.patch('/api/local/settings', async (c) => {
+    const patch = await readJson<Partial<LocalSettingsConfig>>(c.req)
+    const current = loadLocalSettings()
+    const settings = saveLocalSettings({
+      ...current,
+      ...patch,
+      byok: { ...current.byok, ...(patch.byok ?? {}) },
+      updatedAt: new Date().toISOString(),
+    })
+    return c.json({ settings })
+  })
+  app.post('/api/local/settings/engines/rescan', (c) => {
+    const current = loadLocalSettings()
+    const settings = saveLocalSettings({
+      ...current,
+      engines: scanLocalEngines(),
+      updatedAt: new Date().toISOString(),
+    })
+    return c.json({ engines: settings.engines, settings })
+  })
+  app.post('/api/local/settings/engines/test', async (c) => {
+    const body = await readJson<{ engineId?: string }>(c.req)
+    const settings = loadLocalSettings()
+    const engineId = body.engineId ?? settings.engineId
+    const engine = settings.engines.find(engine => engine.id === engineId)
+    if (!engine)
+      return c.json({ result: { engineId, message: 'Engine is not known in local settings.', status: 'fail' } }, 404)
+    if (!engine.installed)
+      return c.json({ result: { engineId, message: `${engine.name} is not installed on PATH.`, status: 'fail' } })
+    return c.json({ result: { engineId, message: `${engine.name} responded as ${engine.version ?? engine.path}.`, status: 'pass' } })
   })
 
   app.get('/api/local/events', (c) => {
@@ -288,7 +381,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     info: {
       title: 'AIWorker Local Daemon API',
       version: runtimeVersion,
-      description: 'Local workspace API for briefs, runs, files, artifacts, reviews, and lessons.',
+      description: 'Local vertical Soul workspace API for Souls, templates, cases, runs, artifacts, reviews, memory candidates, and settings.',
     },
   })
   app.get('/docs', apiReference({ spec: { url: '/openapi.json' } }))
@@ -331,6 +424,87 @@ function timingSafeEqualText(actual: string, expected: string): boolean {
   return a.length === b.length && timingSafeEqual(a, b)
 }
 
+function loadLocalSettings(): LocalSettingsConfig {
+  const row = listSettings().find(setting => setting.key === LOCAL_SETTINGS_KEY)
+  const parsed = row ? localSettingsConfigSchema.safeParse(row.valueJson) : null
+  if (parsed?.success)
+    return parsed.data
+  return saveLocalSettings(defaultLocalSettings())
+}
+
+function saveLocalSettings(settings: LocalSettingsConfig): LocalSettingsConfig {
+  const parsed = localSettingsConfigSchema.parse(settings)
+  setSetting(LOCAL_SETTINGS_KEY, parsed)
+  return parsed
+}
+
+function defaultLocalSettings(): LocalSettingsConfig {
+  const engines = scanLocalEngines()
+  const firstInstalled = engines.find(engine => engine.installed)
+  return {
+    appearance: 'system',
+    byok: {
+      apiKeyRef: '',
+      baseUrl: 'https://api.openai.com/v1',
+      model: 'gpt-4o',
+      provider: 'openai-compatible',
+    },
+    connectors: [
+      { enabled: false, id: 'ats', name: 'ATS / HRIS', status: 'not_configured' },
+      { enabled: false, id: 'docs', name: 'Docs workspace', status: 'not_configured' },
+      { enabled: false, id: 'issue-tracker', name: 'Issue tracker', status: 'not_configured' },
+      { enabled: false, id: 'ci', name: 'CI / release evidence', status: 'not_configured' },
+      { enabled: false, id: 'cloud', name: 'Cloud account', status: 'not_configured' },
+      { enabled: false, id: 'crm', name: 'CRM', status: 'not_configured' },
+    ],
+    engineId: firstInstalled?.id ?? 'codex',
+    engines,
+    executionMode: firstInstalled ? 'local-cli' : 'byok',
+    externalMcpServers: [
+      { command: '', enabled: false, id: 'team-context', name: 'Team context MCP' },
+      { command: '', enabled: false, id: 'evidence-search', name: 'Evidence search MCP' },
+    ],
+    language: 'en',
+    localMcpServer: {
+      enabled: true,
+      url: 'http://127.0.0.1:4319/mcp',
+    },
+    updatedAt: new Date().toISOString(),
+  }
+}
+
+function scanLocalEngines(): LocalEngineStatus[] {
+  return ENGINE_COMMANDS.map((engine) => {
+    const found = commandOutput('bash', ['-lc', `command -v ${engine.command}`]).trim()
+    if (!found) {
+      return {
+        command: engine.command,
+        id: engine.id,
+        installed: false,
+        name: engine.name,
+        path: null,
+        version: null,
+      }
+    }
+    const version = commandOutput(engine.command, ['--version']).split('\n')[0]?.trim() || 'installed'
+    return {
+      command: engine.command,
+      id: engine.id,
+      installed: true,
+      name: engine.name,
+      path: found,
+      version,
+    }
+  })
+}
+
+function commandOutput(command: string, args: string[]): string {
+  const result = spawnSync(command, args, { encoding: 'utf8', timeout: 2500 })
+  if (result.status !== 0)
+    return ''
+  return result.stdout.toString()
+}
+
 function registerLocalOpenApiPaths(app: OpenAPIHono): void {
   const responseSchema = z.object({}).passthrough().openapi('LocalResponse')
   const okJson = {
@@ -356,10 +530,14 @@ function registerLocalOpenApiPaths(app: OpenAPIHono): void {
     { method: 'get', path: '/api/local/info', summary: 'Local daemon info', tags: ['info'] },
     { method: 'get', path: '/api/local/workspace', summary: 'Show local workspace', tags: ['workspace'] },
     { method: 'patch', path: '/api/local/workspace', summary: 'Update local workspace metadata', tags: ['workspace'] },
-    { method: 'get', path: '/api/local/briefs', summary: 'List briefs', tags: ['briefs'] },
-    { method: 'post', path: '/api/local/briefs', summary: 'Create brief', tags: ['briefs'], created: true },
-    { method: 'get', path: '/api/local/briefs/{id}', summary: 'Show brief', tags: ['briefs'] },
-    { method: 'patch', path: '/api/local/briefs/{id}', summary: 'Update brief', tags: ['briefs'] },
+    { method: 'get', path: '/api/local/souls', summary: 'List vertical Souls', tags: ['souls'] },
+    { method: 'get', path: '/api/local/souls/{id}', summary: 'Show vertical Soul', tags: ['souls'] },
+    { method: 'get', path: '/api/local/templates', summary: 'List capability templates', tags: ['templates'] },
+    { method: 'get', path: '/api/local/templates/{id}', summary: 'Show capability template', tags: ['templates'] },
+    { method: 'get', path: '/api/local/cases', summary: 'List cases', tags: ['cases'] },
+    { method: 'post', path: '/api/local/cases', summary: 'Create case', tags: ['cases'], created: true },
+    { method: 'get', path: '/api/local/cases/{id}', summary: 'Show case', tags: ['cases'] },
+    { method: 'patch', path: '/api/local/cases/{id}', summary: 'Update case', tags: ['cases'] },
     { method: 'get', path: '/api/local/runs', summary: 'List runs', tags: ['runs'] },
     { method: 'post', path: '/api/local/runs', summary: 'Start run', tags: ['runs'], created: true },
     { method: 'get', path: '/api/local/runs/{id}', summary: 'Show run', tags: ['runs'] },
@@ -378,8 +556,10 @@ function registerLocalOpenApiPaths(app: OpenAPIHono): void {
     { method: 'get', path: '/api/local/lessons', summary: 'List lessons', tags: ['lessons'] },
     { method: 'post', path: '/api/local/lessons', summary: 'Create lesson', tags: ['lessons'], created: true },
     { method: 'patch', path: '/api/local/lessons/{id}', summary: 'Update lesson', tags: ['lessons'] },
-    { method: 'get', path: '/api/local/settings', summary: 'List settings', tags: ['settings'] },
+    { method: 'get', path: '/api/local/settings', summary: 'Show local settings', tags: ['settings'] },
     { method: 'patch', path: '/api/local/settings', summary: 'Update settings', tags: ['settings'] },
+    { method: 'post', path: '/api/local/settings/engines/rescan', summary: 'Rescan local engines', tags: ['settings'], created: true },
+    { method: 'post', path: '/api/local/settings/engines/test', summary: 'Test local engine', tags: ['settings'], created: true },
     { method: 'get', path: '/api/local/events', summary: 'List local run events', tags: ['events'] },
   ]
 

@@ -49,8 +49,8 @@ Open Design 的参考价值在于它的项目意图：用清晰的 skill/system/
 | Review | 人对 artifact 的质量、风险和后续动作判断 |
 | Durable org memory | 带 provenance 的可复用经验、rubric refinement、example 或 source-tagged fact |
 
-`work order` 可以作为内部兼容或低层 DTO 名称短期存在，但不应再作为产品主语。Web、
-README、GOALS 和 onboarding 应使用 Soul / template / case / artifact 语言。
+Web、README、GOALS 和 onboarding 应使用 Soul / template / case / artifact 语言；
+`work order` 不再是默认产品入口。
 
 ## Runtime Components
 
@@ -62,22 +62,22 @@ README、GOALS 和 onboarding 应使用 Soul / template / case / artifact 语言
 
 ```text
 aiworker init
-aiworker soul list|show|select
-aiworker template list|show|run
+aiworker soul list
+aiworker template list
 aiworker case create|list|show
 aiworker run start|list|show|cancel
 aiworker files list|show|write|delete|search
 aiworker artifacts list|show|open
 aiworker review list|show|create
-aiworker memory list|propose|accept|reject
-aiworker settings list|set
+aiworker lessons list|propose|accept|reject
+aiworker settings list
 aiworker executor select|doctor
 aiworker daemon start|foreground|status|stop|logs|check
 aiworker open
 ```
 
-现有 `brief` / `lessons` 等命令可以在后续破坏式收敛中替换为 `case` / `memory`
-语义；1.0 前不需要为旧命令形态保留长期 alias。
+当前 CLI 已使用 `case` 作为业务入口；`lessons` 是 memory candidate 的最小命令面，
+后续可继续收敛命名，但不保留 `brief` 旧入口。
 
 ### Local Daemon
 
@@ -89,7 +89,6 @@ aiworker open
 GET    /api/local/info
 GET    /api/local/souls
 GET    /api/local/souls/:id
-GET    /api/local/domain-systems
 GET    /api/local/templates
 GET    /api/local/templates/:id
 GET    /api/local/cases
@@ -111,18 +110,20 @@ GET    /api/local/artifacts/:id
 GET    /api/local/reviews
 POST   /api/local/reviews
 GET    /api/local/reviews/:id
-GET    /api/local/memory
-POST   /api/local/memory
-PATCH  /api/local/memory/:id
+GET    /api/local/lessons
+POST   /api/local/lessons
+PATCH  /api/local/lessons/:id
 GET    /api/local/settings
 PATCH  /api/local/settings
+POST   /api/local/settings/engines/rescan
+POST   /api/local/settings/engines/test
 GET    /api/local/events
 ```
 
 daemon 负责：
 
 - 解析 local workspace 与 `worker.db`；
-- 加载 Soul packs、domain systems、capability templates 和 examples；
+- 加载内置 vertical Souls、capability templates 和后续 Soul pack/domain system；
 - 提供 CLI/Web 共用 API；
 - 用 case/template 创建 run；
 - 在 workspace cwd 下调用外部 engine adapter；
@@ -161,18 +162,18 @@ assistant-output 文件落盘、artifact index、review、memory proposal。旧�
 
 ```text
 workspaces
-souls
-domain_systems
-capability_templates
 cases
 runs
 run_events
 files
 artifacts
 reviews
-memory_proposals
+lessons
 settings
 ```
+
+当前 HR/PM/QA/DevOps Soul 与 capability templates 由 `packages/shared` 内置目录提供，
+不是 SQLite 表；case/run/artifact/review/settings 是本地 DB 的落地面。
 
 业务内容不被塞进数据库。HR 简历、PM 文档、QA 缺陷证据、DevOps runbook、artifact
 文件应留在 workspace 或连接器系统中；SQLite 记录指针、状态、索引、provenance、
@@ -187,7 +188,8 @@ review verdict 和 memory admission 状态。
 - 左侧：Soul catalog、domain system、capability templates；
 - 中央：case list / selected case / active run / artifact preview；
 - 右侧：review、memory candidate、connector evidence、artifact metadata；
-- settings：极简 engine、connector、language、appearance 配置。
+- settings：Local CLI / BYOK、engine scan/test、connector、MCP、language、
+  appearance、autosave 配置。
 
 Worker Web 不再是 admin dashboard，也不是 Open Design 的桌面复制。它的第一任务是回答：
 这个 team/org 要用哪个 Soul，基于哪个模板和上下文，产出什么业务 artifact，是否值得

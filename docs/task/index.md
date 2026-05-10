@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-10 (DOC-008 completed)
+> Updated: 2026-05-10 (QA-026 completed)
 
 ## Usage
 
@@ -313,3 +313,7 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REFACTOR-039 Worker Web Open Design source parity**](REFACTOR-039.md) `P0`
 - [x] [**REFACTOR-040 Worker Web product-detail correction**](REFACTOR-040.md) `P0`
 - [x] [**DOC-008 Vertical Soul product north star reset**](DOC-008.md) `P0`
+- [x] [**REFACTOR-041 Vertical Soul Web IA**](REFACTOR-041.md) `P0`
+- [x] [**REFACTOR-042 Soul and Skill data model**](REFACTOR-042.md) `P0`
+- [x] [**REFACTOR-043 Settings full implementation**](REFACTOR-043.md) `P0`
+- [x] [**QA-026 End-to-end vertical Soul MVP validation**](QA-026.md) `P0`

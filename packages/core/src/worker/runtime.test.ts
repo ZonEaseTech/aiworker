@@ -30,7 +30,7 @@ describe('LocalWorkerRuntime', () => {
     return `2026-05-09T00:00:${String(tick).padStart(2, '0')}.000Z`
   }
 
-  it('runs the workspace loop from brief to artifacts, review, and lessons', async () => {
+  it('runs the workspace loop from case to artifacts, review, and lessons', async () => {
     const runtime = new LocalWorkerRuntime({
       workerId: 'worker-local',
       workspace: {
@@ -65,9 +65,14 @@ describe('LocalWorkerRuntime', () => {
       },
     })
     await runtime.init()
-    const brief = runtime.createBrief({ title: 'Screen candidate', body: 'Review the packet.' })
+    const caseRecord = runtime.createCase({
+      body: 'Review the packet.',
+      selectedSkillId: 'candidate-screen',
+      selectedSoulId: 'hr',
+      title: 'Screen candidate',
+    })
 
-    const result = await runtime.startRun({ briefId: brief.id, executor: 'codex' })
+    const result = await runtime.startRun({ caseId: caseRecord.id, executor: 'codex' })
 
     expect(result.run.status).toBe('succeeded')
     expect(result.files).toHaveLength(1)
@@ -78,7 +83,9 @@ describe('LocalWorkerRuntime', () => {
     await expect(runtime.files.read('reports/candidate.md')).resolves.toContain('Evidence attached')
 
     const snapshot = runtime.snapshot()
-    expect(snapshot.briefs[0]?.status).toBe('completed')
+    expect(snapshot.cases[0]?.status).toBe('completed')
+    expect(snapshot.cases[0]?.selectedSoulId).toBe('hr')
+    expect(snapshot.runs[0]?.metadataJson).toMatchObject({ selectedSkillId: 'candidate-screen', selectedSoulId: 'hr' })
     expect(snapshot.runs).toHaveLength(1)
     expect(snapshot.artifacts).toHaveLength(1)
     expect(snapshot.reviews).toHaveLength(1)
@@ -102,7 +109,7 @@ describe('LocalWorkerRuntime', () => {
     })
     await runtime.init()
 
-    const result = await runtime.startRun({ prompt: 'Run direct brief.' })
+    const result = await runtime.startRun({ prompt: 'Run direct case.' })
 
     expect(result.run.status).toBe('failed')
     expect(result.run.error).toBe('executor failed')

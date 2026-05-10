@@ -24,7 +24,7 @@ export {
   LocalWorkspaceFiles,
 } from './worker/files'
 export {
-  type CreateLocalBriefInput,
+  type CreateLocalCaseInput,
   createLocalWorkerRuntime,
   type LocalRunStartInput,
   type LocalRunStartResult,

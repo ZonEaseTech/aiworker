@@ -8,18 +8,19 @@ import path from 'node:path'
 
 import process from 'node:process'
 import { createLocalWorkerRuntime, getWorkerEnv } from '@zonease/aiworker-core'
+import { BUILTIN_CAPABILITY_TEMPLATES, BUILTIN_VERTICAL_SOULS } from '@zonease/aiworker-shared'
 import {
   appendRunEvent,
   closeWorkerDb,
   createLesson,
   createReview,
   getArtifact,
-  getBrief,
+  getCase,
   getReview,
   getRun,
   initWorkerDb,
   listArtifacts,
-  listBriefs,
+  listCases,
   listFiles,
   listLessons,
   listReviews,
@@ -206,19 +207,26 @@ async function showLogs(opts: { tail?: number } = {}): Promise<void> {
   process.stdout.write(`${lines.slice(-(opts.tail ?? 80)).join('\n')}\n`)
 }
 
-async function createBrief(opts: { body?: string, title?: string }): Promise<void> {
+async function createCase(opts: { body?: string, skill?: string, soul?: string, title?: string }): Promise<void> {
   const runtime = await ensureRuntime()
-  printJson({ brief: runtime.createBrief({ title: requireText(opts.title, 'title'), body: requireText(opts.body, 'body') }) })
+  printJson({
+    case: runtime.createCase({
+      title: requireText(opts.title, 'title'),
+      body: requireText(opts.body, 'body'),
+      selectedSoulId: opts.soul ?? 'hr',
+      selectedSkillId: opts.skill ?? 'candidate-screen',
+    }),
+  })
 }
 
-async function showBrief(id: string): Promise<void> {
+async function showCase(id: string): Promise<void> {
   await ensureRuntime()
-  printJson({ brief: getBrief(id) })
+  printJson({ case: getCase(id) })
 }
 
-async function startRun(opts: { brief?: string, prompt?: string }): Promise<void> {
+async function startRun(opts: { case?: string, prompt?: string }): Promise<void> {
   const runtime = await ensureRuntime()
-  printJson(await runtime.startRun({ briefId: opts.brief, prompt: opts.prompt }))
+  printJson(await runtime.startRun({ caseId: opts.case, prompt: opts.prompt }))
 }
 
 async function showRun(id: string): Promise<void> {
@@ -321,14 +329,24 @@ function registerCommands(): void {
   cli.command('daemon logs', 'show local daemon logs').option('--tail <n>', 'line count', { type: [Number] }).action((opts: { tail?: number[] }) => showLogs({ tail: optionalNumber(opts.tail) }))
   cli.command('daemon check', 'check local daemon health').option('--host <host>', 'host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => daemonCheck({ host: opts.host, port: optionalNumber(opts.port) }))
 
-  cli.command('brief create', 'create a workspace brief').option('--title <text>', 'brief title').option('--body <text>', 'brief body').action(createBrief)
-  cli.command('brief list', 'list workspace briefs').action(async () => {
-    const runtime = await ensureRuntime()
-    printJson({ briefs: listBriefs(runtime.snapshot().workspace.id) })
+  cli.command('soul list', 'list built-in vertical Souls').action(() => printJson({ souls: BUILTIN_VERTICAL_SOULS }))
+  cli.command('template list', 'list capability templates').option('--soul <id>', 'Soul id').action((opts: { soul?: string }) => {
+    const templates = opts.soul ? BUILTIN_CAPABILITY_TEMPLATES.filter(template => template.soulId === opts.soul) : BUILTIN_CAPABILITY_TEMPLATES
+    printJson({ templates })
   })
-  cli.command('brief show <id>', 'show one brief').action(showBrief)
+  cli.command('case create', 'create a workspace case')
+    .option('--title <text>', 'case title')
+    .option('--body <text>', 'case body')
+    .option('--soul <id>', 'Soul id')
+    .option('--skill <id>', 'capability template id')
+    .action(createCase)
+  cli.command('case list', 'list workspace cases').action(async () => {
+    const runtime = await ensureRuntime()
+    printJson({ cases: listCases(runtime.snapshot().workspace.id) })
+  })
+  cli.command('case show <id>', 'show one case').action(showCase)
 
-  cli.command('run start', 'start a local run').option('--brief <id>', 'brief id').option('--prompt <text>', 'direct prompt').action(startRun)
+  cli.command('run start', 'start a local run').option('--case <id>', 'case id').option('--prompt <text>', 'direct prompt').action(startRun)
   cli.command('run list', 'list local runs').action(async () => {
     const runtime = await ensureRuntime()
     printJson({ runs: listRuns(runtime.snapshot().workspace.id) })
@@ -405,7 +423,9 @@ function commandIndex(): string {
     'aiworker command index',
     'init',
     'daemon start|foreground|status|stop|logs|check',
-    'brief create|list|show',
+    'soul list',
+    'template list',
+    'case create|list|show',
     'run start|list|show|cancel',
     'files list|show|write|delete|search',
     'artifacts list|show|open',

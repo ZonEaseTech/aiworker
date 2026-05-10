@@ -42,20 +42,20 @@ describe('aiworker local CLI', () => {
   }
 
   it('preprocesses multi-word local commands', () => {
-    expect(preprocessArgv(argv('brief', 'create', '--title', 'T')).slice(2, 3)).toEqual(['brief create'])
+    expect(preprocessArgv(argv('case', 'create', '--title', 'T')).slice(2, 3)).toEqual(['case create'])
     expect(preprocessArgv(argv('run', 'start', '--prompt', 'P')).slice(2, 3)).toEqual(['run start'])
   })
 
-  it('runs init -> brief -> run -> artifact -> lesson locally', async () => {
+  it('runs init -> case -> run -> artifact -> lesson locally', async () => {
     expect(await runCli(argv('init', '--name', 'Hiring'))).toBe(0)
     expect(output).toContain('"workspace"')
     output = ''
 
-    expect(await runCli(argv('brief', 'create', '--title', 'Screen', '--body', 'Review candidate'))).toBe(0)
-    const brief = JSON.parse(output) as { brief: { id: string } }
+    expect(await runCli(argv('case', 'create', '--title', 'Screen', '--body', 'Review candidate'))).toBe(0)
+    const caseBody = JSON.parse(output) as { case: { id: string } }
     output = ''
 
-    expect(await runCli(argv('run', 'start', '--brief', brief.brief.id))).toBe(0)
+    expect(await runCli(argv('run', 'start', '--case', caseBody.case.id))).toBe(0)
     const run = JSON.parse(output) as { artifacts: Array<{ id: string }>, lessons: unknown[], run: { status: string } }
     expect(run.run.status).toBe('succeeded')
     expect(run.artifacts).toHaveLength(1)
@@ -71,7 +71,7 @@ describe('aiworker local CLI', () => {
 
   it('prints the greenfield command index', async () => {
     expect(await runCli(argv('commands'))).toBe(0)
-    expect(output).toContain('brief create|list|show')
+    expect(output).toContain('case create|list|show')
     expect(output).toContain('files list|show|write|delete|search')
     expect(output).not.toContain('schedule')
   })

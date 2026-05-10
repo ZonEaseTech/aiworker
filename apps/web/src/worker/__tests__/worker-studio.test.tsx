@@ -3,59 +3,95 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { WorkerStudio } from '../worker-studio'
 
+const now = '2026-05-10T00:00:00.000Z'
 const workspace = {
+  createdAt: now,
   id: 'local',
   name: 'Hiring Workspace',
   rootPath: '/tmp/hiring',
-  createdAt: '2026-05-09T00:00:00.000Z',
-  updatedAt: '2026-05-09T00:00:00.000Z',
+  updatedAt: now,
 }
 
-const brief = {
-  id: 'brief-1',
-  workspaceId: 'local',
-  title: 'Screen candidate',
-  body: 'Review packet',
-  status: 'completed',
-  createdAt: workspace.createdAt,
-  updatedAt: workspace.updatedAt,
+const souls = [
+  { defaultTemplates: ['candidate-screen'], description: 'Recruiting workspace', domain: 'hr-recruiting', id: 'hr', name: 'HR', status: 'available' },
+  { defaultTemplates: ['prd-draft'], description: 'Product workspace', domain: 'product-management', id: 'pm', name: 'PM', status: 'available' },
+  { defaultTemplates: ['regression-matrix'], description: 'QA workspace', domain: 'quality-assurance', id: 'qa', name: 'QA', status: 'available' },
+  { defaultTemplates: ['deploy-checklist'], description: 'Operations workspace', domain: 'devops-sre', id: 'devops', name: 'DevOps', status: 'available' },
+  { defaultTemplates: [], description: 'Later', domain: 'finance', id: 'finance', name: 'Finance', status: 'coming_soon' },
+]
+
+const templates = [
+  {
+    description: 'Screen a candidate against a role.',
+    id: 'candidate-screen',
+    inputHints: ['Role', 'Candidate packet'],
+    name: 'Candidate Screen',
+    outputKind: 'candidate-screen',
+    prompt: 'Screen candidate',
+    reviewRubric: ['Evidence is grounded.'],
+    soulId: 'hr',
+  },
+  {
+    description: 'Draft a PRD.',
+    id: 'prd-draft',
+    inputHints: ['Goal', 'User evidence'],
+    name: 'PRD Draft',
+    outputKind: 'prd-draft',
+    prompt: 'Draft PRD',
+    reviewRubric: ['Scope is explicit.'],
+    soulId: 'pm',
+  },
+]
+
+const settings = {
+  appearance: 'system',
+  byok: { apiKeyRef: '', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o', provider: 'openai-compatible' },
+  connectors: [{ enabled: false, id: 'ats', name: 'ATS / HRIS', status: 'not_configured' }],
+  engineId: 'codex',
+  engines: [{ command: 'codex', id: 'codex', installed: true, name: 'Codex CLI', path: '/usr/local/bin/codex', version: 'codex 1.0.0' }],
+  executionMode: 'local-cli',
+  externalMcpServers: [{ command: '', enabled: false, id: 'team-context', name: 'Team context MCP' }],
+  language: 'en',
+  localMcpServer: { enabled: true, url: 'http://127.0.0.1:4319/mcp' },
+  updatedAt: now,
 }
 
-const run = {
-  id: 'run-1',
-  workspaceId: 'local',
-  briefId: 'brief-1',
-  status: 'succeeded',
-  executor: 'local',
-  prompt: 'Review packet',
-  summary: 'Candidate review ready',
-  error: null,
+const caseRecord = {
+  body: 'Candidate context',
+  createdAt: now,
+  id: 'case-1',
   metadataJson: {},
-  startedAt: workspace.createdAt,
-  finishedAt: workspace.updatedAt,
-  createdAt: workspace.createdAt,
-  updatedAt: workspace.updatedAt,
+  selectedSkillId: 'candidate-screen',
+  selectedSoulId: 'hr',
+  status: 'completed',
+  title: 'Screen candidate',
+  updatedAt: now,
+  workspaceId: 'local',
 }
 
 beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
     const method = init?.method ?? 'GET'
-    const json = (body: unknown) => new Response(JSON.stringify(body), {
-      status: 200,
+    const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
       headers: { 'content-type': 'application/json' },
+      status,
     })
 
     if (url.endsWith('/api/local/info'))
-      return json({ workerId: 'local-worker', runtimeVersion: 'test', startedAt: workspace.createdAt, workspace })
-    if (url.endsWith('/api/local/briefs') && method === 'POST')
-      return json({ brief: { ...brief, id: 'brief-created', title: 'New work order', body: 'Created work order' } })
-    if (url.endsWith('/api/local/briefs'))
-      return json({ briefs: [brief] })
+      return json({ runtimeVersion: 'test', startedAt: now, workerId: 'local-worker', workspace })
+    if (url.endsWith('/api/local/souls'))
+      return json({ souls })
+    if (url.endsWith('/api/local/templates'))
+      return json({ templates })
+    if (url.endsWith('/api/local/cases') && method === 'POST')
+      return json({ case: { ...caseRecord, id: 'case-created', title: 'New candidate case' } }, 201)
+    if (url.endsWith('/api/local/cases'))
+      return json({ cases: [caseRecord] })
     if (url.endsWith('/api/local/runs') && method === 'POST')
-      return json({ run: { ...run, id: 'run-created', briefId: 'brief-created' }, events: [], files: [], artifacts: [], review: null, lessons: [] })
+      return json({ artifacts: [], events: [], files: [], lessons: [], review: null, run: { caseId: 'case-created', createdAt: now, error: null, executor: 'local', finishedAt: now, id: 'run-created', metadataJson: {}, prompt: 'Run', startedAt: now, status: 'succeeded', summary: 'Done', updatedAt: now, workspaceId: 'local' } }, 201)
     if (url.endsWith('/api/local/runs'))
-      return json({ runs: [run] })
+      return json({ runs: [] })
     if (url.endsWith('/api/local/files'))
       return json({ files: [] })
     if (url.endsWith('/api/local/artifacts'))
@@ -66,56 +102,73 @@ beforeEach(() => {
       return json({ lessons: [] })
     if (url.endsWith('/api/local/events'))
       return json({ events: [] })
+    if (url.endsWith('/api/local/settings') && method === 'PATCH')
+      return json({ settings: { ...settings, language: 'zh-CN' } })
+    if (url.endsWith('/api/local/settings'))
+      return json({ settings })
+    if (url.endsWith('/api/local/settings/engines/rescan'))
+      return json({ engines: settings.engines, settings })
+    if (url.endsWith('/api/local/settings/engines/test'))
+      return json({ result: { engineId: 'codex', message: 'Codex CLI responded.', status: 'pass' } })
 
-    return new Response('{}', { status: 404 })
+    return json({}, 404)
   }))
 })
 
 describe('worker studio', () => {
-  it('renders the AIWorker work order home without desktop chrome or default settings', async () => {
-    const { container } = render(<WorkerStudio />)
+  it('renders Soul catalog as the first screen without import or work-order entrypoints', async () => {
+    render(<WorkerStudio />)
 
-    expect(await screen.findAllByText('AIWorker')).toHaveLength(1)
-    expect(screen.getByLabelText('Work order creator')).toBeTruthy()
-    expect(screen.getByLabelText('Work orders')).toBeTruthy()
-    expect(screen.getByLabelText('Companion')).toBeTruthy()
-    expect(screen.getByText('New work order')).toBeTruthy()
-    expect(screen.getByText('Worker pack')).toBeTruthy()
-    expect(screen.queryByRole('dialog', { name: 'Set up AIWorker' })).toBeNull()
-    expect(container.querySelector('.window-lights')).toBeNull()
-    expect(screen.queryByText('Open Design')).toBeNull()
-    expect(screen.queryByText('Nexu Labs')).toBeNull()
-    expect(screen.queryByText('Import Claude Design ZIP')).toBeNull()
-    expect(screen.queryByText('Trump')).toBeNull()
-    expect(screen.queryByText('Review')).toBeNull()
-    expect(screen.queryByText('Lessons')).toBeNull()
-    expect(screen.queryByLabelText('Artifact canvas')).toBeNull()
+    expect(await screen.findByText('Vertical Soul workspace')).toBeTruthy()
+    expect(screen.getByLabelText('Soul catalog')).toBeTruthy()
+    expect(screen.getByText('HR')).toBeTruthy()
+    expect(screen.getByText('PM')).toBeTruthy()
+    expect(screen.getByText('QA')).toBeTruthy()
+    expect(screen.getByText('DevOps')).toBeTruthy()
+    expect(screen.getAllByText('Candidate Screen').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Create case and run').length).toBeGreaterThan(0)
+    expect(screen.queryByText(/Import/i)).toBeNull()
+    expect(screen.queryByText(/work order/i)).toBeNull()
+    expect(screen.queryByText(/Open Design/i)).toBeNull()
+    expect(screen.queryByText(/Nexu/i)).toBeNull()
   })
 
-  it('opens settings only from the explicit settings trigger', async () => {
+  it('creates a case and run with selected Soul and skill metadata', async () => {
+    render(<WorkerStudio />)
+
+    await screen.findAllByText('Candidate Screen')
+    fireEvent.change(screen.getByLabelText('Case name'), { target: { value: 'New candidate case' } })
+    fireEvent.change(screen.getByLabelText('Business context'), { target: { value: 'Role and candidate packet.' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create case and run' }))
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/local/cases', expect.objectContaining({
+        body: expect.stringContaining('"selectedSoulId":"hr"'),
+        method: 'POST',
+      }))
+      expect(fetch).toHaveBeenCalledWith('/api/local/runs', expect.objectContaining({ method: 'POST' }))
+    })
+  })
+
+  it('opens settings, rescans/tests engines, and autosaves settings changes', async () => {
     render(<WorkerStudio />)
 
     await screen.findByText('AIWorker')
-    expect(screen.queryByRole('dialog', { name: 'Set up AIWorker' })).toBeNull()
+    expect(screen.queryByRole('dialog', { name: 'AIWorker configuration' })).toBeNull()
 
     fireEvent.click(screen.getByLabelText('Open settings'))
 
-    expect(screen.getByRole('dialog', { name: 'Set up AIWorker' })).toBeTruthy()
-    expect(screen.getByText('Set up AIWorker')).toBeTruthy()
-    expect(screen.getAllByText('Local CLI').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('Codex CLI').length).toBeGreaterThan(0)
-  })
-
-  it('creates a work order through the local brief and run APIs', async () => {
-    render(<WorkerStudio />)
-
-    await screen.findByText('AIWorker')
-    fireEvent.change(screen.getByLabelText('Work order name'), { target: { value: 'New work order' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+    expect(screen.getByRole('dialog', { name: 'AIWorker configuration' })).toBeTruthy()
+    expect(screen.getByText('Local CLI / BYOK')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Test' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Rescan' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Language' }))
+    fireEvent.click(screen.getByRole('button', { name: 'zh-CN' }))
 
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('/api/local/briefs', expect.objectContaining({ method: 'POST' }))
-      expect(fetch).toHaveBeenCalledWith('/api/local/runs', expect.objectContaining({ method: 'POST' }))
+      expect(fetch).toHaveBeenCalledWith('/api/local/settings/engines/test', expect.objectContaining({ method: 'POST' }))
+      expect(fetch).toHaveBeenCalledWith('/api/local/settings/engines/rescan', expect.objectContaining({ method: 'POST' }))
+      expect(fetch).toHaveBeenCalledWith('/api/local/settings', expect.objectContaining({ method: 'PATCH' }))
     })
   })
 })

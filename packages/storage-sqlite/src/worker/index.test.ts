@@ -9,9 +9,9 @@ import { sql } from 'drizzle-orm'
 import {
   appendRunEvent,
   artifacts,
-  briefs,
+  cases,
   closeWorkerDb,
-  createBrief,
+  createCase,
   createLesson,
   createReview,
   createRun,
@@ -20,7 +20,7 @@ import {
   initWorkerDb,
   lessons,
   listArtifacts,
-  listBriefs,
+  listCases,
   listFiles,
   listLessons,
   listReviews,
@@ -66,7 +66,7 @@ describe('greenfield local worker schema', () => {
     expect(rows).toEqual([
       '__drizzle_migrations',
       'artifacts',
-      'briefs',
+      'cases',
       'files',
       'lessons',
       'reviews',
@@ -81,7 +81,7 @@ describe('greenfield local worker schema', () => {
     ])
   })
 
-  it('persists the workspace -> brief -> run -> artifact -> review -> lesson loop', () => {
+  it('persists the workspace -> case -> run -> artifact -> review -> lesson loop', () => {
     const workspace = upsertWorkspace({
       id: 'ws-1',
       name: 'Hiring workspace',
@@ -90,22 +90,24 @@ describe('greenfield local worker schema', () => {
     })
     expect(workspace.rootPath).toBe('/tmp/hiring')
 
-    const brief = createBrief({
-      id: 'brief-1',
+    const caseRecord = createCase({
+      id: 'case-1',
       workspaceId: workspace.id,
       title: 'Screen candidate',
       body: 'Review the candidate packet.',
+      selectedSoulId: 'hr',
+      selectedSkillId: 'candidate-screen',
       status: 'queued',
       at: '2026-05-09T01:01:00.000Z',
     })
-    expect(listBriefs(workspace.id)).toEqual([brief])
+    expect(listCases(workspace.id)).toEqual([caseRecord])
 
     const run = createRun({
       id: 'run-1',
       workspaceId: workspace.id,
-      briefId: brief.id,
+      caseId: caseRecord.id,
       executor: 'codex',
-      prompt: brief.body,
+      prompt: caseRecord.body,
       status: 'running',
       metadataJson: { domain: 'hr' },
       at: '2026-05-09T01:02:00.000Z',
@@ -168,7 +170,7 @@ describe('greenfield local worker schema', () => {
 
   it('keeps indexes aligned with the new local workspace query paths', () => {
     expect(explain(`SELECT * FROM workspaces ORDER BY updated_at DESC LIMIT 20`)).toContain('workspaces_updated_at_idx')
-    expect(explain(`SELECT * FROM briefs WHERE workspace_id = 'ws-1' ORDER BY updated_at DESC LIMIT 20`)).toContain('briefs_workspace_updated_at_idx')
+    expect(explain(`SELECT * FROM cases WHERE workspace_id = 'ws-1' ORDER BY updated_at DESC LIMIT 20`)).toContain('cases_workspace_updated_at_idx')
     expect(explain(`SELECT * FROM runs WHERE status = 'running' ORDER BY updated_at DESC LIMIT 20`)).toContain('runs_status_updated_at_idx')
     expect(explain(`SELECT * FROM run_events WHERE run_id = 'run-1' ORDER BY seq ASC LIMIT 200`)).toContain('run_events_run_seq')
     expect(explain(`SELECT * FROM files WHERE workspace_id = 'ws-1' ORDER BY updated_at DESC LIMIT 50`)).toContain('files_workspace_updated_at_idx')
@@ -180,7 +182,7 @@ describe('greenfield local worker schema', () => {
 
   it('exports the schema objects used by downstream packages', () => {
     expect(workspaces).toBeDefined()
-    expect(briefs).toBeDefined()
+    expect(cases).toBeDefined()
     expect(runs).toBeDefined()
     expect(runEvents).toBeDefined()
     expect(files).toBeDefined()

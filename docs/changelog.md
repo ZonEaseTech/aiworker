@@ -1,5 +1,32 @@
 # AIWorker Changelog
 
+## 2026-05-10 10:46 [completed] REFACTOR-041..043 / PLAN-208..210 + QA-026 / PLAN-211 — Vertical Soul workspace MVP
+
+Landed the out-of-box vertical Soul workspace MVP:
+
+- Rebuilt Worker Web around HR/PM/QA/DevOps Soul catalog, scoped skill/template
+  selection, case/run creation, business artifact cards, and selected-Soul
+  review rail.
+- Removed import entrypoints and developer/work-order-first product language
+  from the Web surface.
+- Added shared vertical Soul and capability template schemas plus built-in
+  HR/PM/QA/DevOps template catalog, with Finance/Legal/Ops marked later.
+- Carried selectedSoulId and selectedSkillId through storage, API, CLI, runtime,
+  run metadata, and generated artifact metadata.
+- Implemented AIWorker Settings with Local CLI / BYOK mode, engine status
+  scan/test, connectors, MCP, language, appearance, autosave, close/reopen, and
+  reload persistence.
+- Updated README, GOALS, architecture, PMA task/plan docs, and Web CSS quality
+  selectors to match the shipped MVP.
+
+Verification: focused shared/storage/core/API/CLI/Web tests passed; `bun run
+typecheck`, `bun run lint`, `bun run test`, and `bun run build` passed. Browser
+validation at `http://127.0.0.1:5174/worker/` created HR, PM, QA, and DevOps
+cases/runs, showed artifacts, saved/reloaded Settings, and captured
+`tmp/vertical-soul-preview/soul-workspace.png`. CRG update passed; CRG review
+reported 0 affected flows, 71 test gaps, and risk score 0.60, with high-risk
+minimal context due the intended cross-layer rewrite.
+
 ## 2026-05-10 10:03 [completed] DOC-008 / PLAN-207 — Vertical Soul product north star reset
 
 Reset the product guidance away from Open Design visual copying and

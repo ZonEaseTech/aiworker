@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
-export const localBriefStatusSchema = z.enum(['draft', 'queued', 'running', 'completed', 'failed', 'cancelled'])
-export type LocalBriefStatus = z.infer<typeof localBriefStatusSchema>
+export const localCaseStatusSchema = z.enum(['draft', 'queued', 'running', 'completed', 'failed', 'cancelled'])
+export type LocalCaseStatus = z.infer<typeof localCaseStatusSchema>
 
 export const localRunStatusSchema = z.enum(['queued', 'running', 'succeeded', 'failed', 'cancelled'])
 export type LocalRunStatus = z.infer<typeof localRunStatusSchema>
@@ -49,21 +49,24 @@ export const localWorkspaceSchema = z.object({
 })
 export type LocalWorkspace = z.infer<typeof localWorkspaceSchema>
 
-export const localBriefSchema = z.object({
+export const localCaseSchema = z.object({
   id: idSchema,
   workspaceId: idSchema,
   title: z.string().min(1),
   body: z.string().min(1),
-  status: localBriefStatusSchema,
+  selectedSoulId: idSchema,
+  selectedSkillId: idSchema,
+  status: localCaseStatusSchema,
+  metadataJson: localJsonObjectSchema,
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
 })
-export type LocalBrief = z.infer<typeof localBriefSchema>
+export type LocalCase = z.infer<typeof localCaseSchema>
 
 export const localRunSchema = z.object({
   id: idSchema,
   workspaceId: idSchema,
-  briefId: idSchema.nullable(),
+  caseId: idSchema.nullable(),
   status: localRunStatusSchema,
   executor: z.string().min(1),
   prompt: z.string().min(1),
@@ -145,3 +148,51 @@ export const localSettingSchema = z.object({
   updatedAt: timestampSchema,
 })
 export type LocalSetting = z.infer<typeof localSettingSchema>
+
+export const localExecutionModeSchema = z.enum(['local-cli', 'byok'])
+export type LocalExecutionMode = z.infer<typeof localExecutionModeSchema>
+
+export const localAppearanceSchema = z.enum(['system', 'light', 'dark'])
+export type LocalAppearance = z.infer<typeof localAppearanceSchema>
+
+export const localEngineStatusSchema = z.object({
+  command: z.string().min(1),
+  id: idSchema,
+  installed: z.boolean(),
+  name: z.string().min(1),
+  path: z.string().nullable(),
+  version: z.string().nullable(),
+})
+export type LocalEngineStatus = z.infer<typeof localEngineStatusSchema>
+
+export const localSettingsConfigSchema = z.object({
+  appearance: localAppearanceSchema,
+  byok: z.object({
+    apiKeyRef: z.string(),
+    baseUrl: z.string(),
+    model: z.string(),
+    provider: z.string(),
+  }),
+  connectors: z.array(z.object({
+    enabled: z.boolean(),
+    id: z.string().min(1),
+    name: z.string().min(1),
+    status: z.enum(['configured', 'not_configured']),
+  })),
+  engineId: z.string().min(1),
+  engines: z.array(localEngineStatusSchema),
+  executionMode: localExecutionModeSchema,
+  externalMcpServers: z.array(z.object({
+    command: z.string(),
+    enabled: z.boolean(),
+    id: z.string().min(1),
+    name: z.string().min(1),
+  })),
+  language: z.string().min(1),
+  localMcpServer: z.object({
+    enabled: z.boolean(),
+    url: z.string(),
+  }),
+  updatedAt: timestampSchema,
+})
+export type LocalSettingsConfig = z.infer<typeof localSettingsConfigSchema>

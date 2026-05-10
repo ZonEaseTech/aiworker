@@ -71,20 +71,28 @@ AIWorker 只通过薄 adapter 调用和观察 engine，不把自己做成 execut
 
 ## Quickstart
 
-当前 CLI 仍处在从 local worker loop 向 vertical Soul loop 迁移的中间态。目标 onboarding
-会收敛到：
+当前 local MVP 已经围绕 vertical Soul loop 收敛。CLI 最小路径：
 
 ```bash
 aiworker init --name "Team Workspace" --root .
 aiworker soul list
-aiworker soul select hr-recruiting
-aiworker template list
-aiworker case create --template candidate-screen
+aiworker template list --soul hr
+aiworker case create --soul hr --skill candidate-screen --title "Screen candidate" --body "Role and candidate evidence"
 aiworker run start --case <caseId>
+aiworker artifacts list
 ```
 
-短期内，已有 `brief` / `lessons` 命令可能仍作为底层实现存在；1.0 前不为旧命令形态保留
-长期兼容。
+Web 最小路径：
+
+```bash
+aiworker daemon foreground --port 9217
+bun run --filter '@zonease/aiworker-web' dev
+```
+
+打开 Web 后，首屏就是 Soul catalog。用户选择 HR / PM / QA / DevOps Soul，选择该 Soul
+下的 capability template，创建 case/run，并在右侧看到对应业务 artifact。Settings 由右上
+settings button 打开，支持 Local CLI / BYOK、engine scan/test、connectors、MCP、
+language、appearance 和 autosave。
 
 ## 仓库结构
 
@@ -136,10 +144,12 @@ bun run --filter '@zonease/aiworker-cli' build:bundle
 2. Soul catalog 与内置 HR/PM/QA/DevOps 优先级；
 3. capability template / domain system 文件模型；
 4. local daemon 的 Soul/template/case API；
-5. Web 首屏：Soul catalog + capability templates + simple settings；
-6. business artifact preview；
-7. review/admission -> durable org memory；
-8. developer Soul 降级为 supporting role；
-9. cleanup、验证与发布证据。
+5. Web 首屏：Soul catalog + capability templates + case/run/artifact；
+6. Settings：Local CLI / BYOK、engine scan/test、connectors、MCP、language、
+   appearance、autosave；
+7. business artifact preview；
+8. review/admission -> durable org memory；
+9. developer Soul 降级为 supporting role；
+10. cleanup、验证与发布证据。
 
 fleet/gateway 和 desktop 暂缓，等单个 vertical Soul workspace 自身可用、可解释、可验证后再回到可选扩展层。

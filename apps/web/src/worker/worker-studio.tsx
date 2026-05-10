@@ -1,121 +1,128 @@
-import type { LocalRun } from '@zonease/aiworker-shared'
-import type { CSSProperties, FormEvent } from 'react'
+import type {
+  CapabilityTemplate,
+  LocalArtifact,
+  LocalCase,
+  LocalEngineStatus,
+  LocalRun,
+  LocalSettingsConfig,
+  VerticalSoul,
+} from '@zonease/aiworker-shared'
+import type { FormEvent, ReactNode } from 'react'
 import type { LocalWorkspaceData } from './api'
 
 import {
-  Bell,
   Check,
-  ChevronDown,
-  ChevronRight,
-  Eye,
-  Grid3X3,
-  Image,
+  Circle,
+  FileText,
   Languages,
   Link,
-  List,
-  Plus,
+  Moon,
+  Play,
   RefreshCw,
   Search,
   Settings,
-  SlidersHorizontal,
-  Sparkles,
+  ShieldCheck,
   Sun,
-  Upload,
+  Terminal,
   X,
 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
-import { createBrief, loadLocalWorkspaceData, startRun } from './api'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { createCase, loadLocalWorkspaceData, rescanEngines, saveSettings, startRun, testEngine } from './api'
 
 interface StudioState {
   data: LocalWorkspaceData | null
-  loading: boolean
   error: string | null
+  loading: boolean
 }
 
-interface ProjectCard {
-  title: string
-  engine: string
-  type: string
-  status: string
-  age: string
-}
-
-const topTabs = ['Work orders', 'Examples', 'Worker packs', 'Connectors', 'Templates', 'Artifacts'] as const
-const createTabs = ['Work order', 'From template', 'From artifact', 'Saved template'] as const
-const designTabs = ['Recent', 'This workspace'] as const
-
-const settingsSections = [
-  { id: 'execution', title: 'Configure executor', detail: 'Local CLI / BYOK', icon: SlidersHorizontal },
-  { id: 'packs', title: 'Worker packs', detail: 'Developer / HR / PM / QA', icon: Image },
-  { id: 'connectors', title: 'Connectors', detail: 'External system connections', icon: SlidersHorizontal },
-  { id: 'orbit', title: 'Daily summary', detail: 'Workspace changes and connector signals', icon: Eye },
-  { id: 'mcp', title: 'MCP server', detail: 'Expose workspace context to your coding agent.', icon: Link },
-  { id: 'external-mcp', title: 'External MCP', detail: 'Add MCP tools from external services.', icon: Sparkles },
-  { id: 'language', title: 'Language', detail: 'Switch the interface language. Saved to this browser.', icon: Languages },
-  { id: 'appearance', title: 'Appearance', detail: 'Choose light, dark, or follow system.', icon: Sun },
-  { id: 'notifications', title: 'Notifications', detail: 'Completion alerts and sounds.', icon: Bell },
-  { id: 'companion', title: 'Companion', detail: 'Adopt or customize', icon: Sparkles },
-  { id: 'about', title: 'About', detail: 'Version and runtime details.', icon: Settings },
-] as const
-
-const engines = [
-  { id: 'claude-code', name: 'Claude Code', detail: '2.1.132 (Claude Code)', installed: true, tone: 'coral' },
-  { id: 'codex-cli', name: 'Codex CLI', detail: 'codex-cli 0.128.0', installed: true, tone: 'dark' },
-  { id: 'devin', name: 'Devin for Terminal', detail: 'not installed', installed: false, tone: 'gray' },
-  { id: 'gemini', name: 'Gemini CLI', detail: 'not installed', installed: false, tone: 'violet' },
-  { id: 'opencode', name: 'OpenCode', detail: 'not installed', installed: false, tone: 'green' },
-  { id: 'hermes', name: 'Hermes', detail: 'not installed', installed: false, tone: 'gray' },
-  { id: 'kimi', name: 'Kimi CLI', detail: 'not installed', installed: false, tone: 'gray' },
-  { id: 'cursor', name: 'Cursor Agent', detail: 'not installed', installed: false, tone: 'dark' },
-  { id: 'qwen', name: 'Qwen Code', detail: 'not installed', installed: false, tone: 'violet' },
-  { id: 'qoder', name: 'Qoder CLI', detail: 'not installed', installed: false, tone: 'dark' },
-] as const
-
-type EngineId = (typeof engines)[number]['id']
+type AutosaveState = 'idle' | 'saving' | 'saved' | 'failed'
+type SettingsSection = 'execution' | 'connectors' | 'mcp' | 'language' | 'appearance' | 'about'
 
 export function WorkerStudio() {
-  const [state, setState] = useState<StudioState>({ data: null, loading: true, error: null })
-  const [projectName, setProjectName] = useState('')
-  const [activeTopTab, setActiveTopTab] = useState<(typeof topTabs)[number]>('Work orders')
-  const [activeCreateTab, setActiveCreateTab] = useState<(typeof createTabs)[number]>('Work order')
-  const [activeDesignTab, setActiveDesignTab] = useState<(typeof designTabs)[number]>('Recent')
-  const [view, setView] = useState<'grid' | 'list'>('grid')
+  const [state, setState] = useState<StudioState>({ data: null, error: null, loading: true })
+  const [selectedSoulId, setSelectedSoulId] = useState('hr')
+  const [selectedTemplateId, setSelectedTemplateId] = useState('candidate-screen')
+  const [caseTitle, setCaseTitle] = useState('')
+  const [caseContext, setCaseContext] = useState('')
   const [query, setQuery] = useState('')
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [selectedEngine, setSelectedEngine] = useState<EngineId>('codex-cli')
   const [submitting, setSubmitting] = useState(false)
 
-  async function refresh() {
+  const refresh = useCallback(async () => {
     setState(current => ({ ...current, loading: true, error: null }))
     try {
       const data = await loadLocalWorkspaceData()
-      setState({ data, loading: false, error: null })
+      setState({ data, error: null, loading: false })
+      const firstAvailableSoul = data.souls.find(soul => soul.status === 'available')
+      const selectedSoul = data.souls.find(soul => soul.id === selectedSoulId && soul.status === 'available') ?? firstAvailableSoul
+      if (selectedSoul && selectedSoul.id !== selectedSoulId)
+        setSelectedSoulId(selectedSoul.id)
+      const soulTemplates = data.templates.filter(template => template.soulId === (selectedSoul?.id ?? selectedSoulId))
+      if (soulTemplates.length > 0 && !soulTemplates.some(template => template.id === selectedTemplateId))
+        setSelectedTemplateId(soulTemplates[0]!.id)
     }
     catch (error) {
-      setState({
-        data: null,
-        loading: false,
-        error: error instanceof Error ? error.message : String(error),
-      })
+      setState({ data: null, error: error instanceof Error ? error.message : String(error), loading: false })
     }
-  }
+  }, [selectedSoulId, selectedTemplateId])
 
   useEffect(() => {
     void refresh()
-  }, [])
+  }, [refresh])
 
-  async function submitProject(event: FormEvent<HTMLFormElement>) {
+  const data = state.data
+  const selectedSoul = data?.souls.find(soul => soul.id === selectedSoulId) ?? null
+  const templates = useMemo(
+    () => data?.templates.filter(template => template.soulId === selectedSoulId) ?? [],
+    [data?.templates, selectedSoulId],
+  )
+  const selectedTemplate = templates.find(template => template.id === selectedTemplateId) ?? templates[0] ?? null
+  const soulCases = useMemo(
+    () => data?.cases.filter(item => item.selectedSoulId === selectedSoulId) ?? [],
+    [data?.cases, selectedSoulId],
+  )
+  const soulRuns = useMemo(() => {
+    const caseIds = new Set(soulCases.map(item => item.id))
+    return data?.runs.filter(run => run.caseId !== null && caseIds.has(run.caseId)) ?? []
+  }, [data?.runs, soulCases])
+  const soulRunIds = useMemo(() => new Set(soulRuns.map(run => run.id)), [soulRuns])
+  const soulArtifacts = useMemo(() => {
+    return data?.artifacts.filter(artifact => artifact.runId !== null && soulRunIds.has(artifact.runId)) ?? []
+  }, [data?.artifacts, soulRunIds])
+  const soulReviews = useMemo(() => {
+    return data?.reviews.filter(review => review.runId !== null && soulRunIds.has(review.runId)) ?? []
+  }, [data?.reviews, soulRunIds])
+  const filteredCases = useMemo(() => {
+    const needle = query.trim().toLowerCase()
+    return soulCases.filter(item => !needle || item.title.toLowerCase().includes(needle) || item.body.toLowerCase().includes(needle))
+  }, [query, soulCases])
+  const latestRun = latest(soulRuns)
+  const latestArtifact = latest(soulArtifacts)
+
+  async function submitCase(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const title = projectName.trim()
-    if (!title)
+    if (!selectedSoul || !selectedTemplate || !caseTitle.trim() || !caseContext.trim())
       return
-
     setSubmitting(true)
     try {
-      const body = `Run this work order for ${title}. Produce a visible artifact and capture review notes.`
-      const result = await createBrief({ title, body })
-      await startRun({ briefId: result.brief.id, prompt: body })
-      setProjectName('')
+      const body = buildCasePrompt(selectedSoul, selectedTemplate, caseContext)
+      const result = await createCase({
+        body,
+        metadata: {
+          inputHints: selectedTemplate.inputHints,
+          outputKind: selectedTemplate.outputKind,
+          reviewRubric: selectedTemplate.reviewRubric,
+        },
+        selectedSkillId: selectedTemplate.id,
+        selectedSoulId: selectedSoul.id,
+        title: caseTitle.trim(),
+      })
+      await startRun({
+        caseId: result.case.id,
+        prompt: body,
+      })
+      setCaseTitle('')
+      setCaseContext('')
       await refresh()
     }
     finally {
@@ -123,555 +130,643 @@ export function WorkerStudio() {
     }
   }
 
-  const projects = useMemo(() => {
-    const fromData = buildProjectCards(state.data)
-    const fallback: ProjectCard[] = [
-      { title: 'Developer repo review', engine: 'developer', type: 'verification-report', status: 'Completed', age: '2d ago' },
-      { title: 'Candidate screen', engine: 'hr-recruiting', type: 'candidate-screen', status: 'Completed', age: '3d ago' },
-    ]
-    return fromData.length > 0 ? fromData : fallback
-  }, [state.data])
-
-  const visibleProjects = useMemo(() => {
-    const needle = query.trim().toLowerCase()
-    if (!needle)
-      return projects
-    return projects.filter(project => project.title.toLowerCase().includes(needle))
-  }, [projects, query])
-
-  if (state.loading && !state.data) {
+  if (state.loading && !data) {
     return (
-      <main className="od-loading-shell">
-        <span>Loading workspace...</span>
+      <main className="loading-shell">
+        <span>Loading Soul workspace...</span>
       </main>
     )
   }
 
   if (state.error) {
     return (
-      <main className="od-loading-shell">
+      <main className="loading-shell">
         <span role="alert">{state.error}</span>
       </main>
     )
   }
 
+  if (!data || !selectedSoul || !selectedTemplate)
+    return null
+
   return (
-    <main className="entry-shell">
-      <div
-        className="entry has-pet-rail"
-        style={{ gridTemplateColumns: '380px 1fr auto' }}
-      >
-        <aside className="entry-side" style={{ width: 380 }} aria-label="Work order creator">
-          <div className="entry-brand">
-            <span className="entry-brand-mark" aria-hidden="true">
-              <img src="/logo.svg" alt="" className="brand-mark-img" draggable={false} />
-            </span>
-            <div className="entry-brand-text">
-              <div className="entry-brand-title-row">
-                <span className="entry-brand-title">AIWorker</span>
-                <span className="entry-brand-pill">Local Worker</span>
-              </div>
-              <div className="entry-brand-subtitle">work order studio</div>
-            </div>
+    <main className="soul-shell">
+      <aside className="soul-sidebar" aria-label="Soul catalog">
+        <div className="brand-block">
+          <div className="brand-mark" aria-hidden="true">AI</div>
+          <div>
+            <strong>AIWorker</strong>
+            <span>Vertical Soul workspace</span>
           </div>
+        </div>
 
-          <section className="newproj" data-testid="new-project-panel">
-            <div className="newproj-tabs-shell can-right">
-              <div className="newproj-tabs" role="tablist">
-                {createTabs.map(tab => (
-                  <button
-                    key={tab}
-                    type="button"
-                    role="tab"
-                    aria-selected={activeCreateTab === tab}
-                    className={`newproj-tab ${activeCreateTab === tab ? 'active' : ''}`}
-                    onClick={() => setActiveCreateTab(tab)}
-                  >
-                    {tab}
-                  </button>
-                ))}
-              </div>
+        <section className="sidebar-section">
+          <div className="section-eyebrow">Soul catalog</div>
+          <div className="soul-list">
+            {data.souls.map(soul => (
               <button
+                key={soul.id}
                 type="button"
-                className="newproj-tabs-arrow right"
-                aria-label="Scroll project types right"
+                className={`soul-card ${selectedSoulId === soul.id ? 'active' : ''}`}
+                disabled={soul.status !== 'available'}
+                aria-pressed={selectedSoulId === soul.id}
+                onClick={() => {
+                  setSelectedSoulId(soul.id)
+                  const next = data.templates.find(template => template.soulId === soul.id)
+                  if (next)
+                    setSelectedTemplateId(next.id)
+                }}
               >
-                <ChevronRight aria-hidden="true" size={16} strokeWidth={2} />
+                <span className="soul-card-name">{soul.name}</span>
+                <span className="soul-card-domain">{soul.domain}</span>
+                <span className={`soul-status ${soul.status}`}>{soul.status === 'available' ? 'Ready' : 'Later'}</span>
               </button>
-            </div>
-
-            <form className="newproj-body" onSubmit={submitProject}>
-              <h3 className="newproj-title">
-                <span className="newproj-title-text">New work order</span>
-              </h3>
-
-              <input
-                className="newproj-name"
-                aria-label="Work order name"
-                data-testid="new-project-name"
-                placeholder="What should this worker do?"
-                value={projectName}
-                onChange={event => setProjectName(event.target.value)}
-              />
-
-              <section className="newproj-section">
-                <label className="newproj-label">Worker pack</label>
-                <button className="ds-select" type="button">
-                  <span className="ds-icon-empty" aria-hidden="true">
-                    <span />
-                  </span>
-                  <span className="ds-select-copy">
-                    <strong>Developer - code workspace</strong>
-                    <small>Switch to HR, PM, QA, finance, or legal later</small>
-                  </span>
-                  <ChevronDown aria-hidden="true" size={16} />
-                </button>
-              </section>
-
-              <section className="newproj-section">
-                <label className="newproj-label">Run depth</label>
-                <div className="fidelity-grid">
-                  <FidelityCard label="Quick pass" variant="wireframe" />
-                  <FidelityCard label="Full artifact" variant="high-fidelity" active />
-                </div>
-              </section>
-
-              <button
-                className="primary newproj-create"
-                data-testid="create-project"
-                type="submit"
-                disabled={!projectName.trim() || submitting}
-              >
-                <Plus aria-hidden="true" size={13} />
-                <span>Create</span>
-              </button>
-
-              <button className="ghost newproj-import" type="button">
-                <Upload aria-hidden="true" size={13} />
-                <span>Import work order file</span>
-              </button>
-            </form>
-            <div className="newproj-footer">Runs stay local to this workspace by default.</div>
-          </section>
-
-          <div className="entry-side-foot">
-            <button type="button" className="foot-pill pet-pill pet-pill-fresh">
-              <span className="pet-pill-glyph" aria-hidden="true">✦</span>
-              <span>Change companion</span>
-            </button>
-            <button type="button" className="foot-pill" onClick={() => setSettingsOpen(true)}>
-              <Settings aria-hidden="true" size={12} />
-              <span>Local CLI</span>
-              <span style={{ color: 'var(--text-faint)' }}>·</span>
-              <span>Codex CLI · codex-cli 0.128.0</span>
-            </button>
-            <button type="button" className="foot-pill">
-              <Languages aria-hidden="true" size={12} />
-              <span>English</span>
-              <ChevronDown aria-hidden="true" size={12} />
-            </button>
+            ))}
           </div>
-        </aside>
+        </section>
+      </aside>
 
-        <section className="entry-main" aria-label="Work orders">
-          <header className="entry-header">
-            <div className="entry-tabs" role="tablist">
-              {topTabs.map(tab => (
+      <section className="workspace-main" aria-label="Case workspace">
+        <header className="workspace-header">
+          <div>
+            <div className="section-eyebrow">Selected Soul</div>
+            <h1>
+              {selectedSoul.name}
+              {' '}
+              Soul
+            </h1>
+            <p>{selectedSoul.description}</p>
+          </div>
+          <button type="button" className="icon-action" aria-label="Open settings" onClick={() => setSettingsOpen(true)}>
+            <Settings size={17} />
+          </button>
+        </header>
+
+        <div className="workspace-grid">
+          <section className="template-panel" aria-label="Capability templates">
+            <div className="panel-head">
+              <div>
+                <h2>Skills and capability templates</h2>
+                <p>
+                  {templates.length}
+                  {' '}
+                  templates ready for this Soul
+                </p>
+              </div>
+            </div>
+            <div className="template-list">
+              {templates.map(template => (
                 <button
-                  key={tab}
+                  key={template.id}
                   type="button"
-                  role="tab"
-                  aria-selected={activeTopTab === tab}
-                  className={`entry-tab ${activeTopTab === tab ? 'active' : ''}`}
-                  onClick={() => setActiveTopTab(tab)}
+                  className={`template-card ${selectedTemplateId === template.id ? 'active' : ''}`}
+                  aria-pressed={selectedTemplateId === template.id}
+                  onClick={() => setSelectedTemplateId(template.id)}
                 >
-                  {tab}
+                  <span className="template-card-title">{template.name}</span>
+                  <span>{template.description}</span>
+                  <small>{template.outputKind}</small>
                 </button>
               ))}
             </div>
-            <div className="entry-header-right">
-              <button
-                className="settings-trigger"
-                type="button"
-                aria-label="Open settings"
-                onClick={() => setSettingsOpen(true)}
-              >
-                <Settings aria-hidden="true" size={16} />
-              </button>
-              <button className="avatar-btn" type="button" aria-label="Account">
-                <span aria-hidden="true" className="avatar-btn-initials">AI</span>
-              </button>
-            </div>
-          </header>
+          </section>
 
-          <div className="entry-tab-content">
-            <div className="tab-panel">
-              <div className="tab-panel-toolbar">
-                <div className="toolbar-left">
-                  <div className="subtab-pill" role="group" aria-label="Work order filters">
-                    {designTabs.map(tab => (
-                      <button
-                        key={tab}
-                        type="button"
-                        className={activeDesignTab === tab ? 'active' : ''}
-                        aria-pressed={activeDesignTab === tab}
-                        onClick={() => setActiveDesignTab(tab)}
-                      >
-                        {tab}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="toolbar-right">
-                  <label className="toolbar-search">
-                    <span className="search-icon" aria-hidden="true">
-                      <Search size={13} />
-                    </span>
-                    <input
-                      aria-label="Search work orders"
-                      placeholder="Search work orders..."
-                      value={query}
-                      onChange={event => setQuery(event.target.value)}
-                    />
-                  </label>
-                  <div className="subtab-pill" role="group" aria-label="View mode">
-                    <button
-                      type="button"
-                      className={view === 'grid' ? 'active' : ''}
-                      aria-pressed={view === 'grid'}
-                      aria-label="Grid view"
-                      onClick={() => setView('grid')}
-                    >
-                      <Grid3X3 size={14} />
-                    </button>
-                    <button
-                      type="button"
-                      className={view === 'list' ? 'active' : ''}
-                      aria-pressed={view === 'list'}
-                      aria-label="List view"
-                      onClick={() => setView('list')}
-                    >
-                      <List size={14} />
-                    </button>
-                  </div>
-                </div>
+          <section className="case-panel" aria-label="Create case">
+            <div className="panel-head">
+              <div>
+                <h2>Create case and run</h2>
+                <p>
+                  {selectedTemplate.name}
+                  {' '}
+                  will produce a
+                  {' '}
+                  {selectedTemplate.outputKind}
+                  {' '}
+                  artifact.
+                </p>
               </div>
-
-              <div className={view === 'grid' ? 'design-grid' : 'design-grid design-grid-list'}>
-                {visibleProjects.map(project => (
-                  <DesignCard key={`${project.title}-${project.age}`} project={project} />
+            </div>
+            <form className="case-form" onSubmit={submitCase}>
+              <label>
+                <span>Case name</span>
+                <input
+                  aria-label="Case name"
+                  value={caseTitle}
+                  onChange={event => setCaseTitle(event.target.value)}
+                  placeholder={caseNamePlaceholder(selectedSoul.id)}
+                />
+              </label>
+              <label>
+                <span>Business context</span>
+                <textarea
+                  aria-label="Business context"
+                  value={caseContext}
+                  onChange={event => setCaseContext(event.target.value)}
+                  placeholder={selectedTemplate.inputHints.join(' · ')}
+                />
+              </label>
+              <div className="rubric-strip">
+                {selectedTemplate.reviewRubric.map(item => (
+                  <span key={item}>{item}</span>
                 ))}
               </div>
+              <button className="primary run-button" type="submit" disabled={submitting || !caseTitle.trim() || !caseContext.trim()}>
+                <Play size={14} />
+                <span>{submitting ? 'Running...' : 'Create case and run'}</span>
+              </button>
+            </form>
+          </section>
+        </div>
+
+        <section className="case-history" aria-label="Cases and artifacts">
+          <div className="history-head">
+            <div>
+              <h2>Cases and artifacts</h2>
+              <p>
+                {filteredCases.length}
+                {' '}
+                cases for
+                {' '}
+                {selectedSoul.name}
+              </p>
             </div>
+            <label className="search-box">
+              <Search size={14} />
+              <input aria-label="Search cases" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search cases" />
+            </label>
+          </div>
+          <div className="case-grid">
+            {filteredCases.length > 0
+              ? filteredCases.map(item => (
+                  <CaseCard
+                    key={item.id}
+                    item={item}
+                    artifact={artifactForCase(item, data.artifacts, data.runs)}
+                    run={runForCase(item, data.runs)}
+                    template={data.templates.find(template => template.id === item.selectedSkillId)}
+                  />
+                ))
+              : (
+                  <div className="empty-state">
+                    <FileText size={22} />
+                    <span>
+                      Create the first
+                      {' '}
+                      {selectedSoul.name}
+                      {' '}
+                      case to generate a business artifact.
+                    </span>
+                  </div>
+                )}
           </div>
         </section>
+      </section>
 
-        <aside className="pet-rail" aria-label="Companion">
-          <header className="pet-rail-head">
-            <div className="pet-rail-title">
-              <span aria-hidden="true">✦</span>
-              <strong>COMPANION</strong>
-            </div>
-            <div className="pet-rail-head-actions">
-              <button type="button" className="pet-rail-collapse" aria-label="Collapse pet picker">
-                <ChevronRight size={14} />
-              </button>
-              <button type="button" className="pet-rail-collapse" aria-label="Hide pet picker">
-                <X size={14} />
-              </button>
-            </div>
-          </header>
-          <p className="pet-rail-hint">Pick a small status helper for this workspace.</p>
-          <div className="pet-rail-status">
-            <button type="button" className="pet-rail-status-pill">
-              <Eye aria-hidden="true" size={12} />
-              <span>Tuck away</span>
-            </button>
-          </div>
-          <div className="pet-rail-list">
-            <button
-              type="button"
-              className="pet-rail-item active"
-              aria-pressed="true"
-              style={{ '--pet-accent': 'var(--accent)' } as CSSProperties}
-            >
-              <span className="pet-rail-item-glyph" aria-hidden="true">👨‍💼</span>
-              <span className="pet-rail-item-meta">
-                <span className="pet-rail-item-name">Buddy</span>
-                <span className="pet-rail-item-flavor">Local status, run hints, and quick actions</span>
-              </span>
-              <Check size={14} aria-hidden="true" />
-            </button>
-          </div>
-          <button type="button" className="pet-rail-customize">
-            <Sparkles aria-hidden="true" size={12} />
-            <span>Customize...</span>
-          </button>
-          <div className="floating-pet" aria-hidden="true">T</div>
-        </aside>
+      <aside className="artifact-rail" aria-label="Artifact review">
+        <section className="rail-card">
+          <div className="section-eyebrow">Latest run</div>
+          {latestRun
+            ? (
+                <>
+                  <strong>{titleCase(latestRun.status)}</strong>
+                  <span>{latestRun.summary ?? latestRun.executor}</span>
+                  <small>{relativeTime(latestRun.updatedAt)}</small>
+                </>
+              )
+            : <span>No run yet.</span>}
+        </section>
+        <section className="rail-card">
+          <div className="section-eyebrow">Business artifact</div>
+          {latestArtifact
+            ? (
+                <>
+                  <strong>{latestArtifact.title}</strong>
+                  <span>{latestArtifact.kind}</span>
+                  <small>{latestArtifact.path}</small>
+                </>
+              )
+            : <span>Artifacts appear here after a case run.</span>}
+        </section>
+        <section className="rail-card">
+          <div className="section-eyebrow">Review and memory</div>
+          <strong>
+            {soulReviews.length}
+            {' '}
+            reviews
+          </strong>
+          <span>
+            {data.lessons.length}
+            {' '}
+            memory candidates
+          </span>
+          <small>Human review decides what becomes durable org memory.</small>
+        </section>
+      </aside>
 
-        {settingsOpen
-          ? (
-              <SettingsDialog
-                selectedEngine={selectedEngine}
-                onClose={() => setSettingsOpen(false)}
-                onEngineChange={setSelectedEngine}
-              />
-            )
-          : null}
-      </div>
+      {settingsOpen
+        ? (
+            <SettingsDialog
+              initial={data.settings}
+              runtimeVersion={data.info.runtimeVersion}
+              onClose={() => setSettingsOpen(false)}
+              onSaved={(settings) => {
+                setState(current => current.data
+                  ? { ...current, data: { ...current.data, settings }, loading: false }
+                  : current)
+              }}
+            />
+          )
+        : null}
     </main>
   )
 }
 
 function SettingsDialog({
-  selectedEngine,
+  initial,
   onClose,
-  onEngineChange,
+  onSaved,
+  runtimeVersion,
 }: {
-  selectedEngine: EngineId
+  initial: LocalSettingsConfig
   onClose: () => void
-  onEngineChange: (engine: EngineId) => void
+  onSaved: (settings: LocalSettingsConfig) => void
+  runtimeVersion: string
 }) {
+  const [settings, setSettings] = useState(initial)
+  const [section, setSection] = useState<SettingsSection>('execution')
+  const [autosave, setAutosave] = useState<AutosaveState>('saved')
+  const [engineTest, setEngineTest] = useState<string | null>(null)
+
+  async function persist(patch: Partial<LocalSettingsConfig>) {
+    const next = { ...settings, ...patch }
+    setSettings(next)
+    setAutosave('saving')
+    try {
+      const result = await saveSettings(patch)
+      setSettings(result.settings)
+      onSaved(result.settings)
+      setAutosave('saved')
+    }
+    catch {
+      setAutosave('failed')
+    }
+  }
+
+  async function handleRescan() {
+    setAutosave('saving')
+    try {
+      const result = await rescanEngines()
+      setSettings(result.settings)
+      onSaved(result.settings)
+      setAutosave('saved')
+    }
+    catch {
+      setAutosave('failed')
+    }
+  }
+
+  async function handleTest(engineId: string) {
+    setEngineTest('Testing engine...')
+    try {
+      const result = await testEngine(engineId)
+      setEngineTest(result.result.message)
+    }
+    catch (error) {
+      setEngineTest(error instanceof Error ? error.message : String(error))
+    }
+  }
+
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div
-        className="modal modal-settings"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="settings-dialog-title"
-        onClick={event => event.stopPropagation()}
-      >
-        <div className="settings-chrome" aria-hidden={false}>
-          <div className="settings-autosave is-saved" role="status" aria-live="polite">
-            <Check size={12} />
-            <span>All changes saved</span>
+      <div className="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title" onClick={event => event.stopPropagation()}>
+        <header className="settings-top">
+          <div>
+            <div className="section-eyebrow">Settings</div>
+            <h2 id="settings-title">AIWorker configuration</h2>
+            <p>Execution, connectors, external MCP, language, and appearance are saved to the local daemon.</p>
           </div>
-          <button
-            type="button"
-            className="settings-close"
-            onClick={onClose}
-            aria-label="Close settings"
-            title="Close"
-          >
-            <X size={16} strokeWidth={2} />
-          </button>
-        </div>
-
-        <header className="modal-head">
-          <span className="kicker">WELCOME</span>
-          <h2 id="settings-dialog-title">Set up AIWorker</h2>
-          <p className="subtitle">
-            Pick how local runs execute. You can change this any time from the Settings button.
-          </p>
-          <button type="button" className="welcome-pet-teaser">
-            <span className="welcome-pet-glyph" aria-hidden="true">
-              ✦
-            </span>
-            <span className="welcome-pet-copy">
-              <strong>Choose a companion</strong>
-              <span>A small workspace helper for run status and quick actions.</span>
-            </span>
-            <span className="welcome-pet-cta">
-              Pick one
-              <ChevronRight size={12} />
-            </span>
+          <div className={`autosave ${autosave}`}>
+            {autosave === 'saving' ? <RefreshCw size={13} className="spin" /> : <Check size={13} />}
+            <span>{autosaveCopy(autosave)}</span>
+          </div>
+          <button type="button" className="icon-action" aria-label="Close settings" onClick={onClose}>
+            <X size={17} />
           </button>
         </header>
 
-        <div className="modal-body">
-          <aside className="settings-sidebar" aria-label="Settings sections">
-            {settingsSections.map((section) => {
-              const Icon = section.icon
-              return (
-                <button
-                  key={section.id}
-                  type="button"
-                  className={`settings-nav-item${section.id === 'execution' ? ' active' : ''}`}
-                >
-                  <Icon size={18} />
-                  <span>
-                    <strong>{section.title}</strong>
-                    <small>{section.detail}</small>
-                  </span>
-                </button>
-              )
-            })}
-          </aside>
+        <div className="settings-body">
+          <nav className="settings-nav" aria-label="Settings sections">
+            <SettingsNavButton active={section === 'execution'} icon={<Terminal size={17} />} label="Local CLI / BYOK" onClick={() => setSection('execution')} />
+            <SettingsNavButton active={section === 'connectors'} icon={<Link size={17} />} label="Connectors" onClick={() => setSection('connectors')} />
+            <SettingsNavButton active={section === 'mcp'} icon={<ShieldCheck size={17} />} label="MCP" onClick={() => setSection('mcp')} />
+            <SettingsNavButton active={section === 'language'} icon={<Languages size={17} />} label="Language" onClick={() => setSection('language')} />
+            <SettingsNavButton active={section === 'appearance'} icon={<Sun size={17} />} label="Appearance" onClick={() => setSection('appearance')} />
+            <SettingsNavButton active={section === 'about'} icon={<Settings size={17} />} label="About" onClick={() => setSection('about')} />
+          </nav>
 
-          <div className="settings-content">
-            <div
-              className="seg-control"
-              role="tablist"
-              aria-label="Execution mode"
-              style={{ '--seg-cols': 2 } as CSSProperties}
-            >
-              <button type="button" role="tab" aria-selected="true" className="seg-btn active">
-                <span className="seg-title">Local CLI</span>
-                <span className="seg-meta">2 installed</span>
-              </button>
-              <button type="button" role="tab" aria-selected="false" className="seg-btn">
-                <span className="seg-title">BYOK</span>
-                <span className="seg-meta">API provider</span>
-              </button>
-            </div>
-
-            <section className="settings-section">
-              <div className="section-head">
-                <div>
-                  <h3>Local CLI</h3>
-                  <p className="hint">Detected by scanning your PATH. Pick the CLI you want work orders to flow through.</p>
-                </div>
-                <div className="section-head-actions">
-                  <button type="button" className="ghost icon-btn settings-test-btn">
-                    <span>Test</span>
-                  </button>
-                  <button type="button" className="ghost icon-btn settings-rescan-btn">
-                    <RefreshCw size={13} />
-                    <span>Rescan</span>
-                  </button>
-                </div>
-              </div>
-
-              <div className="agent-grid">
-                {engines.map(engine => (
-                  <button
-                    key={engine.id}
-                    type="button"
-                    className={`agent-card${selectedEngine === engine.id ? ' active' : ''}${engine.installed ? '' : ' disabled'}`}
-                    disabled={!engine.installed}
-                    aria-pressed={selectedEngine === engine.id}
-                    onClick={() => onEngineChange(engine.id)}
-                  >
-                    <span className={`agent-icon agent-icon-${engine.tone}`} aria-hidden="true">
-                      {engine.installed
-                        ? <Sparkles size={28} />
-                        : <span />}
-                    </span>
-                    <span className="agent-card-body">
-                      <span className="agent-card-name">{engine.name}</span>
-                      <span className="agent-card-meta">
-                        {engine.installed
-                          ? <span>{engine.detail}</span>
-                          : <span className="muted">{engine.detail}</span>}
-                      </span>
-                    </span>
-                    {engine.installed
-                      ? (
-                          <span className={`status-dot${selectedEngine === engine.id ? ' active' : ''}`} aria-hidden="true" />
-                        )
-                      : null}
-                  </button>
-                ))}
-              </div>
-            </section>
-          </div>
+          <section className="settings-content">
+            {section === 'execution'
+              ? (
+                  <ExecutionSettings
+                    engineTest={engineTest}
+                    onRescan={() => void handleRescan()}
+                    onTest={engineId => void handleTest(engineId)}
+                    settings={settings}
+                    update={persist}
+                  />
+                )
+              : null}
+            {section === 'connectors' ? <ConnectorsSettings settings={settings} update={persist} /> : null}
+            {section === 'mcp' ? <McpSettings settings={settings} update={persist} /> : null}
+            {section === 'language' ? <LanguageSettings settings={settings} update={persist} /> : null}
+            {section === 'appearance' ? <AppearanceSettings settings={settings} update={persist} /> : null}
+            {section === 'about'
+              ? (
+                  <div className="settings-section">
+                    <h3>Local workspace runtime</h3>
+                    <dl className="about-grid">
+                      <div>
+                        <dt>Version</dt>
+                        <dd>{runtimeVersion}</dd>
+                      </div>
+                      <div>
+                        <dt>Execution mode</dt>
+                        <dd>{settings.executionMode}</dd>
+                      </div>
+                      <div>
+                        <dt>Selected engine</dt>
+                        <dd>{settings.engineId}</dd>
+                      </div>
+                      <div>
+                        <dt>Updated</dt>
+                        <dd>{relativeTime(settings.updatedAt)}</dd>
+                      </div>
+                    </dl>
+                  </div>
+                )
+              : null}
+          </section>
         </div>
       </div>
     </div>
   )
 }
 
-function FidelityCard({
-  label,
-  variant,
-  active = false,
+function ExecutionSettings({
+  engineTest,
+  onRescan,
+  onTest,
+  settings,
+  update,
 }: {
-  label: string
-  variant: 'wireframe' | 'high-fidelity'
-  active?: boolean
+  engineTest: string | null
+  onRescan: () => void
+  onTest: (engineId: string) => void
+  settings: LocalSettingsConfig
+  update: (patch: Partial<LocalSettingsConfig>) => Promise<void>
 }) {
   return (
-    <button
-      type="button"
-      className={`fidelity-card${active ? ' active' : ''}`}
-      aria-pressed={active}
-    >
-      <span className={`fidelity-thumb fidelity-thumb-${variant}`} aria-hidden="true">
-        {variant === 'wireframe' ? <WireframeArt /> : <HighFidelityArt />}
-      </span>
-      <span className="fidelity-label">{label}</span>
+    <div className="settings-section">
+      <div className="segmented" role="tablist" aria-label="Execution mode">
+        <button type="button" className={settings.executionMode === 'local-cli' ? 'active' : ''} onClick={() => void update({ executionMode: 'local-cli' })}>Local CLI</button>
+        <button type="button" className={settings.executionMode === 'byok' ? 'active' : ''} onClick={() => void update({ executionMode: 'byok' })}>BYOK</button>
+      </div>
+      {settings.executionMode === 'local-cli'
+        ? (
+            <>
+              <div className="settings-row-head">
+                <div>
+                  <h3>Engine provider</h3>
+                  <p>Installed state comes from a real PATH scan on the local daemon.</p>
+                </div>
+                <button type="button" className="ghost action-button" onClick={onRescan}>
+                  <RefreshCw size={13} />
+                  {' '}
+                  Rescan
+                </button>
+              </div>
+              <div className="engine-grid">
+                {settings.engines.map(engine => (
+                  <EngineCard
+                    key={engine.id}
+                    active={settings.engineId === engine.id}
+                    engine={engine}
+                    onSelect={() => void update({ engineId: engine.id })}
+                    onTest={() => onTest(engine.id)}
+                  />
+                ))}
+              </div>
+              {engineTest ? <p className="settings-note" role="status">{engineTest}</p> : null}
+            </>
+          )
+        : (
+            <div className="byok-grid">
+              <label>
+                <span>Provider</span>
+                <input value={settings.byok.provider} onChange={event => void update({ byok: { ...settings.byok, provider: event.target.value } })} />
+              </label>
+              <label>
+                <span>Base URL</span>
+                <input value={settings.byok.baseUrl} onChange={event => void update({ byok: { ...settings.byok, baseUrl: event.target.value } })} />
+              </label>
+              <label>
+                <span>Model</span>
+                <input value={settings.byok.model} onChange={event => void update({ byok: { ...settings.byok, model: event.target.value } })} />
+              </label>
+              <label>
+                <span>API key ref</span>
+                <input value={settings.byok.apiKeyRef} onChange={event => void update({ byok: { ...settings.byok, apiKeyRef: event.target.value } })} placeholder="secret://aiworker/byok/openai" />
+              </label>
+            </div>
+          )}
+    </div>
+  )
+}
+
+function EngineCard({
+  active,
+  engine,
+  onSelect,
+  onTest,
+}: {
+  active: boolean
+  engine: LocalEngineStatus
+  onSelect: () => void
+  onTest: () => void
+}) {
+  return (
+    <div className={`engine-card ${active ? 'active' : ''} ${engine.installed ? '' : 'disabled'}`}>
+      <button type="button" disabled={!engine.installed} aria-pressed={active} onClick={onSelect}>
+        <Terminal size={19} />
+        <span>
+          <strong>{engine.name}</strong>
+          <small>{engine.installed ? engine.version ?? engine.path : 'Not installed'}</small>
+        </span>
+        <Circle size={10} className={engine.installed ? 'ok-dot' : 'muted-dot'} />
+      </button>
+      <button type="button" className="ghost action-button" disabled={!engine.installed} onClick={onTest}>Test</button>
+    </div>
+  )
+}
+
+function ConnectorsSettings({ settings, update }: { settings: LocalSettingsConfig, update: (patch: Partial<LocalSettingsConfig>) => Promise<void> }) {
+  return (
+    <div className="settings-section">
+      <h3>Connectors</h3>
+      <div className="connector-list">
+        {settings.connectors.map(connector => (
+          <label key={connector.id} className="switch-row">
+            <span>
+              <strong>{connector.name}</strong>
+              <small>{connector.status === 'configured' ? 'Configured' : 'Not configured'}</small>
+            </span>
+            <input
+              checked={connector.enabled}
+              type="checkbox"
+              onChange={event => void update({
+                connectors: settings.connectors.map(item => item.id === connector.id
+                  ? { ...item, enabled: event.target.checked, status: event.target.checked ? 'configured' : 'not_configured' }
+                  : item),
+              })}
+            />
+          </label>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function McpSettings({ settings, update }: { settings: LocalSettingsConfig, update: (patch: Partial<LocalSettingsConfig>) => Promise<void> }) {
+  return (
+    <div className="settings-section">
+      <h3>MCP server and external MCP</h3>
+      <label className="switch-row">
+        <span>
+          <strong>AIWorker local MCP server</strong>
+          <small>{settings.localMcpServer.url}</small>
+        </span>
+        <input checked={settings.localMcpServer.enabled} type="checkbox" onChange={event => void update({ localMcpServer: { ...settings.localMcpServer, enabled: event.target.checked } })} />
+      </label>
+      <div className="connector-list">
+        {settings.externalMcpServers.map(server => (
+          <label key={server.id} className="field-stack">
+            <span>{server.name}</span>
+            <input
+              value={server.command}
+              onChange={event => void update({
+                externalMcpServers: settings.externalMcpServers.map(item => item.id === server.id ? { ...item, command: event.target.value } : item),
+              })}
+              placeholder="command --arg value"
+            />
+          </label>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function LanguageSettings({ settings, update }: { settings: LocalSettingsConfig, update: (patch: Partial<LocalSettingsConfig>) => Promise<void> }) {
+  return (
+    <div className="settings-section">
+      <h3>Language</h3>
+      <div className="segmented compact" role="group" aria-label="Language">
+        {['en', 'zh-CN', 'ja', 'de'].map(language => (
+          <button key={language} type="button" className={settings.language === language ? 'active' : ''} onClick={() => void update({ language })}>{language}</button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function AppearanceSettings({ settings, update }: { settings: LocalSettingsConfig, update: (patch: Partial<LocalSettingsConfig>) => Promise<void> }) {
+  return (
+    <div className="settings-section">
+      <h3>Appearance</h3>
+      <div className="segmented compact" role="group" aria-label="Appearance">
+        <button type="button" className={settings.appearance === 'system' ? 'active' : ''} onClick={() => void update({ appearance: 'system' })}>
+          <Settings size={13} />
+          {' '}
+          System
+        </button>
+        <button type="button" className={settings.appearance === 'light' ? 'active' : ''} onClick={() => void update({ appearance: 'light' })}>
+          <Sun size={13} />
+          {' '}
+          Light
+        </button>
+        <button type="button" className={settings.appearance === 'dark' ? 'active' : ''} onClick={() => void update({ appearance: 'dark' })}>
+          <Moon size={13} />
+          {' '}
+          Dark
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function SettingsNavButton({ active, icon, label, onClick }: { active: boolean, icon: ReactNode, label: string, onClick: () => void }) {
+  return (
+    <button type="button" className={active ? 'active' : ''} onClick={onClick}>
+      {icon}
+      <span>{label}</span>
     </button>
   )
 }
 
-function WireframeArt() {
+function CaseCard({
+  artifact,
+  item,
+  run,
+  template,
+}: {
+  artifact: LocalArtifact | null
+  item: LocalCase
+  run: LocalRun | null
+  template?: CapabilityTemplate
+}) {
   return (
-    <svg viewBox="0 0 120 70" width="100%" height="100%" aria-hidden="true">
-      <rect x="6" y="8" width="46" height="6" rx="2" fill="#d8d4cb" />
-      <rect x="6" y="20" width="34" height="4" rx="2" fill="#ebe8e1" />
-      <rect x="6" y="28" width="38" height="4" rx="2" fill="#ebe8e1" />
-      <rect x="6" y="36" width="30" height="4" rx="2" fill="#ebe8e1" />
-      <circle cx="22" cy="56" r="6" fill="none" stroke="#d8d4cb" strokeWidth="1.4" />
-      <rect x="64" y="8" width="50" height="54" rx="3" fill="none" stroke="#d8d4cb" strokeWidth="1.4" />
-      <rect x="70" y="14" width="38" height="4" rx="2" fill="#ebe8e1" />
-      <rect x="70" y="22" width="32" height="4" rx="2" fill="#ebe8e1" />
-      <rect x="70" y="30" width="38" height="4" rx="2" fill="#ebe8e1" />
-    </svg>
-  )
-}
-
-function HighFidelityArt() {
-  return (
-    <svg viewBox="0 0 120 70" width="100%" height="100%" aria-hidden="true">
-      <rect x="6" y="8" width="34" height="6" rx="2" fill="#1a1916" />
-      <rect x="6" y="20" width="46" height="4" rx="2" fill="#74716b" />
-      <rect x="6" y="28" width="42" height="4" rx="2" fill="#b3b0a8" />
-      <rect x="6" y="40" width="22" height="9" rx="2" fill="#c96442" />
-      <rect x="64" y="8" width="50" height="54" rx="4" fill="#fbeee5" />
-      <rect x="70" y="14" width="38" height="4" rx="2" fill="#c96442" />
-      <rect x="70" y="22" width="32" height="3" rx="1.5" fill="#74716b" />
-      <rect x="70" y="29" width="36" height="3" rx="1.5" fill="#b3b0a8" />
-      <rect x="70" y="36" width="20" height="6" rx="2" fill="#c96442" />
-    </svg>
-  )
-}
-
-function DesignCard({ project }: { project: ProjectCard }) {
-  return (
-    <div className="design-card" role="button" tabIndex={0}>
-      <div className="design-card-thumb" aria-hidden="true" />
-      <div className="design-card-meta-block">
-        <div className="design-card-name" title={project.title}>{project.title}</div>
-        <div className="design-card-meta">
-          <span className="ds">{project.engine}</span>
-          {` · ${project.type} · `}
-          <span className="design-card-status design-card-status-succeeded">{project.status}</span>
-          {` · ${project.age}`}
-        </div>
+    <article className="case-card">
+      <div>
+        <strong>{item.title}</strong>
+        <span>{template?.name ?? item.selectedSkillId}</span>
       </div>
-    </div>
+      <p>{item.body.slice(0, 150)}</p>
+      <footer>
+        <span>{titleCase(run?.status ?? item.status)}</span>
+        <span>{artifact?.title ?? 'Artifact pending'}</span>
+      </footer>
+    </article>
   )
 }
 
-function buildProjectCards(data: LocalWorkspaceData | null): ProjectCard[] {
-  if (!data)
-    return []
-
-  return data.briefs.map((brief) => {
-    const latestRun = latestRunForBrief(brief.id, data.runs)
-    return {
-      title: brief.title,
-      engine: latestRun?.executor ?? 'Local CLI',
-      type: 'worker-project',
-      status: titleCase(latestRun?.status ?? brief.status),
-      age: relativeTime(brief.updatedAt),
-    }
-  })
+function buildCasePrompt(soul: VerticalSoul, template: CapabilityTemplate, context: string): string {
+  return [
+    `Soul: ${soul.name}`,
+    `Capability template: ${template.name}`,
+    `Output kind: ${template.outputKind}`,
+    '',
+    'Business context:',
+    context.trim(),
+    '',
+    'Review rubric:',
+    ...template.reviewRubric.map(item => `- ${item}`),
+  ].join('\n')
 }
 
-function latestRunForBrief(briefId: string, runs: LocalRun[]): LocalRun | null {
-  return runs
-    .filter(run => run.briefId === briefId)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null
+function artifactForCase(item: LocalCase, artifacts: LocalArtifact[], runs: LocalRun[]): LocalArtifact | null {
+  const run = runForCase(item, runs)
+  return artifacts.find(artifact => artifact.runId === run?.id) ?? null
+}
+
+function runForCase(item: LocalCase, runs: LocalRun[]): LocalRun | null {
+  return runs.filter(run => run.caseId === item.id).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0] ?? null
+}
+
+function latest<T extends { updatedAt: string }>(items: T[]): T | null {
+  return items.slice().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0] ?? null
 }
 
 function titleCase(value: string): string {
-  return value
-    .split('_')
-    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ')
+  return value.split('_').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(' ')
 }
 
 function relativeTime(value: string): string {
@@ -685,4 +780,22 @@ function relativeTime(value: string): string {
   if (hours < 48)
     return `${hours}h ago`
   return `${Math.floor(hours / 24)}d ago`
+}
+
+function autosaveCopy(state: AutosaveState): string {
+  if (state === 'saving')
+    return 'Saving'
+  if (state === 'failed')
+    return 'Save failed'
+  return 'All changes saved'
+}
+
+function caseNamePlaceholder(soulId: string): string {
+  if (soulId === 'hr')
+    return 'Senior backend candidate screen'
+  if (soulId === 'pm')
+    return 'Payments onboarding PRD'
+  if (soulId === 'qa')
+    return 'Release 1.2 regression gate'
+  return 'Checkout deploy checklist'
 }
