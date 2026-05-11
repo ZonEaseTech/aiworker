@@ -10,7 +10,7 @@ import type {
   LocalWorkspace,
 } from '@zonease/aiworker-shared'
 import type { FormEvent } from 'react'
-import type { messagesFor, SupportedLocale } from './i18n'
+import type { messagesFor, SupportedLocale } from '../features/i18n'
 
 import { ChevronLeft, ChevronRight, Circle, ClipboardCheck, Eye, FileText, MessageSquare, RefreshCw, Send, Settings, Sparkles, Terminal } from 'lucide-react'
 
@@ -19,7 +19,7 @@ import {
   formatRelativeTime,
   formatReviewVerdict,
   formatStatus,
-} from './i18n'
+} from '../features/i18n'
 
 export interface ArtifactPreviewState {
   artifactId: string | null

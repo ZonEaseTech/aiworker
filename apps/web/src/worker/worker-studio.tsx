@@ -40,7 +40,6 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useReducer, useState, useSyncExternalStore } from 'react'
 import { navigateWorkerRoute, parseWorkerRoute, useWorkerRoute } from '../app/router/worker-route'
-import { continueSessionTurnStream, createReview, createSessionTurnStream, createWorker, createWorkspace, loadLocalWorkspaceData, readFile, rescanEngines, saveSettings, testEngine, updateLesson } from '../features/local-workspace/api'
 import {
   displaySoul,
   displayTemplate,
@@ -50,7 +49,8 @@ import {
   messagesFor,
   normalizeLocale,
   supportedLocales,
-} from './i18n'
+} from '../features/i18n'
+import { continueSessionTurnStream, createReview, createSessionTurnStream, createWorker, createWorkspace, loadLocalWorkspaceData, readFile, rescanEngines, saveSettings, testEngine, updateLesson } from '../features/local-workspace/api'
 import { WorkerSessionChat } from './session-chat'
 import { SessionDetail } from './session-detail'
 

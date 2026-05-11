@@ -6,7 +6,7 @@ import type {
   LocalWorkspace,
 } from '@zonease/aiworker-shared'
 import type { FormEvent } from 'react'
-import type { messagesFor, SupportedLocale } from './i18n'
+import type { messagesFor, SupportedLocale } from '../features/i18n'
 import type { EngineReadiness } from './session-detail'
 
 import {
@@ -23,7 +23,7 @@ import {
   Wrench,
 } from 'lucide-react'
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
-import { displayTemplate, formatRelativeTime, formatStatus } from './i18n'
+import { displayTemplate, formatRelativeTime, formatStatus } from '../features/i18n'
 
 type WorkerMessages = ReturnType<typeof messagesFor>
 
