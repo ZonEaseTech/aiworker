@@ -1,5 +1,12 @@
 # AIWorker Changelog
 
+## 2026-05-12 01:48 [completed] BUG-110 / PLAN-268 — Count text convergence
+
+- 将能力模板和工作区数量从 badge/tag 改为标题后的 `(N)` 文本。
+- 删除不再使用的 `count-pill` 样式。
+- Verification passed: focused Web typecheck/lint/WorkerStudio test/build, `bun run check`,
+  `git diff --check`, browser verification on 9217, and code-review-graph review.
+
 ## 2026-05-12 01:44 [completed] BUG-109 / PLAN-267 — Add actions plus icon buttons
 
 - 将 Worker home 和 Workspace rail 的 add actions 统一回归为 plus icon button。

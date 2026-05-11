@@ -936,8 +936,7 @@ export function WorkerStudio() {
                       />
                       <div className="worker-capability-summary">
                         <div className="rail-section-head">
-                          <strong>{copy.create.capabilityTemplate}</strong>
-                          <span className="count-pill">{templates.length}</span>
+                          <strong>{`${copy.create.capabilityTemplate} (${templates.length})`}</strong>
                         </div>
                         <div className="worker-capability-chips">
                           {templates.map(template => (
@@ -950,8 +949,7 @@ export function WorkerStudio() {
                     <section className="workspace-list-section">
                       <div className="tab-panel-toolbar">
                         <div className="toolbar-left">
-                          <strong>{copy.workspace.workspaceList}</strong>
-                          <span className="count-pill">{filteredProjects.length}</span>
+                          <strong>{`${copy.workspace.workspaceList} (${filteredProjects.length})`}</strong>
                           <IconButton
                             aria-label={copy.workspace.createWorkspace}
                             title={copy.workspace.createWorkspace}
