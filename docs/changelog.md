@@ -1,5 +1,12 @@
 # AIWorker Changelog
 
+## 2026-05-12 01:24 [completed] BUG-107 / PLAN-265 — Workspace rail width convergence
+
+- 统一 workspace route 与 session route 的桌面态 sidebar padding。
+- 修复选中/未选中 session 时左侧 rail card 和列表项宽度不一致的问题。
+- Verification passed: focused Web typecheck/lint/test/build, `bun run check`, `git diff --check`,
+  browser width verification on 9217, and code-review-graph review.
+
 ## 2026-05-11 20:45 [completed] BUG-106 / PLAN-264 — Workspace route worker return action
 
 - 在未选中 session 的 workspace route 中恢复“返回 worker”动作。

@@ -52,10 +52,6 @@
   overflow-y: auto;
 }
 
-.workspace-session-route .entry-side {
-  padding-inline: 16px;
-}
-
 .soul-sidebar {
   width: auto;
 }
@@ -125,4 +121,3 @@
   color: var(--text-muted);
   font-size: 12px;
 }
-
