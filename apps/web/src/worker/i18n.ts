@@ -133,6 +133,7 @@ interface StaticMessages {
     sendingTurn: string
     backToSoulHome: string
     backToWorkerHome: string
+    backToWorkspace: string
     currentSession: string
     currentWorker: string
     currentWorkspace: string
@@ -408,6 +409,7 @@ const en = {
     sendingTurn: 'Sending turn...',
     backToSoulHome: 'Back to Soul home',
     backToWorkerHome: 'Back to worker',
+    backToWorkspace: 'Back to workspace',
     currentSession: 'Current session',
     currentWorker: 'Current worker',
     currentWorkspace: 'Current workspace',
@@ -677,6 +679,7 @@ const zhCN = {
     sendingTurn: '正在发送 turn...',
     backToSoulHome: '返回 Soul 首页',
     backToWorkerHome: '返回 worker',
+    backToWorkspace: '返回工作区',
     currentSession: '当前会话',
     currentWorker: '当前 worker',
     currentWorkspace: '当前工作区',
@@ -946,6 +949,7 @@ const ja = {
     sendingTurn: '送信中...',
     backToSoulHome: 'Soul ホームに戻る',
     backToWorkerHome: 'worker に戻る',
+    backToWorkspace: 'ワークスペースに戻る',
     currentSession: '現在のセッション',
     currentWorker: '現在の worker',
     currentWorkspace: '現在のワークスペース',
@@ -1215,6 +1219,7 @@ const de = {
     sendingTurn: 'Turn wird gesendet...',
     backToSoulHome: 'Zur Soul-Startseite',
     backToWorkerHome: 'Zurück zum Worker',
+    backToWorkspace: 'Zurück zum Workspace',
     currentSession: 'Aktuelle Session',
     currentWorker: 'Aktueller Worker',
     currentWorkspace: 'Aktueller Workspace',

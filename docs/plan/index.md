@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-11 (PLAN-238..241 completed)
+> Updated: 2026-05-11 (PLAN-242..243 completed)
 
 ## Usage
 
@@ -270,3 +270,5 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-239 Worker list and creation dialog refinement**](PLAN-239.md) `2026-05-11`
 - [x] [**PLAN-240 Session composer and right drawer refinement**](PLAN-240.md) `2026-05-11`
 - [x] [**PLAN-241 Worker Web visual polish validation**](PLAN-241.md) `2026-05-11`
+- [x] [**PLAN-242 Worker Web interaction polish follow-up**](PLAN-242.md) `2026-05-11`
+- [x] [**PLAN-243 Worker Web interaction polish validation**](PLAN-243.md) `2026-05-11`

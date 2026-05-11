@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-11 (Worker Web visual polish planned)
+> Updated: 2026-05-11 (Worker Web interaction polish follow-up completed)
 
 ## Usage
 
@@ -345,3 +345,5 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REFACTOR-061 Worker list and creation dialog polish**](REFACTOR-061.md) `P0`
 - [x] [**REFACTOR-062 Session composer and right-side summary refinement**](REFACTOR-062.md) `P0`
 - [x] [**QA-032 Worker Web visual polish validation**](QA-032.md) `P0`
+- [x] [**REFACTOR-063 Worker Web interaction polish follow-up**](REFACTOR-063.md) `P0`
+- [x] [**QA-033 Worker Web interaction polish regression validation**](QA-033.md) `P0`

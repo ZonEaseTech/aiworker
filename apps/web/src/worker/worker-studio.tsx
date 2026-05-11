@@ -36,7 +36,7 @@ import {
   Terminal,
   X,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useReducer, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useId, useMemo, useReducer, useState, useSyncExternalStore } from 'react'
 import { continueSessionTurnStream, createReview, createSessionTurnStream, createWorker, createWorkspace, loadLocalWorkspaceData, readFile, rescanEngines, saveSettings, testEngine, updateLesson } from './api'
 import {
   displaySoul,
@@ -48,7 +48,7 @@ import {
   normalizeLocale,
   supportedLocales,
 } from './i18n'
-import { navigateWorkerRoute, useWorkerRoute } from './router'
+import { navigateWorkerRoute, parseWorkerRoute, useWorkerRoute } from './router'
 import { WorkerSessionChat } from './session-chat'
 import { SessionDetail } from './session-detail'
 
@@ -340,6 +340,18 @@ export function WorkerStudio() {
     setSubmitting(true)
     try {
       const body = buildProjectPrompt(selectedSoul, selectedTemplate, workspaceContext)
+      let sessionRouteShown = false
+      const startedWorkerId = selectedWorker.id
+      const startedWorkspaceId = selectedWorkspace.id
+      const maybeNavigateToStartedSession = (sessionId: string) => {
+        if (sessionRouteShown)
+          return
+        const currentRoute = parseWorkerRoute(window.location.pathname)
+        if (currentRoute.kind !== 'workspace' || currentRoute.workerId !== startedWorkerId || currentRoute.workspaceId !== startedWorkspaceId)
+          return
+        sessionRouteShown = true
+        navigateWorkerRoute({ kind: 'session', sessionId, workerId: startedWorkerId, workspaceId: startedWorkspaceId })
+      }
       const sessionResult = await createSessionTurnStream(selectedWorkspace.id, {
         capabilityTemplateId: selectedTemplate.id,
         context: workspaceContext,
@@ -355,7 +367,7 @@ export function WorkerStudio() {
         onEvent: event => setStreamEvents(current => [...current, event]),
         onSession: (session) => {
           setStreamSessions(current => upsertSession(current, session))
-          navigateWorkerRoute({ kind: 'session', sessionId: session.id, workerId: selectedWorker.id, workspaceId: selectedWorkspace.id })
+          maybeNavigateToStartedSession(session.id)
         },
         onTurn: turn => setStreamTurns(current => upsertTurn(current, turn)),
       })
@@ -363,7 +375,7 @@ export function WorkerStudio() {
       setStreamTurns(current => upsertTurn(current, sessionResult.turn))
       setWorkspaceContext('')
       await refresh()
-      navigateWorkerRoute({ kind: 'session', sessionId: sessionResult.session.id, workerId: selectedWorker.id, workspaceId: selectedWorkspace.id })
+      maybeNavigateToStartedSession(sessionResult.session.id)
     }
     finally {
       setSubmitting(false)
@@ -500,23 +512,26 @@ export function WorkerStudio() {
                     <Plus aria-hidden="true" size={15} />
                   </button>
                 </div>
-                <div className="soul-rail" role="listbox" aria-label={copy.accessibility.soulCatalog}>
+                <div className="soul-list" role="listbox" aria-label={copy.accessibility.soulCatalog}>
                   {availableSouls.map((soul) => {
                     const soulCopy = displaySoul(soul, activeLocale)
                     return (
                       <button
                         key={soul.id}
                         type="button"
-                        className={`soul-rail-item ${newWorkerSoulId === soul.id ? 'active' : ''}`}
+                        className={`soul-list-item ${newWorkerSoulId === soul.id ? 'active' : ''}`}
                         aria-selected={newWorkerSoulId === soul.id}
                         role="option"
                         onClick={() => setNewWorkerSoulId(soul.id)}
                       >
-                        <span className="soul-rail-title">
+                        <span className="soul-list-item-main">
                           <strong>{soulCopy.name}</strong>
+                          <small>{soulCopy.domain}</small>
                         </span>
-                        <small>{soulCopy.domain}</small>
-                        <span>{copy.common.available}</span>
+                        <span className="soul-list-item-meta">
+                          <span>{copy.common.available}</span>
+                          {newWorkerSoulId === soul.id ? <Check aria-hidden="true" size={14} /> : null}
+                        </span>
                       </button>
                     )
                   })}
@@ -608,6 +623,18 @@ export function WorkerStudio() {
                       <ArrowLeft aria-hidden="true" size={13} />
                       <span>{copy.workspace.backToWorkerHome}</span>
                     </button>
+                    {showSessionSurface
+                      ? (
+                          <button
+                            type="button"
+                            className="rail-back-button"
+                            onClick={() => navigateWorkerRoute({ kind: 'workspace', workerId: selectedWorker.id, workspaceId: selectedWorkspace.id })}
+                          >
+                            <ArrowLeft aria-hidden="true" size={13} />
+                            <span>{copy.workspace.backToWorkspace}</span>
+                          </button>
+                        )
+                      : null}
                     <div className="rail-context-main">
                       <span className="kicker">{copy.workspace.workspaceNavigation}</span>
                       <h3>{selectedWorkspace.name}</h3>
@@ -775,6 +802,7 @@ export function WorkerStudio() {
                   turnSubmitting={turnSubmitting}
                   turns={displayedSessionTurns}
                   workspace={selectedWorkspace}
+                  onBackToWorkspace={() => navigateWorkerRoute({ kind: 'workspace', workerId: selectedWorker.id, workspaceId: selectedWorkspace.id })}
                   onOpenSettings={() => openSettings('execution')}
                   onRefresh={() => void refresh()}
                   onSubmitTurn={submitTurn}
@@ -811,18 +839,20 @@ export function WorkerStudio() {
                           </div>
                         </div>
 
-                        <select
-                          className="ds-select"
-                          aria-label={copy.create.capabilityTemplate}
+                        <StudioSelect
+                          ariaLabel={copy.create.capabilityTemplate}
+                          label={copy.create.capabilityTemplate}
+                          options={templates.map((template) => {
+                            const templateCopy = displayTemplate(template, activeLocale)
+                            return {
+                              description: template.outputKind,
+                              label: templateCopy.name,
+                              value: template.id,
+                            }
+                          })}
                           value={selectedTemplate.id}
-                          onChange={event => setSelectedTemplateId(event.target.value)}
-                        >
-                          {templates.map(template => (
-                            <option key={template.id} value={template.id}>
-                              {displayTemplate(template, activeLocale).name}
-                            </option>
-                          ))}
-                        </select>
+                          onChange={setSelectedTemplateId}
+                        />
 
                         <textarea
                           id="project-context"
@@ -1087,15 +1117,23 @@ function CreateWorkerDialog({
       onClose={onClose}
     >
       <form className="dialog-form" onSubmit={onSubmit}>
-        <label className="settings-field">
+        <div className="settings-field">
           <span>{copy.create.soul}</span>
-          <select className="ds-select" aria-label={copy.create.soul} value={selectedSoulId} onChange={event => onSoulChange(event.target.value)}>
-            {availableSouls.map((soul) => {
+          <StudioSelect
+            ariaLabel={copy.create.soul}
+            label={copy.create.soul}
+            options={availableSouls.map((soul) => {
               const soulCopy = displaySoul(soul, locale)
-              return <option key={soul.id} value={soul.id}>{soulCopy.name}</option>
+              return {
+                description: soulCopy.domain,
+                label: soulCopy.name,
+                value: soul.id,
+              }
             })}
-          </select>
-        </label>
+            value={selectedSoulId}
+            onChange={onSoulChange}
+          />
+        </div>
         <label className="settings-field">
           <span>{copy.workspace.workerName}</span>
           <input
@@ -1217,6 +1255,113 @@ function CreationDialog({
           {children}
         </div>
       </dialog>
+    </div>
+  )
+}
+
+function StudioSelect({
+  ariaLabel,
+  label,
+  onChange,
+  options,
+  value,
+}: {
+  ariaLabel: string
+  label: string
+  onChange: (value: string) => void
+  options: Array<{ description?: string, label: string, value: string }>
+  value: string
+}) {
+  const [open, setOpen] = useState(false)
+  const id = useId()
+  const selectedIndex = Math.max(0, options.findIndex(option => option.value === value))
+  const selected = options[selectedIndex]
+
+  const choose = (nextValue: string) => {
+    onChange(nextValue)
+    setOpen(false)
+  }
+
+  const chooseByOffset = (offset: number) => {
+    if (options.length === 0)
+      return
+    const nextIndex = (selectedIndex + offset + options.length) % options.length
+    const next = options[nextIndex]
+    if (!next)
+      return
+    onChange(next.value)
+    setOpen(true)
+  }
+
+  return (
+    <div
+      className={`studio-select ${open ? 'open' : ''}`}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+          setOpen(false)
+      }}
+    >
+      <button
+        type="button"
+        id={`${id}-trigger`}
+        className="studio-select-trigger"
+        role="combobox"
+        aria-label={ariaLabel}
+        aria-controls={`${id}-listbox`}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        onClick={() => setOpen(current => !current)}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') {
+            setOpen(false)
+            return
+          }
+          if (event.key === 'ArrowDown') {
+            event.preventDefault()
+            chooseByOffset(1)
+            return
+          }
+          if (event.key === 'ArrowUp') {
+            event.preventDefault()
+            chooseByOffset(-1)
+            return
+          }
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            setOpen(current => !current)
+          }
+        }}
+      >
+        <span id={`${id}-label`} className="sr-only">{label}</span>
+        <span className="studio-select-copy">
+          <strong>{selected?.label ?? ''}</strong>
+          {selected?.description ? <small>{selected.description}</small> : null}
+        </span>
+        <ChevronDown aria-hidden="true" className="studio-select-chevron" size={16} />
+      </button>
+      {open
+        ? (
+            <div id={`${id}-listbox`} className="studio-select-list" role="listbox" aria-label={label}>
+              {options.map(option => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={`studio-select-option ${option.value === value ? 'active' : ''}`}
+                  role="option"
+                  aria-selected={option.value === value}
+                  onMouseDown={event => event.preventDefault()}
+                  onClick={() => choose(option.value)}
+                >
+                  <span className="studio-select-copy">
+                    <strong>{option.label}</strong>
+                    {option.description ? <small>{option.description}</small> : null}
+                  </span>
+                  {option.value === value ? <Check aria-hidden="true" size={14} /> : null}
+                </button>
+              ))}
+            </div>
+          )
+        : null}
     </div>
   )
 }

@@ -154,6 +154,7 @@ let currentSessions: typeof sessionRecord[]
 let currentTurns: typeof turnRecord[]
 let currentWorkers: typeof workers
 let currentWorkspaces: typeof workspace[]
+let deferCreatedSessionStream: boolean
 
 function resetSettings() {
   currentSettings = {
@@ -172,6 +173,7 @@ function resetSettings() {
   currentLessons = [{ ...lessonRecord }]
   currentEvents = [{ ...eventRecord }]
   currentWorkers = workers.map(worker => ({ ...worker }))
+  deferCreatedSessionStream = false
 }
 
 function installMatchMedia(initialMatches: boolean) {
@@ -272,10 +274,16 @@ beforeEach(() => {
       const encoder = new TextEncoder()
       return new Response(new ReadableStream({
         start(controller) {
-          controller.enqueue(encoder.encode(`event: session\ndata: ${JSON.stringify(createdSession)}\n\n`))
-          controller.enqueue(encoder.encode(`event: turn\ndata: ${JSON.stringify({ ...createdTurn, status: 'running', response: null })}\n\n`))
-          controller.enqueue(encoder.encode(`event: result\ndata: ${JSON.stringify({ artifacts: [createdArtifact], events: [], files: [], lessons: [], review: null, session: createdSession, turn: createdTurn })}\n\n`))
-          controller.close()
+          const write = () => {
+            controller.enqueue(encoder.encode(`event: session\ndata: ${JSON.stringify(createdSession)}\n\n`))
+            controller.enqueue(encoder.encode(`event: turn\ndata: ${JSON.stringify({ ...createdTurn, status: 'running', response: null })}\n\n`))
+            controller.enqueue(encoder.encode(`event: result\ndata: ${JSON.stringify({ artifacts: [createdArtifact], events: [], files: [], lessons: [], review: null, session: createdSession, turn: createdTurn })}\n\n`))
+            controller.close()
+          }
+          if (deferCreatedSessionStream)
+            setTimeout(write, 20)
+          else
+            write()
         },
       }), { headers: { 'content-type': 'text/event-stream' }, status: 201 })
     }
@@ -435,7 +443,8 @@ describe('worker studio', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create worker' }))
 
     const dialog = screen.getByRole('dialog', { name: 'Create worker' })
-    fireEvent.change(within(dialog).getByLabelText('Soul'), { target: { value: 'pm' } })
+    fireEvent.click(within(dialog).getByRole('combobox', { name: 'Soul' }))
+    fireEvent.click(within(dialog).getByRole('option', { name: /PM/ }))
     fireEvent.change(within(dialog).getByLabelText('Worker name'), { target: { value: 'Product Worker' } })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create worker' }))
 
@@ -446,6 +455,21 @@ describe('worker studio', () => {
       }))
       expect(window.location.pathname).toBe('/workers/worker-created')
     })
+  })
+
+  it('uses a vertical Soul selector when no workers exist', async () => {
+    currentWorkers = []
+    currentWorkspaces = []
+    currentSessions = []
+    currentArtifacts = []
+
+    render(<WorkerStudio />)
+
+    expect((await screen.findAllByText('No worker')).length).toBeGreaterThan(0)
+    const catalog = screen.getByRole('listbox', { name: 'Soul catalog' })
+    expect(within(catalog).getByRole('option', { name: /HR/ })).toBeTruthy()
+    expect(within(catalog).getByText('hr-recruiting')).toBeTruthy()
+    expect(within(catalog).getByRole('option', { name: /PM/ })).toBeTruthy()
   })
 
   it('creates a workspace session turn with selected Soul worker and skill metadata', async () => {
@@ -473,6 +497,34 @@ describe('worker studio', () => {
         body: expect.stringContaining('"capabilityTemplateId":"candidate-screen"'),
         method: 'POST',
       }))
+      expect(window.location.pathname).toBe('/workers/hr-worker/workspaces/workspace-created/sessions/session-created')
+    })
+  })
+
+  it('does not force navigation back to a streaming session after the operator leaves the workspace route', async () => {
+    deferCreatedSessionStream = true
+    render(<WorkerStudio />)
+
+    await screen.findAllByText('Candidate Screen')
+    fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }))
+    const dialog = screen.getByRole('dialog', { name: 'Create workspace' })
+    fireEvent.change(within(dialog).getByLabelText('Project name'), { target: { value: 'New candidate workspace' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create workspace' }))
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/workers/hr-worker/workspaces/workspace-created')
+    })
+
+    fireEvent.change(screen.getByLabelText('Business context'), { target: { value: 'Role and candidate packet.' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create session' }))
+    window.history.pushState(null, '', '/workers/pm-worker')
+    window.dispatchEvent(new PopStateEvent('popstate'))
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/local/workers/hr-worker/workspaces/workspace-created/sessions/stream', expect.objectContaining({ method: 'POST' }))
+    })
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/workers/pm-worker')
     })
   })
 
@@ -497,6 +549,7 @@ describe('worker studio', () => {
     expect(screen.getByText('Current workspace')).toBeTruthy()
     expect(screen.getByText('Workspace sessions')).toBeTruthy()
     expect(screen.getByRole('button', { name: /Back to worker/ })).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: /Back to workspace/ }).length).toBeGreaterThan(0)
     expect(screen.queryByTestId('new-project-panel')).toBeNull()
     expect(screen.getByText('Session events')).toBeTruthy()
     expect(screen.getByText('Memory candidates')).toBeTruthy()

@@ -1,5 +1,37 @@
 # AIWorker Changelog
 
+## 2026-05-11 10:58 [completed] REFACTOR-063 / PLAN-242..243 / QA-033 — Worker Web interaction polish follow-up
+
+- Tightened Worker Web typography to the `DESIGN.md` type scale in the built
+  studio CSS: 12/14/16/18/20/24/30px, weights 400/500/600, and zero letter
+  spacing.
+- Reworked creation dialog spacing and close-button placement, replaced native
+  Worker Studio selects with integrated listbox selects, aligned select chevron
+  padding, and preserved readable button hover foreground colors.
+- Replaced empty-worker Soul tags with a vertical scrollable list item selector
+  while preserving the existing worker list row pattern.
+- Centered the workspace route content rail and added direct return-to-workspace
+  actions in session sidebar and session header.
+- Guarded session creation streaming so engine output no longer forces the
+  operator back to a session after they intentionally navigate away.
+- Playwright MCP validation on `http://127.0.0.1:9217/` covered desktop,
+  create worker dialog/listbox select, workspace route, session route,
+  return-to-workspace actions, and 390px mobile. It also found a mobile
+  create-session/empty-state overlap, which was fixed and revalidated.
+- The local 9217 database already contained a worker, so the no-worker vertical
+  Soul list was validated through focused RTL coverage instead of deleting local
+  operator data.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `bun run crg:update`
+  - `bun run crg:review`
+- code-review-graph result: risk score `0.60`, 0 affected flows; remaining
+  reported test gaps are UI component entities covered by focused RTL and
+  Playwright evidence.
+
 ## 2026-05-11 09:00 [completed] REFACTOR-060..062 / PLAN-238..241 / QA-032 — Worker Web visual polish
 
 - Converged Worker Web styling toward `DESIGN.md`: black / white / neutral

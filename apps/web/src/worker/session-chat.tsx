@@ -12,6 +12,7 @@ import type { EngineReadiness } from './session-detail'
 import {
   AlertCircle,
   ArrowDown,
+  ArrowLeft,
   CheckCircle,
   FileText,
   MessageSquare,
@@ -47,6 +48,7 @@ export function WorkerSessionChat({
   locale,
   onOpenSettings,
   onRefresh,
+  onBackToWorkspace,
   onSubmitTurn,
   onTurnInputChange,
   session,
@@ -62,6 +64,7 @@ export function WorkerSessionChat({
   locale: SupportedLocale
   onOpenSettings: () => void
   onRefresh: () => void
+  onBackToWorkspace: () => void
   onSubmitTurn: (event: FormEvent<HTMLFormElement>) => void
   onTurnInputChange: (value: string) => void
   session: LocalSession
@@ -146,6 +149,10 @@ export function WorkerSessionChat({
           </div>
         </div>
         <div className="worker-chat-actions">
+          <button type="button" className="ghost icon-btn" onClick={onBackToWorkspace}>
+            <ArrowLeft aria-hidden="true" size={14} />
+            <span>{copy.workspace.backToWorkspace}</span>
+          </button>
           <button type="button" className="settings-trigger" aria-label={copy.accessibility.refreshWorkspace} onClick={onRefresh}>
             <RefreshCw aria-hidden="true" size={16} />
           </button>
