@@ -103,6 +103,8 @@ export const de = {
     continueSession: 'Session fortsetzen',
     createSession: 'Session erstellen',
     createSessionHint: templateName => `Startet eine ${templateName}-Session in diesem Workspace.`,
+    createSessionPlaceholder: 'Beschreibe Ziel, Kontext, Quellmaterial oder erwartetes Artefakt...',
+    createSessionPrompt: workspaceName => `Was soll in ${workspaceName} erstellt werden?`,
     createWorker: 'Worker erstellen',
     createWorkerHint: 'Binde zuerst eine Soul an einen Worker, bevor du Workspaces erstellst.',
     createWorkspace: 'Workspace erstellen',

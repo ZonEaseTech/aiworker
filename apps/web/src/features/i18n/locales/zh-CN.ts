@@ -103,6 +103,8 @@ export const zhCN = {
     continueSession: '继续会话',
     createSession: '创建会话',
     createSessionHint: templateName => `在此工作区中启动一个 ${templateName} 会话。`,
+    createSessionPlaceholder: '描述目标、上下文、输入材料或期望产物...',
+    createSessionPrompt: workspaceName => `要在 ${workspaceName} 中构建什么？`,
     createWorker: '创建 worker',
     createWorkerHint: '先将 Soul 绑定到 worker，再创建工作区。',
     createWorkspace: '创建工作区',

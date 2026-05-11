@@ -106,6 +106,8 @@ export const en = {
     continueSession: 'Continue session',
     createSession: 'Create session',
     createSessionHint: templateName => `Start a ${templateName} session in this workspace.`,
+    createSessionPlaceholder: 'Describe the goal, context, source material, or expected artifact...',
+    createSessionPrompt: workspaceName => `What do you want to build in ${workspaceName}?`,
     createWorker: 'Create worker',
     createWorkerHint: 'Bind a Soul to a worker before creating workspaces.',
     createWorkspace: 'Create workspace',

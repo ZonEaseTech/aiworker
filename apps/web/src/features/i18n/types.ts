@@ -100,6 +100,8 @@ export interface StaticMessages {
     continueSession: string
     createSession: string
     createSessionHint: (templateName: string) => string
+    createSessionPlaceholder: string
+    createSessionPrompt: (workspaceName: string) => string
     createWorker: string
     createWorkerHint: string
     createWorkspace: string

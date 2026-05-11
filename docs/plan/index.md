@@ -284,3 +284,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-253 Worker Web full-width route shell**](PLAN-253.md) `2026-05-11`
 - [x] [**PLAN-254 Worker workspace card grid layout**](PLAN-254.md) `2026-05-11`
 - [x] [**PLAN-255 Workspace route management layout alignment**](PLAN-255.md) `2026-05-11`
+- [x] [**PLAN-256 Workspace route create-session composer**](PLAN-256.md) `2026-05-11`

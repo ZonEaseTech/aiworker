@@ -359,3 +359,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-095 Worker Web worker/workspace pages are width constrained**](BUG-095.md) `P0`
 - [x] [**BUG-096 Worker workspace cards render as a single-column list**](BUG-096.md) `P0`
 - [x] [**BUG-097 Workspace route page structure differs from worker route**](BUG-097.md) `P0`
+- [x] [**BUG-098 Workspace route should focus on session creation**](BUG-098.md) `P0`

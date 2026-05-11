@@ -221,7 +221,3 @@
   color: var(--text);
   font-size: 14px;
 }
-
-.workspace-route-empty {
-  min-height: 240px;
-}

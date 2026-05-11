@@ -1,5 +1,24 @@
 # AIWorker Changelog
 
+## 2026-05-11 17:26 [completed] BUG-098 / PLAN-256 — Workspace route create-session composer
+
+- Replace the no-session workspace route with a Codex-like create-session
+  composer.
+- Remove the temporary workspace overview panel and central session-card grid
+  from the workspace route.
+- Keep session navigation in the workspace side rail and preserve session
+  detail routing.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `bun run check`
+  - `git diff --check`
+  - Browser verification on `http://127.0.0.1:9217/workers/hr-worker/workspaces/b8a15051-14ef-4aad-9c66-5405ce39670f`
+  - `bun run crg:update`
+  - `bun run crg:review`
+
 ## 2026-05-11 17:11 [completed] BUG-097 / PLAN-255 — Workspace route management layout alignment
 
 - Restructured `workspaces/[workspace_id]` to match the worker route rhythm:

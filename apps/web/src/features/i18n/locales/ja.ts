@@ -103,6 +103,8 @@ export const ja = {
     continueSession: 'セッションを続ける',
     createSession: 'セッションを作成',
     createSessionHint: templateName => `このワークスペースで ${templateName} セッションを開始します。`,
+    createSessionPlaceholder: '目的、コンテキスト、入力資料、期待する成果物を記述します...',
+    createSessionPrompt: workspaceName => `${workspaceName} で何を構築しますか？`,
     createWorker: 'worker を作成',
     createWorkerHint: 'ワークスペース作成前に Soul を worker にバインドします。',
     createWorkspace: 'ワークスペースを作成',
