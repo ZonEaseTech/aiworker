@@ -1,5 +1,28 @@
 # AIWorker Changelog
 
+## 2026-05-11 11:41 [completed] BUG-091 / PLAN-247 — Mobile session route layout repair
+
+- Corrected the mobile session route validation miss where no horizontal
+  overflow was incorrectly treated as sufficient acceptance.
+- Collapsed mobile session sidebar content to route-critical back actions and
+  workspace context instead of rendering the full desktop navigation stack.
+- Let session chat header controls wrap on narrow screens and hid the back
+  button text behind an accessible label on mobile.
+- Bounded the mobile artifact rail as a bottom preview so it no longer competes
+  with the chat surface for the whole viewport.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `git diff --check`
+  - `bun run crg:update`
+  - `bun run crg:review`
+  - Playwright MCP 390px visual inspection on `http://127.0.0.1:9217/`
+- code-review-graph result: risk score `0.55`, 0 affected flows; the reported
+  `WorkerSessionChat` gap is covered by existing session route tests and the
+  mobile Playwright visual inspection for this CSS/accessibility-only repair.
+
 ## 2026-05-11 11:31 [completed] REFACTOR-064 / PLAN-245..246 / QA-034 — Worker Web shared route layout
 
 - Added shared Worker Web route layout helpers for shell/sidebar/main/detail

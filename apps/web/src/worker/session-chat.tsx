@@ -149,7 +149,7 @@ export function WorkerSessionChat({
           </div>
         </div>
         <div className="worker-chat-actions">
-          <button type="button" className="ghost icon-btn" onClick={onBackToWorkspace}>
+          <button type="button" className="ghost icon-btn" aria-label={copy.workspace.backToWorkspace} onClick={onBackToWorkspace}>
             <ArrowLeft aria-hidden="true" size={14} />
             <span>{copy.workspace.backToWorkspace}</span>
           </button>

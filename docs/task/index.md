@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-11 (Worker Web shared route layout completed)
+> Updated: 2026-05-11 (Mobile session route layout crowding completed)
 
 ## Usage
 
@@ -350,3 +350,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-090 Settings autosave status and dialog scroll layout**](BUG-090.md) `P0`
 - [x] [**REFACTOR-064 Worker Web shared route layout**](REFACTOR-064.md) `P0`
 - [x] [**QA-034 Worker Web shared layout validation**](QA-034.md) `P0`
+- [x] [**BUG-091 Mobile session route layout crowding**](BUG-091.md) `P0`

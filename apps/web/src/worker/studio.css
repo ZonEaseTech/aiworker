@@ -3240,6 +3240,58 @@ textarea {
     padding-right: 16px;
   }
 
+  .workspace-session-route .entry-side {
+    max-height: 188px;
+    padding: 12px 14px;
+    gap: 10px;
+  }
+
+  .workspace-session-route .entry-brand,
+  .workspace-session-route .readiness-card,
+  .workspace-session-route .entry-side-foot,
+  .workspace-session-route .workspace-rail-card:not(.workspace-context-card),
+  .workspace-session-route .workspace-context-card .worker-identity,
+  .workspace-session-route .workspace-context-card .rail-meta-grid {
+    display: none;
+  }
+
+  .workspace-session-route .workspace-context-card {
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .workspace-session-route .entry-main {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .workspace-session-route .artifact-rail {
+    flex: 0 0 188px;
+    width: 100%;
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .worker-chat-header {
+    min-height: 0;
+    flex-direction: column;
+    align-items: stretch;
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  .worker-chat-title h1 {
+    font-size: 18px;
+  }
+
+  .worker-chat-actions {
+    justify-content: flex-end;
+  }
+
+  .worker-chat-actions .ghost.icon-btn span {
+    display: none;
+  }
+
   .worker-composer {
     grid-template-columns: minmax(0, 1fr) auto;
   }
