@@ -1,5 +1,29 @@
 # AIWorker Changelog
 
+## 2026-05-11 16:42 [completed] BUG-095 / PLAN-253 — Worker Web full-width route shell
+
+- Removed the non-session route width cap and auto margins that made
+  worker/workspace pages render as centered layouts while session pages stayed
+  full width.
+- Worker, workspace, and session routes now share the same full-width
+  `.entry-header` and `.entry-tab-content` shell.
+- Component-level card layout is unchanged; only route shell width ownership was
+  unified.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `bun run check`
+  - `git diff --check`
+  - Browser verification on `http://127.0.0.1:9217/worker/`
+  - `bun run crg:update`
+  - `bun run crg:review`
+- Browser result: at 1800x1000, worker and workspace routes both render main,
+  header, and content at 1460px wide from the sidebar edge; the session route
+  keeps its existing 3-column layout with a 1120px middle session column.
+- code-review-graph result: risk score `0.00`, 0 affected flows, 0 test gaps.
+
 ## 2026-05-11 16:24 [completed] BUG-094 / PLAN-252 — Worker list rail scroll ownership
 
 - Removed the fixed `188px` max height from the worker list rail.
