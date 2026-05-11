@@ -286,3 +286,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-255 Workspace route management layout alignment**](PLAN-255.md) `2026-05-11`
 - [x] [**PLAN-256 Workspace route create-session composer**](PLAN-256.md) `2026-05-11`
 - [x] [**PLAN-257 Select 展开态样式统一**](PLAN-257.md) `2026-05-11`
+- [x] [**PLAN-258 其他工作区筛除当前项**](PLAN-258.md) `2026-05-11`

@@ -125,6 +125,7 @@ export const en = {
     memoryCandidates: 'Memory candidates',
     noEvents: 'Events appear after a session turn starts.',
     noMemoryCandidates: 'No memory candidates for this workspace yet.',
+    noOtherWorkspaces: 'No other workspaces yet.',
     noSelectionDetail: 'Create or select a workspace to inspect the session, artifact, review, and memory candidates.',
     noSelectionTitle: 'No workspace selected',
     noTurns: 'No turns recorded for this session.',

@@ -119,6 +119,7 @@ export interface StaticMessages {
     memoryCandidates: string
     noEvents: string
     noMemoryCandidates: string
+    noOtherWorkspaces: string
     noSelectionDetail: string
     noSelectionTitle: string
     noTurns: string

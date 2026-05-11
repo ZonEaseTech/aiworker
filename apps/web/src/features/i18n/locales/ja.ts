@@ -122,6 +122,7 @@ export const ja = {
     memoryCandidates: 'メモリー候補',
     noEvents: 'セッションターン開始後にイベントが表示されます。',
     noMemoryCandidates: 'このワークスペースにはまだメモリー候補がありません。',
+    noOtherWorkspaces: '他のワークスペースはまだありません。',
     noSelectionDetail: 'ワークスペースを作成または選択して、セッション、成果物、レビュー、メモリー候補を確認します。',
     noSelectionTitle: 'ワークスペース未選択',
     noTurns: 'このセッションにはターンがありません。',

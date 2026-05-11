@@ -622,6 +622,13 @@ describe('worker studio', () => {
   })
 
   it('keeps an empty workspace route in workspace navigation instead of the creation surface', async () => {
+    const otherWorkspace = {
+      ...workspace,
+      id: 'workspace-2',
+      name: 'Offer Workspace',
+      rootPath: '/tmp/offer',
+    }
+    currentWorkspaces = [{ ...workspace }, otherWorkspace]
     currentSessions = []
     currentTurns = []
     currentArtifacts = []
@@ -639,6 +646,10 @@ describe('worker studio', () => {
     expect(screen.getAllByText('No sessions in this workspace yet.').length).toBeGreaterThan(0)
     expect(document.querySelector('.workspace-overview-panel')).toBeNull()
     expect(document.querySelector('.workspace-session-grid')).toBeNull()
+    const otherWorkspaceList = document.querySelector('.rail-workspace-list') as HTMLElement
+    expect(within(otherWorkspaceList).queryByText('Hiring Workspace')).toBeNull()
+    expect(within(otherWorkspaceList).getByText('Offer Workspace')).toBeTruthy()
+    expect(otherWorkspaceList.querySelector('.rail-workspace-item.active')).toBeNull()
     expect(screen.queryByTestId('new-project-panel')).toBeNull()
     expect(screen.queryByLabelText('Soul catalog')).toBeNull()
   })

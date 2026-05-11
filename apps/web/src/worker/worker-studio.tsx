@@ -193,6 +193,10 @@ export function WorkerStudio() {
     ?? (selectedWorkspaceId && soulWorkspaces.some(item => item.id === selectedWorkspaceId)
       ? soulWorkspaces.find(item => item.id === selectedWorkspaceId) ?? null
       : latest(soulWorkspaces))
+  const otherWorkspaces = useMemo(
+    () => selectedWorkspace ? soulWorkspaces.filter(item => item.id !== selectedWorkspace.id) : soulWorkspaces,
+    [selectedWorkspace, soulWorkspaces],
+  )
   const workspaceSessions = useMemo(
     () => selectedWorkspace ? allSessions.filter(session => session.workspaceId === selectedWorkspace.id).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)) : [],
     [allSessions, selectedWorkspace],
@@ -744,17 +748,19 @@ export function WorkerStudio() {
                       </button>
                     </div>
                     <div className="rail-workspace-list">
-                      {soulWorkspaces.map(workspace => (
-                        <button
-                          key={workspace.id}
-                          type="button"
-                          className={`rail-workspace-item ${selectedWorkspace.id === workspace.id ? 'active' : ''}`}
-                          onClick={() => navigateWorkerRoute({ kind: 'workspace', workerId: workspace.workerId, workspaceId: workspace.id })}
-                        >
-                          <strong>{workspace.name}</strong>
-                          <small>{formatStatus(workspace.status, activeLocale)}</small>
-                        </button>
-                      ))}
+                      {otherWorkspaces.length > 0
+                        ? otherWorkspaces.map(workspace => (
+                            <button
+                              key={workspace.id}
+                              type="button"
+                              className="rail-workspace-item"
+                              onClick={() => navigateWorkerRoute({ kind: 'workspace', workerId: workspace.workerId, workspaceId: workspace.id })}
+                            >
+                              <strong>{workspace.name}</strong>
+                              <small>{formatStatus(workspace.status, activeLocale)}</small>
+                            </button>
+                          ))
+                        : <div className="rail-empty">{copy.workspace.noOtherWorkspaces}</div>}
                     </div>
                   </section>
                 </>

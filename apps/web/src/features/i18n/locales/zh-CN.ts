@@ -122,6 +122,7 @@ export const zhCN = {
     memoryCandidates: '记忆候选',
     noEvents: 'session turn 启动后会显示事件。',
     noMemoryCandidates: '此工作区还没有记忆候选。',
+    noOtherWorkspaces: '暂无其他工作区。',
     noSelectionDetail: '创建或选择一个工作区，查看会话、产物、评审和记忆候选。',
     noSelectionTitle: '未选择工作区',
     noTurns: '此会话还没有 turn 记录。',

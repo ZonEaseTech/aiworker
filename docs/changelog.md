@@ -1,5 +1,21 @@
 # AIWorker Changelog
 
+## 2026-05-11 18:02 [completed] BUG-100 / PLAN-258 — 其他工作区筛除当前项
+
+- “其他工作区”侧栏列表改为排除当前选中的 workspace。
+- 保留新建工作区动作，并在没有其他 workspace 时显示空态。
+- 更新 WorkerStudio 测试覆盖当前 workspace 不出现在其他工作区列表。
+- 验证通过:
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `bun run check`
+  - `git diff --check`
+  - Browser verification on `http://127.0.0.1:9217/`
+  - `bun run crg:update`
+  - `bun run crg:review`
+
 ## 2026-05-11 17:49 [completed] BUG-099 / PLAN-257 — Select 展开态样式统一
 
 - 收敛 `StudioSelect` 的 trigger、listbox 和 option 盒模型。

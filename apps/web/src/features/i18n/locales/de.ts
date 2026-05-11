@@ -122,6 +122,7 @@ export const de = {
     memoryCandidates: 'Memory-Kandidaten',
     noEvents: 'Events erscheinen nach dem Start eines Session-Turns.',
     noMemoryCandidates: 'Noch keine Memory-Kandidaten für diesen Workspace.',
+    noOtherWorkspaces: 'Noch keine anderen Workspaces.',
     noSelectionDetail: 'Erstelle oder wähle einen Workspace, um Session, Artefakt, Review und Memory-Kandidaten zu prüfen.',
     noSelectionTitle: 'Kein Workspace ausgewählt',
     noTurns: 'Für diese Session sind keine Turns erfasst.',
