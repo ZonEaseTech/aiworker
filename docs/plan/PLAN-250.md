@@ -11,6 +11,8 @@
 - Settings/refresh controls used `settings-trigger` with a 30px box.
 - The size divergence undermined the component-library architecture because
   visually related controls were still controlled by unrelated classes.
+- The first `IconButton` primitive incorrectly reused `.icon-btn`, which is a
+  text action class with 34px min-height and horizontal padding.
 
 ## Proposal
 
@@ -25,7 +27,10 @@
 - Add/settings/refresh icon controls now use `IconButton`.
 - Icon button boxes share `--icon-button-size: 30px`.
 - Icons share `--icon-button-icon-size: 16px`.
-- Legacy selectors remain aligned with the shared token.
+- `IconButton` now emits `icon-button` without inheriting `.icon-btn`.
+- Worker Web tests now assert chrome icon buttons keep the compact primitive
+  class without the legacy text-action class.
+- Legacy selectors remain aligned with the shared token for compatibility.
 
 ## Verification
 

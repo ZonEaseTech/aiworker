@@ -420,6 +420,23 @@ describe('worker studio', () => {
     expect(screen.queryByText(/Evidence summary/i)).toBeNull()
   })
 
+  it('uses the compact icon button primitive for chrome actions', async () => {
+    render(<WorkerStudio />)
+
+    await screen.findByText('hr-worker')
+
+    const iconButtons = [
+      screen.getByRole('button', { name: 'Create worker' }),
+      screen.getByRole('button', { name: 'Refresh workspace' }),
+      screen.getByRole('button', { name: 'Open settings' }),
+    ]
+
+    for (const button of iconButtons) {
+      expect(button.classList.contains('icon-button')).toBe(true)
+      expect(button.classList.contains('icon-btn')).toBe(false)
+    }
+  })
+
   it('switches the Soul rail and updates capability templates with worker identity', async () => {
     render(<WorkerStudio />)
 

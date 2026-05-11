@@ -7,7 +7,7 @@ export type ButtonVariant = 'close' | 'ghost' | 'icon' | 'plain' | 'primary' | '
 const buttonVariantClass: Record<ButtonVariant, string> = {
   close: 'settings-close',
   ghost: 'ghost',
-  icon: 'icon-btn',
+  icon: 'icon-button',
   plain: '',
   primary: 'primary',
   secondary: 'secondary',
@@ -48,7 +48,7 @@ export function IconButton({
   ...props
 }: IconButtonProps) {
   return (
-    <Button {...props} variant="icon" className={cx('icon-button', className)}>
+    <Button {...props} variant="icon" className={className}>
       {children}
     </Button>
   )

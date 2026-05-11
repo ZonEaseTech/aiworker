@@ -9,6 +9,10 @@
 - Routed add/settings/refresh controls through `IconButton`, while keeping
   `.settings-trigger` and `.icon-only` as compatibility aliases tied to the
   same tokens.
+- Corrected `IconButton` so it does not inherit `.icon-btn` text-action
+  min-height or padding; the issue was button box size, not SVG size.
+- Added a Worker Web regression test that keeps add/settings/refresh icon
+  buttons on the compact `icon-button` primitive contract.
 - Verification passed:
   - `bun run --filter '@zonease/aiworker-component' typecheck`
   - `bun run --filter '@zonease/aiworker-web' typecheck`
