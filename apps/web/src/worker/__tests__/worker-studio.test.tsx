@@ -412,7 +412,9 @@ describe('worker studio', () => {
     expect(screen.getAllByText('Current worker').length).toBeGreaterThan(0)
     expect(screen.getByText('hr-worker')).toBeTruthy()
     expect(screen.getByText('Worker ID')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Create workspace' })).toBeTruthy()
+    const createWorkspaceButton = screen.getByRole('button', { name: 'Create workspace' })
+    expect(createWorkspaceButton).toBeTruthy()
+    expect(createWorkspaceButton.classList.contains('rail-mini-action')).toBe(true)
     const workspaceList = document.querySelector('.workspace-list')
     expect(workspaceList?.classList.contains('workspace-grid')).toBe(true)
     expect(workspaceList?.classList.contains('design-grid-list')).toBe(false)
@@ -431,7 +433,6 @@ describe('worker studio', () => {
     await screen.findByText('hr-worker')
 
     const iconButtons = [
-      screen.getByRole('button', { name: 'Create worker' }),
       screen.getByRole('button', { name: 'Refresh workspace' }),
       screen.getByRole('button', { name: 'Open settings' }),
     ]
@@ -440,6 +441,10 @@ describe('worker studio', () => {
       expect(button.classList.contains('icon-button')).toBe(true)
       expect(button.classList.contains('icon-btn')).toBe(false)
     }
+
+    const createWorkerButton = screen.getByRole('button', { name: 'Create worker' })
+    expect(createWorkerButton.classList.contains('rail-mini-action')).toBe(true)
+    expect(createWorkerButton.classList.contains('icon-button')).toBe(false)
   })
 
   it('switches the Soul rail and updates capability templates with worker identity', async () => {

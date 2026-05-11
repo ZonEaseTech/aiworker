@@ -1,5 +1,12 @@
 # AIWorker Changelog
 
+## 2026-05-12 01:33 [completed] BUG-108 / PLAN-266 — Worker home add action convergence
+
+- 将 Worker 列表和工作区列表的 add icon-only 按钮改为 plus + label pill action。
+- 保留 refresh/settings 等 chrome action 的 icon-only 样式。
+- Verification passed: focused Web typecheck/lint/test/build, `bun run check`, `git diff --check`,
+  browser verification on 9217, and code-review-graph review.
+
 ## 2026-05-12 01:24 [completed] BUG-107 / PLAN-265 — Workspace rail width convergence
 
 - 统一 workspace route 与 session route 的桌面态 sidebar padding。

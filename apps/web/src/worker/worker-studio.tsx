@@ -492,13 +492,16 @@ export function WorkerStudio() {
                     <h3>{copy.workspace.createWorker}</h3>
                     <p className="hint">{createSoulCopy?.description ?? copy.workspace.createWorkerHint}</p>
                   </div>
-                  <IconButton
+                  <button
+                    type="button"
+                    className="rail-mini-action"
                     aria-label={copy.workspace.createWorker}
                     title={copy.workspace.createWorker}
                     onClick={() => setCreateWorkerOpen(true)}
                   >
-                    <Plus aria-hidden="true" size={16} />
-                  </IconButton>
+                    <Plus aria-hidden="true" size={12} />
+                    <span>{copy.workspace.createWorker}</span>
+                  </button>
                 </div>
                 <div className="soul-list" role="listbox" aria-label={copy.accessibility.soulCatalog}>
                   {availableSouls.map((soul) => {
@@ -784,13 +787,16 @@ export function WorkerStudio() {
                           <h3>{copy.workspace.workerList}</h3>
                           <p className="hint">{copy.workspace.workerListHint}</p>
                         </div>
-                        <IconButton
+                        <button
+                          type="button"
+                          className="rail-mini-action"
                           aria-label={copy.workspace.createWorker}
                           title={copy.workspace.createWorker}
                           onClick={() => setCreateWorkerOpen(true)}
                         >
-                          <Plus aria-hidden="true" size={16} />
-                        </IconButton>
+                          <Plus aria-hidden="true" size={12} />
+                          <span>{copy.workspace.createWorker}</span>
+                        </button>
                       </div>
                       <div className="worker-list-rail soul-rail" role="listbox" aria-label={copy.workspace.currentWorker}>
                         {data.workers.map((worker) => {
@@ -958,13 +964,16 @@ export function WorkerStudio() {
                         <div className="toolbar-left">
                           <strong>{copy.workspace.workspaceList}</strong>
                           <span className="count-pill">{filteredProjects.length}</span>
-                          <IconButton
+                          <button
+                            type="button"
+                            className="rail-mini-action"
                             aria-label={copy.workspace.createWorkspace}
                             title={copy.workspace.createWorkspace}
                             onClick={() => setCreateWorkspaceOpen(true)}
                           >
-                            <Plus aria-hidden="true" size={16} />
-                          </IconButton>
+                            <Plus aria-hidden="true" size={12} />
+                            <span>{copy.workspace.newWorkspace}</span>
+                          </button>
                         </div>
 
                         <div className="toolbar-right">
