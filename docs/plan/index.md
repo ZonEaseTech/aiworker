@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-12 (PLAN-266 completed)
+> Updated: 2026-05-12 (PLAN-267 completed)
 
 ## Usage
 
@@ -295,3 +295,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-264 Workspace route worker return action**](PLAN-264.md) `2026-05-11`
 - [x] [**PLAN-265 Workspace rail width convergence**](PLAN-265.md) `2026-05-12`
 - [x] [**PLAN-266 Worker home add action convergence**](PLAN-266.md) `2026-05-12`
+- [x] [**PLAN-267 Add actions plus icon button convergence**](PLAN-267.md) `2026-05-12`

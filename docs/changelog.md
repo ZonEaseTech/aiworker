@@ -1,5 +1,12 @@
 # AIWorker Changelog
 
+## 2026-05-12 01:44 [completed] BUG-109 / PLAN-267 — Add actions plus icon buttons
+
+- 将 Worker home 和 Workspace rail 的 add actions 统一回归为 plus icon button。
+- 移除不再使用的 `rail-mini-action` 样式。
+- Verification passed: focused Web typecheck/lint/test/build, `bun run check`, `git diff --check`,
+  browser verification on 9217, and code-review-graph review.
+
 ## 2026-05-12 01:33 [completed] BUG-108 / PLAN-266 — Worker home add action convergence
 
 - 将 Worker 列表和工作区列表的 add icon-only 按钮改为 plus + label pill action。

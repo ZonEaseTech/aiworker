@@ -492,16 +492,13 @@ export function WorkerStudio() {
                     <h3>{copy.workspace.createWorker}</h3>
                     <p className="hint">{createSoulCopy?.description ?? copy.workspace.createWorkerHint}</p>
                   </div>
-                  <button
-                    type="button"
-                    className="rail-mini-action"
+                  <IconButton
                     aria-label={copy.workspace.createWorker}
                     title={copy.workspace.createWorker}
                     onClick={() => setCreateWorkerOpen(true)}
                   >
-                    <Plus aria-hidden="true" size={12} />
-                    <span>{copy.workspace.createWorker}</span>
-                  </button>
+                    <Plus aria-hidden="true" size={16} />
+                  </IconButton>
                 </div>
                 <div className="soul-list" role="listbox" aria-label={copy.accessibility.soulCatalog}>
                   {availableSouls.map((soul) => {
@@ -713,16 +710,13 @@ export function WorkerStudio() {
                   <section className="workspace-rail-card">
                     <div className="rail-section-head">
                       <strong>{copy.workspace.workspaceSessions}</strong>
-                      <button
-                        type="button"
-                        className="rail-mini-action"
+                      <IconButton
                         aria-label={copy.workspace.newSession}
                         title={copy.workspace.newSession}
                         onClick={() => navigateWorkerRoute({ kind: 'workspace', workerId: selectedWorkspace.workerId, workspaceId: selectedWorkspace.id })}
                       >
-                        <Plus aria-hidden="true" size={12} />
-                        <span>{copy.workspace.newSession}</span>
-                      </button>
+                        <Plus aria-hidden="true" size={16} />
+                      </IconButton>
                     </div>
                     <div className="rail-session-list">
                       {workspaceSessions.length > 0
@@ -749,16 +743,13 @@ export function WorkerStudio() {
                   <section className="workspace-rail-card">
                     <div className="rail-section-head">
                       <strong>{copy.workspace.otherWorkspaces}</strong>
-                      <button
-                        type="button"
-                        className="rail-mini-action"
+                      <IconButton
                         aria-label={copy.workspace.createWorkspace}
                         title={copy.workspace.createWorkspace}
                         onClick={() => setCreateWorkspaceOpen(true)}
                       >
-                        <Plus aria-hidden="true" size={12} />
-                        <span>{copy.workspace.newWorkspace}</span>
-                      </button>
+                        <Plus aria-hidden="true" size={16} />
+                      </IconButton>
                     </div>
                     <div className="rail-workspace-list">
                       {otherWorkspaces.length > 0
@@ -787,16 +778,13 @@ export function WorkerStudio() {
                           <h3>{copy.workspace.workerList}</h3>
                           <p className="hint">{copy.workspace.workerListHint}</p>
                         </div>
-                        <button
-                          type="button"
-                          className="rail-mini-action"
+                        <IconButton
                           aria-label={copy.workspace.createWorker}
                           title={copy.workspace.createWorker}
                           onClick={() => setCreateWorkerOpen(true)}
                         >
-                          <Plus aria-hidden="true" size={12} />
-                          <span>{copy.workspace.createWorker}</span>
-                        </button>
+                          <Plus aria-hidden="true" size={16} />
+                        </IconButton>
                       </div>
                       <div className="worker-list-rail soul-rail" role="listbox" aria-label={copy.workspace.currentWorker}>
                         {data.workers.map((worker) => {
@@ -964,16 +952,13 @@ export function WorkerStudio() {
                         <div className="toolbar-left">
                           <strong>{copy.workspace.workspaceList}</strong>
                           <span className="count-pill">{filteredProjects.length}</span>
-                          <button
-                            type="button"
-                            className="rail-mini-action"
+                          <IconButton
                             aria-label={copy.workspace.createWorkspace}
                             title={copy.workspace.createWorkspace}
                             onClick={() => setCreateWorkspaceOpen(true)}
                           >
-                            <Plus aria-hidden="true" size={12} />
-                            <span>{copy.workspace.newWorkspace}</span>
-                          </button>
+                            <Plus aria-hidden="true" size={16} />
+                          </IconButton>
                         </div>
 
                         <div className="toolbar-right">

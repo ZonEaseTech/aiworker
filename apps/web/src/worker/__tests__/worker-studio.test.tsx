@@ -414,7 +414,8 @@ describe('worker studio', () => {
     expect(screen.getByText('Worker ID')).toBeTruthy()
     const createWorkspaceButton = screen.getByRole('button', { name: 'Create workspace' })
     expect(createWorkspaceButton).toBeTruthy()
-    expect(createWorkspaceButton.classList.contains('rail-mini-action')).toBe(true)
+    expect(createWorkspaceButton.classList.contains('icon-button')).toBe(true)
+    expect(createWorkspaceButton.textContent?.trim()).toBe('')
     const workspaceList = document.querySelector('.workspace-list')
     expect(workspaceList?.classList.contains('workspace-grid')).toBe(true)
     expect(workspaceList?.classList.contains('design-grid-list')).toBe(false)
@@ -427,12 +428,14 @@ describe('worker studio', () => {
     expect(screen.queryByText(/Evidence summary/i)).toBeNull()
   })
 
-  it('uses the compact icon button primitive for chrome actions', async () => {
+  it('uses the compact icon button primitive for add and chrome actions', async () => {
     render(<WorkerStudio />)
 
     await screen.findByText('hr-worker')
 
     const iconButtons = [
+      screen.getByRole('button', { name: 'Create worker' }),
+      screen.getByRole('button', { name: 'Create workspace' }),
       screen.getByRole('button', { name: 'Refresh workspace' }),
       screen.getByRole('button', { name: 'Open settings' }),
     ]
@@ -441,10 +444,6 @@ describe('worker studio', () => {
       expect(button.classList.contains('icon-button')).toBe(true)
       expect(button.classList.contains('icon-btn')).toBe(false)
     }
-
-    const createWorkerButton = screen.getByRole('button', { name: 'Create worker' })
-    expect(createWorkerButton.classList.contains('rail-mini-action')).toBe(true)
-    expect(createWorkerButton.classList.contains('icon-button')).toBe(false)
   })
 
   it('switches the Soul rail and updates capability templates with worker identity', async () => {
@@ -649,6 +648,8 @@ describe('worker studio', () => {
     expect(await screen.findByText('Workspace navigation')).toBeTruthy()
     expect(screen.getAllByText('Current workspace').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Workspace sessions').length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: 'New session' }).classList.contains('icon-button')).toBe(true)
+    expect(screen.getByRole('button', { name: 'Create workspace' }).classList.contains('icon-button')).toBe(true)
     expect(screen.getByTestId('new-session-panel')).toBeTruthy()
     expect(screen.getByText('What do you want to build in Hiring Workspace?')).toBeTruthy()
     expect(screen.getAllByText('No sessions in this workspace yet.').length).toBeGreaterThan(0)

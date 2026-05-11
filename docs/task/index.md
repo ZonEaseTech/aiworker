@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-12 (Worker home add action convergence)
+> Updated: 2026-05-12 (Add actions plus icon buttons)
 
 ## Usage
 
@@ -370,3 +370,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-106 Workspace create-session route lacks worker return action**](BUG-106.md) `P0`
 - [x] [**BUG-107 Workspace rail width differs between session states**](BUG-107.md) `P0`
 - [x] [**BUG-108 Worker home add actions use icon-only buttons**](BUG-108.md) `P0`
+- [x] [**BUG-109 Add actions should use plus icon buttons**](BUG-109.md) `P0`

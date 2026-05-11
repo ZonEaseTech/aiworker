@@ -565,8 +565,7 @@
   gap: 14px;
 }
 
-.rail-back-button,
-.rail-mini-action {
+.rail-back-button {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -581,10 +580,6 @@
 
 .rail-back-button {
   padding: 5px 9px;
-}
-
-.rail-mini-action {
-  padding: 4px 8px;
 }
 
 .rail-context-main {
