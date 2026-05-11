@@ -1,5 +1,17 @@
 # AIWorker Changelog
 
+## 2026-05-12 03:11 [completed] BUG-115 / PLAN-274 — Worker Web font token and mono taxonomy
+
+- 新增 Worker Web 自托管 Nunito、Inter、JetBrains Mono variable font，并在
+  `index.html` 中预加载关键字体文件。
+- 定义 `--font-display`、`--font-ui`、`--font-mono`，并让既有
+  `--serif`、`--sans`、`--mono` alias 继承新字体方案。
+- 将 button、固定 tag、status pill、metadata、ID/count、select hint 和 code-like
+  UI surface 统一切到 mono，避免影响正文和 artifact 内容阅读性。
+- Verification passed: focused Web typecheck/lint/test/build, `git diff --check`,
+  font URL smoke on 9217, Browser smoke on 9217, and code-review-graph
+  update/review.
+
 ## 2026-05-12 02:55 [completed] BUG-114 / PLAN-273 — Session drawer controls and motion polish
 
 - 移除选中 session header 内重复的“返回 worker”按钮，以及右侧 drawer 自带的

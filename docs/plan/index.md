@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-12 (PLAN-273 completed)
+> Updated: 2026-05-12 (PLAN-274 completed)
 
 ## Usage
 
@@ -302,3 +302,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-271 Worker Web design system, component, and motion upgrade**](PLAN-271.md) `2026-05-12`
 - [x] [**PLAN-272 Session route return-to-worker alignment**](PLAN-272.md) `2026-05-12`
 - [x] [**PLAN-273 Session drawer controls and motion polish**](PLAN-273.md) `2026-05-12`
+- [x] [**PLAN-274 Worker Web font token and mono taxonomy**](PLAN-274.md) `2026-05-12`

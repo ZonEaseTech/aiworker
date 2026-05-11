@@ -32,6 +32,8 @@ textarea {
 }
 
 button {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
   color: var(--text);
   background: var(--bg-panel);
   border: 1px solid var(--border);
@@ -88,6 +90,50 @@ button.ghost {
 button.ghost:hover:not(:disabled) {
   color: var(--text-strong);
   background: var(--bg-subtle);
+}
+
+:where(
+  .kicker,
+  .entry-brand-pill,
+  .entry-tab,
+  .foot-pill,
+  .subtab-pill,
+  .studio-pill,
+  .studio-section-title small,
+  .studio-section-actions,
+  .studio-activity-row > small,
+  .worker-chat-meta,
+  .worker-message-role time,
+  .worker-status-pill,
+  .worker-produced-chip,
+  .worker-tool-result,
+  .artifact-rail-title,
+  .artifact-rail-status-pill,
+  .artifact-preview-state,
+  .artifact-section-head small,
+  .rail-meta-grid,
+  .rail-session-item span,
+  .rail-session-item small,
+  .rail-workspace-item small,
+  .worker-identity-grid,
+  .worker-capability-chips span,
+  .worker-soul-group-title small,
+  .soul-list-item-meta,
+  .soul-rail-item small,
+  .soul-rail-item > span:last-child,
+  .design-card-meta,
+  .design-card-status,
+  .settings-autosave,
+  .settings-action-button,
+  .settings-engine-version,
+  .settings-engine-path,
+  .ds-select-copy small,
+  .studio-select-copy small,
+  code,
+  pre
+) {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
 }
 
 input,

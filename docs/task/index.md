@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-12 (BUG-114 completed)
+> Updated: 2026-05-12 (BUG-115 completed)
 
 ## Usage
 
@@ -377,3 +377,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REFACTOR-067 Worker Web design system, component, and motion upgrade**](REFACTOR-067.md) `P0`
 - [x] [**BUG-113 Session route return action should go back to worker**](BUG-113.md) `P0`
 - [x] [**BUG-114 Session drawer controls and motion polish**](BUG-114.md) `P0`
+- [x] [**BUG-115 Worker Web font tokens and mono taxonomy**](BUG-115.md) `P0`
