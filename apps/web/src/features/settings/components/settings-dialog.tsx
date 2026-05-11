@@ -2,7 +2,7 @@ import type { CapabilityTemplate, LocalEngineStatus, LocalSettingsConfig, Vertic
 import type { CSSProperties, ReactNode } from 'react'
 
 import { ActionCard, Button, Field, NavItemButton } from '@zonease/aiworker-component'
-import { Check, Languages, Link, Moon, RefreshCw, Settings, ShieldCheck, SlidersHorizontal, Sparkles, Sun, Terminal, X } from 'lucide-react'
+import { Check, Gauge, Languages, Link, Moon, RefreshCw, Settings, ShieldCheck, SlidersHorizontal, Sparkles, Sun, Terminal, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { displaySoul, formatRelativeTime, languageLabel, messagesFor, normalizeLocale, supportedLocales } from '../../i18n'
 import { rescanEngines, saveSettings, testEngine } from '../../local-workspace/api'
@@ -235,11 +235,10 @@ function ExecutionSettings({
                   <p className="hint">{settingsCopy.engine.hint}</p>
                 </div>
                 <div className="section-head-actions">
-                  <Button variant="ghost" iconOnly className="settings-test-btn" onClick={() => onTest(settings.engineId)}>
+                  <Button variant="ghost" icon={<Gauge size={13} />} className="settings-action-button settings-test-btn" onClick={() => onTest(settings.engineId)}>
                     <span>{settingsCopy.engine.test}</span>
                   </Button>
-                  <Button variant="ghost" iconOnly className="settings-rescan-btn" onClick={onRescan}>
-                    <RefreshCw size={13} />
+                  <Button variant="ghost" icon={<RefreshCw size={13} />} className="settings-action-button settings-rescan-btn" onClick={onRescan}>
                     <span>{settingsCopy.engine.rescan}</span>
                   </Button>
                 </div>

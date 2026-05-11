@@ -364,3 +364,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-100 其他工作区列表包含当前工作区**](BUG-100.md) `P0`
 - [x] [**BUG-101 工作区会话头部缺少新建会话动作**](BUG-101.md) `P0`
 - [x] [**BUG-102 工作区侧栏存在多余返回 worker 动作**](BUG-102.md) `P0`
+- [x] [**BUG-103 Settings 引擎操作按钮样式不统一**](BUG-103.md) `P0`

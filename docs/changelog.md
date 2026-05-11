@@ -1,5 +1,13 @@
 # AIWorker Changelog
 
+## 2026-05-11 20:12 [completed] BUG-103 / PLAN-261 — Settings 引擎操作按钮统一
+
+- 将 settings 中“测试 / 重新扫描”从 icon-only button 收敛为统一的小号 action button。
+- 为“测试”补充图标，和“重新扫描”保持 icon + label 结构一致。
+- 更新 WorkerStudio 测试覆盖按钮 class 与原有行为。
+- Verification passed: focused Web typecheck/lint/test/build, `bun run check`, `git diff --check`,
+  browser verification on 9217, and code-review-graph review.
+
 ## 2026-05-11 18:13 [completed] BUG-102 / PLAN-260 — 移除工作区返回 worker 入口
 
 - 移除 workspace rail 顶部多余的“返回 worker”动作。

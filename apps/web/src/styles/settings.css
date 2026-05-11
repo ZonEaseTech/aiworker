@@ -161,6 +161,30 @@
   flex-shrink: 0;
 }
 
+button.settings-action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 5px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+button.settings-action-button:hover:not(:disabled) {
+  background: var(--bg-panel);
+  border-color: var(--border-strong);
+  color: var(--text-strong);
+}
+
+button.settings-action-button svg {
+  flex: 0 0 auto;
+}
+
 .icon-btn {
   display: inline-flex;
   align-items: center;
@@ -367,4 +391,3 @@
   background: var(--accent);
   box-shadow: 0 0 0 4px var(--accent-soft);
 }
-
