@@ -1,0 +1,234 @@
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--modal-backdrop);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.modal {
+  background: var(--bg-elevated);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+}
+
+.creation-dialog {
+  position: relative;
+  width: min(440px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  color: var(--text);
+  overflow: hidden;
+}
+
+.creation-dialog::backdrop {
+  background: transparent;
+}
+
+.creation-dialog-close {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 2;
+}
+
+.creation-dialog-head {
+  padding: 28px 28px 18px;
+  padding-right: 70px;
+}
+
+.creation-dialog-body {
+  padding: 0 28px 28px;
+}
+
+.dialog-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.dialog-actions button {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 16px;
+}
+
+.modal-settings {
+  --modal-padding: 24px;
+  position: relative;
+  width: min(920px, calc(100vw - 48px));
+  height: min(760px, calc(100vh - 64px));
+  max-height: calc(100vh - 64px);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow: hidden;
+}
+
+.settings-chrome {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-autosave {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--bg-panel) 90%, transparent);
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.settings-autosave.is-saved {
+  color: var(--green);
+  background: color-mix(in srgb, var(--green) 14%, var(--bg-panel));
+  border-color: color-mix(in srgb, var(--green) 30%, transparent);
+}
+
+.settings-autosave.is-saving {
+  color: var(--amber);
+  background: color-mix(in srgb, var(--amber) 12%, var(--bg-panel));
+  border-color: color-mix(in srgb, var(--amber) 28%, transparent);
+}
+
+.settings-autosave.is-failed {
+  color: var(--red);
+  background: var(--red-bg);
+  border-color: var(--red-border);
+}
+
+.spin {
+  animation: spin 800ms linear infinite;
+}
+
+.settings-close {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--bg-panel) 90%, transparent);
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: var(--modal-padding);
+  padding-right: calc(var(--modal-padding) + 56px);
+}
+
+.modal-head.creation-dialog-head {
+  padding: 28px 70px 18px 28px;
+}
+
+.modal-head .kicker {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.modal-head h2 {
+  margin: 0;
+  color: var(--text);
+  font-family: var(--serif);
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.33;
+  letter-spacing: 0;
+}
+
+.modal-head .subtitle {
+  max-width: 72ch;
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.welcome-artifact-teaser {
+  margin-top: 18px;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  text-align: left;
+}
+
+.welcome-artifact-glyph {
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-pill);
+  background: var(--bg-panel);
+  font-size: 20px;
+}
+
+.welcome-artifact-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.welcome-artifact-copy strong {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.welcome-artifact-copy span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.welcome-artifact-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}

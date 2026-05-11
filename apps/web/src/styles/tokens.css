@@ -1,0 +1,104 @@
+:root {
+  --bg: #ffffff;
+  --bg-app: #ffffff;
+  --bg-panel: #ffffff;
+  --bg-subtle: #fafafa;
+  --bg-muted: #fafafa;
+  --bg-elevated: #ffffff;
+  --border: #e5e5e5;
+  --border-strong: #d4d4d4;
+  --border-soft: #fafafa;
+  --text: #090909;
+  --text-strong: #000000;
+  --text-muted: #737373;
+  --text-soft: #a3a3a3;
+  --text-faint: #a3a3a3;
+  --accent: #000000;
+  --accent-strong: #090909;
+  --accent-soft: #e5e5e5;
+  --accent-tint: #fafafa;
+  --primary-action-bg: #000000;
+  --primary-action-text: #ffffff;
+  --primary-action-border: #000000;
+  --green: #27c93f;
+  --green-bg: color-mix(in srgb, var(--green) 12%, var(--bg-panel));
+  --green-border: color-mix(in srgb, var(--green) 30%, var(--border));
+  --red: #ff5f56;
+  --red-bg: color-mix(in srgb, var(--red) 10%, var(--bg-panel));
+  --red-border: color-mix(in srgb, var(--red) 30%, var(--border));
+  --amber: #ffbd2e;
+  --shadow-xs: none;
+  --shadow-sm: none;
+  --shadow-lg: none;
+  --shadow-primary-inset: none;
+  --shadow-accent-ring: 0 0 0 1px var(--accent);
+  --bg-fidelity-wireframe: #fafafa;
+  --floating-artifact-bg: #171717;
+  --floating-artifact-text: #ffffff;
+  --modal-backdrop: rgba(0, 0, 0, 0.42);
+  --agent-icon-text: #ffffff;
+  --agent-icon-dark-bg: #090909;
+  --agent-icon-green-bg: #525252;
+  --agent-icon-violet-bg: #737373;
+  --agent-icon-gray-bg: #a3a3a3;
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 9999px;
+  --serif: "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+  --sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+.entry-shell[data-theme="dark"],
+.od-loading-shell[data-theme="dark"] {
+  --bg: #171717;
+  --bg-app: #171717;
+  --bg-panel: #171717;
+  --bg-subtle: #171717;
+  --bg-muted: #525252;
+  --bg-elevated: #171717;
+  --border: #525252;
+  --border-strong: #525252;
+  --border-soft: #171717;
+  --text: #fafafa;
+  --text-strong: #ffffff;
+  --text-muted: #d4d4d4;
+  --text-soft: #a3a3a3;
+  --text-faint: #737373;
+  --accent: #ffffff;
+  --accent-strong: #ffffff;
+  --accent-soft: #525252;
+  --accent-tint: #171717;
+  --primary-action-bg: #ffffff;
+  --primary-action-text: #000000;
+  --primary-action-border: #ffffff;
+  --green-bg: color-mix(in srgb, var(--green) 20%, var(--bg-panel));
+  --green-border: color-mix(in srgb, var(--green) 38%, var(--border));
+  --red-bg: color-mix(in srgb, var(--red) 18%, var(--bg-panel));
+  --red-border: color-mix(in srgb, var(--red) 38%, var(--border));
+  --shadow-xs: none;
+  --shadow-sm: none;
+  --shadow-lg: none;
+  --shadow-primary-inset: none;
+  --shadow-accent-ring: 0 0 0 1px var(--accent);
+  --bg-fidelity-wireframe: #171717;
+  --floating-artifact-bg: #fafafa;
+  --floating-artifact-text: #171717;
+  --modal-backdrop: rgba(0, 0, 0, 0.64);
+  --agent-icon-text: #171717;
+  --agent-icon-dark-bg: #ffffff;
+  --agent-icon-green-bg: #d4d4d4;
+  --agent-icon-violet-bg: #a3a3a3;
+  --agent-icon-gray-bg: #737373;
+}
+
+.entry-shell[data-theme="light"],
+.od-loading-shell[data-theme="light"] {
+  color-scheme: light;
+}
+
+.entry-shell[data-theme="dark"],
+.od-loading-shell[data-theme="dark"] {
+  color-scheme: dark;
+}
