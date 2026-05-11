@@ -1420,11 +1420,20 @@ function SettingsDialog({
 }) {
   const [settings, setSettings] = useState(initial)
   const [section, setSection] = useState<SettingsSection>(initialSection)
-  const [autosave, setAutosave] = useState<AutosaveState>('saved')
+  const [autosave, setAutosave] = useState<AutosaveState>('idle')
   const [engineTest, setEngineTest] = useState<string | null>(null)
   const activeLocale = normalizeLocale(settings.language)
   const copy = messagesFor(activeLocale)
   const settingsCopy = copy.settings
+
+  useEffect(() => {
+    if (autosave !== 'saved')
+      return undefined
+    const timeout = window.setTimeout(() => {
+      setAutosave(current => current === 'saved' ? 'idle' : current)
+    }, 1600)
+    return () => window.clearTimeout(timeout)
+  }, [autosave])
 
   async function persist(patch: Partial<LocalSettingsConfig>) {
     const next = { ...settings, ...patch }
@@ -1469,10 +1478,14 @@ function SettingsDialog({
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal modal-settings" role="dialog" aria-modal="true" aria-labelledby="settings-dialog-title" onClick={event => event.stopPropagation()}>
         <div className="settings-chrome" aria-hidden={false}>
-          <div className={`settings-autosave ${autosaveClass(autosave)}`} role="status" aria-live="polite">
-            {autosave === 'saving' ? <RefreshCw size={12} className="spin" /> : <Check size={12} />}
-            <span>{autosaveCopy(autosave, settingsCopy)}</span>
-          </div>
+          {autosave !== 'idle'
+            ? (
+                <div className={`settings-autosave ${autosaveClass(autosave)}`} role="status" aria-live="polite">
+                  {autosave === 'saving' ? <RefreshCw size={12} className="spin" /> : <Check size={12} />}
+                  <span>{autosaveCopy(autosave, settingsCopy)}</span>
+                </div>
+              )
+            : null}
           <button type="button" className="settings-close" onClick={onClose} aria-label={copy.accessibility.closeSettings} title={copy.accessibility.closeSettings}>
             <X size={16} strokeWidth={2} />
           </button>

@@ -2641,6 +2641,7 @@ textarea {
   --modal-padding: 24px;
   position: relative;
   width: min(920px, calc(100vw - 48px));
+  height: min(760px, calc(100vh - 64px));
   max-height: calc(100vh - 64px);
   padding: 0;
   display: flex;
@@ -2808,7 +2809,8 @@ textarea {
 }
 
 .modal-settings .modal-body {
-  flex: 1;
+  flex: 1 1 auto;
+  height: 0;
   min-height: 0;
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr);
@@ -3256,6 +3258,7 @@ textarea {
 
   .modal-settings {
     width: calc(100vw - 24px);
+    height: min(720px, calc(100vh - 24px));
     max-height: calc(100vh - 24px);
   }
 

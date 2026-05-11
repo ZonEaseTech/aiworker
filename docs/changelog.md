@@ -1,5 +1,28 @@
 # AIWorker Changelog
 
+## 2026-05-11 11:14 [completed] BUG-090 / PLAN-244 — Settings autosave and scroll layout repair
+
+- Changed settings autosave feedback to start hidden instead of showing
+  "All changes saved" on every dialog open.
+- Kept saving/failed/saved feedback for real save and rescan actions, with
+  successful saved feedback auto-hiding after a short confirmation window.
+- Made the settings modal fixed-height within the viewport, with the header
+  fixed and sidebar/content scrolling vertically inside the dialog body.
+- Added focused RTL coverage for the hidden initial saved state.
+- Playwright MCP on `http://127.0.0.1:9217/` confirmed no saved pill on open,
+  a 760px settings dialog, and scrollable Soul package content inside the
+  fixed dialog body.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `bun run crg:update`
+  - `bun run crg:review`
+- code-review-graph CLI result: risk score `0.35`, 0 affected flows, 2 reported
+  test gaps (`current`, `SettingsDialog`) covered by focused RTL and browser
+  layout evidence.
+
 ## 2026-05-11 10:58 [completed] REFACTOR-063 / PLAN-242..243 / QA-033 — Worker Web interaction polish follow-up
 
 - Tightened Worker Web typography to the `DESIGN.md` type scale in the built

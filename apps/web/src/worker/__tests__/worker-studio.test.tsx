@@ -623,6 +623,7 @@ describe('worker studio', () => {
 
     expect(screen.getByRole('dialog', { name: 'Configure Soul workspace' })).toBeTruthy()
     expect(screen.getByText('Local CLI / BYOK')).toBeTruthy()
+    expect(screen.queryByText('All changes saved')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Test' }))
     fireEvent.click(screen.getByRole('button', { name: 'Rescan' }))
     fireEvent.click(screen.getByRole('button', { name: /Language/ }))
