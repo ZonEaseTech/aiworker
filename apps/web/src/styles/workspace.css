@@ -124,6 +124,24 @@
   background: var(--bg-subtle);
 }
 
+.icon-button.active,
+.icon-button[aria-pressed="true"],
+.settings-trigger.active,
+.icon-only.active {
+  border-color: var(--primary-action-border);
+  background: var(--primary-action-bg);
+  color: var(--primary-action-text);
+}
+
+.icon-button.active:hover,
+.icon-button[aria-pressed="true"]:hover,
+.settings-trigger.active:hover,
+.icon-only.active:hover {
+  border-color: var(--accent-strong);
+  background: var(--accent-strong);
+  color: var(--primary-action-text);
+}
+
 .entry-tab-content {
   flex: 1;
   min-height: 0;

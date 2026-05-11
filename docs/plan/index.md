@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-12 (PLAN-270 completed)
+> Updated: 2026-05-12 (PLAN-273 completed)
 
 ## Usage
 
@@ -299,3 +299,6 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-268 Count text convergence**](PLAN-268.md) `2026-05-12`
 - [x] [**PLAN-269 Worker list Soul grouping**](PLAN-269.md) `2026-05-12`
 - [x] [**PLAN-270 Worker item trailing status dot**](PLAN-270.md) `2026-05-12`
+- [x] [**PLAN-271 Worker Web design system, component, and motion upgrade**](PLAN-271.md) `2026-05-12`
+- [x] [**PLAN-272 Session route return-to-worker alignment**](PLAN-272.md) `2026-05-12`
+- [x] [**PLAN-273 Session drawer controls and motion polish**](PLAN-273.md) `2026-05-12`

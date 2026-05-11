@@ -11,7 +11,7 @@ import type { LocalWorkspaceData } from '../features/local-workspace/api'
 import type { SettingsSection } from '../features/settings'
 import type { ArtifactPreviewState } from './session-detail'
 
-import { IconButton, StudioMainFrame, WorkerStudioLayout } from '@zonease/aiworker-component'
+import { IconButton, StudioEmptyState, StudioMainFrame, StudioSectionHeader, WorkerStudioLayout } from '@zonease/aiworker-component'
 import {
   ArrowLeft,
   Check,
@@ -534,19 +534,20 @@ export function WorkerStudio() {
             <StudioBrand copy={copy} />
             <section className="newproj soul-catalog-panel soul-rail-panel">
               <div className="newproj-body">
-                <div className="section-head compact with-action">
-                  <div>
-                    <h3>{copy.workspace.createWorker}</h3>
-                    <p className="hint">{createSoulCopy?.description ?? copy.workspace.createWorkerHint}</p>
-                  </div>
-                  <IconButton
-                    aria-label={copy.workspace.createWorker}
-                    title={copy.workspace.createWorker}
-                    onClick={() => setCreateWorkerOpen(true)}
-                  >
-                    <Plus aria-hidden="true" size={16} />
-                  </IconButton>
-                </div>
+                <StudioSectionHeader
+                  className="section-head compact with-action"
+                  title={copy.workspace.createWorker}
+                  description={createSoulCopy?.description ?? copy.workspace.createWorkerHint}
+                  action={(
+                    <IconButton
+                      aria-label={copy.workspace.createWorker}
+                      title={copy.workspace.createWorker}
+                      onClick={() => setCreateWorkerOpen(true)}
+                    >
+                      <Plus aria-hidden="true" size={16} />
+                    </IconButton>
+                  )}
+                />
                 <div className="soul-list" role="listbox" aria-label={copy.accessibility.soulCatalog}>
                   {availableSouls.map((soul) => {
                     const soulCopy = displaySoul(soul, activeLocale)
@@ -577,15 +578,18 @@ export function WorkerStudio() {
         )}
         main={(
           <StudioMainFrame kicker={copy.workspace.currentWorker} title={copy.workspace.noWorker}>
-            <section className="empty-design-state">
-              <FileText aria-hidden="true" size={20} />
-              <strong>{copy.workspace.noWorker}</strong>
-              <span>{copy.workspace.createWorkerHint}</span>
-              <button type="button" className="ghost icon-btn" onClick={() => setCreateWorkerOpen(true)}>
-                <Plus aria-hidden="true" size={13} />
-                <span>{copy.workspace.createWorker}</span>
-              </button>
-            </section>
+            <StudioEmptyState
+              className="empty-design-state"
+              icon={<FileText size={20} />}
+              title={copy.workspace.noWorker}
+              detail={copy.workspace.createWorkerHint}
+              action={(
+                <button type="button" className="ghost icon-btn" onClick={() => setCreateWorkerOpen(true)}>
+                  <Plus aria-hidden="true" size={13} />
+                  <span>{copy.workspace.createWorker}</span>
+                </button>
+              )}
+            />
           </StudioMainFrame>
         )}
         dialogs={(
@@ -642,9 +646,6 @@ export function WorkerStudio() {
               turns={displayedSessionTurns}
               workspace={selectedWorkspace}
               onLessonStatus={(lesson, status) => void changeLessonStatus(lesson, status)}
-              onCollapsedChange={setDetailDrawerCollapsed}
-              onOpenSettings={openSettings}
-              onRefresh={() => void refresh()}
               onReview={() => void submitReview()}
               onSubmitTurn={submitTurn}
               onTurnInputChange={setSessionTurnInput}
@@ -710,27 +711,14 @@ export function WorkerStudio() {
             ? (
                 <>
                   <section className="workspace-rail-card workspace-context-card">
-                    {showSessionSurface
-                      ? (
-                          <button
-                            type="button"
-                            className="rail-back-button"
-                            onClick={() => navigateWorkerRoute({ kind: 'workspace', workerId: selectedWorker.id, workspaceId: selectedWorkspace.id })}
-                          >
-                            <ArrowLeft aria-hidden="true" size={13} />
-                            <span>{copy.workspace.backToWorkspace}</span>
-                          </button>
-                        )
-                      : (
-                          <button
-                            type="button"
-                            className="rail-back-button"
-                            onClick={() => navigateWorkerRoute({ kind: 'worker', workerId: selectedWorker.id })}
-                          >
-                            <ArrowLeft aria-hidden="true" size={13} />
-                            <span>{copy.workspace.backToWorker}</span>
-                          </button>
-                        )}
+                    <button
+                      type="button"
+                      className="rail-back-button"
+                      onClick={() => navigateWorkerRoute({ kind: 'worker', workerId: selectedWorker.id })}
+                    >
+                      <ArrowLeft aria-hidden="true" size={13} />
+                      <span>{copy.workspace.backToWorker}</span>
+                    </button>
                     <div className="rail-context-main">
                       <span className="kicker">{copy.workspace.workspaceNavigation}</span>
                       <h3>{selectedWorkspace.name}</h3>
@@ -755,16 +743,19 @@ export function WorkerStudio() {
                   </section>
 
                   <section className="workspace-rail-card">
-                    <div className="rail-section-head">
-                      <strong>{copy.workspace.workspaceSessions}</strong>
-                      <IconButton
-                        aria-label={copy.workspace.newSession}
-                        title={copy.workspace.newSession}
-                        onClick={() => navigateWorkerRoute({ kind: 'workspace', workerId: selectedWorkspace.workerId, workspaceId: selectedWorkspace.id })}
-                      >
-                        <Plus aria-hidden="true" size={16} />
-                      </IconButton>
-                    </div>
+                    <StudioSectionHeader
+                      className="rail-section-head"
+                      title={copy.workspace.workspaceSessions}
+                      action={(
+                        <IconButton
+                          aria-label={copy.workspace.newSession}
+                          title={copy.workspace.newSession}
+                          onClick={() => navigateWorkerRoute({ kind: 'workspace', workerId: selectedWorkspace.workerId, workspaceId: selectedWorkspace.id })}
+                        >
+                          <Plus aria-hidden="true" size={16} />
+                        </IconButton>
+                      )}
+                    />
                     <div className="rail-session-list">
                       {workspaceSessions.length > 0
                         ? workspaceSessions.map(session => (
@@ -788,16 +779,19 @@ export function WorkerStudio() {
                   </section>
 
                   <section className="workspace-rail-card">
-                    <div className="rail-section-head">
-                      <strong>{copy.workspace.otherWorkspaces}</strong>
-                      <IconButton
-                        aria-label={copy.workspace.createWorkspace}
-                        title={copy.workspace.createWorkspace}
-                        onClick={() => setCreateWorkspaceOpen(true)}
-                      >
-                        <Plus aria-hidden="true" size={16} />
-                      </IconButton>
-                    </div>
+                    <StudioSectionHeader
+                      className="rail-section-head"
+                      title={copy.workspace.otherWorkspaces}
+                      action={(
+                        <IconButton
+                          aria-label={copy.workspace.createWorkspace}
+                          title={copy.workspace.createWorkspace}
+                          onClick={() => setCreateWorkspaceOpen(true)}
+                        >
+                          <Plus aria-hidden="true" size={16} />
+                        </IconButton>
+                      )}
+                    />
                     <div className="rail-workspace-list">
                       {otherWorkspaces.length > 0
                         ? otherWorkspaces.map(workspace => (
@@ -820,19 +814,20 @@ export function WorkerStudio() {
                 <>
                   <section className="newproj worker-list-panel soul-catalog-panel soul-rail-panel">
                     <div className="newproj-body">
-                      <div className="section-head compact with-action">
-                        <div>
-                          <h3>{copy.workspace.workerList}</h3>
-                          <p className="hint">{copy.workspace.workerListHint}</p>
-                        </div>
-                        <IconButton
-                          aria-label={copy.workspace.createWorker}
-                          title={copy.workspace.createWorker}
-                          onClick={() => setCreateWorkerOpen(true)}
-                        >
-                          <Plus aria-hidden="true" size={16} />
-                        </IconButton>
-                      </div>
+                      <StudioSectionHeader
+                        className="section-head compact with-action"
+                        title={copy.workspace.workerList}
+                        description={copy.workspace.workerListHint}
+                        action={(
+                          <IconButton
+                            aria-label={copy.workspace.createWorker}
+                            title={copy.workspace.createWorker}
+                            onClick={() => setCreateWorkerOpen(true)}
+                          >
+                            <Plus aria-hidden="true" size={16} />
+                          </IconButton>
+                        )}
+                      />
                       <div className="worker-list-rail soul-rail" role="listbox" aria-label={copy.workspace.currentWorker}>
                         {workerSoulGroups.map((group) => {
                           const collapsed = collapsedWorkerSoulIds.has(group.id)
@@ -900,7 +895,7 @@ export function WorkerStudio() {
             <button type="button" className="foot-pill" onClick={() => openSettings('execution')}>
               <Settings aria-hidden="true" size={12} />
               <span>{data.settings.executionMode === 'local-cli' ? 'Local CLI' : 'BYOK'}</span>
-              <span style={{ color: 'var(--text-faint)' }}>·</span>
+              <span className="foot-divider-dot">·</span>
               <span>{selectedEngineLabel(data.settings, copy)}</span>
             </button>
             <button type="button" className="foot-pill" aria-label={copy.accessibility.languageSwitcher} onClick={() => openSettings('language')}>
@@ -918,6 +913,7 @@ export function WorkerStudio() {
                 <WorkerSessionChat
                   key={selectedSession.id}
                   copy={copy}
+                  detailDrawerOpen={!detailDrawerCollapsed}
                   engineReadiness={engineReadiness}
                   events={displayedSessionEvents}
                   locale={activeLocale}
@@ -927,10 +923,10 @@ export function WorkerStudio() {
                   turnSubmitting={turnSubmitting}
                   turns={displayedSessionTurns}
                   workspace={selectedWorkspace}
-                  onBackToWorkspace={() => navigateWorkerRoute({ kind: 'workspace', workerId: selectedWorker.id, workspaceId: selectedWorkspace.id })}
                   onOpenSettings={() => openSettings('execution')}
                   onRefresh={() => void refresh()}
                   onSubmitTurn={submitTurn}
+                  onToggleDetailDrawer={() => setDetailDrawerCollapsed(current => !current)}
                   onTurnInputChange={setSessionTurnInput}
                 />
               )
@@ -991,7 +987,7 @@ export function WorkerStudio() {
                         <Settings aria-hidden="true" size={16} />
                       </IconButton>
                       <button className="avatar-btn" type="button" aria-label={copy.accessibility.workspace}>
-                        <span aria-hidden="true" className="avatar-btn-initials">{selectedWorker.name}</span>
+                        <span aria-hidden="true" className="avatar-btn-initials">{workerInitials(selectedWorker.name)}</span>
                       </button>
                     </div>
                   </header>
@@ -1007,9 +1003,7 @@ export function WorkerStudio() {
                         worker={selectedWorker}
                       />
                       <div className="worker-capability-summary">
-                        <div className="rail-section-head">
-                          <strong>{`${copy.create.capabilityTemplate} (${templates.length})`}</strong>
-                        </div>
+                        <StudioSectionHeader className="rail-section-head" title={`${copy.create.capabilityTemplate} (${templates.length})`} />
                         <div className="worker-capability-chips">
                           {templates.map(template => (
                             <span key={template.id}>{displayTemplate(template, activeLocale).name}</span>
@@ -1065,15 +1059,18 @@ export function WorkerStudio() {
                               />
                             ))
                           : (
-                              <div className="empty-design-state">
-                                <FileText aria-hidden="true" size={20} />
-                                <strong>{copy.projects.empty.title}</strong>
-                                <span>{copy.projects.empty.detail(selectedSoulCopy.name)}</span>
-                                <button type="button" className="ghost icon-btn" onClick={() => setCreateWorkspaceOpen(true)}>
-                                  <Plus aria-hidden="true" size={13} />
-                                  <span>{copy.workspace.createWorkspace}</span>
-                                </button>
-                              </div>
+                              <StudioEmptyState
+                                className="empty-design-state"
+                                icon={<FileText size={20} />}
+                                title={copy.projects.empty.title}
+                                detail={copy.projects.empty.detail(selectedSoulCopy.name)}
+                                action={(
+                                  <button type="button" className="ghost icon-btn" onClick={() => setCreateWorkspaceOpen(true)}>
+                                    <Plus aria-hidden="true" size={13} />
+                                    <span>{copy.workspace.createWorkspace}</span>
+                                  </button>
+                                )}
+                              />
                             )}
                       </div>
                     </section>
@@ -1100,4 +1097,11 @@ function StudioBrand({ copy }: { copy: WorkerMessages }) {
       </div>
     </div>
   )
+}
+
+function workerInitials(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean)
+  if (words.length > 1)
+    return words.slice(0, 2).map(word => Array.from(word)[0]).join('').toUpperCase()
+  return Array.from(words[0] ?? 'AI').slice(0, 2).join('').toUpperCase()
 }

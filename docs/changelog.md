@@ -1,5 +1,38 @@
 # AIWorker Changelog
 
+## 2026-05-12 02:55 [completed] BUG-114 / PLAN-273 — Session drawer controls and motion polish
+
+- 移除选中 session header 内重复的“返回 worker”按钮，以及右侧 drawer 自带的
+  refresh/settings/collapse 控制组。
+- 在 session header 的 settings 右侧新增 sidebar toggle icon button，激活时打开
+  右侧 drawer，未激活时收起 drawer 且不保留 restore sliver。
+- 强化 drawer/layout、panel、row、button、composer 的过渡时长与状态动效，并修复右侧
+  drawer section title 与 icon 的对齐/换行问题。
+- Verification passed: focused Web typecheck/lint/test/build, `git diff --check`,
+  browser smoke on 9217, and code-review-graph update/review.
+
+## 2026-05-12 02:44 [completed] BUG-113 / PLAN-272 — Session route return-to-worker alignment
+
+- 将选中 session 时的上下文卡片和聊天头部返回动作从“返回工作区”统一为
+  “返回 worker”。
+- 点击 session route 的返回动作会直接回到 `/workers/:workerId`，与未选中
+  session 的 workspace route 保持一致。
+- Verification passed: focused Web typecheck/lint/test/build, `git diff --check`,
+  browser smoke on 9217, and code-review-graph update/review.
+
+## 2026-05-12 02:33 [completed] REFACTOR-067 / PLAN-271 — Worker Web design system, component, and motion upgrade
+
+- Web 样式入口启用 Tailwind CSS v4，并通过 `@theme` 承载 `DESIGN.md`
+  palette、radius、font、spacing 和 motion token。
+- 新增 `packages/component` studio pattern：section header、empty state、
+  pill/status、activity row，并迁移 Worker home / workspace rail / session
+  chat / session detail 的重复结构。
+- 新增 reduced-motion-aware 的交互动效层，覆盖 shell、panel、list/card、
+  select、chat、drawer 和 status dot。
+- Verification passed: focused Web typecheck/lint/WorkerStudio test/build,
+  `git diff --check`, browser desktop/mobile smoke on 9217, and
+  code-review-graph update/review.
+
 ## 2026-05-12 02:07 [completed] BUG-112 / PLAN-270 — Worker item trailing status dot
 
 - 将 Worker list item 的状态点移动到尾随列。

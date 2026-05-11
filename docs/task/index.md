@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-12 (Worker item trailing status dot)
+> Updated: 2026-05-12 (BUG-114 completed)
 
 ## Usage
 
@@ -374,3 +374,6 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-110 Count badges should be title text**](BUG-110.md) `P0`
 - [x] [**BUG-111 Worker list should be grouped by Soul**](BUG-111.md) `P0`
 - [x] [**BUG-112 Worker list item status should be trailing-only**](BUG-112.md) `P0`
+- [x] [**REFACTOR-067 Worker Web design system, component, and motion upgrade**](REFACTOR-067.md) `P0`
+- [x] [**BUG-113 Session route return action should go back to worker**](BUG-113.md) `P0`
+- [x] [**BUG-114 Session drawer controls and motion polish**](BUG-114.md) `P0`

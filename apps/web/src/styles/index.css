@@ -1,5 +1,8 @@
+@import "tailwindcss";
 @import './tokens.css';
 @import './base.css';
+@import './patterns.css';
+@import './motion.css';
 @import './shell.css';
 @import './creation.css';
 @import './rail.css';

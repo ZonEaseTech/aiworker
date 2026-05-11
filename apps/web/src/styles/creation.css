@@ -1,6 +1,6 @@
 .newproj {
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   background: var(--bg-panel);
   display: flex;
   flex-direction: column;
@@ -37,7 +37,7 @@
   pointer-events: none;
   opacity: 0;
   background: var(--bg-panel);
-  transition: opacity 120ms ease;
+  transition: opacity var(--motion-fast) var(--motion-ease);
 }
 
 .newproj-tabs-shell.can-right::after {
@@ -169,7 +169,7 @@
 .studio-select-chevron {
   justify-self: end;
   color: var(--text-muted);
-  transition: transform 120ms ease;
+  transition: transform var(--motion-fast) var(--motion-ease);
 }
 
 .studio-select.open .studio-select-chevron {

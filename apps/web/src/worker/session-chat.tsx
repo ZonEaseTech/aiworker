@@ -9,14 +9,15 @@ import type { FormEvent } from 'react'
 import type { messagesFor, SupportedLocale } from '../features/i18n'
 import type { EngineReadiness } from '../features/session/engine-readiness'
 
-import { IconButton } from '@zonease/aiworker-component'
+import { IconButton, StudioPill, StudioStatusPill } from '@zonease/aiworker-component'
 import {
   AlertCircle,
   ArrowDown,
-  ArrowLeft,
   CheckCircle,
   FileText,
   MessageSquare,
+  PanelRightClose,
+  PanelRightOpen,
   RefreshCw,
   Send,
   Settings,
@@ -47,9 +48,10 @@ export function WorkerSessionChat({
   engineReadiness,
   events,
   locale,
+  detailDrawerOpen,
   onOpenSettings,
   onRefresh,
-  onBackToWorkspace,
+  onToggleDetailDrawer,
   onSubmitTurn,
   onTurnInputChange,
   session,
@@ -60,12 +62,13 @@ export function WorkerSessionChat({
   workspace,
 }: {
   copy: WorkerMessages
+  detailDrawerOpen: boolean
   engineReadiness: EngineReadiness
   events: LocalSessionEvent[]
   locale: SupportedLocale
   onOpenSettings: () => void
   onRefresh: () => void
-  onBackToWorkspace: () => void
+  onToggleDetailDrawer: () => void
   onSubmitTurn: (event: FormEvent<HTMLFormElement>) => void
   onTurnInputChange: (value: string) => void
   session: LocalSession
@@ -150,15 +153,22 @@ export function WorkerSessionChat({
           </div>
         </div>
         <div className="worker-chat-actions">
-          <button type="button" className="ghost icon-btn" aria-label={copy.workspace.backToWorkspace} onClick={onBackToWorkspace}>
-            <ArrowLeft aria-hidden="true" size={14} />
-            <span>{copy.workspace.backToWorkspace}</span>
-          </button>
           <IconButton aria-label={copy.accessibility.refreshWorkspace} onClick={onRefresh}>
             <RefreshCw aria-hidden="true" size={16} />
           </IconButton>
           <IconButton aria-label={copy.accessibility.openSettings} onClick={onOpenSettings}>
             <Settings aria-hidden="true" size={16} />
+          </IconButton>
+          <IconButton
+            aria-label={detailDrawerOpen ? copy.accessibility.collapseSessionDetail : copy.accessibility.expandSessionDetail}
+            aria-pressed={detailDrawerOpen}
+            className={detailDrawerOpen ? 'session-detail-toggle active' : 'session-detail-toggle'}
+            title={detailDrawerOpen ? copy.accessibility.collapseSessionDetail : copy.accessibility.expandSessionDetail}
+            onClick={onToggleDetailDrawer}
+          >
+            {detailDrawerOpen
+              ? <PanelRightClose aria-hidden="true" size={16} />
+              : <PanelRightOpen aria-hidden="true" size={16} />}
           </IconButton>
         </div>
       </header>
@@ -291,10 +301,7 @@ function AssistantWaiting({ detail, role }: { detail: string, role: string }) {
 
 function WaitingPill({ detail }: { detail: string }) {
   return (
-    <div className="worker-status-pill active">
-      <span className="status-dot active" />
-      <span>{detail}</span>
-    </div>
+    <StudioStatusPill active className="worker-status-pill">{detail}</StudioStatusPill>
   )
 }
 
@@ -329,29 +336,23 @@ function AgentEventBlock({ event }: { event: WorkerAgentEvent }) {
   }
   if (event.kind === 'status') {
     return (
-      <div className="worker-status-pill">
-        <span className="status-dot active" />
-        <span>{event.label}</span>
-        {event.detail ? <small>{event.detail}</small> : null}
-      </div>
+      <StudioStatusPill active className="worker-status-pill" detail={event.detail}>{event.label}</StudioStatusPill>
     )
   }
   if (event.kind === 'usage') {
     return (
-      <div className="worker-status-pill">
-        <CheckCircle aria-hidden="true" size={14} />
+      <StudioPill className="worker-status-pill" icon={<CheckCircle size={14} />}>
         <span>Usage</span>
         <small>{[event.inputTokens, event.outputTokens].filter(value => value != null).join(' / ')}</small>
-      </div>
+      </StudioPill>
     )
   }
   if (event.kind === 'artifact' || event.kind === 'review' || event.kind === 'lesson') {
     return (
-      <div className="worker-produced-chip">
-        <FileText aria-hidden="true" size={14} />
+      <StudioPill className="worker-produced-chip" icon={<FileText size={14} />}>
         <span>{event.kind}</span>
         <small>{event.detail}</small>
-      </div>
+      </StudioPill>
     )
   }
   if (event.kind === 'error') {

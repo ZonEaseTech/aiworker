@@ -617,15 +617,29 @@ describe('worker studio', () => {
     expect(screen.getAllByText('Current workspace').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Workspace sessions').length).toBeGreaterThan(0)
     const workspaceContextCard = document.querySelector('.workspace-context-card') as HTMLElement
-    expect(within(workspaceContextCard).queryByRole('button', { name: 'Back to worker' })).toBeNull()
-    expect(within(workspaceContextCard).getByRole('button', { name: 'Back to workspace' })).toBeTruthy()
+    expect(within(workspaceContextCard).getByRole('button', { name: 'Back to worker' })).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: 'Back to worker' }).length).toBe(1)
+    expect(screen.queryByRole('button', { name: 'Back to workspace' })).toBeNull()
     expect(screen.queryByTestId('new-project-panel')).toBeNull()
     expect(screen.getByText('Session events')).toBeTruthy()
     expect(screen.getByText('Memory candidates')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Open artifact settings' })).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Collapse session detail' }))
-    expect(screen.getByRole('button', { name: 'Expand session detail' })).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Expand session detail' }))
+    const chatActions = document.querySelector('.worker-chat-actions') as HTMLElement
+    const settingsButton = within(chatActions).getByRole('button', { name: 'Open settings' })
+    const drawerToggle = within(chatActions).getByRole('button', { name: 'Collapse session detail' })
+    expect(drawerToggle.getAttribute('aria-pressed')).toBe('true')
+    expect(settingsButton.nextElementSibling).toBe(drawerToggle)
+    expect(drawerToggle.classList.contains('active')).toBe(true)
+
+    fireEvent.click(drawerToggle)
+    expect(document.querySelector('.detail-drawer-collapsed')).toBeTruthy()
+    const expandDrawerToggle = within(chatActions).getByRole('button', { name: 'Expand session detail' })
+    expect(expandDrawerToggle.getAttribute('aria-pressed')).toBe('false')
+    expect(expandDrawerToggle.classList.contains('active')).toBe(false)
+    expect(document.querySelector('.session-panel.collapsed')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Expand session detail' })).toBeTruthy()
+    fireEvent.click(expandDrawerToggle)
     expect(screen.getByText('Session events')).toBeTruthy()
 
     const chatLog = screen.getByTestId('worker-chat-log')
@@ -712,8 +726,8 @@ describe('worker studio', () => {
 
     expect(await screen.findByText('AIWorker Engine')).toBeTruthy()
     const workspaceContextCard = document.querySelector('.workspace-context-card') as HTMLElement
-    expect(within(workspaceContextCard).queryByRole('button', { name: 'Back to worker' })).toBeNull()
-    expect(within(workspaceContextCard).getByRole('button', { name: 'Back to workspace' })).toBeTruthy()
+    expect(within(workspaceContextCard).getByRole('button', { name: 'Back to worker' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Back to workspace' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'New session' }))
 
     await waitFor(() => {
@@ -721,6 +735,20 @@ describe('worker studio', () => {
     })
     expect(screen.getByText('What do you want to build in Hiring Workspace?')).toBeTruthy()
     expect(screen.getByTestId('new-session-panel')).toBeTruthy()
+  })
+
+  it('returns from a selected session route back to the worker page', async () => {
+    window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1/sessions/session-1')
+
+    render(<WorkerStudio />)
+
+    expect(await screen.findByText('AIWorker Engine')).toBeTruthy()
+    const workspaceContextCard = document.querySelector('.workspace-context-card') as HTMLElement
+    fireEvent.click(within(workspaceContextCard).getByRole('button', { name: 'Back to worker' }))
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/workers/hr-worker')
+    })
   })
 
   it('opens settings, rescans/tests engines, and autosaves settings changes', async () => {
