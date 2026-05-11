@@ -94,28 +94,13 @@
   letter-spacing: 0;
 }
 
-.settings-trigger {
-  width: 30px;
-  height: 30px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border-radius: var(--radius-pill);
-  background: var(--bg-panel);
-  color: var(--text-muted);
-}
-
-.settings-trigger:hover {
-  color: var(--text);
-  background: var(--bg-subtle);
-}
-
+.icon-button,
+.settings-trigger,
 .icon-only {
-  width: 34px;
-  height: 34px;
-  min-width: 34px;
-  min-height: 34px;
+  width: var(--icon-button-size);
+  height: var(--icon-button-size);
+  min-width: var(--icon-button-size);
+  min-height: var(--icon-button-size);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -125,6 +110,15 @@
   color: var(--text-muted);
 }
 
+.icon-button svg,
+.settings-trigger svg,
+.icon-only svg {
+  width: var(--icon-button-icon-size);
+  height: var(--icon-button-icon-size);
+}
+
+.icon-button:hover,
+.settings-trigger:hover,
 .icon-only:hover {
   color: var(--text);
   background: var(--bg-subtle);
@@ -203,4 +197,3 @@
 .workspace-list.design-grid-list {
   grid-template-columns: 1fr;
 }
-

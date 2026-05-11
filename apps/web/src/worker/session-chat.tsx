@@ -9,6 +9,7 @@ import type { FormEvent } from 'react'
 import type { messagesFor, SupportedLocale } from '../features/i18n'
 import type { EngineReadiness } from '../features/session/engine-readiness'
 
+import { IconButton } from '@zonease/aiworker-component'
 import {
   AlertCircle,
   ArrowDown,
@@ -153,12 +154,12 @@ export function WorkerSessionChat({
             <ArrowLeft aria-hidden="true" size={14} />
             <span>{copy.workspace.backToWorkspace}</span>
           </button>
-          <button type="button" className="settings-trigger" aria-label={copy.accessibility.refreshWorkspace} onClick={onRefresh}>
+          <IconButton aria-label={copy.accessibility.refreshWorkspace} onClick={onRefresh}>
             <RefreshCw aria-hidden="true" size={16} />
-          </button>
-          <button type="button" className="settings-trigger" aria-label={copy.accessibility.openSettings} onClick={onOpenSettings}>
+          </IconButton>
+          <IconButton aria-label={copy.accessibility.openSettings} onClick={onOpenSettings}>
             <Settings aria-hidden="true" size={16} />
-          </button>
+          </IconButton>
         </div>
       </header>
 

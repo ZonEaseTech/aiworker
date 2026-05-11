@@ -39,3 +39,17 @@ export function Button({
     </button>
   )
 }
+
+export type IconButtonProps = Omit<ButtonProps, 'iconOnly' | 'variant'>
+
+export function IconButton({
+  children,
+  className,
+  ...props
+}: IconButtonProps) {
+  return (
+    <Button {...props} variant="icon" className={cx('icon-button', className)}>
+      {children}
+    </Button>
+  )
+}

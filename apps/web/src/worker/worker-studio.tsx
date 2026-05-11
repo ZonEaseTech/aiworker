@@ -11,7 +11,7 @@ import type { LocalWorkspaceData } from '../features/local-workspace/api'
 import type { SettingsSection } from '../features/settings'
 import type { ArtifactPreviewState } from './session-detail'
 
-import { StudioMainFrame, StudioSelect, WorkerStudioLayout } from '@zonease/aiworker-component'
+import { IconButton, StudioMainFrame, StudioSelect, WorkerStudioLayout } from '@zonease/aiworker-component'
 import {
   ArrowLeft,
   Check,
@@ -489,15 +489,13 @@ export function WorkerStudio() {
                     <h3>{copy.workspace.createWorker}</h3>
                     <p className="hint">{createSoulCopy?.description ?? copy.workspace.createWorkerHint}</p>
                   </div>
-                  <button
-                    type="button"
-                    className="icon-only"
+                  <IconButton
                     aria-label={copy.workspace.createWorker}
                     title={copy.workspace.createWorker}
                     onClick={() => setCreateWorkerOpen(true)}
                   >
-                    <Plus aria-hidden="true" size={15} />
-                  </button>
+                    <Plus aria-hidden="true" size={16} />
+                  </IconButton>
                 </div>
                 <div className="soul-list" role="listbox" aria-label={copy.accessibility.soulCatalog}>
                   {availableSouls.map((soul) => {
@@ -782,15 +780,13 @@ export function WorkerStudio() {
                           <h3>{copy.workspace.workerList}</h3>
                           <p className="hint">{copy.workspace.workerListHint}</p>
                         </div>
-                        <button
-                          type="button"
-                          className="icon-only"
+                        <IconButton
                           aria-label={copy.workspace.createWorker}
                           title={copy.workspace.createWorker}
                           onClick={() => setCreateWorkerOpen(true)}
                         >
-                          <Plus aria-hidden="true" size={15} />
-                        </button>
+                          <Plus aria-hidden="true" size={16} />
+                        </IconButton>
                       </div>
                       <div className="worker-list-rail soul-rail" role="listbox" aria-label={copy.workspace.currentWorker}>
                         {data.workers.map((worker) => {
@@ -879,12 +875,12 @@ export function WorkerStudio() {
                       <h1>{selectedWorkspace.name}</h1>
                     </div>
                     <div className="entry-header-right">
-                      <button className="settings-trigger" type="button" aria-label={copy.accessibility.refreshWorkspace} onClick={() => void refresh()}>
+                      <IconButton aria-label={copy.accessibility.refreshWorkspace} onClick={() => void refresh()}>
                         <RefreshCw aria-hidden="true" size={16} />
-                      </button>
-                      <button className="settings-trigger" type="button" aria-label={copy.accessibility.openSettings} onClick={() => openSettings()}>
+                      </IconButton>
+                      <IconButton aria-label={copy.accessibility.openSettings} onClick={() => openSettings()}>
                         <Settings aria-hidden="true" size={16} />
-                      </button>
+                      </IconButton>
                     </div>
                   </header>
 
@@ -958,12 +954,12 @@ export function WorkerStudio() {
                       <h1>{copy.workspace.workspaceTitle(selectedWorker.name)}</h1>
                     </div>
                     <div className="entry-header-right">
-                      <button className="settings-trigger" type="button" aria-label={copy.accessibility.refreshWorkspace} onClick={() => void refresh()}>
+                      <IconButton aria-label={copy.accessibility.refreshWorkspace} onClick={() => void refresh()}>
                         <RefreshCw aria-hidden="true" size={16} />
-                      </button>
-                      <button className="settings-trigger" type="button" aria-label={copy.accessibility.openSettings} onClick={() => openSettings()}>
+                      </IconButton>
+                      <IconButton aria-label={copy.accessibility.openSettings} onClick={() => openSettings()}>
                         <Settings aria-hidden="true" size={16} />
-                      </button>
+                      </IconButton>
                       <button className="avatar-btn" type="button" aria-label={copy.accessibility.workspace}>
                         <span aria-hidden="true" className="avatar-btn-initials">{selectedWorker.name}</span>
                       </button>
@@ -998,15 +994,13 @@ export function WorkerStudio() {
                         <div className="toolbar-left">
                           <strong>{copy.workspace.workspaceList}</strong>
                           <span className="count-pill">{filteredProjects.length}</span>
-                          <button
-                            type="button"
-                            className="icon-only"
+                          <IconButton
                             aria-label={copy.workspace.createWorkspace}
                             title={copy.workspace.createWorkspace}
                             onClick={() => setCreateWorkspaceOpen(true)}
                           >
-                            <Plus aria-hidden="true" size={15} />
-                          </button>
+                            <Plus aria-hidden="true" size={16} />
+                          </IconButton>
                         </div>
 
                         <div className="toolbar-right">

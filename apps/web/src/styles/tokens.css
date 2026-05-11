@@ -45,6 +45,8 @@
   --radius: 8px;
   --radius-lg: 12px;
   --radius-pill: 9999px;
+  --icon-button-size: 30px;
+  --icon-button-icon-size: 16px;
   --serif: "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
   --sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
