@@ -1,6 +1,7 @@
 import type { LocalWorker, VerticalSoul } from '@zonease/aiworker-shared'
 import type { displaySoul, messagesFor, normalizeLocale } from '../../i18n'
 
+import { Card } from '@zonease/aiworker-component'
 import { formatStatus } from '../../i18n'
 
 type WorkerMessages = ReturnType<typeof messagesFor>
@@ -21,7 +22,7 @@ export function WorkerIdentityBlock({
   worker: LocalWorker | null
 }) {
   return (
-    <div className={`worker-identity ${compact ? 'compact' : ''}`}>
+    <Card className={`worker-identity ${compact ? 'compact' : ''}`}>
       <div className="worker-identity-head">
         <span className="kicker">{copy.workspace.currentWorker}</span>
         <strong>{worker?.name ?? copy.workspace.noWorker}</strong>
@@ -36,6 +37,6 @@ export function WorkerIdentityBlock({
         <span>{copy.workspace.workerSoul}</span>
         <strong>{`${soulCopy.name} / ${soul.id}`}</strong>
       </div>
-    </div>
+    </Card>
   )
 }

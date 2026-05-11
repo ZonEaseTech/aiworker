@@ -1,3 +1,6 @@
+export * from './layout'
+export * from './patterns'
+export * from './primitives'
 export {
   CreationDialog,
   StudioMainFrame,

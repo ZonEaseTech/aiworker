@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-11 (Worker Web architecture modularization completed)
+> Updated: 2026-05-11 (component package library structure completed)
 
 ## Usage
 
@@ -352,3 +352,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**QA-034 Worker Web shared layout validation**](QA-034.md) `P0`
 - [x] [**BUG-091 Mobile session route layout crowding**](BUG-091.md) `P0`
 - [x] [**REFACTOR-065 Worker Web architecture modularization**](REFACTOR-065.md) `P0`
+- [x] [**REFACTOR-066 Component package library structure**](REFACTOR-066.md) `P0`

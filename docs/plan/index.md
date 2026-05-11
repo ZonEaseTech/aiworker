@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-11 (PLAN-248 completed)
+> Updated: 2026-05-11 (PLAN-249 completed)
 
 ## Usage
 
@@ -277,3 +277,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-246 Worker Web shared layout validation**](PLAN-246.md) `2026-05-11`
 - [x] [**PLAN-247 Mobile session route layout repair**](PLAN-247.md) `2026-05-11`
 - [x] [**PLAN-248 Worker Web architecture modularization**](PLAN-248.md) `2026-05-11`
+- [x] [**PLAN-249 Component package library structure**](PLAN-249.md) `2026-05-11`

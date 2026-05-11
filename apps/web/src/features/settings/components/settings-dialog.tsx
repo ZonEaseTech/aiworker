@@ -1,6 +1,7 @@
 import type { CapabilityTemplate, LocalEngineStatus, LocalSettingsConfig, VerticalSoul } from '@zonease/aiworker-shared'
 import type { CSSProperties, ReactNode } from 'react'
 
+import { ActionCard, Button, Field, NavItemButton } from '@zonease/aiworker-component'
 import { Check, Languages, Link, Moon, RefreshCw, Settings, ShieldCheck, SlidersHorizontal, Sparkles, Sun, Terminal, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { displaySoul, formatRelativeTime, languageLabel, messagesFor, normalizeLocale, supportedLocales } from '../../i18n'
@@ -109,9 +110,9 @@ export function SettingsDialog({
                 </div>
               )
             : null}
-          <button type="button" className="settings-close" onClick={onClose} aria-label={copy.accessibility.closeSettings} title={copy.accessibility.closeSettings}>
+          <Button variant="close" onClick={onClose} aria-label={copy.accessibility.closeSettings} title={copy.accessibility.closeSettings}>
             <X size={16} strokeWidth={2} />
-          </button>
+          </Button>
         </div>
 
         <header className="modal-head">
@@ -126,18 +127,15 @@ export function SettingsDialog({
               const Icon = item.icon
               const navCopy = settingsNavCopy(settingsCopy.nav, item.id)
               return (
-                <button
+                <NavItemButton
                   key={item.id}
-                  type="button"
-                  className={`settings-nav-item${section === item.id ? ' active' : ''}`}
+                  active={section === item.id}
+                  className="settings-nav-item"
+                  description={navCopy.detail}
+                  icon={<Icon size={18} />}
+                  label={navCopy.title}
                   onClick={() => setSection(item.id)}
-                >
-                  <Icon size={18} />
-                  <span>
-                    <strong>{navCopy.title}</strong>
-                    <small>{navCopy.detail}</small>
-                  </span>
-                </button>
+                />
               )
             })}
           </aside>
@@ -237,13 +235,13 @@ function ExecutionSettings({
                   <p className="hint">{settingsCopy.engine.hint}</p>
                 </div>
                 <div className="section-head-actions">
-                  <button type="button" className="ghost icon-btn settings-test-btn" onClick={() => onTest(settings.engineId)}>
+                  <Button variant="ghost" iconOnly className="settings-test-btn" onClick={() => onTest(settings.engineId)}>
                     <span>{settingsCopy.engine.test}</span>
-                  </button>
-                  <button type="button" className="ghost icon-btn settings-rescan-btn" onClick={onRescan}>
+                  </Button>
+                  <Button variant="ghost" iconOnly className="settings-rescan-btn" onClick={onRescan}>
                     <RefreshCw size={13} />
                     <span>{settingsCopy.engine.rescan}</span>
-                  </button>
+                  </Button>
                 </div>
               </div>
 
@@ -270,22 +268,18 @@ function ExecutionSettings({
                 </div>
               </div>
               <div className="settings-field-grid">
-                <label className="settings-field">
-                  <span>{settingsCopy.byok.provider}</span>
+                <Field label={settingsCopy.byok.provider}>
                   <input value={settings.byok.provider} onChange={event => void update({ byok: { ...settings.byok, provider: event.target.value } })} />
-                </label>
-                <label className="settings-field">
-                  <span>{settingsCopy.byok.baseUrl}</span>
+                </Field>
+                <Field label={settingsCopy.byok.baseUrl}>
                   <input value={settings.byok.baseUrl} onChange={event => void update({ byok: { ...settings.byok, baseUrl: event.target.value } })} />
-                </label>
-                <label className="settings-field">
-                  <span>{settingsCopy.byok.model}</span>
+                </Field>
+                <Field label={settingsCopy.byok.model}>
                   <input value={settings.byok.model} onChange={event => void update({ byok: { ...settings.byok, model: event.target.value } })} />
-                </label>
-                <label className="settings-field">
-                  <span>{settingsCopy.byok.apiKeyRef}</span>
+                </Field>
+                <Field label={settingsCopy.byok.apiKeyRef}>
                   <input value={settings.byok.apiKeyRef} onChange={event => void update({ byok: { ...settings.byok, apiKeyRef: event.target.value } })} placeholder="env:OPENAI_API_KEY" />
-                </label>
+                </Field>
               </div>
             </section>
           )}
@@ -295,7 +289,7 @@ function ExecutionSettings({
 
 function EngineCard({ active, copy, engine, onSelect }: { active: boolean, copy: ReturnType<typeof messagesFor>, engine: LocalEngineStatus, onSelect: () => void }) {
   return (
-    <button type="button" className={`agent-card${active ? ' active' : ''}${engine.installed ? '' : ' disabled'}`} disabled={!engine.installed} aria-pressed={active} onClick={onSelect}>
+    <ActionCard active={active} className={`agent-card${engine.installed ? '' : ' disabled'}`} disabled={!engine.installed} aria-pressed={active} onClick={onSelect}>
       <span className={`agent-icon ${engine.installed ? 'agent-icon-dark' : 'agent-icon-gray'}`} aria-hidden="true">
         {engine.installed ? <Sparkles size={24} /> : <span />}
       </span>
@@ -308,7 +302,7 @@ function EngineCard({ active, copy, engine, onSelect }: { active: boolean, copy:
         </span>
       </span>
       {engine.installed ? <span className={`status-dot${active ? ' active' : ''}`} aria-hidden="true" /> : null}
-    </button>
+    </ActionCard>
   )
 }
 
@@ -414,8 +408,7 @@ function ExternalMcpSettings({ copy, settings, update }: { copy: ReturnType<type
       </div>
       <div className="connector-list">
         {settings.externalMcpServers.map(server => (
-          <label key={server.id} className="settings-field">
-            <span>{server.name}</span>
+          <Field key={server.id} label={server.name}>
             <input
               value={server.command}
               onChange={event => void update({
@@ -423,7 +416,7 @@ function ExternalMcpSettings({ copy, settings, update }: { copy: ReturnType<type
               })}
               placeholder={settingsCopy.externalMcp.placeholder}
             />
-          </label>
+          </Field>
         ))}
       </div>
     </div>
@@ -473,13 +466,13 @@ function AppearanceSettings({ copy, settings, update }: { copy: ReturnType<typeo
 
 function AppearanceButton({ active, icon, label, meta, onClick }: { active: boolean, icon: ReactNode, label: string, meta: string, onClick: () => void }) {
   return (
-    <button type="button" className={`seg-btn ${active ? 'active' : ''}`} onClick={onClick}>
+    <Button className={`seg-btn ${active ? 'active' : ''}`} onClick={onClick}>
       <span className="seg-title seg-title-inline">
         {icon}
         {label}
       </span>
       <span className="seg-meta">{meta}</span>
-    </button>
+    </Button>
   )
 }
 

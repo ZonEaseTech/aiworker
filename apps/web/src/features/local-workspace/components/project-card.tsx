@@ -1,6 +1,7 @@
 import type { CapabilityTemplate, LocalArtifact, LocalSession, LocalTurn, LocalWorkspace } from '@zonease/aiworker-shared'
 import type { normalizeLocale } from '../../i18n'
 
+import { ActionCard } from '@zonease/aiworker-component'
 import { FileText } from 'lucide-react'
 import { displayTemplate, formatRelativeTime, formatStatus, messagesFor } from '../../i18n'
 
@@ -27,7 +28,7 @@ export function ProjectCard({
   const templateCopy = template ? displayTemplate(template, locale) : null
   const artifactLabel = artifact ? templateCopy?.outputKind ?? artifact.kind : copy.artifact.pending
   return (
-    <button type="button" className={`design-card ${active ? 'active' : ''}`} onClick={onSelect}>
+    <ActionCard active={active} className="design-card" onClick={onSelect}>
       <div className="design-card-thumb" aria-hidden="true">
         <FileText size={22} />
       </div>
@@ -40,6 +41,6 @@ export function ProjectCard({
           {` · ${formatRelativeTime(item.updatedAt, locale)}`}
         </div>
       </div>
-    </button>
+    </ActionCard>
   )
 }

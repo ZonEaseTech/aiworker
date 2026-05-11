@@ -1,5 +1,31 @@
 # AIWorker Changelog
 
+## 2026-05-11 13:51 [completed] REFACTOR-066 / PLAN-249 — Component package library structure
+
+- Reworked `packages/component` from a single Worker Studio extraction file
+  into a component-library structure with `primitives`, `layout`, `patterns`,
+  `studio`, and `utils` modules.
+- Added primitive exports for button, card/action-card, dialog, field,
+  header, nav, badge, and select while preserving compatibility exports used by
+  Worker Web.
+- Updated Worker Web creation dialogs, project cards, worker identity, and
+  settings surfaces to consume package primitives instead of hand-rolled base
+  button/card/field/nav markup.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-component' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `bun run check`
+  - `git diff --check`
+  - Browser verification on `http://127.0.0.1:9217/worker/`
+  - `bun run crg:update`
+  - `bun run crg:review`
+- code-review-graph result: risk score `0.40`, 0 affected flows; the reported
+  UI component test gaps are covered by existing WorkerStudio RTL tests, Web
+  build, and browser startup verification.
+
 ## 2026-05-11 12:21 [completed] REFACTOR-065 / PLAN-248 — Worker Web architecture modularization
 
 - Added `packages/component` as a workspace package for shared Worker Web React
