@@ -288,3 +288,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-257 Select 展开态样式统一**](PLAN-257.md) `2026-05-11`
 - [x] [**PLAN-258 其他工作区筛除当前项**](PLAN-258.md) `2026-05-11`
 - [x] [**PLAN-259 工作区会话新建入口**](PLAN-259.md) `2026-05-11`
+- [x] [**PLAN-260 移除工作区返回 worker 入口**](PLAN-260.md) `2026-05-11`

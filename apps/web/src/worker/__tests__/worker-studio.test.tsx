@@ -572,8 +572,9 @@ describe('worker studio', () => {
     expect(screen.getByText('hr-worker')).toBeTruthy()
     expect(screen.getAllByText('Current workspace').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Workspace sessions').length).toBeGreaterThan(0)
-    expect(screen.getByRole('button', { name: /Back to worker/ })).toBeTruthy()
-    expect(screen.getAllByRole('button', { name: /Back to workspace/ }).length).toBeGreaterThan(0)
+    const workspaceContextCard = document.querySelector('.workspace-context-card') as HTMLElement
+    expect(within(workspaceContextCard).queryByRole('button', { name: 'Back to worker' })).toBeNull()
+    expect(within(workspaceContextCard).getByRole('button', { name: 'Back to workspace' })).toBeTruthy()
     expect(screen.queryByTestId('new-project-panel')).toBeNull()
     expect(screen.getByText('Session events')).toBeTruthy()
     expect(screen.getByText('Memory candidates')).toBeTruthy()
@@ -643,6 +644,7 @@ describe('worker studio', () => {
     expect(screen.getAllByText('Workspace sessions').length).toBeGreaterThan(0)
     expect(screen.getByTestId('new-session-panel')).toBeTruthy()
     expect(screen.getByText('What do you want to build in Hiring Workspace?')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Back to worker' })).toBeNull()
     expect(screen.getAllByText('No sessions in this workspace yet.').length).toBeGreaterThan(0)
     expect(document.querySelector('.workspace-overview-panel')).toBeNull()
     expect(document.querySelector('.workspace-session-grid')).toBeNull()
@@ -660,6 +662,9 @@ describe('worker studio', () => {
     render(<WorkerStudio />)
 
     expect(await screen.findByText('AIWorker Engine')).toBeTruthy()
+    const workspaceContextCard = document.querySelector('.workspace-context-card') as HTMLElement
+    expect(within(workspaceContextCard).queryByRole('button', { name: 'Back to worker' })).toBeNull()
+    expect(within(workspaceContextCard).getByRole('button', { name: 'Back to workspace' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'New session' }))
 
     await waitFor(() => {

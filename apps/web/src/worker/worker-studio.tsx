@@ -663,14 +663,6 @@ export function WorkerStudio() {
             ? (
                 <>
                   <section className="workspace-rail-card workspace-context-card">
-                    <button
-                      type="button"
-                      className="rail-back-button"
-                      onClick={() => navigateWorkerRoute({ kind: 'worker', workerId: selectedWorker.id })}
-                    >
-                      <ArrowLeft aria-hidden="true" size={13} />
-                      <span>{copy.workspace.backToWorkerHome}</span>
-                    </button>
                     {showSessionSurface
                       ? (
                           <button

@@ -1,5 +1,13 @@
 # AIWorker Changelog
 
+## 2026-05-11 18:13 [completed] BUG-102 / PLAN-260 — 移除工作区返回 worker 入口
+
+- 移除 workspace rail 顶部多余的“返回 worker”动作。
+- 保留 session route 中的“返回工作区”动作。
+- 清理不再使用的 `backToWorkerHome` i18n 文案。
+- Verification passed: focused Web typecheck/lint/test/build, `bun run check`, `git diff --check`,
+  browser verification on 9217, and code-review-graph review.
+
 ## 2026-05-11 18:09 [completed] BUG-101 / PLAN-259 — 工作区会话新建入口
 
 - 将“工作区会话”头部右侧从会话数量改为“新建会话”快捷动作。

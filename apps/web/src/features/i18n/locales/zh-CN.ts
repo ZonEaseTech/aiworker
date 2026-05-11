@@ -137,7 +137,6 @@ export const zhCN = {
     sendTurn: '发送 turn',
     sendingTurn: '正在发送 turn...',
     backToSoulHome: '返回 Soul 首页',
-    backToWorkerHome: '返回 worker',
     backToWorkspace: '返回工作区',
     currentSession: '当前会话',
     currentWorker: '当前 worker',

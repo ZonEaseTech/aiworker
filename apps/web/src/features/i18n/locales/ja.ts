@@ -137,7 +137,6 @@ export const ja = {
     sendTurn: 'ターン送信',
     sendingTurn: '送信中...',
     backToSoulHome: 'Soul ホームに戻る',
-    backToWorkerHome: 'worker に戻る',
     backToWorkspace: 'ワークスペースに戻る',
     currentSession: '現在のセッション',
     currentWorker: '現在の worker',
