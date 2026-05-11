@@ -1,21 +1,15 @@
 import type { WorkerStudioLayoutVariant } from '@zonease/aiworker-component'
 import type {
-  CapabilityTemplate,
-  LocalArtifact,
   LocalLesson,
   LocalLessonStatus,
-  LocalReview,
   LocalSession,
   LocalSessionEvent,
-  LocalSettingsConfig,
   LocalTurn,
-  LocalWorkspace,
-  VerticalSoul,
 } from '@zonease/aiworker-shared'
 import type { FormEvent } from 'react'
 import type { LocalWorkspaceData } from '../features/local-workspace/api'
 import type { SettingsSection } from '../features/settings'
-import type { ArtifactPreviewState, EngineReadiness } from './session-detail'
+import type { ArtifactPreviewState } from './session-detail'
 
 import { StudioMainFrame, StudioSelect, WorkerStudioLayout } from '@zonease/aiworker-component'
 import {
@@ -30,7 +24,7 @@ import {
   Settings,
   ShieldCheck,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useReducer, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useState } from 'react'
 import { navigateWorkerRoute, parseWorkerRoute, useWorkerRoute } from '../app/router/worker-route'
 import {
   displaySoul,
@@ -43,7 +37,27 @@ import {
 } from '../features/i18n'
 import { continueSessionTurnStream, createReview, createSessionTurnStream, createWorker, createWorkspace, loadLocalWorkspaceData, readFile, updateLesson } from '../features/local-workspace/api'
 import { CreateWorkerDialog, CreateWorkspaceDialog, ProjectCard, WorkerIdentityBlock } from '../features/local-workspace/components'
+import {
+  artifactForSession,
+  artifactForWorkspace,
+  artifactsForWorkspace,
+  buildProjectPrompt,
+  eventsForSession,
+  latest,
+  lessonsForWorkspace,
+  projectNamePlaceholder,
+  reviewForSession,
+  reviewsForWorkspace,
+  sessionForWorkspace,
+  turnForSession,
+  turnsForSession,
+  upsertSession,
+  upsertTurn,
+} from '../features/local-workspace/model'
+import { resolveEngineReadiness } from '../features/session/engine-readiness'
 import { SettingsDialog } from '../features/settings'
+import { selectedEngineLabel } from '../features/settings/model'
+import { resolveTheme, useSystemTheme } from '../features/theme/system-theme'
 import { WorkerSessionChat } from './session-chat'
 import { SessionDetail } from './session-detail'
 
@@ -53,9 +67,7 @@ interface StudioState {
   loading: boolean
 }
 
-type ResolvedTheme = 'light' | 'dark'
 type WorkerMessages = ReturnType<typeof messagesFor>
-const themeMediaQuery = '(prefers-color-scheme: dark)'
 const initialArtifactPreviewState: ArtifactPreviewState = {
   artifactId: null,
   content: '',
@@ -1066,154 +1078,4 @@ function StudioBrand({ copy }: { copy: WorkerMessages }) {
       </div>
     </div>
   )
-}
-
-function resolveEngineReadiness(settings: LocalSettingsConfig | null, copy: WorkerMessages): EngineReadiness {
-  if (!settings)
-    return { detail: copy.workspace.engineLoading, label: copy.workspace.engineLoading, ready: false }
-  if (settings.executionMode === 'byok') {
-    const configured = settings.byok.provider.trim().length > 0 && settings.byok.model.trim().length > 0 && settings.byok.apiKeyRef.trim().length > 0
-    return {
-      detail: configured ? copy.workspace.byokReady(settings.byok.provider, settings.byok.model) : copy.workspace.byokNeedsKey,
-      label: `${settings.byok.provider} · ${settings.byok.model}`,
-      ready: configured,
-    }
-  }
-  const engine = settings.engines.find(item => item.id === settings.engineId)
-  if (!engine) {
-    return {
-      detail: copy.workspace.engineMissing(settings.engineId),
-      label: settings.engineId,
-      ready: false,
-    }
-  }
-  return {
-    detail: engine.installed ? copy.workspace.engineReadyDetail(engine.name) : copy.workspace.engineNotInstalled(engine.name),
-    label: `${engine.name}${engine.installed ? '' : ` · ${copy.common.notInstalled}`}`,
-    ready: engine.installed,
-  }
-}
-
-function turnsForSession(session: LocalSession, turns: LocalTurn[]): LocalTurn[] {
-  return turns.filter(turn => turn.sessionId === session.id).sort((a, b) => a.seq - b.seq)
-}
-
-function upsertTurn(turns: LocalTurn[], nextTurn: LocalTurn): LocalTurn[] {
-  const byId = new Map(turns.map(turn => [turn.id, turn]))
-  byId.set(nextTurn.id, nextTurn)
-  return [...byId.values()].sort((a, b) => a.seq - b.seq)
-}
-
-function upsertSession(sessions: LocalSession[], nextSession: LocalSession): LocalSession[] {
-  const byId = new Map(sessions.map(session => [session.id, session]))
-  byId.set(nextSession.id, nextSession)
-  return [...byId.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-}
-
-function eventsForSession(session: LocalSession, events: LocalSessionEvent[]): LocalSessionEvent[] {
-  return events.filter(event => event.sessionId === session.id).sort((a, b) => a.seq - b.seq)
-}
-
-function artifactsForWorkspace(workspace: LocalWorkspace, artifacts: LocalArtifact[]): LocalArtifact[] {
-  return artifacts.filter(artifact => artifact.workspaceId === workspace.id).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-}
-
-function reviewsForWorkspace(workspace: LocalWorkspace, reviews: LocalReview[]): LocalReview[] {
-  return reviews.filter(review => review.workspaceId === workspace.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-}
-
-function lessonsForWorkspace(workspace: LocalWorkspace, lessons: LocalLesson[]): LocalLesson[] {
-  return lessons.filter(lesson => lesson.workspaceId === workspace.id).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-}
-
-function buildProjectPrompt(soul: VerticalSoul, template: CapabilityTemplate, context: string): string {
-  return [
-    `Soul: ${soul.name}`,
-    `Domain system: ${soul.domain}`,
-    `Capability template: ${template.name}`,
-    `Output kind: ${template.outputKind}`,
-    '',
-    'Business context:',
-    context.trim(),
-    '',
-    'Input hints:',
-    ...template.inputHints.map(item => `- ${item}`),
-    '',
-    'Review rubric:',
-    ...template.reviewRubric.map(item => `- ${item}`),
-  ].join('\n')
-}
-
-function artifactForWorkspace(item: LocalWorkspace, artifacts: LocalArtifact[], sessions: LocalSession[]): LocalArtifact | null {
-  const session = sessionForWorkspace(item, sessions)
-  return session ? artifactForSession(session, artifacts) : null
-}
-
-function artifactForSession(session: LocalSession, artifacts: LocalArtifact[]): LocalArtifact | null {
-  return artifacts.find(artifact => artifact.sessionId === session.id) ?? null
-}
-
-function reviewForSession(session: LocalSession, reviews: LocalReview[]): LocalReview | null {
-  return reviews.find(review => review.sessionId === session.id) ?? null
-}
-
-function sessionForWorkspace(item: LocalWorkspace | null, sessions: LocalSession[]): LocalSession | null {
-  if (!item)
-    return null
-  return sessions.filter(session => session.workspaceId === item.id).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0] ?? null
-}
-
-function turnForSession(item: LocalSession | null, turns: LocalTurn[]): LocalTurn | null {
-  if (!item)
-    return null
-  return turns.filter(turn => turn.sessionId === item.id).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0] ?? null
-}
-
-function latest<T extends { updatedAt: string }>(items: T[]): T | null {
-  return items.slice().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0] ?? null
-}
-
-function useSystemTheme(): ResolvedTheme {
-  return useSyncExternalStore(subscribeSystemTheme, readSystemTheme, () => 'light')
-}
-
-function subscribeSystemTheme(onChange: () => void): () => void {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function')
-    return () => {}
-  const media = window.matchMedia(themeMediaQuery)
-  if (typeof media.addEventListener === 'function') {
-    media.addEventListener('change', onChange)
-    return () => media.removeEventListener('change', onChange)
-  }
-  media.addListener(onChange)
-  return () => media.removeListener(onChange)
-}
-
-function readSystemTheme(): ResolvedTheme {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function')
-    return 'light'
-  return window.matchMedia(themeMediaQuery).matches ? 'dark' : 'light'
-}
-
-function resolveTheme(appearance: LocalSettingsConfig['appearance'], systemTheme: ResolvedTheme): ResolvedTheme {
-  return appearance === 'system' ? systemTheme : appearance
-}
-
-function projectNamePlaceholder(soulId: string, copy: WorkerMessages): string {
-  if (soulId === 'hr')
-    return copy.create.projectPlaceholders.hr
-  if (soulId === 'pm')
-    return copy.create.projectPlaceholders.pm
-  if (soulId === 'qa')
-    return copy.create.projectPlaceholders.qa
-  if (soulId === 'devops')
-    return copy.create.projectPlaceholders.devops
-  return copy.create.projectPlaceholders.default
-}
-
-function selectedEngineLabel(settings: LocalSettingsConfig, copy: WorkerMessages): string {
-  if (settings.executionMode === 'byok')
-    return `${settings.byok.provider} · ${settings.byok.model}`
-  const engine = settings.engines.find(item => item.id === settings.engineId)
-  return engine ? `${engine.name}${engine.installed ? '' : ` · ${copy.common.notInstalled}`}` : settings.engineId
 }

@@ -7,7 +7,7 @@ import type {
 } from '@zonease/aiworker-shared'
 import type { FormEvent } from 'react'
 import type { messagesFor, SupportedLocale } from '../features/i18n'
-import type { EngineReadiness } from './session-detail'
+import type { EngineReadiness } from '../features/session/engine-readiness'
 
 import {
   AlertCircle,
