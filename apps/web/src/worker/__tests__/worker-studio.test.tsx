@@ -404,6 +404,10 @@ describe('worker studio', () => {
     expect(await screen.findByText('Soul Workspace')).toBeTruthy()
     expect(document.documentElement.lang).toBe('en')
     expect(screen.getByLabelText('Current worker')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /HR \(1\)/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /PM \(1\)/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /QA \(1\)/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /DevOps \(1\)/ })).toBeTruthy()
     expect(screen.getAllByText('HR').length).toBeGreaterThan(0)
     expect(screen.getAllByText('PM').length).toBeGreaterThan(0)
     expect(screen.getAllByText('QA').length).toBeGreaterThan(0)
@@ -447,6 +451,27 @@ describe('worker studio', () => {
       expect(button.classList.contains('icon-button')).toBe(true)
       expect(button.classList.contains('icon-btn')).toBe(false)
     }
+  })
+
+  it('groups workers by Soul and keeps each category collapsible', async () => {
+    render(<WorkerStudio />)
+
+    await screen.findByText('hr-worker')
+    const pmGroupToggle = screen.getByRole('button', { name: /PM \(1\)/ })
+    const visibleOptionTexts = () => screen.getAllByRole('option').map(option => option.textContent ?? '')
+
+    expect(pmGroupToggle.getAttribute('aria-expanded')).toBe('true')
+    expect(visibleOptionTexts().some(text => text.includes('PM') && text.includes('Active'))).toBe(true)
+
+    fireEvent.click(pmGroupToggle)
+
+    expect(pmGroupToggle.getAttribute('aria-expanded')).toBe('false')
+    expect(visibleOptionTexts().some(text => text.includes('PM') && text.includes('Active'))).toBe(false)
+
+    fireEvent.click(pmGroupToggle)
+
+    expect(pmGroupToggle.getAttribute('aria-expanded')).toBe('true')
+    expect(visibleOptionTexts().some(text => text.includes('PM') && text.includes('Active'))).toBe(true)
   })
 
   it('switches the Soul rail and updates capability templates with worker identity', async () => {

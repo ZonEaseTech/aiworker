@@ -1,5 +1,12 @@
 # AIWorker Changelog
 
+## 2026-05-12 01:59 [completed] BUG-111 / PLAN-269 — Worker list Soul grouping
+
+- 将 Worker home 的 worker list 按 Soul 分组，组头使用 `Soul (N)` 文本。
+- 为每个 Soul 分组增加折叠/展开控制，保留组内 worker item 选择行为。
+- Verification passed: focused Web typecheck/lint/WorkerStudio test/build, `bun run check`,
+  `git diff --check`, browser verification on 9217, and code-review-graph review.
+
 ## 2026-05-12 01:48 [completed] BUG-110 / PLAN-268 — Count text convergence
 
 - 将能力模板和工作区数量从 badge/tag 改为标题后的 `(N)` 文本。

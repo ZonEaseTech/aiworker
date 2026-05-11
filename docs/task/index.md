@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-12 (Count text convergence)
+> Updated: 2026-05-12 (Worker list Soul grouping)
 
 ## Usage
 
@@ -372,3 +372,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-108 Worker home add actions use icon-only buttons**](BUG-108.md) `P0`
 - [x] [**BUG-109 Add actions should use plus icon buttons**](BUG-109.md) `P0`
 - [x] [**BUG-110 Count badges should be title text**](BUG-110.md) `P0`
+- [x] [**BUG-111 Worker list should be grouped by Soul**](BUG-111.md) `P0`

@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-12 (PLAN-268 completed)
+> Updated: 2026-05-12 (PLAN-269 completed)
 
 ## Usage
 
@@ -297,3 +297,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-266 Worker home add action convergence**](PLAN-266.md) `2026-05-12`
 - [x] [**PLAN-267 Add actions plus icon button convergence**](PLAN-267.md) `2026-05-12`
 - [x] [**PLAN-268 Count text convergence**](PLAN-268.md) `2026-05-12`
+- [x] [**PLAN-269 Worker list Soul grouping**](PLAN-269.md) `2026-05-12`

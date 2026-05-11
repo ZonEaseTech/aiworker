@@ -16,6 +16,7 @@ import {
   ArrowLeft,
   Check,
   ChevronDown,
+  ChevronRight,
   FileText,
   Languages,
   Plus,
@@ -106,6 +107,7 @@ export function WorkerStudio() {
   const [query, setQuery] = useState('')
   const [createWorkerOpen, setCreateWorkerOpen] = useState(false)
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false)
+  const [collapsedWorkerSoulIds, setCollapsedWorkerSoulIds] = useState<Set<string>>(() => new Set())
   const [detailDrawerCollapsed, setDetailDrawerCollapsed] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsInitialSection, setSettingsInitialSection] = useState<SettingsSection>('execution')
@@ -186,6 +188,40 @@ export function WorkerStudio() {
         || templateCopy?.name.toLowerCase().includes(needle)
     })
   }, [activeLocale, allSessions, data?.templates, query, soulWorkspaces])
+  const workerSoulGroups = useMemo(() => {
+    if (!data)
+      return []
+
+    const groups = new Map<string, {
+      domain: string
+      id: string
+      name: string
+      workers: typeof data.workers
+    }>()
+    for (const soul of data.souls) {
+      const soulCopy = displaySoul(soul, activeLocale)
+      groups.set(soul.id, {
+        domain: soulCopy.domain,
+        id: soul.id,
+        name: soulCopy.name,
+        workers: [],
+      })
+    }
+
+    for (const worker of data.workers) {
+      if (!groups.has(worker.soulId)) {
+        groups.set(worker.soulId, {
+          domain: worker.soulId,
+          id: worker.soulId,
+          name: worker.soulId,
+          workers: [],
+        })
+      }
+      groups.get(worker.soulId)?.workers.push(worker)
+    }
+
+    return [...groups.values()].filter(group => group.workers.length > 0)
+  }, [activeLocale, data])
 
   const routeWorkspaceId = route.kind === 'workspace' || route.kind === 'session' ? route.workspaceId : null
   const routeWorkspace = routeWorkspaceId ? soulWorkspaces.find(item => item.id === routeWorkspaceId) ?? null : null
@@ -261,6 +297,17 @@ export function WorkerStudio() {
   function openSettings(section: SettingsSection = 'execution') {
     setSettingsInitialSection(section)
     setSettingsOpen(true)
+  }
+
+  function toggleWorkerSoulGroup(soulId: string) {
+    setCollapsedWorkerSoulIds((current) => {
+      const next = new Set(current)
+      if (next.has(soulId))
+        next.delete(soulId)
+      else
+        next.add(soulId)
+      return next
+    })
   }
 
   async function submitWorker(event: FormEvent<HTMLFormElement>) {
@@ -787,35 +834,64 @@ export function WorkerStudio() {
                         </IconButton>
                       </div>
                       <div className="worker-list-rail soul-rail" role="listbox" aria-label={copy.workspace.currentWorker}>
-                        {data.workers.map((worker) => {
-                          const soul = data.souls.find(item => item.id === worker.soulId)
-                          const soulCopy = soul ? displaySoul(soul, activeLocale) : null
-                          const active = selectedWorker.id === worker.id
+                        {workerSoulGroups.map((group) => {
+                          const collapsed = collapsedWorkerSoulIds.has(group.id)
+                          const groupItemsId = `worker-soul-group-${group.id}`
                           return (
-                            <button
-                              key={worker.id}
-                              type="button"
-                              className={`worker-list-item ${active ? 'active' : ''}`}
-                              aria-selected={active}
-                              role="option"
-                              onClick={() => {
-                                setSelectedWorkerId(worker.id)
-                                setSelectedWorkspaceId(null)
-                                const next = data.templates.find(template => template.soulId === worker.soulId)
-                                if (next)
-                                  setSelectedTemplateId(next.id)
-                                navigateWorkerRoute({ kind: 'worker', workerId: worker.id })
-                              }}
-                            >
-                              <span className="worker-list-item-main">
-                                <strong>{worker.name}</strong>
-                                <span className={`status-dot ${worker.status === 'active' ? 'active' : ''}`} aria-hidden="true" />
-                              </span>
-                              <span className="worker-list-item-meta">
-                                <small>{soulCopy?.name ?? worker.soulId}</small>
-                                <span>{formatStatus(worker.status, activeLocale)}</span>
-                              </span>
-                            </button>
+                            <div key={group.id} className="worker-soul-group">
+                              <button
+                                type="button"
+                                className="worker-soul-group-toggle"
+                                aria-label={`${group.name} (${group.workers.length}) ${group.domain}`}
+                                aria-controls={groupItemsId}
+                                aria-expanded={!collapsed}
+                                onClick={() => toggleWorkerSoulGroup(group.id)}
+                              >
+                                <span className="worker-soul-group-title">
+                                  <strong>{`${group.name} (${group.workers.length})`}</strong>
+                                  <small>{group.domain}</small>
+                                </span>
+                                {collapsed
+                                  ? <ChevronRight aria-hidden="true" size={14} />
+                                  : <ChevronDown aria-hidden="true" size={14} />}
+                              </button>
+
+                              {!collapsed
+                                ? (
+                                    <div id={groupItemsId} className="worker-soul-group-items" role="group" aria-label={group.name}>
+                                      {group.workers.map((worker) => {
+                                        const active = selectedWorker.id === worker.id
+                                        return (
+                                          <button
+                                            key={worker.id}
+                                            type="button"
+                                            className={`worker-list-item ${active ? 'active' : ''}`}
+                                            aria-selected={active}
+                                            role="option"
+                                            onClick={() => {
+                                              setSelectedWorkerId(worker.id)
+                                              setSelectedWorkspaceId(null)
+                                              const next = data.templates.find(template => template.soulId === worker.soulId)
+                                              if (next)
+                                                setSelectedTemplateId(next.id)
+                                              navigateWorkerRoute({ kind: 'worker', workerId: worker.id })
+                                            }}
+                                          >
+                                            <span className="worker-list-item-main">
+                                              <strong>{worker.name}</strong>
+                                              <span className={`status-dot ${worker.status === 'active' ? 'active' : ''}`} aria-hidden="true" />
+                                            </span>
+                                            <span className="worker-list-item-meta">
+                                              <small>{group.name}</small>
+                                              <span>{formatStatus(worker.status, activeLocale)}</span>
+                                            </span>
+                                          </button>
+                                        )
+                                      })}
+                                    </div>
+                                  )
+                                : null}
+                            </div>
                           )
                         })}
                       </div>
