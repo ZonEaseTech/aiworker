@@ -1,5 +1,27 @@
 # AIWorker Changelog
 
+## 2026-05-11 16:16 [completed] BUG-093 / PLAN-251 — Worker Web readiness rail simplification
+
+- Removed the persistent left-rail `readiness-card ready` section because it
+  duplicated Settings entrypoints and did not add decision value when execution
+  was ready.
+- Kept blocked execution feedback inline beside session creation, where it
+  directly explains the disabled action.
+- Removed obsolete readiness-card rail styles and the unused `executionReady`
+  locale key.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `bun run check`
+  - `git diff --check`
+  - Browser verification on `http://127.0.0.1:9217/worker/`
+  - `bun run crg:update`
+  - `bun run crg:review`
+- code-review-graph result: risk score `0.40`, 0 affected flows; the reported
+  `WorkerStudio` gap is covered by RTL, build, and browser verification.
+
 ## 2026-05-11 15:06 [completed] BUG-092 / PLAN-250 — Worker Web icon button size convergence
 
 - Added `IconButton` to `packages/component` so add, settings, and refresh

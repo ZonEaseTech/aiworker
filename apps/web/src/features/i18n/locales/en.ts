@@ -118,7 +118,6 @@ export const en = {
     engineStarting: 'Engine is starting the session turn.',
     eventCount: count => `${count} events`,
     eventStream: 'Session events',
-    executionReady: 'Execution',
     followUpInput: 'Follow-up turn',
     followUpPlaceholder: 'Ask the selected Soul to refine the artifact, add evidence, or address review gaps...',
     memoryCandidates: 'Memory candidates',

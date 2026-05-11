@@ -112,7 +112,6 @@ export interface StaticMessages {
     engineStarting: string
     eventCount: (count: number) => string
     eventStream: string
-    executionReady: string
     followUpInput: string
     followUpPlaceholder: string
     memoryCandidates: string

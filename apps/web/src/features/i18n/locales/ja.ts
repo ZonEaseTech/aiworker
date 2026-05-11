@@ -115,7 +115,6 @@ export const ja = {
     engineStarting: 'エンジンがセッションターンを開始しています。',
     eventCount: count => `イベント ${count} 件`,
     eventStream: 'セッションイベント',
-    executionReady: '実行',
     followUpInput: 'フォローアップターン',
     followUpPlaceholder: '成果物の改善、証拠追加、レビューギャップ対応を依頼...',
     memoryCandidates: 'メモリー候補',

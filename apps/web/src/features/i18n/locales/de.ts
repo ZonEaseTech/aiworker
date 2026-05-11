@@ -115,7 +115,6 @@ export const de = {
     engineStarting: 'Engine startet den Session-Turn.',
     eventCount: count => `${count} Events`,
     eventStream: 'Session-Events',
-    executionReady: 'Ausführung',
     followUpInput: 'Follow-up-Turn',
     followUpPlaceholder: 'Artefakt verfeinern, Evidenz ergänzen oder Review-Lücken bearbeiten...',
     memoryCandidates: 'Memory-Kandidaten',

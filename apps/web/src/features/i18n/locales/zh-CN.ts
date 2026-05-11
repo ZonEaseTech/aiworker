@@ -115,7 +115,6 @@ export const zhCN = {
     engineStarting: '引擎正在启动本轮会话。',
     eventCount: count => `${count} 条事件`,
     eventStream: '会话事件',
-    executionReady: '执行',
     followUpInput: '后续 turn',
     followUpPlaceholder: '让当前 Soul 细化产物、补充证据或处理评审缺口...',
     memoryCandidates: '记忆候选',

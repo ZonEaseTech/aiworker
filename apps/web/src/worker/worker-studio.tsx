@@ -656,17 +656,6 @@ export function WorkerStudio() {
         <>
           <StudioBrand copy={copy} />
 
-          <section className={`readiness-card ${engineReadiness.ready ? 'ready' : 'blocked'}`}>
-            <div>
-              <strong>{copy.workspace.executionReady}</strong>
-              <span>{engineReadiness.label}</span>
-            </div>
-            <button type="button" className="ghost icon-btn" onClick={() => openSettings('execution')}>
-              <Settings aria-hidden="true" size={13} />
-              <span>{copy.workspace.configure}</span>
-            </button>
-          </section>
-
           {isWorkspaceContextRoute && selectedWorkspace
             ? (
                 <>
