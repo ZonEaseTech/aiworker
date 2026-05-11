@@ -280,3 +280,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-249 Component package library structure**](PLAN-249.md) `2026-05-11`
 - [x] [**PLAN-250 Worker Web icon button size convergence**](PLAN-250.md) `2026-05-11`
 - [x] [**PLAN-251 Worker Web readiness rail simplification**](PLAN-251.md) `2026-05-11`
+- [x] [**PLAN-252 Worker list rail scroll ownership**](PLAN-252.md) `2026-05-11`

@@ -355,3 +355,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REFACTOR-066 Component package library structure**](REFACTOR-066.md) `P0`
 - [x] [**BUG-092 Worker Web icon button size drift**](BUG-092.md) `P0`
 - [x] [**BUG-093 Worker Web redundant execution readiness rail card**](BUG-093.md) `P0`
+- [x] [**BUG-094 Worker Web worker list rail height is constrained**](BUG-094.md) `P0`
