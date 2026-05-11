@@ -139,6 +139,7 @@ export interface StaticMessages {
     currentSession: string
     currentWorker: string
     currentWorkspace: string
+    newSession: string
     newWorkspace: string
     noWorker: string
     noWorkspaceSessions: string

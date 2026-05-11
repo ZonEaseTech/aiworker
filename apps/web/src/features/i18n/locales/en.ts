@@ -145,6 +145,7 @@ export const en = {
     currentSession: 'Current session',
     currentWorker: 'Current worker',
     currentWorkspace: 'Current workspace',
+    newSession: 'New session',
     newWorkspace: 'New workspace',
     noWorker: 'No worker',
     noWorkspaceSessions: 'No sessions in this workspace yet.',

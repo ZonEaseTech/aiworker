@@ -1,5 +1,13 @@
 # AIWorker Changelog
 
+## 2026-05-11 18:09 [completed] BUG-101 / PLAN-259 — 工作区会话新建入口
+
+- 将“工作区会话”头部右侧从会话数量改为“新建会话”快捷动作。
+- 点击新建会话会回到当前 workspace 的 create-session composer。
+- 增加 WorkerStudio 测试覆盖从 session route 发起新建会话。
+- Verification passed: focused Web typecheck/lint/test/build, `bun run check`, `git diff --check`,
+  browser verification on 9217, and code-review-graph review.
+
 ## 2026-05-11 18:02 [completed] BUG-100 / PLAN-258 — 其他工作区筛除当前项
 
 - “其他工作区”侧栏列表改为排除当前选中的 workspace。

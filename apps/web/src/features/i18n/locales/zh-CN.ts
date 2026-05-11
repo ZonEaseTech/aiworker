@@ -142,6 +142,7 @@ export const zhCN = {
     currentSession: '当前会话',
     currentWorker: '当前 worker',
     currentWorkspace: '当前工作区',
+    newSession: '新建会话',
     newWorkspace: '新建工作区',
     noWorker: '暂无 worker',
     noWorkspaceSessions: '此工作区还没有会话。',

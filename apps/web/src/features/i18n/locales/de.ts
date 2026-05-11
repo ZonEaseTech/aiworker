@@ -142,6 +142,7 @@ export const de = {
     currentSession: 'Aktuelle Session',
     currentWorker: 'Aktueller Worker',
     currentWorkspace: 'Aktueller Workspace',
+    newSession: 'Neue Session',
     newWorkspace: 'Neuer Workspace',
     noWorker: 'Kein Worker',
     noWorkspaceSessions: 'In diesem Workspace gibt es noch keine Sessions.',

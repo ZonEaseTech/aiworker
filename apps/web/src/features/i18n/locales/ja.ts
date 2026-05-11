@@ -142,6 +142,7 @@ export const ja = {
     currentSession: '現在のセッション',
     currentWorker: '現在の worker',
     currentWorkspace: '現在のワークスペース',
+    newSession: '新規セッション',
     newWorkspace: '新規ワークスペース',
     noWorker: 'worker なし',
     noWorkspaceSessions: 'このワークスペースにはまだセッションがありません。',

@@ -654,6 +654,21 @@ describe('worker studio', () => {
     expect(screen.queryByLabelText('Soul catalog')).toBeNull()
   })
 
+  it('uses the workspace sessions header action to start a new session', async () => {
+    window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1/sessions/session-1')
+
+    render(<WorkerStudio />)
+
+    expect(await screen.findByText('AIWorker Engine')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'New session' }))
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/workers/hr-worker/workspaces/workspace-1')
+    })
+    expect(screen.getByText('What do you want to build in Hiring Workspace?')).toBeTruthy()
+    expect(screen.getByTestId('new-session-panel')).toBeTruthy()
+  })
+
   it('opens settings, rescans/tests engines, and autosaves settings changes', async () => {
     render(<WorkerStudio />)
 

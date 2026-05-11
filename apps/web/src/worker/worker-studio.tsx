@@ -709,7 +709,16 @@ export function WorkerStudio() {
                   <section className="workspace-rail-card">
                     <div className="rail-section-head">
                       <strong>{copy.workspace.workspaceSessions}</strong>
-                      <span className="count-pill">{workspaceSessions.length}</span>
+                      <button
+                        type="button"
+                        className="rail-mini-action"
+                        aria-label={copy.workspace.newSession}
+                        title={copy.workspace.newSession}
+                        onClick={() => navigateWorkerRoute({ kind: 'workspace', workerId: selectedWorkspace.workerId, workspaceId: selectedWorkspace.id })}
+                      >
+                        <Plus aria-hidden="true" size={12} />
+                        <span>{copy.workspace.newSession}</span>
+                      </button>
                     </div>
                     <div className="rail-session-list">
                       {workspaceSessions.length > 0
