@@ -1,6 +1,6 @@
 # REFACTOR-065 Worker Web architecture modularization
 
-- **status**: in_progress
+- **status**: completed
 - **priority**: P0
 - **owner**: local
 - **createdAt**: 2026-05-11 13:15
@@ -48,4 +48,18 @@ modules.
 
 ## Verification
 
-- Pending.
+- `bun run --filter '@zonease/aiworker-component' typecheck`
+- `bun run --filter '@zonease/aiworker-web' typecheck`
+- `bun run --filter '@zonease/aiworker-web' lint`
+- `bun run --filter '@zonease/aiworker-web' test`
+- `bun run --filter '@zonease/aiworker-web' build`
+- `bun run check`
+- `git diff --check`
+- Browser preview loaded `http://127.0.0.1:4173/worker/` with title
+  `AIWorker · Soul Workspace`.
+- `bun run crg:update`
+- `bun run crg:review`
+- code-review-graph range review for `8f63d85..HEAD`: risk score `0.40`,
+  0 affected flows, 2 review priorities (`WorkerStudio`,
+  `WorkerStudioLayout`) covered by WorkerStudio RTL tests, component package
+  typecheck, Web build, and browser startup verification.

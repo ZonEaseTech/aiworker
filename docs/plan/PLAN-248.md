@@ -1,6 +1,6 @@
 # PLAN-248 Worker Web architecture modularization
 
-- **status**: implementing
+- **status**: completed
 - **owner**: local
 - **createdAt**: 2026-05-11 13:15
 - **relatedTask**: REFACTOR-065
@@ -101,17 +101,30 @@ Out of scope:
 
 ## Verification Plan
 
-- `bun run --filter '@zonease/aiworker-component' typecheck`
-- `bun run --filter '@zonease/aiworker-web' typecheck`
-- `bun run --filter '@zonease/aiworker-web' lint`
-- `bun run --filter '@zonease/aiworker-web' test`
-- `bun run --filter '@zonease/aiworker-web' build`
-- `git diff --check`
-- `bun run crg:update`
-- `bun run crg:review`
+- Passed: `bun run --filter '@zonease/aiworker-component' typecheck`
+- Passed: `bun run --filter '@zonease/aiworker-web' typecheck`
+- Passed: `bun run --filter '@zonease/aiworker-web' lint`
+- Passed: `bun run --filter '@zonease/aiworker-web' test`
+- Passed: `bun run --filter '@zonease/aiworker-web' build`
+- Passed: `bun run check`
+- Passed: `git diff --check`
+- Passed: Browser preview on `http://127.0.0.1:4173/worker/`
+- Passed: `bun run crg:update`
+- Passed: `bun run crg:review`
+- Passed: code-review-graph range review for `8f63d85..HEAD`
 
 ## Approval Gate
 
 Approved by operator on 2026-05-11 with explicit authorization to take over the
 Worker Web architecture refactor in goal mode and use multiple conventional
 commits until the requirements are landed.
+
+## Result
+
+- Added `packages/component` as the reusable Worker Web React component package.
+- Split Worker Web into `app`, `shared/api`, `features`, and `styles`
+  boundaries.
+- Replaced the monolithic API, i18n, router, settings, workspace component,
+  model/helper, and CSS files with scoped modules.
+- Reduced `worker-studio.tsx` from 2172 lines to 1081 lines while preserving
+  current route behavior and tests.

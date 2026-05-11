@@ -1,5 +1,33 @@
 # AIWorker Changelog
 
+## 2026-05-11 12:21 [completed] REFACTOR-065 / PLAN-248 — Worker Web architecture modularization
+
+- Added `packages/component` as a workspace package for shared Worker Web React
+  primitives and moved studio layout/dialog/select primitives behind that
+  package boundary.
+- Split Worker Web into app/router, shared local API client, feature-scoped API,
+  i18n/catalog/locales, settings, workspace components, session/theme helpers,
+  and style modules.
+- Removed the monolithic `api.ts`, `i18n.ts`, and `studio.css` files, and
+  reduced `worker-studio.tsx` from 2172 lines to 1081 lines.
+- Kept URLs, class names, and behavior stable while preserving the existing RTL
+  worker studio coverage.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-component' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `bun run check`
+  - `git diff --check`
+  - Browser preview on `http://127.0.0.1:4173/worker/`
+  - `bun run crg:update`
+  - `bun run crg:review`
+- code-review-graph result for `8f63d85..HEAD`: risk score `0.40`, 0 affected
+  flows; review priorities `WorkerStudio` and `WorkerStudioLayout` are covered
+  by existing WorkerStudio RTL tests, component package typecheck, Web build,
+  and browser startup verification.
+
 ## 2026-05-11 11:41 [completed] BUG-091 / PLAN-247 — Mobile session route layout repair
 
 - Corrected the mobile session route validation miss where no horizontal
