@@ -1,5 +1,30 @@
 # AIWorker Changelog
 
+## 2026-05-11 11:31 [completed] REFACTOR-064 / PLAN-245..246 / QA-034 — Worker Web shared route layout
+
+- Added shared Worker Web route layout helpers for shell/sidebar/main/detail
+  composition, and routed no-worker, worker home, workspace, and session
+  surfaces through the same layout primitive.
+- Unified worker/workspace/session left navigation geometry around the same
+  340px sidebar width and shared main content rail rules.
+- Kept session-specific behavior as a layout variant with the right-side
+  artifact rail and collapsed detail state.
+- Playwright MCP on `http://127.0.0.1:9217/` confirmed worker home, workspace,
+  and session routes share sidebar/main geometry; 390px workspace/session
+  snapshots confirmed stacked layout without horizontal overflow.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test -- worker-studio`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `git diff --check`
+  - `bun run crg:update`
+  - `bun run crg:review`
+- code-review-graph result: risk score `0.40`, 0 affected flows; reported UI
+  helper test gaps are covered by existing WorkerStudio RTL route tests and
+  Playwright route evidence for this layout-only refactor.
+
 ## 2026-05-11 11:14 [completed] BUG-090 / PLAN-244 — Settings autosave and scroll layout repair
 
 - Changed settings autosave feedback to start hidden instead of showing

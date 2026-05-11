@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-11 (Settings dialog autosave and scroll repair completed)
+> Updated: 2026-05-11 (Worker Web shared route layout completed)
 
 ## Usage
 
@@ -348,3 +348,5 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REFACTOR-063 Worker Web interaction polish follow-up**](REFACTOR-063.md) `P0`
 - [x] [**QA-033 Worker Web interaction polish regression validation**](QA-033.md) `P0`
 - [x] [**BUG-090 Settings autosave status and dialog scroll layout**](BUG-090.md) `P0`
+- [x] [**REFACTOR-064 Worker Web shared route layout**](REFACTOR-064.md) `P0`
+- [x] [**QA-034 Worker Web shared layout validation**](QA-034.md) `P0`

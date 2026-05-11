@@ -61,6 +61,7 @@ interface StudioState {
 type AutosaveState = 'idle' | 'saving' | 'saved' | 'failed'
 type SettingsSection = 'execution' | 'soul-packs' | 'connectors' | 'mcp' | 'external-mcp' | 'language' | 'appearance' | 'about'
 type ResolvedTheme = 'light' | 'dark'
+type WorkerStudioLayoutVariant = 'home' | 'session' | 'workspace'
 type WorkerMessages = ReturnType<typeof messagesFor>
 const themeMediaQuery = '(prefers-color-scheme: dark)'
 const initialArtifactPreviewState: ArtifactPreviewState = {
@@ -482,19 +483,15 @@ export function WorkerStudio() {
     const availableSouls = data.souls.filter(soul => soul.status === 'available')
     const createSoulCopy = selectedSoul ? displaySoul(selectedSoul, activeLocale) : null
     return (
-      <main className="entry-shell" data-appearance={appearance} data-theme={resolvedTheme} data-testid="worker-studio-shell">
-        <div className="entry workspace-entry workspace-home-route">
-          <aside className="entry-side soul-sidebar" aria-label={copy.workspace.currentWorker}>
-            <div className="entry-brand">
-              <span className="entry-brand-mark" aria-hidden="true">AI</span>
-              <div className="entry-brand-text">
-                <div className="entry-brand-title-row">
-                  <span className="entry-brand-title">{copy.app.brand}</span>
-                  <span className="entry-brand-pill">{copy.app.workspacePill}</span>
-                </div>
-                <div className="entry-brand-subtitle">{copy.app.subtitle}</div>
-              </div>
-            </div>
+      <WorkerStudioLayout
+        appearance={appearance}
+        mainLabel={copy.accessibility.soulProjectsAndArtifacts}
+        resolvedTheme={resolvedTheme}
+        sidebarLabel={copy.workspace.currentWorker}
+        variant="home"
+        sidebar={(
+          <>
+            <StudioBrand copy={copy} />
             <section className="newproj soul-catalog-panel soul-rail-panel">
               <div className="newproj-body">
                 <div className="section-head compact with-action">
@@ -538,26 +535,22 @@ export function WorkerStudio() {
                 </div>
               </div>
             </section>
-          </aside>
-          <section className="entry-main workspace-column" aria-label={copy.accessibility.soulProjectsAndArtifacts}>
-            <header className="entry-header workspace-header">
-              <div>
-                <span className="kicker">{copy.workspace.currentWorker}</span>
-                <h1>{copy.workspace.noWorker}</h1>
-              </div>
-            </header>
-            <div className="entry-tab-content workspace-content">
-              <section className="empty-design-state">
-                <FileText aria-hidden="true" size={20} />
-                <strong>{copy.workspace.noWorker}</strong>
-                <span>{copy.workspace.createWorkerHint}</span>
-                <button type="button" className="ghost icon-btn" onClick={() => setCreateWorkerOpen(true)}>
-                  <Plus aria-hidden="true" size={13} />
-                  <span>{copy.workspace.createWorker}</span>
-                </button>
-              </section>
-            </div>
-          </section>
+          </>
+        )}
+        main={(
+          <StudioMainFrame kicker={copy.workspace.currentWorker} title={copy.workspace.noWorker}>
+            <section className="empty-design-state">
+              <FileText aria-hidden="true" size={20} />
+              <strong>{copy.workspace.noWorker}</strong>
+              <span>{copy.workspace.createWorkerHint}</span>
+              <button type="button" className="ghost icon-btn" onClick={() => setCreateWorkerOpen(true)}>
+                <Plus aria-hidden="true" size={13} />
+                <span>{copy.workspace.createWorker}</span>
+              </button>
+            </section>
+          </StudioMainFrame>
+        )}
+        dialogs={(
           <CreateWorkerDialog
             availableSouls={availableSouls}
             copy={copy}
@@ -570,8 +563,8 @@ export function WorkerStudio() {
             onSoulChange={setNewWorkerSoulId}
             onSubmit={submitWorker}
           />
-        </div>
-      </main>
+        )}
+      />
     )
   }
 
@@ -581,24 +574,99 @@ export function WorkerStudio() {
   const isWorkspaceContextRoute = (route.kind === 'workspace' || route.kind === 'session') && Boolean(selectedWorkspace)
   const showWorkspaceContextSurface = isWorkspaceContextRoute && Boolean(selectedWorkspace)
   const showSessionSurface = route.kind === 'session' && Boolean(selectedWorkspace && selectedSession)
+  const layoutVariant: WorkerStudioLayoutVariant = showSessionSurface ? 'session' : showWorkspaceContextSurface ? 'workspace' : 'home'
 
   return (
-    <main className="entry-shell" data-appearance={appearance} data-theme={resolvedTheme} data-testid="worker-studio-shell">
-      <div className={`entry workspace-entry ${showWorkspaceContextSurface ? `${showSessionSurface ? 'workspace-session-route has-artifact-rail' : 'workspace-context-route'}` : 'workspace-home-route'}${showSessionSurface && detailDrawerCollapsed ? ' detail-drawer-collapsed' : ''}`}>
-        <aside
-          className="entry-side soul-sidebar"
-          aria-label={isWorkspaceContextRoute ? copy.workspace.workspaceNavigation : copy.accessibility.soulProjectCreator}
-        >
-          <div className="entry-brand">
-            <span className="entry-brand-mark" aria-hidden="true">AI</span>
-            <div className="entry-brand-text">
-              <div className="entry-brand-title-row">
-                <span className="entry-brand-title">{copy.app.brand}</span>
-                <span className="entry-brand-pill">{copy.app.workspacePill}</span>
-              </div>
-              <div className="entry-brand-subtitle">{copy.app.subtitle}</div>
-            </div>
-          </div>
+    <WorkerStudioLayout
+      appearance={appearance}
+      detail={showSessionSurface
+        ? (
+            <SessionDetail
+              artifact={selectedArtifact}
+              artifactCopy={selectedArtifactCopy}
+              artifactPreview={artifactPreview}
+              artifacts={selectedWorkspaceArtifacts}
+              copy={copy}
+              engineReadiness={engineReadiness}
+              events={displayedSessionEvents}
+              lessonBusyId={lessonBusyId}
+              lessons={selectedWorkspaceLessons}
+              locale={activeLocale}
+              mode="artifact"
+              collapsed={detailDrawerCollapsed}
+              review={selectedReview}
+              reviewSubmitting={reviewSubmitting}
+              reviews={selectedWorkspaceReviews}
+              session={selectedSession}
+              template={selectedSessionTemplate}
+              turnInput={turnInput}
+              turnSubmitting={turnSubmitting}
+              turns={displayedSessionTurns}
+              workspace={selectedWorkspace}
+              onLessonStatus={(lesson, status) => void changeLessonStatus(lesson, status)}
+              onCollapsedChange={setDetailDrawerCollapsed}
+              onOpenSettings={openSettings}
+              onRefresh={() => void refresh()}
+              onReview={() => void submitReview()}
+              onSubmitTurn={submitTurn}
+              onTurnInputChange={setSessionTurnInput}
+            />
+          )
+        : null}
+      detailCollapsed={detailDrawerCollapsed}
+      dialogs={(
+        <>
+          <CreateWorkerDialog
+            availableSouls={data.souls.filter(soul => soul.status === 'available')}
+            copy={copy}
+            locale={activeLocale}
+            open={createWorkerOpen}
+            selectedSoulId={newWorkerSoulId}
+            workerName={newWorkerName}
+            onClose={() => setCreateWorkerOpen(false)}
+            onNameChange={setNewWorkerName}
+            onSoulChange={setNewWorkerSoulId}
+            onSubmit={submitWorker}
+          />
+
+          <CreateWorkspaceDialog
+            copy={copy}
+            open={createWorkspaceOpen}
+            placeholder={projectNamePlaceholder(selectedSoul.id, copy)}
+            workerLabel={`${selectedWorker.name} / ${selectedSoulCopy.name}`}
+            submitting={submitting}
+            workspaceTitle={workspaceTitle}
+            onClose={() => setCreateWorkspaceOpen(false)}
+            onSubmit={submitProject}
+            onTitleChange={setWorkspaceTitle}
+          />
+
+          {settingsOpen
+            ? (
+                <SettingsDialog
+                  initial={data.settings}
+                  initialSection={settingsInitialSection}
+                  runtimeVersion={data.info.runtimeVersion}
+                  souls={data.souls}
+                  templates={data.templates}
+                  onClose={() => setSettingsOpen(false)}
+                  onSaved={(settings) => {
+                    setState(current => current.data
+                      ? { ...current, data: { ...current.data, settings }, loading: false }
+                      : current)
+                  }}
+                />
+              )
+            : null}
+        </>
+      )}
+      mainLabel={copy.accessibility.soulProjectsAndArtifacts}
+      resolvedTheme={resolvedTheme}
+      sidebarLabel={isWorkspaceContextRoute ? copy.workspace.workspaceNavigation : copy.accessibility.soulProjectCreator}
+      variant={layoutVariant}
+      sidebar={(
+        <>
+          <StudioBrand copy={copy} />
 
           <section className={`readiness-card ${engineReadiness.ready ? 'ready' : 'blocked'}`}>
             <div>
@@ -785,9 +853,10 @@ export function WorkerStudio() {
               <ChevronDown aria-hidden="true" size={12} />
             </button>
           </div>
-        </aside>
-
-        <section className="entry-main workspace-column" aria-label={copy.accessibility.soulProjectsAndArtifacts}>
+        </>
+      )}
+      main={(
+        <>
           {showSessionSurface && selectedWorkspace && selectedSession
             ? (
                 <WorkerSessionChat
@@ -1000,87 +1069,105 @@ export function WorkerStudio() {
                 </>
               )
             : null}
+        </>
+      )}
+    />
+  )
+}
+
+function WorkerStudioLayout({
+  appearance,
+  detail,
+  detailCollapsed = false,
+  dialogs,
+  main,
+  mainLabel,
+  resolvedTheme,
+  sidebar,
+  sidebarLabel,
+  variant,
+}: {
+  appearance: LocalSettingsConfig['appearance']
+  detail?: ReactNode
+  detailCollapsed?: boolean
+  dialogs?: ReactNode
+  main: ReactNode
+  mainLabel: string
+  resolvedTheme: ResolvedTheme
+  sidebar: ReactNode
+  sidebarLabel: string
+  variant: WorkerStudioLayoutVariant
+}) {
+  const routeClass = variant === 'session' ? 'workspace-session-route has-artifact-rail' : variant === 'workspace' ? 'workspace-context-route' : 'workspace-home-route'
+  return (
+    <main className="entry-shell" data-appearance={appearance} data-theme={resolvedTheme} data-testid="worker-studio-shell">
+      <div className={`entry workspace-entry ${routeClass}${variant === 'session' && detailCollapsed ? ' detail-drawer-collapsed' : ''}`}>
+        <StudioSidebar label={sidebarLabel}>
+          {sidebar}
+        </StudioSidebar>
+        <section className="entry-main workspace-column" aria-label={mainLabel}>
+          {main}
         </section>
-
-        {showSessionSurface
-          ? (
-              <SessionDetail
-                artifact={selectedArtifact}
-                artifactCopy={selectedArtifactCopy}
-                artifactPreview={artifactPreview}
-                artifacts={selectedWorkspaceArtifacts}
-                copy={copy}
-                engineReadiness={engineReadiness}
-                events={displayedSessionEvents}
-                lessonBusyId={lessonBusyId}
-                lessons={selectedWorkspaceLessons}
-                locale={activeLocale}
-                mode="artifact"
-                collapsed={detailDrawerCollapsed}
-                review={selectedReview}
-                reviewSubmitting={reviewSubmitting}
-                reviews={selectedWorkspaceReviews}
-                session={selectedSession}
-                template={selectedSessionTemplate}
-                turnInput={turnInput}
-                turnSubmitting={turnSubmitting}
-                turns={displayedSessionTurns}
-                workspace={selectedWorkspace}
-                onLessonStatus={(lesson, status) => void changeLessonStatus(lesson, status)}
-                onCollapsedChange={setDetailDrawerCollapsed}
-                onOpenSettings={openSettings}
-                onRefresh={() => void refresh()}
-                onReview={() => void submitReview()}
-                onSubmitTurn={submitTurn}
-                onTurnInputChange={setSessionTurnInput}
-              />
-            )
-          : null}
-
-        <CreateWorkerDialog
-          availableSouls={data.souls.filter(soul => soul.status === 'available')}
-          copy={copy}
-          locale={activeLocale}
-          open={createWorkerOpen}
-          selectedSoulId={newWorkerSoulId}
-          workerName={newWorkerName}
-          onClose={() => setCreateWorkerOpen(false)}
-          onNameChange={setNewWorkerName}
-          onSoulChange={setNewWorkerSoulId}
-          onSubmit={submitWorker}
-        />
-
-        <CreateWorkspaceDialog
-          copy={copy}
-          open={createWorkspaceOpen}
-          placeholder={projectNamePlaceholder(selectedSoul.id, copy)}
-          workerLabel={`${selectedWorker.name} / ${selectedSoulCopy.name}`}
-          submitting={submitting}
-          workspaceTitle={workspaceTitle}
-          onClose={() => setCreateWorkspaceOpen(false)}
-          onSubmit={submitProject}
-          onTitleChange={setWorkspaceTitle}
-        />
-
-        {settingsOpen
-          ? (
-              <SettingsDialog
-                initial={data.settings}
-                initialSection={settingsInitialSection}
-                runtimeVersion={data.info.runtimeVersion}
-                souls={data.souls}
-                templates={data.templates}
-                onClose={() => setSettingsOpen(false)}
-                onSaved={(settings) => {
-                  setState(current => current.data
-                    ? { ...current, data: { ...current.data, settings }, loading: false }
-                    : current)
-                }}
-              />
-            )
-          : null}
+        {detail}
+        {dialogs}
       </div>
     </main>
+  )
+}
+
+function StudioSidebar({
+  children,
+  label,
+}: {
+  children: ReactNode
+  label: string
+}) {
+  return (
+    <aside className="entry-side soul-sidebar" aria-label={label}>
+      {children}
+    </aside>
+  )
+}
+
+function StudioBrand({ copy }: { copy: WorkerMessages }) {
+  return (
+    <div className="entry-brand">
+      <span className="entry-brand-mark" aria-hidden="true">AI</span>
+      <div className="entry-brand-text">
+        <div className="entry-brand-title-row">
+          <span className="entry-brand-title">{copy.app.brand}</span>
+          <span className="entry-brand-pill">{copy.app.workspacePill}</span>
+        </div>
+        <div className="entry-brand-subtitle">{copy.app.subtitle}</div>
+      </div>
+    </div>
+  )
+}
+
+function StudioMainFrame({
+  actions,
+  children,
+  kicker,
+  title,
+}: {
+  actions?: ReactNode
+  children: ReactNode
+  kicker: string
+  title: string
+}) {
+  return (
+    <>
+      <header className="entry-header workspace-header">
+        <div>
+          <span className="kicker">{kicker}</span>
+          <h1>{title}</h1>
+        </div>
+        {actions ? <div className="entry-header-right">{actions}</div> : null}
+      </header>
+      <div className="entry-tab-content workspace-content">
+        {children}
+      </div>
+    </>
   )
 }
 

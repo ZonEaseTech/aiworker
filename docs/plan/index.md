@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-11 (PLAN-244 completed)
+> Updated: 2026-05-11 (PLAN-245..246 completed)
 
 ## Usage
 
@@ -273,3 +273,5 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-242 Worker Web interaction polish follow-up**](PLAN-242.md) `2026-05-11`
 - [x] [**PLAN-243 Worker Web interaction polish validation**](PLAN-243.md) `2026-05-11`
 - [x] [**PLAN-244 Settings dialog autosave and scroll layout repair**](PLAN-244.md) `2026-05-11`
+- [x] [**PLAN-245 Worker Web shared route layout**](PLAN-245.md) `2026-05-11`
+- [x] [**PLAN-246 Worker Web shared layout validation**](PLAN-246.md) `2026-05-11`
