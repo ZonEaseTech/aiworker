@@ -59,6 +59,7 @@
       "name": "@zonease/aiworker-web",
       "dependencies": {
         "@tailwindcss/vite": "^4.2.2",
+        "@zonease/aiworker-component": "workspace:*",
         "@zonease/aiworker-shared": "workspace:*",
         "lucide-react": "^1.8.0",
         "react": "^19.1.0",
@@ -76,6 +77,17 @@
         "typescript": "^5.8.3",
         "vite": "^8",
         "vitest": "4",
+      },
+    },
+    "packages/component": {
+      "name": "@zonease/aiworker-component",
+      "dependencies": {
+        "lucide-react": "^1.8.0",
+        "react": "^19.1.0",
+      },
+      "devDependencies": {
+        "@types/react": "^19.1.2",
+        "typescript": "^5.8.3",
       },
     },
     "packages/core": {
@@ -476,6 +488,8 @@
     "@zonease/aiworker-api": ["@zonease/aiworker-api@workspace:apps/api"],
 
     "@zonease/aiworker-cli": ["@zonease/aiworker-cli@workspace:apps/cli"],
+
+    "@zonease/aiworker-component": ["@zonease/aiworker-component@workspace:packages/component"],
 
     "@zonease/aiworker-core": ["@zonease/aiworker-core@workspace:packages/core"],
 

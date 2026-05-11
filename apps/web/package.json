@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.2.2",
+    "@zonease/aiworker-component": "workspace:*",
     "@zonease/aiworker-shared": "workspace:*",
     "lucide-react": "^1.8.0",
     "react": "^19.1.0",
