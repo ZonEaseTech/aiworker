@@ -1,5 +1,13 @@
 # AIWorker Changelog
 
+## 2026-05-11 20:45 [completed] BUG-106 / PLAN-264 — Workspace route worker return action
+
+- 在未选中 session 的 workspace route 中恢复“返回 worker”动作。
+- 保持 session 详情态只显示“返回工作区”。
+- 补充 WorkerStudio 测试覆盖 workspace route 返回 worker page。
+- Verification passed: focused Web typecheck/lint/test/build, `bun run check`, `git diff --check`,
+  browser verification on 9217, and code-review-graph review.
+
 ## 2026-05-11 20:34 [completed] BUG-105 / PLAN-263 — 未安装 engine icon 可见性
 
 - 修复未安装 engine 的 muted icon 前景/背景同色导致视觉不可见的问题。

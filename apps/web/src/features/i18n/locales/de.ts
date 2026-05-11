@@ -137,6 +137,7 @@ export const de = {
     sendTurn: 'Turn senden',
     sendingTurn: 'Turn wird gesendet...',
     backToSoulHome: 'Zur Soul-Startseite',
+    backToWorker: 'Zur Worker-Seite',
     backToWorkspace: 'Zurück zum Workspace',
     currentSession: 'Aktuelle Session',
     currentWorker: 'Aktueller Worker',

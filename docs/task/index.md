@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-11 (Muted engine icons visible)
+> Updated: 2026-05-11 (Workspace route worker return action)
 
 ## Usage
 
@@ -367,3 +367,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-103 Settings 引擎操作按钮样式不统一**](BUG-103.md) `P0`
 - [x] [**BUG-104 Settings 引擎卡片缺少专属 icon**](BUG-104.md) `P0`
 - [x] [**BUG-105 未安装 engine icon 弱化后不可见**](BUG-105.md) `P0`
+- [x] [**BUG-106 Workspace create-session route lacks worker return action**](BUG-106.md) `P0`

@@ -674,7 +674,16 @@ export function WorkerStudio() {
                             <span>{copy.workspace.backToWorkspace}</span>
                           </button>
                         )
-                      : null}
+                      : (
+                          <button
+                            type="button"
+                            className="rail-back-button"
+                            onClick={() => navigateWorkerRoute({ kind: 'worker', workerId: selectedWorker.id })}
+                          >
+                            <ArrowLeft aria-hidden="true" size={13} />
+                            <span>{copy.workspace.backToWorker}</span>
+                          </button>
+                        )}
                     <div className="rail-context-main">
                       <span className="kicker">{copy.workspace.workspaceNavigation}</span>
                       <h3>{selectedWorkspace.name}</h3>

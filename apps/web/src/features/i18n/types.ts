@@ -134,6 +134,7 @@ export interface StaticMessages {
     sendTurn: string
     sendingTurn: string
     backToSoulHome: string
+    backToWorker: string
     backToWorkspace: string
     currentSession: string
     currentWorker: string

@@ -140,6 +140,7 @@ export const en = {
     sendTurn: 'Send turn',
     sendingTurn: 'Sending turn...',
     backToSoulHome: 'Back to Soul home',
+    backToWorker: 'Back to worker',
     backToWorkspace: 'Back to workspace',
     currentSession: 'Current session',
     currentWorker: 'Current worker',
