@@ -557,7 +557,9 @@ describe('worker studio', () => {
       expect(window.location.pathname).toBe('/workers/hr-worker/workspaces/workspace-1')
     })
     expect(screen.getByTestId('new-session-panel')).toBeTruthy()
-    fireEvent.click(await screen.findByRole('button', { name: /Screen candidate/ }))
+    const sessionEntries = await screen.findAllByRole('button', { name: /Screen candidate/ })
+    expect(sessionEntries.length).toBeGreaterThan(1)
+    fireEvent.click(sessionEntries[0]!)
 
     await waitFor(() => {
       expect(window.location.pathname).toBe('/workers/hr-worker/workspaces/workspace-1/sessions/session-1')
@@ -566,8 +568,8 @@ describe('worker studio', () => {
     expect(screen.getByText('Workspace navigation')).toBeTruthy()
     expect(screen.getByText('Current worker')).toBeTruthy()
     expect(screen.getByText('hr-worker')).toBeTruthy()
-    expect(screen.getByText('Current workspace')).toBeTruthy()
-    expect(screen.getByText('Workspace sessions')).toBeTruthy()
+    expect(screen.getAllByText('Current workspace').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Workspace sessions').length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: /Back to worker/ })).toBeTruthy()
     expect(screen.getAllByRole('button', { name: /Back to workspace/ }).length).toBeGreaterThan(0)
     expect(screen.queryByTestId('new-project-panel')).toBeNull()
@@ -628,6 +630,9 @@ describe('worker studio', () => {
     render(<WorkerStudio />)
 
     expect(await screen.findByText('Workspace navigation')).toBeTruthy()
+    expect(screen.getAllByText('Current workspace').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Workspace sessions').length).toBeGreaterThan(0)
+    expect(screen.getByTestId('new-session-panel')).toBeTruthy()
     expect(screen.getAllByText('No sessions in this workspace yet.').length).toBeGreaterThan(0)
     expect(screen.queryByTestId('new-project-panel')).toBeNull()
     expect(screen.queryByLabelText('Soul catalog')).toBeNull()

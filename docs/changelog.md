@@ -1,5 +1,26 @@
 # AIWorker Changelog
 
+## 2026-05-11 17:11 [completed] BUG-097 / PLAN-255 — Workspace route management layout alignment
+
+- Restructured `workspaces/[workspace_id]` to match the worker route rhythm:
+  overview panel first, managed sessions section second.
+- Added `WorkspaceIdentityBlock` and `WorkspaceSessionCard` so workspace page
+  UI has dedicated components instead of borrowing worker/card semantics.
+- Kept the create-session form on the workspace page, now inside the sessions
+  management section.
+- Updated WorkerStudio tests to cover the central session entrypoint alongside
+  the rail session entrypoint.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `bun run check`
+  - `git diff --check`
+  - Browser verification on `http://127.0.0.1:9217/workers/hr-worker/workspaces/b8a15051-14ef-4aad-9c66-5405ce39670f`
+  - `bun run crg:update`
+  - `bun run crg:review`
+
 ## 2026-05-11 16:59 [completed] BUG-096 / PLAN-254 — Worker workspace card grid layout
 
 - Replaced the single-column `design-grid-list` workspace surface with a

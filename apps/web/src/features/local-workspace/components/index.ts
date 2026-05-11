@@ -1,3 +1,5 @@
 export { CreateWorkerDialog, CreateWorkspaceDialog } from './creation-dialogs'
+export { WorkspaceSessionCard } from './session-card'
 export { WorkerIdentityBlock } from './worker-identity'
 export { WorkspaceCard } from './workspace-card'
+export { WorkspaceIdentityBlock } from './workspace-identity'

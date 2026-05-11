@@ -36,7 +36,7 @@ import {
   normalizeLocale,
 } from '../features/i18n'
 import { continueSessionTurnStream, createReview, createSessionTurnStream, createWorker, createWorkspace, loadLocalWorkspaceData, readFile, updateLesson } from '../features/local-workspace/api'
-import { CreateWorkerDialog, CreateWorkspaceDialog, WorkerIdentityBlock, WorkspaceCard } from '../features/local-workspace/components'
+import { CreateWorkerDialog, CreateWorkspaceDialog, WorkerIdentityBlock, WorkspaceCard, WorkspaceIdentityBlock, WorkspaceSessionCard } from '../features/local-workspace/components'
 import {
   artifactForSession,
   artifactForWorkspace,
@@ -874,60 +874,105 @@ export function WorkerStudio() {
                   </header>
 
                   <div className="entry-tab-content workspace-content">
-                    <section className="newproj workspace-create-card" data-testid="new-session-panel">
-                      <form className="newproj-body" onSubmit={submitSession}>
-                        <div className="section-head compact">
-                          <div>
-                            <h3>{copy.workspace.createSession}</h3>
-                            <p className="hint">{copy.workspace.createSessionHint(selectedTemplateCopy.name)}</p>
-                          </div>
+                    <section className="worker-overview-panel workspace-overview-panel">
+                      <WorkspaceIdentityBlock
+                        artifactCount={selectedWorkspaceArtifacts.length}
+                        copy={copy}
+                        locale={activeLocale}
+                        sessionCount={workspaceSessions.length}
+                        workspace={selectedWorkspace}
+                      />
+                      <div className="worker-capability-summary">
+                        <div className="rail-section-head">
+                          <strong>{copy.workspace.selectedCapability}</strong>
+                          <span className="count-pill">{selectedTemplateCopy.inputHints.length}</span>
                         </div>
-
-                        <StudioSelect
-                          ariaLabel={copy.create.capabilityTemplate}
-                          label={copy.create.capabilityTemplate}
-                          options={templates.map((template) => {
-                            const templateCopy = displayTemplate(template, activeLocale)
-                            return {
-                              description: template.outputKind,
-                              label: templateCopy.name,
-                              value: template.id,
-                            }
-                          })}
-                          value={selectedTemplate.id}
-                          onChange={setSelectedTemplateId}
-                        />
-
-                        <textarea
-                          id="project-context"
-                          className="newproj-context"
-                          aria-label={copy.create.businessContext}
-                          placeholder={selectedTemplateCopy.inputHints.join(' · ')}
-                          value={workspaceContext}
-                          onChange={event => setWorkspaceContext(event.target.value)}
-                        />
-
-                        {!engineReadiness.ready
-                          ? (
-                              <div className="inline-warning" role="status">
-                                <ShieldCheck aria-hidden="true" size={14} />
-                                <span>{engineReadiness.detail}</span>
-                              </div>
-                            )
-                          : null}
-
-                        <button className="primary newproj-create" data-testid="create-session" type="submit" disabled={!workspaceContext.trim() || submitting || !engineReadiness.ready}>
-                          <Plus aria-hidden="true" size={13} />
-                          <span>{submitting ? copy.create.creatingSession : copy.workspace.createSession}</span>
-                        </button>
-                      </form>
+                        <div className="worker-capability-chips">
+                          <span>{selectedTemplateCopy.name}</span>
+                          {selectedTemplateCopy.inputHints.map(hint => <span key={hint}>{hint}</span>)}
+                        </div>
+                      </div>
                     </section>
 
-                    <section className="empty-design-state workspace-route-empty" aria-live="polite">
-                      <FileText aria-hidden="true" size={20} />
-                      <strong>{workspaceSessions.length > 0 ? copy.workspace.workspaceSessions : copy.workspace.noWorkspaceSessions}</strong>
-                      <span>{copy.workspace.selectedCapability}</span>
-                      <span>{selectedTemplateCopy.name}</span>
+                    <section className="workspace-list-section workspace-session-section">
+                      <div className="tab-panel-toolbar">
+                        <div className="toolbar-left">
+                          <strong>{copy.workspace.workspaceSessions}</strong>
+                          <span className="count-pill">{workspaceSessions.length}</span>
+                        </div>
+                      </div>
+
+                      <section className="newproj workspace-create-card" data-testid="new-session-panel">
+                        <form className="newproj-body" onSubmit={submitSession}>
+                          <div className="section-head compact">
+                            <div>
+                              <h3>{copy.workspace.createSession}</h3>
+                              <p className="hint">{copy.workspace.createSessionHint(selectedTemplateCopy.name)}</p>
+                            </div>
+                          </div>
+
+                          <StudioSelect
+                            ariaLabel={copy.create.capabilityTemplate}
+                            label={copy.create.capabilityTemplate}
+                            options={templates.map((template) => {
+                              const templateCopy = displayTemplate(template, activeLocale)
+                              return {
+                                description: template.outputKind,
+                                label: templateCopy.name,
+                                value: template.id,
+                              }
+                            })}
+                            value={selectedTemplate.id}
+                            onChange={setSelectedTemplateId}
+                          />
+
+                          <textarea
+                            id="project-context"
+                            className="newproj-context"
+                            aria-label={copy.create.businessContext}
+                            placeholder={selectedTemplateCopy.inputHints.join(' · ')}
+                            value={workspaceContext}
+                            onChange={event => setWorkspaceContext(event.target.value)}
+                          />
+
+                          {!engineReadiness.ready
+                            ? (
+                                <div className="inline-warning" role="status">
+                                  <ShieldCheck aria-hidden="true" size={14} />
+                                  <span>{engineReadiness.detail}</span>
+                                </div>
+                              )
+                            : null}
+
+                          <button className="primary newproj-create" data-testid="create-session" type="submit" disabled={!workspaceContext.trim() || submitting || !engineReadiness.ready}>
+                            <Plus aria-hidden="true" size={13} />
+                            <span>{submitting ? copy.create.creatingSession : copy.workspace.createSession}</span>
+                          </button>
+                        </form>
+                      </section>
+
+                      <div className="design-grid workspace-grid workspace-session-grid">
+                        {workspaceSessions.length > 0
+                          ? workspaceSessions.map(session => (
+                              <WorkspaceSessionCard
+                                key={session.id}
+                                active={selectedSession?.id === session.id}
+                                locale={activeLocale}
+                                session={session}
+                                template={data.templates.find(template => template.id === session.capabilityTemplateId)}
+                                turn={turnForSession(session, data.turns)}
+                                onSelect={() => navigateWorkerRoute({ kind: 'session', sessionId: session.id, workerId: session.workerId, workspaceId: session.workspaceId })}
+                              />
+                            ))
+                          : (
+                              <div className="empty-design-state workspace-route-empty" aria-live="polite">
+                                <FileText aria-hidden="true" size={20} />
+                                <strong>{copy.workspace.noWorkspaceSessions}</strong>
+                                <span>{copy.workspace.selectedCapability}</span>
+                                <span>{selectedTemplateCopy.name}</span>
+                              </div>
+                            )}
+                      </div>
                     </section>
                   </div>
                 </>
