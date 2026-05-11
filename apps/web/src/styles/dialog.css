@@ -24,7 +24,7 @@
   padding: 0;
   border: 1px solid var(--border);
   color: var(--text);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .creation-dialog::backdrop {

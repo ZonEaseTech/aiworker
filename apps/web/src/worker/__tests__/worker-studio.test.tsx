@@ -464,7 +464,10 @@ describe('worker studio', () => {
 
     const dialog = screen.getByRole('dialog', { name: 'Create worker' })
     fireEvent.click(within(dialog).getByRole('combobox', { name: 'Soul' }))
+    expect(dialog.querySelector('.studio-select.open')).toBeTruthy()
+    expect(within(dialog).getByRole('listbox', { name: 'Soul' })).toBeTruthy()
     fireEvent.click(within(dialog).getByRole('option', { name: /PM/ }))
+    expect(dialog.querySelector('.studio-select.open')).toBeNull()
     fireEvent.change(within(dialog).getByLabelText('Worker name'), { target: { value: 'Product Worker' } })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create worker' }))
 

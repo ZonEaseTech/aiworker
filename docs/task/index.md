@@ -360,3 +360,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-096 Worker workspace cards render as a single-column list**](BUG-096.md) `P0`
 - [x] [**BUG-097 Workspace route page structure differs from worker route**](BUG-097.md) `P0`
 - [x] [**BUG-098 Workspace route should focus on session creation**](BUG-098.md) `P0`
+- [x] [**BUG-099 Select 打开态与选项样式割裂**](BUG-099.md) `P0`

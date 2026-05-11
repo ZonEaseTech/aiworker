@@ -1,5 +1,21 @@
 # AIWorker Changelog
 
+## 2026-05-11 17:49 [completed] BUG-099 / PLAN-257 — Select 展开态样式统一
+
+- 收敛 `StudioSelect` 的 trigger、listbox 和 option 盒模型。
+- 提升展开态层级，并允许 creation dialog 中的 select 浮层完整显示。
+- 为 WorkerStudio 增加 select open/close 语义测试。
+- 验证通过:
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `bun run check`
+  - `git diff --check`
+  - Browser verification on `http://127.0.0.1:9217/`
+  - `bun run crg:update`
+  - `bun run crg:review`
+
 ## 2026-05-11 17:26 [completed] BUG-098 / PLAN-256 — Workspace route create-session composer
 
 - Replace the no-session workspace route with a Codex-like create-session
