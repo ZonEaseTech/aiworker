@@ -1,5 +1,12 @@
 # AIWorker Changelog
 
+## 2026-05-11 20:34 [completed] BUG-105 / PLAN-263 — 未安装 engine icon 可见性
+
+- 修复未安装 engine 的 muted icon 前景/背景同色导致视觉不可见的问题。
+- 补充 WorkerStudio 测试覆盖未安装 Cursor engine icon 渲染。
+- Verification passed: focused Web typecheck/lint/test/build, `bun run check`, `git diff --check`,
+  browser verification on 9217, and code-review-graph review.
+
 ## 2026-05-11 20:23 [completed] BUG-104 / PLAN-262 — Settings engine icon assets
 
 - 拉取 engine 专属 SVG icon 到 Worker Web 静态资产。

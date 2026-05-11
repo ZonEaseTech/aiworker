@@ -384,8 +384,8 @@ button.settings-action-button svg {
 }
 
 .agent-icon-muted {
-  background: var(--agent-icon-gray-bg);
-  color: var(--text-faint);
+  background: var(--bg-panel);
+  color: var(--text);
 }
 
 .agent-icon-shape {

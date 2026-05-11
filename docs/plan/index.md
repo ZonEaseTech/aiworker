@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-11 (PLAN-262 completed)
+> Updated: 2026-05-11 (PLAN-263 completed)
 
 ## Usage
 
@@ -291,3 +291,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-260 移除工作区返回 worker 入口**](PLAN-260.md) `2026-05-11`
 - [x] [**PLAN-261 Settings 引擎操作按钮统一**](PLAN-261.md) `2026-05-11`
 - [x] [**PLAN-262 Settings engine icon assets**](PLAN-262.md) `2026-05-11`
+- [x] [**PLAN-263 Visible muted engine icons**](PLAN-263.md) `2026-05-11`

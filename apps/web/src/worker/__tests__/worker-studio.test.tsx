@@ -1,3 +1,4 @@
+import type { LocalSettingsConfig } from '@zonease/aiworker-shared'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -58,7 +59,7 @@ const templates = [
 
 const themeMediaQuery = '(prefers-color-scheme: dark)'
 
-const baseSettings = {
+const baseSettings: LocalSettingsConfig = {
   appearance: 'system',
   byok: { apiKeyRef: '', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o', provider: 'openai-compatible' },
   connectors: [{ enabled: false, id: 'ats', name: 'ATS / HRIS', status: 'not_configured' }],
@@ -676,6 +677,14 @@ describe('worker studio', () => {
   })
 
   it('opens settings, rescans/tests engines, and autosaves settings changes', async () => {
+    currentSettings = {
+      ...currentSettings,
+      engines: [
+        ...currentSettings.engines,
+        { command: 'cursor-agent', id: 'cursor', installed: false, name: 'Cursor Agent', path: null, version: null },
+      ],
+    }
+
     render(<WorkerStudio />)
 
     await screen.findByText('AIWorker')
@@ -689,6 +698,9 @@ describe('worker studio', () => {
     const codexIcon = document.querySelector('[data-engine-icon="codex"] .agent-icon-shape') as HTMLElement
     expect(codexIcon).toBeTruthy()
     expect(codexIcon.getAttribute('style')).toContain('/engine-icons/openai.svg')
+    const cursorIcon = document.querySelector('[data-engine-icon="cursor"] .agent-icon-shape') as HTMLElement
+    expect(cursorIcon).toBeTruthy()
+    expect(cursorIcon.getAttribute('style')).toContain('/engine-icons/cursor.svg')
     const testButton = screen.getByRole('button', { name: 'Test' })
     const rescanButton = screen.getByRole('button', { name: 'Rescan' })
     expect(testButton.classList.contains('settings-action-button')).toBe(true)

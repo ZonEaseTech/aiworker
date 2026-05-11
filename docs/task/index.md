@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-11 (Settings engine icon assets completed)
+> Updated: 2026-05-11 (Muted engine icons visible)
 
 ## Usage
 
@@ -366,3 +366,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-102 工作区侧栏存在多余返回 worker 动作**](BUG-102.md) `P0`
 - [x] [**BUG-103 Settings 引擎操作按钮样式不统一**](BUG-103.md) `P0`
 - [x] [**BUG-104 Settings 引擎卡片缺少专属 icon**](BUG-104.md) `P0`
+- [x] [**BUG-105 未安装 engine icon 弱化后不可见**](BUG-105.md) `P0`
