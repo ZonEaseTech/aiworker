@@ -1,8 +1,8 @@
 # REFACTOR-061 Worker list and creation dialog polish
 
-- **status**: pending
+- **status**: completed
 - **priority**: P0
-- **owner**: unassigned
+- **owner**: local
 - **createdAt**: 2026-05-11 03:05
 - **plan**: PLAN-239
 - **relatesTo**: apps/web/src/worker/worker-studio.tsx, apps/web/src/worker/studio.css, apps/web/src/worker/i18n.ts
@@ -37,3 +37,11 @@ data flow.
 - Focused Web typecheck, lint, test, and build.
 - Browser desktop and mobile validation.
 - code-review-graph review after code edits.
+
+## Closeout
+
+- Worker navigation now renders compact list rows.
+- Create worker and create workspace flows moved behind accessible icon-button
+  dialogs while preserving existing API payloads and route updates.
+- Empty states reuse the same dialog entrypoints instead of restoring the old
+  full-width creation panels.

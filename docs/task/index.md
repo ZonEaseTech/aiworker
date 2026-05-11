@@ -341,7 +341,7 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REFACTOR-058 Worker-first Web information architecture**](REFACTOR-058.md) `P0`
 - [x] [**REFACTOR-059 Worker capability and session selection alignment**](REFACTOR-059.md) `P0`
 - [x] [**QA-031 Worker-first workflow validation**](QA-031.md) `P0`
-- [ ] [**REFACTOR-060 Worker Web visual token and control convergence**](REFACTOR-060.md) `P0`
-- [ ] [**REFACTOR-061 Worker list and creation dialog polish**](REFACTOR-061.md) `P0`
-- [ ] [**REFACTOR-062 Session composer and right-side summary refinement**](REFACTOR-062.md) `P0`
-- [ ] [**QA-032 Worker Web visual polish validation**](QA-032.md) `P0`
+- [x] [**REFACTOR-060 Worker Web visual token and control convergence**](REFACTOR-060.md) `P0`
+- [x] [**REFACTOR-061 Worker list and creation dialog polish**](REFACTOR-061.md) `P0`
+- [x] [**REFACTOR-062 Session composer and right-side summary refinement**](REFACTOR-062.md) `P0`
+- [x] [**QA-032 Worker Web visual polish validation**](QA-032.md) `P0`

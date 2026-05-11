@@ -1,8 +1,8 @@
 # REFACTOR-062 Session composer and right-side summary refinement
 
-- **status**: pending
+- **status**: completed
 - **priority**: P0
-- **owner**: unassigned
+- **owner**: local
 - **createdAt**: 2026-05-11 03:05
 - **plan**: PLAN-240
 - **relatesTo**: apps/web/src/worker/session-chat.tsx, apps/web/src/worker/session-detail.tsx, apps/web/src/worker/studio.css
@@ -45,3 +45,12 @@ artifact/review/memory context, and a collapsible right-side drawer.
 - Focused Web typecheck, lint, test, and build.
 - Browser desktop and mobile validation.
 - code-review-graph review after code edits.
+
+## Closeout
+
+- Session chat now uses a dedicated scroll island, pinned-bottom follow logic,
+  and a jump-to-latest affordance that does not steal scrollback.
+- Follow-up draft state is scoped by session id and the session surface remounts
+  by selected session.
+- Right-side artifact/review/memory detail can collapse into a slim drawer rail
+  and restore without horizontal overflow on mobile validation.

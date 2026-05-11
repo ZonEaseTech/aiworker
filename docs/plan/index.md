@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-11 (PLAN-238..241 drafted)
+> Updated: 2026-05-11 (PLAN-238..241 completed)
 
 ## Usage
 
@@ -266,7 +266,7 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-235 Worker-first Web information architecture**](PLAN-235.md) `2026-05-11`
 - [x] [**PLAN-236 Worker capability and session selection alignment**](PLAN-236.md) `2026-05-11`
 - [x] [**PLAN-237 Worker-first workflow validation**](PLAN-237.md) `2026-05-11`
-- [ ] [**PLAN-238 Worker Web design token and control convergence**](PLAN-238.md) `2026-05-11`
-- [ ] [**PLAN-239 Worker list and creation dialog refinement**](PLAN-239.md) `2026-05-11`
-- [ ] [**PLAN-240 Session composer and right drawer refinement**](PLAN-240.md) `2026-05-11`
-- [ ] [**PLAN-241 Worker Web visual polish validation**](PLAN-241.md) `2026-05-11`
+- [x] [**PLAN-238 Worker Web design token and control convergence**](PLAN-238.md) `2026-05-11`
+- [x] [**PLAN-239 Worker list and creation dialog refinement**](PLAN-239.md) `2026-05-11`
+- [x] [**PLAN-240 Session composer and right drawer refinement**](PLAN-240.md) `2026-05-11`
+- [x] [**PLAN-241 Worker Web visual polish validation**](PLAN-241.md) `2026-05-11`

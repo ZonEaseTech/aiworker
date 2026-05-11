@@ -1,7 +1,7 @@
 # PLAN-241 Worker Web visual polish validation
 
-- **status**: pending
-- **owner**: unassigned
+- **status**: completed
+- **owner**: local
 - **createdAt**: 2026-05-11 03:05
 - **relatedTask**: QA-032
 
@@ -67,4 +67,9 @@ Out of scope:
 
 ## Approval Gate
 
-Pending operator approval.
+Approved by operator on 2026-05-11.
+
+## Result
+
+Completed with focused Web gates, Playwright desktop/mobile smoke validation,
+`git diff --check`, and code-review-graph update/review.

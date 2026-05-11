@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { WorkerStudio } from '../worker-studio'
@@ -152,6 +152,7 @@ let currentReviews: Array<{
 let currentSettings: typeof baseSettings
 let currentSessions: typeof sessionRecord[]
 let currentTurns: typeof turnRecord[]
+let currentWorkers: typeof workers
 let currentWorkspaces: typeof workspace[]
 
 function resetSettings() {
@@ -170,6 +171,7 @@ function resetSettings() {
   currentReviews = []
   currentLessons = [{ ...lessonRecord }]
   currentEvents = [{ ...eventRecord }]
+  currentWorkers = workers.map(worker => ({ ...worker }))
 }
 
 function installMatchMedia(initialMatches: boolean) {
@@ -230,9 +232,24 @@ beforeEach(() => {
     })
 
     if (url.endsWith('/api/local/info'))
-      return json({ runtimeVersion: 'test', startedAt: now, workers })
+      return json({ runtimeVersion: 'test', startedAt: now, workers: currentWorkers })
+    if (url.endsWith('/api/local/workers') && method === 'POST') {
+      const body = init?.body ? JSON.parse(String(init.body)) as { name: string, soulId: string } : { name: 'Created worker', soulId: 'hr' }
+      const created = {
+        createdAt: now,
+        defaultEngineId: 'codex',
+        id: 'worker-created',
+        metadataJson: {},
+        name: body.name,
+        soulId: body.soulId,
+        status: 'active',
+        updatedAt: now,
+      }
+      currentWorkers = [created, ...currentWorkers]
+      return json({ worker: created }, 201)
+    }
     if (url.endsWith('/api/local/workers'))
-      return json({ workers })
+      return json({ workers: currentWorkers })
     if (url.endsWith('/api/local/souls'))
       return json({ souls })
     if (url.endsWith('/api/local/templates'))
@@ -385,7 +402,7 @@ describe('worker studio', () => {
     expect(screen.getAllByText('Current worker').length).toBeGreaterThan(0)
     expect(screen.getByText('hr-worker')).toBeTruthy()
     expect(screen.getByText('Worker ID')).toBeTruthy()
-    expect(screen.getAllByText('Create workspace').length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: 'Create workspace' })).toBeTruthy()
     expect(screen.queryByText('Examples')).toBeNull()
     expect(screen.queryByText('Domain systems')).toBeNull()
     expect(screen.queryByText(/Import/i)).toBeNull()
@@ -411,12 +428,34 @@ describe('worker studio', () => {
     })
   })
 
+  it('creates a worker from the compact worker list dialog', async () => {
+    render(<WorkerStudio />)
+
+    await screen.findByText('hr-worker')
+    fireEvent.click(screen.getByRole('button', { name: 'Create worker' }))
+
+    const dialog = screen.getByRole('dialog', { name: 'Create worker' })
+    fireEvent.change(within(dialog).getByLabelText('Soul'), { target: { value: 'pm' } })
+    fireEvent.change(within(dialog).getByLabelText('Worker name'), { target: { value: 'Product Worker' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create worker' }))
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/local/workers', expect.objectContaining({
+        body: expect.stringContaining('"soulId":"pm"'),
+        method: 'POST',
+      }))
+      expect(window.location.pathname).toBe('/workers/worker-created')
+    })
+  })
+
   it('creates a workspace session turn with selected Soul worker and skill metadata', async () => {
     render(<WorkerStudio />)
 
     await screen.findAllByText('Candidate Screen')
-    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'New candidate workspace' } })
     fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }))
+    const dialog = screen.getByRole('dialog', { name: 'Create workspace' })
+    fireEvent.change(within(dialog).getByLabelText('Project name'), { target: { value: 'New candidate workspace' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create workspace' }))
 
     await waitFor(() => {
       expect(window.location.pathname).toBe('/workers/hr-worker/workspaces/workspace-created')
@@ -461,6 +500,21 @@ describe('worker studio', () => {
     expect(screen.queryByTestId('new-project-panel')).toBeNull()
     expect(screen.getByText('Session events')).toBeTruthy()
     expect(screen.getByText('Memory candidates')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse session detail' }))
+    expect(screen.getByRole('button', { name: 'Expand session detail' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Expand session detail' }))
+    expect(screen.getByText('Session events')).toBeTruthy()
+
+    const chatLog = screen.getByTestId('worker-chat-log')
+    const scrollTo = vi.fn()
+    Object.defineProperty(chatLog, 'clientHeight', { configurable: true, value: 300 })
+    Object.defineProperty(chatLog, 'scrollHeight', { configurable: true, value: 1000 })
+    Object.defineProperty(chatLog, 'scrollTo', { configurable: true, value: scrollTo })
+    Object.defineProperty(chatLog, 'scrollTop', { configurable: true, value: 100, writable: true })
+    fireEvent.scroll(chatLog)
+    fireEvent.click(screen.getByRole('button', { name: 'Latest' }))
+    expect(scrollTo).toHaveBeenCalledWith({ behavior: 'smooth', top: 1000 })
 
     fireEvent.change(screen.getByLabelText('Follow-up turn'), { target: { value: 'Add interview risks.' } })
     fireEvent.click(screen.getByRole('button', { name: 'Send turn' }))
@@ -528,7 +582,7 @@ describe('worker studio', () => {
       expect(document.documentElement.lang).toBe('zh-CN')
     })
     expect(screen.getByRole('dialog', { name: '配置 Soul 工作区' })).toBeTruthy()
-    expect(screen.getAllByText('创建工作区').length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: '创建工作区' })).toBeTruthy()
     expect(screen.queryByText('Create workspace session')).toBeNull()
   })
 

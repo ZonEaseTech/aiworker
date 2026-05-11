@@ -114,10 +114,13 @@ export function WorkerStudio() {
   const [workspaceTitle, setWorkspaceTitle] = useState('')
   const [workspaceContext, setWorkspaceContext] = useState('')
   const [query, setQuery] = useState('')
+  const [createWorkerOpen, setCreateWorkerOpen] = useState(false)
+  const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false)
+  const [detailDrawerCollapsed, setDetailDrawerCollapsed] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsInitialSection, setSettingsInitialSection] = useState<SettingsSection>('execution')
   const [submitting, setSubmitting] = useState(false)
-  const [turnInput, setTurnInput] = useState('')
+  const [turnDraft, setTurnDraft] = useState<{ sessionId: null | string, value: string }>({ sessionId: null, value: '' })
   const [turnSubmitting, setTurnSubmitting] = useState(false)
   const [reviewSubmitting, setReviewSubmitting] = useState(false)
   const [lessonBusyId, setLessonBusyId] = useState<string | null>(null)
@@ -252,6 +255,10 @@ export function WorkerStudio() {
   const systemTheme = useSystemTheme()
   const appearance = data?.settings.appearance ?? 'system'
   const resolvedTheme = resolveTheme(appearance, systemTheme)
+  const turnInput = selectedSession && turnDraft.sessionId === selectedSession.id ? turnDraft.value : ''
+  const setSessionTurnInput = useCallback((value: string) => {
+    setTurnDraft({ sessionId: selectedSession?.id ?? null, value })
+  }, [selectedSession?.id])
 
   useEffect(() => {
     document.documentElement.lang = activeLocale
@@ -272,6 +279,7 @@ export function WorkerStudio() {
     })
     setSelectedWorkerId(result.worker.id)
     setNewWorkerName('')
+    setCreateWorkerOpen(false)
     await refresh()
     navigateWorkerRoute({ kind: 'worker', workerId: result.worker.id })
   }
@@ -316,6 +324,7 @@ export function WorkerStudio() {
       })
       setSelectedWorkspaceId(workspaceResult.workspace.id)
       setWorkspaceTitle('')
+      setCreateWorkspaceOpen(false)
       await refresh()
       navigateWorkerRoute({ kind: 'workspace', workerId: selectedWorker.id, workspaceId: workspaceResult.workspace.id })
     }
@@ -381,7 +390,7 @@ export function WorkerStudio() {
         status: 'running',
         updatedAt: now,
       })
-      setTurnInput('')
+      setTurnDraft({ sessionId: selectedSession.id, value: '' })
       const result = await continueSessionTurnStream(selectedSession.id, {
         input: prompt,
         metadata: {
@@ -475,12 +484,21 @@ export function WorkerStudio() {
               </div>
             </div>
             <section className="newproj soul-catalog-panel soul-rail-panel">
-              <form className="newproj-body" onSubmit={submitWorker}>
-                <div className="section-head compact">
+              <div className="newproj-body">
+                <div className="section-head compact with-action">
                   <div>
                     <h3>{copy.workspace.createWorker}</h3>
                     <p className="hint">{createSoulCopy?.description ?? copy.workspace.createWorkerHint}</p>
                   </div>
+                  <button
+                    type="button"
+                    className="icon-only"
+                    aria-label={copy.workspace.createWorker}
+                    title={copy.workspace.createWorker}
+                    onClick={() => setCreateWorkerOpen(true)}
+                  >
+                    <Plus aria-hidden="true" size={15} />
+                  </button>
                 </div>
                 <div className="soul-rail" role="listbox" aria-label={copy.accessibility.soulCatalog}>
                   {availableSouls.map((soul) => {
@@ -503,18 +521,7 @@ export function WorkerStudio() {
                     )
                   })}
                 </div>
-                <input
-                  className="newproj-name"
-                  aria-label={copy.workspace.workerName}
-                  placeholder={copy.workspace.workerName}
-                  value={newWorkerName}
-                  onChange={event => setNewWorkerName(event.target.value)}
-                />
-                <button className="primary newproj-create" type="submit" disabled={!newWorkerName.trim()}>
-                  <Plus aria-hidden="true" size={13} />
-                  <span>{copy.workspace.createWorker}</span>
-                </button>
-              </form>
+              </div>
             </section>
           </aside>
           <section className="entry-main workspace-column" aria-label={copy.accessibility.soulProjectsAndArtifacts}>
@@ -529,9 +536,25 @@ export function WorkerStudio() {
                 <FileText aria-hidden="true" size={20} />
                 <strong>{copy.workspace.noWorker}</strong>
                 <span>{copy.workspace.createWorkerHint}</span>
+                <button type="button" className="ghost icon-btn" onClick={() => setCreateWorkerOpen(true)}>
+                  <Plus aria-hidden="true" size={13} />
+                  <span>{copy.workspace.createWorker}</span>
+                </button>
               </section>
             </div>
           </section>
+          <CreateWorkerDialog
+            availableSouls={availableSouls}
+            copy={copy}
+            locale={activeLocale}
+            open={createWorkerOpen}
+            selectedSoulId={newWorkerSoulId}
+            workerName={newWorkerName}
+            onClose={() => setCreateWorkerOpen(false)}
+            onNameChange={setNewWorkerName}
+            onSoulChange={setNewWorkerSoulId}
+            onSubmit={submitWorker}
+          />
         </div>
       </main>
     )
@@ -546,7 +569,7 @@ export function WorkerStudio() {
 
   return (
     <main className="entry-shell" data-appearance={appearance} data-theme={resolvedTheme} data-testid="worker-studio-shell">
-      <div className={`entry workspace-entry ${showWorkspaceContextSurface ? `${showSessionSurface ? 'workspace-session-route has-artifact-rail' : 'workspace-context-route'}` : 'workspace-home-route'}`}>
+      <div className={`entry workspace-entry ${showWorkspaceContextSurface ? `${showSessionSurface ? 'workspace-session-route has-artifact-rail' : 'workspace-context-route'}` : 'workspace-home-route'}${showSessionSurface && detailDrawerCollapsed ? ' detail-drawer-collapsed' : ''}`}>
         <aside
           className="entry-side soul-sidebar"
           aria-label={isWorkspaceContextRoute ? copy.workspace.workspaceNavigation : copy.accessibility.soulProjectCreator}
@@ -638,7 +661,13 @@ export function WorkerStudio() {
                   <section className="workspace-rail-card">
                     <div className="rail-section-head">
                       <strong>{copy.workspace.otherWorkspaces}</strong>
-                      <button type="button" className="rail-mini-action" onClick={() => navigateWorkerRoute({ kind: 'worker', workerId: selectedWorker.id })}>
+                      <button
+                        type="button"
+                        className="rail-mini-action"
+                        aria-label={copy.workspace.createWorkspace}
+                        title={copy.workspace.createWorkspace}
+                        onClick={() => setCreateWorkspaceOpen(true)}
+                      >
                         <Plus aria-hidden="true" size={12} />
                         <span>{copy.workspace.newWorkspace}</span>
                       </button>
@@ -663,11 +692,20 @@ export function WorkerStudio() {
                 <>
                   <section className="newproj worker-list-panel soul-catalog-panel soul-rail-panel">
                     <div className="newproj-body">
-                      <div className="section-head compact">
+                      <div className="section-head compact with-action">
                         <div>
                           <h3>{copy.workspace.workerList}</h3>
                           <p className="hint">{copy.workspace.workerListHint}</p>
                         </div>
+                        <button
+                          type="button"
+                          className="icon-only"
+                          aria-label={copy.workspace.createWorker}
+                          title={copy.workspace.createWorker}
+                          onClick={() => setCreateWorkerOpen(true)}
+                        >
+                          <Plus aria-hidden="true" size={15} />
+                        </button>
                       </div>
                       <div className="worker-list-rail soul-rail" role="listbox" aria-label={copy.workspace.currentWorker}>
                         {data.workers.map((worker) => {
@@ -678,7 +716,7 @@ export function WorkerStudio() {
                             <button
                               key={worker.id}
                               type="button"
-                              className={`soul-rail-item ${active ? 'active' : ''}`}
+                              className={`worker-list-item ${active ? 'active' : ''}`}
                               aria-selected={active}
                               role="option"
                               onClick={() => {
@@ -690,45 +728,19 @@ export function WorkerStudio() {
                                 navigateWorkerRoute({ kind: 'worker', workerId: worker.id })
                               }}
                             >
-                              <span className="soul-rail-title">
+                              <span className="worker-list-item-main">
                                 <strong>{worker.name}</strong>
                                 <span className={`status-dot ${worker.status === 'active' ? 'active' : ''}`} aria-hidden="true" />
                               </span>
-                              <small>{soulCopy?.name ?? worker.soulId}</small>
-                              <span>{formatStatus(worker.status, activeLocale)}</span>
+                              <span className="worker-list-item-meta">
+                                <small>{soulCopy?.name ?? worker.soulId}</small>
+                                <span>{formatStatus(worker.status, activeLocale)}</span>
+                              </span>
                             </button>
                           )
                         })}
                       </div>
                     </div>
-                  </section>
-
-                  <section className="newproj create-worker-panel soul-catalog-panel">
-                    <form className="newproj-body" onSubmit={submitWorker}>
-                      <div className="section-head compact">
-                        <div>
-                          <h3>{copy.workspace.createWorker}</h3>
-                          <p className="hint">{copy.workspace.createWorkerHint}</p>
-                        </div>
-                      </div>
-                      <select className="ds-select" aria-label={copy.create.soul} value={newWorkerSoulId} onChange={event => setNewWorkerSoulId(event.target.value)}>
-                        {data.souls.filter(soul => soul.status === 'available').map((soul) => {
-                          const soulCopy = displaySoul(soul, activeLocale)
-                          return <option key={soul.id} value={soul.id}>{soulCopy.name}</option>
-                        })}
-                      </select>
-                      <input
-                        className="newproj-name"
-                        aria-label={copy.workspace.workerName}
-                        placeholder={copy.workspace.workerName}
-                        value={newWorkerName}
-                        onChange={event => setNewWorkerName(event.target.value)}
-                      />
-                      <button className="primary newproj-create" type="submit" disabled={!newWorkerName.trim()}>
-                        <Plus aria-hidden="true" size={13} />
-                        <span>{copy.workspace.createWorker}</span>
-                      </button>
-                    </form>
                   </section>
                 </>
               )}
@@ -752,6 +764,7 @@ export function WorkerStudio() {
           {showSessionSurface && selectedWorkspace && selectedSession
             ? (
                 <WorkerSessionChat
+                  key={selectedSession.id}
                   copy={copy}
                   engineReadiness={engineReadiness}
                   events={displayedSessionEvents}
@@ -765,7 +778,7 @@ export function WorkerStudio() {
                   onOpenSettings={() => openSettings('execution')}
                   onRefresh={() => void refresh()}
                   onSubmitTurn={submitTurn}
-                  onTurnInputChange={setTurnInput}
+                  onTurnInputChange={setSessionTurnInput}
                 />
               )
             : null}
@@ -891,36 +904,20 @@ export function WorkerStudio() {
                       </div>
                     </section>
 
-                    <section className="newproj workspace-create-card" data-testid="new-project-panel">
-                      <form className="newproj-body" onSubmit={submitProject}>
-                        <div className="section-head compact">
-                          <div>
-                            <h3>{copy.workspace.createWorkspace}</h3>
-                            <p className="hint">{copy.workspace.createWorkspaceHint}</p>
-                          </div>
-                        </div>
-
-                        <input
-                          className="newproj-name"
-                          aria-label={copy.create.projectName}
-                          data-testid="new-project-name"
-                          placeholder={projectNamePlaceholder(selectedSoul.id, copy)}
-                          value={workspaceTitle}
-                          onChange={event => setWorkspaceTitle(event.target.value)}
-                        />
-
-                        <button className="primary newproj-create" data-testid="create-project" type="submit" disabled={!workspaceTitle.trim() || submitting}>
-                          <Plus aria-hidden="true" size={13} />
-                          <span>{copy.workspace.createWorkspace}</span>
-                        </button>
-                      </form>
-                    </section>
-
                     <section className="workspace-list-section">
                       <div className="tab-panel-toolbar">
                         <div className="toolbar-left">
                           <strong>{copy.workspace.workspaceList}</strong>
                           <span className="count-pill">{filteredProjects.length}</span>
+                          <button
+                            type="button"
+                            className="icon-only"
+                            aria-label={copy.workspace.createWorkspace}
+                            title={copy.workspace.createWorkspace}
+                            onClick={() => setCreateWorkspaceOpen(true)}
+                          >
+                            <Plus aria-hidden="true" size={15} />
+                          </button>
                         </div>
 
                         <div className="toolbar-right">
@@ -961,6 +958,10 @@ export function WorkerStudio() {
                                 <FileText aria-hidden="true" size={20} />
                                 <strong>{copy.projects.empty.title}</strong>
                                 <span>{copy.projects.empty.detail(selectedSoulCopy.name)}</span>
+                                <button type="button" className="ghost icon-btn" onClick={() => setCreateWorkspaceOpen(true)}>
+                                  <Plus aria-hidden="true" size={13} />
+                                  <span>{copy.workspace.createWorkspace}</span>
+                                </button>
                               </div>
                             )}
                       </div>
@@ -985,6 +986,7 @@ export function WorkerStudio() {
                 lessons={selectedWorkspaceLessons}
                 locale={activeLocale}
                 mode="artifact"
+                collapsed={detailDrawerCollapsed}
                 review={selectedReview}
                 reviewSubmitting={reviewSubmitting}
                 reviews={selectedWorkspaceReviews}
@@ -995,14 +997,40 @@ export function WorkerStudio() {
                 turns={displayedSessionTurns}
                 workspace={selectedWorkspace}
                 onLessonStatus={(lesson, status) => void changeLessonStatus(lesson, status)}
+                onCollapsedChange={setDetailDrawerCollapsed}
                 onOpenSettings={openSettings}
                 onRefresh={() => void refresh()}
                 onReview={() => void submitReview()}
                 onSubmitTurn={submitTurn}
-                onTurnInputChange={setTurnInput}
+                onTurnInputChange={setSessionTurnInput}
               />
             )
           : null}
+
+        <CreateWorkerDialog
+          availableSouls={data.souls.filter(soul => soul.status === 'available')}
+          copy={copy}
+          locale={activeLocale}
+          open={createWorkerOpen}
+          selectedSoulId={newWorkerSoulId}
+          workerName={newWorkerName}
+          onClose={() => setCreateWorkerOpen(false)}
+          onNameChange={setNewWorkerName}
+          onSoulChange={setNewWorkerSoulId}
+          onSubmit={submitWorker}
+        />
+
+        <CreateWorkspaceDialog
+          copy={copy}
+          open={createWorkspaceOpen}
+          placeholder={projectNamePlaceholder(selectedSoul.id, copy)}
+          workerLabel={`${selectedWorker.name} / ${selectedSoulCopy.name}`}
+          submitting={submitting}
+          workspaceTitle={workspaceTitle}
+          onClose={() => setCreateWorkspaceOpen(false)}
+          onSubmit={submitProject}
+          onTitleChange={setWorkspaceTitle}
+        />
 
         {settingsOpen
           ? (
@@ -1023,6 +1051,173 @@ export function WorkerStudio() {
           : null}
       </div>
     </main>
+  )
+}
+
+function CreateWorkerDialog({
+  availableSouls,
+  copy,
+  locale,
+  onClose,
+  onNameChange,
+  onSoulChange,
+  onSubmit,
+  open,
+  selectedSoulId,
+  workerName,
+}: {
+  availableSouls: VerticalSoul[]
+  copy: WorkerMessages
+  locale: ReturnType<typeof normalizeLocale>
+  onClose: () => void
+  onNameChange: (value: string) => void
+  onSoulChange: (value: string) => void
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void
+  open: boolean
+  selectedSoulId: string
+  workerName: string
+}) {
+  return (
+    <CreationDialog
+      description={copy.workspace.createWorkerHint}
+      open={open}
+      title={copy.workspace.createWorker}
+      titleId="create-worker-dialog-title"
+      closeLabel={copy.accessibility.closeDialog}
+      onClose={onClose}
+    >
+      <form className="dialog-form" onSubmit={onSubmit}>
+        <label className="settings-field">
+          <span>{copy.create.soul}</span>
+          <select className="ds-select" aria-label={copy.create.soul} value={selectedSoulId} onChange={event => onSoulChange(event.target.value)}>
+            {availableSouls.map((soul) => {
+              const soulCopy = displaySoul(soul, locale)
+              return <option key={soul.id} value={soul.id}>{soulCopy.name}</option>
+            })}
+          </select>
+        </label>
+        <label className="settings-field">
+          <span>{copy.workspace.workerName}</span>
+          <input
+            className="newproj-name"
+            aria-label={copy.workspace.workerName}
+            placeholder={copy.workspace.workerName}
+            value={workerName}
+            onChange={event => onNameChange(event.target.value)}
+          />
+        </label>
+        <div className="dialog-actions">
+          <button type="button" className="ghost" onClick={onClose}>{copy.accessibility.closeDialog}</button>
+          <button className="primary" type="submit" disabled={!workerName.trim() || availableSouls.length === 0}>
+            <Plus aria-hidden="true" size={13} />
+            <span>{copy.workspace.createWorker}</span>
+          </button>
+        </div>
+      </form>
+    </CreationDialog>
+  )
+}
+
+function CreateWorkspaceDialog({
+  copy,
+  onClose,
+  onSubmit,
+  onTitleChange,
+  open,
+  placeholder,
+  workerLabel,
+  submitting,
+  workspaceTitle,
+}: {
+  copy: WorkerMessages
+  onClose: () => void
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void
+  onTitleChange: (value: string) => void
+  open: boolean
+  placeholder: string
+  workerLabel: string
+  submitting: boolean
+  workspaceTitle: string
+}) {
+  return (
+    <CreationDialog
+      description={copy.workspace.createWorkspaceHint}
+      open={open}
+      title={copy.workspace.createWorkspace}
+      titleId="create-workspace-dialog-title"
+      closeLabel={copy.accessibility.closeDialog}
+      onClose={onClose}
+    >
+      <form className="dialog-form" onSubmit={onSubmit}>
+        <label className="settings-field">
+          <span>{copy.workspace.currentWorker}</span>
+          <input readOnly value={workerLabel} />
+        </label>
+        <label className="settings-field">
+          <span>{copy.create.projectName}</span>
+          <input
+            className="newproj-name"
+            aria-label={copy.create.projectName}
+            data-testid="new-project-name"
+            placeholder={placeholder}
+            value={workspaceTitle}
+            onChange={event => onTitleChange(event.target.value)}
+          />
+        </label>
+        <div className="dialog-actions">
+          <button type="button" className="ghost" onClick={onClose}>{copy.accessibility.closeDialog}</button>
+          <button className="primary" data-testid="create-project" type="submit" disabled={!workspaceTitle.trim() || submitting}>
+            <Plus aria-hidden="true" size={13} />
+            <span>{copy.workspace.createWorkspace}</span>
+          </button>
+        </div>
+      </form>
+    </CreationDialog>
+  )
+}
+
+function CreationDialog({
+  children,
+  closeLabel,
+  description,
+  onClose,
+  open,
+  title,
+  titleId,
+}: {
+  children: ReactNode
+  closeLabel: string
+  description: string
+  onClose: () => void
+  open: boolean
+  title: string
+  titleId: string
+}) {
+  if (!open)
+    return null
+
+  return (
+    <div
+      className="modal-backdrop creation-dialog-backdrop"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget)
+          onClose()
+      }}
+    >
+      <dialog className="modal creation-dialog" open aria-modal="true" aria-labelledby={titleId} onCancel={onClose}>
+        <button type="button" className="settings-close creation-dialog-close" onClick={onClose} aria-label={closeLabel}>
+          <X size={16} strokeWidth={2} />
+        </button>
+        <header className="modal-head creation-dialog-head">
+          <span className="kicker">{title}</span>
+          <h2 id={titleId}>{title}</h2>
+          <p className="subtitle">{description}</p>
+        </header>
+        <div className="creation-dialog-body">
+          {children}
+        </div>
+      </dialog>
+    </div>
   )
 }
 

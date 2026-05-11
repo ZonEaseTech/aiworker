@@ -73,6 +73,7 @@ export function WorkerSessionChat({
 }) {
   const logRef = useRef<HTMLDivElement | null>(null)
   const didInitialScrollRef = useRef(false)
+  const pinnedToBottomRef = useRef(true)
   const [scrolledFromBottom, setScrolledFromBottom] = useState(false)
   const templateCopy = template ? displayTemplate(template, locale) : null
   const sortedTurns = useMemo(() => [...turns].sort((a, b) => a.seq - b.seq), [turns])
@@ -80,6 +81,7 @@ export function WorkerSessionChat({
 
   useEffect(() => {
     didInitialScrollRef.current = false
+    pinnedToBottomRef.current = true
   }, [session.id])
 
   useEffect(() => {
@@ -89,6 +91,7 @@ export function WorkerSessionChat({
     didInitialScrollRef.current = true
     requestAnimationFrame(() => {
       el.scrollTop = el.scrollHeight
+      pinnedToBottomRef.current = true
       setScrolledFromBottom(false)
     })
   }, [session.id, sortedEvents.length, sortedTurns.length])
@@ -97,9 +100,12 @@ export function WorkerSessionChat({
     const el = logRef.current
     if (!el)
       return
-    const distance = el.scrollHeight - el.scrollTop - el.clientHeight
-    if (distance < 96)
+    if (!pinnedToBottomRef.current)
+      return
+    requestAnimationFrame(() => {
       el.scrollTop = el.scrollHeight
+      setScrolledFromBottom(false)
+    })
   }, [sortedEvents, sortedTurns, turnSubmitting])
 
   useEffect(() => {
@@ -111,6 +117,7 @@ export function WorkerSessionChat({
       if (!target)
         return
       const distance = target.scrollHeight - target.scrollTop - target.clientHeight
+      pinnedToBottomRef.current = distance < 80
       setScrolledFromBottom(distance > 140)
     }
     el.addEventListener('scroll', onScroll)
@@ -121,7 +128,9 @@ export function WorkerSessionChat({
     const el = logRef.current
     if (!el)
       return
+    pinnedToBottomRef.current = true
     el.scrollTo({ behavior: 'smooth', top: el.scrollHeight })
+    setScrolledFromBottom(false)
   }
 
   return (
@@ -146,37 +155,39 @@ export function WorkerSessionChat({
         </div>
       </header>
 
-      <div ref={logRef} className="worker-chat-log">
-        {sortedTurns.length > 0
-          ? sortedTurns.map((turn) => {
-              const turnEvents = sortedEvents.filter(event => event.turnId === turn.id)
-              return (
-                <Fragment key={turn.id}>
-                  <UserTurn copy={copy} turn={turn} locale={locale} />
-                  <AssistantTurn copy={copy} events={turnEvents} locale={locale} turn={turn} turnSubmitting={turnSubmitting && turn.status === 'running'} />
-                </Fragment>
-              )
-            })
-          : (
-              <div className="worker-chat-empty">
-                <MessageSquare aria-hidden="true" size={24} />
-                <strong>{copy.workspace.noTurns}</strong>
-                <span>{engineReadiness.detail}</span>
-              </div>
-            )}
-        {turnSubmitting && sortedTurns.every(turn => turn.status !== 'running')
-          ? <AssistantWaiting detail={engineReadiness.detail} role={copy.workspace.engineRole} />
+      <div className="worker-chat-log-wrap">
+        <div ref={logRef} className="worker-chat-log" data-testid="worker-chat-log">
+          {sortedTurns.length > 0
+            ? sortedTurns.map((turn) => {
+                const turnEvents = sortedEvents.filter(event => event.turnId === turn.id)
+                return (
+                  <Fragment key={turn.id}>
+                    <UserTurn copy={copy} turn={turn} locale={locale} />
+                    <AssistantTurn copy={copy} events={turnEvents} locale={locale} turn={turn} turnSubmitting={turnSubmitting && turn.status === 'running'} />
+                  </Fragment>
+                )
+              })
+            : (
+                <div className="worker-chat-empty">
+                  <MessageSquare aria-hidden="true" size={24} />
+                  <strong>{copy.workspace.noTurns}</strong>
+                  <span>{engineReadiness.detail}</span>
+                </div>
+              )}
+          {turnSubmitting && sortedTurns.every(turn => turn.status !== 'running')
+            ? <AssistantWaiting detail={engineReadiness.detail} role={copy.workspace.engineRole} />
+            : null}
+        </div>
+
+        {scrolledFromBottom
+          ? (
+              <button type="button" className="worker-chat-jump" onClick={jumpToBottom}>
+                <ArrowDown aria-hidden="true" size={14} />
+                <span>{copy.workspace.latest}</span>
+              </button>
+            )
           : null}
       </div>
-
-      {scrolledFromBottom
-        ? (
-            <button type="button" className="worker-chat-jump" onClick={jumpToBottom}>
-              <ArrowDown aria-hidden="true" size={14} />
-              <span>{copy.workspace.latest}</span>
-            </button>
-          )
-        : null}
 
       <form className="worker-composer" onSubmit={onSubmitTurn}>
         <button type="button" className="worker-composer-tool" aria-label={copy.accessibility.openSettings} onClick={onOpenSettings}>

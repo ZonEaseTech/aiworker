@@ -12,7 +12,7 @@ import type {
 import type { FormEvent } from 'react'
 import type { messagesFor, SupportedLocale } from './i18n'
 
-import { Circle, ClipboardCheck, Eye, FileText, MessageSquare, RefreshCw, Send, Settings, Sparkles, Terminal } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Circle, ClipboardCheck, Eye, FileText, MessageSquare, RefreshCw, Send, Settings, Sparkles, Terminal } from 'lucide-react'
 
 import {
   displayTemplate,
@@ -42,6 +42,7 @@ export function SessionDetail({
   artifactCopy,
   artifactPreview,
   artifacts,
+  collapsed = false,
   copy,
   engineReadiness,
   events,
@@ -49,6 +50,7 @@ export function SessionDetail({
   lessons,
   locale,
   onLessonStatus,
+  onCollapsedChange,
   onOpenSettings,
   onRefresh,
   onReview,
@@ -69,6 +71,7 @@ export function SessionDetail({
   artifactCopy: { name: string, outputKind: string } | null
   artifactPreview: ArtifactPreviewState
   artifacts: LocalArtifact[]
+  collapsed?: boolean
   copy: WorkerMessages
   engineReadiness: EngineReadiness
   events: LocalSessionEvent[]
@@ -76,6 +79,7 @@ export function SessionDetail({
   lessons: LocalLesson[]
   locale: SupportedLocale
   onLessonStatus: (lesson: LocalLesson, status: LocalLessonStatus) => void
+  onCollapsedChange?: (collapsed: boolean) => void
   onOpenSettings: (section?: SettingsSection) => void
   onRefresh: () => void
   onReview: () => void
@@ -95,6 +99,22 @@ export function SessionDetail({
   const templateCopy = template ? displayTemplate(template, locale) : null
   const recentEvents = events.slice(-6).reverse()
 
+  if (collapsed) {
+    return (
+      <aside className="artifact-rail session-panel collapsed" aria-label={copy.accessibility.businessArtifactPreview}>
+        <button
+          type="button"
+          className="drawer-restore"
+          aria-label={copy.accessibility.expandSessionDetail}
+          title={copy.accessibility.expandSessionDetail}
+          onClick={() => onCollapsedChange?.(false)}
+        >
+          <ChevronLeft aria-hidden="true" size={16} />
+        </button>
+      </aside>
+    )
+  }
+
   return (
     <aside className="artifact-rail session-panel" aria-label={copy.accessibility.businessArtifactPreview}>
       <header className="artifact-rail-head">
@@ -108,6 +128,15 @@ export function SessionDetail({
           </button>
           <button type="button" className="artifact-rail-collapse" aria-label={copy.accessibility.artifactSettings} onClick={() => onOpenSettings('execution')}>
             <Settings size={14} />
+          </button>
+          <button
+            type="button"
+            className="artifact-rail-collapse"
+            aria-label={copy.accessibility.collapseSessionDetail}
+            title={copy.accessibility.collapseSessionDetail}
+            onClick={() => onCollapsedChange?.(true)}
+          >
+            <ChevronRight size={14} />
           </button>
         </div>
       </header>
@@ -187,14 +216,14 @@ export function SessionDetail({
 
               {mode === 'full'
                 ? (
-                    <section className="session-subpanel">
-                      <div className="artifact-section-head">
+                    <details className="session-subpanel compact-details">
+                      <summary className="artifact-section-head">
                         <div>
                           <strong>{copy.workspace.turnHistory}</strong>
                           <small>{copy.workspace.turnCount(turns.length)}</small>
                         </div>
                         <MessageSquare aria-hidden="true" size={14} />
-                      </div>
+                      </summary>
                       {turns.length > 0
                         ? (
                             <div className="turn-list">
@@ -211,7 +240,7 @@ export function SessionDetail({
                             </div>
                           )
                         : <div className="artifact-preview-state">{copy.workspace.noTurns}</div>}
-                    </section>
+                    </details>
                   )
                 : null}
 
@@ -239,7 +268,7 @@ export function SessionDetail({
                     : <div className="artifact-preview-state">{copy.workspace.reviewWaiting}</div>}
               </section>
 
-              <section className="session-subpanel">
+              <section className="session-subpanel memory-subpanel">
                 <div className="artifact-section-head">
                   <div>
                     <strong>{copy.workspace.memoryCandidates}</strong>
@@ -271,14 +300,14 @@ export function SessionDetail({
                   : <div className="artifact-preview-state">{copy.workspace.noMemoryCandidates}</div>}
               </section>
 
-              <section className="session-subpanel">
-                <div className="artifact-section-head">
+              <details className="session-subpanel compact-details">
+                <summary className="artifact-section-head">
                   <div>
                     <strong>{copy.workspace.eventStream}</strong>
                     <small>{copy.workspace.eventCount(events.length)}</small>
                   </div>
                   <Terminal aria-hidden="true" size={14} />
-                </div>
+                </summary>
                 {recentEvents.length > 0
                   ? (
                       <div className="event-list">
@@ -291,7 +320,7 @@ export function SessionDetail({
                       </div>
                     )
                   : <div className="artifact-preview-state">{copy.workspace.noEvents}</div>}
-              </section>
+              </details>
             </>
           )
         : (

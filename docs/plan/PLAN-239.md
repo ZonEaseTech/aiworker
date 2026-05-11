@@ -1,7 +1,7 @@
 # PLAN-239 Worker list and creation dialog refinement
 
-- **status**: pending
-- **owner**: unassigned
+- **status**: completed
+- **owner**: local
 - **createdAt**: 2026-05-11 03:05
 - **relatedTask**: REFACTOR-061
 
@@ -64,4 +64,9 @@ Out of scope:
 
 ## Approval Gate
 
-Pending operator approval.
+Approved by operator on 2026-05-11.
+
+## Result
+
+Completed with compact worker list rows, create worker/workspace dialogs, and
+RTL coverage for dialog submit and navigation behavior.

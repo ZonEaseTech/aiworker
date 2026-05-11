@@ -1,8 +1,8 @@
 # REFACTOR-060 Worker Web visual token and control convergence
 
-- **status**: pending
+- **status**: completed
 - **priority**: P0
-- **owner**: unassigned
+- **owner**: local
 - **createdAt**: 2026-05-11 03:05
 - **plan**: PLAN-238
 - **relatesTo**: DESIGN.md, apps/web/src/worker/studio.css, apps/web/src/worker/worker-studio.tsx
@@ -38,3 +38,12 @@ existing worker-first interaction model.
 - `bun run --filter '@zonease/aiworker-web' build`
 - Browser visual smoke on desktop and mobile.
 - code-review-graph review after code edits.
+
+## Closeout
+
+- Worker Web tokens now use the `DESIGN.md` black / white / neutral palette and
+  terminal status colors.
+- `input`, `select`, and `textarea` share pill-first control styling, focus
+  states, disabled behavior, and placeholder treatment.
+- Gradients and decorative shadows were removed from the touched Worker Web
+  surfaces; CSS build quality check passed.

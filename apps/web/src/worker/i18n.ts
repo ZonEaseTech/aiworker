@@ -9,7 +9,10 @@ interface StaticMessages {
   accessibility: {
     artifactSettings: string
     businessArtifactPreview: string
+    closeDialog: string
     closeSettings: string
+    collapseSessionDetail: string
+    expandSessionDetail: string
     gridView: string
     languageSwitcher: string
     listView: string
@@ -270,7 +273,10 @@ const en = {
   accessibility: {
     artifactSettings: 'Open artifact settings',
     businessArtifactPreview: 'Business artifact preview',
+    closeDialog: 'Close dialog',
     closeSettings: 'Close settings',
+    collapseSessionDetail: 'Collapse session detail',
+    expandSessionDetail: 'Expand session detail',
     gridView: 'Grid view',
     languageSwitcher: 'Workspace language',
     listView: 'List view',
@@ -541,7 +547,10 @@ const zhCN = {
   accessibility: {
     artifactSettings: '打开产物设置',
     businessArtifactPreview: '业务产物预览',
+    closeDialog: '关闭对话框',
     closeSettings: '关闭设置',
+    collapseSessionDetail: '收起会话详情',
+    expandSessionDetail: '展开会话详情',
     gridView: '网格视图',
     languageSwitcher: '工作区语言',
     listView: '列表视图',
@@ -807,7 +816,10 @@ const ja = {
   accessibility: {
     artifactSettings: '成果物設定を開く',
     businessArtifactPreview: '業務成果物プレビュー',
+    closeDialog: 'ダイアログを閉じる',
     closeSettings: '設定を閉じる',
+    collapseSessionDetail: 'セッション詳細を折りたたむ',
+    expandSessionDetail: 'セッション詳細を展開',
     gridView: 'グリッド表示',
     languageSwitcher: 'ワークスペースの言語',
     listView: 'リスト表示',
@@ -1073,7 +1085,10 @@ const de = {
   accessibility: {
     artifactSettings: 'Artefakteinstellungen öffnen',
     businessArtifactPreview: 'Vorschau des Geschäftsartefakts',
+    closeDialog: 'Dialog schließen',
     closeSettings: 'Einstellungen schließen',
+    collapseSessionDetail: 'Sessiondetails einklappen',
+    expandSessionDetail: 'Sessiondetails ausklappen',
     gridView: 'Rasteransicht',
     languageSwitcher: 'Sprache des Workspace',
     listView: 'Listenansicht',

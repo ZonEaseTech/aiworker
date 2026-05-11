@@ -1,7 +1,7 @@
 # PLAN-240 Session composer and right drawer refinement
 
-- **status**: pending
-- **owner**: unassigned
+- **status**: completed
+- **owner**: local
 - **createdAt**: 2026-05-11 03:05
 - **relatedTask**: REFACTOR-062
 
@@ -94,4 +94,9 @@ Out of scope:
 
 ## Approval Gate
 
-Pending operator approval.
+Approved by operator on 2026-05-11.
+
+## Result
+
+Completed with session-keyed chat state, isolated chat log scrolling,
+jump-to-latest behavior, and collapsible right-side session detail.

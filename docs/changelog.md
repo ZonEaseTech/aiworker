@@ -1,5 +1,37 @@
 # AIWorker Changelog
 
+## 2026-05-11 09:00 [completed] REFACTOR-060..062 / PLAN-238..241 / QA-032 — Worker Web visual polish
+
+- Converged Worker Web styling toward `DESIGN.md`: black / white / neutral
+  tokens, pill-first controls, unified `input` / `select` / `textarea` states,
+  no gradients, and no decorative shadows on the touched surfaces.
+- Reworked worker navigation into compact list rows and moved create worker /
+  create workspace flows behind accessible icon-button dialogs.
+- Reworked the session surface with a dedicated chat scroll island,
+  session-scoped follow-up draft state, pinned-bottom auto-follow, and
+  jump-to-latest behavior.
+- Added a collapsible right-side session detail drawer, with artifact/review
+  kept high-signal and event/history detail de-emphasized behind compact
+  sections.
+- Added/updated Worker Web RTL coverage for create dialogs, session drawer
+  collapse/restore, and chat jump-to-latest behavior.
+- Playwright smoke on `http://127.0.0.1:9331/` covered create worker, create
+  workspace, create session, session detail collapse/restore, and 390px mobile
+  overflow validation. The in-app Browser target was blocked by
+  `ERR_BLOCKED_BY_CLIENT`, so Playwright CLI was used as the browser evidence.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `git diff --check`
+  - `bun run crg:update`
+  - `bun run crg:review`
+- code-review-graph result: 22 changed functions/classes, 0 affected flows,
+  15 reported test gaps, risk score `0.55`; remaining gaps are direct
+  component-level UI entities already covered by focused RTL tests and browser
+  smoke evidence.
+
 ## 2026-05-11 01:37 [completed] REFACTOR-056..059 / PLAN-233..236 / QA-031 — Worker-first product entry
 
 - Investigated the current Soul-first Web shape against the intended

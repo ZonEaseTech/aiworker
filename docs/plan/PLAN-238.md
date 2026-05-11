@@ -1,7 +1,7 @@
 # PLAN-238 Worker Web design token and control convergence
 
-- **status**: pending
-- **owner**: unassigned
+- **status**: completed
+- **owner**: local
 - **createdAt**: 2026-05-11 03:05
 - **relatedTask**: REFACTOR-060
 
@@ -73,4 +73,9 @@ Out of scope:
 
 ## Approval Gate
 
-Pending operator approval.
+Approved by operator on 2026-05-11.
+
+## Result
+
+Completed with Worker Web CSS token convergence, unified form-control styling,
+and final Web build CSS quality verification.
