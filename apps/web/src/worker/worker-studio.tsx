@@ -9,7 +9,6 @@ import type {
   LocalSessionEvent,
   LocalSettingsConfig,
   LocalTurn,
-  LocalWorker,
   LocalWorkspace,
   VerticalSoul,
 } from '@zonease/aiworker-shared'
@@ -18,7 +17,7 @@ import type { LocalWorkspaceData } from '../features/local-workspace/api'
 import type { SettingsSection } from '../features/settings'
 import type { ArtifactPreviewState, EngineReadiness } from './session-detail'
 
-import { CreationDialog, StudioMainFrame, StudioSelect, WorkerStudioLayout } from '@zonease/aiworker-component'
+import { StudioMainFrame, StudioSelect, WorkerStudioLayout } from '@zonease/aiworker-component'
 import {
   ArrowLeft,
   Check,
@@ -43,6 +42,7 @@ import {
   normalizeLocale,
 } from '../features/i18n'
 import { continueSessionTurnStream, createReview, createSessionTurnStream, createWorker, createWorkspace, loadLocalWorkspaceData, readFile, updateLesson } from '../features/local-workspace/api'
+import { CreateWorkerDialog, CreateWorkspaceDialog, ProjectCard, WorkerIdentityBlock } from '../features/local-workspace/components'
 import { SettingsDialog } from '../features/settings'
 import { WorkerSessionChat } from './session-chat'
 import { SessionDetail } from './session-detail'
@@ -1065,211 +1065,6 @@ function StudioBrand({ copy }: { copy: WorkerMessages }) {
         <div className="entry-brand-subtitle">{copy.app.subtitle}</div>
       </div>
     </div>
-  )
-}
-
-function CreateWorkerDialog({
-  availableSouls,
-  copy,
-  locale,
-  onClose,
-  onNameChange,
-  onSoulChange,
-  onSubmit,
-  open,
-  selectedSoulId,
-  workerName,
-}: {
-  availableSouls: VerticalSoul[]
-  copy: WorkerMessages
-  locale: ReturnType<typeof normalizeLocale>
-  onClose: () => void
-  onNameChange: (value: string) => void
-  onSoulChange: (value: string) => void
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void
-  open: boolean
-  selectedSoulId: string
-  workerName: string
-}) {
-  return (
-    <CreationDialog
-      description={copy.workspace.createWorkerHint}
-      open={open}
-      title={copy.workspace.createWorker}
-      titleId="create-worker-dialog-title"
-      closeLabel={copy.accessibility.closeDialog}
-      onClose={onClose}
-    >
-      <form className="dialog-form" onSubmit={onSubmit}>
-        <div className="settings-field">
-          <span>{copy.create.soul}</span>
-          <StudioSelect
-            ariaLabel={copy.create.soul}
-            label={copy.create.soul}
-            options={availableSouls.map((soul) => {
-              const soulCopy = displaySoul(soul, locale)
-              return {
-                description: soulCopy.domain,
-                label: soulCopy.name,
-                value: soul.id,
-              }
-            })}
-            value={selectedSoulId}
-            onChange={onSoulChange}
-          />
-        </div>
-        <label className="settings-field">
-          <span>{copy.workspace.workerName}</span>
-          <input
-            className="newproj-name"
-            aria-label={copy.workspace.workerName}
-            placeholder={copy.workspace.workerName}
-            value={workerName}
-            onChange={event => onNameChange(event.target.value)}
-          />
-        </label>
-        <div className="dialog-actions">
-          <button type="button" className="ghost" onClick={onClose}>{copy.accessibility.closeDialog}</button>
-          <button className="primary" type="submit" disabled={!workerName.trim() || availableSouls.length === 0}>
-            <Plus aria-hidden="true" size={13} />
-            <span>{copy.workspace.createWorker}</span>
-          </button>
-        </div>
-      </form>
-    </CreationDialog>
-  )
-}
-
-function CreateWorkspaceDialog({
-  copy,
-  onClose,
-  onSubmit,
-  onTitleChange,
-  open,
-  placeholder,
-  workerLabel,
-  submitting,
-  workspaceTitle,
-}: {
-  copy: WorkerMessages
-  onClose: () => void
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void
-  onTitleChange: (value: string) => void
-  open: boolean
-  placeholder: string
-  workerLabel: string
-  submitting: boolean
-  workspaceTitle: string
-}) {
-  return (
-    <CreationDialog
-      description={copy.workspace.createWorkspaceHint}
-      open={open}
-      title={copy.workspace.createWorkspace}
-      titleId="create-workspace-dialog-title"
-      closeLabel={copy.accessibility.closeDialog}
-      onClose={onClose}
-    >
-      <form className="dialog-form" onSubmit={onSubmit}>
-        <label className="settings-field">
-          <span>{copy.workspace.currentWorker}</span>
-          <input readOnly value={workerLabel} />
-        </label>
-        <label className="settings-field">
-          <span>{copy.create.projectName}</span>
-          <input
-            className="newproj-name"
-            aria-label={copy.create.projectName}
-            data-testid="new-project-name"
-            placeholder={placeholder}
-            value={workspaceTitle}
-            onChange={event => onTitleChange(event.target.value)}
-          />
-        </label>
-        <div className="dialog-actions">
-          <button type="button" className="ghost" onClick={onClose}>{copy.accessibility.closeDialog}</button>
-          <button className="primary" data-testid="create-project" type="submit" disabled={!workspaceTitle.trim() || submitting}>
-            <Plus aria-hidden="true" size={13} />
-            <span>{copy.workspace.createWorkspace}</span>
-          </button>
-        </div>
-      </form>
-    </CreationDialog>
-  )
-}
-
-function WorkerIdentityBlock({
-  compact = false,
-  copy,
-  locale,
-  soul,
-  soulCopy,
-  worker,
-}: {
-  compact?: boolean
-  copy: WorkerMessages
-  locale: ReturnType<typeof normalizeLocale>
-  soul: VerticalSoul
-  soulCopy: ReturnType<typeof displaySoul>
-  worker: LocalWorker | null
-}) {
-  return (
-    <div className={`worker-identity ${compact ? 'compact' : ''}`}>
-      <div className="worker-identity-head">
-        <span className="kicker">{copy.workspace.currentWorker}</span>
-        <strong>{worker?.name ?? copy.workspace.noWorker}</strong>
-      </div>
-      <div className="worker-identity-grid">
-        <span>{copy.workspace.workerId}</span>
-        <strong>{worker?.id ?? '-'}</strong>
-        <span>{copy.workspace.workerStatus}</span>
-        <strong>{worker ? formatStatus(worker.status, locale) : copy.workspace.noWorker}</strong>
-        <span>{copy.workspace.workerEngine}</span>
-        <strong>{worker?.defaultEngineId ?? '-'}</strong>
-        <span>{copy.workspace.workerSoul}</span>
-        <strong>{`${soulCopy.name} / ${soul.id}`}</strong>
-      </div>
-    </div>
-  )
-}
-
-function ProjectCard({
-  active,
-  artifact,
-  item,
-  locale,
-  onSelect,
-  session,
-  template,
-  turn,
-}: {
-  active: boolean
-  artifact: LocalArtifact | null
-  item: LocalWorkspace
-  locale: ReturnType<typeof normalizeLocale>
-  onSelect: () => void
-  session: LocalSession | null
-  template?: CapabilityTemplate
-  turn: LocalTurn | null
-}) {
-  const copy = messagesFor(locale)
-  const templateCopy = template ? displayTemplate(template, locale) : null
-  const artifactLabel = artifact ? templateCopy?.outputKind ?? artifact.kind : copy.artifact.pending
-  return (
-    <button type="button" className={`design-card ${active ? 'active' : ''}`} onClick={onSelect}>
-      <div className="design-card-thumb" aria-hidden="true">
-        <FileText size={22} />
-      </div>
-      <div className="design-card-meta-block">
-        <div className="design-card-name" title={item.name}>{item.name}</div>
-        <div className="design-card-meta">
-          <span className="ds">{templateCopy?.name ?? session?.capabilityTemplateId ?? copy.common.workspace}</span>
-          {` · ${artifactLabel} · `}
-          <span className="design-card-status design-card-status-succeeded">{formatStatus(turn?.status ?? session?.status ?? item.status, locale)}</span>
-          {` · ${formatRelativeTime(item.updatedAt, locale)}`}
-        </div>
-      </div>
-    </button>
   )
 }
 
