@@ -1,5 +1,13 @@
 # AIWorker Changelog
 
+## 2026-05-11 20:23 [completed] BUG-104 / PLAN-262 — Settings engine icon assets
+
+- 拉取 engine 专属 SVG icon 到 Worker Web 静态资产。
+- Settings engine card 改为按 engine id 渲染专属 icon。
+- 补充 WorkerStudio 测试覆盖 icon 映射和渲染路径。
+- Verification passed: focused Web typecheck/lint/test/build, `bun run check`, `git diff --check`,
+  browser verification on 9217, and code-review-graph review.
+
 ## 2026-05-11 20:12 [completed] BUG-103 / PLAN-261 — Settings 引擎操作按钮统一
 
 - 将 settings 中“测试 / 重新扫描”从 icon-only button 收敛为统一的小号 action button。

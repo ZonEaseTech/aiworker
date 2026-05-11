@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { engineIconSrc } from '../../features/settings/model'
 import { WorkerStudio } from '../worker-studio'
 
 const now = '2026-05-10T00:00:00.000Z'
@@ -685,6 +686,9 @@ describe('worker studio', () => {
     expect(screen.getByRole('dialog', { name: 'Configure Soul workspace' })).toBeTruthy()
     expect(screen.getByText('Local CLI / BYOK')).toBeTruthy()
     expect(screen.queryByText('All changes saved')).toBeNull()
+    const codexIcon = document.querySelector('[data-engine-icon="codex"] .agent-icon-shape') as HTMLElement
+    expect(codexIcon).toBeTruthy()
+    expect(codexIcon.getAttribute('style')).toContain('/engine-icons/openai.svg')
     const testButton = screen.getByRole('button', { name: 'Test' })
     const rescanButton = screen.getByRole('button', { name: 'Rescan' })
     expect(testButton.classList.contains('settings-action-button')).toBe(true)
@@ -705,6 +709,16 @@ describe('worker studio', () => {
     expect(screen.getByRole('dialog', { name: '配置 Soul 工作区' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '创建工作区' })).toBeTruthy()
     expect(screen.queryByText('Create workspace session')).toBeNull()
+  })
+
+  it('maps each local engine to its own icon asset', () => {
+    expect(engineIconSrc('codex')).toBe('/engine-icons/openai.svg')
+    expect(engineIconSrc('claude-code')).toBe('/engine-icons/claude.svg')
+    expect(engineIconSrc('cursor')).toBe('/engine-icons/cursor.svg')
+    expect(engineIconSrc('gemini')).toBe('/engine-icons/gemini.svg')
+    expect(engineIconSrc('opencode')).toBe('/engine-icons/opencode.svg')
+    expect(engineIconSrc('qwen')).toBe('/engine-icons/qwen.svg')
+    expect(engineIconSrc('hermes')).toBe('/engine-icons/hermesagent.svg')
   })
 
   it('falls back to English for unknown persisted language values', async () => {

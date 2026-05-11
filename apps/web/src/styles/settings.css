@@ -370,15 +370,37 @@ button.settings-action-button svg {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
+  border: 1px solid var(--border);
   border-radius: 12px;
-  color: var(--agent-icon-text);
+  background: var(--bg-subtle);
+  color: var(--text);
 }
 
-.agent-icon-coral { background: var(--accent); }
-.agent-icon-dark { background: var(--agent-icon-dark-bg); }
-.agent-icon-green { background: var(--agent-icon-green-bg); }
-.agent-icon-violet { background: var(--agent-icon-violet-bg); }
-.agent-icon-gray { background: var(--agent-icon-gray-bg); }
+.agent-card.active .agent-icon-ready {
+  border-color: var(--border-strong);
+  background: var(--bg-panel);
+  color: var(--text-strong);
+}
+
+.agent-icon-muted {
+  background: var(--agent-icon-gray-bg);
+  color: var(--text-faint);
+}
+
+.agent-icon-shape {
+  width: 24px;
+  height: 24px;
+  background: currentColor;
+  mask-image: var(--engine-icon-url);
+  mask-position: center;
+  mask-repeat: no-repeat;
+  mask-size: contain;
+  -webkit-mask-image: var(--engine-icon-url);
+  -webkit-mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+}
 
 .status-dot {
   width: 8px;

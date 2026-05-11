@@ -6,6 +6,7 @@ import { Check, Gauge, Languages, Link, Moon, RefreshCw, Settings, ShieldCheck, 
 import { useEffect, useState } from 'react'
 import { displaySoul, formatRelativeTime, languageLabel, messagesFor, normalizeLocale, supportedLocales } from '../../i18n'
 import { rescanEngines, saveSettings, testEngine } from '../../local-workspace/api'
+import { engineIconSrc } from '../model'
 
 export type SettingsSection = 'execution' | 'soul-packs' | 'connectors' | 'mcp' | 'external-mcp' | 'language' | 'appearance' | 'about'
 type AutosaveState = 'idle' | 'saving' | 'saved' | 'failed'
@@ -287,10 +288,13 @@ function ExecutionSettings({
 }
 
 function EngineCard({ active, copy, engine, onSelect }: { active: boolean, copy: ReturnType<typeof messagesFor>, engine: LocalEngineStatus, onSelect: () => void }) {
+  const iconSrc = engineIconSrc(engine.id)
   return (
     <ActionCard active={active} className={`agent-card${engine.installed ? '' : ' disabled'}`} disabled={!engine.installed} aria-pressed={active} onClick={onSelect}>
-      <span className={`agent-icon ${engine.installed ? 'agent-icon-dark' : 'agent-icon-gray'}`} aria-hidden="true">
-        {engine.installed ? <Sparkles size={24} /> : <span />}
+      <span className={`agent-icon ${engine.installed ? 'agent-icon-ready' : 'agent-icon-muted'}`} data-engine-icon={engine.id} aria-hidden="true">
+        {iconSrc
+          ? <span className="agent-icon-shape" style={{ '--engine-icon-url': `url(${iconSrc})` } as CSSProperties} />
+          : <Sparkles size={24} />}
       </span>
       <span className="agent-card-body">
         <span className="agent-card-name">{engine.name}</span>

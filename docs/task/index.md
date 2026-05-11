@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-11 (Worker Web icon button size convergence completed)
+> Updated: 2026-05-11 (Settings engine icon assets completed)
 
 ## Usage
 
@@ -365,3 +365,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-101 工作区会话头部缺少新建会话动作**](BUG-101.md) `P0`
 - [x] [**BUG-102 工作区侧栏存在多余返回 worker 动作**](BUG-102.md) `P0`
 - [x] [**BUG-103 Settings 引擎操作按钮样式不统一**](BUG-103.md) `P0`
+- [x] [**BUG-104 Settings 引擎卡片缺少专属 icon**](BUG-104.md) `P0`
