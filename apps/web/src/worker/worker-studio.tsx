@@ -15,7 +15,7 @@ import type {
   VerticalSoul,
 } from '@zonease/aiworker-shared'
 import type { CSSProperties, FormEvent, ReactNode } from 'react'
-import type { LocalWorkspaceData } from './api'
+import type { LocalWorkspaceData } from '../features/local-workspace/api'
 import type { ArtifactPreviewState, EngineReadiness } from './session-detail'
 
 import { CreationDialog, StudioMainFrame, StudioSelect, WorkerStudioLayout } from '@zonease/aiworker-component'
@@ -39,7 +39,7 @@ import {
   X,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useReducer, useState, useSyncExternalStore } from 'react'
-import { continueSessionTurnStream, createReview, createSessionTurnStream, createWorker, createWorkspace, loadLocalWorkspaceData, readFile, rescanEngines, saveSettings, testEngine, updateLesson } from './api'
+import { continueSessionTurnStream, createReview, createSessionTurnStream, createWorker, createWorkspace, loadLocalWorkspaceData, readFile, rescanEngines, saveSettings, testEngine, updateLesson } from '../features/local-workspace/api'
 import {
   displaySoul,
   displayTemplate,
