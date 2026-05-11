@@ -36,7 +36,7 @@ import {
   normalizeLocale,
 } from '../features/i18n'
 import { continueSessionTurnStream, createReview, createSessionTurnStream, createWorker, createWorkspace, loadLocalWorkspaceData, readFile, updateLesson } from '../features/local-workspace/api'
-import { CreateWorkerDialog, CreateWorkspaceDialog, ProjectCard, WorkerIdentityBlock } from '../features/local-workspace/components'
+import { CreateWorkerDialog, CreateWorkspaceDialog, WorkerIdentityBlock, WorkspaceCard } from '../features/local-workspace/components'
 import {
   artifactForSession,
   artifactForWorkspace,
@@ -1007,10 +1007,10 @@ export function WorkerStudio() {
                         </div>
                       </div>
 
-                      <div className="design-grid design-grid-list workspace-list">
+                      <div className="design-grid workspace-grid workspace-list">
                         {filteredProjects.length > 0
                           ? filteredProjects.map(item => (
-                              <ProjectCard
+                              <WorkspaceCard
                                 key={item.id}
                                 active={selectedWorkspace?.id === item.id}
                                 artifact={artifactForWorkspace(item, data.artifacts, allSessions)}

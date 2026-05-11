@@ -176,7 +176,3 @@
   text-align: center;
   font-size: 12px;
 }
-
-.workspace-list.design-grid-list {
-  grid-template-columns: 1fr;
-}

@@ -1,5 +1,31 @@
 # AIWorker Changelog
 
+## 2026-05-11 16:59 [completed] BUG-096 / PLAN-254 — Worker workspace card grid layout
+
+- Replaced the single-column `design-grid-list` workspace surface with a
+  responsive `workspace-grid` card layout.
+- Renamed the local card component from `ProjectCard` to `WorkspaceCard` to
+  match worker-managed workspace semantics.
+- Added a WorkerStudio regression check that card view uses `workspace-grid`
+  and does not reintroduce `design-grid-list`.
+- No list-view toggle was introduced; future list mode should use a dedicated
+  `WorkspaceListItem` surface instead of compressing cards.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `bun run check`
+  - `git diff --check`
+  - Browser verification on `http://127.0.0.1:9217/worker/`
+  - `bun run crg:update`
+  - `bun run crg:review`
+- Browser result: at 1800x1000, `.workspace-list` has classes
+  `design-grid workspace-grid workspace-list` and computes four 340.5px grid
+  columns.
+- code-review-graph result: risk score `0.40`, 0 affected flows; reported gaps
+  are covered by WorkerStudio RTL, Web build, and browser verification.
+
 ## 2026-05-11 16:42 [completed] BUG-095 / PLAN-253 — Worker Web full-width route shell
 
 - Removed the non-session route width cap and auto margins that made

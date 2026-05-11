@@ -5,7 +5,7 @@ import { ActionCard } from '@zonease/aiworker-component'
 import { FileText } from 'lucide-react'
 import { displayTemplate, formatRelativeTime, formatStatus, messagesFor } from '../../i18n'
 
-export function ProjectCard({
+export function WorkspaceCard({
   active,
   artifact,
   item,

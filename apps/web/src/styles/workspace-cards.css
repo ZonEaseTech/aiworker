@@ -96,8 +96,13 @@
   gap: 14px;
 }
 
-.design-grid-list {
-  grid-template-columns: minmax(220px, 520px);
+.workspace-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+  align-items: stretch;
+}
+
+.workspace-grid > .empty-design-state {
+  grid-column: 1 / -1;
 }
 
 .design-card {
@@ -220,4 +225,3 @@
 .workspace-route-empty {
   min-height: 240px;
 }
-
