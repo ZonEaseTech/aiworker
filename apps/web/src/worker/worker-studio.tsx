@@ -879,12 +879,8 @@ export function WorkerStudio() {
                                           >
                                             <span className="worker-list-item-main">
                                               <strong>{worker.name}</strong>
-                                              <span className={`status-dot ${worker.status === 'active' ? 'active' : ''}`} aria-hidden="true" />
                                             </span>
-                                            <span className="worker-list-item-meta">
-                                              <small>{group.name}</small>
-                                              <span>{formatStatus(worker.status, activeLocale)}</span>
-                                            </span>
+                                            <span className={`status-dot ${worker.status === 'active' ? 'active' : ''}`} aria-hidden="true" />
                                           </button>
                                         )
                                       })}

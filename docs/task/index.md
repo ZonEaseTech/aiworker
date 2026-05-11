@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-12 (Worker list Soul grouping)
+> Updated: 2026-05-12 (Worker item trailing status dot)
 
 ## Usage
 
@@ -373,3 +373,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-109 Add actions should use plus icon buttons**](BUG-109.md) `P0`
 - [x] [**BUG-110 Count badges should be title text**](BUG-110.md) `P0`
 - [x] [**BUG-111 Worker list should be grouped by Soul**](BUG-111.md) `P0`
+- [x] [**BUG-112 Worker list item status should be trailing-only**](BUG-112.md) `P0`

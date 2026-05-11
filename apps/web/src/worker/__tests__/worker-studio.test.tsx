@@ -461,27 +461,37 @@ describe('worker studio', () => {
     const visibleOptionTexts = () => screen.getAllByRole('option').map(option => option.textContent ?? '')
 
     expect(pmGroupToggle.getAttribute('aria-expanded')).toBe('true')
-    expect(visibleOptionTexts().some(text => text.includes('PM') && text.includes('Active'))).toBe(true)
+    expect(visibleOptionTexts().includes('PM')).toBe(true)
 
     fireEvent.click(pmGroupToggle)
 
     expect(pmGroupToggle.getAttribute('aria-expanded')).toBe('false')
-    expect(visibleOptionTexts().some(text => text.includes('PM') && text.includes('Active'))).toBe(false)
+    expect(visibleOptionTexts().includes('PM')).toBe(false)
 
     fireEvent.click(pmGroupToggle)
 
     expect(pmGroupToggle.getAttribute('aria-expanded')).toBe('true')
-    expect(visibleOptionTexts().some(text => text.includes('PM') && text.includes('Active'))).toBe(true)
+    expect(visibleOptionTexts().includes('PM')).toBe(true)
+  })
+
+  it('keeps worker status as a trailing dot without duplicated item labels', async () => {
+    render(<WorkerStudio />)
+
+    await screen.findByText('hr-worker')
+    const hrWorkerOption = screen.getByRole('option', { name: 'HR' })
+
+    expect(hrWorkerOption.textContent?.trim()).toBe('HR')
+    expect(hrWorkerOption.querySelector('.worker-list-item-main + .status-dot')).toBeTruthy()
+    expect(hrWorkerOption.querySelector('.worker-list-item-meta')).toBeNull()
   })
 
   it('switches the Soul rail and updates capability templates with worker identity', async () => {
     render(<WorkerStudio />)
 
     await screen.findByText('hr-worker')
-    const pmWorkerOption = screen.getAllByRole('option', { name: /PM/ })
-      .find(option => option.textContent?.includes('Active'))
+    const pmWorkerOption = screen.getByRole('option', { name: 'PM' })
     expect(pmWorkerOption).toBeTruthy()
-    fireEvent.click(pmWorkerOption!)
+    fireEvent.click(pmWorkerOption)
 
     await waitFor(() => {
       expect(screen.getByText('pm-worker')).toBeTruthy()

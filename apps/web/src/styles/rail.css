@@ -206,12 +206,10 @@
   background: var(--accent-tint);
 }
 
-.worker-list-item-main,
-.worker-list-item-meta {
+.worker-list-item-main {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 7px;
 }
 
 .worker-list-item-main strong {
@@ -220,19 +218,6 @@
   color: var(--text);
   font-size: 14px;
   font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.worker-list-item-meta {
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-.worker-list-item-meta small,
-.worker-list-item-meta span {
-  max-width: 72px;
-  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

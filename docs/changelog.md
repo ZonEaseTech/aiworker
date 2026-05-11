@@ -1,5 +1,12 @@
 # AIWorker Changelog
 
+## 2026-05-12 02:07 [completed] BUG-112 / PLAN-270 — Worker item trailing status dot
+
+- 将 Worker list item 的状态点移动到尾随列。
+- 移除 item 内重复的 Soul 和状态文本 label，保留组头 Soul 信息。
+- Verification passed: focused Web typecheck/lint/WorkerStudio test/build, `bun run check`,
+  `git diff --check`, browser verification on 9217, and code-review-graph review.
+
 ## 2026-05-12 01:59 [completed] BUG-111 / PLAN-269 — Worker list Soul grouping
 
 - 将 Worker home 的 worker list 按 Soul 分组，组头使用 `Soul (N)` 文本。
