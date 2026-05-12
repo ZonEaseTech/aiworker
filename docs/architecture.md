@@ -1,8 +1,8 @@
 # AIWorker Architecture
 
 > 状态：这是当前 greenfield vertical Soul 架构合同。默认本地基础设施是
-> `1 host -> 1 local daemon -> N Soul workers`；远程 fleet/gateway 仍为后续可选聚合层，
-> 不牵引本地产品首屏。
+> `1 host -> 1 local daemon -> N Soul Apps / Soul workers`；默认产品路径不再由历史
+> 远程控制面或外部产品映射牵引。
 
 AIWorker 现在按一条垂直业务工作流组织：
 
@@ -18,14 +18,14 @@ host
   -> durable org memory
 ```
 
-Open Design 的参考价值在于它的项目意图：用清晰的 skill/system/template/project
-结构，让用户快速开始并得到 artifact。AIWorker 不复制图片/视频领域和桌面壳，而是把
-这套产品语言用于 HR、PM、QA、DevOps、finance、legal、ops 等 team/org Soul。
+AIWorker 当前产品语法以 Host / Soul App 双自治为中心。Host 负责运行、隔离、记录和
+审查；Soul App 负责垂直领域产品逻辑、UI/API、artifact schema、connector needs 和
+review policy。
 
 ## 架构原则
 
 - Vertical Soul first：默认入口先解释 Soul、domain system、capability template，
-  不是 developer repo、admin dashboard 或 fleet。
+  不是 developer repo、admin dashboard 或远程控制面。
 - One daemon, many workers：一台 host 默认一个 local daemon；daemon 管理多个
   Soul-bound workers。worker 才是 Soul runtime，不是 host，也不是单个 project。
 - External engine owned：外部 engine 负责 tool loop、approval UX、sandbox、
@@ -52,6 +52,7 @@ Open Design 的参考价值在于它的项目意图：用清晰的 skill/system/
 | Local daemon | host-local 控制面；负责 Web/API、DB、migration、engine inventory、settings、worker registry |
 | Worker | 绑定一个 Soul 的业务 runtime；拥有 Soul identity、capabilities、memory namespace 和 review policy |
 | Soul | 面向用户的垂直角色，如 HR、PM、QA、DevOps、finance、legal、ops；只通过 worker 实例化 |
+| Soul App | 可独立部署、也可挂载到 Host 的垂直产品单元，例如 `aiworker-hr` 或 `aiworker-qa` |
 | Soul pack | Soul 的文件化定义和运行时投影 |
 | Domain system | worker 所属领域规范、rubric、policy、style、artifact expectation |
 | Capability template | Soul worker 可执行的能力模板，如 candidate screen、PRD、release gate、incident review |
@@ -79,31 +80,163 @@ CLI 和文档默认严格遵循该合同。
 成本；不能在实现中静默回退到 project-scope、case/run 产品对象、旧 worker runtime 或
 文件自嗨模型。
 
-## Open Design Concept Mapping
+## Soul App Topology
 
-Open Design 的有效参考是信息架构，而不是对象层级的逐字复制。
+Soul App 是 Soul 的可独立产品单位。它比 Soul pack 更重：pack 只承载文件化内容资产，
+Soul App 可以拥有自己的 domain UI、domain API、artifact schema、connector needs、
+storage namespace、review/memory policy 和 standalone shell。
 
-| Open Design | AIWorker | Notes |
-| --- | --- | --- |
-| Local daemon | Local daemon | 都是本机特权进程和 Web/API host |
-| Agent / Local CLI | Executor engine | AIWorker 只做薄 adapter，不拥有 engine 能力生态 |
-| API / BYOK mode | BYOK execution mode | 都是绕过本地 CLI 的 provider path |
-| Project | Workspace/project under one Soul worker | OD project 是主对象；AIWorker project 不是 worker |
-| Skill | Capability template | AIWorker capability 必须归属 Soul worker |
-| Design system | Domain system / rubric / policy | 只借“系统化约束”结构，不借视觉领域语义 |
-| Conversation | Session | workspace 下的多轮上下文线程，也是 engine 接管点 |
-| Chat turn | Turn | session 内的一次多轮交互或 artifact 更新 |
-| Run / chat run | Engine invocation | 内部审计/失败恢复记录，不是用户主对象 |
-| Artifact | Business artifact | AIWorker artifact 是业务输出，不是设计预览默认域 |
-| File workspace | Workspace evidence/artifact files | 文件和 evidence 留在 workspace 或 connector 系统 |
-| Templates | Workspace/template presets or capability seeds | 不能混同为 worker |
-| Import Claude Design | No default mapping | AIWorker 默认不提供 import 入口 |
-| Media providers | No default core mapping | 可借 Settings 交互，不成为核心产品面 |
-| MCP server | Daemon MCP / connector surface | 集成面，不是 Soul/worker 本体 |
+核心拓扑：
 
-OD 没有 `worker` 层，因为它默认是单一 design generation 域。AIWorker 的 worker 层是
-架构必需项：它隔离 Soul identity、domain system、capability catalog、review/admission
-policy 和 durable memory namespace。
+```mermaid
+flowchart TB
+  User["Operator / Team User"]
+
+  subgraph Host["AIWorker Host"]
+    Shell["Host Web Shell"]
+    Daemon["Local Daemon"]
+    Registry["Soul App Registry"]
+    Runtime["Workspace / Session / Turn Runtime"]
+    EngineBroker["Engine Broker"]
+    ConnectorBroker["Connector Broker"]
+    ArtifactSvc["Artifact / Review / Memory Service"]
+    HostDB["Host Metadata DB"]
+  end
+
+  subgraph HR["Soul App: aiworker-hr"]
+    HRManifest["Manifest"]
+    HRDomain["HR Domain Logic"]
+    HRUI["HR UI Contributions"]
+    HRAPI["HR API Surface"]
+    HRSchema["HR Artifact Schemas"]
+  end
+
+  subgraph QA["Soul App: aiworker-qa"]
+    QAManifest["Manifest"]
+    QADomain["QA Domain Logic"]
+    QAUI["QA UI Contributions"]
+    QAAPI["QA API Surface"]
+    QASchema["QA Artifact Schemas"]
+  end
+
+  subgraph External["External Systems"]
+    Engine["External Engine"]
+    ATS["ATS / HR System"]
+    CI["CI / Issue Tracker"]
+    Files["Workspace Files"]
+  end
+
+  User --> Shell
+  Shell --> Daemon
+  Daemon --> Registry
+  Registry --> HRManifest
+  Registry --> QAManifest
+  Daemon --> Runtime
+  Runtime --> EngineBroker --> Engine
+  Runtime --> ArtifactSvc --> HostDB
+  ArtifactSvc --> Files
+  Daemon --> ConnectorBroker
+  ConnectorBroker --> ATS
+  ConnectorBroker --> CI
+  Daemon <-->|"Soul App Protocol"| HRDomain
+  Daemon <-->|"Soul App Protocol"| QADomain
+  Shell <-->|"UI Slots / Routes"| HRUI
+  Shell <-->|"UI Slots / Routes"| QAUI
+```
+
+Standalone 拓扑：
+
+```mermaid
+flowchart LR
+  User["User"] --> App["aiworker-hr / aiworker-qa"]
+  App --> Core["Embedded AIWorker Core Runtime"]
+  App --> Domain["Soul App Domain UI / API / Policy"]
+  Core --> Engine["External Engine"]
+  Core --> Files["Workspace Files"]
+```
+
+Host mounted 拓扑：
+
+```mermaid
+flowchart LR
+  User["User"] --> Host["aiworker-host"]
+  Host --> Registry["Soul App Registry"]
+  Registry --> HR["aiworker-hr"]
+  Registry --> QA["aiworker-qa"]
+  Host --> Core["AIWorker Core Runtime"]
+  Core --> Engine["External Engine"]
+```
+
+两种模式必须复用同一个 manifest、domain logic、artifact schema、review policy 和
+protocol handlers。差异只在启动壳层：standalone 只展示某个垂直 app；Host mounted
+把多个 Soul Apps 挂载进统一 local daemon 和 Web Shell。
+
+### Upstream And Downstream Call Chain
+
+```mermaid
+sequenceDiagram
+  participant U as User
+  participant H as Host Shell
+  participant D as Host Daemon
+  participant A as Soul App
+  participant E as Engine
+  participant F as Workspace Files
+  participant R as Review/Memory
+
+  U->>H: choose Soul App / worker / workspace / capability
+  H->>D: create or resume session
+  D->>A: resolveCapability + prepareSessionContext
+  A-->>D: prompt stack, rubric, artifact schema, domain hints
+  U->>H: send task message
+  H->>D: session message
+  D->>E: invoke external engine with composed context
+  E-->>D: events / output / file changes
+  D->>F: write or index artifacts
+  D->>A: validateArtifact + extractMetadata
+  A-->>D: artifact metadata, preview hints, review criteria
+  D->>R: create review / memory candidate
+  H-->>U: show artifact, review, and next action
+```
+
+Soul App 参与 context、schema、preview 和 review；Host 保留 engine 调度、connector
+授权、artifact index、review/memory 主存和审计权。
+
+### Isolation Layers
+
+- Manifest isolation：Host discovery 只读取 manifest，不执行 app 代码。
+- Runtime isolation：Host 通过 Soul App Protocol 调用标准 handler；handler 只拿 scoped
+  context。
+- Storage isolation：Host DB 存通用 metadata；Soul App 领域数据必须位于自己的
+  namespace/migrations。
+- Connector isolation：Soul App 声明 connector needs；Host Connector Broker 拥有 auth、
+  secret、rate limit、redaction 和 audit。
+- UI isolation：Soul App 贡献 route、panel、preview 和 review widget；Host 控制 shell、
+  navigation、auth、settings 和当前 worker/workspace/session。
+- Engine isolation：Soul App 不能直接调用 executor；它只能提供 prompt/context/rubric/
+  schema，Host 负责 engine adapter 和 invocation audit。
+- Memory isolation：memory 默认写入 app/soul namespace；跨 Soul 共享必须经过显式
+  export/import 或 Host-level policy。
+
+### Soul App Protocol
+
+`soul-app/v1` 至少包含：
+
+- `SoulAppManifest`：app id、版本、兼容 host、capabilities、workspace types、artifact
+  types、UI/API 贡献、connector 权限和 storage namespace。
+- `LifecycleProtocol`：install、enable、disable、upgrade、healthcheck。
+- `RuntimeProtocol`：resolveCapability、prepareSessionContext、enrichTurnContext、
+  classifyIntent。
+- `ArtifactProtocol`：artifact schema、validateArtifact、renderPreview、extractMetadata。
+- `ReviewProtocol`：createReviewRubric、evaluateArtifact、proposeMemoryCandidate。
+- `EventProtocol`：onSessionCreated、onTurnCompleted、onArtifactCreated、
+  onReviewAccepted。
+- `ConnectorProtocol`：declareConnectorNeeds、requestScopedAccess、readEvidence through
+  broker。
+- `UIContributionProtocol`：routes、panels、artifact previews、workspace widgets、
+  review widgets。
+
+简化判断：Host 负责怎么运行、怎么隔离、怎么记录、怎么审查；Soul App 负责这个领域是
+什么、怎么工作、产物怎么算好。
 
 ## Object Invariants
 
@@ -352,7 +485,7 @@ daemon 负责：
 Runtime 只处理 worker-scoped workspace/session intake、prompt composition、engine
 session binding、turn dispatch、event stream、assistant-output 文件落盘、artifact
 index、review、memory proposal 和内部 invocation 审计。旧的通道、定时、审批、演化、
-远程 gateway client、可见 Brain 管理面不再属于默认本地 runtime。
+远程控制 client、可见 Brain 管理面不再属于默认本地 runtime。
 
 ### Storage
 
@@ -501,7 +634,7 @@ template runner local engine
 - settings：Local CLI / BYOK、engine scan/test、connector、MCP、language、
   appearance、autosave 配置。
 
-Worker Web 不再是 admin dashboard，也不是 Open Design 的桌面复制。它的第一任务是回答：
+Worker Web 不再是 admin dashboard，也不是任何历史参考产品的桌面复制。它的第一任务是回答：
 这个 team/org 要进入哪个 Soul worker，在哪个 workspace/session 中基于哪个 capability
 template 产出什么业务 artifact，是否值得沉淀为组织记忆。
 
@@ -550,14 +683,6 @@ Target contract:
   `bun run --filter '@zonease/aiworker-web' dev` commands may remain internal
   contributor escape hatches while the refactor is pending, but README and
   onboarding should not present them as the intended operator path.
-
-## Deferred Control Plane
-
-远程 worker 聚合、fleet presence、gateway routing、enrollment、remote audit 是后续阶段。
-本轮 local Soul deliverable 不依赖这些路径，也不通过它们解释产品价值。
-
-未来如果恢复聚合层，它只能聚合已经可用的 local Soul workspace state，不能重新把 local
-worker 拉回管理后台模型。
 
 ## Repository Map
 

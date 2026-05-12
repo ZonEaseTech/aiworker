@@ -1,9 +1,10 @@
 # PLAN-192 OD-style local worker reboot
 
-- **status**: implementing
+- **status**: superseded
 - **owner**: local
 - **createdAt**: 2026-05-09 16:31
 - **approvedAt**: 2026-05-09 16:36
+- **supersededAt**: 2026-05-12 21:20
 - **relatedTask**: REFACTOR-026
 
 ## Current State
@@ -187,3 +188,6 @@ Open Design 当前参照形态：
   runs/artifacts inspection 和默认 onboarding cleanup，不进入 npm release。
 - 2026-05-09 19:08：S7 完成；local worker 默认 CLI loop 已补齐
   runs/artifacts inspection，root help 与 CLI docs 已同步到 OD-style workbench path。
+- 2026-05-12 21:20：Superseded by FEAT-060..065 / PLAN-284..289. The current
+  product contract is Host / Soul App dual autonomy, not OD-style reboot,
+  fleet/gateway deferral, or external product concept mapping.

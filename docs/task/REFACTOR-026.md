@@ -1,10 +1,11 @@
 # REFACTOR-026 OD-style local worker reboot
 
-- **status**: in_progress
+- **status**: superseded
 - **priority**: P1
 - **owner**: local
 - **createdAt**: 2026-05-09 16:31
 - **claimedAt**: 2026-05-09 16:36
+- **supersededAt**: 2026-05-12 21:20
 - **plan**: PLAN-192
 - **relatesTo**: GOALS.md, docs/architecture.md, apps/cli, apps/api, apps/web, packages/core, packages/storage-sqlite, packages/shared
 
@@ -75,3 +76,10 @@ Open Design 的参照价值不在图片/视频领域本身，而在产品语法�
 ## 建议分期
 
 详见 PLAN-192。本轮已按用户授权进入 S0，先完成产品北极星、目标架构、README/CLI 文档的方向重置。
+
+## Superseded
+
+This reboot plan is no longer a current implementation constraint. The active
+architecture is Host / Soul App dual autonomy, tracked by FEAT-060..065 and
+PLAN-284..289. Historical Open Design mappings and fleet/gateway deferral notes
+must not guide new CLI, Web, API, or developer onboarding work.

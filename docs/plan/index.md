@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-12 (PLAN-283 completed)
+> Updated: 2026-05-12 (PLAN-290 completed)
 
 ## Usage
 
@@ -220,7 +220,7 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-189 Dogfood falsification and release readiness**](PLAN-189.md) `2026-05-09`
 - [x] [**PLAN-190 Case-driven Project Brain learning loop validation**](PLAN-190.md) `2026-05-09`
 - [x] [**PLAN-191 Case-driven Brain loop 0.12.1 release readiness**](PLAN-191.md) `2026-05-09`
-- [-] [**PLAN-192 OD-style local worker reboot**](PLAN-192.md) `2026-05-09`
+- [~] [**PLAN-192 OD-style local worker reboot**](PLAN-192.md) `2026-05-09`
 - [x] [**PLAN-193 Worker run contract compatibility layer**](PLAN-193.md) `2026-05-09`
 - [x] [**PLAN-194 Route CLI run through daemon run contract**](PLAN-194.md) `2026-05-09`
 - [x] [**PLAN-195 Worker artifact metadata index**](PLAN-195.md) `2026-05-09`
@@ -240,8 +240,8 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-209 Soul and Skill data model**](PLAN-209.md) `2026-05-10`
 - [x] [**PLAN-210 Settings full implementation**](PLAN-210.md) `2026-05-10`
 - [x] [**PLAN-211 End-to-end vertical Soul MVP validation**](PLAN-211.md) `2026-05-10`
-- [-] [**PLAN-212 OD-style vertical Soul workspace correction**](PLAN-212.md) `2026-05-10`
-- [-] [**PLAN-213 OD-style vertical Soul MVP correction validation**](PLAN-213.md) `2026-05-10`
+- [~] [**PLAN-212 OD-style vertical Soul workspace correction**](PLAN-212.md) `2026-05-10`
+- [~] [**PLAN-213 OD-style vertical Soul MVP correction validation**](PLAN-213.md) `2026-05-10`
 - [x] [**PLAN-214 Soul project semantics and init artifact purge**](PLAN-214.md) `2026-05-10`
 - [x] [**PLAN-215 Soul project MVP validation**](PLAN-215.md) `2026-05-10`
 - [x] [**PLAN-216 Production-grade Worker Web localization**](PLAN-216.md) `2026-05-10`
@@ -312,3 +312,10 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-281 HR People Workbench focus layout and artifact preview**](PLAN-281.md) `2026-05-12`
 - [x] [**PLAN-282 HR Profile Workspace three panel layout**](PLAN-282.md) `2026-05-12`
 - [x] [**PLAN-283 HR Profile Workbench panel controls polish**](PLAN-283.md) `2026-05-12`
+- [ ] [**PLAN-284 Soul App protocol and manifest contract**](PLAN-284.md) `2026-05-12`
+- [ ] [**PLAN-285 Host Soul App registry and mount runtime**](PLAN-285.md) `2026-05-12`
+- [ ] [**PLAN-286 Soul App standalone runtime and SDK**](PLAN-286.md) `2026-05-12`
+- [ ] [**PLAN-287 Soul App isolation brokers and permission boundary**](PLAN-287.md) `2026-05-12`
+- [ ] [**PLAN-288 HR and QA external Soul App reference extraction**](PLAN-288.md) `2026-05-12`
+- [ ] [**PLAN-289 Soul App developer onboarding and validation harness**](PLAN-289.md) `2026-05-12`
+- [x] [**PLAN-290 Remove legacy OD and control-plane guidance from current contracts**](PLAN-290.md) `2026-05-12`

@@ -1,8 +1,8 @@
 # AIWorker Goals
 
 > 状态：这是当前从零重构的产品北极星。默认 CLI/Web/daemon surface
-> 必须服务垂直业务 Soul，而不是复制 Open Design 的视觉外壳，也不是再做一个
-> developer engine。
+> 必须服务垂直业务 Soul App，而不是再做一个 developer engine、admin dashboard
+> 或通用 agent runtime。
 
 AIWorker 的重构目的不是把旧 worker/admin/dashboard 换皮，也不是与一线 coding
 engine、agent runtime 或创意生成工具竞争。AIWorker 要成为 **team/org 的垂直
@@ -10,16 +10,10 @@ Soul 工作台**：借助已经成熟的外部 engine，面向 HR、PM、QA、De
 legal、ops 等团队职能，提供可复用的 Soul、能力模板、领域系统、连接器、项目流和
 组织记忆。
 
-Open Design 的参考价值在于产品意图和信息架构，而不是图片/视频领域本身：
-
-```text
-Open Design: design skill -> design system -> template -> project/session -> artifact
-AIWorker:    host daemon -> Soul worker -> workspace/project -> session/turn -> business artifact
-```
-
-AIWorker 不做图片/视频设计，不做 coding engine，不做 executor 平台。它把 Open
-Design 已经验证过的“选能力、套系统、从模板开始、在项目中产出”的思路，迁移到组织
-垂直职能。
+AIWorker 不做图片/视频设计，不做 coding engine，不做 executor 平台。当前产品语法以
+Host / Soul App 双自治为中心：Host 提供本地 daemon、workspace/session runtime、
+engine handoff、artifact/review/memory 和隔离 broker；Soul App 提供垂直领域产品逻辑、
+UI/API、artifact schema、connector needs 和 review policy。
 
 ## 产品论点
 
@@ -44,32 +38,18 @@ host -> local daemon -> Soul worker -> workspace/project -> session
 -> turn -> business artifact -> human review -> reusable org memory
 ```
 
-## Open Design 映射
+## Soul App 产品语法
 
-AIWorker 应借鉴 Open Design 的产品语法，而不是盲目复制 UI。
+AIWorker 的默认产品对象不再从外部产品做映射，而是直接围绕 Host 与 Soul App：
 
-| Open Design | AIWorker |
-| --- | --- |
-| Designs home | Soul workspace home |
-| Local daemon | Host-local AIWorker daemon |
-| Project | Workspace/project under one Soul worker |
-| Conversation | Session under one workspace |
-| Chat turn | Turn under one session |
-| Run / chat run | Engine invocation / internal audit attempt |
-| Design skill | Capability template owned by a Soul worker |
-| Design system | Domain system / rubric / policy owned by a Soul worker |
-| Image/video template | Capability template / workspace template |
-| Examples | Example artifacts / playbooks |
-| Connectors | ATS / docs / issue tracker / CI / cloud / CRM connectors |
-| Settings | Execution mode, engine scan/test, connector, MCP, language, and appearance configuration |
-| Pet / companion | Optional ambient helper, never core workflow |
+```text
+host -> local daemon -> Soul App / Soul worker -> workspace/project
+-> session -> turn -> business artifact -> human review -> reusable org memory
+```
 
-OD 没有 `worker` 这一层，因为它的领域是单一 design generation。AIWorker 必须新增
-`worker = one Soul runtime` 作为隔离层；不能把 OD 的 `Project` 直接映射成 worker，
-也不能把 Soul 塞进 project metadata 作为长期模型。
-
-判断一个界面或 API 是否正确，不看它是否像 Open Design 截图，而看它是否让一个 HR、
-PM、QA 或 DevOps 用户能马上选 Soul、选模板、接入上下文并产出业务 artifact。
+判断一个界面或 API 是否正确，不看它是否像某个参考产品，而看它是否让一个 HR、PM、QA
+或 DevOps 用户能马上进入对应 Soul App，选择 workspace/session/capability，接入上下文
+并产出业务 artifact。
 
 ## Host / Daemon / Worker Contract
 
@@ -143,8 +123,7 @@ AIWorker 不能变成另一个 executor platform，也不能变成 coding-only �
 - 不把明文 executor secret 写入 worker config、project file 或 SQLite metadata；
 - 不把 developer 设为默认中心，不把 repo/PMA 作为产品主语；
 - 不在 runtime 里硬编码 HR、PM、QA、DevOps 等领域 workflow；
-- 不把 Open Design 的 desktop chrome、品牌、宠物、图片/视频文案照搬进 Web；
-- 不把 fleet/gateway 作为这次重构的默认第一体验。
+- 不把任何历史 admin/control-plane 入口作为默认第一体验。
 
 外部 engine 是 bring-your-own runtime。AIWorker 只在 session 层设置 cwd/context、组合
 Soul prompt stack、通过薄 adapter 调用或启动 engine native session、观察事件流并记录
@@ -191,9 +170,16 @@ Durable context 不应成为：
 稳定边界是：AIWorker 守 context 的质量和来源；领域语义判断交给 Soul prompt 和外部
 engine 基于 evidence 完成。
 
-## Soul Packs
+## Soul Apps And Packs
 
-Soul 是用户理解的产品单位；pack 是文件和运行时投影。
+Soul 是用户理解的产品单位。未来开发者协作时必须区分 Soul pack 和 Soul App：
+
+- **Soul pack** 是文件化内容资产，适合承载 prompt、domain system、capability template、
+  example、review rubric 和 executor hint；
+- **Soul App** 是可独立部署、也可挂载到 AIWorker Host 的垂直产品单元，例如
+  `aiworker-hr` 或 `aiworker-qa`。它可以包含 pack，并额外拥有 domain UI、domain API、
+  artifact schema、connector needs、storage namespace、review/memory policy 和
+  standalone shell。
 
 一个 Soul pack 可以包含：
 
@@ -206,15 +192,11 @@ Soul 是用户理解的产品单位；pack 是文件和运行时投影。
 
 Pack 以文件为先。daemon 负责加载和组合它们，runtime 不因新增领域继续长分支。
 
-## Fleet And Gateway
-
-Fleet 与 gateway 暂缓。
-
-它们以后可以作为 optional aggregation/control-plane 层回归，但必须等单个 Soul
-workspace 已经被证明可用。当前阶段它们不应牵引 API shape、CLI 默认入口、web
-navigation 或 README onboarding。
-
-如果一个变更需要 fleet/gateway 才能解释 AIWorker 的价值，这个变更就是过早的。
+Soul App 以协议为先。Host 先读取 manifest 做兼容性、权限和 contribution 校验，再通过
+Soul App Protocol 挂载 UI/API/capability/artifact/review 等贡献。Host 不 import
+垂直 app 的内部源码；垂直 app 也不直接控制 Host engine、connector、secret、DB 或全局
+memory。Standalone 与 Host mounted 两种模式必须复用同一份 manifest、domain logic、
+artifact schema 和 review policy。
 
 ## 决策测试
 
@@ -227,8 +209,8 @@ navigation 或 README onboarding。
 5. 真实业务 evidence 是否保留来源和边界，而不是隐藏进无来源 metadata？
 6. artifact 是否可见、可审查、可晋升为 memory？
 7. 同一机制是否能支持多个 Soul，而不需要 runtime 硬编码领域分支？
-8. fleet/gateway 是否对这条路径保持 optional？
-9. durable context 是否只在 review/admission 真正有价值的位置出现？
+8. durable context 是否只在 review/admission 真正有价值的位置出现？
+9. 它是否支持 Soul App 独立部署与 Host 挂载两种模式，而不让双方侵入彼此内部实现？
 
 任一答案是否定，都应先停下来简化方案。
 
@@ -261,5 +243,5 @@ artifact/review/memory`，engine 从 session 层开始接管，run 只允许作�
 11. developer Soul 降级为 supporting role；
 12. cleanup、验证与发布证据。
 
-验收终点不是把旧概念换名，也不是把 Open Design 外壳搬过来，而是得到一条垂直团队
-能理解、能使用、能验证、能沉淀的 Soul 工作流。
+验收终点不是把旧概念换名，也不是把历史参考外壳搬过来，而是得到一条垂直团队能理解、
+能使用、能验证、能沉淀的 Soul App 工作流。

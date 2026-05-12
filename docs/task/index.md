@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-12 (REFACTOR-075 completed)
+> Updated: 2026-05-12 (DOC-010 completed)
 
 ## Usage
 
@@ -297,7 +297,7 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**QA-024 Case-driven Brain loop validation evidence**](QA-024.md) `P1`
 - [x] [**REL-031 发布 aiworker CLI 0.12.1**](REL-031.md) `P1`
 - [x] [**QA-025 Case-driven Brain loop release validation**](QA-025.md) `P1`
-- [-] [**REFACTOR-026 OD-style local worker reboot**](REFACTOR-026.md) `P1`
+- [~] [**REFACTOR-026 OD-style local worker reboot**](REFACTOR-026.md) `P1`
 - [x] [**REFACTOR-027 Worker run contract compatibility layer**](REFACTOR-027.md) `P1`
 - [x] [**REFACTOR-028 Route CLI run through daemon run contract**](REFACTOR-028.md) `P1`
 - [x] [**REFACTOR-029 Add worker artifact metadata index**](REFACTOR-029.md) `P1`
@@ -317,8 +317,8 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REFACTOR-042 Soul and Skill data model**](REFACTOR-042.md) `P0`
 - [x] [**REFACTOR-043 Settings full implementation**](REFACTOR-043.md) `P0`
 - [x] [**QA-026 End-to-end vertical Soul MVP validation**](QA-026.md) `P0`
-- [-] [**REFACTOR-044 OD-style vertical Soul workspace correction**](REFACTOR-044.md) `P0`
-- [-] [**QA-027 OD-style vertical Soul MVP correction validation**](QA-027.md) `P0`
+- [~] [**REFACTOR-044 OD-style vertical Soul workspace correction**](REFACTOR-044.md) `P0`
+- [~] [**QA-027 OD-style vertical Soul MVP correction validation**](QA-027.md) `P0`
 - [x] [**REFACTOR-045 Soul project semantics and init artifact purge**](REFACTOR-045.md) `P0`
 - [x] [**QA-028 Soul project MVP validation**](QA-028.md) `P0`
 - [x] [**FEAT-059 Production-grade Worker Web localization**](FEAT-059.md) `P0`
@@ -387,3 +387,10 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REFACTOR-073 HR People Workbench focus layout and artifact preview**](REFACTOR-073.md) `P0`
 - [x] [**REFACTOR-074 HR Profile Workspace three panel layout**](REFACTOR-074.md) `P0`
 - [x] [**REFACTOR-075 HR Profile Workbench panel controls polish**](REFACTOR-075.md) `P0`
+- [ ] [**FEAT-060 Soul App protocol and manifest contract**](FEAT-060.md) `P0`
+- [ ] [**FEAT-061 Host Soul App registry and mount runtime**](FEAT-061.md) `P0`
+- [ ] [**FEAT-062 Soul App standalone runtime and SDK**](FEAT-062.md) `P0`
+- [ ] [**FEAT-063 Soul App isolation brokers and permission boundary**](FEAT-063.md) `P0`
+- [ ] [**FEAT-064 HR and QA external Soul App reference extraction**](FEAT-064.md) `P0`
+- [ ] [**FEAT-065 Soul App developer onboarding and validation harness**](FEAT-065.md) `P0`
+- [x] [**DOC-010 Remove legacy OD and control-plane guidance from current contracts**](DOC-010.md) `P0`

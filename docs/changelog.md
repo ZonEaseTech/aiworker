@@ -1,5 +1,30 @@
 # AIWorker Changelog
 
+## 2026-05-12 21:20 [completed] DOC-010 / PLAN-290 — Remove legacy OD and control-plane guidance from current contracts
+
+- Removed Open Design mapping tables and fleet/gateway deferral guidance from
+  current product entrypoints: `GOALS.md`, `docs/architecture.md`, `README.md`,
+  and `AGENTS.md`.
+- Reframed current guidance around Host / Soul App dual autonomy, standalone and
+  Host-mounted Soul Apps, and Soul App protocol boundaries.
+- Marked stale OD-style active PMA entries as superseded in task/plan indexes
+  and added explicit superseded notes to REFACTOR-026 / PLAN-192.
+- Identified stale Codex memory themes around OD/fleet/gateway, but did not
+  mutate memory because this checkpoint only had authorization for repository
+  cleanup.
+
+## 2026-05-12 21:00 [decision] FEAT-060..065 / PLAN-284..289 — Soul App / Host dual-autonomy architecture
+
+- Recorded Soul App as the next architecture unit above Soul pack: a vertical
+  product can run standalone and can be mounted into AIWorker Host through a
+  protocol boundary.
+- Added architecture topology, upstream/downstream call chain, isolation layers,
+  and key protocol surfaces for Host / Soul App interaction.
+- Planned six full PMA features for the rollout: manifest/protocol contract,
+  Host registry and mount runtime, standalone SDK/runtime, isolation brokers,
+  HR/QA reference app extraction, and developer onboarding/validation harness.
+- No runtime code changes in this checkpoint.
+
 ## 2026-05-12 20:42 [completed] REFACTOR-075 / PLAN-283 — HR Profile Workbench panel controls polish
 
 - Removed the visible Needs Attention smart section from HR Profile List, so the

@@ -2,10 +2,10 @@
 
 AIWorker 正在重构为面向 team/org 的 vertical Soul workspace。
 
-它不做另一个 developer engine，也不复制 Open Design 的图片/视频领域。它借鉴 Open
-Design 的产品语法：先选能力和系统，再基于模板进入项目上下文，最后产出可审查的
-artifact。AIWorker 把这套结构迁移到 HR、PM、QA、DevOps、finance、legal、ops 等
-组织职能。
+它不做另一个 developer engine、admin dashboard 或通用 agent runtime。当前架构以
+Host / Soul App 双自治为中心：Host 提供本地 daemon、workspace/session runtime、
+engine handoff、artifact/review/memory 和隔离 broker；Soul App 提供垂直领域产品逻辑、
+UI/API、artifact schema、connector needs 和 review policy。
 
 ```text
 host -> local daemon
@@ -32,29 +32,23 @@ AIWorker 的主要价值在更需要组织沉淀的垂直职能：
 - DevOps：deployment checklist、incident review、runbook update、capacity summary；
 - finance/legal/ops：各自领域的审查、模板化输出、证据链和复用经验。
 
-## Open Design 映射
+## Soul App 模型
 
-| Open Design | AIWorker |
-| --- | --- |
-| Local daemon | Host-local AIWorker daemon |
-| Project | Workspace/project under one Soul worker |
-| Conversation | Session under one workspace |
-| Chat turn | Turn under one session |
-| Run / chat run | Engine invocation / internal audit attempt |
-| Design skill | Capability template owned by a Soul worker |
-| Design system | Domain system / rubric / policy |
-| Image/video template | Capability template / workspace template |
-| Examples | Example artifacts / playbooks |
-| Connectors | ATS / docs / issue tracker / CI / cloud / CRM connectors |
-| Run stream | Session event stream |
-| Artifact preview | Business artifact preview |
-| Critique | Review / memory candidate |
+Soul App 是可独立部署、也可挂载到 AIWorker Host 的垂直产品单元。例如 `aiworker-hr`
+可以作为 HR-first 本地应用独立运行，也可以被 Host 挂载，与 `aiworker-qa` 等其他
+Soul App 共存在同一个 local daemon 中。
 
-截图只能校准感受，不能成为复制桌面壳、品牌、宠物或设计工具术语的理由。
+```text
+Standalone:
+aiworker-hr -> embedded AIWorker core runtime -> HR workspace/session/artifacts
 
-OD 没有 `worker` 这一层；AIWorker 必须有。AIWorker 的 worker 是一个 Soul-bound
-runtime，例如 HR worker、PM worker、QA worker 或 DevOps worker。OD 的 project 对应
-AIWorker worker 下的 workspace/project，而不是 worker 本身。
+Host mounted:
+aiworker-host -> Soul App registry -> aiworker-hr / aiworker-qa
+```
+
+两种模式应复用同一份 manifest、domain logic、artifact schema 和 review policy。
+Host 不 import 垂直 app 内部源码；Soul App 不直接控制 Host engine、connector、
+secret、DB 或全局 memory。
 
 ## 基础设施模型
 
@@ -148,7 +142,6 @@ apps/
   cli/       local Soul workspace CLI
   api/       local daemon API and web host
   web/       Worker Soul workspace web
-  gateway/   deferred fleet/gateway control plane
 packages/
   core/             local Soul session runtime and executor adapters
   storage-sqlite/   local SQLite metadata
@@ -199,6 +192,6 @@ bun run --filter '@zonease/aiworker-cli' build:bundle
 9. business artifact preview；
 10. review/admission -> durable org memory；
 11. developer Soul 降级为 supporting role；
-12. cleanup、验证与发布证据。
-
-fleet/gateway 和 desktop 暂缓，等单个 vertical Soul workspace 自身可用、可解释、可验证后再回到可选扩展层。
+12. Soul App protocol / Host mount / standalone SDK / isolation brokers；
+13. HR 与 QA reference Soul App；
+14. developer onboarding、验证与发布证据。

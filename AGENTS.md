@@ -15,10 +15,10 @@ local daemon -> Soul worker -> workspace -> session -> turn -> artifact -> revie
 
 - `GOALS.md`：产品北极星和取舍边界。
 - `docs/architecture.md`：当前对象模型与实现合同。
-- `docs/task/REFACTOR-026.md`、`docs/plan/PLAN-192.md`：OD-style local worker reboot 的实施背景和分期。
+- `docs/task/FEAT-060.md` 到 `docs/task/FEAT-065.md`、`docs/plan/PLAN-284.md` 到 `docs/plan/PLAN-289.md`：Soul App / Host 双自治架构、挂载协议、独立运行、隔离边界和开发者入口。
 - `docs/governance-node-status.md`：遇到旧治理术语时看这里；这些概念已经降级为历史实现或 run 后 review/lesson 机制。
 
-Open Design 只作为产品语法参考：skill、system、template、project/session、artifact。不要复制图片/视频领域、桌面壳、品牌文案或设计工具术语。
+不要把历史外部产品映射、旧远程控制面或旧重启计划当作当前实现约束。它们只属于历史决策轨迹；当前规范入口是 Host / Soul App 双自治、local daemon、workspace/session、artifact、review/lesson 和 Soul App protocol。
 
 ## 工作方式
 
@@ -39,7 +39,6 @@ Open Design 只作为产品语法参考：skill、system、template、project/se
 - `packages/shared`：Soul、worker pack、local workspace schema、共享类型；其中部分旧目录仍可能承载历史或底层类型，改动前先确认是否属于当前默认路径。
 - `packages/storage-sqlite`：worker metadata schema 与 migration；真实业务产物属于 workspace 文件夹，不应复制进 DB。
 - `packages/fs-layout`：`AIWORKER_HOME`、worker home、workspace 与 `.aiworker/` 布局。
-- `packages/gateway`、`packages/gateway-proto`：远程聚合/控制面，当前阶段 deferred；除非任务明确要求，不要让它牵引 CLI、Web 或 API 默认体验。
 
 ## 产品与实现边界
 
