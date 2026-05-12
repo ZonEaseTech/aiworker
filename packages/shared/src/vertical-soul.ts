@@ -27,9 +27,9 @@ export type VerticalSoul = z.infer<typeof verticalSoulSchema>
 
 export const BUILTIN_VERTICAL_SOULS = [
   {
-    defaultTemplates: ['candidate-screen', 'interview-brief', 'role-rubric', 'hiring-risk'],
-    description: 'Recruiting workspace for candidate evidence, interview planning, role rubrics, and hiring risk.',
-    domain: 'hr-recruiting',
+    defaultTemplates: ['person-profile', 'lifecycle-next-step', 'candidate-screen', 'interview-brief', 'onboarding-plan', 'offboarding-summary', 'evidence-matrix', 'hiring-risk'],
+    description: 'People operations workspace for profiles, recruiting evidence, onboarding, employee touchpoints, offboarding, and HR risk.',
+    domain: 'hr-people-ops',
     id: 'hr',
     name: 'HR',
     status: 'available',
@@ -91,9 +91,15 @@ const rubric = {
 }
 
 export const BUILTIN_CAPABILITY_TEMPLATES = [
+  template('hr', 'person-profile', 'Person Profile', 'person-profile', 'Create a source-backed HR profile snapshot with lifecycle stage, evidence, risks, and next steps.', ['Person context', 'Lifecycle stage', 'Relevant HR notes'], [rubric.evidence, rubric.risk, 'No protected-class inference or unsupported personal judgment.']),
+  template('hr', 'lifecycle-next-step', 'Lifecycle Next Step', 'lifecycle-next-step', 'Prepare the next reviewable HR touchpoint for a person across recruiting, onboarding, employee care, or offboarding.', ['Person profile', 'Current lifecycle moment', 'Open questions'], [rubric.evidence, rubric.action, 'Decision and employment commitments remain human-owned.']),
   template('hr', 'candidate-screen', 'Candidate Screen', 'candidate-screen', 'Screen a candidate against a role and identify strengths, gaps, and follow-ups.', ['Role requirements', 'Resume or profile', 'Relevant notes'], [rubric.evidence, rubric.risk, 'No protected-class inference.']),
   template('hr', 'interview-brief', 'Interview Brief', 'interview-brief', 'Prepare a structured interviewer brief with evidence-backed questions.', ['Role stage', 'Candidate packet', 'Interview goals'], [rubric.evidence, rubric.action, 'Questions target missing signal.']),
   template('hr', 'role-rubric', 'Role Rubric', 'role-rubric', 'Turn role expectations into a hiring rubric and scoring guide.', ['Role description', 'Level expectations', 'Team constraints'], [rubric.action, 'Criteria are observable and role-related.', rubric.risk]),
+  template('hr', 'onboarding-plan', 'Onboarding Plan', 'onboarding-plan', 'Draft a 30/60/90 onboarding or check-in plan with owners, evidence, risks, and follow-up prompts.', ['Employee profile', 'Role expectations', 'Team context'], [rubric.evidence, rubric.action, 'No private or unsupported employment claims.']),
+  template('hr', 'offboarding-summary', 'Offboarding Summary', 'offboarding-summary', 'Prepare an offboarding or alumni handoff summary with knowledge-transfer notes, open actions, and privacy guardrails.', ['Departing employee context', 'Handoff notes', 'Open actions'], [rubric.evidence, rubric.action, 'Sensitive details are minimized and reviewed.']),
+  template('hr', 'evidence-matrix', 'Evidence Matrix', 'evidence-matrix', 'Compare candidates against role signals with source-backed coverage, gaps, and conflicts.', ['Role rubric', 'Candidate evidence packets', 'Interview notes or scorecards'], [rubric.evidence, 'Coverage states strong, weak, missing, or conflict.', 'No candidate ranking without human review.']),
+  template('hr', 'roundup-packet', 'Roundup Packet', 'roundup-packet', 'Prepare a hiring roundup packet with rubric snapshot, comparison, missing signals, and decision guardrails.', ['Role rubric', 'Evidence matrix', 'Scorecard summaries'], [rubric.evidence, rubric.risk, 'Decision placeholders remain human-owned.']),
   template('hr', 'hiring-risk', 'Hiring Risk', 'hiring-risk', 'Summarize hiring risks, uncertainty, and decision guardrails.', ['Candidate evidence', 'Scorecard notes', 'Decision constraints'], [rubric.evidence, rubric.risk, 'Decision remains human-owned.']),
 
   template('pm', 'prd-draft', 'PRD Draft', 'prd-draft', 'Draft a PRD from goals, user evidence, constraints, and success metrics.', ['Problem statement', 'User evidence', 'Constraints'], [rubric.action, 'Scope and non-goals are explicit.', rubric.risk]),

@@ -56,11 +56,11 @@ export const ja = {
     creatingSession: 'セッションを作成中...',
     footer: 'セッションは既定でこの Soul ワークスペース内に保持されます。',
     newProject: '新しい Soul プロジェクト',
-    projectName: 'プロジェクト名',
+    projectName: 'ワークスペース名',
     projectPlaceholders: {
       default: 'チェックアウト配備チェックリスト',
       devops: 'チェックアウト配備チェックリスト',
-      hr: 'シニアバックエンド候補者スクリーニング',
+      hr: 'Mia Chen のプロフィール',
       pm: '決済オンボーディング PRD',
       qa: 'リリース 1.2 回帰ゲート',
     },

@@ -5,13 +5,16 @@ import type {
   LocalSession,
   LocalSessionEvent,
   LocalTurn,
+  SoulWorkbenchAction,
 } from '@zonease/aiworker-shared'
 import type { FormEvent } from 'react'
 import type { LocalWorkspaceData } from '../features/local-workspace/api'
 import type { SettingsSection } from '../features/settings'
 import type { ArtifactPreviewState } from './session-detail'
+import type { SoulWorkbenchContext } from './souls/types'
 
 import { IconButton, StudioEmptyState, StudioMainFrame, StudioSectionHeader, WorkerStudioLayout } from '@zonease/aiworker-component'
+import { findSoulWorkbenchForSoul } from '@zonease/aiworker-shared'
 import {
   ArrowLeft,
   Check,
@@ -60,6 +63,9 @@ import { selectedEngineLabel } from '../features/settings/model'
 import { resolveTheme, useSystemTheme } from '../features/theme/system-theme'
 import { WorkerSessionChat } from './session-chat'
 import { SessionDetail } from './session-detail'
+import { buildSessionProgress } from './session-progress'
+import { SoulWorkbenchRenderer } from './souls/registry'
+import { hasSpecializedWorkbenchRenderer } from './souls/renderers'
 
 interface StudioState {
   data: LocalWorkspaceData | null
@@ -100,7 +106,7 @@ export function WorkerStudio() {
   const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null)
   const [newWorkerName, setNewWorkerName] = useState('')
   const [newWorkerSoulId, setNewWorkerSoulId] = useState('hr')
-  const [selectedTemplateId, setSelectedTemplateId] = useState('candidate-screen')
+  const [selectedTemplateId, setSelectedTemplateId] = useState('person-profile')
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null)
   const [workspaceTitle, setWorkspaceTitle] = useState('')
   const [workspaceContext, setWorkspaceContext] = useState('')
@@ -163,6 +169,7 @@ export function WorkerStudio() {
     [data?.templates, selectedWorker?.soulId],
   )
   const selectedTemplate = templates.find(template => template.id === selectedTemplateId) ?? templates[0] ?? null
+  const selectedWorkbench = selectedSoul ? findSoulWorkbenchForSoul(selectedSoul.id) : null
   const soulWorkspaces = useMemo(
     () => data?.workspaces.filter(item => item.workerId === selectedWorker?.id) ?? [],
     [data?.workspaces, selectedWorker?.id],
@@ -242,7 +249,11 @@ export function WorkerStudio() {
     : null
   const selectedSession = routeSession ?? (route.kind === 'workspace' ? null : selectedWorkspace ? sessionForWorkspace(selectedWorkspace, allSessions) : latest(soulSessions))
   const selectedTurn = selectedSession ? turnForSession(selectedSession, data?.turns ?? []) : null
-  const selectedArtifact = selectedSession ? artifactForSession(selectedSession, data?.artifacts ?? []) : latest(soulArtifacts)
+  const selectedArtifact = selectedSession
+    ? artifactForSession(selectedSession, data?.artifacts ?? [])
+    : selectedWorkspace
+      ? artifactForWorkspace(selectedWorkspace, data?.artifacts ?? [], allSessions)
+      : latest(soulArtifacts)
   const selectedReview = selectedSession ? reviewForSession(selectedSession, data?.reviews ?? []) : null
   const selectedSessionTurns = useMemo(
     () => selectedSession ? turnsForSession(selectedSession, data?.turns ?? []) : [],
@@ -274,9 +285,31 @@ export function WorkerStudio() {
       byKey.set(String(event.id), event)
     return [...byKey.values()].sort((a, b) => a.seq - b.seq)
   }, [selectedSession, selectedSessionEvents, streamEvents])
+  const selectedSessionProgress = useMemo(
+    () => selectedSession
+      ? buildSessionProgress({
+          artifact: selectedArtifact,
+          events: displayedSessionEvents,
+          locale: activeLocale,
+          review: selectedReview,
+          session: selectedSession,
+          turns: displayedSessionTurns,
+        })
+      : null,
+    [activeLocale, displayedSessionEvents, displayedSessionTurns, selectedArtifact, selectedReview, selectedSession],
+  )
   const selectedWorkspaceArtifacts = selectedWorkspace ? artifactsForWorkspace(selectedWorkspace, data?.artifacts ?? []) : []
   const selectedWorkspaceLessons = selectedWorkspace ? lessonsForWorkspace(selectedWorkspace, data?.lessons ?? []) : []
   const selectedWorkspaceReviews = selectedWorkspace ? reviewsForWorkspace(selectedWorkspace, data?.reviews ?? []) : []
+  const soulWorkspaceIds = useMemo(() => new Set(soulWorkspaces.map(item => item.id)), [soulWorkspaces])
+  const soulReviews = useMemo(
+    () => data?.reviews.filter(review => soulWorkspaceIds.has(review.workspaceId)) ?? [],
+    [data?.reviews, soulWorkspaceIds],
+  )
+  const soulLessons = useMemo(
+    () => data?.lessons.filter(lesson => soulWorkspaceIds.has(lesson.workspaceId)) ?? [],
+    [data?.lessons, soulWorkspaceIds],
+  )
   const selectedSoulCopy = selectedSoul ? displaySoul(selectedSoul, activeLocale) : null
   const selectedTemplateCopy = selectedTemplate ? displayTemplate(selectedTemplate, activeLocale) : null
   const selectedSessionTemplate = selectedSession ? data?.templates.find(template => template.id === selectedSession.capabilityTemplateId) ?? null : null
@@ -388,7 +421,9 @@ export function WorkerStudio() {
         if (sessionRouteShown)
           return
         const currentRoute = parseWorkerRoute(window.location.pathname)
-        if (currentRoute.kind !== 'workspace' || currentRoute.workerId !== startedWorkerId || currentRoute.workspaceId !== startedWorkspaceId)
+        const stillOnStartedWorker = currentRoute.kind === 'worker' && currentRoute.workerId === startedWorkerId
+        const stillOnStartedWorkspace = currentRoute.kind === 'workspace' && currentRoute.workerId === startedWorkerId && currentRoute.workspaceId === startedWorkspaceId
+        if (!stillOnStartedWorker && !stillOnStartedWorkspace)
           return
         sessionRouteShown = true
         navigateWorkerRoute({ kind: 'session', sessionId, workerId: startedWorkerId, workspaceId: startedWorkspaceId })
@@ -498,6 +533,22 @@ export function WorkerStudio() {
     finally {
       setLessonBusyId(null)
     }
+  }
+
+  function selectWorkbenchAction(action: SoulWorkbenchAction) {
+    const nextTemplate = templates.find(template => template.id === action.templateId) ?? selectedTemplate
+    if (nextTemplate)
+      setSelectedTemplateId(nextTemplate.id)
+    const target = selectedWorkspace?.name ?? selectedWorker?.name ?? selectedSoulCopy?.name ?? 'this people profile'
+    setWorkspaceContext([
+      `Workbench action: ${action.label}`,
+      `Scope: ${action.scope}`,
+      `Target: ${target}`,
+      '',
+      action.prompt,
+      '',
+      'Return this as a profile-bound artifact proposal with source-backed claims, missing evidence, risks, next-step notes, and human review notes.',
+    ].join('\n'))
   }
 
   if (state.loading && !data) {
@@ -616,7 +667,41 @@ export function WorkerStudio() {
   const isWorkspaceContextRoute = (route.kind === 'workspace' || route.kind === 'session') && Boolean(selectedWorkspace)
   const showWorkspaceContextSurface = isWorkspaceContextRoute && Boolean(selectedWorkspace)
   const showSessionSurface = route.kind === 'session' && Boolean(selectedWorkspace && selectedSession)
+  const showSpecializedWorkbench = hasSpecializedWorkbenchRenderer(selectedWorkbench)
   const layoutVariant: WorkerStudioLayoutVariant = showSessionSurface ? 'session' : showWorkspaceContextSurface ? 'workspace' : 'home'
+  const soulWorkbenchContext: SoulWorkbenchContext | null = selectedWorkbench
+    ? {
+        artifactPreview,
+        artifacts: soulArtifacts,
+        copy,
+        engineReadiness,
+        lessons: soulLessons,
+        locale: activeLocale,
+        reviews: soulReviews,
+        selectedArtifact,
+        selectedTemplate,
+        selectedWorkspace,
+        sessions: soulSessions,
+        soul: selectedSoul,
+        soulCopy: selectedSoulCopy,
+        submitting,
+        templates,
+        value: workspaceContext,
+        workbench: selectedWorkbench,
+        workerName: selectedWorker.name,
+        workspaces: soulWorkspaces,
+        onActionSelect: selectWorkbenchAction,
+        onContextChange: setWorkspaceContext,
+        onCreateWorkspace: () => setCreateWorkspaceOpen(true),
+        onOpenConnectors: () => openSettings('connectors'),
+        onOpenSettings: () => openSettings('execution'),
+        onOpenSession: session => navigateWorkerRoute({ kind: 'session', sessionId: session.id, workerId: session.workerId, workspaceId: session.workspaceId }),
+        onOpenWorkspace: workspace => navigateWorkerRoute({ kind: 'workspace', workerId: workspace.workerId, workspaceId: workspace.id }),
+        onRefresh: () => void refresh(),
+        onSubmitSession: submitSession,
+        onTemplateChange: setSelectedTemplateId,
+      }
+    : null
 
   return (
     <WorkerStudioLayout
@@ -649,6 +734,7 @@ export function WorkerStudio() {
               onReview={() => void submitReview()}
               onSubmitTurn={submitTurn}
               onTurnInputChange={setSessionTurnInput}
+              progress={selectedSessionProgress}
             />
           )
         : null}
@@ -908,7 +994,7 @@ export function WorkerStudio() {
       )}
       main={(
         <>
-          {showSessionSurface && selectedWorkspace && selectedSession
+          {showSessionSurface && selectedWorkspace && selectedSession && selectedSessionProgress
             ? (
                 <WorkerSessionChat
                   key={selectedSession.id}
@@ -928,11 +1014,18 @@ export function WorkerStudio() {
                   onSubmitTurn={submitTurn}
                   onToggleDetailDrawer={() => setDetailDrawerCollapsed(current => !current)}
                   onTurnInputChange={setSessionTurnInput}
+                  progress={selectedSessionProgress}
                 />
               )
             : null}
 
-          {!showSessionSurface && isWorkspaceContextRoute && selectedWorkspace
+          {!showSessionSurface && showSpecializedWorkbench && soulWorkbenchContext
+            ? (
+                <SoulWorkbenchRenderer context={soulWorkbenchContext} />
+              )
+            : null}
+
+          {!showSessionSurface && !showSpecializedWorkbench && isWorkspaceContextRoute && selectedWorkspace
             ? (
                 <>
                   <header className="entry-header workspace-header">
@@ -971,7 +1064,7 @@ export function WorkerStudio() {
               )
             : null}
 
-          {!showSessionSurface && !(isWorkspaceContextRoute && selectedWorkspace)
+          {!showSessionSurface && !showSpecializedWorkbench && !(isWorkspaceContextRoute && selectedWorkspace)
             ? (
                 <>
                   <header className="entry-header workspace-header">

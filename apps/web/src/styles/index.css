@@ -8,6 +8,7 @@
 @import './creation.css';
 @import './rail.css';
 @import './workspace.css';
+@import '../worker/souls/hr/people-workbench/styles.css';
 @import './session-chat.css';
 @import './workspace-cards.css';
 @import './artifact.css';

@@ -54,11 +54,11 @@ export const en = {
     creatingSession: 'Creating session...',
     footer: 'Sessions stay in this Soul workspace by default.',
     newProject: 'New Soul project',
-    projectName: 'Project name',
+    projectName: 'Workspace name',
     projectPlaceholders: {
       default: 'Checkout deploy checklist',
       devops: 'Checkout deploy checklist',
-      hr: 'Senior backend candidate screen',
+      hr: 'Mia Chen people profile',
       pm: 'Payments onboarding PRD',
       qa: 'Release 1.2 regression gate',
     },

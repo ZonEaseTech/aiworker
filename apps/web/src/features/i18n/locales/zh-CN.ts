@@ -56,11 +56,11 @@ export const zhCN = {
     creatingSession: '正在创建会话...',
     footer: '会话默认保留在当前 Soul 工作区内。',
     newProject: '新建 Soul 项目',
-    projectName: '项目名称',
+    projectName: '工作区名称',
     projectPlaceholders: {
       default: '结账发布检查清单',
       devops: '结账发布检查清单',
-      hr: '高级后端候选人初筛',
+      hr: 'Mia Chen 人员档案',
       pm: '支付入门 PRD',
       qa: '1.2 版本回归门禁',
     },

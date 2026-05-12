@@ -517,6 +517,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   app.get('/favicon.svg', async c => serveWorkerWebAsset(c, options.webStaticDir, 'favicon.svg'))
   app.get('/logo.svg', async c => serveWorkerWebAsset(c, options.webStaticDir, 'logo.svg'))
   app.get('/assets/:path{.+}', async c => serveWorkerWebAsset(c, options.webStaticDir, `assets/${c.req.param('path')}`))
+  app.get('/fonts/:path{.+}', async c => serveWorkerWebAsset(c, options.webStaticDir, `fonts/${c.req.param('path')}`))
 
   return { app, port: workerEnv.PORT, state }
 }
@@ -962,6 +963,8 @@ function contentTypeFor(filePath: string): string {
     return 'image/jpeg'
   if (ext === '.webp')
     return 'image/webp'
+  if (ext === '.woff2')
+    return 'font/woff2'
   return 'application/octet-stream'
 }
 

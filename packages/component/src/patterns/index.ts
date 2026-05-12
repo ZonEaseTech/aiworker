@@ -1,4 +1,6 @@
 export { CreationDialog } from './creation-dialog'
+export { MarkdownPreview } from './markdown-preview'
+export type { MarkdownPreviewProps } from './markdown-preview'
 export {
   StudioActivityRow,
   StudioEmptyState,

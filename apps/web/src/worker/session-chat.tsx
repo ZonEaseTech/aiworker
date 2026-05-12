@@ -8,6 +8,7 @@ import type {
 import type { FormEvent } from 'react'
 import type { messagesFor, SupportedLocale } from '../features/i18n'
 import type { EngineReadiness } from '../features/session/engine-readiness'
+import type { SessionProgressSummary } from './session-progress'
 
 import { IconButton, StudioPill, StudioStatusPill } from '@zonease/aiworker-component'
 import {
@@ -26,6 +27,7 @@ import {
 } from 'lucide-react'
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { displayTemplate, formatRelativeTime, formatStatus } from '../features/i18n'
+import { SessionProgressPanel } from './session-progress-panel'
 
 type WorkerMessages = ReturnType<typeof messagesFor>
 
@@ -54,6 +56,7 @@ export function WorkerSessionChat({
   onToggleDetailDrawer,
   onSubmitTurn,
   onTurnInputChange,
+  progress,
   session,
   template,
   turnInput,
@@ -71,6 +74,7 @@ export function WorkerSessionChat({
   onToggleDetailDrawer: () => void
   onSubmitTurn: (event: FormEvent<HTMLFormElement>) => void
   onTurnInputChange: (value: string) => void
+  progress: SessionProgressSummary
   session: LocalSession
   template: CapabilityTemplate | null
   turnInput: string
@@ -151,6 +155,7 @@ export function WorkerSessionChat({
             <span>{formatStatus(session.status, locale)}</span>
             <span>{copy.workspace.updated(formatRelativeTime(session.updatedAt, locale))}</span>
           </div>
+          <SessionProgressPanel compact className="worker-chat-progress" progress={progress} />
         </div>
         <div className="worker-chat-actions">
           <IconButton aria-label={copy.accessibility.refreshWorkspace} onClick={onRefresh}>

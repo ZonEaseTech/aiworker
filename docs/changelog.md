@@ -1,5 +1,163 @@
 # AIWorker Changelog
 
+## 2026-05-12 20:42 [completed] REFACTOR-075 / PLAN-283 — HR Profile Workbench panel controls polish
+
+- Removed the visible Needs Attention smart section from HR Profile List, so the
+  list now uses lifecycle sections only.
+- Simplified Profile List cards into compact navigation rows that still show
+  profile name, lifecycle, current moment, and next step.
+- Added Profile List and Profile Tools visibility toggles to the header icon
+  control group beside refresh and settings.
+- Let Profile Details expand when either or both side panels are hidden.
+- Rebalanced Profile Tools spacing and removed nested scrolling from Suggested
+  Tools, leaving the tools panel as the single scroll owner.
+- Verification passed: focused HR WorkerStudio/model tests, Web
+  typecheck/lint/build, `git diff --check`, Playwright desktop panel-toggle
+  review, mobile overflow/scroll review, action-to-composer smoke,
+  session-thumbnail jump smoke, PM fallback smoke, and code-review-graph
+  update/review.
+
+## 2026-05-12 19:08 [completed] REFACTOR-074 / PLAN-282 — HR Profile Workspace three-panel layout
+
+- Reframed HR People Workbench into one header plus three primary panels:
+  Profile List, Profile Details, and Profile Tools.
+- Replaced the profile poster wall with grouped, collapsible Profile List
+  sections for smart attention and lifecycle buckets.
+- Moved selected-profile facts, source counts, timeline, review guardrails, and
+  Markdown artifact preview into a bounded Profile Details panel.
+- Added compact recent session thumbnails to Profile Tools, with jump actions
+  into the existing full session route.
+- Kept agent usage auxiliary: suggested tools populate a profile-bound proposal
+  composer, while generated outputs remain reviewable artifacts.
+- Fixed responsive layout so desktop uses remaining-height panels with internal
+  scroll and mobile stacks bounded panels without horizontal overflow.
+- Verification passed: focused HR WorkerStudio/model tests, Web
+  typecheck/lint/build, `git diff --check`, Playwright desktop/mobile layout
+  review, lifecycle collapse smoke, session-thumbnail jump smoke,
+  action-to-composer smoke, PM fallback smoke, and code-review-graph
+  update/review.
+
+## 2026-05-12 18:18 [completed] REFACTOR-073 / PLAN-281 — HR People Workbench focus layout and artifact preview
+
+- Rebalanced HR People Workbench around a clearer work center: profile poster
+  wall, selected-profile dossier, and right-side action composer.
+- Removed the internal HR source rail and moved source counts, timeline,
+  review guardrails, and artifact preview into the selected-profile dossier.
+- Added shared `MarkdownPreview` under `packages/component` using
+  `react-markdown` plus `remark-gfm`, with raw HTML skipped for artifact
+  preview safety.
+- Passed selected artifact preview state into specialized Soul workbench
+  renderers so HR can render the latest artifact without changing backend
+  artifact/session contracts.
+- Made responsive order more task-oriented: mobile now shows profile wall,
+  action composer, then the long dossier/preview surface.
+- Verification passed: focused HR WorkerStudio/model tests, component
+  typecheck, Web typecheck/lint/build, `git diff --check`, Playwright desktop
+  and mobile layout review, HR action-to-composer smoke, Markdown preview smoke,
+  and PM fallback smoke.
+
+## 2026-05-12 17:34 [completed] REFACTOR-072 / PLAN-280 — Vertical Soul workbench module architecture
+
+- Converted the first HR specialized workbench from a single-file experiment
+  into a repeatable vertical Soul module structure under
+  `apps/web/src/worker/souls/`.
+- Added a shared `SoulWorkbenchContext`, compile-time renderer registry, and
+  common workbench section/status primitives so the next specialized Soul can
+  start from the same shell contract without changing WorkerStudio again.
+- Split HR People Workbench into module-local container, components, model,
+  copy, types, and styles while preserving the existing people-profile UI and
+  agent proposal loop.
+- Added focused HR model tests for lifecycle projection, needs-review behavior,
+  attention filtering, lifecycle counts, and lifecycle-specific action ordering.
+- Verification passed: focused Web tests, Web typecheck, Web lint, Web build,
+  `git diff --check`, Playwright HR desktop/mobile layout checks, PM fallback
+  smoke, and code-review-graph update/review.
+
+## 2026-05-12 16:17 [completed] BUG-116 / PLAN-279 — Session artifact status clarity
+
+- Added a shared Worker Web session progress summary derived from existing
+  session, turn, event, artifact, and review records.
+- Surfaced the progress summary in the session chat header and artifact preview
+  rail, so users can distinguish engine running, artifact file written but not
+  indexed, and artifact indexed but still waiting for human review.
+- Kept the fix frontend-only: no daemon API, database, engine execution, or
+  HR-specific state changes.
+- Added focused WorkerStudio coverage for engine-running, artifact-finalizing,
+  and indexed-artifact review states.
+- Verification passed: focused WorkerStudio test, Web typecheck/lint/build,
+  `git diff --check`, and Playwright desktop/mobile UX checks on the live local
+  daemon session route.
+
+## 2026-05-12 14:28 [completed] REFACTOR-071 / PLAN-278 — HR People Profile Workbench
+
+- Reframed the HR specialized Soul workbench from role-search-first to
+  people-first, with a flex profile poster wall, lifecycle filters, selected
+  profile loop panel, timeline, evidence/review status, and next-step actions.
+- Updated the shared HR workbench descriptor and HR capability templates for
+  person profile, lifecycle next step, onboarding, offboarding, interview,
+  evidence, and risk review artifacts.
+- Wired HR actions into the existing local worker session/artifact proposal
+  flow, so the workbench stays an assistant surface and does not automate hiring
+  or employment decisions.
+- Preserved the specialization boundary: HR uses People Workbench, while PM,
+  QA, DevOps, and other Souls continue to render the generic worker studio.
+- Removed the duplicate lifecycle selector from the left rail after UX review;
+  lifecycle filtering now lives only in the header strip, and the rail summarizes
+  the current view plus selected profile stage.
+- Fixed the HR flow rehearsal defects: pending review records no longer render
+  as completed review, needs-review profiles stay actionable, and proposal
+  submissions launched from the worker route now navigate into the created
+  session.
+- Verification passed: shared descriptor tests, focused WorkerStudio tests,
+  Web/API/shared/root typecheck and lint gates, Web build, Playwright desktop
+  and mobile UX checks, HR action-to-composer flow, PM fallback validation,
+  `git diff --check`, and code-review-graph update/review.
+
+## 2026-05-12 12:55 [completed] REFACTOR-070 / PLAN-277 — HR evidence-first cockpit UX
+
+- Reworked the HR Role Search Cockpit into an evidence-first workbench with
+  context rail, primary Evidence Matrix workspace, secondary rubric/roundup
+  panels, and a Next Actions + Proposal Composer right rail.
+- Added localized HR cockpit copy so zh-CN workspaces read as an HR operation
+  surface instead of a mixed generic agent page.
+- Preserved the specialized-workbench boundary: HR uses the v2 cockpit while PM,
+  QA, DevOps, and other Souls remain on the generic worker studio fallback.
+- Added Worker Web static font serving through local daemon `/fonts/*`, fixing
+  built-preview font 404s on `127.0.0.1:9327`.
+- Verification passed: Web typecheck/lint/focused WorkerStudio test/build, API
+  typecheck/focused local daemon test/build, root typecheck, `git diff --check`,
+  and Playwright UX review for HR desktop/mobile, HR action-to-composer, and PM
+  fallback.
+
+## 2026-05-12 12:23 [completed] REFACTOR-068 / PLAN-275 and REFACTOR-069 / PLAN-276 — HR specialized Soul workbench
+
+- Added a shared Soul workbench descriptor/registry so Worker Web can resolve a
+  specialized Soul workbench or fall back to the generic worker studio.
+- Implemented HR as the first specialized workbench: Role Search Cockpit with
+  pipeline rail, rubric/evidence surface, Evidence Matrix, Roundup Packet
+  summary, and Agent Task Tray.
+- Added HR evidence matrix and roundup packet capability templates, and wired HR
+  task actions to prefill artifact patch/proposal prompts while preserving the
+  existing session stream and review/lesson contract.
+- Kept PM, QA, DevOps, and future Souls on the generic fallback path.
+- Verification passed: shared typecheck/test, focused WorkerStudio test, Web
+  typecheck/lint/build, root typecheck, Playwright desktop/mobile UX review on
+  `127.0.0.1:9328`, `git diff --check`, and code-review-graph update/review
+  (risk 0.50; reported WorkerStudio heuristic test gaps covered by the focused
+  WorkerStudio regression suite).
+
+## 2026-05-12 10:26 [decision] REFACTOR-068 / PLAN-275 and REFACTOR-069 / PLAN-276 — Domain-specific Soul workbenches
+
+- Recorded the product decision that Souls must evolve from a shared generic
+  worker layout into domain-specific workbenches while preserving the common
+  local worker runtime contract.
+- Added HR as the first specialized workbench path: Role Search Cockpit,
+  Candidate Dossier, Evidence Matrix, Agent Task Tray, Roundup Packet, and
+  review-before-memory.
+- Explicitly kept PM, QA, DevOps, finance, legal, and ops on the current generic
+  implementation until HR proves the specialized workbench architecture.
+- No code changes in this checkpoint; implementation remains pending approval.
+
 ## 2026-05-12 03:11 [completed] BUG-115 / PLAN-274 — Worker Web font token and mono taxonomy
 
 - 新增 Worker Web 自托管 Nunito、Inter、JetBrains Mono variable font，并在
@@ -6033,6 +6191,14 @@ Design's chat scroll-island pattern: key chat state by conversation/session,
 wrap the log in a dedicated relative scroll container, auto-follow only when
 near bottom, and expose jump-to-latest without letting streaming output steal
 scrollback.
+
+## 2026-05-12 13:57 [progress]
+
+REFACTOR-071 / PLAN-278 started: HR's specialized Soul workbench is being
+reframed from role-search-first to people-first. The implementation will keep
+the shared worker/workspace/session/artifact/review/lesson contract, make the HR
+home surface a profile poster wall plus selected profile loop panel, and leave
+PM/QA/DevOps on the current generic fallback.
 
 ## 2026-04-21 18:30 [release]
 

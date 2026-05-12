@@ -1,0 +1,208 @@
+import type { SoulWorkbenchRendererProps } from '../../types'
+import type { ProfileListSectionId } from './types'
+
+import { IconButton } from '@zonease/aiworker-component'
+import { PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Plus, RefreshCw, Search, Settings, ShieldCheck } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { HrProfileDetails } from './components/profile-details'
+import { HrProfileList } from './components/profile-list'
+import { HrProfileToolsPanel } from './components/profile-tools-panel'
+import { getHrPeopleWorkbenchCopy } from './copy'
+import {
+  buildPersonProfiles,
+  buildProfileListSections,
+  buildProfileTimeline,
+  orderActionsForProfile,
+} from './model'
+
+export function HrPeopleWorkbench({
+  context: {
+    artifactPreview,
+    artifacts,
+    copy,
+    engineReadiness,
+    lessons,
+    locale,
+    onActionSelect,
+    onOpenConnectors,
+    onContextChange,
+    onCreateWorkspace,
+    onOpenSession,
+    onOpenSettings,
+    onOpenWorkspace,
+    onRefresh,
+    onSubmitSession,
+    onTemplateChange,
+    reviews,
+    selectedArtifact,
+    selectedTemplate,
+    selectedWorkspace,
+    sessions,
+    soulCopy,
+    submitting,
+    templates,
+    value,
+    workbench,
+    workerName,
+    workspaces,
+  },
+}: SoulWorkbenchRendererProps) {
+  const labels = getHrPeopleWorkbenchCopy(locale)
+  const [profileQuery, setProfileQuery] = useState('')
+  const [profileListVisible, setProfileListVisible] = useState(true)
+  const [profileToolsVisible, setProfileToolsVisible] = useState(true)
+  const [collapsedSectionIds, setCollapsedSectionIds] = useState<ReadonlySet<ProfileListSectionId>>(() => new Set(['employee', 'alumni']))
+  const profiles = useMemo(
+    () => buildPersonProfiles(workspaces, sessions, artifacts, reviews, lessons, labels, locale),
+    [artifacts, labels, lessons, locale, reviews, sessions, workspaces],
+  )
+  const visibleProfiles = useMemo(
+    () => profiles.filter(profile => matchesProfileQuery(profile, profileQuery)),
+    [profileQuery, profiles],
+  )
+  const profileSections = useMemo(
+    () => buildProfileListSections(visibleProfiles, labels),
+    [labels, visibleProfiles],
+  )
+  const selectedProfile = selectedWorkspace
+    ? profiles.find(profile => profile.id === selectedWorkspace.id) ?? null
+    : null
+  const focusedProfile = selectedProfile ?? profiles[0] ?? null
+  const reviewGuardrails = locale === 'zh-CN' ? labels.reviewGuardrails : workbench.reviewChecklist.slice(0, 4)
+  const activeActions = orderActionsForProfile(workbench.actions, focusedProfile)
+  const timeline = focusedProfile ? buildProfileTimeline(focusedProfile, labels, locale) : []
+  const toggleSection = (sectionId: ProfileListSectionId) => {
+    setCollapsedSectionIds((current) => {
+      const next = new Set(current)
+      if (next.has(sectionId))
+        next.delete(sectionId)
+      else
+        next.add(sectionId)
+      return next
+    })
+  }
+
+  return (
+    <>
+      <header className="entry-header workspace-header hr-people-header">
+        <div className="hr-header-main">
+          <span className="kicker">{`${soulCopy.name} / ${workbench.name}`}</span>
+          <h1>{labels.workbenchTitle}</h1>
+          <p>{focusedProfile ? labels.commandDetail(focusedProfile.name, focusedProfile.moment) : `${workerName} ${labels.headerFallback}`}</p>
+        </div>
+        <div className="entry-header-right hr-header-actions">
+          <label className="hr-profile-search">
+            <Search aria-hidden="true" size={14} />
+            <span className="sr-only">{labels.profileListSearchLabel}</span>
+            <input
+              value={profileQuery}
+              placeholder={labels.profileListSearchPlaceholder}
+              onChange={event => setProfileQuery(event.target.value)}
+            />
+          </label>
+          <div className="hr-header-metrics" aria-label={labels.metricsLabel}>
+            {labels.metrics(profiles.length, artifacts.length, lessons.length).map(item => (
+              <span key={item}>{item}</span>
+            ))}
+          </div>
+          <button type="button" className="primary hr-header-command" onClick={onCreateWorkspace}>
+            <Plus aria-hidden="true" size={14} />
+            <span>{labels.newProfile}</span>
+          </button>
+          <button type="button" className="ghost hr-header-command" onClick={onOpenConnectors}>
+            <ShieldCheck aria-hidden="true" size={14} />
+            <span>{labels.evidenceConnectors}</span>
+          </button>
+          <div className="hr-header-icon-group" aria-label={labels.workbenchPanelControlsLabel}>
+            <IconButton
+              aria-label={profileListVisible ? labels.hideProfileList : labels.showProfileList}
+              aria-pressed={profileListVisible}
+              onClick={() => setProfileListVisible(visible => !visible)}
+            >
+              {profileListVisible ? <PanelLeftClose aria-hidden="true" size={16} /> : <PanelLeftOpen aria-hidden="true" size={16} />}
+            </IconButton>
+            <IconButton
+              aria-label={profileToolsVisible ? labels.hideProfileTools : labels.showProfileTools}
+              aria-pressed={profileToolsVisible}
+              onClick={() => setProfileToolsVisible(visible => !visible)}
+            >
+              {profileToolsVisible ? <PanelRightClose aria-hidden="true" size={16} /> : <PanelRightOpen aria-hidden="true" size={16} />}
+            </IconButton>
+            <IconButton aria-label={copy.accessibility.refreshWorkspace} onClick={onRefresh}>
+              <RefreshCw aria-hidden="true" size={16} />
+            </IconButton>
+            <IconButton aria-label={copy.accessibility.openSettings} onClick={onOpenSettings}>
+              <Settings aria-hidden="true" size={16} />
+            </IconButton>
+          </div>
+        </div>
+      </header>
+
+      <div className="entry-tab-content workspace-content hr-people-content" data-testid="hr-people-workbench">
+        <div className={`hr-people-layout ${profileListVisible ? '' : 'without-profile-list'} ${profileToolsVisible ? '' : 'without-profile-tools'}`}>
+          {profileListVisible
+            ? (
+                <HrProfileList
+                  collapsedSectionIds={collapsedSectionIds}
+                  labels={labels}
+                  sections={profileSections}
+                  selectedWorkspaceId={selectedWorkspace?.id ?? null}
+                  visibleCount={visibleProfiles.length}
+                  onOpenWorkspace={onOpenWorkspace}
+                  onToggleSection={toggleSection}
+                />
+              )
+            : null}
+
+          <HrProfileDetails
+            artifact={selectedArtifact}
+            artifactPreview={artifactPreview}
+            focusedProfile={focusedProfile}
+            labels={labels}
+            locale={locale}
+            reviewGuardrails={reviewGuardrails}
+            timeline={timeline}
+          />
+
+          {profileToolsVisible
+            ? (
+                <HrProfileToolsPanel
+                  activeActions={activeActions}
+                  copy={copy}
+                  engineReadiness={engineReadiness}
+                  focusedProfile={focusedProfile}
+                  labels={labels}
+                  locale={locale}
+                  selectedTemplate={selectedTemplate}
+                  selectedWorkspace={selectedWorkspace}
+                  submitting={submitting}
+                  templates={templates}
+                  value={value}
+                  onActionSelect={onActionSelect}
+                  onContextChange={onContextChange}
+                  onOpenSession={onOpenSession}
+                  onSubmitSession={onSubmitSession}
+                  onTemplateChange={onTemplateChange}
+                />
+              )
+            : null}
+        </div>
+      </div>
+    </>
+  )
+}
+
+function matchesProfileQuery(profile: ReturnType<typeof buildPersonProfiles>[number], query: string): boolean {
+  const normalizedQuery = query.trim().toLowerCase()
+  if (!normalizedQuery)
+    return true
+  return [
+    profile.name,
+    profile.detail,
+    profile.moment,
+    profile.nextStep,
+    profile.status,
+    profile.reviewStatus,
+    profile.lifecycle,
+  ].some(value => value.toLowerCase().includes(normalizedQuery))
+}

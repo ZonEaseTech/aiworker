@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-12 (BUG-115 completed)
+> Updated: 2026-05-12 (REFACTOR-075 completed)
 
 ## Usage
 
@@ -378,3 +378,12 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-113 Session route return action should go back to worker**](BUG-113.md) `P0`
 - [x] [**BUG-114 Session drawer controls and motion polish**](BUG-114.md) `P0`
 - [x] [**BUG-115 Worker Web font tokens and mono taxonomy**](BUG-115.md) `P0`
+- [x] [**REFACTOR-068 Domain-specific Soul workbench architecture**](REFACTOR-068.md) `P0`
+- [x] [**REFACTOR-069 HR Role Search Cockpit workbench**](REFACTOR-069.md) `P0`
+- [x] [**REFACTOR-070 HR Role Search Cockpit evidence-first UX**](REFACTOR-070.md) `P0`
+- [x] [**REFACTOR-071 HR People Profile Workbench**](REFACTOR-071.md) `P0`
+- [x] [**BUG-116 Session artifact status clarity**](BUG-116.md) `P0`
+- [x] [**REFACTOR-072 Vertical Soul workbench module architecture**](REFACTOR-072.md) `P0`
+- [x] [**REFACTOR-073 HR People Workbench focus layout and artifact preview**](REFACTOR-073.md) `P0`
+- [x] [**REFACTOR-074 HR Profile Workspace three panel layout**](REFACTOR-074.md) `P0`
+- [x] [**REFACTOR-075 HR Profile Workbench panel controls polish**](REFACTOR-075.md) `P0`

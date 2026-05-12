@@ -60,6 +60,15 @@
   white-space: nowrap;
 }
 
+.worker-chat-progress {
+  width: min(620px, 100%);
+  margin-top: 4px;
+}
+
+.worker-chat-progress .session-progress-detail {
+  max-width: 72ch;
+}
+
 .worker-chat-actions {
   display: inline-flex;
   align-items: center;

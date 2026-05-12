@@ -403,6 +403,26 @@ export type {
   SoulRiskPolicy,
   SoulSchemaPack,
 } from './soul'
+export {
+  BUILTIN_SOUL_WORKBENCHES,
+  findSoulWorkbenchForSoul,
+  hasSpecializedSoulWorkbench,
+  hrPeopleWorkbench,
+  soulWorkbenchActionSchema,
+  soulWorkbenchDescriptorSchema,
+  soulWorkbenchFallbackSchema,
+  soulWorkbenchObjectSchema,
+  soulWorkbenchViewSchema,
+  soulWorkbenchWorkspaceTypeSchema,
+} from './soul-workbench'
+export type {
+  SoulWorkbenchAction,
+  SoulWorkbenchDescriptor,
+  SoulWorkbenchFallback,
+  SoulWorkbenchObject,
+  SoulWorkbenchView,
+  SoulWorkbenchWorkspaceType,
+} from './soul-workbench'
 export type { ExecutionEvent, MemoryEntry, ServiceStatus, SkillMeta } from './types'
 export {
   BUILTIN_CAPABILITY_TEMPLATES,

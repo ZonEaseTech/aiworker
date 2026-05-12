@@ -12,6 +12,7 @@ import type {
 import type { FormEvent } from 'react'
 import type { messagesFor, SupportedLocale } from '../features/i18n'
 import type { EngineReadiness } from '../features/session/engine-readiness'
+import type { SessionProgressSummary } from './session-progress'
 
 import { StudioActivityRow, StudioEmptyState, StudioSectionHeader, StudioStatusPill } from '@zonease/aiworker-component'
 import { Circle, ClipboardCheck, Eye, FileText, MessageSquare, Send, Sparkles, Terminal } from 'lucide-react'
@@ -22,6 +23,7 @@ import {
   formatReviewVerdict,
   formatStatus,
 } from '../features/i18n'
+import { SessionProgressPanel } from './session-progress-panel'
 
 export interface ArtifactPreviewState {
   artifactId: string | null
@@ -48,6 +50,7 @@ export function SessionDetail({
   onReview,
   onSubmitTurn,
   onTurnInputChange,
+  progress,
   review,
   reviewSubmitting,
   reviews,
@@ -74,6 +77,7 @@ export function SessionDetail({
   onReview: () => void
   onSubmitTurn: (event: FormEvent<HTMLFormElement>) => void
   onTurnInputChange: (value: string) => void
+  progress: SessionProgressSummary | null
   review: LocalReview | null
   reviewSubmitting: boolean
   reviews: LocalReview[]
@@ -122,6 +126,8 @@ export function SessionDetail({
                 <small>{copy.workspace.updated(formatRelativeTime(session.updatedAt, locale))}</small>
               </section>
 
+              {progress ? <SessionProgressPanel compact className="artifact-session-progress" progress={progress} /> : null}
+
               {mode === 'full'
                 ? (
                     <section className="turn-composer">
@@ -169,7 +175,7 @@ export function SessionDetail({
                       </>
                     )
                   : (
-                      <div className="artifact-preview-state">{copy.artifact.empty}</div>
+                      <div className="artifact-preview-state">{progress?.previewDetail ?? copy.artifact.empty}</div>
                     )}
               </section>
 

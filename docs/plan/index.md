@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-12 (PLAN-274 completed)
+> Updated: 2026-05-12 (PLAN-283 completed)
 
 ## Usage
 
@@ -303,3 +303,12 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-272 Session route return-to-worker alignment**](PLAN-272.md) `2026-05-12`
 - [x] [**PLAN-273 Session drawer controls and motion polish**](PLAN-273.md) `2026-05-12`
 - [x] [**PLAN-274 Worker Web font token and mono taxonomy**](PLAN-274.md) `2026-05-12`
+- [x] [**PLAN-275 Domain-specific Soul workbench architecture**](PLAN-275.md) `2026-05-12`
+- [x] [**PLAN-276 HR Role Search Cockpit workbench**](PLAN-276.md) `2026-05-12`
+- [x] [**PLAN-277 HR Role Search Cockpit evidence-first UX**](PLAN-277.md) `2026-05-12`
+- [x] [**PLAN-278 HR People Profile Workbench**](PLAN-278.md) `2026-05-12`
+- [x] [**PLAN-279 Session artifact status clarity**](PLAN-279.md) `2026-05-12`
+- [x] [**PLAN-280 Vertical Soul workbench module architecture**](PLAN-280.md) `2026-05-12`
+- [x] [**PLAN-281 HR People Workbench focus layout and artifact preview**](PLAN-281.md) `2026-05-12`
+- [x] [**PLAN-282 HR Profile Workspace three panel layout**](PLAN-282.md) `2026-05-12`
+- [x] [**PLAN-283 HR Profile Workbench panel controls polish**](PLAN-283.md) `2026-05-12`

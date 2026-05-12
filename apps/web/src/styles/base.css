@@ -103,6 +103,7 @@ button.ghost:hover:not(:disabled) {
   .worker-status-pill,
   .worker-produced-chip,
   .worker-tool-result,
+  .session-progress-label,
   .artifact-rail-title,
   .artifact-rail-status-pill,
   .artifact-preview-state,

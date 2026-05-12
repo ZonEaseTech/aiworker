@@ -1,4 +1,4 @@
-import { mkdtempSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -21,11 +21,12 @@ describe('local daemon API', () => {
     await rm(dir, { recursive: true, force: true })
   })
 
-  async function app(token?: string) {
+  async function app(token?: string, webStaticDir?: string) {
     const boot = await bootstrapWorkerApp({
       dbPath: join(dir, 'worker.db'),
       workersRoot: join(dir, 'workers'),
       token,
+      webStaticDir,
       runtimeVersion: 'test',
       executor: {
         async invoke(input) {
@@ -114,6 +115,20 @@ describe('local daemon API', () => {
     expect((await target.request('/api/local/info', {
       headers: { authorization: 'Bearer local-token-123456' },
     })).status).toBe(200)
+  })
+
+  it('serves Worker Web font assets from the static build', async () => {
+    const webStaticDir = join(dir, 'web-static')
+    mkdirSync(join(webStaticDir, 'fonts'), { recursive: true })
+    writeFileSync(join(webStaticDir, 'index.html'), '<html></html>')
+    writeFileSync(join(webStaticDir, 'fonts', 'inter.woff2'), 'font-data')
+
+    const target = await app(undefined, webStaticDir)
+    const res = await target.request('/fonts/inter.woff2')
+
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toBe('font/woff2')
+    expect(await res.text()).toBe('font-data')
   })
 
   it('streams session turn engine events before returning the final result', async () => {
