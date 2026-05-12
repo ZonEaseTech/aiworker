@@ -58,6 +58,9 @@
   --primary-action-bg: var(--color-aiworker-ink);
   --primary-action-text: var(--color-aiworker-canvas);
   --primary-action-border: var(--color-aiworker-ink);
+  --interactive-hover-bg: color-mix(in srgb, var(--accent) 4%, var(--bg-panel));
+  --interactive-hover-border: color-mix(in srgb, var(--accent) 26%, var(--border-strong));
+  --interactive-hover-ring: inset 0 0 0 1px color-mix(in srgb, var(--accent) 12%, transparent);
   --green: var(--color-aiworker-terminal-green);
   --green-bg: color-mix(in srgb, var(--green) 12%, var(--bg-panel));
   --green-border: color-mix(in srgb, var(--green) 30%, var(--border));
@@ -121,6 +124,9 @@
   --primary-action-bg: var(--color-aiworker-canvas);
   --primary-action-text: var(--color-aiworker-ink);
   --primary-action-border: var(--color-aiworker-canvas);
+  --interactive-hover-bg: color-mix(in srgb, var(--accent) 8%, var(--bg-panel));
+  --interactive-hover-border: color-mix(in srgb, var(--accent) 34%, var(--border-strong));
+  --interactive-hover-ring: inset 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
   --green-bg: color-mix(in srgb, var(--green) 20%, var(--bg-panel));
   --green-border: color-mix(in srgb, var(--green) 38%, var(--border));
   --red-bg: color-mix(in srgb, var(--red) 18%, var(--bg-panel));

@@ -39,18 +39,14 @@ button {
   border: 1px solid var(--border);
   border-radius: var(--radius-pill);
   cursor: pointer;
-  transition: background var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease), transform var(--motion-fast) var(--motion-ease);
+  transition: background var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease);
 }
 
-button:hover:not(:disabled) {
-  background: var(--bg-subtle);
-  border-color: var(--border-strong);
+button:hover:not(:disabled):where(:not(.active):not([aria-pressed="true"]):not([aria-selected="true"])) {
+  background: var(--interactive-hover-bg);
+  border-color: var(--interactive-hover-border);
+  box-shadow: var(--interactive-hover-ring);
   color: var(--text);
-  transform: translateY(-1px);
-}
-
-button:active:not(:disabled) {
-  transform: translateY(0);
 }
 
 button:focus-visible,

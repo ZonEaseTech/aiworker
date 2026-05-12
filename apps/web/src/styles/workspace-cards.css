@@ -116,13 +116,13 @@
   border-radius: var(--radius-lg);
   background: var(--bg-panel);
   cursor: pointer;
-  transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+  transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
 }
 
-.design-card:hover {
-  border-color: var(--border-strong);
-  box-shadow: var(--shadow-sm);
-  transform: translateY(-1px);
+.design-card:hover:not(.active) {
+  background: var(--interactive-hover-bg);
+  border-color: var(--interactive-hover-border);
+  box-shadow: var(--interactive-hover-ring);
 }
 
 .design-card.active {
