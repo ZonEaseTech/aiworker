@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-13 (FEAT-071 completed)
+> Updated: 2026-05-13 (DOC-011 completed)
 
 ## Usage
 
@@ -404,3 +404,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REFACTOR-077 Make Host runtime a first-class bounded context**](REFACTOR-077.md) `P0`
 - [x] [**REFACTOR-078 Make Worker Web first-run Soul App first**](REFACTOR-078.md) `P0`
 - [x] [**FEAT-071 Soul App development skill and rules**](FEAT-071.md) `P0`
+- [x] [**DOC-011 Converge Host and Soul App architecture entrypoints**](DOC-011.md) `P0`

@@ -17,10 +17,10 @@
 
 新的默认产品闭环见：
 
-- [GOALS.md](../GOALS.md)
 - [docs/architecture.md](architecture.md)
-- [docs/task/REFACTOR-026.md](task/REFACTOR-026.md)
-- [docs/plan/PLAN-192.md](plan/PLAN-192.md)
+
+旧 `REFACTOR-026` / `PLAN-192` 记录只保留历史脉络；当前实现合同以
+`docs/architecture.md` 为准。
 
 ## 重新归位
 
@@ -30,12 +30,12 @@
 | --- | --- |
 | Brain Kernel | Local context quality and provenance guardrails |
 | Gate | Optional post-run review signal |
-| Admission | Lesson promotion state, after run evidence exists |
+| Admission | Optional lesson promotion ledger when a Soul App exposes or requests it |
 | Journal | Run/review provenance where useful |
 | Case | Artifact/review bundle, not the default first screen |
 | Fleet summary | Deferred aggregation after local worker proof |
 
-如果某个治理概念要求 operator 在提交有用 work order 之前先理解它，它在本轮重构中就处在错误位置。
+如果某个治理概念要求 operator 在提交有用业务工作之前先理解它，它在当前架构中就处在错误位置。
 
 ## 替代证据
 

@@ -1,28 +1,32 @@
 # Soul App developer workflow
 
 Soul Apps are vertical products that can run standalone or mount into AIWorker
-Host. App authors should work against the public SDK, manifest protocol, and
-brokered Host surfaces. They should not import Host private modules.
+Host. App authors work against the public SDK, manifest protocol, and brokered
+Host capabilities. They must not import Host private modules or sibling app
+source.
 
 ## Agent Workflow
 
 Repository agents should load `.agents/skills/aiworker-soul-app-dev/SKILL.md`
 before creating or modifying production Soul Apps, Soul App authoring docs,
 validation harnesses, scaffold behavior, manifests, standalone surfaces, Host
-mounted surfaces, artifact schemas, capability prompts, or review rubrics.
+mounted surfaces, artifact schemas, capability prompts, review rubrics, profile
+views, or protocol surfaces.
 
 This document is the human-readable authoring guide. The skill is the
 agent-native execution route. Keep both aligned with the same Host / Soul App,
-workspace/session, artifact, review/lesson, standalone, Host mounted, manifest,
-SDK, and broker vocabulary.
+workspace/session, artifact/profile/review/lesson, standalone, Host mounted,
+manifest, SDK, protocol and broker vocabulary.
 
-Do not treat `apps/AGENTS.md` as the canonical Soul App rule surface until the
-target agent runner has proven native nested AGENTS loading. The current
-canonical route is:
+The canonical route is:
 
 ```text
-root AGENTS.md -> aiworker-soul-app-dev skill -> app manifest/docs/files -> validate/smoke evidence
+root AGENTS.md -> docs/architecture.md -> aiworker-soul-app-dev skill
+  -> app manifest/docs/files -> validate/smoke evidence
 ```
+
+Do not treat `apps/AGENTS.md` as the canonical Soul App rule surface until the
+target agent runner has proven native nested AGENTS loading.
 
 ## Create
 
@@ -52,8 +56,8 @@ apps/<app-id>/
   packs/*/SOUL.md
 ```
 
-Use kebab-case app ids. The storage namespace, memory namespace, and API route
-prefix are app-scoped by default.
+Use kebab-case app ids. Storage namespace, protocol route prefix, mounted
+service identity and optional broker grants are app-scoped by default.
 
 ## Validate
 
@@ -82,13 +86,13 @@ aiworker app smoke <target-dir>
 ```
 
 Smoke uses an isolated temporary `worker.db`, installs and enables the app
-manifest, projects it into the Host Soul catalog, creates a worker/workspace/
-session, and runs a mocked engine turn that must produce an artifact and review.
-For apps that declare standalone support, it also starts a temporary local HTML
-smoke server and fetches it to prove the standalone surface is browser-openable.
-For apps that declare a host-mounted local service command, it starts the
-service, checks the health route, and injects the discovered base URL into the
-temporary Host-mounted smoke manifest.
+manifest, projects it into the Host app catalog, creates a worker/workspace/
+session, and runs a mocked engine turn for the app's declared workflow. For apps
+that declare standalone support, it also starts a temporary local HTML smoke
+server and fetches it to prove the standalone surface is browser-openable. For
+apps that declare a host-mounted local service command, it starts the service,
+checks the health route, and injects the discovered base URL into the temporary
+Host-mounted smoke manifest.
 
 The output reports:
 
@@ -98,37 +102,62 @@ The output reports:
 - mounted service URL and HTTP status, when declared
 - Host mounted status
 - hosted registry status
-- artifact count
-- review verdict
+- artifact count or exposed descriptor count
+- review verdict when the app exposes a review surface
 
 ## Design Boundary
 
-Host owns engine adapters, connector credentials, Host metadata storage,
-artifact indexing, reviews, memory admission, mounted service launch/connect,
-and audit. Soul Apps own domain definitions, workspace types, capability
-prompts, artifact schemas, review rubrics, UI/API contributions, standalone
-runtime surface, and app-scoped storage declarations.
+Host owns platform concerns:
+
+- local daemon lifecycle
+- install/enable/disable state
+- Host auth and session security
+- global appearance, language, default engine, local MCP and connector settings
+- permission, storage, connector, log, search and audit brokers
+- worker/workspace/session locator
+- Host shell and optional header contract
+- mounted service launch/connect
+- protocol discovery and descriptor cache
+
+Soul Apps own domain concerns:
+
+- domain definitions and UI/API
+- workspace types and session workflows
+- capability prompts
+- artifact schemas, content and lifecycle
+- profile composition
+- review rubrics and verdict meaning
+- lesson/memory promotion semantics
+- app-scoped storage content
+- standalone runtime surface
+- Host mounted runtime surface
 
 Standalone app-local calls stay inside the Soul App:
 
 ```text
-Soul App UI/API -> embedded public local runtime -> app-local worker.db/workspace
+Soul App UI/API -> app-local runtime -> app-local workspace/session/domain store
 ```
 
-Mounted calls cross the Host boundary only for shared capabilities:
+Mounted calls cross the Host boundary only for shared platform capabilities:
 
 ```text
-Host -> static manifest -> mounted local service -> Host broker for shared resources
+Host shell -> static manifest/protocol -> mounted local service -> scoped Host broker
 ```
 
+If Host needs to show app-owned state, the app must expose it as a protocol
+view, action, status or descriptor. Host should not infer HR profiles, QA release
+verdicts, review meaning, lessons or memories from app files, DB rows, prompts
+or UI labels.
+
 Use connector broker permissions for external evidence. Do not put secrets in
-manifest files, generated app config, workspace metadata, DB metadata, or logs.
+manifest files, generated app config, workspace metadata, DB metadata, logs,
+prompts, review rubrics or skill files.
 
 ## Contribution Checklist
 
 - Open or update a PMA task and plan for each new production app.
-- Keep workspace, capability, artifact, connector, permission, and review terms
-  understandable to the vertical user.
+- Keep workspace, capability, artifact, profile, connector, permission, review
+  and lesson terms understandable to the vertical user.
 - Run `aiworker app validate <path>` and `aiworker app smoke <path>`.
 - Run focused package tests and typecheck for app code.
 - Run `bun run crg:update` and `bun run crg:review` before finalizing Host code

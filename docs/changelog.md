@@ -1,5 +1,20 @@
 # AIWorker Changelog
 
+## 2026-05-13 20:36 [completed] DOC-011 / PLAN-302 — Converge Host and Soul App architecture entrypoints
+
+Converged the active architecture entrypoints to root `AGENTS.md` and
+`docs/architecture.md`.
+
+- Deleted the old north-star document instead of keeping a redirect stub.
+- Rewrote the architecture contract around Host as platform locator and
+  capability shell, with Soul Apps owning domain state and meaning.
+- Updated Soul App authoring guidance, the repository README and the governance
+  status note so Host consumes only protocol-exposed app surfaces.
+
+Verification passed: active-entrypoint stale-reference searches and
+`git diff --check`. code-review-graph skipped because the slice changes only
+documentation, root agent instructions and skill markdown.
+
 ## 2026-05-13 19:00 [completed] FEAT-071 / PLAN-300 — Soul App development skill and rules
 
 Added an agent-native Soul App development route so contributors can work on
