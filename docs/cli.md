@@ -1,61 +1,101 @@
 # AIWorker CLI
 
-AIWorker CLI 现在只服务 greenfield local workspace loop：
+AIWorker CLI 是 Host local daemon 和 Soul App authoring 的本地入口。它不再承载旧
+gateway/fleet 管理面，也不再使用 `brief/run` 产品路径。
 
-```text
-workspace -> brief -> run -> files/artifacts -> review -> lessons
-```
+## Primary Flow
 
-默认命令不再承载旧本地 worker 管理面。远程聚合、gateway、历史会话、定时、审批、
-可见治理后台都不属于当前 local deliverable。
-
-## 快速开始
+源码调试：
 
 ```bash
-aiworker init --name "Developer Workspace" --root .
-aiworker daemon start --port 8787
-aiworker brief create --title "Release readiness" --body "Review this repository and produce a release-readiness brief"
-aiworker run start --brief <briefId>
-aiworker artifacts list
-aiworker review create --run <runId> --artifact <artifactId> --verdict pass
-aiworker lessons propose --review <reviewId> --statement "Keep release evidence attached to workspace files"
-aiworker lessons accept <lessonId>
+bun apps/cli/src/aiworker.ts dev --host 127.0.0.1 --port 9217
 ```
 
-使用 `aiworker daemon status`、`aiworker daemon logs`、`aiworker daemon check`
-和 `aiworker daemon stop` 管理本地进程。
+安装或打包后：
 
-## 命令索引
+```bash
+aiworker daemon foreground --host 127.0.0.1 --port 9217
+```
+
+打开 Web：
+
+```bash
+aiworker open --port 9217
+```
+
+## Command Index
 
 ```text
 aiworker init
+aiworker dev
+aiworker doctor
 aiworker daemon start|foreground|status|stop|logs|check
-aiworker brief create|list|show
-aiworker run start|list|show|cancel
-aiworker files list|show|write|delete|search
+aiworker app list|show|install|enable|disable|doctor|permissions|bootstrap|create|validate|smoke
+aiworker soul list
+aiworker worker create|list|show|select
+aiworker template list
+aiworker workspace create|list|show
+aiworker session start|list|show
+aiworker turn send
+aiworker files list|show
 aiworker artifacts list|show|open
-aiworker review list|show|create
+aiworker review list|show
 aiworker lessons list|propose|accept|reject
 aiworker settings list
-aiworker executor select|doctor
+aiworker engine select
 aiworker open
 aiworker commands
 ```
 
-## 说明
+## Host Daemon
 
-- `init` 创建 local workspace metadata 和 `worker.db`。
-- `daemon start` 后台启动 local HTTP API；`daemon foreground` 用于调试。
-- `brief create` 记录 operator intent；`run start` 从 brief 或 direct prompt 创建一次 executor run。
-- 成功 run 会把输出写成 workspace 文件，并登记 artifact metadata。
-- `files` 读写 workspace 内文件；路径必须留在 workspace root 下。
-- `review` 是产物之后的复盘面。
-- `lessons` 处理可复用经验，accepted lesson 进入 durable local context。
-- `executor select/doctor` 只保存和检查薄 adapter hint，不拥有 executor 原生能力。
+- `dev` runs the local daemon and hosted Worker Web in foreground.
+- `daemon foreground` runs the same daemon directly.
+- `daemon start` runs it in the background and writes pid/log files under
+  `AIWORKER_HOME`.
+- `daemon status|logs|check|stop` inspect or stop the local process.
+- `doctor` checks host-local readiness without turning AIWorker into a remote
+  control plane.
 
-## 验证
+## Soul Apps
 
-CLI 改动通常需要运行：
+- `app bootstrap official` installs/enables the official HR/QA Soul Apps through
+  the normal app lifecycle.
+- `app install <manifest>` registers a local Soul App manifest.
+- `app enable|disable <id>` changes lifecycle state.
+- `app doctor|permissions <id>` inspect static health and declared grants.
+- `app create <id> --dir <path>` scaffolds a Soul App.
+- `app validate <path>` checks manifest, assets and import boundaries.
+- `app smoke <path>` runs standalone and Host-mounted smoke checks.
+
+Host catalog entries are app-projected. Use app ids such as `aiworker-hr`, not
+legacy built-in ids such as `hr`.
+
+## Work Objects
+
+- `worker create --soul <app-id>` creates a local Soul worker.
+- `worker select <id>` stores the default worker for later commands.
+- `template list --soul <app-id>` lists capability templates projected by the
+  enabled app.
+- `workspace create --worker <id>` creates a business workspace under a worker.
+- `session start --workspace <id> --skill <template-id> --input <text>` creates
+  a session and first turn.
+- `turn send --session <id> --input <text>` continues an existing session.
+- `files list|show`, `artifacts list|show|open`, `review list|show` and
+  `lessons list|propose|accept|reject` inspect the Host-indexed outputs that
+  the app/runtime exposed.
+
+## Settings And Engines
+
+- `settings list` prints Host daemon settings.
+- `engine select <engine>` stores a best-effort default engine hint.
+
+External engines own their auth, model routing, tool loop, sandbox and native
+sessions. See `docs/executor-engines.md` for install/login guidance.
+
+## Verification
+
+CLI changes usually need:
 
 ```bash
 bun run --filter '@zonease/aiworker-cli' test
@@ -63,5 +103,5 @@ bun run --filter '@zonease/aiworker-cli' typecheck
 bun run --filter '@zonease/aiworker-cli' build:bundle
 ```
 
-跨 package runtime 改动还应运行匹配的 API/Web/Core focused tests、source-local smoke
-和 `bun run check`。
+Cross-package Host/Soul protocol changes should also run the focused Core/API/Web
+checks that own the touched files.

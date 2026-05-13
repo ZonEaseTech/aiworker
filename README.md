@@ -14,6 +14,14 @@ Host -> install/enable Soul App -> Soul worker -> workspace -> session
 
 当前架构合同见 `docs/architecture.md`。旧北极星文档已经移除，避免开发入口被拆成多套叙事。
 
+## 文档地图
+
+- `docs/architecture.md`：当前架构合同。
+- `docs/cli.md`：当前 CLI 命令参考。
+- `docs/deployment.md`：local daemon、packaged CLI 和 operator 运行手册。
+- `docs/executor-engines.md`：外部 engine 安装、登录和 readiness 说明。
+- `docs/soul-app-developer.md`：Soul App authoring workflow。
+
 ## 为什么改成这个形态
 
 开发领域已经有成熟的一线 engine。AIWorker 不应该默认以 developer 为中心，更不应该把自己

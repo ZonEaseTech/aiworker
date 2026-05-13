@@ -1,5 +1,23 @@
 # AIWorker Changelog
 
+## 2026-05-13 21:06 [completed] DOC-012 / PLAN-303 — Clean active documentation map
+
+Cleaned the root documentation map so active agent guidance is task-routed
+instead of scattered across stale pages.
+
+- Deleted `docs/e2e-smoke.md` because the referenced PLAN-004 smoke script no
+  longer exists.
+- Deleted `docs/governance-node-status.md` so old governance posture no longer
+  acts as a third architecture entrypoint.
+- Rewrote `docs/cli.md` for the current app/worker/workspace/session/turn
+  command tree.
+- Refreshed `docs/deployment.md`, `docs/executor-engines.md`, `AGENTS.md` and
+  README around the current Host / Soul App local daemon contract.
+
+Verification passed: deleted-doc reference search, stale CLI term search,
+stale governance/product term search and `git diff --check`. code-review-graph
+skipped because this slice changes only documentation and agent guidance.
+
 ## 2026-05-13 20:36 [completed] DOC-011 / PLAN-302 — Converge Host and Soul App architecture entrypoints
 
 Converged the active architecture entrypoints to root `AGENTS.md` and

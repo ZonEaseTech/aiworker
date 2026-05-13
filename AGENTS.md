@@ -19,11 +19,17 @@ agent runtime 平台。
 - `docs/architecture.md`：当前唯一架构合同，定义 Host / Soul App / protocol 边界。
 - `.agents/skills/aiworker-soul-app-dev/SKILL.md`：修改 Soul App、manifest、standalone、
   Host mounted、capability、artifact/review 或 authoring 文档前必须读取。
-- `docs/governance-node-status.md`：遇到旧治理术语时看这里；这些概念已经降级为历史实现、
-  平台 guardrail 或 Soul App 通过协议暴露的 review/lesson 流程。
 
 不要把历史外部产品映射、旧 gateway/fleet/control-plane、旧治理入口或旧重启计划当作当前实现
 约束。当前规范入口只有本文件和 `docs/architecture.md`。
+
+## 按任务读取
+
+- CLI 行为或命令文档：`docs/cli.md`。
+- 本地 daemon、打包或 operator 运行路径：`docs/deployment.md`。
+- 外部 engine 安装、登录和 readiness：`docs/executor-engines.md`。
+- Soul App authoring：`docs/soul-app-developer.md` 和 `aiworker-soul-app-dev` skill。
+- 历史 PMA、changelog、Superpowers spec/plan 只作为审计轨迹；不能覆盖当前架构合同。
 
 ## 工作方式
 
