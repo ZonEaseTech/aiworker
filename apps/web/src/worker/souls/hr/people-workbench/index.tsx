@@ -37,6 +37,7 @@ export function HrPeopleWorkbench({
     selectedArtifact,
     selectedTemplate,
     selectedWorkspace,
+    shellHeader,
     sessions,
     soulCopy,
     submitting,
@@ -91,28 +92,34 @@ export function HrPeopleWorkbench({
           <p>{focusedProfile ? labels.commandDetail(focusedProfile.name, focusedProfile.moment) : `${workerName} ${labels.headerFallback}`}</p>
         </div>
         <div className="entry-header-right hr-header-actions">
-          <label className="hr-profile-search">
-            <Search aria-hidden="true" size={14} />
-            <span className="sr-only">{labels.profileListSearchLabel}</span>
-            <input
-              value={profileQuery}
-              placeholder={labels.profileListSearchPlaceholder}
-              onChange={event => setProfileQuery(event.target.value)}
-            />
-          </label>
+          {shellHeader?.search ?? (
+            <label className="hr-profile-search">
+              <Search aria-hidden="true" size={14} />
+              <span className="sr-only">{labels.profileListSearchLabel}</span>
+              <input
+                value={profileQuery}
+                placeholder={labels.profileListSearchPlaceholder}
+                onChange={event => setProfileQuery(event.target.value)}
+              />
+            </label>
+          )}
           <div className="hr-header-metrics" aria-label={labels.metricsLabel}>
             {labels.metrics(profiles.length, artifacts.length, lessons.length).map(item => (
               <span key={item}>{item}</span>
             ))}
           </div>
-          <button type="button" className="primary hr-header-command" onClick={onCreateWorkspace}>
-            <Plus aria-hidden="true" size={14} />
-            <span>{labels.newProfile}</span>
-          </button>
-          <button type="button" className="ghost hr-header-command" onClick={onOpenConnectors}>
-            <ShieldCheck aria-hidden="true" size={14} />
-            <span>{labels.evidenceConnectors}</span>
-          </button>
+          {shellHeader?.actions ?? (
+            <>
+              <button type="button" className="primary hr-header-command" onClick={onCreateWorkspace}>
+                <Plus aria-hidden="true" size={14} />
+                <span>{labels.newProfile}</span>
+              </button>
+              <button type="button" className="ghost hr-header-command" onClick={onOpenConnectors}>
+                <ShieldCheck aria-hidden="true" size={14} />
+                <span>{labels.evidenceConnectors}</span>
+              </button>
+            </>
+          )}
           <div className="hr-header-icon-group" aria-label={labels.workbenchPanelControlsLabel}>
             <IconButton
               aria-label={profileListVisible ? labels.hideProfileList : labels.showProfileList}
@@ -128,15 +135,25 @@ export function HrPeopleWorkbench({
             >
               {profileToolsVisible ? <PanelRightClose aria-hidden="true" size={16} /> : <PanelRightOpen aria-hidden="true" size={16} />}
             </IconButton>
-            <IconButton aria-label={copy.accessibility.refreshWorkspace} onClick={onRefresh}>
-              <RefreshCw aria-hidden="true" size={16} />
-            </IconButton>
-            <IconButton aria-label={copy.accessibility.openSettings} onClick={onOpenSettings}>
-              <Settings aria-hidden="true" size={16} />
-            </IconButton>
+            {shellHeader?.actionSlots.has('refresh')
+              ? null
+              : (
+                  <IconButton aria-label={copy.accessibility.refreshWorkspace} onClick={onRefresh}>
+                    <RefreshCw aria-hidden="true" size={16} />
+                  </IconButton>
+                )}
+            {shellHeader?.actionSlots.has('settings')
+              ? null
+              : (
+                  <IconButton aria-label={copy.accessibility.openSettings} onClick={onOpenSettings}>
+                    <Settings aria-hidden="true" size={16} />
+                  </IconButton>
+                )}
           </div>
         </div>
       </header>
+      {shellHeader?.status}
+      {shellHeader?.results}
 
       <div className="entry-tab-content workspace-content hr-people-content" data-testid="hr-people-workbench">
         <div className={`hr-people-layout ${profileListVisible ? '' : 'without-profile-list'} ${profileToolsVisible ? '' : 'without-profile-tools'}`}>

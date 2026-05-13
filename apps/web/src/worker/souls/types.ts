@@ -45,6 +45,13 @@ export interface SoulWorkbenchContext {
   selectedArtifact: LocalArtifact | null
   selectedTemplate: CapabilityTemplate
   selectedWorkspace: LocalWorkspace | null
+  shellHeader?: {
+    actionSlots: ReadonlySet<string>
+    actions: ReactNode
+    results: ReactNode
+    search: ReactNode
+    status: ReactNode
+  } | null
   sessions: LocalSession[]
   soul: VerticalSoul
   soulCopy: SoulDisplay

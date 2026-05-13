@@ -713,6 +713,24 @@ export function WorkerStudio() {
     )
   }
 
+  function renderShellSearchInput() {
+    return shellSearch
+      ? (
+          <label className="toolbar-search">
+            <span className="search-icon" aria-hidden="true">
+              <Search size={13} />
+            </span>
+            <input
+              aria-label={copy.accessibility.searchProjects}
+              placeholder={shellSearch.placeholder}
+              value={query}
+              onChange={event => setQuery(event.target.value)}
+            />
+          </label>
+        )
+      : null
+  }
+
   const shellStatus = shellActionState.message || shellActionState.error
     ? (
         <p className={shellActionState.error ? 'shell-action-status error' : 'shell-action-status'} role={shellActionState.error ? 'alert' : 'status'}>
@@ -735,6 +753,22 @@ export function WorkerStudio() {
             : null}
         </div>
       )
+    : null
+  const shellHeader = shell
+    ? {
+        actionSlots: new Set(shellActions.map(action => action.slot)),
+        actions: (
+          <>
+            {shellPrimaryAction
+              ? renderShellActionButton(shellPrimaryAction)
+              : null}
+            {secondaryShellActions.map(action => renderShellActionButton(action, action.slot === 'settings' ? 'settings' : 'plus'))}
+          </>
+        ),
+        results: shellSearchResults,
+        search: renderShellSearchInput(),
+        status: shellStatus,
+      }
     : null
 
   if (state.loading && !data) {
@@ -827,6 +861,7 @@ export function WorkerStudio() {
         selectedArtifact,
         selectedTemplate,
         selectedWorkspace,
+        shellHeader,
         sessions: soulSessions,
         soul: selectedSoul,
         soulCopy: selectedSoulCopy,
@@ -1167,38 +1202,7 @@ export function WorkerStudio() {
 
           {!showSessionSurface && showSpecializedWorkbench && soulWorkbenchContext
             ? (
-                <>
-                  <header className="entry-header workspace-header">
-                    <div>
-                      <span className="kicker">{copy.workspace.currentWorker}</span>
-                      <h1>{copy.workspace.workspaceTitle(selectedWorker.name)}</h1>
-                    </div>
-                    <div className="entry-header-right">
-                      {shellSearch
-                        ? (
-                            <label className="toolbar-search">
-                              <span className="search-icon" aria-hidden="true">
-                                <Search size={13} />
-                              </span>
-                              <input
-                                aria-label={copy.accessibility.searchProjects}
-                                placeholder={shellSearch.placeholder}
-                                value={query}
-                                onChange={event => setQuery(event.target.value)}
-                              />
-                            </label>
-                          )
-                        : null}
-                      {shellPrimaryAction
-                        ? renderShellActionButton(shellPrimaryAction)
-                        : null}
-                      {secondaryShellActions.map(action => renderShellActionButton(action, action.slot === 'settings' ? 'settings' : 'plus'))}
-                    </div>
-                  </header>
-                  {shellStatus}
-                  {shellSearchResults}
-                  <SoulWorkbenchRenderer context={soulWorkbenchContext} />
-                </>
+                <SoulWorkbenchRenderer context={soulWorkbenchContext} />
               )
             : null}
 
@@ -1300,17 +1304,21 @@ export function WorkerStudio() {
                         </div>
 
                         <div className="toolbar-right">
-                          <label className="toolbar-search">
-                            <span className="search-icon" aria-hidden="true">
-                              <Search size={13} />
-                            </span>
-                            <input
-                              aria-label={copy.accessibility.searchProjects}
-                              placeholder={shellSearch?.placeholder ?? copy.projects.searchPlaceholder}
-                              value={query}
-                              onChange={event => setQuery(event.target.value)}
-                            />
-                          </label>
+                          {shellSearch
+                            ? renderShellSearchInput()
+                            : (
+                                <label className="toolbar-search">
+                                  <span className="search-icon" aria-hidden="true">
+                                    <Search size={13} />
+                                  </span>
+                                  <input
+                                    aria-label={copy.accessibility.searchProjects}
+                                    placeholder={copy.projects.searchPlaceholder}
+                                    value={query}
+                                    onChange={event => setQuery(event.target.value)}
+                                  />
+                                </label>
+                              )}
                         </div>
                       </div>
                       {shellStatus}

@@ -889,8 +889,13 @@ describe('worker studio', () => {
     render(<WorkerStudio />)
 
     await screen.findByText('AIWorker HR (1)')
+    await screen.findByTestId('hr-people-workbench')
+    expect(document.querySelectorAll('.entry-header.workspace-header')).toHaveLength(1)
+    const hrHeader = document.querySelector('.hr-people-header') as HTMLElement
     expect(await screen.findByText('New people profile')).toBeTruthy()
     expect(screen.getByPlaceholderText('Search people profiles')).toBeTruthy()
+    expect(within(hrHeader).getByRole('button', { name: 'New people profile' })).toBeTruthy()
+    expect(within(hrHeader).getByPlaceholderText('Search people profiles')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'New people profile' }))
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith('/api/local/apps/aiworker-hr/actions/create-people-profile', expect.objectContaining({ method: 'POST' }))
