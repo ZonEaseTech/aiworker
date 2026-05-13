@@ -18,7 +18,7 @@
       "previewRef": "./src/ui/regression-matrix-preview.tsx",
       "reviewPolicyRef": "./review/regression-matrix.md",
       "schemaRef": "./schemas/regression-matrix.schema.json",
-      "schemaSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "schemaSha256": "6a4f3494764431e8785a82865215eabc4c4678dfb4e447eda4d4684f341892a0",
       "version": "0.1.0"
     },
     {
@@ -28,7 +28,7 @@
       "previewRef": "./src/ui/release-gate-preview.tsx",
       "reviewPolicyRef": "./review/release-gate.md",
       "schemaRef": "./schemas/release-gate.schema.json",
-      "schemaSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "schemaSha256": "0c953a3453ff235c419600073c70c1f155976f448c4567711b511d83668a09e4",
       "version": "0.1.0"
     }
   ],
@@ -224,7 +224,15 @@
         "entry": "./src/ui/release-panel.tsx",
         "id": "qa-release-panel",
         "label": "Release panel",
-        "slot": "panel"
+        "slot": "panel",
+        "surface": {
+          "entry": "/surfaces/panels/qa-release-panel",
+          "renderer": "host-descriptor",
+          "requiredPermissions": [
+            "storage:read:aiworker-qa"
+          ],
+          "scope": "workspace"
+        }
       }
     ],
     "reviewPanels": [
@@ -240,7 +248,15 @@
         "entry": "./src/ui/qa-route.tsx",
         "id": "qa-home",
         "label": "QA",
-        "path": "/qa"
+        "path": "/qa",
+        "surface": {
+          "entry": "/surfaces/routes/qa-home",
+          "renderer": "host-descriptor",
+          "requiredPermissions": [
+            "ui:mount:qa-workbench"
+          ],
+          "scope": "app"
+        }
       }
     ],
     "workspaceWidgets": [
@@ -249,6 +265,11 @@
         "id": "qa-release-widget",
         "label": "Release widget",
         "slot": "workspace-widget",
+        "surface": {
+          "entry": "/frames/widgets/qa-release-widget",
+          "renderer": "sandboxed-frame",
+          "scope": "workspace"
+        },
         "target": "release"
       }
     ]

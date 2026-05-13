@@ -51,3 +51,7 @@ export async function loadLocalWorkspaceData(): Promise<LocalWorkspaceData> {
     settings: settings.settings,
   }
 }
+
+export async function resolveMountedSurface<T>(appId: string, surfaceId: string): Promise<T> {
+  return localJson<T>(`/api/local/apps/${appId}/surfaces/${surfaceId}`)
+}

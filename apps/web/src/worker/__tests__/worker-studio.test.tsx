@@ -6,6 +6,17 @@ import { engineIconSrc } from '../../features/settings/model'
 import { WorkerStudio } from '../worker-studio'
 
 const now = '2026-05-10T00:00:00.000Z'
+const HR_SOUL_ID = 'aiworker-hr'
+const QA_SOUL_ID = 'aiworker-qa'
+const HR_PERSON_PROFILE = `${HR_SOUL_ID}.person-profile`
+const HR_LIFECYCLE_NEXT_STEP = `${HR_SOUL_ID}.lifecycle-next-step`
+const HR_CANDIDATE_SCREEN = `${HR_SOUL_ID}.candidate-screen`
+const HR_INTERVIEW_BRIEF = `${HR_SOUL_ID}.interview-brief`
+const HR_ONBOARDING_PLAN = `${HR_SOUL_ID}.onboarding-plan`
+const HR_OFFBOARDING_SUMMARY = `${HR_SOUL_ID}.offboarding-summary`
+const HR_EVIDENCE_MATRIX = `${HR_SOUL_ID}.evidence-matrix`
+const HR_HIRING_RISK = `${HR_SOUL_ID}.hiring-risk`
+
 const workspace = {
   createdAt: now,
   id: 'workspace-1',
@@ -20,130 +31,125 @@ const workspace = {
 }
 
 const workers = [
-  { createdAt: now, defaultEngineId: 'codex', id: 'hr-worker', metadataJson: {}, name: 'HR', soulId: 'hr', status: 'active', updatedAt: now },
-  { createdAt: now, defaultEngineId: 'codex', id: 'pm-worker', metadataJson: {}, name: 'PM', soulId: 'pm', status: 'active', updatedAt: now },
-  { createdAt: now, defaultEngineId: 'codex', id: 'qa-worker', metadataJson: {}, name: 'QA', soulId: 'qa', status: 'active', updatedAt: now },
-  { createdAt: now, defaultEngineId: 'codex', id: 'devops-worker', metadataJson: {}, name: 'DevOps', soulId: 'devops', status: 'active', updatedAt: now },
+  { createdAt: now, defaultEngineId: 'codex', id: 'hr-worker', metadataJson: {}, name: 'HR', soulId: HR_SOUL_ID, status: 'active', updatedAt: now },
+  { createdAt: now, defaultEngineId: 'codex', id: 'qa-worker', metadataJson: {}, name: 'QA', soulId: QA_SOUL_ID, status: 'active', updatedAt: now },
 ]
 
 const souls = [
-  { defaultTemplates: ['person-profile', 'lifecycle-next-step', 'candidate-screen', 'interview-brief', 'onboarding-plan', 'offboarding-summary', 'evidence-matrix', 'hiring-risk'], description: 'People operations workspace', domain: 'hr-people-ops', id: 'hr', name: 'HR', status: 'available' },
-  { defaultTemplates: ['prd-draft'], description: 'Product workspace', domain: 'product-management', id: 'pm', name: 'PM', status: 'available' },
-  { defaultTemplates: ['regression-matrix'], description: 'QA workspace', domain: 'quality-assurance', id: 'qa', name: 'QA', status: 'available' },
-  { defaultTemplates: ['deploy-checklist'], description: 'Operations workspace', domain: 'devops-sre', id: 'devops', name: 'DevOps', status: 'available' },
-  { defaultTemplates: [], description: 'Later', domain: 'finance', id: 'finance', name: 'Finance', status: 'coming_soon' },
+  { defaultTemplates: [HR_PERSON_PROFILE, HR_LIFECYCLE_NEXT_STEP, HR_CANDIDATE_SCREEN, HR_INTERVIEW_BRIEF, HR_ONBOARDING_PLAN, HR_OFFBOARDING_SUMMARY, HR_EVIDENCE_MATRIX, HR_HIRING_RISK], description: 'People operations workspace', domain: 'hr-people-ops', id: HR_SOUL_ID, name: 'AIWorker HR', status: 'available' },
+  { defaultTemplates: ['aiworker-qa.release-gate'], description: 'QA workspace', domain: 'quality-assurance', id: QA_SOUL_ID, name: 'AIWorker QA', status: 'available' },
 ]
 
 const templates = [
   {
     description: 'Create a source-backed HR profile snapshot.',
-    id: 'person-profile',
+    id: HR_PERSON_PROFILE,
     inputHints: ['Person context', 'Lifecycle stage'],
     name: 'Person Profile',
     outputKind: 'person-profile',
     prompt: 'Summarize profile',
     reviewRubric: ['Evidence is grounded.'],
-    soulId: 'hr',
+    soulId: HR_SOUL_ID,
   },
   {
     description: 'Prepare the next HR touchpoint.',
-    id: 'lifecycle-next-step',
+    id: HR_LIFECYCLE_NEXT_STEP,
     inputHints: ['Person profile', 'Open questions'],
     name: 'Lifecycle Next Step',
     outputKind: 'lifecycle-next-step',
     prompt: 'Prepare next step',
     reviewRubric: ['Next action is concrete.'],
-    soulId: 'hr',
+    soulId: HR_SOUL_ID,
   },
   {
     description: 'Prepare a role rubric.',
-    id: 'role-rubric',
+    id: `${HR_SOUL_ID}.role-rubric`,
     inputHints: ['Role', 'Signals'],
     name: 'Role Rubric',
     outputKind: 'role-rubric',
     prompt: 'Build role rubric',
     reviewRubric: ['Criteria are role-related.'],
-    soulId: 'hr',
+    soulId: HR_SOUL_ID,
   },
   {
     description: 'Screen a candidate against a role.',
-    id: 'candidate-screen',
+    id: HR_CANDIDATE_SCREEN,
     inputHints: ['Role', 'Candidate packet'],
     name: 'Candidate Screen',
     outputKind: 'candidate-screen',
     prompt: 'Screen candidate',
     reviewRubric: ['Evidence is grounded.'],
-    soulId: 'hr',
+    soulId: HR_SOUL_ID,
   },
   {
     description: 'Draft an interview brief.',
-    id: 'interview-brief',
+    id: HR_INTERVIEW_BRIEF,
     inputHints: ['Candidate packet', 'Rubric'],
     name: 'Interview Brief',
     outputKind: 'interview-brief',
     prompt: 'Draft interview brief',
     reviewRubric: ['Questions are evidence-backed.'],
-    soulId: 'hr',
+    soulId: HR_SOUL_ID,
   },
   {
     description: 'Draft an onboarding plan.',
-    id: 'onboarding-plan',
+    id: HR_ONBOARDING_PLAN,
     inputHints: ['Employee profile', 'Role expectations'],
     name: 'Onboarding Plan',
     outputKind: 'onboarding-plan',
     prompt: 'Draft onboarding plan',
     reviewRubric: ['Owners and risks are explicit.'],
-    soulId: 'hr',
+    soulId: HR_SOUL_ID,
   },
   {
     description: 'Prepare an offboarding summary.',
-    id: 'offboarding-summary',
+    id: HR_OFFBOARDING_SUMMARY,
     inputHints: ['Departing employee context', 'Handoff notes'],
     name: 'Offboarding Summary',
     outputKind: 'offboarding-summary',
     prompt: 'Prepare offboarding summary',
     reviewRubric: ['Sensitive details are minimized.'],
-    soulId: 'hr',
+    soulId: HR_SOUL_ID,
   },
   {
     description: 'Compare candidates against the role rubric.',
-    id: 'evidence-matrix',
+    id: HR_EVIDENCE_MATRIX,
     inputHints: ['Role rubric', 'Candidate packets'],
     name: 'Evidence Matrix',
     outputKind: 'evidence-matrix',
     prompt: 'Build evidence matrix',
     reviewRubric: ['Missing signals are visible.'],
-    soulId: 'hr',
+    soulId: HR_SOUL_ID,
   },
   {
     description: 'Prepare a roundup packet.',
-    id: 'roundup-packet',
+    id: `${HR_SOUL_ID}.roundup-packet`,
     inputHints: ['Evidence matrix', 'Interview notes'],
     name: 'Roundup Packet',
     outputKind: 'roundup-packet',
     prompt: 'Draft roundup packet',
     reviewRubric: ['Decision remains human-owned.'],
-    soulId: 'hr',
+    soulId: HR_SOUL_ID,
   },
   {
     description: 'Review hiring risk.',
-    id: 'hiring-risk',
+    id: HR_HIRING_RISK,
     inputHints: ['Artifact', 'Policy'],
     name: 'Hiring Risk',
     outputKind: 'hiring-risk',
     prompt: 'Check hiring risk',
     reviewRubric: ['Protected-class inference is absent.'],
-    soulId: 'hr',
+    soulId: HR_SOUL_ID,
   },
   {
-    description: 'Draft a PRD.',
-    id: 'prd-draft',
-    inputHints: ['Goal', 'User evidence'],
-    name: 'PRD Draft',
-    outputKind: 'prd-draft',
-    prompt: 'Draft PRD',
-    reviewRubric: ['Scope is explicit.'],
-    soulId: 'pm',
+    description: 'Summarize release readiness.',
+    id: 'aiworker-qa.release-gate',
+    inputHints: ['Test evidence', 'Known defects'],
+    name: 'Release Gate',
+    outputKind: 'release-gate',
+    prompt: 'Summarize release gate',
+    reviewRubric: ['Recommendation is explicit.'],
+    soulId: QA_SOUL_ID,
   },
 ]
 
@@ -163,7 +169,7 @@ const baseSettings: LocalSettingsConfig = {
 }
 
 const sessionRecord = {
-  capabilityTemplateId: 'candidate-screen',
+  capabilityTemplateId: HR_CANDIDATE_SCREEN,
   context: 'Candidate context',
   createdAt: now,
   endedAt: null,
@@ -254,16 +260,19 @@ let currentApps: Array<{
       artifactPreviews?: Array<{ id: string, label: string }>
       panels?: Array<{ id: string, label: string }>
       reviewPanels?: Array<{ id: string, label: string }>
-      routes?: Array<{ label: string, path: string }>
-      workspaceWidgets?: Array<{ id: string, label: string }>
+      routes?: Array<{ id?: string, label: string, path: string, surface?: { renderer: 'host-descriptor' | 'sandboxed-frame' | 'trusted-module' } }>
+      workspaceWidgets?: Array<{ id: string, label: string, surface?: { renderer: 'host-descriptor' | 'sandboxed-frame' | 'trusted-module' } }>
     }
   }
   mountedContribution?: {
     apiRoutePrefix: string | null
     artifactPreviewIds: string[]
+    descriptorSurfaceIds?: string[]
+    frameSurfaceIds?: string[]
     panelIds: string[]
     reviewPanelIds: string[]
     routePaths: string[]
+    surfaceIds?: string[]
     workspaceWidgetIds: string[]
   }
   status: string
@@ -353,8 +362,35 @@ beforeEach(() => {
       return json({ runtimeVersion: 'test', startedAt: now, workers: currentWorkers })
     if (url.endsWith('/api/local/apps'))
       return json({ apps: currentApps })
+    if (url.endsWith('/api/local/apps/aiworker-hr/surfaces/hr-home')) {
+      return json({
+        actions: [{ id: 'create-profile-review', label: 'Create review' }],
+        fields: [
+          { label: 'Domain', value: 'hr-people-ops' },
+          { label: 'Evidence broker', value: 'ats' },
+        ],
+        status: 'ready',
+        title: 'HR Mounted Workbench',
+        type: 'aiworker.surface.descriptor.v1',
+      })
+    }
+    if (url.endsWith('/api/local/apps/aiworker-hr/surfaces/hr-people-widget')) {
+      return json({
+        frame: {
+          sandbox: 'allow-scripts allow-forms',
+          title: 'People widget',
+          url: 'about:blank',
+        },
+        surface: { id: 'hr-people-widget', kind: 'workspace-widget', label: 'People widget', renderer: 'sandboxed-frame' },
+      })
+    }
+    if (url.endsWith('/api/local/apps/aiworker-hr/frames/widgets/hr-people-widget')) {
+      return new Response('<!doctype html><html><body><h1>People widget</h1></body></html>', {
+        headers: { 'content-type': 'text/html; charset=utf-8' },
+      })
+    }
     if (url.endsWith('/api/local/workers') && method === 'POST') {
-      const body = init?.body ? JSON.parse(String(init.body)) as { name: string, soulId: string } : { name: 'Created worker', soulId: 'hr' }
+      const body = init?.body ? JSON.parse(String(init.body)) as { name: string, soulId: string } : { name: 'Created worker', soulId: HR_SOUL_ID }
       const created = {
         createdAt: now,
         defaultEngineId: 'codex',
@@ -528,13 +564,9 @@ describe('worker studio', () => {
     expect(document.documentElement.lang).toBe('en')
     expect(screen.getByLabelText('Current worker')).toBeTruthy()
     expect(screen.getByRole('button', { name: /HR \(1\)/ })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /PM \(1\)/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: /QA \(1\)/ })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /DevOps \(1\)/ })).toBeTruthy()
     expect(screen.getAllByText('HR').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('PM').length).toBeGreaterThan(0)
     expect(screen.getAllByText('QA').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('DevOps').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Person Profile').length).toBeGreaterThan(0)
     expect(screen.getByTestId('hr-people-workbench')).toBeTruthy()
     expect(screen.getAllByText('People Workbench').length).toBeGreaterThan(0)
@@ -713,21 +745,21 @@ describe('worker studio', () => {
     render(<WorkerStudio />)
 
     await screen.findByTestId('hr-people-workbench')
-    const pmGroupToggle = screen.getByRole('button', { name: /PM \(1\)/ })
+    const qaGroupToggle = screen.getByRole('button', { name: /QA \(1\)/ })
     const visibleOptionTexts = () => screen.getAllByRole('option').map(option => option.textContent ?? '')
 
-    expect(pmGroupToggle.getAttribute('aria-expanded')).toBe('true')
-    expect(visibleOptionTexts().includes('PM')).toBe(true)
+    expect(qaGroupToggle.getAttribute('aria-expanded')).toBe('true')
+    expect(visibleOptionTexts().includes('QA')).toBe(true)
 
-    fireEvent.click(pmGroupToggle)
+    fireEvent.click(qaGroupToggle)
 
-    expect(pmGroupToggle.getAttribute('aria-expanded')).toBe('false')
-    expect(visibleOptionTexts().includes('PM')).toBe(false)
+    expect(qaGroupToggle.getAttribute('aria-expanded')).toBe('false')
+    expect(visibleOptionTexts().includes('QA')).toBe(false)
 
-    fireEvent.click(pmGroupToggle)
+    fireEvent.click(qaGroupToggle)
 
-    expect(pmGroupToggle.getAttribute('aria-expanded')).toBe('true')
-    expect(visibleOptionTexts().includes('PM')).toBe(true)
+    expect(qaGroupToggle.getAttribute('aria-expanded')).toBe('true')
+    expect(visibleOptionTexts().includes('QA')).toBe(true)
   })
 
   it('lists installed Soul Apps with lifecycle status in the worker rail', async () => {
@@ -740,16 +772,19 @@ describe('worker studio', () => {
             artifactPreviews: [{ id: 'person-profile-preview', label: 'Person profile preview' }],
             panels: [{ id: 'people-panel', label: 'People panel' }],
             reviewPanels: [{ id: 'hr-review', label: 'HR review' }],
-            routes: [{ label: 'People workbench', path: '/hr/people' }],
-            workspaceWidgets: [{ id: 'people-widget', label: 'People widget' }],
+            routes: [{ id: 'hr-home', label: 'People workbench', path: '/hr/people', surface: { renderer: 'host-descriptor' } }],
+            workspaceWidgets: [{ id: 'hr-people-widget', label: 'People widget', surface: { renderer: 'sandboxed-frame' } }],
           },
         },
         mountedContribution: {
           apiRoutePrefix: '/api/local/apps/aiworker-hr',
           artifactPreviewIds: ['person-profile-preview'],
+          descriptorSurfaceIds: ['hr-home'],
+          frameSurfaceIds: ['hr-people-widget'],
           panelIds: ['people-panel'],
           reviewPanelIds: ['hr-review'],
           routePaths: ['/hr/people'],
+          surfaceIds: ['hr-home', 'hr-people-widget'],
           workspaceWidgetIds: ['people-widget'],
         },
         status: 'enabled',
@@ -761,9 +796,12 @@ describe('worker studio', () => {
         mountedContribution: {
           apiRoutePrefix: '/api/local/apps/aiworker-qa',
           artifactPreviewIds: [],
+          descriptorSurfaceIds: [],
+          frameSurfaceIds: [],
           panelIds: [],
           reviewPanelIds: [],
           routePaths: ['/qa/release'],
+          surfaceIds: [],
           workspaceWidgetIds: [],
         },
         status: 'disabled',
@@ -779,6 +817,11 @@ describe('worker studio', () => {
     expect(screen.getByText('API /api/local/apps/aiworker-hr')).toBeTruthy()
     expect(screen.getByText('Route People workbench · /hr/people')).toBeTruthy()
     expect(screen.getByText('4 mounted slots')).toBeTruthy()
+    expect(await screen.findByText('HR Mounted Workbench')).toBeTruthy()
+    expect(screen.getByText('Domain: hr-people-ops')).toBeTruthy()
+    const frame = await screen.findByTitle('People widget')
+    expect(frame.getAttribute('sandbox')).toBe('allow-scripts allow-forms')
+    expect(frame.getAttribute('src')).toBe('about:blank')
     expect(screen.getByText('AIWorker QA')).toBeTruthy()
     expect(screen.getByText('Disabled · 0.1.0')).toBeTruthy()
     expect(screen.getByText('Mounted contributions paused')).toBeTruthy()
@@ -799,13 +842,13 @@ describe('worker studio', () => {
     render(<WorkerStudio />)
 
     await screen.findByTestId('hr-people-workbench')
-    const pmWorkerOption = screen.getByRole('option', { name: 'PM' })
-    expect(pmWorkerOption).toBeTruthy()
-    fireEvent.click(pmWorkerOption)
+    const qaWorkerOption = screen.getByRole('option', { name: 'QA' })
+    expect(qaWorkerOption).toBeTruthy()
+    fireEvent.click(qaWorkerOption)
 
     await waitFor(() => {
-      expect(screen.getByText('pm-worker')).toBeTruthy()
-      expect(screen.getAllByText('PRD Draft').length).toBeGreaterThan(0)
+      expect(screen.getByText('qa-worker')).toBeTruthy()
+      expect(screen.getAllByText('Release Gate').length).toBeGreaterThan(0)
       expect(screen.queryByText('candidate-screen')).toBeNull()
     })
     expect(screen.queryByTestId('hr-people-workbench')).toBeNull()
@@ -822,14 +865,14 @@ describe('worker studio', () => {
     fireEvent.click(within(dialog).getByRole('combobox', { name: 'Soul' }))
     expect(dialog.querySelector('.studio-select.open')).toBeTruthy()
     expect(within(dialog).getByRole('listbox', { name: 'Soul' })).toBeTruthy()
-    fireEvent.click(within(dialog).getByRole('option', { name: /PM/ }))
+    fireEvent.click(within(dialog).getByRole('option', { name: /QA/ }))
     expect(dialog.querySelector('.studio-select.open')).toBeNull()
-    fireEvent.change(within(dialog).getByLabelText('Worker name'), { target: { value: 'Product Worker' } })
+    fireEvent.change(within(dialog).getByLabelText('Worker name'), { target: { value: 'QA Worker' } })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create worker' }))
 
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith('/api/local/workers', expect.objectContaining({
-        body: expect.stringContaining('"soulId":"pm"'),
+        body: expect.stringContaining(`"soulId":"${QA_SOUL_ID}"`),
         method: 'POST',
       }))
       expect(window.location.pathname).toBe('/workers/worker-created')
@@ -848,7 +891,7 @@ describe('worker studio', () => {
     const catalog = screen.getByRole('listbox', { name: 'Soul catalog' })
     expect(within(catalog).getByRole('option', { name: /HR/ })).toBeTruthy()
     expect(within(catalog).getByText('hr-people-ops')).toBeTruthy()
-    expect(within(catalog).getByRole('option', { name: /PM/ })).toBeTruthy()
+    expect(within(catalog).getByRole('option', { name: /QA/ })).toBeTruthy()
   })
 
   it('creates a workspace session turn with selected Soul worker and skill metadata', async () => {
@@ -863,7 +906,7 @@ describe('worker studio', () => {
     await waitFor(() => {
       expect(window.location.pathname).toBe('/workers/hr-worker/workspaces/workspace-created')
       expect(fetch).toHaveBeenCalledWith('/api/local/workers/hr-worker/workspaces', expect.objectContaining({
-        body: expect.stringContaining('"soulId":"hr"'),
+        body: expect.stringContaining(`"soulId":"${HR_SOUL_ID}"`),
         method: 'POST',
       }))
     })
@@ -876,7 +919,7 @@ describe('worker studio', () => {
 
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith('/api/local/workers/hr-worker/workspaces/workspace-created/sessions/stream', expect.objectContaining({
-        body: expect.stringContaining('"capabilityTemplateId":"person-profile"'),
+        body: expect.stringContaining(`"capabilityTemplateId":"${HR_PERSON_PROFILE}"`),
         method: 'POST',
       }))
       expect(window.location.pathname).toBe('/workers/hr-worker/workspaces/workspace-created/sessions/session-created')
@@ -895,7 +938,7 @@ describe('worker studio', () => {
 
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith('/api/local/workers/hr-worker/workspaces/workspace-1/sessions/stream', expect.objectContaining({
-        body: expect.stringContaining('"capabilityTemplateId":"person-profile"'),
+        body: expect.stringContaining(`"capabilityTemplateId":"${HR_PERSON_PROFILE}"`),
         method: 'POST',
       }))
       expect(window.location.pathname).toBe('/workers/hr-worker/workspaces/workspace-1/sessions/session-created-worker-route')
@@ -919,14 +962,14 @@ describe('worker studio', () => {
     expect(screen.getByTestId('hr-people-workbench')).toBeTruthy()
     fireEvent.change(screen.getByLabelText('Context for the next profile proposal'), { target: { value: 'Role and candidate packet.' } })
     fireEvent.click(screen.getByRole('button', { name: /Generate person-profile/ }))
-    window.history.pushState(null, '', '/workers/pm-worker')
+    window.history.pushState(null, '', '/workers/qa-worker')
     window.dispatchEvent(new PopStateEvent('popstate'))
 
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith('/api/local/workers/hr-worker/workspaces/workspace-created/sessions/stream', expect.objectContaining({ method: 'POST' }))
     })
     await waitFor(() => {
-      expect(window.location.pathname).toBe('/workers/pm-worker')
+      expect(window.location.pathname).toBe('/workers/qa-worker')
     })
   })
 

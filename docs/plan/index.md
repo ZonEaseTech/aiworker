@@ -321,3 +321,5 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-290 Remove legacy OD and control-plane guidance from current contracts**](PLAN-290.md) `2026-05-12`
 - [x] [**PLAN-291 Soul App app-level autonomy and Host mounted execution**](PLAN-291.md) `2026-05-13`
 - [x] [**PLAN-292 Soul App mounted hardening and authoring readiness**](PLAN-292.md) `2026-05-13`
+- [x] [**PLAN-293 Mounted Surface Protocol and release gate hardening**](PLAN-293.md) `2026-05-13`
+- [x] [**PLAN-294 Host app-only catalog and official Soul App bootstrap**](PLAN-294.md) `2026-05-13`

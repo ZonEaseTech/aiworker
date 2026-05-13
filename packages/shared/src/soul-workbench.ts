@@ -55,14 +55,14 @@ export type SoulWorkbenchDescriptor = z.infer<typeof soulWorkbenchDescriptorSche
 
 export const hrPeopleWorkbench = soulWorkbenchDescriptorSchema.parse({
   actions: [
-    action('summarize-profile', 'Summarize profile', 'person', 'person-profile', 'person-profile', 'Create a source-backed HR profile snapshot for this person. Separate confirmed facts, missing evidence, risks, and human follow-up notes.'),
-    action('prepare-next-step', 'Prepare next step', 'lifecycle', 'lifecycle-next-step', 'lifecycle-next-step', 'Prepare the next HR touchpoint for this person. Use the current lifecycle stage, evidence, open questions, and human-owned decision guardrails.'),
-    action('extract-evidence', 'Extract evidence', 'person', 'candidate-screen', 'candidate-screen', 'Extract source-backed evidence from the supplied role packet, resume, employee notes, interview notes, or lifecycle records. Preserve missing evidence and do not infer protected-class attributes.'),
-    action('draft-interview-kit', 'Draft interview kit', 'interview', 'interview-brief', 'interview-brief', 'Draft a structured interview kit with evidence-backed questions, focus signals, and scorecard guidance.'),
-    action('draft-onboarding-plan', 'Draft onboarding plan', 'employee', 'onboarding-plan', 'onboarding-plan', 'Draft a 30/60/90 onboarding or check-in plan with evidence, owner placeholders, open risks, and review notes.'),
-    action('prepare-offboarding-summary', 'Prepare offboarding summary', 'alumni', 'offboarding-summary', 'offboarding-summary', 'Prepare an offboarding or alumni handoff summary. Keep sensitive details minimized and separate confirmed facts from assumptions.'),
-    action('build-evidence-matrix', 'Build evidence matrix', 'pool', 'evidence-matrix', 'evidence-matrix', 'Build an evidence matrix across people and role/lifecycle signals. Use source references and mark weak, missing, or conflicting evidence.'),
-    action('check-risky-wording', 'Check risky wording', 'artifact', 'hiring-risk', 'hiring-risk', 'Review the current artifact for protected-class inference, unsupported personal judgments, privacy leakage, and unreviewed employment commitments.'),
+    action('summarize-profile', 'Summarize profile', 'person', 'aiworker-hr.person-profile', 'person-profile', 'Create a source-backed HR profile snapshot for this person. Separate confirmed facts, missing evidence, risks, and human follow-up notes.'),
+    action('prepare-next-step', 'Prepare next step', 'lifecycle', 'aiworker-hr.lifecycle-next-step', 'lifecycle-next-step', 'Prepare the next HR touchpoint for this person. Use the current lifecycle stage, evidence, open questions, and human-owned decision guardrails.'),
+    action('extract-evidence', 'Extract evidence', 'person', 'aiworker-hr.candidate-screen', 'candidate-screen', 'Extract source-backed evidence from the supplied role packet, resume, employee notes, interview notes, or lifecycle records. Preserve missing evidence and do not infer protected-class attributes.'),
+    action('draft-interview-kit', 'Draft interview kit', 'interview', 'aiworker-hr.interview-brief', 'interview-brief', 'Draft a structured interview kit with evidence-backed questions, focus signals, and scorecard guidance.'),
+    action('draft-onboarding-plan', 'Draft onboarding plan', 'employee', 'aiworker-hr.onboarding-plan', 'onboarding-plan', 'Draft a 30/60/90 onboarding or check-in plan with evidence, owner placeholders, open risks, and review notes.'),
+    action('prepare-offboarding-summary', 'Prepare offboarding summary', 'alumni', 'aiworker-hr.offboarding-summary', 'offboarding-summary', 'Prepare an offboarding or alumni handoff summary. Keep sensitive details minimized and separate confirmed facts from assumptions.'),
+    action('build-evidence-matrix', 'Build evidence matrix', 'pool', 'aiworker-hr.evidence-matrix', 'evidence-matrix', 'Build an evidence matrix across people and role/lifecycle signals. Use source references and mark weak, missing, or conflicting evidence.'),
+    action('check-risky-wording', 'Check risky wording', 'artifact', 'aiworker-hr.hiring-risk', 'hiring-risk', 'Review the current artifact for protected-class inference, unsupported personal judgments, privacy leakage, and unreviewed employment commitments.'),
   ],
   artifactKinds: ['person-profile', 'lifecycle-next-step', 'candidate-screen', 'interview-brief', 'onboarding-plan', 'offboarding-summary', 'evidence-matrix', 'hiring-risk'],
   description: 'People-first HR workbench for profile context, lifecycle moments, evidence, reviewable next steps, and memory candidates.',
@@ -82,7 +82,7 @@ export const hrPeopleWorkbench = soulWorkbenchDescriptorSchema.parse({
     'Person-sensitive details are not promoted into durable memory without review.',
     'Hiring and employment decisions remain explicitly human-owned.',
   ],
-  soulId: 'hr',
+  soulId: 'aiworker-hr',
   version: '0.1.0',
   views: [
     { description: 'Lifecycle filters, evidence inventory, and review guardrails.', id: 'lifecycle-rail', label: 'Lifecycle rail', region: 'rail' },

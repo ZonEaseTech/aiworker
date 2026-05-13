@@ -9,6 +9,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 import { bootstrapWorkerApp } from './worker'
 
+const HR_APP_ID = 'aiworker-hr'
+const HR_CANDIDATE_SCREEN = namespaceSoulAppCapabilityId(HR_APP_ID, 'candidate-screen')
+
 describe('local daemon API', () => {
   let dir: string
 
@@ -50,12 +53,59 @@ describe('local daemon API', () => {
   async function createHrWorker(target: Awaited<ReturnType<typeof app>>) {
     const res = await target.request('/api/local/workers', {
       method: 'POST',
-      body: JSON.stringify({ id: 'hr-worker', soulId: 'hr', name: 'HR Recruiting' }),
+      body: JSON.stringify({ id: 'hr-worker', soulId: HR_APP_ID, name: 'HR Recruiting' }),
       headers: { 'content-type': 'application/json' },
     })
     expect(res.status).toBe(201)
     return (await res.json() as { worker: { id: string, soulId: string } }).worker
   }
+
+  it('bootstraps official apps and rejects legacy built-in Soul ids', async () => {
+    const target = await app()
+
+    const soulsBody = await (await target.request('/api/local/souls')).json() as { souls: Array<{ id: string, status: string }> }
+    expect(soulsBody.souls).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'aiworker-hr', status: 'available' }),
+      expect.objectContaining({ id: 'aiworker-qa', status: 'available' }),
+    ]))
+    expect(soulsBody.souls.some(soul => soul.id === 'hr')).toBe(false)
+
+    const legacyRes = await target.request('/api/local/workers', {
+      method: 'POST',
+      body: JSON.stringify({ id: 'legacy-hr-worker', soulId: 'hr', name: 'Legacy HR' }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(legacyRes.status).toBe(400)
+    expect(await legacyRes.json()).toMatchObject({ error: { code: 'SOUL_NOT_AVAILABLE' } })
+
+    const appWorkerRes = await target.request('/api/local/workers', {
+      method: 'POST',
+      body: JSON.stringify({ id: 'official-hr-worker', soulId: HR_APP_ID, name: 'Official HR' }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(appWorkerRes.status).toBe(201)
+    expect(await appWorkerRes.json()).toMatchObject({ worker: { soulId: HR_APP_ID } })
+  })
+
+  it('does not re-enable disabled official apps on daemon restart', async () => {
+    const target = await app()
+    const disableRes = await target.request(`/api/local/apps/${HR_APP_ID}/disable`, { method: 'POST' })
+    expect(disableRes.status).toBe(200)
+
+    const restarted = await app()
+    const soulsBody = await (await restarted.request('/api/local/souls')).json() as { souls: Array<{ id: string, status: string }> }
+    expect(soulsBody.souls).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: HR_APP_ID, status: 'coming_soon' }),
+      expect.objectContaining({ id: 'aiworker-qa', status: 'available' }),
+    ]))
+    const workerRes = await restarted.request('/api/local/workers', {
+      method: 'POST',
+      body: JSON.stringify({ id: 'disabled-hr-worker', soulId: HR_APP_ID, name: 'Disabled HR' }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(workerRes.status).toBe(400)
+    expect(await workerRes.json()).toMatchObject({ error: { code: 'SOUL_NOT_AVAILABLE' } })
+  })
 
   it('serves the session workspace loop through /api/local routes', async () => {
     const target = await app()
@@ -64,7 +114,7 @@ describe('local daemon API', () => {
     const workersRes = await target.request('/api/local/workers')
     expect(workersRes.status).toBe(200)
     const workersBody = await workersRes.json() as { workers: Array<{ id: string, soulId: string }> }
-    const hrWorker = workersBody.workers.find(worker => worker.soulId === 'hr')
+    const hrWorker = workersBody.workers.find(worker => worker.soulId === HR_APP_ID)
     expect(hrWorker?.id).toBe('hr-worker')
     expect(createdWorker.id).toBe(hrWorker!.id)
 
@@ -79,7 +129,7 @@ describe('local daemon API', () => {
     const sessionRes = await target.request(`/api/local/workers/${hrWorker!.id}/workspaces/${workspaceBody.workspace.id}/sessions`, {
       method: 'POST',
       body: JSON.stringify({
-        capabilityTemplateId: 'candidate-screen',
+        capabilityTemplateId: HR_CANDIDATE_SCREEN,
         context: 'Review packet',
         input: 'Prepare a candidate screen.',
         title: 'Screen candidate',
@@ -93,7 +143,7 @@ describe('local daemon API', () => {
       session: { capabilityTemplateId: string, status: string }
       turn: { status: string }
     }
-    expect(sessionBody.session.capabilityTemplateId).toBe('candidate-screen')
+    expect(sessionBody.session.capabilityTemplateId).toBe(HR_CANDIDATE_SCREEN)
     expect(sessionBody.turn.status).toBe('succeeded')
     expect(sessionBody.artifacts).toHaveLength(1)
     expect(sessionBody.lessons).toHaveLength(1)
@@ -132,7 +182,7 @@ describe('local daemon API', () => {
     const soulsBody = await (await target.request('/api/local/souls')).json() as { souls: Array<{ id: string, status: string }> }
     expect(soulsBody.souls).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'aiworker-hr', status: 'available' })]))
 
-    const capabilityId = namespaceSoulAppCapabilityId('aiworker-hr', 'candidate-screen')
+    const capabilityId = HR_CANDIDATE_SCREEN
     const templatesBody = await (await target.request('/api/local/templates?soulId=aiworker-hr')).json() as { templates: Array<{ id: string, soulId: string }> }
     expect(templatesBody.templates).toEqual(expect.arrayContaining([expect.objectContaining({ id: capabilityId, soulId: 'aiworker-hr' })]))
 
@@ -200,9 +250,26 @@ describe('local daemon API', () => {
             cookie: request.headers.get('cookie'),
             forwardedHost: request.headers.get('x-forwarded-host'),
             hostUrl: request.headers.get('x-aiworker-host-url'),
+            mountContext: request.headers.get('x-aiworker-mount-context'),
+            mountSignature: request.headers.get('x-aiworker-mount-signature'),
             mounted: true,
             mountToken: request.headers.get('x-aiworker-mount-token'),
             routePrefix: request.headers.get('x-aiworker-route-prefix'),
+          })
+        }
+        if (url.pathname === '/surfaces/routes/hr-home') {
+          return Response.json({
+            appId: request.headers.get('x-aiworker-app-id'),
+            context: request.headers.get('x-aiworker-mount-context'),
+            renderer: 'host-descriptor',
+            signature: request.headers.get('x-aiworker-mount-signature'),
+            title: 'HR Mounted Workbench',
+            type: 'aiworker.surface.descriptor.v1',
+          })
+        }
+        if (url.pathname === '/frames/widgets/hr-people-widget') {
+          return new Response('<!doctype html><html><body><h1>HR frame</h1></body></html>', {
+            headers: { 'content-type': 'text/html; charset=utf-8' },
           })
         }
         return Response.json({ error: { code: 'NOT_FOUND' } }, { status: 404 })
@@ -243,6 +310,8 @@ describe('local daemon API', () => {
         authorization: string | null
         cookie: string | null
         forwardedHost: string | null
+        mountContext: string | null
+        mountSignature: string | null
         mountToken: string | null
       }
       expect(mountedApiBody).toMatchObject({
@@ -254,6 +323,63 @@ describe('local daemon API', () => {
         routePrefix: '/api/local/apps/aiworker-hr',
       })
       expect(mountedApiBody.mountToken).toMatch(/^[a-f0-9-]{36}$/)
+      expect(mountedApiBody.mountContext).toBeTruthy()
+      expect(mountedApiBody.mountSignature).toMatch(/^[a-f0-9]{64}$/)
+
+      const surfaceRes = await target.request('/api/local/apps/aiworker-hr/surfaces/hr-home')
+      expect(surfaceRes.status).toBe(200)
+      const surfaceBody = await surfaceRes.json() as { context: string | null, renderer: string, signature: string | null, title: string }
+      expect(surfaceBody).toMatchObject({ renderer: 'host-descriptor', title: 'HR Mounted Workbench' })
+      expect(surfaceBody.context).toBeTruthy()
+      expect(surfaceBody.signature).toMatch(/^[a-f0-9]{64}$/)
+
+      const frameRes = await target.request('/api/local/apps/aiworker-hr/surfaces/hr-people-widget')
+      expect(frameRes.status).toBe(200)
+      const frameBody = await frameRes.json() as { frame: { sandbox: string, url: string }, surface: { renderer: string } }
+      expect(frameBody.surface.renderer).toBe('sandboxed-frame')
+      expect(frameBody.frame.sandbox).toBe('allow-scripts allow-forms')
+      expect(frameBody.frame.url).toBe('/api/local/apps/aiworker-hr/frames/widgets/hr-people-widget')
+    }
+    finally {
+      mountedService.stop()
+    }
+  })
+
+  it('healthchecks declared mounted service base URLs before proxying', async () => {
+    const target = await app()
+    const mountedService = Bun.serve({
+      fetch(request) {
+        const url = new URL(request.url)
+        if (url.pathname === '/health')
+          return Response.json({ status: 'not-ready' }, { status: 503 })
+        return Response.json({ appId: 'aiworker-hr' })
+      },
+      hostname: '127.0.0.1',
+      port: 0,
+    })
+
+    try {
+      await target.request('/api/local/apps/install', {
+        method: 'POST',
+        body: JSON.stringify({
+          manifest: {
+            ...hrSoulAppManifest,
+            api: {
+              ...hrSoulAppManifest.api,
+              localService: {
+                baseUrl: `http://127.0.0.1:${mountedService.port}`,
+                healthPath: '/health',
+              },
+            },
+          },
+        }),
+        headers: { 'content-type': 'application/json' },
+      })
+      expect((await target.request('/api/local/apps/aiworker-hr/enable', { method: 'POST' })).status).toBe(200)
+
+      const mountedApiRes = await target.request('/api/local/apps/aiworker-hr/domain')
+      expect(mountedApiRes.status).toBe(502)
+      expect(await mountedApiRes.json()).toMatchObject({ error: { code: 'SOUL_APP_SERVICE_UNREACHABLE' } })
     }
     finally {
       mountedService.stop()
@@ -421,7 +547,7 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
     const sessionBody = await (await target.request(`/api/local/workers/${hrWorker.id}/workspaces/${workspaceBody.workspace.id}/sessions`, {
       method: 'POST',
       body: JSON.stringify({
-        capabilityTemplateId: 'candidate-screen',
+        capabilityTemplateId: HR_CANDIDATE_SCREEN,
         context: 'Review packet',
         title: 'Screen candidate',
       }),
@@ -456,7 +582,7 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
     const streamRes = await target.request(`/api/local/workers/${hrWorker.id}/workspaces/${workspaceBody.workspace.id}/sessions/stream`, {
       method: 'POST',
       body: JSON.stringify({
-        capabilityTemplateId: 'candidate-screen',
+        capabilityTemplateId: HR_CANDIDATE_SCREEN,
         context: 'Review packet',
         input: 'Prepare the first streamed candidate screen.',
         title: 'Screen candidate',
@@ -468,7 +594,7 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
     expect(streamRes.headers.get('content-type')).toContain('text/event-stream')
     const body = await streamRes.text()
     expect(body).toContain('event: session')
-    expect(body).toContain('"capabilityTemplateId":"candidate-screen"')
+    expect(body).toContain(`"capabilityTemplateId":"${HR_CANDIDATE_SCREEN}"`)
     expect(body.indexOf('event: session')).toBeLessThan(body.indexOf('event: turn'))
     expect(body).toContain('event: session_event')
     expect(body).toContain('event: result')

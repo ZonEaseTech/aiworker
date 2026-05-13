@@ -1,8 +1,18 @@
+import { Buffer } from 'node:buffer'
 import process from 'node:process'
 
 import { createSoulAppClient } from '@zonease/aiworker-soul-app-sdk'
 
 import { qaReferenceSoulApp, qaSoulAppManifest } from './index'
+
+interface MountContext {
+  brokerUrl?: string
+  surface?: {
+    id?: string
+    scope?: string
+  }
+  workspaceId?: string | null
+}
 
 export function serveHostMounted(port = Number(Bun.env.PORT ?? 0)) {
   return Bun.serve({
@@ -25,6 +35,14 @@ export function serveHostMounted(port = Number(Bun.env.PORT ?? 0)) {
           mounted: true,
           soul: qaSoulAppManifest.soul.id,
           workspaceTypes: qaSoulAppManifest.workspaceTypes.map(type => type.id),
+        })
+      }
+      if (url.pathname === '/surfaces/routes/qa-home' || url.pathname === '/surfaces/panels/qa-release-panel') {
+        return Response.json(qaDescriptorSurface(request, url.pathname))
+      }
+      if (url.pathname === '/frames/widgets/qa-release-widget') {
+        return new Response(qaWidgetFrameHtml(request), {
+          headers: { 'content-type': 'text/html; charset=utf-8' },
         })
       }
       if (url.pathname === '/broker/permissions') {
@@ -62,4 +80,80 @@ function verifyMountToken(request: Request): Response | null {
   return actual === expected
     ? null
     : Response.json({ error: { code: 'INVALID_MOUNT_TOKEN', message: 'Host mount token is required.' } }, { status: 401 })
+}
+
+function qaDescriptorSurface(request: Request, pathname: string) {
+  const context = readMountContext(request)
+  return {
+    actions: [
+      {
+        id: 'create-release-review',
+        label: 'Create review',
+        method: 'POST',
+        target: `${context?.brokerUrl ?? '/broker'}/reviews`,
+      },
+    ],
+    appId: qaSoulAppManifest.id,
+    context: {
+      signed: Boolean(request.headers.get('x-aiworker-mount-signature')),
+      surfaceId: context?.surface?.id ?? null,
+      workspaceId: context?.workspaceId ?? null,
+    },
+    fields: [
+      { label: 'Domain', value: qaSoulAppManifest.soul.domain },
+      { label: 'Workspace types', value: qaSoulAppManifest.workspaceTypes.map(type => type.name).join(', ') },
+      { label: 'Evidence broker', value: qaSoulAppManifest.connectors.required.map(connector => connector.id).join(', ') },
+    ],
+    path: pathname,
+    renderer: 'host-descriptor',
+    status: 'ready',
+    title: pathname.includes('/routes/') ? 'QA Mounted Workbench' : 'Release Gate Panel',
+    type: 'aiworker.surface.descriptor.v1',
+  }
+}
+
+function qaWidgetFrameHtml(request: Request): string {
+  const context = readMountContext(request)
+  return [
+    '<!doctype html>',
+    '<html lang="en">',
+    '<head><meta charset="utf-8"><title>QA Release Widget</title></head>',
+    '<body>',
+    '<main>',
+    '<h1>Release Widget</h1>',
+    `<p data-soul-app-id="${qaSoulAppManifest.id}">Mounted QA frame surface</p>`,
+    `<p data-surface-id="${context?.surface?.id ?? 'unknown'}">Scope ${context?.surface?.scope ?? 'workspace'}</p>`,
+    '</main>',
+    '</body>',
+    '</html>',
+  ].join('')
+}
+
+function readMountContext(request: Request): MountContext | null {
+  const payload = request.headers.get('x-aiworker-mount-context')
+  if (!payload)
+    return null
+  try {
+    const parsed = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as unknown
+    if (!isRecord(parsed))
+      return null
+    const surface = isRecord(parsed.surface) ? parsed.surface : null
+    return {
+      brokerUrl: typeof parsed.brokerUrl === 'string' ? parsed.brokerUrl : undefined,
+      surface: surface
+        ? {
+            id: typeof surface.id === 'string' ? surface.id : undefined,
+            scope: typeof surface.scope === 'string' ? surface.scope : undefined,
+          }
+        : undefined,
+      workspaceId: typeof parsed.workspaceId === 'string' ? parsed.workspaceId : null,
+    }
+  }
+  catch {
+    return null
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }

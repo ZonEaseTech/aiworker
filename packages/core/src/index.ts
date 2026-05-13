@@ -15,6 +15,14 @@ export {
   type SoulAppStoragePutOptions,
 } from './soul-app/broker'
 export {
+  bootstrapOfficialSoulApps,
+  OFFICIAL_SOUL_APPS,
+  type OfficialSoulAppBootstrapAction,
+  type OfficialSoulAppBootstrapOptions,
+  type OfficialSoulAppBootstrapResult,
+  type OfficialSoulAppDefinition,
+} from './soul-app/official'
+export {
   disableSoulApp,
   enableSoulApp,
   findHostCapabilityTemplate,

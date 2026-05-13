@@ -68,6 +68,16 @@ describe('QA reference Soul App', () => {
       })
       expect(domainRes.status).toBe(200)
       expect(await domainRes.json()).toMatchObject({ appId: 'aiworker-qa', mounted: true })
+      const surfaceRes = await fetch(`${baseUrl}/surfaces/routes/qa-home`, {
+        headers: { 'x-aiworker-mount-token': 'test-qa-mounted-token' },
+      })
+      expect(surfaceRes.status).toBe(200)
+      expect(await surfaceRes.json()).toMatchObject({ renderer: 'host-descriptor', title: 'QA Mounted Workbench' })
+      const frameRes = await fetch(`${baseUrl}/frames/widgets/qa-release-widget`, {
+        headers: { 'x-aiworker-mount-token': 'test-qa-mounted-token' },
+      })
+      expect(frameRes.status).toBe(200)
+      expect(await frameRes.text()).toContain('Mounted QA frame surface')
     }
     finally {
       server.stop()

@@ -440,6 +440,9 @@ export {
   soulAppMemorySchema,
   soulAppModeSchema,
   soulAppMountedContributionSchema,
+  soulAppMountedSurfaceRendererSchema,
+  soulAppMountedSurfaceSchema,
+  soulAppMountedSurfaceScopeSchema,
   soulAppPackRefSchema,
   soulAppPackSourceSchema,
   soulAppPermissionActionSchema,
@@ -492,6 +495,9 @@ export type {
   SoulAppMemoryAdmissionPolicy,
   SoulAppMode,
   SoulAppMountedContribution,
+  SoulAppMountedSurface,
+  SoulAppMountedSurfaceRenderer,
+  SoulAppMountedSurfaceScope,
   SoulAppPackRef,
   SoulAppPackSource,
   SoulAppPermission,
@@ -539,12 +545,7 @@ export type {
 } from './soul-workbench'
 export type { ExecutionEvent, MemoryEntry, ServiceStatus, SkillMeta } from './types'
 export {
-  BUILTIN_CAPABILITY_TEMPLATES,
-  BUILTIN_VERTICAL_SOULS,
   capabilityTemplateSchema,
-  findCapabilityTemplate,
-  findVerticalSoul,
-  listCapabilityTemplatesForSoul,
   verticalSoulSchema,
   verticalSoulStatusSchema,
 } from './vertical-soul'

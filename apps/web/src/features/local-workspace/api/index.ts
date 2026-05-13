@@ -30,6 +30,7 @@ export {
 } from './workers'
 export {
   loadLocalWorkspaceData,
+  resolveMountedSurface,
 } from './workspace-data'
 export {
   createWorkspace,

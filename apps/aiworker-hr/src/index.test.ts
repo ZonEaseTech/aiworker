@@ -68,6 +68,16 @@ describe('HR reference Soul App', () => {
       })
       expect(domainRes.status).toBe(200)
       expect(await domainRes.json()).toMatchObject({ appId: 'aiworker-hr', mounted: true })
+      const surfaceRes = await fetch(`${baseUrl}/surfaces/routes/hr-home`, {
+        headers: { 'x-aiworker-mount-token': 'test-hr-mounted-token' },
+      })
+      expect(surfaceRes.status).toBe(200)
+      expect(await surfaceRes.json()).toMatchObject({ renderer: 'host-descriptor', title: 'HR Mounted Workbench' })
+      const frameRes = await fetch(`${baseUrl}/frames/widgets/hr-people-widget`, {
+        headers: { 'x-aiworker-mount-token': 'test-hr-mounted-token' },
+      })
+      expect(frameRes.status).toBe(200)
+      expect(await frameRes.text()).toContain('Mounted HR frame surface')
     }
     finally {
       server.stop()

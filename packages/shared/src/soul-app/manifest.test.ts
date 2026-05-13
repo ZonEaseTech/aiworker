@@ -47,7 +47,7 @@ describe('Soul App manifest schema', () => {
   })
 
   it('keeps fixture contributions explicit enough for Host discovery', () => {
-    expect(hrSoulAppManifest.artifactTypes[0]?.schemaSha256).toBe('a'.repeat(64))
+    expect(hrSoulAppManifest.artifactTypes[0]?.schemaSha256).toBe('35c14e3d4c0fe9fd95c87e9bc47a210e21f99bcb1b079aa99a95bb93e820c8ab')
     expect(hrSoulAppManifest.capabilities[0]?.promptRef).toBe('./capabilities/person-profile/prompt.md')
     expect(hrSoulAppManifest.workspaceTypes[0]?.defaultCapabilityIds).toEqual(['person-profile'])
     expect(hrSoulAppManifest.connectors.required[0]?.scopes).toContain('candidates.read')
@@ -59,6 +59,16 @@ describe('Soul App manifest schema', () => {
       slot: 'artifact-preview',
       target: 'person-profile',
     }))
+    expect(hrSoulAppManifest.ui.routes[0]?.surface).toMatchObject({
+      entry: '/surfaces/routes/hr-home',
+      renderer: 'host-descriptor',
+      scope: 'app',
+    })
+    expect(hrSoulAppManifest.ui.workspaceWidgets?.[0]?.surface).toMatchObject({
+      entry: '/frames/widgets/hr-people-widget',
+      renderer: 'sandboxed-frame',
+      scope: 'workspace',
+    })
   })
 
   it('reports unsupported protocol before Host imports app code', () => {
@@ -179,6 +189,51 @@ describe('Soul App manifest schema', () => {
 
     expect(result.status).toBe('invalid')
     expect(result.issues.map(issue => issue.code)).toContain('missing_ui_api_entry')
+  })
+
+  it('rejects unsafe mounted surface declarations', () => {
+    const manifest = cloneManifest(hrSoulAppManifest)
+    manifest.ui.routes[0]!.surface = {
+      entry: '/modules/hr-home.js',
+      renderer: 'trusted-module',
+      scope: 'app',
+    }
+
+    const result = validateSoulAppManifest(manifest, {
+      availableConnectorIds: ['ats'],
+      hostVersion: '0.12.1',
+    })
+
+    expect(result.status).toBe('invalid')
+    expect(result.issues).toContainEqual(expect.objectContaining({
+      code: 'unsafe_ui_surface',
+      path: 'ui.routes.0.surface',
+    }))
+  })
+
+  it('requires descriptor and frame surfaces to use their declared endpoint families', () => {
+    const descriptorManifest = cloneManifest(hrSoulAppManifest)
+    descriptorManifest.ui.routes[0]!.surface = {
+      entry: '/frames/routes/hr-home',
+      renderer: 'host-descriptor',
+      scope: 'app',
+    }
+
+    const frameManifest = cloneManifest(hrSoulAppManifest)
+    frameManifest.ui.workspaceWidgets![0]!.surface = {
+      entry: '/surfaces/widgets/hr-people-widget',
+      renderer: 'sandboxed-frame',
+      scope: 'workspace',
+    }
+
+    expect(validateSoulAppManifest(descriptorManifest, {
+      availableConnectorIds: ['ats'],
+      hostVersion: '0.12.1',
+    }).issues).toContainEqual(expect.objectContaining({ code: 'unsafe_ui_surface' }))
+    expect(validateSoulAppManifest(frameManifest, {
+      availableConnectorIds: ['ats'],
+      hostVersion: '0.12.1',
+    }).issues).toContainEqual(expect.objectContaining({ code: 'unsafe_ui_surface' }))
   })
 
   it('classifies missing artifact schema refs as artifact schema errors', () => {

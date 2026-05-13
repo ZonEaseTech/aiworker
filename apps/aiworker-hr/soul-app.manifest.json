@@ -18,7 +18,7 @@
       "previewRef": "./src/ui/person-profile-preview.tsx",
       "reviewPolicyRef": "./review/person-profile.md",
       "schemaRef": "./schemas/person-profile.schema.json",
-      "schemaSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "schemaSha256": "35c14e3d4c0fe9fd95c87e9bc47a210e21f99bcb1b079aa99a95bb93e820c8ab",
       "version": "0.1.0"
     },
     {
@@ -28,7 +28,7 @@
       "previewRef": "./src/ui/candidate-screen-preview.tsx",
       "reviewPolicyRef": "./review/candidate-screen.md",
       "schemaRef": "./schemas/candidate-screen.schema.json",
-      "schemaSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "schemaSha256": "e8bd207be63eab23073cd47e41092f1d753c38d609383206e94334dd984b309c",
       "version": "0.1.0"
     }
   ],
@@ -224,7 +224,15 @@
         "entry": "./src/ui/profile-panel.tsx",
         "id": "hr-profile-panel",
         "label": "Profile panel",
-        "slot": "panel"
+        "slot": "panel",
+        "surface": {
+          "entry": "/surfaces/panels/hr-profile-panel",
+          "renderer": "host-descriptor",
+          "requiredPermissions": [
+            "storage:read:aiworker-hr"
+          ],
+          "scope": "workspace"
+        }
       }
     ],
     "reviewPanels": [
@@ -240,7 +248,15 @@
         "entry": "./src/ui/hr-route.tsx",
         "id": "hr-home",
         "label": "HR",
-        "path": "/hr"
+        "path": "/hr",
+        "surface": {
+          "entry": "/surfaces/routes/hr-home",
+          "renderer": "host-descriptor",
+          "requiredPermissions": [
+            "ui:mount:hr-workbench"
+          ],
+          "scope": "app"
+        }
       }
     ],
     "workspaceWidgets": [
@@ -249,6 +265,11 @@
         "id": "hr-people-widget",
         "label": "People widget",
         "slot": "workspace-widget",
+        "surface": {
+          "entry": "/frames/widgets/hr-people-widget",
+          "renderer": "sandboxed-frame",
+          "scope": "workspace"
+        },
         "target": "people-profile"
       }
     ]

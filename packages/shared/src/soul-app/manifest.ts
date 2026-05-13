@@ -97,11 +97,26 @@ export const soulAppUiContributionKindSchema = zod.enum([
 ])
 export type SoulAppUiContributionKind = z.infer<typeof soulAppUiContributionKindSchema>
 
+export const soulAppMountedSurfaceRendererSchema = zod.enum(['host-descriptor', 'sandboxed-frame', 'trusted-module'])
+export type SoulAppMountedSurfaceRenderer = z.infer<typeof soulAppMountedSurfaceRendererSchema>
+
+export const soulAppMountedSurfaceScopeSchema = zod.enum(['app', 'workspace', 'session', 'artifact', 'review'])
+export type SoulAppMountedSurfaceScope = z.infer<typeof soulAppMountedSurfaceScopeSchema>
+
+export const soulAppMountedSurfaceSchema = zod.object({
+  entry: zod.string().regex(ROUTE_RE, 'surface entry must be an absolute mounted service route'),
+  renderer: soulAppMountedSurfaceRendererSchema,
+  requiredPermissions: zod.array(zod.string().min(1)).readonly().optional(),
+  scope: soulAppMountedSurfaceScopeSchema,
+})
+export type SoulAppMountedSurface = z.infer<typeof soulAppMountedSurfaceSchema>
+
 export const soulAppUiRouteSchema = zod.object({
   entry: zod.string().min(1),
   id: soulAppIdSchema,
   label: zod.string().min(1),
   path: zod.string().regex(ROUTE_RE, 'route path must be an absolute local route'),
+  surface: soulAppMountedSurfaceSchema.optional(),
 })
 export type SoulAppUiRoute = z.infer<typeof soulAppUiRouteSchema>
 
@@ -110,6 +125,7 @@ export const soulAppUiSlotSchema = zod.object({
   id: soulAppIdSchema,
   label: zod.string().min(1),
   slot: soulAppUiContributionKindSchema.exclude(['route']),
+  surface: soulAppMountedSurfaceSchema.optional(),
   target: soulAppIdSchema.optional(),
 })
 export type SoulAppUiSlot = z.infer<typeof soulAppUiSlotSchema>
@@ -268,6 +284,7 @@ export const soulAppManifestIssueCodeSchema = zod.enum([
   'invalid_storage_namespace',
   'unsafe_local_service_url',
   'unsafe_permission_request',
+  'unsafe_ui_surface',
   'missing_ui_api_entry',
   'invalid_artifact_schema',
   'namespace_collision',
@@ -414,6 +431,20 @@ export function validateSoulAppManifest(
         code: 'unsafe_permission_request',
         message,
         path: `permissions.${permission.kind}.${permission.target}`,
+        severity: 'error',
+      })
+    }
+  }
+
+  for (const contribution of manifestUiContributions(manifest)) {
+    if (!contribution.surface)
+      continue
+    const message = unsafeSurfaceMessage(contribution.surface)
+    if (message) {
+      issues.push({
+        code: 'unsafe_ui_surface',
+        message,
+        path: `${contribution.path}.surface`,
         severity: 'error',
       })
     }
@@ -569,4 +600,27 @@ function unsafePermissionMessage(permission: SoulAppPermission, manifest: SoulAp
   if (permission.kind === 'api' && manifest.api.routePrefix && permission.target !== manifest.api.routePrefix)
     return `api permission target must match route prefix ${manifest.api.routePrefix}`
   return null
+}
+
+function unsafeSurfaceMessage(surface: SoulAppMountedSurface): string | null {
+  if (surface.renderer === 'trusted-module')
+    return 'trusted-module surfaces are reserved for a future signed first-party module loader.'
+  if (surface.renderer === 'host-descriptor' && !surface.entry.startsWith('/surfaces/'))
+    return 'host-descriptor surfaces must use a /surfaces/* mounted service entry.'
+  if (surface.renderer === 'sandboxed-frame' && !surface.entry.startsWith('/frames/'))
+    return 'sandboxed-frame surfaces must use a /frames/* mounted service entry.'
+  return null
+}
+
+function manifestUiContributions(manifest: SoulAppManifest): Array<{
+  path: string
+  surface?: SoulAppMountedSurface
+}> {
+  return [
+    ...manifest.ui.routes.map((route, index) => ({ path: `ui.routes.${index}`, surface: route.surface })),
+    ...manifest.ui.panels.map((slot, index) => ({ path: `ui.panels.${index}`, surface: slot.surface })),
+    ...manifest.ui.artifactPreviews.map((slot, index) => ({ path: `ui.artifactPreviews.${index}`, surface: slot.surface })),
+    ...manifest.ui.reviewPanels.map((slot, index) => ({ path: `ui.reviewPanels.${index}`, surface: slot.surface })),
+    ...(manifest.ui.workspaceWidgets ?? []).map((slot, index) => ({ path: `ui.workspaceWidgets.${index}`, surface: slot.surface })),
+  ]
 }

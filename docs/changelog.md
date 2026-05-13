@@ -1,5 +1,59 @@
 # AIWorker Changelog
 
+## 2026-05-13 12:43 [completed] FEAT-069 / PLAN-294 — Host app-only catalog and official Soul App bootstrap
+
+Completed the no-built-in-Soul Host catalog convergence.
+
+- Removed Host runtime fallback to `BUILTIN_VERTICAL_SOULS` and
+  `BUILTIN_CAPABILITY_TEMPLATES`; Host catalog now projects only installed Soul
+  Apps and enabled app capability templates.
+- Added first-party official bootstrap for `aiworker-hr` and `aiworker-qa`
+  using normal install/enable lifecycle, without arbitrary `apps/*` scanning.
+- Wired local daemon startup to bootstrap official HR/QA apps before serving
+  catalog-dependent routes.
+- Preserved explicitly disabled official apps across daemon restart/bootstrap
+  refresh.
+- Added `aiworker app bootstrap official` for CLI repair and diagnostics.
+- Updated API/CLI/Web tests and HR specialized workbench binding to use
+  app-projected IDs such as `aiworker-hr` and
+  `aiworker-hr.person-profile`; legacy `hr` worker creation is rejected.
+- Kept PM/DevOps/finance/legal/ops out of runtime catalog until they become
+  official Soul Apps, as approved in option A.
+
+Verification passed: focused core/shared/API/CLI/Web tests, Web package test,
+temporary-home `app bootstrap official`, HR/QA `app validate` and `app smoke`,
+root `typecheck`, `lint`, `test`, `build`, `git diff --check`,
+`crg:update` and `crg:review`. Web build still emits the existing chunk-size
+warning, but exits 0. code-review-graph reports risk 0.60 with heuristic
+test-gap hints around mounted service/surface helpers.
+
+## 2026-05-13 12:16 [completed] FEAT-068 / PLAN-293 — Mounted Surface Protocol and release gate hardening
+
+Completed the renderer-aware mounted surface slice without making iframe the
+only Host integration path.
+
+- Added mounted `surface` declarations for UI routes, panels, widgets, artifact
+  previews and review panels, with `host-descriptor`, `sandboxed-frame`, and a
+  reserved-but-rejected `trusted-module` renderer.
+- Added mounted contribution surface summaries for Host catalog projection.
+- Replaced HR/QA artifact schema placeholder hashes with real SHA-256 values
+  and made `aiworker app validate` fail on schema hash mismatch.
+- Added Host healthchecks for manifest-declared mounted `baseUrl` services.
+- Added Host-signed `x-aiworker-mount-context` and
+  `x-aiworker-mount-signature` headers on mounted API and declared surface
+  requests.
+- Added `/api/local/apps/:appId/surfaces/:surfaceId` for manifest-declared
+  descriptor/frame surface resolution.
+- Updated HR/QA mounted services to expose descriptor surfaces and sandboxed
+  frame surfaces.
+- Updated Worker Web to render descriptor fields/actions and sandboxed frame
+  surfaces in the Soul Apps rail.
+
+Verification passed: focused shared/API/CLI/Web/HR/QA checks, HR/QA
+`app validate` and `app smoke`, root `typecheck`, `lint`, `test`, `build`, and
+`git diff --check`. Web build still emits the existing chunk-size warning, but
+exits 0.
+
 ## 2026-05-13 03:34 [completed] FEAT-067 / PLAN-292 — Soul App mounted hardening and authoring readiness
 
 Completed the first five post-FEAT-066 follow-up items without publishing the

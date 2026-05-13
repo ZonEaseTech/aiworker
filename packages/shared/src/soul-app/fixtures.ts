@@ -1,7 +1,9 @@
 import { soulAppManifestSchema } from './manifest'
 
-const HR_SCHEMA_HASH = 'a'.repeat(64)
-const QA_SCHEMA_HASH = 'b'.repeat(64)
+const HR_PERSON_PROFILE_SCHEMA_HASH = '35c14e3d4c0fe9fd95c87e9bc47a210e21f99bcb1b079aa99a95bb93e820c8ab'
+const HR_CANDIDATE_SCREEN_SCHEMA_HASH = 'e8bd207be63eab23073cd47e41092f1d753c38d609383206e94334dd984b309c'
+const QA_REGRESSION_MATRIX_SCHEMA_HASH = '6a4f3494764431e8785a82865215eabc4c4678dfb4e447eda4d4684f341892a0'
+const QA_RELEASE_GATE_SCHEMA_HASH = '0c953a3453ff235c419600073c70c1f155976f448c4567711b511d83668a09e4'
 
 export const hrSoulAppManifest = soulAppManifestSchema.parse({
   api: {
@@ -16,7 +18,7 @@ export const hrSoulAppManifest = soulAppManifestSchema.parse({
       previewRef: './src/ui/person-profile-preview.tsx',
       reviewPolicyRef: './review/person-profile.md',
       schemaRef: './schemas/person-profile.schema.json',
-      schemaSha256: HR_SCHEMA_HASH,
+      schemaSha256: HR_PERSON_PROFILE_SCHEMA_HASH,
       version: '0.1.0',
     },
     {
@@ -26,7 +28,7 @@ export const hrSoulAppManifest = soulAppManifestSchema.parse({
       previewRef: './src/ui/candidate-screen-preview.tsx',
       reviewPolicyRef: './review/candidate-screen.md',
       schemaRef: './schemas/candidate-screen.schema.json',
-      schemaSha256: HR_SCHEMA_HASH,
+      schemaSha256: HR_CANDIDATE_SCREEN_SCHEMA_HASH,
       version: '0.1.0',
     },
   ],
@@ -187,6 +189,12 @@ export const hrSoulAppManifest = soulAppManifestSchema.parse({
         id: 'hr-profile-panel',
         label: 'Profile panel',
         slot: 'panel',
+        surface: {
+          entry: '/surfaces/panels/hr-profile-panel',
+          renderer: 'host-descriptor',
+          requiredPermissions: ['storage:read:aiworker-hr'],
+          scope: 'workspace',
+        },
       },
     ],
     reviewPanels: [
@@ -198,7 +206,18 @@ export const hrSoulAppManifest = soulAppManifestSchema.parse({
       },
     ],
     routes: [
-      { entry: './src/ui/hr-route.tsx', id: 'hr-home', label: 'HR', path: '/hr' },
+      {
+        entry: './src/ui/hr-route.tsx',
+        id: 'hr-home',
+        label: 'HR',
+        path: '/hr',
+        surface: {
+          entry: '/surfaces/routes/hr-home',
+          renderer: 'host-descriptor',
+          requiredPermissions: ['ui:mount:hr-workbench'],
+          scope: 'app',
+        },
+      },
     ],
     workspaceWidgets: [
       {
@@ -206,6 +225,11 @@ export const hrSoulAppManifest = soulAppManifestSchema.parse({
         id: 'hr-people-widget',
         label: 'People widget',
         slot: 'workspace-widget',
+        surface: {
+          entry: '/frames/widgets/hr-people-widget',
+          renderer: 'sandboxed-frame',
+          scope: 'workspace',
+        },
         target: 'people-profile',
       },
     ],
@@ -249,7 +273,7 @@ export const qaSoulAppManifest = soulAppManifestSchema.parse({
       previewRef: './src/ui/regression-matrix-preview.tsx',
       reviewPolicyRef: './review/regression-matrix.md',
       schemaRef: './schemas/regression-matrix.schema.json',
-      schemaSha256: QA_SCHEMA_HASH,
+      schemaSha256: QA_REGRESSION_MATRIX_SCHEMA_HASH,
       version: '0.1.0',
     },
     {
@@ -259,7 +283,7 @@ export const qaSoulAppManifest = soulAppManifestSchema.parse({
       previewRef: './src/ui/release-gate-preview.tsx',
       reviewPolicyRef: './review/release-gate.md',
       schemaRef: './schemas/release-gate.schema.json',
-      schemaSha256: QA_SCHEMA_HASH,
+      schemaSha256: QA_RELEASE_GATE_SCHEMA_HASH,
       version: '0.1.0',
     },
   ],
@@ -420,6 +444,12 @@ export const qaSoulAppManifest = soulAppManifestSchema.parse({
         id: 'qa-release-panel',
         label: 'Release panel',
         slot: 'panel',
+        surface: {
+          entry: '/surfaces/panels/qa-release-panel',
+          renderer: 'host-descriptor',
+          requiredPermissions: ['storage:read:aiworker-qa'],
+          scope: 'workspace',
+        },
       },
     ],
     reviewPanels: [
@@ -431,7 +461,18 @@ export const qaSoulAppManifest = soulAppManifestSchema.parse({
       },
     ],
     routes: [
-      { entry: './src/ui/qa-route.tsx', id: 'qa-home', label: 'QA', path: '/qa' },
+      {
+        entry: './src/ui/qa-route.tsx',
+        id: 'qa-home',
+        label: 'QA',
+        path: '/qa',
+        surface: {
+          entry: '/surfaces/routes/qa-home',
+          renderer: 'host-descriptor',
+          requiredPermissions: ['ui:mount:qa-workbench'],
+          scope: 'app',
+        },
+      },
     ],
     workspaceWidgets: [
       {
@@ -439,6 +480,11 @@ export const qaSoulAppManifest = soulAppManifestSchema.parse({
         id: 'qa-release-widget',
         label: 'Release widget',
         slot: 'workspace-widget',
+        surface: {
+          entry: '/frames/widgets/qa-release-widget',
+          renderer: 'sandboxed-frame',
+          scope: 'workspace',
+        },
         target: 'release',
       },
     ],

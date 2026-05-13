@@ -60,8 +60,11 @@ describe('aiworker local CLI', () => {
   })
 
   it('creates workspace/session command records and lists artifacts with a mocked engine', async () => {
-    expect(await runCli(argv('worker', 'create', '--id', 'hr-recruiting', '--name', 'HR Recruiting', '--soul', 'hr'))).toBe(0)
-    expect((JSON.parse(output) as { worker: { id: string, soulId: string } }).worker).toMatchObject({ id: 'hr-recruiting', soulId: 'hr' })
+    expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
+    output = ''
+
+    expect(await runCli(argv('worker', 'create', '--id', 'hr-recruiting', '--name', 'HR Recruiting', '--soul', 'aiworker-hr'))).toBe(0)
+    expect((JSON.parse(output) as { worker: { id: string, soulId: string } }).worker).toMatchObject({ id: 'hr-recruiting', soulId: 'aiworker-hr' })
     output = ''
 
     expect(await runCli(argv('worker', 'select', 'hr-recruiting'))).toBe(0)
@@ -74,11 +77,43 @@ describe('aiworker local CLI', () => {
 
     expect(await runCli(argv('commands'))).toBe(0)
     expect(output).toContain('dev')
-    expect(output).toContain('app list|show|install|enable|disable|doctor|permissions|create|validate|smoke')
+    expect(output).toContain('app list|show|install|enable|disable|doctor|permissions|bootstrap|create|validate|smoke')
     expect(output).toContain('worker create|list|show|select')
     expect(output).toContain('workspace create|list|show')
     expect(output).toContain('session start|list|show')
     expect(output).not.toContain('run start')
+  })
+
+  it('bootstraps official apps and rejects legacy built-in Soul ids', async () => {
+    expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
+    const body = JSON.parse(output) as {
+      bootstrap: {
+        results: Array<{ action: string, appId: string }>
+        status: string
+      }
+      catalog: { souls: Array<{ id: string, status: string }> }
+    }
+    expect(body.bootstrap.status).toBe('pass')
+    expect(body.bootstrap.results.map(result => [result.appId, result.action])).toEqual([
+      ['aiworker-hr', 'installed_enabled'],
+      ['aiworker-qa', 'installed_enabled'],
+    ])
+    expect(body.catalog.souls).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'aiworker-hr', status: 'available' }),
+      expect.objectContaining({ id: 'aiworker-qa', status: 'available' }),
+    ]))
+    expect(body.catalog.souls.some(soul => soul.id === 'hr')).toBe(false)
+    output = ''
+
+    expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
+    expect((JSON.parse(output) as { bootstrap: { results: Array<{ action: string }> } }).bootstrap.results.map(result => result.action)).toEqual(['refreshed', 'refreshed'])
+    output = ''
+
+    expect(await runCli(argv('worker', 'create', '--id', 'legacy-hr', '--name', 'Legacy HR', '--soul', 'hr'))).toBe(1)
+    output = ''
+
+    expect(await runCli(argv('worker', 'create', '--id', 'official-hr', '--name', 'Official HR', '--soul', 'aiworker-hr'))).toBe(0)
+    expect((JSON.parse(output) as { worker: { soulId: string } }).worker.soulId).toBe('aiworker-hr')
   })
 
   it('installs, enables, lists, and disables local Soul App manifests', async () => {
@@ -146,6 +181,7 @@ describe('aiworker local CLI', () => {
     expect(validation.validation.checkedAssets).toContain('./schemas/brief.schema.json')
     expect(validation.validation.checkedAssets).toContain('./src/standalone.ts')
     expect(validation.validation.checkedAssets).toContain('./src/host-mounted.ts')
+    expect(validation.validation.checkedAssets).toContain('./src/index.ts')
     output = ''
 
     expect(await runCli(argv('app', 'smoke', appDir))).toBe(0)
@@ -163,6 +199,26 @@ describe('aiworker local CLI', () => {
     })
     expect(smoke.smoke.standaloneUrl).toStartWith('http://127.0.0.1:')
     expect(smoke.smoke.mountedServiceUrl).toStartWith('http://127.0.0.1:')
+  })
+
+  it('fails Soul App validation when an artifact schema hash does not match the file', async () => {
+    const appDir = path.join(root, 'hash-check-app')
+
+    expect(await runCli(argv('app', 'create', 'hash-check-app', '--dir', appDir))).toBe(0)
+    output = ''
+    await writeFile(path.join(appDir, 'schemas/brief.schema.json'), '{"type":"object","properties":{"tampered":{"type":"string"}}}\n')
+
+    expect(await runCli(argv('app', 'validate', appDir))).toBe(1)
+    const validation = JSON.parse(output) as {
+      validation: {
+        assetIssues: Array<{ code: string, path: string }>
+        status: string
+      }
+    }
+    expect(validation.validation.status).toBe('fail')
+    expect(validation.validation.assetIssues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'asset_hash_mismatch', path: './schemas/brief.schema.json' }),
+    ]))
   })
 
   it('fails Soul App validation on Host private imports', async () => {

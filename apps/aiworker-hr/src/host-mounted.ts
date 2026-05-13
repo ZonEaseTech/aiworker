@@ -1,8 +1,18 @@
+import { Buffer } from 'node:buffer'
 import process from 'node:process'
 
 import { createSoulAppClient } from '@zonease/aiworker-soul-app-sdk'
 
 import { hrReferenceSoulApp, hrSoulAppManifest } from './index'
+
+interface MountContext {
+  brokerUrl?: string
+  surface?: {
+    id?: string
+    scope?: string
+  }
+  workspaceId?: string | null
+}
 
 export function serveHostMounted(port = Number(Bun.env.PORT ?? 0)) {
   return Bun.serve({
@@ -25,6 +35,14 @@ export function serveHostMounted(port = Number(Bun.env.PORT ?? 0)) {
           mounted: true,
           soul: hrSoulAppManifest.soul.id,
           workspaceTypes: hrSoulAppManifest.workspaceTypes.map(type => type.id),
+        })
+      }
+      if (url.pathname === '/surfaces/routes/hr-home' || url.pathname === '/surfaces/panels/hr-profile-panel') {
+        return Response.json(hrDescriptorSurface(request, url.pathname))
+      }
+      if (url.pathname === '/frames/widgets/hr-people-widget') {
+        return new Response(hrWidgetFrameHtml(request), {
+          headers: { 'content-type': 'text/html; charset=utf-8' },
         })
       }
       if (url.pathname === '/broker/permissions') {
@@ -62,4 +80,80 @@ function verifyMountToken(request: Request): Response | null {
   return actual === expected
     ? null
     : Response.json({ error: { code: 'INVALID_MOUNT_TOKEN', message: 'Host mount token is required.' } }, { status: 401 })
+}
+
+function hrDescriptorSurface(request: Request, pathname: string) {
+  const context = readMountContext(request)
+  return {
+    actions: [
+      {
+        id: 'create-profile-review',
+        label: 'Create review',
+        method: 'POST',
+        target: `${context?.brokerUrl ?? '/broker'}/reviews`,
+      },
+    ],
+    appId: hrSoulAppManifest.id,
+    context: {
+      signed: Boolean(request.headers.get('x-aiworker-mount-signature')),
+      surfaceId: context?.surface?.id ?? null,
+      workspaceId: context?.workspaceId ?? null,
+    },
+    fields: [
+      { label: 'Domain', value: hrSoulAppManifest.soul.domain },
+      { label: 'Workspace types', value: hrSoulAppManifest.workspaceTypes.map(type => type.name).join(', ') },
+      { label: 'Evidence broker', value: hrSoulAppManifest.connectors.required.map(connector => connector.id).join(', ') },
+    ],
+    path: pathname,
+    renderer: 'host-descriptor',
+    status: 'ready',
+    title: pathname.includes('/routes/') ? 'HR Mounted Workbench' : 'People Profile Panel',
+    type: 'aiworker.surface.descriptor.v1',
+  }
+}
+
+function hrWidgetFrameHtml(request: Request): string {
+  const context = readMountContext(request)
+  return [
+    '<!doctype html>',
+    '<html lang="en">',
+    '<head><meta charset="utf-8"><title>HR People Widget</title></head>',
+    '<body>',
+    '<main>',
+    '<h1>People Widget</h1>',
+    `<p data-soul-app-id="${hrSoulAppManifest.id}">Mounted HR frame surface</p>`,
+    `<p data-surface-id="${context?.surface?.id ?? 'unknown'}">Scope ${context?.surface?.scope ?? 'workspace'}</p>`,
+    '</main>',
+    '</body>',
+    '</html>',
+  ].join('')
+}
+
+function readMountContext(request: Request): MountContext | null {
+  const payload = request.headers.get('x-aiworker-mount-context')
+  if (!payload)
+    return null
+  try {
+    const parsed = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as unknown
+    if (!isRecord(parsed))
+      return null
+    const surface = isRecord(parsed.surface) ? parsed.surface : null
+    return {
+      brokerUrl: typeof parsed.brokerUrl === 'string' ? parsed.brokerUrl : undefined,
+      surface: surface
+        ? {
+            id: typeof surface.id === 'string' ? surface.id : undefined,
+            scope: typeof surface.scope === 'string' ? surface.scope : undefined,
+          }
+        : undefined,
+      workspaceId: typeof parsed.workspaceId === 'string' ? parsed.workspaceId : null,
+    }
+  }
+  catch {
+    return null
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }

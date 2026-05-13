@@ -93,11 +93,11 @@ export function latest<T extends { updatedAt: string }>(items: T[]): T | null {
 }
 
 export function projectNamePlaceholder(soulId: string, copy: WorkerMessages): string {
-  if (soulId === 'hr')
+  if (soulId === 'aiworker-hr' || soulId === 'hr')
     return copy.create.projectPlaceholders.hr
   if (soulId === 'pm')
     return copy.create.projectPlaceholders.pm
-  if (soulId === 'qa')
+  if (soulId === 'aiworker-qa' || soulId === 'qa')
     return copy.create.projectPlaceholders.qa
   if (soulId === 'devops')
     return copy.create.projectPlaceholders.devops

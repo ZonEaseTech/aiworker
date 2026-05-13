@@ -39,7 +39,7 @@ import {
   messagesFor,
   normalizeLocale,
 } from '../features/i18n'
-import { continueSessionTurnStream, createReview, createSessionTurnStream, createWorker, createWorkspace, loadLocalWorkspaceData, readFile, updateLesson } from '../features/local-workspace/api'
+import { continueSessionTurnStream, createReview, createSessionTurnStream, createWorker, createWorkspace, loadLocalWorkspaceData, readFile, resolveMountedSurface, updateLesson } from '../features/local-workspace/api'
 import { CreateWorkerDialog, CreateWorkspaceDialog, WorkerIdentityBlock, WorkspaceCard, WorkspaceSessionComposer } from '../features/local-workspace/components'
 import {
   artifactForSession,
@@ -75,6 +75,43 @@ interface StudioState {
 }
 
 type WorkerMessages = ReturnType<typeof messagesFor>
+interface MountedSurfaceSummary {
+  id: string
+  kind: string
+  label: string
+  renderer: 'host-descriptor' | 'sandboxed-frame' | 'trusted-module'
+}
+
+interface MountedSurfaceDescriptor {
+  actions?: Array<{ id: string, label: string, method?: string, target?: string }>
+  fields?: Array<{ label: string, value: string }>
+  status?: string
+  title?: string
+  type?: string
+}
+
+interface MountedFrameSurface {
+  frame: {
+    sandbox: string
+    title: string
+    url: string
+  }
+  surface: MountedSurfaceSummary
+}
+
+interface MountedSurfaceState {
+  descriptor: MountedSurfaceDescriptor | null
+  error: string | null
+  frame: MountedFrameSurface['frame'] | null
+  loading: boolean
+}
+
+type MountedSurfaceAction
+  = | { type: 'loading' }
+    | { descriptor: MountedSurfaceDescriptor, type: 'descriptor' }
+    | { frame: MountedFrameSurface['frame'], type: 'frame' }
+    | { error: string, type: 'error' }
+
 const initialArtifactPreviewState: ArtifactPreviewState = {
   artifactId: null,
   content: '',
@@ -98,6 +135,19 @@ function artifactPreviewReducer(_state: ArtifactPreviewState, action: ArtifactPr
       return { artifactId: action.artifactId, content: action.content, error: null, loading: false }
     case 'failed':
       return { artifactId: action.artifactId, content: '', error: action.error, loading: false }
+  }
+}
+
+function mountedSurfaceReducer(_state: MountedSurfaceState, action: MountedSurfaceAction): MountedSurfaceState {
+  switch (action.type) {
+    case 'loading':
+      return { descriptor: null, error: null, frame: null, loading: true }
+    case 'descriptor':
+      return { descriptor: action.descriptor, error: null, frame: null, loading: false }
+    case 'frame':
+      return { descriptor: null, error: null, frame: action.frame, loading: false }
+    case 'error':
+      return { descriptor: null, error: action.error, frame: null, loading: false }
   }
 }
 
@@ -1217,6 +1267,7 @@ function SoulAppsPanel({ apps, locale }: { apps: HostedSoulApp[], locale: Return
                       <small key={route.id}>{`Route ${route.label} · ${route.path}`}</small>
                     ))}
                     <small>{mountedSlotSummary(app)}</small>
+                    <MountedSurfaceList app={app} />
                   </>
                 )
               : <small>Mounted contributions paused</small>}
@@ -1225,6 +1276,102 @@ function SoulAppsPanel({ apps, locale }: { apps: HostedSoulApp[], locale: Return
       </div>
     </section>
   )
+}
+
+function MountedSurfaceList({ app }: { app: HostedSoulApp }) {
+  const surfaces = mountedSurfaceSummaries(app)
+  if (surfaces.length === 0)
+    return null
+  return (
+    <div className="mounted-surface-list">
+      {surfaces.map(surface => (
+        <MountedSurfacePreview key={surface.id} appId={app.appId} surface={surface} />
+      ))}
+    </div>
+  )
+}
+
+function MountedSurfacePreview({ appId, surface }: { appId: string, surface: MountedSurfaceSummary }) {
+  const [state, dispatch] = useReducer(mountedSurfaceReducer, { descriptor: null, error: null, frame: null, loading: true })
+
+  useEffect(() => {
+    let alive = true
+    dispatch({ type: 'loading' })
+    resolveMountedSurface<MountedSurfaceDescriptor | MountedFrameSurface>(appId, surface.id)
+      .then((result) => {
+        if (!alive)
+          return
+        if ('frame' in result) {
+          dispatch({ frame: result.frame, type: 'frame' })
+        }
+        else {
+          dispatch({ descriptor: result, type: 'descriptor' })
+        }
+      })
+      .catch((error) => {
+        if (!alive)
+          return
+        dispatch({ error: error instanceof Error ? error.message : String(error), type: 'error' })
+      })
+    return () => {
+      alive = false
+    }
+  }, [appId, surface.id])
+
+  if (state.loading)
+    return <small>{`${surface.label} surface loading`}</small>
+  if (state.error)
+    return <small>{`${surface.label} surface unavailable`}</small>
+  if (state.frame) {
+    return (
+      <div className="mounted-surface-preview">
+        <strong>{state.frame.title}</strong>
+        <iframe
+          className="mounted-surface-frame"
+          sandbox="allow-scripts allow-forms"
+          src={state.frame.url}
+          title={state.frame.title}
+        />
+      </div>
+    )
+  }
+  if (!state.descriptor)
+    return null
+  return (
+    <div className="mounted-surface-preview">
+      <strong>{state.descriptor.title ?? surface.label}</strong>
+      {state.descriptor.status ? <span>{state.descriptor.status}</span> : null}
+      {(state.descriptor.fields ?? []).slice(0, 3).map(field => (
+        <small key={field.label}>{`${field.label}: ${field.value}`}</small>
+      ))}
+      {(state.descriptor.actions ?? []).slice(0, 2).map(action => (
+        <small key={action.id}>{`Action ${action.label}`}</small>
+      ))}
+    </div>
+  )
+}
+
+function mountedSurfaceSummaries(app: HostedSoulApp): MountedSurfaceSummary[] {
+  const routeSurfaces = app.manifest.ui.routes
+    .filter(route => route.surface)
+    .map(route => ({
+      id: route.id,
+      kind: 'route',
+      label: route.label,
+      renderer: route.surface!.renderer,
+    }))
+  const slotSurfaces = [
+    ...app.manifest.ui.panels,
+    ...app.manifest.ui.artifactPreviews,
+    ...app.manifest.ui.reviewPanels,
+    ...(app.manifest.ui.workspaceWidgets ?? []),
+  ].filter(slot => slot.surface).map(slot => ({
+    id: slot.id,
+    kind: slot.slot,
+    label: slot.label,
+    renderer: slot.surface!.renderer,
+  }))
+  return [...routeSurfaces, ...slotSurfaces].filter(surface => surface.renderer !== 'trusted-module').slice(0, 3)
 }
 
 function mountedSlotSummary(app: HostedSoulApp): string {

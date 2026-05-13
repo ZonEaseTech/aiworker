@@ -18,9 +18,12 @@ export type SoulAppHealthStatus = z.infer<typeof soulAppHealthStatusSchema>
 export const soulAppMountedContributionSchema = zod.object({
   apiRoutePrefix: zod.string().min(1).nullable(),
   artifactPreviewIds: zod.array(zod.string().min(1)).readonly(),
+  descriptorSurfaceIds: zod.array(zod.string().min(1)).readonly(),
+  frameSurfaceIds: zod.array(zod.string().min(1)).readonly(),
   panelIds: zod.array(zod.string().min(1)).readonly(),
   reviewPanelIds: zod.array(zod.string().min(1)).readonly(),
   routePaths: zod.array(zod.string().min(1)).readonly(),
+  surfaceIds: zod.array(zod.string().min(1)).readonly(),
   workspaceWidgetIds: zod.array(zod.string().min(1)).readonly(),
 })
 export type SoulAppMountedContribution = z.infer<typeof soulAppMountedContributionSchema>
@@ -95,12 +98,22 @@ export function projectSoulAppCapabilityTemplates(manifest: SoulAppManifest): Ca
 }
 
 export function mountedContributionForManifest(manifest: SoulAppManifest): SoulAppMountedContribution {
+  const surfaces = [
+    ...manifest.ui.routes,
+    ...manifest.ui.panels,
+    ...manifest.ui.artifactPreviews,
+    ...manifest.ui.reviewPanels,
+    ...(manifest.ui.workspaceWidgets ?? []),
+  ].filter(item => item.surface)
   return {
     apiRoutePrefix: manifest.api.routePrefix ?? null,
     artifactPreviewIds: manifest.ui.artifactPreviews.map(slot => slot.id),
+    descriptorSurfaceIds: surfaces.filter(item => item.surface?.renderer === 'host-descriptor').map(item => item.id),
+    frameSurfaceIds: surfaces.filter(item => item.surface?.renderer === 'sandboxed-frame').map(item => item.id),
     panelIds: manifest.ui.panels.map(slot => slot.id),
     reviewPanelIds: manifest.ui.reviewPanels.map(slot => slot.id),
     routePaths: manifest.ui.routes.map(route => route.path),
+    surfaceIds: surfaces.map(item => item.id),
     workspaceWidgetIds: (manifest.ui.workspaceWidgets ?? []).map(slot => slot.id),
   }
 }

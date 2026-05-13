@@ -6,10 +6,6 @@ import { readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import {
   buildHostedSoulApp,
-  BUILTIN_CAPABILITY_TEMPLATES,
-  BUILTIN_VERTICAL_SOULS,
-  findCapabilityTemplate,
-  findVerticalSoul,
   projectSoulAppCapabilityTemplates,
   projectSoulAppSoul,
   soulAppManifestSchema,
@@ -163,17 +159,17 @@ export function listHostSoulCatalog(): HostSoulCatalog {
     .flatMap(app => projectSoulAppCapabilityTemplates(app.manifest))
   return {
     apps,
-    souls: [...BUILTIN_VERTICAL_SOULS, ...appSouls],
-    templates: [...BUILTIN_CAPABILITY_TEMPLATES, ...appTemplates],
+    souls: appSouls,
+    templates: appTemplates,
   }
 }
 
 export function findHostSoul(id: string): VerticalSoul | undefined {
-  return findVerticalSoul(id) ?? listHostSoulCatalog().souls.find(soul => soul.id === id)
+  return listHostSoulCatalog().souls.find(soul => soul.id === id)
 }
 
 export function findHostCapabilityTemplate(id: string): CapabilityTemplate | undefined {
-  return findCapabilityTemplate(id) ?? listHostSoulCatalog().templates.find(template => template.id === id)
+  return listHostSoulCatalog().templates.find(template => template.id === id)
 }
 
 export function listHostCapabilityTemplatesForSoul(soulId: string): CapabilityTemplate[] {

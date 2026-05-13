@@ -6,13 +6,14 @@ import type { Buffer } from 'node:buffer'
 import type { ChildProcessByStdio } from 'node:child_process'
 import type { Readable } from 'node:stream'
 import { spawn } from 'node:child_process'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { mkdir, readFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import {
+  bootstrapOfficialSoulApps,
   createLocalWorkerRuntime,
   disableSoulApp,
   enableSoulApp,
@@ -479,6 +480,23 @@ async function permissionsAppCommand(id: string): Promise<void> {
   printJson({ appId: id, permissions: app?.manifest.permissions ?? [] })
 }
 
+async function bootstrapAppCommand(scope: string): Promise<void> {
+  await ensureDb()
+  if (scope !== 'official')
+    throw new Error(`unsupported app bootstrap scope: ${scope}`)
+  const results = await bootstrapOfficialSoulApps(registryContext())
+  printJson({
+    bootstrap: {
+      results,
+      scope,
+      status: results.some(result => result.action === 'error') ? 'fail' : 'pass',
+    },
+    catalog: listHostSoulCatalog(),
+  })
+  if (results.some(result => result.action === 'error'))
+    process.exitCode = 1
+}
+
 async function createAppScaffoldCommand(id: string, opts: { dir?: string } = {}): Promise<void> {
   const appId = soulAppIdSchema.parse(id)
   const targetDir = path.resolve(opts.dir ?? appId)
@@ -486,6 +504,7 @@ async function createAppScaffoldCommand(id: string, opts: { dir?: string } = {})
     throw new Error(`target directory is not empty: ${targetDir}`)
 
   const manifest = createScaffoldManifest(appId)
+  const briefSchemaText = scaffoldBriefSchemaText(appId)
   writeScaffoldFile(path.join(targetDir, 'soul-app.manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
   writeScaffoldFile(path.join(targetDir, 'package.json'), `${JSON.stringify(createScaffoldPackageJson(appId), null, 2)}\n`)
   writeScaffoldFile(path.join(targetDir, 'tsconfig.json'), `${JSON.stringify(createScaffoldTsconfig(), null, 2)}\n`)
@@ -493,7 +512,7 @@ async function createAppScaffoldCommand(id: string, opts: { dir?: string } = {})
   writeScaffoldFile(path.join(targetDir, 'src/index.ts'), scaffoldIndexTs())
   writeScaffoldFile(path.join(targetDir, 'src/standalone.ts'), scaffoldStandaloneTs())
   writeScaffoldFile(path.join(targetDir, 'src/host-mounted.ts'), scaffoldHostMountedTs())
-  writeScaffoldFile(path.join(targetDir, 'schemas/brief.schema.json'), `${JSON.stringify(createBriefSchema(appId), null, 2)}\n`)
+  writeScaffoldFile(path.join(targetDir, 'schemas/brief.schema.json'), briefSchemaText)
   writeScaffoldFile(path.join(targetDir, 'capabilities/brief/prompt.md'), scaffoldPrompt(appId))
   writeScaffoldFile(path.join(targetDir, 'review/brief.md'), scaffoldReview(appId))
   writeScaffoldFile(path.join(targetDir, 'packs', appId, 'SOUL.md'), scaffoldSoulPack(appId))
@@ -699,8 +718,6 @@ interface AppValidationResult {
   version: string | null
 }
 
-const SCAFFOLD_SCHEMA_SHA256 = '0'.repeat(64)
-
 const HOST_PRIVATE_IMPORT_PREFIXES = [
   '@zonease/aiworker-api',
   '@zonease/aiworker-cli',
@@ -735,7 +752,7 @@ function createScaffoldManifest(appId: string): SoulAppManifest {
         previewRef: './src/index.ts',
         reviewPolicyRef: './review/brief.md',
         schemaRef: './schemas/brief.schema.json',
-        schemaSha256: SCAFFOLD_SCHEMA_SHA256,
+        schemaSha256: sha256Text(scaffoldBriefSchemaText(appId)),
         version: '0.1.0',
       },
     ],
@@ -862,6 +879,12 @@ function createScaffoldManifest(appId: string): SoulAppManifest {
           id: 'brief-panel',
           label: 'Brief panel',
           slot: 'panel',
+          surface: {
+            entry: '/surfaces/panels/brief-panel',
+            renderer: 'host-descriptor',
+            requiredPermissions: [`storage:read:${appId}`],
+            scope: 'workspace',
+          },
         },
       ],
       reviewPanels: [
@@ -873,7 +896,18 @@ function createScaffoldManifest(appId: string): SoulAppManifest {
         },
       ],
       routes: [
-        { entry: './src/standalone.ts', id: 'brief-home', label: titleCase(appId), path: `/${appId}` },
+        {
+          entry: './src/standalone.ts',
+          id: 'brief-home',
+          label: titleCase(appId),
+          path: `/${appId}`,
+          surface: {
+            entry: '/surfaces/routes/brief-home',
+            renderer: 'host-descriptor',
+            requiredPermissions: [`ui:mount:${appId}-workbench`],
+            scope: 'app',
+          },
+        },
       ],
       workspaceWidgets: [
         {
@@ -881,6 +915,11 @@ function createScaffoldManifest(appId: string): SoulAppManifest {
           id: 'brief-widget',
           label: 'Brief widget',
           slot: 'workspace-widget',
+          surface: {
+            entry: '/frames/widgets/brief-widget',
+            renderer: 'sandboxed-frame',
+            scope: 'workspace',
+          },
           target: 'case',
         },
       ],
@@ -1060,6 +1099,10 @@ function createBriefSchema(appId: string) {
     title: `${titleCase(appId)} Brief`,
     type: 'object',
   }
+}
+
+function scaffoldBriefSchemaText(appId: string): string {
+  return `${JSON.stringify(createBriefSchema(appId), null, 2)}\n`
 }
 
 function scaffoldReadme(appId: string): string {
@@ -1279,6 +1322,27 @@ export function serveHostMounted(port = Number(Bun.env.PORT ?? 0)) {
         })
       }
 
+      if (url.pathname === '/surfaces/routes/brief-home' || url.pathname === '/surfaces/panels/brief-panel') {
+        return Response.json({
+          actions: [{ id: 'create-review', label: 'Create review', method: 'POST', target: '/broker/reviews' }],
+          appId: manifest.id,
+          fields: [
+            { label: 'Domain', value: manifest.soul.domain },
+            { label: 'Workspace types', value: manifest.workspaceTypes.map(type => type.name).join(', ') },
+          ],
+          renderer: 'host-descriptor',
+          status: 'ready',
+          title: manifest.name,
+          type: 'aiworker.surface.descriptor.v1',
+        })
+      }
+
+      if (url.pathname === '/frames/widgets/brief-widget') {
+        return new Response('<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Brief Widget</title></head><body><main><h1>Brief Widget</h1></main></body></html>', {
+          headers: { 'content-type': 'text/html; charset=utf-8' },
+        })
+      }
+
       if (url.pathname === '/broker/permissions') {
         const hostUrl = request.headers.get('x-aiworker-host-url') ?? Bun.env.AIWORKER_HOST_URL
         if (!hostUrl)
@@ -1448,8 +1512,9 @@ function validateManifestAssetRefs(rootDir: string, manifest: SoulAppManifest): 
       continue
     }
     if (ref.kind === 'artifact-schema') {
+      const content = readFileSync(assetPath, 'utf8')
       try {
-        JSON.parse(readFileSync(assetPath, 'utf8'))
+        JSON.parse(content)
       }
       catch (error) {
         issues.push({
@@ -1460,14 +1525,29 @@ function validateManifestAssetRefs(rootDir: string, manifest: SoulAppManifest): 
         })
       }
     }
+    if (ref.sha256) {
+      const actual = sha256Text(readFileSync(assetPath, 'utf8'))
+      if (actual !== ref.sha256) {
+        issues.push({
+          code: 'asset_hash_mismatch',
+          message: `${ref.kind} SHA-256 mismatch for ${ref.path}: expected ${ref.sha256}, got ${actual}`,
+          path: ref.path,
+          severity: 'error',
+        })
+      }
+    }
   }
   return { checkedAssets: [...new Set(checkedAssets)].sort(), issues }
 }
 
-function manifestAssetRefs(manifest: SoulAppManifest): Array<{ kind: string, path: string }> {
-  const refs: Array<{ kind: string, path: string }> = []
+function sha256Text(content: string): string {
+  return createHash('sha256').update(content).digest('hex')
+}
+
+function manifestAssetRefs(manifest: SoulAppManifest): Array<{ kind: string, path: string, sha256?: string }> {
+  const refs: Array<{ kind: string, path: string, sha256?: string }> = []
   for (const type of manifest.artifactTypes) {
-    refs.push({ kind: 'artifact-schema', path: type.schemaRef })
+    refs.push({ kind: 'artifact-schema', path: type.schemaRef, sha256: type.schemaSha256 })
     if (type.previewRef)
       refs.push({ kind: 'artifact-preview', path: type.previewRef })
     if (type.reviewPolicyRef)
@@ -1483,7 +1563,7 @@ function manifestAssetRefs(manifest: SoulAppManifest): Array<{ kind: string, pat
       refs.push({ kind: 'soul-pack', path: ref.ref })
   }
   for (const migration of manifest.storage.migrations)
-    refs.push({ kind: 'storage-migration', path: migration.path })
+    refs.push({ kind: 'storage-migration', path: migration.path, sha256: migration.sha256 })
   for (const entry of [
     ...Object.values(manifest.exports),
     manifest.api.entry,
@@ -1617,11 +1697,12 @@ function registerCommands(): void {
   cli.command('app disable <id>', 'disable an installed Soul App').action(disableAppCommand)
   cli.command('app doctor <id>', 'run static Soul App healthcheck').action(doctorAppCommand)
   cli.command('app permissions <id>', 'show declared Soul App permissions').action(permissionsAppCommand)
+  cli.command('app bootstrap <scope>', 'install and enable first-party Soul Apps by shortcut scope').action(bootstrapAppCommand)
   cli.command('app create <id>', 'scaffold a minimal Soul App').option('--dir <path>', 'target directory').action(createAppScaffoldCommand)
   cli.command('app validate <path>', 'validate a Soul App manifest and app boundary').action(validateAppCommand)
   cli.command('app smoke <path>', 'run standalone and Host-mounted Soul App smoke checks').action(smokeAppCommand)
 
-  cli.command('soul list', 'list built-in and mounted vertical Souls').action(async () => {
+  cli.command('soul list', 'list installed app-projected vertical Souls').action(async () => {
     await ensureDb()
     printJson({ souls: listHostSoulCatalog().souls })
   })
@@ -1723,7 +1804,7 @@ function commandIndex(): string {
     'init',
     'dev',
     'daemon start|foreground|status|stop|logs|check',
-    'app list|show|install|enable|disable|doctor|permissions|create|validate|smoke',
+    'app list|show|install|enable|disable|doctor|permissions|bootstrap|create|validate|smoke',
     'soul list',
     'worker create|list|show|select',
     'template list',

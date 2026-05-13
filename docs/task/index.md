@@ -396,3 +396,5 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**DOC-010 Remove legacy OD and control-plane guidance from current contracts**](DOC-010.md) `P0`
 - [x] [**FEAT-066 Converge Soul Apps into app-level standalone and mounted products**](FEAT-066.md) `P0`
 - [x] [**FEAT-067 Harden Soul App mounted runtime and authoring readiness**](FEAT-067.md) `P0`
+- [x] [**FEAT-068 Mounted Surface Protocol and release gate hardening**](FEAT-068.md) `P0`
+- [x] [**FEAT-069 Host app-only catalog and official Soul App bootstrap**](FEAT-069.md) `P0`
