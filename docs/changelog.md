@@ -1,5 +1,28 @@
 # AIWorker Changelog
 
+## 2026-05-13 17:28 [completed] REFACTOR-076 / PLAN-297 — Remove legacy gateway and fleet surfaces
+
+Removed the historical gateway/fleet control plane from active source,
+packaging, storage, deployment and operator docs.
+
+- Deleted `packages/gateway`, `packages/gateway-proto`, dead gateway smoke
+  scripts, fleet DB schema/migrations/generation, Docker/GHCR/compose/Caddy
+  deployment surfaces and old gateway runbooks.
+- Removed gateway/proto dependencies from current CLI/API/core packages and
+  regenerated `bun.lock`.
+- Rehomed the remaining current worker id helpers into shared ids and moved
+  `EngineKind` to the provider availability contract.
+- Kept release packaging focused on Worker Web static assets and worker DB
+  migrations.
+- Rewrote active README/deployment docs around local daemon, Host and Soul App
+  autonomy instead of a remote gateway/fleet path.
+
+Verification passed: focused shared/storage/CLI/API typechecks, focused
+shared/storage tests, CLI bundle build, root `typecheck`, `lint`, `test`,
+`build`, `web:smoke:mounted-surfaces`, and code-review-graph. CRG exits 0 with
+overall risk 0.35 and one static test-gap hint for `configureWorker`; current
+CLI and root test gates cover the changed smoke configuration path.
+
 ## 2026-05-13 15:49 [completed] BUG-117 / PLAN-296 — Worker Web build chunk reduction
 
 Fixed the Worker Web Vite chunk-size warning by reducing the actual initial

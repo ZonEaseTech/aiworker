@@ -325,3 +325,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-294 Host app-only catalog and official Soul App bootstrap**](PLAN-294.md) `2026-05-13`
 - [x] [**PLAN-295 Legacy Soul metadata discard and mounted surface hardening**](PLAN-295.md) `2026-05-13`
 - [x] [**PLAN-296 Worker Web build chunk reduction**](PLAN-296.md) `2026-05-13`
+- [x] [**PLAN-297 Remove legacy gateway and fleet surfaces**](PLAN-297.md) `2026-05-13`

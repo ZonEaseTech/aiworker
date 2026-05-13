@@ -8,10 +8,6 @@
       "types": "./src/index.ts",
       "import": "./src/index.ts"
     },
-    "./fleet": {
-      "types": "./src/fleet/index.ts",
-      "import": "./src/fleet/index.ts"
-    },
     "./worker": {
       "types": "./src/worker/index.ts",
       "import": "./src/worker/index.ts"
@@ -23,9 +19,8 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test --timeout=15000",
     "test:stress": "bun test --timeout=15000 --rerun-each=3 src/worker/index.test.ts",
-    "db:generate:fleet": "drizzle-kit generate --config drizzle.fleet.config.ts",
     "db:generate:worker": "drizzle-kit generate --config drizzle.worker.config.ts",
-    "db:generate": "bun run db:generate:fleet && bun run db:generate:worker"
+    "db:generate": "bun run db:generate:worker"
   },
   "dependencies": {
     "@zonease/aiworker-shared": "workspace:*",

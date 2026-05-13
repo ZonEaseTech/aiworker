@@ -1,104 +1,115 @@
 # AIWorker
 
-AIWorker 正在按 `REFACTOR-026` 重构为一个 local-first worker workbench。
+AIWorker 正在重构为面向 team/org 的 vertical Soul workspace。
 
-它的默认体验应该很直接：选择业务 worker pack，提交 work order，让外部 executor
-在真实 workspace 里工作，通过 web 实时观察 run，然后把结果沉淀为文件、review
-和可复用 lesson。
+它不做另一个 developer engine、admin dashboard、远程控制面或通用 agent
+runtime。当前架构以 Host / Soul App 双自治为中心：Host 提供本地 daemon、
+workspace/session runtime、engine handoff、artifact/review/memory 和隔离
+broker；Soul App 提供垂直领域产品逻辑、UI/API、artifact schema、connector
+needs 和 review policy。
 
 ```text
-worker pack + workspace -> work order -> run -> artifact -> review -> lesson
+host -> local daemon
+  -> Soul worker
+  -> workspace/project
+  -> session
+  -> turn
+  -> business artifact
+  -> review
+  -> durable org memory
 ```
-
-当前仓库仍保留旧的 Project Brain、case、fleet、gateway 实现，但新的产品判断和
-实现应以 [GOALS.md](GOALS.md) 与
-[docs/architecture.md](docs/architecture.md) 为准。
 
 ## 为什么改成这个形态
 
-这次重构参考的是 Open Design 的产品语法，而不是它的图片/视频设计领域：
+开发领域已经有成熟的一线 engine。AIWorker 不应该默认以 developer 为中心，更不应该
+把自己做成完整开发平台。developer Soul 可以存在，但它应服务 code review、release
+evidence、repo report、handoff、risk audit 等 supporting workflows。
 
-| Open Design | AIWorker |
-| --- | --- |
-| Design skill | Worker skill |
-| Design system | Domain system |
-| Project folder | Worker workspace |
-| Prompt template | Work-order template |
-| Run stream | Worker run stream |
-| Artifact preview | Business artifact / case preview |
-| Critique | Review / lesson candidate |
+AIWorker 的主要价值在更需要组织沉淀的垂直职能：
 
-AIWorker 的领域是 developer、HR、PM、QA、finance、legal 等业务 worker。领域差异
-通过 pack、domain system、template、review rubric 表达，不通过 orchestrator
-硬编码分支表达。
+- HR：candidate screen、interview brief、role rubric、hiring risk；
+- PM：PRD、decision record、roadmap slice、status report；
+- QA：test plan、regression matrix、defect evidence、release gate；
+- DevOps：deployment checklist、incident review、runbook update；
+- finance/legal/ops：各自领域的审查、模板化输出、证据链和复用经验。
 
-## 产品边界
+## Soul App 模型
 
-AIWorker 负责：
+Soul App 是可独立部署、也可挂载到 AIWorker Host 的垂直产品单元。例如
+`aiworker-hr` 可以作为 HR-first 本地应用独立运行，也可以被 Host 挂载，与
+`aiworker-qa` 等其他 Soul App 共存在同一个 local daemon 中。
 
-- 初始化本地 workspace；
-- 启动本地 daemon；
-- 提供 HTTP/SSE run API；
-- 托管 worker web workbench；
-- 读取 worker packs 与 domain systems；
-- 组合 prompt / work order；
-- 记录 run event；
-- 索引产物文件；
-- 管理 review 与 lesson promotion。
+```text
+Standalone:
+aiworker-hr -> embedded AIWorker core runtime -> HR workspace/session/artifacts
 
-外部 executor 负责：
-
-- 原生执行循环；
-- tool / plugin / MCP 生态；
-- sandbox 与 approval UX；
-- 用户级认证和 profile；
-- runtime 自己的模型与会话行为。
-
-AIWorker 只通过薄 adapter 调用和观察 executor，不把自己做成 executor 平台。
-
-## 目标 Quickstart
-
-命令树会在 `REFACTOR-026` 中收敛。目标操作流是：
-
-```bash
-aiworker init --worker developer
-aiworker daemon start --open
-aiworker run "Review this repository and produce a release-readiness brief"
+Host mounted:
+aiworker-host -> Soul App registry -> aiworker-hr / aiworker-qa
 ```
 
-在重构完成前，过渡版本仍可能暴露旧的 `serve`、worker、case、brain、fleet、
-gateway 命令。它们是待收敛的兼容/遗留表面，不是新的长期产品模型。
+两种模式应复用同一份 manifest、domain logic、artifact schema 和 review policy。
+Host 不 import 垂直 app 内部源码；Soul App 不直接控制 Host engine、connector、
+secret、DB 或全局 memory。
+
+## 基础设施模型
+
+AIWorker 的本地目标架构是：
+
+```text
+1 host
+  -> 1 local daemon
+    -> N Soul workers
+      -> 1 Soul per worker
+        -> N workspaces/projects
+          -> N sessions
+            -> N turns / artifacts
+```
+
+- Host 是承载环境，不是产品对象。
+- Local daemon 是唯一的本地控制面，负责 Web/API、SQLite、engine inventory、
+  BYOK、connectors、MCP、settings 和 worker registry。
+- Worker 绑定一个 Soul，并拥有该 Soul 的 capabilities、domain system、review
+  policy 和 durable memory namespace。
+- Workspace/project 是某个 worker 下的业务作用域。
+- Session 是 workspace 内持续上下文，也是 engine native session 的绑定点和接管点。
+- Turn 是 session 内一次用户输入、engine 回复、tool/event 更新或 artifact 修改。
+- Engine invocation 是内部审计对象；用户不创建、不维护 run。
 
 ## 仓库结构
 
 ```text
 apps/
-  cli/       local worker CLI
-  api/       local daemon API and web host
-  web/       worker workbench and deferred fleet UI
-  gateway/   deferred fleet/gateway control plane
+  api/           local daemon API and Worker Web host
+  cli/           aiworker CLI and packaged local daemon entry
+  web/           Worker Web workbench
+  aiworker-hr/   official HR Soul App
+  aiworker-qa/   official QA Soul App
 packages/
-  core/             worker runtime services and executor adapters
-  storage-sqlite/   local SQLite metadata
-  fs-layout/        workspace and .aiworker layout helpers
-  shared/           shared schemas and utilities
+  core/              local session runtime, Soul App registry and executor adapters
+  storage-sqlite/    worker.db schema, migrations and repositories
+  fs-layout/         AIWORKER_HOME, worker and workspace path helpers
+  shared/            shared schemas, Host/Soul App contracts and utilities
+  component/         shared React UI primitives and patterns
+  soul-app-sdk/      public SDK for Soul App authors
+  soul-app-runtime/  standalone/mounted Soul App runtime harness
 ```
 
-## 开发命令
+## Quickstart
 
-安装依赖：
+Source checkout 调试：
 
 ```bash
 bun install
+bun run --filter '@zonease/aiworker-web' build
+bun apps/cli/src/aiworker.ts daemon foreground --port 9217
 ```
 
 常用检查：
 
 ```bash
-bun run typecheck
 bun run lint
+bun run typecheck
 bun run test
-bun run check
 bun run build
 ```
 
@@ -110,19 +121,3 @@ bun run --filter '@zonease/aiworker-api' build
 bun run --filter '@zonease/aiworker-web' build
 bun run --filter '@zonease/aiworker-cli' build:bundle
 ```
-
-## 当前路线
-
-`REFACTOR-026` 分阶段落地：
-
-1. 产品北极星与目标架构重置；
-2. 统一 local run service；
-3. workspace metadata 与 artifact index；
-4. worker pack loader 和内置 packs；
-5. CLI daemon lifecycle 与 root help；
-6. worker web workbench 首屏；
-7. review 和 lesson promotion；
-8. cleanup、验证与发布证据。
-
-fleet/gateway 和 desktop 暂缓，等本地 worker loop 自身可用、可解释、可验证后再回到
-可选扩展层。

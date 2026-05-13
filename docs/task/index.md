@@ -400,3 +400,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-069 Host app-only catalog and official Soul App bootstrap**](FEAT-069.md) `P0`
 - [x] [**FEAT-070 Legacy Soul metadata discard and mounted surface hardening**](FEAT-070.md) `P0`
 - [x] [**BUG-117 Worker Web build chunk warning**](BUG-117.md) `P0`
+- [x] [**REFACTOR-076 Remove legacy gateway and fleet surfaces**](REFACTOR-076.md) `P0`

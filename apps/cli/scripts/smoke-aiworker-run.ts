@@ -1,6 +1,4 @@
 #!/usr/bin/env bun
-import type { WorkerConfig } from '@zonease/aiworker-shared'
-
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -26,6 +24,24 @@ interface CommandResult {
   code: number
   stderr: string
   stdout: string
+}
+
+interface SmokeWorkerConfig {
+  executor: {
+    engine: string
+    overrides?: Record<string, unknown>
+    variant: string
+  }
+  orchestrator?: {
+    decisionPipeline?: {
+      qualityGate?: {
+        budgetMs?: number
+        evaluator?: string
+        mode?: string
+      }
+    }
+  }
+  [key: string]: unknown
 }
 
 async function main(): Promise<number> {
@@ -186,8 +202,8 @@ async function configureWorker(workerDbPath: string, baseUrl: string): Promise<v
   if (row === undefined)
     throw new Error('worker_config.default was not seeded by init')
 
-  const config = row.configJson as WorkerConfig
-  const next: WorkerConfig = {
+  const config = row.configJson as SmokeWorkerConfig
+  const next: SmokeWorkerConfig = {
     ...config,
     executor: {
       engine: 'http',

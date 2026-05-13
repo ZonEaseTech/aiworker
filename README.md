@@ -139,14 +139,19 @@ worker，进入该 worker 下的 workspace/session，选择或接受推荐的 ca
 
 ```text
 apps/
-  cli/       local Soul workspace CLI
-  api/       local daemon API and web host
-  web/       Worker Soul workspace web
+  api/           local daemon API and Worker Web host
+  cli/           aiworker CLI and packaged local daemon entry
+  web/           Worker Web workbench
+  aiworker-hr/   official HR Soul App
+  aiworker-qa/   official QA Soul App
 packages/
-  core/             local Soul session runtime and executor adapters
-  storage-sqlite/   local SQLite metadata
-  fs-layout/        workspace and .aiworker layout helpers
-  shared/           shared schemas and utilities
+  core/              local session runtime, Soul App registry and executor adapters
+  storage-sqlite/    worker.db schema, migrations and repositories
+  fs-layout/         AIWORKER_HOME, worker and workspace path helpers
+  shared/            shared schemas, Host/Soul App contracts and utilities
+  component/         shared React UI primitives and patterns
+  soul-app-sdk/      public SDK for Soul App authors
+  soul-app-runtime/  standalone/mounted Soul App runtime harness
 ```
 
 ## 开发命令

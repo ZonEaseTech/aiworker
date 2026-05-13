@@ -1,4 +1,8 @@
-import { WORKER_ID_ALPHABET } from '../fleet'
+/** Regex for Host-local worker ids minted by `mintWorkerId`. */
+export const WORKER_ID_PATTERN = /^w_[0-9a-hjkmnp-tv-z]{12}$/
+
+/** Crockford base32 alphabet used when minting Host-local worker ids. */
+export const WORKER_ID_ALPHABET = '0123456789abcdefghjkmnpqrstvwxyz'
 
 /** Crockford base32 encoder that emits the exact number of characters requested. */
 function encodeBase32(bytes: Uint8Array, outputLen: number): string {

@@ -19,7 +19,7 @@ import { redactBodySecrets } from './scan-body'
  *    being printed by CLI / surfaced via API; operator must opt in via
  *    `--show-sensitive`
  *
- * Out of scope for PLAN-101: auto-approval, fleet.db replication, executor
+ * Out of scope for PLAN-101: auto-approval, remote replication, executor
  * MCP / engine plugin pathway, Worker Admin UI (handled by PLAN-103).
  */
 

@@ -2,7 +2,7 @@
   "name": "@zonease/aiworker-cli",
   "type": "module",
   "version": "0.12.1",
-  "description": "AIWorker CLI — self-hosted Project Brain and Worker/Fleet aggregation runtime",
+  "description": "AIWorker CLI — local Host and vertical Soul workspace runtime",
   "license": "MIT",
   "homepage": "https://github.com/ZonEaseTech/aiworker#readme",
   "repository": {
@@ -29,16 +29,13 @@
     "build": "bun run --filter '@zonease/aiworker-web' build && bun run build:bundle",
     "build:bundle": "bun build --target=bun --minify --outfile=dist/aiworker-bun.js src/aiworker.ts && bun scripts/build-publish-manifest.ts",
     "prepublishOnly": "bun run build",
-    "smoke:aiworker-run": "bun scripts/smoke-aiworker-run.ts",
-    "smoke:aiworker-fleet": "bun scripts/smoke-aiworker-fleet.ts"
+    "smoke:aiworker-run": "bun scripts/smoke-aiworker-run.ts"
   },
   "devDependencies": {
     "@types/bun": "^1.2.13",
     "@zonease/aiworker-api": "workspace:*",
     "@zonease/aiworker-core": "workspace:*",
     "@zonease/aiworker-fs-layout": "workspace:*",
-    "@zonease/aiworker-gateway": "workspace:*",
-    "@zonease/aiworker-gateway-proto": "workspace:*",
     "@zonease/aiworker-shared": "workspace:*",
     "@zonease/aiworker-storage-sqlite": "workspace:*",
     "cac": "^6.7.14",

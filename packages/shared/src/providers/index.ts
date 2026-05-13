@@ -19,6 +19,7 @@ export type {
   EngineAvailability,
   EngineAvailabilityResponse,
   EngineAvailabilityStatus,
+  EngineKind,
 } from './availability'
 
 export type {

@@ -69,7 +69,7 @@ export default antfu({
   },
 }, {
   // REFACTOR-038：apps/web 是 worker-only local studio。不要把停掉的
-  // fleet/admin/shared shell、gateway proto 或文件路由再带回 Web。
+  // fleet/admin/shared shell 或文件路由再带回 Web。
   files: ['apps/web/src/worker/**/*.{ts,tsx}'],
   rules: {
     'no-restricted-imports': ['error', {
@@ -97,7 +97,6 @@ export default antfu({
           ],
           message: 'Worker Web 是独立 studio，不得引用旧 fleet/shared admin shell。',
         },
-        { group: ['@zonease/aiworker-gateway-proto', '@zonease/aiworker-gateway-proto/**'], message: 'worker UI 不得接 gateway WS/proto；请使用 /api/worker/* REST/SSE。' },
         { group: ['@tanstack/react-router', '@tanstack/router-plugin', '@tanstack/*'], message: 'Worker Web 不再使用旧 routeTree/router 壳。' },
       ],
     }],

@@ -19,10 +19,8 @@ const stripped: Record<string, unknown> = {
   homepage: pkg.homepage,
   publishConfig: pkg.publishConfig,
   bin: { aiworker: './aiworker.js' },
-  // BUG-011/BUG-012: dist 必须含 drizzle/ 子目录（fleet + worker migrations），
-  // packages/storage-sqlite 的 resolveMigrationsFolder fallback 会找 sibling drizzle/。
-  // PLAN-022 / FEAT-033：dist 还含 web/ 子目录（fleet + worker bundles），
-  // gateway / worker `/admin/*` 静态托管在运行期 resolve 同级 web/<bundle>/。
+  // dist 必须含 worker drizzle migrations，storage 的 bundle fallback 会找 sibling drizzle/。
+  // dist 还含 Worker Web 静态资源，local daemon 会在运行期托管它。
   files: ['aiworker.js', 'aiworker-bun.js', 'README.md', 'drizzle/', 'web/'],
   engines: pkg.engines,
 }
@@ -41,24 +39,21 @@ catch {
   await writeFile(resolve(distDir, 'README.md'), `# ${pkg.name}\n\n${pkg.description}\n`, 'utf8')
 }
 
-// BUG-011/BUG-012: 把 packages/storage-sqlite/drizzle/{fleet,worker} 拷到 dist/drizzle/
-// 让 npm-installed bundle 在运行时能找到 migrations，无需访问仓库源码。
+// 把 packages/storage-sqlite/drizzle/worker 拷到 dist/drizzle/，让
+// npm-installed bundle 在运行时能找到 migrations，无需访问仓库源码。
 const drizzleSrc = resolve(repoRoot, 'packages/storage-sqlite/drizzle')
 const drizzleDst = resolve(distDir, 'drizzle')
 await copyDir(drizzleSrc, drizzleDst)
 
-// PLAN-022 / FEAT-033：把 apps/web/dist/{fleet,worker} 拷到 dist/web/，让
-// npm-installed cli 在运行时能 serve fleet bundle（gateway 端）和 worker
-// bundle（worker 端）。只复制两个生产 bundle，避免 dev chooser 或旧 hash
-// chunks 从 apps/web/dist 根目录漏进发布包。
+// 把 apps/web/dist/worker 拷到 dist/web/，让 npm-installed CLI 能通过
+// local daemon 托管 Worker Web。只复制生产 bundle，避免旧 hash chunks
+// 从 apps/web/dist 根目录漏进发布包。
 const webDistSrc = resolve(repoRoot, 'apps/web/dist')
 const webDistDst = resolve(distDir, 'web')
 await rm(webDistDst, { recursive: true, force: true })
-for (const bundle of ['fleet', 'worker']) {
-  const src = resolve(webDistSrc, bundle)
-  await access(resolve(src, 'index.html'))
-  await copyDir(src, resolve(webDistDst, bundle))
-}
+const workerWebSrc = resolve(webDistSrc, 'worker')
+await access(resolve(workerWebSrc, 'index.html'))
+await copyDir(workerWebSrc, resolve(webDistDst, 'worker'))
 
 async function copyDir(src: string, dst: string): Promise<void> {
   await mkdir(dst, { recursive: true })
