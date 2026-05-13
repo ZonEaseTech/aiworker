@@ -76,28 +76,26 @@
 
 .hr-header-command {
   display: inline-flex;
-  min-height: 30px;
+  min-height: 34px;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: 6px;
+  padding: 7px 12px;
   border-radius: var(--radius-pill);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
   white-space: nowrap;
+}
+
+.hr-header-command svg {
+  flex: 0 0 auto;
 }
 
 .hr-header-icon-group {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 3px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  background: var(--bg-panel);
-}
-
-.hr-header-icon-group .icon-button[aria-pressed="true"] {
-  border-color: var(--accent);
-  background: var(--accent-tint);
-  color: var(--text-strong);
 }
 
 .hr-people-content {
