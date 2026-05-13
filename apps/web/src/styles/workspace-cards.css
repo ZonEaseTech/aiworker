@@ -27,6 +27,26 @@
   flex-wrap: wrap;
 }
 
+.shell-primary-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text-muted);
+  min-height: 32px;
+  padding: 0 10px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.shell-primary-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
 .toolbar-search {
   position: relative;
   flex: 1 1 180px;

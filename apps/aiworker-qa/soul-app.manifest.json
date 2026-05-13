@@ -259,6 +259,33 @@
         }
       }
     ],
+    "shell": {
+      "actions": [
+        {
+          "id": "refresh-release",
+          "label": "Refresh",
+          "protocolAction": "release.refresh",
+          "slot": "refresh"
+        }
+      ],
+      "primaryAction": {
+        "id": "create-release-gate",
+        "label": "New release gate",
+        "protocolAction": "releaseGates.create",
+        "slot": "primary"
+      },
+      "search": {
+        "id": "release-search",
+        "label": "Search releases",
+        "placeholder": "Search releases",
+        "protocolProvider": "releases.search"
+      },
+      "settings": {
+        "id": "qa-settings",
+        "label": "QA settings",
+        "protocolAction": "settings.open"
+      }
+    },
     "workspaceWidgets": [
       {
         "entry": "./src/ui/release-widget.tsx",

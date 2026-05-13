@@ -1,6 +1,5 @@
 import type {
   CapabilityTemplate,
-  HostedSoulApp,
   LocalArtifact,
   LocalFile,
   LocalLesson,
@@ -13,14 +12,14 @@ import type {
   LocalWorkspace,
   VerticalSoul,
 } from '@zonease/aiworker-shared'
-import type { LocalInfoResponse, LocalWorkspaceData } from './types'
+import type { LocalHostedSoulApp, LocalInfoResponse, LocalWorkspaceData } from './types'
 
 import { localJson } from '../../../shared/api/local-client'
 
 export async function loadLocalWorkspaceData(): Promise<LocalWorkspaceData> {
   const [info, apps, workers, souls, templates, workspaces, sessions, turns, files, artifacts, reviews, lessons, events, settings] = await Promise.all([
     localJson<LocalInfoResponse>('/api/local/info'),
-    localJson<{ apps: HostedSoulApp[] }>('/api/local/apps'),
+    localJson<{ apps: LocalHostedSoulApp[] }>('/api/local/apps'),
     localJson<{ workers: LocalWorker[] }>('/api/local/workers'),
     localJson<{ souls: VerticalSoul[] }>('/api/local/souls'),
     localJson<{ templates: CapabilityTemplate[] }>('/api/local/templates'),

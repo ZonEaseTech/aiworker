@@ -14,6 +14,40 @@ import type {
   VerticalSoul,
 } from '@zonease/aiworker-shared'
 
+export interface LocalSoulAppShellAction {
+  id: string
+  label: string
+  protocolAction: string
+  requiredPermissions?: string[]
+  slot: 'primary' | 'action' | 'drawer-toggle' | 'refresh' | 'settings'
+}
+
+export interface LocalSoulAppShellSearch {
+  id: string
+  label: string
+  placeholder: string
+  protocolProvider: string
+  requiredPermissions?: string[]
+}
+
+export interface LocalSoulAppShellDescriptor {
+  actions?: LocalSoulAppShellAction[]
+  primaryAction?: LocalSoulAppShellAction
+  search?: LocalSoulAppShellSearch
+  settings?: {
+    id: string
+    label: string
+    protocolAction: string
+    requiredPermissions?: string[]
+  }
+}
+
+export type LocalHostedSoulApp = HostedSoulApp & {
+  mountedContribution: HostedSoulApp['mountedContribution'] & {
+    shell?: LocalSoulAppShellDescriptor | null
+  }
+}
+
 export interface LocalInfoResponse {
   runtimeVersion: string
   startedAt: string
@@ -22,7 +56,7 @@ export interface LocalInfoResponse {
 
 export interface LocalWorkspaceData {
   info: LocalInfoResponse
-  apps: HostedSoulApp[]
+  apps: LocalHostedSoulApp[]
   workers: LocalWorker[]
   souls: VerticalSoul[]
   templates: CapabilityTemplate[]

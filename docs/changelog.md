@@ -1,5 +1,26 @@
 # AIWorker Changelog
 
+## 2026-05-13 23:55 [completed] FEAT-072 / PLAN-304 — Host platform locator and capability shell boundary
+
+Converged Host toward a platform locator, capability broker and shell contract
+while keeping Soul Apps authoritative for domain state and domain meaning.
+
+- Added shell/action/search descriptors to the Soul App manifest and protocol
+  contract.
+- Projected app-declared shell descriptors through Host catalog without adding
+  domain semantics.
+- Marked mounted descriptor responses as app-owned, non-authoritative protocol
+  views.
+- Kept HR/QA people profile and release gate meaning inside their apps while
+  exposing only protocol-owned descriptor surfaces to Host.
+- Rendered Worker Web shell slots from app descriptors without implementing
+  Host-owned HR/QA action handlers.
+
+Verification passed: shared/core/API/Web/HR/QA focused tests and typechecks,
+HR/QA validate and smoke package scripts, root typecheck/lint/test/build,
+browser smoke on `http://localhost:5173/`, `git diff --check`, and
+code-review-graph.
+
 ## 2026-05-13 21:06 [completed] DOC-012 / PLAN-303 — Clean active documentation map
 
 Cleaned the root documentation map so active agent guidance is task-routed
@@ -32,6 +53,26 @@ Converged the active architecture entrypoints to root `AGENTS.md` and
 Verification passed: active-entrypoint stale-reference searches and
 `git diff --check`. code-review-graph skipped because the slice changes only
 documentation, root agent instructions and skill markdown.
+
+## 2026-05-13 19:49 [completed] REFACTOR-079 / PLAN-301 — Move Soul Apps management out of the worker rail
+
+Moved installed Soul App visibility out of the daily worker navigation rail and
+into Settings so the workbench left side can stay focused on worker, workspace
+and session navigation.
+
+- Removed the always-visible `Soul Apps` rail card and inline mounted-surface
+  preview diagnostics from Worker Studio.
+- Kept the first-run main surface backed by enabled installed Soul Apps when no
+  worker exists.
+- Reworked Settings' `Soul Apps` section to list installed apps with status,
+  version, domain, permission count, template count, mounted contribution count
+  and API prefix.
+- Updated Worker Studio tests and localized Settings copy for the new placement.
+
+Verification passed: focused Worker Studio test, Web typecheck, Web build,
+browser verification on `http://localhost:5173`, `git diff --check`, and
+code-review-graph. CRG exits 0 with static test-gap hints for small Settings
+display helpers; the focused test and browser check cover the product contract.
 
 ## 2026-05-13 19:00 [completed] FEAT-071 / PLAN-300 — Soul App development skill and rules
 

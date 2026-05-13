@@ -267,7 +267,12 @@ export interface StaticMessages {
       soulPacksDetail: string
     }
     soulPacks: {
+      apiRoute: (routePrefix: string) => string
+      empty: string
       hint: string
+      mountedContributionCount: (count: number) => string
+      permissionCount: (count: number) => string
+      templateCount: (count: number) => string
       title: string
     }
   }

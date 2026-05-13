@@ -94,6 +94,10 @@ function qaDescriptorSurface(request: Request, pathname: string) {
       },
     ],
     appId: qaSoulAppManifest.id,
+    authority: 'soul-app',
+    cache: {
+      freshness: 'non-authoritative',
+    },
     context: {
       signed: Boolean(request.headers.get('x-aiworker-mount-signature')),
       surfaceId: context?.surface?.id ?? null,

@@ -90,6 +90,10 @@ Host owns shared platform concerns:
 - mounted service launch/connect
 - protocol discovery and descriptor cache
 
+Soul App is the source of truth for domain state and domain meaning.
+Host is the source of truth for platform capabilities, grants, protocol discovery and shell context.
+Host may consume only protocol-exposed views/actions/search/settings descriptors, and must not infer Soul App domain meaning.
+
 Do not bypass those boundaries:
 
 - Do not import `@zonease/aiworker-core`, `@zonease/aiworker-api`,

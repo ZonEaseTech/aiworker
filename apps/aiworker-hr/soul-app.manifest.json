@@ -259,6 +259,39 @@
         }
       }
     ],
+    "shell": {
+      "actions": [
+        {
+          "id": "refresh-people",
+          "label": "Refresh",
+          "protocolAction": "people.refresh",
+          "slot": "refresh"
+        },
+        {
+          "id": "toggle-evidence-drawer",
+          "label": "Evidence",
+          "protocolAction": "drawers.evidence.toggle",
+          "slot": "drawer-toggle"
+        }
+      ],
+      "primaryAction": {
+        "id": "create-people-profile",
+        "label": "New people profile",
+        "protocolAction": "peopleProfiles.create",
+        "slot": "primary"
+      },
+      "search": {
+        "id": "people-profile-search",
+        "label": "Search people profiles",
+        "placeholder": "Search people profiles",
+        "protocolProvider": "peopleProfiles.search"
+      },
+      "settings": {
+        "id": "hr-settings",
+        "label": "HR settings",
+        "protocolAction": "settings.open"
+      }
+    },
     "workspaceWidgets": [
       {
         "entry": "./src/ui/people-widget.tsx",

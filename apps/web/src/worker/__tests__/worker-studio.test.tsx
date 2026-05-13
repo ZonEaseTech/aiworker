@@ -255,12 +255,27 @@ let currentWorkspaces: typeof workspace[]
 let currentApps: Array<{
   appId: string
   manifest: {
+    permissions?: unknown[]
     name: string
     ui?: {
       artifactPreviews?: Array<{ id: string, label: string }>
       panels?: Array<{ id: string, label: string }>
       reviewPanels?: Array<{ id: string, label: string }>
       routes?: Array<{ id?: string, label: string, path: string, surface?: { renderer: 'host-descriptor' | 'sandboxed-frame' | 'trusted-module' } }>
+      shell?: {
+        primaryAction?: {
+          id: string
+          label: string
+          protocolAction: string
+          slot: 'primary'
+        }
+        search?: {
+          id: string
+          label: string
+          placeholder: string
+          protocolProvider: string
+        }
+      }
       workspaceWidgets?: Array<{ id: string, label: string, surface?: { renderer: 'host-descriptor' | 'sandboxed-frame' | 'trusted-module' } }>
     }
   }
@@ -273,6 +288,20 @@ let currentApps: Array<{
     reviewPanelIds: string[]
     routePaths: string[]
     surfaceIds?: string[]
+    shell?: {
+      primaryAction?: {
+        id: string
+        label: string
+        protocolAction: string
+        slot: 'primary'
+      }
+      search?: {
+        id: string
+        label: string
+        placeholder: string
+        protocolProvider: string
+      }
+    } | null
     workspaceWidgetIds: string[]
   }
   status: string
@@ -762,17 +791,32 @@ describe('worker studio', () => {
     expect(visibleOptionTexts().includes('QA')).toBe(true)
   })
 
-  it('lists installed Soul Apps with lifecycle status in the worker rail', async () => {
+  it('keeps installed Soul Apps out of the worker rail and shows them in Settings', async () => {
     currentApps = [
       {
         appId: 'aiworker-hr',
         manifest: {
           name: 'AIWorker HR',
+          permissions: Array.from({ length: 8 }, (_, index) => ({ id: `perm-${index}` })),
           ui: {
             artifactPreviews: [{ id: 'person-profile-preview', label: 'Person profile preview' }],
             panels: [{ id: 'people-panel', label: 'People panel' }],
             reviewPanels: [{ id: 'hr-review', label: 'HR review' }],
             routes: [{ id: 'hr-home', label: 'People workbench', path: '/hr/people', surface: { renderer: 'host-descriptor' } }],
+            shell: {
+              primaryAction: {
+                id: 'create-people-profile',
+                label: 'New people profile',
+                protocolAction: 'peopleProfiles.create',
+                slot: 'primary',
+              },
+              search: {
+                id: 'people-profile-search',
+                label: 'Search people profiles',
+                placeholder: 'Search people profiles',
+                protocolProvider: 'peopleProfiles.search',
+              },
+            },
             workspaceWidgets: [{ id: 'hr-people-widget', label: 'People widget', surface: { renderer: 'sandboxed-frame' } }],
           },
         },
@@ -785,6 +829,20 @@ describe('worker studio', () => {
           reviewPanelIds: ['hr-review'],
           routePaths: ['/hr/people'],
           surfaceIds: ['hr-home', 'hr-people-widget'],
+          shell: {
+            primaryAction: {
+              id: 'create-people-profile',
+              label: 'New people profile',
+              protocolAction: 'peopleProfiles.create',
+              slot: 'primary',
+            },
+            search: {
+              id: 'people-profile-search',
+              label: 'Search people profiles',
+              placeholder: 'Search people profiles',
+              protocolProvider: 'peopleProfiles.search',
+            },
+          },
           workspaceWidgetIds: ['people-widget'],
         },
         status: 'enabled',
@@ -811,29 +869,29 @@ describe('worker studio', () => {
 
     render(<WorkerStudio />)
 
-    await screen.findByText('Soul Apps (2)')
-    expect(screen.getByText('AIWorker HR')).toBeTruthy()
-    expect(screen.getByText('Enabled · 0.1.0')).toBeTruthy()
-    expect(screen.queryByText('aiworker-hr · 0 permissions')).toBeNull()
+    await screen.findByText('AIWorker HR (1)')
+    expect(await screen.findByText('New people profile')).toBeTruthy()
+    expect(screen.getByPlaceholderText('Search people profiles')).toBeTruthy()
+    expect(screen.queryByText('Soul Apps (2)')).toBeNull()
+    expect(screen.queryByText('Enabled · 0.1.0')).toBeNull()
+    expect(screen.queryByText('8 permissions')).toBeNull()
     expect(screen.queryByText('API /api/local/apps/aiworker-hr')).toBeNull()
     expect(screen.queryByText('Route People workbench · /hr/people')).toBeNull()
-    expect(screen.queryByText('4 mounted slots')).toBeNull()
+    expect(screen.queryByText('4 mounted contributions')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Developer details' })).toBeNull()
 
-    const hrAppCard = screen.getByText('AIWorker HR').closest('.rail-session-item') as HTMLElement
-    fireEvent.click(within(hrAppCard).getByRole('button', { name: 'Developer details' }))
+    fireEvent.click(screen.getByLabelText('Open settings'))
+    const dialog = screen.getByRole('dialog', { name: 'Configure Soul workspace' })
+    fireEvent.click(within(dialog).getByRole('button', { name: /Soul Apps/ }))
 
-    expect(screen.getByText('aiworker-hr · 0 permissions')).toBeTruthy()
-    expect(screen.getByText('API /api/local/apps/aiworker-hr')).toBeTruthy()
-    expect(screen.getByText('Route People workbench · /hr/people')).toBeTruthy()
-    expect(screen.getByText('4 mounted slots')).toBeTruthy()
-    expect(await screen.findByText('HR Mounted Workbench')).toBeTruthy()
-    expect(screen.getByText('Domain: hr-people-ops')).toBeTruthy()
-    const frame = await screen.findByTitle('People widget')
-    expect(frame.getAttribute('sandbox')).toBe('allow-scripts allow-forms')
-    expect(frame.getAttribute('src')).toBe('about:blank')
-    expect(screen.getByText('AIWorker QA')).toBeTruthy()
-    expect(screen.getByText('Disabled · 0.1.0')).toBeTruthy()
-    expect(screen.getByText('Mounted contributions paused')).toBeTruthy()
+    expect(within(dialog).getByRole('heading', { name: 'Soul Apps' })).toBeTruthy()
+    expect(within(dialog).getByText('AIWorker HR')).toBeTruthy()
+    expect(within(dialog).getByText('Enabled · 0.1.0')).toBeTruthy()
+    expect(within(dialog).getByText('8 permissions')).toBeTruthy()
+    expect(within(dialog).getByText('4 mounted contributions')).toBeTruthy()
+    expect(within(dialog).getByText('API /api/local/apps/aiworker-hr')).toBeTruthy()
+    expect(within(dialog).getByText('AIWorker QA')).toBeTruthy()
+    expect(within(dialog).getByText('Disabled · 0.1.0')).toBeTruthy()
   })
 
   it('keeps worker status as a trailing dot without duplicated item labels', async () => {

@@ -71,6 +71,63 @@ describe('Soul App manifest schema', () => {
     })
   })
 
+  it('accepts app-declared shell toolbar and search descriptors', () => {
+    const result = validateSoulAppManifest({
+      ...hrSoulAppManifest,
+      ui: {
+        ...hrSoulAppManifest.ui,
+        shell: {
+          actions: [
+            {
+              id: 'refresh-profiles',
+              label: 'Refresh',
+              protocolAction: 'profiles.refresh',
+              slot: 'action',
+            },
+          ],
+          primaryAction: {
+            id: 'create-people-profile',
+            label: 'New people profile',
+            protocolAction: 'profiles.create',
+            slot: 'primary',
+          },
+          search: {
+            id: 'people-profile-search',
+            label: 'Search people profiles',
+            placeholder: 'Search people profiles',
+            protocolProvider: 'peopleProfiles.search',
+          },
+          settings: {
+            id: 'hr-settings',
+            label: 'HR settings',
+            protocolAction: 'settings.open',
+          },
+        },
+      },
+    })
+
+    expect(result.status).toBe('valid')
+  })
+
+  it('rejects shell descriptors without protocol actions', () => {
+    const result = validateSoulAppManifest({
+      ...hrSoulAppManifest,
+      ui: {
+        ...hrSoulAppManifest.ui,
+        shell: {
+          primaryAction: {
+            id: 'create-people-profile',
+            label: 'New people profile',
+            slot: 'primary',
+          },
+        },
+      },
+    })
+
+    expect(result.status).toBe('invalid')
+    expect(result.issues.some(issue => issue.message.includes('protocolAction'))).toBe(true)
+  })
+
   it('reports unsupported protocol before Host imports app code', () => {
     const manifest = { ...hrSoulAppManifest, protocol: 'soul-app/v2' }
     const result = validateSoulAppManifest(manifest)

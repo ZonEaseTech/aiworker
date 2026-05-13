@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-13 (PLAN-303 completed)
+> Updated: 2026-05-13 (PLAN-304 in progress)
 
 ## Usage
 
@@ -329,5 +329,7 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-298 Make Host runtime a first-class bounded context**](PLAN-298.md) `2026-05-13`
 - [x] [**PLAN-299 Make Worker Web first-run Soul App first**](PLAN-299.md) `2026-05-13`
 - [x] [**PLAN-300 Soul App development skill and rules**](PLAN-300.md) `2026-05-13`
+- [x] [**PLAN-301 Worker Web Soul Apps placement**](PLAN-301.md) `2026-05-13`
 - [x] [**PLAN-302 Converge Host and Soul App architecture entrypoints**](PLAN-302.md) `2026-05-13`
 - [x] [**PLAN-303 Clean active documentation map**](PLAN-303.md) `2026-05-13`
+- [x] [**PLAN-304 Host platform locator and capability shell boundary**](PLAN-304.md) `2026-05-13`

@@ -20,6 +20,10 @@ Host -> install/enable Soul App -> Soul worker -> workspace -> session
 
 这条路径里的关键点是：**Host 定位并提供平台能力，Soul App 定义并拥有领域意义。**
 
+Soul App is the source of truth for domain state and domain meaning.
+Host is the source of truth for platform capabilities, grants, protocol discovery and shell context.
+Host may consume only protocol-exposed views/actions/search/settings descriptors, and must not infer Soul App domain meaning.
+
 ## 核心原则
 
 ### 1. Host 是平台定位与能力壳

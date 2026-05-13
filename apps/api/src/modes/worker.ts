@@ -631,6 +631,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   app.get('/logo.svg', async c => serveWorkerWebAsset(c, options.webStaticDir, 'logo.svg'))
   app.get('/assets/:path{.+}', async c => serveWorkerWebAsset(c, options.webStaticDir, `assets/${c.req.param('path')}`))
   app.get('/fonts/:path{.+}', async c => serveWorkerWebAsset(c, options.webStaticDir, `fonts/${c.req.param('path')}`))
+  app.get('/engine-icons/:path{.+}', async c => serveWorkerWebAsset(c, options.webStaticDir, `engine-icons/${c.req.param('path')}`))
 
   return { app, port: workerEnv.PORT, state }
 }
@@ -800,6 +801,23 @@ async function mountedSurfaceResponse(c: Context, state: LocalDaemonState, app: 
     const responseHeaders = new Headers(res.headers)
     responseHeaders.delete('content-encoding')
     responseHeaders.delete('transfer-encoding')
+    if (contribution.surface.renderer === 'host-descriptor' && responseHeaders.get('content-type')?.includes('application/json')) {
+      const descriptor = await res.json() as Record<string, unknown>
+      responseHeaders.set('content-type', 'application/json')
+      return new Response(JSON.stringify({
+        ...descriptor,
+        appId: app.appId,
+        authority: 'soul-app',
+        cache: {
+          cachedAt: (state.now ? new Date(state.now()) : new Date()).toISOString(),
+          freshness: 'non-authoritative',
+        },
+      }), {
+        headers: responseHeaders,
+        status: res.status,
+        statusText: res.statusText,
+      })
+    }
     return new Response(res.body, {
       headers: responseHeaders,
       status: res.status,

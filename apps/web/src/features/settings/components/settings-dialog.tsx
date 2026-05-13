@@ -1,10 +1,10 @@
-import type { CapabilityTemplate, LocalEngineStatus, LocalSettingsConfig, VerticalSoul } from '@zonease/aiworker-shared'
+import type { CapabilityTemplate, HostedSoulApp, LocalEngineStatus, LocalSettingsConfig } from '@zonease/aiworker-shared'
 import type { CSSProperties, ReactNode } from 'react'
 
 import { ActionCard, Button, Field, NavItemButton } from '@zonease/aiworker-component'
 import { Check, Gauge, Languages, Link, Moon, RefreshCw, Settings, ShieldCheck, SlidersHorizontal, Sparkles, Sun, Terminal, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { displaySoul, formatRelativeTime, languageLabel, messagesFor, normalizeLocale, supportedLocales } from '../../i18n'
+import { formatRelativeTime, formatStatus, languageLabel, messagesFor, normalizeLocale, supportedLocales } from '../../i18n'
 import { rescanEngines, saveSettings, testEngine } from '../../local-workspace/api'
 import { engineIconSrc } from '../model'
 
@@ -27,20 +27,20 @@ const settingsSections: Array<{
 ]
 
 export function SettingsDialog({
+  apps,
   initial,
   initialSection,
   onClose,
   onSaved,
   runtimeVersion,
-  souls,
   templates,
 }: {
+  apps: HostedSoulApp[]
   initial: LocalSettingsConfig
   initialSection: SettingsSection
   onClose: () => void
   onSaved: (settings: LocalSettingsConfig) => void
   runtimeVersion: string
-  souls: VerticalSoul[]
   templates: CapabilityTemplate[]
 }) {
   const [settings, setSettings] = useState(initial)
@@ -154,7 +154,7 @@ export function SettingsDialog({
                   />
                 )
               : null}
-            {section === 'soul-packs' ? <SoulPackSettings copy={copy} locale={activeLocale} souls={souls} templates={templates} /> : null}
+            {section === 'soul-packs' ? <SoulAppsSettings apps={apps} copy={copy} locale={activeLocale} templates={templates} /> : null}
             {section === 'connectors' ? <ConnectorsSettings copy={copy} settings={settings} update={persist} /> : null}
             {section === 'mcp' ? <LocalMcpSettings copy={copy} settings={settings} update={persist} /> : null}
             {section === 'external-mcp' ? <ExternalMcpSettings copy={copy} settings={settings} update={persist} /> : null}
@@ -309,40 +309,52 @@ function EngineCard({ active, copy, engine, onSelect }: { active: boolean, copy:
   )
 }
 
-function SoulPackSettings({ copy, locale, souls, templates }: { copy: ReturnType<typeof messagesFor>, locale: ReturnType<typeof normalizeLocale>, souls: VerticalSoul[], templates: CapabilityTemplate[] }) {
+function SoulAppsSettings({ apps, copy, locale, templates }: { apps: HostedSoulApp[], copy: ReturnType<typeof messagesFor>, locale: ReturnType<typeof normalizeLocale>, templates: CapabilityTemplate[] }) {
   const settingsCopy = copy.settings
+  const soulAppsCopy = settingsCopy.soulPacks
   return (
     <div className="settings-section">
       <div className="section-head">
         <div>
-          <h3>{settingsCopy.soulPacks.title}</h3>
-          <p className="hint">{settingsCopy.soulPacks.hint}</p>
+          <h3>{soulAppsCopy.title}</h3>
+          <p className="hint">{soulAppsCopy.hint}</p>
         </div>
       </div>
       <div className="settings-card-list">
-        {souls.map((soul) => {
-          const soulCopy = displaySoul(soul, locale)
-          return (
-            <article key={soul.id} className={`settings-card-row ${soul.status === 'available' ? '' : 'disabled'}`}>
-              <strong>
-                {soulCopy.name}
-                {' '}
-                {copy.create.soul}
-              </strong>
-              <span>{soulCopy.description}</span>
-              <small>
-                {templates.filter(template => template.soulId === soul.id).length}
-                {' '}
-                {copy.common.templates}
-                {' · '}
-                {soul.status === 'available' ? copy.common.available : copy.common.comingSoon}
-              </small>
-            </article>
-          )
-        })}
+        {apps.length > 0
+          ? apps.map((app) => {
+              const permissionCount = app.manifest.permissions?.length ?? 0
+              const contributionCount = mountedContributionCount(app)
+              const templateCount = templates.filter(template => template.soulId === app.appId || template.soulId === app.projectedSoul?.id).length
+              const apiRoutePrefix = app.mountedContribution.apiRoutePrefix
+              const domain = app.projectedSoul?.domain ?? app.manifest.soul?.domain ?? app.appId
+              return (
+                <article key={app.appId} className={`settings-card-row ${app.status === 'enabled' ? '' : 'disabled'}`}>
+                  <strong>{app.manifest.name}</strong>
+                  <span>{`${formatStatus(app.status, locale)} · ${app.version}`}</span>
+                  <small>{domain}</small>
+                  <div className="settings-card-tags">
+                    <small>{soulAppsCopy.permissionCount(permissionCount)}</small>
+                    <small>{soulAppsCopy.templateCount(templateCount)}</small>
+                    <small>{soulAppsCopy.mountedContributionCount(contributionCount)}</small>
+                  </div>
+                  {apiRoutePrefix ? <small>{soulAppsCopy.apiRoute(apiRoutePrefix)}</small> : null}
+                </article>
+              )
+            })
+          : (
+              <div className="settings-note">{soulAppsCopy.empty}</div>
+            )}
       </div>
     </div>
   )
+}
+
+function mountedContributionCount(app: HostedSoulApp): number {
+  return app.mountedContribution.artifactPreviewIds.length
+    + app.mountedContribution.panelIds.length
+    + app.mountedContribution.reviewPanelIds.length
+    + app.mountedContribution.workspaceWidgetIds.length
 }
 
 function ConnectorsSettings({ copy, settings, update }: { copy: ReturnType<typeof messagesFor>, settings: LocalSettingsConfig, update: (patch: Partial<LocalSettingsConfig>) => Promise<void> }) {

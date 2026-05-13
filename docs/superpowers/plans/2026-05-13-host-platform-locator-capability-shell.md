@@ -26,7 +26,7 @@ Do not implement external Logto, S3, GCP, or a new marketplace in this plan. Tho
 
 - Create `docs/task/FEAT-072.md`
   - PMA task for Host platform locator and capability shell convergence.
-- Create `docs/plan/PLAN-302.md`
+- Create `docs/plan/PLAN-304.md`
   - PMA plan record for this implementation.
 - Modify `docs/task/index.md`, `docs/plan/index.md`, `docs/changelog.md`
   - Track and close the PMA work. Preserve any existing in-progress entries such as `REFACTOR-079` / `PLAN-301` if they are present.
@@ -58,7 +58,7 @@ Do not implement external Logto, S3, GCP, or a new marketplace in this plan. Tho
 
 **Files:**
 - Create: `docs/task/FEAT-072.md`
-- Create: `docs/plan/PLAN-302.md`
+- Create: `docs/plan/PLAN-304.md`
 - Modify: `docs/task/index.md`
 - Modify: `docs/plan/index.md`
 - Modify: `docs/architecture.md`
@@ -88,7 +88,7 @@ Create `docs/task/FEAT-072.md`:
 - **priority**: P0
 - **owner**: codex
 - **createdAt**: 2026-05-13 20:00
-- **plan**: PLAN-302
+- **plan**: PLAN-304
 - **relatesTo**: FEAT-060, FEAT-061, FEAT-063, FEAT-066, FEAT-071, docs, packages/shared, packages/core, apps/api, apps/web, apps/aiworker-hr, apps/aiworker-qa
 
 ## 背景
@@ -122,12 +122,12 @@ semantics 和 domain audit。
 - HR/QA validate、smoke、focused tests、root gates 和 code-review-graph 通过。
 ```
 
-- [ ] **Step 3: Create PLAN-302**
+- [ ] **Step 3: Create PLAN-304**
 
-Create `docs/plan/PLAN-302.md`:
+Create `docs/plan/PLAN-304.md`:
 
 ```markdown
-# PLAN-302 Host platform locator and capability shell boundary
+# PLAN-304 Host platform locator and capability shell boundary
 
 - **status**: in_progress
 - **owner**: codex
@@ -185,14 +185,14 @@ Append or update entries while preserving other in-progress work:
 
 ```markdown
 - [-] [**FEAT-072 Host platform locator and capability shell boundary**](FEAT-072.md) `P0`
-- [-] [**PLAN-302 Host platform locator and capability shell boundary**](PLAN-302.md) `2026-05-13`
+- [-] [**PLAN-304 Host platform locator and capability shell boundary**](PLAN-304.md) `2026-05-13`
 ```
 
 Set headers to:
 
 ```markdown
 > Updated: 2026-05-13 (FEAT-072 in progress)
-> Updated: 2026-05-13 (PLAN-302 in progress)
+> Updated: 2026-05-13 (PLAN-304 in progress)
 ```
 
 - [ ] **Step 5: Sync contract docs**
@@ -209,7 +209,7 @@ Run:
 
 ```bash
 rg -n "Soul App is the source of truth for domain state and domain meaning|Host may consume only protocol-exposed" docs/architecture.md docs/soul-app-developer.md .agents/skills/aiworker-soul-app-dev/SKILL.md
-git diff --check -- docs/task/FEAT-072.md docs/plan/PLAN-302.md docs/task/index.md docs/plan/index.md docs/architecture.md docs/soul-app-developer.md .agents/skills/aiworker-soul-app-dev/SKILL.md
+git diff --check -- docs/task/FEAT-072.md docs/plan/PLAN-304.md docs/task/index.md docs/plan/index.md docs/architecture.md docs/soul-app-developer.md .agents/skills/aiworker-soul-app-dev/SKILL.md
 ```
 
 Expected: rule appears in all three contract surfaces and diff check passes.
@@ -817,7 +817,7 @@ Expected: focused Worker Studio test, Web typecheck and build pass.
 
 **Files:**
 - Modify: `docs/task/FEAT-072.md`
-- Modify: `docs/plan/PLAN-302.md`
+- Modify: `docs/plan/PLAN-304.md`
 - Modify: `docs/task/index.md`
 - Modify: `docs/plan/index.md`
 - Modify: `docs/changelog.md`
@@ -852,11 +852,11 @@ Expected: all commands pass. If `aiworker` is not available on PATH, run the equ
 
 - [ ] **Step 2: Close PMA records**
 
-Mark `docs/task/FEAT-072.md` and `docs/plan/PLAN-302.md` as completed. Append verification records with the exact commands that passed. Mark index entries `[x]` and set headers:
+Mark `docs/task/FEAT-072.md` and `docs/plan/PLAN-304.md` as completed. Append verification records with the exact commands that passed. Mark index entries `[x]` and set headers:
 
 ```markdown
 > Updated: 2026-05-13 (FEAT-072 completed)
-> Updated: 2026-05-13 (PLAN-302 completed)
+> Updated: 2026-05-13 (PLAN-304 completed)
 ```
 
 - [ ] **Step 3: Add changelog entry**
@@ -864,7 +864,7 @@ Mark `docs/task/FEAT-072.md` and `docs/plan/PLAN-302.md` as completed. Append ve
 Add after `# AIWorker Changelog`:
 
 ```markdown
-## 2026-05-13 20:00 [completed] FEAT-072 / PLAN-302 — Host platform locator and capability shell boundary
+## 2026-05-13 20:00 [completed] FEAT-072 / PLAN-304 — Host platform locator and capability shell boundary
 
 Converged Host toward a platform locator, capability broker and shell contract while keeping Soul Apps authoritative for domain state.
 
@@ -891,7 +891,7 @@ Expected: only files in this plan plus any pre-existing unrelated dirty files re
 ```bash
 git add \
   docs/task/FEAT-072.md \
-  docs/plan/PLAN-302.md \
+  docs/plan/PLAN-304.md \
   docs/task/index.md \
   docs/plan/index.md \
   docs/changelog.md \

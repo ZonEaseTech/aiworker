@@ -14,6 +14,7 @@ import {
 } from '@zonease/aiworker-soul-app-sdk'
 import { afterEach, describe, expect, it } from 'bun:test'
 
+import hrManifestJson from '../soul-app.manifest.json' with { type: 'json' }
 import { serveHostMounted } from './host-mounted'
 import { HR_REFERENCE_APP_BOUNDARY, hrReferenceSoulApp } from './index'
 
@@ -52,6 +53,8 @@ describe('HR reference Soul App', () => {
     expect(hrReferenceSoulApp.manifest.id).toBe('aiworker-hr')
     expect(await hrReferenceSoulApp.connector?.declareConnectorNeeds({ appId: 'aiworker-hr', permissions: hrReferenceSoulApp.manifest.permissions })).toHaveLength(2)
     expect((await hrReferenceSoulApp.runtime?.resolveCapability({ appId: 'aiworker-hr', permissions: hrReferenceSoulApp.manifest.permissions }, { capabilityId: 'candidate-screen' }))?.id).toBe('candidate-screen')
+    expect(hrManifestJson.ui.shell?.primaryAction?.protocolAction).toBe('peopleProfiles.create')
+    expect(hrManifestJson.ui.shell?.search?.protocolProvider).toBe('peopleProfiles.search')
   })
 
   it('requires the Host mount token for mounted service domain routes', async () => {
@@ -72,7 +75,12 @@ describe('HR reference Soul App', () => {
         headers: { 'x-aiworker-mount-token': 'test-hr-mounted-token' },
       })
       expect(surfaceRes.status).toBe(200)
-      expect(await surfaceRes.json()).toMatchObject({ renderer: 'host-descriptor', title: 'HR Mounted Workbench' })
+      expect(await surfaceRes.json()).toMatchObject({
+        authority: 'soul-app',
+        cache: { freshness: 'non-authoritative' },
+        renderer: 'host-descriptor',
+        title: 'HR Mounted Workbench',
+      })
       const frameRes = await fetch(`${baseUrl}/frames/widgets/hr-people-widget`, {
         headers: { 'x-aiworker-mount-token': 'test-hr-mounted-token' },
       })

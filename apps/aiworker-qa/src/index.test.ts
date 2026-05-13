@@ -14,6 +14,7 @@ import {
 } from '@zonease/aiworker-soul-app-sdk'
 import { afterEach, describe, expect, it } from 'bun:test'
 
+import qaManifestJson from '../soul-app.manifest.json' with { type: 'json' }
 import { serveHostMounted } from './host-mounted'
 import { QA_REFERENCE_APP_BOUNDARY, qaReferenceSoulApp } from './index'
 
@@ -52,6 +53,8 @@ describe('QA reference Soul App', () => {
     expect(qaReferenceSoulApp.manifest.id).toBe('aiworker-qa')
     expect(await qaReferenceSoulApp.connector?.declareConnectorNeeds({ appId: 'aiworker-qa', permissions: qaReferenceSoulApp.manifest.permissions })).toHaveLength(2)
     expect((await qaReferenceSoulApp.runtime?.resolveCapability({ appId: 'aiworker-qa', permissions: qaReferenceSoulApp.manifest.permissions }, { capabilityId: 'release-gate' }))?.id).toBe('release-gate')
+    expect(qaManifestJson.ui.shell?.primaryAction?.protocolAction).toBe('releaseGates.create')
+    expect(qaManifestJson.ui.shell?.search?.protocolProvider).toBe('releases.search')
   })
 
   it('requires the Host mount token for mounted service domain routes', async () => {
@@ -72,7 +75,12 @@ describe('QA reference Soul App', () => {
         headers: { 'x-aiworker-mount-token': 'test-qa-mounted-token' },
       })
       expect(surfaceRes.status).toBe(200)
-      expect(await surfaceRes.json()).toMatchObject({ renderer: 'host-descriptor', title: 'QA Mounted Workbench' })
+      expect(await surfaceRes.json()).toMatchObject({
+        authority: 'soul-app',
+        cache: { freshness: 'non-authoritative' },
+        renderer: 'host-descriptor',
+        title: 'QA Mounted Workbench',
+      })
       const frameRes = await fetch(`${baseUrl}/frames/widgets/qa-release-widget`, {
         headers: { 'x-aiworker-mount-token': 'test-qa-mounted-token' },
       })

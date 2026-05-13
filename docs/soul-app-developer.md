@@ -28,6 +28,10 @@ root AGENTS.md -> docs/architecture.md -> aiworker-soul-app-dev skill
 Do not treat `apps/AGENTS.md` as the canonical Soul App rule surface until the
 target agent runner has proven native nested AGENTS loading.
 
+Soul App is the source of truth for domain state and domain meaning.
+Host is the source of truth for platform capabilities, grants, protocol discovery and shell context.
+Host may consume only protocol-exposed views/actions/search/settings descriptors, and must not infer Soul App domain meaning.
+
 ## Create
 
 ```bash

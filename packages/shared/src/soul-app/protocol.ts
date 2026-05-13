@@ -23,6 +23,44 @@ export interface SoulAppProtocolResult {
   ok: boolean
 }
 
+export interface SoulAppProtocolAction {
+  id: string
+  input?: Record<string, unknown>
+}
+
+export interface SoulAppProtocolActionResult {
+  message?: string
+  ok: boolean
+  redirectTo?: string
+}
+
+export interface SoulAppProtocolViewSummary {
+  appId: string
+  authority: 'soul-app'
+  cache?: {
+    cachedAt: string
+    freshness: 'non-authoritative'
+  }
+  id: string
+  kind: string
+  openAction?: SoulAppProtocolAction
+  permissionRequired?: string
+  status?: string
+  summary?: string
+  title: string
+  updatedAt?: string
+}
+
+export interface SoulAppSearchRequest {
+  limit?: number
+  query: string
+}
+
+export interface SoulAppSearchResult {
+  items: readonly SoulAppProtocolViewSummary[]
+  providerId: string
+}
+
 export interface SoulAppLifecycleProtocol {
   disable: (context: SoulAppScopedContext) => Promise<SoulAppProtocolResult>
   enable: (context: SoulAppScopedContext) => Promise<SoulAppProtocolResult>
@@ -99,9 +137,12 @@ export interface SoulAppProtocolHandlers {
   artifact?: SoulAppArtifactProtocol
   connector?: SoulAppConnectorProtocol
   event?: SoulAppEventProtocol
+  invokeAction?: (context: SoulAppScopedContext, action: SoulAppProtocolAction) => Promise<SoulAppProtocolActionResult>
   lifecycle?: SoulAppLifecycleProtocol
   manifest: SoulAppManifest
   review?: SoulAppReviewProtocol
   runtime?: SoulAppRuntimeProtocol
+  search?: (context: SoulAppScopedContext, request: SoulAppSearchRequest) => Promise<SoulAppSearchResult>
   ui?: SoulAppUiContributionProtocol
+  views?: (context: SoulAppScopedContext, input: { kind?: string }) => Promise<readonly SoulAppProtocolViewSummary[]>
 }

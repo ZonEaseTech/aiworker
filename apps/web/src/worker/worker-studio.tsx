@@ -38,7 +38,7 @@ import {
   messagesFor,
   normalizeLocale,
 } from '../features/i18n'
-import { continueSessionTurnStream, createReview, createSessionTurnStream, createWorker, createWorkspace, loadLocalWorkspaceData, readFile, resolveMountedSurface, updateLesson } from '../features/local-workspace/api'
+import { continueSessionTurnStream, createReview, createSessionTurnStream, createWorker, createWorkspace, loadLocalWorkspaceData, readFile, updateLesson } from '../features/local-workspace/api'
 import { CreateWorkerDialog, CreateWorkspaceDialog, WorkerIdentityBlock, WorkspaceCard, WorkspaceSessionComposer } from '../features/local-workspace/components'
 import {
   artifactForSession,
@@ -74,42 +74,6 @@ interface StudioState {
 }
 
 type WorkerMessages = ReturnType<typeof messagesFor>
-interface MountedSurfaceSummary {
-  id: string
-  kind: string
-  label: string
-  renderer: 'host-descriptor' | 'sandboxed-frame' | 'trusted-module'
-}
-
-interface MountedSurfaceDescriptor {
-  actions?: Array<{ id: string, label: string, method?: string, target?: string }>
-  fields?: Array<{ label: string, value: string }>
-  status?: string
-  title?: string
-  type?: string
-}
-
-interface MountedFrameSurface {
-  frame: {
-    sandbox: string
-    title: string
-    url: string
-  }
-  surface: MountedSurfaceSummary
-}
-
-interface MountedSurfaceState {
-  descriptor: MountedSurfaceDescriptor | null
-  error: string | null
-  frame: MountedFrameSurface['frame'] | null
-  loading: boolean
-}
-
-type MountedSurfaceAction
-  = | { type: 'loading' }
-    | { descriptor: MountedSurfaceDescriptor, type: 'descriptor' }
-    | { frame: MountedFrameSurface['frame'], type: 'frame' }
-    | { error: string, type: 'error' }
 
 const initialArtifactPreviewState: ArtifactPreviewState = {
   artifactId: null,
@@ -134,19 +98,6 @@ function artifactPreviewReducer(_state: ArtifactPreviewState, action: ArtifactPr
       return { artifactId: action.artifactId, content: action.content, error: null, loading: false }
     case 'failed':
       return { artifactId: action.artifactId, content: '', error: action.error, loading: false }
-  }
-}
-
-function mountedSurfaceReducer(_state: MountedSurfaceState, action: MountedSurfaceAction): MountedSurfaceState {
-  switch (action.type) {
-    case 'loading':
-      return { descriptor: null, error: null, frame: null, loading: true }
-    case 'descriptor':
-      return { descriptor: action.descriptor, error: null, frame: null, loading: false }
-    case 'frame':
-      return { descriptor: null, error: null, frame: action.frame, loading: false }
-    case 'error':
-      return { descriptor: null, error: action.error, frame: null, loading: false }
   }
 }
 
@@ -214,6 +165,10 @@ export function WorkerStudio() {
   const selectedSoul = selectedWorker
     ? data?.souls.find(soul => soul.id === selectedWorker.soulId) ?? null
     : data?.souls.find(soul => soul.id === newWorkerSoulId && soul.status === 'available') ?? data?.souls.find(soul => soul.status === 'available') ?? null
+  const selectedSoulApp = useMemo(
+    () => data?.apps.find(app => app.appId === selectedSoul?.id || app.projectedSoul?.id === selectedSoul?.id) ?? null,
+    [data?.apps, selectedSoul?.id],
+  )
   const templates = useMemo(
     () => data?.templates.filter(template => template.soulId === selectedWorker?.soulId) ?? [],
     [data?.templates, selectedWorker?.soulId],
@@ -245,6 +200,9 @@ export function WorkerStudio() {
         || templateCopy?.name.toLowerCase().includes(needle)
     })
   }, [activeLocale, allSessions, data?.templates, query, soulWorkspaces])
+  const shell = selectedSoulApp?.mountedContribution.shell ?? selectedSoulApp?.manifest.ui?.shell ?? null
+  const shellPrimaryAction = shell?.primaryAction ?? null
+  const shellSearch = shell?.search ?? null
   const workerSoulGroups = useMemo(() => {
     if (!data)
       return []
@@ -656,7 +614,6 @@ export function WorkerStudio() {
                 description={copy.workspace.firstRunRailHint}
               />
             </section>
-            <SoulAppsPanel apps={data.apps} copy={copy} locale={activeLocale} />
           </>
         )}
         main={(
@@ -799,8 +756,8 @@ export function WorkerStudio() {
                 <SettingsDialog
                   initial={data.settings}
                   initialSection={settingsInitialSection}
+                  apps={data.apps}
                   runtimeVersion={data.info.runtimeVersion}
-                  souls={data.souls}
                   templates={data.templates}
                   onClose={() => setSettingsOpen(false)}
                   onSaved={(settings) => {
@@ -1002,7 +959,6 @@ export function WorkerStudio() {
                       </div>
                     </div>
                   </section>
-                  <SoulAppsPanel apps={data.apps} copy={copy} locale={activeLocale} />
                 </>
               )}
 
@@ -1050,7 +1006,45 @@ export function WorkerStudio() {
 
           {!showSessionSurface && showSpecializedWorkbench && soulWorkbenchContext
             ? (
-                <SoulWorkbenchRenderer context={soulWorkbenchContext} />
+                <>
+                  <header className="entry-header workspace-header">
+                    <div>
+                      <span className="kicker">{copy.workspace.currentWorker}</span>
+                      <h1>{copy.workspace.workspaceTitle(selectedWorker.name)}</h1>
+                    </div>
+                    <div className="entry-header-right">
+                      {shellSearch
+                        ? (
+                            <label className="toolbar-search">
+                              <span className="search-icon" aria-hidden="true">
+                                <Search size={13} />
+                              </span>
+                              <input
+                                aria-label={copy.accessibility.searchProjects}
+                                placeholder={shellSearch.placeholder}
+                                value={query}
+                                onChange={event => setQuery(event.target.value)}
+                              />
+                            </label>
+                          )
+                        : null}
+                      {shellPrimaryAction
+                        ? (
+                            <button
+                              className="shell-primary-action"
+                              disabled
+                              title="Provided by the Soul App protocol"
+                              type="button"
+                            >
+                              <Plus aria-hidden="true" size={14} />
+                              <span>{shellPrimaryAction.label}</span>
+                            </button>
+                          )
+                        : null}
+                    </div>
+                  </header>
+                  <SoulWorkbenchRenderer context={soulWorkbenchContext} />
+                </>
               )
             : null}
 
@@ -1145,6 +1139,19 @@ export function WorkerStudio() {
                           >
                             <Plus aria-hidden="true" size={16} />
                           </IconButton>
+                          {shellPrimaryAction
+                            ? (
+                                <button
+                                  className="shell-primary-action"
+                                  disabled
+                                  title="Provided by the Soul App protocol"
+                                  type="button"
+                                >
+                                  <Plus aria-hidden="true" size={14} />
+                                  <span>{shellPrimaryAction.label}</span>
+                                </button>
+                              )
+                            : null}
                         </div>
 
                         <div className="toolbar-right">
@@ -1154,7 +1161,7 @@ export function WorkerStudio() {
                             </span>
                             <input
                               aria-label={copy.accessibility.searchProjects}
-                              placeholder={copy.projects.searchPlaceholder}
+                              placeholder={shellSearch?.placeholder ?? copy.projects.searchPlaceholder}
                               value={query}
                               onChange={event => setQuery(event.target.value)}
                             />
@@ -1290,183 +1297,6 @@ function FirstRunSoulAppHome({
       </div>
     </section>
   )
-}
-
-function SoulAppsPanel({ apps, copy, locale }: { apps: HostedSoulApp[], copy: WorkerMessages, locale: ReturnType<typeof normalizeLocale> }) {
-  if (apps.length === 0)
-    return null
-  return (
-    <section className="workspace-rail-card">
-      <StudioSectionHeader className="rail-section-head" title={copy.workspace.soulApps(apps.length)} />
-      <div className="rail-session-list">
-        {apps.map(app => (
-          <SoulAppRailItem key={app.appId} app={app} copy={copy} locale={locale} />
-        ))}
-      </div>
-    </section>
-  )
-}
-
-function SoulAppRailItem({ app, copy, locale }: { app: HostedSoulApp, copy: WorkerMessages, locale: ReturnType<typeof normalizeLocale> }) {
-  const [developerDetailsOpen, setDeveloperDetailsOpen] = useState(false)
-  const permissions = ((app.manifest as Partial<HostedSoulApp['manifest']>).permissions ?? []).length
-  const ui = soulAppUi(app)
-  const detailsId = `soul-app-details-${app.appId.replace(/[^\w-]/g, '-')}`
-  return (
-    <div className="rail-session-item soul-app-rail-item">
-      <strong>{app.manifest.name}</strong>
-      <span>{`${formatStatus(app.status, locale)} · ${app.version}`}</span>
-      {app.status === 'enabled'
-        ? (
-            <>
-              <button
-                type="button"
-                className="soul-app-dev-toggle"
-                aria-controls={detailsId}
-                aria-expanded={developerDetailsOpen}
-                onClick={() => setDeveloperDetailsOpen(current => !current)}
-              >
-                <span>{developerDetailsOpen ? copy.workspace.hideDeveloperDetails : copy.workspace.developerDetails}</span>
-                {developerDetailsOpen
-                  ? <ChevronDown aria-hidden="true" size={13} />
-                  : <ChevronRight aria-hidden="true" size={13} />}
-              </button>
-              {developerDetailsOpen
-                ? (
-                    <div id={detailsId} className="soul-app-dev-panel">
-                      <small>{copy.workspace.appPermissionSummary(app.appId, permissions)}</small>
-                      {app.mountedContribution.apiRoutePrefix
-                        ? <small>{copy.workspace.appApiRoute(app.mountedContribution.apiRoutePrefix)}</small>
-                        : null}
-                      {ui.routes.map(route => (
-                        <small key={route.id}>{copy.workspace.appRoute(route.label, route.path)}</small>
-                      ))}
-                      <small>{mountedSlotSummary(app, copy)}</small>
-                      <MountedSurfaceList app={app} />
-                    </div>
-                  )
-                : null}
-            </>
-          )
-        : <small>{copy.workspace.mountedContributionsPaused}</small>}
-    </div>
-  )
-}
-
-function MountedSurfaceList({ app }: { app: HostedSoulApp }) {
-  const surfaces = mountedSurfaceSummaries(app)
-  if (surfaces.length === 0)
-    return null
-  return (
-    <div className="mounted-surface-list">
-      {surfaces.map(surface => (
-        <MountedSurfacePreview key={surface.id} appId={app.appId} surface={surface} />
-      ))}
-    </div>
-  )
-}
-
-function MountedSurfacePreview({ appId, surface }: { appId: string, surface: MountedSurfaceSummary }) {
-  const [state, dispatch] = useReducer(mountedSurfaceReducer, { descriptor: null, error: null, frame: null, loading: true })
-
-  useEffect(() => {
-    let alive = true
-    dispatch({ type: 'loading' })
-    resolveMountedSurface<MountedSurfaceDescriptor | MountedFrameSurface>(appId, surface.id)
-      .then((result) => {
-        if (!alive)
-          return
-        if ('frame' in result) {
-          dispatch({ frame: result.frame, type: 'frame' })
-        }
-        else {
-          dispatch({ descriptor: result, type: 'descriptor' })
-        }
-      })
-      .catch((error) => {
-        if (!alive)
-          return
-        dispatch({ error: error instanceof Error ? error.message : String(error), type: 'error' })
-      })
-    return () => {
-      alive = false
-    }
-  }, [appId, surface.id])
-
-  if (state.loading)
-    return <small>{`${surface.label} surface loading`}</small>
-  if (state.error)
-    return <small>{`${surface.label} surface unavailable`}</small>
-  if (state.frame) {
-    return (
-      <div className="mounted-surface-preview">
-        <strong>{state.frame.title}</strong>
-        <iframe
-          className="mounted-surface-frame"
-          sandbox="allow-scripts allow-forms"
-          src={state.frame.url}
-          title={state.frame.title}
-        />
-      </div>
-    )
-  }
-  if (!state.descriptor)
-    return null
-  return (
-    <div className="mounted-surface-preview">
-      <strong>{state.descriptor.title ?? surface.label}</strong>
-      {state.descriptor.status ? <span>{state.descriptor.status}</span> : null}
-      {(state.descriptor.fields ?? []).slice(0, 3).map(field => (
-        <small key={field.label}>{`${field.label}: ${field.value}`}</small>
-      ))}
-      {(state.descriptor.actions ?? []).slice(0, 2).map(action => (
-        <small key={action.id}>{`Action ${action.label}`}</small>
-      ))}
-    </div>
-  )
-}
-
-function mountedSurfaceSummaries(app: HostedSoulApp): MountedSurfaceSummary[] {
-  const ui = soulAppUi(app)
-  const routeSurfaces = ui.routes
-    .filter(route => route.surface)
-    .map(route => ({
-      id: route.id,
-      kind: 'route',
-      label: route.label,
-      renderer: route.surface!.renderer,
-    }))
-  const slotSurfaces = [
-    ...ui.panels,
-    ...ui.artifactPreviews,
-    ...ui.reviewPanels,
-    ...(ui.workspaceWidgets ?? []),
-  ].filter(slot => slot.surface).map(slot => ({
-    id: slot.id,
-    kind: slot.slot,
-    label: slot.label,
-    renderer: slot.surface!.renderer,
-  }))
-  return [...routeSurfaces, ...slotSurfaces].filter(surface => surface.renderer !== 'trusted-module').slice(0, 3)
-}
-
-function mountedSlotSummary(app: HostedSoulApp, copy: WorkerMessages): string {
-  const count = app.mountedContribution.artifactPreviewIds.length
-    + app.mountedContribution.panelIds.length
-    + app.mountedContribution.reviewPanelIds.length
-    + app.mountedContribution.workspaceWidgetIds.length
-  return copy.workspace.mountedSlotCount(count)
-}
-
-function soulAppUi(app: HostedSoulApp): HostedSoulApp['manifest']['ui'] {
-  const ui = (app.manifest as Partial<HostedSoulApp['manifest']>).ui
-  return {
-    artifactPreviews: ui?.artifactPreviews ?? [],
-    panels: ui?.panels ?? [],
-    reviewPanels: ui?.reviewPanels ?? [],
-    routes: ui?.routes ?? [],
-    workspaceWidgets: ui?.workspaceWidgets ?? [],
-  }
 }
 
 function soulForApp(app: HostedSoulApp, souls: LocalWorkspaceData['souls']) {

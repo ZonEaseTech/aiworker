@@ -253,6 +253,21 @@ button.settings-action-button svg {
   opacity: 0.64;
 }
 
+.settings-card-tags {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.settings-card-tags small {
+  width: fit-content;
+  padding: 3px 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--bg);
+}
+
 .switch-row span,
 .settings-card-row {
   min-width: 0;

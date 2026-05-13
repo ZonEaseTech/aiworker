@@ -562,6 +562,16 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
     ])
 
     expect(responses.map(response => response.status)).toEqual([200, 200, 200])
+    const descriptorBody = await responses[0].json() as Record<string, unknown>
+    expect(descriptorBody).toMatchObject({
+      appId: 'aiworker-hr',
+      authority: 'soul-app',
+      cache: { freshness: 'non-authoritative' },
+      renderer: 'host-descriptor',
+      title: '/surfaces/routes/hr-home',
+    })
+    expect(descriptorBody).not.toHaveProperty('candidateRisk')
+    expect(descriptorBody).not.toHaveProperty('profileCompleteness')
     const starts = readFileSync(startedPath, 'utf8').trim().split('\n').filter(Boolean)
     expect(starts).toHaveLength(1)
     expect((await target.request('/api/local/apps/aiworker-hr/disable', { method: 'POST' })).status).toBe(200)
@@ -657,6 +667,20 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
     expect(res.status).toBe(200)
     expect(res.headers.get('content-type')).toBe('font/woff2')
     expect(await res.text()).toBe('font-data')
+  })
+
+  it('serves Worker Web engine icon assets from the static build', async () => {
+    const webStaticDir = join(dir, 'web-static')
+    mkdirSync(join(webStaticDir, 'engine-icons'), { recursive: true })
+    writeFileSync(join(webStaticDir, 'index.html'), '<html></html>')
+    writeFileSync(join(webStaticDir, 'engine-icons', 'openai.svg'), '<svg></svg>')
+
+    const target = await app(undefined, webStaticDir)
+    const res = await target.request('/engine-icons/openai.svg')
+
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toBe('image/svg+xml')
+    expect(await res.text()).toBe('<svg></svg>')
   })
 
   it('streams session turn engine events before returning the final result', async () => {

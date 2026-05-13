@@ -130,11 +130,57 @@ export const soulAppUiSlotSchema = zod.object({
 })
 export type SoulAppUiSlot = z.infer<typeof soulAppUiSlotSchema>
 
+export const soulAppShellActionSlotSchema = zod.enum(['primary', 'action', 'drawer-toggle', 'refresh', 'settings'])
+export type SoulAppShellActionSlot = z.infer<typeof soulAppShellActionSlotSchema>
+
+export const soulAppShellActionSchema = zod.object({
+  id: soulAppIdSchema,
+  label: zod.string().min(1),
+  protocolAction: zod.string({ required_error: 'protocolAction is required' }).min(1),
+  requiredPermissions: zod.array(zod.string().min(1)).readonly().optional(),
+  slot: soulAppShellActionSlotSchema,
+})
+export type SoulAppShellAction = z.infer<typeof soulAppShellActionSchema>
+
+export const soulAppShellSearchSchema = zod.object({
+  id: soulAppIdSchema,
+  label: zod.string().min(1),
+  placeholder: zod.string().min(1),
+  protocolProvider: zod.string({ required_error: 'protocolProvider is required' }).min(1),
+  requiredPermissions: zod.array(zod.string().min(1)).readonly().optional(),
+})
+export type SoulAppShellSearch = z.infer<typeof soulAppShellSearchSchema>
+
+export const soulAppShellSettingsSchema = zod.object({
+  id: soulAppIdSchema,
+  label: zod.string().min(1),
+  protocolAction: zod.string({ required_error: 'protocolAction is required' }).min(1),
+  requiredPermissions: zod.array(zod.string().min(1)).readonly().optional(),
+})
+export type SoulAppShellSettings = z.infer<typeof soulAppShellSettingsSchema>
+
+export const soulAppShellSchema = zod.object({
+  actions: zod.array(soulAppShellActionSchema).readonly().optional(),
+  primaryAction: soulAppShellActionSchema.optional(),
+  search: soulAppShellSearchSchema.optional(),
+  settings: soulAppShellSettingsSchema.optional(),
+}).superRefine((shell, ctx) => {
+  if (shell.primaryAction && shell.primaryAction.slot !== 'primary') {
+    ctx.addIssue({
+      code: zod.ZodIssueCode.custom,
+      message: 'primaryAction slot must be primary',
+      path: ['primaryAction', 'slot'],
+    })
+  }
+})
+export type SoulAppShell = z.infer<typeof soulAppShellSchema>
+
 export const soulAppUiSchema = zod.object({
   artifactPreviews: zod.array(soulAppUiSlotSchema).readonly(),
   panels: zod.array(soulAppUiSlotSchema).readonly(),
   reviewPanels: zod.array(soulAppUiSlotSchema).readonly(),
   routes: zod.array(soulAppUiRouteSchema).readonly(),
+  shell: soulAppShellSchema.optional(),
   workspaceWidgets: zod.array(soulAppUiSlotSchema).readonly().optional(),
 })
 export type SoulAppUi = z.infer<typeof soulAppUiSchema>

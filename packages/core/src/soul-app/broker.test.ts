@@ -173,4 +173,34 @@ describe('Soul App isolation broker', () => {
       targetKind: 'engine',
     })
   })
+
+  it('records memory proposals as app-submitted candidates instead of Host-inferred memory', () => {
+    const broker = createSoulAppBroker({
+      appId: 'aiworker-hr',
+      sessionId: 'session-1',
+      workspaceId: 'workspace-hr',
+    })
+
+    const result = broker.memory.propose({
+      evidenceJson: [{ profileId: 'profile-1', source: 'hr-protocol-view' }],
+      sourceReviewId: null,
+      statement: 'HR app proposes this lesson after domain review.',
+      workspaceId: 'workspace-hr',
+    })
+
+    if ('decision' in result)
+      throw new Error(result.decision.reason)
+    expect(result.status).toBe('proposed')
+    expect(result.evidenceJson).toContainEqual(expect.objectContaining({
+      appId: 'aiworker-hr',
+      namespace: 'aiworker-hr',
+      source: 'soul-app-broker',
+    }))
+    expect(listSoulAppAuditEvents('aiworker-hr').at(-1)).toMatchObject({
+      action: 'propose',
+      decision: 'allowed',
+      target: 'aiworker-hr',
+      targetKind: 'memory',
+    })
+  })
 })
