@@ -54,7 +54,9 @@ describe('QA reference Soul App', () => {
     expect(await qaReferenceSoulApp.connector?.declareConnectorNeeds({ appId: 'aiworker-qa', permissions: qaReferenceSoulApp.manifest.permissions })).toHaveLength(2)
     expect((await qaReferenceSoulApp.runtime?.resolveCapability({ appId: 'aiworker-qa', permissions: qaReferenceSoulApp.manifest.permissions }, { capabilityId: 'release-gate' }))?.id).toBe('release-gate')
     expect(qaManifestJson.ui.shell?.primaryAction?.protocolAction).toBe('releaseGates.create')
+    expect(qaManifestJson.ui.shell?.primaryAction?.requiredPermissions).toContain('storage:write:aiworker-qa')
     expect(qaManifestJson.ui.shell?.search?.protocolProvider).toBe('releases.search')
+    expect(qaManifestJson.ui.shell?.search?.requiredPermissions).toContain('storage:read:aiworker-qa')
   })
 
   it('requires the Host mount token for mounted service domain routes', async () => {

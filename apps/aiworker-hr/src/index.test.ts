@@ -54,7 +54,9 @@ describe('HR reference Soul App', () => {
     expect(await hrReferenceSoulApp.connector?.declareConnectorNeeds({ appId: 'aiworker-hr', permissions: hrReferenceSoulApp.manifest.permissions })).toHaveLength(2)
     expect((await hrReferenceSoulApp.runtime?.resolveCapability({ appId: 'aiworker-hr', permissions: hrReferenceSoulApp.manifest.permissions }, { capabilityId: 'candidate-screen' }))?.id).toBe('candidate-screen')
     expect(hrManifestJson.ui.shell?.primaryAction?.protocolAction).toBe('peopleProfiles.create')
+    expect(hrManifestJson.ui.shell?.primaryAction?.requiredPermissions).toContain('storage:write:aiworker-hr')
     expect(hrManifestJson.ui.shell?.search?.protocolProvider).toBe('peopleProfiles.search')
+    expect(hrManifestJson.ui.shell?.search?.requiredPermissions).toContain('storage:read:aiworker-hr')
   })
 
   it('requires the Host mount token for mounted service domain routes', async () => {

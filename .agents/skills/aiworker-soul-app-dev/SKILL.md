@@ -104,6 +104,9 @@ Do not bypass those boundaries:
   handles, access connector credentials, or mutate global memory.
 - Do not let Host infer app-owned profile, review, artifact or memory meaning
   from filenames, DB rows, prompts or UI labels.
+- Declare `requiredPermissions` on shell, search and mounted surfaces whenever
+  the action depends on Host broker capabilities; Host enforces them before it
+  contacts the mounted Soul App service.
 - Do not put secrets in manifests, generated app config, workspace metadata, DB
   metadata, logs, prompts, review rubrics, or skill files.
 - Host mounted access to shared resources must go through scoped broker

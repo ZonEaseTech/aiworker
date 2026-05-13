@@ -8,6 +8,7 @@ const ID_RE = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
 const SEMVER_RE = /^\d+\.\d+\.\d+$/
 const ROUTE_RE = /^\/[a-z0-9][a-z0-9/_:.-]*$/
 const API_PREFIX_RE = /^\/api\/local\/apps\/[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\/[a-z0-9/_:.-]*)?$/
+const REQUIRED_PERMISSION_RE = /^(storage|connector|artifact|review|memory|ui|api):(read|write|create|propose|mount|serve):[^:\s].*$/
 
 export const soulAppIdSchema = zod.string().min(1).regex(ID_RE, 'Soul App id must be kebab-case')
 export const soulAppVersionSchema = zod.string().regex(SEMVER_RE, 'version must be major.minor.patch')
@@ -103,10 +104,13 @@ export type SoulAppMountedSurfaceRenderer = z.infer<typeof soulAppMountedSurface
 export const soulAppMountedSurfaceScopeSchema = zod.enum(['app', 'workspace', 'session', 'artifact', 'review'])
 export type SoulAppMountedSurfaceScope = z.infer<typeof soulAppMountedSurfaceScopeSchema>
 
+export const soulAppRequiredPermissionSchema = zod.string().regex(REQUIRED_PERMISSION_RE, 'requiredPermissions must use kind:action:target')
+export type SoulAppRequiredPermission = z.infer<typeof soulAppRequiredPermissionSchema>
+
 export const soulAppMountedSurfaceSchema = zod.object({
   entry: zod.string().regex(ROUTE_RE, 'surface entry must be an absolute mounted service route'),
   renderer: soulAppMountedSurfaceRendererSchema,
-  requiredPermissions: zod.array(zod.string().min(1)).readonly().optional(),
+  requiredPermissions: zod.array(soulAppRequiredPermissionSchema).readonly().optional(),
   scope: soulAppMountedSurfaceScopeSchema,
 })
 export type SoulAppMountedSurface = z.infer<typeof soulAppMountedSurfaceSchema>
@@ -137,7 +141,7 @@ export const soulAppShellActionSchema = zod.object({
   id: soulAppIdSchema,
   label: zod.string().min(1),
   protocolAction: zod.string({ required_error: 'protocolAction is required' }).min(1),
-  requiredPermissions: zod.array(zod.string().min(1)).readonly().optional(),
+  requiredPermissions: zod.array(soulAppRequiredPermissionSchema).readonly().optional(),
   slot: soulAppShellActionSlotSchema,
 })
 export type SoulAppShellAction = z.infer<typeof soulAppShellActionSchema>
@@ -147,7 +151,7 @@ export const soulAppShellSearchSchema = zod.object({
   label: zod.string().min(1),
   placeholder: zod.string().min(1),
   protocolProvider: zod.string({ required_error: 'protocolProvider is required' }).min(1),
-  requiredPermissions: zod.array(zod.string().min(1)).readonly().optional(),
+  requiredPermissions: zod.array(soulAppRequiredPermissionSchema).readonly().optional(),
 })
 export type SoulAppShellSearch = z.infer<typeof soulAppShellSearchSchema>
 
@@ -155,7 +159,7 @@ export const soulAppShellSettingsSchema = zod.object({
   id: soulAppIdSchema,
   label: zod.string().min(1),
   protocolAction: zod.string({ required_error: 'protocolAction is required' }).min(1),
-  requiredPermissions: zod.array(zod.string().min(1)).readonly().optional(),
+  requiredPermissions: zod.array(soulAppRequiredPermissionSchema).readonly().optional(),
 })
 export type SoulAppShellSettings = z.infer<typeof soulAppShellSettingsSchema>
 

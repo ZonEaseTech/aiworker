@@ -265,6 +265,7 @@
           "id": "refresh-release",
           "label": "Refresh",
           "protocolAction": "release.refresh",
+          "requiredPermissions": ["storage:read:aiworker-qa"],
           "slot": "refresh"
         }
       ],
@@ -272,18 +273,21 @@
         "id": "create-release-gate",
         "label": "New release gate",
         "protocolAction": "releaseGates.create",
+        "requiredPermissions": ["storage:write:aiworker-qa"],
         "slot": "primary"
       },
       "search": {
         "id": "release-search",
         "label": "Search releases",
         "placeholder": "Search releases",
-        "protocolProvider": "releases.search"
+        "protocolProvider": "releases.search",
+        "requiredPermissions": ["storage:read:aiworker-qa"]
       },
       "settings": {
         "id": "qa-settings",
         "label": "QA settings",
-        "protocolAction": "settings.open"
+        "protocolAction": "settings.open",
+        "requiredPermissions": ["api:serve:/api/local/apps/aiworker-qa"]
       }
     },
     "workspaceWidgets": [

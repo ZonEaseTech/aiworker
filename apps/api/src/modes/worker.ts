@@ -1,5 +1,5 @@
 import type { HostRuntime, LocalExecutor, LocalWorkerRuntime } from '@zonease/aiworker-core'
-import type { HostedSoulApp, LocalSettingsConfig, SoulAppMountedSurface } from '@zonease/aiworker-shared'
+import type { HostedSoulApp, LocalSettingsConfig, SoulAppMountedSurface, SoulAppPermission } from '@zonease/aiworker-shared'
 import type { ReviewRow, SessionRow, WorkerRow, WorkspaceRow } from '@zonease/aiworker-storage-sqlite/worker'
 
 import type { Context } from 'hono'
@@ -105,6 +105,7 @@ interface MountedSurfaceContribution {
 interface ShellActionDescriptor {
   id: string
   protocolAction: string
+  requiredPermissions?: readonly string[]
 }
 
 const MOUNTED_PROXY_TIMEOUT_MS = 10_000
@@ -264,6 +265,9 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     const action = resolveShellAction(app, c.req.param('actionId'))
     if (!action)
       return c.json({ error: { code: 'SOUL_APP_ACTION_NOT_DECLARED', message: `Soul App action is not declared: ${c.req.param('actionId')}` } }, 404)
+    const decision = decideDescriptorRequiredPermissions(c, state, action.requiredPermissions, `action ${action.id}`)
+    if (decision)
+      return permissionDecisionResponse(c, decision)
     const body = await readJson<{ input?: Record<string, unknown> }>(c.req)
     return mountedActionResponse(c, state, app, action, isRecord(body.input) ? body.input : {})
   })
@@ -277,6 +281,9 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     const search = app.manifest.ui.shell?.search
     if (!search || search.protocolProvider !== providerId)
       return c.json({ error: { code: 'SOUL_APP_SEARCH_NOT_DECLARED', message: `Soul App search provider is not declared: ${providerId}` } }, 404)
+    const decision = decideDescriptorRequiredPermissions(c, state, search.requiredPermissions, `search ${search.id}`)
+    if (decision)
+      return permissionDecisionResponse(c, decision)
     return mountedSearchResponse(c, state, app, search)
   })
   app.get('/api/local/apps/:appId/surfaces/:surfaceId', async (c) => {
@@ -786,6 +793,56 @@ function resolveShellAction(app: HostedSoulApp, actionId: string): ShellActionDe
     ...(shell?.settings ? [shell.settings] : []),
   ]
   return actions.find(action => action.id === actionId) ?? null
+}
+
+function decideDescriptorRequiredPermissions(
+  c: Context,
+  state: LocalDaemonState,
+  requiredPermissions: readonly string[] | undefined,
+  descriptor: string,
+): { allowed: boolean, code: string, reason: string } | null {
+  if (!requiredPermissions?.length)
+    return null
+
+  const broker = createSoulAppBroker(brokerContext(c, state))
+  for (const permissionRef of requiredPermissions) {
+    const parsed = parseRequiredPermission(permissionRef)
+    if (!parsed) {
+      return {
+        allowed: false,
+        code: 'permission_denied',
+        reason: `Invalid required permission for ${descriptor}: ${permissionRef}. Expected kind:action:target.`,
+      }
+    }
+    const decision = broker.permissions.decide(parsed.kind, parsed.action, parsed.target)
+    if (!decision.allowed)
+      return decision
+  }
+
+  return null
+}
+
+function parseRequiredPermission(value: string): Pick<SoulAppPermission, 'action' | 'kind' | 'target'> | null {
+  const first = value.indexOf(':')
+  const second = first >= 0 ? value.indexOf(':', first + 1) : -1
+  if (first <= 0 || second <= first + 1 || second >= value.length - 1)
+    return null
+
+  const kind = value.slice(0, first)
+  const action = value.slice(first + 1, second)
+  const target = value.slice(second + 1)
+  if (!isSoulAppPermissionKind(kind) || !isSoulAppPermissionAction(action))
+    return null
+
+  return { action, kind, target }
+}
+
+function isSoulAppPermissionKind(value: string): value is SoulAppPermission['kind'] {
+  return ['api', 'artifact', 'connector', 'memory', 'review', 'storage', 'ui'].includes(value)
+}
+
+function isSoulAppPermissionAction(value: string): value is SoulAppPermission['action'] {
+  return ['create', 'mount', 'propose', 'read', 'serve', 'write'].includes(value)
 }
 
 async function mountedActionResponse(

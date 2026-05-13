@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-14 (FEAT-073 completed)
+> Updated: 2026-05-14 (FEAT-074 completed)
 
 ## Usage
 
@@ -409,3 +409,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**DOC-012 Clean active documentation map**](DOC-012.md) `P0`
 - [x] [**FEAT-072 Host platform locator and capability shell boundary**](FEAT-072.md) `P0`
 - [x] [**FEAT-073 Soul App protocol interaction closure**](FEAT-073.md) `P0`
+- [x] [**FEAT-074 Soul App broker permission hardening**](FEAT-074.md) `P0`

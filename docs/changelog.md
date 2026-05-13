@@ -1,5 +1,23 @@
 # AIWorker Changelog
 
+## 2026-05-14 01:16 [completed] FEAT-074 / PLAN-306 — Soul App broker permission hardening
+
+Completed the next zero-trust slice after the protocol interaction closure. App
+declared shell action/search `requiredPermissions` are now enforceable before
+Host contacts a mounted Soul App service.
+
+- Added shared manifest validation and public exports for
+  `requiredPermissions` as `kind:action:target`.
+- Guarded Host action/search invocation through the broker permission decision.
+- Added official HR/QA permission declarations for app-owned shell descriptors.
+- Covered allowed and denied paths, including the denied path not reaching the
+  mounted service.
+
+Verification passed: shared focused/full tests and typecheck, SDK test, API
+focused test and typecheck, HR/QA tests/typechecks/validate, lint boundary,
+`git diff --check`, and code-review-graph. CRG reported static private-helper
+test gaps covered through HTTP-level local daemon tests.
+
 ## 2026-05-14 00:40 [completed] FEAT-073 / PLAN-305 — Soul App protocol interaction closure
 
 Closed the local-first Host / Soul App interaction loop by making app-declared

@@ -82,6 +82,7 @@ describe('Soul App manifest schema', () => {
               id: 'refresh-profiles',
               label: 'Refresh',
               protocolAction: 'profiles.refresh',
+              requiredPermissions: ['storage:read:aiworker-hr'],
               slot: 'action',
             },
           ],
@@ -89,6 +90,7 @@ describe('Soul App manifest schema', () => {
             id: 'create-people-profile',
             label: 'New people profile',
             protocolAction: 'profiles.create',
+            requiredPermissions: ['storage:write:aiworker-hr'],
             slot: 'primary',
           },
           search: {
@@ -96,11 +98,13 @@ describe('Soul App manifest schema', () => {
             label: 'Search people profiles',
             placeholder: 'Search people profiles',
             protocolProvider: 'peopleProfiles.search',
+            requiredPermissions: ['storage:read:aiworker-hr'],
           },
           settings: {
             id: 'hr-settings',
             label: 'HR settings',
             protocolAction: 'settings.open',
+            requiredPermissions: ['api:serve:/api/local/apps/aiworker-hr'],
           },
         },
       },
@@ -126,6 +130,27 @@ describe('Soul App manifest schema', () => {
 
     expect(result.status).toBe('invalid')
     expect(result.issues.some(issue => issue.message.includes('protocolAction'))).toBe(true)
+  })
+
+  it('rejects malformed shell descriptor required permissions', () => {
+    const result = validateSoulAppManifest({
+      ...hrSoulAppManifest,
+      ui: {
+        ...hrSoulAppManifest.ui,
+        shell: {
+          primaryAction: {
+            id: 'create-people-profile',
+            label: 'New people profile',
+            protocolAction: 'profiles.create',
+            requiredPermissions: ['storage.write.aiworker-hr'],
+            slot: 'primary',
+          },
+        },
+      },
+    })
+
+    expect(result.status).toBe('invalid')
+    expect(result.issues.some(issue => issue.message.includes('kind:action:target'))).toBe(true)
   })
 
   it('reports unsupported protocol before Host imports app code', () => {

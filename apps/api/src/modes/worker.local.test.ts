@@ -468,6 +468,7 @@ describe('local daemon API', () => {
                   id: 'create-people-profile',
                   label: 'New people profile',
                   protocolAction: 'peopleProfiles.create',
+                  requiredPermissions: ['storage:write:aiworker-hr'],
                   slot: 'primary',
                 },
                 search: {
@@ -475,6 +476,7 @@ describe('local daemon API', () => {
                   label: 'Search people profiles',
                   placeholder: 'Search people profiles',
                   protocolProvider: 'peopleProfiles.search',
+                  requiredPermissions: ['storage:read:aiworker-hr'],
                 },
               },
             },
@@ -518,6 +520,81 @@ describe('local daemon API', () => {
         limit: '2',
         providerId: 'peopleProfiles.search',
       })
+    }
+    finally {
+      mountedService.stop()
+    }
+  })
+
+  it('rejects shell action and search when descriptor permissions are not granted before mounted calls', async () => {
+    const target = await app()
+    let protocolCalls = 0
+    const mountedService = Bun.serve({
+      fetch(request) {
+        const url = new URL(request.url)
+        if (url.pathname === '/health')
+          return Response.json({ status: 'ok' })
+        if (url.pathname === '/protocol/actions' || url.pathname === '/protocol/search') {
+          protocolCalls += 1
+          return Response.json({ ok: true })
+        }
+        return Response.json({ error: { code: 'NOT_FOUND' } }, { status: 404 })
+      },
+      hostname: '127.0.0.1',
+      port: 0,
+    })
+
+    try {
+      const installRes = await target.request('/api/local/apps/install', {
+        method: 'POST',
+        body: JSON.stringify({
+          manifest: {
+            ...hrSoulAppManifest,
+            api: {
+              ...hrSoulAppManifest.api,
+              localService: {
+                baseUrl: `http://127.0.0.1:${mountedService.port}`,
+                healthPath: '/health',
+              },
+            },
+            ui: {
+              ...hrSoulAppManifest.ui,
+              shell: {
+                primaryAction: {
+                  id: 'create-people-profile',
+                  label: 'New people profile',
+                  protocolAction: 'peopleProfiles.create',
+                  requiredPermissions: ['storage:write:aiworker-qa'],
+                  slot: 'primary',
+                },
+                search: {
+                  id: 'people-profile-search',
+                  label: 'Search people profiles',
+                  placeholder: 'Search people profiles',
+                  protocolProvider: 'peopleProfiles.search',
+                  requiredPermissions: ['storage:read:aiworker-qa'],
+                },
+              },
+            },
+          },
+        }),
+        headers: { 'content-type': 'application/json' },
+      })
+      expect(installRes.status).toBe(201)
+      expect((await target.request('/api/local/apps/aiworker-hr/enable', { method: 'POST' })).status).toBe(200)
+
+      const actionRes = await target.request('/api/local/apps/aiworker-hr/actions/create-people-profile', { method: 'POST' })
+      expect(actionRes.status).toBe(403)
+      expect(await actionRes.json()).toMatchObject({
+        error: { code: 'PERMISSION_DENIED' },
+      })
+
+      const searchRes = await target.request('/api/local/apps/aiworker-hr/search?providerId=peopleProfiles.search&query=ada')
+      expect(searchRes.status).toBe(403)
+      expect(await searchRes.json()).toMatchObject({
+        error: { code: 'PERMISSION_DENIED' },
+      })
+      expect(protocolCalls).toBe(0)
     }
     finally {
       mountedService.stop()

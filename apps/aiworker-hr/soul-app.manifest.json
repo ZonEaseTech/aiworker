@@ -265,12 +265,14 @@
           "id": "refresh-people",
           "label": "Refresh",
           "protocolAction": "people.refresh",
+          "requiredPermissions": ["storage:read:aiworker-hr"],
           "slot": "refresh"
         },
         {
           "id": "toggle-evidence-drawer",
           "label": "Evidence",
           "protocolAction": "drawers.evidence.toggle",
+          "requiredPermissions": ["connector:read:ats"],
           "slot": "drawer-toggle"
         }
       ],
@@ -278,18 +280,21 @@
         "id": "create-people-profile",
         "label": "New people profile",
         "protocolAction": "peopleProfiles.create",
+        "requiredPermissions": ["storage:write:aiworker-hr"],
         "slot": "primary"
       },
       "search": {
         "id": "people-profile-search",
         "label": "Search people profiles",
         "placeholder": "Search people profiles",
-        "protocolProvider": "peopleProfiles.search"
+        "protocolProvider": "peopleProfiles.search",
+        "requiredPermissions": ["storage:read:aiworker-hr"]
       },
       "settings": {
         "id": "hr-settings",
         "label": "HR settings",
-        "protocolAction": "settings.open"
+        "protocolAction": "settings.open",
+        "requiredPermissions": ["api:serve:/api/local/apps/aiworker-hr"]
       }
     },
     "workspaceWidgets": [
