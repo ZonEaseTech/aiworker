@@ -4,7 +4,7 @@ import type { SoulAppRegistryContext } from './registry'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { repairLegacySoulMetadata } from '@zonease/aiworker-storage-sqlite/worker'
+import { discardLegacySoulMetadata } from '@zonease/aiworker-storage-sqlite/worker'
 
 import {
   disableSoulApp,
@@ -33,10 +33,9 @@ export interface OfficialSoulAppBootstrapResult {
   manifestPath: string
 }
 
-export interface OfficialLegacyMetadataRepairResult {
-  skippedSessions: string[]
-  sessionsUpdated: number
-  workersUpdated: number
+export interface OfficialLegacyMetadataDiscardResult {
+  legacySoulIds: string[]
+  workersDeleted: number
 }
 
 export const OFFICIAL_SOUL_APPS = [
@@ -104,29 +103,10 @@ export async function bootstrapOfficialSoulApps(options: OfficialSoulAppBootstra
   return results
 }
 
-export function repairOfficialSoulAppLegacyMetadata(at?: string): OfficialLegacyMetadataRepairResult {
-  return repairLegacySoulMetadata({
+export function discardOfficialSoulAppLegacyMetadata(at?: string): OfficialLegacyMetadataDiscardResult {
+  return discardLegacySoulMetadata({
     at,
-    mappings: [
-      {
-        capabilityTemplateIds: {
-          'candidate-screen': 'aiworker-hr.candidate-screen',
-          'person-profile': 'aiworker-hr.person-profile',
-        },
-        fromSoulId: 'hr',
-        soulName: 'AIWorker HR',
-        toSoulId: 'aiworker-hr',
-      },
-      {
-        capabilityTemplateIds: {
-          'regression-matrix': 'aiworker-qa.regression-matrix',
-          'release-gate': 'aiworker-qa.release-gate',
-        },
-        fromSoulId: 'qa',
-        soulName: 'AIWorker QA',
-        toSoulId: 'aiworker-qa',
-      },
-    ],
+    soulIds: ['hr', 'qa'],
   })
 }
 

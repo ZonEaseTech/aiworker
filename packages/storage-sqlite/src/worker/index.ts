@@ -298,22 +298,14 @@ export interface AppendSoulAppAuditEventInput {
   at?: string
 }
 
-export interface LegacySoulMetadataMapping {
-  fromSoulId: string
-  toSoulId: string
-  soulName?: string
-  capabilityTemplateIds: Record<string, string>
-}
-
-export interface RepairLegacySoulMetadataInput {
-  mappings: LegacySoulMetadataMapping[]
+export interface DiscardLegacySoulMetadataInput {
+  soulIds: readonly string[]
   at?: string
 }
 
-export interface RepairLegacySoulMetadataResult {
-  skippedSessions: string[]
-  sessionsUpdated: number
-  workersUpdated: number
+export interface DiscardLegacySoulMetadataResult {
+  legacySoulIds: string[]
+  workersDeleted: number
 }
 
 export function upsertWorker(input: UpsertWorkerInput): WorkerRow {
@@ -451,67 +443,30 @@ export function listSessions(workspaceId?: string, limit = 200): SessionRow[] {
   return query.orderBy(desc(schema.sessions.updatedAt)).limit(limit).all()
 }
 
-export function repairLegacySoulMetadata(input: RepairLegacySoulMetadataInput): RepairLegacySoulMetadataResult {
-  const now = input.at ?? new Date().toISOString()
-  const mappings = new Map(input.mappings.map(mapping => [mapping.fromSoulId, mapping]))
-  const targetMappings = new Map(input.mappings.map(mapping => [mapping.toSoulId, mapping]))
-  const skippedSessions = new Set<string>()
-  let sessionsUpdated = 0
-  let workersUpdated = 0
+export function discardLegacySoulMetadata(input: DiscardLegacySoulMetadataInput): DiscardLegacySoulMetadataResult {
+  const legacySoulIds = [...new Set(input.soulIds)].sort()
+  let workersDeleted = 0
 
-  const allWorkers = getWorkerDb().select().from(schema.workers).all()
-  for (const worker of allWorkers) {
-    const mapping = mappings.get(worker.soulId) ?? targetMappings.get(worker.soulId)
-    if (!mapping)
+  for (const soulId of legacySoulIds) {
+    const legacyWorkers = getWorkerDb()
+      .select({ id: schema.workers.id })
+      .from(schema.workers)
+      .where(eq(schema.workers.soulId, soulId))
+      .all()
+    if (legacyWorkers.length === 0)
       continue
 
-    if (worker.soulId === mapping.fromSoulId) {
-      getWorkerDb().update(schema.workers).set({
-        metadataJson: rewriteLegacyMetadata(worker.metadataJson, mapping),
-        soulId: mapping.toSoulId,
-        updatedAt: now,
-      }).where(eq(schema.workers.id, worker.id)).run()
-      workersUpdated += 1
-    }
-
-    const workerSessions = getWorkerDb().select().from(schema.sessions).where(eq(schema.sessions.workerId, worker.id)).all()
-    for (const session of workerSessions) {
-      const nextTemplateId = mapping.capabilityTemplateIds[session.capabilityTemplateId]
-      if (!nextTemplateId) {
-        if (worker.soulId === mapping.fromSoulId)
-          skippedSessions.add(session.id)
-        continue
-      }
-      getWorkerDb().update(schema.sessions).set({
-        capabilityTemplateId: nextTemplateId,
-        metadataJson: rewriteLegacyMetadata(session.metadataJson, mapping, nextTemplateId),
-        updatedAt: now,
-      }).where(eq(schema.sessions.id, session.id)).run()
-      sessionsUpdated += 1
-    }
+    getWorkerDb()
+      .delete(schema.workers)
+      .where(eq(schema.workers.soulId, soulId))
+      .run()
+    workersDeleted += legacyWorkers.length
   }
 
   return {
-    skippedSessions: [...skippedSessions].sort(),
-    sessionsUpdated,
-    workersUpdated,
+    legacySoulIds,
+    workersDeleted,
   }
-}
-
-function rewriteLegacyMetadata(
-  metadata: Record<string, unknown> | null,
-  mapping: LegacySoulMetadataMapping,
-  capabilityTemplateId?: string,
-): Record<string, unknown> {
-  const next = { ...(metadata ?? {}) }
-  if (next.soulId === mapping.fromSoulId)
-    next.soulId = mapping.toSoulId
-  next.soulAppId = mapping.toSoulId
-  if (mapping.soulName)
-    next.soulName = mapping.soulName
-  if (capabilityTemplateId)
-    next.capabilityTemplateId = capabilityTemplateId
-  return next
 }
 
 export function createTurn(input: CreateTurnInput): TurnRow {

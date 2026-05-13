@@ -1,15 +1,15 @@
 # AIWorker Changelog
 
-## 2026-05-13 14:02 [completed] FEAT-070 / PLAN-295 — Legacy Soul metadata migration and mounted surface hardening
+## 2026-05-13 14:07 [completed] FEAT-070 / PLAN-295 — Legacy Soul metadata discard and mounted surface hardening
 
 Completed the selected follow-ups 1, 2 and 4, while leaving additional official
 Soul Apps out of scope.
 
-- Added legacy HR/QA metadata repair for old `hr` / `qa` workers and legacy
-  capability template ids, mapping them to `aiworker-hr` / `aiworker-qa` and
-  namespaced template ids without renaming worker ids or workspace paths.
-- Wired the repair into local daemon startup and `aiworker app bootstrap
-  official`, with repair counts surfaced in CLI bootstrap output.
+- Added legacy HR/QA metadata discard for old `hr` / `qa` workers. API startup
+  and `aiworker app bootstrap official` now delete those legacy workers and
+  cascaded local metadata instead of migrating them to `aiworker-hr` /
+  `aiworker-qa`.
+- Surfaced discard counts in CLI bootstrap output.
 - Added a generic Soul App boundary lint script that discovers manifest-backed
   `apps/*` Soul Apps and rejects Host-private imports, sibling app imports and
   Host imports of `apps/*/src` internals.
@@ -21,9 +21,12 @@ Soul Apps out of scope.
   surfaces resolve concurrently.
 
 Verification passed: focused storage/core/API/CLI tests, root `lint` with the
-new boundary script, root `typecheck`, root `test`, Web build and
-`web:smoke:mounted-surfaces`. Web build still emits the existing chunk-size
-warning, but exits 0.
+new boundary script, root `typecheck`, root `test`, root `build`,
+`web:smoke:mounted-surfaces`, `git diff --check` and code-review-graph. Web
+build still emits the existing chunk-size warning, but exits 0.
+Code-review-graph exits 0 and reports static test-gap warnings for touched
+bootstrap/helper functions; focused storage/API/CLI/core tests cover the
+corrected discard behavior.
 
 ## 2026-05-13 12:43 [completed] FEAT-069 / PLAN-294 — Host app-only catalog and official Soul App bootstrap
 
@@ -38,7 +41,7 @@ Completed the no-built-in-Soul Host catalog convergence.
   catalog-dependent routes.
 - Preserved explicitly disabled official apps across daemon restart/bootstrap
   refresh.
-- Added `aiworker app bootstrap official` for CLI repair and diagnostics.
+- Added `aiworker app bootstrap official` for CLI bootstrap and diagnostics.
 - Updated API/CLI/Web tests and HR specialized workbench binding to use
   app-projected IDs such as `aiworker-hr` and
   `aiworker-hr.person-profile`; legacy `hr` worker creation is rejected.

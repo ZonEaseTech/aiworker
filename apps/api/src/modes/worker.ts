@@ -19,6 +19,7 @@ import {
   createLocalWorkerRuntime,
   createSoulAppBroker,
   disableSoulApp,
+  discardOfficialSoulAppLegacyMetadata,
   enableSoulApp,
   findHostCapabilityTemplate,
   findHostSoul,
@@ -27,7 +28,6 @@ import {
   installSoulAppManifest,
   listHostCapabilityTemplatesForSoul,
   listHostSoulCatalog,
-  repairOfficialSoulAppLegacyMetadata,
   runSoulAppHealthcheck,
   workerEnv,
 } from '@zonease/aiworker-core'
@@ -159,7 +159,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     now: options.now,
   }
   await bootstrapOfficialSoulApps(registryContext(state))
-  repairOfficialSoulAppLegacyMetadata(state.now?.())
+  discardOfficialSoulAppLegacyMetadata(state.now?.())
   for (const worker of listWorkers()) {
     const runtime = createRuntimeForWorker(state, worker)
     await runtime.init()

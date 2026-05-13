@@ -145,40 +145,30 @@ describe('local daemon API', () => {
     expect(await workerRes.json()).toMatchObject({ error: { code: 'SOUL_NOT_AVAILABLE' } })
   })
 
-  it('repairs legacy HR worker and session metadata during daemon bootstrap', async () => {
+  it('discards legacy HR worker metadata during daemon bootstrap', async () => {
     seedLegacyHrMetadata()
 
     const target = await app()
 
     const workersBody = await (await target.request('/api/local/workers')).json() as { workers: Array<{ id: string, soulId: string }> }
-    expect(workersBody.workers).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'legacy-hr-worker', soulId: HR_APP_ID }),
-    ]))
+    expect(workersBody.workers.some(worker => worker.id === 'legacy-hr-worker')).toBe(false)
 
-    const sessionsBody = await (await target.request('/api/local/workspaces/legacy-hr-workspace/sessions')).json() as {
-      sessions: Array<{ capabilityTemplateId: string, id: string, metadataJson: Record<string, unknown> }>
+    const workspacesBody = await (await target.request('/api/local/workspaces')).json() as {
+      workspaces: Array<{ id: string, workerId: string }>
     }
-    expect(sessionsBody.sessions).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        capabilityTemplateId: HR_CANDIDATE_SCREEN,
-        id: 'legacy-hr-session',
-        metadataJson: expect.objectContaining({
-          capabilityTemplateId: HR_CANDIDATE_SCREEN,
-          soulAppId: HR_APP_ID,
-        }),
-      }),
-    ]))
+    expect(workspacesBody.workspaces.some(workspace => workspace.id === 'legacy-hr-workspace')).toBe(false)
 
-    const sessionRes = await target.request('/api/local/workers/legacy-hr-worker/workspaces/legacy-hr-workspace/sessions', {
+    const sessionsBody = await (await target.request('/api/local/sessions')).json() as {
+      sessions: Array<{ id: string, workspaceId: string }>
+    }
+    expect(sessionsBody.sessions.some(session => session.id === 'legacy-hr-session')).toBe(false)
+
+    const appWorkerRes = await target.request('/api/local/workers', {
       method: 'POST',
-      body: JSON.stringify({
-        capabilityTemplateId: HR_CANDIDATE_SCREEN,
-        context: 'Migrated worker context',
-        title: 'Post migration session',
-      }),
+      body: JSON.stringify({ id: 'official-hr-after-discard', soulId: HR_APP_ID, name: 'Official HR' }),
       headers: { 'content-type': 'application/json' },
     })
-    expect(sessionRes.status).toBe(201)
+    expect(appWorkerRes.status).toBe(201)
   })
 
   it('serves the session workspace loop through /api/local routes', async () => {

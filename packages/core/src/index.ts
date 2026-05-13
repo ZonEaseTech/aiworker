@@ -16,13 +16,13 @@ export {
 } from './soul-app/broker'
 export {
   bootstrapOfficialSoulApps,
+  discardOfficialSoulAppLegacyMetadata,
   OFFICIAL_SOUL_APPS,
-  type OfficialLegacyMetadataRepairResult,
+  type OfficialLegacyMetadataDiscardResult,
   type OfficialSoulAppBootstrapAction,
   type OfficialSoulAppBootstrapOptions,
   type OfficialSoulAppBootstrapResult,
   type OfficialSoulAppDefinition,
-  repairOfficialSoulAppLegacyMetadata,
 } from './soul-app/official'
 export {
   disableSoulApp,

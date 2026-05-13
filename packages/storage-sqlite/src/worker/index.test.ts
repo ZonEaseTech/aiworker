@@ -17,6 +17,7 @@ import {
   createSession,
   createTurn,
   createWorkspace,
+  discardLegacySoulMetadata,
   engineInvocations,
   files,
   getSession,
@@ -37,7 +38,6 @@ import {
   listWorkers,
   listWorkspaces,
   registerArtifact,
-  repairLegacySoulMetadata,
   reviews,
   runWorkerMigrations,
   sessionEvents,
@@ -251,7 +251,7 @@ describe('greenfield local worker session schema', () => {
     expect(setSetting('engine.default', { engine: 'codex' }).valueJson).toEqual({ engine: 'codex' })
   })
 
-  it('repairs legacy built-in Soul worker and session metadata to app-projected ids', () => {
+  it('discards legacy built-in Soul worker metadata and cascaded local records', () => {
     const worker = upsertWorker({
       id: 'legacy-hr-worker',
       soulId: 'hr',
@@ -289,38 +289,20 @@ describe('greenfield local worker session schema', () => {
       at: '2026-05-13T13:04:03.000Z',
     })
 
-    const result = repairLegacySoulMetadata({
+    const result = discardLegacySoulMetadata({
       at: '2026-05-13T13:05:00.000Z',
-      mappings: [{
-        capabilityTemplateIds: {
-          'candidate-screen': 'aiworker-hr.candidate-screen',
-          'person-profile': 'aiworker-hr.person-profile',
-        },
-        fromSoulId: 'hr',
-        soulName: 'AIWorker HR',
-        toSoulId: 'aiworker-hr',
-      }],
+      soulIds: ['hr'],
     })
 
     expect(result).toEqual({
-      skippedSessions: ['legacy-hr-custom-session'],
-      sessionsUpdated: 1,
-      workersUpdated: 1,
+      legacySoulIds: ['hr'],
+      workersDeleted: 1,
     })
-    expect(getWorker(worker.id)?.soulId).toBe('aiworker-hr')
-    expect(getSession('legacy-hr-session')).toMatchObject({
-      capabilityTemplateId: 'aiworker-hr.candidate-screen',
-      metadataJson: {
-        capabilityTemplateId: 'aiworker-hr.candidate-screen',
-        keep: 'value',
-        soulAppId: 'aiworker-hr',
-        soulName: 'AIWorker HR',
-      },
-    })
-    expect(getSession('legacy-hr-custom-session')).toMatchObject({
-      capabilityTemplateId: 'custom-legacy-template',
-      metadataJson: { capabilityTemplateId: 'custom-legacy-template' },
-    })
+    expect(getWorker(worker.id)).toBeNull()
+    expect(getSession('legacy-hr-session')).toBeNull()
+    expect(getSession('legacy-hr-custom-session')).toBeNull()
+    expect(listWorkspaces(worker.id)).toEqual([])
+    expect(listSessions(workspace.id)).toEqual([])
   })
 
   it('allows multiple workers to bind the same Soul while isolating workspaces by worker', () => {

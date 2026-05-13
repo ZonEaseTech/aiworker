@@ -1,4 +1,4 @@
-# Legacy Soul metadata and mounted surface hardening design
+# Legacy Soul metadata discard and mounted surface hardening design
 
 ## Decision
 
@@ -7,10 +7,11 @@ PM, DevOps, finance, legal or ops official Soul Apps.
 
 ## Shape
 
-Host remains app-only. Old local metadata is treated as migration debt, not as a
-reason to restore Host built-in Souls. The migration maps known legacy HR/QA
-rows to official app ids after official bootstrap has made the target apps
-available.
+Host remains app-only. Old local metadata is treated as discardable pre-1.0.0
+state, not as a reason to restore Host built-in Souls. After official bootstrap
+has made HR/QA apps available for fresh workers, known legacy `hr` / `qa`
+workers and their cascaded local metadata are deleted instead of mapped into
+official app ids.
 
 Import isolation becomes both an authoring validation and a repository lint
 gate. The lint gate discovers manifest-backed `apps/*` Soul Apps and rejects

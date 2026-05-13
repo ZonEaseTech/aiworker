@@ -155,22 +155,22 @@ describe('aiworker local CLI', () => {
     expect((JSON.parse(output) as { worker: { soulId: string } }).worker.soulId).toBe('aiworker-hr')
   })
 
-  it('repairs legacy HR metadata during official app bootstrap', async () => {
+  it('discards legacy HR metadata during official app bootstrap', async () => {
     seedLegacyHrMetadata()
 
     expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
     const body = JSON.parse(output) as {
       bootstrap: {
-        legacyMetadataRepair: { sessionsUpdated: number, workersUpdated: number }
+        legacyMetadataDiscard: { workersDeleted: number }
       }
       catalog: { souls: Array<{ id: string }> }
     }
-    expect(body.bootstrap.legacyMetadataRepair).toMatchObject({ sessionsUpdated: 1, workersUpdated: 1 })
+    expect(body.bootstrap.legacyMetadataDiscard).toMatchObject({ workersDeleted: 1 })
     expect(body.catalog.souls.map(soul => soul.id)).toContain('aiworker-hr')
     output = ''
 
     expect(await runCli(argv('worker', 'show', 'legacy-hr-worker'))).toBe(0)
-    expect((JSON.parse(output) as { worker: { soulId: string } }).worker.soulId).toBe('aiworker-hr')
+    expect((JSON.parse(output) as { worker: null }).worker).toBeNull()
   })
 
   it('installs, enables, lists, and disables local Soul App manifests', async () => {
