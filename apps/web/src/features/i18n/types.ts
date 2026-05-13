@@ -106,6 +106,10 @@ export interface StaticMessages {
     createWorkerHint: string
     createWorkspace: string
     createWorkspaceHint: string
+    appApiRoute: (routePrefix: string) => string
+    appPermissionSummary: (appId: string, count: number) => string
+    appRoute: (label: string, path: string) => string
+    developerDetails: string
     engineLoading: string
     engineMissing: (engineId: string) => string
     engineNotInstalled: (engineName: string) => string
@@ -114,14 +118,23 @@ export interface StaticMessages {
     engineStarting: string
     eventCount: (count: number) => string
     eventStream: string
+    firstRunDetail: string
+    firstRunRailHint: string
+    firstRunRailTitle: string
+    firstRunTitle: string
     followUpInput: string
     followUpPlaceholder: string
+    hideDeveloperDetails: string
     memoryCandidates: string
+    mountedContributionsPaused: string
+    mountedSlotCount: (count: number) => string
     noEvents: string
     noMemoryCandidates: string
     noOtherWorkspaces: string
     noSelectionDetail: string
     noSelectionTitle: string
+    noSoulApps: string
+    noSoulAppsDetail: string
     noTurns: string
     operatorRole: string
     proposed: string
@@ -149,6 +162,8 @@ export interface StaticMessages {
     sessionDetail: string
     latest: string
     soulCatalog: string
+    soulApps: (count: number) => string
+    startSoulApp: (appName: string) => string
     turnCount: (count: number) => string
     turnHistory: string
     updated: (when: string) => string

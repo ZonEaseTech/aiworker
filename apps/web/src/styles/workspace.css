@@ -156,6 +156,115 @@
   gap: 18px;
 }
 
+.first-run-panel {
+  width: min(100%, 1120px);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.first-run-intro {
+  max-width: 680px;
+}
+
+.first-run-intro p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.first-run-app-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.first-run-app-card {
+  min-width: 0;
+  min-height: 176px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-panel);
+  color: var(--text);
+  text-align: left;
+}
+
+.first-run-app-card:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-subtle);
+}
+
+.first-run-app-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.first-run-app-card-main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.first-run-app-card-main strong {
+  overflow: hidden;
+  color: var(--text-strong);
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.first-run-app-card-main span,
+.first-run-app-card-detail,
+.first-run-app-card-foot {
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.first-run-app-card-detail {
+  display: -webkit-box;
+  min-height: 38px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.first-run-app-card-foot {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.first-run-app-card-foot > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.first-run-app-action {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .workspace-compose-content {
   align-items: center;
   justify-content: center;

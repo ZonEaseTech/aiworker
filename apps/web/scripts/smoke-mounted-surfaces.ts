@@ -47,6 +47,7 @@ try {
   await page.goto(`http://${server.hostname}:${server.port}/`, { waitUntil: 'networkidle' })
 
   await page.getByText('Soul Apps (2)').waitFor({ timeout: 10_000 })
+  await page.getByRole('button', { name: 'Developer details' }).first().click()
   await page.getByText('API /api/local/apps/aiworker-hr').waitFor({ timeout: 10_000 })
   await page.getByText('4 mounted slots').first().waitFor({ timeout: 10_000 })
   await page.getByText('HR Mounted Workbench').waitFor({ timeout: 10_000 })

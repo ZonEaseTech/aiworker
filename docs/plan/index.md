@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-13 (PLAN-291 completed)
+> Updated: 2026-05-13 (PLAN-299 completed)
 
 ## Usage
 
@@ -327,3 +327,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-296 Worker Web build chunk reduction**](PLAN-296.md) `2026-05-13`
 - [x] [**PLAN-297 Remove legacy gateway and fleet surfaces**](PLAN-297.md) `2026-05-13`
 - [x] [**PLAN-298 Make Host runtime a first-class bounded context**](PLAN-298.md) `2026-05-13`
+- [x] [**PLAN-299 Make Worker Web first-run Soul App first**](PLAN-299.md) `2026-05-13`

@@ -814,6 +814,15 @@ describe('worker studio', () => {
     await screen.findByText('Soul Apps (2)')
     expect(screen.getByText('AIWorker HR')).toBeTruthy()
     expect(screen.getByText('Enabled · 0.1.0')).toBeTruthy()
+    expect(screen.queryByText('aiworker-hr · 0 permissions')).toBeNull()
+    expect(screen.queryByText('API /api/local/apps/aiworker-hr')).toBeNull()
+    expect(screen.queryByText('Route People workbench · /hr/people')).toBeNull()
+    expect(screen.queryByText('4 mounted slots')).toBeNull()
+
+    const hrAppCard = screen.getByText('AIWorker HR').closest('.rail-session-item') as HTMLElement
+    fireEvent.click(within(hrAppCard).getByRole('button', { name: 'Developer details' }))
+
+    expect(screen.getByText('aiworker-hr · 0 permissions')).toBeTruthy()
     expect(screen.getByText('API /api/local/apps/aiworker-hr')).toBeTruthy()
     expect(screen.getByText('Route People workbench · /hr/people')).toBeTruthy()
     expect(screen.getByText('4 mounted slots')).toBeTruthy()
@@ -879,19 +888,90 @@ describe('worker studio', () => {
     })
   })
 
-  it('uses a vertical Soul selector when no workers exist', async () => {
+  it('starts first-run from enabled Soul Apps when no workers exist', async () => {
     currentWorkers = []
     currentWorkspaces = []
     currentSessions = []
     currentArtifacts = []
+    currentApps = [
+      {
+        appId: 'aiworker-hr',
+        manifest: {
+          name: 'AIWorker HR',
+          ui: {
+            artifactPreviews: [],
+            panels: [],
+            reviewPanels: [],
+            routes: [],
+            workspaceWidgets: [],
+          },
+        },
+        mountedContribution: {
+          apiRoutePrefix: '/api/local/apps/aiworker-hr',
+          artifactPreviewIds: [],
+          descriptorSurfaceIds: [],
+          frameSurfaceIds: [],
+          panelIds: [],
+          reviewPanelIds: [],
+          routePaths: [],
+          surfaceIds: [],
+          workspaceWidgetIds: [],
+        },
+        status: 'enabled',
+        version: '0.1.0',
+      },
+      {
+        appId: 'aiworker-qa',
+        manifest: {
+          name: 'AIWorker QA',
+          ui: {
+            artifactPreviews: [],
+            panels: [],
+            reviewPanels: [],
+            routes: [],
+            workspaceWidgets: [],
+          },
+        },
+        mountedContribution: {
+          apiRoutePrefix: '/api/local/apps/aiworker-qa',
+          artifactPreviewIds: [],
+          descriptorSurfaceIds: [],
+          frameSurfaceIds: [],
+          panelIds: [],
+          reviewPanelIds: [],
+          routePaths: [],
+          surfaceIds: [],
+          workspaceWidgetIds: [],
+        },
+        status: 'enabled',
+        version: '0.1.0',
+      },
+    ]
 
     render(<WorkerStudio />)
 
-    expect((await screen.findAllByText('No worker')).length).toBeGreaterThan(0)
-    const catalog = screen.getByRole('listbox', { name: 'Soul catalog' })
-    expect(within(catalog).getByRole('option', { name: /HR/ })).toBeTruthy()
-    expect(within(catalog).getByText('hr-people-ops')).toBeTruthy()
-    expect(within(catalog).getByRole('option', { name: /QA/ })).toBeTruthy()
+    expect(await screen.findByText('Choose a Soul App to start')).toBeTruthy()
+    expect(screen.getAllByText('AIWorker HR').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('AIWorker QA').length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: 'Start AIWorker HR' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Start AIWorker QA' })).toBeTruthy()
+    expect(screen.queryByText('aiworker-hr · 0 permissions')).toBeNull()
+    expect(screen.queryByText('API /api/local/apps/aiworker-hr')).toBeNull()
+    expect(screen.queryByRole('listbox', { name: 'Soul catalog' })).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start AIWorker HR' }))
+
+    const dialog = screen.getByRole('dialog', { name: 'Create worker' })
+    expect((within(dialog).getByLabelText('Worker name') as HTMLInputElement).value).toBe('AIWorker HR')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create worker' }))
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/local/workers', expect.objectContaining({
+        body: expect.stringContaining(`"soulId":"${HR_SOUL_ID}"`),
+        method: 'POST',
+      }))
+      expect(window.location.pathname).toBe('/workers/worker-created')
+    })
   })
 
   it('creates a workspace session turn with selected Soul worker and skill metadata', async () => {

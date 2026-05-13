@@ -1,5 +1,28 @@
 # AIWorker Changelog
 
+## 2026-05-13 18:32 [completed] REFACTOR-078 / PLAN-299 — Make Worker Web first-run Soul App first
+
+Made Worker Web first-run start from enabled Soul Apps instead of an unexplained
+empty worker object.
+
+- Replaced the no-worker home with a Soul App first-run surface that shows
+  enabled HR/QA app cards and starts the existing create-worker flow with the
+  chosen app-projected Soul preselected.
+- Kept the backend route model unchanged: Soul App -> worker -> workspace ->
+  session remains the implementation path, but the user begins with the
+  business app.
+- Collapsed technical Soul App rail diagnostics such as permission counts, API
+  routes, mounted slots and mounted surfaces behind `Developer details`.
+- Updated localized copy and the mounted-surface browser smoke to use the new
+  disclosure interaction.
+
+Verification passed: focused Worker Studio test, Web `lint`, `typecheck`,
+`test`, `build`, root `typecheck`, `lint`, `test`, `build`,
+`web:smoke:mounted-surfaces`, browser smoke on a temporary local daemon,
+`git diff --check`, and code-review-graph. CRG exits 0 with overall risk 0.40
+and static test-gap hints; Worker Studio tests plus the browser smoke cover the
+changed first-run and mounted-surface paths.
+
 ## 2026-05-13 18:05 [completed] REFACTOR-077 / PLAN-298 — Make Host runtime a first-class bounded context
 
 Made Host a shared core use-case boundary while keeping API, CLI and Web as

@@ -765,6 +765,45 @@
   white-space: nowrap;
 }
 
+.first-run-rail-card {
+  background: var(--bg-panel);
+}
+
+.soul-app-rail-item {
+  gap: 6px;
+}
+
+.soul-app-dev-toggle {
+  width: fit-content;
+  max-width: 100%;
+  min-height: 26px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--bg-panel);
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.soul-app-dev-toggle:hover {
+  color: var(--text);
+  background: var(--bg);
+}
+
+.soul-app-dev-toggle span {
+  color: inherit;
+}
+
+.soul-app-dev-panel {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  padding-top: 4px;
+}
+
 .mounted-surface-list {
   display: grid;
   gap: 6px;

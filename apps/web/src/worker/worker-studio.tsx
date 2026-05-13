@@ -18,7 +18,6 @@ import { IconButton, StudioEmptyState, StudioMainFrame, StudioSectionHeader, Wor
 import { findSoulWorkbenchForSoul } from '@zonease/aiworker-shared/soul-workbench-catalog'
 import {
   ArrowLeft,
-  Check,
   ChevronDown,
   ChevronRight,
   FileText,
@@ -352,6 +351,10 @@ export function WorkerStudio() {
   const selectedWorkspaceArtifacts = selectedWorkspace ? artifactsForWorkspace(selectedWorkspace, data?.artifacts ?? []) : []
   const selectedWorkspaceLessons = selectedWorkspace ? lessonsForWorkspace(selectedWorkspace, data?.lessons ?? []) : []
   const selectedWorkspaceReviews = selectedWorkspace ? reviewsForWorkspace(selectedWorkspace, data?.reviews ?? []) : []
+  const enabledSoulApps = useMemo(
+    () => data?.apps.filter(app => app.status === 'enabled') ?? [],
+    [data?.apps],
+  )
   const soulWorkspaceIds = useMemo(() => new Set(soulWorkspaces.map(item => item.id)), [soulWorkspaces])
   const soulReviews = useMemo(
     () => data?.reviews.filter(review => soulWorkspaceIds.has(review.workspaceId)) ?? [],
@@ -392,6 +395,19 @@ export function WorkerStudio() {
         next.add(soulId)
       return next
     })
+  }
+
+  function startSoulApp(app: HostedSoulApp) {
+    if (!data)
+      return
+    const soulId = data.souls.some(soul => soul.id === app.appId)
+      ? app.appId
+      : app.projectedSoul?.id ?? app.appId
+    const soul = data.souls.find(item => item.id === soulId)
+    const soulCopy = soul ? displaySoul(soul, activeLocale) : null
+    setNewWorkerSoulId(soulId)
+    setNewWorkerName(soulCopy?.name ?? app.manifest.name)
+    setCreateWorkerOpen(true)
   }
 
   async function submitWorker(event: FormEvent<HTMLFormElement>) {
@@ -623,7 +639,6 @@ export function WorkerStudio() {
 
   if (!selectedWorker) {
     const availableSouls = data.souls.filter(soul => soul.status === 'available')
-    const createSoulCopy = selectedSoul ? displaySoul(selectedSoul, activeLocale) : null
     return (
       <WorkerStudioLayout
         appearance={appearance}
@@ -634,64 +649,25 @@ export function WorkerStudio() {
         sidebar={(
           <>
             <StudioBrand copy={copy} />
-            <section className="newproj soul-catalog-panel soul-rail-panel">
-              <div className="newproj-body">
-                <StudioSectionHeader
-                  className="section-head compact with-action"
-                  title={copy.workspace.createWorker}
-                  description={createSoulCopy?.description ?? copy.workspace.createWorkerHint}
-                  action={(
-                    <IconButton
-                      aria-label={copy.workspace.createWorker}
-                      title={copy.workspace.createWorker}
-                      onClick={() => setCreateWorkerOpen(true)}
-                    >
-                      <Plus aria-hidden="true" size={16} />
-                    </IconButton>
-                  )}
-                />
-                <div className="soul-list" role="listbox" aria-label={copy.accessibility.soulCatalog}>
-                  {availableSouls.map((soul) => {
-                    const soulCopy = displaySoul(soul, activeLocale)
-                    return (
-                      <button
-                        key={soul.id}
-                        type="button"
-                        className={`soul-list-item ${newWorkerSoulId === soul.id ? 'active' : ''}`}
-                        aria-selected={newWorkerSoulId === soul.id}
-                        role="option"
-                        onClick={() => setNewWorkerSoulId(soul.id)}
-                      >
-                        <span className="soul-list-item-main">
-                          <strong>{soulCopy.name}</strong>
-                          <small>{soulCopy.domain}</small>
-                        </span>
-                        <span className="soul-list-item-meta">
-                          <span>{copy.common.available}</span>
-                          {newWorkerSoulId === soul.id ? <Check aria-hidden="true" size={14} /> : null}
-                        </span>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
+            <section className="workspace-rail-card first-run-rail-card">
+              <StudioSectionHeader
+                className="rail-section-head"
+                title={copy.workspace.firstRunRailTitle}
+                description={copy.workspace.firstRunRailHint}
+              />
             </section>
-            <SoulAppsPanel apps={data.apps} locale={activeLocale} />
+            <SoulAppsPanel apps={data.apps} copy={copy} locale={activeLocale} />
           </>
         )}
         main={(
-          <StudioMainFrame kicker={copy.workspace.currentWorker} title={copy.workspace.noWorker}>
-            <StudioEmptyState
-              className="empty-design-state"
-              icon={<FileText size={20} />}
-              title={copy.workspace.noWorker}
-              detail={copy.workspace.createWorkerHint}
-              action={(
-                <button type="button" className="ghost icon-btn" onClick={() => setCreateWorkerOpen(true)}>
-                  <Plus aria-hidden="true" size={13} />
-                  <span>{copy.workspace.createWorker}</span>
-                </button>
-              )}
+          <StudioMainFrame kicker={copy.app.workspacePill} title={copy.workspace.firstRunTitle}>
+            <FirstRunSoulAppHome
+              apps={enabledSoulApps}
+              copy={copy}
+              locale={activeLocale}
+              souls={availableSouls}
+              onCreateWorker={() => setCreateWorkerOpen(true)}
+              onStartApp={startSoulApp}
             />
           </StudioMainFrame>
         )}
@@ -1026,7 +1002,7 @@ export function WorkerStudio() {
                       </div>
                     </div>
                   </section>
-                  <SoulAppsPanel apps={data.apps} locale={activeLocale} />
+                  <SoulAppsPanel apps={data.apps} copy={copy} locale={activeLocale} />
                 </>
               )}
 
@@ -1245,36 +1221,135 @@ function StudioBrand({ copy }: { copy: WorkerMessages }) {
   )
 }
 
-function SoulAppsPanel({ apps, locale }: { apps: HostedSoulApp[], locale: ReturnType<typeof normalizeLocale> }) {
+function FirstRunSoulAppHome({
+  apps,
+  copy,
+  locale,
+  onCreateWorker,
+  onStartApp,
+  souls,
+}: {
+  apps: HostedSoulApp[]
+  copy: WorkerMessages
+  locale: ReturnType<typeof normalizeLocale>
+  onCreateWorker: () => void
+  onStartApp: (app: HostedSoulApp) => void
+  souls: LocalWorkspaceData['souls']
+}) {
+  if (apps.length === 0) {
+    return (
+      <StudioEmptyState
+        className="empty-design-state"
+        icon={<FileText size={20} />}
+        title={copy.workspace.noSoulApps}
+        detail={copy.workspace.noSoulAppsDetail}
+        action={(
+          <button type="button" className="ghost icon-btn" onClick={onCreateWorker}>
+            <Plus aria-hidden="true" size={13} />
+            <span>{copy.workspace.createWorker}</span>
+          </button>
+        )}
+      />
+    )
+  }
+
+  return (
+    <section className="first-run-panel" aria-label={copy.workspace.firstRunTitle}>
+      <div className="first-run-intro">
+        <p>{copy.workspace.firstRunDetail}</p>
+      </div>
+      <div className="first-run-app-grid">
+        {apps.map((app) => {
+          const soul = soulForApp(app, souls)
+          const soulCopy = soul ? displaySoul(soul, locale) : null
+          const domain = soulCopy?.domain ?? app.projectedSoul?.domain ?? app.appId
+          const description = soulCopy?.description ?? app.manifest.description
+          return (
+            <button
+              key={app.appId}
+              type="button"
+              className="first-run-app-card"
+              aria-label={copy.workspace.startSoulApp(app.manifest.name)}
+              onClick={() => onStartApp(app)}
+            >
+              <span className="first-run-app-card-main">
+                <strong>{app.manifest.name}</strong>
+                <span>{domain}</span>
+              </span>
+              <span className="first-run-app-card-detail">{description}</span>
+              <span className="first-run-app-card-foot">
+                <span>{`${formatStatus(app.status, locale)} · ${app.version}`}</span>
+                <span className="first-run-app-action">
+                  <span>{copy.workspace.startSoulApp(app.manifest.name)}</span>
+                  <ChevronRight aria-hidden="true" size={14} />
+                </span>
+              </span>
+            </button>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
+function SoulAppsPanel({ apps, copy, locale }: { apps: HostedSoulApp[], copy: WorkerMessages, locale: ReturnType<typeof normalizeLocale> }) {
   if (apps.length === 0)
     return null
   return (
     <section className="workspace-rail-card">
-      <StudioSectionHeader className="rail-section-head" title={`Soul Apps (${apps.length})`} />
+      <StudioSectionHeader className="rail-section-head" title={copy.workspace.soulApps(apps.length)} />
       <div className="rail-session-list">
         {apps.map(app => (
-          <div key={app.appId} className="rail-session-item">
-            <strong>{app.manifest.name}</strong>
-            <span>{`${formatStatus(app.status, locale)} · ${app.version}`}</span>
-            <small>{`${app.appId} · ${(app.manifest.permissions ?? []).length} permissions`}</small>
-            {app.status === 'enabled'
-              ? (
-                  <>
-                    {app.mountedContribution.apiRoutePrefix
-                      ? <small>{`API ${app.mountedContribution.apiRoutePrefix}`}</small>
-                      : null}
-                    {app.manifest.ui.routes.map(route => (
-                      <small key={route.id}>{`Route ${route.label} · ${route.path}`}</small>
-                    ))}
-                    <small>{mountedSlotSummary(app)}</small>
-                    <MountedSurfaceList app={app} />
-                  </>
-                )
-              : <small>Mounted contributions paused</small>}
-          </div>
+          <SoulAppRailItem key={app.appId} app={app} copy={copy} locale={locale} />
         ))}
       </div>
     </section>
+  )
+}
+
+function SoulAppRailItem({ app, copy, locale }: { app: HostedSoulApp, copy: WorkerMessages, locale: ReturnType<typeof normalizeLocale> }) {
+  const [developerDetailsOpen, setDeveloperDetailsOpen] = useState(false)
+  const permissions = ((app.manifest as Partial<HostedSoulApp['manifest']>).permissions ?? []).length
+  const ui = soulAppUi(app)
+  const detailsId = `soul-app-details-${app.appId.replace(/[^\w-]/g, '-')}`
+  return (
+    <div className="rail-session-item soul-app-rail-item">
+      <strong>{app.manifest.name}</strong>
+      <span>{`${formatStatus(app.status, locale)} · ${app.version}`}</span>
+      {app.status === 'enabled'
+        ? (
+            <>
+              <button
+                type="button"
+                className="soul-app-dev-toggle"
+                aria-controls={detailsId}
+                aria-expanded={developerDetailsOpen}
+                onClick={() => setDeveloperDetailsOpen(current => !current)}
+              >
+                <span>{developerDetailsOpen ? copy.workspace.hideDeveloperDetails : copy.workspace.developerDetails}</span>
+                {developerDetailsOpen
+                  ? <ChevronDown aria-hidden="true" size={13} />
+                  : <ChevronRight aria-hidden="true" size={13} />}
+              </button>
+              {developerDetailsOpen
+                ? (
+                    <div id={detailsId} className="soul-app-dev-panel">
+                      <small>{copy.workspace.appPermissionSummary(app.appId, permissions)}</small>
+                      {app.mountedContribution.apiRoutePrefix
+                        ? <small>{copy.workspace.appApiRoute(app.mountedContribution.apiRoutePrefix)}</small>
+                        : null}
+                      {ui.routes.map(route => (
+                        <small key={route.id}>{copy.workspace.appRoute(route.label, route.path)}</small>
+                      ))}
+                      <small>{mountedSlotSummary(app, copy)}</small>
+                      <MountedSurfaceList app={app} />
+                    </div>
+                  )
+                : null}
+            </>
+          )
+        : <small>{copy.workspace.mountedContributionsPaused}</small>}
+    </div>
   )
 }
 
@@ -1352,7 +1427,8 @@ function MountedSurfacePreview({ appId, surface }: { appId: string, surface: Mou
 }
 
 function mountedSurfaceSummaries(app: HostedSoulApp): MountedSurfaceSummary[] {
-  const routeSurfaces = app.manifest.ui.routes
+  const ui = soulAppUi(app)
+  const routeSurfaces = ui.routes
     .filter(route => route.surface)
     .map(route => ({
       id: route.id,
@@ -1361,10 +1437,10 @@ function mountedSurfaceSummaries(app: HostedSoulApp): MountedSurfaceSummary[] {
       renderer: route.surface!.renderer,
     }))
   const slotSurfaces = [
-    ...app.manifest.ui.panels,
-    ...app.manifest.ui.artifactPreviews,
-    ...app.manifest.ui.reviewPanels,
-    ...(app.manifest.ui.workspaceWidgets ?? []),
+    ...ui.panels,
+    ...ui.artifactPreviews,
+    ...ui.reviewPanels,
+    ...(ui.workspaceWidgets ?? []),
   ].filter(slot => slot.surface).map(slot => ({
     id: slot.id,
     kind: slot.slot,
@@ -1374,12 +1450,29 @@ function mountedSurfaceSummaries(app: HostedSoulApp): MountedSurfaceSummary[] {
   return [...routeSurfaces, ...slotSurfaces].filter(surface => surface.renderer !== 'trusted-module').slice(0, 3)
 }
 
-function mountedSlotSummary(app: HostedSoulApp): string {
+function mountedSlotSummary(app: HostedSoulApp, copy: WorkerMessages): string {
   const count = app.mountedContribution.artifactPreviewIds.length
     + app.mountedContribution.panelIds.length
     + app.mountedContribution.reviewPanelIds.length
     + app.mountedContribution.workspaceWidgetIds.length
-  return `${count} mounted ${count === 1 ? 'slot' : 'slots'}`
+  return copy.workspace.mountedSlotCount(count)
+}
+
+function soulAppUi(app: HostedSoulApp): HostedSoulApp['manifest']['ui'] {
+  const ui = (app.manifest as Partial<HostedSoulApp['manifest']>).ui
+  return {
+    artifactPreviews: ui?.artifactPreviews ?? [],
+    panels: ui?.panels ?? [],
+    reviewPanels: ui?.reviewPanels ?? [],
+    routes: ui?.routes ?? [],
+    workspaceWidgets: ui?.workspaceWidgets ?? [],
+  }
+}
+
+function soulForApp(app: HostedSoulApp, souls: LocalWorkspaceData['souls']) {
+  return souls.find(soul => soul.id === app.appId)
+    ?? souls.find(soul => soul.id === app.projectedSoul?.id)
+    ?? null
 }
 
 function workerInitials(name: string): string {
