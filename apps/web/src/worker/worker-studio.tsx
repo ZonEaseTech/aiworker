@@ -1,5 +1,6 @@
 import type { WorkerStudioLayoutVariant } from '@zonease/aiworker-component'
 import type {
+  HostedSoulApp,
   LocalLesson,
   LocalLessonStatus,
   LocalSession,
@@ -162,7 +163,7 @@ export function WorkerStudio() {
     : routedWorkspace ? data?.workers.find(worker => worker.id === routedWorkspace.workerId) ?? null : null
   const selectedWorker = routedWorker ?? (selectedWorkerId ? data?.workers.find(worker => worker.id === selectedWorkerId) ?? null : null) ?? data?.workers[0] ?? null
   const selectedSoul = selectedWorker
-    ? data?.souls.find(soul => soul.id === selectedWorker.soulId && soul.status === 'available') ?? null
+    ? data?.souls.find(soul => soul.id === selectedWorker.soulId) ?? null
     : data?.souls.find(soul => soul.id === newWorkerSoulId && soul.status === 'available') ?? data?.souls.find(soul => soul.status === 'available') ?? null
   const templates = useMemo(
     () => data?.templates.filter(template => template.soulId === selectedWorker?.soulId) ?? [],
@@ -625,6 +626,7 @@ export function WorkerStudio() {
                 </div>
               </div>
             </section>
+            <SoulAppsPanel apps={data.apps} locale={activeLocale} />
           </>
         )}
         main={(
@@ -974,6 +976,7 @@ export function WorkerStudio() {
                       </div>
                     </div>
                   </section>
+                  <SoulAppsPanel apps={data.apps} locale={activeLocale} />
                 </>
               )}
 
@@ -1189,6 +1192,25 @@ function StudioBrand({ copy }: { copy: WorkerMessages }) {
         <div className="entry-brand-subtitle">{copy.app.subtitle}</div>
       </div>
     </div>
+  )
+}
+
+function SoulAppsPanel({ apps, locale }: { apps: HostedSoulApp[], locale: ReturnType<typeof normalizeLocale> }) {
+  if (apps.length === 0)
+    return null
+  return (
+    <section className="workspace-rail-card">
+      <StudioSectionHeader className="rail-section-head" title={`Soul Apps (${apps.length})`} />
+      <div className="rail-session-list">
+        {apps.map(app => (
+          <div key={app.appId} className="rail-session-item">
+            <strong>{app.manifest.name}</strong>
+            <span>{`${formatStatus(app.status, locale)} · ${app.version}`}</span>
+            <small>{`${app.appId} · ${(app.manifest.permissions ?? []).length} permissions`}</small>
+          </div>
+        ))}
+      </div>
+    </section>
   )
 }
 

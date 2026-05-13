@@ -1,6 +1,6 @@
 # FEAT-061 Host Soul App registry and mount runtime
 
-- **status**: pending
+- **status**: completed
 - **priority**: P0
 - **owner**: local
 - **createdAt**: 2026-05-12 21:00
@@ -38,12 +38,12 @@ worker/workspace/session 流程中。
 
 ## 验收标准
 
-- CLI/Web 能列出 installed/enabled/disabled/error 状态的 Soul Apps。
-- Host 能从 manifest 注册 capabilities、workspace types、artifact types 和 UI slots。
-- Worker 创建流程能选择来自 Soul App 的 Soul/capability。
-- UI/API route 挂载必须带 app namespace，且不会覆盖 Host core route。
-- 禁用某个 Soul App 后，新 worker/session 不再能使用其能力；已有 metadata 保留可审计状态。
-- Host mounted 模式不要求 Host import vertical app 内部源码。
+- [x] CLI/Web 能列出 installed/enabled/disabled/error 状态的 Soul Apps。
+- [x] Host 能从 manifest 注册 capabilities、workspace types、artifact types 和 UI slots。
+- [x] Worker 创建流程能选择来自 Soul App 的 Soul/capability。
+- [x] UI/API route 挂载必须带 app namespace，且不会覆盖 Host core route。
+- [x] 禁用某个 Soul App 后，新 worker/session 不再能使用其能力；已有 metadata 保留可审计状态。
+- [x] Host mounted 模式不要求 Host import vertical app 内部源码。
 
 ## 调查结论
 
@@ -51,7 +51,46 @@ worker/workspace/session 流程中。
   Host-level app registry。
 - 当前 local daemon worker/session API 可以作为挂载后的统一 runtime 基础。
 - 需要新增 app registry 层，避免后续每个 vertical Soul 都修改 Host 路由和导航主结构。
+- FEAT-060 已提供 `soul-app/v1` manifest schema、validation helper 和 HR/QA
+  reference manifest fixtures；PLAN-285 应消费这些静态 manifest，不重新定义协议。
+- 当前 Host catalog 直接读取 `BUILTIN_VERTICAL_SOULS` 和
+  `BUILTIN_CAPABILITY_TEMPLATES`，需要增加 enabled Soul App 的 projected Soul /
+  capability catalog，但不能执行 Soul App 内部代码。
 
 ## 备注
 
-本功能是 Host 侧完整挂载能力，不是某个 Soul 的阶段实现。
+PLAN-285 已实现 Host 侧 registry、manifest 静态挂载发现和生命周期面；外部 Soul App
+UI/API handler 执行、standalone SDK、隔离 broker、HR/QA 抽取和开发者脚手架仍分别
+留给 PLAN-286..289。
+
+## 完成记录
+
+- 2026-05-12 22:47: 完成 Host Soul App registry 持久化、manifest install /
+  enable / disable / healthcheck、enabled app catalog projection、CLI/API/Web
+  生命周期入口和 worker/session capability 使用路径。
+- API namespace 只保留 `/api/local/apps/:appId/*` scoped boundary；PLAN-285
+  不执行外部 Soul App API handler，启用后访问贡献 API 会返回保留命名空间错误。
+- 禁用 app 后不删除既有 metadata；新模板发现和新 session 使用会被阻断。
+
+## 验证
+
+- `bun run --filter '@zonease/aiworker-shared' typecheck`
+- `bun run --filter '@zonease/aiworker-storage-sqlite' typecheck`
+- `bun run --filter '@zonease/aiworker-core' typecheck`
+- `bun run --filter '@zonease/aiworker-api' typecheck`
+- `bun run --filter '@zonease/aiworker-cli' typecheck`
+- `bun run --filter '@zonease/aiworker-web' typecheck`
+- `bun run --filter '@zonease/aiworker-shared' test`
+- `bun run --filter '@zonease/aiworker-storage-sqlite' test`
+- `bun run --filter '@zonease/aiworker-core' test`
+- `bun run --filter '@zonease/aiworker-api' test`
+- `bun run --filter '@zonease/aiworker-cli' test`
+- `bun run --filter '@zonease/aiworker-web' test`
+- `bun run typecheck`
+- `bun run lint`
+- `bun run test`
+- `bun run build`
+- `git diff --check`
+- `bun run crg:update`
+- `bun run crg:build`
+- `bun run crg:review`

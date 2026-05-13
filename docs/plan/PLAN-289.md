@@ -1,7 +1,7 @@
 # PLAN-289 Soul App developer onboarding and validation harness
 
-- **status**: pending
-- **owner**: local
+- **status**: completed
+- **owner**: codex
 - **createdAt**: 2026-05-12 21:00
 - **relatedTask**: FEAT-065
 
@@ -144,3 +144,36 @@ Out of scope:
 
 - 2026-05-12 21:00: Drafted as a full developer onboarding and validation
   feature plan. No implementation started.
+- 2026-05-13 00:34: Claimed for goal-mode implementation after HR/QA reference
+  app packages passed. Scope is CLI scaffold, manifest/private-import
+  validation, isolated Host-mounted smoke, developer docs, tests, and PMA sync.
+- 2026-05-13 00:52: Completed CLI scaffold, validation and smoke harness,
+  developer workflow docs, CLI tests, and focused CLI typecheck/test.
+
+## Implementation Record
+
+- Added `aiworker app create <id> --dir <path>` with a minimal Soul App scaffold:
+  manifest, SDK app definition, artifact schema, capability prompt, review
+  policy, Soul pack, README, package scripts, and app-local tsconfig.
+- Added `aiworker app validate <path>` with manifest validation, asset existence
+  checks, artifact schema JSON parsing, and private Host import detection.
+- Added `aiworker app smoke <path>` using an isolated temporary worker DB to
+  install/enable the app manifest, project Host mounted catalog entries, create
+  a worker/workspace/session/artifact/review smoke run through
+  `LocalWorkerRuntime`, and fetch a temporary standalone HTML smoke server for
+  browser-openable apps.
+- Added `docs/soul-app-developer.md` for authoring flow, SDK boundary,
+  ownership model, validation commands, smoke output, and contribution checklist.
+- Updated CLI command index and tests for the new developer workflow commands.
+
+## Verification
+
+- `bun run --filter '@zonease/aiworker-cli' test`
+- `bun run --filter '@zonease/aiworker-cli' typecheck`
+- `bun run typecheck`
+- `bun run lint`
+- `bun run test`
+- `bun run build`
+- `git diff --check`
+- `bun run crg:update`
+- `bun run crg:review`

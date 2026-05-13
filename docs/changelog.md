@@ -1,5 +1,134 @@
 # AIWorker Changelog
 
+## 2026-05-13 02:11 [completed] FEAT-066 / PLAN-291 — Soul App app-level autonomy and Host mounted execution
+
+Completed the B+C convergence for Soul App / Host dual autonomy.
+
+- Moved HR and QA from reference package shape into runnable app workspaces
+  under `apps/aiworker-hr` and `apps/aiworker-qa`, with app-owned manifests,
+  standalone and host-mounted entries, protocol files, schemas, capabilities,
+  review policies, pack assets, scripts, tests and READMEs.
+- Fixed SDK app-origin runtime identity so worker/catalog/template paths use the
+  Soul App id (`aiworker-hr`, `aiworker-qa`) consistently, while the domain Soul
+  id is retained as metadata.
+- Extended `soul-app/v1` API metadata with mounted local service configuration.
+  Host can now proxy enabled app API calls to a declared or launched local app
+  service instead of returning `SOUL_APP_API_NOT_LOADED`.
+- Added mounted service smoke in `aiworker app smoke`, including service launch,
+  healthcheck, discovered base URL injection, Host-mounted runtime smoke and
+  standalone browser-openable smoke.
+- Hardened broker writes with Host-owned worker/workspace/session scope
+  validation before storage/review/memory mutation.
+- Added lint and CLI validation boundaries blocking Host-private imports and
+  sibling Soul App imports from app code.
+- Updated Soul App developer docs and recorded the hybrid autonomy design under
+  `docs/superpowers/specs/`.
+
+Verification passed: focused HR/QA app typecheck/test/build, SDK/API/CLI/Core/Web
+focused tests, `aiworker app validate` and `aiworker app smoke` for both apps,
+root `typecheck`, `lint`, `test`, `build`, `git diff --check`, `crg:update` and
+`crg:review`. Web build still emits the existing chunk-size warning, but exits
+0. code-review-graph reports risk 0.65 with 148 test-gap hints.
+
+## 2026-05-13 00:52 [completed] FEAT-065 / PLAN-289 — Soul App developer onboarding and validation harness
+
+Completed the developer-facing Soul App authoring path.
+
+- Added `aiworker app create <id> --dir <path>` to scaffold a minimal vertical
+  Soul App with manifest, SDK app definition, artifact schema, capability
+  prompt, review policy, Soul pack, README, and package scripts.
+- Added `aiworker app validate <path>` for manifest validation, asset checks,
+  artifact schema JSON parsing, and Host-private import detection.
+- Added `aiworker app smoke <path>` to run isolated Host-mounted runtime smoke
+  through install/enable, catalog projection, worker/workspace/session creation,
+  artifact generation, review creation, and temporary standalone browser-openable
+  HTML smoke.
+- Added `docs/soul-app-developer.md` with the SDK boundary, ownership model,
+  connector/storage/review/memory rules, and contribution checklist.
+- Verified focused CLI tests/typecheck plus root `typecheck`, `lint`, `test`,
+  `build`, `git diff --check`, and code-review-graph update/review.
+
+## 2026-05-13 00:32 [completed] FEAT-064 / PLAN-288 — HR and QA reference Soul Apps
+
+Completed the first monorepo reference Soul App extraction.
+
+- Added `@zonease/aiworker-hr` with HR manifest-backed app definition,
+  protocol handlers, package boundary docs, and standalone/mounted smoke tests.
+- Added `@zonease/aiworker-qa` with release/test-suite focused app definition,
+  protocol handlers, package boundary docs, and standalone/mounted smoke tests.
+- Extended SDK type exports for app authors.
+- Verified HR and QA package tests and typechecks.
+
+## 2026-05-13 00:18 [completed] FEAT-063 / PLAN-287 — Soul App isolation brokers and permission boundary
+
+Completed the Host-owned Soul App broker layer.
+
+- Added app-scoped `soul_app_storage_records` and `soul_app_audit_events` to
+  worker DB, with repository helpers and generated migration.
+- Added core `createSoulAppBroker(...)` for manifest permission decisions,
+  storage namespace isolation, connector evidence reads, review/memory proposal
+  paths, and raw engine invocation denial.
+- Added local daemon broker routes under `/api/local/apps/:appId/broker/*`,
+  SDK client helpers, CLI permission display and Worker Web permission count.
+- Verified focused storage/core/API/SDK/CLI/Web tests and package typechecks.
+
+## 2026-05-12 23:35 [completed] FEAT-062 / PLAN-286 — Soul App standalone runtime and SDK
+
+- Added `@zonease/aiworker-soul-app-sdk` as the external authoring boundary for
+  Soul Apps, with `defineSoulApp(...)`, manifest validation, shared protocol
+  type exports, a scoped local daemon client, standalone runtime bootstrap, and
+  mounted test runtime helper.
+- Added SDK tests proving one demo Soul App definition works unchanged in
+  standalone mode and through Host mounted manifest projection, creating
+  worker/workspace/session/artifact/review in both paths.
+- Kept the runtime boundary narrow: standalone reuses worker.db and
+  `LocalWorkerRuntime`; mounted tests use Host registry projection; production
+  execution of external UI/API handlers remains deferred to PLAN-287 isolation
+  brokers.
+- Added SDK authoring docs and retained `soulAppId` in generated artifact
+  metadata when session metadata supplies it, preserving app provenance.
+- Verification passed: SDK/core focused typecheck and tests, root
+  `typecheck`, `lint`, `test`, `build`, `git diff --check`, and
+  code-review-graph update/review.
+
+## 2026-05-12 22:47 [completed] FEAT-061 / PLAN-285 — Host Soul App registry and mount discovery
+
+- Added Host-side Soul App registry persistence for installed/enabled/disabled/error
+  lifecycle state, manifest digest, stored manifest JSON, validation issues and
+  static healthcheck results.
+- Added core registry services that install static `soul-app/v1` manifests,
+  revalidate compatibility before enable/healthcheck, and project enabled app
+  Souls and capability templates into the Host catalog without executing Soul
+  App code.
+- Added local daemon and CLI lifecycle surfaces for app list/show/install/enable/
+  disable/doctor, plus scoped `/api/local/apps/:appId/*` namespace reservation
+  so app API paths cannot override Host core routes.
+- Wired Worker Web to load installed Soul Apps and show lifecycle status in the
+  worker rail, while worker/session creation uses enabled app capabilities and
+  disabled apps remain audit-visible but unavailable for new sessions.
+- Verification passed: focused package typecheck/test for shared, storage,
+  core, API, CLI and Web; root `typecheck`, `lint`, `test`, `build`; and
+  `git diff --check`; plus code-review-graph update/build/review.
+
+## 2026-05-12 22:09 [completed] FEAT-060 / PLAN-284 — Soul App protocol and manifest contract
+
+- Added the shared `soul-app/v1` contract under `packages/shared/src/soul-app/`:
+  manifest schema, JSON parse helper, Host discovery validation result and
+  protocol surface type definitions.
+- Added HR and QA reference Soul App manifest fixtures covering standalone and
+  Host-mounted modes, Soul pack refs, capabilities, workspace types, artifact
+  schemas, UI/API contributions, connector needs, storage namespace,
+  permissions, healthcheck and protocol exports.
+- Added focused shared tests for valid fixtures and deterministic validation
+  failures: unsupported protocol, incompatible Host version, missing connector,
+  invalid namespace, unsafe permission, missing UI/API entry and artifact schema
+  errors.
+- Scope stayed limited to the protocol contract. Host registry/mount runtime,
+  standalone SDK, isolation brokers, HR/QA extraction and developer scaffold
+  remain in PLAN-285..289.
+- Verification passed: focused shared typecheck/test, root typecheck/lint/test,
+  `git diff --check`, and code-review-graph build/review.
+
 ## 2026-05-12 21:20 [completed] DOC-010 / PLAN-290 — Remove legacy OD and control-plane guidance from current contracts
 
 - Removed Open Design mapping tables and fleet/gateway deferral guidance from

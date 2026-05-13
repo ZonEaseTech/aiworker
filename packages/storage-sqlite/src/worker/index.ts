@@ -72,6 +72,9 @@ export type FileRow = typeof schema.files.$inferSelect
 export type ArtifactRow = typeof schema.artifacts.$inferSelect
 export type ReviewRow = typeof schema.reviews.$inferSelect
 export type LessonRow = typeof schema.lessons.$inferSelect
+export type SoulAppRow = typeof schema.soulApps.$inferSelect
+export type SoulAppStorageRecordRow = typeof schema.soulAppStorageRecords.$inferSelect
+export type SoulAppAuditEventRow = typeof schema.soulAppAuditEvents.$inferSelect
 export type SettingRow = typeof schema.settings.$inferSelect
 
 export interface UpsertWorkerInput {
@@ -234,6 +237,64 @@ export interface CreateLessonInput {
   statement: string
   evidenceJson?: Record<string, unknown>[]
   status?: LessonRow['status']
+  at?: string
+}
+
+export interface UpsertSoulAppInput {
+  id: string
+  name: string
+  version: string
+  protocol: string
+  soulId: string
+  status?: SoulAppRow['status']
+  sourceKind: SoulAppRow['sourceKind']
+  sourceRef: string
+  manifestDigest: string
+  manifestJson: SoulAppRow['manifestJson']
+  validationIssuesJson?: SoulAppRow['validationIssuesJson']
+  healthStatus?: SoulAppRow['healthStatus']
+  healthMessage?: string | null
+  installedAt?: string | null
+  enabledAt?: string | null
+  disabledAt?: string | null
+  lastHealthcheckAt?: string | null
+  at?: string
+}
+
+export interface UpdateSoulAppLifecycleInput {
+  id: string
+  status: SoulAppRow['status']
+  validationIssuesJson?: SoulAppRow['validationIssuesJson']
+  healthStatus?: SoulAppRow['healthStatus']
+  healthMessage?: string | null
+  lastHealthcheckAt?: string | null
+  at?: string
+}
+
+export interface UpsertSoulAppStorageRecordInput {
+  appId: string
+  namespace: string
+  key: string
+  valueJson: Record<string, unknown>
+  workerId?: string | null
+  workspaceId?: string | null
+  sessionId?: string | null
+  operatorId?: string | null
+  at?: string
+}
+
+export interface AppendSoulAppAuditEventInput {
+  appId: string
+  action: string
+  targetKind: string
+  target: string
+  decision: SoulAppAuditEventRow['decision']
+  reason: string
+  workerId?: string | null
+  workspaceId?: string | null
+  sessionId?: string | null
+  operatorId?: string | null
+  requestJson?: Record<string, unknown>
   at?: string
 }
 
@@ -661,6 +722,175 @@ export function listLessons(workspaceId?: string, limit = 200): LessonRow[] {
   if (workspaceId)
     return query.where(eq(schema.lessons.workspaceId, workspaceId)).orderBy(desc(schema.lessons.updatedAt)).limit(limit).all()
   return query.orderBy(desc(schema.lessons.updatedAt)).limit(limit).all()
+}
+
+export function upsertSoulApp(input: UpsertSoulAppInput): SoulAppRow {
+  const now = input.at ?? new Date().toISOString()
+  const existing = getSoulApp(input.id)
+  const status = input.status ?? existing?.status ?? 'installed'
+  const enabledAt = input.enabledAt ?? (status === 'enabled' ? existing?.enabledAt ?? now : existing?.enabledAt ?? null)
+  const disabledAt = input.disabledAt ?? (status === 'disabled' ? now : existing?.disabledAt ?? null)
+  if (!existing) {
+    getWorkerDb().insert(schema.soulApps).values({
+      id: input.id,
+      name: input.name,
+      version: input.version,
+      protocol: input.protocol,
+      soulId: input.soulId,
+      status,
+      sourceKind: input.sourceKind,
+      sourceRef: input.sourceRef,
+      manifestDigest: input.manifestDigest,
+      manifestJson: input.manifestJson,
+      validationIssuesJson: input.validationIssuesJson ?? [],
+      healthStatus: input.healthStatus ?? 'unknown',
+      healthMessage: input.healthMessage ?? null,
+      installedAt: input.installedAt ?? now,
+      enabledAt,
+      disabledAt,
+      lastHealthcheckAt: input.lastHealthcheckAt ?? null,
+      createdAt: now,
+      updatedAt: now,
+    }).run()
+  }
+  else {
+    getWorkerDb().update(schema.soulApps).set({
+      name: input.name,
+      version: input.version,
+      protocol: input.protocol,
+      soulId: input.soulId,
+      status,
+      sourceKind: input.sourceKind,
+      sourceRef: input.sourceRef,
+      manifestDigest: input.manifestDigest,
+      manifestJson: input.manifestJson,
+      validationIssuesJson: input.validationIssuesJson ?? existing.validationIssuesJson,
+      healthStatus: input.healthStatus ?? existing.healthStatus,
+      healthMessage: Object.hasOwn(input, 'healthMessage') ? input.healthMessage ?? null : existing.healthMessage,
+      installedAt: input.installedAt ?? existing.installedAt,
+      enabledAt,
+      disabledAt,
+      lastHealthcheckAt: input.lastHealthcheckAt ?? existing.lastHealthcheckAt,
+      updatedAt: now,
+    }).where(eq(schema.soulApps.id, input.id)).run()
+  }
+  return getSoulApp(input.id)!
+}
+
+export function getSoulApp(id: string): SoulAppRow | null {
+  return getWorkerDb().select().from(schema.soulApps).where(eq(schema.soulApps.id, id)).get() ?? null
+}
+
+export function listSoulApps(limit = 200): SoulAppRow[] {
+  return getWorkerDb().select().from(schema.soulApps).orderBy(schema.soulApps.id).limit(limit).all()
+}
+
+export function updateSoulAppLifecycle(input: UpdateSoulAppLifecycleInput): SoulAppRow {
+  const existing = getSoulApp(input.id)
+  if (!existing)
+    throw new Error(`Soul App not found: ${input.id}`)
+  const now = input.at ?? new Date().toISOString()
+  getWorkerDb().update(schema.soulApps).set({
+    disabledAt: input.status === 'disabled' ? now : existing.disabledAt,
+    enabledAt: input.status === 'enabled' ? now : existing.enabledAt,
+    healthMessage: Object.hasOwn(input, 'healthMessage') ? input.healthMessage ?? null : existing.healthMessage,
+    healthStatus: input.healthStatus ?? existing.healthStatus,
+    lastHealthcheckAt: input.lastHealthcheckAt ?? existing.lastHealthcheckAt,
+    status: input.status,
+    updatedAt: now,
+    validationIssuesJson: input.validationIssuesJson ?? existing.validationIssuesJson,
+  }).where(eq(schema.soulApps.id, input.id)).run()
+  return getSoulApp(input.id)!
+}
+
+export function upsertSoulAppStorageRecord(input: UpsertSoulAppStorageRecordInput): SoulAppStorageRecordRow {
+  const now = input.at ?? new Date().toISOString()
+  const existing = getSoulAppStorageRecord(input.appId, input.key)
+  if (!existing) {
+    getWorkerDb().insert(schema.soulAppStorageRecords).values({
+      appId: input.appId,
+      createdAt: now,
+      id: soulAppStorageRecordId(input.appId, input.key),
+      key: input.key,
+      namespace: input.namespace,
+      operatorId: input.operatorId ?? null,
+      sessionId: input.sessionId ?? null,
+      updatedAt: now,
+      valueJson: input.valueJson,
+      workerId: input.workerId ?? null,
+      workspaceId: input.workspaceId ?? null,
+    }).run()
+  }
+  else {
+    getWorkerDb().update(schema.soulAppStorageRecords).set({
+      namespace: input.namespace,
+      operatorId: input.operatorId ?? existing.operatorId,
+      sessionId: input.sessionId ?? existing.sessionId,
+      updatedAt: now,
+      valueJson: input.valueJson,
+      workerId: input.workerId ?? existing.workerId,
+      workspaceId: input.workspaceId ?? existing.workspaceId,
+    }).where(eq(schema.soulAppStorageRecords.id, existing.id)).run()
+  }
+  return getSoulAppStorageRecord(input.appId, input.key)!
+}
+
+export function getSoulAppStorageRecord(appId: string, key: string): SoulAppStorageRecordRow | null {
+  return getWorkerDb()
+    .select()
+    .from(schema.soulAppStorageRecords)
+    .where(and(eq(schema.soulAppStorageRecords.appId, appId), eq(schema.soulAppStorageRecords.key, key)))
+    .get() ?? null
+}
+
+export function listSoulAppStorageRecords(appId: string, limit = 200): SoulAppStorageRecordRow[] {
+  return getWorkerDb()
+    .select()
+    .from(schema.soulAppStorageRecords)
+    .where(eq(schema.soulAppStorageRecords.appId, appId))
+    .orderBy(desc(schema.soulAppStorageRecords.updatedAt))
+    .limit(limit)
+    .all()
+}
+
+export function appendSoulAppAuditEvent(input: AppendSoulAppAuditEventInput): SoulAppAuditEventRow {
+  getWorkerDb().insert(schema.soulAppAuditEvents).values({
+    action: input.action,
+    appId: input.appId,
+    createdAt: input.at ?? new Date().toISOString(),
+    decision: input.decision,
+    operatorId: input.operatorId ?? null,
+    reason: input.reason,
+    requestJson: input.requestJson ?? {},
+    sessionId: input.sessionId ?? null,
+    target: input.target,
+    targetKind: input.targetKind,
+    workerId: input.workerId ?? null,
+    workspaceId: input.workspaceId ?? null,
+  }).run()
+  return getWorkerDb()
+    .select()
+    .from(schema.soulAppAuditEvents)
+    .where(eq(schema.soulAppAuditEvents.appId, input.appId))
+    .orderBy(desc(schema.soulAppAuditEvents.id))
+    .limit(1)
+    .get()!
+}
+
+export function listSoulAppAuditEvents(appId?: string, limit = 500): SoulAppAuditEventRow[] {
+  const query = getWorkerDb().select().from(schema.soulAppAuditEvents)
+  if (appId) {
+    return query
+      .where(eq(schema.soulAppAuditEvents.appId, appId))
+      .orderBy(schema.soulAppAuditEvents.id)
+      .limit(limit)
+      .all()
+  }
+  return query.orderBy(schema.soulAppAuditEvents.id).limit(limit).all()
+}
+
+function soulAppStorageRecordId(appId: string, key: string): string {
+  return `${appId}:${key}`
 }
 
 export function getSetting(key: string): SettingRow | null {

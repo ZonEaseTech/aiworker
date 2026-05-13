@@ -1,6 +1,6 @@
 # FEAT-060 Soul App protocol and manifest contract
 
-- **status**: pending
+- **status**: completed
 - **priority**: P0
 - **owner**: local
 - **createdAt**: 2026-05-12 21:00
@@ -56,6 +56,34 @@ storage namespace、review/memory policy 和 standalone/mounted 运行模式。
 - 当前 HR 专业工作台证明领域 UI 差异是必要的，但仍没有独立注册/挂载协议。
 - 用户明确要求 Host 能接纳各种 Soul，各 Soul 又不依赖 Host 运行，两侧通过
   API/manifest/protocol 交互。
+
+## 实现记录
+
+- 在 `packages/shared/src/soul-app/` 增加 `soul-app/v1` manifest schema、静态
+  JSON parse helper、Host discovery validation helper 和 operator-facing issue
+  code。
+- Manifest 覆盖 app identity、protocol/version、Host/SDK compatibility、
+  standalone/host-mounted modes、Soul、pack refs、capabilities、workspace
+  types、artifact types、UI/API contributions、storage namespace、connector
+  needs、memory policy、permissions、healthcheck 和 protocol exports。
+- 定义 Lifecycle、Runtime、Artifact、Review、Event、Connector 和 UI contribution
+  protocol surface types；本轮不实现 Host registry、mount runtime 或 SDK。
+- 增加 HR 与 QA reference manifest fixtures，证明同一合同能表达 people/HR 与
+  release/QA 两类 Soul App，同时保留 Soul pack 作为内容资产引用。
+- 增加 shared tests 覆盖有效 fixture、unsupported protocol、Host version
+  incompatibility、required connector 缺失、storage namespace、unsafe
+  permission、missing UI/API entry、artifact schema 错误和 JSON parse 语义。
+
+## 验证
+
+- `bun run --filter '@zonease/aiworker-shared' typecheck`
+- `bun run --filter '@zonease/aiworker-shared' test`
+- `bun run typecheck`
+- `bun run lint`
+- `bun run test`
+- `git diff --check`
+- `bun run crg:build`
+- `bun run crg:review`
 
 ## 备注
 

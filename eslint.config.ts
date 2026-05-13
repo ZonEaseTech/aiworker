@@ -1,9 +1,58 @@
 import antfu from '@antfu/eslint-config'
 
+const soulAppHostPrivateImportPatterns = [
+  { group: ['@zonease/aiworker-api', '@zonease/aiworker-api/**'], message: 'Soul App code must not import Host API internals; use the Soul App SDK or mounted broker routes.' },
+  { group: ['@zonease/aiworker-cli', '@zonease/aiworker-cli/**'], message: 'Soul App code must not import Host CLI internals; use app scripts and the SDK boundary.' },
+  { group: ['@zonease/aiworker-core', '@zonease/aiworker-core/**'], message: 'Soul App code must not import Host core internals; use @zonease/aiworker-soul-app-sdk.' },
+  { group: ['@zonease/aiworker-shared', '@zonease/aiworker-shared/**'], message: 'Soul App code must not import shared Host contracts directly; use @zonease/aiworker-soul-app-sdk exports.' },
+  { group: ['@zonease/aiworker-storage-sqlite', '@zonease/aiworker-storage-sqlite/**'], message: 'Soul App code must not access Host storage directly; use local runtime or brokered routes.' },
+  { group: ['@zonease/aiworker-web', '@zonease/aiworker-web/**'], message: 'Soul App code must not import Host Web internals; declare UI through the manifest.' },
+  { group: ['apps/api/**', 'apps/cli/**', 'apps/web/**', 'packages/core/**', 'packages/shared/**', 'packages/storage-sqlite/**'], message: 'Soul App code must stay inside the public SDK boundary.' },
+]
+
 export default antfu({
   typescript: true,
   react: true,
   ignores: ['dist', 'node_modules', '.agents', '.serena', 'docs', '**/routeTree.gen.ts', '**/drizzle/**'],
+}, {
+  // FEAT-066: Soul Apps are runnable app workspaces. They may depend on the
+  // public SDK, but not on Host internals or sibling app internals.
+  files: ['apps/aiworker-hr/src/**/*.{ts,tsx}', 'apps/aiworker-qa/src/**/*.{ts,tsx}'],
+  rules: {
+    'no-restricted-imports': ['error', {
+      patterns: soulAppHostPrivateImportPatterns,
+    }],
+  },
+}, {
+  files: ['apps/aiworker-hr/src/**/*.{ts,tsx}'],
+  rules: {
+    'no-restricted-imports': ['error', {
+      patterns: [
+        ...soulAppHostPrivateImportPatterns,
+        { group: ['@zonease/aiworker-qa', '@zonease/aiworker-qa/**', 'apps/aiworker-qa/**', '**/apps/aiworker-qa/**'], message: 'Soul Apps must not import sibling app internals.' },
+      ],
+    }],
+  },
+}, {
+  files: ['apps/aiworker-qa/src/**/*.{ts,tsx}'],
+  rules: {
+    'no-restricted-imports': ['error', {
+      patterns: [
+        ...soulAppHostPrivateImportPatterns,
+        { group: ['@zonease/aiworker-hr', '@zonease/aiworker-hr/**', 'apps/aiworker-hr/**', '**/apps/aiworker-hr/**'], message: 'Soul Apps must not import sibling app internals.' },
+      ],
+    }],
+  },
+}, {
+  files: ['apps/api/**/*.{ts,tsx}', 'apps/cli/**/*.{ts,tsx}', 'apps/web/**/*.{ts,tsx}', 'packages/**/*.{ts,tsx}'],
+  ignores: ['apps/aiworker-hr/**/*', 'apps/aiworker-qa/**/*'],
+  rules: {
+    'no-restricted-imports': ['error', {
+      patterns: [
+        { group: ['apps/aiworker-hr/src/**', '**/apps/aiworker-hr/src/**', 'apps/aiworker-qa/src/**', '**/apps/aiworker-qa/src/**'], message: 'Host code must not import Soul App internals; use manifest discovery and app-owned public scripts.' },
+      ],
+    }],
+  },
 }, {
   // PLAN-015 §S1：`@zonease/aiworker-core` 必须保持 transport-agnostic。
   // 任何对 Hono / Scalar / apps/* 的引用都视为越界，CI 跑 lint 时即拦下回退。

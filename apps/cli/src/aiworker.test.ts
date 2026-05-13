@@ -1,9 +1,10 @@
 import { Buffer } from 'node:buffer'
-import { mkdtemp, rm, stat } from 'node:fs/promises'
+import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 
+import { hrSoulAppManifest, namespaceSoulAppCapabilityId } from '@zonease/aiworker-shared'
 import { closeWorkerDb } from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
@@ -29,6 +30,7 @@ describe('aiworker local CLI', () => {
 
   afterEach(async () => {
     closeWorkerDb()
+    process.exitCode = 0
     for (const key of Object.keys(process.env))
       delete process.env[key]
     Object.assign(process.env, originalEnv)
@@ -72,9 +74,129 @@ describe('aiworker local CLI', () => {
 
     expect(await runCli(argv('commands'))).toBe(0)
     expect(output).toContain('dev')
+    expect(output).toContain('app list|show|install|enable|disable|doctor|permissions|create|validate|smoke')
     expect(output).toContain('worker create|list|show|select')
     expect(output).toContain('workspace create|list|show')
     expect(output).toContain('session start|list|show')
     expect(output).not.toContain('run start')
+  })
+
+  it('installs, enables, lists, and disables local Soul App manifests', async () => {
+    const manifestPath = path.join(root, 'aiworker-hr.manifest.json')
+    await writeFile(manifestPath, JSON.stringify(hrSoulAppManifest))
+
+    expect(await runCli(argv('app', 'install', manifestPath))).toBe(0)
+    expect((JSON.parse(output) as { app: { appId: string, status: string } }).app).toMatchObject({ appId: 'aiworker-hr', status: 'installed' })
+    output = ''
+
+    expect(await runCli(argv('app', 'enable', 'aiworker-hr'))).toBe(0)
+    expect((JSON.parse(output) as { app: { healthStatus: string, status: string } }).app).toMatchObject({ healthStatus: 'pass', status: 'enabled' })
+    output = ''
+
+    expect(await runCli(argv('soul', 'list'))).toBe(0)
+    expect((JSON.parse(output) as { souls: Array<{ id: string, status: string }> }).souls).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'aiworker-hr', status: 'available' })]))
+    output = ''
+
+    expect(await runCli(argv('template', 'list', '--soul', 'aiworker-hr'))).toBe(0)
+    const capabilityId = namespaceSoulAppCapabilityId('aiworker-hr', 'candidate-screen')
+    expect((JSON.parse(output) as { templates: Array<{ id: string }> }).templates.map(template => template.id)).toContain(capabilityId)
+    output = ''
+
+    expect(await runCli(argv('worker', 'create', '--id', 'mounted-hr', '--name', 'Mounted HR', '--soul', 'aiworker-hr'))).toBe(0)
+    expect((JSON.parse(output) as { worker: { metadata: Record<string, unknown>, soulId: string } }).worker.soulId).toBe('aiworker-hr')
+    output = ''
+
+    expect(await runCli(argv('app', 'disable', 'aiworker-hr'))).toBe(0)
+    expect((JSON.parse(output) as { app: { status: string } }).app.status).toBe('disabled')
+    output = ''
+
+    expect(await runCli(argv('template', 'list', '--soul', 'aiworker-hr'))).toBe(0)
+    expect((JSON.parse(output) as { templates: unknown[] }).templates).toEqual([])
+  })
+
+  it('scaffolds, validates, and smokes a minimal Soul App', async () => {
+    const appDir = path.join(root, 'demo-soul-app')
+
+    expect(await runCli(argv('app', 'create', 'demo-soul-app', '--dir', appDir))).toBe(0)
+    const scaffold = JSON.parse(output) as { appId: string, files: string[], path: string }
+    expect(scaffold).toMatchObject({ appId: 'demo-soul-app', path: appDir })
+    expect(scaffold.files).toContain('soul-app.manifest.json')
+    expect(scaffold.files).toContain('packs/demo-soul-app/SOUL.md')
+    await expect(stat(path.join(appDir, 'soul-app.manifest.json'))).resolves.toBeTruthy()
+    await expect(stat(path.join(appDir, 'src/index.ts'))).resolves.toBeTruthy()
+    output = ''
+
+    expect(await runCli(argv('app', 'validate', appDir))).toBe(0)
+    const validation = JSON.parse(output) as {
+      validation: {
+        appId: string
+        assetIssues: unknown[]
+        checkedAssets: string[]
+        privateImportIssues: unknown[]
+        status: string
+      }
+    }
+    expect(validation.validation).toMatchObject({ appId: 'demo-soul-app', status: 'pass' })
+    expect(validation.validation.assetIssues).toEqual([])
+    expect(validation.validation.privateImportIssues).toEqual([])
+    expect(validation.validation.checkedAssets).toContain('./schemas/brief.schema.json')
+    output = ''
+
+    expect(await runCli(argv('app', 'smoke', appDir))).toBe(0)
+    const smoke = JSON.parse(output) as { smoke: { appId: string, artifactCount: number, hostedStatus: string, mounted: string, standalone: string, standaloneHttpStatus: number, standaloneUrl: string, status: string } }
+    expect(smoke.smoke).toMatchObject({
+      appId: 'demo-soul-app',
+      artifactCount: 1,
+      hostedStatus: 'enabled',
+      mounted: 'pass',
+      standalone: 'pass',
+      standaloneHttpStatus: 200,
+      status: 'pass',
+    })
+    expect(smoke.smoke.standaloneUrl).toStartWith('http://127.0.0.1:')
+  })
+
+  it('fails Soul App validation on Host private imports', async () => {
+    const appDir = path.join(root, 'private-import-app')
+
+    expect(await runCli(argv('app', 'create', 'private-import-app', '--dir', appDir))).toBe(0)
+    output = ''
+    await writeFile(path.join(appDir, 'src/private.ts'), 'import { createLocalWorkerRuntime } from \'@zonease/aiworker-core\'\n')
+
+    expect(await runCli(argv('app', 'validate', appDir))).toBe(1)
+    const validation = JSON.parse(output) as {
+      validation: {
+        privateImportIssues: Array<{ file: string, importPath: string, message: string }>
+        status: string
+      }
+    }
+    expect(validation.validation.status).toBe('fail')
+    expect(validation.validation.privateImportIssues).toEqual([{
+      file: 'src/private.ts',
+      importPath: '@zonease/aiworker-core',
+      message: 'Soul Apps must use @zonease/aiworker-soul-app-sdk instead of Host private packages or sibling Soul Apps.',
+    }])
+  })
+
+  it('fails Soul App validation on sibling app imports', async () => {
+    const appDir = path.join(root, 'sibling-import-app')
+
+    expect(await runCli(argv('app', 'create', 'sibling-import-app', '--dir', appDir))).toBe(0)
+    output = ''
+    await writeFile(path.join(appDir, 'src/private.ts'), 'import { hrReferenceSoulApp } from \'@zonease/aiworker-hr\'\n')
+
+    expect(await runCli(argv('app', 'validate', appDir))).toBe(1)
+    const validation = JSON.parse(output) as {
+      validation: {
+        privateImportIssues: Array<{ file: string, importPath: string, message: string }>
+        status: string
+      }
+    }
+    expect(validation.validation.status).toBe('fail')
+    expect(validation.validation.privateImportIssues).toEqual([{
+      file: 'src/private.ts',
+      importPath: '@zonease/aiworker-hr',
+      message: 'Soul Apps must use @zonease/aiworker-soul-app-sdk instead of Host private packages or sibling Soul Apps.',
+    }])
   })
 })

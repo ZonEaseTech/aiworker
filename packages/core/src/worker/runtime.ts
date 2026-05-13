@@ -367,6 +367,7 @@ export class LocalWorkerRuntime {
           capabilityTemplateId: session.capabilityTemplateId,
           fileId: file.id,
           outputKind: artifact.kind ?? metadata.outputKind,
+          ...(typeof metadata.soulAppId === 'string' ? { soulAppId: metadata.soulAppId } : {}),
           workerId: this.workerId,
         },
         at: this.#now(),

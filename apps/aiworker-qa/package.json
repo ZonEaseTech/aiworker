@@ -1,0 +1,31 @@
+{
+  "name": "@zonease/aiworker-qa",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "bun build src/index.ts src/standalone.ts src/host-mounted.ts --outdir dist --target bun",
+    "dev": "bun src/standalone.ts --serve",
+    "serve": "bun src/host-mounted.ts",
+    "smoke": "bun ../../apps/cli/src/aiworker.ts app smoke .",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "validate": "bun ../../apps/cli/src/aiworker.ts app validate ."
+  },
+  "dependencies": {
+    "@zonease/aiworker-shared": "workspace:*",
+    "@zonease/aiworker-soul-app-sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.13",
+    "typescript": "^5.8.3"
+  }
+}

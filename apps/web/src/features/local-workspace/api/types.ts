@@ -1,5 +1,6 @@
 import type {
   CapabilityTemplate,
+  HostedSoulApp,
   LocalArtifact,
   LocalFile,
   LocalLesson,
@@ -21,6 +22,7 @@ export interface LocalInfoResponse {
 
 export interface LocalWorkspaceData {
   info: LocalInfoResponse
+  apps: HostedSoulApp[]
   workers: LocalWorker[]
   souls: VerticalSoul[]
   templates: CapabilityTemplate[]

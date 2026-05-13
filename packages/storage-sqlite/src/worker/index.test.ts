@@ -3,6 +3,7 @@ import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { hrSoulAppManifest } from '@zonease/aiworker-shared'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { sql } from 'drizzle-orm'
 
@@ -18,6 +19,7 @@ import {
   createWorkspace,
   engineInvocations,
   files,
+  getSoulApp,
   getWorkerDb,
   initWorkerDb,
   lessons,
@@ -28,6 +30,7 @@ import {
   listReviews,
   listSessionEvents,
   listSessions,
+  listSoulApps,
   listTurns,
   listWorkers,
   listWorkspaces,
@@ -38,8 +41,11 @@ import {
   sessions,
   setSetting,
   settings,
+  soulApps,
   turns,
+  updateSoulAppLifecycle,
   upsertFile,
+  upsertSoulApp,
   upsertWorker,
   workers,
   workspaces,
@@ -80,6 +86,9 @@ describe('greenfield local worker session schema', () => {
       'session_events',
       'sessions',
       'settings',
+      'soul_app_audit_events',
+      'soul_app_storage_records',
+      'soul_apps',
       'sqlite_sequence',
       'turns',
       'worker_config',
@@ -88,6 +97,45 @@ describe('greenfield local worker session schema', () => {
       'workers',
       'workspaces',
     ])
+  })
+
+  it('persists Host Soul App registry lifecycle state', () => {
+    const installed = upsertSoulApp({
+      id: hrSoulAppManifest.id,
+      name: hrSoulAppManifest.name,
+      version: hrSoulAppManifest.version,
+      protocol: hrSoulAppManifest.protocol,
+      soulId: hrSoulAppManifest.soul.id,
+      sourceKind: 'inline',
+      sourceRef: 'test:inline',
+      manifestDigest: 'digest-1',
+      manifestJson: hrSoulAppManifest,
+      at: '2026-05-12T22:22:00.000Z',
+    })
+
+    expect(installed.status).toBe('installed')
+    expect(installed.healthStatus).toBe('unknown')
+    expect(getSoulApp(hrSoulAppManifest.id)?.manifestJson.id).toBe(hrSoulAppManifest.id)
+    expect(listSoulApps()).toHaveLength(1)
+
+    const enabled = updateSoulAppLifecycle({
+      id: hrSoulAppManifest.id,
+      status: 'enabled',
+      healthStatus: 'pass',
+      healthMessage: 'Static manifest validation passed.',
+      lastHealthcheckAt: '2026-05-12T22:23:00.000Z',
+      at: '2026-05-12T22:23:00.000Z',
+    })
+    expect(enabled.enabledAt).toBe('2026-05-12T22:23:00.000Z')
+    expect(enabled.healthStatus).toBe('pass')
+
+    const disabled = updateSoulAppLifecycle({
+      id: hrSoulAppManifest.id,
+      status: 'disabled',
+      at: '2026-05-12T22:24:00.000Z',
+    })
+    expect(disabled.status).toBe('disabled')
+    expect(disabled.disabledAt).toBe('2026-05-12T22:24:00.000Z')
   })
 
   it('persists the worker -> workspace -> session -> turn -> artifact loop', () => {
@@ -275,6 +323,7 @@ describe('greenfield local worker session schema', () => {
     expect(explain(`SELECT * FROM artifacts WHERE status = 'available' ORDER BY updated_at DESC LIMIT 50`)).toContain('artifacts_status_updated_at_idx')
     expect(explain(`SELECT * FROM reviews WHERE workspace_id = 'workspace-1' ORDER BY created_at DESC LIMIT 50`)).toContain('reviews_workspace_created_at_idx')
     expect(explain(`SELECT * FROM lessons WHERE status = 'proposed' ORDER BY updated_at DESC LIMIT 50`)).toContain('lessons_status_updated_at_idx')
+    expect(explain(`SELECT * FROM soul_apps WHERE status = 'enabled' ORDER BY updated_at DESC LIMIT 50`)).toContain('soul_apps_status_updated_at_idx')
   })
 
   it('exports the schema objects used by downstream packages', () => {
@@ -288,6 +337,7 @@ describe('greenfield local worker session schema', () => {
     expect(artifacts).toBeDefined()
     expect(reviews).toBeDefined()
     expect(lessons).toBeDefined()
+    expect(soulApps).toBeDefined()
     expect(settings).toBeDefined()
   })
 })

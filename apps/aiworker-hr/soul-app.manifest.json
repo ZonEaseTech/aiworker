@@ -1,0 +1,292 @@
+{
+  "api": {
+    "entry": "./src/api.ts",
+    "localService": {
+      "command": [
+        "bun",
+        "src/host-mounted.ts"
+      ],
+      "healthPath": "/health"
+    },
+    "routePrefix": "/api/local/apps/aiworker-hr"
+  },
+  "artifactTypes": [
+    {
+      "description": "Source-backed HR lifecycle profile.",
+      "id": "person-profile",
+      "name": "Person Profile",
+      "previewRef": "./src/ui/person-profile-preview.tsx",
+      "reviewPolicyRef": "./review/person-profile.md",
+      "schemaRef": "./schemas/person-profile.schema.json",
+      "schemaSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "version": "0.1.0"
+    },
+    {
+      "description": "Role-related candidate screen with missing evidence and risks.",
+      "id": "candidate-screen",
+      "name": "Candidate Screen",
+      "previewRef": "./src/ui/candidate-screen-preview.tsx",
+      "reviewPolicyRef": "./review/candidate-screen.md",
+      "schemaRef": "./schemas/candidate-screen.schema.json",
+      "schemaSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "version": "0.1.0"
+    }
+  ],
+  "capabilities": [
+    {
+      "artifactTypes": [
+        "person-profile"
+      ],
+      "description": "Create a source-backed people profile snapshot.",
+      "id": "person-profile",
+      "name": "Person Profile",
+      "outputKind": "person-profile",
+      "packRefs": [],
+      "promptRef": "./capabilities/person-profile/prompt.md",
+      "reviewRubricRef": "./capabilities/person-profile/review.md",
+      "version": "0.1.0",
+      "workspaceTypes": [
+        "people-profile"
+      ]
+    },
+    {
+      "artifactTypes": [
+        "candidate-screen"
+      ],
+      "description": "Screen candidate evidence against a role rubric.",
+      "id": "candidate-screen",
+      "name": "Candidate Screen",
+      "outputKind": "candidate-screen",
+      "packRefs": [],
+      "promptRef": "./capabilities/candidate-screen/prompt.md",
+      "reviewRubricRef": "./capabilities/candidate-screen/review.md",
+      "version": "0.1.0",
+      "workspaceTypes": [
+        "role-search",
+        "candidate"
+      ]
+    }
+  ],
+  "compatibility": {
+    "host": {
+      "minVersion": "0.12.0"
+    },
+    "sdk": {
+      "minVersion": "0.1.0"
+    }
+  },
+  "connectors": {
+    "optional": [
+      {
+        "access": [
+          "read"
+        ],
+        "id": "calendar",
+        "reason": "Collect interview availability and touchpoint context.",
+        "scopes": [
+          "events.read"
+        ]
+      }
+    ],
+    "required": [
+      {
+        "access": [
+          "read"
+        ],
+        "id": "ats",
+        "reason": "Read candidate packets and role evidence through the Host connector broker.",
+        "scopes": [
+          "candidates.read",
+          "roles.read"
+        ]
+      }
+    ]
+  },
+  "description": "People operations Soul App for profiles, recruiting evidence, lifecycle touchpoints, and HR review policy.",
+  "exports": {
+    "artifact": "./src/protocol/artifact.ts",
+    "connector": "./src/protocol/connectors.ts",
+    "lifecycle": "./src/protocol/lifecycle.ts",
+    "review": "./src/protocol/review.ts",
+    "runtime": "./src/protocol/runtime.ts",
+    "ui": "./src/protocol/ui.ts"
+  },
+  "healthcheck": {
+    "kind": "protocol-handler",
+    "ref": "healthcheck",
+    "timeoutMs": 5000
+  },
+  "id": "aiworker-hr",
+  "memory": {
+    "admissionPolicy": "manual-review",
+    "namespace": "aiworker-hr"
+  },
+  "modes": {
+    "hostMounted": {
+      "entry": "./src/host-mounted.ts",
+      "supported": true
+    },
+    "standalone": {
+      "entry": "./src/standalone.ts",
+      "supported": true
+    }
+  },
+  "name": "AIWorker HR",
+  "pack": {
+    "refs": [
+      {
+        "id": "hr-recruiting",
+        "ref": "packs/hr-recruiting/SOUL.md",
+        "source": "embedded",
+        "version": "0.1.0"
+      }
+    ]
+  },
+  "permissions": [
+    {
+      "action": "read",
+      "kind": "storage",
+      "reason": "Read app-scoped HR domain metadata.",
+      "target": "aiworker-hr"
+    },
+    {
+      "action": "write",
+      "kind": "storage",
+      "reason": "Write app-scoped HR domain metadata.",
+      "target": "aiworker-hr"
+    },
+    {
+      "action": "read",
+      "kind": "connector",
+      "reason": "Read HR evidence through Host connector broker.",
+      "target": "ats"
+    },
+    {
+      "action": "write",
+      "kind": "artifact",
+      "reason": "Create reviewable HR artifacts.",
+      "target": "person-profile"
+    },
+    {
+      "action": "create",
+      "kind": "review",
+      "reason": "Create HR review rubrics and findings.",
+      "target": "hr-review"
+    },
+    {
+      "action": "propose",
+      "kind": "memory",
+      "reason": "Propose reviewed HR lessons into the app namespace.",
+      "target": "aiworker-hr"
+    },
+    {
+      "action": "mount",
+      "kind": "ui",
+      "reason": "Mount HR workbench contributions.",
+      "target": "hr-workbench"
+    },
+    {
+      "action": "serve",
+      "kind": "api",
+      "reason": "Serve HR scoped API routes.",
+      "target": "/api/local/apps/aiworker-hr"
+    }
+  ],
+  "protocol": "soul-app/v1",
+  "soul": {
+    "description": "HR Soul for people operations, recruiting, onboarding, offboarding, and sensitive evidence review.",
+    "domain": "hr-people-ops",
+    "id": "hr",
+    "name": "HR",
+    "version": "0.1.0"
+  },
+  "storage": {
+    "migrations": [
+      {
+        "id": "hr-initial",
+        "path": "./migrations/0001_hr.sql"
+      }
+    ],
+    "namespace": "aiworker-hr"
+  },
+  "ui": {
+    "artifactPreviews": [
+      {
+        "entry": "./src/ui/person-profile-preview.tsx",
+        "id": "person-profile-preview",
+        "label": "Person profile preview",
+        "slot": "artifact-preview",
+        "target": "person-profile"
+      }
+    ],
+    "panels": [
+      {
+        "entry": "./src/ui/profile-panel.tsx",
+        "id": "hr-profile-panel",
+        "label": "Profile panel",
+        "slot": "panel"
+      }
+    ],
+    "reviewPanels": [
+      {
+        "entry": "./src/ui/review-panel.tsx",
+        "id": "hr-review-panel",
+        "label": "HR review panel",
+        "slot": "review-panel"
+      }
+    ],
+    "routes": [
+      {
+        "entry": "./src/ui/hr-route.tsx",
+        "id": "hr-home",
+        "label": "HR",
+        "path": "/hr"
+      }
+    ],
+    "workspaceWidgets": [
+      {
+        "entry": "./src/ui/people-widget.tsx",
+        "id": "hr-people-widget",
+        "label": "People widget",
+        "slot": "workspace-widget",
+        "target": "people-profile"
+      }
+    ]
+  },
+  "version": "0.1.0",
+  "workspaceTypes": [
+    {
+      "artifactTypes": [
+        "person-profile"
+      ],
+      "defaultCapabilityIds": [
+        "person-profile"
+      ],
+      "description": "Profile-centered workspace for one person lifecycle.",
+      "id": "people-profile",
+      "name": "People Profile"
+    },
+    {
+      "artifactTypes": [
+        "candidate-screen"
+      ],
+      "defaultCapabilityIds": [
+        "candidate-screen"
+      ],
+      "description": "Recruiting role workspace with candidate evidence and review.",
+      "id": "role-search",
+      "name": "Role Search"
+    },
+    {
+      "artifactTypes": [
+        "candidate-screen"
+      ],
+      "defaultCapabilityIds": [
+        "candidate-screen"
+      ],
+      "description": "Focused candidate packet workspace.",
+      "id": "candidate",
+      "name": "Candidate"
+    }
+  ]
+}

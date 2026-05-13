@@ -1,15 +1,36 @@
 #!/usr/bin/env bun
 import type { LocalWorkerRuntime } from '@zonease/aiworker-core'
+import type { SoulAppManifest } from '@zonease/aiworker-shared'
 import type { WorkerRow } from '@zonease/aiworker-storage-sqlite/worker'
+import type { Buffer } from 'node:buffer'
+import type { ChildProcessByStdio } from 'node:child_process'
+import type { Readable } from 'node:stream'
 import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { mkdir, readFile } from 'node:fs/promises'
-import { homedir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
-import { createLocalWorkerRuntime, getWorkerEnv } from '@zonease/aiworker-core'
-import { BUILTIN_CAPABILITY_TEMPLATES, BUILTIN_VERTICAL_SOULS, findCapabilityTemplate, findVerticalSoul } from '@zonease/aiworker-shared'
+import {
+  createLocalWorkerRuntime,
+  disableSoulApp,
+  enableSoulApp,
+  findHostCapabilityTemplate,
+  findHostSoul,
+  getHostedSoulApp,
+  getWorkerEnv,
+  installSoulAppFromPath,
+  installSoulAppManifest,
+  listHostCapabilityTemplatesForSoul,
+  listHostedSoulApps,
+  listHostSoulCatalog,
+  runSoulAppHealthcheck,
+} from '@zonease/aiworker-core'
+import {
+  parseSoulAppManifestJson,
+  soulAppIdSchema,
+} from '@zonease/aiworker-shared'
 import {
   closeWorkerDb,
   createLesson,
@@ -156,6 +177,7 @@ async function runDoctor(): Promise<void> {
     ok: true,
     home: paths.home,
     dbPath: paths.dbPath,
+    apps: listHostedSoulApps(),
     workers: listWorkers(),
     workspaces: listWorkspaces(),
     daemon: daemonStatus(),
@@ -271,6 +293,7 @@ async function createWorkerCommand(opts: { id?: string, name?: string, soul?: st
       defaultTemplates: [...soul.defaultTemplates],
       description: soul.description,
       domain: soul.domain,
+      soulAppId: getHostedSoulApp(soul.id)?.appId ?? null,
     },
   }))
   await runtime.init()
@@ -307,9 +330,9 @@ async function startSessionCommand(opts: { context?: string, input?: string, ski
   if (!workspace || workspace.workerId !== runtime.workerId)
     throw new Error(`workspace not found for ${runtime.workerId}: ${workspaceId}`)
   const skillId = requireText(opts.skill, 'skill')
-  const template = findCapabilityTemplate(skillId)
-  if (!template)
-    throw new Error(`template not found: ${skillId}`)
+  const template = findHostCapabilityTemplate(skillId)
+  if (!template || template.soulId !== runtime.snapshot().worker.soulId)
+    throw new Error(`template not found for worker ${runtime.workerId}: ${skillId}`)
   const session = await runtime.createSession({
     workspaceId,
     capabilityTemplateId: template.id,
@@ -416,6 +439,1046 @@ async function proposeLesson(opts: { review?: string, statement?: string, worksp
   printJson({ lesson })
 }
 
+function registryContext() {
+  return { hostVersion: packageJson.version }
+}
+
+async function listAppsCommand(): Promise<void> {
+  await ensureDb()
+  printJson({ apps: listHostedSoulApps() })
+}
+
+async function showAppCommand(id: string): Promise<void> {
+  await ensureDb()
+  printJson({ app: getHostedSoulApp(id) })
+}
+
+async function installAppCommand(manifestPath: string): Promise<void> {
+  await ensureDb()
+  printJson({ app: await installSoulAppFromPath(manifestPath, registryContext()) })
+}
+
+async function enableAppCommand(id: string): Promise<void> {
+  await ensureDb()
+  printJson({ app: enableSoulApp(id, registryContext()), catalog: listHostSoulCatalog() })
+}
+
+async function disableAppCommand(id: string): Promise<void> {
+  await ensureDb()
+  printJson({ app: disableSoulApp(id, registryContext()), catalog: listHostSoulCatalog() })
+}
+
+async function doctorAppCommand(id: string): Promise<void> {
+  await ensureDb()
+  printJson({ app: runSoulAppHealthcheck(id, registryContext()) })
+}
+
+async function permissionsAppCommand(id: string): Promise<void> {
+  await ensureDb()
+  const app = getHostedSoulApp(id)
+  printJson({ appId: id, permissions: app?.manifest.permissions ?? [] })
+}
+
+async function createAppScaffoldCommand(id: string, opts: { dir?: string } = {}): Promise<void> {
+  const appId = soulAppIdSchema.parse(id)
+  const targetDir = path.resolve(opts.dir ?? appId)
+  if (existsSync(targetDir) && readdirSync(targetDir).length > 0)
+    throw new Error(`target directory is not empty: ${targetDir}`)
+
+  const manifest = createScaffoldManifest(appId)
+  writeScaffoldFile(path.join(targetDir, 'soul-app.manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
+  writeScaffoldFile(path.join(targetDir, 'package.json'), `${JSON.stringify(createScaffoldPackageJson(appId), null, 2)}\n`)
+  writeScaffoldFile(path.join(targetDir, 'tsconfig.json'), `${JSON.stringify(createScaffoldTsconfig(), null, 2)}\n`)
+  writeScaffoldFile(path.join(targetDir, 'README.md'), scaffoldReadme(appId))
+  writeScaffoldFile(path.join(targetDir, 'src/index.ts'), scaffoldIndexTs())
+  writeScaffoldFile(path.join(targetDir, 'schemas/brief.schema.json'), `${JSON.stringify(createBriefSchema(appId), null, 2)}\n`)
+  writeScaffoldFile(path.join(targetDir, 'capabilities/brief/prompt.md'), scaffoldPrompt(appId))
+  writeScaffoldFile(path.join(targetDir, 'review/brief.md'), scaffoldReview(appId))
+  writeScaffoldFile(path.join(targetDir, 'packs', appId, 'SOUL.md'), scaffoldSoulPack(appId))
+
+  printJson({
+    appId,
+    files: [
+      'soul-app.manifest.json',
+      'package.json',
+      'tsconfig.json',
+      'README.md',
+      'src/index.ts',
+      'schemas/brief.schema.json',
+      'capabilities/brief/prompt.md',
+      'review/brief.md',
+      `packs/${appId}/SOUL.md`,
+    ],
+    next: [
+      `cd ${targetDir}`,
+      'aiworker app validate .',
+      'aiworker app smoke .',
+    ],
+    path: targetDir,
+  })
+}
+
+async function validateAppCommand(inputPath: string): Promise<void> {
+  const result = validateAppAtPath(inputPath)
+  printJson({ validation: validationReport(result) })
+  if (result.status !== 'pass')
+    process.exitCode = 1
+}
+
+async function smokeAppCommand(inputPath: string): Promise<void> {
+  const validation = validateAppAtPath(inputPath)
+  if (validation.status !== 'pass') {
+    printJson({ smoke: { status: 'fail', validation: validationReport(validation) } })
+    process.exitCode = 1
+    return
+  }
+  const manifest = validation.manifest
+  if (!manifest || !validation.manifestPath)
+    throw new Error('Soul App validation passed without a parsed manifest.')
+  const smokeRoot = mkdtempSync(path.join(tmpdir(), 'aiworker-app-smoke-'))
+  let mountedService: MountedServiceSmoke | null = null
+  try {
+    mountedService = await runMountedServiceSmoke(manifest, validation.rootDir)
+    const smokeManifest: SoulAppManifest = mountedService.url
+      ? {
+          ...manifest,
+          api: {
+            ...manifest.api,
+            localService: {
+              baseUrl: mountedService.url,
+              healthPath: manifest.api.localService?.healthPath ?? '/health',
+            },
+          },
+        }
+      : manifest
+    closeWorkerDb()
+    initWorkerDb(path.join(smokeRoot, 'worker.db'))
+    runWorkerMigrations()
+    const connectorIds = [
+      ...smokeManifest.connectors.required.map(connector => connector.id),
+      ...smokeManifest.connectors.optional.map(connector => connector.id),
+    ]
+    installSoulAppManifest({
+      manifest: smokeManifest,
+      sourceKind: 'manifest-path',
+      sourceRef: validation.manifestPath,
+    }, {
+      availableConnectorIds: connectorIds,
+      enabledConnectorIds: smokeManifest.connectors.required.map(connector => connector.id),
+      hostVersion: packageJson.version,
+    })
+    const hostedApp = enableSoulApp(smokeManifest.id, {
+      availableConnectorIds: connectorIds,
+      enabledConnectorIds: smokeManifest.connectors.required.map(connector => connector.id),
+      hostVersion: packageJson.version,
+    })
+    const template = listHostSoulCatalog().templates.find(item => item.soulId === manifest.id)
+    if (!template)
+      throw new Error(`No mounted capability template available for ${manifest.id}`)
+    const worker = upsertWorker({
+      defaultEngineId: 'smoke',
+      id: `${manifest.id}-smoke-worker`,
+      metadataJson: {
+        description: manifest.description,
+        domain: manifest.soul.domain,
+        soulAppId: manifest.id,
+      },
+      name: `${manifest.name} Smoke`,
+      soulId: manifest.id,
+    })
+    const runtime = createLocalWorkerRuntime({
+      executor: {
+        async invoke(input) {
+          return {
+            artifacts: [{
+              content: `# ${manifest.name} smoke artifact\n\n${input.prompt}`,
+              kind: template.outputKind,
+              path: `artifacts/${input.sessionId}/smoke.md`,
+              title: `${manifest.name} Smoke Artifact`,
+            }],
+            review: {
+              findings: [{ message: 'Generated app smoke review created by Host runtime.' }],
+              risks: [],
+              verdict: 'needs_review',
+            },
+            summary: 'Generated Soul App smoke completed.',
+          }
+        },
+      },
+      worker: {
+        defaultEngineId: worker.defaultEngineId,
+        id: worker.id,
+        metadata: worker.metadataJson,
+        name: worker.name,
+        soulId: worker.soulId,
+      },
+      workspacesRoot: path.join(smokeRoot, 'workers', worker.id, 'workspaces'),
+    })
+    await runtime.init()
+    const workspace = await runtime.createWorkspace({ name: `${manifest.name} Smoke Workspace`, type: manifest.workspaceTypes[0]!.id })
+    const session = await runtime.createSession({
+      capabilityTemplateId: template.id,
+      context: 'Validate generated Soul App through Host-mounted smoke.',
+      metadata: {
+        capabilityTemplateId: template.id,
+        inputHints: template.inputHints,
+        outputKind: template.outputKind,
+        reviewRubric: template.reviewRubric,
+        soulAppId: manifest.id,
+        soulName: manifest.soul.name,
+      },
+      title: `${manifest.name} Smoke Session`,
+      workspaceId: workspace.id,
+    })
+    const turn = await runtime.startTurn({
+      engineId: 'smoke',
+      input: 'Create a reviewable smoke artifact.',
+      metadata: { soulAppId: manifest.id },
+      sessionId: session.id,
+    })
+    const standalone = await runStandaloneBrowserSmoke(manifest)
+    printJson({
+      smoke: {
+        appId: manifest.id,
+        artifactCount: turn.artifacts.length,
+        hostedStatus: hostedApp.status,
+        mounted: 'pass',
+        mountedService: mountedService.status,
+        mountedServiceHttpStatus: mountedService.httpStatus,
+        mountedServiceUrl: mountedService.url,
+        reviewStatus: turn.review?.verdict ?? null,
+        standalone: standalone.status,
+        standaloneHttpStatus: standalone.httpStatus,
+        standaloneUrl: standalone.url,
+        status: 'pass',
+        workspaceId: workspace.id,
+      },
+    })
+  }
+  finally {
+    mountedService?.stop()
+    closeWorkerDb()
+    rmSync(smokeRoot, { recursive: true, force: true })
+  }
+}
+
+interface MountedServiceSmoke {
+  httpStatus: number | null
+  status: 'pass' | 'skip'
+  stop: () => void
+  url: string | null
+}
+
+interface AppValidationIssue {
+  code: string
+  message: string
+  path?: string
+  severity: 'error' | 'warning'
+}
+
+interface PrivateImportIssue {
+  file: string
+  importPath: string
+  message: string
+}
+
+interface AppValidationResult {
+  appId: string | null
+  assetIssues: AppValidationIssue[]
+  checkedAssets: string[]
+  manifest?: SoulAppManifest
+  manifestIssues: AppValidationIssue[]
+  manifestPath: string | null
+  privateImportIssues: PrivateImportIssue[]
+  rootDir: string | null
+  status: 'fail' | 'pass'
+  version: string | null
+}
+
+const SCAFFOLD_SCHEMA_SHA256 = '0'.repeat(64)
+
+const HOST_PRIVATE_IMPORT_PREFIXES = [
+  '@zonease/aiworker-api',
+  '@zonease/aiworker-cli',
+  '@zonease/aiworker-core',
+  '@zonease/aiworker-fs-layout',
+  '@zonease/aiworker-shared',
+  '@zonease/aiworker-storage-sqlite',
+  '@zonease/aiworker-web',
+]
+
+const SOUL_APP_PACKAGE_IMPORT_PREFIXES = [
+  '@zonease/aiworker-hr',
+  '@zonease/aiworker-qa',
+]
+
+function createScaffoldManifest(appId: string): SoulAppManifest {
+  const routePrefix = `/api/local/apps/${appId}`
+  const raw = {
+    api: {
+      entry: './src/index.ts',
+      routePrefix,
+    },
+    artifactTypes: [
+      {
+        description: 'Reviewable brief artifact for the starter Soul App.',
+        id: 'brief',
+        name: 'Brief',
+        previewRef: './src/index.ts',
+        reviewPolicyRef: './review/brief.md',
+        schemaRef: './schemas/brief.schema.json',
+        schemaSha256: SCAFFOLD_SCHEMA_SHA256,
+        version: '0.1.0',
+      },
+    ],
+    capabilities: [
+      {
+        artifactTypes: ['brief'],
+        description: 'Create a source-backed starter brief.',
+        id: 'brief',
+        name: 'Brief',
+        outputKind: 'brief',
+        packRefs: [appId],
+        promptRef: './capabilities/brief/prompt.md',
+        reviewRubricRef: './review/brief.md',
+        version: '0.1.0',
+        workspaceTypes: ['case'],
+      },
+    ],
+    compatibility: {
+      host: { minVersion: packageJson.version },
+      sdk: { minVersion: '0.1.0' },
+    },
+    connectors: {
+      optional: [],
+      required: [],
+    },
+    description: `${appId} starter Soul App for one vertical workspace, capability, artifact, and review policy.`,
+    exports: {
+      artifact: './src/index.ts',
+      connector: './src/index.ts',
+      lifecycle: './src/index.ts',
+      review: './src/index.ts',
+      runtime: './src/index.ts',
+      ui: './src/index.ts',
+    },
+    healthcheck: {
+      kind: 'protocol-handler',
+      ref: 'healthcheck',
+      timeoutMs: 5000,
+    },
+    id: appId,
+    memory: {
+      admissionPolicy: 'manual-review',
+      namespace: appId,
+    },
+    modes: {
+      hostMounted: { entry: './src/index.ts', supported: true },
+      standalone: { entry: './src/index.ts', supported: true },
+    },
+    name: titleCase(appId),
+    pack: {
+      refs: [
+        { id: appId, ref: `./packs/${appId}/SOUL.md`, source: 'embedded', version: '0.1.0' },
+      ],
+    },
+    permissions: [
+      {
+        action: 'read',
+        kind: 'storage',
+        reason: 'Read app-scoped metadata for the starter workspace.',
+        target: appId,
+      },
+      {
+        action: 'write',
+        kind: 'storage',
+        reason: 'Write app-scoped metadata for the starter workspace.',
+        target: appId,
+      },
+      {
+        action: 'write',
+        kind: 'artifact',
+        reason: 'Create reviewable starter artifacts.',
+        target: 'brief',
+      },
+      {
+        action: 'create',
+        kind: 'review',
+        reason: 'Create starter review rubrics and findings.',
+        target: 'brief-review',
+      },
+      {
+        action: 'propose',
+        kind: 'memory',
+        reason: 'Propose reviewed lessons into the app namespace.',
+        target: appId,
+      },
+      {
+        action: 'mount',
+        kind: 'ui',
+        reason: 'Mount starter workbench contributions.',
+        target: `${appId}-workbench`,
+      },
+      {
+        action: 'serve',
+        kind: 'api',
+        reason: 'Serve app-scoped local API routes.',
+        target: routePrefix,
+      },
+    ],
+    protocol: 'soul-app/v1',
+    soul: {
+      description: `${titleCase(appId)} vertical Soul for app-scoped workspaces and reviewable artifacts.`,
+      domain: appId,
+      id: appId,
+      name: titleCase(appId),
+      version: '0.1.0',
+    },
+    storage: {
+      migrations: [],
+      namespace: appId,
+    },
+    ui: {
+      artifactPreviews: [
+        {
+          entry: './src/index.ts',
+          id: 'brief-preview',
+          label: 'Brief preview',
+          slot: 'artifact-preview',
+          target: 'brief',
+        },
+      ],
+      panels: [
+        {
+          entry: './src/index.ts',
+          id: 'brief-panel',
+          label: 'Brief panel',
+          slot: 'panel',
+        },
+      ],
+      reviewPanels: [
+        {
+          entry: './src/index.ts',
+          id: 'brief-review-panel',
+          label: 'Brief review panel',
+          slot: 'review-panel',
+        },
+      ],
+      routes: [
+        { entry: './src/index.ts', id: 'brief-home', label: titleCase(appId), path: `/${appId}` },
+      ],
+      workspaceWidgets: [
+        {
+          entry: './src/index.ts',
+          id: 'brief-widget',
+          label: 'Brief widget',
+          slot: 'workspace-widget',
+          target: 'case',
+        },
+      ],
+    },
+    version: '0.1.0',
+    workspaceTypes: [
+      {
+        artifactTypes: ['brief'],
+        defaultCapabilityIds: ['brief'],
+        description: 'Starter workspace for one app-scoped case.',
+        id: 'case',
+        name: 'Case',
+      },
+    ],
+  }
+  const parsed = parseSoulAppManifestJson(JSON.stringify(raw), registryContext())
+  if (parsed.status !== 'ok')
+    throw new Error(parsed.error)
+  return parsed.manifest
+}
+
+async function runStandaloneBrowserSmoke(manifest: SoulAppManifest): Promise<{ httpStatus: number | null, status: 'pass' | 'skip', url: string | null }> {
+  if (!manifest.modes.standalone.supported)
+    return { httpStatus: null, status: 'skip', url: null }
+
+  const server = Bun.serve({
+    fetch() {
+      return new Response([
+        '<!doctype html>',
+        '<html lang="en">',
+        '<head>',
+        '<meta charset="utf-8">',
+        `<title>${escapeHtml(manifest.name)}</title>`,
+        '</head>',
+        `<body data-soul-app-id="${escapeHtml(manifest.id)}">`,
+        `<main><h1>${escapeHtml(manifest.name)}</h1><p>${escapeHtml(manifest.description)}</p></main>`,
+        '</body>',
+        '</html>',
+      ].join(''), {
+        headers: { 'content-type': 'text/html; charset=utf-8' },
+      })
+    },
+    hostname: '127.0.0.1',
+    port: 0,
+  })
+  const url = `http://127.0.0.1:${server.port}/`
+  try {
+    const res = await fetch(url)
+    const body = await res.text()
+    if (!res.ok || !body.includes(`data-soul-app-id="${manifest.id}"`))
+      throw new Error(`Standalone browser smoke failed for ${manifest.id}`)
+    return { httpStatus: res.status, status: 'pass', url }
+  }
+  finally {
+    server.stop()
+  }
+}
+
+async function runMountedServiceSmoke(manifest: SoulAppManifest, rootDir: string | null): Promise<MountedServiceSmoke> {
+  const service = manifest.api.localService
+  if (!manifest.modes.hostMounted.supported || !service?.command?.length || !rootDir)
+    return { httpStatus: null, status: 'skip', stop: () => {}, url: null }
+
+  const child = spawn(service.command[0]!, service.command.slice(1), {
+    cwd: path.resolve(rootDir, service.cwd ?? '.'),
+    env: { ...process.env, PORT: '0' },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  }) as ChildProcessByStdio<null, Readable, Readable>
+  let stopped = false
+  const stop = () => {
+    if (!stopped) {
+      stopped = true
+      child.kill()
+    }
+  }
+  const url = await waitForMountedServiceUrl(child, stop)
+  const healthUrl = new URL(service.healthPath, url)
+  const res = await fetch(healthUrl)
+  if (!res.ok) {
+    stop()
+    throw new Error(`Mounted Soul App service healthcheck failed ${res.status}: ${healthUrl}`)
+  }
+  return { httpStatus: res.status, status: 'pass', stop, url }
+}
+
+async function waitForMountedServiceUrl(child: ChildProcessByStdio<null, Readable, Readable>, stop: () => void): Promise<string> {
+  return await new Promise<string>((resolve, reject) => {
+    let output = ''
+    const timer = setTimeout(() => {
+      stop()
+      reject(new Error('Timed out waiting for mounted Soul App service URL.'))
+    }, 5000)
+    child.once('error', (error) => {
+      clearTimeout(timer)
+      reject(error)
+    })
+    child.stdout.on('data', (chunk: Buffer) => {
+      output += chunk.toString('utf8')
+      const line = output.split(/\r?\n/).find(item => item.trim().startsWith('{'))
+      if (!line)
+        return
+      try {
+        const parsed = JSON.parse(line) as { url?: unknown }
+        if (typeof parsed.url === 'string' && parsed.url.length > 0) {
+          clearTimeout(timer)
+          resolve(parsed.url)
+        }
+      }
+      catch {
+        // Keep waiting for the service status line.
+      }
+    })
+    child.stderr.on('data', (chunk: Buffer) => {
+      output += chunk.toString('utf8')
+    })
+    child.once('exit', (code) => {
+      clearTimeout(timer)
+      reject(new Error(`Mounted Soul App service exited before readiness: ${code ?? 'signal'}. ${output.trim()}`))
+    })
+  })
+}
+
+function createScaffoldPackageJson(appId: string) {
+  return {
+    name: `@aiworker-soul-app/${appId}`,
+    private: true,
+    scripts: {
+      smoke: 'aiworker app smoke .',
+      typecheck: 'tsc --noEmit',
+      validate: 'aiworker app validate .',
+    },
+    type: 'module',
+    version: '0.1.0',
+    dependencies: {
+      '@zonease/aiworker-soul-app-sdk': 'workspace:*',
+    },
+    devDependencies: {
+      '@types/bun': '^1.2.13',
+      'typescript': '^5.8.3',
+    },
+  }
+}
+
+function createScaffoldTsconfig() {
+  return {
+    compilerOptions: {
+      allowImportingTsExtensions: true,
+      module: 'ESNext',
+      moduleResolution: 'Bundler',
+      noEmit: true,
+      resolveJsonModule: true,
+      strict: true,
+      target: 'ES2022',
+    },
+    include: ['src/**/*.ts'],
+  }
+}
+
+function createBriefSchema(appId: string) {
+  return {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    additionalProperties: false,
+    properties: {
+      appId: { const: appId },
+      evidence: {
+        items: { type: 'string' },
+        minItems: 1,
+        type: 'array',
+      },
+      summary: { minLength: 1, type: 'string' },
+    },
+    required: ['appId', 'summary', 'evidence'],
+    title: `${titleCase(appId)} Brief`,
+    type: 'object',
+  }
+}
+
+function scaffoldReadme(appId: string): string {
+  return [
+    `# ${titleCase(appId)} Soul App`,
+    '',
+    'This starter app stays inside the public Soul App SDK boundary.',
+    '',
+    '## Local Checks',
+    '',
+    '```bash',
+    'aiworker app validate .',
+    'aiworker app smoke .',
+    '```',
+    '',
+    '## Contribution Checklist',
+    '',
+    '- Keep app code on `@zonease/aiworker-soul-app-sdk`; do not import Host private packages.',
+    '- Keep storage permissions scoped to this app namespace.',
+    '- Add one artifact schema and one review policy for each new artifact type.',
+    '- Run PMA, focused tests, and code-review-graph before submitting Host changes.',
+    '',
+  ].join('\n')
+}
+
+function scaffoldIndexTs(): string {
+  return `import type {
+  SoulAppArtifactValidationResult,
+  SoulAppCapability,
+  SoulAppProtocolResult,
+  SoulAppScopedContext,
+  SoulAppSessionContext,
+} from '@zonease/aiworker-soul-app-sdk'
+
+import manifestJson from '../soul-app.manifest.json' with { type: 'json' }
+import { createSoulAppManifest, defineSoulApp, parseNamespacedSoulAppCapabilityId } from '@zonease/aiworker-soul-app-sdk'
+
+const manifest = createSoulAppManifest(manifestJson)
+
+export const soulApp = defineSoulApp({
+  artifact: {
+    async artifactSchemas() {
+      return manifest.artifactTypes
+    },
+    async validateArtifact(_context, artifact) {
+      return validateArtifactType(artifact.type)
+    },
+  },
+  connector: {
+    async declareConnectorNeeds() {
+      return [
+        ...manifest.connectors.required,
+        ...manifest.connectors.optional,
+      ]
+    },
+  },
+  lifecycle: lifecycleHandlers('Starter Soul App ready.'),
+  manifest,
+  review: {
+    async createReviewRubric(_context, artifactType) {
+      return {
+        checks: [
+          \`Artifact type \${artifactType} cites source evidence.\`,
+          'Missing facts and risks are explicit.',
+          'Next action is concrete for a human reviewer.',
+        ],
+      }
+    },
+  },
+  runtime: {
+    async prepareSessionContext(context, input) {
+      const capability = resolveCapability(input.capabilityId)
+      return sessionContext(context, capability, input.workspaceType)
+    },
+    async resolveCapability(_context, input) {
+      return resolveCapability(input.capabilityId ?? input.intent)
+    },
+  },
+  ui: {
+    async artifactTypes() {
+      return manifest.artifactTypes
+    },
+    async capabilities() {
+      return manifest.capabilities
+    },
+    async ui() {
+      return manifest.ui
+    },
+    async workspaceTypes() {
+      return manifest.workspaceTypes
+    },
+  },
+})
+
+export default soulApp
+
+function resolveCapability(input?: string): SoulAppCapability {
+  const id = input ? parseNamespacedSoulAppCapabilityId(input)?.capabilityId ?? input : manifest.capabilities[0]!.id
+  const capability = manifest.capabilities.find(item => item.id === id)
+  if (!capability)
+    throw new Error(\`Capability not found: \${input}\`)
+  return capability
+}
+
+function sessionContext(context: SoulAppScopedContext, capability: SoulAppCapability, workspaceType: string): SoulAppSessionContext {
+  return {
+    artifactTypes: capability.artifactTypes,
+    capabilityId: capability.id,
+    contextMarkdown: [
+      '# Soul App Context',
+      \`App: \${context.appId}\`,
+      \`Workspace type: \${workspaceType}\`,
+      'Use source-backed evidence language and produce a reviewable business artifact.',
+    ].join('\\n'),
+    promptFragments: [
+      \`Use capability \${capability.name}.\`,
+      'Separate evidence, missing facts, risks, and next actions.',
+    ],
+    reviewRubric: [
+      'Evidence is cited.',
+      'Risk and missing evidence are separated.',
+      'Next action is concrete.',
+    ],
+  }
+}
+
+function validateArtifactType(type: string): SoulAppArtifactValidationResult {
+  const known = manifest.artifactTypes.some(item => item.id === type)
+  return {
+    issues: known ? [] : [{ message: \`Unknown artifact type: \${type}\`, severity: 'error' }],
+    ok: known,
+  }
+}
+
+function lifecycleHandlers(message: string) {
+  const ok = async (): Promise<SoulAppProtocolResult> => ({ message, ok: true })
+  return {
+    disable: ok,
+    enable: ok,
+    healthcheck: ok,
+    install: ok,
+    upgrade: ok,
+  }
+}
+`
+}
+
+function scaffoldPrompt(appId: string): string {
+  return [
+    `# ${titleCase(appId)} Brief Prompt`,
+    '',
+    'Create a concise, source-backed business brief.',
+    '',
+    '- Cite evidence references provided by the Host or connector broker.',
+    '- Mark missing facts explicitly.',
+    '- Separate summary, risks, and next actions.',
+    '',
+  ].join('\n')
+}
+
+function scaffoldReview(appId: string): string {
+  return [
+    `# ${titleCase(appId)} Brief Review`,
+    '',
+    '- Evidence is cited and scoped to the workspace.',
+    '- Missing facts are explicit.',
+    '- Risks and next actions are separated.',
+    '- Memory candidates require human review before promotion.',
+    '',
+  ].join('\n')
+}
+
+function scaffoldSoulPack(appId: string): string {
+  return [
+    `# ${titleCase(appId)} Soul Pack`,
+    '',
+    'This pack describes the starter domain stance for the generated Soul App.',
+    '',
+    '- Keep work inside the app workspace.',
+    '- Produce reviewable artifacts, not generic chat output.',
+    '- Use brokered connectors and scoped storage only.',
+    '',
+  ].join('\n')
+}
+
+function writeScaffoldFile(filePath: string, content: string): void {
+  mkdirSync(path.dirname(filePath), { recursive: true })
+  writeFileSync(filePath, content, { flag: 'wx' })
+}
+
+function validateAppAtPath(inputPath: string): AppValidationResult {
+  const resolved = resolveAppManifestPath(inputPath)
+  if (!resolved) {
+    return {
+      appId: null,
+      assetIssues: [],
+      checkedAssets: [],
+      manifestIssues: [{
+        code: 'missing_manifest',
+        message: 'Soul App manifest not found. Pass a manifest path or a directory containing soul-app.manifest.json.',
+        severity: 'error',
+      }],
+      manifestPath: null,
+      privateImportIssues: [],
+      rootDir: null,
+      status: 'fail',
+      version: null,
+    }
+  }
+
+  const parsed = parseSoulAppManifestJson(readFileSync(resolved.manifestPath, 'utf8'), registryContext())
+  const manifestIssues = parsed.status === 'ok' ? [] : parsed.issues
+  const manifest = parsed.status === 'ok' ? parsed.manifest : undefined
+  const assetResult = manifest ? validateManifestAssetRefs(resolved.rootDir, manifest) : { checkedAssets: [], issues: [] }
+  const privateImportIssues = scanPrivateImports(resolved.rootDir)
+  const status = manifest
+    && manifestIssues.every(issue => issue.severity !== 'error')
+    && assetResult.issues.every(issue => issue.severity !== 'error')
+    && privateImportIssues.length === 0
+    ? 'pass'
+    : 'fail'
+
+  return {
+    appId: manifest?.id ?? null,
+    assetIssues: assetResult.issues,
+    checkedAssets: assetResult.checkedAssets,
+    manifest,
+    manifestIssues,
+    manifestPath: resolved.manifestPath,
+    privateImportIssues,
+    rootDir: resolved.rootDir,
+    status,
+    version: manifest?.version ?? null,
+  }
+}
+
+function validationReport(result: AppValidationResult) {
+  return {
+    appId: result.appId,
+    assetIssues: result.assetIssues,
+    checkedAssets: result.checkedAssets,
+    manifestIssues: result.manifestIssues,
+    manifestPath: result.manifestPath,
+    privateImportIssues: result.privateImportIssues,
+    rootDir: result.rootDir,
+    status: result.status,
+    version: result.version,
+  }
+}
+
+function resolveAppManifestPath(inputPath: string): { manifestPath: string, rootDir: string } | null {
+  const resolved = path.resolve(inputPath)
+  if (!existsSync(resolved))
+    return null
+  const stats = statSync(resolved)
+  const manifestPath = stats.isDirectory() ? path.join(resolved, 'soul-app.manifest.json') : resolved
+  if (!existsSync(manifestPath))
+    return null
+  return {
+    manifestPath,
+    rootDir: stats.isDirectory() ? resolved : path.dirname(manifestPath),
+  }
+}
+
+function validateManifestAssetRefs(rootDir: string, manifest: SoulAppManifest): { checkedAssets: string[], issues: AppValidationIssue[] } {
+  const refs = manifestAssetRefs(manifest)
+  const checkedAssets: string[] = []
+  const issues: AppValidationIssue[] = []
+  for (const ref of refs) {
+    const assetPath = path.resolve(rootDir, ref.path)
+    checkedAssets.push(ref.path)
+    if (!existsSync(assetPath)) {
+      issues.push({
+        code: 'missing_asset',
+        message: `Missing ${ref.kind} asset: ${ref.path}`,
+        path: ref.path,
+        severity: 'error',
+      })
+      continue
+    }
+    if (ref.kind === 'artifact-schema') {
+      try {
+        JSON.parse(readFileSync(assetPath, 'utf8'))
+      }
+      catch (error) {
+        issues.push({
+          code: 'invalid_artifact_schema',
+          message: `Artifact schema is not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
+          path: ref.path,
+          severity: 'error',
+        })
+      }
+    }
+  }
+  return { checkedAssets: [...new Set(checkedAssets)].sort(), issues }
+}
+
+function manifestAssetRefs(manifest: SoulAppManifest): Array<{ kind: string, path: string }> {
+  const refs: Array<{ kind: string, path: string }> = []
+  for (const type of manifest.artifactTypes) {
+    refs.push({ kind: 'artifact-schema', path: type.schemaRef })
+    if (type.previewRef)
+      refs.push({ kind: 'artifact-preview', path: type.previewRef })
+    if (type.reviewPolicyRef)
+      refs.push({ kind: 'review-policy', path: type.reviewPolicyRef })
+  }
+  for (const capability of manifest.capabilities) {
+    refs.push({ kind: 'capability-prompt', path: capability.promptRef })
+    if (capability.reviewRubricRef)
+      refs.push({ kind: 'capability-review', path: capability.reviewRubricRef })
+  }
+  for (const ref of manifest.pack.refs) {
+    if (ref.source !== 'package')
+      refs.push({ kind: 'soul-pack', path: ref.ref })
+  }
+  for (const migration of manifest.storage.migrations)
+    refs.push({ kind: 'storage-migration', path: migration.path })
+  for (const entry of [
+    ...Object.values(manifest.exports),
+    manifest.api.entry,
+    manifest.modes.hostMounted.entry,
+    manifest.modes.standalone.entry,
+    ...manifest.ui.routes.map(route => route.entry),
+    ...manifest.ui.panels.map(slot => slot.entry),
+    ...manifest.ui.artifactPreviews.map(slot => slot.entry),
+    ...manifest.ui.reviewPanels.map(slot => slot.entry),
+    ...(manifest.ui.workspaceWidgets ?? []).map(slot => slot.entry),
+  ]) {
+    if (entry)
+      refs.push({ kind: 'entry', path: entry })
+  }
+  return refs.filter((ref, index, items) => items.findIndex(item => item.kind === ref.kind && item.path === ref.path) === index)
+}
+
+function scanPrivateImports(rootDir: string): PrivateImportIssue[] {
+  const srcDir = path.join(rootDir, 'src')
+  if (!existsSync(srcDir))
+    return []
+  const issues: PrivateImportIssue[] = []
+  for (const file of listSourceFiles(srcDir)) {
+    const content = readFileSync(file, 'utf8')
+    for (const importPath of importSpecifiers(content)) {
+      if (!isForbiddenSoulAppImport(rootDir, importPath))
+        continue
+      issues.push({
+        file: path.relative(rootDir, file),
+        importPath,
+        message: 'Soul Apps must use @zonease/aiworker-soul-app-sdk instead of Host private packages or sibling Soul Apps.',
+      })
+    }
+  }
+  return issues
+}
+
+function listSourceFiles(dir: string): string[] {
+  const files: string[] = []
+  for (const item of readdirSync(dir, { withFileTypes: true })) {
+    if (item.name === 'node_modules' || item.name === 'dist')
+      continue
+    const fullPath = path.join(dir, item.name)
+    if (item.isDirectory()) {
+      files.push(...listSourceFiles(fullPath))
+      continue
+    }
+    if (/\.[cm]?[jt]sx?$/.test(item.name))
+      files.push(fullPath)
+  }
+  return files
+}
+
+function importSpecifiers(content: string): string[] {
+  const specs: string[] = []
+  const patterns = [
+    /\bfrom\s*['"]([^'"]+)['"]/g,
+    /^\s*import\s*['"]([^'"]+)['"]/gm,
+    /\b(?:import|require)\(\s*['"]([^'"]+)['"]\s*\)/g,
+  ]
+  for (const pattern of patterns) {
+    for (const match of content.matchAll(pattern)) {
+      const spec = match[1]
+      if (spec)
+        specs.push(spec)
+    }
+  }
+  return [...new Set(specs)]
+}
+
+function isForbiddenSoulAppImport(rootDir: string, importPath: string): boolean {
+  if (HOST_PRIVATE_IMPORT_PREFIXES.some(prefix => importPath === prefix || importPath.startsWith(`${prefix}/`)))
+    return true
+  if (isSiblingSoulAppImport(rootDir, importPath))
+    return true
+  return [
+    'apps/api',
+    'apps/cli',
+    'apps/web',
+    'packages/core',
+    'packages/fs-layout',
+    'packages/shared',
+    'packages/storage-sqlite',
+  ].some(part => importPath.includes(part))
+}
+
+function isSiblingSoulAppImport(rootDir: string, importPath: string): boolean {
+  const appDirName = path.basename(rootDir)
+  const ownPackageName = `@zonease/${appDirName}`
+  if (SOUL_APP_PACKAGE_IMPORT_PREFIXES.some(prefix =>
+    prefix !== ownPackageName && (importPath === prefix || importPath.startsWith(`${prefix}/`)),
+  )) {
+    return true
+  }
+  if (!importPath.includes('apps/aiworker-'))
+    return false
+  const normalized = importPath.replaceAll('\\\\', '/')
+  return !normalized.includes(`apps/${appDirName}/`)
+}
+
+function titleCase(id: string): string {
+  return id.split('-').map(part => part ? `${part[0]!.toUpperCase()}${part.slice(1)}` : '').join(' ')
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, char => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    '\'': '&#39;',
+  })[char] ?? char)
+}
+
 function registerCommands(): void {
   cli.command('init', 'initialize host-local AIWorker home and Soul workers').action(runInit)
   cli.command('dev', 'run local daemon and hosted Worker Web in foreground').option('--host <host>', 'bind host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => daemonForeground({ host: opts.host, port: optionalNumber(opts.port) }))
@@ -428,7 +1491,21 @@ function registerCommands(): void {
   cli.command('daemon logs', 'show local daemon logs').option('--tail <n>', 'line count', { type: [Number] }).action((opts: { tail?: number[] }) => showLogs({ tail: optionalNumber(opts.tail) }))
   cli.command('daemon check', 'check local daemon health').option('--host <host>', 'host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => daemonCheck({ host: opts.host, port: optionalNumber(opts.port) }))
 
-  cli.command('soul list', 'list built-in vertical Souls').action(() => printJson({ souls: BUILTIN_VERTICAL_SOULS }))
+  cli.command('app list', 'list installed Host Soul Apps').action(listAppsCommand)
+  cli.command('app show <id>', 'show one installed Host Soul App').action(showAppCommand)
+  cli.command('app install <manifest>', 'install a local Soul App manifest').action(installAppCommand)
+  cli.command('app enable <id>', 'enable an installed Soul App').action(enableAppCommand)
+  cli.command('app disable <id>', 'disable an installed Soul App').action(disableAppCommand)
+  cli.command('app doctor <id>', 'run static Soul App healthcheck').action(doctorAppCommand)
+  cli.command('app permissions <id>', 'show declared Soul App permissions').action(permissionsAppCommand)
+  cli.command('app create <id>', 'scaffold a minimal Soul App').option('--dir <path>', 'target directory').action(createAppScaffoldCommand)
+  cli.command('app validate <path>', 'validate a Soul App manifest and app boundary').action(validateAppCommand)
+  cli.command('app smoke <path>', 'run standalone and Host-mounted Soul App smoke checks').action(smokeAppCommand)
+
+  cli.command('soul list', 'list built-in and mounted vertical Souls').action(async () => {
+    await ensureDb()
+    printJson({ souls: listHostSoulCatalog().souls })
+  })
   cli.command('worker create', 'create a local Soul worker').option('--id <id>', 'worker id').option('--name <text>', 'worker name').option('--soul <id>', 'Soul id').action(createWorkerCommand)
   cli.command('worker list', 'list local Soul workers').action(async () => {
     await ensureAllWorkers()
@@ -439,8 +1516,9 @@ function registerCommands(): void {
     printJson({ worker: getWorker(id) })
   })
   cli.command('worker select <id>', 'select default local Soul worker').action(selectWorkerCommand)
-  cli.command('template list', 'list capability templates').option('--soul <id>', 'Soul id').action((opts: { soul?: string }) => {
-    const templates = opts.soul ? BUILTIN_CAPABILITY_TEMPLATES.filter(template => template.soulId === opts.soul) : BUILTIN_CAPABILITY_TEMPLATES
+  cli.command('template list', 'list capability templates').option('--soul <id>', 'Soul id').action(async (opts: { soul?: string }) => {
+    await ensureDb()
+    const templates = opts.soul ? listHostCapabilityTemplatesForSoul(opts.soul) : listHostSoulCatalog().templates
     printJson({ templates })
   })
 
@@ -514,7 +1592,7 @@ function registerCommands(): void {
 }
 
 function requireAvailableSoul(id: string) {
-  const soul = findVerticalSoul(id)
+  const soul = findHostSoul(id)
   if (!soul || soul.status !== 'available')
     throw new Error(`available Soul not found: ${id}`)
   return soul
@@ -526,6 +1604,7 @@ function commandIndex(): string {
     'init',
     'dev',
     'daemon start|foreground|status|stop|logs|check',
+    'app list|show|install|enable|disable|doctor|permissions|create|validate|smoke',
     'soul list',
     'worker create|list|show|select',
     'template list',
@@ -562,6 +1641,7 @@ export function preprocessArgv(argv: string[], commandNames = cli.commands.map(c
 
 export async function runCli(argv: string[] = process.argv): Promise<number> {
   try {
+    process.exitCode = 0
     cli.unsetMatchedCommand()
     const parsed = cli.parse(preprocessArgv(argv), { run: false })
     if (cli.options.help === true || cli.options.version === true)
@@ -569,10 +1649,13 @@ export async function runCli(argv: string[] = process.argv): Promise<number> {
     if (!cli.matchedCommand && parsed.args[0])
       throw new Error(`Unknown command: ${parsed.args[0]}`)
     await cli.runMatchedCommand()
-    return typeof process.exitCode === 'number' ? process.exitCode : 0
+    const code = typeof process.exitCode === 'number' ? process.exitCode : 0
+    process.exitCode = 0
+    return code
   }
   catch (error) {
     consola.error(error instanceof Error ? error.message : String(error))
+    process.exitCode = 0
     return 1
   }
   finally {

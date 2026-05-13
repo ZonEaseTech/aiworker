@@ -1,3 +1,5 @@
+import type { SoulAppHealthStatus, SoulAppInstallSourceKind, SoulAppManifest, SoulAppManifestValidationIssue, SoulAppRegistryStatus } from '@zonease/aiworker-shared'
+
 import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 
 const nowIso = () => new Date().toISOString()
@@ -213,6 +215,83 @@ export const lessons = sqliteTable(
   table => ({
     statusUpdatedAtIdx: index('lessons_status_updated_at_idx').on(table.status, table.updatedAt),
     workspaceUpdatedAtIdx: index('lessons_workspace_updated_at_idx').on(table.workspaceId, table.updatedAt),
+  }),
+)
+
+export const soulApps = sqliteTable(
+  'soul_apps',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    version: text('version').notNull(),
+    protocol: text('protocol').notNull(),
+    soulId: text('soul_id').notNull(),
+    status: text('status', { enum: ['installed', 'enabled', 'disabled', 'error'] }).$type<SoulAppRegistryStatus>().notNull().default('installed'),
+    sourceKind: text('source_kind', { enum: ['manifest-path', 'inline'] }).$type<SoulAppInstallSourceKind>().notNull(),
+    sourceRef: text('source_ref').notNull(),
+    manifestDigest: text('manifest_digest').notNull(),
+    manifestJson: text('manifest_json', { mode: 'json' }).$type<SoulAppManifest>().notNull(),
+    validationIssuesJson: text('validation_issues_json', { mode: 'json' }).$type<SoulAppManifestValidationIssue[]>().notNull().$defaultFn(() => []),
+    healthStatus: text('health_status', { enum: ['unknown', 'pass', 'warn', 'fail'] }).$type<SoulAppHealthStatus>().notNull().default('unknown'),
+    healthMessage: text('health_message'),
+    installedAt: text('installed_at').notNull().$defaultFn(nowIso),
+    enabledAt: text('enabled_at'),
+    disabledAt: text('disabled_at'),
+    lastHealthcheckAt: text('last_healthcheck_at'),
+    createdAt: text('created_at').notNull().$defaultFn(nowIso),
+    updatedAt: text('updated_at').notNull().$defaultFn(nowIso),
+  },
+  table => ({
+    digestIdx: index('soul_apps_manifest_digest_idx').on(table.manifestDigest),
+    soulIdx: index('soul_apps_soul_idx').on(table.soulId),
+    statusUpdatedAtIdx: index('soul_apps_status_updated_at_idx').on(table.status, table.updatedAt),
+  }),
+)
+
+export const soulAppStorageRecords = sqliteTable(
+  'soul_app_storage_records',
+  {
+    id: text('id').primaryKey(),
+    appId: text('app_id').notNull().references(() => soulApps.id, { onDelete: 'cascade' }),
+    namespace: text('namespace').notNull(),
+    key: text('key').notNull(),
+    valueJson: text('value_json', { mode: 'json' }).$type<Record<string, unknown>>().notNull().$defaultFn(() => ({})),
+    workerId: text('worker_id').references(() => workers.id, { onDelete: 'set null' }),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'set null' }),
+    sessionId: text('session_id').references(() => sessions.id, { onDelete: 'set null' }),
+    operatorId: text('operator_id'),
+    createdAt: text('created_at').notNull().$defaultFn(nowIso),
+    updatedAt: text('updated_at').notNull().$defaultFn(nowIso),
+  },
+  table => ({
+    appKeyIdx: uniqueIndex('soul_app_storage_app_key_idx').on(table.appId, table.key),
+    appUpdatedAtIdx: index('soul_app_storage_app_updated_at_idx').on(table.appId, table.updatedAt),
+    namespaceIdx: index('soul_app_storage_namespace_idx').on(table.namespace),
+    workspaceIdx: index('soul_app_storage_workspace_idx').on(table.workspaceId),
+  }),
+)
+
+export const soulAppAuditEvents = sqliteTable(
+  'soul_app_audit_events',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    appId: text('app_id').notNull().references(() => soulApps.id, { onDelete: 'cascade' }),
+    action: text('action').notNull(),
+    targetKind: text('target_kind').notNull(),
+    target: text('target').notNull(),
+    decision: text('decision', { enum: ['allowed', 'denied'] }).notNull(),
+    reason: text('reason').notNull(),
+    workerId: text('worker_id').references(() => workers.id, { onDelete: 'set null' }),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'set null' }),
+    sessionId: text('session_id').references(() => sessions.id, { onDelete: 'set null' }),
+    operatorId: text('operator_id'),
+    requestJson: text('request_json', { mode: 'json' }).$type<Record<string, unknown>>().notNull().$defaultFn(() => ({})),
+    createdAt: text('created_at').notNull().$defaultFn(nowIso),
+  },
+  table => ({
+    appCreatedAtIdx: index('soul_app_audit_app_created_at_idx').on(table.appId, table.createdAt),
+    contextIdx: index('soul_app_audit_context_idx').on(table.workspaceId, table.sessionId),
+    targetIdx: index('soul_app_audit_target_idx').on(table.targetKind, table.target),
   }),
 )
 

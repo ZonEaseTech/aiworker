@@ -1,7 +1,7 @@
 # PLAN-288 HR and QA external Soul App reference extraction
 
-- **status**: pending
-- **owner**: local
+- **status**: completed
+- **owner**: codex
 - **createdAt**: 2026-05-12 21:00
 - **relatedTask**: FEAT-064
 
@@ -117,3 +117,28 @@ Out of scope:
 
 - 2026-05-12 21:00: Drafted as a full reference Soul App extraction plan. No
   implementation started.
+- 2026-05-13 00:20: Claimed for goal-mode implementation after PLAN-287 broker
+  completion. Scope is a monorepo reference extraction: package-level HR and QA
+  app definitions using the SDK, standalone/mounted smoke tests, domain
+  protocol handlers, and boundary docs. Full multi-repository split remains a
+  later packaging decision.
+- 2026-05-13 00:32: Completed HR/QA reference app packages with protocol
+  handlers, package boundary docs, and standalone/mounted smoke coverage.
+
+## Implementation Record
+
+- Added `packages/aiworker-hr` with `hrReferenceSoulApp`, lifecycle/runtime/
+  artifact/review/connector/ui handlers and HR package boundary documentation.
+- Added `packages/aiworker-qa` with `qaReferenceSoulApp`, release-focused
+  handlers and QA package boundary documentation.
+- Added tests proving each app runs unchanged in SDK standalone mode and Host
+  mounted test runtime mode.
+- Extended SDK type exports so reference app authors can import protocol result,
+  session context, capability and artifact validation types from the SDK.
+
+## Verification
+
+- `bun run --filter '@zonease/aiworker-hr' test`
+- `bun run --filter '@zonease/aiworker-hr' typecheck`
+- `bun run --filter '@zonease/aiworker-qa' test`
+- `bun run --filter '@zonease/aiworker-qa' typecheck`

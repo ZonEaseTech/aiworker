@@ -1,8 +1,8 @@
 # FEAT-064 HR and QA external Soul App reference extraction
 
-- **status**: pending
+- **status**: completed
 - **priority**: P0
-- **owner**: local
+- **owner**: codex
 - **createdAt**: 2026-05-12 21:00
 - **plan**: PLAN-288
 - **relatesTo**: FEAT-060, FEAT-061, FEAT-062, FEAT-063, apps/web, apps/api, packages/shared, packages/component
@@ -45,7 +45,30 @@ defect evidence 和 release gate。
 
 - HR workbench 已经从通用 Worker Studio 中抽出模块结构，是外部化的最佳起点。
 - QA 尚未拥有同等专业工作台，适合作为验证协议是否真的跨领域的第二个 reference app。
+- FEAT-060 已有 HR/QA manifest fixtures，FEAT-062/063 已有 SDK、standalone/mounted
+  runtime 和 broker boundary；FEAT-064 可以先以 workspace package 形式建立
+  `@zonease/aiworker-hr` / `@zonease/aiworker-qa` reference apps，再由后续发布阶段决定
+  是否拆仓。
 
 ## 备注
 
 本功能是架构实证，不是 UI 阶段计划；交付必须同时证明 standalone 与 Host mounted。
+
+## 完成记录
+
+- 2026-05-13 00:32: 新增 `@zonease/aiworker-hr` 和
+  `@zonease/aiworker-qa` workspace reference app packages。
+- HR package 提供 People/Profile Workbench 边界说明、HR manifest-backed app
+  definition、runtime/artifact/review/connector/ui protocol handlers，以及
+  standalone / Host-mounted smoke tests。
+- QA package 提供 release/test-suite 领域边界、release gate / regression matrix
+  app definition、protocol handlers，以及 standalone / Host-mounted smoke tests。
+- 两个 reference apps 都只依赖 Soul App SDK 和 shared protocol/fixture，不 import
+  Host API、CLI、Worker Web 私有模块、raw DB、engine adapter、connector token 或 vault。
+
+## 验证
+
+- `bun run --filter '@zonease/aiworker-hr' test`
+- `bun run --filter '@zonease/aiworker-hr' typecheck`
+- `bun run --filter '@zonease/aiworker-qa' test`
+- `bun run --filter '@zonease/aiworker-qa' typecheck`

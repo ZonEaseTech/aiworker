@@ -1,6 +1,6 @@
 # PLAN-285 Host Soul App registry and mount runtime
 
-- **status**: pending
+- **status**: completed
 - **owner**: local
 - **createdAt**: 2026-05-12 21:00
 - **relatedTask**: FEAT-061
@@ -130,3 +130,53 @@ Out of scope:
 
 - 2026-05-12 21:00: Drafted as a full Host mounting feature plan. No
   implementation started.
+- 2026-05-12 22:22: Claimed for implementation after PMA proposal approval.
+  Scope is constrained to Host-side registry persistence, static manifest
+  install/enable/disable/healthcheck, CLI/API/Web catalog surfaces, capability
+  projection, tests, and PMA documentation sync. Runtime execution of external
+  Soul App UI/API code, standalone SDK, isolation brokers, and HR/QA extraction
+  remain deferred to PLAN-286..289.
+- 2026-05-12 22:47: Completed the constrained PLAN-285 slice. Host now stores
+  static Soul App manifests in `worker.db`, revalidates compatibility on enable
+  and healthcheck, projects enabled app Souls/capability templates into the Host
+  catalog, exposes app lifecycle through CLI/API/Web, and reserves the scoped
+  app API namespace without importing or executing vertical app code.
+
+## Implementation Record
+
+- Added shared Host projection helpers for mounted Soul Apps, including
+  namespaced capability ids and mounted contribution descriptors.
+- Added `soul_apps` worker metadata storage, repository functions, migration and
+  lifecycle tests.
+- Added core registry functions for path/inline install, enable, disable,
+  healthcheck and combined Host catalog discovery.
+- Wired local daemon routes for app lifecycle plus `/api/local/apps/:appId/*`
+  namespace reservation, and used the combined catalog for Soul/template/worker
+  and session creation flows.
+- Added CLI `app list/show/install/enable/disable/doctor`, and switched Soul,
+  template, worker and session commands to the Host catalog.
+- Added Worker Web app catalog loading and a lifecycle status panel in the
+  worker rail.
+
+## Verification
+
+- `bun run --filter '@zonease/aiworker-shared' typecheck`
+- `bun run --filter '@zonease/aiworker-storage-sqlite' typecheck`
+- `bun run --filter '@zonease/aiworker-core' typecheck`
+- `bun run --filter '@zonease/aiworker-api' typecheck`
+- `bun run --filter '@zonease/aiworker-cli' typecheck`
+- `bun run --filter '@zonease/aiworker-web' typecheck`
+- `bun run --filter '@zonease/aiworker-shared' test`
+- `bun run --filter '@zonease/aiworker-storage-sqlite' test`
+- `bun run --filter '@zonease/aiworker-core' test`
+- `bun run --filter '@zonease/aiworker-api' test`
+- `bun run --filter '@zonease/aiworker-cli' test`
+- `bun run --filter '@zonease/aiworker-web' test`
+- `bun run typecheck`
+- `bun run lint`
+- `bun run test`
+- `bun run build`
+- `git diff --check`
+- `bun run crg:update`
+- `bun run crg:build`
+- `bun run crg:review`

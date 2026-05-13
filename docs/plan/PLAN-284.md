@@ -1,6 +1,6 @@
 # PLAN-284 Soul App protocol and manifest contract
 
-- **status**: pending
+- **status**: completed
 - **owner**: local
 - **createdAt**: 2026-05-12 21:00
 - **relatedTask**: FEAT-060
@@ -117,3 +117,18 @@ Out of scope:
 
 - 2026-05-12 21:00: Drafted as a full feature plan after Soul App / Host
   topology discussion. No implementation started.
+- 2026-05-12 21:46: Claimed for implementation after current-contract and
+  shared/API/Web/CLI structure investigation. Scope remains limited to shared
+  manifest schema, protocol type surfaces, HR/QA fixtures, focused tests, and
+  PMA documentation sync.
+- 2026-05-12 22:02: Implemented the shared `soul-app/v1` contract under
+  `packages/shared/src/soul-app/`. The implementation is static-manifest only:
+  validation reads JSON/object data and returns deterministic issue codes; it
+  does not import or execute Soul App code. HR and QA fixtures validate through
+  the same schema. Host registry, mount runtime, standalone SDK, brokers,
+  extraction, and scaffold remain out of scope for PLAN-285..289.
+- 2026-05-12 22:09: Completed verification. Passed focused shared typecheck and
+  tests, root typecheck/lint/test, `git diff --check`, and code-review-graph
+  build/review. code-review-graph reports risk 0.60 with residual test-gap
+  hints for `validateSoulAppManifest` / `parseSoulAppManifestJson`, but those
+  paths are directly covered by `packages/shared/src/soul-app/manifest.test.ts`.

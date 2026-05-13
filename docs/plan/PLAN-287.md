@@ -1,7 +1,7 @@
 # PLAN-287 Soul App isolation brokers and permission boundary
 
-- **status**: pending
-- **owner**: local
+- **status**: completed
+- **owner**: codex
 - **createdAt**: 2026-05-12 21:00
 - **relatedTask**: FEAT-063
 
@@ -121,3 +121,34 @@ Out of scope:
 
 - 2026-05-12 21:00: Drafted as a full isolation and permission feature plan. No
   implementation started.
+- 2026-05-12 23:58: Claimed for goal-mode implementation after FEAT-060..062
+  completion. Scope is constrained to Host-owned scoped broker primitives,
+  app-scoped storage/audit records, local daemon broker routes, SDK client
+  helpers and focused denial/audit tests. Host still does not execute arbitrary
+  external Soul App API/UI handlers in this slice.
+- 2026-05-13 00:18: Completed the scoped broker implementation. Host now owns
+  brokered app storage, connector evidence reads, review/memory proposal paths,
+  raw-engine denial and audit events. SDK, CLI, API and Worker Web expose the
+  permission boundary without giving Soul Apps raw Host internals.
+
+## Implementation Record
+
+- Added `soul_app_storage_records` and `soul_app_audit_events` to worker DB with
+  repository helpers and migrations.
+- Added `createSoulAppBroker(...)` in core for permission decisions, storage
+  isolation, connector evidence mocks, review/memory creation paths, and raw
+  engine invocation denial.
+- Added local daemon `/api/local/apps/:appId/broker/*` routes and OpenAPI
+  entries for permissions, storage, connector evidence, audit and engine denial.
+- Extended the SDK client with broker route helpers, and added CLI/Web permission
+  display so operators can inspect app declarations before use.
+
+## Verification
+
+- `bun run --filter '@zonease/aiworker-storage-sqlite' test src/worker/index.test.ts`
+- `bun run --filter '@zonease/aiworker-core' test src/soul-app/broker.test.ts`
+- `bun run --filter '@zonease/aiworker-api' test src/modes/worker.local.test.ts`
+- `bun run --filter '@zonease/aiworker-soul-app-sdk' test`
+- `bun run --filter '@zonease/aiworker-cli' test`
+- `bun run --filter '@zonease/aiworker-web' test`
+- Focused typechecks for storage-sqlite, core, api, soul-app-sdk, cli, and web.

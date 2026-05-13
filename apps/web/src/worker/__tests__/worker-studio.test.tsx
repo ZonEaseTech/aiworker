@@ -246,6 +246,7 @@ let currentSessions: typeof sessionRecord[]
 let currentTurns: LocalTurn[]
 let currentWorkers: typeof workers
 let currentWorkspaces: typeof workspace[]
+let currentApps: Array<{ appId: string, manifest: { name: string }, status: string, version: string }>
 let deferCreatedSessionStream: boolean
 
 function resetSettings() {
@@ -265,6 +266,7 @@ function resetSettings() {
   currentLessons = [{ ...lessonRecord }]
   currentEvents = [{ ...eventRecord }]
   currentWorkers = workers.map(worker => ({ ...worker }))
+  currentApps = []
   deferCreatedSessionStream = false
 }
 
@@ -327,6 +329,8 @@ beforeEach(() => {
 
     if (url.endsWith('/api/local/info'))
       return json({ runtimeVersion: 'test', startedAt: now, workers: currentWorkers })
+    if (url.endsWith('/api/local/apps'))
+      return json({ apps: currentApps })
     if (url.endsWith('/api/local/workers') && method === 'POST') {
       const body = init?.body ? JSON.parse(String(init.body)) as { name: string, soulId: string } : { name: 'Created worker', soulId: 'hr' }
       const created = {
@@ -702,6 +706,21 @@ describe('worker studio', () => {
 
     expect(pmGroupToggle.getAttribute('aria-expanded')).toBe('true')
     expect(visibleOptionTexts().includes('PM')).toBe(true)
+  })
+
+  it('lists installed Soul Apps with lifecycle status in the worker rail', async () => {
+    currentApps = [
+      { appId: 'aiworker-hr', manifest: { name: 'AIWorker HR' }, status: 'enabled', version: '0.1.0' },
+      { appId: 'aiworker-qa', manifest: { name: 'AIWorker QA' }, status: 'disabled', version: '0.1.0' },
+    ]
+
+    render(<WorkerStudio />)
+
+    await screen.findByText('Soul Apps (2)')
+    expect(screen.getByText('AIWorker HR')).toBeTruthy()
+    expect(screen.getByText('Enabled · 0.1.0')).toBeTruthy()
+    expect(screen.getByText('AIWorker QA')).toBeTruthy()
+    expect(screen.getByText('Disabled · 0.1.0')).toBeTruthy()
   })
 
   it('keeps worker status as a trailing dot without duplicated item labels', async () => {

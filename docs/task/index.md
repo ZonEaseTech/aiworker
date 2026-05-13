@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-12 (DOC-010 completed)
+> Updated: 2026-05-13 (FEAT-066 completed)
 
 ## Usage
 
@@ -387,10 +387,11 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REFACTOR-073 HR People Workbench focus layout and artifact preview**](REFACTOR-073.md) `P0`
 - [x] [**REFACTOR-074 HR Profile Workspace three panel layout**](REFACTOR-074.md) `P0`
 - [x] [**REFACTOR-075 HR Profile Workbench panel controls polish**](REFACTOR-075.md) `P0`
-- [ ] [**FEAT-060 Soul App protocol and manifest contract**](FEAT-060.md) `P0`
-- [ ] [**FEAT-061 Host Soul App registry and mount runtime**](FEAT-061.md) `P0`
-- [ ] [**FEAT-062 Soul App standalone runtime and SDK**](FEAT-062.md) `P0`
-- [ ] [**FEAT-063 Soul App isolation brokers and permission boundary**](FEAT-063.md) `P0`
-- [ ] [**FEAT-064 HR and QA external Soul App reference extraction**](FEAT-064.md) `P0`
-- [ ] [**FEAT-065 Soul App developer onboarding and validation harness**](FEAT-065.md) `P0`
+- [x] [**FEAT-060 Soul App protocol and manifest contract**](FEAT-060.md) `P0`
+- [x] [**FEAT-061 Host Soul App registry and mount runtime**](FEAT-061.md) `P0`
+- [x] [**FEAT-062 Soul App standalone runtime and SDK**](FEAT-062.md) `P0`
+- [x] [**FEAT-063 Soul App isolation brokers and permission boundary**](FEAT-063.md) `P0`
+- [x] [**FEAT-064 HR and QA external Soul App reference extraction**](FEAT-064.md) `P0`
+- [x] [**FEAT-065 Soul App developer onboarding and validation harness**](FEAT-065.md) `P0`
 - [x] [**DOC-010 Remove legacy OD and control-plane guidance from current contracts**](DOC-010.md) `P0`
+- [x] [**FEAT-066 Converge Soul Apps into app-level standalone and mounted products**](FEAT-066.md) `P0`

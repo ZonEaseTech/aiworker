@@ -1,22 +1,36 @@
 import type { LocalExecutor, LocalWorkerRuntime } from '@zonease/aiworker-core'
-import type { LocalSettingsConfig } from '@zonease/aiworker-shared'
+import type { HostedSoulApp, LocalSettingsConfig } from '@zonease/aiworker-shared'
 import type { ReviewRow, SessionRow, WorkerRow, WorkspaceRow } from '@zonease/aiworker-storage-sqlite/worker'
 
 import type { Context } from 'hono'
+import type { ChildProcessByStdio } from 'node:child_process'
+import type { Readable } from 'node:stream'
 import { Buffer } from 'node:buffer'
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { randomUUID, timingSafeEqual } from 'node:crypto'
 import { mkdir, readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
+import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { OpenAPIHono, z } from '@hono/zod-openapi'
 import { apiReference } from '@scalar/hono-api-reference'
-import { createLocalWorkerRuntime, workerEnv } from '@zonease/aiworker-core'
 import {
-  BUILTIN_CAPABILITY_TEMPLATES,
-  BUILTIN_VERTICAL_SOULS,
-  findCapabilityTemplate,
-  findVerticalSoul,
+  createLocalWorkerRuntime,
+  createSoulAppBroker,
+  disableSoulApp,
+  enableSoulApp,
+  findHostCapabilityTemplate,
+  findHostSoul,
+  getHostedSoulApp,
+  installSoulAppFromPath,
+  installSoulAppManifest,
+  listHostCapabilityTemplatesForSoul,
+  listHostSoulCatalog,
+  runSoulAppHealthcheck,
+  workerEnv,
+} from '@zonease/aiworker-core'
+import {
+  AppError,
   localSettingsConfigSchema,
 } from '@zonease/aiworker-shared'
 import {
@@ -73,6 +87,7 @@ export interface BootstrapWorkerAppOptions {
 }
 
 export interface LocalDaemonState {
+  mountedAppServices: Map<string, MountedSoulAppService>
   startedAt: string
   token?: string
   runtimeVersion: string
@@ -80,6 +95,11 @@ export interface LocalDaemonState {
   workersRoot: string
   executor?: LocalExecutor
   now?: () => string
+}
+
+interface MountedSoulAppService {
+  baseUrl: string
+  process?: ChildProcessByStdio<null, Readable, Readable>
 }
 
 export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}): Promise<{
@@ -97,6 +117,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   const workersRoot = options.workersRoot ?? path.join(path.dirname(dbPath), 'workers')
   const runtimes = new Map<string, LocalWorkerRuntime>()
   const state: LocalDaemonState = {
+    mountedAppServices: new Map(),
     runtimes,
     startedAt: new Date().toISOString(),
     token: options.token ?? workerEnv.AIWORKER_LOCAL_TOKEN,
@@ -139,6 +160,62 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     workers: listWorkers(),
   }))
 
+  app.get('/api/local/apps', c => c.json({ apps: listHostSoulCatalog().apps }))
+  app.post('/api/local/apps/install', async (c) => {
+    const body = await readJson<{ manifest?: unknown, manifestPath?: string }>(c.req)
+    const context = registryContext(state)
+    const app = typeof body.manifestPath === 'string' && body.manifestPath.trim()
+      ? await installSoulAppFromPath(body.manifestPath, context)
+      : installSoulAppManifest({
+          manifest: body.manifest,
+          sourceKind: 'inline',
+          sourceRef: 'api:inline',
+        }, context)
+    return c.json({ app, catalog: listHostSoulCatalog() }, 201)
+  })
+  app.get('/api/local/apps/:appId', (c) => {
+    const app = getHostedSoulApp(c.req.param('appId'))
+    if (!app)
+      return notFound(c, 'Soul App')
+    return c.json({ app })
+  })
+  app.post('/api/local/apps/:appId/enable', c => c.json({ app: enableSoulApp(c.req.param('appId'), registryContext(state)), catalog: listHostSoulCatalog() }))
+  app.post('/api/local/apps/:appId/disable', c => c.json({ app: disableSoulApp(c.req.param('appId'), registryContext(state)), catalog: listHostSoulCatalog() }))
+  app.post('/api/local/apps/:appId/healthcheck', c => c.json({ app: runSoulAppHealthcheck(c.req.param('appId'), registryContext(state)) }))
+  app.get('/api/local/apps/:appId/broker/permissions', (c) => {
+    const broker = createSoulAppBroker(brokerContext(c, state))
+    return c.json({ permissions: broker.permissions.list() })
+  })
+  app.get('/api/local/apps/:appId/broker/storage', (c) => {
+    const result = createSoulAppBroker(brokerContext(c, state)).storage.list()
+    return brokerResponse(c, 'records', result)
+  })
+  app.get('/api/local/apps/:appId/broker/storage/:key{.+}', (c) => {
+    const result = createSoulAppBroker(brokerContext(c, state)).storage.get(c.req.param('key'))
+    return brokerResponse(c, 'record', result)
+  })
+  app.put('/api/local/apps/:appId/broker/storage/:key{.+}', async (c) => {
+    const body = await readJson<{ namespace?: string, valueJson?: Record<string, unknown> }>(c.req)
+    const result = createSoulAppBroker(brokerContext(c, state)).storage.put(c.req.param('key'), isRecord(body.valueJson) ? body.valueJson : {}, {
+      namespace: body.namespace,
+    })
+    return brokerResponse(c, 'record', result)
+  })
+  app.post('/api/local/apps/:appId/broker/connectors/:connectorId/evidence', async (c) => {
+    const body = await readJson<{ query?: Record<string, unknown> }>(c.req)
+    const result = createSoulAppBroker(brokerContext(c, state)).connectors.readEvidence(c.req.param('connectorId'), isRecord(body.query) ? body.query : {})
+    return brokerResponse(c, 'evidence', result)
+  })
+  app.get('/api/local/apps/:appId/broker/audit', (c) => {
+    const broker = createSoulAppBroker(brokerContext(c, state))
+    return c.json({ events: broker.audit.list() })
+  })
+  app.post('/api/local/apps/:appId/broker/engine/invocations', async (c) => {
+    const body = await readJson<{ prompt?: string }>(c.req)
+    const result = createSoulAppBroker(brokerContext(c, state)).engine.createInvocation({ prompt: body.prompt ?? '' })
+    return brokerResponse(c, 'invocation', result)
+  })
+
   app.get('/api/local/workers', c => c.json({ workers: listWorkers() }))
   app.post('/api/local/workers', async (c) => {
     const body = await readJson<{
@@ -162,6 +239,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
         defaultTemplates: [...soul.defaultTemplates],
         description: soul.description,
         domain: soul.domain,
+        soulAppId: getHostedSoulApp(soul.id)?.appId ?? null,
         ...(body.metadata ?? {}),
       },
     })
@@ -200,9 +278,9 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     return c.json({ worker, snapshot: runtime.snapshot() })
   })
 
-  app.get('/api/local/souls', c => c.json({ souls: BUILTIN_VERTICAL_SOULS }))
+  app.get('/api/local/souls', c => c.json({ souls: listHostSoulCatalog().souls }))
   app.get('/api/local/souls/:id', (c) => {
-    const soul = findVerticalSoul(c.req.param('id'))
+    const soul = findHostSoul(c.req.param('id'))
     if (!soul)
       return notFound(c, 'soul')
     return c.json({ soul })
@@ -210,12 +288,12 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   app.get('/api/local/templates', (c) => {
     const soulId = c.req.query('soulId')
     const templates = soulId
-      ? BUILTIN_CAPABILITY_TEMPLATES.filter(template => template.soulId === soulId)
-      : BUILTIN_CAPABILITY_TEMPLATES
+      ? listHostCapabilityTemplatesForSoul(soulId)
+      : listHostSoulCatalog().templates
     return c.json({ templates })
   })
   app.get('/api/local/templates/:id', (c) => {
-    const template = findCapabilityTemplate(c.req.param('id'))
+    const template = findHostCapabilityTemplate(c.req.param('id'))
     if (!template)
       return notFound(c, 'template')
     return c.json({ template })
@@ -500,6 +578,14 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   })
 
   app.get('/api/local/events', c => c.json({ events: listSessionEvents() }))
+  app.all('/api/local/apps/:appId/:path{.+}', (c) => {
+    const app = getHostedSoulApp(c.req.param('appId'))
+    if (!app)
+      return notFound(c, 'Soul App')
+    if (app.status !== 'enabled')
+      return c.json({ error: { code: 'SOUL_APP_DISABLED', message: `Soul App is not enabled: ${app.appId}` } }, 409)
+    return proxyMountedSoulAppApi(c, state, app)
+  })
 
   registerLocalOpenApiPaths(app)
   app.doc('/openapi.json', {
@@ -539,9 +625,9 @@ function requireString(value: unknown, field: string): string {
 
 function requireAvailableSoul(soulId: unknown) {
   const id = requireString(soulId, 'soulId')
-  const soul = findVerticalSoul(id)
+  const soul = findHostSoul(id)
   if (!soul || soul.status !== 'available')
-    throw new Error(`Available Soul not found: ${id}`)
+    throw AppError.badRequest(`Available Soul not found: ${id}`, 'SOUL_NOT_AVAILABLE')
   return soul
 }
 
@@ -625,22 +711,22 @@ function requireWorkerSession(workerId: string, sessionId: string): SessionRow {
 }
 
 function templatesForWorker(worker: WorkerRow) {
-  return BUILTIN_CAPABILITY_TEMPLATES.filter(template => template.soulId === worker.soulId)
+  return listHostCapabilityTemplatesForSoul(worker.soulId)
 }
 
 function requireTemplateForWorker(workerId: string, templateId: unknown) {
   const worker = requireWorker(workerId)
   const id = requireString(templateId, 'capabilityTemplateId')
-  const template = findCapabilityTemplate(id)
+  const template = findHostCapabilityTemplate(id)
   if (!template || template.soulId !== worker.soulId)
-    throw new Error(`Template ${id} does not belong to worker ${workerId}.`)
+    throw AppError.badRequest(`Template ${id} does not belong to worker ${workerId}.`, 'TEMPLATE_NOT_AVAILABLE')
   return template
 }
 
 function enrichTemplateMetadata(workerId: string, templateId: string, metadata: Record<string, unknown>): Record<string, unknown> {
   const worker = getWorker(workerId)
-  const soul = worker ? findVerticalSoul(worker.soulId) : null
-  const template = findCapabilityTemplate(templateId)
+  const soul = worker ? findHostSoul(worker.soulId) : null
+  const template = findHostCapabilityTemplate(templateId)
   if (!worker || !soul || !template)
     return metadata
   return {
@@ -650,9 +736,182 @@ function enrichTemplateMetadata(workerId: string, templateId: string, metadata: 
     outputKind: template.outputKind,
     reviewRubric: template.reviewRubric,
     skillName: template.name,
+    soulAppId: getHostedSoulApp(soul.id)?.appId ?? null,
     soulName: soul.name,
     workerId: worker.id,
   }
+}
+
+function registryContext(state: LocalDaemonState) {
+  const settings = loadLocalSettings()
+  return {
+    availableConnectorIds: settings.connectors.map(connector => connector.id),
+    enabledConnectorIds: settings.connectors.filter(connector => connector.enabled).map(connector => connector.id),
+    hostVersion: state.runtimeVersion,
+    now: state.now,
+  }
+}
+
+function brokerContext(c: Context, state: LocalDaemonState) {
+  const settings = loadLocalSettings()
+  return {
+    appId: requireString(c.req.param('appId'), 'appId'),
+    enabledConnectorIds: settings.connectors.filter(connector => connector.enabled).map(connector => connector.id),
+    now: state.now,
+    operatorId: c.req.query('operatorId'),
+    sessionId: c.req.query('sessionId'),
+    workerId: c.req.query('workerId'),
+    workspaceId: c.req.query('workspaceId'),
+  }
+}
+
+function brokerResponse(c: Context, key: string, result: unknown): Response {
+  if (isBrokerDenied(result)) {
+    const status = result.decision.code === 'app_not_found'
+      ? 404
+      : result.decision.code === 'app_disabled'
+        ? 409
+        : 403
+    return c.json({
+      decision: result.decision,
+      error: {
+        code: result.decision.code.toUpperCase(),
+        message: result.decision.reason,
+      },
+    }, status)
+  }
+  return c.json({ [key]: result })
+}
+
+async function proxyMountedSoulAppApi(c: Context, state: LocalDaemonState, app: HostedSoulApp): Promise<Response> {
+  const baseUrl = await resolveMountedSoulAppBaseUrl(state, app)
+  if (!baseUrl) {
+    return c.json({
+      error: {
+        code: 'SOUL_APP_SERVICE_NOT_CONFIGURED',
+        message: `Soul App does not declare a mounted local service: ${app.appId}`,
+      },
+      routePrefix: app.mountedContribution.apiRoutePrefix,
+    }, 424)
+  }
+
+  const sourceUrl = new URL(c.req.url)
+  const targetUrl = new URL(`/${c.req.param('path')}`, baseUrl)
+  targetUrl.search = sourceUrl.search
+  const headers = new Headers(c.req.raw.headers)
+  headers.delete('authorization')
+  headers.delete('host')
+  headers.set('x-aiworker-app-id', app.appId)
+  headers.set('x-aiworker-host-url', `${sourceUrl.protocol}//${sourceUrl.host}`)
+  headers.set('x-aiworker-route-prefix', app.mountedContribution.apiRoutePrefix ?? '')
+
+  try {
+    const res = await fetch(targetUrl, {
+      body: c.req.method === 'GET' || c.req.method === 'HEAD' ? undefined : c.req.raw.body,
+      headers,
+      method: c.req.method,
+      redirect: 'manual',
+    })
+    const responseHeaders = new Headers(res.headers)
+    responseHeaders.delete('content-encoding')
+    responseHeaders.delete('transfer-encoding')
+    return new Response(res.body, {
+      headers: responseHeaders,
+      status: res.status,
+      statusText: res.statusText,
+    })
+  }
+  catch (error) {
+    return c.json({
+      error: {
+        code: 'SOUL_APP_SERVICE_UNREACHABLE',
+        message: error instanceof Error ? error.message : String(error),
+      },
+      routePrefix: app.mountedContribution.apiRoutePrefix,
+    }, 502)
+  }
+}
+
+async function resolveMountedSoulAppBaseUrl(state: LocalDaemonState, app: HostedSoulApp): Promise<string | null> {
+  const existing = state.mountedAppServices.get(app.appId)
+  if (existing)
+    return existing.baseUrl
+
+  const service = app.manifest.api.localService
+  if (!service)
+    return null
+  if (service.baseUrl) {
+    state.mountedAppServices.set(app.appId, { baseUrl: service.baseUrl })
+    return service.baseUrl
+  }
+  if (!service.command?.length)
+    return null
+
+  const cwd = mountedSoulAppCwd(app)
+  const child = spawn(service.command[0]!, service.command.slice(1), {
+    cwd,
+    env: { ...process.env, PORT: '0' },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  const baseUrl = await waitForMountedSoulAppUrl(child, service.healthPath)
+  state.mountedAppServices.set(app.appId, { baseUrl, process: child })
+  return baseUrl
+}
+
+function mountedSoulAppCwd(app: HostedSoulApp): string {
+  if (app.sourceKind === 'manifest-path')
+    return path.dirname(app.sourceRef)
+  return process.cwd()
+}
+
+async function waitForMountedSoulAppUrl(child: ChildProcessByStdio<null, Readable, Readable>, healthPath: string): Promise<string> {
+  const url = await new Promise<string>((resolve, reject) => {
+    let output = ''
+    const timer = setTimeout(() => {
+      child.kill()
+      reject(new Error('Timed out waiting for mounted Soul App service URL.'))
+    }, 5000)
+    child.once('error', (error) => {
+      clearTimeout(timer)
+      reject(error)
+    })
+    child.stdout.on('data', (chunk: Buffer) => {
+      output += chunk.toString('utf8')
+      const line = output.split(/\r?\n/).find(item => item.trim().startsWith('{'))
+      if (!line)
+        return
+      try {
+        const parsed = JSON.parse(line) as { url?: unknown }
+        if (typeof parsed.url === 'string' && parsed.url.length > 0) {
+          clearTimeout(timer)
+          resolve(parsed.url)
+        }
+      }
+      catch {
+        // Keep waiting for a JSON status line.
+      }
+    })
+    child.stderr.on('data', (chunk: Buffer) => {
+      output += chunk.toString('utf8')
+    })
+    child.once('exit', (code) => {
+      clearTimeout(timer)
+      reject(new Error(`Mounted Soul App service exited before readiness: ${code ?? 'signal'}. ${output.trim()}`))
+    })
+  })
+  const healthUrl = new URL(healthPath, url)
+  const health = await fetch(healthUrl)
+  if (!health.ok) {
+    child.kill()
+    throw new Error(`Mounted Soul App healthcheck failed ${health.status}: ${healthUrl}`)
+  }
+  return url
+}
+
+function isBrokerDenied(value: unknown): value is { decision: { allowed: false, code: string, reason: string } } {
+  if (!isRecord(value) || !isRecord(value.decision))
+    return false
+  return value.decision.allowed === false
 }
 
 function selectedEngine(settings: LocalSettingsConfig) {
@@ -991,6 +1250,20 @@ function registerLocalOpenApiPaths(app: OpenAPIHono): void {
     created?: boolean
   }> = [
     { method: 'get', path: '/api/local/info', summary: 'Local daemon info', tags: ['info'] },
+    { method: 'get', path: '/api/local/apps', summary: 'List Host Soul Apps', tags: ['apps'] },
+    { method: 'post', path: '/api/local/apps/install', summary: 'Install Host Soul App manifest', tags: ['apps'], created: true },
+    { method: 'get', path: '/api/local/apps/{appId}', summary: 'Show Host Soul App', tags: ['apps'] },
+    { method: 'post', path: '/api/local/apps/{appId}/enable', summary: 'Enable Host Soul App', tags: ['apps'], created: true },
+    { method: 'post', path: '/api/local/apps/{appId}/disable', summary: 'Disable Host Soul App', tags: ['apps'], created: true },
+    { method: 'post', path: '/api/local/apps/{appId}/healthcheck', summary: 'Run Host Soul App static healthcheck', tags: ['apps'], created: true },
+    { method: 'get', path: '/api/local/apps/{appId}/broker/permissions', summary: 'List Soul App broker permissions', tags: ['apps'] },
+    { method: 'get', path: '/api/local/apps/{appId}/broker/storage', summary: 'List Soul App scoped storage records', tags: ['apps'] },
+    { method: 'get', path: '/api/local/apps/{appId}/broker/storage/{key}', summary: 'Read Soul App scoped storage record', tags: ['apps'] },
+    { method: 'put', path: '/api/local/apps/{appId}/broker/storage/{key}', summary: 'Write Soul App scoped storage record', tags: ['apps'] },
+    { method: 'post', path: '/api/local/apps/{appId}/broker/connectors/{connectorId}/evidence', summary: 'Read brokered connector evidence', tags: ['apps'], created: true },
+    { method: 'get', path: '/api/local/apps/{appId}/broker/audit', summary: 'List Soul App broker audit events', tags: ['apps'] },
+    { method: 'post', path: '/api/local/apps/{appId}/broker/engine/invocations', summary: 'Deny raw Soul App engine invocation attempts', tags: ['apps'], created: true },
+    { method: 'get', path: '/api/local/apps/{appId}/{path}', summary: 'Reserved mounted Soul App API namespace', tags: ['apps'] },
     { method: 'get', path: '/api/local/workers', summary: 'List Soul workers', tags: ['workers'] },
     { method: 'post', path: '/api/local/workers', summary: 'Create Soul worker', tags: ['workers'], created: true },
     { method: 'get', path: '/api/local/workers/{workerId}', summary: 'Show Soul worker', tags: ['workers'] },

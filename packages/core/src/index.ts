@@ -4,6 +4,34 @@ export {
   workerEnv,
 } from './config/worker'
 export {
+  createSoulAppBroker,
+  type SoulAppBrokerContext,
+  type SoulAppBrokerDenied,
+  type SoulAppConnectorEvidenceResult,
+  type SoulAppCreateReviewInput,
+  type SoulAppEngineInvocationInput,
+  type SoulAppMemoryProposalInput,
+  type SoulAppPermissionDecision,
+  type SoulAppStoragePutOptions,
+} from './soul-app/broker'
+export {
+  disableSoulApp,
+  enableSoulApp,
+  findHostCapabilityTemplate,
+  findHostSoul,
+  getHostedSoulApp,
+  hostedSoulAppFromRow,
+  type HostSoulCatalog,
+  installSoulAppFromPath,
+  installSoulAppManifest,
+  listHostCapabilityTemplatesForSoul,
+  listHostedSoulApps,
+  listHostSoulCatalog,
+  runSoulAppHealthcheck,
+  type SoulAppInstallInput,
+  type SoulAppRegistryContext,
+} from './soul-app/registry'
+export {
   type LocalWorkerEvent,
   LocalWorkerEventBus,
   type LocalWorkerEventHandler,

@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-12 (PLAN-290 completed)
+> Updated: 2026-05-13 (PLAN-291 completed)
 
 ## Usage
 
@@ -312,10 +312,11 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-281 HR People Workbench focus layout and artifact preview**](PLAN-281.md) `2026-05-12`
 - [x] [**PLAN-282 HR Profile Workspace three panel layout**](PLAN-282.md) `2026-05-12`
 - [x] [**PLAN-283 HR Profile Workbench panel controls polish**](PLAN-283.md) `2026-05-12`
-- [ ] [**PLAN-284 Soul App protocol and manifest contract**](PLAN-284.md) `2026-05-12`
-- [ ] [**PLAN-285 Host Soul App registry and mount runtime**](PLAN-285.md) `2026-05-12`
-- [ ] [**PLAN-286 Soul App standalone runtime and SDK**](PLAN-286.md) `2026-05-12`
-- [ ] [**PLAN-287 Soul App isolation brokers and permission boundary**](PLAN-287.md) `2026-05-12`
-- [ ] [**PLAN-288 HR and QA external Soul App reference extraction**](PLAN-288.md) `2026-05-12`
-- [ ] [**PLAN-289 Soul App developer onboarding and validation harness**](PLAN-289.md) `2026-05-12`
+- [x] [**PLAN-284 Soul App protocol and manifest contract**](PLAN-284.md) `2026-05-12`
+- [x] [**PLAN-285 Host Soul App registry and mount runtime**](PLAN-285.md) `2026-05-12`
+- [x] [**PLAN-286 Soul App standalone runtime and SDK**](PLAN-286.md) `2026-05-12`
+- [x] [**PLAN-287 Soul App isolation brokers and permission boundary**](PLAN-287.md) `2026-05-12`
+- [x] [**PLAN-288 HR and QA external Soul App reference extraction**](PLAN-288.md) `2026-05-12`
+- [x] [**PLAN-289 Soul App developer onboarding and validation harness**](PLAN-289.md) `2026-05-12`
 - [x] [**PLAN-290 Remove legacy OD and control-plane guidance from current contracts**](PLAN-290.md) `2026-05-12`
+- [x] [**PLAN-291 Soul App app-level autonomy and Host mounted execution**](PLAN-291.md) `2026-05-13`
