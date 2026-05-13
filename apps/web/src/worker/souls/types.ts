@@ -11,6 +11,7 @@ import type {
 } from '@zonease/aiworker-shared'
 import type { FormEvent, ReactNode } from 'react'
 import type { displaySoul, messagesFor, normalizeLocale } from '../../features/i18n'
+import type { LocalSoulAppActionResponse, LocalSoulAppShellAction } from '../../features/local-workspace/api/types'
 import type { EngineReadiness } from '../../features/session/engine-readiness'
 
 export type WorkerMessages = ReturnType<typeof messagesFor>
@@ -46,8 +47,10 @@ export interface SoulWorkbenchContext {
   selectedTemplate: CapabilityTemplate
   selectedWorkspace: LocalWorkspace | null
   shellHeader?: {
+    actionDescriptors: readonly LocalSoulAppShellAction[]
     actionSlots: ReadonlySet<string>
-    actions: ReactNode
+    busyActionId: string | null
+    onAction: (action: LocalSoulAppShellAction) => Promise<LocalSoulAppActionResponse['result'] | null>
     results: ReactNode
     search: ReactNode
     status: ReactNode

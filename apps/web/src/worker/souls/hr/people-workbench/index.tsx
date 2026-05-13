@@ -1,3 +1,4 @@
+import type { LocalSoulAppShellAction } from '../../../../features/local-workspace/api/types'
 import type { SoulWorkbenchRendererProps } from '../../types'
 import type { ProfileListSectionId } from './types'
 
@@ -82,6 +83,46 @@ export function HrPeopleWorkbench({
       return next
     })
   }
+  async function handleShellAction(action: LocalSoulAppShellAction) {
+    const result = await shellHeader?.onAction(action)
+    if (!result?.ok)
+      return
+    if (action.slot === 'primary') {
+      onCreateWorkspace()
+      return
+    }
+    if (action.slot === 'drawer-toggle') {
+      setProfileToolsVisible(visible => !visible)
+      return
+    }
+    if (action.slot === 'settings')
+      onOpenSettings()
+  }
+
+  function renderShellHeaderAction(action: LocalSoulAppShellAction) {
+    const busy = shellHeader?.busyActionId === action.id
+    const Icon = action.slot === 'settings'
+      ? Settings
+      : action.slot === 'refresh'
+        ? RefreshCw
+        : action.slot === 'drawer-toggle'
+          ? ShieldCheck
+          : Plus
+    return (
+      <button
+        key={action.id}
+        aria-busy={busy}
+        className="shell-primary-action"
+        disabled={Boolean(shellHeader?.busyActionId)}
+        title="Provided by the Soul App protocol"
+        type="button"
+        onClick={() => void handleShellAction(action)}
+      >
+        <Icon aria-hidden="true" size={14} />
+        <span>{action.label}</span>
+      </button>
+    )
+  }
 
   return (
     <>
@@ -108,18 +149,20 @@ export function HrPeopleWorkbench({
               <span key={item}>{item}</span>
             ))}
           </div>
-          {shellHeader?.actions ?? (
-            <>
-              <button type="button" className="primary hr-header-command" onClick={onCreateWorkspace}>
-                <Plus aria-hidden="true" size={14} />
-                <span>{labels.newProfile}</span>
-              </button>
-              <button type="button" className="ghost hr-header-command" onClick={onOpenConnectors}>
-                <ShieldCheck aria-hidden="true" size={14} />
-                <span>{labels.evidenceConnectors}</span>
-              </button>
-            </>
-          )}
+          {shellHeader
+            ? shellHeader.actionDescriptors.map(renderShellHeaderAction)
+            : (
+                <>
+                  <button type="button" className="primary hr-header-command" onClick={onCreateWorkspace}>
+                    <Plus aria-hidden="true" size={14} />
+                    <span>{labels.newProfile}</span>
+                  </button>
+                  <button type="button" className="ghost hr-header-command" onClick={onOpenConnectors}>
+                    <ShieldCheck aria-hidden="true" size={14} />
+                    <span>{labels.evidenceConnectors}</span>
+                  </button>
+                </>
+              )}
           <div className="hr-header-icon-group" aria-label={labels.workbenchPanelControlsLabel}>
             <IconButton
               aria-label={profileListVisible ? labels.hideProfileList : labels.showProfileList}

@@ -263,6 +263,12 @@ let currentApps: Array<{
       reviewPanels?: Array<{ id: string, label: string }>
       routes?: Array<{ id?: string, label: string, path: string, surface?: { renderer: 'host-descriptor' | 'sandboxed-frame' | 'trusted-module' } }>
       shell?: {
+        actions?: Array<{
+          id: string
+          label: string
+          protocolAction: string
+          slot: 'action' | 'drawer-toggle' | 'refresh'
+        }>
         primaryAction?: {
           id: string
           label: string
@@ -274,6 +280,11 @@ let currentApps: Array<{
           label: string
           placeholder: string
           protocolProvider: string
+        }
+        settings?: {
+          id: string
+          label: string
+          protocolAction: string
         }
       }
       workspaceWidgets?: Array<{ id: string, label: string, surface?: { renderer: 'host-descriptor' | 'sandboxed-frame' | 'trusted-module' } }>
@@ -289,6 +300,12 @@ let currentApps: Array<{
     routePaths: string[]
     surfaceIds?: string[]
     shell?: {
+      actions?: Array<{
+        id: string
+        label: string
+        protocolAction: string
+        slot: 'action' | 'drawer-toggle' | 'refresh'
+      }>
       primaryAction?: {
         id: string
         label: string
@@ -300,6 +317,11 @@ let currentApps: Array<{
         label: string
         placeholder: string
         protocolProvider: string
+      }
+      settings?: {
+        id: string
+        label: string
+        protocolAction: string
       }
     } | null
     workspaceWidgetIds: string[]
@@ -422,6 +444,24 @@ beforeEach(() => {
       return json({
         action: { id: 'create-people-profile', protocolAction: 'peopleProfiles.create' },
         result: { ok: true, message: 'People profile draft created.', refresh: true },
+      })
+    }
+    if (url.endsWith('/api/local/apps/aiworker-hr/actions/toggle-evidence-drawer') && method === 'POST') {
+      return json({
+        action: { id: 'toggle-evidence-drawer', protocolAction: 'drawers.evidence.toggle' },
+        result: { ok: true, message: 'Evidence drawer intent emitted.' },
+      })
+    }
+    if (url.endsWith('/api/local/apps/aiworker-hr/actions/refresh-people') && method === 'POST') {
+      return json({
+        action: { id: 'refresh-people', protocolAction: 'people.refresh' },
+        result: { ok: true, message: 'People data refreshed.', refresh: true },
+      })
+    }
+    if (url.endsWith('/api/local/apps/aiworker-hr/actions/hr-settings') && method === 'POST') {
+      return json({
+        action: { id: 'hr-settings', protocolAction: 'settings.open' },
+        result: { ok: true, message: 'HR settings opened.' },
       })
     }
     if (url.endsWith('/api/local/apps/aiworker-hr/search?providerId=peopleProfiles.search&query=ada&limit=8')) {
@@ -823,6 +863,20 @@ describe('worker studio', () => {
             reviewPanels: [{ id: 'hr-review', label: 'HR review' }],
             routes: [{ id: 'hr-home', label: 'People workbench', path: '/hr/people', surface: { renderer: 'host-descriptor' } }],
             shell: {
+              actions: [
+                {
+                  id: 'refresh-people',
+                  label: 'Refresh',
+                  protocolAction: 'people.refresh',
+                  slot: 'refresh',
+                },
+                {
+                  id: 'toggle-evidence-drawer',
+                  label: 'Evidence',
+                  protocolAction: 'drawers.evidence.toggle',
+                  slot: 'drawer-toggle',
+                },
+              ],
               primaryAction: {
                 id: 'create-people-profile',
                 label: 'New people profile',
@@ -834,6 +888,11 @@ describe('worker studio', () => {
                 label: 'Search people profiles',
                 placeholder: 'Search people profiles',
                 protocolProvider: 'peopleProfiles.search',
+              },
+              settings: {
+                id: 'hr-settings',
+                label: 'HR settings',
+                protocolAction: 'settings.open',
               },
             },
             workspaceWidgets: [{ id: 'hr-people-widget', label: 'People widget', surface: { renderer: 'sandboxed-frame' } }],
@@ -849,6 +908,20 @@ describe('worker studio', () => {
           routePaths: ['/hr/people'],
           surfaceIds: ['hr-home', 'hr-people-widget'],
           shell: {
+            actions: [
+              {
+                id: 'refresh-people',
+                label: 'Refresh',
+                protocolAction: 'people.refresh',
+                slot: 'refresh',
+              },
+              {
+                id: 'toggle-evidence-drawer',
+                label: 'Evidence',
+                protocolAction: 'drawers.evidence.toggle',
+                slot: 'drawer-toggle',
+              },
+            ],
             primaryAction: {
               id: 'create-people-profile',
               label: 'New people profile',
@@ -860,6 +933,11 @@ describe('worker studio', () => {
               label: 'Search people profiles',
               placeholder: 'Search people profiles',
               protocolProvider: 'peopleProfiles.search',
+            },
+            settings: {
+              id: 'hr-settings',
+              label: 'HR settings',
+              protocolAction: 'settings.open',
             },
           },
           workspaceWidgetIds: ['people-widget'],
@@ -896,11 +974,17 @@ describe('worker studio', () => {
     expect(screen.getByPlaceholderText('Search people profiles')).toBeTruthy()
     expect(within(hrHeader).getByRole('button', { name: 'New people profile' })).toBeTruthy()
     expect(within(hrHeader).getByPlaceholderText('Search people profiles')).toBeTruthy()
+    expect(within(hrHeader).getByRole('button', { name: 'Refresh' })).toBeTruthy()
+    expect(within(hrHeader).getByRole('button', { name: 'Evidence' })).toBeTruthy()
+    expect(within(hrHeader).getByRole('button', { name: 'HR settings' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'New people profile' }))
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith('/api/local/apps/aiworker-hr/actions/create-people-profile', expect.objectContaining({ method: 'POST' }))
     })
     expect(await screen.findByText('People profile draft created.')).toBeTruthy()
+    const createWorkspaceDialog = screen.getByRole('dialog', { name: 'Create workspace' })
+    expect(createWorkspaceDialog).toBeTruthy()
+    fireEvent.click(within(createWorkspaceDialog).getAllByRole('button', { name: 'Close dialog' })[0]!)
 
     fireEvent.change(screen.getByPlaceholderText('Search people profiles'), { target: { value: 'ada' } })
     await waitFor(() => {
@@ -908,6 +992,19 @@ describe('worker studio', () => {
     })
     expect(await screen.findByText('Ada Lovelace')).toBeTruthy()
     expect(screen.getByText('Staff engineer candidate profile')).toBeTruthy()
+    expect(document.querySelector('.hr-people-layout')?.classList.contains('without-profile-tools')).toBe(false)
+    fireEvent.click(within(hrHeader).getByRole('button', { name: 'Evidence' }))
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/local/apps/aiworker-hr/actions/toggle-evidence-drawer', expect.objectContaining({ method: 'POST' }))
+    })
+    expect(document.querySelector('.hr-people-layout')?.classList.contains('without-profile-tools')).toBe(true)
+    fireEvent.click(within(hrHeader).getByRole('button', { name: 'HR settings' }))
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/local/apps/aiworker-hr/actions/hr-settings', expect.objectContaining({ method: 'POST' }))
+    })
+    const appSettingsDialog = await screen.findByRole('dialog', { name: 'Configure Soul workspace' })
+    expect(within(appSettingsDialog).getByRole('button', { name: /Soul Apps/ })).toBeTruthy()
+    fireEvent.click(screen.getByLabelText('Close settings'))
     expect(screen.queryByText('Soul Apps (2)')).toBeNull()
     expect(screen.queryByText('Enabled · 0.1.0')).toBeNull()
     expect(screen.queryByText('8 permissions')).toBeNull()
@@ -916,8 +1013,8 @@ describe('worker studio', () => {
     expect(screen.queryByText('4 mounted contributions')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Developer details' })).toBeNull()
 
-    fireEvent.click(screen.getByLabelText('Open settings'))
-    const dialog = screen.getByRole('dialog', { name: 'Configure Soul workspace' })
+    fireEvent.click(within(hrHeader).getByRole('button', { name: 'HR settings' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Configure Soul workspace' })
     fireEvent.click(within(dialog).getByRole('button', { name: /Soul Apps/ }))
 
     expect(within(dialog).getByRole('heading', { name: 'Soul Apps' })).toBeTruthy()

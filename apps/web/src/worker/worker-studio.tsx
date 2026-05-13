@@ -437,7 +437,7 @@ export function WorkerStudio() {
 
   async function runShellAction(action: LocalSoulAppShellAction) {
     if (!selectedSoulApp || shellActionState.busyActionId)
-      return
+      return null
     setShellActionState({ busyActionId: action.id, error: null, message: null })
     try {
       const response = await invokeSoulAppAction(selectedSoulApp.appId, action.id, {
@@ -452,6 +452,7 @@ export function WorkerStudio() {
       })
       if (response.result.refresh)
         await refresh()
+      return response.result
     }
     catch (error) {
       setShellActionState({
@@ -459,6 +460,7 @@ export function WorkerStudio() {
         error: error instanceof Error ? error.message : String(error),
         message: null,
       })
+      return null
     }
   }
 
@@ -756,15 +758,10 @@ export function WorkerStudio() {
     : null
   const shellHeader = shell
     ? {
+        actionDescriptors: shellActions,
         actionSlots: new Set(shellActions.map(action => action.slot)),
-        actions: (
-          <>
-            {shellPrimaryAction
-              ? renderShellActionButton(shellPrimaryAction)
-              : null}
-            {secondaryShellActions.map(action => renderShellActionButton(action, action.slot === 'settings' ? 'settings' : 'plus'))}
-          </>
-        ),
+        busyActionId: shellActionState.busyActionId,
+        onAction: runShellAction,
         results: shellSearchResults,
         search: renderShellSearchInput(),
         status: shellStatus,
