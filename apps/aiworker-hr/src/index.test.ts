@@ -1,4 +1,4 @@
-import type { LocalExecutor } from '@zonease/aiworker-soul-app-sdk'
+import type { LocalExecutor } from '@zonease/aiworker-soul-app-runtime'
 
 import { mkdtempSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
@@ -8,10 +8,13 @@ import path from 'node:path'
 import {
   createMountedSoulAppTestRuntime,
   createStandaloneSoulAppRuntime,
+} from '@zonease/aiworker-soul-app-runtime'
+import {
   namespaceSoulAppCapabilityId,
 } from '@zonease/aiworker-soul-app-sdk'
 import { afterEach, describe, expect, it } from 'bun:test'
 
+import { serveHostMounted } from './host-mounted'
 import { HR_REFERENCE_APP_BOUNDARY, hrReferenceSoulApp } from './index'
 
 const now = () => '2026-05-13T00:25:00.000Z'
@@ -49,6 +52,30 @@ describe('HR reference Soul App', () => {
     expect(hrReferenceSoulApp.manifest.id).toBe('aiworker-hr')
     expect(await hrReferenceSoulApp.connector?.declareConnectorNeeds({ appId: 'aiworker-hr', permissions: hrReferenceSoulApp.manifest.permissions })).toHaveLength(2)
     expect((await hrReferenceSoulApp.runtime?.resolveCapability({ appId: 'aiworker-hr', permissions: hrReferenceSoulApp.manifest.permissions }, { capabilityId: 'candidate-screen' }))?.id).toBe('candidate-screen')
+  })
+
+  it('requires the Host mount token for mounted service domain routes', async () => {
+    const previousToken = Bun.env.AIWORKER_MOUNT_TOKEN
+    Bun.env.AIWORKER_MOUNT_TOKEN = 'test-hr-mounted-token'
+    const server = serveHostMounted(0)
+    const baseUrl = `http://127.0.0.1:${server.port}`
+
+    try {
+      expect((await fetch(`${baseUrl}/health`)).status).toBe(200)
+      expect((await fetch(`${baseUrl}/domain`)).status).toBe(401)
+      const domainRes = await fetch(`${baseUrl}/domain`, {
+        headers: { 'x-aiworker-mount-token': 'test-hr-mounted-token' },
+      })
+      expect(domainRes.status).toBe(200)
+      expect(await domainRes.json()).toMatchObject({ appId: 'aiworker-hr', mounted: true })
+    }
+    finally {
+      server.stop()
+      if (previousToken === undefined)
+        delete Bun.env.AIWORKER_MOUNT_TOKEN
+      else
+        Bun.env.AIWORKER_MOUNT_TOKEN = previousToken
+    }
   })
 
   it('runs the HR app in standalone and Host-mounted smoke paths', async () => {

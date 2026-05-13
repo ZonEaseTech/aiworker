@@ -1,4 +1,4 @@
-import type { LocalExecutor } from '@zonease/aiworker-soul-app-sdk'
+import type { LocalExecutor } from '@zonease/aiworker-soul-app-runtime'
 
 import { mkdtempSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
@@ -8,10 +8,13 @@ import path from 'node:path'
 import {
   createMountedSoulAppTestRuntime,
   createStandaloneSoulAppRuntime,
+} from '@zonease/aiworker-soul-app-runtime'
+import {
   namespaceSoulAppCapabilityId,
 } from '@zonease/aiworker-soul-app-sdk'
 import { afterEach, describe, expect, it } from 'bun:test'
 
+import { serveHostMounted } from './host-mounted'
 import { QA_REFERENCE_APP_BOUNDARY, qaReferenceSoulApp } from './index'
 
 const now = () => '2026-05-13T00:26:00.000Z'
@@ -49,6 +52,30 @@ describe('QA reference Soul App', () => {
     expect(qaReferenceSoulApp.manifest.id).toBe('aiworker-qa')
     expect(await qaReferenceSoulApp.connector?.declareConnectorNeeds({ appId: 'aiworker-qa', permissions: qaReferenceSoulApp.manifest.permissions })).toHaveLength(2)
     expect((await qaReferenceSoulApp.runtime?.resolveCapability({ appId: 'aiworker-qa', permissions: qaReferenceSoulApp.manifest.permissions }, { capabilityId: 'release-gate' }))?.id).toBe('release-gate')
+  })
+
+  it('requires the Host mount token for mounted service domain routes', async () => {
+    const previousToken = Bun.env.AIWORKER_MOUNT_TOKEN
+    Bun.env.AIWORKER_MOUNT_TOKEN = 'test-qa-mounted-token'
+    const server = serveHostMounted(0)
+    const baseUrl = `http://127.0.0.1:${server.port}`
+
+    try {
+      expect((await fetch(`${baseUrl}/health`)).status).toBe(200)
+      expect((await fetch(`${baseUrl}/domain`)).status).toBe(401)
+      const domainRes = await fetch(`${baseUrl}/domain`, {
+        headers: { 'x-aiworker-mount-token': 'test-qa-mounted-token' },
+      })
+      expect(domainRes.status).toBe(200)
+      expect(await domainRes.json()).toMatchObject({ appId: 'aiworker-qa', mounted: true })
+    }
+    finally {
+      server.stop()
+      if (previousToken === undefined)
+        delete Bun.env.AIWORKER_MOUNT_TOKEN
+      else
+        Bun.env.AIWORKER_MOUNT_TOKEN = previousToken
+    }
   })
 
   it('runs the QA app in standalone and Host-mounted smoke paths', async () => {

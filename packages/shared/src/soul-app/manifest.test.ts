@@ -106,6 +106,40 @@ describe('Soul App manifest schema', () => {
     expect(result.issues.map(issue => issue.code)).toContain('invalid_storage_namespace')
   })
 
+  it('rejects mounted local service URLs outside loopback HTTP', () => {
+    const manifest = cloneManifest(hrSoulAppManifest)
+    manifest.api.localService = {
+      baseUrl: 'https://example.com:8443',
+      healthPath: '/health',
+    }
+
+    const result = validateSoulAppManifest(manifest, {
+      availableConnectorIds: ['ats'],
+      hostVersion: '0.12.1',
+    })
+
+    expect(result.status).toBe('invalid')
+    expect(result.issues).toContainEqual(expect.objectContaining({
+      code: 'unsafe_local_service_url',
+      path: 'api.localService.baseUrl',
+    }))
+  })
+
+  it('allows mounted local service URLs on loopback HTTP', () => {
+    const manifest = cloneManifest(hrSoulAppManifest)
+    manifest.api.localService = {
+      baseUrl: 'http://127.0.0.1:3000',
+      healthPath: '/health',
+    }
+
+    const result = validateSoulAppManifest(manifest, {
+      availableConnectorIds: ['ats'],
+      hostVersion: '0.12.1',
+    })
+
+    expect(result.status).toBe('valid')
+  })
+
   it('rejects unsafe permission requests', () => {
     const manifest = cloneManifest(hrSoulAppManifest)
     manifest.permissions = [

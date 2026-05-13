@@ -1,140 +1,31 @@
-import type { LocalExecutor, SoulAppDefinition } from './index'
+import type { SoulAppDefinition } from './index'
 
-import { mkdtempSync } from 'node:fs'
-import { rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import path from 'node:path'
-import { afterEach, describe, expect, it } from 'bun:test'
+import { describe, expect, it } from 'bun:test'
 
+import packageJson from '../package.json' with { type: 'json' }
 import {
-  createMountedSoulAppTestRuntime,
   createSoulAppClient,
-  createStandaloneSoulAppRuntime,
   defineSoulApp,
   namespaceSoulAppCapabilityId,
 } from './index'
 
 const now = () => '2026-05-12T23:30:00.000Z'
 
-const executor: LocalExecutor = {
-  async invoke(input) {
-    return {
-      artifacts: [{
-        content: `# Demo artifact\n\n${input.prompt}`,
-        kind: 'demo-report',
-        path: `artifacts/${input.sessionId}/demo-report.md`,
-        title: 'Demo Report',
-      }],
-      review: {
-        findings: [{ message: 'Demo artifact is ready for human review.' }],
-        risks: [],
-        verdict: 'needs_review',
-      },
-      summary: 'Demo app produced one artifact.',
-    }
-  },
-}
-
-describe('Soul App SDK runtime boundary', () => {
-  let roots: string[] = []
-
-  afterEach(async () => {
-    for (const root of roots)
-      await rm(root, { recursive: true, force: true })
-    roots = []
+describe('Soul App SDK authoring boundary', () => {
+  it('keeps the SDK package free from Host runtime and worker DB dependencies', () => {
+    expect(packageJson.dependencies).not.toHaveProperty('@zonease/aiworker-core')
+    expect(packageJson.dependencies).not.toHaveProperty('@zonease/aiworker-storage-sqlite')
   })
 
-  it('defines one app once and runs it in standalone mode without Host catalog leakage', async () => {
-    const root = tempRoot('standalone')
+  it('defines one app without importing Host runtime internals', async () => {
     const app = demoSoulApp()
 
-    const standalone = await createStandaloneSoulAppRuntime(app, {
-      appHome: root,
-      executor,
-      hostVersion: '0.12.1',
-      now,
-      workerId: 'demo-worker',
-      workerName: 'Demo Worker',
-    })
-
-    expect(standalone.app.manifest.id).toBe('demo-soul-app')
-    expect(standalone.catalog.apps.map(item => item.appId)).toEqual(['demo-soul-app'])
-    expect(standalone.catalog.souls.map(item => item.id)).toEqual(['demo-soul-app'])
-    expect(standalone.catalog.templates.map(item => item.id)).toEqual([
-      namespaceSoulAppCapabilityId('demo-soul-app', 'demo-report'),
-    ])
-    expect(standalone.snapshot().worker.soulId).toBe('demo-soul-app')
-    expect(standalone.snapshot().worker.metadataJson.domainSoulId).toBe('demo-soul')
-
-    const workspace = await standalone.runtime.createWorkspace({ name: 'Standalone workspace', type: 'demo-workspace' })
-    const session = await standalone.runtime.createSession({
-      capabilityTemplateId: standalone.catalog.templates[0]!.id,
-      context: 'Standalone context',
-      metadata: standalone.sessionMetadata(standalone.catalog.templates[0]!.id),
-      title: 'Standalone session',
-      workspaceId: workspace.id,
-    })
-    const result = await standalone.runtime.startTurn({
-      engineId: 'test',
-      input: 'Create standalone artifact.',
-      metadata: standalone.sessionMetadata(standalone.catalog.templates[0]!.id),
-      sessionId: session.id,
-    })
-
-    expect(result.artifacts).toHaveLength(1)
-    expect(result.review?.verdict).toBe('needs_review')
-    expect(standalone.snapshot().worker.metadataJson.soulAppId).toBe('demo-soul-app')
-  })
-
-  it('creates the standalone app home when it does not exist yet', async () => {
-    const root = path.join(tempRoot('standalone-missing-home'), 'nested', 'app-home')
-    const standalone = await createStandaloneSoulAppRuntime(demoSoulApp(), {
-      appHome: root,
-      executor,
-      hostVersion: '0.12.1',
-      now,
-    })
-
-    expect(standalone.runtime.snapshot().worker.soulId).toBe('demo-soul-app')
-  })
-
-  it('uses the same definition through mounted Host projection without changing domain logic', async () => {
-    const root = tempRoot('mounted')
-    const app = demoSoulApp()
-
-    const mounted = await createMountedSoulAppTestRuntime(app, {
-      dbPath: path.join(root, 'worker.db'),
-      executor,
-      hostVersion: '0.12.1',
-      now,
-      workerId: 'mounted-demo-worker',
-      workerName: 'Mounted Demo Worker',
-      workersRoot: path.join(root, 'workers'),
-    })
-
-    const capabilityId = namespaceSoulAppCapabilityId('demo-soul-app', 'demo-report')
-    expect(mounted.hostedApp.appId).toBe(app.manifest.id)
-    expect(mounted.catalog.templates.map(item => item.id)).toContain(capabilityId)
-    expect(mounted.runtime.snapshot().worker.soulId).toBe(app.manifest.id)
-    expect(mounted.runtime.snapshot().worker.metadataJson.domainSoulId).toBe(app.manifest.soul.id)
-
-    const workspace = await mounted.runtime.createWorkspace({ name: 'Mounted workspace', type: 'demo-workspace' })
-    const session = await mounted.runtime.createSession({
-      capabilityTemplateId: capabilityId,
-      context: 'Mounted context',
-      metadata: mounted.sessionMetadata(capabilityId),
-      title: 'Mounted session',
-      workspaceId: workspace.id,
-    })
-    const result = await mounted.runtime.startTurn({
-      engineId: 'test',
-      input: 'Create mounted artifact.',
-      metadata: mounted.sessionMetadata(capabilityId),
-      sessionId: session.id,
-    })
-
-    expect(result.artifacts[0]?.metadataJson.soulAppId).toBe('demo-soul-app')
-    expect(result.review?.findingsJson[0]?.message).toContain('Demo artifact')
+    expect(app.manifest.id).toBe('demo-soul-app')
+    expect(namespaceSoulAppCapabilityId(app.manifest.id, app.manifest.capabilities[0]!.id)).toBe('demo-soul-app.demo-report')
+    expect(await app.lifecycle?.healthcheck?.({
+      appId: app.manifest.id,
+      permissions: app.manifest.permissions,
+    })).toMatchObject({ ok: true })
   })
 
   it('scopes client calls to public local daemon routes for one app worker', async () => {
@@ -197,12 +88,6 @@ describe('Soul App SDK runtime boundary', () => {
     expect(calls[1]?.body).toMatchObject({ valueJson: { ready: true } })
     expect(calls[2]?.body).toMatchObject({ query: { candidateId: 'cand-1' } })
   })
-
-  function tempRoot(label: string): string {
-    const root = mkdtempSync(path.join(tmpdir(), `aiworker-sdk-${label}-`))
-    roots.push(root)
-    return root
-  }
 })
 
 function demoSoulApp(): SoulAppDefinition {
@@ -314,6 +199,23 @@ function demoSoulApp(): SoulAppDefinition {
         id: 'demo-workspace',
         name: 'Demo Workspace',
       }],
+    },
+    lifecycle: {
+      async disable() {
+        return { message: 'disabled', ok: true }
+      },
+      async enable() {
+        return { message: 'enabled', ok: true }
+      },
+      async healthcheck() {
+        return { message: `ready at ${now()}`, ok: true }
+      },
+      async install() {
+        return { message: 'installed', ok: true }
+      },
+      async upgrade() {
+        return { message: 'upgraded', ok: true }
+      },
     },
     runtime: {
       async prepareSessionContext(_context, input) {

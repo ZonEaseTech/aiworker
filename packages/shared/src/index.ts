@@ -407,6 +407,7 @@ export {
   buildHostedSoulApp,
   hostedSoulAppSchema,
   hrSoulAppManifest,
+  isLoopbackMountedServiceUrl,
   mountedContributionForManifest,
   namespaceSoulAppCapabilityId,
   parseNamespacedSoulAppCapabilityId,

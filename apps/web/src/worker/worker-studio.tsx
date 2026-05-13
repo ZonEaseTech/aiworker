@@ -1207,11 +1207,32 @@ function SoulAppsPanel({ apps, locale }: { apps: HostedSoulApp[], locale: Return
             <strong>{app.manifest.name}</strong>
             <span>{`${formatStatus(app.status, locale)} · ${app.version}`}</span>
             <small>{`${app.appId} · ${(app.manifest.permissions ?? []).length} permissions`}</small>
+            {app.status === 'enabled'
+              ? (
+                  <>
+                    {app.mountedContribution.apiRoutePrefix
+                      ? <small>{`API ${app.mountedContribution.apiRoutePrefix}`}</small>
+                      : null}
+                    {app.manifest.ui.routes.map(route => (
+                      <small key={route.id}>{`Route ${route.label} · ${route.path}`}</small>
+                    ))}
+                    <small>{mountedSlotSummary(app)}</small>
+                  </>
+                )
+              : <small>Mounted contributions paused</small>}
           </div>
         ))}
       </div>
     </section>
   )
+}
+
+function mountedSlotSummary(app: HostedSoulApp): string {
+  const count = app.mountedContribution.artifactPreviewIds.length
+    + app.mountedContribution.panelIds.length
+    + app.mountedContribution.reviewPanelIds.length
+    + app.mountedContribution.workspaceWidgetIds.length
+  return `${count} mounted ${count === 1 ? 'slot' : 'slots'}`
 }
 
 function workerInitials(name: string): string {

@@ -31,6 +31,7 @@ import {
 } from '@zonease/aiworker-core'
 import {
   AppError,
+  isLoopbackMountedServiceUrl,
   localSettingsConfigSchema,
 } from '@zonease/aiworker-shared'
 import {
@@ -99,8 +100,26 @@ export interface LocalDaemonState {
 
 interface MountedSoulAppService {
   baseUrl: string
+  mountToken: string
   process?: ChildProcessByStdio<null, Readable, Readable>
 }
+
+const MOUNTED_PROXY_TIMEOUT_MS = 10_000
+const MOUNTED_PROXY_STRIPPED_HEADERS = new Set([
+  'authorization',
+  'connection',
+  'content-length',
+  'cookie',
+  'host',
+  'keep-alive',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'te',
+  'trailer',
+  'transfer-encoding',
+  'upgrade',
+  'x-real-ip',
+])
 
 export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}): Promise<{
   app: OpenAPIHono
@@ -180,7 +199,12 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     return c.json({ app })
   })
   app.post('/api/local/apps/:appId/enable', c => c.json({ app: enableSoulApp(c.req.param('appId'), registryContext(state)), catalog: listHostSoulCatalog() }))
-  app.post('/api/local/apps/:appId/disable', c => c.json({ app: disableSoulApp(c.req.param('appId'), registryContext(state)), catalog: listHostSoulCatalog() }))
+  app.post('/api/local/apps/:appId/disable', (c) => {
+    const appId = c.req.param('appId')
+    const app = disableSoulApp(appId, registryContext(state))
+    stopMountedSoulAppService(state, appId)
+    return c.json({ app, catalog: listHostSoulCatalog() })
+  })
   app.post('/api/local/apps/:appId/healthcheck', c => c.json({ app: runSoulAppHealthcheck(c.req.param('appId'), registryContext(state)) }))
   app.get('/api/local/apps/:appId/broker/permissions', (c) => {
     const broker = createSoulAppBroker(brokerContext(c, state))
@@ -784,8 +808,8 @@ function brokerResponse(c: Context, key: string, result: unknown): Response {
 }
 
 async function proxyMountedSoulAppApi(c: Context, state: LocalDaemonState, app: HostedSoulApp): Promise<Response> {
-  const baseUrl = await resolveMountedSoulAppBaseUrl(state, app)
-  if (!baseUrl) {
+  const service = await resolveMountedSoulAppService(state, app)
+  if (!service) {
     return c.json({
       error: {
         code: 'SOUL_APP_SERVICE_NOT_CONFIGURED',
@@ -796,21 +820,23 @@ async function proxyMountedSoulAppApi(c: Context, state: LocalDaemonState, app: 
   }
 
   const sourceUrl = new URL(c.req.url)
-  const targetUrl = new URL(`/${c.req.param('path')}`, baseUrl)
+  const targetUrl = new URL(`/${c.req.param('path')}`, service.baseUrl)
   targetUrl.search = sourceUrl.search
-  const headers = new Headers(c.req.raw.headers)
-  headers.delete('authorization')
-  headers.delete('host')
+  const headers = mountedProxyHeaders(c.req.raw.headers)
   headers.set('x-aiworker-app-id', app.appId)
   headers.set('x-aiworker-host-url', `${sourceUrl.protocol}//${sourceUrl.host}`)
+  headers.set('x-aiworker-mount-token', service.mountToken)
   headers.set('x-aiworker-route-prefix', app.mountedContribution.apiRoutePrefix ?? '')
 
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), MOUNTED_PROXY_TIMEOUT_MS)
   try {
     const res = await fetch(targetUrl, {
       body: c.req.method === 'GET' || c.req.method === 'HEAD' ? undefined : c.req.raw.body,
       headers,
       method: c.req.method,
       redirect: 'manual',
+      signal: controller.signal,
     })
     const responseHeaders = new Headers(res.headers)
     responseHeaders.delete('content-encoding')
@@ -822,40 +848,71 @@ async function proxyMountedSoulAppApi(c: Context, state: LocalDaemonState, app: 
     })
   }
   catch (error) {
+    const aborted = controller.signal.aborted
     return c.json({
       error: {
-        code: 'SOUL_APP_SERVICE_UNREACHABLE',
-        message: error instanceof Error ? error.message : String(error),
+        code: aborted ? 'SOUL_APP_SERVICE_TIMEOUT' : 'SOUL_APP_SERVICE_UNREACHABLE',
+        message: aborted
+          ? `Mounted Soul App service timed out after ${MOUNTED_PROXY_TIMEOUT_MS}ms.`
+          : error instanceof Error ? error.message : String(error),
       },
       routePrefix: app.mountedContribution.apiRoutePrefix,
-    }, 502)
+    }, aborted ? 504 : 502)
+  }
+  finally {
+    clearTimeout(timeout)
   }
 }
 
-async function resolveMountedSoulAppBaseUrl(state: LocalDaemonState, app: HostedSoulApp): Promise<string | null> {
+function mountedProxyHeaders(source: Headers): Headers {
+  const headers = new Headers()
+  for (const [key, value] of source) {
+    const lower = key.toLowerCase()
+    if (MOUNTED_PROXY_STRIPPED_HEADERS.has(lower) || lower.startsWith('x-forwarded-'))
+      continue
+    headers.set(key, value)
+  }
+  return headers
+}
+
+async function resolveMountedSoulAppService(state: LocalDaemonState, app: HostedSoulApp): Promise<MountedSoulAppService | null> {
   const existing = state.mountedAppServices.get(app.appId)
   if (existing)
-    return existing.baseUrl
+    return existing
 
   const service = app.manifest.api.localService
   if (!service)
     return null
   if (service.baseUrl) {
-    state.mountedAppServices.set(app.appId, { baseUrl: service.baseUrl })
-    return service.baseUrl
+    if (!isLoopbackMountedServiceUrl(service.baseUrl))
+      throw new Error(`Mounted Soul App service URL must be loopback HTTP: ${service.baseUrl}`)
+    const mounted = { baseUrl: service.baseUrl, mountToken: randomUUID() }
+    state.mountedAppServices.set(app.appId, mounted)
+    return mounted
   }
   if (!service.command?.length)
     return null
 
   const cwd = mountedSoulAppCwd(app)
+  const mountToken = randomUUID()
   const child = spawn(service.command[0]!, service.command.slice(1), {
     cwd,
-    env: { ...process.env, PORT: '0' },
+    env: { ...process.env, AIWORKER_MOUNT_TOKEN: mountToken, PORT: '0' },
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   const baseUrl = await waitForMountedSoulAppUrl(child, service.healthPath)
-  state.mountedAppServices.set(app.appId, { baseUrl, process: child })
-  return baseUrl
+  const mounted = { baseUrl, mountToken, process: child }
+  state.mountedAppServices.set(app.appId, mounted)
+  return mounted
+}
+
+function stopMountedSoulAppService(state: LocalDaemonState, appId: string): void {
+  const mounted = state.mountedAppServices.get(appId)
+  if (!mounted)
+    return
+  state.mountedAppServices.delete(appId)
+  if (mounted.process && !mounted.process.killed)
+    mounted.process.kill('SIGTERM')
 }
 
 function mountedSoulAppCwd(app: HostedSoulApp): string {
@@ -883,6 +940,12 @@ async function waitForMountedSoulAppUrl(child: ChildProcessByStdio<null, Readabl
       try {
         const parsed = JSON.parse(line) as { url?: unknown }
         if (typeof parsed.url === 'string' && parsed.url.length > 0) {
+          if (!isLoopbackMountedServiceUrl(parsed.url)) {
+            child.kill()
+            clearTimeout(timer)
+            reject(new Error(`Mounted Soul App service URL must be loopback HTTP: ${parsed.url}`))
+            return
+          }
           clearTimeout(timer)
           resolve(parsed.url)
         }

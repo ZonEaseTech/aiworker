@@ -491,6 +491,8 @@ async function createAppScaffoldCommand(id: string, opts: { dir?: string } = {})
   writeScaffoldFile(path.join(targetDir, 'tsconfig.json'), `${JSON.stringify(createScaffoldTsconfig(), null, 2)}\n`)
   writeScaffoldFile(path.join(targetDir, 'README.md'), scaffoldReadme(appId))
   writeScaffoldFile(path.join(targetDir, 'src/index.ts'), scaffoldIndexTs())
+  writeScaffoldFile(path.join(targetDir, 'src/standalone.ts'), scaffoldStandaloneTs())
+  writeScaffoldFile(path.join(targetDir, 'src/host-mounted.ts'), scaffoldHostMountedTs())
   writeScaffoldFile(path.join(targetDir, 'schemas/brief.schema.json'), `${JSON.stringify(createBriefSchema(appId), null, 2)}\n`)
   writeScaffoldFile(path.join(targetDir, 'capabilities/brief/prompt.md'), scaffoldPrompt(appId))
   writeScaffoldFile(path.join(targetDir, 'review/brief.md'), scaffoldReview(appId))
@@ -504,6 +506,8 @@ async function createAppScaffoldCommand(id: string, opts: { dir?: string } = {})
       'tsconfig.json',
       'README.md',
       'src/index.ts',
+      'src/standalone.ts',
+      'src/host-mounted.ts',
       'schemas/brief.schema.json',
       'capabilities/brief/prompt.md',
       'review/brief.md',
@@ -716,7 +720,11 @@ function createScaffoldManifest(appId: string): SoulAppManifest {
   const routePrefix = `/api/local/apps/${appId}`
   const raw = {
     api: {
-      entry: './src/index.ts',
+      entry: './src/host-mounted.ts',
+      localService: {
+        command: ['bun', 'src/host-mounted.ts'],
+        healthPath: '/health',
+      },
       routePrefix,
     },
     artifactTypes: [
@@ -773,8 +781,8 @@ function createScaffoldManifest(appId: string): SoulAppManifest {
       namespace: appId,
     },
     modes: {
-      hostMounted: { entry: './src/index.ts', supported: true },
-      standalone: { entry: './src/index.ts', supported: true },
+      hostMounted: { entry: './src/host-mounted.ts', supported: true },
+      standalone: { entry: './src/standalone.ts', supported: true },
     },
     name: titleCase(appId),
     pack: {
@@ -865,7 +873,7 @@ function createScaffoldManifest(appId: string): SoulAppManifest {
         },
       ],
       routes: [
-        { entry: './src/index.ts', id: 'brief-home', label: titleCase(appId), path: `/${appId}` },
+        { entry: './src/standalone.ts', id: 'brief-home', label: titleCase(appId), path: `/${appId}` },
       ],
       workspaceWidgets: [
         {
@@ -1000,7 +1008,11 @@ function createScaffoldPackageJson(appId: string) {
     name: `@aiworker-soul-app/${appId}`,
     private: true,
     scripts: {
+      build: 'bun build src/index.ts src/standalone.ts src/host-mounted.ts --outdir dist --target bun',
+      dev: 'bun src/standalone.ts --serve',
+      serve: 'bun src/host-mounted.ts',
       smoke: 'aiworker app smoke .',
+      test: 'bun test',
       typecheck: 'tsc --noEmit',
       validate: 'aiworker app validate .',
     },
@@ -1191,6 +1203,113 @@ function lifecycleHandlers(message: string) {
     install: ok,
     upgrade: ok,
   }
+}
+`
+}
+
+function scaffoldStandaloneTs(): string {
+  return `import process from 'node:process'
+
+import manifestJson from '../soul-app.manifest.json' with { type: 'json' }
+
+const manifest = manifestJson
+
+export function renderStandaloneHtml(): string {
+  return [
+    '<!doctype html>',
+    '<html lang="en">',
+    '<head><meta charset="utf-8"><title>' + manifest.name + '</title></head>',
+    \`<body data-soul-app-id="\${manifest.id}">\`,
+    '<main>',
+    \`<h1>\${manifest.name}</h1>\`,
+    \`<p>\${manifest.description}</p>\`,
+    '</main>',
+    '</body>',
+    '</html>',
+  ].join('')
+}
+
+export function serveStandalone(port = Number(Bun.env.PORT ?? 0)) {
+  return Bun.serve({
+    fetch(request) {
+      const url = new URL(request.url)
+      if (url.pathname === '/health')
+        return Response.json({ appId: manifest.id, mode: 'standalone', status: 'ok' })
+      return new Response(renderStandaloneHtml(), {
+        headers: { 'content-type': 'text/html; charset=utf-8' },
+      })
+    },
+    hostname: Bun.env.HOST ?? '127.0.0.1',
+    port,
+  })
+}
+
+if (import.meta.main) {
+  const server = serveStandalone()
+  process.stdout.write(\`\${JSON.stringify({ appId: manifest.id, mode: 'standalone', url: \`http://\${server.hostname}:\${server.port}\` })}\\n\`)
+}
+`
+}
+
+function scaffoldHostMountedTs(): string {
+  return `import process from 'node:process'
+
+import manifestJson from '../soul-app.manifest.json' with { type: 'json' }
+
+const manifest = manifestJson
+
+export function serveHostMounted(port = Number(Bun.env.PORT ?? 0)) {
+  return Bun.serve({
+    async fetch(request) {
+      const url = new URL(request.url)
+      if (url.pathname === '/health')
+        return Response.json({ appId: manifest.id, mode: 'host-mounted', status: 'ok' })
+
+      const tokenError = verifyMountToken(request)
+      if (tokenError)
+        return tokenError
+
+      if (url.pathname === '/domain') {
+        return Response.json({
+          appId: manifest.id,
+          capabilities: manifest.capabilities.map(capability => capability.id),
+          mounted: true,
+          soul: manifest.soul.id,
+          workspaceTypes: manifest.workspaceTypes.map(type => type.id),
+        })
+      }
+
+      if (url.pathname === '/broker/permissions') {
+        const hostUrl = request.headers.get('x-aiworker-host-url') ?? Bun.env.AIWORKER_HOST_URL
+        if (!hostUrl)
+          return Response.json({ appId: manifest.id, broker: 'not-configured', permissions: [] })
+        return Response.json({ appId: manifest.id, broker: 'host-owned', permissions: manifest.permissions })
+      }
+
+      if (url.pathname === '/protocol/capabilities') {
+        return Response.json({ capabilities: manifest.capabilities })
+      }
+
+      return Response.json({ error: { code: 'NOT_FOUND', message: \`Unknown app route: \${url.pathname}\` } }, { status: 404 })
+    },
+    hostname: Bun.env.HOST ?? '127.0.0.1',
+    port,
+  })
+}
+
+if (import.meta.main) {
+  const server = serveHostMounted()
+  process.stdout.write(\`\${JSON.stringify({ appId: manifest.id, mode: 'host-mounted', url: \`http://\${server.hostname}:\${server.port}\` })}\\n\`)
+}
+
+function verifyMountToken(request: Request): Response | null {
+  const expected = Bun.env.AIWORKER_MOUNT_TOKEN
+  if (!expected)
+    return null
+  const actual = request.headers.get('x-aiworker-mount-token')
+  return actual === expected
+    ? null
+    : Response.json({ error: { code: 'INVALID_MOUNT_TOKEN', message: 'Host mount token is required.' } }, { status: 401 })
 }
 `
 }

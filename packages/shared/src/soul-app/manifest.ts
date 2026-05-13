@@ -266,6 +266,7 @@ export const soulAppManifestIssueCodeSchema = zod.enum([
   'incompatible_host_version',
   'missing_required_connector',
   'invalid_storage_namespace',
+  'unsafe_local_service_url',
   'unsafe_permission_request',
   'missing_ui_api_entry',
   'invalid_artifact_schema',
@@ -397,6 +398,15 @@ export function validateSoulAppManifest(
     })
   }
 
+  if (manifest.api.localService?.baseUrl && !isLoopbackMountedServiceUrl(manifest.api.localService.baseUrl)) {
+    issues.push({
+      code: 'unsafe_local_service_url',
+      message: 'api.localService.baseUrl must use loopback HTTP for mounted local services.',
+      path: 'api.localService.baseUrl',
+      severity: 'error',
+    })
+  }
+
   for (const permission of manifest.permissions) {
     const message = unsafePermissionMessage(permission, manifest)
     if (message) {
@@ -445,6 +455,25 @@ export function parseSoulAppManifestJson(
     issues: result.issues,
     status: 'malformed',
   }
+}
+
+export function isLoopbackMountedServiceUrl(value: string): boolean {
+  let url: URL
+  try {
+    url = new URL(value)
+  }
+  catch {
+    return false
+  }
+  if (url.protocol !== 'http:')
+    return false
+  const hostname = url.hostname.toLowerCase()
+  if (hostname === 'localhost' || hostname === '::1' || hostname === '[::1]')
+    return true
+  const parts = hostname.split('.')
+  if (parts.length !== 4 || parts[0] !== '127')
+    return false
+  return parts.slice(1).every(part => /^\d+$/.test(part) && Number(part) >= 0 && Number(part) <= 255)
 }
 
 function ensureUniqueIds(

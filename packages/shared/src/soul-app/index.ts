@@ -4,6 +4,7 @@ export {
   referenceSoulAppManifests,
 } from './fixtures'
 export {
+  isLoopbackMountedServiceUrl,
   parseSoulAppManifestJson,
   SOUL_APP_PROTOCOL,
   soulAppApiSchema,

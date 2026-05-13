@@ -122,8 +122,12 @@ describe('aiworker local CLI', () => {
     expect(scaffold).toMatchObject({ appId: 'demo-soul-app', path: appDir })
     expect(scaffold.files).toContain('soul-app.manifest.json')
     expect(scaffold.files).toContain('packs/demo-soul-app/SOUL.md')
+    expect(scaffold.files).toContain('src/standalone.ts')
+    expect(scaffold.files).toContain('src/host-mounted.ts')
     await expect(stat(path.join(appDir, 'soul-app.manifest.json'))).resolves.toBeTruthy()
     await expect(stat(path.join(appDir, 'src/index.ts'))).resolves.toBeTruthy()
+    await expect(stat(path.join(appDir, 'src/standalone.ts'))).resolves.toBeTruthy()
+    await expect(stat(path.join(appDir, 'src/host-mounted.ts'))).resolves.toBeTruthy()
     output = ''
 
     expect(await runCli(argv('app', 'validate', appDir))).toBe(0)
@@ -140,20 +144,25 @@ describe('aiworker local CLI', () => {
     expect(validation.validation.assetIssues).toEqual([])
     expect(validation.validation.privateImportIssues).toEqual([])
     expect(validation.validation.checkedAssets).toContain('./schemas/brief.schema.json')
+    expect(validation.validation.checkedAssets).toContain('./src/standalone.ts')
+    expect(validation.validation.checkedAssets).toContain('./src/host-mounted.ts')
     output = ''
 
     expect(await runCli(argv('app', 'smoke', appDir))).toBe(0)
-    const smoke = JSON.parse(output) as { smoke: { appId: string, artifactCount: number, hostedStatus: string, mounted: string, standalone: string, standaloneHttpStatus: number, standaloneUrl: string, status: string } }
+    const smoke = JSON.parse(output) as { smoke: { appId: string, artifactCount: number, hostedStatus: string, mounted: string, mountedService: string, mountedServiceHttpStatus: number, mountedServiceUrl: string, standalone: string, standaloneHttpStatus: number, standaloneUrl: string, status: string } }
     expect(smoke.smoke).toMatchObject({
       appId: 'demo-soul-app',
       artifactCount: 1,
       hostedStatus: 'enabled',
       mounted: 'pass',
+      mountedService: 'pass',
+      mountedServiceHttpStatus: 200,
       standalone: 'pass',
       standaloneHttpStatus: 200,
       status: 'pass',
     })
     expect(smoke.smoke.standaloneUrl).toStartWith('http://127.0.0.1:')
+    expect(smoke.smoke.mountedServiceUrl).toStartWith('http://127.0.0.1:')
   })
 
   it('fails Soul App validation on Host private imports', async () => {

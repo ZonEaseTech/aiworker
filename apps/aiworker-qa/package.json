@@ -21,11 +21,11 @@
     "validate": "bun ../../apps/cli/src/aiworker.ts app validate ."
   },
   "dependencies": {
-    "@zonease/aiworker-shared": "workspace:*",
     "@zonease/aiworker-soul-app-sdk": "workspace:*"
   },
   "devDependencies": {
     "@types/bun": "^1.2.13",
+    "@zonease/aiworker-soul-app-runtime": "workspace:*",
     "typescript": "^5.8.3"
   }
 }

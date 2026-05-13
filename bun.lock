@@ -17,22 +17,22 @@
     "apps/aiworker-hr": {
       "name": "@zonease/aiworker-hr",
       "dependencies": {
-        "@zonease/aiworker-shared": "workspace:*",
         "@zonease/aiworker-soul-app-sdk": "workspace:*",
       },
       "devDependencies": {
         "@types/bun": "^1.2.13",
+        "@zonease/aiworker-soul-app-runtime": "workspace:*",
         "typescript": "^5.8.3",
       },
     },
     "apps/aiworker-qa": {
       "name": "@zonease/aiworker-qa",
       "dependencies": {
-        "@zonease/aiworker-shared": "workspace:*",
         "@zonease/aiworker-soul-app-sdk": "workspace:*",
       },
       "devDependencies": {
         "@types/bun": "^1.2.13",
+        "@zonease/aiworker-soul-app-runtime": "workspace:*",
         "typescript": "^5.8.3",
       },
     },
@@ -177,12 +177,23 @@
         "typescript": "^5.8.3",
       },
     },
-    "packages/soul-app-sdk": {
-      "name": "@zonease/aiworker-soul-app-sdk",
+    "packages/soul-app-runtime": {
+      "name": "@zonease/aiworker-soul-app-runtime",
       "dependencies": {
         "@zonease/aiworker-core": "workspace:*",
         "@zonease/aiworker-shared": "workspace:*",
+        "@zonease/aiworker-soul-app-sdk": "workspace:*",
         "@zonease/aiworker-storage-sqlite": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.2.13",
+        "typescript": "^5.8.3",
+      },
+    },
+    "packages/soul-app-sdk": {
+      "name": "@zonease/aiworker-soul-app-sdk",
+      "dependencies": {
+        "@zonease/aiworker-shared": "workspace:*",
       },
       "devDependencies": {
         "@types/bun": "^1.2.13",
@@ -546,6 +557,8 @@
     "@zonease/aiworker-qa": ["@zonease/aiworker-qa@workspace:apps/aiworker-qa"],
 
     "@zonease/aiworker-shared": ["@zonease/aiworker-shared@workspace:packages/shared"],
+
+    "@zonease/aiworker-soul-app-runtime": ["@zonease/aiworker-soul-app-runtime@workspace:packages/soul-app-runtime"],
 
     "@zonease/aiworker-soul-app-sdk": ["@zonease/aiworker-soul-app-sdk@workspace:packages/soul-app-sdk"],
 

@@ -246,7 +246,29 @@ let currentSessions: typeof sessionRecord[]
 let currentTurns: LocalTurn[]
 let currentWorkers: typeof workers
 let currentWorkspaces: typeof workspace[]
-let currentApps: Array<{ appId: string, manifest: { name: string }, status: string, version: string }>
+let currentApps: Array<{
+  appId: string
+  manifest: {
+    name: string
+    ui?: {
+      artifactPreviews?: Array<{ id: string, label: string }>
+      panels?: Array<{ id: string, label: string }>
+      reviewPanels?: Array<{ id: string, label: string }>
+      routes?: Array<{ label: string, path: string }>
+      workspaceWidgets?: Array<{ id: string, label: string }>
+    }
+  }
+  mountedContribution?: {
+    apiRoutePrefix: string | null
+    artifactPreviewIds: string[]
+    panelIds: string[]
+    reviewPanelIds: string[]
+    routePaths: string[]
+    workspaceWidgetIds: string[]
+  }
+  status: string
+  version: string
+}>
 let deferCreatedSessionStream: boolean
 
 function resetSettings() {
@@ -710,8 +732,43 @@ describe('worker studio', () => {
 
   it('lists installed Soul Apps with lifecycle status in the worker rail', async () => {
     currentApps = [
-      { appId: 'aiworker-hr', manifest: { name: 'AIWorker HR' }, status: 'enabled', version: '0.1.0' },
-      { appId: 'aiworker-qa', manifest: { name: 'AIWorker QA' }, status: 'disabled', version: '0.1.0' },
+      {
+        appId: 'aiworker-hr',
+        manifest: {
+          name: 'AIWorker HR',
+          ui: {
+            artifactPreviews: [{ id: 'person-profile-preview', label: 'Person profile preview' }],
+            panels: [{ id: 'people-panel', label: 'People panel' }],
+            reviewPanels: [{ id: 'hr-review', label: 'HR review' }],
+            routes: [{ label: 'People workbench', path: '/hr/people' }],
+            workspaceWidgets: [{ id: 'people-widget', label: 'People widget' }],
+          },
+        },
+        mountedContribution: {
+          apiRoutePrefix: '/api/local/apps/aiworker-hr',
+          artifactPreviewIds: ['person-profile-preview'],
+          panelIds: ['people-panel'],
+          reviewPanelIds: ['hr-review'],
+          routePaths: ['/hr/people'],
+          workspaceWidgetIds: ['people-widget'],
+        },
+        status: 'enabled',
+        version: '0.1.0',
+      },
+      {
+        appId: 'aiworker-qa',
+        manifest: { name: 'AIWorker QA' },
+        mountedContribution: {
+          apiRoutePrefix: '/api/local/apps/aiworker-qa',
+          artifactPreviewIds: [],
+          panelIds: [],
+          reviewPanelIds: [],
+          routePaths: ['/qa/release'],
+          workspaceWidgetIds: [],
+        },
+        status: 'disabled',
+        version: '0.1.0',
+      },
     ]
 
     render(<WorkerStudio />)
@@ -719,8 +776,12 @@ describe('worker studio', () => {
     await screen.findByText('Soul Apps (2)')
     expect(screen.getByText('AIWorker HR')).toBeTruthy()
     expect(screen.getByText('Enabled · 0.1.0')).toBeTruthy()
+    expect(screen.getByText('API /api/local/apps/aiworker-hr')).toBeTruthy()
+    expect(screen.getByText('Route People workbench · /hr/people')).toBeTruthy()
+    expect(screen.getByText('4 mounted slots')).toBeTruthy()
     expect(screen.getByText('AIWorker QA')).toBeTruthy()
     expect(screen.getByText('Disabled · 0.1.0')).toBeTruthy()
+    expect(screen.getByText('Mounted contributions paused')).toBeTruthy()
   })
 
   it('keeps worker status as a trailing dot without duplicated item labels', async () => {

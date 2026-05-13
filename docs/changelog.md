@@ -1,5 +1,32 @@
 # AIWorker Changelog
 
+## 2026-05-13 03:34 [completed] FEAT-067 / PLAN-292 — Soul App mounted hardening and authoring readiness
+
+Completed the first five post-FEAT-066 follow-up items without publishing the
+branch.
+
+- Split `@zonease/aiworker-soul-app-sdk` back to the public authoring surface:
+  manifest/protocol helpers, `defineSoulApp(...)`, namespace helpers and scoped
+  Host client.
+- Added `@zonease/aiworker-soul-app-runtime` for standalone and Host-mounted
+  runtime harnesses, worker DB bootstrap and LocalExecutor test/runtime types.
+- Hardened mounted services with loopback-only URL validation, Host-generated
+  mount tokens, credential/forwarded-header stripping, upstream timeout handling
+  and launched service teardown on app disable.
+- Added HR/QA mounted token checks and kept app source on SDK while tests use
+  runtime explicitly.
+- Updated Worker Web to surface mounted API prefixes, routes and mounted slot
+  counts in the Soul Apps rail.
+- Upgraded `aiworker app create` to generate standalone and host-mounted entry
+  files, expanded scripts, mounted service metadata and smoke evidence.
+
+Verification passed: focused shared/SDK/runtime/HR/QA/API/CLI/Web tests,
+HR/QA `app validate` and `app smoke`, browser smoke against a real local daemon
+with HR/QA installed, root `typecheck`, `lint`, `test`, `build`,
+`git diff --check`, `crg:update` and `crg:review`. Web build still emits the
+existing chunk-size warning, but exits 0. code-review-graph reports risk 0.60
+with 34 heuristic test-gap hints.
+
 ## 2026-05-13 02:11 [completed] FEAT-066 / PLAN-291 — Soul App app-level autonomy and Host mounted execution
 
 Completed the B+C convergence for Soul App / Host dual autonomy.

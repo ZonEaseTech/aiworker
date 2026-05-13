@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -196,8 +196,12 @@ describe('local daemon API', () => {
         if (url.pathname === '/domain') {
           return Response.json({
             appId: request.headers.get('x-aiworker-app-id'),
+            authorization: request.headers.get('authorization'),
+            cookie: request.headers.get('cookie'),
+            forwardedHost: request.headers.get('x-forwarded-host'),
             hostUrl: request.headers.get('x-aiworker-host-url'),
             mounted: true,
+            mountToken: request.headers.get('x-aiworker-mount-token'),
             routePrefix: request.headers.get('x-aiworker-route-prefix'),
           })
         }
@@ -227,17 +231,91 @@ describe('local daemon API', () => {
       expect(installRes.status).toBe(201)
       expect((await target.request('/api/local/apps/aiworker-hr/enable', { method: 'POST' })).status).toBe(200)
 
-      const mountedApiRes = await target.request('/api/local/apps/aiworker-hr/domain')
+      const mountedApiRes = await target.request('/api/local/apps/aiworker-hr/domain', {
+        headers: {
+          'authorization': 'Bearer caller-token',
+          'cookie': 'session=caller',
+          'x-forwarded-host': 'evil.example.com',
+        },
+      })
       expect(mountedApiRes.status).toBe(200)
-      expect(await mountedApiRes.json()).toMatchObject({
+      const mountedApiBody = await mountedApiRes.json() as {
+        authorization: string | null
+        cookie: string | null
+        forwardedHost: string | null
+        mountToken: string | null
+      }
+      expect(mountedApiBody).toMatchObject({
         appId: 'aiworker-hr',
+        authorization: null,
+        cookie: null,
+        forwardedHost: null,
         mounted: true,
         routePrefix: '/api/local/apps/aiworker-hr',
       })
+      expect(mountedApiBody.mountToken).toMatch(/^[a-f0-9-]{36}$/)
     }
     finally {
       mountedService.stop()
     }
+  })
+
+  it('stops Host-launched mounted Soul App services when the app is disabled', async () => {
+    const target = await app()
+    const servicePath = join(dir, 'mounted-service.ts')
+    const stoppedPath = join(dir, 'mounted-service-stopped.txt')
+    writeFileSync(servicePath, `
+import { writeFileSync } from 'node:fs'
+const stoppedPath = ${JSON.stringify(stoppedPath)}
+const server = Bun.serve({
+  fetch(request) {
+    const url = new URL(request.url)
+    if (url.pathname === '/health')
+      return Response.json({ status: 'ok' })
+    if (url.pathname === '/domain')
+      return Response.json({
+        appId: request.headers.get('x-aiworker-app-id'),
+        mountToken: request.headers.get('x-aiworker-mount-token'),
+      })
+    return Response.json({ error: { code: 'NOT_FOUND' } }, { status: 404 })
+  },
+  hostname: '127.0.0.1',
+  port: Number(Bun.env.PORT ?? 0),
+})
+process.on('SIGTERM', () => {
+  writeFileSync(stoppedPath, 'stopped')
+  server.stop()
+  process.exit(0)
+})
+process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${server.port}\` }) + '\\n')
+`)
+
+    const installRes = await target.request('/api/local/apps/install', {
+      method: 'POST',
+      body: JSON.stringify({
+        manifest: {
+          ...hrSoulAppManifest,
+          api: {
+            ...hrSoulAppManifest.api,
+            localService: {
+              command: ['bun', servicePath],
+              healthPath: '/health',
+            },
+          },
+        },
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(installRes.status).toBe(201)
+    expect((await target.request('/api/local/apps/aiworker-hr/enable', { method: 'POST' })).status).toBe(200)
+
+    const mountedApiRes = await target.request('/api/local/apps/aiworker-hr/domain')
+    expect(mountedApiRes.status).toBe(200)
+    expect(await mountedApiRes.json()).toMatchObject({ appId: 'aiworker-hr' })
+
+    const disableRes = await target.request('/api/local/apps/aiworker-hr/disable', { method: 'POST' })
+    expect(disableRes.status).toBe(200)
+    await waitForFile(stoppedPath)
   })
 
   it('exposes only brokered Soul App storage, connector, audit, and engine-denial routes', async () => {
@@ -445,3 +523,12 @@ describe('local daemon API', () => {
     expect([200, 404]).toContain(testRes.status)
   })
 })
+
+async function waitForFile(filePath: string): Promise<void> {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    if (existsSync(filePath))
+      return
+    await new Promise(resolve => setTimeout(resolve, 25))
+  }
+  throw new Error(`Timed out waiting for file: ${filePath}`)
+}

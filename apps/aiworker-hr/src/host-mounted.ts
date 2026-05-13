@@ -15,6 +15,9 @@ export function serveHostMounted(port = Number(Bun.env.PORT ?? 0)) {
           status: 'ok',
         })
       }
+      const tokenError = verifyMountToken(request)
+      if (tokenError)
+        return tokenError
       if (url.pathname === '/domain') {
         return Response.json({
           appId: hrSoulAppManifest.id,
@@ -49,4 +52,14 @@ export function serveHostMounted(port = Number(Bun.env.PORT ?? 0)) {
 if (import.meta.main) {
   const server = serveHostMounted()
   process.stdout.write(`${JSON.stringify({ appId: hrSoulAppManifest.id, mode: 'host-mounted', url: `http://${server.hostname}:${server.port}` })}\n`)
+}
+
+function verifyMountToken(request: Request): Response | null {
+  const expected = Bun.env.AIWORKER_MOUNT_TOKEN
+  if (!expected)
+    return null
+  const actual = request.headers.get('x-aiworker-mount-token')
+  return actual === expected
+    ? null
+    : Response.json({ error: { code: 'INVALID_MOUNT_TOKEN', message: 'Host mount token is required.' } }, { status: 401 })
 }
