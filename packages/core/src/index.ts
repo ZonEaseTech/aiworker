@@ -17,10 +17,12 @@ export {
 export {
   bootstrapOfficialSoulApps,
   OFFICIAL_SOUL_APPS,
+  type OfficialLegacyMetadataRepairResult,
   type OfficialSoulAppBootstrapAction,
   type OfficialSoulAppBootstrapOptions,
   type OfficialSoulAppBootstrapResult,
   type OfficialSoulAppDefinition,
+  repairOfficialSoulAppLegacyMetadata,
 } from './soul-app/official'
 export {
   disableSoulApp,

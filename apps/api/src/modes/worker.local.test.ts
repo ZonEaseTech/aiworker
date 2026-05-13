@@ -1,10 +1,17 @@
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { hrSoulAppManifest, namespaceSoulAppCapabilityId } from '@zonease/aiworker-shared'
-import { closeWorkerDb } from '@zonease/aiworker-storage-sqlite/worker'
+import {
+  closeWorkerDb,
+  createSession,
+  createWorkspace,
+  initWorkerDb,
+  runWorkerMigrations,
+  upsertWorker,
+} from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 import { bootstrapWorkerApp } from './worker'
@@ -60,6 +67,37 @@ describe('local daemon API', () => {
     return (await res.json() as { worker: { id: string, soulId: string } }).worker
   }
 
+  function seedLegacyHrMetadata() {
+    const seedNow = '2026-05-13T13:04:00.000Z'
+    closeWorkerDb()
+    initWorkerDb(join(dir, 'worker.db'))
+    runWorkerMigrations()
+    upsertWorker({
+      id: 'legacy-hr-worker',
+      soulId: 'hr',
+      name: 'Legacy HR',
+      defaultEngineId: 'codex',
+      at: seedNow,
+    })
+    createWorkspace({
+      id: 'legacy-hr-workspace',
+      workerId: 'legacy-hr-worker',
+      name: 'Legacy HR workspace',
+      rootPath: join(dir, 'workers', 'legacy-hr-worker', 'workspaces', 'legacy-hr-workspace'),
+      at: seedNow,
+    })
+    createSession({
+      id: 'legacy-hr-session',
+      workerId: 'legacy-hr-worker',
+      workspaceId: 'legacy-hr-workspace',
+      capabilityTemplateId: 'candidate-screen',
+      title: 'Legacy candidate screen',
+      metadataJson: { capabilityTemplateId: 'candidate-screen', soulName: 'HR' },
+      at: seedNow,
+    })
+    closeWorkerDb()
+  }
+
   it('bootstraps official apps and rejects legacy built-in Soul ids', async () => {
     const target = await app()
 
@@ -105,6 +143,42 @@ describe('local daemon API', () => {
     })
     expect(workerRes.status).toBe(400)
     expect(await workerRes.json()).toMatchObject({ error: { code: 'SOUL_NOT_AVAILABLE' } })
+  })
+
+  it('repairs legacy HR worker and session metadata during daemon bootstrap', async () => {
+    seedLegacyHrMetadata()
+
+    const target = await app()
+
+    const workersBody = await (await target.request('/api/local/workers')).json() as { workers: Array<{ id: string, soulId: string }> }
+    expect(workersBody.workers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'legacy-hr-worker', soulId: HR_APP_ID }),
+    ]))
+
+    const sessionsBody = await (await target.request('/api/local/workspaces/legacy-hr-workspace/sessions')).json() as {
+      sessions: Array<{ capabilityTemplateId: string, id: string, metadataJson: Record<string, unknown> }>
+    }
+    expect(sessionsBody.sessions).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        capabilityTemplateId: HR_CANDIDATE_SCREEN,
+        id: 'legacy-hr-session',
+        metadataJson: expect.objectContaining({
+          capabilityTemplateId: HR_CANDIDATE_SCREEN,
+          soulAppId: HR_APP_ID,
+        }),
+      }),
+    ]))
+
+    const sessionRes = await target.request('/api/local/workers/legacy-hr-worker/workspaces/legacy-hr-workspace/sessions', {
+      method: 'POST',
+      body: JSON.stringify({
+        capabilityTemplateId: HR_CANDIDATE_SCREEN,
+        context: 'Migrated worker context',
+        title: 'Post migration session',
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(sessionRes.status).toBe(201)
   })
 
   it('serves the session workspace loop through /api/local routes', async () => {
@@ -442,6 +516,65 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
     const disableRes = await target.request('/api/local/apps/aiworker-hr/disable', { method: 'POST' })
     expect(disableRes.status).toBe(200)
     await waitForFile(stoppedPath)
+  })
+
+  it('deduplicates concurrent mounted surface service launches per app', async () => {
+    const target = await app()
+    const servicePath = join(dir, 'mounted-service-concurrent.ts')
+    const startedPath = join(dir, 'mounted-service-started.txt')
+    writeFileSync(servicePath, `
+import { writeFileSync } from 'node:fs'
+const startedPath = ${JSON.stringify(startedPath)}
+writeFileSync(startedPath, 'start\\n', { flag: 'a' })
+const server = Bun.serve({
+  fetch(request) {
+    const url = new URL(request.url)
+    if (url.pathname === '/health')
+      return Response.json({ status: 'ok' })
+    if (url.pathname === '/surfaces/routes/hr-home' || url.pathname === '/surfaces/panels/hr-profile-panel')
+      return Response.json({ renderer: 'host-descriptor', title: url.pathname })
+    if (url.pathname === '/frames/widgets/hr-people-widget')
+      return new Response('<!doctype html><html><body>HR frame</body></html>', { headers: { 'content-type': 'text/html' } })
+    return Response.json({ error: { code: 'NOT_FOUND' } }, { status: 404 })
+  },
+  hostname: '127.0.0.1',
+  port: Number(Bun.env.PORT ?? 0),
+})
+process.on('SIGTERM', () => {
+  server.stop()
+  process.exit(0)
+})
+process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${server.port}\` }) + '\\n')
+`)
+
+    await target.request('/api/local/apps/install', {
+      method: 'POST',
+      body: JSON.stringify({
+        manifest: {
+          ...hrSoulAppManifest,
+          api: {
+            ...hrSoulAppManifest.api,
+            localService: {
+              command: ['bun', servicePath],
+              healthPath: '/health',
+            },
+          },
+        },
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect((await target.request('/api/local/apps/aiworker-hr/enable', { method: 'POST' })).status).toBe(200)
+
+    const responses = await Promise.all([
+      target.request('/api/local/apps/aiworker-hr/surfaces/hr-home'),
+      target.request('/api/local/apps/aiworker-hr/surfaces/hr-profile-panel'),
+      target.request('/api/local/apps/aiworker-hr/surfaces/hr-people-widget'),
+    ])
+
+    expect(responses.map(response => response.status)).toEqual([200, 200, 200])
+    const starts = readFileSync(startedPath, 'utf8').trim().split('\n').filter(Boolean)
+    expect(starts).toHaveLength(1)
+    expect((await target.request('/api/local/apps/aiworker-hr/disable', { method: 'POST' })).status).toBe(200)
   })
 
   it('exposes only brokered Soul App storage, connector, audit, and engine-denial routes', async () => {

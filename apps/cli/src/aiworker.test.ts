@@ -1,11 +1,19 @@
 import { Buffer } from 'node:buffer'
+import { mkdirSync } from 'node:fs'
 import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 
 import { hrSoulAppManifest, namespaceSoulAppCapabilityId } from '@zonease/aiworker-shared'
-import { closeWorkerDb } from '@zonease/aiworker-storage-sqlite/worker'
+import {
+  closeWorkerDb,
+  createSession,
+  createWorkspace,
+  initWorkerDb,
+  runWorkerMigrations,
+  upsertWorker,
+} from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 import { preprocessArgv, runCli } from './aiworker'
@@ -40,6 +48,37 @@ describe('aiworker local CLI', () => {
 
   function argv(...args: string[]): string[] {
     return ['/usr/bin/bun', '/repo/apps/cli/src/aiworker.ts', ...args]
+  }
+
+  function seedLegacyHrMetadata() {
+    closeWorkerDb()
+    mkdirSync(path.dirname(process.env.WORKER_DB_PATH!), { recursive: true })
+    initWorkerDb(process.env.WORKER_DB_PATH!)
+    runWorkerMigrations()
+    upsertWorker({
+      id: 'legacy-hr-worker',
+      soulId: 'hr',
+      name: 'Legacy HR',
+      defaultEngineId: 'codex',
+      at: '2026-05-13T13:04:00.000Z',
+    })
+    createWorkspace({
+      id: 'legacy-hr-workspace',
+      workerId: 'legacy-hr-worker',
+      name: 'Legacy HR workspace',
+      rootPath: path.join(root, 'home', 'workers', 'legacy-hr-worker', 'workspaces', 'legacy-hr-workspace'),
+      at: '2026-05-13T13:04:01.000Z',
+    })
+    createSession({
+      id: 'legacy-hr-session',
+      workerId: 'legacy-hr-worker',
+      workspaceId: 'legacy-hr-workspace',
+      capabilityTemplateId: 'candidate-screen',
+      title: 'Legacy candidate screen',
+      metadataJson: { capabilityTemplateId: 'candidate-screen', soulName: 'HR' },
+      at: '2026-05-13T13:04:02.000Z',
+    })
+    closeWorkerDb()
   }
 
   it('preprocesses multi-word local commands', () => {
@@ -113,6 +152,24 @@ describe('aiworker local CLI', () => {
     output = ''
 
     expect(await runCli(argv('worker', 'create', '--id', 'official-hr', '--name', 'Official HR', '--soul', 'aiworker-hr'))).toBe(0)
+    expect((JSON.parse(output) as { worker: { soulId: string } }).worker.soulId).toBe('aiworker-hr')
+  })
+
+  it('repairs legacy HR metadata during official app bootstrap', async () => {
+    seedLegacyHrMetadata()
+
+    expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
+    const body = JSON.parse(output) as {
+      bootstrap: {
+        legacyMetadataRepair: { sessionsUpdated: number, workersUpdated: number }
+      }
+      catalog: { souls: Array<{ id: string }> }
+    }
+    expect(body.bootstrap.legacyMetadataRepair).toMatchObject({ sessionsUpdated: 1, workersUpdated: 1 })
+    expect(body.catalog.souls.map(soul => soul.id)).toContain('aiworker-hr')
+    output = ''
+
+    expect(await runCli(argv('worker', 'show', 'legacy-hr-worker'))).toBe(0)
     expect((JSON.parse(output) as { worker: { soulId: string } }).worker.soulId).toBe('aiworker-hr')
   })
 

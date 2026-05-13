@@ -26,6 +26,7 @@ import {
   listHostCapabilityTemplatesForSoul,
   listHostedSoulApps,
   listHostSoulCatalog,
+  repairOfficialSoulAppLegacyMetadata,
   runSoulAppHealthcheck,
 } from '@zonease/aiworker-core'
 import {
@@ -485,8 +486,10 @@ async function bootstrapAppCommand(scope: string): Promise<void> {
   if (scope !== 'official')
     throw new Error(`unsupported app bootstrap scope: ${scope}`)
   const results = await bootstrapOfficialSoulApps(registryContext())
+  const legacyMetadataRepair = repairOfficialSoulAppLegacyMetadata()
   printJson({
     bootstrap: {
+      legacyMetadataRepair,
       results,
       scope,
       status: results.some(result => result.action === 'error') ? 'fail' : 'pass',

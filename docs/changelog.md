@@ -1,5 +1,30 @@
 # AIWorker Changelog
 
+## 2026-05-13 14:02 [completed] FEAT-070 / PLAN-295 — Legacy Soul metadata migration and mounted surface hardening
+
+Completed the selected follow-ups 1, 2 and 4, while leaving additional official
+Soul Apps out of scope.
+
+- Added legacy HR/QA metadata repair for old `hr` / `qa` workers and legacy
+  capability template ids, mapping them to `aiworker-hr` / `aiworker-qa` and
+  namespaced template ids without renaming worker ids or workspace paths.
+- Wired the repair into local daemon startup and `aiworker app bootstrap
+  official`, with repair counts surfaced in CLI bootstrap output.
+- Added a generic Soul App boundary lint script that discovers manifest-backed
+  `apps/*` Soul Apps and rejects Host-private imports, sibling app imports and
+  Host imports of `apps/*/src` internals.
+- Added `web:smoke:mounted-surfaces`, a Playwright browser smoke that starts a
+  temporary local daemon, opens Host-served Worker Web, and verifies mounted HR
+  descriptor and sandboxed frame surfaces.
+- Fixed mounted service startup races by deduplicating pending app service
+  launches per app; the browser smoke exposed this because multiple mounted
+  surfaces resolve concurrently.
+
+Verification passed: focused storage/core/API/CLI tests, root `lint` with the
+new boundary script, root `typecheck`, root `test`, Web build and
+`web:smoke:mounted-surfaces`. Web build still emits the existing chunk-size
+warning, but exits 0.
+
 ## 2026-05-13 12:43 [completed] FEAT-069 / PLAN-294 — Host app-only catalog and official Soul App bootstrap
 
 Completed the no-built-in-Soul Host catalog convergence.

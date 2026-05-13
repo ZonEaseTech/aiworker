@@ -19,7 +19,9 @@ import {
   createWorkspace,
   engineInvocations,
   files,
+  getSession,
   getSoulApp,
+  getWorker,
   getWorkerDb,
   initWorkerDb,
   lessons,
@@ -35,6 +37,7 @@ import {
   listWorkers,
   listWorkspaces,
   registerArtifact,
+  repairLegacySoulMetadata,
   reviews,
   runWorkerMigrations,
   sessionEvents,
@@ -246,6 +249,78 @@ describe('greenfield local worker session schema', () => {
     expect(lesson.status).toBe('proposed')
     expect(listLessons(workspace.id)).toEqual([lesson])
     expect(setSetting('engine.default', { engine: 'codex' }).valueJson).toEqual({ engine: 'codex' })
+  })
+
+  it('repairs legacy built-in Soul worker and session metadata to app-projected ids', () => {
+    const worker = upsertWorker({
+      id: 'legacy-hr-worker',
+      soulId: 'hr',
+      name: 'Legacy HR',
+      defaultEngineId: 'codex',
+      at: '2026-05-13T13:04:00.000Z',
+    })
+    const workspace = createWorkspace({
+      id: 'legacy-hr-workspace',
+      workerId: worker.id,
+      name: 'Legacy HR workspace',
+      rootPath: '/tmp/legacy-hr',
+      at: '2026-05-13T13:04:01.000Z',
+    })
+    createSession({
+      id: 'legacy-hr-session',
+      workerId: worker.id,
+      workspaceId: workspace.id,
+      capabilityTemplateId: 'candidate-screen',
+      title: 'Legacy candidate screen',
+      metadataJson: {
+        capabilityTemplateId: 'candidate-screen',
+        keep: 'value',
+        soulName: 'HR',
+      },
+      at: '2026-05-13T13:04:02.000Z',
+    })
+    createSession({
+      id: 'legacy-hr-custom-session',
+      workerId: worker.id,
+      workspaceId: workspace.id,
+      capabilityTemplateId: 'custom-legacy-template',
+      title: 'Custom legacy template',
+      metadataJson: { capabilityTemplateId: 'custom-legacy-template' },
+      at: '2026-05-13T13:04:03.000Z',
+    })
+
+    const result = repairLegacySoulMetadata({
+      at: '2026-05-13T13:05:00.000Z',
+      mappings: [{
+        capabilityTemplateIds: {
+          'candidate-screen': 'aiworker-hr.candidate-screen',
+          'person-profile': 'aiworker-hr.person-profile',
+        },
+        fromSoulId: 'hr',
+        soulName: 'AIWorker HR',
+        toSoulId: 'aiworker-hr',
+      }],
+    })
+
+    expect(result).toEqual({
+      skippedSessions: ['legacy-hr-custom-session'],
+      sessionsUpdated: 1,
+      workersUpdated: 1,
+    })
+    expect(getWorker(worker.id)?.soulId).toBe('aiworker-hr')
+    expect(getSession('legacy-hr-session')).toMatchObject({
+      capabilityTemplateId: 'aiworker-hr.candidate-screen',
+      metadataJson: {
+        capabilityTemplateId: 'aiworker-hr.candidate-screen',
+        keep: 'value',
+        soulAppId: 'aiworker-hr',
+        soulName: 'AIWorker HR',
+      },
+    })
+    expect(getSession('legacy-hr-custom-session')).toMatchObject({
+      capabilityTemplateId: 'custom-legacy-template',
+      metadataJson: { capabilityTemplateId: 'custom-legacy-template' },
+    })
   })
 
   it('allows multiple workers to bind the same Soul while isolating workspaces by worker', () => {

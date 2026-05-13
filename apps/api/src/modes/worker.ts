@@ -27,6 +27,7 @@ import {
   installSoulAppManifest,
   listHostCapabilityTemplatesForSoul,
   listHostSoulCatalog,
+  repairOfficialSoulAppLegacyMetadata,
   runSoulAppHealthcheck,
   workerEnv,
 } from '@zonease/aiworker-core'
@@ -89,6 +90,7 @@ export interface BootstrapWorkerAppOptions {
 }
 
 export interface LocalDaemonState {
+  mountingAppServices: Map<string, Promise<MountedSoulAppService | null>>
   mountedAppServices: Map<string, MountedSoulAppService>
   startedAt: string
   token?: string
@@ -146,6 +148,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   const workersRoot = options.workersRoot ?? path.join(path.dirname(dbPath), 'workers')
   const runtimes = new Map<string, LocalWorkerRuntime>()
   const state: LocalDaemonState = {
+    mountingAppServices: new Map(),
     mountedAppServices: new Map(),
     runtimes,
     startedAt: new Date().toISOString(),
@@ -156,6 +159,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     now: options.now,
   }
   await bootstrapOfficialSoulApps(registryContext(state))
+  repairOfficialSoulAppLegacyMetadata(state.now?.())
   for (const worker of listWorkers()) {
     const runtime = createRuntimeForWorker(state, worker)
     await runtime.init()
@@ -1094,7 +1098,21 @@ async function resolveMountedSoulAppService(state: LocalDaemonState, app: Hosted
   const existing = state.mountedAppServices.get(app.appId)
   if (existing)
     return existing
+  const pending = state.mountingAppServices.get(app.appId)
+  if (pending)
+    return pending
 
+  const started = startMountedSoulAppService(state, app)
+  state.mountingAppServices.set(app.appId, started)
+  try {
+    return await started
+  }
+  finally {
+    state.mountingAppServices.delete(app.appId)
+  }
+}
+
+async function startMountedSoulAppService(state: LocalDaemonState, app: HostedSoulApp): Promise<MountedSoulAppService | null> {
   const service = app.manifest.api.localService
   if (!service)
     return null

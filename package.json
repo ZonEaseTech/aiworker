@@ -15,10 +15,11 @@
     "dev:apps": "bash scripts/dev-apps.sh",
     "dev:status": "bash scripts/dev-status.sh",
     "dev:clean": "bash scripts/dev-clean.sh",
-    "lint": "eslint .",
+    "lint": "eslint . && bun scripts/check-soul-app-boundaries.ts",
     "typecheck": "bun run --filter '*' typecheck",
     "test": "bun run --filter '*' test",
     "build": "bun run --filter '@zonease/aiworker-api' build && bun run --filter '@zonease/aiworker-web' build && bun run --filter '@zonease/aiworker-cli' build:bundle",
+    "web:smoke:mounted-surfaces": "bun apps/web/scripts/smoke-mounted-surfaces.ts",
     "check": "bun run typecheck && bun run lint",
     "crg:status": "uvx code-review-graph status --repo .",
     "crg:update": "uvx code-review-graph update --repo . --base HEAD",
@@ -36,6 +37,7 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.19",
     "jiti": "^2.6.1",
+    "playwright": "1.60.0",
     "typescript": "^5.8.3"
   }
 }
