@@ -4,6 +4,26 @@ Soul Apps are vertical products that can run standalone or mount into AIWorker
 Host. App authors should work against the public SDK, manifest protocol, and
 brokered Host surfaces. They should not import Host private modules.
 
+## Agent Workflow
+
+Repository agents should load `.agents/skills/aiworker-soul-app-dev/SKILL.md`
+before creating or modifying production Soul Apps, Soul App authoring docs,
+validation harnesses, scaffold behavior, manifests, standalone surfaces, Host
+mounted surfaces, artifact schemas, capability prompts, or review rubrics.
+
+This document is the human-readable authoring guide. The skill is the
+agent-native execution route. Keep both aligned with the same Host / Soul App,
+workspace/session, artifact, review/lesson, standalone, Host mounted, manifest,
+SDK, and broker vocabulary.
+
+Do not treat `apps/AGENTS.md` as the canonical Soul App rule surface until the
+target agent runner has proven native nested AGENTS loading. The current
+canonical route is:
+
+```text
+root AGENTS.md -> aiworker-soul-app-dev skill -> app manifest/docs/files -> validate/smoke evidence
+```
+
 ## Create
 
 ```bash

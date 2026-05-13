@@ -24,6 +24,7 @@ local daemon -> Soul worker -> workspace -> session -> turn -> artifact -> revie
 
 - 默认用中文与用户交流；文档、代码注释、commit message、PR title/description 也默认中文。
 - 非平凡开发任务遵循 PMA：先调查，再 proposal，获批后实现，并同步 `docs/task/*.md`；后端参考 `/pma-bun`，前端参考 `/pma-web`，代码评审参考 `/pma-cr`。
+- 修改或新增 `apps/aiworker-*` Soul App、Soul App scaffold/validation 或相关 authoring 文档时，先使用 `.agents/skills/aiworker-soul-app-dev/SKILL.md`；保持同一套 Host / Soul App、workspace/session、artifact、review/lesson、standalone/Host mounted 设计语言。
 - 保持改动收敛，优先修当前路径；不要为未要求的旧入口、别名、shim 或兼容层扩范围。
 - 1.0.0 前允许破坏性收敛；判断标准是当前架构语义、代码归属和用户可理解的产品路径。
 - 不创建非必要说明文件；临时产物放 `tmp/`。

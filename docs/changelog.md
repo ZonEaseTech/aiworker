@@ -1,5 +1,23 @@
 # AIWorker Changelog
 
+## 2026-05-13 19:00 [completed] FEAT-071 / PLAN-300 — Soul App development skill and rules
+
+Added an agent-native Soul App development route so contributors can work on
+Soul Apps without drifting from Host / Soul App dual autonomy.
+
+- Added `.agents/skills/aiworker-soul-app-dev/SKILL.md` with required context,
+  boundary rules, product-language checks, standalone/Host mounted expectations
+  and verification gates.
+- Routed `apps/aiworker-*`, Soul App scaffold/validation and authoring-doc edits
+  from root `AGENTS.md` to the new skill.
+- Updated `docs/soul-app-developer.md` to distinguish the human-readable
+  authoring guide from the agent-native execution route and to keep
+  `apps/AGENTS.md` out of the canonical path until nested loading is proven.
+
+Verification passed: placeholder scan, `test ! -e apps/AGENTS.md`, and
+`git diff --check`. code-review-graph was skipped because this change only
+touches docs, root agent instructions, and skill markdown.
+
 ## 2026-05-13 18:32 [completed] REFACTOR-078 / PLAN-299 — Make Worker Web first-run Soul App first
 
 Made Worker Web first-run start from enabled Soul Apps instead of an unexplained
