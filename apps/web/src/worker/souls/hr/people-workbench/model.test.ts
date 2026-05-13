@@ -1,6 +1,6 @@
 import type { LocalArtifact, LocalLesson, LocalReview, LocalSession, LocalWorkspace } from '@zonease/aiworker-shared'
 
-import { hrPeopleWorkbench } from '@zonease/aiworker-shared'
+import { hrPeopleWorkbench } from '@zonease/aiworker-shared/soul-workbench-catalog'
 import { describe, expect, it } from 'vitest'
 import { getHrPeopleWorkbenchCopy } from './copy'
 import {

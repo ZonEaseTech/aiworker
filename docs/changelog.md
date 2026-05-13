@@ -1,5 +1,26 @@
 # AIWorker Changelog
 
+## 2026-05-13 15:49 [completed] BUG-117 / PLAN-296 — Worker Web build chunk reduction
+
+Fixed the Worker Web Vite chunk-size warning by reducing the actual initial
+JavaScript bundle instead of raising the warning threshold.
+
+- Added a lightweight `@zonease/aiworker-shared/soul-workbench-catalog` export
+  so Worker Web can read workbench descriptors without importing the full shared
+  barrel and its schema/fixture dependencies.
+- Added `@zonease/aiworker-component/markdown-preview` for targeted lazy
+  loading of the markdown preview renderer.
+- Lazy-loaded the HR specialized workbench and nested markdown preview stack.
+- Reduced Worker Web's largest JS chunk from about 779 kB to 351.99 kB; build
+  now emits `index`, `people-workbench`, and `markdown-preview` JS chunks with no
+  Vite chunk-size warning.
+
+Verification passed: focused Web/shared tests, Web build, root `lint`,
+`typecheck`, `test`, `build`, `web:smoke:mounted-surfaces`,
+`git diff --check`, and code-review-graph. `crg:review` exits 0 and reports
+static test-gap warnings for touched lazy modules; focused Web tests and browser
+smoke cover the behavior.
+
 ## 2026-05-13 14:07 [completed] FEAT-070 / PLAN-295 — Legacy Soul metadata discard and mounted surface hardening
 
 Completed the selected follow-ups 1, 2 and 4, while leaving additional official

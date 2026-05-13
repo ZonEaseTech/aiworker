@@ -15,7 +15,7 @@ import type { ArtifactPreviewState } from './session-detail'
 import type { SoulWorkbenchContext } from './souls/types'
 
 import { IconButton, StudioEmptyState, StudioMainFrame, StudioSectionHeader, WorkerStudioLayout } from '@zonease/aiworker-component'
-import { findSoulWorkbenchForSoul } from '@zonease/aiworker-shared'
+import { findSoulWorkbenchForSoul } from '@zonease/aiworker-shared/soul-workbench-catalog'
 import {
   ArrowLeft,
   Check,

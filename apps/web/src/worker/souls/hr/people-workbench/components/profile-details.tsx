@@ -3,10 +3,12 @@ import type { SoulArtifactPreviewState, WorkerLocale } from '../../../types'
 import type { HrWorkbenchCopy } from '../copy'
 import type { PersonProfile, ProfileTimelineItem } from '../types'
 
-import { MarkdownPreview } from '@zonease/aiworker-component'
 import { FileText, ListChecks, NotebookText } from 'lucide-react'
+import { lazy, Suspense } from 'react'
 import { formatRelativeTime } from '../../../../../features/i18n'
 import { WorkbenchSectionTitle } from '../../../common'
+
+const MarkdownPreview = lazy(() => import('@zonease/aiworker-component/markdown-preview').then(module => ({ default: module.MarkdownPreview })))
 
 interface ProfileDetailsProps {
   artifact: LocalArtifact | null
@@ -127,11 +129,13 @@ function renderArtifactPreview({
     return <div className="hr-artifact-preview-empty" role="alert">{`${error} ${artifactPreview.error}`}</div>
 
   return (
-    <MarkdownPreview
-      className="hr-markdown-preview"
-      content={artifactPreview.content}
-      data-testid="hr-artifact-markdown-preview"
-      empty={<span>{empty}</span>}
-    />
+    <Suspense fallback={<div className="hr-markdown-preview" data-testid="hr-artifact-markdown-preview-loading" />}>
+      <MarkdownPreview
+        className="hr-markdown-preview"
+        content={artifactPreview.content}
+        data-testid="hr-artifact-markdown-preview"
+        empty={<span>{empty}</span>}
+      />
+    </Suspense>
   )
 }
