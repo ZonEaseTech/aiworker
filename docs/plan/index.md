@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-13 (PLAN-304 in progress)
+> Updated: 2026-05-14 (PLAN-305 completed)
 
 ## Usage
 
@@ -333,3 +333,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-302 Converge Host and Soul App architecture entrypoints**](PLAN-302.md) `2026-05-13`
 - [x] [**PLAN-303 Clean active documentation map**](PLAN-303.md) `2026-05-13`
 - [x] [**PLAN-304 Host platform locator and capability shell boundary**](PLAN-304.md) `2026-05-13`
+- [x] [**PLAN-305 Soul App protocol interaction closure**](PLAN-305.md) `2026-05-14`

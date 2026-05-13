@@ -45,6 +45,13 @@ export function serveHostMounted(port = Number(Bun.env.PORT ?? 0)) {
           headers: { 'content-type': 'text/html; charset=utf-8' },
         })
       }
+      if (url.pathname === '/protocol/actions' && request.method === 'POST') {
+        const body = await request.json().catch(() => ({})) as Record<string, unknown>
+        return Response.json(hrProtocolAction(String(body.protocolAction ?? '')))
+      }
+      if (url.pathname === '/protocol/search' && request.method === 'GET') {
+        return Response.json(hrProtocolSearch(url))
+      }
       if (url.pathname === '/broker/permissions') {
         const hostUrl = request.headers.get('x-aiworker-host-url') ?? Bun.env.AIWORKER_HOST_URL
         if (!hostUrl)
@@ -131,6 +138,60 @@ function hrWidgetFrameHtml(request: Request): string {
     '</body>',
     '</html>',
   ].join('')
+}
+
+function hrProtocolAction(protocolAction: string) {
+  if (protocolAction === 'peopleProfiles.create') {
+    return {
+      message: 'People profile draft opened by HR app.',
+      ok: true,
+      redirectTo: '/hr/people',
+      refresh: true,
+    }
+  }
+  if (protocolAction === 'people.refresh') {
+    return {
+      message: 'People data refreshed by HR app.',
+      ok: true,
+      refresh: true,
+    }
+  }
+  if (protocolAction === 'drawers.evidence.toggle') {
+    return {
+      message: 'Evidence drawer intent emitted by HR app.',
+      ok: true,
+    }
+  }
+  if (protocolAction === 'settings.open') {
+    return {
+      message: 'HR settings are owned by the HR app.',
+      ok: true,
+    }
+  }
+  return {
+    message: `Unknown HR protocol action: ${protocolAction}`,
+    ok: false,
+  }
+}
+
+function hrProtocolSearch(url: URL) {
+  const query = url.searchParams.get('query') ?? ''
+  return {
+    items: [{
+      appId: hrSoulAppManifest.id,
+      authority: 'soul-app' as const,
+      id: 'people-profile-draft',
+      kind: 'people-profile',
+      openAction: {
+        id: 'create-people-profile',
+        input: { query },
+      },
+      status: 'draft',
+      summary: query ? `HR app-owned profile match for ${query}` : 'Open HR profile workspace',
+      title: query ? `People profile: ${query}` : 'People profile draft',
+    }],
+    providerId: 'peopleProfiles.search',
+  }
 }
 
 function readMountContext(request: Request): MountContext | null {

@@ -32,6 +32,7 @@ export interface SoulAppProtocolActionResult {
   message?: string
   ok: boolean
   redirectTo?: string
+  refresh?: boolean
 }
 
 export interface SoulAppProtocolViewSummary {

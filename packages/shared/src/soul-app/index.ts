@@ -114,9 +114,9 @@ export type {
   SoulAppReviewProtocol,
   SoulAppReviewRubric,
   SoulAppRuntimeProtocol,
+  SoulAppScopedContext,
   SoulAppSearchRequest,
   SoulAppSearchResult,
-  SoulAppScopedContext,
   SoulAppSessionContext,
   SoulAppUiContributionProtocol,
 } from './protocol'

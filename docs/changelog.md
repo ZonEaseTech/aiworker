@@ -1,5 +1,24 @@
 # AIWorker Changelog
 
+## 2026-05-14 00:40 [completed] FEAT-073 / PLAN-305 — Soul App protocol interaction closure
+
+Closed the local-first Host / Soul App interaction loop by making app-declared
+shell actions and search providers usable through generic Host protocol routes.
+
+- Added generic Host action and search routes for declared Soul App shell
+  descriptors.
+- Implemented HR/QA mounted protocol action and search handlers.
+- Enabled Worker Web shell actions and app-owned shell search without
+  app-specific branches.
+- Kept Host as lifecycle, declaration, scope and mounted invocation owner while
+  Soul Apps own domain result meaning.
+
+Verification passed: focused shared/API/Web/HR/QA tests and typechecks, HR/QA
+validate and smoke, root typecheck/lint/test/build, browser smoke on
+`http://127.0.0.1:5273/`, `git diff --check`, and code-review-graph. CRG
+reported private-helper static test gaps, covered by HTTP-level mounted service
+and Host/Web protocol tests.
+
 ## 2026-05-13 23:55 [completed] FEAT-072 / PLAN-304 — Host platform locator and capability shell boundary
 
 Converged Host toward a platform locator, capability broker and shell contract

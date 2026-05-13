@@ -153,6 +153,10 @@ view, action, status or descriptor. Host should not infer HR profiles, QA releas
 verdicts, review meaning, lessons or memories from app files, DB rows, prompts
 or UI labels.
 
+Host action/search/settings invocation must resolve a manifest-declared
+descriptor first. Host must reject undeclared protocol actions or search
+providers, and must not infer app domain behavior from protocol names.
+
 Use connector broker permissions for external evidence. Do not put secrets in
 manifest files, generated app config, workspace metadata, DB metadata, logs,
 prompts, review rubrics or skill files.

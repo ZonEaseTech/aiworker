@@ -45,6 +45,13 @@ export function serveHostMounted(port = Number(Bun.env.PORT ?? 0)) {
           headers: { 'content-type': 'text/html; charset=utf-8' },
         })
       }
+      if (url.pathname === '/protocol/actions' && request.method === 'POST') {
+        const body = await request.json().catch(() => ({})) as Record<string, unknown>
+        return Response.json(qaProtocolAction(String(body.protocolAction ?? '')))
+      }
+      if (url.pathname === '/protocol/search' && request.method === 'GET') {
+        return Response.json(qaProtocolSearch(url))
+      }
       if (url.pathname === '/broker/permissions') {
         const hostUrl = request.headers.get('x-aiworker-host-url') ?? Bun.env.AIWORKER_HOST_URL
         if (!hostUrl)
@@ -131,6 +138,54 @@ function qaWidgetFrameHtml(request: Request): string {
     '</body>',
     '</html>',
   ].join('')
+}
+
+function qaProtocolAction(protocolAction: string) {
+  if (protocolAction === 'releaseGates.create') {
+    return {
+      message: 'Release gate draft opened by QA app.',
+      ok: true,
+      redirectTo: '/qa/release',
+      refresh: true,
+    }
+  }
+  if (protocolAction === 'release.refresh') {
+    return {
+      message: 'Release data refreshed by QA app.',
+      ok: true,
+      refresh: true,
+    }
+  }
+  if (protocolAction === 'settings.open') {
+    return {
+      message: 'QA settings are owned by the QA app.',
+      ok: true,
+    }
+  }
+  return {
+    message: `Unknown QA protocol action: ${protocolAction}`,
+    ok: false,
+  }
+}
+
+function qaProtocolSearch(url: URL) {
+  const query = url.searchParams.get('query') ?? ''
+  return {
+    items: [{
+      appId: qaSoulAppManifest.id,
+      authority: 'soul-app' as const,
+      id: 'release-gate-draft',
+      kind: 'release-gate',
+      openAction: {
+        id: 'create-release-gate',
+        input: { query },
+      },
+      status: 'draft',
+      summary: query ? `QA app-owned release match for ${query}` : 'Open QA release gate workspace',
+      title: query ? `Release gate: ${query}` : 'Release gate draft',
+    }],
+    providerId: 'releases.search',
+  }
 }
 
 function readMountContext(request: Request): MountContext | null {

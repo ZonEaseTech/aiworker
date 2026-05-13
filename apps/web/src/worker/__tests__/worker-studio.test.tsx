@@ -418,6 +418,25 @@ beforeEach(() => {
         headers: { 'content-type': 'text/html; charset=utf-8' },
       })
     }
+    if (url.endsWith('/api/local/apps/aiworker-hr/actions/create-people-profile') && method === 'POST') {
+      return json({
+        action: { id: 'create-people-profile', protocolAction: 'peopleProfiles.create' },
+        result: { ok: true, message: 'People profile draft created.', refresh: true },
+      })
+    }
+    if (url.endsWith('/api/local/apps/aiworker-hr/search?providerId=peopleProfiles.search&query=ada&limit=8')) {
+      return json({
+        providerId: 'peopleProfiles.search',
+        items: [{
+          appId: 'aiworker-hr',
+          authority: 'soul-app',
+          id: 'profile-ada',
+          kind: 'people-profile',
+          summary: 'Staff engineer candidate profile',
+          title: 'Ada Lovelace',
+        }],
+      })
+    }
     if (url.endsWith('/api/local/workers') && method === 'POST') {
       const body = init?.body ? JSON.parse(String(init.body)) as { name: string, soulId: string } : { name: 'Created worker', soulId: HR_SOUL_ID }
       const created = {
@@ -872,6 +891,18 @@ describe('worker studio', () => {
     await screen.findByText('AIWorker HR (1)')
     expect(await screen.findByText('New people profile')).toBeTruthy()
     expect(screen.getByPlaceholderText('Search people profiles')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'New people profile' }))
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/local/apps/aiworker-hr/actions/create-people-profile', expect.objectContaining({ method: 'POST' }))
+    })
+    expect(await screen.findByText('People profile draft created.')).toBeTruthy()
+
+    fireEvent.change(screen.getByPlaceholderText('Search people profiles'), { target: { value: 'ada' } })
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/local/apps/aiworker-hr/search?providerId=peopleProfiles.search&query=ada&limit=8', expect.anything())
+    })
+    expect(await screen.findByText('Ada Lovelace')).toBeTruthy()
+    expect(screen.getByText('Staff engineer candidate profile')).toBeTruthy()
     expect(screen.queryByText('Soul Apps (2)')).toBeNull()
     expect(screen.queryByText('Enabled · 0.1.0')).toBeNull()
     expect(screen.queryByText('8 permissions')).toBeNull()

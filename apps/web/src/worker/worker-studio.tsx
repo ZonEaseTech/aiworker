@@ -9,7 +9,7 @@ import type {
   SoulWorkbenchAction,
 } from '@zonease/aiworker-shared'
 import type { FormEvent } from 'react'
-import type { LocalWorkspaceData } from '../features/local-workspace/api'
+import type { LocalSoulAppSearchResult, LocalSoulAppShellAction, LocalWorkspaceData } from '../features/local-workspace/api/types'
 import type { SettingsSection } from '../features/settings'
 import type { ArtifactPreviewState } from './session-detail'
 import type { SoulWorkbenchContext } from './souls/types'
@@ -39,6 +39,7 @@ import {
   normalizeLocale,
 } from '../features/i18n'
 import { continueSessionTurnStream, createReview, createSessionTurnStream, createWorker, createWorkspace, loadLocalWorkspaceData, readFile, updateLesson } from '../features/local-workspace/api'
+import { invokeSoulAppAction, searchSoulApp } from '../features/local-workspace/api/workspace-data'
 import { CreateWorkerDialog, CreateWorkspaceDialog, WorkerIdentityBlock, WorkspaceCard, WorkspaceSessionComposer } from '../features/local-workspace/components'
 import {
   artifactForSession,
@@ -88,6 +89,19 @@ type ArtifactPreviewAction
     | { artifactId: string, content: string, type: 'loaded' }
     | { artifactId: string, error: string, type: 'failed' }
 
+interface ShellSearchState {
+  error: string | null
+  items: LocalSoulAppSearchResult[]
+  loading: boolean
+  query: string
+}
+
+type ShellSearchAction
+  = | { query: string, type: 'idle' }
+    | { query: string, type: 'loading' }
+    | { items: LocalSoulAppSearchResult[], query: string, type: 'loaded' }
+    | { error: string, query: string, type: 'failed' }
+
 function artifactPreviewReducer(_state: ArtifactPreviewState, action: ArtifactPreviewAction): ArtifactPreviewState {
   switch (action.type) {
     case 'idle':
@@ -98,6 +112,19 @@ function artifactPreviewReducer(_state: ArtifactPreviewState, action: ArtifactPr
       return { artifactId: action.artifactId, content: action.content, error: null, loading: false }
     case 'failed':
       return { artifactId: action.artifactId, content: '', error: action.error, loading: false }
+  }
+}
+
+function shellSearchReducer(state: ShellSearchState, action: ShellSearchAction): ShellSearchState {
+  switch (action.type) {
+    case 'idle':
+      return { error: null, items: [], loading: false, query: action.query }
+    case 'loading':
+      return { ...state, error: null, loading: true, query: action.query }
+    case 'loaded':
+      return { error: null, items: action.items, loading: false, query: action.query }
+    case 'failed':
+      return { error: action.error, items: [], loading: false, query: action.query }
   }
 }
 
@@ -123,6 +150,17 @@ export function WorkerStudio() {
   const [turnSubmitting, setTurnSubmitting] = useState(false)
   const [reviewSubmitting, setReviewSubmitting] = useState(false)
   const [lessonBusyId, setLessonBusyId] = useState<string | null>(null)
+  const [shellActionState, setShellActionState] = useState<{ busyActionId: string | null, error: string | null, message: string | null }>({
+    busyActionId: null,
+    error: null,
+    message: null,
+  })
+  const [shellSearchState, dispatchShellSearch] = useReducer(shellSearchReducer, {
+    error: null,
+    items: [],
+    loading: false,
+    query: '',
+  })
   const [streamEvents, setStreamEvents] = useState<LocalSessionEvent[]>([])
   const [streamSessions, setStreamSessions] = useState<LocalSession[]>([])
   const [streamTurns, setStreamTurns] = useState<LocalTurn[]>([])
@@ -203,6 +241,27 @@ export function WorkerStudio() {
   const shell = selectedSoulApp?.mountedContribution.shell ?? selectedSoulApp?.manifest.ui?.shell ?? null
   const shellPrimaryAction = shell?.primaryAction ?? null
   const shellSearch = shell?.search ?? null
+  const shellActions = useMemo(() => {
+    const actions: LocalSoulAppShellAction[] = []
+    const seen = new Set<string>()
+    const pushAction = (action: LocalSoulAppShellAction | null | undefined) => {
+      if (!action || seen.has(action.id))
+        return
+      seen.add(action.id)
+      actions.push(action)
+    }
+    pushAction(shell?.primaryAction)
+    for (const action of shell?.actions ?? [])
+      pushAction(action)
+    if (shell?.settings) {
+      pushAction({
+        ...shell.settings,
+        slot: 'settings',
+      })
+    }
+    return actions
+  }, [shell])
+  const secondaryShellActions = shellActions.filter(action => action.id !== shellPrimaryAction?.id)
   const workerSoulGroups = useMemo(() => {
     if (!data)
       return []
@@ -339,9 +398,68 @@ export function WorkerStudio() {
     document.documentElement.lang = activeLocale
   }, [activeLocale])
 
+  useEffect(() => {
+    const searchQuery = query.trim()
+    if (!selectedSoulApp || !shellSearch || !searchQuery) {
+      dispatchShellSearch({ query: searchQuery, type: 'idle' })
+      return
+    }
+    let cancelled = false
+    dispatchShellSearch({ query: searchQuery, type: 'loading' })
+    searchSoulApp(selectedSoulApp.appId, shellSearch.protocolProvider, searchQuery, 8)
+      .then((response) => {
+        if (!cancelled) {
+          dispatchShellSearch({
+            items: response.items,
+            query: searchQuery,
+            type: 'loaded',
+          })
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          dispatchShellSearch({
+            error: error instanceof Error ? error.message : String(error),
+            query: searchQuery,
+            type: 'failed',
+          })
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [query, selectedSoulApp, shellSearch])
+
   function openSettings(section: SettingsSection = 'execution') {
     setSettingsInitialSection(section)
     setSettingsOpen(true)
+  }
+
+  async function runShellAction(action: LocalSoulAppShellAction) {
+    if (!selectedSoulApp || shellActionState.busyActionId)
+      return
+    setShellActionState({ busyActionId: action.id, error: null, message: null })
+    try {
+      const response = await invokeSoulAppAction(selectedSoulApp.appId, action.id, {
+        sessionId: selectedSession?.id ?? null,
+        workerId: selectedWorker?.id ?? null,
+        workspaceId: selectedWorkspace?.id ?? null,
+      })
+      setShellActionState({
+        busyActionId: null,
+        error: response.result.ok ? null : response.result.message ?? 'Soul App action failed.',
+        message: response.result.message ?? null,
+      })
+      if (response.result.refresh)
+        await refresh()
+    }
+    catch (error) {
+      setShellActionState({
+        busyActionId: null,
+        error: error instanceof Error ? error.message : String(error),
+        message: null,
+      })
+    }
   }
 
   function toggleWorkerSoulGroup(soulId: string) {
@@ -575,6 +693,49 @@ export function WorkerStudio() {
       'Return this as a profile-bound artifact proposal with source-backed claims, missing evidence, risks, next-step notes, and human review notes.',
     ].join('\n'))
   }
+
+  function renderShellActionButton(action: LocalSoulAppShellAction, icon: 'plus' | 'settings' = 'plus') {
+    const busy = shellActionState.busyActionId === action.id
+    const Icon = icon === 'settings' ? Settings : Plus
+    return (
+      <button
+        key={action.id}
+        aria-busy={busy}
+        className="shell-primary-action"
+        disabled={Boolean(shellActionState.busyActionId)}
+        title="Provided by the Soul App protocol"
+        type="button"
+        onClick={() => void runShellAction(action)}
+      >
+        <Icon aria-hidden="true" size={14} />
+        <span>{action.label}</span>
+      </button>
+    )
+  }
+
+  const shellStatus = shellActionState.message || shellActionState.error
+    ? (
+        <p className={shellActionState.error ? 'shell-action-status error' : 'shell-action-status'} role={shellActionState.error ? 'alert' : 'status'}>
+          {shellActionState.error ?? shellActionState.message}
+        </p>
+      )
+    : null
+  const shellSearchResults = shellSearch && shellSearchState.query
+    ? (
+        <div className="shell-search-results" role="status" aria-live="polite">
+          {shellSearchState.loading ? <span className="shell-search-note">Searching</span> : null}
+          {shellSearchState.error ? <span className="shell-search-note error">{shellSearchState.error}</span> : null}
+          {!shellSearchState.loading && !shellSearchState.error
+            ? shellSearchState.items.map(item => (
+                <button key={item.id} type="button" className="shell-search-result">
+                  <strong>{item.title}</strong>
+                  {item.summary ? <span>{item.summary}</span> : null}
+                </button>
+              ))
+            : null}
+        </div>
+      )
+    : null
 
   if (state.loading && !data) {
     return (
@@ -1029,20 +1190,13 @@ export function WorkerStudio() {
                           )
                         : null}
                       {shellPrimaryAction
-                        ? (
-                            <button
-                              className="shell-primary-action"
-                              disabled
-                              title="Provided by the Soul App protocol"
-                              type="button"
-                            >
-                              <Plus aria-hidden="true" size={14} />
-                              <span>{shellPrimaryAction.label}</span>
-                            </button>
-                          )
+                        ? renderShellActionButton(shellPrimaryAction)
                         : null}
+                      {secondaryShellActions.map(action => renderShellActionButton(action, action.slot === 'settings' ? 'settings' : 'plus'))}
                     </div>
                   </header>
+                  {shellStatus}
+                  {shellSearchResults}
                   <SoulWorkbenchRenderer context={soulWorkbenchContext} />
                 </>
               )
@@ -1140,18 +1294,9 @@ export function WorkerStudio() {
                             <Plus aria-hidden="true" size={16} />
                           </IconButton>
                           {shellPrimaryAction
-                            ? (
-                                <button
-                                  className="shell-primary-action"
-                                  disabled
-                                  title="Provided by the Soul App protocol"
-                                  type="button"
-                                >
-                                  <Plus aria-hidden="true" size={14} />
-                                  <span>{shellPrimaryAction.label}</span>
-                                </button>
-                              )
+                            ? renderShellActionButton(shellPrimaryAction)
                             : null}
+                          {secondaryShellActions.map(action => renderShellActionButton(action, action.slot === 'settings' ? 'settings' : 'plus'))}
                         </div>
 
                         <div className="toolbar-right">
@@ -1168,6 +1313,8 @@ export function WorkerStudio() {
                           </label>
                         </div>
                       </div>
+                      {shellStatus}
+                      {shellSearchResults}
 
                       <div className="design-grid workspace-grid workspace-list">
                         {filteredProjects.length > 0

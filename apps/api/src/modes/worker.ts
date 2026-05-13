@@ -102,6 +102,11 @@ interface MountedSurfaceContribution {
   target?: string
 }
 
+interface ShellActionDescriptor {
+  id: string
+  protocolAction: string
+}
+
 const MOUNTED_PROXY_TIMEOUT_MS = 10_000
 const MOUNTED_PROXY_STRIPPED_HEADERS = new Set([
   'authorization',
@@ -249,6 +254,30 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     const body = await readJson<{ prompt?: string }>(c.req)
     const result = createSoulAppBroker(brokerContext(c, state)).engine.createInvocation({ prompt: body.prompt ?? '' })
     return brokerResponse(c, 'invocation', result)
+  })
+  app.post('/api/local/apps/:appId/actions/:actionId', async (c) => {
+    const app = state.host.getApp(c.req.param('appId'))
+    if (!app)
+      return c.json({ error: { code: 'SOUL_APP_NOT_FOUND', message: `Soul App was not found: ${c.req.param('appId')}` } }, 404)
+    if (app.status !== 'enabled')
+      return c.json({ error: { code: 'SOUL_APP_DISABLED', message: `Soul App is not enabled: ${app.appId}` } }, 409)
+    const action = resolveShellAction(app, c.req.param('actionId'))
+    if (!action)
+      return c.json({ error: { code: 'SOUL_APP_ACTION_NOT_DECLARED', message: `Soul App action is not declared: ${c.req.param('actionId')}` } }, 404)
+    const body = await readJson<{ input?: Record<string, unknown> }>(c.req)
+    return mountedActionResponse(c, state, app, action, isRecord(body.input) ? body.input : {})
+  })
+  app.get('/api/local/apps/:appId/search', async (c) => {
+    const app = state.host.getApp(c.req.param('appId'))
+    if (!app)
+      return c.json({ error: { code: 'SOUL_APP_NOT_FOUND', message: `Soul App was not found: ${c.req.param('appId')}` } }, 404)
+    if (app.status !== 'enabled')
+      return c.json({ error: { code: 'SOUL_APP_DISABLED', message: `Soul App is not enabled: ${app.appId}` } }, 409)
+    const providerId = c.req.query('providerId') ?? ''
+    const search = app.manifest.ui.shell?.search
+    if (!search || search.protocolProvider !== providerId)
+      return c.json({ error: { code: 'SOUL_APP_SEARCH_NOT_DECLARED', message: `Soul App search provider is not declared: ${providerId}` } }, 404)
+    return mountedSearchResponse(c, state, app, search)
   })
   app.get('/api/local/apps/:appId/surfaces/:surfaceId', async (c) => {
     const app = state.host.getApp(c.req.param('appId'))
@@ -747,6 +776,108 @@ function brokerResponse(c: Context, key: string, result: unknown): Response {
     }, status)
   }
   return c.json({ [key]: result })
+}
+
+function resolveShellAction(app: HostedSoulApp, actionId: string): ShellActionDescriptor | null {
+  const shell = app.manifest.ui.shell
+  const actions: ShellActionDescriptor[] = [
+    ...(shell?.primaryAction ? [shell.primaryAction] : []),
+    ...(shell?.actions ?? []),
+    ...(shell?.settings ? [shell.settings] : []),
+  ]
+  return actions.find(action => action.id === actionId) ?? null
+}
+
+async function mountedActionResponse(
+  c: Context,
+  state: LocalDaemonState,
+  app: HostedSoulApp,
+  action: ShellActionDescriptor,
+  input: Record<string, unknown>,
+): Promise<Response> {
+  const service = await mountedSoulAppServiceOrResponse(c, state, app)
+  if (service instanceof Response)
+    return service
+
+  const headers = mountedProxyHeaders(c.req.raw.headers)
+  applyMountedProxyContextHeaders(headers, c, state, app, service)
+  headers.set('content-type', 'application/json')
+
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), MOUNTED_PROXY_TIMEOUT_MS)
+  try {
+    const res = await fetch(new URL('/protocol/actions', service.baseUrl), {
+      body: JSON.stringify({
+        actionId: action.id,
+        input,
+        protocolAction: action.protocolAction,
+      }),
+      headers,
+      method: 'POST',
+      redirect: 'manual',
+      signal: controller.signal,
+    })
+    if (!res.ok)
+      return c.json({ error: { code: 'SOUL_APP_PROTOCOL_ERROR', message: await res.text() } }, 502)
+    return c.json({
+      action: {
+        id: action.id,
+        protocolAction: action.protocolAction,
+      },
+      result: await res.json(),
+    })
+  }
+  catch (error) {
+    const aborted = controller.signal.aborted
+    return mountedServiceError(c, app, aborted ? 'SOUL_APP_SERVICE_TIMEOUT' : 'SOUL_APP_SERVICE_UNREACHABLE', aborted
+      ? `Mounted Soul App service timed out after ${MOUNTED_PROXY_TIMEOUT_MS}ms.`
+      : error instanceof Error ? error.message : String(error), aborted ? 504 : 502)
+  }
+  finally {
+    clearTimeout(timeout)
+  }
+}
+
+async function mountedSearchResponse(
+  c: Context,
+  state: LocalDaemonState,
+  app: HostedSoulApp,
+  search: NonNullable<NonNullable<HostedSoulApp['manifest']['ui']['shell']>['search']>,
+): Promise<Response> {
+  const service = await mountedSoulAppServiceOrResponse(c, state, app)
+  if (service instanceof Response)
+    return service
+
+  const sourceUrl = new URL(c.req.url)
+  const targetUrl = new URL('/protocol/search', service.baseUrl)
+  targetUrl.searchParams.set('providerId', search.protocolProvider)
+  targetUrl.searchParams.set('query', sourceUrl.searchParams.get('query') ?? sourceUrl.searchParams.get('q') ?? '')
+  targetUrl.searchParams.set('limit', sourceUrl.searchParams.get('limit') ?? '8')
+  const headers = mountedProxyHeaders(c.req.raw.headers)
+  applyMountedProxyContextHeaders(headers, c, state, app, service)
+
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), MOUNTED_PROXY_TIMEOUT_MS)
+  try {
+    const res = await fetch(targetUrl, {
+      headers,
+      method: 'GET',
+      redirect: 'manual',
+      signal: controller.signal,
+    })
+    if (!res.ok)
+      return c.json({ error: { code: 'SOUL_APP_PROTOCOL_ERROR', message: await res.text() } }, 502)
+    return c.json(await res.json())
+  }
+  catch (error) {
+    const aborted = controller.signal.aborted
+    return mountedServiceError(c, app, aborted ? 'SOUL_APP_SERVICE_TIMEOUT' : 'SOUL_APP_SERVICE_UNREACHABLE', aborted
+      ? `Mounted Soul App service timed out after ${MOUNTED_PROXY_TIMEOUT_MS}ms.`
+      : error instanceof Error ? error.message : String(error), aborted ? 504 : 502)
+  }
+  finally {
+    clearTimeout(timeout)
+  }
 }
 
 async function mountedSurfaceResponse(c: Context, state: LocalDaemonState, app: HostedSoulApp, surfaceId: string): Promise<Response> {
@@ -1504,6 +1635,8 @@ function registerLocalOpenApiPaths(app: OpenAPIHono): void {
     { method: 'post', path: '/api/local/apps/{appId}/enable', summary: 'Enable Host Soul App', tags: ['apps'], created: true },
     { method: 'post', path: '/api/local/apps/{appId}/disable', summary: 'Disable Host Soul App', tags: ['apps'], created: true },
     { method: 'post', path: '/api/local/apps/{appId}/healthcheck', summary: 'Run Host Soul App static healthcheck', tags: ['apps'], created: true },
+    { method: 'post', path: '/api/local/apps/{appId}/actions/{actionId}', summary: 'Invoke a declared Soul App shell action', tags: ['apps'], created: true },
+    { method: 'get', path: '/api/local/apps/{appId}/search', summary: 'Search through a declared Soul App provider', tags: ['apps'] },
     { method: 'get', path: '/api/local/apps/{appId}/broker/permissions', summary: 'List Soul App broker permissions', tags: ['apps'] },
     { method: 'get', path: '/api/local/apps/{appId}/broker/storage', summary: 'List Soul App scoped storage records', tags: ['apps'] },
     { method: 'get', path: '/api/local/apps/{appId}/broker/storage/{key}', summary: 'Read Soul App scoped storage record', tags: ['apps'] },

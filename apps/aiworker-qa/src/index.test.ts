@@ -86,6 +86,43 @@ describe('QA reference Soul App', () => {
       })
       expect(frameRes.status).toBe(200)
       expect(await frameRes.text()).toContain('Mounted QA frame surface')
+      const actionRes = await fetch(`${baseUrl}/protocol/actions`, {
+        body: JSON.stringify({ input: {}, protocolAction: 'releaseGates.create' }),
+        headers: {
+          'content-type': 'application/json',
+          'x-aiworker-mount-token': 'test-qa-mounted-token',
+        },
+        method: 'POST',
+      })
+      expect(actionRes.status).toBe(200)
+      expect(await actionRes.json()).toMatchObject({
+        message: 'Release gate draft opened by QA app.',
+        ok: true,
+        redirectTo: '/qa/release',
+        refresh: true,
+      })
+      const wrongMethodActionRes = await fetch(`${baseUrl}/protocol/actions`, {
+        headers: { 'x-aiworker-mount-token': 'test-qa-mounted-token' },
+      })
+      expect(wrongMethodActionRes.status).toBe(404)
+
+      const searchRes = await fetch(`${baseUrl}/protocol/search?providerId=releases.search&query=release&limit=2`, {
+        headers: { 'x-aiworker-mount-token': 'test-qa-mounted-token' },
+      })
+      expect(searchRes.status).toBe(200)
+      expect(await searchRes.json()).toMatchObject({
+        items: [expect.objectContaining({
+          appId: 'aiworker-qa',
+          authority: 'soul-app',
+          kind: 'release-gate',
+        })],
+        providerId: 'releases.search',
+      })
+      const wrongMethodSearchRes = await fetch(`${baseUrl}/protocol/search`, {
+        headers: { 'x-aiworker-mount-token': 'test-qa-mounted-token' },
+        method: 'POST',
+      })
+      expect(wrongMethodSearchRes.status).toBe(404)
     }
     finally {
       server.stop()

@@ -86,6 +86,43 @@ describe('HR reference Soul App', () => {
       })
       expect(frameRes.status).toBe(200)
       expect(await frameRes.text()).toContain('Mounted HR frame surface')
+      const actionRes = await fetch(`${baseUrl}/protocol/actions`, {
+        body: JSON.stringify({ input: {}, protocolAction: 'peopleProfiles.create' }),
+        headers: {
+          'content-type': 'application/json',
+          'x-aiworker-mount-token': 'test-hr-mounted-token',
+        },
+        method: 'POST',
+      })
+      expect(actionRes.status).toBe(200)
+      expect(await actionRes.json()).toMatchObject({
+        message: 'People profile draft opened by HR app.',
+        ok: true,
+        redirectTo: '/hr/people',
+        refresh: true,
+      })
+      const wrongMethodActionRes = await fetch(`${baseUrl}/protocol/actions`, {
+        headers: { 'x-aiworker-mount-token': 'test-hr-mounted-token' },
+      })
+      expect(wrongMethodActionRes.status).toBe(404)
+
+      const searchRes = await fetch(`${baseUrl}/protocol/search?providerId=peopleProfiles.search&query=ada&limit=2`, {
+        headers: { 'x-aiworker-mount-token': 'test-hr-mounted-token' },
+      })
+      expect(searchRes.status).toBe(200)
+      expect(await searchRes.json()).toMatchObject({
+        items: [expect.objectContaining({
+          appId: 'aiworker-hr',
+          authority: 'soul-app',
+          kind: 'people-profile',
+        })],
+        providerId: 'peopleProfiles.search',
+      })
+      const wrongMethodSearchRes = await fetch(`${baseUrl}/protocol/search`, {
+        headers: { 'x-aiworker-mount-token': 'test-hr-mounted-token' },
+        method: 'POST',
+      })
+      expect(wrongMethodSearchRes.status).toBe(404)
     }
     finally {
       server.stop()

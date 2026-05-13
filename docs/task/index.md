@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-13 (FEAT-072 in progress)
+> Updated: 2026-05-14 (FEAT-073 completed)
 
 ## Usage
 
@@ -408,3 +408,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**DOC-011 Converge Host and Soul App architecture entrypoints**](DOC-011.md) `P0`
 - [x] [**DOC-012 Clean active documentation map**](DOC-012.md) `P0`
 - [x] [**FEAT-072 Host platform locator and capability shell boundary**](FEAT-072.md) `P0`
+- [x] [**FEAT-073 Soul App protocol interaction closure**](FEAT-073.md) `P0`

@@ -18,7 +18,7 @@ export interface LocalSoulAppShellAction {
   id: string
   label: string
   protocolAction: string
-  requiredPermissions?: string[]
+  requiredPermissions?: readonly string[]
   slot: 'primary' | 'action' | 'drawer-toggle' | 'refresh' | 'settings'
 }
 
@@ -27,7 +27,7 @@ export interface LocalSoulAppShellSearch {
   label: string
   placeholder: string
   protocolProvider: string
-  requiredPermissions?: string[]
+  requiredPermissions?: readonly string[]
 }
 
 export interface LocalSoulAppShellDescriptor {
@@ -38,8 +38,40 @@ export interface LocalSoulAppShellDescriptor {
     id: string
     label: string
     protocolAction: string
-    requiredPermissions?: string[]
+    requiredPermissions?: readonly string[]
   }
+}
+
+export interface LocalSoulAppActionResponse {
+  action: {
+    id: string
+    protocolAction: string
+  }
+  result: {
+    message?: string
+    ok: boolean
+    redirectTo?: string
+    refresh?: boolean
+  }
+}
+
+export interface LocalSoulAppSearchResult {
+  appId: string
+  authority: 'soul-app'
+  id: string
+  kind: string
+  openAction?: {
+    id: string
+    input?: Record<string, unknown>
+  }
+  status?: string
+  summary?: string
+  title: string
+}
+
+export interface LocalSoulAppSearchResponse {
+  items: LocalSoulAppSearchResult[]
+  providerId: string
 }
 
 export type LocalHostedSoulApp = HostedSoulApp & {

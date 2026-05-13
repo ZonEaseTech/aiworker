@@ -409,6 +409,156 @@ describe('local daemon API', () => {
     }
   })
 
+  it('invokes declared Soul App shell actions and search through generic Host endpoints', async () => {
+    const target = await app()
+    const mountedService = Bun.serve({
+      async fetch(request) {
+        const url = new URL(request.url)
+        if (url.pathname === '/health')
+          return Response.json({ status: 'ok' })
+        if (url.pathname === '/protocol/actions') {
+          const body = await request.json() as { protocolAction?: string }
+          return Response.json({
+            message: 'App-owned action result',
+            ok: true,
+            protocolAction: body.protocolAction,
+            redirectTo: '/hr/people',
+            refresh: true,
+          })
+        }
+        if (url.pathname === '/protocol/search') {
+          return Response.json({
+            items: [
+              {
+                appId: 'aiworker-hr',
+                authority: 'soul-app',
+                id: 'profile-draft',
+                kind: 'people-profile',
+                summary: url.searchParams.get('query'),
+                title: 'People profile draft',
+              },
+            ],
+            limit: url.searchParams.get('limit'),
+            providerId: url.searchParams.get('providerId'),
+          })
+        }
+        return Response.json({ error: { code: 'NOT_FOUND' } }, { status: 404 })
+      },
+      hostname: '127.0.0.1',
+      port: 0,
+    })
+
+    try {
+      const installRes = await target.request('/api/local/apps/install', {
+        method: 'POST',
+        body: JSON.stringify({
+          manifest: {
+            ...hrSoulAppManifest,
+            api: {
+              ...hrSoulAppManifest.api,
+              localService: {
+                baseUrl: `http://127.0.0.1:${mountedService.port}`,
+                healthPath: '/health',
+              },
+            },
+            ui: {
+              ...hrSoulAppManifest.ui,
+              shell: {
+                primaryAction: {
+                  id: 'create-people-profile',
+                  label: 'New people profile',
+                  protocolAction: 'peopleProfiles.create',
+                  slot: 'primary',
+                },
+                search: {
+                  id: 'people-profile-search',
+                  label: 'Search people profiles',
+                  placeholder: 'Search people profiles',
+                  protocolProvider: 'peopleProfiles.search',
+                },
+              },
+            },
+          },
+        }),
+        headers: { 'content-type': 'application/json' },
+      })
+      expect(installRes.status).toBe(201)
+      expect((await target.request('/api/local/apps/aiworker-hr/enable', { method: 'POST' })).status).toBe(200)
+
+      const actionRes = await target.request('/api/local/apps/aiworker-hr/actions/create-people-profile', {
+        method: 'POST',
+        body: JSON.stringify({ input: { source: 'test' } }),
+        headers: { 'content-type': 'application/json' },
+      })
+      expect(actionRes.status).toBe(200)
+      expect(await actionRes.json()).toMatchObject({
+        action: {
+          id: 'create-people-profile',
+          protocolAction: 'peopleProfiles.create',
+        },
+        result: {
+          message: 'App-owned action result',
+          ok: true,
+          redirectTo: '/hr/people',
+          refresh: true,
+        },
+      })
+
+      const searchRes = await target.request('/api/local/apps/aiworker-hr/search?providerId=peopleProfiles.search&query=ada&limit=2')
+      expect(searchRes.status).toBe(200)
+      expect(await searchRes.json()).toMatchObject({
+        items: [
+          expect.objectContaining({
+            appId: 'aiworker-hr',
+            authority: 'soul-app',
+            kind: 'people-profile',
+            summary: 'ada',
+          }),
+        ],
+        limit: '2',
+        providerId: 'peopleProfiles.search',
+      })
+    }
+    finally {
+      mountedService.stop()
+    }
+  })
+
+  it('rejects undeclared Soul App shell actions and search providers', async () => {
+    const target = await app()
+    await target.request('/api/local/apps/install', {
+      method: 'POST',
+      body: JSON.stringify({ manifest: hrSoulAppManifest }),
+      headers: { 'content-type': 'application/json' },
+    })
+    await target.request('/api/local/apps/aiworker-hr/enable', { method: 'POST' })
+
+    const actionRes = await target.request('/api/local/apps/aiworker-hr/actions/delete-all-people', { method: 'POST' })
+    expect(actionRes.status).toBe(404)
+    expect(await actionRes.json()).toMatchObject({ error: { code: 'SOUL_APP_ACTION_NOT_DECLARED' } })
+
+    const searchRes = await target.request('/api/local/apps/aiworker-hr/search?providerId=people.internal&query=ada')
+    expect(searchRes.status).toBe(404)
+    expect(await searchRes.json()).toMatchObject({ error: { code: 'SOUL_APP_SEARCH_NOT_DECLARED' } })
+  })
+
+  it('rejects action and search invocation for disabled Soul Apps', async () => {
+    const target = await app()
+    await target.request('/api/local/apps/install', {
+      method: 'POST',
+      body: JSON.stringify({ manifest: hrSoulAppManifest }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    const actionRes = await target.request('/api/local/apps/aiworker-hr/actions/create-people-profile', { method: 'POST' })
+    expect(actionRes.status).toBe(409)
+    expect(await actionRes.json()).toMatchObject({ error: { code: 'SOUL_APP_DISABLED' } })
+
+    const searchRes = await target.request('/api/local/apps/aiworker-hr/search?providerId=peopleProfiles.search&query=ada')
+    expect(searchRes.status).toBe(409)
+    expect(await searchRes.json()).toMatchObject({ error: { code: 'SOUL_APP_DISABLED' } })
+  })
+
   it('healthchecks declared mounted service base URLs before proxying', async () => {
     const target = await app()
     const mountedService = Bun.serve({
@@ -756,6 +906,8 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
     expect(paths).toContain('/api/local/apps')
     expect(paths).toContain('/api/local/apps/install')
     expect(paths).toContain('/api/local/apps/{appId}/enable')
+    expect(paths).toContain('/api/local/apps/{appId}/actions/{actionId}')
+    expect(paths).toContain('/api/local/apps/{appId}/search')
     expect(paths).toContain('/api/local/workers')
     expect(paths).toContain('/api/local/workers/{workerId}')
     expect(paths).toContain('/api/local/workers/{workerId}/templates')

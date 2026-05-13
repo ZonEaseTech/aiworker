@@ -148,6 +148,8 @@ events -> optional app-emitted lifecycle/domain events
 - Host 可以缓存 descriptor，不拥有 descriptor 指向的领域事实。
 - Host 可以提供 route 和 shell，不拥有 route 内的领域体验。
 - Host 可以提供 broker，不拥有 broker 内 app 写入的领域内容。
+- Host action/search/settings invocation must resolve a manifest-declared descriptor first.
+  Host must reject undeclared protocol actions or search providers, and must not infer app domain behavior from protocol names.
 - Host 可以展示 app 的 review 或 memory status，不解释 status 对业务流程的含义。
 - Soul App 不直接读取 Host 私有 DB、secret、connector credential 或 sibling app 源码。
 
