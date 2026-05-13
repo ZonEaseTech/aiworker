@@ -1,4 +1,4 @@
-import type { LocalExecutor, LocalWorkerRuntime } from '@zonease/aiworker-core'
+import type { HostRuntime, LocalExecutor, LocalWorkerRuntime } from '@zonease/aiworker-core'
 import type { HostedSoulApp, LocalSettingsConfig, SoulAppMountedSurface } from '@zonease/aiworker-shared'
 import type { ReviewRow, SessionRow, WorkerRow, WorkspaceRow } from '@zonease/aiworker-storage-sqlite/worker'
 
@@ -15,24 +15,11 @@ import { fileURLToPath } from 'node:url'
 import { OpenAPIHono, z } from '@hono/zod-openapi'
 import { apiReference } from '@scalar/hono-api-reference'
 import {
-  bootstrapOfficialSoulApps,
-  createLocalWorkerRuntime,
+  createHostRuntime,
   createSoulAppBroker,
-  disableSoulApp,
-  discardOfficialSoulAppLegacyMetadata,
-  enableSoulApp,
-  findHostCapabilityTemplate,
-  findHostSoul,
-  getHostedSoulApp,
-  installSoulAppFromPath,
-  installSoulAppManifest,
-  listHostCapabilityTemplatesForSoul,
-  listHostSoulCatalog,
-  runSoulAppHealthcheck,
   workerEnv,
 } from '@zonease/aiworker-core'
 import {
-  AppError,
   isLoopbackMountedServiceUrl,
   localSettingsConfigSchema,
 } from '@zonease/aiworker-shared'
@@ -90,14 +77,13 @@ export interface BootstrapWorkerAppOptions {
 }
 
 export interface LocalDaemonState {
+  host: HostRuntime
   mountingAppServices: Map<string, Promise<MountedSoulAppService | null>>
   mountedAppServices: Map<string, MountedSoulAppService>
   startedAt: string
   token?: string
   runtimeVersion: string
   runtimes: Map<string, LocalWorkerRuntime>
-  workersRoot: string
-  executor?: LocalExecutor
   now?: () => string
 }
 
@@ -147,21 +133,32 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   const runtimeVersion = options.runtimeVersion ?? DEFAULT_RUNTIME_VERSION
   const workersRoot = options.workersRoot ?? path.join(path.dirname(dbPath), 'workers')
   const runtimes = new Map<string, LocalWorkerRuntime>()
+  const host = createHostRuntime({
+    executor: options.executor,
+    now: options.now,
+    registryContext: () => {
+      const settings = loadLocalSettings()
+      return {
+        availableConnectorIds: settings.connectors.map(connector => connector.id),
+        enabledConnectorIds: settings.connectors.filter(connector => connector.enabled).map(connector => connector.id),
+        hostVersion: runtimeVersion,
+      }
+    },
+    workersRoot,
+  })
   const state: LocalDaemonState = {
+    host,
     mountingAppServices: new Map(),
     mountedAppServices: new Map(),
     runtimes,
     startedAt: new Date().toISOString(),
     token: options.token ?? workerEnv.AIWORKER_LOCAL_TOKEN,
     runtimeVersion,
-    workersRoot,
-    executor: options.executor,
     now: options.now,
   }
-  await bootstrapOfficialSoulApps(registryContext(state))
-  discardOfficialSoulAppLegacyMetadata(state.now?.())
+  await state.host.bootstrapOfficialSoulApps()
   for (const worker of listWorkers()) {
-    const runtime = createRuntimeForWorker(state, worker)
+    const runtime = state.host.createRuntimeForWorker(worker)
     await runtime.init()
     runtimes.set(worker.id, runtime)
   }
@@ -194,33 +191,32 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     workers: listWorkers(),
   }))
 
-  app.get('/api/local/apps', c => c.json({ apps: listHostSoulCatalog().apps }))
+  app.get('/api/local/apps', c => c.json({ apps: state.host.listApps() }))
   app.post('/api/local/apps/install', async (c) => {
     const body = await readJson<{ manifest?: unknown, manifestPath?: string }>(c.req)
-    const context = registryContext(state)
     const app = typeof body.manifestPath === 'string' && body.manifestPath.trim()
-      ? await installSoulAppFromPath(body.manifestPath, context)
-      : installSoulAppManifest({
+      ? await state.host.installAppFromPath(body.manifestPath)
+      : state.host.installAppManifest({
           manifest: body.manifest,
           sourceKind: 'inline',
           sourceRef: 'api:inline',
-        }, context)
-    return c.json({ app, catalog: listHostSoulCatalog() }, 201)
+        })
+    return c.json({ app, catalog: state.host.listCatalog() }, 201)
   })
   app.get('/api/local/apps/:appId', (c) => {
-    const app = getHostedSoulApp(c.req.param('appId'))
+    const app = state.host.getApp(c.req.param('appId'))
     if (!app)
       return notFound(c, 'Soul App')
     return c.json({ app })
   })
-  app.post('/api/local/apps/:appId/enable', c => c.json({ app: enableSoulApp(c.req.param('appId'), registryContext(state)), catalog: listHostSoulCatalog() }))
+  app.post('/api/local/apps/:appId/enable', c => c.json({ app: state.host.enableApp(c.req.param('appId')), catalog: state.host.listCatalog() }))
   app.post('/api/local/apps/:appId/disable', (c) => {
     const appId = c.req.param('appId')
-    const app = disableSoulApp(appId, registryContext(state))
+    const app = state.host.disableApp(appId)
     stopMountedSoulAppService(state, appId)
-    return c.json({ app, catalog: listHostSoulCatalog() })
+    return c.json({ app, catalog: state.host.listCatalog() })
   })
-  app.post('/api/local/apps/:appId/healthcheck', c => c.json({ app: runSoulAppHealthcheck(c.req.param('appId'), registryContext(state)) }))
+  app.post('/api/local/apps/:appId/healthcheck', c => c.json({ app: state.host.healthcheckApp(c.req.param('appId')) }))
   app.get('/api/local/apps/:appId/broker/permissions', (c) => {
     const broker = createSoulAppBroker(brokerContext(c, state))
     return c.json({ permissions: broker.permissions.list() })
@@ -255,7 +251,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     return brokerResponse(c, 'invocation', result)
   })
   app.get('/api/local/apps/:appId/surfaces/:surfaceId', async (c) => {
-    const app = getHostedSoulApp(c.req.param('appId'))
+    const app = state.host.getApp(c.req.param('appId'))
     if (!app)
       return notFound(c, 'Soul App')
     if (app.status !== 'enabled')
@@ -272,28 +268,15 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
       name?: string
       soulId?: string
     }>(c.req)
-    const soul = requireAvailableSoul(body.soulId)
-    const name = requireString(body.name, 'name')
-    const workerId = body.id ? requireString(body.id, 'id') : createWorkerId(soul.id, name)
-    if (getWorker(workerId))
-      return c.json({ error: { code: 'CONFLICT', message: `Worker already exists: ${workerId}` } }, 409)
-    const worker = upsertWorker({
-      id: workerId,
-      soulId: soul.id,
-      name,
-      defaultEngineId: body.defaultEngineId ?? 'codex',
-      metadataJson: {
-        defaultTemplates: [...soul.defaultTemplates],
-        description: soul.description,
-        domain: soul.domain,
-        soulAppId: getHostedSoulApp(soul.id)?.appId ?? null,
-        ...(body.metadata ?? {}),
-      },
+    const created = await state.host.createSoulWorker({
+      defaultEngineId: body.defaultEngineId,
+      id: body.id,
+      metadata: body.metadata,
+      name: requireString(body.name, 'name'),
+      soulId: requireString(body.soulId, 'soulId'),
     })
-    const runtime = createRuntimeForWorker(state, worker)
-    await runtime.init()
-    state.runtimes.set(worker.id, runtime)
-    return c.json({ worker, snapshot: runtime.snapshot() }, 201)
+    state.runtimes.set(created.worker.id, created.runtime)
+    return c.json({ worker: created.worker, snapshot: created.snapshot }, 201)
   })
   app.get('/api/local/workers/:workerId', (c) => {
     const worker = getWorker(c.req.param('workerId'))
@@ -319,38 +302,35 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
       defaultEngineId: body.defaultEngineId ?? existing.defaultEngineId,
       metadataJson: body.metadata ?? existing.metadataJson,
     })
-    const runtime = createRuntimeForWorker(state, worker)
+    const runtime = state.host.createRuntimeForWorker(worker)
     await runtime.init()
     state.runtimes.set(worker.id, runtime)
     return c.json({ worker, snapshot: runtime.snapshot() })
   })
 
-  app.get('/api/local/souls', c => c.json({ souls: listHostSoulCatalog().souls }))
+  app.get('/api/local/souls', c => c.json({ souls: state.host.listSouls() }))
   app.get('/api/local/souls/:id', (c) => {
-    const soul = findHostSoul(c.req.param('id'))
+    const soul = state.host.findSoul(c.req.param('id'))
     if (!soul)
       return notFound(c, 'soul')
     return c.json({ soul })
   })
   app.get('/api/local/templates', (c) => {
     const soulId = c.req.query('soulId')
-    const templates = soulId
-      ? listHostCapabilityTemplatesForSoul(soulId)
-      : listHostSoulCatalog().templates
+    const templates = state.host.listCapabilityTemplates(soulId)
     return c.json({ templates })
   })
   app.get('/api/local/templates/:id', (c) => {
-    const template = findHostCapabilityTemplate(c.req.param('id'))
+    const template = state.host.listCatalog().templates.find(template => template.id === c.req.param('id'))
     if (!template)
       return notFound(c, 'template')
     return c.json({ template })
   })
   app.get('/api/local/workers/:workerId/templates', (c) => {
-    const worker = requireWorker(c.req.param('workerId'))
-    return c.json({ templates: templatesForWorker(worker) })
+    return c.json({ templates: state.host.listCapabilityTemplatesForWorker(c.req.param('workerId')) })
   })
   app.get('/api/local/workers/:workerId/templates/:templateId', (c) => {
-    const template = requireTemplateForWorker(c.req.param('workerId'), c.req.param('templateId'))
+    const template = requireTemplateForWorker(state, c.req.param('workerId'), c.req.param('templateId'))
     return c.json({ template })
   })
 
@@ -626,7 +606,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
 
   app.get('/api/local/events', c => c.json({ events: listSessionEvents() }))
   app.all('/api/local/apps/:appId/:path{.+}', (c) => {
-    const app = getHostedSoulApp(c.req.param('appId'))
+    const app = state.host.getApp(c.req.param('appId'))
     if (!app)
       return notFound(c, 'Soul App')
     if (app.status !== 'enabled')
@@ -670,14 +650,6 @@ function requireString(value: unknown, field: string): string {
   return value.trim()
 }
 
-function requireAvailableSoul(soulId: unknown) {
-  const id = requireString(soulId, 'soulId')
-  const soul = findHostSoul(id)
-  if (!soul || soul.status !== 'available')
-    throw AppError.badRequest(`Available Soul not found: ${id}`, 'SOUL_NOT_AVAILABLE')
-  return soul
-}
-
 function notFound(c: Context, resource: string) {
   return c.json({ error: { code: 'NOT_FOUND', message: `${resource} not found.` } }, 404)
 }
@@ -688,26 +660,6 @@ function timingSafeEqualText(actual: string, expected: string): boolean {
   return a.length === b.length && timingSafeEqual(a, b)
 }
 
-function createWorkerId(soulId: string, name: string): string {
-  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 32)
-  return `${soulId}-${slug || 'worker'}-${randomUUID().slice(0, 8)}`
-}
-
-function createRuntimeForWorker(state: LocalDaemonState, worker: WorkerRow): LocalWorkerRuntime {
-  return createLocalWorkerRuntime({
-    worker: {
-      id: worker.id,
-      soulId: worker.soulId,
-      name: worker.name,
-      defaultEngineId: worker.defaultEngineId,
-      metadata: worker.metadataJson,
-    },
-    workspacesRoot: path.join(state.workersRoot, worker.id, 'workspaces'),
-    executor: state.executor,
-    now: state.now,
-  })
-}
-
 function requireRuntime(state: LocalDaemonState, workerId: string): LocalWorkerRuntime {
   const existing = state.runtimes.get(workerId)
   if (existing)
@@ -715,7 +667,7 @@ function requireRuntime(state: LocalDaemonState, workerId: string): LocalWorkerR
   const worker = getWorker(workerId)
   if (!worker)
     throw new Error(`Worker not found: ${workerId}`)
-  const runtime = createRuntimeForWorker(state, worker)
+  const runtime = state.host.createRuntimeForWorker(worker)
   state.runtimes.set(workerId, runtime)
   return runtime
 }
@@ -757,46 +709,12 @@ function requireWorkerSession(workerId: string, sessionId: string): SessionRow {
   return session
 }
 
-function templatesForWorker(worker: WorkerRow) {
-  return listHostCapabilityTemplatesForSoul(worker.soulId)
+function requireTemplateForWorker(state: LocalDaemonState, workerId: string, templateId: unknown) {
+  return state.host.requireCapabilityTemplateForWorker(workerId, templateId)
 }
 
-function requireTemplateForWorker(workerId: string, templateId: unknown) {
-  const worker = requireWorker(workerId)
-  const id = requireString(templateId, 'capabilityTemplateId')
-  const template = findHostCapabilityTemplate(id)
-  if (!template || template.soulId !== worker.soulId)
-    throw AppError.badRequest(`Template ${id} does not belong to worker ${workerId}.`, 'TEMPLATE_NOT_AVAILABLE')
-  return template
-}
-
-function enrichTemplateMetadata(workerId: string, templateId: string, metadata: Record<string, unknown>): Record<string, unknown> {
-  const worker = getWorker(workerId)
-  const soul = worker ? findHostSoul(worker.soulId) : null
-  const template = findHostCapabilityTemplate(templateId)
-  if (!worker || !soul || !template)
-    return metadata
-  return {
-    ...metadata,
-    capabilityTemplateId: template.id,
-    inputHints: template.inputHints,
-    outputKind: template.outputKind,
-    reviewRubric: template.reviewRubric,
-    skillName: template.name,
-    soulAppId: getHostedSoulApp(soul.id)?.appId ?? null,
-    soulName: soul.name,
-    workerId: worker.id,
-  }
-}
-
-function registryContext(state: LocalDaemonState) {
-  const settings = loadLocalSettings()
-  return {
-    availableConnectorIds: settings.connectors.map(connector => connector.id),
-    enabledConnectorIds: settings.connectors.filter(connector => connector.enabled).map(connector => connector.id),
-    hostVersion: state.runtimeVersion,
-    now: state.now,
-  }
+function enrichTemplateMetadata(state: LocalDaemonState, workerId: string, templateId: string, metadata: Record<string, unknown>): Record<string, unknown> {
+  return state.host.enrichTemplateMetadata(workerId, templateId, metadata)
 }
 
 function brokerContext(c: Context, state: LocalDaemonState) {
@@ -1255,8 +1173,8 @@ async function createWorkspaceSessionResponse(c: Context, state: LocalDaemonStat
     metadata?: Record<string, unknown>
     title?: string
   }>(c.req)
-  const template = requireTemplateForWorker(workspace.workerId, body.capabilityTemplateId)
-  const metadata = enrichTemplateMetadata(workspace.workerId, template.id, body.metadata ?? {})
+  const template = requireTemplateForWorker(state, workspace.workerId, body.capabilityTemplateId)
+  const metadata = enrichTemplateMetadata(state, workspace.workerId, template.id, body.metadata ?? {})
   const session = await runtime.createSession({
     workspaceId: workspace.id,
     capabilityTemplateId: template.id,
@@ -1293,7 +1211,7 @@ async function createSessionMessageResponse(c: Context, state: LocalDaemonState,
     engineId: settings.executionMode === 'local-cli' ? settings.engineId : settings.byok.provider,
     input,
     metadata: {
-      ...enrichTemplateMetadata(session.workerId, session.capabilityTemplateId, session.metadataJson ?? {}),
+      ...enrichTemplateMetadata(state, session.workerId, session.capabilityTemplateId, session.metadataJson ?? {}),
       ...(body.metadata ?? {}),
       ...executionMetadata(settings, engine),
     },

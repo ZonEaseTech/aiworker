@@ -4,6 +4,14 @@ export {
   workerEnv,
 } from './config/worker'
 export {
+  createHostRuntime,
+  type CreateHostSoulWorkerInput,
+  type CreateHostSoulWorkerResult,
+  type HostOfficialSoulAppBootstrap,
+  HostRuntime,
+  type HostRuntimeOptions,
+} from './host/runtime'
+export {
   createSoulAppBroker,
   type SoulAppBrokerContext,
   type SoulAppBrokerDenied,

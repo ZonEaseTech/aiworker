@@ -1,5 +1,28 @@
 # AIWorker Changelog
 
+## 2026-05-13 18:05 [completed] REFACTOR-077 / PLAN-298 — Make Host runtime a first-class bounded context
+
+Made Host a shared core use-case boundary while keeping API, CLI and Web as
+separate delivery adapters.
+
+- Added `packages/core/src/host/runtime.ts`, a Host runtime facade for Soul App
+  lifecycle, official bootstrap, catalog projection, worker creation, runtime
+  creation, template ownership and metadata enrichment.
+- Added direct Host contract tests that cover official app bootstrap, legacy
+  built-in Soul rejection, app-scoped worker metadata, duplicate worker
+  conflicts, worker-owned template validation and template metadata enrichment.
+- Refactored local daemon API routes to delegate Host decisions through
+  `state.host` while keeping Hono routes, auth, streaming, settings and mounted
+  service handling in the API adapter.
+- Refactored CLI app/worker/template/session paths and `app smoke` to use the
+  same Host facade.
+
+Verification passed: focused core/API/CLI typechecks and tests, root `lint`,
+`typecheck`, `test`, `build`, `web:smoke:mounted-surfaces`, `git diff --check`
+and code-review-graph. CRG exits 0 with overall risk 0.60 and static test-gap
+hints around adapter helpers; new Host contract tests plus existing API/CLI
+tests and mounted smoke cover those paths.
+
 ## 2026-05-13 17:28 [completed] REFACTOR-076 / PLAN-297 — Remove legacy gateway and fleet surfaces
 
 Removed the historical gateway/fleet control plane from active source,

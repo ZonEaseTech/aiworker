@@ -401,3 +401,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-070 Legacy Soul metadata discard and mounted surface hardening**](FEAT-070.md) `P0`
 - [x] [**BUG-117 Worker Web build chunk warning**](BUG-117.md) `P0`
 - [x] [**REFACTOR-076 Remove legacy gateway and fleet surfaces**](REFACTOR-076.md) `P0`
+- [x] [**REFACTOR-077 Make Host runtime a first-class bounded context**](REFACTOR-077.md) `P0`

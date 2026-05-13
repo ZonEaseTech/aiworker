@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import type { LocalWorkerRuntime } from '@zonease/aiworker-core'
+import type { HostRuntime, LocalExecutor, LocalWorkerRuntime, SoulAppRegistryContext } from '@zonease/aiworker-core'
 import type { SoulAppManifest } from '@zonease/aiworker-shared'
 import type { WorkerRow } from '@zonease/aiworker-storage-sqlite/worker'
 import type { Buffer } from 'node:buffer'
@@ -13,21 +13,8 @@ import { homedir, tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import {
-  bootstrapOfficialSoulApps,
-  createLocalWorkerRuntime,
-  disableSoulApp,
-  discardOfficialSoulAppLegacyMetadata,
-  enableSoulApp,
-  findHostCapabilityTemplate,
-  findHostSoul,
-  getHostedSoulApp,
+  createHostRuntime,
   getWorkerEnv,
-  installSoulAppFromPath,
-  installSoulAppManifest,
-  listHostCapabilityTemplatesForSoul,
-  listHostedSoulApps,
-  listHostSoulCatalog,
-  runSoulAppHealthcheck,
 } from '@zonease/aiworker-core'
 import {
   parseSoulAppManifestJson,
@@ -54,7 +41,6 @@ import {
   runWorkerMigrations,
   setSetting,
   updateLesson,
-  upsertWorker,
 } from '@zonease/aiworker-storage-sqlite/worker'
 import cac from 'cac'
 import consola from 'consola'
@@ -95,29 +81,22 @@ async function ensureDb(): Promise<LocalPaths> {
   return paths
 }
 
-function createWorkerId(soulId: string, name: string): string {
-  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 32)
-  return `${soulId}-${slug || 'worker'}-${randomUUID().slice(0, 8)}`
-}
-
 function selectedWorkerId(): string | null {
   const setting = listSettings().find(setting => setting.key === 'selected-worker')
   const value = setting?.valueJson
   return value && typeof value.workerId === 'string' ? value.workerId : null
 }
 
-function createRuntimeForWorker(paths: LocalPaths, worker: WorkerRow): LocalWorkerRuntime {
-  const runtime = createLocalWorkerRuntime({
-    worker: {
-      id: worker.id,
-      soulId: worker.soulId,
-      name: worker.name,
-      defaultEngineId: worker.defaultEngineId,
-      metadata: worker.metadataJson,
-    },
-    workspacesRoot: path.join(paths.workersRoot, worker.id, 'workspaces'),
+function registryContext() {
+  return { hostVersion: packageJson.version }
+}
+
+function createHost(paths: LocalPaths, options: { executor?: LocalExecutor, registryContext?: () => SoulAppRegistryContext } = {}): HostRuntime {
+  return createHostRuntime({
+    executor: options.executor,
+    registryContext: options.registryContext ?? registryContext,
+    workersRoot: paths.workersRoot,
   })
-  return runtime
 }
 
 async function ensureRuntime(options: RuntimeOptions = {}): Promise<LocalWorkerRuntime> {
@@ -128,7 +107,7 @@ async function ensureRuntime(options: RuntimeOptions = {}): Promise<LocalWorkerR
   const worker = getWorker(workerId)
   if (!worker)
     throw new Error(`worker not found: ${workerId}`)
-  const runtime = createRuntimeForWorker(paths, worker)
+  const runtime = createHost(paths).createRuntimeForWorker(worker)
   await runtime.init()
   return runtime
 }
@@ -179,7 +158,7 @@ async function runDoctor(): Promise<void> {
     ok: true,
     home: paths.home,
     dbPath: paths.dbPath,
-    apps: listHostedSoulApps(),
+    apps: createHost(paths).listApps(),
     workers: listWorkers(),
     workspaces: listWorkspaces(),
     daemon: daemonStatus(),
@@ -281,25 +260,12 @@ async function showLogs(opts: { tail?: number } = {}): Promise<void> {
 
 async function createWorkerCommand(opts: { id?: string, name?: string, soul?: string }): Promise<void> {
   const paths = await ensureDb()
-  const soul = requireAvailableSoul(requireText(opts.soul, 'soul'))
-  const name = requireText(opts.name, 'name')
-  const id = opts.id ? requireText(opts.id, 'id') : createWorkerId(soul.id, name)
-  if (getWorker(id))
-    throw new Error(`worker already exists: ${id}`)
-  const runtime = createRuntimeForWorker(paths, upsertWorker({
-    id,
-    soulId: soul.id,
-    name,
-    defaultEngineId: 'codex',
-    metadataJson: {
-      defaultTemplates: [...soul.defaultTemplates],
-      description: soul.description,
-      domain: soul.domain,
-      soulAppId: getHostedSoulApp(soul.id)?.appId ?? null,
-    },
-  }))
-  await runtime.init()
-  printJson({ worker: runtime.snapshot().worker })
+  const created = await createHost(paths).createSoulWorker({
+    id: opts.id,
+    name: requireText(opts.name, 'name'),
+    soulId: requireText(opts.soul, 'soul'),
+  })
+  printJson({ worker: created.snapshot.worker })
 }
 
 async function selectWorkerCommand(id: string): Promise<void> {
@@ -326,15 +292,14 @@ async function listWorkspaceCommand(opts: { worker?: string }): Promise<void> {
 }
 
 async function startSessionCommand(opts: { context?: string, input?: string, skill?: string, title?: string, worker?: string, workspace?: string }): Promise<void> {
+  const paths = await ensureDb()
   const runtime = await ensureRuntime({ worker: opts.worker })
   const workspaceId = requireText(opts.workspace, 'workspace')
   const workspace = getWorkspace(workspaceId)
   if (!workspace || workspace.workerId !== runtime.workerId)
     throw new Error(`workspace not found for ${runtime.workerId}: ${workspaceId}`)
   const skillId = requireText(opts.skill, 'skill')
-  const template = findHostCapabilityTemplate(skillId)
-  if (!template || template.soulId !== runtime.snapshot().worker.soulId)
-    throw new Error(`template not found for worker ${runtime.workerId}: ${skillId}`)
+  const template = createHost(paths).requireCapabilityTemplateForWorker(runtime.workerId, skillId)
   const session = await runtime.createSession({
     workspaceId,
     capabilityTemplateId: template.id,
@@ -441,62 +406,51 @@ async function proposeLesson(opts: { review?: string, statement?: string, worksp
   printJson({ lesson })
 }
 
-function registryContext() {
-  return { hostVersion: packageJson.version }
-}
-
 async function listAppsCommand(): Promise<void> {
-  await ensureDb()
-  printJson({ apps: listHostedSoulApps() })
+  const paths = await ensureDb()
+  printJson({ apps: createHost(paths).listApps() })
 }
 
 async function showAppCommand(id: string): Promise<void> {
-  await ensureDb()
-  printJson({ app: getHostedSoulApp(id) })
+  const paths = await ensureDb()
+  printJson({ app: createHost(paths).getApp(id) })
 }
 
 async function installAppCommand(manifestPath: string): Promise<void> {
-  await ensureDb()
-  printJson({ app: await installSoulAppFromPath(manifestPath, registryContext()) })
+  const paths = await ensureDb()
+  printJson({ app: await createHost(paths).installAppFromPath(manifestPath) })
 }
 
 async function enableAppCommand(id: string): Promise<void> {
-  await ensureDb()
-  printJson({ app: enableSoulApp(id, registryContext()), catalog: listHostSoulCatalog() })
+  const paths = await ensureDb()
+  const host = createHost(paths)
+  printJson({ app: host.enableApp(id), catalog: host.listCatalog() })
 }
 
 async function disableAppCommand(id: string): Promise<void> {
-  await ensureDb()
-  printJson({ app: disableSoulApp(id, registryContext()), catalog: listHostSoulCatalog() })
+  const paths = await ensureDb()
+  const host = createHost(paths)
+  printJson({ app: host.disableApp(id), catalog: host.listCatalog() })
 }
 
 async function doctorAppCommand(id: string): Promise<void> {
-  await ensureDb()
-  printJson({ app: runSoulAppHealthcheck(id, registryContext()) })
+  const paths = await ensureDb()
+  printJson({ app: createHost(paths).healthcheckApp(id) })
 }
 
 async function permissionsAppCommand(id: string): Promise<void> {
-  await ensureDb()
-  const app = getHostedSoulApp(id)
+  const paths = await ensureDb()
+  const app = createHost(paths).getApp(id)
   printJson({ appId: id, permissions: app?.manifest.permissions ?? [] })
 }
 
 async function bootstrapAppCommand(scope: string): Promise<void> {
-  await ensureDb()
+  const paths = await ensureDb()
   if (scope !== 'official')
     throw new Error(`unsupported app bootstrap scope: ${scope}`)
-  const results = await bootstrapOfficialSoulApps(registryContext())
-  const legacyMetadataDiscard = discardOfficialSoulAppLegacyMetadata()
-  printJson({
-    bootstrap: {
-      legacyMetadataDiscard,
-      results,
-      scope,
-      status: results.some(result => result.action === 'error') ? 'fail' : 'pass',
-    },
-    catalog: listHostSoulCatalog(),
-  })
-  if (results.some(result => result.action === 'error'))
+  const bootstrap = await createHost(paths).bootstrapOfficialSoulApps()
+  printJson({ bootstrap, catalog: bootstrap.catalog })
+  if (bootstrap.status === 'fail')
     process.exitCode = 1
 }
 
@@ -578,41 +532,37 @@ async function smokeAppCommand(inputPath: string): Promise<void> {
         }
       : manifest
     closeWorkerDb()
-    initWorkerDb(path.join(smokeRoot, 'worker.db'))
+    const smokePaths: LocalPaths = {
+      dbPath: path.join(smokeRoot, 'worker.db'),
+      home: smokeRoot,
+      logFile: path.join(smokeRoot, 'aiworker-daemon.log'),
+      pidFile: path.join(smokeRoot, 'aiworker-daemon.pid'),
+      workersRoot: path.join(smokeRoot, 'workers'),
+    }
+    initWorkerDb(smokePaths.dbPath)
     runWorkerMigrations()
     const connectorIds = [
       ...smokeManifest.connectors.required.map(connector => connector.id),
       ...smokeManifest.connectors.optional.map(connector => connector.id),
     ]
-    installSoulAppManifest({
+    const smokeRegistryContext = () => ({
+      availableConnectorIds: connectorIds,
+      enabledConnectorIds: smokeManifest.connectors.required.map(connector => connector.id),
+      hostVersion: packageJson.version,
+    })
+    const host = createHost(smokePaths, {
+      registryContext: smokeRegistryContext,
+    })
+    host.installAppManifest({
       manifest: smokeManifest,
       sourceKind: 'manifest-path',
       sourceRef: validation.manifestPath,
-    }, {
-      availableConnectorIds: connectorIds,
-      enabledConnectorIds: smokeManifest.connectors.required.map(connector => connector.id),
-      hostVersion: packageJson.version,
     })
-    const hostedApp = enableSoulApp(smokeManifest.id, {
-      availableConnectorIds: connectorIds,
-      enabledConnectorIds: smokeManifest.connectors.required.map(connector => connector.id),
-      hostVersion: packageJson.version,
-    })
-    const template = listHostSoulCatalog().templates.find(item => item.soulId === manifest.id)
+    const hostedApp = host.enableApp(smokeManifest.id)
+    const template = host.listCatalog().templates.find(item => item.soulId === manifest.id)
     if (!template)
       throw new Error(`No mounted capability template available for ${manifest.id}`)
-    const worker = upsertWorker({
-      defaultEngineId: 'smoke',
-      id: `${manifest.id}-smoke-worker`,
-      metadataJson: {
-        description: manifest.description,
-        domain: manifest.soul.domain,
-        soulAppId: manifest.id,
-      },
-      name: `${manifest.name} Smoke`,
-      soulId: manifest.id,
-    })
-    const runtime = createLocalWorkerRuntime({
+    const hostWithExecutor = createHost(smokePaths, {
       executor: {
         async invoke(input) {
           return {
@@ -631,16 +581,19 @@ async function smokeAppCommand(inputPath: string): Promise<void> {
           }
         },
       },
-      worker: {
-        defaultEngineId: worker.defaultEngineId,
-        id: worker.id,
-        metadata: worker.metadataJson,
-        name: worker.name,
-        soulId: worker.soulId,
-      },
-      workspacesRoot: path.join(smokeRoot, 'workers', worker.id, 'workspaces'),
+      registryContext: smokeRegistryContext,
     })
-    await runtime.init()
+    const { runtime } = await hostWithExecutor.createSoulWorker({
+      defaultEngineId: 'smoke',
+      id: `${manifest.id}-smoke-worker`,
+      metadata: {
+        description: manifest.description,
+        domain: manifest.soul.domain,
+        soulAppId: manifest.id,
+      },
+      name: `${manifest.name} Smoke`,
+      soulId: manifest.id,
+    })
     const workspace = await runtime.createWorkspace({ name: `${manifest.name} Smoke Workspace`, type: manifest.workspaceTypes[0]!.id })
     const session = await runtime.createSession({
       capabilityTemplateId: template.id,
@@ -1706,8 +1659,8 @@ function registerCommands(): void {
   cli.command('app smoke <path>', 'run standalone and Host-mounted Soul App smoke checks').action(smokeAppCommand)
 
   cli.command('soul list', 'list installed app-projected vertical Souls').action(async () => {
-    await ensureDb()
-    printJson({ souls: listHostSoulCatalog().souls })
+    const paths = await ensureDb()
+    printJson({ souls: createHost(paths).listSouls() })
   })
   cli.command('worker create', 'create a local Soul worker').option('--id <id>', 'worker id').option('--name <text>', 'worker name').option('--soul <id>', 'Soul id').action(createWorkerCommand)
   cli.command('worker list', 'list local Soul workers').action(async () => {
@@ -1720,8 +1673,8 @@ function registerCommands(): void {
   })
   cli.command('worker select <id>', 'select default local Soul worker').action(selectWorkerCommand)
   cli.command('template list', 'list capability templates').option('--soul <id>', 'Soul id').action(async (opts: { soul?: string }) => {
-    await ensureDb()
-    const templates = opts.soul ? listHostCapabilityTemplatesForSoul(opts.soul) : listHostSoulCatalog().templates
+    const paths = await ensureDb()
+    const templates = createHost(paths).listCapabilityTemplates(opts.soul)
     printJson({ templates })
   })
 
@@ -1792,13 +1745,6 @@ function registerCommands(): void {
   cli.command('commands', 'show command index').action(() => {
     process.stdout.write(`${commandIndex()}\n`)
   })
-}
-
-function requireAvailableSoul(id: string) {
-  const soul = findHostSoul(id)
-  if (!soul || soul.status !== 'available')
-    throw new Error(`available Soul not found: ${id}`)
-  return soul
 }
 
 function commandIndex(): string {
