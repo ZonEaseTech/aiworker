@@ -710,6 +710,32 @@ beforeEach(() => {
 })
 
 describe('worker studio', () => {
+  it('skips legacy workers whose Souls are no longer projected', async () => {
+    currentWorkers = [
+      { createdAt: now, defaultEngineId: 'codex', id: 'devops-worker', metadataJson: {}, name: 'DevOps', soulId: 'devops', status: 'active', updatedAt: now },
+      ...workers.map(worker => ({ ...worker })),
+    ]
+
+    render(<WorkerStudio />)
+
+    expect(await screen.findByTestId('hr-people-workbench')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /HR \(1\)/ })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /DevOps/ })).toBeNull()
+    expect(screen.queryByText('Loading Soul workspace...')).toBeNull()
+  })
+
+  it('falls back to first-run Soul App home when every persisted worker is orphaned', async () => {
+    currentWorkers = [
+      { createdAt: now, defaultEngineId: 'codex', id: 'devops-worker', metadataJson: {}, name: 'DevOps', soulId: 'devops', status: 'active', updatedAt: now },
+    ]
+
+    render(<WorkerStudio />)
+
+    expect(await screen.findByRole('heading', { name: 'Choose a Soul App to start' })).toBeTruthy()
+    expect(screen.getByText('No enabled Soul Apps')).toBeTruthy()
+    expect(screen.queryByText('Loading Soul workspace...')).toBeNull()
+  })
+
   it('renders HR as a specialized workbench without import or work-order entrypoints', async () => {
     render(<WorkerStudio />)
 

@@ -76,6 +76,8 @@ interface StudioState {
 
 type WorkerMessages = ReturnType<typeof messagesFor>
 
+const defaultNewWorkerSoulId = 'aiworker-hr'
+
 const initialArtifactPreviewState: ArtifactPreviewState = {
   artifactId: null,
   content: '',
@@ -133,7 +135,7 @@ export function WorkerStudio() {
   const [state, setState] = useState<StudioState>({ data: null, error: null, loading: true })
   const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null)
   const [newWorkerName, setNewWorkerName] = useState('')
-  const [newWorkerSoulId, setNewWorkerSoulId] = useState('hr')
+  const [newWorkerSoulId, setNewWorkerSoulId] = useState(defaultNewWorkerSoulId)
   const [selectedTemplateId, setSelectedTemplateId] = useState('person-profile')
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null)
   const [workspaceTitle, setWorkspaceTitle] = useState('')
@@ -199,7 +201,20 @@ export function WorkerStudio() {
   const routedWorker = route.kind === 'worker'
     ? data?.workers.find(worker => worker.id === route.workerId) ?? null
     : routedWorkspace ? data?.workers.find(worker => worker.id === routedWorkspace.workerId) ?? null : null
-  const selectedWorker = routedWorker ?? (selectedWorkerId ? data?.workers.find(worker => worker.id === selectedWorkerId) ?? null : null) ?? data?.workers[0] ?? null
+  const selectableWorkers = useMemo(() => {
+    if (!data)
+      return []
+    const availableSoulIds = new Set(data.souls.filter(soul => soul.status === 'available').map(soul => soul.id))
+    const templatedSoulIds = new Set(data.templates.map(template => template.soulId))
+    return data.workers.filter(worker => availableSoulIds.has(worker.soulId) && templatedSoulIds.has(worker.soulId))
+  }, [data])
+  const routedSelectableWorker = routedWorker && selectableWorkers.some(worker => worker.id === routedWorker.id)
+    ? routedWorker
+    : null
+  const selectedWorker = routedSelectableWorker
+    ?? (selectedWorkerId ? selectableWorkers.find(worker => worker.id === selectedWorkerId) ?? null : null)
+    ?? selectableWorkers[0]
+    ?? null
   const selectedSoul = selectedWorker
     ? data?.souls.find(soul => soul.id === selectedWorker.soulId) ?? null
     : data?.souls.find(soul => soul.id === newWorkerSoulId && soul.status === 'available') ?? data?.souls.find(soul => soul.status === 'available') ?? null
@@ -282,7 +297,7 @@ export function WorkerStudio() {
       })
     }
 
-    for (const worker of data.workers) {
+    for (const worker of selectableWorkers) {
       if (!groups.has(worker.soulId)) {
         groups.set(worker.soulId, {
           domain: worker.soulId,
@@ -295,7 +310,7 @@ export function WorkerStudio() {
     }
 
     return [...groups.values()].filter(group => group.workers.length > 0)
-  }, [activeLocale, data])
+  }, [activeLocale, data, selectableWorkers])
 
   const routeWorkspaceId = route.kind === 'workspace' || route.kind === 'session' ? route.workspaceId : null
   const routeWorkspace = routeWorkspaceId ? soulWorkspaces.find(item => item.id === routeWorkspaceId) ?? null : null
