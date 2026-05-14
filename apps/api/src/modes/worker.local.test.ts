@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -411,6 +412,7 @@ describe('local daemon API', () => {
 
   it('invokes declared Soul App shell actions and search through generic Host endpoints', async () => {
     const target = await app()
+    let actionMountContext: Record<string, unknown> | null = null
     const mountedService = Bun.serve({
       async fetch(request) {
         const url = new URL(request.url)
@@ -418,6 +420,10 @@ describe('local daemon API', () => {
           return Response.json({ status: 'ok' })
         if (url.pathname === '/protocol/actions') {
           const body = await request.json() as { protocolAction?: string }
+          const mountContext = request.headers.get('x-aiworker-mount-context')
+          actionMountContext = mountContext
+            ? JSON.parse(Buffer.from(mountContext, 'base64url').toString('utf8')) as Record<string, unknown>
+            : null
           return Response.json({
             message: 'App-owned action result',
             ok: true,
@@ -486,10 +492,27 @@ describe('local daemon API', () => {
       })
       expect(installRes.status).toBe(201)
       expect((await target.request('/api/local/apps/aiworker-hr/enable', { method: 'POST' })).status).toBe(200)
+      const workerBody = await (await target.request('/api/local/workers', {
+        method: 'POST',
+        body: JSON.stringify({ id: 'action-scope-hr-worker', soulId: 'aiworker-hr', name: 'Action Scope HR' }),
+        headers: { 'content-type': 'application/json' },
+      })).json() as { worker: { id: string } }
+      const workspaceBody = await (await target.request('/api/local/workers/action-scope-hr-worker/workspaces', {
+        method: 'POST',
+        body: JSON.stringify({ name: 'Action Scope HR workspace', type: 'people-profile' }),
+        headers: { 'content-type': 'application/json' },
+      })).json() as { workspace: { id: string } }
 
       const actionRes = await target.request('/api/local/apps/aiworker-hr/actions/create-people-profile', {
         method: 'POST',
-        body: JSON.stringify({ input: { source: 'test' } }),
+        body: JSON.stringify({
+          input: { source: 'test' },
+          scope: {
+            operatorId: 'operator-local',
+            workerId: workerBody.worker.id,
+            workspaceId: workspaceBody.workspace.id,
+          },
+        }),
         headers: { 'content-type': 'application/json' },
       })
       expect(actionRes.status).toBe(200)
@@ -504,6 +527,11 @@ describe('local daemon API', () => {
           redirectTo: '/hr/people',
           refresh: true,
         },
+      })
+      expect(actionMountContext).toMatchObject({
+        operatorId: 'operator-local',
+        workerId: workerBody.worker.id,
+        workspaceId: workspaceBody.workspace.id,
       })
 
       const searchRes = await target.request('/api/local/apps/aiworker-hr/search?providerId=peopleProfiles.search&query=ada&limit=2')

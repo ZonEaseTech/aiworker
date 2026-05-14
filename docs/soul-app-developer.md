@@ -158,6 +158,8 @@ descriptor first. Host must reject undeclared protocol actions or search
 providers, and must not infer app domain behavior from protocol names.
 Descriptor `requiredPermissions` are broker-enforced before Host contacts a
 mounted Soul App service.
+Host storage broker providers own app-scoped namespaces and access control;
+Soul Apps own stored value semantics.
 
 Use connector broker permissions for external evidence. Do not put secrets in
 manifest files, generated app config, workspace metadata, DB metadata, logs,

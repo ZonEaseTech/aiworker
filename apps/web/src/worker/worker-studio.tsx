@@ -441,9 +441,11 @@ export function WorkerStudio() {
     setShellActionState({ busyActionId: action.id, error: null, message: null })
     try {
       const response = await invokeSoulAppAction(selectedSoulApp.appId, action.id, {
-        sessionId: selectedSession?.id ?? null,
-        workerId: selectedWorker?.id ?? null,
-        workspaceId: selectedWorkspace?.id ?? null,
+        source: 'worker-shell',
+      }, {
+        sessionId: selectedSession?.id ?? undefined,
+        workerId: selectedWorker?.id ?? undefined,
+        workspaceId: selectedWorkspace?.id ?? undefined,
       })
       setShellActionState({
         busyActionId: null,

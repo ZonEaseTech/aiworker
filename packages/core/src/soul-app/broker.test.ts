@@ -1,8 +1,9 @@
+import type { SoulAppStorageRecordRow } from '@zonease/aiworker-storage-sqlite/worker'
 import { mkdtempSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import path from 'node:path'
 
+import path from 'node:path'
 import { hrSoulAppManifest } from '@zonease/aiworker-shared'
 import {
   closeWorkerDb,
@@ -11,6 +12,7 @@ import {
   initWorkerDb,
   listSoulAppAuditEvents,
   runWorkerMigrations,
+
   upsertWorker,
 } from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
@@ -108,6 +110,55 @@ describe('Soul App isolation broker', () => {
     const audit = listSoulAppAuditEvents('aiworker-hr')
     expect(audit.map(event => event.decision)).toEqual(['allowed', 'allowed', 'denied'])
     expect(audit.at(-1)?.reason).toContain('storage namespace')
+  })
+
+  it('routes storage through an injected provider after Host permission checks', () => {
+    const records = new Map<string, SoulAppStorageRecordRow>()
+    const writes: string[] = []
+    const broker = createSoulAppBroker({
+      appId: 'aiworker-hr',
+      now: () => '2026-05-13T00:05:00.000Z',
+      storageProvider: {
+        get(appId, key) {
+          return records.get(`${appId}:${key}`) ?? null
+        },
+        list(appId) {
+          return [...records.values()].filter(record => record.appId === appId)
+        },
+        put(input) {
+          writes.push(`${input.appId}:${input.key}`)
+          const record: SoulAppStorageRecordRow = {
+            appId: input.appId,
+            createdAt: input.at ?? '2026-05-13T00:05:00.000Z',
+            id: `${input.appId}:${input.key}`,
+            key: input.key,
+            namespace: input.namespace,
+            operatorId: input.operatorId ?? null,
+            sessionId: input.sessionId ?? null,
+            updatedAt: input.at ?? '2026-05-13T00:05:00.000Z',
+            valueJson: input.valueJson,
+            workerId: input.workerId ?? null,
+            workspaceId: input.workspaceId ?? null,
+          }
+          records.set(record.id, record)
+          return record
+        },
+      },
+      workspaceId: 'workspace-hr',
+    })
+
+    const written = broker.storage.put('drafts/people-profile', { status: 'draft' })
+    if ('decision' in written)
+      throw new Error(written.decision.reason)
+
+    expect(writes).toEqual(['aiworker-hr:drafts/people-profile'])
+    expect(written.valueJson).toMatchObject({ status: 'draft' })
+    expect(broker.storage.get('drafts/people-profile')).toMatchObject({
+      appId: 'aiworker-hr',
+      key: 'drafts/people-profile',
+    })
+    expect(broker.storage.list()).toHaveLength(1)
+    expect(listSoulAppAuditEvents('aiworker-hr').map(event => event.targetKind)).toEqual(['storage', 'storage', 'storage'])
   })
 
   it('brokers connector evidence without exposing raw tokens', () => {

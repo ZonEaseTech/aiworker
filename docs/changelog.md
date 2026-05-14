@@ -1,5 +1,22 @@
 # AIWorker Changelog
 
+## 2026-05-14 01:34 [completed] FEAT-075 / PLAN-307 — Soul App storage broker provider and app-owned drafts
+
+Completed the next convergence slice after broker permission hardening.
+
+- Added a Host/core storage provider interface with SQLite as the default local
+  provider.
+- Kept broker permission, scope and audit decisions in Host.
+- Separated Host action `scope` from app-owned action `input`.
+- Made HR/QA mounted create actions write app-owned draft records through the
+  public broker storage path when Host context is present.
+- Updated Worker Web shell action calls to pass scope separately.
+
+Verification passed: core/API/HR/QA/Web focused tests and typechecks, HR/QA
+validate, lint boundary, `git diff --check`, and code-review-graph. CRG reported
+static private-helper gaps covered through HR/QA mounted-service tests, API
+HTTP-level tests and Web action payload tests.
+
 ## 2026-05-14 01:16 [completed] FEAT-074 / PLAN-306 — Soul App broker permission hardening
 
 Completed the next zero-trust slice after the protocol interaction closure. App

@@ -7,10 +7,14 @@ import { qaReferenceSoulApp, qaSoulAppManifest } from './index'
 
 interface MountContext {
   brokerUrl?: string
+  hostUrl?: string
+  operatorId?: string | null
+  sessionId?: string | null
   surface?: {
     id?: string
     scope?: string
   }
+  workerId?: string | null
   workspaceId?: string | null
 }
 
@@ -47,7 +51,7 @@ export function serveHostMounted(port = Number(Bun.env.PORT ?? 0)) {
       }
       if (url.pathname === '/protocol/actions' && request.method === 'POST') {
         const body = await request.json().catch(() => ({})) as Record<string, unknown>
-        return Response.json(qaProtocolAction(String(body.protocolAction ?? '')))
+        return Response.json(await qaProtocolAction(request, String(body.protocolAction ?? '')))
       }
       if (url.pathname === '/protocol/search' && request.method === 'GET') {
         return Response.json(qaProtocolSearch(url))
@@ -140,8 +144,11 @@ function qaWidgetFrameHtml(request: Request): string {
   ].join('')
 }
 
-function qaProtocolAction(protocolAction: string) {
+async function qaProtocolAction(request: Request, protocolAction: string) {
   if (protocolAction === 'releaseGates.create') {
+    const persisted = await persistReleaseGateDraft(request)
+    if (!persisted.ok)
+      return persisted
     return {
       message: 'Release gate draft opened by QA app.',
       ok: true,
@@ -165,6 +172,31 @@ function qaProtocolAction(protocolAction: string) {
   return {
     message: `Unknown QA protocol action: ${protocolAction}`,
     ok: false,
+  }
+}
+
+async function persistReleaseGateDraft(request: Request): Promise<{ message: string, ok: false } | { ok: true }> {
+  const context = readMountContext(request)
+  if (!context?.hostUrl)
+    return { ok: true }
+
+  const draftKey = `drafts/release-gate/${context.workspaceId ?? 'app'}`
+  const client = createSoulAppClient({ appId: qaSoulAppManifest.id, baseUrl: context.hostUrl })
+  try {
+    await client.broker.storage.put(draftKey, {
+      appId: qaSoulAppManifest.id,
+      kind: 'release-gate',
+      source: 'qa-mounted-action',
+      status: 'draft',
+      workspaceId: context.workspaceId ?? null,
+    }, brokerScope(context))
+    return { ok: true }
+  }
+  catch (error) {
+    return {
+      message: error instanceof Error ? error.message : String(error),
+      ok: false,
+    }
   }
 }
 
@@ -199,17 +231,30 @@ function readMountContext(request: Request): MountContext | null {
     const surface = isRecord(parsed.surface) ? parsed.surface : null
     return {
       brokerUrl: typeof parsed.brokerUrl === 'string' ? parsed.brokerUrl : undefined,
+      hostUrl: request.headers.get('x-aiworker-host-url') ?? undefined,
+      operatorId: typeof parsed.operatorId === 'string' ? parsed.operatorId : null,
+      sessionId: typeof parsed.sessionId === 'string' ? parsed.sessionId : null,
       surface: surface
         ? {
             id: typeof surface.id === 'string' ? surface.id : undefined,
             scope: typeof surface.scope === 'string' ? surface.scope : undefined,
           }
         : undefined,
+      workerId: typeof parsed.workerId === 'string' ? parsed.workerId : null,
       workspaceId: typeof parsed.workspaceId === 'string' ? parsed.workspaceId : null,
     }
   }
   catch {
     return null
+  }
+}
+
+function brokerScope(context: MountContext) {
+  return {
+    operatorId: context.operatorId ?? undefined,
+    sessionId: context.sessionId ?? undefined,
+    workerId: context.workerId ?? undefined,
+    workspaceId: context.workspaceId ?? undefined,
   }
 }
 

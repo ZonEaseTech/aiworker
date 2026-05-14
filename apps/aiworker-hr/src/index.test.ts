@@ -1,5 +1,6 @@
 import type { LocalExecutor } from '@zonease/aiworker-soul-app-runtime'
 
+import { Buffer } from 'node:buffer'
 import { mkdtempSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -128,6 +129,76 @@ describe('HR reference Soul App', () => {
     }
     finally {
       server.stop()
+      if (previousToken === undefined)
+        delete Bun.env.AIWORKER_MOUNT_TOKEN
+      else
+        Bun.env.AIWORKER_MOUNT_TOKEN = previousToken
+    }
+  })
+
+  it('persists people profile drafts through Host broker storage when mounted context is present', async () => {
+    const previousToken = Bun.env.AIWORKER_MOUNT_TOKEN
+    Bun.env.AIWORKER_MOUNT_TOKEN = 'test-hr-mounted-token'
+    const storageCalls: Array<{ body: Record<string, unknown>, path: string, search: URLSearchParams }> = []
+    const host = Bun.serve({
+      async fetch(request) {
+        const url = new URL(request.url)
+        if (request.method === 'PUT' && url.pathname === '/api/local/apps/aiworker-hr/broker/storage/drafts/people-profile/workspace-hr') {
+          storageCalls.push({
+            body: await request.json() as Record<string, unknown>,
+            path: url.pathname,
+            search: url.searchParams,
+          })
+          return Response.json({ record: { appId: 'aiworker-hr', key: 'drafts/people-profile/workspace-hr' } })
+        }
+        return Response.json({ error: { code: 'NOT_FOUND' } }, { status: 404 })
+      },
+      hostname: '127.0.0.1',
+      port: 0,
+    })
+    const server = serveHostMounted(0)
+    const baseUrl = `http://127.0.0.1:${server.port}`
+    const mountContext = Buffer.from(JSON.stringify({
+      operatorId: 'operator-local',
+      sessionId: 'session-hr',
+      workerId: 'worker-hr',
+      workspaceId: 'workspace-hr',
+    })).toString('base64url')
+
+    try {
+      const actionRes = await fetch(`${baseUrl}/protocol/actions`, {
+        body: JSON.stringify({ input: {}, protocolAction: 'peopleProfiles.create' }),
+        headers: {
+          'content-type': 'application/json',
+          'x-aiworker-host-url': `http://127.0.0.1:${host.port}`,
+          'x-aiworker-mount-context': mountContext,
+          'x-aiworker-mount-token': 'test-hr-mounted-token',
+        },
+        method: 'POST',
+      })
+
+      expect(actionRes.status).toBe(200)
+      expect(await actionRes.json()).toMatchObject({ ok: true, refresh: true })
+      const storageCall = storageCalls[0]
+      expect(storageCall).toBeDefined()
+      expect(storageCall!.path).toBe('/api/local/apps/aiworker-hr/broker/storage/drafts/people-profile/workspace-hr')
+      expect(storageCall!.search.get('operatorId')).toBe('operator-local')
+      expect(storageCall!.search.get('sessionId')).toBe('session-hr')
+      expect(storageCall!.search.get('workerId')).toBe('worker-hr')
+      expect(storageCall!.search.get('workspaceId')).toBe('workspace-hr')
+      expect(storageCall!.body).toMatchObject({
+        valueJson: {
+          appId: 'aiworker-hr',
+          kind: 'people-profile',
+          source: 'hr-mounted-action',
+          status: 'draft',
+          workspaceId: 'workspace-hr',
+        },
+      })
+    }
+    finally {
+      server.stop()
+      host.stop()
       if (previousToken === undefined)
         delete Bun.env.AIWORKER_MOUNT_TOKEN
       else

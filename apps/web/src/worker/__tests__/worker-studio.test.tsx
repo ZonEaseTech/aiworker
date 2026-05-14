@@ -981,6 +981,14 @@ describe('worker studio', () => {
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith('/api/local/apps/aiworker-hr/actions/create-people-profile', expect.objectContaining({ method: 'POST' }))
     })
+    const actionCall = vi.mocked(fetch).mock.calls.find(([url]) => String(url).endsWith('/api/local/apps/aiworker-hr/actions/create-people-profile'))
+    const actionBody = JSON.parse(String(actionCall?.[1]?.body)) as Record<string, Record<string, string>>
+    expect(actionBody).toMatchObject({
+      input: { source: 'worker-shell' },
+      scope: { workerId: 'hr-worker' },
+    })
+    expect(actionBody.input).not.toHaveProperty('workerId')
+    expect(actionBody.input).not.toHaveProperty('workspaceId')
     expect(await screen.findByText('People profile draft created.')).toBeTruthy()
     const createWorkspaceDialog = screen.getByRole('dialog', { name: 'Create workspace' })
     expect(createWorkspaceDialog).toBeTruthy()

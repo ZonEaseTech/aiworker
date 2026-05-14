@@ -55,6 +55,13 @@ export interface LocalSoulAppActionResponse {
   }
 }
 
+export interface LocalSoulAppActionScope {
+  operatorId?: string | null
+  sessionId?: string | null
+  workerId?: string | null
+  workspaceId?: string | null
+}
+
 export interface LocalSoulAppSearchResult {
   appId: string
   authority: 'soul-app'

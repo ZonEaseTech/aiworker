@@ -1,5 +1,6 @@
 import type { HostedSoulApp, SoulAppPermission } from '@zonease/aiworker-shared'
 import type { ArtifactRow, LessonRow, ReviewRow, SoulAppAuditEventRow, SoulAppStorageRecordRow } from '@zonease/aiworker-storage-sqlite/worker'
+import type { SoulAppStorageProvider } from './storage-provider'
 
 import { randomUUID } from 'node:crypto'
 import {
@@ -7,16 +8,14 @@ import {
   createLesson,
   createReview,
   getSession,
-  getSoulAppStorageRecord,
   getWorker,
   getWorkspace,
   listArtifacts,
   listSoulAppAuditEvents,
-  listSoulAppStorageRecords,
-  upsertSoulAppStorageRecord,
 } from '@zonease/aiworker-storage-sqlite/worker'
 
 import { getHostedSoulApp } from './registry'
+import { createSqliteSoulAppStorageProvider } from './storage-provider'
 
 export interface SoulAppBrokerContext {
   appId: string
@@ -24,6 +23,7 @@ export interface SoulAppBrokerContext {
   now?: () => string
   operatorId?: string
   sessionId?: string
+  storageProvider?: SoulAppStorageProvider
   workerId?: string
   workspaceId?: string
 }
@@ -74,6 +74,8 @@ export interface SoulAppEngineInvocationInput {
 }
 
 export function createSoulAppBroker(context: SoulAppBrokerContext) {
+  const storageProvider = context.storageProvider ?? createSqliteSoulAppStorageProvider()
+
   return {
     artifacts: {
       list(workspaceId = context.workspaceId): ArtifactRow[] | SoulAppBrokerDenied {
@@ -174,14 +176,14 @@ export function createSoulAppBroker(context: SoulAppBrokerContext) {
         recordDecision(context, decision, 'storage', 'read', key, { key })
         if (!decision.allowed)
           return denied(decision)
-        return getSoulAppStorageRecord(context.appId, key)
+        return storageProvider.get(context.appId, key)
       },
       list(): SoulAppStorageRecordRow[] | SoulAppBrokerDenied {
         const decision = decide(context, 'storage', 'read', context.appId)
         recordDecision(context, decision, 'storage', 'read', context.appId, {})
         if (!decision.allowed)
           return denied(decision)
-        return listSoulAppStorageRecords(context.appId)
+        return storageProvider.list(context.appId)
       },
       put(key: string, valueJson: Record<string, unknown>, options: SoulAppStoragePutOptions = {}): SoulAppStorageRecordRow | SoulAppBrokerDenied {
         const namespace = options.namespace ?? context.appId
@@ -192,7 +194,7 @@ export function createSoulAppBroker(context: SoulAppBrokerContext) {
         recordDecision(context, namespaceDecision, 'storage', 'write', namespace, { key, namespace })
         if (!namespaceDecision.allowed)
           return denied(namespaceDecision)
-        return upsertSoulAppStorageRecord({
+        return storageProvider.put({
           appId: context.appId,
           key,
           namespace,

@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-14 (PLAN-306 completed)
+> Updated: 2026-05-14 (PLAN-307 completed)
 
 ## Usage
 
@@ -335,3 +335,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-304 Host platform locator and capability shell boundary**](PLAN-304.md) `2026-05-13`
 - [x] [**PLAN-305 Soul App protocol interaction closure**](PLAN-305.md) `2026-05-14`
 - [x] [**PLAN-306 Soul App broker permission hardening**](PLAN-306.md) `2026-05-14`
+- [x] [**PLAN-307 Soul App storage broker provider and app-owned drafts**](PLAN-307.md) `2026-05-14`

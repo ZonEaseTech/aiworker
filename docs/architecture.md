@@ -151,6 +151,7 @@ events -> optional app-emitted lifecycle/domain events
 - Host action/search/settings invocation must resolve a manifest-declared descriptor first.
   Host must reject undeclared protocol actions or search providers, and must not infer app domain behavior from protocol names.
 - Descriptor `requiredPermissions` are broker-enforced before Host contacts a mounted Soul App service.
+- Host storage broker providers own app-scoped namespaces and access control; Soul Apps own stored value semantics.
 - Host 可以展示 app 的 review 或 memory status，不解释 status 对业务流程的含义。
 - Soul App 不直接读取 Host 私有 DB、secret、connector credential 或 sibling app 源码。
 

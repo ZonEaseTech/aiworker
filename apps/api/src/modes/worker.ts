@@ -108,6 +108,13 @@ interface ShellActionDescriptor {
   requiredPermissions?: readonly string[]
 }
 
+interface BrokerRequestScope {
+  operatorId?: string
+  sessionId?: string
+  workerId?: string
+  workspaceId?: string
+}
+
 const MOUNTED_PROXY_TIMEOUT_MS = 10_000
 const MOUNTED_PROXY_STRIPPED_HEADERS = new Set([
   'authorization',
@@ -265,11 +272,12 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     const action = resolveShellAction(app, c.req.param('actionId'))
     if (!action)
       return c.json({ error: { code: 'SOUL_APP_ACTION_NOT_DECLARED', message: `Soul App action is not declared: ${c.req.param('actionId')}` } }, 404)
-    const decision = decideDescriptorRequiredPermissions(c, state, action.requiredPermissions, `action ${action.id}`)
+    const body = await readJson<{ input?: Record<string, unknown>, scope?: Record<string, unknown> }>(c.req)
+    const scope = brokerScopeFromRecord(body.scope)
+    const decision = decideDescriptorRequiredPermissions(c, state, action.requiredPermissions, `action ${action.id}`, scope)
     if (decision)
       return permissionDecisionResponse(c, decision)
-    const body = await readJson<{ input?: Record<string, unknown> }>(c.req)
-    return mountedActionResponse(c, state, app, action, isRecord(body.input) ? body.input : {})
+    return mountedActionResponse(c, state, app, action, isRecord(body.input) ? body.input : {}, scope)
   })
   app.get('/api/local/apps/:appId/search', async (c) => {
     const app = state.host.getApp(c.req.param('appId'))
@@ -754,16 +762,16 @@ function enrichTemplateMetadata(state: LocalDaemonState, workerId: string, templ
   return state.host.enrichTemplateMetadata(workerId, templateId, metadata)
 }
 
-function brokerContext(c: Context, state: LocalDaemonState) {
+function brokerContext(c: Context, state: LocalDaemonState, scope?: BrokerRequestScope) {
   const settings = loadLocalSettings()
   return {
     appId: requireString(c.req.param('appId'), 'appId'),
     enabledConnectorIds: settings.connectors.filter(connector => connector.enabled).map(connector => connector.id),
     now: state.now,
-    operatorId: c.req.query('operatorId'),
-    sessionId: c.req.query('sessionId'),
-    workerId: c.req.query('workerId'),
-    workspaceId: c.req.query('workspaceId'),
+    operatorId: scope?.operatorId ?? c.req.query('operatorId'),
+    sessionId: scope?.sessionId ?? c.req.query('sessionId'),
+    workerId: scope?.workerId ?? c.req.query('workerId'),
+    workspaceId: scope?.workspaceId ?? c.req.query('workspaceId'),
   }
 }
 
@@ -800,11 +808,12 @@ function decideDescriptorRequiredPermissions(
   state: LocalDaemonState,
   requiredPermissions: readonly string[] | undefined,
   descriptor: string,
+  scope?: BrokerRequestScope,
 ): { allowed: boolean, code: string, reason: string } | null {
   if (!requiredPermissions?.length)
     return null
 
-  const broker = createSoulAppBroker(brokerContext(c, state))
+  const broker = createSoulAppBroker(brokerContext(c, state, scope))
   for (const permissionRef of requiredPermissions) {
     const parsed = parseRequiredPermission(permissionRef)
     if (!parsed) {
@@ -820,6 +829,29 @@ function decideDescriptorRequiredPermissions(
   }
 
   return null
+}
+
+function brokerScopeFromRecord(value: unknown): BrokerRequestScope | undefined {
+  if (!isRecord(value))
+    return undefined
+  const scope: BrokerRequestScope = {}
+  const operatorId = optionalNonEmptyString(value.operatorId)
+  const sessionId = optionalNonEmptyString(value.sessionId)
+  const workerId = optionalNonEmptyString(value.workerId)
+  const workspaceId = optionalNonEmptyString(value.workspaceId)
+  if (operatorId)
+    scope.operatorId = operatorId
+  if (sessionId)
+    scope.sessionId = sessionId
+  if (workerId)
+    scope.workerId = workerId
+  if (workspaceId)
+    scope.workspaceId = workspaceId
+  return Object.keys(scope).length > 0 ? scope : undefined
+}
+
+function optionalNonEmptyString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined
 }
 
 function parseRequiredPermission(value: string): Pick<SoulAppPermission, 'action' | 'kind' | 'target'> | null {
@@ -851,13 +883,14 @@ async function mountedActionResponse(
   app: HostedSoulApp,
   action: ShellActionDescriptor,
   input: Record<string, unknown>,
+  scope?: BrokerRequestScope,
 ): Promise<Response> {
   const service = await mountedSoulAppServiceOrResponse(c, state, app)
   if (service instanceof Response)
     return service
 
   const headers = mountedProxyHeaders(c.req.raw.headers)
-  applyMountedProxyContextHeaders(headers, c, state, app, service)
+  applyMountedProxyContextHeaders(headers, c, state, app, service, undefined, scope)
   headers.set('content-type', 'application/json')
 
   const controller = new AbortController()
@@ -1108,6 +1141,7 @@ function applyMountedProxyContextHeaders(
   app: HostedSoulApp,
   service: MountedSoulAppService,
   contribution?: MountedSurfaceContribution,
+  scope?: BrokerRequestScope,
 ): void {
   const sourceUrl = new URL(c.req.url)
   const origin = `${sourceUrl.protocol}//${sourceUrl.host}`
@@ -1116,14 +1150,14 @@ function applyMountedProxyContextHeaders(
     artifactId: c.req.query('artifactId') ?? null,
     brokerUrl: `${origin}/api/local/apps/${app.appId}/broker`,
     expiresAt: mountContextExpiry(state),
-    operatorId: c.req.query('operatorId') ?? null,
+    operatorId: scope?.operatorId ?? c.req.query('operatorId') ?? null,
     permissions: app.manifest.permissions,
     reviewId: c.req.query('reviewId') ?? null,
     routePrefix: app.mountedContribution.apiRoutePrefix,
-    sessionId: c.req.query('sessionId') ?? null,
+    sessionId: scope?.sessionId ?? c.req.query('sessionId') ?? null,
     surface: contribution ? publicMountedSurfaceContribution(contribution) : null,
-    workerId: c.req.query('workerId') ?? null,
-    workspaceId: c.req.query('workspaceId') ?? null,
+    workerId: scope?.workerId ?? c.req.query('workerId') ?? null,
+    workspaceId: scope?.workspaceId ?? c.req.query('workspaceId') ?? null,
   })).toString('base64url')
   const signature = createHmac('sha256', service.mountToken).update(payload).digest('hex')
 

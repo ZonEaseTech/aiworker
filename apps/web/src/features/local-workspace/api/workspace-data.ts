@@ -12,7 +12,7 @@ import type {
   LocalWorkspace,
   VerticalSoul,
 } from '@zonease/aiworker-shared'
-import type { LocalHostedSoulApp, LocalInfoResponse, LocalSoulAppActionResponse, LocalSoulAppSearchResponse, LocalWorkspaceData } from './types'
+import type { LocalHostedSoulApp, LocalInfoResponse, LocalSoulAppActionResponse, LocalSoulAppActionScope, LocalSoulAppSearchResponse, LocalWorkspaceData } from './types'
 
 import { localJson } from '../../../shared/api/local-client'
 
@@ -55,9 +55,9 @@ export async function resolveMountedSurface<T>(appId: string, surfaceId: string)
   return localJson<T>(`/api/local/apps/${appId}/surfaces/${surfaceId}`)
 }
 
-export async function invokeSoulAppAction(appId: string, actionId: string, input?: unknown): Promise<LocalSoulAppActionResponse> {
+export async function invokeSoulAppAction(appId: string, actionId: string, input?: unknown, scope?: LocalSoulAppActionScope): Promise<LocalSoulAppActionResponse> {
   return localJson<LocalSoulAppActionResponse>(`/api/local/apps/${appId}/actions/${actionId}`, {
-    body: JSON.stringify({ input }),
+    body: JSON.stringify({ input, scope }),
     method: 'POST',
   })
 }

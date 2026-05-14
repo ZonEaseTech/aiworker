@@ -50,6 +50,11 @@ export {
   type SoulAppRegistryContext,
 } from './soul-app/registry'
 export {
+  createSqliteSoulAppStorageProvider,
+  type SoulAppStorageProvider,
+  type SoulAppStoragePutInput,
+} from './soul-app/storage-provider'
+export {
   type LocalWorkerEvent,
   LocalWorkerEventBus,
   type LocalWorkerEventHandler,

@@ -7,10 +7,14 @@ import { hrReferenceSoulApp, hrSoulAppManifest } from './index'
 
 interface MountContext {
   brokerUrl?: string
+  hostUrl?: string
+  operatorId?: string | null
+  sessionId?: string | null
   surface?: {
     id?: string
     scope?: string
   }
+  workerId?: string | null
   workspaceId?: string | null
 }
 
@@ -47,7 +51,7 @@ export function serveHostMounted(port = Number(Bun.env.PORT ?? 0)) {
       }
       if (url.pathname === '/protocol/actions' && request.method === 'POST') {
         const body = await request.json().catch(() => ({})) as Record<string, unknown>
-        return Response.json(hrProtocolAction(String(body.protocolAction ?? '')))
+        return Response.json(await hrProtocolAction(request, String(body.protocolAction ?? '')))
       }
       if (url.pathname === '/protocol/search' && request.method === 'GET') {
         return Response.json(hrProtocolSearch(url))
@@ -140,8 +144,11 @@ function hrWidgetFrameHtml(request: Request): string {
   ].join('')
 }
 
-function hrProtocolAction(protocolAction: string) {
+async function hrProtocolAction(request: Request, protocolAction: string) {
   if (protocolAction === 'peopleProfiles.create') {
+    const persisted = await persistPeopleProfileDraft(request)
+    if (!persisted.ok)
+      return persisted
     return {
       message: 'People profile draft opened by HR app.',
       ok: true,
@@ -171,6 +178,31 @@ function hrProtocolAction(protocolAction: string) {
   return {
     message: `Unknown HR protocol action: ${protocolAction}`,
     ok: false,
+  }
+}
+
+async function persistPeopleProfileDraft(request: Request): Promise<{ message: string, ok: false } | { ok: true }> {
+  const context = readMountContext(request)
+  if (!context?.hostUrl)
+    return { ok: true }
+
+  const draftKey = `drafts/people-profile/${context.workspaceId ?? 'app'}`
+  const client = createSoulAppClient({ appId: hrSoulAppManifest.id, baseUrl: context.hostUrl })
+  try {
+    await client.broker.storage.put(draftKey, {
+      appId: hrSoulAppManifest.id,
+      kind: 'people-profile',
+      source: 'hr-mounted-action',
+      status: 'draft',
+      workspaceId: context.workspaceId ?? null,
+    }, brokerScope(context))
+    return { ok: true }
+  }
+  catch (error) {
+    return {
+      message: error instanceof Error ? error.message : String(error),
+      ok: false,
+    }
   }
 }
 
@@ -205,17 +237,30 @@ function readMountContext(request: Request): MountContext | null {
     const surface = isRecord(parsed.surface) ? parsed.surface : null
     return {
       brokerUrl: typeof parsed.brokerUrl === 'string' ? parsed.brokerUrl : undefined,
+      hostUrl: request.headers.get('x-aiworker-host-url') ?? undefined,
+      operatorId: typeof parsed.operatorId === 'string' ? parsed.operatorId : null,
+      sessionId: typeof parsed.sessionId === 'string' ? parsed.sessionId : null,
       surface: surface
         ? {
             id: typeof surface.id === 'string' ? surface.id : undefined,
             scope: typeof surface.scope === 'string' ? surface.scope : undefined,
           }
         : undefined,
+      workerId: typeof parsed.workerId === 'string' ? parsed.workerId : null,
       workspaceId: typeof parsed.workspaceId === 'string' ? parsed.workspaceId : null,
     }
   }
   catch {
     return null
+  }
+}
+
+function brokerScope(context: MountContext) {
+  return {
+    operatorId: context.operatorId ?? undefined,
+    sessionId: context.sessionId ?? undefined,
+    workerId: context.workerId ?? undefined,
+    workspaceId: context.workspaceId ?? undefined,
   }
 }
 
