@@ -41,40 +41,30 @@ capability prompts, packs, app-owned descriptors, and app-scoped broker use.
 
 ## Product Contract
 
-Host owns platform positioning and capability boundaries:
+Hard constraints live in `docs/architecture.md#constraint-registry`. Apply these
+IDs before changing Host behavior:
 
-- local daemon lifecycle and Web/API host;
-- install/enable/disable and app registry;
-- Host auth, security review, grants and session security;
-- global appearance, language, default engine, local MCP and connector settings;
-- permission, storage, connector, secret-ref, log, search and audit brokers;
-- worker/workspace/session locator;
-- Host shell layout and optional header contract;
-- mounted service launch/connect;
-- protocol discovery and descriptor cache.
+- `ARCH-001`: keep the default product path centered on Host-installed Soul
+  Apps, workers, workspaces and sessions.
+- `HOST-001`: Host owns platform capability, not domain meaning.
+- `PROTO-001`: Host consumes only protocol/grant-exposed app surfaces.
+- `IMPORT-001`: Host must not import Soul App `src`.
+- `DATA-001`: Host stores metadata and descriptors, not full business facts.
+- `BROKER-001`: brokers are app/workspace/grant scoped.
+- `DOC-001`: audit docs do not override the active architecture contract.
 
-Host does not own domain meaning. It must not synthesize HR profiles, QA release
-verdicts, review semantics, artifact content meaning, app memory meaning, or
-business-specific search fields.
+Practical Host implications:
 
-## Boundary Rules
-
-- Read `docs/architecture.md` before changing Host behavior.
-- Host may consume only protocol-exposed views, actions, search, settings,
-  status or descriptors from Soul Apps.
-- If a Soul App does not expose a surface, Host does not fetch, infer or
-  backfill it.
-- Keep broker records generic: app id, scope ids, descriptor ids, title,
-  summary, references, status, hashes and platform audit. Do not store raw
-  connector payloads, secrets or domain-specific business facts in Host code.
-- Do not import Soul App `src` from Host code. Host sees manifests, protocol
-  descriptors and public shared fixtures/types.
-- For official HR/QA manifest or shell contract changes, keep `apps/*` manifests
-  and `packages/shared/src/soul-app/fixtures.ts` aligned because Host bootstrap
-  consumes the shared reference manifests.
-- External engines own their tool loop, model routing, sandbox, approval,
-  native session, auth/profile and plugin ecosystem. Host prepares context and
-  observes/invokes at session boundaries.
+- If a Soul App does not expose a surface, Host stops instead of fetching,
+  inferring or backfilling it.
+- Keep broker records generic: ids, references, status, hashes and platform
+  audit, not domain-specific facts.
+- For official HR/QA manifest or shell contract changes, keep app manifests and
+  `packages/shared/src/soul-app/fixtures.ts` aligned because Host bootstrap
+  consumes shared reference manifests.
+- External engines own their tool loop, sandbox, approvals, native sessions,
+  auth/profile and plugin ecosystem; Host prepares context and observes/invokes
+  at session boundaries.
 
 ## Read Set
 

@@ -25,8 +25,8 @@ Use this skill for:
 
 Do not use this as a general validation-campaign router for old fleet/gateway,
 published CLI governance harnesses, Coder workspaces, or release-debug runs.
-Those are historical or task-specific flows; do not resurrect
-`aiworker-validate`.
+Those are historical or task-specific flows, not current Soul App development
+routes.
 
 Use `aiworker-host-dev` instead for Host platform lifecycle, local daemon API,
 CLI lifecycle, Worker Web Shell rendering, broker enforcement, security review,
@@ -35,67 +35,34 @@ implementation.
 
 ## Product Contract
 
-Keep this product path intact:
+Hard constraints live in `docs/architecture.md#constraint-registry`. Apply these
+IDs before changing Soul App behavior:
 
-```text
-Host -> install/enable Soul App -> Soul worker -> workspace -> session
-  -> Soul App exposed views/actions -> business artifact/profile/review/lesson
-```
+- `ARCH-001`: keep the default product path centered on Host-installed Soul
+  Apps, workers, workspaces and sessions.
+- `SOUL-001`: Soul App owns domain state and domain meaning.
+- `PROTO-001`: app-owned state reaches Host only through declared protocol
+  surfaces.
+- `IMPORT-001`: Soul App code must not import Host private packages or sibling
+  app `src`.
+- `DATA-001`: business content stays in app/workspace storage namespaces.
+- `BROKER-001`: shared resources must go through scoped Host brokers.
+- `DOC-001`: audit docs do not override the active architecture contract.
 
 Use this vocabulary consistently: `Host`, `Soul App`, `Soul worker`,
 `workspace`, `session`, `artifact`, `profile`, `review`, `lesson`,
 `standalone`, `Host mounted`, `manifest`, `SDK`, `broker`, `protocol`.
 
-Developer Soul is a supporting role for code review, release evidence, repo
-report, handoff and risk audit. Do not make repo/PMA/coding loop, admin
-dashboard, governance kernel or generic agent runtime the product center.
+Practical Soul App implications:
 
-## Boundary Rules
-
-Soul Apps own domain meaning:
-
-- domain UI/API and standalone shell;
-- manifest, workspace types, packs, capability prompts and protocol handlers;
-- artifact schemas/content/lifecycle;
-- profile composition;
-- review rubrics and verdict meaning;
-- lesson/memory promotion semantics;
-- app-scoped storage content and search descriptor publication;
-- Host mounted service entrypoints.
-
-Host owns platform capability and positioning:
-
-- local daemon, install/enable/disable state and mounted service launch;
-- Host auth, security review, grants and session security;
-- global settings for appearance, language, default engine, MCP and connectors;
-- permission, storage, connector, secret-ref, log, search and audit brokers;
-- worker/workspace/session locator;
-- Host shell and optional header contract;
-- protocol discovery and descriptor cache.
-
-Soul App is the source of truth for domain state and domain meaning.
-Host is the source of truth for platform capabilities, grants, protocol
-discovery and shell context. Host may consume only protocol-exposed
-views/actions/search/settings descriptors, and must not infer Soul App domain
-meaning.
-
-Do not bypass those boundaries:
-
-- Do not import `@zonease/aiworker-core`, `@zonease/aiworker-api`,
-  `@zonease/aiworker-storage-sqlite`, or `@zonease/aiworker-web` from Soul App
-  source.
-- Do not import another Soul App's `src` from app code.
-- Do not let Soul App code directly schedule engines, read/write Host DB
-  handles, access connector credentials, or mutate global memory.
-- Do not let Host infer app-owned profile, review, artifact, search or memory
-  meaning from filenames, DB rows, prompts, protocol names or UI labels.
+- Own domain UI/API, standalone shell, mounted handlers, artifact schemas,
+  profile composition, review rubrics and lesson/memory promotion semantics.
 - Declare `requiredPermissions` on shell, search and mounted surfaces whenever
-  the action depends on Host broker capabilities; Host enforces them before it
-  contacts the mounted Soul App service.
+  the action depends on Host broker capabilities.
 - Do not put secrets in manifests, generated app config, workspace metadata, DB
-  metadata, logs, prompts, review rubrics, or skill files.
-- Host mounted access to shared resources must go through scoped broker
-  surfaces.
+  metadata, logs, prompts, review rubrics or skill files.
+- Developer Soul is supporting infrastructure for review/evidence/handoff/risk
+  audit, not the product center.
 
 ## Read Set
 

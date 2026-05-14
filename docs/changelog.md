@@ -1,5 +1,19 @@
 # AIWorker Changelog
 
+## 2026-05-14 13:39 [completed] DOC-013 / PLAN-314 — Agent-operational documentation contract
+
+Completed the documentation contract convergence slice.
+
+- Centralized hard Host/Soul/protocol/data/import/documentation constraints in
+  `docs/architecture.md`.
+- Kept `AGENTS.md`, README and route skills as thin agent-operational layers.
+- Replaced stale `README.zh-CN.md` product prose with canonical active
+  pointers.
+- Added a docs contract check so stale entrypoints and retired route names do not
+  drift back into active guidance.
+- Verification passed: `bun run docs:check`, `bun run lint`, `git diff
+  --check`, `bun run crg:update`, and `bun run crg:review`.
+
 ## 2026-05-14 13:17 [completed] FEAT-081 / PLAN-313 — Host and Soul App developer route onboarding
 
 Completed the active-entrypoint convergence slice for new developers and

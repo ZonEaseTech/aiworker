@@ -12,7 +12,9 @@ Host -> install/enable Soul App -> Soul worker -> workspace -> session
   -> Soul App exposed views/actions -> business artifact/profile/review/lesson
 ```
 
-当前架构合同见 `docs/architecture.md`。旧北极星文档已经移除，避免开发入口被拆成多套叙事。
+当前架构合同见 `docs/architecture.md`，其中 `Constraint Registry` 是 Host / Soul App /
+protocol / data / broker / documentation 的硬约束源头。旧北极星文档已经移除，避免开发入口
+被拆成多套叙事。
 
 ## 文档地图
 
@@ -31,7 +33,7 @@ Host -> install/enable Soul App -> Soul worker -> workspace -> session
 | CLI lifecycle、daemon/app/worker/workspace/session 命令 | `docs/cli.md` + `.agents/skills/aiworker-host-dev/SKILL.md` |
 | 官方 HR/QA Soul App、manifest、standalone、Host mounted、artifact/profile/review/lesson | `docs/soul-app-developer.md` + `.agents/skills/aiworker-soul-app-dev/SKILL.md` |
 | 新第三方 Soul App | `aiworker app create` + `docs/soul-app-developer.md` + `.agents/skills/aiworker-soul-app-dev/SKILL.md` |
-| Host/Soul App 边界、shared protocol、broker grant | 先读 `docs/architecture.md`，判断 ownership 后进入 Host 或 Soul App skill |
+| Host/Soul App 边界、shared protocol、broker grant | 先读 `docs/architecture.md#constraint-registry`，判断 ownership 后进入 Host 或 Soul App skill |
 
 ## 为什么改成这个形态
 

@@ -13,10 +13,10 @@ validation harnesses, scaffold behavior, manifests, standalone surfaces, Host
 mounted surfaces, artifact schemas, capability prompts, review rubrics, profile
 views, or protocol surfaces.
 
-This document is the human-readable authoring guide. The skill is the
-agent-native execution route. Keep both aligned with the same Host / Soul App,
-workspace/session, artifact/profile/review/lesson, standalone, Host mounted,
-manifest, SDK, protocol and broker vocabulary.
+This document is the authoring guide. The skill is the agent-native execution
+route. Hard constraints live in `docs/architecture.md#constraint-registry`.
+This file may explain authoring implications, but must not redefine the Host /
+Soul App contract.
 
 The canonical route is:
 
@@ -33,9 +33,8 @@ runtime, or shared Host/Soul protocol implementation.
 Do not treat `apps/AGENTS.md` as the canonical Soul App rule surface until the
 target agent runner has proven native nested AGENTS loading.
 
-Soul App is the source of truth for domain state and domain meaning.
-Host is the source of truth for platform capabilities, grants, protocol discovery and shell context.
-Host may consume only protocol-exposed views/actions/search/settings descriptors, and must not infer Soul App domain meaning.
+Apply these registry IDs before changing app behavior: `SOUL-001`,
+`PROTO-001`, `IMPORT-001`, `DATA-001` and `BROKER-001`.
 
 ## Create
 

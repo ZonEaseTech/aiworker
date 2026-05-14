@@ -70,6 +70,23 @@ Host mounted 不等于所有调用都必须由 Host 代理。默认规则是：
 - 共享平台能力通过 Host broker；
 - 跨 app 或跨 workspace 的定位、授权和 shell 集成由 Host 协调。
 
+## Constraint Registry
+
+This registry is the normative source for active Host / Soul App constraints.
+Thin layers such as `AGENTS.md`, README files, skills and authoring guides may
+route agents to these IDs, but must not redefine them as separate contracts.
+
+| ID | Rule | Owner | Enforced by | Thin references |
+| --- | --- | --- | --- | --- |
+| `ARCH-001` | The default product path is `Host -> install/enable Soul App -> Soul worker -> workspace -> session -> app-exposed business output`. Do not route default work back to developer-only work orders, admin dashboards, remote control planes or generic agent runtime platforms. | Architecture | `scripts/check-doc-contract.ts`, active entrypoint review, product-path tests when UI changes | `AGENTS.md`, `README.md`, route skills |
+| `HOST-001` | Host owns platform capabilities: local daemon, install/enable, auth/security, grants, settings, brokers, locator, shell and protocol discovery. Host must not own domain meaning. | Host | Host API/core/Web/CLI tests, broker/security tests, `pma-cr`, code-review-graph | `aiworker-host-dev`, `AGENTS.md` |
+| `SOUL-001` | Soul App owns domain state and semantics: domain UI/API, workspace/session workflow, artifacts, profiles, reviews, lessons/memory, standalone shell and mounted handlers. | Soul App | `aiworker app validate`, `aiworker app smoke`, app package tests | `aiworker-soul-app-dev`, `docs/soul-app-developer.md` |
+| `PROTO-001` | Host may consume only manifest/protocol/grant-exposed Soul App views, actions, search, settings, status and descriptors. If a surface is not exposed, Host must stop instead of fetching, inferring or synthesizing it. | Shared boundary | manifest/protocol schema tests, mounted API tests, security review tests | Host and Soul App skills |
+| `IMPORT-001` | Soul App production code must not import Host private packages or sibling app `src`; Host code must not import Soul App `src`. Public SDK, runtime harnesses, manifests, protocol descriptors and shared fixtures are the allowed boundary objects. | Shared boundary | `scripts/check-soul-app-boundaries.ts`, `aiworker app validate`, package tests | Host and Soul App skills |
+| `DATA-001` | `worker.db` stores Host metadata, references, hashes, status and protocol descriptors. Full business content and domain facts stay in Soul App workspace files or app-scoped object/storage namespaces. | Host storage + Soul App | storage schema tests, broker tests, protocol descriptor tests | architecture data section, route skills |
+| `BROKER-001` | Broker access is scoped by app id, worker id, workspace id and grant. Broker providers expose capability metadata and app-scoped handles, never raw credentials or sibling app data. | Host broker | broker tests, provider registry tests, security review tests | Host skill, Soul App authoring |
+| `DOC-001` | Active normative docs are `AGENTS.md` and this architecture file. `docs/task`, `docs/plan`, `docs/superpowers` and `docs/changelog.md` are audit trail; they cannot override the active contract. | Documentation | `scripts/check-doc-contract.ts`, PMA closeout review | `AGENTS.md`, README, skills |
+
 ## 系统拓扑
 
 ```text
@@ -307,7 +324,7 @@ need by letting a Soul App import Host internals.
 - governance kernel first surface；
 - generic agent runtime platform；
 - developer-only work order loop；
-- 旧 Open Design 或外部产品映射叙事。
+- 旧外部产品映射叙事。
 
 当前开发必须从 `AGENTS.md` 和本文开始。旧 PMA、changelog、Superpowers spec/plan 是历史证据，
 不能覆盖本文合同。

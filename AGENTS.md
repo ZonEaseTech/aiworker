@@ -16,7 +16,8 @@ agent runtime 平台。
 
 ## 必读入口
 
-- `docs/architecture.md`：当前唯一架构合同，定义 Host / Soul App / protocol 边界。
+- `docs/architecture.md`：当前唯一架构合同；`Constraint Registry` 是 Host / Soul App /
+  protocol / data / broker / documentation 硬约束源头。
 - `.agents/skills/aiworker-host-dev/SKILL.md`：修改 Host platform、local daemon/API、
   Worker Web Shell、CLI lifecycle、broker、auth/security、shared protocol 或 storage schema
   前必须读取。
@@ -24,7 +25,8 @@ agent runtime 平台。
   Host mounted、capability、artifact/review 或 authoring 文档前必须读取。
 
 不要把历史外部产品映射、旧 gateway/fleet/control-plane、旧治理入口或旧重启计划当作当前实现
-约束。当前规范入口只有本文件和 `docs/architecture.md`。
+约束。当前规范入口只有本文件和 `docs/architecture.md`；PMA、changelog、Superpowers spec/plan
+都是审计轨迹，不能覆盖 `docs/architecture.md#constraint-registry`。
 
 ## 按任务读取
 
@@ -69,6 +71,8 @@ agent runtime 平台。
 - `packages/fs-layout`：`AIWORKER_HOME`、worker home、workspace 与 `.aiworker/` 布局。
 
 ## 产品与实现边界
+
+硬约束以 `docs/architecture.md#constraint-registry` 为准；本段只是 agent 执行时的速查路由。
 
 - Host 是平台定位与能力壳，不是领域数据解释者。
 - Soul App 是领域主权方，拥有 profile 组合、artifact schema/content、review rubric、
