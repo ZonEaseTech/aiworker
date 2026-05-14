@@ -933,6 +933,25 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
     expect(connectorBody).toMatchObject({ evidence: { connectorId: 'ats', redacted: true } })
     expect(JSON.stringify(connectorBody)).not.toContain('token')
 
+    const providersRes = await target.request(`/api/local/apps/aiworker-hr/broker/providers?${contextQuery}`)
+    expect(providersRes.status).toBe(200)
+    const providersBody = await providersRes.json() as {
+      registry: {
+        providers: Array<{ configured: boolean, enabled: boolean, id: string, kind: string, status: string }>
+        summary: { activeCount: number, plannedCount: number }
+      }
+    }
+    expect(providersBody.registry.providers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'storage.local-sqlite', kind: 'storage', status: 'active' }),
+      expect.objectContaining({ id: 'storage.s3', kind: 'storage', status: 'planned' }),
+      expect.objectContaining({ id: 'storage.gcp-bucket', kind: 'storage', status: 'planned' }),
+      expect.objectContaining({ id: 'audit.local-sqlite', kind: 'audit', status: 'active' }),
+      expect.objectContaining({ id: 'secret.vault-ref', kind: 'secret', status: 'planned' }),
+      expect.objectContaining({ configured: true, enabled: true, id: 'connector.ats', kind: 'connector', status: 'active' }),
+    ]))
+    expect(providersBody.registry.summary.plannedCount).toBe(3)
+    expect(JSON.stringify(providersBody)).not.toContain('token')
+
     const engineRes = await target.request(`/api/local/apps/aiworker-hr/broker/engine/invocations?${contextQuery}`, {
       method: 'POST',
       body: JSON.stringify({ prompt: 'call engine directly' }),
@@ -1059,6 +1078,7 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
     expect(paths).toContain('/api/local/apps/{appId}/enable')
     expect(paths).toContain('/api/local/apps/{appId}/actions/{actionId}')
     expect(paths).toContain('/api/local/apps/{appId}/search')
+    expect(paths).toContain('/api/local/apps/{appId}/broker/providers')
     expect(paths).toContain('/api/local/workers')
     expect(paths).toContain('/api/local/workers/{workerId}')
     expect(paths).toContain('/api/local/workers/{workerId}/templates')

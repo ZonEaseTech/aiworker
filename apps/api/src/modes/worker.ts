@@ -244,6 +244,10 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     const broker = createSoulAppBroker(brokerContext(c, state))
     return c.json({ permissions: broker.permissions.list() })
   })
+  app.get('/api/local/apps/:appId/broker/providers', (c) => {
+    const broker = createSoulAppBroker(brokerContext(c, state))
+    return c.json({ registry: broker.providers.list() })
+  })
   app.get('/api/local/apps/:appId/broker/storage', (c) => {
     const result = createSoulAppBroker(brokerContext(c, state)).storage.list()
     return brokerResponse(c, 'records', result)
@@ -776,6 +780,7 @@ function brokerContext(c: Context, state: LocalDaemonState, scope?: BrokerReques
   const settings = loadLocalSettings()
   return {
     appId: requireString(c.req.param('appId'), 'appId'),
+    connectorProviders: settings.connectors,
     enabledConnectorIds: settings.connectors.filter(connector => connector.enabled).map(connector => connector.id),
     now: state.now,
     operatorId: scope?.operatorId ?? c.req.query('operatorId'),
@@ -1740,6 +1745,7 @@ function registerLocalOpenApiPaths(app: OpenAPIHono): void {
     { method: 'post', path: '/api/local/apps/{appId}/actions/{actionId}', summary: 'Invoke a declared Soul App shell action', tags: ['apps'], created: true },
     { method: 'get', path: '/api/local/apps/{appId}/search', summary: 'Search through a declared Soul App provider', tags: ['apps'] },
     { method: 'get', path: '/api/local/apps/{appId}/broker/permissions', summary: 'List Soul App broker permissions', tags: ['apps'] },
+    { method: 'get', path: '/api/local/apps/{appId}/broker/providers', summary: 'List Host broker providers visible to a Soul App', tags: ['apps'] },
     { method: 'get', path: '/api/local/apps/{appId}/broker/storage', summary: 'List Soul App scoped storage records', tags: ['apps'] },
     { method: 'get', path: '/api/local/apps/{appId}/broker/storage/{key}', summary: 'Read Soul App scoped storage record', tags: ['apps'] },
     { method: 'put', path: '/api/local/apps/{appId}/broker/storage/{key}', summary: 'Write Soul App scoped storage record', tags: ['apps'] },

@@ -1,5 +1,22 @@
 # AIWorker Changelog
 
+## 2026-05-14 11:33 [completed] FEAT-077 / PLAN-309 — Broker provider registry
+
+Completed the next convergence slice after permission visibility delivery.
+
+- Define a typed broker provider registry for storage, connector, audit and
+  secret-reference providers.
+- Expose local SQLite providers and future S3/GCP/vault metadata without adding
+  real cloud SDK dependencies.
+- Let Soul Apps inspect Host platform capability providers through public
+  broker routes and SDK helpers.
+- Keep provider metadata secret-safe and domain-agnostic.
+
+Verification passed: focused shared/core/API/SDK tests and typechecks, lint,
+`git diff --check`, and code-review-graph. CRG exited 0 with static test-gap
+hints for API bootstrap/route registration and broker projection helpers,
+covered by focused API/core tests.
+
 ## 2026-05-14 02:05 [completed] FEAT-076 / PLAN-308 — Soul App permission visibility and install review
 
 Completed the next convergence slice after storage broker provider delivery.

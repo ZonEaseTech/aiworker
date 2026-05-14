@@ -123,6 +123,20 @@ export type {
   SoulAppUiContributionProtocol,
 } from './protocol'
 export {
+  soulAppBrokerProviderKindSchema,
+  soulAppBrokerProviderRegistrySchema,
+  soulAppBrokerProviderRegistrySummarySchema,
+  soulAppBrokerProviderSchema,
+  soulAppBrokerProviderStatusSchema,
+} from './provider'
+export type {
+  SoulAppBrokerProvider,
+  SoulAppBrokerProviderKind,
+  SoulAppBrokerProviderRegistry,
+  SoulAppBrokerProviderRegistrySummary,
+  SoulAppBrokerProviderStatus,
+} from './provider'
+export {
   buildHostedSoulApp,
   hostedSoulAppSchema,
   mountedContributionForManifest,

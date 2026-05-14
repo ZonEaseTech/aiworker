@@ -130,6 +130,11 @@ export function createSoulAppClient(options: SoulAppClientOptions) {
           return json(`/api/local/apps/${options.appId}/broker/permissions${queryString(context)}`)
         },
       },
+      providers: {
+        list(context?: SoulAppBrokerContextQuery) {
+          return json(`/api/local/apps/${options.appId}/broker/providers${queryString(context)}`)
+        },
+      },
       storage: {
         get(key: string, context?: SoulAppBrokerContextQuery) {
           return json(`/api/local/apps/${options.appId}/broker/storage/${encodeBrokerPath(key)}${queryString(context)}`)

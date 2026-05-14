@@ -1,5 +1,6 @@
 import type { HostedSoulApp, SoulAppPermission } from '@zonease/aiworker-shared'
 import type { ArtifactRow, LessonRow, ReviewRow, SoulAppAuditEventRow, SoulAppStorageRecordRow } from '@zonease/aiworker-storage-sqlite/worker'
+import type { SoulAppConnectorProviderConfig } from './provider-registry'
 import type { SoulAppStorageProvider } from './storage-provider'
 
 import { randomUUID } from 'node:crypto'
@@ -14,11 +15,13 @@ import {
   listSoulAppAuditEvents,
 } from '@zonease/aiworker-storage-sqlite/worker'
 
+import { listSoulAppBrokerProviders } from './provider-registry'
 import { getHostedSoulApp } from './registry'
 import { createSqliteSoulAppStorageProvider } from './storage-provider'
 
 export interface SoulAppBrokerContext {
   appId: string
+  connectorProviders?: readonly SoulAppConnectorProviderConfig[]
   enabledConnectorIds?: readonly string[]
   now?: () => string
   operatorId?: string
@@ -147,6 +150,13 @@ export function createSoulAppBroker(context: SoulAppBrokerContext) {
       },
       list(): readonly SoulAppPermission[] {
         return resolveApp(context)?.manifest.permissions ?? []
+      },
+    },
+    providers: {
+      list() {
+        return listSoulAppBrokerProviders({
+          connectors: context.connectorProviders,
+        })
       },
     },
     reviews: {

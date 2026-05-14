@@ -161,6 +161,70 @@ describe('Soul App isolation broker', () => {
     expect(listSoulAppAuditEvents('aiworker-hr').map(event => event.targetKind)).toEqual(['storage', 'storage', 'storage'])
   })
 
+  it('lists Host broker provider metadata without leaking provider secrets', () => {
+    const broker = createSoulAppBroker({
+      appId: 'aiworker-hr',
+      connectorProviders: [
+        { enabled: true, id: 'ats', name: 'ATS / HRIS', status: 'configured' },
+        { enabled: false, id: 'ci', name: 'CI / release evidence', status: 'not_configured' },
+      ],
+      enabledConnectorIds: ['ats'],
+      workspaceId: 'workspace-hr',
+    })
+
+    const registry = broker.providers.list()
+
+    expect(registry.providers).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        appScoped: true,
+        id: 'storage.local-sqlite',
+        kind: 'storage',
+        status: 'active',
+      }),
+      expect.objectContaining({
+        id: 'storage.s3',
+        kind: 'storage',
+        status: 'planned',
+      }),
+      expect.objectContaining({
+        id: 'storage.gcp-bucket',
+        kind: 'storage',
+        status: 'planned',
+      }),
+      expect.objectContaining({
+        id: 'audit.local-sqlite',
+        kind: 'audit',
+        status: 'active',
+      }),
+      expect.objectContaining({
+        id: 'secret.vault-ref',
+        kind: 'secret',
+        status: 'planned',
+      }),
+      expect.objectContaining({
+        configured: true,
+        enabled: true,
+        id: 'connector.ats',
+        kind: 'connector',
+        status: 'active',
+      }),
+      expect.objectContaining({
+        configured: false,
+        enabled: false,
+        id: 'connector.ci',
+        kind: 'connector',
+        status: 'not_configured',
+      }),
+    ]))
+    expect(registry.summary).toMatchObject({
+      activeCount: 3,
+      configuredCount: 3,
+      plannedCount: 3,
+    })
+    expect(JSON.stringify(registry)).not.toContain('sk-')
+    expect(JSON.stringify(registry)).not.toContain('token')
+  })
+
   it('brokers connector evidence without exposing raw tokens', () => {
     const broker = createSoulAppBroker({
       appId: 'aiworker-hr',

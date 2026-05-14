@@ -127,6 +127,7 @@ Soul App 维护的是领域对象：
 | Lesson/memory | Provide generic broker/admission ledger when requested | Decide what becomes reusable domain knowledge |
 | Audit | Audit Host/platform actions | Audit domain actions and expose summaries if useful |
 | Search | Offer platform search/index broker when granted | Decide searchable fields and result meaning |
+| Provider registry | Publish platform provider metadata and app-scoped availability | Choose which declared broker capabilities to use |
 
 ## Protocol Surfaces
 
@@ -152,6 +153,9 @@ events -> optional app-emitted lifecycle/domain events
   Host must reject undeclared protocol actions or search providers, and must not infer app domain behavior from protocol names.
 - Descriptor `requiredPermissions` are broker-enforced before Host contacts a mounted Soul App service.
 - Host storage broker providers own app-scoped namespaces and access control; Soul Apps own stored value semantics.
+- Host broker provider registry lists storage, connector, audit and secret-reference providers as
+  capability metadata. It may name future S3/GCP/vault providers, but it must not load cloud SDKs
+  or expose raw credentials through the registry.
 - Host install/enable surfaces may project manifest permissions, connector needs and descriptor
   `requiredPermissions` as a generic security review before app code runs. This review belongs to
   Host security and grant UX; it is not an app-specific approval model and does not interpret domain data.
@@ -247,8 +251,8 @@ apps/
   aiworker-qa/    official QA Soul App
 
 packages/
-  core/              local runtime, Host services and engine adapters
-  shared/            shared schemas and Host/Soul App protocol types
+  core/              local runtime, Host services, broker providers and engine adapters
+  shared/            shared schemas, provider registry and Host/Soul App protocol types
   soul-app-sdk/      public SDK for Soul App authors
   soul-app-runtime/  standalone and mounted runtime harness
   storage-sqlite/    worker.db schema, migrations and repositories

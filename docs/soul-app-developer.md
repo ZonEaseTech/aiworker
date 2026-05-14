@@ -160,6 +160,11 @@ Descriptor `requiredPermissions` are broker-enforced before Host contacts a
 mounted Soul App service.
 Host storage broker providers own app-scoped namespaces and access control;
 Soul Apps own stored value semantics.
+Host broker provider registry exposes storage, connector, audit and
+secret-reference provider metadata through public broker routes. Soul Apps may
+inspect this registry to adapt UX, but must not treat provider names as domain
+truth or assume future cloud providers are active until the registry marks them
+`active`.
 Host may project manifest permissions, connector needs and descriptor
 `requiredPermissions` into a generic enablement security review before app code
 runs. Soul Apps should make those declarations clear, but Host must not turn the
