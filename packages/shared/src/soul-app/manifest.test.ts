@@ -55,6 +55,19 @@ describe('Soul App manifest schema', () => {
       kind: 'api',
       target: '/api/local/apps/aiworker-hr',
     }))
+    expect(hrSoulAppManifest.permissions).toContainEqual(expect.objectContaining({
+      action: 'read',
+      kind: 'search',
+      target: 'aiworker-hr',
+    }))
+    expect(hrSoulAppManifest.ui.shell?.primaryAction).toEqual(expect.objectContaining({
+      id: 'create-people-profile',
+      requiredPermissions: ['storage:write:aiworker-hr', 'search:write:aiworker-hr'],
+    }))
+    expect(hrSoulAppManifest.ui.shell?.search).toEqual(expect.objectContaining({
+      protocolProvider: 'peopleProfiles.search',
+      requiredPermissions: ['search:read:aiworker-hr'],
+    }))
     expect(hrSoulAppManifest.ui.artifactPreviews[0]).toEqual(expect.objectContaining({
       slot: 'artifact-preview',
       target: 'person-profile',
@@ -74,21 +87,6 @@ describe('Soul App manifest schema', () => {
   it('accepts app-declared shell toolbar and search descriptors', () => {
     const result = validateSoulAppManifest({
       ...hrSoulAppManifest,
-      permissions: [
-        ...hrSoulAppManifest.permissions,
-        {
-          action: 'read',
-          kind: 'search',
-          reason: 'Read app-owned search descriptors.',
-          target: 'aiworker-hr',
-        },
-        {
-          action: 'write',
-          kind: 'search',
-          reason: 'Write app-owned search descriptors.',
-          target: 'aiworker-hr',
-        },
-      ],
       ui: {
         ...hrSoulAppManifest.ui,
         shell: {

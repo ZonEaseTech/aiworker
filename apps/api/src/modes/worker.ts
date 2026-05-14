@@ -918,7 +918,7 @@ function parseRequiredPermission(value: string): Pick<SoulAppPermission, 'action
 }
 
 function isSoulAppPermissionKind(value: string): value is SoulAppPermission['kind'] {
-  return ['api', 'artifact', 'connector', 'memory', 'review', 'storage', 'ui'].includes(value)
+  return ['api', 'artifact', 'connector', 'memory', 'review', 'search', 'storage', 'ui'].includes(value)
 }
 
 function isSoulAppPermissionAction(value: string): value is SoulAppPermission['action'] {

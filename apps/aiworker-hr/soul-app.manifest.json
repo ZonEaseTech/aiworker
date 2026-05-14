@@ -157,6 +157,18 @@
     },
     {
       "action": "read",
+      "kind": "search",
+      "reason": "Read app-owned HR search descriptors.",
+      "target": "aiworker-hr"
+    },
+    {
+      "action": "write",
+      "kind": "search",
+      "reason": "Publish app-owned HR search descriptors.",
+      "target": "aiworker-hr"
+    },
+    {
+      "action": "read",
       "kind": "connector",
       "reason": "Read HR evidence through Host connector broker.",
       "target": "ats"
@@ -280,7 +292,7 @@
         "id": "create-people-profile",
         "label": "New people profile",
         "protocolAction": "peopleProfiles.create",
-        "requiredPermissions": ["storage:write:aiworker-hr"],
+        "requiredPermissions": ["storage:write:aiworker-hr", "search:write:aiworker-hr"],
         "slot": "primary"
       },
       "search": {
@@ -288,7 +300,7 @@
         "label": "Search people profiles",
         "placeholder": "Search people profiles",
         "protocolProvider": "peopleProfiles.search",
-        "requiredPermissions": ["storage:read:aiworker-hr"]
+        "requiredPermissions": ["search:read:aiworker-hr"]
       },
       "settings": {
         "id": "hr-settings",

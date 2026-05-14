@@ -54,10 +54,15 @@ describe('QA reference Soul App', () => {
     expect(qaReferenceSoulApp.manifest.id).toBe('aiworker-qa')
     expect(await qaReferenceSoulApp.connector?.declareConnectorNeeds({ appId: 'aiworker-qa', permissions: qaReferenceSoulApp.manifest.permissions })).toHaveLength(2)
     expect((await qaReferenceSoulApp.runtime?.resolveCapability({ appId: 'aiworker-qa', permissions: qaReferenceSoulApp.manifest.permissions }, { capabilityId: 'release-gate' }))?.id).toBe('release-gate')
+    expect(qaManifestJson.permissions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ action: 'read', kind: 'search', target: 'aiworker-qa' }),
+      expect.objectContaining({ action: 'write', kind: 'search', target: 'aiworker-qa' }),
+    ]))
     expect(qaManifestJson.ui.shell?.primaryAction?.protocolAction).toBe('releaseGates.create')
     expect(qaManifestJson.ui.shell?.primaryAction?.requiredPermissions).toContain('storage:write:aiworker-qa')
+    expect(qaManifestJson.ui.shell?.primaryAction?.requiredPermissions).toContain('search:write:aiworker-qa')
     expect(qaManifestJson.ui.shell?.search?.protocolProvider).toBe('releases.search')
-    expect(qaManifestJson.ui.shell?.search?.requiredPermissions).toContain('storage:read:aiworker-qa')
+    expect(qaManifestJson.ui.shell?.search?.requiredPermissions).toContain('search:read:aiworker-qa')
   })
 
   it('requires the Host mount token for mounted service domain routes', async () => {
@@ -140,6 +145,8 @@ describe('QA reference Soul App', () => {
     const previousToken = Bun.env.AIWORKER_MOUNT_TOKEN
     Bun.env.AIWORKER_MOUNT_TOKEN = 'test-qa-mounted-token'
     const storageCalls: Array<{ body: Record<string, unknown>, path: string, search: URLSearchParams }> = []
+    const searchQueryCalls: Array<{ path: string, search: URLSearchParams }> = []
+    const searchUpsertCalls: Array<{ body: Record<string, unknown>, path: string, search: URLSearchParams }> = []
     const host = Bun.serve({
       async fetch(request) {
         const url = new URL(request.url)
@@ -150,6 +157,33 @@ describe('QA reference Soul App', () => {
             search: url.searchParams,
           })
           return Response.json({ record: { appId: 'aiworker-qa', key: 'drafts/release-gate/workspace-qa' } })
+        }
+        if (request.method === 'PUT' && url.pathname === '/api/local/apps/aiworker-qa/broker/search/drafts/release-gate/workspace-qa') {
+          searchUpsertCalls.push({
+            body: await request.json() as Record<string, unknown>,
+            path: url.pathname,
+            search: url.searchParams,
+          })
+          return Response.json({ record: { appId: 'aiworker-qa', id: 'drafts/release-gate/workspace-qa' } })
+        }
+        if (request.method === 'GET' && url.pathname === '/api/local/apps/aiworker-qa/broker/search') {
+          searchQueryCalls.push({
+            path: url.pathname,
+            search: url.searchParams,
+          })
+          return Response.json({
+            authority: 'soul-app',
+            items: [{
+              appId: 'aiworker-qa',
+              authority: 'soul-app',
+              id: 'drafts/release-gate/workspace-qa',
+              kind: 'release-gate',
+              summary: 'Broker-indexed QA release descriptor',
+              title: 'Indexed Release Gate',
+              workspaceId: 'workspace-qa',
+            }],
+            query: url.searchParams.get('query') ?? '',
+          })
         }
         return Response.json({ error: { code: 'NOT_FOUND' } }, { status: 404 })
       },
@@ -195,6 +229,46 @@ describe('QA reference Soul App', () => {
           workspaceId: 'workspace-qa',
         },
       })
+      const searchUpsertCall = searchUpsertCalls[0]
+      expect(searchUpsertCall).toBeDefined()
+      expect(searchUpsertCall!.path).toBe('/api/local/apps/aiworker-qa/broker/search/drafts/release-gate/workspace-qa')
+      expect(searchUpsertCall!.search.get('operatorId')).toBe('operator-local')
+      expect(searchUpsertCall!.search.get('sessionId')).toBe('session-qa')
+      expect(searchUpsertCall!.search.get('workerId')).toBe('worker-qa')
+      expect(searchUpsertCall!.search.get('workspaceId')).toBe('workspace-qa')
+      expect(searchUpsertCall!.body).toMatchObject({
+        kind: 'release-gate',
+        reference: {
+          id: 'workspace-qa',
+          type: 'workspace',
+        },
+        sessionId: 'session-qa',
+        summary: 'QA app-owned release gate draft for workspace workspace-qa.',
+        title: 'Release gate draft',
+        workspaceId: 'workspace-qa',
+      })
+
+      const searchRes = await fetch(`${baseUrl}/protocol/search?providerId=releases.search&query=release&limit=2`, {
+        headers: {
+          'x-aiworker-host-url': `http://127.0.0.1:${host.port}`,
+          'x-aiworker-mount-context': mountContext,
+          'x-aiworker-mount-token': 'test-qa-mounted-token',
+        },
+      })
+      expect(searchRes.status).toBe(200)
+      expect(await searchRes.json()).toMatchObject({
+        items: [expect.objectContaining({
+          id: 'drafts/release-gate/workspace-qa',
+          title: 'Indexed Release Gate',
+        })],
+        providerId: 'releases.search',
+      })
+      const searchQueryCall = searchQueryCalls[0]
+      expect(searchQueryCall).toBeDefined()
+      expect(searchQueryCall!.path).toBe('/api/local/apps/aiworker-qa/broker/search')
+      expect(searchQueryCall!.search.get('operatorId')).toBe('operator-local')
+      expect(searchQueryCall!.search.get('query')).toBe('release')
+      expect(searchQueryCall!.search.get('workspaceId')).toBe('workspace-qa')
     }
     finally {
       server.stop()

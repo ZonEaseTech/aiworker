@@ -86,6 +86,7 @@ export interface LocalSoulAppSecurityReview {
   manifestPermissions: readonly unknown[]
   status: string
   summary: {
+    canEnable: boolean
     descriptorPermissionCount: number
     disabledRequiredConnectorIds: string[]
     manifestPermissionCount: number

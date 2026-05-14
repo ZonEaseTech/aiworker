@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-14 (PLAN-311 completed)
+> Updated: 2026-05-14 (PLAN-312 completed)
 
 ## Usage
 
@@ -340,3 +340,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-309 Broker provider registry**](PLAN-309.md) `2026-05-14`
 - [x] [**PLAN-310 Identity boundary**](PLAN-310.md) `2026-05-14`
 - [x] [**PLAN-311 App-owned search index broker**](PLAN-311.md) `2026-05-14`
+- [x] [**PLAN-312 Official Soul App broker proof closure**](PLAN-312.md) `2026-05-14`

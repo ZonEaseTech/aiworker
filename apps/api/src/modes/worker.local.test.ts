@@ -174,7 +174,7 @@ describe('local daemon API', () => {
     expect(reviewBody.review.descriptorPermissions).toEqual(expect.arrayContaining([
       expect.objectContaining({
         id: 'create-release-gate',
-        requiredPermissions: ['storage:write:aiworker-qa'],
+        requiredPermissions: ['storage:write:aiworker-qa', 'search:write:aiworker-qa'],
         surface: 'shell.primaryAction',
       }),
     ]))
@@ -527,7 +527,7 @@ describe('local daemon API', () => {
                   label: 'Search people profiles',
                   placeholder: 'Search people profiles',
                   protocolProvider: 'peopleProfiles.search',
-                  requiredPermissions: ['storage:read:aiworker-hr'],
+                  requiredPermissions: ['search:read:aiworker-hr'],
                 },
               },
             },

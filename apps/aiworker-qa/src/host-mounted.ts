@@ -18,6 +18,10 @@ interface MountContext {
   workspaceId?: string | null
 }
 
+interface BrokerSearchResult {
+  items?: Array<Record<string, unknown>>
+}
+
 export function serveHostMounted(port = Number(Bun.env.PORT ?? 0)) {
   return Bun.serve({
     async fetch(request) {
@@ -54,7 +58,7 @@ export function serveHostMounted(port = Number(Bun.env.PORT ?? 0)) {
         return Response.json(await qaProtocolAction(request, String(body.protocolAction ?? '')))
       }
       if (url.pathname === '/protocol/search' && request.method === 'GET') {
-        return Response.json(qaProtocolSearch(url))
+        return Response.json(await qaProtocolSearch(request, url))
       }
       if (url.pathname === '/broker/permissions') {
         const hostUrl = request.headers.get('x-aiworker-host-url') ?? Bun.env.AIWORKER_HOST_URL
@@ -181,6 +185,7 @@ async function persistReleaseGateDraft(request: Request): Promise<{ message: str
     return { ok: true }
 
   const draftKey = `drafts/release-gate/${context.workspaceId ?? 'app'}`
+  const workspaceRef = context.workspaceId ?? 'app'
   const client = createSoulAppClient({ appId: qaSoulAppManifest.id, baseUrl: context.hostUrl })
   try {
     await client.broker.storage.put(draftKey, {
@@ -188,6 +193,17 @@ async function persistReleaseGateDraft(request: Request): Promise<{ message: str
       kind: 'release-gate',
       source: 'qa-mounted-action',
       status: 'draft',
+      workspaceId: context.workspaceId ?? null,
+    }, brokerScope(context))
+    await client.broker.search.upsert(draftKey, {
+      kind: 'release-gate',
+      reference: {
+        id: workspaceRef,
+        type: context.workspaceId ? 'workspace' : 'app',
+      },
+      sessionId: context.sessionId ?? null,
+      summary: `QA app-owned release gate draft for workspace ${workspaceRef}.`,
+      title: 'Release gate draft',
       workspaceId: context.workspaceId ?? null,
     }, brokerScope(context))
     return { ok: true }
@@ -200,8 +216,16 @@ async function persistReleaseGateDraft(request: Request): Promise<{ message: str
   }
 }
 
-function qaProtocolSearch(url: URL) {
+async function qaProtocolSearch(request: Request, url: URL) {
   const query = url.searchParams.get('query') ?? ''
+  const brokerItems = await queryBrokerReleaseSearch(request, query)
+  if (brokerItems?.length) {
+    return {
+      items: brokerItems,
+      providerId: 'releases.search',
+    }
+  }
+
   return {
     items: [{
       appId: qaSoulAppManifest.id,
@@ -217,6 +241,21 @@ function qaProtocolSearch(url: URL) {
       title: query ? `Release gate: ${query}` : 'Release gate draft',
     }],
     providerId: 'releases.search',
+  }
+}
+
+async function queryBrokerReleaseSearch(request: Request, query: string): Promise<Array<Record<string, unknown>> | null> {
+  const context = readMountContext(request)
+  if (!context?.hostUrl)
+    return null
+
+  const client = createSoulAppClient({ appId: qaSoulAppManifest.id, baseUrl: context.hostUrl })
+  try {
+    const result = await client.broker.search.query(query, brokerScope(context)) as BrokerSearchResult
+    return Array.isArray(result.items) ? result.items : null
+  }
+  catch {
+    return null
   }
 }
 

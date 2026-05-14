@@ -428,6 +428,38 @@ beforeEach(() => {
       return json({ runtimeVersion: 'test', startedAt: now, workers: currentWorkers })
     if (url.endsWith('/api/local/apps'))
       return json({ apps: currentApps })
+    if (url.endsWith('/api/local/apps/aiworker-qa/security-review')) {
+      const ciAvailable = currentSettings.connectors.some(connector => connector.id === 'ci')
+      return json({
+        appId: 'aiworker-qa',
+        connectors: {
+          optional: [],
+          required: [{
+            access: ['read'],
+            available: ciAvailable,
+            enabled: currentSettings.connectors.some(connector => connector.id === 'ci' && connector.enabled),
+            id: 'ci',
+            reason: 'Read CI and test evidence through the Host connector broker.',
+            required: true,
+            scopes: ['runs.read'],
+          }],
+        },
+        descriptorPermissions: [],
+        healthStatus: 'pass',
+        manifestPermissions: [],
+        status: 'disabled',
+        summary: {
+          canEnable: ciAvailable,
+          descriptorPermissionCount: 0,
+          disabledRequiredConnectorIds: ciAvailable ? ['ci'] : [],
+          manifestPermissionCount: 0,
+          missingRequiredConnectorIds: ciAvailable ? [] : ['ci'],
+          optionalConnectorCount: 0,
+          requiredConnectorCount: 1,
+          warnings: ciAvailable ? ['Required connectors are not enabled: ci'] : ['Required connectors are not available: ci'],
+        },
+      })
+    }
     if (url.endsWith('/api/local/apps/aiworker-qa/enable') && method === 'POST') {
       const enabled = currentApps.find(app => app.appId === 'aiworker-qa')
       currentApps = currentApps.map(app => app.appId === 'aiworker-qa' ? { ...app, status: 'enabled' } : app)
@@ -889,7 +921,7 @@ describe('worker studio', () => {
         appId: 'aiworker-hr',
         manifest: {
           name: 'AIWorker HR',
-          permissions: Array.from({ length: 8 }, (_, index) => ({ id: `perm-${index}` })),
+          permissions: Array.from({ length: 10 }, (_, index) => ({ id: `perm-${index}` })),
           ui: {
             artifactPreviews: [{ id: 'person-profile-preview', label: 'Person profile preview' }],
             panels: [{ id: 'people-panel', label: 'People panel' }],
@@ -916,7 +948,7 @@ describe('worker studio', () => {
                 id: 'create-people-profile',
                 label: 'New people profile',
                 protocolAction: 'peopleProfiles.create',
-                requiredPermissions: ['storage:write:aiworker-hr'],
+                requiredPermissions: ['storage:write:aiworker-hr', 'search:write:aiworker-hr'],
                 slot: 'primary',
               },
               search: {
@@ -924,7 +956,7 @@ describe('worker studio', () => {
                 label: 'Search people profiles',
                 placeholder: 'Search people profiles',
                 protocolProvider: 'peopleProfiles.search',
-                requiredPermissions: ['storage:read:aiworker-hr'],
+                requiredPermissions: ['search:read:aiworker-hr'],
               },
               settings: {
                 id: 'hr-settings',
@@ -966,7 +998,7 @@ describe('worker studio', () => {
               id: 'create-people-profile',
               label: 'New people profile',
               protocolAction: 'peopleProfiles.create',
-              requiredPermissions: ['storage:write:aiworker-hr'],
+              requiredPermissions: ['storage:write:aiworker-hr', 'search:write:aiworker-hr'],
               slot: 'primary',
             },
             search: {
@@ -974,7 +1006,7 @@ describe('worker studio', () => {
               label: 'Search people profiles',
               placeholder: 'Search people profiles',
               protocolProvider: 'peopleProfiles.search',
-              requiredPermissions: ['storage:read:aiworker-hr'],
+              requiredPermissions: ['search:read:aiworker-hr'],
             },
             settings: {
               id: 'hr-settings',
@@ -1006,6 +1038,8 @@ describe('worker studio', () => {
           permissions: [
             { action: 'read', kind: 'storage', reason: 'Read app-scoped QA domain metadata.', target: 'aiworker-qa' },
             { action: 'write', kind: 'storage', reason: 'Write app-scoped QA domain metadata.', target: 'aiworker-qa' },
+            { action: 'read', kind: 'search', reason: 'Read app-owned QA search descriptors.', target: 'aiworker-qa' },
+            { action: 'write', kind: 'search', reason: 'Publish app-owned QA search descriptors.', target: 'aiworker-qa' },
             { action: 'read', kind: 'connector', reason: 'Read CI evidence through Host connector broker.', target: 'ci' },
           ],
           ui: {
@@ -1018,7 +1052,7 @@ describe('worker studio', () => {
                 id: 'create-release-gate',
                 label: 'New release gate',
                 protocolAction: 'releaseGates.create',
-                requiredPermissions: ['storage:write:aiworker-qa'],
+                requiredPermissions: ['storage:write:aiworker-qa', 'search:write:aiworker-qa'],
                 slot: 'primary',
               },
               search: {
@@ -1026,7 +1060,7 @@ describe('worker studio', () => {
                 label: 'Search releases',
                 placeholder: 'Search releases',
                 protocolProvider: 'releases.search',
-                requiredPermissions: ['storage:read:aiworker-qa'],
+                requiredPermissions: ['search:read:aiworker-qa'],
               },
             },
           },
@@ -1098,7 +1132,7 @@ describe('worker studio', () => {
     fireEvent.click(screen.getByLabelText('Close settings'))
     expect(screen.queryByText('Soul Apps (2)')).toBeNull()
     expect(screen.queryByText('Enabled · 0.1.0')).toBeNull()
-    expect(screen.queryByText('8 permissions')).toBeNull()
+    expect(screen.queryByText('10 permissions')).toBeNull()
     expect(screen.queryByText('API /api/local/apps/aiworker-hr')).toBeNull()
     expect(screen.queryByText('Route People workbench · /hr/people')).toBeNull()
     expect(screen.queryByText('4 mounted contributions')).toBeNull()
@@ -1111,15 +1145,16 @@ describe('worker studio', () => {
     expect(within(dialog).getByRole('heading', { name: 'Soul Apps' })).toBeTruthy()
     expect(within(dialog).getByText('AIWorker HR')).toBeTruthy()
     expect(within(dialog).getByText('Enabled · 0.1.0')).toBeTruthy()
-    expect(within(dialog).getByText('8 permissions')).toBeTruthy()
+    expect(within(dialog).getByText('10 permissions')).toBeTruthy()
     expect(within(dialog).getByText('4 mounted contributions')).toBeTruthy()
     expect(within(dialog).getByText('API /api/local/apps/aiworker-hr')).toBeTruthy()
     expect(within(dialog).getByText('AIWorker QA')).toBeTruthy()
     expect(within(dialog).getByText('Disabled · 0.1.0')).toBeTruthy()
-    expect(within(dialog).getByText('3 permissions')).toBeTruthy()
-    expect(within(dialog).getByText('connector:read:ci')).toBeTruthy()
+    expect(within(dialog).getByText('5 permissions')).toBeTruthy()
+    expect(within(dialog).getAllByText('search:read:aiworker-qa').length).toBeGreaterThan(0)
     expect(within(dialog).getByText('ci · not enabled')).toBeTruthy()
     expect(within(dialog).getAllByText('storage:write:aiworker-qa').length).toBeGreaterThan(0)
+    expect(within(dialog).getAllByText('search:write:aiworker-qa').length).toBeGreaterThan(0)
     fireEvent.click(within(dialog).getByRole('button', { name: 'Enable AIWorker QA' }))
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith('/api/local/apps/aiworker-qa/enable', expect.objectContaining({ method: 'POST' }))
@@ -1127,6 +1162,85 @@ describe('worker studio', () => {
     await waitFor(() => {
       expect(within(dialog).getAllByText('Enabled · 0.1.0').length).toBeGreaterThan(1)
     })
+  })
+
+  it('blocks Soul App enablement when Host security review cannot enable the app', async () => {
+    currentSettings = {
+      ...currentSettings,
+      connectors: currentSettings.connectors.filter(connector => connector.id !== 'ci'),
+    }
+    currentApps = [{
+      appId: 'aiworker-qa',
+      manifest: {
+        connectors: {
+          optional: [],
+          required: [{
+            access: ['read'],
+            id: 'ci',
+            reason: 'Read CI and test evidence through the Host connector broker.',
+            scopes: ['runs.read'],
+          }],
+        },
+        name: 'AIWorker QA',
+        permissions: [
+          { action: 'read', kind: 'storage', reason: 'Read app-scoped QA domain metadata.', target: 'aiworker-qa' },
+          { action: 'write', kind: 'storage', reason: 'Write app-scoped QA domain metadata.', target: 'aiworker-qa' },
+          { action: 'read', kind: 'search', reason: 'Read app-owned QA search descriptors.', target: 'aiworker-qa' },
+          { action: 'write', kind: 'search', reason: 'Publish app-owned QA search descriptors.', target: 'aiworker-qa' },
+          { action: 'read', kind: 'connector', reason: 'Read CI evidence through Host connector broker.', target: 'ci' },
+        ],
+        ui: {
+          artifactPreviews: [],
+          panels: [],
+          reviewPanels: [],
+          routes: [],
+          shell: {
+            primaryAction: {
+              id: 'create-release-gate',
+              label: 'New release gate',
+              protocolAction: 'releaseGates.create',
+              requiredPermissions: ['storage:write:aiworker-qa', 'search:write:aiworker-qa'],
+              slot: 'primary',
+            },
+            search: {
+              id: 'release-search',
+              label: 'Search releases',
+              placeholder: 'Search releases',
+              protocolProvider: 'releases.search',
+              requiredPermissions: ['search:read:aiworker-qa'],
+            },
+          },
+        },
+      },
+      mountedContribution: {
+        apiRoutePrefix: '/api/local/apps/aiworker-qa',
+        artifactPreviewIds: [],
+        descriptorSurfaceIds: [],
+        frameSurfaceIds: [],
+        panelIds: [],
+        reviewPanelIds: [],
+        routePaths: ['/qa/release'],
+        surfaceIds: [],
+        workspaceWidgetIds: [],
+      },
+      status: 'disabled',
+      version: '0.1.0',
+    }]
+
+    render(<WorkerStudio />)
+
+    await screen.findByTestId('hr-people-workbench')
+    fireEvent.click(screen.getByRole('button', { name: 'Open settings' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Configure Soul workspace' })
+    fireEvent.click(within(dialog).getByRole('button', { name: /Soul Apps/ }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Enable AIWorker QA' }))
+
+    await waitFor(() => {
+      const calls = vi.mocked(fetch).mock.calls.map(([url]) => String(url))
+      expect(calls).toContain('/api/local/apps/aiworker-qa/security-review')
+      expect(calls).not.toContain('/api/local/apps/aiworker-qa/enable')
+    })
+    expect((await within(dialog).findByRole('alert')).textContent).toContain('Required connectors are not available: ci')
   })
 
   it('keeps worker status as a trailing dot without duplicated item labels', async () => {

@@ -12,7 +12,7 @@ import type {
   LocalWorkspace,
   VerticalSoul,
 } from '@zonease/aiworker-shared'
-import type { LocalHostedSoulApp, LocalInfoResponse, LocalSoulAppActionResponse, LocalSoulAppActionScope, LocalSoulAppLifecycleResponse, LocalSoulAppSearchResponse, LocalWorkspaceData } from './types'
+import type { LocalHostedSoulApp, LocalInfoResponse, LocalSoulAppActionResponse, LocalSoulAppActionScope, LocalSoulAppLifecycleResponse, LocalSoulAppSearchResponse, LocalSoulAppSecurityReview, LocalWorkspaceData } from './types'
 
 import { localJson } from '../../../shared/api/local-client'
 
@@ -66,6 +66,10 @@ export async function enableSoulApp(appId: string): Promise<LocalSoulAppLifecycl
   return localJson<LocalSoulAppLifecycleResponse>(`/api/local/apps/${appId}/enable`, {
     method: 'POST',
   })
+}
+
+export async function reviewSoulAppSecurity(appId: string): Promise<LocalSoulAppSecurityReview> {
+  return localJson<LocalSoulAppSecurityReview>(`/api/local/apps/${appId}/security-review`)
 }
 
 export async function disableSoulApp(appId: string): Promise<LocalSoulAppLifecycleResponse> {

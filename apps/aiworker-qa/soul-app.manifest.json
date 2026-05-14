@@ -157,6 +157,18 @@
     },
     {
       "action": "read",
+      "kind": "search",
+      "reason": "Read app-owned QA search descriptors.",
+      "target": "aiworker-qa"
+    },
+    {
+      "action": "write",
+      "kind": "search",
+      "reason": "Publish app-owned QA search descriptors.",
+      "target": "aiworker-qa"
+    },
+    {
+      "action": "read",
       "kind": "connector",
       "reason": "Read CI evidence through Host connector broker.",
       "target": "ci"
@@ -273,7 +285,7 @@
         "id": "create-release-gate",
         "label": "New release gate",
         "protocolAction": "releaseGates.create",
-        "requiredPermissions": ["storage:write:aiworker-qa"],
+        "requiredPermissions": ["storage:write:aiworker-qa", "search:write:aiworker-qa"],
         "slot": "primary"
       },
       "search": {
@@ -281,7 +293,7 @@
         "label": "Search releases",
         "placeholder": "Search releases",
         "protocolProvider": "releases.search",
-        "requiredPermissions": ["storage:read:aiworker-qa"]
+        "requiredPermissions": ["search:read:aiworker-qa"]
       },
       "settings": {
         "id": "qa-settings",

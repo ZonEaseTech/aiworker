@@ -1,5 +1,24 @@
 # AIWorker Changelog
 
+## 2026-05-14 12:28 [completed] FEAT-080 / PLAN-312 — Official Soul App broker proof closure
+
+Closed the proof gap found by the code audit: FEAT-079's search broker now runs
+through official HR/QA Soul App code paths instead of only synthetic tests.
+
+- Align API descriptor permission parsing with shared manifest `search` support.
+- Make HR/QA app manifests and Host reference manifests declare
+  `search:read/write:<appId>` and publish app-owned broker search descriptors
+  from mounted actions.
+- Gate Settings enablement through Host-owned security review before calling
+  enable.
+- Keep Host generic: no HR profile or QA release interpretation in platform code.
+
+Verification passed: focused API/HR/QA/Web tests, HR/QA validate and smoke,
+root `check`, `build`, `test`, `git diff --check`, and code-review-graph. CRG
+exited 0 with static test-gap hints for mounted helper functions and test fetch
+mocks, covered by HR/QA mounted-service tests, API local-daemon tests and Worker
+Studio Settings flow tests.
+
 ## 2026-05-14 11:47 [completed] FEAT-079 / PLAN-311 — App-owned search index broker
 
 Completed the final convergence slice after identity boundary delivery.

@@ -54,10 +54,15 @@ describe('HR reference Soul App', () => {
     expect(hrReferenceSoulApp.manifest.id).toBe('aiworker-hr')
     expect(await hrReferenceSoulApp.connector?.declareConnectorNeeds({ appId: 'aiworker-hr', permissions: hrReferenceSoulApp.manifest.permissions })).toHaveLength(2)
     expect((await hrReferenceSoulApp.runtime?.resolveCapability({ appId: 'aiworker-hr', permissions: hrReferenceSoulApp.manifest.permissions }, { capabilityId: 'candidate-screen' }))?.id).toBe('candidate-screen')
+    expect(hrManifestJson.permissions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ action: 'read', kind: 'search', target: 'aiworker-hr' }),
+      expect.objectContaining({ action: 'write', kind: 'search', target: 'aiworker-hr' }),
+    ]))
     expect(hrManifestJson.ui.shell?.primaryAction?.protocolAction).toBe('peopleProfiles.create')
     expect(hrManifestJson.ui.shell?.primaryAction?.requiredPermissions).toContain('storage:write:aiworker-hr')
+    expect(hrManifestJson.ui.shell?.primaryAction?.requiredPermissions).toContain('search:write:aiworker-hr')
     expect(hrManifestJson.ui.shell?.search?.protocolProvider).toBe('peopleProfiles.search')
-    expect(hrManifestJson.ui.shell?.search?.requiredPermissions).toContain('storage:read:aiworker-hr')
+    expect(hrManifestJson.ui.shell?.search?.requiredPermissions).toContain('search:read:aiworker-hr')
   })
 
   it('requires the Host mount token for mounted service domain routes', async () => {
@@ -140,6 +145,8 @@ describe('HR reference Soul App', () => {
     const previousToken = Bun.env.AIWORKER_MOUNT_TOKEN
     Bun.env.AIWORKER_MOUNT_TOKEN = 'test-hr-mounted-token'
     const storageCalls: Array<{ body: Record<string, unknown>, path: string, search: URLSearchParams }> = []
+    const searchQueryCalls: Array<{ path: string, search: URLSearchParams }> = []
+    const searchUpsertCalls: Array<{ body: Record<string, unknown>, path: string, search: URLSearchParams }> = []
     const host = Bun.serve({
       async fetch(request) {
         const url = new URL(request.url)
@@ -150,6 +157,33 @@ describe('HR reference Soul App', () => {
             search: url.searchParams,
           })
           return Response.json({ record: { appId: 'aiworker-hr', key: 'drafts/people-profile/workspace-hr' } })
+        }
+        if (request.method === 'PUT' && url.pathname === '/api/local/apps/aiworker-hr/broker/search/drafts/people-profile/workspace-hr') {
+          searchUpsertCalls.push({
+            body: await request.json() as Record<string, unknown>,
+            path: url.pathname,
+            search: url.searchParams,
+          })
+          return Response.json({ record: { appId: 'aiworker-hr', id: 'drafts/people-profile/workspace-hr' } })
+        }
+        if (request.method === 'GET' && url.pathname === '/api/local/apps/aiworker-hr/broker/search') {
+          searchQueryCalls.push({
+            path: url.pathname,
+            search: url.searchParams,
+          })
+          return Response.json({
+            authority: 'soul-app',
+            items: [{
+              appId: 'aiworker-hr',
+              authority: 'soul-app',
+              id: 'drafts/people-profile/workspace-hr',
+              kind: 'people-profile',
+              summary: 'Broker-indexed HR profile descriptor',
+              title: 'Indexed People Profile',
+              workspaceId: 'workspace-hr',
+            }],
+            query: url.searchParams.get('query') ?? '',
+          })
         }
         return Response.json({ error: { code: 'NOT_FOUND' } }, { status: 404 })
       },
@@ -195,6 +229,46 @@ describe('HR reference Soul App', () => {
           workspaceId: 'workspace-hr',
         },
       })
+      const searchUpsertCall = searchUpsertCalls[0]
+      expect(searchUpsertCall).toBeDefined()
+      expect(searchUpsertCall!.path).toBe('/api/local/apps/aiworker-hr/broker/search/drafts/people-profile/workspace-hr')
+      expect(searchUpsertCall!.search.get('operatorId')).toBe('operator-local')
+      expect(searchUpsertCall!.search.get('sessionId')).toBe('session-hr')
+      expect(searchUpsertCall!.search.get('workerId')).toBe('worker-hr')
+      expect(searchUpsertCall!.search.get('workspaceId')).toBe('workspace-hr')
+      expect(searchUpsertCall!.body).toMatchObject({
+        kind: 'people-profile',
+        reference: {
+          id: 'workspace-hr',
+          type: 'workspace',
+        },
+        sessionId: 'session-hr',
+        summary: 'HR app-owned people profile draft for workspace workspace-hr.',
+        title: 'People profile draft',
+        workspaceId: 'workspace-hr',
+      })
+
+      const searchRes = await fetch(`${baseUrl}/protocol/search?providerId=peopleProfiles.search&query=ada&limit=2`, {
+        headers: {
+          'x-aiworker-host-url': `http://127.0.0.1:${host.port}`,
+          'x-aiworker-mount-context': mountContext,
+          'x-aiworker-mount-token': 'test-hr-mounted-token',
+        },
+      })
+      expect(searchRes.status).toBe(200)
+      expect(await searchRes.json()).toMatchObject({
+        items: [expect.objectContaining({
+          id: 'drafts/people-profile/workspace-hr',
+          title: 'Indexed People Profile',
+        })],
+        providerId: 'peopleProfiles.search',
+      })
+      const searchQueryCall = searchQueryCalls[0]
+      expect(searchQueryCall).toBeDefined()
+      expect(searchQueryCall!.path).toBe('/api/local/apps/aiworker-hr/broker/search')
+      expect(searchQueryCall!.search.get('operatorId')).toBe('operator-local')
+      expect(searchQueryCall!.search.get('query')).toBe('ada')
+      expect(searchQueryCall!.search.get('workspaceId')).toBe('workspace-hr')
     }
     finally {
       server.stop()

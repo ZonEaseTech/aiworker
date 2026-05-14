@@ -33,6 +33,7 @@ export {
   enableSoulApp,
   loadLocalWorkspaceData,
   resolveMountedSurface,
+  reviewSoulAppSecurity,
 } from './workspace-data'
 export {
   createWorkspace,

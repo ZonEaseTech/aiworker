@@ -124,6 +124,18 @@ export const hrSoulAppManifest = soulAppManifestSchema.parse({
     },
     {
       action: 'read',
+      kind: 'search',
+      reason: 'Read app-owned HR search descriptors.',
+      target: 'aiworker-hr',
+    },
+    {
+      action: 'write',
+      kind: 'search',
+      reason: 'Publish app-owned HR search descriptors.',
+      target: 'aiworker-hr',
+    },
+    {
+      action: 'read',
       kind: 'connector',
       reason: 'Read HR evidence through Host connector broker.',
       target: 'ats',
@@ -219,6 +231,44 @@ export const hrSoulAppManifest = soulAppManifestSchema.parse({
         },
       },
     ],
+    shell: {
+      actions: [
+        {
+          id: 'refresh-people',
+          label: 'Refresh',
+          protocolAction: 'people.refresh',
+          requiredPermissions: ['storage:read:aiworker-hr'],
+          slot: 'refresh',
+        },
+        {
+          id: 'toggle-evidence-drawer',
+          label: 'Evidence',
+          protocolAction: 'drawers.evidence.toggle',
+          requiredPermissions: ['connector:read:ats'],
+          slot: 'drawer-toggle',
+        },
+      ],
+      primaryAction: {
+        id: 'create-people-profile',
+        label: 'New people profile',
+        protocolAction: 'peopleProfiles.create',
+        requiredPermissions: ['storage:write:aiworker-hr', 'search:write:aiworker-hr'],
+        slot: 'primary',
+      },
+      search: {
+        id: 'people-profile-search',
+        label: 'Search people profiles',
+        placeholder: 'Search people profiles',
+        protocolProvider: 'peopleProfiles.search',
+        requiredPermissions: ['search:read:aiworker-hr'],
+      },
+      settings: {
+        id: 'hr-settings',
+        label: 'HR settings',
+        protocolAction: 'settings.open',
+        requiredPermissions: ['api:serve:/api/local/apps/aiworker-hr'],
+      },
+    },
     workspaceWidgets: [
       {
         entry: './src/ui/people-widget.tsx',
@@ -379,6 +429,18 @@ export const qaSoulAppManifest = soulAppManifestSchema.parse({
     },
     {
       action: 'read',
+      kind: 'search',
+      reason: 'Read app-owned QA search descriptors.',
+      target: 'aiworker-qa',
+    },
+    {
+      action: 'write',
+      kind: 'search',
+      reason: 'Publish app-owned QA search descriptors.',
+      target: 'aiworker-qa',
+    },
+    {
+      action: 'read',
       kind: 'connector',
       reason: 'Read CI evidence through Host connector broker.',
       target: 'ci',
@@ -474,6 +536,37 @@ export const qaSoulAppManifest = soulAppManifestSchema.parse({
         },
       },
     ],
+    shell: {
+      actions: [
+        {
+          id: 'refresh-release',
+          label: 'Refresh',
+          protocolAction: 'release.refresh',
+          requiredPermissions: ['storage:read:aiworker-qa'],
+          slot: 'refresh',
+        },
+      ],
+      primaryAction: {
+        id: 'create-release-gate',
+        label: 'New release gate',
+        protocolAction: 'releaseGates.create',
+        requiredPermissions: ['storage:write:aiworker-qa', 'search:write:aiworker-qa'],
+        slot: 'primary',
+      },
+      search: {
+        id: 'release-search',
+        label: 'Search releases',
+        placeholder: 'Search releases',
+        protocolProvider: 'releases.search',
+        requiredPermissions: ['search:read:aiworker-qa'],
+      },
+      settings: {
+        id: 'qa-settings',
+        label: 'QA settings',
+        protocolAction: 'settings.open',
+        requiredPermissions: ['api:serve:/api/local/apps/aiworker-qa'],
+      },
+    },
     workspaceWidgets: [
       {
         entry: './src/ui/release-widget.tsx',

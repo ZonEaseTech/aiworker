@@ -18,6 +18,10 @@ interface MountContext {
   workspaceId?: string | null
 }
 
+interface BrokerSearchResult {
+  items?: Array<Record<string, unknown>>
+}
+
 export function serveHostMounted(port = Number(Bun.env.PORT ?? 0)) {
   return Bun.serve({
     async fetch(request) {
@@ -54,7 +58,7 @@ export function serveHostMounted(port = Number(Bun.env.PORT ?? 0)) {
         return Response.json(await hrProtocolAction(request, String(body.protocolAction ?? '')))
       }
       if (url.pathname === '/protocol/search' && request.method === 'GET') {
-        return Response.json(hrProtocolSearch(url))
+        return Response.json(await hrProtocolSearch(request, url))
       }
       if (url.pathname === '/broker/permissions') {
         const hostUrl = request.headers.get('x-aiworker-host-url') ?? Bun.env.AIWORKER_HOST_URL
@@ -187,6 +191,7 @@ async function persistPeopleProfileDraft(request: Request): Promise<{ message: s
     return { ok: true }
 
   const draftKey = `drafts/people-profile/${context.workspaceId ?? 'app'}`
+  const workspaceRef = context.workspaceId ?? 'app'
   const client = createSoulAppClient({ appId: hrSoulAppManifest.id, baseUrl: context.hostUrl })
   try {
     await client.broker.storage.put(draftKey, {
@@ -194,6 +199,17 @@ async function persistPeopleProfileDraft(request: Request): Promise<{ message: s
       kind: 'people-profile',
       source: 'hr-mounted-action',
       status: 'draft',
+      workspaceId: context.workspaceId ?? null,
+    }, brokerScope(context))
+    await client.broker.search.upsert(draftKey, {
+      kind: 'people-profile',
+      reference: {
+        id: workspaceRef,
+        type: context.workspaceId ? 'workspace' : 'app',
+      },
+      sessionId: context.sessionId ?? null,
+      summary: `HR app-owned people profile draft for workspace ${workspaceRef}.`,
+      title: 'People profile draft',
       workspaceId: context.workspaceId ?? null,
     }, brokerScope(context))
     return { ok: true }
@@ -206,8 +222,16 @@ async function persistPeopleProfileDraft(request: Request): Promise<{ message: s
   }
 }
 
-function hrProtocolSearch(url: URL) {
+async function hrProtocolSearch(request: Request, url: URL) {
   const query = url.searchParams.get('query') ?? ''
+  const brokerItems = await queryBrokerPeopleProfileSearch(request, query)
+  if (brokerItems?.length) {
+    return {
+      items: brokerItems,
+      providerId: 'peopleProfiles.search',
+    }
+  }
+
   return {
     items: [{
       appId: hrSoulAppManifest.id,
@@ -223,6 +247,21 @@ function hrProtocolSearch(url: URL) {
       title: query ? `People profile: ${query}` : 'People profile draft',
     }],
     providerId: 'peopleProfiles.search',
+  }
+}
+
+async function queryBrokerPeopleProfileSearch(request: Request, query: string): Promise<Array<Record<string, unknown>> | null> {
+  const context = readMountContext(request)
+  if (!context?.hostUrl)
+    return null
+
+  const client = createSoulAppClient({ appId: hrSoulAppManifest.id, baseUrl: context.hostUrl })
+  try {
+    const result = await client.broker.search.query(query, brokerScope(context)) as BrokerSearchResult
+    return Array.isArray(result.items) ? result.items : null
+  }
+  catch {
+    return null
   }
 }
 

@@ -226,6 +226,23 @@ describe('Soul App isolation broker', () => {
   })
 
   it('indexes app-owned search descriptors behind search broker permissions', () => {
+    const noSearchManifest = JSON.parse(JSON.stringify(hrSoulAppManifest)) as typeof hrSoulAppManifest
+    noSearchManifest.permissions = noSearchManifest.permissions.filter(permission => permission.kind !== 'search')
+    delete noSearchManifest.ui.shell
+    installSoulAppManifest({
+      manifest: noSearchManifest,
+      sourceKind: 'inline',
+      sourceRef: 'test:inline-no-search',
+    }, {
+      availableConnectorIds: ['ats', 'calendar'],
+      hostVersion: '0.12.1',
+    })
+    enableSoulApp('aiworker-hr', {
+      availableConnectorIds: ['ats', 'calendar'],
+      enabledConnectorIds: ['ats'],
+      hostVersion: '0.12.1',
+    })
+
     const deniedBroker = createSoulAppBroker({
       appId: 'aiworker-hr',
       workspaceId: 'workspace-hr',
@@ -241,14 +258,7 @@ describe('Soul App isolation broker', () => {
     })
 
     installSoulAppManifest({
-      manifest: {
-        ...hrSoulAppManifest,
-        permissions: [
-          ...hrSoulAppManifest.permissions,
-          { action: 'read', kind: 'search', reason: 'Read app-owned index descriptors.', target: 'aiworker-hr' },
-          { action: 'write', kind: 'search', reason: 'Write app-owned index descriptors.', target: 'aiworker-hr' },
-        ],
-      },
+      manifest: hrSoulAppManifest,
       sourceKind: 'inline',
       sourceRef: 'test:inline-search',
     }, {

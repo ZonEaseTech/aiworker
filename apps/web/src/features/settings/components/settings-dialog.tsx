@@ -5,7 +5,7 @@ import { ActionCard, Button, Field, NavItemButton } from '@zonease/aiworker-comp
 import { Check, Gauge, Languages, Link, Moon, RefreshCw, Settings, ShieldCheck, SlidersHorizontal, Sparkles, Sun, Terminal, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { formatRelativeTime, formatStatus, languageLabel, messagesFor, normalizeLocale, supportedLocales } from '../../i18n'
-import { disableSoulApp, enableSoulApp, rescanEngines, saveSettings, testEngine } from '../../local-workspace/api'
+import { disableSoulApp, enableSoulApp, rescanEngines, reviewSoulAppSecurity, saveSettings, testEngine } from '../../local-workspace/api'
 import { engineIconSrc } from '../model'
 
 export type SettingsSection = 'execution' | 'soul-packs' | 'connectors' | 'mcp' | 'external-mcp' | 'language' | 'appearance' | 'about'
@@ -335,10 +335,15 @@ function SoulAppsSettings({
     setBusyAppId(app.appId)
     setError(null)
     try {
-      if (app.status === 'enabled')
+      if (app.status === 'enabled') {
         await disableSoulApp(app.appId)
-      else
+      }
+      else {
+        const review = await reviewSoulAppSecurity(app.appId)
+        if (!review.summary.canEnable)
+          throw new Error(securityReviewBlockMessage(review.summary))
         await enableSoulApp(app.appId)
+      }
       await onAppsChanged?.()
     }
     catch (err) {
@@ -438,6 +443,17 @@ function SoulAppsSettings({
       {error ? <p className="settings-note" role="alert">{error}</p> : null}
     </div>
   )
+}
+
+function securityReviewBlockMessage(summary: {
+  missingRequiredConnectorIds: readonly string[]
+  warnings: readonly string[]
+}): string {
+  if (summary.warnings.length > 0)
+    return summary.warnings.join(' ')
+  if (summary.missingRequiredConnectorIds.length > 0)
+    return `Required connectors are not available: ${summary.missingRequiredConnectorIds.join(', ')}`
+  return 'Host security review does not allow enabling this Soul App.'
 }
 
 function mountedContributionCount(app: HostedSoulApp): number {
