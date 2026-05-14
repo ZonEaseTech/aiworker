@@ -46,6 +46,10 @@ function hostHomePath(p: string): string {
   return path.resolve(expandTilde(p))
 }
 
+function defaultHomePath(defaultHomeDir: string): string {
+  return path.resolve(currentHomeDir(), expandTilde(defaultHomeDir))
+}
+
 /**
  * Project-scope autodetection is removed. The function remains exported so old
  * callers fail closed to host-local behaviour instead of silently binding a
@@ -85,7 +89,7 @@ export function resolveAiworkerScope(opts: ResolveScopeOptions = {}): AiworkerSc
 
   return {
     scope: 'user',
-    home: path.resolve(currentHomeDir(), defaultHomeDir),
+    home: defaultHomePath(defaultHomeDir),
     source: 'user-default',
   }
 }
