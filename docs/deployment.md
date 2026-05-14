@@ -31,9 +31,11 @@ Host
 ```bash
 bun install
 bun run --filter '@zonease/aiworker-web' build
-AIWORKER_HOME=/tmp/aiworker-dev \
-  bun apps/cli/src/aiworker.ts dev --host 127.0.0.1 --port 9217
+bun apps/cli/src/aiworker.ts dev --host 127.0.0.1 --port 9217
 ```
+
+源码 checkout 默认使用 `~/.aiworker-dev`。这是一份可长期保留的开发 profile，
+不是临时目录；如需一次性 smoke，可显式设置 `AIWORKER_HOME=/tmp/aiworker-smoke`。
 
 也可以使用 package script：
 
@@ -76,6 +78,9 @@ AIWORKER_HOME=~/.aiworker \
 `0.x` npm preview package 需要在 CLI package 目录内自带 Worker Web static assets、worker DB
 migrations 和官方 first-party Soul App release resources。它不应要求 source checkout 才能服务
 `/` 或 bootstrap HR/QA。
+
+打包或 npm 安装后的 CLI 默认使用 `~/.aiworker`，与源码态
+`~/.aiworker-dev` 分离。`AIWORKER_HOME` 和 `WORKER_DB_PATH` 对两种入口都保持最高优先级。
 
 ## Installed CLI
 

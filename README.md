@@ -154,6 +154,9 @@ bun run --filter '@zonease/aiworker-web' build
 bun apps/cli/src/aiworker.ts dev --port 9217
 ```
 
+源码态默认使用 `~/.aiworker-dev` 作为开发 profile；发布包和 npm preview
+默认仍使用 `~/.aiworker`。两种入口都可以通过 `AIWORKER_HOME=<path>` 显式覆盖。
+
 打开 Web 后，首屏应帮助用户 install/enable 官方或第三方 Soul App，再创建 Soul worker 与
 workspace/session。Settings 由明确 settings button 打开，支持 Local CLI / BYOK、engine
 scan/test、connectors、MCP、language、appearance、autosave 和 Soul App 管理。

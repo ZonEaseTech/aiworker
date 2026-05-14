@@ -11,6 +11,9 @@ gateway/fleet 管理面，也不再使用 `brief/run` 产品路径。
 bun apps/cli/src/aiworker.ts dev --host 127.0.0.1 --port 9217
 ```
 
+源码调试默认把 Host-local state 放在 `~/.aiworker-dev`，避免与已安装 preview
+CLI 的 `~/.aiworker` 竞争同一个 `aiworker.db`、pid/log 和 workspace tree。
+
 安装或打包后：
 
 ```bash
@@ -23,6 +26,9 @@ npm `0.x preview` 入口：
 bunx @zonease/aiworker-cli daemon foreground --host 127.0.0.1 --port 9217
 npx @zonease/aiworker-cli daemon foreground --host 127.0.0.1 --port 9217
 ```
+
+安装或打包后的 CLI 默认使用 `~/.aiworker`。如果需要隔离环境，显式设置
+`AIWORKER_HOME=<path>`；如果只想替换 DB 文件，设置 `WORKER_DB_PATH=<path>`。
 
 Preview 包应能从 package-local 资源启动 Host Web/API、迁移 worker DB，并 bootstrap 官方
 HR/QA Soul App；Host auth、1.0 发布承诺和独立 SDK/runtime npm 发布不属于这个 gate。
