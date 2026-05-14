@@ -1,5 +1,29 @@
 # AIWorker Changelog
 
+## 2026-05-14 17:45 [completed] FEAT-084 / PLAN-321 — Soul App Web Storage discipline
+
+Completed the trusted first-party browser storage discipline slice for official
+Soul Apps.
+
+- Added `createSoulAppWebStorage(...)` to the Soul App SDK for scoped
+  `aiworker:app:<appId>:...` browser UI state.
+- Added SDK tests for key scoping, scoped clear, invalid keys, unavailable
+  storage and invalid JSON values.
+- Extended `aiworker app validate` with additive `webStorageIssues` so raw
+  `localStorage` / `sessionStorage` usage in production Soul App source fails
+  validation.
+- Extended the root Soul App boundary self-check used by `bun run lint` to
+  protect official HR/QA app source from raw Web Storage API regressions.
+- Documented the boundary explicitly: current same-realm Soul Apps are trusted
+  first-party code governed by self-checks, not third-party sandboxed plugins;
+  future third-party apps need a separate isolated renderer, worker/protocol or
+  descriptor-only design.
+- Verification passed: focused SDK tests/typecheck, focused CLI validation
+  tests, root boundary self-check, docs check, root `check`, root `test`, root
+  `build`, `git diff --check`, `bun run crg:update` and `bun run crg:review`.
+- code-review-graph exited 0 with static helper-level test-gap hints; CLI
+  behavior is covered through `aiworker app validate` regression tests.
+
 ## 2026-05-14 [done]
 
 Completed BUG-119 / PLAN-319. Soul App SDK/runtime packages remain unpublished,

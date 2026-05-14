@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-14 (BUG-119 and BUG-120 completed)
+> Updated: 2026-05-14 (FEAT-084 completed)
 
 ## Usage
 
@@ -424,3 +424,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-083 Dev home isolation**](FEAT-083.md) `P0`
 - [x] [**BUG-119 Soul App authoring boundary leaks pre-publication coupling**](BUG-119.md) `P0`
 - [x] [**BUG-120 Release daemon reports dev runtime version**](BUG-120.md) `P0`
+- [x] [**FEAT-084 Soul App Web Storage discipline**](FEAT-084.md) `P0`
