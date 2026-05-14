@@ -1,78 +1,63 @@
-# PLAN-193 Executor non-interference 0.12.2 release readiness
+# PLAN-193 Worker run contract compatibility layer
 
 - **status**: completed
 - **owner**: local
-- **createdAt**: 2026-05-09 16:50
-- **approvedAt**: 2026-05-09 16:50
-- **completedAt**: 2026-05-09 17:04
-- **task**: REL-032
+- **createdAt**: 2026-05-09 16:46
+- **approvedAt**: 2026-05-09 16:46
+- **completedAt**: 2026-05-09 16:55
+- **relatedTask**: REFACTOR-027
 
-## Context
+## Current State
 
-REFACTOR-026 has been committed and source gates have already passed. A real
-worker regression against `/Users/ben/projects/my-aiworker` also passed before
-the version bump, including success, failure, and long-running native adapter
-paths.
+现有 worker 执行路径分裂在三个层面：
 
-npm latest is still `0.12.1`, so the next publish target is the patch release
-`0.12.2`.
+- core：`Orchestrator.submitTask()` / `continueConversation()` 创建 `agent_tasks`，再异步
+  `ingest()` envelope。
+- API：`apps/api/src/worker/orchestrator/routes.ts` 暴露 `/tasks` 和
+  `/conversations/:id/messages`。
+- Web：`apps/web/src/worker/api.ts` 直接调用 `/api/worker/orchestrator/*`。
+- CLI：`apps/cli/src/commands/worker/run.ts` 直接 in-process 构造 `web` envelope 并订阅
+  runtime bus。
+
+这使产品语义仍停留在 orchestrator task，而不是 OD-style run。
 
 ## Proposal
 
-1. Record REL-032 / QA-026 / PLAN-193.
-2. Bump CLI package version to `0.12.2`.
-3. Run release gates: typecheck, lint, test, build, diff check.
-4. Verify dist version and publish dry-run from `apps/cli/dist`.
-5. Commit release docs/version bump and tag `v0.12.2`.
-6. Push `main` and tag, monitor release workflow, verify npm/GitHub assets.
-7. Run published-package compact governance harness and close REL/QA docs.
+本 slice 做兼容层，不做破坏性迁移：
 
-## Scope
-
-- `apps/cli/package.json`
-- release QA / task / plan / changelog docs
-- no runtime code changes beyond the already committed REFACTOR-026
-- no UI redesign
+1. 新增 core `WorkerRunService`：
+   - `listRuns()` 从 `agent_tasks` 读取并按 createdAt 倒序返回；
+   - `getRun(id)` 读取单个 task 并映射为 run；
+   - `createRun({ prompt, conversationId? })` 调用现有 orchestrator；
+   - `cancelRun(id)` 使用 `conversationId -> ProcessManager.cancelGroup()` 中止可取消 run；
+   - 终态或不可取消状态返回明确错误。
+2. 新增 API route `apps/api/src/worker/runs/routes.ts`：
+   - zod 校验 prompt 和 conversationId；
+   - `/runs/:id/events` 复用 runtime bus，按 `taskId` 过滤事件；
+   - route 挂到 `/api/worker/runs`。
+3. 更新 Worker Web API：
+   - `submitTask()` 改为 `POST /api/worker/runs`；
+   - `continueConversation()` 改为同 endpoint + `conversationId`；
+   - 类型仍兼容 `AgentTaskRow`，UI 不做结构性改动。
+4. 更新 OpenAPI path registry 和 focused tests。
 
 ## Risks
 
-- Release workflow depends on GitHub secrets and npm publish permission.
-- Published-package harness depends on local executor availability and can fail
-  due environment issues rather than product regressions; QA must distinguish
-  those cases.
-- If release validation exposes a product blocker, stop and open a BUG task
-  rather than forcing the tag.
+- 这是过渡层，底层表仍叫 `agent_tasks`，旧事件仍叫 `orchestrator.*`。文档和测试必须明确它是兼容层。
+- `cancelRun()` 对尚未绑定 conversationId 的 queued run 不能可靠取消；本 slice 返回可解释的 400。
+- web UI 仍显示 conversation/chat 形态，不等于 S5 workbench 已完成。
 
 ## Verification
 
-- `bun run typecheck`
-- `bun run lint`
-- `bun run test`
-- `bun run build`
+- `bun test packages/core/src/worker/runs/service.test.ts`
+- `bun test apps/api/src/worker/runs/routes.test.ts`
+- `bun run --filter '@zonease/aiworker-web' test -- src/worker/api.test.ts`
+- `bun run --filter '@zonease/aiworker-api' typecheck`
+- `bun run --filter '@zonease/aiworker-core' typecheck`
 - `git diff --check`
-- `bun apps/cli/dist/aiworker-bun.js --version`
-- `bun pm pkg get version --cwd apps/cli/dist`
-- `cd apps/cli/dist && bun publish --dry-run --access public`
-- GitHub release workflow for `v0.12.2`
-- `bunx @zonease/aiworker-cli@0.12.2 --version`
-- `bun scripts/governance-kernel-harness.ts --mode cli-release-local --version 0.12.2 --matrix compact ...`
+- code-review-graph change review
 
 ## Progress
 
-- 2026-05-09 16:50: Plan created and moved to implementing after the user
-  approved the recommended real-worker regression and patch release path.
-- 2026-05-09 16:44-16:49: Source real-worker regression passed on
-  `/Users/ben/projects/my-aiworker`, including no default control executor,
-  successful Codex Chat, durable failure Chat message, restored Codex config,
-  and a 125079 ms native adapter slow-turn check.
-- 2026-05-09 16:52: Source release gates passed after version bump:
-  typecheck, lint, full test suite, production build, and diff check.
-- 2026-05-09 16:53: dist reports `0.12.2`; publish dry-run packed
-  34 files / 3.21MB and stopped at the expected local npm auth boundary.
-- 2026-05-09 16:56: pushed `main` and tag `v0.12.2`; release workflow
-  `25597026067` passed and published npm + GitHub Release assets.
-- 2026-05-09 17:00: `npm view @zonease/aiworker-cli version` returned
-  `0.12.2`; `bunx @zonease/aiworker-cli@0.12.2 --version` returned
-  `aiworker/0.12.2 darwin-arm64 node-v24.3.0`.
-- 2026-05-09 17:03: published-package compact governance harness passed
-  80/80 checks across `developer-codex` and `general-assistant-claude-code`.
+- 2026-05-09 16:46：完成 S1 调查，确认先做 `/api/worker/runs` 兼容层，保留旧路径。
+- 2026-05-09 16:55：完成 core `WorkerRunService`、worker `/api/worker/runs` route、filtered run SSE、OpenAPI registry、web submit/continue 调用切换和聚焦测试。

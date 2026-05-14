@@ -18,7 +18,6 @@
   },
   "dependencies": {
     "@zonease/aiworker-fs-layout": "workspace:*",
-    "@zonease/aiworker-gateway-proto": "workspace:*",
     "@zonease/aiworker-shared": "workspace:*",
     "@zonease/aiworker-storage-sqlite": "workspace:*",
     "consola": "^3.4.2",

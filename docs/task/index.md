@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-09 (REFACTOR-026 completed)
+> Updated: 2026-05-14 (FEAT-082 completed)
 
 ## Usage
 
@@ -297,6 +297,125 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**QA-024 Case-driven Brain loop validation evidence**](QA-024.md) `P1`
 - [x] [**REL-031 发布 aiworker CLI 0.12.1**](REL-031.md) `P1`
 - [x] [**QA-025 Case-driven Brain loop release validation**](QA-025.md) `P1`
-- [x] [**REFACTOR-026 Executor non-interference boundary**](REFACTOR-026.md) `P0`
-- [x] [**REL-032 Publish aiworker CLI 0.12.2**](REL-032.md) `P1`
-- [x] [**QA-026 Executor non-interference release validation**](QA-026.md) `P1`
+- [~] [**REFACTOR-026 OD-style local worker reboot**](REFACTOR-026.md) `P1`
+- [x] [**REFACTOR-027 Worker run contract compatibility layer**](REFACTOR-027.md) `P1`
+- [x] [**REFACTOR-028 Route CLI run through daemon run contract**](REFACTOR-028.md) `P1`
+- [x] [**REFACTOR-029 Add worker artifact metadata index**](REFACTOR-029.md) `P1`
+- [x] [**REFACTOR-030 Add OD-style worker pack registry**](REFACTOR-030.md) `P1`
+- [x] [**REFACTOR-031 Materialize worker packs during project init**](REFACTOR-031.md) `P1`
+- [x] [**REFACTOR-032 Add local worker daemon lifecycle commands**](REFACTOR-032.md) `P1`
+- [x] [**REFACTOR-033 Worker web workbench first screen**](REFACTOR-033.md) `P1`
+- [x] [**REFACTOR-034 Add worker review promotion surface**](REFACTOR-034.md) `P1`
+- [x] [**REFACTOR-035 Complete OD-style worker default loop**](REFACTOR-035.md) `P1`
+- [x] [**REFACTOR-036 Hard reset OD-style worker product surface**](REFACTOR-036.md) `P1`
+- [x] [**REFACTOR-037 Greenfield local worker rebuild**](REFACTOR-037.md) `P0`
+- [x] [**REFACTOR-038 Worker Web greenfield studio rebuild**](REFACTOR-038.md) `P0`
+- [x] [**REFACTOR-039 Worker Web Open Design source parity**](REFACTOR-039.md) `P0`
+- [x] [**REFACTOR-040 Worker Web product-detail correction**](REFACTOR-040.md) `P0`
+- [x] [**DOC-008 Vertical Soul product north star reset**](DOC-008.md) `P0`
+- [x] [**REFACTOR-041 Vertical Soul Web IA**](REFACTOR-041.md) `P0`
+- [x] [**REFACTOR-042 Soul and Skill data model**](REFACTOR-042.md) `P0`
+- [x] [**REFACTOR-043 Settings full implementation**](REFACTOR-043.md) `P0`
+- [x] [**QA-026 End-to-end vertical Soul MVP validation**](QA-026.md) `P0`
+- [~] [**REFACTOR-044 OD-style vertical Soul workspace correction**](REFACTOR-044.md) `P0`
+- [~] [**QA-027 OD-style vertical Soul MVP correction validation**](QA-027.md) `P0`
+- [x] [**REFACTOR-045 Soul project semantics and init artifact purge**](REFACTOR-045.md) `P0`
+- [x] [**QA-028 Soul project MVP validation**](QA-028.md) `P0`
+- [x] [**FEAT-059 Production-grade Worker Web localization**](FEAT-059.md) `P0`
+- [x] [**REFACTOR-046 Worker Web theme switching and dark mode readiness**](REFACTOR-046.md) `P1`
+- [x] [**DOC-009 Host daemon and Soul worker architecture contract**](DOC-009.md) `P0`
+- [x] [**REFACTOR-047 Worker session data contract**](REFACTOR-047.md) `P0`
+- [x] [**REFACTOR-048 Local daemon worker/session API**](REFACTOR-048.md) `P0`
+- [x] [**REFACTOR-049 Worker Web session workspace surface**](REFACTOR-049.md) `P0`
+- [x] [**REFACTOR-050 Host home lifecycle and project-scope removal**](REFACTOR-050.md) `P0`
+- [x] [**QA-029 Session workspace MVP validation**](QA-029.md) `P0`
+- [x] [**REFACTOR-051 Worker Web production UX integration**](REFACTOR-051.md) `P0`
+- [x] [**REFACTOR-052 Worker Web session-first interaction model**](REFACTOR-052.md) `P0`
+- [x] [**BUG-088 Worker Web session turn disappears until refresh and Codex plugin warning noise**](BUG-088.md) `P0`
+- [x] [**REFACTOR-053 Worker Web workspace route contextual navigation**](REFACTOR-053.md) `P0`
+- [x] [**REFACTOR-054 Structured engine session parity**](REFACTOR-054.md) `P0`
+- [x] [**QA-030 Structured engine session validation**](QA-030.md) `P0`
+- [x] [**REFACTOR-055 Worker Web Soul rail and worker identity**](REFACTOR-055.md) `P0`
+- [x] [**REFACTOR-056 Worker-first registry and storage contract**](REFACTOR-056.md) `P0`
+- [x] [**REFACTOR-057 Worker-scoped API and CLI surface**](REFACTOR-057.md) `P0`
+- [x] [**REFACTOR-058 Worker-first Web information architecture**](REFACTOR-058.md) `P0`
+- [x] [**REFACTOR-059 Worker capability and session selection alignment**](REFACTOR-059.md) `P0`
+- [x] [**QA-031 Worker-first workflow validation**](QA-031.md) `P0`
+- [x] [**REFACTOR-060 Worker Web visual token and control convergence**](REFACTOR-060.md) `P0`
+- [x] [**REFACTOR-061 Worker list and creation dialog polish**](REFACTOR-061.md) `P0`
+- [x] [**REFACTOR-062 Session composer and right-side summary refinement**](REFACTOR-062.md) `P0`
+- [x] [**QA-032 Worker Web visual polish validation**](QA-032.md) `P0`
+- [x] [**REFACTOR-063 Worker Web interaction polish follow-up**](REFACTOR-063.md) `P0`
+- [x] [**QA-033 Worker Web interaction polish regression validation**](QA-033.md) `P0`
+- [x] [**BUG-090 Settings autosave status and dialog scroll layout**](BUG-090.md) `P0`
+- [x] [**REFACTOR-064 Worker Web shared route layout**](REFACTOR-064.md) `P0`
+- [x] [**QA-034 Worker Web shared layout validation**](QA-034.md) `P0`
+- [x] [**BUG-091 Mobile session route layout crowding**](BUG-091.md) `P0`
+- [x] [**REFACTOR-065 Worker Web architecture modularization**](REFACTOR-065.md) `P0`
+- [x] [**REFACTOR-066 Component package library structure**](REFACTOR-066.md) `P0`
+- [x] [**BUG-092 Worker Web icon button size drift**](BUG-092.md) `P0`
+- [x] [**BUG-093 Worker Web redundant execution readiness rail card**](BUG-093.md) `P0`
+- [x] [**BUG-094 Worker Web worker list rail height is constrained**](BUG-094.md) `P0`
+- [x] [**BUG-095 Worker Web worker/workspace pages are width constrained**](BUG-095.md) `P0`
+- [x] [**BUG-096 Worker workspace cards render as a single-column list**](BUG-096.md) `P0`
+- [x] [**BUG-097 Workspace route page structure differs from worker route**](BUG-097.md) `P0`
+- [x] [**BUG-098 Workspace route should focus on session creation**](BUG-098.md) `P0`
+- [x] [**BUG-099 Select 打开态与选项样式割裂**](BUG-099.md) `P0`
+- [x] [**BUG-100 其他工作区列表包含当前工作区**](BUG-100.md) `P0`
+- [x] [**BUG-101 工作区会话头部缺少新建会话动作**](BUG-101.md) `P0`
+- [x] [**BUG-102 工作区侧栏存在多余返回 worker 动作**](BUG-102.md) `P0`
+- [x] [**BUG-103 Settings 引擎操作按钮样式不统一**](BUG-103.md) `P0`
+- [x] [**BUG-104 Settings 引擎卡片缺少专属 icon**](BUG-104.md) `P0`
+- [x] [**BUG-105 未安装 engine icon 弱化后不可见**](BUG-105.md) `P0`
+- [x] [**BUG-106 Workspace create-session route lacks worker return action**](BUG-106.md) `P0`
+- [x] [**BUG-107 Workspace rail width differs between session states**](BUG-107.md) `P0`
+- [x] [**BUG-108 Worker home add actions use icon-only buttons**](BUG-108.md) `P0`
+- [x] [**BUG-109 Add actions should use plus icon buttons**](BUG-109.md) `P0`
+- [x] [**BUG-110 Count badges should be title text**](BUG-110.md) `P0`
+- [x] [**BUG-111 Worker list should be grouped by Soul**](BUG-111.md) `P0`
+- [x] [**BUG-112 Worker list item status should be trailing-only**](BUG-112.md) `P0`
+- [x] [**REFACTOR-067 Worker Web design system, component, and motion upgrade**](REFACTOR-067.md) `P0`
+- [x] [**BUG-113 Session route return action should go back to worker**](BUG-113.md) `P0`
+- [x] [**BUG-114 Session drawer controls and motion polish**](BUG-114.md) `P0`
+- [x] [**BUG-115 Worker Web font tokens and mono taxonomy**](BUG-115.md) `P0`
+- [x] [**REFACTOR-068 Domain-specific Soul workbench architecture**](REFACTOR-068.md) `P0`
+- [x] [**REFACTOR-069 HR Role Search Cockpit workbench**](REFACTOR-069.md) `P0`
+- [x] [**REFACTOR-070 HR Role Search Cockpit evidence-first UX**](REFACTOR-070.md) `P0`
+- [x] [**REFACTOR-071 HR People Profile Workbench**](REFACTOR-071.md) `P0`
+- [x] [**BUG-116 Session artifact status clarity**](BUG-116.md) `P0`
+- [x] [**REFACTOR-072 Vertical Soul workbench module architecture**](REFACTOR-072.md) `P0`
+- [x] [**REFACTOR-073 HR People Workbench focus layout and artifact preview**](REFACTOR-073.md) `P0`
+- [x] [**REFACTOR-074 HR Profile Workspace three panel layout**](REFACTOR-074.md) `P0`
+- [x] [**REFACTOR-075 HR Profile Workbench panel controls polish**](REFACTOR-075.md) `P0`
+- [x] [**FEAT-060 Soul App protocol and manifest contract**](FEAT-060.md) `P0`
+- [x] [**FEAT-061 Host Soul App registry and mount runtime**](FEAT-061.md) `P0`
+- [x] [**FEAT-062 Soul App standalone runtime and SDK**](FEAT-062.md) `P0`
+- [x] [**FEAT-063 Soul App isolation brokers and permission boundary**](FEAT-063.md) `P0`
+- [x] [**FEAT-064 HR and QA external Soul App reference extraction**](FEAT-064.md) `P0`
+- [x] [**FEAT-065 Soul App developer onboarding and validation harness**](FEAT-065.md) `P0`
+- [x] [**DOC-010 Remove legacy OD and control-plane guidance from current contracts**](DOC-010.md) `P0`
+- [x] [**FEAT-066 Converge Soul Apps into app-level standalone and mounted products**](FEAT-066.md) `P0`
+- [x] [**FEAT-067 Harden Soul App mounted runtime and authoring readiness**](FEAT-067.md) `P0`
+- [x] [**FEAT-068 Mounted Surface Protocol and release gate hardening**](FEAT-068.md) `P0`
+- [x] [**FEAT-069 Host app-only catalog and official Soul App bootstrap**](FEAT-069.md) `P0`
+- [x] [**FEAT-070 Legacy Soul metadata discard and mounted surface hardening**](FEAT-070.md) `P0`
+- [x] [**BUG-117 Worker Web build chunk warning**](BUG-117.md) `P0`
+- [x] [**REFACTOR-076 Remove legacy gateway and fleet surfaces**](REFACTOR-076.md) `P0`
+- [x] [**REFACTOR-077 Make Host runtime a first-class bounded context**](REFACTOR-077.md) `P0`
+- [x] [**REFACTOR-078 Make Worker Web first-run Soul App first**](REFACTOR-078.md) `P0`
+- [x] [**FEAT-071 Soul App development skill and rules**](FEAT-071.md) `P0`
+- [x] [**REFACTOR-079 Move Soul Apps management out of the worker rail**](REFACTOR-079.md) `P0`
+- [x] [**DOC-011 Converge Host and Soul App architecture entrypoints**](DOC-011.md) `P0`
+- [x] [**DOC-012 Clean active documentation map**](DOC-012.md) `P0`
+- [x] [**FEAT-072 Host platform locator and capability shell boundary**](FEAT-072.md) `P0`
+- [x] [**FEAT-073 Soul App protocol interaction closure**](FEAT-073.md) `P0`
+- [x] [**FEAT-074 Soul App broker permission hardening**](FEAT-074.md) `P0`
+- [x] [**FEAT-075 Soul App storage broker provider and app-owned drafts**](FEAT-075.md) `P0`
+- [x] [**FEAT-076 Soul App permission visibility and install review**](FEAT-076.md) `P0`
+- [x] [**FEAT-077 Broker provider registry**](FEAT-077.md) `P0`
+- [x] [**FEAT-078 Identity boundary**](FEAT-078.md) `P0`
+- [x] [**FEAT-079 App-owned search index broker**](FEAT-079.md) `P0`
+- [x] [**FEAT-080 Official Soul App broker proof closure**](FEAT-080.md) `P0`
+- [x] [**FEAT-081 Host and Soul App developer route onboarding**](FEAT-081.md) `P0`
+- [x] [**DOC-013 Agent-operational documentation contract**](DOC-013.md) `P0`
+- [x] [**FEAT-082 npm preview release readiness**](FEAT-082.md) `P0`

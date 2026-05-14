@@ -1,1 +1,37 @@
-../.agents/hooks/hooks.json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .codex/session-start.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "EnterWorktree",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "code-review-graph build >/dev/null 2>&1 &"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|Write|Edit|ApplyPatch|apply_patch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "code-review-graph update --skip-flows",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

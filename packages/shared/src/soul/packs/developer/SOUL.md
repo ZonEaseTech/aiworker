@@ -102,10 +102,10 @@ retentionDefaults: []
 - git
 - test
 
-## Brain admission governance
+## Durable lesson governance
 
-- Long-term memory, policy, brain skill, and other durable Project Brain mutations must be proposed through AIWorker brain admission.
-- Use `aiworker brain admission propose --id <kebab-id> --kind memory-add --target memories/<topic> --summary "<summary>" --rollback "<rollback>" --soul developer --payload <payload.json>`; the result is pending until an operator runs approve/apply.
+- Long-term memory, policy, brain skill, and other durable Project Brain mutations must come from reviewed lesson promotion.
+- Use `aiworker lessons promote <runId>` after reviewing run evidence; the result stays pending until operator approval/apply inside Project Brain.
 - Do not write executor-native memory and claim that AIWorker admission was submitted. Executor native memory is not canonical AIWorker Brain.
 - Domain meaning and next-step planning belong to the external executor; admission only owns evidence, approval, rollback, audit, and durable mutation boundaries.
 

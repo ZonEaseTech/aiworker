@@ -1,50 +1,2140 @@
 # AIWorker Changelog
 
-## 2026-05-09 17:04 [completed] REL-032 / QA-026 — CLI 0.12.2 release
+## 2026-05-14 14:11 [completed] FEAT-082 / PLAN-315 — npm preview release readiness
 
-Released `@zonease/aiworker-cli@0.12.2` as the executor non-interference patch
-release after REFACTOR-026:
+Completed the 0.x public preview release readiness slice.
 
-- Source real-worker regression passed against `/Users/ben/projects/my-aiworker`
-  before the version bump: no default control executor, successful Codex Chat,
-  durable assistant failure message on controlled executor error, restored Codex
-  config, and a 125079 ms native adapter slow-turn check.
-- Release records opened in REL-032, QA-026, and PLAN-193.
-- Local release gates passed after the version bump: `bun run typecheck`,
-  `bun run lint`, `bun run test`, `bun run build`, and `git diff --check`.
-- Dist reports `0.12.2`; publish dry-run packed 34 files / 3.21MB before the
-  expected local npm auth boundary.
-- GitHub release workflow `25597026067` passed and published npm plus 4 GitHub
-  Release binary assets.
-- npm latest is `0.12.2`; `bunx @zonease/aiworker-cli@0.12.2 --version`
-  returns `aiworker/0.12.2 darwin-arm64 node-v24.3.0`.
-- main `lint` workflow `25597024994` and `build-image` workflow `25597024993`
-  passed.
-- Published-package compact governance harness passed with 80 PASS / 0 FAIL /
-  0 SKIPPED. Report:
-  `tmp/governance-kernel-0.12.2-cli-compact-20260509-1700/reports/governance-kernel-report.md`.
+- Added package-local resource locators for Worker Web static files and
+  official HR/QA Soul App manifests.
+- Packaged `official-apps/`, `web/` and `drizzle/` into the CLI dist package,
+  with official app mounted/standalone entries patched to app `dist/` bundles.
+- Added `smoke:dist-release` to verify dist daemon startup, Host Web assets,
+  `/api/local/apps`, official app bootstrap and HR template projection.
+- Documented the external `bunx` / `npx @zonease/aiworker-cli` preview path.
+- Host auth, 1.0 release claims and third-party SDK/runtime npm publication are
+  out of scope for this slice.
+- Verification passed: focused core/API/CLI tests, Web build, CLI build bundle,
+  npm pack dry-run, dist release smoke, root `check`, root `test`, root
+  `build`, `git diff --check`, `bun run crg:update` and `bun run crg:review`.
 
-## 2026-05-09 17:05 [completed] REFACTOR-026 / PLAN-192 — Executor non-interference boundary
+## 2026-05-14 13:39 [completed] DOC-013 / PLAN-314 — Agent-operational documentation contract
 
-Completed the default runtime boundary correction after dogfood showed AIWorker
-was killing Codex-backed tasks around 120 seconds and surfacing the result as a
-child-process failure.
+Completed the documentation contract convergence slice.
 
-- Native Codex / Claude Code / ACP / Cursor profiles no longer carry default
-  per-turn kill timers; adapter watchdogs are installed only when
-  `timeoutMs` is explicitly configured.
-- Codex no longer forces approval policy or auto-allows permission requests;
-  Claude Code no longer adds `--dangerously-skip-permissions` or defaults to
-  auto-approve; ACP no longer defaults to yolo / auto-approve.
-- ProcessManager stall cancellation defaults to disabled
-  (`PROCESS_STALL_TIMEOUT_MS=0`), while explicit operator watchdogs still work.
-- Dead-loop detection is warning-only telemetry and Journal evidence; it no
-  longer aborts the executor stream.
-- Control-plane LLM calls require an explicit
-  `orchestrator.decisionPipeline.executor`; without one, AIWorker falls back
-  to heuristic / observe-only behavior instead of reusing the task executor.
-- Executor errors now persist a concise assistant failure message so Worker
-  Admin Chat can show the failure after refresh or missed SSE.
+- Centralized hard Host/Soul/protocol/data/import/documentation constraints in
+  `docs/architecture.md`.
+- Kept `AGENTS.md`, README and route skills as thin agent-operational layers.
+- Replaced stale `README.zh-CN.md` product prose with canonical active
+  pointers.
+- Added a docs contract check so stale entrypoints and retired route names do not
+  drift back into active guidance.
+- Verification passed: `bun run docs:check`, `bun run lint`, `git diff
+  --check`, `bun run crg:update`, and `bun run crg:review`.
+
+## 2026-05-14 13:17 [completed] FEAT-081 / PLAN-313 — Host and Soul App developer route onboarding
+
+Completed the active-entrypoint convergence slice for new developers and
+agents.
+
+- Added a Host-side agent skill for daemon/API, Web shell, CLI, runtime, broker,
+  auth, shared protocol, storage and shared UI work.
+- Kept the Soul App skill focused and handed Host-owned changes to the Host
+  route.
+- Mapped `AGENTS.md`, `README.md` and `docs/architecture.md` to the two active
+  development routes without creating a second architecture contract.
+- Verification: parsed both skill frontmatter blocks, searched active
+  references, confirmed `aiworker-validate` was not reintroduced as an active
+  route, and ran `git diff --check`.
+- Skipped code-review-graph because only documentation and agent instruction
+  files changed.
+
+## 2026-05-14 12:28 [completed] FEAT-080 / PLAN-312 — Official Soul App broker proof closure
+
+Closed the proof gap found by the code audit: FEAT-079's search broker now runs
+through official HR/QA Soul App code paths instead of only synthetic tests.
+
+- Align API descriptor permission parsing with shared manifest `search` support.
+- Make HR/QA app manifests and Host reference manifests declare
+  `search:read/write:<appId>` and publish app-owned broker search descriptors
+  from mounted actions.
+- Gate Settings enablement through Host-owned security review before calling
+  enable.
+- Keep Host generic: no HR profile or QA release interpretation in platform code.
+
+Verification passed: focused API/HR/QA/Web tests, HR/QA validate and smoke,
+root `check`, `build`, `test`, `git diff --check`, and code-review-graph. CRG
+exited 0 with static test-gap hints for mounted helper functions and test fetch
+mocks, covered by HR/QA mounted-service tests, API local-daemon tests and Worker
+Studio Settings flow tests.
+
+## 2026-05-14 11:47 [completed] FEAT-079 / PLAN-311 — App-owned search index broker
+
+Completed the final convergence slice after identity boundary delivery.
+
+- Add `search` broker permissions for app-owned index descriptors.
+- Let Soul Apps push non-authoritative title/summary/reference records through Host broker routes.
+- Keep Host search indexing generic and avoid domain result interpretation.
+- Expose SDK helpers for public app-scoped broker search routes.
+
+Verification passed: focused shared/core/API/SDK tests and typechecks, lint,
+`git diff --check`, and code-review-graph. CRG exited 0 with static test-gap
+hints for API parsing/OpenAPI helpers and search-index helpers, covered by the
+focused API/core/SDK tests.
+
+## 2026-05-14 11:41 [completed] FEAT-078 / PLAN-310 — Identity boundary
+
+Completed the next convergence slice after broker provider registry delivery.
+
+- Move local bearer auth behind a Host auth provider interface.
+- Keep existing local daemon token behavior compatible.
+- Project authenticated operator identity into broker scope and signed mount context.
+- Keep Soul Apps away from caller cookies, caller authorization headers and Host auth internals.
+
+Verification passed: focused core/API tests and typechecks, lint, `git diff
+--check`, and code-review-graph. CRG exited 0 with static test-gap hints for
+API request helpers and mount context projection, covered by the focused
+authenticated identity API test.
+
+## 2026-05-14 11:33 [completed] FEAT-077 / PLAN-309 — Broker provider registry
+
+Completed the next convergence slice after permission visibility delivery.
+
+- Define a typed broker provider registry for storage, connector, audit and
+  secret-reference providers.
+- Expose local SQLite providers and future S3/GCP/vault metadata without adding
+  real cloud SDK dependencies.
+- Let Soul Apps inspect Host platform capability providers through public
+  broker routes and SDK helpers.
+- Keep provider metadata secret-safe and domain-agnostic.
+
+Verification passed: focused shared/core/API/SDK tests and typechecks, lint,
+`git diff --check`, and code-review-graph. CRG exited 0 with static test-gap
+hints for API bootstrap/route registration and broker projection helpers,
+covered by focused API/core tests.
+
+## 2026-05-14 02:05 [completed] FEAT-076 / PLAN-308 — Soul App permission visibility and install review
+
+Completed the next convergence slice after storage broker provider delivery.
+
+- Add a Host-owned security review projection for manifest permissions,
+  connector needs and descriptor `requiredPermissions`.
+- Expose review through local daemon routes before app code runs.
+- Show review details in Settings before generic enable/disable actions.
+- Keep the review generic and avoid HR/QA-specific approval semantics.
+
+Verification passed: focused core/API/Web tests and typechecks, lint, `git
+diff --check`, Worker Web build, and code-review-graph. CRG exited 0 with
+static test-gap hints for route/bootstrap/display helpers, covered by the
+HTTP-level local daemon test and Worker Studio Settings flow test.
+
+## 2026-05-14 01:34 [completed] FEAT-075 / PLAN-307 — Soul App storage broker provider and app-owned drafts
+
+Completed the next convergence slice after broker permission hardening.
+
+- Added a Host/core storage provider interface with SQLite as the default local
+  provider.
+- Kept broker permission, scope and audit decisions in Host.
+- Separated Host action `scope` from app-owned action `input`.
+- Made HR/QA mounted create actions write app-owned draft records through the
+  public broker storage path when Host context is present.
+- Updated Worker Web shell action calls to pass scope separately.
+
+Verification passed: core/API/HR/QA/Web focused tests and typechecks, HR/QA
+validate, lint boundary, `git diff --check`, and code-review-graph. CRG reported
+static private-helper gaps covered through HR/QA mounted-service tests, API
+HTTP-level tests and Web action payload tests.
+
+## 2026-05-14 01:16 [completed] FEAT-074 / PLAN-306 — Soul App broker permission hardening
+
+Completed the next zero-trust slice after the protocol interaction closure. App
+declared shell action/search `requiredPermissions` are now enforceable before
+Host contacts a mounted Soul App service.
+
+- Added shared manifest validation and public exports for
+  `requiredPermissions` as `kind:action:target`.
+- Guarded Host action/search invocation through the broker permission decision.
+- Added official HR/QA permission declarations for app-owned shell descriptors.
+- Covered allowed and denied paths, including the denied path not reaching the
+  mounted service.
+
+Verification passed: shared focused/full tests and typecheck, SDK test, API
+focused test and typecheck, HR/QA tests/typechecks/validate, lint boundary,
+`git diff --check`, and code-review-graph. CRG reported static private-helper
+test gaps covered through HTTP-level local daemon tests.
+
+## 2026-05-14 00:40 [completed] FEAT-073 / PLAN-305 — Soul App protocol interaction closure
+
+Closed the local-first Host / Soul App interaction loop by making app-declared
+shell actions and search providers usable through generic Host protocol routes.
+
+- Added generic Host action and search routes for declared Soul App shell
+  descriptors.
+- Implemented HR/QA mounted protocol action and search handlers.
+- Enabled Worker Web shell actions and app-owned shell search without
+  app-specific branches.
+- Kept Host as lifecycle, declaration, scope and mounted invocation owner while
+  Soul Apps own domain result meaning.
+
+Verification passed: focused shared/API/Web/HR/QA tests and typechecks, HR/QA
+validate and smoke, root typecheck/lint/test/build, browser smoke on
+`http://127.0.0.1:5273/`, `git diff --check`, and code-review-graph. CRG
+reported private-helper static test gaps, covered by HTTP-level mounted service
+and Host/Web protocol tests.
+
+## 2026-05-13 23:55 [completed] FEAT-072 / PLAN-304 — Host platform locator and capability shell boundary
+
+Converged Host toward a platform locator, capability broker and shell contract
+while keeping Soul Apps authoritative for domain state and domain meaning.
+
+- Added shell/action/search descriptors to the Soul App manifest and protocol
+  contract.
+- Projected app-declared shell descriptors through Host catalog without adding
+  domain semantics.
+- Marked mounted descriptor responses as app-owned, non-authoritative protocol
+  views.
+- Kept HR/QA people profile and release gate meaning inside their apps while
+  exposing only protocol-owned descriptor surfaces to Host.
+- Rendered Worker Web shell slots from app descriptors without implementing
+  Host-owned HR/QA action handlers.
+
+Verification passed: shared/core/API/Web/HR/QA focused tests and typechecks,
+HR/QA validate and smoke package scripts, root typecheck/lint/test/build,
+browser smoke on `http://localhost:5173/`, `git diff --check`, and
+code-review-graph.
+
+## 2026-05-13 21:06 [completed] DOC-012 / PLAN-303 — Clean active documentation map
+
+Cleaned the root documentation map so active agent guidance is task-routed
+instead of scattered across stale pages.
+
+- Deleted `docs/e2e-smoke.md` because the referenced PLAN-004 smoke script no
+  longer exists.
+- Deleted `docs/governance-node-status.md` so old governance posture no longer
+  acts as a third architecture entrypoint.
+- Rewrote `docs/cli.md` for the current app/worker/workspace/session/turn
+  command tree.
+- Refreshed `docs/deployment.md`, `docs/executor-engines.md`, `AGENTS.md` and
+  README around the current Host / Soul App local daemon contract.
+
+Verification passed: deleted-doc reference search, stale CLI term search,
+stale governance/product term search and `git diff --check`. code-review-graph
+skipped because this slice changes only documentation and agent guidance.
+
+## 2026-05-13 20:36 [completed] DOC-011 / PLAN-302 — Converge Host and Soul App architecture entrypoints
+
+Converged the active architecture entrypoints to root `AGENTS.md` and
+`docs/architecture.md`.
+
+- Deleted the old north-star document instead of keeping a redirect stub.
+- Rewrote the architecture contract around Host as platform locator and
+  capability shell, with Soul Apps owning domain state and meaning.
+- Updated Soul App authoring guidance, the repository README and the governance
+  status note so Host consumes only protocol-exposed app surfaces.
+
+Verification passed: active-entrypoint stale-reference searches and
+`git diff --check`. code-review-graph skipped because the slice changes only
+documentation, root agent instructions and skill markdown.
+
+## 2026-05-13 19:49 [completed] REFACTOR-079 / PLAN-301 — Move Soul Apps management out of the worker rail
+
+Moved installed Soul App visibility out of the daily worker navigation rail and
+into Settings so the workbench left side can stay focused on worker, workspace
+and session navigation.
+
+- Removed the always-visible `Soul Apps` rail card and inline mounted-surface
+  preview diagnostics from Worker Studio.
+- Kept the first-run main surface backed by enabled installed Soul Apps when no
+  worker exists.
+- Reworked Settings' `Soul Apps` section to list installed apps with status,
+  version, domain, permission count, template count, mounted contribution count
+  and API prefix.
+- Updated Worker Studio tests and localized Settings copy for the new placement.
+
+Verification passed: focused Worker Studio test, Web typecheck, Web build,
+browser verification on `http://localhost:5173`, `git diff --check`, and
+code-review-graph. CRG exits 0 with static test-gap hints for small Settings
+display helpers; the focused test and browser check cover the product contract.
+
+## 2026-05-13 19:00 [completed] FEAT-071 / PLAN-300 — Soul App development skill and rules
+
+Added an agent-native Soul App development route so contributors can work on
+Soul Apps without drifting from Host / Soul App dual autonomy.
+
+- Added `.agents/skills/aiworker-soul-app-dev/SKILL.md` with required context,
+  boundary rules, product-language checks, standalone/Host mounted expectations
+  and verification gates.
+- Routed `apps/aiworker-*`, Soul App scaffold/validation and authoring-doc edits
+  from root `AGENTS.md` to the new skill.
+- Updated `docs/soul-app-developer.md` to distinguish the human-readable
+  authoring guide from the agent-native execution route and to keep
+  `apps/AGENTS.md` out of the canonical path until nested loading is proven.
+
+Verification passed: placeholder scan, `test ! -e apps/AGENTS.md`, and
+`git diff --check`. code-review-graph was skipped because this change only
+touches docs, root agent instructions, and skill markdown.
+
+## 2026-05-13 18:32 [completed] REFACTOR-078 / PLAN-299 — Make Worker Web first-run Soul App first
+
+Made Worker Web first-run start from enabled Soul Apps instead of an unexplained
+empty worker object.
+
+- Replaced the no-worker home with a Soul App first-run surface that shows
+  enabled HR/QA app cards and starts the existing create-worker flow with the
+  chosen app-projected Soul preselected.
+- Kept the backend route model unchanged: Soul App -> worker -> workspace ->
+  session remains the implementation path, but the user begins with the
+  business app.
+- Collapsed technical Soul App rail diagnostics such as permission counts, API
+  routes, mounted slots and mounted surfaces behind `Developer details`.
+- Updated localized copy and the mounted-surface browser smoke to use the new
+  disclosure interaction.
+
+Verification passed: focused Worker Studio test, Web `lint`, `typecheck`,
+`test`, `build`, root `typecheck`, `lint`, `test`, `build`,
+`web:smoke:mounted-surfaces`, browser smoke on a temporary local daemon,
+`git diff --check`, and code-review-graph. CRG exits 0 with overall risk 0.40
+and static test-gap hints; Worker Studio tests plus the browser smoke cover the
+changed first-run and mounted-surface paths.
+
+## 2026-05-13 18:05 [completed] REFACTOR-077 / PLAN-298 — Make Host runtime a first-class bounded context
+
+Made Host a shared core use-case boundary while keeping API, CLI and Web as
+separate delivery adapters.
+
+- Added `packages/core/src/host/runtime.ts`, a Host runtime facade for Soul App
+  lifecycle, official bootstrap, catalog projection, worker creation, runtime
+  creation, template ownership and metadata enrichment.
+- Added direct Host contract tests that cover official app bootstrap, legacy
+  built-in Soul rejection, app-scoped worker metadata, duplicate worker
+  conflicts, worker-owned template validation and template metadata enrichment.
+- Refactored local daemon API routes to delegate Host decisions through
+  `state.host` while keeping Hono routes, auth, streaming, settings and mounted
+  service handling in the API adapter.
+- Refactored CLI app/worker/template/session paths and `app smoke` to use the
+  same Host facade.
+
+Verification passed: focused core/API/CLI typechecks and tests, root `lint`,
+`typecheck`, `test`, `build`, `web:smoke:mounted-surfaces`, `git diff --check`
+and code-review-graph. CRG exits 0 with overall risk 0.60 and static test-gap
+hints around adapter helpers; new Host contract tests plus existing API/CLI
+tests and mounted smoke cover those paths.
+
+## 2026-05-13 17:28 [completed] REFACTOR-076 / PLAN-297 — Remove legacy gateway and fleet surfaces
+
+Removed the historical gateway/fleet control plane from active source,
+packaging, storage, deployment and operator docs.
+
+- Deleted `packages/gateway`, `packages/gateway-proto`, dead gateway smoke
+  scripts, fleet DB schema/migrations/generation, Docker/GHCR/compose/Caddy
+  deployment surfaces and old gateway runbooks.
+- Removed gateway/proto dependencies from current CLI/API/core packages and
+  regenerated `bun.lock`.
+- Rehomed the remaining current worker id helpers into shared ids and moved
+  `EngineKind` to the provider availability contract.
+- Kept release packaging focused on Worker Web static assets and worker DB
+  migrations.
+- Rewrote active README/deployment docs around local daemon, Host and Soul App
+  autonomy instead of a remote gateway/fleet path.
+
+Verification passed: focused shared/storage/CLI/API typechecks, focused
+shared/storage tests, CLI bundle build, root `typecheck`, `lint`, `test`,
+`build`, `web:smoke:mounted-surfaces`, and code-review-graph. CRG exits 0 with
+overall risk 0.35 and one static test-gap hint for `configureWorker`; current
+CLI and root test gates cover the changed smoke configuration path.
+
+## 2026-05-13 15:49 [completed] BUG-117 / PLAN-296 — Worker Web build chunk reduction
+
+Fixed the Worker Web Vite chunk-size warning by reducing the actual initial
+JavaScript bundle instead of raising the warning threshold.
+
+- Added a lightweight `@zonease/aiworker-shared/soul-workbench-catalog` export
+  so Worker Web can read workbench descriptors without importing the full shared
+  barrel and its schema/fixture dependencies.
+- Added `@zonease/aiworker-component/markdown-preview` for targeted lazy
+  loading of the markdown preview renderer.
+- Lazy-loaded the HR specialized workbench and nested markdown preview stack.
+- Reduced Worker Web's largest JS chunk from about 779 kB to 351.99 kB; build
+  now emits `index`, `people-workbench`, and `markdown-preview` JS chunks with no
+  Vite chunk-size warning.
+
+Verification passed: focused Web/shared tests, Web build, root `lint`,
+`typecheck`, `test`, `build`, `web:smoke:mounted-surfaces`,
+`git diff --check`, and code-review-graph. `crg:review` exits 0 and reports
+static test-gap warnings for touched lazy modules; focused Web tests and browser
+smoke cover the behavior.
+
+## 2026-05-13 14:07 [completed] FEAT-070 / PLAN-295 — Legacy Soul metadata discard and mounted surface hardening
+
+Completed the selected follow-ups 1, 2 and 4, while leaving additional official
+Soul Apps out of scope.
+
+- Added legacy HR/QA metadata discard for old `hr` / `qa` workers. API startup
+  and `aiworker app bootstrap official` now delete those legacy workers and
+  cascaded local metadata instead of migrating them to `aiworker-hr` /
+  `aiworker-qa`.
+- Surfaced discard counts in CLI bootstrap output.
+- Added a generic Soul App boundary lint script that discovers manifest-backed
+  `apps/*` Soul Apps and rejects Host-private imports, sibling app imports and
+  Host imports of `apps/*/src` internals.
+- Added `web:smoke:mounted-surfaces`, a Playwright browser smoke that starts a
+  temporary local daemon, opens Host-served Worker Web, and verifies mounted HR
+  descriptor and sandboxed frame surfaces.
+- Fixed mounted service startup races by deduplicating pending app service
+  launches per app; the browser smoke exposed this because multiple mounted
+  surfaces resolve concurrently.
+
+Verification passed: focused storage/core/API/CLI tests, root `lint` with the
+new boundary script, root `typecheck`, root `test`, root `build`,
+`web:smoke:mounted-surfaces`, `git diff --check` and code-review-graph. Web
+build still emits the existing chunk-size warning, but exits 0.
+Code-review-graph exits 0 and reports static test-gap warnings for touched
+bootstrap/helper functions; focused storage/API/CLI/core tests cover the
+corrected discard behavior.
+
+## 2026-05-13 12:43 [completed] FEAT-069 / PLAN-294 — Host app-only catalog and official Soul App bootstrap
+
+Completed the no-built-in-Soul Host catalog convergence.
+
+- Removed Host runtime fallback to `BUILTIN_VERTICAL_SOULS` and
+  `BUILTIN_CAPABILITY_TEMPLATES`; Host catalog now projects only installed Soul
+  Apps and enabled app capability templates.
+- Added first-party official bootstrap for `aiworker-hr` and `aiworker-qa`
+  using normal install/enable lifecycle, without arbitrary `apps/*` scanning.
+- Wired local daemon startup to bootstrap official HR/QA apps before serving
+  catalog-dependent routes.
+- Preserved explicitly disabled official apps across daemon restart/bootstrap
+  refresh.
+- Added `aiworker app bootstrap official` for CLI bootstrap and diagnostics.
+- Updated API/CLI/Web tests and HR specialized workbench binding to use
+  app-projected IDs such as `aiworker-hr` and
+  `aiworker-hr.person-profile`; legacy `hr` worker creation is rejected.
+- Kept PM/DevOps/finance/legal/ops out of runtime catalog until they become
+  official Soul Apps, as approved in option A.
+
+Verification passed: focused core/shared/API/CLI/Web tests, Web package test,
+temporary-home `app bootstrap official`, HR/QA `app validate` and `app smoke`,
+root `typecheck`, `lint`, `test`, `build`, `git diff --check`,
+`crg:update` and `crg:review`. Web build still emits the existing chunk-size
+warning, but exits 0. code-review-graph reports risk 0.60 with heuristic
+test-gap hints around mounted service/surface helpers.
+
+## 2026-05-13 12:16 [completed] FEAT-068 / PLAN-293 — Mounted Surface Protocol and release gate hardening
+
+Completed the renderer-aware mounted surface slice without making iframe the
+only Host integration path.
+
+- Added mounted `surface` declarations for UI routes, panels, widgets, artifact
+  previews and review panels, with `host-descriptor`, `sandboxed-frame`, and a
+  reserved-but-rejected `trusted-module` renderer.
+- Added mounted contribution surface summaries for Host catalog projection.
+- Replaced HR/QA artifact schema placeholder hashes with real SHA-256 values
+  and made `aiworker app validate` fail on schema hash mismatch.
+- Added Host healthchecks for manifest-declared mounted `baseUrl` services.
+- Added Host-signed `x-aiworker-mount-context` and
+  `x-aiworker-mount-signature` headers on mounted API and declared surface
+  requests.
+- Added `/api/local/apps/:appId/surfaces/:surfaceId` for manifest-declared
+  descriptor/frame surface resolution.
+- Updated HR/QA mounted services to expose descriptor surfaces and sandboxed
+  frame surfaces.
+- Updated Worker Web to render descriptor fields/actions and sandboxed frame
+  surfaces in the Soul Apps rail.
+
+Verification passed: focused shared/API/CLI/Web/HR/QA checks, HR/QA
+`app validate` and `app smoke`, root `typecheck`, `lint`, `test`, `build`, and
+`git diff --check`. Web build still emits the existing chunk-size warning, but
+exits 0.
+
+## 2026-05-13 03:34 [completed] FEAT-067 / PLAN-292 — Soul App mounted hardening and authoring readiness
+
+Completed the first five post-FEAT-066 follow-up items without publishing the
+branch.
+
+- Split `@zonease/aiworker-soul-app-sdk` back to the public authoring surface:
+  manifest/protocol helpers, `defineSoulApp(...)`, namespace helpers and scoped
+  Host client.
+- Added `@zonease/aiworker-soul-app-runtime` for standalone and Host-mounted
+  runtime harnesses, worker DB bootstrap and LocalExecutor test/runtime types.
+- Hardened mounted services with loopback-only URL validation, Host-generated
+  mount tokens, credential/forwarded-header stripping, upstream timeout handling
+  and launched service teardown on app disable.
+- Added HR/QA mounted token checks and kept app source on SDK while tests use
+  runtime explicitly.
+- Updated Worker Web to surface mounted API prefixes, routes and mounted slot
+  counts in the Soul Apps rail.
+- Upgraded `aiworker app create` to generate standalone and host-mounted entry
+  files, expanded scripts, mounted service metadata and smoke evidence.
+
+Verification passed: focused shared/SDK/runtime/HR/QA/API/CLI/Web tests,
+HR/QA `app validate` and `app smoke`, browser smoke against a real local daemon
+with HR/QA installed, root `typecheck`, `lint`, `test`, `build`,
+`git diff --check`, `crg:update` and `crg:review`. Web build still emits the
+existing chunk-size warning, but exits 0. code-review-graph reports risk 0.60
+with 34 heuristic test-gap hints.
+
+## 2026-05-13 02:11 [completed] FEAT-066 / PLAN-291 — Soul App app-level autonomy and Host mounted execution
+
+Completed the B+C convergence for Soul App / Host dual autonomy.
+
+- Moved HR and QA from reference package shape into runnable app workspaces
+  under `apps/aiworker-hr` and `apps/aiworker-qa`, with app-owned manifests,
+  standalone and host-mounted entries, protocol files, schemas, capabilities,
+  review policies, pack assets, scripts, tests and READMEs.
+- Fixed SDK app-origin runtime identity so worker/catalog/template paths use the
+  Soul App id (`aiworker-hr`, `aiworker-qa`) consistently, while the domain Soul
+  id is retained as metadata.
+- Extended `soul-app/v1` API metadata with mounted local service configuration.
+  Host can now proxy enabled app API calls to a declared or launched local app
+  service instead of returning `SOUL_APP_API_NOT_LOADED`.
+- Added mounted service smoke in `aiworker app smoke`, including service launch,
+  healthcheck, discovered base URL injection, Host-mounted runtime smoke and
+  standalone browser-openable smoke.
+- Hardened broker writes with Host-owned worker/workspace/session scope
+  validation before storage/review/memory mutation.
+- Added lint and CLI validation boundaries blocking Host-private imports and
+  sibling Soul App imports from app code.
+- Updated Soul App developer docs and recorded the hybrid autonomy design under
+  `docs/superpowers/specs/`.
+
+Verification passed: focused HR/QA app typecheck/test/build, SDK/API/CLI/Core/Web
+focused tests, `aiworker app validate` and `aiworker app smoke` for both apps,
+root `typecheck`, `lint`, `test`, `build`, `git diff --check`, `crg:update` and
+`crg:review`. Web build still emits the existing chunk-size warning, but exits
+0. code-review-graph reports risk 0.65 with 148 test-gap hints.
+
+## 2026-05-13 00:52 [completed] FEAT-065 / PLAN-289 — Soul App developer onboarding and validation harness
+
+Completed the developer-facing Soul App authoring path.
+
+- Added `aiworker app create <id> --dir <path>` to scaffold a minimal vertical
+  Soul App with manifest, SDK app definition, artifact schema, capability
+  prompt, review policy, Soul pack, README, and package scripts.
+- Added `aiworker app validate <path>` for manifest validation, asset checks,
+  artifact schema JSON parsing, and Host-private import detection.
+- Added `aiworker app smoke <path>` to run isolated Host-mounted runtime smoke
+  through install/enable, catalog projection, worker/workspace/session creation,
+  artifact generation, review creation, and temporary standalone browser-openable
+  HTML smoke.
+- Added `docs/soul-app-developer.md` with the SDK boundary, ownership model,
+  connector/storage/review/memory rules, and contribution checklist.
+- Verified focused CLI tests/typecheck plus root `typecheck`, `lint`, `test`,
+  `build`, `git diff --check`, and code-review-graph update/review.
+
+## 2026-05-13 00:32 [completed] FEAT-064 / PLAN-288 — HR and QA reference Soul Apps
+
+Completed the first monorepo reference Soul App extraction.
+
+- Added `@zonease/aiworker-hr` with HR manifest-backed app definition,
+  protocol handlers, package boundary docs, and standalone/mounted smoke tests.
+- Added `@zonease/aiworker-qa` with release/test-suite focused app definition,
+  protocol handlers, package boundary docs, and standalone/mounted smoke tests.
+- Extended SDK type exports for app authors.
+- Verified HR and QA package tests and typechecks.
+
+## 2026-05-13 00:18 [completed] FEAT-063 / PLAN-287 — Soul App isolation brokers and permission boundary
+
+Completed the Host-owned Soul App broker layer.
+
+- Added app-scoped `soul_app_storage_records` and `soul_app_audit_events` to
+  worker DB, with repository helpers and generated migration.
+- Added core `createSoulAppBroker(...)` for manifest permission decisions,
+  storage namespace isolation, connector evidence reads, review/memory proposal
+  paths, and raw engine invocation denial.
+- Added local daemon broker routes under `/api/local/apps/:appId/broker/*`,
+  SDK client helpers, CLI permission display and Worker Web permission count.
+- Verified focused storage/core/API/SDK/CLI/Web tests and package typechecks.
+
+## 2026-05-12 23:35 [completed] FEAT-062 / PLAN-286 — Soul App standalone runtime and SDK
+
+- Added `@zonease/aiworker-soul-app-sdk` as the external authoring boundary for
+  Soul Apps, with `defineSoulApp(...)`, manifest validation, shared protocol
+  type exports, a scoped local daemon client, standalone runtime bootstrap, and
+  mounted test runtime helper.
+- Added SDK tests proving one demo Soul App definition works unchanged in
+  standalone mode and through Host mounted manifest projection, creating
+  worker/workspace/session/artifact/review in both paths.
+- Kept the runtime boundary narrow: standalone reuses worker.db and
+  `LocalWorkerRuntime`; mounted tests use Host registry projection; production
+  execution of external UI/API handlers remains deferred to PLAN-287 isolation
+  brokers.
+- Added SDK authoring docs and retained `soulAppId` in generated artifact
+  metadata when session metadata supplies it, preserving app provenance.
+- Verification passed: SDK/core focused typecheck and tests, root
+  `typecheck`, `lint`, `test`, `build`, `git diff --check`, and
+  code-review-graph update/review.
+
+## 2026-05-12 22:47 [completed] FEAT-061 / PLAN-285 — Host Soul App registry and mount discovery
+
+- Added Host-side Soul App registry persistence for installed/enabled/disabled/error
+  lifecycle state, manifest digest, stored manifest JSON, validation issues and
+  static healthcheck results.
+- Added core registry services that install static `soul-app/v1` manifests,
+  revalidate compatibility before enable/healthcheck, and project enabled app
+  Souls and capability templates into the Host catalog without executing Soul
+  App code.
+- Added local daemon and CLI lifecycle surfaces for app list/show/install/enable/
+  disable/doctor, plus scoped `/api/local/apps/:appId/*` namespace reservation
+  so app API paths cannot override Host core routes.
+- Wired Worker Web to load installed Soul Apps and show lifecycle status in the
+  worker rail, while worker/session creation uses enabled app capabilities and
+  disabled apps remain audit-visible but unavailable for new sessions.
+- Verification passed: focused package typecheck/test for shared, storage,
+  core, API, CLI and Web; root `typecheck`, `lint`, `test`, `build`; and
+  `git diff --check`; plus code-review-graph update/build/review.
+
+## 2026-05-12 22:09 [completed] FEAT-060 / PLAN-284 — Soul App protocol and manifest contract
+
+- Added the shared `soul-app/v1` contract under `packages/shared/src/soul-app/`:
+  manifest schema, JSON parse helper, Host discovery validation result and
+  protocol surface type definitions.
+- Added HR and QA reference Soul App manifest fixtures covering standalone and
+  Host-mounted modes, Soul pack refs, capabilities, workspace types, artifact
+  schemas, UI/API contributions, connector needs, storage namespace,
+  permissions, healthcheck and protocol exports.
+- Added focused shared tests for valid fixtures and deterministic validation
+  failures: unsupported protocol, incompatible Host version, missing connector,
+  invalid namespace, unsafe permission, missing UI/API entry and artifact schema
+  errors.
+- Scope stayed limited to the protocol contract. Host registry/mount runtime,
+  standalone SDK, isolation brokers, HR/QA extraction and developer scaffold
+  remain in PLAN-285..289.
+- Verification passed: focused shared typecheck/test, root typecheck/lint/test,
+  `git diff --check`, and code-review-graph build/review.
+
+## 2026-05-12 21:20 [completed] DOC-010 / PLAN-290 — Remove legacy OD and control-plane guidance from current contracts
+
+- Removed Open Design mapping tables and fleet/gateway deferral guidance from
+  current product entrypoints: `GOALS.md`, `docs/architecture.md`, `README.md`,
+  and `AGENTS.md`.
+- Reframed current guidance around Host / Soul App dual autonomy, standalone and
+  Host-mounted Soul Apps, and Soul App protocol boundaries.
+- Marked stale OD-style active PMA entries as superseded in task/plan indexes
+  and added explicit superseded notes to REFACTOR-026 / PLAN-192.
+- Identified stale Codex memory themes around OD/fleet/gateway, but did not
+  mutate memory because this checkpoint only had authorization for repository
+  cleanup.
+
+## 2026-05-12 21:00 [decision] FEAT-060..065 / PLAN-284..289 — Soul App / Host dual-autonomy architecture
+
+- Recorded Soul App as the next architecture unit above Soul pack: a vertical
+  product can run standalone and can be mounted into AIWorker Host through a
+  protocol boundary.
+- Added architecture topology, upstream/downstream call chain, isolation layers,
+  and key protocol surfaces for Host / Soul App interaction.
+- Planned six full PMA features for the rollout: manifest/protocol contract,
+  Host registry and mount runtime, standalone SDK/runtime, isolation brokers,
+  HR/QA reference app extraction, and developer onboarding/validation harness.
+- No runtime code changes in this checkpoint.
+
+## 2026-05-12 20:42 [completed] REFACTOR-075 / PLAN-283 — HR Profile Workbench panel controls polish
+
+- Removed the visible Needs Attention smart section from HR Profile List, so the
+  list now uses lifecycle sections only.
+- Simplified Profile List cards into compact navigation rows that still show
+  profile name, lifecycle, current moment, and next step.
+- Added Profile List and Profile Tools visibility toggles to the header icon
+  control group beside refresh and settings.
+- Let Profile Details expand when either or both side panels are hidden.
+- Rebalanced Profile Tools spacing and removed nested scrolling from Suggested
+  Tools, leaving the tools panel as the single scroll owner.
+- Verification passed: focused HR WorkerStudio/model tests, Web
+  typecheck/lint/build, `git diff --check`, Playwright desktop panel-toggle
+  review, mobile overflow/scroll review, action-to-composer smoke,
+  session-thumbnail jump smoke, PM fallback smoke, and code-review-graph
+  update/review.
+
+## 2026-05-12 19:08 [completed] REFACTOR-074 / PLAN-282 — HR Profile Workspace three-panel layout
+
+- Reframed HR People Workbench into one header plus three primary panels:
+  Profile List, Profile Details, and Profile Tools.
+- Replaced the profile poster wall with grouped, collapsible Profile List
+  sections for smart attention and lifecycle buckets.
+- Moved selected-profile facts, source counts, timeline, review guardrails, and
+  Markdown artifact preview into a bounded Profile Details panel.
+- Added compact recent session thumbnails to Profile Tools, with jump actions
+  into the existing full session route.
+- Kept agent usage auxiliary: suggested tools populate a profile-bound proposal
+  composer, while generated outputs remain reviewable artifacts.
+- Fixed responsive layout so desktop uses remaining-height panels with internal
+  scroll and mobile stacks bounded panels without horizontal overflow.
+- Verification passed: focused HR WorkerStudio/model tests, Web
+  typecheck/lint/build, `git diff --check`, Playwright desktop/mobile layout
+  review, lifecycle collapse smoke, session-thumbnail jump smoke,
+  action-to-composer smoke, PM fallback smoke, and code-review-graph
+  update/review.
+
+## 2026-05-12 18:18 [completed] REFACTOR-073 / PLAN-281 — HR People Workbench focus layout and artifact preview
+
+- Rebalanced HR People Workbench around a clearer work center: profile poster
+  wall, selected-profile dossier, and right-side action composer.
+- Removed the internal HR source rail and moved source counts, timeline,
+  review guardrails, and artifact preview into the selected-profile dossier.
+- Added shared `MarkdownPreview` under `packages/component` using
+  `react-markdown` plus `remark-gfm`, with raw HTML skipped for artifact
+  preview safety.
+- Passed selected artifact preview state into specialized Soul workbench
+  renderers so HR can render the latest artifact without changing backend
+  artifact/session contracts.
+- Made responsive order more task-oriented: mobile now shows profile wall,
+  action composer, then the long dossier/preview surface.
+- Verification passed: focused HR WorkerStudio/model tests, component
+  typecheck, Web typecheck/lint/build, `git diff --check`, Playwright desktop
+  and mobile layout review, HR action-to-composer smoke, Markdown preview smoke,
+  and PM fallback smoke.
+
+## 2026-05-12 17:34 [completed] REFACTOR-072 / PLAN-280 — Vertical Soul workbench module architecture
+
+- Converted the first HR specialized workbench from a single-file experiment
+  into a repeatable vertical Soul module structure under
+  `apps/web/src/worker/souls/`.
+- Added a shared `SoulWorkbenchContext`, compile-time renderer registry, and
+  common workbench section/status primitives so the next specialized Soul can
+  start from the same shell contract without changing WorkerStudio again.
+- Split HR People Workbench into module-local container, components, model,
+  copy, types, and styles while preserving the existing people-profile UI and
+  agent proposal loop.
+- Added focused HR model tests for lifecycle projection, needs-review behavior,
+  attention filtering, lifecycle counts, and lifecycle-specific action ordering.
+- Verification passed: focused Web tests, Web typecheck, Web lint, Web build,
+  `git diff --check`, Playwright HR desktop/mobile layout checks, PM fallback
+  smoke, and code-review-graph update/review.
+
+## 2026-05-12 16:17 [completed] BUG-116 / PLAN-279 — Session artifact status clarity
+
+- Added a shared Worker Web session progress summary derived from existing
+  session, turn, event, artifact, and review records.
+- Surfaced the progress summary in the session chat header and artifact preview
+  rail, so users can distinguish engine running, artifact file written but not
+  indexed, and artifact indexed but still waiting for human review.
+- Kept the fix frontend-only: no daemon API, database, engine execution, or
+  HR-specific state changes.
+- Added focused WorkerStudio coverage for engine-running, artifact-finalizing,
+  and indexed-artifact review states.
+- Verification passed: focused WorkerStudio test, Web typecheck/lint/build,
+  `git diff --check`, and Playwright desktop/mobile UX checks on the live local
+  daemon session route.
+
+## 2026-05-12 14:28 [completed] REFACTOR-071 / PLAN-278 — HR People Profile Workbench
+
+- Reframed the HR specialized Soul workbench from role-search-first to
+  people-first, with a flex profile poster wall, lifecycle filters, selected
+  profile loop panel, timeline, evidence/review status, and next-step actions.
+- Updated the shared HR workbench descriptor and HR capability templates for
+  person profile, lifecycle next step, onboarding, offboarding, interview,
+  evidence, and risk review artifacts.
+- Wired HR actions into the existing local worker session/artifact proposal
+  flow, so the workbench stays an assistant surface and does not automate hiring
+  or employment decisions.
+- Preserved the specialization boundary: HR uses People Workbench, while PM,
+  QA, DevOps, and other Souls continue to render the generic worker studio.
+- Removed the duplicate lifecycle selector from the left rail after UX review;
+  lifecycle filtering now lives only in the header strip, and the rail summarizes
+  the current view plus selected profile stage.
+- Fixed the HR flow rehearsal defects: pending review records no longer render
+  as completed review, needs-review profiles stay actionable, and proposal
+  submissions launched from the worker route now navigate into the created
+  session.
+- Verification passed: shared descriptor tests, focused WorkerStudio tests,
+  Web/API/shared/root typecheck and lint gates, Web build, Playwright desktop
+  and mobile UX checks, HR action-to-composer flow, PM fallback validation,
+  `git diff --check`, and code-review-graph update/review.
+
+## 2026-05-12 12:55 [completed] REFACTOR-070 / PLAN-277 — HR evidence-first cockpit UX
+
+- Reworked the HR Role Search Cockpit into an evidence-first workbench with
+  context rail, primary Evidence Matrix workspace, secondary rubric/roundup
+  panels, and a Next Actions + Proposal Composer right rail.
+- Added localized HR cockpit copy so zh-CN workspaces read as an HR operation
+  surface instead of a mixed generic agent page.
+- Preserved the specialized-workbench boundary: HR uses the v2 cockpit while PM,
+  QA, DevOps, and other Souls remain on the generic worker studio fallback.
+- Added Worker Web static font serving through local daemon `/fonts/*`, fixing
+  built-preview font 404s on `127.0.0.1:9327`.
+- Verification passed: Web typecheck/lint/focused WorkerStudio test/build, API
+  typecheck/focused local daemon test/build, root typecheck, `git diff --check`,
+  and Playwright UX review for HR desktop/mobile, HR action-to-composer, and PM
+  fallback.
+
+## 2026-05-12 12:23 [completed] REFACTOR-068 / PLAN-275 and REFACTOR-069 / PLAN-276 — HR specialized Soul workbench
+
+- Added a shared Soul workbench descriptor/registry so Worker Web can resolve a
+  specialized Soul workbench or fall back to the generic worker studio.
+- Implemented HR as the first specialized workbench: Role Search Cockpit with
+  pipeline rail, rubric/evidence surface, Evidence Matrix, Roundup Packet
+  summary, and Agent Task Tray.
+- Added HR evidence matrix and roundup packet capability templates, and wired HR
+  task actions to prefill artifact patch/proposal prompts while preserving the
+  existing session stream and review/lesson contract.
+- Kept PM, QA, DevOps, and future Souls on the generic fallback path.
+- Verification passed: shared typecheck/test, focused WorkerStudio test, Web
+  typecheck/lint/build, root typecheck, Playwright desktop/mobile UX review on
+  `127.0.0.1:9328`, `git diff --check`, and code-review-graph update/review
+  (risk 0.50; reported WorkerStudio heuristic test gaps covered by the focused
+  WorkerStudio regression suite).
+
+## 2026-05-12 10:26 [decision] REFACTOR-068 / PLAN-275 and REFACTOR-069 / PLAN-276 — Domain-specific Soul workbenches
+
+- Recorded the product decision that Souls must evolve from a shared generic
+  worker layout into domain-specific workbenches while preserving the common
+  local worker runtime contract.
+- Added HR as the first specialized workbench path: Role Search Cockpit,
+  Candidate Dossier, Evidence Matrix, Agent Task Tray, Roundup Packet, and
+  review-before-memory.
+- Explicitly kept PM, QA, DevOps, finance, legal, and ops on the current generic
+  implementation until HR proves the specialized workbench architecture.
+- No code changes in this checkpoint; implementation remains pending approval.
+
+## 2026-05-12 03:11 [completed] BUG-115 / PLAN-274 — Worker Web font token and mono taxonomy
+
+- 新增 Worker Web 自托管 Nunito、Inter、JetBrains Mono variable font，并在
+  `index.html` 中预加载关键字体文件。
+- 定义 `--font-display`、`--font-ui`、`--font-mono`，并让既有
+  `--serif`、`--sans`、`--mono` alias 继承新字体方案。
+- 将 button、固定 tag、status pill、metadata、ID/count、select hint 和 code-like
+  UI surface 统一切到 mono，避免影响正文和 artifact 内容阅读性。
+- Verification passed: focused Web typecheck/lint/test/build, `git diff --check`,
+  font URL smoke on 9217, Browser smoke on 9217, and code-review-graph
+  update/review.
+
+## 2026-05-12 02:55 [completed] BUG-114 / PLAN-273 — Session drawer controls and motion polish
+
+- 移除选中 session header 内重复的“返回 worker”按钮，以及右侧 drawer 自带的
+  refresh/settings/collapse 控制组。
+- 在 session header 的 settings 右侧新增 sidebar toggle icon button，激活时打开
+  右侧 drawer，未激活时收起 drawer 且不保留 restore sliver。
+- 强化 drawer/layout、panel、row、button、composer 的过渡时长与状态动效，并修复右侧
+  drawer section title 与 icon 的对齐/换行问题。
+- Verification passed: focused Web typecheck/lint/test/build, `git diff --check`,
+  browser smoke on 9217, and code-review-graph update/review.
+
+## 2026-05-12 02:44 [completed] BUG-113 / PLAN-272 — Session route return-to-worker alignment
+
+- 将选中 session 时的上下文卡片和聊天头部返回动作从“返回工作区”统一为
+  “返回 worker”。
+- 点击 session route 的返回动作会直接回到 `/workers/:workerId`，与未选中
+  session 的 workspace route 保持一致。
+- Verification passed: focused Web typecheck/lint/test/build, `git diff --check`,
+  browser smoke on 9217, and code-review-graph update/review.
+
+## 2026-05-12 02:33 [completed] REFACTOR-067 / PLAN-271 — Worker Web design system, component, and motion upgrade
+
+- Web 样式入口启用 Tailwind CSS v4，并通过 `@theme` 承载 `DESIGN.md`
+  palette、radius、font、spacing 和 motion token。
+- 新增 `packages/component` studio pattern：section header、empty state、
+  pill/status、activity row，并迁移 Worker home / workspace rail / session
+  chat / session detail 的重复结构。
+- 新增 reduced-motion-aware 的交互动效层，覆盖 shell、panel、list/card、
+  select、chat、drawer 和 status dot。
+- Verification passed: focused Web typecheck/lint/WorkerStudio test/build,
+  `git diff --check`, browser desktop/mobile smoke on 9217, and
+  code-review-graph update/review.
+
+## 2026-05-12 02:07 [completed] BUG-112 / PLAN-270 — Worker item trailing status dot
+
+- 将 Worker list item 的状态点移动到尾随列。
+- 移除 item 内重复的 Soul 和状态文本 label，保留组头 Soul 信息。
+- Verification passed: focused Web typecheck/lint/WorkerStudio test/build, `bun run check`,
+  `git diff --check`, browser verification on 9217, and code-review-graph review.
+
+## 2026-05-12 01:59 [completed] BUG-111 / PLAN-269 — Worker list Soul grouping
+
+- 将 Worker home 的 worker list 按 Soul 分组，组头使用 `Soul (N)` 文本。
+- 为每个 Soul 分组增加折叠/展开控制，保留组内 worker item 选择行为。
+- Verification passed: focused Web typecheck/lint/WorkerStudio test/build, `bun run check`,
+  `git diff --check`, browser verification on 9217, and code-review-graph review.
+
+## 2026-05-12 01:48 [completed] BUG-110 / PLAN-268 — Count text convergence
+
+- 将能力模板和工作区数量从 badge/tag 改为标题后的 `(N)` 文本。
+- 删除不再使用的 `count-pill` 样式。
+- Verification passed: focused Web typecheck/lint/WorkerStudio test/build, `bun run check`,
+  `git diff --check`, browser verification on 9217, and code-review-graph review.
+
+## 2026-05-12 01:44 [completed] BUG-109 / PLAN-267 — Add actions plus icon buttons
+
+- 将 Worker home 和 Workspace rail 的 add actions 统一回归为 plus icon button。
+- 移除不再使用的 `rail-mini-action` 样式。
+- Verification passed: focused Web typecheck/lint/test/build, `bun run check`, `git diff --check`,
+  browser verification on 9217, and code-review-graph review.
+
+## 2026-05-12 01:33 [completed] BUG-108 / PLAN-266 — Worker home add action convergence
+
+- 将 Worker 列表和工作区列表的 add icon-only 按钮改为 plus + label pill action。
+- 保留 refresh/settings 等 chrome action 的 icon-only 样式。
+- Verification passed: focused Web typecheck/lint/test/build, `bun run check`, `git diff --check`,
+  browser verification on 9217, and code-review-graph review.
+
+## 2026-05-12 01:24 [completed] BUG-107 / PLAN-265 — Workspace rail width convergence
+
+- 统一 workspace route 与 session route 的桌面态 sidebar padding。
+- 修复选中/未选中 session 时左侧 rail card 和列表项宽度不一致的问题。
+- Verification passed: focused Web typecheck/lint/test/build, `bun run check`, `git diff --check`,
+  browser width verification on 9217, and code-review-graph review.
+
+## 2026-05-11 20:45 [completed] BUG-106 / PLAN-264 — Workspace route worker return action
+
+- 在未选中 session 的 workspace route 中恢复“返回 worker”动作。
+- 保持 session 详情态只显示“返回工作区”。
+- 补充 WorkerStudio 测试覆盖 workspace route 返回 worker page。
+- Verification passed: focused Web typecheck/lint/test/build, `bun run check`, `git diff --check`,
+  browser verification on 9217, and code-review-graph review.
+
+## 2026-05-11 20:34 [completed] BUG-105 / PLAN-263 — 未安装 engine icon 可见性
+
+- 修复未安装 engine 的 muted icon 前景/背景同色导致视觉不可见的问题。
+- 补充 WorkerStudio 测试覆盖未安装 Cursor engine icon 渲染。
+- Verification passed: focused Web typecheck/lint/test/build, `bun run check`, `git diff --check`,
+  browser verification on 9217, and code-review-graph review.
+
+## 2026-05-11 20:23 [completed] BUG-104 / PLAN-262 — Settings engine icon assets
+
+- 拉取 engine 专属 SVG icon 到 Worker Web 静态资产。
+- Settings engine card 改为按 engine id 渲染专属 icon。
+- 补充 WorkerStudio 测试覆盖 icon 映射和渲染路径。
+- Verification passed: focused Web typecheck/lint/test/build, `bun run check`, `git diff --check`,
+  browser verification on 9217, and code-review-graph review.
+
+## 2026-05-11 20:12 [completed] BUG-103 / PLAN-261 — Settings 引擎操作按钮统一
+
+- 将 settings 中“测试 / 重新扫描”从 icon-only button 收敛为统一的小号 action button。
+- 为“测试”补充图标，和“重新扫描”保持 icon + label 结构一致。
+- 更新 WorkerStudio 测试覆盖按钮 class 与原有行为。
+- Verification passed: focused Web typecheck/lint/test/build, `bun run check`, `git diff --check`,
+  browser verification on 9217, and code-review-graph review.
+
+## 2026-05-11 18:13 [completed] BUG-102 / PLAN-260 — 移除工作区返回 worker 入口
+
+- 移除 workspace rail 顶部多余的“返回 worker”动作。
+- 保留 session route 中的“返回工作区”动作。
+- 清理不再使用的 `backToWorkerHome` i18n 文案。
+- Verification passed: focused Web typecheck/lint/test/build, `bun run check`, `git diff --check`,
+  browser verification on 9217, and code-review-graph review.
+
+## 2026-05-11 18:09 [completed] BUG-101 / PLAN-259 — 工作区会话新建入口
+
+- 将“工作区会话”头部右侧从会话数量改为“新建会话”快捷动作。
+- 点击新建会话会回到当前 workspace 的 create-session composer。
+- 增加 WorkerStudio 测试覆盖从 session route 发起新建会话。
+- Verification passed: focused Web typecheck/lint/test/build, `bun run check`, `git diff --check`,
+  browser verification on 9217, and code-review-graph review.
+
+## 2026-05-11 18:02 [completed] BUG-100 / PLAN-258 — 其他工作区筛除当前项
+
+- “其他工作区”侧栏列表改为排除当前选中的 workspace。
+- 保留新建工作区动作，并在没有其他 workspace 时显示空态。
+- 更新 WorkerStudio 测试覆盖当前 workspace 不出现在其他工作区列表。
+- 验证通过:
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `bun run check`
+  - `git diff --check`
+  - Browser verification on `http://127.0.0.1:9217/`
+  - `bun run crg:update`
+  - `bun run crg:review`
+
+## 2026-05-11 17:49 [completed] BUG-099 / PLAN-257 — Select 展开态样式统一
+
+- 收敛 `StudioSelect` 的 trigger、listbox 和 option 盒模型。
+- 提升展开态层级，并允许 creation dialog 中的 select 浮层完整显示。
+- 为 WorkerStudio 增加 select open/close 语义测试。
+- 验证通过:
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `bun run check`
+  - `git diff --check`
+  - Browser verification on `http://127.0.0.1:9217/`
+  - `bun run crg:update`
+  - `bun run crg:review`
+
+## 2026-05-11 17:26 [completed] BUG-098 / PLAN-256 — Workspace route create-session composer
+
+- Replace the no-session workspace route with a Codex-like create-session
+  composer.
+- Remove the temporary workspace overview panel and central session-card grid
+  from the workspace route.
+- Keep session navigation in the workspace side rail and preserve session
+  detail routing.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `bun run check`
+  - `git diff --check`
+  - Browser verification on `http://127.0.0.1:9217/workers/hr-worker/workspaces/b8a15051-14ef-4aad-9c66-5405ce39670f`
+  - `bun run crg:update`
+  - `bun run crg:review`
+
+## 2026-05-11 17:11 [completed] BUG-097 / PLAN-255 — Workspace route management layout alignment
+
+- Restructured `workspaces/[workspace_id]` to match the worker route rhythm:
+  overview panel first, managed sessions section second.
+- Added `WorkspaceIdentityBlock` and `WorkspaceSessionCard` so workspace page
+  UI has dedicated components instead of borrowing worker/card semantics.
+- Kept the create-session form on the workspace page, now inside the sessions
+  management section.
+- Updated WorkerStudio tests to cover the central session entrypoint alongside
+  the rail session entrypoint.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `bun run check`
+  - `git diff --check`
+  - Browser verification on `http://127.0.0.1:9217/workers/hr-worker/workspaces/b8a15051-14ef-4aad-9c66-5405ce39670f`
+  - `bun run crg:update`
+  - `bun run crg:review`
+
+## 2026-05-11 16:59 [completed] BUG-096 / PLAN-254 — Worker workspace card grid layout
+
+- Replaced the single-column `design-grid-list` workspace surface with a
+  responsive `workspace-grid` card layout.
+- Renamed the local card component from `ProjectCard` to `WorkspaceCard` to
+  match worker-managed workspace semantics.
+- Added a WorkerStudio regression check that card view uses `workspace-grid`
+  and does not reintroduce `design-grid-list`.
+- No list-view toggle was introduced; future list mode should use a dedicated
+  `WorkspaceListItem` surface instead of compressing cards.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `bun run check`
+  - `git diff --check`
+  - Browser verification on `http://127.0.0.1:9217/worker/`
+  - `bun run crg:update`
+  - `bun run crg:review`
+- Browser result: at 1800x1000, `.workspace-list` has classes
+  `design-grid workspace-grid workspace-list` and computes four 340.5px grid
+  columns.
+- code-review-graph result: risk score `0.40`, 0 affected flows; reported gaps
+  are covered by WorkerStudio RTL, Web build, and browser verification.
+
+## 2026-05-11 16:42 [completed] BUG-095 / PLAN-253 — Worker Web full-width route shell
+
+- Removed the non-session route width cap and auto margins that made
+  worker/workspace pages render as centered layouts while session pages stayed
+  full width.
+- Worker, workspace, and session routes now share the same full-width
+  `.entry-header` and `.entry-tab-content` shell.
+- Component-level card layout is unchanged; only route shell width ownership was
+  unified.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `bun run check`
+  - `git diff --check`
+  - Browser verification on `http://127.0.0.1:9217/worker/`
+  - `bun run crg:update`
+  - `bun run crg:review`
+- Browser result: at 1800x1000, worker and workspace routes both render main,
+  header, and content at 1460px wide from the sidebar edge; the session route
+  keeps its existing 3-column layout with a 1120px middle session column.
+- code-review-graph result: risk score `0.00`, 0 affected flows, 0 test gaps.
+
+## 2026-05-11 16:24 [completed] BUG-094 / PLAN-252 — Worker list rail scroll ownership
+
+- Removed the fixed `188px` max height from the worker list rail.
+- Let the worker list section fill the remaining sidebar height, with the row
+  list owning internal vertical scroll.
+- Kept the worker list header and sidebar footer stable around the scroll
+  region.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `bun run check`
+  - `git diff --check`
+  - Browser verification on `http://127.0.0.1:9217/worker/`
+  - `bun run crg:update`
+  - `bun run crg:review`
+- Browser result: worker list section expanded to 708px high and the listbox
+  owns a 595px internal scroll region at 1280x900.
+- code-review-graph result: risk score `0.00`, 0 affected flows, 0 test gaps.
+
+## 2026-05-11 16:16 [completed] BUG-093 / PLAN-251 — Worker Web readiness rail simplification
+
+- Removed the persistent left-rail `readiness-card ready` section because it
+  duplicated Settings entrypoints and did not add decision value when execution
+  was ready.
+- Kept blocked execution feedback inline beside session creation, where it
+  directly explains the disabled action.
+- Removed obsolete readiness-card rail styles and the unused `executionReady`
+  locale key.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `bun run check`
+  - `git diff --check`
+  - Browser verification on `http://127.0.0.1:9217/worker/`
+  - `bun run crg:update`
+  - `bun run crg:review`
+- code-review-graph result: risk score `0.40`, 0 affected flows; the reported
+  `WorkerStudio` gap is covered by RTL, build, and browser verification.
+
+## 2026-05-11 15:06 [completed] BUG-092 / PLAN-250 — Worker Web icon button size convergence
+
+- Added `IconButton` to `packages/component` so add, settings, and refresh
+  controls use the same primitive instead of split local button classes.
+- Added shared icon-button tokens: `--icon-button-size: 30px` and
+  `--icon-button-icon-size: 16px`.
+- Routed add/settings/refresh controls through `IconButton`, while keeping
+  `.settings-trigger` and `.icon-only` as compatibility aliases tied to the
+  same tokens.
+- Corrected `IconButton` so it does not inherit `.icon-btn` text-action
+  min-height or padding; the issue was button box size, not SVG size.
+- Added a Worker Web regression test that keeps add/settings/refresh icon
+  buttons on the compact `icon-button` primitive contract.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-component' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `bun run check`
+  - `git diff --check`
+  - Browser verification on `http://127.0.0.1:9217/worker/`
+  - `bun run crg:update`
+  - `bun run crg:review`
+- code-review-graph result: risk score `0.55`, 0 affected flows; reported
+  gaps are covered by WorkerStudio RTL tests, component typecheck, Web build,
+  and browser startup verification.
+
+## 2026-05-11 13:51 [completed] REFACTOR-066 / PLAN-249 — Component package library structure
+
+- Reworked `packages/component` from a single Worker Studio extraction file
+  into a component-library structure with `primitives`, `layout`, `patterns`,
+  `studio`, and `utils` modules.
+- Added primitive exports for button, card/action-card, dialog, field,
+  header, nav, badge, and select while preserving compatibility exports used by
+  Worker Web.
+- Updated Worker Web creation dialogs, project cards, worker identity, and
+  settings surfaces to consume package primitives instead of hand-rolled base
+  button/card/field/nav markup.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-component' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `bun run check`
+  - `git diff --check`
+  - Browser verification on `http://127.0.0.1:9217/worker/`
+  - `bun run crg:update`
+  - `bun run crg:review`
+- code-review-graph result: risk score `0.40`, 0 affected flows; the reported
+  UI component test gaps are covered by existing WorkerStudio RTL tests, Web
+  build, and browser startup verification.
+
+## 2026-05-11 12:21 [completed] REFACTOR-065 / PLAN-248 — Worker Web architecture modularization
+
+- Added `packages/component` as a workspace package for shared Worker Web React
+  primitives and moved studio layout/dialog/select primitives behind that
+  package boundary.
+- Split Worker Web into app/router, shared local API client, feature-scoped API,
+  i18n/catalog/locales, settings, workspace components, session/theme helpers,
+  and style modules.
+- Removed the monolithic `api.ts`, `i18n.ts`, and `studio.css` files, and
+  reduced `worker-studio.tsx` from 2172 lines to 1081 lines.
+- Kept URLs, class names, and behavior stable while preserving the existing RTL
+  worker studio coverage.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-component' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `bun run check`
+  - `git diff --check`
+  - Browser preview on `http://127.0.0.1:4173/worker/`
+  - `bun run crg:update`
+  - `bun run crg:review`
+- code-review-graph result for `8f63d85..HEAD`: risk score `0.40`, 0 affected
+  flows; review priorities `WorkerStudio` and `WorkerStudioLayout` are covered
+  by existing WorkerStudio RTL tests, component package typecheck, Web build,
+  and browser startup verification.
+
+## 2026-05-11 11:41 [completed] BUG-091 / PLAN-247 — Mobile session route layout repair
+
+- Corrected the mobile session route validation miss where no horizontal
+  overflow was incorrectly treated as sufficient acceptance.
+- Collapsed mobile session sidebar content to route-critical back actions and
+  workspace context instead of rendering the full desktop navigation stack.
+- Let session chat header controls wrap on narrow screens and hid the back
+  button text behind an accessible label on mobile.
+- Bounded the mobile artifact rail as a bottom preview so it no longer competes
+  with the chat surface for the whole viewport.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `git diff --check`
+  - `bun run crg:update`
+  - `bun run crg:review`
+  - Playwright MCP 390px visual inspection on `http://127.0.0.1:9217/`
+- code-review-graph result: risk score `0.55`, 0 affected flows; the reported
+  `WorkerSessionChat` gap is covered by existing session route tests and the
+  mobile Playwright visual inspection for this CSS/accessibility-only repair.
+
+## 2026-05-11 11:31 [completed] REFACTOR-064 / PLAN-245..246 / QA-034 — Worker Web shared route layout
+
+- Added shared Worker Web route layout helpers for shell/sidebar/main/detail
+  composition, and routed no-worker, worker home, workspace, and session
+  surfaces through the same layout primitive.
+- Unified worker/workspace/session left navigation geometry around the same
+  340px sidebar width and shared main content rail rules.
+- Kept session-specific behavior as a layout variant with the right-side
+  artifact rail and collapsed detail state.
+- Playwright MCP on `http://127.0.0.1:9217/` confirmed worker home, workspace,
+  and session routes share sidebar/main geometry; 390px workspace/session
+  snapshots confirmed stacked layout without horizontal overflow.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test -- worker-studio`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `git diff --check`
+  - `bun run crg:update`
+  - `bun run crg:review`
+- code-review-graph result: risk score `0.40`, 0 affected flows; reported UI
+  helper test gaps are covered by existing WorkerStudio RTL route tests and
+  Playwright route evidence for this layout-only refactor.
+
+## 2026-05-11 11:14 [completed] BUG-090 / PLAN-244 — Settings autosave and scroll layout repair
+
+- Changed settings autosave feedback to start hidden instead of showing
+  "All changes saved" on every dialog open.
+- Kept saving/failed/saved feedback for real save and rescan actions, with
+  successful saved feedback auto-hiding after a short confirmation window.
+- Made the settings modal fixed-height within the viewport, with the header
+  fixed and sidebar/content scrolling vertically inside the dialog body.
+- Added focused RTL coverage for the hidden initial saved state.
+- Playwright MCP on `http://127.0.0.1:9217/` confirmed no saved pill on open,
+  a 760px settings dialog, and scrollable Soul package content inside the
+  fixed dialog body.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `bun run crg:update`
+  - `bun run crg:review`
+- code-review-graph CLI result: risk score `0.35`, 0 affected flows, 2 reported
+  test gaps (`current`, `SettingsDialog`) covered by focused RTL and browser
+  layout evidence.
+
+## 2026-05-11 10:58 [completed] REFACTOR-063 / PLAN-242..243 / QA-033 — Worker Web interaction polish follow-up
+
+- Tightened Worker Web typography to the `DESIGN.md` type scale in the built
+  studio CSS: 12/14/16/18/20/24/30px, weights 400/500/600, and zero letter
+  spacing.
+- Reworked creation dialog spacing and close-button placement, replaced native
+  Worker Studio selects with integrated listbox selects, aligned select chevron
+  padding, and preserved readable button hover foreground colors.
+- Replaced empty-worker Soul tags with a vertical scrollable list item selector
+  while preserving the existing worker list row pattern.
+- Centered the workspace route content rail and added direct return-to-workspace
+  actions in session sidebar and session header.
+- Guarded session creation streaming so engine output no longer forces the
+  operator back to a session after they intentionally navigate away.
+- Playwright MCP validation on `http://127.0.0.1:9217/` covered desktop,
+  create worker dialog/listbox select, workspace route, session route,
+  return-to-workspace actions, and 390px mobile. It also found a mobile
+  create-session/empty-state overlap, which was fixed and revalidated.
+- The local 9217 database already contained a worker, so the no-worker vertical
+  Soul list was validated through focused RTL coverage instead of deleting local
+  operator data.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `bun run crg:update`
+  - `bun run crg:review`
+- code-review-graph result: risk score `0.60`, 0 affected flows; remaining
+  reported test gaps are UI component entities covered by focused RTL and
+  Playwright evidence.
+
+## 2026-05-11 09:00 [completed] REFACTOR-060..062 / PLAN-238..241 / QA-032 — Worker Web visual polish
+
+- Converged Worker Web styling toward `DESIGN.md`: black / white / neutral
+  tokens, pill-first controls, unified `input` / `select` / `textarea` states,
+  no gradients, and no decorative shadows on the touched surfaces.
+- Reworked worker navigation into compact list rows and moved create worker /
+  create workspace flows behind accessible icon-button dialogs.
+- Reworked the session surface with a dedicated chat scroll island,
+  session-scoped follow-up draft state, pinned-bottom auto-follow, and
+  jump-to-latest behavior.
+- Added a collapsible right-side session detail drawer, with artifact/review
+  kept high-signal and event/history detail de-emphasized behind compact
+  sections.
+- Added/updated Worker Web RTL coverage for create dialogs, session drawer
+  collapse/restore, and chat jump-to-latest behavior.
+- Playwright smoke on `http://127.0.0.1:9331/` covered create worker, create
+  workspace, create session, session detail collapse/restore, and 390px mobile
+  overflow validation. The in-app Browser target was blocked by
+  `ERR_BLOCKED_BY_CLIENT`, so Playwright CLI was used as the browser evidence.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `git diff --check`
+  - `bun run crg:update`
+  - `bun run crg:review`
+- code-review-graph result: 22 changed functions/classes, 0 affected flows,
+  15 reported test gaps, risk score `0.55`; remaining gaps are direct
+  component-level UI entities already covered by focused RTL tests and browser
+  smoke evidence.
+
+## 2026-05-11 01:37 [completed] REFACTOR-056..059 / PLAN-233..236 / QA-031 — Worker-first product entry
+
+- Investigated the current Soul-first Web shape against the intended
+  worker-first IA and split the work into registry/storage, API/CLI, Web IA,
+  capability/session alignment, and validation tracks.
+- Relaxed the worker storage contract so multiple workers can bind the same
+  Soul while keeping workspaces isolated by worker id.
+- Stopped daemon/CLI bootstrap from auto-creating one worker per available
+  Soul; workers are now explicitly created and selected.
+- Added worker-scoped local daemon routes for templates, workspaces, sessions,
+  session messages, files, and artifacts while preserving transitional flat
+  routes for the current Web client surface.
+- Reworked CLI commands around explicit or selected worker ids:
+  `worker create`, `worker select`, worker-scoped workspace/session/file/artifact
+  commands, and host init without implicit Soul workers.
+- Reworked Worker Web routes to canonical
+  `/workers/:workerId`,
+  `/workers/:workerId/workspaces/:workspaceId`, and
+  `/workers/:workerId/workspaces/:workspaceId/sessions/:sessionId`.
+- Worker Web now uses workers as the top-level entry, creates workspaces under
+  the selected worker, and moves capability selection into workspace-scoped
+  session creation.
+- Follow-up regression fix: existing local `worker.db` files created before the
+  worker-first refactor may still have a unique `workers_soul_idx`. Worker
+  migrations now repair that legacy unique index into a normal non-unique index
+  so multiple workers can bind the same Soul in real upgraded environments.
+- Playwright MCP validation on `http://127.0.0.1:9217/` clicked through the real
+  Web flow after the repair: created worker `hr-playwright-worker-1740-31ce9d16`,
+  created workspace `3f240c55-a457-4c5b-be43-f0d5dd66628d`, created session
+  `f3e44590-08ec-4093-a066-e8bff979f443`, reached the canonical session route,
+  and observed a succeeded engine run with 1 artifact and pending review state.
+- Browser validation on `http://127.0.0.1:9328/` with clean
+  `AIWORKER_HOME=/tmp/aiworker-worker-first-validation` created an HR worker,
+  workspace, Candidate Screen session, follow-up turn, artifacts, and review
+  state through the canonical worker route. A 390px viewport reported no
+  horizontal overflow.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-storage-sqlite' test`
+  - `bun run --filter '@zonease/aiworker-storage-sqlite' typecheck`
+  - `bun run --filter '@zonease/aiworker-core' test`
+  - `bun run --filter '@zonease/aiworker-api' typecheck`
+  - `bun run --filter '@zonease/aiworker-api' test`
+  - `bun run --filter '@zonease/aiworker-cli' typecheck`
+  - `bun run --filter '@zonease/aiworker-cli' test`
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `bun run typecheck`
+  - `bun run lint`
+  - `bun run test`
+  - `bun run build`
+  - `git diff --check`
+  - `bun run crg:update`
+  - `bun run crg:review`
+- code-review-graph result: 83 changed functions/classes, 0 affected flows,
+  61 reported test gaps, risk score `0.60`; the remaining gaps are tied to
+  broader worker-first entrypoints such as `createHrWorker`,
+  `bootstrapWorkerApp`, `template`, `workspace`, and `artifact`.
+
+## 2026-05-11 00:35 [completed] REFACTOR-055 / PLAN-232 — Worker Web Soul rail and worker identity
+
+- Reworked the Worker Web home sidebar from a vertical Soul grid into an
+  OD-style horizontal Soul rail.
+- Added visible local worker identity on both home and workspace/session route
+  sidebars: worker name, `workerId`, status, default engine, and Soul binding.
+- Kept capability templates as the existing list surface under the selected
+  Soul worker context.
+- Added localized worker identity copy and Worker Web tests for Soul switching,
+  template scope, and session-route worker context.
+- Verification passed: focused Web typecheck, lint, test, build, browser
+  validation, 390px viewport overflow check, `git diff --check`, and
+  code-review-graph review.
+
+## 2026-05-10 22:31 [completed] REFACTOR-054 / PLAN-228..231 / QA-030 — Structured engine session parity
+
+- Investigated the reported stderr-only session behavior.
+- Confirmed the root cause is the local executor contract, not only Worker Web:
+  AIWorker wraps Codex as one synthetic Bash command without `--json`, emits
+  stdout/stderr as coarse logs, and fails turns that do not write a mandatory
+  artifact file.
+- Compared the current implementation with Open Design's daemon run service,
+  engine argument registry, structured JSON event parsers, and Web event
+  translation.
+- Opened REFACTOR-054 plus PLAN-228..231 to port the OD session/engine contract
+  into AIWorker's `session` / `engine_invocation` model without making run a
+  user-facing product object.
+- Implemented OD-style local engine adapters for the surfaced engines:
+  Codex CLI, Claude Code, Cursor Agent, Gemini CLI, OpenCode, and Qwen Code.
+  Unsupported ACP engines are not exposed in Local CLI settings until AIWorker
+  has a correct ACP adapter.
+- Codex now runs through `codex exec --json` with stdin prompt delivery,
+  workspace cwd, and workspace-write network config. Claude, Cursor, Gemini,
+  and OpenCode use their structured stream modes; Qwen uses a plain stdout
+  fallback.
+- Local CLI execution now uses the resolved engine path from Settings instead
+  of assuming the daemon PATH can find the same binary; Codex also honors
+  `AIWORKER_CODEX_DISABLE_PLUGINS=1` / `OD_CODEX_DISABLE_PLUGINS=1` for the
+  OD-style plugin-warning workaround.
+- Added structured stream parsing for status, assistant text, thinking,
+  tool-use/tool-result, Codex file-change, usage, and raw fallback events.
+- Successful turns store stdout/stderr logs under the invocation root, surface
+  stderr only on failure, allow text-only success, and index artifacts only
+  when files are actually produced under `artifacts/<sessionId>/`.
+- Added `GET /api/local/sessions/:sessionId/events` for replay and
+  `POST /api/local/workspaces/:workspaceId/sessions/stream` so the first
+  workspace session streams like follow-up turns.
+- Worker Web now uses the streamed initial-session endpoint, merges adjacent
+  assistant/thinking deltas, handles engine-native `toolUseId`, and renders
+  file changes as structured timeline status instead of raw JSON.
+- Fixed daemon foreground lifetime so `daemon start` keeps the local server
+  alive when it spawns the foreground child.
+- Browser validation on `http://127.0.0.1:9327/` with clean
+  `AIWORKER_HOME=/tmp/aiworker-stream-validation-home` created an HR /
+  Candidate Screen session through real Codex. The route entered
+  `/workspaces/:workspaceId/sessions/:sessionId` immediately, then streamed
+  running status, Bash tool events, file-change status, assistant text,
+  artifact, and review. Persisted DB evidence: one succeeded turn, one
+  artifact, ten tool events, ten status events, four assistant deltas, and zero
+  raw JSON events.
+- Desktop (`1440x1000`) and narrow (`390x844`) browser checks showed no
+  horizontal overflow and reachable session controls.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-core' typecheck`
+  - `bun run --filter '@zonease/aiworker-core' test`
+  - `bun run --filter '@zonease/aiworker-api' typecheck`
+  - `bun run --filter '@zonease/aiworker-api' test`
+  - `bun run --filter '@zonease/aiworker-api' build`
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `bun run --filter '@zonease/aiworker-cli' build:bundle`
+  - `bun run typecheck`
+  - `bun run lint`
+  - `bun run test`
+  - `bun run build`
+  - `git diff --check`
+  - `bun run crg:update`
+  - `bun run crg:review`
+
+## 2026-05-10 21:35 [completed] REFACTOR-053 / PLAN-227 — Worker Web workspace route contextual navigation
+
+- Investigated the reported route-context mismatch.
+- Found that `WorkerStudio` always renders the global Soul catalog and
+  workspace creation sidebar; session routes only swap the center column.
+- Opened REFACTOR-053 / PLAN-227 to keep the creation sidebar on the home
+  route and render a workspace-context navigation rail after entering a
+  workspace/session route.
+- Completed REFACTOR-053 / PLAN-227.
+- Worker Web now keeps Soul catalog/capability/create controls on `/`, and
+  switches `/workspaces/:workspaceId` plus
+  `/workspaces/:workspaceId/sessions/:sessionId` to contextual workspace
+  navigation.
+- Workspace/session routes show current Soul, current workspace, selected
+  capability/session metadata, workspace sessions, same-Soul workspace
+  switching, Settings, and engine status instead of the creation rail.
+- Empty workspace routes no longer show the create panel.
+- Browser validation confirmed no Import text, no creation panel on session
+  routes, and no horizontal overflow across 1440x947, 1024x640, 980x720, and
+  390x844 viewports.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `git diff --check`
+  - `bun run crg:update`
+  - `bun run crg:review`
+- code-review-graph result: 6 changed functions/classes, 0 affected flows,
+  risk score `0.45`; MCP impact radius found only adjacent Worker Web API
+  client symbols within one hop.
+
+## 2026-05-10 20:50 [completed] BUG-088 / PLAN-226 — Worker Web streamed turn visibility and Codex warning cleanup
+
+- Investigated the reported session UX defects.
+- Found that Web clears the composer before the stream exposes the newly
+  created turn row, so streamed events cannot attach to a visible turn until
+  the final refresh.
+- Confirmed that the observed Codex `403 Forbidden` is a non-fatal featured
+  plugin cache warm warning from `chatgpt.com/backend-api/plugins/featured`,
+  while the actual Codex invocation succeeded and produced an artifact.
+- Opened BUG-088 / PLAN-226 to stream real turn rows immediately, add an
+  optimistic pending turn in Web, and filter known non-fatal Codex plugin cache
+  warning noise from visible session logs.
+- Completed BUG-088 / PLAN-226.
+- Runtime now includes the persisted turn row in turn bus payloads; the API
+  streams them as `turn` SSE frames; Worker Web merges persisted, streamed, and
+  optimistic turns so the submitted operator message is visible immediately.
+- Filtered Codex's known featured plugin cache 403 warning from visible session
+  logs and final tool output while preserving raw `stderr.log` on disk.
+- Browser validation confirmed a real Codex-backed follow-up turn appeared
+  within 300ms, completed successfully, produced an artifact, and exposed no
+  `backend-api/plugins/featured` / Cloudflare / `403 Forbidden` text in the Web
+  session timeline.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-core' test`
+  - `bun run --filter '@zonease/aiworker-core' typecheck`
+  - `bun run --filter '@zonease/aiworker-api' test`
+  - `bun run --filter '@zonease/aiworker-api' typecheck`
+  - `bun run --filter '@zonease/aiworker-api' build`
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `git diff --check`
+  - `bun run crg:update`
+  - `bun run crg:review`
+- code-review-graph result: 17 changed functions/classes, 0 affected flows,
+  risk score `0.55`; MCP `get_affected_flows` also returned 0 affected flows.
+
+## 2026-05-10 19:59 [completed] REFACTOR-052 / PLAN-225 — Worker Web session-first interaction model
+
+- Investigated the UX critique after PLAN-224 and confirmed the core issue:
+  the Web is technically connected but still not session-first.
+- Compared current Worker Web against Open Design's entry/project route,
+  conversation/message/run surface, streamed assistant events, and bounded
+  scroll layout.
+- Found that AIWorker currently compresses engine execution into blocking
+  `LocalExecutor.invoke(...)` plus coarse session events, so the UI cannot show
+  the full engine process the way Open Design shows run/message progress.
+- Updated the plan direction: do not reinvent session rendering, message type
+  grouping, stream buffering, run reattachment, tool cards, composer ergonomics,
+  or scroll behavior. Port Open Design's mature session primitives where
+  practical and adapt them to AIWorker workspace/session/turn APIs.
+- Opened REFACTOR-052 and draft PLAN-225 to rebuild the Web interaction model
+  around routed workspace/session screens, streamed engine event timelines,
+  contextual artifact/review/memory surfaces, and explicit scroll validation.
+- Approved by operator with `proceed` and completed the Web session-first
+  rebuild.
+- Added Worker Web routing for `/` and
+  `/workspaces/:workspaceId/sessions/:sessionId`, with SPA fallback and
+  production asset base fixes for direct session-route reloads.
+- Reworked the home route into a Soul catalog/workspace launcher and moved the
+  active session into its own conversation-style route.
+- Added streamed local executor events across core/runtime/API/Web so a session
+  turn shows engine status, Bash tool use/result, compact stdout/stderr,
+  assistant text, artifact/review chips, and completion state inside the
+  assistant flow.
+- Added SSE heartbeat and daemon idle-timeout tuning for long local engine
+  turns.
+- Moved artifact/review/memory/event inspection into the session route
+  secondary pane so the main viewport stays focused on the conversation.
+- Browser validation at `http://127.0.0.1:9217/` confirmed Soul home, session
+  deep link, real Codex CLI continuation, explicit Settings open/close,
+  independent chat/artifact scrolling, no console errors, and no mobile
+  horizontal overflow at 390px width.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `bun run --filter '@zonease/aiworker-api' build`
+  - `bun run check`
+  - `bun run test`
+  - `bun run build`
+- code-review-graph passed:
+  - `bun run crg:status`
+  - `bun run crg:update`
+  - `bun run crg:review`
+  - MCP `get_minimal_context`
+  - MCP `get_affected_flows`
+  - Result: 16 changed files, 38 changed functions/classes, 0 affected flows,
+    risk score `0.55`; `streamSessionTurn`/bootstrap test-gap warnings are
+    covered by API SSE tests, Web stream tests, root gates, and local browser
+    validation.
+
+## 2026-05-10 19:39 [completed] REFACTOR-051 / PLAN-224 — Worker Web production UX integration
+
+- Investigated the current Worker Web production-readiness gap after the
+  session/workspace MVP landed.
+- Found that Web currently has working API contracts but disconnected UX:
+  inert top tabs, create-only session flow, no follow-up turn composer, passive
+  review/memory counts, Settings readiness not surfaced in the turn path, and
+  hidden artifact access below tablet width.
+- Opened REFACTOR-051 and draft PLAN-224 for a focused Web refactor that
+  connects Soul selection, capability selection, workspace/session browsing,
+  turn continuation, artifact preview, review/memory actions, and Settings
+  readiness into one operator flow.
+- Approved by operator with `proceed` and implemented the connected Worker Web
+  flow.
+- Replaced inert top tabs with a three-column Soul workspace: Soul/capability
+  selector, workspace/session list, and selected session detail.
+- Added follow-up session turns, review creation, and lesson status actions to
+  the Web client and UI.
+- Split the active session surface into `SessionDetail`, covering turn composer,
+  artifact preview, turn history, review, memory candidates, and session events.
+- Browser verification at `http://127.0.0.1:9217/` confirmed the current Web
+  opens directly into the Soul workspace, shows HR/PM/QA/DevOps Souls, keeps
+  Settings explicit, displays a real follow-up Codex artifact, and preserves
+  session/artifact detail at narrow width.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' lint`
+  - `bun run --filter '@zonease/aiworker-web' test -- --reporter=verbose`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `bun run typecheck`
+  - `bun run lint`
+  - `bun run test`
+  - `bun run build`
+  - `git diff --check`
+- code-review-graph passed:
+  - `bun run crg:status`
+  - `bun run crg:update`
+  - `bun run crg:review`
+  - MCP `get_review_context`, `detect_changes`, `get_impact_radius`, and
+    `get_affected_flows`
+  - Result: 11 changed files, 36 changed functions/classes, 0 affected flows,
+    overall risk score `0.55`; API client/session detail test gaps are covered
+    by the expanded Worker Web RTL flow and local browser verification.
+
+## 2026-05-10 18:50 [completed] QA-029 / PLAN-223 — Session workspace MVP validation
+
+- From an empty `/Users/ben/.aiworker`, started the local daemon with
+  `bun apps/cli/src/aiworker.ts daemon start --host 127.0.0.1 --port 9217`.
+- Verified `GET /health` returns Soul workspace mode and active HR/PM/QA/DevOps
+  Soul workers.
+- Browser verification at `http://127.0.0.1:9217/` confirmed the Soul catalog
+  first screen, capability template selection, HR Candidate Screen workspace
+  session creation, real Codex CLI turn execution, and visible business
+  artifact rail.
+- Settings verification confirmed explicit open/close behavior, Local CLI
+  engine Test, installed/uninstalled engine states, and language persistence
+  across refresh.
+- Fixed two QA findings:
+  - `daemon start` now detaches correctly and writes foreground logs to
+    `~/.aiworker/aiworker-daemon.log`.
+  - Artifact preview rail remains visible at normal desktop widths.
+- Root gates passed:
+  - `bun run typecheck`
+  - `bun run lint` (passes with existing React hook warnings)
+  - `bun run test`
+  - `bun run build`
+  - `git diff --check`
+- code-review-graph passed:
+  - `bun run crg:status`
+  - `bun run crg:update`
+  - `bun run crg:review`
+  - Result: 7 changed files, 4 changed functions/classes, 0 affected flows,
+    risk score `0.40`; CRG noted unit-test gaps for `bootstrapWorkerApp` and
+    `startDaemon`, covered here by local daemon/browser validation.
+
+## 2026-05-10 18:38 [completed] REFACTOR-050 / PLAN-222 — Host home lifecycle and project-scope removal
+
+- Removed active project-scope fs-layout initialization and cwd-based scope
+  detection. `AIWORKER_HOME` / `~/.aiworker` is now the local daemon source of
+  truth.
+- Worker initialization creates only the engine-usable workspace root
+  `workers/<workerId>/workspaces`; worker identity, Soul binding, capabilities,
+  settings, reviews, and memory metadata stay in `aiworker.db`.
+- Default daemon paths now resolve to `~/.aiworker/aiworker.db` and
+  `~/.aiworker/workers`.
+- CLI command surface now exposes `dev`, `daemon`, `worker`, `workspace`,
+  `session`, `turn`, `artifacts`, `review`, `lessons`, `settings`, and `engine`
+  commands without public `run` commands.
+- Local daemon serves the built Worker Web at `/`, so a source checkout can be
+  debugged with one daemon process after the Web build.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-fs-layout' typecheck`
+  - `bun run --filter '@zonease/aiworker-fs-layout' test`
+  - `bun run --filter '@zonease/aiworker-core' typecheck`
+  - `bun run --filter '@zonease/aiworker-core' test`
+  - `bun run --filter '@zonease/aiworker-api' typecheck`
+  - `bun run --filter '@zonease/aiworker-api' test`
+  - `bun run --filter '@zonease/aiworker-cli' typecheck`
+  - `bun run --filter '@zonease/aiworker-cli' test`
+
+## 2026-05-10 18:01 [progress] Session workspace implementation slices
+
+- Opened implementation PMA slices for the approved session-handoff
+  architecture:
+  - REFACTOR-047 / PLAN-219 — worker/session/turn/invocation data contract.
+  - REFACTOR-048 / PLAN-220 — local daemon worker/session API.
+  - REFACTOR-049 / PLAN-221 — Worker Web session workspace surface.
+  - REFACTOR-050 / PLAN-222 — host-home lifecycle and project-scope removal.
+  - QA-029 / PLAN-223 — focused/root gates, CRG review, and browser validation.
+- Investigation found the concrete old-contract anchors to remove:
+  `projects/runs/run_events` storage, `/api/local/runs`, Web `startRun()`, CLI
+  `run` commands, `ensureProjectAiworker()` init, and the internal
+  `workspace-template` engine.
+
+## 2026-05-10 18:11 [completed] REFACTOR-047 / REFACTOR-048 — Worker session data and daemon API
+
+- Replaced the local worker contract with workers, workspaces, sessions, turns,
+  internal engine invocations, and session events.
+- Regenerated the worker SQLite migration; the greenfield schema no longer has
+  `runs` or `run_events`.
+- Core runtime now materializes session context under the workspace, invokes an
+  external engine adapter, and registers artifacts/reviews/lessons against
+  session/turn/invocation metadata.
+- Local daemon boot now seeds HR/PM/QA/DevOps Soul workers and exposes
+  worker/workspace/session/turn routes.
+- Removed public run API paths and removed the internal `workspace-template`
+  engine from Settings scan/test.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-shared' typecheck`
+  - `bun run --filter '@zonease/aiworker-storage-sqlite' typecheck`
+  - `bun run --filter '@zonease/aiworker-storage-sqlite' test`
+  - `bun run --filter '@zonease/aiworker-core' typecheck`
+  - `bun run --filter '@zonease/aiworker-core' test`
+  - `bun run --filter '@zonease/aiworker-api' typecheck`
+  - `bun run --filter '@zonease/aiworker-api' test`
+
+## 2026-05-10 18:31 [completed] REFACTOR-049 / PLAN-221 — Worker Web session workspace surface
+
+- Worker Web now consumes local daemon workers, workspaces, sessions, turns,
+  artifacts, reviews, lessons, and session events.
+- The create path selects a Soul worker, creates a workspace/project under that
+  worker, starts a workspace session turn with the selected capability template,
+  and shows the resulting artifact.
+- Web calls to `/api/local/runs` are removed; artifact preview reads
+  workspace-scoped file paths.
+- Settings language now states that session turns require an external engine or
+  BYOK provider; no built-in template runner fallback is advertised.
+- Verification passed:
+  - `bun run --filter '@zonease/aiworker-web' typecheck`
+  - `bun run --filter '@zonease/aiworker-web' test`
+  - `bun run --filter '@zonease/aiworker-web' build`
+  - `bun run --filter '@zonease/aiworker-api' typecheck`
+  - `bun run --filter '@zonease/aiworker-api' test`
+
+## 2026-05-10 17:44 [completed] DOC-009 / PLAN-218 — Session handoff and file consumer contract correction
+
+Follow-up architecture discussion clarified that AIWorker must not ask users to
+maintain runs. Engine handoff begins at the workspace session layer, aligned
+with Claude Code / Codex / Cursor native sessions:
+
+- Updated `GOALS.md`, `docs/architecture.md`, and `README.md` so the product
+  chain is `worker -> workspace/project -> session -> turn -> artifact`, not
+  `session -> run`.
+- Reframed `run` as internal `engine_invocation` audit/retry/debug metadata,
+  not a product object or default UI/API path.
+- Added the file consumer contract to `docs/architecture.md`: files must serve
+  daemon prompt/catalog composition, engine-visible session cwd, audit/replay,
+  or human/export use. Files outside those consumers should not be created.
+- Documented that this architecture must be strictly followed unless
+  implementation evidence proves it impossible or inferior, in which case a new
+  proposal is required before adjustment.
+- Synced `docs/task/DOC-009.md` and `docs/plan/PLAN-218.md` with the corrected
+  session/turn/invocation model.
+
+Verification: `git diff --check` passed. code-review-graph was skipped because
+this was documentation-only architecture work.
+
+## 2026-05-10 16:59 [completed] DOC-009 / PLAN-218 — Host daemon and Soul worker architecture contract
+
+Initial architecture pass treated the local product as `1 host -> 1 local
+daemon -> N Soul workers -> N workspaces -> N sessions -> N capability runs`.
+The 17:44 follow-up entry above supersedes that run wording with the final
+session/turn/invocation contract:
+
+- Updated `GOALS.md` so Soul selection means selecting or creating a Soul-bound
+  worker, not storing Soul as long-term project metadata.
+- Expanded `docs/architecture.md` with definitions for host, local daemon,
+  worker, workspace/project, session, turn/invocation, capability template,
+  host settings, and worker settings.
+- Added an Open Design mapping that keeps OD's project/conversation/run/artifact
+  grammar while making AIWorker's extra Soul worker layer explicit.
+- Defined the target local daemon API/storage/debug contracts, including
+  worker registry routes, host-vs-worker settings, session ownership, and a
+  single lifecycle debug path.
+- Updated `README.md` to explain the model and mark split API/Web startup as a
+  transitional contributor escape hatch rather than the intended operator path.
+
+Verification: `git diff --check` passed. code-review-graph was skipped because
+this was documentation-only architecture work.
+
+## 2026-05-10 12:25 [completed] REFACTOR-046 / PLAN-217 — Worker Web theme switching and dark mode readiness
+
+Worker Web appearance settings now drive the rendered shell instead of only
+persisting a preference:
+
+- Added theme resolution for `system | light | dark`, with live
+  `prefers-color-scheme` updates and stable `data-appearance` / `data-theme`
+  shell attributes.
+- Added dark-mode token coverage for the Worker Studio shell, settings modal,
+  controls, overlays, icon surfaces, artifact preview elements, status states,
+  shadows, and primary actions.
+- Decoupled primary action colors from warm accent tokens so light and dark
+  themes both meet production contrast expectations.
+- Added focused tests for system theme resolution, system preference changes,
+  and persisted dark-theme application.
+
+Verification passed: `git diff --check`,
+`bun run --filter '@zonease/aiworker-web' typecheck`, `test`, `lint` (0 errors,
+existing five effect-setState warnings), and `build` including Worker Studio CSS
+quality, plus root `bun run check` and `bun run build`. Browser validation at
+`http://127.0.0.1:5179/worker/` verified Light/Dark/System switching,
+`/api/local/settings` persistence, OS preference response, 0 browser
+warnings/errors, and passing sampled contrast ratios. code-review-graph
+update/review completed with 0 affected flows and risk score 0.55.
+
+## 2026-05-10 12:12 [completed] FEAT-059 / PLAN-216 — Production-grade Worker Web localization
+
+Worker Web language switching now localizes the product shell instead of only
+persisting a language code:
+
+- Added a typed Worker Web localization catalog for English, Simplified Chinese,
+  Japanese, and German.
+- Routed Worker Studio navigation, creation form, Settings dialog, status labels,
+  accessibility labels, language names, and built-in Soul/template display copy
+  through the catalog.
+- Saved `settings.language` now controls the active locale, updates
+  `document.documentElement.lang`, and falls back to English for unknown values.
+- Settings language switching updates the UI after the existing
+  `/api/local/settings` save path returns.
+
+Verification passed: `bun run --filter '@zonease/aiworker-web' test`,
+`typecheck`, `lint` (0 errors, existing five effect-setState warnings), `build`
+including CSS quality, root `bun run check`, root `bun run build`,
+`git diff --check`, browser validation for `en`, `zh-CN`, `ja`, and `de`, and
+code-review-graph update/review.
+
+## 2026-05-10 11:26 [completed] REFACTOR-045 / PLAN-214 + QA-028 / PLAN-215 — Soul project semantics and init artifact purge
+
+User review clarified that the remaining `case` language is not the intended
+default product object and that old Project Brain initialization artifacts
+should not leak into the vertical Soul workspace. Scope:
+
+- Replace the local work object with Soul `project` across Web, API, CLI,
+  storage, shared schemas, runtime metadata, tests, and docs.
+- Remove default initialization of `.aiworker/local`, `scope.json`,
+  `brain-capabilities.json`, and `executor-capabilities.json`.
+- Keep the OD-style IA skeleton while making the visible product path
+  Soul / capability template / project / run / artifact.
+- Revalidate with focused gates, browser preview, and code-review-graph.
+
+Completed:
+
+- Replaced local `case` semantics with Soul `project` across Web, API, CLI,
+  core runtime, shared DTOs, storage schema/migration metadata, tests, and docs.
+- `aiworker init` now writes product-facing `.aiworker` Soul workspace
+  scaffolding and no longer writes `.aiworker/local`, `scope.json`,
+  `brain-capabilities.json`, or `executor-capabilities.json` by default.
+- Browser validation at `http://127.0.0.1:5178/worker/` created HR, PM, QA, and
+  DevOps projects/runs/artifacts, verified Settings Test/Rescan and `zh-CN`
+  persistence, and confirmed no visible `case` or import entry.
+- Verification passed: focused package gates, root `bun run typecheck`,
+  `bun run test`, `bun run build`, `bun run lint`, `git diff --check`, and
+  code-review-graph. Lint exits 0 with the existing five Web effect-setState
+  warnings.
+
+## 2026-05-10 11:28 [superseded] REFACTOR-044 / PLAN-212 + QA-027 / PLAN-213 — OD-style vertical Soul workspace correction
+
+This correction track was superseded before completion. User review clarified
+that the work object itself must converge from `case` to `project`, and that
+default initialization must stop carrying `.aiworker/local`, scope manifest,
+Brain capability, and executor overlay JSON artifacts.
+
+## 2026-05-10 10:46 [completed] REFACTOR-041..043 / PLAN-208..210 + QA-026 / PLAN-211 — Vertical Soul workspace MVP
+
+Landed the out-of-box vertical Soul workspace MVP:
+
+- Rebuilt Worker Web around HR/PM/QA/DevOps Soul catalog, scoped skill/template
+  selection, case/run creation, business artifact cards, and selected-Soul
+  review rail.
+- Removed import entrypoints and developer/work-order-first product language
+  from the Web surface.
+- Added shared vertical Soul and capability template schemas plus built-in
+  HR/PM/QA/DevOps template catalog, with Finance/Legal/Ops marked later.
+- Carried selectedSoulId and selectedSkillId through storage, API, CLI, runtime,
+  run metadata, and generated artifact metadata.
+- Implemented AIWorker Settings with Local CLI / BYOK mode, engine status
+  scan/test, connectors, MCP, language, appearance, autosave, close/reopen, and
+  reload persistence.
+- Updated README, GOALS, architecture, PMA task/plan docs, and Web CSS quality
+  selectors to match the shipped MVP.
+
+Verification: focused shared/storage/core/API/CLI/Web tests passed; `bun run
+typecheck`, `bun run lint`, `bun run test`, and `bun run build` passed. Browser
+validation at `http://127.0.0.1:5174/worker/` created HR, PM, QA, and DevOps
+cases/runs, showed artifacts, saved/reloaded Settings, and captured
+`tmp/vertical-soul-preview/soul-workspace.png`. CRG update passed; CRG review
+reported 0 affected flows, 71 test gaps, and risk score 0.60, with high-risk
+minimal context due the intended cross-layer rewrite.
+
+## 2026-05-10 10:03 [completed] DOC-008 / PLAN-207 — Vertical Soul product north star reset
+
+Reset the product guidance away from Open Design visual copying and
+developer-first worker loops:
+
+- Rewrote `GOALS.md` around vertical Soul workspace, HR/PM/QA/DevOps priority,
+  capability templates, domain systems, cases, business artifacts, review, and
+  durable org memory.
+- Rewrote `docs/architecture.md` to define the target Soul/domain/template/case
+  architecture and to demote `work order` to a low-level/internal concept.
+- Updated `AGENTS.md` with anti-drift rules against executor-platform,
+  developer-first, coding-only, and Open Design shell-copy directions.
+- Rewrote `README.md` to present Open Design as product grammar, not a
+  visual/brand/domain copy target.
+
+Verification: `git diff --check` passed. CRG was skipped because this slice
+only changes documentation and instruction files.
+
+## 2026-05-10 09:11 [completed] REFACTOR-040 / PLAN-206 — Worker Web product detail correction
+
+Corrected the too-literal Open Design Web copy:
+
+- Removed the macOS traffic-light window controls from the browser page.
+- Made settings closed by default and opened only through the explicit settings
+  button.
+- Replaced copied Open Design/Nexu/design-prototype copy with AIWorker work
+  order, worker pack, workspace, run, and executor vocabulary.
+- Replaced the copied avatar image and Open Design logo geometry with AIWorker
+  UI assets.
+- Updated Worker Studio tests to reject the stale copied text and desktop
+  chrome.
+
+Verification: `bun run --filter '@zonease/aiworker-web' test`,
+`bun run --filter '@zonease/aiworker-web' typecheck`,
+`bun run --filter '@zonease/aiworker-web' lint`,
+`bun run --filter '@zonease/aiworker-web' build`, and `git diff --check` pass.
+Browser review of `http://127.0.0.1:5173/worker/` confirmed the default home
+has no settings dialog, macOS traffic lights, or copied avatar image, and
+settings opens through the explicit settings button. CRG reported 0 affected
+flows, 3 test gaps, and risk score 0.40.
+
+## 2026-05-10 01:43 [completed] REFACTOR-039 / PLAN-205 — Worker Web Open Design source parity
+
+Replaced the rejected Worker Web studio with a direct Open Design source-parity
+baseline:
+
+- Rebuilt `WorkerStudio` around Open Design's entry shell structure: left
+  `newproj` creation panel, center designs toolbar/grid, right `pet-rail`, and
+  first-run `modal-settings`.
+- Removed the home-screen review, lessons, run events, and artifact canvas
+  concepts from the visible first screen.
+- Copied Open Design public `logo.svg` and `avatar.png` assets into the Worker
+  Web bundle.
+- Updated Web tests and studio CSS quality selectors to guard the OD source
+  structure.
+
+Verification: `bun run --filter '@zonease/aiworker-web' test`,
+`bun run --filter '@zonease/aiworker-web' typecheck`,
+`bun run --filter '@zonease/aiworker-web' lint`,
+`bun run --filter '@zonease/aiworker-web' build`, `bun run check`,
+`bun run test`, `bun run --filter '@zonease/aiworker-api' build`,
+`bun run --filter '@zonease/aiworker-cli' build:bundle`, and
+`git diff --check` pass. Browser review of
+`http://127.0.0.1:5173/worker/` passed for settings/home views at default and
+2048px widths with 0 console errors. CRG reported 0 affected flows, 18 test
+gaps, and risk score 0.55. Aggregate `bun run build` was terminated after the
+Web Vite subprocess stalled despite the package-level API/Web/CLI builds
+passing.
+
+## 2026-05-10 00:23 [completed] REFACTOR-038 / PLAN-204 — Worker Web greenfield studio rebuild
+
+Completed the destructive Worker Web reset after user review found the previous
+screen still looked like legacy admin UI:
+
+- Removed the parked fleet Web bundle/source, old `apps/web/fleet` and
+  `apps/web/worker` HTML entries, TanStack route trees, shared admin UI
+  primitives, shared theme store, and gateway smoke from `apps/web`.
+- Replaced the Web package with a single worker studio build that outputs
+  `dist/worker`.
+- Added `WorkerStudio` and purpose-built studio CSS around brief shelf, run
+  lane, artifact canvas, review rail, run events, and lesson ledger.
+- Rewrote Web tests and quality checks around the worker-only studio surface.
+- Updated bundle size baseline to the new single-worker bundle.
+
+Verification: `bun run --filter '@zonease/aiworker-web' test`,
+`bun run --filter '@zonease/aiworker-web' typecheck`,
+`bun run --filter '@zonease/aiworker-web' lint`,
+`bun run --filter '@zonease/aiworker-web' build`,
+`bun run --filter '@zonease/aiworker-web' size:baseline`,
+`bun run check`, `bun run test`, `bun run build`, and `git diff --check` pass.
+Browser review of `http://127.0.0.1:5173/worker/` passed on desktop and mobile
+with 0 console errors / 0 warnings. CRG reported 0 affected flows, 33 test
+gaps, and risk score 0.45.
+
+## 2026-05-10 00:26 [completed] REFACTOR-037 / PLAN-203 — Greenfield local worker rebuild
+
+Completed the destructive greenfield local worker rebuild:
+
+- Replaced the default worker schema with workspace, briefs, runs, run events,
+  files, artifacts, reviews, lessons, and settings.
+- Deleted the old default worker runtime subsystems and rebuilt the local run
+  engine around brief -> run -> artifact -> review -> lesson.
+- Replaced the worker API with `/api/local/*` only.
+- Rebuilt the CLI around local workspace commands.
+- Rebuilt Worker Web as a workspace app instead of an admin dashboard.
+- Rewrote README, GOALS, architecture, and CLI docs around the shipped product
+  loop, with remote aggregation deferred.
+
+Verification: `bun run check`, `bun run test`, `bun run build`,
+`git diff --check`, focused package gates, source-local smoke, and browser
+review pass. CRG completed with no affected flows and static test-gap warnings
+recorded for the broad rewrite surface.
+
+## 2026-05-09 21:58 [completed] REFACTOR-036 / PLAN-202 — Hard reset OD-style worker product surface
+
+Completed the destructive OD-style worker hard reset:
+
+- Root CLI now exposes only the local worker loop: init, daemon, run, runs,
+  artifacts, pack, review, lessons, doctor, and executor.
+- Worker Web now routes only Workbench, Runs, Artifacts, Reviews, Lessons, and
+  Settings; old Chat/Cases/Brain/Cron/Approvals/Test/Secrets pages were removed
+  from the worker shell.
+- The local worker API removed `/api/worker/cases`; review and lesson promotion
+  are the product-facing surfaces.
+- Core product naming now uses Worker Review and Lesson Promotion services
+  instead of Brain Case / Inbox terminology.
+- Successful daemon runs now capture final assistant output as an
+  `assistant-output` artifact and the source-local smoke covers init -> daemon
+  -> run -> artifacts -> review -> lesson promotion.
+
+Verification: `bun run check`, `bun run test`, `bun run build`,
+`bun run --filter '@zonease/aiworker-core' test`,
+`bun run --filter '@zonease/aiworker-cli' smoke:aiworker-run`, and
+`git diff --check` pass. Production release remains a separate step requiring a
+published-package compact harness and deployment validation.
+
+## 2026-05-09 19:08 [completed] REFACTOR-035 / PLAN-201 — Complete OD-style worker default loop
+
+Completed S7 of the OD-style worker reboot:
+
+- Added daemon-backed `runs list/show/cancel` CLI commands.
+- Added daemon-backed `artifacts list/show` CLI commands.
+- Refreshed root help so onboarding reads init -> daemon -> run -> inspect artifacts
+  -> review/promote.
+- Updated `docs/cli.md` to describe the current local worker loop and mark
+  Brain/Fleet/Gateway as secondary/admin surfaces.
+
+## 2026-05-09 18:58 [completed] REFACTOR-034 / PLAN-200 — Worker review promotion surface
+
+Completed S6 of the OD-style worker reboot:
+
+- Added product-facing `/api/worker/reviews` list/show/rerun/promote routes over the
+  existing Case / Inbox / Admission backend.
+- Added root/canonical `review list/show/rerun/promote` CLI commands.
+- Updated Worker Web review copy to Reviews / Promote lessons and wired promotion to
+  the new review API.
+- Kept promotion safe: it only creates pending proposals and does not auto-approve or
+  apply durable memory.
+
+## 2026-05-09 18:42 [completed] REFACTOR-033 / PLAN-199 — Worker web workbench first screen
+
+Completed S5 of the OD-style worker reboot:
+
+- Replaced the Worker Admin `/` overview with a local worker workbench.
+- Added built-in worker pack and work-order template pickers backed by shared worker pack
+  metadata.
+- Added a first-screen composer that submits through the existing run contract.
+- Added run timeline, artifact metadata, and case review panels.
+- Added runs / worker artifact query hooks and invalidated runs after work-order submit.
+- Kept old Brain / Config / Cron / Approvals / Chat pages as secondary/admin routes.
+
+## 2026-05-09 18:23 [completed] REFACTOR-032 / PLAN-198 — Local worker daemon lifecycle commands
+
+Completed S4 of the OD-style worker reboot:
+
+- Added local worker daemon lifecycle commands:
+  - `aiworker daemon start/status/stop/logs/check/inspect`
+  - `aiworker worker daemon start/status/stop/logs/check/inspect`
+- `daemon start` reuses the existing `up` / `init` / `serve` path and launches a
+  detached worker child process.
+- The active scope home now stores worker daemon pid, log, and metadata files.
+- `daemon check` verifies `/health`; `daemon logs --tail <n>` reads recent log
+  lines; `daemon inspect` prints JSON status.
+- `up --pack` now passes worker pack selection through to `init`.
+
+## 2026-05-09 18:10 [completed] REFACTOR-031 / PLAN-197 — Project init worker pack materialization
+
+Completed S3B of the OD-style worker reboot:
+
+- Added `.aiworker`-local worker pack seed support in fs-layout with path guards.
+- Added `aiworker init --pack <id>` and `aiworker worker init --pack <id>`.
+- `init --soul <id>` now materializes a same-id built-in worker pack when one
+  exists, writing:
+  - `.aiworker/worker-packs/<pack>/SKILL.md`
+  - `.aiworker/domain-systems/<pack>/DOMAIN.md`
+- `policy.json` records selected worker pack metadata for brand-new projects.
+- Init preflight, next steps, and root help now expose the worker pack assets
+  and `aiworker pack show` inspection path.
+
+## 2026-05-09 17:20 [completed] REFACTOR-030 / PLAN-196 — OD-style worker pack registry
+
+Completed S3A of the OD-style worker reboot:
+
+- Added a shared worker pack registry with developer, HR recruiting, project
+  manager, and QA reviewer packs.
+- Each pack now exposes OD-style `SKILL.md` and `DOMAIN.md` markdown, work-order
+  templates, artifact kinds, and a default review checklist.
+- Added `aiworker pack list/show` and `aiworker worker pack list/show`.
+- Fixed CLI dotenv bootstrap command detection for multi-token diagnostic
+  commands so pack/soul read-only commands do not require worker state.
+
+## 2026-05-09 17:12 [completed] REFACTOR-029 / PLAN-195 — Worker artifact metadata index
+
+Completed S2A of the OD-style worker reboot:
+
+- Added `worker_artifacts` to worker.db as the workbench artifact metadata
+  index.
+- Added `WorkerArtifactService` with workspace-relative path normalization,
+  upsert-by-path registration, and list/get filters.
+- Added read-only worker REST routes for artifact list/show and registered
+  them in the Worker OpenAPI path registry.
+- Added Web API client methods with explicit `WorkerArtifact` naming so this
+  surface does not collide with Brain artifact registry APIs.
+
+## 2026-05-09 17:02 [completed] REFACTOR-028 / PLAN-194 — CLI run daemon contract default
+
+Completed the second runtime slice for the OD-style local worker loop:
+
+- `aiworker run` now submits work orders to the local daemon
+  `/api/worker/runs` by default.
+- CLI output now follows run-scoped SSE from `/api/worker/runs/:id/events` and
+  keeps terminal exit-code mapping for finished, error, and timeout states.
+- Added explicit `--local` fallback for the old in-process runtime path.
+- Refreshed root and `worker run` help text so the default behavior no longer
+  claims to avoid the HTTP daemon.
+
+## 2026-05-09 16:36 [decision] REFACTOR-026 / PLAN-192 — OD-style local worker reboot
+
+Accepted the Open Design-style reboot direction for AIWorker worker:
+
+- Product north star moves from governance-first Project Brain runtime to
+  local-first worker workbench.
+- Default loop becomes work order -> run -> artifact -> review -> lesson.
+- Fleet/gateway and desktop are deferred until the local worker loop is useful
+  and verifiable.
+- S0 updated GOALS, target architecture, README, CLI docs, governance-node
+  status, and PMA tracking only; runtime code remains unchanged in this slice.
+
+## 2026-05-09 16:55 [completed] REFACTOR-027 / PLAN-193 — Worker run contract compatibility layer
+
+Landed the first runtime slice for the OD-style local worker loop:
+
+- Added core `WorkerRunService` over the transitional `agent_tasks` store.
+- Added worker `/api/worker/runs` list/create/show/cancel and per-run SSE
+  filtering.
+- Registered run endpoints in Worker OpenAPI metadata.
+- Moved Worker Web submit/continue calls to `/api/worker/runs` while keeping
+  current UI function names.
+- Kept old orchestrator task routes as compatibility paths for later cleanup.
 
 ## 2026-05-09 15:29 [completed] REL-031 / QA-025 — CLI 0.12.1 release
 
@@ -4713,6 +6803,28 @@ Verification:
 - All four BKD subtasks (`x9u5jzz9`, `izavqq37`, `zi8wqgzs`, `tbled0e0`) transitioned to `done`; worktrees pruned.
 
 Pointer: `docs/plan/PLAN-006.md` for the design matrix and per-subtask spec, and `docs/task/FEAT-00{3,4,5,6}.md` for the individual deliverables.
+
+# 2026-05-11 03:05 [progress]
+
+Planned the Worker Web visual polish campaign after reviewing `DESIGN.md`,
+GOALS, the current Worker Web source, and recent PMA status. New draft tracking:
+REFACTOR-060 / PLAN-238 for design tokens and unified controls, REFACTOR-061 /
+PLAN-239 for compact worker list and icon-button creation dialogs,
+REFACTOR-062 / PLAN-240 for session composer and collapsible right drawer, and
+QA-032 / PLAN-241 for visual, responsive, and code-review-graph validation.
+After a follow-up scroll investigation, PLAN-240 was expanded with Open
+Design's chat scroll-island pattern: key chat state by conversation/session,
+wrap the log in a dedicated relative scroll container, auto-follow only when
+near bottom, and expose jump-to-latest without letting streaming output steal
+scrollback.
+
+## 2026-05-12 13:57 [progress]
+
+REFACTOR-071 / PLAN-278 started: HR's specialized Soul workbench is being
+reframed from role-search-first to people-first. The implementation will keep
+the shared worker/workspace/session/artifact/review/lesson contract, make the HR
+home surface a profile poster wall plus selected profile loop panel, and leave
+PM/QA/DevOps on the current generic fallback.
 
 ## 2026-04-21 18:30 [release]
 

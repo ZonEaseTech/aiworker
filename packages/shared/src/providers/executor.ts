@@ -47,7 +47,7 @@ export interface ExecutorTool {
 
 /** Input payload for a streamed agent run. */
 export interface AgentRunInput {
-  messages: ChatMessage[]
+  turns: ChatMessage[]
   /** Model identifier, provider-specific. */
   model?: string
   /**

@@ -1,0 +1,158 @@
+@theme {
+  --color-aiworker-canvas: oklch(1 0 0);
+  --color-aiworker-surface-soft: oklch(0.985 0 0);
+  --color-aiworker-hairline: oklch(0.922 0 0);
+  --color-aiworker-hairline-strong: oklch(0.872 0 0);
+  --color-aiworker-ink: oklch(0 0 0);
+  --color-aiworker-ink-deep: oklch(0.135 0 0);
+  --color-aiworker-charcoal: oklch(0.439 0 0);
+  --color-aiworker-body: oklch(0.556 0 0);
+  --color-aiworker-mute: oklch(0.708 0 0);
+  --color-aiworker-surface-dark: oklch(0.205 0 0);
+  --color-aiworker-focus: oklch(0.62 0.18 260 / 0.5);
+  --color-aiworker-terminal-green: oklch(0.73 0.2 144);
+  --color-aiworker-terminal-red: oklch(0.69 0.18 29);
+  --color-aiworker-terminal-yellow: oklch(0.83 0.16 82);
+  --font-display: 'Nunito', system-ui, -apple-system, sans-serif;
+  --font-ui: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-aiworker-display: var(--font-display);
+  --font-aiworker-sans: var(--font-ui);
+  --font-aiworker-mono: var(--font-mono);
+  --radius-aiworker-sm: 6px;
+  --radius-aiworker-md: 8px;
+  --radius-aiworker-lg: 12px;
+  --radius-aiworker-pill: 9999px;
+  --spacing-aiworker-xxs: 2px;
+  --spacing-aiworker-xs: 4px;
+  --spacing-aiworker-sm: 8px;
+  --spacing-aiworker-md: 12px;
+  --spacing-aiworker-lg: 16px;
+  --spacing-aiworker-xl: 24px;
+  --spacing-aiworker-xxl: 32px;
+  --ease-aiworker-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-aiworker-emphasized: cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-aiworker-enter: aiworker-enter 180ms var(--ease-aiworker-standard) both;
+  --animate-aiworker-list: aiworker-list-enter 220ms var(--ease-aiworker-emphasized) both;
+}
+
+:root {
+  --bg: var(--color-aiworker-canvas);
+  --bg-app: var(--color-aiworker-canvas);
+  --bg-panel: var(--color-aiworker-canvas);
+  --bg-subtle: var(--color-aiworker-surface-soft);
+  --bg-muted: var(--color-aiworker-surface-soft);
+  --bg-elevated: var(--color-aiworker-canvas);
+  --border: var(--color-aiworker-hairline);
+  --border-strong: var(--color-aiworker-hairline-strong);
+  --border-soft: var(--color-aiworker-surface-soft);
+  --text: var(--color-aiworker-ink-deep);
+  --text-strong: var(--color-aiworker-ink);
+  --text-muted: var(--color-aiworker-body);
+  --text-soft: var(--color-aiworker-mute);
+  --text-faint: var(--color-aiworker-mute);
+  --accent: var(--color-aiworker-ink);
+  --accent-strong: var(--color-aiworker-ink-deep);
+  --accent-soft: var(--color-aiworker-hairline);
+  --accent-tint: var(--color-aiworker-surface-soft);
+  --primary-action-bg: var(--color-aiworker-ink);
+  --primary-action-text: var(--color-aiworker-canvas);
+  --primary-action-border: var(--color-aiworker-ink);
+  --interactive-hover-bg: color-mix(in srgb, var(--accent) 4%, var(--bg-panel));
+  --interactive-hover-border: color-mix(in srgb, var(--accent) 26%, var(--border-strong));
+  --interactive-hover-ring: inset 0 0 0 1px color-mix(in srgb, var(--accent) 12%, transparent);
+  --green: var(--color-aiworker-terminal-green);
+  --green-bg: color-mix(in srgb, var(--green) 12%, var(--bg-panel));
+  --green-border: color-mix(in srgb, var(--green) 30%, var(--border));
+  --red: var(--color-aiworker-terminal-red);
+  --red-bg: color-mix(in srgb, var(--red) 10%, var(--bg-panel));
+  --red-border: color-mix(in srgb, var(--red) 30%, var(--border));
+  --amber: var(--color-aiworker-terminal-yellow);
+  --shadow-xs: none;
+  --shadow-sm: none;
+  --shadow-lg: none;
+  --shadow-primary-inset: none;
+  --shadow-accent-ring: 0 0 0 1px var(--accent);
+  --bg-fidelity-wireframe: var(--color-aiworker-surface-soft);
+  --floating-artifact-bg: var(--color-aiworker-surface-dark);
+  --floating-artifact-text: var(--color-aiworker-canvas);
+  --modal-backdrop: oklch(0 0 0 / 0.42);
+  --agent-icon-text: var(--color-aiworker-canvas);
+  --agent-icon-dark-bg: var(--color-aiworker-ink-deep);
+  --agent-icon-green-bg: var(--color-aiworker-charcoal);
+  --agent-icon-violet-bg: var(--color-aiworker-body);
+  --agent-icon-gray-bg: var(--color-aiworker-mute);
+  --radius-sm: var(--radius-aiworker-sm);
+  --radius: var(--radius-aiworker-md);
+  --radius-lg: var(--radius-aiworker-lg);
+  --radius-pill: var(--radius-aiworker-pill);
+  --icon-button-size: 30px;
+  --icon-button-icon-size: 16px;
+  --motion-fast: 150ms;
+  --motion-base: 240ms;
+  --motion-slow: 380ms;
+  --motion-ease: var(--ease-aiworker-standard);
+  --motion-ease-out: var(--ease-aiworker-emphasized);
+  --font-display: 'Nunito', system-ui, -apple-system, sans-serif;
+  --font-ui: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --serif: var(--font-display);
+  --sans: var(--font-ui);
+  --mono: var(--font-mono);
+}
+
+.entry-shell[data-theme="dark"],
+.od-loading-shell[data-theme="dark"] {
+  --bg: var(--color-aiworker-surface-dark);
+  --bg-app: var(--color-aiworker-surface-dark);
+  --bg-panel: var(--color-aiworker-surface-dark);
+  --bg-subtle: var(--color-aiworker-surface-dark);
+  --bg-muted: var(--color-aiworker-charcoal);
+  --bg-elevated: var(--color-aiworker-surface-dark);
+  --border: var(--color-aiworker-charcoal);
+  --border-strong: var(--color-aiworker-charcoal);
+  --border-soft: var(--color-aiworker-surface-dark);
+  --text: var(--color-aiworker-surface-soft);
+  --text-strong: var(--color-aiworker-canvas);
+  --text-muted: var(--color-aiworker-hairline-strong);
+  --text-soft: var(--color-aiworker-mute);
+  --text-faint: var(--color-aiworker-body);
+  --accent: var(--color-aiworker-canvas);
+  --accent-strong: var(--color-aiworker-canvas);
+  --accent-soft: var(--color-aiworker-charcoal);
+  --accent-tint: var(--color-aiworker-surface-dark);
+  --primary-action-bg: var(--color-aiworker-canvas);
+  --primary-action-text: var(--color-aiworker-ink);
+  --primary-action-border: var(--color-aiworker-canvas);
+  --interactive-hover-bg: color-mix(in srgb, var(--accent) 8%, var(--bg-panel));
+  --interactive-hover-border: color-mix(in srgb, var(--accent) 34%, var(--border-strong));
+  --interactive-hover-ring: inset 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+  --green-bg: color-mix(in srgb, var(--green) 20%, var(--bg-panel));
+  --green-border: color-mix(in srgb, var(--green) 38%, var(--border));
+  --red-bg: color-mix(in srgb, var(--red) 18%, var(--bg-panel));
+  --red-border: color-mix(in srgb, var(--red) 38%, var(--border));
+  --shadow-xs: none;
+  --shadow-sm: none;
+  --shadow-lg: none;
+  --shadow-primary-inset: none;
+  --shadow-accent-ring: 0 0 0 1px var(--accent);
+  --bg-fidelity-wireframe: var(--color-aiworker-surface-dark);
+  --floating-artifact-bg: var(--color-aiworker-surface-soft);
+  --floating-artifact-text: var(--color-aiworker-surface-dark);
+  --modal-backdrop: oklch(0 0 0 / 0.64);
+  --agent-icon-text: var(--color-aiworker-surface-dark);
+  --agent-icon-dark-bg: var(--color-aiworker-canvas);
+  --agent-icon-green-bg: var(--color-aiworker-hairline-strong);
+  --agent-icon-violet-bg: var(--color-aiworker-mute);
+  --agent-icon-gray-bg: var(--color-aiworker-body);
+}
+
+.entry-shell[data-theme="light"],
+.od-loading-shell[data-theme="light"] {
+  color-scheme: light;
+}
+
+.entry-shell[data-theme="dark"],
+.od-loading-shell[data-theme="dark"] {
+  color-scheme: dark;
+}

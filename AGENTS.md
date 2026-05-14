@@ -1,143 +1,145 @@
-# AIWorker
+# AIWorker Agent Guide
 
-AIWorker 是轻量自托管 **Project Brain + Worker/Fleet aggregation runtime**。
-Gateway 是 WebSocket 控制面，持有 `fleet.db`；worker 是数据面，持有各自的
-`worker.db` 与 Project Brain。Executor 是 bring-your-own 外部 agent runtime
-（Codex / Claude Code / Hermes / OpenClaw / Cursor 等），AIWorker 只通过薄
-adapter 调用和观察它们，不把自己做成 executor 平台。完整架构以
-[`docs/architecture.md`](docs/architecture.md) 为准。
+AIWorker 当前目标是 **local-first vertical Soul App host**。Host 提供本地 daemon、安装启用、
+鉴权安全、平台设置、能力 broker、统一 shell 与协议定位；Soul App 提供可独立部署的垂直产品，
+并拥有领域状态、领域语义、artifact/profile/review/lesson 的解释权。
 
-## 产品北极星
+默认产品路径：
 
-- 后续涉及 Brain、Executor、Soul、Fleet、scope、memory、skill、MCP、plugin、
-  capability、approval、audit 或 runtime 边界的开发，先读
-  [`GOALS.md`](GOALS.md)。
-- `GOALS.md` 是产品取舍与防跑偏的北极星；`docs/architecture.md` 是实现边界；
-  `docs/governance-node-status.md` 是当前状态审计。
-- 如果一个改动会把 AIWorker 推向 executor 平台、通用 memory layer、coding-only
-  项目管理器、或高频确认弹窗，默认先停下来重新评估。
+```text
+Host -> install/enable Soul App -> Soul worker -> workspace -> session
+  -> Soul App exposed views/actions -> business artifact/profile/review/lesson
+```
 
-## 工作规则
+不要把默认体验拉回 developer-only work order、admin dashboard、远程控制面、治理内核或通用
+agent runtime 平台。
+
+## 必读入口
+
+- `docs/architecture.md`：当前唯一架构合同；`Constraint Registry` 是 Host / Soul App /
+  protocol / data / broker / documentation 硬约束源头。
+- `.agents/skills/aiworker-host-dev/SKILL.md`：修改 Host platform、local daemon/API、
+  Worker Web Shell、CLI lifecycle、broker、auth/security、shared protocol 或 storage schema
+  前必须读取。
+- `.agents/skills/aiworker-soul-app-dev/SKILL.md`：修改 Soul App、manifest、standalone、
+  Host mounted、capability、artifact/review 或 authoring 文档前必须读取。
+
+不要把历史外部产品映射、旧 gateway/fleet/control-plane、旧治理入口或旧重启计划当作当前实现
+约束。当前规范入口只有本文件和 `docs/architecture.md`；PMA、changelog、Superpowers spec/plan
+都是审计轨迹，不能覆盖 `docs/architecture.md#constraint-registry`。
+
+## 按任务读取
+
+- CLI 行为或命令文档：`docs/cli.md`。
+- 本地 daemon、打包或 operator 运行路径：`docs/deployment.md`。
+- 外部 engine 安装、登录和 readiness：`docs/executor-engines.md`。
+- Host platform、daemon API、registry、broker、security、storage schema：
+  `docs/architecture.md` 和 `aiworker-host-dev` skill。
+- Host Web Shell、Settings、workbench：`docs/architecture.md`、`aiworker-host-dev` skill，
+  非平凡前端改动再读取 `/pma-web`。
+- CLI lifecycle、daemon/app/worker/workspace/session 命令：`docs/cli.md` 和
+  `aiworker-host-dev` skill。
+- Soul App authoring：`docs/soul-app-developer.md` 和 `aiworker-soul-app-dev` skill。
+- 历史 PMA、changelog、Superpowers spec/plan 只作为审计轨迹；不能覆盖当前架构合同。
+
+## 工作方式
 
 - 默认用中文与用户交流；文档、代码注释、commit message、PR title/description 也默认中文。
-- 对外可见内容避免提及具体协作工具、模型名称或内部执行过程，除非用户明确要求。
-- 开发任务使用 `/pma`：先调查，再 proposal，获批后实现，并同步 `docs/task/*.md`。后端用 `/pma-bun`，前端用 `/pma-web`，代码评审用 `/pma-cr`，复杂编排按需用 `/bkd`。
-- 凡是修改代码文件，完成实现后、最终回复前必须介入 code-review-graph 做变更审查；仅修改文档、注释、纯格式或用户明确要求跳过时，可以跳过，但最终回复要说明原因。
-- 不创建非必要说明文件。临时产物放 `tmp/`。
-- 1.0.0 正式发布以前不考虑 legacy 兼容；不为未发布的旧 CLI/API/config 形态保留 alias、shim 或迁移层，破坏性收敛时优先架构语义、代码归属和当前文档一致性。
+- 非平凡开发任务遵循 PMA：先调查，再 proposal，获批后实现，并同步 `docs/task/*.md` 与
+  `docs/plan/*.md`；后端参考 `/pma-bun`，前端参考 `/pma-web`，代码评审参考 `/pma-cr`。
+- 保持改动收敛，优先修当前路径；不要为未要求的旧入口、别名、shim 或兼容层扩范围。
+- 1.0.0 前允许破坏性收敛；判断标准是当前架构语义、代码归属和用户可理解的产品路径。
+- 不创建非必要说明文件；临时产物放 `tmp/`。
+- 修改代码文件后，最终回复前介入 code-review-graph 做变更审查；仅改文档、注释、纯格式或
+  用户明确要求跳过时可以跳过，并说明原因。
 
-## 产品定位
+## 当前实现地图
 
-- AIWorker 的核心卖点是 **Project Brain** 与 **Worker/Fleet 聚合控制面**：
-  Soul/persona、scope memory、brain skill、worker identity/state、gateway
-  routing、fleet presence、audit、admin UI 和远程 worker 管理。
-- 这里的 Project 是 worker 在 host/workspace 维度绑定的业务作用域，不等同于
-  software project。developer Soul 的 scope 可以是代码仓库；HR Soul 的 scope
-  可以是岗位、候选人池或简历库；legal/finance/ops 等 Soul 也应按各自业务对象
-  建模。不要把 Project Brain 设计收窄成代码项目管理或 PMA 专用能力。
-- AIWorker 不与成熟 executor runtime 竞争 MCP、skill、plugin、sandbox、
-  approval、native session、subagent 或模型生态；这些能力由 Codex、Claude
-  Code、Hermes、OpenClaw、Cursor 等外部 executor 自己负责。
-- 默认不做通用 executor isolation。AIWorker 隔离和治理的是 brain、worker
-  state、fleet control plane 与 secret vault；executor 运行在 operator 提供的
-  user/host 环境中，可能加载 user-level MCP / skill / plugin / auth / native
-  session。
-- Project 级 executor 配置只能表达 overlay / bootstrap hint / best-effort
-  projection，不是 executor 的完整 effective capability source of truth。
+- `apps/cli`：`aiworker` CLI，本地 daemon lifecycle、Soul App install/enable、worker/workspace/
+  session 命令入口。
+- `apps/api`：local daemon API 与 Worker Web 静态托管。
+- `apps/web`：Host Web Shell 与 worker/workspace/session workbench。
+- `apps/aiworker-hr`、`apps/aiworker-qa`：官方维护的参考 Soul App；它们必须通过 install/enable
+  进入 Host，不得被 Host 内置。
+- `packages/core`：local runtime、Host services、engine adapter 与 protocol 消费侧。
+- `packages/shared`：共享 schema、Host/Soul App protocol 类型与工具。
+- `packages/soul-app-sdk`：Soul App authoring 的公开 SDK。
+- `packages/soul-app-runtime`：standalone 与 Host mounted runtime harness。
+- `packages/component`：共享 UI primitives / patterns。
+- `packages/storage-sqlite`：Host metadata schema 与 migration；真实业务产物属于 app/workspace
+  命名空间，DB 只存平台 metadata、引用或协议 descriptor。
+- `packages/fs-layout`：`AIWORKER_HOME`、worker home、workspace 与 `.aiworker/` 布局。
+
+## 产品与实现边界
+
+硬约束以 `docs/architecture.md#constraint-registry` 为准；本段只是 agent 执行时的速查路由。
+
+- Host 是平台定位与能力壳，不是领域数据解释者。
+- Soul App 是领域主权方，拥有 profile 组合、artifact schema/content、review rubric、
+  lesson/memory 语义和 standalone 体验。
+- Host 只能消费 Soul App 通过 manifest/protocol/grant 暴露的 view、action、status、descriptor、
+  search、review summary、memory summary 或 audit event。
+- 如果 Soul App 不暴露某个 surface，Host 不取、不猜、不补。
+- Workspace/project 是业务作用域，不等同于软件仓库；HR 可以是岗位或候选人池，QA 可以是
+  release 或 test suite，DevOps 可以是 service、incident 或 runbook。
+- 外部 engine 负责自己的 tool loop、模型、sandbox、approval、auth/profile、native session
+  和插件生态；AIWorker 只在 session 层准备 cwd/context、调用或观察 engine。
+- Developer Soul 只是 supporting role，用于 code review、release evidence、repo report、
+  handoff、risk audit 等；不要让 repo/PMA/coding loop 成为产品中心。
+
+## 数据与 API 规则
+
+- `worker.db` 存 Host metadata：installed apps、workers、workspaces、sessions、engine
+  invocations、protocol cache、grants、platform files/descriptors、Host audit，以及可选的通用
+  review/lesson ledger。
+- 真实业务文件和 artifact 留在 Soul App 的 workspace 文件夹或对象存储命名空间；DB 只存引用、
+  hash、status、source、owner app id 或 protocol descriptor。
+- Host 不合成 HR profile，不解释 QA release verdict，不把 Soul App 记忆提升规则硬编码进平台。
+- API 文档以代码为准：OpenAPIHono `app.doc('/openapi.json')` + `/docs`。
+- 新增或修改 API 时同步 zod schema、OpenAPI metadata、typed client/proto 和相关测试。
+- Schema 变更通过 `packages/storage-sqlite` 的 Drizzle schema 与 migration 生成，不手写应用层绕过。
+- Secret 只能放 `.env` 或 vault/ref；不要写入 engine config、manifest、`.aiworker/*.json`、
+  DB metadata、日志、prompt、review rubric 或 skill 文件。
+
+## UI 规则
+
+- Worker Web 应是 Soul worker / workspace / session / artifact/profile 工作台，不是设置页、
+  日志页或治理概念陈列。
+- Host 拥有当前 shell layout，可通过协议把 header title、primary action、searchbar、actions、
+  drawer toggles、refresh 和 app settings 暴露给 Soul App 配置。
+- Standalone 模式下 Soul App 拥有自己的完整 shell；Host mounted 模式下 Soul App 适配 Host 壳。
+- 新组件优先复用 `apps/web/src/shared/components/ui/`、`packages/component` 和已有 primitives。
+- 交互组件使用成熟 headless UI；不要手写 focus trap、scroll lock、ARIA 或键盘导航。
+- 视觉值来自根目录 `DESIGN.md`，通过 Tailwind CSS v4 `@theme` 接入；不要新增 hex 字面量或
+  arbitrary value。
+- 文案用用户能理解的业务对象：Soul App、Soul worker、workspace、session、artifact、profile、
+  review、lesson。仅在开发者/诊断界面暴露 invocation、engine、broker 等底层词汇。
 
 ## 常用命令
 
 - 安装依赖：`bun install`
-- 全量类型检查：`bun run typecheck`
-- 全量 lint：`bun run lint`
-- 全量测试：`bun run test`
-- 常规验证：`bun run check`
-- 构建发布产物：`bun run build`
-- 聚焦某个 workspace：`bun run --filter '@zonease/aiworker-core' test`
+- 类型检查：`bun run typecheck`
+- Lint：`bun run lint`
+- 测试：`bun run test`
+- 常规 gate：`bun run check`
+- 构建：`bun run build`
 - Web 构建：`bun run --filter '@zonease/aiworker-web' build`
 - API 构建：`bun run --filter '@zonease/aiworker-api' build`
 - CLI bundle：`bun run --filter '@zonease/aiworker-cli' build:bundle`
-- 数据库 schema 生成：`bun run db:generate:fleet` / `bun run db:generate:worker`
-- code-review-graph 状态/刷新/变更审查：`bun run crg:status` / `bun run crg:update` / `bun run crg:review`
+- Worker DB schema：`bun run db:generate:worker`
+- code-review-graph：`bun run crg:status` / `bun run crg:update` / `bun run crg:review`
 
-优先跑和改动范围匹配的聚焦命令；跨 package、发布、迁移或安全相关改动再跑全量 gate。
+优先跑与改动范围匹配的聚焦命令；跨 package、发布、迁移、安全或公共 API 改动再跑全量 gate。
 
-## 仓库结构
-
-- `apps/api`：worker HTTP API、OpenAPIHono 文档、worker admin 静态托管。
-- `apps/gateway`：fleet WebSocket gateway、worker registry、enrollment、audit。
-- `apps/cli`：单一 `aiworker` CLI。
-- `apps/web`：fleet 与 worker 两套 admin bundle。
-- `packages/core`：transport-agnostic worker runtime。
-- `packages/gateway-proto`：gateway WS 协议类型和 zod 校验。
-- `packages/storage-sqlite`：`fleet.db` / `worker.db` schema、Drizzle 配置和迁移。
-- `packages/fs-layout`：`AIWORKER_HOME`、project scope、worker home 与模板解析。
-- `packages/shared`：共享类型与工具。
-
-## 技术栈
-
-- 后端：Bun、Hono/OpenAPIHono、Drizzle ORM、SQLite、Zod、consola。
-- 前端：React 19、Vite 8、TanStack Router/Query、Zustand、Base UI/shadcn/ui、Tailwind CSS v4。
-- Runtime：Brain provider 当前以 filesystem 为权威；Executor 支持 `http`、`claude-code`、`codex`、`acp`、`cursor`、`mcp` 等 engine。扩展点见 [`docs/executor-engines.md`](docs/executor-engines.md) 与 [`docs/architecture.md`](docs/architecture.md)。
-
-## 能力边界
-
-- Brain capability 与 Executor capability 必须隔离设计、隔离持久化、隔离同步；不要用 Brain 的 memory/persona/prompt skill/capability-pack 机制去配置 executor 原生能力。
-- Brain capability 指 worker 自身的 filesystem brain、长期记忆、persona、brain skill、scope policy 与未来学习沉淀。这是 AIWorker 的核心资产，project scope 下绑定 `<project>/.aiworker/`，但语义上表示 worker-bound business scope，不限定为 git repo 或软件工程项目。
-- Brain 硬逻辑只允许守治理不变量：scope identity、数据面隔离、evidence/provenance、admission 状态机、secret redaction、rollback/audit、token budget、source tagging。领域语义、下一步规划、候选人/代码/合同/财务含义判断交给 LLM / executor；不要把 Brain Kernel 做成硬编码领域 workflow engine。
-- Executor capability 指外部 engine 自身运行时可用的能力，例如 user-level 或 engine-native MCP server、skill/plugin、sandbox、approval、native session、profile/config。AIWorker 默认只做薄 adapter、readiness、事件归一化和可选 project overlay hint，不承诺拥有或隔离这些能力。
-- `.aiworker/executor-capabilities.json` 只表达 project executor overlay / bootstrap hint；它不是 executor effective capability 的完整来源，也不应被当成安全隔离边界。
-- `.aiworker/brain-capabilities.json` 是 Brain 侧唯一能力草案入口，承载 default toolsets、Brain capability packs 和 Brain MCP descriptors；不要再新增或依赖 project-scope `.aiworker/toolsets.json`、`.aiworker/capability-packs.json`、`.aiworker/mcp.json`。
-- CLI、API、DB schema、文档里出现 `mcp`、`skill`、`plugin` 等重名概念时必须显式加限定词，例如 `executor mcp overlay`、`engine plugin`、`brain skill`，避免跨层复用语义。
-- Executor overlay 涉及 secret 时只能存 ref；不要把明文 secret 写入 engine project config、`.aiworker/*.json` 或 worker configJson。外部 executor 的 user/host auth 由 operator 自己管理。
-
-## 架构不变量
-
-- `fleet.db` 只存 `registered_workers` 和 `audit_events` 等 fleet 指针/审计数据；worker 的 config、secrets、conversations、messages 必须留在 `worker.db`。
-- Fleet 与 worker migration 分开：`drizzle.fleet.config.ts`、`drizzle.worker.config.ts` 和对应迁移目录不要混用。
-- `worker_config.configJson` 不存明文 secret；配置里只能存 ref，启动/reload 时经 `enumerateSecretPaths`、`hydrateSecrets`、`SecretsVault` 注回。
-- 新 Brain/Executor/Channel 只通过 `packages/core/src/worker/*` 的 provider/adapter 接口扩展；不要在 orchestrator 加 provider-specific 分支。
-- `packages/core` 不依赖 `hono`、`@hono/*`、`@scalar/*`；transport 边界由 ESLint `no-restricted-imports` 守。
-- Hot reload 必须懒取当前 runtime；reload 由 `reloadRuntime` 内部 promise chain 串行化；旧 runtime 的 `dispose()` 必须解绑长连接资源。
-
-## 安全
-
-- secret 放 `.env` 或 vault，永不硬编码；新增 env 时同步 `.env.example` 或对应示例文件。
-- bearer/token 比较使用 `timingSafeEqualStrings`。
-- `AIWORKER_MASTER_KEY` 必须离线备份；丢失会导致已注册 worker token 无法解密。
-- Telegram、WhatsApp、Lark 等 channel webhook 必须验签；web channel 必须有 inbound bearer。
-- 公开 admin、gateway 或 worker 入口时遵守 fail-closed 外部鉴权规则。部署细节见 [`docs/deployment.md`](docs/deployment.md) 和 [`docs/deployment-public-https.md`](docs/deployment-public-https.md)。
-- 测试服和发布验证部署规则以 [`docs/task/REFACTOR-004.md`](docs/task/REFACTOR-004.md) 为准；不要把源码部署、docker compose 或远端 build 当成默认路径。
-
-## API 与数据
-
-- API 文档以代码为准：OpenAPIHono `app.doc('/openapi.json')` + `/docs`。
-- 新增或修改 API 时同步 zod schema、OpenAPI metadata、typed client/proto 和相关测试。
-- schema 变更必须通过 `packages/storage-sqlite` 的 Drizzle schema 与 migration 生成，不手写应用层绕过。
-
-## UI
-
-- 新组件优先复用 `apps/web/src/shared/components/ui/` 和已有 shared primitives。
-- 交互组件使用成熟 headless UI；不要手写 focus trap、scroll lock、ARIA、键盘导航。
-- 所有颜色、字号、间距、圆角、阴影等视觉值来自根目录 [`DESIGN.md`](DESIGN.md)，通过 Tailwind CSS v4 `@theme` 接入；禁止新增 hex 字面量和 arbitrary value。
-- Fleet UI 只走 gateway WS；Worker UI 只走 worker REST/SSE + bearer-auth，两边源码边界不能交叉。
-
-## Shell 与进程
+## Shell、Git 与验证
 
 - 命令默认用 `bash`。
-- 开发服务器和长驻进程优先放 tmux：session name 用 `{basename}-{hash}`，创建前先 `tmux has-session`；如果环境没有 `tmux`，使用 `setsid`/`nohup` + 明确 pidfile/logfile，并在完成后清理。
-- 测试 Codex executor 或 Codex-backed worker 时保持真实用户 `HOME`，让 Codex CLI 读取已有认证和 sandbox 配置；只用 `AIWORKER_HOME`、DB 路径、data root、log、pidfile 隔离 AIWorker 状态。需要验证默认 HOME 初始化行为时，单独做非 Codex 场景。
-- 禁止 `kill $(lsof -ti:PORT)`；如需按端口处理，只匹配监听进程，例如 `lsof -tiTCP:PORT -sTCP:LISTEN`。
-
-## Git
-
-- Commit message / PR title / PR description 使用中文；Conventional Commit type 保持英文，例如 `feat:`、`fix:`、`refactor:`、`docs:`、`chore:`、`test:`、`ops:`。
-- 提交前给出已运行的验证命令和结果；未能运行的 gate 要说明原因。
-
-## 工具偏好
-
+- 长驻进程优先放 tmux，session name 用 `{basename}-{hash}`；没有 tmux 时用 `setsid`/`nohup`
+  + 明确 pidfile/logfile，并在完成后清理。
+- 禁止 `kill $(lsof -ti:PORT)`；如需按端口处理，只匹配监听进程，例如
+  `lsof -tiTCP:PORT -sTCP:LISTEN`。
+- Commit message / PR title / PR description 使用中文；Conventional Commit type 保持英文，例如
+  `feat:`、`fix:`、`refactor:`、`docs:`、`chore:`、`test:`、`ops:`。
+- 提交前说明已运行的验证命令和结果；未能运行的 gate 要说明原因。
 - 简单文件查找优先 `rg` / `rg --files`。
-- 跨调用链影响分析可用 code-review-graph；大型符号定位可用 Serena；第三方库文档按需用 context7。
-- 修改代码文件后的 code-review-graph gate：先用 `git diff --name-only` 确认变更文件，再增量更新 graph，然后调用 `get_minimal_context` 与 `detect_changes`；如结果提示跨调用链、公共 API、DB schema、runtime、Brain/Executor/Fleet 边界或安全影响，继续调用 `get_affected_flows` 或 `get_impact_radius`。最终回复必须包含 CRG 结论，或说明本次为什么跳过。
-- 使用 code-review-graph 时优先从 `get_minimal_context` 起步；审查变更用 `detect_changes`、`get_affected_flows`、`get_impact_radius`，定位关系用 `query_graph`、`list_communities`、`list_flows`。CLI 统一走 `bun run crg:*`，避免本机 PATH 版本漂移。当前规避 `get_docs_section`、hub/bridge/gaps/surprising 相关端点，它们在本仓库环境下会返回工具错误。
-- 单文件文档/配置改动直接读写即可，不需要强行使用 MCP。
+- 单文件文档/配置改动直接读写即可，不需要强行使用 MCP 或 code-review-graph。

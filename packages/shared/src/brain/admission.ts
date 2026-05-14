@@ -6,7 +6,7 @@ import { redactBodySecrets } from './scan-body'
  * Brain admission MVP (PLAN-101).
  *
  * Generated brain change (memory / brain-skill / policy / artifact-status)
- * must enter `brain_admission_proposals` first; operator approval +
+ * must enter the durable proposal table first; operator approval +
  * materialization happen via the core service. Brain Kernel guarantees:
  *
  *  - status machine: pending → approved | rejected
@@ -19,7 +19,7 @@ import { redactBodySecrets } from './scan-body'
  *    being printed by CLI / surfaced via API; operator must opt in via
  *    `--show-sensitive`
  *
- * Out of scope for PLAN-101: auto-approval, fleet.db replication, executor
+ * Out of scope for PLAN-101: auto-approval, remote replication, executor
  * MCP / engine plugin pathway, Worker Admin UI (handled by PLAN-103).
  */
 

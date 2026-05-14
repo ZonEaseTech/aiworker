@@ -92,9 +92,9 @@ retentionDefaults: []
 - task-tracking
 - calendar-draft
 
-## Brain admission governance
+## Durable lesson governance
 
-- Durable Brain mutations must go through AIWorker brain admission.
+- Durable Brain mutations must come from reviewed lesson promotion.
 - Executor-native notes are not canonical AIWorker Brain.
 - Admission owns evidence, approval, rollback, audit, and durable mutation boundaries.
 

@@ -1,8 +1,11 @@
-import type { EngineKind } from '../fleet/executor'
+/**
+ * Engine kinds the Host can probe for local session handoff.
+ */
+export type EngineKind = 'http' | 'mcp' | 'cli' | 'claude-code' | 'acp' | 'codex' | 'cursor'
 
 /**
- * FEAT-018 —— Engine availability shape shared across the manager→worker
- * proxy and the frontend picker.
+ * Engine availability shape shared by the local daemon API and Worker Web
+ * picker.
  *
  * 三态语义：
  * - `ready`          PATH 命中 CLI 且 auth 文件存在

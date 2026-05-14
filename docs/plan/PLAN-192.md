@@ -1,92 +1,193 @@
-# PLAN-192 Executor non-interference boundary
+# PLAN-192 OD-style local worker reboot
 
-- **status**: completed
+- **status**: superseded
 - **owner**: local
-- **createdAt**: 2026-05-09 16:20
-- **approvedAt**: 2026-05-09 16:20
+- **createdAt**: 2026-05-09 16:31
+- **approvedAt**: 2026-05-09 16:36
+- **supersededAt**: 2026-05-12 21:20
 - **relatedTask**: REFACTOR-026
 
 ## Current State
 
-The architecture and GOALS documents already define the right boundary:
-AIWorker owns Project Brain, governance evidence, Case state, and worker/fleet
-operations; external executors own task execution, approval, sandbox, native
-session, and tool loop.
+AIWorker 当前实现已经有很多正确的低层组件：
 
-Source audit found the implementation still violates that boundary in default
-paths:
+- `apps/cli` 能初始化 project-scope `.aiworker/`，选择 executor，启动 `serve`，提交 `run`；
+- `apps/api` 暴露 worker REST/SSE，并托管 Worker Admin；
+- `packages/core` 有 executor adapter、conversation、orchestrator、Brain Journal、Gate、Admission、Case、Inbox、Cron、Channel；
+- `apps/web` 有 worker chat / brain / cases / config / approvals / cron 等页面。
 
-1. Native executor adapters install hard kill timers by default.
-2. Codex / Claude Code / ACP force or auto-answer permission behavior.
-3. ProcessManager and dead-loop detection can cancel or fail native executor
-   runs from AIWorker-side heuristics.
-4. Control-plane LLM calls reuse the task executor when no dedicated control
-   executor is configured.
-5. Executor failures are not durably reflected back into Chat messages.
+问题是这些能力是 governance-first 的堆叠，不是 OD-style 产品回路。用户进入系统时看到的是 Brain/Gate/Case/Admission/Fleet 等抽象，而不是：
+
+```text
+选择业务技能和领域上下文 -> 发起 work order -> executor 在真实 workspace 里工作 -> 产物和证据实时出现 -> 可复盘、可晋升为长期经验
+```
+
+Open Design 当前参照形态：
+
+- local daemon 是唯一 privileged process；
+- web 是 artifact 工作台；
+- SQLite 在 `.od/app.sqlite` 存 project / conversation / message / tabs / run metadata；
+- files under `.od/projects/<id>/` 是产物 truth；
+- `SKILL.md` + `DESIGN.md` + discovery prompt 是核心产品资产；
+- `/api/runs` + SSE 是 web 与 daemon 的统一执行协议；
+- executor CLI 只在 project cwd 下运行，不被 OD 重建成内置 agent platform。
+
+## Product Pivot
+
+本轮接受一个明确 pivot：
+
+> AIWorker local worker should be an Open Design-style business workbench, not a governance-first Project Brain kernel.
+
+领域差异只体现在 worker packs：
+
+| Open Design | AIWorker reboot |
+| --- | --- |
+| Design skill | Worker skill，例如 codebase review、candidate screen、PM spec、QA audit |
+| Design system | Domain system，例如 repo conventions、role rubric、roadmap style、finance policy |
+| Project folder | Worker workspace / scope folder |
+| Artifact preview | Case artifact / report / file preview |
+| Prompt template | Work-order template |
+| Daemon run | Worker run |
+| Critique | Review / lesson candidate |
+| Media output | Business deliverable files |
+
+这意味着 GOALS.md 与 docs/architecture.md 需要先被改写，否则实现阶段会继续被旧 Brain Governance Kernel 牵引。
 
 ## Proposal
 
-Implement an observation-first boundary in one focused slice:
+按 8 个 slice 落地，每个 slice 独立提交，必要时单独创建子 task/plan。
 
-1. Make native executor kill timers opt-in by explicit `timeoutMs`; keep HTTP /
-   generic CLI request timeouts unchanged.
-2. Remove default executor-native permission overrides and auto-approval from
-   Codex, Claude Code, and ACP.
-3. Disable ProcessManager stall cancellation by default while retaining the
-   opt-in env knob.
-4. Convert dead-loop detection from abort/fail to warning-only journal and bus
-   signal.
-5. Stop default control-plane reuse of the task executor; without a configured
-   control executor, use heuristic / fallback behavior.
-6. Persist a concise assistant failure message on executor error.
-7. Update docs and focused tests.
+1. **S0 — Product reset docs**
+   - 改写 `GOALS.md`、`docs/architecture.md`、README/CLI docs 的 worker 定位。
+   - 明确 fleet/gateway deferred，不作为默认体验。
+   - 验证：docs diff review + `git diff --check`。
+
+2. **S1 — Worker daemon run contract**
+   - 新建或重塑本地 run service，对齐 OD `/api/runs` 模型：create/list/show/events/cancel。
+   - CLI `run`、HTTP submit、web chat 都走同一个 run service。
+   - 保留 executor adapter，但把 Journal/Gate/Admission 从主 run path 下沉为可选 observers。
+   - 验证：focused core/API tests。
+
+3. **S2 — Workspace and metadata model**
+   - 收敛 worker.db：workspace/project metadata、conversations、messages、runs、artifact index、reviews。
+   - 真实产物留在 workspace 文件夹；DB 不复制业务内容。
+   - 允许 destructive migration，因为 1.0 前不保 legacy。
+   - 验证：storage migration/tests + CLI smoke。
+
+4. **S3 — Worker packs**
+   - 用 OD `SKILL.md` / `DESIGN.md` 语法做 AIWorker `worker-skills/` 与 `domain-systems/`。
+   - 内置 developer、hr-recruiting、project-manager、qa-reviewer 等 packs。
+   - 选择逻辑只做 prompt composition，不做领域 workflow engine。
+   - 验证：pack parser tests + init/list/show tests。
+
+5. **S4 — CLI daemon lifecycle**
+   - 重新整理 CLI：`aiworker init` 生成 local worker workspace；`aiworker daemon` 或等价 canonical command 启动 daemon/web；`aiworker run` 提交 work order。
+   - root help 必须像 OD `tools-dev` 一样说明 start / stop / status / logs / inspect / check。
+   - 验证：CLI help snapshots、daemon start smoke、bundle build。
+
+6. **S5 — Worker web workbench**
+   - 重构 Worker Admin 第一屏为 OD-style workbench：skill/domain picker、composer、run timeline、file/artifact panel、case/review panel。
+   - 现有 Brain/Admission/Config/Cron 页面默认降级到 secondary/admin。
+   - 验证：web build、component tests、Playwright/browser visual smoke。
+
+7. **S6 — Review and lesson promotion**
+   - 把现有 Gate/Brain Engine/Admission/Case 改成 run 后复盘：review result、lesson candidate、promote to durable context。
+   - 不再让 governance terminology 压在首轮 work order 之前。
+   - 验证：review/admission focused tests + local worker dogfood。
+
+8. **S7 — Cleanup, release, and evidence**
+   - 删除或隐藏旧默认路径、陈旧命名和重复 API。
+   - 更新 docs/changelog、PMA task/plan。
+   - 跑聚焦 gate、全量 check/build、source local smoke、published package harness。
+   - 根据结果发布下一版。
 
 ## Scope
 
-- `packages/core/src/worker/executor/*`
-- `packages/core/src/worker/orchestrator/*`
-- `packages/core/src/worker/runtime.ts`
-- `packages/core/src/worker/management/*`
-- `packages/core/src/config/worker.ts`
-- `packages/shared/src/fleet/*`
-- focused tests for executor defaults, runtime control executor resolution,
-  dead-loop behavior, config schema, and worker info
-- `docs/task/REFACTOR-026.md`
-- `docs/plan/PLAN-192.md`
-- `docs/executor-engines.md`
+第一轮批准后，优先改：
+
+- `GOALS.md`
 - `docs/architecture.md`
-- `docs/changelog.md`
+- README / CLI docs
+- `apps/cli/src/aiworker.ts`
+- `apps/cli/src/commands/worker/*`
+- `apps/api/src/worker/*`
+- `apps/web/src/worker/*`
+- `packages/core/src/worker/*`
+- `packages/storage-sqlite/src/worker/*`
+- `packages/shared/src/soul/*` 或新的 worker pack surface
+
+明确暂不改：
+
+- `packages/gateway*`
+- `apps/web/src/fleet/*`
+- gateway enrollment / remote worker / public deployment routes
+- desktop / Electron
 
 ## Risks
 
-- Worker Admin Chat will become less useful as a direct task runner for
-  engines that require interactive native permissions. This is intentional:
-  Admin Chat is a management/debug surface, not the primary native executor
-  product path.
-- Long-running hung executor processes can remain active without an explicit
-  watchdog. Operators can still set `PROCESS_STALL_TIMEOUT_MS` or executor
-  `timeoutMs` when they want a managed watchdog.
-- Some tests encoded the previous MVP behavior and must be rewritten to guard
-  the new product boundary instead of preserving old compatibility.
+- **产品语义冲突**：当前 GOALS 是 governance runtime；本方案把 worker 主路径改成 business workbench。必须先接受并落文档，否则实现会自相矛盾。
+- **迁移破坏性**：worker.db schema 和 CLI command tree 可能破坏 0.12.x 行为。1.0 前允许，但每个 slice 要明确删除理由。
+- **OD 参照误读**：OD 的 `server.ts` 很大且仍有 `@ts-nocheck`，不能复制巨石结构；只复制 run/workspace/skill/artifact 产品拓扑。
+- **范围回流**：fleet/gateway 一旦重新进入默认路径，S1-S5 会被拖回旧控制面问题。
+- **验证成本**：这不是单次 build 能证明的改造，必须用真实 local worker smoke 和 web smoke 收口。
+
+## Alternatives
+
+1. **保留当前 Project Brain north star，只做 UI 简化。**
+   - 代价：不会解决“产品无法推进”的根因，只是把复杂度换皮。
+
+2. **直接 fork/copy Open Design 架构和技术栈。**
+   - 代价：Next/Express/Node24 与本仓库 Bun/Hono/Vite/release pipeline 冲突；会制造第二个产品，而不是重构 AIWorker。
+
+3. **只做 developer repo worker，放弃 HR/PM 等业务域。**
+   - 代价：短期更容易验证，但违背用户本次“适用领域区分”的方向；建议作为第一个 smoke pack，而不是产品边界。
+
+推荐方案是复制 OD 的产品语法和运行拓扑，保留本仓库的 Bun/Hono/React/Vite 发布基础。
 
 ## Verification
 
-- `bun run --filter '@zonease/aiworker-core' test`
-- focused CLI / API tests touched by config or worker info changes
+每个 slice 至少运行对应 focused tests。完整收口前运行：
+
 - `bun run typecheck`
 - `bun run lint`
 - `bun run test`
 - `bun run build`
 - `git diff --check`
+- source-local worker daemon smoke
+- Worker web browser smoke
+- CLI bundle smoke
+- published-package compact harness if release is included
 
 ## Progress
 
-- 2026-05-09 16:20: Plan created from the confirmed executor interference
-  audit. Implementation started immediately after approval.
-- 2026-05-09 17:05: Implemented executor non-interference defaults: native
-  watchdogs are opt-in, permission auto-approval defaults were removed,
-  task executor reuse for control-plane LLM calls was stopped, dead-loop
-  detection became warning-only, and executor failures now persist a Chat
-  assistant failure message.
-- 2026-05-09 17:15: Final verification passed across typecheck, lint, full
-  test suite, production build, and diff whitespace checks.
+- 2026-05-09 16:31：调查 Open Design 当前 `main` (`4c15ea4`) 与本仓库 worker/CLI/web 结构，创建 draft proposal。
+- 2026-05-09 16:36：按用户授权进入实施；S0 聚焦产品北极星与目标架构文档重置，不改 runtime code。
+- 2026-05-09 16:55：S1A 通过 REFACTOR-027 / PLAN-193 完成 `/api/worker/runs` 兼容层，web submit/continue 已改走 run contract。
+- 2026-05-09 17:02：S1B 通过 REFACTOR-028 / PLAN-194 完成 `aiworker run` 默认 daemon
+  run contract 路径，并保留 `--local` in-process fallback。
+- 2026-05-09 17:12：S2A 通过 REFACTOR-029 / PLAN-195 完成 worker artifact metadata
+  index、read-only REST surface 与 Web API client，保持真实文件仍由 workspace folder 拥有。
+- 2026-05-09 17:20：S3A 通过 REFACTOR-030 / PLAN-196 完成 OD-style worker pack
+  registry 与 CLI list/show；`init` materialization 留给后续 slice。
+- 2026-05-09 18:10：S3B 通过 REFACTOR-031 / PLAN-197 完成 `aiworker init`
+  worker pack materialization；brand-new project 会写入 OD-style `SKILL.md` /
+  `DOMAIN.md` pack assets，并在 policy 中记录 worker pack 来源。
+- 2026-05-09 18:23：S4 通过 REFACTOR-032 / PLAN-198 完成本地 worker daemon
+  lifecycle；`aiworker daemon start/status/stop/logs/check/inspect` 复用现有
+  `up` / `serve`，并以 active scope home 中的 pid/log/metadata 跟踪 detached worker。
+- 2026-05-09 18:27：启动 S5（REFACTOR-033 / PLAN-199）；聚焦 Worker Admin 第一屏
+  workbench，不改 fleet/gateway，不新增后端 API。
+- 2026-05-09 18:42：S5 完成；Worker Admin `/` 已变为 local worker workbench，
+  组合 pack/template picker、composer、run timeline、artifact metadata 和 case review。
+- 2026-05-09 18:44：启动 S6（REFACTOR-034 / PLAN-200）；复用现有 Case/Inbox/Admission
+  底层能力，新增 product-facing review/promote surface。
+- 2026-05-09 18:58：S6 完成；新增 `/api/worker/reviews`、root/canonical
+  `review` CLI commands，并把 Worker Web 默认复盘入口收敛到 Reviews / Promote
+  lessons。
+- 2026-05-09 19:00：启动 S7（REFACTOR-035 / PLAN-201）；聚焦补齐 CLI
+  runs/artifacts inspection 和默认 onboarding cleanup，不进入 npm release。
+- 2026-05-09 19:08：S7 完成；local worker 默认 CLI loop 已补齐
+  runs/artifacts inspection，root help 与 CLI docs 已同步到 OD-style workbench path。
+- 2026-05-12 21:20：Superseded by FEAT-060..065 / PLAN-284..289. The current
+  product contract is Host / Soul App dual autonomy, not OD-style reboot,
+  fleet/gateway deferral, or external product concept mapping.

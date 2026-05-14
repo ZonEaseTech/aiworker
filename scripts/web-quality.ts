@@ -13,36 +13,37 @@ interface BundleSize {
 }
 
 interface SizeBaseline {
-  bundles: Record<'fleet' | 'worker', BundleSize>
+  bundles: Record<'worker', BundleSize>
 }
 
-const webBundles = ['fleet', 'worker'] as const
-const criticalCssSelectors = [
-  '.flex',
-  '.h-dvh',
-  '.rounded-sm',
-  '.p-6',
-  '.md\\:flex',
-  '.bg-background',
-  '.bg-soft-stone',
-  '.border-hairline',
-  '.text-foreground',
+const criticalStudioSelectors = [
+  '.entry-shell',
+  '.entry-side',
+  '.newproj',
+  '.entry-main',
+  '.tab-panel-toolbar',
+  '.design-card',
+  '.artifact-rail',
+  '.soul-option',
+  '.template-option',
+  '.modal-settings',
+  '.settings-autosave',
+  '.agent-card',
 ] as const
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url))
 const webRoot = path.join(repoRoot, 'apps/web')
-const webSrc = path.join(webRoot, 'src')
-const sharedRoot = path.join(webSrc, 'shared')
+const sharedRoot = path.join(webRoot, 'src/shared')
 const baselinePath = path.join(webRoot, 'bundle-size-baseline.json')
 
 async function main() {
   const [command, ...args] = process.argv.slice(2)
-  if (command === 'shared-cycles') {
-    await checkSharedCycles()
+  if (command === 'studio-css') {
+    await checkStudioCss()
     return
   }
-  if (command === 'css-utilities') {
-    await checkCssUtilities()
+  if (command === 'shared-cycles') {
+    await checkSharedCycles()
     return
   }
   if (command === 'size-report') {
@@ -92,9 +93,8 @@ async function checkSharedCycles(): Promise<void> {
 
   if (cycles.length > 0) {
     console.error('shared import cycles detected:')
-    for (const cycle of cycles) {
+    for (const cycle of cycles)
       console.error(`- ${cycle.map(rel).join(' -> ')}`)
-    }
     process.exitCode = 1
     return
   }
@@ -161,7 +161,6 @@ function resolveSourceFile(base: string): string | null {
 
 async function reportBundleSizes(writeBaseline: boolean): Promise<void> {
   const bundles: SizeBaseline['bundles'] = {
-    fleet: await measureDir(path.join(webRoot, 'dist/fleet')),
     worker: await measureDir(path.join(webRoot, 'dist/worker')),
   }
 
@@ -172,12 +171,12 @@ async function reportBundleSizes(writeBaseline: boolean): Promise<void> {
   }
 
   const baseline = existsSync(baselinePath)
-    ? JSON.parse(await readFile(baselinePath, 'utf8')) as SizeBaseline
+    ? normalizeBaseline(JSON.parse(await readFile(baselinePath, 'utf8')) as Partial<SizeBaseline>)
     : null
 
   console.log('| bundle | bytes | gzip bytes | baseline bytes | baseline gzip | delta bytes | delta gzip |')
   console.log('|---|---:|---:|---:|---:|---:|---:|')
-  for (const name of ['fleet', 'worker'] as const) {
+  for (const name of ['worker'] as const) {
     const current = bundles[name]
     const base = baseline?.bundles[name]
     console.log([
@@ -192,11 +191,10 @@ async function reportBundleSizes(writeBaseline: boolean): Promise<void> {
     ].join(' | '))
   }
 
-  if (!baseline) {
+  if (!baseline)
     throw new Error(`missing bundle size baseline: ${rel(baselinePath)}`)
-  }
 
-  const overLimit = (['fleet', 'worker'] as const).flatMap((name) => {
+  const overLimit = (['worker'] as const).flatMap((name) => {
     const current = bundles[name]
     const base = baseline.bundles[name]
     return [
@@ -212,39 +210,23 @@ async function reportBundleSizes(writeBaseline: boolean): Promise<void> {
   }
 }
 
-async function checkCssUtilities(): Promise<void> {
-  const failures: string[] = []
+async function checkStudioCss(): Promise<void> {
+  const assetsDir = path.join(webRoot, 'dist/worker/assets')
+  if (!existsSync(assetsDir))
+    throw new Error(`missing worker build assets directory ${rel(assetsDir)}`)
 
-  for (const bundle of webBundles) {
-    const assetsDir = path.join(webRoot, 'dist', bundle, 'assets')
-    if (!existsSync(assetsDir)) {
-      failures.push(`${bundle}: missing build assets directory ${rel(assetsDir)}`)
-      continue
-    }
+  const cssFiles = (await collectFiles(assetsDir))
+    .filter(file => file.endsWith('.css'))
+    .sort()
+  if (cssFiles.length === 0)
+    throw new Error(`no CSS assets found in ${rel(assetsDir)}`)
 
-    const cssFiles = (await collectFiles(assetsDir))
-      .filter(file => file.endsWith('.css'))
-      .sort()
-    if (cssFiles.length === 0) {
-      failures.push(`${bundle}: no CSS assets found in ${rel(assetsDir)}`)
-      continue
-    }
+  const css = (await Promise.all(cssFiles.map(file => readFile(file, 'utf8')))).join('\n')
+  const missing = criticalStudioSelectors.filter(selector => !hasCssSelector(css, selector))
+  if (missing.length > 0)
+    throw new Error(`worker studio CSS missing ${missing.join(', ')} in ${cssFiles.map(rel).join(', ')}`)
 
-    const css = (await Promise.all(cssFiles.map(file => readFile(file, 'utf8')))).join('\n')
-    const missing = criticalCssSelectors.filter(selector => !hasCssSelector(css, selector))
-    if (missing.length > 0) {
-      failures.push(`${bundle}: missing ${missing.join(', ')} in ${cssFiles.map(rel).join(', ')}`)
-      continue
-    }
-
-    console.log(`${bundle} CSS utility check passed (${cssFiles.map(rel).join(', ')})`)
-  }
-
-  if (failures.length > 0) {
-    for (const failure of failures)
-      console.error(failure)
-    throw new Error('web CSS utility check failed')
-  }
+  console.log(`worker studio CSS check passed (${cssFiles.map(rel).join(', ')})`)
 }
 
 async function measureDir(dir: string): Promise<BundleSize> {
@@ -275,6 +257,13 @@ async function collectFiles(root: string): Promise<string[]> {
   }
   await walk(root)
   return out
+}
+
+function normalizeBaseline(input: Partial<SizeBaseline>): SizeBaseline | null {
+  const worker = input.bundles?.worker
+  if (!worker)
+    return null
+  return { bundles: { worker } }
 }
 
 function formatDelta(current: number, baseline: number): string {

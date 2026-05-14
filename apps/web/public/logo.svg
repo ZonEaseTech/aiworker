@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" role="img" aria-label="AIWorker">
+  <title>AIWorker</title>
+  <rect x="8" y="8" width="48" height="48" rx="14" fill="#1A1916"/>
+  <path d="M19 43L29.2 20H35L45 43H38.8L36.9 38.2H27L25.1 43H19Z" fill="#FAF9F7"/>
+  <path d="M28.8 33.6H35.1L31.9 25.7L28.8 33.6Z" fill="#C96442"/>
+  <circle cx="46" cy="18" r="5" fill="#C96442"/>
+  <path d="M41.7 45.2L47.2 39.7" stroke="#FAF9F7" stroke-width="3" stroke-linecap="round"/>
+</svg>

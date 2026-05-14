@@ -7,6 +7,10 @@
     ".": {
       "types": "./src/index.ts",
       "import": "./src/index.ts"
+    },
+    "./soul-workbench-catalog": {
+      "types": "./src/soul-workbench-catalog.ts",
+      "import": "./src/soul-workbench-catalog.ts"
     }
   },
   "main": "./src/index.ts",

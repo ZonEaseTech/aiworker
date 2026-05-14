@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-09 (PLAN-192 completed)
+> Updated: 2026-05-14 (PLAN-315 completed)
 
 ## Usage
 
@@ -220,5 +220,127 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-189 Dogfood falsification and release readiness**](PLAN-189.md) `2026-05-09`
 - [x] [**PLAN-190 Case-driven Project Brain learning loop validation**](PLAN-190.md) `2026-05-09`
 - [x] [**PLAN-191 Case-driven Brain loop 0.12.1 release readiness**](PLAN-191.md) `2026-05-09`
-- [x] [**PLAN-192 Executor non-interference boundary**](PLAN-192.md) `2026-05-09`
-- [x] [**PLAN-193 Executor non-interference 0.12.2 release readiness**](PLAN-193.md) `2026-05-09`
+- [~] [**PLAN-192 OD-style local worker reboot**](PLAN-192.md) `2026-05-09`
+- [x] [**PLAN-193 Worker run contract compatibility layer**](PLAN-193.md) `2026-05-09`
+- [x] [**PLAN-194 Route CLI run through daemon run contract**](PLAN-194.md) `2026-05-09`
+- [x] [**PLAN-195 Worker artifact metadata index**](PLAN-195.md) `2026-05-09`
+- [x] [**PLAN-196 OD-style worker pack registry**](PLAN-196.md) `2026-05-09`
+- [x] [**PLAN-197 Project init worker pack materialization**](PLAN-197.md) `2026-05-09`
+- [x] [**PLAN-198 Local worker daemon lifecycle commands**](PLAN-198.md) `2026-05-09`
+- [x] [**PLAN-199 Worker web workbench first screen**](PLAN-199.md) `2026-05-09`
+- [x] [**PLAN-200 Worker review promotion surface**](PLAN-200.md) `2026-05-09`
+- [x] [**PLAN-201 Complete OD-style worker default loop**](PLAN-201.md) `2026-05-09`
+- [x] [**PLAN-202 Hard reset OD-style worker product surface**](PLAN-202.md) `2026-05-09`
+- [x] [**PLAN-203 Greenfield local worker rebuild**](PLAN-203.md) `2026-05-09`
+- [x] [**PLAN-204 Worker Web greenfield studio rebuild**](PLAN-204.md) `2026-05-10`
+- [x] [**PLAN-205 Worker Web Open Design source parity**](PLAN-205.md) `2026-05-10`
+- [x] [**PLAN-206 Worker Web product-detail correction**](PLAN-206.md) `2026-05-10`
+- [x] [**PLAN-207 Vertical Soul product north star reset**](PLAN-207.md) `2026-05-10`
+- [x] [**PLAN-208 Vertical Soul Web IA**](PLAN-208.md) `2026-05-10`
+- [x] [**PLAN-209 Soul and Skill data model**](PLAN-209.md) `2026-05-10`
+- [x] [**PLAN-210 Settings full implementation**](PLAN-210.md) `2026-05-10`
+- [x] [**PLAN-211 End-to-end vertical Soul MVP validation**](PLAN-211.md) `2026-05-10`
+- [~] [**PLAN-212 OD-style vertical Soul workspace correction**](PLAN-212.md) `2026-05-10`
+- [~] [**PLAN-213 OD-style vertical Soul MVP correction validation**](PLAN-213.md) `2026-05-10`
+- [x] [**PLAN-214 Soul project semantics and init artifact purge**](PLAN-214.md) `2026-05-10`
+- [x] [**PLAN-215 Soul project MVP validation**](PLAN-215.md) `2026-05-10`
+- [x] [**PLAN-216 Production-grade Worker Web localization**](PLAN-216.md) `2026-05-10`
+- [x] [**PLAN-217 Worker Web theme switching and dark mode readiness**](PLAN-217.md) `2026-05-10`
+- [x] [**PLAN-218 Host daemon and Soul worker architecture contract**](PLAN-218.md) `2026-05-10`
+- [x] [**PLAN-219 Worker session data contract**](PLAN-219.md) `2026-05-10`
+- [x] [**PLAN-220 Local daemon worker/session API**](PLAN-220.md) `2026-05-10`
+- [x] [**PLAN-221 Worker Web session workspace surface**](PLAN-221.md) `2026-05-10`
+- [x] [**PLAN-222 Host home lifecycle and project-scope removal**](PLAN-222.md) `2026-05-10`
+- [x] [**PLAN-223 Session workspace MVP validation**](PLAN-223.md) `2026-05-10`
+- [x] [**PLAN-224 Worker Web production UX integration**](PLAN-224.md) `2026-05-10`
+- [x] [**PLAN-225 Worker Web session-first interaction model**](PLAN-225.md) `2026-05-10`
+- [x] [**PLAN-226 Worker Web streamed turn visibility and Codex warning cleanup**](PLAN-226.md) `2026-05-10`
+- [x] [**PLAN-227 Worker Web workspace route contextual navigation**](PLAN-227.md) `2026-05-10`
+- [x] [**PLAN-228 Structured local engine adapters**](PLAN-228.md) `2026-05-10`
+- [x] [**PLAN-229 Session invocation result semantics**](PLAN-229.md) `2026-05-10`
+- [x] [**PLAN-230 Worker Web structured session timeline**](PLAN-230.md) `2026-05-10`
+- [x] [**PLAN-231 Structured session end-to-end validation**](PLAN-231.md) `2026-05-10`
+- [x] [**PLAN-232 Worker Web Soul rail and worker identity**](PLAN-232.md) `2026-05-10`
+- [x] [**PLAN-233 Worker-first registry and storage contract**](PLAN-233.md) `2026-05-11`
+- [x] [**PLAN-234 Worker-scoped API and CLI surface**](PLAN-234.md) `2026-05-11`
+- [x] [**PLAN-235 Worker-first Web information architecture**](PLAN-235.md) `2026-05-11`
+- [x] [**PLAN-236 Worker capability and session selection alignment**](PLAN-236.md) `2026-05-11`
+- [x] [**PLAN-237 Worker-first workflow validation**](PLAN-237.md) `2026-05-11`
+- [x] [**PLAN-238 Worker Web design token and control convergence**](PLAN-238.md) `2026-05-11`
+- [x] [**PLAN-239 Worker list and creation dialog refinement**](PLAN-239.md) `2026-05-11`
+- [x] [**PLAN-240 Session composer and right drawer refinement**](PLAN-240.md) `2026-05-11`
+- [x] [**PLAN-241 Worker Web visual polish validation**](PLAN-241.md) `2026-05-11`
+- [x] [**PLAN-242 Worker Web interaction polish follow-up**](PLAN-242.md) `2026-05-11`
+- [x] [**PLAN-243 Worker Web interaction polish validation**](PLAN-243.md) `2026-05-11`
+- [x] [**PLAN-244 Settings dialog autosave and scroll layout repair**](PLAN-244.md) `2026-05-11`
+- [x] [**PLAN-245 Worker Web shared route layout**](PLAN-245.md) `2026-05-11`
+- [x] [**PLAN-246 Worker Web shared layout validation**](PLAN-246.md) `2026-05-11`
+- [x] [**PLAN-247 Mobile session route layout repair**](PLAN-247.md) `2026-05-11`
+- [x] [**PLAN-248 Worker Web architecture modularization**](PLAN-248.md) `2026-05-11`
+- [x] [**PLAN-249 Component package library structure**](PLAN-249.md) `2026-05-11`
+- [x] [**PLAN-250 Worker Web icon button size convergence**](PLAN-250.md) `2026-05-11`
+- [x] [**PLAN-251 Worker Web readiness rail simplification**](PLAN-251.md) `2026-05-11`
+- [x] [**PLAN-252 Worker list rail scroll ownership**](PLAN-252.md) `2026-05-11`
+- [x] [**PLAN-253 Worker Web full-width route shell**](PLAN-253.md) `2026-05-11`
+- [x] [**PLAN-254 Worker workspace card grid layout**](PLAN-254.md) `2026-05-11`
+- [x] [**PLAN-255 Workspace route management layout alignment**](PLAN-255.md) `2026-05-11`
+- [x] [**PLAN-256 Workspace route create-session composer**](PLAN-256.md) `2026-05-11`
+- [x] [**PLAN-257 Select 展开态样式统一**](PLAN-257.md) `2026-05-11`
+- [x] [**PLAN-258 其他工作区筛除当前项**](PLAN-258.md) `2026-05-11`
+- [x] [**PLAN-259 工作区会话新建入口**](PLAN-259.md) `2026-05-11`
+- [x] [**PLAN-260 移除工作区返回 worker 入口**](PLAN-260.md) `2026-05-11`
+- [x] [**PLAN-261 Settings 引擎操作按钮统一**](PLAN-261.md) `2026-05-11`
+- [x] [**PLAN-262 Settings engine icon assets**](PLAN-262.md) `2026-05-11`
+- [x] [**PLAN-263 Visible muted engine icons**](PLAN-263.md) `2026-05-11`
+- [x] [**PLAN-264 Workspace route worker return action**](PLAN-264.md) `2026-05-11`
+- [x] [**PLAN-265 Workspace rail width convergence**](PLAN-265.md) `2026-05-12`
+- [x] [**PLAN-266 Worker home add action convergence**](PLAN-266.md) `2026-05-12`
+- [x] [**PLAN-267 Add actions plus icon button convergence**](PLAN-267.md) `2026-05-12`
+- [x] [**PLAN-268 Count text convergence**](PLAN-268.md) `2026-05-12`
+- [x] [**PLAN-269 Worker list Soul grouping**](PLAN-269.md) `2026-05-12`
+- [x] [**PLAN-270 Worker item trailing status dot**](PLAN-270.md) `2026-05-12`
+- [x] [**PLAN-271 Worker Web design system, component, and motion upgrade**](PLAN-271.md) `2026-05-12`
+- [x] [**PLAN-272 Session route return-to-worker alignment**](PLAN-272.md) `2026-05-12`
+- [x] [**PLAN-273 Session drawer controls and motion polish**](PLAN-273.md) `2026-05-12`
+- [x] [**PLAN-274 Worker Web font token and mono taxonomy**](PLAN-274.md) `2026-05-12`
+- [x] [**PLAN-275 Domain-specific Soul workbench architecture**](PLAN-275.md) `2026-05-12`
+- [x] [**PLAN-276 HR Role Search Cockpit workbench**](PLAN-276.md) `2026-05-12`
+- [x] [**PLAN-277 HR Role Search Cockpit evidence-first UX**](PLAN-277.md) `2026-05-12`
+- [x] [**PLAN-278 HR People Profile Workbench**](PLAN-278.md) `2026-05-12`
+- [x] [**PLAN-279 Session artifact status clarity**](PLAN-279.md) `2026-05-12`
+- [x] [**PLAN-280 Vertical Soul workbench module architecture**](PLAN-280.md) `2026-05-12`
+- [x] [**PLAN-281 HR People Workbench focus layout and artifact preview**](PLAN-281.md) `2026-05-12`
+- [x] [**PLAN-282 HR Profile Workspace three panel layout**](PLAN-282.md) `2026-05-12`
+- [x] [**PLAN-283 HR Profile Workbench panel controls polish**](PLAN-283.md) `2026-05-12`
+- [x] [**PLAN-284 Soul App protocol and manifest contract**](PLAN-284.md) `2026-05-12`
+- [x] [**PLAN-285 Host Soul App registry and mount runtime**](PLAN-285.md) `2026-05-12`
+- [x] [**PLAN-286 Soul App standalone runtime and SDK**](PLAN-286.md) `2026-05-12`
+- [x] [**PLAN-287 Soul App isolation brokers and permission boundary**](PLAN-287.md) `2026-05-12`
+- [x] [**PLAN-288 HR and QA external Soul App reference extraction**](PLAN-288.md) `2026-05-12`
+- [x] [**PLAN-289 Soul App developer onboarding and validation harness**](PLAN-289.md) `2026-05-12`
+- [x] [**PLAN-290 Remove legacy OD and control-plane guidance from current contracts**](PLAN-290.md) `2026-05-12`
+- [x] [**PLAN-291 Soul App app-level autonomy and Host mounted execution**](PLAN-291.md) `2026-05-13`
+- [x] [**PLAN-292 Soul App mounted hardening and authoring readiness**](PLAN-292.md) `2026-05-13`
+- [x] [**PLAN-293 Mounted Surface Protocol and release gate hardening**](PLAN-293.md) `2026-05-13`
+- [x] [**PLAN-294 Host app-only catalog and official Soul App bootstrap**](PLAN-294.md) `2026-05-13`
+- [x] [**PLAN-295 Legacy Soul metadata discard and mounted surface hardening**](PLAN-295.md) `2026-05-13`
+- [x] [**PLAN-296 Worker Web build chunk reduction**](PLAN-296.md) `2026-05-13`
+- [x] [**PLAN-297 Remove legacy gateway and fleet surfaces**](PLAN-297.md) `2026-05-13`
+- [x] [**PLAN-298 Make Host runtime a first-class bounded context**](PLAN-298.md) `2026-05-13`
+- [x] [**PLAN-299 Make Worker Web first-run Soul App first**](PLAN-299.md) `2026-05-13`
+- [x] [**PLAN-300 Soul App development skill and rules**](PLAN-300.md) `2026-05-13`
+- [x] [**PLAN-301 Worker Web Soul Apps placement**](PLAN-301.md) `2026-05-13`
+- [x] [**PLAN-302 Converge Host and Soul App architecture entrypoints**](PLAN-302.md) `2026-05-13`
+- [x] [**PLAN-303 Clean active documentation map**](PLAN-303.md) `2026-05-13`
+- [x] [**PLAN-304 Host platform locator and capability shell boundary**](PLAN-304.md) `2026-05-13`
+- [x] [**PLAN-305 Soul App protocol interaction closure**](PLAN-305.md) `2026-05-14`
+- [x] [**PLAN-306 Soul App broker permission hardening**](PLAN-306.md) `2026-05-14`
+- [x] [**PLAN-307 Soul App storage broker provider and app-owned drafts**](PLAN-307.md) `2026-05-14`
+- [x] [**PLAN-308 Soul App permission visibility and install review**](PLAN-308.md) `2026-05-14`
+- [x] [**PLAN-309 Broker provider registry**](PLAN-309.md) `2026-05-14`
+- [x] [**PLAN-310 Identity boundary**](PLAN-310.md) `2026-05-14`
+- [x] [**PLAN-311 App-owned search index broker**](PLAN-311.md) `2026-05-14`
+- [x] [**PLAN-312 Official Soul App broker proof closure**](PLAN-312.md) `2026-05-14`
+- [x] [**PLAN-313 Host and Soul App developer route onboarding**](PLAN-313.md) `2026-05-14`
+- [x] [**PLAN-314 Agent-operational documentation contract**](PLAN-314.md) `2026-05-14`
+- [x] [**PLAN-315 npm preview release readiness**](PLAN-315.md) `2026-05-14`

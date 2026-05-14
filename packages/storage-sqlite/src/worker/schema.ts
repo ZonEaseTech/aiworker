@@ -1,349 +1,324 @@
-import type {
-  BrainAdmissionDecisionKind,
-  BrainAdmissionEvidence,
-  BrainAdmissionRisk,
-  BrainAdmissionStatus,
-  BrainArtifactSensitivity,
-  BrainArtifactSource,
-  BrainArtifactStatus,
-  ChannelType,
-  SkillBindingSource,
-  SkillDraftSource,
-  SkillDraftStatus,
-  ToolCall,
-  WorkerConfig,
-} from '@zonease/aiworker-shared'
-import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
+import type { SoulAppHealthStatus, SoulAppInstallSourceKind, SoulAppManifest, SoulAppManifestValidationIssue, SoulAppRegistryStatus } from '@zonease/aiworker-shared'
 
-/**
- * worker.db — owned by a single worker container. Every row belongs to the
- * same worker, so no `workerId` column is needed: the whole file is scoped.
- */
+import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 
-export const agentTasks = sqliteTable(
-  'agent_tasks',
+const nowIso = () => new Date().toISOString()
+
+export const workers = sqliteTable(
+  'workers',
   {
     id: text('id').primaryKey(),
-    prompt: text('prompt').notNull(),
-    status: text('status', { enum: ['queued', 'running', 'succeeded', 'failed', 'cancelled'] }).notNull(),
-    conversationId: text('conversation_id'),
-    createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-    finishedAt: text('finished_at'),
-    result: text('result', { mode: 'json' }).$type<Record<string, unknown>>(),
+    soulId: text('soul_id').notNull(),
+    name: text('name').notNull(),
+    status: text('status', { enum: ['active', 'paused', 'disabled'] }).notNull().default('active'),
+    defaultEngineId: text('default_engine_id'),
+    metadataJson: text('metadata_json', { mode: 'json' }).$type<Record<string, unknown>>().notNull().$defaultFn(() => ({})),
+    createdAt: text('created_at').notNull().$defaultFn(nowIso),
+    updatedAt: text('updated_at').notNull().$defaultFn(nowIso),
+  },
+  table => ({
+    soulIdx: index('workers_soul_idx').on(table.soulId),
+    statusUpdatedAtIdx: index('workers_status_updated_at_idx').on(table.status, table.updatedAt),
+  }),
+)
+
+export const workspaces = sqliteTable(
+  'workspaces',
+  {
+    id: text('id').primaryKey(),
+    workerId: text('worker_id').notNull().references(() => workers.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    rootPath: text('root_path').notNull(),
+    type: text('type').notNull().default('workspace'),
+    status: text('status', { enum: ['active', 'archived'] }).notNull().default('active'),
+    sourcePointersJson: text('source_pointers_json', { mode: 'json' }).$type<Record<string, unknown>[]>().notNull().$defaultFn(() => []),
+    metadataJson: text('metadata_json', { mode: 'json' }).$type<Record<string, unknown>>().notNull().$defaultFn(() => ({})),
+    createdAt: text('created_at').notNull().$defaultFn(nowIso),
+    updatedAt: text('updated_at').notNull().$defaultFn(nowIso),
+  },
+  table => ({
+    rootPathIdx: uniqueIndex('workspaces_root_path_idx').on(table.rootPath),
+    statusUpdatedAtIdx: index('workspaces_status_updated_at_idx').on(table.status, table.updatedAt),
+    workerUpdatedAtIdx: index('workspaces_worker_updated_at_idx').on(table.workerId, table.updatedAt),
+  }),
+)
+
+export const sessions = sqliteTable(
+  'sessions',
+  {
+    id: text('id').primaryKey(),
+    workerId: text('worker_id').notNull().references(() => workers.id, { onDelete: 'cascade' }),
+    workspaceId: text('workspace_id').notNull().references(() => workspaces.id, { onDelete: 'cascade' }),
+    capabilityTemplateId: text('capability_template_id').notNull(),
+    title: text('title').notNull(),
+    context: text('context').notNull().default(''),
+    status: text('status', { enum: ['active', 'completed', 'failed', 'cancelled'] }).notNull().default('active'),
+    metadataJson: text('metadata_json', { mode: 'json' }).$type<Record<string, unknown>>().notNull().$defaultFn(() => ({})),
+    startedAt: text('started_at'),
+    endedAt: text('ended_at'),
+    createdAt: text('created_at').notNull().$defaultFn(nowIso),
+    updatedAt: text('updated_at').notNull().$defaultFn(nowIso),
+  },
+  table => ({
+    capabilityUpdatedAtIdx: index('sessions_capability_updated_at_idx').on(table.capabilityTemplateId, table.updatedAt),
+    statusUpdatedAtIdx: index('sessions_status_updated_at_idx').on(table.status, table.updatedAt),
+    workerUpdatedAtIdx: index('sessions_worker_updated_at_idx').on(table.workerId, table.updatedAt),
+    workspaceUpdatedAtIdx: index('sessions_workspace_updated_at_idx').on(table.workspaceId, table.updatedAt),
+  }),
+)
+
+export const turns = sqliteTable(
+  'turns',
+  {
+    id: text('id').primaryKey(),
+    sessionId: text('session_id').notNull().references(() => sessions.id, { onDelete: 'cascade' }),
+    seq: integer('seq').notNull(),
+    input: text('input').notNull(),
+    response: text('response'),
+    status: text('status', { enum: ['queued', 'running', 'succeeded', 'failed', 'cancelled'] }).notNull().default('queued'),
     error: text('error'),
+    metadataJson: text('metadata_json', { mode: 'json' }).$type<Record<string, unknown>>().notNull().$defaultFn(() => ({})),
+    createdAt: text('created_at').notNull().$defaultFn(nowIso),
+    updatedAt: text('updated_at').notNull().$defaultFn(nowIso),
   },
   table => ({
-    createdAtIdx: index('agent_tasks_created_at_idx').on(table.createdAt),
+    sessionSeqIdx: index('turns_session_seq_idx').on(table.sessionId, table.seq),
+    sessionSeqUniqueIdx: uniqueIndex('turns_session_seq_unique_idx').on(table.sessionId, table.seq),
+    statusUpdatedAtIdx: index('turns_status_updated_at_idx').on(table.status, table.updatedAt),
   }),
 )
 
-export const conversations = sqliteTable(
-  'conversations',
+export const engineInvocations = sqliteTable(
+  'engine_invocations',
   {
     id: text('id').primaryKey(),
-    taskId: text('task_id').references(() => agentTasks.id),
-    channel: text('channel').$type<ChannelType>().notNull(),
-    chatId: text('chat_id').notNull(),
-    threadId: text('thread_id'),
-    status: text('status', { enum: ['open', 'closed'] }).notNull().default('open'),
+    sessionId: text('session_id').notNull().references(() => sessions.id, { onDelete: 'cascade' }),
+    turnId: text('turn_id').notNull().references(() => turns.id, { onDelete: 'cascade' }),
+    seq: integer('seq').notNull(),
+    engineId: text('engine_id').notNull(),
+    engineCommand: text('engine_command'),
+    status: text('status', { enum: ['queued', 'running', 'succeeded', 'failed', 'cancelled'] }).notNull().default('queued'),
+    prompt: text('prompt').notNull(),
     summary: text('summary'),
-    startedAt: text('started_at').notNull().$defaultFn(() => new Date().toISOString()),
-    lastActiveAt: text('last_active_at').notNull().$defaultFn(() => new Date().toISOString()),
-    closedAt: text('closed_at'),
+    error: text('error'),
+    metadataJson: text('metadata_json', { mode: 'json' }).$type<Record<string, unknown>>().notNull().$defaultFn(() => ({})),
+    startedAt: text('started_at'),
+    finishedAt: text('finished_at'),
+    createdAt: text('created_at').notNull().$defaultFn(nowIso),
+    updatedAt: text('updated_at').notNull().$defaultFn(nowIso),
   },
   table => ({
-    // findOpenConversation: WHERE channel=? AND chatId=? [AND threadId=?] AND status=?
-    lookupIdx: index('conversations_lookup_idx').on(table.channel, table.chatId, table.threadId, table.status),
-    // ORDER BY last_active_at DESC LIMIT 200（SQLite 可反向扫普通索引）
-    lastActiveAtIdx: index('conversations_last_active_at_idx').on(table.lastActiveAt),
+    engineUpdatedAtIdx: index('engine_invocations_engine_updated_at_idx').on(table.engineId, table.updatedAt),
+    sessionSeqIdx: index('engine_invocations_session_seq_idx').on(table.sessionId, table.seq),
+    statusUpdatedAtIdx: index('engine_invocations_status_updated_at_idx').on(table.status, table.updatedAt),
+    turnIdx: index('engine_invocations_turn_idx').on(table.turnId),
   }),
 )
 
-export const sessionEntries = sqliteTable(
-  'session_entries',
-  {
-    sessionKey: text('session_key').primaryKey(),
-    currentConversationId: text('current_conversation_id').notNull().references(() => conversations.id),
-    channel: text('channel').$type<ChannelType>().notNull(),
-    chatId: text('chat_id').notNull(),
-    threadId: text('thread_id'),
-    accountId: text('account_id'),
-    status: text('status', { enum: ['active', 'closed'] }).notNull().default('active'),
-    sessionStartedAt: text('session_started_at').notNull().$defaultFn(() => new Date().toISOString()),
-    lastInteractionAt: text('last_interaction_at').notNull().$defaultFn(() => new Date().toISOString()),
-    resetAt: text('reset_at'),
-    resetReason: text('reset_reason'),
-    contextTokens: integer('context_tokens').notNull().default(0),
-    totalTokens: integer('total_tokens').notNull().default(0),
-    totalTokensFresh: integer('total_tokens_fresh').notNull().default(0),
-    compactionCount: integer('compaction_count').notNull().default(0),
-    memoryFlushAt: text('memory_flush_at'),
-    memoryFlushCompactionCount: integer('memory_flush_compaction_count').notNull().default(0),
-    engineBindings: text('engine_bindings', { mode: 'json' }).$type<Record<string, unknown>>().notNull().$defaultFn(() => ({})),
-    createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-    updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()),
-  },
-  table => ({
-    currentConversationIdIdx: index('session_entries_current_conversation_id_idx').on(table.currentConversationId),
-    lastInteractionAtIdx: index('session_entries_last_interaction_at_idx').on(table.lastInteractionAt),
-  }),
-)
-
-export const messages = sqliteTable(
-  'messages',
+export const sessionEvents = sqliteTable(
+  'session_events',
   {
     id: integer('id').primaryKey({ autoIncrement: true }),
-    conversationId: text('conversation_id').notNull().references(() => conversations.id, { onDelete: 'cascade' }),
-    role: text('role', { enum: ['system', 'user', 'assistant', 'tool'] }).notNull(),
-    content: text('content').notNull(),
-    toolCalls: text('tool_calls', { mode: 'json' }).$type<ToolCall[]>(),
-    toolCallId: text('tool_call_id'),
-    tokensIn: integer('tokens_in'),
-    tokensOut: integer('tokens_out'),
-    // JSON 字符串：envelope 附带的 reply / edit / delete / reactions 等元信息。
-    richMetadata: text('rich_metadata'),
-    createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+    sessionId: text('session_id').notNull().references(() => sessions.id, { onDelete: 'cascade' }),
+    turnId: text('turn_id').references(() => turns.id, { onDelete: 'set null' }),
+    invocationId: text('invocation_id').references(() => engineInvocations.id, { onDelete: 'set null' }),
+    seq: integer('seq').notNull(),
+    type: text('type', {
+      enum: ['status', 'assistant_delta', 'tool', 'file_change', 'artifact', 'review', 'lesson', 'error', 'log'],
+    }).notNull(),
+    payloadJson: text('payload_json', { mode: 'json' }).$type<Record<string, unknown>>().notNull().$defaultFn(() => ({})),
+    createdAt: text('created_at').notNull().$defaultFn(nowIso),
   },
   table => ({
-    conversationIdIdx: index('messages_conversation_id_idx').on(table.conversationId),
+    sessionCreatedAtIdx: index('session_events_session_created_at_idx').on(table.sessionId, table.createdAt),
+    sessionSeqIdx: index('session_events_session_seq_idx').on(table.sessionId, table.seq),
+    sessionSeqUniqueIdx: uniqueIndex('session_events_session_seq_unique_idx').on(table.sessionId, table.seq),
   }),
 )
 
-export const executionLogs = sqliteTable(
-  'execution_logs',
+export const files = sqliteTable(
+  'files',
+  {
+    id: text('id').primaryKey(),
+    workspaceId: text('workspace_id').notNull().references(() => workspaces.id, { onDelete: 'cascade' }),
+    path: text('path').notNull(),
+    kind: text('kind', { enum: ['file', 'directory', 'generated', 'uploaded'] }).notNull().default('file'),
+    size: integer('size'),
+    mtime: integer('mtime'),
+    hash: text('hash'),
+    source: text('source', { enum: ['user', 'session', 'system'] }).notNull().default('user'),
+    createdAt: text('created_at').notNull().$defaultFn(nowIso),
+    updatedAt: text('updated_at').notNull().$defaultFn(nowIso),
+  },
+  table => ({
+    kindIdx: index('files_kind_idx').on(table.kind),
+    pathUniqueIdx: uniqueIndex('files_workspace_path_idx').on(table.workspaceId, table.path),
+    workspaceUpdatedAtIdx: index('files_workspace_updated_at_idx').on(table.workspaceId, table.updatedAt),
+  }),
+)
+
+export const artifacts = sqliteTable(
+  'artifacts',
+  {
+    id: text('id').primaryKey(),
+    workspaceId: text('workspace_id').notNull().references(() => workspaces.id, { onDelete: 'cascade' }),
+    sessionId: text('session_id').references(() => sessions.id, { onDelete: 'set null' }),
+    turnId: text('turn_id').references(() => turns.id, { onDelete: 'set null' }),
+    invocationId: text('invocation_id').references(() => engineInvocations.id, { onDelete: 'set null' }),
+    path: text('path').notNull(),
+    kind: text('kind').notNull().default('file'),
+    title: text('title').notNull(),
+    status: text('status', { enum: ['available', 'missing', 'archived'] }).notNull().default('available'),
+    metadataJson: text('metadata_json', { mode: 'json' }).$type<Record<string, unknown>>().notNull().$defaultFn(() => ({})),
+    createdAt: text('created_at').notNull().$defaultFn(nowIso),
+    updatedAt: text('updated_at').notNull().$defaultFn(nowIso),
+  },
+  table => ({
+    sessionUpdatedAtIdx: index('artifacts_session_updated_at_idx').on(table.sessionId, table.updatedAt),
+    statusUpdatedAtIdx: index('artifacts_status_updated_at_idx').on(table.status, table.updatedAt),
+    workspaceUpdatedAtIdx: index('artifacts_workspace_updated_at_idx').on(table.workspaceId, table.updatedAt),
+  }),
+)
+
+export const reviews = sqliteTable(
+  'reviews',
+  {
+    id: text('id').primaryKey(),
+    workspaceId: text('workspace_id').notNull().references(() => workspaces.id, { onDelete: 'cascade' }),
+    sessionId: text('session_id').references(() => sessions.id, { onDelete: 'set null' }),
+    turnId: text('turn_id').references(() => turns.id, { onDelete: 'set null' }),
+    artifactId: text('artifact_id').references(() => artifacts.id, { onDelete: 'set null' }),
+    verdict: text('verdict', { enum: ['pass', 'warn', 'fail', 'needs_review'] }).notNull().default('needs_review'),
+    findingsJson: text('findings_json', { mode: 'json' }).$type<Record<string, unknown>[]>().notNull().$defaultFn(() => []),
+    risksJson: text('risks_json', { mode: 'json' }).$type<Record<string, unknown>[]>().notNull().$defaultFn(() => []),
+    createdAt: text('created_at').notNull().$defaultFn(nowIso),
+  },
+  table => ({
+    artifactCreatedAtIdx: index('reviews_artifact_created_at_idx').on(table.artifactId, table.createdAt),
+    sessionCreatedAtIdx: index('reviews_session_created_at_idx').on(table.sessionId, table.createdAt),
+    workspaceCreatedAtIdx: index('reviews_workspace_created_at_idx').on(table.workspaceId, table.createdAt),
+  }),
+)
+
+export const lessons = sqliteTable(
+  'lessons',
+  {
+    id: text('id').primaryKey(),
+    workspaceId: text('workspace_id').notNull().references(() => workspaces.id, { onDelete: 'cascade' }),
+    sourceReviewId: text('source_review_id').references(() => reviews.id, { onDelete: 'set null' }),
+    statement: text('statement').notNull(),
+    evidenceJson: text('evidence_json', { mode: 'json' }).$type<Record<string, unknown>[]>().notNull().$defaultFn(() => []),
+    status: text('status', { enum: ['proposed', 'accepted', 'rejected'] }).notNull().default('proposed'),
+    createdAt: text('created_at').notNull().$defaultFn(nowIso),
+    updatedAt: text('updated_at').notNull().$defaultFn(nowIso),
+  },
+  table => ({
+    statusUpdatedAtIdx: index('lessons_status_updated_at_idx').on(table.status, table.updatedAt),
+    workspaceUpdatedAtIdx: index('lessons_workspace_updated_at_idx').on(table.workspaceId, table.updatedAt),
+  }),
+)
+
+export const soulApps = sqliteTable(
+  'soul_apps',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    version: text('version').notNull(),
+    protocol: text('protocol').notNull(),
+    soulId: text('soul_id').notNull(),
+    status: text('status', { enum: ['installed', 'enabled', 'disabled', 'error'] }).$type<SoulAppRegistryStatus>().notNull().default('installed'),
+    sourceKind: text('source_kind', { enum: ['manifest-path', 'inline'] }).$type<SoulAppInstallSourceKind>().notNull(),
+    sourceRef: text('source_ref').notNull(),
+    manifestDigest: text('manifest_digest').notNull(),
+    manifestJson: text('manifest_json', { mode: 'json' }).$type<SoulAppManifest>().notNull(),
+    validationIssuesJson: text('validation_issues_json', { mode: 'json' }).$type<SoulAppManifestValidationIssue[]>().notNull().$defaultFn(() => []),
+    healthStatus: text('health_status', { enum: ['unknown', 'pass', 'warn', 'fail'] }).$type<SoulAppHealthStatus>().notNull().default('unknown'),
+    healthMessage: text('health_message'),
+    installedAt: text('installed_at').notNull().$defaultFn(nowIso),
+    enabledAt: text('enabled_at'),
+    disabledAt: text('disabled_at'),
+    lastHealthcheckAt: text('last_healthcheck_at'),
+    createdAt: text('created_at').notNull().$defaultFn(nowIso),
+    updatedAt: text('updated_at').notNull().$defaultFn(nowIso),
+  },
+  table => ({
+    digestIdx: index('soul_apps_manifest_digest_idx').on(table.manifestDigest),
+    soulIdx: index('soul_apps_soul_idx').on(table.soulId),
+    statusUpdatedAtIdx: index('soul_apps_status_updated_at_idx').on(table.status, table.updatedAt),
+  }),
+)
+
+export const soulAppStorageRecords = sqliteTable(
+  'soul_app_storage_records',
+  {
+    id: text('id').primaryKey(),
+    appId: text('app_id').notNull().references(() => soulApps.id, { onDelete: 'cascade' }),
+    namespace: text('namespace').notNull(),
+    key: text('key').notNull(),
+    valueJson: text('value_json', { mode: 'json' }).$type<Record<string, unknown>>().notNull().$defaultFn(() => ({})),
+    workerId: text('worker_id').references(() => workers.id, { onDelete: 'set null' }),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'set null' }),
+    sessionId: text('session_id').references(() => sessions.id, { onDelete: 'set null' }),
+    operatorId: text('operator_id'),
+    createdAt: text('created_at').notNull().$defaultFn(nowIso),
+    updatedAt: text('updated_at').notNull().$defaultFn(nowIso),
+  },
+  table => ({
+    appKeyIdx: uniqueIndex('soul_app_storage_app_key_idx').on(table.appId, table.key),
+    appUpdatedAtIdx: index('soul_app_storage_app_updated_at_idx').on(table.appId, table.updatedAt),
+    namespaceIdx: index('soul_app_storage_namespace_idx').on(table.namespace),
+    workspaceIdx: index('soul_app_storage_workspace_idx').on(table.workspaceId),
+  }),
+)
+
+export const soulAppAuditEvents = sqliteTable(
+  'soul_app_audit_events',
   {
     id: integer('id').primaryKey({ autoIncrement: true }),
-    conversationId: text('conversation_id'),
-    toolName: text('tool_name').notNull(),
-    params: text('params', { mode: 'json' }).$type<Record<string, unknown>>(),
-    result: text('result', { mode: 'json' }).$type<Record<string, unknown>>(),
-    duration: integer('duration'),
-    createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+    appId: text('app_id').notNull().references(() => soulApps.id, { onDelete: 'cascade' }),
+    action: text('action').notNull(),
+    targetKind: text('target_kind').notNull(),
+    target: text('target').notNull(),
+    decision: text('decision', { enum: ['allowed', 'denied'] }).notNull(),
+    reason: text('reason').notNull(),
+    workerId: text('worker_id').references(() => workers.id, { onDelete: 'set null' }),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'set null' }),
+    sessionId: text('session_id').references(() => sessions.id, { onDelete: 'set null' }),
+    operatorId: text('operator_id'),
+    requestJson: text('request_json', { mode: 'json' }).$type<Record<string, unknown>>().notNull().$defaultFn(() => ({})),
+    createdAt: text('created_at').notNull().$defaultFn(nowIso),
   },
   table => ({
-    conversationIdIdx: index('execution_logs_conversation_id_idx').on(table.conversationId),
+    appCreatedAtIdx: index('soul_app_audit_app_created_at_idx').on(table.appId, table.createdAt),
+    contextIdx: index('soul_app_audit_context_idx').on(table.workspaceId, table.sessionId),
+    targetIdx: index('soul_app_audit_target_idx').on(table.targetKind, table.target),
   }),
 )
 
-export const brainJournalEvents = sqliteTable(
-  'brain_journal_events',
-  {
-    id: integer('id').primaryKey({ autoIncrement: true }),
-    taskId: text('task_id').references(() => agentTasks.id),
-    conversationId: text('conversation_id').references(() => conversations.id, { onDelete: 'set null' }),
-    kind: text('kind').notNull(),
-    payload: text('payload', { mode: 'json' }).$type<Record<string, unknown>>().notNull(),
-    createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-  },
-  table => ({
-    conversationCreatedAtIdx: index('brain_journal_events_conversation_created_at_idx').on(table.conversationId, table.createdAt),
-    kindCreatedAtIdx: index('brain_journal_events_kind_created_at_idx').on(table.kind, table.createdAt),
-    taskCreatedAtIdx: index('brain_journal_events_task_created_at_idx').on(table.taskId, table.createdAt),
-  }),
-)
-
-export const skillBindings = sqliteTable(
-  'skill_bindings',
-  {
-    id: integer('id').primaryKey({ autoIncrement: true }),
-    source: text('source').$type<SkillBindingSource>().notNull(),
-    brainName: text('brain_name'),
-    skillName: text('skill_name').notNull(),
-    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
-    priority: integer('priority').notNull().default(0),
-    config: text('config', { mode: 'json' }).$type<Record<string, unknown>>(),
-    createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-    updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()),
-  },
-  table => ({
-    uniqueBinding: uniqueIndex('skill_bindings_source_brain_name_idx').on(table.source, table.brainName, table.skillName),
-  }),
-)
-
-export const skillDrafts = sqliteTable('skill_drafts', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  proposedName: text('proposed_name').notNull(),
-  source: text('source').$type<SkillDraftSource>().notNull(),
-  bodyMarkdown: text('body_markdown').notNull(),
-  rationale: text('rationale').notNull().default(''),
-  status: text('status').$type<SkillDraftStatus>().notNull().default('pending'),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-  decidedAt: text('decided_at'),
-  decidedBy: text('decided_by'),
+export const settings = sqliteTable('settings', {
+  key: text('key').primaryKey(),
+  valueJson: text('value_json', { mode: 'json' }).$type<Record<string, unknown>>().notNull(),
+  updatedAt: text('updated_at').notNull().$defaultFn(nowIso),
 })
 
-export const evolutionObservations = sqliteTable(
-  'evolution_observations',
-  {
-    id: integer('id').primaryKey({ autoIncrement: true }),
-    conversationId: text('conversation_id'),
-    kind: text('kind').notNull(),
-    payload: text('payload', { mode: 'json' }).$type<Record<string, unknown>>().notNull(),
-    noticedAt: text('noticed_at').notNull().$defaultFn(() => new Date().toISOString()),
-  },
-  table => ({
-    noticedAtIdx: index('evolution_observations_noticed_at_idx').on(table.noticedAt),
-  }),
-)
-
-/**
- * Decision pipeline recent samples (TODO-028). Unlike the process-local ring
- * buffer, this table lets one-shot CLI runs contribute to a later
- * `aiworker brain status` invocation in a new process. It is observability
- * data, not audit; bounded reads keep only the latest window per stage.
- */
-export const decisionPipelineSamples = sqliteTable(
-  'decision_pipeline_samples',
-  {
-    id: integer('id').primaryKey({ autoIncrement: true }),
-    stage: text('stage', { enum: ['intent_classifier', 'quality_gate', 'conversation_classifier'] }).notNull(),
-    source: text('source').notNull(),
-    evaluator: text('evaluator').notNull(),
-    reason: text('reason').notNull(),
-    fallback: integer('fallback', { mode: 'boolean' }).notNull().default(false),
-    createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-  },
-  table => ({
-    stageCreatedAtIdx: index('decision_pipeline_samples_stage_created_at_idx').on(table.stage, table.createdAt),
-  }),
-)
-
-// Singleton table: `pk` is always the literal 'default'. Enforced at app layer.
 export const workerIdentity = sqliteTable('worker_identity', {
   pk: text('pk').primaryKey().default('default'),
   workerId: text('worker_id').notNull().unique(),
   apiTokenEnc: text('api_token_enc').notNull(),
   nonce: text('nonce').notNull(),
   authTag: text('auth_tag').notNull(),
-  bootstrapShownAt: text('bootstrap_shown_at').notNull().$defaultFn(() => new Date().toISOString()),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+  bootstrapShownAt: text('bootstrap_shown_at').notNull().$defaultFn(nowIso),
+  createdAt: text('created_at').notNull().$defaultFn(nowIso),
   rotatedAt: text('rotated_at'),
 })
 
-// Singleton table: `pk` is always the literal 'default'. Enforced at app layer.
 export const workerConfig = sqliteTable('worker_config', {
   pk: text('pk').primaryKey().default('default'),
-  configJson: text('config_json', { mode: 'json' }).$type<WorkerConfig>().notNull(),
+  configJson: text('config_json', { mode: 'json' }).$type<Record<string, unknown>>().notNull(),
   version: integer('version').notNull().default(1),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()),
+  updatedAt: text('updated_at').notNull().$defaultFn(nowIso),
   updatedBy: text('updated_by', { enum: ['bootstrap', 'api', 'cli'] }),
 })
-
-/**
- * `cron_jobs` 是 worker 自驱调度的存储位（PLAN-014 §F4）。
- * tick loop 每分钟扫描一次：所有 `enabled=true` 且 `nextRunAt <= now()` 的 row
- * 都会被合成 envelope 喂给 orchestrator.ingest，然后用 cron-parser 算出新的
- * nextRunAt。`accountId` 在 PLAN-014 S1 后随 envelope 必填，cron 默认填
- * `sys:cron`，operator 也可以显式填自定义值（与 web binding.id 形成命名空间隔离）。
- */
-export const cronJobs = sqliteTable(
-  'cron_jobs',
-  {
-    id: text('id').primaryKey(),
-    expression: text('expression').notNull(),
-    prompt: text('prompt').notNull(),
-    channel: text('channel').$type<ChannelType>().notNull(),
-    chatId: text('chat_id').notNull(),
-    accountId: text('account_id').notNull(),
-    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
-    lastRunAt: text('last_run_at'),
-    nextRunAt: text('next_run_at'),
-    createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-    updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()),
-  },
-  table => ({
-    // tick: WHERE enabled=true AND next_run_at <= now —— 复合索引让 planner 走 range scan
-    dueIdx: index('cron_jobs_due_idx').on(table.enabled, table.nextRunAt),
-  }),
-)
-
-/**
- * Brain artifact registry (PLAN-099). Each row registers a piece of business
- * material (resume, code module, ticket, contract, etc.) by ref/hash; the
- * Kernel never copies the content. Soul module declares the artifact `type`
- * universe (PLAN-100); workflow status beyond `active`/`archived`/`removed`
- * is encoded in opaque `metadata`.
- */
-export const brainArtifacts = sqliteTable(
-  'brain_artifacts',
-  {
-    id: text('id').primaryKey(),
-    scopeId: text('scope_id'),
-    type: text('type').notNull(),
-    ref: text('ref').notNull(),
-    hash: text('hash'),
-    source: text('source').$type<BrainArtifactSource>().notNull(),
-    sensitivity: text('sensitivity').$type<BrainArtifactSensitivity>().notNull().default('internal'),
-    retention: text('retention'),
-    status: text('status').$type<BrainArtifactStatus>().notNull().default('active'),
-    summary: text('summary'),
-    evidenceRefs: text('evidence_refs', { mode: 'json' }).$type<readonly string[]>().notNull().$defaultFn(() => []),
-    metadata: text('metadata', { mode: 'json' }).$type<Record<string, unknown>>(),
-    createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-    updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()),
-  },
-  table => ({
-    // list-by-scope+type: fleet/UI inspector path.
-    scopeTypeIdx: index('brain_artifacts_scope_type_idx').on(table.scopeId, table.type),
-    // list-by-status+type: routing pending review / archived inspections.
-    statusTypeIdx: index('brain_artifacts_status_type_idx').on(table.status, table.type),
-    updatedAtIdx: index('brain_artifacts_updated_at_idx').on(table.updatedAt),
-  }),
-)
-
-/**
- * Brain admission proposals (PLAN-101). Generated brain change must enter
- * this table first; service approves / rejects / applies via state machine
- * `pending → approved | rejected → applied | failed`. MVP only materializes
- * `kind === 'memory-add'`; other kinds may approve but stay pre-apply.
- */
-export const brainAdmissionProposals = sqliteTable(
-  'brain_admission_proposals',
-  {
-    id: text('id').primaryKey(),
-    scopeId: text('scope_id'),
-    soulId: text('soul_id').notNull(),
-    kind: text('kind').notNull(),
-    target: text('target').notNull(),
-    summary: text('summary').notNull(),
-    evidence: text('evidence', { mode: 'json' }).$type<readonly BrainAdmissionEvidence[]>().notNull().$defaultFn(() => []),
-    risk: text('risk').$type<BrainAdmissionRisk>().notNull().default('high'),
-    confidence: real('confidence').notNull(),
-    rollback: text('rollback').notNull(),
-    payload: text('payload', { mode: 'json' }).$type<Record<string, unknown> | null>(),
-    status: text('status').$type<BrainAdmissionStatus>().notNull().default('pending'),
-    createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-    updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()),
-  },
-  table => ({
-    statusKindIdx: index('brain_admission_proposals_status_kind_idx').on(table.status, table.kind),
-    scopeIdx: index('brain_admission_proposals_scope_id_idx').on(table.scopeId),
-    createdAtIdx: index('brain_admission_proposals_created_at_idx').on(table.createdAt),
-  }),
-)
-
-/**
- * Brain admission decision log (PLAN-101). Append-only audit trail for
- * approvals / rejections / apply outcomes. Brain Kernel never deletes rows
- * here; CLI / API surfaces redact secret-like values before display.
- */
-export const brainAdmissionDecisions = sqliteTable(
-  'brain_admission_decisions',
-  {
-    id: integer('id').primaryKey({ autoIncrement: true }),
-    proposalId: text('proposal_id').notNull().references(() => brainAdmissionProposals.id, { onDelete: 'cascade' }),
-    decision: text('decision').$type<BrainAdmissionDecisionKind>().notNull(),
-    decidedBy: text('decided_by').notNull(),
-    decidedAt: text('decided_at').notNull().$defaultFn(() => new Date().toISOString()),
-    reason: text('reason'),
-    appliedAt: text('applied_at'),
-    failureReason: text('failure_reason'),
-  },
-  table => ({
-    proposalIdx: index('brain_admission_decisions_proposal_id_idx').on(table.proposalId),
-    decidedAtIdx: index('brain_admission_decisions_decided_at_idx').on(table.decidedAt),
-  }),
-)
 
 export const workerSecrets = sqliteTable('worker_secrets', {
   id: integer('id').primaryKey({ autoIncrement: true }),
@@ -351,6 +326,6 @@ export const workerSecrets = sqliteTable('worker_secrets', {
   valueEnc: text('value_enc').notNull(),
   nonce: text('nonce').notNull(),
   authTag: text('auth_tag').notNull(),
-  createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-  updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString()),
+  createdAt: text('created_at').notNull().$defaultFn(nowIso),
+  updatedAt: text('updated_at').notNull().$defaultFn(nowIso),
 })

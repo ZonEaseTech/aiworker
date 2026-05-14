@@ -1,411 +1,219 @@
 # AIWorker
 
-**English** · [简体中文](./README.zh-CN.md)
+AIWorker 正在重构为面向 team/org 的 **local-first vertical Soul App host**。
 
-Self-hosted, lightweight **Project Brain + Worker/Fleet aggregation runtime**.
-
-- **Worker** owns the Project Brain (filesystem is the source of truth), worker.db, and conversations. External executors (Codex / Claude Code / Hermes / OpenClaw / Cursor, etc.) are invoked through a thin adapter only.
-- **Gateway is an optional control plane**: a single worker runs without one. With multiple workers, the gateway aggregates presence, routing, and audit — it never holds brain or conversation data.
-
-## Why AIWorker exists
-
-AIWorker is not trying to be a smarter coding assistant or a new executor
-platform. If all you need is a better one-off chat or coding agent, use Codex,
-Claude Code, Cursor, Hermes, OpenClaw, or another executor directly.
-
-Use AIWorker when you already trust external executors, but need to run them as
-durable, governed workers bound to a real business scope:
-
-- **Project Brain as an owned asset**: each worker has a filesystem-first,
-  reviewable, portable brain for scope identity, persona, policy, memories,
-  rollups, and brain skills.
-- **Governed self-iteration**: an executor can propose durable brain changes,
-  but memory and brain-skill writes must pass admission, approval,
-  secret-scan, provenance, and audit.
-- **Bring your own executor**: AIWorker does not replace the executor's tool
-  loop, MCP, plugins, sandbox, native sessions, auth, or model routing. It
-  wraps them with scope context, persistence, observation, and governance.
-- **Worker/Fleet operations**: one worker can run alone; many workers can be
-  aggregated by a gateway for presence, routing, logs, approvals, cron, and
-  audit without copying brain, conversations, or secrets into fleet.db.
-
-In short: AIWorker turns existing AI agents into self-hosted, scope-bound,
-auditable business workers. The competitive edge is not "better model output";
-it is durable Project Brain plus governance and fleet operations around the
-executors customers already use.
-
-## Who needs AIWorker
-
-AIWorker is a good fit when you want AI agents to behave less like disposable
-chat windows and more like managed workers tied to real work.
-
-- **Teams that already use AI executors** and want durable scope memory,
-  policy, persona, and reviewable brain files around them.
-- **Operators running agents for business scopes**, such as a code repository,
-  hiring pipeline, finance period, support queue, compliance folder, or
-  operational runbook.
-- **Organizations that need governance before self-learning**, where memory or
-  brain-skill changes can be proposed by an agent but must be reviewed,
-  approved, and audited.
-- **People running more than one worker**, where presence, routing, logs,
-  approvals, schedules, and enrollment need one control plane without moving
-  private brain or conversation data into that control plane.
-- **Customers who need to keep their own data local**, while still using the
-  executor, model, auth, and tool ecosystem they already trust.
-
-If you only need a one-off coding session, a single chat, or a better model
-answer, AIWorker is probably more infrastructure than you need.
-
-## Topology
+它不做另一个 developer engine、admin dashboard 或通用 agent runtime。当前架构以 Host /
+Soul App 双自治为中心：Host 提供本地 daemon、安装启用、鉴权安全、平台设置、能力 broker、
+统一 shell 与协议定位；Soul App 提供垂直领域产品逻辑、standalone 体验、Host mounted 体验、
+领域 UI/API，以及 artifact/profile/review/lesson 的领域语义。
 
 ```text
-Operator / Admin
-  runs `aiworker fleet ...`
-        |
-        | WebSocket control traffic
-        | basicauth + device token
-        v
-+--------------------------------------------------------------------------------+
-| AIWorker Gateway (optional control plane)                                      |
-|                                                                                |
-| fleet.db stores: worker pointers, presence, enrollment state, audit events     |
-| fleet.db does not store: Project Brain, conversations, worker secrets          |
-+---------------------------+----------------------------+-----------------------+
-                            |                            |
-                            | WS relay / routing         | WS relay / routing
-                            v                            v
-                 +----------------------+      +----------------------+
-                 | Worker A             |      | Worker B ... N       |
-                 | owns its own data    |      | owns its own data    |
-                 +----------------------+      +----------------------+
-
-A single worker can also run without the gateway:
-
-+--------------------------------------------------------------------------------+
-| One worker data plane                                                          |
-|                                                                                |
-|  Project Brain (filesystem)        worker.db                                   |
-|  - SOUL / USER / MEMORY            - identity and config                       |
-|  - memories and governance         - conversations and messages                |
-|  - managed native skill            - encrypted local state                     |
-|    projection manifest                                                         |
-|  - native skill files in                                                       |
-|    .agents / .claude                                                           |
-|  - policy and capabilities                                                     |
-|  - admission proposals                                                         |
-|                                                                                |
-|  AIWorker thin adapter                                                         |
-|  - adds scope context and governance                                           |
-|  - observes run / stream / cancel / resume                                     |
-|  - does not replace the executor tool loop                                     |
-|                                                                                |
-|  External executor                                                             |
-|  - Codex / Claude Code / Hermes / OpenClaw / Cursor / ACP / MCP / HTTP         |
-|  - keeps its own MCP, skills, plugins, auth, sandbox, and native sessions      |
-+--------------------------------------------------------------------------------+
+Host -> install/enable Soul App -> Soul worker -> workspace -> session
+  -> Soul App exposed views/actions -> business artifact/profile/review/lesson
 ```
 
-A single worker can run standalone — the gateway is needed only when you want to aggregate multiple workers. The control plane and the data plane are physically isolated: fleet.db never stores brain / conversations / secrets, and worker.db is never reverse-fetched by the gateway. Full architecture and dual-view diagrams: [`docs/architecture.md`](docs/architecture.md). Production-readiness notes and remaining boundaries: [`docs/governance-node-status.md`](docs/governance-node-status.md).
+当前架构合同见 `docs/architecture.md`，其中 `Constraint Registry` 是 Host / Soul App /
+protocol / data / broker / documentation 的硬约束源头。旧北极星文档已经移除，避免开发入口
+被拆成多套叙事。
 
----
+## 文档地图
 
-## Install
+- `docs/architecture.md`：当前架构合同。
+- `docs/cli.md`：当前 CLI 命令参考。
+- `docs/deployment.md`：local daemon、packaged CLI 和 operator 运行手册。
+- `docs/executor-engines.md`：外部 engine 安装、登录和 readiness 说明。
+- `docs/soul-app-developer.md`：Soul App authoring workflow。
 
-```sh
-bun install -g @zonease/aiworker-cli
-# or `bunx @zonease/aiworker-cli --help` (when Bun is already installed)
-# or `npx` / `npm install -g` (Bun is still required at runtime)
+## Developer Route
+
+| 我要修改 | 从这里开始 |
+| --- | --- |
+| Host daemon/API、registry、broker、auth/security、storage metadata | `docs/architecture.md` + `.agents/skills/aiworker-host-dev/SKILL.md` |
+| Host Web Shell、Settings、worker/workspace/session workbench | `docs/architecture.md` + `.agents/skills/aiworker-host-dev/SKILL.md`，前端实现再用 `/pma-web` |
+| CLI lifecycle、daemon/app/worker/workspace/session 命令 | `docs/cli.md` + `.agents/skills/aiworker-host-dev/SKILL.md` |
+| 官方 HR/QA Soul App、manifest、standalone、Host mounted、artifact/profile/review/lesson | `docs/soul-app-developer.md` + `.agents/skills/aiworker-soul-app-dev/SKILL.md` |
+| 新第三方 Soul App | `aiworker app create` + `docs/soul-app-developer.md` + `.agents/skills/aiworker-soul-app-dev/SKILL.md` |
+| Host/Soul App 边界、shared protocol、broker grant | 先读 `docs/architecture.md#constraint-registry`，判断 ownership 后进入 Host 或 Soul App skill |
+
+## 为什么改成这个形态
+
+开发领域已经有成熟的一线 engine。AIWorker 不应该默认以 developer 为中心，更不应该把自己
+做成完整开发平台。Developer Soul 可以存在，但它应服务 code review、release evidence、
+repo report、handoff、risk audit 等 supporting workflows。
+
+AIWorker 的主要价值在更需要组织沉淀的垂直职能：
+
+- HR：candidate screen、interview brief、role rubric、people profile、hiring risk；
+- PM：PRD、decision record、roadmap slice、status report；
+- QA：test plan、regression matrix、defect evidence、release gate；
+- DevOps：deployment checklist、incident review、runbook update、capacity summary；
+- finance/legal/ops：各自领域的审查、模板化输出、证据链和复用经验。
+
+## Soul App 模型
+
+Soul App 是可独立部署、也可挂载到 AIWorker Host 的垂直产品单元。例如 `aiworker-hr`
+可以作为 HR-first 本地应用独立运行，也可以被 Host 挂载，与 `aiworker-qa` 等其他 Soul App
+共存在同一个 local daemon 中。
+
+```text
+Standalone:
+aiworker-hr -> app-local runtime/settings/storage -> HR workspace/session
+
+Host mounted:
+aiworker-host -> app registry -> manifest/protocol -> aiworker-hr / aiworker-qa
 ```
 
-The CLI is Bun-native. The first worker initialization mints a master key and writes it to the worker-local `.env` (project workers use `<project>/.aiworker/local/.env`; explicit/user homes use `<AIWORKER_HOME>/.env`). **The master key must be backed up offline at the org level** — if it is lost, worker.db / fleet.db cannot be decrypted and every worker must re-enroll.
+两种模式应复用同一份 manifest、domain logic、artifact schema、review policy 和权限声明。
+Host 不 import 垂直 app 内部源码；Soul App 不直接控制 Host engine、connector、secret、DB 或
+全局 memory。
 
-Full install and per-platform binaries: [`docs/deployment.md`](docs/deployment.md).
+## Host 的职责
 
----
+Host 是平台定位与能力壳，负责：
 
-## CLI discovery
+- local daemon API 和 Web shell；
+- Soul App registry、install、enable、disable、route 和 mounted launch；
+- Host auth、安全层、session 安全和 grant enforcement；
+- appearance、language、default engine、local MCP、connector、BYOK、autosave 等横向设置；
+- storage、connector evidence、secret reference、log、search、audit 等 broker；
+- worker/workspace/session locator；
+- Host shell layout 和 optional header contract；
+- app protocol discovery、health、descriptor cache 和平台审计。
 
-`aiworker --help` is intentionally short and shows the first-run path. Use
-`aiworker commands` for the complete command index, or scoped help for a role:
+Host 不负责解释 HR profile、QA release verdict、artifact 内容、review verdict 或 lesson/memory
+的领域意义。它只能消费 Soul App 通过协议和 grant 暴露的 view、action、status、descriptor、
+search、review summary、memory summary 或 audit event。
 
-```sh
-aiworker --help
-aiworker commands
-aiworker worker --help
-aiworker fleet --help
-aiworker gateway --help
+## Soul App 的职责
+
+Soul App 是领域主权方，负责：
+
+- 垂直领域 UI/API；
+- workspace type 与 session workflow；
+- capability prompt；
+- artifact schema、内容、生命周期与含义；
+- profile 组合；
+- review rubric 与 verdict 语义；
+- lesson/memory promotion 语义；
+- app-scoped storage content；
+- standalone shell；
+- Host mounted service entrypoints。
+
+例如 HR People Profile 应由 HR App 从候选人 artifact、面试 evidence、人工 review 和业务规则
+组合而成。Host 可以定位并展示 HR App 暴露的 profile view，但不应该知道 profile 如何合成。
+
+## 基础设施模型
+
+```text
+1 Host
+  -> 1 local daemon
+    -> N installed/enabled Soul Apps
+      -> N Soul workers
+        -> N workspaces/projects
+          -> N sessions
+            -> protocol-exposed views/actions/descriptors
 ```
 
----
+- Host 是承载环境，不是垂直产品对象。
+- Local daemon 是唯一的本地控制面，负责 Web/API、SQLite、engine inventory、BYOK、
+  connectors、MCP、settings 和 app registry。
+- Worker 绑定一个 Soul App，并拥有该 app 的 capabilities、domain system、review policy 和
+  app-scoped namespaces。
+- Workspace/project 是某个 worker 下的业务作用域，例如候选人、需求、release、incident 或
+  runbook。
+- Session 是 workspace 内持续上下文，也是 engine native session 的绑定点和接管点。
+- Engine invocation 只是内部审计对象；用户不创建、不维护 run。
 
-## Start a worker (single host, no gateway)
+## Quickstart
 
-The most common path: turn the current business directory into a worker scope, start a local server + admin UI, and chat through the CLI. **No fleet credentials required.**
+目标 operator 路径应是一个本地 daemon 生命周期和一个 Web URL，而不是要求用户分别理解 API
+dev server 与 Web dev server。
 
-```sh
-cd ~/code/my-project
-aiworker up --soul developer            # one shot: init + doctor + executor readiness + serve
+目标 source-checkout 调试入口：
+
+```bash
+aiworker dev
 ```
 
-`aiworker up` lays down the Project Brain layout under `<cwd>/.aiworker/` (worker.db, master key, persona, policy, memories, native skill projection manifest) and projects managed `aiworker-*` executor-native skills under `.agents/skills` and `.claude/skills`. It then runs preflight checks, reports executor readiness, and starts the worker HTTP/admin server (default `:9217`). It does not choose an executor for you; use `aiworker executor select --engine <id> --apply` for that. Pick a Soul from `developer` / `hr-recruiting` / `finance-ops` / `qa-reviewer` / `general-assistant` — Souls shape persona / risk preferences / default brief sections; governance kernel behavior is the same across all Souls.
+目标 packaged/npm preview 入口：
 
-Step-by-step alternative:
-
-```sh
-aiworker init --soul developer                            # only lay out files
-aiworker executor select --engine claude-code --apply     # pick executor (see "Configure the LLM" below)
-aiworker executor doctor --engine claude-code             # check engine CLI + project overlay
-aiworker doctor                                            # overall diagnostics (PASS / WARN / INFO)
-aiworker brain status                                      # inspect brain assets
-aiworker serve --port 9217 --host 127.0.0.1               # start the server
-aiworker run --message 'hello' --chat-id demo             # one-shot CLI turn (no server)
+```bash
+bunx @zonease/aiworker-cli daemon foreground --port 9217
+# or, if Bun is already available for the shim:
+npx @zonease/aiworker-cli daemon foreground --port 9217
 ```
 
-After it is running:
+这是 `0.x preview`：Host Web/API 启动、worker DB migrations，以及官方 HR/QA Soul App
+bootstrap 需要能从 npm package 直接工作。HR/QA 业务 workflow、第三方 Soul App authoring、
+standalone SDK/runtime npm publication 仍是 preview surface，不是 1.0 承诺。
 
-- Admin UI: `http://127.0.0.1:9217/admin/` (loopback by default; public hosts must front it with external auth — see below)
-- Bearer token: `<scope>/.aiworker/local/bootstrap-token.txt`. REST calls must include `Authorization: Bearer <token>`.
-- Brain and conversations stay local. The only outbound traffic is whatever the external executor itself talks to (its own LLM provider).
+Source checkout 调试也走同一个 daemon；先构建一次 Web 静态资源，然后以前台 daemon 托管 Web/API：
 
-New worker-local `.env` files reserve commented gateway enrollment examples.
-`aiworker doctor` also reports gateway enrollment as standalone/configured and
-prints the exact `aiworker env ...` commands when enrollment is optional but not
-yet configured.
-
-Full CLI reference: [`docs/cli.md`](docs/cli.md).
-
----
-
-## Developer repo proof loop
-
-For a repo-scoped developer worker, AIWorker adds a reviewable proof loop around
-the executor:
-
-1. The external executor still performs the work.
-2. Brain Journal records task intent, selected context, executor events, tool
-   signals, authority preflight, Gate verdict, and outcome.
-3. Brain Gate separates hard invariants from Brain Engine review and heuristic
-   quality signals.
-4. Failed or incomplete work can be held or rerun with parent/child lineage.
-5. Useful lessons become Brain Inbox candidates first; canonical memory writes
-   still go through admission approval and apply.
-
-Useful local commands:
-
-```sh
-aiworker run --message "review this change"
-aiworker brain journal show <taskId>
-aiworker brain inbox propose <taskId>
+```bash
+bun run --filter '@zonease/aiworker-web' build
+bun apps/cli/src/aiworker.ts dev --port 9217
 ```
 
-When running the worker HTTP API, operator-triggered reruns are available at:
+打开 Web 后，首屏应帮助用户 install/enable 官方或第三方 Soul App，再创建 Soul worker 与
+workspace/session。Settings 由明确 settings button 打开，支持 Local CLI / BYOK、engine
+scan/test、connectors、MCP、language、appearance、autosave 和 Soul App 管理。
 
-```sh
-curl -X POST \
-  -H "Authorization: Bearer $(cat .aiworker/local/bootstrap-token.txt)" \
-  http://127.0.0.1:9217/api/worker/orchestrator/tasks/<taskId>/rerun
+## 仓库结构
+
+```text
+apps/
+  api/            local daemon API and Worker Web host
+  cli/            aiworker CLI and packaged local daemon entry
+  web/            Host Web Shell and worker workbench
+  aiworker-hr/    official HR Soul App
+  aiworker-qa/    official QA Soul App
+packages/
+  core/              local runtime, Host services and engine adapters
+  storage-sqlite/    worker.db schema, migrations and repositories
+  fs-layout/         AIWORKER_HOME, worker and workspace path helpers
+  shared/            shared schemas, Host/Soul App protocol and utilities
+  component/         shared React UI primitives and patterns
+  soul-app-sdk/      public SDK for Soul App authors
+  soul-app-runtime/  standalone/mounted Soul App runtime harness
 ```
 
-Authority preflight is a truthfulness surface, not a sandbox claim. High-risk
-ambient executor work is marked as observe-only unless the capability is
-explicitly brokered by AIWorker.
+## 开发命令
 
----
+安装依赖：
 
-## Start a fleet (multiple workers + gateway)
-
-The gateway aggregates multiple workers into a fleet: one operator CLI controls all of them, while each worker keeps owning its own brain, conversations, and secrets.
-
-### 1) Start the gateway
-
-```sh
-# Dev / single host: foreground
-aiworker gateway start --host 127.0.0.1 --port 9218
-
-# Server long-run: systemd
-aiworker gateway install systemd --user
-systemctl --user start aiworker-gateway
+```bash
+bun install
 ```
 
-When binding to a non-loopback host you must set:
+常用检查：
 
-```sh
-export INTERNAL_SHARED_SECRET='<≥16 chars>'   # bearer for remote operators
-# Front /ws and /admin/* with Caddy / Cloudflare Access / Logto / etc. (fail-closed)
+```bash
+bun run typecheck
+bun run lint
+bun run test
+bun run check
+bun run build
 ```
 
-Public deployment + Caddy basicauth template: [`docs/deployment-public-https.md`](docs/deployment-public-https.md).
+聚焦命令：
 
-### 2) Enroll a worker (OTP recommended)
-
-The most common path — the worker side carries no fleet credentials, the operator approves an 8-character OTP:
-
-```sh
-# Worker side:
-aiworker init --soul developer
-aiworker env gateway-url wss://your-gateway.example/
-aiworker env display-name my-laptop
-aiworker serve
-# stdout prints an OTP, e.g.  YDCR-ZD8M
+```bash
+bun run --filter '@zonease/aiworker-core' test
+bun run --filter '@zonease/aiworker-api' build
+bun run --filter '@zonease/aiworker-web' build
+bun run --filter '@zonease/aiworker-cli' build:bundle
 ```
 
-`aiworker init` also leaves commented `AIWORKER_GATEWAY_URL` /
-`AIWORKER_DISPLAY_NAME` examples in the worker-local `.env`; keep them
-commented unless you intentionally configure gateway enrollment.
+## 当前路线
 
-```sh
-# Operator side:
-aiworker fleet enroll list                  # see pending OTPs
-aiworker fleet enroll approve YDCR-ZD8M     # approve
-aiworker fleet list                         # the worker is now visible
-```
+当前重构阶段重新排优先级：
 
-The other three enrollment paths (self-enroll for unattended batch setups / manual pair for high-security single-worker / docker auto-launch): [`docs/gateway.md`](docs/gateway.md).
-
-### 3) Operator gateway config
-
-The operator side needs `~/.aiworker/aiworker.json` on first use:
-
-```sh
-mkdir -p ~/.aiworker && chmod 700 ~/.aiworker
-cat > ~/.aiworker/aiworker.json <<EOF
-{
-  "gatewayUrl": "wss://operator:<basicauth-pwd>@your-gateway.example/ws",
-  "deviceId": "op-$(uuidgen)",
-  "deviceToken": "<INTERNAL_SHARED_SECRET>"
-}
-EOF
-chmod 600 ~/.aiworker/aiworker.json
-```
-
-> Same-host loopback skips basicauth and the token: just use `ws://127.0.0.1:9218/ws`.
-
-### 4) Common operator commands
-
-```sh
-# State
-aiworker fleet list
-aiworker fleet remove <workerId>
-
-# Chat (streaming NDJSON)
-aiworker fleet chat <workerId> 'hello'
-aiworker fleet chat <workerId> 'continue' --conversation-id <prev-id>
-
-# Worker config (optimistic-locked)
-aiworker fleet config get <workerId>                          # returns version + config
-aiworker fleet config set <workerId> "$NEW_CFG" --if-match <version>
-
-# Token rotation / logs / cron / per-tool approvals
-aiworker fleet token rotate <workerId>
-aiworker fleet logs <workerId> --follow --tail 200
-aiworker fleet schedule list <workerId>
-aiworker fleet schedule add <workerId> --expression '0 9 * * *' --prompt 'morning brief' --channel web --chat-id daily
-aiworker fleet approvals list
-aiworker fleet approvals grant <workerId> <taskId> <toolCallId>          # allow
-aiworker fleet approvals grant <workerId> <taskId> <toolCallId> --deny
-```
-
----
-
-## Configure the LLM executor
-
-A new worker defaults to `executor: { engine: 'http', variant: 'default' }` and must be switched to a real LLM before it can do anything.
-
-```sh
-# Local:
-aiworker executor select --engine claude-code --variant default --timeout-ms 240000 --apply
-aiworker executor doctor --engine claude-code
-
-# Remote, for a worker in the fleet:
-aiworker fleet config get <workerId>          # grab version + current config
-aiworker fleet config set <workerId> "$NEW" --if-match <version>
-```
-
-Supported engines: `http` (OpenAI / DeepSeek / SiliconFlow / any chat-completions-compatible API), `claude-code`, `codex`, `acp` (gemini / qwen), `cursor`, `mcp`.
-
-Per-engine install / auth recipes (including `claude login`, `codex auth`, secret vault writes, ACP CLI installs): [`docs/executor-engines.md`](docs/executor-engines.md).
-
-`--timeout-ms` on `executor select` sets the executor adapter's per-turn hard
-timeout. `aiworker run --timeout-ms` only controls how long the CLI waits for
-the worker turn to finish.
-
----
-
-## Deployment shapes
-
-| Shape | When | Entry |
-|---|---|---|
-| Bare-process | dev / CI | `aiworker gateway start` / `aiworker serve` in the foreground |
-| systemd (Linux preferred) | server long-run | `aiworker {gateway,worker} install systemd [--user\|--system]` |
-| docker compose | no Bun on host / per-worker isolation | `ops/compose/docker-compose.yml` (GHCR images) |
-
-See [`docs/deployment.md`](docs/deployment.md).
-
----
-
-## Key environment variables
-
-| Variable | Purpose |
-|---|---|
-| `AIWORKER_MASTER_KEY` | 64 hex; AES master key for worker / gateway databases; **must be backed up offline** |
-| `INTERNAL_SHARED_SECRET` | Remote-operator bearer when the gateway is exposed publicly or off loopback (≥16 chars) |
-| `AIWORKER_GATEWAY_URL` | Optional worker-side gateway URL (path + basicauth); set with `aiworker env gateway-url <url>` |
-| `AIWORKER_DISPLAY_NAME` | Optional worker label in the fleet list (defaults to hostname / worker id); set with `aiworker env display-name <name>` |
-| `AIWORKER_HOME` | Explicit worker state root; project scope auto-resolves to `<project>/.aiworker/local` |
-| `AIWORKER_ADMIN_EXTERNAL_AUTH` | Set to `1` if `/admin/*` is fronted by Caddy / Cloudflare Access / Logto / etc. |
-
-Full list: `apps/api/.env.example` + `ops/compose/.env.example`, or [`docs/architecture.md` § Environment](docs/architecture.md).
-
----
-
-## More
-
-- [`docs/architecture.md`](docs/architecture.md) — system layout, data flow, security model, Brain governance boundary, full env table
-- [`docs/governance-node-status.md`](docs/governance-node-status.md) — production-readiness checklist and remaining boundaries
-- [`docs/gateway.md`](docs/gateway.md) — WS protocol (METHODS / EVENTS) and the four enrollment paths
-- [`docs/deployment.md`](docs/deployment.md) — three deployment shapes runbook + troubleshooting + backup checklist
-- [`docs/deployment-public-https.md`](docs/deployment-public-https.md) — public-internet Cloudflare + Caddy overlay (including the BUG-007 fail-closed fix)
-- [`docs/executor-engines.md`](docs/executor-engines.md) — per-engine auth/install
-- [`docs/cli.md`](docs/cli.md) — full CLI reference
-- [`docs/changelog.md`](docs/changelog.md) — release history and end-to-end test notes
-
----
-
-## Development
-
-```sh
-git clone https://github.com/ZonEaseTech/aiworker
-cd aiworker && bun install
-bun run typecheck && bun run lint && bun run test
-```
-
-For local development, run focused package checks while iterating and the full
-gate before publishing or merging. Planning notes, implementation history, and
-release records live in [`docs/plan/`](docs/plan/), [`docs/task/`](docs/task/),
-and [`docs/changelog.md`](docs/changelog.md).
-
----
-
-## Status
-
-> Before going to production, read the readiness table and remaining-boundary
-> section in [`docs/governance-node-status.md`](docs/governance-node-status.md).
-> Before 1.0.0, CLI / API / config shapes may still change.
-
-CLI npm latest: **0.12.0**.
-
-| Module | Status |
-|---|---|
-| Worker and Fleet operations: control plane, enrollment, executor adapters, webhooks, schedules, per-tool approvals, hot reload | ✅ Production |
-| Project Brain governance: reviewed memory changes, secret scanning, provenance events, canonical memory boundary, bypass checks | ✅ GA |
-| Governance regression coverage: 800+ checks across source and packaged CLI, plus long-running worker REST regression | ✅ GA |
-| Memory-write automation | ✅ MVP (`memory-add` is available; other proposal types are rejected until implemented) |
-| Optional LLM-backed Brain reviewer | 🔜 opt-in; default is observe-only heuristic review |
-| Cross-scope runtime isolation | 🔜 currently convention / filesystem only |
-| Web SPA pending UI / Multi-host HA | 🔜 Stage-2 |
-
----
-
-## License
-
-[MIT](LICENSE) © 2026 ZonEase Tech
+1. 架构入口收敛为 `AGENTS.md` + `docs/architecture.md`；
+2. Host 作为平台定位、能力壳、安装启用、安全设置和 shell contract；
+3. Soul App 作为 app-level standalone + Host mounted 垂直产品；
+4. 官方 HR/QA Soul App 通过快捷 install/enable 进入 Host，而不是被 Host 内置；
+5. Worker Web 首屏围绕 Soul App、worker、workspace、session 和 app-owned workbench；
+6. Settings 管理 Local CLI / BYOK、engine scan/test、connectors、MCP、language、
+   appearance、autosave 和 installed Soul Apps；
+7. Host/Soul protocol 继续收敛 view、action、status、descriptor、broker 和 mount mode；
+8. Developer onboarding、验证、发布证据和第三方 app authoring 继续完善。
