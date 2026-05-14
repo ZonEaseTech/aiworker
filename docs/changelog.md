@@ -1,5 +1,11 @@
 # AIWorker Changelog
 
+## 2026-05-14 [progress]
+
+Started FEAT-083 / PLAN-318 to isolate source-checkout development state under
+`~/.aiworker-dev` while preserving packaged CLI default state under
+`~/.aiworker`.
+
 ## 2026-05-14 16:25 [completed] BUG-118 / PLAN-317 — Worker Web legacy orphan worker blank-page repair
 
 Published `@zonease/aiworker-cli@0.13.1` as a patch release for the 0.13.0

@@ -346,3 +346,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-315 npm preview release readiness**](PLAN-315.md) `2026-05-14`
 - [x] [**PLAN-316 CLI 0.13.0 preview minor release**](PLAN-316.md) `2026-05-14`
 - [x] [**PLAN-317 Worker Web legacy orphan worker blank-page repair**](PLAN-317.md) `2026-05-14`
+- [ ] [**PLAN-318 Dev home isolation**](PLAN-318.md) `2026-05-14`
