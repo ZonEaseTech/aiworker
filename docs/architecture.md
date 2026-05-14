@@ -240,6 +240,17 @@ Soul App 拥有自己的完整 shell；Host mounted 模式下，Soul App 只适�
 - app-scoped storage path、bucket prefix 或 object namespace 必须由 Host broker 按 app id
   隔离。
 
+浏览器侧 storage 是 trusted first-party 纪律，不是三方安全沙箱：
+
+- Host Web 自己的 browser storage key 使用 `aiworker:host:*` 前缀；
+- 当前同 realm 运行的 Soul App 只能是一方/官方代码，必须通过 SDK scoped helper 使用
+  `aiworker:app:<appId>:...` 前缀；
+- Soul App 生产代码不得直接使用裸 `localStorage`、`sessionStorage` 或全局 `.clear()`；
+- browser storage 只用于 UI preference、draft、filter 等局部状态，真实业务内容继续走
+  Host broker storage 或 app workspace/object namespace；
+- 未来开放 third-party Soul App 前，必须新增 isolated renderer、worker/protocol 或
+  descriptor-only 设计，不能把当前 first-party discipline 当作三方隔离边界。
+
 ## Engine And MCP
 
 Host 维护默认 engine、local MCP、BYOK、语言、外观和 autosave 等横向配置，并透传给 Soul App
@@ -260,8 +271,11 @@ handoff、risk audit 等，不是产品中心。
   `@zonease/aiworker-api`、`@zonease/aiworker-storage-sqlite`、`@zonease/aiworker-web`。
 - Soul App 生产代码不得 import sibling app 的 `src`。
 - app 之间不共享默认 storage namespace、memory namespace 或 API route。
+- app 之间不共享 browser storage key；Host 使用 `aiworker:host:*`，Soul App 使用
+  SDK scoped `aiworker:app:*`。
 - Secret 只能放 `.env`、vault 或 secret reference；不得写入 manifest、generated app config、
   workspace metadata、DB metadata、日志、prompt、review rubric 或 skill 文件。
+- Secret 不得写入 browser `localStorage` 或 `sessionStorage`。
 - Host broker 必须按 app id、worker id、workspace id 和 grant scope 做边界控制。
 - 1.0.0 前允许破坏性收敛，优先保证当前合同清晰，不保留拖累边界的旧 shim。
 

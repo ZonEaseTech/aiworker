@@ -169,6 +169,13 @@ broker scope, not through caller cookies, caller authorization headers or Host
 private auth internals.
 Host storage broker providers own app-scoped namespaces and access control;
 Soul Apps own stored value semantics.
+Browser `localStorage` and `sessionStorage` are not a durable domain storage
+path. Current same-realm Host mounted Soul Apps are trusted first-party code and
+must use the SDK scoped browser storage helper instead of raw Web Storage APIs.
+Use the helper only for UI state such as filters, drafts and local preferences;
+use broker storage for durable workspace/session/domain records. Do not store
+secrets, bearer tokens, connector credentials or engine credentials in browser
+storage.
 Host broker provider registry exposes storage, connector, audit and
 secret-reference provider metadata through public broker routes. Soul Apps may
 inspect this registry to adapt UX, but must not treat provider names as domain
@@ -186,6 +193,25 @@ review into domain-specific approval logic.
 Use connector broker permissions for external evidence. Do not put secrets in
 manifest files, generated app config, workspace metadata, DB metadata, logs,
 prompts, review rubrics or skill files.
+
+Use `createSoulAppWebStorage(...)` for Host-mounted browser state:
+
+```ts
+const storage = createSoulAppWebStorage({
+  appId,
+  sessionId,
+  workerId,
+  workspaceId,
+})
+
+storage.local.set('filters', { status: 'open' })
+storage.session.set('draft', { body: '...' })
+```
+
+The helper writes only scoped `aiworker:app:<appId>:...` keys and exposes
+`clearScope()` instead of global `localStorage.clear()`. `aiworker app validate`
+fails production Soul App source that directly uses raw `localStorage` or
+`sessionStorage`.
 
 ## Contribution Checklist
 

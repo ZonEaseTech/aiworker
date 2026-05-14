@@ -33,11 +33,13 @@ const hostPrivateRoots = [
   'packages/shared',
   'packages/storage-sqlite',
 ]
+const rawWebStorageMessage = 'Soul Apps must use createSoulAppWebStorage(...) instead of raw browser Web Storage APIs.'
 
 const soulApps = discoverSoulApps()
 const issues: BoundaryIssue[] = [
   ...scanSoulAppImports(soulApps),
   ...scanHostImports(soulApps),
+  ...scanSoulAppWebStorageUsage(soulApps),
 ]
 
 if (issues.length > 0) {
@@ -140,6 +142,19 @@ function scanHostImports(apps: SoulAppWorkspace[]): BoundaryIssue[] {
   return issues
 }
 
+function scanSoulAppWebStorageUsage(apps: SoulAppWorkspace[]): BoundaryIssue[] {
+  const issues: BoundaryIssue[] = []
+  for (const app of apps) {
+    for (const file of listSourceFiles(app.srcDir)) {
+      if (isTestSourceFile(file))
+        continue
+      for (const symbol of rawWebStorageSymbols(readFileSync(file, 'utf8')))
+        issues.push(issue(file, symbol, rawWebStorageMessage))
+    }
+  }
+  return issues
+}
+
 function listSourceFiles(dir: string): string[] {
   const files: string[] = []
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -154,6 +169,33 @@ function listSourceFiles(dir: string): string[] {
       files.push(fullPath)
   }
   return files
+}
+
+function rawWebStorageSymbols(content: string): string[] {
+  const matches: Array<{ index: number, symbol: string }> = []
+  const clearPattern = /\b(?:window\.)?(?:localStorage|sessionStorage)\.clear\s*\(/g
+  for (const match of content.matchAll(clearPattern)) {
+    if (match.index !== undefined)
+      matches.push({ index: match.index, symbol: match[0].replace(/\s*\($/, '') })
+  }
+  const storagePattern = /\b(?:window\.)?(?:localStorage|sessionStorage)\b/g
+  for (const match of content.matchAll(storagePattern)) {
+    if (match.index === undefined)
+      continue
+    const symbol = match[0]
+    const after = content.slice(match.index + symbol.length)
+    if (after.match(/^\s*\.clear\s*\(/))
+      continue
+    matches.push({ index: match.index, symbol })
+  }
+  return matches
+    .sort((left, right) => left.index - right.index)
+    .filter((match, index, items) => items.findIndex(item => item.index === match.index && item.symbol === match.symbol) === index)
+    .map(match => match.symbol)
+}
+
+function isTestSourceFile(file: string): boolean {
+  return /\.(?:test|spec)\.[cm]?[jt]sx?$/.test(file)
 }
 
 function importSpecifiers(content: string): string[] {

@@ -412,4 +412,37 @@ describe('aiworker local CLI', () => {
       message: 'Soul Apps must use @zonease/aiworker-soul-app-sdk instead of Host private packages or sibling Soul Apps.',
     }])
   })
+
+  it('fails Soul App validation on raw browser storage usage', async () => {
+    const appDir = path.join(root, 'raw-storage-app')
+
+    expect(await runCli(argv('app', 'create', 'raw-storage-app', '--dir', appDir))).toBe(0)
+    output = ''
+    await writeFile(path.join(appDir, 'src/raw-storage.ts'), [
+      'localStorage.setItem("theme", "dark")',
+      'window.sessionStorage.clear()',
+      '',
+    ].join('\n'))
+
+    expect(await runCli(argv('app', 'validate', appDir))).toBe(1)
+    const validation = JSON.parse(output) as {
+      validation: {
+        status: string
+        webStorageIssues: Array<{ file: string, message: string, symbol: string }>
+      }
+    }
+    expect(validation.validation.status).toBe('fail')
+    expect(validation.validation.webStorageIssues).toEqual([
+      {
+        file: 'src/raw-storage.ts',
+        message: 'Soul Apps must use createSoulAppWebStorage(...) instead of raw browser Web Storage APIs.',
+        symbol: 'localStorage',
+      },
+      {
+        file: 'src/raw-storage.ts',
+        message: 'Soul Apps must use createSoulAppWebStorage(...) instead of raw browser Web Storage APIs.',
+        symbol: 'window.sessionStorage.clear',
+      },
+    ])
+  })
 })

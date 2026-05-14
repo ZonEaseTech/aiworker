@@ -69,6 +69,60 @@ export interface SoulAppBrokerContextQuery {
   workspaceId?: string
 }
 
+export interface SoulAppWebStorageOptions {
+  appId: string
+  localStorage?: SoulAppStorageLike
+  sessionId?: string
+  sessionStorage?: SoulAppStorageLike
+  workerId?: string
+  workspaceId?: string
+}
+
+export interface SoulAppStorageLike {
+  readonly length: number
+  getItem: (key: string) => string | null
+  key: (index: number) => string | null
+  removeItem: (key: string) => void
+  setItem: (key: string, value: string) => void
+}
+
+export interface SoulAppWebStorageFacade {
+  clearScope: () => SoulAppWebStorageClearResult
+  get: <T = unknown>(key: string) => SoulAppWebStorageReadResult<T>
+  key: (key: string) => string
+  remove: (key: string) => SoulAppWebStorageWriteResult
+  set: (key: string, value: unknown) => SoulAppWebStorageWriteResult
+}
+
+export interface SoulAppWebStorage {
+  local: SoulAppWebStorageFacade
+  session: SoulAppWebStorageFacade
+}
+
+export type SoulAppWebStorageReadResult<T>
+  = | { ok: true, value: T | null }
+    | SoulAppWebStorageFailure
+
+export type SoulAppWebStorageWriteResult
+  = | { ok: true }
+    | SoulAppWebStorageFailure
+
+export type SoulAppWebStorageClearResult
+  = | { ok: true, removed: number }
+    | SoulAppWebStorageFailure
+
+export type SoulAppWebStorageFailureCode
+  = | 'invalid_key'
+    | 'parse_error'
+    | 'serialize_error'
+    | 'storage_unavailable'
+
+export interface SoulAppWebStorageFailure {
+  code: SoulAppWebStorageFailureCode
+  message: string
+  ok: false
+}
+
 export function defineSoulApp(input: SoulAppProtocolHandlers): SoulAppDefinition {
   const manifest = soulAppManifestSchema.parse(input.manifest)
   return {
@@ -82,6 +136,15 @@ export function createSoulAppManifest(input: unknown, options: SoulAppManifestVa
   if (result.status !== 'valid' || !result.manifest)
     throw new Error(result.issues.map(issue => `${issue.path ?? '<root>'}: ${issue.message}`).join('; ') || 'Invalid Soul App manifest.')
   return result.manifest
+}
+
+export function createSoulAppWebStorage(options: SoulAppWebStorageOptions): SoulAppWebStorage {
+  const localPrefix = scopedBrowserStoragePrefix(options, 'local')
+  const sessionPrefix = scopedBrowserStoragePrefix(options, 'session')
+  return {
+    local: createSoulAppWebStorageFacade(options.localStorage ?? globalStorage('localStorage'), localPrefix),
+    session: createSoulAppWebStorageFacade(options.sessionStorage ?? globalStorage('sessionStorage'), sessionPrefix),
+  }
 }
 
 export function createSoulAppClient(options: SoulAppClientOptions) {
@@ -201,6 +264,115 @@ export function createSoulAppClient(options: SoulAppClientOptions) {
       return json(`/api/local/apps/${options.appId}`)
     },
   }
+}
+
+function createSoulAppWebStorageFacade(storage: SoulAppStorageLike | undefined, prefix: string): SoulAppWebStorageFacade {
+  function key(key: string): string {
+    return `${prefix}:${key}`
+  }
+
+  function validKey(input: string): SoulAppWebStorageFailure | null {
+    if (!input || input.startsWith('/') || input.startsWith('aiworker:') || input.includes('://')) {
+      return {
+        code: 'invalid_key',
+        message: 'Soul App browser storage key must be a non-empty relative key.',
+        ok: false,
+      }
+    }
+    return null
+  }
+
+  function unavailable(): SoulAppWebStorageFailure {
+    return {
+      code: 'storage_unavailable',
+      message: 'Browser storage is unavailable for this Soul App scope.',
+      ok: false,
+    }
+  }
+
+  return {
+    clearScope(): SoulAppWebStorageClearResult {
+      if (!storage)
+        return unavailable()
+      try {
+        const keys: string[] = []
+        for (let index = 0; index < storage.length; index++) {
+          const item = storage.key(index)
+          if (item?.startsWith(`${prefix}:`))
+            keys.push(item)
+        }
+        for (const item of keys)
+          storage.removeItem(item)
+        return { ok: true, removed: keys.length }
+      }
+      catch {
+        return unavailable()
+      }
+    },
+    get<T = unknown>(input: string): SoulAppWebStorageReadResult<T> {
+      const failure = validKey(input)
+      if (failure)
+        return failure
+      if (!storage)
+        return unavailable()
+      try {
+        const value = storage.getItem(key(input))
+        if (value === null)
+          return { ok: true, value: null }
+        return { ok: true, value: JSON.parse(value) as T }
+      }
+      catch (error) {
+        return error instanceof SyntaxError
+          ? { code: 'parse_error', message: 'Browser storage value is not valid JSON.', ok: false }
+          : unavailable()
+      }
+    },
+    key,
+    remove(input: string): SoulAppWebStorageWriteResult {
+      const failure = validKey(input)
+      if (failure)
+        return failure
+      if (!storage)
+        return unavailable()
+      try {
+        storage.removeItem(key(input))
+        return { ok: true }
+      }
+      catch {
+        return unavailable()
+      }
+    },
+    set(input: string, value: unknown): SoulAppWebStorageWriteResult {
+      const failure = validKey(input)
+      if (failure)
+        return failure
+      if (!storage)
+        return unavailable()
+      try {
+        storage.setItem(key(input), JSON.stringify(value))
+        return { ok: true }
+      }
+      catch (error) {
+        return error instanceof TypeError
+          ? { code: 'serialize_error', message: 'Browser storage value is not JSON serializable.', ok: false }
+          : unavailable()
+      }
+    },
+  }
+}
+
+function scopedBrowserStoragePrefix(options: SoulAppWebStorageOptions, kind: 'local' | 'session'): string {
+  const workspaceScope = options.workerId && options.workspaceId
+    ? `${options.workerId}:${options.workspaceId}`
+    : 'app'
+  if (kind === 'session')
+    return `aiworker:app:${options.appId}:${workspaceScope}:session:${options.sessionId ?? 'app'}`
+  return `aiworker:app:${options.appId}:${workspaceScope}:local`
+}
+
+function globalStorage(name: 'localStorage' | 'sessionStorage'): SoulAppStorageLike | undefined {
+  const scope = globalThis as typeof globalThis & Partial<Record<'localStorage' | 'sessionStorage', SoulAppStorageLike>>
+  return scope[name]
 }
 
 function encodeBrokerPath(value: string): string {

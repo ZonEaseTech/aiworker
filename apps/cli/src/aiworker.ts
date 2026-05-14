@@ -715,6 +715,12 @@ interface PrivateImportIssue {
   message: string
 }
 
+interface WebStorageIssue {
+  file: string
+  message: string
+  symbol: string
+}
+
 interface AppValidationResult {
   appId: string | null
   assetIssues: AppValidationIssue[]
@@ -726,6 +732,7 @@ interface AppValidationResult {
   rootDir: string | null
   status: 'fail' | 'pass'
   version: string | null
+  webStorageIssues: WebStorageIssue[]
 }
 
 const HOST_PRIVATE_IMPORT_PREFIXES = [
@@ -742,6 +749,7 @@ const SOUL_APP_PACKAGE_IMPORT_PREFIXES = [
   '@zonease/aiworker-hr',
   '@zonease/aiworker-qa',
 ]
+const RAW_WEB_STORAGE_MESSAGE = 'Soul Apps must use createSoulAppWebStorage(...) instead of raw browser Web Storage APIs.'
 
 function createScaffoldManifest(appId: string): SoulAppManifest {
   const routePrefix = `/api/local/apps/${appId}`
@@ -1449,6 +1457,7 @@ function validateAppAtPath(inputPath: string): AppValidationResult {
       rootDir: null,
       status: 'fail',
       version: null,
+      webStorageIssues: [],
     }
   }
 
@@ -1457,10 +1466,12 @@ function validateAppAtPath(inputPath: string): AppValidationResult {
   const manifest = parsed.status === 'ok' ? parsed.manifest : undefined
   const assetResult = manifest ? validateManifestAssetRefs(resolved.rootDir, manifest) : { checkedAssets: [], issues: [] }
   const privateImportIssues = scanPrivateImports(resolved.rootDir)
+  const webStorageIssues = scanRawWebStorageUsage(resolved.rootDir)
   const status = manifest
     && manifestIssues.every(issue => issue.severity !== 'error')
     && assetResult.issues.every(issue => issue.severity !== 'error')
     && privateImportIssues.length === 0
+    && webStorageIssues.length === 0
     ? 'pass'
     : 'fail'
 
@@ -1475,6 +1486,7 @@ function validateAppAtPath(inputPath: string): AppValidationResult {
     rootDir: resolved.rootDir,
     status,
     version: manifest?.version ?? null,
+    webStorageIssues,
   }
 }
 
@@ -1489,6 +1501,7 @@ function validationReport(result: AppValidationResult) {
     rootDir: result.rootDir,
     status: result.status,
     version: result.version,
+    webStorageIssues: result.webStorageIssues,
   }
 }
 
@@ -1610,6 +1623,53 @@ function scanPrivateImports(rootDir: string): PrivateImportIssue[] {
     }
   }
   return issues
+}
+
+function scanRawWebStorageUsage(rootDir: string): WebStorageIssue[] {
+  const srcDir = path.join(rootDir, 'src')
+  if (!existsSync(srcDir))
+    return []
+  const issues: WebStorageIssue[] = []
+  for (const file of listSourceFiles(srcDir)) {
+    if (isTestSourceFile(file))
+      continue
+    const content = readFileSync(file, 'utf8')
+    for (const symbol of rawWebStorageSymbols(content)) {
+      issues.push({
+        file: path.relative(rootDir, file),
+        message: RAW_WEB_STORAGE_MESSAGE,
+        symbol,
+      })
+    }
+  }
+  return issues
+}
+
+function rawWebStorageSymbols(content: string): string[] {
+  const matches: Array<{ index: number, symbol: string }> = []
+  const clearPattern = /\b(?:window\.)?(?:localStorage|sessionStorage)\.clear\s*\(/g
+  for (const match of content.matchAll(clearPattern)) {
+    if (match.index !== undefined)
+      matches.push({ index: match.index, symbol: match[0].replace(/\s*\($/, '') })
+  }
+  const storagePattern = /\b(?:window\.)?(?:localStorage|sessionStorage)\b/g
+  for (const match of content.matchAll(storagePattern)) {
+    if (match.index === undefined)
+      continue
+    const symbol = match[0]
+    const after = content.slice(match.index + symbol.length)
+    if (after.match(/^\s*\.clear\s*\(/))
+      continue
+    matches.push({ index: match.index, symbol })
+  }
+  return matches
+    .sort((left, right) => left.index - right.index)
+    .filter((match, index, items) => items.findIndex(item => item.index === match.index && item.symbol === match.symbol) === index)
+    .map(match => match.symbol)
+}
+
+function isTestSourceFile(file: string): boolean {
+  return /\.(?:test|spec)\.[cm]?[jt]sx?$/.test(file)
 }
 
 function listSourceFiles(dir: string): string[] {

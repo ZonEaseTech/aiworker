@@ -5,6 +5,7 @@ import { describe, expect, it } from 'bun:test'
 import packageJson from '../package.json' with { type: 'json' }
 import {
   createSoulAppClient,
+  createSoulAppWebStorage,
   defineSoulApp,
   namespaceSoulAppCapabilityId,
 } from './index'
@@ -134,7 +135,165 @@ describe('Soul App SDK authoring boundary', () => {
       'x-aiworker-mount-token': 'mount-token-123',
     })
   })
+
+  it('scopes browser storage keys by app, worker, workspace, and session', () => {
+    const local = new MemoryStorage()
+    const session = new MemoryStorage()
+    const storage = createSoulAppWebStorage({
+      appId: 'demo-soul-app',
+      localStorage: local,
+      sessionId: 'session-1',
+      sessionStorage: session,
+      workerId: 'worker-1',
+      workspaceId: 'workspace-1',
+    })
+
+    expect(storage.local.set('filters', { status: 'open' })).toEqual({ ok: true })
+    expect(storage.session.set('draft', { text: 'hello' })).toEqual({ ok: true })
+
+    expect(local.getItem('aiworker:app:demo-soul-app:worker-1:workspace-1:local:filters')).toBe(JSON.stringify({ status: 'open' }))
+    expect(session.getItem('aiworker:app:demo-soul-app:worker-1:workspace-1:session:session-1:draft')).toBe(JSON.stringify({ text: 'hello' }))
+    expect(storage.local.get('filters')).toEqual({ ok: true, value: { status: 'open' } })
+    expect(storage.session.get('draft')).toEqual({ ok: true, value: { text: 'hello' } })
+  })
+
+  it('clears only the active Soul App browser storage scope', () => {
+    const local = new MemoryStorage()
+    const storage = createSoulAppWebStorage({
+      appId: 'demo-soul-app',
+      localStorage: local,
+      workerId: 'worker-1',
+      workspaceId: 'workspace-1',
+    })
+    const sibling = createSoulAppWebStorage({
+      appId: 'demo-soul-app',
+      localStorage: local,
+      workerId: 'worker-2',
+      workspaceId: 'workspace-1',
+    })
+
+    expect(storage.local.set('filters', { status: 'open' })).toEqual({ ok: true })
+    expect(sibling.local.set('filters', { status: 'closed' })).toEqual({ ok: true })
+    local.setItem('aiworker:host:theme:mode', '"dark"')
+
+    expect(storage.local.clearScope()).toEqual({ ok: true, removed: 1 })
+
+    expect(storage.local.get('filters')).toEqual({ ok: true, value: null })
+    expect(sibling.local.get('filters')).toEqual({ ok: true, value: { status: 'closed' } })
+    expect(local.getItem('aiworker:host:theme:mode')).toBe('"dark"')
+  })
+
+  it('rejects unsafe browser storage keys before touching storage', () => {
+    const local = new MemoryStorage()
+    const storage = createSoulAppWebStorage({
+      appId: 'demo-soul-app',
+      localStorage: local,
+      workerId: 'worker-1',
+      workspaceId: 'workspace-1',
+    })
+
+    expect(storage.local.set('', { ready: true })).toEqual({
+      code: 'invalid_key',
+      message: 'Soul App browser storage key must be a non-empty relative key.',
+      ok: false,
+    })
+    expect(storage.local.set('/absolute', { ready: true })).toEqual({
+      code: 'invalid_key',
+      message: 'Soul App browser storage key must be a non-empty relative key.',
+      ok: false,
+    })
+    expect(local.length).toBe(0)
+  })
+
+  it('reports unavailable browser storage without throwing', () => {
+    const local = new ThrowingStorage('unavailable')
+    const storage = createSoulAppWebStorage({
+      appId: 'demo-soul-app',
+      localStorage: local,
+      workerId: 'worker-1',
+      workspaceId: 'workspace-1',
+    })
+
+    expect(storage.local.set('filters', { status: 'open' })).toEqual({
+      code: 'storage_unavailable',
+      message: 'Browser storage is unavailable for this Soul App scope.',
+      ok: false,
+    })
+    expect(storage.local.get('filters')).toEqual({
+      code: 'storage_unavailable',
+      message: 'Browser storage is unavailable for this Soul App scope.',
+      ok: false,
+    })
+  })
+
+  it('reports invalid JSON values without throwing', () => {
+    const local = new MemoryStorage()
+    const storage = createSoulAppWebStorage({
+      appId: 'demo-soul-app',
+      localStorage: local,
+      workerId: 'worker-1',
+      workspaceId: 'workspace-1',
+    })
+
+    local.setItem(storage.local.key('filters'), '{not json')
+
+    expect(storage.local.get('filters')).toEqual({
+      code: 'parse_error',
+      message: 'Browser storage value is not valid JSON.',
+      ok: false,
+    })
+  })
 })
+
+class MemoryStorage {
+  private readonly values = new Map<string, string>()
+
+  get length(): number {
+    return this.values.size
+  }
+
+  clear(): void {
+    this.values.clear()
+  }
+
+  getItem(key: string): string | null {
+    return this.values.get(key) ?? null
+  }
+
+  key(index: number): string | null {
+    return [...this.values.keys()][index] ?? null
+  }
+
+  removeItem(key: string): void {
+    this.values.delete(key)
+  }
+
+  setItem(key: string, value: string): void {
+    this.values.set(key, value)
+  }
+}
+
+class ThrowingStorage extends MemoryStorage {
+  constructor(private readonly message: string) {
+    super()
+  }
+
+  override getItem(_key: string): string | null {
+    throw new Error(this.message)
+  }
+
+  override key(_index: number): string | null {
+    throw new Error(this.message)
+  }
+
+  override removeItem(_key: string): void {
+    throw new Error(this.message)
+  }
+
+  override setItem(_key: string, _value: string): void {
+    throw new Error(this.message)
+  }
+}
 
 function demoSoulApp(): SoulAppDefinition {
   return defineSoulApp({
