@@ -100,6 +100,40 @@ describe('Soul App SDK authoring boundary', () => {
     expect(calls[4]?.body).toMatchObject({ valueJson: { ready: true } })
     expect(calls[5]?.body).toMatchObject({ query: { candidateId: 'cand-1' } })
   })
+
+  it('sends the mounted app token on broker callbacks without requiring bearer auth', async () => {
+    const calls: Array<{ headers: Record<string, string>, path: string }> = []
+    const client = createSoulAppClient({
+      appId: 'demo-soul-app',
+      fetch: async (input, init) => {
+        calls.push({
+          headers: Object.fromEntries(new Headers(init?.headers).entries()),
+          path: input,
+        })
+        return new Response(JSON.stringify({ ok: true }), {
+          headers: { 'content-type': 'application/json' },
+          status: 200,
+        })
+      },
+      mountToken: 'mount-token-123',
+    })
+
+    await client.broker.permissions.list()
+    await client.broker.storage.put('records/demo', { ready: true })
+
+    expect(calls.map(call => call.path)).toEqual([
+      '/api/local/apps/demo-soul-app/broker/permissions',
+      '/api/local/apps/demo-soul-app/broker/storage/records/demo',
+    ])
+    expect(calls[0]?.headers).toMatchObject({
+      'x-aiworker-mount-token': 'mount-token-123',
+    })
+    expect(calls[0]?.headers).not.toHaveProperty('authorization')
+    expect(calls[1]?.headers).toMatchObject({
+      'content-type': 'application/json',
+      'x-aiworker-mount-token': 'mount-token-123',
+    })
+  })
 })
 
 function demoSoulApp(): SoulAppDefinition {

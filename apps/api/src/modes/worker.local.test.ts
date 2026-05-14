@@ -1122,6 +1122,97 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
     }
   })
 
+  it('accepts a Host-issued mount token for the owning app broker only', async () => {
+    const target = await app('local-token-123456')
+    const authHeaders = { authorization: 'Bearer local-token-123456' }
+    const mountedService = Bun.serve({
+      fetch(request) {
+        const url = new URL(request.url)
+        if (url.pathname === '/health')
+          return Response.json({ status: 'ok' })
+        if (url.pathname === '/domain') {
+          return Response.json({
+            mountToken: request.headers.get('x-aiworker-mount-token'),
+          })
+        }
+        return Response.json({ error: { code: 'NOT_FOUND' } }, { status: 404 })
+      },
+      hostname: '127.0.0.1',
+      port: 0,
+    })
+
+    try {
+      const installRes = await target.request('/api/local/apps/install', {
+        method: 'POST',
+        body: JSON.stringify({
+          manifest: {
+            ...hrSoulAppManifest,
+            api: {
+              ...hrSoulAppManifest.api,
+              localService: {
+                baseUrl: `http://127.0.0.1:${mountedService.port}`,
+                healthPath: '/health',
+              },
+            },
+          },
+        }),
+        headers: { ...authHeaders, 'content-type': 'application/json' },
+      })
+      expect(installRes.status).toBe(201)
+      expect((await target.request('/api/local/apps/aiworker-hr/enable', {
+        method: 'POST',
+        headers: authHeaders,
+      })).status).toBe(200)
+
+      const mountedRes = await target.request('/api/local/apps/aiworker-hr/domain', {
+        headers: authHeaders,
+      })
+      expect(mountedRes.status).toBe(200)
+      const mountedBody = await mountedRes.json() as { mountToken: string | null }
+      expect(mountedBody.mountToken).toMatch(/^[a-f0-9-]{36}$/)
+
+      const writeRes = await target.request('/api/local/apps/aiworker-hr/broker/storage/mount-token/probe?operatorId=mounted-app', {
+        method: 'PUT',
+        body: JSON.stringify({ valueJson: { ok: true } }),
+        headers: {
+          'content-type': 'application/json',
+          'x-aiworker-mount-token': mountedBody.mountToken ?? '',
+        },
+      })
+      expect(writeRes.status).toBe(200)
+      expect(await writeRes.json()).toMatchObject({
+        record: {
+          appId: 'aiworker-hr',
+          key: 'mount-token/probe',
+          operatorId: 'mounted-app',
+        },
+      })
+
+      expect((await target.request('/api/local/info', {
+        headers: { 'x-aiworker-mount-token': mountedBody.mountToken ?? '' },
+      })).status).toBe(401)
+      expect((await target.request('/api/local/apps/aiworker-qa/broker/storage/mount-token/probe', {
+        method: 'PUT',
+        body: JSON.stringify({ valueJson: { ok: true } }),
+        headers: {
+          'content-type': 'application/json',
+          'x-aiworker-mount-token': mountedBody.mountToken ?? '',
+        },
+      })).status).toBe(401)
+      expect((await target.request('/api/local/apps/aiworker-hr/broker/storage/mount-token/probe', {
+        method: 'PUT',
+        body: JSON.stringify({ valueJson: { ok: true } }),
+        headers: {
+          'content-type': 'application/json',
+          'x-aiworker-mount-token': 'not-the-issued-token',
+        },
+      })).status).toBe(401)
+    }
+    finally {
+      mountedService.stop()
+    }
+  })
+
   it('serves Worker Web font assets from the static build', async () => {
     const webStaticDir = join(dir, 'web-static')
     mkdirSync(join(webStaticDir, 'fonts'), { recursive: true })

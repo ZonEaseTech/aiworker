@@ -273,6 +273,7 @@ async function daemonForeground(opts: { host?: string, port?: number } = {}): Pr
   const { bootstrapWorkerApp } = await import('@zonease/aiworker-api/bootstrap')
   const { app, port } = await bootstrapWorkerApp({
     officialAppsRoot: resolveCliOfficialAppsRoot(),
+    runtimeVersion: packageJson.version,
     webStaticDir: resolveCliWorkerWebStaticDir(),
   })
   const env = getWorkerEnv()
@@ -1119,6 +1120,7 @@ function scaffoldReadme(appId: string): string {
     `# ${titleCase(appId)} Soul App`,
     '',
     'This starter app stays inside the public Soul App SDK boundary.',
+    'It is a source-checkout preview scaffold: the generated package uses `workspace:*` while the SDK is still unpublished; replace `workspace:*` after the SDK is published.',
     '',
     '## Local Checks',
     '',

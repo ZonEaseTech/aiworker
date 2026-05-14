@@ -7,7 +7,7 @@ import type { ChildProcessByStdio } from 'node:child_process'
 import type { Readable } from 'node:stream'
 import { Buffer } from 'node:buffer'
 import { spawn, spawnSync } from 'node:child_process'
-import { createHmac, randomUUID } from 'node:crypto'
+import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
 import { mkdir, readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
@@ -184,6 +184,8 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   app.use(requestLogger)
   app.onError(errorHandler)
   app.use('/api/local/*', async (c, next) => {
+    if (authenticateMountedBrokerRequest(c, state))
+      return next()
     const result = state.authProvider.authenticate({ authorization: c.req.header('authorization') })
     if (result.status === 'denied')
       return c.json({ error: { code: 'UNAUTHORIZED', message: result.reason } }, 401)
@@ -709,6 +711,35 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
 export async function createWorkerApp(): Promise<{ app: OpenAPIHono, port: number }> {
   const { app, port } = await bootstrapWorkerApp()
   return { app, port }
+}
+
+function authenticateMountedBrokerRequest(c: Context, state: LocalDaemonState): boolean {
+  const appId = brokerAppIdFromPath(new URL(c.req.url).pathname)
+  if (!appId)
+    return false
+  const token = c.req.header('x-aiworker-mount-token')
+  if (!token)
+    return false
+  const mounted = state.mountedAppServices.get(appId)
+  return mounted ? secureStringEqual(token, mounted.mountToken) : false
+}
+
+function brokerAppIdFromPath(pathname: string): string | null {
+  const match = /^\/api\/local\/apps\/([^/]+)\/broker(?:\/|$)/.exec(pathname)
+  if (!match?.[1])
+    return null
+  try {
+    return decodeURIComponent(match[1])
+  }
+  catch {
+    return null
+  }
+}
+
+function secureStringEqual(actual: string, expected: string): boolean {
+  const actualBytes = Buffer.from(actual)
+  const expectedBytes = Buffer.from(expected)
+  return actualBytes.length === expectedBytes.length && timingSafeEqual(actualBytes, expectedBytes)
 }
 
 async function readJson<T>(request: { json: () => Promise<unknown> }): Promise<T> {

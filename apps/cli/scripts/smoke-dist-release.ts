@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import process from 'node:process'
@@ -17,6 +17,7 @@ async function main(): Promise<number> {
   const cli = resolve(import.meta.dirname, '..', 'dist', 'aiworker.js')
   if (!existsSync(cli))
     throw new Error(`Dist CLI not found: ${cli}. Run bun run build:bundle first.`)
+  const expectedVersion = readDistPackageVersion()
 
   const root = mkdtempSync(join(tmpdir(), 'aiworker-dist-release-'))
   const home = join(root, 'home')
@@ -37,6 +38,7 @@ async function main(): Promise<number> {
       stdout: 'pipe',
     })
     await waitForHealth(port)
+    await assertDaemonRuntimeVersion(port, expectedVersion)
     const html = await assertHttpText(`http://127.0.0.1:${port}/`, /<!doctype html>/i)
     await assertWorkerWebAsset(port, html)
 
@@ -70,6 +72,13 @@ async function main(): Promise<number> {
     }
     rmSync(root, { recursive: true, force: true })
   }
+}
+
+function readDistPackageVersion(): string {
+  const pkg = JSON.parse(readFileSync(resolve(import.meta.dirname, '..', 'dist', 'package.json'), 'utf8')) as { version?: unknown }
+  if (typeof pkg.version !== 'string' || pkg.version.length === 0)
+    throw new Error('dist package.json must include a version')
+  return pkg.version
 }
 
 async function assertCli(cli: string, args: string[], options: { env: NodeJS.ProcessEnv, label: string }): Promise<CommandResult> {
@@ -141,6 +150,12 @@ async function getJson<T>(url: string): Promise<T> {
   if (!res.ok)
     throw new Error(`GET ${url} failed: ${res.status} ${await res.text()}`)
   return await res.json() as T
+}
+
+async function assertDaemonRuntimeVersion(port: number, expectedVersion: string): Promise<void> {
+  const info = await getJson<{ runtimeVersion: string }>(`http://127.0.0.1:${port}/api/local/info`)
+  if (info.runtimeVersion !== expectedVersion)
+    throw new Error(`Expected daemon runtimeVersion ${expectedVersion}, got ${info.runtimeVersion}`)
 }
 
 function assertCatalogApps(apps: Array<{ appId: string, status: string }>): void {

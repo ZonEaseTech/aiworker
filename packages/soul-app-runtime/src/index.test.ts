@@ -58,6 +58,17 @@ describe('Soul App runtime harness', () => {
     expect(standalone.catalog.templates.map(item => item.id)).toEqual([
       namespaceSoulAppCapabilityId('demo-soul-app', 'demo-report'),
     ])
+    expect(standalone.worker).toEqual({
+      defaultEngineId: 'codex',
+      id: 'demo-worker',
+      metadata: expect.objectContaining({
+        domainSoulId: 'demo-soul',
+        soulAppId: 'demo-soul-app',
+      }),
+      name: 'Demo Worker',
+      soulId: 'demo-soul-app',
+    })
+    expect(standalone.worker).not.toHaveProperty('metadataJson')
     expect(standalone.snapshot().worker.soulId).toBe('demo-soul-app')
     expect(standalone.snapshot().worker.metadataJson.domainSoulId).toBe('demo-soul')
 

@@ -8,6 +8,7 @@ import { hrReferenceSoulApp, hrSoulAppManifest } from './index'
 interface MountContext {
   brokerUrl?: string
   hostUrl?: string
+  mountToken?: string
   operatorId?: string | null
   sessionId?: string | null
   surface?: {
@@ -64,7 +65,11 @@ export function serveHostMounted(port = Number(Bun.env.PORT ?? 0)) {
         const hostUrl = request.headers.get('x-aiworker-host-url') ?? Bun.env.AIWORKER_HOST_URL
         if (!hostUrl)
           return Response.json({ appId: hrSoulAppManifest.id, broker: 'not-configured', permissions: [] })
-        const client = createSoulAppClient({ appId: hrSoulAppManifest.id, baseUrl: hostUrl })
+        const client = createSoulAppClient({
+          appId: hrSoulAppManifest.id,
+          baseUrl: hostUrl,
+          mountToken: request.headers.get('x-aiworker-mount-token') ?? undefined,
+        })
         return Response.json(await client.broker.permissions.list())
       }
       if (url.pathname === '/protocol/capabilities') {
@@ -192,7 +197,11 @@ async function persistPeopleProfileDraft(request: Request): Promise<{ message: s
 
   const draftKey = `drafts/people-profile/${context.workspaceId ?? 'app'}`
   const workspaceRef = context.workspaceId ?? 'app'
-  const client = createSoulAppClient({ appId: hrSoulAppManifest.id, baseUrl: context.hostUrl })
+  const client = createSoulAppClient({
+    appId: hrSoulAppManifest.id,
+    baseUrl: context.hostUrl,
+    mountToken: context.mountToken,
+  })
   try {
     await client.broker.storage.put(draftKey, {
       appId: hrSoulAppManifest.id,
@@ -255,7 +264,11 @@ async function queryBrokerPeopleProfileSearch(request: Request, query: string): 
   if (!context?.hostUrl)
     return null
 
-  const client = createSoulAppClient({ appId: hrSoulAppManifest.id, baseUrl: context.hostUrl })
+  const client = createSoulAppClient({
+    appId: hrSoulAppManifest.id,
+    baseUrl: context.hostUrl,
+    mountToken: context.mountToken,
+  })
   try {
     const result = await client.broker.search.query(query, brokerScope(context)) as BrokerSearchResult
     return Array.isArray(result.items) ? result.items : null
@@ -277,6 +290,7 @@ function readMountContext(request: Request): MountContext | null {
     return {
       brokerUrl: typeof parsed.brokerUrl === 'string' ? parsed.brokerUrl : undefined,
       hostUrl: request.headers.get('x-aiworker-host-url') ?? undefined,
+      mountToken: request.headers.get('x-aiworker-mount-token') ?? undefined,
       operatorId: typeof parsed.operatorId === 'string' ? parsed.operatorId : null,
       sessionId: typeof parsed.sessionId === 'string' ? parsed.sessionId : null,
       surface: surface

@@ -144,15 +144,16 @@ describe('HR reference Soul App', () => {
   it('persists people profile drafts through Host broker storage when mounted context is present', async () => {
     const previousToken = Bun.env.AIWORKER_MOUNT_TOKEN
     Bun.env.AIWORKER_MOUNT_TOKEN = 'test-hr-mounted-token'
-    const storageCalls: Array<{ body: Record<string, unknown>, path: string, search: URLSearchParams }> = []
-    const searchQueryCalls: Array<{ path: string, search: URLSearchParams }> = []
-    const searchUpsertCalls: Array<{ body: Record<string, unknown>, path: string, search: URLSearchParams }> = []
+    const storageCalls: Array<{ body: Record<string, unknown>, mountToken: string | null, path: string, search: URLSearchParams }> = []
+    const searchQueryCalls: Array<{ mountToken: string | null, path: string, search: URLSearchParams }> = []
+    const searchUpsertCalls: Array<{ body: Record<string, unknown>, mountToken: string | null, path: string, search: URLSearchParams }> = []
     const host = Bun.serve({
       async fetch(request) {
         const url = new URL(request.url)
         if (request.method === 'PUT' && url.pathname === '/api/local/apps/aiworker-hr/broker/storage/drafts/people-profile/workspace-hr') {
           storageCalls.push({
             body: await request.json() as Record<string, unknown>,
+            mountToken: request.headers.get('x-aiworker-mount-token'),
             path: url.pathname,
             search: url.searchParams,
           })
@@ -161,6 +162,7 @@ describe('HR reference Soul App', () => {
         if (request.method === 'PUT' && url.pathname === '/api/local/apps/aiworker-hr/broker/search/drafts/people-profile/workspace-hr') {
           searchUpsertCalls.push({
             body: await request.json() as Record<string, unknown>,
+            mountToken: request.headers.get('x-aiworker-mount-token'),
             path: url.pathname,
             search: url.searchParams,
           })
@@ -168,6 +170,7 @@ describe('HR reference Soul App', () => {
         }
         if (request.method === 'GET' && url.pathname === '/api/local/apps/aiworker-hr/broker/search') {
           searchQueryCalls.push({
+            mountToken: request.headers.get('x-aiworker-mount-token'),
             path: url.pathname,
             search: url.searchParams,
           })
@@ -215,6 +218,7 @@ describe('HR reference Soul App', () => {
       expect(await actionRes.json()).toMatchObject({ ok: true, refresh: true })
       const storageCall = storageCalls[0]
       expect(storageCall).toBeDefined()
+      expect(storageCall!.mountToken).toBe('test-hr-mounted-token')
       expect(storageCall!.path).toBe('/api/local/apps/aiworker-hr/broker/storage/drafts/people-profile/workspace-hr')
       expect(storageCall!.search.get('operatorId')).toBe('operator-local')
       expect(storageCall!.search.get('sessionId')).toBe('session-hr')
@@ -231,6 +235,7 @@ describe('HR reference Soul App', () => {
       })
       const searchUpsertCall = searchUpsertCalls[0]
       expect(searchUpsertCall).toBeDefined()
+      expect(searchUpsertCall!.mountToken).toBe('test-hr-mounted-token')
       expect(searchUpsertCall!.path).toBe('/api/local/apps/aiworker-hr/broker/search/drafts/people-profile/workspace-hr')
       expect(searchUpsertCall!.search.get('operatorId')).toBe('operator-local')
       expect(searchUpsertCall!.search.get('sessionId')).toBe('session-hr')
@@ -265,6 +270,7 @@ describe('HR reference Soul App', () => {
       })
       const searchQueryCall = searchQueryCalls[0]
       expect(searchQueryCall).toBeDefined()
+      expect(searchQueryCall!.mountToken).toBe('test-hr-mounted-token')
       expect(searchQueryCall!.path).toBe('/api/local/apps/aiworker-hr/broker/search')
       expect(searchQueryCall!.search.get('operatorId')).toBe('operator-local')
       expect(searchQueryCall!.search.get('query')).toBe('ada')

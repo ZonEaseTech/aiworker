@@ -2,6 +2,36 @@
 
 ## 2026-05-14 [done]
 
+Completed BUG-119 / PLAN-319. Soul App SDK/runtime packages remain unpublished,
+but the source-checkout authoring boundary is now tighter: mounted app broker
+callbacks can use Host-issued app-scoped mount tokens under bearer-protected
+daemons, `createSoulAppClient(...)` can send that token, HR/QA mounted services
+pass it through, scaffold output clearly labels `workspace:*` as preview-only,
+the SDK README no longer claims runtime harness exports, and runtime harnesses
+expose a minimal app-facing worker snapshot instead of `WorkerRow`.
+
+Completed BUG-120 / PLAN-320. Packaged CLI daemon startup now injects the CLI
+package version into local daemon bootstrap, so `/api/local/info`,
+`/health` and Worker Web Settings About no longer fall back to `dev` for a dist
+release daemon. Added dist release smoke coverage that fails when
+`runtimeVersion` diverges from `apps/cli/dist/package.json`.
+
+## 2026-05-14 [progress]
+
+Started BUG-120 / PLAN-320 to fix packaged daemon runtime version propagation.
+The currently running published `@zonease/aiworker-cli@0.13.1` daemon reports
+`runtimeVersion: "dev"` through `/health` and `/api/local/info`, which makes
+Worker Web Settings show a dev version for a release daemon.
+
+## 2026-05-14 [progress]
+
+Started BUG-119 / PLAN-319 to clean Soul App SDK/runtime authoring boundaries
+without publishing standalone SDK/runtime npm packages. The slice targets
+mounted broker auth through Host mount tokens, source-checkout scaffold
+messaging, SDK/runtime docs alignment and runtime harness type narrowing.
+
+## 2026-05-14 [done]
+
 Completed FEAT-083 / PLAN-318. Source-checkout development now defaults to
 `~/.aiworker-dev`, packaged CLI defaults remain `~/.aiworker`, and explicit
 `AIWORKER_HOME` / `WORKER_DB_PATH` overrides keep priority. Verified with

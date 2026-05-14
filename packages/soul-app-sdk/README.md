@@ -37,10 +37,12 @@ The SDK exposes:
 
 - `defineSoulApp(...)` and `createSoulAppManifest(...)`;
 - protocol handler and manifest types from `@zonease/aiworker-shared`;
-- `createSoulAppClient(...)` for scoped public local API calls;
-- `createStandaloneSoulAppRuntime(...)` for app-scoped standalone bootstraps;
-- `createMountedSoulAppTestRuntime(...)` for proving the same definition works
-  through Host manifest projection.
+- `createSoulAppClient(...)` for scoped public local API and mounted broker
+  callbacks.
+
+Standalone and Host-mounted harnesses live in
+`@zonease/aiworker-soul-app-runtime`; keep runtime bootstrapping out of the SDK
+package boundary.
 
 Host-side execution of external app UI/API handlers remains gated by the
 isolation brokers tracked in PLAN-287.

@@ -34,6 +34,7 @@ export interface SoulAppClientOptions {
   appId: string
   baseUrl?: string
   fetch?: SoulAppFetch
+  mountToken?: string
   token?: string
 }
 
@@ -86,14 +87,18 @@ export function createSoulAppManifest(input: unknown, options: SoulAppManifestVa
 export function createSoulAppClient(options: SoulAppClientOptions) {
   const fetcher = options.fetch ?? fetch
   const prefix = options.baseUrl?.replace(/\/$/, '') ?? ''
-  const headers = options.token ? { authorization: `Bearer ${options.token}` } : undefined
+  const headers: Record<string, string> = {}
+  if (options.token)
+    headers.authorization = `Bearer ${options.token}`
+  if (options.mountToken)
+    headers['x-aiworker-mount-token'] = options.mountToken
 
   async function json<T>(route: string, init?: RequestInit): Promise<T> {
     const res = await fetcher(`${prefix}${route}`, {
       ...init,
       headers: {
         ...(init?.body ? { 'content-type': 'application/json' } : {}),
-        ...headers,
+        ...(Object.keys(headers).length ? headers : {}),
         ...init?.headers,
       },
     })

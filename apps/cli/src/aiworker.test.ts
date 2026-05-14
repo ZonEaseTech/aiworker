@@ -1,6 +1,6 @@
 import { Buffer } from 'node:buffer'
 import { mkdirSync } from 'node:fs'
-import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
@@ -304,6 +304,13 @@ describe('aiworker local CLI', () => {
     await expect(stat(path.join(appDir, 'src/index.ts'))).resolves.toBeTruthy()
     await expect(stat(path.join(appDir, 'src/standalone.ts'))).resolves.toBeTruthy()
     await expect(stat(path.join(appDir, 'src/host-mounted.ts'))).resolves.toBeTruthy()
+    const scaffoldPackageJson = JSON.parse(await readFile(path.join(appDir, 'package.json'), 'utf8')) as {
+      dependencies: Record<string, string>
+    }
+    const scaffoldReadme = await readFile(path.join(appDir, 'README.md'), 'utf8')
+    expect(scaffoldPackageJson.dependencies['@zonease/aiworker-soul-app-sdk']).toBe('workspace:*')
+    expect(scaffoldReadme).toContain('source-checkout preview')
+    expect(scaffoldReadme).toContain('replace `workspace:*` after the SDK is published')
     output = ''
 
     expect(await runCli(argv('app', 'validate', appDir))).toBe(0)

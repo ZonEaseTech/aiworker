@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-14 (BUG-118 completed)
+> Updated: 2026-05-14 (BUG-119 and BUG-120 completed)
 
 ## Usage
 
@@ -422,3 +422,5 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-082 npm preview release readiness**](FEAT-082.md) `P0`
 - [x] [**BUG-118 Worker Web blanks with orphan legacy workers**](BUG-118.md) `P0`
 - [x] [**FEAT-083 Dev home isolation**](FEAT-083.md) `P0`
+- [x] [**BUG-119 Soul App authoring boundary leaks pre-publication coupling**](BUG-119.md) `P0`
+- [x] [**BUG-120 Release daemon reports dev runtime version**](BUG-120.md) `P0`

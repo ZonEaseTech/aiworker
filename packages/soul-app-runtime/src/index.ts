@@ -74,7 +74,15 @@ export interface SoulAppRuntimeHarness {
   runtime: LocalWorkerRuntime
   sessionMetadata: (capabilityTemplateId: string) => Record<string, unknown>
   snapshot: LocalWorkerRuntime['snapshot']
-  worker: WorkerRow
+  worker: SoulAppRuntimeWorkerSnapshot
+}
+
+export interface SoulAppRuntimeWorkerSnapshot {
+  defaultEngineId: string | null
+  id: string
+  metadata: Record<string, unknown>
+  name: string
+  soulId: string
 }
 
 export async function createStandaloneSoulAppRuntime(
@@ -91,7 +99,7 @@ export async function createStandaloneSoulAppRuntime(
     now: options.now,
     sourceRef: 'standalone:inline',
   })
-  const runtime = await createRuntimeForApp({
+  const { runtime, worker } = await createRuntimeForApp({
     app,
     executor: options.executor,
     now: options.now,
@@ -104,7 +112,7 @@ export async function createStandaloneSoulAppRuntime(
     catalog: scopedCatalog(hostedApp),
     hostedApp,
     runtime,
-    worker: runtime.snapshot().worker,
+    worker,
   })
 }
 
@@ -120,7 +128,7 @@ export async function createMountedSoulAppTestRuntime(
     now: options.now,
     sourceRef: 'mounted-test:inline',
   })
-  const runtime = await createRuntimeForApp({
+  const { runtime, worker } = await createRuntimeForApp({
     app,
     executor: options.executor,
     now: options.now,
@@ -133,7 +141,7 @@ export async function createMountedSoulAppTestRuntime(
     catalog: listHostSoulCatalog(),
     hostedApp,
     runtime,
-    worker: runtime.snapshot().worker,
+    worker,
   })
 }
 
@@ -179,7 +187,7 @@ async function createRuntimeForApp(input: {
   workerId: string
   workerName: string
   workersRoot: string
-}): Promise<LocalWorkerRuntime> {
+}): Promise<{ runtime: LocalWorkerRuntime, worker: SoulAppRuntimeWorkerSnapshot }> {
   const worker = upsertWorker({
     id: input.workerId,
     soulId: input.app.manifest.id,
@@ -209,7 +217,10 @@ async function createRuntimeForApp(input: {
     workspacesRoot: path.join(input.workersRoot, worker.id, 'workspaces'),
   })
   await runtime.init()
-  return runtime
+  return {
+    runtime,
+    worker: publicWorkerSnapshot(worker),
+  }
 }
 
 function harness(input: {
@@ -217,13 +228,23 @@ function harness(input: {
   catalog: HostSoulCatalog
   hostedApp: HostedSoulApp
   runtime: LocalWorkerRuntime
-  worker: WorkerRow
+  worker: SoulAppRuntimeWorkerSnapshot
 }): SoulAppRuntimeHarness {
   return {
     ...input,
     dispose: closeWorkerDb,
     sessionMetadata: capabilityTemplateId => sessionMetadata(input.app, input.catalog.templates, capabilityTemplateId),
     snapshot: () => input.runtime.snapshot(),
+  }
+}
+
+function publicWorkerSnapshot(worker: WorkerRow): SoulAppRuntimeWorkerSnapshot {
+  return {
+    defaultEngineId: worker.defaultEngineId,
+    id: worker.id,
+    metadata: worker.metadataJson,
+    name: worker.name,
+    soulId: worker.soulId,
   }
 }
 
