@@ -39,6 +39,7 @@ import { createLocalWorkerRuntime } from '../worker/runtime'
 export interface HostRuntimeOptions {
   executor?: LocalExecutor
   now?: () => string
+  officialAppsRoot?: string
   registryContext?: () => SoulAppRegistryContext
   workersRoot: string
 }
@@ -112,7 +113,10 @@ export class HostRuntime {
   }
 
   async bootstrapOfficialSoulApps(): Promise<HostOfficialSoulAppBootstrap> {
-    const results = await bootstrapOfficialSoulAppRegistry(this.registryContext())
+    const results = await bootstrapOfficialSoulAppRegistry({
+      ...this.registryContext(),
+      officialAppsRoot: this.options.officialAppsRoot,
+    })
     const legacyMetadataDiscard = discardOfficialSoulAppLegacyMetadata(this.options.now?.())
     return {
       catalog: this.listCatalog(),

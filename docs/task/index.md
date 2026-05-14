@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-14 (DOC-013 completed)
+> Updated: 2026-05-14 (FEAT-082 completed)
 
 ## Usage
 
@@ -418,3 +418,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-080 Official Soul App broker proof closure**](FEAT-080.md) `P0`
 - [x] [**FEAT-081 Host and Soul App developer route onboarding**](FEAT-081.md) `P0`
 - [x] [**DOC-013 Agent-operational documentation contract**](DOC-013.md) `P0`
+- [x] [**FEAT-082 npm preview release readiness**](FEAT-082.md) `P0`

@@ -16,7 +16,7 @@ import {
 } from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
-import { preprocessArgv, runCli } from './aiworker'
+import { preprocessArgv, resolveCliOfficialAppsRoot, resolveCliWorkerWebStaticDir, runCli } from './aiworker'
 
 describe('aiworker local CLI', () => {
   const originalEnv = { ...process.env }
@@ -85,6 +85,24 @@ describe('aiworker local CLI', () => {
     expect(preprocessArgv(argv('workspace', 'create', '--name', 'T')).slice(2, 3)).toEqual(['workspace create'])
     expect(preprocessArgv(argv('session', 'start', '--input', 'P')).slice(2, 3)).toEqual(['session start'])
     expect(preprocessArgv(argv('worker', 'create', '--name', 'HR')).slice(2, 3)).toEqual(['worker create'])
+  })
+
+  it('resolves package-local official apps before source apps', async () => {
+    const moduleDir = path.join(root, 'dist')
+    const officialAppsRoot = path.join(moduleDir, 'official-apps')
+    mkdirSync(path.join(officialAppsRoot, 'aiworker-hr'), { recursive: true })
+    await writeFile(path.join(officialAppsRoot, 'aiworker-hr', 'soul-app.manifest.json'), '{}')
+
+    expect(resolveCliOfficialAppsRoot(moduleDir)).toBe(officialAppsRoot)
+  })
+
+  it('resolves package-local Worker Web static before source static', async () => {
+    const moduleDir = path.join(root, 'dist')
+    const workerWebRoot = path.join(moduleDir, 'web', 'worker')
+    mkdirSync(workerWebRoot, { recursive: true })
+    await writeFile(path.join(workerWebRoot, 'index.html'), '<!doctype html>')
+
+    expect(resolveCliWorkerWebStaticDir(moduleDir)).toBe(workerWebRoot)
   })
 
   it('initializes host-local daemon state without auto-creating Soul workers', async () => {

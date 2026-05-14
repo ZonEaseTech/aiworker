@@ -135,11 +135,17 @@ dev server 与 Web dev server。
 aiworker dev
 ```
 
-目标 packaged/local runtime 入口：
+目标 packaged/npm preview 入口：
 
 ```bash
-aiworker daemon foreground --port 9217
+bunx @zonease/aiworker-cli daemon foreground --port 9217
+# or, if Bun is already available for the shim:
+npx @zonease/aiworker-cli daemon foreground --port 9217
 ```
+
+这是 `0.x preview`：Host Web/API 启动、worker DB migrations，以及官方 HR/QA Soul App
+bootstrap 需要能从 npm package 直接工作。HR/QA 业务 workflow、第三方 Soul App authoring、
+standalone SDK/runtime npm publication 仍是 preview surface，不是 1.0 承诺。
 
 Source checkout 调试也走同一个 daemon；先构建一次 Web 静态资源，然后以前台 daemon 托管 Web/API：
 

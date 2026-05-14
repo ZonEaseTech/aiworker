@@ -4,7 +4,7 @@ import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { hrSoulAppManifest, namespaceSoulAppCapabilityId } from '@zonease/aiworker-shared'
+import { hrSoulAppManifest, namespaceSoulAppCapabilityId, qaSoulAppManifest } from '@zonease/aiworker-shared'
 import {
   closeWorkerDb,
   createSession,
@@ -34,9 +34,10 @@ describe('local daemon API', () => {
     await rm(dir, { recursive: true, force: true })
   })
 
-  async function app(token?: string, webStaticDir?: string) {
+  async function app(token?: string, webStaticDir?: string, officialAppsRoot?: string) {
     const boot = await bootstrapWorkerApp({
       dbPath: join(dir, 'worker.db'),
+      officialAppsRoot,
       workersRoot: join(dir, 'workers'),
       token,
       webStaticDir,
@@ -125,6 +126,25 @@ describe('local daemon API', () => {
     })
     expect(appWorkerRes.status).toBe(201)
     expect(await appWorkerRes.json()).toMatchObject({ worker: { soulId: HR_APP_ID } })
+  })
+
+  it('bootstraps official apps from an explicit packaged app root', async () => {
+    const officialAppsRoot = join(dir, 'official-apps')
+    mkdirSync(join(officialAppsRoot, 'aiworker-hr'), { recursive: true })
+    mkdirSync(join(officialAppsRoot, 'aiworker-qa'), { recursive: true })
+    writeFileSync(join(officialAppsRoot, 'aiworker-hr', 'soul-app.manifest.json'), JSON.stringify(hrSoulAppManifest))
+    writeFileSync(join(officialAppsRoot, 'aiworker-qa', 'soul-app.manifest.json'), JSON.stringify(qaSoulAppManifest))
+
+    const target = await app(undefined, undefined, officialAppsRoot)
+    const body = await (await target.request('/api/local/apps')).json() as {
+      apps: Array<{ appId: string, sourceRef: string, status: string }>
+    }
+
+    expect(body.apps).toEqual(expect.arrayContaining([
+      expect.objectContaining({ appId: 'aiworker-hr', status: 'enabled' }),
+      expect.objectContaining({ appId: 'aiworker-qa', status: 'enabled' }),
+    ]))
+    expect(body.apps.every(item => item.sourceRef.startsWith(officialAppsRoot))).toBe(true)
   })
 
   it('does not re-enable disabled official apps on daemon restart', async () => {

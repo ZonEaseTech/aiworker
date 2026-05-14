@@ -1,9 +1,9 @@
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
-import { hrSoulAppManifest, namespaceSoulAppCapabilityId } from '@zonease/aiworker-shared'
+import { hrSoulAppManifest, namespaceSoulAppCapabilityId, qaSoulAppManifest } from '@zonease/aiworker-shared'
 import { closeWorkerDb, initWorkerDb, runWorkerMigrations } from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
@@ -132,6 +132,31 @@ describe('Host Soul App registry', () => {
     ])
     expect(findHostSoul('aiworker-hr')?.status).toBe('coming_soon')
     expect(listHostCapabilityTemplatesForSoul('aiworker-hr')).toEqual([])
+    expect(findHostSoul('aiworker-qa')?.status).toBe('available')
+  })
+
+  it('bootstraps official apps from an explicit packaged app root', async () => {
+    const packagedRoot = path.join(dir, 'official-apps')
+    const hrRoot = path.join(packagedRoot, 'aiworker-hr')
+    const qaRoot = path.join(packagedRoot, 'aiworker-qa')
+    mkdirSync(hrRoot, { recursive: true })
+    mkdirSync(qaRoot, { recursive: true })
+    writeFileSync(path.join(hrRoot, 'soul-app.manifest.json'), JSON.stringify(hrSoulAppManifest))
+    writeFileSync(path.join(qaRoot, 'soul-app.manifest.json'), JSON.stringify(qaSoulAppManifest))
+
+    const results = await bootstrapOfficialSoulApps({
+      availableConnectorIds: ['ats', 'calendar', 'ci', 'issue-tracker'],
+      hostVersion: '0.12.1',
+      now: () => '2026-05-14T14:12:00.000Z',
+      officialAppsRoot: packagedRoot,
+    })
+
+    expect(results.map(result => [result.appId, result.action])).toEqual([
+      ['aiworker-hr', 'installed_enabled'],
+      ['aiworker-qa', 'installed_enabled'],
+    ])
+    expect(results.every(result => result.manifestPath.startsWith(packagedRoot))).toBe(true)
+    expect(findHostSoul('aiworker-hr')?.status).toBe('available')
     expect(findHostSoul('aiworker-qa')?.status).toBe('available')
   })
 

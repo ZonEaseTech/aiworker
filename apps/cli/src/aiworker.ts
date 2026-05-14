@@ -12,6 +12,7 @@ import { mkdir, readFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
+import { fileURLToPath } from 'node:url'
 import {
   createHostRuntime,
   getWorkerEnv,
@@ -60,6 +61,28 @@ interface RuntimeOptions {
 }
 
 const cli = cac('aiworker')
+const CLI_MODULE_DIR = path.dirname(fileURLToPath(import.meta.url))
+const OFFICIAL_APP_MANIFEST_FILENAME = 'soul-app.manifest.json'
+
+export function resolveCliOfficialAppsRoot(moduleDir = CLI_MODULE_DIR): string | undefined {
+  const packaged = path.resolve(moduleDir, 'official-apps')
+  if (existsSync(path.join(packaged, 'aiworker-hr', OFFICIAL_APP_MANIFEST_FILENAME)))
+    return packaged
+  const source = path.resolve(moduleDir, '../../apps')
+  if (existsSync(path.join(source, 'aiworker-hr', OFFICIAL_APP_MANIFEST_FILENAME)))
+    return source
+  return undefined
+}
+
+export function resolveCliWorkerWebStaticDir(moduleDir = CLI_MODULE_DIR): string | undefined {
+  const packaged = path.resolve(moduleDir, 'web', 'worker')
+  if (existsSync(path.join(packaged, 'index.html')))
+    return packaged
+  const source = path.resolve(moduleDir, '../../web/dist/worker')
+  if (existsSync(path.join(source, 'index.html')))
+    return source
+  return undefined
+}
 
 function localPaths(): LocalPaths {
   const home = process.env.AIWORKER_HOME ?? path.join(homedir(), '.aiworker')
@@ -91,9 +114,10 @@ function registryContext() {
   return { hostVersion: packageJson.version }
 }
 
-function createHost(paths: LocalPaths, options: { executor?: LocalExecutor, registryContext?: () => SoulAppRegistryContext } = {}): HostRuntime {
+function createHost(paths: LocalPaths, options: { executor?: LocalExecutor, officialAppsRoot?: string, registryContext?: () => SoulAppRegistryContext } = {}): HostRuntime {
   return createHostRuntime({
     executor: options.executor,
+    officialAppsRoot: options.officialAppsRoot ?? resolveCliOfficialAppsRoot(),
     registryContext: options.registryContext ?? registryContext,
     workersRoot: paths.workersRoot,
   })
@@ -221,7 +245,10 @@ async function stopDaemon(): Promise<void> {
 
 async function daemonForeground(opts: { host?: string, port?: number } = {}): Promise<void> {
   const { bootstrapWorkerApp } = await import('@zonease/aiworker-api/bootstrap')
-  const { app, port } = await bootstrapWorkerApp()
+  const { app, port } = await bootstrapWorkerApp({
+    officialAppsRoot: resolveCliOfficialAppsRoot(),
+    webStaticDir: resolveCliWorkerWebStaticDir(),
+  })
   const env = getWorkerEnv()
   const server = Bun.serve({
     fetch: app.fetch,

@@ -70,14 +70,20 @@ AIWORKER_HOME=~/.aiworker \
 - `aiworker.js` / `aiworker-bun.js`；
 - `drizzle/worker` migrations；
 - `web/worker` static bundle；
+- `official-apps/aiworker-hr` 与 `official-apps/aiworker-qa` release resources；
 - package README。
+
+`0.x` npm preview package 需要在 CLI package 目录内自带 Worker Web static assets、worker DB
+migrations 和官方 first-party Soul App release resources。它不应要求 source checkout 才能服务
+`/` 或 bootstrap HR/QA。
 
 ## Installed CLI
 
 发布后，operator 的本地入口是：
 
 ```bash
-aiworker daemon foreground --host 127.0.0.1 --port 9217
+bunx @zonease/aiworker-cli daemon foreground --host 127.0.0.1 --port 9217
+npx @zonease/aiworker-cli daemon foreground --host 127.0.0.1 --port 9217
 ```
 
 `AIWORKER_HOME` 默认是 `~/.aiworker`。可用环境变量：

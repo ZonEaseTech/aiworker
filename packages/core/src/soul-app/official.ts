@@ -20,6 +20,7 @@ export interface OfficialSoulAppDefinition {
 
 export interface OfficialSoulAppBootstrapOptions extends SoulAppRegistryContext {
   definitions?: readonly OfficialSoulAppDefinition[]
+  officialAppsRoot?: string
   repoRoot?: string
 }
 
@@ -48,6 +49,8 @@ export const OFFICIAL_SOUL_APPS = [
     manifestPath: 'apps/aiworker-qa/soul-app.manifest.json',
   },
 ] as const satisfies readonly OfficialSoulAppDefinition[]
+
+const DEFAULT_OFFICIAL_MANIFEST_FILENAME = 'soul-app.manifest.json'
 
 export async function bootstrapOfficialSoulApps(options: OfficialSoulAppBootstrapOptions = {}): Promise<OfficialSoulAppBootstrapResult[]> {
   const definitions = options.definitions ?? OFFICIAL_SOUL_APPS
@@ -113,6 +116,8 @@ export function discardOfficialSoulAppLegacyMetadata(at?: string): OfficialLegac
 function resolveOfficialManifestPath(definition: OfficialSoulAppDefinition, options: OfficialSoulAppBootstrapOptions): string {
   if (path.isAbsolute(definition.manifestPath))
     return definition.manifestPath
+  if (options.officialAppsRoot)
+    return path.resolve(options.officialAppsRoot, definition.id, DEFAULT_OFFICIAL_MANIFEST_FILENAME)
   return path.resolve(options.repoRoot ?? defaultRepoRoot(), definition.manifestPath)
 }
 

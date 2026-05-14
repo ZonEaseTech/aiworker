@@ -17,6 +17,16 @@ bun apps/cli/src/aiworker.ts dev --host 127.0.0.1 --port 9217
 aiworker daemon foreground --host 127.0.0.1 --port 9217
 ```
 
+npm `0.x preview` 入口：
+
+```bash
+bunx @zonease/aiworker-cli daemon foreground --host 127.0.0.1 --port 9217
+npx @zonease/aiworker-cli daemon foreground --host 127.0.0.1 --port 9217
+```
+
+Preview 包应能从 package-local 资源启动 Host Web/API、迁移 worker DB，并 bootstrap 官方
+HR/QA Soul App；Host auth、1.0 发布承诺和独立 SDK/runtime npm 发布不属于这个 gate。
+
 打开 Web：
 
 ```bash
@@ -105,3 +115,12 @@ bun run --filter '@zonease/aiworker-cli' build:bundle
 
 Cross-package Host/Soul protocol changes should also run the focused Core/API/Web
 checks that own the touched files.
+
+For npm preview release readiness:
+
+```bash
+bun run --filter '@zonease/aiworker-web' build
+bun run --filter '@zonease/aiworker-cli' build:bundle
+cd apps/cli/dist && npm pack --dry-run --json
+bun run --filter '@zonease/aiworker-cli' smoke:dist-release
+```

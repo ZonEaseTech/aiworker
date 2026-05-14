@@ -69,6 +69,7 @@ const ENGINE_COMMANDS = [
 
 export interface BootstrapWorkerAppOptions {
   dbPath?: string
+  officialAppsRoot?: string
   webStaticDir?: string
   migrationsFolder?: string
   workersRoot?: string
@@ -151,6 +152,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   const host = createHostRuntime({
     executor: options.executor,
     now: options.now,
+    officialAppsRoot: options.officialAppsRoot,
     registryContext: () => {
       const settings = loadLocalSettings()
       return {

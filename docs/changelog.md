@@ -1,5 +1,22 @@
 # AIWorker Changelog
 
+## 2026-05-14 14:11 [completed] FEAT-082 / PLAN-315 — npm preview release readiness
+
+Completed the 0.x public preview release readiness slice.
+
+- Added package-local resource locators for Worker Web static files and
+  official HR/QA Soul App manifests.
+- Packaged `official-apps/`, `web/` and `drizzle/` into the CLI dist package,
+  with official app mounted/standalone entries patched to app `dist/` bundles.
+- Added `smoke:dist-release` to verify dist daemon startup, Host Web assets,
+  `/api/local/apps`, official app bootstrap and HR template projection.
+- Documented the external `bunx` / `npx @zonease/aiworker-cli` preview path.
+- Host auth, 1.0 release claims and third-party SDK/runtime npm publication are
+  out of scope for this slice.
+- Verification passed: focused core/API/CLI tests, Web build, CLI build bundle,
+  npm pack dry-run, dist release smoke, root `check`, root `test`, root
+  `build`, `git diff --check`, `bun run crg:update` and `bun run crg:review`.
+
 ## 2026-05-14 13:39 [completed] DOC-013 / PLAN-314 — Agent-operational documentation contract
 
 Completed the documentation contract convergence slice.
