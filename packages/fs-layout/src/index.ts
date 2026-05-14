@@ -12,7 +12,7 @@ import process from 'node:process'
  */
 
 const DEFAULT_HOME_ENV = 'AIWORKER_HOME'
-const DEFAULT_HOME_DIR = '.aiworker'
+export const DEFAULT_AIWORKER_HOME_DIR = '.aiworker'
 
 export type AiworkerScope = 'explicit' | 'user'
 
@@ -28,6 +28,8 @@ export interface ResolveScopeOptions {
   cwd?: string
   /** Explicit `--aiworker-home <path>` from a CLI flag. Highest priority. */
   explicitHome?: string
+  /** Caller-selected fallback directory name when neither flag nor env exists. */
+  defaultHomeDir?: string
   /** Deprecated compatibility input. Project detection is always disabled. */
   disableProjectDetect?: boolean
 }
@@ -77,15 +79,19 @@ export function resolveAiworkerScope(opts: ResolveScopeOptions = {}): AiworkerSc
     }
   }
 
+  const defaultHomeDir = opts.defaultHomeDir && opts.defaultHomeDir.length > 0
+    ? opts.defaultHomeDir
+    : DEFAULT_AIWORKER_HOME_DIR
+
   return {
     scope: 'user',
-    home: path.resolve(currentHomeDir(), DEFAULT_HOME_DIR),
+    home: path.resolve(currentHomeDir(), defaultHomeDir),
     source: 'user-default',
   }
 }
 
-export function resolveAiworkerHome(): string {
-  return resolveAiworkerScope().home
+export function resolveAiworkerHome(opts: ResolveScopeOptions = {}): string {
+  return resolveAiworkerScope(opts).home
 }
 
 export function resolveWorkerHome(workerId: string): string {

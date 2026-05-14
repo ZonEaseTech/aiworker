@@ -63,6 +63,27 @@ describe('host-local AIWorker home resolution', () => {
     expect(result.source).toBe('env')
   })
 
+  it('uses a caller-provided default home directory when no explicit home exists', () => {
+    process.env.HOME = '/tmp/aiworker-home-owner'
+
+    const result = resolveAiworkerScope({ defaultHomeDir: '.aiworker-dev' })
+
+    expect(result.scope).toBe('user')
+    expect(result.home).toBe('/tmp/aiworker-home-owner/.aiworker-dev')
+    expect(result.source).toBe('user-default')
+  })
+
+  it('keeps explicit env priority over a caller-provided default home directory', () => {
+    process.env.HOME = '/tmp/aiworker-home-owner'
+    process.env.AIWORKER_HOME = '/tmp/env-aiworker-home'
+
+    const result = resolveAiworkerScope({ defaultHomeDir: '.aiworker-dev' })
+
+    expect(result.scope).toBe('explicit')
+    expect(result.home).toBe('/tmp/env-aiworker-home')
+    expect(result.source).toBe('env')
+  })
+
   it('defaults to ~/.aiworker and ignores cwd project markers', async () => {
     const tmp = await makeTmpDir()
     try {
