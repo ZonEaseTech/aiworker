@@ -16,7 +16,14 @@ import {
 } from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
-import { preprocessArgv, resolveCliOfficialAppsRoot, resolveCliWorkerWebStaticDir, runCli } from './aiworker'
+import {
+  preprocessArgv,
+  resolveCliDefaultHomeDir,
+  resolveCliLocalPaths,
+  resolveCliOfficialAppsRoot,
+  resolveCliWorkerWebStaticDir,
+  runCli,
+} from './aiworker'
 
 describe('aiworker local CLI', () => {
   const originalEnv = { ...process.env }
@@ -103,6 +110,65 @@ describe('aiworker local CLI', () => {
     await writeFile(path.join(workerWebRoot, 'index.html'), '<!doctype html>')
 
     expect(resolveCliWorkerWebStaticDir(moduleDir)).toBe(workerWebRoot)
+  })
+
+  it('defaults source-checkout local paths to ~/.aiworker-dev when no home env exists', () => {
+    delete process.env.AIWORKER_HOME
+    delete process.env.WORKER_DB_PATH
+    process.env.HOME = root
+
+    const moduleDir = path.join(root, 'repo', 'apps', 'cli', 'src')
+    const paths = resolveCliLocalPaths(moduleDir)
+
+    expect(resolveCliDefaultHomeDir(moduleDir)).toBe('.aiworker-dev')
+    expect(paths.home).toBe(path.join(root, '.aiworker-dev'))
+    expect(paths.dbPath).toBe(path.join(root, '.aiworker-dev', 'aiworker.db'))
+    expect(paths.workersRoot).toBe(path.join(root, '.aiworker-dev', 'workers'))
+    expect(paths.pidFile).toBe(path.join(root, '.aiworker-dev', 'aiworker-daemon.pid'))
+    expect(paths.logFile).toBe(path.join(root, '.aiworker-dev', 'aiworker-daemon.log'))
+  })
+
+  it('defaults packaged local paths to ~/.aiworker when package resources exist', () => {
+    delete process.env.AIWORKER_HOME
+    delete process.env.WORKER_DB_PATH
+    process.env.HOME = root
+
+    const moduleDir = path.join(root, 'package', 'dist')
+    mkdirSync(path.join(moduleDir, 'official-apps'), { recursive: true })
+    const paths = resolveCliLocalPaths(moduleDir)
+
+    expect(resolveCliDefaultHomeDir(moduleDir)).toBe('.aiworker')
+    expect(paths.home).toBe(path.join(root, '.aiworker'))
+    expect(paths.dbPath).toBe(path.join(root, '.aiworker', 'aiworker.db'))
+    expect(paths.workersRoot).toBe(path.join(root, '.aiworker', 'workers'))
+  })
+
+  it('keeps explicit home and db path ahead of source defaults', () => {
+    process.env.HOME = root
+    process.env.AIWORKER_HOME = path.join(root, 'explicit-home')
+    process.env.WORKER_DB_PATH = path.join(root, 'explicit-home', 'custom.db')
+
+    const moduleDir = path.join(root, 'repo', 'apps', 'cli', 'src')
+    const paths = resolveCliLocalPaths(moduleDir)
+
+    expect(resolveCliDefaultHomeDir(moduleDir)).toBe('.aiworker-dev')
+    expect(paths.home).toBe(path.join(root, 'explicit-home'))
+    expect(paths.dbPath).toBe(path.join(root, 'explicit-home', 'custom.db'))
+    expect(paths.workersRoot).toBe(path.join(root, 'explicit-home', 'workers'))
+  })
+
+  it('applies the source default before init reads core env defaults', async () => {
+    delete process.env.AIWORKER_HOME
+    delete process.env.WORKER_DB_PATH
+    process.env.HOME = root
+
+    expect(await runCli(argv('init'))).toBe(0)
+    const body = JSON.parse(output) as { dbPath: string, home: string, workersRoot: string }
+
+    expect(body.home).toBe(path.join(root, '.aiworker-dev'))
+    expect(body.dbPath).toBe(path.join(root, '.aiworker-dev', 'aiworker.db'))
+    expect(body.workersRoot).toBe(path.join(root, '.aiworker-dev', 'workers'))
+    await expect(stat(path.join(root, '.aiworker'))).rejects.toThrow()
   })
 
   it('initializes host-local daemon state without auto-creating Soul workers', async () => {

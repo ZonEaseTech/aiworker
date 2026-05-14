@@ -9,7 +9,7 @@ import { spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { mkdir, readFile } from 'node:fs/promises'
-import { homedir, tmpdir } from 'node:os'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
@@ -17,6 +17,7 @@ import {
   createHostRuntime,
   getWorkerEnv,
 } from '@zonease/aiworker-core'
+import { resolveAiworkerScope } from '@zonease/aiworker-fs-layout'
 import {
   parseSoulAppManifestJson,
   soulAppIdSchema,
@@ -48,7 +49,7 @@ import consola from 'consola'
 
 import packageJson from '../package.json' with { type: 'json' }
 
-interface LocalPaths {
+export interface LocalPaths {
   home: string
   dbPath: string
   workersRoot: string
@@ -84,8 +85,21 @@ export function resolveCliWorkerWebStaticDir(moduleDir = CLI_MODULE_DIR): string
   return undefined
 }
 
-function localPaths(): LocalPaths {
-  const home = process.env.AIWORKER_HOME ?? path.join(homedir(), '.aiworker')
+const SOURCE_CHECKOUT_DEFAULT_HOME_DIR = '.aiworker-dev'
+const PACKAGED_DEFAULT_HOME_DIR = '.aiworker'
+
+export function resolveCliDefaultHomeDir(moduleDir = CLI_MODULE_DIR): string {
+  const hasPackagedOfficialApps = existsSync(path.join(moduleDir, 'official-apps'))
+  const hasPackagedWeb = existsSync(path.join(moduleDir, 'web', 'worker'))
+  return hasPackagedOfficialApps || hasPackagedWeb
+    ? PACKAGED_DEFAULT_HOME_DIR
+    : SOURCE_CHECKOUT_DEFAULT_HOME_DIR
+}
+
+export function resolveCliLocalPaths(moduleDir = CLI_MODULE_DIR): LocalPaths {
+  const home = resolveAiworkerScope({
+    defaultHomeDir: resolveCliDefaultHomeDir(moduleDir),
+  }).home
   return {
     home,
     dbPath: process.env.WORKER_DB_PATH ?? path.join(home, 'aiworker.db'),
@@ -93,6 +107,17 @@ function localPaths(): LocalPaths {
     pidFile: path.join(home, 'aiworker-daemon.pid'),
     logFile: path.join(home, 'aiworker-daemon.log'),
   }
+}
+
+function applyLocalPathEnv(paths: LocalPaths): void {
+  process.env.AIWORKER_HOME ??= paths.home
+  process.env.WORKER_DB_PATH ??= paths.dbPath
+}
+
+function localPaths(): LocalPaths {
+  const paths = resolveCliLocalPaths()
+  applyLocalPathEnv(paths)
+  return paths
 }
 
 async function ensureDb(): Promise<LocalPaths> {
@@ -244,6 +269,7 @@ async function stopDaemon(): Promise<void> {
 }
 
 async function daemonForeground(opts: { host?: string, port?: number } = {}): Promise<void> {
+  localPaths()
   const { bootstrapWorkerApp } = await import('@zonease/aiworker-api/bootstrap')
   const { app, port } = await bootstrapWorkerApp({
     officialAppsRoot: resolveCliOfficialAppsRoot(),
