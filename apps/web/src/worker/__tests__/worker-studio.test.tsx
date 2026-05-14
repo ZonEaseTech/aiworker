@@ -255,6 +255,7 @@ let currentSessions: typeof sessionRecord[]
 let currentTurns: LocalTurn[]
 let currentWorkers: typeof workers
 let currentWorkspaces: typeof workspace[]
+let currentProfiles: Record<string, string>
 let currentApps: Array<{
   appId: string
   manifest: {
@@ -363,6 +364,9 @@ function resetSettings() {
   currentLessons = [{ ...lessonRecord }]
   currentEvents = [{ ...eventRecord }]
   currentWorkers = workers.map(worker => ({ ...worker }))
+  currentProfiles = {
+    'workspace-1': '# Current Profile Summary\n\nAccepted profile summary.\n',
+  }
   currentApps = []
   deferCreatedSessionStream = false
 }
@@ -567,6 +571,7 @@ beforeEach(() => {
       const body = init?.body ? JSON.parse(String(init.body)) as { name: string } : { name: 'New candidate workspace' }
       const created = { ...workspace, id: 'workspace-created', name: body.name }
       currentWorkspaces = [created, ...currentWorkspaces]
+      currentProfiles[created.id] = `# Current Profile Summary\n\n${created.name} does not have an approved profile revision yet.\n`
       return json({ workspace: created }, 201)
     }
     if (url.endsWith('/api/local/workspaces'))
@@ -657,6 +662,49 @@ beforeEach(() => {
       return json({ turns: currentTurns })
     if (url.endsWith('/api/local/files'))
       return json({ files: [] })
+    const profileMatch = url.match(/\/api\/local\/workspaces\/([^/]+)\/profile$/)
+    if (profileMatch && method === 'GET') {
+      const workspaceId = profileMatch[1]!
+      const workspaceName = currentWorkspaces.find(item => item.id === workspaceId)?.name ?? 'People Profile'
+      return new Response(currentProfiles[workspaceId] ?? `# Current Profile Summary\n\n${workspaceName} does not have an approved profile revision yet.\n`, {
+        headers: { 'content-type': 'text/plain' },
+      })
+    }
+    const profileRevisionMatch = url.match(/\/api\/local\/workspaces\/([^/]+)\/profile-revisions$/)
+    if (profileRevisionMatch && method === 'POST') {
+      const workspaceId = profileRevisionMatch[1]!
+      const body = init?.body
+        ? JSON.parse(String(init.body)) as {
+          artifactId?: string
+          findingsJson?: Array<Record<string, unknown>>
+          profileMarkdown?: string
+          risksJson?: Array<Record<string, unknown>>
+          verdict?: 'pass' | 'warn'
+        }
+        : {}
+      currentProfiles[workspaceId] = body.profileMarkdown ?? '# Candidate Screen\n\nEvidence summary.\n'
+      const review = {
+        artifactId: body.artifactId ?? 'artifact-1',
+        createdAt: now,
+        findingsJson: body.findingsJson ?? [{ message: 'Approved from HR workbench.' }],
+        id: 'review-profile-1',
+        risksJson: body.risksJson ?? [],
+        sessionId: 'session-1',
+        turnId: 'turn-1',
+        verdict: body.verdict ?? 'pass',
+        workspaceId,
+      }
+      currentReviews = [review, ...currentReviews]
+      return json({
+        profileRevision: {
+          git: { hash: 'abc123', status: 'created' },
+          profilePath: 'README.md',
+          review,
+          reviewPath: 'reviews/review-profile-1.md',
+          tag: null,
+        },
+      }, 201)
+    }
     if (url.includes('/api/local/workspaces/') && url.includes('/files/raw/'))
       return new Response('# Candidate Screen\n\nEvidence summary.\n', { headers: { 'content-type': 'text/plain' } })
     if (url.endsWith('/api/local/artifacts'))
@@ -750,12 +798,13 @@ describe('worker studio', () => {
     expect(screen.getAllByText('Person Profile').length).toBeGreaterThan(0)
     expect(screen.getAllByText('People Workbench').length).toBeGreaterThan(0)
     expect(screen.queryByText('PEOPLE PROFILE WORKBENCH')).toBeNull()
-    expect(screen.getByText('Profile Tools')).toBeTruthy()
-    expect(screen.getByText('Profile List')).toBeTruthy()
+    expect(screen.getByText('Profile Actions')).toBeTruthy()
+    expect(screen.getByText('People Profiles')).toBeTruthy()
     const hrDetails = document.querySelector('.hr-profile-details') as HTMLElement
-    expect(within(hrDetails).getByText('Profile Details')).toBeTruthy()
+    expect(within(hrDetails).getAllByText('Current Profile Summary').length).toBeGreaterThan(0)
+    expect(await within(hrDetails).findByText('Accepted profile summary.')).toBeTruthy()
     expect(within(hrDetails).getByText('Profile sources')).toBeTruthy()
-    expect(within(hrDetails).getByText('Artifact preview')).toBeTruthy()
+    expect(within(hrDetails).getByText('Proposed Change')).toBeTruthy()
     expect(within(hrDetails).queryByText('View focus')).toBeNull()
     expect(within(hrDetails).queryByText('Active view')).toBeNull()
     expect(within(hrDetails).queryByRole('button', { name: /Candidates/ })).toBeNull()
@@ -777,12 +826,36 @@ describe('worker studio', () => {
     expect(await screen.findByText('Evidence summary.')).toBeTruthy()
   })
 
+  it('centers the README profile and promotes a proposed change through review', async () => {
+    window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
+    render(<WorkerStudio />)
+
+    const hrDetails = await screen.findByLabelText('Current Profile Summary')
+    const currentProfile = await within(hrDetails).findByTestId('hr-current-profile-summary')
+    const proposedChange = await within(hrDetails).findByTestId('hr-proposed-change')
+
+    expect(within(currentProfile).getByText('Accepted profile summary.')).toBeTruthy()
+    expect(within(proposedChange).getByText('Evidence summary.')).toBeTruthy()
+
+    fireEvent.click(within(proposedChange).getByRole('button', { name: 'Approve Profile Revision' }))
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/local/workspaces/workspace-1/profile-revisions', expect.objectContaining({
+        body: expect.stringContaining('"artifactId":"artifact-1"'),
+        method: 'POST',
+      }))
+    })
+    await waitFor(() => {
+      expect(within(currentProfile).getByText('Evidence summary.')).toBeTruthy()
+    })
+  })
+
   it('keeps profile details stable while lifecycle list sections are expanded', async () => {
     render(<WorkerStudio />)
 
     await screen.findByTestId('hr-people-workbench')
     expect(screen.getByText('Artifact evidence')).toBeTruthy()
-    expect(screen.getByText('Profile Tools')).toBeTruthy()
+    expect(screen.getByText('Profile Actions')).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: /Employees/ }))
 
@@ -790,7 +863,7 @@ describe('worker studio', () => {
       expect(screen.getByText('No profiles in this section.')).toBeTruthy()
     })
     const hrDetails = document.querySelector('.hr-profile-details') as HTMLElement
-    expect(within(hrDetails).getByText('Artifact preview')).toBeTruthy()
+    expect(within(hrDetails).getByText('Proposed Change')).toBeTruthy()
     expect(within(hrDetails).getByText('Artifact evidence').parentElement?.textContent).toContain('1')
   })
 
@@ -1494,8 +1567,8 @@ describe('worker studio', () => {
     await screen.findByTestId('hr-people-workbench')
     expect(window.location.pathname).toBe('/workers/hr-worker/workspaces/workspace-1')
     expect(screen.getByTestId('hr-people-workbench')).toBeTruthy()
-    expect(screen.getByText('Profile Tools')).toBeTruthy()
-    expect(screen.getByText('Profile List')).toBeTruthy()
+    expect(screen.getByText('Profile Actions')).toBeTruthy()
+    expect(screen.getByText('People Profiles')).toBeTruthy()
     expect(screen.queryByTestId('new-session-panel')).toBeNull()
     const profileTools = document.querySelector('.hr-profile-tools-panel') as HTMLElement
     fireEvent.click(await within(profileTools).findByRole('button', { name: /Open Screen candidate session/ }))
@@ -1596,8 +1669,8 @@ describe('worker studio', () => {
     expect(screen.getByRole('button', { name: 'New session' }).classList.contains('icon-button')).toBe(true)
     expect(screen.getByRole('button', { name: 'Create workspace' }).classList.contains('icon-button')).toBe(true)
     expect(screen.getByTestId('hr-people-workbench')).toBeTruthy()
-    expect(screen.getByText('Profile Tools')).toBeTruthy()
-    expect(screen.getByText('Profile List')).toBeTruthy()
+    expect(screen.getByText('Profile Actions')).toBeTruthy()
+    expect(screen.getByText('People Profiles')).toBeTruthy()
     expect(screen.queryByTestId('new-session-panel')).toBeNull()
     expect(screen.queryByText('What do you want to build in Hiring Workspace?')).toBeNull()
     expect(screen.getAllByText('No sessions in this workspace yet.').length).toBeGreaterThan(0)
@@ -1630,7 +1703,7 @@ describe('worker studio', () => {
       expect(window.location.pathname).toBe('/workers/hr-worker/workspaces/workspace-1')
     })
     expect(screen.getByTestId('hr-people-workbench')).toBeTruthy()
-    expect(screen.getByText('Profile Tools')).toBeTruthy()
+    expect(screen.getByText('Profile Actions')).toBeTruthy()
     expect(screen.queryByTestId('new-session-panel')).toBeNull()
   })
 

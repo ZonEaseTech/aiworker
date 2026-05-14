@@ -442,6 +442,40 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     const body = await readJson<Partial<Pick<WorkspaceRow, 'metadataJson' | 'name' | 'sourcePointersJson' | 'status'>>>(c.req)
     return c.json({ workspace: updateWorkspace({ id: c.req.param('workspaceId'), ...body }) })
   })
+  app.get('/api/local/workspaces/:workspaceId/profile', async (c) => {
+    const workspace = requireWorkspace(c.req.param('workspaceId'))
+    return c.text(await requireRuntime(state, workspace.workerId).files(workspace.id).read('README.md'))
+  })
+  app.post('/api/local/workspaces/:workspaceId/profile-revisions', async (c) => {
+    const workspace = requireWorkspace(c.req.param('workspaceId'))
+    const body = await readJson<{
+      artifactId?: string
+      findingsJson?: Record<string, unknown>[]
+      profileMarkdown?: string
+      risksJson?: Record<string, unknown>[]
+      tagName?: string | null
+      verdict?: ReviewRow['verdict']
+    }>(c.req)
+    const verdict = body.verdict ?? 'pass'
+    if (verdict !== 'pass' && verdict !== 'warn') {
+      return c.json({
+        error: {
+          code: 'PROFILE_REVISION_NOT_APPROVED',
+          message: 'Only pass or warn reviews can promote a profile revision.',
+        },
+      }, 400)
+    }
+    const profileRevision = await requireRuntime(state, workspace.workerId).promoteProfileRevision({
+      artifactId: requireString(body.artifactId, 'artifactId'),
+      findingsJson: body.findingsJson ?? [],
+      profileMarkdown: body.profileMarkdown,
+      risksJson: body.risksJson ?? [],
+      tagName: body.tagName,
+      verdict,
+      workspaceId: workspace.id,
+    })
+    return c.json({ profileRevision }, 201)
+  })
 
   app.get('/api/local/sessions', c => c.json({ sessions: listSessions() }))
   app.get('/api/local/turns', c => c.json({ turns: listTurns() }))
@@ -1857,6 +1891,8 @@ function registerLocalOpenApiPaths(app: OpenAPIHono): void {
     { method: 'patch', path: '/api/local/workers/{workerId}/workspaces/{workspaceId}', summary: 'Update worker workspace', tags: ['workspaces'] },
     { method: 'get', path: '/api/local/workspaces/{workspaceId}', summary: 'Show workspace', tags: ['workspaces'] },
     { method: 'patch', path: '/api/local/workspaces/{workspaceId}', summary: 'Update workspace', tags: ['workspaces'] },
+    { method: 'get', path: '/api/local/workspaces/{workspaceId}/profile', summary: 'Read workspace profile README', tags: ['workspaces'] },
+    { method: 'post', path: '/api/local/workspaces/{workspaceId}/profile-revisions', summary: 'Promote reviewed artifact into workspace profile', tags: ['workspaces'], created: true },
     { method: 'get', path: '/api/local/sessions', summary: 'List sessions', tags: ['sessions'] },
     { method: 'get', path: '/api/local/turns', summary: 'List turns', tags: ['turns'] },
     { method: 'get', path: '/api/local/workers/{workerId}/workspaces/{workspaceId}/sessions', summary: 'List worker workspace sessions', tags: ['sessions'] },

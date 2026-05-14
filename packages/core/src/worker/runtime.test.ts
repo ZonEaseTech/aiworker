@@ -1,5 +1,6 @@
+import { spawnSync } from 'node:child_process'
 import { mkdtempSync } from 'node:fs'
-import { rm } from 'node:fs/promises'
+import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -37,6 +38,24 @@ describe('LocalWorkerRuntime', () => {
         soulId: 'hr',
         name: 'HR',
         defaultEngineId: 'codex',
+      },
+      workspacesRoot: join(dir, 'workers', 'worker-hr', 'workspaces'),
+      now,
+      executor,
+    })
+  }
+
+  function runtimeWithNativeSkills(sourceRoot: string, executor: ConstructorParameters<typeof LocalWorkerRuntime>[0]['executor']) {
+    return new LocalWorkerRuntime({
+      worker: {
+        id: 'worker-hr',
+        soulId: 'aiworker-hr',
+        name: 'AIWorker HR',
+        defaultEngineId: 'codex',
+      },
+      nativeSkillSource: {
+        appId: 'aiworker-hr',
+        sourceRoot,
       },
       workspacesRoot: join(dir, 'workers', 'worker-hr', 'workspaces'),
       now,
@@ -175,4 +194,144 @@ describe('LocalWorkerRuntime', () => {
     expect(recruitingRuntime.snapshot().workspaces.map(workspace => workspace.id)).toEqual([recruitingWorkspace.id])
     expect(talentRuntime.snapshot().workspaces.map(workspace => workspace.id)).toEqual([talentWorkspace.id])
   })
+
+  it('bootstraps profile workspace ledger and projects app-owned native skills', async () => {
+    const appRoot = join(dir, 'apps', 'aiworker-hr')
+    await mkdir(join(appRoot, 'skills', 'candidate-profile'), { recursive: true })
+    await writeFile(join(appRoot, 'skills', 'candidate-profile', 'SKILL.md'), [
+      '---',
+      'name: candidate-profile',
+      'description: Maintain a source-backed candidate profile.',
+      '---',
+      '',
+      '# Candidate Profile',
+      '',
+      'Use candidate, employee, and alumni lifecycle language.',
+      '',
+    ].join('\n'))
+
+    const workerRuntime = runtimeWithNativeSkills(appRoot, {
+      async invoke() {
+        return { summary: 'ok' }
+      },
+    })
+
+    await workerRuntime.init()
+    const workspace = await workerRuntime.createWorkspace({ name: 'Ada Lovelace Candidate', type: 'people-profile' })
+
+    await expect(readFile(join(workspace.rootPath, 'README.md'), 'utf8')).resolves.toContain('# Ada Lovelace Candidate')
+    await expect(stat(join(workspace.rootPath, 'artifacts'))).resolves.toBeTruthy()
+    await expect(stat(join(workspace.rootPath, 'reviews'))).resolves.toBeTruthy()
+    await expect(stat(join(workspace.rootPath, 'evidence', 'descriptors'))).resolves.toBeTruthy()
+    await expect(stat(join(workspace.rootPath, 'evidence', 'raw'))).resolves.toBeTruthy()
+    await expect(stat(join(workspace.rootPath, '.aiworker', 'sessions'))).resolves.toBeTruthy()
+
+    const gitignore = await readFile(join(workspace.rootPath, '.gitignore'), 'utf8')
+    expect(gitignore).toContain('.aiworker/sessions/')
+    expect(gitignore).toContain('.aiworker/native-skill-projections.json')
+    expect(gitignore).toContain('.agents/skills/aiworker-*')
+    expect(gitignore).toContain('.claude/skills/aiworker-*')
+    expect(gitignore).toContain('evidence/raw/')
+
+    await expect(readFile(join(workspace.rootPath, '.agents', 'skills', 'aiworker-hr-candidate-profile', 'SKILL.md'), 'utf8')).resolves.toContain('Candidate Profile')
+    await expect(readFile(join(workspace.rootPath, '.claude', 'skills', 'aiworker-hr-candidate-profile', 'SKILL.md'), 'utf8')).resolves.toContain('Candidate Profile')
+    const projection = JSON.parse(await readFile(join(workspace.rootPath, '.aiworker', 'native-skill-projections.json'), 'utf8')) as {
+      appId: string
+      skills: Array<{ projectionId: string, sha256: string, skillId: string, source: string, targets: string[] }>
+    }
+    expect(projection.appId).toBe('aiworker-hr')
+    expect(projection.skills).toEqual([
+      expect.objectContaining({
+        projectionId: 'aiworker-hr-candidate-profile',
+        skillId: 'candidate-profile',
+      }),
+    ])
+    expect(projection.skills[0]?.sha256).toMatch(/^[a-f0-9]{64}$/)
+    expect(projection.skills[0]?.targets).toEqual([
+      '.agents/skills/aiworker-hr-candidate-profile/SKILL.md',
+      '.claude/skills/aiworker-hr-candidate-profile/SKILL.md',
+    ])
+
+    if (gitAvailable()) {
+      const head = spawnSync('git', ['-C', workspace.rootPath, 'rev-parse', '--verify', 'HEAD'], { encoding: 'utf8' })
+      expect(head.status).toBe(0)
+      expect(head.stdout.trim()).toMatch(/^[a-f0-9]{40}$/)
+    }
+  })
+
+  it('keeps a Soul App without native skills valid and usable', async () => {
+    const appRoot = join(dir, 'apps', 'aiworker-hr-no-skills')
+    await mkdir(appRoot, { recursive: true })
+    const workerRuntime = runtimeWithNativeSkills(appRoot, {
+      async invoke() {
+        return { summary: 'ok' }
+      },
+    })
+
+    await workerRuntime.init()
+    const workspace = await workerRuntime.createWorkspace({ name: 'No Skills Profile' })
+    const projection = JSON.parse(await readFile(join(workspace.rootPath, '.aiworker', 'native-skill-projections.json'), 'utf8')) as {
+      appId: string
+      skills: unknown[]
+    }
+
+    expect(projection.appId).toBe('aiworker-hr')
+    expect(projection.skills).toEqual([])
+    await expect(readFile(join(workspace.rootPath, 'README.md'), 'utf8')).resolves.toContain('No approved profile revision yet.')
+  })
+
+  it('promotes a reviewed artifact into the canonical profile README', async () => {
+    const workerRuntime = runtime({
+      async invoke(input) {
+        return {
+          summary: 'Profile proposal ready',
+          artifacts: [
+            {
+              path: `artifacts/${input.sessionId}/profile-proposal.md`,
+              title: 'Profile proposal',
+              content: '# Accepted Candidate Profile\n\nEvidence-backed summary.\n',
+            },
+          ],
+        }
+      },
+    })
+
+    await workerRuntime.init()
+    const workspace = await workerRuntime.createWorkspace({ name: 'Profile Promotion Workspace' })
+    const session = await workerRuntime.createSession({
+      workspaceId: workspace.id,
+      capabilityTemplateId: 'person-profile',
+      title: 'Prepare profile',
+    })
+    const turn = await workerRuntime.startTurn({
+      sessionId: session.id,
+      input: 'Draft the profile.',
+      engineId: 'codex',
+    })
+
+    const promotion = await workerRuntime.promoteProfileRevision({
+      artifactId: turn.artifacts[0]!.id,
+      findingsJson: [{ message: 'Approved from HR review.' }],
+      risksJson: [],
+      verdict: 'pass',
+      workspaceId: workspace.id,
+    })
+
+    expect(promotion.review.verdict).toBe('pass')
+    expect(promotion.profilePath).toBe('README.md')
+    expect(promotion.reviewPath).toBe(`reviews/${promotion.review.id}.md`)
+    await expect(readFile(join(workspace.rootPath, 'README.md'), 'utf8')).resolves.toContain('Accepted Candidate Profile')
+    await expect(readFile(join(workspace.rootPath, promotion.reviewPath), 'utf8')).resolves.toContain('Approved from HR review.')
+    expect(workerRuntime.snapshot().reviews.map(review => review.id)).toContain(promotion.review.id)
+
+    if (gitAvailable()) {
+      expect(promotion.git.status).toBe('created')
+      const log = spawnSync('git', ['-C', workspace.rootPath, 'log', '--oneline', '--', 'README.md'], { encoding: 'utf8' })
+      expect(log.stdout).toContain('profile: approve Profile Promotion Workspace revision')
+    }
+  })
 })
+
+function gitAvailable(): boolean {
+  return spawnSync('git', ['--version'], { encoding: 'utf8' }).status === 0
+}

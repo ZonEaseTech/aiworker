@@ -2,6 +2,13 @@ export {
   updateLesson,
 } from './lessons'
 export {
+  promoteProfileRevision,
+  readProfile,
+} from './profile-revisions'
+export type {
+  LocalProfileRevision,
+} from './profile-revisions'
+export {
   createReview,
 } from './reviews'
 export {

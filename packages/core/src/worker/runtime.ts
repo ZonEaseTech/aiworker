@@ -11,6 +11,8 @@ import type {
   WorkspaceRow,
 } from '@zonease/aiworker-storage-sqlite/worker'
 import type { LocalExecutor, LocalExecutorEvent, LocalExecutorResult } from './executor'
+import type { NativeSkillProjectionManifest, NativeSkillSource } from './native-skills'
+import type { GitOperationResult, ProfileWorkspaceBootstrapResult } from './profile-ledger'
 
 import { randomUUID } from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
@@ -23,6 +25,7 @@ import {
   createSession,
   createTurn,
   createWorkspace,
+  getArtifact,
   getSession,
   getWorker,
   getWorkspace,
@@ -48,6 +51,8 @@ import {
 import { LocalWorkerEventBus } from './events'
 import { createExternalEngineExecutor } from './executor'
 import { LocalWorkspaceFiles } from './files'
+import { nativeSkillProjectionManifestPath, projectNativeSkillsToWorkspace } from './native-skills'
+import { bootstrapProfileWorkspace, promoteProfileRevision as promoteProfileRevisionFiles } from './profile-ledger'
 
 export interface LocalWorkerRuntimeOptions {
   worker: {
@@ -59,6 +64,7 @@ export interface LocalWorkerRuntimeOptions {
   }
   workspacesRoot: string
   executor?: LocalExecutor
+  nativeSkillSource?: NativeSkillSource | null
   now?: () => string
 }
 
@@ -109,10 +115,29 @@ export interface LocalWorkerSnapshot {
   events: SessionEventRow[]
 }
 
+export interface PromoteProfileRevisionInput {
+  artifactId: string
+  findingsJson?: Record<string, unknown>[]
+  profileMarkdown?: string
+  risksJson?: Record<string, unknown>[]
+  tagName?: string | null
+  verdict?: ReviewRow['verdict']
+  workspaceId: string
+}
+
+export interface ProfileRevisionPromotionResult {
+  git: GitOperationResult
+  profilePath: string
+  review: ReviewRow
+  reviewPath: string
+  tag: GitOperationResult | null
+}
+
 export class LocalWorkerRuntime {
   readonly #workerInput: LocalWorkerRuntimeOptions['worker']
   readonly #workspacesRoot: string
   readonly #executor: LocalExecutor
+  readonly #nativeSkillSource: NativeSkillSource | null
   readonly #now: () => string
   readonly bus = new LocalWorkerEventBus()
 
@@ -120,6 +145,7 @@ export class LocalWorkerRuntime {
     this.#workerInput = options.worker
     this.#workspacesRoot = path.resolve(options.workspacesRoot)
     this.#executor = options.executor ?? createExternalEngineExecutor()
+    this.#nativeSkillSource = options.nativeSkillSource ?? null
     this.#now = options.now ?? (() => new Date().toISOString())
   }
 
@@ -133,7 +159,7 @@ export class LocalWorkerRuntime {
 
   async init(): Promise<WorkerRow> {
     await mkdir(this.#workspacesRoot, { recursive: true })
-    return upsertWorker({
+    const worker = upsertWorker({
       id: this.#workerInput.id,
       soulId: this.#workerInput.soulId,
       name: this.#workerInput.name,
@@ -141,17 +167,18 @@ export class LocalWorkerRuntime {
       metadataJson: this.#workerInput.metadata ?? {},
       at: this.#now(),
     })
+    await this.repairWorkspaceLayouts()
+    return worker
   }
 
   async createWorkspace(input: CreateLocalWorkspaceInput): Promise<WorkspaceRow> {
     this.requireWorker()
     const id = randomUUID()
     const rootPath = path.join(this.#workspacesRoot, id)
-    const files = new LocalWorkspaceFiles(rootPath)
-    await files.ensureRoot()
-    await mkdir(files.resolve('evidence'), { recursive: true })
-    await mkdir(files.resolve('artifacts'), { recursive: true })
-    await mkdir(files.resolve(path.posix.join('.aiworker', 'sessions')), { recursive: true })
+    const layout = await this.prepareWorkspaceLayout({
+      name: input.name,
+      rootPath,
+    })
     return createWorkspace({
       id,
       workerId: this.workerId,
@@ -159,7 +186,19 @@ export class LocalWorkerRuntime {
       rootPath,
       type: input.type ?? 'workspace',
       sourcePointersJson: input.sourcePointers ?? [],
-      metadataJson: input.metadata ?? {},
+      metadataJson: {
+        ...(input.metadata ?? {}),
+        nativeSkillProjection: layout.nativeSkills
+          ? {
+              projectionCount: layout.nativeSkills.skills.length,
+              projectionManifestPath: nativeSkillProjectionManifestPath(),
+            }
+          : null,
+        profileLedger: {
+          git: layout.profile.git,
+          profilePath: layout.profile.profilePath,
+        },
+      },
       at: this.#now(),
     })
   }
@@ -325,6 +364,51 @@ export class LocalWorkerRuntime {
     return new LocalWorkspaceFiles(workspace.rootPath)
   }
 
+  async promoteProfileRevision(input: PromoteProfileRevisionInput): Promise<ProfileRevisionPromotionResult> {
+    const workspace = this.requireWorkspace(input.workspaceId)
+    const artifact = getArtifact(input.artifactId)
+    if (!artifact || artifact.workspaceId !== workspace.id)
+      throw new Error(`Artifact not found for workspace ${workspace.id}: ${input.artifactId}`)
+
+    const verdict = input.verdict ?? 'pass'
+    const reviewId = randomUUID()
+    const files = new LocalWorkspaceFiles(workspace.rootPath)
+    const artifactContent = await files.read(artifact.path)
+    const at = this.#now()
+    const promotion = await promoteProfileRevisionFiles({
+      artifactPath: artifact.path,
+      artifactTitle: artifact.title,
+      findingsJson: input.findingsJson ?? [{ message: 'Profile revision approved.' }],
+      now: at,
+      profileMarkdown: input.profileMarkdown ?? artifactContent,
+      reviewId,
+      risksJson: input.risksJson ?? [],
+      tagName: input.tagName,
+      verdict,
+      workspaceName: workspace.name,
+      workspaceRoot: workspace.rootPath,
+    })
+    const review = createReview({
+      id: reviewId,
+      workspaceId: workspace.id,
+      sessionId: artifact.sessionId,
+      turnId: artifact.turnId,
+      artifactId: artifact.id,
+      verdict,
+      findingsJson: input.findingsJson ?? [{ message: 'Profile revision approved.' }],
+      risksJson: input.risksJson ?? [],
+      at,
+    })
+    if (review.sessionId) {
+      this.appendEvent(review.sessionId, 'review', { reviewId: review.id, verdict: review.verdict, profilePath: promotion.profilePath }, review.turnId, null)
+      this.bus.emit({ kind: 'review', workspaceId: workspace.id, sessionId: review.sessionId, turnId: review.turnId ?? undefined, payload: { reviewId: review.id, profilePath: promotion.profilePath }, at: this.#now() })
+    }
+    return {
+      ...promotion,
+      review,
+    }
+  }
+
   dispose(): void {
     return undefined
   }
@@ -457,6 +541,12 @@ export class LocalWorkerRuntime {
       `Capability template: ${session.capabilityTemplateId}`,
       `Output kind: ${readString(metadata.outputKind, 'business-artifact')}`,
       '',
+      'Workspace profile ledger:',
+      '- README.md is the accepted profile for this workspace.',
+      `- Proposed changes should be written under artifacts/${session.id}/ before review.`,
+      '- Human review records live under reviews/.',
+      '- Native skills may be projected under .agents/skills and .claude/skills when the Soul App provides them.',
+      '',
       'Session context:',
       session.context || '(no prior context)',
       '',
@@ -489,6 +579,9 @@ export class LocalWorkerRuntime {
       `- Soul: ${this.#workerInput.soulId}`,
       `- Capability template: ${session.capabilityTemplateId}`,
       `- Output kind: ${readString(metadata.outputKind, 'business-artifact')}`,
+      `- Accepted profile: README.md`,
+      `- Proposed change directory: artifacts/${session.id}/`,
+      '- Native skill projections: .agents/skills and .claude/skills when available',
       '',
       '## Context',
       session.context || 'No context supplied.',
@@ -535,6 +628,31 @@ export class LocalWorkerRuntime {
     if (!session || session.workerId !== this.workerId)
       throw new Error(`Session not found for worker ${this.workerId}: ${id}`)
     return session
+  }
+
+  private async repairWorkspaceLayouts(): Promise<void> {
+    for (const workspace of listWorkspaces(this.workerId))
+      await this.prepareWorkspaceLayout({ name: workspace.name, rootPath: workspace.rootPath })
+  }
+
+  private async prepareWorkspaceLayout(input: { name: string, rootPath: string }): Promise<{
+    nativeSkills: NativeSkillProjectionManifest | null
+    profile: ProfileWorkspaceBootstrapResult
+  }> {
+    const profile = await bootstrapProfileWorkspace({
+      name: input.name,
+      now: this.#now(),
+      rootPath: input.rootPath,
+    })
+    const nativeSkills = this.#nativeSkillSource
+      ? await projectNativeSkillsToWorkspace({
+          appId: this.#nativeSkillSource.appId,
+          now: this.#now(),
+          sourceRoot: this.#nativeSkillSource.sourceRoot,
+          workspaceRoot: input.rootPath,
+        })
+      : null
+    return { nativeSkills, profile }
   }
 }
 

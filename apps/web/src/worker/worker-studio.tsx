@@ -12,7 +12,7 @@ import type { FormEvent } from 'react'
 import type { LocalSoulAppSearchResult, LocalSoulAppShellAction, LocalWorkspaceData } from '../features/local-workspace/api/types'
 import type { SettingsSection } from '../features/settings'
 import type { ArtifactPreviewState } from './session-detail'
-import type { SoulWorkbenchContext } from './souls/types'
+import type { SoulProfilePreviewState, SoulWorkbenchContext } from './souls/types'
 
 import { IconButton, StudioEmptyState, StudioMainFrame, StudioSectionHeader, WorkerStudioLayout } from '@zonease/aiworker-component'
 import { findSoulWorkbenchForSoul } from '@zonease/aiworker-shared/soul-workbench-catalog'
@@ -38,7 +38,7 @@ import {
   messagesFor,
   normalizeLocale,
 } from '../features/i18n'
-import { continueSessionTurnStream, createReview, createSessionTurnStream, createWorker, createWorkspace, loadLocalWorkspaceData, readFile, updateLesson } from '../features/local-workspace/api'
+import { continueSessionTurnStream, createReview, createSessionTurnStream, createWorker, createWorkspace, loadLocalWorkspaceData, promoteProfileRevision, readFile, readProfile, updateLesson } from '../features/local-workspace/api'
 import { invokeSoulAppAction, searchSoulApp } from '../features/local-workspace/api/workspace-data'
 import { CreateWorkerDialog, CreateWorkspaceDialog, WorkerIdentityBlock, WorkspaceCard, WorkspaceSessionComposer } from '../features/local-workspace/components'
 import {
@@ -85,11 +85,24 @@ const initialArtifactPreviewState: ArtifactPreviewState = {
   loading: false,
 }
 
+const initialProfilePreviewState: SoulProfilePreviewState = {
+  content: '',
+  error: null,
+  loading: false,
+  workspaceId: null,
+}
+
 type ArtifactPreviewAction
   = | { type: 'idle' }
     | { artifactId: string, type: 'loading' }
     | { artifactId: string, content: string, type: 'loaded' }
     | { artifactId: string, error: string, type: 'failed' }
+
+type ProfilePreviewAction
+  = | { type: 'idle' }
+    | { type: 'loading', workspaceId: string }
+    | { type: 'loaded', content: string, workspaceId: string }
+    | { type: 'failed', error: string, workspaceId: string }
 
 interface ShellSearchState {
   error: string | null
@@ -114,6 +127,19 @@ function artifactPreviewReducer(_state: ArtifactPreviewState, action: ArtifactPr
       return { artifactId: action.artifactId, content: action.content, error: null, loading: false }
     case 'failed':
       return { artifactId: action.artifactId, content: '', error: action.error, loading: false }
+  }
+}
+
+function profilePreviewReducer(_state: SoulProfilePreviewState, action: ProfilePreviewAction): SoulProfilePreviewState {
+  switch (action.type) {
+    case 'idle':
+      return initialProfilePreviewState
+    case 'loading':
+      return { content: '', error: null, loading: true, workspaceId: action.workspaceId }
+    case 'loaded':
+      return { content: action.content, error: null, loading: false, workspaceId: action.workspaceId }
+    case 'failed':
+      return { content: '', error: action.error, loading: false, workspaceId: action.workspaceId }
   }
 }
 
@@ -151,6 +177,7 @@ export function WorkerStudio() {
   const [turnDraft, setTurnDraft] = useState<{ sessionId: null | string, value: string }>({ sessionId: null, value: '' })
   const [turnSubmitting, setTurnSubmitting] = useState(false)
   const [reviewSubmitting, setReviewSubmitting] = useState(false)
+  const [profileRevisionSubmitting, setProfileRevisionSubmitting] = useState(false)
   const [lessonBusyId, setLessonBusyId] = useState<string | null>(null)
   const [shellActionState, setShellActionState] = useState<{ busyActionId: string | null, error: string | null, message: string | null }>({
     busyActionId: null,
@@ -168,6 +195,7 @@ export function WorkerStudio() {
   const [streamTurns, setStreamTurns] = useState<LocalTurn[]>([])
   const [pendingTurn, setPendingTurn] = useState<LocalTurn | null>(null)
   const [artifactPreview, dispatchArtifactPreview] = useReducer(artifactPreviewReducer, initialArtifactPreviewState)
+  const [profilePreview, dispatchProfilePreview] = useReducer(profilePreviewReducer, initialProfilePreviewState)
 
   const refresh = useCallback(async () => {
     setState(current => ({ ...current, loading: true, error: null }))
@@ -546,6 +574,32 @@ export function WorkerStudio() {
     }
   }, [selectedArtifact])
 
+  useEffect(() => {
+    if (!selectedWorkspace) {
+      dispatchProfilePreview({ type: 'idle' })
+      return
+    }
+    let cancelled = false
+    dispatchProfilePreview({ type: 'loading', workspaceId: selectedWorkspace.id })
+    readProfile(selectedWorkspace.id)
+      .then((content) => {
+        if (!cancelled)
+          dispatchProfilePreview({ content, type: 'loaded', workspaceId: selectedWorkspace.id })
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          dispatchProfilePreview({
+            error: error instanceof Error ? error.message : String(error),
+            type: 'failed',
+            workspaceId: selectedWorkspace.id,
+          })
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [selectedWorkspace])
+
   async function submitProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!data || !selectedSoul || !selectedWorker || !workspaceTitle.trim())
@@ -683,6 +737,39 @@ export function WorkerStudio() {
     }
     finally {
       setReviewSubmitting(false)
+    }
+  }
+
+  async function submitProfileRevision() {
+    if (!selectedWorkspace || !selectedArtifact || profileRevisionSubmitting)
+      return
+    setProfileRevisionSubmitting(true)
+    try {
+      const previewContent = artifactPreview.artifactId === selectedArtifact.id && !artifactPreview.loading && !artifactPreview.error
+        ? artifactPreview.content.trim()
+        : ''
+      await promoteProfileRevision(selectedWorkspace.id, {
+        artifactId: selectedArtifact.id,
+        findingsJson: [{ message: 'Approved from HR workbench.' }],
+        profileMarkdown: previewContent || undefined,
+        risksJson: [],
+        verdict: 'pass',
+      })
+      try {
+        const nextProfile = await readProfile(selectedWorkspace.id)
+        dispatchProfilePreview({ content: nextProfile, type: 'loaded', workspaceId: selectedWorkspace.id })
+      }
+      catch (error) {
+        dispatchProfilePreview({
+          error: error instanceof Error ? error.message : String(error),
+          type: 'failed',
+          workspaceId: selectedWorkspace.id,
+        })
+      }
+      await refresh()
+    }
+    finally {
+      setProfileRevisionSubmitting(false)
     }
   }
 
@@ -892,9 +979,12 @@ export function WorkerStudio() {
         onOpenSettings: () => openSettings('execution'),
         onOpenSession: session => navigateWorkerRoute({ kind: 'session', sessionId: session.id, workerId: session.workerId, workspaceId: session.workspaceId }),
         onOpenWorkspace: workspace => navigateWorkerRoute({ kind: 'workspace', workerId: workspace.workerId, workspaceId: workspace.id }),
+        onPromoteProfileRevision: submitProfileRevision,
         onRefresh: () => void refresh(),
         onSubmitSession: submitSession,
         onTemplateChange: setSelectedTemplateId,
+        profilePreview,
+        profileRevisionSubmitting,
       }
     : null
 
