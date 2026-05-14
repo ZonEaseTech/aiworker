@@ -421,4 +421,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**DOC-013 Agent-operational documentation contract**](DOC-013.md) `P0`
 - [x] [**FEAT-082 npm preview release readiness**](FEAT-082.md) `P0`
 - [x] [**BUG-118 Worker Web blanks with orphan legacy workers**](BUG-118.md) `P0`
-- [ ] [**FEAT-083 Dev home isolation**](FEAT-083.md) `P0`
+- [x] [**FEAT-083 Dev home isolation**](FEAT-083.md) `P0`

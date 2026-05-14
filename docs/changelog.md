@@ -1,5 +1,13 @@
 # AIWorker Changelog
 
+## 2026-05-14 [done]
+
+Completed FEAT-083 / PLAN-318. Source-checkout development now defaults to
+`~/.aiworker-dev`, packaged CLI defaults remain `~/.aiworker`, and explicit
+`AIWORKER_HOME` / `WORKER_DB_PATH` overrides keep priority. Verified with
+focused fs-layout/Core/CLI tests, Web build, CLI bundle, dist release smoke,
+`git diff --check` and code-review-graph.
+
 ## 2026-05-14 [progress]
 
 Started FEAT-083 / PLAN-318 to isolate source-checkout development state under

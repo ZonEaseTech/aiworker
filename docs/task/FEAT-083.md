@@ -1,6 +1,6 @@
 # FEAT-083 Dev home isolation
 
-- **status**: in_progress
+- **status**: completed
 - **priority**: P0
 - **owner**: codex
 - **createdAt**: 2026-05-14
@@ -58,4 +58,11 @@ and daemon logs.
 
 ## Result
 
-This task remains open until implementation records final verification evidence.
+Completed on 2026-05-14.
+
+- Source-checkout CLI defaults to `~/.aiworker-dev`.
+- Packaged/dist/npm CLI defaults remain `~/.aiworker`.
+- Explicit `AIWORKER_HOME` and `WORKER_DB_PATH` still win.
+- Root dev scripts use `$HOME/.aiworker-dev`.
+- Docs describe source and packaged defaults.
+- Focused tests, dist smoke and code-review-graph were run.
