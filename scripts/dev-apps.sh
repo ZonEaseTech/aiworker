@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-export AIWORKER_HOME="${AIWORKER_HOME:-/tmp/aiworker-dev}"
+export AIWORKER_HOME="${AIWORKER_HOME:-$HOME/.aiworker-dev}"
 
 cd "$ROOT_DIR"
 

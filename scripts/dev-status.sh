@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-AIWORKER_HOME="${AIWORKER_HOME:-/tmp/aiworker-dev}"
+AIWORKER_HOME="${AIWORKER_HOME:-$HOME/.aiworker-dev}"
 AIWORKER_HOST="${AIWORKER_HOST:-127.0.0.1}"
 PORT="${PORT:-9217}"
 AIWORKER_WEB_PORT="${AIWORKER_WEB_PORT:-5173}"

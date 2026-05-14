@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "bash scripts/dev-local.sh",
     "dev:all": "bun run --filter '*' dev",
-    "dev:host": "AIWORKER_HOME=${AIWORKER_HOME:-/tmp/aiworker-dev} AIWORKER_WORKER_HOST=${AIWORKER_WORKER_HOST:-127.0.0.1} PORT=${PORT:-9217} bun apps/cli/src/aiworker.ts daemon foreground --host ${AIWORKER_WORKER_HOST:-127.0.0.1} --port ${PORT:-9217}",
+    "dev:host": "AIWORKER_HOME=${AIWORKER_HOME:-$HOME/.aiworker-dev} AIWORKER_WORKER_HOST=${AIWORKER_WORKER_HOST:-127.0.0.1} PORT=${PORT:-9217} bun apps/cli/src/aiworker.ts daemon foreground --host ${AIWORKER_WORKER_HOST:-127.0.0.1} --port ${PORT:-9217}",
     "dev:web": "cd apps/web && AIWORKER_API_URL=${AIWORKER_API_URL:-http://127.0.0.1:${PORT:-9217}} bun run dev --host ${AIWORKER_WEB_HOST:-127.0.0.1} --port ${AIWORKER_WEB_PORT:-5173}",
     "dev:apps": "bash scripts/dev-apps.sh",
     "dev:status": "bash scripts/dev-status.sh",
