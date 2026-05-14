@@ -4,6 +4,17 @@ export {
   workerEnv,
 } from './config/worker'
 export {
+  createLocalBearerAuthProvider,
+  type HostAuthInput,
+  type HostAuthMethod,
+  type HostAuthProvider,
+  type HostAuthProviderKind,
+  type HostAuthResult,
+  type HostIdentity,
+  type HostIdentityGrant,
+  type LocalBearerAuthProviderOptions,
+} from './host/identity-provider'
+export {
   createHostRuntime,
   type CreateHostSoulWorkerInput,
   type CreateHostSoulWorkerResult,

@@ -1,4 +1,4 @@
-import type { HostRuntime, LocalExecutor, LocalWorkerRuntime } from '@zonease/aiworker-core'
+import type { HostAuthProvider, HostIdentity, HostRuntime, LocalExecutor, LocalWorkerRuntime } from '@zonease/aiworker-core'
 import type { HostedSoulApp, LocalSettingsConfig, SoulAppMountedSurface, SoulAppPermission } from '@zonease/aiworker-shared'
 import type { ReviewRow, SessionRow, WorkerRow, WorkspaceRow } from '@zonease/aiworker-storage-sqlite/worker'
 
@@ -7,7 +7,7 @@ import type { ChildProcessByStdio } from 'node:child_process'
 import type { Readable } from 'node:stream'
 import { Buffer } from 'node:buffer'
 import { spawn, spawnSync } from 'node:child_process'
-import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
+import { createHmac, randomUUID } from 'node:crypto'
 import { mkdir, readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
@@ -16,6 +16,7 @@ import { OpenAPIHono, z } from '@hono/zod-openapi'
 import { apiReference } from '@scalar/hono-api-reference'
 import {
   createHostRuntime,
+  createLocalBearerAuthProvider,
   createSoulAppBroker,
   workerEnv,
 } from '@zonease/aiworker-core'
@@ -56,6 +57,7 @@ import { requestLogger } from '../shared/middleware/logger'
 
 const DEFAULT_RUNTIME_VERSION = 'dev'
 const LOCAL_SETTINGS_KEY = 'local-settings'
+const REQUEST_IDENTITIES = new WeakMap<Context, HostIdentity>()
 const ENGINE_COMMANDS = [
   { id: 'codex', name: 'Codex CLI', command: 'codex' },
   { id: 'claude-code', name: 'Claude Code', command: 'claude' },
@@ -77,11 +79,11 @@ export interface BootstrapWorkerAppOptions {
 }
 
 export interface LocalDaemonState {
+  authProvider: HostAuthProvider
   host: HostRuntime
   mountingAppServices: Map<string, Promise<MountedSoulAppService | null>>
   mountedAppServices: Map<string, MountedSoulAppService>
   startedAt: string
-  token?: string
   runtimeVersion: string
   runtimes: Map<string, LocalWorkerRuntime>
   now?: () => string
@@ -160,12 +162,12 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     workersRoot,
   })
   const state: LocalDaemonState = {
+    authProvider: createLocalBearerAuthProvider({ token: options.token ?? workerEnv.AIWORKER_LOCAL_TOKEN }),
     host,
     mountingAppServices: new Map(),
     mountedAppServices: new Map(),
     runtimes,
     startedAt: new Date().toISOString(),
-    token: options.token ?? workerEnv.AIWORKER_LOCAL_TOKEN,
     runtimeVersion,
     now: options.now,
   }
@@ -180,12 +182,11 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
   app.use(requestLogger)
   app.onError(errorHandler)
   app.use('/api/local/*', async (c, next) => {
-    if (!state.token)
-      return next()
-    const header = c.req.header('authorization') ?? ''
-    const expected = `Bearer ${state.token}`
-    if (!timingSafeEqualText(header, expected))
-      return c.json({ error: { code: 'UNAUTHORIZED', message: 'Missing or invalid local bearer token.' } }, 401)
+    const result = state.authProvider.authenticate({ authorization: c.req.header('authorization') })
+    if (result.status === 'denied')
+      return c.json({ error: { code: 'UNAUTHORIZED', message: result.reason } }, 401)
+    if (result.status === 'authenticated')
+      REQUEST_IDENTITIES.set(c, result.identity)
     return next()
   })
 
@@ -713,12 +714,6 @@ function notFound(c: Context, resource: string) {
   return c.json({ error: { code: 'NOT_FOUND', message: `${resource} not found.` } }, 404)
 }
 
-function timingSafeEqualText(actual: string, expected: string): boolean {
-  const a = Buffer.from(actual)
-  const b = Buffer.from(expected)
-  return a.length === b.length && timingSafeEqual(a, b)
-}
-
 function requireRuntime(state: LocalDaemonState, workerId: string): LocalWorkerRuntime {
   const existing = state.runtimes.get(workerId)
   if (existing)
@@ -783,7 +778,7 @@ function brokerContext(c: Context, state: LocalDaemonState, scope?: BrokerReques
     connectorProviders: settings.connectors,
     enabledConnectorIds: settings.connectors.filter(connector => connector.enabled).map(connector => connector.id),
     now: state.now,
-    operatorId: scope?.operatorId ?? c.req.query('operatorId'),
+    operatorId: requestIdentity(c)?.operatorId ?? scope?.operatorId ?? c.req.query('operatorId'),
     sessionId: scope?.sessionId ?? c.req.query('sessionId'),
     workerId: scope?.workerId ?? c.req.query('workerId'),
     workspaceId: scope?.workspaceId ?? c.req.query('workspaceId'),
@@ -1160,12 +1155,16 @@ function applyMountedProxyContextHeaders(
 ): void {
   const sourceUrl = new URL(c.req.url)
   const origin = `${sourceUrl.protocol}//${sourceUrl.host}`
+  const identity = requestIdentity(c)
+  const operatorId = identity?.operatorId ?? scope?.operatorId ?? c.req.query('operatorId') ?? null
   const payload = Buffer.from(JSON.stringify({
     appId: app.appId,
     artifactId: c.req.query('artifactId') ?? null,
+    brokerGrants: app.manifest.permissions,
     brokerUrl: `${origin}/api/local/apps/${app.appId}/broker`,
     expiresAt: mountContextExpiry(state),
-    operatorId: scope?.operatorId ?? c.req.query('operatorId') ?? null,
+    identity: identity ? publicHostIdentity(identity) : null,
+    operatorId,
     permissions: app.manifest.permissions,
     reviewId: c.req.query('reviewId') ?? null,
     routePrefix: app.mountedContribution.apiRoutePrefix,
@@ -1182,6 +1181,20 @@ function applyMountedProxyContextHeaders(
   headers.set('x-aiworker-mount-signature', signature)
   headers.set('x-aiworker-mount-token', service.mountToken)
   headers.set('x-aiworker-route-prefix', app.mountedContribution.apiRoutePrefix ?? '')
+}
+
+function requestIdentity(c: Context): HostIdentity | null {
+  return REQUEST_IDENTITIES.get(c) ?? null
+}
+
+function publicHostIdentity(identity: HostIdentity): HostIdentity {
+  return {
+    authMethod: identity.authMethod,
+    grants: identity.grants,
+    operatorId: identity.operatorId,
+    providerId: identity.providerId,
+    subject: identity.subject,
+  }
 }
 
 function mountContextExpiry(state: LocalDaemonState): string {

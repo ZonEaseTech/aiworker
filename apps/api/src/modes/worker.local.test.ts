@@ -974,6 +974,92 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
     })).status).toBe(200)
   })
 
+  it('projects authenticated local identity into broker scope and signed mount context', async () => {
+    const target = await app('local-token-123456')
+    const authHeaders = { authorization: 'Bearer local-token-123456' }
+
+    const writeRes = await target.request('/api/local/apps/aiworker-hr/broker/storage/identity/probe?operatorId=spoofed-operator', {
+      method: 'PUT',
+      body: JSON.stringify({ valueJson: { ok: true } }),
+      headers: { ...authHeaders, 'content-type': 'application/json' },
+    })
+    expect(writeRes.status).toBe(200)
+    expect(await writeRes.json()).toMatchObject({
+      record: {
+        operatorId: 'operator-local',
+      },
+    })
+
+    const mountedService = Bun.serve({
+      fetch(request) {
+        const url = new URL(request.url)
+        if (url.pathname === '/health')
+          return Response.json({ status: 'ok' })
+        if (url.pathname === '/domain') {
+          const mountContext = request.headers.get('x-aiworker-mount-context')
+          return Response.json({
+            authorization: request.headers.get('authorization'),
+            cookie: request.headers.get('cookie'),
+            mountContext,
+          })
+        }
+        return Response.json({ error: { code: 'NOT_FOUND' } }, { status: 404 })
+      },
+      hostname: '127.0.0.1',
+      port: 0,
+    })
+
+    try {
+      const installRes = await target.request('/api/local/apps/install', {
+        method: 'POST',
+        body: JSON.stringify({
+          manifest: {
+            ...hrSoulAppManifest,
+            api: {
+              ...hrSoulAppManifest.api,
+              localService: {
+                baseUrl: `http://127.0.0.1:${mountedService.port}`,
+                healthPath: '/health',
+              },
+            },
+          },
+        }),
+        headers: { ...authHeaders, 'content-type': 'application/json' },
+      })
+      expect(installRes.status).toBe(201)
+      expect((await target.request('/api/local/apps/aiworker-hr/enable', {
+        method: 'POST',
+        headers: authHeaders,
+      })).status).toBe(200)
+
+      const mountedRes = await target.request('/api/local/apps/aiworker-hr/domain?operatorId=spoofed-operator', {
+        headers: {
+          ...authHeaders,
+          cookie: 'session=caller',
+        },
+      })
+      expect(mountedRes.status).toBe(200)
+      const mountedBody = await mountedRes.json() as { authorization: string | null, cookie: string | null, mountContext: string }
+      expect(mountedBody.authorization).toBeNull()
+      expect(mountedBody.cookie).toBeNull()
+      const mountContext = JSON.parse(Buffer.from(mountedBody.mountContext, 'base64url').toString('utf8')) as {
+        brokerGrants: unknown[]
+        identity: { authMethod: string, operatorId: string, providerId: string }
+        operatorId: string
+      }
+      expect(mountContext.operatorId).toBe('operator-local')
+      expect(mountContext.identity).toMatchObject({
+        authMethod: 'local-bearer',
+        operatorId: 'operator-local',
+        providerId: 'local-bearer',
+      })
+      expect(mountContext.brokerGrants.length).toBeGreaterThan(0)
+    }
+    finally {
+      mountedService.stop()
+    }
+  })
+
   it('serves Worker Web font assets from the static build', async () => {
     const webStaticDir = join(dir, 'web-static')
     mkdirSync(join(webStaticDir, 'fonts'), { recursive: true })

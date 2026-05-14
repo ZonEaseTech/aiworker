@@ -1,5 +1,19 @@
 # AIWorker Changelog
 
+## 2026-05-14 11:41 [completed] FEAT-078 / PLAN-310 — Identity boundary
+
+Completed the next convergence slice after broker provider registry delivery.
+
+- Move local bearer auth behind a Host auth provider interface.
+- Keep existing local daemon token behavior compatible.
+- Project authenticated operator identity into broker scope and signed mount context.
+- Keep Soul Apps away from caller cookies, caller authorization headers and Host auth internals.
+
+Verification passed: focused core/API tests and typechecks, lint, `git diff
+--check`, and code-review-graph. CRG exited 0 with static test-gap hints for
+API request helpers and mount context projection, covered by the focused
+authenticated identity API test.
+
 ## 2026-05-14 11:33 [completed] FEAT-077 / PLAN-309 — Broker provider registry
 
 Completed the next convergence slice after permission visibility delivery.

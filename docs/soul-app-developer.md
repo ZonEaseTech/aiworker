@@ -158,6 +158,11 @@ descriptor first. Host must reject undeclared protocol actions or search
 providers, and must not infer app domain behavior from protocol names.
 Descriptor `requiredPermissions` are broker-enforced before Host contacts a
 mounted Soul App service.
+Host auth is provider-backed. Local bearer auth is the first implementation;
+future Logto integration should stay behind the same Host provider boundary.
+Mounted Soul Apps receive operator identity through signed mount context and
+broker scope, not through caller cookies, caller authorization headers or Host
+private auth internals.
 Host storage broker providers own app-scoped namespaces and access control;
 Soul Apps own stored value semantics.
 Host broker provider registry exposes storage, connector, audit and

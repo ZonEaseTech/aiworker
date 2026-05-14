@@ -151,6 +151,9 @@ events -> optional app-emitted lifecycle/domain events
 - Host 可以提供 broker，不拥有 broker 内 app 写入的领域内容。
 - Host action/search/settings invocation must resolve a manifest-declared descriptor first.
   Host must reject undeclared protocol actions or search providers, and must not infer app domain behavior from protocol names.
+- Host auth is provider-backed. The current local provider preserves bearer-token behavior, while
+  future Logto integration must implement the same provider boundary instead of leaking auth
+  internals into Soul Apps.
 - Descriptor `requiredPermissions` are broker-enforced before Host contacts a mounted Soul App service.
 - Host storage broker providers own app-scoped namespaces and access control; Soul Apps own stored value semantics.
 - Host broker provider registry lists storage, connector, audit and secret-reference providers as
@@ -161,6 +164,8 @@ events -> optional app-emitted lifecycle/domain events
   Host security and grant UX; it is not an app-specific approval model and does not interpret domain data.
 - Host 可以展示 app 的 review 或 memory status，不解释 status 对业务流程的含义。
 - Soul App 不直接读取 Host 私有 DB、secret、connector credential 或 sibling app 源码。
+- Soul App receives operator identity and broker grants only through signed mount context or
+  app-scoped broker scope. Caller cookies and caller authorization headers are not forwarded.
 
 ## Shell Contract
 
