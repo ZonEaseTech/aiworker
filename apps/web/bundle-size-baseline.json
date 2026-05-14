@@ -1,8 +1,8 @@
 {
   "bundles": {
     "worker": {
-      "bytes": 220049,
-      "gzipBytes": 68301
+      "bytes": 807087,
+      "gzipBytes": 322074
     }
   }
 }

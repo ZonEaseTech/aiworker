@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build && bun run check:studio-css",
     "check:studio-css": "bun ../../scripts/web-quality.ts studio-css",
+    "check:shared-cycles": "bun ../../scripts/web-quality.ts shared-cycles",
     "lint": "eslint src vite.config.ts",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
