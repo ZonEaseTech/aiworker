@@ -1,9 +1,10 @@
 # PLAN-322 CLI 0.13.2 patch release
 
-- **status**: implementing
+- **status**: completed
 - **owner**: codex
 - **createdAt**: 2026-05-15 00:18
 - **approvedAt**: 2026-05-15 00:24
+- **completedAt**: 2026-05-15 00:31
 - **relatedTask**: REL-033
 
 ## Current State
@@ -99,6 +100,9 @@ the already committed source changes and the version bump.
 - 2026-05-15 00:25：本地 release gates 已通过到 source/build/dist/pack/smoke
   与 code-review-graph。下一步提交 release prep、推送 `main` 并创建
   annotated tag `v0.13.2`。
+- 2026-05-15 00:31：`@zonease/aiworker-cli@0.13.2` 已发布并完成
+  post-release verification。release workflow、main lint workflow、npm latest、
+  explicit `bunx`、GitHub Release assets 与 published-package smoke 均通过。
 
 ## Verification
 
@@ -116,3 +120,32 @@ the already committed source changes and the version bump.
 - Passed: `bun run crg:update`
 - Passed: `uvx code-review-graph detect-changes --repo . --base origin/main --brief`
   with 0 affected flows and static helper-level test-gap hints.
+- Passed: GitHub Actions release workflow `25871841845` for `v0.13.2`
+- Passed: main lint workflow `25871841945`
+- Passed: `npm view @zonease/aiworker-cli version` returned `0.13.2`
+- Passed: `bunx @zonease/aiworker-cli@0.13.2 --version` returned
+  `aiworker/0.13.2 darwin-arm64 node-v24.3.0`
+- Passed: `gh release view v0.13.2 --repo ZonEaseTech/aiworker --json
+  tagName,isDraft,isPrerelease,assets,url`
+- Passed: published-package smoke report at
+  `/private/tmp/aiworker-release-0.13.2-published-smoke-pDiAut/report.json`
+
+## Result
+
+Completed on 2026-05-15.
+
+- Published `@zonease/aiworker-cli@0.13.2` through annotated tag `v0.13.2`.
+- Local source/build gates, dist package checks, npm pack dry-run,
+  `smoke:dist-release` and code-review-graph passed before tagging.
+- GitHub Actions release run `25871841845` completed successfully and published
+  npm plus four GitHub Release binary tarballs.
+- npm latest is `0.13.2`; explicit `bunx @zonease/aiworker-cli@0.13.2
+  --version` reports `aiworker/0.13.2`.
+- Published-package smoke passed for Host Web/API, runtime version, official app
+  bootstrap, app/Soul catalog and HR template projection.
+
+## Residual Risk
+
+- `softprops/action-gh-release@v2` still emits the known Node.js 20 deprecation
+  annotation. This did not block the release.
+- Independent SDK/runtime npm publication remains out of scope.
