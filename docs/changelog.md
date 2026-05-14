@@ -1,17 +1,23 @@
 # AIWorker Changelog
 
-## 2026-05-14 15:35 [in_progress] REL-032 / PLAN-316 — CLI 0.13.0 preview minor release
+## 2026-05-14 15:45 [completed] REL-032 / PLAN-316 — CLI 0.13.0 preview minor release
 
-Started the `@zonease/aiworker-cli@0.13.0` release.
+Published `@zonease/aiworker-cli@0.13.0`.
 
 - Release scope is the CLI npm package and tag-triggered GitHub Release assets.
-- The release proves the packaged Host Web/API plus bundled official HR/QA Soul
-  App preview path.
+- Local gates passed: `bun run check`, `bun run test`, `bun run build`, `git diff
+  --check`, dist version checks, npm pack dry-run and `smoke:dist-release`.
+- GitHub Actions release workflow `25848244863` completed successfully and
+  published npm plus four GitHub Release binary tarballs.
+- npm latest is `0.13.0`; explicit `bunx @zonease/aiworker-cli@0.13.0
+  --version` reports `aiworker/0.13.0 darwin-arm64 node-v24.3.0`.
+- Published-package smoke passed for Host Web/API, official app bootstrap,
+  app/Soul catalog and HR template projection.
 - Independent SDK/runtime npm publication, third-party authoring outside the
   monorepo, Host auth and 1.0 GA claims are out of scope.
-- Required evidence includes source gates, dist/pack checks, `smoke:dist-release`,
-  GitHub Actions release workflow, npm latest, explicit `bunx` smoke, GitHub
-  Release assets and published-package smoke.
+- The legacy governance compact harness was not used as a blocking gate because
+  it still targets retired worker-governance surfaces rather than the packaged
+  Host/Soul App preview path.
 
 ## 2026-05-14 14:11 [completed] FEAT-082 / PLAN-315 — npm preview release readiness
 

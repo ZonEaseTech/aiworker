@@ -1,6 +1,6 @@
 # PLAN-316 CLI 0.13.0 preview minor release
 
-- **status**: in_progress
+- **status**: completed
 - **owner**: codex
 - **createdAt**: 2026-05-14 15:35
 - **relatedTask**: REL-032
@@ -58,5 +58,24 @@ After tagging:
 
 ## Result
 
-Pending.
+Completed on 2026-05-14.
 
+- Published `@zonease/aiworker-cli@0.13.0` through annotated tag `v0.13.0`.
+- Local source/build gates passed: `bun run check`, `bun run test`,
+  `bun run build`, and `git diff --check`.
+- Dist version checks reported `aiworker/0.13.0` and dist package version
+  `"0.13.0"`.
+- `npm pack --dry-run --json` from `apps/cli/dist` packed 114 files and included
+  CLI shims, Worker Web static assets, worker migrations and official HR/QA
+  bundled runtime resources.
+- `smoke:dist-release` passed for the dist CLI Host Web/API and official app
+  bootstrap path.
+- GitHub Actions release run `25848244863` completed successfully, published npm
+  and attached four GitHub Release binary tarballs.
+- npm latest is `0.13.0`; explicit `bunx @zonease/aiworker-cli@0.13.0
+  --version` reports `aiworker/0.13.0`.
+- Published-package smoke passed with report at
+  `/private/tmp/aiworker-release-0.13.0-published-smoke-ThktM4/report.json`.
+- The legacy governance compact harness was consciously replaced because it
+  targets retired worker-governance surfaces rather than this release's
+  packaged Host/Soul App preview path.

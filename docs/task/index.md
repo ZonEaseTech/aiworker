@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-14 (REL-032 in progress)
+> Updated: 2026-05-14 (REL-032 completed)
 
 ## Usage
 
@@ -296,7 +296,7 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-058 Case-driven Project Brain learning loop validation**](FEAT-058.md) `P1`
 - [x] [**QA-024 Case-driven Brain loop validation evidence**](QA-024.md) `P1`
 - [x] [**REL-031 发布 aiworker CLI 0.12.1**](REL-031.md) `P1`
-- [ ] [**REL-032 发布 aiworker CLI 0.13.0**](REL-032.md) `P1`
+- [x] [**REL-032 发布 aiworker CLI 0.13.0**](REL-032.md) `P1`
 - [x] [**QA-025 Case-driven Brain loop release validation**](QA-025.md) `P1`
 - [~] [**REFACTOR-026 OD-style local worker reboot**](REFACTOR-026.md) `P1`
 - [x] [**REFACTOR-027 Worker run contract compatibility layer**](REFACTOR-027.md) `P1`

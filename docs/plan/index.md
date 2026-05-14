@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-14 (PLAN-316 in progress)
+> Updated: 2026-05-14 (PLAN-316 completed)
 
 ## Usage
 
@@ -344,4 +344,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-313 Host and Soul App developer route onboarding**](PLAN-313.md) `2026-05-14`
 - [x] [**PLAN-314 Agent-operational documentation contract**](PLAN-314.md) `2026-05-14`
 - [x] [**PLAN-315 npm preview release readiness**](PLAN-315.md) `2026-05-14`
-- [ ] [**PLAN-316 CLI 0.13.0 preview minor release**](PLAN-316.md) `2026-05-14`
+- [x] [**PLAN-316 CLI 0.13.0 preview minor release**](PLAN-316.md) `2026-05-14`
