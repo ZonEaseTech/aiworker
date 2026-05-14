@@ -1,5 +1,32 @@
 # AIWorker Changelog
 
+## 2026-05-14 16:25 [completed] BUG-118 / PLAN-317 — Worker Web legacy orphan worker blank-page repair
+
+Published `@zonease/aiworker-cli@0.13.1` as a patch release for the 0.13.0
+preview.
+
+- Fixed Worker Web worker selection so persisted legacy workers whose `soulId`
+  is no longer projected by the enabled Soul App catalog cannot blank the Host
+  shell.
+- Worker Web now selects only workers backed by a current available Soul and at
+  least one capability template; if none exist, it falls back to the first-run
+  Soul App home.
+- Added Worker Studio regression tests for both mixed valid/legacy workers and
+  all-orphan legacy workers.
+- Verified a temporary legacy-home daemon and the published package with old
+  `devops` / `pm` workers now render the HR/QA first-run Soul App cards instead
+  of an empty page.
+- Local verification passed: focused Worker Studio tests, Worker Web build,
+  browser smoke, `bun run check`, `bun run test`, `bun run build`, dist version
+  checks, npm pack dry-run, dist release smoke, `git diff --check`, and
+  code-review-graph.
+- GitHub Actions release workflow `25849847547` completed successfully and
+  published npm plus four GitHub Release binary tarballs.
+- npm latest is `0.13.1`; explicit `bunx @zonease/aiworker-cli@0.13.1
+  --version` reports `aiworker/0.13.1 darwin-arm64 node-v24.3.0`.
+- Residual workflow note: `softprops/action-gh-release@v2` still emits the
+  existing Node.js 20 deprecation annotation; it did not affect this release.
+
 ## 2026-05-14 15:45 [completed] REL-032 / PLAN-316 — CLI 0.13.0 preview minor release
 
 Published `@zonease/aiworker-cli@0.13.0`.

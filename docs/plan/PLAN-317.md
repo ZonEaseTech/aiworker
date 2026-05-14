@@ -1,8 +1,9 @@
 # PLAN-317 Worker Web legacy orphan worker blank-page repair
 
-- **status**: implementing
+- **status**: completed
 - **createdAt**: 2026-05-14 16:15
 - **approvedAt**: 2026-05-14 16:15
+- **completedAt**: 2026-05-14 16:25
 - **owner**: codex
 - **relatedTask**: BUG-118
 
@@ -89,6 +90,8 @@ Out of scope:
   before current app-projected workers, causing `WorkerStudio` to return `null`.
 - 2026-05-14 16:21: Implemented the Worker Web selection repair and prepared
   `@zonease/aiworker-cli@0.13.1` as the patch version.
+- 2026-05-14 16:25: Published `@zonease/aiworker-cli@0.13.1` and completed
+  post-release verification.
 
 ## Verification Results
 
@@ -115,7 +118,28 @@ Out of scope:
 - `git diff --check`
 - `bun run crg:update`
 - `bun run crg:review`
+- GitHub Actions release workflow `25849847547` completed successfully in 1m42s
+  with Typecheck, Test, Bundle CLI, Publish to npm, binary compile/package and
+  GitHub Release attachment steps all passing.
+- `npm view @zonease/aiworker-cli version` returned `0.13.1`.
+- `bunx @zonease/aiworker-cli@0.13.1 --version` returned
+  `aiworker/0.13.1 darwin-arm64 node-v24.3.0`.
+- `gh release view v0.13.1 --repo ZonEaseTech/aiworker --json
+  tagName,isDraft,isPrerelease,assets,url` confirmed a non-draft /
+  non-prerelease release with four uploaded assets:
+  `aiworker-darwin-arm64.tar.gz`, `aiworker-darwin-x64.tar.gz`,
+  `aiworker-linux-arm64.tar.gz` and `aiworker-linux-x64.tar.gz`.
+- Published-package legacy-home browser smoke passed using
+  `bunx @zonease/aiworker-cli@0.13.1 daemon foreground` against a temporary DB
+  seeded with only `devops` / `pm` legacy workers. Worker Web rendered
+  `Choose a Soul App to start` with HR/QA app cards and no browser console
+  errors or warnings.
 
 All commands above exited 0. `crg:review` reported static test-gap hints for the
 changed Worker Studio selection path; the new Worker Studio regression tests and
 legacy-home browser smoke cover the release regression.
+
+Residual note: the GitHub release workflow still emits the existing
+`softprops/action-gh-release@v2` Node.js 20 deprecation annotation. The release
+completed successfully; action runtime maintenance remains a separate workflow
+follow-up before GitHub's 2026-06-02 default Node 24 switch.
