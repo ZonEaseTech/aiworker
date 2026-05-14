@@ -1,98 +1,78 @@
 ---
 name: aiworker-soul-app-dev
-description: "Use when creating, modifying, or reviewing AIWorker Soul Apps under apps/aiworker-* or related authoring, validation, scaffold, manifest, SDK, standalone, Host mounted, artifact, review, or capability surfaces."
+description: "Use when creating, modifying, or reviewing AIWorker Soul Apps under apps/aiworker-* or public Soul App authoring, manifest, SDK, standalone, Host mounted, broker, artifact, review, profile, capability, scaffold, validate, or smoke surfaces."
 argument-hint: "[app-path]"
 arguments: [app_path]
 ---
 
 # AIWorker Soul App Developer
 
-Use this skill before creating, modifying, or reviewing a Soul App. It covers
-production apps under `apps/aiworker-*`, app manifests, standalone surfaces,
-Host mounted surfaces, capability prompts, artifact schemas, review rubrics,
-Soul packs, authoring docs, validation harnesses, scaffold behavior, and
-Host/Soul protocol-facing changes.
+Use this skill before touching a Soul App or the public surfaces that let agents
+author, install, validate, smoke, mount, or review Soul Apps.
 
-## Read First
+## Fit Check
 
-Load the minimum context for the current change:
+Use this skill for:
 
-1. `docs/architecture.md`
-2. `docs/soul-app-developer.md`
-3. The target app's `soul-app.manifest.json`
-4. The target app's `README.md`
-5. The target app files touched by the request, such as `capabilities/`,
-   `schemas/`, `review/`, `packs/`, `src/standalone.ts`,
-   `src/host-mounted.ts`, or `src/protocol/`
+- `apps/aiworker-*` production Soul App changes.
+- `soul-app.manifest.json`, artifact schemas, review rubrics, packs,
+  capability prompts, workspace types, standalone surfaces, Host mounted
+  services, protocol handlers, app-owned UI/API, and app-owned broker use.
+- Public authoring surfaces: `packages/soul-app-sdk`,
+  `packages/soul-app-runtime`, shared manifest/protocol types, app scaffold,
+  `aiworker app validate`, `aiworker app smoke`, and
+  `docs/soul-app-developer.md`.
 
-If `$app_path` is provided, start there. If no app path is supplied, infer the
-target from changed files or the user request. Ask only when the target cannot
-be inferred safely.
+Do not use this as a general validation-campaign router for old fleet/gateway,
+published CLI governance harnesses, Coder workspaces, or release-debug runs.
+Those are historical or task-specific flows; do not resurrect
+`aiworker-validate`.
 
-## Product Language
+## Product Contract
 
-Use the same product vocabulary everywhere:
-
-- `Host`
-- `Soul App`
-- `Soul worker`
-- `workspace`
-- `session`
-- `artifact`
-- `profile`
-- `review`
-- `lesson`
-- `standalone`
-- `Host mounted`
-- `manifest`
-- `SDK`
-- `broker`
-- `protocol`
-
-Keep the default product path intact:
+Keep this product path intact:
 
 ```text
 Host -> install/enable Soul App -> Soul worker -> workspace -> session
   -> Soul App exposed views/actions -> business artifact/profile/review/lesson
 ```
 
+Use this vocabulary consistently: `Host`, `Soul App`, `Soul worker`,
+`workspace`, `session`, `artifact`, `profile`, `review`, `lesson`,
+`standalone`, `Host mounted`, `manifest`, `SDK`, `broker`, `protocol`.
+
 Developer Soul is a supporting role for code review, release evidence, repo
-report, handoff, and risk audit. Do not make repo, PMA, coding loop, admin
-dashboard, governance kernel, or generic agent runtime the default product
-center.
+report, handoff and risk audit. Do not make repo/PMA/coding loop, admin
+dashboard, governance kernel or generic agent runtime the product center.
 
 ## Boundary Rules
 
-Soul Apps own vertical product logic:
+Soul Apps own domain meaning:
 
-- domain UI/API
-- manifest
-- workspace types
-- capability prompts
-- artifact schemas and artifact content semantics
-- profile composition
-- review rubrics and verdict meaning
-- lesson/memory promotion semantics
-- Soul packs
-- app-scoped storage content
-- standalone shell
-- Host mounted service entrypoints
+- domain UI/API and standalone shell;
+- manifest, workspace types, packs, capability prompts and protocol handlers;
+- artifact schemas/content/lifecycle;
+- profile composition;
+- review rubrics and verdict meaning;
+- lesson/memory promotion semantics;
+- app-scoped storage content and search descriptor publication;
+- Host mounted service entrypoints.
 
-Host owns shared platform concerns:
+Host owns platform capability and positioning:
 
-- local daemon and app lifecycle
-- install/enable/disable state
-- Host auth and session security
-- global settings for appearance, language, default engine, MCP and connectors
-- permission, storage, connector, log, search and audit brokers
-- worker/workspace/session locator
-- Host shell and optional header contract
-- mounted service launch/connect
-- protocol discovery and descriptor cache
+- local daemon, install/enable/disable state and mounted service launch;
+- Host auth, security review, grants and session security;
+- global settings for appearance, language, default engine, MCP and connectors;
+- permission, storage, connector, secret-ref, log, search and audit brokers;
+- worker/workspace/session locator;
+- Host shell and optional header contract;
+- protocol discovery and descriptor cache.
 
 Soul App is the source of truth for domain state and domain meaning.
-Host is the source of truth for platform capabilities, grants, protocol discovery and shell context.
-Host may consume only protocol-exposed views/actions/search/settings descriptors, and must not infer Soul App domain meaning.
+Host is the source of truth for platform capabilities, grants, protocol
+discovery and shell context. Host may consume only protocol-exposed
+views/actions/search/settings descriptors, and must not infer Soul App domain
+meaning.
 
 Do not bypass those boundaries:
 
@@ -102,8 +82,8 @@ Do not bypass those boundaries:
 - Do not import another Soul App's `src` from app code.
 - Do not let Soul App code directly schedule engines, read/write Host DB
   handles, access connector credentials, or mutate global memory.
-- Do not let Host infer app-owned profile, review, artifact or memory meaning
-  from filenames, DB rows, prompts or UI labels.
+- Do not let Host infer app-owned profile, review, artifact, search or memory
+  meaning from filenames, DB rows, prompts, protocol names or UI labels.
 - Declare `requiredPermissions` on shell, search and mounted surfaces whenever
   the action depends on Host broker capabilities; Host enforces them before it
   contacts the mounted Soul App service.
@@ -112,30 +92,58 @@ Do not bypass those boundaries:
 - Host mounted access to shared resources must go through scoped broker
   surfaces.
 
+## Read Set
+
+Load only what the task needs:
+
+1. Always read `docs/architecture.md`.
+2. Read `docs/soul-app-developer.md` for authoring, scaffold, validate, smoke,
+   standalone or mounted runtime changes.
+3. For a target app, read its `soul-app.manifest.json` and touched files:
+   `capabilities/`, `schemas/`, `review/`, `packs/`, `src/standalone.ts`,
+   `src/host-mounted.ts`, `src/protocol/`, or app tests.
+4. For official HR/QA app manifest or shell changes, also read
+   `packages/shared/src/soul-app/fixtures.ts` and shared manifest tests; Host
+   bootstraps from these reference manifests, not only from `apps/*` files.
+5. For SDK/runtime/protocol changes, read the owning package tests before
+   editing.
+
+If `$app_path` is provided, start there. If it is missing, infer the target from
+the user request or changed files. Ask only when the target cannot be inferred
+safely.
+
 ## Workflow
 
-1. Identify whether the request changes a Soul App, authoring docs, validation
-   harness, scaffold behavior, or Host/Soul App protocol-facing surface.
-2. Read the required context above.
-3. Confirm the change belongs in the Soul App boundary. If it needs Host-owned
-   resources, design a protocol, SDK, or broker interaction instead of direct
+1. Classify the surface: app domain, public authoring contract, Host broker,
+   Host shell protocol, validation/smoke, or docs.
+2. Confirm the change belongs at that boundary. If a Soul App needs Host-owned
+   resources, use protocol, SDK or broker interaction instead of Host-private
    imports.
-4. Keep standalone and Host mounted modes aligned. They should share the same
-   manifest, domain definitions, artifact schemas, review rubrics, capability
-   prompts and handler semantics.
-5. Keep user-facing text and prompts understandable to the vertical user. HR,
-   QA, finance, legal, ops, DevOps, and PM users should see business objects,
-   not Host internals.
-6. If Host needs to display an app-owned concept, expose a descriptor, view,
-   action or status through the protocol. If the app does not expose it, Host
-   should not fetch or infer it.
-7. For non-trivial repository work, follow PMA: investigate, proposal, then
-   implementation after approval. Keep `docs/task/`, `docs/plan/`, and
-   `docs/changelog.md` synced when the change has project-level impact.
+3. Keep standalone and Host mounted modes aligned. They share one manifest,
+   domain definitions, schemas, review rubrics, prompts and core handler
+   semantics.
+4. Keep vertical-user language visible. HR, QA, finance, legal, ops, DevOps and
+   PM users should see business objects, not Host internals.
+5. If Host needs app-owned state, expose a view, action, search result, status
+   or descriptor through protocol. If the app does not expose it, Host does not
+   fetch, infer or synthesize it.
+6. For non-trivial code/product changes, follow PMA and keep `docs/task/`,
+   `docs/plan/` and `docs/changelog.md` synced when the change has
+   project-level impact.
 
 ## Validation
 
-For each changed production Soul App, run:
+Pick the smallest command set that proves the touched surface:
+
+| Change | Verification |
+| --- | --- |
+| Production Soul App | `aiworker app validate <app-path>` and `aiworker app smoke <app-path>` |
+| App package code | app package `typecheck` and `test` |
+| Official app manifest/catalog | app validate/smoke, shared tests, and affected API/core tests |
+| SDK/runtime/protocol/shared schema | focused package tests and typecheck |
+| CLI validate/smoke behavior | focused CLI tests and matching docs |
+| Web Host shell interaction | focused Web tests; browser smoke only when UI behavior changed |
+| Instruction-only skill/docs | `git diff --check` and reference/link search |
 
 ```bash
 aiworker app validate <app-path>
@@ -150,9 +158,8 @@ bun run --filter '<package-name>' typecheck
 bun run --filter '<package-name>' test
 ```
 
-For root-level authoring, scaffold, or validation changes, run the focused
-package gates that own those files. Run root gates only when the change touches
-shared contracts, CLI behavior, Host runtime, or cross-package configuration.
+Run root gates only when the change touches shared contracts, CLI behavior, Host
+runtime, cross-package configuration, or public release surfaces.
 
 When code files changed, run code-review-graph before the final response:
 
@@ -168,14 +175,14 @@ formatting changes, and state that skip explicitly.
 
 Before reporting completion:
 
-- the target app or authoring surface is named;
-- Host / Soul App ownership stayed explicit;
-- standalone and Host mounted implications are addressed;
-- no Host-private or sibling app source imports were introduced;
-- Host consumes only protocol-exposed app-owned surfaces;
-- product language matches `docs/architecture.md` and
-  `docs/soul-app-developer.md`;
-- validation commands and results are recorded;
-- PMA docs and changelog are synced when applicable;
-- code-review-graph ran for code changes or was explicitly skipped for
-  docs/instruction-only work.
+- Name the target app or authoring surface.
+- State the Host/Soul App ownership decision.
+- Address standalone and Host mounted implications.
+- Confirm no Host-private or sibling app source imports were introduced.
+- Confirm Host consumes only protocol-exposed app-owned surfaces.
+- For official apps, confirm `apps/*` manifest and shared reference manifest
+  stayed aligned when both are relevant.
+- Record validation commands and results.
+- Sync PMA docs/changelog when the change has project-level impact.
+- Run code-review-graph for code changes or explicitly skip it for
+  instruction-only, docs-only, or formatting-only work.
