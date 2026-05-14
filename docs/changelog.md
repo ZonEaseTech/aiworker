@@ -1,5 +1,22 @@
 # AIWorker Changelog
 
+## 2026-05-14 13:17 [completed] FEAT-081 / PLAN-313 — Host and Soul App developer route onboarding
+
+Completed the active-entrypoint convergence slice for new developers and
+agents.
+
+- Added a Host-side agent skill for daemon/API, Web shell, CLI, runtime, broker,
+  auth, shared protocol, storage and shared UI work.
+- Kept the Soul App skill focused and handed Host-owned changes to the Host
+  route.
+- Mapped `AGENTS.md`, `README.md` and `docs/architecture.md` to the two active
+  development routes without creating a second architecture contract.
+- Verification: parsed both skill frontmatter blocks, searched active
+  references, confirmed `aiworker-validate` was not reintroduced as an active
+  route, and ran `git diff --check`.
+- Skipped code-review-graph because only documentation and agent instruction
+  files changed.
+
 ## 2026-05-14 12:28 [completed] FEAT-080 / PLAN-312 — Official Soul App broker proof closure
 
 Closed the proof gap found by the code audit: FEAT-079's search broker now runs

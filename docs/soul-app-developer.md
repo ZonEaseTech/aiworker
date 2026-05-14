@@ -25,6 +25,11 @@ root AGENTS.md -> docs/architecture.md -> aiworker-soul-app-dev skill
   -> app manifest/docs/files -> validate/smoke evidence
 ```
 
+Use `.agents/skills/aiworker-host-dev/SKILL.md` instead when the change is
+Host-owned: local daemon/API, CLI lifecycle, Worker Web Shell, Host settings,
+app registry, broker enforcement, auth/security, storage metadata, shared Host
+runtime, or shared Host/Soul protocol implementation.
+
 Do not treat `apps/AGENTS.md` as the canonical Soul App rule surface until the
 target agent runner has proven native nested AGENTS loading.
 

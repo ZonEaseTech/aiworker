@@ -22,6 +22,17 @@ Host -> install/enable Soul App -> Soul worker -> workspace -> session
 - `docs/executor-engines.md`：外部 engine 安装、登录和 readiness 说明。
 - `docs/soul-app-developer.md`：Soul App authoring workflow。
 
+## Developer Route
+
+| 我要修改 | 从这里开始 |
+| --- | --- |
+| Host daemon/API、registry、broker、auth/security、storage metadata | `docs/architecture.md` + `.agents/skills/aiworker-host-dev/SKILL.md` |
+| Host Web Shell、Settings、worker/workspace/session workbench | `docs/architecture.md` + `.agents/skills/aiworker-host-dev/SKILL.md`，前端实现再用 `/pma-web` |
+| CLI lifecycle、daemon/app/worker/workspace/session 命令 | `docs/cli.md` + `.agents/skills/aiworker-host-dev/SKILL.md` |
+| 官方 HR/QA Soul App、manifest、standalone、Host mounted、artifact/profile/review/lesson | `docs/soul-app-developer.md` + `.agents/skills/aiworker-soul-app-dev/SKILL.md` |
+| 新第三方 Soul App | `aiworker app create` + `docs/soul-app-developer.md` + `.agents/skills/aiworker-soul-app-dev/SKILL.md` |
+| Host/Soul App 边界、shared protocol、broker grant | 先读 `docs/architecture.md`，判断 ownership 后进入 Host 或 Soul App skill |
+
 ## 为什么改成这个形态
 
 开发领域已经有成熟的一线 engine。AIWorker 不应该默认以 developer 为中心，更不应该把自己

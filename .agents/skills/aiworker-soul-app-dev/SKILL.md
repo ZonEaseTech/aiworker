@@ -28,6 +28,11 @@ published CLI governance harnesses, Coder workspaces, or release-debug runs.
 Those are historical or task-specific flows; do not resurrect
 `aiworker-validate`.
 
+Use `aiworker-host-dev` instead for Host platform lifecycle, local daemon API,
+CLI lifecycle, Worker Web Shell rendering, broker enforcement, security review,
+shared storage schema, Host runtime, app registry, or shared Host/Soul protocol
+implementation.
+
 ## Product Contract
 
 Keep this product path intact:
@@ -119,15 +124,17 @@ safely.
 2. Confirm the change belongs at that boundary. If a Soul App needs Host-owned
    resources, use protocol, SDK or broker interaction instead of Host-private
    imports.
-3. Keep standalone and Host mounted modes aligned. They share one manifest,
+3. If the requested change actually modifies Host-owned behavior, switch to
+   `aiworker-host-dev` and keep this skill focused on app-owned domain work.
+4. Keep standalone and Host mounted modes aligned. They share one manifest,
    domain definitions, schemas, review rubrics, prompts and core handler
    semantics.
-4. Keep vertical-user language visible. HR, QA, finance, legal, ops, DevOps and
+5. Keep vertical-user language visible. HR, QA, finance, legal, ops, DevOps and
    PM users should see business objects, not Host internals.
-5. If Host needs app-owned state, expose a view, action, search result, status
+6. If Host needs app-owned state, expose a view, action, search result, status
    or descriptor through protocol. If the app does not expose it, Host does not
    fetch, infer or synthesize it.
-6. For non-trivial code/product changes, follow PMA and keep `docs/task/`,
+7. For non-trivial code/product changes, follow PMA and keep `docs/task/`,
    `docs/plan/` and `docs/changelog.md` synced when the change has
    project-level impact.
 

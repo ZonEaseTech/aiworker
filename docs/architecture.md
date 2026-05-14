@@ -268,6 +268,25 @@ packages/
   component/         shared UI primitives and patterns
 ```
 
+## Development Entry Routing
+
+Architecture ownership decides the development route:
+
+| Change area | Owner | Repo path | Agent route |
+| --- | --- | --- | --- |
+| local daemon API, app registry, broker enforcement, auth/security, platform settings | Host | `apps/api`, `packages/core`, `packages/storage-sqlite` | `.agents/skills/aiworker-host-dev/SKILL.md` |
+| Host Web Shell, Settings, worker/workspace/session workbench, shell header contract | Host | `apps/web`, `packages/component` | `.agents/skills/aiworker-host-dev/SKILL.md` |
+| CLI lifecycle, daemon/app/worker/workspace/session commands | Host | `apps/cli`, `docs/cli.md` | `.agents/skills/aiworker-host-dev/SKILL.md` |
+| shared Host/Soul manifest, protocol, descriptor, grant or broker schema | Shared boundary | `packages/shared`, affected Host package, affected Soul App manifest or SDK/runtime package | Start here, classify Host vs Soul ownership, then use the matching skill |
+| Soul App domain UI/API, manifest, standalone, Host mounted handler, artifacts, profiles, reviews, lessons | Soul App | `apps/aiworker-*`, `packages/soul-app-sdk`, `packages/soul-app-runtime` | `.agents/skills/aiworker-soul-app-dev/SKILL.md` |
+| Soul App authoring, scaffold, validate or smoke behavior | Public Soul App authoring | `docs/soul-app-developer.md`, `packages/soul-app-sdk`, `packages/soul-app-runtime`, CLI validate/smoke code | `.agents/skills/aiworker-soul-app-dev/SKILL.md` |
+
+If a change crosses the boundary, keep the architecture rule intact: Host may
+add or enforce protocol, broker, grant, locator or shell behavior; Soul App
+defines the domain surface exposed through that protocol. Do not solve a
+domain need by teaching Host the domain meaning, and do not solve a platform
+need by letting a Soul App import Host internals.
+
 ## API And Validation Rules
 
 - API 文档以代码为准：OpenAPIHono `app.doc('/openapi.json')` + `/docs`。

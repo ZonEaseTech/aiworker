@@ -17,6 +17,9 @@ agent runtime 平台。
 ## 必读入口
 
 - `docs/architecture.md`：当前唯一架构合同，定义 Host / Soul App / protocol 边界。
+- `.agents/skills/aiworker-host-dev/SKILL.md`：修改 Host platform、local daemon/API、
+  Worker Web Shell、CLI lifecycle、broker、auth/security、shared protocol 或 storage schema
+  前必须读取。
 - `.agents/skills/aiworker-soul-app-dev/SKILL.md`：修改 Soul App、manifest、standalone、
   Host mounted、capability、artifact/review 或 authoring 文档前必须读取。
 
@@ -28,6 +31,12 @@ agent runtime 平台。
 - CLI 行为或命令文档：`docs/cli.md`。
 - 本地 daemon、打包或 operator 运行路径：`docs/deployment.md`。
 - 外部 engine 安装、登录和 readiness：`docs/executor-engines.md`。
+- Host platform、daemon API、registry、broker、security、storage schema：
+  `docs/architecture.md` 和 `aiworker-host-dev` skill。
+- Host Web Shell、Settings、workbench：`docs/architecture.md`、`aiworker-host-dev` skill，
+  非平凡前端改动再读取 `/pma-web`。
+- CLI lifecycle、daemon/app/worker/workspace/session 命令：`docs/cli.md` 和
+  `aiworker-host-dev` skill。
 - Soul App authoring：`docs/soul-app-developer.md` 和 `aiworker-soul-app-dev` skill。
 - 历史 PMA、changelog、Superpowers spec/plan 只作为审计轨迹；不能覆盖当前架构合同。
 
