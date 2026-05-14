@@ -29,6 +29,8 @@ export {
   createWorker,
 } from './workers'
 export {
+  disableSoulApp,
+  enableSoulApp,
   loadLocalWorkspaceData,
   resolveMountedSurface,
 } from './workspace-data'

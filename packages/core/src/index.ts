@@ -50,6 +50,14 @@ export {
   type SoulAppRegistryContext,
 } from './soul-app/registry'
 export {
+  reviewSoulAppSecurity,
+  type SoulAppSecurityReview,
+  type SoulAppSecurityReviewConnector,
+  type SoulAppSecurityReviewDescriptor,
+  type SoulAppSecurityReviewDescriptorSurface,
+  type SoulAppSecurityReviewSummary,
+} from './soul-app/security-review'
+export {
   createSqliteSoulAppStorageProvider,
   type SoulAppStorageProvider,
   type SoulAppStoragePutInput,

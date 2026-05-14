@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-14 (FEAT-075 completed)
+> Updated: 2026-05-14 (FEAT-076 completed)
 
 ## Usage
 
@@ -411,3 +411,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-073 Soul App protocol interaction closure**](FEAT-073.md) `P0`
 - [x] [**FEAT-074 Soul App broker permission hardening**](FEAT-074.md) `P0`
 - [x] [**FEAT-075 Soul App storage broker provider and app-owned drafts**](FEAT-075.md) `P0`
+- [x] [**FEAT-076 Soul App permission visibility and install review**](FEAT-076.md) `P0`

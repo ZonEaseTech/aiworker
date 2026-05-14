@@ -960,6 +960,7 @@ export function WorkerStudio() {
                       ? { ...current, data: { ...current.data, settings }, loading: false }
                       : current)
                   }}
+                  onAppsChanged={() => refresh()}
                 />
               )
             : null}

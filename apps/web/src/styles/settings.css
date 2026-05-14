@@ -250,7 +250,18 @@ button.settings-action-button svg {
 }
 
 .settings-card-row.disabled {
-  opacity: 0.64;
+  background: var(--bg);
+}
+
+.settings-card-mainline {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+}
+
+.soul-app-lifecycle-button {
+  justify-self: end;
 }
 
 .settings-card-tags {
@@ -266,6 +277,24 @@ button.settings-action-button svg {
   border: 1px solid var(--border);
   border-radius: var(--radius-pill);
   background: var(--bg);
+}
+
+.settings-review-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.settings-review-group {
+  display: grid;
+  gap: 5px;
+}
+
+.settings-review-group > span {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.35;
+  text-transform: uppercase;
 }
 
 .switch-row span,

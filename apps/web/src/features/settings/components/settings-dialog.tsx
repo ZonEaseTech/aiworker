@@ -5,7 +5,7 @@ import { ActionCard, Button, Field, NavItemButton } from '@zonease/aiworker-comp
 import { Check, Gauge, Languages, Link, Moon, RefreshCw, Settings, ShieldCheck, SlidersHorizontal, Sparkles, Sun, Terminal, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { formatRelativeTime, formatStatus, languageLabel, messagesFor, normalizeLocale, supportedLocales } from '../../i18n'
-import { rescanEngines, saveSettings, testEngine } from '../../local-workspace/api'
+import { disableSoulApp, enableSoulApp, rescanEngines, saveSettings, testEngine } from '../../local-workspace/api'
 import { engineIconSrc } from '../model'
 
 export type SettingsSection = 'execution' | 'soul-packs' | 'connectors' | 'mcp' | 'external-mcp' | 'language' | 'appearance' | 'about'
@@ -30,6 +30,7 @@ export function SettingsDialog({
   apps,
   initial,
   initialSection,
+  onAppsChanged,
   onClose,
   onSaved,
   runtimeVersion,
@@ -38,6 +39,7 @@ export function SettingsDialog({
   apps: HostedSoulApp[]
   initial: LocalSettingsConfig
   initialSection: SettingsSection
+  onAppsChanged?: () => Promise<void> | void
   onClose: () => void
   onSaved: (settings: LocalSettingsConfig) => void
   runtimeVersion: string
@@ -154,7 +156,7 @@ export function SettingsDialog({
                   />
                 )
               : null}
-            {section === 'soul-packs' ? <SoulAppsSettings apps={apps} copy={copy} locale={activeLocale} templates={templates} /> : null}
+            {section === 'soul-packs' ? <SoulAppsSettings apps={apps} copy={copy} locale={activeLocale} settings={settings} templates={templates} onAppsChanged={onAppsChanged} /> : null}
             {section === 'connectors' ? <ConnectorsSettings copy={copy} settings={settings} update={persist} /> : null}
             {section === 'mcp' ? <LocalMcpSettings copy={copy} settings={settings} update={persist} /> : null}
             {section === 'external-mcp' ? <ExternalMcpSettings copy={copy} settings={settings} update={persist} /> : null}
@@ -309,9 +311,44 @@ function EngineCard({ active, copy, engine, onSelect }: { active: boolean, copy:
   )
 }
 
-function SoulAppsSettings({ apps, copy, locale, templates }: { apps: HostedSoulApp[], copy: ReturnType<typeof messagesFor>, locale: ReturnType<typeof normalizeLocale>, templates: CapabilityTemplate[] }) {
+function SoulAppsSettings({
+  apps,
+  copy,
+  locale,
+  onAppsChanged,
+  settings,
+  templates,
+}: {
+  apps: HostedSoulApp[]
+  copy: ReturnType<typeof messagesFor>
+  locale: ReturnType<typeof normalizeLocale>
+  onAppsChanged?: () => Promise<void> | void
+  settings: LocalSettingsConfig
+  templates: CapabilityTemplate[]
+}) {
   const settingsCopy = copy.settings
   const soulAppsCopy = settingsCopy.soulPacks
+  const [busyAppId, setBusyAppId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  async function updateLifecycle(app: HostedSoulApp) {
+    setBusyAppId(app.appId)
+    setError(null)
+    try {
+      if (app.status === 'enabled')
+        await disableSoulApp(app.appId)
+      else
+        await enableSoulApp(app.appId)
+      await onAppsChanged?.()
+    }
+    catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+    finally {
+      setBusyAppId(null)
+    }
+  }
+
   return (
     <div className="settings-section">
       <div className="section-head">
@@ -328,15 +365,67 @@ function SoulAppsSettings({ apps, copy, locale, templates }: { apps: HostedSoulA
               const templateCount = templates.filter(template => template.soulId === app.appId || template.soulId === app.projectedSoul?.id).length
               const apiRoutePrefix = app.mountedContribution.apiRoutePrefix
               const domain = app.projectedSoul?.domain ?? app.manifest.soul?.domain ?? app.appId
+              const permissionLabels = (app.manifest.permissions ?? []).map(permissionLabel).filter(isString)
+              const connectorRows = (app.manifest.connectors?.required ?? []).map(connector => ({
+                id: connector.id,
+                label: soulAppsCopy.connectorStatus(connector.id, connectorStatus(connector.id, settings, soulAppsCopy)),
+              }))
+              const descriptorPermissions = descriptorPermissionLabels(app)
+              const busy = busyAppId === app.appId
+              const actionLabel = app.status === 'enabled' ? soulAppsCopy.disableApp(app.manifest.name) : soulAppsCopy.enableApp(app.manifest.name)
               return (
                 <article key={app.appId} className={`settings-card-row ${app.status === 'enabled' ? '' : 'disabled'}`}>
-                  <strong>{app.manifest.name}</strong>
-                  <span>{`${formatStatus(app.status, locale)} · ${app.version}`}</span>
+                  <div className="settings-card-mainline">
+                    <span>
+                      <strong>{app.manifest.name}</strong>
+                      <span>{`${formatStatus(app.status, locale)} · ${app.version}`}</span>
+                    </span>
+                    <Button
+                      variant="ghost"
+                      className="settings-action-button soul-app-lifecycle-button"
+                      disabled={busy}
+                      onClick={() => void updateLifecycle(app)}
+                    >
+                      <span>{busy ? soulAppsCopy.updating : actionLabel}</span>
+                    </Button>
+                  </div>
                   <small>{domain}</small>
                   <div className="settings-card-tags">
                     <small>{soulAppsCopy.permissionCount(permissionCount)}</small>
                     <small>{soulAppsCopy.templateCount(templateCount)}</small>
                     <small>{soulAppsCopy.mountedContributionCount(contributionCount)}</small>
+                  </div>
+                  <div className="settings-review-grid" aria-label={`${app.manifest.name} security review`}>
+                    {permissionLabels.length > 0
+                      ? (
+                          <div className="settings-review-group">
+                            <span>{soulAppsCopy.permissionsTitle}</span>
+                            <div className="settings-card-tags">
+                              {permissionLabels.slice(0, 4).map(label => <small key={label}>{label}</small>)}
+                            </div>
+                          </div>
+                        )
+                      : null}
+                    {connectorRows.length > 0
+                      ? (
+                          <div className="settings-review-group">
+                            <span>{soulAppsCopy.connectorsTitle}</span>
+                            <div className="settings-card-tags">
+                              {connectorRows.map(connector => <small key={connector.id}>{connector.label}</small>)}
+                            </div>
+                          </div>
+                        )
+                      : null}
+                    {descriptorPermissions.length > 0
+                      ? (
+                          <div className="settings-review-group">
+                            <span>{soulAppsCopy.descriptorPermissionsTitle}</span>
+                            <div className="settings-card-tags">
+                              {descriptorPermissions.slice(0, 4).map(label => <small key={label}>{label}</small>)}
+                            </div>
+                          </div>
+                        )
+                      : null}
                   </div>
                   {apiRoutePrefix ? <small>{soulAppsCopy.apiRoute(apiRoutePrefix)}</small> : null}
                 </article>
@@ -346,6 +435,7 @@ function SoulAppsSettings({ apps, copy, locale, templates }: { apps: HostedSoulA
               <div className="settings-note">{soulAppsCopy.empty}</div>
             )}
       </div>
+      {error ? <p className="settings-note" role="alert">{error}</p> : null}
     </div>
   )
 }
@@ -355,6 +445,48 @@ function mountedContributionCount(app: HostedSoulApp): number {
     + app.mountedContribution.panelIds.length
     + app.mountedContribution.reviewPanelIds.length
     + app.mountedContribution.workspaceWidgetIds.length
+}
+
+function permissionLabel(permission: HostedSoulApp['manifest']['permissions'][number]): string | null {
+  if (!permission.kind || !permission.action || !permission.target)
+    return null
+  return `${permission.kind}:${permission.action}:${permission.target}`
+}
+
+function isString(value: string | null): value is string {
+  return typeof value === 'string'
+}
+
+function connectorStatus(connectorId: string, settings: LocalSettingsConfig, copy: ReturnType<typeof messagesFor>['settings']['soulPacks']): string {
+  const connector = settings.connectors.find(item => item.id === connectorId)
+  if (!connector)
+    return copy.unavailableConnector
+  return connector.enabled ? copy.enabledConnector : copy.disabledConnector
+}
+
+function descriptorPermissionLabels(app: HostedSoulApp): string[] {
+  const labels = new Set<string>()
+  const add = (permissions?: readonly string[]) => {
+    for (const permission of permissions ?? [])
+      labels.add(permission)
+  }
+  const shell = app.manifest.ui?.shell
+  add(shell?.primaryAction?.requiredPermissions)
+  for (const action of shell?.actions ?? [])
+    add(action.requiredPermissions)
+  add(shell?.search?.requiredPermissions)
+  add(shell?.settings?.requiredPermissions)
+  for (const route of app.manifest.ui?.routes ?? [])
+    add(route.surface?.requiredPermissions)
+  for (const panel of app.manifest.ui?.panels ?? [])
+    add(panel.surface?.requiredPermissions)
+  for (const preview of app.manifest.ui?.artifactPreviews ?? [])
+    add(preview.surface?.requiredPermissions)
+  for (const panel of app.manifest.ui?.reviewPanels ?? [])
+    add(panel.surface?.requiredPermissions)
+  for (const widget of app.manifest.ui?.workspaceWidgets ?? [])
+    add(widget.surface?.requiredPermissions)
+  return [...labels]
 }
 
 function ConnectorsSettings({ copy, settings, update }: { copy: ReturnType<typeof messagesFor>, settings: LocalSettingsConfig, update: (patch: Partial<LocalSettingsConfig>) => Promise<void> }) {

@@ -1,5 +1,20 @@
 # AIWorker Changelog
 
+## 2026-05-14 02:05 [completed] FEAT-076 / PLAN-308 — Soul App permission visibility and install review
+
+Completed the next convergence slice after storage broker provider delivery.
+
+- Add a Host-owned security review projection for manifest permissions,
+  connector needs and descriptor `requiredPermissions`.
+- Expose review through local daemon routes before app code runs.
+- Show review details in Settings before generic enable/disable actions.
+- Keep the review generic and avoid HR/QA-specific approval semantics.
+
+Verification passed: focused core/API/Web tests and typechecks, lint, `git
+diff --check`, Worker Web build, and code-review-graph. CRG exited 0 with
+static test-gap hints for route/bootstrap/display helpers, covered by the
+HTTP-level local daemon test and Worker Studio Settings flow test.
+
 ## 2026-05-14 01:34 [completed] FEAT-075 / PLAN-307 — Soul App storage broker provider and app-owned drafts
 
 Completed the next convergence slice after broker permission hardening.

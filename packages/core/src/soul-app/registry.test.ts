@@ -19,6 +19,7 @@ import {
   listHostSoulCatalog,
   runSoulAppHealthcheck,
 } from './registry'
+import { reviewSoulAppSecurity } from './security-review'
 
 describe('Host Soul App registry', () => {
   let dir: string
@@ -148,5 +149,56 @@ describe('Host Soul App registry', () => {
     expect(app.healthStatus).toBe('fail')
     expect(app.validationIssues.map(issue => issue.code)).toContain('missing_required_connector')
     expect(listHostedSoulApps()).toHaveLength(1)
+  })
+
+  it('projects a security review from manifest permissions, connectors, and descriptors before enablement', async () => {
+    const manifestPath = path.join(dir, 'soul-app.manifest.json')
+    writeFileSync(manifestPath, JSON.stringify({
+      ...hrSoulAppManifest,
+      ui: {
+        ...hrSoulAppManifest.ui,
+        shell: {
+          primaryAction: {
+            id: 'create-people-profile',
+            label: 'New people profile',
+            protocolAction: 'peopleProfiles.create',
+            requiredPermissions: ['storage:write:aiworker-hr'],
+            slot: 'primary',
+          },
+        },
+      },
+    }))
+
+    const installed = await installSoulAppFromPath(manifestPath, {
+      availableConnectorIds: ['ats', 'calendar'],
+      hostVersion: '0.12.1',
+      now: () => '2026-05-14T02:06:00.000Z',
+    })
+
+    const review = reviewSoulAppSecurity(installed, {
+      availableConnectorIds: ['ats', 'calendar'],
+      enabledConnectorIds: [],
+      hostVersion: '0.12.1',
+    })
+
+    expect(review.appId).toBe('aiworker-hr')
+    expect(review.status).toBe('installed')
+    expect(review.manifestPermissions.length).toBeGreaterThan(0)
+    expect(review.connectors.required).toContainEqual(expect.objectContaining({
+      available: true,
+      enabled: false,
+      id: 'ats',
+      required: true,
+    }))
+    expect(review.descriptorPermissions).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'create-people-profile',
+        requiredPermissions: ['storage:write:aiworker-hr'],
+        surface: 'shell.primaryAction',
+      }),
+    ]))
+    expect(review.summary.disabledRequiredConnectorIds).toEqual(['ats'])
+    expect(review.summary.descriptorPermissionCount).toBeGreaterThan(0)
+    expect(review.summary.warnings).toContain('Required connectors are not enabled: ats')
   })
 })

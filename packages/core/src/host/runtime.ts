@@ -2,6 +2,7 @@ import type { CapabilityTemplate, HostedSoulApp, VerticalSoul } from '@zonease/a
 import type { WorkerRow } from '@zonease/aiworker-storage-sqlite/worker'
 import type { OfficialLegacyMetadataDiscardResult, OfficialSoulAppBootstrapResult } from '../soul-app/official'
 import type { HostSoulCatalog, SoulAppInstallInput, SoulAppRegistryContext } from '../soul-app/registry'
+import type { SoulAppSecurityReview } from '../soul-app/security-review'
 import type { LocalExecutor } from '../worker/executor'
 import type { LocalWorkerRuntime, LocalWorkerSnapshot } from '../worker/runtime'
 
@@ -32,6 +33,7 @@ import {
   listHostSoulCatalog,
   runSoulAppHealthcheck,
 } from '../soul-app/registry'
+import { reviewSoulAppSecurity } from '../soul-app/security-review'
 import { createLocalWorkerRuntime } from '../worker/runtime'
 
 export interface HostRuntimeOptions {
@@ -80,6 +82,13 @@ export class HostRuntime {
 
   getApp(appId: string): HostedSoulApp | null {
     return getHostedSoulApp(appId)
+  }
+
+  reviewAppSecurity(appId: string): SoulAppSecurityReview {
+    const app = getHostedSoulApp(appId)
+    if (!app)
+      throw new Error(`Soul App not found: ${appId}`)
+    return reviewSoulAppSecurity(app, this.registryContext())
   }
 
   async installAppFromPath(manifestPath: string): Promise<HostedSoulApp> {

@@ -158,7 +158,10 @@ const themeMediaQuery = '(prefers-color-scheme: dark)'
 const baseSettings: LocalSettingsConfig = {
   appearance: 'system',
   byok: { apiKeyRef: '', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o', provider: 'openai-compatible' },
-  connectors: [{ enabled: false, id: 'ats', name: 'ATS / HRIS', status: 'not_configured' }],
+  connectors: [
+    { enabled: false, id: 'ats', name: 'ATS / HRIS', status: 'not_configured' },
+    { enabled: false, id: 'ci', name: 'CI / release evidence', status: 'not_configured' },
+  ],
   engineId: 'codex',
   engines: [{ command: 'codex', id: 'codex', installed: true, name: 'Codex CLI', path: '/usr/local/bin/codex', version: 'codex 1.0.0' }],
   executionMode: 'local-cli',
@@ -255,6 +258,10 @@ let currentWorkspaces: typeof workspace[]
 let currentApps: Array<{
   appId: string
   manifest: {
+    connectors?: {
+      optional: Array<{ access: string[], id: string, reason: string, scopes: string[] }>
+      required: Array<{ access: string[], id: string, reason: string, scopes: string[] }>
+    }
     permissions?: unknown[]
     name: string
     ui?: {
@@ -267,12 +274,14 @@ let currentApps: Array<{
           id: string
           label: string
           protocolAction: string
+          requiredPermissions?: string[]
           slot: 'action' | 'drawer-toggle' | 'refresh'
         }>
         primaryAction?: {
           id: string
           label: string
           protocolAction: string
+          requiredPermissions?: string[]
           slot: 'primary'
         }
         search?: {
@@ -280,11 +289,13 @@ let currentApps: Array<{
           label: string
           placeholder: string
           protocolProvider: string
+          requiredPermissions?: string[]
         }
         settings?: {
           id: string
           label: string
           protocolAction: string
+          requiredPermissions?: string[]
         }
       }
       workspaceWidgets?: Array<{ id: string, label: string, surface?: { renderer: 'host-descriptor' | 'sandboxed-frame' | 'trusted-module' } }>
@@ -304,12 +315,14 @@ let currentApps: Array<{
         id: string
         label: string
         protocolAction: string
+        requiredPermissions?: string[]
         slot: 'action' | 'drawer-toggle' | 'refresh'
       }>
       primaryAction?: {
         id: string
         label: string
         protocolAction: string
+        requiredPermissions?: string[]
         slot: 'primary'
       }
       search?: {
@@ -317,11 +330,13 @@ let currentApps: Array<{
         label: string
         placeholder: string
         protocolProvider: string
+        requiredPermissions?: string[]
       }
       settings?: {
         id: string
         label: string
         protocolAction: string
+        requiredPermissions?: string[]
       }
     } | null
     workspaceWidgetIds: string[]
@@ -413,6 +428,24 @@ beforeEach(() => {
       return json({ runtimeVersion: 'test', startedAt: now, workers: currentWorkers })
     if (url.endsWith('/api/local/apps'))
       return json({ apps: currentApps })
+    if (url.endsWith('/api/local/apps/aiworker-qa/enable') && method === 'POST') {
+      const enabled = currentApps.find(app => app.appId === 'aiworker-qa')
+      currentApps = currentApps.map(app => app.appId === 'aiworker-qa' ? { ...app, status: 'enabled' } : app)
+      return json({
+        app: enabled ? { ...enabled, status: 'enabled' } : null,
+        catalog: { apps: currentApps, souls, templates },
+        review: { appId: 'aiworker-qa', summary: { disabledRequiredConnectorIds: ['ci'] } },
+      })
+    }
+    if (url.endsWith('/api/local/apps/aiworker-qa/disable') && method === 'POST') {
+      const disabled = currentApps.find(app => app.appId === 'aiworker-qa')
+      currentApps = currentApps.map(app => app.appId === 'aiworker-qa' ? { ...app, status: 'disabled' } : app)
+      return json({
+        app: disabled ? { ...disabled, status: 'disabled' } : null,
+        catalog: { apps: currentApps, souls, templates },
+        review: { appId: 'aiworker-qa', summary: { disabledRequiredConnectorIds: ['ci'] } },
+      })
+    }
     if (url.endsWith('/api/local/apps/aiworker-hr/surfaces/hr-home')) {
       return json({
         actions: [{ id: 'create-profile-review', label: 'Create review' }],
@@ -868,12 +901,14 @@ describe('worker studio', () => {
                   id: 'refresh-people',
                   label: 'Refresh',
                   protocolAction: 'people.refresh',
+                  requiredPermissions: ['storage:read:aiworker-hr'],
                   slot: 'refresh',
                 },
                 {
                   id: 'toggle-evidence-drawer',
                   label: 'Evidence',
                   protocolAction: 'drawers.evidence.toggle',
+                  requiredPermissions: ['connector:read:ats'],
                   slot: 'drawer-toggle',
                 },
               ],
@@ -881,6 +916,7 @@ describe('worker studio', () => {
                 id: 'create-people-profile',
                 label: 'New people profile',
                 protocolAction: 'peopleProfiles.create',
+                requiredPermissions: ['storage:write:aiworker-hr'],
                 slot: 'primary',
               },
               search: {
@@ -888,11 +924,13 @@ describe('worker studio', () => {
                 label: 'Search people profiles',
                 placeholder: 'Search people profiles',
                 protocolProvider: 'peopleProfiles.search',
+                requiredPermissions: ['storage:read:aiworker-hr'],
               },
               settings: {
                 id: 'hr-settings',
                 label: 'HR settings',
                 protocolAction: 'settings.open',
+                requiredPermissions: ['api:serve:/api/local/apps/aiworker-hr'],
               },
             },
             workspaceWidgets: [{ id: 'hr-people-widget', label: 'People widget', surface: { renderer: 'sandboxed-frame' } }],
@@ -913,12 +951,14 @@ describe('worker studio', () => {
                 id: 'refresh-people',
                 label: 'Refresh',
                 protocolAction: 'people.refresh',
+                requiredPermissions: ['storage:read:aiworker-hr'],
                 slot: 'refresh',
               },
               {
                 id: 'toggle-evidence-drawer',
                 label: 'Evidence',
                 protocolAction: 'drawers.evidence.toggle',
+                requiredPermissions: ['connector:read:ats'],
                 slot: 'drawer-toggle',
               },
             ],
@@ -926,6 +966,7 @@ describe('worker studio', () => {
               id: 'create-people-profile',
               label: 'New people profile',
               protocolAction: 'peopleProfiles.create',
+              requiredPermissions: ['storage:write:aiworker-hr'],
               slot: 'primary',
             },
             search: {
@@ -933,11 +974,13 @@ describe('worker studio', () => {
               label: 'Search people profiles',
               placeholder: 'Search people profiles',
               protocolProvider: 'peopleProfiles.search',
+              requiredPermissions: ['storage:read:aiworker-hr'],
             },
             settings: {
               id: 'hr-settings',
               label: 'HR settings',
               protocolAction: 'settings.open',
+              requiredPermissions: ['api:serve:/api/local/apps/aiworker-hr'],
             },
           },
           workspaceWidgetIds: ['people-widget'],
@@ -947,7 +990,47 @@ describe('worker studio', () => {
       },
       {
         appId: 'aiworker-qa',
-        manifest: { name: 'AIWorker QA' },
+        manifest: {
+          connectors: {
+            optional: [],
+            required: [
+              {
+                access: ['read'],
+                id: 'ci',
+                reason: 'Read CI and test evidence through the Host connector broker.',
+                scopes: ['runs.read'],
+              },
+            ],
+          },
+          name: 'AIWorker QA',
+          permissions: [
+            { action: 'read', kind: 'storage', reason: 'Read app-scoped QA domain metadata.', target: 'aiworker-qa' },
+            { action: 'write', kind: 'storage', reason: 'Write app-scoped QA domain metadata.', target: 'aiworker-qa' },
+            { action: 'read', kind: 'connector', reason: 'Read CI evidence through Host connector broker.', target: 'ci' },
+          ],
+          ui: {
+            artifactPreviews: [],
+            panels: [],
+            reviewPanels: [],
+            routes: [],
+            shell: {
+              primaryAction: {
+                id: 'create-release-gate',
+                label: 'New release gate',
+                protocolAction: 'releaseGates.create',
+                requiredPermissions: ['storage:write:aiworker-qa'],
+                slot: 'primary',
+              },
+              search: {
+                id: 'release-search',
+                label: 'Search releases',
+                placeholder: 'Search releases',
+                protocolProvider: 'releases.search',
+                requiredPermissions: ['storage:read:aiworker-qa'],
+              },
+            },
+          },
+        },
         mountedContribution: {
           apiRoutePrefix: '/api/local/apps/aiworker-qa',
           artifactPreviewIds: [],
@@ -1033,6 +1116,17 @@ describe('worker studio', () => {
     expect(within(dialog).getByText('API /api/local/apps/aiworker-hr')).toBeTruthy()
     expect(within(dialog).getByText('AIWorker QA')).toBeTruthy()
     expect(within(dialog).getByText('Disabled · 0.1.0')).toBeTruthy()
+    expect(within(dialog).getByText('3 permissions')).toBeTruthy()
+    expect(within(dialog).getByText('connector:read:ci')).toBeTruthy()
+    expect(within(dialog).getByText('ci · not enabled')).toBeTruthy()
+    expect(within(dialog).getAllByText('storage:write:aiworker-qa').length).toBeGreaterThan(0)
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Enable AIWorker QA' }))
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/local/apps/aiworker-qa/enable', expect.objectContaining({ method: 'POST' }))
+    })
+    await waitFor(() => {
+      expect(within(dialog).getAllByText('Enabled · 0.1.0').length).toBeGreaterThan(1)
+    })
   })
 
   it('keeps worker status as a trailing dot without duplicated item labels', async () => {

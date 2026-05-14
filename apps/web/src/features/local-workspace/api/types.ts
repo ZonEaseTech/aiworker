@@ -55,6 +55,51 @@ export interface LocalSoulAppActionResponse {
   }
 }
 
+export interface LocalSoulAppSecurityReview {
+  appId: string
+  connectors: {
+    optional: Array<{
+      access: readonly string[]
+      available: boolean
+      enabled: boolean
+      id: string
+      reason: string
+      required: boolean
+      scopes: readonly string[]
+    }>
+    required: Array<{
+      access: readonly string[]
+      available: boolean
+      enabled: boolean
+      id: string
+      reason: string
+      required: boolean
+      scopes: readonly string[]
+    }>
+  }
+  descriptorPermissions: Array<{
+    id: string
+    label: string
+    requiredPermissions: readonly string[]
+    surface: string
+  }>
+  manifestPermissions: readonly unknown[]
+  status: string
+  summary: {
+    descriptorPermissionCount: number
+    disabledRequiredConnectorIds: string[]
+    manifestPermissionCount: number
+    missingRequiredConnectorIds: string[]
+    warnings: string[]
+  }
+}
+
+export interface LocalSoulAppLifecycleResponse {
+  app: LocalHostedSoulApp
+  catalog?: unknown
+  review?: LocalSoulAppSecurityReview
+}
+
 export interface LocalSoulAppActionScope {
   operatorId?: string | null
   sessionId?: string | null

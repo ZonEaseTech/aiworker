@@ -222,12 +222,22 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
       return notFound(c, 'Soul App')
     return c.json({ app })
   })
-  app.post('/api/local/apps/:appId/enable', c => c.json({ app: state.host.enableApp(c.req.param('appId')), catalog: state.host.listCatalog() }))
+  app.get('/api/local/apps/:appId/security-review', (c) => {
+    const appId = c.req.param('appId')
+    if (!state.host.getApp(appId))
+      return notFound(c, 'Soul App')
+    return c.json({ review: state.host.reviewAppSecurity(appId) })
+  })
+  app.post('/api/local/apps/:appId/enable', (c) => {
+    const appId = c.req.param('appId')
+    const app = state.host.enableApp(appId)
+    return c.json({ app, catalog: state.host.listCatalog(), review: state.host.reviewAppSecurity(appId) })
+  })
   app.post('/api/local/apps/:appId/disable', (c) => {
     const appId = c.req.param('appId')
     const app = state.host.disableApp(appId)
     stopMountedSoulAppService(state, appId)
-    return c.json({ app, catalog: state.host.listCatalog() })
+    return c.json({ app, catalog: state.host.listCatalog(), review: state.host.reviewAppSecurity(appId) })
   })
   app.post('/api/local/apps/:appId/healthcheck', c => c.json({ app: state.host.healthcheckApp(c.req.param('appId')) }))
   app.get('/api/local/apps/:appId/broker/permissions', (c) => {
@@ -1723,6 +1733,7 @@ function registerLocalOpenApiPaths(app: OpenAPIHono): void {
     { method: 'get', path: '/api/local/apps', summary: 'List Host Soul Apps', tags: ['apps'] },
     { method: 'post', path: '/api/local/apps/install', summary: 'Install Host Soul App manifest', tags: ['apps'], created: true },
     { method: 'get', path: '/api/local/apps/{appId}', summary: 'Show Host Soul App', tags: ['apps'] },
+    { method: 'get', path: '/api/local/apps/{appId}/security-review', summary: 'Review Soul App permissions before enablement', tags: ['apps'] },
     { method: 'post', path: '/api/local/apps/{appId}/enable', summary: 'Enable Host Soul App', tags: ['apps'], created: true },
     { method: 'post', path: '/api/local/apps/{appId}/disable', summary: 'Disable Host Soul App', tags: ['apps'], created: true },
     { method: 'post', path: '/api/local/apps/{appId}/healthcheck', summary: 'Run Host Soul App static healthcheck', tags: ['apps'], created: true },

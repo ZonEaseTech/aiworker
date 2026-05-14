@@ -18,6 +18,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { bootstrapWorkerApp } from './worker'
 
 const HR_APP_ID = 'aiworker-hr'
+const QA_APP_ID = 'aiworker-qa'
 const HR_CANDIDATE_SCREEN = namespaceSoulAppCapabilityId(HR_APP_ID, 'candidate-screen')
 
 describe('local daemon API', () => {
@@ -144,6 +145,50 @@ describe('local daemon API', () => {
     })
     expect(workerRes.status).toBe(400)
     expect(await workerRes.json()).toMatchObject({ error: { code: 'SOUL_NOT_AVAILABLE' } })
+  })
+
+  it('exposes Soul App security review before generic enablement', async () => {
+    const target = await app()
+    expect((await target.request(`/api/local/apps/${QA_APP_ID}/disable`, { method: 'POST' })).status).toBe(200)
+
+    const reviewRes = await target.request(`/api/local/apps/${QA_APP_ID}/security-review`)
+    expect(reviewRes.status).toBe(200)
+    const reviewBody = await reviewRes.json() as {
+      review: {
+        appId: string
+        connectors: { required: Array<{ enabled: boolean, id: string, required: boolean }> }
+        descriptorPermissions: Array<{ id: string, requiredPermissions: string[], surface: string }>
+        manifestPermissions: unknown[]
+        status: string
+        summary: { disabledRequiredConnectorIds: string[], warnings: string[] }
+      }
+    }
+    expect(reviewBody.review.appId).toBe(QA_APP_ID)
+    expect(reviewBody.review.status).toBe('disabled')
+    expect(reviewBody.review.manifestPermissions.length).toBeGreaterThan(0)
+    expect(reviewBody.review.connectors.required).toContainEqual(expect.objectContaining({
+      enabled: false,
+      id: 'ci',
+      required: true,
+    }))
+    expect(reviewBody.review.descriptorPermissions).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'create-release-gate',
+        requiredPermissions: ['storage:write:aiworker-qa'],
+        surface: 'shell.primaryAction',
+      }),
+    ]))
+    expect(reviewBody.review.summary.disabledRequiredConnectorIds).toEqual(['ci'])
+    expect(reviewBody.review.summary.warnings).toContain('Required connectors are not enabled: ci')
+
+    const enableRes = await target.request(`/api/local/apps/${QA_APP_ID}/enable`, { method: 'POST' })
+    expect(enableRes.status).toBe(200)
+    const enableBody = await enableRes.json() as { app: { status: string }, review: { appId: string, summary: { disabledRequiredConnectorIds: string[] } } }
+    expect(enableBody.app.status).toBe('enabled')
+    expect(enableBody.review).toMatchObject({
+      appId: QA_APP_ID,
+      summary: { disabledRequiredConnectorIds: ['ci'] },
+    })
   })
 
   it('discards legacy HR worker metadata during daemon bootstrap', async () => {
@@ -1010,6 +1055,7 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
     expect(paths).toContain('/api/local/info')
     expect(paths).toContain('/api/local/apps')
     expect(paths).toContain('/api/local/apps/install')
+    expect(paths).toContain('/api/local/apps/{appId}/security-review')
     expect(paths).toContain('/api/local/apps/{appId}/enable')
     expect(paths).toContain('/api/local/apps/{appId}/actions/{actionId}')
     expect(paths).toContain('/api/local/apps/{appId}/search')
