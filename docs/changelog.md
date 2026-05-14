@@ -1,5 +1,23 @@
 # AIWorker Changelog
 
+## 2026-05-15 00:24 [progress] REL-033 / PLAN-322 — CLI 0.13.2 patch release
+
+Started the `@zonease/aiworker-cli@0.13.2` patch release. `0.13.1` is already
+published on npm and GitHub Release, so this release uses a new patch version
+for the current post-0.13.1 `main` changes: dev home isolation, Soul App
+authoring boundary cleanup, packaged daemon runtime version propagation and
+Soul App Web Storage discipline.
+
+Release execution will run local source/build/dist/pack/smoke gates before
+pushing `main` and annotated tag `v0.13.2`.
+
+Local release gates passed: `bun run check`, `bun run test`, `bun run build`,
+`git diff --check`, dist version checks, npm pack dry-run, `smoke:dist-release`,
+`bun run crg:update` and code-review-graph change detection against
+`origin/main`. Pack preview reports `@zonease/aiworker-cli@0.13.2` with 114
+files and the expected CLI, Worker Web, worker migration and official HR/QA app
+runtime resources.
+
 ## 2026-05-14 17:45 [completed] FEAT-084 / PLAN-321 — Soul App Web Storage discipline
 
 Completed the trusted first-party browser storage discipline slice for official
