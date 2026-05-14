@@ -249,6 +249,15 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     const broker = createSoulAppBroker(brokerContext(c, state))
     return c.json({ registry: broker.providers.list() })
   })
+  app.get('/api/local/apps/:appId/broker/search', (c) => {
+    const result = createSoulAppBroker(brokerContext(c, state)).search.query(c.req.query('query') ?? '')
+    return brokerResponse(c, 'result', result)
+  })
+  app.put('/api/local/apps/:appId/broker/search/:itemId{.+}', async (c) => {
+    const body = await c.req.json().catch(() => ({}))
+    const result = createSoulAppBroker(brokerContext(c, state)).search.upsert(c.req.param('itemId'), searchIndexInputFromRecord(body))
+    return brokerResponse(c, 'item', result)
+  })
   app.get('/api/local/apps/:appId/broker/storage', (c) => {
     const result = createSoulAppBroker(brokerContext(c, state)).storage.list()
     return brokerResponse(c, 'records', result)
@@ -801,6 +810,35 @@ function brokerResponse(c: Context, key: string, result: unknown): Response {
     }, status)
   }
   return c.json({ [key]: result })
+}
+
+function searchIndexInputFromRecord(value: unknown) {
+  const record = isRecord(value) ? value : {}
+  return {
+    artifactId: optionalNonEmptyString(record.artifactId),
+    kind: optionalNonEmptyString(record.kind) ?? 'item',
+    reference: searchIndexReferenceFromRecord(record.reference),
+    reviewId: optionalNonEmptyString(record.reviewId),
+    sessionId: optionalNonEmptyString(record.sessionId),
+    summary: optionalNonEmptyString(record.summary),
+    title: optionalNonEmptyString(record.title) ?? 'Untitled',
+    workspaceId: optionalNonEmptyString(record.workspaceId),
+  }
+}
+
+function searchIndexReferenceFromRecord(value: unknown) {
+  if (!isRecord(value))
+    return undefined
+  const id = optionalNonEmptyString(value.id)
+  const type = optionalNonEmptyString(value.type)
+  if (!id || !type)
+    return undefined
+  const url = optionalNonEmptyString(value.url)
+  return {
+    id,
+    type,
+    ...(url ? { url } : {}),
+  }
 }
 
 function resolveShellAction(app: HostedSoulApp, actionId: string): ShellActionDescriptor | null {
@@ -1759,6 +1797,8 @@ function registerLocalOpenApiPaths(app: OpenAPIHono): void {
     { method: 'get', path: '/api/local/apps/{appId}/search', summary: 'Search through a declared Soul App provider', tags: ['apps'] },
     { method: 'get', path: '/api/local/apps/{appId}/broker/permissions', summary: 'List Soul App broker permissions', tags: ['apps'] },
     { method: 'get', path: '/api/local/apps/{appId}/broker/providers', summary: 'List Host broker providers visible to a Soul App', tags: ['apps'] },
+    { method: 'get', path: '/api/local/apps/{appId}/broker/search', summary: 'Query Soul App broker search index descriptors', tags: ['apps'] },
+    { method: 'put', path: '/api/local/apps/{appId}/broker/search/{itemId}', summary: 'Upsert a Soul App broker search index descriptor', tags: ['apps'] },
     { method: 'get', path: '/api/local/apps/{appId}/broker/storage', summary: 'List Soul App scoped storage records', tags: ['apps'] },
     { method: 'get', path: '/api/local/apps/{appId}/broker/storage/{key}', summary: 'Read Soul App scoped storage record', tags: ['apps'] },
     { method: 'put', path: '/api/local/apps/{appId}/broker/storage/{key}', summary: 'Write Soul App scoped storage record', tags: ['apps'] },

@@ -74,6 +74,21 @@ describe('Soul App manifest schema', () => {
   it('accepts app-declared shell toolbar and search descriptors', () => {
     const result = validateSoulAppManifest({
       ...hrSoulAppManifest,
+      permissions: [
+        ...hrSoulAppManifest.permissions,
+        {
+          action: 'read',
+          kind: 'search',
+          reason: 'Read app-owned search descriptors.',
+          target: 'aiworker-hr',
+        },
+        {
+          action: 'write',
+          kind: 'search',
+          reason: 'Write app-owned search descriptors.',
+          target: 'aiworker-hr',
+        },
+      ],
       ui: {
         ...hrSoulAppManifest.ui,
         shell: {
@@ -98,7 +113,7 @@ describe('Soul App manifest schema', () => {
             label: 'Search people profiles',
             placeholder: 'Search people profiles',
             protocolProvider: 'peopleProfiles.search',
-            requiredPermissions: ['storage:read:aiworker-hr'],
+            requiredPermissions: ['search:read:aiworker-hr'],
           },
           settings: {
             id: 'hr-settings',

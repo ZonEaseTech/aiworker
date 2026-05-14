@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-14 (FEAT-078 completed)
+> Updated: 2026-05-14 (FEAT-079 completed)
 
 ## Usage
 
@@ -414,3 +414,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-076 Soul App permission visibility and install review**](FEAT-076.md) `P0`
 - [x] [**FEAT-077 Broker provider registry**](FEAT-077.md) `P0`
 - [x] [**FEAT-078 Identity boundary**](FEAT-078.md) `P0`
+- [x] [**FEAT-079 App-owned search index broker**](FEAT-079.md) `P0`

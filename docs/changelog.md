@@ -1,5 +1,19 @@
 # AIWorker Changelog
 
+## 2026-05-14 11:47 [completed] FEAT-079 / PLAN-311 — App-owned search index broker
+
+Completed the final convergence slice after identity boundary delivery.
+
+- Add `search` broker permissions for app-owned index descriptors.
+- Let Soul Apps push non-authoritative title/summary/reference records through Host broker routes.
+- Keep Host search indexing generic and avoid domain result interpretation.
+- Expose SDK helpers for public app-scoped broker search routes.
+
+Verification passed: focused shared/core/API/SDK tests and typechecks, lint,
+`git diff --check`, and code-review-graph. CRG exited 0 with static test-gap
+hints for API parsing/OpenAPI helpers and search-index helpers, covered by the
+focused API/core/SDK tests.
+
 ## 2026-05-14 11:41 [completed] FEAT-078 / PLAN-310 — Identity boundary
 
 Completed the next convergence slice after broker provider registry delivery.

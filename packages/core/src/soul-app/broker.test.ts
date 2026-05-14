@@ -225,6 +225,77 @@ describe('Soul App isolation broker', () => {
     expect(JSON.stringify(registry)).not.toContain('token')
   })
 
+  it('indexes app-owned search descriptors behind search broker permissions', () => {
+    const deniedBroker = createSoulAppBroker({
+      appId: 'aiworker-hr',
+      workspaceId: 'workspace-hr',
+    })
+    expect(deniedBroker.search.upsert('profiles/ada', {
+      kind: 'people-profile',
+      reference: { id: 'profile-ada', type: 'profile' },
+      summary: 'Compiler pioneer.',
+      title: 'Ada Lovelace',
+      workspaceId: 'workspace-hr',
+    })).toMatchObject({
+      decision: { allowed: false, code: 'permission_denied' },
+    })
+
+    installSoulAppManifest({
+      manifest: {
+        ...hrSoulAppManifest,
+        permissions: [
+          ...hrSoulAppManifest.permissions,
+          { action: 'read', kind: 'search', reason: 'Read app-owned index descriptors.', target: 'aiworker-hr' },
+          { action: 'write', kind: 'search', reason: 'Write app-owned index descriptors.', target: 'aiworker-hr' },
+        ],
+      },
+      sourceKind: 'inline',
+      sourceRef: 'test:inline-search',
+    }, {
+      availableConnectorIds: ['ats', 'calendar'],
+      hostVersion: '0.12.1',
+    })
+    enableSoulApp('aiworker-hr', {
+      availableConnectorIds: ['ats', 'calendar'],
+      enabledConnectorIds: ['ats'],
+      hostVersion: '0.12.1',
+    })
+
+    const broker = createSoulAppBroker({
+      appId: 'aiworker-hr',
+      now: () => '2026-05-13T00:05:00.000Z',
+      workspaceId: 'workspace-hr',
+    })
+
+    const indexed = broker.search.upsert('profiles/ada', {
+      kind: 'people-profile',
+      reference: { id: 'profile-ada', type: 'profile' },
+      summary: 'Compiler pioneer.',
+      title: 'Ada Lovelace',
+      workspaceId: 'workspace-hr',
+    })
+    if ('decision' in indexed)
+      throw new Error(indexed.decision.reason)
+    expect(indexed).toMatchObject({
+      appId: 'aiworker-hr',
+      authority: 'soul-app',
+      cache: { freshness: 'non-authoritative' },
+      id: 'profiles/ada',
+      title: 'Ada Lovelace',
+    })
+
+    const result = broker.search.query('compiler')
+    if ('decision' in result)
+      throw new Error(result.decision.reason)
+    expect(result.items).toEqual([
+      expect.objectContaining({
+        id: 'profiles/ada',
+        reference: { id: 'profile-ada', type: 'profile' },
+      }),
+    ])
+    expect(JSON.stringify(result.items[0])).not.toContain('candidateRisk')
+  })
+
   it('brokers connector evidence without exposing raw tokens', () => {
     const broker = createSoulAppBroker({
       appId: 'aiworker-hr',

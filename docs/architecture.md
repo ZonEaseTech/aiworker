@@ -159,6 +159,9 @@ events -> optional app-emitted lifecycle/domain events
 - Host broker provider registry lists storage, connector, audit and secret-reference providers as
   capability metadata. It may name future S3/GCP/vault providers, but it must not load cloud SDKs
   or expose raw credentials through the registry.
+- Host search index broker stores only app-submitted non-authoritative descriptors: title,
+  summary, reference and scope ids. Soul Apps own which descriptors to publish and what each
+  result means.
 - Host install/enable surfaces may project manifest permissions, connector needs and descriptor
   `requiredPermissions` as a generic security review before app code runs. This review belongs to
   Host security and grant UX; it is not an app-specific approval model and does not interpret domain data.
@@ -273,6 +276,9 @@ packages/
 - Soul App 变更必须跑 `aiworker app validate <app-path>`。
 - 影响 standalone 或 Host mounted surface 时必须跑 `aiworker app smoke <app-path>`。
 - Host/Soul protocol 变更必须同时验证 standalone 与 Host mounted 语义。
+- Search broker records are Host-owned indexes of app-owned descriptors only; do not store
+  profile fields, release verdict semantics, private evidence payloads or raw connector data in
+  the index.
 
 ## Current Historical Boundaries
 

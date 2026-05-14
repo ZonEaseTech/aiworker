@@ -74,6 +74,13 @@ describe('Soul App SDK authoring boundary', () => {
 
     await client.broker.permissions.list()
     await client.broker.providers.list()
+    await client.broker.search.upsert('records/demo', {
+      kind: 'demo-record',
+      reference: { id: 'demo-record-1', type: 'demo-record' },
+      summary: 'Demo descriptor',
+      title: 'Demo record',
+    }, { workspaceId: 'workspace-1' })
+    await client.broker.search.query('demo', { workspaceId: 'workspace-1' })
     await client.broker.storage.put('records/demo', { ready: true }, { operatorId: 'operator-local', workspaceId: 'workspace-1' })
     await client.broker.connectors.readEvidence('ats', { candidateId: 'cand-1' }, { sessionId: 'session-1', workspaceId: 'workspace-1' })
     await client.broker.engine.createInvocation({ prompt: 'raw engine call should be denied by Host' }, { sessionId: 'session-1' })
@@ -82,13 +89,16 @@ describe('Soul App SDK authoring boundary', () => {
     expect(calls.map(call => call.path)).toEqual([
       '/api/local/apps/demo-soul-app/broker/permissions',
       '/api/local/apps/demo-soul-app/broker/providers',
+      '/api/local/apps/demo-soul-app/broker/search/records/demo?workspaceId=workspace-1',
+      '/api/local/apps/demo-soul-app/broker/search?query=demo&workspaceId=workspace-1',
       '/api/local/apps/demo-soul-app/broker/storage/records/demo?operatorId=operator-local&workspaceId=workspace-1',
       '/api/local/apps/demo-soul-app/broker/connectors/ats/evidence?sessionId=session-1&workspaceId=workspace-1',
       '/api/local/apps/demo-soul-app/broker/engine/invocations?sessionId=session-1',
       '/api/local/apps/demo-soul-app/broker/audit',
     ])
-    expect(calls[2]?.body).toMatchObject({ valueJson: { ready: true } })
-    expect(calls[3]?.body).toMatchObject({ query: { candidateId: 'cand-1' } })
+    expect(calls[2]?.body).toMatchObject({ title: 'Demo record' })
+    expect(calls[4]?.body).toMatchObject({ valueJson: { ready: true } })
+    expect(calls[5]?.body).toMatchObject({ query: { candidateId: 'cand-1' } })
   })
 })
 

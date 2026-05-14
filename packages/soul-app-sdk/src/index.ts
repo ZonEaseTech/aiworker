@@ -135,6 +135,26 @@ export function createSoulAppClient(options: SoulAppClientOptions) {
           return json(`/api/local/apps/${options.appId}/broker/providers${queryString(context)}`)
         },
       },
+      search: {
+        query(query: string, context?: SoulAppBrokerContextQuery) {
+          return json(`/api/local/apps/${options.appId}/broker/search${queryString(context, { query })}`)
+        },
+        upsert(id: string, input: {
+          artifactId?: string | null
+          kind: string
+          reference?: { id: string, type: string, url?: string }
+          reviewId?: string | null
+          sessionId?: string | null
+          summary?: string | null
+          title: string
+          workspaceId?: string | null
+        }, context?: SoulAppBrokerContextQuery) {
+          return json(`/api/local/apps/${options.appId}/broker/search/${encodeBrokerPath(id)}${queryString(context)}`, {
+            body: JSON.stringify(input),
+            method: 'PUT',
+          })
+        },
+      },
       storage: {
         get(key: string, context?: SoulAppBrokerContextQuery) {
           return json(`/api/local/apps/${options.appId}/broker/storage/${encodeBrokerPath(key)}${queryString(context)}`)
@@ -182,8 +202,10 @@ function encodeBrokerPath(value: string): string {
   return value.split('/').map(part => encodeURIComponent(part)).join('/')
 }
 
-function queryString(input?: SoulAppBrokerContextQuery): string {
+function queryString(input?: SoulAppBrokerContextQuery, seed: Record<string, string> = {}): string {
   const params = new URLSearchParams()
+  for (const [key, value] of Object.entries(seed))
+    params.set(key, value)
   for (const [key, value] of Object.entries(input ?? {})) {
     if (typeof value === 'string' && value.length > 0)
       params.set(key, value)

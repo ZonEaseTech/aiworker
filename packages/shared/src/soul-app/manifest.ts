@@ -8,7 +8,7 @@ const ID_RE = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
 const SEMVER_RE = /^\d+\.\d+\.\d+$/
 const ROUTE_RE = /^\/[a-z0-9][a-z0-9/_:.-]*$/
 const API_PREFIX_RE = /^\/api\/local\/apps\/[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\/[a-z0-9/_:.-]*)?$/
-const REQUIRED_PERMISSION_RE = /^(storage|connector|artifact|review|memory|ui|api):(read|write|create|propose|mount|serve):[^:\s].*$/
+const REQUIRED_PERMISSION_RE = /^(storage|connector|artifact|review|memory|ui|api|search):(read|write|create|propose|mount|serve):[^:\s].*$/
 
 export const soulAppIdSchema = zod.string().min(1).regex(ID_RE, 'Soul App id must be kebab-case')
 export const soulAppVersionSchema = zod.string().regex(SEMVER_RE, 'version must be major.minor.patch')
@@ -242,7 +242,7 @@ export const soulAppMemorySchema = zod.object({
 })
 export type SoulAppMemory = z.infer<typeof soulAppMemorySchema>
 
-export const soulAppPermissionKindSchema = zod.enum(['storage', 'connector', 'artifact', 'review', 'memory', 'ui', 'api'])
+export const soulAppPermissionKindSchema = zod.enum(['storage', 'connector', 'artifact', 'review', 'memory', 'ui', 'api', 'search'])
 export type SoulAppPermissionKind = z.infer<typeof soulAppPermissionKindSchema>
 
 export const soulAppPermissionActionSchema = zod.enum(['read', 'write', 'create', 'propose', 'mount', 'serve'])

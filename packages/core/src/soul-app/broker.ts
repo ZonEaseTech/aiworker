@@ -1,6 +1,7 @@
 import type { HostedSoulApp, SoulAppPermission } from '@zonease/aiworker-shared'
 import type { ArtifactRow, LessonRow, ReviewRow, SoulAppAuditEventRow, SoulAppStorageRecordRow } from '@zonease/aiworker-storage-sqlite/worker'
 import type { SoulAppConnectorProviderConfig } from './provider-registry'
+import type { SoulAppSearchIndexUpsertInput } from './search-index'
 import type { SoulAppStorageProvider } from './storage-provider'
 
 import { randomUUID } from 'node:crypto'
@@ -17,6 +18,7 @@ import {
 
 import { listSoulAppBrokerProviders } from './provider-registry'
 import { getHostedSoulApp } from './registry'
+import { querySoulAppSearchIndex, upsertSoulAppSearchIndexRecord } from './search-index'
 import { createSqliteSoulAppStorageProvider } from './storage-provider'
 
 export interface SoulAppBrokerContext {
@@ -178,6 +180,28 @@ export function createSoulAppBroker(context: SoulAppBrokerContext) {
           verdict: input.verdict ?? 'needs_review',
           workspaceId: input.workspaceId,
         })
+      },
+    },
+    search: {
+      query(query: string) {
+        const decision = decide(context, 'search', 'read', context.appId)
+        recordDecision(context, decision, 'search', 'read', context.appId, { query })
+        if (!decision.allowed)
+          return denied(decision)
+        return querySoulAppSearchIndex(context.appId, query)
+      },
+      upsert(id: string, input: SoulAppSearchIndexUpsertInput) {
+        const decision = decide(context, 'search', 'write', context.appId)
+        recordDecision(context, decision, 'search', 'write', id, {
+          artifactId: input.artifactId ?? null,
+          kind: input.kind,
+          reviewId: input.reviewId ?? null,
+          sessionId: input.sessionId ?? null,
+          workspaceId: input.workspaceId ?? null,
+        })
+        if (!decision.allowed)
+          return denied(decision)
+        return upsertSoulAppSearchIndexRecord(context.appId, id, input, context.now?.())
       },
     },
     storage: {

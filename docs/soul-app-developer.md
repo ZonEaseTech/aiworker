@@ -170,6 +170,10 @@ secret-reference provider metadata through public broker routes. Soul Apps may
 inspect this registry to adapt UX, but must not treat provider names as domain
 truth or assume future cloud providers are active until the registry marks them
 `active`.
+Host search index broker accepts only non-authoritative descriptors such as
+title, summary, reference and scope ids. Soul Apps decide what to publish and
+what results mean; Host must not use the index to infer profile fields, review
+verdict semantics or private evidence.
 Host may project manifest permissions, connector needs and descriptor
 `requiredPermissions` into a generic enablement security review before app code
 runs. Soul Apps should make those declarations clear, but Host must not turn the

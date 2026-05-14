@@ -891,7 +891,16 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
     })
     await target.request('/api/local/apps/install', {
       method: 'POST',
-      body: JSON.stringify({ manifest: hrSoulAppManifest }),
+      body: JSON.stringify({
+        manifest: {
+          ...hrSoulAppManifest,
+          permissions: [
+            ...hrSoulAppManifest.permissions,
+            { action: 'read', kind: 'search', reason: 'Read app-owned index descriptors.', target: 'aiworker-hr' },
+            { action: 'write', kind: 'search', reason: 'Write app-owned index descriptors.', target: 'aiworker-hr' },
+          ],
+        },
+      }),
       headers: { 'content-type': 'application/json' },
     })
     await target.request('/api/local/apps/aiworker-hr/enable', { method: 'POST' })
@@ -952,6 +961,39 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
     expect(providersBody.registry.summary.plannedCount).toBe(3)
     expect(JSON.stringify(providersBody)).not.toContain('token')
 
+    const searchWriteRes = await target.request(`/api/local/apps/aiworker-hr/broker/search/profiles/ada?${contextQuery}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        kind: 'people-profile',
+        reference: { id: 'profile-ada', type: 'profile' },
+        summary: 'Compiler pioneer.',
+        title: 'Ada Lovelace',
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(searchWriteRes.status).toBe(200)
+    expect(await searchWriteRes.json()).toMatchObject({
+      item: {
+        authority: 'soul-app',
+        cache: { freshness: 'non-authoritative' },
+        id: 'profiles/ada',
+        title: 'Ada Lovelace',
+      },
+    })
+
+    const searchIndexRes = await target.request(`/api/local/apps/aiworker-hr/broker/search?query=compiler&${contextQuery}`)
+    expect(searchIndexRes.status).toBe(200)
+    expect(await searchIndexRes.json()).toMatchObject({
+      result: {
+        items: [
+          expect.objectContaining({
+            id: 'profiles/ada',
+            reference: { id: 'profile-ada', type: 'profile' },
+          }),
+        ],
+      },
+    })
+
     const engineRes = await target.request(`/api/local/apps/aiworker-hr/broker/engine/invocations?${contextQuery}`, {
       method: 'POST',
       body: JSON.stringify({ prompt: 'call engine directly' }),
@@ -961,8 +1003,8 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
     expect(await engineRes.json()).toMatchObject({ error: { code: 'ENGINE_OWNED_BY_HOST' } })
 
     const auditBody = await (await target.request('/api/local/apps/aiworker-hr/broker/audit')).json() as { events: Array<{ decision: string, targetKind: string }> }
-    expect(auditBody.events.map(event => event.targetKind)).toEqual(['storage', 'storage', 'connector', 'engine'])
-    expect(auditBody.events.map(event => event.decision)).toEqual(['allowed', 'denied', 'allowed', 'denied'])
+    expect(auditBody.events.map(event => event.targetKind)).toEqual(['storage', 'storage', 'connector', 'search', 'search', 'engine'])
+    expect(auditBody.events.map(event => event.decision)).toEqual(['allowed', 'denied', 'allowed', 'allowed', 'allowed', 'denied'])
   })
 
   it('requires bearer auth only when a workspace token is configured', async () => {
@@ -1165,6 +1207,8 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
     expect(paths).toContain('/api/local/apps/{appId}/actions/{actionId}')
     expect(paths).toContain('/api/local/apps/{appId}/search')
     expect(paths).toContain('/api/local/apps/{appId}/broker/providers')
+    expect(paths).toContain('/api/local/apps/{appId}/broker/search')
+    expect(paths).toContain('/api/local/apps/{appId}/broker/search/{itemId}')
     expect(paths).toContain('/api/local/workers')
     expect(paths).toContain('/api/local/workers/{workerId}')
     expect(paths).toContain('/api/local/workers/{workerId}/templates')
