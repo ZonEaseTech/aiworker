@@ -1,5 +1,18 @@
 # AIWorker Changelog
 
+## 2026-05-14 15:35 [in_progress] REL-032 / PLAN-316 — CLI 0.13.0 preview minor release
+
+Started the `@zonease/aiworker-cli@0.13.0` release.
+
+- Release scope is the CLI npm package and tag-triggered GitHub Release assets.
+- The release proves the packaged Host Web/API plus bundled official HR/QA Soul
+  App preview path.
+- Independent SDK/runtime npm publication, third-party authoring outside the
+  monorepo, Host auth and 1.0 GA claims are out of scope.
+- Required evidence includes source gates, dist/pack checks, `smoke:dist-release`,
+  GitHub Actions release workflow, npm latest, explicit `bunx` smoke, GitHub
+  Release assets and published-package smoke.
+
 ## 2026-05-14 14:11 [completed] FEAT-082 / PLAN-315 — npm preview release readiness
 
 Completed the 0.x public preview release readiness slice.
