@@ -1,6 +1,7 @@
 import { Buffer } from 'node:buffer'
-import { mkdirSync } from 'node:fs'
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { mkdirSync, realpathSync, renameSync } from 'node:fs'
+import { chmod, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
@@ -17,6 +18,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 import {
+  downloadAndReplaceGitHubBundle,
   preprocessArgv,
   resolveCliDefaultHomeDir,
   resolveCliLocalPaths,
@@ -88,6 +90,44 @@ describe('aiworker local CLI', () => {
       at: '2026-05-13T13:04:02.000Z',
     })
     closeWorkerDb()
+  }
+
+  async function writeFakeBundle(bundleDir: string, marker: string): Promise<void> {
+    mkdirSync(path.join(bundleDir, 'web', 'worker'), { recursive: true })
+    mkdirSync(path.join(bundleDir, 'drizzle'), { recursive: true })
+    await writeFile(path.join(bundleDir, 'aiworker'), [
+      '#!/bin/sh',
+      'if [ "$1" = "--version" ]; then',
+      `  echo "aiworker ${marker}"`,
+      '  exit 0',
+      'fi',
+      `echo "${marker}"`,
+      '',
+    ].join('\n'))
+    await chmod(path.join(bundleDir, 'aiworker'), 0o755)
+    await writeFile(path.join(bundleDir, 'web', 'worker', 'index.html'), `<html>${marker}</html>\n`)
+    await writeFile(path.join(bundleDir, 'drizzle', 'migration.sql'), `-- ${marker}\n`)
+    await writeFile(path.join(bundleDir, 'README.md'), `${marker} readme\n`)
+  }
+
+  async function createTarGz(bundleDir: string): Promise<Buffer> {
+    const archivePath = path.join(root, `${path.basename(bundleDir)}.tar.gz`)
+    const tar = Bun.spawnSync(['tar', '-C', path.dirname(bundleDir), '-czf', archivePath, path.basename(bundleDir)])
+    expect(tar.exitCode).toBe(0)
+    return await readFile(archivePath)
+  }
+
+  function mockReleaseFetch(archiveBytes: Buffer, checksum = createHash('sha256').update(archiveBytes).digest('hex')) {
+    return (async (url: string | URL | Request) => {
+      const value = String(url)
+      if (value.endsWith('.sha256'))
+        return new Response(`${checksum}  aiworker.tar.gz\n`)
+      return new Response(new Uint8Array(archiveBytes))
+    }) as typeof fetch
+  }
+
+  async function updateScratchEntries(parentDir: string): Promise<string[]> {
+    return (await readdir(parentDir)).filter(entry => entry.startsWith('.aiworker-update-') || entry.startsWith('.aiworker-next-'))
   }
 
   it('preprocesses multi-word local commands', () => {
@@ -249,6 +289,82 @@ describe('aiworker local CLI', () => {
       status: 'source_not_supported',
     })
     expect(body.result).toBeUndefined()
+  })
+
+  it('replaces the complete GitHub release bundle and keeps the previous bundle as backup', async () => {
+    const installParent = path.join(root, 'install')
+    const currentBundleDir = path.join(installParent, 'aiworker-darwin-arm64')
+    const releaseBundleDir = path.join(root, 'release', 'aiworker-darwin-arm64')
+    await writeFakeBundle(currentBundleDir, 'old')
+    await writeFakeBundle(releaseBundleDir, 'new')
+    const archiveBytes = await createTarGz(releaseBundleDir)
+    const realCurrentBundleDir = realpathSync(currentBundleDir)
+
+    const result = await downloadAndReplaceGitHubBundle({
+      checksumUrl: 'https://example.test/aiworker.tar.gz.sha256',
+      downloadUrl: 'https://example.test/aiworker.tar.gz',
+    }, {
+      currentPath: path.join(currentBundleDir, 'aiworker'),
+      fetch: mockReleaseFetch(archiveBytes),
+    })
+
+    expect(result.installedPath).toBe(path.join(realCurrentBundleDir, 'aiworker'))
+    expect(await readFile(path.join(currentBundleDir, 'web', 'worker', 'index.html'), 'utf8')).toContain('new')
+    expect(await readFile(path.join(currentBundleDir, 'drizzle', 'migration.sql'), 'utf8')).toContain('new')
+    expect(await readFile(path.join(currentBundleDir, 'README.md'), 'utf8')).toContain('new')
+    expect(await readFile(path.join(result.backupPath, 'web', 'worker', 'index.html'), 'utf8')).toContain('old')
+    expect(await readFile(path.join(result.backupPath, 'drizzle', 'migration.sql'), 'utf8')).toContain('old')
+    expect(await readFile(path.join(result.backupPath, 'README.md'), 'utf8')).toContain('old')
+    expect(await updateScratchEntries(installParent)).toEqual([])
+  })
+
+  it('preserves the current bundle and cleans staging paths on checksum mismatch', async () => {
+    const installParent = path.join(root, 'install')
+    const currentBundleDir = path.join(installParent, 'aiworker-darwin-arm64')
+    const releaseBundleDir = path.join(root, 'release', 'aiworker-darwin-arm64')
+    await writeFakeBundle(currentBundleDir, 'old')
+    await writeFakeBundle(releaseBundleDir, 'new')
+    const archiveBytes = await createTarGz(releaseBundleDir)
+
+    await expect(downloadAndReplaceGitHubBundle({
+      checksumUrl: 'https://example.test/aiworker.tar.gz.sha256',
+      downloadUrl: 'https://example.test/aiworker.tar.gz',
+    }, {
+      currentPath: path.join(currentBundleDir, 'aiworker'),
+      fetch: mockReleaseFetch(archiveBytes, '0'.repeat(64)),
+    })).rejects.toThrow('checksum_mismatch')
+
+    expect(await readFile(path.join(currentBundleDir, 'web', 'worker', 'index.html'), 'utf8')).toContain('old')
+    expect(await readFile(path.join(currentBundleDir, 'drizzle', 'migration.sql'), 'utf8')).toContain('old')
+    expect(await updateScratchEntries(installParent)).toEqual([])
+    expect((await readdir(installParent)).some(entry => entry.startsWith('.aiworker-backup-'))).toBe(false)
+  })
+
+  it('restores the current bundle when final bundle rename fails after backup rename', async () => {
+    const installParent = path.join(root, 'install')
+    const currentBundleDir = path.join(installParent, 'aiworker-darwin-arm64')
+    const releaseBundleDir = path.join(root, 'release', 'aiworker-darwin-arm64')
+    await writeFakeBundle(currentBundleDir, 'old')
+    await writeFakeBundle(releaseBundleDir, 'new')
+    const archiveBytes = await createTarGz(releaseBundleDir)
+    const realCurrentBundleDir = realpathSync(currentBundleDir)
+
+    await expect(downloadAndReplaceGitHubBundle({
+      checksumUrl: 'https://example.test/aiworker.tar.gz.sha256',
+      downloadUrl: 'https://example.test/aiworker.tar.gz',
+    }, {
+      currentPath: path.join(currentBundleDir, 'aiworker'),
+      fetch: mockReleaseFetch(archiveBytes),
+      renameSync: (from, to) => {
+        if (path.basename(String(from)).startsWith('.aiworker-next-') && String(to) === realCurrentBundleDir)
+          throw new Error('simulated final rename failure')
+        renameSync(from, to)
+      },
+    })).rejects.toThrow('simulated final rename failure')
+
+    expect(await readFile(path.join(currentBundleDir, 'web', 'worker', 'index.html'), 'utf8')).toContain('old')
+    expect(await readFile(path.join(currentBundleDir, 'drizzle', 'migration.sql'), 'utf8')).toContain('old')
+    expect(await updateScratchEntries(installParent)).toEqual([])
   })
 
   it('returns fresh doctor update notice error state when daily notice resolution fails', async () => {

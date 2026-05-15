@@ -7,7 +7,7 @@ import type { Readable } from 'node:stream'
 import { Buffer } from 'node:buffer'
 import { spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
-import { chmodSync, closeSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { mkdir, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -299,21 +299,33 @@ async function runUpdateCommand(command: UpdateCommandName, opts: UpdateCliOptio
   printJson({ update: plan, result })
 }
 
-async function downloadAndReplaceGitHubBundle(action: { checksumUrl: string, downloadUrl: string }): Promise<{ backupPath: string, installedPath: string }> {
-  const currentPath = resolveArgv1(process.argv[1])
+interface GitHubBundleReplacementOptions {
+  currentPath?: string
+  fetch?: typeof fetch
+  renameSync?: typeof renameSync
+  spawnSync?: (command: string[]) => { exitCode: number | null, stderr?: ArrayBufferView | string }
+}
+
+export async function downloadAndReplaceGitHubBundle(action: { checksumUrl: string, downloadUrl: string }, options: GitHubBundleReplacementOptions = {}): Promise<{ backupPath: string, installedPath: string }> {
+  const currentPath = safeRealpath(resolveArgv1(options.currentPath ?? process.argv[1]))
   if (!currentPath)
     throw new Error('current binary path is required')
 
-  const installDir = path.dirname(currentPath)
-  const stageDir = mkdtempSync(path.join(installDir, '.aiworker-update-'))
+  const rename = options.renameSync ?? renameSync
+  const spawnSync = options.spawnSync ?? ((command: string[]) => Bun.spawnSync(command))
+  const fetchImpl = options.fetch ?? fetch
+  const currentBundleDir = path.dirname(currentPath)
+  const installParentDir = path.dirname(currentBundleDir)
+  const stageDir = mkdtempSync(path.join(installParentDir, '.aiworker-update-'))
   const archivePath = path.join(stageDir, 'aiworker.tar.gz')
-  const nextPath = path.join(installDir, `.aiworker-next-${process.pid}`)
-  const backupPath = path.join(installDir, `.aiworker-backup-${process.pid}`)
+  const nextBundleDir = path.join(installParentDir, `.aiworker-next-${process.pid}-${randomUUID()}`)
+  const backupPath = path.join(installParentDir, `.aiworker-backup-${process.pid}-${randomUUID()}`)
+  let installed = false
 
   try {
     const [checksumText, archiveBytes] = await Promise.all([
-      fetchUpdateText(action.checksumUrl),
-      fetchUpdateBytes(action.downloadUrl),
+      fetchUpdateText(action.checksumUrl, fetchImpl),
+      fetchUpdateBytes(action.downloadUrl, fetchImpl),
     ])
     const expectedChecksum = checksumText.trim().split(/\s+/)[0]
     const actualChecksum = createHash('sha256').update(archiveBytes).digest('hex')
@@ -321,9 +333,9 @@ async function downloadAndReplaceGitHubBundle(action: { checksumUrl: string, dow
       throw new Error('checksum_mismatch')
 
     writeFileSync(archivePath, archiveBytes)
-    const extract = Bun.spawnSync(['tar', '-xzf', archivePath, '-C', stageDir])
+    const extract = spawnSync(['tar', '-xzf', archivePath, '-C', stageDir])
     if (extract.exitCode !== 0) {
-      const stderr = Buffer.from(extract.stderr).toString('utf8').trim()
+      const stderr = spawnStderrText(extract.stderr)
       throw new Error(`staging_failed: ${stderr || `tar exited ${extract.exitCode}`}`)
     }
 
@@ -337,42 +349,57 @@ async function downloadAndReplaceGitHubBundle(action: { checksumUrl: string, dow
     const stagedBinary = path.join(extractedDir, 'aiworker')
     if (!existsSync(stagedBinary) || !statSync(stagedBinary).isFile())
       throw new Error('staging_failed: aiworker binary not found')
+    if (!existsSync(path.join(extractedDir, 'web')) || !statSync(path.join(extractedDir, 'web')).isDirectory())
+      throw new Error('staging_failed: web assets not found')
+    if (!existsSync(path.join(extractedDir, 'drizzle')) || !statSync(path.join(extractedDir, 'drizzle')).isDirectory())
+      throw new Error('staging_failed: drizzle migrations not found')
 
-    rmSync(nextPath, { force: true })
-    rmSync(backupPath, { force: true })
-    copyFileSync(stagedBinary, nextPath)
-    chmodSync(nextPath, 0o755)
+    rmSync(nextBundleDir, { force: true, recursive: true })
+    rmSync(backupPath, { force: true, recursive: true })
+    rename(extractedDir, nextBundleDir)
+    chmodSync(path.join(nextBundleDir, 'aiworker'), 0o755)
 
-    const probe = Bun.spawnSync([nextPath, '--version'])
+    const probe = spawnSync([path.join(nextBundleDir, 'aiworker'), '--version'])
     if (probe.exitCode !== 0) {
-      const stderr = Buffer.from(probe.stderr).toString('utf8').trim()
+      const stderr = spawnStderrText(probe.stderr)
       throw new Error(`staging_failed: version probe failed${stderr ? `: ${stderr}` : ''}`)
     }
 
-    renameSync(currentPath, backupPath)
+    rename(currentBundleDir, backupPath)
     try {
-      renameSync(nextPath, currentPath)
+      rename(nextBundleDir, currentBundleDir)
     }
     catch (error) {
-      renameSync(backupPath, currentPath)
+      rename(backupPath, currentBundleDir)
       throw error
     }
+    installed = true
     return { backupPath, installedPath: currentPath }
   }
   finally {
     rmSync(stageDir, { recursive: true, force: true })
+    if (!installed)
+      rmSync(nextBundleDir, { recursive: true, force: true })
   }
 }
 
-async function fetchUpdateBytes(url: string): Promise<Buffer> {
-  const response = await fetch(url)
+function spawnStderrText(stderr: ArrayBufferView | string | undefined): string {
+  if (!stderr)
+    return ''
+  if (typeof stderr === 'string')
+    return stderr.trim()
+  return Buffer.from(stderr.buffer, stderr.byteOffset, stderr.byteLength).toString('utf8').trim()
+}
+
+async function fetchUpdateBytes(url: string, fetchImpl: typeof fetch = fetch): Promise<Buffer> {
+  const response = await fetchImpl(url)
   if (!response.ok)
     throw new Error(`update asset fetch failed: HTTP ${response.status}`)
   return Buffer.from(await response.arrayBuffer())
 }
 
-async function fetchUpdateText(url: string): Promise<string> {
-  const response = await fetch(url)
+async function fetchUpdateText(url: string, fetchImpl: typeof fetch = fetch): Promise<string> {
+  const response = await fetchImpl(url)
   if (!response.ok)
     throw new Error(`update checksum fetch failed: HTTP ${response.status}`)
   return await response.text()
