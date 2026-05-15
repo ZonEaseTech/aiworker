@@ -345,7 +345,46 @@ describe('CLI updater core', () => {
     expect(calls).toEqual([])
   })
 
-  it('skips execution for non-update plans without actions', async () => {
+  it('skips execution for non-update plans even when actions are present', async () => {
+    const calls: string[] = []
+    const result = await executeUpgradePlan({
+      convergeHost: async () => {
+        calls.push('convergeHost')
+      },
+      downloadAndReplace: async () => {
+        calls.push('downloadAndReplace')
+      },
+      plan: {
+        actions: [
+          {
+            args: ['install', '-g', '@zonease/aiworker-cli@1.2.3'],
+            command: 'npm',
+            kind: 'package-manager',
+          },
+          { kind: 'host-convergence' },
+          { kind: 'daemon-restart' },
+        ],
+        currentVersion: '1.2.3',
+        mode: 'apply',
+        requiresConfirmation: false,
+        source: { canAutoUpgrade: true, kind: 'npm-global', packageManager: 'npm' },
+        status: 'already_current',
+        target: { checksumUrl: null, downloadUrl: null, source: 'npm', version: '1.2.3' },
+        targetVersion: '1.2.3',
+      },
+      restartDaemon: async () => {
+        calls.push('restartDaemon')
+      },
+      runCommand: async () => {
+        calls.push('runCommand')
+      },
+    })
+
+    expect(result).toEqual({ completedActions: [], status: 'skipped' })
+    expect(calls).toEqual([])
+  })
+
+  it('skips execution for update-available plans without actions', async () => {
     const calls: string[] = []
     const result = await executeUpgradePlan({
       convergeHost: async () => {
@@ -356,11 +395,11 @@ describe('CLI updater core', () => {
       },
       plan: {
         actions: [],
-        currentVersion: '1.2.3',
+        currentVersion: '1.2.2',
         mode: 'apply',
         requiresConfirmation: false,
         source: { canAutoUpgrade: true, kind: 'npm-global', packageManager: 'npm' },
-        status: 'already_current',
+        status: 'update_available',
         target: { checksumUrl: null, downloadUrl: null, source: 'npm', version: '1.2.3' },
         targetVersion: '1.2.3',
       },
