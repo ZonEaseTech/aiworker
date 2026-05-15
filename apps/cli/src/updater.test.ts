@@ -3,7 +3,9 @@ import { describe, expect, it } from 'bun:test'
 import {
   buildUpgradePlan,
   detectInstallSource,
+  executeUpgradePlan,
   parseUpdateCommandOptions,
+  resolveReleaseTarget,
 } from './updater'
 
 describe('CLI updater core', () => {
@@ -182,4 +184,120 @@ describe('CLI updater core', () => {
     expect(olderPatchPlan.status).toBe('update_available')
     expect(newerMinorPlan.status).toBe('already_current')
   })
+
+  it('resolves npm latest for stable package-manager installs', async () => {
+    const seenUrls: string[] = []
+    const target = await resolveReleaseTarget({
+      fetch: async (url) => {
+        seenUrls.push(url)
+        return jsonResponse({
+          'dist-tags': {
+            latest: '1.2.3',
+            preview: '1.3.0-beta.1',
+          },
+        })
+      },
+      options: parseUpdateCommandOptions('update', {}),
+      source: { canAutoUpgrade: true, kind: 'npm-global', packageManager: 'npm' },
+    })
+
+    expect(seenUrls).toEqual(['https://registry.npmjs.org/@zonease%2Faiworker-cli'])
+    expect(target).toEqual({
+      checksumUrl: null,
+      downloadUrl: null,
+      isPrerelease: false,
+      source: 'npm',
+      version: '1.2.3',
+    })
+  })
+
+  it('resolves npm preview when pre is set and marks prerelease', async () => {
+    const target = await resolveReleaseTarget({
+      fetch: async () => jsonResponse({
+        'dist-tags': {
+          latest: '1.2.3',
+          preview: '1.3.0-beta.1',
+        },
+      }),
+      options: parseUpdateCommandOptions('update', { pre: true }),
+      source: { canAutoUpgrade: true, kind: 'bun-global', packageManager: 'bun' },
+    })
+
+    expect(target).toMatchObject({
+      isPrerelease: true,
+      source: 'npm',
+      version: '1.3.0-beta.1',
+    })
+  })
+
+  it('resolves GitHub tarball releases to platform asset and checksum URLs', async () => {
+    const target = await resolveReleaseTarget({
+      fetch: async url => jsonResponse({
+        assets: [
+          { browser_download_url: 'https://downloads.example/aiworker-darwin-arm64.tar.gz', name: 'aiworker-darwin-arm64.tar.gz' },
+          { browser_download_url: 'https://downloads.example/aiworker-darwin-arm64.tar.gz.sha256', name: 'aiworker-darwin-arm64.tar.gz.sha256' },
+          { browser_download_url: 'https://downloads.example/aiworker-linux-x64.tar.gz', name: 'aiworker-linux-x64.tar.gz' },
+        ],
+        tag_name: 'v1.2.3',
+        url,
+      }),
+      options: parseUpdateCommandOptions('update', {}),
+      platformAssetName: () => 'aiworker-darwin-arm64.tar.gz',
+      source: { canAutoUpgrade: true, kind: 'github-tarball' },
+    })
+
+    expect(target).toEqual({
+      checksumUrl: 'https://downloads.example/aiworker-darwin-arm64.tar.gz.sha256',
+      downloadUrl: 'https://downloads.example/aiworker-darwin-arm64.tar.gz',
+      isPrerelease: false,
+      source: 'github',
+      version: '1.2.3',
+    })
+  })
+
+  it('does not call write hooks during dry-run execution', async () => {
+    const calls: string[] = []
+    const result = await executeUpgradePlan({
+      downloadAndReplace: async () => {
+        calls.push('downloadAndReplace')
+      },
+      convergeHost: async () => {
+        calls.push('convergeHost')
+      },
+      plan: {
+        actions: [
+          {
+            args: ['install', '-g', '@zonease/aiworker-cli@1.2.3'],
+            command: 'npm',
+            kind: 'package-manager',
+          },
+          { kind: 'host-convergence' },
+          { kind: 'daemon-restart' },
+        ],
+        currentVersion: '1.2.2',
+        mode: 'dry-run',
+        requiresConfirmation: false,
+        source: { canAutoUpgrade: true, kind: 'npm-global', packageManager: 'npm' },
+        status: 'update_available',
+        target: { checksumUrl: null, downloadUrl: null, source: 'npm', version: '1.2.3' },
+        targetVersion: '1.2.3',
+      },
+      restartDaemon: async () => {
+        calls.push('restartDaemon')
+      },
+      runCommand: async () => {
+        calls.push('runCommand')
+      },
+    })
+
+    expect(result).toEqual({ completedActions: [], status: 'dry_run' })
+    expect(calls).toEqual([])
+  })
 })
+
+function jsonResponse(value: unknown): Response {
+  return new Response(JSON.stringify(value), {
+    headers: { 'content-type': 'application/json' },
+    status: 200,
+  })
+}

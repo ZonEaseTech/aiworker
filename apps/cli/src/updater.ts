@@ -1,3 +1,5 @@
+import process from 'node:process'
+
 export type UpdateCommandName = 'update' | 'upgrade'
 export type UpdateMode = 'apply' | 'check' | 'dry-run'
 export type UpdateChannel = 'stable' | 'preview'
@@ -40,8 +42,9 @@ export interface InstallSource {
 }
 
 export interface ReleaseTarget {
-  checksumUrl?: string
-  downloadUrl?: string
+  checksumUrl?: null | string
+  downloadUrl?: null | string
+  isPrerelease?: boolean
   source: ReleaseSource
   version: string
 }
@@ -73,7 +76,46 @@ export interface UpgradePlan {
   targetVersion: string
 }
 
+export interface ResolveReleaseTargetInput {
+  fetch?: FetchRelease
+  options: ParsedUpdateOptions
+  platformAssetName?: () => string
+  source: InstallSource
+}
+
+export interface ExecuteUpgradePlanInput {
+  convergeHost?: () => MaybePromise<void>
+  downloadAndReplace?: (action: { checksumUrl: string, downloadUrl: string }) => MaybePromise<void>
+  plan: UpgradePlan
+  restartDaemon?: () => MaybePromise<void>
+  runCommand?: (command: PackageManager, args: string[]) => MaybePromise<void>
+}
+
+export interface ExecuteUpgradePlanResult {
+  completedActions: UpgradeAction['kind'][]
+  status: 'completed' | 'dry_run' | 'skipped'
+}
+
+type FetchRelease = (url: string) => Promise<Response>
+type MaybePromise<T> = Promise<T> | T
+
+interface NpmRegistryResponse {
+  'dist-tags'?: Record<string, string | undefined>
+}
+
+interface GitHubReleaseAssetResponse {
+  browser_download_url?: string
+  name?: string
+}
+
+interface GitHubReleaseResponse {
+  assets?: GitHubReleaseAssetResponse[]
+  tag_name?: string
+}
+
 const packageName = '@zonease/aiworker-cli'
+const npmRegistryUrl = 'https://registry.npmjs.org/@zonease%2Faiworker-cli'
+const githubLatestReleaseUrl = 'https://api.github.com/repos/ZonEaseTech/aiworker/releases/latest'
 
 export function parseUpdateCommandOptions(command: UpdateCommandName, opts: UpdateCliOptions): ParsedUpdateOptions {
   if (opts.channel !== undefined && opts.channel !== 'stable' && opts.channel !== 'preview') {
@@ -168,6 +210,90 @@ export function buildUpgradePlan(input: BuildUpgradePlanInput): UpgradePlan {
   }
 }
 
+export async function resolveReleaseTarget(input: ResolveReleaseTargetInput): Promise<ReleaseTarget> {
+  if (input.options.target) {
+    return {
+      checksumUrl: null,
+      downloadUrl: null,
+      isPrerelease: input.options.prerelease,
+      source: input.source.kind === 'github-tarball' ? 'github' : 'npm',
+      version: input.options.target,
+    }
+  }
+
+  if (input.source.kind === 'github-tarball') {
+    const response = await fetchJson<GitHubReleaseResponse>(input.fetch, githubLatestReleaseUrl)
+    const assetName = (input.platformAssetName ?? platformAssetName)()
+    const asset = (response.assets ?? []).find(candidate => candidate.name === assetName)
+    const checksumAsset = (response.assets ?? []).find(candidate => candidate.name === `${assetName}.sha256`)
+
+    return {
+      checksumUrl: checksumAsset?.browser_download_url ?? null,
+      downloadUrl: asset?.browser_download_url ?? null,
+      isPrerelease: input.options.prerelease,
+      source: 'github',
+      version: (response.tag_name ?? '').replace(/^v/, ''),
+    }
+  }
+
+  const response = await fetchJson<NpmRegistryResponse>(input.fetch, npmRegistryUrl)
+  const tag = input.options.prerelease ? 'preview' : 'latest'
+  const version = response['dist-tags']?.[tag]
+
+  if (!version)
+    throw new Error(`npm registry is missing ${tag} dist-tag for ${packageName}`)
+
+  return {
+    checksumUrl: null,
+    downloadUrl: null,
+    isPrerelease: input.options.prerelease,
+    source: 'npm',
+    version,
+  }
+}
+
+export async function executeUpgradePlan(input: ExecuteUpgradePlanInput): Promise<ExecuteUpgradePlanResult> {
+  if (input.plan.mode === 'dry-run')
+    return { completedActions: [], status: 'dry_run' }
+
+  if (input.plan.status !== 'update_available' || input.plan.actions.length === 0)
+    return { completedActions: [], status: 'skipped' }
+
+  const completedActions: UpgradeAction['kind'][] = []
+
+  for (const action of input.plan.actions) {
+    if (action.kind === 'package-manager') {
+      if (!action.command || !action.args)
+        throw new Error('package-manager upgrade action is missing command or args')
+
+      await input.runCommand?.(action.command, action.args)
+    }
+    else if (action.kind === 'github-tarball') {
+      if (!action.downloadUrl || !action.checksumUrl)
+        throw new Error('github tarball upgrade action requires downloadUrl and checksumUrl')
+
+      await input.downloadAndReplace?.({ checksumUrl: action.checksumUrl, downloadUrl: action.downloadUrl })
+    }
+    else if (action.kind === 'host-convergence') {
+      await input.convergeHost?.()
+    }
+    else {
+      await input.restartDaemon?.()
+    }
+
+    completedActions.push(action.kind)
+  }
+
+  return { completedActions, status: 'completed' }
+}
+
+export function platformAssetName(): string {
+  const platform = process.platform === 'win32' ? 'windows' : process.platform
+  const arch = process.arch === 'x64' ? 'x64' : process.arch === 'arm64' ? 'arm64' : process.arch
+
+  return `aiworker-${platform}-${arch}.tar.gz`
+}
+
 function buildPackageManagerAction(packageManager: PackageManager, version: string): UpgradeAction {
   if (packageManager === 'bun') {
     return {
@@ -184,6 +310,15 @@ function buildPackageManagerAction(packageManager: PackageManager, version: stri
     kind: 'package-manager',
     packageManager,
   }
+}
+
+async function fetchJson<T>(fetchRelease: FetchRelease | undefined, url: string): Promise<T> {
+  const response = await (fetchRelease ?? globalThis.fetch)(url)
+
+  if (!response.ok)
+    throw new Error(`failed to resolve release target from ${url}: HTTP ${response.status}`)
+
+  return await response.json() as T
 }
 
 function compareVersions(current: string, target: string): number {
