@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   lint:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, ttpos-uat-linux]
     steps:
       - uses: actions/checkout@v5
 
