@@ -1205,7 +1205,7 @@ describe('worker studio', () => {
     })
     expect(actionBody.input).not.toHaveProperty('workerId')
     expect(actionBody.input).not.toHaveProperty('workspaceId')
-    const createWorkspaceDialog = screen.getByRole('dialog', { name: 'Create workspace' })
+    const createWorkspaceDialog = await screen.findByRole('dialog', { name: 'Create workspace' })
     expect(createWorkspaceDialog).toBeTruthy()
     expect(screen.queryByText('People profile draft created.')).toBeNull()
     expect(document.querySelector('.shell-action-status')).toBeNull()

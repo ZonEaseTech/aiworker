@@ -99,6 +99,10 @@ the already merged source fix and the version bump.
   `0.15.1`，dist package 与 dist CLI 均报告 `0.15.1`，pack dry-run
   包含 CLI shims、Worker Web static、worker migrations 与官方 HR/QA app
   resources。
+- 2026-05-15 14:04：第一次 release workflow `25903035166` 在 Test 阶段失败，
+  npm publish 与 GitHub Release asset upload 均未执行。根因是 WorkerStudio
+  header action 回归测试对异步 dialog 打开路径使用同步 `getByRole`，CI 慢路径下
+  触发竞态；修复为等待 `findByRole('dialog')`。
 
 ## Verification
 
@@ -115,3 +119,15 @@ the already merged source fix and the version bump.
 - `bun run --filter '@zonease/aiworker-cli' smoke:dist-release` passed.
 - `bun run crg:update` passed.
 - `bun run crg:review` passed with risk score `0.00`.
+- First `gh run watch 25903035166 --exit-status` failed during the Test step
+  before npm publish.
+- `CI=true bun run --filter '@zonease/aiworker-web' test --
+  src/worker/__tests__/worker-studio.test.tsx -t "keeps installed Soul Apps out
+  of the worker rail"` passed with 1 passed / 29 skipped after replacing the
+  dialog assertion with `findByRole`.
+- `CI=true bun run test` passed after the WorkerStudio test race fix.
+- `bun run check` passed after the WorkerStudio test race fix.
+- `git diff --check` passed after the WorkerStudio test race fix.
+- `bun run crg:update` passed after the WorkerStudio test race fix.
+- `bun run crg:review` passed after the WorkerStudio test race fix with risk
+  score `0.30`.
