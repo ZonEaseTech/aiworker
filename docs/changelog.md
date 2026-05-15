@@ -1,11 +1,15 @@
 # AIWorker Changelog
 
-## 2026-05-15 13:37 [in_progress] REL-035 / PLAN-326 — CLI 0.15.0 minor release
+## 2026-05-15 13:50 [completed] REL-035 / PLAN-326 — CLI 0.15.0 minor release
 
-Started the `@zonease/aiworker-cli@0.15.0` minor release for the completed
-FEAT-086 self-updater slice. Release prep bumps the CLI package version, adds
-GitHub Release `.sha256` checksum assets for binary tarballs, and passed the
-local release gates before pushing `main` and annotated tag `v0.15.0`.
+Published `@zonease/aiworker-cli@0.15.0` as a minor release for the completed
+FEAT-086 self-updater slice. The release bumps the CLI package version, adds
+GitHub Release `.sha256` checksum assets for binary tarballs, and passed local
+release gates before pushing `main` and annotated tag `v0.15.0`. GitHub Actions
+release run `25902585088` succeeded, npm latest now resolves to `0.15.0`,
+`bunx @zonease/aiworker-cli@0.15.0 --version` reports `aiworker/0.15.0`, and
+published-package smoke verified the Host Web/API plus official HR/QA Soul App
+bootstrap path.
 
 ## 2026-05-15 [completed] FEAT-086 / PLAN-325 — CLI self-updater
 

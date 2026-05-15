@@ -1,9 +1,10 @@
 # PLAN-326 CLI 0.15.0 minor release
 
-- **status**: in_progress
+- **status**: completed
 - **owner**: codex
 - **createdAt**: 2026-05-15 13:37
 - **approvedAt**: 2026-05-15 13:37
+- **completedAt**: 2026-05-15 13:50
 - **relatedTask**: REL-035
 
 ## Current State
@@ -105,6 +106,10 @@ the already merged source changes, release checksum assets and the version bump.
   `.sha256` tarball checksum assets，CLI package version bump 到 `0.15.0`。
   CLI 集成测试中的显式 update target 改为稳定未来版本，避免后续版本 bump
   让 source-checkout check 测试误判为 already current。
+- 2026-05-15 13:50：`main` 和 annotated tag `v0.15.0` 推送成功；
+  release workflow `25902585088` 成功发布 npm package 并上传 GitHub
+  Release assets。发布后验证确认 npm latest、`bunx` 显式版本、GitHub
+  Release asset set 与 published-package smoke 均通过。
 
 ## Verification
 
@@ -122,3 +127,18 @@ the already merged source changes, release checksum assets and the version bump.
 - `bun run crg:update` passed.
 - `bun run crg:review` passed with risk score `0.40`; the reported
   `WorkerStudio` test gap belongs to pre-existing unrelated worktree changes.
+- `git push origin main` pushed release prep commit `12c5c33c`.
+- `git push origin v0.15.0` pushed the annotated release tag.
+- `gh run watch 25902585088 --exit-status` passed; release job completed in
+  1m46s.
+- `npm view @zonease/aiworker-cli version dist-tags --json` reported latest
+  `0.15.0`.
+- `bunx @zonease/aiworker-cli@0.15.0 --version` reported
+  `aiworker/0.15.0 darwin-arm64 node-v24.3.0`.
+- `gh release view v0.15.0 --repo ZonEaseTech/aiworker --json
+  tagName,isDraft,isPrerelease,assets,url` reported a non-draft,
+  non-prerelease release with four platform tarballs and four `.sha256`
+  checksum assets.
+- Published-package smoke passed using `bunx @zonease/aiworker-cli@0.15.0`:
+  daemon health, `/api/local/info`, Host Web HTML, `app bootstrap official`,
+  `app list`, `soul list` and HR template discovery all succeeded.
