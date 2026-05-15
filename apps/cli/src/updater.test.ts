@@ -147,6 +147,24 @@ describe('CLI updater core', () => {
     })
   })
 
+  it('preserves hyphens inside prerelease identifiers when comparing updates', () => {
+    const numberedBetaPlan = buildUpgradePlan({
+      currentVersion: '1.0.0-beta-1',
+      options: parseUpdateCommandOptions('update', { check: true }),
+      source: { canAutoUpgrade: true, kind: 'npm-global', packageManager: 'npm' },
+      target: { source: 'npm', version: '1.0.0-beta-2' },
+    })
+    const alphaBetaPlan = buildUpgradePlan({
+      currentVersion: '1.0.0-alpha',
+      options: parseUpdateCommandOptions('update', { check: true }),
+      source: { canAutoUpgrade: true, kind: 'npm-global', packageManager: 'npm' },
+      target: { source: 'npm', version: '1.0.0-alpha-beta' },
+    })
+
+    expect(numberedBetaPlan.status).toBe('update_available')
+    expect(alphaBetaPlan.status).toBe('update_available')
+  })
+
   it('keeps normal numeric version comparisons intact', () => {
     const olderPatchPlan = buildUpgradePlan({
       currentVersion: '1.0.9',

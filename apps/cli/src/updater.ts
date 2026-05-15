@@ -272,7 +272,9 @@ function parseNumericIdentifier(value: string): number | undefined {
 
 function parseSemver(version: string): { core: number[], prerelease: string[] } {
   const withoutBuild = version.replace(/^v/, '').split('+', 1)[0] ?? ''
-  const [coreVersion, prereleaseVersion] = withoutBuild.split('-', 2)
+  const prereleaseStart = withoutBuild.indexOf('-')
+  const coreVersion = prereleaseStart === -1 ? withoutBuild : withoutBuild.slice(0, prereleaseStart)
+  const prereleaseVersion = prereleaseStart === -1 ? undefined : withoutBuild.slice(prereleaseStart + 1)
 
   return {
     core: (coreVersion ?? '')
