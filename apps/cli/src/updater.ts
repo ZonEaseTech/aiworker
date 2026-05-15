@@ -104,7 +104,7 @@ interface NpmRegistryResponse {
 }
 
 interface GitHubReleaseAssetResponse {
-  browser_download_url?: string
+  browser_download_url?: unknown
   name?: string
 }
 
@@ -228,8 +228,8 @@ export async function resolveReleaseTarget(input: ResolveReleaseTargetInput): Pr
     const checksumAsset = response.assets.find(candidate => candidate.name === `${assetName}.sha256`)
 
     return {
-      checksumUrl: checksumAsset?.browser_download_url ?? null,
-      downloadUrl: asset?.browser_download_url ?? null,
+      checksumUrl: resolveGitHubReleaseAssetUrl(checksumAsset, `${assetName}.sha256`),
+      downloadUrl: resolveGitHubReleaseAssetUrl(asset, assetName),
       isPrerelease: input.options.prerelease,
       source: 'github',
       version: response.tag_name.replace(/^v/, ''),
@@ -356,7 +356,16 @@ function validateGitHubReleaseResponse(value: unknown): GitHubReleaseResponse {
 function isGitHubReleaseAssetResponse(value: unknown): value is GitHubReleaseAssetResponse {
   return isRecord(value)
     && (value.name === undefined || typeof value.name === 'string')
-    && (value.browser_download_url === undefined || typeof value.browser_download_url === 'string')
+}
+
+function resolveGitHubReleaseAssetUrl(asset: GitHubReleaseAssetResponse | undefined, assetName: string): string | null {
+  if (asset === undefined)
+    return null
+
+  if (typeof asset.browser_download_url !== 'string' || asset.browser_download_url.trim().length === 0)
+    throw new Error(`github release asset url invalid: ${assetName}`)
+
+  return asset.browser_download_url
 }
 
 function requireExecutorHook<T extends (...args: never[]) => MaybePromise<void>>(hook: T | undefined, name: string): T {

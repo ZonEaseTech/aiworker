@@ -321,6 +321,45 @@ describe('CLI updater core', () => {
     })
   })
 
+  it('rejects GitHub tarball releases when the platform asset URL is invalid', async () => {
+    for (const asset of [
+      { name: 'aiworker-darwin-arm64.tar.gz' },
+      { browser_download_url: '', name: 'aiworker-darwin-arm64.tar.gz' },
+      { browser_download_url: 123, name: 'aiworker-darwin-arm64.tar.gz' },
+    ]) {
+      await expect(resolveReleaseTarget({
+        fetch: async () => jsonResponse({
+          assets: [asset],
+          tag_name: 'v1.2.3',
+        }),
+        options: parseUpdateCommandOptions('update', {}),
+        platformAssetName: () => 'aiworker-darwin-arm64.tar.gz',
+        source: { canAutoUpgrade: true, kind: 'github-tarball' },
+      })).rejects.toThrow('github release asset url invalid: aiworker-darwin-arm64.tar.gz')
+    }
+  })
+
+  it('rejects GitHub tarball releases when the checksum asset URL is invalid', async () => {
+    for (const checksumAsset of [
+      { name: 'aiworker-darwin-arm64.tar.gz.sha256' },
+      { browser_download_url: '', name: 'aiworker-darwin-arm64.tar.gz.sha256' },
+      { browser_download_url: false, name: 'aiworker-darwin-arm64.tar.gz.sha256' },
+    ]) {
+      await expect(resolveReleaseTarget({
+        fetch: async () => jsonResponse({
+          assets: [
+            { browser_download_url: 'https://downloads.example/aiworker-darwin-arm64.tar.gz', name: 'aiworker-darwin-arm64.tar.gz' },
+            checksumAsset,
+          ],
+          tag_name: 'v1.2.3',
+        }),
+        options: parseUpdateCommandOptions('update', {}),
+        platformAssetName: () => 'aiworker-darwin-arm64.tar.gz',
+        source: { canAutoUpgrade: true, kind: 'github-tarball' },
+      })).rejects.toThrow('github release asset url invalid: aiworker-darwin-arm64.tar.gz.sha256')
+    }
+  })
+
   it('rejects GitHub releases when tag_name is missing or malformed', async () => {
     for (const payload of [
       { assets: [], tag_name: '' },
