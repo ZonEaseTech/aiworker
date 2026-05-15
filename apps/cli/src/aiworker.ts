@@ -7,7 +7,7 @@ import type { ChildProcessByStdio } from 'node:child_process'
 import type { Readable } from 'node:stream'
 import { spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
-import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { mkdir, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -48,6 +48,15 @@ import cac from 'cac'
 import consola from 'consola'
 
 import packageJson from '../package.json' with { type: 'json' }
+import {
+  buildUpgradePlan,
+  detectInstallSource,
+  executeUpgradePlan,
+  parseUpdateCommandOptions,
+  readDailyUpdateNoticeState,
+  resolveReleaseTarget,
+} from './updater'
+import type { UpdateCliOptions, UpdateCommandName } from './updater'
 
 export interface LocalPaths {
   home: string
@@ -212,7 +221,193 @@ async function runDoctor(): Promise<void> {
     workspaces: listWorkspaces(),
     daemon: daemonStatus(),
     settings: listSettings(),
+    updateNotice: await maybeResolveDailyUpdateNotice(),
   })
+}
+
+async function runUpdateCommand(command: UpdateCommandName, opts: UpdateCliOptions): Promise<void> {
+  const options = parseUpdateCommandOptions(command, opts)
+  const argv1 = resolveArgv1(process.argv[1])
+  const source = detectInstallSource({
+    argv1,
+    bunGlobalBinDirs: bunGlobalBinDirs(),
+    moduleDir: CLI_MODULE_DIR,
+    npmGlobalBinDirs: npmGlobalBinDirs(),
+    realArgv1: safeRealpath(argv1),
+  })
+  const target = await resolveReleaseTarget({
+    fetch: url => fetch(url),
+    options,
+    source,
+  })
+  const plan = buildUpgradePlan({
+    currentVersion: packageJson.version,
+    options,
+    source,
+    target,
+  })
+
+  if (options.mode !== 'apply') {
+    printJson({ update: plan })
+    return
+  }
+
+  if (plan.requiresConfirmation)
+    throw new Error('update requires --yes to apply changes')
+
+  const result = await executeUpgradePlan({
+    convergeHost: async () => {
+      await convergeHostAfterCliUpgrade()
+    },
+    downloadAndReplace: () => {
+      throw new Error('github_tarball_replacement_not_wired')
+    },
+    plan,
+    restartDaemon: async () => {
+      consola.info('AIWorker daemon requires manual restart after CLI upgrade')
+    },
+    runCommand: async (command, args) => {
+      const proc = Bun.spawn([command, ...args], {
+        stderr: 'inherit',
+        stdin: 'inherit',
+        stdout: 'inherit',
+      })
+      const code = await proc.exited
+      if (code !== 0)
+        throw new Error(`package manager upgrade failed: ${command} ${args.join(' ')}`)
+    },
+  })
+
+  printJson({ update: plan, result })
+}
+
+async function maybeResolveDailyUpdateNotice(): Promise<null | { channel: 'stable', command: 'aiworker update', currentVersion: string, targetVersion: string }> {
+  const checkedAt = new Date()
+  try {
+    await ensureDb()
+    const setting = listSettings().find(setting => setting.key === 'update.notice')
+    const previous = setting?.valueJson ?? null
+    const state = readDailyUpdateNoticeState(previous, checkedAt)
+
+    if (!state.canCheck) {
+      return state.latestSeenVersion && compareVersionStrings(state.latestSeenVersion, packageJson.version) > 0
+        ? {
+            channel: 'stable',
+            command: 'aiworker update',
+            currentVersion: packageJson.version,
+            targetVersion: state.latestSeenVersion,
+          }
+        : null
+    }
+
+    const options = parseUpdateCommandOptions('update', { check: true, channel: 'stable' })
+    const argv1 = resolveArgv1(process.argv[1])
+    const source = detectInstallSource({
+      argv1,
+      bunGlobalBinDirs: bunGlobalBinDirs(),
+      moduleDir: CLI_MODULE_DIR,
+      npmGlobalBinDirs: npmGlobalBinDirs(),
+      realArgv1: safeRealpath(argv1),
+    })
+    const target = await resolveReleaseTarget({
+      fetch: url => fetchWithShortTimeout(url),
+      options,
+      source,
+    })
+    const plan = buildUpgradePlan({
+      currentVersion: packageJson.version,
+      options,
+      source,
+      target,
+    })
+
+    setSetting('update.notice', {
+      checkedAt: checkedAt.toISOString(),
+      latestSeenVersion: target.version,
+    })
+
+    return plan.status === 'update_available'
+      ? {
+          channel: 'stable',
+          command: 'aiworker update',
+          currentVersion: packageJson.version,
+          targetVersion: target.version,
+        }
+      : null
+  }
+  catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    try {
+      const latestSeenVersion = listSettings().find(setting => setting.key === 'update.notice')?.valueJson.latestSeenVersion
+      setSetting('update.notice', {
+        checkedAt: checkedAt.toISOString(),
+        errorMessage: message,
+        latestSeenVersion: typeof latestSeenVersion === 'string' ? latestSeenVersion : packageJson.version,
+      })
+    }
+    catch {
+      // Daily notices must never block daemon or doctor startup.
+    }
+    return null
+  }
+}
+
+function npmGlobalBinDirs(): string[] {
+  return uniqueTruthy([
+    process.env.npm_config_prefix ? path.join(process.env.npm_config_prefix, 'bin') : undefined,
+    process.env.PREFIX ? path.join(process.env.PREFIX, 'bin') : undefined,
+    '/usr/local/bin',
+    '/opt/homebrew/bin',
+  ])
+}
+
+function bunGlobalBinDirs(): string[] {
+  return uniqueTruthy([
+    process.env.BUN_INSTALL ? path.join(process.env.BUN_INSTALL, 'bin') : undefined,
+    process.env.HOME ? path.join(process.env.HOME, '.bun', 'bin') : undefined,
+  ])
+}
+
+function uniqueTruthy(values: Array<string | undefined>): string[] {
+  return [...new Set(values.filter((value): value is string => typeof value === 'string' && value.length > 0).map(value => path.resolve(value)))]
+}
+
+function resolveArgv1(value: string | undefined): string | undefined {
+  return value ? path.resolve(value) : undefined
+}
+
+function safeRealpath(value: string | undefined): string | undefined {
+  if (!value)
+    return undefined
+  try {
+    return realpathSync(value)
+  }
+  catch {
+    return value
+  }
+}
+
+async function fetchWithShortTimeout(url: string): Promise<Response> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 750)
+  try {
+    return await fetch(url, { signal: controller.signal })
+  }
+  finally {
+    clearTimeout(timeout)
+  }
+}
+
+function compareVersionStrings(left: string, right: string): number {
+  const a = left.split(/[.-]/).map(part => Number.parseInt(part, 10) || 0)
+  const b = right.split(/[.-]/).map(part => Number.parseInt(part, 10) || 0)
+  const length = Math.max(a.length, b.length)
+  for (let i = 0; i < length; i++) {
+    const diff = (a[i] ?? 0) - (b[i] ?? 0)
+    if (diff !== 0)
+      return diff
+  }
+  return 0
 }
 
 function daemonStatus(): { logFile: string, pid: number | null, running: boolean } {
@@ -270,6 +465,10 @@ async function stopDaemon(): Promise<void> {
 
 async function daemonForeground(opts: { host?: string, port?: number } = {}): Promise<void> {
   localPaths()
+  const updateNotice = await maybeResolveDailyUpdateNotice()
+  if (updateNotice) {
+    consola.info(`[aiworker-daemon] update available: ${updateNotice.currentVersion} -> ${updateNotice.targetVersion}; run ${updateNotice.command}`)
+  }
   const { bootstrapWorkerApp } = await import('@zonease/aiworker-api/bootstrap')
   const { app, port } = await bootstrapWorkerApp({
     officialAppsRoot: resolveCliOfficialAppsRoot(),
@@ -1762,6 +1961,22 @@ function registerCommands(): void {
   cli.command('init', 'initialize host-local AIWorker home and Soul workers').action(runInit)
   cli.command('dev', 'run local daemon and hosted Worker Web in foreground').option('--host <host>', 'bind host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => daemonForeground({ host: opts.host, port: optionalNumber(opts.port) }))
   cli.command('doctor', 'inspect host-local daemon readiness').action(runDoctor)
+  cli.command('update', 'check or apply an AIWorker CLI update')
+    .option('--check', 'check for updates without changing files')
+    .option('--dry-run', 'print planned update actions without applying them')
+    .option('--yes', 'confirm update application')
+    .option('--target <version>', 'explicit target version')
+    .option('--channel <channel>', 'release channel: stable or preview')
+    .option('--pre', 'use preview release channel')
+    .action((opts: UpdateCliOptions) => runUpdateCommand('update', opts))
+  cli.command('upgrade', 'alias for aiworker update')
+    .option('--check', 'check for updates without changing files')
+    .option('--dry-run', 'print planned update actions without applying them')
+    .option('--yes', 'confirm update application')
+    .option('--target <version>', 'explicit target version')
+    .option('--channel <channel>', 'release channel: stable or preview')
+    .option('--pre', 'use preview release channel')
+    .action((opts: UpdateCliOptions) => runUpdateCommand('upgrade', opts))
 
   cli.command('daemon start', 'start local daemon in background').option('--host <host>', 'bind host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => startDaemon({ host: opts.host, port: optionalNumber(opts.port) }))
   cli.command('daemon foreground', 'run local daemon in foreground').option('--host <host>', 'bind host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => daemonForeground({ host: opts.host, port: optionalNumber(opts.port) }))
@@ -1876,6 +2091,7 @@ function commandIndex(): string {
     'aiworker command index',
     'init',
     'dev',
+    'update|upgrade',
     'daemon start|foreground|status|stop|logs|check',
     'app list|show|install|enable|disable|doctor|permissions|bootstrap|create|validate|smoke',
     'soul list',

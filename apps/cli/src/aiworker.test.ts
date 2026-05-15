@@ -207,6 +207,39 @@ describe('aiworker local CLI', () => {
     expect(output).not.toContain('run start')
   })
 
+  it('lists update and upgrade in the command index', async () => {
+    expect(await runCli(argv('commands'))).toBe(0)
+
+    expect(output).toContain('update|upgrade')
+  })
+
+  it('checks explicit source-checkout update targets without resolving release metadata', async () => {
+    expect(await runCli(argv('update', '--check', '--target', '0.14.1'))).toBe(0)
+    const body = JSON.parse(output) as {
+      update: {
+        mode: string
+        source: { kind: string }
+        status: string
+      }
+    }
+
+    expect(body.update).toMatchObject({
+      mode: 'check',
+      source: { kind: 'source-checkout' },
+      status: 'update_available',
+    })
+  })
+
+  it('prints equivalent check reports for update and upgrade aliases', async () => {
+    expect(await runCli(argv('update', '--check', '--target', '0.14.1'))).toBe(0)
+    const updateOutput = output
+    output = ''
+
+    expect(await runCli(argv('upgrade', '--check', '--target', '0.14.1'))).toBe(0)
+
+    expect(JSON.parse(output)).toEqual(JSON.parse(updateOutput))
+  })
+
   it('bootstraps official apps and rejects legacy built-in Soul ids', async () => {
     expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
     const body = JSON.parse(output) as {
