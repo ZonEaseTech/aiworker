@@ -55,6 +55,7 @@ jobs:
             cp -R apps/cli/dist/drizzle "release/${bundle}/drizzle"
             cp apps/cli/dist/README.md "release/${bundle}/README.md"
             tar -C release -czf "${bundle}.tar.gz" "${bundle}"
+            shasum -a 256 "${bundle}.tar.gz" > "${bundle}.tar.gz.sha256"
           done
 
       - name: Attach binaries to GitHub Release
@@ -65,3 +66,7 @@ jobs:
             aiworker-linux-arm64.tar.gz
             aiworker-darwin-x64.tar.gz
             aiworker-darwin-arm64.tar.gz
+            aiworker-linux-x64.tar.gz.sha256
+            aiworker-linux-arm64.tar.gz.sha256
+            aiworker-darwin-x64.tar.gz.sha256
+            aiworker-darwin-arm64.tar.gz.sha256

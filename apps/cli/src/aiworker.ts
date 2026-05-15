@@ -4,6 +4,7 @@ import type { SoulAppManifest } from '@zonease/aiworker-shared'
 import type { WorkerRow } from '@zonease/aiworker-storage-sqlite/worker'
 import type { ChildProcessByStdio } from 'node:child_process'
 import type { Readable } from 'node:stream'
+import type { UpdateCliOptions, UpdateCommandName } from './updater'
 import { Buffer } from 'node:buffer'
 import { spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
@@ -45,8 +46,8 @@ import {
   updateLesson,
 } from '@zonease/aiworker-storage-sqlite/worker'
 import cac from 'cac'
-import consola from 'consola'
 
+import consola from 'consola'
 import packageJson from '../package.json' with { type: 'json' }
 import {
   buildUpgradePlan,
@@ -56,7 +57,6 @@ import {
   readDailyUpdateNoticeState,
   resolveReleaseTarget,
 } from './updater'
-import type { UpdateCliOptions, UpdateCommandName } from './updater'
 
 export interface LocalPaths {
   home: string

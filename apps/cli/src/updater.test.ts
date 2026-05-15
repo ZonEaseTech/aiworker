@@ -1,3 +1,5 @@
+import type { ExecuteUpgradePlanInput, UpgradeAction, UpgradePlan } from './updater'
+import { Buffer } from 'node:buffer'
 import { describe, expect, it } from 'bun:test'
 
 import {
@@ -11,7 +13,6 @@ import {
   resolveReleaseTarget,
   verifySha256Text,
 } from './updater'
-import type { ExecuteUpgradePlanInput, UpgradeAction, UpgradePlan } from './updater'
 
 describe('CLI updater core', () => {
   it('treats update and upgrade as apply-mode aliases', () => {
@@ -257,7 +258,7 @@ describe('CLI updater core', () => {
     await expect(resolveReleaseTarget({
       fetch: async () => jsonResponse({
         'dist-tags': {},
-        versions: {},
+        'versions': {},
       }),
       options: parseUpdateCommandOptions('update', {}),
       source: { canAutoUpgrade: true, kind: 'npm-global', packageManager: 'npm' },

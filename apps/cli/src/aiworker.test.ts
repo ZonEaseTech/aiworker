@@ -256,7 +256,7 @@ describe('aiworker local CLI', () => {
   })
 
   it('checks explicit source-checkout update targets without resolving release metadata', async () => {
-    expect(await runCli(argv('update', '--check', '--target', '0.14.1'))).toBe(0)
+    expect(await runCli(argv('update', '--check', '--target', '99.0.0'))).toBe(0)
     const body = JSON.parse(output) as {
       update: {
         mode: string
@@ -384,11 +384,11 @@ describe('aiworker local CLI', () => {
   })
 
   it('prints equivalent check reports for update and upgrade aliases', async () => {
-    expect(await runCli(argv('update', '--check', '--target', '0.14.1'))).toBe(0)
+    expect(await runCli(argv('update', '--check', '--target', '99.0.0'))).toBe(0)
     const updateOutput = output
     output = ''
 
-    expect(await runCli(argv('upgrade', '--check', '--target', '0.14.1'))).toBe(0)
+    expect(await runCli(argv('upgrade', '--check', '--target', '99.0.0'))).toBe(0)
 
     expect(JSON.parse(output)).toEqual(JSON.parse(updateOutput))
   })

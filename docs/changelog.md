@@ -1,5 +1,12 @@
 # AIWorker Changelog
 
+## 2026-05-15 13:37 [in_progress] REL-035 / PLAN-326 — CLI 0.15.0 minor release
+
+Started the `@zonease/aiworker-cli@0.15.0` minor release for the completed
+FEAT-086 self-updater slice. Release prep bumps the CLI package version, adds
+GitHub Release `.sha256` checksum assets for binary tarballs, and passed the
+local release gates before pushing `main` and annotated tag `v0.15.0`.
+
 ## 2026-05-15 [completed] FEAT-086 / PLAN-325 — CLI self-updater
 
 Completed the top-level `aiworker update` / `aiworker upgrade` self-updater
