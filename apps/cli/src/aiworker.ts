@@ -508,6 +508,13 @@ async function bootstrapAppCommand(scope: string): Promise<void> {
     process.exitCode = 1
 }
 
+export async function convergeHostAfterCliUpgrade(): Promise<{ bootstrap: Awaited<ReturnType<HostRuntime['bootstrapOfficialSoulApps']>>, home: string }> {
+  const paths = await ensureDb()
+  const host = createHost(paths)
+  const bootstrap = await host.bootstrapOfficialSoulApps()
+  return { bootstrap, home: paths.home }
+}
+
 async function createAppScaffoldCommand(id: string, opts: { dir?: string } = {}): Promise<void> {
   const appId = soulAppIdSchema.parse(id)
   const targetDir = path.resolve(opts.dir ?? appId)

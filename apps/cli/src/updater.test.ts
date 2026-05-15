@@ -2,10 +2,14 @@ import { describe, expect, it } from 'bun:test'
 
 import {
   buildUpgradePlan,
+  canRestartManagedDaemon,
   detectInstallSource,
   executeUpgradePlan,
+  formatUpgradeReport,
   parseUpdateCommandOptions,
+  readDailyUpdateNoticeState,
   resolveReleaseTarget,
+  verifySha256Text,
 } from './updater'
 import type { ExecuteUpgradePlanInput, UpgradeAction, UpgradePlan } from './updater'
 
@@ -585,6 +589,54 @@ describe('CLI updater core', () => {
       status: 'completed',
     })
     expect(calls).toEqual(['package-manager', 'github-tarball', 'host-convergence', 'daemon-restart'])
+  })
+})
+
+describe('CLI updater safety helpers', () => {
+  it('verifies sha256 checksum lines', () => {
+    const digest = '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08'
+    expect(verifySha256Text('test', `${digest}  aiworker-darwin-arm64.tar.gz\n`)).toBe(true)
+    expect(verifySha256Text('test', '0000  aiworker-darwin-arm64.tar.gz\n')).toBe(false)
+  })
+
+  it('allows restart only for the managed daemon in the same home', () => {
+    expect(canRestartManagedDaemon({
+      command: '/usr/local/bin/bun /usr/local/bin/aiworker daemon foreground --host 127.0.0.1 --port 9217',
+      expectedHome: '/Users/ben/.aiworker',
+      pid: 123,
+      pidFileHome: '/Users/ben/.aiworker',
+      running: true,
+    })).toMatchObject({ allowed: true })
+
+    expect(canRestartManagedDaemon({
+      command: 'bun apps/cli/src/aiworker.ts dev --port 9217',
+      expectedHome: '/Users/ben/.aiworker',
+      pid: 123,
+      pidFileHome: '/Users/ben/.aiworker',
+      running: true,
+    })).toMatchObject({ allowed: false, reason: 'not-managed-daemon' })
+  })
+
+  it('reads absent daily notice state as ready for a check', () => {
+    expect(readDailyUpdateNoticeState(null, new Date('2026-05-15T00:00:00.000Z'))).toMatchObject({
+      canCheck: true,
+      latestSeenVersion: null,
+    })
+  })
+
+  it('formats reports with source, target, actions and restart result', () => {
+    const report = formatUpgradeReport({
+      completedActions: ['package-manager', 'host-convergence'],
+      currentVersion: '0.14.0',
+      daemon: { restarted: false, reason: 'foreground daemon requires manual restart' },
+      source: { canAutoUpgrade: true, detail: 'npm global', kind: 'npm-global', packageManager: 'npm' },
+      status: 'completed',
+      targetVersion: '0.14.1',
+    })
+
+    expect(report).toContain('0.14.0 -> 0.14.1')
+    expect(report).toContain('npm global')
+    expect(report).toContain('foreground daemon requires manual restart')
   })
 })
 

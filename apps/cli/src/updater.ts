@@ -1,3 +1,5 @@
+import type { Buffer } from 'node:buffer'
+import { createHash } from 'node:crypto'
 import process from 'node:process'
 
 export type UpdateCommandName = 'update' | 'upgrade'
@@ -36,6 +38,7 @@ export interface InstallSourceInput {
 
 export interface InstallSource {
   canAutoUpgrade: boolean
+  detail?: string
   kind: InstallSourceKind
   packageManager?: PackageManager
   reason?: string
@@ -94,6 +97,38 @@ export interface ExecuteUpgradePlanInput {
 export interface ExecuteUpgradePlanResult {
   completedActions: UpgradeAction['kind'][]
   status: 'completed' | 'dry_run' | 'skipped'
+}
+
+export interface ManagedDaemonProbe {
+  command: null | string
+  expectedHome: string
+  pid: null | number
+  pidFileHome: string
+  running: boolean
+}
+
+export interface ManagedDaemonDecision {
+  allowed: boolean
+  reason: 'home-mismatch' | 'managed-daemon' | 'not-managed-daemon' | 'not-running' | 'unknown-command'
+}
+
+export interface DailyUpdateNoticeValue {
+  checkedAt?: string
+  latestSeenVersion?: string
+}
+
+export interface DailyUpdateNoticeState {
+  canCheck: boolean
+  latestSeenVersion: null | string
+}
+
+export interface UpgradeReportInput {
+  completedActions: string[]
+  currentVersion: string
+  daemon: { reason: string, restarted: boolean }
+  source: InstallSource
+  status: string
+  targetVersion: string
 }
 
 type FetchRelease = (url: string) => Promise<Response>
@@ -289,6 +324,56 @@ export async function executeUpgradePlan(input: ExecuteUpgradePlanInput): Promis
   }
 
   return { completedActions, status: 'completed' }
+}
+
+export function verifySha256Text(content: Buffer | Uint8Array | string, checksumText: string): boolean {
+  const expected = checksumText.trim().split(/\s+/)[0]
+  if (!expected)
+    return false
+
+  const actual = createHash('sha256').update(content).digest('hex')
+  return expected === actual
+}
+
+export function canRestartManagedDaemon(input: ManagedDaemonProbe): ManagedDaemonDecision {
+  if (!input.running || !input.pid)
+    return { allowed: false, reason: 'not-running' }
+  if (normalizePath(input.pidFileHome) !== normalizePath(input.expectedHome))
+    return { allowed: false, reason: 'home-mismatch' }
+  if (!input.command)
+    return { allowed: false, reason: 'unknown-command' }
+  if (!input.command.includes('aiworker') || !input.command.includes('daemon foreground'))
+    return { allowed: false, reason: 'not-managed-daemon' }
+  if (input.command.includes(' apps/cli/src/aiworker.ts dev'))
+    return { allowed: false, reason: 'not-managed-daemon' }
+  return { allowed: true, reason: 'managed-daemon' }
+}
+
+export function readDailyUpdateNoticeState(value: DailyUpdateNoticeValue | null, now: Date): DailyUpdateNoticeState {
+  if (!value?.checkedAt) {
+    return {
+      canCheck: true,
+      latestSeenVersion: value?.latestSeenVersion ?? null,
+    }
+  }
+
+  const checkedAt = new Date(value.checkedAt)
+  const ageMs = now.getTime() - checkedAt.getTime()
+
+  return {
+    canCheck: !Number.isFinite(checkedAt.getTime()) || ageMs >= 24 * 60 * 60 * 1000,
+    latestSeenVersion: value.latestSeenVersion ?? null,
+  }
+}
+
+export function formatUpgradeReport(input: UpgradeReportInput): string {
+  const sourceDetail = input.source.detail ?? input.source.kind
+  return [
+    `AIWorker update ${input.status}: ${input.currentVersion} -> ${input.targetVersion}`,
+    `Source: ${sourceDetail}`,
+    `Actions: ${input.completedActions.length > 0 ? input.completedActions.join(', ') : 'none'}`,
+    `Daemon: ${input.daemon.restarted ? 'restarted' : input.daemon.reason}`,
+  ].join('\n')
 }
 
 export function platformAssetName(): string {
