@@ -212,6 +212,9 @@ export function buildUpgradePlan(input: BuildUpgradePlanInput): UpgradePlan {
   else if (!input.source.canAutoUpgrade && input.options.mode !== 'check') {
     status = 'source_not_supported'
   }
+  else if (input.source.kind === 'github-tarball' && input.options.mode !== 'check' && (!input.target.downloadUrl || !input.target.checksumUrl)) {
+    status = 'source_not_supported'
+  }
   else {
     status = 'update_available'
   }

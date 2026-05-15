@@ -325,6 +325,23 @@ describe('CLI updater core', () => {
     })
   })
 
+  it('marks GitHub tarball apply plans without checksum URLs as unsupported', () => {
+    const plan = buildUpgradePlan({
+      currentVersion: '1.2.2',
+      options: parseUpdateCommandOptions('update', {}),
+      source: { canAutoUpgrade: true, kind: 'github-tarball' },
+      target: {
+        checksumUrl: null,
+        downloadUrl: 'https://downloads.example/aiworker-darwin-arm64.tar.gz',
+        source: 'github',
+        version: '1.2.3',
+      },
+    })
+
+    expect(plan.actions).toEqual([])
+    expect(plan.status).toBe('source_not_supported')
+  })
+
   it('rejects GitHub tarball releases when the platform asset URL is invalid', async () => {
     for (const asset of [
       { name: 'aiworker-darwin-arm64.tar.gz' },

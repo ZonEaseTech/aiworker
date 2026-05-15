@@ -2,12 +2,12 @@
 import type { HostRuntime, LocalExecutor, LocalWorkerRuntime, SoulAppRegistryContext } from '@zonease/aiworker-core'
 import type { SoulAppManifest } from '@zonease/aiworker-shared'
 import type { WorkerRow } from '@zonease/aiworker-storage-sqlite/worker'
-import type { Buffer } from 'node:buffer'
 import type { ChildProcessByStdio } from 'node:child_process'
 import type { Readable } from 'node:stream'
+import { Buffer } from 'node:buffer'
 import { spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
-import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, closeSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { mkdir, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -277,8 +277,8 @@ async function runUpdateCommand(command: UpdateCommandName, opts: UpdateCliOptio
     convergeHost: async () => {
       await convergeHostAfterCliUpgrade()
     },
-    downloadAndReplace: () => {
-      throw new Error('github_tarball_replacement_not_wired')
+    downloadAndReplace: async (action) => {
+      await downloadAndReplaceGitHubBundle(action)
     },
     plan,
     restartDaemon: async () => {
@@ -297,6 +297,85 @@ async function runUpdateCommand(command: UpdateCommandName, opts: UpdateCliOptio
   })
 
   printJson({ update: plan, result })
+}
+
+async function downloadAndReplaceGitHubBundle(action: { checksumUrl: string, downloadUrl: string }): Promise<{ backupPath: string, installedPath: string }> {
+  const currentPath = resolveArgv1(process.argv[1])
+  if (!currentPath)
+    throw new Error('current binary path is required')
+
+  const installDir = path.dirname(currentPath)
+  const stageDir = mkdtempSync(path.join(installDir, '.aiworker-update-'))
+  const archivePath = path.join(stageDir, 'aiworker.tar.gz')
+  const nextPath = path.join(installDir, `.aiworker-next-${process.pid}`)
+  const backupPath = path.join(installDir, `.aiworker-backup-${process.pid}`)
+
+  try {
+    const [checksumText, archiveBytes] = await Promise.all([
+      fetchUpdateText(action.checksumUrl),
+      fetchUpdateBytes(action.downloadUrl),
+    ])
+    const expectedChecksum = checksumText.trim().split(/\s+/)[0]
+    const actualChecksum = createHash('sha256').update(archiveBytes).digest('hex')
+    if (!expectedChecksum || actualChecksum !== expectedChecksum)
+      throw new Error('checksum_mismatch')
+
+    writeFileSync(archivePath, archiveBytes)
+    const extract = Bun.spawnSync(['tar', '-xzf', archivePath, '-C', stageDir])
+    if (extract.exitCode !== 0) {
+      const stderr = Buffer.from(extract.stderr).toString('utf8').trim()
+      throw new Error(`staging_failed: ${stderr || `tar exited ${extract.exitCode}`}`)
+    }
+
+    const extractedDirs = readdirSync(stageDir)
+      .map(entry => path.join(stageDir, entry))
+      .filter(entry => statSync(entry).isDirectory())
+    const extractedDir = extractedDirs.find(entry => existsSync(path.join(entry, 'aiworker')))
+    if (!extractedDir)
+      throw new Error(extractedDirs.length > 0 ? 'staging_failed: aiworker binary not found' : 'staging_failed: extracted directory not found')
+
+    const stagedBinary = path.join(extractedDir, 'aiworker')
+    if (!existsSync(stagedBinary) || !statSync(stagedBinary).isFile())
+      throw new Error('staging_failed: aiworker binary not found')
+
+    rmSync(nextPath, { force: true })
+    rmSync(backupPath, { force: true })
+    copyFileSync(stagedBinary, nextPath)
+    chmodSync(nextPath, 0o755)
+
+    const probe = Bun.spawnSync([nextPath, '--version'])
+    if (probe.exitCode !== 0) {
+      const stderr = Buffer.from(probe.stderr).toString('utf8').trim()
+      throw new Error(`staging_failed: version probe failed${stderr ? `: ${stderr}` : ''}`)
+    }
+
+    renameSync(currentPath, backupPath)
+    try {
+      renameSync(nextPath, currentPath)
+    }
+    catch (error) {
+      renameSync(backupPath, currentPath)
+      throw error
+    }
+    return { backupPath, installedPath: currentPath }
+  }
+  finally {
+    rmSync(stageDir, { recursive: true, force: true })
+  }
+}
+
+async function fetchUpdateBytes(url: string): Promise<Buffer> {
+  const response = await fetch(url)
+  if (!response.ok)
+    throw new Error(`update asset fetch failed: HTTP ${response.status}`)
+  return Buffer.from(await response.arrayBuffer())
+}
+
+async function fetchUpdateText(url: string): Promise<string> {
+  const response = await fetch(url)
+  if (!response.ok)
+    throw new Error(`update checksum fetch failed: HTTP ${response.status}`)
+  return await response.text()
 }
 
 async function maybeResolveDailyUpdateNotice(): Promise<null | { channel: 'stable', command: 'aiworker update', currentVersion: string, targetVersion: string }> {
