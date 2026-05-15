@@ -7,6 +7,7 @@ import {
   parseUpdateCommandOptions,
   resolveReleaseTarget,
 } from './updater'
+import type { ExecuteUpgradePlanInput, UpgradeAction, UpgradePlan } from './updater'
 
 describe('CLI updater core', () => {
   it('treats update and upgrade as apply-mode aliases', () => {
@@ -259,6 +260,20 @@ describe('CLI updater core', () => {
     })).rejects.toThrow('npm dist-tag not found: latest')
   })
 
+  it('rejects npm targets when the selected dist-tag is empty or malformed', async () => {
+    for (const payload of [
+      { 'dist-tags': { latest: '' } },
+      { 'dist-tags': { latest: 123 } },
+      {},
+    ]) {
+      await expect(resolveReleaseTarget({
+        fetch: async () => jsonResponse(payload),
+        options: parseUpdateCommandOptions('update', {}),
+        source: { canAutoUpgrade: true, kind: 'npm-global', packageManager: 'npm' },
+      })).rejects.toThrow('npm dist-tag not found: latest')
+    }
+  })
+
   it('resolves GitHub tarball releases to platform asset and checksum URLs', async () => {
     const target = await resolveReleaseTarget({
       fetch: async url => jsonResponse({
@@ -304,6 +319,36 @@ describe('CLI updater core', () => {
       source: 'github',
       version: '1.2.3',
     })
+  })
+
+  it('rejects GitHub releases when tag_name is missing or malformed', async () => {
+    for (const payload of [
+      { assets: [], tag_name: '' },
+      { assets: [], tag_name: 123 },
+      { assets: [] },
+    ]) {
+      await expect(resolveReleaseTarget({
+        fetch: async () => jsonResponse(payload),
+        options: parseUpdateCommandOptions('update', {}),
+        platformAssetName: () => 'aiworker-darwin-arm64.tar.gz',
+        source: { canAutoUpgrade: true, kind: 'github-tarball' },
+      })).rejects.toThrow('github release tag not found')
+    }
+  })
+
+  it('rejects GitHub releases when assets is missing or malformed', async () => {
+    for (const payload of [
+      { tag_name: 'v1.2.3' },
+      { assets: null, tag_name: 'v1.2.3' },
+      { assets: {}, tag_name: 'v1.2.3' },
+    ]) {
+      await expect(resolveReleaseTarget({
+        fetch: async () => jsonResponse(payload),
+        options: parseUpdateCommandOptions('update', {}),
+        platformAssetName: () => 'aiworker-darwin-arm64.tar.gz',
+        source: { canAutoUpgrade: true, kind: 'github-tarball' },
+      })).rejects.toThrow('github release assets invalid')
+    }
   })
 
   it('does not call write hooks during dry-run execution', async () => {
@@ -415,6 +460,42 @@ describe('CLI updater core', () => {
     expect(calls).toEqual([])
   })
 
+  it('fails package-manager actions when the runCommand hook is missing', async () => {
+    await expect(executeUpgradePlan({
+      plan: upgradePlanWithActions([
+        {
+          args: ['install', '-g', '@zonease/aiworker-cli@1.2.3'],
+          command: 'npm',
+          kind: 'package-manager',
+        },
+      ]),
+    } as unknown as ExecuteUpgradePlanInput)).rejects.toThrow('upgrade executor hook missing: runCommand')
+  })
+
+  it('fails github-tarball actions when the downloadAndReplace hook is missing', async () => {
+    await expect(executeUpgradePlan({
+      plan: upgradePlanWithActions([
+        {
+          checksumUrl: 'https://downloads.example/aiworker-darwin-arm64.tar.gz.sha256',
+          downloadUrl: 'https://downloads.example/aiworker-darwin-arm64.tar.gz',
+          kind: 'github-tarball',
+        },
+      ]),
+    } as unknown as ExecuteUpgradePlanInput)).rejects.toThrow('upgrade executor hook missing: downloadAndReplace')
+  })
+
+  it('fails host-convergence actions when the convergeHost hook is missing', async () => {
+    await expect(executeUpgradePlan({
+      plan: upgradePlanWithActions([{ kind: 'host-convergence' }]),
+    } as unknown as ExecuteUpgradePlanInput)).rejects.toThrow('upgrade executor hook missing: convergeHost')
+  })
+
+  it('fails daemon-restart actions when the restartDaemon hook is missing', async () => {
+    await expect(executeUpgradePlan({
+      plan: upgradePlanWithActions([{ kind: 'daemon-restart' }]),
+    } as unknown as ExecuteUpgradePlanInput)).rejects.toThrow('upgrade executor hook missing: restartDaemon')
+  })
+
   it('executes upgrade actions in order and collects completed action names', async () => {
     const calls: string[] = []
     const result = await executeUpgradePlan({
@@ -473,4 +554,17 @@ function jsonResponse(value: unknown): Response {
     headers: { 'content-type': 'application/json' },
     status: 200,
   })
+}
+
+function upgradePlanWithActions(actions: UpgradeAction[]): UpgradePlan {
+  return {
+    actions,
+    currentVersion: '1.2.2',
+    mode: 'apply',
+    requiresConfirmation: false,
+    source: { canAutoUpgrade: true, kind: 'npm-global', packageManager: 'npm' },
+    status: 'update_available',
+    target: { checksumUrl: null, downloadUrl: null, source: 'npm', version: '1.2.3' },
+    targetVersion: '1.2.3',
+  }
 }

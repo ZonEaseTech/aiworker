@@ -84,11 +84,11 @@ export interface ResolveReleaseTargetInput {
 }
 
 export interface ExecuteUpgradePlanInput {
-  convergeHost?: () => MaybePromise<void>
-  downloadAndReplace?: (action: { checksumUrl: string, downloadUrl: string }) => MaybePromise<void>
+  convergeHost: () => MaybePromise<void>
+  downloadAndReplace: (action: { checksumUrl: string, downloadUrl: string }) => MaybePromise<void>
   plan: UpgradePlan
-  restartDaemon?: () => MaybePromise<void>
-  runCommand?: (command: PackageManager, args: string[]) => MaybePromise<void>
+  restartDaemon: () => MaybePromise<void>
+  runCommand: (command: PackageManager, args: string[]) => MaybePromise<void>
 }
 
 export interface ExecuteUpgradePlanResult {
@@ -109,8 +109,8 @@ interface GitHubReleaseAssetResponse {
 }
 
 interface GitHubReleaseResponse {
-  assets?: GitHubReleaseAssetResponse[]
-  tag_name?: string
+  assets: GitHubReleaseAssetResponse[]
+  tag_name: string
 }
 
 const packageName = '@zonease/aiworker-cli'
@@ -222,25 +222,25 @@ export async function resolveReleaseTarget(input: ResolveReleaseTargetInput): Pr
   }
 
   if (input.source.kind === 'github-tarball') {
-    const response = await fetchJson<GitHubReleaseResponse>(input.fetch, githubLatestReleaseUrl)
+    const response = validateGitHubReleaseResponse(await fetchJson<unknown>(input.fetch, githubLatestReleaseUrl))
     const assetName = (input.platformAssetName ?? platformAssetName)()
-    const asset = (response.assets ?? []).find(candidate => candidate.name === assetName)
-    const checksumAsset = (response.assets ?? []).find(candidate => candidate.name === `${assetName}.sha256`)
+    const asset = response.assets.find(candidate => candidate.name === assetName)
+    const checksumAsset = response.assets.find(candidate => candidate.name === `${assetName}.sha256`)
 
     return {
       checksumUrl: checksumAsset?.browser_download_url ?? null,
       downloadUrl: asset?.browser_download_url ?? null,
       isPrerelease: input.options.prerelease,
       source: 'github',
-      version: (response.tag_name ?? '').replace(/^v/, ''),
+      version: response.tag_name.replace(/^v/, ''),
     }
   }
 
-  const response = await fetchJson<NpmRegistryResponse>(input.fetch, npmRegistryUrl)
+  const response = validateNpmRegistryResponse(await fetchJson<unknown>(input.fetch, npmRegistryUrl))
   const tag = input.options.prerelease ? 'preview' : 'latest'
   const version = response['dist-tags']?.[tag]
 
-  if (!version)
+  if (typeof version !== 'string' || version.length === 0)
     throw new Error(`npm dist-tag not found: ${tag}`)
 
   return {
@@ -266,19 +266,23 @@ export async function executeUpgradePlan(input: ExecuteUpgradePlanInput): Promis
       if (!action.command || !action.args)
         throw new Error('package-manager upgrade action is missing command or args')
 
-      await input.runCommand?.(action.command, action.args)
+      const runCommand = requireExecutorHook(input.runCommand, 'runCommand')
+      await runCommand(action.command, action.args)
     }
     else if (action.kind === 'github-tarball') {
       if (!action.downloadUrl || !action.checksumUrl)
         throw new Error('github tarball upgrade action requires downloadUrl and checksumUrl')
 
-      await input.downloadAndReplace?.({ checksumUrl: action.checksumUrl, downloadUrl: action.downloadUrl })
+      const downloadAndReplace = requireExecutorHook(input.downloadAndReplace, 'downloadAndReplace')
+      await downloadAndReplace({ checksumUrl: action.checksumUrl, downloadUrl: action.downloadUrl })
     }
     else if (action.kind === 'host-convergence') {
-      await input.convergeHost?.()
+      const convergeHost = requireExecutorHook(input.convergeHost, 'convergeHost')
+      await convergeHost()
     }
     else {
-      await input.restartDaemon?.()
+      const restartDaemon = requireExecutorHook(input.restartDaemon, 'restartDaemon')
+      await restartDaemon()
     }
 
     completedActions.push(action.kind)
@@ -319,6 +323,51 @@ async function fetchJson<T>(fetchRelease: FetchRelease | undefined, url: string)
     throw new Error(`failed to resolve release target from ${url}: HTTP ${response.status}`)
 
   return await response.json() as T
+}
+
+function validateNpmRegistryResponse(value: unknown): NpmRegistryResponse {
+  if (!isRecord(value))
+    return {}
+
+  const distTags = value['dist-tags']
+  if (!isRecord(distTags))
+    return {}
+
+  return {
+    'dist-tags': Object.fromEntries(
+      Object.entries(distTags).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+    ),
+  }
+}
+
+function validateGitHubReleaseResponse(value: unknown): GitHubReleaseResponse {
+  if (!isRecord(value) || typeof value.tag_name !== 'string' || value.tag_name.length === 0)
+    throw new Error('github release tag not found')
+
+  if (!Array.isArray(value.assets))
+    throw new Error('github release assets invalid')
+
+  return {
+    assets: value.assets.filter(isGitHubReleaseAssetResponse),
+    tag_name: value.tag_name,
+  }
+}
+
+function isGitHubReleaseAssetResponse(value: unknown): value is GitHubReleaseAssetResponse {
+  return isRecord(value)
+    && (value.name === undefined || typeof value.name === 'string')
+    && (value.browser_download_url === undefined || typeof value.browser_download_url === 'string')
+}
+
+function requireExecutorHook<T extends (...args: never[]) => MaybePromise<void>>(hook: T | undefined, name: string): T {
+  if (hook === undefined)
+    throw new Error(`upgrade executor hook missing: ${name}`)
+
+  return hook
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function compareVersions(current: string, target: string): number {
