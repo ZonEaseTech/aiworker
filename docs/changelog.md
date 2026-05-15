@@ -1,5 +1,19 @@
 # AIWorker Changelog
 
+## 2026-05-15 21:00 [completed] BUG-122 / PLAN-330 — Restore GitHub-hosted release workflows
+
+Restored `.github/workflows/lint.yml` and `.github/workflows/release.yml` from
+the temporary `self-hosted` / `ttpos-uat-linux` release fallback back to
+`ubuntu-latest`. The workflows keep `actions/setup-node@v4` with Node 24 and
+`NODE_OPTIONS=--max-old-space-size=1024`, because those settings address the
+self-hosted Node/runtime instability seen during the emergency release path
+without binding public CI to private runners.
+
+Release run `25909996552` remains the completed `v0.15.2` publication evidence.
+Future queued GitHub-hosted runs should be cancelled and re-run first; switching
+public repository workflows to self-hosted runners is an explicit last resort,
+not the default remediation path.
+
 ## 2026-05-15 17:20 [completed] BUG-121 / PLAN-329 — CLI updater global package source detection
 
 Published `@zonease/aiworker-cli@0.15.2` as a patch release for `aiworker

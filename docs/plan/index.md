@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-15 (PLAN-329 completed)
+> Updated: 2026-05-15 (PLAN-330 completed)
 
 ## Usage
 
@@ -357,3 +357,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-326 CLI 0.15.0 minor release**](PLAN-326.md) `2026-05-15`
 - [x] [**PLAN-327 CLI 0.15.1 patch release**](PLAN-327.md) `2026-05-15`
 - [x] [**PLAN-329 CLI updater global package source detection**](PLAN-329.md) `2026-05-15`
+- [x] [**PLAN-330 Restore GitHub-hosted release workflows**](PLAN-330.md) `2026-05-15`

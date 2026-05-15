@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   release:
-    runs-on: [self-hosted, ttpos-uat-linux]
+    runs-on: ubuntu-latest
     env:
       NODE_OPTIONS: --max-old-space-size=1024
     steps:

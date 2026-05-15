@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-15 (BUG-121 completed)
+> Updated: 2026-05-15 (BUG-122 completed)
 
 ## Usage
 
@@ -432,3 +432,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REL-035 发布 aiworker CLI 0.15.0**](REL-035.md) `P1`
 - [x] [**REL-036 发布 aiworker CLI 0.15.1**](REL-036.md) `P1`
 - [x] [**BUG-121 CLI self-updater cannot prove global package bundle source**](BUG-121.md) `P0`
+- [x] [**BUG-122 Restore GitHub-hosted release workflows after self-hosted fallback**](BUG-122.md) `P0`
