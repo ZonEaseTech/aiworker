@@ -1,5 +1,13 @@
 # AIWorker Changelog
 
+## 2026-05-15 13:57 [progress] REL-036 / PLAN-327 — CLI 0.15.1 patch release
+
+Started `@zonease/aiworker-cli@0.15.1` as a patch release for the post-0.15.0
+Worker Web shell header action status fix. Baseline checks confirm npm latest is
+`0.15.0`, GitHub Release `v0.15.0` exists with tarball/checksum assets, and the
+remote `v0.15.1` tag is unused. Local release gates and post-publish validation
+are in progress.
+
 ## 2026-05-15 13:50 [completed] REL-035 / PLAN-326 — CLI 0.15.0 minor release
 
 Published `@zonease/aiworker-cli@0.15.0` as a minor release for the completed
