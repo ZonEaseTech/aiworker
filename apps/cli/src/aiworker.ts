@@ -212,6 +212,7 @@ async function runInit(): Promise<void> {
 
 async function runDoctor(): Promise<void> {
   const paths = await ensureDb()
+  const updateNotice = await maybeResolveDailyUpdateNotice()
   printJson({
     ok: true,
     home: paths.home,
@@ -221,7 +222,7 @@ async function runDoctor(): Promise<void> {
     workspaces: listWorkspaces(),
     daemon: daemonStatus(),
     settings: listSettings(),
-    updateNotice: await maybeResolveDailyUpdateNotice(),
+    updateNotice,
   })
 }
 
@@ -252,8 +253,25 @@ async function runUpdateCommand(command: UpdateCommandName, opts: UpdateCliOptio
     return
   }
 
-  if (plan.requiresConfirmation)
+  if (plan.status === 'source_not_supported' || plan.status === 'source_unknown') {
+    printJson({ update: plan })
+    throw new Error(`update_not_supported: ${plan.source.detail ?? plan.source.reason ?? plan.source.kind}`)
+  }
+
+  if (plan.status === 'update_available' && plan.actions.length === 0) {
+    printJson({ update: plan })
+    throw new Error('update_not_actionable')
+  }
+
+  if (plan.status !== 'update_available') {
+    printJson({ update: plan })
+    return
+  }
+
+  if (plan.requiresConfirmation) {
+    printJson({ update: plan })
     throw new Error('update requires --yes to apply changes')
+  }
 
   const result = await executeUpgradePlan({
     convergeHost: async () => {

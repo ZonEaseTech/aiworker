@@ -27,6 +27,7 @@ import {
 
 describe('aiworker local CLI', () => {
   const originalEnv = { ...process.env }
+  const originalFetch = globalThis.fetch
   const originalWrite = process.stdout.write
   let root: string
   let output = ''
@@ -49,6 +50,7 @@ describe('aiworker local CLI', () => {
     for (const key of Object.keys(process.env))
       delete process.env[key]
     Object.assign(process.env, originalEnv)
+    globalThis.fetch = originalFetch
     process.stdout.write = originalWrite
     await rm(root, { recursive: true, force: true })
   })
@@ -228,6 +230,41 @@ describe('aiworker local CLI', () => {
       source: { kind: 'source-checkout' },
       status: 'update_available',
     })
+  })
+
+  it('rejects source-checkout update apply targets without reporting skipped success', async () => {
+    expect(await runCli(argv('update', '--target', '99.0.0'))).toBe(1)
+    const body = JSON.parse(output) as {
+      result?: { status: string }
+      update: {
+        mode: string
+        source: { kind: string }
+        status: string
+      }
+    }
+
+    expect(body.update).toMatchObject({
+      mode: 'apply',
+      source: { kind: 'source-checkout' },
+      status: 'source_not_supported',
+    })
+    expect(body.result).toBeUndefined()
+  })
+
+  it('returns fresh doctor update notice error state when daily notice resolution fails', async () => {
+    globalThis.fetch = (async () => {
+      throw new Error('network down')
+    }) as unknown as typeof fetch
+
+    expect(await runCli(argv('doctor'))).toBe(0)
+    const body = JSON.parse(output) as {
+      settings: Array<{ key: string, valueJson: Record<string, unknown> }>
+      updateNotice: null | unknown
+    }
+    const noticeSetting = body.settings.find(setting => setting.key === 'update.notice')
+
+    expect(body.updateNotice).toBeNull()
+    expect(noticeSetting?.valueJson.errorMessage).toBe('network down')
   })
 
   it('prints equivalent check reports for update and upgrade aliases', async () => {
