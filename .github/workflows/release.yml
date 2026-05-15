@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   release:
-    runs-on: [self-hosted, Linux, X64, ttpos-uat-linux]
+    runs-on: [self-hosted, ttpos-uat-linux]
     steps:
       - uses: actions/checkout@v5
 
