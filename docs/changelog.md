@@ -1,10 +1,15 @@
 # AIWorker Changelog
 
-## 2026-05-15 [in_progress] FEAT-086 / PLAN-325 — CLI self-updater
+## 2026-05-15 [completed] FEAT-086 / PLAN-325 — CLI self-updater
 
-Started the top-level `aiworker update` / `aiworker upgrade` self-updater slice
-from the approved Superpowers design. The scope is the AIWorker CLI/Host
-distribution and Host metadata convergence, not worker domain data migration.
+Completed the top-level `aiworker update` / `aiworker upgrade` self-updater
+slice. Verification passed: `bun test --timeout=15000
+apps/cli/src/updater.test.ts apps/cli/src/aiworker.test.ts` with 66 tests,
+`bun run --filter '@zonease/aiworker-cli' typecheck`,
+`bun run --filter '@zonease/aiworker-cli' build:bundle`,
+`bun run --filter '@zonease/aiworker-cli' smoke:dist-release`,
+`git diff --check`, `bun run crg:update` and `bun run crg:review` with final
+docs risk score 0.00.
 
 ## 2026-05-15 10:14 [completed] REL-034 / PLAN-324 — CLI 0.14.0 minor release
 

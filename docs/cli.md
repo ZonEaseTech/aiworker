@@ -45,6 +45,7 @@ aiworker open --port 9217
 aiworker init
 aiworker dev
 aiworker doctor
+aiworker update|upgrade
 aiworker daemon start|foreground|status|stop|logs|check
 aiworker app list|show|install|enable|disable|doctor|permissions|bootstrap|create|validate|smoke
 aiworker soul list
@@ -72,6 +73,24 @@ aiworker commands
 - `daemon status|logs|check|stop` inspect or stop the local process.
 - `doctor` checks host-local readiness without turning AIWorker into a remote
   control plane.
+
+## Updates
+
+`aiworker update` and `aiworker upgrade` are aliases for the AIWorker
+distribution updater. They upgrade the CLI package, package-local Host Web
+assets, worker DB migrations and bundled official Soul App release resources.
+
+Use `aiworker update --check` for a read-only check. The default channel is
+stable. Preview or prerelease targets require `--channel preview` or `--pre`.
+
+Global npm and Bun installs can be upgraded through their package managers.
+Source checkout, `npx`, `bunx` and unknown sources print a plan and do not
+self-modify. GitHub release bundles require SHA256 checksum assets before
+automatic replacement.
+
+Future `aiworker worker <worker_id> update|upgrade` is reserved for
+worker-scoped compatibility and is not the same command as top-level CLI
+self-update.
 
 ## Soul Apps
 

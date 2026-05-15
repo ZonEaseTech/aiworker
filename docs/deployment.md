@@ -79,6 +79,10 @@ AIWORKER_HOME=~/.aiworker \
 migrations 和官方 first-party Soul App release resources。它不应要求 source checkout 才能服务
 `/` 或 bootstrap HR/QA。
 
+Standalone GitHub release bundle upgrades require matching `.sha256` assets.
+When checksums are missing, AIWorker reports the target release and refuses
+automatic binary replacement.
+
 打包或 npm 安装后的 CLI 默认使用 `~/.aiworker`，与源码态
 `~/.aiworker-dev` 分离。`AIWORKER_HOME` 和 `WORKER_DB_PATH` 对两种入口都保持最高优先级。
 
@@ -97,6 +101,11 @@ npx @zonease/aiworker-cli daemon foreground --host 127.0.0.1 --port 9217
 - `WORKER_DB_PATH`：覆盖默认 `~/.aiworker/aiworker.db`；
 - `AIWORKER_WORKER_HOST`：daemon bind host；
 - `PORT`：daemon port。
+
+`aiworker update` / `aiworker upgrade` only restart daemons that were started
+through `aiworker daemon start` for the same `AIWORKER_HOME` and can be proven
+from the managed pid/log files. Foreground, source `dev`, tmux and manually
+started daemon processes require a manual restart after upgrade.
 
 ## Official Soul Apps
 

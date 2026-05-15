@@ -1,6 +1,6 @@
 # PLAN-325 CLI self-updater
 
-- **status**: in_progress
+- **status**: completed
 - **owner**: codex
 - **task**: FEAT-086
 - **created**: 2026-05-15
@@ -32,3 +32,17 @@ git diff --check
 bun run crg:update
 bun run crg:review
 ```
+
+## Verification Evidence
+
+2026-05-15 completed:
+
+- `bun test --timeout=15000 apps/cli/src/updater.test.ts apps/cli/src/aiworker.test.ts`
+  passed with 66 tests.
+- `bun run --filter '@zonease/aiworker-cli' typecheck` passed.
+- `bun run --filter '@zonease/aiworker-cli' build:bundle` passed.
+- `bun run --filter '@zonease/aiworker-cli' smoke:dist-release` passed.
+- `git diff --check` passed.
+- `bun run crg:update` passed.
+- `bun run crg:review` passed with risk score 0.00 for the final docs-only
+  diff after code review fixes had passed focused CRG reviews.

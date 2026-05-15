@@ -1,6 +1,6 @@
 # FEAT-086 CLI self-updater
 
-- **status**: in_progress
+- **status**: completed
 - **priority**: P1
 - **owner**: codex
 - **plan**: PLAN-325
@@ -39,3 +39,7 @@ namespace.
 ## Progress
 
 - 2026-05-15: Implementation slice opened from approved Superpowers spec.
+- 2026-05-15: Completed CLI self-updater implementation and verification.
+  Passed focused CLI updater tests, CLI typecheck, CLI bundle build, dist
+  release smoke, `git diff --check`, `bun run crg:update` and
+  `bun run crg:review`.
