@@ -1,5 +1,22 @@
 # AIWorker Changelog
 
+## 2026-05-15 10:07 [progress] REL-034 / PLAN-324 — CLI 0.14.0 minor release
+
+Started the `@zonease/aiworker-cli@0.14.0` minor release after merging PR #3
+into `main`. This release carries the HR profile-first workspace loop, profile
+ledger, native Soul App skill projection, profile revision API, and HR-native
+skills into the published CLI package.
+
+- Baseline release facts: npm latest is `0.13.2`; local and remote `v0.14.0`
+  tags are unused; local `main` and `origin/main` both point at `f14af975`.
+- Release prep is in progress under `REL-034 / PLAN-324`.
+- Local release gates passed: `bun run check`, `bun run test`, `bun run build`,
+  `git diff --check`, dist version checks, npm pack dry-run,
+  `smoke:dist-release`, `bun run crg:update` and `bun run crg:review`.
+- Pack preview reports `@zonease/aiworker-cli@0.14.0` with 119 files and the
+  expected HR native skills, Worker Web static, worker migrations and official
+  HR/QA app runtime resources.
+
 ## 2026-05-15 02:45 [completed] FEAT-085 / PLAN-323 — HR Profile Ledger and Native Skills
 
 Started the profile-first HR Soul App landing work from the approved

@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-15 (REL-033 completed)
+> Updated: 2026-05-15 (REL-034 in progress)
 
 ## Usage
 
@@ -426,3 +426,5 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-120 Release daemon reports dev runtime version**](BUG-120.md) `P0`
 - [x] [**FEAT-084 Soul App Web Storage discipline**](FEAT-084.md) `P0`
 - [x] [**REL-033 发布 aiworker CLI 0.13.2**](REL-033.md) `P1`
+- [x] [**FEAT-085 HR Profile Ledger and Native Skills**](FEAT-085.md) `P0`
+- [-] [**REL-034 发布 aiworker CLI 0.14.0**](REL-034.md) `P1`
