@@ -11,6 +11,8 @@ permissions:
 jobs:
   lint:
     runs-on: [self-hosted, ttpos-uat-linux]
+    env:
+      NODE_OPTIONS: --max-old-space-size=1024
     steps:
       - uses: actions/checkout@v5
 
