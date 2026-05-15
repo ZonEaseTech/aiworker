@@ -1,12 +1,36 @@
 # AIWorker Changelog
 
-## 2026-05-15 15:44 [in_progress] BUG-121 / PLAN-329 — CLI updater global package source detection
+## 2026-05-15 17:20 [completed] BUG-121 / PLAN-329 — CLI updater global package source detection
 
-Started a patch release fix for `aiworker upgrade` reporting `source_unknown`
-from package-manager installs. The root cause is that npm/Bun global shims launch
-the package's `aiworker-bun.js` bundle, while the detector only recognized the
-global bin shim path. Local regression tests, bundle, dist smoke and release
-gates now pass for the `0.15.2` patch candidate.
+Published `@zonease/aiworker-cli@0.15.2` as a patch release for `aiworker
+upgrade` reporting `source_unknown` from package-manager installs. The root
+cause was that npm/Bun global shims launch the package's `aiworker-bun.js`
+bundle, while the detector only recognized the global bin shim path.
+
+- Added updater regression coverage for npm global and Bun global package bundle
+  paths, then fixed `detectInstallSource` to classify them as `npm-global` and
+  `bun-global`.
+- Local gates passed: focused updater/CLI tests, CLI typecheck, Web build, CLI
+  bundle, dist release smoke, root `check`, root `test`, root `build`,
+  `git diff --check`, npm pack dry-run, `bun run crg:update` and
+  `bun run crg:review`.
+- GitHub Actions release run `25909996552` completed successfully on
+  `v0.15.2` / `6c0dc357` and published npm plus four GitHub Release binary
+  tarballs with four matching `.sha256` assets. Main lint run `25909992060`
+  also passed.
+- npm latest is `0.15.2`; explicit `bunx @zonease/aiworker-cli@0.15.2
+  --version` reports `aiworker/0.15.2 darwin-arm64 node-v24.3.0`.
+- Published-package smoke verified daemon runtimeVersion `0.15.2`, Host
+  Web/API, official HR/QA app bootstrap, app/soul listing and HR template
+  discovery.
+- Published Bun global install smoke verified `aiworker update --check --target
+  99.0.0` now reports `source.kind: bun-global`,
+  `source.canAutoUpgrade: true` and `status: update_available`.
+- CI note: the self-hosted runner exposed a 256MB Node heap OOM during
+  Typecheck/Web build. The lint and release workflows now set
+  `NODE_OPTIONS=--max-old-space-size=1024`; the temporary runner-group
+  public-repository access used to unblock the release was restored to
+  `allows_public_repositories=false`.
 
 ## 2026-05-15 14:08 [completed] REL-036 / PLAN-327 — CLI 0.15.1 patch release
 

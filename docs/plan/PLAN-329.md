@@ -1,9 +1,10 @@
 # PLAN-329 CLI updater global package source detection
 
-- **status**: in_progress
+- **status**: completed
 - **owner**: codex
 - **createdAt**: 2026-05-15 15:44
 - **approvedAt**: 2026-05-15 15:44
+- **completedAt**: 2026-05-15 17:20
 - **relatedTask**: BUG-121
 
 ## Current State
@@ -45,6 +46,8 @@ Expected changes:
 - `apps/cli/src/updater.ts`
 - `apps/cli/src/updater.test.ts`
 - `apps/cli/package.json`
+- `.github/workflows/lint.yml`
+- `.github/workflows/release.yml`
 - `docs/task/BUG-121.md`
 - `docs/task/index.md`
 - `docs/plan/PLAN-329.md`
@@ -78,3 +81,24 @@ Expected changes:
 - `bun run crg:review` passed with risk score `0.40`; CRG reported
   `detectInstallSource` as an untested symbol even though the focused
   regression tests above executed it directly.
+- `NODE_OPTIONS=--max-old-space-size=1024 bun run typecheck` passed locally and
+  reproduced the GitHub Actions memory fix path after CI exposed 256MB Node heap
+  OOM failures on the self-hosted runner.
+- Main lint workflow `25909992060` passed on commit `6c0dc357`.
+- Release workflow `25909996552` passed on tag `v0.15.2` / commit
+  `6c0dc357`, including Typecheck, Test, Bundle CLI, Publish to npm, binary
+  packaging and GitHub Release attachment.
+- `npm view @zonease/aiworker-cli version dist-tags --json` reports version
+  `0.15.2` and `latest: 0.15.2`.
+- `bunx @zonease/aiworker-cli@0.15.2 --version` reports
+  `aiworker/0.15.2 darwin-arm64 node-v24.3.0`.
+- `gh release view v0.15.2` reports a non-draft, non-prerelease release with 8
+  uploaded assets: 4 platform tarballs and 4 `.sha256` files.
+- Published-package smoke passed from an isolated temp HOME/AIWORKER_HOME:
+  daemon `/health`, `/api/local/info` runtimeVersion `0.15.2`, Host Web static
+  serving, official app bootstrap, app list, soul list and HR template list.
+- Published Bun global install smoke passed: `aiworker update --check --target
+  99.0.0` reports `source.kind: bun-global`, `source.canAutoUpgrade: true` and
+  `status: update_available`.
+- Temporary org runner group public-repository access was restored to
+  `allows_public_repositories=false` after release verification.
