@@ -342,10 +342,21 @@ export function canRestartManagedDaemon(input: ManagedDaemonProbe): ManagedDaemo
     return { allowed: false, reason: 'home-mismatch' }
   if (!input.command)
     return { allowed: false, reason: 'unknown-command' }
-  if (!input.command.includes('aiworker') || !input.command.includes('daemon foreground'))
+
+  const commandTokens = input.command.trim().split(/\s+/).filter(Boolean)
+  const hasManagedBinary = commandTokens.some(token => token === 'aiworker' || token.endsWith('/aiworker'))
+  const daemonIndex = commandTokens.findIndex(token => token === 'daemon')
+  const hasDaemonForeground = daemonIndex >= 0 && commandTokens[daemonIndex + 1] === 'foreground'
+
+  if (
+    input.command.includes('apps/cli/src/aiworker.ts')
+    || commandTokens.includes('dev')
+    || !hasManagedBinary
+    || !hasDaemonForeground
+  ) {
     return { allowed: false, reason: 'not-managed-daemon' }
-  if (input.command.includes(' apps/cli/src/aiworker.ts dev'))
-    return { allowed: false, reason: 'not-managed-daemon' }
+  }
+
   return { allowed: true, reason: 'managed-daemon' }
 }
 
@@ -359,9 +370,10 @@ export function readDailyUpdateNoticeState(value: DailyUpdateNoticeValue | null,
 
   const checkedAt = new Date(value.checkedAt)
   const ageMs = now.getTime() - checkedAt.getTime()
+  const canCheck = !Number.isFinite(checkedAt.getTime()) || ageMs < 0 || ageMs >= 24 * 60 * 60 * 1000
 
   return {
-    canCheck: !Number.isFinite(checkedAt.getTime()) || ageMs >= 24 * 60 * 60 * 1000,
+    canCheck,
     latestSeenVersion: value.latestSeenVersion ?? null,
   }
 }

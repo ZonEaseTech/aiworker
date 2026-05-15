@@ -596,6 +596,7 @@ describe('CLI updater safety helpers', () => {
   it('verifies sha256 checksum lines', () => {
     const digest = '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08'
     expect(verifySha256Text('test', `${digest}  aiworker-darwin-arm64.tar.gz\n`)).toBe(true)
+    expect(verifySha256Text(new Uint8Array(Buffer.from('test')), `${digest}  aiworker-darwin-arm64.tar.gz\n`)).toBe(true)
     expect(verifySha256Text('test', '0000  aiworker-darwin-arm64.tar.gz\n')).toBe(false)
   })
 
@@ -617,11 +618,50 @@ describe('CLI updater safety helpers', () => {
     })).toMatchObject({ allowed: false, reason: 'not-managed-daemon' })
   })
 
+  it('rejects unmanaged daemon-like commands', () => {
+    const baseProbe = {
+      expectedHome: '/Users/ben/.aiworker',
+      pid: 123,
+      pidFileHome: '/Users/ben/.aiworker',
+      running: true,
+    }
+
+    expect(canRestartManagedDaemon({
+      ...baseProbe,
+      command: 'bun apps/cli/src/aiworker.ts daemon foreground --port 9217',
+    })).toMatchObject({ allowed: false, reason: 'not-managed-daemon' })
+
+    expect(canRestartManagedDaemon({
+      ...baseProbe,
+      command: '/usr/local/bin/aiworker dev --port 9217',
+    })).toMatchObject({ allowed: false, reason: 'not-managed-daemon' })
+
+    expect(canRestartManagedDaemon({
+      ...baseProbe,
+      command: '/usr/local/bin/aiworker foreground daemon --port 9217',
+    })).toMatchObject({ allowed: false, reason: 'not-managed-daemon' })
+  })
+
   it('reads absent daily notice state as ready for a check', () => {
     expect(readDailyUpdateNoticeState(null, new Date('2026-05-15T00:00:00.000Z'))).toMatchObject({
       canCheck: true,
       latestSeenVersion: null,
     })
+  })
+
+  it('reads invalid, future and expired daily notice state as ready for a check', () => {
+    const now = new Date('2026-05-15T00:00:00.000Z')
+
+    expect(readDailyUpdateNoticeState({ checkedAt: 'not-a-date' }, now)).toMatchObject({ canCheck: true })
+    expect(readDailyUpdateNoticeState({ checkedAt: '2026-05-16T00:00:00.000Z' }, now)).toMatchObject({ canCheck: true })
+    expect(readDailyUpdateNoticeState({ checkedAt: '2026-05-14T00:00:00.000Z' }, now)).toMatchObject({ canCheck: true })
+    expect(readDailyUpdateNoticeState({ checkedAt: '2026-05-13T23:59:59.999Z' }, now)).toMatchObject({ canCheck: true })
+  })
+
+  it('suppresses daily notice checks only within the current 24 hour window', () => {
+    const now = new Date('2026-05-15T00:00:00.000Z')
+
+    expect(readDailyUpdateNoticeState({ checkedAt: '2026-05-14T00:00:00.001Z' }, now)).toMatchObject({ canCheck: false })
   })
 
   it('formats reports with source, target, actions and restart result', () => {

@@ -512,6 +512,8 @@ export async function convergeHostAfterCliUpgrade(): Promise<{ bootstrap: Awaite
   const paths = await ensureDb()
   const host = createHost(paths)
   const bootstrap = await host.bootstrapOfficialSoulApps()
+  if (bootstrap.status === 'fail')
+    throw new Error('host convergence failed while bootstrapping official Soul Apps')
   return { bootstrap, home: paths.home }
 }
 
