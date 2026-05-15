@@ -76,6 +76,10 @@ export interface UpgradePlan {
 const packageName = '@zonease/aiworker-cli'
 
 export function parseUpdateCommandOptions(command: UpdateCommandName, opts: UpdateCliOptions): ParsedUpdateOptions {
+  if (opts.channel !== undefined && opts.channel !== 'stable' && opts.channel !== 'preview') {
+    throw new Error(`unsupported update channel: ${opts.channel}`)
+  }
+
   const prerelease = opts.pre === true || opts.channel === 'preview'
   const mode: UpdateMode = opts.check === true ? 'check' : opts.dryRun === true ? 'dry-run' : 'apply'
 
@@ -183,13 +187,12 @@ function buildPackageManagerAction(packageManager: PackageManager, version: stri
 }
 
 function compareVersions(current: string, target: string): number {
-  const currentParts = versionParts(current)
-  const targetParts = versionParts(target)
-  const width = Math.max(currentParts.length, targetParts.length)
+  const currentSemver = parseSemver(current)
+  const targetSemver = parseSemver(target)
 
-  for (let index = 0; index < width; index += 1) {
-    const currentPart = currentParts[index] ?? 0
-    const targetPart = targetParts[index] ?? 0
+  for (let index = 0; index < 3; index += 1) {
+    const currentPart = currentSemver.core[index] ?? 0
+    const targetPart = targetSemver.core[index] ?? 0
 
     if (currentPart > targetPart)
       return 1
@@ -197,7 +200,7 @@ function compareVersions(current: string, target: string): number {
       return -1
   }
 
-  return 0
+  return comparePrerelease(currentSemver.prerelease, targetSemver.prerelease)
 }
 
 function isUnderAnyDir(candidate: string, dirs?: string[]): boolean {
@@ -219,10 +222,64 @@ function normalizePath(value?: string): string {
   return value.replaceAll('\\', '/').replace(/\/+/g, '/').replace(/\/$/, '')
 }
 
-function versionParts(version: string): number[] {
-  return version
-    .replace(/^v/, '')
-    .split(/[.-]/)
-    .map(part => Number.parseInt(part, 10))
-    .map(part => Number.isFinite(part) ? part : 0)
+function comparePrerelease(current: string[], target: string[]): number {
+  if (current.length === 0 && target.length === 0)
+    return 0
+  if (current.length === 0)
+    return 1
+  if (target.length === 0)
+    return -1
+
+  const width = Math.max(current.length, target.length)
+  for (let index = 0; index < width; index += 1) {
+    const currentPart = current[index]
+    const targetPart = target[index]
+
+    if (currentPart === undefined)
+      return -1
+    if (targetPart === undefined)
+      return 1
+
+    const currentNumber = parseNumericIdentifier(currentPart)
+    const targetNumber = parseNumericIdentifier(targetPart)
+    if (currentNumber !== undefined && targetNumber !== undefined) {
+      if (currentNumber > targetNumber)
+        return 1
+      if (currentNumber < targetNumber)
+        return -1
+      continue
+    }
+
+    if (currentNumber !== undefined)
+      return -1
+    if (targetNumber !== undefined)
+      return 1
+    if (currentPart > targetPart)
+      return 1
+    if (currentPart < targetPart)
+      return -1
+  }
+
+  return 0
+}
+
+function parseNumericIdentifier(value: string): number | undefined {
+  if (!/^\d+$/.test(value))
+    return undefined
+
+  return Number.parseInt(value, 10)
+}
+
+function parseSemver(version: string): { core: number[], prerelease: string[] } {
+  const withoutBuild = version.replace(/^v/, '').split('+', 1)[0] ?? ''
+  const [coreVersion, prereleaseVersion] = withoutBuild.split('-', 2)
+
+  return {
+    core: (coreVersion ?? '')
+      .split('.')
+      .slice(0, 3)
+      .map(part => Number.parseInt(part, 10))
+      .map(part => Number.isFinite(part) ? part : 0),
+    prerelease: prereleaseVersion ? prereleaseVersion.split('.') : [],
+  }
 }

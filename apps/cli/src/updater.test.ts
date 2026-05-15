@@ -32,6 +32,17 @@ describe('CLI updater core', () => {
     })
   })
 
+  it('rejects unsupported runtime update channels', () => {
+    expect(() => parseUpdateCommandOptions('update', { channel: 'canary' as any })).toThrow('unsupported update channel: canary')
+  })
+
+  it('lets pre force preview even when stable channel is provided', () => {
+    expect(parseUpdateCommandOptions('update', { channel: 'stable', pre: true })).toMatchObject({
+      channel: 'preview',
+      prerelease: true,
+    })
+  })
+
   it('detects source checkouts and refuses self modification', () => {
     expect(detectInstallSource({
       argv1: '/repo/apps/cli/src/aiworker.ts',
@@ -106,5 +117,51 @@ describe('CLI updater core', () => {
       requiresConfirmation: false,
       status: 'update_available',
     })
+  })
+
+  it('treats prerelease current versions as older than matching stable targets', () => {
+    const plan = buildUpgradePlan({
+      currentVersion: '1.0.0-beta.1',
+      options: parseUpdateCommandOptions('update', { check: true }),
+      source: { canAutoUpgrade: true, kind: 'npm-global', packageManager: 'npm' },
+      target: { source: 'npm', version: '1.0.0' },
+    })
+
+    expect(plan).toMatchObject({
+      actions: [],
+      status: 'update_available',
+    })
+  })
+
+  it('treats stable current versions as newer than matching prerelease targets', () => {
+    const plan = buildUpgradePlan({
+      currentVersion: '1.0.0',
+      options: parseUpdateCommandOptions('update', { check: true }),
+      source: { canAutoUpgrade: true, kind: 'npm-global', packageManager: 'npm' },
+      target: { source: 'npm', version: '1.0.0-beta.1' },
+    })
+
+    expect(plan).toMatchObject({
+      actions: [],
+      status: 'already_current',
+    })
+  })
+
+  it('keeps normal numeric version comparisons intact', () => {
+    const olderPatchPlan = buildUpgradePlan({
+      currentVersion: '1.0.9',
+      options: parseUpdateCommandOptions('update', { check: true }),
+      source: { canAutoUpgrade: true, kind: 'npm-global', packageManager: 'npm' },
+      target: { source: 'npm', version: '1.0.10' },
+    })
+    const newerMinorPlan = buildUpgradePlan({
+      currentVersion: '1.2.0',
+      options: parseUpdateCommandOptions('update', { check: true }),
+      source: { canAutoUpgrade: true, kind: 'npm-global', packageManager: 'npm' },
+      target: { source: 'npm', version: '1.1.9' },
+    })
+
+    expect(olderPatchPlan.status).toBe('update_available')
+    expect(newerMinorPlan.status).toBe('already_current')
   })
 })
