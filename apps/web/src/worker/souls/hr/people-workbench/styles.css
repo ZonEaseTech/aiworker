@@ -440,6 +440,7 @@
 }
 
 .hr-details-card,
+.hr-current-profile-card,
 .hr-guardrail-panel,
 .hr-action-profile-card,
 .hr-tool-section {
@@ -451,6 +452,38 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-subtle);
+}
+
+.hr-current-profile-card {
+  background: var(--bg);
+}
+
+.hr-current-profile-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.hr-current-profile-head strong,
+.hr-current-profile-head small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hr-current-profile-head strong {
+  color: var(--text-strong);
+  font-size: 14px;
+}
+
+.hr-current-profile-head small {
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: 12px;
 }
 
 .hr-source-grid {
@@ -585,6 +618,32 @@
   color: var(--text);
   font-size: 13px;
   line-height: 1.6;
+}
+
+.hr-current-profile-markdown {
+  min-height: 240px;
+}
+
+.hr-proposed-change-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding-top: 2px;
+}
+
+.hr-profile-promote-button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+}
+
+.hr-profile-promote-button svg {
+  flex: 0 0 auto;
 }
 
 .hr-markdown-preview > :first-child {
@@ -861,15 +920,20 @@
   .hr-details-grid {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  .hr-proposed-change-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 @media (max-width: 760px) {
   .hr-header-actions {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr)) auto auto;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .hr-profile-search,
+  .hr-header-actions > .toolbar-search,
   .hr-header-metrics {
     grid-column: 1 / -1;
     width: 100%;
@@ -884,6 +948,25 @@
 
   .hr-header-command {
     width: 100%;
+  }
+
+  .hr-header-actions > .shell-primary-action {
+    min-width: 0;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .hr-header-actions > .shell-primary-action span,
+  .hr-header-command span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .hr-header-icon-group {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
   }
 
   .hr-people-content {

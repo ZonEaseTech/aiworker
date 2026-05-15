@@ -4,7 +4,7 @@ import type { OfficialLegacyMetadataDiscardResult, OfficialSoulAppBootstrapResul
 import type { HostSoulCatalog, SoulAppInstallInput, SoulAppRegistryContext } from '../soul-app/registry'
 import type { SoulAppSecurityReview } from '../soul-app/security-review'
 import type { LocalExecutor } from '../worker/executor'
-import type { LocalWorkerRuntime, LocalWorkerSnapshot } from '../worker/runtime'
+import type { LocalWorkerRuntime, LocalWorkerRuntimeOptions, LocalWorkerSnapshot } from '../worker/runtime'
 
 import path from 'node:path'
 import {
@@ -200,6 +200,7 @@ export class HostRuntime {
         metadata: worker.metadataJson,
       },
       executor: this.options.executor,
+      nativeSkillSource: this.nativeSkillSourceForWorker(worker),
       now: this.options.now,
       workspacesRoot: path.join(this.options.workersRoot, worker.id, 'workspaces'),
     })
@@ -228,6 +229,16 @@ export class HostRuntime {
     return {
       now: this.options.now,
       ...(this.options.registryContext?.() ?? {}),
+    }
+  }
+
+  private nativeSkillSourceForWorker(worker: WorkerRow): LocalWorkerRuntimeOptions['nativeSkillSource'] {
+    const app = getHostedSoulApp(worker.soulId)
+    if (!app || app.status !== 'enabled' || app.sourceKind !== 'manifest-path')
+      return null
+    return {
+      appId: app.appId,
+      sourceRoot: path.dirname(app.sourceRef),
     }
   }
 

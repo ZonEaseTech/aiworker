@@ -25,6 +25,13 @@ export interface SoulArtifactPreviewState {
   loading: boolean
 }
 
+export interface SoulProfilePreviewState {
+  content: string
+  error: string | null
+  loading: boolean
+  workspaceId: string | null
+}
+
 export interface SoulWorkbenchContext {
   artifactPreview: SoulArtifactPreviewState
   artifacts: LocalArtifact[]
@@ -39,9 +46,12 @@ export interface SoulWorkbenchContext {
   onOpenSession: (session: LocalSession) => void
   onOpenSettings: () => void
   onOpenWorkspace: (workspace: LocalWorkspace) => void
+  onPromoteProfileRevision: () => Promise<void> | void
   onRefresh: () => void
   onSubmitSession: (event: FormEvent<HTMLFormElement>) => void
   onTemplateChange: (templateId: string) => void
+  profilePreview: SoulProfilePreviewState
+  profileRevisionSubmitting: boolean
   reviews: LocalReview[]
   selectedArtifact: LocalArtifact | null
   selectedTemplate: CapabilityTemplate

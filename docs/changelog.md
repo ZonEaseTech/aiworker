@@ -1,5 +1,40 @@
 # AIWorker Changelog
 
+## 2026-05-15 02:45 [completed] FEAT-085 / PLAN-323 — HR Profile Ledger and Native Skills
+
+Started the profile-first HR Soul App landing work from the approved
+`docs/superpowers/specs/2026-05-15-hr-profile-ledger-native-skills-design.md`.
+The implementation targets one People Profile per workspace, `README.md` as the
+accepted profile, git-backed profile revisions, app-owned native skill
+projection into engine workspaces, and an HR workbench centered on Current
+Profile Summary with Candidate / Employee / Alumni as first-level profile lists.
+
+Baseline focused gates passed before implementation:
+`packages/core/src/worker/runtime.test.ts`,
+`apps/api/src/modes/worker.local.test.ts`, and
+`apps/web/src/worker/souls/hr/people-workbench/model.test.ts`.
+
+Implementation progress: native Soul App skill projection, profile workspace
+ledger bootstrap, profile revision promotion API, HR native skills, and the
+profile-first Worker Web loop are implemented. Focused HR Web RED/GREEN checks
+now pass through the package-local Vitest runner.
+
+Completed the end-to-end slice:
+
+- Profile workspaces now bootstrap `README.md`, profile-safe folders,
+  `.gitignore`, local git initialization, and repair logic.
+- Source-backed Soul Apps can project static native skills into
+  `.agents/skills` and `.claude/skills`; `aiworker-hr` ships five HR-native
+  skills for profile, evidence, interview, and risk review workflows.
+- The local daemon exposes generic profile read and approved revision promotion
+  endpoints without interpreting HR profile fields.
+- Worker Web now centers HR around Current Profile Summary, keeps Candidate /
+  Employee / Alumni as first-level profile lists, and treats artifact output as
+  Proposed Change with an explicit approval path.
+- Verification passed: focused runtime/API/HR/Web tests, HR app validate/test,
+  root `check`, root `test`, root `build`, `git diff --check`, desktop/mobile
+  Playwright smoke, `crg:update`, and `crg:review`.
+
 ## 2026-05-15 00:31 [completed] REL-033 / PLAN-322 — CLI 0.13.2 patch release
 
 Published `@zonease/aiworker-cli@0.13.2` as a patch release. `0.13.1` was

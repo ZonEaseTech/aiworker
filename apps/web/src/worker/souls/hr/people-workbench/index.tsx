@@ -31,9 +31,12 @@ export function HrPeopleWorkbench({
     onOpenSession,
     onOpenSettings,
     onOpenWorkspace,
+    onPromoteProfileRevision,
     onRefresh,
     onSubmitSession,
     onTemplateChange,
+    profilePreview,
+    profileRevisionSubmitting,
     reviews,
     selectedArtifact,
     selectedTemplate,
@@ -220,8 +223,11 @@ export function HrPeopleWorkbench({
             focusedProfile={focusedProfile}
             labels={labels}
             locale={locale}
+            profilePreview={profilePreview}
+            profileRevisionSubmitting={profileRevisionSubmitting}
             reviewGuardrails={reviewGuardrails}
             timeline={timeline}
+            onPromoteProfileRevision={onPromoteProfileRevision}
           />
 
           {profileToolsVisible

@@ -199,5 +199,9 @@ describe('hr people workbench model', () => {
       ['employee', 1],
       ['alumni', 1],
     ])
+    expect(buildProfileListSections(profiles, labels).map(section => section.label)).toEqual(['Candidates', 'Employees', 'Alumni'])
+    expect(labels.profileBoardTitle).toBe('People Profiles')
+    expect(labels.profileDetailsTitle).toBe('Current Profile Summary')
+    expect(labels.artifactPreviewTitle).toBe('Proposed Change')
   })
 })

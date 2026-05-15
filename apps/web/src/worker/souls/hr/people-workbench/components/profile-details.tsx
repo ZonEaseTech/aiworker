@@ -1,9 +1,9 @@
 import type { LocalArtifact } from '@zonease/aiworker-shared'
-import type { SoulArtifactPreviewState, WorkerLocale } from '../../../types'
+import type { SoulArtifactPreviewState, SoulProfilePreviewState, WorkerLocale } from '../../../types'
 import type { HrWorkbenchCopy } from '../copy'
 import type { PersonProfile, ProfileTimelineItem } from '../types'
 
-import { FileText, ListChecks, NotebookText } from 'lucide-react'
+import { CheckCircle2, FileText, ListChecks, NotebookText } from 'lucide-react'
 import { lazy, Suspense } from 'react'
 import { formatRelativeTime } from '../../../../../features/i18n'
 import { WorkbenchSectionTitle } from '../../../common'
@@ -16,6 +16,9 @@ interface ProfileDetailsProps {
   focusedProfile: PersonProfile | null
   labels: HrWorkbenchCopy
   locale: WorkerLocale
+  onPromoteProfileRevision: () => Promise<void> | void
+  profilePreview: SoulProfilePreviewState
+  profileRevisionSubmitting: boolean
   reviewGuardrails: readonly string[]
   timeline: ProfileTimelineItem[]
 }
@@ -26,10 +29,14 @@ export function HrProfileDetails({
   focusedProfile,
   labels,
   locale,
+  onPromoteProfileRevision,
+  profilePreview,
+  profileRevisionSubmitting,
   reviewGuardrails,
   timeline,
 }: ProfileDetailsProps) {
   const previewMatchesArtifact = Boolean(artifact && artifactPreview.artifactId === artifact.id)
+  const profilePreviewMatchesProfile = Boolean(focusedProfile && profilePreview.workspaceId === focusedProfile.id)
 
   return (
     <section className="hr-profile-details" aria-label={labels.profileDetailsTitle}>
@@ -40,6 +47,27 @@ export function HrProfileDetails({
       />
 
       <div className="hr-profile-details-scroll">
+        <article className="hr-current-profile-card" data-testid="hr-current-profile-summary">
+          <div className="hr-current-profile-head">
+            {focusedProfile
+              ? (
+                  <span className="hr-profile-avatar large" aria-hidden="true">{focusedProfile.initials}</span>
+                )
+              : null}
+            <span>
+              <strong>{focusedProfile?.name ?? labels.profileDetailsTitle}</strong>
+              <small>README.md</small>
+            </span>
+          </div>
+          {renderProfilePreview({
+            empty: labels.currentProfileEmpty,
+            error: labels.currentProfileError,
+            loading: labels.currentProfileLoading,
+            profilePreview,
+            profilePreviewMatchesProfile,
+          })}
+        </article>
+
         <div className="hr-details-grid">
           <article className="hr-details-card">
             <WorkbenchSectionTitle icon={<FileText size={15} />} title={labels.sourcesTitle} detail={labels.sourcesDetail} />
@@ -73,7 +101,7 @@ export function HrProfileDetails({
             </div>
           </article>
 
-          <article className="hr-details-card hr-artifact-preview-card">
+          <article className="hr-details-card hr-artifact-preview-card" data-testid="hr-proposed-change">
             <WorkbenchSectionTitle
               icon={<FileText size={15} />}
               title={labels.artifactPreviewTitle}
@@ -88,6 +116,18 @@ export function HrProfileDetails({
               loading: labels.artifactPreviewLoading,
               previewMatchesArtifact,
             })}
+            <div className="hr-proposed-change-actions">
+              <span className="hr-muted-note">{labels.promoteProfileRevisionHint}</span>
+              <button
+                type="button"
+                className="secondary hr-profile-promote-button"
+                disabled={!artifact || profileRevisionSubmitting}
+                onClick={() => void onPromoteProfileRevision()}
+              >
+                <CheckCircle2 aria-hidden="true" size={14} />
+                <span>{profileRevisionSubmitting ? labels.approvingProfileRevision : labels.approveProfileRevision}</span>
+              </button>
+            </div>
           </article>
         </div>
 
@@ -101,6 +141,37 @@ export function HrProfileDetails({
         </div>
       </div>
     </section>
+  )
+}
+
+function renderProfilePreview({
+  empty,
+  error,
+  loading,
+  profilePreview,
+  profilePreviewMatchesProfile,
+}: {
+  empty: string
+  error: string
+  loading: string
+  profilePreview: SoulProfilePreviewState
+  profilePreviewMatchesProfile: boolean
+}) {
+  if (!profilePreviewMatchesProfile || profilePreview.loading)
+    return <div className="hr-artifact-preview-empty">{loading}</div>
+
+  if (profilePreview.error)
+    return <div className="hr-artifact-preview-empty" role="alert">{`${error} ${profilePreview.error}`}</div>
+
+  return (
+    <Suspense fallback={<div className="hr-markdown-preview hr-current-profile-markdown" data-testid="hr-current-profile-markdown-loading" />}>
+      <MarkdownPreview
+        className="hr-markdown-preview hr-current-profile-markdown"
+        content={profilePreview.content}
+        data-testid="hr-current-profile-markdown"
+        empty={<span>{empty}</span>}
+      />
+    </Suspense>
   )
 }
 

@@ -289,6 +289,70 @@ describe('local daemon API', () => {
     expect(eventsBody.events.length).toBeGreaterThan(0)
   })
 
+  it('promotes an approved artifact into the workspace profile README', async () => {
+    const target = await app()
+    const hrWorker = await createHrWorker(target)
+    const workspaceBody = await (await target.request(`/api/local/workers/${hrWorker.id}/workspaces`, {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Profile API workspace', type: 'people-profile' }),
+      headers: { 'content-type': 'application/json' },
+    })).json() as { workspace: { id: string } }
+    const sessionBody = await (await target.request(`/api/local/workers/${hrWorker.id}/workspaces/${workspaceBody.workspace.id}/sessions`, {
+      method: 'POST',
+      body: JSON.stringify({
+        capabilityTemplateId: HR_CANDIDATE_SCREEN,
+        context: 'Review packet',
+        input: 'Prepare a profile proposal.',
+        title: 'Profile proposal',
+      }),
+      headers: { 'content-type': 'application/json' },
+    })).json() as {
+      artifacts: Array<{ id: string }>
+    }
+
+    const initialProfileRes = await target.request(`/api/local/workspaces/${workspaceBody.workspace.id}/profile`)
+    expect(initialProfileRes.status).toBe(200)
+    expect(await initialProfileRes.text()).toContain('No approved profile revision yet.')
+
+    const promoteRes = await target.request(`/api/local/workspaces/${workspaceBody.workspace.id}/profile-revisions`, {
+      method: 'POST',
+      body: JSON.stringify({
+        artifactId: sessionBody.artifacts[0]!.id,
+        findingsJson: [{ message: 'Approved by HR reviewer.' }],
+        profileMarkdown: '# Approved Profile\n\nEvidence-backed update.\n',
+        risksJson: [],
+        verdict: 'pass',
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(promoteRes.status).toBe(201)
+    const promoteBody = await promoteRes.json() as {
+      profileRevision: {
+        profilePath: string
+        review: { artifactId: string, verdict: string }
+        reviewPath: string
+      }
+    }
+    expect(promoteBody.profileRevision.profilePath).toBe('README.md')
+    expect(promoteBody.profileRevision.review.verdict).toBe('pass')
+    expect(promoteBody.profileRevision.review.artifactId).toBe(sessionBody.artifacts[0]!.id)
+    expect(promoteBody.profileRevision.reviewPath).toMatch(/^reviews\/.+\.md$/)
+
+    const profileRes = await target.request(`/api/local/workspaces/${workspaceBody.workspace.id}/profile`)
+    expect(profileRes.status).toBe(200)
+    expect(await profileRes.text()).toContain('Approved Profile')
+
+    const rejectPromotionRes = await target.request(`/api/local/workspaces/${workspaceBody.workspace.id}/profile-revisions`, {
+      method: 'POST',
+      body: JSON.stringify({
+        artifactId: sessionBody.artifacts[0]!.id,
+        verdict: 'needs_review',
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(rejectPromotionRes.status).toBe(400)
+  })
+
   it('mounts enabled Soul App manifests into app, soul, template, worker, and session surfaces', async () => {
     const target = await app()
     const installRes = await target.request('/api/local/apps/install', {
@@ -1328,6 +1392,8 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
     expect(paths).toContain('/api/local/workers/{workerId}/workspaces')
     expect(paths).toContain('/api/local/workers/{workerId}/workspaces/{workspaceId}/sessions')
     expect(paths).toContain('/api/local/workers/{workerId}/workspaces/{workspaceId}/sessions/stream')
+    expect(paths).toContain('/api/local/workspaces/{workspaceId}/profile')
+    expect(paths).toContain('/api/local/workspaces/{workspaceId}/profile-revisions')
     expect(paths).toContain('/api/local/workers/{workerId}/sessions/{sessionId}/messages')
     expect(paths).toContain('/api/local/settings/engines/rescan')
     expect(paths.some(path => path.includes('/runs'))).toBe(false)

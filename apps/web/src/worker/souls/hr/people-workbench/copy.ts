@@ -14,9 +14,14 @@ export interface HrWorkbenchCopy {
   artifactPreviewLoading: string
   artifactPreviewTitle: string
   artifactTargetLabel: string
+  approveProfileRevision: string
+  approvingProfileRevision: string
   commandDetail: (profileName: string, moment: string) => string
   contextLabel: string
   contextPlaceholder: string
+  currentProfileEmpty: string
+  currentProfileError: string
+  currentProfileLoading: string
   emptyProfileBody: string
   emptyProfileTitle: string
   evidenceConnectors: string
@@ -74,6 +79,7 @@ export interface HrWorkbenchCopy {
   recentSessionsTitle: string
   proposalComposerDetail: string
   proposalComposerTitle: string
+  promoteProfileRevisionHint: string
   proposalOnly: string
   recommended: string
   reviewGuardrails: string[]
@@ -109,18 +115,23 @@ const enHrCopy: HrWorkbenchCopy = {
   actionLabels: {},
   actionComposerEmpty: 'Select a profile',
   actionMeta: (scope, outputKind) => `${scope} / ${outputKind}`,
-  actionComposerDetail: profileName => `Prepare the next reviewable artifact for ${profileName}.`,
-  actionComposerTitle: 'Profile Tools',
+  actionComposerDetail: profileName => `Prepare the next reviewable profile action for ${profileName}.`,
+  actionComposerTitle: 'Profile Actions',
   artifactPatches: 'artifact proposals',
-  artifactPreviewDetail: 'Latest reviewable artifact rendered from the workspace file.',
-  artifactPreviewEmpty: 'No artifact preview yet.',
-  artifactPreviewError: 'Artifact preview is unavailable.',
-  artifactPreviewLoading: 'Loading artifact preview...',
-  artifactPreviewTitle: 'Artifact preview',
+  artifactPreviewDetail: 'Latest reviewable change proposal rendered from the workspace file.',
+  artifactPreviewEmpty: 'No proposed change yet.',
+  artifactPreviewError: 'Proposed change preview is unavailable.',
+  artifactPreviewLoading: 'Loading proposed change...',
+  artifactPreviewTitle: 'Proposed Change',
   artifactTargetLabel: 'Artifact proposal target',
+  approveProfileRevision: 'Approve Profile Revision',
+  approvingProfileRevision: 'Approving Profile Revision',
   commandDetail: (profileName, moment) => `${profileName}: ${moment}. Keep evidence, next step, review, and memory status connected.`,
   contextLabel: 'Context for the next profile proposal',
   contextPlaceholder: 'Describe this person, lifecycle moment, evidence, open questions, or the next HR artifact...',
+  currentProfileEmpty: 'No accepted profile summary yet. Approve a proposed change to update README.md.',
+  currentProfileError: 'Current profile summary is unavailable.',
+  currentProfileLoading: 'Loading current profile summary...',
   emptyProfileBody: 'Create a profile workspace to start connecting evidence, next steps, review, and memory.',
   emptyProfileTitle: 'No people profiles yet',
   evidenceConnectors: 'Evidence connectors',
@@ -175,12 +186,12 @@ const enHrCopy: HrWorkbenchCopy = {
   openSession: sessionTitle => `Open ${sessionTitle} session`,
   openLatestSession: 'Open latest session',
   openProfile: profileName => `Open ${profileName} profile`,
-  profileDetailsDetail: profileName => `${profileName} evidence, timeline, review, and artifact preview.`,
-  profileDetailsEmpty: 'Select a profile to inspect evidence, timeline, review guardrails, and the latest artifact preview.',
-  profileDetailsTitle: 'Profile Details',
+  profileDetailsDetail: profileName => `${profileName} accepted README profile, evidence, proposed changes, and review state.`,
+  profileDetailsEmpty: 'Select a people profile to inspect its accepted README profile and proposed changes.',
+  profileDetailsTitle: 'Current Profile Summary',
   profileBoardDetail: count => `${count} visible profiles`,
-  profileBoardLabel: 'Profile List',
-  profileBoardTitle: 'Profile List',
+  profileBoardLabel: 'People Profiles',
+  profileBoardTitle: 'People Profiles',
   profileListDetail: count => `${count} visible profiles`,
   profileListSearchLabel: 'Search people profiles',
   profileListSearchPlaceholder: 'Search people...',
@@ -188,6 +199,7 @@ const enHrCopy: HrWorkbenchCopy = {
   recentSessionsTitle: 'Recent Sessions',
   proposalComposerDetail: 'Agent output remains a reviewable proposal tied to this profile.',
   proposalComposerTitle: 'Proposal Composer',
+  promoteProfileRevisionHint: 'Review accepts this proposal into README.md and records a git revision.',
   proposalOnly: 'Agent output remains a proposal until review.',
   recommended: 'Recommended',
   reviewGuardrails: [
@@ -216,7 +228,7 @@ const enHrCopy: HrWorkbenchCopy = {
   ],
   sourcesDetail: 'Selected profile inventory',
   sourcesTitle: 'Profile sources',
-  suggestedToolsTitle: 'Suggested Tools',
+  suggestedToolsTitle: 'Suggested Profile Actions',
   status: {
     evidenceMissing: 'needs evidence',
     evidenceReady: 'evidence ready',
@@ -249,18 +261,23 @@ const zhHrCopy: HrWorkbenchCopy = {
   },
   actionComposerEmpty: '选择一个人员档案',
   actionMeta: (scope, outputKind) => `${zhScope(scope)} / ${outputKind}`,
-  actionComposerDetail: profileName => `为 ${profileName} 准备下一份可 review 产物。`,
-  actionComposerTitle: 'Profile Tools',
+  actionComposerDetail: profileName => `为 ${profileName} 准备下一步档案操作。`,
+  actionComposerTitle: '档案操作',
   artifactPatches: '产物提案',
-  artifactPreviewDetail: '从 workspace 文件渲染最近一份可 review 产物。',
-  artifactPreviewEmpty: '还没有可预览的产物。',
-  artifactPreviewError: '产物预览暂不可用。',
-  artifactPreviewLoading: '正在加载产物预览...',
-  artifactPreviewTitle: '产物预览',
+  artifactPreviewDetail: '从 workspace 文件渲染最近一份可 review 的档案变更提案。',
+  artifactPreviewEmpty: '还没有可预览的变更提案。',
+  artifactPreviewError: '变更提案预览暂不可用。',
+  artifactPreviewLoading: '正在加载变更提案...',
+  artifactPreviewTitle: '变更提案',
   artifactTargetLabel: '产物提案目标',
+  approveProfileRevision: '批准档案修订',
+  approvingProfileRevision: '正在批准档案修订',
   commandDetail: (profileName, moment) => `${profileName}：${moment}。证据、下一步、review 和 memory 状态保持在同一个闭环里。`,
   contextLabel: '下一份人员提案上下文',
   contextPlaceholder: '描述这个人、生命周期节点、证据、开放问题，或下一份 HR 产物目标...',
+  currentProfileEmpty: '还没有已接受的档案摘要。批准一份变更提案后会更新 README.md。',
+  currentProfileError: '当前档案摘要暂不可用。',
+  currentProfileLoading: '正在加载当前档案摘要...',
   emptyProfileBody: '创建人员档案工作区后，再把证据、下一步、review 和 memory 串起来。',
   emptyProfileTitle: '还没有人员档案',
   evidenceConnectors: '证据连接器',
@@ -315,12 +332,12 @@ const zhHrCopy: HrWorkbenchCopy = {
   openSession: sessionTitle => `打开 ${sessionTitle} session`,
   openLatestSession: '打开最近 session',
   openProfile: profileName => `打开 ${profileName} 档案`,
-  profileDetailsDetail: profileName => `${profileName} 的证据、时间线、review 和产物预览。`,
-  profileDetailsEmpty: '选择一个人员档案后查看证据、时间线、review 护栏和最近产物预览。',
-  profileDetailsTitle: 'Profile Details',
+  profileDetailsDetail: profileName => `${profileName} 的已接受 README 档案、证据、变更提案和 review 状态。`,
+  profileDetailsEmpty: '选择一个人员档案后查看已接受 README 档案和变更提案。',
+  profileDetailsTitle: '当前档案摘要',
   profileBoardDetail: count => `${count} 个可见档案`,
-  profileBoardLabel: 'Profile List',
-  profileBoardTitle: 'Profile List',
+  profileBoardLabel: '人员档案',
+  profileBoardTitle: '人员档案',
   profileListDetail: count => `${count} 个可见档案`,
   profileListSearchLabel: '搜索人员档案',
   profileListSearchPlaceholder: '搜索人员...',
@@ -328,6 +345,7 @@ const zhHrCopy: HrWorkbenchCopy = {
   recentSessionsTitle: 'Recent Sessions',
   proposalComposerDetail: 'Agent 输出只作为绑定此档案的可 review 提案。',
   proposalComposerTitle: '产物提案',
+  promoteProfileRevisionHint: 'Review 通过后会把这份提案写入 README.md，并记录 git 修订。',
   proposalOnly: 'Agent 输出在 review 前都只是提案。',
   recommended: '建议',
   reviewGuardrails: [
@@ -356,7 +374,7 @@ const zhHrCopy: HrWorkbenchCopy = {
   ],
   sourcesDetail: '所选人员证据库存',
   sourcesTitle: '档案来源',
-  suggestedToolsTitle: 'Suggested Tools',
+  suggestedToolsTitle: '建议档案操作',
   status: {
     evidenceMissing: '需要证据',
     evidenceReady: '证据就绪',
