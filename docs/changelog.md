@@ -1,5 +1,13 @@
 # AIWorker Changelog
 
+## 2026-05-15 15:44 [in_progress] BUG-121 / PLAN-329 — CLI updater global package source detection
+
+Started a patch release fix for `aiworker upgrade` reporting `source_unknown`
+from package-manager installs. The root cause is that npm/Bun global shims launch
+the package's `aiworker-bun.js` bundle, while the detector only recognized the
+global bin shim path. Local regression tests, bundle, dist smoke and release
+gates now pass for the `0.15.2` patch candidate.
+
 ## 2026-05-15 14:08 [completed] REL-036 / PLAN-327 — CLI 0.15.1 patch release
 
 Published `@zonease/aiworker-cli@0.15.1` as a patch release for the post-0.15.0
