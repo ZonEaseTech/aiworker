@@ -428,3 +428,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REL-033 发布 aiworker CLI 0.13.2**](REL-033.md) `P1`
 - [x] [**FEAT-085 HR Profile Ledger and Native Skills**](FEAT-085.md) `P0`
 - [x] [**REL-034 发布 aiworker CLI 0.14.0**](REL-034.md) `P1`
+- [ ] [**FEAT-086 CLI self-updater**](FEAT-086.md) `P1`

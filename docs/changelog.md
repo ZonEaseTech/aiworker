@@ -1,5 +1,11 @@
 # AIWorker Changelog
 
+## 2026-05-15 [in_progress] FEAT-086 / PLAN-325 — CLI self-updater
+
+Started the top-level `aiworker update` / `aiworker upgrade` self-updater slice
+from the approved Superpowers design. The scope is the AIWorker CLI/Host
+distribution and Host metadata convergence, not worker domain data migration.
+
 ## 2026-05-15 10:14 [completed] REL-034 / PLAN-324 — CLI 0.14.0 minor release
 
 Published `@zonease/aiworker-cli@0.14.0` as a minor release after merging PR #3
