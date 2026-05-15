@@ -1,12 +1,27 @@
 # AIWorker Changelog
 
-## 2026-05-15 13:57 [progress] REL-036 / PLAN-327 — CLI 0.15.1 patch release
+## 2026-05-15 14:08 [completed] REL-036 / PLAN-327 — CLI 0.15.1 patch release
 
-Started `@zonease/aiworker-cli@0.15.1` as a patch release for the post-0.15.0
-Worker Web shell header action status fix. Baseline checks confirm npm latest is
-`0.15.0`, GitHub Release `v0.15.0` exists with tarball/checksum assets, and the
-remote `v0.15.1` tag is unused. Local release gates and post-publish validation
-are in progress.
+Published `@zonease/aiworker-cli@0.15.1` as a patch release for the post-0.15.0
+Worker Web shell header action status fix. The release carries the
+`WorkerStudio` success-status suppression plus a CI-stable regression test that
+waits for the Soul App action dialog before asserting that no success status row
+is rendered.
+
+- Local release gates passed: `bun run check`, `bun run test`, `bun run build`,
+  `git diff --check`, dist version checks, npm pack dry-run,
+  `smoke:dist-release`, `bun run crg:update` and `bun run crg:review`.
+- First tag-triggered workflow `25903035166` failed in Test before npm publish;
+  the root cause was a test-only async dialog race. The remote `v0.15.1` tag was
+  rebuilt after fixing the test and before any package or GitHub Release was
+  published.
+- Release workflow `25903157643` completed successfully and published npm plus
+  four GitHub Release binary tarballs with four matching `.sha256` assets.
+- npm latest now resolves to `0.15.1`; `bunx @zonease/aiworker-cli@0.15.1
+  --version` reports `aiworker/0.15.1 darwin-arm64 node-v24.3.0`.
+- Published-package smoke verified the Host Web/API, runtimeVersion `0.15.1`,
+  official HR/QA Soul App bootstrap, app/soul listing and HR person-profile
+  template discovery.
 
 ## 2026-05-15 13:50 [completed] REL-035 / PLAN-326 — CLI 0.15.0 minor release
 

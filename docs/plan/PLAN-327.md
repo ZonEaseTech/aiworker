@@ -1,10 +1,10 @@
 # PLAN-327 CLI 0.15.1 patch release
 
-- **status**: in_progress
+- **status**: completed
 - **owner**: codex
 - **createdAt**: 2026-05-15 13:57
 - **approvedAt**: 2026-05-15 13:57
-- **completedAt**:
+- **completedAt**: 2026-05-15 14:08
 - **relatedTask**: REL-036
 
 ## Current State
@@ -103,6 +103,10 @@ the already merged source fix and the version bump.
   npm publish 与 GitHub Release asset upload 均未执行。根因是 WorkerStudio
   header action 回归测试对异步 dialog 打开路径使用同步 `getByRole`，CI 慢路径下
   触发竞态；修复为等待 `findByRole('dialog')`。
+- 2026-05-15 14:08：`main` 与重建后的 annotated tag `v0.15.1` 推送成功；
+  release workflow `25903157643` 成功发布 npm package 并上传 GitHub Release
+  assets。发布后验证确认 npm latest、`bunx` 显式版本、GitHub Release asset
+  set 与 published-package smoke 均通过。
 
 ## Verification
 
@@ -131,3 +135,19 @@ the already merged source fix and the version bump.
 - `bun run crg:update` passed after the WorkerStudio test race fix.
 - `bun run crg:review` passed after the WorkerStudio test race fix with risk
   score `0.30`.
+- `git push origin main` pushed release follow-up commit `424018c7`.
+- Remote tag `v0.15.1` was deleted and recreated after the first workflow failed
+  before publish; the final tag points at `424018c7`.
+- `gh run watch 25903157643 --exit-status` passed; release job completed in
+  1m37s.
+- `npm view @zonease/aiworker-cli version dist-tags --json` reported latest
+  `0.15.1`.
+- `bunx @zonease/aiworker-cli@0.15.1 --version` reported
+  `aiworker/0.15.1 darwin-arm64 node-v24.3.0`.
+- `gh release view v0.15.1 --repo ZonEaseTech/aiworker --json
+  tagName,isDraft,isPrerelease,assets,url,publishedAt,targetCommitish` reported
+  a non-draft, non-prerelease release with four platform tarballs and four
+  `.sha256` checksum assets.
+- Published-package smoke passed using `bunx @zonease/aiworker-cli@0.15.1`:
+  daemon health, `/api/local/info`, Host Web HTML/assets, `app bootstrap
+  official`, `app list`, `soul list` and HR template discovery all succeeded.

@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-15 (REL-036 in progress)
+> Updated: 2026-05-15 (REL-036 completed)
 
 ## Usage
 
@@ -430,4 +430,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REL-034 发布 aiworker CLI 0.14.0**](REL-034.md) `P1`
 - [x] [**FEAT-086 CLI self-updater**](FEAT-086.md) `P1`
 - [x] [**REL-035 发布 aiworker CLI 0.15.0**](REL-035.md) `P1`
-- [-] [**REL-036 发布 aiworker CLI 0.15.1**](REL-036.md) `P1`
+- [x] [**REL-036 发布 aiworker CLI 0.15.1**](REL-036.md) `P1`
