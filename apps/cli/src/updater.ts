@@ -241,7 +241,7 @@ export async function resolveReleaseTarget(input: ResolveReleaseTargetInput): Pr
   const version = response['dist-tags']?.[tag]
 
   if (!version)
-    throw new Error(`npm registry is missing ${tag} dist-tag for ${packageName}`)
+    throw new Error(`npm dist-tag not found: ${tag}`)
 
   return {
     checksumUrl: null,

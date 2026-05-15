@@ -230,6 +230,35 @@ describe('CLI updater core', () => {
     })
   })
 
+  it('resolves explicit targets without fetching registry metadata', async () => {
+    const target = await resolveReleaseTarget({
+      fetch: async () => {
+        throw new Error('fetchJson should not be called for explicit targets')
+      },
+      options: parseUpdateCommandOptions('update', { target: '0.14.9' }),
+      source: { canAutoUpgrade: true, kind: 'npm-global', packageManager: 'npm' },
+    })
+
+    expect(target).toEqual({
+      checksumUrl: null,
+      downloadUrl: null,
+      isPrerelease: false,
+      source: 'npm',
+      version: '0.14.9',
+    })
+  })
+
+  it('rejects npm targets when the selected dist-tag is missing', async () => {
+    await expect(resolveReleaseTarget({
+      fetch: async () => jsonResponse({
+        'dist-tags': {},
+        versions: {},
+      }),
+      options: parseUpdateCommandOptions('update', {}),
+      source: { canAutoUpgrade: true, kind: 'npm-global', packageManager: 'npm' },
+    })).rejects.toThrow('npm dist-tag not found: latest')
+  })
+
   it('resolves GitHub tarball releases to platform asset and checksum URLs', async () => {
     const target = await resolveReleaseTarget({
       fetch: async url => jsonResponse({
@@ -249,6 +278,28 @@ describe('CLI updater core', () => {
     expect(target).toEqual({
       checksumUrl: 'https://downloads.example/aiworker-darwin-arm64.tar.gz.sha256',
       downloadUrl: 'https://downloads.example/aiworker-darwin-arm64.tar.gz',
+      isPrerelease: false,
+      source: 'github',
+      version: '1.2.3',
+    })
+  })
+
+  it('keeps missing GitHub tarball asset URLs nullable', async () => {
+    const target = await resolveReleaseTarget({
+      fetch: async () => jsonResponse({
+        assets: [
+          { browser_download_url: 'https://downloads.example/aiworker-linux-x64.tar.gz', name: 'aiworker-linux-x64.tar.gz' },
+        ],
+        tag_name: 'v1.2.3',
+      }),
+      options: parseUpdateCommandOptions('update', {}),
+      platformAssetName: () => 'aiworker-darwin-arm64.tar.gz',
+      source: { canAutoUpgrade: true, kind: 'github-tarball' },
+    })
+
+    expect(target).toEqual({
+      checksumUrl: null,
+      downloadUrl: null,
       isPrerelease: false,
       source: 'github',
       version: '1.2.3',
@@ -292,6 +343,89 @@ describe('CLI updater core', () => {
 
     expect(result).toEqual({ completedActions: [], status: 'dry_run' })
     expect(calls).toEqual([])
+  })
+
+  it('skips execution for non-update plans without actions', async () => {
+    const calls: string[] = []
+    const result = await executeUpgradePlan({
+      convergeHost: async () => {
+        calls.push('convergeHost')
+      },
+      downloadAndReplace: async () => {
+        calls.push('downloadAndReplace')
+      },
+      plan: {
+        actions: [],
+        currentVersion: '1.2.3',
+        mode: 'apply',
+        requiresConfirmation: false,
+        source: { canAutoUpgrade: true, kind: 'npm-global', packageManager: 'npm' },
+        status: 'already_current',
+        target: { checksumUrl: null, downloadUrl: null, source: 'npm', version: '1.2.3' },
+        targetVersion: '1.2.3',
+      },
+      restartDaemon: async () => {
+        calls.push('restartDaemon')
+      },
+      runCommand: async () => {
+        calls.push('runCommand')
+      },
+    })
+
+    expect(result).toEqual({ completedActions: [], status: 'skipped' })
+    expect(calls).toEqual([])
+  })
+
+  it('executes upgrade actions in order and collects completed action names', async () => {
+    const calls: string[] = []
+    const result = await executeUpgradePlan({
+      convergeHost: async () => {
+        calls.push('host-convergence')
+      },
+      downloadAndReplace: async () => {
+        calls.push('github-tarball')
+      },
+      plan: {
+        actions: [
+          {
+            args: ['install', '-g', '@zonease/aiworker-cli@1.2.3'],
+            command: 'npm',
+            kind: 'package-manager',
+          },
+          {
+            checksumUrl: 'https://downloads.example/aiworker-darwin-arm64.tar.gz.sha256',
+            downloadUrl: 'https://downloads.example/aiworker-darwin-arm64.tar.gz',
+            kind: 'github-tarball',
+          },
+          { kind: 'host-convergence' },
+          { kind: 'daemon-restart' },
+        ],
+        currentVersion: '1.2.2',
+        mode: 'apply',
+        requiresConfirmation: false,
+        source: { canAutoUpgrade: true, kind: 'github-tarball' },
+        status: 'update_available',
+        target: {
+          checksumUrl: 'https://downloads.example/aiworker-darwin-arm64.tar.gz.sha256',
+          downloadUrl: 'https://downloads.example/aiworker-darwin-arm64.tar.gz',
+          source: 'github',
+          version: '1.2.3',
+        },
+        targetVersion: '1.2.3',
+      },
+      restartDaemon: async () => {
+        calls.push('daemon-restart')
+      },
+      runCommand: async () => {
+        calls.push('package-manager')
+      },
+    })
+
+    expect(result).toEqual({
+      completedActions: ['package-manager', 'github-tarball', 'host-convergence', 'daemon-restart'],
+      status: 'completed',
+    })
+    expect(calls).toEqual(['package-manager', 'github-tarball', 'host-convergence', 'daemon-restart'])
   })
 })
 
