@@ -179,10 +179,9 @@ export function WorkerStudio() {
   const [reviewSubmitting, setReviewSubmitting] = useState(false)
   const [profileRevisionSubmitting, setProfileRevisionSubmitting] = useState(false)
   const [lessonBusyId, setLessonBusyId] = useState<string | null>(null)
-  const [shellActionState, setShellActionState] = useState<{ busyActionId: string | null, error: string | null, message: string | null }>({
+  const [shellActionState, setShellActionState] = useState<{ busyActionId: string | null, error: string | null }>({
     busyActionId: null,
     error: null,
-    message: null,
   })
   const [shellSearchState, dispatchShellSearch] = useReducer(shellSearchReducer, {
     error: null,
@@ -481,7 +480,7 @@ export function WorkerStudio() {
   async function runShellAction(action: LocalSoulAppShellAction) {
     if (!selectedSoulApp || shellActionState.busyActionId)
       return null
-    setShellActionState({ busyActionId: action.id, error: null, message: null })
+    setShellActionState({ busyActionId: action.id, error: null })
     try {
       const response = await invokeSoulAppAction(selectedSoulApp.appId, action.id, {
         source: 'worker-shell',
@@ -493,7 +492,6 @@ export function WorkerStudio() {
       setShellActionState({
         busyActionId: null,
         error: response.result.ok ? null : response.result.message ?? 'Soul App action failed.',
-        message: response.result.message ?? null,
       })
       if (response.result.refresh)
         await refresh()
@@ -503,7 +501,6 @@ export function WorkerStudio() {
       setShellActionState({
         busyActionId: null,
         error: error instanceof Error ? error.message : String(error),
-        message: null,
       })
       return null
     }
@@ -837,10 +834,10 @@ export function WorkerStudio() {
       : null
   }
 
-  const shellStatus = shellActionState.message || shellActionState.error
+  const shellStatus = shellActionState.error
     ? (
-        <p className={shellActionState.error ? 'shell-action-status error' : 'shell-action-status'} role={shellActionState.error ? 'alert' : 'status'}>
-          {shellActionState.error ?? shellActionState.message}
+        <p className="shell-action-status error" role="alert">
+          {shellActionState.error}
         </p>
       )
     : null

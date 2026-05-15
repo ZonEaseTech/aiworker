@@ -1205,9 +1205,10 @@ describe('worker studio', () => {
     })
     expect(actionBody.input).not.toHaveProperty('workerId')
     expect(actionBody.input).not.toHaveProperty('workspaceId')
-    expect(await screen.findByText('People profile draft created.')).toBeTruthy()
     const createWorkspaceDialog = screen.getByRole('dialog', { name: 'Create workspace' })
     expect(createWorkspaceDialog).toBeTruthy()
+    expect(screen.queryByText('People profile draft created.')).toBeNull()
+    expect(document.querySelector('.shell-action-status')).toBeNull()
     fireEvent.click(within(createWorkspaceDialog).getAllByRole('button', { name: 'Close dialog' })[0]!)
 
     fireEvent.change(screen.getByPlaceholderText('Search people profiles'), { target: { value: 'ada' } })
