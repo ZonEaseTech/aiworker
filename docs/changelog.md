@@ -1,9 +1,9 @@
 # AIWorker Changelog
 
-## 2026-05-15 10:07 [progress] REL-034 / PLAN-324 — CLI 0.14.0 minor release
+## 2026-05-15 10:14 [completed] REL-034 / PLAN-324 — CLI 0.14.0 minor release
 
-Started the `@zonease/aiworker-cli@0.14.0` minor release after merging PR #3
-into `main`. This release carries the HR profile-first workspace loop, profile
+Published `@zonease/aiworker-cli@0.14.0` as a minor release after merging PR #3
+into `main`. The release carries the HR profile-first workspace loop, profile
 ledger, native Soul App skill projection, profile revision API, and HR-native
 skills into the published CLI package.
 
@@ -16,6 +16,23 @@ skills into the published CLI package.
 - Pack preview reports `@zonease/aiworker-cli@0.14.0` with 119 files and the
   expected HR native skills, Worker Web static, worker migrations and official
   HR/QA app runtime resources.
+- Release prep commit `97d127ad chore(release): 准备 CLI 0.14.0` and annotated
+  tag `v0.14.0` were pushed to origin.
+- GitHub Actions release workflow `25896450431` completed successfully and
+  published npm plus four GitHub Release binary tarballs; main lint workflow
+  `25896448657` also passed.
+- npm latest is `0.14.0`; explicit `bunx @zonease/aiworker-cli@0.14.0
+  --version` reports `aiworker/0.14.0 darwin-arm64 node-v24.3.0`.
+- GitHub Release `https://github.com/ZonEaseTech/aiworker/releases/tag/v0.14.0`
+  is non-draft / non-prerelease and includes the darwin-arm64, darwin-x64,
+  linux-arm64 and linux-x64 tarballs.
+- Published-package smoke passed from
+  `/private/tmp/aiworker-release-0.14.0-published-smoke-ihaCX6`, covering
+  `/health`, runtimeVersion `0.14.0`, Host Web static serving, official app
+  bootstrap, HR template discovery, profile `README.md`, local git init, and 5
+  HR native skill projections.
+- Residual workflow note: `softprops/action-gh-release@v2` still emits the
+  existing Node.js 20 deprecation annotation; it did not affect this release.
 
 ## 2026-05-15 02:45 [completed] FEAT-085 / PLAN-323 — HR Profile Ledger and Native Skills
 

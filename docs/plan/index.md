@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-15 (PLAN-324 in progress)
+> Updated: 2026-05-15 (PLAN-324 completed)
 
 ## Usage
 
@@ -352,4 +352,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-321 Soul App Web Storage discipline**](PLAN-321.md) `2026-05-14`
 - [x] [**PLAN-322 CLI 0.13.2 patch release**](PLAN-322.md) `2026-05-15`
 - [x] [**PLAN-323 HR Profile Ledger and Native Skills**](PLAN-323.md) `2026-05-15`
-- [-] [**PLAN-324 CLI 0.14.0 minor release**](PLAN-324.md) `2026-05-15`
+- [x] [**PLAN-324 CLI 0.14.0 minor release**](PLAN-324.md) `2026-05-15`

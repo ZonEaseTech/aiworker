@@ -1,10 +1,10 @@
 # PLAN-324 CLI 0.14.0 minor release
 
-- **status**: approved
+- **status**: completed
 - **owner**: codex
 - **createdAt**: 2026-05-15 10:07
 - **approvedAt**: 2026-05-15 10:07
-- **completedAt**:
+- **completedAt**: 2026-05-15 10:14
 - **relatedTask**: REL-034
 
 ## Current State
@@ -98,6 +98,9 @@ the already merged source changes and the version bump.
 - 2026-05-15 10:09：本地 release gates 已通过到 source/build/dist/pack/smoke
   与 code-review-graph。下一步提交 release prep、推送 `main` 并创建 annotated
   tag `v0.14.0`。
+- 2026-05-15 10:14：`@zonease/aiworker-cli@0.14.0` 已发布并完成
+  post-release verification。release workflow、main lint workflow、npm latest、
+  explicit `bunx`、GitHub Release assets 与 published-package smoke 均通过。
 
 ## Verification
 
@@ -114,11 +117,33 @@ the already merged source changes and the version bump.
 - Passed: `bun run --filter '@zonease/aiworker-cli' smoke:dist-release`
 - Passed: `bun run crg:update`
 - Passed: `bun run crg:review` with 0 affected flows and 0 test gaps.
+- Passed: GitHub Actions release workflow `25896450431` for `v0.14.0`
+- Passed: main lint workflow `25896448657`
+- Passed: `npm view @zonease/aiworker-cli version` returned `0.14.0`
+- Passed: `bunx @zonease/aiworker-cli@0.14.0 --version` returned
+  `aiworker/0.14.0 darwin-arm64 node-v24.3.0`
+- Passed: `gh release view v0.14.0 --repo ZonEaseTech/aiworker --json
+  tagName,isDraft,isPrerelease,assets,url`
+- Passed: published-package smoke report at
+  `/private/tmp/aiworker-release-0.14.0-published-smoke-ihaCX6/report.json`
 
 ## Result
 
-Pending.
+Completed on 2026-05-15.
+
+- Published `@zonease/aiworker-cli@0.14.0` through annotated tag `v0.14.0`.
+- Local source/build gates, dist package checks, npm pack dry-run,
+  `smoke:dist-release` and code-review-graph passed before tagging.
+- GitHub Actions release run `25896450431` completed successfully and published
+  npm plus four GitHub Release binary tarballs.
+- npm latest is `0.14.0`; explicit `bunx @zonease/aiworker-cli@0.14.0
+  --version` reports `aiworker/0.14.0`.
+- Published-package smoke passed for Host Web/API, runtime version, official app
+  bootstrap, HR template discovery, HR profile workspace `README.md`, local git
+  initialization, and 5 native HR skill projections.
 
 ## Residual Risk
 
-Pending post-release verification.
+- `softprops/action-gh-release@v2` still emits the known Node.js 20 deprecation
+  annotation. This did not block the release.
+- Independent SDK/runtime npm publication remains out of scope.
