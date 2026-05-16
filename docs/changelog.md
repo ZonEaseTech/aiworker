@@ -1,5 +1,23 @@
 # AIWorker Changelog
 
+## 2026-05-16 [completed] BUG-124 / PLAN-339 — GitHub Actions Node 24 action runtime migration
+
+Cleared the GitHub Actions Node.js 20 action runtime deprecation annotations
+from the active lint and release workflows.
+
+- Updated `actions/setup-node@v4` to `actions/setup-node@v5` in
+  `.github/workflows/lint.yml` and `.github/workflows/release.yml`.
+- Updated `softprops/action-gh-release@v2` to `softprops/action-gh-release@v3`
+  in `.github/workflows/release.yml`.
+- Preserved `ubuntu-latest`, `NODE_OPTIONS=--max-old-space-size=1024`,
+  `node-version: '24'`, npm publish behavior, binary packaging, and release
+  asset globs.
+- Verification passed: deprecated-reference scan, upgraded-reference scan,
+  `bun run docs:check`, `git diff --check`, `bun run crg:update`, and
+  `bun run crg:review`.
+- Residual: the next tag-triggered release should confirm that the remote
+  release workflow no longer emits the Node.js 20 deprecation annotation.
+
 ## 2026-05-16 [completed] REL-038 / PLAN-338 — CLI 0.16.1 patch release
 
 Published `@zonease/aiworker-cli@0.16.1` as a patch release for the official

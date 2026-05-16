@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-16 (PLAN-338 completed)
+> Updated: 2026-05-16 (PLAN-339 completed)
 
 ## Usage
 
@@ -367,3 +367,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-336 CLI 0.16.0 minor release**](PLAN-336.md) `2026-05-16`
 - [x] [**PLAN-337 Published official Soul App mounted entrypoint repair**](PLAN-337.md) `2026-05-16`
 - [x] [**PLAN-338 CLI 0.16.1 patch release**](PLAN-338.md) `2026-05-16`
+- [x] [**PLAN-339 GitHub Actions Node 24 action runtime migration**](PLAN-339.md) `2026-05-16`

@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-16 (REL-038 completed)
+> Updated: 2026-05-16 (BUG-124 completed)
 
 ## Usage
 
@@ -442,3 +442,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REL-037 发布 aiworker CLI 0.16.0**](REL-037.md) `P1`
 - [x] [**BUG-123 Published official Soul App mounted entrypoints are wrong**](BUG-123.md) `P0`
 - [x] [**REL-038 发布 aiworker CLI 0.16.1**](REL-038.md) `P0`
+- [x] [**BUG-124 Migrate GitHub Actions to Node 24 action runtimes**](BUG-124.md) `P2`
