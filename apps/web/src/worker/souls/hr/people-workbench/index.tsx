@@ -8,6 +8,7 @@ import { useMemo, useState } from 'react'
 import { HrProfileDetails } from './components/profile-details'
 import { HrProfileList } from './components/profile-list'
 import { HrProfileToolsPanel } from './components/profile-tools-panel'
+import { HrProfileToolsRail } from './components/profile-tools-rail'
 import { getHrPeopleWorkbenchCopy } from './copy'
 import {
   buildPersonProfiles,
@@ -55,7 +56,7 @@ export function HrPeopleWorkbench({
   const labels = getHrPeopleWorkbenchCopy(locale)
   const [profileQuery, setProfileQuery] = useState('')
   const [profileListVisible, setProfileListVisible] = useState(true)
-  const [profileToolsVisible, setProfileToolsVisible] = useState(true)
+  const [profileToolsExpanded, setProfileToolsExpanded] = useState(false)
   const [collapsedSectionIds, setCollapsedSectionIds] = useState<ReadonlySet<ProfileListSectionId>>(() => new Set(['employee', 'alumni']))
   const profiles = useMemo(
     () => buildPersonProfiles(workspaces, sessions, artifacts, reviews, lessons, labels, locale),
@@ -95,7 +96,7 @@ export function HrPeopleWorkbench({
       return
     }
     if (action.slot === 'drawer-toggle') {
-      setProfileToolsVisible(visible => !visible)
+      setProfileToolsExpanded(expanded => !expanded)
       return
     }
     if (action.slot === 'settings')
@@ -175,11 +176,11 @@ export function HrPeopleWorkbench({
               {profileListVisible ? <PanelLeftClose aria-hidden="true" size={16} /> : <PanelLeftOpen aria-hidden="true" size={16} />}
             </IconButton>
             <IconButton
-              aria-label={profileToolsVisible ? labels.hideProfileTools : labels.showProfileTools}
-              aria-pressed={profileToolsVisible}
-              onClick={() => setProfileToolsVisible(visible => !visible)}
+              aria-label={profileToolsExpanded ? labels.collapseProfileTools : labels.expandProfileTools}
+              aria-pressed={profileToolsExpanded}
+              onClick={() => setProfileToolsExpanded(expanded => !expanded)}
             >
-              {profileToolsVisible ? <PanelRightClose aria-hidden="true" size={16} /> : <PanelRightOpen aria-hidden="true" size={16} />}
+              {profileToolsExpanded ? <PanelRightClose aria-hidden="true" size={16} /> : <PanelRightOpen aria-hidden="true" size={16} />}
             </IconButton>
             {shellHeader?.actionSlots.has('refresh')
               ? null
@@ -202,7 +203,7 @@ export function HrPeopleWorkbench({
       {shellHeader?.results}
 
       <div className="entry-tab-content workspace-content hr-people-content" data-testid="hr-people-workbench">
-        <div className={`hr-people-layout ${profileListVisible ? '' : 'without-profile-list'} ${profileToolsVisible ? '' : 'without-profile-tools'}`}>
+        <div className={`hr-people-layout ${profileListVisible ? '' : 'without-profile-list'} ${profileToolsExpanded ? '' : 'with-tools-rail'}`}>
           {profileListVisible
             ? (
                 <HrProfileList
@@ -218,22 +219,17 @@ export function HrPeopleWorkbench({
             : null}
 
           <HrProfileDetails
-            artifact={selectedArtifact}
-            artifactPreview={artifactPreview}
             focusedProfile={focusedProfile}
             labels={labels}
-            locale={locale}
             profilePreview={profilePreview}
-            profileRevisionSubmitting={profileRevisionSubmitting}
-            reviewGuardrails={reviewGuardrails}
-            timeline={timeline}
-            onPromoteProfileRevision={onPromoteProfileRevision}
           />
 
-          {profileToolsVisible
+          {profileToolsExpanded
             ? (
                 <HrProfileToolsPanel
                   activeActions={activeActions}
+                  artifact={selectedArtifact}
+                  artifactPreview={artifactPreview}
                   copy={copy}
                   engineReadiness={engineReadiness}
                   focusedProfile={focusedProfile}
@@ -247,11 +243,20 @@ export function HrPeopleWorkbench({
                   onActionSelect={onActionSelect}
                   onContextChange={onContextChange}
                   onOpenSession={onOpenSession}
+                  onPromoteProfileRevision={onPromoteProfileRevision}
                   onSubmitSession={onSubmitSession}
                   onTemplateChange={onTemplateChange}
+                  profileRevisionSubmitting={profileRevisionSubmitting}
+                  reviewGuardrails={reviewGuardrails}
+                  timeline={timeline}
                 />
               )
-            : null}
+            : (
+                <HrProfileToolsRail
+                  labels={labels}
+                  onExpand={() => setProfileToolsExpanded(true)}
+                />
+              )}
         </div>
       </div>
     </>

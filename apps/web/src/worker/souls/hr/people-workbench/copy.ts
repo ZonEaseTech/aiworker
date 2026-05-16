@@ -7,6 +7,7 @@ export interface HrWorkbenchCopy {
   actionMeta: (scope: SoulWorkbenchAction['scope'], outputKind: string) => string
   actionComposerDetail: (profileName: string) => string
   actionComposerTitle: string
+  acceptedExternalSectionsTitle: string
   artifactPatches: string
   artifactPreviewDetail: string
   artifactPreviewEmpty: string
@@ -16,6 +17,8 @@ export interface HrWorkbenchCopy {
   artifactTargetLabel: string
   approveProfileRevision: string
   approvingProfileRevision: string
+  baseSectionEmpty: string
+  collapseProfileTools: string
   commandDetail: (profileName: string, moment: string) => string
   contextLabel: string
   contextPlaceholder: string
@@ -25,6 +28,7 @@ export interface HrWorkbenchCopy {
   emptyProfileBody: string
   emptyProfileTitle: string
   evidenceConnectors: string
+  expandProfileTools: string
   generate: (outputKind: string) => string
   guardrailsDetail: string
   guardrailsTitle: string
@@ -32,6 +36,7 @@ export interface HrWorkbenchCopy {
   hideProfileList: string
   hideProfileTools: string
   humanDecisionTag: string
+  identitySnapshotTitle: string
   latestSession: (status: string) => string
   lifecycleFilterLabel: string
   lifecycleFilters: Record<LifecycleFilter, string>
@@ -65,16 +70,24 @@ export interface HrWorkbenchCopy {
   noRecentSessions: string
   openSession: (sessionTitle: string) => string
   openLatestSession: string
+  openProfileSources: string
+  openProposedChange: string
+  openReviewGuardrails: string
   openProfile: (profileName: string) => string
+  openSessionTools: string
+  otherProfileNotesTitle: string
   profileDetailsDetail: (profileName: string) => string
   profileDetailsEmpty: string
   profileDetailsTitle: string
+  profileReadingRoomDetail: (profileName: string) => string
+  profileReadingRoomFallback: string
   profileBoardDetail: (count: number) => string
   profileBoardLabel: string
   profileBoardTitle: string
   profileListDetail: (count: number) => string
   profileListSearchLabel: string
   profileListSearchPlaceholder: string
+  profileToolsRailLabel: string
   recentSessionsDetail: (count: number) => string
   recentSessionsTitle: string
   proposalComposerDetail: string
@@ -117,6 +130,7 @@ const enHrCopy: HrWorkbenchCopy = {
   actionMeta: (scope, outputKind) => `${scope} / ${outputKind}`,
   actionComposerDetail: profileName => `Prepare the next reviewable profile action for ${profileName}.`,
   actionComposerTitle: 'Profile Actions',
+  acceptedExternalSectionsTitle: 'Accepted External Sections',
   artifactPatches: 'artifact proposals',
   artifactPreviewDetail: 'Latest reviewable change proposal rendered from the workspace file.',
   artifactPreviewEmpty: 'No proposed change yet.',
@@ -126,6 +140,8 @@ const enHrCopy: HrWorkbenchCopy = {
   artifactTargetLabel: 'Artifact proposal target',
   approveProfileRevision: 'Approve Profile Revision',
   approvingProfileRevision: 'Approving Profile Revision',
+  baseSectionEmpty: 'No accepted content in this section yet.',
+  collapseProfileTools: 'Collapse Profile Tools',
   commandDetail: (profileName, moment) => `${profileName}: ${moment}. Keep evidence, next step, review, and memory status connected.`,
   contextLabel: 'Context for the next profile proposal',
   contextPlaceholder: 'Describe this person, lifecycle moment, evidence, open questions, or the next HR artifact...',
@@ -135,6 +151,7 @@ const enHrCopy: HrWorkbenchCopy = {
   emptyProfileBody: 'Create a profile workspace to start connecting evidence, next steps, review, and memory.',
   emptyProfileTitle: 'No people profiles yet',
   evidenceConnectors: 'Evidence connectors',
+  expandProfileTools: 'Expand Profile Tools',
   generate: outputKind => `Generate ${outputKind}`,
   guardrailsDetail: 'Review before memory',
   guardrailsTitle: 'Review guardrails',
@@ -142,6 +159,7 @@ const enHrCopy: HrWorkbenchCopy = {
   hideProfileList: 'Hide Profile List',
   hideProfileTools: 'Hide Profile Tools',
   humanDecisionTag: 'human decision',
+  identitySnapshotTitle: 'Profile baseline',
   latestSession: status => `Latest session ${status}.`,
   lifecycleFilterLabel: 'Lifecycle filters',
   lifecycleFilters: {
@@ -185,16 +203,24 @@ const enHrCopy: HrWorkbenchCopy = {
   noRecentSessions: 'No agent sessions for this profile yet.',
   openSession: sessionTitle => `Open ${sessionTitle} session`,
   openLatestSession: 'Open latest session',
+  openProfileSources: 'Open Profile Sources',
+  openProposedChange: 'Open Proposed Change',
+  openReviewGuardrails: 'Open Review Guardrails',
   openProfile: profileName => `Open ${profileName} profile`,
-  profileDetailsDetail: profileName => `${profileName} accepted README profile, evidence, proposed changes, and review state.`,
-  profileDetailsEmpty: 'Select a people profile to inspect its accepted README profile and proposed changes.',
+  openSessionTools: 'Open Session Tools',
+  otherProfileNotesTitle: 'Other Profile Notes',
+  profileDetailsDetail: profileName => `${profileName} accepted README profile baseline.`,
+  profileDetailsEmpty: 'Select a people profile to inspect its accepted README profile baseline.',
   profileDetailsTitle: 'Current Profile Summary',
+  profileReadingRoomDetail: profileName => `${profileName} accepted README profile baseline.`,
+  profileReadingRoomFallback: 'Showing the accepted README as written.',
   profileBoardDetail: count => `${count} visible profiles`,
   profileBoardLabel: 'People Profiles',
   profileBoardTitle: 'People Profiles',
   profileListDetail: count => `${count} visible profiles`,
   profileListSearchLabel: 'Search people profiles',
   profileListSearchPlaceholder: 'Search people...',
+  profileToolsRailLabel: 'Collapsed Profile Tools',
   recentSessionsDetail: count => `${count} profile sessions`,
   recentSessionsTitle: 'Recent Sessions',
   proposalComposerDetail: 'Agent output remains a reviewable proposal tied to this profile.',
@@ -263,6 +289,7 @@ const zhHrCopy: HrWorkbenchCopy = {
   actionMeta: (scope, outputKind) => `${zhScope(scope)} / ${outputKind}`,
   actionComposerDetail: profileName => `为 ${profileName} 准备下一步档案操作。`,
   actionComposerTitle: '档案操作',
+  acceptedExternalSectionsTitle: '已接受的外部章节',
   artifactPatches: '产物提案',
   artifactPreviewDetail: '从 workspace 文件渲染最近一份可 review 的档案变更提案。',
   artifactPreviewEmpty: '还没有可预览的变更提案。',
@@ -272,6 +299,8 @@ const zhHrCopy: HrWorkbenchCopy = {
   artifactTargetLabel: '产物提案目标',
   approveProfileRevision: '批准档案修订',
   approvingProfileRevision: '正在批准档案修订',
+  baseSectionEmpty: '这个章节还没有已接受内容。',
+  collapseProfileTools: '收起档案工具',
   commandDetail: (profileName, moment) => `${profileName}：${moment}。证据、下一步、review 和 memory 状态保持在同一个闭环里。`,
   contextLabel: '下一份人员提案上下文',
   contextPlaceholder: '描述这个人、生命周期节点、证据、开放问题，或下一份 HR 产物目标...',
@@ -281,6 +310,7 @@ const zhHrCopy: HrWorkbenchCopy = {
   emptyProfileBody: '创建人员档案工作区后，再把证据、下一步、review 和 memory 串起来。',
   emptyProfileTitle: '还没有人员档案',
   evidenceConnectors: '证据连接器',
+  expandProfileTools: '展开档案工具',
   generate: outputKind => `生成 ${outputKind}`,
   guardrailsDetail: '先复核，再沉淀组织记忆',
   guardrailsTitle: 'Review 护栏',
@@ -288,6 +318,7 @@ const zhHrCopy: HrWorkbenchCopy = {
   hideProfileList: '隐藏 Profile List',
   hideProfileTools: '隐藏 Profile Tools',
   humanDecisionTag: '人类决策',
+  identitySnapshotTitle: '档案基线',
   latestSession: status => `最近 session ${status}。`,
   lifecycleFilterLabel: '生命周期筛选',
   lifecycleFilters: {
@@ -331,16 +362,24 @@ const zhHrCopy: HrWorkbenchCopy = {
   noRecentSessions: '这个人员档案还没有 agent session。',
   openSession: sessionTitle => `打开 ${sessionTitle} session`,
   openLatestSession: '打开最近 session',
+  openProfileSources: '打开档案来源',
+  openProposedChange: '打开变更提案',
+  openReviewGuardrails: '打开 Review 护栏',
   openProfile: profileName => `打开 ${profileName} 档案`,
-  profileDetailsDetail: profileName => `${profileName} 的已接受 README 档案、证据、变更提案和 review 状态。`,
-  profileDetailsEmpty: '选择一个人员档案后查看已接受 README 档案和变更提案。',
+  openSessionTools: '打开 Session 工具',
+  otherProfileNotesTitle: '其他档案备注',
+  profileDetailsDetail: profileName => `${profileName} 的已接受 README 档案基线。`,
+  profileDetailsEmpty: '选择一个人员档案后查看已接受 README 档案基线。',
   profileDetailsTitle: '当前档案摘要',
+  profileReadingRoomDetail: profileName => `${profileName} 的已接受 README 档案基线。`,
+  profileReadingRoomFallback: '按原始 README 展示已接受档案。',
   profileBoardDetail: count => `${count} 个可见档案`,
   profileBoardLabel: '人员档案',
   profileBoardTitle: '人员档案',
   profileListDetail: count => `${count} 个可见档案`,
   profileListSearchLabel: '搜索人员档案',
   profileListSearchPlaceholder: '搜索人员...',
+  profileToolsRailLabel: '已收起的档案工具',
   recentSessionsDetail: count => `${count} 个 profile session`,
   recentSessionsTitle: 'Recent Sessions',
   proposalComposerDetail: 'Agent 输出只作为绑定此档案的可 review 提案。',

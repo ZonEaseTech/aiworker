@@ -1,5 +1,27 @@
 # AIWorker Changelog
 
+## 2026-05-17 [completed] FEAT-093 / PLAN-340 — HR Profile Reading Room
+
+Made AIWorker HR profile-first by foregrounding the accepted `README.md` as the
+center Reading Room while keeping sources, proposed changes, guardrails and
+session tools available from the right rail/drawer.
+
+- Added the HR README base-section contract for current profile summary,
+  identity, role context, capabilities, confirmed facts, evidence status, risks,
+  next actions, review state and accepted external sections.
+- Updated the runtime fallback profile README and tests so new profile
+  workspaces seed the same plain Markdown shape without Web-only metadata.
+- Added an HR-local README parser and Reading Room renderer that foregrounds
+  accepted sections and preserves unknown Markdown sections as additional notes.
+- Changed the HR workbench to keep three full-height columns: profile list,
+  Reading Room and a collapsed tools rail by default; expanding the rail opens
+  sources, proposed change preview, review guardrails, recent sessions, actions
+  and composer.
+- Verification passed: focused core runtime test, HR Web parser/integration
+  tests, Web typecheck, Web build/CSS gate, project `bun run check`,
+  `git diff --check`, code-review-graph update/review, and isolated browser
+  smoke for the HR worker layout.
+
 ## 2026-05-16 [completed] BUG-124 / PLAN-339 — GitHub Actions Node 24 action runtime migration
 
 Cleared the GitHub Actions Node.js 20 action runtime deprecation annotations

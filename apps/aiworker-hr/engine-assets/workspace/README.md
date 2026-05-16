@@ -1,17 +1,48 @@
 # {{workspaceName}}
 
-> Canonical accepted HR profile for this Soul workspace. Session outputs remain proposals until review.
+> Accepted People Profile for this HR workspace. Agent outputs remain proposals until review.
 
 ## Current Profile Summary
 
 No approved profile revision yet.
 
-## Evidence And Review
+## Identity And Basics
 
-- Proposed changes live in `artifacts/`.
-- Human review records live in `reviews/`.
-- Evidence descriptors live in `evidence/descriptors/`.
+- Lifecycle: Unknown
+- Target role: Unknown
+- Current stage: Not started
+- Profile confidence: No accepted evidence yet
 
-## Revision Notes
+## Role Context And Responsibilities
 
-Approve a profile revision to update this README.
+No accepted role context yet.
+
+## Capabilities And Stack
+
+- No accepted capabilities yet.
+
+## Confirmed Facts
+
+- No confirmed facts yet.
+
+## Evidence Status
+
+| Signal | Status | Source |
+| --- | --- | --- |
+| Profile baseline | Missing | No approved revision |
+
+## Risks And Gaps
+
+- No accepted risks or gaps yet.
+
+## Next HR Actions
+
+- Approve a profile revision to update this README.
+
+## Review State
+
+No approved profile revision yet.
+
+## Accepted External Sections
+
+- None yet.

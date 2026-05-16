@@ -215,7 +215,13 @@ describe('LocalWorkerRuntime', () => {
     await workerRuntime.init()
     const workspace = await workerRuntime.createWorkspace({ name: 'Ada Lovelace Candidate', type: 'people-profile' })
 
-    await expect(readFile(join(workspace.rootPath, 'README.md'), 'utf8')).resolves.toContain('# Ada Lovelace Candidate')
+    const readme = await readFile(join(workspace.rootPath, 'README.md'), 'utf8')
+    expect(readme).toContain('# Ada Lovelace Candidate')
+    expect(readme).toContain('## Current Profile Summary')
+    expect(readme).toContain('## Identity And Basics')
+    expect(readme).toContain('## Role Context And Responsibilities')
+    expect(readme).toContain('## Capabilities And Stack')
+    expect(readme).toContain('## Accepted External Sections')
     await expect(readFile(join(workspace.rootPath, 'AGENTS.md'), 'utf8')).resolves.toContain('README.md is the accepted profile state')
     await expect(readFile(join(workspace.rootPath, 'AGENTS.md'), 'utf8')).resolves.toContain('AIWorker HR')
     await expect(readFile(join(workspace.rootPath, 'AGENTS.md'), 'utf8')).resolves.toContain('treat that action as an explicit skill selection')
@@ -390,7 +396,10 @@ describe('LocalWorkerRuntime', () => {
 
     expect(receipt.appId).toBe('aiworker-hr')
     expect(receipt.projections.filter(item => item.kind === 'native-skill')).toEqual([])
-    await expect(readFile(join(workspace.rootPath, 'README.md'), 'utf8')).resolves.toContain('No approved profile revision yet.')
+    const readme = await readFile(join(workspace.rootPath, 'README.md'), 'utf8')
+    expect(readme).toContain('## Identity And Basics')
+    expect(readme).toContain('## Review State')
+    expect(readme).toContain('No approved profile revision yet.')
     await expect(readFile(join(workspace.rootPath, 'AGENTS.md'), 'utf8')).resolves.toContain('Available native skills may be empty')
     await expect(readFile(join(workspace.rootPath, 'CLAUDE.md'), 'utf8')).resolves.toBe('@AGENTS.md\n')
   })
@@ -528,7 +537,52 @@ async function writeWorkspaceEngineAssets(appRoot: string): Promise<void> {
   await writeFile(join(appRoot, 'engine-assets', 'workspace', 'README.md'), [
     '# {{workspaceName}}',
     '',
+    '> Accepted People Profile for this workspace. Agent outputs remain proposals until review.',
+    '',
+    '## Current Profile Summary',
+    '',
     'No approved profile revision yet.',
+    '',
+    '## Identity And Basics',
+    '',
+    '- Lifecycle: Unknown',
+    '- Target role: Unknown',
+    '- Current stage: Not started',
+    '- Profile confidence: No accepted evidence yet',
+    '',
+    '## Role Context And Responsibilities',
+    '',
+    'No accepted role context yet.',
+    '',
+    '## Capabilities And Stack',
+    '',
+    '- No accepted capabilities yet.',
+    '',
+    '## Confirmed Facts',
+    '',
+    '- No confirmed facts yet.',
+    '',
+    '## Evidence Status',
+    '',
+    '| Signal | Status | Source |',
+    '| --- | --- | --- |',
+    '| Profile baseline | Missing | No approved revision |',
+    '',
+    '## Risks And Gaps',
+    '',
+    '- No accepted risks or gaps yet.',
+    '',
+    '## Next HR Actions',
+    '',
+    '- Approve a profile revision to update this README.',
+    '',
+    '## Review State',
+    '',
+    'No approved profile revision yet.',
+    '',
+    '## Accepted External Sections',
+    '',
+    '- None yet.',
     '',
   ].join('\n'))
   await writeFile(join(appRoot, 'engine-assets', 'workspace', '.gitignore'), [

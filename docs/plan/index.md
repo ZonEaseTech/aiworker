@@ -368,3 +368,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-337 Published official Soul App mounted entrypoint repair**](PLAN-337.md) `2026-05-16`
 - [x] [**PLAN-338 CLI 0.16.1 patch release**](PLAN-338.md) `2026-05-16`
 - [x] [**PLAN-339 GitHub Actions Node 24 action runtime migration**](PLAN-339.md) `2026-05-16`
+- [x] [**PLAN-340 HR Profile Reading Room**](PLAN-340.md) `2026-05-17`

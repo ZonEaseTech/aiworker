@@ -12,6 +12,11 @@ import {
   orderActionsForProfile,
   resolvePersonLifecycle,
 } from './model'
+import {
+  getHrProfileSection,
+  HR_PROFILE_SECTION_ORDER,
+  parseHrProfileReadme,
+} from './profile-readme'
 
 const labels = getHrPeopleWorkbenchCopy('en')
 const now = '2026-05-12T08:00:00.000Z'
@@ -203,5 +208,49 @@ describe('hr people workbench model', () => {
     expect(labels.profileBoardTitle).toBe('People Profiles')
     expect(labels.profileDetailsTitle).toBe('Current Profile Summary')
     expect(labels.artifactPreviewTitle).toBe('Proposed Change')
+  })
+
+  it('parses HR profile README sections without losing unknown notes', () => {
+    const parsed = parseHrProfileReadme([
+      '# Ada Chen',
+      '',
+      'Intro before sections.',
+      '',
+      '## Current Profile Summary',
+      '',
+      'Accepted profile summary.',
+      '',
+      '## Identity And Basics',
+      '',
+      '- Lifecycle: Candidate',
+      '- Target role: Senior Product Manager',
+      '',
+      '## Capabilities And Stack',
+      '',
+      '- SQL analytics',
+      '',
+      '## Custom Notes',
+      '',
+      'Keep this unknown section.',
+      '',
+    ].join('\n'))
+
+    expect(parsed.title).toBe('Ada Chen')
+    expect(parsed.intro).toContain('Intro before sections.')
+    expect(getHrProfileSection(parsed, 'currentProfileSummary')?.body).toContain('Accepted profile summary.')
+    expect(getHrProfileSection(parsed, 'identityAndBasics')?.body).toContain('Lifecycle: Candidate')
+    expect(getHrProfileSection(parsed, 'capabilitiesAndStack')?.body).toContain('SQL analytics')
+    expect(parsed.unknownSections).toEqual([
+      { body: 'Keep this unknown section.', heading: 'Custom Notes' },
+    ])
+  })
+
+  it('keeps a legacy README renderable when base sections are missing', () => {
+    const parsed = parseHrProfileReadme('# Legacy Profile\n\nAccepted profile summary.\n')
+
+    expect(parsed.title).toBe('Legacy Profile')
+    expect(parsed.intro).toContain('Accepted profile summary.')
+    expect(HR_PROFILE_SECTION_ORDER.map(section => section.id)).toContain('currentProfileSummary')
+    expect(getHrProfileSection(parsed, 'currentProfileSummary')).toBeNull()
   })
 })

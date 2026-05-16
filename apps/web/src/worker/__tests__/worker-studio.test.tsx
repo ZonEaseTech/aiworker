@@ -17,6 +17,13 @@ const HR_OFFBOARDING_SUMMARY = `${HR_SOUL_ID}.offboarding-summary`
 const HR_EVIDENCE_MATRIX = `${HR_SOUL_ID}.evidence-matrix`
 const HR_HIRING_RISK = `${HR_SOUL_ID}.hiring-risk`
 
+function expandProfileTools(): HTMLElement {
+  const expandButton = screen.queryByRole('button', { name: 'Expand Profile Tools' })
+  if (expandButton)
+    fireEvent.click(expandButton)
+  return document.querySelector('.hr-profile-tools-panel') as HTMLElement
+}
+
 const workspace = {
   createdAt: now,
   id: 'workspace-1',
@@ -365,7 +372,54 @@ function resetSettings() {
   currentEvents = [{ ...eventRecord }]
   currentWorkers = workers.map(worker => ({ ...worker }))
   currentProfiles = {
-    'workspace-1': '# Current Profile Summary\n\nAccepted profile summary.\n',
+    'workspace-1': [
+      '# Hiring Workspace',
+      '',
+      '## Current Profile Summary',
+      '',
+      'Accepted profile summary.',
+      '',
+      '## Identity And Basics',
+      '',
+      '- Lifecycle: Candidate',
+      '- Target role: Senior Product Manager',
+      '',
+      '## Role Context And Responsibilities',
+      '',
+      'Own product discovery and marketplace growth execution.',
+      '',
+      '## Capabilities And Stack',
+      '',
+      '- SQL analytics',
+      '- Experiment design',
+      '',
+      '## Confirmed Facts',
+      '',
+      '- Completed recruiter screen.',
+      '',
+      '## Evidence Status',
+      '',
+      '| Signal | Status | Source |',
+      '| --- | --- | --- |',
+      '| Product discovery | Supported | Interview notes |',
+      '',
+      '## Risks And Gaps',
+      '',
+      '- Reference check is missing.',
+      '',
+      '## Next HR Actions',
+      '',
+      '- Request reviewer decision.',
+      '',
+      '## Review State',
+      '',
+      'Accepted profile baseline is reviewed.',
+      '',
+      '## Accepted External Sections',
+      '',
+      '- Interview Brief: reviews/interview-brief.md',
+      '',
+    ].join('\n'),
   }
   currentApps = []
   deferCreatedSessionStream = false
@@ -795,24 +849,31 @@ describe('worker studio', () => {
     expect(screen.getAllByText('HR').length).toBeGreaterThan(0)
     expect(screen.getAllByText('QA').length).toBeGreaterThan(0)
     expect(await screen.findByTestId('hr-people-workbench')).toBeTruthy()
-    expect(screen.getAllByText('Person Profile').length).toBeGreaterThan(0)
     expect(screen.getAllByText('People Workbench').length).toBeGreaterThan(0)
     expect(screen.queryByText('PEOPLE PROFILE WORKBENCH')).toBeNull()
-    expect(screen.getByText('Profile Actions')).toBeTruthy()
+    expect(screen.queryByText('Profile Actions')).toBeNull()
     expect(screen.getByText('People Profiles')).toBeTruthy()
     const hrDetails = document.querySelector('.hr-profile-details') as HTMLElement
     expect(within(hrDetails).getAllByText('Current Profile Summary').length).toBeGreaterThan(0)
     expect(await within(hrDetails).findByText('Accepted profile summary.')).toBeTruthy()
-    expect(within(hrDetails).getByText('Profile sources')).toBeTruthy()
-    expect(within(hrDetails).getByText('Proposed Change')).toBeTruthy()
+    expect(within(hrDetails).getByText('Identity And Basics')).toBeTruthy()
+    expect(within(hrDetails).getByText('Role Context And Responsibilities')).toBeTruthy()
+    expect(within(hrDetails).getByText('Capabilities And Stack')).toBeTruthy()
+    expect(within(hrDetails).queryByText('Profile sources')).toBeNull()
+    expect(within(hrDetails).queryByText('Proposed Change')).toBeNull()
+    expect(within(hrDetails).queryByText('Review guardrails')).toBeNull()
     expect(within(hrDetails).queryByText('View focus')).toBeNull()
     expect(within(hrDetails).queryByText('Active view')).toBeNull()
     expect(within(hrDetails).queryByRole('button', { name: /Candidates/ })).toBeNull()
     expect(screen.getByRole('button', { name: /Candidates/ })).toBeTruthy()
     expect(screen.queryByRole('button', { name: /Needs attention/ })).toBeNull()
     expect(screen.getByRole('button', { name: 'Hide Profile List' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Hide Profile Tools' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Expand Profile Tools' })).toBeTruthy()
+    expect(screen.getByLabelText('Collapsed Profile Tools')).toBeTruthy()
     expect(screen.getByRole('button', { name: /New profile/ })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Open Proposed Change' }))
+    expect(await screen.findByText('Proposed Change')).toBeTruthy()
+    expect(await screen.findByText('Evidence summary.')).toBeTruthy()
     expect(screen.getByRole('button', { name: /Summarize profile/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: /Open Screen candidate session/ })).toBeTruthy()
     expect(screen.queryByText('Capability template (6)')).toBeNull()
@@ -823,7 +884,6 @@ describe('worker studio', () => {
     expect(screen.queryByText(/work order/i)).toBeNull()
     expect(screen.queryByText(/Open Design/i)).toBeNull()
     expect(screen.queryByText(/Nexu/i)).toBeNull()
-    expect(await screen.findByText('Evidence summary.')).toBeTruthy()
   })
 
   it('centers the README profile and promotes a proposed change through review', async () => {
@@ -832,10 +892,11 @@ describe('worker studio', () => {
 
     const hrDetails = await screen.findByLabelText('Current Profile Summary')
     const currentProfile = await within(hrDetails).findByTestId('hr-current-profile-summary')
-    const proposedChange = await within(hrDetails).findByTestId('hr-proposed-change')
+    fireEvent.click(screen.getByRole('button', { name: 'Open Proposed Change' }))
+    const proposedChange = await screen.findByTestId('hr-proposed-change')
 
     expect(within(currentProfile).getByText('Accepted profile summary.')).toBeTruthy()
-    expect(within(proposedChange).getByText('Evidence summary.')).toBeTruthy()
+    expect(await within(proposedChange).findByText('Evidence summary.')).toBeTruthy()
 
     fireEvent.click(within(proposedChange).getByRole('button', { name: 'Approve Profile Revision' }))
 
@@ -854,6 +915,9 @@ describe('worker studio', () => {
     render(<WorkerStudio />)
 
     await screen.findByTestId('hr-people-workbench')
+    expect(screen.queryByText('Artifact evidence')).toBeNull()
+    expect(screen.queryByText('Profile Actions')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Open Profile Sources' }))
     expect(screen.getByText('Artifact evidence')).toBeTruthy()
     expect(screen.getByText('Profile Actions')).toBeTruthy()
 
@@ -863,8 +927,8 @@ describe('worker studio', () => {
       expect(screen.getByText('No profiles in this section.')).toBeTruthy()
     })
     const hrDetails = document.querySelector('.hr-profile-details') as HTMLElement
-    expect(within(hrDetails).getByText('Proposed Change')).toBeTruthy()
-    expect(within(hrDetails).getByText('Artifact evidence').parentElement?.textContent).toContain('1')
+    expect(within(hrDetails).queryByText('Proposed Change')).toBeNull()
+    expect(screen.getByText('Artifact evidence').parentElement?.textContent).toContain('1')
   })
 
   it('toggles HR side panels from the header controls', async () => {
@@ -872,22 +936,24 @@ describe('worker studio', () => {
 
     await screen.findByTestId('hr-people-workbench')
     expect(document.querySelector('.hr-profile-list-panel')).toBeTruthy()
-    expect(document.querySelector('.hr-profile-tools-panel')).toBeTruthy()
+    expect(document.querySelector('.hr-profile-tools-rail')).toBeTruthy()
+    expect(document.querySelector('.hr-profile-tools-panel')).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: 'Hide Profile List' }))
     expect(document.querySelector('.hr-profile-list-panel')).toBeNull()
     expect(document.querySelector('.hr-people-layout')?.classList.contains('without-profile-list')).toBe(true)
     expect(screen.getByRole('button', { name: 'Show Profile List' })).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Hide Profile Tools' }))
-    expect(document.querySelector('.hr-profile-tools-panel')).toBeNull()
-    expect(document.querySelector('.hr-people-layout')?.classList.contains('without-profile-tools')).toBe(true)
-    expect(screen.getByRole('button', { name: 'Show Profile Tools' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Expand Profile Tools' }))
+    expect(document.querySelector('.hr-profile-tools-panel')).toBeTruthy()
+    expect(document.querySelector('.hr-profile-tools-rail')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Collapse Profile Tools' })).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: 'Show Profile List' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Show Profile Tools' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse Profile Tools' }))
     expect(document.querySelector('.hr-profile-list-panel')).toBeTruthy()
-    expect(document.querySelector('.hr-profile-tools-panel')).toBeTruthy()
+    expect(document.querySelector('.hr-profile-tools-rail')).toBeTruthy()
+    expect(document.querySelector('.hr-profile-tools-panel')).toBeNull()
   })
 
   it('treats needs-review records as pending instead of reviewed in the HR profile loop', async () => {
@@ -1217,12 +1283,12 @@ describe('worker studio', () => {
     })
     expect(await screen.findByText('Ada Lovelace')).toBeTruthy()
     expect(screen.getByText('Staff engineer candidate profile')).toBeTruthy()
-    expect(document.querySelector('.hr-people-layout')?.classList.contains('without-profile-tools')).toBe(false)
+    expect(document.querySelector('.hr-people-layout')?.classList.contains('with-tools-rail')).toBe(true)
     fireEvent.click(within(hrHeader).getByRole('button', { name: 'Evidence' }))
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith('/api/local/apps/aiworker-hr/actions/toggle-evidence-drawer', expect.objectContaining({ method: 'POST' }))
     })
-    expect(document.querySelector('.hr-people-layout')?.classList.contains('without-profile-tools')).toBe(true)
+    expect(document.querySelector('.hr-people-layout')?.classList.contains('with-tools-rail')).toBe(false)
     fireEvent.click(within(hrHeader).getByRole('button', { name: 'HR settings' }))
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith('/api/local/apps/aiworker-hr/actions/hr-settings', expect.objectContaining({ method: 'POST' }))
@@ -1484,7 +1550,7 @@ describe('worker studio', () => {
   it('creates a workspace session turn with selected Soul worker and skill metadata', async () => {
     render(<WorkerStudio />)
 
-    await screen.findAllByText('Person Profile')
+    await screen.findByTestId('hr-people-workbench')
     fireEvent.click(screen.getByRole('button', { name: 'New profile' }))
     const dialog = screen.getByRole('dialog', { name: 'Create workspace' })
     fireEvent.change(within(dialog).getByLabelText('Workspace name'), { target: { value: 'New candidate workspace' } })
@@ -1499,6 +1565,7 @@ describe('worker studio', () => {
     })
 
     expect(screen.getByTestId('hr-people-workbench')).toBeTruthy()
+    expandProfileTools()
     const actionList = document.querySelector('.hr-action-list') as HTMLElement
     fireEvent.click(within(actionList).getByRole('button', { name: /Summarize profile/ }))
     expect((screen.getByLabelText('Context for the next profile proposal') as HTMLTextAreaElement).value).toContain('Summarize profile')
@@ -1518,6 +1585,7 @@ describe('worker studio', () => {
     render(<WorkerStudio />)
 
     await screen.findByTestId('hr-people-workbench')
+    expandProfileTools()
     const actionList = document.querySelector('.hr-action-list') as HTMLElement
     fireEvent.click(within(actionList).getByRole('button', { name: /Summarize profile/ }))
     expect((screen.getByLabelText('Context for the next profile proposal') as HTMLTextAreaElement).value).toContain('Target: Hiring Workspace')
@@ -1536,7 +1604,7 @@ describe('worker studio', () => {
     deferCreatedSessionStream = true
     render(<WorkerStudio />)
 
-    await screen.findAllByText('Person Profile')
+    await screen.findByTestId('hr-people-workbench')
     fireEvent.click(screen.getByRole('button', { name: 'New profile' }))
     const dialog = screen.getByRole('dialog', { name: 'Create workspace' })
     fireEvent.change(within(dialog).getByLabelText('Workspace name'), { target: { value: 'New candidate workspace' } })
@@ -1547,6 +1615,7 @@ describe('worker studio', () => {
     })
 
     expect(screen.getByTestId('hr-people-workbench')).toBeTruthy()
+    expandProfileTools()
     fireEvent.change(screen.getByLabelText('Context for the next profile proposal'), { target: { value: 'Role and candidate packet.' } })
     fireEvent.click(screen.getByRole('button', { name: /Generate person-profile/ }))
     window.history.pushState(null, '', '/workers/qa-worker')
@@ -1568,6 +1637,7 @@ describe('worker studio', () => {
     await screen.findByTestId('hr-people-workbench')
     expect(window.location.pathname).toBe('/workers/hr-worker/workspaces/workspace-1')
     expect(screen.getByTestId('hr-people-workbench')).toBeTruthy()
+    expandProfileTools()
     expect(screen.getByText('Profile Actions')).toBeTruthy()
     expect(screen.getByText('People Profiles')).toBeTruthy()
     expect(screen.queryByTestId('new-session-panel')).toBeNull()
@@ -1670,6 +1740,7 @@ describe('worker studio', () => {
     expect(screen.getByRole('button', { name: 'New session' }).classList.contains('icon-button')).toBe(true)
     expect(screen.getByRole('button', { name: 'Create workspace' }).classList.contains('icon-button')).toBe(true)
     expect(screen.getByTestId('hr-people-workbench')).toBeTruthy()
+    expandProfileTools()
     expect(screen.getByText('Profile Actions')).toBeTruthy()
     expect(screen.getByText('People Profiles')).toBeTruthy()
     expect(screen.queryByTestId('new-session-panel')).toBeNull()
@@ -1704,6 +1775,7 @@ describe('worker studio', () => {
       expect(window.location.pathname).toBe('/workers/hr-worker/workspaces/workspace-1')
     })
     expect(screen.getByTestId('hr-people-workbench')).toBeTruthy()
+    expandProfileTools()
     expect(screen.getByText('Profile Actions')).toBeTruthy()
     expect(screen.queryByTestId('new-session-panel')).toBeNull()
   })
