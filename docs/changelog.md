@@ -1,5 +1,33 @@
 # AIWorker Changelog
 
+## 2026-05-16 [completed] REL-038 / PLAN-338 — CLI 0.16.1 patch release
+
+Published `@zonease/aiworker-cli@0.16.1` as a patch release for the official
+Soul App mounted entrypoint repair in `BUG-123 / PLAN-337`.
+
+- Bumped `apps/cli/package.json` to `0.16.1`.
+- Local release gates passed: `bun run check`, `bun run test`, `bun run build`,
+  `git diff --check`, dist version checks, npm pack dry-run,
+  `smoke:dist-release`, `bun run crg:update` and `bun run crg:review`.
+- `npm pack --dry-run --json` reported `@zonease/aiworker-cli@0.16.1` with
+  128 entries, no legacy flat official app runtime files, and all four nested
+  HR/QA mounted/standalone runtime files.
+- Release prep commit `e51d00c5` was pushed to `main`, and annotated tag
+  `v0.16.1` was pushed.
+- Release workflow `25965424624` completed successfully and published npm plus
+  four GitHub Release binary tarballs with four matching `.sha256` assets. Main
+  lint run `25965422858` also passed.
+- npm latest is `0.16.1`; explicit `bunx @zonease/aiworker-cli@0.16.1
+  --version` reports `aiworker/0.16.1 darwin-arm64 node-v24.3.0`.
+- Published-package smoke verified daemon runtimeVersion `0.16.1`, Host
+  Web/API, official HR/QA app bootstrap, app/soul/template listing, HR
+  `create-people-profile` and QA `create-release-gate` mounted actions.
+- Release residual: `0.16.0` remains affected if pinned explicitly; users should
+  upgrade to npm latest `0.16.1`.
+- Release residual: GitHub Actions still reports the existing Node.js 20 action
+  deprecation annotation for `actions/setup-node@v4` and
+  `softprops/action-gh-release@v2`; it did not block this release.
+
 ## 2026-05-16 [completed] BUG-123 / PLAN-337 — Published official Soul App mounted entrypoint repair
 
 Fixed the published official Soul App packaging path that caused HR/QA mounted
@@ -21,8 +49,8 @@ header actions to fail with 502 in the `@zonease/aiworker-cli@0.16.0` package.
   full `check/test/build`, dist version checks, npm pack dry-run with no legacy
   flat official app runtime files, dist release smoke, `git diff --check`,
   `bun run crg:update`, and `bun run crg:review`.
-- Residual: already-published `0.16.0` remains affected until a follow-up patch
-  release ships this source fix.
+- Residual: already-published `0.16.0` remains affected if pinned explicitly;
+  `0.16.1` ships this source fix as npm latest.
 
 ## 2026-05-16 [completed] REL-037 / PLAN-336 — CLI 0.16.0 minor release
 

@@ -1,10 +1,10 @@
 # PLAN-338 CLI 0.16.1 patch release
 
-- **status**: implementing
+- **status**: completed
 - **owner**: codex
 - **createdAt**: 2026-05-16
 - **approvedAt**: 2026-05-16
-- **completedAt**:
+- **completedAt**: 2026-05-16
 - **relatedTask**: REL-038
 
 ## Current State
@@ -81,6 +81,11 @@ beyond the BUG-123 source fix and the version bump.
   确认 package id 为 `@zonease/aiworker-cli@0.16.1`、entryCount 为 128、
   official app release resources 不再包含 legacy flat runtime files，并包含
   HR/QA 四个 nested mounted/standalone runtime files。
+- 2026-05-16：release prep commit `e51d00c5` 推送到 `main`，annotated tag
+  `v0.16.1` 推送成功；release workflow `25965424624` 成功发布 npm package
+  并上传 GitHub Release assets。
+- 2026-05-16：发布后验证确认 npm latest、`bunx` 显式版本、GitHub Release
+  asset set 与 published-package mounted action smoke 均通过。
 
 ## Verification
 
@@ -99,3 +104,15 @@ beyond the BUG-123 source fix and the version bump.
 - `bun run crg:update` passed.
 - `bun run crg:review` exited 0 with risk score `0.45`; static gaps were
   reviewed against focused unit tests and mounted action smoke evidence.
+- `gh run watch 25965424624 --repo ZonEaseTech/aiworker --exit-status` passed.
+- Main lint run `25965422858` completed successfully on `e51d00c5`.
+- `npm view @zonease/aiworker-cli version dist-tags --json` reported `0.16.1`
+  and `latest: 0.16.1`.
+- `bunx @zonease/aiworker-cli@0.16.1 --version` reported
+  `aiworker/0.16.1 darwin-arm64 node-v24.3.0`.
+- `gh release view v0.16.1` reported a non-draft, non-prerelease release with
+  8 uploaded assets: 4 platform tarballs and 4 `.sha256` files.
+- Published-package smoke passed from an isolated `AIWORKER_HOME`: daemon
+  `/health`, `/api/local/info` runtimeVersion `0.16.1`, Host Web static serving,
+  official app bootstrap, app/soul/template listing, HR `create-people-profile`
+  and QA `create-release-gate` mounted actions.
