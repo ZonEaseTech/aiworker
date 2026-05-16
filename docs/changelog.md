@@ -1,22 +1,33 @@
 # AIWorker Changelog
 
-## 2026-05-17 [release] REL-039 / PLAN-341 — CLI 0.17.0 minor release
+## 2026-05-17 [completed] REL-039 / PLAN-341 — CLI 0.17.0 minor release
 
-Started `@zonease/aiworker-cli@0.17.0` as a minor preview release for
+Published `@zonease/aiworker-cli@0.17.0` as a minor preview release for
 `FEAT-093 / PLAN-340`, carrying the HR Profile Reading Room and README
 base-section contract into the packaged CLI.
 
-- Baseline release facts: npm latest is `0.16.1`; local `main` now includes
-  `FEAT-093 / PLAN-340`.
-- Target version: `0.17.0`.
+- Release prep commit `19e2f38d` was pushed to `main`, and annotated tag
+  `v0.17.0` was pushed to GitHub.
 - Local release gates passed: `bun run check`, `bun run test`, `bun run build`,
   `git diff --check`, dist version checks, npm pack dry-run,
   `smoke:dist-release`, `bun run crg:update` and `bun run crg:review`.
 - `npm pack --dry-run --json` reported `@zonease/aiworker-cli@0.17.0` with
   128 entries, including the Worker Web `people-workbench-BHpi7EqO.js` bundle
   and official HR README base-section seed.
-- Remote workflow and published-package verification are still in progress
-  under `REL-039 / PLAN-341`.
+- GitHub Actions release workflow `25967504572` passed and published the npm
+  package plus GitHub Release assets; main lint workflow `25967501296` passed.
+- npm `latest` now resolves to `0.17.0`, and
+  `bunx @zonease/aiworker-cli@0.17.0 --version` reports
+  `aiworker/0.17.0 darwin-arm64 node-v24.3.0`.
+- GitHub Release `v0.17.0` is non-draft/non-prerelease and contains 8 assets:
+  four platform binary tarballs plus matching `.sha256` files.
+- Published-package smoke passed with isolated `AIWORKER_HOME`: Host Web/API
+  served runtimeVersion `0.17.0`, official HR/QA Soul Apps bootstrapped, and
+  HR `create-people-profile` plus QA `create-release-gate` mounted actions
+  returned expected responses.
+- Residual risk: users pinned to `0.16.1` must upgrade or use
+  `@zonease/aiworker-cli@0.17.0` explicitly before seeing the Reading Room in
+  the published CLI.
 
 ## 2026-05-17 [completed] FEAT-093 / PLAN-340 — HR Profile Reading Room
 

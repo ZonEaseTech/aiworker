@@ -1,9 +1,10 @@
 # PLAN-341 CLI 0.17.0 minor release
 
-- **status**: implementing
+- **status**: completed
 - **owner**: codex
 - **createdAt**: 2026-05-17
 - **approvedAt**: 2026-05-17
+- **completedAt**: 2026-05-17
 - **relatedTask**: REL-039
 
 ## Current State
@@ -74,6 +75,11 @@ prep beyond the version bump and release tracking.
   包含 Worker Web `people-workbench-BHpi7EqO.js` bundle、official HR
   workspace README base-section seed，以及 HR/QA nested mounted/standalone
   runtime files。
+- 2026-05-17：release prep commit `19e2f38d` 推送到 `main`，annotated tag
+  `v0.17.0` 推送成功；release workflow `25967504572` 成功发布 npm package
+  并上传 GitHub Release assets。
+- 2026-05-17：发布后验证确认 npm latest、`bunx` 显式版本、GitHub Release
+  asset set 与 published-package smoke 均通过。
 
 ## Verification
 
@@ -90,3 +96,15 @@ prep beyond the version bump and release tracking.
   invoked HR `create-people-profile` plus QA `create-release-gate`.
 - `bun run crg:update` passed.
 - `bun run crg:review` exited 0 with risk score `0.00`.
+- `gh run watch 25967504572 --repo ZonEaseTech/aiworker --exit-status` passed.
+- Main lint run `25967501296` completed successfully on `19e2f38d`.
+- `npm view @zonease/aiworker-cli version dist-tags --json` reported `0.17.0`
+  and `latest: 0.17.0`.
+- `bunx @zonease/aiworker-cli@0.17.0 --version` reported
+  `aiworker/0.17.0 darwin-arm64 node-v24.3.0`.
+- `gh release view v0.17.0` reported a non-draft, non-prerelease release with
+  8 uploaded assets: 4 platform tarballs and 4 `.sha256` files.
+- Published-package smoke passed from an isolated `AIWORKER_HOME`: daemon
+  `/health`, `/api/local/info` runtimeVersion `0.17.0`, Host Web static serving,
+  official app bootstrap, app/soul/template listing, HR `create-people-profile`
+  and QA `create-release-gate` mounted actions.
