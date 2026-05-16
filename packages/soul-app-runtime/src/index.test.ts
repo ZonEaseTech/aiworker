@@ -177,7 +177,7 @@ function demoSoulApp(): SoulAppDefinition {
         description: 'Demo report artifact.',
         id: 'demo-report',
         name: 'Demo Report',
-        schemaRef: './schemas/demo-report.json',
+        schemaRef: './product/artifacts/schemas/demo-report.schema.json',
         version: '1.0.0',
       }],
       capabilities: [{
@@ -186,7 +186,7 @@ function demoSoulApp(): SoulAppDefinition {
         id: 'demo-report',
         name: 'Demo Report',
         outputKind: 'demo-report',
-        promptRef: './capabilities/demo-report/prompt.md',
+        promptRef: './product/workflows/demo-report/prompt.md',
         version: '1.0.0',
         workspaceTypes: ['demo-workspace'],
       }],
@@ -206,8 +206,8 @@ function demoSoulApp(): SoulAppDefinition {
         },
       },
       exports: {
-        runtime: './src/runtime.ts',
-        ui: './src/ui.ts',
+        runtime: './host-adapter/index.ts',
+        ui: './host-adapter/index.ts',
       },
       healthcheck: {
         kind: 'protocol-handler',
@@ -220,12 +220,12 @@ function demoSoulApp(): SoulAppDefinition {
         namespace: 'demo-soul-app',
       },
       modes: {
-        hostMounted: { entry: './src/host-mounted.ts', supported: true },
-        standalone: { entry: './src/standalone.ts', supported: true },
+        hostMounted: { entry: './host-adapter/mounted/host-mounted.ts', supported: true },
+        standalone: { entry: './host-adapter/standalone/standalone.ts', supported: true },
       },
       name: 'Demo Soul App',
       pack: {
-        refs: [{ id: 'demo-pack', ref: './pack', source: 'embedded', version: '1.0.0' }],
+        refs: [{ id: 'demo-pack', ref: './product/profiles/demo-soul-app/SOUL.md', source: 'embedded', version: '1.0.0' }],
       },
       permissions: [
         { action: 'write', kind: 'artifact', reason: 'Create demo artifacts.', target: 'demo-report' },
@@ -251,7 +251,7 @@ function demoSoulApp(): SoulAppDefinition {
         artifactPreviews: [],
         panels: [],
         reviewPanels: [],
-        routes: [{ entry: './src/ui.ts', id: 'demo-home', label: 'Demo', path: '/demo' }],
+        routes: [{ entry: './product/web/routes/demo-home.tsx', id: 'demo-home', label: 'Demo', path: '/demo' }],
         workspaceWidgets: [],
       },
       version: '1.0.0',

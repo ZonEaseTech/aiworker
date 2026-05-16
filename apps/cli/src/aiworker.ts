@@ -852,13 +852,25 @@ async function createAppScaffoldCommand(id: string, opts: { dir?: string } = {})
   writeScaffoldFile(path.join(targetDir, 'package.json'), `${JSON.stringify(createScaffoldPackageJson(appId), null, 2)}\n`)
   writeScaffoldFile(path.join(targetDir, 'tsconfig.json'), `${JSON.stringify(createScaffoldTsconfig(), null, 2)}\n`)
   writeScaffoldFile(path.join(targetDir, 'README.md'), scaffoldReadme(appId))
-  writeScaffoldFile(path.join(targetDir, 'src/index.ts'), scaffoldIndexTs())
-  writeScaffoldFile(path.join(targetDir, 'src/standalone.ts'), scaffoldStandaloneTs())
-  writeScaffoldFile(path.join(targetDir, 'src/host-mounted.ts'), scaffoldHostMountedTs())
-  writeScaffoldFile(path.join(targetDir, 'schemas/brief.schema.json'), briefSchemaText)
-  writeScaffoldFile(path.join(targetDir, 'capabilities/brief/prompt.md'), scaffoldPrompt(appId))
-  writeScaffoldFile(path.join(targetDir, 'review/brief.md'), scaffoldReview(appId))
-  writeScaffoldFile(path.join(targetDir, 'packs', appId, 'SOUL.md'), scaffoldSoulPack(appId))
+  writeScaffoldFile(path.join(targetDir, 'engine-assets/workspace/AGENTS.md'), scaffoldWorkspaceAgents(appId))
+  writeScaffoldFile(path.join(targetDir, 'engine-assets/workspace/CLAUDE.md'), '@AGENTS.md\n')
+  writeScaffoldFile(path.join(targetDir, 'engine-assets/workspace/README.md'), scaffoldWorkspaceReadme(appId))
+  writeScaffoldFile(path.join(targetDir, 'engine-assets/workspace/.gitignore'), scaffoldWorkspaceGitignore())
+  writeScaffoldFile(path.join(targetDir, 'engine-assets/skills/brief/SKILL.md'), scaffoldSkill(appId))
+  writeScaffoldFile(path.join(targetDir, 'host-adapter/index.ts'), scaffoldIndexTs())
+  writeScaffoldFile(path.join(targetDir, 'host-adapter/api.ts'), scaffoldApiTs())
+  writeScaffoldFile(path.join(targetDir, 'host-adapter/standalone/standalone.ts'), scaffoldStandaloneTs())
+  writeScaffoldFile(path.join(targetDir, 'host-adapter/mounted/host-mounted.ts'), scaffoldHostMountedTs())
+  writeScaffoldFile(path.join(targetDir, 'product/artifacts/schemas/brief.schema.json'), briefSchemaText)
+  writeScaffoldFile(path.join(targetDir, 'product/workflows/brief/prompt.md'), scaffoldPrompt(appId))
+  writeScaffoldFile(path.join(targetDir, 'product/workflows/brief/review.md'), scaffoldReview(appId))
+  writeScaffoldFile(path.join(targetDir, 'product/reviews/brief.md'), scaffoldReview(appId))
+  writeScaffoldFile(path.join(targetDir, 'product/profiles', appId, 'SOUL.md'), scaffoldSoulPack(appId))
+  writeScaffoldFile(path.join(targetDir, 'product/web/artifact-previews/brief-preview.tsx'), scaffoldProductWebTs('briefPreview'))
+  writeScaffoldFile(path.join(targetDir, 'product/web/panels/brief-panel.tsx'), scaffoldProductWebTs('briefPanel'))
+  writeScaffoldFile(path.join(targetDir, 'product/web/panels/brief-review-panel.tsx'), scaffoldProductWebTs('briefReviewPanel'))
+  writeScaffoldFile(path.join(targetDir, 'product/web/routes/brief-route.tsx'), scaffoldProductWebTs('briefRoute'))
+  writeScaffoldFile(path.join(targetDir, 'product/web/widgets/brief-widget.tsx'), scaffoldProductWebTs('briefWidget'))
 
   printJson({
     appId,
@@ -867,13 +879,25 @@ async function createAppScaffoldCommand(id: string, opts: { dir?: string } = {})
       'package.json',
       'tsconfig.json',
       'README.md',
-      'src/index.ts',
-      'src/standalone.ts',
-      'src/host-mounted.ts',
-      'schemas/brief.schema.json',
-      'capabilities/brief/prompt.md',
-      'review/brief.md',
-      `packs/${appId}/SOUL.md`,
+      'engine-assets/workspace/AGENTS.md',
+      'engine-assets/workspace/CLAUDE.md',
+      'engine-assets/workspace/README.md',
+      'engine-assets/workspace/.gitignore',
+      'engine-assets/skills/brief/SKILL.md',
+      'host-adapter/index.ts',
+      'host-adapter/api.ts',
+      'host-adapter/standalone/standalone.ts',
+      'host-adapter/mounted/host-mounted.ts',
+      'product/artifacts/schemas/brief.schema.json',
+      'product/workflows/brief/prompt.md',
+      'product/workflows/brief/review.md',
+      'product/reviews/brief.md',
+      `product/profiles/${appId}/SOUL.md`,
+      'product/web/artifact-previews/brief-preview.tsx',
+      'product/web/panels/brief-panel.tsx',
+      'product/web/panels/brief-review-panel.tsx',
+      'product/web/routes/brief-route.tsx',
+      'product/web/widgets/brief-widget.tsx',
     ],
     next: [
       `cd ${targetDir}`,
@@ -1087,9 +1111,9 @@ function createScaffoldManifest(appId: string): SoulAppManifest {
   const routePrefix = `/api/local/apps/${appId}`
   const raw = {
     api: {
-      entry: './src/host-mounted.ts',
+      entry: './host-adapter/api.ts',
       localService: {
-        command: ['bun', 'src/host-mounted.ts'],
+        command: ['bun', 'host-adapter/mounted/host-mounted.ts'],
         healthPath: '/health',
       },
       routePrefix,
@@ -1099,9 +1123,9 @@ function createScaffoldManifest(appId: string): SoulAppManifest {
         description: 'Reviewable brief artifact for the starter Soul App.',
         id: 'brief',
         name: 'Brief',
-        previewRef: './src/index.ts',
-        reviewPolicyRef: './review/brief.md',
-        schemaRef: './schemas/brief.schema.json',
+        previewRef: './product/web/artifact-previews/brief-preview.tsx',
+        reviewPolicyRef: './product/reviews/brief.md',
+        schemaRef: './product/artifacts/schemas/brief.schema.json',
         schemaSha256: sha256Text(scaffoldBriefSchemaText(appId)),
         version: '0.1.0',
       },
@@ -1114,8 +1138,8 @@ function createScaffoldManifest(appId: string): SoulAppManifest {
         name: 'Brief',
         outputKind: 'brief',
         packRefs: [appId],
-        promptRef: './capabilities/brief/prompt.md',
-        reviewRubricRef: './review/brief.md',
+        promptRef: './product/workflows/brief/prompt.md',
+        reviewRubricRef: './product/workflows/brief/review.md',
         version: '0.1.0',
         workspaceTypes: ['case'],
       },
@@ -1129,13 +1153,22 @@ function createScaffoldManifest(appId: string): SoulAppManifest {
       required: [],
     },
     description: `${appId} starter Soul App for one vertical workspace, capability, artifact, and review policy.`,
+    engineAssets: {
+      skills: {
+        source: './engine-assets/skills',
+        targets: ['codex', 'claude-code'],
+      },
+      workspace: {
+        source: './engine-assets/workspace',
+      },
+    },
     exports: {
-      artifact: './src/index.ts',
-      connector: './src/index.ts',
-      lifecycle: './src/index.ts',
-      review: './src/index.ts',
-      runtime: './src/index.ts',
-      ui: './src/index.ts',
+      artifact: './host-adapter/index.ts',
+      connector: './host-adapter/index.ts',
+      lifecycle: './host-adapter/index.ts',
+      review: './host-adapter/index.ts',
+      runtime: './host-adapter/index.ts',
+      ui: './host-adapter/index.ts',
     },
     healthcheck: {
       kind: 'protocol-handler',
@@ -1148,13 +1181,13 @@ function createScaffoldManifest(appId: string): SoulAppManifest {
       namespace: appId,
     },
     modes: {
-      hostMounted: { entry: './src/host-mounted.ts', supported: true },
-      standalone: { entry: './src/standalone.ts', supported: true },
+      hostMounted: { entry: './host-adapter/mounted/host-mounted.ts', supported: true },
+      standalone: { entry: './host-adapter/standalone/standalone.ts', supported: true },
     },
     name: titleCase(appId),
     pack: {
       refs: [
-        { id: appId, ref: `./packs/${appId}/SOUL.md`, source: 'embedded', version: '0.1.0' },
+        { id: appId, ref: `./product/profiles/${appId}/SOUL.md`, source: 'embedded', version: '0.1.0' },
       ],
     },
     permissions: [
@@ -1216,7 +1249,7 @@ function createScaffoldManifest(appId: string): SoulAppManifest {
     ui: {
       artifactPreviews: [
         {
-          entry: './src/index.ts',
+          entry: './product/web/artifact-previews/brief-preview.tsx',
           id: 'brief-preview',
           label: 'Brief preview',
           slot: 'artifact-preview',
@@ -1225,7 +1258,7 @@ function createScaffoldManifest(appId: string): SoulAppManifest {
       ],
       panels: [
         {
-          entry: './src/index.ts',
+          entry: './product/web/panels/brief-panel.tsx',
           id: 'brief-panel',
           label: 'Brief panel',
           slot: 'panel',
@@ -1239,7 +1272,7 @@ function createScaffoldManifest(appId: string): SoulAppManifest {
       ],
       reviewPanels: [
         {
-          entry: './src/index.ts',
+          entry: './product/web/panels/brief-review-panel.tsx',
           id: 'brief-review-panel',
           label: 'Brief review panel',
           slot: 'review-panel',
@@ -1247,7 +1280,7 @@ function createScaffoldManifest(appId: string): SoulAppManifest {
       ],
       routes: [
         {
-          entry: './src/standalone.ts',
+          entry: './product/web/routes/brief-route.tsx',
           id: 'brief-home',
           label: titleCase(appId),
           path: `/${appId}`,
@@ -1261,7 +1294,7 @@ function createScaffoldManifest(appId: string): SoulAppManifest {
       ],
       workspaceWidgets: [
         {
-          entry: './src/index.ts',
+          entry: './product/web/widgets/brief-widget.tsx',
           id: 'brief-widget',
           label: 'Brief widget',
           slot: 'workspace-widget',
@@ -1397,9 +1430,9 @@ function createScaffoldPackageJson(appId: string) {
     name: `@aiworker-soul-app/${appId}`,
     private: true,
     scripts: {
-      build: 'bun build src/index.ts src/standalone.ts src/host-mounted.ts --outdir dist --target bun',
-      dev: 'bun src/standalone.ts --serve',
-      serve: 'bun src/host-mounted.ts',
+      build: 'bun build host-adapter/index.ts host-adapter/standalone/standalone.ts host-adapter/mounted/host-mounted.ts --outdir dist --target bun',
+      dev: 'bun host-adapter/standalone/standalone.ts --serve',
+      serve: 'bun host-adapter/mounted/host-mounted.ts',
       smoke: 'aiworker app smoke .',
       test: 'bun test',
       typecheck: 'tsc --noEmit',
@@ -1428,7 +1461,7 @@ function createScaffoldTsconfig() {
       strict: true,
       target: 'ES2022',
     },
-    include: ['src/**/*.ts'],
+    include: ['host-adapter/**/*.ts'],
   }
 }
 
@@ -1477,6 +1510,57 @@ function scaffoldReadme(appId: string): string {
     '- Run PMA, focused tests, and code-review-graph before submitting Host changes.',
     '',
   ].join('\n')
+}
+
+function scaffoldWorkspaceAgents(appId: string): string {
+  return [
+    `# ${titleCase(appId)} Workspace Instructions`,
+    '',
+    'This workspace belongs to an AIWorker Soul App.',
+    'Treat action-started sessions as explicit native skill selections.',
+    'Keep generated artifacts reviewable before they become accepted workspace state.',
+    '',
+  ].join('\n')
+}
+
+function scaffoldWorkspaceReadme(appId: string): string {
+  return [
+    '# {{workspaceName}}',
+    '',
+    `Workspace for ${titleCase(appId)}.`,
+    '',
+  ].join('\n')
+}
+
+function scaffoldWorkspaceGitignore(): string {
+  return [
+    '.aiworker/projections.json',
+    '.agents/skills/*',
+    '.claude/skills/*',
+    '',
+  ].join('\n')
+}
+
+function scaffoldSkill(appId: string): string {
+  return [
+    '---',
+    'name: brief',
+    `description: Create source-backed ${titleCase(appId)} briefs.`,
+    '---',
+    '',
+    '# Brief',
+    '',
+    'Create a concise, source-backed brief and surface missing evidence for human review.',
+    '',
+  ].join('\n')
+}
+
+function scaffoldProductWebTs(symbol: string): string {
+  return `export const ${symbol} = {
+  renderer: 'host-descriptor',
+  status: 'scaffold',
+}
+`
 }
 
 function scaffoldIndexTs(): string {
@@ -1601,10 +1685,15 @@ function lifecycleHandlers(message: string) {
 `
 }
 
+function scaffoldApiTs(): string {
+  return `export { soulApp } from './index'
+`
+}
+
 function scaffoldStandaloneTs(): string {
   return `import process from 'node:process'
 
-import manifestJson from '../soul-app.manifest.json' with { type: 'json' }
+import manifestJson from '../../soul-app.manifest.json' with { type: 'json' }
 
 const manifest = manifestJson
 
@@ -1648,7 +1737,7 @@ if (import.meta.main) {
 function scaffoldHostMountedTs(): string {
   return `import process from 'node:process'
 
-import manifestJson from '../soul-app.manifest.json' with { type: 'json' }
+import manifestJson from '../../soul-app.manifest.json' with { type: 'json' }
 
 const manifest = manifestJson
 
@@ -1902,6 +1991,11 @@ function sha256Text(content: string): string {
 
 function manifestAssetRefs(manifest: SoulAppManifest): Array<{ kind: string, path: string, sha256?: string }> {
   const refs: Array<{ kind: string, path: string, sha256?: string }> = []
+  refs.push({ kind: 'engine-assets-workspace', path: manifest.engineAssets.workspace.source })
+  if (manifest.engineAssets.skills)
+    refs.push({ kind: 'engine-assets-skills', path: manifest.engineAssets.skills.source })
+  for (const client of manifest.engineAssets.mcpClients ?? [])
+    refs.push({ kind: 'engine-assets-mcp-client', path: client.source })
   for (const type of manifest.artifactTypes) {
     refs.push({ kind: 'artifact-schema', path: type.schemaRef, sha256: type.schemaSha256 })
     if (type.previewRef)
@@ -1938,43 +2032,47 @@ function manifestAssetRefs(manifest: SoulAppManifest): Array<{ kind: string, pat
 }
 
 function scanPrivateImports(rootDir: string): PrivateImportIssue[] {
-  const srcDir = path.join(rootDir, 'src')
-  if (!existsSync(srcDir))
-    return []
   const issues: PrivateImportIssue[] = []
-  for (const file of listSourceFiles(srcDir)) {
-    const content = readFileSync(file, 'utf8')
-    for (const importPath of importSpecifiers(content)) {
-      if (!isForbiddenSoulAppImport(rootDir, importPath))
-        continue
-      issues.push({
-        file: path.relative(rootDir, file),
-        importPath,
-        message: 'Soul Apps must use @zonease/aiworker-soul-app-sdk instead of Host private packages or sibling Soul Apps.',
-      })
+  for (const sourceDir of appSourceScanDirs(rootDir)) {
+    for (const file of listSourceFiles(sourceDir)) {
+      const content = readFileSync(file, 'utf8')
+      for (const importPath of importSpecifiers(content)) {
+        if (!isForbiddenSoulAppImport(rootDir, importPath))
+          continue
+        issues.push({
+          file: path.relative(rootDir, file),
+          importPath,
+          message: 'Soul Apps must use @zonease/aiworker-soul-app-sdk instead of Host private packages or sibling Soul Apps.',
+        })
+      }
     }
   }
   return issues
 }
 
 function scanRawWebStorageUsage(rootDir: string): WebStorageIssue[] {
-  const srcDir = path.join(rootDir, 'src')
-  if (!existsSync(srcDir))
-    return []
   const issues: WebStorageIssue[] = []
-  for (const file of listSourceFiles(srcDir)) {
-    if (isTestSourceFile(file))
-      continue
-    const content = readFileSync(file, 'utf8')
-    for (const symbol of rawWebStorageSymbols(content)) {
-      issues.push({
-        file: path.relative(rootDir, file),
-        message: RAW_WEB_STORAGE_MESSAGE,
-        symbol,
-      })
+  for (const sourceDir of appSourceScanDirs(rootDir)) {
+    for (const file of listSourceFiles(sourceDir)) {
+      if (isTestSourceFile(file))
+        continue
+      const content = readFileSync(file, 'utf8')
+      for (const symbol of rawWebStorageSymbols(content)) {
+        issues.push({
+          file: path.relative(rootDir, file),
+          message: RAW_WEB_STORAGE_MESSAGE,
+          symbol,
+        })
+      }
     }
   }
   return issues
+}
+
+function appSourceScanDirs(rootDir: string): string[] {
+  return ['host-adapter', 'product', 'src']
+    .map(dir => path.join(rootDir, dir))
+    .filter(dir => existsSync(dir))
 }
 
 function rawWebStorageSymbols(content: string): string[] {

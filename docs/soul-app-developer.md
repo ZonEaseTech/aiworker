@@ -45,8 +45,11 @@ aiworker app create <app-id> --dir <target-dir>
 Production Soul Apps live under `apps/<app-id>/`. The scaffold creates:
 
 - `soul-app.manifest.json`
-- `src/index.ts`
-- one workspace type, capability, artifact schema, review policy, and Soul pack
+- `engine-assets/workspace` and `engine-assets/skills`
+- `product/workflows`, `product/artifacts`, `product/reviews`,
+  `product/profiles`, and `product/web`
+- `host-adapter/index.ts`, `host-adapter/mounted/host-mounted.ts`, and
+  `host-adapter/standalone/standalone.ts`
 - package scripts for `validate`, `smoke`, and `typecheck`
 
 Reference and production apps should use the fuller app layout:

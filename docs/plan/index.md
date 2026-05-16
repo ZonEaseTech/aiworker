@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-16 (PLAN-331 completed)
+> Updated: 2026-05-16 (PLAN-333 completed)
 
 ## Usage
 
@@ -361,3 +361,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-330 Soul App Product Layout Migration**](PLAN-330.md) `2026-05-16`
 - [x] [**PLAN-331 Soul App Host Adapter Layout Migration**](PLAN-331.md) `2026-05-16`
 - [x] [**PLAN-332 Soul App MCP Client And Server Contract**](PLAN-332.md) `2026-05-16`
+- [x] [**PLAN-333 Soul App Scaffold And Legacy Layout Removal**](PLAN-333.md) `2026-05-16`

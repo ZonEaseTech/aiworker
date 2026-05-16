@@ -322,7 +322,7 @@ function demoSoulApp(): SoulAppDefinition {
         description: 'Demo report artifact.',
         id: 'demo-report',
         name: 'Demo Report',
-        schemaRef: './schemas/demo-report.json',
+        schemaRef: './product/artifacts/schemas/demo-report.schema.json',
         version: '1.0.0',
       }],
       capabilities: [{
@@ -331,7 +331,7 @@ function demoSoulApp(): SoulAppDefinition {
         id: 'demo-report',
         name: 'Demo Report',
         outputKind: 'demo-report',
-        promptRef: './capabilities/demo-report/prompt.md',
+        promptRef: './product/workflows/demo-report/prompt.md',
         version: '1.0.0',
         workspaceTypes: ['demo-workspace'],
       }],
@@ -351,8 +351,8 @@ function demoSoulApp(): SoulAppDefinition {
         },
       }),
       exports: {
-        runtime: './src/runtime.ts',
-        ui: './src/ui.ts',
+        runtime: './host-adapter/index.ts',
+        ui: './host-adapter/index.ts',
       },
       healthcheck: {
         kind: 'protocol-handler',
@@ -365,12 +365,12 @@ function demoSoulApp(): SoulAppDefinition {
         namespace: 'demo-soul-app',
       },
       modes: {
-        hostMounted: { entry: './src/host-mounted.ts', supported: true },
-        standalone: { entry: './src/standalone.ts', supported: true },
+        hostMounted: { entry: './host-adapter/mounted/host-mounted.ts', supported: true },
+        standalone: { entry: './host-adapter/standalone/standalone.ts', supported: true },
       },
       name: 'Demo Soul App',
       pack: {
-        refs: [{ id: 'demo-pack', ref: './pack', source: 'embedded', version: '1.0.0' }],
+        refs: [{ id: 'demo-pack', ref: './product/profiles/demo-soul-app/SOUL.md', source: 'embedded', version: '1.0.0' }],
       },
       permissions: [
         {
@@ -400,21 +400,21 @@ function demoSoulApp(): SoulAppDefinition {
       },
       ui: {
         artifactPreviews: [{
-          entry: './src/ui/demo-preview.tsx',
+          entry: './product/web/artifact-previews/demo-preview.tsx',
           id: 'demo-preview',
           label: 'Demo preview',
           slot: 'artifact-preview',
           target: 'demo-report',
         }],
         panels: [{
-          entry: './src/ui/demo-panel.tsx',
+          entry: './product/web/panels/demo-panel.tsx',
           id: 'demo-panel',
           label: 'Demo panel',
           slot: 'panel',
         }],
         reviewPanels: [],
         routes: [{
-          entry: './src/ui/demo-route.tsx',
+          entry: './product/web/routes/demo-route.tsx',
           id: 'demo-route',
           label: 'Demo',
           path: '/demo',

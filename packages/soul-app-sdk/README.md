@@ -11,6 +11,14 @@ then reuses the same definition in two modes:
 
 ## Minimal Shape
 
+New apps should keep source responsibilities split by layout:
+
+```text
+engine-assets/   engine-visible workspace files, native skills, MCP client config
+product/         workflows, schemas, reviews, profiles, Web product surfaces
+host-adapter/    SDK definition, protocol handlers, mounted and standalone entrypoints
+```
+
 ```ts
 import { defineSoulApp } from '@zonease/aiworker-soul-app-sdk'
 

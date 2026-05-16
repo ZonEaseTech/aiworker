@@ -483,13 +483,15 @@ describe('aiworker local CLI', () => {
     const scaffold = JSON.parse(output) as { appId: string, files: string[], path: string }
     expect(scaffold).toMatchObject({ appId: 'demo-soul-app', path: appDir })
     expect(scaffold.files).toContain('soul-app.manifest.json')
-    expect(scaffold.files).toContain('packs/demo-soul-app/SOUL.md')
-    expect(scaffold.files).toContain('src/standalone.ts')
-    expect(scaffold.files).toContain('src/host-mounted.ts')
+    expect(scaffold.files).toContain('engine-assets/workspace/AGENTS.md')
+    expect(scaffold.files).toContain('engine-assets/skills/brief/SKILL.md')
+    expect(scaffold.files).toContain('product/profiles/demo-soul-app/SOUL.md')
+    expect(scaffold.files).toContain('host-adapter/standalone/standalone.ts')
+    expect(scaffold.files).toContain('host-adapter/mounted/host-mounted.ts')
     await expect(stat(path.join(appDir, 'soul-app.manifest.json'))).resolves.toBeTruthy()
-    await expect(stat(path.join(appDir, 'src/index.ts'))).resolves.toBeTruthy()
-    await expect(stat(path.join(appDir, 'src/standalone.ts'))).resolves.toBeTruthy()
-    await expect(stat(path.join(appDir, 'src/host-mounted.ts'))).resolves.toBeTruthy()
+    await expect(stat(path.join(appDir, 'host-adapter/index.ts'))).resolves.toBeTruthy()
+    await expect(stat(path.join(appDir, 'host-adapter/standalone/standalone.ts'))).resolves.toBeTruthy()
+    await expect(stat(path.join(appDir, 'host-adapter/mounted/host-mounted.ts'))).resolves.toBeTruthy()
     const scaffoldPackageJson = JSON.parse(await readFile(path.join(appDir, 'package.json'), 'utf8')) as {
       dependencies: Record<string, string>
     }
@@ -512,10 +514,12 @@ describe('aiworker local CLI', () => {
     expect(validation.validation).toMatchObject({ appId: 'demo-soul-app', status: 'pass' })
     expect(validation.validation.assetIssues).toEqual([])
     expect(validation.validation.privateImportIssues).toEqual([])
-    expect(validation.validation.checkedAssets).toContain('./schemas/brief.schema.json')
-    expect(validation.validation.checkedAssets).toContain('./src/standalone.ts')
-    expect(validation.validation.checkedAssets).toContain('./src/host-mounted.ts')
-    expect(validation.validation.checkedAssets).toContain('./src/index.ts')
+    expect(validation.validation.checkedAssets).toContain('./engine-assets/workspace')
+    expect(validation.validation.checkedAssets).toContain('./engine-assets/skills')
+    expect(validation.validation.checkedAssets).toContain('./product/artifacts/schemas/brief.schema.json')
+    expect(validation.validation.checkedAssets).toContain('./host-adapter/standalone/standalone.ts')
+    expect(validation.validation.checkedAssets).toContain('./host-adapter/mounted/host-mounted.ts')
+    expect(validation.validation.checkedAssets).toContain('./host-adapter/index.ts')
     output = ''
 
     expect(await runCli(argv('app', 'smoke', appDir))).toBe(0)
@@ -540,7 +544,7 @@ describe('aiworker local CLI', () => {
 
     expect(await runCli(argv('app', 'create', 'hash-check-app', '--dir', appDir))).toBe(0)
     output = ''
-    await writeFile(path.join(appDir, 'schemas/brief.schema.json'), '{"type":"object","properties":{"tampered":{"type":"string"}}}\n')
+    await writeFile(path.join(appDir, 'product/artifacts/schemas/brief.schema.json'), '{"type":"object","properties":{"tampered":{"type":"string"}}}\n')
 
     expect(await runCli(argv('app', 'validate', appDir))).toBe(1)
     const validation = JSON.parse(output) as {
@@ -551,7 +555,7 @@ describe('aiworker local CLI', () => {
     }
     expect(validation.validation.status).toBe('fail')
     expect(validation.validation.assetIssues).toEqual(expect.arrayContaining([
-      expect.objectContaining({ code: 'asset_hash_mismatch', path: './schemas/brief.schema.json' }),
+      expect.objectContaining({ code: 'asset_hash_mismatch', path: './product/artifacts/schemas/brief.schema.json' }),
     ]))
   })
 
@@ -560,7 +564,7 @@ describe('aiworker local CLI', () => {
 
     expect(await runCli(argv('app', 'create', 'private-import-app', '--dir', appDir))).toBe(0)
     output = ''
-    await writeFile(path.join(appDir, 'src/private.ts'), 'import { createLocalWorkerRuntime } from \'@zonease/aiworker-core\'\n')
+    await writeFile(path.join(appDir, 'host-adapter/private.ts'), 'import { createLocalWorkerRuntime } from \'@zonease/aiworker-core\'\n')
 
     expect(await runCli(argv('app', 'validate', appDir))).toBe(1)
     const validation = JSON.parse(output) as {
@@ -571,7 +575,7 @@ describe('aiworker local CLI', () => {
     }
     expect(validation.validation.status).toBe('fail')
     expect(validation.validation.privateImportIssues).toEqual([{
-      file: 'src/private.ts',
+      file: 'host-adapter/private.ts',
       importPath: '@zonease/aiworker-core',
       message: 'Soul Apps must use @zonease/aiworker-soul-app-sdk instead of Host private packages or sibling Soul Apps.',
     }])
@@ -582,7 +586,7 @@ describe('aiworker local CLI', () => {
 
     expect(await runCli(argv('app', 'create', 'sibling-import-app', '--dir', appDir))).toBe(0)
     output = ''
-    await writeFile(path.join(appDir, 'src/private.ts'), 'import { hrReferenceSoulApp } from \'@zonease/aiworker-hr\'\n')
+    await writeFile(path.join(appDir, 'host-adapter/private.ts'), 'import { hrReferenceSoulApp } from \'@zonease/aiworker-hr\'\n')
 
     expect(await runCli(argv('app', 'validate', appDir))).toBe(1)
     const validation = JSON.parse(output) as {
@@ -593,7 +597,7 @@ describe('aiworker local CLI', () => {
     }
     expect(validation.validation.status).toBe('fail')
     expect(validation.validation.privateImportIssues).toEqual([{
-      file: 'src/private.ts',
+      file: 'host-adapter/private.ts',
       importPath: '@zonease/aiworker-hr',
       message: 'Soul Apps must use @zonease/aiworker-soul-app-sdk instead of Host private packages or sibling Soul Apps.',
     }])
@@ -604,7 +608,7 @@ describe('aiworker local CLI', () => {
 
     expect(await runCli(argv('app', 'create', 'raw-storage-app', '--dir', appDir))).toBe(0)
     output = ''
-    await writeFile(path.join(appDir, 'src/raw-storage.ts'), [
+    await writeFile(path.join(appDir, 'product/web/routes/raw-storage.ts'), [
       'localStorage.setItem("theme", "dark")',
       'window.sessionStorage.clear()',
       '',
@@ -620,12 +624,12 @@ describe('aiworker local CLI', () => {
     expect(validation.validation.status).toBe('fail')
     expect(validation.validation.webStorageIssues).toEqual([
       {
-        file: 'src/raw-storage.ts',
+        file: 'product/web/routes/raw-storage.ts',
         message: 'Soul Apps must use createSoulAppWebStorage(...) instead of raw browser Web Storage APIs.',
         symbol: 'localStorage',
       },
       {
-        file: 'src/raw-storage.ts',
+        file: 'product/web/routes/raw-storage.ts',
         message: 'Soul Apps must use createSoulAppWebStorage(...) instead of raw browser Web Storage APIs.',
         symbol: 'window.sessionStorage.clear',
       },

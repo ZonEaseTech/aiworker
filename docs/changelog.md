@@ -1,5 +1,31 @@
 # AIWorker Changelog
 
+## 2026-05-16 [completed] FEAT-092 / PLAN-333 — Soul App Scaffold And Legacy Layout Removal
+
+Completed Phase 5 of Soul App authoring layout v2. New app scaffolds now
+generate the same inspectable `engine-assets/`, `product/` and `host-adapter/`
+shape used by official Soul Apps, and active docs/tests no longer teach the old
+scattered layout as the default authoring model.
+
+- Updated `aiworker app create` to write workspace engine assets, native skill
+  sources, product workflow/schema/review/profile/web placeholders, and
+  host-adapter mounted/standalone entrypoints.
+- Updated generated manifests, package scripts and tsconfig include paths to
+  point at `engine-assets/`, `product/` and `host-adapter/`.
+- Updated validation to scan `host-adapter/`, `product/` and legacy `src/`
+  production source directories for Host-private imports and raw Web Storage.
+- Updated scaffold, SDK, runtime and publish-manifest tests so executable
+  examples use the v2 layout.
+- Verification passed: `bun test apps/cli/src/aiworker.test.ts
+  packages/soul-app-sdk/src/index.test.ts
+  packages/soul-app-runtime/src/index.test.ts
+  apps/cli/scripts/build-publish-manifest.test.ts`,
+  `bun run --filter '@zonease/aiworker-cli' typecheck`,
+  `bun run --filter '@zonease/aiworker-soul-app-sdk' typecheck`,
+  `bun run --filter '@zonease/aiworker-soul-app-runtime' typecheck`,
+  `bun run --filter '@zonease/aiworker-cli' build:bundle`, `bun run lint`,
+  `git diff --check`, `bun run crg:update`, and `bun run crg:review`.
+
 ## 2026-05-16 [completed] FEAT-091 / PLAN-332 — Soul App MCP Client And Server Contract
 
 Completed Phase 4 of Soul App authoring layout v2. Soul App MCP client config
