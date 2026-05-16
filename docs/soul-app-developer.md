@@ -92,6 +92,7 @@ Validation checks:
 - manifest schema and host compatibility
 - storage namespace and permission targets
 - artifact schema JSON files
+- engine-visible workspace files, native skills, and MCP client config
 - prompt, review, pack, UI, API, and mode entry file references
 - Host-private imports from app adapter code
 - sibling Soul App imports from app adapter code
@@ -100,6 +101,40 @@ App code should depend on `@zonease/aiworker-soul-app-sdk`. The validator flags
 imports from Host private packages such as `@zonease/aiworker-core`,
 `@zonease/aiworker-api`, `@zonease/aiworker-storage-sqlite`, and direct imports
 from sibling apps such as `@zonease/aiworker-hr` or `@zonease/aiworker-qa`.
+
+## Engine Assets Projection
+
+`engine-assets/` is the canonical source for files that AIWorker projects into
+workspace roots for native engines. Keep these files as ordinary source files so
+they are visible in review, easy to debug, and available for app or user
+iteration.
+
+```text
+engine-assets/workspace/**
+  -> <workspace>/**
+
+engine-assets/skills/<skill-id>/SKILL.md
+  -> <workspace>/.agents/skills/<app-id>-<skill-id>/SKILL.md
+  -> <workspace>/.claude/skills/<app-id>-<skill-id>/SKILL.md
+```
+
+Workspace assets are projected 1:1 into the workspace root. Use them for
+engine-facing instructions and stable workspace files such as `AGENTS.md`,
+`CLAUDE.md`, `README.md`, app-local `.gitignore`, and other text assets that
+should be inspectable. `CLAUDE.md` should stay as a one-line `@AGENTS.md`
+reference when the same rules apply to Claude Code.
+
+Native skills are app-owned domain assets. They should describe the action
+purpose, required inputs, artifact shape, review boundary, and promotion rules
+that keep an engine session aligned with the Soul App workflow. Projected skill
+copies are workspace-visible and should not be ignored by default; a user or app
+may intentionally iterate them as part of the workspace history.
+
+Only runtime or sensitive outputs should be ignored by the projected workspace
+`.gitignore`, for example `.aiworker/sessions/`, `.aiworker/projections.json`,
+and raw evidence folders that may contain sensitive source material. Do not
+ignore stable projected instructions, native skills, or reviewable artifacts just
+because they came from AIWorker.
 
 ## MCP Client And Server Declarations
 

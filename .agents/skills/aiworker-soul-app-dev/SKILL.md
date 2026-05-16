@@ -20,7 +20,7 @@ Use this skill for:
   services, protocol handlers, app-owned UI/API, and app-owned broker use.
 - Public authoring surfaces: `packages/soul-app-sdk`,
   `packages/soul-app-runtime`, shared manifest/protocol types, app scaffold,
-  `aiworker app validate`, `aiworker app smoke`, and
+  engine assets projection, `aiworker app validate`, `aiworker app smoke`, and
   `docs/soul-app-developer.md`.
 
 Do not use this as a general validation-campaign router for old fleet/gateway,
@@ -57,6 +57,9 @@ Practical Soul App implications:
 
 - Own domain UI/API, standalone shell, mounted handlers, artifact schemas,
   profile composition, review rubrics and lesson/memory promotion semantics.
+- Own engine-facing workspace instructions, native skills and MCP client
+  declarations under `engine-assets/`; runtime may project them into workspace
+  roots, but the source stays app-authored and reviewable.
 - Declare `requiredPermissions` on shell, search and mounted surfaces whenever
   the action depends on Host broker capabilities.
 - Do not put secrets in manifests, generated app config, workspace metadata, DB
@@ -70,10 +73,9 @@ Load only what the task needs:
 
 1. Always read `docs/architecture.md`.
 2. Read `docs/soul-app-developer.md` for authoring, scaffold, validate, smoke,
-   standalone or mounted runtime changes.
+   engine assets projection, standalone or mounted runtime changes.
 3. For a target app, read its `soul-app.manifest.json` and touched files:
-   `capabilities/`, `schemas/`, `review/`, `packs/`, `src/standalone.ts`,
-   `src/host-mounted.ts`, `src/protocol/`, or app tests.
+   `engine-assets/`, `product/`, `host-adapter/`, or app tests.
 4. For official HR/QA app manifest or shell changes, also read
    `packages/shared/src/soul-app/fixtures.ts` and shared manifest tests; Host
    bootstraps from these reference manifests, not only from `apps/*` files.
@@ -96,12 +98,15 @@ safely.
 4. Keep standalone and Host mounted modes aligned. They share one manifest,
    domain definitions, schemas, review rubrics, prompts and core handler
    semantics.
-5. Keep vertical-user language visible. HR, QA, finance, legal, ops, DevOps and
+5. Keep engine assets source-backed. Workspace files, native skills and MCP
+   client config should be ordinary reviewable files; ignore only runtime or
+   sensitive outputs such as sessions, projection receipts and raw evidence.
+6. Keep vertical-user language visible. HR, QA, finance, legal, ops, DevOps and
    PM users should see business objects, not Host internals.
-6. If Host needs app-owned state, expose a view, action, search result, status
+7. If Host needs app-owned state, expose a view, action, search result, status
    or descriptor through protocol. If the app does not expose it, Host does not
    fetch, infer or synthesize it.
-7. For non-trivial code/product changes, follow PMA and keep `docs/task/`,
+8. For non-trivial code/product changes, follow PMA and keep `docs/task/`,
    `docs/plan/` and `docs/changelog.md` synced when the change has
    project-level impact.
 
@@ -114,6 +119,7 @@ Pick the smallest command set that proves the touched surface:
 | Production Soul App | `aiworker app validate <app-path>` and `aiworker app smoke <app-path>` |
 | App package code | app package `typecheck` and `test` |
 | Official app manifest/catalog | app validate/smoke, shared tests, and affected API/core tests |
+| Engine assets projection | app validate/smoke and focused runtime/scaffold tests when projection code changed |
 | SDK/runtime/protocol/shared schema | focused package tests and typecheck |
 | CLI validate/smoke behavior | focused CLI tests and matching docs |
 | Web Host shell interaction | focused Web tests; browser smoke only when UI behavior changed |

@@ -7,7 +7,9 @@ then reuses the same definition in two modes:
 - standalone: the app owns a small vertical shell and boots an embedded
   AIWorker core runtime for one app-bound worker;
 - Host mounted: AIWorker Host reads the manifest, projects the Soul/capability
-  catalog, and keeps engine, connector, artifact, review, and memory ownership.
+  catalog, mounts declared protocol surfaces, and owns platform capabilities
+  such as engine selection, connector grants and broker scopes. The Soul App
+  still owns artifact, review, profile and lesson/memory semantics.
 
 ## Minimal Shape
 
@@ -54,7 +56,8 @@ Standalone and Host-mounted harnesses live in
 package boundary.
 
 Host-side execution of external app UI/API handlers remains gated by the
-isolation brokers tracked in PLAN-287.
+manifest protocol, scoped broker grants, and the active architecture contract in
+`docs/architecture.md#constraint-registry`.
 
 ## Browser UI State
 
