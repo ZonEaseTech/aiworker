@@ -1,5 +1,22 @@
 # AIWorker Changelog
 
+## 2026-05-16 [progress] REL-037 / PLAN-336 — CLI 0.16.0 minor release
+
+Preparing `@zonease/aiworker-cli@0.16.0` as a minor preview release for the Soul
+App authoring layout v2 work. The release source includes `engine-assets/`,
+`product/` and `host-adapter/` layout convergence, engine asset projection,
+MCP client/server declarations, scaffold/validator updates, and current
+`origin/main` fixes from `0.15.2`.
+
+- Merged the feature branch with `origin/main`, preserving BUG-121 / PLAN-329
+  and BUG-122 / PLAN-330 while renumbering Soul App v2 plans to
+  `PLAN-331..335`.
+- Bumped `apps/cli/package.json` to `0.16.0`.
+- Local release gates passed: `bun run check`, `bun run test`, `bun run build`,
+  `git diff --check`, dist version checks, npm pack dry-run,
+  `smoke:dist-release`, `bun run crg:update` and `bun run crg:review`.
+- Tag push and post-release verification are in progress.
+
 ## 2026-05-16 [completed] FEAT-092 / PLAN-335 — Soul App Scaffold And Legacy Layout Removal
 
 Completed Phase 5 of Soul App authoring layout v2. New app scaffolds now
