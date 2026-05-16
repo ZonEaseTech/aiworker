@@ -228,13 +228,13 @@ describe('LocalWorkerRuntime', () => {
     await expect(stat(join(workspace.rootPath, '.aiworker', 'sessions'))).resolves.toBeTruthy()
 
     const gitignore = await readFile(join(workspace.rootPath, '.gitignore'), 'utf8')
-    expect(gitignore).toContain('AGENTS.md')
-    expect(gitignore).toContain('CLAUDE.md')
     expect(gitignore).toContain('.aiworker/sessions/')
     expect(gitignore).toContain('.aiworker/projections.json')
-    expect(gitignore).toContain('.agents/skills/aiworker-*')
-    expect(gitignore).toContain('.claude/skills/aiworker-*')
     expect(gitignore).toContain('evidence/raw/')
+    expect(gitignore).not.toContain('AGENTS.md')
+    expect(gitignore).not.toContain('CLAUDE.md')
+    expect(gitignore).not.toContain('.agents/skills/aiworker-*')
+    expect(gitignore).not.toContain('.claude/skills/aiworker-*')
 
     await expect(readFile(join(workspace.rootPath, '.agents', 'skills', 'aiworker-hr-candidate-profile', 'SKILL.md'), 'utf8')).resolves.toContain('Candidate Profile')
     await expect(readFile(join(workspace.rootPath, '.claude', 'skills', 'aiworker-hr-candidate-profile', 'SKILL.md'), 'utf8')).resolves.toContain('Candidate Profile')
@@ -532,12 +532,8 @@ async function writeWorkspaceEngineAssets(appRoot: string): Promise<void> {
     '',
   ].join('\n'))
   await writeFile(join(appRoot, 'engine-assets', 'workspace', '.gitignore'), [
-    'AGENTS.md',
-    'CLAUDE.md',
     '.aiworker/sessions/',
     '.aiworker/projections.json',
-    '.agents/skills/aiworker-*',
-    '.claude/skills/aiworker-*',
     'evidence/raw/',
     '',
   ].join('\n'))

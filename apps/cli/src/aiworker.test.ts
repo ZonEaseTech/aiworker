@@ -496,9 +496,17 @@ describe('aiworker local CLI', () => {
       dependencies: Record<string, string>
     }
     const scaffoldReadme = await readFile(path.join(appDir, 'README.md'), 'utf8')
+    const scaffoldWorkspaceGitignore = await readFile(path.join(appDir, 'engine-assets', 'workspace', '.gitignore'), 'utf8')
     expect(scaffoldPackageJson.dependencies['@zonease/aiworker-soul-app-sdk']).toBe('workspace:*')
     expect(scaffoldReadme).toContain('source-checkout preview')
     expect(scaffoldReadme).toContain('replace `workspace:*` after the SDK is published')
+    expect(scaffoldWorkspaceGitignore).toContain('.aiworker/sessions/')
+    expect(scaffoldWorkspaceGitignore).toContain('.aiworker/projections.json')
+    expect(scaffoldWorkspaceGitignore).toContain('evidence/raw/')
+    expect(scaffoldWorkspaceGitignore).not.toContain('AGENTS.md')
+    expect(scaffoldWorkspaceGitignore).not.toContain('CLAUDE.md')
+    expect(scaffoldWorkspaceGitignore).not.toContain('.agents/skills')
+    expect(scaffoldWorkspaceGitignore).not.toContain('.claude/skills')
     output = ''
 
     expect(await runCli(argv('app', 'validate', appDir))).toBe(0)

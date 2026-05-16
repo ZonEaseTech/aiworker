@@ -8,12 +8,8 @@ export const PROFILE_README_PATH = 'README.md'
 export const PROFILE_REVIEW_DIR = 'reviews'
 
 const PROFILE_GITIGNORE_PATTERNS = [
-  'AGENTS.md',
-  'CLAUDE.md',
   '.aiworker/sessions/',
   '.aiworker/projections.json',
-  '.agents/skills/aiworker-*',
-  '.claude/skills/aiworker-*',
   'evidence/raw/',
 ] as const
 

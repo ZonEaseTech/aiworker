@@ -1534,9 +1534,9 @@ function scaffoldWorkspaceReadme(appId: string): string {
 
 function scaffoldWorkspaceGitignore(): string {
   return [
+    '.aiworker/sessions/',
     '.aiworker/projections.json',
-    '.agents/skills/*',
-    '.claude/skills/*',
+    'evidence/raw/',
     '',
   ].join('\n')
 }
