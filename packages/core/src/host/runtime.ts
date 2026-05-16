@@ -200,7 +200,7 @@ export class HostRuntime {
         metadata: worker.metadataJson,
       },
       executor: this.options.executor,
-      nativeSkillSource: this.nativeSkillSourceForWorker(worker),
+      engineAssetSource: this.engineAssetSourceForWorker(worker),
       now: this.options.now,
       workspacesRoot: path.join(this.options.workersRoot, worker.id, 'workspaces'),
     })
@@ -232,7 +232,7 @@ export class HostRuntime {
     }
   }
 
-  private nativeSkillSourceForWorker(worker: WorkerRow): LocalWorkerRuntimeOptions['nativeSkillSource'] {
+  private engineAssetSourceForWorker(worker: WorkerRow): LocalWorkerRuntimeOptions['engineAssetSource'] {
     const app = getHostedSoulApp(worker.soulId)
     if (!app || app.status !== 'enabled' || app.sourceKind !== 'manifest-path')
       return null

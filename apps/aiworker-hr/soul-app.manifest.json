@@ -103,6 +103,18 @@
     ]
   },
   "description": "People operations Soul App for profiles, recruiting evidence, lifecycle touchpoints, and HR review policy.",
+  "engineAssets": {
+    "skills": {
+      "source": "./engine-assets/skills",
+      "targets": [
+        "codex",
+        "claude-code"
+      ]
+    },
+    "workspace": {
+      "source": "./engine-assets/workspace"
+    }
+  },
   "exports": {
     "artifact": "./src/protocol/artifact.ts",
     "connector": "./src/protocol/connectors.ts",

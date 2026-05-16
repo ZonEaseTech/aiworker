@@ -2,7 +2,7 @@ import type { SoulAppDefinition } from '@zonease/aiworker-soul-app-sdk'
 import type { LocalExecutor } from './index'
 
 import { mkdtempSync } from 'node:fs'
-import { rm } from 'node:fs/promises'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { defineSoulApp, namespaceSoulAppCapabilityId } from '@zonease/aiworker-soul-app-sdk'
@@ -41,10 +41,13 @@ describe('Soul App runtime harness', () => {
 
   it('runs one SDK-defined app in standalone mode without Host catalog leakage', async () => {
     const root = tempRoot('standalone')
+    const appRoot = path.join(root, 'app')
+    await writeDemoEngineAssets(appRoot)
     const app = demoSoulApp()
 
     const standalone = await createStandaloneSoulAppRuntime(app, {
       appHome: root,
+      appSourceRoot: appRoot,
       executor,
       hostVersion: '0.12.1',
       now,
@@ -73,6 +76,9 @@ describe('Soul App runtime harness', () => {
     expect(standalone.snapshot().worker.metadataJson.domainSoulId).toBe('demo-soul')
 
     const workspace = await standalone.runtime.createWorkspace({ name: 'Standalone workspace', type: 'demo-workspace' })
+    await expect(readFile(path.join(workspace.rootPath, 'README.md'), 'utf8')).resolves.toContain('# Standalone workspace')
+    await expect(readFile(path.join(workspace.rootPath, '.agents', 'skills', 'demo-soul-app-demo-report', 'SKILL.md'), 'utf8')).resolves.toContain('Demo Report Skill')
+    await expect(readFile(path.join(workspace.rootPath, '.aiworker', 'projections.json'), 'utf8')).resolves.toContain('workspace-file')
     const session = await standalone.runtime.createSession({
       capabilityTemplateId: standalone.catalog.templates[0]!.id,
       context: 'Standalone context',
@@ -150,6 +156,16 @@ describe('Soul App runtime harness', () => {
   }
 })
 
+async function writeDemoEngineAssets(appRoot: string): Promise<void> {
+  await mkdir(path.join(appRoot, 'engine-assets', 'workspace'), { recursive: true })
+  await mkdir(path.join(appRoot, 'engine-assets', 'skills', 'demo-report'), { recursive: true })
+  await writeFile(path.join(appRoot, 'engine-assets', 'workspace', 'README.md'), '# {{workspaceName}}\n')
+  await writeFile(path.join(appRoot, 'engine-assets', 'workspace', 'AGENTS.md'), '# {{workerName}}\n')
+  await writeFile(path.join(appRoot, 'engine-assets', 'workspace', 'CLAUDE.md'), '@AGENTS.md\n')
+  await writeFile(path.join(appRoot, 'engine-assets', 'workspace', '.gitignore'), '.aiworker/projections.json\n')
+  await writeFile(path.join(appRoot, 'engine-assets', 'skills', 'demo-report', 'SKILL.md'), '# Demo Report Skill\n')
+}
+
 function demoSoulApp(): SoulAppDefinition {
   return defineSoulApp({
     manifest: {
@@ -180,6 +196,15 @@ function demoSoulApp(): SoulAppDefinition {
       },
       connectors: { optional: [], required: [] },
       description: 'Demo Soul App for SDK boundary tests.',
+      engineAssets: {
+        skills: {
+          source: './engine-assets/skills',
+          targets: ['codex', 'claude-code'],
+        },
+        workspace: {
+          source: './engine-assets/workspace',
+        },
+      },
       exports: {
         runtime: './src/runtime.ts',
         ui: './src/ui.ts',

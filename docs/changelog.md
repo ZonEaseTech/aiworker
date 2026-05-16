@@ -1,5 +1,55 @@
 # AIWorker Changelog
 
+## 2026-05-16 [completed] FEAT-088 / PLAN-329 — Soul App Engine Assets Foundation
+
+Implemented Phase 1 of Soul App authoring layout v2. Official Soul Apps now
+declare `engineAssets`, HR native skills moved under `engine-assets/skills`, and
+HR/QA workspace seed files live as inspectable `engine-assets/workspace`
+templates instead of core Markdown renderers.
+
+- Shared manifest schema, fixture manifests and SDK exports now include
+  `engineAssets` plus projection receipt types.
+- Core runtime projects workspace files and native skills through
+  `packages/core/src/worker/engine-assets.ts`, writes a unified
+  `.aiworker/projections.json` receipt, and Host manifest-path workers pass the
+  app source root into the same projection path.
+- `packages/soul-app-runtime` accepts `appSourceRoot`, so standalone test
+  runtimes materialize the same workspace files and engine-native skills as the
+  Host-mounted path.
+- FEAT-087's uncommitted root `AGENTS.md` / `CLAUDE.md` renderer work was
+  absorbed into this source-template projection. `CLAUDE.md` remains the
+  one-line `@AGENTS.md` shim, but the maintained source is now app-owned.
+- Verification passed: `bun test packages/shared/src/soul-app/manifest.test.ts`,
+  `bun run --filter '@zonease/aiworker-shared' typecheck`,
+  `bun test --timeout=30000 packages/core/src/worker/runtime.test.ts`,
+  `bun run --filter '@zonease/aiworker-core' typecheck`,
+  `bun run --filter '@zonease/aiworker-core' test`,
+  `bun run --filter '@zonease/aiworker-soul-app-runtime' test`,
+  `bun run --filter '@zonease/aiworker-soul-app-runtime' typecheck`,
+  `bun run --filter '@zonease/aiworker-soul-app-sdk' test`,
+  `bun run --filter '@zonease/aiworker-soul-app-sdk' typecheck`, `bun run lint`,
+  `git diff --check`, `bun run crg:update`, and `bun run crg:review`.
+
+## 2026-05-15 14:42 [completed] FEAT-087 / PLAN-328 — Soul workspace agent instructions projection
+
+Soul profile workspaces now bootstrap and repair engine-root guidance for Codex
+and Claude Code without duplicating the maintained instruction source.
+
+- `AGENTS.md` is written at the Soul workspace root with the generic workspace
+  contract: `README.md` is accepted state, session output belongs under
+  `artifacts/<sessionId>/`, agent output stays proposed until human review, and
+  promotion into `README.md` is controlled by Soul App policy.
+- Action-started sessions are now documented as explicit Soul skill selections:
+  agents must follow the selected skill and must ask before switching skills.
+- `CLAUDE.md` is written as the one-line `@AGENTS.md` shim.
+- Profile ledger `.gitignore` excludes `AGENTS.md` and `CLAUDE.md` so generated
+  engine guidance does not enter accepted profile revision commits.
+- Focused verification passed: `bun test --timeout=30000
+  packages/core/src/worker/runtime.test.ts`, `bun run --filter
+  '@zonease/aiworker-core' typecheck`, `bun run --filter
+  '@zonease/aiworker-core' test`, `bun run lint`, `git diff --check`,
+  `bun run crg:update`, and `bun run crg:review`.
+
 ## 2026-05-15 14:08 [completed] REL-036 / PLAN-327 — CLI 0.15.1 patch release
 
 Published `@zonease/aiworker-cli@0.15.1` as a patch release for the post-0.15.0

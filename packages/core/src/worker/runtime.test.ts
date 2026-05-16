@@ -45,7 +45,7 @@ describe('LocalWorkerRuntime', () => {
     })
   }
 
-  function runtimeWithNativeSkills(sourceRoot: string, executor: ConstructorParameters<typeof LocalWorkerRuntime>[0]['executor']) {
+  function runtimeWithEngineAssets(sourceRoot: string, executor: ConstructorParameters<typeof LocalWorkerRuntime>[0]['executor']) {
     return new LocalWorkerRuntime({
       worker: {
         id: 'worker-hr',
@@ -53,7 +53,7 @@ describe('LocalWorkerRuntime', () => {
         name: 'AIWorker HR',
         defaultEngineId: 'codex',
       },
-      nativeSkillSource: {
+      engineAssetSource: {
         appId: 'aiworker-hr',
         sourceRoot,
       },
@@ -197,20 +197,9 @@ describe('LocalWorkerRuntime', () => {
 
   it('bootstraps profile workspace ledger and projects app-owned native skills', async () => {
     const appRoot = join(dir, 'apps', 'aiworker-hr')
-    await mkdir(join(appRoot, 'skills', 'candidate-profile'), { recursive: true })
-    await writeFile(join(appRoot, 'skills', 'candidate-profile', 'SKILL.md'), [
-      '---',
-      'name: candidate-profile',
-      'description: Maintain a source-backed candidate profile.',
-      '---',
-      '',
-      '# Candidate Profile',
-      '',
-      'Use candidate, employee, and alumni lifecycle language.',
-      '',
-    ].join('\n'))
+    await writeProfileEngineAssets(appRoot)
 
-    const workerRuntime = runtimeWithNativeSkills(appRoot, {
+    const workerRuntime = runtimeWithEngineAssets(appRoot, {
       async invoke() {
         return { summary: 'ok' }
       },
@@ -220,6 +209,11 @@ describe('LocalWorkerRuntime', () => {
     const workspace = await workerRuntime.createWorkspace({ name: 'Ada Lovelace Candidate', type: 'people-profile' })
 
     await expect(readFile(join(workspace.rootPath, 'README.md'), 'utf8')).resolves.toContain('# Ada Lovelace Candidate')
+    await expect(readFile(join(workspace.rootPath, 'AGENTS.md'), 'utf8')).resolves.toContain('README.md is the accepted profile state')
+    await expect(readFile(join(workspace.rootPath, 'AGENTS.md'), 'utf8')).resolves.toContain('AIWorker HR')
+    await expect(readFile(join(workspace.rootPath, 'AGENTS.md'), 'utf8')).resolves.toContain('treat that action as an explicit skill selection')
+    await expect(readFile(join(workspace.rootPath, 'AGENTS.md'), 'utf8')).resolves.toContain('Do not silently switch to another skill')
+    await expect(readFile(join(workspace.rootPath, 'CLAUDE.md'), 'utf8')).resolves.toBe('@AGENTS.md\n')
     await expect(stat(join(workspace.rootPath, 'artifacts'))).resolves.toBeTruthy()
     await expect(stat(join(workspace.rootPath, 'reviews'))).resolves.toBeTruthy()
     await expect(stat(join(workspace.rootPath, 'evidence', 'descriptors'))).resolves.toBeTruthy()
@@ -227,30 +221,27 @@ describe('LocalWorkerRuntime', () => {
     await expect(stat(join(workspace.rootPath, '.aiworker', 'sessions'))).resolves.toBeTruthy()
 
     const gitignore = await readFile(join(workspace.rootPath, '.gitignore'), 'utf8')
+    expect(gitignore).toContain('AGENTS.md')
+    expect(gitignore).toContain('CLAUDE.md')
     expect(gitignore).toContain('.aiworker/sessions/')
-    expect(gitignore).toContain('.aiworker/native-skill-projections.json')
+    expect(gitignore).toContain('.aiworker/projections.json')
     expect(gitignore).toContain('.agents/skills/aiworker-*')
     expect(gitignore).toContain('.claude/skills/aiworker-*')
     expect(gitignore).toContain('evidence/raw/')
 
     await expect(readFile(join(workspace.rootPath, '.agents', 'skills', 'aiworker-hr-candidate-profile', 'SKILL.md'), 'utf8')).resolves.toContain('Candidate Profile')
     await expect(readFile(join(workspace.rootPath, '.claude', 'skills', 'aiworker-hr-candidate-profile', 'SKILL.md'), 'utf8')).resolves.toContain('Candidate Profile')
-    const projection = JSON.parse(await readFile(join(workspace.rootPath, '.aiworker', 'native-skill-projections.json'), 'utf8')) as {
+    const receipt = JSON.parse(await readFile(join(workspace.rootPath, '.aiworker', 'projections.json'), 'utf8')) as {
       appId: string
-      skills: Array<{ projectionId: string, sha256: string, skillId: string, source: string, targets: string[] }>
+      projections: Array<{ kind: string, sha256: string, source: string, target: string }>
     }
-    expect(projection.appId).toBe('aiworker-hr')
-    expect(projection.skills).toEqual([
-      expect.objectContaining({
-        projectionId: 'aiworker-hr-candidate-profile',
-        skillId: 'candidate-profile',
-      }),
-    ])
-    expect(projection.skills[0]?.sha256).toMatch(/^[a-f0-9]{64}$/)
-    expect(projection.skills[0]?.targets).toEqual([
-      '.agents/skills/aiworker-hr-candidate-profile/SKILL.md',
-      '.claude/skills/aiworker-hr-candidate-profile/SKILL.md',
-    ])
+    expect(receipt.appId).toBe('aiworker-hr')
+    expect(receipt.projections).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'workspace-file', source: 'engine-assets/workspace/AGENTS.md', target: 'AGENTS.md' }),
+      expect.objectContaining({ kind: 'native-skill', source: 'engine-assets/skills/candidate-profile/SKILL.md', target: '.agents/skills/aiworker-hr-candidate-profile/SKILL.md' }),
+      expect.objectContaining({ kind: 'native-skill', source: 'engine-assets/skills/candidate-profile/SKILL.md', target: '.claude/skills/aiworker-hr-candidate-profile/SKILL.md' }),
+    ]))
+    expect(receipt.projections.every(item => /^[a-f0-9]{64}$/.test(item.sha256))).toBe(true)
 
     if (gitAvailable()) {
       const head = spawnSync('git', ['-C', workspace.rootPath, 'rev-parse', '--verify', 'HEAD'], { encoding: 'utf8' })
@@ -259,10 +250,31 @@ describe('LocalWorkerRuntime', () => {
     }
   })
 
+  it('repairs stale workspace root agent instructions during runtime init', async () => {
+    const appRoot = join(dir, 'apps', 'aiworker-hr')
+    await writeProfileEngineAssets(appRoot)
+    const workerRuntime = runtimeWithEngineAssets(appRoot, {
+      async invoke() {
+        return { summary: 'ok' }
+      },
+    })
+
+    await workerRuntime.init()
+    const workspace = await workerRuntime.createWorkspace({ name: 'Repairable Profile' })
+    await writeFile(join(workspace.rootPath, 'AGENTS.md'), '# stale\n')
+    await writeFile(join(workspace.rootPath, 'CLAUDE.md'), 'stale\n')
+
+    await workerRuntime.init()
+
+    await expect(readFile(join(workspace.rootPath, 'AGENTS.md'), 'utf8')).resolves.toContain('README.md is the accepted profile state')
+    await expect(readFile(join(workspace.rootPath, 'AGENTS.md'), 'utf8')).resolves.toContain('Repairable Profile')
+    await expect(readFile(join(workspace.rootPath, 'CLAUDE.md'), 'utf8')).resolves.toBe('@AGENTS.md\n')
+  })
+
   it('keeps a Soul App without native skills valid and usable', async () => {
     const appRoot = join(dir, 'apps', 'aiworker-hr-no-skills')
-    await mkdir(appRoot, { recursive: true })
-    const workerRuntime = runtimeWithNativeSkills(appRoot, {
+    await writeWorkspaceEngineAssets(appRoot)
+    const workerRuntime = runtimeWithEngineAssets(appRoot, {
       async invoke() {
         return { summary: 'ok' }
       },
@@ -270,14 +282,16 @@ describe('LocalWorkerRuntime', () => {
 
     await workerRuntime.init()
     const workspace = await workerRuntime.createWorkspace({ name: 'No Skills Profile' })
-    const projection = JSON.parse(await readFile(join(workspace.rootPath, '.aiworker', 'native-skill-projections.json'), 'utf8')) as {
+    const receipt = JSON.parse(await readFile(join(workspace.rootPath, '.aiworker', 'projections.json'), 'utf8')) as {
       appId: string
-      skills: unknown[]
+      projections: Array<{ kind: string }>
     }
 
-    expect(projection.appId).toBe('aiworker-hr')
-    expect(projection.skills).toEqual([])
+    expect(receipt.appId).toBe('aiworker-hr')
+    expect(receipt.projections.filter(item => item.kind === 'native-skill')).toEqual([])
     await expect(readFile(join(workspace.rootPath, 'README.md'), 'utf8')).resolves.toContain('No approved profile revision yet.')
+    await expect(readFile(join(workspace.rootPath, 'AGENTS.md'), 'utf8')).resolves.toContain('Available native skills may be empty')
+    await expect(readFile(join(workspace.rootPath, 'CLAUDE.md'), 'utf8')).resolves.toBe('@AGENTS.md\n')
   })
 
   it('promotes a reviewed artifact into the canonical profile README', async () => {
@@ -331,6 +345,67 @@ describe('LocalWorkerRuntime', () => {
     }
   })
 })
+
+async function writeProfileEngineAssets(appRoot: string): Promise<void> {
+  await writeWorkspaceEngineAssets(appRoot)
+  await mkdir(join(appRoot, 'engine-assets', 'skills', 'candidate-profile'), { recursive: true })
+  await writeFile(join(appRoot, 'engine-assets', 'skills', 'candidate-profile', 'SKILL.md'), [
+    '---',
+    'name: candidate-profile',
+    'description: Maintain a source-backed candidate profile.',
+    '---',
+    '',
+    '# Candidate Profile',
+    '',
+    'Use candidate, employee, and alumni lifecycle language.',
+    '',
+  ].join('\n'))
+}
+
+async function writeWorkspaceEngineAssets(appRoot: string): Promise<void> {
+  await mkdir(join(appRoot, 'engine-assets', 'workspace', 'evidence'), { recursive: true })
+  await writeFile(join(appRoot, 'engine-assets', 'workspace', 'AGENTS.md'), [
+    '# {{workerName}} Workspace Instructions',
+    '',
+    'This workspace belongs to an AIWorker Soul App profile ledger.',
+    '',
+    '## Workspace Identity',
+    '',
+    '- Soul worker: {{workerName}}',
+    '- Soul id: {{soulId}}',
+    '- Workspace profile: {{workspaceName}}',
+    '',
+    '## Accepted State',
+    '',
+    '- README.md is the accepted profile state for this workspace.',
+    '- Do not directly update `README.md` during an agent session.',
+    '',
+    '## Action and Skill Binding',
+    '',
+    '- When a session is started from a Soul App action, treat that action as an explicit skill selection.',
+    '- Do not silently switch to another skill.',
+    '- Available native skills may be empty.',
+    '',
+  ].join('\n'))
+  await writeFile(join(appRoot, 'engine-assets', 'workspace', 'CLAUDE.md'), '@AGENTS.md\n')
+  await writeFile(join(appRoot, 'engine-assets', 'workspace', 'README.md'), [
+    '# {{workspaceName}}',
+    '',
+    'No approved profile revision yet.',
+    '',
+  ].join('\n'))
+  await writeFile(join(appRoot, 'engine-assets', 'workspace', '.gitignore'), [
+    'AGENTS.md',
+    'CLAUDE.md',
+    '.aiworker/sessions/',
+    '.aiworker/projections.json',
+    '.agents/skills/aiworker-*',
+    '.claude/skills/aiworker-*',
+    'evidence/raw/',
+    '',
+  ].join('\n'))
+  await writeFile(join(appRoot, 'engine-assets', 'workspace', 'evidence', 'README.md'), '# Evidence\n')
+}
 
 function gitAvailable(): boolean {
   return spawnSync('git', ['--version'], { encoding: 'utf8' }).status === 0

@@ -7,6 +7,7 @@ import {
   createSoulAppClient,
   createSoulAppWebStorage,
   defineSoulApp,
+  defineSoulAppEngineAssets,
   namespaceSoulAppCapabilityId,
 } from './index'
 
@@ -27,6 +28,21 @@ describe('Soul App SDK authoring boundary', () => {
       appId: app.manifest.id,
       permissions: app.manifest.permissions,
     })).toMatchObject({ ok: true })
+  })
+
+  it('defines engine asset declarations without runtime side effects', () => {
+    const assets = defineSoulAppEngineAssets({
+      skills: {
+        source: './engine-assets/skills',
+        targets: ['codex', 'claude-code'],
+      },
+      workspace: {
+        source: './engine-assets/workspace',
+      },
+    })
+
+    expect(assets.workspace.source).toBe('./engine-assets/workspace')
+    expect(assets.skills?.targets).toEqual(['codex', 'claude-code'])
   })
 
   it('scopes client calls to public local daemon routes for one app worker', async () => {
@@ -325,6 +341,15 @@ function demoSoulApp(): SoulAppDefinition {
       },
       connectors: { optional: [], required: [] },
       description: 'Demo Soul App for SDK boundary tests.',
+      engineAssets: defineSoulAppEngineAssets({
+        skills: {
+          source: './engine-assets/skills',
+          targets: ['codex', 'claude-code'],
+        },
+        workspace: {
+          source: './engine-assets/workspace',
+        },
+      }),
       exports: {
         runtime: './src/runtime.ts',
         ui: './src/ui.ts',

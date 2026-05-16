@@ -30,6 +30,35 @@ describe('Soul App manifest schema', () => {
     }
   })
 
+  it('requires official reference manifests to declare engine assets', () => {
+    expect(hrSoulAppManifest.engineAssets.workspace.source).toBe('./engine-assets/workspace')
+    expect(hrSoulAppManifest.engineAssets.skills).toEqual({
+      source: './engine-assets/skills',
+      targets: ['codex', 'claude-code'],
+    })
+    expect(qaSoulAppManifest.engineAssets.workspace.source).toBe('./engine-assets/workspace')
+    expect(qaSoulAppManifest.engineAssets.skills?.targets).toEqual(['codex', 'claude-code'])
+  })
+
+  it('rejects engine asset paths that escape the app root', () => {
+    const manifest = cloneManifest(hrSoulAppManifest) as SoulAppManifest & { engineAssets?: unknown }
+    manifest.engineAssets = {
+      workspace: { source: '../outside' },
+      skills: { source: './engine-assets/skills', targets: ['codex'] },
+    }
+
+    const result = validateSoulAppManifest(manifest, {
+      availableConnectorIds: ['ats', 'calendar'],
+      hostVersion: '0.12.1',
+    })
+
+    expect(result.status).toBe('invalid')
+    expect(result.issues).toContainEqual(expect.objectContaining({
+      code: 'unsafe_engine_asset_source',
+      path: 'engineAssets.workspace.source',
+    }))
+  })
+
   it('validates reference manifests against host discovery inputs', () => {
     const hrResult = validateSoulAppManifest(hrSoulAppManifest, {
       availableConnectorIds: ['ats', 'calendar'],

@@ -107,6 +107,70 @@ export type SoulAppMountedSurfaceScope = z.infer<typeof soulAppMountedSurfaceSco
 export const soulAppRequiredPermissionSchema = zod.string().regex(REQUIRED_PERMISSION_RE, 'requiredPermissions must use kind:action:target')
 export type SoulAppRequiredPermission = z.infer<typeof soulAppRequiredPermissionSchema>
 
+export const soulAppEngineTargetSchema = zod.enum(['codex', 'claude-code'])
+export type SoulAppEngineTarget = z.infer<typeof soulAppEngineTargetSchema>
+
+export const soulAppEngineAssetSourceSchema = zod.string().min(1)
+export type SoulAppEngineAssetSource = z.infer<typeof soulAppEngineAssetSourceSchema>
+
+export const soulAppWorkspaceEngineAssetsSchema = zod.object({
+  source: soulAppEngineAssetSourceSchema,
+})
+export type SoulAppWorkspaceEngineAssets = z.infer<typeof soulAppWorkspaceEngineAssetsSchema>
+
+export const soulAppSkillEngineAssetsSchema = zod.object({
+  source: soulAppEngineAssetSourceSchema,
+  targets: zod.array(soulAppEngineTargetSchema).min(1).readonly(),
+})
+export type SoulAppSkillEngineAssets = z.infer<typeof soulAppSkillEngineAssetsSchema>
+
+export const soulAppMcpClientEngineAssetsSchema = zod.object({
+  source: soulAppEngineAssetSourceSchema,
+  target: soulAppEngineTargetSchema,
+})
+export type SoulAppMcpClientEngineAssets = z.infer<typeof soulAppMcpClientEngineAssetsSchema>
+
+export const soulAppMcpServerTransportSchema = zod.enum(['stdio', 'http'])
+export type SoulAppMcpServerTransport = z.infer<typeof soulAppMcpServerTransportSchema>
+
+export const soulAppMcpServerEngineAssetsSchema = zod.object({
+  id: soulAppIdSchema,
+  package: zod.string().min(1),
+  requiredPermissions: zod.array(soulAppRequiredPermissionSchema).readonly().optional(),
+  transport: soulAppMcpServerTransportSchema,
+})
+export type SoulAppMcpServerEngineAssets = z.infer<typeof soulAppMcpServerEngineAssetsSchema>
+
+export const soulAppEngineAssetsSchema = zod.object({
+  mcpClients: zod.array(soulAppMcpClientEngineAssetsSchema).readonly().optional(),
+  mcpServers: zod.array(soulAppMcpServerEngineAssetsSchema).readonly().optional(),
+  skills: soulAppSkillEngineAssetsSchema.optional(),
+  workspace: soulAppWorkspaceEngineAssetsSchema,
+})
+export type SoulAppEngineAssets = z.infer<typeof soulAppEngineAssetsSchema>
+
+export const soulAppProjectionKindSchema = zod.enum(['workspace-file', 'native-skill', 'mcp-client'])
+export type SoulAppProjectionKind = z.infer<typeof soulAppProjectionKindSchema>
+
+export const soulAppProjectionReceiptEntrySchema = zod.object({
+  appId: soulAppIdSchema,
+  engineTarget: soulAppEngineTargetSchema.optional(),
+  generatedAt: zod.string().min(1),
+  kind: soulAppProjectionKindSchema,
+  sha256: zod.string().regex(/^[a-f0-9]{64}$/),
+  source: zod.string().min(1),
+  target: zod.string().min(1),
+})
+export type SoulAppProjectionReceiptEntry = z.infer<typeof soulAppProjectionReceiptEntrySchema>
+
+export const soulAppProjectionReceiptSchema = zod.object({
+  appId: soulAppIdSchema,
+  generatedAt: zod.string().min(1),
+  projections: zod.array(soulAppProjectionReceiptEntrySchema).readonly(),
+  version: zod.literal(1),
+})
+export type SoulAppProjectionReceipt = z.infer<typeof soulAppProjectionReceiptSchema>
+
 export const soulAppMountedSurfaceSchema = zod.object({
   entry: zod.string().regex(ROUTE_RE, 'surface entry must be an absolute mounted service route'),
   renderer: soulAppMountedSurfaceRendererSchema,
@@ -284,6 +348,7 @@ export const soulAppManifestSchema = zod.object({
   compatibility: soulAppCompatibilitySchema,
   connectors: soulAppConnectorsSchema,
   description: zod.string().min(1),
+  engineAssets: soulAppEngineAssetsSchema,
   exports: soulAppExportsSchema,
   healthcheck: soulAppHealthcheckSchema,
   id: soulAppIdSchema,
@@ -335,6 +400,7 @@ export const soulAppManifestIssueCodeSchema = zod.enum([
   'unsafe_local_service_url',
   'unsafe_permission_request',
   'unsafe_ui_surface',
+  'unsafe_engine_asset_source',
   'missing_ui_api_entry',
   'invalid_artifact_schema',
   'namespace_collision',
@@ -405,6 +471,17 @@ export function validateSoulAppManifest(
 
   const manifest = parsed.data
   const issues: SoulAppManifestValidationIssue[] = []
+
+  for (const source of engineAssetSources(manifest)) {
+    if (!source.value.startsWith('./') || source.value.includes('..')) {
+      issues.push({
+        code: 'unsafe_engine_asset_source',
+        message: 'engine asset source must be a relative app-local path.',
+        path: source.path,
+        severity: 'error',
+      })
+    }
+  }
 
   if (options.hostVersion && !hostVersionSatisfies(options.hostVersion, manifest.compatibility.host)) {
     issues.push({
@@ -660,6 +737,17 @@ function unsafeSurfaceMessage(surface: SoulAppMountedSurface): string | null {
   if (surface.renderer === 'sandboxed-frame' && !surface.entry.startsWith('/frames/'))
     return 'sandboxed-frame surfaces must use a /frames/* mounted service entry.'
   return null
+}
+
+function engineAssetSources(manifest: SoulAppManifest): Array<{ path: string, value: string }> {
+  return [
+    { path: 'engineAssets.workspace.source', value: manifest.engineAssets.workspace.source },
+    ...(manifest.engineAssets.skills ? [{ path: 'engineAssets.skills.source', value: manifest.engineAssets.skills.source }] : []),
+    ...(manifest.engineAssets.mcpClients ?? []).map((client, index) => ({
+      path: `engineAssets.mcpClients.${index}.source`,
+      value: client.source,
+    })),
+  ]
 }
 
 function manifestUiContributions(manifest: SoulAppManifest): Array<{

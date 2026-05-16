@@ -8,8 +8,10 @@ export const PROFILE_README_PATH = 'README.md'
 export const PROFILE_REVIEW_DIR = 'reviews'
 
 const PROFILE_GITIGNORE_PATTERNS = [
+  'AGENTS.md',
+  'CLAUDE.md',
   '.aiworker/sessions/',
-  '.aiworker/native-skill-projections.json',
+  '.aiworker/projections.json',
   '.agents/skills/aiworker-*',
   '.claude/skills/aiworker-*',
   'evidence/raw/',
@@ -52,6 +54,9 @@ export async function bootstrapProfileWorkspace(input: {
   name: string
   now: string
   rootPath: string
+  seedProfileFiles?: boolean
+  soulId: string
+  workerName: string
 }): Promise<ProfileWorkspaceBootstrapResult> {
   const rootPath = path.resolve(input.rootPath)
   await mkdir(rootPath, { recursive: true })
@@ -61,12 +66,14 @@ export async function bootstrapProfileWorkspace(input: {
   await mkdir(path.join(rootPath, 'evidence', 'raw'), { recursive: true })
   await mkdir(path.join(rootPath, '.aiworker', 'sessions'), { recursive: true })
 
-  await ensureFile(path.join(rootPath, PROFILE_README_PATH), renderInitialProfileReadme(input.name))
-  await ensureFile(path.join(rootPath, 'evidence', 'README.md'), renderEvidenceReadme())
-  await ensureGitignore(rootPath)
+  if (input.seedProfileFiles !== false) {
+    await ensureFile(path.join(rootPath, PROFILE_README_PATH), renderInitialProfileReadme(input.name))
+    await ensureFile(path.join(rootPath, 'evidence', 'README.md'), renderEvidenceReadme())
+    await ensureGitignore(rootPath)
+  }
 
   return {
-    git: ensureGitInitialCommit(rootPath, [PROFILE_README_PATH, '.gitignore', 'evidence/README.md']),
+    git: ensureGitInitialCommit(rootPath, await existingBootstrapPaths(rootPath)),
     profilePath: PROFILE_README_PATH,
   }
 }
@@ -165,6 +172,16 @@ async function ensureGitignore(rootPath: string): Promise<void> {
   await writeFile(filePath, next, 'utf8')
 }
 
+async function existingBootstrapPaths(rootPath: string): Promise<string[]> {
+  const paths = [PROFILE_README_PATH, '.gitignore', 'evidence/README.md']
+  const existing: string[] = []
+  for (const item of paths) {
+    if (await pathExists(path.join(rootPath, item)))
+      existing.push(item)
+  }
+  return existing
+}
+
 function ensureGitInitialCommit(rootPath: string, paths: string[]): GitOperationResult {
   if (!isGitAvailable())
     return { message: 'git is not available on PATH.', status: 'unavailable' }
@@ -184,6 +201,8 @@ function commitGitChanges(rootPath: string, paths: string[], message: string): G
     return { message: 'git is not available on PATH.', status: 'unavailable' }
   if (!isGitRepository(rootPath))
     return { message: 'workspace is not a git repository.', status: 'failed' }
+  if (paths.length === 0)
+    return { hash: currentHead(rootPath), message: 'no bootstrap files to commit.', status: 'skipped' }
 
   configureGitIdentity(rootPath)
   const add = runGit(rootPath, ['add', '--', ...paths])

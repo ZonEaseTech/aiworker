@@ -81,6 +81,15 @@ export const hrSoulAppManifest = soulAppManifestSchema.parse({
     ],
   },
   description: 'People operations Soul App for profiles, recruiting evidence, lifecycle touchpoints, and HR review policy.',
+  engineAssets: {
+    skills: {
+      source: './engine-assets/skills',
+      targets: ['codex', 'claude-code'],
+    },
+    workspace: {
+      source: './engine-assets/workspace',
+    },
+  },
   exports: {
     artifact: './src/protocol/artifact.ts',
     connector: './src/protocol/connectors.ts',
@@ -386,6 +395,15 @@ export const qaSoulAppManifest = soulAppManifestSchema.parse({
     ],
   },
   description: 'Quality Soul App for release workspaces, regression evidence, defect triage, and release gate review.',
+  engineAssets: {
+    skills: {
+      source: './engine-assets/skills',
+      targets: ['codex', 'claude-code'],
+    },
+    workspace: {
+      source: './engine-assets/workspace',
+    },
+  },
   exports: {
     artifact: './src/protocol/artifact.ts',
     connector: './src/protocol/connectors.ts',

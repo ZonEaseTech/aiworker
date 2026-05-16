@@ -1,3 +1,4 @@
+import type { SoulAppProjectionReceipt } from '@zonease/aiworker-shared'
 import type {
   ArtifactRow,
   EngineInvocationRow,
@@ -10,8 +11,8 @@ import type {
   WorkerRow,
   WorkspaceRow,
 } from '@zonease/aiworker-storage-sqlite/worker'
+import type { EngineAssetSource } from './engine-assets'
 import type { LocalExecutor, LocalExecutorEvent, LocalExecutorResult } from './executor'
-import type { NativeSkillProjectionManifest, NativeSkillSource } from './native-skills'
 import type { GitOperationResult, ProfileWorkspaceBootstrapResult } from './profile-ledger'
 
 import { randomUUID } from 'node:crypto'
@@ -48,10 +49,10 @@ import {
   upsertFile,
   upsertWorker,
 } from '@zonease/aiworker-storage-sqlite/worker'
+import { engineAssetProjectionReceiptPath, projectEngineAssetsToWorkspace } from './engine-assets'
 import { LocalWorkerEventBus } from './events'
 import { createExternalEngineExecutor } from './executor'
 import { LocalWorkspaceFiles } from './files'
-import { nativeSkillProjectionManifestPath, projectNativeSkillsToWorkspace } from './native-skills'
 import { bootstrapProfileWorkspace, promoteProfileRevision as promoteProfileRevisionFiles } from './profile-ledger'
 
 export interface LocalWorkerRuntimeOptions {
@@ -64,7 +65,7 @@ export interface LocalWorkerRuntimeOptions {
   }
   workspacesRoot: string
   executor?: LocalExecutor
-  nativeSkillSource?: NativeSkillSource | null
+  engineAssetSource?: EngineAssetSource | null
   now?: () => string
 }
 
@@ -137,7 +138,7 @@ export class LocalWorkerRuntime {
   readonly #workerInput: LocalWorkerRuntimeOptions['worker']
   readonly #workspacesRoot: string
   readonly #executor: LocalExecutor
-  readonly #nativeSkillSource: NativeSkillSource | null
+  readonly #engineAssetSource: EngineAssetSource | null
   readonly #now: () => string
   readonly bus = new LocalWorkerEventBus()
 
@@ -145,7 +146,7 @@ export class LocalWorkerRuntime {
     this.#workerInput = options.worker
     this.#workspacesRoot = path.resolve(options.workspacesRoot)
     this.#executor = options.executor ?? createExternalEngineExecutor()
-    this.#nativeSkillSource = options.nativeSkillSource ?? null
+    this.#engineAssetSource = options.engineAssetSource ?? null
     this.#now = options.now ?? (() => new Date().toISOString())
   }
 
@@ -188,10 +189,10 @@ export class LocalWorkerRuntime {
       sourcePointersJson: input.sourcePointers ?? [],
       metadataJson: {
         ...(input.metadata ?? {}),
-        nativeSkillProjection: layout.nativeSkills
+        engineAssetProjection: layout.engineAssets
           ? {
-              projectionCount: layout.nativeSkills.skills.length,
-              projectionManifestPath: nativeSkillProjectionManifestPath(),
+              projectionCount: layout.engineAssets.projections.length,
+              projectionManifestPath: engineAssetProjectionReceiptPath(),
             }
           : null,
         profileLedger: {
@@ -636,23 +637,32 @@ export class LocalWorkerRuntime {
   }
 
   private async prepareWorkspaceLayout(input: { name: string, rootPath: string }): Promise<{
-    nativeSkills: NativeSkillProjectionManifest | null
+    engineAssets: SoulAppProjectionReceipt | null
     profile: ProfileWorkspaceBootstrapResult
   }> {
+    const engineAssets = this.#engineAssetSource
+      ? await projectEngineAssetsToWorkspace({
+          appId: this.#engineAssetSource.appId,
+          now: this.#now(),
+          sourceRoot: this.#engineAssetSource.sourceRoot,
+          variables: {
+            appId: this.#engineAssetSource.appId,
+            soulId: this.#workerInput.soulId,
+            workerName: this.#workerInput.name,
+            workspaceName: input.name,
+          },
+          workspaceRoot: input.rootPath,
+        })
+      : null
     const profile = await bootstrapProfileWorkspace({
       name: input.name,
       now: this.#now(),
       rootPath: input.rootPath,
+      seedProfileFiles: !this.#engineAssetSource,
+      soulId: this.#workerInput.soulId,
+      workerName: this.#workerInput.name,
     })
-    const nativeSkills = this.#nativeSkillSource
-      ? await projectNativeSkillsToWorkspace({
-          appId: this.#nativeSkillSource.appId,
-          now: this.#now(),
-          sourceRoot: this.#nativeSkillSource.sourceRoot,
-          workspaceRoot: input.rootPath,
-        })
-      : null
-    return { nativeSkills, profile }
+    return { engineAssets, profile }
   }
 }
 

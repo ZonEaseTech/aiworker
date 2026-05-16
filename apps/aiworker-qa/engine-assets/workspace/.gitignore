@@ -1,0 +1,7 @@
+AGENTS.md
+CLAUDE.md
+.aiworker/sessions/
+.aiworker/projections.json
+.agents/skills/aiworker-*
+.claude/skills/aiworker-*
+evidence/raw/

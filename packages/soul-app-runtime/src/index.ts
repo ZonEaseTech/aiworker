@@ -43,6 +43,7 @@ export type {
 
 export interface StandaloneSoulAppRuntimeOptions {
   appHome: string
+  appSourceRoot?: string
   availableConnectorIds?: readonly string[]
   enabledConnectorIds?: readonly string[]
   executor?: LocalExecutor
@@ -54,6 +55,7 @@ export interface StandaloneSoulAppRuntimeOptions {
 }
 
 export interface MountedSoulAppTestRuntimeOptions {
+  appSourceRoot?: string
   availableConnectorIds?: readonly string[]
   dbPath: string
   enabledConnectorIds?: readonly string[]
@@ -101,6 +103,7 @@ export async function createStandaloneSoulAppRuntime(
   })
   const { runtime, worker } = await createRuntimeForApp({
     app,
+    appSourceRoot: options.appSourceRoot,
     executor: options.executor,
     now: options.now,
     workerId: options.workerId ?? `${app.manifest.id}-worker`,
@@ -130,6 +133,7 @@ export async function createMountedSoulAppTestRuntime(
   })
   const { runtime, worker } = await createRuntimeForApp({
     app,
+    appSourceRoot: options.appSourceRoot,
     executor: options.executor,
     now: options.now,
     workerId: options.workerId ?? `${app.manifest.id}-worker`,
@@ -182,6 +186,7 @@ function installAndEnable(
 
 async function createRuntimeForApp(input: {
   app: SoulAppDefinition
+  appSourceRoot?: string
   executor?: LocalExecutor
   now?: () => string
   workerId: string
@@ -205,6 +210,12 @@ async function createRuntimeForApp(input: {
     at: input.now?.(),
   })
   const runtime = createLocalWorkerRuntime({
+    engineAssetSource: input.appSourceRoot
+      ? {
+          appId: input.app.manifest.id,
+          sourceRoot: input.appSourceRoot,
+        }
+      : null,
     executor: input.executor,
     now: input.now,
     worker: {

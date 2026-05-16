@@ -1,4 +1,5 @@
 import type {
+  SoulAppEngineAssets,
   SoulAppManifest,
   SoulAppManifestValidationOptions,
   SoulAppProtocolHandlers,
@@ -18,11 +19,19 @@ export type {
   HostedSoulApp,
   SoulAppArtifactValidationResult,
   SoulAppCapability,
+  SoulAppEngineAssets,
+  SoulAppEngineTarget,
   SoulAppManifest,
+  SoulAppMcpClientEngineAssets,
+  SoulAppMcpServerEngineAssets,
+  SoulAppProjectionReceipt,
+  SoulAppProjectionReceiptEntry,
   SoulAppProtocolHandlers,
   SoulAppProtocolResult,
   SoulAppScopedContext,
   SoulAppSessionContext,
+  SoulAppSkillEngineAssets,
+  SoulAppWorkspaceEngineAssets,
   VerticalSoul,
 } from '@zonease/aiworker-shared'
 
@@ -129,6 +138,10 @@ export function defineSoulApp(input: SoulAppProtocolHandlers): SoulAppDefinition
     ...input,
     manifest,
   }
+}
+
+export function defineSoulAppEngineAssets(input: SoulAppEngineAssets): SoulAppEngineAssets {
+  return input
 }
 
 export function createSoulAppManifest(input: unknown, options: SoulAppManifestValidationOptions = {}): SoulAppManifest {

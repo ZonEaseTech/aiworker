@@ -1,5 +1,5 @@
 import { mkdtempSync } from 'node:fs'
-import { rm } from 'node:fs/promises'
+import { readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
@@ -111,6 +111,11 @@ describe('Host runtime boundary', () => {
       soulAppId: HR_APP_ID,
     })
     expect(created.snapshot.worker.id).toBe('hr-worker')
+
+    const workspace = await created.runtime.createWorkspace({ name: 'Ada Candidate', type: 'candidate' })
+    await expect(readFile(path.join(workspace.rootPath, 'AGENTS.md'), 'utf8')).resolves.toContain('AIWorker HR profile ledger')
+    await expect(readFile(path.join(workspace.rootPath, '.agents', 'skills', 'aiworker-hr-candidate-profile', 'SKILL.md'), 'utf8')).resolves.toContain('Candidate Profile')
+    await expect(readFile(path.join(workspace.rootPath, '.aiworker', 'projections.json'), 'utf8')).resolves.toContain('engine-assets/workspace/AGENTS.md')
 
     await expect(runtime.createSoulWorker({
       id: 'hr-worker',
