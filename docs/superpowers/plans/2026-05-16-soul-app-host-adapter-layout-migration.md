@@ -35,7 +35,7 @@
 ## Task 4: Verification And PMA Closeout
 
 - [x] Run the FEAT-090 verification commands.
-- [x] Mark FEAT-090 and PLAN-331 completed and update the changelog.
+- [x] Mark FEAT-090 and PLAN-333 completed and update the changelog.
 
 ## Execution Notes
 

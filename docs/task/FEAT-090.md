@@ -4,7 +4,7 @@
 - **priority**: P0
 - **owner**: codex
 - **createdAt**: 2026-05-16
-- **plan**: PLAN-331
+- **plan**: PLAN-333
 - **spec**: docs/superpowers/specs/2026-05-16-soul-app-authoring-layout-v2-design.md
 - **superpowersPlan**: docs/superpowers/plans/2026-05-16-soul-app-host-adapter-layout-migration.md
 - **relatesTo**: apps/aiworker-hr, apps/aiworker-qa, packages/shared, docs/soul-app-developer.md
@@ -51,7 +51,7 @@ moving protocol handlers, mounted services and standalone entrypoints into
 
 ## ActiveForm
 
-- 2026-05-16: Claimed after completing FEAT-089 / PLAN-330.
+- 2026-05-16: Claimed after completing FEAT-089 / PLAN-332.
 - 2026-05-16: Completed. HR/QA Host adapter files moved into
   `host-adapter/`, manifests/shared fixtures/package scripts/docs updated, and
   Phase 3 verification passed.

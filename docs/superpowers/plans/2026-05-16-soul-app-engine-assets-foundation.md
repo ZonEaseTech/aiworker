@@ -60,7 +60,7 @@
 - Create: `apps/aiworker-qa/engine-assets/workspace/README.md`
 - Create: `apps/aiworker-qa/engine-assets/workspace/.gitignore`
 - Create: `apps/aiworker-qa/engine-assets/workspace/evidence/README.md`
-- Modify: `docs/task/FEAT-088.md`, `docs/plan/PLAN-329.md`,
+- Modify: `docs/task/FEAT-088.md`, `docs/plan/PLAN-331.md`,
   `docs/changelog.md`
   - Keep PMA status and verification in sync.
 
@@ -975,7 +975,7 @@ Expected: both pass.
 
 **Files:**
 - Modify: `docs/task/FEAT-088.md`
-- Modify: `docs/plan/PLAN-329.md`
+- Modify: `docs/plan/PLAN-331.md`
 - Modify: `docs/changelog.md`
 
 - [ ] **Step 1: Run focused verification**
@@ -1011,13 +1011,13 @@ or fix them before closeout if they indicate real risk.
 
 - [ ] **Step 3: Update PMA docs**
 
-In `docs/task/FEAT-088.md` and `docs/plan/PLAN-329.md`, set status to
+In `docs/task/FEAT-088.md` and `docs/plan/PLAN-331.md`, set status to
 `completed` and add the exact verification commands run.
 
 In `docs/changelog.md`, prepend:
 
 ```md
-## 2026-05-16 [completed] FEAT-088 / PLAN-329 — Soul App Engine Assets Foundation
+## 2026-05-16 [completed] FEAT-088 / PLAN-331 — Soul App Engine Assets Foundation
 
 Implemented Phase 1 of Soul App authoring layout v2. HR workspace seed files
 and native skills now originate from `engine-assets`, core/runtime write a
@@ -1032,7 +1032,7 @@ Verification passed: ...
 Run:
 
 ```bash
-rg -n "apps/aiworker-hr/skills|native-skill-projections|renderAgentsFile|engineAssets|projections.json" apps packages docs/task/FEAT-088.md docs/plan/PLAN-329.md docs/changelog.md
+rg -n "apps/aiworker-hr/skills|native-skill-projections|renderAgentsFile|engineAssets|projections.json" apps packages docs/task/FEAT-088.md docs/plan/PLAN-331.md docs/changelog.md
 git status --short
 ```
 

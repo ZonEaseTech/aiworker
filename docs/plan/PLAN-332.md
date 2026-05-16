@@ -1,41 +1,50 @@
-# PLAN-332 Soul App MCP Client And Server Contract
+# PLAN-332 Soul App Product Layout Migration
 
 - **status**: completed
 - **owner**: codex
 - **createdAt**: 2026-05-16
-- **relatedTask**: FEAT-091
+- **relatedTask**: FEAT-089
 - **spec**: docs/superpowers/specs/2026-05-16-soul-app-authoring-layout-v2-design.md
-- **superpowersPlan**: docs/superpowers/plans/2026-05-16-soul-app-mcp-client-server-contract.md
+- **superpowersPlan**: docs/superpowers/plans/2026-05-16-soul-app-product-layout-migration.md
 
 ## Decision
 
-Implement Phase 4 of Soul App authoring layout v2 by making MCP client config a
-runtime projection target and MCP server declarations an app manifest contract.
+Implement Phase 2 of Soul App authoring layout v2 by moving official HR and QA
+product semantics into `product/` while leaving Host adapter files in place for
+Phase 3.
 
 ## Scope
 
-- Add shared manifest validation for generic MCP server package names.
-- Add Codex and Claude Code MCP client projection adapters.
-- Pass manifest `engineAssets` and selected worker engine target into workspace
-  projection.
-- Update runtime tests and Soul App authoring docs.
+- Move `capabilities/*/{prompt,review}.md` to `product/workflows/*/`.
+- Move `schemas/*.schema.json` to `product/artifacts/schemas/`.
+- Move `review/*.md` to `product/reviews/`.
+- Move `packs/*/SOUL.md` to `product/profiles/*/SOUL.md`.
+- Move `src/ui/*.tsx` to `product/web/...` and update manifest refs.
+- Update shared fixtures and manifest tests.
+- Update active authoring docs that still teach the old scattered layout.
 
 ## Out Of Scope
 
-- Scaffold v2 migration.
-- Real MCP server package implementation.
-- Engine-global MCP config mutation.
-- Secret management or engine login automation.
+- Moving `src/protocol`, `src/host-mounted.ts`, `src/standalone.ts` or package
+  entrypoints.
+- MCP client and server config.
+- Runtime behavior changes beyond path references.
+
+## Stage Review Gates
+
+1. Layout review: no active official app manifest points to old product paths.
+2. Product/Host boundary review: Host adapter files remain out of `product/`.
+3. Validation review: official HR/QA validate and app tests pass.
+4. Docs review: active authoring docs describe v2 layout.
 
 ## Verification
 
 - `bun test packages/shared/src/soul-app/manifest.test.ts`
 - `bun run --filter '@zonease/aiworker-shared' typecheck`
-- `bun test --timeout=30000 packages/core/src/worker/runtime.test.ts`
-- `bun run --filter '@zonease/aiworker-core' typecheck`
-- `bun run --filter '@zonease/aiworker-core' test`
-- `bun run --filter '@zonease/aiworker-soul-app-runtime' test`
-- `bun run --filter '@zonease/aiworker-soul-app-runtime' typecheck`
+- `bun run --filter '@zonease/aiworker-hr' test`
+- `bun run --filter '@zonease/aiworker-hr' validate`
+- `bun run --filter '@zonease/aiworker-qa' test`
+- `bun run --filter '@zonease/aiworker-qa' validate`
 - `bun run lint`
 - `git diff --check`
 - `bun run crg:update`
@@ -43,6 +52,6 @@ runtime projection target and MCP server declarations an app manifest contract.
 
 ## ActiveForm
 
-- 2026-05-16: Started after Phase 3 commit `b0117447`.
-- 2026-05-16: Completed with shared manifest tests, core runtime tests, core
-  package tests, soul-app-runtime tests, lint, diff check and CRG passing.
+- 2026-05-16: Drafted as Phase 2 after the engine-assets checkpoint commit.
+- 2026-05-16: Completed with HR/QA app tests, app validate commands, shared
+  manifest tests, lint, diff check and CRG self-review.

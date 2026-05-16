@@ -20,7 +20,7 @@
 - `packages/core/src/host/runtime.ts`: pass installed app manifest `engineAssets` into worker runtime.
 - `packages/soul-app-runtime/src/index.ts`: pass SDK app manifest `engineAssets` into standalone/mounted test runtime.
 - `docs/soul-app-developer.md`: document the MCP client/server boundary.
-- `docs/task/FEAT-091.md`, `docs/plan/PLAN-332.md`, `docs/changelog.md`: PMA closeout.
+- `docs/task/FEAT-091.md`, `docs/plan/PLAN-334.md`, `docs/changelog.md`: PMA closeout.
 
 ## Task 1: Shared Manifest MCP Server Contract
 
@@ -80,8 +80,8 @@
   - `engine-assets/mcp-clients/claude-code/.mcp.json`;
   - generic `packages/mcp-*` or `@zonease/aiworker-mcp-*` server naming;
   - no literal secrets in manifest or generated engine client config.
-- [x] Mark FEAT-091 and PLAN-332 completed.
-- [x] Add a changelog entry for FEAT-091 / PLAN-332.
+- [x] Mark FEAT-091 and PLAN-334 completed.
+- [x] Add a changelog entry for FEAT-091 / PLAN-334.
 - [x] Run:
   - `bun test packages/shared/src/soul-app/manifest.test.ts`
   - `bun run --filter '@zonease/aiworker-shared' typecheck`

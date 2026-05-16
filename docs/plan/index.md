@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-16 (PLAN-333 completed)
+> Updated: 2026-05-16 (PLAN-335 completed)
 
 ## Usage
 
@@ -357,8 +357,10 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-326 CLI 0.15.0 minor release**](PLAN-326.md) `2026-05-15`
 - [x] [**PLAN-327 CLI 0.15.1 patch release**](PLAN-327.md) `2026-05-15`
 - [x] [**PLAN-328 Soul workspace agent instructions projection**](PLAN-328.md) `2026-05-15`
-- [x] [**PLAN-329 Soul App Engine Assets Foundation**](PLAN-329.md) `2026-05-16`
-- [x] [**PLAN-330 Soul App Product Layout Migration**](PLAN-330.md) `2026-05-16`
-- [x] [**PLAN-331 Soul App Host Adapter Layout Migration**](PLAN-331.md) `2026-05-16`
-- [x] [**PLAN-332 Soul App MCP Client And Server Contract**](PLAN-332.md) `2026-05-16`
-- [x] [**PLAN-333 Soul App Scaffold And Legacy Layout Removal**](PLAN-333.md) `2026-05-16`
+- [x] [**PLAN-329 CLI updater global package source detection**](PLAN-329.md) `2026-05-15`
+- [x] [**PLAN-330 Restore GitHub-hosted release workflows**](PLAN-330.md) `2026-05-15`
+- [x] [**PLAN-331 Soul App Engine Assets Foundation**](PLAN-331.md) `2026-05-16`
+- [x] [**PLAN-332 Soul App Product Layout Migration**](PLAN-332.md) `2026-05-16`
+- [x] [**PLAN-333 Soul App Host Adapter Layout Migration**](PLAN-333.md) `2026-05-16`
+- [x] [**PLAN-334 Soul App MCP Client And Server Contract**](PLAN-334.md) `2026-05-16`
+- [x] [**PLAN-335 Soul App Scaffold And Legacy Layout Removal**](PLAN-335.md) `2026-05-16`

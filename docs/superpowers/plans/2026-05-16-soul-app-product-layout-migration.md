@@ -58,7 +58,7 @@
 
 **Files:**
 - Modify: `docs/task/FEAT-089.md`
-- Modify: `docs/plan/PLAN-330.md`
+- Modify: `docs/plan/PLAN-332.md`
 - Modify: `docs/changelog.md`
 
 - [ ] Run:
@@ -72,7 +72,7 @@
   - `git diff --check`
   - `bun run crg:update`
   - `bun run crg:review`
-- [ ] Mark FEAT-089 and PLAN-330 completed and update the changelog.
+- [ ] Mark FEAT-089 and PLAN-332 completed and update the changelog.
 
 ## Execution Notes
 

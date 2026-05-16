@@ -1,6 +1,6 @@
 # AIWorker Changelog
 
-## 2026-05-16 [completed] FEAT-092 / PLAN-333 — Soul App Scaffold And Legacy Layout Removal
+## 2026-05-16 [completed] FEAT-092 / PLAN-335 — Soul App Scaffold And Legacy Layout Removal
 
 Completed Phase 5 of Soul App authoring layout v2. New app scaffolds now
 generate the same inspectable `engine-assets/`, `product/` and `host-adapter/`
@@ -26,7 +26,7 @@ scattered layout as the default authoring model.
   `bun run --filter '@zonease/aiworker-cli' build:bundle`, `bun run lint`,
   `git diff --check`, `bun run crg:update`, and `bun run crg:review`.
 
-## 2026-05-16 [completed] FEAT-091 / PLAN-332 — Soul App MCP Client And Server Contract
+## 2026-05-16 [completed] FEAT-091 / PLAN-334 — Soul App MCP Client And Server Contract
 
 Completed Phase 4 of Soul App authoring layout v2. Soul App MCP client config
 is now a workspace-local engine asset projection, and MCP server declarations
@@ -58,7 +58,7 @@ implementations.
   `bun run lint`, `git diff --check`, `bun run crg:update`, and
   `bun run crg:review`.
 
-## 2026-05-16 [completed] FEAT-090 / PLAN-331 — Soul App Host Adapter Layout Migration
+## 2026-05-16 [completed] FEAT-090 / PLAN-333 — Soul App Host Adapter Layout Migration
 
 Completed Phase 3 of Soul App authoring layout v2. HR and QA app definitions,
 protocol exports, API entries, mounted services and standalone services now
@@ -83,7 +83,7 @@ and `engine-assets/` remains the engine projection source.
   `bun run --filter '@zonease/aiworker-qa' validate`, `bun run lint`,
   `git diff --check`, `bun run crg:update`, and `bun run crg:review`.
 
-## 2026-05-16 [completed] FEAT-089 / PLAN-330 — Soul App Product Layout Migration
+## 2026-05-16 [completed] FEAT-089 / PLAN-332 — Soul App Product Layout Migration
 
 Completed Phase 2 of Soul App authoring layout v2. HR and QA product semantics
 now live under `product/`, while Host adapter entrypoints remain in `src/` for
@@ -107,7 +107,7 @@ the next migration phase.
   `bun run --filter '@zonease/aiworker-qa' validate`, `bun run lint`,
   `git diff --check`, `bun run crg:update`, and `bun run crg:review`.
 
-## 2026-05-16 [completed] FEAT-088 / PLAN-329 — Soul App Engine Assets Foundation
+## 2026-05-16 [completed] FEAT-088 / PLAN-331 — Soul App Engine Assets Foundation
 
 Implemented Phase 1 of Soul App authoring layout v2. Official Soul Apps now
 declare `engineAssets`, HR native skills moved under `engine-assets/skills`, and
@@ -156,6 +156,51 @@ and Claude Code without duplicating the maintained instruction source.
   '@zonease/aiworker-core' typecheck`, `bun run --filter
   '@zonease/aiworker-core' test`, `bun run lint`, `git diff --check`,
   `bun run crg:update`, and `bun run crg:review`.
+## 2026-05-15 21:00 [completed] BUG-122 / PLAN-330 — Restore GitHub-hosted release workflows
+
+Restored `.github/workflows/lint.yml` and `.github/workflows/release.yml` from
+the temporary `self-hosted` / `ttpos-uat-linux` release fallback back to
+`ubuntu-latest`. The workflows keep `actions/setup-node@v4` with Node 24 and
+`NODE_OPTIONS=--max-old-space-size=1024`, because those settings address the
+self-hosted Node/runtime instability seen during the emergency release path
+without binding public CI to private runners.
+
+Release run `25909996552` remains the completed `v0.15.2` publication evidence.
+Future queued GitHub-hosted runs should be cancelled and re-run first; switching
+public repository workflows to self-hosted runners is an explicit last resort,
+not the default remediation path.
+
+## 2026-05-15 17:20 [completed] BUG-121 / PLAN-329 — CLI updater global package source detection
+
+Published `@zonease/aiworker-cli@0.15.2` as a patch release for `aiworker
+upgrade` reporting `source_unknown` from package-manager installs. The root
+cause was that npm/Bun global shims launch the package's `aiworker-bun.js`
+bundle, while the detector only recognized the global bin shim path.
+
+- Added updater regression coverage for npm global and Bun global package bundle
+  paths, then fixed `detectInstallSource` to classify them as `npm-global` and
+  `bun-global`.
+- Local gates passed: focused updater/CLI tests, CLI typecheck, Web build, CLI
+  bundle, dist release smoke, root `check`, root `test`, root `build`,
+  `git diff --check`, npm pack dry-run, `bun run crg:update` and
+  `bun run crg:review`.
+- GitHub Actions release run `25909996552` completed successfully on
+  `v0.15.2` / `6c0dc357` and published npm plus four GitHub Release binary
+  tarballs with four matching `.sha256` assets. Main lint run `25909992060`
+  also passed.
+- npm latest is `0.15.2`; explicit `bunx @zonease/aiworker-cli@0.15.2
+  --version` reports `aiworker/0.15.2 darwin-arm64 node-v24.3.0`.
+- Published-package smoke verified daemon runtimeVersion `0.15.2`, Host
+  Web/API, official HR/QA app bootstrap, app/soul listing and HR template
+  discovery.
+- Published Bun global install smoke verified `aiworker update --check --target
+  99.0.0` now reports `source.kind: bun-global`,
+  `source.canAutoUpgrade: true` and `status: update_available`.
+- CI note: the self-hosted runner exposed a 256MB Node heap OOM during
+  Typecheck/Web build. The lint and release workflows now set
+  `NODE_OPTIONS=--max-old-space-size=1024`; the temporary runner-group
+  public-repository access used to unblock the release was restored to
+  `allows_public_repositories=false`.
 
 ## 2026-05-15 14:08 [completed] REL-036 / PLAN-327 — CLI 0.15.1 patch release
 

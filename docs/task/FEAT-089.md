@@ -4,7 +4,7 @@
 - **priority**: P0
 - **owner**: codex
 - **createdAt**: 2026-05-16
-- **plan**: PLAN-330
+- **plan**: PLAN-332
 - **spec**: docs/superpowers/specs/2026-05-16-soul-app-authoring-layout-v2-design.md
 - **superpowersPlan**: docs/superpowers/plans/2026-05-16-soul-app-product-layout-migration.md
 - **relatesTo**: apps/aiworker-hr, apps/aiworker-qa, packages/shared, docs/soul-app-developer.md
@@ -55,6 +55,6 @@ scattered across top-level `capabilities/`, `review/`, `schemas/`, `packs/` and
 
 ## ActiveForm
 
-- 2026-05-16: Claimed after completing FEAT-088 / PLAN-329.
+- 2026-05-16: Claimed after completing FEAT-088 / PLAN-331.
 - 2026-05-16: Completed HR/QA product layout migration. Official app manifests,
   shared fixtures and active authoring docs now point to `product/`.

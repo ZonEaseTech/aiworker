@@ -432,6 +432,8 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REL-035 发布 aiworker CLI 0.15.0**](REL-035.md) `P1`
 - [x] [**REL-036 发布 aiworker CLI 0.15.1**](REL-036.md) `P1`
 - [x] [**FEAT-087 Soul workspace agent instructions projection**](FEAT-087.md) `P0`
+- [x] [**BUG-121 CLI self-updater cannot prove global package bundle source**](BUG-121.md) `P0`
+- [x] [**BUG-122 Restore GitHub-hosted release workflows after self-hosted fallback**](BUG-122.md) `P0`
 - [x] [**FEAT-088 Soul App Engine Assets Foundation**](FEAT-088.md) `P0`
 - [x] [**FEAT-089 Soul App Product Layout Migration**](FEAT-089.md) `P0`
 - [x] [**FEAT-090 Soul App Host Adapter Layout Migration**](FEAT-090.md) `P0`

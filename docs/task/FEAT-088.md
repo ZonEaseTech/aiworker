@@ -4,7 +4,7 @@
 - **priority**: P0
 - **owner**: codex
 - **createdAt**: 2026-05-16
-- **plan**: PLAN-329
+- **plan**: PLAN-331
 - **spec**: docs/superpowers/specs/2026-05-16-soul-app-authoring-layout-v2-design.md
 - **superpowersPlan**: docs/superpowers/plans/2026-05-16-soul-app-engine-assets-foundation.md
 - **relatesTo**: packages/shared, packages/soul-app-sdk, packages/soul-app-runtime, packages/core, apps/aiworker-hr, apps/aiworker-qa

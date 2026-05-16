@@ -80,6 +80,17 @@ describe('CLI updater core', () => {
       kind: 'npm-global',
       packageManager: 'npm',
     })
+
+    expect(detectInstallSource({
+      argv1: '/usr/local/lib/node_modules/@zonease/aiworker-cli/aiworker-bun.js',
+      moduleDir: '/usr/local/lib/node_modules/@zonease/aiworker-cli',
+      npmGlobalBinDirs: ['/usr/local/bin'],
+      realArgv1: '/usr/local/lib/node_modules/@zonease/aiworker-cli/aiworker-bun.js',
+    })).toMatchObject({
+      canAutoUpgrade: true,
+      kind: 'npm-global',
+      packageManager: 'npm',
+    })
   })
 
   it('detects bun global installs as auto-upgradeable bun installs', () => {
@@ -87,6 +98,17 @@ describe('CLI updater core', () => {
       argv1: '/Users/ben/.bun/bin/aiworker',
       moduleDir: '/Users/ben/.bun/install/global/node_modules/@zonease/aiworker-cli/dist',
       bunGlobalBinDirs: ['/Users/ben/.bun/bin'],
+    })).toMatchObject({
+      canAutoUpgrade: true,
+      kind: 'bun-global',
+      packageManager: 'bun',
+    })
+
+    expect(detectInstallSource({
+      argv1: '/Users/ben/.bun/install/global/node_modules/@zonease/aiworker-cli/aiworker-bun.js',
+      bunGlobalBinDirs: ['/Users/ben/.bun/bin'],
+      moduleDir: '/Users/ben/.bun/install/global/node_modules/@zonease/aiworker-cli',
+      realArgv1: '/Users/ben/.bun/install/global/node_modules/@zonease/aiworker-cli/aiworker-bun.js',
     })).toMatchObject({
       canAutoUpgrade: true,
       kind: 'bun-global',

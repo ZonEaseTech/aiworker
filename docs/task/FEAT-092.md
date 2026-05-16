@@ -4,7 +4,7 @@
 - **priority**: P0
 - **owner**: codex
 - **createdAt**: 2026-05-16
-- **plan**: PLAN-333
+- **plan**: PLAN-335
 - **spec**: docs/superpowers/specs/2026-05-16-soul-app-authoring-layout-v2-design.md
 - **superpowersPlan**: docs/superpowers/plans/2026-05-16-soul-app-scaffold-legacy-removal.md
 - **relatesTo**: apps/cli, docs/soul-app-developer.md, packages/soul-app-sdk, packages/soul-app-runtime
@@ -51,7 +51,7 @@ directories.
 
 ## ActiveForm
 
-- 2026-05-16: Claimed after FEAT-091 / PLAN-332 checkpoint.
+- 2026-05-16: Claimed after FEAT-091 / PLAN-334 checkpoint.
 - 2026-05-16: Completed v2 scaffold convergence. `aiworker app create` now
   writes `engine-assets/`, `product/` and `host-adapter/`; validation scans
   v2 production source directories while retaining legacy `src/` coverage.

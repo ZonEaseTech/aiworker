@@ -192,6 +192,14 @@ export function detectInstallSource(input: InstallSourceInput): InstallSource {
     return { canAutoUpgrade: true, kind: 'bun-global', packageManager: 'bun' }
   }
 
+  if (evidence.includes('/.bun/install/global/node_modules/@zonease/aiworker-cli')) {
+    return { canAutoUpgrade: true, kind: 'bun-global', packageManager: 'bun' }
+  }
+
+  if (evidence.includes('/lib/node_modules/@zonease/aiworker-cli')) {
+    return { canAutoUpgrade: true, kind: 'npm-global', packageManager: 'npm' }
+  }
+
   if (moduleDir.includes('/aiworker-darwin-') || moduleDir.includes('/aiworker-linux-')) {
     return { canAutoUpgrade: true, kind: 'github-tarball' }
   }

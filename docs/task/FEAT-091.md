@@ -4,7 +4,7 @@
 - **priority**: P0
 - **owner**: codex
 - **createdAt**: 2026-05-16
-- **plan**: PLAN-332
+- **plan**: PLAN-334
 - **spec**: docs/superpowers/specs/2026-05-16-soul-app-authoring-layout-v2-design.md
 - **superpowersPlan**: docs/superpowers/plans/2026-05-16-soul-app-mcp-client-server-contract.md
 - **relatesTo**: packages/shared, packages/core, packages/soul-app-runtime, docs/soul-app-developer.md
@@ -59,7 +59,7 @@ contract without making MCP servers private to one Soul workflow.
 
 ## ActiveForm
 
-- 2026-05-16: Claimed after FEAT-090 / PLAN-331 checkpoint.
+- 2026-05-16: Claimed after FEAT-090 / PLAN-333 checkpoint.
 - 2026-05-16: Completed. MCP client config now projects through Codex and
   Claude Code adapters, MCP server packages are validated as generic MCP
   packages, and Phase 4 verification passed.
