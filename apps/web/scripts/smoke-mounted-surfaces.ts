@@ -39,28 +39,37 @@ const server = Bun.serve({
   hostname: '127.0.0.1',
   port: 0,
 })
+const host = `http://${server.hostname}:${server.port}`
 
 let browser: Awaited<ReturnType<typeof chromium.launch>> | null = null
 try {
+  await assertMountedSurfaces(host)
+
   browser = await launchBrowser()
   const page = await browser.newPage({ viewport: { height: 900, width: 1280 } })
-  await page.goto(`http://${server.hostname}:${server.port}/`, { waitUntil: 'networkidle' })
+  await page.goto(`${host}/`, { waitUntil: 'networkidle' })
 
-  await page.getByText('Soul Apps (2)').waitFor({ timeout: 10_000 })
-  await page.getByRole('button', { name: 'Developer details' }).first().click()
+  await page.getByRole('heading', { name: 'Choose a Soul App to start' }).waitFor({ timeout: 10_000 })
+  await page.getByRole('button', { name: 'Start AIWorker HR' }).click()
+  const createWorkerDialog = page.getByRole('dialog', { name: 'Create worker' })
+  await createWorkerDialog.waitFor({ timeout: 10_000 })
+  await createWorkerDialog.getByRole('button', { name: 'Create worker' }).click()
+  await page.getByTestId('hr-people-workbench').waitFor({ timeout: 10_000 })
+  await page.getByRole('button', { name: 'HR settings' }).click()
+  const settingsDialog = page.getByRole('dialog', { name: 'Configure Soul workspace' })
+  await settingsDialog.waitFor({ timeout: 10_000 })
+  await settingsDialog.getByRole('button', { name: /Soul Apps/ }).click()
   await page.getByText('API /api/local/apps/aiworker-hr').waitFor({ timeout: 10_000 })
-  await page.getByText('4 mounted slots').first().waitFor({ timeout: 10_000 })
-  await page.getByText('HR Mounted Workbench').waitFor({ timeout: 10_000 })
-
-  const frameElement = page.frameLocator('iframe[title="People widget"]')
-  await frameElement.getByText('Mounted HR frame surface').waitFor({ timeout: 10_000 })
+  await page.getByText('4 mounted contributions').first().waitFor({ timeout: 10_000 })
 
   console.log(JSON.stringify({
     appId: 'aiworker-hr',
-    frame: 'pass',
-    host: `http://${server.hostname}:${server.port}`,
+    firstRun: 'pass',
+    frameSurface: 'pass',
+    host,
     status: 'pass',
-    surface: 'pass',
+    settings: 'pass',
+    surfaceDescriptor: 'pass',
   }))
 }
 finally {
@@ -87,4 +96,32 @@ async function launchBrowser(): Promise<Awaited<ReturnType<typeof chromium.launc
       headless: true,
     })
   }
+}
+
+async function assertMountedSurfaces(host: string): Promise<void> {
+  const descriptor = await fetchJson<{
+    renderer?: string
+    title?: string
+    type?: string
+  }>(`${host}/api/local/apps/aiworker-hr/surfaces/hr-home`)
+  if (descriptor.title !== 'HR Mounted Workbench' || descriptor.renderer !== 'host-descriptor' || descriptor.type !== 'aiworker.surface.descriptor.v1')
+    throw new Error('HR mounted descriptor surface did not resolve through the Host API.')
+
+  const widget = await fetchJson<{
+    frame?: { title?: string, url?: string }
+  }>(`${host}/api/local/apps/aiworker-hr/surfaces/hr-people-widget`)
+  if (widget.frame?.title !== 'People widget' || !widget.frame.url)
+    throw new Error('HR mounted frame surface did not resolve through the Host API.')
+
+  const frame = await fetch(new URL(widget.frame.url, host))
+  const html = await frame.text()
+  if (!frame.ok || !html.includes('Mounted HR frame surface'))
+    throw new Error(`HR mounted frame content did not load: ${frame.status}`)
+}
+
+async function fetchJson<T>(url: string): Promise<T> {
+  const response = await fetch(url)
+  if (!response.ok)
+    throw new Error(`Request failed ${response.status}: ${url}`)
+  return await response.json() as T
 }
