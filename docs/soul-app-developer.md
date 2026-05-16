@@ -54,14 +54,23 @@ Reference apps use the fuller app layout:
 ```text
 apps/<app-id>/
   soul-app.manifest.json
+  engine-assets/
+    workspace/
+    skills/
+  product/
+    workflows/*/{prompt,review}.md
+    artifacts/schemas/*.schema.json
+    reviews/*.md
+    profiles/*/SOUL.md
+    web/
+      artifact-previews/
+      panels/
+      routes/
+      widgets/
   src/index.ts
   src/standalone.ts
   src/host-mounted.ts
   src/protocol/*.ts
-  schemas/*.schema.json
-  capabilities/*/{prompt,review}.md
-  review/*.md
-  packs/*/SOUL.md
 ```
 
 Use kebab-case app ids. Storage namespace, protocol route prefix, mounted

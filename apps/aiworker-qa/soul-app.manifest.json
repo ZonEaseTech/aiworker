@@ -15,9 +15,9 @@
       "description": "Coverage matrix mapped to release risk.",
       "id": "regression-matrix",
       "name": "Regression Matrix",
-      "previewRef": "./src/ui/regression-matrix-preview.tsx",
-      "reviewPolicyRef": "./review/regression-matrix.md",
-      "schemaRef": "./schemas/regression-matrix.schema.json",
+      "previewRef": "./product/web/artifact-previews/regression-matrix-preview.tsx",
+      "reviewPolicyRef": "./product/reviews/regression-matrix.md",
+      "schemaRef": "./product/artifacts/schemas/regression-matrix.schema.json",
       "schemaSha256": "6a4f3494764431e8785a82865215eabc4c4678dfb4e447eda4d4684f341892a0",
       "version": "0.1.0"
     },
@@ -25,9 +25,9 @@
       "description": "Go/no-go release readiness artifact.",
       "id": "release-gate",
       "name": "Release Gate",
-      "previewRef": "./src/ui/release-gate-preview.tsx",
-      "reviewPolicyRef": "./review/release-gate.md",
-      "schemaRef": "./schemas/release-gate.schema.json",
+      "previewRef": "./product/web/artifact-previews/release-gate-preview.tsx",
+      "reviewPolicyRef": "./product/reviews/release-gate.md",
+      "schemaRef": "./product/artifacts/schemas/release-gate.schema.json",
       "schemaSha256": "0c953a3453ff235c419600073c70c1f155976f448c4567711b511d83668a09e4",
       "version": "0.1.0"
     }
@@ -42,8 +42,8 @@
       "name": "Regression Matrix",
       "outputKind": "regression-matrix",
       "packRefs": [],
-      "promptRef": "./capabilities/regression-matrix/prompt.md",
-      "reviewRubricRef": "./capabilities/regression-matrix/review.md",
+      "promptRef": "./product/workflows/regression-matrix/prompt.md",
+      "reviewRubricRef": "./product/workflows/regression-matrix/review.md",
       "version": "0.1.0",
       "workspaceTypes": [
         "release",
@@ -59,8 +59,8 @@
       "name": "Release Gate",
       "outputKind": "release-gate",
       "packRefs": [],
-      "promptRef": "./capabilities/release-gate/prompt.md",
-      "reviewRubricRef": "./capabilities/release-gate/review.md",
+      "promptRef": "./product/workflows/release-gate/prompt.md",
+      "reviewRubricRef": "./product/workflows/release-gate/review.md",
       "version": "0.1.0",
       "workspaceTypes": [
         "release"
@@ -148,7 +148,7 @@
     "refs": [
       {
         "id": "qa-reviewer",
-        "ref": "packs/qa-reviewer/SOUL.md",
+        "ref": "product/profiles/qa-reviewer/SOUL.md",
         "source": "embedded",
         "version": "0.1.0"
       }
@@ -236,7 +236,7 @@
   "ui": {
     "artifactPreviews": [
       {
-        "entry": "./src/ui/release-gate-preview.tsx",
+        "entry": "./product/web/artifact-previews/release-gate-preview.tsx",
         "id": "release-gate-preview",
         "label": "Release gate preview",
         "slot": "artifact-preview",
@@ -245,7 +245,7 @@
     ],
     "panels": [
       {
-        "entry": "./src/ui/release-panel.tsx",
+        "entry": "./product/web/panels/release-panel.tsx",
         "id": "qa-release-panel",
         "label": "Release panel",
         "slot": "panel",
@@ -261,7 +261,7 @@
     ],
     "reviewPanels": [
       {
-        "entry": "./src/ui/review-panel.tsx",
+        "entry": "./product/web/panels/review-panel.tsx",
         "id": "qa-review-panel",
         "label": "QA review panel",
         "slot": "review-panel"
@@ -269,7 +269,7 @@
     ],
     "routes": [
       {
-        "entry": "./src/ui/qa-route.tsx",
+        "entry": "./product/web/routes/qa-route.tsx",
         "id": "qa-home",
         "label": "QA",
         "path": "/qa",
@@ -316,7 +316,7 @@
     },
     "workspaceWidgets": [
       {
-        "entry": "./src/ui/release-widget.tsx",
+        "entry": "./product/web/widgets/release-widget.tsx",
         "id": "qa-release-widget",
         "label": "Release widget",
         "slot": "workspace-widget",

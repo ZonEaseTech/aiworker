@@ -433,3 +433,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REL-036 发布 aiworker CLI 0.15.1**](REL-036.md) `P1`
 - [x] [**FEAT-087 Soul workspace agent instructions projection**](FEAT-087.md) `P0`
 - [x] [**FEAT-088 Soul App Engine Assets Foundation**](FEAT-088.md) `P0`
+- [x] [**FEAT-089 Soul App Product Layout Migration**](FEAT-089.md) `P0`

@@ -15,9 +15,9 @@ export const hrSoulAppManifest = soulAppManifestSchema.parse({
       description: 'Source-backed HR lifecycle profile.',
       id: 'person-profile',
       name: 'Person Profile',
-      previewRef: './src/ui/person-profile-preview.tsx',
-      reviewPolicyRef: './review/person-profile.md',
-      schemaRef: './schemas/person-profile.schema.json',
+      previewRef: './product/web/artifact-previews/person-profile-preview.tsx',
+      reviewPolicyRef: './product/reviews/person-profile.md',
+      schemaRef: './product/artifacts/schemas/person-profile.schema.json',
       schemaSha256: HR_PERSON_PROFILE_SCHEMA_HASH,
       version: '0.1.0',
     },
@@ -25,9 +25,9 @@ export const hrSoulAppManifest = soulAppManifestSchema.parse({
       description: 'Role-related candidate screen with missing evidence and risks.',
       id: 'candidate-screen',
       name: 'Candidate Screen',
-      previewRef: './src/ui/candidate-screen-preview.tsx',
-      reviewPolicyRef: './review/candidate-screen.md',
-      schemaRef: './schemas/candidate-screen.schema.json',
+      previewRef: './product/web/artifact-previews/candidate-screen-preview.tsx',
+      reviewPolicyRef: './product/reviews/candidate-screen.md',
+      schemaRef: './product/artifacts/schemas/candidate-screen.schema.json',
       schemaSha256: HR_CANDIDATE_SCREEN_SCHEMA_HASH,
       version: '0.1.0',
     },
@@ -40,8 +40,8 @@ export const hrSoulAppManifest = soulAppManifestSchema.parse({
       name: 'Person Profile',
       outputKind: 'person-profile',
       packRefs: [],
-      promptRef: './capabilities/person-profile/prompt.md',
-      reviewRubricRef: './capabilities/person-profile/review.md',
+      promptRef: './product/workflows/person-profile/prompt.md',
+      reviewRubricRef: './product/workflows/person-profile/review.md',
       version: '0.1.0',
       workspaceTypes: ['people-profile'],
     },
@@ -52,8 +52,8 @@ export const hrSoulAppManifest = soulAppManifestSchema.parse({
       name: 'Candidate Screen',
       outputKind: 'candidate-screen',
       packRefs: [],
-      promptRef: './capabilities/candidate-screen/prompt.md',
-      reviewRubricRef: './capabilities/candidate-screen/review.md',
+      promptRef: './product/workflows/candidate-screen/prompt.md',
+      reviewRubricRef: './product/workflows/candidate-screen/review.md',
       version: '0.1.0',
       workspaceTypes: ['role-search', 'candidate'],
     },
@@ -115,7 +115,7 @@ export const hrSoulAppManifest = soulAppManifestSchema.parse({
   name: 'AIWorker HR',
   pack: {
     refs: [
-      { id: 'hr-recruiting', ref: 'packs/hr-recruiting/SOUL.md', source: 'embedded', version: '0.1.0' },
+      { id: 'hr-recruiting', ref: 'product/profiles/hr-recruiting/SOUL.md', source: 'embedded', version: '0.1.0' },
     ],
   },
   permissions: [
@@ -197,7 +197,7 @@ export const hrSoulAppManifest = soulAppManifestSchema.parse({
   ui: {
     artifactPreviews: [
       {
-        entry: './src/ui/person-profile-preview.tsx',
+        entry: './product/web/artifact-previews/person-profile-preview.tsx',
         id: 'person-profile-preview',
         label: 'Person profile preview',
         slot: 'artifact-preview',
@@ -206,7 +206,7 @@ export const hrSoulAppManifest = soulAppManifestSchema.parse({
     ],
     panels: [
       {
-        entry: './src/ui/profile-panel.tsx',
+        entry: './product/web/panels/profile-panel.tsx',
         id: 'hr-profile-panel',
         label: 'Profile panel',
         slot: 'panel',
@@ -220,7 +220,7 @@ export const hrSoulAppManifest = soulAppManifestSchema.parse({
     ],
     reviewPanels: [
       {
-        entry: './src/ui/review-panel.tsx',
+        entry: './product/web/panels/review-panel.tsx',
         id: 'hr-review-panel',
         label: 'HR review panel',
         slot: 'review-panel',
@@ -228,7 +228,7 @@ export const hrSoulAppManifest = soulAppManifestSchema.parse({
     ],
     routes: [
       {
-        entry: './src/ui/hr-route.tsx',
+        entry: './product/web/routes/hr-route.tsx',
         id: 'hr-home',
         label: 'HR',
         path: '/hr',
@@ -280,7 +280,7 @@ export const hrSoulAppManifest = soulAppManifestSchema.parse({
     },
     workspaceWidgets: [
       {
-        entry: './src/ui/people-widget.tsx',
+        entry: './product/web/widgets/people-widget.tsx',
         id: 'hr-people-widget',
         label: 'People widget',
         slot: 'workspace-widget',
@@ -329,9 +329,9 @@ export const qaSoulAppManifest = soulAppManifestSchema.parse({
       description: 'Coverage matrix mapped to release risk.',
       id: 'regression-matrix',
       name: 'Regression Matrix',
-      previewRef: './src/ui/regression-matrix-preview.tsx',
-      reviewPolicyRef: './review/regression-matrix.md',
-      schemaRef: './schemas/regression-matrix.schema.json',
+      previewRef: './product/web/artifact-previews/regression-matrix-preview.tsx',
+      reviewPolicyRef: './product/reviews/regression-matrix.md',
+      schemaRef: './product/artifacts/schemas/regression-matrix.schema.json',
       schemaSha256: QA_REGRESSION_MATRIX_SCHEMA_HASH,
       version: '0.1.0',
     },
@@ -339,9 +339,9 @@ export const qaSoulAppManifest = soulAppManifestSchema.parse({
       description: 'Go/no-go release readiness artifact.',
       id: 'release-gate',
       name: 'Release Gate',
-      previewRef: './src/ui/release-gate-preview.tsx',
-      reviewPolicyRef: './review/release-gate.md',
-      schemaRef: './schemas/release-gate.schema.json',
+      previewRef: './product/web/artifact-previews/release-gate-preview.tsx',
+      reviewPolicyRef: './product/reviews/release-gate.md',
+      schemaRef: './product/artifacts/schemas/release-gate.schema.json',
       schemaSha256: QA_RELEASE_GATE_SCHEMA_HASH,
       version: '0.1.0',
     },
@@ -354,8 +354,8 @@ export const qaSoulAppManifest = soulAppManifestSchema.parse({
       name: 'Regression Matrix',
       outputKind: 'regression-matrix',
       packRefs: [],
-      promptRef: './capabilities/regression-matrix/prompt.md',
-      reviewRubricRef: './capabilities/regression-matrix/review.md',
+      promptRef: './product/workflows/regression-matrix/prompt.md',
+      reviewRubricRef: './product/workflows/regression-matrix/review.md',
       version: '0.1.0',
       workspaceTypes: ['release', 'test-suite'],
     },
@@ -366,8 +366,8 @@ export const qaSoulAppManifest = soulAppManifestSchema.parse({
       name: 'Release Gate',
       outputKind: 'release-gate',
       packRefs: [],
-      promptRef: './capabilities/release-gate/prompt.md',
-      reviewRubricRef: './capabilities/release-gate/review.md',
+      promptRef: './product/workflows/release-gate/prompt.md',
+      reviewRubricRef: './product/workflows/release-gate/review.md',
       version: '0.1.0',
       workspaceTypes: ['release'],
     },
@@ -429,7 +429,7 @@ export const qaSoulAppManifest = soulAppManifestSchema.parse({
   name: 'AIWorker QA',
   pack: {
     refs: [
-      { id: 'qa-reviewer', ref: 'packs/qa-reviewer/SOUL.md', source: 'embedded', version: '0.1.0' },
+      { id: 'qa-reviewer', ref: 'product/profiles/qa-reviewer/SOUL.md', source: 'embedded', version: '0.1.0' },
     ],
   },
   permissions: [
@@ -511,7 +511,7 @@ export const qaSoulAppManifest = soulAppManifestSchema.parse({
   ui: {
     artifactPreviews: [
       {
-        entry: './src/ui/release-gate-preview.tsx',
+        entry: './product/web/artifact-previews/release-gate-preview.tsx',
         id: 'release-gate-preview',
         label: 'Release gate preview',
         slot: 'artifact-preview',
@@ -520,7 +520,7 @@ export const qaSoulAppManifest = soulAppManifestSchema.parse({
     ],
     panels: [
       {
-        entry: './src/ui/release-panel.tsx',
+        entry: './product/web/panels/release-panel.tsx',
         id: 'qa-release-panel',
         label: 'Release panel',
         slot: 'panel',
@@ -534,7 +534,7 @@ export const qaSoulAppManifest = soulAppManifestSchema.parse({
     ],
     reviewPanels: [
       {
-        entry: './src/ui/review-panel.tsx',
+        entry: './product/web/panels/review-panel.tsx',
         id: 'qa-review-panel',
         label: 'QA review panel',
         slot: 'review-panel',
@@ -542,7 +542,7 @@ export const qaSoulAppManifest = soulAppManifestSchema.parse({
     ],
     routes: [
       {
-        entry: './src/ui/qa-route.tsx',
+        entry: './product/web/routes/qa-route.tsx',
         id: 'qa-home',
         label: 'QA',
         path: '/qa',
@@ -587,7 +587,7 @@ export const qaSoulAppManifest = soulAppManifestSchema.parse({
     },
     workspaceWidgets: [
       {
-        entry: './src/ui/release-widget.tsx',
+        entry: './product/web/widgets/release-widget.tsx',
         id: 'qa-release-widget',
         label: 'Release widget',
         slot: 'workspace-widget',

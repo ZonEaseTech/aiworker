@@ -1,5 +1,29 @@
 # AIWorker Changelog
 
+## 2026-05-16 [completed] FEAT-089 / PLAN-330 — Soul App Product Layout Migration
+
+Completed Phase 2 of Soul App authoring layout v2. HR and QA product semantics
+now live under `product/`, while Host adapter entrypoints remain in `src/` for
+the next migration phase.
+
+- Moved official app workflow prompts and review rubrics to
+  `product/workflows/*/{prompt,review}.md`.
+- Moved artifact schemas to `product/artifacts/schemas/`, artifact review
+  policies to `product/reviews/`, profile/SOUL packs to `product/profiles/`,
+  and Web product contribution files to `product/web/`.
+- Updated HR/QA manifests, shared fixtures and manifest tests to use the v2
+  product paths.
+- Updated active Soul App developer docs so reference app layout no longer
+  teaches the old scattered `capabilities/`, `review/`, `schemas/`, `packs/`
+  and `src/ui/` structure as the default.
+- Verification passed: `bun test packages/shared/src/soul-app/manifest.test.ts`,
+  `bun run --filter '@zonease/aiworker-shared' typecheck`,
+  `bun run --filter '@zonease/aiworker-hr' test`,
+  `bun run --filter '@zonease/aiworker-hr' validate`,
+  `bun run --filter '@zonease/aiworker-qa' test`,
+  `bun run --filter '@zonease/aiworker-qa' validate`, `bun run lint`,
+  `git diff --check`, `bun run crg:update`, and `bun run crg:review`.
+
 ## 2026-05-16 [completed] FEAT-088 / PLAN-329 — Soul App Engine Assets Foundation
 
 Implemented Phase 1 of Soul App authoring layout v2. Official Soul Apps now

@@ -358,3 +358,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-327 CLI 0.15.1 patch release**](PLAN-327.md) `2026-05-15`
 - [x] [**PLAN-328 Soul workspace agent instructions projection**](PLAN-328.md) `2026-05-15`
 - [x] [**PLAN-329 Soul App Engine Assets Foundation**](PLAN-329.md) `2026-05-16`
+- [x] [**PLAN-330 Soul App Product Layout Migration**](PLAN-330.md) `2026-05-16`

@@ -15,9 +15,9 @@
       "description": "Source-backed HR lifecycle profile.",
       "id": "person-profile",
       "name": "Person Profile",
-      "previewRef": "./src/ui/person-profile-preview.tsx",
-      "reviewPolicyRef": "./review/person-profile.md",
-      "schemaRef": "./schemas/person-profile.schema.json",
+      "previewRef": "./product/web/artifact-previews/person-profile-preview.tsx",
+      "reviewPolicyRef": "./product/reviews/person-profile.md",
+      "schemaRef": "./product/artifacts/schemas/person-profile.schema.json",
       "schemaSha256": "35c14e3d4c0fe9fd95c87e9bc47a210e21f99bcb1b079aa99a95bb93e820c8ab",
       "version": "0.1.0"
     },
@@ -25,9 +25,9 @@
       "description": "Role-related candidate screen with missing evidence and risks.",
       "id": "candidate-screen",
       "name": "Candidate Screen",
-      "previewRef": "./src/ui/candidate-screen-preview.tsx",
-      "reviewPolicyRef": "./review/candidate-screen.md",
-      "schemaRef": "./schemas/candidate-screen.schema.json",
+      "previewRef": "./product/web/artifact-previews/candidate-screen-preview.tsx",
+      "reviewPolicyRef": "./product/reviews/candidate-screen.md",
+      "schemaRef": "./product/artifacts/schemas/candidate-screen.schema.json",
       "schemaSha256": "e8bd207be63eab23073cd47e41092f1d753c38d609383206e94334dd984b309c",
       "version": "0.1.0"
     }
@@ -42,8 +42,8 @@
       "name": "Person Profile",
       "outputKind": "person-profile",
       "packRefs": [],
-      "promptRef": "./capabilities/person-profile/prompt.md",
-      "reviewRubricRef": "./capabilities/person-profile/review.md",
+      "promptRef": "./product/workflows/person-profile/prompt.md",
+      "reviewRubricRef": "./product/workflows/person-profile/review.md",
       "version": "0.1.0",
       "workspaceTypes": [
         "people-profile"
@@ -58,8 +58,8 @@
       "name": "Candidate Screen",
       "outputKind": "candidate-screen",
       "packRefs": [],
-      "promptRef": "./capabilities/candidate-screen/prompt.md",
-      "reviewRubricRef": "./capabilities/candidate-screen/review.md",
+      "promptRef": "./product/workflows/candidate-screen/prompt.md",
+      "reviewRubricRef": "./product/workflows/candidate-screen/review.md",
       "version": "0.1.0",
       "workspaceTypes": [
         "role-search",
@@ -148,7 +148,7 @@
     "refs": [
       {
         "id": "hr-recruiting",
-        "ref": "packs/hr-recruiting/SOUL.md",
+        "ref": "product/profiles/hr-recruiting/SOUL.md",
         "source": "embedded",
         "version": "0.1.0"
       }
@@ -236,7 +236,7 @@
   "ui": {
     "artifactPreviews": [
       {
-        "entry": "./src/ui/person-profile-preview.tsx",
+        "entry": "./product/web/artifact-previews/person-profile-preview.tsx",
         "id": "person-profile-preview",
         "label": "Person profile preview",
         "slot": "artifact-preview",
@@ -245,7 +245,7 @@
     ],
     "panels": [
       {
-        "entry": "./src/ui/profile-panel.tsx",
+        "entry": "./product/web/panels/profile-panel.tsx",
         "id": "hr-profile-panel",
         "label": "Profile panel",
         "slot": "panel",
@@ -261,7 +261,7 @@
     ],
     "reviewPanels": [
       {
-        "entry": "./src/ui/review-panel.tsx",
+        "entry": "./product/web/panels/review-panel.tsx",
         "id": "hr-review-panel",
         "label": "HR review panel",
         "slot": "review-panel"
@@ -269,7 +269,7 @@
     ],
     "routes": [
       {
-        "entry": "./src/ui/hr-route.tsx",
+        "entry": "./product/web/routes/hr-route.tsx",
         "id": "hr-home",
         "label": "HR",
         "path": "/hr",
@@ -323,7 +323,7 @@
     },
     "workspaceWidgets": [
       {
-        "entry": "./src/ui/people-widget.tsx",
+        "entry": "./product/web/widgets/people-widget.tsx",
         "id": "hr-people-widget",
         "label": "People widget",
         "slot": "workspace-widget",

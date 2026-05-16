@@ -77,7 +77,12 @@ describe('Soul App manifest schema', () => {
 
   it('keeps fixture contributions explicit enough for Host discovery', () => {
     expect(hrSoulAppManifest.artifactTypes[0]?.schemaSha256).toBe('35c14e3d4c0fe9fd95c87e9bc47a210e21f99bcb1b079aa99a95bb93e820c8ab')
-    expect(hrSoulAppManifest.capabilities[0]?.promptRef).toBe('./capabilities/person-profile/prompt.md')
+    expect(hrSoulAppManifest.capabilities[0]?.promptRef).toBe('./product/workflows/person-profile/prompt.md')
+    expect(hrSoulAppManifest.capabilities[0]?.reviewRubricRef).toBe('./product/workflows/person-profile/review.md')
+    expect(hrSoulAppManifest.artifactTypes[0]?.schemaRef).toBe('./product/artifacts/schemas/person-profile.schema.json')
+    expect(hrSoulAppManifest.artifactTypes[0]?.previewRef).toBe('./product/web/artifact-previews/person-profile-preview.tsx')
+    expect(hrSoulAppManifest.artifactTypes[0]?.reviewPolicyRef).toBe('./product/reviews/person-profile.md')
+    expect(hrSoulAppManifest.pack.refs[0]?.ref).toBe('product/profiles/hr-recruiting/SOUL.md')
     expect(hrSoulAppManifest.workspaceTypes[0]?.defaultCapabilityIds).toEqual(['person-profile'])
     expect(hrSoulAppManifest.connectors.required[0]?.scopes).toContain('candidates.read')
     expect(hrSoulAppManifest.permissions).toContainEqual(expect.objectContaining({
@@ -98,6 +103,7 @@ describe('Soul App manifest schema', () => {
       requiredPermissions: ['search:read:aiworker-hr'],
     }))
     expect(hrSoulAppManifest.ui.artifactPreviews[0]).toEqual(expect.objectContaining({
+      entry: './product/web/artifact-previews/person-profile-preview.tsx',
       slot: 'artifact-preview',
       target: 'person-profile',
     }))
@@ -111,6 +117,12 @@ describe('Soul App manifest schema', () => {
       renderer: 'sandboxed-frame',
       scope: 'workspace',
     })
+    expect(qaSoulAppManifest.capabilities[0]?.promptRef).toBe('./product/workflows/regression-matrix/prompt.md')
+    expect(qaSoulAppManifest.capabilities[0]?.reviewRubricRef).toBe('./product/workflows/regression-matrix/review.md')
+    expect(qaSoulAppManifest.artifactTypes[0]?.schemaRef).toBe('./product/artifacts/schemas/regression-matrix.schema.json')
+    expect(qaSoulAppManifest.artifactTypes[0]?.reviewPolicyRef).toBe('./product/reviews/regression-matrix.md')
+    expect(qaSoulAppManifest.pack.refs[0]?.ref).toBe('product/profiles/qa-reviewer/SOUL.md')
+    expect(qaSoulAppManifest.ui.routes[0]?.entry).toBe('./product/web/routes/qa-route.tsx')
   })
 
   it('accepts app-declared shell toolbar and search descriptors', () => {
@@ -385,6 +397,7 @@ describe('Soul App manifest schema', () => {
     if (result.status === 'ok') {
       expect(result.manifest.exports.runtime).toBe('./src/protocol/runtime.ts')
       expect(result.manifest.modes.hostMounted.entry).toBe('./src/host-mounted.ts')
+      expect(result.manifest.artifactTypes[0]?.schemaRef).toBe('./product/artifacts/schemas/person-profile.schema.json')
     }
   })
 
