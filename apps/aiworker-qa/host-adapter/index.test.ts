@@ -16,8 +16,8 @@ import {
 import { afterEach, describe, expect, it } from 'bun:test'
 
 import qaManifestJson from '../soul-app.manifest.json' with { type: 'json' }
-import { serveHostMounted } from './host-mounted'
 import { QA_REFERENCE_APP_BOUNDARY, qaReferenceSoulApp } from './index'
+import { serveHostMounted } from './mounted/host-mounted'
 
 const now = () => '2026-05-13T00:26:00.000Z'
 

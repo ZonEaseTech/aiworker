@@ -1,6 +1,6 @@
 import process from 'node:process'
 
-import { qaSoulAppManifest } from './index'
+import { qaSoulAppManifest } from '../index'
 
 export function renderStandaloneHtml(): string {
   return [

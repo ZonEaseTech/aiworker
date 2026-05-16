@@ -11,26 +11,26 @@ import { createSoulAppManifest, defineSoulApp, parseNamespacedSoulAppCapabilityI
 
 import manifestJson from '../soul-app.manifest.json' with { type: 'json' }
 
-export const hrSoulAppManifest = createSoulAppManifest(manifestJson)
+export const qaSoulAppManifest = createSoulAppManifest(manifestJson)
 
-export const HR_REFERENCE_APP_BOUNDARY = {
-  hostMountedEntry: './src/host-mounted.ts',
-  packageName: '@zonease/aiworker-hr',
-  primaryWorkbench: 'People/Profile Workbench',
-  standaloneEntry: './src/standalone.ts',
+export const QA_REFERENCE_APP_BOUNDARY = {
+  hostMountedEntry: './host-adapter/mounted/host-mounted.ts',
+  packageName: '@zonease/aiworker-qa',
+  primaryWorkbench: 'Release Gate Workbench',
+  standaloneEntry: './host-adapter/standalone/standalone.ts',
 } as const
 
-export const hrReferenceSoulApp: SoulAppDefinition = defineSoulApp({
+export const qaReferenceSoulApp: SoulAppDefinition = defineSoulApp({
   artifact: {
     async artifactSchemas() {
-      return hrSoulAppManifest.artifactTypes
+      return qaSoulAppManifest.artifactTypes
     },
     async extractMetadata(_context, artifact) {
       return {
-        appId: hrSoulAppManifest.id,
+        appId: qaSoulAppManifest.id,
         contentRef: artifact.contentRef,
         kind: artifact.type,
-        lifecycle: artifact.type === 'person-profile' ? 'people-profile' : 'recruiting',
+        releaseRisk: artifact.type === 'release-gate' ? 'gate-review' : 'coverage-review',
       }
     },
     async validateArtifact(_context, artifact) {
@@ -40,22 +40,22 @@ export const hrReferenceSoulApp: SoulAppDefinition = defineSoulApp({
   connector: {
     async declareConnectorNeeds() {
       return [
-        ...hrSoulAppManifest.connectors.required,
-        ...hrSoulAppManifest.connectors.optional,
+        ...qaSoulAppManifest.connectors.required,
+        ...qaSoulAppManifest.connectors.optional,
       ]
     },
   },
-  lifecycle: lifecycleHandlers('HR reference app ready.'),
-  manifest: hrSoulAppManifest,
+  lifecycle: lifecycleHandlers('QA reference app ready.'),
+  manifest: qaSoulAppManifest,
   review: {
     async createReviewRubric(_context, artifactType) {
       return {
         checks: [
-          `Artifact type ${artifactType} cites source evidence.`,
-          'Missing candidate or employee facts are explicit.',
-          'Human review notes separate risks, next actions, and memory candidates.',
+          `Artifact type ${artifactType} maps test evidence to release risk.`,
+          'Known defects, missing evidence, and residual risk are separated.',
+          'Go/no-go recommendation is explicit and reviewable.',
         ],
-        policyRef: hrSoulAppManifest.artifactTypes.find(type => type.id === artifactType)?.reviewPolicyRef,
+        policyRef: qaSoulAppManifest.artifactTypes.find(type => type.id === artifactType)?.reviewPolicyRef,
       }
     },
     async proposeMemoryCandidate(context, review) {
@@ -64,42 +64,42 @@ export const hrReferenceSoulApp: SoulAppDefinition = defineSoulApp({
           appId: context.appId,
           artifactId: review.artifactId,
           reviewId: review.reviewId,
-          source: 'hr-reference-app',
+          source: 'qa-reference-app',
         }],
-        statement: 'Promote reviewed HR evidence handling guidance into the HR Soul namespace.',
+        statement: 'Promote reviewed QA release gate guidance into the QA Soul namespace.',
       }
     },
   },
   runtime: {
     async prepareSessionContext(context, input) {
-      const capability = resolveHrCapability(input.capabilityId)
+      const capability = resolveQaCapability(input.capabilityId)
       return sessionContext(context, capability, input.workspaceType)
     },
     async resolveCapability(_context, input) {
-      return resolveHrCapability(input.capabilityId ?? input.intent)
+      return resolveQaCapability(input.capabilityId ?? input.intent)
     },
   },
   ui: {
     async artifactTypes() {
-      return hrSoulAppManifest.artifactTypes
+      return qaSoulAppManifest.artifactTypes
     },
     async capabilities() {
-      return hrSoulAppManifest.capabilities
+      return qaSoulAppManifest.capabilities
     },
     async ui() {
-      return hrSoulAppManifest.ui
+      return qaSoulAppManifest.ui
     },
     async workspaceTypes() {
-      return hrSoulAppManifest.workspaceTypes
+      return qaSoulAppManifest.workspaceTypes
     },
   },
 })
 
-function resolveHrCapability(input?: string): SoulAppCapability {
-  const id = normalizeCapabilityId(input) ?? hrSoulAppManifest.capabilities[0]!.id
-  const capability = hrSoulAppManifest.capabilities.find(item => item.id === id)
+function resolveQaCapability(input?: string): SoulAppCapability {
+  const id = normalizeCapabilityId(input) ?? qaSoulAppManifest.capabilities[0]!.id
+  const capability = qaSoulAppManifest.capabilities.find(item => item.id === id)
   if (!capability)
-    throw new Error(`HR capability not found: ${input}`)
+    throw new Error(`QA capability not found: ${input}`)
   return capability
 }
 
@@ -114,28 +114,28 @@ function sessionContext(context: SoulAppScopedContext, capability: SoulAppCapabi
     artifactTypes: capability.artifactTypes,
     capabilityId: capability.id,
     contextMarkdown: [
-      '# HR Soul App Context',
+      '# QA Soul App Context',
       `App: ${context.appId}`,
       `Workspace type: ${workspaceType}`,
-      'Use people-profile, candidate-screen, review notes, and source-backed evidence language.',
+      'Use release, test suite, defect evidence, regression matrix, and release gate language.',
     ].join('\n'),
     promptFragments: [
-      `Use HR capability ${capability.name}.`,
-      'Preserve candidate or employee evidence provenance and mark missing facts.',
-      'Return a reviewable HR business artifact, not a generic chat answer.',
+      `Use QA capability ${capability.name}.`,
+      'Map test evidence and known defects to user-facing release risk.',
+      'Return a reviewable QA business artifact, not a generic chat answer.',
     ],
     reviewRubric: [
-      'Evidence is source-backed.',
-      'Risk and missing evidence are separated.',
-      'Next action is concrete for a human HR reviewer.',
+      'Coverage maps to changed scope and user risk.',
+      'Known blockers and residual risk are separate.',
+      'Recommendation is explicit and actionable.',
     ],
   }
 }
 
 function validateArtifactType(type: string): SoulAppArtifactValidationResult {
-  const known = hrSoulAppManifest.artifactTypes.some(item => item.id === type)
+  const known = qaSoulAppManifest.artifactTypes.some(item => item.id === type)
   return {
-    issues: known ? [] : [{ message: `Unknown HR artifact type: ${type}`, severity: 'error' }],
+    issues: known ? [] : [{ message: `Unknown QA artifact type: ${type}`, severity: 'error' }],
     ok: known,
   }
 }

@@ -49,7 +49,7 @@ Production Soul Apps live under `apps/<app-id>/`. The scaffold creates:
 - one workspace type, capability, artifact schema, review policy, and Soul pack
 - package scripts for `validate`, `smoke`, and `typecheck`
 
-Reference apps use the fuller app layout:
+Reference and production apps should use the fuller app layout:
 
 ```text
 apps/<app-id>/
@@ -67,10 +67,12 @@ apps/<app-id>/
       panels/
       routes/
       widgets/
-  src/index.ts
-  src/standalone.ts
-  src/host-mounted.ts
-  src/protocol/*.ts
+  host-adapter/
+    index.ts
+    api.ts
+    protocol/*.ts
+    mounted/host-mounted.ts
+    standalone/standalone.ts
 ```
 
 Use kebab-case app ids. Storage namespace, protocol route prefix, mounted
@@ -88,8 +90,8 @@ Validation checks:
 - storage namespace and permission targets
 - artifact schema JSON files
 - prompt, review, pack, UI, API, and mode entry file references
-- Host-private imports from `src/`
-- sibling Soul App imports from `src/`
+- Host-private imports from app adapter code
+- sibling Soul App imports from app adapter code
 
 App code should depend on `@zonease/aiworker-soul-app-sdk`. The validator flags
 imports from Host private packages such as `@zonease/aiworker-core`,

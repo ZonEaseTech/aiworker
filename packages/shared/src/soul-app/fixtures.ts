@@ -7,7 +7,7 @@ const QA_RELEASE_GATE_SCHEMA_HASH = '0c953a3453ff235c419600073c70c1f155976f448c4
 
 export const hrSoulAppManifest = soulAppManifestSchema.parse({
   api: {
-    entry: './src/api.ts',
+    entry: './host-adapter/api.ts',
     routePrefix: '/api/local/apps/aiworker-hr',
   },
   artifactTypes: [
@@ -91,12 +91,12 @@ export const hrSoulAppManifest = soulAppManifestSchema.parse({
     },
   },
   exports: {
-    artifact: './src/protocol/artifact.ts',
-    connector: './src/protocol/connectors.ts',
-    lifecycle: './src/protocol/lifecycle.ts',
-    review: './src/protocol/review.ts',
-    runtime: './src/protocol/runtime.ts',
-    ui: './src/protocol/ui.ts',
+    artifact: './host-adapter/protocol/artifact.ts',
+    connector: './host-adapter/protocol/connectors.ts',
+    lifecycle: './host-adapter/protocol/lifecycle.ts',
+    review: './host-adapter/protocol/review.ts',
+    runtime: './host-adapter/protocol/runtime.ts',
+    ui: './host-adapter/protocol/ui.ts',
   },
   healthcheck: {
     kind: 'protocol-handler',
@@ -109,8 +109,8 @@ export const hrSoulAppManifest = soulAppManifestSchema.parse({
     namespace: 'aiworker-hr',
   },
   modes: {
-    hostMounted: { entry: './src/host-mounted.ts', supported: true },
-    standalone: { entry: './src/standalone.ts', supported: true },
+    hostMounted: { entry: './host-adapter/mounted/host-mounted.ts', supported: true },
+    standalone: { entry: './host-adapter/standalone/standalone.ts', supported: true },
   },
   name: 'AIWorker HR',
   pack: {
@@ -321,7 +321,7 @@ export const hrSoulAppManifest = soulAppManifestSchema.parse({
 
 export const qaSoulAppManifest = soulAppManifestSchema.parse({
   api: {
-    entry: './src/api.ts',
+    entry: './host-adapter/api.ts',
     routePrefix: '/api/local/apps/aiworker-qa',
   },
   artifactTypes: [
@@ -405,12 +405,12 @@ export const qaSoulAppManifest = soulAppManifestSchema.parse({
     },
   },
   exports: {
-    artifact: './src/protocol/artifact.ts',
-    connector: './src/protocol/connectors.ts',
-    lifecycle: './src/protocol/lifecycle.ts',
-    review: './src/protocol/review.ts',
-    runtime: './src/protocol/runtime.ts',
-    ui: './src/protocol/ui.ts',
+    artifact: './host-adapter/protocol/artifact.ts',
+    connector: './host-adapter/protocol/connectors.ts',
+    lifecycle: './host-adapter/protocol/lifecycle.ts',
+    review: './host-adapter/protocol/review.ts',
+    runtime: './host-adapter/protocol/runtime.ts',
+    ui: './host-adapter/protocol/ui.ts',
   },
   healthcheck: {
     kind: 'protocol-handler',
@@ -423,8 +423,8 @@ export const qaSoulAppManifest = soulAppManifestSchema.parse({
     namespace: 'aiworker-qa',
   },
   modes: {
-    hostMounted: { entry: './src/host-mounted.ts', supported: true },
-    standalone: { entry: './src/standalone.ts', supported: true },
+    hostMounted: { entry: './host-adapter/mounted/host-mounted.ts', supported: true },
+    standalone: { entry: './host-adapter/standalone/standalone.ts', supported: true },
   },
   name: 'AIWorker QA',
   pack: {

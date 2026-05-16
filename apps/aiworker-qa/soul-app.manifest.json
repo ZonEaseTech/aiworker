@@ -1,10 +1,10 @@
 {
   "api": {
-    "entry": "./src/api.ts",
+    "entry": "./host-adapter/api.ts",
     "localService": {
       "command": [
         "bun",
-        "src/host-mounted.ts"
+        "host-adapter/mounted/host-mounted.ts"
       ],
       "healthPath": "/health"
     },
@@ -116,12 +116,12 @@
     }
   },
   "exports": {
-    "artifact": "./src/protocol/artifact.ts",
-    "connector": "./src/protocol/connectors.ts",
-    "lifecycle": "./src/protocol/lifecycle.ts",
-    "review": "./src/protocol/review.ts",
-    "runtime": "./src/protocol/runtime.ts",
-    "ui": "./src/protocol/ui.ts"
+    "artifact": "./host-adapter/protocol/artifact.ts",
+    "connector": "./host-adapter/protocol/connectors.ts",
+    "lifecycle": "./host-adapter/protocol/lifecycle.ts",
+    "review": "./host-adapter/protocol/review.ts",
+    "runtime": "./host-adapter/protocol/runtime.ts",
+    "ui": "./host-adapter/protocol/ui.ts"
   },
   "healthcheck": {
     "kind": "protocol-handler",
@@ -135,11 +135,11 @@
   },
   "modes": {
     "hostMounted": {
-      "entry": "./src/host-mounted.ts",
+      "entry": "./host-adapter/mounted/host-mounted.ts",
       "supported": true
     },
     "standalone": {
-      "entry": "./src/standalone.ts",
+      "entry": "./host-adapter/standalone/standalone.ts",
       "supported": true
     }
   },

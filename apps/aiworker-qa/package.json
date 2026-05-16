@@ -5,16 +5,16 @@
   "license": "MIT",
   "exports": {
     ".": {
-      "types": "./src/index.ts",
-      "import": "./src/index.ts"
+      "types": "./host-adapter/index.ts",
+      "import": "./host-adapter/index.ts"
     }
   },
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
+  "main": "./host-adapter/index.ts",
+  "types": "./host-adapter/index.ts",
   "scripts": {
-    "build": "bun build src/index.ts src/standalone.ts src/host-mounted.ts --outdir dist --target bun",
-    "dev": "bun src/standalone.ts --serve",
-    "serve": "bun src/host-mounted.ts",
+    "build": "bun build host-adapter/index.ts host-adapter/standalone/standalone.ts host-adapter/mounted/host-mounted.ts --outdir dist --target bun",
+    "dev": "bun host-adapter/standalone/standalone.ts --serve",
+    "serve": "bun host-adapter/mounted/host-mounted.ts",
     "smoke": "bun ../../apps/cli/src/aiworker.ts app smoke .",
     "typecheck": "tsc --noEmit",
     "test": "bun test",

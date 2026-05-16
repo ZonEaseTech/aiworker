@@ -3,7 +3,7 @@ import process from 'node:process'
 
 import { createSoulAppClient } from '@zonease/aiworker-soul-app-sdk'
 
-import { hrReferenceSoulApp, hrSoulAppManifest } from './index'
+import { qaReferenceSoulApp, qaSoulAppManifest } from '../index'
 
 interface MountContext {
   brokerUrl?: string
@@ -29,7 +29,7 @@ export function serveHostMounted(port = Number(Bun.env.PORT ?? 0)) {
       const url = new URL(request.url)
       if (url.pathname === '/health') {
         return Response.json({
-          appId: hrSoulAppManifest.id,
+          appId: qaSoulAppManifest.id,
           mode: 'host-mounted',
           status: 'ok',
         })
@@ -39,34 +39,34 @@ export function serveHostMounted(port = Number(Bun.env.PORT ?? 0)) {
         return tokenError
       if (url.pathname === '/domain') {
         return Response.json({
-          appId: hrSoulAppManifest.id,
-          capabilities: hrSoulAppManifest.capabilities.map(capability => capability.id),
+          appId: qaSoulAppManifest.id,
+          capabilities: qaSoulAppManifest.capabilities.map(capability => capability.id),
           mounted: true,
-          soul: hrSoulAppManifest.soul.id,
-          workspaceTypes: hrSoulAppManifest.workspaceTypes.map(type => type.id),
+          soul: qaSoulAppManifest.soul.id,
+          workspaceTypes: qaSoulAppManifest.workspaceTypes.map(type => type.id),
         })
       }
-      if (url.pathname === '/surfaces/routes/hr-home' || url.pathname === '/surfaces/panels/hr-profile-panel') {
-        return Response.json(hrDescriptorSurface(request, url.pathname))
+      if (url.pathname === '/surfaces/routes/qa-home' || url.pathname === '/surfaces/panels/qa-release-panel') {
+        return Response.json(qaDescriptorSurface(request, url.pathname))
       }
-      if (url.pathname === '/frames/widgets/hr-people-widget') {
-        return new Response(hrWidgetFrameHtml(request), {
+      if (url.pathname === '/frames/widgets/qa-release-widget') {
+        return new Response(qaWidgetFrameHtml(request), {
           headers: { 'content-type': 'text/html; charset=utf-8' },
         })
       }
       if (url.pathname === '/protocol/actions' && request.method === 'POST') {
         const body = await request.json().catch(() => ({})) as Record<string, unknown>
-        return Response.json(await hrProtocolAction(request, String(body.protocolAction ?? '')))
+        return Response.json(await qaProtocolAction(request, String(body.protocolAction ?? '')))
       }
       if (url.pathname === '/protocol/search' && request.method === 'GET') {
-        return Response.json(await hrProtocolSearch(request, url))
+        return Response.json(await qaProtocolSearch(request, url))
       }
       if (url.pathname === '/broker/permissions') {
         const hostUrl = request.headers.get('x-aiworker-host-url') ?? Bun.env.AIWORKER_HOST_URL
         if (!hostUrl)
-          return Response.json({ appId: hrSoulAppManifest.id, broker: 'not-configured', permissions: [] })
+          return Response.json({ appId: qaSoulAppManifest.id, broker: 'not-configured', permissions: [] })
         const client = createSoulAppClient({
-          appId: hrSoulAppManifest.id,
+          appId: qaSoulAppManifest.id,
           baseUrl: hostUrl,
           mountToken: request.headers.get('x-aiworker-mount-token') ?? undefined,
         })
@@ -74,13 +74,13 @@ export function serveHostMounted(port = Number(Bun.env.PORT ?? 0)) {
       }
       if (url.pathname === '/protocol/capabilities') {
         return Response.json({
-          capabilities: await hrReferenceSoulApp.ui?.capabilities({
-            appId: hrSoulAppManifest.id,
-            permissions: hrSoulAppManifest.permissions,
+          capabilities: await qaReferenceSoulApp.ui?.capabilities({
+            appId: qaSoulAppManifest.id,
+            permissions: qaSoulAppManifest.permissions,
           }),
         })
       }
-      return Response.json({ error: { code: 'NOT_FOUND', message: `Unknown HR app route: ${url.pathname}` } }, { status: 404 })
+      return Response.json({ error: { code: 'NOT_FOUND', message: `Unknown QA app route: ${url.pathname}` } }, { status: 404 })
     },
     hostname: Bun.env.HOST ?? '127.0.0.1',
     port,
@@ -89,7 +89,7 @@ export function serveHostMounted(port = Number(Bun.env.PORT ?? 0)) {
 
 if (import.meta.main) {
   const server = serveHostMounted()
-  process.stdout.write(`${JSON.stringify({ appId: hrSoulAppManifest.id, mode: 'host-mounted', url: `http://${server.hostname}:${server.port}` })}\n`)
+  process.stdout.write(`${JSON.stringify({ appId: qaSoulAppManifest.id, mode: 'host-mounted', url: `http://${server.hostname}:${server.port}` })}\n`)
 }
 
 function verifyMountToken(request: Request): Response | null {
@@ -102,18 +102,18 @@ function verifyMountToken(request: Request): Response | null {
     : Response.json({ error: { code: 'INVALID_MOUNT_TOKEN', message: 'Host mount token is required.' } }, { status: 401 })
 }
 
-function hrDescriptorSurface(request: Request, pathname: string) {
+function qaDescriptorSurface(request: Request, pathname: string) {
   const context = readMountContext(request)
   return {
     actions: [
       {
-        id: 'create-profile-review',
+        id: 'create-release-review',
         label: 'Create review',
         method: 'POST',
         target: `${context?.brokerUrl ?? '/broker'}/reviews`,
       },
     ],
-    appId: hrSoulAppManifest.id,
+    appId: qaSoulAppManifest.id,
     authority: 'soul-app',
     cache: {
       freshness: 'non-authoritative',
@@ -124,28 +124,28 @@ function hrDescriptorSurface(request: Request, pathname: string) {
       workspaceId: context?.workspaceId ?? null,
     },
     fields: [
-      { label: 'Domain', value: hrSoulAppManifest.soul.domain },
-      { label: 'Workspace types', value: hrSoulAppManifest.workspaceTypes.map(type => type.name).join(', ') },
-      { label: 'Evidence broker', value: hrSoulAppManifest.connectors.required.map(connector => connector.id).join(', ') },
+      { label: 'Domain', value: qaSoulAppManifest.soul.domain },
+      { label: 'Workspace types', value: qaSoulAppManifest.workspaceTypes.map(type => type.name).join(', ') },
+      { label: 'Evidence broker', value: qaSoulAppManifest.connectors.required.map(connector => connector.id).join(', ') },
     ],
     path: pathname,
     renderer: 'host-descriptor',
     status: 'ready',
-    title: pathname.includes('/routes/') ? 'HR Mounted Workbench' : 'People Profile Panel',
+    title: pathname.includes('/routes/') ? 'QA Mounted Workbench' : 'Release Gate Panel',
     type: 'aiworker.surface.descriptor.v1',
   }
 }
 
-function hrWidgetFrameHtml(request: Request): string {
+function qaWidgetFrameHtml(request: Request): string {
   const context = readMountContext(request)
   return [
     '<!doctype html>',
     '<html lang="en">',
-    '<head><meta charset="utf-8"><title>HR People Widget</title></head>',
+    '<head><meta charset="utf-8"><title>QA Release Widget</title></head>',
     '<body>',
     '<main>',
-    '<h1>People Widget</h1>',
-    `<p data-soul-app-id="${hrSoulAppManifest.id}">Mounted HR frame surface</p>`,
+    '<h1>Release Widget</h1>',
+    `<p data-soul-app-id="${qaSoulAppManifest.id}">Mounted QA frame surface</p>`,
     `<p data-surface-id="${context?.surface?.id ?? 'unknown'}">Scope ${context?.surface?.scope ?? 'workspace'}</p>`,
     '</main>',
     '</body>',
@@ -153,72 +153,66 @@ function hrWidgetFrameHtml(request: Request): string {
   ].join('')
 }
 
-async function hrProtocolAction(request: Request, protocolAction: string) {
-  if (protocolAction === 'peopleProfiles.create') {
-    const persisted = await persistPeopleProfileDraft(request)
+async function qaProtocolAction(request: Request, protocolAction: string) {
+  if (protocolAction === 'releaseGates.create') {
+    const persisted = await persistReleaseGateDraft(request)
     if (!persisted.ok)
       return persisted
     return {
-      message: 'People profile draft opened by HR app.',
+      message: 'Release gate draft opened by QA app.',
       ok: true,
-      redirectTo: '/hr/people',
+      redirectTo: '/qa/release',
       refresh: true,
     }
   }
-  if (protocolAction === 'people.refresh') {
+  if (protocolAction === 'release.refresh') {
     return {
-      message: 'People data refreshed by HR app.',
+      message: 'Release data refreshed by QA app.',
       ok: true,
       refresh: true,
-    }
-  }
-  if (protocolAction === 'drawers.evidence.toggle') {
-    return {
-      message: 'Evidence drawer intent emitted by HR app.',
-      ok: true,
     }
   }
   if (protocolAction === 'settings.open') {
     return {
-      message: 'HR settings are owned by the HR app.',
+      message: 'QA settings are owned by the QA app.',
       ok: true,
     }
   }
   return {
-    message: `Unknown HR protocol action: ${protocolAction}`,
+    message: `Unknown QA protocol action: ${protocolAction}`,
     ok: false,
   }
 }
 
-async function persistPeopleProfileDraft(request: Request): Promise<{ message: string, ok: false } | { ok: true }> {
+async function persistReleaseGateDraft(request: Request): Promise<{ message: string, ok: false } | { ok: true }> {
   const context = readMountContext(request)
   if (!context?.hostUrl)
     return { ok: true }
 
-  const draftKey = `drafts/people-profile/${context.workspaceId ?? 'app'}`
+  const draftKey = `drafts/release-gate/${context.workspaceId ?? 'app'}`
   const workspaceRef = context.workspaceId ?? 'app'
   const client = createSoulAppClient({
-    appId: hrSoulAppManifest.id,
+    appId: qaSoulAppManifest.id,
     baseUrl: context.hostUrl,
     mountToken: context.mountToken,
   })
   try {
     await client.broker.storage.put(draftKey, {
-      appId: hrSoulAppManifest.id,
-      kind: 'people-profile',
-      source: 'hr-mounted-action',
+      appId: qaSoulAppManifest.id,
+      kind: 'release-gate',
+      source: 'qa-mounted-action',
       status: 'draft',
       workspaceId: context.workspaceId ?? null,
     }, brokerScope(context))
     await client.broker.search.upsert(draftKey, {
-      kind: 'people-profile',
+      kind: 'release-gate',
       reference: {
         id: workspaceRef,
         type: context.workspaceId ? 'workspace' : 'app',
       },
       sessionId: context.sessionId ?? null,
-      summary: `HR app-owned people profile draft for workspace ${workspaceRef}.`,
-      title: 'People profile draft',
+      summary: `QA app-owned release gate draft for workspace ${workspaceRef}.`,
+      title: 'Release gate draft',
       workspaceId: context.workspaceId ?? null,
     }, brokerScope(context))
     return { ok: true }
@@ -231,41 +225,41 @@ async function persistPeopleProfileDraft(request: Request): Promise<{ message: s
   }
 }
 
-async function hrProtocolSearch(request: Request, url: URL) {
+async function qaProtocolSearch(request: Request, url: URL) {
   const query = url.searchParams.get('query') ?? ''
-  const brokerItems = await queryBrokerPeopleProfileSearch(request, query)
+  const brokerItems = await queryBrokerReleaseSearch(request, query)
   if (brokerItems?.length) {
     return {
       items: brokerItems,
-      providerId: 'peopleProfiles.search',
+      providerId: 'releases.search',
     }
   }
 
   return {
     items: [{
-      appId: hrSoulAppManifest.id,
+      appId: qaSoulAppManifest.id,
       authority: 'soul-app' as const,
-      id: 'people-profile-draft',
-      kind: 'people-profile',
+      id: 'release-gate-draft',
+      kind: 'release-gate',
       openAction: {
-        id: 'create-people-profile',
+        id: 'create-release-gate',
         input: { query },
       },
       status: 'draft',
-      summary: query ? `HR app-owned profile match for ${query}` : 'Open HR profile workspace',
-      title: query ? `People profile: ${query}` : 'People profile draft',
+      summary: query ? `QA app-owned release match for ${query}` : 'Open QA release gate workspace',
+      title: query ? `Release gate: ${query}` : 'Release gate draft',
     }],
-    providerId: 'peopleProfiles.search',
+    providerId: 'releases.search',
   }
 }
 
-async function queryBrokerPeopleProfileSearch(request: Request, query: string): Promise<Array<Record<string, unknown>> | null> {
+async function queryBrokerReleaseSearch(request: Request, query: string): Promise<Array<Record<string, unknown>> | null> {
   const context = readMountContext(request)
   if (!context?.hostUrl)
     return null
 
   const client = createSoulAppClient({
-    appId: hrSoulAppManifest.id,
+    appId: qaSoulAppManifest.id,
     baseUrl: context.hostUrl,
     mountToken: context.mountToken,
   })

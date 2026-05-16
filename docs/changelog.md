@@ -1,5 +1,30 @@
 # AIWorker Changelog
 
+## 2026-05-16 [completed] FEAT-090 / PLAN-331 — Soul App Host Adapter Layout Migration
+
+Completed Phase 3 of Soul App authoring layout v2. HR and QA app definitions,
+protocol exports, API entries, mounted services and standalone services now
+live under `host-adapter/`, while `product/` remains the domain asset surface
+and `engine-assets/` remains the engine projection source.
+
+- Moved official HR/QA adapter code from `src/` into
+  `host-adapter/{protocol,mounted,standalone}` without adding legacy path
+  aliases.
+- Updated official app manifests, package exports/scripts, shared reference
+  fixtures and manifest tests to use `./host-adapter/...` API, protocol and mode
+  refs.
+- Updated active Soul App developer docs so reference and production apps show
+  `host-adapter/` as the adapter boundary.
+- Verification passed: `bun test packages/shared/src/soul-app/manifest.test.ts`,
+  `bun run --filter '@zonease/aiworker-shared' typecheck`,
+  `bun run --filter '@zonease/aiworker-hr' test`,
+  `bun run --filter '@zonease/aiworker-hr' typecheck`,
+  `bun run --filter '@zonease/aiworker-hr' validate`,
+  `bun run --filter '@zonease/aiworker-qa' test`,
+  `bun run --filter '@zonease/aiworker-qa' typecheck`,
+  `bun run --filter '@zonease/aiworker-qa' validate`, `bun run lint`,
+  `git diff --check`, `bun run crg:update`, and `bun run crg:review`.
+
 ## 2026-05-16 [completed] FEAT-089 / PLAN-330 — Soul App Product Layout Migration
 
 Completed Phase 2 of Soul App authoring layout v2. HR and QA product semantics

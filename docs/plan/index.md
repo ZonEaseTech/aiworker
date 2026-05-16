@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-15 (PLAN-327 completed)
+> Updated: 2026-05-16 (PLAN-331 completed)
 
 ## Usage
 
@@ -359,3 +359,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-328 Soul workspace agent instructions projection**](PLAN-328.md) `2026-05-15`
 - [x] [**PLAN-329 Soul App Engine Assets Foundation**](PLAN-329.md) `2026-05-16`
 - [x] [**PLAN-330 Soul App Product Layout Migration**](PLAN-330.md) `2026-05-16`
+- [x] [**PLAN-331 Soul App Host Adapter Layout Migration**](PLAN-331.md) `2026-05-16`

@@ -123,6 +123,14 @@ describe('Soul App manifest schema', () => {
     expect(qaSoulAppManifest.artifactTypes[0]?.reviewPolicyRef).toBe('./product/reviews/regression-matrix.md')
     expect(qaSoulAppManifest.pack.refs[0]?.ref).toBe('product/profiles/qa-reviewer/SOUL.md')
     expect(qaSoulAppManifest.ui.routes[0]?.entry).toBe('./product/web/routes/qa-route.tsx')
+    expect(hrSoulAppManifest.api.entry).toBe('./host-adapter/api.ts')
+    expect(hrSoulAppManifest.exports.runtime).toBe('./host-adapter/protocol/runtime.ts')
+    expect(hrSoulAppManifest.modes.hostMounted.entry).toBe('./host-adapter/mounted/host-mounted.ts')
+    expect(hrSoulAppManifest.modes.standalone.entry).toBe('./host-adapter/standalone/standalone.ts')
+    expect(qaSoulAppManifest.api.entry).toBe('./host-adapter/api.ts')
+    expect(qaSoulAppManifest.exports.runtime).toBe('./host-adapter/protocol/runtime.ts')
+    expect(qaSoulAppManifest.modes.hostMounted.entry).toBe('./host-adapter/mounted/host-mounted.ts')
+    expect(qaSoulAppManifest.modes.standalone.entry).toBe('./host-adapter/standalone/standalone.ts')
   })
 
   it('accepts app-declared shell toolbar and search descriptors', () => {
@@ -395,8 +403,8 @@ describe('Soul App manifest schema', () => {
 
     expect(result.status).toBe('ok')
     if (result.status === 'ok') {
-      expect(result.manifest.exports.runtime).toBe('./src/protocol/runtime.ts')
-      expect(result.manifest.modes.hostMounted.entry).toBe('./src/host-mounted.ts')
+      expect(result.manifest.exports.runtime).toBe('./host-adapter/protocol/runtime.ts')
+      expect(result.manifest.modes.hostMounted.entry).toBe('./host-adapter/mounted/host-mounted.ts')
       expect(result.manifest.artifactTypes[0]?.schemaRef).toBe('./product/artifacts/schemas/person-profile.schema.json')
     }
   })

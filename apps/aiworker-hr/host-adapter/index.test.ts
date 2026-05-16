@@ -16,8 +16,8 @@ import {
 import { afterEach, describe, expect, it } from 'bun:test'
 
 import hrManifestJson from '../soul-app.manifest.json' with { type: 'json' }
-import { serveHostMounted } from './host-mounted'
 import { HR_REFERENCE_APP_BOUNDARY, hrReferenceSoulApp } from './index'
+import { serveHostMounted } from './mounted/host-mounted'
 
 const now = () => '2026-05-13T00:25:00.000Z'
 

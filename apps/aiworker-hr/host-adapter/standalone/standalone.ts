@@ -1,6 +1,6 @@
 import process from 'node:process'
 
-import { hrSoulAppManifest } from './index'
+import { hrSoulAppManifest } from '../index'
 
 export function renderStandaloneHtml(): string {
   return [
