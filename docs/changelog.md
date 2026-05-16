@@ -1,12 +1,12 @@
 # AIWorker Changelog
 
-## 2026-05-16 [progress] REL-037 / PLAN-336 — CLI 0.16.0 minor release
+## 2026-05-16 [completed] REL-037 / PLAN-336 — CLI 0.16.0 minor release
 
-Preparing `@zonease/aiworker-cli@0.16.0` as a minor preview release for the Soul
-App authoring layout v2 work. The release source includes `engine-assets/`,
-`product/` and `host-adapter/` layout convergence, engine asset projection,
-MCP client/server declarations, scaffold/validator updates, and current
-`origin/main` fixes from `0.15.2`.
+Published `@zonease/aiworker-cli@0.16.0` as a minor preview release for the Soul
+App authoring layout v2 work. The release carries `engine-assets/`, `product/`
+and `host-adapter/` layout convergence, engine asset projection, MCP
+client/server declarations, scaffold/validator updates, and current `origin/main`
+fixes from `0.15.2`.
 
 - Merged the feature branch with `origin/main`, preserving BUG-121 / PLAN-329
   and BUG-122 / PLAN-330 while renumbering Soul App v2 plans to
@@ -15,7 +15,17 @@ MCP client/server declarations, scaffold/validator updates, and current
 - Local release gates passed: `bun run check`, `bun run test`, `bun run build`,
   `git diff --check`, dist version checks, npm pack dry-run,
   `smoke:dist-release`, `bun run crg:update` and `bun run crg:review`.
-- Tag push and post-release verification are in progress.
+- Release workflow `25956576934` completed successfully on `v0.16.0` /
+  `ca4d00ca` and published npm plus four GitHub Release binary tarballs with
+  four matching `.sha256` assets. Main lint run `25956576009` also passed.
+- npm latest is `0.16.0`; explicit `bunx @zonease/aiworker-cli@0.16.0
+  --version` reports `aiworker/0.16.0 darwin-arm64 node-v24.3.0`.
+- Published-package smoke verified daemon runtimeVersion `0.16.0`, Host
+  Web/API, official HR/QA app bootstrap, app/soul listing and HR template
+  discovery.
+- Release residual: GitHub Actions still reports the existing Node.js 20 action
+  deprecation annotation for `actions/setup-node@v4` and
+  `softprops/action-gh-release@v2`; it did not block this release.
 
 ## 2026-05-16 [completed] FEAT-092 / PLAN-335 — Soul App Scaffold And Legacy Layout Removal
 

@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-16 (REL-037 in progress)
+> Updated: 2026-05-16 (REL-037 completed)
 
 ## Usage
 
@@ -439,4 +439,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-090 Soul App Host Adapter Layout Migration**](FEAT-090.md) `P0`
 - [x] [**FEAT-091 Soul App MCP Client And Server Contract**](FEAT-091.md) `P0`
 - [x] [**FEAT-092 Soul App Scaffold And Legacy Layout Removal**](FEAT-092.md) `P0`
-- [-] [**REL-037 发布 aiworker CLI 0.16.0**](REL-037.md) `P1`
+- [x] [**REL-037 发布 aiworker CLI 0.16.0**](REL-037.md) `P1`

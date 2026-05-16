@@ -1,9 +1,10 @@
 # PLAN-336 CLI 0.16.0 minor release
 
-- **status**: in_progress
+- **status**: completed
 - **owner**: codex
 - **createdAt**: 2026-05-16
 - **approvedAt**: 2026-05-16
+- **completedAt**: 2026-05-16
 - **relatedTask**: REL-037
 
 ## Current State
@@ -74,6 +75,16 @@ Expected repository changes during the release step:
 No additional Host/Soul App feature behavior should change during release prep
 beyond the already merged source changes and the version bump.
 
+## Annotations
+
+- 2026-05-16：合并 `origin/main` 后，保留 `0.15.2` updater/CI 修复并将
+  Soul App v2 阶段计划顺延为 `PLAN-331..335`。
+- 2026-05-16：本地 release gates 通过，release prep commit 为 `ca4d00ca`。
+- 2026-05-16：`main` 与 annotated tag `v0.16.0` 推送成功；release workflow
+  `25956576934` 成功发布 npm package 并上传 GitHub Release assets。
+- 2026-05-16：发布后验证确认 npm latest、`bunx` 显式版本、GitHub Release
+  asset set 与 published-package smoke 均通过。
+
 ## Verification
 
 - `bun run check` passed.
@@ -89,3 +100,14 @@ beyond the already merged source changes and the version bump.
 - `bun run --filter '@zonease/aiworker-cli' smoke:dist-release` passed.
 - `bun run crg:update` passed.
 - `bun run crg:review` passed with risk score `0.00`.
+- `gh run watch 25956576934 --repo ZonEaseTech/aiworker --exit-status` passed.
+- Main lint run `25956576009` completed successfully on `ca4d00ca`.
+- `npm view @zonease/aiworker-cli version dist-tags --json` reported
+  `0.16.0` and `latest: 0.16.0`.
+- `bunx @zonease/aiworker-cli@0.16.0 --version` reported
+  `aiworker/0.16.0 darwin-arm64 node-v24.3.0`.
+- `gh release view v0.16.0` reported a non-draft, non-prerelease release with
+  8 uploaded assets: 4 platform tarballs and 4 `.sha256` files.
+- Published-package smoke passed from an isolated `AIWORKER_HOME`: daemon
+  `/health`, `/api/local/info` runtimeVersion `0.16.0`, Host Web static serving,
+  official app bootstrap, app list, soul list and HR template list.
