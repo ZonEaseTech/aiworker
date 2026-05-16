@@ -1,5 +1,29 @@
 # AIWorker Changelog
 
+## 2026-05-16 [completed] BUG-123 / PLAN-337 — Published official Soul App mounted entrypoint repair
+
+Fixed the published official Soul App packaging path that caused HR/QA mounted
+header actions to fail with 502 in the `@zonease/aiworker-cli@0.16.0` package.
+
+- Root cause: `build-publish-manifest.ts` patched official app manifests to
+  `dist/host-mounted.js` and `dist/standalone.js`, while a clean Bun app build
+  emits `dist/mounted/host-mounted.js` and `dist/standalone/standalone.js`.
+- Updated publish-manifest patching to the real nested runtime paths and added
+  copied-file assertions so missing official app runtime entrypoints fail the
+  build step.
+- Filtered stale flat official app dist leftovers from release resources so a
+  local dirty ignored `dist/` cannot leak `dist/host-mounted.js` or
+  `dist/standalone.js` into the package.
+- Extended `smoke:dist-release` to invoke HR `create-people-profile` and QA
+  `create-release-gate`, proving mounted service startup plus app-owned broker
+  storage/search writes.
+- Verification passed: focused publish-manifest test, CLI typecheck,
+  full `check/test/build`, dist version checks, npm pack dry-run with no legacy
+  flat official app runtime files, dist release smoke, `git diff --check`,
+  `bun run crg:update`, and `bun run crg:review`.
+- Residual: already-published `0.16.0` remains affected until a follow-up patch
+  release ships this source fix.
+
 ## 2026-05-16 [completed] REL-037 / PLAN-336 — CLI 0.16.0 minor release
 
 Published `@zonease/aiworker-cli@0.16.0` as a minor preview release for the Soul

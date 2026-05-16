@@ -9,6 +9,8 @@ const binShimDst = resolve(distDir, 'aiworker.js')
 
 const officialApps = ['aiworker-hr', 'aiworker-qa'] as const
 const officialAppsDst = resolve(distDir, 'official-apps')
+const publishedMountedEntrypoint = 'dist/mounted/host-mounted.js'
+const publishedStandaloneEntrypoint = 'dist/standalone/standalone.js'
 
 export async function buildPublishManifest(): Promise<void> {
   const pkg = JSON.parse(await readFile(resolve(cliDir, 'package.json'), 'utf8'))
@@ -66,13 +68,13 @@ export async function buildPublishManifest(): Promise<void> {
     await copyOfficialApp(appId)
 }
 
-export async function copyDir(src: string, dst: string, options: { skip?: (entryName: string) => boolean } = {}): Promise<void> {
+export async function copyDir(src: string, dst: string, options: { skip?: (entryName: string, srcPath: string) => boolean } = {}): Promise<void> {
   await mkdir(dst, { recursive: true })
   const entries = await readdir(src, { withFileTypes: true })
   for (const entry of entries) {
-    if (options.skip?.(entry.name))
-      continue
     const srcPath = resolve(src, entry.name)
+    if (options.skip?.(entry.name, srcPath))
+      continue
     const dstPath = resolve(dst, entry.name)
     if (entry.isDirectory())
       await copyDir(srcPath, dstPath, options)
@@ -86,14 +88,19 @@ export async function copyOfficialApp(appId: string, options: { appsRoot?: strin
   const appDst = resolve(options.officialAppsRoot ?? officialAppsDst, appId)
   await copyDir(appSrc, appDst, { skip: shouldSkipOfficialAppResource })
   await patchOfficialAppManifest(resolve(appDst, 'soul-app.manifest.json'))
+  await access(resolve(appDst, publishedMountedEntrypoint))
+  await access(resolve(appDst, publishedStandaloneEntrypoint))
 }
 
-export function shouldSkipOfficialAppResource(entryName: string): boolean {
+export function shouldSkipOfficialAppResource(entryName: string, srcPath = ''): boolean {
+  const normalizedSrcPath = srcPath.replaceAll('\\', '/')
   return entryName === 'node_modules'
     || entryName.endsWith('.spec.ts')
     || entryName.endsWith('.spec.tsx')
     || entryName.endsWith('.test.ts')
     || entryName.endsWith('.test.tsx')
+    || normalizedSrcPath.endsWith('/dist/host-mounted.js')
+    || normalizedSrcPath.endsWith('/dist/standalone.js')
 }
 
 export async function patchOfficialAppManifest(manifestPath: string): Promise<void> {
@@ -105,11 +112,11 @@ export async function patchOfficialAppManifest(manifestPath: string): Promise<vo
     }
   }
   if (manifest.api?.localService)
-    manifest.api.localService.command = ['bun', 'dist/host-mounted.js']
+    manifest.api.localService.command = ['bun', publishedMountedEntrypoint]
   if (manifest.modes?.hostMounted)
-    manifest.modes.hostMounted.entry = './dist/host-mounted.js'
+    manifest.modes.hostMounted.entry = `./${publishedMountedEntrypoint}`
   if (manifest.modes?.standalone)
-    manifest.modes.standalone.entry = './dist/standalone.js'
+    manifest.modes.standalone.entry = `./${publishedStandaloneEntrypoint}`
   await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
 }
 

@@ -51,15 +51,17 @@ describe('CLI publish manifest builder', () => {
       api: { localService: { command: string[] } }
       modes: { hostMounted: { entry: string }, standalone: { entry: string } }
     }
-    expect(manifest.api.localService.command).toEqual(['bun', 'dist/host-mounted.js'])
-    expect(manifest.modes.hostMounted.entry).toBe('./dist/host-mounted.js')
-    expect(manifest.modes.standalone.entry).toBe('./dist/standalone.js')
+    expect(manifest.api.localService.command).toEqual(['bun', 'dist/mounted/host-mounted.js'])
+    expect(manifest.modes.hostMounted.entry).toBe('./dist/mounted/host-mounted.js')
+    expect(manifest.modes.standalone.entry).toBe('./dist/standalone/standalone.js')
   })
 
   it('copies an official app resource tree without copied tests', async () => {
     const appsRoot = path.join(root, 'apps')
     const officialAppsRoot = path.join(root, 'dist', 'official-apps')
     const appRoot = path.join(appsRoot, 'aiworker-demo')
+    mkdirSync(path.join(appRoot, 'dist', 'mounted'), { recursive: true })
+    mkdirSync(path.join(appRoot, 'dist', 'standalone'), { recursive: true })
     mkdirSync(path.join(appRoot, 'host-adapter', 'mounted'), { recursive: true })
     await writeFile(path.join(appRoot, 'soul-app.manifest.json'), JSON.stringify({
       api: {
@@ -72,6 +74,10 @@ describe('CLI publish manifest builder', () => {
     }))
     await writeFile(path.join(appRoot, 'host-adapter', 'mounted', 'host-mounted.ts'), 'export {}\n')
     await writeFile(path.join(appRoot, 'host-adapter', 'mounted', 'host-mounted.test.ts'), 'throw new Error("not shipped")\n')
+    await writeFile(path.join(appRoot, 'dist', 'host-mounted.js'), 'console.log("legacy mounted")\n')
+    await writeFile(path.join(appRoot, 'dist', 'mounted', 'host-mounted.js'), 'console.log("mounted")\n')
+    await writeFile(path.join(appRoot, 'dist', 'standalone.js'), 'console.log("legacy standalone")\n')
+    await writeFile(path.join(appRoot, 'dist', 'standalone', 'standalone.js'), 'console.log("standalone")\n')
 
     await copyOfficialApp('aiworker-demo', { appsRoot, officialAppsRoot })
 
@@ -79,7 +85,11 @@ describe('CLI publish manifest builder', () => {
     const copiedManifest = JSON.parse(await readFile(copiedManifestPath, 'utf8')) as {
       api: { localService: { command: string[] } }
     }
-    expect(copiedManifest.api.localService.command).toEqual(['bun', 'dist/host-mounted.js'])
+    expect(copiedManifest.api.localService.command).toEqual(['bun', 'dist/mounted/host-mounted.js'])
+    await expect(stat(path.join(officialAppsRoot, 'aiworker-demo', 'dist', 'host-mounted.js'))).rejects.toThrow()
+    await expect(stat(path.join(officialAppsRoot, 'aiworker-demo', 'dist', 'mounted', 'host-mounted.js'))).resolves.toBeTruthy()
+    await expect(stat(path.join(officialAppsRoot, 'aiworker-demo', 'dist', 'standalone.js'))).rejects.toThrow()
+    await expect(stat(path.join(officialAppsRoot, 'aiworker-demo', 'dist', 'standalone', 'standalone.js'))).resolves.toBeTruthy()
     await expect(stat(path.join(officialAppsRoot, 'aiworker-demo', 'host-adapter', 'mounted', 'host-mounted.ts'))).resolves.toBeTruthy()
     await expect(stat(path.join(officialAppsRoot, 'aiworker-demo', 'host-adapter', 'mounted', 'host-mounted.test.ts'))).rejects.toThrow()
   })

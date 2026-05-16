@@ -13,6 +13,16 @@ interface CommandResult {
   stdout: string
 }
 
+interface SoulAppActionResponse {
+  action?: {
+    id?: string
+  }
+  result?: {
+    message?: string
+    ok?: boolean
+  }
+}
+
 async function main(): Promise<number> {
   const cli = resolve(import.meta.dirname, '..', 'dist', 'aiworker.js')
   if (!existsSync(cli))
@@ -52,8 +62,10 @@ async function main(): Promise<number> {
     assertJsonIncludes(list.stdout, 'aiworker-hr')
     assertJsonIncludes(souls.stdout, 'aiworker-qa')
     assertJsonIncludes(templates.stdout, 'aiworker-hr.person-profile')
+    await assertMountedAction(port, 'aiworker-hr', 'create-people-profile', 'People profile draft opened by HR app.')
+    await assertMountedAction(port, 'aiworker-qa', 'create-release-gate', 'Release gate draft opened by QA app.')
 
-    consola.success('[smoke-dist-release] PASS: dist CLI starts Host Web/API and bootstraps official Soul Apps')
+    consola.success('[smoke-dist-release] PASS: dist CLI starts Host Web/API, bootstraps official Soul Apps, and invokes mounted actions')
     return 0
   }
   finally {
@@ -166,6 +178,29 @@ function assertCatalogApps(apps: Array<{ appId: string, status: string }>): void
     if (app.status !== 'enabled')
       throw new Error(`${appId} should be enabled, got ${app.status}`)
   }
+}
+
+async function assertMountedAction(port: number, appId: string, actionId: string, expectedMessage: string): Promise<void> {
+  const url = `http://127.0.0.1:${port}/api/local/apps/${appId}/actions/${actionId}`
+  const res = await fetch(url, {
+    body: JSON.stringify({ input: { source: 'smoke-dist-release' } }),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  })
+  const bodyText = await res.text()
+  if (!res.ok)
+    throw new Error(`Mounted action failed: POST ${url} -> ${res.status} ${bodyText.slice(0, 500)}`)
+
+  let body: SoulAppActionResponse
+  try {
+    body = JSON.parse(bodyText) as SoulAppActionResponse
+  }
+  catch {
+    throw new Error(`Mounted action returned non-JSON: POST ${url} -> ${bodyText.slice(0, 500)}`)
+  }
+
+  if (body.action?.id !== actionId || body.result?.ok !== true || body.result.message !== expectedMessage)
+    throw new Error(`Mounted action returned unexpected body for ${appId}/${actionId}: ${bodyText.slice(0, 500)}`)
 }
 
 function assertJsonIncludes(stdout: string, expected: string): void {

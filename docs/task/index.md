@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-16 (REL-037 completed)
+> Updated: 2026-05-16 (REL-038 in progress)
 
 ## Usage
 
@@ -440,3 +440,5 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-091 Soul App MCP Client And Server Contract**](FEAT-091.md) `P0`
 - [x] [**FEAT-092 Soul App Scaffold And Legacy Layout Removal**](FEAT-092.md) `P0`
 - [x] [**REL-037 发布 aiworker CLI 0.16.0**](REL-037.md) `P1`
+- [x] [**BUG-123 Published official Soul App mounted entrypoints are wrong**](BUG-123.md) `P0`
+- [-] [**REL-038 发布 aiworker CLI 0.16.1**](REL-038.md) `P0`
