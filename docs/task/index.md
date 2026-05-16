@@ -444,3 +444,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REL-038 发布 aiworker CLI 0.16.1**](REL-038.md) `P0`
 - [x] [**BUG-124 Migrate GitHub Actions to Node 24 action runtimes**](BUG-124.md) `P2`
 - [x] [**FEAT-093 HR Profile Reading Room**](FEAT-093.md) `P0`
+- [-] [**REL-039 发布 aiworker CLI 0.17.0**](REL-039.md) `P1`
