@@ -1,9 +1,9 @@
 import { mkdtempSync } from 'node:fs'
-import { readFile, rm } from 'node:fs/promises'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
-import { namespaceSoulAppCapabilityId } from '@zonease/aiworker-shared'
+import { hrSoulAppManifest, namespaceSoulAppCapabilityId } from '@zonease/aiworker-shared'
 import {
   closeWorkerDb,
   createSession,
@@ -122,6 +122,35 @@ describe('Host runtime boundary', () => {
       name: 'Duplicate HR',
       soulId: HR_APP_ID,
     })).rejects.toMatchObject({ code: 'CONFLICT', status: 409 })
+  })
+
+  it('passes manifest engine assets into manifest-path worker projections', async () => {
+    const appRoot = path.join(dir, 'apps', HR_APP_ID)
+    await mkdir(path.join(appRoot, 'engine-assets', 'workspace'), { recursive: true })
+    await mkdir(path.join(appRoot, 'engine-assets', 'mcp-clients', 'codex'), { recursive: true })
+    await writeFile(path.join(appRoot, 'engine-assets', 'workspace', 'README.md'), '# {{workspaceName}}\n')
+    await writeFile(path.join(appRoot, 'engine-assets', 'mcp-clients', 'codex', 'config.toml'), '[mcp_servers.ats]\ncommand = "uvx"\n')
+    await writeFile(path.join(appRoot, 'soul-app.manifest.json'), `${JSON.stringify({
+      ...hrSoulAppManifest,
+      engineAssets: {
+        ...hrSoulAppManifest.engineAssets,
+        mcpClients: [{ source: './engine-assets/mcp-clients/codex', target: 'codex' }],
+      },
+    }, null, 2)}\n`)
+
+    const runtime = host()
+    await runtime.installAppFromPath(appRoot)
+    runtime.enableApp(HR_APP_ID)
+    const created = await runtime.createSoulWorker({
+      defaultEngineId: 'codex',
+      id: 'hr-mcp-worker',
+      name: 'HR MCP',
+      soulId: HR_APP_ID,
+    })
+    const workspace = await created.runtime.createWorkspace({ name: 'MCP Candidate', type: 'candidate' })
+
+    await expect(readFile(path.join(workspace.rootPath, '.codex', 'config.toml'), 'utf8')).resolves.toContain('mcp_servers.ats')
+    await expect(readFile(path.join(workspace.rootPath, '.aiworker', 'projections.json'), 'utf8')).resolves.toContain('"kind": "mcp-client"')
   })
 
   it('validates worker template ownership and enriches metadata from the Host catalog', async () => {

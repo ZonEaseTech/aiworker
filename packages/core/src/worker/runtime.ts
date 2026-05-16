@@ -49,7 +49,7 @@ import {
   upsertFile,
   upsertWorker,
 } from '@zonease/aiworker-storage-sqlite/worker'
-import { engineAssetProjectionReceiptPath, projectEngineAssetsToWorkspace } from './engine-assets'
+import { engineAssetProjectionReceiptPath, projectEngineAssetsToWorkspace, resolveSoulAppEngineTarget } from './engine-assets'
 import { LocalWorkerEventBus } from './events'
 import { createExternalEngineExecutor } from './executor'
 import { LocalWorkspaceFiles } from './files'
@@ -643,6 +643,8 @@ export class LocalWorkerRuntime {
     const engineAssets = this.#engineAssetSource
       ? await projectEngineAssetsToWorkspace({
           appId: this.#engineAssetSource.appId,
+          engineAssets: this.#engineAssetSource.engineAssets,
+          engineTarget: resolveSoulAppEngineTarget(this.#workerInput.defaultEngineId),
           now: this.#now(),
           sourceRoot: this.#engineAssetSource.sourceRoot,
           variables: {

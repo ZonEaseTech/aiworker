@@ -59,6 +59,54 @@ describe('Soul App manifest schema', () => {
     }))
   })
 
+  it('accepts generic MCP client and server declarations', () => {
+    const manifest = cloneManifest(hrSoulAppManifest)
+    manifest.engineAssets = {
+      ...manifest.engineAssets,
+      mcpClients: [
+        { source: './engine-assets/mcp-clients/codex', target: 'codex' },
+        { source: './engine-assets/mcp-clients/claude-code', target: 'claude-code' },
+      ],
+      mcpServers: [{
+        id: 'ats',
+        package: '@zonease/aiworker-mcp-ats',
+        requiredPermissions: ['connector:read:ats'],
+        transport: 'stdio',
+      }],
+    }
+
+    const result = validateSoulAppManifest(manifest, {
+      availableConnectorIds: ['ats', 'calendar'],
+      hostVersion: '0.12.1',
+    })
+
+    expect(result.status).toBe('valid')
+    expect(result.issues).toHaveLength(0)
+  })
+
+  it('rejects workflow-private MCP server package names', () => {
+    const manifest = cloneManifest(hrSoulAppManifest)
+    manifest.engineAssets = {
+      ...manifest.engineAssets,
+      mcpServers: [{
+        id: 'candidate-screening',
+        package: '@zonease/aiworker-hr-candidate-screening-mcp',
+        transport: 'stdio',
+      }],
+    }
+
+    const result = validateSoulAppManifest(manifest, {
+      availableConnectorIds: ['ats', 'calendar'],
+      hostVersion: '0.12.1',
+    })
+
+    expect(result.status).toBe('invalid')
+    expect(result.issues).toContainEqual(expect.objectContaining({
+      code: 'unsafe_mcp_server_package',
+      path: 'engineAssets.mcpServers.candidate-screening.package',
+    }))
+  })
+
   it('validates reference manifests against host discovery inputs', () => {
     const hrResult = validateSoulAppManifest(hrSoulAppManifest, {
       availableConnectorIds: ['ats', 'calendar'],

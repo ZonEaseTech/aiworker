@@ -1,5 +1,37 @@
 # AIWorker Changelog
 
+## 2026-05-16 [completed] FEAT-091 / PLAN-332 — Soul App MCP Client And Server Contract
+
+Completed Phase 4 of Soul App authoring layout v2. Soul App MCP client config
+is now a workspace-local engine asset projection, and MCP server declarations
+are constrained to generic MCP package names instead of app-private workflow
+implementations.
+
+- Added manifest validation for `engineAssets.mcpServers` package names:
+  generic names such as `@zonease/aiworker-mcp-ats` are accepted, while
+  workflow-private names such as `aiworker-hr-candidate-screening-mcp` are
+  rejected.
+- Added runtime MCP client target adapters:
+  `engine-assets/mcp-clients/codex/config.toml` projects to
+  `.codex/config.toml`, and
+  `engine-assets/mcp-clients/claude-code/.mcp.json` projects to `.mcp.json`.
+- Projection now uses the worker's selected supported engine target and records
+  `mcp-client` receipt entries with `engineTarget`; unsupported engines skip MCP
+  client projection.
+- Added a literal-secret guard so generated MCP client config cannot carry
+  bearer tokens, API keys, passwords, tokens or literal secret assignments.
+- Updated Soul App developer docs with the MCP client/server boundary and
+  generic `packages/mcp-*` / `@zonease/aiworker-mcp-*` package convention.
+- Verification passed: `bun test packages/shared/src/soul-app/manifest.test.ts`,
+  `bun run --filter '@zonease/aiworker-shared' typecheck`,
+  `bun test --timeout=30000 packages/core/src/worker/runtime.test.ts`,
+  `bun run --filter '@zonease/aiworker-core' typecheck`,
+  `bun run --filter '@zonease/aiworker-core' test`,
+  `bun run --filter '@zonease/aiworker-soul-app-runtime' test`,
+  `bun run --filter '@zonease/aiworker-soul-app-runtime' typecheck`,
+  `bun run lint`, `git diff --check`, `bun run crg:update`, and
+  `bun run crg:review`.
+
 ## 2026-05-16 [completed] FEAT-090 / PLAN-331 — Soul App Host Adapter Layout Migration
 
 Completed Phase 3 of Soul App authoring layout v2. HR and QA app definitions,

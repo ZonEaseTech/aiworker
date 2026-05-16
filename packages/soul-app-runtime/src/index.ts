@@ -213,6 +213,7 @@ async function createRuntimeForApp(input: {
     engineAssetSource: input.appSourceRoot
       ? {
           appId: input.app.manifest.id,
+          engineAssets: input.app.manifest.engineAssets,
           sourceRoot: input.appSourceRoot,
         }
       : null,

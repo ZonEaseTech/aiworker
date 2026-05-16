@@ -435,3 +435,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-088 Soul App Engine Assets Foundation**](FEAT-088.md) `P0`
 - [x] [**FEAT-089 Soul App Product Layout Migration**](FEAT-089.md) `P0`
 - [x] [**FEAT-090 Soul App Host Adapter Layout Migration**](FEAT-090.md) `P0`
+- [x] [**FEAT-091 Soul App MCP Client And Server Contract**](FEAT-091.md) `P0`

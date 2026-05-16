@@ -98,6 +98,31 @@ imports from Host private packages such as `@zonease/aiworker-core`,
 `@zonease/aiworker-api`, `@zonease/aiworker-storage-sqlite`, and direct imports
 from sibling apps such as `@zonease/aiworker-hr` or `@zonease/aiworker-qa`.
 
+## MCP Client And Server Declarations
+
+Soul Apps may declare workspace-local MCP client config under `engineAssets`.
+Runtime projects only the selected supported engine target:
+
+```text
+engine-assets/mcp-clients/codex/config.toml
+  -> <workspace>/.codex/config.toml
+
+engine-assets/mcp-clients/claude-code/.mcp.json
+  -> <workspace>/.mcp.json
+```
+
+Generated MCP client config must not contain literal secrets, bearer tokens,
+API keys or connector credentials. Use Host connector grants, broker routes,
+environment wiring or secret references instead of writing secrets into
+manifest files, `engine-assets/`, generated app config, workspace metadata or
+logs.
+
+Executable MCP servers are generic monorepo packages, not app-private workflow
+implementations. Use package names such as `packages/mcp-ats` or
+`@zonease/aiworker-mcp-ats`; avoid names that encode a Soul App workflow such
+as `aiworker-hr-candidate-screening-mcp`. Workflow meaning belongs in
+`product/`, while the MCP server exposes reusable external-system capability.
+
 ## Smoke
 
 ```bash

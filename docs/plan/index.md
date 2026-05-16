@@ -360,3 +360,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-329 Soul App Engine Assets Foundation**](PLAN-329.md) `2026-05-16`
 - [x] [**PLAN-330 Soul App Product Layout Migration**](PLAN-330.md) `2026-05-16`
 - [x] [**PLAN-331 Soul App Host Adapter Layout Migration**](PLAN-331.md) `2026-05-16`
+- [x] [**PLAN-332 Soul App MCP Client And Server Contract**](PLAN-332.md) `2026-05-16`

@@ -1,4 +1,9 @@
-import type { SoulAppProjectionReceipt, SoulAppProjectionReceiptEntry } from '@zonease/aiworker-shared'
+import type {
+  SoulAppEngineAssets,
+  SoulAppEngineTarget,
+  SoulAppProjectionReceipt,
+  SoulAppProjectionReceiptEntry,
+} from '@zonease/aiworker-shared'
 
 import { createHash } from 'node:crypto'
 import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
@@ -7,14 +12,19 @@ import path from 'node:path'
 const SKILL_ID_RE = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
 const SKILL_FILE = 'SKILL.md'
 const PROJECTION_RECEIPT = path.posix.join('.aiworker', 'projections.json')
+const MCP_SECRET_ASSIGNMENT_RE = /["']?([\w-]*(?:api[_-]?key|authorization|password|secret|token)[\w-]*)["']?\s*[:=]\s*["']([^"'\n]+)["']/gi
+const MCP_SECRET_VALUE_RE = /Bearer\s+[\w.~+/-]{12,}|sk-[\w-]{8,}/i
 
 export interface EngineAssetSource {
   appId: string
+  engineAssets?: SoulAppEngineAssets
   sourceRoot: string
 }
 
 export interface EngineAssetProjectionInput {
   appId: string
+  engineAssets?: SoulAppEngineAssets
+  engineTarget?: SoulAppEngineTarget | null
   now: string
   sourceRoot: string
   variables: Record<string, string>
@@ -30,6 +40,7 @@ export async function projectEngineAssetsToWorkspace(input: EngineAssetProjectio
   await mkdir(path.join(workspaceRoot, '.aiworker'), { recursive: true })
   projections.push(...await projectWorkspaceFiles({ ...input, generatedAt, sourceRoot, workspaceRoot }))
   projections.push(...await projectNativeSkills({ ...input, generatedAt, sourceRoot, workspaceRoot }))
+  projections.push(...await projectMcpClients({ ...input, generatedAt, sourceRoot, workspaceRoot }))
 
   const receipt: SoulAppProjectionReceipt = {
     appId: input.appId,
@@ -43,6 +54,16 @@ export async function projectEngineAssetsToWorkspace(input: EngineAssetProjectio
 
 export function engineAssetProjectionReceiptPath(): string {
   return PROJECTION_RECEIPT
+}
+
+export function resolveSoulAppEngineTarget(engineId?: string | null): SoulAppEngineTarget | null {
+  if (!engineId)
+    return null
+  if (engineId === 'codex' || engineId.startsWith('codex/'))
+    return 'codex'
+  if (engineId === 'claude-code' || engineId.startsWith('claude-code/'))
+    return 'claude-code'
+  return null
 }
 
 async function projectWorkspaceFiles(input: EngineAssetProjectionInput & { generatedAt: string, sourceRoot: string, workspaceRoot: string }): Promise<SoulAppProjectionReceiptEntry[]> {
@@ -63,6 +84,7 @@ async function projectNativeSkills(input: EngineAssetProjectionInput & { generat
   const root = path.join(input.sourceRoot, 'engine-assets', 'skills')
   const skillDirs = await readdirOrEmpty(root)
   const entries: SoulAppProjectionReceiptEntry[] = []
+  const configuredTargets = new Set<SoulAppEngineTarget>(input.engineAssets?.skills?.targets ?? ['codex', 'claude-code'])
   for (const dirent of skillDirs) {
     if (!dirent.isDirectory() || !SKILL_ID_RE.test(dirent.name))
       continue
@@ -75,7 +97,7 @@ async function projectNativeSkills(input: EngineAssetProjectionInput & { generat
     const targets = [
       { engineTarget: 'codex' as const, path: path.posix.join('.agents', 'skills', projectionId, SKILL_FILE) },
       { engineTarget: 'claude-code' as const, path: path.posix.join('.claude', 'skills', projectionId, SKILL_FILE) },
-    ]
+    ].filter(target => configuredTargets.has(target.engineTarget))
     for (const target of targets) {
       await writeProjectedFile(input.workspaceRoot, target.path, content)
       entries.push(receiptEntry(
@@ -89,6 +111,58 @@ async function projectNativeSkills(input: EngineAssetProjectionInput & { generat
     }
   }
   return entries
+}
+
+async function projectMcpClients(input: EngineAssetProjectionInput & { generatedAt: string, sourceRoot: string, workspaceRoot: string }): Promise<SoulAppProjectionReceiptEntry[]> {
+  if (!input.engineTarget)
+    return []
+
+  const clients = (input.engineAssets?.mcpClients ?? []).filter(client => client.target === input.engineTarget)
+  const adapter = mcpClientAdapter(input.engineTarget)
+  const entries: SoulAppProjectionReceiptEntry[] = []
+
+  for (const client of clients) {
+    const sourceDir = appLocalSourcePath(client.source)
+    const source = path.posix.join(sourceDir, adapter.sourceFile)
+    const file = path.join(input.sourceRoot, ...source.split('/'))
+    if (!await isFile(file))
+      throw new Error(`MCP client config not found for ${input.engineTarget}: ${source}`)
+
+    const content = await readFile(file, 'utf8')
+    assertNoLiteralMcpSecrets(content, source)
+    await writeProjectedFile(input.workspaceRoot, adapter.targetPath, content)
+    entries.push(receiptEntry(input, 'mcp-client', source, adapter.targetPath, content, input.engineTarget))
+  }
+
+  return entries
+}
+
+function mcpClientAdapter(engineTarget: SoulAppEngineTarget): { sourceFile: string, targetPath: string } {
+  if (engineTarget === 'codex')
+    return { sourceFile: 'config.toml', targetPath: path.posix.join('.codex', 'config.toml') }
+  return { sourceFile: '.mcp.json', targetPath: '.mcp.json' }
+}
+
+function appLocalSourcePath(source: string): string {
+  return source.replace(/^\.\//, '').split('/').filter(Boolean).join('/')
+}
+
+function assertNoLiteralMcpSecrets(content: string, source: string): void {
+  if (hasLiteralSecretAssignment(content) || MCP_SECRET_VALUE_RE.test(content))
+    throw new Error(`MCP client config must not contain literal secrets: ${source}`)
+}
+
+function hasLiteralSecretAssignment(content: string): boolean {
+  for (const match of content.matchAll(MCP_SECRET_ASSIGNMENT_RE)) {
+    const value = match[2]?.trim() ?? ''
+    if (!isSecretReferenceValue(value))
+      return true
+  }
+  return false
+}
+
+function isSecretReferenceValue(value: string): boolean {
+  return value.startsWith('$') || value.startsWith('env:') || value.startsWith('secretRef:')
 }
 
 function receiptEntry(

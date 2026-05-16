@@ -401,6 +401,7 @@ export const soulAppManifestIssueCodeSchema = zod.enum([
   'unsafe_permission_request',
   'unsafe_ui_surface',
   'unsafe_engine_asset_source',
+  'unsafe_mcp_server_package',
   'missing_ui_api_entry',
   'invalid_artifact_schema',
   'namespace_collision',
@@ -478,6 +479,18 @@ export function validateSoulAppManifest(
         code: 'unsafe_engine_asset_source',
         message: 'engine asset source must be a relative app-local path.',
         path: source.path,
+        severity: 'error',
+      })
+    }
+  }
+
+  for (const server of manifest.engineAssets.mcpServers ?? []) {
+    const message = mcpServerPackageMessage(manifest, server.package)
+    if (message) {
+      issues.push({
+        code: 'unsafe_mcp_server_package',
+        message,
+        path: `engineAssets.mcpServers.${server.id}.package`,
         severity: 'error',
       })
     }
@@ -736,6 +749,16 @@ function unsafeSurfaceMessage(surface: SoulAppMountedSurface): string | null {
     return 'host-descriptor surfaces must use a /surfaces/* mounted service entry.'
   if (surface.renderer === 'sandboxed-frame' && !surface.entry.startsWith('/frames/'))
     return 'sandboxed-frame surfaces must use a /frames/* mounted service entry.'
+  return null
+}
+
+function mcpServerPackageMessage(manifest: SoulAppManifest, packageName: string): string | null {
+  const packagePart = packageName.includes('/') ? packageName.split('/').at(-1)! : packageName
+  const genericMcpPackage = /^(?:[a-z][a-z0-9]*-)*mcp-[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(packagePart)
+  if (!genericMcpPackage)
+    return 'MCP server packages must use a generic mcp-* package name, for example @zonease/aiworker-mcp-ats.'
+  if (packagePart.includes(manifest.id))
+    return 'MCP server packages must not be private to a Soul App id.'
   return null
 }
 

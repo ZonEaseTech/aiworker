@@ -1,3 +1,5 @@
+import type { SoulAppEngineAssets } from '@zonease/aiworker-shared'
+
 import { spawnSync } from 'node:child_process'
 import { mkdtempSync } from 'node:fs'
 import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
@@ -45,16 +47,21 @@ describe('LocalWorkerRuntime', () => {
     })
   }
 
-  function runtimeWithEngineAssets(sourceRoot: string, executor: ConstructorParameters<typeof LocalWorkerRuntime>[0]['executor']) {
+  function runtimeWithEngineAssets(
+    sourceRoot: string,
+    executor: ConstructorParameters<typeof LocalWorkerRuntime>[0]['executor'],
+    options: { defaultEngineId?: string, engineAssets?: SoulAppEngineAssets } = {},
+  ) {
     return new LocalWorkerRuntime({
       worker: {
         id: 'worker-hr',
         soulId: 'aiworker-hr',
         name: 'AIWorker HR',
-        defaultEngineId: 'codex',
+        defaultEngineId: options.defaultEngineId ?? 'codex',
       },
       engineAssetSource: {
         appId: 'aiworker-hr',
+        ...(options.engineAssets ? { engineAssets: options.engineAssets } : {}),
         sourceRoot,
       },
       workspacesRoot: join(dir, 'workers', 'worker-hr', 'workspaces'),
@@ -250,6 +257,100 @@ describe('LocalWorkerRuntime', () => {
     }
   })
 
+  it('projects Codex MCP client config for codex workers', async () => {
+    const appRoot = join(dir, 'apps', 'aiworker-hr-mcp-codex')
+    await writeMcpClientEngineAssets(appRoot)
+
+    const workerRuntime = runtimeWithEngineAssets(appRoot, {
+      async invoke() {
+        return { summary: 'ok' }
+      },
+    }, { engineAssets: mcpClientEngineAssets() })
+
+    await workerRuntime.init()
+    const workspace = await workerRuntime.createWorkspace({ name: 'Codex MCP Workspace' })
+
+    await expect(readFile(join(workspace.rootPath, '.codex', 'config.toml'), 'utf8')).resolves.toContain('mcp_servers.ats')
+    await expect(stat(join(workspace.rootPath, '.mcp.json'))).rejects.toThrow()
+    const receipt = JSON.parse(await readFile(join(workspace.rootPath, '.aiworker', 'projections.json'), 'utf8')) as {
+      projections: Array<{ engineTarget?: string, kind: string, source: string, target: string }>
+    }
+    expect(receipt.projections).toContainEqual(expect.objectContaining({
+      engineTarget: 'codex',
+      kind: 'mcp-client',
+      source: 'engine-assets/mcp-clients/codex/config.toml',
+      target: '.codex/config.toml',
+    }))
+  })
+
+  it('projects Claude Code MCP client config for claude-code workers', async () => {
+    const appRoot = join(dir, 'apps', 'aiworker-hr-mcp-claude')
+    await writeMcpClientEngineAssets(appRoot)
+
+    const workerRuntime = runtimeWithEngineAssets(appRoot, {
+      async invoke() {
+        return { summary: 'ok' }
+      },
+    }, {
+      defaultEngineId: 'claude-code',
+      engineAssets: mcpClientEngineAssets(),
+    })
+
+    await workerRuntime.init()
+    const workspace = await workerRuntime.createWorkspace({ name: 'Claude MCP Workspace' })
+
+    await expect(readFile(join(workspace.rootPath, '.mcp.json'), 'utf8')).resolves.toContain('aiworker-mcp-ats')
+    await expect(stat(join(workspace.rootPath, '.codex', 'config.toml'))).rejects.toThrow()
+    const receipt = JSON.parse(await readFile(join(workspace.rootPath, '.aiworker', 'projections.json'), 'utf8')) as {
+      projections: Array<{ engineTarget?: string, kind: string, source: string, target: string }>
+    }
+    expect(receipt.projections).toContainEqual(expect.objectContaining({
+      engineTarget: 'claude-code',
+      kind: 'mcp-client',
+      source: 'engine-assets/mcp-clients/claude-code/.mcp.json',
+      target: '.mcp.json',
+    }))
+  })
+
+  it('skips MCP client config for unsupported worker engine targets', async () => {
+    const appRoot = join(dir, 'apps', 'aiworker-hr-mcp-http')
+    await writeMcpClientEngineAssets(appRoot)
+
+    const workerRuntime = runtimeWithEngineAssets(appRoot, {
+      async invoke() {
+        return { summary: 'ok' }
+      },
+    }, {
+      defaultEngineId: 'http',
+      engineAssets: mcpClientEngineAssets(),
+    })
+
+    await workerRuntime.init()
+    const workspace = await workerRuntime.createWorkspace({ name: 'HTTP MCP Workspace' })
+    const receipt = JSON.parse(await readFile(join(workspace.rootPath, '.aiworker', 'projections.json'), 'utf8')) as {
+      projections: Array<{ kind: string }>
+    }
+
+    expect(receipt.projections.filter(item => item.kind === 'mcp-client')).toEqual([])
+    await expect(stat(join(workspace.rootPath, '.mcp.json'))).rejects.toThrow()
+    await expect(stat(join(workspace.rootPath, '.codex', 'config.toml'))).rejects.toThrow()
+  })
+
+  it('rejects literal secrets in MCP client config projections', async () => {
+    const appRoot = join(dir, 'apps', 'aiworker-hr-mcp-secret')
+    await writeMcpClientEngineAssets(appRoot)
+    await writeFile(join(appRoot, 'engine-assets', 'mcp-clients', 'codex', 'config.toml'), 'token = "sk-test-literal-secret"\n')
+
+    const workerRuntime = runtimeWithEngineAssets(appRoot, {
+      async invoke() {
+        return { summary: 'ok' }
+      },
+    }, { engineAssets: mcpClientEngineAssets() })
+
+    await workerRuntime.init()
+    await expect(workerRuntime.createWorkspace({ name: 'Secret MCP Workspace' })).rejects.toThrow('MCP client config must not contain literal secrets')
+  })
+
   it('repairs stale workspace root agent instructions during runtime init', async () => {
     const appRoot = join(dir, 'apps', 'aiworker-hr')
     await writeProfileEngineAssets(appRoot)
@@ -360,6 +461,42 @@ async function writeProfileEngineAssets(appRoot: string): Promise<void> {
     'Use candidate, employee, and alumni lifecycle language.',
     '',
   ].join('\n'))
+}
+
+async function writeMcpClientEngineAssets(appRoot: string): Promise<void> {
+  await writeProfileEngineAssets(appRoot)
+  await mkdir(join(appRoot, 'engine-assets', 'mcp-clients', 'codex'), { recursive: true })
+  await mkdir(join(appRoot, 'engine-assets', 'mcp-clients', 'claude-code'), { recursive: true })
+  await writeFile(join(appRoot, 'engine-assets', 'mcp-clients', 'codex', 'config.toml'), [
+    '[mcp_servers.ats]',
+    'command = "uvx"',
+    'args = ["aiworker-mcp-ats"]',
+    '',
+  ].join('\n'))
+  await writeFile(join(appRoot, 'engine-assets', 'mcp-clients', 'claude-code', '.mcp.json'), `${JSON.stringify({
+    mcpServers: {
+      ats: {
+        args: ['aiworker-mcp-ats'],
+        command: 'uvx',
+      },
+    },
+  }, null, 2)}\n`)
+}
+
+function mcpClientEngineAssets(): SoulAppEngineAssets {
+  return {
+    mcpClients: [
+      { source: './engine-assets/mcp-clients/codex', target: 'codex' },
+      { source: './engine-assets/mcp-clients/claude-code', target: 'claude-code' },
+    ],
+    skills: {
+      source: './engine-assets/skills',
+      targets: ['codex', 'claude-code'],
+    },
+    workspace: {
+      source: './engine-assets/workspace',
+    },
+  }
 }
 
 async function writeWorkspaceEngineAssets(appRoot: string): Promise<void> {
