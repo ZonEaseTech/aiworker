@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import type { HostRuntime, LocalExecutor, LocalWorkerRuntime, SoulAppRegistryContext } from '@zonease/aiworker-core'
-import type { SoulAppManifest } from '@zonease/aiworker-shared'
+import type { LocalReviewVerdict, SoulAppManifest } from '@zonease/aiworker-shared'
 import type { WorkerRow } from '@zonease/aiworker-storage-sqlite/worker'
 import type { ChildProcessByStdio } from 'node:child_process'
 import type { Readable } from 'node:stream'
@@ -20,7 +20,9 @@ import {
 } from '@zonease/aiworker-core'
 import { resolveAiworkerScope } from '@zonease/aiworker-fs-layout'
 import {
+  formatProfilePromotionIssues,
   parseSoulAppManifestJson,
+  prepareProfileMarkdownForPromotion,
   soulAppIdSchema,
 } from '@zonease/aiworker-shared'
 import {
@@ -777,6 +779,64 @@ async function openArtifact(id: string, opts: { worker?: string }): Promise<void
   const fullPath = runtime.files(workspace.id).resolve(artifact.path)
   Bun.spawn(['open', fullPath])
   printJson({ opened: fullPath })
+}
+
+async function promoteProfileCommand(opts: {
+  artifact?: string
+  finding?: string | string[]
+  profileMarkdown?: string
+  risk?: string | string[]
+  tag?: string
+  verdict?: string
+  worker?: string
+  workspace?: string
+}): Promise<void> {
+  await ensureDb()
+  const workspaceId = requireText(opts.workspace, 'workspace')
+  const artifactId = requireText(opts.artifact, 'artifact')
+  const workspace = getWorkspace(workspaceId)
+  if (!workspace)
+    throw new Error(`workspace not found: ${workspaceId}`)
+  const artifact = getArtifact(artifactId)
+  if (!artifact || artifact.workspaceId !== workspace.id)
+    throw new Error(`artifact not found for workspace ${workspace.id}: ${artifactId}`)
+  const runtime = await ensureRuntime({ worker: opts.worker ?? workspace.workerId })
+  const artifactMarkdown = await runtime.files(workspace.id).read(artifact.path)
+  const explicitProfileMarkdown = opts.profileMarkdown
+    ? await readFile(path.resolve(opts.profileMarkdown), 'utf8')
+    : undefined
+  const prepared = prepareProfileMarkdownForPromotion({
+    artifactMarkdown,
+    profileMarkdown: explicitProfileMarkdown,
+    requireFencedDraft: !explicitProfileMarkdown,
+  })
+  if (!prepared.ok)
+    throw new Error(`profile promotion rejected: ${formatProfilePromotionIssues(prepared.issues)}`)
+  const profileRevision = await runtime.promoteProfileRevision({
+    artifactId,
+    findingsJson: profilePromotionMessages(opts.finding),
+    profileMarkdown: prepared.profileMarkdown,
+    risksJson: profilePromotionMessages(opts.risk),
+    tagName: opts.tag,
+    verdict: requirePromotionVerdict(opts.verdict),
+    workspaceId: workspace.id,
+  })
+  printJson({ profileRevision, source: prepared.source })
+}
+
+function requirePromotionVerdict(value: string | undefined): Extract<LocalReviewVerdict, 'pass' | 'warn'> {
+  if (!value)
+    return 'pass'
+  if (value === 'pass' || value === 'warn')
+    return value
+  throw new Error('profile promotion verdict must be pass or warn')
+}
+
+function profilePromotionMessages(value: string | string[] | undefined): Array<Record<string, unknown>> | undefined {
+  if (!value)
+    return undefined
+  const items = Array.isArray(value) ? value : [value]
+  return items.map(message => ({ message }))
 }
 
 async function listArtifactsCommand(opts: { workspace?: string }): Promise<void> {
@@ -2289,6 +2349,17 @@ function registerCommands(): void {
   })
   cli.command('artifacts open <id>', 'open one artifact').option('--worker <id>', 'worker id').action(openArtifact)
 
+  cli.command('profile promote', 'promote a reviewed artifact into the workspace profile README')
+    .option('--workspace <id>', 'workspace id')
+    .option('--artifact <id>', 'artifact id')
+    .option('--worker <id>', 'worker id')
+    .option('--verdict <verdict>', 'review verdict: pass or warn')
+    .option('--profile-markdown <path>', 'explicit reviewed profile markdown file')
+    .option('--finding <text>', 'review finding message')
+    .option('--risk <text>', 'review risk message')
+    .option('--tag <name>', 'optional git tag name')
+    .action(promoteProfileCommand)
+
   cli.command('review list', 'list reviews').option('--workspace <id>', 'workspace id').action(listReviewsCommand)
   cli.command('review show <id>', 'show one review').action(async (id: string) => {
     await ensureAllWorkers()
@@ -2345,6 +2416,7 @@ function commandIndex(): string {
     'turn send',
     'files list|show',
     'artifacts list|show|open',
+    'profile promote',
     'review list|show',
     'lessons list|propose|accept|reject',
     'settings list',

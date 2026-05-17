@@ -56,6 +56,7 @@ aiworker session start|list|show
 aiworker turn send
 aiworker files list|show
 aiworker artifacts list|show|open
+aiworker profile promote
 aiworker review list|show
 aiworker lessons list|propose|accept|reject
 aiworker settings list
@@ -116,9 +117,14 @@ legacy built-in ids such as `hr`.
 - `session start --workspace <id> --skill <template-id> --input <text>` creates
   a session and first turn.
 - `turn send --session <id> --input <text>` continues an existing session.
-- `files list|show`, `artifacts list|show|open`, `review list|show` and
+- `files list|show`, `artifacts list|show|open`, `profile promote`,
+  `review list|show` and
   `lessons list|propose|accept|reject` inspect the Host-indexed outputs that
   the app/runtime exposed.
+- `profile promote --workspace <id> --artifact <id>` promotes a reviewed
+  artifact into the workspace `README.md`. By default the artifact must contain
+  a clean `aiworker-profile-readme` fenced draft; `--profile-markdown <path>`
+  can provide an explicit reviewed markdown file.
 
 ## Settings And Engines
 

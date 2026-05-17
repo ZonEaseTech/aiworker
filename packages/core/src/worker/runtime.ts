@@ -18,6 +18,7 @@ import type { GitOperationResult, ProfileWorkspaceBootstrapResult } from './prof
 import { randomUUID } from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+import { formatProfilePromotionIssues, prepareProfileMarkdownForPromotion } from '@zonease/aiworker-shared'
 import {
   appendSessionEvent,
   createEngineInvocation,
@@ -382,13 +383,20 @@ export class LocalWorkerRuntime {
     const reviewId = randomUUID()
     const files = new LocalWorkspaceFiles(workspace.rootPath)
     const artifactContent = await files.read(artifact.path)
+    const preparedProfile = prepareProfileMarkdownForPromotion({
+      artifactMarkdown: artifactContent,
+      profileMarkdown: input.profileMarkdown,
+      requireFencedDraft: !input.profileMarkdown,
+    })
+    if (!preparedProfile.ok)
+      throw new Error(`Profile promotion rejected: ${formatProfilePromotionIssues(preparedProfile.issues)}`)
     const at = this.#now()
     const promotion = await promoteProfileRevisionFiles({
       artifactPath: artifact.path,
       artifactTitle: artifact.title,
       findingsJson: input.findingsJson ?? [{ message: 'Profile revision approved.' }],
       now: at,
-      profileMarkdown: input.profileMarkdown ?? artifactContent,
+      profileMarkdown: preparedProfile.profileMarkdown,
       reviewId,
       risksJson: input.risksJson ?? [],
       tagName: input.tagName,

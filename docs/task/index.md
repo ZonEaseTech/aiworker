@@ -458,4 +458,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-130 CLI session start misses app-authored capability assets**](BUG-130.md) `P0`
 - [x] [**TODO-045 Clarify capability asset source refs for external engines**](TODO-045.md) `P2`
 - [x] [**BUG-131 Profile proposal README draft can carry pending-promotion language**](BUG-131.md) `P1`
-- [ ] [**TODO-046 Add a headless reviewed profile promotion command**](TODO-046.md) `P2`
+- [x] [**TODO-046 Add a headless reviewed profile promotion command**](TODO-046.md) `P2`

@@ -465,16 +465,30 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
         },
       }, 400)
     }
-    const profileRevision = await requireRuntime(state, workspace.workerId).promoteProfileRevision({
-      artifactId: requireString(body.artifactId, 'artifactId'),
-      findingsJson: body.findingsJson ?? [],
-      profileMarkdown: body.profileMarkdown,
-      risksJson: body.risksJson ?? [],
-      tagName: body.tagName,
-      verdict,
-      workspaceId: workspace.id,
-    })
-    return c.json({ profileRevision }, 201)
+    try {
+      const profileRevision = await requireRuntime(state, workspace.workerId).promoteProfileRevision({
+        artifactId: requireString(body.artifactId, 'artifactId'),
+        findingsJson: body.findingsJson ?? [],
+        profileMarkdown: body.profileMarkdown,
+        risksJson: body.risksJson ?? [],
+        tagName: body.tagName,
+        verdict,
+        workspaceId: workspace.id,
+      })
+      return c.json({ profileRevision }, 201)
+    }
+    catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (message.startsWith('Profile promotion rejected:')) {
+        return c.json({
+          error: {
+            code: 'PROFILE_REVISION_REJECTED',
+            message,
+          },
+        }, 400)
+      }
+      throw error
+    }
   })
 
   app.get('/api/local/sessions', c => c.json({ sessions: listSessions() }))

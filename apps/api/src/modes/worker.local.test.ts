@@ -351,6 +351,21 @@ describe('local daemon API', () => {
       headers: { 'content-type': 'application/json' },
     })
     expect(rejectPromotionRes.status).toBe(400)
+
+    const invalidDraftPromotionRes = await target.request(`/api/local/workspaces/${workspaceBody.workspace.id}/profile-revisions`, {
+      method: 'POST',
+      body: JSON.stringify({
+        artifactId: sessionBody.artifacts[0]!.id,
+        verdict: 'pass',
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(invalidDraftPromotionRes.status).toBe(400)
+    expect(await invalidDraftPromotionRes.json()).toMatchObject({
+      error: {
+        code: 'PROFILE_REVISION_REJECTED',
+      },
+    })
   })
 
   it('mounts enabled Soul App manifests into app, soul, template, worker, and session surfaces', async () => {

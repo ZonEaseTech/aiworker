@@ -632,6 +632,7 @@ describe('LocalWorkerRuntime', () => {
     const promotion = await workerRuntime.promoteProfileRevision({
       artifactId: turn.artifacts[0]!.id,
       findingsJson: [{ message: 'Approved from HR review.' }],
+      profileMarkdown: '# Accepted Candidate Profile\n\nEvidence-backed summary.\n',
       risksJson: [],
       verdict: 'pass',
       workspaceId: workspace.id,
@@ -649,6 +650,153 @@ describe('LocalWorkerRuntime', () => {
       const log = spawnSync('git', ['-C', workspace.rootPath, 'log', '--oneline', '--', 'README.md'], { encoding: 'utf8' })
       expect(log.stdout).toContain('profile: approve Profile Promotion Workspace revision')
     }
+  })
+
+  it('promotes only the fenced accepted profile draft from proposal artifacts', async () => {
+    const workerRuntime = runtime({
+      async invoke(input) {
+        return {
+          summary: 'Profile proposal ready',
+          artifacts: [
+            {
+              path: `artifacts/${input.sessionId}/profile-proposal.md`,
+              title: 'Profile proposal',
+              content: [
+                '# Profile Update Proposal',
+                '',
+                'Proposal Notes: reviewer should approve this.',
+                '',
+                '```aiworker-profile-readme',
+                '# Accepted Candidate Profile',
+                '',
+                'Evidence-backed summary.',
+                '```',
+                '',
+              ].join('\n'),
+            },
+          ],
+        }
+      },
+    })
+
+    await workerRuntime.init()
+    const workspace = await workerRuntime.createWorkspace({ name: 'Fenced Profile Promotion Workspace' })
+    const session = await workerRuntime.createSession({
+      workspaceId: workspace.id,
+      capabilityTemplateId: 'profile-update-proposal',
+      title: 'Prepare profile proposal',
+    })
+    const turn = await workerRuntime.startTurn({
+      sessionId: session.id,
+      input: 'Draft the profile.',
+      engineId: 'codex',
+    })
+
+    await workerRuntime.promoteProfileRevision({
+      artifactId: turn.artifacts[0]!.id,
+      findingsJson: [{ message: 'Approved from HR review.' }],
+      risksJson: [],
+      verdict: 'pass',
+      workspaceId: workspace.id,
+    })
+
+    const readme = await readFile(join(workspace.rootPath, 'README.md'), 'utf8')
+    expect(readme).toContain('Accepted Candidate Profile')
+    expect(readme).not.toContain('Proposal Notes')
+    expect(readme).not.toContain('aiworker-profile-readme')
+  })
+
+  it('rejects artifact profile promotion without an accepted README fence', async () => {
+    const workerRuntime = runtime({
+      async invoke(input) {
+        return {
+          summary: 'Profile proposal ready',
+          artifacts: [
+            {
+              path: `artifacts/${input.sessionId}/profile-proposal.md`,
+              title: 'Profile proposal',
+              content: '# Accepted Candidate Profile\n\nThis looks clean but lacks a reviewed README fence.\n',
+            },
+          ],
+        }
+      },
+    })
+
+    await workerRuntime.init()
+    const workspace = await workerRuntime.createWorkspace({ name: 'Missing Fence Promotion Workspace' })
+    const session = await workerRuntime.createSession({
+      workspaceId: workspace.id,
+      capabilityTemplateId: 'profile-update-proposal',
+      title: 'Prepare profile proposal',
+    })
+    const turn = await workerRuntime.startTurn({
+      sessionId: session.id,
+      input: 'Draft the profile.',
+      engineId: 'codex',
+    })
+
+    await expect(workerRuntime.promoteProfileRevision({
+      artifactId: turn.artifacts[0]!.id,
+      findingsJson: [{ message: 'Approved from HR review.' }],
+      risksJson: [],
+      verdict: 'pass',
+      workspaceId: workspace.id,
+    })).rejects.toThrow('requires an aiworker-profile-readme fenced draft')
+
+    await expect(readFile(join(workspace.rootPath, 'README.md'), 'utf8'))
+      .resolves
+      .toContain('No approved profile revision yet.')
+  })
+
+  it('rejects profile promotion when the accepted draft still has proposal-state language', async () => {
+    const workerRuntime = runtime({
+      async invoke(input) {
+        return {
+          summary: 'Profile proposal ready',
+          artifacts: [
+            {
+              path: `artifacts/${input.sessionId}/profile-proposal.md`,
+              title: 'Profile proposal',
+              content: [
+                '```aiworker-profile-readme',
+                '# Accepted Candidate Profile',
+                '',
+                '## Review State',
+                '',
+                'Promotion requested and pending human review.',
+                '```',
+                '',
+              ].join('\n'),
+            },
+          ],
+        }
+      },
+    })
+
+    await workerRuntime.init()
+    const workspace = await workerRuntime.createWorkspace({ name: 'Rejected Profile Promotion Workspace' })
+    const session = await workerRuntime.createSession({
+      workspaceId: workspace.id,
+      capabilityTemplateId: 'profile-update-proposal',
+      title: 'Prepare profile proposal',
+    })
+    const turn = await workerRuntime.startTurn({
+      sessionId: session.id,
+      input: 'Draft the profile.',
+      engineId: 'codex',
+    })
+
+    await expect(workerRuntime.promoteProfileRevision({
+      artifactId: turn.artifacts[0]!.id,
+      findingsJson: [{ message: 'Approved from HR review.' }],
+      risksJson: [],
+      verdict: 'pass',
+      workspaceId: workspace.id,
+    })).rejects.toThrow('pending human review')
+
+    await expect(readFile(join(workspace.rootPath, 'README.md'), 'utf8'))
+      .resolves
+      .toContain('No approved profile revision yet.')
   })
 })
 

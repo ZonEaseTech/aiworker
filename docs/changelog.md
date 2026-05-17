@@ -1,5 +1,28 @@
 # AIWorker Changelog
 
+## 2026-05-17 [completed] TODO-046 / PLAN-347 — Headless reviewed profile promotion CLI
+
+Added a product-owned headless promotion path for reviewed profile artifacts.
+
+- Added shared accepted-profile README helpers for `aiworker-profile-readme`
+  fence extraction, empty draft rejection, and proposal-state language
+  rejection.
+- Added `aiworker profile promote` with `--workspace`, `--artifact`,
+  `--verdict pass|warn`, `--profile-markdown`, `--finding`, `--risk`, and
+  `--tag`.
+- Tightened runtime promotion so artifact-based README writes require a clean
+  fenced accepted draft unless the caller supplies explicit reviewed profile
+  markdown.
+- Reused the shared helper in Worker Web promotion and returned
+  `PROFILE_REVISION_REJECTED` from the local API for invalid profile drafts.
+- Verified deterministic isolated CLI debug rounds for success, missing-fence
+  rejection, pending-state rejection, and explicit markdown promotion, plus a
+  real Codex two-turn HR profile session promoted from artifact to `README.md`.
+
+Verification passed: focused shared/core/CLI/API/Web tests and isolated debug
+evidence under `tmp/hr-profile-promote-debug-20260517151429` and
+`tmp/hr-profile-promote-real-20260517151507`.
+
 ## 2026-05-17 [completed] QA-036 / BUG-130 / BUG-131 / PLAN-346 — HR native skill closure follow-up regression
 
 Ran another real Codex-backed HR native skill regression campaign from

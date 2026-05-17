@@ -925,6 +925,10 @@ describe('worker studio', () => {
         method: 'POST',
       }))
     })
+    expect(fetch).toHaveBeenCalledWith('/api/local/workspaces/workspace-1/profile-revisions', expect.objectContaining({
+      body: expect.stringContaining('"profileMarkdown":"# Accepted Ada Profile\\n\\nReviewed profile summary."'),
+      method: 'POST',
+    }))
     await waitFor(() => {
       expect(within(currentProfile).getByText('Reviewed profile summary.')).toBeTruthy()
     })

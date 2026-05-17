@@ -204,6 +204,18 @@ export type {
 } from './local-workspace'
 
 export {
+  extractProfileReadmeDraft,
+  formatProfilePromotionIssues,
+  prepareProfileMarkdownForPromotion,
+  validatePromotableProfileMarkdown,
+} from './profile-promotion'
+export type {
+  ProfilePromotionIssue,
+  ProfilePromotionMarkdownSource,
+  ProfilePromotionPreparationResult,
+} from './profile-promotion'
+
+export {
   agentEventSchema,
   agentFinishReasonSchema,
   tokenUsageSchema,

@@ -141,6 +141,60 @@ describe('aiworker local CLI', () => {
     process.env.PATH = `${binDir}:${process.env.PATH ?? ''}`
   }
 
+  async function writeFakeCodexArtifactCommand(): Promise<void> {
+    const binDir = path.join(root, 'bin')
+    mkdirSync(binDir, { recursive: true })
+    const commandPath = path.join(binDir, 'codex')
+    await writeFile(commandPath, [
+      '#!/usr/bin/env bash',
+      'set -euo pipefail',
+      'prompt="$(cat)"',
+      'artifact_path="$(printf \'%s\\n\' "$prompt" | sed -n \'s/^- Prefer \\(artifacts\\/[^ ]*\\) for a new .*$/\\1/p\' | head -n 1)"',
+      'if [ -z "$artifact_path" ]; then artifact_path="artifacts/unknown-session/profile-update-proposal.md"; fi',
+      'mkdir -p "$(dirname "$artifact_path")"',
+      'artifact_content="$(printenv FAKE_CODEX_ARTIFACT_CONTENT || true)"',
+      'if [ -z "$artifact_content" ]; then artifact_content="# Empty Artifact"; fi',
+      'printf \'%s\\n\' "$artifact_content" > "$artifact_path"',
+      'printf \'%s\\n\' \'{"type":"item.completed","item":{"type":"agent_message","text":"Artifact written."}}\'',
+      '',
+    ].join('\n'))
+    await chmod(commandPath, 0o755)
+    process.env.PATH = `${binDir}:${process.env.PATH ?? ''}`
+  }
+
+  async function createProfilePromotionArtifact(content: string): Promise<{ artifactId: string, rootPath: string, workspaceId: string }> {
+    await writeFakeCodexArtifactCommand()
+    process.env.FAKE_CODEX_ARTIFACT_CONTENT = content
+    expect(await runCli(argv('app', 'install', path.resolve(import.meta.dir, '..', '..', 'aiworker-hr')))).toBe(0)
+    output = ''
+    expect(await runCli(argv('app', 'enable', 'aiworker-hr'))).toBe(0)
+    output = ''
+    expect(await runCli(argv('worker', 'create', '--id', 'hr-recruiting', '--name', 'HR Recruiting', '--soul', 'aiworker-hr'))).toBe(0)
+    output = ''
+    expect(await runCli(argv('workspace', 'create', '--name', 'Ada Profile', '--type', 'people-profile', '--worker', 'hr-recruiting'))).toBe(0)
+    const workspace = (JSON.parse(output) as { workspace: { id: string, rootPath: string } }).workspace
+    output = ''
+    expect(await runCli(argv(
+      'session',
+      'start',
+      '--worker',
+      'hr-recruiting',
+      '--workspace',
+      workspace.id,
+      '--skill',
+      namespaceSoulAppCapabilityId('aiworker-hr', 'profile-update-proposal'),
+      '--title',
+      'Profile Update Proposal',
+      '--context',
+      'Synthetic profile promotion CLI test.',
+      '--input',
+      'Create a profile update proposal.',
+    ))).toBe(0)
+    const result = JSON.parse(output) as { artifacts: Array<{ id: string }> }
+    output = ''
+    return { artifactId: result.artifacts[0]!.id, rootPath: workspace.rootPath, workspaceId: workspace.id }
+  }
+
   async function updateScratchEntries(parentDir: string): Promise<string[]> {
     return (await readdir(parentDir)).filter(entry => entry.startsWith('.aiworker-update-') || entry.startsWith('.aiworker-next-'))
   }
@@ -318,6 +372,137 @@ describe('aiworker local CLI', () => {
     ))
       .resolves
       .toContain('Evidence Matrix Review Rubric')
+  })
+
+  it('promotes a fenced profile draft from the CLI without writing proposal notes to README', async () => {
+    const promotion = await createProfilePromotionArtifact([
+      '# Profile Update Proposal',
+      '',
+      'Proposal Notes: approve this draft.',
+      '',
+      '```aiworker-profile-readme',
+      '# Accepted Ada Profile',
+      '',
+      'Reviewed profile summary.',
+      '```',
+    ].join('\n'))
+
+    expect(await runCli(argv(
+      'profile',
+      'promote',
+      '--worker',
+      'hr-recruiting',
+      '--workspace',
+      promotion.workspaceId,
+      '--artifact',
+      promotion.artifactId,
+      '--verdict',
+      'pass',
+      '--finding',
+      'Approved by CLI test.',
+      '--risk',
+      'Open facts stay tracked.',
+    ))).toBe(0)
+    const body = JSON.parse(output) as { profileRevision: { profilePath: string, review: { verdict: string } }, source: string }
+    expect(body.profileRevision.profilePath).toBe('README.md')
+    expect(body.profileRevision.review.verdict).toBe('pass')
+    expect(body.source).toBe('fenced-draft')
+    const readme = await readFile(path.join(promotion.rootPath, 'README.md'), 'utf8')
+    expect(readme).toContain('Accepted Ada Profile')
+    expect(readme).not.toContain('Proposal Notes')
+  })
+
+  it('rejects CLI profile promotion when the artifact is missing a fenced draft', async () => {
+    const promotion = await createProfilePromotionArtifact('# Profile Update Proposal\n\nNo accepted draft yet.')
+
+    expect(await runCli(argv(
+      'profile',
+      'promote',
+      '--worker',
+      'hr-recruiting',
+      '--workspace',
+      promotion.workspaceId,
+      '--artifact',
+      promotion.artifactId,
+      '--verdict',
+      'pass',
+    ))).toBe(1)
+  })
+
+  it('rejects CLI profile promotion when the accepted draft has proposal-state language', async () => {
+    const promotion = await createProfilePromotionArtifact([
+      '```aiworker-profile-readme',
+      '# Accepted Ada Profile',
+      '',
+      'Promotion requested and pending human review.',
+      '```',
+    ].join('\n'))
+
+    expect(await runCli(argv(
+      'profile',
+      'promote',
+      '--worker',
+      'hr-recruiting',
+      '--workspace',
+      promotion.workspaceId,
+      '--artifact',
+      promotion.artifactId,
+      '--verdict',
+      'pass',
+    ))).toBe(1)
+  })
+
+  it('rejects CLI profile promotion verdicts that cannot approve README writes', async () => {
+    const promotion = await createProfilePromotionArtifact([
+      '```aiworker-profile-readme',
+      '# Accepted Ada Profile',
+      '',
+      'Reviewed profile summary.',
+      '```',
+    ].join('\n'))
+
+    expect(await runCli(argv(
+      'profile',
+      'promote',
+      '--worker',
+      'hr-recruiting',
+      '--workspace',
+      promotion.workspaceId,
+      '--artifact',
+      promotion.artifactId,
+      '--verdict',
+      'needs_review',
+    ))).toBe(1)
+    await expect(readFile(path.join(promotion.rootPath, 'README.md'), 'utf8'))
+      .resolves
+      .toContain('No approved profile revision yet.')
+  })
+
+  it('promotes explicit reviewed markdown from the CLI without requiring an artifact fence', async () => {
+    const promotion = await createProfilePromotionArtifact('# Profile Update Proposal\n\nNo accepted draft yet.')
+    const reviewedPath = path.join(root, 'reviewed-profile.md')
+    await writeFile(reviewedPath, '# Accepted Ada Profile\n\nReviewed from explicit file.\n')
+
+    expect(await runCli(argv(
+      'profile',
+      'promote',
+      '--worker',
+      'hr-recruiting',
+      '--workspace',
+      promotion.workspaceId,
+      '--artifact',
+      promotion.artifactId,
+      '--profile-markdown',
+      reviewedPath,
+      '--verdict',
+      'warn',
+    ))).toBe(0)
+    const body = JSON.parse(output) as { profileRevision: { review: { verdict: string } }, source: string }
+    expect(body.profileRevision.review.verdict).toBe('warn')
+    expect(body.source).toBe('explicit')
+    await expect(readFile(path.join(promotion.rootPath, 'README.md'), 'utf8'))
+      .resolves
+      .toContain('Reviewed from explicit file.')
   })
 
   it('lists update and upgrade in the command index', async () => {

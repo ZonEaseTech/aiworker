@@ -15,6 +15,7 @@ import type { ArtifactPreviewState } from './session-detail'
 import type { SoulProfilePreviewState, SoulWorkbenchContext } from './souls/types'
 
 import { IconButton, StudioEmptyState, StudioMainFrame, StudioSectionHeader, WorkerStudioLayout } from '@zonease/aiworker-component'
+import { prepareProfileMarkdownForPromotion } from '@zonease/aiworker-shared'
 import { findSoulWorkbenchForSoul } from '@zonease/aiworker-shared/soul-workbench-catalog'
 import {
   ArrowLeft,
@@ -1477,21 +1478,8 @@ function profileMarkdownForPromotion(content: string): string | undefined {
   if (!trimmed)
     return undefined
 
-  return extractAcceptedProfileDraft(trimmed) ?? trimmed
-}
-
-function extractAcceptedProfileDraft(content: string): string | null {
-  const lines = content.split(/\r?\n/)
-  for (let index = 0; index < lines.length; index += 1) {
-    const opener = lines[index]?.trim().toLowerCase()
-    if (opener !== '```aiworker-profile-readme' && opener !== '```markdown aiworker-profile-readme')
-      continue
-
-    const closeIndex = lines.findIndex((line, candidateIndex) => candidateIndex > index && line.trim() === '```')
-    if (closeIndex > index)
-      return lines.slice(index + 1, closeIndex).join('\n').trim() || null
-  }
-  return null
+  const prepared = prepareProfileMarkdownForPromotion({ artifactMarkdown: trimmed })
+  return prepared.ok ? prepared.profileMarkdown : undefined
 }
 
 function StudioBrand({ copy }: { copy: WorkerMessages }) {
