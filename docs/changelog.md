@@ -1,5 +1,14 @@
 # AIWorker Changelog
 
+## 2026-05-17 [progress] REL-040 / PLAN-350 — CLI 0.17.1 patch release
+
+Preparing `@zonease/aiworker-cli@0.17.1` as the patch release carrying the HR
+app production-readiness fixes from `QA-037 / PLAN-349`, including
+`BUG-132`, `BUG-133`, and `BUG-134`.
+
+Local release gates passed, including full check/test/build, dist bundle,
+pack dry-run, dist release smoke, and code-review-graph review.
+
 ## 2026-05-17 [completed] QA-037 / BUG-132 / BUG-133 / BUG-134 / PLAN-349 — HR app production readiness campaign
 
 Completed HR app production-readiness validation across CLI and Web after the
