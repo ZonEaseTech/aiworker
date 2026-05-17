@@ -59,15 +59,28 @@ export function parseNamespacedSoulAppCapabilityId(id: string): { appId: string,
 
 export function projectSoulAppSoul(manifest: SoulAppManifest, status: VerticalSoulStatus = 'available'): VerticalSoul {
   return {
-    defaultTemplates: manifest.workspaceTypes.flatMap(type =>
-      (type.defaultCapabilityIds ?? []).map(id => namespaceSoulAppCapabilityId(manifest.id, id)),
-    ),
+    defaultTemplates: projectSoulAppDefaultTemplates(manifest),
     description: manifest.description,
     domain: manifest.soul.domain,
     id: manifest.id,
     name: manifest.name,
     status,
   }
+}
+
+export function projectSoulAppDefaultTemplates(manifest: SoulAppManifest): string[] {
+  const seen = new Set<string>()
+  const templates: string[] = []
+  for (const type of manifest.workspaceTypes) {
+    for (const id of type.defaultCapabilityIds ?? []) {
+      const namespacedId = namespaceSoulAppCapabilityId(manifest.id, id)
+      if (seen.has(namespacedId))
+        continue
+      seen.add(namespacedId)
+      templates.push(namespacedId)
+    }
+  }
+  return templates
 }
 
 export function projectSoulAppCapabilityTemplate(manifest: SoulAppManifest, capability: SoulAppCapability): CapabilityTemplate {

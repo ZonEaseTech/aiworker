@@ -166,6 +166,7 @@ export {
   parseNamespacedSoulAppCapabilityId,
   projectSoulAppCapabilityTemplate,
   projectSoulAppCapabilityTemplates,
+  projectSoulAppDefaultTemplates,
   projectSoulAppSoul,
   soulAppHealthStatusSchema,
   soulAppInstallSourceKindSchema,

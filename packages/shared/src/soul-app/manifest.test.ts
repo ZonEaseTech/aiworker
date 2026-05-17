@@ -158,7 +158,7 @@ describe('Soul App manifest schema', () => {
     expect(hrSoulAppManifest.artifactTypes[0]?.previewRef).toBe('./product/web/artifact-previews/person-profile-preview.tsx')
     expect(hrSoulAppManifest.artifactTypes[0]?.reviewPolicyRef).toBe('./product/reviews/person-profile.md')
     expect(hrSoulAppManifest.pack.refs[0]?.ref).toBe('product/profiles/hr-recruiting/SOUL.md')
-    expect(hrSoulAppManifest.workspaceTypes[0]?.defaultCapabilityIds).toEqual(['person-profile'])
+    expect(hrSoulAppManifest.workspaceTypes[0]?.defaultCapabilityIds).toEqual(['person-profile', 'profile-update-proposal'])
     expect(hrSoulAppManifest.connectors.required[0]?.scopes).toContain('candidates.read')
     expect(hrSoulAppManifest.permissions).toContainEqual(expect.objectContaining({
       kind: 'api',

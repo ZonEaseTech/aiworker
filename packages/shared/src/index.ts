@@ -335,6 +335,7 @@ export {
   parseSoulAppManifestJson,
   projectSoulAppCapabilityTemplate,
   projectSoulAppCapabilityTemplates,
+  projectSoulAppDefaultTemplates,
   projectSoulAppSoul,
   qaSoulAppManifest,
   referenceSoulAppManifests,

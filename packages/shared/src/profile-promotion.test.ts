@@ -88,4 +88,32 @@ describe('profile promotion markdown helpers', () => {
     expect(issues.map(issue => issue.code)).toEqual(['proposal_state_language', 'proposal_state_language'])
     expect(formatProfilePromotionIssues(issues)).toContain('pending human review')
   })
+
+  it('rejects review-ready proposal wording copied into accepted README drafts', () => {
+    const result = prepareProfileMarkdownForPromotion({
+      artifactMarkdown: [
+        '# Profile Update Proposal',
+        '',
+        '```aiworker-profile-readme',
+        '# Ada Lovelace Product Lead',
+        '',
+        '> Accepted People Profile for this HR workspace. Agent outputs remain proposals until review.',
+        '',
+        '## Review State',
+        '',
+        'Accepted profile revision ready for HR review.',
+        '```',
+      ].join('\n'),
+      requireFencedDraft: true,
+    })
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.issues.map(issue => issue.phrase)).toEqual(expect.arrayContaining([
+        'Agent outputs remain proposals until review',
+        'ready for HR review',
+      ]))
+      expect(formatProfilePromotionIssues(result.issues)).toContain('ready for HR review')
+    }
+  })
 })

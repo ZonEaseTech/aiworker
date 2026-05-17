@@ -1,5 +1,45 @@
 # AIWorker Changelog
 
+## 2026-05-17 [completed] QA-037 / BUG-132 / BUG-133 / BUG-134 / PLAN-349 — HR app production readiness campaign
+
+Completed HR app production-readiness validation across CLI and Web after the
+profile revision workbench landed.
+
+- Baseline HR app gates, CLI bundle smoke, CLI/API/Web focused tests, dist app
+  validate/smoke, and `smoke:dist-release` passed before new fixes.
+- Real disposable debug root
+  `/private/tmp/aiworker-hr-prod-20260517173556` reproduced `BUG-132`: a
+  Codex-generated `aiworker-profile-readme` fenced draft still contained
+  review/proposal readiness language, and `aiworker profile promote` wrote it
+  into `README.md`.
+- The same run reproduced `BUG-133`: official Soul App `defaultTemplates`
+  projection duplicated defaults for HR and QA.
+- A second disposable run reproduced `BUG-134`: after a clean profile
+  promotion, a follow-up CLI read path re-projected
+  `engine-assets/workspace/README.md` and restored the starter scaffold over
+  the promoted profile.
+- Fixed profile promotion validation so accepted README drafts reject copied
+  scaffold/proposal/review-ready language, including the reproduced
+  "Agent outputs remain proposals until review" and "ready for HR review"
+  phrases.
+- Tuned HR `profile-update-proposal` native skill/workflow assets so the fenced
+  draft example is accepted-profile-only, and proposal/review lifecycle state
+  stays outside the promotable block.
+- Fixed official app default template projection: HR now defaults to
+  person-profile, profile-update-proposal, and candidate-screen; QA now
+  defaults to regression-matrix and release-gate, with duplicates removed in
+  declaration order.
+- Fixed engine asset reprojection so existing workspace `README.md` is
+  preserved while agent instruction projections can still be repaired.
+- Verified the original dirty Ada artifact is now blocked, then ran a fresh
+  real Codex Grace Hopper profile session through clean artifact generation,
+  CLI promotion, follow-up CLI read, and daemon-served Web rendering.
+
+Verification passed: focused shared/core/CLI/API/Web tests, HR
+validate/smoke/typecheck/test, CLI bundle build, dist release smoke, root
+`bun run check`, full repo `bun run test`, and Playwright Web evidence under
+`/private/tmp/aiworker-hr-prod-fix-20260517-2gs7kH`.
+
 ## 2026-05-17 [completed] FEAT-095 / PLAN-348 — HR Profile Revision Review Workbench
 
 Made the HR proposed-change area a Product-owned profile revision review

@@ -448,7 +448,8 @@
         "profile-update-proposal"
       ],
       "defaultCapabilityIds": [
-        "person-profile"
+        "person-profile",
+        "profile-update-proposal"
       ],
       "description": "Profile-centered workspace for one person lifecycle.",
       "id": "people-profile",
@@ -463,7 +464,8 @@
         "profile-update-proposal"
       ],
       "defaultCapabilityIds": [
-        "candidate-screen"
+        "candidate-screen",
+        "profile-update-proposal"
       ],
       "description": "Recruiting role workspace with candidate evidence and review.",
       "id": "role-search",
@@ -478,7 +480,8 @@
         "profile-update-proposal"
       ],
       "defaultCapabilityIds": [
-        "candidate-screen"
+        "candidate-screen",
+        "profile-update-proposal"
       ],
       "description": "Focused candidate packet workspace.",
       "id": "candidate",

@@ -65,6 +65,7 @@ describe('Soul App runtime harness', () => {
       defaultEngineId: 'codex',
       id: 'demo-worker',
       metadata: expect.objectContaining({
+        defaultTemplates: [namespaceSoulAppCapabilityId('demo-soul-app', 'demo-report')],
         domainSoulId: 'demo-soul',
         soulAppId: 'demo-soul-app',
       }),
@@ -261,6 +262,12 @@ function demoSoulApp(): SoulAppDefinition {
         description: 'Demo workspace.',
         id: 'demo-workspace',
         name: 'Demo Workspace',
+      }, {
+        artifactTypes: ['demo-report'],
+        defaultCapabilityIds: ['demo-report'],
+        description: 'Demo duplicate-default workspace.',
+        id: 'demo-workspace-duplicate-default',
+        name: 'Demo Duplicate Default Workspace',
       }],
     },
     lifecycle: {

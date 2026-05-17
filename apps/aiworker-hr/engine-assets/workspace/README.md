@@ -1,6 +1,6 @@
 # {{workspaceName}}
 
-> Accepted People Profile for this HR workspace. Agent outputs remain proposals until review.
+> Starter People Profile for this HR workspace. Promote a reviewed profile draft to replace this scaffold.
 
 ## Current Profile Summary
 

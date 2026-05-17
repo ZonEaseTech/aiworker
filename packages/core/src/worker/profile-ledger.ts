@@ -101,7 +101,7 @@ function renderInitialProfileReadme(name: string): string {
   return [
     `# ${name}`,
     '',
-    '> Accepted People Profile for this workspace. Agent outputs remain proposals until review.',
+    '> Starter People Profile for this workspace. Promote a reviewed profile draft to replace this scaffold.',
     '',
     '## Current Profile Summary',
     '',

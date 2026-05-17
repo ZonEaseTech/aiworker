@@ -114,6 +114,15 @@ describe('Host Soul App registry', () => {
     expect(findHostSoul('aiworker-hr')?.status).toBe('available')
     expect(findHostSoul('aiworker-qa')?.status).toBe('available')
     expect(findHostSoul('hr')).toBeUndefined()
+    expect(findHostSoul('aiworker-hr')?.defaultTemplates).toEqual([
+      namespaceSoulAppCapabilityId('aiworker-hr', 'person-profile'),
+      namespaceSoulAppCapabilityId('aiworker-hr', 'profile-update-proposal'),
+      namespaceSoulAppCapabilityId('aiworker-hr', 'candidate-screen'),
+    ])
+    expect(findHostSoul('aiworker-qa')?.defaultTemplates).toEqual([
+      namespaceSoulAppCapabilityId('aiworker-qa', 'regression-matrix'),
+      namespaceSoulAppCapabilityId('aiworker-qa', 'release-gate'),
+    ])
     expect(listHostSoulCatalog().templates.some(template => template.soulId === 'aiworker-hr')).toBe(true)
 
     const second = await bootstrapOfficialSoulApps({

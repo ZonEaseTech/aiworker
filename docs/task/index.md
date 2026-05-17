@@ -460,3 +460,7 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-131 Profile proposal README draft can carry pending-promotion language**](BUG-131.md) `P1`
 - [x] [**TODO-046 Add a headless reviewed profile promotion command**](TODO-046.md) `P2`
 - [x] [**FEAT-095 HR Profile Revision Review Workbench**](FEAT-095.md) `P0`
+- [x] [**QA-037 HR app production readiness campaign**](QA-037.md) `P0`
+- [x] [**BUG-132 Profile promotion accepts review-ready proposal language**](BUG-132.md) `P0`
+- [x] [**BUG-133 Official Soul App defaultTemplates contain duplicates**](BUG-133.md) `P1`
+- [x] [**BUG-134 Engine asset projection can overwrite promoted profile README**](BUG-134.md) `P0`

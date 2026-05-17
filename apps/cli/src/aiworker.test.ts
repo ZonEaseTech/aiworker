@@ -434,7 +434,11 @@ describe('aiworker local CLI', () => {
       '```aiworker-profile-readme',
       '# Accepted Ada Profile',
       '',
-      'Promotion requested and pending human review.',
+      '> Accepted People Profile for this HR workspace. Agent outputs remain proposals until review.',
+      '',
+      '## Review State',
+      '',
+      'Accepted profile revision ready for HR review.',
       '```',
     ].join('\n'))
 

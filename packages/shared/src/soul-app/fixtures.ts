@@ -377,21 +377,21 @@ export const hrSoulAppManifest = soulAppManifestSchema.parse({
   workspaceTypes: [
     {
       artifactTypes: ['person-profile', 'evidence-matrix', 'hiring-risk', 'profile-update-proposal'],
-      defaultCapabilityIds: ['person-profile'],
+      defaultCapabilityIds: ['person-profile', 'profile-update-proposal'],
       description: 'Profile-centered workspace for one person lifecycle.',
       id: 'people-profile',
       name: 'People Profile',
     },
     {
       artifactTypes: ['candidate-screen', 'evidence-matrix', 'interview-brief', 'hiring-risk', 'profile-update-proposal'],
-      defaultCapabilityIds: ['candidate-screen'],
+      defaultCapabilityIds: ['candidate-screen', 'profile-update-proposal'],
       description: 'Recruiting role workspace with candidate evidence and review.',
       id: 'role-search',
       name: 'Role Search',
     },
     {
       artifactTypes: ['candidate-screen', 'evidence-matrix', 'interview-brief', 'hiring-risk', 'profile-update-proposal'],
-      defaultCapabilityIds: ['candidate-screen'],
+      defaultCapabilityIds: ['candidate-screen', 'profile-update-proposal'],
       description: 'Focused candidate packet workspace.',
       id: 'candidate',
       name: 'Candidate',

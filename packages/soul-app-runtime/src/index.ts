@@ -21,8 +21,8 @@ import {
   listHostSoulCatalog,
 } from '@zonease/aiworker-core'
 import {
-  namespaceSoulAppCapabilityId,
   projectSoulAppCapabilityTemplates,
+  projectSoulAppDefaultTemplates,
   projectSoulAppSoul,
 } from '@zonease/aiworker-shared'
 import {
@@ -199,9 +199,7 @@ async function createRuntimeForApp(input: {
     name: input.workerName,
     defaultEngineId: 'codex',
     metadataJson: {
-      defaultTemplates: input.app.manifest.workspaceTypes.flatMap(type =>
-        (type.defaultCapabilityIds ?? []).map(id => namespaceSoulAppCapabilityId(input.app.manifest.id, id)),
-      ),
+      defaultTemplates: projectSoulAppDefaultTemplates(input.app.manifest),
       description: input.app.manifest.description,
       domainSoulId: input.app.manifest.soul.id,
       domain: input.app.manifest.soul.domain,

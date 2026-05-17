@@ -12,6 +12,7 @@ import path from 'node:path'
 const SKILL_ID_RE = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
 const SKILL_FILE = 'SKILL.md'
 const PROJECTION_RECEIPT = path.posix.join('.aiworker', 'projections.json')
+const PRESERVE_EXISTING_WORKSPACE_TARGETS = new Set(['README.md'])
 const MCP_SECRET_ASSIGNMENT_RE = /["']?([\w-]*(?:api[_-]?key|authorization|password|secret|token)[\w-]*)["']?\s*[:=]\s*["']([^"'\n]+)["']/gi
 const MCP_SECRET_VALUE_RE = /Bearer\s+[\w.~+/-]{12,}|sk-[\w-]{8,}/i
 
@@ -74,7 +75,11 @@ async function projectWorkspaceFiles(input: EngineAssetProjectionInput & { gener
     const relative = path.relative(root, file).split(path.sep).join('/')
     const source = path.posix.join('engine-assets', 'workspace', relative)
     const content = renderTemplate(await readFile(file, 'utf8'), input.variables)
-    await writeProjectedFile(input.workspaceRoot, relative, content)
+    const written = await writeProjectedFile(input.workspaceRoot, relative, content, {
+      preserveExisting: PRESERVE_EXISTING_WORKSPACE_TARGETS.has(relative),
+    })
+    if (!written)
+      continue
     entries.push(receiptEntry(input, 'workspace-file', source, relative, content))
   }
   return entries
@@ -188,10 +193,13 @@ function renderTemplate(content: string, variables: Record<string, string>): str
   return content.replace(/\{\{([a-z][a-z0-9]*)\}\}/gi, (_, key: string) => variables[key] ?? '')
 }
 
-async function writeProjectedFile(root: string, relativePath: string, content: string): Promise<void> {
+async function writeProjectedFile(root: string, relativePath: string, content: string, options: { preserveExisting?: boolean } = {}): Promise<boolean> {
   const targetPath = path.join(root, ...relativePath.split('/'))
+  if (options.preserveExisting && await isFile(targetPath))
+    return false
   await mkdir(path.dirname(targetPath), { recursive: true })
   await writeFile(targetPath, content, 'utf8')
+  return true
 }
 
 async function listFiles(root: string): Promise<string[]> {

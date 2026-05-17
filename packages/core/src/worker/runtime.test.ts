@@ -706,6 +706,65 @@ describe('LocalWorkerRuntime', () => {
     expect(readme).not.toContain('aiworker-profile-readme')
   })
 
+  it('keeps promoted README intact when app engine assets are reprojected', async () => {
+    const appRoot = join(dir, 'apps', 'aiworker-hr')
+    await writeProfileEngineAssets(appRoot)
+    const workerRuntime = runtimeWithEngineAssets(appRoot, {
+      async invoke(input) {
+        return {
+          summary: 'Profile proposal ready',
+          artifacts: [
+            {
+              path: `artifacts/${input.sessionId}/profile-proposal.md`,
+              title: 'Profile proposal',
+              content: [
+                '# Profile Update Proposal',
+                '',
+                '```aiworker-profile-readme',
+                '# Accepted Engine Asset Profile',
+                '',
+                'Evidence-backed summary.',
+                '```',
+                '',
+              ].join('\n'),
+            },
+          ],
+        }
+      },
+    })
+
+    await workerRuntime.init()
+    const workspace = await workerRuntime.createWorkspace({ name: 'Engine Asset Profile Workspace' })
+    const session = await workerRuntime.createSession({
+      workspaceId: workspace.id,
+      capabilityTemplateId: 'profile-update-proposal',
+      title: 'Prepare profile proposal',
+    })
+    const turn = await workerRuntime.startTurn({
+      sessionId: session.id,
+      input: 'Draft the profile.',
+      engineId: 'codex',
+    })
+
+    await workerRuntime.promoteProfileRevision({
+      artifactId: turn.artifacts[0]!.id,
+      findingsJson: [{ message: 'Approved from HR review.' }],
+      risksJson: [],
+      verdict: 'pass',
+      workspaceId: workspace.id,
+    })
+
+    await workerRuntime.init()
+
+    const readme = await readFile(join(workspace.rootPath, 'README.md'), 'utf8')
+    expect(readme).toContain('Accepted Engine Asset Profile')
+    expect(readme).not.toContain('Starter People Profile')
+    if (gitAvailable()) {
+      const log = spawnSync('git', ['-C', workspace.rootPath, 'log', '--pretty=%s', '--', 'README.md'], { encoding: 'utf8' })
+      expect(log.stdout.match(/profile: initialize workspace/g) ?? []).toHaveLength(1)
+    }
+  })
+
   it('rejects artifact profile promotion without an accepted README fence', async () => {
     const workerRuntime = runtime({
       async invoke(input) {
@@ -761,9 +820,11 @@ describe('LocalWorkerRuntime', () => {
                 '```aiworker-profile-readme',
                 '# Accepted Candidate Profile',
                 '',
+                '> Accepted People Profile for this HR workspace. Agent outputs remain proposals until review.',
+                '',
                 '## Review State',
                 '',
-                'Promotion requested and pending human review.',
+                'Accepted profile revision ready for HR review.',
                 '```',
                 '',
               ].join('\n'),
@@ -792,7 +853,7 @@ describe('LocalWorkerRuntime', () => {
       risksJson: [],
       verdict: 'pass',
       workspaceId: workspace.id,
-    })).rejects.toThrow('pending human review')
+    })).rejects.toThrow('ready for HR review')
 
     await expect(readFile(join(workspace.rootPath, 'README.md'), 'utf8'))
       .resolves
@@ -881,7 +942,7 @@ async function writeWorkspaceEngineAssets(appRoot: string): Promise<void> {
   await writeFile(join(appRoot, 'engine-assets', 'workspace', 'README.md'), [
     '# {{workspaceName}}',
     '',
-    '> Accepted People Profile for this workspace. Agent outputs remain proposals until review.',
+    '> Starter People Profile for this workspace. Promote a reviewed profile draft to replace this scaffold.',
     '',
     '## Current Profile Summary',
     '',

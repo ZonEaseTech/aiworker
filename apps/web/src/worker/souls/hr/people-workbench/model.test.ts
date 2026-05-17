@@ -296,7 +296,11 @@ describe('hr people workbench model', () => {
         '```aiworker-profile-readme',
         '# Ada Profile',
         '',
-        'Promotion requested and pending human review.',
+        '> Accepted People Profile for this HR workspace. Agent outputs remain proposals until review.',
+        '',
+        '## Review State',
+        '',
+        'Accepted profile revision ready for HR review.',
         '```',
       ].join('\n'),
       artifactLoading: false,
@@ -308,6 +312,6 @@ describe('hr people workbench model', () => {
     expect(missingFence.status).toBe('blocked')
     expect(missingFence.issues[0]).toContain('aiworker-profile-readme')
     expect(pending.status).toBe('blocked')
-    expect(pending.issues.join(' ')).toContain('pending human review')
+    expect(pending.issues.join(' ')).toContain('ready for HR review')
   })
 })

@@ -38,7 +38,7 @@ review:
 ```aiworker-profile-readme
 # <Profile name>
 
-> Accepted People Profile for this HR workspace. Agent outputs remain proposals until review.
+> Accepted People Profile for this HR workspace.
 
 ...
 ```
@@ -50,5 +50,7 @@ promotion can promote only the accepted profile state.
 The fenced draft must be internally consistent. If it includes accepted facts or
 is intended for `pass` / `warn` promotion, its `Review State` must describe the
 accepted state after approval, not the pending proposal request. Do not leave
-`No approved profile revision yet`, `promotion requested`, or `pending human
-review` in a draft that otherwise contains accepted profile facts.
+`No approved profile revision yet`, `Starter People Profile`, `replace this
+scaffold`, `Agent outputs remain proposals until review`, `promotion requested`,
+`pending human review`, `ready for HR review`, or any other approval-waiting
+wording in a draft that otherwise contains accepted profile facts.

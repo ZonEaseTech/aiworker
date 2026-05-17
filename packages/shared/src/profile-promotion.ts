@@ -21,9 +21,22 @@ const PROFILE_README_FENCE_RE = /^```(?:markdown\s+)?aiworker-profile-readme\s*$
 
 const PROPOSAL_STATE_PHRASES = [
   'No approved profile revision yet',
+  'No accepted profile revision has been promoted yet',
+  'Starter People Profile',
+  'replace this scaffold',
+  'Agent outputs remain proposals until review',
+  'Session outputs remain proposals until review',
   'pending human review',
   'pending review',
   'promotion requested',
+  'ready for HR review',
+  'ready for review',
+  'ready for promotion review',
+  'awaiting approval',
+  'profile revision requires approval',
+  'profile revision needs approval',
+  'review decision requested',
+  'reviewer decision',
 ]
 
 export function extractProfileReadmeDraft(content: string): string | null {
