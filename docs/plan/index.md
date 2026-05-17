@@ -378,4 +378,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-347 Headless profile promotion CLI and shared draft validation**](PLAN-347.md) `2026-05-17`
 - [x] [**PLAN-348 HR Profile Revision Review Workbench**](PLAN-348.md) `2026-05-17`
 - [x] [**PLAN-349 HR app production readiness campaign**](PLAN-349.md) `2026-05-17`
-- [-] [**PLAN-350 CLI 0.17.1 patch release**](PLAN-350.md) `2026-05-17`
+- [x] [**PLAN-350 CLI 0.17.1 patch release**](PLAN-350.md) `2026-05-17`

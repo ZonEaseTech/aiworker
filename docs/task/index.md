@@ -464,4 +464,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-132 Profile promotion accepts review-ready proposal language**](BUG-132.md) `P0`
 - [x] [**BUG-133 Official Soul App defaultTemplates contain duplicates**](BUG-133.md) `P1`
 - [x] [**BUG-134 Engine asset projection can overwrite promoted profile README**](BUG-134.md) `P0`
-- [-] [**REL-040 发布 aiworker CLI 0.17.1**](REL-040.md) `P0`
+- [x] [**REL-040 发布 aiworker CLI 0.17.1**](REL-040.md) `P0`

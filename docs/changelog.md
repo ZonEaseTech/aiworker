@@ -1,13 +1,21 @@
 # AIWorker Changelog
 
-## 2026-05-17 [progress] REL-040 / PLAN-350 — CLI 0.17.1 patch release
+## 2026-05-17 [completed] REL-040 / PLAN-350 — CLI 0.17.1 patch release
 
-Preparing `@zonease/aiworker-cli@0.17.1` as the patch release carrying the HR
+Published `@zonease/aiworker-cli@0.17.1` as the patch release carrying the HR
 app production-readiness fixes from `QA-037 / PLAN-349`, including
 `BUG-132`, `BUG-133`, and `BUG-134`.
 
 Local release gates passed, including full check/test/build, dist bundle,
 pack dry-run, dist release smoke, and code-review-graph review.
+
+Release workflow `25989343420` passed and published npm latest plus GitHub
+Release `v0.17.1` with 8 binary/checksum assets. The first main lint run hit
+the Web bundle size review gate after the HR vertical workbench growth; the
+reviewed Worker Web baseline was updated and main lint run `25989409374`
+passed. Published-package smoke passed from an isolated `AIWORKER_HOME`:
+daemon health, runtimeVersion `0.17.1`, Host Web static serving, official
+HR/QA app bootstrap, app/soul/template listing, and HR/QA mounted actions.
 
 ## 2026-05-17 [completed] QA-037 / BUG-132 / BUG-133 / BUG-134 / PLAN-349 — HR app production readiness campaign
 

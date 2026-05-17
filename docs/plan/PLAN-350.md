@@ -1,9 +1,10 @@
 # PLAN-350 CLI 0.17.1 patch release
 
-- **status**: approved
+- **status**: completed
 - **owner**: codex
 - **createdAt**: 2026-05-17
 - **approvedAt**: 2026-05-17
+- **completedAt**: 2026-05-17
 - **relatedTask**: REL-040
 
 ## Current State
@@ -79,6 +80,14 @@ the version bump and release tracking.
   official HR/QA app resources 与 CLI runtime entrypoints；dist release smoke
   成功启动 Host Web/API、bootstrap official apps，并调用 HR/QA mounted
   actions。
+- 2026-05-17：release prep commit `7024286c` 合并到 `main` 并推送
+  annotated tag `v0.17.1`；release workflow `25989343420` 成功发布 npm
+  package 并上传 GitHub Release assets。
+- 2026-05-17：首次 main lint workflow `25989342532` 在 Web bundle size
+  review gate 失败；已通过 commit `3f148df0` 更新已审核的 Worker Web bundle
+  baseline，并由 main lint workflow `25989409374` 证明通过。
+- 2026-05-17：发布后验证确认 npm latest、`bunx` 显式版本、GitHub Release
+  asset set 与 published-package smoke 均通过。
 
 ## Verification
 
@@ -97,3 +106,18 @@ the version bump and release tracking.
   invoked HR `create-people-profile` plus QA `create-release-gate`.
 - `bun run crg:update` passed.
 - `bun run crg:review` exited 0 with risk score `0.00`.
+- `bun run --filter '@zonease/aiworker-web' size:baseline` updated the reviewed
+  Worker Web bundle baseline to 1,073,662 bytes / 392,166 gzip bytes.
+- `bun run --filter '@zonease/aiworker-web' size:report` passed.
+- `gh run watch 25989343420 --repo ZonEaseTech/aiworker --exit-status` passed.
+- Main lint run `25989409374` completed successfully on `3f148df0`.
+- `npm view @zonease/aiworker-cli version dist-tags --json` reported `0.17.1`
+  and `latest: 0.17.1`.
+- `bunx @zonease/aiworker-cli@0.17.1 --version` reported
+  `aiworker/0.17.1 darwin-arm64 node-v24.3.0`.
+- `gh release view v0.17.1` reported a non-draft, non-prerelease release with
+  8 uploaded assets: 4 platform tarballs and 4 `.sha256` files.
+- Published-package smoke passed from an isolated `AIWORKER_HOME`: daemon
+  `/health`, `/api/local/info` runtimeVersion `0.17.1`, Host Web static serving,
+  official app bootstrap, app/soul/template listing, HR `create-people-profile`
+  and QA `create-release-gate` mounted actions.
