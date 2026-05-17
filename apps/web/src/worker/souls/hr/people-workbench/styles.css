@@ -106,30 +106,40 @@
 }
 
 .hr-people-layout {
+  --hr-profile-list-track: minmax(220px, 0.28fr);
+  --hr-profile-tools-track: minmax(336px, 0.34fr);
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(220px, 0.28fr) minmax(560px, 1fr) minmax(336px, 0.34fr);
+  grid-template-columns: var(--hr-profile-list-track) minmax(560px, 1fr) var(--hr-profile-tools-track);
   gap: 14px;
   align-items: stretch;
+  transition: grid-template-columns var(--motion-slow) var(--motion-ease-out), gap var(--motion-base) var(--motion-ease);
 }
 
 .hr-people-layout.without-profile-list {
-  grid-template-columns: minmax(620px, 1fr) minmax(336px, 0.34fr);
+  --hr-profile-list-track: 0fr;
 }
 
 .hr-people-layout.with-tools-rail {
-  grid-template-columns: minmax(220px, 0.28fr) minmax(620px, 1fr) 48px;
+  --hr-profile-tools-track: 48px;
 }
 
 .hr-people-layout.without-profile-list.with-tools-rail {
-  grid-template-columns: minmax(0, 1fr) 48px;
+  --hr-profile-list-track: 0fr;
+  --hr-profile-tools-track: 48px;
+}
+
+.hr-people-layout.selection-empty {
+  --hr-profile-tools-track: 0fr;
+  grid-template-columns: var(--hr-profile-list-track) minmax(360px, 0.72fr);
 }
 
 .hr-profile-list-panel,
 .hr-profile-details,
 .hr-profile-tools-panel,
-.hr-profile-tools-rail {
+.hr-profile-tools-rail,
+.hr-profile-selection-empty {
   min-width: 0;
   min-height: 0;
   display: flex;
@@ -140,20 +150,34 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--bg-panel);
+  transition: opacity var(--motion-slow) var(--motion-ease-out), transform var(--motion-slow) var(--motion-ease-out), border-color var(--motion-base) var(--motion-ease);
+  will-change: opacity, transform;
+}
+
+.hr-profile-list-panel {
+  grid-column: 1;
+}
+
+.hr-profile-details,
+.hr-profile-selection-empty {
+  grid-column: 2;
+}
+
+.hr-profile-tools-panel,
+.hr-profile-tools-rail {
+  grid-column: 3;
 }
 
 .hr-profile-list-scroll,
 .hr-profile-details-scroll,
 .hr-profile-tools-scroll,
-.hr-profile-tools-rail,
 .hr-markdown-preview {
   scrollbar-gutter: stable;
 }
 
 .hr-profile-list-scroll,
 .hr-profile-details-scroll,
-.hr-profile-tools-scroll,
-.hr-profile-tools-rail {
+.hr-profile-tools-scroll {
   min-height: 0;
   overflow-y: auto;
   padding-right: 2px;
@@ -162,7 +186,6 @@
 .hr-profile-list-scroll::-webkit-scrollbar,
 .hr-profile-details-scroll::-webkit-scrollbar,
 .hr-profile-tools-scroll::-webkit-scrollbar,
-.hr-profile-tools-rail::-webkit-scrollbar,
 .hr-markdown-preview::-webkit-scrollbar {
   width: 6px;
 }
@@ -170,7 +193,6 @@
 .hr-profile-list-scroll::-webkit-scrollbar-thumb,
 .hr-profile-details-scroll::-webkit-scrollbar-thumb,
 .hr-profile-tools-scroll::-webkit-scrollbar-thumb,
-.hr-profile-tools-rail::-webkit-scrollbar-thumb,
 .hr-markdown-preview::-webkit-scrollbar-thumb {
   border-radius: var(--radius-pill);
   background: var(--border-strong);
@@ -439,14 +461,58 @@
 
 .hr-profile-tools-rail {
   align-items: center;
+  justify-content: flex-start;
   gap: 8px;
-  padding: 10px 5px;
+  overflow: hidden;
+  padding: 10px 6px;
+  scrollbar-gutter: auto;
 }
 
 .hr-tools-rail-button {
   width: 34px;
   height: 34px;
   flex: 0 0 auto;
+  margin-inline: auto;
+}
+
+.hr-profile-selection-empty {
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+
+.hr-profile-selection-empty-inner {
+  width: min(460px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 11px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.hr-profile-selection-empty-inner > svg {
+  width: 36px;
+  height: 36px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+}
+
+.hr-profile-selection-empty-inner h2 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.hr-profile-selection-empty-inner p {
+  max-width: 42ch;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 .hr-reading-room {
@@ -563,6 +629,11 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 8px;
+}
+
+.hr-next-action-section {
+  border-color: var(--border-strong);
+  background: var(--bg);
 }
 
 .hr-source-row {

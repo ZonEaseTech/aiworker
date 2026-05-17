@@ -1,5 +1,21 @@
 # AIWorker Changelog
 
+## 2026-05-17 [completed] BUG-125 / PLAN-342 — HR workbench selection and drawer refinement
+
+收敛 HR People Workbench 的空选择、drawer 动效、右侧 icon rail 对齐和
+Profile Actions 过重的问题。
+
+- Worker home 不再把 HR 的第一个 workspace/profile 隐式当作已选对象；未显式选中时只显示
+  People Profiles 列和选择提示，不渲染 Reading Room 或右侧工具 rail。
+- HR profile 选中后才进入 Reading Room，并保留可折叠的右侧 profile workbench。
+- HR profile list 和右侧 workbench 使用稳定 grid track 与 motion token 过渡；collapsed
+  right rail 移除滚动槽位预留，icon button 在 48px rail 内水平居中。
+- 右侧 drawer 从 `Profile Actions` 收敛为 `Next Profile Step`，将下一步建议动作前置，
+  sources、proposed change、guardrails 和 sessions 降为支撑上下文。
+- Verification passed: focused Worker Web test, Web typecheck, Web build,
+  isolated browser smoke, `git diff --check`, `bun run crg:update`, and
+  `bun run crg:review`.
+
 ## 2026-05-17 [completed] REL-039 / PLAN-341 — CLI 0.17.0 minor release
 
 Published `@zonease/aiworker-cli@0.17.0` as a minor preview release for

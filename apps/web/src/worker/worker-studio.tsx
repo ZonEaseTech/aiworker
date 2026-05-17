@@ -255,6 +255,7 @@ export function WorkerStudio() {
   )
   const selectedTemplate = templates.find(template => template.id === selectedTemplateId) ?? templates[0] ?? null
   const selectedWorkbench = selectedSoul ? findSoulWorkbenchForSoul(selectedSoul.id) : null
+  const showSpecializedWorkbench = hasSpecializedWorkbenchRenderer(selectedWorkbench)
   const soulWorkspaces = useMemo(
     () => data?.workspaces.filter(item => item.workerId === selectedWorker?.id) ?? [],
     [data?.workspaces, selectedWorker?.id],
@@ -341,10 +342,12 @@ export function WorkerStudio() {
 
   const routeWorkspaceId = route.kind === 'workspace' || route.kind === 'session' ? route.workspaceId : null
   const routeWorkspace = routeWorkspaceId ? soulWorkspaces.find(item => item.id === routeWorkspaceId) ?? null : null
-  const selectedWorkspace = routeWorkspace
-    ?? (selectedWorkspaceId && soulWorkspaces.some(item => item.id === selectedWorkspaceId)
+  const manuallySelectedWorkspace = selectedWorkspaceId && soulWorkspaces.some(item => item.id === selectedWorkspaceId)
       ? soulWorkspaces.find(item => item.id === selectedWorkspaceId) ?? null
-      : latest(soulWorkspaces))
+      : null
+  const explicitSelectedWorkspace = routeWorkspace ?? manuallySelectedWorkspace
+  const selectedWorkspace = explicitSelectedWorkspace ?? latest(soulWorkspaces)
+  const workbenchSelectedWorkspace = showSpecializedWorkbench ? explicitSelectedWorkspace : selectedWorkspace
   const otherWorkspaces = useMemo(
     () => selectedWorkspace ? soulWorkspaces.filter(item => item.id !== selectedWorkspace.id) : soulWorkspaces,
     [selectedWorkspace, soulWorkspaces],
@@ -572,30 +575,30 @@ export function WorkerStudio() {
   }, [selectedArtifact])
 
   useEffect(() => {
-    if (!selectedWorkspace) {
+    if (!workbenchSelectedWorkspace) {
       dispatchProfilePreview({ type: 'idle' })
       return
     }
     let cancelled = false
-    dispatchProfilePreview({ type: 'loading', workspaceId: selectedWorkspace.id })
-    readProfile(selectedWorkspace.id)
+    dispatchProfilePreview({ type: 'loading', workspaceId: workbenchSelectedWorkspace.id })
+    readProfile(workbenchSelectedWorkspace.id)
       .then((content) => {
         if (!cancelled)
-          dispatchProfilePreview({ content, type: 'loaded', workspaceId: selectedWorkspace.id })
+          dispatchProfilePreview({ content, type: 'loaded', workspaceId: workbenchSelectedWorkspace.id })
       })
       .catch((error) => {
         if (!cancelled) {
           dispatchProfilePreview({
             error: error instanceof Error ? error.message : String(error),
             type: 'failed',
-            workspaceId: selectedWorkspace.id,
+            workspaceId: workbenchSelectedWorkspace.id,
           })
         }
       })
     return () => {
       cancelled = true
     }
-  }, [selectedWorkspace])
+  }, [workbenchSelectedWorkspace])
 
   async function submitProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -945,7 +948,6 @@ export function WorkerStudio() {
   const isWorkspaceContextRoute = (route.kind === 'workspace' || route.kind === 'session') && Boolean(selectedWorkspace)
   const showWorkspaceContextSurface = isWorkspaceContextRoute && Boolean(selectedWorkspace)
   const showSessionSurface = route.kind === 'session' && Boolean(selectedWorkspace && selectedSession)
-  const showSpecializedWorkbench = hasSpecializedWorkbenchRenderer(selectedWorkbench)
   const layoutVariant: WorkerStudioLayoutVariant = showSessionSurface ? 'session' : showWorkspaceContextSurface ? 'workspace' : 'home'
   const soulWorkbenchContext: SoulWorkbenchContext | null = selectedWorkbench
     ? {
@@ -956,9 +958,9 @@ export function WorkerStudio() {
         lessons: soulLessons,
         locale: activeLocale,
         reviews: soulReviews,
-        selectedArtifact,
+        selectedArtifact: workbenchSelectedWorkspace ? selectedArtifact : null,
         selectedTemplate,
-        selectedWorkspace,
+        selectedWorkspace: workbenchSelectedWorkspace,
         shellHeader,
         sessions: soulSessions,
         soul: selectedSoul,

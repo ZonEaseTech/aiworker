@@ -73,7 +73,7 @@ export function HrPeopleWorkbench({
   const selectedProfile = selectedWorkspace
     ? profiles.find(profile => profile.id === selectedWorkspace.id) ?? null
     : null
-  const focusedProfile = selectedProfile ?? profiles[0] ?? null
+  const focusedProfile = selectedProfile
   const reviewGuardrails = locale === 'zh-CN' ? labels.reviewGuardrails : workbench.reviewChecklist.slice(0, 4)
   const activeActions = orderActionsForProfile(workbench.actions, focusedProfile)
   const timeline = focusedProfile ? buildProfileTimeline(focusedProfile, labels, locale) : []
@@ -96,7 +96,8 @@ export function HrPeopleWorkbench({
       return
     }
     if (action.slot === 'drawer-toggle') {
-      setProfileToolsExpanded(expanded => !expanded)
+      if (focusedProfile)
+        setProfileToolsExpanded(expanded => !expanded)
       return
     }
     if (action.slot === 'settings')
@@ -175,13 +176,17 @@ export function HrPeopleWorkbench({
             >
               {profileListVisible ? <PanelLeftClose aria-hidden="true" size={16} /> : <PanelLeftOpen aria-hidden="true" size={16} />}
             </IconButton>
-            <IconButton
-              aria-label={profileToolsExpanded ? labels.collapseProfileTools : labels.expandProfileTools}
-              aria-pressed={profileToolsExpanded}
-              onClick={() => setProfileToolsExpanded(expanded => !expanded)}
-            >
-              {profileToolsExpanded ? <PanelRightClose aria-hidden="true" size={16} /> : <PanelRightOpen aria-hidden="true" size={16} />}
-            </IconButton>
+            {focusedProfile
+              ? (
+                  <IconButton
+                    aria-label={profileToolsExpanded ? labels.collapseProfileTools : labels.expandProfileTools}
+                    aria-pressed={profileToolsExpanded}
+                    onClick={() => setProfileToolsExpanded(expanded => !expanded)}
+                  >
+                    {profileToolsExpanded ? <PanelRightClose aria-hidden="true" size={16} /> : <PanelRightOpen aria-hidden="true" size={16} />}
+                  </IconButton>
+                )
+              : null}
             {shellHeader?.actionSlots.has('refresh')
               ? null
               : (
@@ -203,7 +208,7 @@ export function HrPeopleWorkbench({
       {shellHeader?.results}
 
       <div className="entry-tab-content workspace-content hr-people-content" data-testid="hr-people-workbench">
-        <div className={`hr-people-layout ${profileListVisible ? '' : 'without-profile-list'} ${profileToolsExpanded ? '' : 'with-tools-rail'}`}>
+        <div className={`hr-people-layout ${profileListVisible ? '' : 'without-profile-list'} ${focusedProfile ? 'has-profile-selection' : 'selection-empty'} ${focusedProfile && !profileToolsExpanded ? 'with-tools-rail' : ''}`}>
           {profileListVisible
             ? (
                 <HrProfileList
@@ -218,13 +223,22 @@ export function HrPeopleWorkbench({
               )
             : null}
 
-          <HrProfileDetails
-            focusedProfile={focusedProfile}
-            labels={labels}
-            profilePreview={profilePreview}
-          />
+          {focusedProfile
+            ? (
+                <HrProfileDetails
+                  focusedProfile={focusedProfile}
+                  labels={labels}
+                  profilePreview={profilePreview}
+                />
+              )
+            : (
+                <HrProfileSelectionEmpty
+                  hasProfiles={profiles.length > 0}
+                  labels={labels}
+                />
+              )}
 
-          {profileToolsExpanded
+          {focusedProfile && profileToolsExpanded
             ? (
                 <HrProfileToolsPanel
                   activeActions={activeActions}
@@ -251,15 +265,35 @@ export function HrPeopleWorkbench({
                   timeline={timeline}
                 />
               )
-            : (
+            : focusedProfile
+              ? (
                 <HrProfileToolsRail
                   labels={labels}
                   onExpand={() => setProfileToolsExpanded(true)}
                 />
-              )}
+                )
+              : null}
         </div>
       </div>
     </>
+  )
+}
+
+function HrProfileSelectionEmpty({
+  hasProfiles,
+  labels,
+}: {
+  hasProfiles: boolean
+  labels: ReturnType<typeof getHrPeopleWorkbenchCopy>
+}) {
+  return (
+    <section className="hr-profile-selection-empty" aria-label={hasProfiles ? labels.profileSelectionTitle : labels.emptyProfileTitle}>
+      <div className="hr-profile-selection-empty-inner">
+        <Search aria-hidden="true" size={20} />
+        <h2>{hasProfiles ? labels.profileSelectionTitle : labels.emptyProfileTitle}</h2>
+        <p>{hasProfiles ? labels.profileSelectionBody : labels.emptyProfileBody}</p>
+      </div>
+    </section>
   )
 }
 

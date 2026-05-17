@@ -87,6 +87,27 @@ export function HrProfileToolsPanel({
             )
           : null}
 
+        <section className="hr-tool-section hr-next-action-section" aria-label={labels.suggestedToolsTitle}>
+          <WorkbenchSectionTitle icon={<Sparkles size={15} />} title={labels.suggestedToolsTitle} detail={labels.proposalOnly} />
+          <div className="hr-action-list">
+            {activeActions.map((action, index) => (
+              <button
+                key={action.id}
+                type="button"
+                className={`hr-action-row ${index === 0 ? 'suggested' : ''}`}
+                disabled={!selectedWorkspace}
+                onClick={() => onActionSelect(action)}
+              >
+                <span>
+                  <strong>{displayActionLabel(action, labels)}</strong>
+                  <small>{labels.actionMeta(action.scope, action.outputKind)}</small>
+                </span>
+                {index === 0 ? <em>{labels.recommended}</em> : <ArrowRight aria-hidden="true" size={14} />}
+              </button>
+            ))}
+          </div>
+        </section>
+
         <section className="hr-tool-section" aria-label={labels.sourcesTitle}>
           <WorkbenchSectionTitle icon={<FileText size={15} />} title={labels.sourcesTitle} detail={labels.sourcesDetail} />
           <div className="hr-source-grid">
@@ -190,26 +211,6 @@ export function HrProfileToolsPanel({
           </div>
         </section>
 
-        <section className="hr-tool-section" aria-label={labels.suggestedToolsTitle}>
-          <WorkbenchSectionTitle icon={<Sparkles size={15} />} title={labels.suggestedToolsTitle} detail={labels.proposalOnly} />
-          <div className="hr-action-list">
-            {activeActions.map((action, index) => (
-              <button
-                key={action.id}
-                type="button"
-                className={`hr-action-row ${index === 0 ? 'suggested' : ''}`}
-                disabled={!selectedWorkspace}
-                onClick={() => onActionSelect(action)}
-              >
-                <span>
-                  <strong>{displayActionLabel(action, labels)}</strong>
-                  <small>{labels.actionMeta(action.scope, action.outputKind)}</small>
-                </span>
-                {index === 0 ? <em>{labels.recommended}</em> : <ArrowRight aria-hidden="true" size={14} />}
-              </button>
-            ))}
-          </div>
-        </section>
       </div>
 
       <form className="hr-task-composer" onSubmit={onSubmitSession}>
