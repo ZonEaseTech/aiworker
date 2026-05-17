@@ -468,3 +468,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REFACTOR-080 Worker Web Host shell V9 layout**](REFACTOR-080.md) `P0`
 - [x] [**REFACTOR-081 Host/Soul workbench contract cleanup**](REFACTOR-081.md) `P0`
 - [x] [**REFACTOR-082 Soul App scaffold workbench design migration**](REFACTOR-082.md) `P0`
+- [-] [**FEAT-096 HR profile patch review workbench**](FEAT-096.md) `P0`

@@ -1,5 +1,13 @@
 # AIWorker Changelog
 
+## 2026-05-18 [progress] FEAT-096 / PLAN-354 — HR profile patch review workbench
+
+Started the HR People Workbench redesign that turns reviewable profile
+artifacts into section-aware README promotion patches. The approved design keeps
+the Reading Room reading-first, moves current/proposed comparison into a center
+Profile Patch Review view, and reduces the right panel to a concise Next Step
+surface.
+
 ## 2026-05-18 [completed] REFACTOR-082 / PLAN-353 — Soul App scaffold workbench design migration
 
 Migrated Soul App authoring/scaffold design to the current Host-owned header
