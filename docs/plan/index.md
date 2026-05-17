@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-17 (PLAN-343 completed)
+> Updated: 2026-05-17
 
 ## Usage
 
@@ -372,3 +372,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-341 CLI 0.17.0 minor release**](PLAN-341.md) `2026-05-17`
 - [x] [**PLAN-342 HR workbench selection empty state and action drawer refinement**](PLAN-342.md) `2026-05-17`
 - [x] [**PLAN-343 HR native skill artifact boundary**](PLAN-343.md) `2026-05-17`
+- [x] [**PLAN-344 HR native skills README closure debug campaign**](PLAN-344.md) `2026-05-17`

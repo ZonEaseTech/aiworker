@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-17 (FEAT-094 completed)
+> Updated: 2026-05-17
 
 ## Usage
 
@@ -447,3 +447,10 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REL-039 发布 aiworker CLI 0.17.0**](REL-039.md) `P1`
 - [x] [**BUG-125 收敛 HR workbench 空选择、drawer 动效和 Profile Actions**](BUG-125.md) `P0`
 - [x] [**FEAT-094 HR native skill artifact boundary**](FEAT-094.md) `P0`
+- [x] [**QA-035 HR native skills README closure debug campaign**](QA-035.md) `P0`
+- [x] [**BUG-126 Profile ledger follows parent repository when workspace is under ignored path**](BUG-126.md) `P0`
+- [x] [**BUG-127 CLI continuation turns lose capability metadata**](BUG-127.md) `P0`
+- [x] [**BUG-128 HR profile promotion can write proposal-shaped content into README**](BUG-128.md) `P0`
+- [ ] [**BUG-129 Failed Codex turn can leave durable artifact files unregistered**](BUG-129.md) `P1`
+- [ ] [**TODO-043 Make HR native skill artifact kinds first-class**](TODO-043.md) `P1`
+- [ ] [**TODO-044 Materialize capability prompt and review content for external engines**](TODO-044.md) `P2`

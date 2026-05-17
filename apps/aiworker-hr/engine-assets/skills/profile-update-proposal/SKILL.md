@@ -28,3 +28,25 @@ People Profile.
 - Which facts are still missing?
 - Which risks need HR or legal review?
 - What exact review decision is needed before promotion?
+
+## Accepted Profile Draft
+
+When the proposal is intended for promotion, include one fenced block with the
+exact `README.md` candidate profile draft the HR product may promote after
+review:
+
+```aiworker-profile-readme
+# <Profile name>
+
+> Accepted People Profile for this HR workspace. Agent outputs remain proposals until review.
+
+...
+```
+
+Keep review rationale, evidence commentary, and rejected claims outside this
+fenced block so product promotion can promote only the accepted profile state.
+
+The fenced draft must be internally consistent. If it includes accepted facts or
+is intended for `pass` / `warn` promotion, its `Review State` must describe that
+requested or approved promotion state. Do not leave `No approved profile
+revision yet` in a draft that otherwise contains accepted profile facts.

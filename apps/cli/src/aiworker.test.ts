@@ -236,8 +236,8 @@ describe('aiworker local CLI', () => {
     expect(output).toContain('selected-worker')
     output = ''
 
-    expect(await runCli(argv('workspace', 'create', '--name', 'Hiring', '--worker', 'hr-recruiting'))).toBe(0)
-    expect((JSON.parse(output) as { workspace: { id: string } }).workspace.id).toBeTruthy()
+    expect(await runCli(argv('workspace', 'create', '--name', 'Hiring', '--type', 'people-profile', '--worker', 'hr-recruiting'))).toBe(0)
+    expect((JSON.parse(output) as { workspace: { id: string, type: string } }).workspace).toMatchObject({ type: 'people-profile' })
     output = ''
 
     expect(await runCli(argv('commands'))).toBe(0)

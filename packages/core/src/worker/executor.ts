@@ -104,6 +104,8 @@ const localEngineDefinitions: Record<string, LocalEngineDefinition> = {
       ]
       if (process.env.AIWORKER_CODEX_DISABLE_PLUGINS === '1' || process.env.OD_CODEX_DISABLE_PLUGINS === '1')
         args.push('--disable', 'plugins')
+      if (process.env.AIWORKER_CODEX_IGNORE_USER_CONFIG === '1')
+        args.push('--ignore-user-config')
       if (model && model !== 'default')
         args.push('--model', model)
       if (reasoning && reasoning !== 'default')

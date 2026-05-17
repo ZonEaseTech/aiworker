@@ -759,8 +759,20 @@ beforeEach(() => {
         },
       }, 201)
     }
-    if (url.includes('/api/local/workspaces/') && url.includes('/files/raw/'))
-      return new Response('# Candidate Screen\n\nEvidence summary.\n', { headers: { 'content-type': 'text/plain' } })
+    if (url.includes('/api/local/workspaces/') && url.includes('/files/raw/')) {
+      return new Response([
+        '# Candidate Screen',
+        '',
+        'Evidence summary.',
+        '',
+        '```aiworker-profile-readme',
+        '# Accepted Ada Profile',
+        '',
+        'Reviewed profile summary.',
+        '```',
+        '',
+      ].join('\n'), { headers: { 'content-type': 'text/plain' } })
+    }
     if (url.endsWith('/api/local/artifacts'))
       return json({ artifacts: currentArtifacts })
     if (url.endsWith('/api/local/reviews') && method === 'POST') {
@@ -914,7 +926,7 @@ describe('worker studio', () => {
       }))
     })
     await waitFor(() => {
-      expect(within(currentProfile).getByText('Evidence summary.')).toBeTruthy()
+      expect(within(currentProfile).getByText('Reviewed profile summary.')).toBeTruthy()
     })
   })
 

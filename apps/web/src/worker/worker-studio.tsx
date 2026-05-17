@@ -751,7 +751,7 @@ export function WorkerStudio() {
       await promoteProfileRevision(selectedWorkspace.id, {
         artifactId: selectedArtifact.id,
         findingsJson: [{ message: 'Approved from HR workbench.' }],
-        profileMarkdown: previewContent || undefined,
+        profileMarkdown: profileMarkdownForPromotion(previewContent),
         risksJson: [],
         verdict: 'pass',
       })
@@ -1470,6 +1470,19 @@ export function WorkerStudio() {
       )}
     />
   )
+}
+
+function profileMarkdownForPromotion(content: string): string | undefined {
+  const trimmed = content.trim()
+  if (!trimmed)
+    return undefined
+
+  return extractAcceptedProfileDraft(trimmed) ?? trimmed
+}
+
+function extractAcceptedProfileDraft(content: string): string | null {
+  const match = content.match(/```(?:markdown\s+)?aiworker-profile-readme\s*\n([\s\S]*?)\n```/i)
+  return match?.[1]?.trim() || null
 }
 
 function StudioBrand({ copy }: { copy: WorkerMessages }) {

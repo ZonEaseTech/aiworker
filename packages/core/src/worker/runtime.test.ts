@@ -1,7 +1,7 @@
 import type { SoulAppEngineAssets } from '@zonease/aiworker-shared'
 
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, realpathSync } from 'node:fs'
 import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -155,6 +155,51 @@ describe('LocalWorkerRuntime', () => {
     expect(snapshot.lessons).toHaveLength(1)
   })
 
+  it('carries session template metadata into continuation turn prompts and artifacts', async () => {
+    const prompts: string[] = []
+    const workerRuntime = runtime({
+      async invoke(input) {
+        prompts.push(input.prompt)
+        return {
+          summary: `Finished ${input.turnId}`,
+          artifacts: [
+            {
+              path: `artifacts/${input.sessionId}/${input.turnId}-candidate-screen.md`,
+              kind: 'candidate-screen',
+              title: 'Candidate Screen',
+              content: '# Candidate Screen\n\nEvidence attached.\n',
+            },
+          ],
+        }
+      },
+    })
+    await workerRuntime.init()
+    const workspace = await workerRuntime.createWorkspace({ name: 'Hiring Workspace' })
+    const session = await workerRuntime.createSession({
+      workspaceId: workspace.id,
+      capabilityTemplateId: 'candidate-screen',
+      title: 'Screen candidate',
+      metadata: {
+        outputKind: 'candidate-screen',
+        reviewRubric: ['Evidence references are present.'],
+        skillName: 'Candidate Screen',
+      },
+    })
+
+    const result = await workerRuntime.startTurn({
+      sessionId: session.id,
+      input: 'Continue the screen.',
+      engineId: 'codex',
+      metadata: { executionMode: 'local-cli' },
+    })
+
+    expect(prompts[0]).toContain('Output kind: candidate-screen')
+    expect(prompts[0]).toContain('Review rubric:\n- Evidence references are present.')
+    expect(result.invocation.metadataJson).toMatchObject({ executionMode: 'local-cli', outputKind: 'candidate-screen', skillName: 'Candidate Screen' })
+    expect(result.turn.metadataJson).toMatchObject({ executionMode: 'local-cli', outputKind: 'candidate-screen', skillName: 'Candidate Screen' })
+    expect(result.artifacts[0]?.metadataJson).toMatchObject({ outputKind: 'candidate-screen' })
+  })
+
   it('records failed turns without throwing away the event trail', async () => {
     const workerRuntime = runtime({
       async invoke() {
@@ -261,6 +306,46 @@ describe('LocalWorkerRuntime', () => {
       expect(head.status).toBe(0)
       expect(head.stdout.trim()).toMatch(/^[a-f0-9]{40}$/)
     }
+  })
+
+  it('initializes the profile ledger inside a parent repository ignored path', async () => {
+    if (!gitAvailable())
+      return
+
+    const parentRoot = join(dir, 'parent-repo')
+    await mkdir(parentRoot, { recursive: true })
+    await writeFile(join(parentRoot, '.gitignore'), 'ignored/\n')
+    expect(spawnSync('git', ['init'], { cwd: parentRoot, encoding: 'utf8' }).status).toBe(0)
+
+    const appRoot = join(dir, 'apps', 'aiworker-hr')
+    await writeProfileEngineAssets(appRoot)
+    const workerRuntime = new LocalWorkerRuntime({
+      worker: {
+        id: 'worker-hr',
+        soulId: 'aiworker-hr',
+        name: 'AIWorker HR',
+        defaultEngineId: 'codex',
+      },
+      engineAssetSource: {
+        appId: 'aiworker-hr',
+        sourceRoot: appRoot,
+      },
+      executor: {
+        async invoke() {
+          return { summary: 'ok' }
+        },
+      },
+      now,
+      workspacesRoot: join(parentRoot, 'ignored', 'workers', 'worker-hr', 'workspaces'),
+    })
+
+    await workerRuntime.init()
+    const workspace = await workerRuntime.createWorkspace({ name: 'Ignored Parent Profile', type: 'people-profile' })
+
+    expect(workspace.metadataJson.profileLedger).toMatchObject({ git: { status: 'created' }, profilePath: 'README.md' })
+    const topLevel = spawnSync('git', ['-C', workspace.rootPath, 'rev-parse', '--show-toplevel'], { encoding: 'utf8' })
+    expect(topLevel.status).toBe(0)
+    expect(realpathSync(topLevel.stdout.trim())).toBe(realpathSync(workspace.rootPath))
   })
 
   it('projects Codex MCP client config for codex workers', async () => {

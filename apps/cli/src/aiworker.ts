@@ -653,9 +653,9 @@ async function selectWorkerCommand(id: string): Promise<void> {
   printJson({ setting: setSetting('selected-worker', { workerId: worker.id }) })
 }
 
-async function createWorkspaceCommand(opts: { name?: string, worker?: string }): Promise<void> {
+async function createWorkspaceCommand(opts: { name?: string, type?: string, worker?: string }): Promise<void> {
   const runtime = await ensureRuntime({ worker: opts.worker })
-  printJson({ workspace: await runtime.createWorkspace({ name: requireText(opts.name, 'name') }) })
+  printJson({ workspace: await runtime.createWorkspace({ name: requireText(opts.name, 'name'), type: opts.type }) })
 }
 
 async function listWorkspaceCommand(opts: { worker?: string }): Promise<void> {
@@ -668,7 +668,7 @@ async function listWorkspaceCommand(opts: { worker?: string }): Promise<void> {
   printJson({ workspaces: listWorkspaces(runtime.workerId) })
 }
 
-async function startSessionCommand(opts: { context?: string, input?: string, skill?: string, title?: string, worker?: string, workspace?: string }): Promise<void> {
+async function startSessionCommand(opts: { context?: string, input?: string, model?: string, reasoning?: string, skill?: string, title?: string, worker?: string, workspace?: string }): Promise<void> {
   const paths = await ensureDb()
   const runtime = await ensureRuntime({ worker: opts.worker })
   const workspaceId = requireText(opts.workspace, 'workspace')
@@ -687,6 +687,7 @@ async function startSessionCommand(opts: { context?: string, input?: string, ski
       outputKind: template.outputKind,
       reviewRubric: template.reviewRubric,
       skillName: template.name,
+      ...cliEngineOverrideMetadata(opts),
     },
   })
   const input = requireText(opts.input, 'input')
@@ -701,24 +702,41 @@ async function startSessionCommand(opts: { context?: string, input?: string, ski
       reviewRubric: template.reviewRubric,
       skillName: template.name,
       executionMode: 'local-cli',
+      ...cliEngineOverrideMetadata(opts),
     },
   }))
 }
 
-async function sendTurnCommand(opts: { input?: string, session?: string, worker?: string }): Promise<void> {
-  await ensureDb()
+async function sendTurnCommand(opts: { input?: string, model?: string, reasoning?: string, session?: string, worker?: string }): Promise<void> {
+  const paths = await ensureDb()
   const sessionId = requireText(opts.session, 'session')
   const session = getSession(sessionId)
   if (!session)
     throw new Error(`session not found: ${sessionId}`)
   const runtime = await ensureRuntime({ worker: opts.worker ?? session.workerId })
+  const metadata = createHost(paths).enrichTemplateMetadata(
+    session.workerId,
+    session.capabilityTemplateId,
+    {
+      ...(session.metadataJson ?? {}),
+      executionMode: 'local-cli',
+      ...cliEngineOverrideMetadata(opts),
+    },
+  )
   printJson(await runtime.startTurn({
     sessionId,
     input: requireText(opts.input, 'input'),
     engineId: 'codex',
     engineCommand: 'codex',
-    metadata: { executionMode: 'local-cli' },
+    metadata,
   }))
+}
+
+function cliEngineOverrideMetadata(opts: { model?: string, reasoning?: string }): Record<string, string> {
+  return {
+    ...(opts.model ? { model: opts.model } : {}),
+    ...(opts.reasoning ? { reasoning: opts.reasoning } : {}),
+  }
 }
 
 async function listSessionCommand(opts: { workspace?: string }): Promise<void> {
@@ -2239,7 +2257,7 @@ function registerCommands(): void {
     printJson({ templates })
   })
 
-  cli.command('workspace create', 'create a worker workspace').option('--name <text>', 'workspace name').option('--worker <id>', 'worker id').action(createWorkspaceCommand)
+  cli.command('workspace create', 'create a worker workspace').option('--name <text>', 'workspace name').option('--type <id>', 'workspace type').option('--worker <id>', 'worker id').action(createWorkspaceCommand)
   cli.command('workspace list', 'list worker workspaces').option('--worker <id>', 'worker id').action(listWorkspaceCommand)
   cli.command('workspace show <id>', 'show one workspace').action(async (id: string) => {
     await ensureDb()
@@ -2252,11 +2270,13 @@ function registerCommands(): void {
     .option('--title <text>', 'session title')
     .option('--context <text>', 'session context')
     .option('--input <text>', 'turn input')
+    .option('--model <id>', 'Codex model override')
+    .option('--reasoning <effort>', 'Codex reasoning effort override')
     .option('--worker <id>', 'worker id')
     .action(startSessionCommand)
   cli.command('session list', 'list sessions').option('--workspace <id>', 'workspace id').action(listSessionCommand)
   cli.command('session show <id>', 'show one session').action(showSession)
-  cli.command('turn send', 'send a turn to an existing session').option('--session <id>', 'session id').option('--input <text>', 'turn input').option('--worker <id>', 'worker id').action(sendTurnCommand)
+  cli.command('turn send', 'send a turn to an existing session').option('--session <id>', 'session id').option('--input <text>', 'turn input').option('--model <id>', 'Codex model override').option('--reasoning <effort>', 'Codex reasoning effort override').option('--worker <id>', 'worker id').action(sendTurnCommand)
 
   cli.command('files list', 'list workspace files').option('--workspace <id>', 'workspace id').action(listWorkspaceFiles)
   cli.command('files show <path>', 'print workspace file').option('--workspace <id>', 'workspace id').option('--worker <id>', 'worker id').action(showFile)

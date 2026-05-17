@@ -1,8 +1,10 @@
 import type { ReviewRow } from '@zonease/aiworker-storage-sqlite/worker'
 
 import { spawnSync } from 'node:child_process'
+import { realpathSync } from 'node:fs'
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+import process from 'node:process'
 
 export const PROFILE_README_PATH = 'README.md'
 export const PROFILE_REVIEW_DIR = 'reviews'
@@ -274,11 +276,28 @@ function isGitAvailable(): boolean {
 }
 
 function isGitRepository(rootPath: string): boolean {
-  return runGit(rootPath, ['rev-parse', '--is-inside-work-tree']).status === 0
+  const result = runGit(rootPath, ['rev-parse', '--show-toplevel'])
+  return result.status === 0 && canonicalPath(result.stdout.trim()) === canonicalPath(rootPath)
+}
+
+function canonicalPath(inputPath: string): string {
+  try {
+    return realpathSync(inputPath)
+  }
+  catch {
+    return path.resolve(inputPath)
+  }
 }
 
 function runGit(cwd: string, args: string[]): { status: number | null, stderr: string, stdout: string } {
-  const result = spawnSync('git', args, { cwd, encoding: 'utf8' })
+  const result = spawnSync('git', args, {
+    cwd,
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      GIT_CEILING_DIRECTORIES: path.dirname(path.resolve(cwd)),
+    },
+  })
   return {
     status: result.status,
     stderr: result.stderr ?? '',

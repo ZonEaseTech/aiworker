@@ -1,7 +1,7 @@
 import type { LocalExecutorEvent } from './executor'
 
 import { mkdtempSync } from 'node:fs'
-import { chmod, mkdir, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
@@ -102,6 +102,37 @@ printf '%s\\n' '{"type":"item.completed","item":{"type":"agent_message","text":"
     expect(result.artifacts).toEqual([])
     expect(result.review).toBeUndefined()
     expect(events.some(event => event.kind === 'text' && event.text === 'Plain answer.')).toBe(true)
+  })
+
+  it('can isolate Codex CLI from user plugins and config for debug runs', async () => {
+    const workspaceRoot = path.join(makeRoot(), 'workspace')
+    await mkdir(workspaceRoot, { recursive: true })
+    const command = await makeScript(`
+cat >/dev/null
+printf '%s\\n' "$@" > args.txt
+printf '%s\\n' '{"type":"item.completed","item":{"type":"agent_message","text":"Plain answer."}}'
+`)
+    const originalDisablePlugins = process.env.AIWORKER_CODEX_DISABLE_PLUGINS
+    const originalIgnoreConfig = process.env.AIWORKER_CODEX_IGNORE_USER_CONFIG
+    process.env.AIWORKER_CODEX_DISABLE_PLUGINS = '1'
+    process.env.AIWORKER_CODEX_IGNORE_USER_CONFIG = '1'
+
+    try {
+      await createExternalEngineExecutor().invoke(baseInput(command, workspaceRoot))
+    }
+    finally {
+      if (originalDisablePlugins === undefined)
+        delete process.env.AIWORKER_CODEX_DISABLE_PLUGINS
+      else
+        process.env.AIWORKER_CODEX_DISABLE_PLUGINS = originalDisablePlugins
+      if (originalIgnoreConfig === undefined)
+        delete process.env.AIWORKER_CODEX_IGNORE_USER_CONFIG
+      else
+        process.env.AIWORKER_CODEX_IGNORE_USER_CONFIG = originalIgnoreConfig
+    }
+
+    await expect(readFile(path.join(workspaceRoot, 'args.txt'), 'utf8')).resolves.toContain('--disable\nplugins')
+    await expect(readFile(path.join(workspaceRoot, 'args.txt'), 'utf8')).resolves.toContain('--ignore-user-config')
   })
 
   it('surfaces stderr only when the engine process fails', async () => {

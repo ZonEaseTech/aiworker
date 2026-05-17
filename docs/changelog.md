@@ -1,5 +1,32 @@
 # AIWorker Changelog
 
+## 2026-05-17 [completed] QA-035 / PLAN-344 — HR native skills README closure debug campaign
+
+Ran and tuned the real Codex-backed HR native skill closure loop from zero
+profiles to reviewed `README.md` promotion.
+
+- Executed a 3-profile matrix across all five HR native skills with 30 real
+  Codex turns, plus targeted third turns for human-review promotion readiness.
+- Promoted `hr-profile-alpha` and `hr-profile-gamma` through the local daemon
+  REST profile revision endpoint with `warn` verdicts and profile ledger git
+  commits; left `hr-profile-beta` unpromoted because its proposal flagged
+  unresolved risk around unsupported `culture fit` language and documentation
+  inconsistency.
+- Fixed profile-ledger git isolation under ignored parent repositories
+  (`BUG-126`).
+- Fixed CLI/runtime continuation metadata so follow-up turns preserve selected
+  capability output kind and review context (`BUG-127`).
+- Tuned HR profile update proposals and Worker Web promotion to extract an
+  explicit `aiworker-profile-readme` draft instead of writing whole proposal
+  artifacts into accepted `README.md` (`BUG-128`).
+- Recorded remaining follow-ups for failed-turn artifact salvage (`BUG-129`),
+  first-class HR native artifact kinds (`TODO-043`), and capability prompt
+  materialization for external engines (`TODO-044`).
+
+Verification passed: focused core runtime/executor tests, CLI tests, Worker Web
+test, HR app validate/test, real REST profile promotion, and debug matrix
+evidence under `/private/tmp/aiworker-hr-native-skill-debug-20260517-114309-matrix`.
+
 ## 2026-05-17 [completed] FEAT-094 / PLAN-343 — HR native skill artifact boundary
 
 Landed the HR native skill artifact boundary from the approved Superpowers

@@ -227,6 +227,14 @@ export class LocalWorkerRuntime {
   async startTurn(input: StartLocalTurnInput): Promise<LocalTurnStartResult> {
     const session = this.requireSession(input.sessionId)
     const workspace = this.requireWorkspace(session.workspaceId)
+    const metadata = {
+      ...(session.metadataJson ?? {}),
+      ...(input.metadata ?? {}),
+      capabilityTemplateId: session.capabilityTemplateId,
+      sessionId: session.id,
+      workerId: this.workerId,
+      workspaceId: workspace.id,
+    }
     const seq = nextTurnSeq(session.id)
     const turn = createTurn({
       id: randomUUID(),
@@ -234,10 +242,10 @@ export class LocalWorkerRuntime {
       seq,
       input: input.input,
       status: 'running',
-      metadataJson: input.metadata ?? {},
+      metadataJson: metadata,
       at: this.#now(),
     })
-    const prompt = this.buildInvocationPrompt(session, turn, input.metadata ?? {})
+    const prompt = this.buildInvocationPrompt(session, turn, metadata)
     const invocation = createEngineInvocation({
       id: randomUUID(),
       sessionId: session.id,
@@ -247,7 +255,7 @@ export class LocalWorkerRuntime {
       engineCommand: input.engineCommand ?? null,
       prompt,
       status: 'running',
-      metadataJson: input.metadata ?? {},
+      metadataJson: metadata,
       startedAt: this.#now(),
       at: this.#now(),
     })
@@ -268,21 +276,16 @@ export class LocalWorkerRuntime {
         workspaceId: workspace.id,
         workspaceRoot: workspace.rootPath,
         metadata: {
-          ...(session.metadataJson ?? {}),
-          ...(input.metadata ?? {}),
-          capabilityTemplateId: session.capabilityTemplateId,
-          sessionId: session.id,
+          ...metadata,
           turnId: turn.id,
-          workerId: this.workerId,
-          workspaceId: workspace.id,
         },
       })
-      const output = await this.captureResult(workspace, session, turn, invocation, result, input.metadata ?? {})
+      const output = await this.captureResult(workspace, session, turn, invocation, result, metadata)
       const finishedInvocation = updateEngineInvocation({
         id: invocation.id,
         status: 'succeeded',
         summary: result.summary,
-        metadataJson: { ...(input.metadata ?? {}), ...(result.metadata ?? {}) },
+        metadataJson: { ...metadata, ...(result.metadata ?? {}) },
         finishedAt: this.#now(),
         at: this.#now(),
       })
