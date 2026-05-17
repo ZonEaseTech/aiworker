@@ -1,5 +1,21 @@
 # AIWorker Changelog
 
+## 2026-05-17 [completed] FEAT-094 / PLAN-343 — HR native skill artifact boundary
+
+Landed the HR native skill artifact boundary from the approved Superpowers
+design. HR native skills now read as artifact producers, while HR product-owned
+material defines artifact taxonomy, review gates and promotion meaning.
+
+- Updated HR workspace instructions to keep durable session output
+  artifact-first and make accepted People Profile promotion a product review
+  decision.
+- Reworded the five HR native skills around artifact output, evidence, risk and
+  human decision boundaries instead of accepted profile writes.
+- Added HR product artifact policy under `apps/aiworker-hr/product/artifacts/`.
+
+Verification passed: HR app validate/typecheck/test, focused core
+engine-assets/runtime tests, and `git diff --check`.
+
 ## 2026-05-17 [completed] BUG-125 / PLAN-342 — HR workbench selection and drawer refinement
 
 收敛 HR People Workbench 的空选择、drawer 动效、右侧 icon rail 对齐和

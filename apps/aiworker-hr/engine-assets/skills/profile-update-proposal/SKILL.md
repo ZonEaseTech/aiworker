@@ -14,11 +14,12 @@ People Profile.
 
 ## Rules
 
-- Read `README.md` first to understand the accepted profile baseline.
+- Read the accepted profile surface first when available to understand the reviewed baseline.
 - Write proposed changes under `artifacts/<sessionId>/`.
-- Do not update `README.md` directly unless the operator explicitly asks for a
-  reviewed profile revision workflow.
-- Preserve source references, open questions, and human decision ownership.
+- Produce a complete reviewable proposal with source references, open questions,
+  risks, and exact requested review decision.
+- Do not update `README.md` or any accepted profile surface directly.
+- Preserve human decision ownership for promotion.
 
 ## Proposal Checklist
 

@@ -12,14 +12,16 @@ capabilities:
 Use this skill when the workspace profile represents a candidate or candidate
 pool member.
 
-## Profile Contract
+## Artifact Contract
 
-- Treat `README.md` as the accepted Candidate Profile.
-- Treat files under `artifacts/` as proposed profile changes until review.
+- Produce a candidate-focused People Profile artifact for HR review.
+- Read the accepted profile surface when available to avoid contradicting reviewed state.
+- Treat files under `artifacts/` as proposed or supporting work products until HR product review.
 - Keep confirmed facts, missing evidence, weak signals, and next HR actions
   separate.
 - Do not infer protected-class attributes, personal judgments, or employment
   commitments.
+- Do not update accepted profile state directly.
 
 ## Output Shape
 

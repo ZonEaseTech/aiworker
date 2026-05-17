@@ -9,8 +9,8 @@ capabilities:
 
 # Hiring Risk Review
 
-Use this skill before a proposed HR artifact is promoted into the accepted
-People Profile.
+Use this skill to produce a hiring risk review artifact for a proposed HR
+artifact before HR product review promotes or references it.
 
 ## Risk Review Rules
 
@@ -23,6 +23,9 @@ People Profile.
 - Separate blocking risks from advisory improvements.
 
 ## Output Shape
+
+The verdict is a recommendation for HR product review; it is not the promotion
+operation itself.
 
 Return:
 

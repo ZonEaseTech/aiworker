@@ -1,6 +1,6 @@
 # AIWorker - Task List
 
-> Updated: 2026-05-17 (BUG-125 completed)
+> Updated: 2026-05-17 (FEAT-094 completed)
 
 ## Usage
 
@@ -446,3 +446,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-093 HR Profile Reading Room**](FEAT-093.md) `P0`
 - [x] [**REL-039 发布 aiworker CLI 0.17.0**](REL-039.md) `P1`
 - [x] [**BUG-125 收敛 HR workbench 空选择、drawer 动效和 Profile Actions**](BUG-125.md) `P0`
+- [x] [**FEAT-094 HR native skill artifact boundary**](FEAT-094.md) `P0`

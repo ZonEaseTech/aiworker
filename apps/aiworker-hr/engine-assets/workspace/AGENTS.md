@@ -15,12 +15,20 @@ This workspace belongs to an AIWorker HR profile ledger.
 - If a result should change the accepted profile, write a reviewable artifact and request human review.
 - Human review plus HR policy is the only path that may promote an artifact into `README.md`.
 
+## Product Artifact Loop
+
+- Native skills produce reviewable artifacts; they do not own accepted profile state.
+- HR product logic decides how an artifact is interpreted, reviewed, referenced, or promoted.
+- `README.md` is the accepted People Profile for this HR product, not a generic Soul App assumption.
+- Supporting artifacts may inform future profile proposals without becoming accepted profile state.
+- Profile promotion requires HR product review and may only update `README.md` through the reviewed promotion path.
+
 ## Action and Skill Binding
 
 - When a session is started from a Soul App action, treat that action as an explicit skill selection.
-- Follow the selected skill purpose, expected inputs, output shape, and review boundary.
-- Do not silently switch to another skill.
-- If the request appears to require a different skill, explain the mismatch and ask the user to confirm whether to continue, switch, or start a new action.
+- Follow the selected skill purpose, expected inputs, artifact output shape, and review boundary.
+- Do not silently switch to another skill or turn a supporting artifact into accepted profile state.
+- If the request appears to require a different skill or a product promotion decision, explain the mismatch and ask the user to confirm whether to continue, switch, or start a review path.
 - When no action or skill is explicitly selected, choose the most relevant available HR skill when useful.
 - If no skill fits, continue as a general HR workspace session and keep outputs within the same artifact and review rules.
 

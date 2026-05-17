@@ -12,6 +12,10 @@ capabilities:
 Use this skill when preparing an interview plan from a Candidate Profile or
 candidate evidence packet.
 
+This skill produces an interview brief artifact for human panels. It can inform
+future People Profile proposals, but it does not directly change accepted
+profile state or make a hiring decision.
+
 ## Interview Guidance
 
 - Use role-relevant evidence and open questions from the profile.

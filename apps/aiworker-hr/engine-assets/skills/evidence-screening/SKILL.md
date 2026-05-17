@@ -12,6 +12,10 @@ capabilities:
 Use this skill to evaluate resumes, ATS packets, interview notes, employee
 records, or lifecycle touchpoints before they influence a People Profile.
 
+This skill produces an evidence matrix artifact. HR product logic may later
+reference that artifact from a profile update proposal, but the matrix itself is
+supporting material until reviewed.
+
 ## Screening Standard
 
 - Tie every positive or negative signal to source evidence.
