@@ -126,6 +126,21 @@ describe('aiworker local CLI', () => {
     }) as typeof fetch
   }
 
+  async function writeFakeCodexCommand(): Promise<void> {
+    const binDir = path.join(root, 'bin')
+    mkdirSync(binDir, { recursive: true })
+    const commandPath = path.join(binDir, 'codex')
+    await writeFile(commandPath, [
+      '#!/usr/bin/env bash',
+      'set -euo pipefail',
+      'cat >/dev/null',
+      'printf \'%s\\n\' \'{"type":"item.completed","item":{"type":"agent_message","text":"Done."}}\'',
+      '',
+    ].join('\n'))
+    await chmod(commandPath, 0o755)
+    process.env.PATH = `${binDir}:${process.env.PATH ?? ''}`
+  }
+
   async function updateScratchEntries(parentDir: string): Promise<string[]> {
     return (await readdir(parentDir)).filter(entry => entry.startsWith('.aiworker-update-') || entry.startsWith('.aiworker-next-'))
   }
@@ -247,6 +262,62 @@ describe('aiworker local CLI', () => {
     expect(output).toContain('workspace create|list|show')
     expect(output).toContain('session start|list|show')
     expect(output).not.toContain('run start')
+  })
+
+  it('materializes app-authored capability assets for the first session turn', async () => {
+    await writeFakeCodexCommand()
+
+    expect(await runCli(argv('app', 'install', path.resolve(import.meta.dir, '..', '..', 'aiworker-hr')))).toBe(0)
+    output = ''
+    expect(await runCli(argv('app', 'enable', 'aiworker-hr'))).toBe(0)
+    output = ''
+    expect(await runCli(argv('worker', 'create', '--id', 'hr-recruiting', '--name', 'HR Recruiting', '--soul', 'aiworker-hr'))).toBe(0)
+    output = ''
+    expect(await runCli(argv('workspace', 'create', '--name', 'Hiring', '--type', 'role-search', '--worker', 'hr-recruiting'))).toBe(0)
+    const workspace = (JSON.parse(output) as { workspace: { id: string, rootPath: string } }).workspace
+    output = ''
+
+    expect(await runCli(argv(
+      'session',
+      'start',
+      '--worker',
+      'hr-recruiting',
+      '--workspace',
+      workspace.id,
+      '--skill',
+      namespaceSoulAppCapabilityId('aiworker-hr', 'evidence-matrix'),
+      '--title',
+      'Evidence Matrix',
+      '--context',
+      'Synthetic source notes.',
+      '--input',
+      'Create the evidence matrix.',
+    ))).toBe(0)
+    const result = JSON.parse(output) as {
+      invocation: { metadataJson: Record<string, unknown> }
+      session: { id: string, metadataJson: Record<string, unknown> }
+    }
+
+    expect(result.session.metadataJson.capabilityPrompt).toMatchObject({
+      content: expect.stringContaining('Use AIWorker HR domain evidence'),
+      ref: './product/workflows/evidence-matrix/prompt.md',
+    })
+    expect(result.invocation.metadataJson.capabilityReviewRubric).toMatchObject({
+      content: expect.stringContaining('Evidence Matrix Review Rubric'),
+      ref: './product/workflows/evidence-matrix/review.md',
+    })
+    await expect(readFile(
+      path.join(workspace.rootPath, '.aiworker', 'sessions', result.session.id, 'context', 'capability', 'prompt.md'),
+      'utf8',
+    ))
+      .resolves
+      .toContain('Use AIWorker HR domain evidence')
+    await expect(readFile(
+      path.join(workspace.rootPath, '.aiworker', 'sessions', result.session.id, 'context', 'capability', 'review.md'),
+      'utf8',
+    ))
+      .resolves
+      .toContain('Evidence Matrix Review Rubric')
   })
 
   it('lists update and upgrade in the command index', async () => {

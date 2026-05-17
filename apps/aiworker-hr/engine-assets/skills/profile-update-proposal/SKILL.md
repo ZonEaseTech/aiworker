@@ -43,10 +43,12 @@ review:
 ...
 ```
 
-Keep review rationale, evidence commentary, and rejected claims outside this
-fenced block so product promotion can promote only the accepted profile state.
+Keep review rationale, evidence commentary, rejected claims, pending-review
+state, and requested promotion decisions outside this fenced block so product
+promotion can promote only the accepted profile state.
 
 The fenced draft must be internally consistent. If it includes accepted facts or
-is intended for `pass` / `warn` promotion, its `Review State` must describe that
-requested or approved promotion state. Do not leave `No approved profile
-revision yet` in a draft that otherwise contains accepted profile facts.
+is intended for `pass` / `warn` promotion, its `Review State` must describe the
+accepted state after approval, not the pending proposal request. Do not leave
+`No approved profile revision yet`, `promotion requested`, or `pending human
+review` in a draft that otherwise contains accepted profile facts.

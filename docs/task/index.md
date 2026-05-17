@@ -454,3 +454,8 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-129 Failed Codex turn can leave durable artifact files unregistered**](BUG-129.md) `P1`
 - [x] [**TODO-043 Make HR native skill artifact kinds first-class**](TODO-043.md) `P1`
 - [x] [**TODO-044 Materialize capability prompt and review content for external engines**](TODO-044.md) `P2`
+- [x] [**QA-036 HR native skill closure follow-up regression debug**](QA-036.md) `P0`
+- [x] [**BUG-130 CLI session start misses app-authored capability assets**](BUG-130.md) `P0`
+- [x] [**TODO-045 Clarify capability asset source refs for external engines**](TODO-045.md) `P2`
+- [x] [**BUG-131 Profile proposal README draft can carry pending-promotion language**](BUG-131.md) `P1`
+- [ ] [**TODO-046 Add a headless reviewed profile promotion command**](TODO-046.md) `P2`

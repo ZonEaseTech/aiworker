@@ -676,19 +676,19 @@ async function startSessionCommand(opts: { context?: string, input?: string, mod
   if (!workspace || workspace.workerId !== runtime.workerId)
     throw new Error(`workspace not found for ${runtime.workerId}: ${workspaceId}`)
   const skillId = requireText(opts.skill, 'skill')
-  const template = createHost(paths).requireCapabilityTemplateForWorker(runtime.workerId, skillId)
+  const host = createHost(paths)
+  const template = host.requireCapabilityTemplateForWorker(runtime.workerId, skillId)
+  const sessionMetadata = host.enrichTemplateMetadata(
+    runtime.workerId,
+    template.id,
+    cliEngineOverrideMetadata(opts),
+  )
   const session = await runtime.createSession({
     workspaceId,
     capabilityTemplateId: template.id,
     title: requireText(opts.title, 'title'),
     context: opts.context ?? '',
-    metadata: {
-      inputHints: template.inputHints,
-      outputKind: template.outputKind,
-      reviewRubric: template.reviewRubric,
-      skillName: template.name,
-      ...cliEngineOverrideMetadata(opts),
-    },
+    metadata: sessionMetadata,
   })
   const input = requireText(opts.input, 'input')
   printJson(await runtime.startTurn({
@@ -696,14 +696,15 @@ async function startSessionCommand(opts: { context?: string, input?: string, mod
     input,
     engineId: 'codex',
     engineCommand: 'codex',
-    metadata: {
-      inputHints: template.inputHints,
-      outputKind: template.outputKind,
-      reviewRubric: template.reviewRubric,
-      skillName: template.name,
-      executionMode: 'local-cli',
-      ...cliEngineOverrideMetadata(opts),
-    },
+    metadata: host.enrichTemplateMetadata(
+      runtime.workerId,
+      session.capabilityTemplateId,
+      {
+        ...(session.metadataJson ?? sessionMetadata),
+        executionMode: 'local-cli',
+        ...cliEngineOverrideMetadata(opts),
+      },
+    ),
   }))
 }
 

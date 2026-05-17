@@ -374,3 +374,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-343 HR native skill artifact boundary**](PLAN-343.md) `2026-05-17`
 - [x] [**PLAN-344 HR native skills README closure debug campaign**](PLAN-344.md) `2026-05-17`
 - [x] [**PLAN-345 HR native skill closure follow-ups**](PLAN-345.md) `2026-05-17`
+- [x] [**PLAN-346 HR native skill closure follow-up regression debug**](PLAN-346.md) `2026-05-17`

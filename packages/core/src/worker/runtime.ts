@@ -571,9 +571,9 @@ export class LocalWorkerRuntime {
     const capabilityPrompt = capabilityAsset(metadata.capabilityPrompt)
     const capabilityReviewRubric = capabilityAsset(metadata.capabilityReviewRubric)
     if (capabilityPrompt)
-      lines.push('', `Capability prompt asset: ${capabilityPrompt.ref}`, capabilityPrompt.content)
+      lines.push('', `Capability prompt source ref: ${capabilityPrompt.ref}`, 'Use the embedded content below; the source ref is not expected to exist in this workspace.', capabilityPrompt.content)
     if (capabilityReviewRubric)
-      lines.push('', `Capability review rubric asset: ${capabilityReviewRubric.ref}`, capabilityReviewRubric.content)
+      lines.push('', `Capability review rubric source ref: ${capabilityReviewRubric.ref}`, 'Use the embedded content below; the source ref is not expected to exist in this workspace.', capabilityReviewRubric.content)
     return lines.join('\n')
   }
 
@@ -618,8 +618,8 @@ export class LocalWorkerRuntime {
       `# ${name}`,
       '',
       'Use this capability in the current AIWorker session only.',
-      ...(capabilityPrompt ? ['', '## Capability Prompt', `Source: ${capabilityPrompt.ref}`, '', capabilityPrompt.content] : []),
-      ...(capabilityReviewRubric ? ['', '## Capability Review Rubric', `Source: ${capabilityReviewRubric.ref}`, '', capabilityReviewRubric.content] : []),
+      ...(capabilityPrompt ? ['', '## Capability Prompt', `Source ref: ${capabilityPrompt.ref}`, 'Use the embedded content below; this source ref is not expected to exist in the workspace.', '', capabilityPrompt.content] : []),
+      ...(capabilityReviewRubric ? ['', '## Capability Review Rubric', `Source ref: ${capabilityReviewRubric.ref}`, 'Use the embedded content below; this source ref is not expected to exist in the workspace.', '', capabilityReviewRubric.content] : []),
       '',
       '## Review Rubric',
       ...(rubric.length > 0 ? rubric.map(item => `- ${item}`) : ['- Separate facts, assumptions, risks, and next actions.']),

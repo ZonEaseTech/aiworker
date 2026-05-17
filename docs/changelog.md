@@ -1,5 +1,35 @@
 # AIWorker Changelog
 
+## 2026-05-17 [completed] QA-036 / BUG-130 / BUG-131 / PLAN-346 — HR native skill closure follow-up regression
+
+Ran another real Codex-backed HR native skill regression campaign from
+zero-state workspaces through artifact creation, failed-turn recovery, and
+reviewed README promotion.
+
+- Fixed first-turn `session start` metadata enrichment so app-authored
+  capability prompt/review assets materialize for the initial invocation, not
+  only continuation turns (`BUG-130`).
+- Clarified embedded capability source refs so external engines do not treat
+  `./product/workflows/...` app refs as missing workspace files (`TODO-045`).
+- Tightened HR profile proposal prompt/skill/review wording so promotable
+  `aiworker-profile-readme` drafts represent accepted post-approval profile
+  state, while pending review decisions stay outside the fence (`BUG-131`).
+- Verified real artifacts for `evidence-matrix`, `interview-brief`,
+  `hiring-risk`, and `profile-update-proposal`, including multi-turn role,
+  candidate, and profile sessions.
+- Promoted corrected profile proposal artifact
+  `95e7aaeb-35a9-43cb-a411-3ea4459072b6` into the accepted profile README with
+  review `c7e57663-fa06-4d34-9fcb-a495b9ee84b2` and workspace commit
+  `996a32a9e46c8061093b891a8d33db0be9a3294d`.
+- Verified deterministic failed-turn recovery keeps failed status visible while
+  indexing the recovered artifact and `needs_review` record.
+- Recorded `TODO-046` for a future headless reviewed profile promotion CLI
+  command.
+
+Verification passed: focused CLI/core/HR tests, CLI/core/HR typechecks, HR app
+validate, root lint, and real debug evidence under
+`/private/tmp/aiworker-hr-regression-20260517-131444`.
+
 ## 2026-05-17 [completed] BUG-129 / TODO-043 / TODO-044 / PLAN-345 — HR native skill closure follow-ups
 
 Closed the remaining HR native skill README closure follow-ups from the real

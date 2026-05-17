@@ -331,9 +331,10 @@ describe('LocalWorkerRuntime', () => {
       metadata: {},
     })
 
-    expect(prompts[0]).toContain('Capability prompt asset: ./product/workflows/interview-brief/prompt.md')
+    expect(prompts[0]).toContain('Capability prompt source ref: ./product/workflows/interview-brief/prompt.md')
+    expect(prompts[0]).toContain('the source ref is not expected to exist in this workspace')
     expect(prompts[0]).toContain('Create evidence-backed interviewer questions.')
-    expect(prompts[0]).toContain('Capability review rubric asset: ./product/workflows/interview-brief/review.md')
+    expect(prompts[0]).toContain('Capability review rubric source ref: ./product/workflows/interview-brief/review.md')
     expect(prompts[0]).toContain('Questions target missing signal.')
   })
 
