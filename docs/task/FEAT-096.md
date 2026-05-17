@@ -1,10 +1,11 @@
 # FEAT-096 HR profile patch review workbench
 
-- **status**: in_progress
+- **status**: completed
 - **priority**: P0
 - **owner**: codex
 - **createdAt**: 2026-05-18
 - **claimedAt**: 2026-05-18
+- **completedAt**: 2026-05-18
 - **plan**: PLAN-354
 - **relatesTo**: apps/web/src/worker/souls/hr/people-workbench, FEAT-095, REFACTOR-080, REFACTOR-081
 
@@ -42,3 +43,14 @@ versus proposed README state.
 
 - Covered by `PLAN-354`.
 
+## Completion Evidence
+
+- Added a Product-owned Profile Patch Review center view for whole-patch README
+  promotion decisions.
+- Moved full current/proposed markdown comparison out of the right panel.
+- Added section-level patch status to the Reading Room without turning it into
+  an action dashboard.
+- Reduced the right panel to a concise Next Step surface with no raw markdown
+  preview.
+- Covered the profile patch model and Worker Studio behavior with focused
+  tests.

@@ -896,18 +896,22 @@ describe('worker studio', () => {
     expect(within(hrDetails).getByText('Identity And Basics')).toBeTruthy()
     expect(within(hrDetails).getByText('Role Context And Responsibilities')).toBeTruthy()
     expect(within(hrDetails).getByText('Capabilities And Stack')).toBeTruthy()
+    expect(await within(hrDetails).findByText('Profile patch ready')).toBeTruthy()
+    expect(within(hrDetails).getByText('10 sections changed')).toBeTruthy()
+    expect(within(hrDetails).getByRole('button', { name: 'Review profile patch' })).toBeTruthy()
     expect(within(hrDetails).queryByText('Profile sources')).toBeNull()
-    expect(within(hrDetails).queryByText('Proposed Change')).toBeNull()
+    expect(within(hrDetails).queryByText('Profile Patch')).toBeNull()
     expect(within(hrDetails).queryByText('Review guardrails')).toBeNull()
     expect(within(hrDetails).queryByText('View focus')).toBeNull()
     expect(within(hrDetails).queryByText('Active view')).toBeNull()
     expect(screen.getByRole('button', { name: 'Expand Profile Workbench' })).toBeTruthy()
     expect(screen.getByLabelText('Collapsed Profile Workbench')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Open Proposed Change' }))
-    expect(await screen.findByText('Proposed Change')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Open Profile Patch' }))
+    expect(await screen.findByText('Profile Patch')).toBeTruthy()
     expect(screen.getByText('Next Profile Step')).toBeTruthy()
-    expect(await screen.findByText('Ready to approve')).toBeTruthy()
-    expect(screen.getAllByText('Reviewed profile summary.').length).toBeGreaterThan(0)
+    expect((await screen.findAllByText('Profile patch ready')).length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('button', { name: 'Review profile patch' }).length).toBeGreaterThan(0)
+    expect(screen.queryByTestId('hr-artifact-markdown-preview')).toBeNull()
     expect(screen.getByRole('button', { name: /Summarize profile/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: /Open Screen candidate session/ })).toBeTruthy()
     expect(screen.queryByText('Capability template (6)')).toBeNull()
@@ -926,14 +930,16 @@ describe('worker studio', () => {
 
     const hrDetails = await screen.findByLabelText('Current Profile Summary')
     const currentProfile = await within(hrDetails).findByTestId('hr-current-profile-summary')
-    fireEvent.click(screen.getByRole('button', { name: 'Open Proposed Change' }))
-    const proposedChange = await screen.findByTestId('hr-proposed-change')
 
     expect(within(currentProfile).getByText('Accepted profile summary.')).toBeTruthy()
-    expect(await within(proposedChange).findByText('Ready to approve')).toBeTruthy()
-    expect(within(proposedChange).getAllByText('Reviewed profile summary.').length).toBeGreaterThan(0)
+    fireEvent.click(within(hrDetails).getByRole('button', { name: 'Review profile patch' }))
+    const profilePatchReview = await screen.findByTestId('hr-profile-patch-review')
+    expect(await within(profilePatchReview).findByText('Profile Patch Review')).toBeTruthy()
+    expect(within(profilePatchReview).getAllByText('Current README').length).toBeGreaterThan(0)
+    expect(within(profilePatchReview).getAllByText('Proposed README').length).toBeGreaterThan(0)
+    expect((await within(profilePatchReview).findAllByText('Reviewed profile summary.')).length).toBeGreaterThan(0)
 
-    fireEvent.click(within(proposedChange).getByRole('button', { name: 'Approve Profile Revision' }))
+    fireEvent.click(within(profilePatchReview).getByRole('button', { name: 'Approve into README' }))
 
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith('/api/local/workspaces/workspace-1/profile-revisions', expect.objectContaining({
@@ -945,8 +951,9 @@ describe('worker studio', () => {
       body: expect.stringContaining('"profileMarkdown":"# Accepted Ada Profile\\n\\n## Current Profile Summary\\n\\nReviewed profile summary."'),
       method: 'POST',
     }))
+    const updatedProfile = await screen.findByTestId('hr-current-profile-summary')
     await waitFor(() => {
-      expect(within(currentProfile).getByText('Reviewed profile summary.')).toBeTruthy()
+      expect(within(updatedProfile).getByText('Reviewed profile summary.')).toBeTruthy()
     })
   })
 
@@ -954,15 +961,17 @@ describe('worker studio', () => {
     window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
     render(<WorkerStudio />)
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Open Proposed Change' }))
-    const proposedChange = await screen.findByTestId('hr-proposed-change')
+    const hrDetails = await screen.findByLabelText('Current Profile Summary')
+    fireEvent.click(await within(hrDetails).findByRole('button', { name: 'Review profile patch' }))
+    const profilePatchReview = await screen.findByTestId('hr-profile-patch-review')
 
-    expect(await within(proposedChange).findByText('Ready to approve')).toBeTruthy()
-    expect(within(proposedChange).getByText('Current accepted profile')).toBeTruthy()
-    expect(within(proposedChange).getByText('Accepted profile summary.')).toBeTruthy()
-    expect(within(proposedChange).getByText('Accepted draft')).toBeTruthy()
-    expect(within(proposedChange).getAllByText('Reviewed profile summary.').length).toBeGreaterThan(0)
-    expect((within(proposedChange).getByRole('button', { name: 'Approve Profile Revision' }) as HTMLButtonElement).disabled).toBe(false)
+    expect(await within(profilePatchReview).findByText('Profile patch ready')).toBeTruthy()
+    expect(within(profilePatchReview).getByText('Changed sections')).toBeTruthy()
+    expect(within(profilePatchReview).getAllByText('Current README').length).toBeGreaterThan(0)
+    expect(within(profilePatchReview).getByText('Accepted profile summary.')).toBeTruthy()
+    expect(within(profilePatchReview).getAllByText('Proposed README').length).toBeGreaterThan(0)
+    expect((await within(profilePatchReview).findAllByText('Reviewed profile summary.')).length).toBeGreaterThan(0)
+    expect((within(profilePatchReview).getByRole('button', { name: 'Approve into README' }) as HTMLButtonElement).disabled).toBe(false)
   })
 
   it('blocks profile revision approval when the artifact has no accepted README draft', async () => {
@@ -970,12 +979,13 @@ describe('worker studio', () => {
     window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
     render(<WorkerStudio />)
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Open Proposed Change' }))
-    const proposedChange = await screen.findByTestId('hr-proposed-change')
+    const hrDetails = await screen.findByLabelText('Current Profile Summary')
+    fireEvent.click(await within(hrDetails).findByRole('button', { name: 'Review profile patch' }))
+    const profilePatchReview = await screen.findByTestId('hr-profile-patch-review')
 
-    expect(await within(proposedChange).findByText('Revision blocked')).toBeTruthy()
-    expect(within(proposedChange).getByText(/aiworker-profile-readme/)).toBeTruthy()
-    expect((within(proposedChange).getByRole('button', { name: 'Approve Profile Revision' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(await within(profilePatchReview).findByText('Profile patch blocked')).toBeTruthy()
+    expect(within(profilePatchReview).getByText(/aiworker-profile-readme/)).toBeTruthy()
+    expect((within(profilePatchReview).getByRole('button', { name: 'Approve into README' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('keeps profile details stable while lifecycle list sections are expanded', async () => {
@@ -995,7 +1005,7 @@ describe('worker studio', () => {
       expect(screen.getByText('No profiles in this section.')).toBeTruthy()
     })
     const hrDetails = document.querySelector('.hr-profile-details') as HTMLElement
-    expect(within(hrDetails).queryByText('Proposed Change')).toBeNull()
+    expect(within(hrDetails).queryByText('Profile Patch')).toBeNull()
     expect(screen.getByText('Artifact evidence').parentElement?.textContent).toContain('1')
   })
 

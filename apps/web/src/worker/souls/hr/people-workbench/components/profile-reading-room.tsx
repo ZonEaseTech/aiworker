@@ -1,8 +1,11 @@
+import type { LocalArtifact } from '@zonease/aiworker-shared'
 import type { SoulProfilePreviewState } from '../../../types'
 import type { HrWorkbenchCopy } from '../copy'
+import type { HrProfileSectionId } from '../profile-readme'
+import type { ProfileRevisionReviewState, ProfileRevisionSectionChange } from '../revision-review'
 import type { PersonProfile } from '../types'
 
-import { BookOpenText } from 'lucide-react'
+import { BookOpenText, Play, ShieldAlert } from 'lucide-react'
 import { lazy, Suspense, useMemo } from 'react'
 import { WorkbenchSectionTitle } from '../../../common'
 import { getHrProfileSection, HR_PROFILE_SECTION_ORDER, parseHrProfileReadme } from '../profile-readme'
@@ -12,11 +15,24 @@ const MarkdownPreview = lazy(() => import('@zonease/aiworker-component/markdown-
 interface HrProfileReadingRoomProps {
   focusedProfile: PersonProfile | null
   labels: HrWorkbenchCopy
+  patchArtifact: LocalArtifact | null
   profilePreview: SoulProfilePreviewState
+  profileRevisionReview: ProfileRevisionReviewState
+  onReviewPatch: () => void
+  onSectionAction: (sectionId: HrProfileSectionId) => void
 }
 
-export function HrProfileReadingRoom({ focusedProfile, labels, profilePreview }: HrProfileReadingRoomProps) {
+export function HrProfileReadingRoom({
+  focusedProfile,
+  labels,
+  patchArtifact,
+  profilePreview,
+  profileRevisionReview,
+  onReviewPatch,
+  onSectionAction,
+}: HrProfileReadingRoomProps) {
   const profilePreviewMatchesProfile = Boolean(focusedProfile && profilePreview.workspaceId === focusedProfile.id)
+  const changedSectionById = useMemo(() => new Map(profileRevisionReview.changedSections.map(section => [section.id, section])), [profileRevisionReview.changedSections])
   const parsed = useMemo(() => {
     if (!profilePreviewMatchesProfile || profilePreview.loading || profilePreview.error)
       return null
@@ -42,14 +58,34 @@ export function HrProfileReadingRoom({ focusedProfile, labels, profilePreview }:
         title={parsed.title ?? focusedProfile?.name ?? labels.profileDetailsTitle}
         detail={focusedProfile ? labels.profileReadingRoomDetail(focusedProfile.name) : labels.profileReadingRoomFallback}
       />
+      <ProfilePatchStrip
+        artifact={patchArtifact}
+        labels={labels}
+        review={profileRevisionReview}
+        onReviewPatch={onReviewPatch}
+      />
       <section className="hr-reading-summary">
-        <h2>{labels.profileDetailsTitle}</h2>
+        <ReadingSectionHeading
+          labels={labels}
+          sectionId="currentProfileSummary"
+          title={labels.profileDetailsTitle}
+          change={changedSectionById.get('currentProfileSummary') ?? null}
+          onReviewPatch={onReviewPatch}
+          onSectionAction={onSectionAction}
+        />
         <MarkdownSection content={summary?.body || parsed.intro} empty={labels.currentProfileEmpty} />
       </section>
       <div className="hr-reading-section-grid">
         {primarySections.map(section => (
           <section key={section.id} className={`hr-reading-section ${section.id}`}>
-            <h3>{section.title}</h3>
+            <ReadingSectionHeading
+              labels={labels}
+              sectionId={section.id}
+              title={section.title}
+              change={changedSectionById.get(section.id) ?? null}
+              onReviewPatch={onReviewPatch}
+              onSectionAction={onSectionAction}
+            />
             <MarkdownSection content={getHrProfileSection(parsed, section.id)?.body} empty={labels.baseSectionEmpty} />
           </section>
         ))}
@@ -68,6 +104,85 @@ export function HrProfileReadingRoom({ focusedProfile, labels, profilePreview }:
           : null}
       </div>
     </article>
+  )
+}
+
+function ProfilePatchStrip({
+  artifact,
+  labels,
+  review,
+  onReviewPatch,
+}: {
+  artifact: LocalArtifact | null
+  labels: HrWorkbenchCopy
+  review: ProfileRevisionReviewState
+  onReviewPatch: () => void
+}) {
+  if (!artifact || review.status === 'empty' || review.status === 'loading')
+    return null
+
+  const ready = review.status === 'ready'
+  return (
+    <section className={`hr-profile-patch-strip ${review.status}`} aria-label={ready ? labels.profilePatchReadyTitle : labels.profilePatchBlockedTitle}>
+      <span className="hr-profile-patch-strip-icon" aria-hidden="true">
+        {ready ? <BookOpenText size={16} /> : <ShieldAlert size={16} />}
+      </span>
+      <span>
+        <strong>{ready ? labels.profilePatchReadyTitle : labels.profilePatchBlockedTitle}</strong>
+        <small>{ready ? labels.profilePatchChangedSections(review.changedSectionCount) : labels.profilePatchBlockers(review.blockerCount || review.issues.length)}</small>
+      </span>
+      <span className="hr-profile-patch-strip-source">{ready ? labels.profilePatchStripDetail(artifact.title) : labels.profilePatchBlockedStripDetail(artifact.title)}</span>
+      <button type="button" className="secondary" onClick={onReviewPatch}>
+        {labels.reviewProfilePatch}
+      </button>
+    </section>
+  )
+}
+
+function ReadingSectionHeading({
+  change,
+  labels,
+  sectionId,
+  title,
+  onReviewPatch,
+  onSectionAction,
+}: {
+  change: ProfileRevisionSectionChange | null
+  labels: HrWorkbenchCopy
+  sectionId: HrProfileSectionId
+  title: string
+  onReviewPatch: () => void
+  onSectionAction: (sectionId: HrProfileSectionId) => void
+}) {
+  const statusLabel = change?.status === 'added' ? labels.profilePatchAddedLabel : labels.profilePatchChangedLabel
+  return (
+    <div className="hr-reading-section-heading">
+      <h3>{title}</h3>
+      <div className="hr-reading-section-heading-actions">
+        {change
+          ? (
+              <button
+                type="button"
+                className={`hr-section-patch-badge ${change.status}`}
+                aria-label={labels.profilePatchSectionBadge(title, statusLabel)}
+                title={labels.reviewProfilePatch}
+                onClick={onReviewPatch}
+              >
+                <span aria-hidden="true">{change.status === 'added' ? '+' : '~'}</span>
+              </button>
+            )
+          : null}
+        <button
+          type="button"
+          className="hr-section-run-button"
+          aria-label={labels.profilePatchSectionAction(title)}
+          title={labels.runSectionProposal}
+          onClick={() => onSectionAction(sectionId)}
+        >
+          <Play aria-hidden="true" size={12} />
+        </button>
+      </div>
+    </div>
   )
 }
 

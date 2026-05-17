@@ -208,7 +208,7 @@ describe('hr people workbench model', () => {
     expect(buildProfileListSections(profiles, labels).map(section => section.label)).toEqual(['Candidates', 'Employees', 'Alumni'])
     expect(labels.profileBoardTitle).toBe('People Profiles')
     expect(labels.profileDetailsTitle).toBe('Current Profile Summary')
-    expect(labels.artifactPreviewTitle).toBe('Proposed Change')
+    expect(labels.artifactPreviewTitle).toBe('Profile Patch')
   })
 
   it('parses HR profile README sections without losing unknown notes', () => {
@@ -281,6 +281,51 @@ describe('hr people workbench model', () => {
     expect(review.proposedMarkdown).not.toContain('Proposal notes')
     expect(review.currentSummary).toContain('Current accepted summary.')
     expect(review.proposedSummary).toContain('Proposed accepted summary.')
+    expect(review.changedSectionCount).toBe(1)
+    expect(review.blockerCount).toBe(0)
+    expect(review.changedSections).toEqual([
+      {
+        currentMarkdown: 'Current accepted summary.',
+        id: 'currentProfileSummary',
+        proposedMarkdown: 'Proposed accepted summary.',
+        status: 'changed',
+        title: 'Current Profile Summary',
+      },
+    ])
+  })
+
+  it('marks added profile revision sections separately from changed sections', () => {
+    const review = buildProfileRevisionReview({
+      artifactContent: [
+        '```aiworker-profile-readme',
+        '# Ada Profile',
+        '',
+        '## Current Profile Summary',
+        '',
+        'Current accepted summary.',
+        '',
+        '## Identity And Basics',
+        '',
+        '- Candidate: Ada Chen',
+        '```',
+      ].join('\n'),
+      artifactLoading: false,
+      currentProfileContent: [
+        '# Ada Profile',
+        '',
+        '## Current Profile Summary',
+        '',
+        'Current accepted summary.',
+      ].join('\n'),
+      currentProfileLoading: false,
+      hasArtifact: true,
+    })
+
+    expect(review.status).toBe('ready')
+    expect(review.changedSectionCount).toBe(1)
+    expect(review.changedSections.map(section => [section.id, section.status])).toEqual([
+      ['identityAndBasics', 'added'],
+    ])
   })
 
   it('blocks profile revision review when the artifact is not promotable', () => {
@@ -310,8 +355,11 @@ describe('hr people workbench model', () => {
     })
 
     expect(missingFence.status).toBe('blocked')
+    expect(missingFence.changedSectionCount).toBe(0)
+    expect(missingFence.blockerCount).toBe(1)
     expect(missingFence.issues[0]).toContain('aiworker-profile-readme')
     expect(pending.status).toBe('blocked')
+    expect(pending.changedSections).toEqual([])
     expect(pending.issues.join(' ')).toContain('ready for HR review')
   })
 })

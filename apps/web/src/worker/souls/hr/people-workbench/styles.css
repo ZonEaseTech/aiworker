@@ -106,12 +106,12 @@
 }
 
 .hr-people-layout {
-  --hr-profile-list-track: minmax(220px, 0.28fr);
-  --hr-profile-tools-track: minmax(336px, 0.34fr);
+  --hr-profile-list-track: minmax(220px, 345px);
+  --hr-profile-tools-track: minmax(320px, 360px);
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: var(--hr-profile-list-track) minmax(560px, 1fr) var(--hr-profile-tools-track);
+  grid-template-columns: var(--hr-profile-list-track) minmax(0, 1fr) var(--hr-profile-tools-track);
   gap: 14px;
   align-items: stretch;
   transition: grid-template-columns var(--motion-slow) var(--motion-ease-out), gap var(--motion-base) var(--motion-ease);
@@ -137,6 +137,7 @@
 
 .hr-profile-list-panel,
 .hr-profile-details,
+.hr-profile-patch-review,
 .hr-profile-tools-panel,
 .hr-profile-tools-rail,
 .hr-profile-selection-empty {
@@ -159,6 +160,7 @@
 }
 
 .hr-profile-details,
+.hr-profile-patch-review,
 .hr-profile-selection-empty {
   grid-column: 2;
 }
@@ -178,6 +180,7 @@
 .hr-profile-list-scroll,
 .hr-profile-details-scroll,
 .hr-profile-tools-scroll {
+  flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   padding-right: 2px;
@@ -541,27 +544,148 @@
 }
 
 .hr-reading-section-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: 12px;
-  align-items: start;
 }
 
-.hr-reading-summary h2,
-.hr-reading-section h3,
+.hr-reading-section-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.hr-reading-section-heading h3,
 .hr-reading-unknown-section h4 {
-  margin: 0 0 10px;
+  margin: 0;
   color: var(--text-strong);
   font-size: 14px;
   line-height: 1.3;
 }
 
+.hr-reading-section-heading-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hr-section-patch-badge,
+.hr-section-run-button {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--bg);
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.hr-section-patch-badge.added {
+  border-color: var(--green-border);
+  background: var(--green-bg);
+  color: var(--green);
+}
+
+.hr-section-patch-badge.changed {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  color: var(--accent);
+}
+
+.hr-section-run-button {
+  opacity: 0;
+  transform: translateX(3px);
+  transition: opacity var(--motion-base) var(--motion-ease), transform var(--motion-base) var(--motion-ease), border-color var(--motion-base) var(--motion-ease);
+}
+
+.hr-reading-summary:hover .hr-section-run-button,
+.hr-reading-section:hover .hr-section-run-button,
+.hr-section-run-button:focus-visible {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.hr-section-run-button:hover,
+.hr-section-run-button:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.hr-profile-patch-strip {
+  display: grid;
+  grid-template-columns: auto minmax(150px, auto) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+}
+
+.hr-profile-patch-strip.ready {
+  border-color: var(--green-border);
+  background: var(--green-bg);
+}
+
+.hr-profile-patch-strip.blocked,
+.hr-profile-patch-strip.error {
+  border-color: var(--red-border);
+  background: var(--red-bg);
+}
+
+.hr-profile-patch-strip-icon {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--bg);
+  color: var(--text-muted);
+}
+
+.hr-profile-patch-strip strong,
+.hr-profile-patch-strip small {
+  display: block;
+}
+
+.hr-profile-patch-strip strong {
+  color: var(--text-strong);
+  font-size: 13px;
+}
+
+.hr-profile-patch-strip small,
+.hr-profile-patch-strip-source {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hr-profile-patch-strip button {
+  min-height: 30px;
+  border-radius: var(--radius-pill);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .hr-reading-summary .hr-reading-markdown {
-  min-height: 220px;
+  min-height: 0;
 }
 
 .hr-reading-section .hr-reading-markdown {
-  min-height: 118px;
+  min-height: 0;
 }
 
 .hr-reading-markdown {
@@ -743,7 +867,7 @@
 }
 
 .hr-artifact-preview-card {
-  min-height: 320px;
+  min-height: 0;
 }
 
 .hr-artifact-preview-name {
@@ -780,11 +904,11 @@
 .hr-revision-status span {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 10px;
 }
 
 .hr-revision-status strong {
+  flex: 1 1 auto;
   color: var(--text-strong);
   font-size: 13px;
 }
@@ -802,6 +926,223 @@
   gap: 5px;
   margin: 0;
   padding-left: 16px;
+}
+
+.hr-profile-patch-chip-list {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.hr-profile-patch-chip {
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 7px 5px 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--bg);
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.hr-profile-patch-chip .hr-section-patch-badge {
+  width: 18px;
+  height: 18px;
+  font-size: 10px;
+}
+
+.hr-profile-patch-chip small {
+  color: var(--text-muted);
+}
+
+.hr-profile-patch-review {
+  min-width: 0;
+}
+
+.hr-profile-patch-status {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+}
+
+.hr-profile-patch-status.ready {
+  border-color: var(--green-border);
+  background: var(--green-bg);
+  color: var(--green);
+}
+
+.hr-profile-patch-status.blocked,
+.hr-profile-patch-status.error {
+  border-color: var(--red-border);
+  background: var(--red-bg);
+  color: var(--red);
+}
+
+.hr-profile-patch-status strong,
+.hr-profile-patch-status small {
+  display: block;
+}
+
+.hr-profile-patch-status strong {
+  color: var(--text-strong);
+  font-size: 14px;
+}
+
+.hr-profile-patch-status small {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.hr-profile-patch-issues {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 12px 12px 12px 28px;
+  border: 1px solid var(--red-border);
+  border-radius: var(--radius);
+  background: var(--red-bg);
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.hr-profile-patch-nav {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+}
+
+.hr-profile-patch-nav strong {
+  color: var(--text-strong);
+  font-size: 13px;
+}
+
+.hr-profile-patch-nav div {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.hr-profile-patch-nav button {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px 5px 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--bg);
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.hr-profile-patch-section-list {
+  min-height: 0;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.hr-profile-patch-section {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.hr-profile-patch-section header {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 10px;
+}
+
+.hr-profile-patch-section header strong,
+.hr-profile-patch-section header small {
+  display: block;
+}
+
+.hr-profile-patch-section header strong {
+  color: var(--text-strong);
+  font-size: 14px;
+}
+
+.hr-profile-patch-section header small {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.hr-profile-patch-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.hr-profile-patch-column {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hr-profile-patch-column h3 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: 13px;
+}
+
+.hr-profile-patch-markdown {
+  min-height: 130px;
+  max-height: 360px;
+}
+
+.hr-profile-patch-empty {
+  min-height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.hr-profile-patch-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.hr-profile-patch-actions button {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: var(--radius-pill);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .hr-revision-comparison {
@@ -1056,6 +1397,12 @@
   white-space: nowrap;
 }
 
+.hr-action-list-more {
+  padding: 4px 2px 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
 .hr-task-composer {
   flex: 0 0 auto;
   display: flex;
@@ -1113,6 +1460,12 @@
   white-space: nowrap;
 }
 
+.hr-profile-promote-button {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+}
+
 @media (max-width: 1280px) {
   .hr-people-header {
     min-height: 0;
@@ -1154,6 +1507,7 @@
 
   .hr-profile-list-panel,
   .hr-profile-details,
+  .hr-profile-patch-review,
   .hr-profile-tools-panel,
   .hr-profile-tools-rail {
     min-height: 360px;
@@ -1166,6 +1520,12 @@
   }
 
   .hr-revision-comparison {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hr-profile-patch-strip,
+  .hr-profile-patch-nav,
+  .hr-profile-patch-columns {
     grid-template-columns: minmax(0, 1fr);
   }
 

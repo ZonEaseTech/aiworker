@@ -1,9 +1,10 @@
 # PLAN-354 HR profile patch review workbench
 
-- **status**: implementing
+- **status**: completed
 - **owner**: codex
 - **createdAt**: 2026-05-18
 - **approvedAt**: 2026-05-18
+- **completedAt**: 2026-05-18
 - **relatedTask**: FEAT-096
 
 ## Current State
@@ -67,6 +68,7 @@ Refactor the HR workbench around a Profile Patch Review model:
 
 - `bun run --filter '@zonease/aiworker-web' test src/worker/souls/hr/people-workbench/model.test.ts`
 - `bun run --filter '@zonease/aiworker-web' test src/worker/__tests__/worker-studio.test.tsx`
+- `bun run --filter '@zonease/aiworker-web' lint`
 - `bun run --filter '@zonease/aiworker-web' typecheck`
 - `bun run --filter '@zonease/aiworker-web' build`
 - Browser smoke against the local HR workspace URL for:
@@ -77,3 +79,14 @@ Refactor the HR workbench around a Profile Patch Review model:
 - `bun run crg:update`
 - `bun run crg:review`
 
+## Completion Notes
+
+- `buildProfileRevisionReview` now returns section-aware patch metadata for
+  changed and newly added HR README sections.
+- The Reading Room now exposes a slim patch strip and section action aliases,
+  while detailed patch comparison opens in a center-column review workspace.
+- The right panel no longer renders proposal markdown; it now surfaces patch
+  status, a primary review action, limited run actions, source summaries and the
+  proposal composer.
+- Browser smoke covered desktop Reading Room, Profile Patch Review, right panel
+  collapse/width behavior, blocked patch messaging and a mobile viewport.

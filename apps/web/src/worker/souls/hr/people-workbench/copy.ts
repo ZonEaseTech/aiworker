@@ -17,11 +17,14 @@ export interface HrWorkbenchCopy {
   artifactTargetLabel: string
   approveProfileRevision: string
   approvingProfileRevision: string
+  backToReadingRoom: string
   baseSectionEmpty: string
+  changedSectionsTitle: string
   collapseProfileTools: string
   commandDetail: (profileName: string, moment: string) => string
   contextLabel: string
   contextPlaceholder: string
+  currentReadmeTitle: string
   currentProfileEmpty: string
   currentProfileError: string
   currentProfileLoading: string
@@ -41,6 +44,7 @@ export interface HrWorkbenchCopy {
   lifecycleFilterLabel: string
   lifecycleFilters: Record<LifecycleFilter, string>
   lifecycleLabels: Record<PersonLifecycle, string>
+  limitedActionsHidden: (count: number) => string
   memoryCandidates: string
   metrics: (profiles: number, artifacts: number, lessons: number) => string[]
   metricsLabel: string
@@ -81,6 +85,19 @@ export interface HrWorkbenchCopy {
   profileDetailsTitle: string
   profileReadingRoomDetail: (profileName: string) => string
   profileReadingRoomFallback: string
+  profilePatchAddedLabel: string
+  profilePatchBlockedTitle: string
+  profilePatchBlockedStripDetail: (artifactTitle: string) => string
+  profilePatchBlockers: (count: number) => string
+  profilePatchChangedLabel: string
+  profilePatchChangedSections: (count: number) => string
+  profilePatchNoChanges: string
+  profilePatchReadyTitle: string
+  profilePatchReviewDetail: (artifactTitle: string) => string
+  profilePatchReviewTitle: string
+  profilePatchSectionAction: (sectionTitle: string) => string
+  profilePatchSectionBadge: (sectionTitle: string, statusLabel: string) => string
+  profilePatchStripDetail: (artifactTitle: string) => string
   profileSelectionBody: string
   profileSelectionTitle: string
   profileBoardDetail: (count: number) => string
@@ -94,6 +111,7 @@ export interface HrWorkbenchCopy {
   recentSessionsTitle: string
   proposalComposerDetail: string
   proposalComposerTitle: string
+  proposedReadmeTitle: string
   promoteProfileRevisionHint: string
   proposalOnly: string
   recommended: string
@@ -104,7 +122,9 @@ export interface HrWorkbenchCopy {
   revisionDraftTitle: string
   revisionReady: string
   revisionStatusTitle: string
+  reviewProfilePatch: string
   reviewStatus: (state: ReviewDisplayState) => string
+  runSectionProposal: string
   selectProfileFirst: string
   sessionLoops: string
   showProfileList: string
@@ -144,15 +164,18 @@ const enHrCopy: HrWorkbenchCopy = {
   artifactPreviewEmpty: 'No proposed change yet.',
   artifactPreviewError: 'Proposed change preview is unavailable.',
   artifactPreviewLoading: 'Loading proposed change...',
-  artifactPreviewTitle: 'Proposed Change',
+  artifactPreviewTitle: 'Profile Patch',
   artifactTargetLabel: 'Artifact proposal target',
-  approveProfileRevision: 'Approve Profile Revision',
-  approvingProfileRevision: 'Approving Profile Revision',
+  approveProfileRevision: 'Approve into README',
+  approvingProfileRevision: 'Approving README patch',
+  backToReadingRoom: 'Back to Reading Room',
   baseSectionEmpty: 'No accepted content in this section yet.',
+  changedSectionsTitle: 'Changed sections',
   collapseProfileTools: 'Collapse Profile Workbench',
   commandDetail: (profileName, moment) => `${profileName}: ${moment}. Keep evidence, next step, review, and memory status connected.`,
   contextLabel: 'Context for the next profile proposal',
   contextPlaceholder: 'Describe this person, lifecycle moment, evidence, open questions, or the next HR artifact...',
+  currentReadmeTitle: 'Current README',
   currentProfileEmpty: 'No accepted profile summary yet. Approve a proposed change to update README.md.',
   currentProfileError: 'Current profile summary is unavailable.',
   currentProfileLoading: 'Loading current profile summary...',
@@ -182,6 +205,7 @@ const enHrCopy: HrWorkbenchCopy = {
     candidate: 'Candidate',
     employee: 'Employee',
   },
+  limitedActionsHidden: count => `+${count} more actions`,
   memoryCandidates: 'memory candidates',
   metrics: (profiles, artifacts, lessons) => [`${profiles} profiles`, `${artifacts} artifacts`, `${lessons} lessons`],
   metricsLabel: 'HR workbench metrics',
@@ -212,7 +236,7 @@ const enHrCopy: HrWorkbenchCopy = {
   openSession: sessionTitle => `Open ${sessionTitle} session`,
   openLatestSession: 'Open latest session',
   openProfileSources: 'Open Profile Sources',
-  openProposedChange: 'Open Proposed Change',
+  openProposedChange: 'Open Profile Patch',
   openReviewGuardrails: 'Open Review Guardrails',
   openProfile: profileName => `Open ${profileName} profile`,
   openSessionTools: 'Open Session Tools',
@@ -222,6 +246,19 @@ const enHrCopy: HrWorkbenchCopy = {
   profileDetailsTitle: 'Current Profile Summary',
   profileReadingRoomDetail: profileName => `${profileName} accepted README profile baseline.`,
   profileReadingRoomFallback: 'Showing the accepted README as written.',
+  profilePatchAddedLabel: 'Added',
+  profilePatchBlockedTitle: 'Profile patch blocked',
+  profilePatchBlockedStripDetail: artifactTitle => `${artifactTitle} needs an accepted README draft before it can be promoted.`,
+  profilePatchBlockers: count => `${count} blocker${count === 1 ? '' : 's'}`,
+  profilePatchChangedLabel: 'Changed',
+  profilePatchChangedSections: count => `${count} section${count === 1 ? '' : 's'} changed`,
+  profilePatchNoChanges: 'No README section changes detected.',
+  profilePatchReadyTitle: 'Profile patch ready',
+  profilePatchReviewDetail: artifactTitle => `Review ${artifactTitle} as a README patch before accepting it.`,
+  profilePatchReviewTitle: 'Profile Patch Review',
+  profilePatchSectionAction: sectionTitle => `Run profile action for ${sectionTitle}`,
+  profilePatchSectionBadge: (sectionTitle, statusLabel) => `${sectionTitle} patch: ${statusLabel}`,
+  profilePatchStripDetail: artifactTitle => `${artifactTitle} can be reviewed as a README patch.`,
   profileSelectionBody: 'Pick a profile from the list to read its accepted README, review the latest proposal, or prepare one focused next step.',
   profileSelectionTitle: 'Select a people profile',
   profileBoardDetail: count => `${count} visible profiles`,
@@ -235,6 +272,7 @@ const enHrCopy: HrWorkbenchCopy = {
   recentSessionsTitle: 'Recent Sessions',
   proposalComposerDetail: 'Agent output remains a reviewable proposal tied to this profile.',
   proposalComposerTitle: 'Proposal Composer',
+  proposedReadmeTitle: 'Proposed README',
   promoteProfileRevisionHint: 'Review accepts this proposal into README.md and records a git revision.',
   proposalOnly: 'Agent output remains a proposal until review.',
   recommended: 'Recommended',
@@ -250,6 +288,7 @@ const enHrCopy: HrWorkbenchCopy = {
   revisionDraftTitle: 'Accepted draft',
   revisionReady: 'Ready to approve',
   revisionStatusTitle: 'Revision status',
+  reviewProfilePatch: 'Review profile patch',
   reviewStatus: (state) => {
     if (state === 'pass')
       return 'reviewed'
@@ -259,6 +298,7 @@ const enHrCopy: HrWorkbenchCopy = {
       return 'review failed'
     return 'needs review'
   },
+  runSectionProposal: 'Run section proposal',
   selectProfileFirst: 'Select a profile card before generating a proposal.',
   sessionLoops: 'session loops',
   showProfileList: 'Show Profile List',
@@ -311,15 +351,18 @@ const zhHrCopy: HrWorkbenchCopy = {
   artifactPreviewEmpty: '还没有可预览的变更提案。',
   artifactPreviewError: '变更提案预览暂不可用。',
   artifactPreviewLoading: '正在加载变更提案...',
-  artifactPreviewTitle: '变更提案',
+  artifactPreviewTitle: '档案 Patch',
   artifactTargetLabel: '产物提案目标',
-  approveProfileRevision: '批准档案修订',
-  approvingProfileRevision: '正在批准档案修订',
+  approveProfileRevision: '写入 README',
+  approvingProfileRevision: '正在写入 README patch',
+  backToReadingRoom: '返回 Reading Room',
   baseSectionEmpty: '这个章节还没有已接受内容。',
+  changedSectionsTitle: '变更章节',
   collapseProfileTools: '收起档案工作台',
   commandDetail: (profileName, moment) => `${profileName}：${moment}。证据、下一步、review 和 memory 状态保持在同一个闭环里。`,
   contextLabel: '下一份人员提案上下文',
   contextPlaceholder: '描述这个人、生命周期节点、证据、开放问题，或下一份 HR 产物目标...',
+  currentReadmeTitle: '当前 README',
   currentProfileEmpty: '还没有已接受的档案摘要。批准一份变更提案后会更新 README.md。',
   currentProfileError: '当前档案摘要暂不可用。',
   currentProfileLoading: '正在加载当前档案摘要...',
@@ -349,6 +392,7 @@ const zhHrCopy: HrWorkbenchCopy = {
     candidate: '候选人',
     employee: '在职',
   },
+  limitedActionsHidden: count => `另有 ${count} 个动作`,
   memoryCandidates: 'memory 候选',
   metrics: (profiles, artifacts, lessons) => [`${profiles} 个人员档案`, `${artifacts} 个产物`, `${lessons} 条 lesson`],
   metricsLabel: 'HR 工作台指标',
@@ -379,7 +423,7 @@ const zhHrCopy: HrWorkbenchCopy = {
   openSession: sessionTitle => `打开 ${sessionTitle} session`,
   openLatestSession: '打开最近 session',
   openProfileSources: '打开档案来源',
-  openProposedChange: '打开变更提案',
+  openProposedChange: '打开档案 Patch',
   openReviewGuardrails: '打开 Review 护栏',
   openProfile: profileName => `打开 ${profileName} 档案`,
   openSessionTools: '打开 Session 工具',
@@ -389,6 +433,19 @@ const zhHrCopy: HrWorkbenchCopy = {
   profileDetailsTitle: '当前档案摘要',
   profileReadingRoomDetail: profileName => `${profileName} 的已接受 README 档案基线。`,
   profileReadingRoomFallback: '按原始 README 展示已接受档案。',
+  profilePatchAddedLabel: '新增',
+  profilePatchBlockedTitle: '档案 patch 被阻止',
+  profilePatchBlockedStripDetail: artifactTitle => `${artifactTitle} 还缺少可接受的 README 草案，暂不能提升。`,
+  profilePatchBlockers: count => `${count} 个阻断项`,
+  profilePatchChangedLabel: '变更',
+  profilePatchChangedSections: count => `${count} 个章节变更`,
+  profilePatchNoChanges: '没有检测到 README 章节变更。',
+  profilePatchReadyTitle: '档案 patch 可 review',
+  profilePatchReviewDetail: artifactTitle => `先把 ${artifactTitle} 作为 README patch 复核，再决定是否接受。`,
+  profilePatchReviewTitle: '档案 Patch Review',
+  profilePatchSectionAction: sectionTitle => `为 ${sectionTitle} 运行档案动作`,
+  profilePatchSectionBadge: (sectionTitle, statusLabel) => `${sectionTitle} patch：${statusLabel}`,
+  profilePatchStripDetail: artifactTitle => `${artifactTitle} 可作为 README patch 复核。`,
   profileSelectionBody: '从左侧选择一个人员档案后，再阅读已接受 README、检查最近提案，或准备一个聚焦的下一步动作。',
   profileSelectionTitle: '选择一个人员档案',
   profileBoardDetail: count => `${count} 个可见档案`,
@@ -402,6 +459,7 @@ const zhHrCopy: HrWorkbenchCopy = {
   recentSessionsTitle: 'Recent Sessions',
   proposalComposerDetail: 'Agent 输出只作为绑定此档案的可 review 提案。',
   proposalComposerTitle: '产物提案',
+  proposedReadmeTitle: '拟写入 README',
   promoteProfileRevisionHint: 'Review 通过后会把这份提案写入 README.md，并记录 git 修订。',
   proposalOnly: 'Agent 输出在 review 前都只是提案。',
   recommended: '建议',
@@ -417,6 +475,7 @@ const zhHrCopy: HrWorkbenchCopy = {
   revisionDraftTitle: '待接受草案',
   revisionReady: '可批准',
   revisionStatusTitle: '修订状态',
+  reviewProfilePatch: 'Review 档案 patch',
   reviewStatus: (state) => {
     if (state === 'pass')
       return '已 review'
@@ -426,6 +485,7 @@ const zhHrCopy: HrWorkbenchCopy = {
       return 'review 未通过'
     return '待 review'
   },
+  runSectionProposal: '运行章节提案',
   selectProfileFirst: '先选择一个人员档案卡片，再生成提案。',
   sessionLoops: 'session 循环',
   showProfileList: '显示 Profile List',

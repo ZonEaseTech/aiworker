@@ -1,6 +1,8 @@
+import type { SoulWorkbenchAction } from '@zonease/aiworker-shared'
 import type { LocalSoulAppWorkbenchAction } from '../../../../features/local-workspace/api/types'
 import type { SoulWorkbenchRendererProps } from '../../types'
 import type { HrProfileToolsRailTarget } from './components/profile-tools-rail'
+import type { HrProfileSectionId } from './profile-readme'
 import type { ProfileListSectionId } from './types'
 
 import { IconButton } from '@zonease/aiworker-component'
@@ -8,6 +10,7 @@ import { PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Plus, R
 import { useMemo, useState } from 'react'
 import { HrProfileDetails } from './components/profile-details'
 import { HrProfileList } from './components/profile-list'
+import { HrProfilePatchReview } from './components/profile-patch-review'
 import { HrProfileToolsPanel } from './components/profile-tools-panel'
 import { HrProfileToolsRail } from './components/profile-tools-rail'
 import { getHrPeopleWorkbenchCopy } from './copy'
@@ -17,6 +20,7 @@ import {
   buildProfileTimeline,
   orderActionsForProfile,
 } from './model'
+import { buildProfileRevisionReview } from './revision-review'
 
 export function HrPeopleWorkbench({
   context: {
@@ -57,6 +61,7 @@ export function HrPeopleWorkbench({
   const labels = getHrPeopleWorkbenchCopy(locale)
   const [profileQuery, setProfileQuery] = useState('')
   const [profileListVisible, setProfileListVisible] = useState(true)
+  const [profilePatchReviewWorkspaceId, setProfilePatchReviewWorkspaceId] = useState<string | null>(null)
   const [profileToolsExpanded, setProfileToolsExpanded] = useState(false)
   const [profileToolsFocusTarget, setProfileToolsFocusTarget] = useState<HrProfileToolsRailTarget | null>(null)
   const [collapsedSectionIds, setCollapsedSectionIds] = useState<ReadonlySet<ProfileListSectionId>>(() => new Set(['employee', 'alumni']))
@@ -79,6 +84,30 @@ export function HrPeopleWorkbench({
   const reviewGuardrails = locale === 'zh-CN' ? labels.reviewGuardrails : workbench.reviewChecklist.slice(0, 4)
   const activeActions = orderActionsForProfile(workbench.actions, focusedProfile)
   const timeline = focusedProfile ? buildProfileTimeline(focusedProfile, labels, locale) : []
+  const profilePatchReviewOpen = Boolean(focusedProfile && profilePatchReviewWorkspaceId === focusedProfile.id)
+  const previewMatchesArtifact = Boolean(selectedArtifact && artifactPreview.artifactId === selectedArtifact.id)
+  const profilePreviewMatchesProfile = Boolean(focusedProfile && profilePreview.workspaceId === focusedProfile.id)
+  const profileRevisionReview = useMemo(() => buildProfileRevisionReview({
+    artifactContent: previewMatchesArtifact ? artifactPreview.content : '',
+    artifactError: previewMatchesArtifact ? artifactPreview.error : null,
+    artifactLoading: Boolean(selectedArtifact) && (!previewMatchesArtifact || artifactPreview.loading),
+    currentProfileContent: profilePreviewMatchesProfile ? profilePreview.content : '',
+    currentProfileError: profilePreviewMatchesProfile ? profilePreview.error : null,
+    currentProfileLoading: Boolean(focusedProfile) && (!profilePreviewMatchesProfile || profilePreview.loading),
+    hasArtifact: Boolean(selectedArtifact),
+  }), [
+    artifactPreview.content,
+    artifactPreview.error,
+    artifactPreview.loading,
+    focusedProfile,
+    previewMatchesArtifact,
+    profilePreview.content,
+    profilePreview.error,
+    profilePreview.loading,
+    profilePreviewMatchesProfile,
+    selectedArtifact,
+  ])
+
   const toggleSection = (sectionId: ProfileListSectionId) => {
     setCollapsedSectionIds((current) => {
       const next = new Set(current)
@@ -88,6 +117,20 @@ export function HrPeopleWorkbench({
         next.add(sectionId)
       return next
     })
+  }
+
+  function handleOpenProfilePatchReview() {
+    if (selectedArtifact && focusedProfile)
+      setProfilePatchReviewWorkspaceId(focusedProfile.id)
+  }
+
+  function handleSectionAction(sectionId: HrProfileSectionId) {
+    const action = findActionForProfileSection(activeActions, sectionId)
+    if (!action)
+      return
+    onActionSelect(action)
+    setProfileToolsFocusTarget('proposal')
+    setProfileToolsExpanded(true)
   }
   async function handleWorkbenchAction(action: LocalSoulAppWorkbenchAction) {
     const result = await workbenchBridge?.onAction(action)
@@ -226,13 +269,28 @@ export function HrPeopleWorkbench({
             : null}
 
           {focusedProfile
-            ? (
-                <HrProfileDetails
-                  focusedProfile={focusedProfile}
-                  labels={labels}
-                  profilePreview={profilePreview}
-                />
-              )
+            ? profilePatchReviewOpen
+              ? (
+                  <HrProfilePatchReview
+                    artifact={selectedArtifact}
+                    labels={labels}
+                    profileRevisionSubmitting={profileRevisionSubmitting}
+                    review={profileRevisionReview}
+                    onBack={() => setProfilePatchReviewWorkspaceId(null)}
+                    onPromoteProfileRevision={onPromoteProfileRevision}
+                  />
+                )
+              : (
+                  <HrProfileDetails
+                    focusedProfile={focusedProfile}
+                    labels={labels}
+                    patchArtifact={selectedArtifact}
+                    profilePreview={profilePreview}
+                    profileRevisionReview={profileRevisionReview}
+                    onReviewPatch={handleOpenProfilePatchReview}
+                    onSectionAction={handleSectionAction}
+                  />
+                )
             : (
                 <HrProfileSelectionEmpty
                   hasProfiles={profiles.length > 0}
@@ -245,13 +303,12 @@ export function HrPeopleWorkbench({
                 <HrProfileToolsPanel
                   activeActions={activeActions}
                   artifact={selectedArtifact}
-                  artifactPreview={artifactPreview}
                   copy={copy}
                   engineReadiness={engineReadiness}
                   focusedProfile={focusedProfile}
                   labels={labels}
                   locale={locale}
-                  profilePreview={profilePreview}
+                  profileRevisionReview={profileRevisionReview}
                   selectedTemplate={selectedTemplate}
                   selectedWorkspace={selectedWorkspace}
                   submitting={submitting}
@@ -260,11 +317,10 @@ export function HrPeopleWorkbench({
                   onActionSelect={onActionSelect}
                   onContextChange={onContextChange}
                   onOpenSession={onOpenSession}
+                  onOpenProfilePatchReview={handleOpenProfilePatchReview}
                   onProfileToolsFocusTargetHandled={() => setProfileToolsFocusTarget(null)}
-                  onPromoteProfileRevision={onPromoteProfileRevision}
                   onSubmitSession={onSubmitSession}
                   onTemplateChange={onTemplateChange}
-                  profileRevisionSubmitting={profileRevisionSubmitting}
                   profileToolsFocusTarget={profileToolsFocusTarget}
                   reviewGuardrails={reviewGuardrails}
                   timeline={timeline}
@@ -318,4 +374,29 @@ function matchesProfileQuery(profile: ReturnType<typeof buildPersonProfiles>[num
     profile.reviewStatus,
     profile.lifecycle,
   ].some(value => value.toLowerCase().includes(normalizedQuery))
+}
+
+function findActionForProfileSection(
+  actions: readonly SoulWorkbenchAction[],
+  sectionId: HrProfileSectionId,
+): SoulWorkbenchAction | null {
+  const preferredIds: Record<HrProfileSectionId, string[]> = {
+    acceptedExternalSections: ['extract-evidence', 'summarize-profile'],
+    capabilitiesAndStack: ['summarize-profile', 'extract-evidence'],
+    confirmedFacts: ['extract-evidence', 'build-evidence-matrix'],
+    currentProfileSummary: ['summarize-profile'],
+    evidenceStatus: ['build-evidence-matrix', 'extract-evidence'],
+    identityAndBasics: ['summarize-profile'],
+    nextHrActions: ['prepare-next-step'],
+    reviewState: ['prepare-next-step'],
+    risksAndGaps: ['check-risky-wording', 'build-evidence-matrix'],
+    roleContextAndResponsibilities: ['summarize-profile', 'prepare-next-step'],
+  }
+
+  for (const actionId of preferredIds[sectionId]) {
+    const action = actions.find(item => item.id === actionId)
+    if (action)
+      return action
+  }
+  return actions[0] ?? null
 }
