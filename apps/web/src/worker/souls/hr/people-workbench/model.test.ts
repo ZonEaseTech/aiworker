@@ -17,6 +17,7 @@ import {
   HR_PROFILE_SECTION_ORDER,
   parseHrProfileReadme,
 } from './profile-readme'
+import { buildProfileRevisionReview } from './revision-review'
 
 const labels = getHrPeopleWorkbenchCopy('en')
 const now = '2026-05-12T08:00:00.000Z'
@@ -252,5 +253,61 @@ describe('hr people workbench model', () => {
     expect(parsed.intro).toContain('Accepted profile summary.')
     expect(HR_PROFILE_SECTION_ORDER.map(section => section.id)).toContain('currentProfileSummary')
     expect(getHrProfileSection(parsed, 'currentProfileSummary')).toBeNull()
+  })
+
+  it('builds a ready profile revision review from a fenced accepted README draft', () => {
+    const review = buildProfileRevisionReview({
+      artifactContent: [
+        '# Profile Update Proposal',
+        '',
+        'Proposal notes stay outside the accepted profile.',
+        '',
+        '```aiworker-profile-readme',
+        '# Ada Profile',
+        '',
+        '## Current Profile Summary',
+        '',
+        'Proposed accepted summary.',
+        '```',
+      ].join('\n'),
+      artifactLoading: false,
+      currentProfileContent: '# Ada Profile\n\n## Current Profile Summary\n\nCurrent accepted summary.\n',
+      currentProfileLoading: false,
+      hasArtifact: true,
+    })
+
+    expect(review.status).toBe('ready')
+    expect(review.proposedMarkdown).toContain('Proposed accepted summary.')
+    expect(review.proposedMarkdown).not.toContain('Proposal notes')
+    expect(review.currentSummary).toContain('Current accepted summary.')
+    expect(review.proposedSummary).toContain('Proposed accepted summary.')
+  })
+
+  it('blocks profile revision review when the artifact is not promotable', () => {
+    const missingFence = buildProfileRevisionReview({
+      artifactContent: '# Profile Update Proposal\n\nNo accepted draft yet.',
+      artifactLoading: false,
+      currentProfileContent: '# Ada Profile\n\nCurrent accepted summary.\n',
+      currentProfileLoading: false,
+      hasArtifact: true,
+    })
+    const pending = buildProfileRevisionReview({
+      artifactContent: [
+        '```aiworker-profile-readme',
+        '# Ada Profile',
+        '',
+        'Promotion requested and pending human review.',
+        '```',
+      ].join('\n'),
+      artifactLoading: false,
+      currentProfileContent: '# Ada Profile\n\nCurrent accepted summary.\n',
+      currentProfileLoading: false,
+      hasArtifact: true,
+    })
+
+    expect(missingFence.status).toBe('blocked')
+    expect(missingFence.issues[0]).toContain('aiworker-profile-readme')
+    expect(pending.status).toBe('blocked')
+    expect(pending.issues.join(' ')).toContain('pending human review')
   })
 })

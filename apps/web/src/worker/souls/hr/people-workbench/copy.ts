@@ -98,6 +98,12 @@ export interface HrWorkbenchCopy {
   proposalOnly: string
   recommended: string
   reviewGuardrails: string[]
+  revisionBlocked: string
+  revisionComparisonTitle: string
+  revisionCurrentTitle: string
+  revisionDraftTitle: string
+  revisionReady: string
+  revisionStatusTitle: string
   reviewStatus: (state: ReviewDisplayState) => string
   selectProfileFirst: string
   sessionLoops: string
@@ -238,6 +244,12 @@ const enHrCopy: HrWorkbenchCopy = {
     'Sensitive details are not promoted into durable memory without review.',
     'Hiring and employment decisions remain explicitly human-owned.',
   ],
+  revisionBlocked: 'Revision blocked',
+  revisionComparisonTitle: 'Profile revision comparison',
+  revisionCurrentTitle: 'Current accepted profile',
+  revisionDraftTitle: 'Accepted draft',
+  revisionReady: 'Ready to approve',
+  revisionStatusTitle: 'Revision status',
   reviewStatus: (state) => {
     if (state === 'pass')
       return 'reviewed'
@@ -399,6 +411,12 @@ const zhHrCopy: HrWorkbenchCopy = {
     '敏感信息未经 review 不进入 durable memory。',
     '招聘和雇佣决策必须明确由人类负责。',
   ],
+  revisionBlocked: '修订被阻止',
+  revisionComparisonTitle: '档案修订对比',
+  revisionCurrentTitle: '当前已接受档案',
+  revisionDraftTitle: '待接受草案',
+  revisionReady: '可批准',
+  revisionStatusTitle: '修订状态',
   reviewStatus: (state) => {
     if (state === 'pass')
       return '已 review'

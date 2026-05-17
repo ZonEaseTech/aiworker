@@ -1,15 +1,18 @@
 import type { CapabilityTemplate, LocalArtifact, LocalSession, LocalWorkspace, SoulWorkbenchAction } from '@zonease/aiworker-shared'
 import type { FormEvent } from 'react'
 import type { EngineReadiness } from '../../../../../features/session/engine-readiness'
-import type { SoulArtifactPreviewState, WorkerLocale, WorkerMessages } from '../../../types'
+import type { SoulArtifactPreviewState, SoulProfilePreviewState, WorkerLocale, WorkerMessages } from '../../../types'
 import type { HrWorkbenchCopy } from '../copy'
+import type { ProfileRevisionReviewState } from '../revision-review'
 import type { PersonProfile, ProfileTimelineItem } from '../types'
+import type { HrProfileToolsRailTarget } from './profile-tools-rail'
 
 import { ArrowRight, CheckCircle2, Clock3, FileCheck2, FileText, ListChecks, MessageSquareText, Sparkles } from 'lucide-react'
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect, useRef } from 'react'
 import { displayTemplate, formatRelativeTime, formatStatus } from '../../../../../features/i18n'
 import { WorkbenchSectionTitle } from '../../../common'
 import { displayActionLabel } from '../model'
+import { buildProfileRevisionReview } from '../revision-review'
 
 const MarkdownPreview = lazy(() => import('@zonease/aiworker-component/markdown-preview').then(module => ({ default: module.MarkdownPreview })))
 
@@ -22,13 +25,16 @@ interface ProfileToolsPanelProps {
   focusedProfile: PersonProfile | null
   labels: HrWorkbenchCopy
   locale: WorkerLocale
+  profilePreview: SoulProfilePreviewState
   onActionSelect: (action: SoulWorkbenchAction) => void
   onContextChange: (value: string) => void
   onOpenSession: (session: LocalSession) => void
+  onProfileToolsFocusTargetHandled: () => void
   onPromoteProfileRevision: () => Promise<void> | void
   onSubmitSession: (event: FormEvent<HTMLFormElement>) => void
   onTemplateChange: (templateId: string) => void
   profileRevisionSubmitting: boolean
+  profileToolsFocusTarget: HrProfileToolsRailTarget | null
   reviewGuardrails: readonly string[]
   selectedTemplate: CapabilityTemplate
   selectedWorkspace: LocalWorkspace | null
@@ -47,13 +53,16 @@ export function HrProfileToolsPanel({
   focusedProfile,
   labels,
   locale,
+  profilePreview,
   onActionSelect,
   onContextChange,
   onOpenSession,
+  onProfileToolsFocusTargetHandled,
   onPromoteProfileRevision,
   onSubmitSession,
   onTemplateChange,
   profileRevisionSubmitting,
+  profileToolsFocusTarget,
   reviewGuardrails,
   selectedTemplate,
   selectedWorkspace,
@@ -65,6 +74,37 @@ export function HrProfileToolsPanel({
   const selectedTemplateCopy = displayTemplate(selectedTemplate, locale)
   const recentSessions = focusedProfile?.sessions.slice().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 3) ?? []
   const previewMatchesArtifact = Boolean(artifact && artifactPreview.artifactId === artifact.id)
+  const guardrailsSectionRef = useRef<HTMLElement | null>(null)
+  const proposalSectionRef = useRef<HTMLElement | null>(null)
+  const sessionsSectionRef = useRef<HTMLElement | null>(null)
+  const sourcesSectionRef = useRef<HTMLElement | null>(null)
+  const profilePreviewMatchesProfile = Boolean(focusedProfile && profilePreview.workspaceId === focusedProfile.id)
+  const revisionReview = buildProfileRevisionReview({
+    artifactContent: previewMatchesArtifact ? artifactPreview.content : '',
+    artifactError: previewMatchesArtifact ? artifactPreview.error : null,
+    artifactLoading: !previewMatchesArtifact || artifactPreview.loading,
+    currentProfileContent: profilePreviewMatchesProfile ? profilePreview.content : '',
+    currentProfileError: profilePreviewMatchesProfile ? profilePreview.error : null,
+    currentProfileLoading: !profilePreviewMatchesProfile || profilePreview.loading,
+    hasArtifact: Boolean(artifact),
+  })
+  const approveProfileRevisionDisabled = !artifact || profileRevisionSubmitting || revisionReview.status !== 'ready'
+
+  useEffect(() => {
+    if (!profileToolsFocusTarget)
+      return
+
+    const target = profileToolsFocusTarget === 'proposal'
+      ? proposalSectionRef.current
+      : profileToolsFocusTarget === 'guardrails'
+        ? guardrailsSectionRef.current
+        : profileToolsFocusTarget === 'sessions'
+          ? sessionsSectionRef.current
+          : sourcesSectionRef.current
+
+    target?.scrollIntoView({ block: 'start' })
+    onProfileToolsFocusTargetHandled()
+  }, [onProfileToolsFocusTargetHandled, profileToolsFocusTarget])
 
   return (
     <aside className="hr-profile-tools-panel" aria-label={labels.actionComposerTitle}>
@@ -108,7 +148,7 @@ export function HrProfileToolsPanel({
           </div>
         </section>
 
-        <section className="hr-tool-section" aria-label={labels.sourcesTitle}>
+        <section ref={sourcesSectionRef} className="hr-tool-section" aria-label={labels.sourcesTitle}>
           <WorkbenchSectionTitle icon={<FileText size={15} />} title={labels.sourcesTitle} detail={labels.sourcesDetail} />
           <div className="hr-source-grid">
             {labels.sourceCards(
@@ -140,19 +180,24 @@ export function HrProfileToolsPanel({
           </div>
         </section>
 
-        <section className="hr-tool-section hr-artifact-preview-card" aria-label={labels.artifactPreviewTitle} data-testid="hr-proposed-change">
+        <section ref={proposalSectionRef} className="hr-tool-section hr-artifact-preview-card" aria-label={labels.artifactPreviewTitle} data-testid="hr-proposed-change">
           <WorkbenchSectionTitle
             icon={<FileCheck2 size={15} />}
             title={labels.artifactPreviewTitle}
             detail={artifact ? formatRelativeTime(artifact.updatedAt, locale) : labels.artifactPreviewDetail}
           />
           {artifact ? <strong className="hr-artifact-preview-name">{artifact.title}</strong> : null}
+          <RevisionReviewStatus labels={labels} review={revisionReview} />
+          {revisionReview.currentSummary || revisionReview.proposedSummary
+            ? <RevisionReviewComparison labels={labels} review={revisionReview} />
+            : null}
           {renderArtifactPreview({
             artifact,
             artifactPreview,
             empty: labels.artifactPreviewEmpty,
             error: labels.artifactPreviewError,
             loading: labels.artifactPreviewLoading,
+            markdownContent: revisionReview.status === 'ready' ? revisionReview.proposedMarkdown : artifactPreview.content,
             previewMatchesArtifact,
           })}
           <div className="hr-proposed-change-actions">
@@ -160,7 +205,7 @@ export function HrProfileToolsPanel({
             <button
               type="button"
               className="secondary hr-profile-promote-button"
-              disabled={!artifact || profileRevisionSubmitting}
+              disabled={approveProfileRevisionDisabled}
               onClick={() => void onPromoteProfileRevision()}
             >
               <CheckCircle2 aria-hidden="true" size={14} />
@@ -169,7 +214,7 @@ export function HrProfileToolsPanel({
           </div>
         </section>
 
-        <section className="hr-tool-section" aria-label={labels.guardrailsTitle}>
+        <section ref={guardrailsSectionRef} className="hr-tool-section" aria-label={labels.guardrailsTitle}>
           <WorkbenchSectionTitle icon={<ListChecks size={15} />} title={labels.guardrailsTitle} detail={labels.guardrailsDetail} />
           <ul className="hr-guardrail-list">
             {reviewGuardrails.map(item => (
@@ -178,7 +223,7 @@ export function HrProfileToolsPanel({
           </ul>
         </section>
 
-        <section className="hr-tool-section" aria-label={labels.recentSessionsTitle}>
+        <section ref={sessionsSectionRef} className="hr-tool-section" aria-label={labels.recentSessionsTitle}>
           <WorkbenchSectionTitle
             icon={<MessageSquareText size={15} />}
             title={labels.recentSessionsTitle}
@@ -259,12 +304,63 @@ function displayTemplateForSession(session: LocalSession, templates: CapabilityT
   return template ? displayTemplate(template, locale).name : session.capabilityTemplateId.replace(/-/g, ' ')
 }
 
+function RevisionReviewStatus({
+  labels,
+  review,
+}: {
+  labels: HrWorkbenchCopy
+  review: ProfileRevisionReviewState
+}) {
+  if (review.status === 'empty')
+    return null
+
+  const isReady = review.status === 'ready'
+  const statusLabel = isReady ? labels.revisionReady : labels.revisionBlocked
+  return (
+    <div className={`hr-revision-status ${review.status}`} role={isReady ? 'status' : 'alert'}>
+      <span>
+        <strong>{statusLabel}</strong>
+        <small>{labels.revisionStatusTitle}</small>
+      </span>
+      {review.issues.length > 0
+        ? (
+            <ul>
+              {review.issues.map(issue => <li key={issue}>{issue}</li>)}
+            </ul>
+          )
+        : null}
+    </div>
+  )
+}
+
+function RevisionReviewComparison({
+  labels,
+  review,
+}: {
+  labels: HrWorkbenchCopy
+  review: ProfileRevisionReviewState
+}) {
+  return (
+    <div className="hr-revision-comparison" aria-label={labels.revisionComparisonTitle}>
+      <div>
+        <strong>{labels.revisionCurrentTitle}</strong>
+        <p>{review.currentSummary || labels.currentProfileEmpty}</p>
+      </div>
+      <div>
+        <strong>{labels.revisionDraftTitle}</strong>
+        <p>{review.proposedSummary || labels.artifactPreviewEmpty}</p>
+      </div>
+    </div>
+  )
+}
+
 function renderArtifactPreview({
   artifact,
   artifactPreview,
   empty,
   error,
   loading,
+  markdownContent,
   previewMatchesArtifact,
 }: {
   artifact: LocalArtifact | null
@@ -272,6 +368,7 @@ function renderArtifactPreview({
   empty: string
   error: string
   loading: string
+  markdownContent: string
   previewMatchesArtifact: boolean
 }) {
   if (!artifact)
@@ -287,7 +384,7 @@ function renderArtifactPreview({
     <Suspense fallback={<div className="hr-markdown-preview" data-testid="hr-artifact-markdown-preview-loading" />}>
       <MarkdownPreview
         className="hr-markdown-preview"
-        content={artifactPreview.content}
+        content={markdownContent}
         data-testid="hr-artifact-markdown-preview"
         empty={<span>{empty}</span>}
       />

@@ -459,6 +459,11 @@
   gap: 10px;
 }
 
+.hr-profile-tools-scroll > .hr-action-profile-card,
+.hr-profile-tools-scroll > .hr-tool-section {
+  flex: 0 0 auto;
+}
+
 .hr-profile-tools-rail {
   align-items: center;
   justify-content: flex-start;
@@ -751,6 +756,87 @@
   white-space: nowrap;
 }
 
+.hr-revision-status {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+}
+
+.hr-revision-status.ready {
+  border-color: var(--green-border);
+  background: var(--green-bg);
+}
+
+.hr-revision-status.blocked,
+.hr-revision-status.error {
+  border-color: var(--red-border);
+  background: var(--red-bg);
+}
+
+.hr-revision-status span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.hr-revision-status strong {
+  color: var(--text-strong);
+  font-size: 13px;
+}
+
+.hr-revision-status small,
+.hr-revision-status li {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.hr-revision-status ul {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 0;
+  padding-left: 16px;
+}
+
+.hr-revision-comparison {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.hr-revision-comparison > div {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.hr-revision-comparison strong {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text-strong);
+  font-size: 12px;
+}
+
+.hr-revision-comparison p {
+  display: -webkit-box;
+  min-height: 68px;
+  margin: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+
 .hr-markdown-preview {
   min-height: 190px;
   max-height: none;
@@ -841,6 +927,18 @@
 .hr-markdown-preview th {
   background: var(--bg-subtle);
   color: var(--text-strong);
+}
+
+@media (min-width: 1281px) and (max-width: 1500px) {
+  .hr-people-layout:not(.with-tools-rail) {
+    grid-template-columns: minmax(200px, 0.28fr) minmax(0, 1fr);
+  }
+
+  .hr-people-layout:not(.with-tools-rail) .hr-profile-tools-panel {
+    grid-column: 1 / -1;
+    min-height: 420px;
+    max-height: 68vh;
+  }
 }
 
 .hr-guardrail-list {
@@ -1064,6 +1162,10 @@
 
   .hr-details-grid,
   .hr-reading-section-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hr-revision-comparison {
     grid-template-columns: minmax(0, 1fr);
   }
 

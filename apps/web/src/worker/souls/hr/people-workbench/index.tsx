@@ -1,5 +1,6 @@
 import type { LocalSoulAppShellAction } from '../../../../features/local-workspace/api/types'
 import type { SoulWorkbenchRendererProps } from '../../types'
+import type { HrProfileToolsRailTarget } from './components/profile-tools-rail'
 import type { ProfileListSectionId } from './types'
 
 import { IconButton } from '@zonease/aiworker-component'
@@ -57,6 +58,7 @@ export function HrPeopleWorkbench({
   const [profileQuery, setProfileQuery] = useState('')
   const [profileListVisible, setProfileListVisible] = useState(true)
   const [profileToolsExpanded, setProfileToolsExpanded] = useState(false)
+  const [profileToolsFocusTarget, setProfileToolsFocusTarget] = useState<HrProfileToolsRailTarget | null>(null)
   const [collapsedSectionIds, setCollapsedSectionIds] = useState<ReadonlySet<ProfileListSectionId>>(() => new Set(['employee', 'alumni']))
   const profiles = useMemo(
     () => buildPersonProfiles(workspaces, sessions, artifacts, reviews, lessons, labels, locale),
@@ -249,6 +251,7 @@ export function HrPeopleWorkbench({
                   focusedProfile={focusedProfile}
                   labels={labels}
                   locale={locale}
+                  profilePreview={profilePreview}
                   selectedTemplate={selectedTemplate}
                   selectedWorkspace={selectedWorkspace}
                   submitting={submitting}
@@ -257,10 +260,12 @@ export function HrPeopleWorkbench({
                   onActionSelect={onActionSelect}
                   onContextChange={onContextChange}
                   onOpenSession={onOpenSession}
+                  onProfileToolsFocusTargetHandled={() => setProfileToolsFocusTarget(null)}
                   onPromoteProfileRevision={onPromoteProfileRevision}
                   onSubmitSession={onSubmitSession}
                   onTemplateChange={onTemplateChange}
                   profileRevisionSubmitting={profileRevisionSubmitting}
+                  profileToolsFocusTarget={profileToolsFocusTarget}
                   reviewGuardrails={reviewGuardrails}
                   timeline={timeline}
                 />
@@ -269,7 +274,10 @@ export function HrPeopleWorkbench({
               ? (
                   <HrProfileToolsRail
                     labels={labels}
-                    onExpand={() => setProfileToolsExpanded(true)}
+                    onExpand={(target) => {
+                      setProfileToolsFocusTarget(target)
+                      setProfileToolsExpanded(true)
+                    }}
                   />
                 )
               : null}

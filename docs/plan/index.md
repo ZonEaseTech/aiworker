@@ -376,3 +376,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-345 HR native skill closure follow-ups**](PLAN-345.md) `2026-05-17`
 - [x] [**PLAN-346 HR native skill closure follow-up regression debug**](PLAN-346.md) `2026-05-17`
 - [x] [**PLAN-347 Headless profile promotion CLI and shared draft validation**](PLAN-347.md) `2026-05-17`
+- [x] [**PLAN-348 HR Profile Revision Review Workbench**](PLAN-348.md) `2026-05-17`

@@ -1,5 +1,28 @@
 # AIWorker Changelog
 
+## 2026-05-17 [completed] FEAT-095 / PLAN-348 — HR Profile Revision Review Workbench
+
+Made the HR proposed-change area a Product-owned profile revision review
+surface instead of a raw artifact preview.
+
+- Added a pure HR Web revision-review model that uses shared
+  `aiworker-profile-readme` promotion validation and README section parsing.
+- Rendered ready/blocked status, current vs accepted-draft summary comparison,
+  and the extracted accepted profile Markdown preview before approval.
+- Disabled approval when the selected artifact lacks a promotable accepted
+  README draft, with the shared validation reason visible to the reviewer.
+- Kept native skill boundaries intact: skills produce reviewable artifacts;
+  HR Web decides whether the accepted README draft can be approved into the
+  profile.
+- Improved the collapsed Profile Workbench rail so section buttons open the
+  requested area, and fixed medium-desktop flex shrink overlap in the tools
+  panel found during browser debugging.
+
+Verification passed: focused HR model tests, full Worker Studio tests, Web
+typecheck/build, root lint/docs checks, `git diff --check`, and mocked browser
+debug rounds for ready approval, blocked approval, and mobile stacked
+comparison.
+
 ## 2026-05-17 [completed] TODO-046 / PLAN-347 — Headless reviewed profile promotion CLI
 
 Added a product-owned headless promotion path for reviewed profile artifacts.

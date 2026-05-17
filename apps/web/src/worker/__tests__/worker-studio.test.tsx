@@ -263,6 +263,7 @@ let currentTurns: LocalTurn[]
 let currentWorkers: typeof workers
 let currentWorkspaces: typeof workspace[]
 let currentProfiles: Record<string, string>
+let currentArtifactRawContent: string
 let currentApps: Array<{
   appId: string
   manifest: {
@@ -421,6 +422,20 @@ function resetSettings() {
       '',
     ].join('\n'),
   }
+  currentArtifactRawContent = [
+    '# Candidate Screen',
+    '',
+    'Evidence summary.',
+    '',
+    '```aiworker-profile-readme',
+    '# Accepted Ada Profile',
+    '',
+    '## Current Profile Summary',
+    '',
+    'Reviewed profile summary.',
+    '```',
+    '',
+  ].join('\n')
   currentApps = []
   deferCreatedSessionStream = false
 }
@@ -760,18 +775,7 @@ beforeEach(() => {
       }, 201)
     }
     if (url.includes('/api/local/workspaces/') && url.includes('/files/raw/')) {
-      return new Response([
-        '# Candidate Screen',
-        '',
-        'Evidence summary.',
-        '',
-        '```aiworker-profile-readme',
-        '# Accepted Ada Profile',
-        '',
-        'Reviewed profile summary.',
-        '```',
-        '',
-      ].join('\n'), { headers: { 'content-type': 'text/plain' } })
+      return new Response(currentArtifactRawContent, { headers: { 'content-type': 'text/plain' } })
     }
     if (url.endsWith('/api/local/artifacts'))
       return json({ artifacts: currentArtifacts })
@@ -892,7 +896,8 @@ describe('worker studio', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open Proposed Change' }))
     expect(await screen.findByText('Proposed Change')).toBeTruthy()
     expect(screen.getByText('Next Profile Step')).toBeTruthy()
-    expect(await screen.findByText('Evidence summary.')).toBeTruthy()
+    expect(await screen.findByText('Ready to approve')).toBeTruthy()
+    expect(screen.getAllByText('Reviewed profile summary.').length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: /Summarize profile/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: /Open Screen candidate session/ })).toBeTruthy()
     expect(screen.queryByText('Capability template (6)')).toBeNull()
@@ -915,7 +920,8 @@ describe('worker studio', () => {
     const proposedChange = await screen.findByTestId('hr-proposed-change')
 
     expect(within(currentProfile).getByText('Accepted profile summary.')).toBeTruthy()
-    expect(await within(proposedChange).findByText('Evidence summary.')).toBeTruthy()
+    expect(await within(proposedChange).findByText('Ready to approve')).toBeTruthy()
+    expect(within(proposedChange).getAllByText('Reviewed profile summary.').length).toBeGreaterThan(0)
 
     fireEvent.click(within(proposedChange).getByRole('button', { name: 'Approve Profile Revision' }))
 
@@ -926,12 +932,40 @@ describe('worker studio', () => {
       }))
     })
     expect(fetch).toHaveBeenCalledWith('/api/local/workspaces/workspace-1/profile-revisions', expect.objectContaining({
-      body: expect.stringContaining('"profileMarkdown":"# Accepted Ada Profile\\n\\nReviewed profile summary."'),
+      body: expect.stringContaining('"profileMarkdown":"# Accepted Ada Profile\\n\\n## Current Profile Summary\\n\\nReviewed profile summary."'),
       method: 'POST',
     }))
     await waitFor(() => {
       expect(within(currentProfile).getByText('Reviewed profile summary.')).toBeTruthy()
     })
+  })
+
+  it('shows a profile revision review before approving a proposed change', async () => {
+    window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
+    render(<WorkerStudio />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Open Proposed Change' }))
+    const proposedChange = await screen.findByTestId('hr-proposed-change')
+
+    expect(await within(proposedChange).findByText('Ready to approve')).toBeTruthy()
+    expect(within(proposedChange).getByText('Current accepted profile')).toBeTruthy()
+    expect(within(proposedChange).getByText('Accepted profile summary.')).toBeTruthy()
+    expect(within(proposedChange).getByText('Accepted draft')).toBeTruthy()
+    expect(within(proposedChange).getAllByText('Reviewed profile summary.').length).toBeGreaterThan(0)
+    expect((within(proposedChange).getByRole('button', { name: 'Approve Profile Revision' }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('blocks profile revision approval when the artifact has no accepted README draft', async () => {
+    currentArtifactRawContent = '# Profile Update Proposal\n\nNo accepted profile draft yet.\n'
+    window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
+    render(<WorkerStudio />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Open Proposed Change' }))
+    const proposedChange = await screen.findByTestId('hr-proposed-change')
+
+    expect(await within(proposedChange).findByText('Revision blocked')).toBeTruthy()
+    expect(within(proposedChange).getByText(/aiworker-profile-readme/)).toBeTruthy()
+    expect((within(proposedChange).getByRole('button', { name: 'Approve Profile Revision' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('keeps profile details stable while lifecycle list sections are expanded', async () => {
