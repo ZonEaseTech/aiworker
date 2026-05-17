@@ -58,11 +58,12 @@ describe('HR reference Soul App', () => {
       expect.objectContaining({ action: 'read', kind: 'search', target: 'aiworker-hr' }),
       expect.objectContaining({ action: 'write', kind: 'search', target: 'aiworker-hr' }),
     ]))
-    expect(hrManifestJson.ui.shell?.primaryAction?.protocolAction).toBe('peopleProfiles.create')
-    expect(hrManifestJson.ui.shell?.primaryAction?.requiredPermissions).toContain('storage:write:aiworker-hr')
-    expect(hrManifestJson.ui.shell?.primaryAction?.requiredPermissions).toContain('search:write:aiworker-hr')
-    expect(hrManifestJson.ui.shell?.search?.protocolProvider).toBe('peopleProfiles.search')
-    expect(hrManifestJson.ui.shell?.search?.requiredPermissions).toContain('search:read:aiworker-hr')
+    expect(hrManifestJson.ui.workbench?.primaryAction?.protocolAction).toBe('peopleProfiles.create')
+    expect(hrManifestJson.ui.workbench?.primaryAction?.requiredPermissions).toContain('storage:write:aiworker-hr')
+    expect(hrManifestJson.ui.workbench?.primaryAction?.requiredPermissions).toContain('search:write:aiworker-hr')
+    expect(hrManifestJson.ui.workbench?.search?.protocolProvider).toBe('peopleProfiles.search')
+    expect(hrManifestJson.ui.workbench?.search?.requiredPermissions).toContain('search:read:aiworker-hr')
+    expect(hrManifestJson.ui.workspaceContext?.terminal?.cwd).toEqual({ source: 'host-workspace-root' })
   })
 
   it('requires the Host mount token for mounted service domain routes', async () => {

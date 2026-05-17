@@ -105,8 +105,11 @@ agent runtime 平台。
 
 - Worker Web 应是 Soul worker / workspace / session / artifact/profile 工作台，不是设置页、
   日志页或治理概念陈列。
-- Host 拥有当前 shell layout，可通过协议把 header title、primary action、searchbar、actions、
-  drawer toggles、refresh 和 app settings 暴露给 Soul App 配置。
+- Host 拥有当前 shell layout 与 full-width Host header；header action 是 Host 固化平台 action，
+  不再下放给 Soul App 作为 slot 配置。
+- Soul App 仍可通过 manifest/protocol 暴露 app-owned `ui.workbench` actions/search/settings 与
+  `ui.workspaceContext`，例如让未来 Host-owned web terminal 知道 workspace context；Host
+  只能按 descriptor 调用或定位，不解释领域语义。
 - Standalone 模式下 Soul App 拥有自己的完整 shell；Host mounted 模式下 Soul App 适配 Host 壳。
 - 新组件优先复用 `apps/web/src/shared/components/ui/`、`packages/component` 和已有 primitives。
 - 交互组件使用成熟 headless UI；不要手写 focus trap、scroll lock、ARIA 或键盘导航。

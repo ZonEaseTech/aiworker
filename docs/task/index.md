@@ -465,3 +465,6 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-133 Official Soul App defaultTemplates contain duplicates**](BUG-133.md) `P1`
 - [x] [**BUG-134 Engine asset projection can overwrite promoted profile README**](BUG-134.md) `P0`
 - [x] [**REL-040 发布 aiworker CLI 0.17.1**](REL-040.md) `P0`
+- [x] [**REFACTOR-080 Worker Web Host shell V9 layout**](REFACTOR-080.md) `P0`
+- [x] [**REFACTOR-081 Host/Soul workbench contract cleanup**](REFACTOR-081.md) `P0`
+- [x] [**REFACTOR-082 Soul App scaffold workbench design migration**](REFACTOR-082.md) `P0`

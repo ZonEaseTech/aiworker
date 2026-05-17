@@ -100,9 +100,12 @@ self-update.
 - `app install <manifest>` registers a local Soul App manifest.
 - `app enable|disable <id>` changes lifecycle state.
 - `app doctor|permissions <id>` inspect static health and declared grants.
-- `app create <id> --dir <path>` scaffolds a Soul App.
+- `app create <id> --dir <path>` scaffolds a Soul App with `ui.workbench`
+  descriptors and `ui.workspaceContext` for Host-owned workspace process
+  context.
 - `app validate <path>` checks manifest, assets and import boundaries.
-- `app smoke <path>` runs standalone and Host-mounted smoke checks.
+- `app smoke <path>` runs standalone, Host-mounted, and declared workbench
+  action/search smoke checks.
 
 Host catalog entries are app-projected. Use app ids such as `aiworker-hr`, not
 legacy built-in ids such as `hr`.

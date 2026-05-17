@@ -136,7 +136,7 @@ Soul App 维护的是领域对象：
 | Auth/security | Own Host auth, session security and grant enforcement | Declare required permissions and enforce app-local domain rules |
 | Storage | Provide app-scoped storage namespace and broker credentials | Own stored domain content and file/object layout inside the namespace |
 | Settings | Own global appearance, language, default engine, local MCP and connector settings | Own app-specific settings exposed through protocol |
-| Shell | Own global layout, navigation, worker/workspace/session locator and optional header contract | Contribute title, primary action, search, actions, drawers and settings when mounted |
+| Shell | Own global layout, Host header, navigation and worker/workspace/session locator | Expose app-owned workbench actions, search, settings and workspace context descriptors when mounted |
 | UI/API | Mount or proxy declared surfaces | Own domain UI, API and standalone runtime |
 | Artifact | Store or cache protocol descriptors when exposed | Own artifact schema, content, lifecycle and meaning |
 | Profile | Only locate or render exposed profile views | Compose and own profile state and semantics |
@@ -154,9 +154,10 @@ Host 和 Soul App 之间的交互只通过显式协议面完成：
 manifest -> compatibility, permissions, routes, slots, capabilities
 health -> mounted service readiness
 views -> app-owned UI surfaces Host can render or route
-actions -> app-owned commands Host can expose in shell
+actions -> app-owned workbench commands Host can invoke through declared descriptors
 status -> app-owned lifecycle/workflow summaries
 descriptors -> artifact/profile/review/memory summaries exposed for Host indexing
+workspace context -> app-declared locator hints such as terminal cwd source
 brokers -> Host-owned storage, connector, secret-ref, search, log and audit capabilities
 events -> optional app-emitted lifecycle/domain events
 ```
@@ -164,7 +165,8 @@ events -> optional app-emitted lifecycle/domain events
 协议原则：
 
 - Host 可以缓存 descriptor，不拥有 descriptor 指向的领域事实。
-- Host 可以提供 route 和 shell，不拥有 route 内的领域体验。
+- Host 可以提供 route 和 shell layout，不拥有 route 内的领域体验，也不把 Soul App descriptor
+  渲染成 Host header slot。
 - Host 可以提供 broker，不拥有 broker 内 app 写入的领域内容。
 - Host action/search/settings invocation must resolve a manifest-declared descriptor first.
   Host must reject undeclared protocol actions or search providers, and must not infer app domain behavior from protocol names.
@@ -187,9 +189,9 @@ events -> optional app-emitted lifecycle/domain events
 - Soul App receives operator identity and broker grants only through signed mount context or
   app-scoped broker scope. Caller cookies and caller authorization headers are not forwarded.
 
-## Shell Contract
+## Host Shell And Workbench Contract
 
-Host 当前保留统一 shell layout，因为它提供跨 Soul App 的定位能力：
+Host 当前保留统一 shell layout，因为它提供跨 Soul App 的平台定位能力：
 
 - installed/enabled Soul App；
 - Soul worker；
@@ -199,19 +201,38 @@ Host 当前保留统一 shell layout，因为它提供跨 Soul App 的定位能�
 - local daemon status；
 - platform capability grants。
 
-Mounted Soul App 可以通过协议配置 Host header：
+Host header is platform-owned chrome. It may contain fixed Host actions such as
+sidebar, terminal panel or right-panel toggles, but mounted Soul Apps must not
+customize Host header title, primary action, searchbar, action menu, drawer
+toggle, refresh button or app settings placement.
 
-- title / subtitle；
-- breadcrumb；
-- primary action，例如 HR 的 “New People Profile”；
-- searchbar；
-- action menu；
-- left/right drawer toggles；
-- refresh；
-- app-specific settings。
+Mounted Soul Apps can still expose app-owned workbench coordination through
+manifest/protocol descriptors:
 
-这个 header 合同是 Host 与 Soul App 的协议面，不是 Host 对领域 UI 的硬编码。Standalone 模式下
-Soul App 拥有自己的完整 shell；Host mounted 模式下，Soul App 只适配 Host 暴露的壳。
+- `ui.workbench.primaryAction` and `ui.workbench.actions` declare commands
+  Host may invoke on behalf of a mounted workbench.
+- `ui.workbench.search` declares an app-owned search provider that Host may call
+  through the generic app search endpoint.
+- `ui.workbench.settings` declares an app-specific settings command without
+  granting control over Host settings chrome.
+- Workbench action descriptors use `role`, not header `slot`; roles describe
+  intent such as `primary`, `refresh`, `settings` or `panel-toggle`, not Host
+  placement.
+
+Workspace/process coordination belongs to a separate context descriptor:
+
+- `ui.workspaceContext.terminal` can declare how a future Host-owned web
+  terminal should locate the selected workspace context.
+- `cwd.source = "host-workspace-root"` means Host uses the platform workspace
+  root it already controls.
+- `cwd.source = "app-workspace-path"` requires an app-local `subpath`.
+- `cwd.source = "protocol-resolver"` requires a `protocolProvider`; Host must
+  authorize and resolve it before opening a terminal.
+
+This contract keeps protocol interaction ability while preventing Host header
+customization from becoming a cross-boundary UI slot. Standalone 模式下 Soul App
+拥有自己的完整 shell；Host mounted 模式下，Soul App owns its workbench surface
+inside Host shell.
 
 如果未来某个垂直 app 证明全页接管比 Host header 更清晰，可以新增 mount mode，但不能让 Host
 开始理解领域对象。
@@ -306,7 +327,7 @@ Architecture ownership decides the development route:
 | Change area | Owner | Repo path | Agent route |
 | --- | --- | --- | --- |
 | local daemon API, app registry, broker enforcement, auth/security, platform settings | Host | `apps/api`, `packages/core`, `packages/storage-sqlite` | `.agents/skills/aiworker-host-dev/SKILL.md` |
-| Host Web Shell, Settings, worker/workspace/session workbench, shell header contract | Host | `apps/web`, `packages/component` | `.agents/skills/aiworker-host-dev/SKILL.md` |
+| Host Web Shell, Settings, worker/workspace/session workbench, Host-owned header chrome | Host | `apps/web`, `packages/component` | `.agents/skills/aiworker-host-dev/SKILL.md` |
 | CLI lifecycle, daemon/app/worker/workspace/session commands | Host | `apps/cli`, `docs/cli.md` | `.agents/skills/aiworker-host-dev/SKILL.md` |
 | shared Host/Soul manifest, protocol, descriptor, grant or broker schema | Shared boundary | `packages/shared`, affected Host package, affected Soul App manifest or SDK/runtime package | Start here, classify Host vs Soul ownership, then use the matching skill |
 | Soul App domain UI/API, manifest, standalone, Host mounted handler, artifacts, profiles, reviews, lessons | Soul App | `apps/aiworker-*`, `packages/soul-app-sdk`, `packages/soul-app-runtime` | `.agents/skills/aiworker-soul-app-dev/SKILL.md` |

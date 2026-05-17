@@ -320,21 +320,21 @@ export const hrSoulAppManifest = soulAppManifestSchema.parse({
         },
       },
     ],
-    shell: {
+    workbench: {
       actions: [
         {
           id: 'refresh-people',
           label: 'Refresh',
           protocolAction: 'people.refresh',
           requiredPermissions: ['storage:read:aiworker-hr'],
-          slot: 'refresh',
+          role: 'refresh',
         },
         {
           id: 'toggle-evidence-drawer',
           label: 'Evidence',
           protocolAction: 'drawers.evidence.toggle',
           requiredPermissions: ['connector:read:ats'],
-          slot: 'drawer-toggle',
+          role: 'panel-toggle',
         },
       ],
       primaryAction: {
@@ -342,7 +342,7 @@ export const hrSoulAppManifest = soulAppManifestSchema.parse({
         label: 'New people profile',
         protocolAction: 'peopleProfiles.create',
         requiredPermissions: ['storage:write:aiworker-hr', 'search:write:aiworker-hr'],
-        slot: 'primary',
+        role: 'primary',
       },
       search: {
         id: 'people-profile-search',
@@ -356,6 +356,15 @@ export const hrSoulAppManifest = soulAppManifestSchema.parse({
         label: 'HR settings',
         protocolAction: 'settings.open',
         requiredPermissions: ['api:serve:/api/local/apps/aiworker-hr'],
+      },
+    },
+    workspaceContext: {
+      terminal: {
+        cwd: {
+          source: 'host-workspace-root',
+        },
+        id: 'hr-workspace-terminal',
+        label: 'People workspace terminal',
       },
     },
     workspaceWidgets: [
@@ -634,14 +643,14 @@ export const qaSoulAppManifest = soulAppManifestSchema.parse({
         },
       },
     ],
-    shell: {
+    workbench: {
       actions: [
         {
           id: 'refresh-release',
           label: 'Refresh',
           protocolAction: 'release.refresh',
           requiredPermissions: ['storage:read:aiworker-qa'],
-          slot: 'refresh',
+          role: 'refresh',
         },
       ],
       primaryAction: {
@@ -649,7 +658,7 @@ export const qaSoulAppManifest = soulAppManifestSchema.parse({
         label: 'New release gate',
         protocolAction: 'releaseGates.create',
         requiredPermissions: ['storage:write:aiworker-qa', 'search:write:aiworker-qa'],
-        slot: 'primary',
+        role: 'primary',
       },
       search: {
         id: 'release-search',
@@ -663,6 +672,15 @@ export const qaSoulAppManifest = soulAppManifestSchema.parse({
         label: 'QA settings',
         protocolAction: 'settings.open',
         requiredPermissions: ['api:serve:/api/local/apps/aiworker-qa'],
+      },
+    },
+    workspaceContext: {
+      terminal: {
+        cwd: {
+          source: 'host-workspace-root',
+        },
+        id: 'qa-workspace-terminal',
+        label: 'Release workspace terminal',
       },
     },
     workspaceWidgets: [

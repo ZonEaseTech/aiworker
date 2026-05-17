@@ -198,59 +198,105 @@ export const soulAppUiSlotSchema = zod.object({
 })
 export type SoulAppUiSlot = z.infer<typeof soulAppUiSlotSchema>
 
-export const soulAppShellActionSlotSchema = zod.enum(['primary', 'action', 'drawer-toggle', 'refresh', 'settings'])
-export type SoulAppShellActionSlot = z.infer<typeof soulAppShellActionSlotSchema>
+export const soulAppWorkbenchActionRoleSchema = zod.enum(['primary', 'action', 'panel-toggle', 'refresh', 'settings'])
+export type SoulAppWorkbenchActionRole = z.infer<typeof soulAppWorkbenchActionRoleSchema>
 
-export const soulAppShellActionSchema = zod.object({
+export const soulAppWorkbenchActionSchema = zod.object({
   id: soulAppIdSchema,
   label: zod.string().min(1),
   protocolAction: zod.string({ required_error: 'protocolAction is required' }).min(1),
   requiredPermissions: zod.array(soulAppRequiredPermissionSchema).readonly().optional(),
-  slot: soulAppShellActionSlotSchema,
+  role: soulAppWorkbenchActionRoleSchema,
 })
-export type SoulAppShellAction = z.infer<typeof soulAppShellActionSchema>
+export type SoulAppWorkbenchAction = z.infer<typeof soulAppWorkbenchActionSchema>
 
-export const soulAppShellSearchSchema = zod.object({
+export const soulAppWorkbenchSearchSchema = zod.object({
   id: soulAppIdSchema,
   label: zod.string().min(1),
   placeholder: zod.string().min(1),
   protocolProvider: zod.string({ required_error: 'protocolProvider is required' }).min(1),
   requiredPermissions: zod.array(soulAppRequiredPermissionSchema).readonly().optional(),
 })
-export type SoulAppShellSearch = z.infer<typeof soulAppShellSearchSchema>
+export type SoulAppWorkbenchSearch = z.infer<typeof soulAppWorkbenchSearchSchema>
 
-export const soulAppShellSettingsSchema = zod.object({
+export const soulAppWorkbenchSettingsSchema = zod.object({
   id: soulAppIdSchema,
   label: zod.string().min(1),
   protocolAction: zod.string({ required_error: 'protocolAction is required' }).min(1),
   requiredPermissions: zod.array(soulAppRequiredPermissionSchema).readonly().optional(),
 })
-export type SoulAppShellSettings = z.infer<typeof soulAppShellSettingsSchema>
+export type SoulAppWorkbenchSettings = z.infer<typeof soulAppWorkbenchSettingsSchema>
 
-export const soulAppShellSchema = zod.object({
-  actions: zod.array(soulAppShellActionSchema).readonly().optional(),
-  primaryAction: soulAppShellActionSchema.optional(),
-  search: soulAppShellSearchSchema.optional(),
-  settings: soulAppShellSettingsSchema.optional(),
-}).superRefine((shell, ctx) => {
-  if (shell.primaryAction && shell.primaryAction.slot !== 'primary') {
+export const soulAppWorkbenchSchema = zod.object({
+  actions: zod.array(soulAppWorkbenchActionSchema).readonly().optional(),
+  primaryAction: soulAppWorkbenchActionSchema.optional(),
+  search: soulAppWorkbenchSearchSchema.optional(),
+  settings: soulAppWorkbenchSettingsSchema.optional(),
+}).superRefine((workbench, ctx) => {
+  if (workbench.primaryAction && workbench.primaryAction.role !== 'primary') {
     ctx.addIssue({
       code: zod.ZodIssueCode.custom,
-      message: 'primaryAction slot must be primary',
-      path: ['primaryAction', 'slot'],
+      message: 'primaryAction role must be primary',
+      path: ['primaryAction', 'role'],
     })
   }
 })
-export type SoulAppShell = z.infer<typeof soulAppShellSchema>
+export type SoulAppWorkbench = z.infer<typeof soulAppWorkbenchSchema>
+
+export const soulAppWorkspaceCwdSourceSchema = zod.enum(['host-workspace-root', 'app-workspace-path', 'protocol-resolver'])
+export type SoulAppWorkspaceCwdSource = z.infer<typeof soulAppWorkspaceCwdSourceSchema>
+
+export const soulAppWorkspaceCwdDescriptorSchema = zod.object({
+  protocolProvider: zod.string().min(1).optional(),
+  source: soulAppWorkspaceCwdSourceSchema,
+  subpath: zod.string().min(1).optional(),
+}).superRefine((cwd, ctx) => {
+  if (cwd.source === 'app-workspace-path' && !cwd.subpath) {
+    ctx.addIssue({
+      code: zod.ZodIssueCode.custom,
+      message: 'app-workspace-path cwd must declare subpath',
+      path: ['subpath'],
+    })
+  }
+  if (cwd.source === 'protocol-resolver' && !cwd.protocolProvider) {
+    ctx.addIssue({
+      code: zod.ZodIssueCode.custom,
+      message: 'protocol-resolver cwd must declare protocolProvider',
+      path: ['protocolProvider'],
+    })
+  }
+  if (cwd.source === 'host-workspace-root' && (cwd.subpath || cwd.protocolProvider)) {
+    ctx.addIssue({
+      code: zod.ZodIssueCode.custom,
+      message: 'host-workspace-root cwd must not declare subpath or protocolProvider',
+      path: ['source'],
+    })
+  }
+})
+export type SoulAppWorkspaceCwdDescriptor = z.infer<typeof soulAppWorkspaceCwdDescriptorSchema>
+
+export const soulAppWorkspaceTerminalContextSchema = zod.object({
+  cwd: soulAppWorkspaceCwdDescriptorSchema,
+  id: soulAppIdSchema,
+  label: zod.string().min(1),
+  requiredPermissions: zod.array(soulAppRequiredPermissionSchema).readonly().optional(),
+})
+export type SoulAppWorkspaceTerminalContext = z.infer<typeof soulAppWorkspaceTerminalContextSchema>
+
+export const soulAppWorkspaceContextSchema = zod.object({
+  terminal: soulAppWorkspaceTerminalContextSchema.optional(),
+})
+export type SoulAppWorkspaceContext = z.infer<typeof soulAppWorkspaceContextSchema>
 
 export const soulAppUiSchema = zod.object({
   artifactPreviews: zod.array(soulAppUiSlotSchema).readonly(),
   panels: zod.array(soulAppUiSlotSchema).readonly(),
   reviewPanels: zod.array(soulAppUiSlotSchema).readonly(),
   routes: zod.array(soulAppUiRouteSchema).readonly(),
-  shell: soulAppShellSchema.optional(),
+  workbench: soulAppWorkbenchSchema.optional(),
+  workspaceContext: soulAppWorkspaceContextSchema.optional(),
   workspaceWidgets: zod.array(soulAppUiSlotSchema).readonly().optional(),
-})
+}).strict()
 export type SoulAppUi = z.infer<typeof soulAppUiSchema>
 
 export const soulAppApiSchema = zod.object({

@@ -169,13 +169,18 @@ describe('Soul App manifest schema', () => {
       kind: 'search',
       target: 'aiworker-hr',
     }))
-    expect(hrSoulAppManifest.ui.shell?.primaryAction).toEqual(expect.objectContaining({
+    expect(hrSoulAppManifest.ui.workbench?.primaryAction).toEqual(expect.objectContaining({
       id: 'create-people-profile',
       requiredPermissions: ['storage:write:aiworker-hr', 'search:write:aiworker-hr'],
+      role: 'primary',
     }))
-    expect(hrSoulAppManifest.ui.shell?.search).toEqual(expect.objectContaining({
+    expect(hrSoulAppManifest.ui.workbench?.search).toEqual(expect.objectContaining({
       protocolProvider: 'peopleProfiles.search',
       requiredPermissions: ['search:read:aiworker-hr'],
+    }))
+    expect(hrSoulAppManifest.ui.workspaceContext?.terminal).toEqual(expect.objectContaining({
+      cwd: { source: 'host-workspace-root' },
+      id: 'hr-workspace-terminal',
     }))
     expect(hrSoulAppManifest.ui.artifactPreviews[0]).toEqual(expect.objectContaining({
       entry: './product/web/artifact-previews/person-profile-preview.tsx',
@@ -208,19 +213,19 @@ describe('Soul App manifest schema', () => {
     expect(qaSoulAppManifest.modes.standalone.entry).toBe('./host-adapter/standalone/standalone.ts')
   })
 
-  it('accepts app-declared shell toolbar and search descriptors', () => {
+  it('accepts app-declared workbench actions and search descriptors', () => {
     const result = validateSoulAppManifest({
       ...hrSoulAppManifest,
       ui: {
         ...hrSoulAppManifest.ui,
-        shell: {
+        workbench: {
           actions: [
             {
               id: 'refresh-profiles',
               label: 'Refresh',
               protocolAction: 'profiles.refresh',
               requiredPermissions: ['storage:read:aiworker-hr'],
-              slot: 'action',
+              role: 'action',
             },
           ],
           primaryAction: {
@@ -228,7 +233,7 @@ describe('Soul App manifest schema', () => {
             label: 'New people profile',
             protocolAction: 'profiles.create',
             requiredPermissions: ['storage:write:aiworker-hr'],
-            slot: 'primary',
+            role: 'primary',
           },
           search: {
             id: 'people-profile-search',
@@ -250,26 +255,29 @@ describe('Soul App manifest schema', () => {
     expect(result.status).toBe('valid')
   })
 
-  it('rejects shell descriptors without protocol actions', () => {
+  it('accepts app-declared workspace terminal context descriptors', () => {
     const result = validateSoulAppManifest({
       ...hrSoulAppManifest,
       ui: {
         ...hrSoulAppManifest.ui,
-        shell: {
-          primaryAction: {
-            id: 'create-people-profile',
-            label: 'New people profile',
-            slot: 'primary',
+        workspaceContext: {
+          terminal: {
+            cwd: {
+              protocolProvider: 'workspaces.cwd.resolve',
+              source: 'protocol-resolver',
+            },
+            id: 'hr-workspace-terminal',
+            label: 'People workspace terminal',
+            requiredPermissions: ['api:serve:/api/local/apps/aiworker-hr'],
           },
         },
       },
     })
 
-    expect(result.status).toBe('invalid')
-    expect(result.issues.some(issue => issue.message.includes('protocolAction'))).toBe(true)
+    expect(result.status).toBe('valid')
   })
 
-  it('rejects malformed shell descriptor required permissions', () => {
+  it('rejects deprecated Host header shell descriptors', () => {
     const result = validateSoulAppManifest({
       ...hrSoulAppManifest,
       ui: {
@@ -279,7 +287,6 @@ describe('Soul App manifest schema', () => {
             id: 'create-people-profile',
             label: 'New people profile',
             protocolAction: 'profiles.create',
-            requiredPermissions: ['storage.write.aiworker-hr'],
             slot: 'primary',
           },
         },
@@ -287,7 +294,68 @@ describe('Soul App manifest schema', () => {
     })
 
     expect(result.status).toBe('invalid')
+    expect(result.issues.some(issue => issue.path === 'ui' && issue.message.includes('shell'))).toBe(true)
+  })
+
+  it('rejects workbench descriptors without protocol actions', () => {
+    const result = validateSoulAppManifest({
+      ...hrSoulAppManifest,
+      ui: {
+        ...hrSoulAppManifest.ui,
+        workbench: {
+          primaryAction: {
+            id: 'create-people-profile',
+            label: 'New people profile',
+            role: 'primary',
+          },
+        },
+      },
+    })
+
+    expect(result.status).toBe('invalid')
+    expect(result.issues.some(issue => issue.message.includes('protocolAction'))).toBe(true)
+  })
+
+  it('rejects malformed workbench descriptor required permissions', () => {
+    const result = validateSoulAppManifest({
+      ...hrSoulAppManifest,
+      ui: {
+        ...hrSoulAppManifest.ui,
+        workbench: {
+          primaryAction: {
+            id: 'create-people-profile',
+            label: 'New people profile',
+            protocolAction: 'profiles.create',
+            requiredPermissions: ['storage.write.aiworker-hr'],
+            role: 'primary',
+          },
+        },
+      },
+    })
+
+    expect(result.status).toBe('invalid')
     expect(result.issues.some(issue => issue.message.includes('kind:action:target'))).toBe(true)
+  })
+
+  it('rejects workspace terminal context without a resolver for protocol cwd', () => {
+    const result = validateSoulAppManifest({
+      ...hrSoulAppManifest,
+      ui: {
+        ...hrSoulAppManifest.ui,
+        workspaceContext: {
+          terminal: {
+            cwd: {
+              source: 'protocol-resolver',
+            },
+            id: 'hr-workspace-terminal',
+            label: 'People workspace terminal',
+          },
+        },
+      },
+    })
+
+    expect(result.status).toBe('invalid')
+    expect(result.issues.some(issue => issue.message.includes('protocolProvider'))).toBe(true)
   })
 
   it('reports unsupported protocol before Host imports app code', () => {

@@ -379,3 +379,6 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-348 HR Profile Revision Review Workbench**](PLAN-348.md) `2026-05-17`
 - [x] [**PLAN-349 HR app production readiness campaign**](PLAN-349.md) `2026-05-17`
 - [x] [**PLAN-350 CLI 0.17.1 patch release**](PLAN-350.md) `2026-05-17`
+- [x] [**PLAN-351 Worker Web Host shell V9 layout**](PLAN-351.md) `2026-05-17`
+- [x] [**PLAN-352 Host/Soul workbench contract cleanup**](PLAN-352.md) `2026-05-18`
+- [x] [**PLAN-353 Soul App scaffold workbench design migration**](PLAN-353.md) `2026-05-18`

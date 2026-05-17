@@ -4,27 +4,40 @@ import { hrSoulAppManifest } from './fixtures'
 import { mountedContributionForManifest } from './registry'
 
 describe('Soul App registry projection', () => {
-  it('projects shell descriptors as app-owned mounted contribution metadata', () => {
+  it('projects workbench descriptors and workspace context as app-owned mounted contribution metadata', () => {
     const app = mountedContributionForManifest({
       ...hrSoulAppManifest,
       ui: {
         ...hrSoulAppManifest.ui,
-        shell: {
+        workbench: {
           primaryAction: {
             id: 'create-people-profile',
             label: 'New people profile',
             protocolAction: 'profiles.create',
-            slot: 'primary',
+            role: 'primary',
+          },
+        },
+        workspaceContext: {
+          terminal: {
+            cwd: { source: 'host-workspace-root' },
+            id: 'hr-workspace-terminal',
+            label: 'People workspace terminal',
           },
         },
       },
     })
 
-    expect(app.shell).toMatchObject({
+    expect(app.workbench).toMatchObject({
       primaryAction: {
         id: 'create-people-profile',
         protocolAction: 'profiles.create',
-        slot: 'primary',
+        role: 'primary',
+      },
+    })
+    expect(app.workspaceContext).toMatchObject({
+      terminal: {
+        cwd: { source: 'host-workspace-root' },
+        id: 'hr-workspace-terminal',
       },
     })
   })

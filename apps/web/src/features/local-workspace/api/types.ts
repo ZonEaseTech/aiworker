@@ -14,15 +14,15 @@ import type {
   VerticalSoul,
 } from '@zonease/aiworker-shared'
 
-export interface LocalSoulAppShellAction {
+export interface LocalSoulAppWorkbenchAction {
   id: string
   label: string
   protocolAction: string
   requiredPermissions?: readonly string[]
-  slot: 'primary' | 'action' | 'drawer-toggle' | 'refresh' | 'settings'
+  role: 'primary' | 'action' | 'panel-toggle' | 'refresh' | 'settings'
 }
 
-export interface LocalSoulAppShellSearch {
+export interface LocalSoulAppWorkbenchSearch {
   id: string
   label: string
   placeholder: string
@@ -30,14 +30,27 @@ export interface LocalSoulAppShellSearch {
   requiredPermissions?: readonly string[]
 }
 
-export interface LocalSoulAppShellDescriptor {
-  actions?: LocalSoulAppShellAction[]
-  primaryAction?: LocalSoulAppShellAction
-  search?: LocalSoulAppShellSearch
+export interface LocalSoulAppWorkbenchDescriptor {
+  actions?: LocalSoulAppWorkbenchAction[]
+  primaryAction?: LocalSoulAppWorkbenchAction
+  search?: LocalSoulAppWorkbenchSearch
   settings?: {
     id: string
     label: string
     protocolAction: string
+    requiredPermissions?: readonly string[]
+  }
+}
+
+export interface LocalSoulAppWorkspaceContext {
+  terminal?: {
+    cwd: {
+      protocolProvider?: string
+      source: 'host-workspace-root' | 'app-workspace-path' | 'protocol-resolver'
+      subpath?: string
+    }
+    id: string
+    label: string
     requiredPermissions?: readonly string[]
   }
 }
@@ -129,7 +142,8 @@ export interface LocalSoulAppSearchResponse {
 
 export type LocalHostedSoulApp = HostedSoulApp & {
   mountedContribution: HostedSoulApp['mountedContribution'] & {
-    shell?: LocalSoulAppShellDescriptor | null
+    workbench?: LocalSoulAppWorkbenchDescriptor | null
+    workspaceContext?: LocalSoulAppWorkspaceContext | null
   }
 }
 

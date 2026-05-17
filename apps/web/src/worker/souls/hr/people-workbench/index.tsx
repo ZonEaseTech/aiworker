@@ -1,4 +1,4 @@
-import type { LocalSoulAppShellAction } from '../../../../features/local-workspace/api/types'
+import type { LocalSoulAppWorkbenchAction } from '../../../../features/local-workspace/api/types'
 import type { SoulWorkbenchRendererProps } from '../../types'
 import type { HrProfileToolsRailTarget } from './components/profile-tools-rail'
 import type { ProfileListSectionId } from './types'
@@ -43,7 +43,7 @@ export function HrPeopleWorkbench({
     selectedArtifact,
     selectedTemplate,
     selectedWorkspace,
-    shellHeader,
+    workbenchBridge,
     sessions,
     soulCopy,
     submitting,
@@ -89,30 +89,30 @@ export function HrPeopleWorkbench({
       return next
     })
   }
-  async function handleShellAction(action: LocalSoulAppShellAction) {
-    const result = await shellHeader?.onAction(action)
+  async function handleWorkbenchAction(action: LocalSoulAppWorkbenchAction) {
+    const result = await workbenchBridge?.onAction(action)
     if (!result?.ok)
       return
-    if (action.slot === 'primary') {
+    if (action.role === 'primary') {
       onCreateWorkspace()
       return
     }
-    if (action.slot === 'drawer-toggle') {
+    if (action.role === 'panel-toggle') {
       if (focusedProfile)
         setProfileToolsExpanded(expanded => !expanded)
       return
     }
-    if (action.slot === 'settings')
+    if (action.role === 'settings')
       onOpenSettings()
   }
 
-  function renderShellHeaderAction(action: LocalSoulAppShellAction) {
-    const busy = shellHeader?.busyActionId === action.id
-    const Icon = action.slot === 'settings'
+  function renderWorkbenchBridgeAction(action: LocalSoulAppWorkbenchAction) {
+    const busy = workbenchBridge?.busyActionId === action.id
+    const Icon = action.role === 'settings'
       ? Settings
-      : action.slot === 'refresh'
+      : action.role === 'refresh'
         ? RefreshCw
-        : action.slot === 'drawer-toggle'
+        : action.role === 'panel-toggle'
           ? ShieldCheck
           : Plus
     return (
@@ -120,10 +120,10 @@ export function HrPeopleWorkbench({
         key={action.id}
         aria-busy={busy}
         className="shell-primary-action"
-        disabled={Boolean(shellHeader?.busyActionId)}
+        disabled={Boolean(workbenchBridge?.busyActionId)}
         title="Provided by the Soul App protocol"
         type="button"
-        onClick={() => void handleShellAction(action)}
+        onClick={() => void handleWorkbenchAction(action)}
       >
         <Icon aria-hidden="true" size={14} />
         <span>{action.label}</span>
@@ -140,7 +140,7 @@ export function HrPeopleWorkbench({
           <p>{focusedProfile ? labels.commandDetail(focusedProfile.name, focusedProfile.moment) : `${workerName} ${labels.headerFallback}`}</p>
         </div>
         <div className="entry-header-right hr-header-actions">
-          {shellHeader?.search ?? (
+          {workbenchBridge?.search ?? (
             <label className="hr-profile-search">
               <Search aria-hidden="true" size={14} />
               <span className="sr-only">{labels.profileListSearchLabel}</span>
@@ -156,8 +156,8 @@ export function HrPeopleWorkbench({
               <span key={item}>{item}</span>
             ))}
           </div>
-          {shellHeader
-            ? shellHeader.actionDescriptors.map(renderShellHeaderAction)
+          {workbenchBridge
+            ? workbenchBridge.actionDescriptors.map(renderWorkbenchBridgeAction)
             : (
                 <>
                   <button type="button" className="primary hr-header-command" onClick={onCreateWorkspace}>
@@ -189,14 +189,14 @@ export function HrPeopleWorkbench({
                   </IconButton>
                 )
               : null}
-            {shellHeader?.actionSlots.has('refresh')
+            {workbenchBridge?.actionRoles.has('refresh')
               ? null
               : (
                   <IconButton aria-label={copy.accessibility.refreshWorkspace} onClick={onRefresh}>
                     <RefreshCw aria-hidden="true" size={16} />
                   </IconButton>
                 )}
-            {shellHeader?.actionSlots.has('settings')
+            {workbenchBridge?.actionRoles.has('settings')
               ? null
               : (
                   <IconButton aria-label={copy.accessibility.openSettings} onClick={onOpenSettings}>
@@ -206,8 +206,8 @@ export function HrPeopleWorkbench({
           </div>
         </div>
       </header>
-      {shellHeader?.status}
-      {shellHeader?.results}
+      {workbenchBridge?.status}
+      {workbenchBridge?.results}
 
       <div className="entry-tab-content workspace-content hr-people-content" data-testid="hr-people-workbench">
         <div className={`hr-people-layout ${profileListVisible ? '' : 'without-profile-list'} ${focusedProfile ? 'has-profile-selection' : 'selection-empty'} ${focusedProfile && !profileToolsExpanded ? 'with-tools-rail' : ''}`}>

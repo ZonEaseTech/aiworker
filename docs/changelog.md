@@ -1,5 +1,50 @@
 # AIWorker Changelog
 
+## 2026-05-18 [completed] REFACTOR-082 / PLAN-353 — Soul App scaffold workbench design migration
+
+Migrated Soul App authoring/scaffold design to the current Host-owned header
+boundary:
+
+- `aiworker app create` now generates `ui.workbench` action/search/settings
+  descriptors and `ui.workspaceContext.terminal` workspace locator metadata;
+- generated Host-mounted services implement `/protocol/actions` and
+  `/protocol/search` for the scaffolded workbench descriptors;
+- `aiworker app smoke` now verifies declared workbench action/search protocol
+  wiring when present, including the official HR and QA apps;
+- Soul App authoring docs, CLI docs and SDK README now state that workbench
+  descriptors are app-owned while Host header actions remain platform chrome.
+
+## 2026-05-18 [completed] REFACTOR-081 / PLAN-352 — Host/Soul workbench contract cleanup
+
+Retired Host header slot semantics from the current Soul App manifest contract
+while preserving Host/Soul protocol coordination:
+
+- replaced `ui.shell` with `ui.workbench` for app-owned workbench
+  actions/search/settings;
+- replaced action `slot` placement with `role` intent, including
+  `panel-toggle`;
+- added `ui.workspaceContext.terminal` as the future Host-owned web terminal
+  workspace locator descriptor;
+- updated Host daemon API, Worker Web, security review, official HR/QA
+  manifests and current architecture/authoring docs to declare that Host header
+  actions are platform-owned and not Soul-customizable.
+
+## 2026-05-17 [completed] REFACTOR-080 / PLAN-351 — Worker Web Host shell V9 layout
+
+Implemented the approved Worker Web Host shell V9 layout. The Host header is
+now a 40px full-width chrome row above the sidebar/main grid, with fixed
+Host-owned `PanelLeft`, `PanelBottom`, and `PanelRight` controls. Sidebar
+collapse fully hides the sidebar with no icon rail.
+
+Replaced the sidebar brand/logo block with Host list item actions and kept the
+sidebar scoped to Soul App / Soul worker navigation. Workspace/session lists
+stay in the Soul App main surface, preserving the HR workbench, profile,
+artifact review, and session detail behavior.
+
+Verification passed: focused Worker Studio tests, Web typecheck, Web lint, Web
+build, browser smoke for expanded/collapsed layouts, and code-review-graph
+update/review.
+
 ## 2026-05-17 [completed] REL-040 / PLAN-350 — CLI 0.17.1 patch release
 
 Published `@zonease/aiworker-cli@0.17.1` as the patch release carrying the HR

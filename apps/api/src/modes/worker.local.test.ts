@@ -195,7 +195,7 @@ describe('local daemon API', () => {
       expect.objectContaining({
         id: 'create-release-gate',
         requiredPermissions: ['storage:write:aiworker-qa', 'search:write:aiworker-qa'],
-        surface: 'shell.primaryAction',
+        surface: 'workbench.primaryAction',
       }),
     ]))
     expect(reviewBody.review.summary.disabledRequiredConnectorIds).toEqual(['ci'])
@@ -554,7 +554,7 @@ describe('local daemon API', () => {
     }
   })
 
-  it('invokes declared Soul App shell actions and search through generic Host endpoints', async () => {
+  it('invokes declared Soul App workbench actions and search through generic Host endpoints', async () => {
     const target = await app()
     let actionMountContext: Record<string, unknown> | null = null
     const mountedService = Bun.serve({
@@ -613,13 +613,13 @@ describe('local daemon API', () => {
             },
             ui: {
               ...hrSoulAppManifest.ui,
-              shell: {
+              workbench: {
                 primaryAction: {
                   id: 'create-people-profile',
                   label: 'New people profile',
                   protocolAction: 'peopleProfiles.create',
                   requiredPermissions: ['storage:write:aiworker-hr'],
-                  slot: 'primary',
+                  role: 'primary',
                 },
                 search: {
                   id: 'people-profile-search',
@@ -698,7 +698,7 @@ describe('local daemon API', () => {
     }
   })
 
-  it('rejects shell action and search when descriptor permissions are not granted before mounted calls', async () => {
+  it('rejects workbench action and search when descriptor permissions are not granted before mounted calls', async () => {
     const target = await app()
     let protocolCalls = 0
     const mountedService = Bun.serve({
@@ -731,13 +731,13 @@ describe('local daemon API', () => {
             },
             ui: {
               ...hrSoulAppManifest.ui,
-              shell: {
+              workbench: {
                 primaryAction: {
                   id: 'create-people-profile',
                   label: 'New people profile',
                   protocolAction: 'peopleProfiles.create',
                   requiredPermissions: ['storage:write:aiworker-qa'],
-                  slot: 'primary',
+                  role: 'primary',
                 },
                 search: {
                   id: 'people-profile-search',
@@ -773,7 +773,7 @@ describe('local daemon API', () => {
     }
   })
 
-  it('rejects undeclared Soul App shell actions and search providers', async () => {
+  it('rejects undeclared Soul App workbench actions and search providers', async () => {
     const target = await app()
     await target.request('/api/local/apps/install', {
       method: 'POST',

@@ -58,11 +58,12 @@ describe('QA reference Soul App', () => {
       expect.objectContaining({ action: 'read', kind: 'search', target: 'aiworker-qa' }),
       expect.objectContaining({ action: 'write', kind: 'search', target: 'aiworker-qa' }),
     ]))
-    expect(qaManifestJson.ui.shell?.primaryAction?.protocolAction).toBe('releaseGates.create')
-    expect(qaManifestJson.ui.shell?.primaryAction?.requiredPermissions).toContain('storage:write:aiworker-qa')
-    expect(qaManifestJson.ui.shell?.primaryAction?.requiredPermissions).toContain('search:write:aiworker-qa')
-    expect(qaManifestJson.ui.shell?.search?.protocolProvider).toBe('releases.search')
-    expect(qaManifestJson.ui.shell?.search?.requiredPermissions).toContain('search:read:aiworker-qa')
+    expect(qaManifestJson.ui.workbench?.primaryAction?.protocolAction).toBe('releaseGates.create')
+    expect(qaManifestJson.ui.workbench?.primaryAction?.requiredPermissions).toContain('storage:write:aiworker-qa')
+    expect(qaManifestJson.ui.workbench?.primaryAction?.requiredPermissions).toContain('search:write:aiworker-qa')
+    expect(qaManifestJson.ui.workbench?.search?.protocolProvider).toBe('releases.search')
+    expect(qaManifestJson.ui.workbench?.search?.requiredPermissions).toContain('search:read:aiworker-qa')
+    expect(qaManifestJson.ui.workspaceContext?.terminal?.cwd).toEqual({ source: 'host-workspace-root' })
   })
 
   it('requires the Host mount token for mounted service domain routes', async () => {

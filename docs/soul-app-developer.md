@@ -52,6 +52,13 @@ Production Soul Apps live under `apps/<app-id>/`. The scaffold creates:
   `host-adapter/standalone/standalone.ts`
 - package scripts for `validate`, `smoke`, and `typecheck`
 
+The starter manifest follows the current mounted design: app-owned action,
+search and settings descriptors live under `ui.workbench`, and process locator
+intent such as terminal cwd lives under `ui.workspaceContext`. Generated
+Host-mounted services implement the matching `/protocol/actions` and
+`/protocol/search` endpoints; they do not declare or customize Host header
+slots.
+
 Reference and production apps should use the fuller app layout:
 
 ```text
@@ -174,7 +181,9 @@ that declare standalone support, it also starts a temporary local HTML smoke
 server and fetches it to prove the standalone surface is browser-openable. For
 apps that declare a host-mounted local service command, it starts the service,
 checks the health route, and injects the discovered base URL into the temporary
-Host-mounted smoke manifest.
+Host-mounted smoke manifest. If the app declares `ui.workbench`, smoke also
+invokes one declared workbench action and one declared search provider through
+the mounted service protocol.
 
 The output reports:
 
@@ -182,6 +191,7 @@ The output reports:
 - standalone support status
 - standalone smoke URL and HTTP status
 - mounted service URL and HTTP status, when declared
+- workbench action/search smoke status, when declared
 - Host mounted status
 - hosted registry status
 - artifact count or exposed descriptor count
@@ -197,7 +207,7 @@ Host owns platform concerns:
 - global appearance, language, default engine, local MCP and connector settings
 - permission, storage, connector, log, search and audit brokers
 - worker/workspace/session locator
-- Host shell and optional header contract
+- Host shell and Host-owned header chrome
 - mounted service launch/connect
 - protocol discovery and descriptor cache
 
@@ -232,10 +242,27 @@ verdicts, review meaning, lessons or memories from app files, DB rows, prompts
 or UI labels.
 
 Host action/search/settings invocation must resolve a manifest-declared
-descriptor first. Host must reject undeclared protocol actions or search
-providers, and must not infer app domain behavior from protocol names.
+`ui.workbench` descriptor first. Host must reject undeclared protocol actions or
+search providers, and must not infer app domain behavior from protocol names.
 Descriptor `requiredPermissions` are broker-enforced before Host contacts a
 mounted Soul App service.
+
+Mounted Soul Apps must not declare Host header slots. Host header title,
+primary action, searchbar, action menu, drawer toggles, refresh and settings
+placement are Host-owned chrome. App-owned workbench actions/search/settings
+belong under `ui.workbench` and describe intent with `role`, not placement with
+`slot`.
+
+If a Soul App needs Host process coordination, such as a future web terminal, it
+should expose workspace locator intent through `ui.workspaceContext`. Terminal
+cwd descriptors must use one of the explicit sources:
+
+- `host-workspace-root`
+- `app-workspace-path` with `subpath`
+- `protocol-resolver` with `protocolProvider`
+
+Host owns terminal rendering, process lifecycle and authorization. Soul Apps
+only declare the workspace context needed to resolve the correct location.
 Host auth is provider-backed. Local bearer auth is the first implementation;
 future Logto integration should stay behind the same Host provider boundary.
 Mounted Soul Apps receive operator identity through signed mount context and

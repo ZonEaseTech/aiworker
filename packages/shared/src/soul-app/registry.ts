@@ -4,7 +4,7 @@ import type { SoulAppCapability, SoulAppManifest, SoulAppManifestValidationIssue
 
 import { z as zod } from 'zod'
 import { capabilityTemplateSchema, verticalSoulSchema } from '../vertical-soul'
-import { soulAppManifestSchema, soulAppManifestValidationIssueSchema, soulAppShellSchema } from './manifest'
+import { soulAppManifestSchema, soulAppManifestValidationIssueSchema, soulAppWorkbenchSchema, soulAppWorkspaceContextSchema } from './manifest'
 
 export const soulAppRegistryStatusSchema = zod.enum(['installed', 'enabled', 'disabled', 'error'])
 export type SoulAppRegistryStatus = z.infer<typeof soulAppRegistryStatusSchema>
@@ -23,8 +23,9 @@ export const soulAppMountedContributionSchema = zod.object({
   panelIds: zod.array(zod.string().min(1)).readonly(),
   reviewPanelIds: zod.array(zod.string().min(1)).readonly(),
   routePaths: zod.array(zod.string().min(1)).readonly(),
-  shell: soulAppShellSchema.nullable(),
   surfaceIds: zod.array(zod.string().min(1)).readonly(),
+  workbench: soulAppWorkbenchSchema.nullable(),
+  workspaceContext: soulAppWorkspaceContextSchema.nullable(),
   workspaceWidgetIds: zod.array(zod.string().min(1)).readonly(),
 })
 export type SoulAppMountedContribution = z.infer<typeof soulAppMountedContributionSchema>
@@ -127,8 +128,9 @@ export function mountedContributionForManifest(manifest: SoulAppManifest): SoulA
     panelIds: manifest.ui.panels.map(slot => slot.id),
     reviewPanelIds: manifest.ui.reviewPanels.map(slot => slot.id),
     routePaths: manifest.ui.routes.map(route => route.path),
-    shell: manifest.ui.shell ?? null,
     surfaceIds: surfaces.map(item => item.id),
+    workbench: manifest.ui.workbench ?? null,
+    workspaceContext: manifest.ui.workspaceContext ?? null,
     workspaceWidgetIds: (manifest.ui.workspaceWidgets ?? []).map(slot => slot.id),
   }
 }

@@ -228,7 +228,7 @@ describe('Soul App isolation broker', () => {
   it('indexes app-owned search descriptors behind search broker permissions', () => {
     const noSearchManifest = JSON.parse(JSON.stringify(hrSoulAppManifest)) as typeof hrSoulAppManifest
     noSearchManifest.permissions = noSearchManifest.permissions.filter(permission => permission.kind !== 'search')
-    delete noSearchManifest.ui.shell
+    delete noSearchManifest.ui.workbench
     installSoulAppManifest({
       manifest: noSearchManifest,
       sourceKind: 'inline',

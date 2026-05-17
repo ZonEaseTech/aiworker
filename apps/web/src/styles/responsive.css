@@ -4,6 +4,24 @@
     grid-template-columns: 320px minmax(0, 1fr) !important;
   }
 
+  .workspace-session-route {
+    grid-template-columns: 320px minmax(0, 1fr) var(--studio-detail-width) !important;
+  }
+
+  .workspace-entry.workspace-sidebar-collapsed,
+  .workspace-home-route.workspace-sidebar-collapsed,
+  .workspace-context-route.workspace-sidebar-collapsed {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .workspace-session-route.workspace-sidebar-collapsed {
+    grid-template-columns: minmax(0, 1fr) var(--studio-detail-width) !important;
+  }
+
+  .workspace-session-route.workspace-sidebar-collapsed.detail-drawer-collapsed {
+    grid-template-columns: minmax(0, 1fr) 0 !important;
+  }
+
   .session-panel {
     grid-column: 1 / -1;
     border-left: 0;

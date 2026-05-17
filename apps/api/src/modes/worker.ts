@@ -105,7 +105,7 @@ interface MountedSurfaceContribution {
   target?: string
 }
 
-interface ShellActionDescriptor {
+interface WorkbenchActionDescriptor {
   id: string
   protocolAction: string
   requiredPermissions?: readonly string[]
@@ -297,7 +297,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
       return c.json({ error: { code: 'SOUL_APP_NOT_FOUND', message: `Soul App was not found: ${c.req.param('appId')}` } }, 404)
     if (app.status !== 'enabled')
       return c.json({ error: { code: 'SOUL_APP_DISABLED', message: `Soul App is not enabled: ${app.appId}` } }, 409)
-    const action = resolveShellAction(app, c.req.param('actionId'))
+    const action = resolveWorkbenchAction(app, c.req.param('actionId'))
     if (!action)
       return c.json({ error: { code: 'SOUL_APP_ACTION_NOT_DECLARED', message: `Soul App action is not declared: ${c.req.param('actionId')}` } }, 404)
     const body = await readJson<{ input?: Record<string, unknown>, scope?: Record<string, unknown> }>(c.req)
@@ -314,7 +314,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     if (app.status !== 'enabled')
       return c.json({ error: { code: 'SOUL_APP_DISABLED', message: `Soul App is not enabled: ${app.appId}` } }, 409)
     const providerId = c.req.query('providerId') ?? ''
-    const search = app.manifest.ui.shell?.search
+    const search = app.manifest.ui.workbench?.search
     if (!search || search.protocolProvider !== providerId)
       return c.json({ error: { code: 'SOUL_APP_SEARCH_NOT_DECLARED', message: `Soul App search provider is not declared: ${providerId}` } }, 404)
     const decision = decideDescriptorRequiredPermissions(c, state, search.requiredPermissions, `search ${search.id}`)
@@ -922,12 +922,12 @@ function searchIndexReferenceFromRecord(value: unknown) {
   }
 }
 
-function resolveShellAction(app: HostedSoulApp, actionId: string): ShellActionDescriptor | null {
-  const shell = app.manifest.ui.shell
-  const actions: ShellActionDescriptor[] = [
-    ...(shell?.primaryAction ? [shell.primaryAction] : []),
-    ...(shell?.actions ?? []),
-    ...(shell?.settings ? [shell.settings] : []),
+function resolveWorkbenchAction(app: HostedSoulApp, actionId: string): WorkbenchActionDescriptor | null {
+  const workbench = app.manifest.ui.workbench
+  const actions: WorkbenchActionDescriptor[] = [
+    ...(workbench?.primaryAction ? [workbench.primaryAction] : []),
+    ...(workbench?.actions ?? []),
+    ...(workbench?.settings ? [workbench.settings] : []),
   ]
   return actions.find(action => action.id === actionId) ?? null
 }
@@ -1010,7 +1010,7 @@ async function mountedActionResponse(
   c: Context,
   state: LocalDaemonState,
   app: HostedSoulApp,
-  action: ShellActionDescriptor,
+  action: WorkbenchActionDescriptor,
   input: Record<string, unknown>,
   scope?: BrokerRequestScope,
 ): Promise<Response> {
@@ -1061,7 +1061,7 @@ async function mountedSearchResponse(
   c: Context,
   state: LocalDaemonState,
   app: HostedSoulApp,
-  search: NonNullable<NonNullable<HostedSoulApp['manifest']['ui']['shell']>['search']>,
+  search: NonNullable<NonNullable<HostedSoulApp['manifest']['ui']['workbench']>['search']>,
 ): Promise<Response> {
   const service = await mountedSoulAppServiceOrResponse(c, state, app)
   if (service instanceof Response)
@@ -1874,7 +1874,7 @@ function registerLocalOpenApiPaths(app: OpenAPIHono): void {
     { method: 'post', path: '/api/local/apps/{appId}/enable', summary: 'Enable Host Soul App', tags: ['apps'], created: true },
     { method: 'post', path: '/api/local/apps/{appId}/disable', summary: 'Disable Host Soul App', tags: ['apps'], created: true },
     { method: 'post', path: '/api/local/apps/{appId}/healthcheck', summary: 'Run Host Soul App static healthcheck', tags: ['apps'], created: true },
-    { method: 'post', path: '/api/local/apps/{appId}/actions/{actionId}', summary: 'Invoke a declared Soul App shell action', tags: ['apps'], created: true },
+    { method: 'post', path: '/api/local/apps/{appId}/actions/{actionId}', summary: 'Invoke a declared Soul App workbench action', tags: ['apps'], created: true },
     { method: 'get', path: '/api/local/apps/{appId}/search', summary: 'Search through a declared Soul App provider', tags: ['apps'] },
     { method: 'get', path: '/api/local/apps/{appId}/broker/permissions', summary: 'List Soul App broker permissions', tags: ['apps'] },
     { method: 'get', path: '/api/local/apps/{appId}/broker/providers', summary: 'List Host broker providers visible to a Soul App', tags: ['apps'] },

@@ -61,10 +61,12 @@ export function WorkerStudioLayout({
   detail,
   detailCollapsed = false,
   dialogs,
+  header,
   main,
   mainLabel,
   resolvedTheme,
   sidebar,
+  sidebarCollapsed = false,
   sidebarLabel,
   variant,
 }: {
@@ -72,17 +74,27 @@ export function WorkerStudioLayout({
   detail?: ReactNode
   detailCollapsed?: boolean
   dialogs?: ReactNode
+  header?: ReactNode
   main: ReactNode
   mainLabel: string
   resolvedTheme: string
   sidebar: ReactNode
+  sidebarCollapsed?: boolean
   sidebarLabel: string
   variant: WorkerStudioLayoutVariant
 }) {
   const routeClass = variant === 'session' ? 'workspace-session-route has-artifact-rail' : variant === 'workspace' ? 'workspace-context-route' : 'workspace-home-route'
   return (
     <AppShell appearance={appearance} resolvedTheme={resolvedTheme}>
-      <div className={cx('entry workspace-entry', routeClass, variant === 'session' && detailCollapsed ? 'detail-drawer-collapsed' : undefined)}>
+      <div className={cx(
+        'entry workspace-entry',
+        routeClass,
+        header ? 'has-host-header' : undefined,
+        sidebarCollapsed ? 'workspace-sidebar-collapsed' : undefined,
+        variant === 'session' && detailCollapsed ? 'detail-drawer-collapsed' : undefined,
+      )}
+      >
+        {header ? <div className="host-header-row">{header}</div> : null}
         <ShellSidebar label={sidebarLabel} className="soul-sidebar">
           {sidebar}
         </ShellSidebar>

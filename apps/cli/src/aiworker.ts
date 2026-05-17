@@ -1114,6 +1114,8 @@ async function smokeAppCommand(inputPath: string): Promise<void> {
         mountedService: mountedService.status,
         mountedServiceHttpStatus: mountedService.httpStatus,
         mountedServiceUrl: mountedService.url,
+        workbenchAction: mountedService.workbenchAction,
+        workbenchSearch: mountedService.workbenchSearch,
         reviewStatus: turn.review?.verdict ?? null,
         standalone: standalone.status,
         standaloneHttpStatus: standalone.httpStatus,
@@ -1135,6 +1137,8 @@ interface MountedServiceSmoke {
   status: 'pass' | 'skip'
   stop: () => void
   url: string | null
+  workbenchAction: 'pass' | 'skip'
+  workbenchSearch: 'pass' | 'skip'
 }
 
 interface AppValidationIssue {
@@ -1371,6 +1375,46 @@ function createScaffoldManifest(appId: string): SoulAppManifest {
           },
         },
       ],
+      workbench: {
+        actions: [
+          {
+            id: 'refresh-briefs',
+            label: 'Refresh',
+            protocolAction: 'briefs.refresh',
+            requiredPermissions: [`storage:read:${appId}`],
+            role: 'refresh',
+          },
+        ],
+        primaryAction: {
+          id: 'create-brief',
+          label: 'New brief',
+          protocolAction: 'briefs.create',
+          requiredPermissions: [`storage:write:${appId}`, 'artifact:write:brief'],
+          role: 'primary',
+        },
+        search: {
+          id: 'brief-search',
+          label: 'Search briefs',
+          placeholder: 'Search briefs',
+          protocolProvider: 'briefs.search',
+          requiredPermissions: [`storage:read:${appId}`],
+        },
+        settings: {
+          id: 'brief-settings',
+          label: 'App settings',
+          protocolAction: 'settings.open',
+          requiredPermissions: [`api:serve:${routePrefix}`],
+        },
+      },
+      workspaceContext: {
+        terminal: {
+          cwd: {
+            source: 'host-workspace-root',
+          },
+          id: 'starter-workspace-terminal',
+          label: 'Workspace terminal',
+        },
+      },
       workspaceWidgets: [
         {
           entry: './product/web/widgets/brief-widget.tsx',
@@ -1443,7 +1487,7 @@ async function runStandaloneBrowserSmoke(manifest: SoulAppManifest): Promise<{ h
 async function runMountedServiceSmoke(manifest: SoulAppManifest, rootDir: string | null): Promise<MountedServiceSmoke> {
   const service = manifest.api.localService
   if (!manifest.modes.hostMounted.supported || !service?.command?.length || !rootDir)
-    return { httpStatus: null, status: 'skip', stop: () => {}, url: null }
+    return { httpStatus: null, status: 'skip', stop: () => {}, url: null, workbenchAction: 'skip', workbenchSearch: 'skip' }
 
   const child = spawn(service.command[0]!, service.command.slice(1), {
     cwd: path.resolve(rootDir, service.cwd ?? '.'),
@@ -1464,7 +1508,48 @@ async function runMountedServiceSmoke(manifest: SoulAppManifest, rootDir: string
     stop()
     throw new Error(`Mounted Soul App service healthcheck failed ${res.status}: ${healthUrl}`)
   }
-  return { httpStatus: res.status, status: 'pass', stop, url }
+  const workbenchAction = await runMountedWorkbenchActionSmoke(manifest, url)
+  const workbenchSearch = await runMountedWorkbenchSearchSmoke(manifest, url)
+  return { httpStatus: res.status, status: 'pass', stop, url, workbenchAction, workbenchSearch }
+}
+
+async function runMountedWorkbenchActionSmoke(manifest: SoulAppManifest, baseUrl: string): Promise<'pass' | 'skip'> {
+  const action = manifest.ui.workbench?.primaryAction ?? manifest.ui.workbench?.actions?.[0] ?? manifest.ui.workbench?.settings
+  if (!action)
+    return 'skip'
+
+  const res = await fetch(new URL('/protocol/actions', baseUrl), {
+    body: JSON.stringify({
+      input: { source: 'app-smoke' },
+      protocolAction: action.protocolAction,
+    }),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  })
+  if (!res.ok)
+    throw new Error(`Mounted Soul App workbench action smoke failed ${res.status}: ${action.id}`)
+  const body = await res.json() as { ok?: unknown }
+  if (body.ok !== true)
+    throw new Error(`Mounted Soul App workbench action smoke returned non-ok result: ${action.id}`)
+  return 'pass'
+}
+
+async function runMountedWorkbenchSearchSmoke(manifest: SoulAppManifest, baseUrl: string): Promise<'pass' | 'skip'> {
+  const search = manifest.ui.workbench?.search
+  if (!search)
+    return 'skip'
+
+  const url = new URL('/protocol/search', baseUrl)
+  url.searchParams.set('providerId', search.protocolProvider)
+  url.searchParams.set('query', 'smoke')
+  url.searchParams.set('limit', '1')
+  const res = await fetch(url)
+  if (!res.ok)
+    throw new Error(`Mounted Soul App workbench search smoke failed ${res.status}: ${search.id}`)
+  const body = await res.json() as { providerId?: unknown }
+  if (body.providerId !== search.protocolProvider)
+    throw new Error(`Mounted Soul App workbench search smoke returned unexpected provider: ${search.id}`)
+  return 'pass'
 }
 
 async function waitForMountedServiceUrl(child: ChildProcessByStdio<null, Readable, Readable>, stop: () => void): Promise<string> {
@@ -1584,6 +1669,8 @@ function scaffoldReadme(appId: string): string {
     '## Contribution Checklist',
     '',
     '- Keep app code on `@zonease/aiworker-soul-app-sdk`; do not import Host private packages.',
+    '- Put mounted app actions, search, and settings in `ui.workbench`; do not declare Host header slots.',
+    '- Use `ui.workspaceContext` for Host-owned workspace process context such as a future web terminal.',
     '- Keep storage permissions scoped to this app namespace.',
     '- Add one artifact schema and one review policy for each new artifact type.',
     '- Run PMA, focused tests, and code-review-graph before submitting Host changes.',
@@ -1831,6 +1918,12 @@ export function serveHostMounted(port = Number(Bun.env.PORT ?? 0)) {
       if (tokenError)
         return tokenError
 
+      if (url.pathname === '/protocol/actions' && request.method === 'POST')
+        return handleProtocolAction(request)
+
+      if (url.pathname === '/protocol/search' && request.method === 'GET')
+        return handleProtocolSearch(url)
+
       if (url.pathname === '/domain') {
         return Response.json({
           appId: manifest.id,
@@ -1893,6 +1986,62 @@ function verifyMountToken(request: Request): Response | null {
   return actual === expected
     ? null
     : Response.json({ error: { code: 'INVALID_MOUNT_TOKEN', message: 'Host mount token is required.' } }, { status: 401 })
+}
+
+interface ProtocolActionBody {
+  input?: Record<string, unknown>
+  protocolAction?: string
+}
+
+async function handleProtocolAction(request: Request): Promise<Response> {
+  const body = await request.json().catch(() => ({})) as ProtocolActionBody
+  const input = body.input ?? {}
+
+  if (body.protocolAction === 'briefs.create') {
+    return Response.json({
+      message: 'Starter brief draft created.',
+      ok: true,
+      refresh: true,
+      result: {
+        kind: 'brief',
+        title: typeof input.query === 'string' ? input.query : 'Starter brief',
+      },
+    })
+  }
+
+  if (body.protocolAction === 'briefs.refresh') {
+    return Response.json({ message: 'Starter briefs refreshed.', ok: true, refresh: true })
+  }
+
+  if (body.protocolAction === 'settings.open') {
+    return Response.json({ message: 'Starter app settings are handled by the app workbench.', ok: true })
+  }
+
+  return Response.json({ message: \`Unknown protocol action: \${body.protocolAction ?? 'missing'}\`, ok: false }, { status: 404 })
+}
+
+function handleProtocolSearch(url: URL): Response {
+  const providerId = url.searchParams.get('providerId') ?? ''
+  const query = url.searchParams.get('query') ?? ''
+  if (providerId !== 'briefs.search')
+    return Response.json({ error: { code: 'PROVIDER_NOT_FOUND', message: \`Unknown provider: \${providerId}\` } }, { status: 404 })
+
+  return Response.json({
+    items: [{
+      appId: manifest.id,
+      authority: 'soul-app',
+      id: 'starter-brief',
+      kind: 'brief',
+      openAction: {
+        id: 'create-brief',
+        input: { query },
+      },
+      status: 'draft',
+      summary: query ? \`Starter brief match for \${query}\` : 'Starter brief workspace item',
+      title: query ? \`Brief: \${query}\` : 'Starter brief',
+    }],
+    providerId: 'briefs.search',
+  })
 }
 `
 }

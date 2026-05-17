@@ -757,8 +757,50 @@ describe('aiworker local CLI', () => {
     }
     const scaffoldReadme = await readFile(path.join(appDir, 'README.md'), 'utf8')
     const scaffoldWorkspaceGitignore = await readFile(path.join(appDir, 'engine-assets', 'workspace', '.gitignore'), 'utf8')
+    const scaffoldManifest = JSON.parse(await readFile(path.join(appDir, 'soul-app.manifest.json'), 'utf8')) as {
+      ui: {
+        workbench?: {
+          actions?: Array<{ id: string, protocolAction: string, role: string }>
+          primaryAction?: { id: string, protocolAction: string, role: string }
+          search?: { id: string, protocolProvider: string }
+          settings?: { id: string, protocolAction: string }
+        }
+        workspaceContext?: {
+          terminal?: {
+            cwd?: { source: string }
+            id: string
+          }
+        }
+      }
+    }
     expect(scaffoldPackageJson.dependencies['@zonease/aiworker-soul-app-sdk']).toBe('workspace:*')
+    expect(scaffoldManifest.ui.workbench?.primaryAction).toEqual(expect.objectContaining({
+      id: 'create-brief',
+      protocolAction: 'briefs.create',
+      role: 'primary',
+    }))
+    expect(scaffoldManifest.ui.workbench?.actions).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'refresh-briefs',
+        protocolAction: 'briefs.refresh',
+        role: 'refresh',
+      }),
+    ]))
+    expect(scaffoldManifest.ui.workbench?.search).toEqual(expect.objectContaining({
+      id: 'brief-search',
+      protocolProvider: 'briefs.search',
+    }))
+    expect(scaffoldManifest.ui.workbench?.settings).toEqual(expect.objectContaining({
+      id: 'brief-settings',
+      protocolAction: 'settings.open',
+    }))
+    expect(scaffoldManifest.ui.workspaceContext?.terminal).toEqual(expect.objectContaining({
+      cwd: { source: 'host-workspace-root' },
+      id: 'starter-workspace-terminal',
+    }))
     expect(scaffoldReadme).toContain('source-checkout preview')
+    expect(scaffoldReadme).toContain('ui.workbench')
+    expect(scaffoldReadme).toContain('ui.workspaceContext')
     expect(scaffoldReadme).toContain('replace `workspace:*` after the SDK is published')
     expect(scaffoldWorkspaceGitignore).toContain('.aiworker/sessions/')
     expect(scaffoldWorkspaceGitignore).toContain('.aiworker/projections.json')
@@ -791,7 +833,23 @@ describe('aiworker local CLI', () => {
     output = ''
 
     expect(await runCli(argv('app', 'smoke', appDir))).toBe(0)
-    const smoke = JSON.parse(output) as { smoke: { appId: string, artifactCount: number, hostedStatus: string, mounted: string, mountedService: string, mountedServiceHttpStatus: number, mountedServiceUrl: string, standalone: string, standaloneHttpStatus: number, standaloneUrl: string, status: string } }
+    const smoke = JSON.parse(output) as {
+      smoke: {
+        appId: string
+        artifactCount: number
+        hostedStatus: string
+        mounted: string
+        mountedService: string
+        mountedServiceHttpStatus: number
+        mountedServiceUrl: string
+        standalone: string
+        standaloneHttpStatus: number
+        standaloneUrl: string
+        status: string
+        workbenchAction: string
+        workbenchSearch: string
+      }
+    }
     expect(smoke.smoke).toMatchObject({
       appId: 'demo-soul-app',
       artifactCount: 1,
@@ -802,6 +860,8 @@ describe('aiworker local CLI', () => {
       standalone: 'pass',
       standaloneHttpStatus: 200,
       status: 'pass',
+      workbenchAction: 'pass',
+      workbenchSearch: 'pass',
     })
     expect(smoke.smoke.standaloneUrl).toStartWith('http://127.0.0.1:')
     expect(smoke.smoke.mountedServiceUrl).toStartWith('http://127.0.0.1:')

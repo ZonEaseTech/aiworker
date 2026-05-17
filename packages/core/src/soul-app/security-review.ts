@@ -9,15 +9,16 @@ import type {
 import type { SoulAppRegistryContext } from './registry'
 
 export type SoulAppSecurityReviewDescriptorSurface
-  = 'shell.action'
-    | 'shell.primaryAction'
-    | 'shell.search'
-    | 'shell.settings'
+  = 'workbench.action'
+    | 'workbench.primaryAction'
+    | 'workbench.search'
+    | 'workbench.settings'
     | 'ui.artifactPreview'
     | 'ui.panel'
     | 'ui.reviewPanel'
     | 'ui.route'
     | 'ui.workspaceWidget'
+    | 'workspaceContext.terminal'
 
 export interface SoulAppSecurityReviewConnector {
   access: readonly SoulAppConnectorAccess[]
@@ -125,40 +126,48 @@ function reviewConnector(
 }
 
 function collectDescriptorPermissions(app: HostedSoulApp): SoulAppSecurityReviewDescriptor[] {
-  const shell = app.manifest.ui.shell
+  const workbench = app.manifest.ui.workbench
   const descriptors: SoulAppSecurityReviewDescriptor[] = []
-  if (shell?.primaryAction?.requiredPermissions?.length) {
+  if (workbench?.primaryAction?.requiredPermissions?.length) {
     descriptors.push({
-      id: shell.primaryAction.id,
-      label: shell.primaryAction.label,
-      requiredPermissions: shell.primaryAction.requiredPermissions,
-      surface: 'shell.primaryAction',
+      id: workbench.primaryAction.id,
+      label: workbench.primaryAction.label,
+      requiredPermissions: workbench.primaryAction.requiredPermissions,
+      surface: 'workbench.primaryAction',
     })
   }
-  for (const action of shell?.actions ?? []) {
+  for (const action of workbench?.actions ?? []) {
     if (action.requiredPermissions?.length) {
       descriptors.push({
         id: action.id,
         label: action.label,
         requiredPermissions: action.requiredPermissions,
-        surface: 'shell.action',
+        surface: 'workbench.action',
       })
     }
   }
-  if (shell?.search?.requiredPermissions?.length) {
+  if (workbench?.search?.requiredPermissions?.length) {
     descriptors.push({
-      id: shell.search.id,
-      label: shell.search.label,
-      requiredPermissions: shell.search.requiredPermissions,
-      surface: 'shell.search',
+      id: workbench.search.id,
+      label: workbench.search.label,
+      requiredPermissions: workbench.search.requiredPermissions,
+      surface: 'workbench.search',
     })
   }
-  if (shell?.settings?.requiredPermissions?.length) {
+  if (workbench?.settings?.requiredPermissions?.length) {
     descriptors.push({
-      id: shell.settings.id,
-      label: shell.settings.label,
-      requiredPermissions: shell.settings.requiredPermissions,
-      surface: 'shell.settings',
+      id: workbench.settings.id,
+      label: workbench.settings.label,
+      requiredPermissions: workbench.settings.requiredPermissions,
+      surface: 'workbench.settings',
+    })
+  }
+  if (app.manifest.ui.workspaceContext?.terminal?.requiredPermissions?.length) {
+    descriptors.push({
+      id: app.manifest.ui.workspaceContext.terminal.id,
+      label: app.manifest.ui.workspaceContext.terminal.label,
+      requiredPermissions: app.manifest.ui.workspaceContext.terminal.requiredPermissions,
+      surface: 'workspaceContext.terminal',
     })
   }
 

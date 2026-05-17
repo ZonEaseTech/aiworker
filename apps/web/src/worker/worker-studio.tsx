@@ -9,7 +9,7 @@ import type {
   SoulWorkbenchAction,
 } from '@zonease/aiworker-shared'
 import type { FormEvent } from 'react'
-import type { LocalSoulAppSearchResult, LocalSoulAppShellAction, LocalWorkspaceData } from '../features/local-workspace/api/types'
+import type { LocalSoulAppSearchResult, LocalSoulAppWorkbenchAction, LocalWorkspaceData } from '../features/local-workspace/api/types'
 import type { SettingsSection } from '../features/settings'
 import type { ArtifactPreviewState } from './session-detail'
 import type { SoulProfilePreviewState, SoulWorkbenchContext } from './souls/types'
@@ -18,11 +18,13 @@ import { IconButton, StudioEmptyState, StudioMainFrame, StudioSectionHeader, Wor
 import { prepareProfileMarkdownForPromotion } from '@zonease/aiworker-shared'
 import { findSoulWorkbenchForSoul } from '@zonease/aiworker-shared/soul-workbench-catalog'
 import {
-  ArrowLeft,
   ChevronDown,
   ChevronRight,
   FileText,
-  Languages,
+  PanelBottom,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRight,
   Plus,
   RefreshCw,
   Search,
@@ -33,9 +35,7 @@ import { navigateWorkerRoute, parseWorkerRoute, useWorkerRoute } from '../app/ro
 import {
   displaySoul,
   displayTemplate,
-  formatRelativeTime,
   formatStatus,
-  languageLabel,
   messagesFor,
   normalizeLocale,
 } from '../features/i18n'
@@ -105,14 +105,14 @@ type ProfilePreviewAction
     | { type: 'loaded', content: string, workspaceId: string }
     | { type: 'failed', error: string, workspaceId: string }
 
-interface ShellSearchState {
+interface WorkbenchSearchState {
   error: string | null
   items: LocalSoulAppSearchResult[]
   loading: boolean
   query: string
 }
 
-type ShellSearchAction
+type WorkbenchSearchAction
   = | { query: string, type: 'idle' }
     | { query: string, type: 'loading' }
     | { items: LocalSoulAppSearchResult[], query: string, type: 'loaded' }
@@ -144,7 +144,7 @@ function profilePreviewReducer(_state: SoulProfilePreviewState, action: ProfileP
   }
 }
 
-function shellSearchReducer(state: ShellSearchState, action: ShellSearchAction): ShellSearchState {
+function workbenchSearchReducer(state: WorkbenchSearchState, action: WorkbenchSearchAction): WorkbenchSearchState {
   switch (action.type) {
     case 'idle':
       return { error: null, items: [], loading: false, query: action.query }
@@ -172,6 +172,7 @@ export function WorkerStudio() {
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false)
   const [collapsedWorkerSoulIds, setCollapsedWorkerSoulIds] = useState<Set<string>>(() => new Set())
   const [detailDrawerCollapsed, setDetailDrawerCollapsed] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsInitialSection, setSettingsInitialSection] = useState<SettingsSection>('execution')
   const [submitting, setSubmitting] = useState(false)
@@ -180,11 +181,11 @@ export function WorkerStudio() {
   const [reviewSubmitting, setReviewSubmitting] = useState(false)
   const [profileRevisionSubmitting, setProfileRevisionSubmitting] = useState(false)
   const [lessonBusyId, setLessonBusyId] = useState<string | null>(null)
-  const [shellActionState, setShellActionState] = useState<{ busyActionId: string | null, error: string | null }>({
+  const [workbenchActionState, setWorkbenchActionState] = useState<{ busyActionId: string | null, error: string | null }>({
     busyActionId: null,
     error: null,
   })
-  const [shellSearchState, dispatchShellSearch] = useReducer(shellSearchReducer, {
+  const [workbenchSearchState, dispatchWorkbenchSearch] = useReducer(workbenchSearchReducer, {
     error: null,
     items: [],
     loading: false,
@@ -282,30 +283,30 @@ export function WorkerStudio() {
         || templateCopy?.name.toLowerCase().includes(needle)
     })
   }, [activeLocale, allSessions, data?.templates, query, soulWorkspaces])
-  const shell = selectedSoulApp?.mountedContribution.shell ?? selectedSoulApp?.manifest.ui?.shell ?? null
-  const shellPrimaryAction = shell?.primaryAction ?? null
-  const shellSearch = shell?.search ?? null
-  const shellActions = useMemo(() => {
-    const actions: LocalSoulAppShellAction[] = []
+  const workbenchContract = selectedSoulApp?.mountedContribution.workbench ?? selectedSoulApp?.manifest.ui?.workbench ?? null
+  const workbenchPrimaryAction = workbenchContract?.primaryAction ?? null
+  const workbenchSearch = workbenchContract?.search ?? null
+  const workbenchActions = useMemo(() => {
+    const actions: LocalSoulAppWorkbenchAction[] = []
     const seen = new Set<string>()
-    const pushAction = (action: LocalSoulAppShellAction | null | undefined) => {
+    const pushAction = (action: LocalSoulAppWorkbenchAction | null | undefined) => {
       if (!action || seen.has(action.id))
         return
       seen.add(action.id)
       actions.push(action)
     }
-    pushAction(shell?.primaryAction)
-    for (const action of shell?.actions ?? [])
+    pushAction(workbenchContract?.primaryAction)
+    for (const action of workbenchContract?.actions ?? [])
       pushAction(action)
-    if (shell?.settings) {
+    if (workbenchContract?.settings) {
       pushAction({
-        ...shell.settings,
-        slot: 'settings',
+        ...workbenchContract.settings,
+        role: 'settings',
       })
     }
     return actions
-  }, [shell])
-  const secondaryShellActions = shellActions.filter(action => action.id !== shellPrimaryAction?.id)
+  }, [workbenchContract])
+  const secondaryWorkbenchActions = workbenchActions.filter(action => action.id !== workbenchPrimaryAction?.id)
   const workerSoulGroups = useMemo(() => {
     if (!data)
       return []
@@ -349,14 +350,6 @@ export function WorkerStudio() {
   const explicitSelectedWorkspace = routeWorkspace ?? manuallySelectedWorkspace
   const selectedWorkspace = explicitSelectedWorkspace ?? latest(soulWorkspaces)
   const workbenchSelectedWorkspace = showSpecializedWorkbench ? explicitSelectedWorkspace : selectedWorkspace
-  const otherWorkspaces = useMemo(
-    () => selectedWorkspace ? soulWorkspaces.filter(item => item.id !== selectedWorkspace.id) : soulWorkspaces,
-    [selectedWorkspace, soulWorkspaces],
-  )
-  const workspaceSessions = useMemo(
-    () => selectedWorkspace ? allSessions.filter(session => session.workspaceId === selectedWorkspace.id).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)) : [],
-    [allSessions, selectedWorkspace],
-  )
   const routeSession = route.kind === 'session'
     ? allSessions.find(session => session.id === route.sessionId && session.workspaceId === route.workspaceId) ?? null
     : null
@@ -431,6 +424,9 @@ export function WorkerStudio() {
   const selectedTemplateCopy = selectedTemplate ? displayTemplate(selectedTemplate, activeLocale) : null
   const selectedSessionTemplate = selectedSession ? data?.templates.find(template => template.id === selectedSession.capabilityTemplateId) ?? null : null
   const selectedArtifactCopy = selectedSessionTemplate ? displayTemplate(selectedSessionTemplate, activeLocale) : null
+  const hostLocatorSegments = selectedWorker && selectedSoulCopy
+    ? [selectedSoulCopy.name, selectedWorker.name]
+    : [copy.app.brand]
   const engineReadiness = resolveEngineReadiness(data?.settings ?? null, copy)
   const systemTheme = useSystemTheme()
   const appearance = data?.settings.appearance ?? 'system'
@@ -446,16 +442,16 @@ export function WorkerStudio() {
 
   useEffect(() => {
     const searchQuery = query.trim()
-    if (!selectedSoulApp || !shellSearch || !searchQuery) {
-      dispatchShellSearch({ query: searchQuery, type: 'idle' })
+    if (!selectedSoulApp || !workbenchSearch || !searchQuery) {
+      dispatchWorkbenchSearch({ query: searchQuery, type: 'idle' })
       return
     }
     let cancelled = false
-    dispatchShellSearch({ query: searchQuery, type: 'loading' })
-    searchSoulApp(selectedSoulApp.appId, shellSearch.protocolProvider, searchQuery, 8)
+    dispatchWorkbenchSearch({ query: searchQuery, type: 'loading' })
+    searchSoulApp(selectedSoulApp.appId, workbenchSearch.protocolProvider, searchQuery, 8)
       .then((response) => {
         if (!cancelled) {
-          dispatchShellSearch({
+          dispatchWorkbenchSearch({
             items: response.items,
             query: searchQuery,
             type: 'loaded',
@@ -464,7 +460,7 @@ export function WorkerStudio() {
       })
       .catch((error) => {
         if (!cancelled) {
-          dispatchShellSearch({
+          dispatchWorkbenchSearch({
             error: error instanceof Error ? error.message : String(error),
             query: searchQuery,
             type: 'failed',
@@ -474,26 +470,26 @@ export function WorkerStudio() {
     return () => {
       cancelled = true
     }
-  }, [query, selectedSoulApp, shellSearch])
+  }, [query, selectedSoulApp, workbenchSearch])
 
   function openSettings(section: SettingsSection = 'execution') {
     setSettingsInitialSection(section)
     setSettingsOpen(true)
   }
 
-  async function runShellAction(action: LocalSoulAppShellAction) {
-    if (!selectedSoulApp || shellActionState.busyActionId)
+  async function runWorkbenchAction(action: LocalSoulAppWorkbenchAction) {
+    if (!selectedSoulApp || workbenchActionState.busyActionId)
       return null
-    setShellActionState({ busyActionId: action.id, error: null })
+    setWorkbenchActionState({ busyActionId: action.id, error: null })
     try {
       const response = await invokeSoulAppAction(selectedSoulApp.appId, action.id, {
-        source: 'worker-shell',
+        source: 'soul-workbench',
       }, {
         sessionId: selectedSession?.id ?? undefined,
         workerId: selectedWorker?.id ?? undefined,
         workspaceId: selectedWorkspace?.id ?? undefined,
       })
-      setShellActionState({
+      setWorkbenchActionState({
         busyActionId: null,
         error: response.result.ok ? null : response.result.message ?? 'Soul App action failed.',
       })
@@ -502,7 +498,7 @@ export function WorkerStudio() {
       return response.result
     }
     catch (error) {
-      setShellActionState({
+      setWorkbenchActionState({
         busyActionId: null,
         error: error instanceof Error ? error.message : String(error),
       })
@@ -801,18 +797,18 @@ export function WorkerStudio() {
     ].join('\n'))
   }
 
-  function renderShellActionButton(action: LocalSoulAppShellAction, icon: 'plus' | 'settings' = 'plus') {
-    const busy = shellActionState.busyActionId === action.id
+  function renderWorkbenchActionButton(action: LocalSoulAppWorkbenchAction, icon: 'plus' | 'settings' = 'plus') {
+    const busy = workbenchActionState.busyActionId === action.id
     const Icon = icon === 'settings' ? Settings : Plus
     return (
       <button
         key={action.id}
         aria-busy={busy}
         className="shell-primary-action"
-        disabled={Boolean(shellActionState.busyActionId)}
+        disabled={Boolean(workbenchActionState.busyActionId)}
         title="Provided by the Soul App protocol"
         type="button"
-        onClick={() => void runShellAction(action)}
+        onClick={() => void runWorkbenchAction(action)}
       >
         <Icon aria-hidden="true" size={14} />
         <span>{action.label}</span>
@@ -820,8 +816,8 @@ export function WorkerStudio() {
     )
   }
 
-  function renderShellSearchInput() {
-    return shellSearch
+  function renderWorkbenchSearchInput() {
+    return workbenchSearch
       ? (
           <label className="toolbar-search">
             <span className="search-icon" aria-hidden="true">
@@ -829,7 +825,7 @@ export function WorkerStudio() {
             </span>
             <input
               aria-label={copy.accessibility.searchProjects}
-              placeholder={shellSearch.placeholder}
+              placeholder={workbenchSearch.placeholder}
               value={query}
               onChange={event => setQuery(event.target.value)}
             />
@@ -838,20 +834,20 @@ export function WorkerStudio() {
       : null
   }
 
-  const shellStatus = shellActionState.error
+  const workbenchStatus = workbenchActionState.error
     ? (
         <p className="shell-action-status error" role="alert">
-          {shellActionState.error}
+          {workbenchActionState.error}
         </p>
       )
     : null
-  const shellSearchResults = shellSearch && shellSearchState.query
+  const workbenchSearchResults = workbenchSearch && workbenchSearchState.query
     ? (
         <div className="shell-search-results" role="status" aria-live="polite">
-          {shellSearchState.loading ? <span className="shell-search-note">Searching</span> : null}
-          {shellSearchState.error ? <span className="shell-search-note error">{shellSearchState.error}</span> : null}
-          {!shellSearchState.loading && !shellSearchState.error
-            ? shellSearchState.items.map(item => (
+          {workbenchSearchState.loading ? <span className="shell-search-note">Searching</span> : null}
+          {workbenchSearchState.error ? <span className="shell-search-note error">{workbenchSearchState.error}</span> : null}
+          {!workbenchSearchState.loading && !workbenchSearchState.error
+            ? workbenchSearchState.items.map(item => (
                 <button key={item.id} type="button" className="shell-search-result">
                   <strong>{item.title}</strong>
                   {item.summary ? <span>{item.summary}</span> : null}
@@ -861,15 +857,15 @@ export function WorkerStudio() {
         </div>
       )
     : null
-  const shellHeader = shell
+  const workbenchBridge = workbenchContract
     ? {
-        actionDescriptors: shellActions,
-        actionSlots: new Set(shellActions.map(action => action.slot)),
-        busyActionId: shellActionState.busyActionId,
-        onAction: runShellAction,
-        results: shellSearchResults,
-        search: renderShellSearchInput(),
-        status: shellStatus,
+        actionDescriptors: workbenchActions,
+        actionRoles: new Set(workbenchActions.map(action => action.role)),
+        busyActionId: workbenchActionState.busyActionId,
+        onAction: runWorkbenchAction,
+        results: workbenchSearchResults,
+        search: renderWorkbenchSearchInput(),
+        status: workbenchStatus,
       }
     : null
 
@@ -897,13 +893,24 @@ export function WorkerStudio() {
     return (
       <WorkerStudioLayout
         appearance={appearance}
+        header={(
+          <HostTopBar
+            sidebarCollapsed={sidebarCollapsed}
+            locatorSegments={hostLocatorSegments}
+            onToggleSidebar={() => setSidebarCollapsed(current => !current)}
+          />
+        )}
         mainLabel={copy.accessibility.soulProjectsAndArtifacts}
         resolvedTheme={resolvedTheme}
+        sidebarCollapsed={sidebarCollapsed}
         sidebarLabel={copy.workspace.currentWorker}
         variant="home"
         sidebar={(
           <>
-            <StudioBrand copy={copy} />
+            <HostSidebarActions
+              onCreateWorker={() => setCreateWorkerOpen(true)}
+              onOpenSoulApps={() => openSettings('soul-packs')}
+            />
             <section className="workspace-rail-card first-run-rail-card">
               <StudioSectionHeader
                 className="rail-section-head"
@@ -911,6 +918,7 @@ export function WorkerStudio() {
                 description={copy.workspace.firstRunRailHint}
               />
             </section>
+            <HostSidebarFooter runtimeVersion={data.info.runtimeVersion} onOpenSettings={() => openSettings('execution')} />
           </>
         )}
         main={(
@@ -962,7 +970,7 @@ export function WorkerStudio() {
         selectedArtifact: workbenchSelectedWorkspace ? selectedArtifact : null,
         selectedTemplate,
         selectedWorkspace: workbenchSelectedWorkspace,
-        shellHeader,
+        workbenchBridge,
         sessions: soulSessions,
         soul: selectedSoul,
         soulCopy: selectedSoulCopy,
@@ -991,6 +999,13 @@ export function WorkerStudio() {
   return (
     <WorkerStudioLayout
       appearance={appearance}
+      header={(
+        <HostTopBar
+          sidebarCollapsed={sidebarCollapsed}
+          locatorSegments={hostLocatorSegments}
+          onToggleSidebar={() => setSidebarCollapsed(current => !current)}
+        />
+      )}
       detail={showSessionSurface
         ? (
             <SessionDetail
@@ -1073,209 +1088,94 @@ export function WorkerStudio() {
       )}
       mainLabel={copy.accessibility.soulProjectsAndArtifacts}
       resolvedTheme={resolvedTheme}
-      sidebarLabel={isWorkspaceContextRoute ? copy.workspace.workspaceNavigation : copy.accessibility.soulProjectCreator}
+      sidebarCollapsed={sidebarCollapsed}
+      sidebarLabel={copy.workspace.currentWorker}
       variant={layoutVariant}
       sidebar={(
         <>
-          <StudioBrand copy={copy} />
+          <HostSidebarActions
+            onCreateWorker={() => setCreateWorkerOpen(true)}
+            onOpenSoulApps={() => openSettings('soul-packs')}
+          />
 
-          {isWorkspaceContextRoute && selectedWorkspace
-            ? (
-                <>
-                  <section className="workspace-rail-card workspace-context-card">
-                    <button
-                      type="button"
-                      className="rail-back-button"
-                      onClick={() => navigateWorkerRoute({ kind: 'worker', workerId: selectedWorker.id })}
-                    >
-                      <ArrowLeft aria-hidden="true" size={13} />
-                      <span>{copy.workspace.backToWorker}</span>
-                    </button>
-                    <div className="rail-context-main">
-                      <span className="kicker">{copy.workspace.workspaceNavigation}</span>
-                      <h3>{selectedWorkspace.name}</h3>
-                      <p>{`${selectedSoulCopy.name} / ${selectedSoulCopy.domain}`}</p>
-                    </div>
-                    <WorkerIdentityBlock
-                      compact
-                      copy={copy}
-                      locale={activeLocale}
-                      soul={selectedSoul}
-                      soulCopy={selectedSoulCopy}
-                      worker={selectedWorker}
-                    />
-                    <div className="rail-meta-grid">
-                      <span>{copy.workspace.currentWorkspace}</span>
-                      <strong>{selectedWorkspace.name}</strong>
-                      <span>{copy.workspace.selectedCapability}</span>
-                      <strong>{selectedArtifactCopy?.name ?? selectedTemplateCopy.name}</strong>
-                      <span>{copy.workspace.currentSession}</span>
-                      <strong>{selectedSession ? formatStatus(selectedSession.status, activeLocale) : copy.artifact.noSession}</strong>
-                    </div>
-                  </section>
+          <section className="newproj worker-list-panel soul-catalog-panel soul-rail-panel">
+            <div className="newproj-body">
+              <StudioSectionHeader
+                className="section-head compact with-action"
+                title={copy.workspace.workerList}
+                description={copy.workspace.workerListHint}
+                action={(
+                  <IconButton
+                    aria-label={copy.workspace.createWorker}
+                    title={copy.workspace.createWorker}
+                    onClick={() => setCreateWorkerOpen(true)}
+                  >
+                    <Plus aria-hidden="true" size={16} />
+                  </IconButton>
+                )}
+              />
+              <div className="worker-list-rail soul-rail" role="listbox" aria-label={copy.workspace.currentWorker}>
+                {workerSoulGroups.map((group) => {
+                  const collapsed = collapsedWorkerSoulIds.has(group.id)
+                  const groupItemsId = `worker-soul-group-${group.id}`
+                  return (
+                    <div key={group.id} className="worker-soul-group">
+                      <button
+                        type="button"
+                        className="worker-soul-group-toggle"
+                        aria-label={`${group.name} (${group.workers.length}) ${group.domain}`}
+                        aria-controls={groupItemsId}
+                        aria-expanded={!collapsed}
+                        onClick={() => toggleWorkerSoulGroup(group.id)}
+                      >
+                        <span className="worker-soul-group-title">
+                          <strong>{`${group.name} (${group.workers.length})`}</strong>
+                          <small>{group.domain}</small>
+                        </span>
+                        {collapsed
+                          ? <ChevronRight aria-hidden="true" size={14} />
+                          : <ChevronDown aria-hidden="true" size={14} />}
+                      </button>
 
-                  <section className="workspace-rail-card">
-                    <StudioSectionHeader
-                      className="rail-section-head"
-                      title={copy.workspace.workspaceSessions}
-                      action={(
-                        <IconButton
-                          aria-label={copy.workspace.newSession}
-                          title={copy.workspace.newSession}
-                          onClick={() => navigateWorkerRoute({ kind: 'workspace', workerId: selectedWorkspace.workerId, workspaceId: selectedWorkspace.id })}
-                        >
-                          <Plus aria-hidden="true" size={16} />
-                        </IconButton>
-                      )}
-                    />
-                    <div className="rail-session-list">
-                      {workspaceSessions.length > 0
-                        ? workspaceSessions.map(session => (
-                            <button
-                              key={session.id}
-                              type="button"
-                              className={`rail-session-item ${selectedSession?.id === session.id ? 'active' : ''}`}
-                              onClick={() => navigateWorkerRoute({ kind: 'session', sessionId: session.id, workerId: session.workerId, workspaceId: session.workspaceId })}
-                            >
-                              <strong>{session.title}</strong>
-                              <span>
-                                {displayTemplate(data.templates.find(template => template.id === session.capabilityTemplateId) ?? selectedTemplate, activeLocale).name}
-                                {' · '}
-                                {formatStatus(session.status, activeLocale)}
-                              </span>
-                              <small>{copy.workspace.updated(formatRelativeTime(session.updatedAt, activeLocale))}</small>
-                            </button>
-                          ))
-                        : <div className="rail-empty">{copy.workspace.noWorkspaceSessions}</div>}
-                    </div>
-                  </section>
-
-                  <section className="workspace-rail-card">
-                    <StudioSectionHeader
-                      className="rail-section-head"
-                      title={copy.workspace.otherWorkspaces}
-                      action={(
-                        <IconButton
-                          aria-label={copy.workspace.createWorkspace}
-                          title={copy.workspace.createWorkspace}
-                          onClick={() => setCreateWorkspaceOpen(true)}
-                        >
-                          <Plus aria-hidden="true" size={16} />
-                        </IconButton>
-                      )}
-                    />
-                    <div className="rail-workspace-list">
-                      {otherWorkspaces.length > 0
-                        ? otherWorkspaces.map(workspace => (
-                            <button
-                              key={workspace.id}
-                              type="button"
-                              className="rail-workspace-item"
-                              onClick={() => navigateWorkerRoute({ kind: 'workspace', workerId: workspace.workerId, workspaceId: workspace.id })}
-                            >
-                              <strong>{workspace.name}</strong>
-                              <small>{formatStatus(workspace.status, activeLocale)}</small>
-                            </button>
-                          ))
-                        : <div className="rail-empty">{copy.workspace.noOtherWorkspaces}</div>}
-                    </div>
-                  </section>
-                </>
-              )
-            : (
-                <>
-                  <section className="newproj worker-list-panel soul-catalog-panel soul-rail-panel">
-                    <div className="newproj-body">
-                      <StudioSectionHeader
-                        className="section-head compact with-action"
-                        title={copy.workspace.workerList}
-                        description={copy.workspace.workerListHint}
-                        action={(
-                          <IconButton
-                            aria-label={copy.workspace.createWorker}
-                            title={copy.workspace.createWorker}
-                            onClick={() => setCreateWorkerOpen(true)}
-                          >
-                            <Plus aria-hidden="true" size={16} />
-                          </IconButton>
-                        )}
-                      />
-                      <div className="worker-list-rail soul-rail" role="listbox" aria-label={copy.workspace.currentWorker}>
-                        {workerSoulGroups.map((group) => {
-                          const collapsed = collapsedWorkerSoulIds.has(group.id)
-                          const groupItemsId = `worker-soul-group-${group.id}`
-                          return (
-                            <div key={group.id} className="worker-soul-group">
-                              <button
-                                type="button"
-                                className="worker-soul-group-toggle"
-                                aria-label={`${group.name} (${group.workers.length}) ${group.domain}`}
-                                aria-controls={groupItemsId}
-                                aria-expanded={!collapsed}
-                                onClick={() => toggleWorkerSoulGroup(group.id)}
-                              >
-                                <span className="worker-soul-group-title">
-                                  <strong>{`${group.name} (${group.workers.length})`}</strong>
-                                  <small>{group.domain}</small>
-                                </span>
-                                {collapsed
-                                  ? <ChevronRight aria-hidden="true" size={14} />
-                                  : <ChevronDown aria-hidden="true" size={14} />}
-                              </button>
-
-                              {!collapsed
-                                ? (
-                                    <div id={groupItemsId} className="worker-soul-group-items" role="group" aria-label={group.name}>
-                                      {group.workers.map((worker) => {
-                                        const active = selectedWorker.id === worker.id
-                                        return (
-                                          <button
-                                            key={worker.id}
-                                            type="button"
-                                            className={`worker-list-item ${active ? 'active' : ''}`}
-                                            aria-selected={active}
-                                            role="option"
-                                            onClick={() => {
-                                              setSelectedWorkerId(worker.id)
-                                              setSelectedWorkspaceId(null)
-                                              const next = data.templates.find(template => template.soulId === worker.soulId)
-                                              if (next)
-                                                setSelectedTemplateId(next.id)
-                                              navigateWorkerRoute({ kind: 'worker', workerId: worker.id })
-                                            }}
-                                          >
-                                            <span className="worker-list-item-main">
-                                              <strong>{worker.name}</strong>
-                                            </span>
-                                            <span className={`status-dot ${worker.status === 'active' ? 'active' : ''}`} aria-hidden="true" />
-                                          </button>
-                                        )
-                                      })}
-                                    </div>
-                                  )
-                                : null}
+                      {!collapsed
+                        ? (
+                            <div id={groupItemsId} className="worker-soul-group-items" role="group" aria-label={group.name}>
+                              {group.workers.map((worker) => {
+                                const active = selectedWorker.id === worker.id
+                                return (
+                                  <button
+                                    key={worker.id}
+                                    type="button"
+                                    className={`worker-list-item ${active ? 'active' : ''}`}
+                                    aria-selected={active}
+                                    role="option"
+                                    onClick={() => {
+                                      setSelectedWorkerId(worker.id)
+                                      setSelectedWorkspaceId(null)
+                                      const next = data.templates.find(template => template.soulId === worker.soulId)
+                                      if (next)
+                                        setSelectedTemplateId(next.id)
+                                      navigateWorkerRoute({ kind: 'worker', workerId: worker.id })
+                                    }}
+                                  >
+                                    <span className="worker-list-item-main">
+                                      <strong>{worker.name}</strong>
+                                    </span>
+                                    <span className={`status-dot ${worker.status === 'active' ? 'active' : ''}`} aria-hidden="true" />
+                                  </button>
+                                )
+                              })}
                             </div>
                           )
-                        })}
-                      </div>
+                        : null}
                     </div>
-                  </section>
-                </>
-              )}
+                  )
+                })}
+              </div>
+            </div>
+          </section>
 
-          <div className="entry-side-foot">
-            <button type="button" className="foot-pill" onClick={() => openSettings('execution')}>
-              <Settings aria-hidden="true" size={12} />
-              <span>{data.settings.executionMode === 'local-cli' ? 'Local CLI' : 'BYOK'}</span>
-              <span className="foot-divider-dot">·</span>
-              <span>{selectedEngineLabel(data.settings, copy)}</span>
-            </button>
-            <button type="button" className="foot-pill" aria-label={copy.accessibility.languageSwitcher} onClick={() => openSettings('language')}>
-              <Languages aria-hidden="true" size={12} />
-              <span>{languageLabel(activeLocale, activeLocale)}</span>
-              <ChevronDown aria-hidden="true" size={12} />
-            </button>
-          </div>
+          <HostSidebarFooter runtimeVersion={data.info.runtimeVersion} onOpenSettings={() => openSettings('execution')} />
         </>
       )}
       main={(
@@ -1402,15 +1302,15 @@ export function WorkerStudio() {
                           >
                             <Plus aria-hidden="true" size={16} />
                           </IconButton>
-                          {shellPrimaryAction
-                            ? renderShellActionButton(shellPrimaryAction)
+                          {workbenchPrimaryAction
+                            ? renderWorkbenchActionButton(workbenchPrimaryAction)
                             : null}
-                          {secondaryShellActions.map(action => renderShellActionButton(action, action.slot === 'settings' ? 'settings' : 'plus'))}
+                          {secondaryWorkbenchActions.map(action => renderWorkbenchActionButton(action, action.role === 'settings' ? 'settings' : 'plus'))}
                         </div>
 
                         <div className="toolbar-right">
-                          {shellSearch
-                            ? renderShellSearchInput()
+                          {workbenchSearch
+                            ? renderWorkbenchSearchInput()
                             : (
                                 <label className="toolbar-search">
                                   <span className="search-icon" aria-hidden="true">
@@ -1426,8 +1326,8 @@ export function WorkerStudio() {
                               )}
                         </div>
                       </div>
-                      {shellStatus}
-                      {shellSearchResults}
+                      {workbenchStatus}
+                      {workbenchSearchResults}
 
                       <div className="design-grid workspace-grid workspace-list">
                         {filteredProjects.length > 0
@@ -1482,18 +1382,109 @@ function profileMarkdownForPromotion(content: string): string | undefined {
   return prepared.ok ? prepared.profileMarkdown : undefined
 }
 
-function StudioBrand({ copy }: { copy: WorkerMessages }) {
+function HostTopBar({
+  locatorSegments,
+  onToggleSidebar,
+  sidebarCollapsed,
+}: {
+  locatorSegments: string[]
+  onToggleSidebar: () => void
+  sidebarCollapsed: boolean
+}) {
+  const sidebarLabel = sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'
+  const locatorItems = locatorSegments.map((segment, index) => ({
+    key: locatorSegments.slice(0, index + 1).join('/'),
+    segment,
+    showSeparator: index > 0,
+  }))
+
   return (
-    <div className="entry-brand">
-      <span className="entry-brand-mark" aria-hidden="true">AI</span>
-      <div className="entry-brand-text">
-        <div className="entry-brand-title-row">
-          <span className="entry-brand-title">{copy.app.brand}</span>
-          <span className="entry-brand-pill">{copy.app.workspacePill}</span>
-        </div>
-        <div className="entry-brand-subtitle">{copy.app.subtitle}</div>
+    <header className="host-topbar" aria-label="Host actions">
+      <div className="host-topbar-left">
+        <IconButton
+          aria-label={sidebarLabel}
+          title={sidebarLabel}
+          onClick={onToggleSidebar}
+        >
+          {sidebarCollapsed
+            ? <PanelLeftOpen aria-hidden="true" size={15} />
+            : <PanelLeftClose aria-hidden="true" size={15} />}
+        </IconButton>
+        <nav className="host-locator" aria-label="Current Soul worker">
+          {locatorItems.map(item => (
+            <span key={item.key} className="host-locator-segment">
+              {item.showSeparator ? <span className="host-locator-separator" aria-hidden="true">/</span> : null}
+              <span>{item.segment}</span>
+            </span>
+          ))}
+        </nav>
       </div>
-    </div>
+      <div className="host-topbar-actions" aria-label="Reserved Host panels">
+        <IconButton
+          aria-label="Open workspace terminal"
+          title="Workspace terminal"
+          disabled
+        >
+          <PanelBottom aria-hidden="true" size={15} />
+        </IconButton>
+        <IconButton
+          aria-label="Open right panel"
+          title="Right panel"
+          disabled
+        >
+          <PanelRight aria-hidden="true" size={15} />
+        </IconButton>
+      </div>
+    </header>
+  )
+}
+
+function HostSidebarActions({
+  onCreateWorker,
+  onOpenSoulApps,
+}: {
+  onCreateWorker: () => void
+  onOpenSoulApps: () => void
+}) {
+  return (
+    <section className="host-sidebar-actions" aria-label="Host navigation">
+      <button type="button" className="host-sidebar-action" onClick={onCreateWorker}>
+        <Plus aria-hidden="true" size={15} />
+        <span>New Soul worker</span>
+      </button>
+      <button type="button" className="host-sidebar-action" disabled>
+        <Search aria-hidden="true" size={15} />
+        <span>Search</span>
+      </button>
+      <button type="button" className="host-sidebar-action" onClick={onOpenSoulApps}>
+        <span className="host-sidebar-action-icon" aria-hidden="true">
+          <ChevronRight size={15} />
+        </span>
+        <span>Soul Apps</span>
+      </button>
+    </section>
+  )
+}
+
+function HostSidebarFooter({
+  onOpenSettings,
+  runtimeVersion,
+}: {
+  onOpenSettings: () => void
+  runtimeVersion: string
+}) {
+  const version = runtimeVersion.startsWith('v') ? runtimeVersion : `v${runtimeVersion}`
+
+  return (
+    <footer className="host-sidebar-footer">
+      <button type="button" className="host-settings-row" onClick={onOpenSettings}>
+        <span className="host-settings-label">
+          <Settings aria-hidden="true" size={14} />
+          <span>Settings</span>
+        </span>
+        <span className="host-version">{version}</span>
+      </button>
+    </footer>
   )
 }
 

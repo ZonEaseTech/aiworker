@@ -486,12 +486,13 @@ function descriptorPermissionLabels(app: HostedSoulApp): string[] {
     for (const permission of permissions ?? [])
       labels.add(permission)
   }
-  const shell = app.manifest.ui?.shell
-  add(shell?.primaryAction?.requiredPermissions)
-  for (const action of shell?.actions ?? [])
+  const workbench = app.manifest.ui?.workbench
+  add(workbench?.primaryAction?.requiredPermissions)
+  for (const action of workbench?.actions ?? [])
     add(action.requiredPermissions)
-  add(shell?.search?.requiredPermissions)
-  add(shell?.settings?.requiredPermissions)
+  add(workbench?.search?.requiredPermissions)
+  add(workbench?.settings?.requiredPermissions)
+  add(app.manifest.ui?.workspaceContext?.terminal?.requiredPermissions)
   for (const route of app.manifest.ui?.routes ?? [])
     add(route.surface?.requiredPermissions)
   for (const panel of app.manifest.ui?.panels ?? [])

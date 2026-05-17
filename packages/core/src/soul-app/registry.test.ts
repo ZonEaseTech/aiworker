@@ -197,13 +197,13 @@ describe('Host Soul App registry', () => {
       ...hrSoulAppManifest,
       ui: {
         ...hrSoulAppManifest.ui,
-        shell: {
+        workbench: {
           primaryAction: {
             id: 'create-people-profile',
             label: 'New people profile',
             protocolAction: 'peopleProfiles.create',
             requiredPermissions: ['storage:write:aiworker-hr'],
-            slot: 'primary',
+            role: 'primary',
           },
         },
       },
@@ -234,7 +234,7 @@ describe('Host Soul App registry', () => {
       expect.objectContaining({
         id: 'create-people-profile',
         requiredPermissions: ['storage:write:aiworker-hr'],
-        surface: 'shell.primaryAction',
+        surface: 'workbench.primaryAction',
       }),
     ]))
     expect(review.summary.disabledRequiredConnectorIds).toEqual(['ats'])

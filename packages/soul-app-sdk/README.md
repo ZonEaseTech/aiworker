@@ -11,6 +11,11 @@ then reuses the same definition in two modes:
   such as engine selection, connector grants and broker scopes. The Soul App
   still owns artifact, review, profile and lesson/memory semantics.
 
+Mounted app actions, search and app settings belong in `ui.workbench`.
+Workspace process locator intent, such as a future Host-owned web terminal cwd,
+belongs in `ui.workspaceContext`. Host header actions are platform chrome, not
+Soul App slots.
+
 ## Minimal Shape
 
 New apps should keep source responsibilities split by layout:

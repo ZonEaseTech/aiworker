@@ -24,6 +24,83 @@
   grid-template-columns: var(--studio-sidebar-width) minmax(0, 1fr);
 }
 
+.workspace-entry.has-host-header {
+  grid-template-rows: 40px minmax(0, 1fr);
+}
+
+.host-header-row {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  min-width: 0;
+  min-height: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.host-topbar {
+  height: 40px;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 0 10px;
+}
+
+.host-topbar-left,
+.host-topbar-actions,
+.host-locator,
+.host-locator-segment {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+}
+
+.host-topbar-left {
+  gap: 8px;
+}
+
+.host-topbar-actions {
+  gap: 4px;
+}
+
+.host-topbar-actions .icon-button:disabled {
+  cursor: default;
+  opacity: 0.48;
+}
+
+.host-locator {
+  gap: 5px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.host-locator-segment {
+  gap: 5px;
+}
+
+.host-locator-segment span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.host-locator-segment:last-child span:last-child {
+  color: var(--text);
+}
+
+.host-locator-separator {
+  color: var(--text-faint);
+}
+
+.workspace-entry.has-host-header > .entry-side,
+.workspace-entry.has-host-header > .entry-main,
+.workspace-entry.has-host-header > .artifact-rail {
+  grid-row: 2;
+}
+
 .workspace-home-route {
   grid-template-columns: var(--studio-sidebar-width) minmax(0, 1fr);
 }
@@ -38,6 +115,23 @@
 
 .workspace-context-route {
   grid-template-columns: var(--studio-sidebar-width) minmax(0, 1fr);
+}
+
+.workspace-home-route.workspace-sidebar-collapsed,
+.workspace-context-route.workspace-sidebar-collapsed {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.workspace-session-route.workspace-sidebar-collapsed {
+  grid-template-columns: minmax(0, 1fr) var(--studio-detail-width);
+}
+
+.workspace-session-route.workspace-sidebar-collapsed.detail-drawer-collapsed {
+  grid-template-columns: minmax(0, 1fr) 0;
+}
+
+.workspace-sidebar-collapsed > .entry-side {
+  display: none;
 }
 
 .entry-side {

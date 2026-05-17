@@ -278,20 +278,20 @@ let currentApps: Array<{
       panels?: Array<{ id: string, label: string }>
       reviewPanels?: Array<{ id: string, label: string }>
       routes?: Array<{ id?: string, label: string, path: string, surface?: { renderer: 'host-descriptor' | 'sandboxed-frame' | 'trusted-module' } }>
-      shell?: {
+      workbench?: {
         actions?: Array<{
           id: string
           label: string
           protocolAction: string
           requiredPermissions?: string[]
-          slot: 'action' | 'drawer-toggle' | 'refresh'
+          role: 'action' | 'panel-toggle' | 'refresh'
         }>
         primaryAction?: {
           id: string
           label: string
           protocolAction: string
           requiredPermissions?: string[]
-          slot: 'primary'
+          role: 'primary'
         }
         search?: {
           id: string
@@ -319,20 +319,20 @@ let currentApps: Array<{
     reviewPanelIds: string[]
     routePaths: string[]
     surfaceIds?: string[]
-    shell?: {
+    workbench?: {
       actions?: Array<{
         id: string
         label: string
         protocolAction: string
         requiredPermissions?: string[]
-        slot: 'action' | 'drawer-toggle' | 'refresh'
+        role: 'action' | 'panel-toggle' | 'refresh'
       }>
       primaryAction?: {
         id: string
         label: string
         protocolAction: string
         requiredPermissions?: string[]
-        slot: 'primary'
+        role: 'primary'
       }
       search?: {
         id: string
@@ -857,9 +857,19 @@ describe('worker studio', () => {
   it('renders HR as a specialized workbench without import or work-order entrypoints', async () => {
     render(<WorkerStudio />)
 
-    expect(await screen.findByText('Soul Workspace')).toBeTruthy()
+    expect(await screen.findByLabelText('Host actions')).toBeTruthy()
     expect(document.documentElement.lang).toBe('en')
-    expect(screen.getByLabelText('Current worker')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Hide sidebar' })).toBeTruthy()
+    expect((screen.getByRole('button', { name: 'Open workspace terminal' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: 'Open right panel' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByRole('button', { name: 'New Soul worker' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Soul Apps' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Hide sidebar' }))
+    expect(document.querySelector('.workspace-sidebar-collapsed')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Show sidebar' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Show sidebar' }))
+    expect(document.querySelector('.workspace-sidebar-collapsed')).toBeNull()
+    expect(screen.getAllByLabelText('Current worker').length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: /HR \(1\)/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: /QA \(1\)/ })).toBeTruthy()
     expect(screen.getAllByText('HR').length).toBeGreaterThan(0)
@@ -1151,21 +1161,21 @@ describe('worker studio', () => {
             panels: [{ id: 'people-panel', label: 'People panel' }],
             reviewPanels: [{ id: 'hr-review', label: 'HR review' }],
             routes: [{ id: 'hr-home', label: 'People workbench', path: '/hr/people', surface: { renderer: 'host-descriptor' } }],
-            shell: {
+            workbench: {
               actions: [
                 {
                   id: 'refresh-people',
                   label: 'Refresh',
                   protocolAction: 'people.refresh',
                   requiredPermissions: ['storage:read:aiworker-hr'],
-                  slot: 'refresh',
+                  role: 'refresh',
                 },
                 {
                   id: 'toggle-evidence-drawer',
                   label: 'Evidence',
                   protocolAction: 'drawers.evidence.toggle',
                   requiredPermissions: ['connector:read:ats'],
-                  slot: 'drawer-toggle',
+                  role: 'panel-toggle',
                 },
               ],
               primaryAction: {
@@ -1173,7 +1183,7 @@ describe('worker studio', () => {
                 label: 'New people profile',
                 protocolAction: 'peopleProfiles.create',
                 requiredPermissions: ['storage:write:aiworker-hr', 'search:write:aiworker-hr'],
-                slot: 'primary',
+                role: 'primary',
               },
               search: {
                 id: 'people-profile-search',
@@ -1201,21 +1211,21 @@ describe('worker studio', () => {
           reviewPanelIds: ['hr-review'],
           routePaths: ['/hr/people'],
           surfaceIds: ['hr-home', 'hr-people-widget'],
-          shell: {
+          workbench: {
             actions: [
               {
                 id: 'refresh-people',
                 label: 'Refresh',
                 protocolAction: 'people.refresh',
                 requiredPermissions: ['storage:read:aiworker-hr'],
-                slot: 'refresh',
+                role: 'refresh',
               },
               {
                 id: 'toggle-evidence-drawer',
                 label: 'Evidence',
                 protocolAction: 'drawers.evidence.toggle',
                 requiredPermissions: ['connector:read:ats'],
-                slot: 'drawer-toggle',
+                role: 'panel-toggle',
               },
             ],
             primaryAction: {
@@ -1223,7 +1233,7 @@ describe('worker studio', () => {
               label: 'New people profile',
               protocolAction: 'peopleProfiles.create',
               requiredPermissions: ['storage:write:aiworker-hr', 'search:write:aiworker-hr'],
-              slot: 'primary',
+              role: 'primary',
             },
             search: {
               id: 'people-profile-search',
@@ -1271,13 +1281,13 @@ describe('worker studio', () => {
             panels: [],
             reviewPanels: [],
             routes: [],
-            shell: {
+            workbench: {
               primaryAction: {
                 id: 'create-release-gate',
                 label: 'New release gate',
                 protocolAction: 'releaseGates.create',
                 requiredPermissions: ['storage:write:aiworker-qa', 'search:write:aiworker-qa'],
-                slot: 'primary',
+                role: 'primary',
               },
               search: {
                 id: 'release-search',
@@ -1325,7 +1335,7 @@ describe('worker studio', () => {
     const actionCall = vi.mocked(fetch).mock.calls.find(([url]) => String(url).endsWith('/api/local/apps/aiworker-hr/actions/create-people-profile'))
     const actionBody = JSON.parse(String(actionCall?.[1]?.body)) as Record<string, Record<string, string>>
     expect(actionBody).toMatchObject({
-      input: { source: 'worker-shell' },
+      input: { source: 'soul-workbench' },
       scope: { workerId: 'hr-worker' },
     })
     expect(actionBody.input).not.toHaveProperty('workerId')
@@ -1420,13 +1430,13 @@ describe('worker studio', () => {
           panels: [],
           reviewPanels: [],
           routes: [],
-          shell: {
+          workbench: {
             primaryAction: {
               id: 'create-release-gate',
               label: 'New release gate',
               protocolAction: 'releaseGates.create',
               requiredPermissions: ['storage:write:aiworker-qa', 'search:write:aiworker-qa'],
-              slot: 'primary',
+              role: 'primary',
             },
             search: {
               id: 'release-search',
@@ -1709,14 +1719,16 @@ describe('worker studio', () => {
       expect(window.location.pathname).toBe('/workers/hr-worker/workspaces/workspace-1/sessions/session-1')
     })
     expect(await screen.findByText('AIWorker Engine')).toBeTruthy()
-    expect(screen.getByText('Workspace navigation')).toBeTruthy()
-    expect(screen.getByText('Current worker')).toBeTruthy()
-    expect(screen.getByText('hr-worker')).toBeTruthy()
-    expect(screen.getAllByText('Current workspace').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('Workspace sessions').length).toBeGreaterThan(0)
-    const workspaceContextCard = document.querySelector('.workspace-context-card') as HTMLElement
-    expect(within(workspaceContextCard).getByRole('button', { name: 'Back to worker' })).toBeTruthy()
-    expect(screen.getAllByRole('button', { name: 'Back to worker' }).length).toBe(1)
+    expect(screen.getAllByLabelText('Current worker').length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: 'New Soul worker' })).toBeTruthy()
+    const hostLocator = screen.getByLabelText('Current Soul worker')
+    expect(within(hostLocator).getByText('AIWorker HR')).toBeTruthy()
+    expect(within(hostLocator).getByText('HR')).toBeTruthy()
+    expect(screen.queryByText('Workspace navigation')).toBeNull()
+    expect(document.querySelector('.workspace-context-card')).toBeNull()
+    expect(screen.queryByText('Workspace sessions')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'New session' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Back to worker' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Back to workspace' })).toBeNull()
     expect(screen.queryByTestId('new-project-panel')).toBeNull()
     expect(screen.getByText('Session events')).toBeTruthy()
@@ -1778,7 +1790,7 @@ describe('worker studio', () => {
     })
   })
 
-  it('keeps an empty workspace route in workspace navigation instead of the creation surface', async () => {
+  it('keeps an empty workspace route in the Soul workbench without Host workspace navigation', async () => {
     const otherWorkspace = {
       ...workspace,
       id: 'workspace-2',
@@ -1795,60 +1807,46 @@ describe('worker studio', () => {
 
     render(<WorkerStudio />)
 
-    expect(await screen.findByText('Workspace navigation')).toBeTruthy()
-    expect(screen.getAllByText('Current workspace').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('Workspace sessions').length).toBeGreaterThan(0)
-    expect(screen.getByRole('button', { name: 'New session' }).classList.contains('icon-button')).toBe(true)
-    expect(screen.getByRole('button', { name: 'Create workspace' }).classList.contains('icon-button')).toBe(true)
+    expect(await screen.findByLabelText('Host actions')).toBeTruthy()
     expect(screen.getByTestId('hr-people-workbench')).toBeTruthy()
+    expect(screen.queryByText('Workspace navigation')).toBeNull()
+    expect(document.querySelector('.workspace-context-card')).toBeNull()
+    expect(screen.queryByText('Workspace sessions')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'New session' })).toBeNull()
     expandProfileTools()
     expect(screen.getByText('Next Profile Step')).toBeTruthy()
     expect(screen.getByText('People Profiles')).toBeTruthy()
     expect(screen.queryByTestId('new-session-panel')).toBeNull()
     expect(screen.queryByText('What do you want to build in Hiring Workspace?')).toBeNull()
-    expect(screen.getAllByText('No sessions in this workspace yet.').length).toBeGreaterThan(0)
+    expect(screen.queryByText('No sessions in this workspace yet.')).toBeNull()
     expect(document.querySelector('.workspace-overview-panel')).toBeNull()
     expect(document.querySelector('.workspace-session-grid')).toBeNull()
-    const otherWorkspaceList = document.querySelector('.rail-workspace-list') as HTMLElement
-    expect(within(otherWorkspaceList).queryByText('Hiring Workspace')).toBeNull()
-    expect(within(otherWorkspaceList).getByText('Offer Workspace')).toBeTruthy()
-    expect(otherWorkspaceList.querySelector('.rail-workspace-item.active')).toBeNull()
+    expect(document.querySelector('.rail-workspace-list')).toBeNull()
     expect(screen.queryByTestId('new-project-panel')).toBeNull()
     expect(screen.queryByLabelText('Soul catalog')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Back to worker' }))
-    await waitFor(() => {
-      expect(window.location.pathname).toBe('/workers/hr-worker')
-    })
   })
 
-  it('uses the workspace sessions header action to start a new session', async () => {
+  it('keeps session routes free of Host-level new-session navigation', async () => {
     window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1/sessions/session-1')
 
     render(<WorkerStudio />)
 
     expect(await screen.findByText('AIWorker Engine')).toBeTruthy()
-    const workspaceContextCard = document.querySelector('.workspace-context-card') as HTMLElement
-    expect(within(workspaceContextCard).getByRole('button', { name: 'Back to worker' })).toBeTruthy()
+    expect(document.querySelector('.workspace-context-card')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Back to workspace' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'New session' }))
-
-    await waitFor(() => {
-      expect(window.location.pathname).toBe('/workers/hr-worker/workspaces/workspace-1')
-    })
-    expect(screen.getByTestId('hr-people-workbench')).toBeTruthy()
-    expandProfileTools()
-    expect(screen.getByText('Next Profile Step')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'New session' })).toBeNull()
+    expect(window.location.pathname).toBe('/workers/hr-worker/workspaces/workspace-1/sessions/session-1')
     expect(screen.queryByTestId('new-session-panel')).toBeNull()
   })
 
-  it('returns from a selected session route back to the worker page', async () => {
+  it('returns from a selected session route through the Soul worker navigation', async () => {
     window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1/sessions/session-1')
 
     render(<WorkerStudio />)
 
     expect(await screen.findByText('AIWorker Engine')).toBeTruthy()
-    const workspaceContextCard = document.querySelector('.workspace-context-card') as HTMLElement
-    fireEvent.click(within(workspaceContextCard).getByRole('button', { name: 'Back to worker' }))
+    const workerRail = screen.getByRole('listbox', { name: 'Current worker' })
+    fireEvent.click(within(workerRail).getByRole('option', { name: 'HR' }))
 
     await waitFor(() => {
       expect(window.location.pathname).toBe('/workers/hr-worker')
@@ -1866,7 +1864,7 @@ describe('worker studio', () => {
 
     render(<WorkerStudio />)
 
-    await screen.findByText('AIWorker')
+    await screen.findByLabelText('Host actions')
     expect(screen.queryByRole('dialog', { name: 'Configure Soul workspace' })).toBeNull()
 
     fireEvent.click(screen.getByLabelText('Open settings'))
@@ -1917,9 +1915,9 @@ describe('worker studio', () => {
 
     render(<WorkerStudio />)
 
-    expect(await screen.findByText('Soul Workspace')).toBeTruthy()
+    expect(await screen.findByLabelText('Host actions')).toBeTruthy()
     expect(document.documentElement.lang).toBe('en')
-    expect(screen.getByLabelText('Workspace language')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Settings vtest/ })).toBeTruthy()
   })
 
   it('applies system appearance from the operating-system color scheme and updates on changes', async () => {

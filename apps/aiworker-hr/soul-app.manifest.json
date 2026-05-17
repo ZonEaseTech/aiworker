@@ -385,21 +385,21 @@
         }
       }
     ],
-    "shell": {
+    "workbench": {
       "actions": [
         {
           "id": "refresh-people",
           "label": "Refresh",
           "protocolAction": "people.refresh",
           "requiredPermissions": ["storage:read:aiworker-hr"],
-          "slot": "refresh"
+          "role": "refresh"
         },
         {
           "id": "toggle-evidence-drawer",
           "label": "Evidence",
           "protocolAction": "drawers.evidence.toggle",
           "requiredPermissions": ["connector:read:ats"],
-          "slot": "drawer-toggle"
+          "role": "panel-toggle"
         }
       ],
       "primaryAction": {
@@ -407,7 +407,7 @@
         "label": "New people profile",
         "protocolAction": "peopleProfiles.create",
         "requiredPermissions": ["storage:write:aiworker-hr", "search:write:aiworker-hr"],
-        "slot": "primary"
+        "role": "primary"
       },
       "search": {
         "id": "people-profile-search",
@@ -421,6 +421,15 @@
         "label": "HR settings",
         "protocolAction": "settings.open",
         "requiredPermissions": ["api:serve:/api/local/apps/aiworker-hr"]
+      }
+    },
+    "workspaceContext": {
+      "terminal": {
+        "cwd": {
+          "source": "host-workspace-root"
+        },
+        "id": "hr-workspace-terminal",
+        "label": "People workspace terminal"
       }
     },
     "workspaceWidgets": [

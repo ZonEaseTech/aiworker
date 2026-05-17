@@ -283,14 +283,14 @@
         }
       }
     ],
-    "shell": {
+    "workbench": {
       "actions": [
         {
           "id": "refresh-release",
           "label": "Refresh",
           "protocolAction": "release.refresh",
           "requiredPermissions": ["storage:read:aiworker-qa"],
-          "slot": "refresh"
+          "role": "refresh"
         }
       ],
       "primaryAction": {
@@ -298,7 +298,7 @@
         "label": "New release gate",
         "protocolAction": "releaseGates.create",
         "requiredPermissions": ["storage:write:aiworker-qa", "search:write:aiworker-qa"],
-        "slot": "primary"
+        "role": "primary"
       },
       "search": {
         "id": "release-search",
@@ -312,6 +312,15 @@
         "label": "QA settings",
         "protocolAction": "settings.open",
         "requiredPermissions": ["api:serve:/api/local/apps/aiworker-qa"]
+      }
+    },
+    "workspaceContext": {
+      "terminal": {
+        "cwd": {
+          "source": "host-workspace-root"
+        },
+        "id": "qa-workspace-terminal",
+        "label": "Release workspace terminal"
       }
     },
     "workspaceWidgets": [
