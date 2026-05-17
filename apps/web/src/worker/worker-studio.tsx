@@ -343,8 +343,8 @@ export function WorkerStudio() {
   const routeWorkspaceId = route.kind === 'workspace' || route.kind === 'session' ? route.workspaceId : null
   const routeWorkspace = routeWorkspaceId ? soulWorkspaces.find(item => item.id === routeWorkspaceId) ?? null : null
   const manuallySelectedWorkspace = selectedWorkspaceId && soulWorkspaces.some(item => item.id === selectedWorkspaceId)
-      ? soulWorkspaces.find(item => item.id === selectedWorkspaceId) ?? null
-      : null
+    ? soulWorkspaces.find(item => item.id === selectedWorkspaceId) ?? null
+    : null
   const explicitSelectedWorkspace = routeWorkspace ?? manuallySelectedWorkspace
   const selectedWorkspace = explicitSelectedWorkspace ?? latest(soulWorkspaces)
   const workbenchSelectedWorkspace = showSpecializedWorkbench ? explicitSelectedWorkspace : selectedWorkspace
@@ -1481,8 +1481,17 @@ function profileMarkdownForPromotion(content: string): string | undefined {
 }
 
 function extractAcceptedProfileDraft(content: string): string | null {
-  const match = content.match(/```(?:markdown\s+)?aiworker-profile-readme\s*\n([\s\S]*?)\n```/i)
-  return match?.[1]?.trim() || null
+  const lines = content.split(/\r?\n/)
+  for (let index = 0; index < lines.length; index += 1) {
+    const opener = lines[index]?.trim().toLowerCase()
+    if (opener !== '```aiworker-profile-readme' && opener !== '```markdown aiworker-profile-readme')
+      continue
+
+    const closeIndex = lines.findIndex((line, candidateIndex) => candidateIndex > index && line.trim() === '```')
+    if (closeIndex > index)
+      return lines.slice(index + 1, closeIndex).join('\n').trim() || null
+  }
+  return null
 }
 
 function StudioBrand({ copy }: { copy: WorkerMessages }) {

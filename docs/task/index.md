@@ -451,6 +451,6 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-126 Profile ledger follows parent repository when workspace is under ignored path**](BUG-126.md) `P0`
 - [x] [**BUG-127 CLI continuation turns lose capability metadata**](BUG-127.md) `P0`
 - [x] [**BUG-128 HR profile promotion can write proposal-shaped content into README**](BUG-128.md) `P0`
-- [ ] [**BUG-129 Failed Codex turn can leave durable artifact files unregistered**](BUG-129.md) `P1`
-- [ ] [**TODO-043 Make HR native skill artifact kinds first-class**](TODO-043.md) `P1`
-- [ ] [**TODO-044 Materialize capability prompt and review content for external engines**](TODO-044.md) `P2`
+- [x] [**BUG-129 Failed Codex turn can leave durable artifact files unregistered**](BUG-129.md) `P1`
+- [x] [**TODO-043 Make HR native skill artifact kinds first-class**](TODO-043.md) `P1`
+- [x] [**TODO-044 Materialize capability prompt and review content for external engines**](TODO-044.md) `P2`

@@ -6,10 +6,12 @@ import type { SoulAppSecurityReview } from '../soul-app/security-review'
 import type { LocalExecutor } from '../worker/executor'
 import type { LocalWorkerRuntime, LocalWorkerRuntimeOptions, LocalWorkerSnapshot } from '../worker/runtime'
 
+import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import {
   AppError,
   mintWorkerId,
+  parseNamespacedSoulAppCapabilityId,
 } from '@zonease/aiworker-shared'
 import {
   getWorker,
@@ -214,6 +216,7 @@ export class HostRuntime {
       return metadata
     return {
       ...metadata,
+      ...this.capabilityAssetMetadata(template.id),
       capabilityTemplateId: template.id,
       inputHints: template.inputHints,
       outputKind: template.outputKind,
@@ -222,6 +225,22 @@ export class HostRuntime {
       soulAppId: getHostedSoulApp(soul.id)?.appId ?? null,
       soulName: soul.name,
       workerId: worker.id,
+    }
+  }
+
+  private capabilityAssetMetadata(templateId: string): Record<string, unknown> {
+    const parsed = parseNamespacedSoulAppCapabilityId(templateId)
+    if (!parsed)
+      return {}
+    const app = getHostedSoulApp(parsed.appId)
+    if (!app || app.sourceKind !== 'manifest-path')
+      return {}
+    const capability = app.manifest.capabilities.find(item => item.id === parsed.capabilityId)
+    if (!capability)
+      return {}
+    return {
+      ...readCapabilityAsset(app.sourceRef, 'capabilityPrompt', capability.promptRef),
+      ...(capability.reviewRubricRef ? readCapabilityAsset(app.sourceRef, 'capabilityReviewRubric', capability.reviewRubricRef) : {}),
     }
   }
 
@@ -255,4 +274,14 @@ function requireText(value: unknown, field: string): string {
   if (typeof value !== 'string' || value.trim().length === 0)
     throw new Error(`Missing required field: ${field}`)
   return value.trim()
+}
+
+function readCapabilityAsset(manifestPath: string, key: string, ref: string): Record<string, unknown> {
+  try {
+    const content = readFileSync(path.resolve(path.dirname(manifestPath), ref), 'utf8').trim()
+    return content ? { [key]: { content, ref } } : {}
+  }
+  catch {
+    return {}
+  }
 }

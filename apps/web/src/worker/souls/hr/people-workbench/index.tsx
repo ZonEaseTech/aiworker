@@ -267,10 +267,10 @@ export function HrPeopleWorkbench({
               )
             : focusedProfile
               ? (
-                <HrProfileToolsRail
-                  labels={labels}
-                  onExpand={() => setProfileToolsExpanded(true)}
-                />
+                  <HrProfileToolsRail
+                    labels={labels}
+                    onExpand={() => setProfileToolsExpanded(true)}
+                  />
                 )
               : null}
         </div>

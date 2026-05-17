@@ -9,6 +9,7 @@ import { join } from 'node:path'
 import { closeWorkerDb, initWorkerDb, runWorkerMigrations } from '@zonease/aiworker-storage-sqlite/worker'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
+import { LocalExecutorFailure } from './executor'
 import { LocalWorkerRuntime } from './runtime'
 
 describe('LocalWorkerRuntime', () => {
@@ -225,6 +226,115 @@ describe('LocalWorkerRuntime', () => {
     expect(result.turn.error).toBe('executor failed')
     expect(result.invocation.status).toBe('failed')
     expect(result.events.map(event => event.type)).toEqual(['status', 'status', 'error'])
+  })
+
+  it('indexes artifacts recovered from a failed executor turn while keeping the turn failed', async () => {
+    const workerRuntime = runtime({
+      async invoke(input) {
+        throw new LocalExecutorFailure('codex exited with code 9: selected model is at capacity', {
+          artifacts: [
+            {
+              content: '# Candidate Screen\n\nRecovered artifact.\n',
+              kind: 'candidate-screen',
+              metadata: {
+                engineExitCode: 9,
+                recoveredAfterFailure: true,
+              },
+              path: `artifacts/${input.sessionId}/${input.turnId}-candidate-screen.md`,
+              title: 'Candidate Screen',
+            },
+          ],
+          metadata: {
+            engineExitCode: 9,
+            recoveredAfterFailure: true,
+          },
+          review: {
+            findings: [{ message: 'External engine wrote an artifact before failing; human review is required before promotion.' }],
+            risks: [{ message: 'Engine exited non-zero after writing the artifact.' }],
+            verdict: 'needs_review',
+          },
+          summary: 'Codex failed after writing a candidate-screen artifact.',
+        })
+      },
+    })
+    await workerRuntime.init()
+    const workspace = await workerRuntime.createWorkspace({ name: 'Hiring Workspace' })
+    const session = await workerRuntime.createSession({
+      workspaceId: workspace.id,
+      capabilityTemplateId: 'candidate-screen',
+      title: 'Screen candidate',
+      metadata: {
+        outputKind: 'candidate-screen',
+        skillName: 'Candidate Screen',
+      },
+    })
+
+    const result = await workerRuntime.startTurn({
+      sessionId: session.id,
+      input: 'Prepare the screen.',
+      engineId: 'codex',
+      engineCommand: 'codex',
+    })
+
+    expect(result.turn.status).toBe('failed')
+    expect(result.invocation.status).toBe('failed')
+    expect(result.artifacts).toHaveLength(1)
+    expect(result.artifacts[0]?.metadataJson).toMatchObject({
+      engineExitCode: 9,
+      outputKind: 'candidate-screen',
+      recoveredAfterFailure: true,
+    })
+    expect(result.review?.verdict).toBe('needs_review')
+    expect(result.events.map(event => event.type)).toEqual(['status', 'status', 'artifact', 'review', 'error'])
+    await expect(workerRuntime.files(workspace.id).read(`artifacts/${session.id}/${result.turn.id}-candidate-screen.md`)).resolves.toContain('Recovered artifact.')
+  })
+
+  it('materializes app-authored capability prompt and review content into session context', async () => {
+    const prompts: string[] = []
+    const workerRuntime = runtime({
+      async invoke(input) {
+        prompts.push(input.prompt)
+        return { summary: 'ok' }
+      },
+    })
+    await workerRuntime.init()
+    const workspace = await workerRuntime.createWorkspace({ name: 'Hiring Workspace' })
+    const session = await workerRuntime.createSession({
+      workspaceId: workspace.id,
+      capabilityTemplateId: 'aiworker-hr.interview-brief',
+      title: 'Interview brief',
+      metadata: {
+        capabilityPrompt: {
+          content: '# Interview Brief\n\nCreate evidence-backed interviewer questions.',
+          ref: './product/workflows/interview-brief/prompt.md',
+        },
+        capabilityReviewRubric: {
+          content: '# Interview Brief Review\n\n- Questions target missing signal.',
+          ref: './product/workflows/interview-brief/review.md',
+        },
+        outputKind: 'interview-brief',
+        skillName: 'Interview Brief',
+      },
+    })
+
+    await expect(
+      workerRuntime.files(workspace.id).read(`.aiworker/sessions/${session.id}/context/capability/prompt.md`),
+    ).resolves.toContain('Create evidence-backed interviewer questions.')
+    await expect(
+      workerRuntime.files(workspace.id).read(`.aiworker/sessions/${session.id}/context/capability/review.md`),
+    ).resolves.toContain('Questions target missing signal.')
+
+    await workerRuntime.startTurn({
+      sessionId: session.id,
+      input: 'Prepare interviewer brief.',
+      engineId: 'codex',
+      metadata: {},
+    })
+
+    expect(prompts[0]).toContain('Capability prompt asset: ./product/workflows/interview-brief/prompt.md')
+    expect(prompts[0]).toContain('Create evidence-backed interviewer questions.')
+    expect(prompts[0]).toContain('Capability review rubric asset: ./product/workflows/interview-brief/review.md')
+    expect(prompts[0]).toContain('Questions target missing signal.')
   })
 
   it('keeps runtime workspaces isolated when two workers share one Soul', async () => {

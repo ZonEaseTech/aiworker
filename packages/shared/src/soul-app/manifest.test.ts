@@ -125,6 +125,33 @@ describe('Soul App manifest schema', () => {
 
   it('keeps fixture contributions explicit enough for Host discovery', () => {
     expect(hrSoulAppManifest.artifactTypes[0]?.schemaSha256).toBe('35c14e3d4c0fe9fd95c87e9bc47a210e21f99bcb1b079aa99a95bb93e820c8ab')
+    expect(hrSoulAppManifest.artifactTypes.map(type => type.id)).toEqual(expect.arrayContaining([
+      'person-profile',
+      'candidate-screen',
+      'evidence-matrix',
+      'interview-brief',
+      'hiring-risk',
+      'profile-update-proposal',
+    ]))
+    expect(hrSoulAppManifest.capabilities.map(capability => capability.outputKind)).toEqual(expect.arrayContaining([
+      'person-profile',
+      'candidate-screen',
+      'evidence-matrix',
+      'interview-brief',
+      'hiring-risk',
+      'profile-update-proposal',
+    ]))
+    expect(hrSoulAppManifest.capabilities.find(capability => capability.id === 'interview-brief')).toMatchObject({
+      artifactTypes: ['interview-brief'],
+      promptRef: './product/workflows/interview-brief/prompt.md',
+      reviewRubricRef: './product/workflows/interview-brief/review.md',
+    })
+    const profileUpdateProposal = hrSoulAppManifest.capabilities.find(capability => capability.id === 'profile-update-proposal')
+    expect(profileUpdateProposal).toMatchObject({
+      artifactTypes: ['profile-update-proposal'],
+      outputKind: 'profile-update-proposal',
+    })
+    expect(profileUpdateProposal?.workspaceTypes).toEqual(expect.arrayContaining(['people-profile', 'candidate']))
     expect(hrSoulAppManifest.capabilities[0]?.promptRef).toBe('./product/workflows/person-profile/prompt.md')
     expect(hrSoulAppManifest.capabilities[0]?.reviewRubricRef).toBe('./product/workflows/person-profile/review.md')
     expect(hrSoulAppManifest.artifactTypes[0]?.schemaRef).toBe('./product/artifacts/schemas/person-profile.schema.json')

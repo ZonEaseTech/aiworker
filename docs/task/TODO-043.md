@@ -1,10 +1,12 @@
 # TODO-043 Make HR native skill artifact kinds first-class
 
-- **status**: pending
+- **status**: completed
 - **priority**: P1
-- **owner**: unassigned
+- **owner**: codex
 - **createdAt**: 2026-05-17
-- **plan**: PLAN-344
+- **claimedAt**: 2026-05-17
+- **completedAt**: 2026-05-17
+- **plan**: PLAN-345
 - **relatesTo**: apps/aiworker-hr/soul-app.manifest.json, apps/aiworker-hr/product/artifacts, packages/core/src/worker/executor.ts
 
 ## Context
@@ -33,3 +35,20 @@ declare artifact kind without expanding Host product semantics.
   the meaning and promotion rules.
 - Artifact preview/review surfaces can distinguish supporting artifacts from
   promotable profile proposals.
+
+## Implementation Plan
+
+- Covered by `PLAN-345`.
+
+## Resolution
+
+HR now declares first-class artifact types and capability output kinds for
+`evidence-matrix`, `interview-brief`, `hiring-risk`, and
+`profile-update-proposal`. The app manifest and shared official fixture stay
+aligned, and the new product assets live under the HR Soul App namespace.
+
+## Verification
+
+- `bun run --filter '@zonease/aiworker-shared' test src/soul-app/manifest.test.ts`
+- `bun run --filter '@zonease/aiworker-hr' validate`
+- `bun run --filter '@zonease/aiworker-hr' test`

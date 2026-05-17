@@ -1,5 +1,23 @@
 # AIWorker Changelog
 
+## 2026-05-17 [completed] BUG-129 / TODO-043 / TODO-044 / PLAN-345 — HR native skill closure follow-ups
+
+Closed the remaining HR native skill README closure follow-ups from the real
+Codex debug campaign.
+
+- Failed local-engine turns can now recover artifacts written before a non-zero
+  exit. Recovered artifacts are indexed with `needs_review`, while the turn and
+  invocation remain failed.
+- HR native skill outputs now have first-class app-owned artifact kinds and
+  capabilities for `evidence-matrix`, `interview-brief`, `hiring-risk`, and
+  `profile-update-proposal`.
+- Manifest-path Soul App capability prompt/review assets are materialized into
+  session context and invocation prompts for external engines, so engines no
+  longer receive only inaccessible source refs.
+
+Verification passed: focused core/shared/API/CLI/Web/HR tests, HR app validate,
+package typechecks, root lint, `git diff --check`, and code-review-graph.
+
 ## 2026-05-17 [completed] QA-035 / PLAN-344 — HR native skills README closure debug campaign
 
 Ran and tuned the real Codex-backed HR native skill closure loop from zero

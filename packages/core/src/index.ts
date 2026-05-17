@@ -83,6 +83,7 @@ export {
   createExternalEngineExecutor,
   type LocalExecutor,
   type LocalExecutorArtifact,
+  LocalExecutorFailure,
   type LocalExecutorInput,
   type LocalExecutorLesson,
   type LocalExecutorResult,

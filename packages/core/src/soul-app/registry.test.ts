@@ -72,6 +72,12 @@ describe('Host Soul App registry', () => {
     expect(findHostSoul('aiworker-hr')?.status).toBe('available')
     expect(findHostCapabilityTemplate(capabilityId)?.soulId).toBe('aiworker-hr')
     expect(listHostCapabilityTemplatesForSoul('aiworker-hr').map(template => template.id)).toContain(capabilityId)
+    expect(listHostCapabilityTemplatesForSoul('aiworker-hr').map(template => template.id)).toEqual(expect.arrayContaining([
+      namespaceSoulAppCapabilityId('aiworker-hr', 'evidence-matrix'),
+      namespaceSoulAppCapabilityId('aiworker-hr', 'interview-brief'),
+      namespaceSoulAppCapabilityId('aiworker-hr', 'hiring-risk'),
+      namespaceSoulAppCapabilityId('aiworker-hr', 'profile-update-proposal'),
+    ]))
     expect(listHostSoulCatalog().souls.some(soul => soul.id === 'hr')).toBe(false)
 
     const checked = runSoulAppHealthcheck('aiworker-hr', {

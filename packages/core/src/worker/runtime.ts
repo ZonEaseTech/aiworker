@@ -51,7 +51,7 @@ import {
 } from '@zonease/aiworker-storage-sqlite/worker'
 import { engineAssetProjectionReceiptPath, projectEngineAssetsToWorkspace, resolveSoulAppEngineTarget } from './engine-assets'
 import { LocalWorkerEventBus } from './events'
-import { createExternalEngineExecutor } from './executor'
+import { createExternalEngineExecutor, LocalExecutorFailure } from './executor'
 import { LocalWorkspaceFiles } from './files'
 import { bootstrapProfileWorkspace, promoteProfileRevision as promoteProfileRevisionFiles } from './profile-ledger'
 
@@ -308,16 +308,23 @@ export class LocalWorkerRuntime {
     }
     catch (error) {
       const message = error instanceof Error ? error.message : String(error)
+      const recoveredOutput = error instanceof LocalExecutorFailure && error.partialResult
+        ? await this.captureResult(workspace, session, turn, invocation, error.partialResult, metadata)
+        : { artifacts: [], files: [], lessons: [], review: null }
+      const recoveredMetadata = error instanceof LocalExecutorFailure ? error.partialResult?.metadata ?? {} : {}
       const failedInvocation = updateEngineInvocation({
         id: invocation.id,
         status: 'failed',
         error: message,
+        metadataJson: { ...metadata, ...recoveredMetadata },
+        summary: error instanceof LocalExecutorFailure ? error.partialResult?.summary ?? null : null,
         finishedAt: this.#now(),
         at: this.#now(),
       })
       const failedTurn = updateTurn({
         id: turn.id,
         status: 'failed',
+        response: error instanceof LocalExecutorFailure ? error.partialResult?.summary ?? null : null,
         error: message,
         at: this.#now(),
       })
@@ -334,10 +341,7 @@ export class LocalWorkerRuntime {
         turn: failedTurn,
         invocation: failedInvocation,
         events: listSessionEvents(session.id),
-        files: [],
-        artifacts: [],
-        review: null,
-        lessons: [],
+        ...recoveredOutput,
       }
     }
   }
@@ -456,6 +460,7 @@ export class LocalWorkerRuntime {
           fileId: file.id,
           outputKind: artifact.kind ?? metadata.outputKind,
           ...(typeof metadata.soulAppId === 'string' ? { soulAppId: metadata.soulAppId } : {}),
+          ...(artifact.metadata ?? {}),
           workerId: this.workerId,
         },
         at: this.#now(),
@@ -563,6 +568,12 @@ export class LocalWorkerRuntime {
       lines.push('', 'Input hints:', ...hints.map(item => `- ${String(item)}`))
     if (rubric.length > 0)
       lines.push('', 'Review rubric:', ...rubric.map(item => `- ${String(item)}`))
+    const capabilityPrompt = capabilityAsset(metadata.capabilityPrompt)
+    const capabilityReviewRubric = capabilityAsset(metadata.capabilityReviewRubric)
+    if (capabilityPrompt)
+      lines.push('', `Capability prompt asset: ${capabilityPrompt.ref}`, capabilityPrompt.content)
+    if (capabilityReviewRubric)
+      lines.push('', `Capability review rubric asset: ${capabilityReviewRubric.ref}`, capabilityReviewRubric.content)
     return lines.join('\n')
   }
 
@@ -572,6 +583,12 @@ export class LocalWorkerRuntime {
     await mkdir(files.resolve(path.posix.join(sessionRoot, 'context', 'capability')), { recursive: true })
     await writeFile(files.resolve(path.posix.join(sessionRoot, 'context', 'active-context.md')), this.buildActiveContext(session, metadata), 'utf8')
     await writeFile(files.resolve(path.posix.join(sessionRoot, 'context', 'capability', 'SKILL.md')), this.buildCapabilitySkill(session, metadata), 'utf8')
+    const capabilityPrompt = capabilityAsset(metadata.capabilityPrompt)
+    const capabilityReviewRubric = capabilityAsset(metadata.capabilityReviewRubric)
+    if (capabilityPrompt)
+      await writeFile(files.resolve(path.posix.join(sessionRoot, 'context', 'capability', 'prompt.md')), capabilityPrompt.content, 'utf8')
+    if (capabilityReviewRubric)
+      await writeFile(files.resolve(path.posix.join(sessionRoot, 'context', 'capability', 'review.md')), capabilityReviewRubric.content, 'utf8')
     await mkdir(files.resolve(path.posix.join(sessionRoot, 'invocations')), { recursive: true })
   }
 
@@ -595,10 +612,14 @@ export class LocalWorkerRuntime {
   private buildCapabilitySkill(session: SessionRow, metadata: Record<string, unknown>): string {
     const name = readString(metadata.skillName, session.capabilityTemplateId)
     const rubric = Array.isArray(metadata.reviewRubric) ? metadata.reviewRubric.map(String) : []
+    const capabilityPrompt = capabilityAsset(metadata.capabilityPrompt)
+    const capabilityReviewRubric = capabilityAsset(metadata.capabilityReviewRubric)
     return [
       `# ${name}`,
       '',
       'Use this capability in the current AIWorker session only.',
+      ...(capabilityPrompt ? ['', '## Capability Prompt', `Source: ${capabilityPrompt.ref}`, '', capabilityPrompt.content] : []),
+      ...(capabilityReviewRubric ? ['', '## Capability Review Rubric', `Source: ${capabilityReviewRubric.ref}`, '', capabilityReviewRubric.content] : []),
       '',
       '## Review Rubric',
       ...(rubric.length > 0 ? rubric.map(item => `- ${item}`) : ['- Separate facts, assumptions, risks, and next actions.']),
@@ -677,4 +698,13 @@ export function createLocalWorkerRuntime(options: LocalWorkerRuntimeOptions): Lo
 
 function readString(value: unknown, fallback: string): string {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : fallback
+}
+
+function capabilityAsset(value: unknown): { content: string, ref: string } | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    return null
+  const record = value as Record<string, unknown>
+  const content = readString(record.content, '')
+  const ref = readString(record.ref, '')
+  return content && ref ? { content, ref } : null
 }

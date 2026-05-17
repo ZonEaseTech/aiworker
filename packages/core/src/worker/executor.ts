@@ -11,6 +11,7 @@ export interface LocalExecutorArtifact {
   path: string
   content: string
   kind?: string
+  metadata?: Record<string, unknown>
   title?: string
 }
 
@@ -45,6 +46,13 @@ export interface LocalExecutorResult {
   review?: LocalExecutorReview
   lessons?: LocalExecutorLesson[]
   metadata?: Record<string, unknown>
+}
+
+export class LocalExecutorFailure extends Error {
+  constructor(message: string, readonly partialResult?: LocalExecutorResult) {
+    super(message)
+    this.name = 'LocalExecutorFailure'
+  }
 }
 
 export type LocalExecutorEvent
@@ -248,6 +256,47 @@ async function runLocalCliExecutor(input: LocalExecutorInput): Promise<LocalExec
     const visible = filterVisibleEngineLog(execution.stderr || execution.stdout)
     if (visible.trim())
       emit(input, { chunk: truncate(visible, 8_000), kind: 'log', stream: execution.stderr ? 'stderr' : 'stdout' })
+    const artifacts = await discoverInvocationArtifacts({
+      fallbackKind: outputKind,
+      fallbackTitle: skillName,
+      sessionId: input.sessionId,
+      sinceMs: invocationStartedAt,
+      turnId: input.turnId,
+      workspaceRoot: input.workspaceRoot,
+    })
+    if (artifacts.length > 0) {
+      emit(input, {
+        kind: 'status',
+        label: 'artifact_recovered',
+        detail: `${artifacts.length} artifact${artifacts.length === 1 ? '' : 's'} written before failure`,
+      })
+      throw new LocalExecutorFailure(`${command} exited with code ${execution.code}: ${truncate(visible || execution.stderr || execution.stdout, 2_000)}`, {
+        artifacts: artifacts.map(artifact => ({
+          ...artifact,
+          metadata: {
+            ...(artifact.metadata ?? {}),
+            engineExitCode: execution.code,
+            recoveredAfterFailure: true,
+          },
+        })),
+        lessons: [],
+        metadata: {
+          engineExitCode: execution.code,
+          executionSource: 'local-cli',
+          finalMessage: finalMessage.trim(),
+          processId: randomUUID(),
+          recoveredAfterFailure: true,
+          stderrLog: path.join(input.invocationRoot, 'stderr.log'),
+          stdoutLog: path.join(input.invocationRoot, 'stdout.log'),
+        },
+        review: {
+          findings: [{ message: 'External engine wrote an artifact before failing; human review is required before promotion.' }],
+          risks: [{ message: `External engine failed after writing the artifact: ${truncate(visible || execution.stderr || execution.stdout, 500)}` }],
+          verdict: 'needs_review',
+        },
+        summary: finalMessage.trim() || `${engine.name} failed after writing ${artifacts.length} artifact${artifacts.length === 1 ? '' : 's'}.`,
+      })
+    }
     throw new Error(`${command} exited with code ${execution.code}: ${truncate(visible || execution.stderr || execution.stdout, 2_000)}`)
   }
 

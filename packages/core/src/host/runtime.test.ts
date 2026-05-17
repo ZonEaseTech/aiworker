@@ -174,6 +174,14 @@ describe('Host runtime boundary', () => {
     expect(runtime.enrichTemplateMetadata(created.worker.id, HR_CANDIDATE_SCREEN, { source: 'contract-test' }))
       .toMatchObject({
         capabilityTemplateId: HR_CANDIDATE_SCREEN,
+        capabilityPrompt: {
+          content: expect.stringContaining('Use AIWorker HR domain evidence'),
+          ref: './product/workflows/candidate-screen/prompt.md',
+        },
+        capabilityReviewRubric: {
+          content: expect.stringContaining('Candidate Screen Review Rubric'),
+          ref: './product/workflows/candidate-screen/review.md',
+        },
         inputHints: template.inputHints,
         outputKind: template.outputKind,
         reviewRubric: template.reviewRubric,

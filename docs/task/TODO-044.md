@@ -1,10 +1,12 @@
 # TODO-044 Materialize capability prompt and review content for external engines
 
-- **status**: pending
+- **status**: completed
 - **priority**: P2
-- **owner**: unassigned
+- **owner**: codex
 - **createdAt**: 2026-05-17
-- **plan**: PLAN-344
+- **claimedAt**: 2026-05-17
+- **completedAt**: 2026-05-17
+- **plan**: PLAN-345
 - **relatesTo**: packages/shared/src/soul-app/registry.ts, packages/core/src/host/runtime.ts, packages/core/src/worker/runtime.ts
 
 ## Context
@@ -29,3 +31,20 @@ source refs that are inaccessible from the workspace.
   source files outside the workspace.
 - The mechanism remains Soul App-owned and does not make Host interpret HR
   profile semantics.
+
+## Implementation Plan
+
+- Covered by `PLAN-345`.
+
+## Resolution
+
+Host metadata enrichment now reads app-authored capability prompt and review
+assets for manifest-path Soul Apps. Runtime materializes those assets under the
+session context directory and includes them in external-engine invocation
+prompts, without interpreting HR domain semantics.
+
+## Verification
+
+- `bun run --filter '@zonease/aiworker-core' test src/worker/executor.test.ts src/worker/runtime.test.ts src/host/runtime.test.ts src/soul-app/registry.test.ts`
+- `bun run --filter '@zonease/aiworker-api' test src/modes/worker.local.test.ts`
+- `bun run --filter '@zonease/aiworker-cli' test src/aiworker.test.ts`

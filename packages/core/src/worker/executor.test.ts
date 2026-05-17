@@ -7,7 +7,7 @@ import path from 'node:path'
 
 import { afterEach, describe, expect, it } from 'bun:test'
 
-import { createExternalEngineExecutor } from './executor'
+import { createExternalEngineExecutor, LocalExecutorFailure } from './executor'
 
 describe('createExternalEngineExecutor', () => {
   let roots: string[] = []
@@ -147,5 +147,44 @@ exit 9
 
     await expect(createExternalEngineExecutor().invoke(baseInput(command, workspaceRoot, events))).rejects.toThrow('exited with code 9')
     expect(events.some(event => event.kind === 'log' && event.stream === 'stderr' && event.chunk.includes('fatal engine error'))).toBe(true)
+  })
+
+  it('carries artifacts written before a failed engine exit for recovery', async () => {
+    const workspaceRoot = path.join(makeRoot(), 'workspace')
+    await mkdir(path.join(workspaceRoot, 'artifacts', 'session-1'), { recursive: true })
+    const command = await makeScript(`
+cat >/dev/null
+cat > artifacts/session-1/turn-1-candidate-screen.md <<'EOF'
+# Candidate Screen
+
+Evidence attached before the engine failed.
+EOF
+printf '%s\\n' '{"type":"item.completed","item":{"type":"agent_message","text":"Draft written, then capacity failed."}}'
+printf 'selected model is at capacity\\n' >&2
+exit 9
+`)
+    const events: LocalExecutorEvent[] = []
+
+    try {
+      await createExternalEngineExecutor().invoke(baseInput(command, workspaceRoot, events))
+      throw new Error('expected executor failure')
+    }
+    catch (error) {
+      expect(error).toBeInstanceOf(LocalExecutorFailure)
+      const partial = (error as LocalExecutorFailure).partialResult
+      expect(partial?.artifacts).toHaveLength(1)
+      expect(partial?.artifacts?.[0]).toMatchObject({
+        kind: 'candidate-screen',
+        metadata: {
+          engineExitCode: 9,
+          recoveredAfterFailure: true,
+        },
+        path: 'artifacts/session-1/turn-1-candidate-screen.md',
+        title: 'Candidate Screen',
+      })
+      expect(partial?.review?.verdict).toBe('needs_review')
+      expect(partial?.metadata).toMatchObject({ engineExitCode: 9, recoveredAfterFailure: true })
+    }
+    expect(events.some(event => event.kind === 'status' && event.label === 'artifact_recovered')).toBe(true)
   })
 })
