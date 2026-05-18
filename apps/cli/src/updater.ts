@@ -248,7 +248,7 @@ export function buildUpgradePlan(input: BuildUpgradePlanInput): UpgradePlan {
     actions,
     currentVersion: input.currentVersion,
     mode: input.options.mode,
-    requiresConfirmation: input.options.mode === 'apply' && actions.length > 0 && !input.options.yes,
+    requiresConfirmation: false,
     source: input.source,
     status,
     target: input.target,

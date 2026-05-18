@@ -203,6 +203,40 @@ describe('aiworker local CLI', () => {
     expect(preprocessArgv(argv('workspace', 'create', '--name', 'T')).slice(2, 3)).toEqual(['workspace create'])
     expect(preprocessArgv(argv('session', 'start', '--input', 'P')).slice(2, 3)).toEqual(['session start'])
     expect(preprocessArgv(argv('worker', 'create', '--name', 'HR')).slice(2, 3)).toEqual(['worker create'])
+    expect(preprocessArgv(argv('daemon', 'restart')).slice(2, 3)).toEqual(['daemon restart'])
+  })
+
+  it('shows a compact operator command index by default and full index on request', async () => {
+    expect(await runCli(argv('commands'))).toBe(0)
+
+    expect(output).toContain('aiworker operator commands')
+    expect(output).toContain('daemon start|stop|restart|status|logs')
+    expect(output).toContain('app list|show|install|enable|bootstrap')
+    expect(output).toContain('worker create|list|select')
+    expect(output).not.toContain('dev')
+    expect(output).not.toContain('app create|validate|smoke')
+
+    output = ''
+    expect(await runCli(argv('commands', '--all'))).toBe(0)
+
+    expect(output).toContain('aiworker command index')
+    expect(output).toContain('dev')
+    expect(output).toContain('daemon start|foreground|status|stop|restart|logs|check')
+    expect(output).toContain('app list|show|install|enable|disable|doctor|permissions|bootstrap|create|validate|smoke')
+  })
+
+  it('shows compact top-level help unless all commands are requested', async () => {
+    expect(await runCli(argv('--help'))).toBe(0)
+
+    expect(output).toContain('Primary operator commands')
+    expect(output).toContain('daemon start|stop|restart|status|logs')
+    expect(output).not.toContain('app create <id>')
+
+    output = ''
+    expect(await runCli(argv('--help', '--all'))).toBe(0)
+
+    expect(output).toContain('Commands:')
+    expect(output).toContain('app create <id>')
   })
 
   it('resolves package-local official apps before source apps', async () => {
@@ -310,10 +344,10 @@ describe('aiworker local CLI', () => {
     output = ''
 
     expect(await runCli(argv('commands'))).toBe(0)
-    expect(output).toContain('dev')
-    expect(output).toContain('app list|show|install|enable|disable|doctor|permissions|bootstrap|create|validate|smoke')
-    expect(output).toContain('worker create|list|show|select')
-    expect(output).toContain('workspace create|list|show')
+    expect(output).toContain('daemon start|stop|restart|status|logs')
+    expect(output).toContain('app list|show|install|enable|bootstrap')
+    expect(output).toContain('worker create|list|select')
+    expect(output).toContain('workspace create|list')
     expect(output).toContain('session start|list|show')
     expect(output).not.toContain('run start')
   })
@@ -509,8 +543,14 @@ describe('aiworker local CLI', () => {
       .toContain('Reviewed from explicit file.')
   })
 
-  it('lists update and upgrade in the command index', async () => {
+  it('keeps upgrade discoverable only in the full command index', async () => {
     expect(await runCli(argv('commands'))).toBe(0)
+
+    expect(output).toContain('update')
+    expect(output).not.toContain('update|upgrade')
+    output = ''
+
+    expect(await runCli(argv('commands', '--all'))).toBe(0)
 
     expect(output).toContain('update|upgrade')
   })

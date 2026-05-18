@@ -149,6 +149,25 @@ describe('CLI updater core', () => {
     })
   })
 
+  it('builds executable apply plans without requiring a confirmation flag', () => {
+    const plan = buildUpgradePlan({
+      currentVersion: '1.0.0',
+      options: parseUpdateCommandOptions('update', {}),
+      source: { canAutoUpgrade: true, kind: 'npm-global', packageManager: 'npm' },
+      target: { source: 'npm', version: '1.1.0' },
+    })
+
+    expect(plan).toMatchObject({
+      requiresConfirmation: false,
+      status: 'update_available',
+    })
+    expect(plan.actions.map(action => action.kind)).toEqual([
+      'package-manager',
+      'host-convergence',
+      'daemon-restart',
+    ])
+  })
+
   it('treats prerelease current versions as older than matching stable targets', () => {
     const plan = buildUpgradePlan({
       currentVersion: '1.0.0-beta.1',

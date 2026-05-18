@@ -132,15 +132,15 @@ dev server 与 Web dev server。
 目标 source-checkout 调试入口：
 
 ```bash
-aiworker dev
+bun run dev
 ```
 
 目标 packaged/npm preview 入口：
 
 ```bash
-bunx @zonease/aiworker-cli daemon foreground --port 9217
+bunx @zonease/aiworker-cli daemon start --port 9217
 # or, if Bun is already available for the shim:
-npx @zonease/aiworker-cli daemon foreground --port 9217
+npx @zonease/aiworker-cli daemon start --port 9217
 ```
 
 这是 `0.x preview`：Host Web/API 启动、worker DB migrations，以及官方 HR/QA Soul App
@@ -151,11 +151,13 @@ Source checkout 调试也走同一个 daemon；先构建一次 Web 静态资源�
 
 ```bash
 bun run --filter '@zonease/aiworker-web' build
-bun apps/cli/src/aiworker.ts dev --port 9217
+bun apps/cli/src/aiworker.ts daemon foreground --port 9217
 ```
 
 源码态默认使用 `~/.aiworker-dev` 作为开发 profile；发布包和 npm preview
 默认仍使用 `~/.aiworker`。两种入口都可以通过 `AIWORKER_HOME=<path>` 显式覆盖。
+`aiworker dev` 仅保留为 source-checkout compatibility alias；日常 operator
+lifecycle 使用 `daemon start|stop|restart|status|logs`。
 
 打开 Web 后，首屏应帮助用户 install/enable 官方或第三方 Soul App，再创建 Soul worker 与
 workspace/session。Settings 由明确 settings button 打开，支持 Local CLI / BYOK、engine

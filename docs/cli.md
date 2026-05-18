@@ -1,30 +1,43 @@
 # AIWorker CLI
 
-AIWorker CLI 是 Host local daemon 和 Soul App authoring 的本地入口。它不再承载旧
-gateway/fleet 管理面，也不再使用 `brief/run` 产品路径。
+AIWorker CLI 是 Host local daemon lifecycle、operator locator 和 Soul App
+authoring 的本地入口。它不再承载旧 gateway/fleet 管理面，也不再使用 `brief/run`
+产品路径。
 
 ## Primary Flow
-
-源码调试：
-
-```bash
-bun apps/cli/src/aiworker.ts dev --host 127.0.0.1 --port 9217
-```
-
-源码调试默认把 Host-local state 放在 `~/.aiworker-dev`，避免与已安装 preview
-CLI 的 `~/.aiworker` 竞争同一个 `aiworker.db`、pid/log 和 workspace tree。
 
 安装或打包后：
 
 ```bash
-aiworker daemon foreground --host 127.0.0.1 --port 9217
+aiworker daemon start --host 127.0.0.1 --port 9217
+aiworker open --port 9217
 ```
+
+常用 lifecycle：
+
+```bash
+aiworker daemon status
+aiworker daemon logs
+aiworker daemon restart
+aiworker daemon stop
+```
+
+源码 checkout 开发：
+
+```bash
+bun run dev
+```
+
+源码态默认把 Host-local state 放在 `~/.aiworker-dev`，避免与已安装 preview
+CLI 的 `~/.aiworker` 竞争同一个 `aiworker.db`、pid/log 和 workspace tree。
+`aiworker dev` 仅保留为 source-checkout compatibility alias；repo 开发优先使用
+`bun run dev`，前台 daemon 调试使用 `aiworker daemon foreground`。
 
 npm `0.x preview` 入口：
 
 ```bash
-bunx @zonease/aiworker-cli daemon foreground --host 127.0.0.1 --port 9217
-npx @zonease/aiworker-cli daemon foreground --host 127.0.0.1 --port 9217
+bunx @zonease/aiworker-cli daemon start --host 127.0.0.1 --port 9217
+npx @zonease/aiworker-cli daemon start --host 127.0.0.1 --port 9217
 ```
 
 安装或打包后的 CLI 默认使用 `~/.aiworker`。如果需要隔离环境，显式设置
@@ -33,45 +46,38 @@ npx @zonease/aiworker-cli daemon foreground --host 127.0.0.1 --port 9217
 Preview 包应能从 package-local 资源启动 Host Web/API、迁移 worker DB，并 bootstrap 官方
 HR/QA Soul App；Host auth、1.0 发布承诺和独立 SDK/runtime npm 发布不属于这个 gate。
 
-打开 Web：
-
-```bash
-aiworker open --port 9217
-```
-
 ## Command Index
 
+Default `aiworker --help` and `aiworker commands` show the compact operator
+surface:
+
 ```text
-aiworker init
-aiworker dev
+aiworker daemon start|stop|restart|status|logs
+aiworker open
 aiworker doctor
-aiworker update|upgrade
-aiworker daemon start|foreground|status|stop|logs|check
-aiworker app list|show|install|enable|disable|doctor|permissions|bootstrap|create|validate|smoke
-aiworker soul list
-aiworker worker create|list|show|select
-aiworker template list
-aiworker workspace create|list|show
+aiworker update
+aiworker app list|show|install|enable|bootstrap
+aiworker worker create|list|select
+aiworker workspace create|list
 aiworker session start|list|show
 aiworker turn send
-aiworker files list|show
-aiworker artifacts list|show|open
-aiworker profile promote
-aiworker review list|show
-aiworker lessons list|propose|accept|reject
-aiworker settings list
-aiworker engine select
-aiworker open
-aiworker commands
 ```
+
+Use `aiworker --help --all` or `aiworker commands --all` for authoring,
+diagnostics, inspection and compatibility commands.
 
 ## Host Daemon
 
-- `dev` runs the local daemon and hosted Worker Web in foreground.
-- `daemon foreground` runs the same daemon directly.
 - `daemon start` runs it in the background and writes pid/log files under
   `AIWORKER_HOME`.
-- `daemon status|logs|check|stop` inspect or stop the local process.
+- `daemon stop` stops the managed local daemon and clears its pid file.
+- `daemon restart` stops a running daemon, waits for the old process to exit,
+  and starts a fresh daemon.
+- `daemon status|logs` inspect the managed process.
+- `daemon foreground|check` remain callable diagnostics/compatibility commands
+  but are not part of the default operator surface.
+- `dev` is a source-checkout compatibility alias for `daemon foreground`; repo
+  development should use `bun run dev`.
 - `doctor` checks host-local readiness without turning AIWorker into a remote
   control plane.
 
@@ -81,13 +87,24 @@ aiworker commands
 distribution updater. They upgrade the CLI package, package-local Host Web
 assets, worker DB migrations and bundled official Soul App release resources.
 
-Use `aiworker update --check` for a read-only check. The default channel is
-stable. Preview or prerelease targets require `--channel preview` or `--pre`.
+`aiworker update` executes safe update actions by default. Use
+`aiworker update --check` for a read-only check and `aiworker update --dry-run`
+to print the planned write actions without performing them. The default channel
+is stable. Preview or prerelease targets require `--channel preview` or `--pre`.
+
+If a managed daemon for the same `AIWORKER_HOME` is running, `aiworker update`
+automatically restarts it after the package/bundle update and Host convergence.
+If no daemon is running, update does not start one. If the pid points to a
+source checkout, `dev` process, mismatched home or unknown command, update
+reports the reason and leaves the process untouched.
 
 Global npm and Bun installs can be upgraded through their package managers.
 Source checkout, `npx`, `bunx` and unknown sources print a plan and do not
 self-modify. GitHub release bundles require SHA256 checksum assets before
 automatic replacement.
+
+`aiworker upgrade` remains a compatibility alias for `aiworker update`, but it
+is not part of the default compact operator command index.
 
 Future `aiworker worker <worker_id> update|upgrade` is reserved for
 worker-scoped compatibility and is not the same command as top-level CLI
@@ -98,8 +115,9 @@ self-update.
 - `app bootstrap official` installs/enables the official HR/QA Soul Apps through
   the normal app lifecycle.
 - `app install <manifest>` registers a local Soul App manifest.
-- `app enable|disable <id>` changes lifecycle state.
-- `app doctor|permissions <id>` inspect static health and declared grants.
+- `app enable <id>` changes lifecycle state.
+- `app disable|doctor|permissions <id>` remain advanced lifecycle/security
+  commands.
 - `app create <id> --dir <path>` scaffolds a Soul App with `ui.workbench`
   descriptors and `ui.workspaceContext` for Host-owned workspace process
   context.
@@ -114,16 +132,16 @@ legacy built-in ids such as `hr`.
 
 - `worker create --soul <app-id>` creates a local Soul worker.
 - `worker select <id>` stores the default worker for later commands.
-- `template list --soul <app-id>` lists capability templates projected by the
-  enabled app.
 - `workspace create --worker <id>` creates a business workspace under a worker.
 - `session start --workspace <id> --skill <template-id> --input <text>` creates
   a session and first turn.
 - `turn send --session <id> --input <text>` continues an existing session.
-- `files list|show`, `artifacts list|show|open`, `profile promote`,
-  `review list|show` and
-  `lessons list|propose|accept|reject` inspect the Host-indexed outputs that
-  the app/runtime exposed.
+- `template list`, `files list|show`, `artifacts list|show|open`,
+  `profile promote`, `review list|show` and `lessons list|propose|accept|reject`
+  remain callable advanced commands for diagnostics, automation and focused
+  app-owned workflow checks. They are hidden from the default command index
+  because fine-grained agent-operable surfaces should normally go through the
+  local daemon API and manifest/protocol/action/search descriptors.
 - `profile promote --workspace <id> --artifact <id>` promotes a reviewed
   artifact into the workspace `README.md`. By default the artifact must contain
   a clean `aiworker-profile-readme` fenced draft; `--profile-markdown <path>`

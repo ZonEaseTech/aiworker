@@ -53,6 +53,7 @@ import consola from 'consola'
 import packageJson from '../package.json' with { type: 'json' }
 import {
   buildUpgradePlan,
+  canRestartManagedDaemon,
   detectInstallSource,
   executeUpgradePlan,
   parseUpdateCommandOptions,
@@ -70,6 +71,26 @@ export interface LocalPaths {
 
 interface RuntimeOptions {
   worker?: string
+}
+
+interface DaemonStartResult {
+  logFile: string
+  pid: number
+  started: true
+  url: string
+}
+
+interface DaemonStopResult {
+  pid?: number
+  running: false
+  stopped: boolean
+}
+
+interface DaemonRestartResult {
+  reason: string
+  restarted: boolean
+  started?: DaemonStartResult
+  stopped?: DaemonStopResult
 }
 
 const cli = cac('aiworker')
@@ -275,6 +296,7 @@ async function runUpdateCommand(command: UpdateCommandName, opts: UpdateCliOptio
     throw new Error('update requires --yes to apply changes')
   }
 
+  let daemonRestart: DaemonRestartResult = { reason: 'update did not request daemon restart', restarted: false }
   const result = await executeUpgradePlan({
     convergeHost: async () => {
       await convergeHostAfterCliUpgrade()
@@ -284,7 +306,7 @@ async function runUpdateCommand(command: UpdateCommandName, opts: UpdateCliOptio
     },
     plan,
     restartDaemon: async () => {
-      consola.info('AIWorker daemon requires manual restart after CLI upgrade')
+      daemonRestart = await restartManagedDaemonAfterCliUpgrade()
     },
     runCommand: async (command, args) => {
       const proc = Bun.spawn([command, ...args], {
@@ -298,7 +320,7 @@ async function runUpdateCommand(command: UpdateCommandName, opts: UpdateCliOptio
     },
   })
 
-  printJson({ update: plan, result })
+  printJson({ update: plan, result, daemon: daemonRestart })
 }
 
 interface GitHubBundleReplacementOptions {
@@ -544,8 +566,7 @@ function daemonStatus(): { logFile: string, pid: number | null, running: boolean
   return { pid: Number.isFinite(pid) ? pid : null, running: Number.isFinite(pid) && isProcessAlive(pid), logFile: paths.logFile }
 }
 
-async function startDaemon(opts: { host?: string, port?: number } = {}): Promise<void> {
-  const paths = localPaths()
+async function startDaemonProcess(opts: { host?: string, port?: number } = {}, paths = localPaths()): Promise<DaemonStartResult> {
   mkdirSync(paths.home, { recursive: true })
   const current = daemonStatus()
   if (current.running)
@@ -573,20 +594,77 @@ async function startDaemon(opts: { host?: string, port?: number } = {}): Promise
   if (!child.pid)
     throw new Error('daemon did not return a pid')
   writeFileSync(paths.pidFile, String(child.pid))
-  printJson({ started: true, pid: child.pid, logFile: paths.logFile, url: `http://127.0.0.1:${opts.port ?? getWorkerEnv().PORT}` })
+  return { started: true, pid: child.pid, logFile: paths.logFile, url: `http://127.0.0.1:${opts.port ?? getWorkerEnv().PORT}` }
+}
+
+async function startDaemon(opts: { host?: string, port?: number } = {}): Promise<void> {
+  printJson(await startDaemonProcess(opts))
+}
+
+async function stopDaemonProcess(paths = localPaths(), status = daemonStatus()): Promise<DaemonStopResult> {
+  if (!status.pid || !status.running) {
+    rmSync(paths.pidFile, { force: true })
+    return { stopped: false, running: false }
+  }
+  try {
+    process.kill(status.pid, 'SIGTERM')
+  }
+  catch (error) {
+    if (!(error instanceof Error) || !('code' in error) || error.code !== 'ESRCH')
+      throw error
+  }
+  await waitForProcessExit(status.pid)
+  rmSync(paths.pidFile, { force: true })
+  return { stopped: true, pid: status.pid, running: false }
 }
 
 async function stopDaemon(): Promise<void> {
+  printJson(await stopDaemonProcess())
+}
+
+async function restartDaemon(opts: { host?: string, port?: number } = {}): Promise<void> {
   const paths = localPaths()
   const status = daemonStatus()
-  if (!status.pid || !status.running) {
-    rmSync(paths.pidFile, { force: true })
-    printJson({ stopped: false, running: false })
-    return
+  const stopped = await stopDaemonProcess(paths, status)
+  const started = await startDaemonProcess(opts, paths)
+  printJson({ restarted: stopped.stopped, stopped, started })
+}
+
+async function restartManagedDaemonAfterCliUpgrade(): Promise<DaemonRestartResult> {
+  const paths = localPaths()
+  const status = daemonStatus()
+  const command = status.pid ? readProcessCommand(status.pid) : null
+  const decision = canRestartManagedDaemon({
+    command,
+    expectedHome: paths.home,
+    pid: status.pid,
+    pidFileHome: paths.home,
+    running: status.running,
+  })
+
+  if (!decision.allowed)
+    return { restarted: false, reason: decision.reason }
+
+  const stopped = await stopDaemonProcess(paths, status)
+  const started = await startDaemonProcess({}, paths)
+  return { restarted: true, reason: decision.reason, stopped, started }
+}
+
+async function waitForProcessExit(pid: number, timeoutMs = 5000): Promise<void> {
+  const startedAt = Date.now()
+  while (isProcessAlive(pid)) {
+    if (Date.now() - startedAt > timeoutMs)
+      throw new Error(`daemon did not stop before restart: pid=${pid}`)
+    await new Promise(resolve => setTimeout(resolve, 100))
   }
-  process.kill(status.pid, 'SIGTERM')
-  rmSync(paths.pidFile, { force: true })
-  printJson({ stopped: true, pid: status.pid })
+}
+
+function readProcessCommand(pid: number): string | null {
+  const result = Bun.spawnSync(['ps', '-p', String(pid), '-o', 'command='])
+  if (result.exitCode !== 0)
+    return null
+  const output = Buffer.from(result.stdout).toString('utf8').trim()
+  return output.length > 0 ? output : null
 }
 
 async function daemonForeground(opts: { host?: string, port?: number } = {}): Promise<void> {
@@ -2409,12 +2487,15 @@ function escapeHtml(value: string): string {
 
 function registerCommands(): void {
   cli.command('init', 'initialize host-local AIWorker home and Soul workers').action(runInit)
-  cli.command('dev', 'run local daemon and hosted Worker Web in foreground').option('--host <host>', 'bind host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => daemonForeground({ host: opts.host, port: optionalNumber(opts.port) }))
+  cli.command('dev', 'source-checkout alias for daemon foreground').option('--host <host>', 'bind host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => {
+    consola.warn('aiworker dev is a source-checkout compatibility alias; prefer `bun run dev` in the repository or `aiworker daemon start` after installation.')
+    return daemonForeground({ host: opts.host, port: optionalNumber(opts.port) })
+  })
   cli.command('doctor', 'inspect host-local daemon readiness').action(runDoctor)
   cli.command('update', 'check or apply an AIWorker CLI update')
     .option('--check', 'check for updates without changing files')
     .option('--dry-run', 'print planned update actions without applying them')
-    .option('--yes', 'confirm update application')
+    .option('--yes', 'accepted for compatibility; updates execute by default')
     .option('--target <version>', 'explicit target version')
     .option('--channel <channel>', 'release channel: stable or preview')
     .option('--pre', 'use preview release channel')
@@ -2432,6 +2513,7 @@ function registerCommands(): void {
   cli.command('daemon foreground', 'run local daemon in foreground').option('--host <host>', 'bind host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => daemonForeground({ host: opts.host, port: optionalNumber(opts.port) }))
   cli.command('daemon status', 'show local daemon status').action(() => printJson(daemonStatus()))
   cli.command('daemon stop', 'stop local daemon').action(stopDaemon)
+  cli.command('daemon restart', 'restart local daemon').option('--host <host>', 'bind host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => restartDaemon({ host: opts.host, port: optionalNumber(opts.port) }))
   cli.command('daemon logs', 'show local daemon logs').option('--tail <n>', 'line count', { type: [Number] }).action((opts: { tail?: number[] }) => showLogs({ tail: optionalNumber(opts.tail) }))
   cli.command('daemon check', 'check local daemon health').option('--host <host>', 'host').option('--port <n>', 'port', { type: [Number] }).action((opts: { host?: string, port?: number[] }) => daemonCheck({ host: opts.host, port: optionalNumber(opts.port) }))
 
@@ -2544,33 +2626,86 @@ function registerCommands(): void {
     Bun.spawn(['open', url])
     printJson({ opened: url })
   })
-  cli.command('commands', 'show command index').action(() => {
-    process.stdout.write(`${commandIndex()}\n`)
+  cli.command('commands', 'show command index').option('--all', 'show advanced and compatibility commands').action((opts: { all?: boolean }) => {
+    process.stdout.write(`${commandIndex({ all: opts.all === true })}\n`)
   })
 }
 
-function commandIndex(): string {
+const OPERATOR_COMMAND_INDEX = [
+  'aiworker operator commands',
+  'daemon start|stop|restart|status|logs',
+  'open',
+  'doctor',
+  'update',
+  'app list|show|install|enable|bootstrap',
+  'worker create|list|select',
+  'workspace create|list',
+  'session start|list|show',
+  'turn send',
+  '',
+  'Run `aiworker commands --all` for authoring, diagnostics and compatibility commands.',
+]
+
+const FULL_COMMAND_INDEX = [
+  'aiworker command index',
+  'init',
+  'dev',
+  'update|upgrade',
+  'daemon start|foreground|status|stop|restart|logs|check',
+  'app list|show|install|enable|disable|doctor|permissions|bootstrap|create|validate|smoke',
+  'soul list',
+  'worker create|list|show|select',
+  'template list',
+  'workspace create|list|show',
+  'session start|list|show',
+  'turn send',
+  'files list|show',
+  'artifacts list|show|open',
+  'profile promote',
+  'review list|show',
+  'lessons list|propose|accept|reject',
+  'settings list',
+  'engine select',
+  'open',
+]
+
+function commandIndex(opts: { all?: boolean } = {}): string {
+  return (opts.all ? FULL_COMMAND_INDEX : OPERATOR_COMMAND_INDEX).join('\n')
+}
+
+function renderTopLevelHelp(opts: { all?: boolean } = {}): string {
+  if (opts.all) {
+    const longest = Math.max(...cli.commands.map(command => command.rawName.length))
+    return [
+      `aiworker/${packageJson.version}`,
+      '',
+      'Usage:',
+      '  $ aiworker <command> [options]',
+      '',
+      'Commands:',
+      ...cli.commands.map(command => `  ${command.rawName.padEnd(longest)}  ${command.description}`),
+      '',
+      'Options:',
+      '  -h, --help     Display this message',
+      '  -v, --version  Display version number',
+      '',
+      'Run `aiworker commands` for the compact operator command index.',
+    ].join('\n')
+  }
+
   return [
-    'aiworker command index',
-    'init',
-    'dev',
-    'update|upgrade',
-    'daemon start|foreground|status|stop|logs|check',
-    'app list|show|install|enable|disable|doctor|permissions|bootstrap|create|validate|smoke',
-    'soul list',
-    'worker create|list|show|select',
-    'template list',
-    'workspace create|list|show',
-    'session start|list|show',
-    'turn send',
-    'files list|show',
-    'artifacts list|show|open',
-    'profile promote',
-    'review list|show',
-    'lessons list|propose|accept|reject',
-    'settings list',
-    'engine select',
-    'open',
+    `aiworker/${packageJson.version}`,
+    '',
+    'Usage:',
+    '  $ aiworker <command> [options]',
+    '',
+    'Primary operator commands:',
+    ...OPERATOR_COMMAND_INDEX.slice(1).map(line => line ? `  ${line}` : ''),
+    '',
+    'Options:',
+    '  -h, --help     Display this message',
+    '  -v, --version  Display version number',
+    '  --all          Show every registered command',
   ].join('\n')
 }
 
@@ -2595,6 +2730,10 @@ export function preprocessArgv(argv: string[], commandNames = cli.commands.map(c
 export async function runCli(argv: string[] = process.argv): Promise<number> {
   try {
     process.exitCode = 0
+    if (isTopLevelHelpRequest(argv)) {
+      process.stdout.write(`${renderTopLevelHelp({ all: argv.includes('--all') })}\n`)
+      return 0
+    }
     cli.unsetMatchedCommand()
     const parsed = cli.parse(preprocessArgv(argv), { run: false })
     if (cli.options.help === true || cli.options.version === true)
@@ -2614,6 +2753,11 @@ export async function runCli(argv: string[] = process.argv): Promise<number> {
   finally {
     closeWorkerDb()
   }
+}
+
+function isTopLevelHelpRequest(argv: string[]): boolean {
+  const args = argv.slice(2)
+  return args.some(arg => arg === '--help' || arg === '-h') && args.every(arg => arg.startsWith('-'))
 }
 
 if (import.meta.main)

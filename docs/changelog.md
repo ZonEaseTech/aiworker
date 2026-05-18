@@ -1,5 +1,25 @@
 # AIWorker Changelog
 
+## 2026-05-19 [completed] FEAT-098 / PLAN-365 — Compact operator CLI surface
+
+Converged the default CLI discovery surface around compact operator lifecycle
+commands. `aiworker --help` and `aiworker commands` now show daemon lifecycle,
+open, doctor, update, app install/enable/bootstrap, worker/workspace/session and
+turn commands. Full authoring, diagnostics, inspection and compatibility
+commands remain available through `aiworker --help --all` and
+`aiworker commands --all`.
+
+Added `aiworker daemon restart` and moved `aiworker dev` out of the default
+operator surface as a source-checkout compatibility alias. `aiworker update`
+now executes safe apply actions by default and automatically restarts a running
+managed daemon for the same `AIWORKER_HOME` after update convergence; `--check`
+and `--dry-run` remain non-writing modes.
+
+Verification passed: focused CLI/updater tests, CLI typecheck, full CLI package
+tests, CLI bundle build, dist command smoke for `commands`/`--help`/`commands
+--all`, docs contract check, `git diff --check`, root lint and code-review-graph.
+CRG exited 0 with advisory static gaps for private daemon/update helpers.
+
 ## 2026-05-18 [completed] REL-045 / PLAN-363 — CLI 0.17.6 patch release
 
 Published `@zonease/aiworker-cli@0.17.6` carrying the Host left panel toggle
