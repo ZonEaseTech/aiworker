@@ -1,5 +1,14 @@
 # AIWorker Changelog
 
+## 2026-05-18 [progress] REL-042 / PLAN-357 — CLI 0.17.3 patch release
+
+Started the `@zonease/aiworker-cli@0.17.3` patch release after merging
+`BUG-135 / PLAN-356`, carrying the Web README approval and session parent
+navigation fixes.
+
+Local release gates passed, including full check/test/build, dist version
+checks, pack dry-run, dist release smoke and code-review-graph review.
+
 ## 2026-05-18 [completed] BUG-135 / PLAN-356 — Web approval and session parent navigation regressions
 
 Fixed two post-release Web regressions in the HR People Workbench and session
