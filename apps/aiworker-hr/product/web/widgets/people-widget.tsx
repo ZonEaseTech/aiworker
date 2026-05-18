@@ -1,8 +1,5 @@
-import '@zonease/aiworker-component/styles.css'
-
 import { ProfileReaderShell, StudioStatusPill } from '@zonease/aiworker-component'
-
-export const widgetId = 'hr-people-widget'
+import '@zonease/aiworker-component/styles.css'
 
 export function HrPeopleWidgetProof() {
   return (

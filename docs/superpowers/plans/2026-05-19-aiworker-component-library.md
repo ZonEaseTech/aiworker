@@ -1,6 +1,6 @@
 # AIWorker Component Library Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Upgrade `packages/component` into a Host/Soul shared component library with package-owned styles, component catalog, AGENTS constraints, CRG-driven migration, and verified Host/Soul Web stability.
 
@@ -56,7 +56,7 @@ entrypoint, catalog, tests, Host migrations, Soul proof, and verification.
 - Modify: `docs/changelog.md`
 - Create: `tmp/component-library-crg-candidates.md`
 
-- [ ] **Step 1: Rebuild CRG for the current branch**
+- [x] **Step 1: Rebuild CRG for the current branch**
 
 Run:
 
@@ -70,7 +70,7 @@ Expected: all commands exit 0, and `crg:status` reports the current branch and
 current commit instead of the older `codex/shared-collapsible-group-list`
 branch.
 
-- [ ] **Step 2: Capture reusable UI candidates**
+- [x] **Step 2: Capture reusable UI candidates**
 
 Run:
 
@@ -126,7 +126,7 @@ Create `tmp/component-library-crg-candidates.md` with this concrete structure:
   runs. If the command reports no advisory gaps, write `None reported`.
 ```
 
-- [ ] **Step 3: Add PMA task**
+- [x] **Step 3: Add PMA task**
 
 Create `docs/task/FEAT-099.md`:
 
@@ -171,7 +171,7 @@ Task 8 adds the exact completion evidence after implementation and verification
 commands pass. Until then this task remains `in_progress`.
 ```
 
-- [ ] **Step 4: Add PMA implementation plan**
+- [x] **Step 4: Add PMA implementation plan**
 
 Create `docs/plan/PLAN-367.md`:
 
@@ -233,7 +233,7 @@ components, and prove a Soul App Web surface imports the package directly.
 - `git diff --check`
 ```
 
-- [ ] **Step 5: Update PMA indexes and changelog**
+- [x] **Step 5: Update PMA indexes and changelog**
 
 Preserve any existing FEAT-098/PLAN-365 changes in the dirty worktree. Append or
 insert FEAT-099 and PLAN-367 according to the current index style. Add a
@@ -247,7 +247,7 @@ changelog entry:
   AGENTS constraints, CRG candidate audit, and Host/Soul Web verification.
 ```
 
-- [ ] **Step 6: Verify PMA/doc contract**
+- [x] **Step 6: Verify PMA/doc contract**
 
 Run:
 
@@ -258,7 +258,7 @@ git diff --check
 
 Expected: both pass.
 
-- [ ] **Step 7: Commit the claim**
+- [x] **Step 7: Commit the claim**
 
 Stage only the files from this task and commit:
 
@@ -279,7 +279,7 @@ include it in Task 2.
 - Modify: `packages/component/src/index.ts`
 - Modify: `packages/component/package.json`
 
-- [ ] **Step 1: Add AGENTS.md UI constraint**
+- [x] **Step 1: Add AGENTS.md UI constraint**
 
 In the `## UI 规则` section, replace the current soft reuse bullet with this
 stronger rule:
@@ -293,7 +293,7 @@ stronger rule:
   app 内手搓样式。
 ```
 
-- [ ] **Step 2: Add catalog model**
+- [x] **Step 2: Add catalog model**
 
 Create `packages/component/src/catalog.ts`:
 
@@ -374,7 +374,7 @@ export const componentMigrationQueue: ComponentMigrationCandidate[] = [
 ]
 ```
 
-- [ ] **Step 3: Add catalog tests**
+- [x] **Step 3: Add catalog tests**
 
 Create `packages/component/src/catalog.test.ts`:
 
@@ -400,7 +400,7 @@ describe('component catalog', () => {
 })
 ```
 
-- [ ] **Step 4: Add package test script and Vitest dependency surface**
+- [x] **Step 4: Add package test script and Vitest dependency surface**
 
 Modify `packages/component/package.json` scripts:
 
@@ -417,7 +417,7 @@ If `vitest` is already available from the root workspace, do not add a package
 dependency. If Bun cannot resolve it in package context, add `"vitest": "4"` to
 root `devDependencies` only if not already present.
 
-- [ ] **Step 5: Export catalog**
+- [x] **Step 5: Export catalog**
 
 Append to `packages/component/src/index.ts`:
 
@@ -426,7 +426,7 @@ export { componentCatalog, componentMigrationQueue } from './catalog'
 export type { ComponentCatalogFamily, ComponentCatalogItem, ComponentCatalogStatus, ComponentMigrationCandidate } from './catalog'
 ```
 
-- [ ] **Step 6: Run catalog gates**
+- [x] **Step 6: Run catalog gates**
 
 Run:
 
@@ -437,7 +437,7 @@ bun run --filter '@zonease/aiworker-component' typecheck
 
 Expected: both pass.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add AGENTS.md packages/component/package.json packages/component/src/catalog.ts packages/component/src/catalog.test.ts packages/component/src/index.ts
@@ -458,7 +458,7 @@ git commit -m "docs: 约束共享组件库优先使用"
 - Modify: `apps/web/src/app/main.tsx`
 - Modify: `apps/web/src/styles/index.css`
 
-- [ ] **Step 1: Export package styles**
+- [x] **Step 1: Export package styles**
 
 Add this export to `packages/component/package.json`:
 
@@ -468,7 +468,7 @@ Add this export to `packages/component/package.json`:
 }
 ```
 
-- [ ] **Step 2: Create package style entrypoint**
+- [x] **Step 2: Create package style entrypoint**
 
 Create `packages/component/src/styles.css`:
 
@@ -481,7 +481,7 @@ Create `packages/component/src/styles.css`:
 @import './styles/motion.css';
 ```
 
-- [ ] **Step 3: Move foundation tokens without breaking Host Web**
+- [x] **Step 3: Move foundation tokens without breaking Host Web**
 
 Create `packages/component/src/styles/foundation.css` by moving the shared
 content currently in `apps/web/src/styles/tokens.css` and `apps/web/src/styles/base.css`.
@@ -493,7 +493,7 @@ The file must contain every rule currently in
 button, `.sr-only`, and `.od-loading-shell` rules currently in
 `apps/web/src/styles/base.css`.
 
-- [ ] **Step 4: Move shared primitive and pattern styles**
+- [x] **Step 4: Move shared primitive and pattern styles**
 
 Move these selector groups into package style slices:
 
@@ -506,7 +506,7 @@ Move these selector groups into package style slices:
 
 Do not move HR-specific selectors such as `.hr-profile-*` yet.
 
-- [ ] **Step 5: Import package styles before app styles**
+- [x] **Step 5: Import package styles before app styles**
 
 Modify `apps/web/src/app/main.tsx`:
 
@@ -515,7 +515,7 @@ import '@zonease/aiworker-component/styles.css'
 import '../styles/index.css'
 ```
 
-- [ ] **Step 6: Remove duplicate moved imports from app style entrypoint**
+- [x] **Step 6: Remove duplicate moved imports from app style entrypoint**
 
 Modify `apps/web/src/styles/index.css` so it no longer imports CSS files whose
 shared contents moved entirely into the package. Keep app-specific files:
@@ -538,7 +538,7 @@ shared contents moved entirely into the package. Keep app-specific files:
 If a file still contains local-only rules after extraction, keep its import and
 delete only the moved selectors.
 
-- [ ] **Step 7: Run CSS/build gates**
+- [x] **Step 7: Run CSS/build gates**
 
 ```bash
 bun run --filter '@zonease/aiworker-web' build
@@ -548,7 +548,7 @@ git diff --check
 
 Expected: all pass, including `check:studio-css` from Web build.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add packages/component/package.json packages/component/src/styles.css packages/component/src/styles apps/web/src/app/main.tsx apps/web/src/styles
@@ -568,7 +568,7 @@ git commit -m "feat: 让组件库拥有共享样式入口"
 - Create: `packages/component/src/primitives/primitives.test.tsx`
 - Modify: `packages/component/package.json`
 
-- [ ] **Step 1: Add mature headless dependencies for delivered wrappers**
+- [x] **Step 1: Add mature headless dependencies for delivered wrappers**
 
 Add dependencies only for delivered wrappers:
 
@@ -590,7 +590,7 @@ Run:
 bun install
 ```
 
-- [ ] **Step 2: Add Input primitive**
+- [x] **Step 2: Add Input primitive**
 
 Create `packages/component/src/primitives/input.tsx`:
 
@@ -616,7 +616,7 @@ export function Textarea({ className, invalid = false, ...props }: TextareaProps
 }
 ```
 
-- [ ] **Step 3: Upgrade Field props without breaking existing users**
+- [x] **Step 3: Upgrade Field props without breaking existing users**
 
 Modify `packages/component/src/primitives/field.tsx` to add optional
 `description`, `error`, and `htmlFor` support while preserving the existing
@@ -633,7 +633,7 @@ export interface FieldProps extends LabelHTMLAttributes<HTMLLabelElement> {
 Render `description` as `<small className="ui-field-description">` and `error`
 as `<small className="ui-field-error" role="alert">`.
 
-- [ ] **Step 4: Convert Dialog to Radix while keeping public props**
+- [x] **Step 4: Convert Dialog to Radix while keeping public props**
 
 Modify `packages/component/src/primitives/dialog.tsx` to use
 `@radix-ui/react-dialog`, but keep the existing `DialogProps` so current
@@ -647,14 +647,14 @@ Render `DialogPrimitive.Root`, `Portal`, `Overlay`, `Content`, `Title`, and
 `Close`. Preserve `modal-backdrop`, `modal`, `modal-head`, and close class names
 so current CSS guard selectors remain stable.
 
-- [ ] **Step 5: Convert Select to Radix while keeping current props**
+- [x] **Step 5: Convert Select to Radix while keeping current props**
 
 Modify `packages/component/src/primitives/select.tsx` to use
 `@radix-ui/react-select`, preserving `SelectProps` and class names
 `studio-select`, `studio-select-trigger`, `studio-select-list`, and
 `studio-select-option`.
 
-- [ ] **Step 6: Add Switch primitive**
+- [x] **Step 6: Add Switch primitive**
 
 Create `packages/component/src/primitives/switch.tsx`:
 
@@ -677,7 +677,7 @@ export function Switch({ className, label, ...props }: SwitchProps) {
 }
 ```
 
-- [ ] **Step 7: Export new primitives**
+- [x] **Step 7: Export new primitives**
 
 Update `packages/component/src/primitives/index.ts`:
 
@@ -688,7 +688,7 @@ export { Switch } from './switch'
 export type { SwitchProps } from './switch'
 ```
 
-- [ ] **Step 8: Add primitive tests**
+- [x] **Step 8: Add primitive tests**
 
 Create `packages/component/src/primitives/primitives.test.tsx`:
 
@@ -732,7 +732,7 @@ describe('shared primitives', () => {
 If `@testing-library/react` is not available to the package test runner, add it
 to root dev dependencies only if missing.
 
-- [ ] **Step 9: Run primitive gates**
+- [x] **Step 9: Run primitive gates**
 
 ```bash
 bun run --filter '@zonease/aiworker-component' test
@@ -740,7 +740,7 @@ bun run --filter '@zonease/aiworker-component' typecheck
 bun run --filter '@zonease/aiworker-web' test src/shared/__tests__/studio-collapsible-group.test.tsx
 ```
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add package.json bun.lock packages/component
@@ -759,7 +759,7 @@ git commit -m "feat: 补齐共享组件基础 primitives"
 - Create: `packages/component/src/patterns/patterns.test.tsx`
 - Modify: `packages/component/src/catalog.ts`
 
-- [ ] **Step 1: Add SettingsShell pattern**
+- [x] **Step 1: Add SettingsShell pattern**
 
 Create `packages/component/src/patterns/settings.tsx` with generic shell
 components:
@@ -813,7 +813,7 @@ export function SegmentedControl({
 }
 ```
 
-- [ ] **Step 2: Add ProgressCard pattern**
+- [x] **Step 2: Add ProgressCard pattern**
 
 Create `packages/component/src/patterns/progress.tsx`:
 
@@ -841,14 +841,14 @@ export function ProgressCard({ className, compact = false, detail, label, ...pro
 }
 ```
 
-- [ ] **Step 3: Add message and tool result shells**
+- [x] **Step 3: Add message and tool result shells**
 
 Create `packages/component/src/patterns/message-flow.tsx` with generic
 `MessageFlow`, `MessageRow`, `ToolResultCard`, and `StatusEventPill` components.
 These components accept `children`, `roleLabel`, `timestamp`, `tone`, `command`,
 and `result` props, but do not parse engine events.
 
-- [ ] **Step 4: Add artifact/review/profile shells**
+- [x] **Step 4: Add artifact/review/profile shells**
 
 Create:
 
@@ -860,12 +860,12 @@ Each component accepts explicit `title`, `description`, `actions`, `children`,
 `empty`, `loading`, and `error` props. They must not mention HR, QA, candidate,
 release, or review verdict semantics.
 
-- [ ] **Step 5: Export patterns**
+- [x] **Step 5: Export patterns**
 
 Update `packages/component/src/patterns/index.ts` to export all new patterns and
 types.
 
-- [ ] **Step 6: Add pattern tests**
+- [x] **Step 6: Add pattern tests**
 
 Create `packages/component/src/patterns/patterns.test.tsx` verifying:
 
@@ -874,20 +874,20 @@ Create `packages/component/src/patterns/patterns.test.tsx` verifying:
 - `ProgressCard` renders label/detail and compact class.
 - `ProfileReaderShell` renders loading/error/empty states without domain words.
 
-- [ ] **Step 7: Mark catalog items implemented**
+- [x] **Step 7: Mark catalog items implemented**
 
 Update `componentCatalog` statuses for `ProgressCard`, `MessageFlow`,
 `ArtifactPreviewFrame`, `ReviewPanelShell`, and `ProfileReaderShell` from
 `planned` to `implemented` after each pattern exists.
 
-- [ ] **Step 8: Run pattern gates**
+- [x] **Step 8: Run pattern gates**
 
 ```bash
 bun run --filter '@zonease/aiworker-component' test
 bun run --filter '@zonease/aiworker-component' typecheck
 ```
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add packages/component/src/patterns packages/component/src/catalog.ts
@@ -905,7 +905,7 @@ git commit -m "feat: 提升共享工作台 UI patterns"
 - Modify: `apps/web/src/styles/*.css`
 - Modify: `apps/web/src/worker/__tests__/worker-studio.test.tsx`
 
-- [ ] **Step 1: Migrate SessionProgressPanel first**
+- [x] **Step 1: Migrate SessionProgressPanel first**
 
 Replace local markup in `apps/web/src/worker/session-progress-panel.tsx` with
 `ProgressCard`:
@@ -925,36 +925,36 @@ export function SessionProgressPanel({ className = '', compact = false, progress
 }
 ```
 
-- [ ] **Step 2: Migrate settings reusable shell**
+- [x] **Step 2: Migrate settings reusable shell**
 
 In `settings-dialog.tsx`, replace local `.modal-body` grid composition with
 `SettingsShell`, and replace duplicated segmented controls with
 `SegmentedControl`. Keep settings data state and copy in Host Web.
 
-- [ ] **Step 3: Migrate session chat shells**
+- [x] **Step 3: Migrate session chat shells**
 
 Use `MessageFlow`, `MessageRow`, and `ToolResultCard` for generic layout in
 `session-chat.tsx`. Keep engine event parsing and copy in Host Web.
 
-- [ ] **Step 4: Migrate session detail shells**
+- [x] **Step 4: Migrate session detail shells**
 
 Use `ArtifactPreviewFrame` and `ReviewPanelShell` for generic side panel layout.
 Keep artifact preview loading, review submit, memory lesson status and labels in
 Host Web.
 
-- [ ] **Step 5: Migrate worker-studio toolbar/list leftovers**
+- [x] **Step 5: Migrate worker-studio toolbar/list leftovers**
 
 Use existing and new shared patterns for the Host locator, toolbar buttons,
 grouped rail sections, and empty states. Do not move worker/workspace/session
 API state to the component package.
 
-- [ ] **Step 6: Delete duplicate app CSS only after tests pass**
+- [x] **Step 6: Delete duplicate app CSS only after tests pass**
 
 Remove style rules from `apps/web/src/styles/*.css` only when the selector is
 now owned by `packages/component/src/styles/*.css`. Keep HR-specific and
 Host-specific domain styles local.
 
-- [ ] **Step 7: Extend Host tests**
+- [x] **Step 7: Extend Host tests**
 
 Update `worker-studio.test.tsx` to assert that migrated surfaces still render
 critical shared class names:
@@ -967,7 +967,7 @@ expect(document.querySelector('.studio-collapsible-group')).toBeTruthy()
 Add settings or session assertions only where existing fixtures already open
 those surfaces.
 
-- [ ] **Step 8: Run Host migration gates**
+- [x] **Step 8: Run Host migration gates**
 
 ```bash
 bun run --filter '@zonease/aiworker-web' test src/shared/__tests__/studio-collapsible-group.test.tsx src/worker/__tests__/worker-studio.test.tsx
@@ -977,7 +977,7 @@ bun run --filter '@zonease/aiworker-web' build
 git diff --check
 ```
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add apps/web packages/component/src/styles packages/component/src/catalog.ts
@@ -995,7 +995,7 @@ git commit -m "refactor: 迁移 Host Web 到共享组件库"
   included by the current config after `bun run --filter '@zonease/aiworker-hr'
   test`
 
-- [ ] **Step 1: Add component package dependency to HR app**
+- [x] **Step 1: Add component package dependency to HR app**
 
 Add to `apps/aiworker-hr/package.json` dependencies:
 
@@ -1003,7 +1003,7 @@ Add to `apps/aiworker-hr/package.json` dependencies:
 "@zonease/aiworker-component": "workspace:*"
 ```
 
-- [ ] **Step 2: Replace descriptor-only widget with a small real component export**
+- [x] **Step 2: Replace descriptor-only widget with a small real component export**
 
 Modify `people-widget.tsx`:
 
@@ -1029,7 +1029,7 @@ export function HrPeopleWidgetProof() {
 This proof can use generic labels, but must not move HR parsing/promotion logic
 into the component package.
 
-- [ ] **Step 3: Add package-level proof test**
+- [x] **Step 3: Add package-level proof test**
 
 Create `apps/aiworker-hr/product/web/component-proof.test.tsx`:
 
@@ -1048,7 +1048,7 @@ describe('HR product web shared component proof', () => {
 })
 ```
 
-- [ ] **Step 4: Run HR gates**
+- [x] **Step 4: Run HR gates**
 
 ```bash
 bun run --filter '@zonease/aiworker-hr' typecheck
@@ -1058,7 +1058,7 @@ bun run --filter '@zonease/aiworker-hr' test
 If the HR package has no test script, add `"test": "vitest run"` to
 `apps/aiworker-hr/package.json`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/aiworker-hr package.json bun.lock
@@ -1073,7 +1073,7 @@ git commit -m "feat: 证明 HR Soul App 消费共享组件库"
 - Modify: `docs/plan/PLAN-367.md`
 - Modify: `docs/changelog.md`
 
-- [ ] **Step 1: Update CSS guard selectors**
+- [x] **Step 1: Update CSS guard selectors**
 
 Ensure `scripts/web-quality.ts` checks selectors that prove component package
 styles survived extraction:
@@ -1095,7 +1095,7 @@ const criticalStudioSelectors = [
 Keep existing selectors that remain critical and remove only stale selectors
 after confirming they are not rendered by the current Host Web build.
 
-- [ ] **Step 2: Run full focused gate**
+- [x] **Step 2: Run full focused gate**
 
 ```bash
 bun run --filter '@zonease/aiworker-component' test
@@ -1112,7 +1112,7 @@ git diff --check
 
 Expected: all pass.
 
-- [ ] **Step 3: Run browser smoke**
+- [x] **Step 3: Run browser smoke**
 
 Start the dev server:
 
@@ -1139,7 +1139,7 @@ Open or render the HR proof component through the available test/story/dev
 surface. If there is no existing route, use the Vitest-rendered proof plus a
 temporary local Vite proof page under `tmp/` and do not commit that temp page.
 
-- [ ] **Step 4: Run final CRG**
+- [x] **Step 4: Run final CRG**
 
 ```bash
 bun run crg:update
@@ -1150,7 +1150,7 @@ bun run crg:review
 Expected: commands exit 0. If advisory gaps remain, summarize why focused tests
 and browser smoke cover the changed behavior.
 
-- [ ] **Step 5: Complete PMA and changelog**
+- [x] **Step 5: Complete PMA and changelog**
 
 Update `docs/task/FEAT-099.md` completion section with:
 
@@ -1165,7 +1165,7 @@ Update `docs/task/FEAT-099.md` completion section with:
 Update `docs/plan/PLAN-367.md` verification with exact passed commands.
 Update `docs/changelog.md` with the completed summary.
 
-- [ ] **Step 6: Commit closeout**
+- [x] **Step 6: Commit closeout**
 
 ```bash
 git add scripts/web-quality.ts docs/task/FEAT-099.md docs/plan/PLAN-367.md docs/task/index.md docs/plan/index.md docs/changelog.md
@@ -1177,7 +1177,7 @@ git commit -m "test: 验证 Host/Soul 共享组件库稳定性"
 **Files:**
 - No required file changes unless the audit finds gaps.
 
-- [ ] **Step 1: Derive requirements from the objective**
+- [x] **Step 1: Derive requirements from the objective**
 
 Check the objective and confirm evidence exists for:
 
@@ -1192,7 +1192,7 @@ Check the objective and confirm evidence exists for:
 - strict tests
 - browser smoke proving Host/Soul Web did not collapse
 
-- [ ] **Step 2: Inspect current state**
+- [x] **Step 2: Inspect current state**
 
 Run:
 
@@ -1203,7 +1203,7 @@ rg -n "styles.css|componentCatalog|componentMigrationQueue|ProfileReaderShell|Pr
 
 Expected: evidence exists in current files, not only in plan text.
 
-- [ ] **Step 3: Decide whether the goal is complete**
+- [x] **Step 3: Decide whether the goal is complete**
 
 If every requirement is proven by current files and command output, report the
 evidence and mark the goal complete. If any requirement is missing or only

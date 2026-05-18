@@ -67,7 +67,6 @@
 .session-subpanel,
 .worker-chat-header,
 .worker-composer,
-.modal-settings,
 .studio-empty-state {
   animation: aiworker-enter var(--motion-base) var(--motion-ease-out) both;
 }

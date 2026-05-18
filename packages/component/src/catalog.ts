@@ -1,16 +1,16 @@
 export type ComponentCatalogStatus = 'deprecated' | 'experimental' | 'implemented' | 'planned'
 
-export type ComponentCatalogFamily =
-  | 'data-display'
-  | 'feedback'
-  | 'forms'
-  | 'foundation'
-  | 'layout'
-  | 'navigation'
-  | 'overlays'
-  | 'primitives'
-  | 'soul-shells'
-  | 'workbench'
+export type ComponentCatalogFamily
+  = | 'data-display'
+    | 'feedback'
+    | 'forms'
+    | 'foundation'
+    | 'layout'
+    | 'navigation'
+    | 'overlays'
+    | 'primitives'
+    | 'soul-shells'
+    | 'workbench'
 
 export interface ComponentCatalogItem {
   description: string

@@ -1,6 +1,6 @@
 # PLAN-367 Host/Soul shared component library
 
-- **status**: approved
+- **status**: completed
 - **owner**: codex
 - **createdAt**: 2026-05-19
 - **approvedAt**: 2026-05-19
@@ -56,16 +56,21 @@ Initial reusable UI candidates were recorded in
 
 ## Verification
 
-- Pending: `bun run crg:update`
-- Pending: `bun run crg:build`
-- Pending: `bun run crg:review`
-- Pending: `bun run --filter '@zonease/aiworker-component' test`
-- Pending: `bun run --filter '@zonease/aiworker-component' typecheck`
-- Pending: `bun run --filter '@zonease/aiworker-web' test`
-- Pending: `bun run --filter '@zonease/aiworker-web' typecheck`
-- Pending: `bun run --filter '@zonease/aiworker-web' lint`
-- Pending: `bun run --filter '@zonease/aiworker-web' build`
-- Pending: `bun run web:smoke:mounted-surfaces`
-- Pending: Browser smoke for Host Web
-- Pending: Browser smoke for Soul App proof surface
-- Pending: `git diff --check`
+- Passed: `bun run check`
+- Passed: `bun run test`
+- Passed: `bun run --filter '@zonease/aiworker-component' test`
+- Passed: `bun run --filter '@zonease/aiworker-web' test`
+- Passed: `bun run --filter '@zonease/aiworker-hr' test`
+- Passed: `bun run --filter '@zonease/aiworker-web' build`
+- Passed: `bun run web:smoke:mounted-surfaces`
+- Passed: Browser smoke for Host Web and HR mounted Soul App path at
+  `http://127.0.0.1:52067/`.
+- Passed: `git diff --check`
+- Passed: `uvx code-review-graph update --repo . --base 71c1aa5278aab5f9426c43381fb0049af62407b8`
+- Passed: `uvx code-review-graph build --repo .`
+- Passed with advisory: `uvx code-review-graph detect-changes --repo . --base 71c1aa5278aab5f9426c43381fb0049af62407b8 --brief`
+
+CRG full-branch advisory: risk score `0.65`, `40` static test gaps, and no
+affected flow. The named gaps are UI shells that are covered by focused
+component tests, Worker Studio RTL tests, HR proof tests, mounted-surface smoke,
+browser smoke, and the full root test suite.

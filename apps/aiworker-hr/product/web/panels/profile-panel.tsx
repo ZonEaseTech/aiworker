@@ -1,8 +1,5 @@
-import '@zonease/aiworker-component/styles.css'
-
 import { ReviewPanelShell, StudioPill } from '@zonease/aiworker-component'
-
-export const panelId = 'hr-profile-panel'
+import '@zonease/aiworker-component/styles.css'
 
 export function HrProfilePanelProof() {
   return (

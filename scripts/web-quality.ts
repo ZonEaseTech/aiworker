@@ -19,15 +19,16 @@ interface SizeBaseline {
 const criticalStudioSelectors = [
   '.entry-shell',
   '.entry-side',
-  '.newproj',
   '.entry-main',
-  '.tab-panel-toolbar',
-  '.design-card',
+  '.host-header-row',
+  '.studio-collapsible-group',
+  '.session-progress-card',
   '.artifact-rail',
-  '.soul-option',
-  '.template-option',
+  '.artifact-preview-frame',
   '.modal-settings',
-  '.settings-autosave',
+  '.settings-sidebar',
+  '.seg-control',
+  '.markdown-preview',
   '.agent-card',
 ] as const
 

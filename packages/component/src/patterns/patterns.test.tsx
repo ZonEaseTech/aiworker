@@ -3,10 +3,15 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
-  ProgressCard,
+  ArtifactPreviewFrame,
+  MessageFlow,
   ProfileReaderShell,
+  ProgressCard,
+  ReviewPanelShell,
   SegmentedControl,
   SettingsShell,
+  StatusEventPill,
+  ToolResultCard,
 } from '.'
 
 afterEach(() => cleanup())
@@ -49,6 +54,47 @@ describe('shared patterns', () => {
     const card = screen.getByText('Running').closest('.session-progress-card')
     expect(card?.classList.contains('compact')).toBe(true)
     expect(screen.getByText('2 steps left')).toBeTruthy()
+  })
+
+  it('renders artifact and review shell state variants', () => {
+    const { rerender } = render(
+      <ArtifactPreviewFrame
+        title="Artifact"
+        description="Preview"
+        actions={<button type="button">Open</button>}
+      >
+        <p>Rendered artifact body</p>
+      </ArtifactPreviewFrame>,
+    )
+
+    expect(screen.getByText('Artifact').closest('.artifact-preview-frame')).toBeTruthy()
+    expect(screen.getByText('Preview')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Open' })).toBeTruthy()
+    expect(screen.getByText('Rendered artifact body').closest('.surface-shell-body')).toBeTruthy()
+
+    rerender(<ReviewPanelShell title="Review" loading="Checking review" />)
+    expect(screen.getByText('Checking review').closest('.surface-shell-state')).toBeTruthy()
+
+    rerender(<ReviewPanelShell title="Review" error="Review failed" />)
+    expect(screen.getByRole('alert').textContent).toBe('Review failed')
+
+    rerender(<ReviewPanelShell title="Review" empty="No review yet" />)
+    expect(screen.getByText('No review yet').closest('.surface-shell-state')).toBeTruthy()
+  })
+
+  it('renders message flow rows tool cards and status pills', () => {
+    render(
+      <MessageFlow aria-label="Session messages">
+        <StatusEventPill detail="2 files" tone="success">Saved</StatusEventPill>
+        <ToolResultCard command="aiworker status" result="ok" tone="muted" />
+      </MessageFlow>,
+    )
+
+    expect(screen.getByLabelText('Session messages').classList.contains('message-flow')).toBe(true)
+    expect(screen.getByText('Saved').closest('.status-event-pill-success')).toBeTruthy()
+    expect(screen.getByText('2 files')).toBeTruthy()
+    expect(screen.getByText('aiworker status')).toBeTruthy()
+    expect(screen.getByText('ok')).toBeTruthy()
   })
 
   it('renders profile reader states without domain language', () => {

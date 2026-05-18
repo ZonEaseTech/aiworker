@@ -1,3 +1,5 @@
+import type { Locator, Page } from 'playwright'
+
 import { existsSync, mkdtempSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -53,11 +55,13 @@ try {
   await page.getByRole('button', { name: 'Start AIWorker HR' }).click()
   const createWorkerDialog = page.getByRole('dialog', { name: 'Create worker' })
   await createWorkerDialog.waitFor({ timeout: 10_000 })
+  await assertLocatorWithinViewport(page, createWorkerDialog, 'create worker dialog')
   await createWorkerDialog.getByRole('button', { name: 'Create worker' }).click()
   await page.getByTestId('hr-people-workbench').waitFor({ timeout: 10_000 })
-  await page.getByRole('button', { name: 'HR settings' }).click()
+  await page.getByRole('button', { name: 'Soul Apps' }).click()
   const settingsDialog = page.getByRole('dialog', { name: 'Configure Soul workspace' })
   await settingsDialog.waitFor({ timeout: 10_000 })
+  await assertLocatorWithinViewport(page, settingsDialog, 'settings dialog')
   await settingsDialog.getByRole('button', { name: /Soul Apps/ }).click()
   await page.getByText('API /api/local/apps/aiworker-hr').waitFor({ timeout: 10_000 })
   await page.getByText('4 mounted contributions').first().waitFor({ timeout: 10_000 })
@@ -117,6 +121,23 @@ async function assertMountedSurfaces(host: string): Promise<void> {
   const html = await frame.text()
   if (!frame.ok || !html.includes('Mounted HR frame surface'))
     throw new Error(`HR mounted frame content did not load: ${frame.status}`)
+}
+
+async function assertLocatorWithinViewport(page: Page, locator: Locator, name: string): Promise<void> {
+  const [box, viewport] = await Promise.all([
+    locator.boundingBox(),
+    page.viewportSize(),
+  ])
+  if (!box)
+    throw new Error(`${name} is not visible.`)
+  if (!viewport)
+    throw new Error(`Viewport is unavailable while checking ${name}.`)
+  const outsideViewport = box.x < 0
+    || box.y < 0
+    || box.x + box.width > viewport.width + 1
+    || box.y + box.height > viewport.height + 1
+  if (outsideViewport)
+    throw new Error(`${name} is outside the viewport: ${JSON.stringify({ box, viewport })}`)
 }
 
 async function fetchJson<T>(url: string): Promise<T> {

@@ -1,15 +1,24 @@
 # AIWorker Changelog
 
-## 2026-05-19 [in_progress] FEAT-099 / PLAN-367 — Host/Soul shared component library
+## 2026-05-19 [completed] FEAT-099 / PLAN-367 — Host/Soul shared component library
 
-Started the shared component library delivery. `packages/component` will become
-the Host/Soul Web component source of truth with package-owned styles,
-component catalog, AGENTS constraints, CRG candidate audit, reusable Host Web
-pattern uplift, and an official Soul App Web consumption proof.
+Made `packages/component` the Host/Soul Web component source of truth with a
+package-owned `@zonease/aiworker-component/styles.css` entrypoint, shared style
+slices, a typed catalog/migration queue, Radix-backed Dialog/Select/Switch
+primitives, and reusable settings, progress, message flow, artifact/review, and
+profile reader patterns.
 
-CRG baseline was rebuilt on `codex/aiworker-component-library` before
-implementation, and the initial reusable UI candidates cover settings, Host
-shell/rail, session progress/chat/detail, and HR people workbench surfaces.
+Host Web now imports the package style entrypoint and uses shared components
+for settings, session progress/chat/detail, and reusable shell patterns. The HR
+Soul App now has a real Web proof that imports shared components and styles
+directly while keeping HR profile/review meaning local.
+
+Browser smoke caught and fixed a modal positioning regression after the Dialog
+uplift; the mounted-surface smoke now asserts creation/settings dialogs remain
+inside the viewport. Verification passed: root check, root test, component/Web/
+HR focused tests, Web build CSS guard, mounted-surface smoke, browser smoke,
+`git diff --check`, and code-review-graph. CRG exited 0 with advisory static
+UI shell gaps covered by the focused and browser tests.
 
 ## 2026-05-19 [completed] REL-046 / PLAN-366 — CLI 0.18.0 minor release
 

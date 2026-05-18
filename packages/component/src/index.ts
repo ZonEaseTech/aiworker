@@ -1,6 +1,3 @@
-export * from './layout'
-export * from './patterns'
-export * from './primitives'
 export { componentCatalog, componentMigrationQueue } from './catalog'
 export type {
   ComponentCatalogFamily,
@@ -8,6 +5,9 @@ export type {
   ComponentCatalogStatus,
   ComponentMigrationCandidate,
 } from './catalog'
+export * from './layout'
+export * from './patterns'
+export * from './primitives'
 export {
   CreationDialog,
   StudioMainFrame,
