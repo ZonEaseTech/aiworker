@@ -18,10 +18,15 @@
     "apps/aiworker-hr": {
       "name": "@zonease/aiworker-hr",
       "dependencies": {
+        "@zonease/aiworker-component": "workspace:*",
         "@zonease/aiworker-soul-app-sdk": "workspace:*",
+        "react": "^19.1.0",
+        "react-dom": "^19.1.0",
       },
       "devDependencies": {
         "@types/bun": "^1.2.13",
+        "@types/react": "^19.1.2",
+        "@types/react-dom": "^19.1.2",
         "@zonease/aiworker-soul-app-runtime": "workspace:*",
         "typescript": "^5.8.3",
       },
