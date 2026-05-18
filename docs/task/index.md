@@ -480,4 +480,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REL-045 发布 aiworker CLI 0.17.6**](REL-045.md) `P0`
 - [x] [**REFACTOR-083 Extract shared collapsible grouped list pattern**](REFACTOR-083.md) `P1`
 - [x] [**FEAT-098 Compact operator CLI surface**](FEAT-098.md) `P0`
-- [-] [**REL-046 发布 aiworker CLI 0.18.0**](REL-046.md) `P0`
+- [x] [**REL-046 发布 aiworker CLI 0.18.0**](REL-046.md) `P0`

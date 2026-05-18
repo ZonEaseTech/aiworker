@@ -1,5 +1,21 @@
 # AIWorker Changelog
 
+## 2026-05-19 [completed] REL-046 / PLAN-366 — CLI 0.18.0 minor release
+
+Published `@zonease/aiworker-cli@0.18.0` carrying the compact operator CLI
+surface from `FEAT-098 / PLAN-365`: compact default help/commands, full command
+discovery through `--all`, `daemon restart`, default update apply semantics and
+managed daemon auto-restart after update convergence.
+
+Local release gates passed, including full check/test/build, dist version
+checks, pack dry-run, dist release smoke and code-review-graph review.
+
+Release workflow `26048444696` passed and published npm latest plus GitHub
+Release `v0.18.0` with 8 binary/checksum assets. Main lint workflow
+`26048434417` passed. Published-package smoke passed from an isolated
+`AIWORKER_HOME`: daemon health, runtimeVersion `0.18.0`, Host Web static
+serving, official app bootstrap/list/template, and HR/QA mounted actions.
+
 ## 2026-05-19 [completed] FEAT-098 / PLAN-365 — Compact operator CLI surface
 
 Converged the default CLI discovery surface around compact operator lifecycle
