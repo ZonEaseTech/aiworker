@@ -389,3 +389,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-358 HR Soul App header convergence**](PLAN-358.md) `2026-05-18`
 - [x] [**PLAN-359 CLI 0.17.4 patch release**](PLAN-359.md) `2026-05-18`
 - [x] [**PLAN-360 CLI 0.17.5 patch release**](PLAN-360.md) `2026-05-18`
+- [x] [**PLAN-362 Host left panel toggle active state repair**](PLAN-362.md) `2026-05-18`

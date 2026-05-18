@@ -475,3 +475,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-097 HR Soul App header convergence**](FEAT-097.md) `P0`
 - [x] [**REL-043 发布 aiworker CLI 0.17.4**](REL-043.md) `P0`
 - [x] [**REL-044 发布 aiworker CLI 0.17.5**](REL-044.md) `P0`
+- [x] [**BUG-137 Host left panel toggle lacks active highlight**](BUG-137.md) `P1`

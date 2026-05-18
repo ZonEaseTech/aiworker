@@ -1406,6 +1406,7 @@ function HostTopBar({
       <div className="host-topbar-left">
         <IconButton
           aria-label={sidebarLabel}
+          aria-pressed={!sidebarCollapsed}
           title={sidebarLabel}
           onClick={onToggleSidebar}
         >

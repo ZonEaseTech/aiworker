@@ -1295,7 +1295,11 @@ describe('worker studio', () => {
       expect(button.classList.contains('icon-btn')).toBe(false)
     }
 
-    expect(screen.getByRole('button', { name: 'Hide sidebar' }).querySelector('.lucide-panel-left')).toBeTruthy()
+    const hostSidebarToggle = screen.getByRole('button', { name: 'Hide sidebar' })
+    expect(hostSidebarToggle.getAttribute('aria-pressed')).toBe('true')
+    expect(hostSidebarToggle.querySelector('.lucide-panel-left')).toBeTruthy()
+    fireEvent.click(hostSidebarToggle)
+    expect(screen.getByRole('button', { name: 'Show sidebar' }).getAttribute('aria-pressed')).toBe('false')
     expect(screen.getByRole('button', { name: 'Open workspace terminal' }).querySelector('.lucide-panel-bottom')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Open right panel' }).querySelector('.lucide-panel-right')).toBeTruthy()
     expect(within(hrDetails).getByRole('button', { name: 'Hide Profile List' }).querySelector('.lucide-panel-left')).toBeTruthy()

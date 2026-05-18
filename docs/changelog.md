@@ -1,5 +1,18 @@
 # AIWorker Changelog
 
+## 2026-05-18 [completed] BUG-137 / PLAN-362 — Host left panel toggle active state repair
+
+Fixed the Host shell left sidebar toggle so it now reports
+`aria-pressed="true"` while the sidebar is visible and `aria-pressed="false"`
+after collapse. The control now shares the same active icon button style
+contract as the HR People Profile panel toggles.
+
+Verification passed: focused RED regression, full Worker Studio test file, Web
+typecheck/lint/build, browser smoke against the real HR workspace route,
+`git diff --check`, and code-review-graph. CRG reported a static gap for the
+private `HostTopBar` function, while the user-facing behavior is covered by the
+Worker Studio integration test.
+
 ## 2026-05-18 [completed] REL-044 / PLAN-360 — CLI 0.17.5 patch release
 
 Published `@zonease/aiworker-cli@0.17.5` carrying the HR panel toggle icon fix,
