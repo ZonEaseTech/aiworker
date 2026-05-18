@@ -1,6 +1,6 @@
 # AIWorker - Plan Index
 
-> Updated: 2026-05-18
+> Updated: 2026-05-19
 
 ## Usage
 
@@ -394,3 +394,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-363 CLI 0.17.6 patch release**](PLAN-363.md) `2026-05-18`
 - [x] [**PLAN-364 Shared collapsible grouped list pattern**](PLAN-364.md) `2026-05-19`
 - [x] [**PLAN-365 Compact operator CLI surface**](PLAN-365.md) `2026-05-19`
+- [-] [**PLAN-366 CLI 0.18.0 minor release**](PLAN-366.md) `2026-05-19`
