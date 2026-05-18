@@ -5,16 +5,20 @@
 
 ## 产品定位
 
-AIWorker 是 **local-first vertical Soul App host**。
+AIWorker 是 **local-first vertical Soul App host**。它把垂直 Soul App 暴露为
+human-legible 和 agent-operable 的本地能力面，但不认识、依赖或特化任何具体外部 agent runtime。
 
 它不是 developer-only coding loop、admin dashboard、远程控制面、治理内核，也不是通用
 agent runtime 平台。默认体验是让团队安装或启用垂直 Soul App，例如 HR、QA、PM、DevOps、
-finance、legal、ops，并在本地 workspace/session 中产出可审查的业务结果。
+finance、legal、ops，并在本地 workspace/session 中产出可审查的业务结果。人类可以直接使用
+AIWorker；外部 agent runtime 或其他 operator 也可以在授权后使用同一批 Soul App workspace、
+session、action、search 和 descriptor。谁来理解目标、选择 worker、编排步骤、重试失败或跨
+Soul 调度，是外部 operator 的事，不属于 AIWorker Host/Soul 合同。
 
 当前产品路径：
 
 ```text
-Host -> install/enable Soul App -> Soul worker -> workspace -> session
+Operator (human UI or external runtime) -> Host -> install/enable Soul App -> Soul worker -> workspace -> session
   -> Soul App exposed views/actions -> business artifact/profile/review/lesson
 ```
 
@@ -23,6 +27,10 @@ Host -> install/enable Soul App -> Soul worker -> workspace -> session
 Soul App is the source of truth for domain state and domain meaning.
 Host is the source of truth for platform capabilities, grants, protocol discovery and shell context.
 Host may consume only protocol-exposed views/actions/search/settings descriptors, and must not infer Soul App domain meaning.
+The operator may be a human using Host Web/Soul App UI or an external runtime
+using protocol/MCP/action/search descriptors. AIWorker does not decide how that
+operator reasons, schedules or orchestrates; it only enforces Host grants and
+routes explicit Soul App-owned protocol surfaces.
 
 ## 核心原则
 
@@ -70,6 +78,18 @@ Host mounted 不等于所有调用都必须由 Host 代理。默认规则是：
 - 共享平台能力通过 Host broker；
 - 跨 app 或跨 workspace 的定位、授权和 shell 集成由 Host 协调。
 
+### 5. AIWorker 提供能力面，不认识具体调度者
+
+AIWorker 的 operator 可以是人类，也可以是外部 agent runtime 或其他自动化系统。人类通过
+Host Web Shell、standalone Soul App 或 mounted workbench 使用产品；外部 operator 可以通过
+manifest/protocol/MCP/action/search/descriptor 等 agent-operable surface 使用同一批垂直能力。
+
+Host/Soul 不内置任何具体外部 runtime 名称，也不提供跨 Soul 调度智能。Host 只负责 discovery、
+grant、routing、broker、workspace/session locator、audit 和 shell/context 能力；Soul App
+决定哪些领域能力暴露给人类、哪些暴露给外部 operator，以及这些能力的业务含义、权限和
+review/takeover 规则。外部 operator 自己负责 reasoning、scheduling、orchestration、retry、
+native tool loop、model、sandbox 和 memory。
+
 ## Constraint Registry
 
 This registry is the normative source for active Host / Soul App constraints.
@@ -78,7 +98,8 @@ route agents to these IDs, but must not redefine them as separate contracts.
 
 | ID | Rule | Owner | Enforced by | Thin references |
 | --- | --- | --- | --- | --- |
-| `ARCH-001` | The default product path is `Host -> install/enable Soul App -> Soul worker -> workspace -> session -> app-exposed business output`. Do not route default work back to developer-only work orders, admin dashboards, remote control planes or generic agent runtime platforms. | Architecture | `scripts/check-doc-contract.ts`, active entrypoint review, product-path tests when UI changes | `AGENTS.md`, `README.md`, route skills |
+| `ARCH-001` | The default product path is `Operator -> Host -> install/enable Soul App -> Soul worker -> workspace -> session -> app-exposed business output`. Do not route default work back to developer-only work orders, admin dashboards, remote control planes or generic agent runtime platforms. | Architecture | `scripts/check-doc-contract.ts`, active entrypoint review, product-path tests when UI changes | `AGENTS.md`, `README.md`, route skills |
+| `OPERATOR-001` | AIWorker exposes human-legible and agent-operable surfaces over the same Soul-owned workspace/session/domain state. External operator access must use Host grants and explicit Soul App protocol/MCP/action/search/descriptor surfaces. AIWorker must not depend on or specialize for a named external runtime, schedule cross-Soul work on behalf of callers, translate app domains into generic tools, or infer hidden app behavior. | Architecture | protocol schema tests, broker/security tests, app validate/smoke, future external-operator smoke tests | `docs/soul-app-developer.md`, Host and Soul App skills |
 | `HOST-001` | Host owns platform capabilities: local daemon, install/enable, auth/security, grants, settings, brokers, locator, shell and protocol discovery. Host must not own domain meaning. | Host | Host API/core/Web/CLI tests, broker/security tests, `pma-cr`, code-review-graph | `aiworker-host-dev`, `AGENTS.md` |
 | `SOUL-001` | Soul App owns domain state and semantics: domain UI/API, workspace/session workflow, artifacts, profiles, reviews, lessons/memory, standalone shell and mounted handlers. | Soul App | `aiworker app validate`, `aiworker app smoke`, app package tests | `aiworker-soul-app-dev`, `docs/soul-app-developer.md` |
 | `PROTO-001` | Host may consume only manifest/protocol/grant-exposed Soul App views, actions, search, settings, status and descriptors. If a surface is not exposed, Host must stop instead of fetching, inferring or synthesizing it. | Shared boundary | manifest/protocol schema tests, mounted API tests, security review tests | Host and Soul App skills |
@@ -90,7 +111,8 @@ route agents to these IDs, but must not redefine them as separate contracts.
 ## 系统拓扑
 
 ```text
-Operator
+Human operator
+External runtime or operator
   -> Host Web Shell
   -> Local Daemon API
       -> App Registry / Install Enablement
@@ -138,6 +160,7 @@ Soul App 维护的是领域对象：
 | Settings | Own global appearance, language, default engine, local MCP and connector settings | Own app-specific settings exposed through protocol |
 | Shell | Own global layout, Host header, navigation and worker/workspace/session locator | Expose app-owned workbench actions, search, settings and workspace context descriptors when mounted |
 | UI/API | Mount or proxy declared surfaces | Own domain UI, API and standalone runtime |
+| Operator | Identify human/agent callers, enforce grants, route declared surfaces and audit platform access | Decide which human-facing and agent-operable domain surfaces exist and what they mean |
 | Artifact | Store or cache protocol descriptors when exposed | Own artifact schema, content, lifecycle and meaning |
 | Profile | Only locate or render exposed profile views | Compose and own profile state and semantics |
 | Review | Render or index exposed review summaries | Define review rubric, verdict meaning and promotion policy |
@@ -165,6 +188,8 @@ events -> optional app-emitted lifecycle/domain events
 协议原则：
 
 - Host 可以缓存 descriptor，不拥有 descriptor 指向的领域事实。
+- Human UI 和 agent-operable surfaces 必须指向同一份 Soul App domain state；不允许为 agent
+  维护一套由 Host 合成的影子领域模型。
 - Host 可以提供 route 和 shell layout，不拥有 route 内的领域体验，也不把 Soul App descriptor
   渲染成 Host header slot。
 - Host 可以提供 broker，不拥有 broker 内 app 写入的领域内容。
@@ -276,6 +301,12 @@ inside Host shell.
 
 Host 维护默认 engine、local MCP、BYOK、语言、外观和 autosave 等横向配置，并透传给 Soul App
 或 mounted runtime。
+
+Host 可以提供 MCP gateway、MCP server lifecycle、workspace/session binding、grant enforcement
+和 audit 等基础设施。MCP 不是 AIWorker 的产品主语，也不是 Host 解释领域的入口。
+Soul App 决定是否暴露 MCP-facing tool/resource/prompt，暴露哪些领域能力，以及这些能力如何
+映射到 artifact、profile、review、lesson 或 domain action。Host 不应把 HR、QA、PM 等领域
+统一翻译成一组通用 MCP tools。
 
 外部 engine 负责自己的 tool loop、模型、sandbox、approval、auth/profile、native session 和
 插件生态。AIWorker 只在 session 层准备 cwd/context、调用或观察 engine，并索引平台事件和

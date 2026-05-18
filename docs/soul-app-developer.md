@@ -33,8 +33,15 @@ runtime, or shared Host/Soul protocol implementation.
 Do not treat `apps/AGENTS.md` as the canonical Soul App rule surface until the
 target agent runner has proven native nested AGENTS loading.
 
-Apply these registry IDs before changing app behavior: `SOUL-001`,
-`PROTO-001`, `IMPORT-001`, `DATA-001` and `BROKER-001`.
+Apply these registry IDs before changing app behavior: `OPERATOR-001`,
+`SOUL-001`, `PROTO-001`, `IMPORT-001`, `DATA-001` and `BROKER-001`.
+
+Soul Apps must treat human-facing UI/workbench surfaces and external-operator
+protocol/MCP/action/search/descriptor surfaces as entry modes over the same
+app-owned domain state. These surfaces may differ, but they must resolve to the
+same workspace/session/artifact/profile/review/lesson semantics owned by the
+app. Soul Apps should not assume a specific external agent runtime; callers
+outside AIWorker own reasoning, scheduling and orchestration.
 
 ## Create
 
@@ -167,6 +174,12 @@ implementations. Use package names such as `packages/mcp-ats` or
 `@zonease/aiworker-mcp-ats`; avoid names that encode a Soul App workflow such
 as `aiworker-hr-candidate-screening-mcp`. Workflow meaning belongs in
 `product/`, while the MCP server exposes reusable external-system capability.
+
+If a Soul App needs an agent-operable surface for an external runtime, the app
+decides whether that surface is a workbench action, search provider, descriptor,
+MCP tool/resource/prompt, or a combination of these. Host-provided MCP plumbing
+may route, authorize and audit the call, but it must not invent domain tools or
+translate app-owned meanings into generic platform semantics.
 
 ## Smoke
 
