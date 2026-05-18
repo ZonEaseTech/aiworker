@@ -1,10 +1,19 @@
 # AIWorker Changelog
 
-## 2026-05-18 [progress] REL-044 / PLAN-360 — CLI 0.17.5 patch release
+## 2026-05-18 [completed] REL-044 / PLAN-360 — CLI 0.17.5 patch release
 
-Started the `@zonease/aiworker-cli@0.17.5` patch release carrying the HR panel
-toggle icon fix, HR People Workbench right-panel convergence, and external
-operator boundary documentation update.
+Published `@zonease/aiworker-cli@0.17.5` carrying the HR panel toggle icon fix,
+HR People Workbench right-panel convergence, and external operator boundary
+documentation update.
+
+Local release gates passed, including full check/test/build, dist version
+checks, pack dry-run, dist release smoke and code-review-graph review.
+
+Release workflow `26044002863` passed and published npm latest plus GitHub
+Release `v0.17.5` with 8 binary/checksum assets. Main lint workflow
+`26043996324` passed. Published-package smoke passed from an isolated
+`AIWORKER_HOME`: daemon health, runtimeVersion `0.17.5`, Host Web static
+serving, official app bootstrap/list/template, and HR/QA mounted actions.
 
 ## 2026-05-18 [completed] REL-043 / PLAN-359 — CLI 0.17.4 patch release
 
