@@ -221,7 +221,6 @@ function ensureGitInitialCommit(rootPath: string, paths: string[]): GitOperation
       return { message: init.stderr || init.stdout || 'git init failed.', status: 'failed' }
   }
 
-  configureGitIdentity(rootPath)
   return commitGitChanges(rootPath, paths, 'profile: initialize workspace')
 }
 
@@ -233,7 +232,6 @@ function commitGitChanges(rootPath: string, paths: string[], message: string): G
   if (paths.length === 0)
     return { hash: currentHead(rootPath), message: 'no bootstrap files to commit.', status: 'skipped' }
 
-  configureGitIdentity(rootPath)
   const add = runGit(rootPath, ['add', '--', ...paths])
   if (add.status !== 0)
     return { message: add.stderr || add.stdout || 'git add failed.', status: 'failed' }
@@ -259,11 +257,6 @@ function tagGitRevision(rootPath: string, tagName: string, message: string): Git
   if (tag.status !== 0)
     return { message: tag.stderr || tag.stdout || 'git tag failed.', status: 'failed' }
   return { hash: currentHead(rootPath), status: 'created' }
-}
-
-function configureGitIdentity(rootPath: string): void {
-  runGit(rootPath, ['config', 'user.name', AIWORKER_GIT_USER])
-  runGit(rootPath, ['config', 'user.email', AIWORKER_GIT_EMAIL])
 }
 
 function currentHead(rootPath: string): string | undefined {
@@ -295,7 +288,11 @@ function runGit(cwd: string, args: string[]): { status: number | null, stderr: s
     encoding: 'utf8',
     env: {
       ...process.env,
+      GIT_AUTHOR_EMAIL: AIWORKER_GIT_EMAIL,
+      GIT_AUTHOR_NAME: AIWORKER_GIT_USER,
       GIT_CEILING_DIRECTORIES: path.dirname(path.resolve(cwd)),
+      GIT_COMMITTER_EMAIL: AIWORKER_GIT_EMAIL,
+      GIT_COMMITTER_NAME: AIWORKER_GIT_USER,
     },
   })
   return {

@@ -27,6 +27,30 @@ typecheck/lint/build, browser smoke against the real HR workspace route,
 private `HostTopBar` function, while the user-facing behavior is covered by the
 Worker Studio integration test.
 
+## 2026-05-18 [completed] BUG-136 / PLAN-361 — Profile ledger Git identity side-effect hardening
+
+Fixed the profile ledger Git identity side effect that made the earlier parent
+repository discovery bug more damaging. Profile ledger commits and annotated
+tags now receive `AIWorker Profile Ledger <aiworker@local>` through per-process
+Git environment variables instead of persistent repository-local
+`user.name/user.email` config.
+
+The regression now proves a workspace under an ignored parent repository gets
+its own ledger repo, neither parent nor workspace local Git config receives
+`user.*`, and the profile commit author still carries the ledger identity.
+
+Current source checkout local Git config is clean. Historical polluted commits
+were measured as 27 commits from `285e5f22` through `b31ff94a`; this fix records
+the range but does not rewrite already-shared release history.
+
+Verification: focused RED regression failed before the production change, then
+`bun run --filter '@zonease/aiworker-core' test src/worker/runtime.test.ts`,
+`bun run --filter '@zonease/aiworker-core' test`, and
+`bun run --filter '@zonease/aiworker-core' typecheck` passed. `git diff
+--check`, `bun run crg:update`, and `bun run crg:review` also passed; CRG
+reported risk score `0.40` with indirect test-gap notes for the changed helper
+functions covered through runtime tests.
+
 ## 2026-05-18 [completed] REL-044 / PLAN-360 — CLI 0.17.5 patch release
 
 Published `@zonease/aiworker-cli@0.17.5` carrying the HR panel toggle icon fix,

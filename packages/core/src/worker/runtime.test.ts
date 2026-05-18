@@ -457,6 +457,16 @@ describe('LocalWorkerRuntime', () => {
     const topLevel = spawnSync('git', ['-C', workspace.rootPath, 'rev-parse', '--show-toplevel'], { encoding: 'utf8' })
     expect(topLevel.status).toBe(0)
     expect(realpathSync(topLevel.stdout.trim())).toBe(realpathSync(workspace.rootPath))
+
+    const parentIdentity = spawnSync('git', ['-C', parentRoot, 'config', '--local', '--get-regexp', '^user\\.(name|email)$'], { encoding: 'utf8' })
+    expect(parentIdentity.stdout.trim()).toBe('')
+
+    const workspaceIdentity = spawnSync('git', ['-C', workspace.rootPath, 'config', '--local', '--get-regexp', '^user\\.(name|email)$'], { encoding: 'utf8' })
+    expect(workspaceIdentity.stdout.trim()).toBe('')
+
+    const author = spawnSync('git', ['-C', workspace.rootPath, 'log', '-1', '--format=%an <%ae>'], { encoding: 'utf8' })
+    expect(author.status).toBe(0)
+    expect(author.stdout.trim()).toBe('AIWorker Profile Ledger <aiworker@local>')
   })
 
   it('projects Codex MCP client config for codex workers', async () => {
