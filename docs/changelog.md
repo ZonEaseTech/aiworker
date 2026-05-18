@@ -1,5 +1,19 @@
 # AIWorker Changelog
 
+## 2026-05-18 [completed] REL-045 / PLAN-363 — CLI 0.17.6 patch release
+
+Published `@zonease/aiworker-cli@0.17.6` carrying the Host left panel toggle
+active-state repair from `BUG-137 / PLAN-362`.
+
+Local release gates passed, including full check/test/build, dist version
+checks, pack dry-run, dist release smoke and code-review-graph review.
+
+Release workflow `26045311566` passed and published npm latest plus GitHub
+Release `v0.17.6` with 8 binary/checksum assets. Main lint workflow
+`26045309534` passed. Published-package smoke passed from an isolated
+`AIWORKER_HOME`: daemon health, runtimeVersion `0.17.6`, Host Web static
+serving, official app bootstrap/list/template, and HR/QA mounted actions.
+
 ## 2026-05-18 [completed] BUG-137 / PLAN-362 — Host left panel toggle active state repair
 
 Fixed the Host shell left sidebar toggle so it now reports
