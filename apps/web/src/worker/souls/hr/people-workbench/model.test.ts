@@ -294,6 +294,80 @@ describe('hr people workbench model', () => {
     ])
   })
 
+  it('surfaces whole README document changes when no canonical profile section changes are detected', () => {
+    const review = buildProfileRevisionReview({
+      artifactContent: [
+        '# Profile Update Proposal',
+        '',
+        '```aiworker-profile-readme',
+        '# Accepted Ben Profile',
+        '',
+        'Ben has a reviewed profile baseline.',
+        '```',
+      ].join('\n'),
+      artifactLoading: false,
+      currentProfileContent: '# Current Profile Summary\n\nNo approved profile revision yet.\n',
+      currentProfileLoading: false,
+      hasArtifact: true,
+    })
+
+    expect(review.status).toBe('ready')
+    expect(review.changedSectionCount).toBe(1)
+    expect(review.changedSections).toEqual([
+      {
+        currentMarkdown: '# Current Profile Summary\n\nNo approved profile revision yet.',
+        id: 'profileReadmeDocument',
+        proposedMarkdown: '# Accepted Ben Profile\n\nBen has a reviewed profile baseline.',
+        status: 'changed',
+        title: 'Profile README',
+      },
+    ])
+  })
+
+  it('synthesizes a promotable README review from an unfenced person-profile artifact', () => {
+    const review = buildProfileRevisionReview({
+      artifactContent: [
+        '# Person Profile Snapshot Proposal: Ben',
+        '',
+        'Generated: 2026-05-17 19:35 CST',
+        'Soul worker: AIWorker HR',
+        'Proposal status: Human review required before any accepted profile promotion',
+        '',
+        '## Current Profile Snapshot',
+        '',
+        'This is a profile-bound snapshot proposal for the person target labeled `Ben`.',
+        'The accepted profile surface states that no approved profile revision exists.',
+        '',
+        '## Confirmed Facts',
+        '',
+        '| Claim | Evidence | Confidence |',
+        '| --- | --- | --- |',
+        '| The selected workbench action is `Summarize profile`. | active-context.md:11-18 | High |',
+        '',
+        '## Missing Or Conflicting Evidence',
+        '',
+        '- No approved profile revision exists.',
+        '- No verified lifecycle status is available.',
+        '',
+        '## Human Reviewer Next Actions',
+        '',
+        '1. Confirm whether `Ben` is the correct target profile for this workspace.',
+      ].join('\n'),
+      artifactLoading: false,
+      currentProfileContent: '# Ben\n\nNo accepted HR profile yet.\n',
+      currentProfileLoading: false,
+      hasArtifact: true,
+    })
+
+    expect(review.status).toBe('ready')
+    expect(review.proposedMarkdown).toContain('# Ben People Profile')
+    expect(review.proposedMarkdown).toContain('## Current Profile Summary')
+    expect(review.proposedMarkdown).toContain('## Confirmed Facts')
+    expect(review.proposedMarkdown).toContain('The selected workbench action')
+    expect(review.proposedMarkdown).not.toMatch(/Proposal status|snapshot proposal|no approved profile revision/i)
+    expect(review.changedSectionCount).toBeGreaterThan(0)
+  })
+
   it('marks added profile revision sections separately from changed sections', () => {
     const review = buildProfileRevisionReview({
       artifactContent: [

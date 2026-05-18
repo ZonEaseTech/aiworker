@@ -14,6 +14,7 @@ import { IconButton, StudioPill, StudioStatusPill } from '@zonease/aiworker-comp
 import {
   AlertCircle,
   ArrowDown,
+  ArrowLeft,
   CheckCircle,
   FileText,
   MessageSquare,
@@ -51,6 +52,7 @@ export function WorkerSessionChat({
   events,
   locale,
   detailDrawerOpen,
+  onBackToWorkspace,
   onOpenSettings,
   onRefresh,
   onToggleDetailDrawer,
@@ -69,6 +71,7 @@ export function WorkerSessionChat({
   engineReadiness: EngineReadiness
   events: LocalSessionEvent[]
   locale: SupportedLocale
+  onBackToWorkspace: () => void
   onOpenSettings: () => void
   onRefresh: () => void
   onToggleDetailDrawer: () => void
@@ -158,6 +161,9 @@ export function WorkerSessionChat({
           <SessionProgressPanel compact className="worker-chat-progress" progress={progress} />
         </div>
         <div className="worker-chat-actions">
+          <IconButton aria-label={copy.workspace.backToWorkspace} title={copy.workspace.backToWorkspace} onClick={onBackToWorkspace}>
+            <ArrowLeft aria-hidden="true" size={16} />
+          </IconButton>
           <IconButton aria-label={copy.accessibility.refreshWorkspace} onClick={onRefresh}>
             <RefreshCw aria-hidden="true" size={16} />
           </IconButton>

@@ -957,6 +957,94 @@ describe('worker studio', () => {
     })
   })
 
+  it('allows approving a whole README proposal when section-level diff is unavailable', async () => {
+    currentProfiles['workspace-1'] = '# Current Profile Summary\n\nNo approved profile revision yet.\n'
+    currentArtifactRawContent = [
+      '# Profile Update Proposal',
+      '',
+      '```aiworker-profile-readme',
+      '# Accepted Ben Profile',
+      '',
+      'Ben has a reviewed profile baseline.',
+      '```',
+      '',
+    ].join('\n')
+    window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
+    render(<WorkerStudio />)
+
+    const hrDetails = await screen.findByLabelText('Current Profile Summary')
+    fireEvent.click(await within(hrDetails).findByRole('button', { name: 'Review profile patch' }))
+    const profilePatchReview = await screen.findByTestId('hr-profile-patch-review')
+
+    expect((await within(profilePatchReview).findAllByText('Profile README')).length).toBeGreaterThan(0)
+    expect(within(profilePatchReview).getByText('Ben has a reviewed profile baseline.')).toBeTruthy()
+    const approveButton = within(profilePatchReview).getByRole('button', { name: 'Approve into README' }) as HTMLButtonElement
+    expect(approveButton.disabled).toBe(false)
+
+    fireEvent.click(approveButton)
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/local/workspaces/workspace-1/profile-revisions', expect.objectContaining({
+        body: expect.stringContaining('"profileMarkdown":"# Accepted Ben Profile\\n\\nBen has a reviewed profile baseline."'),
+        method: 'POST',
+      }))
+    })
+  })
+
+  it('approves an unfenced person-profile artifact through product-owned README synthesis', async () => {
+    currentProfiles['workspace-1'] = '# Ben\n\nNo accepted HR profile yet.\n'
+    currentArtifactRawContent = [
+      '# Person Profile Snapshot Proposal: Ben',
+      '',
+      'Generated: 2026-05-17 19:35 CST',
+      'Soul worker: AIWorker HR',
+      'Proposal status: Human review required before any accepted profile promotion',
+      '',
+      '## Current Profile Snapshot',
+      '',
+      'This is a profile-bound snapshot proposal for the person target labeled `Ben`.',
+      'The accepted profile surface states that no approved profile revision exists.',
+      '',
+      '## Confirmed Facts',
+      '',
+      '| Claim | Evidence | Confidence |',
+      '| --- | --- | --- |',
+      '| The selected workbench action is `Summarize profile`. | active-context.md:11-18 | High |',
+      '',
+      '## Missing Or Conflicting Evidence',
+      '',
+      '- No approved profile revision exists.',
+      '- No verified lifecycle status is available.',
+      '',
+      '## Human Reviewer Next Actions',
+      '',
+      '1. Confirm whether `Ben` is the correct target profile for this workspace.',
+    ].join('\n')
+    window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
+    render(<WorkerStudio />)
+
+    const hrDetails = await screen.findByLabelText('Current Profile Summary')
+    fireEvent.click(await within(hrDetails).findByRole('button', { name: 'Review profile patch' }))
+    const profilePatchReview = await screen.findByTestId('hr-profile-patch-review')
+    const approveButton = within(profilePatchReview).getByRole('button', { name: 'Approve into README' }) as HTMLButtonElement
+
+    expect(await within(profilePatchReview).findByText('Profile patch ready')).toBeTruthy()
+    expect(approveButton.disabled).toBe(false)
+    fireEvent.click(approveButton)
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/local/workspaces/workspace-1/profile-revisions', expect.objectContaining({
+        method: 'POST',
+      }))
+    })
+    const promotionCall = vi.mocked(fetch).mock.calls.find(([url, init]) => String(url).endsWith('/api/local/workspaces/workspace-1/profile-revisions') && init?.method === 'POST')
+    const body = JSON.parse(String(promotionCall?.[1]?.body)) as { profileMarkdown?: string }
+    expect(body.profileMarkdown).toContain('# Ben People Profile')
+    expect(body.profileMarkdown).toContain('## Current Profile Summary')
+    expect(body.profileMarkdown).toContain('The selected workbench action')
+    expect(body.profileMarkdown).not.toMatch(/Proposal status|snapshot proposal|no approved profile revision/i)
+  })
+
   it('shows a profile revision review before approving a proposed change', async () => {
     window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
     render(<WorkerStudio />)
@@ -1739,7 +1827,7 @@ describe('worker studio', () => {
     expect(screen.queryByText('Workspace sessions')).toBeNull()
     expect(screen.queryByRole('button', { name: 'New session' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Back to worker' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Back to workspace' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Back to workspace' })).toBeTruthy()
     expect(screen.queryByTestId('new-project-panel')).toBeNull()
     expect(screen.getByText('Session events')).toBeTruthy()
     expect(screen.getByText('Memory candidates')).toBeTruthy()
@@ -1798,6 +1886,13 @@ describe('worker studio', () => {
       expect(fetch).toHaveBeenCalledWith('/api/local/lessons/lesson-1', expect.objectContaining({ method: 'PATCH' }))
       expect(screen.getByText('Accepted')).toBeTruthy()
     })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to workspace' }))
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/workers/hr-worker/workspaces/workspace-1')
+    })
+    expect(await screen.findByTestId('hr-people-workbench')).toBeTruthy()
   })
 
   it('keeps an empty workspace route in the Soul workbench without Host workspace navigation', async () => {
@@ -1843,7 +1938,7 @@ describe('worker studio', () => {
 
     expect(await screen.findByText('AIWorker Engine')).toBeTruthy()
     expect(document.querySelector('.workspace-context-card')).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Back to workspace' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Back to workspace' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'New session' })).toBeNull()
     expect(window.location.pathname).toBe('/workers/hr-worker/workspaces/workspace-1/sessions/session-1')
     expect(screen.queryByTestId('new-session-panel')).toBeNull()

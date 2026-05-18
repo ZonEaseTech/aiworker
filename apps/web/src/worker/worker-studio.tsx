@@ -737,7 +737,7 @@ export function WorkerStudio() {
     }
   }
 
-  async function submitProfileRevision() {
+  async function submitProfileRevision(profileMarkdown?: string) {
     if (!selectedWorkspace || !selectedArtifact || profileRevisionSubmitting)
       return
     setProfileRevisionSubmitting(true)
@@ -748,7 +748,7 @@ export function WorkerStudio() {
       await promoteProfileRevision(selectedWorkspace.id, {
         artifactId: selectedArtifact.id,
         findingsJson: [{ message: 'Approved from HR workbench.' }],
-        profileMarkdown: profileMarkdownForPromotion(previewContent),
+        profileMarkdown: profileMarkdownForPromotion(previewContent, profileMarkdown),
         risksJson: [],
         verdict: 'pass',
       })
@@ -1195,6 +1195,7 @@ export function WorkerStudio() {
                   turnSubmitting={turnSubmitting}
                   turns={displayedSessionTurns}
                   workspace={selectedWorkspace}
+                  onBackToWorkspace={() => navigateWorkerRoute({ kind: 'workspace', workerId: selectedWorkspace.workerId, workspaceId: selectedWorkspace.id })}
                   onOpenSettings={() => openSettings('execution')}
                   onRefresh={() => void refresh()}
                   onSubmitTurn={submitTurn}
@@ -1373,7 +1374,10 @@ export function WorkerStudio() {
   )
 }
 
-function profileMarkdownForPromotion(content: string): string | undefined {
+function profileMarkdownForPromotion(content: string, preparedProfileMarkdown?: string): string | undefined {
+  if (preparedProfileMarkdown?.trim())
+    return preparedProfileMarkdown.trim()
+
   const trimmed = content.trim()
   if (!trimmed)
     return undefined

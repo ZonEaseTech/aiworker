@@ -46,7 +46,7 @@ export interface SoulWorkbenchContext {
   onOpenSession: (session: LocalSession) => void
   onOpenSettings: () => void
   onOpenWorkspace: (workspace: LocalWorkspace) => void
-  onPromoteProfileRevision: () => Promise<void> | void
+  onPromoteProfileRevision: (profileMarkdown?: string) => Promise<void> | void
   onRefresh: () => void
   onSubmitSession: (event: FormEvent<HTMLFormElement>) => void
   onTemplateChange: (templateId: string) => void

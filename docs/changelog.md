@@ -1,5 +1,22 @@
 # AIWorker Changelog
 
+## 2026-05-18 [completed] BUG-135 / PLAN-356 — Web approval and session parent navigation regressions
+
+Fixed two post-release Web regressions in the HR People Workbench and session
+route:
+
+- HR Profile Patch Review now handles fenced README drafts, unfenced native
+  `person-profile` artifacts and document-level README changes. Unfenced HR
+  artifacts are converted by product-owned logic into canonical accepted README
+  markdown, sanitized through the promotion validator, then submitted as
+  explicit `profileMarkdown`.
+- Session routes now expose a direct header control back to the parent workspace
+  / Soul workbench route without restoring the old Host workspace navigation
+  panels.
+
+Focused HR model and Worker Studio tests, Web lint/typecheck/build and a real
+browser smoke against the local Ben workspace passed.
+
 ## 2026-05-18 [completed] REL-041 / PLAN-355 — CLI 0.17.2 patch release
 
 Published `@zonease/aiworker-cli@0.17.2` as the patch release carrying Host

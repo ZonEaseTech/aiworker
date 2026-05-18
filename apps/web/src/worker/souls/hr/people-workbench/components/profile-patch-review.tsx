@@ -14,7 +14,7 @@ interface ProfilePatchReviewProps {
   profileRevisionSubmitting: boolean
   review: ProfileRevisionReviewState
   onBack: () => void
-  onPromoteProfileRevision: () => Promise<void> | void
+  onPromoteProfileRevision: (profileMarkdown?: string) => Promise<void> | void
 }
 
 export function HrProfilePatchReview({
@@ -31,7 +31,7 @@ export function HrProfilePatchReview({
     ? labels.profilePatchChangedSections(review.changedSectionCount)
     : labels.profilePatchBlockers(review.blockerCount || review.issues.length)
   async function handleApproveProfilePatch() {
-    await onPromoteProfileRevision()
+    await onPromoteProfileRevision(review.proposedMarkdown)
     onBack()
   }
 
