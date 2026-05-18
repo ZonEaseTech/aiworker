@@ -387,4 +387,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-356 Web profile approval and session parent navigation repair**](PLAN-356.md) `2026-05-18`
 - [x] [**PLAN-357 CLI 0.17.3 patch release**](PLAN-357.md) `2026-05-18`
 - [x] [**PLAN-358 HR Soul App header convergence**](PLAN-358.md) `2026-05-18`
-- [-] [**PLAN-359 CLI 0.17.4 patch release**](PLAN-359.md) `2026-05-18`
+- [x] [**PLAN-359 CLI 0.17.4 patch release**](PLAN-359.md) `2026-05-18`

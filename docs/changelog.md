@@ -1,10 +1,18 @@
 # AIWorker Changelog
 
-## 2026-05-18 [progress] REL-043 / PLAN-359 — CLI 0.17.4 patch release
+## 2026-05-18 [completed] REL-043 / PLAN-359 — CLI 0.17.4 patch release
 
-Started the `@zonease/aiworker-cli@0.17.4` patch release after merging
-`FEAT-097 / PLAN-358`, carrying the HR People Workbench header/search
-convergence.
+Published `@zonease/aiworker-cli@0.17.4` after merging `FEAT-097 / PLAN-358`,
+carrying the HR People Workbench header/search convergence.
+
+Local release gates passed, including full check/test/build, dist version
+checks, pack dry-run, dist release smoke and code-review-graph review.
+
+Release workflow `26033776748` passed and published npm latest plus GitHub
+Release `v0.17.4` with 8 binary/checksum assets. Main lint workflow
+`26033769144` passed. Published-package smoke passed from an isolated
+`AIWORKER_HOME`: daemon health, runtimeVersion `0.17.4`, Host Web static
+serving, official app bootstrap/list/template, and HR/QA mounted actions.
 
 ## 2026-05-18 [completed] FEAT-097 / PLAN-358 — HR Soul App header convergence
 
