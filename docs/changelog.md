@@ -1,5 +1,11 @@
 # AIWorker Changelog
 
+## 2026-05-18 [progress] REL-044 / PLAN-360 — CLI 0.17.5 patch release
+
+Started the `@zonease/aiworker-cli@0.17.5` patch release carrying the HR panel
+toggle icon fix, HR People Workbench right-panel convergence, and external
+operator boundary documentation update.
+
 ## 2026-05-18 [completed] REL-043 / PLAN-359 — CLI 0.17.4 patch release
 
 Published `@zonease/aiworker-cli@0.17.4` after merging `FEAT-097 / PLAN-358`,

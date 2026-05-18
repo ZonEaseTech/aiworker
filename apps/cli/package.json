@@ -1,7 +1,7 @@
 {
   "name": "@zonease/aiworker-cli",
   "type": "module",
-  "version": "0.17.4",
+  "version": "0.17.5",
   "description": "AIWorker CLI — local Host and vertical Soul workspace runtime",
   "license": "MIT",
   "homepage": "https://github.com/ZonEaseTech/aiworker#readme",

@@ -474,3 +474,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REL-042 发布 aiworker CLI 0.17.3**](REL-042.md) `P0`
 - [x] [**FEAT-097 HR Soul App header convergence**](FEAT-097.md) `P0`
 - [x] [**REL-043 发布 aiworker CLI 0.17.4**](REL-043.md) `P0`
+- [-] [**REL-044 发布 aiworker CLI 0.17.5**](REL-044.md) `P0`
