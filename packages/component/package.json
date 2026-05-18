@@ -11,6 +11,11 @@
     "./markdown-preview": {
       "types": "./src/patterns/markdown-preview.tsx",
       "import": "./src/patterns/markdown-preview.tsx"
+    },
+    "./styles.css": {
+      "style": "./src/styles.css",
+      "import": "./src/styles.css",
+      "default": "./src/styles.css"
     }
   },
   "main": "./src/index.ts",
