@@ -12,8 +12,8 @@ people profile instead of navigating a second app-level shell inside the Host
 shell.
 
 The Host header remains visible and Host-owned. The HR Soul App should stop
-rendering its own top workbench header row with duplicate title, search, counts
-and broad actions.
+rendering its own top workbench header row with duplicate title, global search,
+counts and broad actions.
 
 ## Product Principle
 
@@ -22,6 +22,8 @@ Actions belong next to the object they affect:
 - People-list actions belong to the People Profiles panel.
 - Current-profile actions belong to the selected People Profile header.
 - Next-step and secondary workflow actions belong to the right panel.
+- Search is not a workbench-level affordance. At most, HR may expose a local
+  People Profiles list filter.
 - Host layout controls remain Host-owned unless a control only affects an
   HR-owned panel inside the HR workbench.
 
@@ -39,7 +41,7 @@ Host Header
 HR People Workbench
 +-------------------------+---------------------------------------------+-----------------+
 | People Profiles         | Stella People Profile                       | Profile Actions |
-| [search] [count] [ + ]  | Stella - review / lesson candidate         |                 |
+| [filter] [count] [ + ]  | Stella - review / lesson candidate         |                 |
 | Candidates              | [left] [right] [refresh] [evidence] [gear] |                 |
 | Ben                     | README profile content starts here.        |                 |
 | Stella                  | No separate Current Profile Summary UI.   |                 |
@@ -53,7 +55,7 @@ Remove the HR Soul App top workbench header that currently contains:
 - `AIWorker HR / People Workbench`;
 - `People Workbench`;
 - the workspace subtitle;
-- global people search;
+- global people/profile search;
 - counts for profiles, artifacts and lessons;
 - `New people profile`;
 - `Refresh`;
@@ -72,8 +74,15 @@ Header contents:
 
 - title: `People Profiles`;
 - compact count for visible profiles;
-- search control for people profiles;
 - icon button for new people profile.
+
+Optional header content:
+
+- a local profile-list filter when the visible list is long enough to need it.
+
+This filter is not a global search. It filters the current profile list only;
+it does not search artifacts, sessions, lessons, evidence or workspace files.
+If the list is short, the People Profiles panel can omit the filter entirely.
 
 The new-profile action should use a `Plus` icon button with a tooltip and
 accessible name such as `New people profile`. It should not occupy the main
@@ -140,6 +149,8 @@ implemented as Host shell slots.
 
 - Worker Studio tests cover the absence of the HR workbench header.
 - Tests verify `New people profile` lives in the People Profiles panel header.
+- Tests verify there is no HR workbench-level search and, if present, search is
+  scoped to the People Profiles list only.
 - Tests verify HR left/right panel toggles live in the selected People Profile
   header.
 - Tests verify no separate `Current Profile Summary` UI header is rendered
