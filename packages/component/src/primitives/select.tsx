@@ -46,27 +46,35 @@ export function Select({
             <ChevronDown aria-hidden="true" className="studio-select-chevron" size={16} />
           </SelectPrimitive.Icon>
         </SelectPrimitive.Trigger>
-        <SelectPrimitive.Content className="studio-select-list" aria-label={label}>
-          <SelectPrimitive.Viewport className="studio-select-viewport">
-            {options.map(option => (
-              <SelectPrimitive.Item
-                key={option.value}
-                className={cx('studio-select-option', option.value === value && 'active')}
-                value={option.value}
-              >
-                <SelectPrimitive.ItemText asChild>
-                  <span className="studio-select-copy">
-                    <strong>{option.label}</strong>
-                    {option.description ? <small>{option.description}</small> : null}
-                  </span>
-                </SelectPrimitive.ItemText>
-                <SelectPrimitive.ItemIndicator asChild>
-                  <Check aria-hidden="true" size={14} />
-                </SelectPrimitive.ItemIndicator>
-              </SelectPrimitive.Item>
-            ))}
-          </SelectPrimitive.Viewport>
-        </SelectPrimitive.Content>
+        <SelectPrimitive.Portal>
+          <SelectPrimitive.Content
+            className="studio-select-list"
+            align="start"
+            aria-label={label}
+            position="popper"
+            sideOffset={-1}
+          >
+            <SelectPrimitive.Viewport className="studio-select-viewport">
+              {options.map(option => (
+                <SelectPrimitive.Item
+                  key={option.value}
+                  className={cx('studio-select-option', option.value === value && 'active')}
+                  value={option.value}
+                >
+                  <SelectPrimitive.ItemText asChild>
+                    <span className="studio-select-copy">
+                      <strong>{option.label}</strong>
+                      {option.description ? <small>{option.description}</small> : null}
+                    </span>
+                  </SelectPrimitive.ItemText>
+                  <SelectPrimitive.ItemIndicator asChild>
+                    <Check aria-hidden="true" size={14} />
+                  </SelectPrimitive.ItemIndicator>
+                </SelectPrimitive.Item>
+              ))}
+            </SelectPrimitive.Viewport>
+          </SelectPrimitive.Content>
+        </SelectPrimitive.Portal>
       </div>
     </SelectPrimitive.Root>
   )

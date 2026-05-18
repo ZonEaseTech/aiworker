@@ -1,7 +1,7 @@
 import type { CapabilityTemplate, HostedSoulApp, LocalEngineStatus, LocalSettingsConfig } from '@zonease/aiworker-shared'
-import type { CSSProperties, ReactNode } from 'react'
+import type { CSSProperties } from 'react'
 
-import { ActionCard, Button, Field, NavItemButton } from '@zonease/aiworker-component'
+import { ActionCard, Button, Field, NavItemButton, SegmentedControl, SettingsShell } from '@zonease/aiworker-component'
 import { Check, Gauge, Languages, Link, Moon, RefreshCw, Settings, ShieldCheck, SlidersHorizontal, Sparkles, Sun, Terminal, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { formatRelativeTime, formatStatus, languageLabel, messagesFor, normalizeLocale, supportedLocales } from '../../i18n'
@@ -124,76 +124,80 @@ export function SettingsDialog({
           <p className="subtitle">{settingsCopy.dialog.subtitle}</p>
         </header>
 
-        <div className="modal-body">
-          <aside className="settings-sidebar" aria-label={settingsCopy.dialog.title}>
-            {settingsSections.map((item) => {
-              const Icon = item.icon
-              const navCopy = settingsNavCopy(settingsCopy.nav, item.id)
-              return (
-                <NavItemButton
-                  key={item.id}
-                  active={section === item.id}
-                  className="settings-nav-item"
-                  description={navCopy.detail}
-                  icon={<Icon size={18} />}
-                  label={navCopy.title}
-                  onClick={() => setSection(item.id)}
-                />
-              )
-            })}
-          </aside>
-
-          <div className="settings-content">
-            {section === 'execution'
-              ? (
-                  <ExecutionSettings
-                    copy={copy}
-                    engineTest={engineTest}
-                    onRescan={() => void handleRescan()}
-                    onTest={engineId => void handleTest(engineId)}
-                    settings={settings}
-                    update={persist}
+        <SettingsShell
+          className="modal-body"
+          sidebar={(
+            <nav aria-label={settingsCopy.dialog.title}>
+              {settingsSections.map((item) => {
+                const Icon = item.icon
+                const navCopy = settingsNavCopy(settingsCopy.nav, item.id)
+                return (
+                  <NavItemButton
+                    key={item.id}
+                    active={section === item.id}
+                    className="settings-nav-item"
+                    description={navCopy.detail}
+                    icon={<Icon size={18} />}
+                    label={navCopy.title}
+                    onClick={() => setSection(item.id)}
                   />
                 )
-              : null}
-            {section === 'soul-packs' ? <SoulAppsSettings apps={apps} copy={copy} locale={activeLocale} settings={settings} templates={templates} onAppsChanged={onAppsChanged} /> : null}
-            {section === 'connectors' ? <ConnectorsSettings copy={copy} settings={settings} update={persist} /> : null}
-            {section === 'mcp' ? <LocalMcpSettings copy={copy} settings={settings} update={persist} /> : null}
-            {section === 'external-mcp' ? <ExternalMcpSettings copy={copy} settings={settings} update={persist} /> : null}
-            {section === 'language' ? <LanguageSettings copy={copy} locale={activeLocale} update={persist} /> : null}
-            {section === 'appearance' ? <AppearanceSettings copy={copy} settings={settings} update={persist} /> : null}
-            {section === 'about'
-              ? (
-                  <div className="settings-section">
-                    <div className="section-head">
-                      <div>
-                        <h3>{settingsCopy.about.title}</h3>
-                        <p className="hint">{settingsCopy.about.hint}</p>
+              })}
+            </nav>
+          )}
+          content={(
+            <>
+              {section === 'execution'
+                ? (
+                    <ExecutionSettings
+                      copy={copy}
+                      engineTest={engineTest}
+                      onRescan={() => void handleRescan()}
+                      onTest={engineId => void handleTest(engineId)}
+                      settings={settings}
+                      update={persist}
+                    />
+                  )
+                : null}
+              {section === 'soul-packs' ? <SoulAppsSettings apps={apps} copy={copy} locale={activeLocale} settings={settings} templates={templates} onAppsChanged={onAppsChanged} /> : null}
+              {section === 'connectors' ? <ConnectorsSettings copy={copy} settings={settings} update={persist} /> : null}
+              {section === 'mcp' ? <LocalMcpSettings copy={copy} settings={settings} update={persist} /> : null}
+              {section === 'external-mcp' ? <ExternalMcpSettings copy={copy} settings={settings} update={persist} /> : null}
+              {section === 'language' ? <LanguageSettings copy={copy} locale={activeLocale} update={persist} /> : null}
+              {section === 'appearance' ? <AppearanceSettings copy={copy} settings={settings} update={persist} /> : null}
+              {section === 'about'
+                ? (
+                    <div className="settings-section">
+                      <div className="section-head">
+                        <div>
+                          <h3>{settingsCopy.about.title}</h3>
+                          <p className="hint">{settingsCopy.about.hint}</p>
+                        </div>
                       </div>
+                      <dl className="about-grid">
+                        <div>
+                          <dt>{settingsCopy.about.version}</dt>
+                          <dd>{runtimeVersion}</dd>
+                        </div>
+                        <div>
+                          <dt>{settingsCopy.about.executionMode}</dt>
+                          <dd>{settings.executionMode}</dd>
+                        </div>
+                        <div>
+                          <dt>{settingsCopy.about.selectedEngine}</dt>
+                          <dd>{settings.engineId}</dd>
+                        </div>
+                        <div>
+                          <dt>{settingsCopy.about.updated}</dt>
+                          <dd>{formatRelativeTime(settings.updatedAt, activeLocale)}</dd>
+                        </div>
+                      </dl>
                     </div>
-                    <dl className="about-grid">
-                      <div>
-                        <dt>{settingsCopy.about.version}</dt>
-                        <dd>{runtimeVersion}</dd>
-                      </div>
-                      <div>
-                        <dt>{settingsCopy.about.executionMode}</dt>
-                        <dd>{settings.executionMode}</dd>
-                      </div>
-                      <div>
-                        <dt>{settingsCopy.about.selectedEngine}</dt>
-                        <dd>{settings.engineId}</dd>
-                      </div>
-                      <div>
-                        <dt>{settingsCopy.about.updated}</dt>
-                        <dd>{formatRelativeTime(settings.updatedAt, activeLocale)}</dd>
-                      </div>
-                    </dl>
-                  </div>
-                )
-              : null}
-          </div>
-        </div>
+                  )
+                : null}
+            </>
+          )}
+        />
       </div>
     </div>
   )
@@ -218,16 +222,15 @@ function ExecutionSettings({
   const settingsCopy = copy.settings
   return (
     <>
-      <div className="seg-control" role="tablist" aria-label={settingsCopy.nav.execution} style={{ '--seg-cols': 2 } as CSSProperties}>
-        <button type="button" role="tab" aria-selected={settings.executionMode === 'local-cli'} className={`seg-btn ${settings.executionMode === 'local-cli' ? 'active' : ''}`} onClick={() => void update({ executionMode: 'local-cli' })}>
-          <span className="seg-title">Local CLI</span>
-          <span className="seg-meta">{settingsCopy.engine.availableCount(installedCount)}</span>
-        </button>
-        <button type="button" role="tab" aria-selected={settings.executionMode === 'byok'} className={`seg-btn ${settings.executionMode === 'byok' ? 'active' : ''}`} onClick={() => void update({ executionMode: 'byok' })}>
-          <span className="seg-title">BYOK</span>
-          <span className="seg-meta">{settings.byok.provider}</span>
-        </button>
-      </div>
+      <SegmentedControl
+        ariaLabel={settingsCopy.nav.execution}
+        value={settings.executionMode}
+        onChange={value => void update({ executionMode: value as LocalSettingsConfig['executionMode'] })}
+        options={[
+          { description: settingsCopy.engine.availableCount(installedCount), label: 'Local CLI', value: 'local-cli' },
+          { description: settings.byok.provider, label: 'BYOK', value: 'byok' },
+        ]}
+      />
 
       {settings.executionMode === 'local-cli'
         ? (
@@ -597,14 +600,16 @@ function LanguageSettings({ copy, locale, update }: { copy: ReturnType<typeof me
           <p className="hint">{settingsCopy.language.hint}</p>
         </div>
       </div>
-      <div className="seg-control" role="group" aria-label={settingsCopy.language.title} style={{ '--seg-cols': 4 } as CSSProperties}>
-        {supportedLocales.map(language => (
-          <button key={language} type="button" className={`seg-btn ${locale === language ? 'active' : ''}`} onClick={() => void update({ language })}>
-            <span className="seg-title">{languageLabel(language, locale)}</span>
-            <span className="seg-meta">{copy.common.interface}</span>
-          </button>
-        ))}
-      </div>
+      <SegmentedControl
+        ariaLabel={settingsCopy.language.title}
+        value={locale}
+        onChange={language => void update({ language: language as LocalSettingsConfig['language'] })}
+        options={supportedLocales.map(language => ({
+          description: copy.common.interface,
+          label: languageLabel(language, locale),
+          value: language,
+        }))}
+      />
     </div>
   )
 }
@@ -619,24 +624,32 @@ function AppearanceSettings({ copy, settings, update }: { copy: ReturnType<typeo
           <p className="hint">{settingsCopy.appearance.hint}</p>
         </div>
       </div>
-      <div className="seg-control" role="group" aria-label={settingsCopy.appearance.title} style={{ '--seg-cols': 3 } as CSSProperties}>
-        <AppearanceButton active={settings.appearance === 'system'} icon={<Settings size={14} />} label={settingsCopy.appearance.system} meta={copy.common.workspace} onClick={() => void update({ appearance: 'system' })} />
-        <AppearanceButton active={settings.appearance === 'light'} icon={<Sun size={14} />} label={settingsCopy.appearance.light} meta={copy.common.workspace} onClick={() => void update({ appearance: 'light' })} />
-        <AppearanceButton active={settings.appearance === 'dark'} icon={<Moon size={14} />} label={settingsCopy.appearance.dark} meta={copy.common.workspace} onClick={() => void update({ appearance: 'dark' })} />
-      </div>
+      <SegmentedControl
+        ariaLabel={settingsCopy.appearance.title}
+        value={settings.appearance}
+        onChange={appearance => void update({ appearance: appearance as LocalSettingsConfig['appearance'] })}
+        options={[
+          { description: copy.common.workspace, label: (
+            <span className="seg-title-inline">
+              <Settings size={14} />
+              {settingsCopy.appearance.system}
+            </span>
+          ), value: 'system' },
+          { description: copy.common.workspace, label: (
+            <span className="seg-title-inline">
+              <Sun size={14} />
+              {settingsCopy.appearance.light}
+            </span>
+          ), value: 'light' },
+          { description: copy.common.workspace, label: (
+            <span className="seg-title-inline">
+              <Moon size={14} />
+              {settingsCopy.appearance.dark}
+            </span>
+          ), value: 'dark' },
+        ]}
+      />
     </div>
-  )
-}
-
-function AppearanceButton({ active, icon, label, meta, onClick }: { active: boolean, icon: ReactNode, label: string, meta: string, onClick: () => void }) {
-  return (
-    <Button className={`seg-btn ${active ? 'active' : ''}`} onClick={onClick}>
-      <span className="seg-title seg-title-inline">
-        {icon}
-        {label}
-      </span>
-      <span className="seg-meta">{meta}</span>
-    </Button>
   )
 }
 

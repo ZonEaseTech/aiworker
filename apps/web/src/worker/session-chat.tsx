@@ -10,7 +10,7 @@ import type { messagesFor, SupportedLocale } from '../features/i18n'
 import type { EngineReadiness } from '../features/session/engine-readiness'
 import type { SessionProgressSummary } from './session-progress'
 
-import { IconButton, StudioPill, StudioStatusPill } from '@zonease/aiworker-component'
+import { IconButton, MessageFlow, MessageRow, StatusEventPill, StudioPill, ToolResultCard } from '@zonease/aiworker-component'
 import {
   AlertCircle,
   ArrowDown,
@@ -241,13 +241,9 @@ export function WorkerSessionChat({
 
 function UserTurn({ copy, locale, turn }: { copy: WorkerMessages, locale: SupportedLocale, turn: LocalTurn }) {
   return (
-    <article className="worker-message user">
-      <div className="worker-message-role">
-        <span>{copy.workspace.operatorRole}</span>
-        <time>{formatRelativeTime(turn.createdAt, locale)}</time>
-      </div>
+    <MessageRow className="worker-message user" roleLabel={copy.workspace.operatorRole} timestamp={formatRelativeTime(turn.createdAt, locale)}>
       <div className="worker-user-bubble">{turn.input}</div>
-    </article>
+    </MessageRow>
   )
 }
 
@@ -275,12 +271,8 @@ function AssistantTurn({
   }
 
   return (
-    <article className="worker-message assistant">
-      <div className="worker-message-role">
-        <span>{copy.workspace.engineRole}</span>
-        <time>{formatStatus(turn.status, locale)}</time>
-      </div>
-      <div className="worker-assistant-flow">
+    <MessageRow className="worker-message assistant" roleLabel={copy.workspace.engineRole} timestamp={formatStatus(turn.status, locale)}>
+      <MessageFlow className="worker-assistant-flow">
         {agentEvents.length === 0 && (turn.status === 'running' || turnSubmitting)
           ? <WaitingPill detail={copy.workspace.engineStarting} />
           : null}
@@ -292,27 +284,24 @@ function AssistantTurn({
           return <AgentEventBlock key={key} event={event} />
         })}
         {turn.error ? <AgentEventBlock event={{ kind: 'error', message: turn.error }} /> : null}
-      </div>
-    </article>
+      </MessageFlow>
+    </MessageRow>
   )
 }
 
 function AssistantWaiting({ detail, role }: { detail: string, role: string }) {
   return (
-    <article className="worker-message assistant">
-      <div className="worker-message-role">
-        <span>{role}</span>
-      </div>
-      <div className="worker-assistant-flow">
+    <MessageRow className="worker-message assistant" roleLabel={role}>
+      <MessageFlow className="worker-assistant-flow">
         <WaitingPill detail={detail} />
-      </div>
-    </article>
+      </MessageFlow>
+    </MessageRow>
   )
 }
 
 function WaitingPill({ detail }: { detail: string }) {
   return (
-    <StudioStatusPill active className="worker-status-pill">{detail}</StudioStatusPill>
+    <StatusEventPill className="worker-status-pill" tone="success">{detail}</StatusEventPill>
   )
 }
 
@@ -347,7 +336,7 @@ function AgentEventBlock({ event }: { event: WorkerAgentEvent }) {
   }
   if (event.kind === 'status') {
     return (
-      <StudioStatusPill active className="worker-status-pill" detail={event.detail}>{event.label}</StudioStatusPill>
+      <StatusEventPill className="worker-status-pill" detail={event.detail} tone="success">{event.label}</StatusEventPill>
     )
   }
   if (event.kind === 'usage') {
@@ -397,8 +386,16 @@ function EngineToolCard({
         <small>{description}</small>
         {result ? <span className={`worker-tool-result ${result.isError ? 'failed' : 'ok'}`}>{result.isError ? 'failed' : 'done'}</span> : null}
       </summary>
-      {command ? <pre className="worker-tool-command">{command}</pre> : null}
-      {result?.content ? <pre className="worker-tool-output">{result.content}</pre> : null}
+      {command || result?.content
+        ? (
+            <ToolResultCard
+              className="worker-tool-output"
+              command={command || undefined}
+              result={result?.content ?? ''}
+              tone={result?.isError ? 'danger' : 'muted'}
+            />
+          )
+        : null}
     </details>
   )
 }

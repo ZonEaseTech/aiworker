@@ -1696,8 +1696,8 @@ describe('worker studio', () => {
     const dialog = screen.getByRole('dialog', { name: 'Create worker' })
     fireEvent.click(within(dialog).getByRole('combobox', { name: 'Soul' }))
     expect(dialog.querySelector('.studio-select.open')).toBeTruthy()
-    expect(within(dialog).getByRole('listbox', { name: 'Soul' })).toBeTruthy()
-    fireEvent.click(within(dialog).getByRole('option', { name: /QA/ }))
+    expect(screen.getByRole('listbox', { name: 'Soul' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('option', { name: /QA/ }))
     expect(dialog.querySelector('.studio-select.open')).toBeNull()
     fireEvent.change(within(dialog).getByLabelText('Worker name'), { target: { value: 'QA Worker' } })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create worker' }))
@@ -1913,6 +1913,9 @@ describe('worker studio', () => {
     expect(screen.queryByTestId('new-project-panel')).toBeNull()
     expect(screen.getByText('Session events')).toBeTruthy()
     expect(screen.getByText('Memory candidates')).toBeTruthy()
+    expect(document.querySelector('.session-progress-card')).toBeTruthy()
+    expect(document.querySelector('.studio-collapsible-group')).toBeTruthy()
+    expect(document.querySelector('.artifact-preview-frame')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Open artifact settings' })).toBeNull()
 
     const chatActions = document.querySelector('.worker-chat-actions') as HTMLElement

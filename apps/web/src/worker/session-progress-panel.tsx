@@ -1,5 +1,7 @@
 import type { SessionProgressSummary } from './session-progress'
 
+import { ProgressCard } from '@zonease/aiworker-component'
+
 export function SessionProgressPanel({
   className = '',
   compact = false,
@@ -10,18 +12,15 @@ export function SessionProgressPanel({
   progress: SessionProgressSummary
 }) {
   return (
-    <section
-      aria-live={progress.live ? 'polite' : undefined}
-      className={`session-progress-card ${compact ? 'compact' : ''} ${className}`.trim()}
-      data-stage={progress.stage}
-      data-tone={progress.tone}
-    >
-      <div className="session-progress-head">
-        <span className="session-progress-dot" aria-hidden="true" />
-        <span className="session-progress-label">{progress.label}</span>
-      </div>
-      <strong>{progress.title}</strong>
-      <span className="session-progress-detail">{progress.detail}</span>
-    </section>
+    <ProgressCard
+      className={className}
+      compact={compact}
+      detail={progress.detail}
+      label={progress.label}
+      live={progress.live}
+      stage={progress.stage}
+      title={progress.title}
+      tone={progress.tone}
+    />
   )
 }

@@ -2,7 +2,7 @@ import type { HTMLAttributes, ReactNode } from 'react'
 
 import { cx } from '../utils/cx'
 
-export type ProgressCardTone = 'finalizing' | 'ready' | 'reviewed' | 'risk' | 'working'
+export type ProgressCardTone = 'finalizing' | 'muted' | 'ready' | 'reviewed' | 'risk' | 'working'
 
 export interface ProgressCardProps extends Omit<HTMLAttributes<HTMLElement>, 'title'> {
   compact?: boolean

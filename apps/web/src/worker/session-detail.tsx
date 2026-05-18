@@ -14,8 +14,8 @@ import type { messagesFor, SupportedLocale } from '../features/i18n'
 import type { EngineReadiness } from '../features/session/engine-readiness'
 import type { SessionProgressSummary } from './session-progress'
 
-import { StudioActivityRow, StudioEmptyState, StudioSectionHeader, StudioStatusPill } from '@zonease/aiworker-component'
-import { Circle, ClipboardCheck, Eye, FileText, MessageSquare, Send, Sparkles, Terminal } from 'lucide-react'
+import { ArtifactPreviewFrame, ReviewPanelShell, StudioActivityRow, StudioEmptyState, StudioSectionHeader, StudioStatusPill } from '@zonease/aiworker-component'
+import { Circle, ClipboardCheck, FileText, MessageSquare, Send, Sparkles, Terminal } from 'lucide-react'
 
 import {
   displayTemplate,
@@ -152,13 +152,14 @@ export function SessionDetail({
                   )
                 : null}
 
-              <section className="artifact-panel">
-                <StudioSectionHeader
-                  className="artifact-section-head"
-                  icon={<Eye size={14} />}
-                  title={copy.artifact.label}
-                  description={copy.workspace.artifactCount(artifacts.length)}
-                />
+              <ArtifactPreviewFrame
+                className="artifact-panel"
+                title={copy.artifact.label}
+                description={copy.workspace.artifactCount(artifacts.length)}
+                loading={artifact && artifactPreview.loading ? copy.artifact.loading : false}
+                error={artifactPreview.error}
+                empty={artifact ? undefined : progress?.previewDetail ?? copy.artifact.empty}
+              >
                 {artifact
                   ? (
                       <>
@@ -174,10 +175,8 @@ export function SessionDetail({
                           : null}
                       </>
                     )
-                  : (
-                      <div className="artifact-preview-state">{progress?.previewDetail ?? copy.artifact.empty}</div>
-                    )}
-              </section>
+                  : null}
+              </ArtifactPreviewFrame>
 
               {mode === 'full'
                 ? (
@@ -212,13 +211,12 @@ export function SessionDetail({
                   )
                 : null}
 
-              <section className="session-subpanel">
-                <StudioSectionHeader
-                  className="artifact-section-head"
-                  icon={<ClipboardCheck size={14} />}
-                  title={copy.artifact.review}
-                  description={review ? formatReviewVerdict(review.verdict, locale) : copy.artifact.reviewCount(reviews.length)}
-                />
+              <ReviewPanelShell
+                className="session-subpanel"
+                title={copy.artifact.review}
+                description={review ? formatReviewVerdict(review.verdict, locale) : copy.artifact.reviewCount(reviews.length)}
+                empty={!artifact ? copy.workspace.reviewWaiting : undefined}
+              >
                 {review
                   ? (
                       <div className="review-list">
@@ -232,8 +230,8 @@ export function SessionDetail({
                           <span>{reviewSubmitting ? copy.workspace.requestingReview : copy.workspace.requestReview}</span>
                         </button>
                       )
-                    : <div className="artifact-preview-state">{copy.workspace.reviewWaiting}</div>}
-              </section>
+                    : null}
+              </ReviewPanelShell>
 
               <section className="session-subpanel memory-subpanel">
                 <StudioSectionHeader
