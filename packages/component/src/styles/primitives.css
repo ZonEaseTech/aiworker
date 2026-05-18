@@ -13,6 +13,11 @@
 }
 
 .modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 101;
+  transform: translate(-50%, -50%);
   background: var(--bg-elevated);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
@@ -179,6 +184,65 @@
   color: var(--text-muted);
   font-size: 14px;
   line-height: 1.55;
+}
+
+.ui-input,
+.ui-textarea {
+  width: 100%;
+}
+
+.ui-input[aria-invalid="true"],
+.ui-textarea[aria-invalid="true"] {
+  border-color: var(--red-border);
+  background: var(--red-bg);
+}
+
+.ui-field-description,
+.ui-field-error {
+  display: block;
+  margin-top: -2px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.ui-field-description {
+  color: var(--text-muted);
+}
+
+.ui-field-error {
+  color: var(--red);
+}
+
+.ui-switch {
+  width: 38px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  transition: background var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease);
+}
+
+.ui-switch[data-state="checked"] {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.ui-switch-thumb {
+  width: 16px;
+  height: 16px;
+  display: block;
+  border-radius: var(--radius-pill);
+  background: var(--bg-panel);
+  transform: translateX(0);
+  transition: transform var(--motion-fast) var(--motion-ease);
+}
+
+.ui-switch[data-state="checked"] .ui-switch-thumb {
+  transform: translateX(16px);
 }
 
 .welcome-artifact-teaser {

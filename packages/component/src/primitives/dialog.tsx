@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 
+import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { X } from 'lucide-react'
 
 import { cx } from '../utils/cx'
@@ -38,26 +39,43 @@ export function Dialog({
     return null
 
   return (
-    <div
-      className={cx('modal-backdrop', backdropClassName)}
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget)
+    <DialogPrimitive.Root
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen)
           onClose()
       }}
     >
-      <dialog className={cx('modal', dialogClassName)} open aria-modal="true" aria-labelledby={titleId} onCancel={onClose}>
-        <Button variant="close" className={closeClassName} onClick={onClose} aria-label={closeLabel}>
-          <X size={16} strokeWidth={2} />
-        </Button>
-        <header className={cx('modal-head', headerClassName)}>
-          <span className="kicker">{title}</span>
-          <h2 id={titleId}>{title}</h2>
-          {description ? <p className="subtitle">{description}</p> : null}
-        </header>
-        <div className={bodyClassName}>
-          {children}
-        </div>
-      </dialog>
-    </div>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className={cx('modal-backdrop', backdropClassName)} />
+        <DialogPrimitive.Content
+          aria-describedby={description ? `${titleId}-description` : undefined}
+          aria-labelledby={titleId}
+          className={cx('modal', dialogClassName)}
+        >
+          <DialogPrimitive.Close asChild>
+            <Button variant="close" className={closeClassName} aria-label={closeLabel}>
+              <X size={16} strokeWidth={2} />
+            </Button>
+          </DialogPrimitive.Close>
+          <header className={cx('modal-head', headerClassName)}>
+            <span className="kicker">{title}</span>
+            <DialogPrimitive.Title asChild>
+              <h2 id={titleId}>{title}</h2>
+            </DialogPrimitive.Title>
+            {description
+              ? (
+                  <DialogPrimitive.Description asChild>
+                    <p id={`${titleId}-description`} className="subtitle">{description}</p>
+                  </DialogPrimitive.Description>
+                )
+              : null}
+          </header>
+          <div className={bodyClassName}>
+            {children}
+          </div>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   )
 }

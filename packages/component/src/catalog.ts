@@ -48,7 +48,14 @@ export const componentCatalog: ComponentCatalogItem[] = [
     family: 'primitives',
     name: 'Input',
     owner: 'host-soul-shared',
-    status: 'planned',
+    status: 'implemented',
+  },
+  {
+    description: 'Accessible binary switch primitive.',
+    family: 'primitives',
+    name: 'Switch',
+    owner: 'host-soul-shared',
+    status: 'implemented',
   },
   {
     description: 'Form field shell with label, help and validation slots.',

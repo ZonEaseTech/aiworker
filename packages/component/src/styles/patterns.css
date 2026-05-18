@@ -374,6 +374,12 @@
   box-shadow: var(--shadow-sm);
 }
 
+.studio-select-viewport {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .studio-select-option {
   width: 100%;
   min-height: 42px;
