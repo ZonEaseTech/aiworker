@@ -111,7 +111,11 @@ agent runtime 平台。
   `ui.workspaceContext`，例如让未来 Host-owned web terminal 知道 workspace context；Host
   只能按 descriptor 调用或定位，不解释领域语义。
 - Standalone 模式下 Soul App 拥有自己的完整 shell；Host mounted 模式下 Soul App 适配 Host 壳。
-- 新组件优先复用 `apps/web/src/shared/components/ui/`、`packages/component` 和已有 primitives。
+- 新增或修改 Host Web / Soul App UI 时必须优先从 `packages/component` 查找 primitives、
+  patterns、layout 与 package-owned styles。新增 app-local UI 组件或 CSS 前必须说明缺口：
+  组件库尚无对应 primitive/pattern、该 UI 确实是 Soul App 领域语义，或属于临时迁移步骤。
+  可复用缺口必须补进 `packages/component` 或登记到组件 catalog 的 migration queue；不要默认
+  在 app 内手搓样式。
 - 交互组件使用成熟 headless UI；不要手写 focus trap、scroll lock、ARIA 或键盘导航。
 - 视觉值来自根目录 `DESIGN.md`，通过 Tailwind CSS v4 `@theme` 接入；不要新增 hex 字面量或
   arbitrary value。

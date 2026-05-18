@@ -58,7 +58,7 @@
     },
     "apps/cli": {
       "name": "@zonease/aiworker-cli",
-      "version": "0.12.1",
+      "version": "0.18.0",
       "bin": {
         "aiworker": "./dist/aiworker.js",
       },
@@ -110,6 +110,7 @@
       "devDependencies": {
         "@types/react": "^19.1.2",
         "typescript": "^5.8.3",
+        "vitest": "4",
       },
     },
     "packages/core": {
