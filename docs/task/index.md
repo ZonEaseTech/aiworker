@@ -469,3 +469,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REFACTOR-081 Host/Soul workbench contract cleanup**](REFACTOR-081.md) `P0`
 - [x] [**REFACTOR-082 Soul App scaffold workbench design migration**](REFACTOR-082.md) `P0`
 - [x] [**FEAT-096 HR profile patch review workbench**](FEAT-096.md) `P0`
+- [-] [**REL-041 发布 aiworker CLI 0.17.2**](REL-041.md) `P0`

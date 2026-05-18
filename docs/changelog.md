@@ -1,5 +1,11 @@
 # AIWorker Changelog
 
+## 2026-05-18 [progress] REL-041 / PLAN-355 — CLI 0.17.2 patch release
+
+Started the `@zonease/aiworker-cli@0.17.2` patch release to publish the current
+Host shell V9, Host/Soul workbench contract cleanup, scaffold workbench
+migration and HR Profile Patch Review workbench changes.
+
 ## 2026-05-18 [completed] FEAT-096 / PLAN-354 — HR profile patch review workbench
 
 Completed the HR People Workbench redesign around Product-owned profile patch
