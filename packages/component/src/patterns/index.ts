@@ -1,6 +1,16 @@
 export { CreationDialog } from './creation-dialog'
+export { ArtifactPreviewFrame, ReviewPanelShell } from './artifact-review'
+export type { ArtifactPreviewFrameProps, ReviewPanelShellProps } from './artifact-review'
 export { MarkdownPreview } from './markdown-preview'
 export type { MarkdownPreviewProps } from './markdown-preview'
+export { MessageFlow, MessageRow, StatusEventPill, ToolResultCard } from './message-flow'
+export type { MessageFlowTone, MessageRowProps, StatusEventPillProps, ToolResultCardProps } from './message-flow'
+export { ProfileReaderShell } from './profile'
+export type { ProfileReaderShellProps } from './profile'
+export { ProgressCard } from './progress'
+export type { ProgressCardProps, ProgressCardTone } from './progress'
+export { SegmentedControl, SettingsShell } from './settings'
+export type { SegmentedControlOption, SegmentedControlProps, SettingsShellProps } from './settings'
 export {
   StudioActivityRow,
   StudioCollapsibleGroup,
