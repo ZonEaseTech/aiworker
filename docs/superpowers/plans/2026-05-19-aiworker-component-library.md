@@ -22,7 +22,7 @@ entrypoint, catalog, tests, Host migrations, Soul proof, and verification.
 
 - `AGENTS.md`: add the agent-facing rule that new Host/Soul UI must start from `packages/component`.
 - `docs/task/FEAT-099.md`: PMA task for the component library delivery.
-- `docs/plan/PLAN-366.md`: PMA plan tied to FEAT-099.
+- `docs/plan/PLAN-367.md`: PMA plan tied to FEAT-099.
 - `docs/task/index.md`, `docs/plan/index.md`, `docs/changelog.md`: PMA/changelog sync. Preserve existing unrelated FEAT-098/PLAN-365 edits already present in the worktree.
 - `packages/component/package.json`: export `./styles.css`, add test script, and add only delivered headless dependencies.
 - `packages/component/src/styles.css`: package style entrypoint.
@@ -50,7 +50,7 @@ entrypoint, catalog, tests, Host migrations, Soul proof, and verification.
 
 **Files:**
 - Create: `docs/task/FEAT-099.md`
-- Create: `docs/plan/PLAN-366.md`
+- Create: `docs/plan/PLAN-367.md`
 - Modify: `docs/task/index.md`
 - Modify: `docs/plan/index.md`
 - Modify: `docs/changelog.md`
@@ -138,7 +138,7 @@ Create `docs/task/FEAT-099.md`:
 - **owner**: codex
 - **createdAt**: 2026-05-19
 - **claimedAt**: 2026-05-19
-- **plan**: PLAN-366
+- **plan**: PLAN-367
 - **relatesTo**: ARCH-001, HOST-001, SOUL-001, IMPORT-001, REFACTOR-083
 
 ## Background
@@ -173,10 +173,10 @@ commands pass. Until then this task remains `in_progress`.
 
 - [ ] **Step 4: Add PMA implementation plan**
 
-Create `docs/plan/PLAN-366.md`:
+Create `docs/plan/PLAN-367.md`:
 
 ```md
-# PLAN-366 Host/Soul shared component library
+# PLAN-367 Host/Soul shared component library
 
 - **status**: approved
 - **owner**: codex
@@ -205,7 +205,7 @@ components, and prove a Soul App Web surface imports the package directly.
 - `apps/web`
 - `apps/aiworker-hr/product/web`
 - `docs/task/FEAT-099.md`
-- `docs/plan/PLAN-366.md`
+- `docs/plan/PLAN-367.md`
 - `docs/changelog.md`
 - focused tests and browser verification
 
@@ -236,13 +236,13 @@ components, and prove a Soul App Web surface imports the package directly.
 - [ ] **Step 5: Update PMA indexes and changelog**
 
 Preserve any existing FEAT-098/PLAN-365 changes in the dirty worktree. Append or
-insert FEAT-099 and PLAN-366 according to the current index style. Add a
+insert FEAT-099 and PLAN-367 according to the current index style. Add a
 changelog entry:
 
 ```md
 ## Unreleased
 
-- Started FEAT-099 / PLAN-366 to make `packages/component` a real Host/Soul
+- Started FEAT-099 / PLAN-367 to make `packages/component` a real Host/Soul
   shared component library with package-owned styles, component catalog,
   AGENTS constraints, CRG candidate audit, and Host/Soul Web verification.
 ```
@@ -263,7 +263,7 @@ Expected: both pass.
 Stage only the files from this task and commit:
 
 ```bash
-git add AGENTS.md docs/task/FEAT-099.md docs/plan/PLAN-366.md docs/task/index.md docs/plan/index.md docs/changelog.md tmp/component-library-crg-candidates.md
+git add AGENTS.md docs/task/FEAT-099.md docs/plan/PLAN-367.md docs/task/index.md docs/plan/index.md docs/changelog.md tmp/component-library-crg-candidates.md
 git commit -m "docs: 启动 Host/Soul 共享组件库计划"
 ```
 
@@ -1070,7 +1070,7 @@ git commit -m "feat: 证明 HR Soul App 消费共享组件库"
 **Files:**
 - Modify: `scripts/web-quality.ts`
 - Modify: `docs/task/FEAT-099.md`
-- Modify: `docs/plan/PLAN-366.md`
+- Modify: `docs/plan/PLAN-367.md`
 - Modify: `docs/changelog.md`
 
 - [ ] **Step 1: Update CSS guard selectors**
@@ -1162,13 +1162,13 @@ Update `docs/task/FEAT-099.md` completion section with:
 - Browser smoke summary.
 - CRG summary.
 
-Update `docs/plan/PLAN-366.md` verification with exact passed commands.
+Update `docs/plan/PLAN-367.md` verification with exact passed commands.
 Update `docs/changelog.md` with the completed summary.
 
 - [ ] **Step 6: Commit closeout**
 
 ```bash
-git add scripts/web-quality.ts docs/task/FEAT-099.md docs/plan/PLAN-366.md docs/task/index.md docs/plan/index.md docs/changelog.md
+git add scripts/web-quality.ts docs/task/FEAT-099.md docs/plan/PLAN-367.md docs/task/index.md docs/plan/index.md docs/changelog.md
 git commit -m "test: 验证 Host/Soul 共享组件库稳定性"
 ```
 
