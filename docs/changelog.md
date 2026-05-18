@@ -1,5 +1,11 @@
 # AIWorker Changelog
 
+## 2026-05-18 [progress] REL-043 / PLAN-359 — CLI 0.17.4 patch release
+
+Started the `@zonease/aiworker-cli@0.17.4` patch release after merging
+`FEAT-097 / PLAN-358`, carrying the HR People Workbench header/search
+convergence.
+
 ## 2026-05-18 [completed] FEAT-097 / PLAN-358 — HR Soul App header convergence
 
 Completed the HR People Workbench chrome convergence after the approved design:
