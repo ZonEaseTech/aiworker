@@ -1,5 +1,19 @@
 # AIWorker Changelog
 
+## 2026-05-18 [completed] REL-041 / PLAN-355 — CLI 0.17.2 patch release
+
+Published `@zonease/aiworker-cli@0.17.2` as the patch release carrying Host
+shell V9, Host/Soul workbench contract cleanup, scaffold workbench migration
+and the HR Profile Patch Review workbench.
+
+Local release gates passed, including full check/test/build, dist version
+checks, pack dry-run, dist release smoke and code-review-graph review. Release
+workflow `26010518321` passed and published npm latest plus GitHub Release
+`v0.17.2` with 8 binary/checksum assets. Main lint workflow `26010512951`
+passed. Published-package smoke passed from an isolated `AIWORKER_HOME`: daemon
+health, runtimeVersion `0.17.2`, Host Web static serving, official app
+bootstrap, app/soul/template listing, and HR/QA mounted actions.
+
 ## 2026-05-18 [progress] REL-041 / PLAN-355 — CLI 0.17.2 patch release
 
 Started the `@zonease/aiworker-cli@0.17.2` patch release to publish the current
