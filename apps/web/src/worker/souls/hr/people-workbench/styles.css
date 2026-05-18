@@ -261,53 +261,6 @@
   border-top: 1px solid var(--border);
 }
 
-.hr-profile-section-toggle {
-  width: 100%;
-  min-width: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 9px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-subtle);
-  color: var(--text);
-  text-align: left;
-}
-
-.hr-profile-section-toggle[aria-expanded="true"] svg {
-  transform: rotate(180deg);
-}
-
-.hr-profile-section-toggle strong,
-.hr-profile-section-toggle small {
-  display: block;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.hr-profile-section-toggle strong {
-  color: var(--text-strong);
-  font-size: 13px;
-}
-
-.hr-profile-section-toggle small {
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-.hr-section-count {
-  min-width: 24px;
-  color: var(--text-strong);
-  font-family: var(--mono);
-  font-size: 13px;
-  text-align: right;
-}
-
-.hr-profile-section-drawer,
 .hr-session-card-list,
 .hr-action-list {
   display: flex;

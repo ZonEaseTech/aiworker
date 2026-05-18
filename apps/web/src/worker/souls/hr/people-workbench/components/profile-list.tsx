@@ -2,8 +2,8 @@ import type { LocalWorkspace } from '@zonease/aiworker-shared'
 import type { HrWorkbenchCopy } from '../copy'
 import type { PersonProfile, ProfileListSection, ProfileListSectionId } from '../types'
 
-import { IconButton } from '@zonease/aiworker-component'
-import { ChevronDown, Plus, Search, UsersRound } from 'lucide-react'
+import { IconButton, StudioCollapsibleGroup } from '@zonease/aiworker-component'
+import { Plus, Search, UsersRound } from 'lucide-react'
 import { WorkbenchSectionTitle } from '../../../common'
 
 interface ProfileListProps {
@@ -74,38 +74,27 @@ export function HrProfileList({
         {sections.map((section) => {
           const collapsed = collapsedSectionIds.has(section.id)
           return (
-            <section key={section.id} className="hr-profile-list-section">
-              <button
-                type="button"
-                className="hr-profile-section-toggle"
-                aria-expanded={!collapsed}
-                onClick={() => onToggleSection(section.id)}
-              >
-                <span>
-                  <strong>{section.label}</strong>
-                </span>
-                <span className="hr-section-count">{section.profiles.length}</span>
-                <ChevronDown aria-hidden="true" size={14} />
-              </button>
-
-              {!collapsed
-                ? (
-                    <div className="hr-profile-section-drawer">
-                      {section.profiles.length > 0
-                        ? section.profiles.map(profile => (
-                            <ProfileListCard
-                              key={`${section.id}-${profile.id}`}
-                              labels={labels}
-                              profile={profile}
-                              selected={selectedWorkspaceId === profile.id}
-                              onOpenWorkspace={onOpenWorkspace}
-                            />
-                          ))
-                        : <span className="hr-profile-section-empty">{labels.noProfilesInSection}</span>}
-                    </div>
-                  )
-                : null}
-            </section>
+            <StudioCollapsibleGroup
+              key={section.id}
+              className="hr-profile-list-section"
+              collapsed={collapsed}
+              meta={section.profiles.length}
+              title={section.label}
+              toggleAriaLabel={`${section.label} ${section.profiles.length}`}
+              onToggle={() => onToggleSection(section.id)}
+            >
+              {section.profiles.length > 0
+                ? section.profiles.map(profile => (
+                    <ProfileListCard
+                      key={`${section.id}-${profile.id}`}
+                      labels={labels}
+                      profile={profile}
+                      selected={selectedWorkspaceId === profile.id}
+                      onOpenWorkspace={onOpenWorkspace}
+                    />
+                  ))
+                : <span className="hr-profile-section-empty">{labels.noProfilesInSection}</span>}
+            </StudioCollapsibleGroup>
           )
         })}
       </div>

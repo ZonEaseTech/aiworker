@@ -14,11 +14,10 @@ import type { SettingsSection } from '../features/settings'
 import type { ArtifactPreviewState } from './session-detail'
 import type { SoulProfilePreviewState, SoulWorkbenchContext } from './souls/types'
 
-import { IconButton, StudioEmptyState, StudioMainFrame, StudioSectionHeader, WorkerStudioLayout } from '@zonease/aiworker-component'
+import { IconButton, StudioCollapsibleGroup, StudioEmptyState, StudioMainFrame, StudioSectionHeader, WorkerStudioLayout } from '@zonease/aiworker-component'
 import { prepareProfileMarkdownForPromotion } from '@zonease/aiworker-shared'
 import { findSoulWorkbenchForSoul } from '@zonease/aiworker-shared/soul-workbench-catalog'
 import {
-  ChevronDown,
   ChevronRight,
   FileText,
   PanelBottom,
@@ -1118,56 +1117,42 @@ export function WorkerStudio() {
                   const collapsed = collapsedWorkerSoulIds.has(group.id)
                   const groupItemsId = `worker-soul-group-${group.id}`
                   return (
-                    <div key={group.id} className="worker-soul-group">
-                      <button
-                        type="button"
-                        className="worker-soul-group-toggle"
-                        aria-label={`${group.name} (${group.workers.length}) ${group.domain}`}
-                        aria-controls={groupItemsId}
-                        aria-expanded={!collapsed}
-                        onClick={() => toggleWorkerSoulGroup(group.id)}
-                      >
-                        <span className="worker-soul-group-title">
-                          <strong>{`${group.name} (${group.workers.length})`}</strong>
-                          <small>{group.domain}</small>
-                        </span>
-                        {collapsed
-                          ? <ChevronRight aria-hidden="true" size={14} />
-                          : <ChevronDown aria-hidden="true" size={14} />}
-                      </button>
-
-                      {!collapsed
-                        ? (
-                            <div id={groupItemsId} className="worker-soul-group-items" role="group" aria-label={group.name}>
-                              {group.workers.map((worker) => {
-                                const active = selectedWorker.id === worker.id
-                                return (
-                                  <button
-                                    key={worker.id}
-                                    type="button"
-                                    className={`worker-list-item ${active ? 'active' : ''}`}
-                                    aria-selected={active}
-                                    role="option"
-                                    onClick={() => {
-                                      setSelectedWorkerId(worker.id)
-                                      setSelectedWorkspaceId(null)
-                                      const next = data.templates.find(template => template.soulId === worker.soulId)
-                                      if (next)
-                                        setSelectedTemplateId(next.id)
-                                      navigateWorkerRoute({ kind: 'worker', workerId: worker.id })
-                                    }}
-                                  >
-                                    <span className="worker-list-item-main">
-                                      <strong>{worker.name}</strong>
-                                    </span>
-                                    <span className={`status-dot ${worker.status === 'active' ? 'active' : ''}`} aria-hidden="true" />
-                                  </button>
-                                )
-                              })}
-                            </div>
-                          )
-                        : null}
-                    </div>
+                    <StudioCollapsibleGroup
+                      key={group.id}
+                      collapsed={collapsed}
+                      controlsId={groupItemsId}
+                      description={group.domain}
+                      drawerProps={{ 'role': 'group', 'aria-label': group.name }}
+                      title={`${group.name} (${group.workers.length})`}
+                      toggleAriaLabel={`${group.name} (${group.workers.length}) ${group.domain}`}
+                      onToggle={() => toggleWorkerSoulGroup(group.id)}
+                    >
+                      {group.workers.map((worker) => {
+                        const active = selectedWorker.id === worker.id
+                        return (
+                          <button
+                            key={worker.id}
+                            type="button"
+                            className={`worker-list-item ${active ? 'active' : ''}`}
+                            aria-selected={active}
+                            role="option"
+                            onClick={() => {
+                              setSelectedWorkerId(worker.id)
+                              setSelectedWorkspaceId(null)
+                              const next = data.templates.find(template => template.soulId === worker.soulId)
+                              if (next)
+                                setSelectedTemplateId(next.id)
+                              navigateWorkerRoute({ kind: 'worker', workerId: worker.id })
+                            }}
+                          >
+                            <span className="worker-list-item-main">
+                              <strong>{worker.name}</strong>
+                            </span>
+                            <span className={`status-dot ${worker.status === 'active' ? 'active' : ''}`} aria-hidden="true" />
+                          </button>
+                        )
+                      })}
+                    </StudioCollapsibleGroup>
                   )
                 })}
               </div>

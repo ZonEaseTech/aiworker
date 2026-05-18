@@ -392,3 +392,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-361 Profile ledger Git identity side-effect hardening**](PLAN-361.md) `2026-05-18`
 - [x] [**PLAN-362 Host left panel toggle active state repair**](PLAN-362.md) `2026-05-18`
 - [x] [**PLAN-363 CLI 0.17.6 patch release**](PLAN-363.md) `2026-05-18`
+- [x] [**PLAN-364 Shared collapsible grouped list pattern**](PLAN-364.md) `2026-05-19`

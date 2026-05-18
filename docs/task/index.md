@@ -478,3 +478,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-136 Profile ledger writes repository-local Git identity**](BUG-136.md) `P1`
 - [x] [**BUG-137 Host left panel toggle lacks active highlight**](BUG-137.md) `P1`
 - [x] [**REL-045 发布 aiworker CLI 0.17.6**](REL-045.md) `P0`
+- [x] [**REFACTOR-083 Extract shared collapsible grouped list pattern**](REFACTOR-083.md) `P1`

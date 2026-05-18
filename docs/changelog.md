@@ -7983,3 +7983,17 @@ Phase 3 + 4 complete. Backend gained `execution`, `config`, `events` modules (RE
 ## 2026-04-20 09:45 [progress]
 
 Project initialized with PMA docs structure.
+## 2026-05-19 00:12 [progress]
+
+REFACTOR-083 / PLAN-364 extracted the shared collapsible grouped-list pattern
+for Worker Web. `@zonease/aiworker-component` now exports
+`StudioCollapsibleGroup`, which owns the generic group toggle, chevron state,
+count/meta slot, expanded drawer, and visual child indentation. The Worker Web
+Soul worker rail and the HR People Workbench profile lifecycle list both use the
+shared pattern while keeping worker/profile child item rendering local.
+
+Verification: focused component and WorkerStudio RTL tests, component
+typecheck, Web typecheck/lint/build, `git diff --check`, browser smoke against
+the local daemon, and code-review-graph update/review. The build still reports
+the existing large chunk warning; `crg:review` exited 0 but kept advisory static
+test-gap labels despite the new direct tests.

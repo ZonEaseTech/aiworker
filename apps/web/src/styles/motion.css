@@ -70,6 +70,7 @@
   animation: aiworker-enter var(--motion-base) var(--motion-ease-out) both;
 }
 
+.studio-collapsible-group-toggle,
 .worker-list-item,
 .rail-session-item,
 .rail-workspace-item,
@@ -97,6 +98,7 @@
 .workspace-session-composer,
 .artifact-panel,
 .session-subpanel,
+.studio-collapsible-group-toggle,
 .worker-list-item,
 .rail-session-item,
 .rail-workspace-item,

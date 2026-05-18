@@ -896,7 +896,9 @@ describe('worker studio', () => {
     expect(screen.queryByLabelText('Current Profile Summary')).toBeNull()
     expect(document.querySelector('.hr-profile-details')).toBeNull()
     expect(document.querySelector('.hr-profile-tools-rail')).toBeNull()
-    expect(screen.getByRole('button', { name: /Candidates/ })).toBeTruthy()
+    const candidateSectionToggle = screen.getByRole('button', { name: /Candidates/ })
+    expect(candidateSectionToggle.closest('.studio-collapsible-group')).toBeTruthy()
+    expect(profileList.querySelector('.studio-collapsible-group-drawer')).toBeTruthy()
     expect(screen.queryByRole('button', { name: /Needs attention/ })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Hide Profile List' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Expand Profile Tools' })).toBeNull()
@@ -1312,8 +1314,11 @@ describe('worker studio', () => {
 
     await screen.findByTestId('hr-people-workbench')
     const qaGroupToggle = screen.getByRole('button', { name: /QA \(1\)/ })
+    const qaGroup = qaGroupToggle.closest('.studio-collapsible-group')
     const visibleOptionTexts = () => screen.getAllByRole('option').map(option => option.textContent ?? '')
 
+    expect(qaGroup).toBeTruthy()
+    expect(qaGroup?.querySelector('.studio-collapsible-group-drawer')).toBeTruthy()
     expect(qaGroupToggle.getAttribute('aria-expanded')).toBe('true')
     expect(visibleOptionTexts().includes('QA')).toBe(true)
 

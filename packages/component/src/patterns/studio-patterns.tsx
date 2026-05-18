@@ -1,5 +1,6 @@
 import type { HTMLAttributes, ReactNode } from 'react'
 
+import { ChevronDown } from 'lucide-react'
 import { cx } from '../utils/cx'
 
 export interface StudioSectionHeaderProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'> {
@@ -33,6 +34,66 @@ export function StudioSectionHeader({
             <div className="studio-section-actions">
               {meta}
               {action}
+            </div>
+          )
+        : null}
+    </div>
+  )
+}
+
+export interface StudioCollapsibleGroupProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'> {
+  children?: ReactNode
+  collapsed: boolean
+  controlsId?: string
+  description?: ReactNode
+  drawerProps?: HTMLAttributes<HTMLDivElement>
+  meta?: ReactNode
+  onToggle: () => void
+  title: ReactNode
+  toggleAriaLabel: string
+}
+
+export function StudioCollapsibleGroup({
+  children,
+  className,
+  collapsed,
+  controlsId,
+  description,
+  drawerProps,
+  meta,
+  onToggle,
+  title,
+  toggleAriaLabel,
+  ...props
+}: StudioCollapsibleGroupProps) {
+  const { className: drawerClassName, ...restDrawerProps } = drawerProps ?? {}
+
+  return (
+    <div {...props} className={cx('studio-collapsible-group', collapsed && 'collapsed', className)}>
+      <button
+        type="button"
+        className="studio-collapsible-group-toggle"
+        aria-label={toggleAriaLabel}
+        aria-controls={controlsId}
+        aria-expanded={!collapsed}
+        onClick={onToggle}
+      >
+        <span className="studio-collapsible-group-title">
+          <strong>{title}</strong>
+          {description ? <small>{description}</small> : null}
+        </span>
+        {meta !== null && meta !== undefined ? <span className="studio-collapsible-group-meta">{meta}</span> : null}
+        <ChevronDown className="studio-collapsible-group-chevron" aria-hidden="true" size={14} />
+      </button>
+
+      {!collapsed
+        ? (
+            <div
+              {...restDrawerProps}
+              id={controlsId}
+              className={cx('studio-collapsible-group-drawer', drawerClassName)}
+            >
+              {children}
             </div>
           )
         : null}
