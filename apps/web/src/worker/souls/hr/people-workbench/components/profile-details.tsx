@@ -36,6 +36,22 @@ export function HrProfileDetails({
         <div className="hr-selected-profile-copy">
           <h2>{title}</h2>
           <p>{focusedProfile ? labels.profileHeaderDetail(focusedProfile.moment, focusedProfile.nextStep) : labels.profileDetailsEmpty}</p>
+          {focusedProfile
+            ? (
+                <div className="hr-profile-source-tags" aria-label={labels.sourcesTitle}>
+                  {labels.sourceCards(
+                    focusedProfile.artifacts.length,
+                    focusedProfile.sessions.length,
+                    focusedProfile.reviews.length,
+                  ).map(source => (
+                    <span key={source.label} className="hr-profile-source-tag">
+                      <span>{source.label}</span>
+                      <strong>{source.count}</strong>
+                    </span>
+                  ))}
+                </div>
+              )
+            : null}
         </div>
         <div className="hr-selected-profile-actions" aria-label={labels.workbenchPanelControlsLabel}>
           {headerActions}

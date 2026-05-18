@@ -17,7 +17,6 @@ import { getHrPeopleWorkbenchCopy } from './copy'
 import {
   buildPersonProfiles,
   buildProfileListSections,
-  buildProfileTimeline,
   orderActionsForProfile,
 } from './model'
 import { buildProfileRevisionReview } from './revision-review'
@@ -79,9 +78,7 @@ export function HrPeopleWorkbench({
     ? profiles.find(profile => profile.id === selectedWorkspace.id) ?? null
     : null
   const focusedProfile = selectedProfile
-  const reviewGuardrails = locale === 'zh-CN' ? labels.reviewGuardrails : workbench.reviewChecklist.slice(0, 4)
   const activeActions = orderActionsForProfile(workbench.actions, focusedProfile)
-  const timeline = focusedProfile ? buildProfileTimeline(focusedProfile, labels, locale) : []
   const profilePatchReviewOpen = Boolean(focusedProfile && profilePatchReviewWorkspaceId === focusedProfile.id)
   const previewMatchesArtifact = Boolean(selectedArtifact && artifactPreview.artifactId === selectedArtifact.id)
   const profilePreviewMatchesProfile = Boolean(focusedProfile && profilePreview.workspaceId === focusedProfile.id)
@@ -127,7 +124,6 @@ export function HrPeopleWorkbench({
     if (!action)
       return
     onActionSelect(action)
-    setProfileToolsFocusTarget('proposal')
     setProfileToolsExpanded(true)
   }
   async function handleWorkbenchAction(action: LocalSoulAppWorkbenchAction) {
@@ -281,13 +277,11 @@ export function HrPeopleWorkbench({
             ? (
                 <HrProfileToolsPanel
                   activeActions={activeActions}
-                  artifact={selectedArtifact}
                   copy={copy}
                   engineReadiness={engineReadiness}
                   focusedProfile={focusedProfile}
                   labels={labels}
                   locale={locale}
-                  profileRevisionReview={profileRevisionReview}
                   selectedTemplate={selectedTemplate}
                   selectedWorkspace={selectedWorkspace}
                   submitting={submitting}
@@ -296,13 +290,10 @@ export function HrPeopleWorkbench({
                   onActionSelect={onActionSelect}
                   onContextChange={onContextChange}
                   onOpenSession={onOpenSession}
-                  onOpenProfilePatchReview={handleOpenProfilePatchReview}
                   onProfileToolsFocusTargetHandled={() => setProfileToolsFocusTarget(null)}
                   onSubmitSession={onSubmitSession}
                   onTemplateChange={onTemplateChange}
                   profileToolsFocusTarget={profileToolsFocusTarget}
-                  reviewGuardrails={reviewGuardrails}
-                  timeline={timeline}
                 />
               )
             : focusedProfile

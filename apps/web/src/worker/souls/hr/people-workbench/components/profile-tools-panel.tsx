@@ -1,13 +1,12 @@
-import type { CapabilityTemplate, LocalArtifact, LocalSession, LocalWorkspace, SoulWorkbenchAction } from '@zonease/aiworker-shared'
+import type { CapabilityTemplate, LocalSession, LocalWorkspace, SoulWorkbenchAction } from '@zonease/aiworker-shared'
 import type { FormEvent } from 'react'
 import type { EngineReadiness } from '../../../../../features/session/engine-readiness'
 import type { WorkerLocale, WorkerMessages } from '../../../types'
 import type { HrWorkbenchCopy } from '../copy'
-import type { ProfileRevisionReviewState, ProfileRevisionSectionChange } from '../revision-review'
-import type { PersonProfile, ProfileTimelineItem } from '../types'
+import type { PersonProfile } from '../types'
 import type { HrProfileToolsRailTarget } from './profile-tools-rail'
 
-import { ArrowRight, CheckCircle2, Clock3, FileDiff, FileText, ListChecks, MessageSquareText, ShieldAlert, Sparkles } from 'lucide-react'
+import { ArrowRight, Clock3, MessageSquareText, Sparkles } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { displayTemplate, formatRelativeTime, formatStatus } from '../../../../../features/i18n'
 import { WorkbenchSectionTitle } from '../../../common'
@@ -15,61 +14,48 @@ import { displayActionLabel } from '../model'
 
 interface ProfileToolsPanelProps {
   activeActions: readonly SoulWorkbenchAction[]
-  artifact: LocalArtifact | null
   copy: WorkerMessages
   engineReadiness: EngineReadiness
   focusedProfile: PersonProfile | null
   labels: HrWorkbenchCopy
   locale: WorkerLocale
-  profileRevisionReview: ProfileRevisionReviewState
   onActionSelect: (action: SoulWorkbenchAction) => void
   onContextChange: (value: string) => void
   onOpenSession: (session: LocalSession) => void
-  onOpenProfilePatchReview: () => void
   onProfileToolsFocusTargetHandled: () => void
   onSubmitSession: (event: FormEvent<HTMLFormElement>) => void
   onTemplateChange: (templateId: string) => void
   profileToolsFocusTarget: HrProfileToolsRailTarget | null
-  reviewGuardrails: readonly string[]
   selectedTemplate: CapabilityTemplate
   selectedWorkspace: LocalWorkspace | null
   submitting: boolean
   templates: CapabilityTemplate[]
-  timeline: ProfileTimelineItem[]
   value: string
 }
 
 export function HrProfileToolsPanel({
   activeActions,
-  artifact,
   copy,
   engineReadiness,
   focusedProfile,
   labels,
   locale,
-  profileRevisionReview,
   onActionSelect,
   onContextChange,
   onOpenSession,
-  onOpenProfilePatchReview,
   onProfileToolsFocusTargetHandled,
   onSubmitSession,
   onTemplateChange,
   profileToolsFocusTarget,
-  reviewGuardrails,
   selectedTemplate,
   selectedWorkspace,
   submitting,
   templates,
-  timeline,
   value,
 }: ProfileToolsPanelProps) {
   const selectedTemplateCopy = displayTemplate(selectedTemplate, locale)
   const recentSessions = focusedProfile?.sessions.slice().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 3) ?? []
-  const guardrailsSectionRef = useRef<HTMLElement | null>(null)
-  const proposalSectionRef = useRef<HTMLElement | null>(null)
   const sessionsSectionRef = useRef<HTMLElement | null>(null)
-  const sourcesSectionRef = useRef<HTMLElement | null>(null)
   const visibleActions = activeActions.slice(0, 3)
   const hiddenActionCount = Math.max(activeActions.length - visibleActions.length, 0)
 
@@ -77,15 +63,7 @@ export function HrProfileToolsPanel({
     if (!profileToolsFocusTarget)
       return
 
-    const target = profileToolsFocusTarget === 'proposal'
-      ? proposalSectionRef.current
-      : profileToolsFocusTarget === 'guardrails'
-        ? guardrailsSectionRef.current
-        : profileToolsFocusTarget === 'sessions'
-          ? sessionsSectionRef.current
-          : sourcesSectionRef.current
-
-    target?.scrollIntoView({ block: 'start' })
+    sessionsSectionRef.current?.scrollIntoView({ block: 'start' })
     onProfileToolsFocusTargetHandled()
   }, [onProfileToolsFocusTargetHandled, profileToolsFocusTarget])
 
@@ -132,69 +110,6 @@ export function HrProfileToolsPanel({
               ? <span className="hr-action-list-more">{labels.limitedActionsHidden(hiddenActionCount)}</span>
               : null}
           </div>
-        </section>
-
-        <section ref={sourcesSectionRef} className="hr-tool-section" aria-label={labels.sourcesTitle}>
-          <WorkbenchSectionTitle icon={<FileText size={15} />} title={labels.sourcesTitle} detail={labels.sourcesDetail} />
-          <div className="hr-source-grid">
-            {labels.sourceCards(
-              focusedProfile?.artifacts.length ?? 0,
-              focusedProfile?.sessions.length ?? 0,
-              focusedProfile?.reviews.length ?? 0,
-            ).map(source => (
-              <div key={source.label} className="hr-source-row">
-                <span>{source.label}</span>
-                <strong>{source.count}</strong>
-                <small>{source.detail}</small>
-              </div>
-            ))}
-          </div>
-
-          <div className="hr-profile-timeline" aria-label={labels.timelineTitle}>
-            <strong>{labels.timelineTitle}</strong>
-            {timeline.length > 0
-              ? timeline.map(item => (
-                  <div key={`${item.label}-${item.detail}`} className="hr-timeline-row">
-                    <span className={`hr-timeline-dot ${item.tone}`} aria-hidden="true" />
-                    <span>
-                      <strong>{item.label}</strong>
-                      <small>{item.detail}</small>
-                    </span>
-                  </div>
-                ))
-              : <span className="hr-muted-note">{labels.noTimeline}</span>}
-          </div>
-        </section>
-
-        <section ref={proposalSectionRef} className="hr-tool-section hr-artifact-preview-card" aria-label={labels.artifactPreviewTitle} data-testid="hr-proposed-change">
-          <WorkbenchSectionTitle
-            icon={<FileDiff size={15} />}
-            title={labels.artifactPreviewTitle}
-            detail={artifact ? formatRelativeTime(artifact.updatedAt, locale) : labels.artifactPreviewDetail}
-          />
-          {artifact ? <strong className="hr-artifact-preview-name">{artifact.title}</strong> : null}
-          <ProfilePatchSummary labels={labels} review={profileRevisionReview} />
-          <div className="hr-proposed-change-actions">
-            <span className="hr-muted-note">{labels.promoteProfileRevisionHint}</span>
-            <button
-              type="button"
-              className="secondary hr-profile-promote-button"
-              disabled={!artifact || profileRevisionReview.status === 'empty' || profileRevisionReview.status === 'loading'}
-              onClick={onOpenProfilePatchReview}
-            >
-              <FileDiff aria-hidden="true" size={14} />
-              <span>{labels.reviewProfilePatch}</span>
-            </button>
-          </div>
-        </section>
-
-        <section ref={guardrailsSectionRef} className="hr-tool-section" aria-label={labels.guardrailsTitle}>
-          <WorkbenchSectionTitle icon={<ListChecks size={15} />} title={labels.guardrailsTitle} detail={labels.guardrailsDetail} />
-          <ul className="hr-guardrail-list">
-            {reviewGuardrails.map(item => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
         </section>
 
         <section ref={sessionsSectionRef} className="hr-tool-section" aria-label={labels.recentSessionsTitle}>
@@ -276,66 +191,4 @@ export function HrProfileToolsPanel({
 function displayTemplateForSession(session: LocalSession, templates: CapabilityTemplate[], locale: WorkerLocale): string {
   const template = templates.find(item => item.id === session.capabilityTemplateId)
   return template ? displayTemplate(template, locale).name : session.capabilityTemplateId.replace(/-/g, ' ')
-}
-
-function ProfilePatchSummary({
-  labels,
-  review,
-}: {
-  labels: HrWorkbenchCopy
-  review: ProfileRevisionReviewState
-}) {
-  if (review.status === 'empty')
-    return <div className="hr-artifact-preview-empty">{labels.artifactPreviewEmpty}</div>
-
-  if (review.status === 'loading')
-    return <div className="hr-artifact-preview-empty">{labels.artifactPreviewLoading}</div>
-
-  const isReady = review.status === 'ready'
-  const title = isReady ? labels.profilePatchReadyTitle : labels.profilePatchBlockedTitle
-  const detail = isReady
-    ? labels.profilePatchChangedSections(review.changedSectionCount)
-    : labels.profilePatchBlockers(review.blockerCount || review.issues.length)
-
-  return (
-    <div className={`hr-revision-status ${review.status}`} role={isReady ? 'status' : 'alert'}>
-      <span>
-        {isReady ? <CheckCircle2 aria-hidden="true" size={15} /> : <ShieldAlert aria-hidden="true" size={15} />}
-        <strong>{title}</strong>
-        <small>{detail}</small>
-      </span>
-      {isReady && review.changedSections.length > 0
-        ? (
-            <div className="hr-profile-patch-chip-list" aria-label={labels.changedSectionsTitle}>
-              {review.changedSections.slice(0, 4).map(section => (
-                <ProfilePatchChip key={section.id} labels={labels} section={section} />
-              ))}
-            </div>
-          )
-        : null}
-      {review.issues.length > 0
-        ? (
-            <ul>
-              {review.issues.map(issue => <li key={issue}>{issue}</li>)}
-            </ul>
-          )
-        : null}
-    </div>
-  )
-}
-
-function ProfilePatchChip({
-  labels,
-  section,
-}: {
-  labels: HrWorkbenchCopy
-  section: ProfileRevisionSectionChange
-}) {
-  return (
-    <span className="hr-profile-patch-chip">
-      <span className={`hr-section-patch-badge ${section.status}`} aria-hidden="true">{section.status === 'added' ? '+' : '~'}</span>
-      <span>{section.title}</span>
-      <small>{section.status === 'added' ? labels.profilePatchAddedLabel : labels.profilePatchChangedLabel}</small>
-    </span>
-  )
 }

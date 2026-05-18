@@ -1,8 +1,8 @@
 import type { LocalArtifact, LocalLesson, LocalReview, LocalSession, LocalWorkspace, SoulWorkbenchAction } from '@zonease/aiworker-shared'
 import type { HrWorkbenchCopy } from './copy'
-import type { HrLocale, LifecycleFilter, PersonLifecycle, PersonProfile, ProfileListSection, ProfileTimelineItem, ReviewDisplayState, StatusTone } from './types'
+import type { HrLocale, LifecycleFilter, PersonLifecycle, PersonProfile, ProfileListSection, ReviewDisplayState, StatusTone } from './types'
 
-import { formatRelativeTime, formatStatus } from '../../../../features/i18n'
+import { formatRelativeTime } from '../../../../features/i18n'
 
 export function buildPersonProfiles(
   workspaces: LocalWorkspace[],
@@ -199,49 +199,6 @@ export function orderActionsForProfile(actions: readonly SoulWorkbenchAction[], 
       : ['summarize-profile', 'extract-evidence', 'draft-interview-kit', 'build-evidence-matrix']
   const rank = new Map(preferred.map((id, index) => [id, index]))
   return actions.slice().sort((a, b) => (rank.get(a.id) ?? 99) - (rank.get(b.id) ?? 99)).slice(0, 5)
-}
-
-export function buildProfileTimeline(profile: PersonProfile, labels: HrWorkbenchCopy, locale: HrLocale): ProfileTimelineItem[] {
-  const rows: ProfileTimelineItem[] = [{
-    detail: labels.timelineUpdated(formatRelativeTime(profile.workspace.updatedAt, locale)),
-    label: labels.timelineLabels.profile,
-    tone: 'muted',
-  }]
-
-  if (profile.latestSession) {
-    rows.push({
-      detail: `${profile.latestSession.title} · ${formatStatus(profile.latestSession.status, locale)}`,
-      label: labels.timelineLabels.session,
-      tone: profile.latestSession.status === 'failed' ? 'risk' : 'good',
-    })
-  }
-
-  const latestArtifact = profile.artifacts.slice().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]
-  if (latestArtifact) {
-    rows.push({
-      detail: latestArtifact.title,
-      label: labels.timelineLabels.artifact,
-      tone: 'good',
-    })
-  }
-
-  if (profile.reviews.length > 0) {
-    rows.push({
-      detail: labels.timelineReviewCount(profile.reviews.length),
-      label: labels.timelineLabels.review,
-      tone: 'good',
-    })
-  }
-
-  if (profile.lessons.length > 0) {
-    rows.push({
-      detail: labels.timelineLessonCount(profile.lessons.length),
-      label: labels.timelineLabels.memory,
-      tone: 'warn',
-    })
-  }
-
-  return rows.slice(0, 5)
 }
 
 export function initialsFor(name: string): string {

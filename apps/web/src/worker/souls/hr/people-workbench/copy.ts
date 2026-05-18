@@ -9,11 +9,7 @@ export interface HrWorkbenchCopy {
   actionComposerTitle: string
   acceptedExternalSectionsTitle: string
   artifactPatches: string
-  artifactPreviewDetail: string
   artifactPreviewEmpty: string
-  artifactPreviewError: string
-  artifactPreviewLoading: string
-  artifactPreviewTitle: string
   artifactTargetLabel: string
   approveProfileRevision: string
   approvingProfileRevision: string
@@ -33,8 +29,6 @@ export interface HrWorkbenchCopy {
   evidenceConnectors: string
   expandProfileTools: string
   generate: (outputKind: string) => string
-  guardrailsDetail: string
-  guardrailsTitle: string
   headerFallback: string
   hideProfileList: string
   hideProfileTools: string
@@ -69,14 +63,10 @@ export interface HrWorkbenchCopy {
     resolveRisk: string
   }
   noSessionYet: string
-  noTimeline: string
   noProfilesInSection: string
   noRecentSessions: string
   openSession: (sessionTitle: string) => string
   openLatestSession: string
-  openProfileSources: string
-  openProposedChange: string
-  openReviewGuardrails: string
   openProfile: (profileName: string) => string
   openSessionTools: string
   otherProfileNotesTitle: string
@@ -114,7 +104,6 @@ export interface HrWorkbenchCopy {
   proposalComposerDetail: string
   proposalComposerTitle: string
   proposedReadmeTitle: string
-  promoteProfileRevisionHint: string
   proposalOnly: string
   recommended: string
   reviewGuardrails: string[]
@@ -132,25 +121,13 @@ export interface HrWorkbenchCopy {
   sessionLoops: string
   showProfileList: string
   showProfileTools: string
-  sourceCards: (artifacts: number, sessions: number, reviews: number) => Array<{ count: number, detail: string, label: string }>
-  sourcesDetail: string
+  sourceCards: (artifacts: number, sessions: number, reviews: number) => Array<{ count: number, label: string }>
   sourcesTitle: string
   suggestedToolsTitle: string
   status: {
     evidenceMissing: string
     evidenceReady: string
   }
-  timelineLabels: {
-    artifact: string
-    memory: string
-    profile: string
-    review: string
-    session: string
-  }
-  timelineLessonCount: (count: number) => string
-  timelineReviewCount: (count: number) => string
-  timelineTitle: string
-  timelineUpdated: (updatedAt: string) => string
   workbenchPanelControlsLabel: string
   workbenchTitle: string
 }
@@ -163,11 +140,7 @@ const enHrCopy: HrWorkbenchCopy = {
   actionComposerTitle: 'Next Profile Step',
   acceptedExternalSectionsTitle: 'Accepted External Sections',
   artifactPatches: 'artifact proposals',
-  artifactPreviewDetail: 'Latest reviewable change proposal rendered from the workspace file.',
   artifactPreviewEmpty: 'No proposed change yet.',
-  artifactPreviewError: 'Proposed change preview is unavailable.',
-  artifactPreviewLoading: 'Loading proposed change...',
-  artifactPreviewTitle: 'Profile Patch',
   artifactTargetLabel: 'Artifact proposal target',
   approveProfileRevision: 'Approve into README',
   approvingProfileRevision: 'Approving README patch',
@@ -187,8 +160,6 @@ const enHrCopy: HrWorkbenchCopy = {
   evidenceConnectors: 'Evidence connectors',
   expandProfileTools: 'Expand Profile Workbench',
   generate: outputKind => `Generate ${outputKind}`,
-  guardrailsDetail: 'Review before memory',
-  guardrailsTitle: 'Review guardrails',
   headerFallback: 'People Profiles',
   hideProfileList: 'Hide Profile List',
   hideProfileTools: 'Hide Profile Workbench',
@@ -233,14 +204,10 @@ const enHrCopy: HrWorkbenchCopy = {
     resolveRisk: 'Resolve risk',
   },
   noSessionYet: 'No session yet',
-  noTimeline: 'Select or create a profile to build the timeline.',
   noProfilesInSection: 'No profiles in this section.',
   noRecentSessions: 'No agent sessions for this profile yet.',
   openSession: sessionTitle => `Open ${sessionTitle} session`,
   openLatestSession: 'Open latest session',
-  openProfileSources: 'Open Profile Sources',
-  openProposedChange: 'Open Profile Patch',
-  openReviewGuardrails: 'Open Review Guardrails',
   openProfile: profileName => `Open ${profileName} profile`,
   openSessionTools: 'Open Session Tools',
   otherProfileNotesTitle: 'Other Profile Notes',
@@ -278,7 +245,6 @@ const enHrCopy: HrWorkbenchCopy = {
   proposalComposerDetail: 'Agent output remains a reviewable proposal tied to this profile.',
   proposalComposerTitle: 'Proposal Composer',
   proposedReadmeTitle: 'Proposed README',
-  promoteProfileRevisionHint: 'Review accepts this proposal into README.md and records a git revision.',
   proposalOnly: 'Agent output remains a proposal until review.',
   recommended: 'Recommended',
   reviewGuardrails: [
@@ -310,28 +276,16 @@ const enHrCopy: HrWorkbenchCopy = {
   showProfileList: 'Show Profile List',
   showProfileTools: 'Show Profile Workbench',
   sourceCards: (artifacts, sessions, reviews) => [
-    { count: artifacts, detail: 'reviewable outputs', label: 'Artifact evidence' },
-    { count: sessions, detail: 'profile work loops', label: 'Session context' },
-    { count: reviews, detail: 'human checks', label: 'Review records' },
+    { count: artifacts, label: 'Artifact evidence' },
+    { count: sessions, label: 'Session context' },
+    { count: reviews, label: 'Review records' },
   ],
-  sourcesDetail: 'Selected profile inventory',
   sourcesTitle: 'Profile sources',
   suggestedToolsTitle: 'Next action',
   status: {
     evidenceMissing: 'needs evidence',
     evidenceReady: 'evidence ready',
   },
-  timelineLabels: {
-    artifact: 'Artifact',
-    memory: 'Memory',
-    profile: 'Profile',
-    review: 'Review',
-    session: 'Session',
-  },
-  timelineLessonCount: count => `${count} memory candidates`,
-  timelineReviewCount: count => `${count} review records`,
-  timelineTitle: 'Profile timeline',
-  timelineUpdated: updatedAt => `Updated ${updatedAt}`,
   workbenchPanelControlsLabel: 'Workbench panel controls',
   workbenchTitle: 'People Workbench',
 }
@@ -353,11 +307,7 @@ const zhHrCopy: HrWorkbenchCopy = {
   actionComposerTitle: '下一步档案动作',
   acceptedExternalSectionsTitle: '已接受的外部章节',
   artifactPatches: '产物提案',
-  artifactPreviewDetail: '从 workspace 文件渲染最近一份可 review 的档案变更提案。',
   artifactPreviewEmpty: '还没有可预览的变更提案。',
-  artifactPreviewError: '变更提案预览暂不可用。',
-  artifactPreviewLoading: '正在加载变更提案...',
-  artifactPreviewTitle: '档案 Patch',
   artifactTargetLabel: '产物提案目标',
   approveProfileRevision: '写入 README',
   approvingProfileRevision: '正在写入 README patch',
@@ -377,8 +327,6 @@ const zhHrCopy: HrWorkbenchCopy = {
   evidenceConnectors: '证据连接器',
   expandProfileTools: '展开档案工作台',
   generate: outputKind => `生成 ${outputKind}`,
-  guardrailsDetail: '先复核，再沉淀组织记忆',
-  guardrailsTitle: 'Review 护栏',
   headerFallback: '人员档案',
   hideProfileList: '隐藏 Profile List',
   hideProfileTools: '隐藏档案工作台',
@@ -423,14 +371,10 @@ const zhHrCopy: HrWorkbenchCopy = {
     resolveRisk: '处理风险',
   },
   noSessionYet: '还没有 session',
-  noTimeline: '选择或创建人员档案后开始形成时间线。',
   noProfilesInSection: '这个分组里还没有人员档案。',
   noRecentSessions: '这个人员档案还没有 agent session。',
   openSession: sessionTitle => `打开 ${sessionTitle} session`,
   openLatestSession: '打开最近 session',
-  openProfileSources: '打开档案来源',
-  openProposedChange: '打开档案 Patch',
-  openReviewGuardrails: '打开 Review 护栏',
   openProfile: profileName => `打开 ${profileName} 档案`,
   openSessionTools: '打开 Session 工具',
   otherProfileNotesTitle: '其他档案备注',
@@ -468,7 +412,6 @@ const zhHrCopy: HrWorkbenchCopy = {
   proposalComposerDetail: 'Agent 输出只作为绑定此档案的可 review 提案。',
   proposalComposerTitle: '产物提案',
   proposedReadmeTitle: '拟写入 README',
-  promoteProfileRevisionHint: 'Review 通过后会把这份提案写入 README.md，并记录 git 修订。',
   proposalOnly: 'Agent 输出在 review 前都只是提案。',
   recommended: '建议',
   reviewGuardrails: [
@@ -500,28 +443,16 @@ const zhHrCopy: HrWorkbenchCopy = {
   showProfileList: '显示 Profile List',
   showProfileTools: '显示档案工作台',
   sourceCards: (artifacts, sessions, reviews) => [
-    { count: artifacts, detail: '可 review 的输出', label: '产物证据' },
-    { count: sessions, detail: '人员工作循环', label: 'Session 上下文' },
-    { count: reviews, detail: '人工质量检查', label: 'Review 记录' },
+    { count: artifacts, label: '产物证据' },
+    { count: sessions, label: 'Session 上下文' },
+    { count: reviews, label: 'Review 记录' },
   ],
-  sourcesDetail: '所选人员证据库存',
   sourcesTitle: '档案来源',
   suggestedToolsTitle: '下一步动作',
   status: {
     evidenceMissing: '需要证据',
     evidenceReady: '证据就绪',
   },
-  timelineLabels: {
-    artifact: '产物',
-    memory: 'Memory',
-    profile: '档案',
-    review: 'Review',
-    session: 'Session',
-  },
-  timelineLessonCount: count => `${count} 条 memory 候选`,
-  timelineReviewCount: count => `${count} 条 review 记录`,
-  timelineTitle: '档案时间线',
-  timelineUpdated: updatedAt => `更新于 ${updatedAt}`,
   workbenchPanelControlsLabel: '工作台面板控制',
   workbenchTitle: 'People Workbench',
 }

@@ -1,20 +1,17 @@
 import type { HrWorkbenchCopy } from '../copy'
 
 import { IconButton } from '@zonease/aiworker-component'
-import { FileCheck2, FileText, ListChecks, MessageSquareText } from 'lucide-react'
+import { MessageSquareText } from 'lucide-react'
 
 interface ProfileToolsRailProps {
   labels: HrWorkbenchCopy
   onExpand: (target: HrProfileToolsRailTarget) => void
 }
 
-export type HrProfileToolsRailTarget = 'guardrails' | 'proposal' | 'sessions' | 'sources'
+export type HrProfileToolsRailTarget = 'sessions'
 
 export function HrProfileToolsRail({ labels, onExpand }: ProfileToolsRailProps) {
-  const items: Array<{ icon: typeof FileText, label: string, target: HrProfileToolsRailTarget }> = [
-    { icon: FileText, label: labels.openProfileSources, target: 'sources' },
-    { icon: FileCheck2, label: labels.openProposedChange, target: 'proposal' },
-    { icon: ListChecks, label: labels.openReviewGuardrails, target: 'guardrails' },
+  const items: Array<{ icon: typeof MessageSquareText, label: string, target: HrProfileToolsRailTarget }> = [
     { icon: MessageSquareText, label: labels.openSessionTools, target: 'sessions' },
   ]
 

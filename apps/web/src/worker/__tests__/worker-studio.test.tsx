@@ -29,12 +29,7 @@ function openHostSettings() {
 }
 
 async function openProfilePatchReviewFromRail() {
-  fireEvent.click(await screen.findByRole('button', { name: 'Open Profile Patch' }))
-  await waitFor(() => {
-    expect(document.querySelector('.hr-profile-tools-panel')).toBeTruthy()
-  })
-  const profileTools = document.querySelector('.hr-profile-tools-panel') as HTMLElement
-  fireEvent.click(await within(profileTools).findByRole('button', { name: 'Review profile patch' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Review profile patch' }))
 }
 
 const workspace = {
@@ -915,6 +910,10 @@ describe('worker studio', () => {
     expect(within(hrDetails).getByText('Identity And Basics')).toBeTruthy()
     expect(within(hrDetails).getByText('Role Context And Responsibilities')).toBeTruthy()
     expect(within(hrDetails).getByText('Capabilities And Stack')).toBeTruthy()
+    const profileSourceTags = within(hrDetails).getByLabelText('Profile sources')
+    expect(profileSourceTags.textContent).toContain('Artifact evidence1')
+    expect(profileSourceTags.textContent).toContain('Session context1')
+    expect(profileSourceTags.textContent).toContain('Review records0')
     expect(await within(hrDetails).findByText('Profile patch ready')).toBeTruthy()
     expect(within(hrDetails).getByText('10 sections changed')).toBeTruthy()
     expect(within(hrDetails).getByRole('button', { name: 'Review profile patch' })).toBeTruthy()
@@ -925,11 +924,14 @@ describe('worker studio', () => {
     expect(within(hrDetails).queryByText('View focus')).toBeNull()
     expect(within(hrDetails).queryByText('Active view')).toBeNull()
     expect(screen.getByLabelText('Collapsed Profile Workbench')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Open Profile Patch' }))
-    expect(await screen.findByText('Profile Patch')).toBeTruthy()
-    expect(screen.getByText('Next Profile Step')).toBeTruthy()
-    expect((await screen.findAllByText('Profile patch ready')).length).toBeGreaterThan(0)
-    expect(screen.getAllByRole('button', { name: 'Review profile patch' }).length).toBeGreaterThan(0)
+    fireEvent.click(screen.getByRole('button', { name: 'Expand Profile Workbench' }))
+    const profileTools = document.querySelector('.hr-profile-tools-panel') as HTMLElement
+    expect(within(profileTools).getByText('Next Profile Step')).toBeTruthy()
+    expect(within(profileTools).getByText('Recent Sessions')).toBeTruthy()
+    expect(within(profileTools).queryByText('Profile Patch')).toBeNull()
+    expect(within(profileTools).queryByText('Review guardrails')).toBeNull()
+    expect(within(profileTools).queryByText('Artifact evidence')).toBeNull()
+    expect(screen.getAllByRole('button', { name: 'Review profile patch' })).toHaveLength(1)
     expect(screen.queryByTestId('hr-artifact-markdown-preview')).toBeNull()
     expect(screen.getByRole('button', { name: /Summarize profile/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: /Open Screen candidate session/ })).toBeTruthy()
@@ -1081,18 +1083,18 @@ describe('worker studio', () => {
     expect((within(profilePatchReview).getByRole('button', { name: 'Approve into README' }) as HTMLButtonElement).disabled).toBe(false)
   })
 
-  it('blocks profile revision approval when the artifact has no accepted README draft', async () => {
+  it('does not expose profile revision approval when the artifact has no accepted README draft', async () => {
     currentArtifactRawContent = '# Profile Update Proposal\n\nNo accepted profile draft yet.\n'
     window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
     render(<WorkerStudio />)
 
-    await screen.findByLabelText('Hiring Workspace People Profile')
-    await openProfilePatchReviewFromRail()
-    const profilePatchReview = await screen.findByTestId('hr-profile-patch-review')
+    const hrDetails = await screen.findByLabelText('Hiring Workspace People Profile')
 
-    expect(await within(profilePatchReview).findByText('Profile patch blocked')).toBeTruthy()
-    expect(within(profilePatchReview).getByText(/aiworker-profile-readme/)).toBeTruthy()
-    expect((within(profilePatchReview).getByRole('button', { name: 'Approve into README' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(within(hrDetails).queryByRole('button', { name: 'Review profile patch' })).toBeNull()
+    expandProfileTools()
+    const profileTools = document.querySelector('.hr-profile-tools-panel') as HTMLElement
+    expect(within(profileTools).queryByText('Profile Patch')).toBeNull()
+    expect(screen.queryByTestId('hr-profile-patch-review')).toBeNull()
   })
 
   it('does not show an actionable patch strip when a README proposal has no section changes', async () => {
@@ -1141,11 +1143,12 @@ describe('worker studio', () => {
     render(<WorkerStudio />)
 
     await screen.findByTestId('hr-people-workbench')
-    expect(screen.queryByText('Artifact evidence')).toBeNull()
     expect(screen.queryByText('Profile Actions')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Open Profile Sources' }))
-    expect(screen.getByText('Artifact evidence')).toBeTruthy()
-    expect(screen.getByText('Next Profile Step')).toBeTruthy()
+    const profileTools = expandProfileTools()
+    const nextStepTitle = within(profileTools).getByText('Next Profile Step')
+    const recentSessionsTitle = within(profileTools).getByText('Recent Sessions')
+    expect(nextStepTitle.compareDocumentPosition(recentSessionsTitle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(within(profileTools).queryByText('Artifact evidence')).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: /Employees/ }))
 
@@ -1154,7 +1157,7 @@ describe('worker studio', () => {
     })
     const hrDetails = document.querySelector('.hr-profile-details') as HTMLElement
     expect(within(hrDetails).queryByText('Profile Patch')).toBeNull()
-    expect(screen.getByText('Artifact evidence').parentElement?.textContent).toContain('1')
+    expect(within(hrDetails).getByLabelText('Profile sources').textContent).toContain('Artifact evidence1')
   })
 
   it('toggles HR side panels from the header controls', async () => {

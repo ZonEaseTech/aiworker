@@ -31,12 +31,6 @@ export interface PersonProfile {
   workspace: LocalWorkspace
 }
 
-export interface ProfileTimelineItem {
-  detail: string
-  label: string
-  tone: StatusTone
-}
-
 export interface ProfileListSection {
   id: ProfileListSectionId
   label: string

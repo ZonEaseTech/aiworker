@@ -208,7 +208,6 @@ describe('hr people workbench model', () => {
     expect(buildProfileListSections(profiles, labels).map(section => section.label)).toEqual(['Candidates', 'Employees', 'Alumni'])
     expect(labels.profileBoardTitle).toBe('People Profiles')
     expect(labels.profileDetailsTitle).toBe('Current Profile Summary')
-    expect(labels.artifactPreviewTitle).toBe('Profile Patch')
   })
 
   it('parses HR profile README sections without losing unknown notes', () => {
