@@ -385,4 +385,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-354 HR profile patch review workbench**](PLAN-354.md) `2026-05-18`
 - [x] [**PLAN-355 CLI 0.17.2 patch release**](PLAN-355.md) `2026-05-18`
 - [x] [**PLAN-356 Web profile approval and session parent navigation repair**](PLAN-356.md) `2026-05-18`
-- [-] [**PLAN-357 CLI 0.17.3 patch release**](PLAN-357.md) `2026-05-18`
+- [x] [**PLAN-357 CLI 0.17.3 patch release**](PLAN-357.md) `2026-05-18`

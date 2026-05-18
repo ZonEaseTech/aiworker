@@ -1,6 +1,6 @@
 # AIWorker Changelog
 
-## 2026-05-18 [progress] REL-042 / PLAN-357 — CLI 0.17.3 patch release
+## 2026-05-18 [completed] REL-042 / PLAN-357 — CLI 0.17.3 patch release
 
 Started the `@zonease/aiworker-cli@0.17.3` patch release after merging
 `BUG-135 / PLAN-356`, carrying the Web README approval and session parent
@@ -8,6 +8,12 @@ navigation fixes.
 
 Local release gates passed, including full check/test/build, dist version
 checks, pack dry-run, dist release smoke and code-review-graph review.
+
+Release workflow `26012389330` passed and published npm latest plus GitHub
+Release `v0.17.3` with 8 binary/checksum assets. Main lint workflow
+`26012385184` passed. Published-package smoke passed from an isolated
+`AIWORKER_HOME`: daemon health, runtimeVersion `0.17.3`, Host Web static
+serving, official app bootstrap/list/template, and HR/QA mounted actions.
 
 ## 2026-05-18 [completed] BUG-135 / PLAN-356 — Web approval and session parent navigation regressions
 

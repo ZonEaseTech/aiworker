@@ -1,6 +1,6 @@
 # PLAN-357 CLI 0.17.3 patch release
 
-- **status**: implementing
+- **status**: completed
 - **owner**: codex
 - **createdAt**: 2026-05-18
 - **approvedAt**: 2026-05-18
@@ -76,6 +76,9 @@ the version bump and release tracking.
 - 2026-05-18：本地 release gate 通过；dist dry-run 包含 CLI、Worker Web、
   official HR/QA resources 与 migrations；`smoke:dist-release` 覆盖 Host
   Web/API、official Soul App bootstrap 与 HR/QA mounted actions。
+- 2026-05-18：`main` 与 annotated tag `v0.17.3` 推送成功。Release workflow
+  `26012389330` 和 main lint workflow `26012385184` 均通过。npm latest、
+  explicit `bunx`、GitHub Release assets 与 published-package smoke 均通过。
 
 ## Verification
 
@@ -89,8 +92,8 @@ the version bump and release tracking.
 - [x] `bun run --filter '@zonease/aiworker-cli' smoke:dist-release`
 - [x] `bun run crg:update`
 - [x] `bun run crg:review`
-- [ ] `gh run watch <release-run-id> --repo ZonEaseTech/aiworker --exit-status`
-- [ ] `npm view @zonease/aiworker-cli version dist-tags --json`
-- [ ] `bunx @zonease/aiworker-cli@0.17.3 --version`
-- [ ] `gh release view v0.17.3 --repo ZonEaseTech/aiworker --json tagName,isDraft,isPrerelease,assets,url,publishedAt,targetCommitish`
-- [ ] Published-package smoke.
+- [x] `gh run watch <release-run-id> --repo ZonEaseTech/aiworker --exit-status`
+- [x] `npm view @zonease/aiworker-cli version dist-tags --json`
+- [x] `bunx @zonease/aiworker-cli@0.17.3 --version`
+- [x] `gh release view v0.17.3 --repo ZonEaseTech/aiworker --json tagName,isDraft,isPrerelease,assets,url,publishedAt,targetCommitish`
+- [x] Published-package smoke.

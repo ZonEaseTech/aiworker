@@ -471,4 +471,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-096 HR profile patch review workbench**](FEAT-096.md) `P0`
 - [x] [**REL-041 发布 aiworker CLI 0.17.2**](REL-041.md) `P0`
 - [x] [**BUG-135 Web approval and session parent navigation regressions**](BUG-135.md) `P0`
-- [-] [**REL-042 发布 aiworker CLI 0.17.3**](REL-042.md) `P0`
+- [x] [**REL-042 发布 aiworker CLI 0.17.3**](REL-042.md) `P0`
