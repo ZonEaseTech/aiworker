@@ -1,5 +1,16 @@
 # AIWorker Changelog
 
+## 2026-05-19 [in_progress] FEAT-099 / PLAN-367 — Host/Soul shared component library
+
+Started the shared component library delivery. `packages/component` will become
+the Host/Soul Web component source of truth with package-owned styles,
+component catalog, AGENTS constraints, CRG candidate audit, reusable Host Web
+pattern uplift, and an official Soul App Web consumption proof.
+
+CRG baseline was rebuilt on `codex/aiworker-component-library` before
+implementation, and the initial reusable UI candidates cover settings, Host
+shell/rail, session progress/chat/detail, and HR people workbench surfaces.
+
 ## 2026-05-19 [completed] REL-046 / PLAN-366 — CLI 0.18.0 minor release
 
 Published `@zonease/aiworker-cli@0.18.0` carrying the compact operator CLI
