@@ -1291,6 +1291,13 @@ describe('worker studio', () => {
       expect(button.classList.contains('icon-button')).toBe(true)
       expect(button.classList.contains('icon-btn')).toBe(false)
     }
+
+    expect(screen.getByRole('button', { name: 'Hide sidebar' }).querySelector('.lucide-panel-left')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Open workspace terminal' }).querySelector('.lucide-panel-bottom')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Open right panel' }).querySelector('.lucide-panel-right')).toBeTruthy()
+    expect(within(hrDetails).getByRole('button', { name: 'Hide Profile List' }).querySelector('.lucide-panel-left')).toBeTruthy()
+    expect(within(hrDetails).getByRole('button', { name: 'Expand Profile Workbench' }).querySelector('.lucide-panel-right')).toBeTruthy()
+    expect(document.querySelector('.lucide-panel-left-open, .lucide-panel-left-close, .lucide-panel-right-open, .lucide-panel-right-close')).toBeNull()
   })
 
   it('groups workers by Soul and keeps each category collapsible', async () => {

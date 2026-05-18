@@ -22,8 +22,7 @@ import {
   ChevronRight,
   FileText,
   PanelBottom,
-  PanelLeftClose,
-  PanelLeftOpen,
+  PanelLeft,
   PanelRight,
   Plus,
   RefreshCw,
@@ -1410,9 +1409,7 @@ function HostTopBar({
           title={sidebarLabel}
           onClick={onToggleSidebar}
         >
-          {sidebarCollapsed
-            ? <PanelLeftOpen aria-hidden="true" size={15} />
-            : <PanelLeftClose aria-hidden="true" size={15} />}
+          <PanelLeft aria-hidden="true" size={15} />
         </IconButton>
         <nav className="host-locator" aria-label="Current Soul worker">
           {locatorItems.map(item => (

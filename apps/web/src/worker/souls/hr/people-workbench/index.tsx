@@ -6,7 +6,7 @@ import type { HrProfileSectionId } from './profile-readme'
 import type { ProfileListSectionId } from './types'
 
 import { IconButton } from '@zonease/aiworker-component'
-import { PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Plus, RefreshCw, Search, Settings, ShieldCheck } from 'lucide-react'
+import { PanelLeft, PanelRight, Plus, RefreshCw, Search, Settings, ShieldCheck } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { HrProfileDetails } from './components/profile-details'
 import { HrProfileList } from './components/profile-list'
@@ -182,14 +182,14 @@ export function HrPeopleWorkbench({
             aria-pressed={profileListVisible}
             onClick={() => setProfileListVisible(visible => !visible)}
           >
-            {profileListVisible ? <PanelLeftClose aria-hidden="true" size={16} /> : <PanelLeftOpen aria-hidden="true" size={16} />}
+            <PanelLeft aria-hidden="true" size={16} />
           </IconButton>
           <IconButton
             aria-label={profileToolsExpanded ? labels.collapseProfileTools : labels.expandProfileTools}
             aria-pressed={profileToolsExpanded}
             onClick={() => setProfileToolsExpanded(expanded => !expanded)}
           >
-            {profileToolsExpanded ? <PanelRightClose aria-hidden="true" size={16} /> : <PanelRightOpen aria-hidden="true" size={16} />}
+            <PanelRight aria-hidden="true" size={16} />
           </IconButton>
           {workbenchBridge
             ? workbenchBridge.actionDescriptors
