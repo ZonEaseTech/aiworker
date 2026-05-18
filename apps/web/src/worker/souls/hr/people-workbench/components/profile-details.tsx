@@ -1,12 +1,11 @@
 import type { LocalArtifact } from '@zonease/aiworker-shared'
+import type { ReactNode } from 'react'
 import type { SoulProfilePreviewState } from '../../../types'
 import type { HrWorkbenchCopy } from '../copy'
 import type { HrProfileSectionId } from '../profile-readme'
 import type { ProfileRevisionReviewState } from '../revision-review'
 import type { PersonProfile } from '../types'
 
-import { NotebookText } from 'lucide-react'
-import { WorkbenchSectionTitle } from '../../../common'
 import { HrProfileReadingRoom } from './profile-reading-room'
 
 interface ProfileDetailsProps {
@@ -15,6 +14,7 @@ interface ProfileDetailsProps {
   patchArtifact: LocalArtifact | null
   profilePreview: SoulProfilePreviewState
   profileRevisionReview: ProfileRevisionReviewState
+  headerActions: ReactNode
   onReviewPatch: () => void
   onSectionAction: (sectionId: HrProfileSectionId) => void
 }
@@ -25,16 +25,22 @@ export function HrProfileDetails({
   patchArtifact,
   profilePreview,
   profileRevisionReview,
+  headerActions,
   onReviewPatch,
   onSectionAction,
 }: ProfileDetailsProps) {
+  const title = focusedProfile ? labels.profileHeaderTitle(focusedProfile.name) : labels.profileDetailsTitle
   return (
-    <section className="hr-profile-details" aria-label={labels.profileDetailsTitle}>
-      <WorkbenchSectionTitle
-        icon={<NotebookText size={15} />}
-        title={labels.profileDetailsTitle}
-        detail={focusedProfile ? labels.profileDetailsDetail(focusedProfile.name) : labels.profileDetailsEmpty}
-      />
+    <section className="hr-profile-details" aria-label={title}>
+      <div className="hr-selected-profile-header">
+        <div className="hr-selected-profile-copy">
+          <h2>{title}</h2>
+          <p>{focusedProfile ? labels.profileHeaderDetail(focusedProfile.moment, focusedProfile.nextStep) : labels.profileDetailsEmpty}</p>
+        </div>
+        <div className="hr-selected-profile-actions" aria-label={labels.workbenchPanelControlsLabel}>
+          {headerActions}
+        </div>
+      </div>
       <div className="hr-profile-details-scroll">
         <HrProfileReadingRoom
           focusedProfile={focusedProfile}

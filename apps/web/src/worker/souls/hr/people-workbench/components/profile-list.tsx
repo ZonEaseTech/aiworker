@@ -2,35 +2,73 @@ import type { LocalWorkspace } from '@zonease/aiworker-shared'
 import type { HrWorkbenchCopy } from '../copy'
 import type { PersonProfile, ProfileListSection, ProfileListSectionId } from '../types'
 
-import { ChevronDown, UsersRound } from 'lucide-react'
+import { IconButton } from '@zonease/aiworker-component'
+import { ChevronDown, Plus, Search, UsersRound } from 'lucide-react'
 import { WorkbenchSectionTitle } from '../../../common'
 
 interface ProfileListProps {
   collapsedSectionIds: ReadonlySet<ProfileListSectionId>
+  createProfileBusy?: boolean
+  createProfileLabel: string
   labels: HrWorkbenchCopy
+  onCreateProfile: () => void
   onOpenWorkspace: (workspace: LocalWorkspace) => void
+  onProfileQueryChange: (query: string) => void
   onToggleSection: (sectionId: ProfileListSectionId) => void
+  profileQuery: string
   sections: ProfileListSection[]
   selectedWorkspaceId: string | null
+  showProfileFilter: boolean
   visibleCount: number
 }
 
 export function HrProfileList({
   collapsedSectionIds,
+  createProfileBusy = false,
+  createProfileLabel,
   labels,
+  onCreateProfile,
   onOpenWorkspace,
+  onProfileQueryChange,
   onToggleSection,
+  profileQuery,
   sections,
   selectedWorkspaceId,
+  showProfileFilter,
   visibleCount,
 }: ProfileListProps) {
   return (
     <aside className="hr-profile-list-panel" aria-label={labels.profileBoardLabel}>
-      <WorkbenchSectionTitle
-        icon={<UsersRound size={15} />}
-        title={labels.profileBoardTitle}
-        detail={labels.profileListDetail(visibleCount)}
-      />
+      <div className="hr-profile-list-header">
+        <WorkbenchSectionTitle
+          icon={<UsersRound size={15} />}
+          title={labels.profileBoardTitle}
+          detail={labels.profileListDetail(visibleCount)}
+        />
+        <IconButton
+          aria-busy={createProfileBusy}
+          aria-label={createProfileLabel}
+          disabled={createProfileBusy}
+          title={createProfileLabel}
+          onClick={onCreateProfile}
+        >
+          <Plus aria-hidden="true" size={15} />
+        </IconButton>
+      </div>
+
+      {showProfileFilter
+        ? (
+            <label className="hr-profile-list-filter">
+              <Search aria-hidden="true" size={14} />
+              <span className="sr-only">{labels.profileListFilterLabel}</span>
+              <input
+                value={profileQuery}
+                placeholder={labels.profileListFilterPlaceholder}
+                onChange={event => onProfileQueryChange(event.target.value)}
+              />
+            </label>
+          )
+        : null}
 
       <div className="hr-profile-list-scroll">
         {sections.map((section) => {

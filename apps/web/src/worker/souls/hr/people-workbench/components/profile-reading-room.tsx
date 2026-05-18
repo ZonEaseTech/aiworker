@@ -5,9 +5,8 @@ import type { HrProfileSectionId } from '../profile-readme'
 import type { ProfileRevisionReviewState, ProfileRevisionSectionChange } from '../revision-review'
 import type { PersonProfile } from '../types'
 
-import { BookOpenText, Play, ShieldAlert } from 'lucide-react'
+import { BookOpenText, Play } from 'lucide-react'
 import { lazy, Suspense, useMemo } from 'react'
-import { WorkbenchSectionTitle } from '../../../common'
 import { getHrProfileSection, HR_PROFILE_SECTION_ORDER, parseHrProfileReadme } from '../profile-readme'
 
 const MarkdownPreview = lazy(() => import('@zonease/aiworker-component/markdown-preview').then(module => ({ default: module.MarkdownPreview })))
@@ -53,11 +52,6 @@ export function HrProfileReadingRoom({
 
   return (
     <article className="hr-reading-room" data-testid="hr-current-profile-summary">
-      <WorkbenchSectionTitle
-        icon={<BookOpenText size={15} />}
-        title={parsed.title ?? focusedProfile?.name ?? labels.profileDetailsTitle}
-        detail={focusedProfile ? labels.profileReadingRoomDetail(focusedProfile.name) : labels.profileReadingRoomFallback}
-      />
       <ProfilePatchStrip
         artifact={patchArtifact}
         labels={labels}
@@ -118,22 +112,21 @@ function ProfilePatchStrip({
   review: ProfileRevisionReviewState
   onReviewPatch: () => void
 }) {
-  if (!artifact || review.status === 'empty' || review.status === 'loading')
+  if (!artifact || review.status !== 'ready' || review.changedSectionCount <= 0)
     return null
 
-  const ready = review.status === 'ready'
   return (
-    <section className={`hr-profile-patch-strip ${review.status}`} aria-label={ready ? labels.profilePatchReadyTitle : labels.profilePatchBlockedTitle}>
+    <section className={`hr-profile-patch-strip ${review.status}`} aria-label={labels.profilePatchReadyTitle}>
       <span className="hr-profile-patch-strip-icon" aria-hidden="true">
-        {ready ? <BookOpenText size={16} /> : <ShieldAlert size={16} />}
+        <BookOpenText size={16} />
       </span>
       <span>
-        <strong>{ready ? labels.profilePatchReadyTitle : labels.profilePatchBlockedTitle}</strong>
-        <small>{ready ? labels.profilePatchChangedSections(review.changedSectionCount) : labels.profilePatchBlockers(review.blockerCount || review.issues.length)}</small>
+        <strong>{labels.profilePatchReadyTitle}</strong>
+        <small>{labels.profilePatchChangedSections(review.changedSectionCount)}</small>
       </span>
-      <span className="hr-profile-patch-strip-source">{ready ? labels.profilePatchStripDetail(artifact.title) : labels.profilePatchBlockedStripDetail(artifact.title)}</span>
-      <button type="button" className="secondary" onClick={onReviewPatch}>
-        {labels.reviewProfilePatch}
+      <span className="hr-profile-patch-strip-source">{labels.profilePatchStripDetail(artifact.title)}</span>
+      <button type="button" className="secondary" aria-label={labels.reviewProfilePatch} title={labels.reviewProfilePatch} onClick={onReviewPatch}>
+        {labels.reviewProfilePatchShort}
       </button>
     </section>
   )

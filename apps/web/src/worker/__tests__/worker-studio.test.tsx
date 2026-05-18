@@ -24,6 +24,19 @@ function expandProfileTools(): HTMLElement {
   return document.querySelector('.hr-profile-tools-panel') as HTMLElement
 }
 
+function openHostSettings() {
+  fireEvent.click(screen.getByRole('button', { name: /^Settings(?:\s|$)/ }))
+}
+
+async function openProfilePatchReviewFromRail() {
+  fireEvent.click(await screen.findByRole('button', { name: 'Open Profile Patch' }))
+  await waitFor(() => {
+    expect(document.querySelector('.hr-profile-tools-panel')).toBeTruthy()
+  })
+  const profileTools = document.querySelector('.hr-profile-tools-panel') as HTMLElement
+  fireEvent.click(await within(profileTools).findByRole('button', { name: 'Review profile patch' }))
+}
+
 const workspace = {
   createdAt: now,
   id: 'workspace-1',
@@ -875,23 +888,29 @@ describe('worker studio', () => {
     expect(screen.getAllByText('HR').length).toBeGreaterThan(0)
     expect(screen.getAllByText('QA').length).toBeGreaterThan(0)
     expect(await screen.findByTestId('hr-people-workbench')).toBeTruthy()
-    expect(screen.getAllByText('People Workbench').length).toBeGreaterThan(0)
+    expect(screen.queryByRole('heading', { name: 'People Workbench' })).toBeNull()
+    expect(document.querySelector('.hr-people-header')).toBeNull()
     expect(screen.queryByText('PEOPLE PROFILE WORKBENCH')).toBeNull()
     expect(screen.queryByText('Profile Actions')).toBeNull()
-    expect(screen.getByText('People Profiles')).toBeTruthy()
+    const profileList = screen.getByLabelText('People Profiles')
+    expect(profileList).toBeTruthy()
+    expect(within(profileList).getByText('People Profiles')).toBeTruthy()
+    expect(within(profileList).getByRole('button', { name: /New profile/ })).toBeTruthy()
+    expect(screen.queryByPlaceholderText('Search people profiles')).toBeNull()
     expect(screen.getByRole('heading', { name: 'Select a people profile' })).toBeTruthy()
     expect(screen.queryByLabelText('Current Profile Summary')).toBeNull()
     expect(document.querySelector('.hr-profile-details')).toBeNull()
     expect(document.querySelector('.hr-profile-tools-rail')).toBeNull()
     expect(screen.getByRole('button', { name: /Candidates/ })).toBeTruthy()
     expect(screen.queryByRole('button', { name: /Needs attention/ })).toBeNull()
-    expect(screen.getByRole('button', { name: 'Hide Profile List' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Hide Profile List' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Expand Profile Tools' })).toBeNull()
     expect(screen.queryByLabelText('Collapsed Profile Tools')).toBeNull()
-    expect(screen.getByRole('button', { name: /New profile/ })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Open Hiring Workspace profile' }))
-    const hrDetails = await screen.findByLabelText('Current Profile Summary')
-    expect(within(hrDetails).getAllByText('Current Profile Summary').length).toBeGreaterThan(0)
+    const hrDetails = await screen.findByLabelText('Hiring Workspace People Profile')
+    expect(within(hrDetails).getByRole('heading', { name: 'Hiring Workspace People Profile' })).toBeTruthy()
+    expect(within(hrDetails).getByRole('button', { name: 'Hide Profile List' })).toBeTruthy()
+    expect(within(hrDetails).getByRole('button', { name: 'Expand Profile Workbench' })).toBeTruthy()
     expect(await within(hrDetails).findByText('Accepted profile summary.')).toBeTruthy()
     expect(within(hrDetails).getByText('Identity And Basics')).toBeTruthy()
     expect(within(hrDetails).getByText('Role Context And Responsibilities')).toBeTruthy()
@@ -899,12 +918,12 @@ describe('worker studio', () => {
     expect(await within(hrDetails).findByText('Profile patch ready')).toBeTruthy()
     expect(within(hrDetails).getByText('10 sections changed')).toBeTruthy()
     expect(within(hrDetails).getByRole('button', { name: 'Review profile patch' })).toBeTruthy()
+    expect(within(hrDetails).getByRole('button', { name: 'Review profile patch' }).textContent).toBe('Review')
     expect(within(hrDetails).queryByText('Profile sources')).toBeNull()
     expect(within(hrDetails).queryByText('Profile Patch')).toBeNull()
     expect(within(hrDetails).queryByText('Review guardrails')).toBeNull()
     expect(within(hrDetails).queryByText('View focus')).toBeNull()
     expect(within(hrDetails).queryByText('Active view')).toBeNull()
-    expect(screen.getByRole('button', { name: 'Expand Profile Workbench' })).toBeTruthy()
     expect(screen.getByLabelText('Collapsed Profile Workbench')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Open Profile Patch' }))
     expect(await screen.findByText('Profile Patch')).toBeTruthy()
@@ -928,7 +947,7 @@ describe('worker studio', () => {
     window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
     render(<WorkerStudio />)
 
-    const hrDetails = await screen.findByLabelText('Current Profile Summary')
+    const hrDetails = await screen.findByLabelText('Hiring Workspace People Profile')
     const currentProfile = await within(hrDetails).findByTestId('hr-current-profile-summary')
 
     expect(within(currentProfile).getByText('Accepted profile summary.')).toBeTruthy()
@@ -972,8 +991,8 @@ describe('worker studio', () => {
     window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
     render(<WorkerStudio />)
 
-    const hrDetails = await screen.findByLabelText('Current Profile Summary')
-    fireEvent.click(await within(hrDetails).findByRole('button', { name: 'Review profile patch' }))
+    await screen.findByLabelText('Hiring Workspace People Profile')
+    await openProfilePatchReviewFromRail()
     const profilePatchReview = await screen.findByTestId('hr-profile-patch-review')
 
     expect((await within(profilePatchReview).findAllByText('Profile README')).length).toBeGreaterThan(0)
@@ -1023,8 +1042,8 @@ describe('worker studio', () => {
     window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
     render(<WorkerStudio />)
 
-    const hrDetails = await screen.findByLabelText('Current Profile Summary')
-    fireEvent.click(await within(hrDetails).findByRole('button', { name: 'Review profile patch' }))
+    await screen.findByLabelText('Hiring Workspace People Profile')
+    await openProfilePatchReviewFromRail()
     const profilePatchReview = await screen.findByTestId('hr-profile-patch-review')
     const approveButton = within(profilePatchReview).getByRole('button', { name: 'Approve into README' }) as HTMLButtonElement
 
@@ -1049,7 +1068,7 @@ describe('worker studio', () => {
     window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
     render(<WorkerStudio />)
 
-    const hrDetails = await screen.findByLabelText('Current Profile Summary')
+    const hrDetails = await screen.findByLabelText('Hiring Workspace People Profile')
     fireEvent.click(await within(hrDetails).findByRole('button', { name: 'Review profile patch' }))
     const profilePatchReview = await screen.findByTestId('hr-profile-patch-review')
 
@@ -1067,13 +1086,54 @@ describe('worker studio', () => {
     window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
     render(<WorkerStudio />)
 
-    const hrDetails = await screen.findByLabelText('Current Profile Summary')
-    fireEvent.click(await within(hrDetails).findByRole('button', { name: 'Review profile patch' }))
+    await screen.findByLabelText('Hiring Workspace People Profile')
+    await openProfilePatchReviewFromRail()
     const profilePatchReview = await screen.findByTestId('hr-profile-patch-review')
 
     expect(await within(profilePatchReview).findByText('Profile patch blocked')).toBeTruthy()
     expect(within(profilePatchReview).getByText(/aiworker-profile-readme/)).toBeTruthy()
     expect((within(profilePatchReview).getByRole('button', { name: 'Approve into README' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('does not show an actionable patch strip when a README proposal has no section changes', async () => {
+    const stableProfileMarkdown = [
+      '# Hiring Workspace',
+      '',
+      '## Current Profile Summary',
+      '',
+      'Accepted profile summary.',
+      '',
+      '## Identity And Basics',
+      '',
+      '- Lifecycle: Candidate',
+      '',
+      '## Role Context And Responsibilities',
+      '',
+      'Own product discovery and marketplace growth execution.',
+      '',
+      '## Review State',
+      '',
+      'Accepted profile baseline is confirmed.',
+      '',
+    ].join('\n')
+    currentProfiles['workspace-1'] = stableProfileMarkdown
+    currentArtifactRawContent = [
+      '# Candidate Screen',
+      '',
+      '```aiworker-profile-readme',
+      stableProfileMarkdown,
+      '```',
+      '',
+    ].join('\n')
+    window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
+    render(<WorkerStudio />)
+
+    const hrDetails = await screen.findByLabelText('Hiring Workspace People Profile')
+
+    await waitFor(() => {
+      expect(within(hrDetails).queryByText('Profile patch ready')).toBeNull()
+    })
+    expect(within(hrDetails).queryByRole('button', { name: 'Review profile patch' })).toBeNull()
   })
 
   it('keeps profile details stable while lifecycle list sections are expanded', async () => {
@@ -1209,21 +1269,28 @@ describe('worker studio', () => {
     expect(screen.queryByText('Review recorded')).toBeNull()
   })
 
-  it('uses the compact icon button primitive for add and chrome actions', async () => {
+  it('uses the compact icon button primitive for profile and host chrome actions', async () => {
     render(<WorkerStudio />)
 
     await screen.findByTestId('hr-people-workbench')
+    const profileList = screen.getByLabelText('People Profiles')
+    fireEvent.click(screen.getByRole('button', { name: 'Open Hiring Workspace profile' }))
+    const hrDetails = await screen.findByLabelText('Hiring Workspace People Profile')
     const iconButtons = [
-      screen.getByRole('button', { name: 'Create worker' }),
-      screen.getByRole('button', { name: 'Refresh workspace' }),
-      screen.getByRole('button', { name: 'Open settings' }),
+      screen.getByRole('button', { name: 'Hide sidebar' }),
+      screen.getByRole('button', { name: 'Open workspace terminal' }),
+      screen.getByRole('button', { name: 'Open right panel' }),
+      within(profileList).getByRole('button', { name: 'New profile' }),
+      within(hrDetails).getByRole('button', { name: 'Hide Profile List' }),
+      within(hrDetails).getByRole('button', { name: 'Expand Profile Workbench' }),
+      within(hrDetails).getByRole('button', { name: 'Refresh workspace' }),
+      within(hrDetails).getByRole('button', { name: 'Open settings' }),
     ]
 
     for (const button of iconButtons) {
       expect(button.classList.contains('icon-button')).toBe(true)
       expect(button.classList.contains('icon-btn')).toBe(false)
     }
-    expect(screen.getByRole('button', { name: 'New profile' }).classList.contains('icon-button')).toBe(false)
   })
 
   it('groups workers by Soul and keeps each category collapsible', async () => {
@@ -1417,16 +1484,13 @@ describe('worker studio', () => {
 
     await screen.findByText('AIWorker HR (1)')
     await screen.findByTestId('hr-people-workbench')
-    expect(document.querySelectorAll('.entry-header.workspace-header')).toHaveLength(1)
-    const hrHeader = document.querySelector('.hr-people-header') as HTMLElement
-    expect(await screen.findByText('New people profile')).toBeTruthy()
-    expect(screen.getByPlaceholderText('Search people profiles')).toBeTruthy()
-    expect(within(hrHeader).getByRole('button', { name: 'New people profile' })).toBeTruthy()
-    expect(within(hrHeader).getByPlaceholderText('Search people profiles')).toBeTruthy()
-    expect(within(hrHeader).getByRole('button', { name: 'Refresh' })).toBeTruthy()
-    expect(within(hrHeader).getByRole('button', { name: 'Evidence' })).toBeTruthy()
-    expect(within(hrHeader).getByRole('button', { name: 'HR settings' })).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'New people profile' }))
+    expect(screen.getByLabelText('Host actions')).toBeTruthy()
+    expect(document.querySelectorAll('.entry-header.workspace-header')).toHaveLength(0)
+    expect(document.querySelector('.hr-people-header')).toBeNull()
+    const profileList = screen.getByLabelText('People Profiles')
+    expect(screen.queryByPlaceholderText('Search people profiles')).toBeNull()
+    expect(within(profileList).getByRole('button', { name: 'New people profile' })).toBeTruthy()
+    fireEvent.click(within(profileList).getByRole('button', { name: 'New people profile' }))
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith('/api/local/apps/aiworker-hr/actions/create-people-profile', expect.objectContaining({ method: 'POST' }))
     })
@@ -1445,19 +1509,18 @@ describe('worker studio', () => {
     fireEvent.click(within(createWorkspaceDialog).getAllByRole('button', { name: 'Close dialog' })[0]!)
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Hiring Workspace profile' }))
-    fireEvent.change(screen.getByPlaceholderText('Search people profiles'), { target: { value: 'ada' } })
-    await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('/api/local/apps/aiworker-hr/search?providerId=peopleProfiles.search&query=ada&limit=8', expect.anything())
-    })
-    expect(await screen.findByText('Ada Lovelace')).toBeTruthy()
-    expect(screen.getByText('Staff engineer candidate profile')).toBeTruthy()
+    const hrDetails = await screen.findByLabelText('Hiring Workspace People Profile')
+    expect(within(hrDetails).getByRole('button', { name: 'Refresh' })).toBeTruthy()
+    expect(within(hrDetails).getByRole('button', { name: 'Evidence' })).toBeTruthy()
+    expect(within(hrDetails).getByRole('button', { name: 'HR settings' })).toBeTruthy()
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/api/local/apps/aiworker-hr/search'))).toBe(false)
     expect(document.querySelector('.hr-people-layout')?.classList.contains('with-tools-rail')).toBe(true)
-    fireEvent.click(within(hrHeader).getByRole('button', { name: 'Evidence' }))
+    fireEvent.click(within(hrDetails).getByRole('button', { name: 'Evidence' }))
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith('/api/local/apps/aiworker-hr/actions/toggle-evidence-drawer', expect.objectContaining({ method: 'POST' }))
     })
     expect(document.querySelector('.hr-people-layout')?.classList.contains('with-tools-rail')).toBe(false)
-    fireEvent.click(within(hrHeader).getByRole('button', { name: 'HR settings' }))
+    fireEvent.click(within(hrDetails).getByRole('button', { name: 'HR settings' }))
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith('/api/local/apps/aiworker-hr/actions/hr-settings', expect.objectContaining({ method: 'POST' }))
     })
@@ -1472,7 +1535,7 @@ describe('worker studio', () => {
     expect(screen.queryByText('4 mounted contributions')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Developer details' })).toBeNull()
 
-    fireEvent.click(within(hrHeader).getByRole('button', { name: 'HR settings' }))
+    fireEvent.click(within(hrDetails).getByRole('button', { name: 'HR settings' }))
     const dialog = await screen.findByRole('dialog', { name: 'Configure Soul workspace' })
     fireEvent.click(within(dialog).getByRole('button', { name: /Soul Apps/ }))
 
@@ -1564,7 +1627,7 @@ describe('worker studio', () => {
     render(<WorkerStudio />)
 
     await screen.findByTestId('hr-people-workbench')
-    fireEvent.click(screen.getByRole('button', { name: 'Open settings' }))
+    openHostSettings()
     const dialog = await screen.findByRole('dialog', { name: 'Configure Soul workspace' })
     fireEvent.click(within(dialog).getByRole('button', { name: /Soul Apps/ }))
     fireEvent.click(within(dialog).getByRole('button', { name: 'Enable AIWorker QA' }))
@@ -1972,7 +2035,7 @@ describe('worker studio', () => {
     await screen.findByLabelText('Host actions')
     expect(screen.queryByRole('dialog', { name: 'Configure Soul workspace' })).toBeNull()
 
-    fireEvent.click(screen.getByLabelText('Open settings'))
+    openHostSettings()
 
     expect(screen.getByRole('dialog', { name: 'Configure Soul workspace' })).toBeTruthy()
     expect(screen.getByText('Local CLI / BYOK')).toBeTruthy()
@@ -2045,7 +2108,7 @@ describe('worker studio', () => {
     render(<WorkerStudio />)
 
     await screen.findByTestId('worker-studio-shell')
-    fireEvent.click(screen.getByLabelText('Open settings'))
+    openHostSettings()
     fireEvent.click(screen.getByText('System / light / dark'))
     fireEvent.click(screen.getByRole('button', { name: /Dark Workspace/ }))
 

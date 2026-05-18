@@ -49,12 +49,10 @@ export function HrPeopleWorkbench({
     selectedWorkspace,
     workbenchBridge,
     sessions,
-    soulCopy,
     submitting,
     templates,
     value,
     workbench,
-    workerName,
     workspaces,
   },
 }: SoulWorkbenchRendererProps) {
@@ -149,7 +147,7 @@ export function HrPeopleWorkbench({
       onOpenSettings()
   }
 
-  function renderWorkbenchBridgeAction(action: LocalSoulAppWorkbenchAction) {
+  function renderWorkbenchIconAction(action: LocalSoulAppWorkbenchAction) {
     const busy = workbenchBridge?.busyActionId === action.id
     const Icon = action.role === 'settings'
       ? Settings
@@ -159,98 +157,72 @@ export function HrPeopleWorkbench({
           ? ShieldCheck
           : Plus
     return (
-      <button
+      <IconButton
         key={action.id}
         aria-busy={busy}
-        className="shell-primary-action"
+        aria-label={action.label}
         disabled={Boolean(workbenchBridge?.busyActionId)}
         title="Provided by the Soul App protocol"
-        type="button"
         onClick={() => void handleWorkbenchAction(action)}
       >
-        <Icon aria-hidden="true" size={14} />
-        <span>{action.label}</span>
-      </button>
+        <Icon aria-hidden="true" size={15} />
+      </IconButton>
     )
+  }
+
+  const primaryWorkbenchAction = workbenchBridge?.actionDescriptors.find(action => action.role === 'primary') ?? null
+  const createProfileLabel = primaryWorkbenchAction?.label ?? labels.newProfile
+  const createProfileBusy = Boolean(primaryWorkbenchAction && workbenchBridge?.busyActionId === primaryWorkbenchAction.id)
+  const showProfileFilter = profiles.length > 5 || profileQuery.trim().length > 0
+  const profileHeaderActions = focusedProfile
+    ? (
+        <>
+          <IconButton
+            aria-label={profileListVisible ? labels.hideProfileList : labels.showProfileList}
+            aria-pressed={profileListVisible}
+            onClick={() => setProfileListVisible(visible => !visible)}
+          >
+            {profileListVisible ? <PanelLeftClose aria-hidden="true" size={16} /> : <PanelLeftOpen aria-hidden="true" size={16} />}
+          </IconButton>
+          <IconButton
+            aria-label={profileToolsExpanded ? labels.collapseProfileTools : labels.expandProfileTools}
+            aria-pressed={profileToolsExpanded}
+            onClick={() => setProfileToolsExpanded(expanded => !expanded)}
+          >
+            {profileToolsExpanded ? <PanelRightClose aria-hidden="true" size={16} /> : <PanelRightOpen aria-hidden="true" size={16} />}
+          </IconButton>
+          {workbenchBridge
+            ? workbenchBridge.actionDescriptors
+                .filter(action => action.role !== 'primary')
+                .map(renderWorkbenchIconAction)
+            : (
+                <>
+                  <IconButton aria-label={copy.accessibility.refreshWorkspace} onClick={onRefresh}>
+                    <RefreshCw aria-hidden="true" size={16} />
+                  </IconButton>
+                  <IconButton aria-label={labels.evidenceConnectors} onClick={onOpenConnectors}>
+                    <ShieldCheck aria-hidden="true" size={16} />
+                  </IconButton>
+                  <IconButton aria-label={copy.accessibility.openSettings} onClick={onOpenSettings}>
+                    <Settings aria-hidden="true" size={16} />
+                  </IconButton>
+                </>
+              )}
+        </>
+      )
+    : null
+
+  function handleCreateProfile() {
+    if (primaryWorkbenchAction) {
+      void handleWorkbenchAction(primaryWorkbenchAction)
+      return
+    }
+    onCreateWorkspace()
   }
 
   return (
     <>
-      <header className="entry-header workspace-header hr-people-header">
-        <div className="hr-header-main">
-          <span className="kicker">{`${soulCopy.name} / ${workbench.name}`}</span>
-          <h1>{labels.workbenchTitle}</h1>
-          <p>{focusedProfile ? labels.commandDetail(focusedProfile.name, focusedProfile.moment) : `${workerName} ${labels.headerFallback}`}</p>
-        </div>
-        <div className="entry-header-right hr-header-actions">
-          {workbenchBridge?.search ?? (
-            <label className="hr-profile-search">
-              <Search aria-hidden="true" size={14} />
-              <span className="sr-only">{labels.profileListSearchLabel}</span>
-              <input
-                value={profileQuery}
-                placeholder={labels.profileListSearchPlaceholder}
-                onChange={event => setProfileQuery(event.target.value)}
-              />
-            </label>
-          )}
-          <div className="hr-header-metrics" aria-label={labels.metricsLabel}>
-            {labels.metrics(profiles.length, artifacts.length, lessons.length).map(item => (
-              <span key={item}>{item}</span>
-            ))}
-          </div>
-          {workbenchBridge
-            ? workbenchBridge.actionDescriptors.map(renderWorkbenchBridgeAction)
-            : (
-                <>
-                  <button type="button" className="primary hr-header-command" onClick={onCreateWorkspace}>
-                    <Plus aria-hidden="true" size={14} />
-                    <span>{labels.newProfile}</span>
-                  </button>
-                  <button type="button" className="ghost hr-header-command" onClick={onOpenConnectors}>
-                    <ShieldCheck aria-hidden="true" size={14} />
-                    <span>{labels.evidenceConnectors}</span>
-                  </button>
-                </>
-              )}
-          <div className="hr-header-icon-group" aria-label={labels.workbenchPanelControlsLabel}>
-            <IconButton
-              aria-label={profileListVisible ? labels.hideProfileList : labels.showProfileList}
-              aria-pressed={profileListVisible}
-              onClick={() => setProfileListVisible(visible => !visible)}
-            >
-              {profileListVisible ? <PanelLeftClose aria-hidden="true" size={16} /> : <PanelLeftOpen aria-hidden="true" size={16} />}
-            </IconButton>
-            {focusedProfile
-              ? (
-                  <IconButton
-                    aria-label={profileToolsExpanded ? labels.collapseProfileTools : labels.expandProfileTools}
-                    aria-pressed={profileToolsExpanded}
-                    onClick={() => setProfileToolsExpanded(expanded => !expanded)}
-                  >
-                    {profileToolsExpanded ? <PanelRightClose aria-hidden="true" size={16} /> : <PanelRightOpen aria-hidden="true" size={16} />}
-                  </IconButton>
-                )
-              : null}
-            {workbenchBridge?.actionRoles.has('refresh')
-              ? null
-              : (
-                  <IconButton aria-label={copy.accessibility.refreshWorkspace} onClick={onRefresh}>
-                    <RefreshCw aria-hidden="true" size={16} />
-                  </IconButton>
-                )}
-            {workbenchBridge?.actionRoles.has('settings')
-              ? null
-              : (
-                  <IconButton aria-label={copy.accessibility.openSettings} onClick={onOpenSettings}>
-                    <Settings aria-hidden="true" size={16} />
-                  </IconButton>
-                )}
-          </div>
-        </div>
-      </header>
       {workbenchBridge?.status}
-      {workbenchBridge?.results}
 
       <div className="entry-tab-content workspace-content hr-people-content" data-testid="hr-people-workbench">
         <div className={`hr-people-layout ${profileListVisible ? '' : 'without-profile-list'} ${focusedProfile ? 'has-profile-selection' : 'selection-empty'} ${focusedProfile && !profileToolsExpanded ? 'with-tools-rail' : ''}`}>
@@ -258,11 +230,17 @@ export function HrPeopleWorkbench({
             ? (
                 <HrProfileList
                   collapsedSectionIds={collapsedSectionIds}
+                  createProfileBusy={createProfileBusy}
+                  createProfileLabel={createProfileLabel}
                   labels={labels}
+                  profileQuery={profileQuery}
                   sections={profileSections}
                   selectedWorkspaceId={selectedWorkspace?.id ?? null}
+                  showProfileFilter={showProfileFilter}
                   visibleCount={visibleProfiles.length}
+                  onCreateProfile={handleCreateProfile}
                   onOpenWorkspace={onOpenWorkspace}
+                  onProfileQueryChange={setProfileQuery}
                   onToggleSection={toggleSection}
                 />
               )
@@ -287,6 +265,7 @@ export function HrPeopleWorkbench({
                     patchArtifact={selectedArtifact}
                     profilePreview={profilePreview}
                     profileRevisionReview={profileRevisionReview}
+                    headerActions={profileHeaderActions}
                     onReviewPatch={handleOpenProfilePatchReview}
                     onSectionAction={handleSectionAction}
                   />

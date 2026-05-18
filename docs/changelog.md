@@ -1,5 +1,23 @@
 # AIWorker Changelog
 
+## 2026-05-18 [completed] FEAT-097 / PLAN-358 — HR Soul App header convergence
+
+Completed the HR People Workbench chrome convergence after the approved design:
+
+- kept the Host header visible while removing the HR Soul App workbench header;
+- removed the workbench-level search rendering and kept any filtering local to
+  People Profiles;
+- moved `New people profile` into the People Profiles panel header;
+- moved profile-list/tool toggles plus refresh, evidence, and settings into the
+  selected People Profile header;
+- removed the duplicated `Current Profile Summary` UI header so the center
+  surface reads as one People Profile;
+- tightened the patch strip to actionable ready patches and shortened the
+  visible review action to `Review`.
+
+Focused Worker Studio tests, Web typecheck/lint/build and browser smoke against
+the local Ben HR workspace passed.
+
 ## 2026-05-18 [completed] REL-042 / PLAN-357 — CLI 0.17.3 patch release
 
 Started the `@zonease/aiworker-cli@0.17.3` patch release after merging

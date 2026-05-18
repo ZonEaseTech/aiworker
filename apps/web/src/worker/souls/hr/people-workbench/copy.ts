@@ -83,6 +83,8 @@ export interface HrWorkbenchCopy {
   profileDetailsDetail: (profileName: string) => string
   profileDetailsEmpty: string
   profileDetailsTitle: string
+  profileHeaderDetail: (moment: string, nextStep: string) => string
+  profileHeaderTitle: (profileName: string) => string
   profileReadingRoomDetail: (profileName: string) => string
   profileReadingRoomFallback: string
   profilePatchAddedLabel: string
@@ -104,8 +106,8 @@ export interface HrWorkbenchCopy {
   profileBoardLabel: string
   profileBoardTitle: string
   profileListDetail: (count: number) => string
-  profileListSearchLabel: string
-  profileListSearchPlaceholder: string
+  profileListFilterLabel: string
+  profileListFilterPlaceholder: string
   profileToolsRailLabel: string
   recentSessionsDetail: (count: number) => string
   recentSessionsTitle: string
@@ -123,6 +125,7 @@ export interface HrWorkbenchCopy {
   revisionReady: string
   revisionStatusTitle: string
   reviewProfilePatch: string
+  reviewProfilePatchShort: string
   reviewStatus: (state: ReviewDisplayState) => string
   runSectionProposal: string
   selectProfileFirst: string
@@ -244,6 +247,8 @@ const enHrCopy: HrWorkbenchCopy = {
   profileDetailsDetail: profileName => `${profileName} accepted README profile baseline.`,
   profileDetailsEmpty: 'Select a people profile to inspect its accepted README profile baseline.',
   profileDetailsTitle: 'Current Profile Summary',
+  profileHeaderDetail: (moment, nextStep) => `${moment} · ${nextStep}`,
+  profileHeaderTitle: profileName => `${profileName} People Profile`,
   profileReadingRoomDetail: profileName => `${profileName} accepted README profile baseline.`,
   profileReadingRoomFallback: 'Showing the accepted README as written.',
   profilePatchAddedLabel: 'Added',
@@ -265,8 +270,8 @@ const enHrCopy: HrWorkbenchCopy = {
   profileBoardLabel: 'People Profiles',
   profileBoardTitle: 'People Profiles',
   profileListDetail: count => `${count} visible profiles`,
-  profileListSearchLabel: 'Search people profiles',
-  profileListSearchPlaceholder: 'Search people...',
+  profileListFilterLabel: 'Filter people profiles',
+  profileListFilterPlaceholder: 'Filter profiles...',
   profileToolsRailLabel: 'Collapsed Profile Workbench',
   recentSessionsDetail: count => `${count} profile sessions`,
   recentSessionsTitle: 'Recent Sessions',
@@ -289,6 +294,7 @@ const enHrCopy: HrWorkbenchCopy = {
   revisionReady: 'Ready to approve',
   revisionStatusTitle: 'Revision status',
   reviewProfilePatch: 'Review profile patch',
+  reviewProfilePatchShort: 'Review',
   reviewStatus: (state) => {
     if (state === 'pass')
       return 'reviewed'
@@ -431,6 +437,8 @@ const zhHrCopy: HrWorkbenchCopy = {
   profileDetailsDetail: profileName => `${profileName} 的已接受 README 档案基线。`,
   profileDetailsEmpty: '选择一个人员档案后查看已接受 README 档案基线。',
   profileDetailsTitle: '当前档案摘要',
+  profileHeaderDetail: (moment, nextStep) => `${moment} / ${nextStep}`,
+  profileHeaderTitle: profileName => `${profileName} 人员档案`,
   profileReadingRoomDetail: profileName => `${profileName} 的已接受 README 档案基线。`,
   profileReadingRoomFallback: '按原始 README 展示已接受档案。',
   profilePatchAddedLabel: '新增',
@@ -452,8 +460,8 @@ const zhHrCopy: HrWorkbenchCopy = {
   profileBoardLabel: '人员档案',
   profileBoardTitle: '人员档案',
   profileListDetail: count => `${count} 个可见档案`,
-  profileListSearchLabel: '搜索人员档案',
-  profileListSearchPlaceholder: '搜索人员...',
+  profileListFilterLabel: '筛选人员档案',
+  profileListFilterPlaceholder: '筛选档案...',
   profileToolsRailLabel: '已收起的档案工作台',
   recentSessionsDetail: count => `${count} 个 profile session`,
   recentSessionsTitle: 'Recent Sessions',
@@ -475,7 +483,8 @@ const zhHrCopy: HrWorkbenchCopy = {
   revisionDraftTitle: '待接受草案',
   revisionReady: '可批准',
   revisionStatusTitle: '修订状态',
-  reviewProfilePatch: 'Review 档案 patch',
+  reviewProfilePatch: 'Review profile patch',
+  reviewProfilePatchShort: 'Review',
   reviewStatus: (state) => {
     if (state === 'pass')
       return '已 review'
