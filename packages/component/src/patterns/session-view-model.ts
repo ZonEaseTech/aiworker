@@ -46,6 +46,14 @@ export interface SessionTimelineActivityDetail {
   value: string
 }
 
+export type SessionTimelineSignalKind = 'output' | 'status'
+
+export interface SessionTimelineUsageSummary {
+  costUsd?: number
+  inputTokens?: number
+  outputTokens?: number
+}
+
 export interface SessionTimelineActivityEvent extends SessionTimelineEventBase {
   activityKind: SessionTimelineActivityKind
   command?: string
@@ -67,6 +75,15 @@ export interface SessionTimelineActivityGroupEvent extends SessionTimelineEventB
   status: SessionTimelineActivityStatus
 }
 
+export interface SessionTimelineSignalEvent extends SessionTimelineEventBase {
+  detail?: string
+  details?: SessionTimelineActivityDetail[]
+  kind: 'signal'
+  label: string
+  signalKind: SessionTimelineSignalKind
+  status?: SessionTimelineActivityStatus
+}
+
 export type SessionTimelineEvent
   = | (SessionTimelineEventBase & { detail?: string, kind: 'status', label: string })
     | (SessionTimelineEventBase & { kind: 'text', text: string })
@@ -75,6 +92,7 @@ export type SessionTimelineEvent
     | (SessionTimelineEventBase & { content: string, isError?: boolean, kind: 'tool_result', name?: string, toolUseId: string })
     | SessionTimelineActivityEvent
     | SessionTimelineActivityGroupEvent
+    | SessionTimelineSignalEvent
     | (SessionTimelineEventBase & { costUsd?: number, inputTokens?: number, kind: 'usage', outputTokens?: number })
     | (SessionTimelineEventBase & { chunk: string, kind: 'log', stream: 'stderr' | 'stdout' })
     | (SessionTimelineEventBase & { kind: 'raw', line: string })
@@ -140,6 +158,25 @@ export function normalizeSessionEvents(events: SessionTimelineEventInput[], opti
     .map(event => coerceTimelineEvent(event, options))
 }
 
+export function summarizeSessionUsage(events: SessionTimelineEvent[]): SessionTimelineUsageSummary | null {
+  let usage: Extract<SessionTimelineEvent, { kind: 'usage' }> | null = null
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index]
+    if (event?.kind === 'usage') {
+      usage = event
+      break
+    }
+  }
+  if (!usage)
+    return null
+
+  return {
+    costUsd: usage.costUsd,
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
+  }
+}
+
 export function createSessionTimelineViewModel(input: {
   events: SessionTimelineEvent[]
   turns: SessionTimelineTurnInput[]
@@ -175,6 +212,8 @@ function coerceTimelineEvent(event: SessionTimelineEventInput, options: Normaliz
     if (kind === 'status') {
       if (options.parser === 'codex-cli' && readString(agentEvent.label) === 'file_change')
         return createFileActivity(base, readString(agentEvent.detail), readString(agentEvent.status))
+      if (options.parser === 'codex-cli')
+        return createCodexStatusSignal(base, agentEvent, event.type)
       return { ...base, detail: readString(agentEvent.detail), kind, label: readString(agentEvent.label, event.type) }
     }
     if (kind === 'text')
@@ -215,16 +254,32 @@ function coerceTimelineEvent(event: SessionTimelineEventInput, options: Normaliz
 
   if (event.type === 'assistant_delta')
     return { ...base, kind: 'text', text: readString(payload.text ?? payload.delta) }
-  if (event.type === 'artifact')
+  if (event.type === 'artifact') {
+    if (options.parser === 'codex-cli')
+      return createOutputSignal(base, 'Artifact ready', readString(payload.path ?? payload.artifactId, 'artifact'), 'artifact')
     return { ...base, detail: readString(payload.path ?? payload.artifactId, 'artifact'), kind: 'artifact' }
-  if (event.type === 'review')
+  }
+  if (event.type === 'review') {
+    if (options.parser === 'codex-cli')
+      return createOutputSignal(base, 'Review ready', readString(payload.verdict ?? payload.reviewId, 'review'), 'review')
     return { ...base, detail: readString(payload.verdict ?? payload.reviewId, 'review'), kind: 'review' }
-  if (event.type === 'lesson')
+  }
+  if (event.type === 'lesson') {
+    if (options.parser === 'codex-cli')
+      return createOutputSignal(base, 'Lesson candidate', readString(payload.lessonId, 'memory candidate'), 'lesson')
     return { ...base, detail: readString(payload.lessonId, 'memory candidate'), kind: 'lesson' }
+  }
   if (event.type === 'error')
     return { ...base, kind: 'error', message: readString(payload.message, 'Session turn failed.') }
   if (event.type === 'log')
     return { ...base, chunk: JSON.stringify(payload, null, 2), kind: 'log', stream: 'stdout' }
+  if (event.type === 'status' && options.parser === 'codex-cli') {
+    return createCodexStatusSignal(base, {
+      detail: payload.detail ?? payload.status,
+      label: payload.label ?? event.type,
+      status: payload.status,
+    }, event.type)
+  }
   return { ...base, detail: readString(payload.status, event.type), kind: 'status', label: event.type }
 }
 
@@ -252,9 +307,17 @@ function compactTimelineEvents(events: SessionTimelineEvent[]): SessionTimelineE
       last.details = mergeActivityDetails(last.details, event.details)
       continue
     }
-    compacted.push(event.kind === 'log' ? { ...event, chunk: truncateLog(event.chunk) } : event)
+    if (event.kind === 'activity' && last?.kind === 'activity' && !event.toolUseId && !last.toolUseId && event.activityKind === last.activityKind && event.detail === last.detail) {
+      const mergedStatus = normalizeMergedActivityStatus(last, event)
+      last.status = mergedStatus
+      last.label = activityLabel(last.activityKind, mergedStatus)
+      last.details = mergeActivityDetails(last.details, event.details)
+      continue
+    }
+    if (event.kind !== 'usage')
+      compacted.push(event.kind === 'log' ? { ...event, chunk: truncateLog(event.chunk) } : event)
   }
-  return groupExplorationActivity(compacted)
+  return groupExplorationActivity(compactSessionSignals(compacted))
 }
 
 function fallbackResponseEvents(turn: SessionTimelineTurnInput): SessionTimelineEvent[] {
@@ -275,6 +338,59 @@ function isTextLikeFile(file: File): boolean {
   if (['application/csv', 'application/json', 'application/xml', 'application/yaml'].includes(file.type))
     return true
   return /\.(?:csv|json|log|md|txt|ya?ml)$/i.test(file.name)
+}
+
+function createCodexStatusSignal(base: SessionTimelineEventBase, event: Record<string, unknown>, fallbackLabel: string): SessionTimelineSignalEvent {
+  const label = readString(event.label, fallbackLabel)
+  const detail = readString(event.detail ?? event.status)
+  const rawStatus = readString(event.status ?? event.detail ?? label)
+  const normalizedStatus = normalizeSignalStatus(rawStatus)
+  const lowerLabel = label.toLowerCase()
+  const lowerDetail = detail.toLowerCase()
+
+  if (lowerLabel === 'completed' || /\b(?:artifact|review|lesson|memory)\b/u.test(lowerDetail)) {
+    return {
+      ...base,
+      detail,
+      details: buildActivityDetails([
+        ['Signal', label],
+        ['Detail', detail],
+      ]),
+      kind: 'signal',
+      label: detail ? 'Session output' : 'Session updated',
+      signalKind: 'output',
+      status: normalizedStatus ?? 'succeeded',
+    }
+  }
+
+  return {
+    ...base,
+    detail: statusDetail(label, detail),
+    details: buildActivityDetails([
+      ['Signal', label],
+      ['Detail', detail],
+      ['Status', rawStatus === detail || rawStatus === label ? undefined : rawStatus],
+    ]),
+    kind: 'signal',
+    label: statusSignalLabel(label, detail, normalizedStatus),
+    signalKind: 'status',
+    status: normalizedStatus,
+  }
+}
+
+function createOutputSignal(base: SessionTimelineEventBase, label: string, detail: string, source: string): SessionTimelineSignalEvent {
+  return {
+    ...base,
+    detail,
+    details: buildActivityDetails([
+      ['Source', source],
+      ['Detail', detail],
+    ]),
+    kind: 'signal',
+    label,
+    signalKind: 'output',
+    status: 'succeeded',
+  }
 }
 
 function createCodexToolActivity(base: SessionTimelineEventBase, event: Record<string, unknown>): SessionTimelineActivityEvent {
@@ -430,6 +546,98 @@ function groupExplorationActivity(events: SessionTimelineEvent[]): SessionTimeli
   return grouped
 }
 
+function compactSessionSignals(events: SessionTimelineEvent[]): SessionTimelineEvent[] {
+  const compacted: SessionTimelineEvent[] = []
+  let statusBuffer: SessionTimelineSignalEvent[] = []
+  let outputBuffer: SessionTimelineSignalEvent[] = []
+
+  const flushStatus = () => {
+    if (statusBuffer.length === 0)
+      return
+    const outputAlreadyVisible = compacted.some(event => event.kind === 'signal' && event.signalKind === 'output')
+    const nextOutputPending = outputBuffer.length > 0
+    const summary = summarizeStatusSignals(statusBuffer)
+    statusBuffer = []
+    if (summary.status === 'succeeded' && (outputAlreadyVisible || nextOutputPending))
+      return
+    compacted.push(summary)
+  }
+
+  const flushOutput = () => {
+    if (outputBuffer.length === 0)
+      return
+    compacted.push(summarizeOutputSignals(outputBuffer))
+    outputBuffer = []
+  }
+
+  for (const event of events) {
+    if (event.kind === 'signal' && event.signalKind === 'status') {
+      statusBuffer.push(event)
+      continue
+    }
+    if (event.kind === 'signal' && event.signalKind === 'output') {
+      flushStatus()
+      outputBuffer.push(event)
+      continue
+    }
+    flushStatus()
+    flushOutput()
+    compacted.push(event)
+  }
+
+  flushStatus()
+  flushOutput()
+  return compacted
+}
+
+function summarizeStatusSignals(events: SessionTimelineSignalEvent[]): SessionTimelineSignalEvent {
+  const latest = events.at(-1)
+  const status = latest?.status ?? findLast(events, event => Boolean(event.status))?.status
+  const rawDetail = findLast(events, event => Boolean(event.detail))?.detail
+  const detail = rawDetail && rawDetail.toLowerCase() !== status ? rawDetail : undefined
+  return {
+    detail,
+    details: mergeSignalDetails(events),
+    id: `signal-status-${events[0]?.id}`,
+    kind: 'signal',
+    label: status === 'failed' ? 'Session needs attention' : status === 'succeeded' ? 'Session succeeded' : 'Session running',
+    signalKind: 'status',
+    status,
+    turnId: events[0]?.turnId,
+  }
+}
+
+function summarizeOutputSignals(events: SessionTimelineSignalEvent[]): SessionTimelineSignalEvent {
+  const artifactCount = events.filter(event => /artifact/i.test(`${event.label} ${event.detail ?? ''}`)).length
+  const reviewCount = events.filter(event => /review/i.test(`${event.label} ${event.detail ?? ''}`)).length
+  const lessonCount = events.filter(event => /lesson|memory/i.test(`${event.label} ${event.detail ?? ''}`)).length
+  const detail = [
+    artifactCount ? `${artifactCount} ${artifactCount === 1 ? 'artifact' : 'artifacts'}` : '',
+    reviewCount ? `${reviewCount} ${reviewCount === 1 ? 'review' : 'reviews'}` : '',
+    lessonCount ? `${lessonCount} ${lessonCount === 1 ? 'lesson' : 'lessons'}` : '',
+  ].filter(Boolean).join(', ')
+  return {
+    detail: detail || findLast(events, event => Boolean(event.detail))?.detail,
+    details: mergeSignalDetails(events),
+    id: `signal-output-${events[0]?.id}`,
+    kind: 'signal',
+    label: 'Session output',
+    signalKind: 'output',
+    status: events.some(event => event.status === 'failed') ? 'failed' : 'succeeded',
+    turnId: events[0]?.turnId,
+  }
+}
+
+function mergeSignalDetails(events: SessionTimelineSignalEvent[]): SessionTimelineActivityDetail[] | undefined {
+  const details = events.flatMap((event) => {
+    const own = event.details ?? []
+    if (own.length > 0)
+      return own.map(detail => ({ label: `${event.label} · ${detail.label}`, value: detail.value }))
+    return event.detail ? [{ label: event.label, value: event.detail }] : []
+  })
+  return details.length > 0 ? details : undefined
+}
+
 function summarizeExploration(events: SessionTimelineActivityEvent[]): string {
   const reads = events.filter(event => event.activityKind === 'read').length
   const searches = events.filter(event => event.activityKind === 'search').length
@@ -439,6 +647,41 @@ function summarizeExploration(events: SessionTimelineActivityEvent[]): string {
     searches ? `${searches} ${searches === 1 ? 'search' : 'searches'}` : '',
     lists ? `${lists} ${lists === 1 ? 'list' : 'lists'}` : '',
   ].filter(Boolean).join(', ')
+}
+
+function normalizeSignalStatus(value: string): SessionTimelineActivityStatus | undefined {
+  const lower = value.toLowerCase()
+  if (/\b(?:fail|failed|error)\b/u.test(lower))
+    return 'failed'
+  if (/\b(?:complete|completed|done|pass|succeed|succeeded|success)\b/u.test(lower))
+    return 'succeeded'
+  if (/\b(?:initializing|running|pending|start|starting|streaming)\b/u.test(lower))
+    return 'running'
+  return undefined
+}
+
+function statusSignalLabel(label: string, detail: string, status?: SessionTimelineActivityStatus): string {
+  const lowerLabel = label.toLowerCase()
+  const lowerDetail = detail.toLowerCase()
+  if (status === 'failed')
+    return 'Session needs attention'
+  if (status === 'succeeded')
+    return 'Session succeeded'
+  if (lowerLabel.includes('initializing') || lowerDetail.includes('initializing'))
+    return 'Starting engine'
+  if (status === 'running')
+    return 'Session running'
+  return 'Session status'
+}
+
+function statusDetail(label: string, detail: string): string | undefined {
+  const lowerLabel = label.toLowerCase()
+  const lowerDetail = detail.toLowerCase()
+  if (!detail)
+    return lowerLabel === 'status' ? undefined : label
+  if (lowerLabel === 'status' || lowerLabel === lowerDetail)
+    return detail
+  return `${label} · ${detail}`
 }
 
 function startsWithCommand(command: string, names: string[]): boolean {
@@ -522,6 +765,15 @@ function readString(value: unknown, fallback = ''): string {
 
 function readNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function findLast<T>(items: T[], predicate: (item: T) => boolean): T | undefined {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index]!
+    if (predicate(item))
+      return item
+  }
+  return undefined
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

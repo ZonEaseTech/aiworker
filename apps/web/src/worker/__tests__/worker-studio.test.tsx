@@ -283,6 +283,7 @@ let currentWorkers: typeof workers
 let currentWorkspaces: typeof workspace[]
 let currentProfiles: Record<string, string>
 let currentArtifactRawContent: string
+let lastMessageRequestBody: Record<string, unknown> | null
 let lastSessionRequestBody: Record<string, unknown> | null
 let writtenFiles: Array<{ body: string, path: string, workspaceId: string }>
 let currentApps: Array<{
@@ -443,6 +444,7 @@ function resetSettings() {
       '',
     ].join('\n'),
   }
+  lastMessageRequestBody = null
   lastSessionRequestBody = null
   writtenFiles = []
   currentArtifactRawContent = [
@@ -741,10 +743,11 @@ beforeEach(() => {
       return json({ artifacts: [createdArtifact], events: [], files: [], lessons: [], review: null, session: createdSession, turn: createdTurn }, 201)
     }
     if ((url.endsWith('/api/local/workers/hr-worker/sessions/session-1/messages/stream') || url.endsWith('/api/local/sessions/session-1/turns/stream')) && method === 'POST') {
+      lastMessageRequestBody = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {}
       const nextTurn = {
         ...turnRecord,
         id: 'turn-2',
-        input: 'Add interview risks.',
+        input: String(lastMessageRequestBody.input ?? 'Add interview risks.'),
         response: 'Updated Candidate Screen.',
         seq: 2,
       }
@@ -770,10 +773,11 @@ beforeEach(() => {
       }), { headers: { 'content-type': 'text/event-stream' }, status: 200 })
     }
     if ((url.endsWith('/api/local/workers/hr-worker/sessions/session-1/messages') || url.endsWith('/api/local/sessions/session-1/turns')) && method === 'POST') {
+      lastMessageRequestBody = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {}
       const nextTurn = {
         ...turnRecord,
         id: 'turn-2',
-        input: 'Add interview risks.',
+        input: String(lastMessageRequestBody.input ?? 'Add interview risks.'),
         response: 'Updated Candidate Screen.',
         seq: 2,
       }
@@ -2019,8 +2023,78 @@ describe('worker studio', () => {
     })
   })
 
+  it('submits source material files with a follow-up session turn', async () => {
+    window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1/sessions/session-1')
+
+    render(<WorkerStudio />)
+
+    await screen.findByText('AIWorker Engine')
+    const workerComposer = document.querySelector('.worker-composer') as HTMLElement
+    const fileInput = document.querySelector('.worker-chat-pane input[type="file"]') as HTMLInputElement
+    expect(within(workerComposer).getByRole('button', { name: 'Add source material' })).toBeTruthy()
+    expect(fileInput).toBeTruthy()
+
+    await act(async () => {
+      fireEvent.change(fileInput, { target: { files: [new File(['source evidence'], 'source-notes.txt', { type: 'text/plain' })] } })
+    })
+
+    expect(within(workerComposer).getByText('source-notes.txt')).toBeTruthy()
+    fireEvent.change(within(workerComposer).getByLabelText('Follow-up turn'), { target: { value: 'Use the attached source.' } })
+    fireEvent.click(within(workerComposer).getByRole('button', { name: 'Send turn' }))
+
+    await waitFor(() => {
+      expect(writtenFiles).toHaveLength(1)
+      expect(lastMessageRequestBody).not.toBeNull()
+    })
+    expect(writtenFiles[0]).toMatchObject({
+      body: 'source evidence',
+      workspaceId: 'workspace-1',
+    })
+    expect(writtenFiles[0]?.path).toMatch(/^evidence\/uploads\/.+\/source-notes\.txt$/)
+    expect(String(lastMessageRequestBody?.input)).toContain('Use the attached source.')
+    expect(String(lastMessageRequestBody?.input)).toContain('Attached source material:')
+    expect(String(lastMessageRequestBody?.input)).toContain('evidence/uploads/')
+    const metadata = lastMessageRequestBody?.metadata as { attachedMaterials?: Array<{ name: string, path: string }>, materialCount?: number }
+    expect(metadata.materialCount).toBe(1)
+    expect(metadata.attachedMaterials?.[0]?.name).toBe('source-notes.txt')
+  })
+
   it('continues an existing session and wires review and memory actions', async () => {
     window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
+    currentEvents = [
+      {
+        ...eventRecord,
+        id: 30,
+        payloadJson: { agentEvent: { detail: 'running', kind: 'status', label: 'status' } },
+        seq: 1,
+      },
+      {
+        ...eventRecord,
+        id: 31,
+        payloadJson: { agentEvent: { inputTokens: 175170, kind: 'usage', outputTokens: 3446 } },
+        seq: 2,
+      },
+      {
+        ...eventRecord,
+        id: 32,
+        payloadJson: { path: 'artifacts/profile-update-proposal.md' },
+        seq: 3,
+        type: 'artifact',
+      },
+      {
+        ...eventRecord,
+        id: 33,
+        payloadJson: { verdict: 'needs_review' },
+        seq: 4,
+        type: 'review',
+      },
+      {
+        ...eventRecord,
+        id: 34,
+        payloadJson: { agentEvent: { detail: 'succeeded', kind: 'status', label: 'status' } },
+        seq: 5,
+      },
+    ]
 
     render(<WorkerStudio />)
 
@@ -2067,6 +2141,12 @@ describe('worker studio', () => {
     const workerComposer = document.querySelector('.worker-composer') as HTMLElement
     expect(workerComposer).toBeTruthy()
     expect(within(workerComposer).queryByRole('button', { name: 'Open settings' })).toBeNull()
+    expect(within(workerComposer).getByRole('button', { name: 'Add source material' })).toBeTruthy()
+    expect(within(workerComposer).getByLabelText('Usage 175170 / 3446')).toBeTruthy()
+    const chatLogBeforeFollowUp = screen.getByTestId('worker-chat-log')
+    expect(within(chatLogBeforeFollowUp).getByText('Session running')).toBeTruthy()
+    expect(within(chatLogBeforeFollowUp).getByText('Session output')).toBeTruthy()
+    expect(chatLogBeforeFollowUp.querySelector('.session-status-pill')).toBeNull()
 
     fireEvent.click(drawerToggle)
     expect(document.querySelector('.detail-drawer-collapsed')).toBeTruthy()

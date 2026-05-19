@@ -1,5 +1,21 @@
 # AIWorker Changelog
 
+## 2026-05-19 [completed] BUG-140 / PLAN-379 — Session composer and timeline review gaps
+
+Session Kit now collapses Codex CLI status/output signals into compact timeline
+rows instead of rendering repeated raw status, artifact and review pills.
+Usage remains available from the parser stream but is rendered through the
+active composer action bar rather than the chat timeline.
+
+The session follow-up composer now exposes the default file/image attachment
+input, keeps image lightbox preview through the shared composer, persists
+attached source materials into the workspace, and sends those material
+descriptors with the follow-up turn metadata.
+
+Verification covered focused component tests/typecheck, WorkerStudio
+integration tests/typecheck/lint/build, UI component governance, diff check,
+browser smoke and code-review-graph review.
+
 ## 2026-05-19 [completed] FEAT-103 / PLAN-377 — Session activity pipeline and composer media previews
 
 Session Kit now renders Codex CLI session activity through a shared

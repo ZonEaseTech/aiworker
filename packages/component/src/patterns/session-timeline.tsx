@@ -4,7 +4,7 @@ import type { SessionTimelineActivityEvent, SessionTimelineEvent, SessionTimelin
 import { AlertCircle, CheckCircle, Code2, FileText, ListTree, Play, Search, Terminal, Wrench } from 'lucide-react'
 import { Fragment } from 'react'
 import { MarkdownPreview } from './markdown-preview'
-import { MessageFlow, MessageRow, StatusEventPill, ToolResultCard } from './message-flow'
+import { MessageFlow, MessageRow, ToolResultCard } from './message-flow'
 import { StudioPill } from './studio-patterns'
 
 export interface SessionTimelineProps {
@@ -82,15 +82,11 @@ function DefaultSessionEvent({
   if (event.kind === 'raw')
     return <SessionLogCard label="raw" value={event.line} />
   if (event.kind === 'status')
-    return <StatusEventPill className="session-status-pill" detail={event.detail} tone="success">{event.label}</StatusEventPill>
-  if (event.kind === 'usage') {
-    return (
-      <StudioPill className="session-status-pill" icon={<CheckCircle size={14} />}>
-        <span>Usage</span>
-        <small>{[event.inputTokens, event.outputTokens].filter(value => value != null).join(' / ')}</small>
-      </StudioPill>
-    )
-  }
+    return <SessionSignalRow signal={{ ...event, kind: 'signal', label: event.label, signalKind: 'status' }} />
+  if (event.kind === 'signal')
+    return <SessionSignalRow signal={event} />
+  if (event.kind === 'usage')
+    return null
   if (event.kind === 'artifact' || event.kind === 'review' || event.kind === 'lesson') {
     return (
       <StudioPill className="session-produced-chip" icon={<FileText size={14} />}>
@@ -142,6 +138,48 @@ function SessionActivityGroup({
   )
 }
 
+function SessionSignalRow({
+  signal,
+}: {
+  signal: Extract<SessionTimelineEvent, { kind: 'signal' }>
+}) {
+  const hasDetails = signal.details && signal.details.length > 0
+  return (
+    <details className="session-signal-row">
+      <summary>
+        <span className="session-activity-icon">
+          {signal.signalKind === 'output'
+            ? <FileText aria-hidden="true" size={14} />
+            : <CheckCircle aria-hidden="true" size={14} />}
+        </span>
+        <span className="session-activity-copy">
+          <strong>{signal.label}</strong>
+          {signal.detail ? <small>{signal.detail}</small> : null}
+        </span>
+        {signal.status && (signal.signalKind !== 'status' || signal.status === 'failed')
+          ? (
+              <span className={`session-activity-result ${signal.status}`}>
+                {signal.status === 'failed' ? 'failed' : signal.status === 'running' ? 'running' : 'done'}
+              </span>
+            )
+          : null}
+      </summary>
+      {hasDetails
+        ? (
+            <div className="session-activity-details">
+              {signal.details?.map((detail, index) => (
+                <div key={`${signal.id}-${detail.label}-${index}`} className="session-activity-detail">
+                  <span>{detail.label}</span>
+                  <pre>{detail.value}</pre>
+                </div>
+              ))}
+            </div>
+          )
+        : null}
+    </details>
+  )
+}
+
 function SessionActivityRow({
   activity,
   nested = false,
@@ -167,8 +205,8 @@ function SessionActivityRow({
       {hasDetails
         ? (
             <div className="session-activity-details">
-              {activity.details?.map(detail => (
-                <div key={`${activity.id}-${detail.label}`} className="session-activity-detail">
+              {activity.details?.map((detail, index) => (
+                <div key={`${activity.id}-${detail.label}-${index}`} className="session-activity-detail">
                   <span>{detail.label}</span>
                   <pre>{detail.value}</pre>
                 </div>

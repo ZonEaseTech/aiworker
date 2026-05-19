@@ -21,6 +21,7 @@ import {
   formatSessionAttachmentSize,
   isSessionAttachmentImage,
   normalizeSessionEvents,
+  summarizeSessionUsage,
 } from '.'
 
 afterEach(() => cleanup())
@@ -183,6 +184,7 @@ describe('shared patterns', () => {
         templateLabel="Proposal type"
         templateOptions={[{ label: 'Candidate profile proposal', value: 'profile-update-proposal' }]}
         title="Complete Hiring Workspace candidate profile"
+        usage={{ ariaLabel: 'Usage 120 / 15', label: 'Usage', value: '120 / 15' }}
         value="Summarize new evidence"
         onAddAttachments={vi.fn()}
         onRemoveAttachment={vi.fn()}
@@ -194,6 +196,7 @@ describe('shared patterns', () => {
 
     expect(screen.getByRole('textbox', { name: 'Profile draft material' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Add candidate materials' })).toBeTruthy()
+    expect(screen.getByLabelText('Usage 120 / 15')).toBeTruthy()
     expect(screen.getByRole('combobox', { name: 'Proposal type' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Generate profile draft' })).toBeTruthy()
     expect(screen.getByText('resume.md')).toBeTruthy()
@@ -263,6 +266,94 @@ describe('shared patterns', () => {
       return
     expect(activity.status).toBe('succeeded')
     expect(activity.label).toBe('Searched files')
+  })
+
+  it('collapses repeated Codex file-change status updates for the same path', () => {
+    const events = normalizeSessionEvents([
+      {
+        id: 'file-1',
+        payloadJson: { agentEvent: { detail: 'add artifacts/profile.md (in_progress)', kind: 'status', label: 'file_change', status: 'in_progress' } },
+        seq: 1,
+        turnId: 'turn-1',
+        type: 'status',
+      },
+      {
+        id: 'file-2',
+        payloadJson: { agentEvent: { detail: 'add artifacts/profile.md (completed)', kind: 'status', label: 'file_change', status: 'completed' } },
+        seq: 2,
+        turnId: 'turn-1',
+        type: 'status',
+      },
+    ], { parser: 'codex-cli' })
+    const viewModel = createSessionTimelineViewModel({
+      events,
+      turns: [{ id: 'turn-1', input: 'Write artifact', seq: 1, status: 'succeeded' }],
+    })
+
+    expect(viewModel.turns[0]?.events).toHaveLength(1)
+    const activity = viewModel.turns[0]?.events[0]
+    expect(activity?.kind).toBe('activity')
+    if (activity?.kind !== 'activity')
+      return
+    expect(activity.label).toBe('Created file')
+    expect(activity.status).toBe('succeeded')
+  })
+
+  it('collapses Codex status output signals and keeps usage for the composer', () => {
+    const events = normalizeSessionEvents([
+      {
+        id: 'status-1',
+        payloadJson: { agentEvent: { detail: 'running', kind: 'status', label: 'status' } },
+        seq: 1,
+        turnId: 'turn-1',
+        type: 'status',
+      },
+      {
+        id: 'status-2',
+        payloadJson: { agentEvent: { detail: 'Codex CLI via Local CLI', kind: 'status', label: 'initializing' } },
+        seq: 2,
+        turnId: 'turn-1',
+        type: 'status',
+      },
+      {
+        id: 'usage-1',
+        payloadJson: { agentEvent: { inputTokens: 175170, kind: 'usage', outputTokens: 3446 } },
+        seq: 3,
+        turnId: 'turn-1',
+        type: 'usage',
+      },
+      {
+        id: 'artifact-1',
+        payloadJson: { path: 'artifacts/profile.md' },
+        seq: 4,
+        turnId: 'turn-1',
+        type: 'artifact',
+      },
+      {
+        id: 'review-1',
+        payloadJson: { verdict: 'needs_review' },
+        seq: 5,
+        turnId: 'turn-1',
+        type: 'review',
+      },
+      {
+        id: 'status-3',
+        payloadJson: { agentEvent: { detail: 'succeeded', kind: 'status', label: 'status' } },
+        seq: 6,
+        turnId: 'turn-1',
+        type: 'status',
+      },
+    ], { parser: 'codex-cli' })
+    const usage = summarizeSessionUsage(events)
+    const viewModel = createSessionTimelineViewModel({
+      events,
+      turns: [{ id: 'turn-1', input: 'Build profile', seq: 1, status: 'succeeded' }],
+    })
+
+    expect(usage).toMatchObject({ inputTokens: 175170, outputTokens: 3446 })
+    expect(viewModel.turns[0]?.events.map(event => event.kind)).toEqual(['signal', 'signal'])
+    expect(viewModel.turns[0]?.events.some(event => event.kind === 'usage')).toBe(false)
+    expect(viewModel.turns[0]?.events.filter(event => event.kind === 'signal').map(event => event.label)).toEqual(['Session running', 'Session output'])
   })
 
   it('renders session timeline turns and event blocks', () => {

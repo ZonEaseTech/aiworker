@@ -9,6 +9,7 @@ import type { FormEvent } from 'react'
 import type { messagesFor, SupportedLocale } from '../features/i18n'
 import type { EngineReadiness } from '../features/session/engine-readiness'
 import type { SessionProgressSummary } from './session-progress'
+import type { SessionTurnDraft } from './session-turn-composer'
 
 import {
   createSessionTimelineViewModel,
@@ -16,9 +17,9 @@ import {
   MessageFlow,
   MessageRow,
   normalizeSessionEvents,
-  SessionComposer,
   SessionTimeline,
   StatusEventPill,
+  summarizeSessionUsage,
 } from '@zonease/aiworker-component'
 import {
   ArrowDown,
@@ -27,12 +28,12 @@ import {
   PanelRightClose,
   PanelRightOpen,
   RefreshCw,
-  Send,
   Settings,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { displayTemplate, formatRelativeTime, formatStatus } from '../features/i18n'
 import { SessionProgressPanel } from './session-progress-panel'
+import { SessionTurnComposer } from './session-turn-composer'
 
 type WorkerMessages = ReturnType<typeof messagesFor>
 
@@ -65,7 +66,7 @@ export function WorkerSessionChat({
   onOpenSettings: () => void
   onRefresh: () => void
   onToggleDetailDrawer: () => void
-  onSubmitTurn: (event: FormEvent<HTMLFormElement>) => void
+  onSubmitTurn: (event: FormEvent<HTMLFormElement>, draft?: SessionTurnDraft) => void
   onTurnInputChange: (value: string) => void
   progress: SessionProgressSummary
   session: LocalSession
@@ -80,10 +81,20 @@ export function WorkerSessionChat({
   const pinnedToBottomRef = useRef(true)
   const [scrolledFromBottom, setScrolledFromBottom] = useState(false)
   const templateCopy = template ? displayTemplate(template, locale) : null
+  const normalizedEvents = useMemo(() => normalizeSessionEvents(events, { parser: 'codex-cli' }), [events])
   const timeline = useMemo(() => createSessionTimelineViewModel({
-    events: normalizeSessionEvents(events, { parser: 'codex-cli' }),
+    events: normalizedEvents,
     turns,
-  }), [events, turns])
+  }), [normalizedEvents, turns])
+  const usage = useMemo(() => summarizeSessionUsage(normalizedEvents), [normalizedEvents])
+  const composerUsage = usage && (usage.inputTokens != null || usage.outputTokens != null)
+    ? {
+        ariaLabel: `Usage ${formatUsagePair(usage.inputTokens, usage.outputTokens)}`,
+        label: 'Usage',
+        title: `Usage ${formatUsagePair(usage.inputTokens, usage.outputTokens)}`,
+        value: formatUsagePair(usage.inputTokens, usage.outputTokens),
+      }
+    : undefined
 
   useEffect(() => {
     didInitialScrollRef.current = false
@@ -212,23 +223,25 @@ export function WorkerSessionChat({
           : null}
       </div>
 
-      <SessionComposer
-        ariaLabel={copy.workspace.followUpInput}
+      <SessionTurnComposer
         className="worker-composer"
-        disabled={!engineReadiness.ready}
-        placeholder={copy.workspace.followUpPlaceholder}
-        submitAriaLabel={turnSubmitting ? copy.workspace.sendingTurn : copy.workspace.sendTurn}
-        submitDisabled={!engineReadiness.ready}
-        submitIcon={<Send aria-hidden="true" size={14} />}
-        submitting={turnSubmitting}
-        submitTitle={turnSubmitting ? copy.workspace.sendingTurn : copy.workspace.sendTurn}
+        copy={copy}
+        engineReadiness={engineReadiness}
+        usage={composerUsage}
         value={turnInput}
+        submitting={turnSubmitting}
         variant="compact"
         onSubmit={onSubmitTurn}
         onValueChange={onTurnInputChange}
       />
     </section>
   )
+}
+
+function formatUsagePair(inputTokens?: number, outputTokens?: number): string {
+  return [inputTokens, outputTokens]
+    .map(value => value == null ? '0' : String(value))
+    .join(' / ')
 }
 
 function AssistantWaiting({ detail, role }: { detail: string, role: string }) {

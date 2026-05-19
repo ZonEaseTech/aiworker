@@ -18,6 +18,7 @@ export type {
   SessionComposerAttachmentItem,
   SessionComposerOption,
   SessionComposerProps,
+  SessionComposerUsage,
 } from './session-composer'
 export { SessionDetailPanel } from './session-detail'
 export type { SessionDetailPanelProps } from './session-detail'
@@ -30,6 +31,7 @@ export {
   formatSessionAttachmentSize,
   isSessionAttachmentImage,
   normalizeSessionEvents,
+  summarizeSessionUsage,
 } from './session-view-model'
 export type {
   SessionComposerMaterial,
@@ -42,8 +44,11 @@ export type {
   SessionTimelineEvent,
   SessionTimelineEventInput,
   SessionTimelineParser,
+  SessionTimelineSignalEvent,
+  SessionTimelineSignalKind,
   SessionTimelineTurnInput,
   SessionTimelineTurnViewModel,
+  SessionTimelineUsageSummary,
 } from './session-view-model'
 export {
   StudioActivityRow,

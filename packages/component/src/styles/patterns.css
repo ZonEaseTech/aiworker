@@ -1104,6 +1104,29 @@
   min-width: 0;
 }
 
+.session-composer-usage {
+  min-width: 0;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.session-composer-usage span,
+.session-composer-usage small {
+  font: 12px/1 var(--mono);
+}
+
+.session-composer-usage small {
+  color: var(--text-soft);
+}
+
 .session-composer-template-select .studio-select-trigger {
   min-height: 38px;
   padding: 6px 10px 6px 12px;
@@ -1208,7 +1231,8 @@
 .session-log-card,
 .session-tool-card,
 .session-activity-row,
-.session-activity-group {
+.session-activity-group,
+.session-signal-row {
   max-width: 100%;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -1219,7 +1243,8 @@
 .session-log-card summary,
 .session-tool-card summary,
 .session-activity-row summary,
-.session-activity-group summary {
+.session-activity-group summary,
+.session-signal-row summary {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1242,7 +1267,8 @@
 .session-log-card summary::-webkit-details-marker,
 .session-tool-card summary::-webkit-details-marker,
 .session-activity-row summary::-webkit-details-marker,
-.session-activity-group summary::-webkit-details-marker {
+.session-activity-group summary::-webkit-details-marker,
+.session-signal-row summary::-webkit-details-marker {
   display: none;
 }
 
@@ -1295,6 +1321,21 @@
 .session-activity-row.nested {
   border-radius: var(--radius);
   background: var(--bg);
+}
+
+.session-signal-row {
+  width: fit-content;
+  min-width: min(100%, 260px);
+  background: color-mix(in srgb, var(--bg-panel) 72%, transparent);
+}
+
+.session-signal-row summary {
+  padding: 7px 9px;
+}
+
+.session-signal-row .session-activity-icon {
+  background: var(--bg-subtle);
+  color: var(--text-muted);
 }
 
 .session-activity-group-list,

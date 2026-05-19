@@ -1,6 +1,6 @@
 import type { FormEvent, ReactNode } from 'react'
 
-import { Expand, File, Paperclip, SendHorizontal, X } from 'lucide-react'
+import { Activity, Expand, File, Paperclip, SendHorizontal, X } from 'lucide-react'
 import { useState } from 'react'
 import { IconButton, Select, Textarea } from '../primitives'
 import { cx } from '../utils/cx'
@@ -35,6 +35,13 @@ export interface SessionComposerAction {
   title?: string
 }
 
+export interface SessionComposerUsage {
+  ariaLabel?: string
+  label: ReactNode
+  title?: string
+  value: ReactNode
+}
+
 export interface SessionComposerProps {
   allowSubmitWithoutText?: boolean
   ariaLabel: string
@@ -65,6 +72,7 @@ export interface SessionComposerProps {
   templateLabel?: string
   templateOptions?: SessionComposerOption[]
   title?: ReactNode
+  usage?: SessionComposerUsage
   value: string
   variant?: 'compact' | 'large' | 'panel'
 }
@@ -87,6 +95,7 @@ export interface SessionComposerActionBarProps {
   templateContentClassName?: string
   templateLabel?: string
   templateOptions?: SessionComposerOption[]
+  usage?: SessionComposerUsage
 }
 
 export function SessionComposer({
@@ -119,6 +128,7 @@ export function SessionComposer({
   templateLabel,
   templateOptions,
   title,
+  usage,
   value,
   variant = 'large',
 }: SessionComposerProps) {
@@ -169,6 +179,7 @@ export function SessionComposer({
         templateContentClassName={templateContentClassName}
         templateLabel={templateLabel}
         templateOptions={templateOptions}
+        usage={usage}
       />
     </form>
   )
@@ -192,6 +203,7 @@ export function SessionComposerActionBar({
   templateContentClassName,
   templateLabel = 'Proposal type',
   templateOptions = [],
+  usage,
 }: SessionComposerActionBarProps) {
   const templateSelect = selectedTemplateId && onTemplateChange && templateOptions.length > 0
     ? { onChange: onTemplateChange, value: selectedTemplateId }
@@ -219,6 +231,15 @@ export function SessionComposerActionBar({
       </div>
 
       <div className="session-composer-action-main">
+        {usage
+          ? (
+              <span className="session-composer-usage" aria-label={usage.ariaLabel} title={usage.title}>
+                <Activity aria-hidden="true" size={14} />
+                <span>{usage.label}</span>
+                <small>{usage.value}</small>
+              </span>
+            )
+          : null}
         {templateSelect
           ? (
               <Select

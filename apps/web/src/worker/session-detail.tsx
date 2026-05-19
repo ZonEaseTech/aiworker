@@ -13,19 +13,22 @@ import type { FormEvent } from 'react'
 import type { messagesFor, SupportedLocale } from '../features/i18n'
 import type { EngineReadiness } from '../features/session/engine-readiness'
 import type { SessionProgressSummary } from './session-progress'
+import type { SessionTurnDraft } from './session-turn-composer'
 
 import {
   ArtifactPreviewFrame,
+  normalizeSessionEvents,
   ReviewPanelShell,
-  SessionComposer,
   SessionDetailPanel,
   StudioActivityRow,
   StudioEmptyState,
   StudioSectionHeader,
   StudioStatusPill,
+  summarizeSessionUsage,
 } from '@zonease/aiworker-component'
-import { Circle, ClipboardCheck, FileText, MessageSquare, Send, Sparkles, Terminal } from 'lucide-react'
+import { Circle, ClipboardCheck, FileText, MessageSquare, Sparkles, Terminal } from 'lucide-react'
 
+import { useMemo } from 'react'
 import {
   displayTemplate,
   formatRelativeTime,
@@ -33,6 +36,7 @@ import {
   formatStatus,
 } from '../features/i18n'
 import { SessionProgressPanel } from './session-progress-panel'
+import { SessionTurnComposer } from './session-turn-composer'
 
 export interface ArtifactPreviewState {
   artifactId: string | null
@@ -84,7 +88,7 @@ export function SessionDetail({
   locale: SupportedLocale
   onLessonStatus: (lesson: LocalLesson, status: LocalLessonStatus) => void
   onReview: () => void
-  onSubmitTurn: (event: FormEvent<HTMLFormElement>) => void
+  onSubmitTurn: (event: FormEvent<HTMLFormElement>, draft?: SessionTurnDraft) => void
   onTurnInputChange: (value: string) => void
   progress: SessionProgressSummary | null
   review: LocalReview | null
@@ -100,6 +104,16 @@ export function SessionDetail({
 }) {
   const templateCopy = template ? displayTemplate(template, locale) : null
   const recentEvents = events.slice(-6).reverse()
+  const normalizedEvents = useMemo(() => normalizeSessionEvents(events, { parser: 'codex-cli' }), [events])
+  const usage = useMemo(() => summarizeSessionUsage(normalizedEvents), [normalizedEvents])
+  const composerUsage = usage && (usage.inputTokens != null || usage.outputTokens != null)
+    ? {
+        ariaLabel: `Usage ${formatUsagePair(usage.inputTokens, usage.outputTokens)}`,
+        label: 'Usage',
+        title: `Usage ${formatUsagePair(usage.inputTokens, usage.outputTokens)}`,
+        value: formatUsagePair(usage.inputTokens, usage.outputTokens),
+      }
+    : undefined
 
   if (collapsed) {
     return (
@@ -142,17 +156,14 @@ export function SessionDetail({
               )}
               composer={mode === 'full'
                 ? (
-                    <SessionComposer
-                      ariaLabel={copy.workspace.followUpInput}
+                    <SessionTurnComposer
                       className="turn-composer"
+                      copy={copy}
                       description={engineReadiness.detail}
-                      placeholder={copy.workspace.followUpPlaceholder}
-                      submitAriaLabel={turnSubmitting ? copy.workspace.sendingTurn : copy.workspace.sendTurn}
-                      submitDisabled={!engineReadiness.ready}
-                      submitIcon={<Send aria-hidden="true" size={13} />}
+                      engineReadiness={engineReadiness}
                       submitting={turnSubmitting}
-                      submitTitle={turnSubmitting ? copy.workspace.sendingTurn : copy.workspace.sendTurn}
                       title={copy.workspace.continueSession}
+                      usage={composerUsage}
                       value={turnInput}
                       variant="compact"
                       onSubmit={onSubmitTurn}
@@ -313,6 +324,12 @@ export function SessionDetail({
           )}
     </aside>
   )
+}
+
+function formatUsagePair(inputTokens?: number, outputTokens?: number): string {
+  return [inputTokens, outputTokens]
+    .map(value => value == null ? '0' : String(value))
+    .join(' / ')
 }
 
 function reviewItems(review: LocalReview): string[] {

@@ -12,6 +12,7 @@ import type { FormEvent } from 'react'
 import type { LocalSoulAppSearchResult, LocalSoulAppWorkbenchAction, LocalWorkspaceData } from '../features/local-workspace/api/types'
 import type { SettingsSection } from '../features/settings'
 import type { ArtifactPreviewState } from './session-detail'
+import type { SessionTurnDraft } from './session-turn-composer'
 import type { SoulProfilePreviewState, SoulSessionDraft, SoulSessionMaterialDescriptor, SoulSessionMaterialInput, SoulWorkbenchContext } from './souls/types'
 
 import { IconButton, StudioCollapsibleGroup, StudioEmptyState, StudioMainFrame, StudioSectionHeader, WorkerStudioLayout } from '@zonease/aiworker-component'
@@ -699,13 +700,19 @@ export function WorkerStudio() {
     }
   }
 
-  async function submitTurn(event: FormEvent<HTMLFormElement>) {
+  async function submitTurn(event: FormEvent<HTMLFormElement>, draft?: SessionTurnDraft) {
     event.preventDefault()
-    if (!selectedSession || !turnInput.trim() || !engineReadiness.ready)
+    const draftInput = draft?.input ?? turnInput
+    const draftMaterials = draft?.materials ?? []
+    if (!selectedSession || (draftMaterials.length > 0 && !selectedWorkspace) || (!draftInput.trim() && draftMaterials.length === 0) || !engineReadiness.ready)
       return
     setTurnSubmitting(true)
     try {
-      const prompt = turnInput.trim()
+      const materialCopy = draft?.materialCopy ?? defaultSessionMaterialCopy
+      const attachedMaterials = selectedWorkspace && draftMaterials.length > 0
+        ? await persistSessionMaterials(selectedWorkspace.id, draftMaterials, materialCopy)
+        : []
+      const prompt = buildSessionContextWithMaterials(draftInput, attachedMaterials, materialCopy)
       const now = new Date().toISOString()
       setPendingTurn({
         createdAt: now,
@@ -723,6 +730,12 @@ export function WorkerStudio() {
       const result = await continueSessionTurnStream(selectedSession.id, {
         input: prompt,
         metadata: {
+          ...(attachedMaterials.length > 0
+            ? {
+                attachedMaterials,
+                materialCount: attachedMaterials.length,
+              }
+            : {}),
           requestedFrom: 'worker-web-follow-up',
         },
       }, selectedSession.workerId, {
