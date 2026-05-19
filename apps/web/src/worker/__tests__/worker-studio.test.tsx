@@ -1308,6 +1308,48 @@ describe('worker studio', () => {
     expect(screen.getByText('The artifact file is written and will appear here after session finalization.')).toBeTruthy()
   })
 
+  it('renders Codex CLI tool activity as readable session activity with command evidence retained', async () => {
+    currentEvents = [
+      {
+        ...eventRecord,
+        id: 21,
+        payloadJson: {
+          agentEvent: {
+            id: 'codex-tool-1',
+            input: { command: 'rg -n "profile" evidence' },
+            kind: 'tool_use',
+            name: 'Bash',
+          },
+        },
+        seq: 1,
+        type: 'tool',
+      },
+      {
+        ...eventRecord,
+        id: 22,
+        payloadJson: {
+          agentEvent: {
+            content: 'evidence/README.md:1:profile',
+            id: 'codex-tool-1',
+            isError: false,
+            kind: 'tool_result',
+          },
+        },
+        seq: 2,
+        type: 'tool',
+      },
+    ]
+    currentTurns = [{ ...turnRecord, response: null, status: 'succeeded' }]
+    window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1/sessions/session-1')
+
+    render(<WorkerStudio />)
+
+    const activityLabel = await screen.findByText('Searched files')
+    expect(activityLabel.closest('summary')?.textContent).not.toContain('Bash')
+    expect(screen.getByText('rg -n "profile" evidence')).toBeTruthy()
+    expect(screen.getByText('evidence/README.md:1:profile')).toBeTruthy()
+  })
+
   it('shows indexed artifacts as human-review work instead of completed automation', async () => {
     currentReviews = [{
       artifactId: 'artifact-1',

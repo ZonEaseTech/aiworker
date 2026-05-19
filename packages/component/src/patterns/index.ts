@@ -28,13 +28,20 @@ export {
   createSessionTimelineViewModel,
   formatSessionAttachmentKind,
   formatSessionAttachmentSize,
+  isSessionAttachmentImage,
   normalizeSessionEvents,
 } from './session-view-model'
 export type {
   SessionComposerMaterial,
   SessionComposerMaterialEncoding,
+  SessionTimelineActivityDetail,
+  SessionTimelineActivityEvent,
+  SessionTimelineActivityGroupEvent,
+  SessionTimelineActivityKind,
+  SessionTimelineActivityStatus,
   SessionTimelineEvent,
   SessionTimelineEventInput,
+  SessionTimelineParser,
   SessionTimelineTurnInput,
   SessionTimelineTurnViewModel,
 } from './session-view-model'

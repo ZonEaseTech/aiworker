@@ -1,5 +1,23 @@
 # AIWorker Changelog
 
+## 2026-05-19 [completed] FEAT-103 / PLAN-377 — Session activity pipeline and composer media previews
+
+Session Kit now renders Codex CLI session activity through a shared
+parser/view-model pipeline instead of exposing raw `Bash` tool cards as the
+primary chat hierarchy. `SessionTimeline` uses shared markdown preview for
+assistant prose, lightweight activity rows for Codex CLI search/read/list/run
+events, generic fallback for unknown commands, and collapsed evidence details
+for command/output payloads.
+
+The shared composer now supports image-aware attachment rows and package-owned
+lightbox preview. Generic workspace session creation can attach source
+materials, while HR profile drafts keep candidate-material wording and
+profile-proposal semantics outside the shared component.
+
+Verification covered focused component tests/typecheck, WorkerStudio
+integration tests/typecheck/lint/build, UI component governance, diff check and
+browser smoke on a real Codex-backed HR session route.
+
 ## 2026-05-19 [completed] FEAT-102 / PLAN-376 — Session Kit shared composer and session surfaces
 
 Completed the shared Session Kit extraction from the approved

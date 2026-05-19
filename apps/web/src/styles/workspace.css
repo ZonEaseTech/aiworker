@@ -212,6 +212,10 @@
   font-size: 13px;
 }
 
+.workspace-material-file-input {
+  display: none;
+}
+
 .inline-warning {
   display: flex;
   align-items: center;

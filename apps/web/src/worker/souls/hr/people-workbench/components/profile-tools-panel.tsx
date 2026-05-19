@@ -5,9 +5,9 @@ import type { SoulSessionDraft, WorkerLocale } from '../../../types'
 import type { HrWorkbenchCopy } from '../copy'
 import type { PersonProfile } from '../types'
 
-import { createComposerAttachment, formatSessionAttachmentKind, formatSessionAttachmentSize, SessionComposer } from '@zonease/aiworker-component'
+import { createComposerAttachment, formatSessionAttachmentKind, formatSessionAttachmentSize, isSessionAttachmentImage, SessionComposer } from '@zonease/aiworker-component'
 import { Clock3 } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { displayTemplate, formatRelativeTime } from '../../../../../features/i18n'
 
 interface ProfileToolsPanelProps {
@@ -29,6 +29,7 @@ interface ProfileToolsPanelProps {
 interface ComposerAttachment {
   file: File
   id: string
+  previewUrl?: string
 }
 
 export function HrProfileToolsPanel({
@@ -47,10 +48,24 @@ export function HrProfileToolsPanel({
   value,
 }: ProfileToolsPanelProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const attachmentsRef = useRef<ComposerAttachment[]>([])
   const [attachments, setAttachments] = useState<ComposerAttachment[]>([])
   const [attachmentError, setAttachmentError] = useState<string | null>(null)
   const recentSessions = focusedProfile?.sessions.slice().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)) ?? []
   const canSubmit = Boolean(selectedWorkspace && engineReadiness.ready && !submitting && (value.trim() || attachments.length > 0))
+
+  useEffect(() => {
+    attachmentsRef.current = attachments
+  }, [attachments])
+
+  useEffect(() => {
+    return () => {
+      for (const attachment of attachmentsRef.current) {
+        if (attachment.previewUrl)
+          URL.revokeObjectURL(attachment.previewUrl)
+      }
+    }
+  }, [])
 
   function handleFilesSelected(files: FileList | null) {
     if (!files?.length)
@@ -61,6 +76,7 @@ export function HrProfileToolsPanel({
       ...Array.from(files).map((file, index) => ({
         file,
         id: `${file.name}-${file.size}-${file.lastModified}-${current.length + index}`,
+        previewUrl: isSessionAttachmentImage(file) ? URL.createObjectURL(file) : undefined,
       })),
     ])
     if (fileInputRef.current)
@@ -68,7 +84,21 @@ export function HrProfileToolsPanel({
   }
 
   function removeAttachment(id: string) {
-    setAttachments(current => current.filter(attachment => attachment.id !== id))
+    setAttachments(current => current.filter((attachment) => {
+      if (attachment.id === id && attachment.previewUrl)
+        URL.revokeObjectURL(attachment.previewUrl)
+      return attachment.id !== id
+    }))
+  }
+
+  function clearAttachments() {
+    setAttachments((current) => {
+      for (const attachment of current) {
+        if (attachment.previewUrl)
+          URL.revokeObjectURL(attachment.previewUrl)
+      }
+      return []
+    })
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -78,8 +108,16 @@ export function HrProfileToolsPanel({
     try {
       setAttachmentError(null)
       const materials = await Promise.all(attachments.map(attachment => createComposerAttachment(attachment.file)))
-      await onSubmitSession(event, { context: value, materials })
-      setAttachments([])
+      await onSubmitSession(event, {
+        context: value,
+        materialCopy: {
+          binaryTitle: 'Uploaded Candidate Material',
+          heading: 'Attached candidate material:',
+          instruction: 'Use these workspace file paths as source material before drafting the reviewable profile proposal.',
+        },
+        materials,
+      })
+      clearAttachments()
     }
     catch {
       setAttachmentError(labels.materialReadError)
@@ -138,7 +176,13 @@ export function HrProfileToolsPanel({
         attachments={attachments.map(attachment => ({
           id: attachment.id,
           kind: formatSessionAttachmentKind(attachment.file),
+          closePreviewLabel: 'Close preview',
+          mediaType: attachment.previewUrl ? 'image' : 'file',
           name: attachment.file.name,
+          onPreviewLabel: `Preview ${attachment.file.name}`,
+          previewAlt: attachment.file.name,
+          previewTitle: attachment.file.name,
+          previewUrl: attachment.previewUrl,
           removeLabel: labels.removeCandidateMaterial(attachment.file.name),
           size: formatSessionAttachmentSize(attachment.file.size),
         }))}

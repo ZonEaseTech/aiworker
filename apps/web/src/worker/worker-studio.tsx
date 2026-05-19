@@ -76,6 +76,18 @@ type WorkerMessages = ReturnType<typeof messagesFor>
 
 const defaultNewWorkerSoulId = 'aiworker-hr'
 
+interface SessionMaterialCopy {
+  binaryTitle?: string
+  heading: string
+  instruction: string
+}
+
+const defaultSessionMaterialCopy: SessionMaterialCopy = {
+  binaryTitle: 'Uploaded Source Material',
+  heading: 'Attached source material:',
+  instruction: 'Use these workspace file paths as source material before producing the requested output.',
+}
+
 const initialArtifactPreviewState: ArtifactPreviewState = {
   artifactId: null,
   content: '',
@@ -631,10 +643,11 @@ export function WorkerStudio() {
       return
     setSubmitting(true)
     try {
+      const materialCopy = draft?.materialCopy ?? defaultSessionMaterialCopy
       const attachedMaterials = draftMaterials.length > 0
-        ? await persistSessionMaterials(selectedWorkspace.id, draftMaterials)
+        ? await persistSessionMaterials(selectedWorkspace.id, draftMaterials, materialCopy)
         : []
-      const sessionContext = buildSessionContextWithMaterials(draftContext, attachedMaterials)
+      const sessionContext = buildSessionContextWithMaterials(draftContext, attachedMaterials, materialCopy)
       const body = buildProjectPrompt(selectedSoul, selectedTemplate, sessionContext)
       let sessionRouteShown = false
       const startedWorkerId = selectedWorker.id
@@ -1396,7 +1409,7 @@ function findHrProfileDraftTemplate(templates: LocalWorkspaceData['templates'][n
   ) ?? null
 }
 
-async function persistSessionMaterials(workspaceId: string, materials: SoulSessionMaterialInput[]): Promise<SoulSessionMaterialDescriptor[]> {
+async function persistSessionMaterials(workspaceId: string, materials: SoulSessionMaterialInput[], copy: SessionMaterialCopy): Promise<SoulSessionMaterialDescriptor[]> {
   const batch = new Date().toISOString().replace(/[:.]/g, '-')
   const usedNames = new Set<string>()
   const descriptors: SoulSessionMaterialDescriptor[] = []
@@ -1408,7 +1421,7 @@ async function persistSessionMaterials(workspaceId: string, materials: SoulSessi
       : `evidence/uploads/${batch}/${safeName}.base64.txt`
     const content = material.encoding === 'utf8'
       ? material.content
-      : renderBase64MaterialFile(material)
+      : renderBase64MaterialFile(material, copy)
     await writeFile(workspaceId, path, content)
     descriptors.push({
       encoding: material.encoding,
@@ -1422,7 +1435,7 @@ async function persistSessionMaterials(workspaceId: string, materials: SoulSessi
   return descriptors
 }
 
-function buildSessionContextWithMaterials(context: string, materials: SoulSessionMaterialDescriptor[]): string {
+function buildSessionContextWithMaterials(context: string, materials: SoulSessionMaterialDescriptor[], copy: SessionMaterialCopy): string {
   const trimmed = context.trim()
   if (materials.length === 0)
     return trimmed
@@ -1432,10 +1445,10 @@ function buildSessionContextWithMaterials(context: string, materials: SoulSessio
   )
   return [
     trimmed,
-    'Attached candidate material:',
+    copy.heading,
     ...materialLines,
     '',
-    'Use these workspace file paths as source material before drafting the reviewable profile proposal.',
+    copy.instruction,
   ].filter(Boolean).join('\n')
 }
 
@@ -1461,9 +1474,9 @@ function uniqueMaterialFileName(name: string, used: Set<string>): string {
   return next
 }
 
-function renderBase64MaterialFile(material: SoulSessionMaterialInput): string {
+function renderBase64MaterialFile(material: SoulSessionMaterialInput, copy: SessionMaterialCopy): string {
   return [
-    '# Uploaded Candidate Material',
+    `# ${copy.binaryTitle ?? 'Uploaded Source Material'}`,
     '',
     `- Original filename: ${material.name}`,
     `- MIME type: ${material.mimeType || 'application/octet-stream'}`,

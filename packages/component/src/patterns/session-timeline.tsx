@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react'
-import type { SessionTimelineEvent, SessionTimelineTurnViewModel } from './session-view-model'
+import type { SessionTimelineActivityEvent, SessionTimelineEvent, SessionTimelineTurnViewModel } from './session-view-model'
 
-import { AlertCircle, CheckCircle, FileText, Terminal, Wrench } from 'lucide-react'
+import { AlertCircle, CheckCircle, Code2, FileText, ListTree, Play, Search, Terminal, Wrench } from 'lucide-react'
 import { Fragment } from 'react'
+import { MarkdownPreview } from './markdown-preview'
 import { MessageFlow, MessageRow, StatusEventPill, ToolResultCard } from './message-flow'
 import { StudioPill } from './studio-patterns'
 
@@ -73,7 +74,7 @@ function DefaultSessionEvent({
   toolResult?: Extract<SessionTimelineEvent, { kind: 'tool_result' }>
 }) {
   if (event.kind === 'text')
-    return <div className="session-prose">{event.text}</div>
+    return <MarkdownPreview className="session-prose" content={event.text} />
   if (event.kind === 'thinking')
     return <pre className="session-log thinking">{event.text}</pre>
   if (event.kind === 'log')
@@ -100,6 +101,10 @@ function DefaultSessionEvent({
   }
   if (event.kind === 'tool_result')
     return null
+  if (event.kind === 'activity')
+    return <SessionActivityRow activity={event} />
+  if (event.kind === 'activity_group')
+    return <SessionActivityGroup group={event} />
   if (event.kind === 'tool_use')
     return <SessionToolCard result={toolResult} tool={event} />
   if (event.kind === 'error') {
@@ -111,6 +116,82 @@ function DefaultSessionEvent({
     )
   }
   return null
+}
+
+function SessionActivityGroup({
+  group,
+}: {
+  group: Extract<SessionTimelineEvent, { kind: 'activity_group' }>
+}) {
+  return (
+    <details className="session-activity-group">
+      <summary>
+        <span className="session-activity-icon">
+          <Search aria-hidden="true" size={14} />
+        </span>
+        <span className="session-activity-copy">
+          <strong>{group.label}</strong>
+          {group.detail ? <small>{group.detail}</small> : null}
+        </span>
+        <span className={`session-activity-result ${group.status}`}>{group.status === 'failed' ? 'failed' : 'done'}</span>
+      </summary>
+      <div className="session-activity-group-list">
+        {group.activities.map(activity => <SessionActivityRow key={activity.id} activity={activity} nested />)}
+      </div>
+    </details>
+  )
+}
+
+function SessionActivityRow({
+  activity,
+  nested = false,
+}: {
+  activity: SessionTimelineActivityEvent
+  nested?: boolean
+}) {
+  const hasDetails = activity.details && activity.details.length > 0
+  return (
+    <details className={nested ? 'session-activity-row nested' : 'session-activity-row'} open={activity.status === 'failed'}>
+      <summary>
+        <span className="session-activity-icon">
+          {activityIcon(activity)}
+        </span>
+        <span className="session-activity-copy">
+          <strong>{activity.label}</strong>
+          {activity.detail ? <small>{activity.detail}</small> : null}
+        </span>
+        <span className={`session-activity-result ${activity.status}`}>
+          {activity.status === 'running' ? 'running' : activity.status === 'failed' ? 'failed' : 'done'}
+        </span>
+      </summary>
+      {hasDetails
+        ? (
+            <div className="session-activity-details">
+              {activity.details?.map(detail => (
+                <div key={`${activity.id}-${detail.label}`} className="session-activity-detail">
+                  <span>{detail.label}</span>
+                  <pre>{detail.value}</pre>
+                </div>
+              ))}
+            </div>
+          )
+        : null}
+    </details>
+  )
+}
+
+function activityIcon(activity: SessionTimelineActivityEvent) {
+  if (activity.activityKind === 'search')
+    return <Search aria-hidden="true" size={14} />
+  if (activity.activityKind === 'list')
+    return <ListTree aria-hidden="true" size={14} />
+  if (activity.activityKind === 'read')
+    return <FileText aria-hidden="true" size={14} />
+  if (['build', 'lint', 'test'].includes(activity.activityKind))
+    return <Play aria-hidden="true" size={14} />
+  if (['create', 'delete', 'edit', 'file'].includes(activity.activityKind))
+    return <Code2 aria-hidden="true" size={14} />
+  return <Terminal aria-hidden="true" size={14} />
 }
 
 function SessionLogCard({ label, value }: { label: string, value: string }) {

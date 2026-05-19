@@ -1,13 +1,20 @@
 import type { FormEvent, ReactNode } from 'react'
 
-import { Paperclip, SendHorizontal, X } from 'lucide-react'
+import { Expand, File, Paperclip, SendHorizontal, X } from 'lucide-react'
+import { useState } from 'react'
 import { IconButton, Select, Textarea } from '../primitives'
 import { cx } from '../utils/cx'
 
 export interface SessionComposerAttachmentItem {
   id: string
   kind: string
+  closePreviewLabel?: string
+  mediaType?: 'file' | 'image'
   name: string
+  onPreviewLabel?: string
+  previewAlt?: string
+  previewTitle?: string
+  previewUrl?: string
   removeLabel: string
   size?: string
 }
@@ -249,30 +256,76 @@ export function SessionAttachmentList({
   attachments: SessionComposerAttachmentItem[]
   onRemoveAttachment?: (id: string) => void
 }) {
+  const [previewAttachment, setPreviewAttachment] = useState<SessionComposerAttachmentItem | null>(null)
+
   if (attachments.length === 0)
     return null
 
   return (
-    <div className="session-composer-attachment-list">
-      {attachments.map(attachment => (
-        <div key={attachment.id} className="session-composer-attachment-row">
-          <span className="session-composer-attachment-kind">{attachment.kind}</span>
-          <span className="session-composer-attachment-name">{attachment.name}</span>
-          {attachment.size ? <span className="session-composer-attachment-size">{attachment.size}</span> : null}
-          {onRemoveAttachment
-            ? (
+    <>
+      <div className="session-composer-attachment-list">
+        {attachments.map(attachment => (
+          <div key={attachment.id} className={cx('session-composer-attachment-row', attachment.mediaType === 'image' && 'image')}>
+            {attachment.mediaType === 'image' && attachment.previewUrl
+              ? (
+                  <button
+                    type="button"
+                    className="session-composer-attachment-preview"
+                    aria-label={attachment.onPreviewLabel ?? attachment.previewTitle ?? attachment.name}
+                    title={attachment.previewTitle ?? attachment.name}
+                    onClick={() => setPreviewAttachment(attachment)}
+                  >
+                    <img src={attachment.previewUrl} alt={attachment.previewAlt ?? ''} />
+                    <Expand aria-hidden="true" size={12} />
+                  </button>
+                )
+              : (
+                  <span className="session-composer-attachment-file-icon" aria-hidden="true">
+                    <File size={13} />
+                  </span>
+                )}
+            <span className="session-composer-attachment-kind">{attachment.kind}</span>
+            <span className="session-composer-attachment-name">{attachment.name}</span>
+            {attachment.size ? <span className="session-composer-attachment-size">{attachment.size}</span> : null}
+            {onRemoveAttachment
+              ? (
+                  <IconButton
+                    aria-label={attachment.removeLabel}
+                    title={attachment.removeLabel}
+                    onClick={() => onRemoveAttachment(attachment.id)}
+                  >
+                    <X aria-hidden="true" size={13} />
+                  </IconButton>
+                )
+              : null}
+          </div>
+        ))}
+      </div>
+      {previewAttachment?.previewUrl
+        ? (
+            <div
+              className="session-composer-lightbox"
+              role="dialog"
+              aria-modal="true"
+              aria-label={previewAttachment.previewTitle ?? previewAttachment.name}
+              onClick={() => setPreviewAttachment(null)}
+            >
+              <div className="session-composer-lightbox-frame" onClick={event => event.stopPropagation()}>
                 <IconButton
-                  aria-label={attachment.removeLabel}
-                  title={attachment.removeLabel}
-                  onClick={() => onRemoveAttachment(attachment.id)}
+                  className="session-composer-lightbox-close"
+                  aria-label={previewAttachment.closePreviewLabel ?? 'Close preview'}
+                  title={previewAttachment.closePreviewLabel ?? 'Close preview'}
+                  onClick={() => setPreviewAttachment(null)}
                 >
-                  <X aria-hidden="true" size={13} />
+                  <X aria-hidden="true" size={16} />
                 </IconButton>
-              )
-            : null}
-        </div>
-      ))}
-    </div>
+                <img src={previewAttachment.previewUrl} alt={previewAttachment.previewAlt ?? previewAttachment.name} />
+                <span>{previewAttachment.name}</span>
+              </div>
+            </div>
+          )
+        : null}
+    </>
   )
 }
 

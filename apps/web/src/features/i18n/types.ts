@@ -102,6 +102,9 @@ export interface StaticMessages {
     createSessionHint: (templateName: string) => string
     createSessionPlaceholder: string
     createSessionPrompt: (workspaceName: string) => string
+    addSourceMaterials: string
+    attachedSourceMaterials: string
+    closeSourceMaterialPreview: string
     createWorker: string
     createWorkerHint: string
     createWorkspace: string
@@ -161,7 +164,10 @@ export interface StaticMessages {
     selectedWorkspace: string
     sessionDetail: string
     latest: string
+    materialReadError: string
     soulCatalog: string
+    previewSourceMaterial: (name: string) => string
+    removeSourceMaterial: (name: string) => string
     soulApps: (count: number) => string
     startSoulApp: (appName: string) => string
     turnCount: (count: number) => string

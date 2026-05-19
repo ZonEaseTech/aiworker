@@ -81,7 +81,7 @@ export function WorkerSessionChat({
   const [scrolledFromBottom, setScrolledFromBottom] = useState(false)
   const templateCopy = template ? displayTemplate(template, locale) : null
   const timeline = useMemo(() => createSessionTimelineViewModel({
-    events: normalizeSessionEvents(events),
+    events: normalizeSessionEvents(events, { parser: 'codex-cli' }),
     turns,
   }), [events, turns])
 

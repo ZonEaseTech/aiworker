@@ -167,7 +167,7 @@ export const componentCatalog: ComponentCatalogItem[] = [
     status: 'implemented',
   },
   {
-    description: 'Shared controlled session composer shell with attachments and action bar.',
+    description: 'Shared controlled session composer shell with file/image attachments, image preview and action bar.',
     family: 'workbench',
     name: 'SessionComposer',
     owner: 'host-soul-shared',
@@ -181,7 +181,7 @@ export const componentCatalog: ComponentCatalogItem[] = [
     status: 'implemented',
   },
   {
-    description: 'Shared normalized session timeline renderer.',
+    description: 'Shared normalized session timeline renderer with parser-led activity rows and markdown assistant prose.',
     family: 'workbench',
     name: 'SessionTimeline',
     owner: 'host-soul-shared',

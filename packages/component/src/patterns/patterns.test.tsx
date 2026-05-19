@@ -19,6 +19,7 @@ import {
   createSessionTimelineViewModel,
   formatSessionAttachmentKind,
   formatSessionAttachmentSize,
+  isSessionAttachmentImage,
   normalizeSessionEvents,
 } from '.'
 
@@ -131,6 +132,7 @@ describe('shared patterns', () => {
     })
     expect(formatSessionAttachmentKind(file)).toBe('MD')
     expect(formatSessionAttachmentSize(1536)).toBe('1.5 KB')
+    expect(isSessionAttachmentImage(new File(['png'], 'portrait.png', { type: 'image/png' }))).toBe(true)
   })
 
   it('normalizes session events and groups them by turn', () => {
@@ -158,7 +160,22 @@ describe('shared patterns', () => {
       <SessionComposer
         ariaLabel="Profile draft material"
         attachmentTriggerLabel="Add candidate materials"
-        attachments={[{ id: 'a1', kind: 'MD', name: 'resume.md', removeLabel: 'Remove resume.md', size: '1 KB' }]}
+        attachments={[
+          { id: 'a1', kind: 'MD', name: 'resume.md', removeLabel: 'Remove resume.md', size: '1 KB' },
+          {
+            closePreviewLabel: 'Close preview',
+            id: 'a2',
+            kind: 'PNG',
+            mediaType: 'image',
+            name: 'portrait.png',
+            onPreviewLabel: 'Preview portrait.png',
+            previewAlt: 'portrait.png',
+            previewTitle: 'portrait.png',
+            previewUrl: 'blob:portrait',
+            removeLabel: 'Remove portrait.png',
+            size: '12 KB',
+          },
+        ]}
         description="Drafts stay reviewable before profile promotion."
         selectedTemplateId="profile-update-proposal"
         submitAriaLabel="Generate profile draft"
@@ -180,6 +197,72 @@ describe('shared patterns', () => {
     expect(screen.getByRole('combobox', { name: 'Proposal type' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Generate profile draft' })).toBeTruthy()
     expect(screen.getByText('resume.md')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Preview portrait.png' }))
+    expect(screen.getByRole('dialog', { name: 'portrait.png' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Close preview' }))
+    expect(screen.queryByRole('dialog', { name: 'portrait.png' })).toBeNull()
+  })
+
+  it('classifies Codex CLI tool events as readable activity with raw evidence', () => {
+    const events = normalizeSessionEvents([
+      {
+        id: 'tool-use',
+        payloadJson: { agentEvent: { id: 'run-1', input: { command: 'rg -n "SessionTimeline" packages/component/src' }, kind: 'tool_use', name: 'Bash' } },
+        seq: 1,
+        turnId: 'turn-1',
+        type: 'tool',
+      },
+      {
+        id: 'tool-result',
+        payloadJson: { agentEvent: { content: 'packages/component/src/patterns/session-timeline.tsx:1', id: 'run-1', isError: false, kind: 'tool_result' } },
+        seq: 2,
+        turnId: 'turn-1',
+        type: 'tool',
+      },
+    ], { parser: 'codex-cli' })
+    const viewModel = createSessionTimelineViewModel({
+      events,
+      turns: [{ id: 'turn-1', input: 'Find timeline', seq: 1, status: 'succeeded' }],
+    })
+    const activity = viewModel.turns[0]?.events[0]
+
+    expect(activity?.kind).toBe('activity')
+    if (activity?.kind !== 'activity')
+      return
+    expect(activity.activityKind).toBe('search')
+    expect(activity.label).toBe('Searched files')
+    expect(activity.details?.some(detail => detail.value.includes('rg -n'))).toBe(true)
+    expect(activity.details?.some(detail => detail.value.includes('session-timeline.tsx'))).toBe(true)
+  })
+
+  it('treats empty Codex search results as completed exploration instead of an expanded failure', () => {
+    const events = normalizeSessionEvents([
+      {
+        id: 'tool-use',
+        payloadJson: { agentEvent: { id: 'run-empty', input: { command: 'rg -n "secret" README.md' }, kind: 'tool_use', name: 'Bash' } },
+        seq: 1,
+        turnId: 'turn-1',
+        type: 'tool',
+      },
+      {
+        id: 'tool-result',
+        payloadJson: { agentEvent: { content: '', id: 'run-empty', isError: true, kind: 'tool_result' } },
+        seq: 2,
+        turnId: 'turn-1',
+        type: 'tool',
+      },
+    ], { parser: 'codex-cli' })
+    const viewModel = createSessionTimelineViewModel({
+      events,
+      turns: [{ id: 'turn-1', input: 'Search secrets', seq: 1, status: 'succeeded' }],
+    })
+    const activity = viewModel.turns[0]?.events[0]
+
+    expect(activity?.kind).toBe('activity')
+    if (activity?.kind !== 'activity')
+      return
+    expect(activity.status).toBe('succeeded')
+    expect(activity.label).toBe('Searched files')
   })
 
   it('renders session timeline turns and event blocks', () => {
@@ -198,6 +281,51 @@ describe('shared patterns', () => {
     expect(screen.getByText('Build profile')).toBeTruthy()
     expect(screen.getByText('Agent')).toBeTruthy()
     expect(screen.getByText('file_change')).toBeTruthy()
+  })
+
+  it('renders session timeline assistant text as markdown', () => {
+    render(
+      <SessionTimeline
+        assistantRoleLabel="Agent"
+        operatorRoleLabel="Operator"
+        turns={[{
+          events: [{ id: 'event-1', kind: 'text', text: '- first\n- `second`', turnId: 'turn-1' }],
+          turn: { id: 'turn-1', input: 'Render markdown', seq: 1, status: 'succeeded' },
+        }]}
+      />,
+    )
+
+    expect(screen.getByText('first').closest('li')).toBeTruthy()
+    expect(screen.getByText('second').tagName.toLowerCase()).toBe('code')
+  })
+
+  it('renders codex activity without exposing Bash as the primary label', () => {
+    render(
+      <SessionTimeline
+        assistantRoleLabel="Agent"
+        operatorRoleLabel="Operator"
+        turns={[{
+          events: [{
+            activityKind: 'search',
+            command: 'rg SessionTimeline packages/component',
+            details: [{ label: 'Command', value: 'rg SessionTimeline packages/component' }],
+            id: 'activity-1',
+            kind: 'activity',
+            label: 'Searched files',
+            status: 'succeeded',
+            toolName: 'Bash',
+            toolUseId: 'run-1',
+            turnId: 'turn-1',
+          }],
+          turn: { id: 'turn-1', input: 'Search', seq: 1, status: 'succeeded' },
+        }]}
+      />,
+    )
+
+    expect(screen.getByText('Searched files')).toBeTruthy()
+    expect(screen.queryByText('Bash')).toBeNull()
+    fireEvent.click(screen.getByText('Searched files'))
+    expect(screen.getByText('rg SessionTimeline packages/component')).toBeTruthy()
   })
 
   it('renders session timeline tool result next to its tool call', () => {
