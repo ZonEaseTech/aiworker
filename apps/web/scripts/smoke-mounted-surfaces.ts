@@ -59,7 +59,7 @@ try {
   await createWorkerDialog.getByRole('button', { name: 'Create worker' }).click()
   await page.getByTestId('hr-people-workbench').waitFor({ timeout: 10_000 })
   await page.getByRole('button', { name: 'Soul Apps' }).click()
-  const settingsDialog = page.getByRole('dialog', { name: 'Configure Soul workspace' })
+  const settingsDialog = page.getByRole('dialog', { name: 'Platform Settings' })
   await settingsDialog.waitFor({ timeout: 10_000 })
   await assertLocatorWithinViewport(page, settingsDialog, 'settings dialog')
   await settingsDialog.getByRole('button', { name: /Execution/ }).click()
