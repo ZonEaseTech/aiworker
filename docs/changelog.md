@@ -1,5 +1,20 @@
 # AIWorker Changelog
 
+## 2026-05-19 [completed] BUG-138 / PLAN-371 — HR profile composer panel refinement
+
+Refined the HR People Workbench right panel after visual review. Recent
+Sessions now reads as the top segment of one continuous profile tools surface
+instead of a separate card; the composer keeps the remaining height; the
+bottom action bar now aligns paperclip file attach, shared component `Select`
+proposal type, and icon-only send as one control row.
+
+The composer now uses `IconButton`, `Textarea` and `Select` from
+`@zonease/aiworker-component`. The hidden file input is removed from the
+accessible tree so the visible paperclip button is the single file-entry
+affordance. Verification covered focused WorkerStudio tests, Web typecheck and
+build, docs contract, diff check, browser smoke against a local daemon/Web
+instance, and code-review-graph update/review.
+
 ## 2026-05-19 [completed] REL-048 / PLAN-370 — CLI 0.18.2 patch release
 
 Published `@zonease/aiworker-cli@0.18.2` after `FEAT-100 / PLAN-369`, carrying

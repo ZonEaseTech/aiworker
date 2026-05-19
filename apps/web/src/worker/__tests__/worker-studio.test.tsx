@@ -1869,7 +1869,9 @@ describe('worker studio', () => {
 
     expect(screen.getByTestId('hr-people-workbench')).toBeTruthy()
     const profileTools = expandProfileTools()
-    expect((within(profileTools).getByLabelText('Proposal type') as HTMLSelectElement).value).toBe(HR_PROFILE_UPDATE_PROPOSAL)
+    expect(profileTools.querySelector('select.hr-composer-template-select')).toBeNull()
+    expect(profileTools.querySelector('.hr-composer-template-select.studio-select')).toBeTruthy()
+    expect(within(profileTools).getByLabelText('Proposal type').textContent).toContain('Candidate profile draft')
     expect(within(profileTools).getByRole('button', { name: /Generate profile draft/ }).textContent).not.toContain('Generate profile draft')
     fireEvent.change(within(profileTools).getByLabelText('Candidate material'), { target: { value: 'Role and candidate packet.' } })
     fireEvent.click(within(profileTools).getByRole('button', { name: /Generate profile draft/ }))
@@ -1889,7 +1891,8 @@ describe('worker studio', () => {
 
     await screen.findByTestId('hr-people-workbench')
     const profileTools = expandProfileTools()
-    const fileInput = within(profileTools).getByLabelText('Add candidate material files') as HTMLInputElement
+    const fileInput = profileTools.querySelector('input.hr-material-file-input') as HTMLInputElement
+    expect(fileInput).toBeTruthy()
     const resume = new File(['resume evidence'], 'ada-resume.txt', { type: 'text/plain' })
     const notes = new File(['interview notes'], 'round-one.md', { type: 'text/markdown' })
 

@@ -5,8 +5,8 @@ import type { SoulSessionDraft, SoulSessionMaterialEncoding, SoulSessionMaterial
 import type { HrWorkbenchCopy } from '../copy'
 import type { PersonProfile } from '../types'
 
-import { IconButton, Textarea } from '@zonease/aiworker-component'
-import { Clock3, FileText, Plus, SendHorizontal, X } from 'lucide-react'
+import { IconButton, Select, Textarea } from '@zonease/aiworker-component'
+import { Clock3, FileText, Paperclip, SendHorizontal, X } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { displayTemplate, formatRelativeTime, formatStatus } from '../../../../../features/i18n'
 
@@ -49,7 +49,7 @@ export function HrProfileToolsPanel({
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [attachments, setAttachments] = useState<ComposerAttachment[]>([])
   const [attachmentError, setAttachmentError] = useState<string | null>(null)
-  const recentSessions = focusedProfile?.sessions.slice().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 4) ?? []
+  const recentSessions = focusedProfile?.sessions.slice().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)) ?? []
   const canSubmit = Boolean(selectedWorkspace && engineReadiness.ready && !submitting && (value.trim() || attachments.length > 0))
 
   function handleFilesSelected(files: FileList | null) {
@@ -144,7 +144,8 @@ export function HrProfileToolsPanel({
           className="hr-material-file-input"
           type="file"
           multiple
-          aria-label={labels.addCandidateMaterials}
+          aria-hidden="true"
+          tabIndex={-1}
           onChange={event => handleFilesSelected(event.currentTarget.files)}
         />
 
@@ -179,31 +180,31 @@ export function HrProfileToolsPanel({
 
         <div className="hr-composer-action-bar">
           <IconButton
+            className="hr-material-add-button"
             aria-label={labels.openCandidateMaterialPicker}
             title={labels.addCandidateMaterials}
             onClick={() => fileInputRef.current?.click()}
           >
-            <Plus aria-hidden="true" size={15} />
+            <Paperclip aria-hidden="true" size={15} />
             {attachments.length > 0
               ? <span className="hr-material-count" aria-label={labels.attachedCandidateMaterialsLabel}>{attachments.length}</span>
               : null}
           </IconButton>
 
-          <select
+          <Select
             className="hr-composer-template-select"
-            aria-label={labels.proposalTypeSelectLabel}
+            ariaLabel={labels.proposalTypeSelectLabel}
+            label={labels.proposalTypeSelectLabel}
             value={selectedTemplate.id}
-            onChange={event => onTemplateChange(event.target.value)}
-          >
-            {templates.map((template) => {
+            onChange={onTemplateChange}
+            options={templates.map((template) => {
               const templateCopy = displayTemplate(template, locale)
-              return (
-                <option key={template.id} value={template.id}>
-                  {labels.proposalTypeLabel(template.id, template.outputKind, templateCopy.name)}
-                </option>
-              )
+              return {
+                label: labels.proposalTypeLabel(template.id, template.outputKind, templateCopy.name),
+                value: template.id,
+              }
             })}
-          </select>
+          />
 
           <IconButton
             type="submit"
