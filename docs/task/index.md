@@ -489,4 +489,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-101 Shared UI component governance gate**](FEAT-101.md) `P1`
 - [x] [**REL-049 发布 aiworker CLI 0.18.3**](REL-049.md) `P0`
 - [x] [**BUG-139 HR profile composer select dropdown visual split**](BUG-139.md) `P1`
-- [-] [**REL-050 发布 aiworker CLI 0.18.4**](REL-050.md) `P0`
+- [x] [**REL-050 发布 aiworker CLI 0.18.4**](REL-050.md) `P0`

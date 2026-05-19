@@ -1,6 +1,6 @@
 # AIWorker Changelog
 
-## 2026-05-19 18:05 [progress] REL-050 / PLAN-375 — CLI 0.18.4 patch release
+## 2026-05-19 18:05 [completed] REL-050 / PLAN-375 — CLI 0.18.4 patch release
 
 Started the `@zonease/aiworker-cli@0.18.4` patch release after `BUG-139 /
 PLAN-374`. npm latest is `0.18.3`; current `main` contains the Worker Web
@@ -9,9 +9,13 @@ refinement, and the HR composer select expanded-menu styling fix.
 
 Local release gates passed through `bun run check`, `bun run test`,
 `bun run build`, mounted-surface smoke, dist version/package checks, pack
-dry-run, dist release smoke, and code-review-graph. Next steps are release prep
-commit, `main`/tag push, GitHub Actions monitoring, npm/GitHub Release
-verification, published-package smoke, and release closeout.
+dry-run, dist release smoke, and code-review-graph. Release workflow
+`26090536203` and main lint workflow `26090531497` passed. npm latest now
+resolves to `0.18.4`; `bunx @zonease/aiworker-cli@0.18.4 --version` reports
+`aiworker/0.18.4`; GitHub Release `v0.18.4` is published with 8
+binary/checksum assets; published-package smoke passed from public npm package
+covering Host Web/API startup, Worker Web asset serving, official HR/QA apps,
+HR template listing, and HR/QA mounted actions.
 
 ## 2026-05-19 [completed] BUG-139 / PLAN-374 — HR profile composer select dropdown visual split
 
