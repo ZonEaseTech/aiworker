@@ -10,9 +10,9 @@ import type { SoulAppRegistryContext } from './registry'
 
 export type SoulAppSecurityReviewDescriptorSurface
   = 'workbench.action'
+    | 'workbench.configuration'
     | 'workbench.primaryAction'
     | 'workbench.search'
-    | 'workbench.settings'
     | 'ui.artifactPreview'
     | 'ui.panel'
     | 'ui.reviewPanel'
@@ -154,12 +154,12 @@ function collectDescriptorPermissions(app: HostedSoulApp): SoulAppSecurityReview
       surface: 'workbench.search',
     })
   }
-  if (workbench?.settings?.requiredPermissions?.length) {
+  if (workbench?.configuration?.requiredPermissions?.length) {
     descriptors.push({
-      id: workbench.settings.id,
-      label: workbench.settings.label,
-      requiredPermissions: workbench.settings.requiredPermissions,
-      surface: 'workbench.settings',
+      id: workbench.configuration.id,
+      label: workbench.configuration.label,
+      requiredPermissions: workbench.configuration.requiredPermissions,
+      surface: 'workbench.configuration',
     })
   }
   if (app.manifest.ui.workspaceContext?.terminal?.requiredPermissions?.length) {

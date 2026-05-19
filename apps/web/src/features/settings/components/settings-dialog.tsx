@@ -494,7 +494,7 @@ function descriptorPermissionLabels(app: HostedSoulApp): string[] {
   for (const action of workbench?.actions ?? [])
     add(action.requiredPermissions)
   add(workbench?.search?.requiredPermissions)
-  add(workbench?.settings?.requiredPermissions)
+  add(workbench?.configuration?.requiredPermissions)
   add(app.manifest.ui?.workspaceContext?.terminal?.requiredPermissions)
   for (const route of app.manifest.ui?.routes ?? [])
     add(route.surface?.requiredPermissions)

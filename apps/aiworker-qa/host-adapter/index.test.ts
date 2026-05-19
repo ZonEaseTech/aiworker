@@ -63,6 +63,7 @@ describe('QA reference Soul App', () => {
     expect(qaManifestJson.ui.workbench?.primaryAction?.requiredPermissions).toContain('search:write:aiworker-qa')
     expect(qaManifestJson.ui.workbench?.search?.protocolProvider).toBe('releases.search')
     expect(qaManifestJson.ui.workbench?.search?.requiredPermissions).toContain('search:read:aiworker-qa')
+    expect(qaManifestJson.ui.workbench?.configuration?.protocolAction).toBe('configuration.open')
     expect(qaManifestJson.ui.workspaceContext?.terminal?.cwd).toEqual({ source: 'host-workspace-root' })
   })
 
@@ -109,6 +110,19 @@ describe('QA reference Soul App', () => {
         ok: true,
         redirectTo: '/qa/release',
         refresh: true,
+      })
+      const configurationRes = await fetch(`${baseUrl}/protocol/actions`, {
+        body: JSON.stringify({ input: {}, protocolAction: 'configuration.open' }),
+        headers: {
+          'content-type': 'application/json',
+          'x-aiworker-mount-token': 'test-qa-mounted-token',
+        },
+        method: 'POST',
+      })
+      expect(configurationRes.status).toBe(200)
+      expect(await configurationRes.json()).toMatchObject({
+        message: 'QA configuration is owned by the QA app.',
+        ok: true,
       })
       const wrongMethodActionRes = await fetch(`${baseUrl}/protocol/actions`, {
         headers: { 'x-aiworker-mount-token': 'test-qa-mounted-token' },

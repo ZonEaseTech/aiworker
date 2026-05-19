@@ -179,9 +179,10 @@ export function WorkerStudio() {
   const [reviewSubmitting, setReviewSubmitting] = useState(false)
   const [profileRevisionSubmitting, setProfileRevisionSubmitting] = useState(false)
   const [lessonBusyId, setLessonBusyId] = useState<string | null>(null)
-  const [workbenchActionState, setWorkbenchActionState] = useState<{ busyActionId: string | null, error: string | null }>({
+  const [workbenchActionState, setWorkbenchActionState] = useState<{ busyActionId: string | null, error: string | null, message: string | null }>({
     busyActionId: null,
     error: null,
+    message: null,
   })
   const [workbenchSearchState, dispatchWorkbenchSearch] = useReducer(workbenchSearchReducer, {
     error: null,
@@ -302,10 +303,10 @@ export function WorkerStudio() {
     pushAction(workbenchContract?.primaryAction)
     for (const action of workbenchContract?.actions ?? [])
       pushAction(action)
-    if (workbenchContract?.settings) {
+    if (workbenchContract?.configuration) {
       pushAction({
-        ...workbenchContract.settings,
-        role: 'settings',
+        ...workbenchContract.configuration,
+        role: 'configure',
       })
     }
     return actions
@@ -484,7 +485,7 @@ export function WorkerStudio() {
   async function runWorkbenchAction(action: LocalSoulAppWorkbenchAction) {
     if (!selectedSoulApp || workbenchActionState.busyActionId)
       return null
-    setWorkbenchActionState({ busyActionId: action.id, error: null })
+    setWorkbenchActionState({ busyActionId: action.id, error: null, message: null })
     try {
       const response = await invokeSoulAppAction(selectedSoulApp.appId, action.id, {
         source: 'soul-workbench',
@@ -496,6 +497,7 @@ export function WorkerStudio() {
       setWorkbenchActionState({
         busyActionId: null,
         error: response.result.ok ? null : response.result.message ?? 'Soul App action failed.',
+        message: response.result.ok && action.role === 'configure' ? response.result.message ?? null : null,
       })
       if (response.result.refresh)
         await refresh()
@@ -505,6 +507,7 @@ export function WorkerStudio() {
       setWorkbenchActionState({
         busyActionId: null,
         error: error instanceof Error ? error.message : String(error),
+        message: null,
       })
       return null
     }
@@ -856,7 +859,13 @@ export function WorkerStudio() {
           {workbenchActionState.error}
         </p>
       )
-    : null
+    : workbenchActionState.message
+      ? (
+          <p className="shell-action-status" role="status">
+            {workbenchActionState.message}
+          </p>
+        )
+      : null
   const workbenchSearchResults = workbenchSearch && workbenchSearchState.query
     ? (
         <div className="shell-search-results" role="status" aria-live="polite">
@@ -1311,7 +1320,7 @@ export function WorkerStudio() {
                           {workbenchPrimaryAction
                             ? renderWorkbenchActionButton(workbenchPrimaryAction)
                             : null}
-                          {secondaryWorkbenchActions.map(action => renderWorkbenchActionButton(action, action.role === 'settings' ? 'settings' : 'plus'))}
+                          {secondaryWorkbenchActions.map(action => renderWorkbenchActionButton(action, action.role === 'configure' ? 'settings' : 'plus'))}
                         </div>
 
                         <div className="toolbar-right">
@@ -1585,7 +1594,7 @@ function HostSidebarFooter({
       <button type="button" className="host-settings-row" onClick={onOpenSettings}>
         <span className="host-settings-label">
           <Settings aria-hidden="true" size={14} />
-          <span>Settings</span>
+          <span>Platform settings</span>
         </span>
         <span className="host-version">{version}</span>
       </button>

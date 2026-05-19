@@ -26,7 +26,7 @@ Operator (human UI or external runtime) -> Host -> install/enable Soul App -> So
 
 Soul App is the source of truth for domain state and domain meaning.
 Host is the source of truth for platform capabilities, grants, protocol discovery and shell context.
-Host may consume only protocol-exposed views/actions/search/settings descriptors, and must not infer Soul App domain meaning.
+Host may consume only protocol-exposed views/actions/search/configuration descriptors, and must not infer Soul App domain meaning.
 The operator may be a human using Host Web/Soul App UI or an external runtime
 using protocol/MCP/action/search descriptors. AIWorker does not decide how that
 operator reasons, schedules or orchestrates; it only enforces Host grants and
@@ -100,9 +100,9 @@ route agents to these IDs, but must not redefine them as separate contracts.
 | --- | --- | --- | --- | --- |
 | `ARCH-001` | The default product path is `Operator -> Host -> install/enable Soul App -> Soul worker -> workspace -> session -> app-exposed business output`. Do not route default work back to developer-only work orders, admin dashboards, remote control planes or generic agent runtime platforms. | Architecture | `scripts/check-doc-contract.ts`, active entrypoint review, product-path tests when UI changes | `AGENTS.md`, `README.md`, route skills |
 | `OPERATOR-001` | AIWorker exposes human-legible and agent-operable surfaces over the same Soul-owned workspace/session/domain state. External operator access must use Host grants and explicit Soul App protocol/MCP/action/search/descriptor surfaces. AIWorker must not depend on or specialize for a named external runtime, schedule cross-Soul work on behalf of callers, translate app domains into generic tools, or infer hidden app behavior. | Architecture | protocol schema tests, broker/security tests, app validate/smoke, future external-operator smoke tests | `docs/soul-app-developer.md`, Host and Soul App skills |
-| `HOST-001` | Host owns platform capabilities: local daemon, install/enable, auth/security, grants, settings, brokers, locator, shell and protocol discovery. Host must not own domain meaning. | Host | Host API/core/Web/CLI tests, broker/security tests, `pma-cr`, code-review-graph | `aiworker-host-dev`, `AGENTS.md` |
+| `HOST-001` | Host owns platform capabilities: local daemon, install/enable, auth/security, grants, platform settings, brokers, locator, shell and protocol discovery. Host must not own domain meaning. | Host | Host API/core/Web/CLI tests, broker/security tests, `pma-cr`, code-review-graph | `aiworker-host-dev`, `AGENTS.md` |
 | `SOUL-001` | Soul App owns domain state and semantics: domain UI/API, workspace/session workflow, artifacts, profiles, reviews, lessons/memory, standalone shell and mounted handlers. | Soul App | `aiworker app validate`, `aiworker app smoke`, app package tests | `aiworker-soul-app-dev`, `docs/soul-app-developer.md` |
-| `PROTO-001` | Host may consume only manifest/protocol/grant-exposed Soul App views, actions, search, settings, status and descriptors. If a surface is not exposed, Host must stop instead of fetching, inferring or synthesizing it. | Shared boundary | manifest/protocol schema tests, mounted API tests, security review tests | Host and Soul App skills |
+| `PROTO-001` | Host may consume only manifest/protocol/grant-exposed Soul App views, actions, search, configuration, status and descriptors. If a surface is not exposed, Host must stop instead of fetching, inferring or synthesizing it. | Shared boundary | manifest/protocol schema tests, mounted API tests, security review tests | Host and Soul App skills |
 | `IMPORT-001` | Soul App production code must not import Host private packages or sibling app `src`; Host code must not import Soul App `src`. Public SDK, runtime harnesses, manifests, protocol descriptors and shared fixtures are the allowed boundary objects. | Shared boundary | `scripts/check-soul-app-boundaries.ts`, `aiworker app validate`, package tests | Host and Soul App skills |
 | `DATA-001` | `worker.db` stores Host metadata, references, hashes, status and protocol descriptors. Full business content and domain facts stay in Soul App workspace files or app-scoped object/storage namespaces. | Host storage + Soul App | storage schema tests, broker tests, protocol descriptor tests | architecture data section, route skills |
 | `BROKER-001` | Broker access is scoped by app id, worker id, workspace id and grant. Broker providers expose capability metadata and app-scoped handles, never raw credentials or sibling app data. | Host broker | broker tests, provider registry tests, security review tests | Host skill, Soul App authoring |
@@ -157,8 +157,8 @@ Soul App 维护的是领域对象：
 | App lifecycle | Discover, install, enable, disable, route, launch | Provide manifest, health, compatibility and entrypoints |
 | Auth/security | Own Host auth, session security and grant enforcement | Declare required permissions and enforce app-local domain rules |
 | Storage | Provide app-scoped storage namespace and broker credentials | Own stored domain content and file/object layout inside the namespace |
-| Settings | Own global appearance, language, default engine, local MCP and connector settings | Own app-specific settings exposed through protocol |
-| Shell | Own global layout, Host header, navigation and worker/workspace/session locator | Expose app-owned workbench actions, search, settings and workspace context descriptors when mounted |
+| Platform settings / configuration | Own global appearance, language, default engine, local MCP and connector settings | Own app-specific configuration exposed through protocol |
+| Shell | Own global layout, Host header, navigation and worker/workspace/session locator | Expose app-owned workbench actions, search, configuration and workspace context descriptors when mounted |
 | UI/API | Mount or proxy declared surfaces | Own domain UI, API and standalone runtime |
 | Operator | Identify human/agent callers, enforce grants, route declared surfaces and audit platform access | Decide which human-facing and agent-operable domain surfaces exist and what they mean |
 | Artifact | Store or cache protocol descriptors when exposed | Own artifact schema, content, lifecycle and meaning |
@@ -193,7 +193,7 @@ events -> optional app-emitted lifecycle/domain events
 - Host 可以提供 route 和 shell layout，不拥有 route 内的领域体验，也不把 Soul App descriptor
   渲染成 Host header slot。
 - Host 可以提供 broker，不拥有 broker 内 app 写入的领域内容。
-- Host action/search/settings invocation must resolve a manifest-declared descriptor first.
+- Host action/search/configuration invocation must resolve a manifest-declared descriptor first.
   Host must reject undeclared protocol actions or search providers, and must not infer app domain behavior from protocol names.
 - Host auth is provider-backed. The current local provider preserves bearer-token behavior, while
   future Logto integration must implement the same provider boundary instead of leaking auth
@@ -222,14 +222,14 @@ Host 当前保留统一 shell layout，因为它提供跨 Soul App 的平台定�
 - Soul worker；
 - workspace；
 - session；
-- global settings；
+- platform settings；
 - local daemon status；
 - platform capability grants。
 
 Host header is platform-owned chrome. It may contain fixed Host actions such as
 sidebar, terminal panel or right-panel toggles, but mounted Soul Apps must not
 customize Host header title, primary action, searchbar, action menu, drawer
-toggle, refresh button or app settings placement.
+toggle, refresh button or app configuration placement.
 
 Mounted Soul Apps can still expose app-owned workbench coordination through
 manifest/protocol descriptors:
@@ -238,11 +238,22 @@ manifest/protocol descriptors:
   Host may invoke on behalf of a mounted workbench.
 - `ui.workbench.search` declares an app-owned search provider that Host may call
   through the generic app search endpoint.
-- `ui.workbench.settings` declares an app-specific settings command without
-  granting control over Host settings chrome.
+- `ui.workbench.configuration` declares an app-specific configuration command
+  without granting control over Host Platform Settings chrome.
 - Workbench action descriptors use `role`, not header `slot`; roles describe
-  intent such as `primary`, `refresh`, `settings` or `panel-toggle`, not Host
+  intent such as `primary`, `refresh`, `configure` or `panel-toggle`, not Host
   placement.
+
+Settings-related UX is intentionally split into three layers:
+
+- Host Platform Settings: global/local Host preferences such as execution
+  mode, engine/BYOK, MCP, connector availability, language, appearance and
+  installed Soul App lifecycle.
+- Soul App Configuration: app-owned domain configuration exposed through
+  `ui.workbench.configuration` or an app-owned route/panel.
+- Workspace / session preferences: scoped choices that bind Host capabilities
+  to a business workspace or session. Host enforces capability grants; Soul App
+  owns the domain meaning.
 
 Workspace/process coordination belongs to a separate context descriptor:
 
@@ -299,7 +310,7 @@ inside Host shell.
 
 ## Engine And MCP
 
-Host 维护默认 engine、local MCP、BYOK、语言、外观和 autosave 等横向配置，并透传给 Soul App
+Host 维护默认 engine、local MCP、BYOK、语言、外观和 autosave 等平台设置，并透传给 Soul App
 或 mounted runtime。
 
 Host 可以提供 MCP gateway、MCP server lifecycle、workspace/session binding、grant enforcement

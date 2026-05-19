@@ -307,10 +307,10 @@
         "protocolProvider": "releases.search",
         "requiredPermissions": ["search:read:aiworker-qa"]
       },
-      "settings": {
-        "id": "qa-settings",
-        "label": "QA settings",
-        "protocolAction": "settings.open",
+      "configuration": {
+        "id": "configure-qa",
+        "label": "Configure QA",
+        "protocolAction": "configuration.open",
         "requiredPermissions": ["api:serve:/api/local/apps/aiworker-qa"]
       }
     },

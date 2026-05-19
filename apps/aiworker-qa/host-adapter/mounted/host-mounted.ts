@@ -172,9 +172,9 @@ async function qaProtocolAction(request: Request, protocolAction: string) {
       refresh: true,
     }
   }
-  if (protocolAction === 'settings.open') {
+  if (protocolAction === 'configuration.open') {
     return {
-      message: 'QA settings are owned by the QA app.',
+      message: 'QA configuration is owned by the QA app.',
       ok: true,
     }
   }

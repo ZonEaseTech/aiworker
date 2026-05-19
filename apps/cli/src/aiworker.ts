@@ -1477,10 +1477,10 @@ function createScaffoldManifest(appId: string): SoulAppManifest {
           protocolProvider: 'briefs.search',
           requiredPermissions: [`storage:read:${appId}`],
         },
-        settings: {
-          id: 'brief-settings',
-          label: 'App settings',
-          protocolAction: 'settings.open',
+        configuration: {
+          id: 'configure-app',
+          label: 'Configure app',
+          protocolAction: 'configuration.open',
           requiredPermissions: [`api:serve:${routePrefix}`],
         },
       },
@@ -1592,7 +1592,7 @@ async function runMountedServiceSmoke(manifest: SoulAppManifest, rootDir: string
 }
 
 async function runMountedWorkbenchActionSmoke(manifest: SoulAppManifest, baseUrl: string): Promise<'pass' | 'skip'> {
-  const action = manifest.ui.workbench?.primaryAction ?? manifest.ui.workbench?.actions?.[0] ?? manifest.ui.workbench?.settings
+  const action = manifest.ui.workbench?.primaryAction ?? manifest.ui.workbench?.actions?.[0] ?? manifest.ui.workbench?.configuration
   if (!action)
     return 'skip'
 
@@ -1747,7 +1747,7 @@ function scaffoldReadme(appId: string): string {
     '## Contribution Checklist',
     '',
     '- Keep app code on `@zonease/aiworker-soul-app-sdk`; do not import Host private packages.',
-    '- Put mounted app actions, search, and settings in `ui.workbench`; do not declare Host header slots.',
+    '- Put mounted app actions, search, and configuration in `ui.workbench`; do not declare Host header slots.',
     '- Use `ui.workspaceContext` for Host-owned workspace process context such as a future web terminal.',
     '- Keep storage permissions scoped to this app namespace.',
     '- Add one artifact schema and one review policy for each new artifact type.',
@@ -2091,8 +2091,8 @@ async function handleProtocolAction(request: Request): Promise<Response> {
     return Response.json({ message: 'Starter briefs refreshed.', ok: true, refresh: true })
   }
 
-  if (body.protocolAction === 'settings.open') {
-    return Response.json({ message: 'Starter app settings are handled by the app workbench.', ok: true })
+  if (body.protocolAction === 'configuration.open') {
+    return Response.json({ message: 'Starter app configuration is handled by the app workbench.', ok: true })
   }
 
   return Response.json({ message: \`Unknown protocol action: \${body.protocolAction ?? 'missing'}\`, ok: false }, { status: 404 })

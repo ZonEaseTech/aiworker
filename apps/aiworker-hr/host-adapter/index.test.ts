@@ -63,6 +63,7 @@ describe('HR reference Soul App', () => {
     expect(hrManifestJson.ui.workbench?.primaryAction?.requiredPermissions).toContain('search:write:aiworker-hr')
     expect(hrManifestJson.ui.workbench?.search?.protocolProvider).toBe('peopleProfiles.search')
     expect(hrManifestJson.ui.workbench?.search?.requiredPermissions).toContain('search:read:aiworker-hr')
+    expect(hrManifestJson.ui.workbench?.configuration?.protocolAction).toBe('configuration.open')
     expect(hrManifestJson.ui.workspaceContext?.terminal?.cwd).toEqual({ source: 'host-workspace-root' })
   })
 
@@ -109,6 +110,19 @@ describe('HR reference Soul App', () => {
         ok: true,
         redirectTo: '/hr/people',
         refresh: true,
+      })
+      const configurationRes = await fetch(`${baseUrl}/protocol/actions`, {
+        body: JSON.stringify({ input: {}, protocolAction: 'configuration.open' }),
+        headers: {
+          'content-type': 'application/json',
+          'x-aiworker-mount-token': 'test-hr-mounted-token',
+        },
+        method: 'POST',
+      })
+      expect(configurationRes.status).toBe(200)
+      expect(await configurationRes.json()).toMatchObject({
+        message: 'HR configuration is owned by the HR app.',
+        ok: true,
       })
       const wrongMethodActionRes = await fetch(`${baseUrl}/protocol/actions`, {
         headers: { 'x-aiworker-mount-token': 'test-hr-mounted-token' },

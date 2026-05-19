@@ -134,15 +134,12 @@ export function HrPeopleWorkbench({
     if (action.role === 'panel-toggle') {
       if (focusedProfile)
         setProfileToolsExpanded(expanded => !expanded)
-      return
     }
-    if (action.role === 'settings')
-      onOpenSettings()
   }
 
   function renderWorkbenchIconAction(action: LocalSoulAppWorkbenchAction) {
     const busy = workbenchBridge?.busyActionId === action.id
-    const Icon = action.role === 'settings'
+    const Icon = action.role === 'configure'
       ? Settings
       : action.role === 'refresh'
         ? RefreshCw

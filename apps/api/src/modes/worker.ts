@@ -927,7 +927,7 @@ function resolveWorkbenchAction(app: HostedSoulApp, actionId: string): Workbench
   const actions: WorkbenchActionDescriptor[] = [
     ...(workbench?.primaryAction ? [workbench.primaryAction] : []),
     ...(workbench?.actions ?? []),
-    ...(workbench?.settings ? [workbench.settings] : []),
+    ...(workbench?.configuration ? [workbench.configuration] : []),
   ]
   return actions.find(action => action.id === actionId) ?? null
 }

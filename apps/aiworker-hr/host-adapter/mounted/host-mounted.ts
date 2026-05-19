@@ -178,9 +178,9 @@ async function hrProtocolAction(request: Request, protocolAction: string) {
       ok: true,
     }
   }
-  if (protocolAction === 'settings.open') {
+  if (protocolAction === 'configuration.open') {
     return {
-      message: 'HR settings are owned by the HR app.',
+      message: 'HR configuration is owned by the HR app.',
       ok: true,
     }
   }

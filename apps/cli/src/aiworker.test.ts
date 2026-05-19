@@ -803,7 +803,7 @@ describe('aiworker local CLI', () => {
           actions?: Array<{ id: string, protocolAction: string, role: string }>
           primaryAction?: { id: string, protocolAction: string, role: string }
           search?: { id: string, protocolProvider: string }
-          settings?: { id: string, protocolAction: string }
+          configuration?: { id: string, protocolAction: string }
         }
         workspaceContext?: {
           terminal?: {
@@ -830,9 +830,9 @@ describe('aiworker local CLI', () => {
       id: 'brief-search',
       protocolProvider: 'briefs.search',
     }))
-    expect(scaffoldManifest.ui.workbench?.settings).toEqual(expect.objectContaining({
-      id: 'brief-settings',
-      protocolAction: 'settings.open',
+    expect(scaffoldManifest.ui.workbench?.configuration).toEqual(expect.objectContaining({
+      id: 'configure-app',
+      protocolAction: 'configuration.open',
     }))
     expect(scaffoldManifest.ui.workspaceContext?.terminal).toEqual(expect.objectContaining({
       cwd: { source: 'host-workspace-root' },

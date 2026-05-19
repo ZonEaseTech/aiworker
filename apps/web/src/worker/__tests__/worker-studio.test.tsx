@@ -26,7 +26,7 @@ function expandProfileTools(): HTMLElement {
 }
 
 function openHostSettings() {
-  fireEvent.click(screen.getByRole('button', { name: /^Settings(?:\s|$)/ }))
+  fireEvent.click(screen.getByRole('button', { name: /^Platform settings(?:\s|$)/ }))
 }
 
 async function openProfilePatchReviewFromRail() {
@@ -321,7 +321,7 @@ let currentApps: Array<{
           protocolProvider: string
           requiredPermissions?: string[]
         }
-        settings?: {
+        configuration?: {
           id: string
           label: string
           protocolAction: string
@@ -362,7 +362,7 @@ let currentApps: Array<{
         protocolProvider: string
         requiredPermissions?: string[]
       }
-      settings?: {
+      configuration?: {
         id: string
         label: string
         protocolAction: string
@@ -619,10 +619,10 @@ beforeEach(() => {
         result: { ok: true, message: 'People data refreshed.', refresh: true },
       })
     }
-    if (url.endsWith('/api/local/apps/aiworker-hr/actions/hr-settings') && method === 'POST') {
+    if (url.endsWith('/api/local/apps/aiworker-hr/actions/configure-hr') && method === 'POST') {
       return json({
-        action: { id: 'hr-settings', protocolAction: 'settings.open' },
-        result: { ok: true, message: 'HR settings opened.' },
+        action: { id: 'configure-hr', protocolAction: 'configuration.open' },
+        result: { ok: true, message: 'HR configuration is owned by the HR app.' },
       })
     }
     if (url.endsWith('/api/local/apps/aiworker-hr/search?providerId=peopleProfiles.search&query=ada&limit=8')) {
@@ -1344,7 +1344,7 @@ describe('worker studio', () => {
       within(hrDetails).getByRole('button', { name: 'Hide Profile List' }),
       within(hrDetails).getByRole('button', { name: 'Expand Profile Workbench' }),
       within(hrDetails).getByRole('button', { name: 'Refresh workspace' }),
-      within(hrDetails).getByRole('button', { name: 'Open settings' }),
+      within(hrDetails).getByRole('button', { name: 'Open platform settings' }),
     ]
 
     for (const button of iconButtons) {
@@ -1431,10 +1431,10 @@ describe('worker studio', () => {
                 protocolProvider: 'peopleProfiles.search',
                 requiredPermissions: ['search:read:aiworker-hr'],
               },
-              settings: {
-                id: 'hr-settings',
-                label: 'HR settings',
-                protocolAction: 'settings.open',
+              configuration: {
+                id: 'configure-hr',
+                label: 'Configure HR',
+                protocolAction: 'configuration.open',
                 requiredPermissions: ['api:serve:/api/local/apps/aiworker-hr'],
               },
             },
@@ -1481,10 +1481,10 @@ describe('worker studio', () => {
               protocolProvider: 'peopleProfiles.search',
               requiredPermissions: ['search:read:aiworker-hr'],
             },
-            settings: {
-              id: 'hr-settings',
-              label: 'HR settings',
-              protocolAction: 'settings.open',
+            configuration: {
+              id: 'configure-hr',
+              label: 'Configure HR',
+              protocolAction: 'configuration.open',
               requiredPermissions: ['api:serve:/api/local/apps/aiworker-hr'],
             },
           },
@@ -1586,7 +1586,7 @@ describe('worker studio', () => {
     const hrDetails = await screen.findByLabelText('Hiring Workspace People Profile')
     expect(within(hrDetails).getByRole('button', { name: 'Refresh' })).toBeTruthy()
     expect(within(hrDetails).getByRole('button', { name: 'Evidence' })).toBeTruthy()
-    expect(within(hrDetails).getByRole('button', { name: 'HR settings' })).toBeTruthy()
+    expect(within(hrDetails).getByRole('button', { name: 'Configure HR' })).toBeTruthy()
     expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/api/local/apps/aiworker-hr/search'))).toBe(false)
     expect(document.querySelector('.hr-people-layout')?.classList.contains('without-profile-tools')).toBe(true)
     fireEvent.click(within(hrDetails).getByRole('button', { name: 'Evidence' }))
@@ -1594,13 +1594,12 @@ describe('worker studio', () => {
       expect(fetch).toHaveBeenCalledWith('/api/local/apps/aiworker-hr/actions/toggle-evidence-drawer', expect.objectContaining({ method: 'POST' }))
     })
     expect(document.querySelector('.hr-people-layout')?.classList.contains('without-profile-tools')).toBe(false)
-    fireEvent.click(within(hrDetails).getByRole('button', { name: 'HR settings' }))
+    fireEvent.click(within(hrDetails).getByRole('button', { name: 'Configure HR' }))
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('/api/local/apps/aiworker-hr/actions/hr-settings', expect.objectContaining({ method: 'POST' }))
+      expect(fetch).toHaveBeenCalledWith('/api/local/apps/aiworker-hr/actions/configure-hr', expect.objectContaining({ method: 'POST' }))
     })
-    const appSettingsDialog = await screen.findByRole('dialog', { name: 'Configure Soul workspace' })
-    expect(within(appSettingsDialog).getByRole('button', { name: /Soul Apps/ })).toBeTruthy()
-    fireEvent.click(screen.getByLabelText('Close settings'))
+    expect(await screen.findByText('HR configuration is owned by the HR app.')).toBeTruthy()
+    expect(screen.queryByRole('dialog')).toBeNull()
     expect(screen.queryByText('Soul Apps (2)')).toBeNull()
     expect(screen.queryByText('Enabled · 0.1.0')).toBeNull()
     expect(screen.queryByText('10 permissions')).toBeNull()
@@ -1609,8 +1608,8 @@ describe('worker studio', () => {
     expect(screen.queryByText('4 mounted contributions')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Developer details' })).toBeNull()
 
-    fireEvent.click(within(hrDetails).getByRole('button', { name: 'HR settings' }))
-    const dialog = await screen.findByRole('dialog', { name: 'Configure Soul workspace' })
+    openHostSettings()
+    const dialog = await screen.findByRole('dialog', { name: 'Platform Settings' })
     fireEvent.click(within(dialog).getByRole('button', { name: /Soul Apps/ }))
 
     expect(within(dialog).getByRole('heading', { name: 'Soul Apps' })).toBeTruthy()
@@ -1702,7 +1701,7 @@ describe('worker studio', () => {
 
     await screen.findByTestId('hr-people-workbench')
     openHostSettings()
-    const dialog = await screen.findByRole('dialog', { name: 'Configure Soul workspace' })
+    const dialog = await screen.findByRole('dialog', { name: 'Platform Settings' })
     fireEvent.click(within(dialog).getByRole('button', { name: /Soul Apps/ }))
     fireEvent.click(within(dialog).getByRole('button', { name: 'Enable AIWorker QA' }))
 
@@ -2017,7 +2016,7 @@ describe('worker studio', () => {
     expect(screen.queryByRole('button', { name: 'Open artifact settings' })).toBeNull()
 
     const chatActions = document.querySelector('.worker-chat-actions') as HTMLElement
-    const settingsButton = within(chatActions).getByRole('button', { name: 'Open settings' })
+    const settingsButton = within(chatActions).getByRole('button', { name: 'Open platform settings' })
     const drawerToggle = within(chatActions).getByRole('button', { name: 'Collapse session detail' })
     expect(drawerToggle.getAttribute('aria-pressed')).toBe('true')
     expect(settingsButton.nextElementSibling).toBe(drawerToggle)
@@ -2154,11 +2153,11 @@ describe('worker studio', () => {
     render(<WorkerStudio />)
 
     await screen.findByLabelText('Host actions')
-    expect(screen.queryByRole('dialog', { name: 'Configure Soul workspace' })).toBeNull()
+    expect(screen.queryByRole('dialog', { name: 'Platform Settings' })).toBeNull()
 
     openHostSettings()
 
-    expect(screen.getByRole('dialog', { name: 'Configure Soul workspace' })).toBeTruthy()
+    expect(screen.getByRole('dialog', { name: 'Platform Settings' })).toBeTruthy()
     expect(screen.getByText('Local CLI / BYOK')).toBeTruthy()
     expect(screen.queryByText('All changes saved')).toBeNull()
     const codexIcon = document.querySelector('[data-engine-icon="codex"] .agent-icon-shape') as HTMLElement
@@ -2184,7 +2183,7 @@ describe('worker studio', () => {
       expect(fetch).toHaveBeenCalledWith('/api/local/settings', expect.objectContaining({ method: 'PATCH' }))
       expect(document.documentElement.lang).toBe('zh-CN')
     })
-    expect(screen.getByRole('dialog', { name: '配置 Soul 工作区' })).toBeTruthy()
+    expect(screen.getByRole('dialog', { name: '平台设置' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '新建人员档案' })).toBeTruthy()
     expect(screen.queryByText('Create workspace session')).toBeNull()
   })
@@ -2206,7 +2205,7 @@ describe('worker studio', () => {
 
     expect(await screen.findByLabelText('Host actions')).toBeTruthy()
     expect(document.documentElement.lang).toBe('en')
-    expect(screen.getByRole('button', { name: /Settings vtest/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Platform settings vtest/ })).toBeTruthy()
   })
 
   it('applies system appearance from the operating-system color scheme and updates on changes', async () => {

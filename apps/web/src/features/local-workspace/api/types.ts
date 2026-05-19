@@ -19,7 +19,7 @@ export interface LocalSoulAppWorkbenchAction {
   label: string
   protocolAction: string
   requiredPermissions?: readonly string[]
-  role: 'primary' | 'action' | 'panel-toggle' | 'refresh' | 'settings'
+  role: 'primary' | 'action' | 'panel-toggle' | 'refresh' | 'configure'
 }
 
 export interface LocalSoulAppWorkbenchSearch {
@@ -32,14 +32,14 @@ export interface LocalSoulAppWorkbenchSearch {
 
 export interface LocalSoulAppWorkbenchDescriptor {
   actions?: LocalSoulAppWorkbenchAction[]
-  primaryAction?: LocalSoulAppWorkbenchAction
-  search?: LocalSoulAppWorkbenchSearch
-  settings?: {
+  configuration?: {
     id: string
     label: string
     protocolAction: string
     requiredPermissions?: readonly string[]
   }
+  primaryAction?: LocalSoulAppWorkbenchAction
+  search?: LocalSoulAppWorkbenchSearch
 }
 
 export interface LocalSoulAppWorkspaceContext {

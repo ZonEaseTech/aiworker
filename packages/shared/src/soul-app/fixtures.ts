@@ -351,10 +351,10 @@ export const hrSoulAppManifest = soulAppManifestSchema.parse({
         protocolProvider: 'peopleProfiles.search',
         requiredPermissions: ['search:read:aiworker-hr'],
       },
-      settings: {
-        id: 'hr-settings',
-        label: 'HR settings',
-        protocolAction: 'settings.open',
+      configuration: {
+        id: 'configure-hr',
+        label: 'Configure HR',
+        protocolAction: 'configuration.open',
         requiredPermissions: ['api:serve:/api/local/apps/aiworker-hr'],
       },
     },
@@ -667,10 +667,10 @@ export const qaSoulAppManifest = soulAppManifestSchema.parse({
         protocolProvider: 'releases.search',
         requiredPermissions: ['search:read:aiworker-qa'],
       },
-      settings: {
-        id: 'qa-settings',
-        label: 'QA settings',
-        protocolAction: 'settings.open',
+      configuration: {
+        id: 'configure-qa',
+        label: 'Configure QA',
+        protocolAction: 'configuration.open',
         requiredPermissions: ['api:serve:/api/local/apps/aiworker-qa'],
       },
     },

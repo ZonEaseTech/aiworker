@@ -242,10 +242,10 @@ describe('Soul App manifest schema', () => {
             protocolProvider: 'peopleProfiles.search',
             requiredPermissions: ['search:read:aiworker-hr'],
           },
-          settings: {
-            id: 'hr-settings',
-            label: 'HR settings',
-            protocolAction: 'settings.open',
+          configuration: {
+            id: 'configure-hr',
+            label: 'Configure HR',
+            protocolAction: 'configuration.open',
             requiredPermissions: ['api:serve:/api/local/apps/aiworker-hr'],
           },
         },

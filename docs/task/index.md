@@ -490,3 +490,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REL-049 发布 aiworker CLI 0.18.3**](REL-049.md) `P0`
 - [x] [**BUG-139 HR profile composer select dropdown visual split**](BUG-139.md) `P1`
 - [x] [**REL-050 发布 aiworker CLI 0.18.4**](REL-050.md) `P0`
+- [x] [**BUG-140 Split Soul App configuration from Host platform settings**](BUG-140.md) `P0`

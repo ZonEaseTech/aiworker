@@ -1,5 +1,23 @@
 # AIWorker Changelog
 
+## 2026-05-19 20:29 [completed] BUG-140 / PLAN-376 — Host platform settings and Soul App configuration boundary
+
+Split the settings boundary into Host-owned Platform Settings and Soul
+App-owned configuration. The Soul App manifest contract now uses
+`ui.workbench.configuration` with a Worker Web `configure` action role; the old
+app-owned `ui.workbench.settings` contract is intentionally removed before
+1.0.0 instead of preserved as a compatibility alias.
+
+Worker Web now keeps fixed Host chrome actions pointed at Platform Settings,
+while HR/QA app configuration commands invoke mounted Soul App protocol actions
+and surface app-owned status messages. Shared schemas, fixtures, official HR/QA
+manifests, daemon action resolution, security review surfaces, CLI scaffold
+output and Soul App authoring docs all use configuration terminology.
+
+Verification covered the focused RED/GREEN WorkerStudio test, shared/core/API/
+CLI/HR/QA/Web focused tests, package typechecks, Web lint, UI component
+governance, root check, docs contract, diff check and code-review-graph.
+
 ## 2026-05-19 18:05 [completed] REL-050 / PLAN-375 — CLI 0.18.4 patch release
 
 Started the `@zonease/aiworker-cli@0.18.4` patch release after `BUG-139 /

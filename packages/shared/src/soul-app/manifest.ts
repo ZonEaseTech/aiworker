@@ -198,7 +198,7 @@ export const soulAppUiSlotSchema = zod.object({
 })
 export type SoulAppUiSlot = z.infer<typeof soulAppUiSlotSchema>
 
-export const soulAppWorkbenchActionRoleSchema = zod.enum(['primary', 'action', 'panel-toggle', 'refresh', 'settings'])
+export const soulAppWorkbenchActionRoleSchema = zod.enum(['primary', 'action', 'panel-toggle', 'refresh', 'configure'])
 export type SoulAppWorkbenchActionRole = z.infer<typeof soulAppWorkbenchActionRoleSchema>
 
 export const soulAppWorkbenchActionSchema = zod.object({
@@ -219,20 +219,20 @@ export const soulAppWorkbenchSearchSchema = zod.object({
 })
 export type SoulAppWorkbenchSearch = z.infer<typeof soulAppWorkbenchSearchSchema>
 
-export const soulAppWorkbenchSettingsSchema = zod.object({
+export const soulAppWorkbenchConfigurationSchema = zod.object({
   id: soulAppIdSchema,
   label: zod.string().min(1),
   protocolAction: zod.string({ required_error: 'protocolAction is required' }).min(1),
   requiredPermissions: zod.array(soulAppRequiredPermissionSchema).readonly().optional(),
 })
-export type SoulAppWorkbenchSettings = z.infer<typeof soulAppWorkbenchSettingsSchema>
+export type SoulAppWorkbenchConfiguration = z.infer<typeof soulAppWorkbenchConfigurationSchema>
 
 export const soulAppWorkbenchSchema = zod.object({
   actions: zod.array(soulAppWorkbenchActionSchema).readonly().optional(),
+  configuration: soulAppWorkbenchConfigurationSchema.optional(),
   primaryAction: soulAppWorkbenchActionSchema.optional(),
   search: soulAppWorkbenchSearchSchema.optional(),
-  settings: soulAppWorkbenchSettingsSchema.optional(),
-}).superRefine((workbench, ctx) => {
+}).strict().superRefine((workbench, ctx) => {
   if (workbench.primaryAction && workbench.primaryAction.role !== 'primary') {
     ctx.addIssue({
       code: zod.ZodIssueCode.custom,
