@@ -205,14 +205,15 @@ export function HrProfileToolsPanel({
             })}
           </select>
 
-          <button
+          <IconButton
             type="submit"
             className="primary hr-composer-submit"
             disabled={!canSubmit}
+            aria-label={submitting ? labels.generatingProfileDraft : labels.generateProfileDraft}
+            title={submitting ? labels.generatingProfileDraft : labels.generateProfileDraft}
           >
-            <SendHorizontal aria-hidden="true" size={15} />
-            <span>{submitting ? labels.generatingProfileDraft : labels.generateProfileDraft}</span>
-          </button>
+            <SendHorizontal aria-hidden="true" size={16} />
+          </IconButton>
         </div>
       </form>
     </aside>

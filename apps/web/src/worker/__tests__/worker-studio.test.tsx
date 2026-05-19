@@ -1870,6 +1870,7 @@ describe('worker studio', () => {
     expect(screen.getByTestId('hr-people-workbench')).toBeTruthy()
     const profileTools = expandProfileTools()
     expect((within(profileTools).getByLabelText('Proposal type') as HTMLSelectElement).value).toBe(HR_PROFILE_UPDATE_PROPOSAL)
+    expect(within(profileTools).getByRole('button', { name: /Generate profile draft/ }).textContent).not.toContain('Generate profile draft')
     fireEvent.change(within(profileTools).getByLabelText('Candidate material'), { target: { value: 'Role and candidate packet.' } })
     fireEvent.click(within(profileTools).getByRole('button', { name: /Generate profile draft/ }))
 

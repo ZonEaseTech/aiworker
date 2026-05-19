@@ -1281,8 +1281,11 @@
 }
 
 .hr-composer-submit {
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
   min-height: 38px;
-  padding-inline: 14px;
+  padding: 0;
 }
 
 @media (max-width: 1280px) {
