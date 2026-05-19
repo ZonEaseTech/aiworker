@@ -414,4 +414,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-383 Session composer attachment density polish**](PLAN-383.md) `2026-05-19`
 - [x] [**PLAN-384 Session composer attachment deduplication**](PLAN-384.md) `2026-05-19`
 - [x] [**PLAN-385 Host platform settings and Soul App configuration boundary**](PLAN-385.md) `2026-05-19`
-- [-] [**PLAN-386 CLI 0.19.0 minor release**](PLAN-386.md) `2026-05-19`
+- [x] [**PLAN-386 CLI 0.19.0 minor release**](PLAN-386.md) `2026-05-19`

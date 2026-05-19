@@ -1,6 +1,6 @@
 # AIWorker Changelog
 
-## 2026-05-19 22:25 [in progress] REL-051 / PLAN-386 — CLI 0.19.0 minor release
+## 2026-05-19 22:25 [completed] REL-051 / PLAN-386 — CLI 0.19.0 minor release
 
 Started the `@zonease/aiworker-cli@0.19.0` minor release after the Session Kit
 and MCP workspace-binding cleanup work landed on `main`. npm latest is
@@ -11,8 +11,13 @@ handling, HR/session composer adoption, and MCP legacy-entrypoint cleanup.
 Local pre-release and release-prep gates passed through `bun run check`,
 `bun run test`, `bun run build`, focused shared/API/Web tests, UI governance,
 docs contract, mounted-surface smoke, dist version/package checks, pack
-dry-run, dist release smoke, diff checks and code-review-graph review. The
-tag workflow and published-package verification are still in progress.
+dry-run, dist release smoke, diff checks and code-review-graph review. Release
+workflow `26105535525` and main lint workflow `26105518550` passed. npm latest
+resolves to `0.19.0`; explicit `bunx @zonease/aiworker-cli@0.19.0 --version`
+reports `aiworker/0.19.0`; GitHub Release `v0.19.0` is published with 8
+binary/checksum assets; published-package smoke passed from public npm package
+covering Host Web/API startup, Worker Web asset serving, official HR/QA apps
+and HR/QA mounted actions.
 
 ## 2026-05-19 20:29 [completed] BUG-146 / PLAN-385 — Host platform settings and Soul App configuration boundary
 

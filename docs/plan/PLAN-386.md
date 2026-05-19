@@ -1,9 +1,10 @@
 # PLAN-386 CLI 0.19.0 minor release
 
-- **status**: in_progress
+- **status**: completed
 - **owner**: codex
 - **createdAt**: 2026-05-19
 - **approvedAt**: 2026-05-19
+- **completedAt**: 2026-05-19
 - **relatedTask**: REL-051
 
 ## Current State
@@ -69,13 +70,13 @@ Execution steps:
 - [x] `bun run --filter '@zonease/aiworker-cli' smoke:dist-release`
 - [x] `bun run crg:update`
 - [x] `bun run crg:review`
-- [ ] GitHub Actions release workflow
-- [ ] GitHub Actions main lint workflow
-- [ ] `npm view @zonease/aiworker-cli version dist-tags --json`
-- [ ] `bunx @zonease/aiworker-cli@0.19.0 --version`
-- [ ] `gh release view v0.19.0 --repo ZonEaseTech/aiworker --json tagName,isDraft,isPrerelease,assets,url,publishedAt,targetCommitish`
-- [ ] Published-package smoke
-- [ ] `git status --short --branch`
+- [x] GitHub Actions release workflow
+- [x] GitHub Actions main lint workflow
+- [x] `npm view @zonease/aiworker-cli version dist-tags --json`
+- [x] `bunx @zonease/aiworker-cli@0.19.0 --version`
+- [x] `gh release view v0.19.0 --repo ZonEaseTech/aiworker --json tagName,isDraft,isPrerelease,assets,url,publishedAt,targetCommitish`
+- [x] Published-package smoke
+- [x] `git status --short --branch`
 
 ## Annotations
 
@@ -88,3 +89,10 @@ Execution steps:
   `@zonease/aiworker-cli@0.19.0`; pack dry-run produced
   `zonease-aiworker-cli-0.19.0.tgz` with 146 entries; mounted-surface smoke and
   dist release smoke passed; code-review-graph reported risk score `0.00`.
+- 2026-05-19 23:02 CST: Pushed `main` and annotated tag `v0.19.0`. Release
+  workflow `26105535525` passed; main lint workflow `26105518550` passed; npm
+  latest resolves to `0.19.0`; `bunx @zonease/aiworker-cli@0.19.0 --version`
+  reported `aiworker/0.19.0`; GitHub Release `v0.19.0` is formal with 8
+  binary/checksum assets; published-package smoke passed from public npm package
+  with report at
+  `/tmp/aiworker-release-0.19.0-published-smoke-UBSJd9/report.json`.
