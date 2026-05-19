@@ -986,7 +986,9 @@ describe('worker studio', () => {
     expect(screen.getAllByRole('button', { name: 'Review profile patch' })).toHaveLength(1)
     expect(screen.queryByTestId('hr-artifact-markdown-preview')).toBeNull()
     expect(screen.queryByRole('button', { name: /Summarize profile/ })).toBeNull()
-    expect(screen.getByRole('button', { name: /Open Screen candidate session/ })).toBeTruthy()
+    expect(within(profileTools).queryByText('Screen candidate')).toBeNull()
+    expect(within(profileTools).queryByText('Active')).toBeNull()
+    expect(within(profileTools).getByRole('button', { name: /Open Evidence organization session/ })).toBeTruthy()
     expect(screen.queryByText('Capability template (6)')).toBeNull()
     expect(document.querySelector('.count-pill')).toBeNull()
     expect(screen.queryByText('Examples')).toBeNull()
@@ -1985,7 +1987,7 @@ describe('worker studio', () => {
     expect(screen.getByText('People Profiles')).toBeTruthy()
     expect(screen.queryByTestId('new-session-panel')).toBeNull()
     const profileTools = document.querySelector('.hr-profile-tools-panel') as HTMLElement
-    fireEvent.click(await within(profileTools).findByRole('button', { name: /Open Screen candidate session/ }))
+    fireEvent.click(await within(profileTools).findByRole('button', { name: /Open Evidence organization session/ }))
 
     await waitFor(() => {
       expect(window.location.pathname).toBe('/workers/hr-worker/workspaces/workspace-1/sessions/session-1')

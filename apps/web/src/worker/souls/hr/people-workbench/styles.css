@@ -1072,14 +1072,6 @@
   gap: 3px;
 }
 
-.hr-session-card-meta em {
-  color: var(--text-strong);
-  font-family: var(--mono);
-  font-size: 12px;
-  font-style: normal;
-  white-space: nowrap;
-}
-
 .hr-session-card-meta small {
   display: inline-flex;
   align-items: center;

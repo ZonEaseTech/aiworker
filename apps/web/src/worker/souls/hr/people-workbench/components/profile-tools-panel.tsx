@@ -8,7 +8,7 @@ import type { PersonProfile } from '../types'
 import { IconButton, Select, Textarea } from '@zonease/aiworker-component'
 import { Clock3, FileText, Paperclip, SendHorizontal, X } from 'lucide-react'
 import { useRef, useState } from 'react'
-import { displayTemplate, formatRelativeTime, formatStatus } from '../../../../../features/i18n'
+import { displayTemplate, formatRelativeTime } from '../../../../../features/i18n'
 
 interface ProfileToolsPanelProps {
   engineReadiness: EngineReadiness
@@ -95,27 +95,28 @@ export function HrProfileToolsPanel({
         </div>
         <div className="hr-session-card-list compact">
           {recentSessions.length > 0
-            ? recentSessions.map(session => (
-                <button
-                  key={session.id}
-                  type="button"
-                  className="hr-session-card compact"
-                  aria-label={labels.openSession(session.title)}
-                  onClick={() => onOpenSession(session)}
-                >
-                  <span>
-                    <strong>{session.title}</strong>
-                    <small>{displayTemplateForSession(session, templates, locale, labels)}</small>
-                  </span>
-                  <span className="hr-session-card-meta">
-                    <em>{formatStatus(session.status, locale)}</em>
-                    <small>
-                      <Clock3 aria-hidden="true" size={12} />
-                      {formatRelativeTime(session.updatedAt, locale)}
-                    </small>
-                  </span>
-                </button>
-              ))
+            ? recentSessions.map((session) => {
+                const sessionLabel = displayTemplateForSession(session, templates, locale, labels)
+                return (
+                  <button
+                    key={session.id}
+                    type="button"
+                    className="hr-session-card compact"
+                    aria-label={labels.openSession(sessionLabel)}
+                    onClick={() => onOpenSession(session)}
+                  >
+                    <span>
+                      <strong>{sessionLabel}</strong>
+                    </span>
+                    <span className="hr-session-card-meta">
+                      <small>
+                        <Clock3 aria-hidden="true" size={12} />
+                        {formatRelativeTime(session.updatedAt, locale)}
+                      </small>
+                    </span>
+                  </button>
+                )
+              })
             : <span className="hr-profile-section-empty">{labels.noRecentSessions}</span>}
         </div>
       </section>
