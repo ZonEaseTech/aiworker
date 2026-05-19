@@ -482,3 +482,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-098 Compact operator CLI surface**](FEAT-098.md) `P0`
 - [x] [**REL-046 发布 aiworker CLI 0.18.0**](REL-046.md) `P0`
 - [x] [**FEAT-099 Host/Soul shared component library**](FEAT-099.md) `P0`
+- [-] [**REL-047 发布 aiworker CLI 0.18.1**](REL-047.md) `P0`
