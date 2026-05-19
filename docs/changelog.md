@@ -1,5 +1,16 @@
 # AIWorker Changelog
 
+## 2026-05-19 [completed] BUG-145 / PLAN-384 — Session composer attachment deduplication
+
+The Worker Web follow-up composer now deduplicates file and image attachments
+across repeated add events. Selecting or pasting the same source material more
+than once keeps one preview card, one attachment badge count and one submitted
+material descriptor.
+
+The fix keeps shared per-paste payload dedupe in `SessionComposer`, then adds
+state-level dedupe in `SessionTurnComposer` using the same `name:size:type`
+attachment identity.
+
 ## 2026-05-19 [completed] BUG-144 / PLAN-383 — Session composer attachment density polish
 
 The shared session composer now renders file and image attachments at a more

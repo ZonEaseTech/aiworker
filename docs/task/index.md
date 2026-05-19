@@ -497,3 +497,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-142 Session composer integrated field and signal width polish**](BUG-142.md) `P0`
 - [x] [**BUG-143 Session composer busy state, attachment clearing and usage meter**](BUG-143.md) `P0`
 - [x] [**BUG-144 Session composer attachment density polish**](BUG-144.md) `P1`
+- [x] [**BUG-145 Session composer attachment deduplication**](BUG-145.md) `P0`

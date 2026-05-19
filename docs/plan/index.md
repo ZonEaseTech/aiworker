@@ -411,3 +411,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-381 Session composer integrated field and signal width polish**](PLAN-381.md) `2026-05-19`
 - [x] [**PLAN-382 Session composer busy state, attachment clearing and usage meter**](PLAN-382.md) `2026-05-19`
 - [x] [**PLAN-383 Session composer attachment density polish**](PLAN-383.md) `2026-05-19`
+- [x] [**PLAN-384 Session composer attachment deduplication**](PLAN-384.md) `2026-05-19`

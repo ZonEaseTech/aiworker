@@ -2048,30 +2048,45 @@ describe('worker studio', () => {
     expect(within(workerComposer).getByRole('button', { name: 'Add source material' })).toBeTruthy()
     expect(fileInput).toBeTruthy()
 
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:source-image')
+    const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+    const sourceNotes = new File(['source evidence'], 'source-notes.txt', { type: 'text/plain' })
+    const duplicateSourceNotes = new File(['source evidence'], 'source-notes.txt', { type: 'text/plain' })
+    const sourceImage = new File(['image evidence'], 'source-image.png', { type: 'image/png' })
+    const duplicateSourceImage = new File(['image evidence'], 'source-image.png', { type: 'image/png' })
     await act(async () => {
-      fireEvent.change(fileInput, { target: { files: [new File(['source evidence'], 'source-notes.txt', { type: 'text/plain' })] } })
+      fireEvent.change(fileInput, { target: { files: [sourceNotes, sourceImage] } })
+      fireEvent.change(fileInput, { target: { files: [duplicateSourceNotes, duplicateSourceImage] } })
     })
 
     expect(within(workerComposer).getByText('source-notes.txt')).toBeTruthy()
+    expect(within(workerComposer).getAllByText('source-notes.txt')).toHaveLength(1)
+    expect(within(workerComposer).getAllByRole('button', { name: 'Preview source-image.png' })).toHaveLength(1)
     fireEvent.change(within(workerComposer).getByLabelText('Follow-up turn'), { target: { value: 'Use the attached source.' } })
     fireEvent.click(within(workerComposer).getByRole('button', { name: 'Send turn' }))
 
     await waitFor(() => {
-      expect(writtenFiles).toHaveLength(1)
+      expect(writtenFiles).toHaveLength(2)
       expect(lastMessageRequestBody).not.toBeNull()
     })
     expect(writtenFiles[0]).toMatchObject({
       body: 'source evidence',
       workspaceId: 'workspace-1',
     })
-    expect(writtenFiles[0]?.path).toMatch(/^evidence\/uploads\/.+\/source-notes\.txt$/)
+    expect(writtenFiles.map(file => file.path)).toEqual(expect.arrayContaining([
+      expect.stringMatching(/^evidence\/uploads\/.+\/source-notes\.txt$/),
+      expect.stringMatching(/^evidence\/uploads\/.+\/source-image\.png\.base64\.txt$/),
+    ]))
     expect(String(lastMessageRequestBody?.input)).toContain('Use the attached source.')
     expect(String(lastMessageRequestBody?.input)).toContain('Attached source material:')
     expect(String(lastMessageRequestBody?.input)).toContain('evidence/uploads/')
     expect(within(workerComposer).queryByText('source-notes.txt')).toBeNull()
     const metadata = lastMessageRequestBody?.metadata as { attachedMaterials?: Array<{ name: string, path: string }>, materialCount?: number }
-    expect(metadata.materialCount).toBe(1)
-    expect(metadata.attachedMaterials?.[0]?.name).toBe('source-notes.txt')
+    expect(metadata.materialCount).toBe(2)
+    expect(metadata.attachedMaterials?.map(item => item.name)).toEqual(['source-notes.txt', 'source-image.png'])
+    expect(createObjectURL).toHaveBeenCalledTimes(1)
+    createObjectURL.mockRestore()
+    revokeObjectURL.mockRestore()
   })
 
   it('continues an existing session and wires review and memory actions', async () => {

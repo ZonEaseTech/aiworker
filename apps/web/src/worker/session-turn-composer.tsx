@@ -84,14 +84,26 @@ export function SessionTurnComposer({
     if (selectedFiles.length === 0)
       return
     setAttachmentError(null)
-    setAttachments(current => [
-      ...current,
-      ...selectedFiles.map((file, index) => ({
-        file,
-        id: `${file.name}-${file.size}-${file.lastModified}-${current.length + index}`,
-        previewUrl: isSessionAttachmentImage(file) ? URL.createObjectURL(file) : undefined,
-      })),
-    ])
+    setAttachments((current) => {
+      const seen = new Set(current.map(attachment => attachmentFileKey(attachment.file)))
+      const nextFiles = selectedFiles.filter((file) => {
+        const key = attachmentFileKey(file)
+        if (seen.has(key))
+          return false
+        seen.add(key)
+        return true
+      })
+      if (nextFiles.length === 0)
+        return current
+      return [
+        ...current,
+        ...nextFiles.map((file, index) => ({
+          file,
+          id: `${file.name}-${file.size}-${file.type}-${current.length + index}`,
+          previewUrl: isSessionAttachmentImage(file) ? URL.createObjectURL(file) : undefined,
+        })),
+      ]
+    })
     if (fileInputRef.current)
       fileInputRef.current.value = ''
   }
@@ -189,4 +201,8 @@ function clearAttachmentPreviews(attachments: SessionTurnAttachment[]) {
     if (attachment.previewUrl)
       URL.revokeObjectURL(attachment.previewUrl)
   }
+}
+
+function attachmentFileKey(file: Pick<File, 'name' | 'size' | 'type'>): string {
+  return `${file.name}:${file.size}:${file.type}`
 }
