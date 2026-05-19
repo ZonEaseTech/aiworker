@@ -62,6 +62,8 @@ try {
   const settingsDialog = page.getByRole('dialog', { name: 'Configure Soul workspace' })
   await settingsDialog.waitFor({ timeout: 10_000 })
   await assertLocatorWithinViewport(page, settingsDialog, 'settings dialog')
+  await settingsDialog.getByRole('button', { name: /Execution/ }).click()
+  await assertEngineIconSurface(page)
   await settingsDialog.getByRole('button', { name: /Soul Apps/ }).click()
   await page.getByText('API /api/local/apps/aiworker-hr').waitFor({ timeout: 10_000 })
   await page.getByText('4 mounted contributions').first().waitFor({ timeout: 10_000 })
@@ -138,6 +140,30 @@ async function assertLocatorWithinViewport(page: Page, locator: Locator, name: s
     || box.y + box.height > viewport.height + 1
   if (outsideViewport)
     throw new Error(`${name} is outside the viewport: ${JSON.stringify({ box, viewport })}`)
+}
+
+async function assertEngineIconSurface(page: Page): Promise<void> {
+  const icon = page.locator('[data-engine-icon="codex"] .agent-icon-shape').first()
+  await icon.waitFor({ timeout: 10_000 })
+  const state = await icon.evaluate((element) => {
+    const style = getComputedStyle(element)
+    const box = element.getBoundingClientRect()
+    return {
+      background: style.backgroundColor,
+      height: box.height,
+      maskImage: style.maskImage,
+      webkitMaskImage: style.webkitMaskImage,
+      width: box.width,
+    }
+  })
+  if (state.width <= 0 || state.height <= 0)
+    throw new Error(`Engine icon has no visible box: ${JSON.stringify(state)}`)
+  if ((!state.maskImage || state.maskImage === 'none') && (!state.webkitMaskImage || state.webkitMaskImage === 'none'))
+    throw new Error(`Engine icon mask is missing: ${JSON.stringify(state)}`)
+
+  const asset = await fetch(new URL('/engine-icons/openai.svg', page.url()))
+  if (!asset.ok)
+    throw new Error(`Engine icon asset is unavailable: ${asset.status}`)
 }
 
 async function fetchJson<T>(url: string): Promise<T> {

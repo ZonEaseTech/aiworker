@@ -194,6 +194,96 @@
   white-space: nowrap;
 }
 
+.agent-card {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-panel);
+  text-align: left;
+}
+
+.agent-card.active {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  box-shadow: 0 0 0 1px var(--accent-soft);
+}
+
+.agent-card.disabled {
+  opacity: 0.62;
+}
+
+.agent-card-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.agent-card-name {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-card-meta {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-card-meta .muted {
+  color: var(--text-soft);
+  font-style: italic;
+}
+
+.agent-icon {
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-subtle);
+  color: var(--text);
+}
+
+.agent-card.active .agent-icon-ready {
+  border-color: var(--border-strong);
+  background: var(--bg-panel);
+  color: var(--text-strong);
+}
+
+.agent-icon-muted {
+  background: var(--bg-panel);
+  color: var(--text);
+}
+
+.agent-icon-shape {
+  width: 24px;
+  height: 24px;
+  background: currentColor;
+  mask-image: var(--engine-icon-url);
+  mask-position: center;
+  mask-repeat: no-repeat;
+  mask-size: contain;
+  -webkit-mask-image: var(--engine-icon-url);
+  -webkit-mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+}
+
 /* Shared collapsible group and select styles migrated from rail/creation. */
 
 .studio-collapsible-group {

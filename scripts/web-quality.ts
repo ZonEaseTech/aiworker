@@ -30,6 +30,7 @@ const criticalStudioSelectors = [
   '.seg-control',
   '.markdown-preview',
   '.agent-card',
+  '.agent-icon-shape',
 ] as const
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url))
