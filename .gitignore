@@ -16,3 +16,4 @@ coverage/
 .aissh.yaml
 .playwright-mcp/
 .worktrees/
+.superpowers/
