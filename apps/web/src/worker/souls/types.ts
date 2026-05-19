@@ -52,6 +52,11 @@ export interface SoulSessionMaterialDescriptor {
 
 export interface SoulSessionDraft {
   context?: string
+  materialCopy?: {
+    binaryTitle?: string
+    heading: string
+    instruction: string
+  }
   materials?: SoulSessionMaterialInput[]
 }
 

@@ -404,4 +404,12 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-373 CLI 0.18.3 patch release**](PLAN-373.md) `2026-05-19`
 - [x] [**PLAN-374 HR profile composer select dropdown visual split**](PLAN-374.md) `2026-05-19`
 - [x] [**PLAN-375 CLI 0.18.4 patch release**](PLAN-375.md) `2026-05-19`
-- [x] [**PLAN-376 Host platform settings and Soul App configuration boundary**](PLAN-376.md) `2026-05-19`
+- [x] [**PLAN-376 Session Kit shared composer and session surfaces**](PLAN-376.md) `2026-05-19`
+- [x] [**PLAN-377 Session activity pipeline and composer media previews**](PLAN-377.md) `2026-05-19`
+- [x] [**PLAN-379 Session composer and timeline review gaps**](PLAN-379.md) `2026-05-19`
+- [x] [**PLAN-380 Session composer attachment paste and card UX**](PLAN-380.md) `2026-05-19`
+- [x] [**PLAN-381 Session composer integrated field and signal width polish**](PLAN-381.md) `2026-05-19`
+- [x] [**PLAN-382 Session composer busy state, attachment clearing and usage meter**](PLAN-382.md) `2026-05-19`
+- [x] [**PLAN-383 Session composer attachment density polish**](PLAN-383.md) `2026-05-19`
+- [x] [**PLAN-384 Session composer attachment deduplication**](PLAN-384.md) `2026-05-19`
+- [x] [**PLAN-385 Host platform settings and Soul App configuration boundary**](PLAN-385.md) `2026-05-19`

@@ -1,13 +1,13 @@
 import type { CapabilityTemplate, LocalSession, LocalWorkspace } from '@zonease/aiworker-shared'
 import type { FormEvent } from 'react'
 import type { EngineReadiness } from '../../../../../features/session/engine-readiness'
-import type { SoulSessionDraft, SoulSessionMaterialEncoding, SoulSessionMaterialInput, WorkerLocale } from '../../../types'
+import type { SoulSessionDraft, WorkerLocale } from '../../../types'
 import type { HrWorkbenchCopy } from '../copy'
 import type { PersonProfile } from '../types'
 
-import { IconButton, Select, Textarea } from '@zonease/aiworker-component'
-import { Clock3, FileText, Paperclip, SendHorizontal, X } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { createComposerAttachment, formatSessionAttachmentKind, formatSessionAttachmentSize, isSessionAttachmentImage, SessionComposer } from '@zonease/aiworker-component'
+import { Clock3 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { displayTemplate, formatRelativeTime } from '../../../../../features/i18n'
 
 interface ProfileToolsPanelProps {
@@ -29,6 +29,7 @@ interface ProfileToolsPanelProps {
 interface ComposerAttachment {
   file: File
   id: string
+  previewUrl?: string
 }
 
 export function HrProfileToolsPanel({
@@ -47,28 +48,66 @@ export function HrProfileToolsPanel({
   value,
 }: ProfileToolsPanelProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const attachmentsRef = useRef<ComposerAttachment[]>([])
   const [attachments, setAttachments] = useState<ComposerAttachment[]>([])
   const [attachmentError, setAttachmentError] = useState<string | null>(null)
   const recentSessions = focusedProfile?.sessions.slice().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)) ?? []
   const canSubmit = Boolean(selectedWorkspace && engineReadiness.ready && !submitting && (value.trim() || attachments.length > 0))
 
-  function handleFilesSelected(files: FileList | null) {
-    if (!files?.length)
+  useEffect(() => {
+    attachmentsRef.current = attachments
+  }, [attachments])
+
+  useEffect(() => {
+    return () => {
+      for (const attachment of attachmentsRef.current) {
+        if (attachment.previewUrl)
+          URL.revokeObjectURL(attachment.previewUrl)
+      }
+    }
+  }, [])
+
+  function addAttachmentFiles(files: FileList | File[] | null) {
+    const selectedFiles = Array.from(files ?? [])
+    if (selectedFiles.length === 0)
       return
     setAttachmentError(null)
     setAttachments(current => [
       ...current,
-      ...Array.from(files).map((file, index) => ({
+      ...selectedFiles.map((file, index) => ({
         file,
         id: `${file.name}-${file.size}-${file.lastModified}-${current.length + index}`,
+        previewUrl: isSessionAttachmentImage(file) ? URL.createObjectURL(file) : undefined,
       })),
     ])
     if (fileInputRef.current)
       fileInputRef.current.value = ''
   }
 
+  function openFilePicker() {
+    const input = fileInputRef.current
+    if (!input)
+      return
+    input.value = ''
+    input.click()
+  }
+
   function removeAttachment(id: string) {
-    setAttachments(current => current.filter(attachment => attachment.id !== id))
+    setAttachments(current => current.filter((attachment) => {
+      if (attachment.id === id && attachment.previewUrl)
+        URL.revokeObjectURL(attachment.previewUrl)
+      return attachment.id !== id
+    }))
+  }
+
+  function clearAttachments() {
+    setAttachments((current) => {
+      for (const attachment of current) {
+        if (attachment.previewUrl)
+          URL.revokeObjectURL(attachment.previewUrl)
+      }
+      return []
+    })
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -77,9 +116,17 @@ export function HrProfileToolsPanel({
       return
     try {
       setAttachmentError(null)
-      const materials = await Promise.all(attachments.map(readAttachmentMaterial))
-      await onSubmitSession(event, { context: value, materials })
-      setAttachments([])
+      const materials = await Promise.all(attachments.map(attachment => createComposerAttachment(attachment.file)))
+      await onSubmitSession(event, {
+        context: value,
+        materialCopy: {
+          binaryTitle: 'Uploaded Candidate Material',
+          heading: 'Attached candidate material:',
+          instruction: 'Use these workspace file paths as source material before drafting the reviewable profile proposal.',
+        },
+        materials,
+      })
+      clearAttachments()
     }
     catch {
       setAttachmentError(labels.materialReadError)
@@ -121,105 +168,64 @@ export function HrProfileToolsPanel({
         </div>
       </section>
 
-      <form className="hr-task-composer profile-draft-composer" onSubmit={handleSubmit}>
-        <header className="hr-composer-heading">
-          <span className="hr-composer-glyph" aria-hidden="true">
-            <FileText size={18} />
-          </span>
-          <span>
-            <strong>{labels.profileComposerTitle(focusedProfile?.name ?? labels.headerFallback)}</strong>
-            <small>{selectedWorkspace ? labels.composerSafetyDetail : labels.selectProfileFirst}</small>
-          </span>
-        </header>
+      <input
+        ref={fileInputRef}
+        className="session-composer-file-input hr-material-file-input"
+        type="file"
+        multiple
+        aria-hidden="true"
+        tabIndex={-1}
+        onChange={event => addAttachmentFiles(event.currentTarget.files)}
+      />
 
-        <Textarea
-          id="hr-task-context"
-          aria-label={labels.candidateMaterialLabel}
-          value={value}
-          placeholder={labels.contextPlaceholder}
-          onChange={event => onContextChange(event.target.value)}
-        />
-
-        <input
-          ref={fileInputRef}
-          className="hr-material-file-input"
-          type="file"
-          multiple
-          aria-hidden="true"
-          tabIndex={-1}
-          onChange={event => handleFilesSelected(event.currentTarget.files)}
-        />
-
-        {attachments.length > 0
-          ? (
-              <div className="hr-material-list" aria-label={`${labels.attachedCandidateMaterialsLabel} list`}>
-                {attachments.map(attachment => (
-                  <div key={attachment.id} className="hr-material-row">
-                    <span className="hr-material-kind">{fileKindLabel(attachment.file)}</span>
-                    <span className="hr-material-name">{attachment.file.name}</span>
-                    <span className="hr-material-size">{formatFileSize(attachment.file.size)}</span>
-                    <IconButton
-                      aria-label={labels.removeCandidateMaterial(attachment.file.name)}
-                      title={labels.removeCandidateMaterial(attachment.file.name)}
-                      onClick={() => removeAttachment(attachment.id)}
-                    >
-                      <X aria-hidden="true" size={13} />
-                    </IconButton>
-                  </div>
-                ))}
-              </div>
-            )
-          : null}
-
-        {attachmentError
-          ? <div className="inline-warning" role="status">{attachmentError}</div>
-          : null}
-
-        {!engineReadiness.ready
-          ? <div className="inline-warning" role="status">{engineReadiness.detail}</div>
-          : null}
-
-        <div className="hr-composer-action-bar">
-          <IconButton
-            className="hr-material-add-button"
-            aria-label={labels.openCandidateMaterialPicker}
-            title={labels.addCandidateMaterials}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <Paperclip aria-hidden="true" size={15} />
-            {attachments.length > 0
-              ? <span className="hr-material-count" aria-label={labels.attachedCandidateMaterialsLabel}>{attachments.length}</span>
-              : null}
-          </IconButton>
-
-          <Select
-            className="hr-composer-template-select"
-            contentClassName="hr-composer-template-select-content"
-            ariaLabel={labels.proposalTypeSelectLabel}
-            label={labels.proposalTypeSelectLabel}
-            value={selectedTemplate.id}
-            onChange={onTemplateChange}
-            side="top"
-            options={templates.map((template) => {
-              const templateCopy = displayTemplate(template, locale)
-              return {
-                label: labels.proposalTypeLabel(template.id, template.outputKind, templateCopy.name),
-                value: template.id,
-              }
-            })}
-          />
-
-          <IconButton
-            type="submit"
-            className="primary hr-composer-submit"
-            disabled={!canSubmit}
-            aria-label={submitting ? labels.generatingProfileDraft : labels.generateProfileDraft}
-            title={submitting ? labels.generatingProfileDraft : labels.generateProfileDraft}
-          >
-            <SendHorizontal aria-hidden="true" size={16} />
-          </IconButton>
-        </div>
-      </form>
+      <SessionComposer
+        ariaLabel={labels.candidateMaterialLabel}
+        attachmentCountLabel={labels.attachedCandidateMaterialsLabel}
+        attachmentTriggerLabel={labels.openCandidateMaterialPicker}
+        attachments={attachments.map(attachment => ({
+          id: attachment.id,
+          kind: formatSessionAttachmentKind(attachment.file),
+          closePreviewLabel: 'Close preview',
+          mediaType: attachment.previewUrl ? 'image' : 'file',
+          name: attachment.file.name,
+          onPreviewLabel: `Preview ${attachment.file.name}`,
+          previewAlt: attachment.file.name,
+          previewTitle: attachment.file.name,
+          previewUrl: attachment.previewUrl,
+          removeLabel: labels.removeCandidateMaterial(attachment.file.name),
+          size: formatSessionAttachmentSize(attachment.file.size),
+        }))}
+        className="profile-draft-composer"
+        description={selectedWorkspace ? labels.composerSafetyDetail : labels.selectProfileFirst}
+        disabled={!selectedWorkspace}
+        disabledReason={!selectedWorkspace ? labels.selectProfileFirst : !engineReadiness.ready ? engineReadiness.detail : undefined}
+        error={attachmentError}
+        onAddAttachmentFiles={addAttachmentFiles}
+        onAddAttachments={openFilePicker}
+        onRemoveAttachment={removeAttachment}
+        onSubmit={handleSubmit}
+        onTemplateChange={onTemplateChange}
+        onValueChange={onContextChange}
+        placeholder={labels.contextPlaceholder}
+        selectedTemplateId={selectedTemplate.id}
+        submitAriaLabel={submitting ? labels.generatingProfileDraft : labels.generateProfileDraft}
+        submitDisabled={!canSubmit}
+        submitting={submitting}
+        submitTitle={submitting ? labels.generatingProfileDraft : labels.generateProfileDraft}
+        templateClassName="hr-composer-template-select"
+        templateContentClassName="hr-composer-template-select-content"
+        templateLabel={labels.proposalTypeSelectLabel}
+        templateOptions={templates.map((template) => {
+          const templateCopy = displayTemplate(template, locale)
+          return {
+            label: labels.proposalTypeLabel(template.id, template.outputKind, templateCopy.name),
+            value: template.id,
+          }
+        })}
+        title={labels.profileComposerTitle(focusedProfile?.name ?? labels.headerFallback)}
+        value={value}
+        variant="panel"
+      />
     </aside>
   )
 }
@@ -230,48 +236,4 @@ function displayTemplateForSession(session: LocalSession, templates: CapabilityT
     return session.capabilityTemplateId.replace(/-/g, ' ')
   const templateCopy = displayTemplate(template, locale)
   return labels.proposalTypeLabel(template.id, template.outputKind, templateCopy.name)
-}
-
-async function readAttachmentMaterial(attachment: ComposerAttachment): Promise<SoulSessionMaterialInput> {
-  const encoding: SoulSessionMaterialEncoding = isTextLikeFile(attachment.file) ? 'utf8' : 'base64'
-  const content = encoding === 'utf8'
-    ? await attachment.file.text()
-    : arrayBufferToBase64(await attachment.file.arrayBuffer())
-  return {
-    content,
-    encoding,
-    mimeType: attachment.file.type || 'application/octet-stream',
-    name: attachment.file.name,
-    size: attachment.file.size,
-  }
-}
-
-function isTextLikeFile(file: File): boolean {
-  if (file.type.startsWith('text/'))
-    return true
-  if (['application/csv', 'application/json', 'application/xml', 'application/yaml'].includes(file.type))
-    return true
-  return /\.(?:csv|json|log|md|txt|ya?ml)$/i.test(file.name)
-}
-
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer)
-  let binary = ''
-  const chunkSize = 0x8000
-  for (let index = 0; index < bytes.length; index += chunkSize)
-    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize))
-  return btoa(binary)
-}
-
-function fileKindLabel(file: File): string {
-  const extension = file.name.includes('.') ? file.name.split('.').pop() : ''
-  return (extension || file.type.split('/').pop() || 'file').slice(0, 5).toUpperCase()
-}
-
-function formatFileSize(size: number): string {
-  if (size < 1024)
-    return `${size} B`
-  if (size < 1024 * 1024)
-    return `${Math.round(size / 102.4) / 10} KB`
-  return `${Math.round(size / 1024 / 102.4) / 10} MB`
 }

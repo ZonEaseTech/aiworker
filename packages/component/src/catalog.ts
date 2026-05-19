@@ -167,6 +167,34 @@ export const componentCatalog: ComponentCatalogItem[] = [
     status: 'implemented',
   },
   {
+    description: 'Shared controlled session composer shell with file/image attachments, usage status, image preview and action bar.',
+    family: 'workbench',
+    name: 'SessionComposer',
+    owner: 'host-soul-shared',
+    status: 'implemented',
+  },
+  {
+    description: 'Shared composer action bar with attachment trigger, usage status, template select and submit affordance.',
+    family: 'workbench',
+    name: 'SessionComposerActionBar',
+    owner: 'host-soul-shared',
+    status: 'implemented',
+  },
+  {
+    description: 'Shared normalized session timeline renderer with parser-led activity rows, collapsed status signals and markdown assistant prose.',
+    family: 'workbench',
+    name: 'SessionTimeline',
+    owner: 'host-soul-shared',
+    status: 'implemented',
+  },
+  {
+    description: 'Shared generic session detail section shell.',
+    family: 'workbench',
+    name: 'SessionDetailPanel',
+    owner: 'host-soul-shared',
+    status: 'implemented',
+  },
+  {
     description: 'Generic profile reader frame without HR semantics.',
     family: 'soul-shells',
     name: 'ProfileReaderShell',
@@ -201,12 +229,6 @@ export const componentMigrationQueue: ComponentMigrationCandidate[] = [
     reason: 'Reusable progress/status card can serve Host and Soul workbenches.',
     source: 'apps/web/src/worker/session-progress-panel.tsx',
     target: 'packages/component/src/patterns/progress.tsx',
-  },
-  {
-    candidate: 'message, tool result and status event shells',
-    reason: 'Session message UI is generic while event meaning stays local.',
-    source: 'apps/web/src/worker/session-chat.tsx',
-    target: 'packages/component/src/patterns/message-flow.tsx',
   },
   {
     candidate: 'profile reader frame',

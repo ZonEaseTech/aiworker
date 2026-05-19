@@ -490,4 +490,12 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REL-049 发布 aiworker CLI 0.18.3**](REL-049.md) `P0`
 - [x] [**BUG-139 HR profile composer select dropdown visual split**](BUG-139.md) `P1`
 - [x] [**REL-050 发布 aiworker CLI 0.18.4**](REL-050.md) `P0`
-- [x] [**BUG-140 Split Soul App configuration from Host platform settings**](BUG-140.md) `P0`
+- [x] [**FEAT-102 Session Kit shared composer and session surfaces**](FEAT-102.md) `P0`
+- [x] [**FEAT-103 Session activity pipeline and composer media previews**](FEAT-103.md) `P0`
+- [x] [**BUG-140 Session composer and timeline review gaps**](BUG-140.md) `P0`
+- [x] [**BUG-141 Session composer attachment paste and card UX**](BUG-141.md) `P0`
+- [x] [**BUG-142 Session composer integrated field and signal width polish**](BUG-142.md) `P0`
+- [x] [**BUG-143 Session composer busy state, attachment clearing and usage meter**](BUG-143.md) `P0`
+- [x] [**BUG-144 Session composer attachment density polish**](BUG-144.md) `P1`
+- [x] [**BUG-145 Session composer attachment deduplication**](BUG-145.md) `P0`
+- [x] [**BUG-146 Split Soul App configuration from Host platform settings**](BUG-146.md) `P0`

@@ -283,6 +283,7 @@ let currentWorkers: typeof workers
 let currentWorkspaces: typeof workspace[]
 let currentProfiles: Record<string, string>
 let currentArtifactRawContent: string
+let lastMessageRequestBody: Record<string, unknown> | null
 let lastSessionRequestBody: Record<string, unknown> | null
 let writtenFiles: Array<{ body: string, path: string, workspaceId: string }>
 let currentApps: Array<{
@@ -443,6 +444,7 @@ function resetSettings() {
       '',
     ].join('\n'),
   }
+  lastMessageRequestBody = null
   lastSessionRequestBody = null
   writtenFiles = []
   currentArtifactRawContent = [
@@ -741,10 +743,11 @@ beforeEach(() => {
       return json({ artifacts: [createdArtifact], events: [], files: [], lessons: [], review: null, session: createdSession, turn: createdTurn }, 201)
     }
     if ((url.endsWith('/api/local/workers/hr-worker/sessions/session-1/messages/stream') || url.endsWith('/api/local/sessions/session-1/turns/stream')) && method === 'POST') {
+      lastMessageRequestBody = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {}
       const nextTurn = {
         ...turnRecord,
         id: 'turn-2',
-        input: 'Add interview risks.',
+        input: String(lastMessageRequestBody.input ?? 'Add interview risks.'),
         response: 'Updated Candidate Screen.',
         seq: 2,
       }
@@ -770,10 +773,11 @@ beforeEach(() => {
       }), { headers: { 'content-type': 'text/event-stream' }, status: 200 })
     }
     if ((url.endsWith('/api/local/workers/hr-worker/sessions/session-1/messages') || url.endsWith('/api/local/sessions/session-1/turns')) && method === 'POST') {
+      lastMessageRequestBody = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {}
       const nextTurn = {
         ...turnRecord,
         id: 'turn-2',
-        input: 'Add interview risks.',
+        input: String(lastMessageRequestBody.input ?? 'Add interview risks.'),
         response: 'Updated Candidate Screen.',
         seq: 2,
       }
@@ -1280,6 +1284,8 @@ describe('worker studio', () => {
     expect((await screen.findAllByText('Agent is generating')).length).toBeGreaterThan(0)
     expect(screen.getAllByText('The agent is generating a reviewable artifact. Streamed events will keep updating.').length).toBeGreaterThan(0)
     expect(screen.getByText('The preview will unlock after the first artifact enters the index.')).toBeTruthy()
+    const workerComposer = document.querySelector('.worker-composer') as HTMLElement
+    expect(within(workerComposer).getByRole('button', { name: /Sending turn/ }).getAttribute('aria-busy')).toBe('true')
   })
 
   it('distinguishes written artifact files from indexed artifacts', async () => {
@@ -1306,6 +1312,48 @@ describe('worker studio', () => {
     expect((await screen.findAllByText('File written, indexing')).length).toBeGreaterThan(0)
     expect(screen.getAllByText('The engine wrote an artifact file. AIWorker is finalizing the session before it appears in the artifact preview.').length).toBeGreaterThan(0)
     expect(screen.getByText('The artifact file is written and will appear here after session finalization.')).toBeTruthy()
+  })
+
+  it('renders Codex CLI tool activity as readable session activity with command evidence retained', async () => {
+    currentEvents = [
+      {
+        ...eventRecord,
+        id: 21,
+        payloadJson: {
+          agentEvent: {
+            id: 'codex-tool-1',
+            input: { command: 'rg -n "profile" evidence' },
+            kind: 'tool_use',
+            name: 'Bash',
+          },
+        },
+        seq: 1,
+        type: 'tool',
+      },
+      {
+        ...eventRecord,
+        id: 22,
+        payloadJson: {
+          agentEvent: {
+            content: 'evidence/README.md:1:profile',
+            id: 'codex-tool-1',
+            isError: false,
+            kind: 'tool_result',
+          },
+        },
+        seq: 2,
+        type: 'tool',
+      },
+    ]
+    currentTurns = [{ ...turnRecord, response: null, status: 'succeeded' }]
+    window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1/sessions/session-1')
+
+    render(<WorkerStudio />)
+
+    const activityLabel = await screen.findByText('Searched files')
+    expect(activityLabel.closest('summary')?.textContent).not.toContain('Bash')
+    expect(screen.getByText('rg -n "profile" evidence')).toBeTruthy()
+    expect(screen.getByText('evidence/README.md:1:profile')).toBeTruthy()
   })
 
   it('shows indexed artifacts as human-review work instead of completed automation', async () => {
@@ -1898,11 +1946,23 @@ describe('worker studio', () => {
     const profileTools = expandProfileTools()
     const fileInput = profileTools.querySelector('input.hr-material-file-input') as HTMLInputElement
     expect(fileInput).toBeTruthy()
+    const fileInputClick = vi.spyOn(fileInput, 'click').mockImplementation(() => {})
+    Object.defineProperty(fileInput, 'value', { configurable: true, value: 'stale-selection', writable: true })
+    fireEvent.click(within(profileTools).getByRole('button', { name: 'Open candidate material file picker' }))
+    expect(fileInput.value).toBe('')
+    expect(fileInputClick).toHaveBeenCalledTimes(1)
+    fileInputClick.mockRestore()
     const resume = new File(['resume evidence'], 'ada-resume.txt', { type: 'text/plain' })
     const notes = new File(['interview notes'], 'round-one.md', { type: 'text/markdown' })
 
     await act(async () => {
-      fireEvent.change(fileInput, { target: { files: [resume, notes] } })
+      fireEvent.change(fileInput, { target: { files: [resume] } })
+      fireEvent.paste(within(profileTools).getByLabelText('Candidate material'), {
+        clipboardData: {
+          files: [notes],
+          items: [{ getAsFile: () => notes, kind: 'file' }],
+        },
+      })
     })
 
     expect(within(profileTools).getByText('ada-resume.txt')).toBeTruthy()
@@ -1976,8 +2036,94 @@ describe('worker studio', () => {
     })
   })
 
+  it('submits source material files with a follow-up session turn', async () => {
+    window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1/sessions/session-1')
+
+    render(<WorkerStudio />)
+
+    await screen.findByText('AIWorker Engine')
+    const workerComposer = document.querySelector('.worker-composer') as HTMLElement
+    const fileInput = document.querySelector('.worker-chat-pane input[type="file"]') as HTMLInputElement
+    expect(within(workerComposer).getByRole('button', { name: 'Add source material' })).toBeTruthy()
+    expect(fileInput).toBeTruthy()
+
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:source-image')
+    const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+    const sourceNotes = new File(['source evidence'], 'source-notes.txt', { type: 'text/plain' })
+    const duplicateSourceNotes = new File(['source evidence'], 'source-notes.txt', { type: 'text/plain' })
+    const sourceImage = new File(['image evidence'], 'source-image.png', { type: 'image/png' })
+    const duplicateSourceImage = new File(['image evidence'], 'source-image.png', { type: 'image/png' })
+    await act(async () => {
+      fireEvent.change(fileInput, { target: { files: [sourceNotes, sourceImage] } })
+      fireEvent.change(fileInput, { target: { files: [duplicateSourceNotes, duplicateSourceImage] } })
+    })
+
+    expect(within(workerComposer).getByText('source-notes.txt')).toBeTruthy()
+    expect(within(workerComposer).getAllByText('source-notes.txt')).toHaveLength(1)
+    expect(within(workerComposer).getAllByRole('button', { name: 'Preview source-image.png' })).toHaveLength(1)
+    fireEvent.change(within(workerComposer).getByLabelText('Follow-up turn'), { target: { value: 'Use the attached source.' } })
+    fireEvent.click(within(workerComposer).getByRole('button', { name: 'Send turn' }))
+
+    await waitFor(() => {
+      expect(writtenFiles).toHaveLength(2)
+      expect(lastMessageRequestBody).not.toBeNull()
+    })
+    expect(writtenFiles[0]).toMatchObject({
+      body: 'source evidence',
+      workspaceId: 'workspace-1',
+    })
+    expect(writtenFiles.map(file => file.path)).toEqual(expect.arrayContaining([
+      expect.stringMatching(/^evidence\/uploads\/.+\/source-notes\.txt$/),
+      expect.stringMatching(/^evidence\/uploads\/.+\/source-image\.png\.base64\.txt$/),
+    ]))
+    expect(String(lastMessageRequestBody?.input)).toContain('Use the attached source.')
+    expect(String(lastMessageRequestBody?.input)).toContain('Attached source material:')
+    expect(String(lastMessageRequestBody?.input)).toContain('evidence/uploads/')
+    expect(within(workerComposer).queryByText('source-notes.txt')).toBeNull()
+    const metadata = lastMessageRequestBody?.metadata as { attachedMaterials?: Array<{ name: string, path: string }>, materialCount?: number }
+    expect(metadata.materialCount).toBe(2)
+    expect(metadata.attachedMaterials?.map(item => item.name)).toEqual(['source-notes.txt', 'source-image.png'])
+    expect(createObjectURL).toHaveBeenCalledTimes(1)
+    createObjectURL.mockRestore()
+    revokeObjectURL.mockRestore()
+  })
+
   it('continues an existing session and wires review and memory actions', async () => {
     window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
+    currentEvents = [
+      {
+        ...eventRecord,
+        id: 30,
+        payloadJson: { agentEvent: { detail: 'running', kind: 'status', label: 'status' } },
+        seq: 1,
+      },
+      {
+        ...eventRecord,
+        id: 31,
+        payloadJson: { agentEvent: { inputTokens: 175170, kind: 'usage', outputTokens: 3446 } },
+        seq: 2,
+      },
+      {
+        ...eventRecord,
+        id: 32,
+        payloadJson: { path: 'artifacts/profile-update-proposal.md' },
+        seq: 3,
+        type: 'artifact',
+      },
+      {
+        ...eventRecord,
+        id: 33,
+        payloadJson: { verdict: 'needs_review' },
+        seq: 4,
+        type: 'review',
+      },
+      {
+        ...eventRecord,
+        id: 34,
+        payloadJson: { agentEvent: { detail: 'succeeded', kind: 'status', label: 'status' } },
+        seq: 5,
+      },
+    ]
 
     render(<WorkerStudio />)
 
@@ -2021,6 +2167,16 @@ describe('worker studio', () => {
     expect(drawerToggle.getAttribute('aria-pressed')).toBe('true')
     expect(settingsButton.nextElementSibling).toBe(drawerToggle)
     expect(drawerToggle.classList.contains('active')).toBe(true)
+    const workerComposer = document.querySelector('.worker-composer') as HTMLElement
+    expect(workerComposer).toBeTruthy()
+    expect(within(workerComposer).queryByRole('button', { name: 'Open settings' })).toBeNull()
+    expect(within(workerComposer).getByRole('button', { name: 'Add source material' })).toBeTruthy()
+    expect(within(workerComposer).getByLabelText('Usage 175,170 input tokens, 3,446 output tokens')).toBeTruthy()
+    expect(within(workerComposer).getByText('175K in / 3.4K out').closest('.session-composer-action-right')).toBeTruthy()
+    const chatLogBeforeFollowUp = screen.getByTestId('worker-chat-log')
+    expect(within(chatLogBeforeFollowUp).getByText('Session running')).toBeTruthy()
+    expect(within(chatLogBeforeFollowUp).getByText('Session output')).toBeTruthy()
+    expect(chatLogBeforeFollowUp.querySelector('.session-status-pill')).toBeNull()
 
     fireEvent.click(drawerToggle)
     expect(document.querySelector('.detail-drawer-collapsed')).toBeTruthy()

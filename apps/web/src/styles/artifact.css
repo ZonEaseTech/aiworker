@@ -236,12 +236,6 @@
   margin-bottom: 10px;
 }
 
-.turn-composer form {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-}
-
 .turn-composer textarea {
   min-height: 96px;
 }

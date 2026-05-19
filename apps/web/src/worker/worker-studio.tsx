@@ -12,6 +12,7 @@ import type { FormEvent } from 'react'
 import type { LocalSoulAppSearchResult, LocalSoulAppWorkbenchAction, LocalWorkspaceData } from '../features/local-workspace/api/types'
 import type { SettingsSection } from '../features/settings'
 import type { ArtifactPreviewState } from './session-detail'
+import type { SessionTurnDraft } from './session-turn-composer'
 import type { SoulProfilePreviewState, SoulSessionDraft, SoulSessionMaterialDescriptor, SoulSessionMaterialInput, SoulWorkbenchContext } from './souls/types'
 
 import { IconButton, StudioCollapsibleGroup, StudioEmptyState, StudioMainFrame, StudioSectionHeader, WorkerStudioLayout } from '@zonease/aiworker-component'
@@ -59,7 +60,6 @@ import {
 } from '../features/local-workspace/model'
 import { resolveEngineReadiness } from '../features/session/engine-readiness'
 import { SettingsDialog } from '../features/settings'
-import { selectedEngineLabel } from '../features/settings/model'
 import { resolveTheme, useSystemTheme } from '../features/theme/system-theme'
 import { WorkerSessionChat } from './session-chat'
 import { SessionDetail } from './session-detail'
@@ -76,6 +76,18 @@ interface StudioState {
 type WorkerMessages = ReturnType<typeof messagesFor>
 
 const defaultNewWorkerSoulId = 'aiworker-hr'
+
+interface SessionMaterialCopy {
+  binaryTitle?: string
+  heading: string
+  instruction: string
+}
+
+const defaultSessionMaterialCopy: SessionMaterialCopy = {
+  binaryTitle: 'Uploaded Source Material',
+  heading: 'Attached source material:',
+  instruction: 'Use these workspace file paths as source material before producing the requested output.',
+}
 
 const initialArtifactPreviewState: ArtifactPreviewState = {
   artifactId: null,
@@ -635,10 +647,11 @@ export function WorkerStudio() {
       return
     setSubmitting(true)
     try {
+      const materialCopy = draft?.materialCopy ?? defaultSessionMaterialCopy
       const attachedMaterials = draftMaterials.length > 0
-        ? await persistSessionMaterials(selectedWorkspace.id, draftMaterials)
+        ? await persistSessionMaterials(selectedWorkspace.id, draftMaterials, materialCopy)
         : []
-      const sessionContext = buildSessionContextWithMaterials(draftContext, attachedMaterials)
+      const sessionContext = buildSessionContextWithMaterials(draftContext, attachedMaterials, materialCopy)
       const body = buildProjectPrompt(selectedSoul, selectedTemplate, sessionContext)
       let sessionRouteShown = false
       const startedWorkerId = selectedWorker.id
@@ -690,13 +703,19 @@ export function WorkerStudio() {
     }
   }
 
-  async function submitTurn(event: FormEvent<HTMLFormElement>) {
+  async function submitTurn(event: FormEvent<HTMLFormElement>, draft?: SessionTurnDraft) {
     event.preventDefault()
-    if (!selectedSession || !turnInput.trim() || !engineReadiness.ready)
+    const draftInput = draft?.input ?? turnInput
+    const draftMaterials = draft?.materials ?? []
+    if (!selectedSession || (draftMaterials.length > 0 && !selectedWorkspace) || (!draftInput.trim() && draftMaterials.length === 0) || !engineReadiness.ready)
       return
     setTurnSubmitting(true)
     try {
-      const prompt = turnInput.trim()
+      const materialCopy = draft?.materialCopy ?? defaultSessionMaterialCopy
+      const attachedMaterials = selectedWorkspace && draftMaterials.length > 0
+        ? await persistSessionMaterials(selectedWorkspace.id, draftMaterials, materialCopy)
+        : []
+      const prompt = buildSessionContextWithMaterials(draftInput, attachedMaterials, materialCopy)
       const now = new Date().toISOString()
       setPendingTurn({
         createdAt: now,
@@ -714,6 +733,12 @@ export function WorkerStudio() {
       const result = await continueSessionTurnStream(selectedSession.id, {
         input: prompt,
         metadata: {
+          ...(attachedMaterials.length > 0
+            ? {
+                attachedMaterials,
+                materialCount: attachedMaterials.length,
+              }
+            : {}),
           requestedFrom: 'worker-web-follow-up',
         },
       }, selectedSession.workerId, {
@@ -1247,7 +1272,6 @@ export function WorkerStudio() {
                   <div className="entry-tab-content workspace-content workspace-compose-content">
                     <WorkspaceSessionComposer
                       copy={copy}
-                      engineLabel={selectedEngineLabel(data.settings, copy)}
                       engineReadiness={engineReadiness}
                       locale={activeLocale}
                       selectedTemplate={selectedTemplate}
@@ -1256,7 +1280,6 @@ export function WorkerStudio() {
                       value={workspaceContext}
                       workspace={selectedWorkspace}
                       onContextChange={setWorkspaceContext}
-                      onOpenSettings={() => openSettings('execution')}
                       onSubmit={submitSession}
                       onTemplateChange={setSelectedTemplateId}
                     />
@@ -1408,7 +1431,7 @@ function findHrProfileDraftTemplate(templates: LocalWorkspaceData['templates'][n
   ) ?? null
 }
 
-async function persistSessionMaterials(workspaceId: string, materials: SoulSessionMaterialInput[]): Promise<SoulSessionMaterialDescriptor[]> {
+async function persistSessionMaterials(workspaceId: string, materials: SoulSessionMaterialInput[], copy: SessionMaterialCopy): Promise<SoulSessionMaterialDescriptor[]> {
   const batch = new Date().toISOString().replace(/[:.]/g, '-')
   const usedNames = new Set<string>()
   const descriptors: SoulSessionMaterialDescriptor[] = []
@@ -1420,7 +1443,7 @@ async function persistSessionMaterials(workspaceId: string, materials: SoulSessi
       : `evidence/uploads/${batch}/${safeName}.base64.txt`
     const content = material.encoding === 'utf8'
       ? material.content
-      : renderBase64MaterialFile(material)
+      : renderBase64MaterialFile(material, copy)
     await writeFile(workspaceId, path, content)
     descriptors.push({
       encoding: material.encoding,
@@ -1434,7 +1457,7 @@ async function persistSessionMaterials(workspaceId: string, materials: SoulSessi
   return descriptors
 }
 
-function buildSessionContextWithMaterials(context: string, materials: SoulSessionMaterialDescriptor[]): string {
+function buildSessionContextWithMaterials(context: string, materials: SoulSessionMaterialDescriptor[], copy: SessionMaterialCopy): string {
   const trimmed = context.trim()
   if (materials.length === 0)
     return trimmed
@@ -1444,10 +1467,10 @@ function buildSessionContextWithMaterials(context: string, materials: SoulSessio
   )
   return [
     trimmed,
-    'Attached candidate material:',
+    copy.heading,
     ...materialLines,
     '',
-    'Use these workspace file paths as source material before drafting the reviewable profile proposal.',
+    copy.instruction,
   ].filter(Boolean).join('\n')
 }
 
@@ -1473,9 +1496,9 @@ function uniqueMaterialFileName(name: string, used: Set<string>): string {
   return next
 }
 
-function renderBase64MaterialFile(material: SoulSessionMaterialInput): string {
+function renderBase64MaterialFile(material: SoulSessionMaterialInput, copy: SessionMaterialCopy): string {
   return [
-    '# Uploaded Candidate Material',
+    `# ${copy.binaryTitle ?? 'Uploaded Source Material'}`,
     '',
     `- Original filename: ${material.name}`,
     `- MIME type: ${material.mimeType || 'application/octet-stream'}`,

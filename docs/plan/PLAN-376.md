@@ -1,147 +1,144 @@
-# PLAN-376 Host platform settings and Soul App configuration boundary
+# PLAN-376 Session Kit shared composer and session surfaces
 
 - **status**: completed
 - **owner**: codex
 - **createdAt**: 2026-05-19
 - **approvedAt**: 2026-05-19
-- **completedAt**: 2026-05-19
-- **relatedTask**: BUG-140
+- **relatedTask**: FEAT-102
 
 ## Current State
 
-`docs/architecture.md` already distinguishes Host settings from Soul
-App-owned app-specific settings. The table says Host owns global appearance,
-language, default engine, local MCP and connector settings, while Soul Apps own
-app-specific settings exposed through protocol.
+`packages/component` already contains shared primitives and patterns used by
+Worker Web. Session UI remains partly local:
 
-The code still uses the same product word and UI mental model for both layers:
+- `apps/web/src/features/local-workspace/components/session-composer.tsx` owns
+  the large workspace composer.
+- `apps/web/src/worker/session-chat.tsx` owns event normalization, timeline
+  rendering, scroll pinning and the compact follow-up composer.
+- `apps/web/src/worker/session-detail.tsx` owns artifact/review/lesson/event
+  panel composition and a right-side turn composer.
+- `apps/web/src/worker/souls/hr/people-workbench/components/profile-tools-panel.tsx`
+  owns a richer HR profile-draft composer with file materials, compact proposal
+  type select and icon-only submit.
 
-- `packages/shared/src/soul-app/manifest.ts` exposes
-  `ui.workbench.settings`.
-- HR/QA manifests and shared fixtures use `settings.open` actions.
-- `apps/api/src/modes/worker.ts` resolves the descriptor as a normal workbench
-  action.
-- `apps/web/src/worker/worker-studio.tsx` pushes the descriptor into workbench
-  actions with `role: "settings"`.
-- `apps/web/src/worker/souls/hr/people-workbench/index.tsx` calls the app
-  action and then opens the Host `SettingsDialog` when the role is `settings`.
-
-That means the protocol does contact the Soul App first, but the visible
-outcome still lands the operator in Host platform settings.
-
-## Component Library Preflight
-
-- Checked `packages/component`: the changed UI uses existing button/icon
-  primitives and status rendering in Worker Web. No new generic primitive is
-  needed.
-- Checked `packages/component/src/catalog.ts`: no reusable component gap is
-  introduced because this slice changes protocol semantics and existing button
-  labels, not a new repeated UI pattern.
-- App-local UI changes are limited to HR workbench role handling and status
-  display through the existing workbench bridge. No app-local CSS should be
-  needed unless tests reveal a status layout issue.
-- `bun run ui:check` remains required because Worker Web UI files change.
+The HR composer/action bar is the best current visual baseline, but its HR
+labels, focused profile context and promotion semantics must stay app-owned.
 
 ## Proposal
 
-1. Change the shared Soul App workbench contract:
-   - `ui.workbench.settings` becomes `ui.workbench.configuration`;
-   - `SoulAppWorkbenchSettings` becomes app configuration naming;
-   - the workbench action role becomes `configure` when the Host Web bridge
-     maps the descriptor into a clickable command.
-2. Update all current producers and consumers:
-   - official HR/QA manifest JSON;
-   - shared HR/QA fixture manifests;
-   - CLI scaffold manifest and README text;
-   - CLI mounted smoke action selection;
-   - daemon generic action resolution;
-   - security review descriptor surface.
-3. Update Worker Web behavior:
-   - map `configuration` into a `configure` workbench action;
-   - render it with the settings icon but label it as app configuration;
-   - on HR workbench click, invoke the app protocol action and show the app
-     result/status instead of opening Host settings;
-   - keep Host fixed chrome actions opening the platform settings dialog.
-4. Rename Host-facing copy where it identifies the global settings surface:
-   - dialog title/kicker/subtitle should say Platform Settings / AIWorker
-     platform;
-   - accessibility labels for fixed Host settings controls should say Platform
-     Settings.
-5. Update docs:
-   - architecture constraint text for the three-layer boundary;
-   - Soul App developer docs and SDK README;
-   - PMA task, plan and changelog.
+Implement the approved Session Kit design:
 
-## Risks
+1. Add shared Session Kit components, helpers, styles and tests to
+   `packages/component`.
+2. Migrate generic workspace session creation and session follow-up composer
+   surfaces to the shared composer.
+3. Migrate the HR profile tools panel composer to the same shared composer and
+   remove duplicated HR composer/action-bar CSS.
+4. Move session event normalization and timeline grouping into shared helpers,
+   then consume them from Worker Web.
+5. Move reusable session detail section layout into shared panel components
+   while keeping artifact/review/lesson meaning in the consumer.
+6. Update catalog/migration queue, PMA docs and changelog.
 
-- This is a breaking manifest contract rename. It is acceptable before 1.0.0,
-  and avoids keeping a legacy alias that would preserve the ambiguity.
-- Some historical Superpowers specs and plans still mention
-  `ui.workbench.settings`. They are audit history and should not be rewritten.
-- Host platform settings still remain under `/api/local/settings`; renaming the
-  API would widen the blast radius without changing the user-visible boundary.
-- HR/QA configuration actions are still placeholders. The acceptance target is
-  correct ownership and invocation, not full domain configuration UI.
+## Component Library Preflight
+
+Checked shared components:
+
+- `Button`, `IconButton`, `Select`, `Textarea`
+- `ProgressCard`
+- `MessageFlow`, `MessageRow`, `StatusEventPill`, `ToolResultCard`
+- `ArtifactPreviewFrame`, `ReviewPanelShell`, `ProfileReaderShell`
+- `StudioSectionHeader`, `StudioActivityRow`, `StudioEmptyState`,
+  `StudioPill`, `StudioStatusPill`
+
+Reusable gaps to close in this plan:
+
+- `SessionComposer`
+- `SessionComposerActionBar`
+- `SessionAttachmentList`
+- `createComposerAttachment` and attachment formatting helpers
+- `normalizeSessionEvents`
+- `createSessionTimelineViewModel`
+- `SessionTimeline`
+- `SessionDetailPanel`
+
+Local UI exceptions:
+
+- HR keeps profile list, recent-session list, profile section actions and
+  profile patch review UI because those are HR domain semantics.
+- WorkerStudio keeps route, stream and Host API state because shared components
+  must not fetch or route.
 
 ## Scope
 
-- `packages/shared/src/soul-app/manifest.ts`
-- `packages/shared/src/soul-app/fixtures.ts`
-- `packages/shared/src/soul-app/manifest.test.ts`
-- `packages/shared/src/soul-app/registry.test.ts`
-- `packages/core/src/soul-app/security-review.ts`
-- `packages/core/src/soul-app/registry.test.ts`
-- `apps/api/src/modes/worker.ts`
-- `apps/api/src/modes/worker.local.test.ts`
-- `apps/web/src/features/local-workspace/api/types.ts`
-- `apps/web/src/features/i18n/*`
-- `apps/web/src/worker/worker-studio.tsx`
-- `apps/web/src/worker/souls/hr/people-workbench/index.tsx`
+- `packages/component/src/patterns/session-composer.tsx`
+- `packages/component/src/patterns/session-timeline.tsx`
+- `packages/component/src/patterns/session-detail.tsx`
+- `packages/component/src/patterns/session-view-model.ts`
+- `packages/component/src/patterns/index.ts`
+- `packages/component/src/index.ts`
+- `packages/component/src/styles/patterns.css`
+- `packages/component/src/catalog.ts`
+- `packages/component/src/patterns/patterns.test.tsx`
+- `apps/web/src/features/local-workspace/components/session-composer.tsx`
+- `apps/web/src/worker/session-chat.tsx`
+- `apps/web/src/worker/session-detail.tsx`
+- `apps/web/src/worker/souls/hr/people-workbench/components/profile-tools-panel.tsx`
+- `apps/web/src/worker/souls/hr/people-workbench/styles.css`
+- `apps/web/src/styles/session-chat.css`
+- `apps/web/src/styles/workspace.css`
+- `apps/web/src/styles/artifact.css`
 - `apps/web/src/worker/__tests__/worker-studio.test.tsx`
-- `apps/aiworker-hr/soul-app.manifest.json`
-- `apps/aiworker-hr/host-adapter/mounted/host-mounted.ts`
-- `apps/aiworker-hr/host-adapter/index.test.ts`
-- `apps/aiworker-qa/soul-app.manifest.json`
-- `apps/aiworker-qa/host-adapter/mounted/host-mounted.ts`
-- `apps/aiworker-qa/host-adapter/index.test.ts`
-- `apps/cli/src/aiworker.ts`
-- `apps/cli/src/aiworker.test.ts`
-- `docs/architecture.md`
-- `docs/soul-app-developer.md`
-- `packages/soul-app-sdk/README.md`
-- `docs/changelog.md`
+- PMA task/plan/changelog files
 
-## Verification Plan
+## Non-Goals
 
-- [x] RED: focused WorkerStudio test proves app configuration no longer opens
-  Host Platform Settings.
-- [x] GREEN: implement protocol rename and Worker Web behavior.
-- [x] `bun run --filter '@zonease/aiworker-shared' test`
-- [x] `bun run --filter '@zonease/aiworker-core' test src/soul-app/registry.test.ts`
-- [x] `bun run --filter '@zonease/aiworker-api' test src/modes/worker.local.test.ts`
+- No Host/Soul protocol, manifest, API or storage schema changes.
+- No shared component fetches Host data or invokes Soul App actions.
+- No broad visual redesign beyond unifying the composer/action bar and shared
+  session surfaces.
+- No release automation in this plan.
+
+## Risks
+
+- The full extraction is large. Mitigation: implement in slices, starting with
+  composer/action bar, then timeline helpers, then detail shells.
+- Moving event normalization can change visible session output. Mitigation:
+  write shared helper tests and keep WorkerStudio integration tests focused on
+  running, file-written and artifact-indexed states.
+- HR profile semantics could leak into the shared package. Mitigation: shared
+  APIs accept generic labels/options/material descriptors; HR maps its own
+  labels and session metadata outside the package.
+- CSS movement can regress layout. Mitigation: keep package-owned class names,
+  run `ui:check`, and use browser smoke on generic session and HR right panel.
+
+## Implementation Plan
+
+Detailed implementation steps are tracked in
+`docs/superpowers/plans/2026-05-19-session-kit.md`.
+
+## Verification
+
+- [x] `bun run --filter '@zonease/aiworker-component' test`
+- [x] `bun run --filter '@zonease/aiworker-component' typecheck`
 - [x] `bun run --filter '@zonease/aiworker-web' test src/worker/__tests__/worker-studio.test.tsx`
-- [x] `bun run --filter '@zonease/aiworker-hr' test`
-- [x] `bun run --filter '@zonease/aiworker-qa' test`
-- [x] `bun run --filter '@zonease/aiworker-cli' test src/aiworker.test.ts`
-- [x] `bun run --filter '@zonease/aiworker-shared' typecheck`
-- [x] `bun run --filter '@zonease/aiworker-core' typecheck`
-- [x] `bun run --filter '@zonease/aiworker-api' typecheck`
-- [x] `bun run --filter '@zonease/aiworker-cli' typecheck`
 - [x] `bun run --filter '@zonease/aiworker-web' typecheck`
 - [x] `bun run --filter '@zonease/aiworker-web' lint`
+- [x] `bun run --filter '@zonease/aiworker-web' build`
 - [x] `bun run ui:check`
-- [x] `bun run check`
-- [x] `bun run docs:check`
+- [x] browser smoke for generic session route and HR right panel composer
 - [x] `git diff --check`
 - [x] `bun run crg:update`
 - [x] `bun run crg:review`
 
-## Annotations
+Notes:
 
-- 2026-05-19 20:19 CST: Plan created after user authorized goal-mode
-  execution. The chosen route is a breaking pre-1.0 contract rename instead of
-  a compatibility shim because the old `settings` name is itself the boundary
-  leak.
-- 2026-05-19 20:29 CST: Implementation completed. Host Platform Settings stay
-  under Host chrome and `/api/local/settings`; Soul App configuration uses
-  app-owned descriptors and mounted protocol actions.
+- Browser smoke used a disposable `AIWORKER_HOME` under
+  `tmp/session-kit-smoke-home`, enabled HR/QA apps, created an HR worker,
+  created a profile workspace, and verified shared composer/action-bar selectors
+  on the HR right panel plus shared composer/detail selectors on the session
+  route.
+- `bun run crg:review` exited 0 and reported residual structural test gaps for
+  changed UI functions. The behavior is covered by
+  `packages/component` pattern/catalog tests and the focused WorkerStudio
+  integration test.

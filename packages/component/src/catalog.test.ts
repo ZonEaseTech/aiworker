@@ -25,4 +25,13 @@ describe('component catalog', () => {
     expect(preflight?.appliesTo).toContain('apps/web')
     expect(preflight?.requiredEvidence.join('\n')).toContain('componentMigrationQueue')
   })
+
+  it('tracks Session Kit as implemented shared workbench components', () => {
+    const names = new Set(componentCatalog.map(item => item.name))
+
+    expect(names.has('SessionComposer')).toBe(true)
+    expect(names.has('SessionComposerActionBar')).toBe(true)
+    expect(names.has('SessionTimeline')).toBe(true)
+    expect(names.has('SessionDetailPanel')).toBe(true)
+  })
 })

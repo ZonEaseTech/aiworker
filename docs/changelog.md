@@ -1,6 +1,6 @@
 # AIWorker Changelog
 
-## 2026-05-19 20:29 [completed] BUG-140 / PLAN-376 — Host platform settings and Soul App configuration boundary
+## 2026-05-19 20:29 [completed] BUG-146 / PLAN-385 — Host platform settings and Soul App configuration boundary
 
 Split the settings boundary into Host-owned Platform Settings and Soul
 App-owned configuration. The Soul App manifest contract now uses
@@ -17,6 +17,126 @@ output and Soul App authoring docs all use configuration terminology.
 Verification covered the focused RED/GREEN WorkerStudio test, shared/core/API/
 CLI/HR/QA/Web focused tests, package typechecks, Web lint, UI component
 governance, root check, docs contract, diff check and code-review-graph.
+
+## 2026-05-19 [completed] BUG-145 / PLAN-384 — Session composer attachment deduplication
+
+The Worker Web follow-up composer now deduplicates file and image attachments
+across repeated add events. Selecting or pasting the same source material more
+than once keeps one preview card, one attachment badge count and one submitted
+material descriptor.
+
+The fix keeps shared per-paste payload dedupe in `SessionComposer`, then adds
+state-level dedupe in `SessionTurnComposer` using the same `name:size:type`
+attachment identity.
+
+## 2026-05-19 [completed] BUG-144 / PLAN-383 — Session composer attachment density polish
+
+The shared session composer now renders file and image attachments at a more
+compact chip scale. File attachment cards use smaller icons, copy, height and
+close controls; image previews are smaller while retaining lightbox preview.
+
+The attachment tray also has more padding from the composer field border, so
+uploaded source material feels integrated without crowding the shell.
+
+## 2026-05-19 [completed] BUG-143 / PLAN-382 — Session composer busy state, attachment clearing and usage meter
+
+The session follow-up composer now treats a running turn as a busy state, so
+the send button switches to a loading spinner with `aria-busy` instead of only
+becoming disabled. Submitted file/image attachments clear after material reads
+succeed and the streaming follow-up turn begins.
+
+Usage now renders as a compact circular token meter immediately before the send
+button. The visible value uses explicit `in/out` wording, while the accessible
+label and title retain full input/output token counts.
+
+Verification covered focused component tests/typecheck, WorkerStudio
+integration tests/typecheck/lint/build, UI component governance, diff check,
+browser smoke and code-review-graph review.
+
+## 2026-05-19 [completed] BUG-142 / PLAN-381 — Session composer integrated field and signal width polish
+
+The shared `SessionComposer` now renders attachment previews, textarea,
+warnings and actions inside one field shell. Composer textareas no longer expose
+browser resize handles; the shared composer controls height and overflow so the
+surface reads as an authored product component instead of a raw form control.
+
+Clipboard file deduplication now ignores `lastModified` when merging
+`DataTransfer.files` and `DataTransfer.items`, preventing pasted images from
+being added twice. Session status/output signal rows now share the same width
+grammar as command/read-file activity rows while keeping the lower-noise visual
+tone.
+
+Verification covered focused component tests/typecheck, WorkerStudio
+integration tests/typecheck/lint/build, UI component governance, diff check,
+browser smoke and code-review-graph review.
+
+## 2026-05-19 [completed] BUG-141 / PLAN-380 — Session composer attachment paste and card UX
+
+The shared `SessionComposer` now treats pasted clipboard files as first-class
+attachments, deduplicating `DataTransfer.files` and `DataTransfer.items` before
+passing files to the consumer-owned material pipeline.
+
+Attachments now render inside the composer body before the text input: images
+use preview tiles with the existing lightbox behavior, and files use compact
+type cards with stable remove controls. HR profile, workspace new-session and
+session follow-up composers all consume the same shared behavior and clear file
+input values before opening the picker so repeat same-file selection works.
+
+Verification covered focused component tests/typecheck, WorkerStudio
+integration tests/typecheck/lint/build, UI component governance, diff check,
+browser smoke and code-review-graph review.
+
+## 2026-05-19 [completed] BUG-140 / PLAN-379 — Session composer and timeline review gaps
+
+Session Kit now collapses Codex CLI status/output signals into compact timeline
+rows instead of rendering repeated raw status, artifact and review pills.
+Usage remains available from the parser stream but is rendered through the
+active composer action bar rather than the chat timeline.
+
+The session follow-up composer now exposes the default file/image attachment
+input, keeps image lightbox preview through the shared composer, persists
+attached source materials into the workspace, and sends those material
+descriptors with the follow-up turn metadata.
+
+Verification covered focused component tests/typecheck, WorkerStudio
+integration tests/typecheck/lint/build, UI component governance, diff check,
+browser smoke and code-review-graph review.
+
+## 2026-05-19 [completed] FEAT-103 / PLAN-377 — Session activity pipeline and composer media previews
+
+Session Kit now renders Codex CLI session activity through a shared
+parser/view-model pipeline instead of exposing raw `Bash` tool cards as the
+primary chat hierarchy. `SessionTimeline` uses shared markdown preview for
+assistant prose, lightweight activity rows for Codex CLI search/read/list/run
+events, generic fallback for unknown commands, and collapsed evidence details
+for command/output payloads.
+
+The shared composer now supports image-aware attachment rows and package-owned
+lightbox preview. Generic workspace session creation can attach source
+materials, while HR profile drafts keep candidate-material wording and
+profile-proposal semantics outside the shared component.
+
+Verification covered focused component tests/typecheck, WorkerStudio
+integration tests/typecheck/lint/build, UI component governance, diff check and
+browser smoke on a real Codex-backed HR session route.
+
+## 2026-05-19 [completed] FEAT-102 / PLAN-376 — Session Kit shared composer and session surfaces
+
+Completed the shared Session Kit extraction from the approved
+`docs/superpowers/specs/2026-05-19-session-kit-design.md` design. The shared
+component package now owns `SessionComposer`, `SessionComposerActionBar`,
+attachment helpers, neutral session event normalization, timeline view-model
+grouping, `SessionTimeline`, and `SessionDetailPanel`.
+
+Worker Web now consumes the shared kit from the generic workspace session
+composer, the session follow-up composer, the session detail panel and the HR
+People Workbench right-panel composer. Host Web still owns data loading,
+streaming and routing; HR still owns profile context, recent sessions, profile
+draft copy, material metadata and promotion policy.
+
+Verification covered component tests/typecheck, focused WorkerStudio tests, web
+typecheck/lint/build, `ui:check`, `git diff --check`, browser smoke on the HR
+right panel and session route, plus `crg:update` / `crg:review`.
 
 ## 2026-05-19 18:05 [completed] REL-050 / PLAN-375 — CLI 0.18.4 patch release
 

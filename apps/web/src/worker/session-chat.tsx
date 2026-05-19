@@ -9,42 +9,33 @@ import type { FormEvent } from 'react'
 import type { messagesFor, SupportedLocale } from '../features/i18n'
 import type { EngineReadiness } from '../features/session/engine-readiness'
 import type { SessionProgressSummary } from './session-progress'
+import type { SessionTurnDraft } from './session-turn-composer'
 
-import { IconButton, MessageFlow, MessageRow, StatusEventPill, StudioPill, ToolResultCard } from '@zonease/aiworker-component'
 import {
-  AlertCircle,
+  createSessionTimelineViewModel,
+  IconButton,
+  MessageFlow,
+  MessageRow,
+  normalizeSessionEvents,
+  SessionTimeline,
+  StatusEventPill,
+  summarizeSessionUsage,
+} from '@zonease/aiworker-component'
+import {
   ArrowDown,
   ArrowLeft,
-  CheckCircle,
-  FileText,
   MessageSquare,
   PanelRightClose,
   PanelRightOpen,
   RefreshCw,
-  Send,
   Settings,
-  Terminal,
-  Wrench,
 } from 'lucide-react'
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { displayTemplate, formatRelativeTime, formatStatus } from '../features/i18n'
 import { SessionProgressPanel } from './session-progress-panel'
+import { SessionTurnComposer } from './session-turn-composer'
 
 type WorkerMessages = ReturnType<typeof messagesFor>
-
-type WorkerAgentEvent
-  = | { kind: 'status', label: string, detail?: string }
-    | { kind: 'text', text: string }
-    | { kind: 'thinking', text: string }
-    | { kind: 'tool_use', id: string, input: unknown, name: string }
-    | { kind: 'tool_result', id: string, content: string, isError?: boolean, name?: string }
-    | { kind: 'usage', costUsd?: number, inputTokens?: number, outputTokens?: number }
-    | { kind: 'log', chunk: string, stream: 'stderr' | 'stdout' }
-    | { kind: 'raw', line: string }
-    | { kind: 'artifact', detail: string }
-    | { kind: 'review', detail: string }
-    | { kind: 'lesson', detail: string }
-    | { kind: 'error', message: string }
 
 export function WorkerSessionChat({
   copy,
@@ -75,7 +66,7 @@ export function WorkerSessionChat({
   onOpenSettings: () => void
   onRefresh: () => void
   onToggleDetailDrawer: () => void
-  onSubmitTurn: (event: FormEvent<HTMLFormElement>) => void
+  onSubmitTurn: (event: FormEvent<HTMLFormElement>, draft?: SessionTurnDraft) => void
   onTurnInputChange: (value: string) => void
   progress: SessionProgressSummary
   session: LocalSession
@@ -90,8 +81,22 @@ export function WorkerSessionChat({
   const pinnedToBottomRef = useRef(true)
   const [scrolledFromBottom, setScrolledFromBottom] = useState(false)
   const templateCopy = template ? displayTemplate(template, locale) : null
-  const sortedTurns = useMemo(() => [...turns].sort((a, b) => a.seq - b.seq), [turns])
-  const sortedEvents = useMemo(() => [...events].sort((a, b) => a.seq - b.seq), [events])
+  const normalizedEvents = useMemo(() => normalizeSessionEvents(events, { parser: 'codex-cli' }), [events])
+  const timeline = useMemo(() => createSessionTimelineViewModel({
+    events: normalizedEvents,
+    turns,
+  }), [normalizedEvents, turns])
+  const usage = useMemo(() => summarizeSessionUsage(normalizedEvents), [normalizedEvents])
+  const composerUsage = usage && (usage.inputTokens != null || usage.outputTokens != null)
+    ? {
+        ariaLabel: formatUsageLabel(usage.inputTokens, usage.outputTokens),
+        label: 'Usage',
+        meterValue: usageMeterValue(usage.inputTokens, usage.outputTokens),
+        title: formatUsageLabel(usage.inputTokens, usage.outputTokens),
+        value: formatUsageValue(usage.inputTokens, usage.outputTokens),
+      }
+    : undefined
+  const composerBusy = turnSubmitting || turns.some(turn => turn.status === 'running')
 
   useEffect(() => {
     didInitialScrollRef.current = false
@@ -100,7 +105,7 @@ export function WorkerSessionChat({
 
   useEffect(() => {
     const el = logRef.current
-    if (!el || didInitialScrollRef.current || (sortedTurns.length === 0 && sortedEvents.length === 0))
+    if (!el || didInitialScrollRef.current || (timeline.turns.length === 0 && events.length === 0))
       return
     didInitialScrollRef.current = true
     requestAnimationFrame(() => {
@@ -108,7 +113,7 @@ export function WorkerSessionChat({
       pinnedToBottomRef.current = true
       setScrolledFromBottom(false)
     })
-  }, [session.id, sortedEvents.length, sortedTurns.length])
+  }, [events.length, session.id, timeline.turns.length])
 
   useEffect(() => {
     const el = logRef.current
@@ -120,7 +125,7 @@ export function WorkerSessionChat({
       el.scrollTop = el.scrollHeight
       setScrolledFromBottom(false)
     })
-  }, [sortedEvents, sortedTurns, turnSubmitting])
+  }, [timeline, turnSubmitting])
 
   useEffect(() => {
     const el = logRef.current
@@ -186,16 +191,18 @@ export function WorkerSessionChat({
 
       <div className="worker-chat-log-wrap">
         <div ref={logRef} className="worker-chat-log" data-testid="worker-chat-log">
-          {sortedTurns.length > 0
-            ? sortedTurns.map((turn) => {
-                const turnEvents = sortedEvents.filter(event => event.turnId === turn.id)
-                return (
-                  <Fragment key={turn.id}>
-                    <UserTurn copy={copy} turn={turn} locale={locale} />
-                    <AssistantTurn copy={copy} events={turnEvents} locale={locale} turn={turn} turnSubmitting={turnSubmitting && turn.status === 'running'} />
-                  </Fragment>
-                )
-              })
+          {timeline.turns.length > 0
+            ? (
+                <SessionTimeline
+                  assistantRoleLabel={copy.workspace.engineRole}
+                  assistantTimestampForTurn={turn => formatStatus(turn.status, locale)}
+                  className="worker-session-timeline"
+                  operatorRoleLabel={copy.workspace.operatorRole}
+                  placeholderForTurn={turn => turn.status === 'running' ? <WaitingPill detail={copy.workspace.engineStarting} /> : null}
+                  timestampForTurn={turn => turn.createdAt ? formatRelativeTime(turn.createdAt, locale) : undefined}
+                  turns={timeline.turns}
+                />
+              )
             : (
                 <div className="worker-chat-empty">
                   <MessageSquare aria-hidden="true" size={24} />
@@ -203,7 +210,7 @@ export function WorkerSessionChat({
                   <span>{engineReadiness.detail}</span>
                 </div>
               )}
-          {turnSubmitting && sortedTurns.every(turn => turn.status !== 'running')
+          {turnSubmitting && timeline.turns.every(({ turn }) => turn.status !== 'running')
             ? <AssistantWaiting detail={engineReadiness.detail} role={copy.workspace.engineRole} />
             : null}
         </div>
@@ -218,81 +225,52 @@ export function WorkerSessionChat({
           : null}
       </div>
 
-      <form className="worker-composer" onSubmit={onSubmitTurn}>
-        <button type="button" className="worker-composer-tool" aria-label={copy.accessibility.openSettings} onClick={onOpenSettings}>
-          <Settings aria-hidden="true" size={15} />
-        </button>
-        <textarea
-          aria-label={copy.workspace.followUpInput}
-          disabled={!engineReadiness.ready || turnSubmitting}
-          placeholder={copy.workspace.followUpPlaceholder}
-          rows={3}
-          value={turnInput}
-          onChange={event => onTurnInputChange(event.target.value)}
-        />
-        <button className="primary worker-composer-send" type="submit" disabled={!turnInput.trim() || turnSubmitting || !engineReadiness.ready}>
-          <Send aria-hidden="true" size={14} />
-          <span>{turnSubmitting ? copy.workspace.sendingTurn : copy.workspace.sendTurn}</span>
-        </button>
-      </form>
+      <SessionTurnComposer
+        className="worker-composer"
+        copy={copy}
+        engineReadiness={engineReadiness}
+        usage={composerUsage}
+        value={turnInput}
+        submitting={composerBusy}
+        variant="compact"
+        onSubmit={onSubmitTurn}
+        onValueChange={onTurnInputChange}
+      />
     </section>
   )
 }
 
-function UserTurn({ copy, locale, turn }: { copy: WorkerMessages, locale: SupportedLocale, turn: LocalTurn }) {
-  return (
-    <MessageRow className="worker-message user" roleLabel={copy.workspace.operatorRole} timestamp={formatRelativeTime(turn.createdAt, locale)}>
-      <div className="worker-user-bubble">{turn.input}</div>
-    </MessageRow>
-  )
+function formatUsageLabel(inputTokens?: number, outputTokens?: number): string {
+  return `Usage ${formatTokenCount(inputTokens)} input tokens, ${formatTokenCount(outputTokens)} output tokens`
 }
 
-function AssistantTurn({
-  copy,
-  events,
-  locale,
-  turn,
-  turnSubmitting,
-}: {
-  copy: WorkerMessages
-  events: LocalSessionEvent[]
-  locale: SupportedLocale
-  turn: LocalTurn
-  turnSubmitting: boolean
-}) {
-  const agentEvents = compactAgentEvents(events.map(event => ({ event: coerceAgentEvent(event), key: String(event.id) })))
-  if (agentEvents.length === 0 && turn.response)
-    agentEvents.push({ event: { kind: 'text', text: turn.response }, key: `response-${turn.id}` })
+function formatUsageValue(inputTokens?: number, outputTokens?: number): string {
+  return `${formatCompactTokenCount(inputTokens)} in / ${formatCompactTokenCount(outputTokens)} out`
+}
 
-  const toolResults = new Map<string, Extract<WorkerAgentEvent, { kind: 'tool_result' }>>()
-  for (const { event } of agentEvents) {
-    if (event.kind === 'tool_result')
-      toolResults.set(event.id, event)
-  }
+function formatTokenCount(value?: number): string {
+  return value == null ? '0' : value.toLocaleString('en-US')
+}
 
-  return (
-    <MessageRow className="worker-message assistant" roleLabel={copy.workspace.engineRole} timestamp={formatStatus(turn.status, locale)}>
-      <MessageFlow className="worker-assistant-flow">
-        {agentEvents.length === 0 && (turn.status === 'running' || turnSubmitting)
-          ? <WaitingPill detail={copy.workspace.engineStarting} />
-          : null}
-        {agentEvents.map(({ event, key }) => {
-          if (event.kind === 'tool_result')
-            return null
-          if (event.kind === 'tool_use')
-            return <EngineToolCard key={key} result={toolResults.get(event.id)} tool={event} />
-          return <AgentEventBlock key={key} event={event} />
-        })}
-        {turn.error ? <AgentEventBlock event={{ kind: 'error', message: turn.error }} /> : null}
-      </MessageFlow>
-    </MessageRow>
-  )
+function formatCompactTokenCount(value?: number): string {
+  if (value == null)
+    return '0'
+  if (value >= 1000)
+    return `${Number((value / 1000).toFixed(value >= 10000 ? 0 : 1))}K`
+  return String(value)
+}
+
+function usageMeterValue(inputTokens?: number, outputTokens?: number): number | undefined {
+  const input = inputTokens ?? 0
+  const output = outputTokens ?? 0
+  const total = input + output
+  return total > 0 ? input / total : undefined
 }
 
 function AssistantWaiting({ detail, role }: { detail: string, role: string }) {
   return (
-    <MessageRow className="worker-message assistant" roleLabel={role}>
-      <MessageFlow className="worker-assistant-flow">
+    <MessageRow className="session-message assistant" roleLabel={role}>
+      <MessageFlow className="session-assistant-flow">
         <WaitingPill detail={detail} />
       </MessageFlow>
     </MessageRow>
@@ -301,190 +279,6 @@ function AssistantWaiting({ detail, role }: { detail: string, role: string }) {
 
 function WaitingPill({ detail }: { detail: string }) {
   return (
-    <StatusEventPill className="worker-status-pill" tone="success">{detail}</StatusEventPill>
+    <StatusEventPill className="session-status-pill" tone="success">{detail}</StatusEventPill>
   )
-}
-
-function AgentEventBlock({ event }: { event: WorkerAgentEvent }) {
-  if (event.kind === 'text') {
-    return <div className="worker-prose">{event.text}</div>
-  }
-  if (event.kind === 'thinking') {
-    return <pre className="worker-log thinking">{event.text}</pre>
-  }
-  if (event.kind === 'log') {
-    return (
-      <details className="worker-log-card">
-        <summary>
-          <Terminal aria-hidden="true" size={14} />
-          <span>{event.stream}</span>
-        </summary>
-        <pre>{event.chunk}</pre>
-      </details>
-    )
-  }
-  if (event.kind === 'raw') {
-    return (
-      <details className="worker-log-card">
-        <summary>
-          <Terminal aria-hidden="true" size={14} />
-          <span>raw</span>
-        </summary>
-        <pre>{event.line}</pre>
-      </details>
-    )
-  }
-  if (event.kind === 'status') {
-    return (
-      <StatusEventPill className="worker-status-pill" detail={event.detail} tone="success">{event.label}</StatusEventPill>
-    )
-  }
-  if (event.kind === 'usage') {
-    return (
-      <StudioPill className="worker-status-pill" icon={<CheckCircle size={14} />}>
-        <span>Usage</span>
-        <small>{[event.inputTokens, event.outputTokens].filter(value => value != null).join(' / ')}</small>
-      </StudioPill>
-    )
-  }
-  if (event.kind === 'artifact' || event.kind === 'review' || event.kind === 'lesson') {
-    return (
-      <StudioPill className="worker-produced-chip" icon={<FileText size={14} />}>
-        <span>{event.kind}</span>
-        <small>{event.detail}</small>
-      </StudioPill>
-    )
-  }
-  if (event.kind === 'error') {
-    return (
-      <div className="worker-error-card" role="alert">
-        <AlertCircle aria-hidden="true" size={15} />
-        <span>{event.message}</span>
-      </div>
-    )
-  }
-  return null
-}
-
-function EngineToolCard({
-  result,
-  tool,
-}: {
-  result?: Extract<WorkerAgentEvent, { kind: 'tool_result' }>
-  tool: Extract<WorkerAgentEvent, { kind: 'tool_use' }>
-}) {
-  const input = isRecord(tool.input) ? tool.input : {}
-  const command = typeof input.command === 'string' ? input.command : ''
-  const description = typeof input.description === 'string' ? input.description : tool.name
-  return (
-    <details className="worker-tool-card" open={!result?.content}>
-      <summary>
-        <span className="worker-tool-icon">
-          <Wrench aria-hidden="true" size={14} />
-        </span>
-        <span>{tool.name}</span>
-        <small>{description}</small>
-        {result ? <span className={`worker-tool-result ${result.isError ? 'failed' : 'ok'}`}>{result.isError ? 'failed' : 'done'}</span> : null}
-      </summary>
-      {command || result?.content
-        ? (
-            <ToolResultCard
-              className="worker-tool-output"
-              command={command || undefined}
-              result={result?.content ?? ''}
-              tone={result?.isError ? 'danger' : 'muted'}
-            />
-          )
-        : null}
-    </details>
-  )
-}
-
-function coerceAgentEvent(event: LocalSessionEvent): WorkerAgentEvent {
-  const payload = event.payloadJson
-  const agentEvent = isRecord(payload.agentEvent) ? payload.agentEvent : null
-  if (agentEvent && typeof agentEvent.kind === 'string') {
-    const kind = agentEvent.kind
-    if (kind === 'status')
-      return { detail: readString(agentEvent.detail), kind, label: readString(agentEvent.label, event.type) }
-    if (kind === 'text')
-      return { kind, text: readString(agentEvent.text) }
-    if (kind === 'thinking')
-      return { kind, text: readString(agentEvent.text) }
-    if (kind === 'log')
-      return { chunk: readString(agentEvent.chunk), kind, stream: agentEvent.stream === 'stderr' ? 'stderr' : 'stdout' }
-    if (kind === 'tool_use')
-      return { id: readString(agentEvent.id, String(event.id)), input: agentEvent.input, kind, name: readString(agentEvent.name, 'Tool') }
-    if (kind === 'tool_result')
-      return { content: readString(agentEvent.content), id: readString(agentEvent.id ?? agentEvent.toolUseId, String(event.id)), isError: agentEvent.isError === true, kind, name: readString(agentEvent.name) }
-    if (kind === 'usage')
-      return { costUsd: readNumber(agentEvent.costUsd), inputTokens: readNumber(agentEvent.inputTokens), kind, outputTokens: readNumber(agentEvent.outputTokens) }
-    if (kind === 'raw')
-      return { kind, line: readString(agentEvent.line) }
-  }
-
-  if (event.type === 'assistant_delta')
-    return { kind: 'text', text: readString(payload.text ?? payload.delta) }
-  if (event.type === 'artifact')
-    return { detail: readString(payload.path ?? payload.artifactId, 'artifact'), kind: 'artifact' }
-  if (event.type === 'review')
-    return { detail: readString(payload.verdict ?? payload.reviewId, 'review'), kind: 'review' }
-  if (event.type === 'lesson')
-    return { detail: readString(payload.lessonId, 'memory candidate'), kind: 'lesson' }
-  if (event.type === 'error')
-    return { kind: 'error', message: readString(payload.message, 'Session turn failed.') }
-  if (event.type === 'log')
-    return { chunk: JSON.stringify(payload, null, 2), kind: 'log', stream: 'stdout' }
-  return { detail: readString(payload.status, event.type), kind: 'status', label: event.type }
-}
-
-function compactAgentEvents(items: Array<{ event: WorkerAgentEvent, key: string }>): Array<{ event: WorkerAgentEvent, key: string }> {
-  const compacted: Array<{ event: WorkerAgentEvent, key: string }> = []
-  for (const item of items) {
-    const last = compacted.at(-1)
-    if (item.event.kind === 'text' && last?.event.kind === 'text') {
-      last.event = {
-        ...last.event,
-        text: `${last.event.text}${item.event.text}`,
-      }
-      continue
-    }
-    if (item.event.kind === 'thinking' && last?.event.kind === 'thinking') {
-      last.event = {
-        ...last.event,
-        text: truncateLog(`${last.event.text}${item.event.text}`),
-      }
-      continue
-    }
-    if (item.event.kind === 'log' && last?.event.kind === 'log' && last.event.stream === item.event.stream) {
-      last.event = {
-        ...last.event,
-        chunk: truncateLog(`${last.event.chunk}${item.event.chunk}`),
-      }
-      continue
-    }
-    compacted.push(item.event.kind === 'log'
-      ? { event: { ...item.event, chunk: truncateLog(item.event.chunk) }, key: item.key }
-      : item)
-  }
-  return compacted
-}
-
-function truncateLog(value: string): string {
-  const max = 12_000
-  if (value.length <= max)
-    return value
-  return `${value.slice(0, max)}\n...[truncated]`
-}
-
-function readString(value: unknown, fallback = ''): string {
-  return typeof value === 'string' && value.trim().length > 0 ? value : fallback
-}
-
-function readNumber(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
