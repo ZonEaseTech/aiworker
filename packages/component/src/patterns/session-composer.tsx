@@ -100,12 +100,16 @@ export interface SessionComposerActionBarProps {
   usage?: SessionComposerUsage
 }
 
+const EMPTY_ATTACHMENTS: SessionComposerAttachmentItem[] = []
+const EMPTY_COMPOSER_ACTIONS: SessionComposerAction[] = []
+const EMPTY_COMPOSER_OPTIONS: SessionComposerOption[] = []
+
 export function SessionComposer({
   allowSubmitWithoutText = false,
   ariaLabel,
   attachmentCountLabel,
   attachmentTriggerLabel,
-  attachments = [],
+  attachments = EMPTY_ATTACHMENTS,
   className,
   description,
   disabled = false,
@@ -118,7 +122,7 @@ export function SessionComposer({
   onTemplateChange,
   onValueChange,
   placeholder,
-  secondaryActions,
+  secondaryActions = EMPTY_COMPOSER_ACTIONS,
   selectedTemplateId,
   statusAction,
   submitAriaLabel,
@@ -129,7 +133,7 @@ export function SessionComposer({
   templateClassName,
   templateContentClassName,
   templateLabel,
-  templateOptions,
+  templateOptions = EMPTY_COMPOSER_OPTIONS,
   title,
   usage,
   value,
@@ -225,7 +229,7 @@ export function SessionComposerActionBar({
   disabled = false,
   onAddAttachments,
   onTemplateChange,
-  secondaryActions = [],
+  secondaryActions = EMPTY_COMPOSER_ACTIONS,
   selectedTemplateId,
   statusAction,
   submitAriaLabel,
@@ -235,7 +239,7 @@ export function SessionComposerActionBar({
   templateClassName,
   templateContentClassName,
   templateLabel = 'Proposal type',
-  templateOptions = [],
+  templateOptions = EMPTY_COMPOSER_OPTIONS,
   usage,
 }: SessionComposerActionBarProps) {
   const templateSelect = selectedTemplateId && onTemplateChange && templateOptions.length > 0
@@ -343,21 +347,21 @@ export function SessionAttachmentList({
             <div key={attachment.id} className={cx('session-composer-attachment-card', isImage ? 'image' : 'file')}>
               {isImage
                 ? (
-                  <button
-                    type="button"
-                    className="session-composer-attachment-preview"
-                    aria-label={attachment.onPreviewLabel ?? attachment.previewTitle ?? attachment.name}
-                    title={attachment.previewTitle ?? attachment.name}
-                    onClick={() => setPreviewAttachment(attachment)}
-                  >
-                    <img src={attachment.previewUrl} alt={attachment.previewAlt ?? ''} />
-                    <Expand aria-hidden="true" size={12} />
-                  </button>
+                    <button
+                      type="button"
+                      className="session-composer-attachment-preview"
+                      aria-label={attachment.onPreviewLabel ?? attachment.previewTitle ?? attachment.name}
+                      title={attachment.previewTitle ?? attachment.name}
+                      onClick={() => setPreviewAttachment(attachment)}
+                    >
+                      <img src={attachment.previewUrl} alt={attachment.previewAlt ?? ''} />
+                      <Expand aria-hidden="true" size={12} />
+                    </button>
                   )
                 : (
-                  <span className="session-composer-attachment-file-icon" aria-hidden="true">
-                    {renderAttachmentFileIcon(attachment)}
-                  </span>
+                    <span className="session-composer-attachment-file-icon" aria-hidden="true">
+                      {renderAttachmentFileIcon(attachment)}
+                    </span>
                   )}
               {isImage
                 ? null
@@ -369,14 +373,14 @@ export function SessionAttachmentList({
                   )}
               {onRemoveAttachment
                 ? (
-                  <IconButton
-                    className="session-composer-attachment-remove"
-                    aria-label={attachment.removeLabel}
-                    title={attachment.removeLabel}
-                    onClick={() => onRemoveAttachment(attachment.id)}
-                  >
-                    <X aria-hidden="true" size={13} />
-                  </IconButton>
+                    <IconButton
+                      className="session-composer-attachment-remove"
+                      aria-label={attachment.removeLabel}
+                      title={attachment.removeLabel}
+                      onClick={() => onRemoveAttachment(attachment.id)}
+                    >
+                      <X aria-hidden="true" size={13} />
+                    </IconButton>
                   )
                 : null}
             </div>

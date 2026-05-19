@@ -9,8 +9,6 @@ export { ProfileReaderShell } from './profile'
 export type { ProfileReaderShellProps } from './profile'
 export { ProgressCard } from './progress'
 export type { ProgressCardProps, ProgressCardTone } from './progress'
-export { SegmentedControl, SettingsShell } from './settings'
-export type { SegmentedControlOption, SegmentedControlProps, SettingsShellProps } from './settings'
 export { SessionAttachmentList, SessionComposer, SessionComposerActionBar } from './session-composer'
 export type {
   SessionComposerAction,
@@ -50,6 +48,8 @@ export type {
   SessionTimelineTurnViewModel,
   SessionTimelineUsageSummary,
 } from './session-view-model'
+export { SegmentedControl, SettingsShell } from './settings'
+export type { SegmentedControlOption, SegmentedControlProps, SettingsShellProps } from './settings'
 export {
   StudioActivityRow,
   StudioCollapsibleGroup,

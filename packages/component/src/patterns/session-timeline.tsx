@@ -167,8 +167,8 @@ function SessionSignalRow({
       {hasDetails
         ? (
             <div className="session-activity-details">
-              {signal.details?.map((detail, index) => (
-                <div key={`${signal.id}-${detail.label}-${index}`} className="session-activity-detail">
+              {signal.details?.map(detail => (
+                <div key={`${signal.id}-${detail.label}-${detail.value}`} className="session-activity-detail">
                   <span>{detail.label}</span>
                   <pre>{detail.value}</pre>
                 </div>
@@ -205,8 +205,8 @@ function SessionActivityRow({
       {hasDetails
         ? (
             <div className="session-activity-details">
-              {activity.details?.map((detail, index) => (
-                <div key={`${activity.id}-${detail.label}-${index}`} className="session-activity-detail">
+              {activity.details?.map(detail => (
+                <div key={`${activity.id}-${detail.label}-${detail.value}`} className="session-activity-detail">
                   <span>{detail.label}</span>
                   <pre>{detail.value}</pre>
                 </div>
