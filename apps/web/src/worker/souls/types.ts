@@ -32,6 +32,29 @@ export interface SoulProfilePreviewState {
   workspaceId: string | null
 }
 
+export type SoulSessionMaterialEncoding = 'base64' | 'utf8'
+
+export interface SoulSessionMaterialInput {
+  content: string
+  encoding: SoulSessionMaterialEncoding
+  mimeType: string
+  name: string
+  size: number
+}
+
+export interface SoulSessionMaterialDescriptor {
+  encoding: SoulSessionMaterialEncoding
+  mimeType: string
+  name: string
+  path: string
+  size: number
+}
+
+export interface SoulSessionDraft {
+  context?: string
+  materials?: SoulSessionMaterialInput[]
+}
+
 export interface SoulWorkbenchContext {
   artifactPreview: SoulArtifactPreviewState
   artifacts: LocalArtifact[]
@@ -48,7 +71,7 @@ export interface SoulWorkbenchContext {
   onOpenWorkspace: (workspace: LocalWorkspace) => void
   onPromoteProfileRevision: (profileMarkdown?: string) => Promise<void> | void
   onRefresh: () => void
-  onSubmitSession: (event: FormEvent<HTMLFormElement>) => void
+  onSubmitSession: (event: FormEvent<HTMLFormElement>, draft?: SoulSessionDraft) => Promise<void> | void
   onTemplateChange: (templateId: string) => void
   profilePreview: SoulProfilePreviewState
   profileRevisionSubmitting: boolean

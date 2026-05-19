@@ -20,6 +20,10 @@ export interface HrWorkbenchCopy {
   commandDetail: (profileName: string, moment: string) => string
   contextLabel: string
   contextPlaceholder: string
+  addCandidateMaterials: string
+  attachedCandidateMaterialsLabel: string
+  candidateMaterialLabel: string
+  composerSafetyDetail: string
   currentReadmeTitle: string
   currentProfileEmpty: string
   currentProfileError: string
@@ -65,6 +69,7 @@ export interface HrWorkbenchCopy {
   noSessionYet: string
   noProfilesInSection: string
   noRecentSessions: string
+  openCandidateMaterialPicker: string
   openSession: (sessionTitle: string) => string
   openLatestSession: string
   openProfile: (profileName: string) => string
@@ -103,9 +108,12 @@ export interface HrWorkbenchCopy {
   recentSessionsTitle: string
   proposalComposerDetail: string
   proposalComposerTitle: string
+  proposalTypeLabel: (templateId: string, outputKind: string, fallback: string) => string
+  proposalTypeSelectLabel: string
   proposedReadmeTitle: string
   proposalOnly: string
   recommended: string
+  removeCandidateMaterial: (fileName: string) => string
   reviewGuardrails: string[]
   revisionBlocked: string
   revisionComparisonTitle: string
@@ -130,6 +138,10 @@ export interface HrWorkbenchCopy {
   }
   workbenchPanelControlsLabel: string
   workbenchTitle: string
+  generateProfileDraft: string
+  generatingProfileDraft: string
+  materialReadError: string
+  profileComposerTitle: (profileName: string) => string
 }
 
 const enHrCopy: HrWorkbenchCopy = {
@@ -151,6 +163,10 @@ const enHrCopy: HrWorkbenchCopy = {
   commandDetail: (profileName, moment) => `${profileName}: ${moment}. Keep evidence, next step, review, and memory status connected.`,
   contextLabel: 'Context for the next profile proposal',
   contextPlaceholder: 'Describe this person, lifecycle moment, evidence, open questions, or the next HR artifact...',
+  addCandidateMaterials: 'Add candidate material files',
+  attachedCandidateMaterialsLabel: 'Attached candidate materials',
+  candidateMaterialLabel: 'Candidate material',
+  composerSafetyDetail: 'Generates a reviewable profile draft and will not directly modify the official profile.',
   currentReadmeTitle: 'Current README',
   currentProfileEmpty: 'No accepted profile summary yet. Approve a proposed change to update README.md.',
   currentProfileError: 'Current profile summary is unavailable.',
@@ -206,6 +222,7 @@ const enHrCopy: HrWorkbenchCopy = {
   noSessionYet: 'No session yet',
   noProfilesInSection: 'No profiles in this section.',
   noRecentSessions: 'No agent sessions for this profile yet.',
+  openCandidateMaterialPicker: 'Open candidate material file picker',
   openSession: sessionTitle => `Open ${sessionTitle} session`,
   openLatestSession: 'Open latest session',
   openProfile: profileName => `Open ${profileName} profile`,
@@ -244,9 +261,22 @@ const enHrCopy: HrWorkbenchCopy = {
   recentSessionsTitle: 'Recent Sessions',
   proposalComposerDetail: 'Agent output remains a reviewable proposal tied to this profile.',
   proposalComposerTitle: 'Proposal Composer',
+  proposalTypeLabel: (_templateId, outputKind, fallback) => {
+    if (outputKind === 'profile-update-proposal')
+      return 'Candidate profile draft'
+    if (outputKind === 'candidate-screen' || outputKind === 'evidence-matrix')
+      return 'Evidence organization'
+    if (outputKind === 'interview-brief')
+      return 'Interview brief'
+    if (outputKind === 'hiring-risk')
+      return 'Risk check'
+    return fallback
+  },
+  proposalTypeSelectLabel: 'Proposal type',
   proposedReadmeTitle: 'Proposed README',
   proposalOnly: 'Agent output remains a proposal until review.',
   recommended: 'Recommended',
+  removeCandidateMaterial: fileName => `Remove ${fileName}`,
   reviewGuardrails: [
     'Evidence is tied to role-related or lifecycle-relevant criteria and source references.',
     'Missing, weak, and conflicting signals are visible.',
@@ -288,6 +318,10 @@ const enHrCopy: HrWorkbenchCopy = {
   },
   workbenchPanelControlsLabel: 'Workbench panel controls',
   workbenchTitle: 'People Workbench',
+  generateProfileDraft: 'Generate profile draft',
+  generatingProfileDraft: 'Generating profile draft',
+  materialReadError: 'Could not read one of the attached material files.',
+  profileComposerTitle: profileName => `Complete ${profileName} candidate profile`,
 }
 
 const zhHrCopy: HrWorkbenchCopy = {
@@ -318,6 +352,10 @@ const zhHrCopy: HrWorkbenchCopy = {
   commandDetail: (profileName, moment) => `${profileName}：${moment}。证据、下一步、review 和 memory 状态保持在同一个闭环里。`,
   contextLabel: '下一份人员提案上下文',
   contextPlaceholder: '描述这个人、生命周期节点、证据、开放问题，或下一份 HR 产物目标...',
+  addCandidateMaterials: '添加候选人材料文件',
+  attachedCandidateMaterialsLabel: '已添加的候选人材料',
+  candidateMaterialLabel: '候选人材料',
+  composerSafetyDetail: '生成可 review 的档案草案，不会直接修改正式档案。',
   currentReadmeTitle: '当前 README',
   currentProfileEmpty: '还没有已接受的档案摘要。批准一份变更提案后会更新 README.md。',
   currentProfileError: '当前档案摘要暂不可用。',
@@ -373,6 +411,7 @@ const zhHrCopy: HrWorkbenchCopy = {
   noSessionYet: '还没有 session',
   noProfilesInSection: '这个分组里还没有人员档案。',
   noRecentSessions: '这个人员档案还没有 agent session。',
+  openCandidateMaterialPicker: '打开候选人材料文件选择器',
   openSession: sessionTitle => `打开 ${sessionTitle} session`,
   openLatestSession: '打开最近 session',
   openProfile: profileName => `打开 ${profileName} 档案`,
@@ -411,9 +450,22 @@ const zhHrCopy: HrWorkbenchCopy = {
   recentSessionsTitle: 'Recent Sessions',
   proposalComposerDetail: 'Agent 输出只作为绑定此档案的可 review 提案。',
   proposalComposerTitle: '产物提案',
+  proposalTypeLabel: (_templateId, outputKind, fallback) => {
+    if (outputKind === 'profile-update-proposal')
+      return '候选人档案草案'
+    if (outputKind === 'candidate-screen' || outputKind === 'evidence-matrix')
+      return '证据整理'
+    if (outputKind === 'interview-brief')
+      return '面试提纲'
+    if (outputKind === 'hiring-risk')
+      return '风险检查'
+    return fallback
+  },
+  proposalTypeSelectLabel: '提案类型',
   proposedReadmeTitle: '拟写入 README',
   proposalOnly: 'Agent 输出在 review 前都只是提案。',
   recommended: '建议',
+  removeCandidateMaterial: fileName => `移除 ${fileName}`,
   reviewGuardrails: [
     '证据必须绑定岗位相关或生命周期相关标准和来源引用。',
     '缺失、薄弱和冲突信号必须保持可见。',
@@ -455,6 +507,10 @@ const zhHrCopy: HrWorkbenchCopy = {
   },
   workbenchPanelControlsLabel: '工作台面板控制',
   workbenchTitle: 'People Workbench',
+  generateProfileDraft: '生成档案草案',
+  generatingProfileDraft: '正在生成档案草案',
+  materialReadError: '无法读取其中一个候选人材料文件。',
+  profileComposerTitle: profileName => `补全 ${profileName} 的候选人档案`,
 }
 
 export function getHrPeopleWorkbenchCopy(locale: HrLocale): HrWorkbenchCopy {

@@ -1,5 +1,34 @@
 # AIWorker Changelog
 
+## 2026-05-19 15:22 [progress] FEAT-100 / PLAN-369 — HR profile composer flow
+
+Landed the HR profile composer flow. The HR People Workbench right panel now
+collapses without leaving the old icon rail, shows a compact Recent Sessions
+block at the top, and uses the remaining panel height for one profile-draft
+composer with textarea, material attachment rows, proposal type selector, and
+the bottom-right generate action.
+
+The composer defaults HR profile work to the reviewable
+`profile-update-proposal` template, labels it as a candidate profile draft in
+the Web UI, supports multiple uploaded candidate material files, writes them to
+workspace evidence under `evidence/uploads/`, and includes material descriptors
+in the new session metadata/context. Review and approval still stay in the
+center profile patch review flow; generated output does not directly mutate the
+accepted README/profile.
+
+Component library decision: reuse `@zonease/aiworker-component` primitives such
+as `IconButton` and `Textarea`, but keep the full composer in the HR app because
+candidate-material wording, proposal defaults, and profile draft semantics are
+HR-owned. A generic material-composer shell can be promoted later if another
+Soul App needs the same app-agnostic structure.
+
+Verification: focused WorkerStudio tests, HR people model tests, Web
+typecheck/lint/build, HR app validate/smoke, mounted-surfaces smoke, browser
+smoke against a local daemon/Web instance, `git diff --check`, and
+code-review-graph update/review. `crg:review` exited 0 and kept advisory static
+test-gap labels for helpers/components covered through the WorkerStudio
+integration path.
+
 ## 2026-05-19 [completed] REL-047 / PLAN-368 — CLI 0.18.1 patch release
 
 Published `@zonease/aiworker-cli@0.18.1` after `FEAT-099 / PLAN-367`, carrying

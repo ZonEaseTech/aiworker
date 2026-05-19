@@ -397,3 +397,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-366 CLI 0.18.0 minor release**](PLAN-366.md) `2026-05-19`
 - [x] [**PLAN-367 Host/Soul shared component library**](PLAN-367.md) `2026-05-19`
 - [x] [**PLAN-368 CLI 0.18.1 patch release**](PLAN-368.md) `2026-05-19`
+- [x] [**PLAN-369 HR profile composer flow**](PLAN-369.md) `2026-05-19`

@@ -45,4 +45,5 @@ export {
 export {
   createWorkspace,
   readFile,
+  writeFile,
 } from './workspaces'

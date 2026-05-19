@@ -16,6 +16,7 @@ const HR_ONBOARDING_PLAN = `${HR_SOUL_ID}.onboarding-plan`
 const HR_OFFBOARDING_SUMMARY = `${HR_SOUL_ID}.offboarding-summary`
 const HR_EVIDENCE_MATRIX = `${HR_SOUL_ID}.evidence-matrix`
 const HR_HIRING_RISK = `${HR_SOUL_ID}.hiring-risk`
+const HR_PROFILE_UPDATE_PROPOSAL = `${HR_SOUL_ID}.profile-update-proposal`
 
 function expandProfileTools(): HTMLElement {
   const expandButton = screen.queryByRole('button', { name: 'Expand Profile Workbench' })
@@ -51,7 +52,7 @@ const workers = [
 ]
 
 const souls = [
-  { defaultTemplates: [HR_PERSON_PROFILE, HR_LIFECYCLE_NEXT_STEP, HR_CANDIDATE_SCREEN, HR_INTERVIEW_BRIEF, HR_ONBOARDING_PLAN, HR_OFFBOARDING_SUMMARY, HR_EVIDENCE_MATRIX, HR_HIRING_RISK], description: 'People operations workspace', domain: 'hr-people-ops', id: HR_SOUL_ID, name: 'AIWorker HR', status: 'available' },
+  { defaultTemplates: [HR_PERSON_PROFILE, HR_PROFILE_UPDATE_PROPOSAL, HR_LIFECYCLE_NEXT_STEP, HR_CANDIDATE_SCREEN, HR_INTERVIEW_BRIEF, HR_ONBOARDING_PLAN, HR_OFFBOARDING_SUMMARY, HR_EVIDENCE_MATRIX, HR_HIRING_RISK], description: 'People operations workspace', domain: 'hr-people-ops', id: HR_SOUL_ID, name: 'AIWorker HR', status: 'available' },
   { defaultTemplates: ['aiworker-qa.release-gate'], description: 'QA workspace', domain: 'quality-assurance', id: QA_SOUL_ID, name: 'AIWorker QA', status: 'available' },
 ]
 
@@ -64,6 +65,16 @@ const templates = [
     outputKind: 'person-profile',
     prompt: 'Summarize profile',
     reviewRubric: ['Evidence is grounded.'],
+    soulId: HR_SOUL_ID,
+  },
+  {
+    description: 'Draft a reviewable candidate profile update.',
+    id: HR_PROFILE_UPDATE_PROPOSAL,
+    inputHints: ['Candidate materials', 'Accepted README baseline'],
+    name: 'Profile Update Proposal',
+    outputKind: 'profile-update-proposal',
+    prompt: 'Draft profile update proposal',
+    reviewRubric: ['Accepted README draft is reviewable.'],
     soulId: HR_SOUL_ID,
   },
   {
@@ -272,6 +283,8 @@ let currentWorkers: typeof workers
 let currentWorkspaces: typeof workspace[]
 let currentProfiles: Record<string, string>
 let currentArtifactRawContent: string
+let lastSessionRequestBody: Record<string, unknown> | null
+let writtenFiles: Array<{ body: string, path: string, workspaceId: string }>
 let currentApps: Array<{
   appId: string
   manifest: {
@@ -430,6 +443,8 @@ function resetSettings() {
       '',
     ].join('\n'),
   }
+  lastSessionRequestBody = null
+  writtenFiles = []
   currentArtifactRawContent = [
     '# Candidate Screen',
     '',
@@ -653,15 +668,46 @@ beforeEach(() => {
     }
     if (url.endsWith('/api/local/workspaces'))
       return json({ workspaces: currentWorkspaces })
+    const workspaceFileWriteMatch = url.match(/\/api\/local\/workspaces\/([^/]+)\/files\/raw\/(.+)$/)
+    if (workspaceFileWriteMatch && method === 'PUT') {
+      const workspaceId = workspaceFileWriteMatch[1]!
+      const filePath = workspaceFileWriteMatch[2]!.split('/').map(decodeURIComponent).join('/')
+      const body = String(init?.body ?? '')
+      writtenFiles.push({ body, path: filePath, workspaceId })
+      return json({
+        file: {
+          createdAt: now,
+          hash: null,
+          id: `file-${writtenFiles.length}`,
+          kind: 'uploaded',
+          mtime: Date.parse(now),
+          path: filePath,
+          size: body.length,
+          source: 'user',
+          updatedAt: now,
+          workspaceId,
+        },
+      }, 201)
+    }
     const workerSessionStreamMatch = url.match(/\/api\/local\/workers\/hr-worker\/workspaces\/([^/]+)\/sessions\/stream$/)
     const workspaceSessionStreamMatch = url.match(/\/api\/local\/workspaces\/([^/]+)\/sessions\/stream$/)
     const streamWorkspaceId = workerSessionStreamMatch?.[1] ?? workspaceSessionStreamMatch?.[1]
     if (streamWorkspaceId && method === 'POST') {
+      const requestBody = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {}
+      lastSessionRequestBody = requestBody
       const sessionId = streamWorkspaceId === 'workspace-created' ? 'session-created' : 'session-created-worker-route'
       const turnId = streamWorkspaceId === 'workspace-created' ? 'turn-created' : 'turn-created-worker-route'
       const artifactId = streamWorkspaceId === 'workspace-created' ? 'artifact-created' : 'artifact-created-worker-route'
       const workspaceName = currentWorkspaces.find(item => item.id === streamWorkspaceId)?.name ?? 'New candidate workspace'
-      const createdSession = { ...sessionRecord, workspaceId: streamWorkspaceId, id: sessionId, title: workspaceName }
+      const createdSession = {
+        ...sessionRecord,
+        capabilityTemplateId: String(requestBody.capabilityTemplateId ?? sessionRecord.capabilityTemplateId),
+        context: String(requestBody.context ?? ''),
+        metadataJson: requestBody.metadata as Record<string, unknown> ?? {},
+        workspaceId: streamWorkspaceId,
+        id: sessionId,
+        title: workspaceName,
+      }
       const createdTurn = { ...turnRecord, id: turnId, sessionId }
       const createdArtifact = { ...artifactRecord, id: artifactId, sessionId, turnId, workspaceId: streamWorkspaceId }
       currentSessions = [createdSession, ...currentSessions]
@@ -684,6 +730,8 @@ beforeEach(() => {
       }), { headers: { 'content-type': 'text/event-stream' }, status: 201 })
     }
     if ((url.endsWith('/api/local/workers/hr-worker/workspaces/workspace-created/sessions') || url.endsWith('/api/local/workspaces/workspace-created/sessions')) && method === 'POST') {
+      const requestBody = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {}
+      lastSessionRequestBody = requestBody
       const createdSession = { ...sessionRecord, workspaceId: 'workspace-created', id: 'session-created', title: 'New candidate workspace' }
       const createdTurn = { ...turnRecord, id: 'turn-created', sessionId: 'session-created' }
       const createdArtifact = { ...artifactRecord, id: 'artifact-created', sessionId: 'session-created', turnId: 'turn-created', workspaceId: 'workspace-created' }
@@ -925,17 +973,19 @@ describe('worker studio', () => {
     expect(within(hrDetails).queryByText('Review guardrails')).toBeNull()
     expect(within(hrDetails).queryByText('View focus')).toBeNull()
     expect(within(hrDetails).queryByText('Active view')).toBeNull()
-    expect(screen.getByLabelText('Collapsed Profile Workbench')).toBeTruthy()
+    expect(screen.queryByLabelText('Collapsed Profile Workbench')).toBeNull()
+    expect(document.querySelector('.hr-profile-tools-rail')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Expand Profile Workbench' }))
     const profileTools = document.querySelector('.hr-profile-tools-panel') as HTMLElement
-    expect(within(profileTools).getByText('Next Profile Step')).toBeTruthy()
-    expect(within(profileTools).getByText('Recent Sessions')).toBeTruthy()
+    const profileToolsText = profileTools.textContent ?? ''
+    expect(profileToolsText.indexOf('Recent Sessions')).toBeLessThan(profileToolsText.indexOf('Complete Hiring Workspace candidate profile'))
+    expect(within(profileTools).queryByText('Next Profile Step')).toBeNull()
     expect(within(profileTools).queryByText('Profile Patch')).toBeNull()
     expect(within(profileTools).queryByText('Review guardrails')).toBeNull()
     expect(within(profileTools).queryByText('Artifact evidence')).toBeNull()
     expect(screen.getAllByRole('button', { name: 'Review profile patch' })).toHaveLength(1)
     expect(screen.queryByTestId('hr-artifact-markdown-preview')).toBeNull()
-    expect(screen.getByRole('button', { name: /Summarize profile/ })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Summarize profile/ })).toBeNull()
     expect(screen.getByRole('button', { name: /Open Screen candidate session/ })).toBeTruthy()
     expect(screen.queryByText('Capability template (6)')).toBeNull()
     expect(document.querySelector('.count-pill')).toBeNull()
@@ -1147,9 +1197,9 @@ describe('worker studio', () => {
     await screen.findByTestId('hr-people-workbench')
     expect(screen.queryByText('Profile Actions')).toBeNull()
     const profileTools = expandProfileTools()
-    const nextStepTitle = within(profileTools).getByText('Next Profile Step')
-    const recentSessionsTitle = within(profileTools).getByText('Recent Sessions')
-    expect(nextStepTitle.compareDocumentPosition(recentSessionsTitle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    const profileToolsText = profileTools.textContent ?? ''
+    expect(profileToolsText.indexOf('Recent Sessions')).toBeLessThan(profileToolsText.indexOf('Complete Hiring Workspace candidate profile'))
+    expect(within(profileTools).queryByText('Next Profile Step')).toBeNull()
     expect(within(profileTools).queryByText('Artifact evidence')).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: /Employees/ }))
@@ -1168,8 +1218,9 @@ describe('worker studio', () => {
 
     await screen.findByTestId('hr-people-workbench')
     expect(document.querySelector('.hr-profile-list-panel')).toBeTruthy()
-    expect(document.querySelector('.hr-profile-tools-rail')).toBeTruthy()
+    expect(document.querySelector('.hr-profile-tools-rail')).toBeNull()
     expect(document.querySelector('.hr-profile-tools-panel')).toBeNull()
+    expect(document.querySelector('.hr-people-layout')?.classList.contains('without-profile-tools')).toBe(true)
 
     fireEvent.click(screen.getByRole('button', { name: 'Hide Profile List' }))
     expect(document.querySelector('.hr-profile-list-panel')).toBeNull()
@@ -1179,13 +1230,15 @@ describe('worker studio', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Expand Profile Workbench' }))
     expect(document.querySelector('.hr-profile-tools-panel')).toBeTruthy()
     expect(document.querySelector('.hr-profile-tools-rail')).toBeNull()
+    expect(document.querySelector('.hr-people-layout')?.classList.contains('without-profile-tools')).toBe(false)
     expect(screen.getByRole('button', { name: 'Collapse Profile Workbench' })).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: 'Show Profile List' }))
     fireEvent.click(screen.getByRole('button', { name: 'Collapse Profile Workbench' }))
     expect(document.querySelector('.hr-profile-list-panel')).toBeTruthy()
-    expect(document.querySelector('.hr-profile-tools-rail')).toBeTruthy()
+    expect(document.querySelector('.hr-profile-tools-rail')).toBeNull()
     expect(document.querySelector('.hr-profile-tools-panel')).toBeNull()
+    expect(document.querySelector('.hr-people-layout')?.classList.contains('without-profile-tools')).toBe(true)
   })
 
   it('treats needs-review records as pending instead of reviewed in the HR profile loop', async () => {
@@ -1533,12 +1586,12 @@ describe('worker studio', () => {
     expect(within(hrDetails).getByRole('button', { name: 'Evidence' })).toBeTruthy()
     expect(within(hrDetails).getByRole('button', { name: 'HR settings' })).toBeTruthy()
     expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/api/local/apps/aiworker-hr/search'))).toBe(false)
-    expect(document.querySelector('.hr-people-layout')?.classList.contains('with-tools-rail')).toBe(true)
+    expect(document.querySelector('.hr-people-layout')?.classList.contains('without-profile-tools')).toBe(true)
     fireEvent.click(within(hrDetails).getByRole('button', { name: 'Evidence' }))
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith('/api/local/apps/aiworker-hr/actions/toggle-evidence-drawer', expect.objectContaining({ method: 'POST' }))
     })
-    expect(document.querySelector('.hr-people-layout')?.classList.contains('with-tools-rail')).toBe(false)
+    expect(document.querySelector('.hr-people-layout')?.classList.contains('without-profile-tools')).toBe(false)
     fireEvent.click(within(hrDetails).getByRole('button', { name: 'HR settings' }))
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith('/api/local/apps/aiworker-hr/actions/hr-settings', expect.objectContaining({ method: 'POST' }))
@@ -1815,19 +1868,55 @@ describe('worker studio', () => {
     })
 
     expect(screen.getByTestId('hr-people-workbench')).toBeTruthy()
-    expandProfileTools()
-    const actionList = document.querySelector('.hr-action-list') as HTMLElement
-    fireEvent.click(within(actionList).getByRole('button', { name: /Summarize profile/ }))
-    expect((screen.getByLabelText('Context for the next profile proposal') as HTMLTextAreaElement).value).toContain('Summarize profile')
-    fireEvent.click(screen.getByRole('button', { name: /Generate person-profile/ }))
+    const profileTools = expandProfileTools()
+    expect((within(profileTools).getByLabelText('Proposal type') as HTMLSelectElement).value).toBe(HR_PROFILE_UPDATE_PROPOSAL)
+    fireEvent.change(within(profileTools).getByLabelText('Candidate material'), { target: { value: 'Role and candidate packet.' } })
+    fireEvent.click(within(profileTools).getByRole('button', { name: /Generate profile draft/ }))
 
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith('/api/local/workers/hr-worker/workspaces/workspace-created/sessions/stream', expect.objectContaining({
-        body: expect.stringContaining(`"capabilityTemplateId":"${HR_PERSON_PROFILE}"`),
+        body: expect.stringContaining(`"capabilityTemplateId":"${HR_PROFILE_UPDATE_PROPOSAL}"`),
         method: 'POST',
       }))
       expect(window.location.pathname).toBe('/workers/hr-worker/workspaces/workspace-created/sessions/session-created')
     })
+  })
+
+  it('submits multiple candidate material files with the profile draft session', async () => {
+    window.history.replaceState(null, '', '/workers/hr-worker/workspaces/workspace-1')
+    render(<WorkerStudio />)
+
+    await screen.findByTestId('hr-people-workbench')
+    const profileTools = expandProfileTools()
+    const fileInput = within(profileTools).getByLabelText('Add candidate material files') as HTMLInputElement
+    const resume = new File(['resume evidence'], 'ada-resume.txt', { type: 'text/plain' })
+    const notes = new File(['interview notes'], 'round-one.md', { type: 'text/markdown' })
+
+    await act(async () => {
+      fireEvent.change(fileInput, { target: { files: [resume, notes] } })
+    })
+
+    expect(within(profileTools).getByText('ada-resume.txt')).toBeTruthy()
+    expect(within(profileTools).getByText('round-one.md')).toBeTruthy()
+    expect(within(profileTools).getByLabelText('Attached candidate materials').textContent).toContain('2')
+
+    fireEvent.change(within(profileTools).getByLabelText('Candidate material'), { target: { value: 'Use these materials first.' } })
+    fireEvent.click(within(profileTools).getByRole('button', { name: /Generate profile draft/ }))
+
+    await waitFor(() => {
+      expect(writtenFiles).toHaveLength(2)
+      expect(lastSessionRequestBody).not.toBeNull()
+    })
+    expect(writtenFiles.map(file => file.path)).toEqual(expect.arrayContaining([
+      expect.stringMatching(/^evidence\/uploads\/.+\/ada-resume\.txt$/),
+      expect.stringMatching(/^evidence\/uploads\/.+\/round-one\.md$/),
+    ]))
+    expect(writtenFiles[0]?.body).toContain('resume evidence')
+    const metadata = lastSessionRequestBody?.metadata as { attachedMaterials?: Array<{ name: string, path: string }>, materialCount?: number }
+    expect(metadata.materialCount).toBe(2)
+    expect(metadata.attachedMaterials?.map(item => item.name)).toEqual(['ada-resume.txt', 'round-one.md'])
+    expect(String(lastSessionRequestBody?.context)).toContain('Attached candidate material')
+    expect(String(lastSessionRequestBody?.context)).toContain('evidence/uploads/')
   })
 
   it('navigates from the HR worker workbench to the created session after a profile action', async () => {
@@ -1836,15 +1925,13 @@ describe('worker studio', () => {
 
     await screen.findByTestId('hr-people-workbench')
     fireEvent.click(screen.getByRole('button', { name: 'Open Hiring Workspace profile' }))
-    expandProfileTools()
-    const actionList = document.querySelector('.hr-action-list') as HTMLElement
-    fireEvent.click(within(actionList).getByRole('button', { name: /Summarize profile/ }))
-    expect((screen.getByLabelText('Context for the next profile proposal') as HTMLTextAreaElement).value).toContain('Target: Hiring Workspace')
-    fireEvent.click(screen.getByRole('button', { name: /Generate person-profile/ }))
+    const profileTools = expandProfileTools()
+    fireEvent.change(within(profileTools).getByLabelText('Candidate material'), { target: { value: 'Target: Hiring Workspace\n\nSummarize profile.' } })
+    fireEvent.click(within(profileTools).getByRole('button', { name: /Generate profile draft/ }))
 
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith('/api/local/workers/hr-worker/workspaces/workspace-1/sessions/stream', expect.objectContaining({
-        body: expect.stringContaining(`"capabilityTemplateId":"${HR_PERSON_PROFILE}"`),
+        body: expect.stringContaining(`"capabilityTemplateId":"${HR_PROFILE_UPDATE_PROPOSAL}"`),
         method: 'POST',
       }))
       expect(window.location.pathname).toBe('/workers/hr-worker/workspaces/workspace-1/sessions/session-created-worker-route')
@@ -1866,9 +1953,9 @@ describe('worker studio', () => {
     })
 
     expect(screen.getByTestId('hr-people-workbench')).toBeTruthy()
-    expandProfileTools()
-    fireEvent.change(screen.getByLabelText('Context for the next profile proposal'), { target: { value: 'Role and candidate packet.' } })
-    fireEvent.click(screen.getByRole('button', { name: /Generate person-profile/ }))
+    const profileTools = expandProfileTools()
+    fireEvent.change(within(profileTools).getByLabelText('Candidate material'), { target: { value: 'Role and candidate packet.' } })
+    fireEvent.click(within(profileTools).getByRole('button', { name: /Generate profile draft/ }))
     window.history.pushState(null, '', '/workers/qa-worker')
     window.dispatchEvent(new PopStateEvent('popstate'))
 
@@ -1889,7 +1976,8 @@ describe('worker studio', () => {
     expect(window.location.pathname).toBe('/workers/hr-worker/workspaces/workspace-1')
     expect(screen.getByTestId('hr-people-workbench')).toBeTruthy()
     expandProfileTools()
-    expect(screen.getByText('Next Profile Step')).toBeTruthy()
+    expect(screen.getByText('Complete Hiring Workspace candidate profile')).toBeTruthy()
+    expect(screen.queryByText('Next Profile Step')).toBeNull()
     expect(screen.getByText('People Profiles')).toBeTruthy()
     expect(screen.queryByTestId('new-session-panel')).toBeNull()
     const profileTools = document.querySelector('.hr-profile-tools-panel') as HTMLElement
@@ -2004,7 +2092,8 @@ describe('worker studio', () => {
     expect(screen.queryByText('Workspace sessions')).toBeNull()
     expect(screen.queryByRole('button', { name: 'New session' })).toBeNull()
     expandProfileTools()
-    expect(screen.getByText('Next Profile Step')).toBeTruthy()
+    expect(screen.getByText('Complete Hiring Workspace candidate profile')).toBeTruthy()
+    expect(screen.queryByText('Next Profile Step')).toBeNull()
     expect(screen.getByText('People Profiles')).toBeTruthy()
     expect(screen.queryByTestId('new-session-panel')).toBeNull()
     expect(screen.queryByText('What do you want to build in Hiring Workspace?')).toBeNull()

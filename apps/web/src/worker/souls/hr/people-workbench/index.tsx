@@ -1,7 +1,6 @@
 import type { SoulWorkbenchAction } from '@zonease/aiworker-shared'
 import type { LocalSoulAppWorkbenchAction } from '../../../../features/local-workspace/api/types'
 import type { SoulWorkbenchRendererProps } from '../../types'
-import type { HrProfileToolsRailTarget } from './components/profile-tools-rail'
 import type { HrProfileSectionId } from './profile-readme'
 import type { ProfileListSectionId } from './types'
 
@@ -12,7 +11,6 @@ import { HrProfileDetails } from './components/profile-details'
 import { HrProfileList } from './components/profile-list'
 import { HrProfilePatchReview } from './components/profile-patch-review'
 import { HrProfileToolsPanel } from './components/profile-tools-panel'
-import { HrProfileToolsRail } from './components/profile-tools-rail'
 import { getHrPeopleWorkbenchCopy } from './copy'
 import {
   buildPersonProfiles,
@@ -60,7 +58,6 @@ export function HrPeopleWorkbench({
   const [profileListVisible, setProfileListVisible] = useState(true)
   const [profilePatchReviewWorkspaceId, setProfilePatchReviewWorkspaceId] = useState<string | null>(null)
   const [profileToolsExpanded, setProfileToolsExpanded] = useState(false)
-  const [profileToolsFocusTarget, setProfileToolsFocusTarget] = useState<HrProfileToolsRailTarget | null>(null)
   const [collapsedSectionIds, setCollapsedSectionIds] = useState<ReadonlySet<ProfileListSectionId>>(() => new Set(['employee', 'alumni']))
   const profiles = useMemo(
     () => buildPersonProfiles(workspaces, sessions, artifacts, reviews, lessons, labels, locale),
@@ -221,7 +218,7 @@ export function HrPeopleWorkbench({
       {workbenchBridge?.status}
 
       <div className="entry-tab-content workspace-content hr-people-content" data-testid="hr-people-workbench">
-        <div className={`hr-people-layout ${profileListVisible ? '' : 'without-profile-list'} ${focusedProfile ? 'has-profile-selection' : 'selection-empty'} ${focusedProfile && !profileToolsExpanded ? 'with-tools-rail' : ''}`}>
+        <div className={`hr-people-layout ${profileListVisible ? '' : 'without-profile-list'} ${focusedProfile ? 'has-profile-selection' : 'selection-empty'} ${focusedProfile && !profileToolsExpanded ? 'without-profile-tools' : ''}`}>
           {profileListVisible
             ? (
                 <HrProfileList
@@ -276,8 +273,6 @@ export function HrPeopleWorkbench({
           {focusedProfile && profileToolsExpanded
             ? (
                 <HrProfileToolsPanel
-                  activeActions={activeActions}
-                  copy={copy}
                   engineReadiness={engineReadiness}
                   focusedProfile={focusedProfile}
                   labels={labels}
@@ -287,26 +282,13 @@ export function HrPeopleWorkbench({
                   submitting={submitting}
                   templates={templates}
                   value={value}
-                  onActionSelect={onActionSelect}
                   onContextChange={onContextChange}
                   onOpenSession={onOpenSession}
-                  onProfileToolsFocusTargetHandled={() => setProfileToolsFocusTarget(null)}
                   onSubmitSession={onSubmitSession}
                   onTemplateChange={onTemplateChange}
-                  profileToolsFocusTarget={profileToolsFocusTarget}
                 />
               )
-            : focusedProfile
-              ? (
-                  <HrProfileToolsRail
-                    labels={labels}
-                    onExpand={(target) => {
-                      setProfileToolsFocusTarget(target)
-                      setProfileToolsExpanded(true)
-                    }}
-                  />
-                )
-              : null}
+            : null}
         </div>
       </div>
     </>

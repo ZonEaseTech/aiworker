@@ -12,7 +12,7 @@ import type { FormEvent } from 'react'
 import type { LocalSoulAppSearchResult, LocalSoulAppWorkbenchAction, LocalWorkspaceData } from '../features/local-workspace/api/types'
 import type { SettingsSection } from '../features/settings'
 import type { ArtifactPreviewState } from './session-detail'
-import type { SoulProfilePreviewState, SoulWorkbenchContext } from './souls/types'
+import type { SoulProfilePreviewState, SoulSessionDraft, SoulSessionMaterialDescriptor, SoulSessionMaterialInput, SoulWorkbenchContext } from './souls/types'
 
 import { IconButton, StudioCollapsibleGroup, StudioEmptyState, StudioMainFrame, StudioSectionHeader, WorkerStudioLayout } from '@zonease/aiworker-component'
 import { prepareProfileMarkdownForPromotion } from '@zonease/aiworker-shared'
@@ -37,7 +37,7 @@ import {
   messagesFor,
   normalizeLocale,
 } from '../features/i18n'
-import { continueSessionTurnStream, createReview, createSessionTurnStream, createWorker, createWorkspace, loadLocalWorkspaceData, promoteProfileRevision, readFile, readProfile, updateLesson } from '../features/local-workspace/api'
+import { continueSessionTurnStream, createReview, createSessionTurnStream, createWorker, createWorkspace, loadLocalWorkspaceData, promoteProfileRevision, readFile, readProfile, updateLesson, writeFile } from '../features/local-workspace/api'
 import { invokeSoulAppAction, searchSoulApp } from '../features/local-workspace/api/workspace-data'
 import { CreateWorkerDialog, CreateWorkspaceDialog, WorkerIdentityBlock, WorkspaceCard, WorkspaceSessionComposer } from '../features/local-workspace/components'
 import {
@@ -161,7 +161,7 @@ export function WorkerStudio() {
   const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null)
   const [newWorkerName, setNewWorkerName] = useState('')
   const [newWorkerSoulId, setNewWorkerSoulId] = useState(defaultNewWorkerSoulId)
-  const [selectedTemplateId, setSelectedTemplateId] = useState('person-profile')
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null)
   const [workspaceTitle, setWorkspaceTitle] = useState('')
   const [workspaceContext, setWorkspaceContext] = useState('')
@@ -253,7 +253,13 @@ export function WorkerStudio() {
     () => data?.templates.filter(template => template.soulId === selectedWorker?.soulId) ?? [],
     [data?.templates, selectedWorker?.soulId],
   )
-  const selectedTemplate = templates.find(template => template.id === selectedTemplateId) ?? templates[0] ?? null
+  const preferredHrProfileDraftTemplate = selectedSoul?.id === 'aiworker-hr'
+    ? findHrProfileDraftTemplate(templates)
+    : null
+  const selectedTemplate = templates.find(template => template.id === selectedTemplateId)
+    ?? preferredHrProfileDraftTemplate
+    ?? templates[0]
+    ?? null
   const selectedWorkbench = selectedSoul ? findSoulWorkbenchForSoul(selectedSoul.id) : null
   const showSpecializedWorkbench = hasSpecializedWorkbenchRenderer(selectedWorkbench)
   const soulWorkspaces = useMemo(
@@ -618,13 +624,19 @@ export function WorkerStudio() {
     }
   }
 
-  async function submitSession(event: FormEvent<HTMLFormElement>) {
+  async function submitSession(event: FormEvent<HTMLFormElement>, draft?: SoulSessionDraft) {
     event.preventDefault()
-    if (!selectedSoul || !selectedWorker || !selectedWorkspace || !selectedTemplate || !workspaceContext.trim() || !engineReadiness.ready)
+    const draftContext = draft?.context ?? workspaceContext
+    const draftMaterials = draft?.materials ?? []
+    if (!selectedSoul || !selectedWorker || !selectedWorkspace || !selectedTemplate || (!draftContext.trim() && draftMaterials.length === 0) || !engineReadiness.ready)
       return
     setSubmitting(true)
     try {
-      const body = buildProjectPrompt(selectedSoul, selectedTemplate, workspaceContext)
+      const attachedMaterials = draftMaterials.length > 0
+        ? await persistSessionMaterials(selectedWorkspace.id, draftMaterials)
+        : []
+      const sessionContext = buildSessionContextWithMaterials(draftContext, attachedMaterials)
+      const body = buildProjectPrompt(selectedSoul, selectedTemplate, sessionContext)
       let sessionRouteShown = false
       const startedWorkerId = selectedWorker.id
       const startedWorkspaceId = selectedWorkspace.id
@@ -641,9 +653,15 @@ export function WorkerStudio() {
       }
       const sessionResult = await createSessionTurnStream(selectedWorkspace.id, {
         capabilityTemplateId: selectedTemplate.id,
-        context: workspaceContext,
+        context: sessionContext,
         input: body,
         metadata: {
+          ...(attachedMaterials.length > 0
+            ? {
+                attachedMaterials,
+                materialCount: attachedMaterials.length,
+              }
+            : {}),
           inputHints: selectedTemplate.inputHints,
           outputKind: selectedTemplate.outputKind,
           requestedFrom: 'worker-web',
@@ -1139,7 +1157,10 @@ export function WorkerStudio() {
                             onClick={() => {
                               setSelectedWorkerId(worker.id)
                               setSelectedWorkspaceId(null)
-                              const next = data.templates.find(template => template.soulId === worker.soulId)
+                              const workerTemplates = data.templates.filter(template => template.soulId === worker.soulId)
+                              const next = worker.soulId === 'aiworker-hr'
+                                ? findHrProfileDraftTemplate(workerTemplates) ?? workerTemplates[0]
+                                : workerTemplates[0]
                               if (next)
                                 setSelectedTemplateId(next.id)
                               navigateWorkerRoute({ kind: 'worker', workerId: worker.id })
@@ -1368,6 +1389,103 @@ function profileMarkdownForPromotion(content: string, preparedProfileMarkdown?: 
 
   const prepared = prepareProfileMarkdownForPromotion({ artifactMarkdown: trimmed })
   return prepared.ok ? prepared.profileMarkdown : undefined
+}
+
+function findHrProfileDraftTemplate(templates: LocalWorkspaceData['templates'][number][]): LocalWorkspaceData['templates'][number] | null {
+  return templates.find(template =>
+    template.outputKind === 'profile-update-proposal'
+    || template.id === 'profile-update-proposal'
+    || template.id.endsWith('.profile-update-proposal'),
+  ) ?? null
+}
+
+async function persistSessionMaterials(workspaceId: string, materials: SoulSessionMaterialInput[]): Promise<SoulSessionMaterialDescriptor[]> {
+  const batch = new Date().toISOString().replace(/[:.]/g, '-')
+  const usedNames = new Set<string>()
+  const descriptors: SoulSessionMaterialDescriptor[] = []
+
+  for (const material of materials) {
+    const safeName = uniqueMaterialFileName(sanitizeMaterialFileName(material.name), usedNames)
+    const path = material.encoding === 'utf8'
+      ? `evidence/uploads/${batch}/${safeName}`
+      : `evidence/uploads/${batch}/${safeName}.base64.txt`
+    const content = material.encoding === 'utf8'
+      ? material.content
+      : renderBase64MaterialFile(material)
+    await writeFile(workspaceId, path, content)
+    descriptors.push({
+      encoding: material.encoding,
+      mimeType: material.mimeType,
+      name: material.name,
+      path,
+      size: material.size,
+    })
+  }
+
+  return descriptors
+}
+
+function buildSessionContextWithMaterials(context: string, materials: SoulSessionMaterialDescriptor[]): string {
+  const trimmed = context.trim()
+  if (materials.length === 0)
+    return trimmed
+
+  const materialLines = materials.map(material =>
+    `- ${material.name} (${material.mimeType || 'application/octet-stream'}, ${formatBytes(material.size)}): ${material.path}`,
+  )
+  return [
+    trimmed,
+    'Attached candidate material:',
+    ...materialLines,
+    '',
+    'Use these workspace file paths as source material before drafting the reviewable profile proposal.',
+  ].filter(Boolean).join('\n')
+}
+
+function sanitizeMaterialFileName(name: string): string {
+  const base = name.trim().replace(/[/\\:*?"<>|]+/g, '-').replace(/\s+/g, '-')
+  return base || 'candidate-material.txt'
+}
+
+function uniqueMaterialFileName(name: string, used: Set<string>): string {
+  if (!used.has(name)) {
+    used.add(name)
+    return name
+  }
+
+  const dot = name.lastIndexOf('.')
+  const stem = dot > 0 ? name.slice(0, dot) : name
+  const extension = dot > 0 ? name.slice(dot) : ''
+  let index = 2
+  while (used.has(`${stem}-${index}${extension}`))
+    index += 1
+  const next = `${stem}-${index}${extension}`
+  used.add(next)
+  return next
+}
+
+function renderBase64MaterialFile(material: SoulSessionMaterialInput): string {
+  return [
+    '# Uploaded Candidate Material',
+    '',
+    `- Original filename: ${material.name}`,
+    `- MIME type: ${material.mimeType || 'application/octet-stream'}`,
+    `- Size: ${formatBytes(material.size)}`,
+    '- Encoding: base64',
+    '',
+    '```base64',
+    material.content,
+    '```',
+    '',
+  ].join('\n')
+}
+
+function formatBytes(size: number): string {
+  if (size < 1024)
+    return `${size} B`
+  if (size < 1024 * 1024)
+    return `${Math.round(size / 102.4) / 10} KB`
+  return `${Math.round(size / 1024 / 102.4) / 10} MB`
 }
 
 function HostTopBar({
