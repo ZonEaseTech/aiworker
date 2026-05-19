@@ -414,10 +414,10 @@ export function SessionAttachmentList({
 function renderAttachmentFileIcon(attachment: SessionComposerAttachmentItem) {
   const kind = attachment.kind.toUpperCase()
   if (['CSV', 'TSV', 'XLS', 'XLSX'].includes(kind))
-    return <FileSpreadsheet size={25} />
+    return <FileSpreadsheet size={20} />
   if (['MD', 'PDF', 'TXT', 'JSON', 'DOC', 'DOCX'].includes(kind))
-    return <FileText size={25} />
-  return <FileIcon size={25} />
+    return <FileText size={20} />
+  return <FileIcon size={20} />
 }
 
 function SessionComposerIconAction({ action }: { action: SessionComposerAction }) {

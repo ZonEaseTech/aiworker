@@ -1,5 +1,14 @@
 # AIWorker Changelog
 
+## 2026-05-19 [completed] BUG-144 / PLAN-383 — Session composer attachment density polish
+
+The shared session composer now renders file and image attachments at a more
+compact chip scale. File attachment cards use smaller icons, copy, height and
+close controls; image previews are smaller while retaining lightbox preview.
+
+The attachment tray also has more padding from the composer field border, so
+uploaded source material feels integrated without crowding the shell.
+
 ## 2026-05-19 [completed] BUG-143 / PLAN-382 — Session composer busy state, attachment clearing and usage meter
 
 The session follow-up composer now treats a running turn as a busy state, so
