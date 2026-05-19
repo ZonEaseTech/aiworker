@@ -242,6 +242,7 @@ export interface StaticMessages {
     }
     externalMcp: {
       hint: string
+      pending: string
       placeholder: string
       title: string
     }
@@ -251,6 +252,7 @@ export interface StaticMessages {
     }
     localMcp: {
       hint: string
+      pending: string
       title: string
       toggle: string
     }

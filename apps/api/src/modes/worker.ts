@@ -1698,14 +1698,28 @@ function loadLocalSettings(): LocalSettingsConfig {
   const row = listSettings().find(setting => setting.key === LOCAL_SETTINGS_KEY)
   const parsed = row ? localSettingsConfigSchema.safeParse(row.valueJson) : null
   if (parsed?.success)
-    return parsed.data
+    return normalizePendingMcpSettings(parsed.data)
   return saveLocalSettings(defaultLocalSettings())
 }
 
 function saveLocalSettings(settings: LocalSettingsConfig): LocalSettingsConfig {
-  const parsed = localSettingsConfigSchema.parse(settings)
+  const parsed = localSettingsConfigSchema.parse(normalizePendingMcpSettings(settings))
   setSetting(LOCAL_SETTINGS_KEY, parsed)
   return parsed
+}
+
+function normalizePendingMcpSettings(settings: LocalSettingsConfig): LocalSettingsConfig {
+  return {
+    ...settings,
+    externalMcpServers: settings.externalMcpServers.map(server => ({
+      ...server,
+      enabled: false,
+    })),
+    localMcpServer: {
+      ...settings.localMcpServer,
+      enabled: false,
+    },
+  }
 }
 
 function defaultLocalSettings(): LocalSettingsConfig {
@@ -1736,7 +1750,7 @@ function defaultLocalSettings(): LocalSettingsConfig {
     ],
     language: 'en',
     localMcpServer: {
-      enabled: true,
+      enabled: false,
       url: 'http://127.0.0.1:4319/mcp',
     },
     updatedAt: new Date().toISOString(),

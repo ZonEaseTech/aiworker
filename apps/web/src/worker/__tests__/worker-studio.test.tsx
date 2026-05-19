@@ -193,7 +193,7 @@ const baseSettings: LocalSettingsConfig = {
   executionMode: 'local-cli',
   externalMcpServers: [{ command: '', enabled: false, id: 'team-context', name: 'Team context MCP' }],
   language: 'en',
-  localMcpServer: { enabled: true, url: 'http://127.0.0.1:4319/mcp' },
+  localMcpServer: { enabled: false, url: 'http://127.0.0.1:4319/mcp' },
   updatedAt: now,
 }
 
@@ -2342,6 +2342,24 @@ describe('worker studio', () => {
     expect(screen.getByRole('dialog', { name: '平台设置' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '新建人员档案' })).toBeTruthy()
     expect(screen.queryByText('Create workspace session')).toBeNull()
+  })
+
+  it('marks MCP settings as pending until workspace binding is implemented', async () => {
+    render(<WorkerStudio />)
+
+    await screen.findByLabelText('Host actions')
+    openHostSettings()
+
+    fireEvent.click(screen.getByRole('button', { name: /Local MCP/ }))
+    const localMcpToggle = screen.getByRole('checkbox', { name: /Local workspace MCP/ }) as HTMLInputElement
+    expect(localMcpToggle.disabled).toBe(true)
+    expect(localMcpToggle.checked).toBe(false)
+    expect(screen.getByText('Not connected yet. Future workspace binding will decide which sessions expose MCP context.')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: /External MCP/ }))
+    const commandInput = screen.getByPlaceholderText('command --arg value') as HTMLInputElement
+    expect(commandInput.disabled).toBe(true)
+    expect(screen.getByText('App-owned local MCP servers will be enabled from the workspace binding flow with grants, secret references, and audit.')).toBeTruthy()
   })
 
   it('maps each local engine to its own icon asset', () => {

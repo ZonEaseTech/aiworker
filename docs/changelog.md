@@ -120,6 +120,26 @@ Verification covered focused component tests/typecheck, WorkerStudio
 integration tests/typecheck/lint/build, UI component governance, diff check and
 browser smoke on a real Codex-backed HR session route.
 
+## 2026-05-19 [completed] FEAT-104 / PLAN-378 — MCP legacy cleanup before workspace binding
+
+Closed the MCP design hygiene gate before real workspace MCP binding work.
+Architecture now names Host-owned workspace/session MCP binding as the current
+landing path and explicitly excludes project-scope `.aiworker`,
+`.aiworker/executor-capabilities.json`, and historical `executor mcp ...`
+commands from current design authority.
+
+Soul App authoring now separates reusable `engineAssets.mcpServers` packages
+from vertical/app-owned local MCP servers such as product-specific operations
+servers. Those servers stay with their owning Soul App/product/deployment repo
+and are enabled through future workspace binding with grants, secret references
+and audit. Legacy executor capability schemas remain only as deprecated
+compatibility overlays, while Worker Settings MCP controls are disabled and
+marked pending so they are not mistaken for a completed binding lifecycle.
+
+Verification covered CLI command index, docs contract, shared tests/typecheck,
+API settings tests/typecheck, Worker Web settings tests/typecheck, UI component
+governance, diff check, and code-review-graph update/review.
+
 ## 2026-05-19 [completed] FEAT-102 / PLAN-376 — Session Kit shared composer and session surfaces
 
 Completed the shared Session Kit extraction from the approved

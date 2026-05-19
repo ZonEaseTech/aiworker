@@ -244,7 +244,8 @@ export const zhCN = {
       title: '本地 CLI 引擎',
     },
     externalMcp: {
-      hint: '登记外部证据工具的命令行。密钥必须保留在外部工具或环境中。',
+      hint: 'Workspace MCP binding 尚未落地，这里不会 materialize 到 engine。',
+      pending: 'App-owned local MCP server 后续会通过 workspace binding、grant、secret reference 和 audit 启用。',
       placeholder: 'command --arg value',
       title: '外部 MCP 服务器',
     },
@@ -253,7 +254,8 @@ export const zhCN = {
       title: '语言',
     },
     localMcp: {
-      hint: '向支持 MCP 的外部引擎暴露工作区上下文。',
+      hint: '等待 Host-owned workspace MCP binding；当前设置不会启动服务器。',
+      pending: '尚未接入。未来由 workspace binding 决定哪些 session 暴露 MCP context。',
       title: 'AIWorker 工作区 MCP 服务器',
       toggle: '本地工作区 MCP',
     },

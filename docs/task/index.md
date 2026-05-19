@@ -492,6 +492,7 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**REL-050 发布 aiworker CLI 0.18.4**](REL-050.md) `P0`
 - [x] [**FEAT-102 Session Kit shared composer and session surfaces**](FEAT-102.md) `P0`
 - [x] [**FEAT-103 Session activity pipeline and composer media previews**](FEAT-103.md) `P0`
+- [x] [**FEAT-104 MCP legacy cleanup before workspace binding**](FEAT-104.md) `P0`
 - [x] [**BUG-140 Session composer and timeline review gaps**](BUG-140.md) `P0`
 - [x] [**BUG-141 Session composer attachment paste and card UX**](BUG-141.md) `P0`
 - [x] [**BUG-142 Session composer integrated field and signal width polish**](BUG-142.md) `P0`

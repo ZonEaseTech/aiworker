@@ -161,8 +161,8 @@ export function SettingsDialog({
                 : null}
               {section === 'soul-packs' ? <SoulAppsSettings apps={apps} copy={copy} locale={activeLocale} settings={settings} templates={templates} onAppsChanged={onAppsChanged} /> : null}
               {section === 'connectors' ? <ConnectorsSettings copy={copy} settings={settings} update={persist} /> : null}
-              {section === 'mcp' ? <LocalMcpSettings copy={copy} settings={settings} update={persist} /> : null}
-              {section === 'external-mcp' ? <ExternalMcpSettings copy={copy} settings={settings} update={persist} /> : null}
+              {section === 'mcp' ? <LocalMcpSettings copy={copy} /> : null}
+              {section === 'external-mcp' ? <ExternalMcpSettings copy={copy} settings={settings} /> : null}
               {section === 'language' ? <LanguageSettings copy={copy} locale={activeLocale} update={persist} /> : null}
               {section === 'appearance' ? <AppearanceSettings copy={copy} settings={settings} update={persist} /> : null}
               {section === 'about'
@@ -542,7 +542,7 @@ function ConnectorsSettings({ copy, settings, update }: { copy: ReturnType<typeo
   )
 }
 
-function LocalMcpSettings({ copy, settings, update }: { copy: ReturnType<typeof messagesFor>, settings: LocalSettingsConfig, update: (patch: Partial<LocalSettingsConfig>) => Promise<void> }) {
+function LocalMcpSettings({ copy }: { copy: ReturnType<typeof messagesFor> }) {
   const settingsCopy = copy.settings
   return (
     <div className="settings-section">
@@ -552,18 +552,18 @@ function LocalMcpSettings({ copy, settings, update }: { copy: ReturnType<typeof 
           <p className="hint">{settingsCopy.localMcp.hint}</p>
         </div>
       </div>
-      <label className="switch-row">
+      <label className="switch-row settings-disabled-row">
         <span>
           <strong>{settingsCopy.localMcp.toggle}</strong>
-          <small>{settings.localMcpServer.url}</small>
+          <small>{settingsCopy.localMcp.pending}</small>
         </span>
-        <input checked={settings.localMcpServer.enabled} type="checkbox" onChange={event => void update({ localMcpServer: { ...settings.localMcpServer, enabled: event.target.checked } })} />
+        <input checked={false} disabled type="checkbox" />
       </label>
     </div>
   )
 }
 
-function ExternalMcpSettings({ copy, settings, update }: { copy: ReturnType<typeof messagesFor>, settings: LocalSettingsConfig, update: (patch: Partial<LocalSettingsConfig>) => Promise<void> }) {
+function ExternalMcpSettings({ copy, settings }: { copy: ReturnType<typeof messagesFor>, settings: LocalSettingsConfig }) {
   const settingsCopy = copy.settings
   return (
     <div className="settings-section">
@@ -577,15 +577,15 @@ function ExternalMcpSettings({ copy, settings, update }: { copy: ReturnType<type
         {settings.externalMcpServers.map(server => (
           <Field key={server.id} label={server.name}>
             <input
+              disabled
               value={server.command}
-              onChange={event => void update({
-                externalMcpServers: settings.externalMcpServers.map(item => item.id === server.id ? { ...item, command: event.target.value } : item),
-              })}
               placeholder={settingsCopy.externalMcp.placeholder}
+              readOnly
             />
           </Field>
         ))}
       </div>
+      <small className="settings-pending-note">{settingsCopy.externalMcp.pending}</small>
     </div>
   )
 }

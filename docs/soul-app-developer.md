@@ -169,11 +169,21 @@ environment wiring or secret references instead of writing secrets into
 manifest files, `engine-assets/`, generated app config, workspace metadata or
 logs.
 
-Executable MCP servers are generic monorepo packages, not app-private workflow
-implementations. Use package names such as `packages/mcp-ats` or
-`@zonease/aiworker-mcp-ats`; avoid names that encode a Soul App workflow such
-as `aiworker-hr-candidate-screening-mcp`. Workflow meaning belongs in
-`product/`, while the MCP server exposes reusable external-system capability.
+`engineAssets.mcpServers` is only for reusable MCP server packages that AIWorker
+can validate as generic engine assets. Use package names such as
+`packages/mcp-ats` or `@zonease/aiworker-mcp-ats`; avoid names that encode a
+Soul App workflow such as `aiworker-hr-candidate-screening-mcp`. Workflow
+meaning belongs in `product/`, while a reusable MCP package exposes
+external-system capability.
+
+Vertical or strongly app-owned local MCP servers are different. Keep their code
+with the owning Soul App, product repository, or deployment project, and bind
+them to a workspace through Host workspace MCP binding, grants, secret
+references and audit. A TTPOS operations MCP server, for example, should not be
+imported into AIWorker core unless it is intentionally generalized into a
+reusable package. The Soul App may recommend or require that binding through its
+own product documentation or future protocol descriptors, but Host still owns
+the workspace enablement and secret wiring.
 
 If a Soul App needs an agent-operable surface for an external runtime, the app
 decides whether that surface is a workbench action, search provider, descriptor,
@@ -217,7 +227,7 @@ Host owns platform concerns:
 - local daemon lifecycle
 - install/enable/disable state
 - Host auth and session security
-- global appearance, language, default engine, local MCP and connector settings
+- global appearance, language, default engine, workspace MCP binding metadata and connector settings
 - permission, storage, connector, log, search and audit brokers
 - worker/workspace/session locator
 - Host shell and Host-owned header chrome

@@ -6,7 +6,7 @@ import {
 } from './executor-capabilities'
 
 describe('project executor overlay schemas', () => {
-  it('accepts project-scope MCP descriptors for supported engines', () => {
+  it('accepts legacy project-scope MCP overlay descriptors for supported engines', () => {
     const parsed = executorCapabilityManifestSchema.safeParse({
       engines: {
         'codex': {

@@ -123,6 +123,11 @@ export type {
   ToolsetDefinition,
 } from './capabilities'
 export { AppError } from './errors'
+/**
+ * @deprecated Legacy executor overlay schemas. They are exported for historical
+ * compatibility only; new MCP work belongs to Host-owned workspace/session
+ * binding, not project-scope executor overlays.
+ */
 export {
   executorCapabilityEngineConfigSchema,
   executorCapabilityEngineSchema,

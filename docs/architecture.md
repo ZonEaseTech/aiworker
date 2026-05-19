@@ -37,7 +37,7 @@ routes explicit Soul App-owned protocol surfaces.
 ### 1. Host 是平台定位与能力壳
 
 Host 负责让 Soul App 被发现、安装、启用、运行、挂载和获得被授权的平台能力。Host 可以
-提供统一 shell、鉴权、安全策略、设置、engine/MCP 配置、connector grant、对象存储、日志、
+提供统一 shell、鉴权、安全策略、设置、engine/workspace MCP binding、connector grant、对象存储、日志、
 审计和本地 daemon 能力。
 
 Host 不应该把自己升级成 HR、QA、PM 或任何垂直领域的数据解释者。
@@ -157,7 +157,7 @@ Soul App 维护的是领域对象：
 | App lifecycle | Discover, install, enable, disable, route, launch | Provide manifest, health, compatibility and entrypoints |
 | Auth/security | Own Host auth, session security and grant enforcement | Declare required permissions and enforce app-local domain rules |
 | Storage | Provide app-scoped storage namespace and broker credentials | Own stored domain content and file/object layout inside the namespace |
-| Platform settings / configuration | Own global appearance, language, default engine, local MCP and connector settings | Own app-specific configuration exposed through protocol |
+| Platform settings / configuration | Own global appearance, language, default engine, local MCP registry, workspace MCP binding metadata and connector settings | Own app-specific configuration exposed through protocol |
 | Shell | Own global layout, Host header, navigation and worker/workspace/session locator | Expose app-owned workbench actions, search, configuration and workspace context descriptors when mounted |
 | UI/API | Mount or proxy declared surfaces | Own domain UI, API and standalone runtime |
 | Operator | Identify human/agent callers, enforce grants, route declared surfaces and audit platform access | Decide which human-facing and agent-operable domain surfaces exist and what they mean |
@@ -310,14 +310,20 @@ inside Host shell.
 
 ## Engine And MCP
 
-Host 维护默认 engine、local MCP、BYOK、语言、外观和 autosave 等平台设置，并透传给 Soul App
-或 mounted runtime。
+Host 维护默认 engine、BYOK、语言、外观、autosave、connector grant、local MCP registry 和
+workspace MCP binding 等横向配置，并透传给 Soul App 或 mounted runtime。
 
 Host 可以提供 MCP gateway、MCP server lifecycle、workspace/session binding、grant enforcement
 和 audit 等基础设施。MCP 不是 AIWorker 的产品主语，也不是 Host 解释领域的入口。
 Soul App 决定是否暴露 MCP-facing tool/resource/prompt，暴露哪些领域能力，以及这些能力如何
 映射到 artifact、profile、review、lesson 或 domain action。Host 不应把 HR、QA、PM 等领域
 统一翻译成一组通用 MCP tools。
+
+新的 MCP 落点必须是 Host-owned workspace/session binding：Host 保存 binding metadata、
+grant、secret reference 和 audit trail，并在 session 启动或 engine projection 时按 workspace
+上下文 materialize 到目标 engine。不要把 project-scope `.aiworker/`、
+`.aiworker/executor-capabilities.json` 或历史 `executor mcp ...` 命令当作当前设计入口。
+`executor-capabilities` 只能作为历史 overlay/compat schema 读取，不能作为 MCP source of truth。
 
 外部 engine 负责自己的 tool loop、模型、sandbox、approval、auth/profile、native session 和
 插件生态。AIWorker 只在 session 层准备 cwd/context、调用或观察 engine，并索引平台事件和

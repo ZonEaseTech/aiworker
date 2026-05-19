@@ -244,7 +244,8 @@ export const ja = {
       title: 'ローカル CLI エンジン',
     },
     externalMcp: {
-      hint: '外部証拠ツールのコマンドラインを登録します。シークレットは外部ツールまたは環境に保持してください。',
+      hint: 'Workspace MCP binding は未実装で、まだ engine へ materialize されません。',
+      pending: 'App-owned local MCP server は今後 workspace binding、grant、secret reference、audit を通して有効化します。',
       placeholder: 'command --arg value',
       title: '外部 MCP サーバー',
     },
@@ -253,7 +254,8 @@ export const ja = {
       title: '言語',
     },
     localMcp: {
-      hint: 'MCP 対応の外部エンジンへワークスペースコンテキストを公開します。',
+      hint: 'Host-owned workspace MCP binding 待ちです。この設定はまだサーバーを起動しません。',
+      pending: '未接続です。今後の workspace binding が MCP context を公開する session を決定します。',
       title: 'AIWorker ワークスペース MCP サーバー',
       toggle: 'ローカルワークスペース MCP',
     },

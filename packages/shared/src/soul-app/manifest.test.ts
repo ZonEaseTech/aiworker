@@ -84,7 +84,7 @@ describe('Soul App manifest schema', () => {
     expect(result.issues).toHaveLength(0)
   })
 
-  it('rejects workflow-private MCP server package names', () => {
+  it('routes workflow-private MCP server package names to workspace binding instead of engine assets', () => {
     const manifest = cloneManifest(hrSoulAppManifest)
     manifest.engineAssets = {
       ...manifest.engineAssets,
@@ -103,6 +103,7 @@ describe('Soul App manifest schema', () => {
     expect(result.status).toBe('invalid')
     expect(result.issues).toContainEqual(expect.objectContaining({
       code: 'unsafe_mcp_server_package',
+      message: expect.stringContaining('workspace MCP binding'),
       path: 'engineAssets.mcpServers.candidate-screening.package',
     }))
   })

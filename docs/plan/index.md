@@ -406,6 +406,7 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-375 CLI 0.18.4 patch release**](PLAN-375.md) `2026-05-19`
 - [x] [**PLAN-376 Session Kit shared composer and session surfaces**](PLAN-376.md) `2026-05-19`
 - [x] [**PLAN-377 Session activity pipeline and composer media previews**](PLAN-377.md) `2026-05-19`
+- [x] [**PLAN-378 MCP legacy cleanup before workspace binding**](PLAN-378.md) `2026-05-19`
 - [x] [**PLAN-379 Session composer and timeline review gaps**](PLAN-379.md) `2026-05-19`
 - [x] [**PLAN-380 Session composer attachment paste and card UX**](PLAN-380.md) `2026-05-19`
 - [x] [**PLAN-381 Session composer integrated field and signal width polish**](PLAN-381.md) `2026-05-19`

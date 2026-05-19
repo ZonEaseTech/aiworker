@@ -802,9 +802,9 @@ function mcpServerPackageMessage(manifest: SoulAppManifest, packageName: string)
   const packagePart = packageName.includes('/') ? packageName.split('/').at(-1)! : packageName
   const genericMcpPackage = /^(?:[a-z][a-z0-9]*-)*mcp-[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(packagePart)
   if (!genericMcpPackage)
-    return 'MCP server packages must use a generic mcp-* package name, for example @zonease/aiworker-mcp-ats.'
+    return 'engineAssets.mcpServers must use a reusable mcp-* package name, for example @zonease/aiworker-mcp-ats. App-owned local MCP servers belong in workspace MCP binding.'
   if (packagePart.includes(manifest.id))
-    return 'MCP server packages must not be private to a Soul App id.'
+    return 'engineAssets.mcpServers must not be private to a Soul App id. App-owned local MCP servers belong in workspace MCP binding.'
   return null
 }
 

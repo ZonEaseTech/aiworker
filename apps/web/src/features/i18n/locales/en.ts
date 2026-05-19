@@ -247,7 +247,8 @@ export const en = {
       title: 'Local CLI engines',
     },
     externalMcp: {
-      hint: 'Register command lines for external evidence tools. Secrets must stay in the external tool or environment.',
+      hint: 'Workspace MCP binding is pending and is not materialized into engines yet.',
+      pending: 'App-owned local MCP servers will be enabled from the workspace binding flow with grants, secret references, and audit.',
       placeholder: 'command --arg value',
       title: 'External MCP servers',
     },
@@ -256,7 +257,8 @@ export const en = {
       title: 'Language',
     },
     localMcp: {
-      hint: 'Expose workspace context to an external engine that supports MCP.',
+      hint: 'Pending Host-owned workspace MCP binding; this setting does not start a server yet.',
+      pending: 'Not connected yet. Future workspace binding will decide which sessions expose MCP context.',
       title: 'AIWorker workspace MCP server',
       toggle: 'Local workspace MCP',
     },

@@ -1439,9 +1439,11 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
 
     const settingsRes = await target.request('/api/local/settings')
     expect(settingsRes.status).toBe(200)
-    const initial = await settingsRes.json() as { settings: { engineId: string, engines: Array<{ id: string }>, executionMode: string } }
+    const initial = await settingsRes.json() as { settings: { engineId: string, engines: Array<{ id: string }>, executionMode: string, externalMcpServers: Array<{ enabled: boolean }>, localMcpServer: { enabled: boolean } } }
     expect(['local-cli', 'byok']).toContain(initial.settings.executionMode)
     expect(initial.settings.engines.some(engine => engine.id === 'workspace-template')).toBe(false)
+    expect(initial.settings.localMcpServer.enabled).toBe(false)
+    expect(initial.settings.externalMcpServers.every(server => !server.enabled)).toBe(true)
 
     const patchRes = await target.request('/api/local/settings', {
       method: 'PATCH',
@@ -1450,6 +1452,19 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
     })
     expect(patchRes.status).toBe(200)
     expect((await patchRes.json() as { settings: { language: string } }).settings.language).toBe('zh-CN')
+
+    const mcpPatchRes = await target.request('/api/local/settings', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        externalMcpServers: [{ command: 'custom-mcp', enabled: true, id: 'team-context', name: 'Team context MCP' }],
+        localMcpServer: { enabled: true, url: 'http://127.0.0.1:4319/mcp' },
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+    const mcpPatchBody = await mcpPatchRes.json() as { settings: { externalMcpServers: Array<{ enabled: boolean }>, localMcpServer: { enabled: boolean } } }
+    expect(mcpPatchRes.status).toBe(200)
+    expect(mcpPatchBody.settings.localMcpServer.enabled).toBe(false)
+    expect(mcpPatchBody.settings.externalMcpServers.every(server => !server.enabled)).toBe(true)
 
     expect((await target.request('/api/local/settings/engines/rescan', { method: 'POST' })).status).toBe(200)
     const testRes = await target.request('/api/local/settings/engines/test', {
