@@ -1,10 +1,17 @@
 # AIWorker Changelog
 
-## 2026-05-19 15:46 [progress] REL-048 / PLAN-370 — CLI 0.18.2 patch release
+## 2026-05-19 [completed] REL-048 / PLAN-370 — CLI 0.18.2 patch release
 
-Started `@zonease/aiworker-cli@0.18.2` patch release after `FEAT-100 /
-PLAN-369`, carrying the HR profile composer flow and icon-only composer send
-button refinement.
+Published `@zonease/aiworker-cli@0.18.2` after `FEAT-100 / PLAN-369`, carrying
+the HR profile composer flow and icon-only composer send button refinement.
+
+Release evidence: local `check` / `test` / `build` / mounted-surface smoke /
+dist release smoke / code-review-graph all passed; `main` lint run
+`26083926864` and tag release run `26083940091` passed; npm latest now resolves
+to `0.18.2`; GitHub Release `v0.18.2` is a formal release with four binary
+tarballs and four checksum assets. Published-package smoke with
+`bunx @zonease/aiworker-cli@0.18.2` started Host Web/API, loaded Worker Web,
+bootstrapped official HR/QA Soul Apps, and invoked HR/QA mounted actions.
 
 ## 2026-05-19 15:22 [progress] FEAT-100 / PLAN-369 — HR profile composer flow
 

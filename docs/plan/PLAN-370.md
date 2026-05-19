@@ -1,6 +1,6 @@
 # PLAN-370 CLI 0.18.2 patch release
 
-- **status**: implementing
+- **status**: completed
 - **owner**: codex
 - **createdAt**: 2026-05-19
 - **approvedAt**: 2026-05-19
@@ -84,11 +84,11 @@ version bump and release tracking.
 - [x] `bun run --filter '@zonease/aiworker-cli' smoke:dist-release`
 - [x] `bun run crg:update`
 - [x] `bun run crg:review`
-- [ ] `gh run watch <release-run-id> --repo ZonEaseTech/aiworker --exit-status`
-- [ ] `npm view @zonease/aiworker-cli version dist-tags --json`
-- [ ] `bunx @zonease/aiworker-cli@0.18.2 --version`
-- [ ] `gh release view v0.18.2 --repo ZonEaseTech/aiworker --json tagName,isDraft,isPrerelease,assets,url,publishedAt,targetCommitish`
-- [ ] Published-package smoke.
+- [x] `gh run watch <release-run-id> --repo ZonEaseTech/aiworker --exit-status`
+- [x] `npm view @zonease/aiworker-cli version dist-tags --json`
+- [x] `bunx @zonease/aiworker-cli@0.18.2 --version`
+- [x] `gh release view v0.18.2 --repo ZonEaseTech/aiworker --json tagName,isDraft,isPrerelease,assets,url,publishedAt,targetCommitish`
+- [x] Published-package smoke.
 
 ## Annotations
 
@@ -97,3 +97,7 @@ version bump and release tracking.
   version 为 `@zonease/aiworker-cli@0.18.2`，`npm pack --dry-run --json`
   生成 `zonease-aiworker-cli-0.18.2.tgz`，dist release smoke 成功启动
   Host Web/API、bootstrap official HR/QA Soul Apps 并调用 mounted actions。
+- 2026-05-19 15:56 CST：`main` 与 `v0.18.2` 已推送；main lint run
+  `26083926864` 成功，tag release run `26083940091` 成功。npm latest
+  解析到 `0.18.2`，GitHub Release `v0.18.2` 为正式 release 且包含 4 个
+  binary tarballs 与 4 个 `.sha256` assets。Published-package smoke 通过。
