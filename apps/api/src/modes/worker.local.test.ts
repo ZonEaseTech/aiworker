@@ -1320,6 +1320,25 @@ process.stdout.write(JSON.stringify({ url: \`http://\${server.hostname}:\${serve
     expect(await res.text()).toBe('<svg></svg>')
   })
 
+  it('serves Worker Web PNG brand assets from the static build', async () => {
+    const webStaticDir = join(dir, 'web-static')
+    mkdirSync(webStaticDir, { recursive: true })
+    writeFileSync(join(webStaticDir, 'index.html'), '<html></html>')
+    writeFileSync(join(webStaticDir, 'favicon.png'), 'favicon-data')
+    writeFileSync(join(webStaticDir, 'logo.png'), 'logo-data')
+
+    const target = await app(undefined, webStaticDir)
+    const favicon = await target.request('/favicon.png')
+    const logo = await target.request('/logo.png')
+
+    expect(favicon.status).toBe(200)
+    expect(favicon.headers.get('content-type')).toBe('image/png')
+    expect(await favicon.text()).toBe('favicon-data')
+    expect(logo.status).toBe(200)
+    expect(logo.headers.get('content-type')).toBe('image/png')
+    expect(await logo.text()).toBe('logo-data')
+  })
+
   it('streams session turn engine events before returning the final result', async () => {
     const target = await app()
     const hrWorker = await createHrWorker(target)
