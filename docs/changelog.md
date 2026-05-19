@@ -1,17 +1,22 @@
 # AIWorker Changelog
 
-## 2026-05-19 [progress] FEAT-102 / PLAN-376 — Session Kit shared composer and session surfaces
+## 2026-05-19 [completed] FEAT-102 / PLAN-376 — Session Kit shared composer and session surfaces
 
-Started the shared Session Kit extraction after the approved
-`docs/superpowers/specs/2026-05-19-session-kit-design.md` design. The target is
-to move generic session composer/action-bar, attachment helpers, timeline
-view-model helpers and session detail shells into `packages/component`, then
-migrate generic Worker Web surfaces and the HR People Workbench right-panel
-composer to consume the same shared components.
+Completed the shared Session Kit extraction from the approved
+`docs/superpowers/specs/2026-05-19-session-kit-design.md` design. The shared
+component package now owns `SessionComposer`, `SessionComposerActionBar`,
+attachment helpers, neutral session event normalization, timeline view-model
+grouping, `SessionTimeline`, and `SessionDetailPanel`.
 
-The boundary stays UI + view model only: Host Web keeps data loading, session
-streaming and routing; HR keeps profile context, recent sessions, profile draft
-copy and promotion policy.
+Worker Web now consumes the shared kit from the generic workspace session
+composer, the session follow-up composer, the session detail panel and the HR
+People Workbench right-panel composer. Host Web still owns data loading,
+streaming and routing; HR still owns profile context, recent sessions, profile
+draft copy, material metadata and promotion policy.
+
+Verification covered component tests/typecheck, focused WorkerStudio tests, web
+typecheck/lint/build, `ui:check`, `git diff --check`, browser smoke on the HR
+right panel and session route, plus `crg:update` / `crg:review`.
 
 ## 2026-05-19 18:05 [completed] REL-050 / PLAN-375 — CLI 0.18.4 patch release
 

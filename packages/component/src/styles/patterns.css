@@ -828,3 +828,387 @@
 .session-progress-card[data-tone="risk"] .session-progress-dot {
   background: var(--red);
 }
+
+/* Shared Session Kit styles. */
+
+.session-composer,
+.session-timeline,
+.session-detail-panel {
+  min-width: 0;
+}
+
+.session-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.session-composer-large {
+  width: min(100%, 920px);
+}
+
+.session-composer-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.session-composer-heading {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+}
+
+.session-composer-heading strong {
+  display: block;
+  color: var(--text-strong);
+  font-size: 17px;
+  line-height: 1.25;
+}
+
+.session-composer-heading small,
+.session-composer-warning {
+  display: block;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.session-composer-input {
+  width: 100%;
+  min-width: 0;
+  resize: vertical;
+}
+
+.session-composer-large .session-composer-input {
+  min-height: 136px;
+  padding: 22px 24px 10px;
+  border: 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: transparent;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.session-composer-large .session-composer-input:focus-visible {
+  outline: none;
+}
+
+.session-composer-large .session-composer-warning {
+  margin: 0 16px 12px;
+}
+
+.session-composer-panel .session-composer-input {
+  flex: 1 1 auto;
+  min-height: 150px;
+}
+
+.session-composer-attachment-list {
+  flex: 0 0 auto;
+  max-height: 118px;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  padding-right: 2px;
+  scrollbar-gutter: stable;
+}
+
+.session-composer-attachment-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.session-composer-attachment-kind,
+.session-composer-attachment-size,
+.session-composer-attachment-count {
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.session-composer-attachment-kind {
+  color: var(--accent);
+}
+
+.session-composer-attachment-name {
+  overflow: hidden;
+  color: var(--text-strong);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-composer-attachment-size {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.session-composer-warning {
+  padding: 9px 10px;
+  border: 1px solid var(--red-border);
+  border-radius: var(--radius-sm);
+  background: var(--red-bg);
+  color: var(--text);
+}
+
+.session-composer-action-bar {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.session-composer-large .session-composer-action-bar {
+  padding: 0 16px 14px;
+  border-top: 0;
+}
+
+.session-composer-action-left,
+.session-composer-action-main {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.session-composer-action-main {
+  justify-content: stretch;
+}
+
+.session-composer-attachment-button,
+.session-composer-submit {
+  position: relative;
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  min-height: 38px;
+}
+
+.session-composer-attachment-count {
+  min-width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  right: -5px;
+  bottom: -4px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--bg-panel);
+  line-height: 1;
+  pointer-events: none;
+}
+
+.session-composer-template-select {
+  width: 100%;
+  min-width: 0;
+}
+
+.session-composer-template-select .studio-select-trigger {
+  min-height: 38px;
+  padding: 6px 10px 6px 12px;
+  background: var(--bg-panel);
+}
+
+.session-composer-template-select .studio-select-copy strong,
+.session-composer-template-select-content .studio-select-copy strong {
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.session-composer-template-select .studio-select-copy small,
+.session-composer-template-select-content .studio-select-copy small {
+  display: none;
+}
+
+.session-composer-status-action {
+  min-height: 38px;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--bg-panel);
+  color: var(--text-muted);
+}
+
+.session-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.session-timeline-turn {
+  display: contents;
+}
+
+.session-message {
+  max-width: min(760px, 100%);
+}
+
+.session-message.user {
+  align-self: flex-end;
+  width: min(680px, 88%);
+}
+
+.session-message.assistant {
+  align-self: stretch;
+}
+
+.session-message.user .message-row-role {
+  justify-content: flex-end;
+}
+
+.session-user-bubble {
+  width: fit-content;
+  max-width: 100%;
+  margin-left: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-subtle);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.session-assistant-flow {
+  gap: 10px;
+}
+
+.session-prose {
+  max-width: 760px;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.58;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.session-status-pill,
+.session-produced-chip {
+  max-width: 100%;
+}
+
+.session-produced-chip small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-log-card,
+.session-tool-card {
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-panel);
+  overflow: hidden;
+}
+
+.session-log-card summary,
+.session-tool-card summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 12px;
+  list-style: none;
+}
+
+.session-tool-card summary small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-log-card summary::-webkit-details-marker,
+.session-tool-card summary::-webkit-details-marker {
+  display: none;
+}
+
+.session-log-card pre,
+.session-log.thinking,
+.session-tool-output {
+  margin: 0;
+  max-height: 280px;
+  overflow: auto;
+  padding: 10px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  font: 12px/1.5 var(--mono);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.session-tool-icon {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  background: var(--accent-tint);
+  color: var(--accent-strong);
+  flex-shrink: 0;
+}
+
+.session-tool-result {
+  margin-left: auto;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--green-bg);
+  color: var(--green);
+  font-size: 12px;
+}
+
+.session-tool-result.failed {
+  background: var(--red-bg);
+  color: var(--red);
+}
+
+.session-error-card {
+  width: fit-content;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid var(--red-border);
+  border-radius: var(--radius-lg);
+  background: var(--red-bg);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.session-detail-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.session-detail-section {
+  min-width: 0;
+}

@@ -59,7 +59,6 @@ import {
 } from '../features/local-workspace/model'
 import { resolveEngineReadiness } from '../features/session/engine-readiness'
 import { SettingsDialog } from '../features/settings'
-import { selectedEngineLabel } from '../features/settings/model'
 import { resolveTheme, useSystemTheme } from '../features/theme/system-theme'
 import { WorkerSessionChat } from './session-chat'
 import { SessionDetail } from './session-detail'
@@ -1238,7 +1237,6 @@ export function WorkerStudio() {
                   <div className="entry-tab-content workspace-content workspace-compose-content">
                     <WorkspaceSessionComposer
                       copy={copy}
-                      engineLabel={selectedEngineLabel(data.settings, copy)}
                       engineReadiness={engineReadiness}
                       locale={activeLocale}
                       selectedTemplate={selectedTemplate}
@@ -1247,7 +1245,6 @@ export function WorkerStudio() {
                       value={workspaceContext}
                       workspace={selectedWorkspace}
                       onContextChange={setWorkspaceContext}
-                      onOpenSettings={() => openSettings('execution')}
                       onSubmit={submitSession}
                       onTemplateChange={setSelectedTemplateId}
                     />

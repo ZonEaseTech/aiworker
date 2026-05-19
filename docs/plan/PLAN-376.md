@@ -1,6 +1,6 @@
 # PLAN-376 Session Kit shared composer and session surfaces
 
-- **status**: in_progress
+- **status**: completed
 - **owner**: codex
 - **createdAt**: 2026-05-19
 - **approvedAt**: 2026-05-19
@@ -119,14 +119,26 @@ Detailed implementation steps are tracked in
 
 ## Verification
 
-- [ ] `bun run --filter '@zonease/aiworker-component' test`
-- [ ] `bun run --filter '@zonease/aiworker-component' typecheck`
-- [ ] focused WorkerStudio tests
-- [ ] `bun run --filter '@zonease/aiworker-web' typecheck`
-- [ ] `bun run --filter '@zonease/aiworker-web' lint`
-- [ ] `bun run --filter '@zonease/aiworker-web' build`
-- [ ] `bun run ui:check`
-- [ ] browser smoke for generic session route and HR right panel composer
-- [ ] `git diff --check`
-- [ ] `bun run crg:update`
-- [ ] `bun run crg:review`
+- [x] `bun run --filter '@zonease/aiworker-component' test`
+- [x] `bun run --filter '@zonease/aiworker-component' typecheck`
+- [x] `bun run --filter '@zonease/aiworker-web' test src/worker/__tests__/worker-studio.test.tsx`
+- [x] `bun run --filter '@zonease/aiworker-web' typecheck`
+- [x] `bun run --filter '@zonease/aiworker-web' lint`
+- [x] `bun run --filter '@zonease/aiworker-web' build`
+- [x] `bun run ui:check`
+- [x] browser smoke for generic session route and HR right panel composer
+- [x] `git diff --check`
+- [x] `bun run crg:update`
+- [x] `bun run crg:review`
+
+Notes:
+
+- Browser smoke used a disposable `AIWORKER_HOME` under
+  `tmp/session-kit-smoke-home`, enabled HR/QA apps, created an HR worker,
+  created a profile workspace, and verified shared composer/action-bar selectors
+  on the HR right panel plus shared composer/detail selectors on the session
+  route.
+- `bun run crg:review` exited 0 and reported residual structural test gaps for
+  changed UI functions. The behavior is covered by
+  `packages/component` pattern/catalog tests and the focused WorkerStudio
+  integration test.

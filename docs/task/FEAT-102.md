@@ -1,6 +1,6 @@
 # FEAT-102 Session Kit shared composer and session surfaces
 
-- **status**: in_progress
+- **status**: completed
 - **priority**: P0
 - **owner**: codex
 - **createdAt**: 2026-05-19
@@ -46,3 +46,38 @@ streaming, route state and domain semantics.
   domain state.
 - The HR right panel remains profile-first. Recent sessions, selected profile
   context, profile-update prompt semantics and promotion policy stay in HR code.
+
+## Completion
+
+Session Kit now lives in `packages/component` as shared UI plus view-model
+helpers:
+
+- `SessionComposer`, `SessionComposerActionBar` and `SessionAttachmentList`
+  cover the shared composer/action bar and attachment rows.
+- `createComposerAttachment`, attachment formatting helpers,
+  `normalizeSessionEvents` and `createSessionTimelineViewModel` cover neutral
+  session view-model work.
+- `SessionTimeline` owns normalized turn/event rendering, including tool result
+  pairing.
+- `SessionDetailPanel` owns the generic detail-section shell.
+
+Worker Web now consumes the shared kit from the workspace session creation
+composer, session follow-up composer, session detail panel and HR profile-draft
+right panel. HR keeps profile selection, recent sessions, labels, materials,
+profile draft metadata and promotion policy in app-owned code.
+
+Verification completed:
+
+- `bun run --filter '@zonease/aiworker-component' test`
+- `bun run --filter '@zonease/aiworker-component' typecheck`
+- `bun run --filter '@zonease/aiworker-web' test src/worker/__tests__/worker-studio.test.tsx`
+- `bun run --filter '@zonease/aiworker-web' typecheck`
+- `bun run --filter '@zonease/aiworker-web' lint`
+- `bun run --filter '@zonease/aiworker-web' build`
+- `bun run ui:check`
+- `git diff --check`
+- Browser smoke on HR right panel and session route at `http://127.0.0.1:55206`
+- `bun run crg:update`
+- `bun run crg:review` exited 0; it reported residual structural test gaps for
+  changed UI functions, covered by the focused WorkerStudio integration test and
+  component tests above.

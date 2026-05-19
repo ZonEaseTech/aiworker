@@ -205,95 +205,6 @@
   box-shadow: var(--shadow-sm);
 }
 
-.workspace-composer-input {
-  width: 100%;
-  min-height: 136px;
-  padding: 22px 24px 10px;
-  border: 0;
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  background: transparent;
-  color: var(--text);
-  font-size: 16px;
-  line-height: 1.5;
-  resize: vertical;
-}
-
-.workspace-composer-input:focus-visible {
-  outline: none;
-}
-
-.workspace-composer-warning {
-  margin: 0 16px 12px;
-}
-
-.workspace-composer-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 0 16px 14px;
-}
-
-.workspace-composer-tools {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  flex-wrap: wrap;
-}
-
-.workspace-composer-tool-static,
-.workspace-composer-engine {
-  min-height: 32px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  background: var(--bg-panel);
-  color: var(--text-muted);
-}
-
-.workspace-composer-tool-static {
-  width: 32px;
-}
-
-.workspace-composer-engine {
-  gap: 7px;
-  padding: 0 12px;
-}
-
-.workspace-composer-select {
-  width: 220px;
-}
-
-.workspace-composer-select .studio-select-trigger {
-  min-height: 32px;
-  padding: 5px 10px 5px 12px;
-  border-radius: var(--radius-pill);
-  background: var(--bg-panel);
-}
-
-.workspace-composer-select .studio-select-copy strong {
-  font-size: 13px;
-}
-
-.workspace-composer-select .studio-select-copy small {
-  display: none;
-}
-
-.workspace-composer-submit {
-  width: 40px;
-  height: 40px;
-  min-width: 40px;
-  min-height: 40px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border-radius: var(--radius-pill);
-}
-
 .workspace-composer-hint {
   margin: -8px 0 0;
   color: var(--text-muted);
@@ -330,11 +241,7 @@
     font-size: 24px;
   }
 
-  .workspace-composer-toolbar {
+  .workspace-composer-box .session-composer-action-bar {
     align-items: flex-end;
-  }
-
-  .workspace-composer-select {
-    width: 100%;
   }
 }

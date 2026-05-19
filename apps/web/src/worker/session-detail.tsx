@@ -14,7 +14,16 @@ import type { messagesFor, SupportedLocale } from '../features/i18n'
 import type { EngineReadiness } from '../features/session/engine-readiness'
 import type { SessionProgressSummary } from './session-progress'
 
-import { ArtifactPreviewFrame, ReviewPanelShell, StudioActivityRow, StudioEmptyState, StudioSectionHeader, StudioStatusPill } from '@zonease/aiworker-component'
+import {
+  ArtifactPreviewFrame,
+  ReviewPanelShell,
+  SessionComposer,
+  SessionDetailPanel,
+  StudioActivityRow,
+  StudioEmptyState,
+  StudioSectionHeader,
+  StudioStatusPill,
+} from '@zonease/aiworker-component'
 import { Circle, ClipboardCheck, FileText, MessageSquare, Send, Sparkles, Terminal } from 'lucide-react'
 
 import {
@@ -109,76 +118,76 @@ export function SessionDetail({
 
       {workspace && session
         ? (
-            <>
-              <section className="session-summary">
-                <div>
-                  <span className="kicker">{copy.workspace.selectedWorkspace}</span>
-                  <h2>{workspace.name}</h2>
-                </div>
-                <StudioStatusPill active className="artifact-rail-status-pill" icon={<Circle size={10} />}>
-                  {formatStatus(session.status, locale)}
-                </StudioStatusPill>
-              </section>
+            <SessionDetailPanel
+              summary={(
+                <>
+                  <section className="session-summary">
+                    <div>
+                      <span className="kicker">{copy.workspace.selectedWorkspace}</span>
+                      <h2>{workspace.name}</h2>
+                    </div>
+                    <StudioStatusPill active className="artifact-rail-status-pill" icon={<Circle size={10} />}>
+                      {formatStatus(session.status, locale)}
+                    </StudioStatusPill>
+                  </section>
 
-              <section className="rail-metadata">
-                <strong>{templateCopy?.name ?? session.capabilityTemplateId}</strong>
-                <small>{templateCopy?.outputKind ?? session.capabilityTemplateId}</small>
-                <small>{copy.workspace.updated(formatRelativeTime(session.updatedAt, locale))}</small>
-              </section>
+                  <section className="rail-metadata">
+                    <strong>{templateCopy?.name ?? session.capabilityTemplateId}</strong>
+                    <small>{templateCopy?.outputKind ?? session.capabilityTemplateId}</small>
+                    <small>{copy.workspace.updated(formatRelativeTime(session.updatedAt, locale))}</small>
+                  </section>
 
-              {progress ? <SessionProgressPanel compact className="artifact-session-progress" progress={progress} /> : null}
-
-              {mode === 'full'
+                  {progress ? <SessionProgressPanel compact className="artifact-session-progress" progress={progress} /> : null}
+                </>
+              )}
+              composer={mode === 'full'
                 ? (
-                    <section className="turn-composer">
-                      <StudioSectionHeader
-                        className="section-head compact"
-                        title={copy.workspace.continueSession}
-                        description={engineReadiness.detail}
-                      />
-                      <form onSubmit={onSubmitTurn}>
-                        <textarea
-                          aria-label={copy.workspace.followUpInput}
-                          placeholder={copy.workspace.followUpPlaceholder}
-                          value={turnInput}
-                          onChange={event => onTurnInputChange(event.target.value)}
-                        />
-                        <button className="primary" type="submit" disabled={!turnInput.trim() || turnSubmitting || !engineReadiness.ready}>
-                          <Send aria-hidden="true" size={13} />
-                          <span>{turnSubmitting ? copy.workspace.sendingTurn : copy.workspace.sendTurn}</span>
-                        </button>
-                      </form>
-                    </section>
+                    <SessionComposer
+                      ariaLabel={copy.workspace.followUpInput}
+                      className="turn-composer"
+                      description={engineReadiness.detail}
+                      placeholder={copy.workspace.followUpPlaceholder}
+                      submitAriaLabel={turnSubmitting ? copy.workspace.sendingTurn : copy.workspace.sendTurn}
+                      submitDisabled={!engineReadiness.ready}
+                      submitIcon={<Send aria-hidden="true" size={13} />}
+                      submitting={turnSubmitting}
+                      submitTitle={turnSubmitting ? copy.workspace.sendingTurn : copy.workspace.sendTurn}
+                      title={copy.workspace.continueSession}
+                      value={turnInput}
+                      variant="compact"
+                      onSubmit={onSubmitTurn}
+                      onValueChange={onTurnInputChange}
+                    />
                   )
                 : null}
-
-              <ArtifactPreviewFrame
-                className="artifact-panel"
-                title={copy.artifact.label}
-                description={copy.workspace.artifactCount(artifacts.length)}
-                loading={artifact && artifactPreview.loading ? copy.artifact.loading : false}
-                error={artifactPreview.error}
-                empty={artifact ? undefined : progress?.previewDetail ?? copy.artifact.empty}
-              >
-                {artifact
-                  ? (
-                      <>
-                        <div className="rail-metadata">
-                          <strong>{artifactCopy?.name ?? artifact.title}</strong>
-                          <small>{artifactCopy?.outputKind ?? artifact.kind}</small>
-                          <small>{artifact.path}</small>
-                        </div>
-                        {artifactPreview.loading ? <div className="artifact-preview-state">{copy.artifact.loading}</div> : null}
-                        {artifactPreview.error ? <div className="artifact-preview-state" role="alert">{artifactPreview.error}</div> : null}
-                        {!artifactPreview.loading && !artifactPreview.error
-                          ? <pre className="artifact-preview">{artifactPreview.content}</pre>
-                          : null}
-                      </>
-                    )
-                  : null}
-              </ArtifactPreviewFrame>
-
-              {mode === 'full'
+              artifact={(
+                <ArtifactPreviewFrame
+                  className="artifact-panel"
+                  title={copy.artifact.label}
+                  description={copy.workspace.artifactCount(artifacts.length)}
+                  loading={artifact && artifactPreview.loading ? copy.artifact.loading : false}
+                  error={artifactPreview.error}
+                  empty={artifact ? undefined : progress?.previewDetail ?? copy.artifact.empty}
+                >
+                  {artifact
+                    ? (
+                        <>
+                          <div className="rail-metadata">
+                            <strong>{artifactCopy?.name ?? artifact.title}</strong>
+                            <small>{artifactCopy?.outputKind ?? artifact.kind}</small>
+                            <small>{artifact.path}</small>
+                          </div>
+                          {artifactPreview.loading ? <div className="artifact-preview-state">{copy.artifact.loading}</div> : null}
+                          {artifactPreview.error ? <div className="artifact-preview-state" role="alert">{artifactPreview.error}</div> : null}
+                          {!artifactPreview.loading && !artifactPreview.error
+                            ? <pre className="artifact-preview">{artifactPreview.content}</pre>
+                            : null}
+                        </>
+                      )
+                    : null}
+                </ArtifactPreviewFrame>
+              )}
+              history={mode === 'full'
                 ? (
                     <details className="session-subpanel compact-details">
                       <summary className="artifact-section-head">
@@ -210,86 +219,89 @@ export function SessionDetail({
                     </details>
                   )
                 : null}
-
-              <ReviewPanelShell
-                className="session-subpanel"
-                title={copy.artifact.review}
-                description={review ? formatReviewVerdict(review.verdict, locale) : copy.artifact.reviewCount(reviews.length)}
-                empty={!artifact ? copy.workspace.reviewWaiting : undefined}
-              >
-                {review
-                  ? (
-                      <div className="review-list">
-                        {reviewItems(review).map(item => <span key={item}>{item}</span>)}
-                      </div>
-                    )
-                  : artifact
+              review={(
+                <ReviewPanelShell
+                  className="session-subpanel"
+                  title={copy.artifact.review}
+                  description={review ? formatReviewVerdict(review.verdict, locale) : copy.artifact.reviewCount(reviews.length)}
+                  empty={!artifact ? copy.workspace.reviewWaiting : undefined}
+                >
+                  {review
                     ? (
-                        <button type="button" className="ghost review-action" disabled={reviewSubmitting} onClick={onReview}>
-                          <ClipboardCheck aria-hidden="true" size={13} />
-                          <span>{reviewSubmitting ? copy.workspace.requestingReview : copy.workspace.requestReview}</span>
-                        </button>
+                        <div className="review-list">
+                          {reviewItems(review).map(item => <span key={item}>{item}</span>)}
+                        </div>
                       )
-                    : null}
-              </ReviewPanelShell>
-
-              <section className="session-subpanel memory-subpanel">
-                <StudioSectionHeader
-                  className="artifact-section-head"
-                  icon={<Sparkles size={14} />}
-                  title={copy.workspace.memoryCandidates}
-                  description={copy.artifact.memoryCandidates(lessons.length)}
-                />
-                {lessons.length > 0
-                  ? (
-                      <div className="memory-list">
-                        {lessons.map(lesson => (
-                          <article key={lesson.id} className="memory-row">
-                            <div>
-                              <strong>{formatLessonStatus(lesson.status, copy)}</strong>
-                              <span>{lesson.statement}</span>
-                            </div>
-                            <div className="memory-actions">
-                              <button type="button" className="ghost" disabled={lessonBusyId === lesson.id || lesson.status === 'accepted'} onClick={() => onLessonStatus(lesson, 'accepted')}>
-                                {copy.workspace.accept}
-                              </button>
-                              <button type="button" className="ghost" disabled={lessonBusyId === lesson.id || lesson.status === 'rejected'} onClick={() => onLessonStatus(lesson, 'rejected')}>
-                                {copy.workspace.reject}
-                              </button>
-                            </div>
-                          </article>
-                        ))}
-                      </div>
-                    )
-                  : <div className="artifact-preview-state">{copy.workspace.noMemoryCandidates}</div>}
-              </section>
-
-              <details className="session-subpanel compact-details">
-                <summary className="artifact-section-head">
-                  <span className="artifact-summary-icon" aria-hidden="true">
-                    <Terminal size={14} />
-                  </span>
-                  <div>
-                    <strong>{copy.workspace.eventStream}</strong>
-                    <small>{copy.workspace.eventCount(events.length)}</small>
-                  </div>
-                </summary>
-                {recentEvents.length > 0
-                  ? (
-                      <div className="event-list">
-                        {recentEvents.map(event => (
-                          <StudioActivityRow
-                            key={event.id}
-                            className="event-row"
-                            title={event.type}
-                            meta={formatRelativeTime(event.createdAt, locale)}
-                          />
-                        ))}
-                      </div>
-                    )
-                  : <div className="artifact-preview-state">{copy.workspace.noEvents}</div>}
-              </details>
-            </>
+                    : artifact
+                      ? (
+                          <button type="button" className="ghost review-action" disabled={reviewSubmitting} onClick={onReview}>
+                            <ClipboardCheck aria-hidden="true" size={13} />
+                            <span>{reviewSubmitting ? copy.workspace.requestingReview : copy.workspace.requestReview}</span>
+                          </button>
+                        )
+                      : null}
+                </ReviewPanelShell>
+              )}
+              memory={(
+                <section className="session-subpanel memory-subpanel">
+                  <StudioSectionHeader
+                    className="artifact-section-head"
+                    icon={<Sparkles size={14} />}
+                    title={copy.workspace.memoryCandidates}
+                    description={copy.artifact.memoryCandidates(lessons.length)}
+                  />
+                  {lessons.length > 0
+                    ? (
+                        <div className="memory-list">
+                          {lessons.map(lesson => (
+                            <article key={lesson.id} className="memory-row">
+                              <div>
+                                <strong>{formatLessonStatus(lesson.status, copy)}</strong>
+                                <span>{lesson.statement}</span>
+                              </div>
+                              <div className="memory-actions">
+                                <button type="button" className="ghost" disabled={lessonBusyId === lesson.id || lesson.status === 'accepted'} onClick={() => onLessonStatus(lesson, 'accepted')}>
+                                  {copy.workspace.accept}
+                                </button>
+                                <button type="button" className="ghost" disabled={lessonBusyId === lesson.id || lesson.status === 'rejected'} onClick={() => onLessonStatus(lesson, 'rejected')}>
+                                  {copy.workspace.reject}
+                                </button>
+                              </div>
+                            </article>
+                          ))}
+                        </div>
+                      )
+                    : <div className="artifact-preview-state">{copy.workspace.noMemoryCandidates}</div>}
+                </section>
+              )}
+              eventStream={(
+                <details className="session-subpanel compact-details">
+                  <summary className="artifact-section-head">
+                    <span className="artifact-summary-icon" aria-hidden="true">
+                      <Terminal size={14} />
+                    </span>
+                    <div>
+                      <strong>{copy.workspace.eventStream}</strong>
+                      <small>{copy.workspace.eventCount(events.length)}</small>
+                    </div>
+                  </summary>
+                  {recentEvents.length > 0
+                    ? (
+                        <div className="event-list">
+                          {recentEvents.map(event => (
+                            <StudioActivityRow
+                              key={event.id}
+                              className="event-row"
+                              title={event.type}
+                              meta={formatRelativeTime(event.createdAt, locale)}
+                            />
+                          ))}
+                        </div>
+                      )
+                    : <div className="artifact-preview-state">{copy.workspace.noEvents}</div>}
+                </details>
+              )}
+            />
           )
         : (
             <StudioEmptyState

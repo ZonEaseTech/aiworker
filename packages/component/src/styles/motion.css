@@ -77,9 +77,9 @@
 .rail-workspace-item,
 .soul-list-item,
 .design-card,
-.worker-message,
-.worker-tool-card,
-.worker-log-card,
+.session-message,
+.session-tool-card,
+.session-log-card,
 .studio-activity-row {
   animation: aiworker-list-enter var(--motion-base) var(--motion-ease-out) both;
 }
@@ -106,8 +106,8 @@
 .soul-list-item,
 .design-card,
 .studio-activity-row,
-.worker-tool-card,
-.worker-log-card {
+.session-tool-card,
+.session-log-card {
   transition: background var(--motion-base) var(--motion-ease), border-color var(--motion-base) var(--motion-ease), color var(--motion-base) var(--motion-ease), box-shadow var(--motion-base) var(--motion-ease), transform var(--motion-base) var(--motion-ease);
 }
 

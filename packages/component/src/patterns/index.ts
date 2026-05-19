@@ -11,6 +11,33 @@ export { ProgressCard } from './progress'
 export type { ProgressCardProps, ProgressCardTone } from './progress'
 export { SegmentedControl, SettingsShell } from './settings'
 export type { SegmentedControlOption, SegmentedControlProps, SettingsShellProps } from './settings'
+export { SessionAttachmentList, SessionComposer, SessionComposerActionBar } from './session-composer'
+export type {
+  SessionComposerAction,
+  SessionComposerActionBarProps,
+  SessionComposerAttachmentItem,
+  SessionComposerOption,
+  SessionComposerProps,
+} from './session-composer'
+export { SessionDetailPanel } from './session-detail'
+export type { SessionDetailPanelProps } from './session-detail'
+export { SessionTimeline } from './session-timeline'
+export type { SessionTimelineProps } from './session-timeline'
+export {
+  createComposerAttachment,
+  createSessionTimelineViewModel,
+  formatSessionAttachmentKind,
+  formatSessionAttachmentSize,
+  normalizeSessionEvents,
+} from './session-view-model'
+export type {
+  SessionComposerMaterial,
+  SessionComposerMaterialEncoding,
+  SessionTimelineEvent,
+  SessionTimelineEventInput,
+  SessionTimelineTurnInput,
+  SessionTimelineTurnViewModel,
+} from './session-view-model'
 export {
   StudioActivityRow,
   StudioCollapsibleGroup,

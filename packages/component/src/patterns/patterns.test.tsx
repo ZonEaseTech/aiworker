@@ -10,8 +10,16 @@ import {
   ReviewPanelShell,
   SegmentedControl,
   SettingsShell,
+  SessionComposer,
+  SessionDetailPanel,
+  SessionTimeline,
   StatusEventPill,
   ToolResultCard,
+  createComposerAttachment,
+  createSessionTimelineViewModel,
+  formatSessionAttachmentKind,
+  formatSessionAttachmentSize,
+  normalizeSessionEvents,
 } from '.'
 
 afterEach(() => cleanup())
@@ -108,5 +116,123 @@ describe('shared patterns', () => {
 
     rerender(<ProfileReaderShell title="Profile" empty="No profile selected" />)
     expect(screen.getByText('No profile selected')).toBeTruthy()
+  })
+
+  it('formats and reads composer attachments without domain language', async () => {
+    const file = new File(['hello'], 'resume.md', { type: 'text/markdown' })
+    const material = await createComposerAttachment(file)
+
+    expect(material).toMatchObject({
+      content: 'hello',
+      encoding: 'utf8',
+      mimeType: 'text/markdown',
+      name: 'resume.md',
+      size: 5,
+    })
+    expect(formatSessionAttachmentKind(file)).toBe('MD')
+    expect(formatSessionAttachmentSize(1536)).toBe('1.5 KB')
+  })
+
+  it('normalizes session events and groups them by turn', () => {
+    const events = normalizeSessionEvents([
+      { id: 'e1', payloadJson: { agentEvent: { kind: 'text', text: 'Hi' } }, seq: 1, turnId: 'turn-1', type: 'assistant_delta' },
+      { id: 'e2', payloadJson: { path: 'artifact.md' }, seq: 2, turnId: 'turn-1', type: 'artifact' },
+      { id: 'e3', payloadJson: { message: 'boom' }, seq: 3, turnId: 'turn-2', type: 'error' },
+    ])
+    const viewModel = createSessionTimelineViewModel({
+      events,
+      turns: [
+        { createdAt: '2026-05-19T00:00:00Z', id: 'turn-1', input: 'Start', response: null, seq: 1, status: 'running', updatedAt: '2026-05-19T00:00:00Z' },
+        { createdAt: '2026-05-19T00:01:00Z', id: 'turn-2', input: 'Continue', response: null, seq: 2, status: 'failed', updatedAt: '2026-05-19T00:01:00Z' },
+      ],
+    })
+
+    expect(viewModel.turns[0]?.events.map(event => event.kind)).toEqual(['text', 'artifact'])
+    expect(viewModel.turns[1]?.events[0]?.kind).toBe('error')
+  })
+
+  it('renders session composer action bar with attachments template and submit', () => {
+    const onSubmit = vi.fn(event => event.preventDefault())
+
+    render(
+      <SessionComposer
+        ariaLabel="Profile draft material"
+        attachmentTriggerLabel="Add candidate materials"
+        attachments={[{ id: 'a1', kind: 'MD', name: 'resume.md', removeLabel: 'Remove resume.md', size: '1 KB' }]}
+        description="Drafts stay reviewable before profile promotion."
+        selectedTemplateId="profile-update-proposal"
+        submitAriaLabel="Generate profile draft"
+        submitTitle="Generate profile draft"
+        templateLabel="Proposal type"
+        templateOptions={[{ label: 'Candidate profile proposal', value: 'profile-update-proposal' }]}
+        title="Complete Hiring Workspace candidate profile"
+        value="Summarize new evidence"
+        onAddAttachments={vi.fn()}
+        onRemoveAttachment={vi.fn()}
+        onSubmit={onSubmit}
+        onTemplateChange={vi.fn()}
+        onValueChange={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByRole('textbox', { name: 'Profile draft material' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Add candidate materials' })).toBeTruthy()
+    expect(screen.getByRole('combobox', { name: 'Proposal type' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Generate profile draft' })).toBeTruthy()
+    expect(screen.getByText('resume.md')).toBeTruthy()
+  })
+
+  it('renders session timeline turns and event blocks', () => {
+    render(
+      <SessionTimeline
+        assistantRoleLabel="Agent"
+        operatorRoleLabel="Operator"
+        turns={[{
+          events: [{ detail: 'artifact.md', id: 'event-1', kind: 'status', label: 'file_change', turnId: 'turn-1' }],
+          turn: { id: 'turn-1', input: 'Build profile', seq: 1, status: 'running' },
+        }]}
+      />,
+    )
+
+    expect(screen.getByText('Operator')).toBeTruthy()
+    expect(screen.getByText('Build profile')).toBeTruthy()
+    expect(screen.getByText('Agent')).toBeTruthy()
+    expect(screen.getByText('file_change')).toBeTruthy()
+  })
+
+  it('renders session timeline tool result next to its tool call', () => {
+    render(
+      <SessionTimeline
+        assistantRoleLabel="Agent"
+        operatorRoleLabel="Operator"
+        turns={[{
+          events: [
+            { id: 'tool-1', input: { command: 'aiworker status', description: 'Inspect worker' }, kind: 'tool_use', name: 'Shell', toolUseId: 'run-1', turnId: 'turn-1' },
+            { content: 'ok', id: 'result-1', kind: 'tool_result', toolUseId: 'run-1', turnId: 'turn-1' },
+          ],
+          turn: { id: 'turn-1', input: 'Check status', seq: 1, status: 'succeeded' },
+        }]}
+      />,
+    )
+
+    expect(screen.getByText('Shell')).toBeTruthy()
+    expect(screen.getByText('done')).toBeTruthy()
+    expect(screen.getByText('aiworker status')).toBeTruthy()
+    expect(screen.getByText('ok')).toBeTruthy()
+  })
+
+  it('renders session detail panel sections without domain meaning', () => {
+    render(
+      <SessionDetailPanel
+        artifact={<p>Artifact preview</p>}
+        eventStream={<p>Events</p>}
+        review={<p>Review summary</p>}
+        summary={<p>Summary</p>}
+      />,
+    )
+
+    expect(screen.getByText('Artifact preview')).toBeTruthy()
+    expect(screen.getByText('Review summary')).toBeTruthy()
+    expect(screen.getByText('Events')).toBeTruthy()
   })
 })

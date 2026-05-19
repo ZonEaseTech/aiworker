@@ -2022,6 +2022,9 @@ describe('worker studio', () => {
     expect(drawerToggle.getAttribute('aria-pressed')).toBe('true')
     expect(settingsButton.nextElementSibling).toBe(drawerToggle)
     expect(drawerToggle.classList.contains('active')).toBe(true)
+    const workerComposer = document.querySelector('.worker-composer') as HTMLElement
+    expect(workerComposer).toBeTruthy()
+    expect(within(workerComposer).queryByRole('button', { name: 'Open settings' })).toBeNull()
 
     fireEvent.click(drawerToggle)
     expect(document.querySelector('.detail-drawer-collapsed')).toBeTruthy()

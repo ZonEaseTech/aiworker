@@ -37,7 +37,7 @@
 - Create: `packages/component/src/patterns/session-view-model.ts`
 - Modify: `packages/component/src/patterns/patterns.test.tsx`
 
-- [ ] **Step 1: Write helper tests**
+- [x] **Step 1: Write helper tests**
 
 Add tests to `packages/component/src/patterns/patterns.test.tsx`:
 
@@ -84,7 +84,7 @@ it('normalizes session events and groups them by turn', () => {
 })
 ```
 
-- [ ] **Step 2: Run helper tests and verify they fail**
+- [x] **Step 2: Run helper tests and verify they fail**
 
 Run:
 
@@ -94,7 +94,7 @@ bun run --filter '@zonease/aiworker-component' test src/patterns/patterns.test.t
 
 Expected: fails because the new Session Kit helpers are not exported.
 
-- [ ] **Step 3: Implement helper module**
+- [x] **Step 3: Implement helper module**
 
 Create `packages/component/src/patterns/session-view-model.ts`:
 
@@ -204,7 +204,7 @@ export function createSessionTimelineViewModel(input: {
 Then add the private helper functions from the current `session-chat.tsx`
 normalization logic, keeping them generic and free of Host imports.
 
-- [ ] **Step 4: Export helpers**
+- [x] **Step 4: Export helpers**
 
 Add exports to `packages/component/src/patterns/index.ts`:
 
@@ -225,7 +225,7 @@ export type {
 } from './session-view-model'
 ```
 
-- [ ] **Step 5: Run helper tests and verify they pass**
+- [x] **Step 5: Run helper tests and verify they pass**
 
 Run:
 
@@ -245,7 +245,7 @@ Expected: the helper tests pass.
 - Modify: `packages/component/src/styles/patterns.css`
 - Modify: `packages/component/src/patterns/patterns.test.tsx`
 
-- [ ] **Step 1: Write composer component tests**
+- [x] **Step 1: Write composer component tests**
 
 Add tests:
 
@@ -280,7 +280,7 @@ it('renders session composer action bar with attachments template and submit', (
 })
 ```
 
-- [ ] **Step 2: Run composer tests and verify they fail**
+- [x] **Step 2: Run composer tests and verify they fail**
 
 Run:
 
@@ -290,7 +290,7 @@ bun run --filter '@zonease/aiworker-component' test src/patterns/patterns.test.t
 
 Expected: fails because `SessionComposer` is not exported.
 
-- [ ] **Step 3: Implement `session-composer.tsx`**
+- [x] **Step 3: Implement `session-composer.tsx`**
 
 Create `packages/component/src/patterns/session-composer.tsx` with:
 
@@ -389,7 +389,7 @@ export function SessionComposer(props: SessionComposerProps) {
 Implement `SessionComposerActionBar` and `SessionAttachmentList` in the same
 file using `IconButton`, `Select`, `Paperclip`, `SendHorizontal` and `X`.
 
-- [ ] **Step 4: Add shared styles**
+- [x] **Step 4: Add shared styles**
 
 Append Session Kit styles to `packages/component/src/styles/patterns.css`:
 
@@ -449,7 +449,7 @@ Add attachment row, count badge and compact select styles using existing HR
 measurements as the baseline: 38px action buttons, mono option labels and
 connected top-opening select support.
 
-- [ ] **Step 5: Export components and run tests**
+- [x] **Step 5: Export components and run tests**
 
 Add exports to `packages/component/src/patterns/index.ts`:
 
@@ -482,7 +482,7 @@ Expected: pass.
 - Modify: `packages/component/src/styles/patterns.css`
 - Modify: `packages/component/src/patterns/patterns.test.tsx`
 
-- [ ] **Step 1: Write timeline/detail tests**
+- [x] **Step 1: Write timeline/detail tests**
 
 Add tests:
 
@@ -521,7 +521,7 @@ it('renders session detail panel sections without domain meaning', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests and verify they fail**
+- [x] **Step 2: Run tests and verify they fail**
 
 Run:
 
@@ -531,7 +531,7 @@ bun run --filter '@zonease/aiworker-component' test src/patterns/patterns.test.t
 
 Expected: fails because timeline/detail exports do not exist.
 
-- [ ] **Step 3: Implement `SessionTimeline`**
+- [x] **Step 3: Implement `SessionTimeline`**
 
 Create `packages/component/src/patterns/session-timeline.tsx`:
 
@@ -579,7 +579,7 @@ Implement `renderDefaultEvent` by moving the generic block rendering from
 `WorkerSessionChat` and keeping only generic labels such as `Usage`, `raw`,
 `done` and `failed`.
 
-- [ ] **Step 4: Implement `SessionDetailPanel`**
+- [x] **Step 4: Implement `SessionDetailPanel`**
 
 Create `packages/component/src/patterns/session-detail.tsx`:
 
@@ -610,7 +610,7 @@ export function SessionDetailPanel({ artifact, className, composer, eventStream,
 }
 ```
 
-- [ ] **Step 5: Export and style timeline/detail**
+- [x] **Step 5: Export and style timeline/detail**
 
 Export in `packages/component/src/patterns/index.ts`:
 
@@ -626,7 +626,7 @@ Add CSS for `.session-timeline`, `.session-message`, `.session-user-bubble`,
 `packages/component/src/styles/patterns.css`, reusing existing token values from
 `session-chat.css` and `artifact.css`.
 
-- [ ] **Step 6: Run shared package gates**
+- [x] **Step 6: Run shared package gates**
 
 Run:
 
@@ -645,7 +645,7 @@ Expected: pass.
 - Modify: `packages/component/src/catalog.ts`
 - Modify: `packages/component/src/catalog.test.ts`
 
-- [ ] **Step 1: Add catalog assertions**
+- [x] **Step 1: Add catalog assertions**
 
 Extend `catalog.test.ts`:
 
@@ -660,7 +660,7 @@ it('tracks Session Kit as implemented shared workbench components', () => {
 })
 ```
 
-- [ ] **Step 2: Run catalog test and verify it fails**
+- [x] **Step 2: Run catalog test and verify it fails**
 
 Run:
 
@@ -670,7 +670,7 @@ bun run --filter '@zonease/aiworker-component' test src/catalog.test.ts
 
 Expected: fails until catalog entries are added.
 
-- [ ] **Step 3: Add catalog entries**
+- [x] **Step 3: Add catalog entries**
 
 Add implemented entries:
 
@@ -708,7 +708,7 @@ Add implemented entries:
 Keep migration queue entries only for source files that still have uncovered
 shared gaps after the implementation.
 
-- [ ] **Step 4: Run catalog test**
+- [x] **Step 4: Run catalog test**
 
 Run:
 
@@ -727,7 +727,7 @@ Expected: pass.
 - Modify: `apps/web/src/styles/workspace.css`
 - Modify: `apps/web/src/worker/__tests__/worker-studio.test.tsx`
 
-- [ ] **Step 1: Add/adjust integration assertion**
+- [x] **Step 1: Add/adjust integration assertion**
 
 In `worker-studio.test.tsx`, keep the existing `new-session-panel` coverage and
 add an assertion that the shared composer class renders:
@@ -737,7 +737,7 @@ expect(await screen.findByTestId('new-session-panel')).toBeTruthy()
 expect(document.querySelector('.session-composer')).toBeTruthy()
 ```
 
-- [ ] **Step 2: Run focused Web test and verify current state fails the new assertion**
+- [x] **Step 2: Run focused Web test and verify current state fails the new assertion**
 
 Run:
 
@@ -747,7 +747,7 @@ bun run --filter '@zonease/aiworker-web' test src/worker/__tests__/worker-studio
 
 Expected: fails until the generic composer uses shared Session Kit.
 
-- [ ] **Step 3: Convert `WorkspaceSessionComposer` to a thin adapter**
+- [x] **Step 3: Convert `WorkspaceSessionComposer` to a thin adapter**
 
 Replace local markup with:
 
@@ -790,7 +790,7 @@ export function WorkspaceSessionComposer(props: WorkspaceSessionComposerProps) {
 Keep the engine settings action as a `secondaryActions` or status action prop if
 the implementation adds that prop to `SessionComposerActionBar`.
 
-- [ ] **Step 4: Remove duplicated workspace composer styles**
+- [x] **Step 4: Remove duplicated workspace composer styles**
 
 Delete local CSS now owned by Session Kit from `apps/web/src/styles/workspace.css`,
 keeping only route-level width, title and hint styles:
@@ -806,7 +806,7 @@ keeping only route-level width, title and hint styles:
 }
 ```
 
-- [ ] **Step 5: Run focused test**
+- [x] **Step 5: Run focused test**
 
 Run:
 
@@ -826,7 +826,7 @@ shared composer.
 - Modify: `apps/web/src/worker/souls/hr/people-workbench/styles.css`
 - Modify: `apps/web/src/worker/__tests__/worker-studio.test.tsx`
 
-- [ ] **Step 1: Add HR shared composer assertions**
+- [x] **Step 1: Add HR shared composer assertions**
 
 In the HR test block after expanding Profile Workbench:
 
@@ -836,7 +836,7 @@ expect(profileTools.querySelector('.session-composer')).toBeTruthy()
 expect(profileTools.querySelector('.session-composer-action-bar')).toBeTruthy()
 ```
 
-- [ ] **Step 2: Run test and verify current state fails the shared class assertion**
+- [x] **Step 2: Run test and verify current state fails the shared class assertion**
 
 Run:
 
@@ -846,7 +846,7 @@ bun run --filter '@zonease/aiworker-web' test src/worker/__tests__/worker-studio
 
 Expected: fails until HR uses shared Session Kit.
 
-- [ ] **Step 3: Replace HR local composer internals**
+- [x] **Step 3: Replace HR local composer internals**
 
 Keep recent sessions and attachment state in HR, but render shared composer:
 
@@ -897,7 +897,7 @@ import {
 Use `createComposerAttachment(attachment.file)` in `handleSubmit` instead of the
 local `readAttachmentMaterial` helper.
 
-- [ ] **Step 4: Remove HR duplicated helpers and CSS**
+- [x] **Step 4: Remove HR duplicated helpers and CSS**
 
 Remove local `readAttachmentMaterial`, `isTextLikeFile`,
 `arrayBufferToBase64`, `fileKindLabel` and `formatFileSize`.
@@ -917,7 +917,7 @@ Remove CSS selectors now owned by shared Session Kit from the HR stylesheet:
 Keep panel layout CSS such as `.hr-profile-tools-panel`,
 `.hr-recent-sessions-section` and recent session cards.
 
-- [ ] **Step 5: Run focused HR tests**
+- [x] **Step 5: Run focused HR tests**
 
 Run:
 
@@ -936,7 +936,7 @@ Expected: pass.
 - Modify: `apps/web/src/styles/session-chat.css`
 - Modify: `apps/web/src/worker/__tests__/worker-studio.test.tsx`
 
-- [ ] **Step 1: Add session route assertions**
+- [x] **Step 1: Add session route assertions**
 
 Use existing session route tests or add a focused assertion:
 
@@ -949,7 +949,7 @@ expect(document.querySelector('.session-timeline')).toBeTruthy()
 expect(document.querySelector('.session-composer-compact')).toBeTruthy()
 ```
 
-- [ ] **Step 2: Run test and verify current state fails shared class assertion**
+- [x] **Step 2: Run test and verify current state fails shared class assertion**
 
 Run:
 
@@ -959,7 +959,7 @@ bun run --filter '@zonease/aiworker-web' test src/worker/__tests__/worker-studio
 
 Expected: fails until chat consumes shared timeline/composer.
 
-- [ ] **Step 3: Replace local event block helpers**
+- [x] **Step 3: Replace local event block helpers**
 
 Import shared helpers:
 
@@ -1000,7 +1000,7 @@ Render:
 
 Use compact `SessionComposer` for the bottom follow-up composer.
 
-- [ ] **Step 4: Remove obsolete local chat helpers and CSS**
+- [x] **Step 4: Remove obsolete local chat helpers and CSS**
 
 Remove local `WorkerAgentEvent`, `AssistantTurn`, `AgentEventBlock`,
 `EngineToolCard`, `coerceAgentEvent`, `compactAgentEvents`, `truncateLog`,
@@ -1010,7 +1010,7 @@ helpers cover them.
 Remove duplicated message/tool/status styles from `session-chat.css`, keeping
 only route-level header, log wrapper and jump-to-latest styles.
 
-- [ ] **Step 5: Run session tests**
+- [x] **Step 5: Run session tests**
 
 Run:
 
@@ -1029,7 +1029,7 @@ Expected: pass.
 - Modify: `apps/web/src/styles/artifact.css`
 - Modify: `apps/web/src/worker/__tests__/worker-studio.test.tsx`
 
-- [ ] **Step 1: Add shared detail assertion**
+- [x] **Step 1: Add shared detail assertion**
 
 In a session detail test:
 
@@ -1037,7 +1037,7 @@ In a session detail test:
 expect(document.querySelector('.session-detail-panel')).toBeTruthy()
 ```
 
-- [ ] **Step 2: Run test and verify current state fails the assertion**
+- [x] **Step 2: Run test and verify current state fails the assertion**
 
 Run:
 
@@ -1047,7 +1047,7 @@ bun run --filter '@zonease/aiworker-web' test src/worker/__tests__/worker-studio
 
 Expected: fails until `SessionDetail` uses `SessionDetailPanel`.
 
-- [ ] **Step 3: Wrap detail sections in `SessionDetailPanel`**
+- [x] **Step 3: Wrap detail sections in `SessionDetailPanel`**
 
 Keep `SessionDetail` as the Host-owned adapter and move layout into shared
 panel:
@@ -1107,13 +1107,13 @@ const artifactContent = (
 Extract tiny local rendering helpers such as `MemorySection` only if that keeps
 `session-detail.tsx` readable. Do not move lesson policy into shared code.
 
-- [ ] **Step 4: Remove obsolete artifact detail styles**
+- [x] **Step 4: Remove obsolete artifact detail styles**
 
 Remove local `.turn-composer` styles now covered by `SessionComposer`. Keep
 artifact rail sizing, summary, preview, memory row and event list styles that
 remain Host-owned.
 
-- [ ] **Step 5: Run session detail tests**
+- [x] **Step 5: Run session detail tests**
 
 Run:
 
@@ -1134,7 +1134,7 @@ Expected: pass.
 - Modify: `docs/plan/index.md`
 - Modify: `docs/changelog.md`
 
-- [ ] **Step 1: Run shared component gates**
+- [x] **Step 1: Run shared component gates**
 
 Run:
 
@@ -1145,7 +1145,7 @@ bun run --filter '@zonease/aiworker-component' typecheck
 
 Expected: both pass.
 
-- [ ] **Step 2: Run focused Web gates**
+- [x] **Step 2: Run focused Web gates**
 
 Run:
 
@@ -1158,7 +1158,7 @@ bun run --filter '@zonease/aiworker-web' build
 
 Expected: all pass.
 
-- [ ] **Step 3: Run governance and diff checks**
+- [x] **Step 3: Run governance and diff checks**
 
 Run:
 
@@ -1169,7 +1169,7 @@ git diff --check
 
 Expected: both pass.
 
-- [ ] **Step 4: Browser smoke**
+- [x] **Step 4: Browser smoke**
 
 Start the local dev stack with the repo's accepted command:
 
@@ -1185,7 +1185,7 @@ Open Worker Web and verify:
 - file attachment rows and proposal type select still work visually;
 - no text overlaps at desktop and narrow widths.
 
-- [ ] **Step 5: Run code-review-graph**
+- [x] **Step 5: Run code-review-graph**
 
 Run:
 
@@ -1197,13 +1197,13 @@ bun run crg:review
 Expected: review exits 0 or only reports understood residual warnings that are
 covered by focused tests.
 
-- [ ] **Step 6: Update PMA docs and changelog**
+- [x] **Step 6: Update PMA docs and changelog**
 
 Mark verification boxes in `docs/plan/PLAN-376.md`, summarize completion in
 `docs/task/FEAT-102.md`, change index markers from `[-]` to `[x]`, and update
 the changelog entry from `[progress]` to `[completed]`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 Run:
 
