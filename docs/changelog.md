@@ -1,5 +1,22 @@
 # AIWorker Changelog
 
+## 2026-05-19 [completed] BUG-142 / PLAN-381 — Session composer integrated field and signal width polish
+
+The shared `SessionComposer` now renders attachment previews, textarea,
+warnings and actions inside one field shell. Composer textareas no longer expose
+browser resize handles; the shared composer controls height and overflow so the
+surface reads as an authored product component instead of a raw form control.
+
+Clipboard file deduplication now ignores `lastModified` when merging
+`DataTransfer.files` and `DataTransfer.items`, preventing pasted images from
+being added twice. Session status/output signal rows now share the same width
+grammar as command/read-file activity rows while keeping the lower-noise visual
+tone.
+
+Verification covered focused component tests/typecheck, WorkerStudio
+integration tests/typecheck/lint/build, UI component governance, diff check,
+browser smoke and code-review-graph review.
+
 ## 2026-05-19 [completed] BUG-141 / PLAN-380 — Session composer attachment paste and card UX
 
 The shared `SessionComposer` now treats pasted clipboard files as first-class

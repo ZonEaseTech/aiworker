@@ -149,41 +149,43 @@ export function SessionComposer({
           )
         : null}
 
-      <SessionAttachmentList attachments={attachments} onRemoveAttachment={onRemoveAttachment} />
+      <div className="session-composer-field">
+        <SessionAttachmentList attachments={attachments} onRemoveAttachment={onRemoveAttachment} />
 
-      <Textarea
-        aria-label={ariaLabel}
-        className="session-composer-input"
-        disabled={disabled || submitting}
-        placeholder={placeholder}
-        value={value}
-        onChange={event => onValueChange(event.target.value)}
-        onPaste={event => handleAttachmentPaste(event, onAddAttachmentFiles)}
-      />
+        <Textarea
+          aria-label={ariaLabel}
+          className="session-composer-input"
+          disabled={disabled || submitting}
+          placeholder={placeholder}
+          value={value}
+          onChange={event => onValueChange(event.target.value)}
+          onPaste={event => handleAttachmentPaste(event, onAddAttachmentFiles)}
+        />
 
-      {error ? <div className="session-composer-warning" role="status">{error}</div> : null}
-      {disabledReason ? <div className="session-composer-warning" role="status">{disabledReason}</div> : null}
+        {error ? <div className="session-composer-warning" role="status">{error}</div> : null}
+        {disabledReason ? <div className="session-composer-warning" role="status">{disabledReason}</div> : null}
 
-      <SessionComposerActionBar
-        attachmentCount={attachments.length}
-        attachmentCountLabel={attachmentCountLabel}
-        attachmentTriggerLabel={attachmentTriggerLabel}
-        disabled={!canSubmit}
-        onAddAttachments={onAddAttachments}
-        onTemplateChange={onTemplateChange}
-        secondaryActions={secondaryActions}
-        selectedTemplateId={selectedTemplateId}
-        statusAction={statusAction}
-        submitAriaLabel={submitAriaLabel}
-        submitIcon={submitIcon}
-        submitting={submitting}
-        submitTitle={submitTitle}
-        templateClassName={templateClassName}
-        templateContentClassName={templateContentClassName}
-        templateLabel={templateLabel}
-        templateOptions={templateOptions}
-        usage={usage}
-      />
+        <SessionComposerActionBar
+          attachmentCount={attachments.length}
+          attachmentCountLabel={attachmentCountLabel}
+          attachmentTriggerLabel={attachmentTriggerLabel}
+          disabled={!canSubmit}
+          onAddAttachments={onAddAttachments}
+          onTemplateChange={onTemplateChange}
+          secondaryActions={secondaryActions}
+          selectedTemplateId={selectedTemplateId}
+          statusAction={statusAction}
+          submitAriaLabel={submitAriaLabel}
+          submitIcon={submitIcon}
+          submitting={submitting}
+          submitTitle={submitTitle}
+          templateClassName={templateClassName}
+          templateContentClassName={templateContentClassName}
+          templateLabel={templateLabel}
+          templateOptions={templateOptions}
+          usage={usage}
+        />
+      </div>
     </form>
   )
 }
@@ -212,7 +214,7 @@ function filesFromDataTransfer(dataTransfer: DataTransfer): File[] {
 }
 
 function fileKey(file: File): string {
-  return `${file.name}:${file.size}:${file.type}:${file.lastModified}`
+  return `${file.name}:${file.size}:${file.type}`
 }
 
 export function SessionComposerActionBar({

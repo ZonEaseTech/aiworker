@@ -200,6 +200,10 @@ describe('shared patterns', () => {
     expect(screen.getByRole('combobox', { name: 'Proposal type' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Generate profile draft' })).toBeTruthy()
     expect(screen.getByText('resume.md')).toBeTruthy()
+    const composerField = screen.getByRole('textbox', { name: 'Profile draft material' }).closest('.session-composer-field')
+    expect(composerField).toBeTruthy()
+    expect(composerField?.querySelector('.session-composer-attachment-list')).toBeTruthy()
+    expect(composerField?.querySelector('.session-composer-action-bar')).toBeTruthy()
     expect(screen.getByText('resume.md').closest('.session-composer-attachment-card')?.classList.contains('file')).toBe(true)
     expect(screen.getByRole('button', { name: 'Preview portrait.png' }).closest('.session-composer-attachment-card')?.classList.contains('image')).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: 'Preview portrait.png' }))
@@ -210,12 +214,13 @@ describe('shared patterns', () => {
 
   it('hands pasted files to the session composer consumer once', () => {
     const onAddAttachmentFiles = vi.fn()
-    const portrait = new File(['png'], 'portrait.png', { type: 'image/png' })
+    const portrait = new File(['png'], 'portrait.png', { lastModified: 1, type: 'image/png' })
+    const duplicatePortrait = new File(['png'], 'portrait.png', { lastModified: 2, type: 'image/png' })
     const source = new File(['name,role'], 'bom_export_2026.csv', { type: 'text/csv' })
     const clipboardData = {
       files: [portrait],
       items: [
-        { getAsFile: () => portrait, kind: 'file' },
+        { getAsFile: () => duplicatePortrait, kind: 'file' },
         { getAsFile: () => source, kind: 'file' },
         { getAsFile: () => null, kind: 'string' },
       ],

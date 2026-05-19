@@ -852,6 +852,29 @@
   min-height: 0;
 }
 
+.session-composer-field {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-panel);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  transition: border-color var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease);
+}
+
+.session-composer-field:focus-within {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-sm), 0 0 0 3px var(--accent-soft);
+}
+
+.session-composer-panel .session-composer-field {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .session-composer-heading {
   display: grid;
   min-width: 0;
@@ -877,14 +900,22 @@
 .session-composer-input {
   width: 100%;
   min-width: 0;
-  resize: vertical;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  resize: none;
+}
+
+.session-composer-input:focus-visible {
+  outline: none;
 }
 
 .session-composer-large .session-composer-input {
   min-height: 136px;
-  padding: 22px 24px 10px;
+  padding: 18px 20px 14px;
   border: 0;
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  border-radius: 0;
   background: transparent;
   font-size: 16px;
   line-height: 1.5;
@@ -895,12 +926,13 @@
 }
 
 .session-composer-large .session-composer-warning {
-  margin: 0 16px 12px;
+  margin: 0 14px 10px;
 }
 
 .session-composer-panel .session-composer-input {
   flex: 1 1 auto;
   min-height: 150px;
+  padding: 14px 16px;
 }
 
 .session-composer-file-input {
@@ -928,11 +960,11 @@
 }
 
 .session-composer-large .session-composer-attachment-list {
-  padding: 16px 18px 0;
+  padding: 14px 16px 0;
 }
 
 .session-composer-panel .session-composer-attachment-list {
-  padding-top: 2px;
+  padding: 12px 14px 0;
 }
 
 .session-composer-attachment-card {
@@ -1104,13 +1136,13 @@
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
-  padding-top: 8px;
+  padding: 10px 12px;
   border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-panel) 88%, var(--bg-subtle));
 }
 
 .session-composer-large .session-composer-action-bar {
-  padding: 0 16px 14px;
-  border-top: 0;
+  padding: 10px 14px 12px;
 }
 
 .session-composer-action-left,
@@ -1375,8 +1407,6 @@
 }
 
 .session-signal-row {
-  width: fit-content;
-  min-width: min(100%, 260px);
   background: color-mix(in srgb, var(--bg-panel) 72%, transparent);
 }
 
