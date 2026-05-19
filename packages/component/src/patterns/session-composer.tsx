@@ -1,6 +1,6 @@
-import type { FormEvent, ReactNode } from 'react'
+import type { ClipboardEvent, FormEvent, ReactNode } from 'react'
 
-import { Activity, Expand, File, Paperclip, SendHorizontal, X } from 'lucide-react'
+import { Activity, Expand, File as FileIcon, FileSpreadsheet, FileText, Paperclip, SendHorizontal, X } from 'lucide-react'
 import { useState } from 'react'
 import { IconButton, Select, Textarea } from '../primitives'
 import { cx } from '../utils/cx'
@@ -53,6 +53,7 @@ export interface SessionComposerProps {
   disabled?: boolean
   disabledReason?: ReactNode
   error?: ReactNode
+  onAddAttachmentFiles?: (files: File[]) => void
   onAddAttachments?: () => void
   onRemoveAttachment?: (id: string) => void
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
@@ -109,6 +110,7 @@ export function SessionComposer({
   disabled = false,
   disabledReason,
   error,
+  onAddAttachmentFiles,
   onAddAttachments,
   onRemoveAttachment,
   onSubmit,
@@ -147,6 +149,8 @@ export function SessionComposer({
           )
         : null}
 
+      <SessionAttachmentList attachments={attachments} onRemoveAttachment={onRemoveAttachment} />
+
       <Textarea
         aria-label={ariaLabel}
         className="session-composer-input"
@@ -154,9 +158,8 @@ export function SessionComposer({
         placeholder={placeholder}
         value={value}
         onChange={event => onValueChange(event.target.value)}
+        onPaste={event => handleAttachmentPaste(event, onAddAttachmentFiles)}
       />
-
-      <SessionAttachmentList attachments={attachments} onRemoveAttachment={onRemoveAttachment} />
 
       {error ? <div className="session-composer-warning" role="status">{error}</div> : null}
       {disabledReason ? <div className="session-composer-warning" role="status">{disabledReason}</div> : null}
@@ -183,6 +186,33 @@ export function SessionComposer({
       />
     </form>
   )
+}
+
+function handleAttachmentPaste(event: ClipboardEvent<HTMLTextAreaElement>, onAddAttachmentFiles?: (files: File[]) => void) {
+  if (!onAddAttachmentFiles)
+    return
+  const files = filesFromDataTransfer(event.clipboardData)
+  if (files.length === 0)
+    return
+  onAddAttachmentFiles(files)
+}
+
+function filesFromDataTransfer(dataTransfer: DataTransfer): File[] {
+  const files = new Map<string, File>()
+  for (const file of Array.from(dataTransfer.files))
+    files.set(fileKey(file), file)
+  for (const item of Array.from(dataTransfer.items)) {
+    if (item.kind !== 'file')
+      continue
+    const file = item.getAsFile()
+    if (file)
+      files.set(fileKey(file), file)
+  }
+  return [...files.values()]
+}
+
+function fileKey(file: File): string {
+  return `${file.name}:${file.size}:${file.type}:${file.lastModified}`
 }
 
 export function SessionComposerActionBar({
@@ -285,10 +315,12 @@ export function SessionAttachmentList({
   return (
     <>
       <div className="session-composer-attachment-list">
-        {attachments.map(attachment => (
-          <div key={attachment.id} className={cx('session-composer-attachment-row', attachment.mediaType === 'image' && 'image')}>
-            {attachment.mediaType === 'image' && attachment.previewUrl
-              ? (
+        {attachments.map((attachment) => {
+          const isImage = attachment.mediaType === 'image' && attachment.previewUrl
+          return (
+            <div key={attachment.id} className={cx('session-composer-attachment-card', isImage ? 'image' : 'file')}>
+              {isImage
+                ? (
                   <button
                     type="button"
                     className="session-composer-attachment-preview"
@@ -299,28 +331,35 @@ export function SessionAttachmentList({
                     <img src={attachment.previewUrl} alt={attachment.previewAlt ?? ''} />
                     <Expand aria-hidden="true" size={12} />
                   </button>
-                )
-              : (
+                  )
+                : (
                   <span className="session-composer-attachment-file-icon" aria-hidden="true">
-                    <File size={13} />
+                    {renderAttachmentFileIcon(attachment)}
                   </span>
-                )}
-            <span className="session-composer-attachment-kind">{attachment.kind}</span>
-            <span className="session-composer-attachment-name">{attachment.name}</span>
-            {attachment.size ? <span className="session-composer-attachment-size">{attachment.size}</span> : null}
-            {onRemoveAttachment
-              ? (
+                  )}
+              {isImage
+                ? null
+                : (
+                    <span className="session-composer-attachment-copy">
+                      <span className="session-composer-attachment-name">{attachment.name}</span>
+                      <span className="session-composer-attachment-kind">{attachment.kind}</span>
+                    </span>
+                  )}
+              {onRemoveAttachment
+                ? (
                   <IconButton
+                    className="session-composer-attachment-remove"
                     aria-label={attachment.removeLabel}
                     title={attachment.removeLabel}
                     onClick={() => onRemoveAttachment(attachment.id)}
                   >
                     <X aria-hidden="true" size={13} />
                   </IconButton>
-                )
-              : null}
-          </div>
-        ))}
+                  )
+                : null}
+            </div>
+          )
+        })}
       </div>
       {previewAttachment?.previewUrl
         ? (
@@ -348,6 +387,15 @@ export function SessionAttachmentList({
         : null}
     </>
   )
+}
+
+function renderAttachmentFileIcon(attachment: SessionComposerAttachmentItem) {
+  const kind = attachment.kind.toUpperCase()
+  if (['CSV', 'TSV', 'XLS', 'XLSX'].includes(kind))
+    return <FileSpreadsheet size={25} />
+  if (['MD', 'PDF', 'TXT', 'JSON', 'DOC', 'DOCX'].includes(kind))
+    return <FileText size={25} />
+  return <FileIcon size={25} />
 }
 
 function SessionComposerIconAction({ action }: { action: SessionComposerAction }) {

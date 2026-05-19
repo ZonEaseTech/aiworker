@@ -1142,7 +1142,14 @@
 }
 
 .hr-material-file-input {
-  display: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  opacity: 0;
+  pointer-events: none;
+  white-space: nowrap;
 }
 
 .hr-composer-template-select-content .studio-select-copy strong {

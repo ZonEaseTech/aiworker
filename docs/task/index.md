@@ -493,3 +493,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-102 Session Kit shared composer and session surfaces**](FEAT-102.md) `P0`
 - [x] [**FEAT-103 Session activity pipeline and composer media previews**](FEAT-103.md) `P0`
 - [x] [**BUG-140 Session composer and timeline review gaps**](BUG-140.md) `P0`
+- [x] [**BUG-141 Session composer attachment paste and card UX**](BUG-141.md) `P0`

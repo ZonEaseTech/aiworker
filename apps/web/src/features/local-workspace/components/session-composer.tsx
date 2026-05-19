@@ -69,13 +69,14 @@ export function WorkspaceSessionComposer({
     }
   }, [])
 
-  function handleFilesSelected(files: FileList | null) {
-    if (!files?.length)
+  function addAttachmentFiles(files: FileList | File[] | null) {
+    const selectedFiles = Array.from(files ?? [])
+    if (selectedFiles.length === 0)
       return
     setAttachmentError(null)
     setAttachments(current => [
       ...current,
-      ...Array.from(files).map((file, index) => ({
+      ...selectedFiles.map((file, index) => ({
         file,
         id: `${file.name}-${file.size}-${file.lastModified}-${current.length + index}`,
         previewUrl: isSessionAttachmentImage(file) ? URL.createObjectURL(file) : undefined,
@@ -83,6 +84,14 @@ export function WorkspaceSessionComposer({
     ])
     if (fileInputRef.current)
       fileInputRef.current.value = ''
+  }
+
+  function openFilePicker() {
+    const input = fileInputRef.current
+    if (!input)
+      return
+    input.value = ''
+    input.click()
   }
 
   function removeAttachment(id: string) {
@@ -131,12 +140,12 @@ export function WorkspaceSessionComposer({
       <h2 className="workspace-composer-title">{copy.workspace.createSessionPrompt(workspace.name)}</h2>
       <input
         ref={fileInputRef}
-        className="workspace-material-file-input"
+        className="session-composer-file-input workspace-material-file-input"
         type="file"
         multiple
         aria-hidden="true"
         tabIndex={-1}
-        onChange={event => handleFilesSelected(event.currentTarget.files)}
+        onChange={event => addAttachmentFiles(event.currentTarget.files)}
       />
       <SessionComposer
         ariaLabel={copy.create.businessContext}
@@ -158,7 +167,8 @@ export function WorkspaceSessionComposer({
         className="workspace-composer-box"
         disabledReason={engineReadiness.ready ? undefined : engineReadiness.detail}
         error={attachmentError}
-        onAddAttachments={() => fileInputRef.current?.click()}
+        onAddAttachmentFiles={addAttachmentFiles}
+        onAddAttachments={openFilePicker}
         onRemoveAttachment={removeAttachment}
         placeholder={copy.workspace.createSessionPlaceholder}
         selectedTemplateId={selectedTemplate.id}

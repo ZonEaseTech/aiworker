@@ -1,5 +1,21 @@
 # AIWorker Changelog
 
+## 2026-05-19 [completed] BUG-141 / PLAN-380 — Session composer attachment paste and card UX
+
+The shared `SessionComposer` now treats pasted clipboard files as first-class
+attachments, deduplicating `DataTransfer.files` and `DataTransfer.items` before
+passing files to the consumer-owned material pipeline.
+
+Attachments now render inside the composer body before the text input: images
+use preview tiles with the existing lightbox behavior, and files use compact
+type cards with stable remove controls. HR profile, workspace new-session and
+session follow-up composers all consume the same shared behavior and clear file
+input values before opening the picker so repeat same-file selection works.
+
+Verification covered focused component tests/typecheck, WorkerStudio
+integration tests/typecheck/lint/build, UI component governance, diff check,
+browser smoke and code-review-graph review.
+
 ## 2026-05-19 [completed] BUG-140 / PLAN-379 — Session composer and timeline review gaps
 
 Session Kit now collapses Codex CLI status/output signals into compact timeline

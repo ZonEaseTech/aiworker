@@ -79,13 +79,14 @@ export function SessionTurnComposer({
     size: formatSessionAttachmentSize(attachment.file.size),
   })), [attachments, copy])
 
-  function handleFilesSelected(files: FileList | null) {
-    if (!files?.length)
+  function addAttachmentFiles(files: FileList | File[] | null) {
+    const selectedFiles = Array.from(files ?? [])
+    if (selectedFiles.length === 0)
       return
     setAttachmentError(null)
     setAttachments(current => [
       ...current,
-      ...Array.from(files).map((file, index) => ({
+      ...selectedFiles.map((file, index) => ({
         file,
         id: `${file.name}-${file.size}-${file.lastModified}-${current.length + index}`,
         previewUrl: isSessionAttachmentImage(file) ? URL.createObjectURL(file) : undefined,
@@ -93,6 +94,14 @@ export function SessionTurnComposer({
     ])
     if (fileInputRef.current)
       fileInputRef.current.value = ''
+  }
+
+  function openFilePicker() {
+    const input = fileInputRef.current
+    if (!input)
+      return
+    input.value = ''
+    input.click()
   }
 
   function removeAttachment(id: string) {
@@ -137,12 +146,12 @@ export function SessionTurnComposer({
     <>
       <input
         ref={fileInputRef}
+        className="session-composer-file-input"
         type="file"
         multiple
-        hidden
         aria-hidden="true"
         tabIndex={-1}
-        onChange={event => handleFilesSelected(event.currentTarget.files)}
+        onChange={event => addAttachmentFiles(event.currentTarget.files)}
       />
       <SessionComposer
         ariaLabel={copy.workspace.followUpInput}
@@ -154,7 +163,8 @@ export function SessionTurnComposer({
         disabled={!engineReadiness.ready}
         disabledReason={engineReadiness.ready ? undefined : engineReadiness.detail}
         error={attachmentError}
-        onAddAttachments={() => fileInputRef.current?.click()}
+        onAddAttachmentFiles={addAttachmentFiles}
+        onAddAttachments={openFilePicker}
         onRemoveAttachment={removeAttachment}
         placeholder={copy.workspace.followUpPlaceholder}
         submitAriaLabel={submitting ? copy.workspace.sendingTurn : copy.workspace.sendTurn}

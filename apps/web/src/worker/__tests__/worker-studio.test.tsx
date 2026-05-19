@@ -1945,11 +1945,23 @@ describe('worker studio', () => {
     const profileTools = expandProfileTools()
     const fileInput = profileTools.querySelector('input.hr-material-file-input') as HTMLInputElement
     expect(fileInput).toBeTruthy()
+    const fileInputClick = vi.spyOn(fileInput, 'click').mockImplementation(() => {})
+    Object.defineProperty(fileInput, 'value', { configurable: true, value: 'stale-selection', writable: true })
+    fireEvent.click(within(profileTools).getByRole('button', { name: 'Open candidate material file picker' }))
+    expect(fileInput.value).toBe('')
+    expect(fileInputClick).toHaveBeenCalledTimes(1)
+    fileInputClick.mockRestore()
     const resume = new File(['resume evidence'], 'ada-resume.txt', { type: 'text/plain' })
     const notes = new File(['interview notes'], 'round-one.md', { type: 'text/markdown' })
 
     await act(async () => {
-      fireEvent.change(fileInput, { target: { files: [resume, notes] } })
+      fireEvent.change(fileInput, { target: { files: [resume] } })
+      fireEvent.paste(within(profileTools).getByLabelText('Candidate material'), {
+        clipboardData: {
+          files: [notes],
+          items: [{ getAsFile: () => notes, kind: 'file' }],
+        },
+      })
     })
 
     expect(within(profileTools).getByText('ada-resume.txt')).toBeTruthy()
