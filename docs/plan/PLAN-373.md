@@ -1,6 +1,6 @@
 # PLAN-373 CLI 0.18.3 patch release
 
-- **status**: implementing
+- **status**: completed
 - **owner**: codex
 - **createdAt**: 2026-05-19
 - **approvedAt**: 2026-05-19
@@ -68,18 +68,28 @@ Execution steps:
 - [x] `bun run --filter '@zonease/aiworker-cli' smoke:dist-release`
 - [x] `bun run crg:update`
 - [x] `bun run crg:review`
-- [ ] GitHub Actions release workflow.
-- [ ] GitHub Actions main lint workflow.
-- [ ] `npm view @zonease/aiworker-cli version dist-tags --json`
-- [ ] `bunx @zonease/aiworker-cli@0.18.3 --version`
-- [ ] `gh release view v0.18.3 --repo ZonEaseTech/aiworker --json tagName,isDraft,isPrerelease,assets,url,publishedAt,targetCommitish`
-- [ ] Published-package smoke.
-- [ ] `git status --short --branch`
+- [x] GitHub Actions release workflow.
+- [x] GitHub Actions main lint workflow.
+- [x] `npm view @zonease/aiworker-cli version dist-tags --json`
+- [x] `bunx @zonease/aiworker-cli@0.18.3 --version`
+- [x] `gh release view v0.18.3 --repo ZonEaseTech/aiworker --json tagName,isDraft,isPrerelease,assets,url,publishedAt,targetCommitish`
+- [x] Published-package smoke.
+- [x] `git status --short --branch`
 
 ## Annotations
 
 - 2026-05-19 16:57 CST：开始 `0.18.3` patch release prep。
-- 2026-05-19 17:23 CST：本地 release gates 全部通过。`npm pack --dry-run`
+- 2026-05-19 17:02 CST：本地 release gates 全部通过。`npm pack --dry-run`
   生成 `zonease-aiworker-cli-0.18.3.tgz`，dist CLI 报告
   `aiworker/0.18.3`，dist release smoke 证明 Host Web/API、官方 HR/QA app
   bootstrap 与 mounted actions 正常；code-review-graph 风险分数 `0.00`。
+- 2026-05-19 17:04 CST：release workflow `26087276218` 成功，GitHub Release
+  `v0.18.3` published with 8 assets, and npm latest resolves to `0.18.3`.
+- 2026-05-19 17:06 CST：main lint run `26087262983` exposed a stale Worker Web
+  bundle-size baseline. Updated reviewed baseline to 1,359,691 bytes /
+  607,432 gzip bytes and verified main lint run `26087432953` passed, including
+  Web bundle size report.
+- 2026-05-19 17:07 CST：published-package smoke passed against
+  `bunx @zonease/aiworker-cli@0.18.3`, covering daemon health, runtimeVersion
+  `0.18.3`, Worker Web asset/favicon serving, official HR/QA app bootstrap,
+  HR template listing, and HR/QA mounted action invocation.

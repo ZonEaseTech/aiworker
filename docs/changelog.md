@@ -1,10 +1,20 @@
 # AIWorker Changelog
 
-## 2026-05-19 16:57 [progress] REL-049 / PLAN-373 — CLI 0.18.3 patch release
+## 2026-05-19 [completed] REL-049 / PLAN-373 — CLI 0.18.3 patch release
 
-Started `@zonease/aiworker-cli@0.18.3` patch release to publish the PNG brand
-asset fix, shared UI component governance gate, and HR profile composer right
-panel refinement.
+Published `@zonease/aiworker-cli@0.18.3` to carry the PNG brand asset fix,
+shared UI component governance gate, and HR profile composer right panel
+refinement.
+
+Release evidence: local `check` / `test` / `build` / mounted-surface smoke /
+dist release smoke / code-review-graph all passed; tag release workflow
+`26087276218` passed; npm latest now resolves to `0.18.3`; GitHub Release
+`v0.18.3` is a formal release with four binary tarballs and four checksum
+assets. The first main lint run caught a stale Worker Web bundle-size baseline;
+after updating the reviewed baseline, main lint run `26087432953` passed,
+including Web bundle size report. Published-package smoke with
+`bunx @zonease/aiworker-cli@0.18.3` started Host Web/API, loaded Worker Web,
+bootstrapped official HR/QA Soul Apps, and invoked HR/QA mounted actions.
 
 ## 2026-05-19 [completed] BUG-138 / PLAN-371 — HR profile composer panel refinement
 
