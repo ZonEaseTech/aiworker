@@ -484,3 +484,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**FEAT-099 Host/Soul shared component library**](FEAT-099.md) `P0`
 - [x] [**REL-047 发布 aiworker CLI 0.18.1**](REL-047.md) `P0`
 - [x] [**FEAT-100 HR profile composer flow**](FEAT-100.md) `P0`
+- [-] [**REL-048 发布 aiworker CLI 0.18.2**](REL-048.md) `P0`

@@ -1,5 +1,11 @@
 # AIWorker Changelog
 
+## 2026-05-19 15:46 [progress] REL-048 / PLAN-370 — CLI 0.18.2 patch release
+
+Started `@zonease/aiworker-cli@0.18.2` patch release after `FEAT-100 /
+PLAN-369`, carrying the HR profile composer flow and icon-only composer send
+button refinement.
+
 ## 2026-05-19 15:22 [progress] FEAT-100 / PLAN-369 — HR profile composer flow
 
 Landed the HR profile composer flow. The HR People Workbench right panel now
