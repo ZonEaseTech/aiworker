@@ -94,10 +94,15 @@ cannot be determined safely.
    switch to `aiworker-soul-app-dev` or design a protocol/broker surface.
 3. For non-trivial work, follow PMA: investigate, proposal, approval,
    implementation, verification and PMA/changelog sync.
-4. For frontend Host work, use `pma-web` after PMA approval.
-5. For backend/runtime/CLI/storage work, use `pma-bun` after PMA approval.
-6. For reviews or audits, use `pma-cr`.
-7. Keep edits minimal and aligned with existing package boundaries.
+4. For Host Web or shared UI work, add a `Component Library Preflight` section
+   to the proposal before implementation. It must name checked
+   `packages/component` primitives/patterns, state why app-local UI is still
+   needed, and record reusable gaps in
+   `packages/component/src/catalog.ts` `componentMigrationQueue`.
+5. For frontend Host work, use `pma-web` after PMA approval.
+6. For backend/runtime/CLI/storage work, use `pma-bun` after PMA approval.
+7. For reviews or audits, use `pma-cr`.
+8. Keep edits minimal and aligned with existing package boundaries.
 
 ## Contract Sync Rules
 
@@ -122,6 +127,7 @@ Pick the smallest command set that proves the touched Host surface:
 | --- | --- |
 | API/local daemon | `bun run --filter '@zonease/aiworker-api' test src/modes/worker.local.test.ts` and API typecheck when types changed |
 | Web shell/settings/workbench | `bun run --filter '@zonease/aiworker-web' test`; build or browser smoke when visible UI changed |
+| Web UI local style or component work | `bun run ui:check` plus focused Web test/build when visible behavior changed |
 | CLI lifecycle | `bun run --filter '@zonease/aiworker-cli' test` and `build:bundle` when command behavior changed |
 | Core runtime/registry/broker | `bun run --filter '@zonease/aiworker-core' test` |
 | Shared protocol/schema | `bun run --filter '@zonease/aiworker-shared' test` and downstream focused tests |
@@ -146,6 +152,8 @@ formatting changes, and state that skip explicitly.
 - State whether any Soul App protocol or app-owned surface is involved.
 - Confirm Host did not infer domain meaning or import Soul App internals.
 - Confirm shared contracts, docs and tests stayed aligned.
+- For Web UI work, summarize the component-library preflight and whether any
+  reusable gap was added to `componentMigrationQueue`.
 - Record validation commands and results.
 - Sync PMA docs/changelog when project-level impact exists.
 - Run code-review-graph for code changes or explicitly skip it for

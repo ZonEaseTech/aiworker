@@ -8113,3 +8113,25 @@ typecheck, Web typecheck/lint/build, `git diff --check`, browser smoke against
 the local daemon, and code-review-graph update/review. The build still reports
 the existing large chunk warning; `crg:review` exited 0 but kept advisory static
 test-gap labels despite the new direct tests.
+
+## 2026-05-19 16:40 [progress]
+
+FEAT-101 / PLAN-372 turned the shared Host/Soul component package into an
+active development guardrail. Non-trivial Host Web and Soul App UI proposals now
+must include a `Component Library Preflight`, `packages/component/src/catalog.ts`
+exports a discoverable `componentGovernanceRules` entry, and root `lint` now
+runs `bun run ui:check`.
+
+The new `scripts/check-web-ui-components.ts` scans changed Web UI files for
+obvious app-local button/card/chip clones, raw native select/dialog usage, and
+unscoped shared selector overrides. Files can pass by importing
+`@zonease/aiworker-component`, being tracked in `componentMigrationQueue`, or
+documenting an explicit `@aiworker-component-local-ok` exception.
+
+Verification: `bun scripts/check-web-ui-components.ts`, `bun run ui:check`,
+`bun run docs:check`, scripts typecheck, component typecheck, focused component
+catalog test, root `bun run lint`, `git diff --check`, `bun run crg:update`,
+and `bun run crg:review`. The graph review exited 0 with risk score `0.40` and
+kept advisory test-gap labels for unrelated in-progress worktree symbols plus
+the catalog rule; direct catalog test coverage was added for the governance
+rule.

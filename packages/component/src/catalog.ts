@@ -28,6 +28,31 @@ export interface ComponentMigrationCandidate {
   target: string
 }
 
+export interface ComponentGovernanceRule {
+  appliesTo: string[]
+  description: string
+  id: string
+  requiredEvidence: string[]
+}
+
+export const componentGovernanceRules: ComponentGovernanceRule[] = [
+  {
+    appliesTo: [
+      'apps/web',
+      'apps/aiworker-*',
+      'packages/component',
+    ],
+    description: 'Non-trivial Host Web or Soul App UI work must check the shared component library before adding app-local UI.',
+    id: 'component-library-preflight',
+    requiredEvidence: [
+      'checked packages/component primitives or patterns',
+      'reason app-local UI is still needed',
+      'componentMigrationQueue entry for reusable gaps',
+      'bun run ui:check for local style or component changes',
+    ],
+  },
+]
+
 export const componentCatalog: ComponentCatalogItem[] = [
   {
     description: 'Package-owned shared style entrypoint.',

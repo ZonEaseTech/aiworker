@@ -116,6 +116,9 @@ agent runtime 平台。
   组件库尚无对应 primitive/pattern、该 UI 确实是 Soul App 领域语义，或属于临时迁移步骤。
   可复用缺口必须补进 `packages/component` 或登记到组件 catalog 的 migration queue；不要默认
   在 app 内手搓样式。
+- 非平凡 UI proposal 必须包含 `Component Library Preflight`：列出已检查的
+  `packages/component` primitive/pattern、说明为什么不能直接复用、以及是否需要补组件库或登记
+  `componentMigrationQueue`。若新增或修改 app-local CSS/组件，最终验证必须跑 `bun run ui:check`。
 - 交互组件使用成熟 headless UI；不要手写 focus trap、scroll lock、ARIA 或键盘导航。
 - 视觉值来自根目录 `DESIGN.md`，通过 Tailwind CSS v4 `@theme` 接入；不要新增 hex 字面量或
   arbitrary value。
@@ -129,6 +132,7 @@ agent runtime 平台。
 - Lint：`bun run lint`
 - 测试：`bun run test`
 - 常规 gate：`bun run check`
+- UI 组件治理检查：`bun run ui:check`
 - 构建：`bun run build`
 - Web 构建：`bun run --filter '@zonease/aiworker-web' build`
 - API 构建：`bun run --filter '@zonease/aiworker-api' build`

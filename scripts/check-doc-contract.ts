@@ -58,6 +58,8 @@ requireIncludes('AGENTS.md', [
   'Constraint Registry',
   'aiworker-host-dev',
   'aiworker-soul-app-dev',
+  'Component Library Preflight',
+  'bun run ui:check',
   '审计轨迹',
 ])
 
@@ -97,6 +99,8 @@ requireIncludes('.agents/skills/aiworker-host-dev/SKILL.md', [
   '`DATA-001`',
   '`BROKER-001`',
   '`DOC-001`',
+  'Component Library Preflight',
+  'componentMigrationQueue',
 ])
 
 requireIncludes('.agents/skills/aiworker-soul-app-dev/SKILL.md', [
@@ -120,6 +124,10 @@ for (const file of activeDocs) {
 const packageJson = JSON.parse(read('package.json')) as { scripts?: Record<string, string> }
 if (packageJson.scripts?.['docs:check'] !== 'bun scripts/check-doc-contract.ts')
   issues.push({ file: 'package.json', message: 'docs:check must run scripts/check-doc-contract.ts' })
+if (packageJson.scripts?.['ui:check'] !== 'bun scripts/check-web-ui-components.ts')
+  issues.push({ file: 'package.json', message: 'ui:check must run scripts/check-web-ui-components.ts' })
+if (!packageJson.scripts?.lint?.includes('bun run ui:check'))
+  issues.push({ file: 'package.json', message: 'lint must include bun run ui:check' })
 if (!packageJson.scripts?.lint?.includes('bun run docs:check'))
   issues.push({ file: 'package.json', message: 'lint must include bun run docs:check' })
 
