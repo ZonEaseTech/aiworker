@@ -194,10 +194,12 @@ export function HrProfileToolsPanel({
 
           <Select
             className="hr-composer-template-select"
+            contentClassName="hr-composer-template-select-content"
             ariaLabel={labels.proposalTypeSelectLabel}
             label={labels.proposalTypeSelectLabel}
             value={selectedTemplate.id}
             onChange={onTemplateChange}
+            side="top"
             options={templates.map((template) => {
               const templateCopy = displayTemplate(template, locale)
               return {

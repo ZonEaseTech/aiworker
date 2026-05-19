@@ -402,3 +402,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-371 HR profile composer panel refinement**](PLAN-371.md) `2026-05-19`
 - [x] [**PLAN-372 Shared UI component governance gate**](PLAN-372.md) `2026-05-19`
 - [x] [**PLAN-373 CLI 0.18.3 patch release**](PLAN-373.md) `2026-05-19`
+- [x] [**PLAN-374 HR profile composer select dropdown visual split**](PLAN-374.md) `2026-05-19`

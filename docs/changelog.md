@@ -1,5 +1,21 @@
 # AIWorker Changelog
 
+## 2026-05-19 [completed] BUG-139 / PLAN-374 — HR profile composer select dropdown visual split
+
+Fixed the HR profile composer proposal type dropdown so the opened menu reads
+as one connected compact control with the select trigger instead of a detached
+portal panel. The shared `Select` primitive now supports opt-in popper `side`
+and portal `contentClassName` hooks, while shared CSS handles top-opening menu
+radii and portal radius fallback.
+
+The HR People Workbench pins this bottom action-bar select to open upward and
+uses an HR-owned compact content class for mono 13px option labels and 38px
+rows. Browser smoke confirmed the trigger remains 38px before and after open,
+the menu opens with `data-side="top"`, and the trigger/menu edges connect.
+Verification covered shared component tests/typecheck, focused WorkerStudio
+tests, Web typecheck/lint/build, UI component governance, docs contract, diff
+check, browser smoke, and code-review-graph update/review.
+
 ## 2026-05-19 [completed] REL-049 / PLAN-373 — CLI 0.18.3 patch release
 
 Published `@zonease/aiworker-cli@0.18.3` to carry the PNG brand asset fix,

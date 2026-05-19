@@ -1281,12 +1281,24 @@
   background: var(--bg-panel);
 }
 
-.hr-composer-template-select .studio-select-copy strong {
+.hr-composer-template-select .studio-select-copy strong,
+.hr-composer-template-select-content .studio-select-copy strong {
+  font-family: var(--mono);
   font-size: 13px;
 }
 
-.hr-composer-template-select .studio-select-copy small {
+.hr-composer-template-select .studio-select-copy small,
+.hr-composer-template-select-content .studio-select-copy small {
   display: none;
+}
+
+.hr-composer-template-select-content {
+  padding: 5px;
+}
+
+.hr-composer-template-select-content .studio-select-option {
+  min-height: 38px;
+  padding: 7px 9px;
 }
 
 .hr-task-composer button,

@@ -6,6 +6,8 @@ import { useState } from 'react'
 
 import { cx } from '../utils/cx'
 
+export type SelectSide = 'bottom' | 'left' | 'right' | 'top'
+
 export interface SelectOption {
   description?: ReactNode
   label: ReactNode
@@ -15,18 +17,22 @@ export interface SelectOption {
 export interface SelectProps {
   ariaLabel: string
   className?: string
+  contentClassName?: string
   label: string
   onChange: (value: string) => void
   options: SelectOption[]
+  side?: SelectSide
   value: string
 }
 
 export function Select({
   ariaLabel,
   className,
+  contentClassName,
   label,
   onChange,
   options,
+  side,
   value,
 }: SelectProps) {
   const [open, setOpen] = useState(false)
@@ -35,7 +41,7 @@ export function Select({
 
   return (
     <SelectPrimitive.Root value={value} open={open} onOpenChange={setOpen} onValueChange={onChange}>
-      <div className={cx('studio-select', open && 'open', className)}>
+      <div className={cx('studio-select', open && 'open', side && `side-${side}`, className)}>
         <SelectPrimitive.Trigger className="studio-select-trigger" aria-label={ariaLabel}>
           <span className="sr-only">{label}</span>
           <span className="studio-select-copy">
@@ -48,10 +54,11 @@ export function Select({
         </SelectPrimitive.Trigger>
         <SelectPrimitive.Portal>
           <SelectPrimitive.Content
-            className="studio-select-list"
+            className={cx('studio-select-list', contentClassName)}
             align="start"
             aria-label={label}
             position="popper"
+            side={side}
             sideOffset={-1}
           >
             <SelectPrimitive.Viewport className="studio-select-viewport">

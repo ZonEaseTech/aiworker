@@ -488,3 +488,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-138 HR profile composer panel refinement**](BUG-138.md) `P0`
 - [x] [**FEAT-101 Shared UI component governance gate**](FEAT-101.md) `P1`
 - [x] [**REL-049 发布 aiworker CLI 0.18.3**](REL-049.md) `P0`
+- [x] [**BUG-139 HR profile composer select dropdown visual split**](BUG-139.md) `P1`

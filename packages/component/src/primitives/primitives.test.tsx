@@ -66,6 +66,30 @@ describe('shared primitives', () => {
     expect(onChange).toHaveBeenCalledWith('b')
   })
 
+  it('passes popper side and content class to select portal content', () => {
+    render(
+      <Select
+        ariaLabel="Mode"
+        label="Mode"
+        value="a"
+        side="top"
+        contentClassName="compact-select-content"
+        onChange={vi.fn()}
+        options={[
+          { label: 'A', value: 'a' },
+          { label: 'B', value: 'b' },
+        ]}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Mode' }))
+
+    const option = screen.getByRole('option', { name: 'B' })
+    const content = option.closest('.studio-select-list')
+    expect(content?.classList.contains('compact-select-content')).toBe(true)
+    expect(content?.getAttribute('data-side')).toBe('top')
+  })
+
   it('toggles switch', () => {
     const onCheckedChange = vi.fn()
 
