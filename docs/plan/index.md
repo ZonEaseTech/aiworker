@@ -401,3 +401,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-370 CLI 0.18.2 patch release**](PLAN-370.md) `2026-05-19`
 - [x] [**PLAN-371 HR profile composer panel refinement**](PLAN-371.md) `2026-05-19`
 - [x] [**PLAN-372 Shared UI component governance gate**](PLAN-372.md) `2026-05-19`
+- [-] [**PLAN-373 CLI 0.18.3 patch release**](PLAN-373.md) `2026-05-19`

@@ -1,5 +1,11 @@
 # AIWorker Changelog
 
+## 2026-05-19 16:57 [progress] REL-049 / PLAN-373 — CLI 0.18.3 patch release
+
+Started `@zonease/aiworker-cli@0.18.3` patch release to publish the PNG brand
+asset fix, shared UI component governance gate, and HR profile composer right
+panel refinement.
+
 ## 2026-05-19 [completed] BUG-138 / PLAN-371 — HR profile composer panel refinement
 
 Refined the HR People Workbench right panel after visual review. Recent
