@@ -126,7 +126,7 @@ export function SessionTurnComposer({
     try {
       setAttachmentError(null)
       const materials = await Promise.all(attachments.map(attachment => createComposerAttachment(attachment.file)))
-      await onSubmit(event, {
+      const submitResult = onSubmit(event, {
         input: value,
         materialCopy: {
           binaryTitle: 'Uploaded Source Material',
@@ -136,6 +136,7 @@ export function SessionTurnComposer({
         materials,
       })
       clearAttachments()
+      await submitResult
     }
     catch {
       setAttachmentError(copy.workspace.materialReadError)

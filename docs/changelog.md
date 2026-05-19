@@ -1,5 +1,20 @@
 # AIWorker Changelog
 
+## 2026-05-19 [completed] BUG-143 / PLAN-382 — Session composer busy state, attachment clearing and usage meter
+
+The session follow-up composer now treats a running turn as a busy state, so
+the send button switches to a loading spinner with `aria-busy` instead of only
+becoming disabled. Submitted file/image attachments clear after material reads
+succeed and the streaming follow-up turn begins.
+
+Usage now renders as a compact circular token meter immediately before the send
+button. The visible value uses explicit `in/out` wording, while the accessible
+label and title retain full input/output token counts.
+
+Verification covered focused component tests/typecheck, WorkerStudio
+integration tests/typecheck/lint/build, UI component governance, diff check,
+browser smoke and code-review-graph review.
+
 ## 2026-05-19 [completed] BUG-142 / PLAN-381 — Session composer integrated field and signal width polish
 
 The shared `SessionComposer` now renders attachment previews, textarea,

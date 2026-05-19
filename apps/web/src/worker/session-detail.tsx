@@ -108,12 +108,14 @@ export function SessionDetail({
   const usage = useMemo(() => summarizeSessionUsage(normalizedEvents), [normalizedEvents])
   const composerUsage = usage && (usage.inputTokens != null || usage.outputTokens != null)
     ? {
-        ariaLabel: `Usage ${formatUsagePair(usage.inputTokens, usage.outputTokens)}`,
+        ariaLabel: formatUsageLabel(usage.inputTokens, usage.outputTokens),
         label: 'Usage',
-        title: `Usage ${formatUsagePair(usage.inputTokens, usage.outputTokens)}`,
-        value: formatUsagePair(usage.inputTokens, usage.outputTokens),
+        meterValue: usageMeterValue(usage.inputTokens, usage.outputTokens),
+        title: formatUsageLabel(usage.inputTokens, usage.outputTokens),
+        value: formatUsageValue(usage.inputTokens, usage.outputTokens),
       }
     : undefined
+  const composerBusy = turnSubmitting || turns.some(turn => turn.status === 'running')
 
   if (collapsed) {
     return (
@@ -161,7 +163,7 @@ export function SessionDetail({
                       copy={copy}
                       description={engineReadiness.detail}
                       engineReadiness={engineReadiness}
-                      submitting={turnSubmitting}
+                      submitting={composerBusy}
                       title={copy.workspace.continueSession}
                       usage={composerUsage}
                       value={turnInput}
@@ -326,10 +328,31 @@ export function SessionDetail({
   )
 }
 
-function formatUsagePair(inputTokens?: number, outputTokens?: number): string {
-  return [inputTokens, outputTokens]
-    .map(value => value == null ? '0' : String(value))
-    .join(' / ')
+function formatUsageLabel(inputTokens?: number, outputTokens?: number): string {
+  return `Usage ${formatTokenCount(inputTokens)} input tokens, ${formatTokenCount(outputTokens)} output tokens`
+}
+
+function formatUsageValue(inputTokens?: number, outputTokens?: number): string {
+  return `${formatCompactTokenCount(inputTokens)} in / ${formatCompactTokenCount(outputTokens)} out`
+}
+
+function formatTokenCount(value?: number): string {
+  return value == null ? '0' : value.toLocaleString('en-US')
+}
+
+function formatCompactTokenCount(value?: number): string {
+  if (value == null)
+    return '0'
+  if (value >= 1000)
+    return `${Number((value / 1000).toFixed(value >= 10000 ? 0 : 1))}K`
+  return String(value)
+}
+
+function usageMeterValue(inputTokens?: number, outputTokens?: number): number | undefined {
+  const input = inputTokens ?? 0
+  const output = outputTokens ?? 0
+  const total = input + output
+  return total > 0 ? input / total : undefined
 }
 
 function reviewItems(review: LocalReview): string[] {

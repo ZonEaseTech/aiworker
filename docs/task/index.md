@@ -495,3 +495,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-140 Session composer and timeline review gaps**](BUG-140.md) `P0`
 - [x] [**BUG-141 Session composer attachment paste and card UX**](BUG-141.md) `P0`
 - [x] [**BUG-142 Session composer integrated field and signal width polish**](BUG-142.md) `P0`
+- [x] [**BUG-143 Session composer busy state, attachment clearing and usage meter**](BUG-143.md) `P0`

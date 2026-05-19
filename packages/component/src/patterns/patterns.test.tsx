@@ -184,7 +184,7 @@ describe('shared patterns', () => {
         templateLabel="Proposal type"
         templateOptions={[{ label: 'Candidate profile proposal', value: 'profile-update-proposal' }]}
         title="Complete Hiring Workspace candidate profile"
-        usage={{ ariaLabel: 'Usage 120 / 15', label: 'Usage', value: '120 / 15' }}
+        usage={{ ariaLabel: 'Usage 120 input tokens, 15 output tokens', label: 'Usage', meterValue: 0.89, value: '120 in / 15 out' }}
         value="Summarize new evidence"
         onAddAttachments={vi.fn()}
         onRemoveAttachment={vi.fn()}
@@ -196,7 +196,8 @@ describe('shared patterns', () => {
 
     expect(screen.getByRole('textbox', { name: 'Profile draft material' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Add candidate materials' })).toBeTruthy()
-    expect(screen.getByLabelText('Usage 120 / 15')).toBeTruthy()
+    expect(screen.getByLabelText('Usage 120 input tokens, 15 output tokens')).toBeTruthy()
+    expect(screen.getByText('120 in / 15 out').closest('.session-composer-action-right')).toBeTruthy()
     expect(screen.getByRole('combobox', { name: 'Proposal type' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Generate profile draft' })).toBeTruthy()
     expect(screen.getByText('resume.md')).toBeTruthy()

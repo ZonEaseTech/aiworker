@@ -1284,6 +1284,8 @@ describe('worker studio', () => {
     expect((await screen.findAllByText('Agent is generating')).length).toBeGreaterThan(0)
     expect(screen.getAllByText('The agent is generating a reviewable artifact. Streamed events will keep updating.').length).toBeGreaterThan(0)
     expect(screen.getByText('The preview will unlock after the first artifact enters the index.')).toBeTruthy()
+    const workerComposer = document.querySelector('.worker-composer') as HTMLElement
+    expect(within(workerComposer).getByRole('button', { name: /Sending turn/ }).getAttribute('aria-busy')).toBe('true')
   })
 
   it('distinguishes written artifact files from indexed artifacts', async () => {
@@ -2066,6 +2068,7 @@ describe('worker studio', () => {
     expect(String(lastMessageRequestBody?.input)).toContain('Use the attached source.')
     expect(String(lastMessageRequestBody?.input)).toContain('Attached source material:')
     expect(String(lastMessageRequestBody?.input)).toContain('evidence/uploads/')
+    expect(within(workerComposer).queryByText('source-notes.txt')).toBeNull()
     const metadata = lastMessageRequestBody?.metadata as { attachedMaterials?: Array<{ name: string, path: string }>, materialCount?: number }
     expect(metadata.materialCount).toBe(1)
     expect(metadata.attachedMaterials?.[0]?.name).toBe('source-notes.txt')
@@ -2154,7 +2157,8 @@ describe('worker studio', () => {
     expect(workerComposer).toBeTruthy()
     expect(within(workerComposer).queryByRole('button', { name: 'Open settings' })).toBeNull()
     expect(within(workerComposer).getByRole('button', { name: 'Add source material' })).toBeTruthy()
-    expect(within(workerComposer).getByLabelText('Usage 175170 / 3446')).toBeTruthy()
+    expect(within(workerComposer).getByLabelText('Usage 175,170 input tokens, 3,446 output tokens')).toBeTruthy()
+    expect(within(workerComposer).getByText('175K in / 3.4K out').closest('.session-composer-action-right')).toBeTruthy()
     const chatLogBeforeFollowUp = screen.getByTestId('worker-chat-log')
     expect(within(chatLogBeforeFollowUp).getByText('Session running')).toBeTruthy()
     expect(within(chatLogBeforeFollowUp).getByText('Session output')).toBeTruthy()

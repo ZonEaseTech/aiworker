@@ -409,3 +409,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-379 Session composer and timeline review gaps**](PLAN-379.md) `2026-05-19`
 - [x] [**PLAN-380 Session composer attachment paste and card UX**](PLAN-380.md) `2026-05-19`
 - [x] [**PLAN-381 Session composer integrated field and signal width polish**](PLAN-381.md) `2026-05-19`
+- [x] [**PLAN-382 Session composer busy state, attachment clearing and usage meter**](PLAN-382.md) `2026-05-19`

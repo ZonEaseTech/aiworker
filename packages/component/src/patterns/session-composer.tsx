@@ -1,6 +1,6 @@
-import type { ClipboardEvent, FormEvent, ReactNode } from 'react'
+import type { ClipboardEvent, CSSProperties, FormEvent, ReactNode } from 'react'
 
-import { Activity, Expand, File as FileIcon, FileSpreadsheet, FileText, Paperclip, SendHorizontal, X } from 'lucide-react'
+import { Activity, Expand, File as FileIcon, FileSpreadsheet, FileText, LoaderCircle, Paperclip, SendHorizontal, X } from 'lucide-react'
 import { useState } from 'react'
 import { IconButton, Select, Textarea } from '../primitives'
 import { cx } from '../utils/cx'
@@ -38,6 +38,7 @@ export interface SessionComposerAction {
 export interface SessionComposerUsage {
   ariaLabel?: string
   label: ReactNode
+  meterValue?: number
   title?: string
   value: ReactNode
 }
@@ -263,15 +264,6 @@ export function SessionComposerActionBar({
       </div>
 
       <div className="session-composer-action-main">
-        {usage
-          ? (
-              <span className="session-composer-usage" aria-label={usage.ariaLabel} title={usage.title}>
-                <Activity aria-hidden="true" size={14} />
-                <span>{usage.label}</span>
-                <small>{usage.value}</small>
-              </span>
-            )
-          : null}
         {templateSelect
           ? (
               <Select
@@ -289,17 +281,45 @@ export function SessionComposerActionBar({
         {statusAction ? <SessionComposerStatusAction action={statusAction} /> : null}
       </div>
 
-      <IconButton
-        type="submit"
-        className="primary session-composer-submit"
-        disabled={disabled || submitting}
-        aria-label={submitAriaLabel}
-        title={submitTitle ?? submitAriaLabel}
-      >
-        {submitIcon ?? <SendHorizontal aria-hidden="true" size={16} />}
-      </IconButton>
+      <div className="session-composer-action-right">
+        {usage
+          ? (
+              <span
+                className="session-composer-usage"
+                aria-label={usage.ariaLabel}
+                title={usage.title}
+                style={usageMeterStyle(usage.meterValue)}
+              >
+                <span className="session-composer-usage-ring" aria-hidden="true">
+                  <Activity aria-hidden="true" size={11} />
+                </span>
+                <span className="session-composer-usage-label">{usage.label}</span>
+                <small>{usage.value}</small>
+              </span>
+            )
+          : null}
+        <IconButton
+          type="submit"
+          className="primary session-composer-submit"
+          disabled={disabled || submitting}
+          aria-busy={submitting ? true : undefined}
+          aria-label={submitAriaLabel}
+          title={submitTitle ?? submitAriaLabel}
+        >
+          {submitting
+            ? <LoaderCircle className="session-composer-submit-spinner" aria-hidden="true" size={16} />
+            : submitIcon ?? <SendHorizontal aria-hidden="true" size={16} />}
+        </IconButton>
+      </div>
     </div>
   )
+}
+
+function usageMeterStyle(value?: number): CSSProperties | undefined {
+  if (value == null || Number.isNaN(value))
+    return undefined
+  const progress = Math.max(0, Math.min(1, value))
+  return { '--session-composer-usage-progress': `${Math.round(progress * 100)}%` } as CSSProperties
 }
 
 export function SessionAttachmentList({
