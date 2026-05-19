@@ -404,3 +404,4 @@ Each plan is a single line linking to its detail file. All detailed information 
 - [x] [**PLAN-373 CLI 0.18.3 patch release**](PLAN-373.md) `2026-05-19`
 - [x] [**PLAN-374 HR profile composer select dropdown visual split**](PLAN-374.md) `2026-05-19`
 - [x] [**PLAN-375 CLI 0.18.4 patch release**](PLAN-375.md) `2026-05-19`
+- [-] [**PLAN-376 Session Kit shared composer and session surfaces**](PLAN-376.md) `2026-05-19`

@@ -1,5 +1,18 @@
 # AIWorker Changelog
 
+## 2026-05-19 [progress] FEAT-102 / PLAN-376 — Session Kit shared composer and session surfaces
+
+Started the shared Session Kit extraction after the approved
+`docs/superpowers/specs/2026-05-19-session-kit-design.md` design. The target is
+to move generic session composer/action-bar, attachment helpers, timeline
+view-model helpers and session detail shells into `packages/component`, then
+migrate generic Worker Web surfaces and the HR People Workbench right-panel
+composer to consume the same shared components.
+
+The boundary stays UI + view model only: Host Web keeps data loading, session
+streaming and routing; HR keeps profile context, recent sessions, profile draft
+copy and promotion policy.
+
 ## 2026-05-19 18:05 [completed] REL-050 / PLAN-375 — CLI 0.18.4 patch release
 
 Started the `@zonease/aiworker-cli@0.18.4` patch release after `BUG-139 /
