@@ -1,6 +1,6 @@
 # PLAN-368 CLI 0.18.1 patch release
 
-- **status**: implementing
+- **status**: completed
 - **owner**: codex
 - **createdAt**: 2026-05-19
 - **approvedAt**: 2026-05-19
@@ -88,11 +88,11 @@ version bump and release tracking.
 - [x] `bun run --filter '@zonease/aiworker-cli' smoke:dist-release`
 - [x] `bun run crg:update`
 - [x] `bun run crg:review`
-- [ ] GitHub Actions release workflow.
-- [ ] `npm view @zonease/aiworker-cli version dist-tags --json`
-- [ ] `bunx @zonease/aiworker-cli@0.18.1 --version`
-- [ ] `gh release view v0.18.1 --repo ZonEaseTech/aiworker --json tagName,isDraft,isPrerelease,assets,url,publishedAt,targetCommitish`
-- [ ] Published-package smoke.
+- [x] `gh run watch 26074095645 --repo ZonEaseTech/aiworker --exit-status`
+- [x] `npm view @zonease/aiworker-cli version dist-tags --json`
+- [x] `bunx @zonease/aiworker-cli@0.18.1 --version`
+- [x] `gh release view v0.18.1 --repo ZonEaseTech/aiworker --json tagName,isDraft,isPrerelease,assets,url,publishedAt,targetCommitish`
+- [x] Published-package smoke.
 
 ## Annotations
 
@@ -102,3 +102,9 @@ version bump and release tracking.
   CLI、Worker Web、engine-icons、fonts、official HR/QA resources 与 migrations；
   `smoke:dist-release` 覆盖 Host Web/API、official Soul App bootstrap 与
   HR/QA mounted actions。CRG risk score `0.00`，无 test gap。
+- 2026-05-19：release prep commit `2aca8102`、tag `v0.18.1` 已推送；
+  release workflow `26074095645` 与 main lint workflow `26074093498` 均成功。
+- 2026-05-19：post-release verification 通过；npm latest 为 `0.18.1`，
+  GitHub Release `v0.18.1` 为 non-draft / non-prerelease 且包含 8 个
+  binary/checksum assets，published-package smoke 从公开包启动 Host Web/API、
+  验证 `openai.svg`、bootstrap official HR/QA，并调用 HR/QA mounted actions。

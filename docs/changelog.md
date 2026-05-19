@@ -1,15 +1,22 @@
 # AIWorker Changelog
 
-## 2026-05-19 [in_progress] REL-047 / PLAN-368 — CLI 0.18.1 patch release
+## 2026-05-19 [completed] REL-047 / PLAN-368 — CLI 0.18.1 patch release
 
-Started the `@zonease/aiworker-cli@0.18.1` patch release after
-`FEAT-099 / PLAN-367`, carrying the Host/Soul shared component library uplift,
-HR Soul App direct consumption proof, and the engine icon style delivery fix.
+Published `@zonease/aiworker-cli@0.18.1` after `FEAT-099 / PLAN-367`, carrying
+the Host/Soul shared component library uplift, HR Soul App direct consumption
+proof, and the engine icon style delivery fix.
 
 Local release gates passed, including full check/test/build, mounted-surface
 smoke for the engine icon delivery chain, dist version checks, pack dry-run,
 dist release smoke and code-review-graph. CRG risk score was `0.00` with no
 test gaps.
+
+Release workflow `26074095645` passed and published npm latest plus GitHub
+Release `v0.18.1` with 8 binary/checksum assets. Main lint workflow
+`26074093498` passed. Published-package smoke passed from an isolated
+`AIWORKER_HOME`: daemon health, runtimeVersion `0.18.1`, Host Web static
+serving, engine icon asset delivery, official app bootstrap/list/template, and
+HR/QA mounted actions.
 
 ## 2026-05-19 [completed] FEAT-099 / PLAN-367 — Host/Soul shared component library
 
