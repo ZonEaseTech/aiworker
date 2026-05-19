@@ -1,5 +1,19 @@
 # AIWorker Changelog
 
+## 2026-05-19 22:25 [in progress] REL-051 / PLAN-386 — CLI 0.19.0 minor release
+
+Started the `@zonease/aiworker-cli@0.19.0` minor release after the Session Kit
+and MCP workspace-binding cleanup work landed on `main`. npm latest is
+`0.18.4`; current `main` contains the shared session composer/timeline
+components, Codex CLI session activity parser, composer file/image attachment
+handling, HR/session composer adoption, and MCP legacy-entrypoint cleanup.
+
+Local pre-release and release-prep gates passed through `bun run check`,
+`bun run test`, `bun run build`, focused shared/API/Web tests, UI governance,
+docs contract, mounted-surface smoke, dist version/package checks, pack
+dry-run, dist release smoke, diff checks and code-review-graph review. The
+tag workflow and published-package verification are still in progress.
+
 ## 2026-05-19 20:29 [completed] BUG-146 / PLAN-385 — Host platform settings and Soul App configuration boundary
 
 Split the settings boundary into Host-owned Platform Settings and Soul

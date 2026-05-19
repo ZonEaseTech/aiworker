@@ -500,3 +500,4 @@ Each task is a single line linking to its detail file. All detailed information 
 - [x] [**BUG-144 Session composer attachment density polish**](BUG-144.md) `P1`
 - [x] [**BUG-145 Session composer attachment deduplication**](BUG-145.md) `P0`
 - [x] [**BUG-146 Split Soul App configuration from Host platform settings**](BUG-146.md) `P0`
+- [-] [**REL-051 发布 aiworker CLI 0.19.0**](REL-051.md) `P0`
