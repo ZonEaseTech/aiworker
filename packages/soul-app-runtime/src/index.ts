@@ -283,6 +283,38 @@ function scopedCatalog(app: HostedSoulApp): HostSoulCatalog {
   }
 }
 
+export { renderUniversalWorkbenchHtml } from './universal-workbench-html'
+
+export function mountSessionApiProxy(request: Request, options: {
+  hostApiBaseUrl: string
+  workerId: string
+  workspaceId: string
+}): Promise<Response> | null {
+  const url = new URL(request.url)
+  const hostApi = options.hostApiBaseUrl.replace(/\/$/, '')
+
+  // GET /api/sessions
+  if (url.pathname === '/api/sessions' && request.method === 'GET') {
+    const target = `${hostApi}/api/local/workers/${options.workerId}/workspaces/${options.workspaceId}/sessions`
+    return fetch(target, { headers: request.headers }).then(r =>
+      new Response(r.body, { status: r.status, headers: r.headers }))
+      .catch(() => Response.json({ sessions: [] }))
+  }
+
+  // POST /api/sessions (create)
+  if (url.pathname === '/api/sessions' && request.method === 'POST') {
+    const target = `${hostApi}/api/local/workers/${options.workerId}/workspaces/${options.workspaceId}/sessions`
+    return fetch(target, {
+      method: 'POST',
+      headers: request.headers,
+      body: request.body,
+    }).then(r => new Response(r.body, { status: r.status, headers: r.headers }))
+      .catch(() => new Response(null, { status: 502 }))
+  }
+
+  return null
+}
+
 function sessionMetadata(
   app: SoulAppDefinition,
   templates: readonly CapabilityTemplate[],
