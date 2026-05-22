@@ -109,9 +109,11 @@ describe('Host Soul App registry', () => {
     expect(first.map(result => [result.appId, result.action])).toEqual([
       ['aiworker-hr', 'installed_enabled'],
       ['aiworker-qa', 'installed_enabled'],
+      ['aiworker-custom', 'error'],
     ])
     expect(findHostSoul('aiworker-hr')?.status).toBe('available')
     expect(findHostSoul('aiworker-qa')?.status).toBe('available')
+    expect(first.find(r => r.appId === 'aiworker-custom')?.errorMessage).toBeTruthy()
     expect(findHostSoul('hr')).toBeUndefined()
     expect(findHostSoul('aiworker-hr')?.defaultTemplates).toEqual([
       namespaceSoulAppCapabilityId('aiworker-hr', 'person-profile'),
@@ -132,6 +134,7 @@ describe('Host Soul App registry', () => {
     expect(second.map(result => [result.appId, result.action])).toEqual([
       ['aiworker-hr', 'refreshed'],
       ['aiworker-qa', 'refreshed'],
+      ['aiworker-custom', 'error'],
     ])
 
     disableSoulApp('aiworker-hr', { now: () => '2026-05-13T12:27:00.000Z' })
@@ -143,6 +146,7 @@ describe('Host Soul App registry', () => {
     expect(third.map(result => [result.appId, result.action])).toEqual([
       ['aiworker-hr', 'preserved_disabled'],
       ['aiworker-qa', 'refreshed'],
+      ['aiworker-custom', 'error'],
     ])
     expect(findHostSoul('aiworker-hr')?.status).toBe('coming_soon')
     expect(listHostCapabilityTemplatesForSoul('aiworker-hr')).toEqual([])
@@ -211,10 +215,12 @@ describe('Host Soul App registry', () => {
     expect(results.map(result => [result.appId, result.action])).toEqual([
       ['aiworker-hr', 'installed_enabled'],
       ['aiworker-qa', 'installed_enabled'],
+      ['aiworker-custom', 'error'],
     ])
-    expect(results.every(result => result.manifestPath.startsWith(packagedRoot))).toBe(true)
+    expect(results.filter(r => r.action !== 'error').every(result => result.manifestPath.startsWith(packagedRoot))).toBe(true)
     expect(findHostSoul('aiworker-hr')?.status).toBe('available')
     expect(findHostSoul('aiworker-qa')?.status).toBe('available')
+    expect(results.find(r => r.appId === 'aiworker-custom')?.errorMessage).toBeTruthy()
   })
 
   it('stores path manifest validation failures as registry error state', async () => {

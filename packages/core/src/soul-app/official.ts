@@ -48,6 +48,10 @@ export const OFFICIAL_SOUL_APPS = [
     id: 'aiworker-qa',
     manifestPath: 'apps/aiworker-qa/soul-app.manifest.json',
   },
+  {
+    id: 'aiworker-custom',
+    manifestPath: 'apps/aiworker-custom/soul-app.manifest.json',
+  },
 ] as const satisfies readonly OfficialSoulAppDefinition[]
 
 const DEFAULT_OFFICIAL_MANIFEST_FILENAME = 'soul-app.manifest.json'
