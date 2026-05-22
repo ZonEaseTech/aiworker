@@ -23,6 +23,10 @@
     "./timeline/engine-readiness": {
       "types": "./src/universal-workbench/timeline/engine-readiness.ts",
       "import": "./src/universal-workbench/timeline/engine-readiness.ts"
+    },
+    "./timeline/SessionTimeline": {
+      "types": "./src/universal-workbench/timeline/SessionTimeline.tsx",
+      "import": "./src/universal-workbench/timeline/SessionTimeline.tsx"
     }
   },
   "main": "./src/index.ts",
