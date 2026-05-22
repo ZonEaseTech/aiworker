@@ -80,8 +80,8 @@ describe('Host runtime boundary', () => {
     const bootstrap = await runtime.bootstrapOfficialSoulApps()
 
     expect(bootstrap.scope).toBe('official')
-    expect(bootstrap.status).toBe('fail')
-    expect(bootstrap.results.find(r => r.appId === 'aiworker-custom')?.action).toBe('error')
+    expect(bootstrap.status).toBe('pass')
+    expect(bootstrap.results.find(r => r.appId === 'aiworker-custom')?.action).toBe('installed_enabled')
     expect(bootstrap.legacyMetadataDiscard).toMatchObject({ workersDeleted: 1 })
     expect(getWorker('legacy-hr-worker')).toBeNull()
     expect(runtime.findSoul(HR_APP_ID)?.status).toBe('available')
