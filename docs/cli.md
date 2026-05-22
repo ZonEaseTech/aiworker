@@ -1,8 +1,7 @@
 # AIWorker CLI
 
 AIWorker CLI 是 Host local daemon lifecycle、operator locator 和 Soul App
-authoring 的本地入口。它不再承载旧 gateway/fleet 管理面，也不再使用 `brief/run`
-产品路径。
+authoring 的本地入口。它不承载远程控制面，也不使用 `brief/run` 产品路径。
 
 ## Primary Flow
 

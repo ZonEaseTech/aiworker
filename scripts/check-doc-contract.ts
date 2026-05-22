@@ -39,13 +39,18 @@ const registryIds = [
 ]
 
 const forbiddenActiveDocPhrases = [
-  '平台 broker',
-  'Host broker provider registry',
-  'generic review/lesson ledger',
   'Host auth is provider-backed',
-  'generic enablement security review',
-  'storage、connector evidence、secret reference、log、search、audit 等 broker',
+  'broker',
+  'admission',
+  'governance',
   'grant enforcement',
+  'gateway',
+  'fleet',
+  'control-plane',
+  'Host-owned proposal',
+  'Host-owned review',
+  'generic review/lesson ledger',
+  'generic enablement security review',
 ]
 
 for (const file of activeDocs) {
@@ -58,7 +63,7 @@ requireIncludes('docs/architecture.md', [
   'AIWorker = Local Shell + Engine Bridge for Soul Apps',
   '## Constraint Registry',
   'start, shell, locate, mount and bridge',
-  'proposal, broker, review, audit, governance, grant and admission are deprecated Host concepts',
+  'Host 不拥有领域工作流',
   'scripts/check-doc-contract.ts',
   '`docs/task`, `docs/plan`, `docs/superpowers` and `docs/changelog.md` are audit trail',
 ])

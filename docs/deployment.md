@@ -4,7 +4,7 @@ AIWorker 的当前部署主路径是 **local daemon**：一台 host 运行一个
 Host Web Shell、local API、SQLite metadata、Soul App registry、worker/workspace/session
 locator、mounted app surfaces 和 engine bridge context。
 
-历史 gateway/fleet、Docker compose gateway、公网 Caddy/aissh 控制面已经不属于当前默认路径。
+当前默认路径只覆盖本地 daemon。远程多节点控制面、公共反向代理部署和外部编排不属于本文范围。
 
 ## Topology
 

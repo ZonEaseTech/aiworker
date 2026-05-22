@@ -2,7 +2,7 @@
 
 AIWorker 正在收敛为 **Local Shell + Engine Bridge for Soul Apps**。
 
-它不做另一个 developer engine、admin dashboard、治理内核、通用 broker 平台或通用 agent runtime。
+它不做另一个 developer engine、admin dashboard、远程控制面、通用平台或通用 agent runtime。
 Host 只负责启动 Soul App、提供本地 Web/CLI/daemon 壳、定位 worker/workspace/session、挂载
 app-owned surface，并为 session 准备 cwd/context/engine 调用入口。业务对象、业务输出、
 确认动作和历史记录由 Soul App 自己拥有。

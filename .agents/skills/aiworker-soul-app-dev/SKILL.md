@@ -23,10 +23,9 @@ Use this skill for:
   engine assets projection, `aiworker app validate`, `aiworker app smoke`, and
   `docs/soul-app-developer.md`.
 
-Do not use this as a general validation-campaign router for old fleet/gateway,
-published CLI governance harnesses, Coder workspaces, or release-debug runs.
-Those are historical or task-specific flows, not current Soul App development
-routes.
+Do not use this as a general validation-campaign router for published CLI
+harnesses, Coder workspaces, or release-debug runs. Those are task-specific
+flows, not current Soul App development routes.
 
 Use `aiworker-host-dev` instead for Host platform lifecycle, local daemon API,
 CLI lifecycle, Worker Web Shell rendering, thin local adapter compatibility,

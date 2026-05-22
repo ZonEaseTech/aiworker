@@ -18,8 +18,8 @@ Host-owned Worker Configuration 的 trigger、dialog shell 和配置边界只到
 领域配置字段，不允许 Soul 向 Host left panel、header、toolbar 或 Worker Configuration slot 注册
 自定义 UI。
 
-不要把默认体验拉回 developer-only work order、admin dashboard、远程控制面、治理内核、通用
-agent runtime 平台，或 Host-owned proposal/broker/review/audit/governance/admission 流程。
+不要把默认体验拉回 developer-only work order、admin dashboard、远程控制面、通用 agent runtime
+平台，或任何 Host-owned 领域工作流。
 
 ## 必读入口
 
@@ -31,9 +31,9 @@ agent runtime 平台，或 Host-owned proposal/broker/review/audit/governance/ad
 - `.agents/skills/aiworker-soul-app-dev/SKILL.md`：修改 Soul App、manifest、standalone、
   Host mounted、capability、artifact/review 或 authoring 文档前必须读取。
 
-不要把历史外部产品映射、旧 gateway/fleet/control-plane、旧治理入口或旧重启计划当作当前实现
-约束。当前规范入口只有本文件和 `docs/architecture.md`；PMA、changelog、Superpowers spec/plan
-都是审计轨迹，不能覆盖 `docs/architecture.md#constraint-registry`。
+不要把历史外部产品映射或旧重启计划当作当前实现约束。当前规范入口只有本文件和
+`docs/architecture.md`；PMA、changelog、Superpowers spec/plan 都是审计轨迹，不能覆盖
+`docs/architecture.md#constraint-registry`。
 
 ## 按任务读取
 
@@ -95,7 +95,7 @@ agent runtime 平台，或 Host-owned proposal/broker/review/audit/governance/ad
   和 manifest-derived 泛化选项。需要 workspace/session/domain 配置时，进入 Soul-owned micro-app
   或 app-owned API，由 Soul 自己解释和保存。
 - 如果 Soul App 不暴露某个 surface，Host 不取、不猜、不补。
-- proposal、broker、review、audit、governance、grant 和 admission 不再是 Host 产品内核。
+- Host 不拥有领域工作流、领域状态、跨 Soul 编排或通用 agent runtime。
 - Workspace/project 是业务作用域，不等同于软件仓库；HR 可以是岗位或候选人池，QA 可以是
   release 或 test suite，DevOps 可以是 service、incident 或 runbook。
 - 外部 engine 负责自己的 tool loop、模型、sandbox、approval、auth/profile、native session
@@ -108,9 +108,8 @@ agent runtime 平台，或 Host-owned proposal/broker/review/audit/governance/ad
 - `worker.db` 只存 Host metadata：installed/enabled apps、workers、workspaces、sessions、
   engine invocation references、protocol cache needed for routing、mounted surface references
   和 platform file references。
-- 真实业务文件和 artifact 留在 Soul App 的 workspace 文件夹或对象存储命名空间；generic review
-  rows、lesson ledgers、admission proposals、profile promotion state、grants-as-product-flow 和
-  domain facts 都不是 Host product primitives。
+- 真实业务文件和 artifact 留在 Soul App 的 workspace 文件夹或对象存储命名空间；领域事实、
+  领域状态、业务确认和 app-owned history 都不是 Host product primitives。
 - Host 不合成 HR profile，不解释 QA release verdict，不把 Soul App 记忆提升规则硬编码进平台。
 - API 文档以代码为准：OpenAPIHono `app.doc('/openapi.json')` + `/docs`。
 - 新增或修改 API 时同步 zod schema、OpenAPI metadata、typed client/proto 和相关测试。

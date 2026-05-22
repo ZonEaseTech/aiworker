@@ -56,12 +56,12 @@ IDs before changing Host behavior:
   mounted API proxying and narrow context data; Host does not render app-domain
   UI or translate workbench descriptors into product routes.
 - `DATA-001`: Host stores local metadata and references, not business facts or
-  generic review/proposal/admission state.
+  domain facts, domain state or business confirmations.
 - `ENGINE-001`: Host prepares cwd/context/invocation boundaries; external
   engines own tool loop, approval behavior, native sessions and memory.
 - `UI-001`: Host Web and official Soul App web are shadcn-first through
-  `packages/ui`; Host Web must not make generic artifact/review/broker/governance
-  panels the default product surface.
+  `packages/ui`; Host Web must not make Host-owned domain panels the default
+  product surface.
 - `DOC-001`: audit docs do not override the active architecture contract.
 
 Practical Host implications:
@@ -105,7 +105,7 @@ Load only the relevant slice:
 | Web Shell | `apps/web/src/worker/worker-studio.tsx`, `apps/web/src/features/local-workspace/api/`, `apps/web/src/features/settings/`, touched component/style files |
 | CLI lifecycle | `apps/cli/src/aiworker.ts`, `apps/cli/src/aiworker.test.ts`, `docs/cli.md` |
 | Host runtime/registry | `packages/core/src/host/`, `packages/core/src/soul-app/`, matching tests |
-| Thin adapters/compat | mounted service proxy helpers in `apps/api/src/modes/worker.ts`, shared protocol descriptors, and matching tests; treat old broker/security-review/workbench action-search bridge history as audit-only context |
+| Thin adapters/compat | mounted service proxy helpers in `apps/api/src/modes/worker.ts`, shared protocol descriptors, and matching tests; treat old workbench action-search bridge history as audit-only context |
 | Shared protocol/schema | `packages/shared/src/soul-app/`, `packages/shared/src/local-workspace.ts`, matching tests |
 | Storage metadata | `packages/storage-sqlite/src/worker/schema.ts`, `index.ts`, `index.test.ts`, migrations/scripts |
 | Shared UI primitives | `packages/ui`, `apps/web/components.json`, touched style/component files |
@@ -128,7 +128,7 @@ cannot be determined safely.
 4. For Host Web or shared UI work, add a `Component Library Preflight` section
    to the proposal before implementation. It must name checked `packages/ui`
    shadcn primitives, state the app-local UI ownership reason, and include the
-   focused UI governance command in verification.
+   focused UI component check in verification.
 5. For frontend Host work, use `pma-web` after PMA approval.
 6. For backend/runtime/CLI/storage work, use `pma-bun` after PMA approval.
 7. For reviews or audits, use `pma-cr`.
@@ -192,7 +192,7 @@ formatting changes, and state that skip explicitly.
 - Confirm Host did not infer domain meaning or import Soul App internals.
 - Confirm shared contracts, docs and tests stayed aligned.
 - For Web UI work, summarize the component-library preflight, app-local UI
-  ownership reason and UI governance result.
+  ownership reason and UI component check result.
 - Record validation commands and results.
 - Sync PMA docs/changelog when project-level impact exists.
 - Run code-review-graph for code changes or explicitly skip it for
