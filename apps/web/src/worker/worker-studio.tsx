@@ -1,5 +1,6 @@
 import type {
   HostedSoulApp,
+  LocalSessionEvent,
   LocalWorkerOverlayAsset,
   MountedMicroAppChildEvent,
   MountedMicroAppHostData,
@@ -22,6 +23,7 @@ import {
   Settings02Icon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
+import { resolveEngineReadiness, UniversalWorkbenchApp } from '@zonease/aiworker-soul-app-workbench'
 import { Alert, AlertDescription } from '@zonease/aiworker-ui/components/alert'
 import { Avatar, AvatarFallback } from '@zonease/aiworker-ui/components/avatar'
 import { Badge } from '@zonease/aiworker-ui/components/badge'
@@ -54,7 +56,7 @@ import {
   messagesFor,
   normalizeLocale,
 } from '../features/i18n'
-import { createWorker, createWorkspace, loadLocalWorkspaceData, loadWorkerOverlay, projectWorkerWorkspaceOverlay, saveWorkerOverlay } from '../features/local-workspace/api'
+import { continueSessionTurn, createSessionTurn, createWorker, createWorkspace, loadLocalWorkspaceData, loadWorkerOverlay, projectWorkerWorkspaceOverlay, saveWorkerOverlay } from '../features/local-workspace/api'
 import { resolveMountedSurface } from '../features/local-workspace/api/workspace-data'
 import { CreateWorkerDialog, CreateWorkspaceDialog, WorkerIdentityBlock, WorkspaceCard } from '../features/local-workspace/components'
 import {
@@ -131,6 +133,9 @@ export function WorkerStudio() {
   const [workerConfigurationWorkerId, setWorkerConfigurationWorkerId] = useState<string | null>(null)
   const [workerOverlayAssets, setWorkerOverlayAssets] = useState<LocalWorkerOverlayAsset[]>([])
   const [submitting, setSubmitting] = useState(false)
+  const [turnInput, setTurnInput] = useState('')
+  const [turnSubmitting, setTurnSubmitting] = useState(false)
+  const [sessionEvents, setSessionEvents] = useState<LocalSessionEvent[]>([])
   const mountedChildRouteMemoryRef = useRef(new Map<string, string>())
 
   const refresh = useCallback(async () => {
@@ -197,7 +202,8 @@ export function WorkerStudio() {
       .filter(r => r.surface?.renderer === 'micro-app')
       .map(r => ({ id: r.id, label: r.label, path: mountedChildDefaultPath(r.path) }))
   }, [selectedSoulApp?.manifest.ui?.routes])
-  const [activeMountedRouteId, setActiveMountedRouteId] = useState<string | null>(null)
+  const [activeMountedTabMap, setActiveMountedTabMap] = useState<Record<string, string>>({})
+  const activeMountedRouteId = activeMountedTabMap[selectedWorker?.id ?? ''] ?? null
   const activeMountedRoute = useMemo(() => {
     if (!activeMountedRouteId || !selectedSoulApp?.manifest.ui?.routes)
       return selectedMountedWorkbenchRoute
@@ -234,6 +240,85 @@ export function WorkerStudio() {
     ? allSessions.find(session => session.id === route.sessionId && session.workspaceId === route.workspaceId) ?? null
     : null
   const selectedSession = routeSession ?? (route.kind === 'workspace' ? null : selectedWorkspace ? sessionForWorkspace(selectedWorkspace, allSessions) : latest(soulSessions))
+
+  const fetchSessionEvents = useCallback(async (sessionId: string) => {
+    if (!selectedWorker?.id)
+      return
+    try {
+      const res = await fetch(`/api/local/workers/${selectedWorker.id}/sessions/${sessionId}/events`)
+      const json = await res.json() as { events: LocalSessionEvent[] }
+      setSessionEvents(json.events ?? [])
+    }
+    catch {
+      setSessionEvents([])
+    }
+  }, [selectedWorker?.id])
+
+  const handleSelectSession = useCallback((sessionId: string | null) => {
+    if (sessionId && selectedWorker?.id) {
+      void fetchSessionEvents(sessionId)
+    }
+    else {
+      setSessionEvents([])
+    }
+  }, [fetchSessionEvents, selectedWorker?.id])
+
+  const handleCreateSession = useCallback(async (workspaceId: string, input: string) => {
+    if (!selectedWorker?.id || !templates.length)
+      return
+    setTurnSubmitting(true)
+    try {
+      const result = await createSessionTurn(workspaceId, {
+        capabilityTemplateId: templates[0]!.id,
+        input,
+        title: input.slice(0, 80),
+      }, selectedWorker.id)
+      setSessionEvents(result.events)
+      await refresh()
+      navigateWorkerRoute({
+        kind: 'session',
+        workerId: selectedWorker.id,
+        workspaceId,
+        sessionId: result.session.id,
+      })
+    }
+    finally {
+      setTurnSubmitting(false)
+      setTurnInput('')
+    }
+  }, [selectedWorker?.id, templates, refresh])
+
+  const handleSubmitTurn = useCallback(async (
+    event: FormEvent<HTMLFormElement>,
+  ) => {
+    event?.preventDefault()
+    if (!selectedWorker?.id || !selectedSession)
+      return
+    setTurnSubmitting(true)
+    try {
+      if (!turnInput.trim())
+        return
+      await continueSessionTurn(selectedSession.id, { input: turnInput.trim() }, selectedWorker.id)
+      await refresh()
+      setTurnInput('')
+    }
+    finally {
+      setTurnSubmitting(false)
+    }
+  }, [selectedWorker?.id, selectedSession?.id, turnInput, refresh])
+
+  useEffect(() => {
+    if (activeMountedRoute?.id !== 'universal-workbench') {
+      setSessionEvents([])
+      setTurnInput('')
+    }
+  }, [activeMountedRoute?.id])
+
+  useEffect(() => {
+    setSessionEvents([])
+    setTurnInput('')
+  }, [selectedWorker?.id])
+
   const enabledSoulApps = useMemo(
     () => data?.apps.filter(app => app.status === 'enabled') ?? [],
     [data?.apps],
@@ -245,6 +330,10 @@ export function WorkerStudio() {
   const systemTheme = useSystemTheme()
   const appearance = data?.settings.appearance ?? 'system'
   const resolvedTheme = resolveTheme(appearance, systemTheme)
+  const engineReadiness = useMemo(
+    () => resolveEngineReadiness(data?.settings ?? null, copy),
+    [data?.settings, copy],
+  )
 
   useEffect(() => {
     document.documentElement.lang = activeLocale
@@ -284,8 +373,9 @@ export function WorkerStudio() {
     if (!workerOverlayTarget)
       return
     setWorkerOverlayAssets(assets)
+    const overlayOnly = assets.filter(asset => asset.source !== 'baseline')
     const result = await saveWorkerOverlay(workerOverlayTarget.id, {
-      assets: assets.map(asset => ({
+      assets: overlayOnly.map(asset => ({
         content: asset.content,
         enabled: asset.enabled,
         id: asset.id,
@@ -420,12 +510,7 @@ export function WorkerStudio() {
           <HostTopBar
             sidebarCollapsed={sidebarCollapsed}
             locatorSegments={hostLocatorSegments}
-            workbenchTabs={workbenchTabs}
-            activeTabId={activeMountedRoute?.id ?? null}
             onToggleSidebar={() => setSidebarCollapsed(current => !current)}
-            onSelectTab={(tab) => {
-              setActiveMountedRouteId(tab.id)
-            }}
           />
         )}
         mainLabel={copy.accessibility.soulProjectsAndArtifacts}
@@ -493,12 +578,7 @@ export function WorkerStudio() {
           <HostTopBar
             sidebarCollapsed={sidebarCollapsed}
             locatorSegments={hostLocatorSegments}
-            workbenchTabs={workbenchTabs}
-            activeTabId={activeMountedRoute?.id ?? null}
             onToggleSidebar={() => setSidebarCollapsed(current => !current)}
-            onSelectTab={(tab) => {
-              setActiveMountedRouteId(tab.id)
-            }}
           />
         )}
         dialogs={(
@@ -584,18 +664,40 @@ export function WorkerStudio() {
         main={(
           <>
             {showMountedWorkbenchRoute && selectedSoulApp && activeMountedRoute
-              ? (
-                  <MountedSoulAppRouteSurface
-                    key={activeMountedRoute.id}
-                    appId={selectedSoulApp.appId}
-                    resolvedTheme={resolvedTheme}
-                    route={activeMountedRoute}
-                    routeMemoryRef={mountedChildRouteMemoryRef}
-                    sessionId={activeMountedRoute?.surface?.scope === 'session' ? selectedSession?.id ?? null : null}
-                    workerId={selectedWorker.id}
-                    workspaceId={selectedWorkspace?.id ?? null}
-                  />
-                )
+              ? activeMountedRoute.id === 'universal-workbench'
+                ? (
+                    <UniversalWorkbenchApp
+                      engineReadiness={engineReadiness}
+                      events={sessionEvents}
+                      sessions={soulSessions}
+                      turnInput={turnInput}
+                      turnSubmitting={turnSubmitting}
+                      turns={data.turns}
+                      workspace={selectedWorkspace}
+                      workspaces={soulWorkspaces}
+                      onBackToWorkspace={() => {
+                        navigateWorkerRoute({ kind: 'worker', workerId: selectedWorker.id })
+                      }}
+                      onCreateSession={handleCreateSession}
+                      onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
+                      onRefresh={refresh}
+                      onSelectSession={handleSelectSession}
+                      onSubmitTurn={handleSubmitTurn}
+                      onTurnInputChange={setTurnInput}
+                    />
+                  )
+                : (
+                    <MountedSoulAppRouteSurface
+                      key={activeMountedRoute.id}
+                      appId={selectedSoulApp.appId}
+                      resolvedTheme={resolvedTheme}
+                      route={activeMountedRoute}
+                      routeMemoryRef={mountedChildRouteMemoryRef}
+                      sessionId={activeMountedRoute?.surface?.scope === 'session' ? selectedSession?.id ?? null : null}
+                      workerId={selectedWorker.id}
+                      workspaceId={selectedWorkspace?.id ?? null}
+                    />
+                  )
               : null}
 
             {!showMountedWorkbenchRoute && isWorkspaceContextRoute && selectedWorkspace
@@ -740,9 +842,11 @@ export function WorkerStudio() {
         )}
       />
       <WorkerConfigurationDialog
+        activeWorkbenchTabId={activeMountedRoute?.id ?? null}
         assets={workerOverlayAssets}
         open={workerConfigurationOpen}
         worker={workerConfigurationWorker}
+        workbenchTabs={workbenchTabs}
         onOpenChange={(open) => {
           setWorkerConfigurationOpen(open)
           if (!open)
@@ -750,6 +854,10 @@ export function WorkerStudio() {
         }}
         onProjectWorkspaceAssets={projectSelectedWorkspaceOverlay}
         onSaveAssets={saveWorkerOverlayAssets}
+        onSelectWorkbenchTab={(tab) => {
+          if (workerConfigurationWorker)
+            setActiveMountedTabMap(prev => ({ ...prev, [workerConfigurationWorker.id]: tab.id }))
+        }}
         projectionWorkspace={selectedWorkspace?.workerId === workerConfigurationWorker?.id ? selectedWorkspace : null}
       />
     </>
@@ -943,7 +1051,7 @@ function MountedSoulAppRouteSurface({
                 name={surface.microApp.name}
                 router-mode="pure"
                 title={surface.surface.label}
-                url={stableMountedMicroAppUrl(surface.microApp.url)}
+                url={surface.microApp.url}
                 className="min-h-0 w-full flex-1"
               />
             )
@@ -969,24 +1077,14 @@ async function openMountedChildRoute(
   routeMemoryRef.current.set(memoryKey, nextPath)
 }
 
-function stableMountedMicroAppUrl(url: string): string {
-  return url.split(/[?#]/, 1)[0] || url
-}
-
 function HostTopBar({
-  activeTabId,
   locatorSegments,
-  onSelectTab,
   onToggleSidebar,
   sidebarCollapsed,
-  workbenchTabs,
 }: {
-  activeTabId?: string | null
   locatorSegments: string[]
-  onSelectTab?: (tab: { id: string, path: string }) => void
   onToggleSidebar: () => void
   sidebarCollapsed: boolean
-  workbenchTabs?: { id: string, label: string, path: string }[]
 }) {
   const sidebarLabel = sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'
   const locatorItems = locatorSegments.map((segment, index) => ({
@@ -1025,28 +1123,6 @@ function HostTopBar({
               ))}
             </BreadcrumbList>
           </Breadcrumb>
-          {workbenchTabs && workbenchTabs.length > 1
-            ? (
-                <ItemActions className="min-w-0 gap-0.5 ml-2" role="tablist" aria-label="Workbench tabs">
-                  {workbenchTabs.map(tab => (
-                    <button
-                      key={tab.id}
-                      type="button"
-                      role="tab"
-                      aria-selected={tab.id === activeTabId}
-                      className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-                        tab.id === activeTabId
-                          ? 'bg-background text-foreground shadow-sm'
-                          : 'text-muted-foreground hover:text-foreground'
-                      }`}
-                      onClick={() => onSelectTab?.(tab)}
-                    >
-                      {tab.label}
-                    </button>
-                  ))}
-                </ItemActions>
-              )
-            : null}
         </ItemActions>
         <ItemActions className="min-w-0 gap-1" aria-label="Reserved Host panels">
           <SidebarMenuButton

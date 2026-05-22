@@ -123,7 +123,19 @@
   "ui": {
     "artifactPreviews": [],
     "panels": [],
-    "routes": [],
+    "routes": [
+      {
+        "entry": "./runtime/universal-workbench",
+        "id": "universal-workbench",
+        "label": "通用工作台",
+        "path": "/workbench/universal",
+        "surface": {
+          "entry": "/micro-app/workbench/universal",
+          "renderer": "micro-app",
+          "scope": "app"
+        }
+      }
+    ],
     "workspaceContext": {
       "terminal": {
         "cwd": { "source": "host-workspace-root" },

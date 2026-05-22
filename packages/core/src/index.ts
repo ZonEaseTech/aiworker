@@ -50,6 +50,11 @@ export {
   type SoulAppRegistryContext,
 } from './soul-app/registry'
 export {
+  type EngineAssetSource,
+  listBaselineAssets,
+  projectEngineAssetsToWorkspace,
+} from './worker/engine-assets'
+export {
   invokeNativeEngine,
   type NativeEngineBridgeEvent,
   type NativeEngineBridgeInput,

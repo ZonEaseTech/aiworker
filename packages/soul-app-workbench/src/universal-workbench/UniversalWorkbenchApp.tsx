@@ -6,12 +6,12 @@ import type {
 } from '@zonease/aiworker-shared'
 import type { FormEvent } from 'react'
 import type { EngineReadiness } from './timeline/engine-readiness'
-import type { SessionTurnDraft } from './SessionTurnComposer'
 import type { WorkspaceSessionTreeNode } from './WorkspaceSessionTree'
 
-import { SidebarLeftIcon } from '@hugeicons/core-free-icons'
+import { Add01Icon, SidebarLeftIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Button } from '@zonease/aiworker-ui/components/button'
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@zonease/aiworker-ui/components/empty'
 import { useMemo, useState } from 'react'
 import { SessionChatView } from './SessionChatView'
 import { SessionDetail } from './SessionDetail'
@@ -28,8 +28,10 @@ export interface UniversalWorkbenchAppProps {
   workspaces: LocalWorkspace[]
   onBackToWorkspace: () => void
   onCreateSession: (workspaceId: string, input: string) => Promise<void>
+  onCreateWorkspace: () => void
+  onSelectSession?: (sessionId: string | null) => void
   onRefresh: () => void
-  onSubmitTurn: (event: FormEvent<HTMLFormElement>, draft?: SessionTurnDraft) => Promise<void> | void
+  onSubmitTurn: (event: FormEvent<HTMLFormElement>) => void
   onTurnInputChange: (value: string) => void
 }
 
@@ -44,7 +46,9 @@ export function UniversalWorkbenchApp({
   workspaces,
   onBackToWorkspace,
   onCreateSession,
+  onCreateWorkspace,
   onRefresh,
+  onSelectSession,
   onSubmitTurn,
   onTurnInputChange,
 }: UniversalWorkbenchAppProps) {
@@ -104,18 +108,30 @@ export function UniversalWorkbenchApp({
     <div className="flex h-full min-h-0" data-slot="universal-workbench">
       {!sidebarCollapsed && (
         <aside className="w-56 min-w-0 flex-shrink-0 overflow-y-auto border-r p-3" data-slot="workbench-sidebar">
-          <div className="mb-3 flex items-center justify-between">
+          <div className="mb-3 flex items-center justify-between gap-1">
             <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Workspaces</span>
-            <Button
-              aria-label="Collapse sidebar"
-              className="size-6"
-              size="icon"
-              type="button"
-              variant="ghost"
-              onClick={() => setSidebarCollapsed(true)}
-            >
-              <HugeiconsIcon icon={SidebarLeftIcon} strokeWidth={2} aria-hidden="true" />
-            </Button>
+            <div className="flex items-center gap-0.5">
+              <Button
+                aria-label="Create workspace"
+                className="size-6"
+                size="icon"
+                type="button"
+                variant="ghost"
+                onClick={onCreateWorkspace}
+              >
+                <HugeiconsIcon icon={Add01Icon} strokeWidth={2} aria-hidden="true" />
+              </Button>
+              <Button
+                aria-label="Collapse sidebar"
+                className="size-6"
+                size="icon"
+                type="button"
+                variant="ghost"
+                onClick={() => setSidebarCollapsed(true)}
+              >
+                <HugeiconsIcon icon={SidebarLeftIcon} strokeWidth={2} aria-hidden="true" />
+              </Button>
+            </div>
           </div>
           <WorkspaceSessionTree
             nodes={treeNodes}
@@ -124,10 +140,12 @@ export function UniversalWorkbenchApp({
             onSelectNode={(node) => {
               if (node.kind === 'session') {
                 setSelectedSessionId(node.sessionId ?? null)
+                onSelectSession?.(node.sessionId ?? null)
               }
               else {
                 setSelectedWorkspaceId(node.workspaceId)
                 setSelectedSessionId(null)
+                onSelectSession?.(null)
               }
             }}
           />
@@ -164,7 +182,11 @@ export function UniversalWorkbenchApp({
                 turns={sessionTurns}
                 workspace={selectedWorkspace}
                 workspaceName={selectedWorkspace.name}
-                onBackToWorkspace={() => setSelectedSessionId(null)}
+                onBackToWorkspace={() => {
+                  setSelectedSessionId(null)
+                  onBackToWorkspace()
+                  onSelectSession?.(null)
+                }}
                 onRefresh={onRefresh}
                 onToggleDetailDrawer={() => setDetailDrawerOpen(v => !v)}
                 onSubmitTurn={onSubmitTurn}
@@ -197,11 +219,26 @@ export function UniversalWorkbenchApp({
                   </div>
                 </div>
               )
-            : (
-                <div className="flex flex-1 items-center justify-center">
-                  <p className="text-sm text-muted-foreground">Select a workspace to get started.</p>
-                </div>
-              )}
+            : workspaces.length === 0
+              ? (
+                  <div className="flex flex-1 items-center justify-center">
+                    <Empty className="min-h-42 items-start justify-center p-4">
+                      <EmptyHeader>
+                        <EmptyTitle>No workspaces yet</EmptyTitle>
+                        <EmptyDescription>Create your first workspace to get started.</EmptyDescription>
+                      </EmptyHeader>
+                      <Button type="button" variant="ghost" size="lg" onClick={onCreateWorkspace}>
+                        <HugeiconsIcon icon={Add01Icon} strokeWidth={2} aria-hidden="true" data-icon="inline-start" />
+                        Create workspace
+                      </Button>
+                    </Empty>
+                  </div>
+                )
+              : (
+                  <div className="flex flex-1 items-center justify-center">
+                    <p className="text-sm text-muted-foreground">Select a workspace to get started.</p>
+                  </div>
+                )}
       </main>
 
       <SessionDetail

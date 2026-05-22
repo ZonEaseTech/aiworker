@@ -6,7 +6,6 @@ import type {
 } from '@zonease/aiworker-shared'
 import type { FormEvent, ReactNode } from 'react'
 import type { EngineReadiness } from './timeline/engine-readiness'
-import type { SessionTurnDraft } from './SessionTurnComposer'
 
 import {
   CircleIcon,
@@ -19,14 +18,13 @@ import { Badge } from '@zonease/aiworker-ui/components/badge'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@zonease/aiworker-ui/components/collapsible'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@zonease/aiworker-ui/components/empty'
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from '@zonease/aiworker-ui/components/item'
+import { SessionComposer } from '@zonease/aiworker-ui/components/session-composer'
 import { cn } from '@zonease/aiworker-ui/lib/utils'
 import { useMemo } from 'react'
-
 import {
   normalizeSessionEvents,
   summarizeSessionUsage,
 } from './timeline/session-view-model'
-import { SessionTurnComposer } from './SessionTurnComposer'
 
 export interface SessionDetailCopy {
   accessibility: { businessArtifactPreview: string }
@@ -60,12 +58,6 @@ export interface SessionDetailTemplate {
   id: string
   name: string
   outputKind?: string
-}
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-interface SessionDetailProgress {
-  label: string
-  tone?: string
 }
 
 function StudioEmptyState({
@@ -109,7 +101,7 @@ export function SessionDetail({
   copy: SessionDetailCopy
   engineReadiness: EngineReadiness
   events: LocalSessionEvent[]
-  onSubmitTurn: (event: FormEvent<HTMLFormElement>, draft?: SessionTurnDraft) => void
+  onSubmitTurn: (event: FormEvent<HTMLFormElement>) => void
   onTurnInputChange: (value: string) => void
   progressPanel?: ReactNode
   session: LocalSession | null
@@ -195,12 +187,17 @@ export function SessionDetail({
                 </ItemGroup>
               )}
               composer={(
-                <SessionTurnComposer
+                <SessionComposer
+                  ariaLabel={copy.workspace.followUpInput}
                   className="min-w-0"
-                  copy={copy}
                   description={engineReadiness.detail}
-                  engineReadiness={engineReadiness}
+                  disabled={!engineReadiness.ready}
+                  disabledReason={engineReadiness.ready ? undefined : engineReadiness.detail}
+                  placeholder={copy.workspace.followUpPlaceholder}
+                  submitAriaLabel={composerBusy ? copy.workspace.sendingTurn : copy.workspace.sendTurn}
+                  submitDisabled={!engineReadiness.ready}
                   submitting={composerBusy}
+                  submitTitle={composerBusy ? copy.workspace.sendingTurn : copy.workspace.sendTurn}
                   title={copy.workspace.continueSession}
                   usage={composerUsage}
                   value={turnInput}

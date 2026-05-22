@@ -6,7 +6,6 @@ import type {
 } from '@zonease/aiworker-shared'
 import type { FormEvent } from 'react'
 import type { EngineReadiness } from './timeline/engine-readiness'
-import type { SessionTurnDraft } from './SessionTurnComposer'
 
 import {
   ArrowDown01Icon,
@@ -20,15 +19,21 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { Badge } from '@zonease/aiworker-ui/components/badge'
 import { Button } from '@zonease/aiworker-ui/components/button'
 import { ScrollArea } from '@zonease/aiworker-ui/components/scroll-area'
+import {
+  createComposerAttachment,
+  formatSessionAttachmentKind,
+  formatSessionAttachmentSize,
+  isSessionAttachmentImage,
+  SessionComposer,
+} from '@zonease/aiworker-ui/components/session-composer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { MessageFlow, MessageRow, StatusEventPill } from './timeline/message-flow'
-import { SessionTimeline } from './timeline/SessionTimeline'
 import {
   createSessionTimelineViewModel,
   normalizeSessionEvents,
   summarizeSessionUsage,
 } from './timeline/session-view-model'
-import { SessionTurnComposer } from './SessionTurnComposer'
+import { SessionTimeline } from './timeline/SessionTimeline'
 
 export interface SessionChatViewProps {
   assistantRoleLabel: string
@@ -38,7 +43,7 @@ export interface SessionChatViewProps {
   onBackToWorkspace: () => void
   onRefresh: () => void
   onToggleDetailDrawer: () => void
-  onSubmitTurn: (event: FormEvent<HTMLFormElement>, draft?: SessionTurnDraft) => void
+  onSubmitTurn: (event: FormEvent<HTMLFormElement>) => void
   onTurnInputChange: (value: string) => void
   operatorRoleLabel: string
   session: LocalSession
@@ -48,6 +53,25 @@ export interface SessionChatViewProps {
   turns: LocalTurn[]
   workspace: LocalWorkspace
   workspaceName: string
+}
+
+interface SessionTurnAttachment {
+  file: File
+  id: string
+  previewUrl?: string
+}
+
+const copy = {
+  addSourceMaterials: 'Add source materials',
+  attachedSourceMaterials: 'Attached source materials',
+  closeSourceMaterialPreview: 'Close preview',
+  followUpInput: 'Session follow-up input',
+  followUpPlaceholder: 'Continue the conversation...',
+  materialReadError: 'Failed to read source material.',
+  previewSourceMaterial: (name: string) => `Preview ${name}`,
+  removeSourceMaterial: (name: string) => `Remove ${name}`,
+  sendTurn: 'Send',
+  sendingTurn: 'Sending...',
 }
 
 export function SessionChatView({
@@ -66,13 +90,17 @@ export function SessionChatView({
   turnInput,
   turnSubmitting,
   turns,
-  workspace,
+  workspace: _workspace,
   workspaceName,
 }: SessionChatViewProps) {
   const logRef = useRef<HTMLDivElement | null>(null)
   const didInitialScrollRef = useRef(false)
   const pinnedToBottomRef = useRef(true)
   const [scrolledFromBottom, setScrolledFromBottom] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const attachmentsRef = useRef<SessionTurnAttachment[]>([])
+  const [attachments, setAttachments] = useState<SessionTurnAttachment[]>([])
+  const [attachmentError, setAttachmentError] = useState<string | null>(null)
   const normalizedEvents = useMemo(() => normalizeSessionEvents(events, { parser: 'codex-cli' }), [events])
   const timeline = useMemo(() => createSessionTimelineViewModel({
     events: normalizedEvents,
@@ -93,6 +121,33 @@ export function SessionChatView({
     : undefined
 
   const composerBusy = turnSubmitting || turns.some(turn => turn.status === 'running')
+
+  const attachmentItems = useMemo(() => attachments.map(attachment => ({
+    id: attachment.id,
+    kind: formatSessionAttachmentKind(attachment.file),
+    closePreviewLabel: copy.closeSourceMaterialPreview,
+    mediaType: attachment.previewUrl ? 'image' as const : 'file' as const,
+    name: attachment.file.name,
+    onPreviewLabel: copy.previewSourceMaterial(attachment.file.name),
+    previewAlt: attachment.file.name,
+    previewTitle: attachment.file.name,
+    previewUrl: attachment.previewUrl,
+    removeLabel: copy.removeSourceMaterial(attachment.file.name),
+    size: formatSessionAttachmentSize(attachment.file.size),
+  })), [attachments])
+
+  useEffect(() => {
+    attachmentsRef.current = attachments
+  }, [attachments])
+
+  useEffect(() => {
+    return () => {
+      for (const attachment of attachmentsRef.current) {
+        if (attachment.previewUrl)
+          URL.revokeObjectURL(attachment.previewUrl)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     didInitialScrollRef.current = false
@@ -144,6 +199,70 @@ export function SessionChatView({
     pinnedToBottomRef.current = true
     el.scrollTo({ behavior: 'smooth', top: el.scrollHeight })
     setScrolledFromBottom(false)
+  }
+
+  function addAttachmentFiles(files: FileList | File[] | null) {
+    const selectedFiles = Array.from(files ?? [])
+    if (selectedFiles.length === 0)
+      return
+    setAttachmentError(null)
+    setAttachments((current) => {
+      const seen = new Set(current.map(a => `${a.file.name}:${a.file.size}:${a.file.type}`))
+      const nextFiles = selectedFiles.filter((file) => {
+        const key = `${file.name}:${file.size}:${file.type}`
+        if (seen.has(key))
+          return false
+        seen.add(key)
+        return true
+      })
+      if (nextFiles.length === 0)
+        return current
+      return [
+        ...current,
+        ...nextFiles.map((file, index) => ({
+          file,
+          id: `${file.name}-${file.size}-${file.type}-${current.length + index}`,
+          previewUrl: isSessionAttachmentImage(file) ? URL.createObjectURL(file) : undefined,
+        })),
+      ]
+    })
+    if (fileInputRef.current)
+      fileInputRef.current.value = ''
+  }
+
+  function openFilePicker() {
+    const input = fileInputRef.current
+    if (!input)
+      return
+    input.value = ''
+    input.click()
+  }
+
+  function removeAttachment(id: string) {
+    setAttachments(current => current.filter((attachment) => {
+      if (attachment.id === id && attachment.previewUrl)
+        URL.revokeObjectURL(attachment.previewUrl)
+      return attachment.id !== id
+    }))
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!engineReadiness.ready || (!turnInput.trim() && attachments.length === 0))
+      return
+    try {
+      setAttachmentError(null)
+      await Promise.all(attachments.map(a => createComposerAttachment(a.file)))
+      for (const a of attachments) {
+        if (a.previewUrl)
+          URL.revokeObjectURL(a.previewUrl)
+      }
+      setAttachments([])
+      onSubmitTurn(event)
+    }
+    catch {
+      setAttachmentError(copy.materialReadError)
+    }
   }
 
   return (
@@ -230,28 +349,36 @@ export function SessionChatView({
           : null}
       </ScrollArea>
 
-      <SessionTurnComposer
+      <input
+        ref={fileInputRef}
+        className="sr-only"
+        type="file"
+        multiple
+        aria-hidden="true"
+        tabIndex={-1}
+        onChange={event => addAttachmentFiles(event.currentTarget.files)}
+      />
+      <SessionComposer
+        ariaLabel={copy.followUpInput}
+        attachmentCountLabel={copy.attachedSourceMaterials}
+        attachmentTriggerLabel={copy.addSourceMaterials}
+        attachments={attachmentItems}
         className="min-w-0 max-w-full px-6 pt-3 pb-4 max-md:px-4"
-        copy={{
-          workspace: {
-            addSourceMaterials: 'Add source materials',
-            attachedSourceMaterials: 'Attached source materials',
-            closeSourceMaterialPreview: 'Close preview',
-            followUpInput: 'Session follow-up input',
-            followUpPlaceholder: 'Continue the conversation...',
-            materialReadError: 'Failed to read source material.',
-            previewSourceMaterial: (name: string) => `Preview ${name}`,
-            removeSourceMaterial: (name: string) => `Remove ${name}`,
-            sendTurn: 'Send',
-            sendingTurn: 'Sending...',
-          },
-        }}
-        engineReadiness={engineReadiness}
+        disabled={!engineReadiness.ready}
+        disabledReason={engineReadiness.ready ? undefined : engineReadiness.detail}
+        error={attachmentError}
+        onAddAttachmentFiles={addAttachmentFiles}
+        onAddAttachments={openFilePicker}
+        onRemoveAttachment={removeAttachment}
+        placeholder={copy.followUpPlaceholder}
+        submitAriaLabel={turnSubmitting || composerBusy ? copy.sendingTurn : copy.sendTurn}
+        submitDisabled={!engineReadiness.ready}
+        submitting={composerBusy}
+        submitTitle={turnSubmitting || composerBusy ? copy.sendingTurn : copy.sendTurn}
         usage={composerUsage}
         value={turnInput}
-        submitting={composerBusy}
         variant="compact"
-        onSubmit={onSubmitTurn}
+        onSubmit={handleSubmit}
         onValueChange={onTurnInputChange}
       />
     </section>

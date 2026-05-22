@@ -225,7 +225,7 @@ export class HostRuntime {
     }
   }
 
-  private engineAssetSourceForWorker(worker: WorkerRow): LocalWorkerRuntimeOptions['engineAssetSource'] {
+  engineAssetSourceForWorker(worker: WorkerRow): LocalWorkerRuntimeOptions['engineAssetSource'] {
     const app = getHostedSoulApp(worker.soulId)
     if (!app || app.status !== 'enabled' || app.sourceKind !== 'manifest-path')
       return null

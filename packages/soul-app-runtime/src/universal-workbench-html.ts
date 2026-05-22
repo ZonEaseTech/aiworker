@@ -3,7 +3,7 @@ export function renderUniversalWorkbenchHtml(options: {
   appName: string
   theme?: 'dark' | 'light'
 }): string {
-  const { appId, appName, theme = 'dark' } = options
+  const { appId: _appId, appName, theme = 'dark' } = options
   return `<!DOCTYPE html>
 <html lang="zh-CN" data-theme="${theme}">
 <head>

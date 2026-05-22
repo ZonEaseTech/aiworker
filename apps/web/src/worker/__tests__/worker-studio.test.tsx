@@ -901,7 +901,7 @@ describe('worker studio', () => {
 
     expect(screen.getByRole('dialog', { name: 'Worker configuration' })).toBeTruthy()
     expect(screen.queryByRole('dialog', { name: /settings/i })).toBeNull()
-    expect(screen.getByRole('tab', { name: 'Skills' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Toggle Skills' })).toBeTruthy()
     expect(screen.getByTestId('worker-overlay-asset-list').getAttribute('data-orientation')).toBe('vertical')
 
     fireEvent.click(screen.getAllByRole('switch', { name: 'Enable interview-brief' })[0]!)
@@ -913,7 +913,7 @@ describe('worker studio', () => {
       }))
     })
 
-    fireEvent.click(screen.getByRole('button', { name: 'New asset' }))
+    fireEvent.click(screen.getByRole('button', { name: 'New skill' }))
     fireEvent.change(screen.getByLabelText('Overlay asset id'), { target: { value: 'custom-skill' } })
     fireEvent.change(screen.getByLabelText('Overlay asset target'), { target: { value: 'codex' } })
     fireEvent.change(screen.getByLabelText('Overlay asset content'), { target: { value: '# Custom Skill\n\nUse with product research.' } })
@@ -925,8 +925,7 @@ describe('worker studio', () => {
         method: 'PUT',
       }))
     })
-    fireEvent.click(await screen.findByRole('button', { name: 'Edit custom-skill' }))
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'More actions for custom-skill' }))
+    fireEvent.pointerDown(await screen.findByRole('button', { name: 'More actions for custom-skill' }))
     fireEvent.click(await screen.findByText('Duplicate'))
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith('/api/local/workers/hr-worker/overlay', expect.objectContaining({
@@ -935,20 +934,16 @@ describe('worker studio', () => {
       }))
     })
 
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Projection' }), { button: 0, ctrlKey: false })
-    expect(await screen.findByText('Projection receipt')).toBeTruthy()
-    expect(await screen.findByText('custom-skill-2')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /^Projection/ }))
+    expect(await screen.findByRole('button', { name: 'Run projection' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Run projection' }))
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith('/api/local/workers/hr-worker/workspaces/workspace-1/projection', expect.objectContaining({
         method: 'POST',
       }))
     })
-    expect(await screen.findByText('Projection updated with 2 items.')).toBeTruthy()
-
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Skills' }), { button: 0, ctrlKey: false })
-    fireEvent.click(await screen.findByRole('button', { name: 'Edit custom-skill-2' }))
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'More actions for custom-skill-2' }))
+    expect(await screen.findByText('Projection updated with 4 items.')).toBeTruthy()
+    fireEvent.pointerDown(await screen.findByRole('button', { name: 'More actions for custom-skill-2' }))
     fireEvent.click(await screen.findByText('Delete'))
 
     await waitFor(() => {
@@ -1048,7 +1043,7 @@ describe('worker studio', () => {
     expect(microApp.getAttribute('name')).toBe('aiworker-hr--hr-home')
     expect(microApp.getAttribute('baseroute')).toBe('/hr')
     expect(microApp.getAttribute('router-mode')).toBe('pure')
-    expect(microApp.getAttribute('url')).toBe('/api/local/apps/aiworker-hr/micro-app/routes/hr-home')
+    expect(microApp.getAttribute('url')).toBe('/api/local/apps/aiworker-hr/micro-app/routes/hr-home?workerId=hr-worker&workspaceId=workspace-1&theme=light')
     expect((microApp as HTMLElement & { data?: Record<string, unknown> }).data).toMatchObject({
       appId: 'aiworker-hr',
       surfaceId: 'hr-home',
@@ -1125,7 +1120,7 @@ describe('worker studio', () => {
     })
 
     expect(await screen.findByTitle('HR People Workbench')).toBe(firstMicroApp)
-    expect(firstMicroApp.getAttribute('url')).toBe('/api/local/apps/aiworker-hr/micro-app/routes/hr-home')
+    expect(firstMicroApp.getAttribute('url')).toBe('/api/local/apps/aiworker-hr/micro-app/routes/hr-home?workerId=hr-worker&workspaceId=workspace-2&theme=light')
     await waitFor(() => {
       expect((firstMicroApp as HTMLElement & { data?: Record<string, unknown> }).data).toMatchObject({
         workspaceId: 'workspace-2',
@@ -1146,7 +1141,7 @@ describe('worker studio', () => {
     })
 
     expect(await screen.findByTitle('HR People Workbench')).toBe(firstMicroApp)
-    expect(firstMicroApp.getAttribute('url')).toBe('/api/local/apps/aiworker-hr/micro-app/routes/hr-home')
+    expect(firstMicroApp.getAttribute('url')).toBe('/api/local/apps/aiworker-hr/micro-app/routes/hr-home?workerId=hr-worker&workspaceId=workspace-1&theme=light')
     await waitFor(() => {
       expect((firstMicroApp as HTMLElement & { data?: Record<string, unknown> }).data).toMatchObject({
         workspaceId: 'workspace-1',
@@ -1162,7 +1157,7 @@ describe('worker studio', () => {
     })
 
     expect(await screen.findByTitle('HR People Workbench')).toBe(firstMicroApp)
-    expect(firstMicroApp.getAttribute('url')).toBe('/api/local/apps/aiworker-hr/micro-app/routes/hr-home')
+    expect(firstMicroApp.getAttribute('url')).toBe('/api/local/apps/aiworker-hr/micro-app/routes/hr-home?workerId=hr-worker&workspaceId=workspace-2&theme=light')
     await waitFor(() => {
       expect((firstMicroApp as HTMLElement & { data?: Record<string, unknown> }).data).toMatchObject({
         workspaceId: 'workspace-2',
@@ -1560,7 +1555,7 @@ describe('worker studio', () => {
     expect(microApp.getAttribute('data-slot')).toBe('soul-app-mounted-micro-app')
     expect(microApp.getAttribute('name')).toBe('aiworker-hr--hr-home')
     expect(microApp.getAttribute('router-mode')).toBe('pure')
-    expect(microApp.getAttribute('url')).toBe('/api/local/apps/aiworker-hr/micro-app/routes/hr-home')
+    expect(microApp.getAttribute('url')).toBe('/api/local/apps/aiworker-hr/micro-app/routes/hr-home?workerId=hr-worker&workspaceId=workspace-1&theme=light')
     expect(screen.queryByText('Soul App mounted route')).toBeNull()
     expect(screen.queryByTestId('hr-people-workbench')).toBeNull()
     expect(fetch).toHaveBeenCalledWith('/api/local/apps/aiworker-hr/surfaces/hr-home?workerId=hr-worker&workspaceId=workspace-1&theme=light', expect.objectContaining({ headers: {} }))

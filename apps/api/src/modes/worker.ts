@@ -18,13 +18,16 @@ import {
   createHostRuntime,
   createLocalBearerAuthProvider,
   invokeNativeEngine,
+  listBaselineAssets,
   workerEnv,
 } from '@zonease/aiworker-core'
 import {
+  AppError,
   isLoopbackMountedServiceUrl,
   localSettingsConfigSchema,
   localWorkerOverlaySaveSchema,
 } from '@zonease/aiworker-shared'
+import type { LocalWorkerOverlayAsset } from '@zonease/aiworker-shared'
 import {
   closeWorkerDb,
   createWorkerEngineInvocation,
@@ -298,9 +301,9 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
     state.runtimes.set(worker.id, runtime)
     return c.json({ worker, snapshot: runtime.snapshot() })
   })
-  app.get('/api/local/workers/:workerId/overlay', (c) => {
+  app.get('/api/local/workers/:workerId/overlay', async (c) => {
     const worker = requireWorker(c.req.param('workerId'))
-    return c.json({ overlay: workerOverlayResponse(worker.id) })
+    return c.json({ overlay: await workerOverlayResponse(state, worker.id) })
   })
   app.put('/api/local/workers/:workerId/overlay', async (c) => {
     const worker = requireWorker(c.req.param('workerId'))
@@ -330,7 +333,7 @@ export async function bootstrapWorkerApp(options: BootstrapWorkerAppOptions = {}
       metadataJson: asset.metadataJson,
       target: asset.target,
     })))
-    return c.json({ overlay: workerOverlayResponse(worker.id) })
+    return c.json({ overlay: await workerOverlayResponse(state, worker.id) })
   })
   app.post('/api/local/workers/:workerId/engine/invocations', async (c) => {
     const prepared = await prepareNativeEngineInvocation(c, c.req.param('workerId'))
@@ -584,7 +587,7 @@ async function readJson<T>(request: { json: () => Promise<unknown> }): Promise<T
 
 function requireString(value: unknown, field: string): string {
   if (typeof value !== 'string' || value.trim().length === 0)
-    throw new Error(`Missing required field: ${field}`)
+    throw AppError.badRequest(`Missing required field: ${field}`)
   return value.trim()
 }
 
@@ -599,15 +602,47 @@ function readStringArray(value: unknown, field: string): string[] {
   if (value === undefined)
     return []
   if (!Array.isArray(value) || value.some(item => typeof item !== 'string'))
-    throw new Error(`Invalid field: ${field}`)
+    throw AppError.badRequest(`Invalid field: ${field}`)
   return value
 }
 
-function workerOverlayResponse(workerId: string) {
-  return {
-    assets: listWorkerOverlayAssets(workerId),
-    workerId,
+async function workerOverlayResponse(state: LocalDaemonState, workerId: string) {
+  const overlayAssets = listWorkerOverlayAssets(workerId).map(({ content, enabled, id, kind, metadataJson, source, target, updatedAt }) => ({
+    content,
+    enabled,
+    id,
+    kind,
+    metadataJson: metadataJson as Record<string, unknown>,
+    source,
+    target,
+    updatedAt,
+  }))
+  const worker = getWorker(workerId)
+  if (!worker)
+    return { assets: overlayAssets, workerId }
+
+  const source = state.host.engineAssetSourceForWorker(worker)
+  if (!source)
+    return { assets: overlayAssets, workerId }
+
+  const baselineAssets = await listBaselineAssets(source)
+  const overlayKeyMap = new Map(
+    overlayAssets.map((asset, index) => [`${asset.kind}:${asset.target}:${asset.id}`, index]),
+  )
+  const merged: LocalWorkerOverlayAsset[] = [...overlayAssets]
+  for (const baseline of baselineAssets) {
+    const key = `${baseline.kind}:${baseline.target}:${baseline.id}`
+    const overlayIndex = overlayKeyMap.get(key)
+    if (overlayIndex !== undefined) {
+      const overlay = merged[overlayIndex] as LocalWorkerOverlayAsset
+      if (!overlay.enabled)
+        merged[overlayIndex] = { ...baseline, enabled: false }
+    }
+    else {
+      merged.push(baseline)
+    }
   }
+  return { assets: merged, workerId }
 }
 
 function containsLiteralSecret(content: string): boolean {
@@ -634,7 +669,7 @@ function requireRuntime(state: LocalDaemonState, workerId: string): LocalWorkerR
     return existing
   const worker = getWorker(workerId)
   if (!worker)
-    throw new Error(`Worker not found: ${workerId}`)
+    throw AppError.notFound(`Worker not found: ${workerId}`)
   const runtime = state.host.createRuntimeForWorker(worker)
   state.runtimes.set(workerId, runtime)
   return runtime
@@ -643,14 +678,14 @@ function requireRuntime(state: LocalDaemonState, workerId: string): LocalWorkerR
 function requireWorker(workerId: string): WorkerRow {
   const worker = getWorker(workerId)
   if (!worker)
-    throw new Error(`Worker not found: ${workerId}`)
+    throw AppError.notFound(`Worker not found: ${workerId}`)
   return worker
 }
 
 function requireWorkspace(workspaceId: string): WorkspaceRow {
   const workspace = getWorkspace(workspaceId)
   if (!workspace)
-    throw new Error(`Workspace not found: ${workspaceId}`)
+    throw AppError.notFound(`Workspace not found: ${workspaceId}`)
   return workspace
 }
 
@@ -658,14 +693,14 @@ function requireWorkerWorkspace(workerId: string, workspaceId: string): Workspac
   requireWorker(workerId)
   const workspace = requireWorkspace(workspaceId)
   if (workspace.workerId !== workerId)
-    throw new Error(`Workspace ${workspaceId} does not belong to worker ${workerId}`)
+    throw AppError.badRequest(`Workspace ${workspaceId} does not belong to worker ${workerId}`)
   return workspace
 }
 
 function requireSession(sessionId: string): SessionRow {
   const session = getSession(sessionId)
   if (!session)
-    throw new Error(`Session not found: ${sessionId}`)
+    throw AppError.notFound(`Session not found: ${sessionId}`)
   return session
 }
 
@@ -673,7 +708,7 @@ function requireWorkerSession(workerId: string, sessionId: string): SessionRow {
   requireWorker(workerId)
   const session = requireSession(sessionId)
   if (session.workerId !== workerId)
-    throw new Error(`Session ${sessionId} does not belong to worker ${workerId}`)
+    throw AppError.badRequest(`Session ${sessionId} does not belong to worker ${workerId}`)
   return session
 }
 

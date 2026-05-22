@@ -357,6 +357,9 @@ export function listWorkerOverlayAssets(workerId: string): (WorkerOverlayAssetRo
 
 export function upsertWorkerOverlayAssets(workerId: string, assets: WorkerOverlayAssetInput[], at = new Date().toISOString()): void {
   const db = getWorkerDb()
+  db.delete(schema.workerOverlayAssets)
+    .where(eq(schema.workerOverlayAssets.workerId, workerId))
+    .run()
   for (const asset of assets) {
     db.insert(schema.workerOverlayAssets)
       .values({
@@ -369,20 +372,6 @@ export function upsertWorkerOverlayAssets(workerId: string, assets: WorkerOverla
         target: asset.target,
         updatedAt: at,
         workerId,
-      })
-      .onConflictDoUpdate({
-        set: {
-          content: asset.content,
-          enabled: asset.enabled,
-          metadataJson: asset.metadataJson ?? {},
-          updatedAt: at,
-        },
-        target: [
-          schema.workerOverlayAssets.workerId,
-          schema.workerOverlayAssets.kind,
-          schema.workerOverlayAssets.target,
-          schema.workerOverlayAssets.id,
-        ],
       })
       .run()
   }

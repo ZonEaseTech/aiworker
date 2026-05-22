@@ -51,12 +51,7 @@ interface VerticalSoul {
   status: 'available' | 'coming_soon'
 }
 
-export type {
-  LocalExecutor,
-  LocalExecutorInput,
-  LocalExecutorResult,
-  LocalWorkerRuntime,
-} from '@zonease/aiworker-core'
+export { renderUniversalWorkbenchHtml } from './universal-workbench-html'
 
 export interface StandaloneSoulAppRuntimeOptions {
   appHome: string
@@ -283,7 +278,12 @@ function scopedCatalog(app: HostedSoulApp): HostSoulCatalog {
   }
 }
 
-export { renderUniversalWorkbenchHtml } from './universal-workbench-html'
+export type {
+  LocalExecutor,
+  LocalExecutorInput,
+  LocalExecutorResult,
+  LocalWorkerRuntime,
+} from '@zonease/aiworker-core'
 
 export function mountSessionApiProxy(request: Request, options: {
   hostApiBaseUrl: string
@@ -297,8 +297,7 @@ export function mountSessionApiProxy(request: Request, options: {
   if (url.pathname === '/api/sessions' && request.method === 'GET') {
     const target = `${hostApi}/api/local/workers/${options.workerId}/workspaces/${options.workspaceId}/sessions`
     return fetch(target, { headers: request.headers }).then(r =>
-      new Response(r.body, { status: r.status, headers: r.headers }))
-      .catch(() => Response.json({ sessions: [] }))
+      new Response(r.body, { status: r.status, headers: r.headers })).catch(() => Response.json({ sessions: [] }))
   }
 
   // POST /api/sessions (create)
@@ -308,8 +307,7 @@ export function mountSessionApiProxy(request: Request, options: {
       method: 'POST',
       headers: request.headers,
       body: request.body,
-    }).then(r => new Response(r.body, { status: r.status, headers: r.headers }))
-      .catch(() => new Response(null, { status: 502 }))
+    }).then(r => new Response(r.body, { status: r.status, headers: r.headers })).catch(() => new Response(null, { status: 502 }))
   }
 
   return null

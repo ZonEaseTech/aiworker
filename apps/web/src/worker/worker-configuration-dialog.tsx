@@ -5,18 +5,18 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { Alert, AlertDescription } from '@zonease/aiworker-ui/components/alert'
 import { Badge } from '@zonease/aiworker-ui/components/badge'
 import { Button } from '@zonease/aiworker-ui/components/button'
-import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@zonease/aiworker-ui/components/dialog'
+import { CollapsibleGroup } from '@zonease/aiworker-ui/components/collapsible-group'
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@zonease/aiworker-ui/components/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@zonease/aiworker-ui/components/dropdown-menu'
 import { Input } from '@zonease/aiworker-ui/components/input'
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@zonease/aiworker-ui/components/item'
 import { ScrollArea } from '@zonease/aiworker-ui/components/scroll-area'
+import { SidebarGroup, SidebarGroupLabel, SidebarMenu, SidebarMenuAction, SidebarMenuButton, SidebarMenuItem } from '@zonease/aiworker-ui/components/sidebar'
 import { Switch } from '@zonease/aiworker-ui/components/switch'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@zonease/aiworker-ui/components/tabs'
 import { Textarea } from '@zonease/aiworker-ui/components/textarea'
 import { useEffect, useMemo, useState } from 'react'
 
 type OverlayCategory = LocalWorkerOverlayAssetKind
-type OverlayTab = OverlayCategory | 'projection'
 
 const categories: { label: string, value: OverlayCategory }[] = [
   { label: 'Skills', value: 'skill' },
@@ -32,23 +32,30 @@ interface NewAssetDraft {
 }
 
 export function WorkerConfigurationDialog({
+  activeWorkbenchTabId,
   assets,
   onOpenChange,
   onProjectWorkspaceAssets,
   onSaveAssets,
+  onSelectWorkbenchTab,
   open,
   projectionWorkspace,
   worker,
+  workbenchTabs,
 }: {
+  activeWorkbenchTabId?: string | null
   assets: LocalWorkerOverlayAsset[]
   onOpenChange: (open: boolean) => void
   onProjectWorkspaceAssets?: () => Promise<SoulAppProjectionReceipt | null> | SoulAppProjectionReceipt | null
   onSaveAssets: (assets: LocalWorkerOverlayAsset[]) => Promise<void> | void
+  onSelectWorkbenchTab?: (tab: { id: string, path: string }) => void
   open: boolean
   projectionWorkspace?: LocalWorkspace | null
   worker: LocalWorker | null
+  workbenchTabs?: { id: string, label: string, path: string }[]
 }) {
-  const [tab, setTab] = useState<OverlayTab>('skill')
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
+  const [activeCategory, setActiveCategory] = useState<OverlayCategory | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [createValidation, setCreateValidation] = useState<string | null>(null)
   const [newAsset, setNewAsset] = useState<NewAssetDraft | null>(null)
@@ -58,27 +65,114 @@ export function WorkerConfigurationDialog({
   const [projecting, setProjecting] = useState(false)
   const [projectionStatus, setProjectionStatus] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [selectedPanel, setSelectedPanel] = useState<null | 'projection'>(null)
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null)
-  const activeCategory = tab === 'projection' ? null : tab
-  const selectedAssets = useMemo(() => tab === 'projection' ? [] : assets.filter(asset => asset.kind === tab), [assets, tab])
-  const selectedAsset = selectedAssets.find(asset => asset.id === selectedAssetId) ?? selectedAssets[0] ?? null
+  const displayAssets = useMemo(() => {
+    if (assets.length === 0)
+      return assets
+    const seen = new Map<string, number>()
+    const result: LocalWorkerOverlayAsset[] = []
+    for (const asset of assets) {
+      if (asset.kind !== 'skill') {
+        result.push(asset)
+        continue
+      }
+      const existing = seen.get(asset.id)
+      if (existing !== undefined)
+        continue
+      seen.set(asset.id, result.length)
+      result.push(asset)
+    }
+    return result
+  }, [assets])
+  const skillTargets = useMemo(() => {
+    const map: Record<string, string[]> = {}
+    for (const asset of assets) {
+      if (asset.kind !== 'skill')
+        continue
+      const existing = map[asset.id]
+      if (!existing)
+        map[asset.id] = [asset.target]
+      else
+        existing.push(asset.target)
+    }
+    return map
+  }, [assets])
+  const selectedAsset = selectedPanel === 'projection' ? null : (displayAssets.find(asset => asset.id === selectedAssetId) ?? displayAssets[0] ?? null)
   const selectedAssetKey = selectedAsset ? `${selectedAsset.kind}:${selectedAsset.id}` : null
   const defaultNewAsset = useMemo(() => activeCategory ? createDefaultAssetDraft(activeCategory, assets) : null, [activeCategory, assets])
   const effectiveNewAsset = newAsset?.kind === activeCategory ? newAsset : defaultNewAsset
 
+  function targetsFor(nextAsset: LocalWorkerOverlayAsset): string[] {
+    if (nextAsset.kind !== 'skill')
+      return [nextAsset.target]
+    const existing = new Set(assets.filter(asset => asset.kind === 'skill' && asset.id === nextAsset.id).map(asset => asset.target))
+    existing.add(nextAsset.target)
+    return [...existing].sort()
+  }
+
   async function saveAsset(nextAsset: LocalWorkerOverlayAsset) {
-    const original = assets.find(item => item.id === nextAsset.id && item.kind === nextAsset.kind)
-    const errors = validateAsset(nextAsset, assets, original)
+    const targets = targetsFor(nextAsset)
+    const allOriginals = assets.filter(item => item.id === nextAsset.id && item.kind === nextAsset.kind && targets.includes(item.target))
+    const isBaseline = allOriginals.some(item => item.source === 'baseline')
+
+    if (isBaseline) {
+      const overlayAssets = assets.filter(asset => asset.source !== 'baseline')
+      const matchingKeys = targets.map(target => `${nextAsset.kind}:${target}:${nextAsset.id}`)
+      const filtered = overlayAssets.filter(asset => !matchingKeys.includes(`${asset.kind}:${asset.target}:${asset.id}`))
+      if (nextAsset.enabled) {
+        setAutosave('saving')
+        setAutosaveErrorMessage(null)
+        try {
+          await saveAssets([...filtered, ...baselineAssets()])
+          setAutosave('saved')
+        }
+        catch (error) {
+          setAutosave('failed')
+          setAutosaveErrorMessage(error instanceof Error ? error.message : 'Save failed')
+        }
+        return
+      }
+      const stampedAssets: LocalWorkerOverlayAsset[] = targets.map(target => ({
+        content: nextAsset.content,
+        enabled: false,
+        id: nextAsset.id,
+        kind: nextAsset.kind,
+        metadataJson: {},
+        source: 'overlay' as const,
+        target,
+        updatedAt: new Date().toISOString(),
+      }))
+      setAutosave('saving')
+      setAutosaveErrorMessage(null)
+      try {
+        await saveAssets([...filtered, ...stampedAssets, ...baselineAssets()])
+        setAutosave('saved')
+      }
+      catch (error) {
+        setAutosave('failed')
+        setAutosaveErrorMessage(error instanceof Error ? error.message : 'Save failed')
+      }
+      return
+    }
+    const firstOriginal = allOriginals[0] as LocalWorkerOverlayAsset | undefined
+    const errors = validateAsset({ ...nextAsset, target: targets[0]! }, assets, firstOriginal)
     if (errors.length > 0) {
       setAutosave('failed')
       setAutosaveErrorMessage(formatValidation(errors))
       return
     }
-    const stampedAsset = { ...nextAsset, source: 'overlay' as const, updatedAt: new Date().toISOString() }
     setAutosave('saving')
     setAutosaveErrorMessage(null)
     try {
-      await saveAssets(assets.map(asset => asset.id === nextAsset.id && asset.kind === nextAsset.kind ? stampedAsset : asset))
+      const now = new Date().toISOString()
+      const matchingKeys = new Set(targets.map(target => `${nextAsset.kind}:${target}:${nextAsset.id}`))
+      const stamped = assets.map(asset =>
+        matchingKeys.has(`${asset.kind}:${asset.target}:${asset.id}`)
+          ? { ...asset, enabled: nextAsset.enabled, source: 'overlay' as const, updatedAt: now }
+          : asset,
+      )
+      await saveAssets(stamped)
       setAutosave('saved')
     }
     catch (error) {
@@ -87,31 +181,43 @@ export function WorkerConfigurationDialog({
     }
   }
 
+  function baselineAssets(): LocalWorkerOverlayAsset[] {
+    return assets.filter(asset => asset.source === 'baseline')
+  }
+
   async function saveAssets(nextAssets: LocalWorkerOverlayAsset[]) {
     await onSaveAssets(nextAssets)
+  }
+
+  function createTargets(kind: OverlayCategory, target: string): string[] {
+    if (kind !== 'skill')
+      return [target.trim()]
+    return ['codex', 'claude-code']
   }
 
   async function createAsset() {
     if (!activeCategory || !effectiveNewAsset)
       return
-    const nextAsset: LocalWorkerOverlayAsset = {
+    const targets = createTargets(activeCategory, effectiveNewAsset.target)
+    const now = new Date().toISOString()
+    const nextAssets: LocalWorkerOverlayAsset[] = targets.map(target => ({
       content: effectiveNewAsset.content,
       enabled: true,
       id: effectiveNewAsset.id.trim(),
       kind: activeCategory,
       metadataJson: {},
-      source: 'overlay',
-      target: effectiveNewAsset.target.trim(),
-      updatedAt: new Date().toISOString(),
-    }
-    const errors = validateAsset(nextAsset, assets)
+      source: 'overlay' as const,
+      target,
+      updatedAt: now,
+    }))
+    const errors = nextAssets.flatMap(asset => validateAsset(asset, assets))
     setCreateValidation(formatValidation(errors))
     if (errors.length > 0)
       return
     setSaving(true)
     try {
-      await saveAssets([...assets, nextAsset])
-      setSelectedAssetId(nextAsset.id)
+      await saveAssets([...assets, ...nextAssets])
+      setSelectedAssetId(nextAssets[0]!.id)
       setNewAsset(null)
       setCreateOpen(false)
     }
@@ -123,7 +229,8 @@ export function WorkerConfigurationDialog({
   async function deleteAsset(asset: LocalWorkerOverlayAsset) {
     setSaving(true)
     try {
-      await saveAssets(assets.filter(item => !(item.kind === asset.kind && item.id === asset.id)))
+      const matchingKeys = new Set(targetsFor(asset).map(target => `${asset.kind}:${target}:${asset.id}`))
+      await saveAssets(assets.filter(item => !matchingKeys.has(`${item.kind}:${item.target}:${item.id}`)))
       setSelectedAssetId(null)
     }
     finally {
@@ -132,16 +239,20 @@ export function WorkerConfigurationDialog({
   }
 
   async function duplicateAsset(asset: LocalWorkerOverlayAsset) {
-    const copy = {
+    const targets = targetsFor(asset)
+    const now = new Date().toISOString()
+    const newId = nextCopyId(asset.id, assets)
+    const copies: LocalWorkerOverlayAsset[] = targets.map(target => ({
       ...asset,
-      id: nextCopyId(asset.id, assets),
+      id: newId,
       source: 'overlay' as const,
-      updatedAt: new Date().toISOString(),
-    }
+      target,
+      updatedAt: now,
+    }))
     setSaving(true)
     try {
-      await saveAssets([...assets, copy])
-      setSelectedAssetId(copy.id)
+      await saveAssets([...assets, ...copies])
+      setSelectedAssetId(newId)
     }
     finally {
       setSaving(false)
@@ -149,6 +260,7 @@ export function WorkerConfigurationDialog({
   }
 
   function selectAsset(id: string) {
+    setSelectedPanel(null)
     setSelectedAssetId(id)
   }
 
@@ -180,7 +292,8 @@ export function WorkerConfigurationDialog({
   }
 
   useEffect(() => {
-    if (autosave !== 'saved') return undefined
+    if (autosave !== 'saved')
+      return undefined
     const timeout = window.setTimeout(() => {
       setAutosave(current => current === 'saved' ? 'idle' : current)
     }, 1600)
@@ -194,228 +307,312 @@ export function WorkerConfigurationDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-dvh flex-col gap-0 overflow-hidden p-0 sm:h-5/6 sm:max-w-5xl" showCloseButton={false}>
-        <div className="relative px-6 pt-6 pr-20 pb-5">
+        <ItemActions data-settings-slot="settings-dialog-actions" className="absolute top-4 right-4" aria-hidden={false}>
+          {autosave !== 'idle'
+            ? (
+                <Badge variant={autosave === 'failed' ? 'destructive' : 'outline'} role="status" aria-live="polite">
+                  {autosave === 'saving'
+                    ? <HugeiconsIcon icon={RefreshIcon} strokeWidth={2} className="animate-spin" />
+                    : autosave === 'failed'
+                      ? <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
+                      : <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} />}
+                  {autosave === 'saving' ? 'Saving' : autosave === 'failed' ? 'Failed' : 'Saved'}
+                </Badge>
+              )
+            : null}
+          <DialogClose asChild>
+            <Button variant="ghost" size="icon" aria-label="Close">
+              <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} aria-hidden="true" />
+            </Button>
+          </DialogClose>
+        </ItemActions>
+
+        <DialogHeader className="px-6 pt-6 pr-20 pb-5">
           <Badge variant="secondary" className="w-fit">WORKER OVERLAY</Badge>
           <DialogTitle>Worker configuration</DialogTitle>
           <DialogDescription>{worker ? `${worker.name} worker overlay` : 'Worker overlay'}</DialogDescription>
-          <div className="absolute top-4 right-4 flex items-center gap-2">
-            {autosave !== 'idle' ? (
-              <Badge variant={autosave === 'failed' ? 'destructive' : 'outline'} role="status" aria-live="polite">
-                {autosave === 'saving'
-                  ? <HugeiconsIcon icon={RefreshIcon} strokeWidth={2} className="animate-spin" />
-                  : autosave === 'failed'
-                    ? <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
-                    : <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} />}
-                {autosave === 'saving' ? 'Saving' : autosave === 'failed' ? 'Failed' : 'Saved'}
-              </Badge>
-            ) : null}
-            <DialogClose asChild>
-              <Button variant="ghost" size="icon-sm" aria-label="Close">
-                <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} aria-hidden="true" />
-              </Button>
-            </DialogClose>
+        </DialogHeader>
+        <div className="flex flex-1 min-h-0">
+          <div className="flex w-80 shrink-0 flex-col min-h-0 bg-sidebar text-sidebar-foreground">
+            <div className="shrink-0 px-3 pt-4 pb-2">
+              <SidebarGroupLabel className="h-auto px-2 py-0 text-xs">Overlay assets</SidebarGroupLabel>
+            </div>
+            <ScrollArea className="flex-1 min-h-0">
+              <SidebarGroup>
+                {categories.map((cat) => {
+                  const catAssets = displayAssets.filter(asset => asset.kind === cat.value)
+                  const collapsed = collapsedGroups[cat.value] ?? false
+                  return (
+                    <CollapsibleGroup
+                      key={cat.value}
+                      collapsed={collapsed}
+                      controlsId={`overlay-group-${cat.value}`}
+                      onToggle={() => setCollapsedGroups(prev => ({ ...prev, [cat.value]: !collapsed }))}
+                      title={cat.label}
+                      toggleAriaLabel={`Toggle ${cat.label}`}
+                      meta={catAssets.length > 0 ? <Badge variant="outline">{catAssets.length}</Badge> : null}
+                      drawerProps={{ className: 'gap-1' }}
+                    >
+                      {catAssets.length > 0
+                        ? (
+                            <SidebarMenu>
+                              {catAssets.map(asset => (
+                                <SidebarMenuItem key={asset.id}>
+                                  <SidebarMenuButton
+                                    isActive={selectedAsset?.id === asset.id && selectedAsset?.kind === asset.kind}
+                                    size="lg"
+                                    className="h-11 items-start py-1.5"
+                                    onClick={() => selectAsset(asset.id)}
+                                  >
+                                    <span className="flex min-w-0 flex-col gap-0.5">
+                                      <span className="truncate">{asset.id}</span>
+                                      <span className="truncate font-normal text-sidebar-foreground/60">
+                                        {asset.kind === 'skill' ? (skillTargets[asset.id] ?? [asset.target]).sort().join(', ') : asset.target}
+                                      </span>
+                                    </span>
+                                  </SidebarMenuButton>
+                                  <DropdownMenu>
+                                    <SidebarMenuAction showOnHover asChild>
+                                      <DropdownMenuTrigger asChild>
+                                        <button type="button" aria-label={`More actions for ${asset.id}`}>
+                                          <HugeiconsIcon icon={MoreHorizontalCircle01Icon} strokeWidth={2} aria-hidden="true" />
+                                        </button>
+                                      </DropdownMenuTrigger>
+                                    </SidebarMenuAction>
+                                    <DropdownMenuContent align="start">
+                                      <DropdownMenuItem onSelect={() => void duplicateAsset(asset)}>Duplicate</DropdownMenuItem>
+                                      {asset.source !== 'baseline'
+                                        ? (
+                                            <>
+                                              <DropdownMenuSeparator />
+                                              <DropdownMenuItem variant="destructive" onSelect={() => void deleteAsset(asset)}>Delete</DropdownMenuItem>
+                                            </>
+                                          )
+                                        : null}
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </SidebarMenuItem>
+                              ))}
+                            </SidebarMenu>
+                          )
+                        : (
+                            <p className="px-2 text-xs text-sidebar-foreground/60">
+                              No
+                              {cat.label.toLowerCase()}
+                              {' '}
+                              assets.
+                            </p>
+                          )}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="w-full justify-start"
+                        onClick={() => {
+                          setActiveCategory(cat.value)
+                          setCreateOpen(true)
+                          setCreateValidation(null)
+                        }}
+                      >
+                        New
+                        {' '}
+                        {cat.label.slice(0, -1).toLowerCase()}
+                      </Button>
+                    </CollapsibleGroup>
+                  )
+                })}
+                <SidebarMenu>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      isActive={selectedPanel === 'projection'}
+                      size="lg"
+                      className="h-11 items-start py-1.5"
+                      onClick={() => {
+                        setSelectedPanel('projection')
+                        setSelectedAssetId(null)
+                      }}
+                    >
+                      <span className="flex min-w-0 flex-col gap-0.5">
+                        <span className="truncate">Projection</span>
+                        <span className="truncate font-normal text-sidebar-foreground/60">
+                          {projectionWorkspace ? `Workspace: ${projectionWorkspace.name}` : 'No workspace selected'}
+                        </span>
+                      </span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </SidebarGroup>
+            </ScrollArea>
+            <div data-testid="worker-overlay-asset-list" data-orientation="vertical" className="hidden" />
           </div>
-        </div>
-        <Tabs
-          value={tab}
-          className="flex flex-1 min-h-0 flex-col gap-0"
-          onValueChange={(value) => {
-            setTab(value as OverlayTab)
-            setCreateOpen(false)
-            setCreateValidation(null)
-          }}
-        >
-          <TabsList>
-            {categories.map(item => <TabsTrigger key={item.value} value={item.value}>{item.label}</TabsTrigger>)}
-            <TabsTrigger value="projection">Projection</TabsTrigger>
-          </TabsList>
-          {categories.map(item => (
-            <TabsContent key={item.value} value={item.value} className="flex-1 min-h-0 overflow-hidden p-0">
-              <ScrollArea className="h-full">
-                <div className="grid gap-4 p-6">
-                  <div data-testid="worker-overlay-asset-list" data-orientation="vertical">
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant={createOpen ? 'secondary' : 'ghost'}
-                    onClick={() => {
-                      setCreateOpen(current => !current)
-                      setCreateValidation(null)
-                    }}
-                  >
-                    New asset
-                  </Button>
-                </div>
-                {selectedAssets.length > 0
+          <div className="flex-1 min-w-0">
+            <ScrollArea className="h-full">
+              <div className="p-6">
+                {createOpen
                   ? (
-                      <ItemGroup className="gap-1 mt-2">
-                        {selectedAssets.map(asset => (
-                          <Item key={asset.id} variant={selectedAsset?.id === asset.id ? 'muted' : 'default'} size="sm">
-                            <ItemContent className="min-w-0">
-                              <ItemTitle>{asset.id}</ItemTitle>
-                              <ItemDescription>{asset.target}</ItemDescription>
-                            </ItemContent>
-                            <ItemActions>
-                              <Switch
-                                checked={asset.enabled}
-                                aria-label={`Enable ${asset.id}`}
-                                onCheckedChange={checked => void saveAsset({ ...asset, enabled: checked })}
-                              />
-                              <Button type="button" variant="ghost" size="sm" aria-label={`Edit ${asset.id}`} onClick={() => selectAsset(asset.id)}>
-                                Edit
-                              </Button>
-                            </ItemActions>
-                          </Item>
-                        ))}
+                      <ItemGroup className="gap-3">
+                        <Item variant="muted">
+                          <ItemContent className="grid min-w-0 gap-2">
+                            <ItemTitle>
+                              Create
+                              {' '}
+                              {activeCategory ? categories.find(c => c.value === activeCategory)?.label.slice(0, -1) : 'asset'}
+                            </ItemTitle>
+                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                              <Input aria-label="Overlay asset id" value={effectiveNewAsset?.id ?? ''} onChange={event => updateNewAsset({ id: event.currentTarget.value })} />
+                              <Input aria-label="Overlay asset target" value={effectiveNewAsset?.target ?? ''} onChange={event => updateNewAsset({ target: event.currentTarget.value })} />
+                            </div>
+                            <Textarea aria-label="Overlay asset content" value={effectiveNewAsset?.content ?? ''} onChange={event => updateNewAsset({ content: event.currentTarget.value })} />
+                          </ItemContent>
+                          <ItemActions>
+                            <Button type="button" variant="secondary" disabled={saving} onClick={() => void createAsset()}>
+                              Create asset
+                            </Button>
+                          </ItemActions>
+                        </Item>
+                        {createValidation
+                          ? (
+                              <Item variant="default">
+                                <ItemContent>
+                                  <ItemTitle>Validation</ItemTitle>
+                                  <ItemDescription className="line-clamp-none whitespace-pre-wrap">{createValidation}</ItemDescription>
+                                </ItemContent>
+                              </Item>
+                            )
+                          : null}
                       </ItemGroup>
                     )
-                  : <ItemDescription className="mt-2">No worker overlay assets.</ItemDescription>}
-              </div>
-              {createOpen
-                ? (
-                    <>
-                      <Item variant="muted">
-                        <ItemContent className="grid min-w-0 gap-2">
-                          <ItemTitle>
-                            Create
-                            {' '}
-                            {item.label.slice(0, -1)}
-                          </ItemTitle>
-                          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                            <Input aria-label="Overlay asset id" value={effectiveNewAsset?.id ?? ''} onChange={event => updateNewAsset({ id: event.currentTarget.value })} />
-                            <Input aria-label="Overlay asset target" value={effectiveNewAsset?.target ?? ''} onChange={event => updateNewAsset({ target: event.currentTarget.value })} />
-                          </div>
-                          <Textarea aria-label="Overlay asset content" value={effectiveNewAsset?.content ?? ''} onChange={event => updateNewAsset({ content: event.currentTarget.value })} />
-                        </ItemContent>
-                        <ItemActions>
-                          <Button type="button" variant="secondary" disabled={saving} onClick={() => void createAsset()}>
-                            Create asset
-                          </Button>
-                        </ItemActions>
-                      </Item>
-                      {createValidation
-                        ? (
-                            <Item variant="default">
-                              <ItemContent>
-                                <ItemTitle>Validation</ItemTitle>
-                                <ItemDescription className="line-clamp-none whitespace-pre-wrap">{createValidation}</ItemDescription>
-                              </ItemContent>
-                            </Item>
-                          )
-                        : null}
-                    </>
-                  )
-                : null}
-              {selectedAsset
-                ? (
-                    <ItemGroup className="gap-3">
-                      <Item variant="muted">
-                        <ItemContent className="min-w-0">
-                          <ItemTitle>{selectedAsset.id}</ItemTitle>
-                          <ItemDescription>
-                            {selectedAsset.source}
-                            {' '}
-                            ·
-                            {' '}
-                            {selectedAsset.target}
+                  : selectedPanel === 'projection'
+                    ? (
+                        <ItemGroup className="gap-3">
+                          <Item variant="muted">
+                            <ItemContent className="grid min-w-0 gap-3">
+                              <ItemTitle>Projection</ItemTitle>
+                              <ItemDescription>
+                                {projectionWorkspace
+                                  ? `Target workspace: ${projectionWorkspace.name}`
+                                  : 'No workspace selected. Select a workspace in the main view to enable projection.'}
+                              </ItemDescription>
+                            </ItemContent>
+                          </Item>
+                          {workbenchTabs && workbenchTabs.length > 1
+                            ? (
+                                <Item variant="default">
+                                  <ItemContent className="grid min-w-0 gap-2">
+                                    <ItemTitle>Workbench tabs</ItemTitle>
+                                    <ItemDescription>Choose which workbench tab is active for this worker.</ItemDescription>
+                                    <ItemActions className="gap-0.5" role="tablist" aria-label="Workbench tabs">
+                                      {workbenchTabs.map(tab => (
+                                        <button
+                                          key={tab.id}
+                                          type="button"
+                                          role="tab"
+                                          aria-selected={tab.id === activeWorkbenchTabId}
+                                          className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                                            tab.id === activeWorkbenchTabId
+                                              ? 'bg-background text-foreground shadow-sm'
+                                              : 'text-muted-foreground hover:text-foreground'
+                                          }`}
+                                          onClick={() => onSelectWorkbenchTab?.(tab)}
+                                        >
+                                          {tab.label}
+                                        </button>
+                                      ))}
+                                    </ItemActions>
+                                  </ItemContent>
+                                </Item>
+                              )
+                            : null}
+                          <Item variant="default">
+                            <ItemContent className="grid min-w-0 gap-2">
+                              <ItemTitle>Run projection</ItemTitle>
+                              <ItemDescription>
+                                Project workspace assets from the selected Soul App into this worker&apos;s overlay.
+                              </ItemDescription>
+                              <ItemActions>
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  size="sm"
+                                  disabled={!projectionWorkspace || !onProjectWorkspaceAssets || projecting}
+                                  onClick={() => void projectWorkspaceAssets()}
+                                >
+                                  <HugeiconsIcon icon={RefreshIcon} strokeWidth={2} aria-hidden="true" data-icon="inline-start" />
+                                  Run projection
+                                </Button>
+                              </ItemActions>
+                            </ItemContent>
+                          </Item>
+                          {projectionStatus
+                            ? (
+                                <Item variant="default">
+                                  <ItemContent>
+                                    <ItemDescription>{projectionStatus}</ItemDescription>
+                                  </ItemContent>
+                                </Item>
+                              )
+                            : null}
+                        </ItemGroup>
+                      )
+                    : selectedAsset
+                      ? (
+                          <ItemGroup className="gap-3">
+                            <div className="flex items-center justify-between">
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <ItemTitle>{selectedAsset.id}</ItemTitle>
+                                  {selectedAsset.source === 'baseline'
+                                    ? <Badge variant="secondary" className="text-xs">baseline</Badge>
+                                    : null}
+                                </div>
+                                <ItemDescription>
+                                  {selectedAsset.source}
+                                  {' '}
+                                  ·
+                                  {' '}
+                                  {selectedAsset.target}
+                                </ItemDescription>
+                              </div>
+                              <div className="flex shrink-0 items-center gap-2">
+                                <Switch
+                                  checked={selectedAsset.enabled}
+                                  disabled={saving}
+                                  aria-label={`Enable ${selectedAsset.id}`}
+                                  onCheckedChange={checked => void saveAsset({ ...selectedAsset, enabled: checked })}
+                                />
+                              </div>
+                            </div>
+                            <Textarea
+                              value={editContent}
+                              aria-label={`${selectedAsset.id} editor`}
+                              readOnly={selectedAsset.source === 'baseline'}
+                              onChange={event => setEditContent(event.currentTarget.value)}
+                              onBlur={() => {
+                                if (selectedAsset.source === 'baseline')
+                                  return
+                                if (editContent !== (selectedAsset?.content ?? '')) {
+                                  void saveAsset({ ...selectedAsset, content: editContent })
+                                }
+                              }}
+                            />
+                            {autosave === 'failed' && autosaveErrorMessage
+                              ? (
+                                  <Alert variant="destructive">
+                                    <AlertDescription>{autosaveErrorMessage}</AlertDescription>
+                                  </Alert>
+                                )
+                              : null}
+                          </ItemGroup>
+                        )
+                      : (
+                          <ItemDescription className="pt-8 text-center">
+                            Select an asset from the list or create a new one.
                           </ItemDescription>
-                        </ItemContent>
-                        <ItemActions>
-                          <Switch
-                            checked={selectedAsset.enabled}
-                            disabled={saving}
-                            aria-label={`Enable ${selectedAsset.id}`}
-                            onCheckedChange={checked => void saveAsset({ ...selectedAsset, enabled: checked })}
-                          />
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button type="button" variant="ghost" size="icon-sm" aria-label={`More actions for ${selectedAsset.id}`}>
-                                <HugeiconsIcon icon={MoreHorizontalCircle01Icon} strokeWidth={2} aria-hidden="true" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onSelect={() => void duplicateAsset(selectedAsset)}>Duplicate</DropdownMenuItem>
-                              <DropdownMenuItem onSelect={() => setTab('projection')}>Projection history</DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem variant="destructive" onSelect={() => void deleteAsset(selectedAsset)}>Delete</DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </ItemActions>
-                      </Item>
-                      <Textarea
-                        value={editContent}
-                        aria-label={`${selectedAsset.id} editor`}
-                        onChange={event => setEditContent(event.currentTarget.value)}
-                        onBlur={() => {
-                          if (editContent !== (selectedAsset?.content ?? '')) {
-                            void saveAsset({ ...selectedAsset, content: editContent })
-                          }
-                        }}
-                      />
-                      {autosave === 'failed' && autosaveErrorMessage
-                        ? (
-                            <Alert variant="destructive">
-                              <AlertDescription>{autosaveErrorMessage}</AlertDescription>
-                            </Alert>
-                          )
-                        : null}
-                    </ItemGroup>
-                  )
-                : null}
-                </div>
-              </ScrollArea>
-            </TabsContent>
-          ))}
-          <TabsContent value="projection" className="flex-1 min-h-0 overflow-hidden p-0">
-            <ScrollArea className="h-full">
-            <ItemGroup className="gap-2">
-              <Item variant="muted">
-                <ItemContent>
-                  <ItemTitle>Projection receipt</ItemTitle>
-                  <ItemDescription>
-                    {projectionWorkspace
-                      ? `Target workspace: ${projectionWorkspace.name}`
-                      : 'Select a workspace before running projection.'}
-                  </ItemDescription>
-                </ItemContent>
-                <ItemActions>
-                  <Button type="button" variant="secondary" size="sm" disabled={!projectionWorkspace || !onProjectWorkspaceAssets || projecting} onClick={() => void projectWorkspaceAssets()}>
-                    <HugeiconsIcon icon={RefreshIcon} strokeWidth={2} aria-hidden="true" data-icon="inline-start" />
-                    Run projection
-                  </Button>
-                </ItemActions>
-              </Item>
-              {projectionStatus
-                ? (
-                    <Item variant="default">
-                      <ItemContent>
-                        <ItemTitle>Projection status</ItemTitle>
-                        <ItemDescription>{projectionStatus}</ItemDescription>
-                      </ItemContent>
-                    </Item>
-                  )
-                : null}
-              {assets.length > 0
-                ? assets.map(asset => (
-                    <Item key={`${asset.kind}:${asset.id}`} variant="default">
-                      <ItemContent className="min-w-0">
-                        <ItemTitle>{asset.id}</ItemTitle>
-                        <ItemDescription>{`${asset.kind} · ${asset.enabled ? 'enabled' : 'disabled'} · ${asset.target}`}</ItemDescription>
-                      </ItemContent>
-                    </Item>
-                  ))
-                : (
-                    <Item variant="default">
-                      <ItemContent>
-                        <ItemTitle>No overlay projections yet</ItemTitle>
-                        <ItemDescription>Create a worker overlay asset before checking projection receipts.</ItemDescription>
-                      </ItemContent>
-                    </Item>
-                  )}
-            </ItemGroup>
+                        )}
+              </div>
             </ScrollArea>
-          </TabsContent>
-        </Tabs>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   )
@@ -465,7 +662,7 @@ function validateAsset(asset: LocalWorkerOverlayAsset, assets: LocalWorkerOverla
     errors.push('Content is required.')
   if (assets.some(item => item !== original && item.kind === asset.kind && item.id === asset.id))
     errors.push('Another asset with this kind and id already exists.')
-  if (/(?:api[_-]?key|token|secret)\s*[:=]\s*["']?[^"'\s]+/i.test(asset.content) || /sk-[a-z0-9]/i.test(asset.content))
+  if (/(?:api[_-]?key|token|secret)\s*[:=]\s*["']?[^"'\s]+/i.test(asset.content) || /sk-[a-z0-9]{15,}/i.test(asset.content))
     errors.push('Content appears to contain a literal secret. Use a secret reference instead.')
   return errors
 }

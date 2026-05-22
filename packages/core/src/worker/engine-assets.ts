@@ -1,4 +1,5 @@
 import type {
+  LocalWorkerOverlayAsset,
   SoulAppEngineAssets,
   SoulAppEngineTarget,
   SoulAppProjectionReceipt,
@@ -383,6 +384,71 @@ async function isFile(filePath: string): Promise<boolean> {
       return false
     throw error
   }
+}
+
+export async function listBaselineAssets(source: EngineAssetSource): Promise<LocalWorkerOverlayAsset[]> {
+  const sourceRoot = path.resolve(source.sourceRoot)
+  const assets: LocalWorkerOverlayAsset[] = []
+  const now = new Date().toISOString()
+
+  const workspaceRoot = path.join(sourceRoot, 'engine-assets', 'workspace')
+  for (const file of await listFiles(workspaceRoot)) {
+    const id = path.relative(workspaceRoot, file).split(path.sep).join('/')
+    assets.push({
+      content: await readFile(file, 'utf8'),
+      enabled: true,
+      id,
+      kind: 'entry-file',
+      metadataJson: {},
+      source: 'baseline',
+      target: 'workspace',
+      updatedAt: now,
+    })
+  }
+
+  const skillsRoot = path.join(sourceRoot, 'engine-assets', 'skills')
+  for (const dirent of await readdirOrEmpty(skillsRoot)) {
+    if (!dirent.isDirectory() || !SKILL_ID_RE.test(dirent.name))
+      continue
+    const file = path.join(skillsRoot, dirent.name, SKILL_FILE)
+    if (!await isFile(file))
+      continue
+    const configuredTargets = source.engineAssets?.skills?.targets ?? ['codex', 'claude-code'] as SoulAppEngineTarget[]
+    for (const target of configuredTargets) {
+      assets.push({
+        content: await readFile(file, 'utf8'),
+        enabled: true,
+        id: dirent.name,
+        kind: 'skill',
+        metadataJson: {},
+        source: 'baseline',
+        target,
+        updatedAt: now,
+      })
+    }
+  }
+
+  const configuredMcpClients = source.engineAssets?.mcpClients ?? []
+  for (const client of configuredMcpClients) {
+    const adapter = mcpClientAdapter(client.target)
+    const sourceDir = appLocalSourcePath(client.source)
+    const relativePath = path.posix.join(sourceDir, adapter.sourceFile)
+    const file = path.join(sourceRoot, ...relativePath.split('/'))
+    if (!await isFile(file))
+      continue
+    assets.push({
+      content: await readFile(file, 'utf8'),
+      enabled: true,
+      id: client.target,
+      kind: 'mcp-client',
+      metadataJson: {},
+      source: 'baseline',
+      target: client.target,
+      updatedAt: now,
+    })
+  }
+
+  return assets
 }
 
 function isNoEntryError(error: unknown): boolean {

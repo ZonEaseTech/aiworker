@@ -1,6 +1,4 @@
-import type { ReactNode } from 'react'
-
-import { Add01Icon, Message02Icon } from '@hugeicons/core-free-icons'
+import { Add01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@zonease/aiworker-ui/components/item'
 import { cn } from '@zonease/aiworker-ui/lib/utils'
@@ -36,7 +34,8 @@ export function WorkspaceSessionTree({
   for (const node of nodes) {
     if (node.kind === 'session') {
       const ws = workspaces.get(node.workspaceId)
-      if (ws) ws.sessions.push(node)
+      if (ws)
+        ws.sessions.push(node)
     }
   }
 
