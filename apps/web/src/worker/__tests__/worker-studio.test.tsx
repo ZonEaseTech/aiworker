@@ -904,7 +904,7 @@ describe('worker studio', () => {
     expect(screen.getByRole('tab', { name: 'Skills' })).toBeTruthy()
     expect(screen.getByTestId('worker-overlay-asset-list').getAttribute('data-orientation')).toBe('vertical')
 
-    fireEvent.click(screen.getAllByRole('switch', { name: 'Enable interview-brief' })[0])
+    fireEvent.click(screen.getAllByRole('switch', { name: 'Enable interview-brief' })[0]!)
 
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith('/api/local/workers/hr-worker/overlay', expect.objectContaining({
