@@ -1,6 +1,6 @@
 import type { LocalWorker, LocalWorkerOverlayAsset, LocalWorkerOverlayAssetKind, LocalWorkspace, SoulAppProjectionReceipt } from '@zonease/aiworker-shared'
 
-import { MoreHorizontalCircle01Icon, RefreshIcon } from '@hugeicons/core-free-icons'
+import { Cancel01Icon, MoreHorizontalCircle01Icon, RefreshIcon, Tick02Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Badge } from '@zonease/aiworker-ui/components/badge'
 import { Button } from '@zonease/aiworker-ui/components/button'
@@ -12,7 +12,7 @@ import { ScrollArea } from '@zonease/aiworker-ui/components/scroll-area'
 import { Switch } from '@zonease/aiworker-ui/components/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@zonease/aiworker-ui/components/tabs'
 import { Textarea } from '@zonease/aiworker-ui/components/textarea'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 type OverlayCategory = LocalWorkerOverlayAssetKind
 type OverlayTab = OverlayCategory | 'projection'
@@ -28,11 +28,6 @@ interface NewAssetDraft {
   id: string
   kind: OverlayCategory
   target: string
-}
-
-interface AssetDraft {
-  content: string
-  key: string | null
 }
 
 export function WorkerConfigurationDialog({
@@ -55,10 +50,10 @@ export function WorkerConfigurationDialog({
   const [tab, setTab] = useState<OverlayTab>('skill')
   const [createOpen, setCreateOpen] = useState(false)
   const [createValidation, setCreateValidation] = useState<string | null>(null)
-  const [draft, setDraft] = useState<AssetDraft>({ content: '', key: null })
-  const [mode, setMode] = useState<'editor' | 'preview'>('editor')
   const [newAsset, setNewAsset] = useState<NewAssetDraft | null>(null)
   const [assetValidation, setAssetValidation] = useState<string | null>(null)
+  const [autosave, setAutosave] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle')
+  const [editContent, setEditContent] = useState('')
   const [projecting, setProjecting] = useState(false)
   const [projectionStatus, setProjectionStatus] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -67,19 +62,18 @@ export function WorkerConfigurationDialog({
   const selectedAssets = useMemo(() => tab === 'projection' ? [] : assets.filter(asset => asset.kind === tab), [assets, tab])
   const selectedAsset = selectedAssets.find(asset => asset.id === selectedAssetId) ?? selectedAssets[0] ?? null
   const selectedAssetKey = selectedAsset ? `${selectedAsset.kind}:${selectedAsset.id}` : null
-  const draftContent = selectedAssetKey && draft.key === selectedAssetKey ? draft.content : selectedAsset?.content ?? ''
-  const dirty = Boolean(selectedAsset && draftContent !== selectedAsset.content)
   const defaultNewAsset = useMemo(() => activeCategory ? createDefaultAssetDraft(activeCategory, assets) : null, [activeCategory, assets])
   const effectiveNewAsset = newAsset?.kind === activeCategory ? newAsset : defaultNewAsset
 
   async function saveAsset(nextAsset: LocalWorkerOverlayAsset) {
     const stampedAsset = { ...nextAsset, source: 'overlay' as const, updatedAt: new Date().toISOString() }
-    setSaving(true)
+    setAutosave('saving')
     try {
       await saveAssets(assets.map(asset => asset.id === nextAsset.id && asset.kind === nextAsset.kind ? stampedAsset : asset))
+      setAutosave('saved')
     }
-    finally {
-      setSaving(false)
+    catch {
+      setAutosave('failed')
     }
   }
 
@@ -148,12 +142,7 @@ export function WorkerConfigurationDialog({
   }
 
   function runValidation(asset: LocalWorkerOverlayAsset) {
-    setAssetValidation(formatValidation(validateAsset({ ...asset, content: draftContent }, assets, asset)))
-  }
-
-  function resetDraft() {
-    setDraft({ content: selectedAsset?.content ?? '', key: selectedAssetKey })
-    setAssetValidation(null)
+    setAssetValidation(formatValidation(validateAsset({ ...asset, content: editContent }, assets, asset)))
   }
 
   function selectAsset(id: string) {
@@ -188,13 +177,37 @@ export function WorkerConfigurationDialog({
     }
   }
 
+  useEffect(() => {
+    if (autosave !== 'saved') return undefined
+    const timeout = window.setTimeout(() => {
+      setAutosave(current => current === 'saved' ? 'idle' : current)
+    }, 1600)
+    return () => window.clearTimeout(timeout)
+  }, [autosave])
+
+  useEffect(() => {
+    setEditContent(selectedAsset?.content ?? '')
+  }, [selectedAssetKey])
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-dvh flex-col gap-0 overflow-hidden p-0 sm:h-5/6 sm:max-w-5xl">
-        <div className="px-6 pt-6 pb-5">
+        <div className="relative px-6 pt-6 pr-20 pb-5">
           <Badge variant="secondary" className="w-fit">WORKER OVERLAY</Badge>
           <DialogTitle>Worker configuration</DialogTitle>
           <DialogDescription>{worker ? `${worker.name} worker overlay` : 'Worker overlay'}</DialogDescription>
+          <div className="absolute top-4 right-4 flex items-center gap-2">
+            {autosave !== 'idle' ? (
+              <Badge variant={autosave === 'failed' ? 'destructive' : 'outline'} role="status" aria-live="polite">
+                {autosave === 'saving'
+                  ? <HugeiconsIcon icon={RefreshIcon} strokeWidth={2} className="animate-spin" />
+                  : autosave === 'failed'
+                    ? <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
+                    : <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} />}
+                {autosave === 'saving' ? 'Saving' : autosave === 'failed' ? 'Failed' : 'Saved'}
+              </Badge>
+            ) : null}
+          </div>
         </div>
         <Tabs
           value={tab}
@@ -283,13 +296,6 @@ export function WorkerConfigurationDialog({
                           </ItemDescription>
                         </ItemContent>
                         <ItemActions>
-                          {dirty
-                            ? (
-                                <Button type="button" variant="secondary" size="sm" disabled={saving} onClick={() => void saveAsset({ ...selectedAsset, content: draftContent })}>
-                                  Apply
-                                </Button>
-                              )
-                            : null}
                           <Switch
                             checked={selectedAsset.enabled}
                             disabled={saving}
@@ -307,7 +313,6 @@ export function WorkerConfigurationDialog({
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem onSelect={() => void duplicateAsset(selectedAsset)}>Duplicate</DropdownMenuItem>
-                              <DropdownMenuItem onSelect={resetDraft} disabled={!dirty}>Reset draft</DropdownMenuItem>
                               <DropdownMenuItem onSelect={() => setTab('projection')}>Projection history</DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem variant="destructive" onSelect={() => void deleteAsset(selectedAsset)}>Delete</DropdownMenuItem>
@@ -325,23 +330,16 @@ export function WorkerConfigurationDialog({
                             </Item>
                           )
                         : null}
-                      <Tabs value={mode} onValueChange={value => setMode(value as 'editor' | 'preview')}>
-                        <TabsList>
-                          <TabsTrigger value="editor">Editor</TabsTrigger>
-                          <TabsTrigger value="preview">Preview</TabsTrigger>
-                        </TabsList>
-                        <TabsContent value="editor">
-                          <Textarea value={draftContent} aria-label={`${selectedAsset.id} editor`} onChange={event => setDraft({ content: event.currentTarget.value, key: selectedAssetKey })} />
-                        </TabsContent>
-                        <TabsContent value="preview">
-                          <Item variant="default">
-                            <ItemContent>
-                              <ItemTitle>{selectedAsset.id}</ItemTitle>
-                              <ItemDescription className="line-clamp-none whitespace-pre-wrap">{draftContent}</ItemDescription>
-                            </ItemContent>
-                          </Item>
-                        </TabsContent>
-                      </Tabs>
+                      <Textarea
+                        value={editContent}
+                        aria-label={`${selectedAsset.id} editor`}
+                        onChange={event => setEditContent(event.currentTarget.value)}
+                        onBlur={() => {
+                          if (editContent !== (selectedAsset?.content ?? '')) {
+                            void saveAsset({ ...selectedAsset, content: editContent })
+                          }
+                        }}
+                      />
                     </ItemGroup>
                   )
                 : null}
