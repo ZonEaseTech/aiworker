@@ -525,16 +525,18 @@ describe('aiworker local CLI', () => {
     expect(body.bootstrap.results.map(result => [result.appId, result.action])).toEqual([
       ['aiworker-hr', 'installed_enabled'],
       ['aiworker-qa', 'installed_enabled'],
+      ['aiworker-custom', 'installed_enabled'],
     ])
     expect(body.catalog.souls).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: 'aiworker-hr', status: 'available' }),
       expect.objectContaining({ id: 'aiworker-qa', status: 'available' }),
+      expect.objectContaining({ id: 'aiworker-custom', status: 'available' }),
     ]))
     expect(body.catalog.souls.some(soul => soul.id === 'hr')).toBe(false)
     output = ''
 
     expect(await runCli(argv('app', 'bootstrap', 'official'))).toBe(0)
-    expect((JSON.parse(output) as { bootstrap: { results: Array<{ action: string }> } }).bootstrap.results.map(result => result.action)).toEqual(['refreshed', 'refreshed'])
+    expect((JSON.parse(output) as { bootstrap: { results: Array<{ action: string }> } }).bootstrap.results.map(result => result.action)).toEqual(['refreshed', 'refreshed', 'refreshed'])
     output = ''
 
     expect(await runCli(argv('worker', 'create', '--id', 'legacy-hr', '--name', 'Legacy HR', '--soul', 'hr'))).toBe(1)
