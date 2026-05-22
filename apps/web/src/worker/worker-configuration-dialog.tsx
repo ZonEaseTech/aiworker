@@ -227,24 +227,43 @@ export function WorkerConfigurationDialog({
             <TabsContent key={item.value} value={item.value} className="flex-1 min-h-0 overflow-hidden p-0">
               <ScrollArea className="h-full">
                 <div className="grid gap-4 p-6">
-                  <div data-testid="worker-overlay-asset-list" data-orientation="horizontal" className="flex min-w-0 gap-2 overflow-x-auto">
-                <Button
-                  type="button"
-                  variant={createOpen ? 'secondary' : 'ghost'}
-                  onClick={() => {
-                    setCreateOpen(current => !current)
-                    setCreateValidation(null)
-                  }}
-                >
-                  New asset
-                </Button>
+                  <div data-testid="worker-overlay-asset-list" data-orientation="vertical">
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant={createOpen ? 'secondary' : 'ghost'}
+                    onClick={() => {
+                      setCreateOpen(current => !current)
+                      setCreateValidation(null)
+                    }}
+                  >
+                    New asset
+                  </Button>
+                </div>
                 {selectedAssets.length > 0
-                  ? selectedAssets.map(asset => (
-                      <Button key={asset.id} type="button" variant={selectedAsset?.id === asset.id ? 'secondary' : 'ghost'} onClick={() => selectAsset(asset.id)}>
-                        {asset.id}
-                      </Button>
-                    ))
-                  : <ItemDescription>No worker overlay assets.</ItemDescription>}
+                  ? (
+                      <ItemGroup className="gap-1 mt-2">
+                        {selectedAssets.map(asset => (
+                          <Item key={asset.id} variant={selectedAsset?.id === asset.id ? 'muted' : 'default'} size="sm">
+                            <ItemContent className="min-w-0">
+                              <ItemTitle>{asset.id}</ItemTitle>
+                              <ItemDescription>{asset.target}</ItemDescription>
+                            </ItemContent>
+                            <ItemActions>
+                              <Switch
+                                checked={asset.enabled}
+                                aria-label={`Enable ${asset.id}`}
+                                onCheckedChange={checked => void saveAsset({ ...asset, enabled: checked })}
+                              />
+                              <Button type="button" variant="ghost" size="sm" aria-label={`Edit ${asset.id}`} onClick={() => selectAsset(asset.id)}>
+                                Edit
+                              </Button>
+                            </ItemActions>
+                          </Item>
+                        ))}
+                      </ItemGroup>
+                    )
+                  : <ItemDescription className="mt-2">No worker overlay assets.</ItemDescription>}
               </div>
               {createOpen
                 ? (

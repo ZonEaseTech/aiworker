@@ -902,9 +902,9 @@ describe('worker studio', () => {
     expect(screen.getByRole('dialog', { name: 'Worker configuration' })).toBeTruthy()
     expect(screen.queryByRole('dialog', { name: /settings/i })).toBeNull()
     expect(screen.getByRole('tab', { name: 'Skills' })).toBeTruthy()
-    expect(screen.getByTestId('worker-overlay-asset-list').getAttribute('data-orientation')).toBe('horizontal')
+    expect(screen.getByTestId('worker-overlay-asset-list').getAttribute('data-orientation')).toBe('vertical')
 
-    fireEvent.click(screen.getByRole('switch', { name: 'Enable interview-brief' }))
+    fireEvent.click(screen.getAllByRole('switch', { name: 'Enable interview-brief' })[0])
 
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith('/api/local/workers/hr-worker/overlay', expect.objectContaining({
@@ -925,7 +925,7 @@ describe('worker studio', () => {
         method: 'PUT',
       }))
     })
-    fireEvent.click(await screen.findByRole('button', { name: 'custom-skill' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit custom-skill' }))
     fireEvent.click(screen.getByRole('button', { name: 'Validate' }))
     expect(await screen.findByText('Overlay asset is valid.')).toBeTruthy()
 
@@ -950,7 +950,7 @@ describe('worker studio', () => {
     expect(await screen.findByText('Projection updated with 2 items.')).toBeTruthy()
 
     fireEvent.mouseDown(screen.getByRole('tab', { name: 'Skills' }), { button: 0, ctrlKey: false })
-    fireEvent.click(await screen.findByRole('button', { name: 'custom-skill-2' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit custom-skill-2' }))
     fireEvent.pointerDown(screen.getByRole('button', { name: 'More actions for custom-skill-2' }))
     fireEvent.click(await screen.findByText('Delete'))
 
